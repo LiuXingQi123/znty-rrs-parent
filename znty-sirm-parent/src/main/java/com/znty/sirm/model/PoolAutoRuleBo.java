@@ -19,6 +19,9 @@ public class PoolAutoRuleBo {
     /** 规则类型 */
     private String ruleType;
 
+    /** 关联规则 ID（规则管理中心） */
+    private Long ruleId;
+
     /** 规则描述 */
     private String ruleDesc;
 

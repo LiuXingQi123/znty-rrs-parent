@@ -125,8 +125,22 @@ public class InvestmentPoolService {
 
         investmentPoolMapper.addAutoRuleEventByPoolId(poolId, operatorId, "删除");
         investmentPoolMapper.deleteAutoRuleByPoolId(poolId);
-        addAutoRule(poolId, "auto_in", req.getAutoInRuleDesc(), operatorId);
-        addAutoRule(poolId, "auto_out", req.getAutoOutRuleDesc(), operatorId);
+        if (req.getAutoInRuleIds() != null) {
+            List<String> inDescs = req.getAutoInRuleDescs();
+            for (int i = 0; i < req.getAutoInRuleIds().size(); i++) {
+                Long ruleId = req.getAutoInRuleIds().get(i);
+                String ruleDesc = (inDescs != null && i < inDescs.size()) ? inDescs.get(i) : "";
+                addAutoRule(poolId, "auto_in", ruleId, ruleDesc, operatorId);
+            }
+        }
+        if (req.getAutoOutRuleIds() != null) {
+            List<String> outDescs = req.getAutoOutRuleDescs();
+            for (int i = 0; i < req.getAutoOutRuleIds().size(); i++) {
+                Long ruleId = req.getAutoOutRuleIds().get(i);
+                String ruleDesc = (outDescs != null && i < outDescs.size()) ? outDescs.get(i) : "";
+                addAutoRule(poolId, "auto_out", ruleId, ruleDesc, operatorId);
+            }
+        }
         return queryPoolDetail(req);
     }
 
@@ -465,7 +479,7 @@ public class InvestmentPoolService {
     private void copyParentAutoRuleConfig(Long parentPoolId, Long childPoolId, String operatorId) {
         List<PoolAutoRuleBo> rules = investmentPoolMapper.queryAutoRuleList(parentPoolId);
         for (PoolAutoRuleBo parentRule : rules) {
-            addAutoRule(childPoolId, parentRule.getRuleType(), parentRule.getRuleDesc(), operatorId);
+            addAutoRule(childPoolId, parentRule.getRuleType(), parentRule.getRuleId(), parentRule.getRuleDesc(), operatorId);
         }
     }
 
@@ -578,13 +592,14 @@ public class InvestmentPoolService {
     /**
      * 新增自动规则备注
      */
-    private void addAutoRule(Long poolId, String ruleType, String ruleDesc, String operatorId) {
-        if (ruleDesc == null || ruleDesc.trim().isEmpty()) {
+    private void addAutoRule(Long poolId, String ruleType, Long ruleId, String ruleDesc, String operatorId) {
+        if ((ruleId == null) && (ruleDesc == null || ruleDesc.trim().isEmpty())) {
             return;
         }
         PoolAutoRuleBo rule = new PoolAutoRuleBo();
         rule.setPoolId(poolId);
         rule.setRuleType(ruleType);
+        rule.setRuleId(ruleId);
         rule.setRuleDesc(ruleDesc);
         rule.setIsDeleted(0);
         Date now = new Date();
@@ -617,10 +632,12 @@ public class InvestmentPoolService {
         List<PoolAutoRuleBo> rules = investmentPoolMapper.queryAutoRuleList(dto.getId());
         for (PoolAutoRuleBo rule : rules) {
             if ("auto_in".equals(rule.getRuleType())) {
-                dto.setAutoInRuleDesc(rule.getRuleDesc());
+                dto.getAutoInRuleIds().add(rule.getRuleId());
+                dto.getAutoInRuleDescs().add(rule.getRuleDesc());
             }
             if ("auto_out".equals(rule.getRuleType())) {
-                dto.setAutoOutRuleDesc(rule.getRuleDesc());
+                dto.getAutoOutRuleIds().add(rule.getRuleId());
+                dto.getAutoOutRuleDescs().add(rule.getRuleDesc());
             }
         }
     }

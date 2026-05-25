@@ -370,6 +370,7 @@
         SELECT id,
                pool_id AS poolId,
                rule_type AS ruleType,
+               rule_id AS ruleId,
                rule_desc AS ruleDesc,
                is_deleted AS isDeleted,
                crte_time AS crteTime,
@@ -383,18 +384,18 @@
     <!-- 新增自动规则 -->
     <insert id="addAutoRule" parameterType="com.znty.sirm.model.PoolAutoRuleBo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_pool_auto_rule (
-            pool_id, rule_type, rule_desc, is_deleted, crte_time, updt_time
+            pool_id, rule_type, rule_id, rule_desc, is_deleted, crte_time, updt_time
         ) VALUES (
-            #{poolId}, #{ruleType}, #{ruleDesc}, #{isDeleted}, #{crteTime}, #{updtTime}
+            #{poolId}, #{ruleType}, #{ruleId}, #{ruleDesc}, #{isDeleted}, #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- 写入自动规则事件 -->
     <insert id="addAutoRuleEvent">
         INSERT INTO ip_pool_auto_rule_evt (
-            id, pool_id, rule_type, rule_desc, is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
+            id, pool_id, rule_type, rule_id, rule_desc, is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
-        SELECT id, pool_id, rule_type, rule_desc, is_deleted, crte_time, updt_time, #{operatorId}, NOW(), #{oprtType}
+        SELECT id, pool_id, rule_type, rule_id, rule_desc, is_deleted, crte_time, updt_time, #{operatorId}, NOW(), #{oprtType}
         FROM ip_pool_auto_rule
         WHERE id = #{id}
     </insert>
@@ -402,9 +403,9 @@
     <!-- 按投资池写入自动规则事件 -->
     <insert id="addAutoRuleEventByPoolId">
         INSERT INTO ip_pool_auto_rule_evt (
-            id, pool_id, rule_type, rule_desc, is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
+            id, pool_id, rule_type, rule_id, rule_desc, is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
-        SELECT id, pool_id, rule_type, rule_desc, is_deleted, crte_time, updt_time, #{operatorId}, NOW(), #{oprtType}
+        SELECT id, pool_id, rule_type, rule_id, rule_desc, is_deleted, crte_time, updt_time, #{operatorId}, NOW(), #{oprtType}
         FROM ip_pool_auto_rule
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
@@ -413,9 +414,9 @@
     <!-- 按投资池列表写入自动规则事件 -->
     <insert id="addAutoRuleEventByPoolIds">
         INSERT INTO ip_pool_auto_rule_evt (
-            id, pool_id, rule_type, rule_desc, is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
+            id, pool_id, rule_type, rule_id, rule_desc, is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
-        SELECT id, pool_id, rule_type, rule_desc, is_deleted, crte_time, updt_time, #{operatorId}, NOW(), #{oprtType}
+        SELECT id, pool_id, rule_type, rule_id, rule_desc, is_deleted, crte_time, updt_time, #{operatorId}, NOW(), #{oprtType}
         FROM ip_pool_auto_rule
         WHERE is_deleted = 0
           AND pool_id IN

@@ -77,11 +77,17 @@ public class InvestmentPoolDto {
     /** 关系类型到投资池 ID 列表映射 */
     private Map<String, List<Long>> relationPoolIds = new HashMap<>();
 
-    /** 自动调入规则备注 */
-    private String autoInRuleDesc;
+    /** 自动调入规则 ID 列表 */
+    private List<Long> autoInRuleIds = new ArrayList<>();
 
-    /** 自动调出规则备注 */
-    private String autoOutRuleDesc;
+    /** 自动调入规则备注列表 */
+    private List<String> autoInRuleDescs = new ArrayList<>();
+
+    /** 自动调出规则 ID 列表 */
+    private List<Long> autoOutRuleIds = new ArrayList<>();
+
+    /** 自动调出规则备注列表 */
+    private List<String> autoOutRuleDescs = new ArrayList<>();
 
     /** 权限配置列表 */
     private List<PoolPermissionBo> permissions = new ArrayList<>();
