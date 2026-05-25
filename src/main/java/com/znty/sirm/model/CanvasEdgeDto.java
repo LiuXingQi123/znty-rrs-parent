@@ -1,0 +1,28 @@
+package com.znty.sirm.model;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * 画布连线 JSON 结构
+ */
+@Data
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class CanvasEdgeDto {
+    /** 连线唯一标识 */
+    private String id;
+    /** 起始节点 ID */
+    private String from;
+    /** 目标节点 ID */
+    private String to;
+    /** 连线标签 */
+    private String label;
+    /** 连线备注 */
+    private String remark;
+    /** 条件逻辑：and/or */
+    private String condLogic;
+    /** 条件规则列表 */
+    private List<CondRuleItemDto> condRules;
+}

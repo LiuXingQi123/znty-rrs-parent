@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 测试用例 SQL 映射，对应接口 com.znty.sirm.mapper.TestCaseMapper -->
+<mapper namespace="com.znty.sirm.mapper.TestCaseMapper">
+
+    <!-- ==================== 测试用例（rule_test_case） ==================== -->
+
+    <!-- 统计测试用例总数 -->
+    <select id="countCases" resultType="long">
+        SELECT COUNT(1) FROM rule_test_case
+    </select>
+
+    <!-- 分页查询测试用例列表，按创建时间倒序 -->
+    <select id="selectCases" resultType="com.znty.sirm.model.RuleTestCaseBo">
+        SELECT id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time, updt_time
+        FROM rule_test_case ORDER BY crte_time DESC, id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <!-- 查询全部测试用例（用于批量执行场景） -->
+    <select id="selectAllCases" resultType="com.znty.sirm.model.RuleTestCaseBo">
+        SELECT id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time, updt_time
+        FROM rule_test_case ORDER BY crte_time DESC, id DESC
+    </select>
+
+    <!-- 按主键查询单条测试用例 -->
+    <select id="selectCaseById" resultType="com.znty.sirm.model.RuleTestCaseBo">
+        SELECT id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time, updt_time
+        FROM rule_test_case WHERE id = #{id} LIMIT 1
+    </select>
+
+    <!-- 新增测试用例，主键自增回填 -->
+    <insert id="insertCase" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rule_test_case (case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time, updt_time)
+        VALUES (#{caseName}, #{ruleId}, #{ruleNameSnapshot}, #{lastResult}, #{lastOutput}, #{lastRunTime}, NOW(), NOW())
+    </insert>
+
+    <!-- 按主键更新测试用例基本信息（名称、关联规则、规则名称快照） -->
+    <update id="updateCase">
+        UPDATE rule_test_case
+        SET case_name = #{caseName}, rule_id = #{ruleId}, rule_name_snapshot = #{ruleNameSnapshot}, updt_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 仅更新用例名称（重命名操作，不涉及规则关联变更） -->
+    <update id="updateCaseName">
+        UPDATE rule_test_case SET case_name = #{caseName}, updt_time = NOW() WHERE id = #{id}
+    </update>
+
+    <!-- 更新用例最近一次执行结果：状态、输出、执行时间 -->
+    <update id="updateLastResult">
+        UPDATE rule_test_case
+        SET last_result = #{lastResult}, last_output = #{lastOutput}, last_run_time = #{lastRunTime}, updt_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 按主键物理删除测试用例 -->
+    <delete id="deleteById">
+        DELETE FROM rule_test_case WHERE id = #{id}
+    </delete>
+
+    <!-- ==================== 测试用例参数值（rule_test_case_param） ==================== -->
+
+    <!-- 按用例 ID 列表批量查询参数值（用于用例列表页批量加载，避免 N+1） -->
+    <select id="selectParamsByCaseIds" resultType="com.znty.sirm.model.RuleTestCaseParamBo">
+        SELECT id, case_id, param_name, param_label_snapshot, param_type_snapshot, param_value, crte_time, updt_time
+        FROM rule_test_case_param WHERE case_id IN
+        <foreach collection="caseIds" item="caseId" open="(" separator="," close=")">#{caseId}</foreach>
+        ORDER BY case_id ASC, id ASC
+    </select>
+
+    <!-- 新增用例参数值，含参数名、实际值及展示标签/类型的快照 -->
+    <insert id="insertCaseParam" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rule_test_case_param (case_id, param_name, param_label_snapshot, param_type_snapshot, param_value, crte_time, updt_time)
+        VALUES (#{caseId}, #{paramName}, #{paramLabelSnapshot}, #{paramTypeSnapshot}, #{paramValue}, NOW(), NOW())
+    </insert>
+
+    <!-- 按用例 ID 删除该用例下的所有参数值（编辑保存时全量替换的前置清理） -->
+    <delete id="deleteParamsByCaseId">
+        DELETE FROM rule_test_case_param WHERE case_id = #{caseId}
+    </delete>
+
+    <!-- ==================== 测试执行记录 & 步骤日志 ==================== -->
+
+    <!-- 按用例 ID 查询执行记录列表，按开始时间倒序（最近执行在前） -->
+    <select id="selectRunsByCaseId" resultType="com.znty.sirm.model.RuleTestRunBo">
+        SELECT id, case_id, rule_id, run_status, output, error_message, start_time, finish_time, crte_time, updt_time
+        FROM rule_test_run WHERE case_id = #{caseId} ORDER BY start_time DESC
+    </select>
+
+    <!-- 按执行记录 ID 查询该次执行的所有步骤日志，按时间升序 -->
+    <select id="selectRunLogs" resultType="com.znty.sirm.model.RuleTestRunLogBo">
+        SELECT id, run_id, log_time, log_type, message, crte_time, updt_time
+        FROM rule_test_run_log WHERE run_id = #{runId} ORDER BY log_time ASC, id ASC
+    </select>
+
+    <!-- 新增执行记录，含规则 ID、用例 ID、状态、输出、异常信息和起止时间 -->
+    <insert id="insertRun" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rule_test_run (case_id, rule_id, run_status, output, error_message, start_time, finish_time, crte_time, updt_time)
+        VALUES (#{caseId}, #{ruleId}, #{runStatus}, #{output}, #{errorMessage}, #{startTime}, #{finishTime}, NOW(), NOW())
+    </insert>
+
+    <!-- 新增单条步骤日志，关联执行记录 ID -->
+    <insert id="insertRunLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rule_test_run_log (run_id, log_time, log_type, message, crte_time, updt_time)
+        VALUES (#{runId}, #{logTime}, #{logType}, #{message}, NOW(), NOW())
+    </insert>
+</mapper>
