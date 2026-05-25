@@ -4,9 +4,11 @@
 
     <!-- ==================== 流程定义 ==================== -->
 
-    <!-- 拼接流程分页查询条件。 -->
-    <sql id="queryFlowPageWhere">
-        AND d.is_deleted = 0
+    <!-- 分页查询流程定义。 -->
+    <select id="queryFlowPage" resultType="com.znty.sirm.model.FlowDefinitionBo">
+        SELECT d.*, (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'disabled') AS current_ver
+        FROM wf_flow_definition d
+        WHERE d.is_deleted = 0
         <if test="keyword != null and keyword != ''">
             AND (d.name LIKE CONCAT('%', #{keyword}, '%') OR d.flow_key LIKE CONCAT('%', #{keyword}, '%'))
         </if>
@@ -16,14 +18,6 @@
         <if test="category != null and category != ''">
             AND d.category = #{category}
         </if>
-    </sql>
-
-    <!-- 分页查询流程定义。 -->
-    <select id="queryFlowPage" resultType="com.znty.sirm.model.FlowDefinitionBo">
-        SELECT d.*, (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'disabled') AS current_ver
-        FROM wf_flow_definition d
-        WHERE 1 = 1
-        <include refid="queryFlowPageWhere"/>
         ORDER BY d.updt_time DESC
     </select>
 
@@ -31,8 +25,16 @@
     <select id="queryFlowList" resultType="com.znty.sirm.model.FlowDefinitionBo">
         SELECT d.*, (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'disabled') AS current_ver
         FROM wf_flow_definition d
-        WHERE 1 = 1
-        <include refid="queryFlowPageWhere"/>
+        WHERE d.is_deleted = 0
+        <if test="keyword != null and keyword != ''">
+            AND (d.name LIKE CONCAT('%', #{keyword}, '%') OR d.flow_key LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        <if test="status != null and status != ''">
+            AND d.status = #{status}
+        </if>
+        <if test="category != null and category != ''">
+            AND d.category = #{category}
+        </if>
         ORDER BY d.updt_time DESC
     </select>
 

@@ -5,39 +5,26 @@
 
     <!-- ==================== 测试用例（rule_test_case） ==================== -->
 
-    <!-- 测试用例表字段映射 -->
-    <resultMap id="TestCaseMap" type="com.znty.sirm.model.RuleTestCaseBo">
-        <id column="id" property="id"/>
-        <result column="case_name" property="caseName"/>
-        <result column="rule_id" property="ruleId"/>
-        <result column="rule_name_snapshot" property="ruleNameSnapshot"/>
-        <result column="last_result" property="lastResult"/>
-        <result column="last_output" property="lastOutput"/>
-        <result column="last_run_time" property="lastRunTime"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
-
     <!-- 统计测试用例总数 -->
     <select id="countCases" resultType="long">
         SELECT COUNT(1) FROM rule_test_case
     </select>
 
     <!-- 分页查询测试用例列表，按创建时间倒序 -->
-    <select id="selectCases" resultMap="TestCaseMap">
+    <select id="selectCases" resultType="com.znty.sirm.model.RuleTestCaseBo">
         SELECT id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time, updt_time
         FROM rule_test_case ORDER BY crte_time DESC, id DESC
         LIMIT #{offset}, #{pageSize}
     </select>
 
     <!-- 查询全部测试用例（用于批量执行场景） -->
-    <select id="selectAllCases" resultMap="TestCaseMap">
+    <select id="selectAllCases" resultType="com.znty.sirm.model.RuleTestCaseBo">
         SELECT id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time, updt_time
         FROM rule_test_case ORDER BY crte_time DESC, id DESC
     </select>
 
     <!-- 按主键查询单条测试用例 -->
-    <select id="selectCaseById" resultMap="TestCaseMap">
+    <select id="selectCaseById" resultType="com.znty.sirm.model.RuleTestCaseBo">
         SELECT id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time, updt_time
         FROM rule_test_case WHERE id = #{id} LIMIT 1
     </select>
@@ -74,20 +61,8 @@
 
     <!-- ==================== 测试用例参数值（rule_test_case_param） ==================== -->
 
-    <!-- 测试用例参数值表字段映射 -->
-    <resultMap id="TestCaseParamMap" type="com.znty.sirm.model.RuleTestCaseParamBo">
-        <id column="id" property="id"/>
-        <result column="case_id" property="caseId"/>
-        <result column="param_name" property="paramName"/>
-        <result column="param_label_snapshot" property="paramLabelSnapshot"/>
-        <result column="param_type_snapshot" property="paramTypeSnapshot"/>
-        <result column="param_value" property="paramValue"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
-
     <!-- 按用例 ID 列表批量查询参数值（用于用例列表页批量加载，避免 N+1） -->
-    <select id="selectParamsByCaseIds" resultMap="TestCaseParamMap">
+    <select id="selectParamsByCaseIds" resultType="com.znty.sirm.model.RuleTestCaseParamBo">
         SELECT id, case_id, param_name, param_label_snapshot, param_type_snapshot, param_value, crte_time, updt_time
         FROM rule_test_case_param WHERE case_id IN
         <foreach collection="caseIds" item="caseId" open="(" separator="," close=")">#{caseId}</foreach>
@@ -107,39 +82,14 @@
 
     <!-- ==================== 测试执行记录 & 步骤日志 ==================== -->
 
-    <!-- 测试执行记录表字段映射 -->
-    <resultMap id="TestRunMap" type="com.znty.sirm.model.RuleTestRunBo">
-        <id column="id" property="id"/>
-        <result column="case_id" property="caseId"/>
-        <result column="rule_id" property="ruleId"/>
-        <result column="run_status" property="runStatus"/>
-        <result column="output" property="output"/>
-        <result column="error_message" property="errorMessage"/>
-        <result column="start_time" property="startTime"/>
-        <result column="finish_time" property="finishTime"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
-
-    <!-- 测试执行步骤日志表字段映射 -->
-    <resultMap id="TestRunLogMap" type="com.znty.sirm.model.RuleTestRunLogBo">
-        <id column="id" property="id"/>
-        <result column="run_id" property="runId"/>
-        <result column="log_time" property="logTime"/>
-        <result column="log_type" property="logType"/>
-        <result column="message" property="message"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
-
     <!-- 按用例 ID 查询执行记录列表，按开始时间倒序（最近执行在前） -->
-    <select id="selectRunsByCaseId" resultMap="TestRunMap">
+    <select id="selectRunsByCaseId" resultType="com.znty.sirm.model.RuleTestRunBo">
         SELECT id, case_id, rule_id, run_status, output, error_message, start_time, finish_time, crte_time, updt_time
         FROM rule_test_run WHERE case_id = #{caseId} ORDER BY start_time DESC
     </select>
 
     <!-- 按执行记录 ID 查询该次执行的所有步骤日志，按时间升序 -->
-    <select id="selectRunLogs" resultMap="TestRunLogMap">
+    <select id="selectRunLogs" resultType="com.znty.sirm.model.RuleTestRunLogBo">
         SELECT id, run_id, log_time, log_type, message, crte_time, updt_time
         FROM rule_test_run_log WHERE run_id = #{runId} ORDER BY log_time ASC, id ASC
     </select>

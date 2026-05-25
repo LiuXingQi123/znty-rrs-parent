@@ -5,18 +5,6 @@
 
     <!-- ==================== 规则定义（rule_definition） ==================== -->
 
-    <!-- 规则定义表字段映射 -->
-    <resultMap id="RuleDefinitionMap" type="com.znty.sirm.model.RuleDefinitionBo">
-        <id column="id" property="id"/>
-        <result column="rule_name" property="ruleName"/>
-        <result column="description" property="description"/>
-        <result column="category_code" property="categoryCode"/>
-        <result column="script" property="script"/>
-        <result column="status" property="status"/>
-        <result column="deleted_flag" property="deletedFlag"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
 
     <!-- 统计符合条件的规则数量 -->
     <select id="countRules" resultType="long">
@@ -42,7 +30,7 @@
     </select>
 
     <!-- 分页查询规则列表，按创建时间倒序 -->
-    <select id="selectRules" resultMap="RuleDefinitionMap">
+    <select id="selectRules" resultType="com.znty.sirm.model.RuleDefinitionBo">
         SELECT id, rule_name, description, category_code, script, status, deleted_flag, crte_time, updt_time
         FROM rule_definition
         <where>
@@ -68,7 +56,7 @@
     </select>
 
     <!-- 按主键查询单条规则（仅未删除记录） -->
-    <select id="selectById" resultMap="RuleDefinitionMap">
+    <select id="selectById" resultType="com.znty.sirm.model.RuleDefinitionBo">
         SELECT id, rule_name, description, category_code, script, status, deleted_flag, crte_time, updt_time
         FROM rule_definition
         WHERE id = #{id} AND IFNULL(deleted_flag, 0) = 0
@@ -76,7 +64,7 @@
     </select>
 
     <!-- 按 ID 列表批量查询规则（用于关联查询，避免逐条查询的 N+1 问题） -->
-    <select id="selectByIds" resultMap="RuleDefinitionMap">
+    <select id="selectByIds" resultType="com.znty.sirm.model.RuleDefinitionBo">
         SELECT id, rule_name, description, category_code, script, status, deleted_flag, crte_time, updt_time
         FROM rule_definition
         WHERE id IN
@@ -112,28 +100,15 @@
 
     <!-- ==================== 规则参数（rule_param） ==================== -->
 
-    <!-- 规则参数表字段映射 -->
-    <resultMap id="RuleParamMap" type="com.znty.sirm.model.RuleParamBo">
-        <id column="id" property="id"/>
-        <result column="rule_id" property="ruleId"/>
-        <result column="param_name" property="paramName"/>
-        <result column="param_label" property="paramLabel"/>
-        <result column="param_type" property="paramType"/>
-        <result column="required" property="required"/>
-        <result column="sort_no" property="sortNo"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
-
     <!-- 按规则 ID 查询该规则的所有参数，按排序号升序 -->
-    <select id="selectParamsByRuleId" resultMap="RuleParamMap">
+    <select id="selectParamsByRuleId" resultType="com.znty.sirm.model.RuleParamBo">
         SELECT id, rule_id, param_name, param_label, param_type, required, sort_no, crte_time, updt_time
         FROM rule_param WHERE rule_id = #{ruleId}
         ORDER BY sort_no ASC, id ASC
     </select>
 
     <!-- 按规则 ID 列表批量查询参数（用于规则列表页批量加载，避免 N+1） -->
-    <select id="selectParamsByRuleIds" resultMap="RuleParamMap">
+    <select id="selectParamsByRuleIds" resultType="com.znty.sirm.model.RuleParamBo">
         SELECT id, rule_id, param_name, param_label, param_type, required, sort_no, crte_time, updt_time
         FROM rule_param WHERE rule_id IN
         <foreach collection="ruleIds" item="ruleId" open="(" separator="," close=")">#{ruleId}</foreach>
@@ -153,19 +128,8 @@
 
     <!-- ==================== 规则参数选项（rule_param_option） ==================== -->
 
-    <!-- 规则参数选项表字段映射 -->
-    <resultMap id="RuleParamOptionMap" type="com.znty.sirm.model.RuleParamOptionBo">
-        <id column="id" property="id"/>
-        <result column="param_id" property="paramId"/>
-        <result column="option_value" property="optionValue"/>
-        <result column="option_label" property="optionLabel"/>
-        <result column="sort_no" property="sortNo"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
-
     <!-- 按参数 ID 列表批量查询选项（用于规则详情批量加载，避免 N+1） -->
-    <select id="selectOptionsByParamIds" resultMap="RuleParamOptionMap">
+    <select id="selectOptionsByParamIds" resultType="com.znty.sirm.model.RuleParamOptionBo">
         SELECT id, param_id, option_value, option_label, sort_no, crte_time, updt_time
         FROM rule_param_option WHERE param_id IN
         <foreach collection="paramIds" item="paramId" open="(" separator="," close=")">#{paramId}</foreach>
@@ -187,19 +151,8 @@
 
     <!-- ==================== 规则分类（rule_category） ==================== -->
 
-    <!-- 规则分类表字段映射 -->
-    <resultMap id="RuleCategoryMap" type="com.znty.sirm.model.RuleCategoryBo">
-        <id column="id" property="id"/>
-        <result column="category_code" property="categoryCode"/>
-        <result column="category_name" property="categoryName"/>
-        <result column="sort_no" property="sortNo"/>
-        <result column="enabled" property="enabled"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
-
     <!-- 查询所有启用的规则分类（enabled 为 null 时默认为启用） -->
-    <select id="selectCategories" resultMap="RuleCategoryMap">
+    <select id="selectCategories" resultType="com.znty.sirm.model.RuleCategoryBo">
         SELECT id, category_code, category_name, sort_no, enabled, crte_time, updt_time
         FROM rule_category WHERE IFNULL(enabled, 1) = 1
         ORDER BY sort_no ASC, id ASC
@@ -207,34 +160,15 @@
 
     <!-- ==================== 预设选项集 & 预设选项明细 ==================== -->
 
-    <!-- 预设选项集表字段映射 -->
-    <resultMap id="PresetSetMap" type="com.znty.sirm.model.RulePresetOptionSetBo">
-        <id column="id" property="id"/>
-        <result column="set_name" property="setName"/>
-        <result column="sort_no" property="sortNo"/>
-        <result column="enabled" property="enabled"/>
-        <result column="crte_time" property="crteTime"/>
-        <result column="updt_time" property="updtTime"/>
-    </resultMap>
-
-    <!-- 预设选项明细表字段映射（无时间戳字段） -->
-    <resultMap id="PresetItemMap" type="com.znty.sirm.model.RulePresetOptionItemBo">
-        <id column="id" property="id"/>
-        <result column="set_id" property="setId"/>
-        <result column="option_value" property="optionValue"/>
-        <result column="option_label" property="optionLabel"/>
-        <result column="sort_no" property="sortNo"/>
-    </resultMap>
-
     <!-- 查询所有启用的预设选项集 -->
-    <select id="selectPresetSets" resultMap="PresetSetMap">
+    <select id="selectPresetSets" resultType="com.znty.sirm.model.RulePresetOptionSetBo">
         SELECT id, set_name, sort_no, enabled, crte_time, updt_time
         FROM rule_preset_option_set WHERE IFNULL(enabled, 1) = 1
         ORDER BY sort_no ASC, id ASC
     </select>
 
     <!-- 按选项集 ID 列表批量查询预设选项明细 -->
-    <select id="selectPresetItems" resultMap="PresetItemMap">
+    <select id="selectPresetItems" resultType="com.znty.sirm.model.RulePresetOptionItemBo">
         SELECT id, set_id, option_value, option_label, sort_no
         FROM rule_preset_option_item WHERE set_id IN
         <foreach collection="setIds" item="setId" open="(" separator="," close=")">#{setId}</foreach>
