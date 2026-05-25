@@ -16,4 +16,7 @@ public class FlowOptionDto {
 
     /** 流程名称 */
     private String flowName;
+
+    /** 流程描述 */
+    private String description;
 }

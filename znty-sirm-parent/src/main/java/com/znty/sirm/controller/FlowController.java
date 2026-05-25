@@ -31,6 +31,12 @@ public class FlowController {
         return ApiResponse.success(flowService.queryFlowPage(req));
     }
 
+    /** 查询流程列表（不分页，用于下拉选项）。 */
+    @PostMapping("/flows/queryFlowList")
+    public ApiResponse<List<FlowOptionDto>> queryFlowList(@RequestBody FlowReq req) {
+        return ApiResponse.success(flowService.queryFlowList(req));
+    }
+
     /** 新建流程。 */
     @PostMapping("/flows/createFlow")
     public ApiResponse<FlowDto> createFlow(@RequestBody FlowReq req) {

@@ -56,6 +56,21 @@ public class FlowService {
         return new PageResult<>(records, total, req.getPageIndex(), req.getPageSize());
     }
 
+    /** 查询流程列表（不分页，用于下拉选项），仅返回 id/name/key/description。 */
+    public List<FlowOptionDto> queryFlowList(FlowReq req) {
+        FlowReq safeReq = req == null ? new FlowReq() : req;
+        List<FlowDefinitionBo> entities = flowMapper.queryFlowList(
+                safeReq.getKeyword(), safeReq.getStatus(), safeReq.getCategory());
+        return entities.stream().map(e -> {
+            FlowOptionDto d = new FlowOptionDto();
+            d.setFlowId(e.getId());
+            d.setFlowKey(e.getFlowKey());
+            d.setFlowName(e.getName());
+            d.setDescription(e.getDescription());
+            return d;
+        }).collect(Collectors.toList());
+    }
+
     // ==================== 新建流程 ====================
 
     @Transactional(rollbackFor = Exception.class)

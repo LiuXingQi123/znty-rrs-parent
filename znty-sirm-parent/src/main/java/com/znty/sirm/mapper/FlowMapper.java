@@ -17,6 +17,11 @@ public interface FlowMapper {
                                          @Param("status") String status,
                                          @Param("category") String category);
 
+    /** 列表查询流程定义（不分页）。 */
+    List<FlowDefinitionBo> queryFlowList(@Param("keyword") String keyword,
+                                         @Param("status") String status,
+                                         @Param("category") String category);
+
     /** 根据 ID 查询流程定义。 */
     FlowDefinitionBo queryFlowById(@Param("id") Long id);
 

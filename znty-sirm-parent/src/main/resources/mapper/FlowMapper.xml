@@ -27,6 +27,15 @@
         ORDER BY d.updt_time DESC
     </select>
 
+    <!-- 列表查询流程定义（不分页，用于下拉选项）。 -->
+    <select id="queryFlowList" resultType="com.znty.sirm.model.FlowDefinitionBo">
+        SELECT d.*, (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'disabled') AS current_ver
+        FROM wf_flow_definition d
+        WHERE 1 = 1
+        <include refid="queryFlowPageWhere"/>
+        ORDER BY d.updt_time DESC
+    </select>
+
     <!-- 根据 ID 查询流程定义。 -->
     <select id="queryFlowById" resultType="com.znty.sirm.model.FlowDefinitionBo">
         SELECT d.*, (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'disabled') AS current_ver
