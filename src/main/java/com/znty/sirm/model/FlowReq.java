@@ -37,4 +37,6 @@ public class FlowReq extends PageRequest {
     private Long flowId;
     /** 版本 ID */
     private Long versionId;
+    /** 版本号筛选（版本历史查询） */
+    private Integer verNum;
 }

@@ -29,6 +29,8 @@ public class FlowDto {
     private String status;
     /** 当前版本号 */
     private Integer currentVer;
+    /** 是否有已发布版本 */
+    private Boolean hasPublishedVersion;
     /** 创建人 */
     private Long createdBy;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

@@ -47,6 +47,7 @@ public class FlowService {
             d.setRemark(e.getRemark());
             d.setCurrentVer(e.getCurrentVer());
             d.setStatus(e.getStatus());
+            d.setHasPublishedVersion(e.getHasPublishedVersion());
             d.setCreatedBy(e.getCreatedBy());
             d.setCrteTime(e.getCrteTime());
             d.setUpdtTime(e.getUpdtTime());
@@ -198,10 +199,10 @@ public class FlowService {
         flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "DELETE"));
     }
 
-    // ==================== 停用 / 恢复 ====================
+    // ==================== 停用 ====================
 
     @Transactional(rollbackFor = Exception.class)
-    /** 停用流程。 */
+    /** 停用流程：更新定义状态 + 将当前活跃版本标为停用以反映在历史中。 */
     public void disableFlow(IdRequest req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
@@ -218,86 +219,20 @@ public class FlowService {
         def.setStatus("disabled"); def.setUpdtTime(now);
         flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
 
-        // 归档当前 active 版本，避免历史中出现"已停用→已发布"的不合理链路
-        for (FlowVersionBo v : flowMapper.queryFlowVersionListByFlowId(def.getId())) {
+        // 将当前活跃版本标为停用，历史中可追溯
+        FlowVersionBo latestActive = null;
+        for (FlowVersionBo v : flowMapper.queryFlowVersionListByFlowId(def.getId(), null)) {
             if ("active".equals(v.getStatus())) {
-                flowMapper.updateFlowVersionStatus(v.getId(), "archived", now);
-                v.setStatus("archived"); v.setUpdtTime(now);
-                flowMapper.createFlowVersionEvt(toFlowVerEvt(v, L_OPTER, now, "UPDATE"));
+                if (latestActive == null || v.getVerNum() > latestActive.getVerNum()) {
+                    latestActive = v;
+                }
             }
         }
-
-        // 在版本历史中记录停用事件
-        FlowVersionBo latest = flowMapper.queryLatestFlowVersion(def.getId());
-        FlowVersionBo rec = new FlowVersionBo();
-        rec.setFlowId(def.getId());
-        rec.setFlowKey(def.getFlowKey());
-        rec.setVerNum(latest != null ? latest.getVerNum() + 1 : 1);
-        rec.setStatus("disabled");
-        rec.setPublishNote("流程停用");
-        rec.setCanvasNodes(latest != null ? latest.getCanvasNodes() : null);
-        rec.setCanvasEdges(latest != null ? latest.getCanvasEdges() : null);
-        rec.setCanvasPanX(latest != null ? latest.getCanvasPanX() : null);
-        rec.setCanvasPanY(latest != null ? latest.getCanvasPanY() : null);
-        rec.setCanvasZoom(latest != null ? latest.getCanvasZoom() : null);
-        rec.setPublishedBy(1L);
-        rec.setPublishedTime(now);
-        rec.setCreatedBy(1L);
-        rec.setCrteTime(now);
-        rec.setUpdtTime(now);
-        flowMapper.createFlowVersion(rec);
-        flowMapper.createFlowVersionEvt(toFlowVerEvt(rec, L_OPTER, now, "INSERT"));
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    /** 恢复流程。 */
-    public void restoreFlow(IdRequest req) {
-        FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
-        if (def == null) {
-            throw new BizException(404, "流程不存在");
+        if (latestActive != null) {
+            flowMapper.updateFlowVersionStatus(latestActive.getId(), "disabled", now);
+            latestActive.setStatus("disabled"); latestActive.setUpdtTime(now);
+            flowMapper.createFlowVersionEvt(toFlowVerEvt(latestActive, L_OPTER, now, "UPDATE"));
         }
-        if (!"disabled".equals(def.getStatus())) {
-            throw new BizException("流程不是停用状态，无法恢复");
-        }
-
-        Date now = new Date();
-        flowMapper.restoreFlowDefinition(req.getId(), now);
-        def.setStatus("draft"); def.setUpdtTime(now);
-        flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
-
-        // 归档 disabled 版本，避免历史中残留"已停用"状态
-        for (FlowVersionBo v : flowMapper.queryFlowVersionListByFlowId(def.getId())) {
-            if ("disabled".equals(v.getStatus())) {
-                flowMapper.updateFlowVersionStatus(v.getId(), "archived", now);
-                v.setStatus("archived"); v.setUpdtTime(now);
-                flowMapper.createFlowVersionEvt(toFlowVerEvt(v, L_OPTER, now, "UPDATE"));
-            }
-        }
-
-        // 新建草稿版本（复制最新版本的画布数据）
-        FlowVersionBo latest = flowMapper.queryLatestFlowVersion(def.getId());
-        FlowVersionBo draft = flowMapper.queryDraftFlowVersion(def.getId());
-        if (draft != null) {
-            archiveOtherDraftVersions(def.getId(), draft.getId(), now);
-            return;
-        }
-        int newVerNum = (latest != null ? latest.getVerNum() : 0) + 1;
-        draft = new FlowVersionBo();
-        draft.setFlowId(def.getId());
-        draft.setFlowKey(def.getFlowKey());
-        draft.setVerNum(newVerNum);
-        draft.setStatus("draft");
-        draft.setPublishNote("恢复为草稿");
-        draft.setCanvasNodes(latest != null ? latest.getCanvasNodes() : null);
-        draft.setCanvasEdges(latest != null ? latest.getCanvasEdges() : null);
-        draft.setCanvasPanX(latest != null ? latest.getCanvasPanX() : null);
-        draft.setCanvasPanY(latest != null ? latest.getCanvasPanY() : null);
-        draft.setCanvasZoom(latest != null ? latest.getCanvasZoom() : null);
-        draft.setCreatedBy(1L);
-        draft.setCrteTime(now);
-        draft.setUpdtTime(now);
-        flowMapper.createFlowVersion(draft);
-        flowMapper.createFlowVersionEvt(toFlowVerEvt(draft, L_OPTER, now, "INSERT"));
     }
 
     // ==================== 保存草稿 ====================
@@ -327,9 +262,7 @@ public class FlowService {
         String edgesJson = toJson(req.getEdges());
 
         FlowVersionBo latest = flowMapper.queryDraftFlowVersion(def.getId());
-        if (latest != null) {
-            archiveOtherDraftVersions(def.getId(), latest.getId(), now);
-        } else {
+        if (latest == null) {
             // 查最新版本
             latest = flowMapper.queryLatestFlowVersion(def.getId());
         }
@@ -368,6 +301,15 @@ public class FlowService {
             flowMapper.createFlowVersion(ver);
             flowMapper.createFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
             versionId = ver.getId();
+
+            // active 流程首次创建新草稿时，同步定义状态为 draft
+            if ("active".equals(def.getStatus())) {
+                def.setStatus("draft");
+                def.setUpdatedBy(1L);
+                def.setUpdtTime(now);
+                flowMapper.updateFlowDefinition(def);
+                flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
+            }
         }
 
         // 解析 JSON → 归一化表
@@ -401,9 +343,7 @@ public class FlowService {
         String edgesJson = toJson(edges);
 
         FlowVersionBo latest = flowMapper.queryDraftFlowVersion(def.getId());
-        if (latest != null) {
-            archiveOtherDraftVersions(def.getId(), latest.getId(), now);
-        } else {
+        if (latest == null) {
             // 查最新版本
             latest = flowMapper.queryLatestFlowVersion(def.getId());
         }
@@ -458,17 +398,6 @@ public class FlowService {
         flowMapper.updateFlowDefinition(def);
         flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
 
-        // 归档所有旧版本（active / draft / disabled），同一流程只保留当前版本
-        List<FlowVersionBo> allVers = flowMapper.queryFlowVersionListByFlowId(def.getId());
-        for (FlowVersionBo v : allVers) {
-            if (!v.getId().equals(versionId)
-                    && ("active".equals(v.getStatus()) || "draft".equals(v.getStatus()) || "disabled".equals(v.getStatus()))) {
-                flowMapper.updateFlowVersionStatus(v.getId(), "archived", now);
-                v.setStatus("archived"); v.setUpdtTime(now);
-                flowMapper.createFlowVersionEvt(toFlowVerEvt(v, L_OPTER, now, "UPDATE"));
-            }
-        }
-
         // 解析 JSON → 归一化表
         syncNormalized(def.getId(), versionId, nodes, edges, now);
 
@@ -482,9 +411,9 @@ public class FlowService {
 
     // ==================== 版本历史 ====================
 
-    /** 查询流程版本列表。 */
-    public List<VersionDto> queryFlowVersionList(IdRequest req) {
-        List<FlowVersionBo> vers = flowMapper.queryFlowVersionListByFlowId(req.getId());
+    /** 查询流程版本列表，可按版本号筛选。 */
+    public List<VersionDto> queryFlowVersionList(FlowReq req) {
+        List<FlowVersionBo> vers = flowMapper.queryFlowVersionListByFlowId(req.getId(), req.getVerNum());
         return vers.stream().map(v -> {
             VersionDto d = new VersionDto();
             d.setVersionId(v.getId());
@@ -913,19 +842,6 @@ public class FlowService {
         }
         for (EdgeCondRuleBo rule : flowMapper.queryCondRuleListByVersionId(versionId)) {
             flowMapper.createCondRuleEvt(toCondRuleEvt(rule, L_OPTER, now, "DELETE"));
-        }
-    }
-
-    /** 归档同流程的其它草稿版本。 */
-    private void archiveOtherDraftVersions(Long flowId, Long keepVersionId, Date now) {
-        List<FlowVersionBo> versions = flowMapper.queryFlowVersionListByFlowId(flowId);
-        for (FlowVersionBo v : versions) {
-            if ("draft".equals(v.getStatus()) && !v.getId().equals(keepVersionId)) {
-                flowMapper.updateFlowVersionStatus(v.getId(), "archived", now);
-                v.setStatus("archived");
-                v.setUpdtTime(now);
-                flowMapper.createFlowVersionEvt(toFlowVerEvt(v, L_OPTER, now, "UPDATE"));
-            }
         }
     }
 

@@ -40,9 +40,6 @@ public interface FlowMapper {
     /** 停用流程定义。 */
     int disableFlowDefinition(@Param("id") Long id, @Param("updtTime") Date now);
 
-    /** 恢复流程定义。 */
-    int restoreFlowDefinition(@Param("id") Long id, @Param("updtTime") Date now);
-
     // ==================== 流程版本 ====================
 
     /** 查询最新流程版本。 */
@@ -54,8 +51,9 @@ public interface FlowMapper {
     /** 根据 ID 查询流程版本。 */
     FlowVersionBo queryFlowVersionById(@Param("id") Long id);
 
-    /** 查询流程版本列表。 */
-    List<FlowVersionBo> queryFlowVersionListByFlowId(@Param("flowId") Long flowId);
+    /** 查询流程版本列表，可按版本号筛选。 */
+    List<FlowVersionBo> queryFlowVersionListByFlowId(@Param("flowId") Long flowId,
+                                                      @Param("verNum") Integer verNum);
 
     /** 新建流程版本。 */
     int createFlowVersion(FlowVersionBo ver);

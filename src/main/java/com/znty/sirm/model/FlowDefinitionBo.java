@@ -26,6 +26,8 @@ public class FlowDefinitionBo {
     private String status;
     /** 当前版本号 */
     private Integer currentVer;
+    /** 是否有已发布版本（用于区分"从未发布的未发布"和"有已发布版本的未发布"） */
+    private Boolean hasPublishedVersion;
     /** 创建人 */
     private Long createdBy;
     /** 更新人 */

@@ -70,13 +70,6 @@ public class FlowController {
         return ApiResponse.success();
     }
 
-    /** 恢复流程。 */
-    @PostMapping("/flows/restoreFlow")
-    public ApiResponse<Void> restoreFlow(@RequestBody IdRequest req) {
-        flowService.restoreFlow(req);
-        return ApiResponse.success();
-    }
-
     // ==================== 流程设计器 ====================
 
     /** 保存流程草稿。 */
@@ -93,9 +86,9 @@ public class FlowController {
 
     // ==================== 版本管理 ====================
 
-    /** 查询流程版本列表。 */
+    /** 查询流程版本列表，可按版本号筛选。 */
     @PostMapping("/flows/queryFlowVersionList")
-    public ApiResponse<List<VersionDto>> queryFlowVersionList(@RequestBody IdRequest req) {
+    public ApiResponse<List<VersionDto>> queryFlowVersionList(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.queryFlowVersionList(req));
     }
 
