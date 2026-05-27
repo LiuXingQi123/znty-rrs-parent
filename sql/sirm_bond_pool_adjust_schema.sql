@@ -81,6 +81,40 @@ CREATE TABLE `sirm_bondinfo`
     `is_dy`                    varchar(1)     DEFAULT NULL COMMENT '是否永续',
     `is_deferred`              varchar(1)     DEFAULT NULL COMMENT '是否递延', -- 对应图1最后一行半遮挡的'是否递延'
 
+    -- ==========================================
+-- 1. 基础、承销与控制类字段
+-- ==========================================
+    `b_info_term_str`          varchar(100)   DEFAULT NULL COMMENT '债券期限(文本形式，如“4年11月1天”)',
+    `b_info_lead_underwriter`  varchar(300)   DEFAULT NULL COMMENT '主承销商',
+    `b_info_cur_interestrate`  decimal(10, 4) DEFAULT NULL COMMENT '当期利率(%)',
+    `b_info_pledge_ratio`      decimal(10, 4) DEFAULT NULL COMMENT '质押比率(%)',
+    `b_info_guarantee_status`  varchar(500)   DEFAULT NULL COMMENT '担保情况',
+
+-- ==========================================
+-- 2. 行权相关期限字段
+-- ==========================================
+    `b_info_rem_exe_term`      varchar(100)   DEFAULT NULL COMMENT '行权剩余期限',
+    `b_info_put_exe_term`      varchar(100)   DEFAULT NULL COMMENT '回售行权期限',
+    `b_info_call_rem_term`     varchar(100)   DEFAULT NULL COMMENT '赎回行权剩余期限',
+    `b_info_opt_rem_term`      varchar(100)   DEFAULT NULL COMMENT '含权债剩余期限',
+
+-- ==========================================
+-- 3. 信用评级与内部评价字段
+-- ==========================================
+    `credit_rating_agency`     varchar(100)   DEFAULT NULL COMMENT '评级机构',
+    `b_credit_rating`          varchar(50)    DEFAULT NULL COMMENT '债券评级',
+    `issuer_credit_rating`     varchar(50)    DEFAULT NULL COMMENT '主体评级',
+    `rating_outlook`           varchar(50)    DEFAULT NULL COMMENT '展望评级',
+    `inner_issuer_rating`      varchar(50)    DEFAULT NULL COMMENT '主体内评分档',
+    `inner_guarantor_rating`   varchar(50)    DEFAULT NULL COMMENT '担保人主体内评分',
+
+-- ==========================================
+-- 4. 页面下方大文本框字段
+-- ==========================================
+    `b_fund_usage`             longtext       DEFAULT NULL COMMENT '募集资金用途',
+    `b_prompt_reason`          longtext       DEFAULT NULL COMMENT '提示原因',
+    `b_analysis`               longtext       DEFAULT NULL COMMENT '债券分析'
+
     -- 主键设置（可根据业务实际需求调整，这里默认以自增id或核心代码作为参考）
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
