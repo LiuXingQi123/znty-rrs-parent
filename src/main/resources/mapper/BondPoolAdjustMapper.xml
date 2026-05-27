@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.BondPoolAdjustMapper">
+
+    <!-- 分页查询债券列表 -->
+    <select id="queryBondPage" resultType="com.znty.sirm.model.BondInfoBo">
+        SELECT id,
+               s_info_code AS sInfoCode,
+               s_info_name AS sInfoName,
+               b_info_fullname AS bInfoFullname,
+               b_info_issuer AS bInfoIssuer,
+               b_issue_amountplan AS bIssueAmountplan,
+               b_info_carrydate AS bInfoCarrydate,
+               b_info_maturitydate AS bInfoMaturitydate,
+               b_credit_rating AS bCreditRating,
+               issuer_credit_rating AS issuerCreditRating,
+               d_bond_type AS dBondType,
+               b_info_cur_interestrate AS bInfoCurInterestrate,
+               b_info_term_str AS bInfoTermStr
+        FROM sirm_bondinfo
+        <where>
+            <if test="bondCode != null and bondCode != ''">
+                AND s_info_code LIKE CONCAT('%', #{bondCode}, '%')
+            </if>
+            <if test="bondShortName != null and bondShortName != ''">
+                AND s_info_name LIKE CONCAT('%', #{bondShortName}, '%')
+            </if>
+            <if test="issuer != null and issuer != ''">
+                AND b_info_issuer LIKE CONCAT('%', #{issuer}, '%')
+            </if>
+        </where>
+        ORDER BY id DESC
+    </select>
+
+    <!-- 查询债券详情 -->
+    <select id="queryBondDetail" resultType="com.znty.sirm.model.BondInfoBo">
+        SELECT id,
+               s_info_code AS sInfoCode,
+               s_info_name AS sInfoName,
+               b_info_fullname AS bInfoFullname,
+               b_info_issuer AS bInfoIssuer,
+               s_windcode_nib AS sWindcodeNib,
+               s_windcode_sh AS sWindcodeSh,
+               s_windcode_sz AS sWindcodeSz,
+               b_issue_amountplan AS bIssueAmountplan,
+               b_info_cur_interestrate AS bInfoCurInterestrate,
+               b_info_rem_exe_term AS bInfoRemExeTerm,
+               b_info_carrydate AS bInfoCarrydate,
+               b_info_maturitydate AS bInfoMaturitydate,
+               b_info_pledge_ratio AS bInfoPledgeRatio,
+               credit_rating_agency AS creditRatingAgency,
+               b_credit_rating AS bCreditRating,
+               issuer_credit_rating AS issuerCreditRating,
+               rating_outlook AS ratingOutlook,
+               b_info_guarantee_status AS bInfoGuaranteeStatus,
+               b_info_lead_underwriter AS bInfoLeadUnderwriter,
+               inner_issuer_rating AS innerIssuerRating,
+               d_bond_type AS dBondType,
+               b_info_put_exe_term AS bInfoPutExeTerm,
+               b_info_call_rem_term AS bInfoCallRemTerm,
+               inner_guarantor_rating AS innerGuarantorRating,
+               b_info_opt_rem_term AS bInfoOptRemTerm,
+               b_info_term_str AS bInfoTermStr,
+               b_fund_usage AS bFundUsage,
+               b_prompt_reason AS bPromptReason,
+               b_analysis AS bAnalysis
+        FROM sirm_bondinfo
+        WHERE id = #{bondId}
+    </select>
+
+</mapper>
