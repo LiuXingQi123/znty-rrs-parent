@@ -113,7 +113,7 @@ CREATE TABLE `sirm_bondinfo`
 -- ==========================================
     `b_fund_usage`             longtext       DEFAULT NULL COMMENT '募集资金用途',
     `b_prompt_reason`          longtext       DEFAULT NULL COMMENT '提示原因',
-    `b_analysis`               longtext       DEFAULT NULL COMMENT '债券分析'
+    `b_analysis`               longtext       DEFAULT NULL COMMENT '债券分析',
 
     -- 主键设置（可根据业务实际需求调整，这里默认以自增id或核心代码作为参考）
     PRIMARY KEY (`id`)
@@ -121,3 +121,39 @@ CREATE TABLE `sirm_bondinfo`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
     COMMENT = '债券信息表';
+
+-- ============================================================================
+-- 2. 债券池调库记录表
+-- ============================================================================
+DROP TABLE IF EXISTS `ip_adjust_log`;
+
+CREATE TABLE `ip_adjust_log`
+(
+    `id`               BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `bond_id`          BIGINT       DEFAULT NULL COMMENT '债券 ID，关联 sirm_bondinfo.id',
+    `bond_code`        VARCHAR(32)  DEFAULT NULL COMMENT '债券代码',
+    `bond_short_name`  VARCHAR(128) DEFAULT NULL COMMENT '债券简称',
+    `bond_type`        VARCHAR(32)  DEFAULT NULL COMMENT '债券类型：中期票据/公司债/可交换债/商业银行债/短期融资券/资产支持证券/超短期融资券/其他',
+    `adjust_type`      VARCHAR(32)  DEFAULT NULL COMMENT '调整类型：手工调整/联动调整/互斥调整/关联调整/Excel导入/手动批量调整',
+    `adjust_mode`      VARCHAR(8)   DEFAULT NULL COMMENT '调整模式：调入/调出',
+    `target_pool_id`   BIGINT       DEFAULT NULL COMMENT '目标投资池 ID，关联 ip_investment_pool.id',
+    `target_pool_name` VARCHAR(128) DEFAULT NULL COMMENT '目标投资池名称',
+    `pool_type`        VARCHAR(32)  DEFAULT NULL COMMENT '投资池类型：研究池/基金池/限制池/其他池/行业池/白名单/黑名单/私募池',
+    `audit_status`     VARCHAR(4)   DEFAULT NULL COMMENT '审核状态：-1=无效调整 / 00=待审核 / 10=审核通过 / 11=驳回待修改 / 20=审批通过 / 21=审批驳回 / 99=已撤回',
+    `adjuster_id`      VARCHAR(32)  DEFAULT NULL COMMENT '调整人 ID',
+    `adjuster_name`    VARCHAR(64)  DEFAULT NULL COMMENT '调整人名称',
+    `adjust_reason`    VARCHAR(500) DEFAULT NULL COMMENT '调整原因',
+    `adjust_advice`    VARCHAR(500) DEFAULT NULL COMMENT '调整意见',
+    `attachment_files` TEXT         DEFAULT NULL COMMENT '附件报告文件路径（JSON数组）',
+    `material_files`   TEXT         DEFAULT NULL COMMENT '其他材料文件路径（JSON数组）',
+    `submit_time`      DATETIME     DEFAULT NULL COMMENT '提交时间',
+    `audit_time`       DATETIME     DEFAULT NULL COMMENT '审核时间',
+    `entry_time`       DATETIME     DEFAULT NULL COMMENT '入池时间',
+    `is_deleted`       TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
+    `crte_time`        DATETIME     DEFAULT NULL COMMENT '创建时间',
+    `updt_time`        DATETIME     DEFAULT NULL COMMENT '修改时间',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+    COMMENT = '债券池调库记录表';
