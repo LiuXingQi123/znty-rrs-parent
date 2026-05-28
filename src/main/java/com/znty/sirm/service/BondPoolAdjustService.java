@@ -10,9 +10,12 @@ import com.znty.sirm.model.BondInfoBo;
 import com.znty.sirm.model.BondInfoDetailDto;
 import com.znty.sirm.model.BondInfoDto;
 import com.znty.sirm.model.BondPoolAdjustReq;
+import com.znty.sirm.model.BondPoolAdjustSubmitReq;
 import com.znty.sirm.model.InvestmentPoolBo;
+import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.PoolTreeNodeDto;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
@@ -108,6 +111,7 @@ public class BondPoolAdjustService {
     private BondInfoDetailDto toBondInfoDetailDto(BondInfoBo bo) {
         BondInfoDetailDto d = new BondInfoDetailDto();
         d.setFullName(bo.getBInfoFullname());
+        d.setBondShortName(bo.getSInfoName());
         d.setBondCode(bo.getSInfoCode());
         d.setIssuerName(bo.getBInfoIssuer());
         d.setNibCode(bo.getSWindcodeNib());
@@ -157,6 +161,40 @@ public class BondPoolAdjustService {
         node.setOtherMaterials(null);
         node.setChildren(new ArrayList<>());
         return node;
+    }
+
+    /** 提交调库申请 */
+    @Transactional(rollbackFor = Exception.class)
+    public void submitAdjust(BondPoolAdjustSubmitReq req) {
+        if (req.getItems() == null || req.getItems().isEmpty()) {
+            throw new BizException("调库项不能为空");
+        }
+        for (BondPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            IpAdjustLogBo bo = buildAdjustLog(req, item);
+            bondPoolAdjustMapper.addAdjustLog(bo);
+        }
+    }
+
+    /** 构建调库记录实体 */
+    private IpAdjustLogBo buildAdjustLog(BondPoolAdjustSubmitReq req, BondPoolAdjustSubmitReq.AdjustItem item) {
+        IpAdjustLogBo bo = new IpAdjustLogBo();
+        bo.setBondId(req.getBondId());
+        bo.setBondCode(req.getBondCode());
+        bo.setBondShortName(req.getBondShortName());
+        bo.setBondType(req.getBondType());
+        bo.setAdjustType(req.getAdjustType());
+        bo.setAdjustMode(item.getAdjustMode());
+        bo.setTargetPoolId(item.getTargetPoolId());
+        bo.setTargetPoolName(item.getTargetPoolName());
+        bo.setPoolType(item.getPoolType());
+        bo.setAuditStatus("00");
+        bo.setAdjusterId(req.getAdjusterId());
+        bo.setAdjusterName(req.getAdjusterName());
+        bo.setAdjustReason(req.getAdjustReason());
+        bo.setAdjustAdvice(req.getAdjustAdvice());
+        bo.setAttachmentFiles(item.getAttachmentFiles());
+        bo.setMaterialFiles(item.getMaterialFiles());
+        return bo;
     }
 
     /** 债券类型 int → 中文 */

@@ -138,7 +138,7 @@ CREATE TABLE `ip_adjust_log`
     `adjust_mode`      VARCHAR(8)   DEFAULT NULL COMMENT '调整模式：调入/调出',
     `target_pool_id`   BIGINT       DEFAULT NULL COMMENT '目标投资池 ID，关联 ip_investment_pool.id',
     `target_pool_name` VARCHAR(128) DEFAULT NULL COMMENT '目标投资池名称',
-    `pool_type`        VARCHAR(32)  DEFAULT NULL COMMENT '投资池类型：研究池/基金池/限制池/其他池/行业池/白名单/黑名单/私募池',
+    `pool_type`        VARCHAR(32)  DEFAULT NULL COMMENT '投资池类型：research=研究池 / fund=基金池 / restricted=限制池 / other=其他池 / industry=行业池 / whitelist=白名单 / blacklist=黑名单 / private_placement=私募池',
     `audit_status`     VARCHAR(4)   DEFAULT NULL COMMENT '审核状态：-1=无效调整 / 00=待审核 / 10=审核通过 / 11=驳回待修改 / 20=审批通过 / 21=审批驳回 / 99=已撤回',
     `adjuster_id`      VARCHAR(32)  DEFAULT NULL COMMENT '调整人 ID',
     `adjuster_name`    VARCHAR(64)  DEFAULT NULL COMMENT '调整人名称',

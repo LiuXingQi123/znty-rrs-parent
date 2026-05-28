@@ -5,6 +5,7 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.BondInfoDetailDto;
 import com.znty.sirm.model.BondInfoDto;
 import com.znty.sirm.model.BondPoolAdjustReq;
+import com.znty.sirm.model.BondPoolAdjustSubmitReq;
 import com.znty.sirm.model.PoolTreeNodeDto;
 import com.znty.sirm.service.BondPoolAdjustService;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,5 +42,12 @@ public class BondPoolAdjustController {
     @PostMapping("/queryAdjustPoolTree")
     public ApiResponse<List<PoolTreeNodeDto>> queryAdjustPoolTree(@RequestBody BondPoolAdjustReq req) {
         return ApiResponse.success(bondPoolAdjustService.queryPoolTreeForAdjust(req.getBondId(), req.getAdjustDirection()));
+    }
+
+    /** 提交调库申请 */
+    @PostMapping("/submitAdjust")
+    public ApiResponse<String> submitAdjust(@RequestBody BondPoolAdjustSubmitReq req) {
+        bondPoolAdjustService.submitAdjust(req);
+        return ApiResponse.success("提交成功");
     }
 }

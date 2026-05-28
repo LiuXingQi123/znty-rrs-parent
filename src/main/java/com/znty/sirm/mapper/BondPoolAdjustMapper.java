@@ -1,6 +1,7 @@
 package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.BondInfoBo;
+import com.znty.sirm.model.IpAdjustLogBo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -19,4 +20,7 @@ public interface BondPoolAdjustMapper {
 
     /** 根据 ID 查询债券详情 */
     BondInfoBo queryBondDetail(@Param("bondId") Long bondId);
+
+    /** 新增调库记录 */
+    int addAdjustLog(IpAdjustLogBo bo);
 }

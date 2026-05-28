@@ -67,5 +67,16 @@
         FROM sirm_bondinfo
         WHERE id = #{bondId}
     </select>
+    <!-- 新增调库记录 -->
+    <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_log (bond_id, bond_code, bond_short_name, bond_type,
+            adjust_type, adjust_mode, target_pool_id, target_pool_name, pool_type,
+            audit_status, adjuster_id, adjuster_name, adjust_reason, adjust_advice,
+            attachment_files, material_files, submit_time, is_deleted, crte_time, updt_time)
+        VALUES (#{bondId}, #{bondCode}, #{bondShortName}, #{bondType},
+            #{adjustType}, #{adjustMode}, #{targetPoolId}, #{targetPoolName}, #{poolType},
+            #{auditStatus}, #{adjusterId}, #{adjusterName}, #{adjustReason}, #{adjustAdvice},
+            #{attachmentFiles}, #{materialFiles}, NOW(), 0, NOW(), NOW())
+    </insert>
 
 </mapper>

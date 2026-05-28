@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 public class BondInfoDetailDto {
     /** 债券全称 */
     private String fullName;
+    /** 债券简称 */
+    private String bondShortName;
     /** 债券代码 */
     private String bondCode;
     /** 发行人名称 */
