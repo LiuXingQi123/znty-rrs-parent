@@ -174,7 +174,7 @@ public class BondPoolAdjustService {
             logIds.add(bo.getId());
         }
         AdjustSubmitDto dto = new AdjustSubmitDto();
-        dto.setBondId(req.getBondId());
+        dto.setBondCode(req.getBondCode());
         dto.setSubmitCount(logIds.size());
         dto.setLogIds(logIds);
         return dto;
@@ -183,7 +183,6 @@ public class BondPoolAdjustService {
     /** 构建调库记录实体 */
     private IpAdjustLogBo buildAdjustLog(BondPoolAdjustSubmitReq req, BondPoolAdjustSubmitReq.AdjustItem item) {
         IpAdjustLogBo bo = new IpAdjustLogBo();
-        bo.setBondId(req.getBondId());
         bo.setBondCode(req.getBondCode());
         bo.setBondShortName(req.getBondShortName());
         bo.setBondType(req.getBondType());
@@ -204,10 +203,10 @@ public class BondPoolAdjustService {
 
     /** 查询债券的调库记录列表 */
     public List<AdjustLogDto> queryAdjustLogList(BondPoolAdjustReq req) {
-        if (req.getBondId() == null) {
-            throw new BizException("债券ID不能为空");
+        if (req.getBondCode() == null || req.getBondCode().isEmpty()) {
+            throw new BizException("债券代码不能为空");
         }
-        List<IpAdjustLogBo> logs = bondPoolAdjustMapper.queryAdjustLogList(req.getBondId());
+        List<IpAdjustLogBo> logs = bondPoolAdjustMapper.queryAdjustLogList(req.getBondCode());
         if (logs == null || logs.isEmpty()) {
             return new ArrayList<>();
         }

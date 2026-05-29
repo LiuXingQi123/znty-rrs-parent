@@ -24,6 +24,6 @@ public interface BondPoolAdjustMapper {
     /** 新增调库记录 */
     int addAdjustLog(IpAdjustLogBo bo);
 
-    /** 根据债券 ID 查询调库记录列表 */
-    List<IpAdjustLogBo> queryAdjustLogList(@Param("bondId") Long bondId);
+    /** 根据债券代码查询调库记录列表 */
+    List<IpAdjustLogBo> queryAdjustLogList(@Param("bondCode") String bondCode);
 }

@@ -6,10 +6,10 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 债券池调库记录表实体
+ * 投资池当前状态表实体
  */
 @Data
-public class IpAdjustLogBo {
+public class IpPoolStatusBo {
 
     /** 主键 ID */
     private Long id;
