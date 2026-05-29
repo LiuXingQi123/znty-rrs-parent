@@ -1,6 +1,6 @@
 # 后端开发规范（CLAUDE.md）
 
-> 适用项目：Spring Boot 2.x 后端项目
+> 适用项目：Spring Boot 1.x 后端项目
 
 ---
 
@@ -8,14 +8,15 @@
 
 | 技术 | 版本 |
 |------|------|
-| Spring Boot | 2.7.18 |
+| Spring Boot | 1.5.9.RELEASE |
 | Java | 1.8 |
 | Maven | — |
-| MyBatis（mybatis-spring-boot-starter） | 2.3.2 |
-| MySQL（mysql-connector-j） | 8.0.33 |
+| MyBatis（mybatis-spring-boot-starter） | 1.2.0 |
+| MySQL（mysql-connector-java） | 8.0.28 |
 | PageHelper | 4.0.0 |
-| H2 | — |
-| Lombok | — |
+| H2 | 2.3.232（test） |
+| Lombok | 1.18.38 |
+| QLExpress | 3.3.4 |
 
 > ⚠️ 如需引入上述以外的第三方库，须主动询问用户并经确认后方可使用，**不得擅自引入**。
 
