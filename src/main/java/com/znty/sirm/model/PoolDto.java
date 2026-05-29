@@ -1,14 +1,12 @@
 package com.znty.sirm.model;
 
 import lombok.Data;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * 投资池树节点返回对象（调库页面底部可调库/可调出库树展示）
+ * 投资池返回对象（调库页面可调入/可调出投资池列表）
  */
 @Data
-public class PoolTreeNodeDto {
+public class PoolDto {
     /** 投资池 ID */
     private Long id;
     /** 父级 ID */
@@ -25,10 +23,4 @@ public class PoolTreeNodeDto {
     private Long maxCapacity;
     /** 现有数量（占位，当前无 bond-pool 映射表） */
     private Integer currentCount;
-    /** 附件报告 */
-    private String attachmentReport;
-    /** 其他材料 */
-    private String otherMaterials;
-    /** 子节点 */
-    private List<PoolTreeNodeDto> children = new ArrayList<>();
 }

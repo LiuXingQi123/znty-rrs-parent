@@ -3,11 +3,12 @@ package com.znty.sirm.controller;
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.AdjustLogDto;
+import com.znty.sirm.model.AdjustSubmitDto;
 import com.znty.sirm.model.BondInfoDetailDto;
 import com.znty.sirm.model.BondInfoDto;
 import com.znty.sirm.model.BondPoolAdjustReq;
 import com.znty.sirm.model.BondPoolAdjustSubmitReq;
-import com.znty.sirm.model.PoolTreeNodeDto;
+import com.znty.sirm.model.PoolDto;
 import com.znty.sirm.service.BondPoolAdjustService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,25 +37,24 @@ public class BondPoolAdjustController {
     /** 查询债券详情（调库页面顶部信息） */
     @PostMapping("/queryBondDetail")
     public ApiResponse<BondInfoDetailDto> queryBondDetail(@RequestBody BondPoolAdjustReq req) {
-        return ApiResponse.success(bondPoolAdjustService.queryBondDetail(req.getBondId()));
+        return ApiResponse.success(bondPoolAdjustService.queryBondDetail(req));
     }
 
-    /** 查询可调库/可调出库的投资池树 */
-    @PostMapping("/queryAdjustPoolTree")
-    public ApiResponse<List<PoolTreeNodeDto>> queryAdjustPoolTree(@RequestBody BondPoolAdjustReq req) {
-        return ApiResponse.success(bondPoolAdjustService.queryPoolTreeForAdjust(req.getBondId(), req.getAdjustDirection()));
+    /** 查询可调入/可调出投资池列表（树结构由前端组装） */
+    @PostMapping("/queryAdjustPoolList")
+    public ApiResponse<List<PoolDto>> queryAdjustPoolList(@RequestBody BondPoolAdjustReq req) {
+        return ApiResponse.success(bondPoolAdjustService.queryAdjustPoolList(req));
     }
 
     /** 提交调库申请 */
     @PostMapping("/submitAdjust")
-    public ApiResponse<String> submitAdjust(@RequestBody BondPoolAdjustSubmitReq req) {
-        bondPoolAdjustService.submitAdjust(req);
-        return ApiResponse.success("提交成功");
+    public ApiResponse<AdjustSubmitDto> submitAdjust(@RequestBody BondPoolAdjustSubmitReq req) {
+        return ApiResponse.success(bondPoolAdjustService.submitAdjust(req));
     }
 
     /** 查询债券的调库记录列表 */
     @PostMapping("/queryAdjustLogList")
     public ApiResponse<List<AdjustLogDto>> queryAdjustLogList(@RequestBody BondPoolAdjustReq req) {
-        return ApiResponse.success(bondPoolAdjustService.queryAdjustLogList(req.getBondId()));
+        return ApiResponse.success(bondPoolAdjustService.queryAdjustLogList(req));
     }
 }

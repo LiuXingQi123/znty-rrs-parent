@@ -7,6 +7,7 @@ import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.BondPoolAdjustMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.model.AdjustLogDto;
+import com.znty.sirm.model.AdjustSubmitDto;
 import com.znty.sirm.model.BondInfoBo;
 import com.znty.sirm.model.BondInfoDetailDto;
 import com.znty.sirm.model.BondInfoDto;
@@ -14,7 +15,7 @@ import com.znty.sirm.model.BondPoolAdjustReq;
 import com.znty.sirm.model.BondPoolAdjustSubmitReq;
 import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.IpAdjustLogBo;
-import com.znty.sirm.model.PoolTreeNodeDto;
+import com.znty.sirm.model.PoolDto;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,44 +50,24 @@ public class BondPoolAdjustService {
     }
 
     /** 查询债券详情 */
-    public BondInfoDetailDto queryBondDetail(Long bondId) {
-        if (bondId == null) {
+    public BondInfoDetailDto queryBondDetail(BondPoolAdjustReq req) {
+        if (req.getBondId() == null) {
             throw new BizException("债券ID不能为空");
         }
-        BondInfoBo bo = bondPoolAdjustMapper.queryBondDetail(bondId);
+        BondInfoBo bo = bondPoolAdjustMapper.queryBondDetail(req.getBondId());
         if (bo == null) {
             throw new BizException(404, "债券不存在");
         }
         return toBondInfoDetailDto(bo);
     }
 
-    /** 查询可调库/可调出库的投资池树 */
-    public List<PoolTreeNodeDto> queryPoolTreeForAdjust(Long bondId, String adjustDirection) {
+    /** 查询可调库/可调出库的投资池列表（树结构由前端组装） */
+    public List<PoolDto> queryAdjustPoolList(BondPoolAdjustReq req) {
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
         if (allPools == null || allPools.isEmpty()) {
             return new ArrayList<>();
         }
-
-        // 构建 ID → 节点映射
-        Map<Long, PoolTreeNodeDto> nodeMap = new HashMap<>();
-        List<PoolTreeNodeDto> roots = new ArrayList<>();
-
-        for (InvestmentPoolBo pool : allPools) {
-            PoolTreeNodeDto node = toPoolTreeNode(pool);
-            nodeMap.put(node.getId(), node);
-        }
-
-        // 组装树结构
-        for (InvestmentPoolBo pool : allPools) {
-            PoolTreeNodeDto node = nodeMap.get(pool.getId());
-            if (pool.getParentId() != null && nodeMap.containsKey(pool.getParentId())) {
-                nodeMap.get(pool.getParentId()).getChildren().add(node);
-            } else {
-                roots.add(node);
-            }
-        }
-
-        return roots;
+        return allPools.stream().map(this::toPoolDto).collect(Collectors.toList());
     }
 
     /** BondInfoBo → BondInfoDto */
@@ -147,33 +128,37 @@ public class BondPoolAdjustService {
         return d;
     }
 
-    /** InvestmentPoolBo → PoolTreeNodeDto */
-    private PoolTreeNodeDto toPoolTreeNode(InvestmentPoolBo pool) {
-        PoolTreeNodeDto node = new PoolTreeNodeDto();
-        node.setId(pool.getId());
-        node.setParentId(pool.getParentId());
-        node.setPoolName(pool.getPoolName());
-        node.setPoolCode(pool.getPoolCode());
-        node.setPoolType(pool.getPoolType());
-        node.setPoolLevel(pool.getPoolLevel());
-        node.setMaxCapacity(pool.getMaxCapacity());
-        node.setCurrentCount(0);
-        node.setAttachmentReport(null);
-        node.setOtherMaterials(null);
-        node.setChildren(new ArrayList<>());
-        return node;
+    /** InvestmentPoolBo → PoolDto */
+    private PoolDto toPoolDto(InvestmentPoolBo pool) {
+        PoolDto dto = new PoolDto();
+        dto.setId(pool.getId());
+        dto.setParentId(pool.getParentId());
+        dto.setPoolName(pool.getPoolName());
+        dto.setPoolCode(pool.getPoolCode());
+        dto.setPoolType(pool.getPoolType());
+        dto.setPoolLevel(pool.getPoolLevel());
+        dto.setMaxCapacity(pool.getMaxCapacity());
+        dto.setCurrentCount(0);
+        return dto;
     }
 
     /** 提交调库申请 */
     @Transactional(rollbackFor = Exception.class)
-    public void submitAdjust(BondPoolAdjustSubmitReq req) {
+    public AdjustSubmitDto submitAdjust(BondPoolAdjustSubmitReq req) {
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("调库项不能为空");
         }
+        List<Long> logIds = new ArrayList<>();
         for (BondPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             IpAdjustLogBo bo = buildAdjustLog(req, item);
             bondPoolAdjustMapper.addAdjustLog(bo);
+            logIds.add(bo.getId());
         }
+        AdjustSubmitDto dto = new AdjustSubmitDto();
+        dto.setBondId(req.getBondId());
+        dto.setSubmitCount(logIds.size());
+        dto.setLogIds(logIds);
+        return dto;
     }
 
     /** 构建调库记录实体 */
@@ -199,11 +184,11 @@ public class BondPoolAdjustService {
     }
 
     /** 查询债券的调库记录列表 */
-    public List<AdjustLogDto> queryAdjustLogList(Long bondId) {
-        if (bondId == null) {
+    public List<AdjustLogDto> queryAdjustLogList(BondPoolAdjustReq req) {
+        if (req.getBondId() == null) {
             throw new BizException("债券ID不能为空");
         }
-        List<IpAdjustLogBo> logs = bondPoolAdjustMapper.queryAdjustLogList(bondId);
+        List<IpAdjustLogBo> logs = bondPoolAdjustMapper.queryAdjustLogList(req.getBondId());
         if (logs == null || logs.isEmpty()) {
             return new ArrayList<>();
         }
