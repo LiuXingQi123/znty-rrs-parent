@@ -4,8 +4,8 @@ import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.model.FlowOptionDto;
 import com.znty.sirm.model.InvestmentPoolDto;
 import com.znty.sirm.model.InvestmentPoolReq;
-import com.znty.sirm.model.RoleBo;
-import com.znty.sirm.model.UserBo;
+import com.znty.sirm.model.RoleDto;
+import com.znty.sirm.model.UserDto;
 import com.znty.sirm.service.InvestmentPoolService;
 import java.util.List;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,11 +26,11 @@ public class InvestmentPoolController {
     private InvestmentPoolService investmentPoolService;
 
     /**
-     * 查询投资池树
+     * 查询投资池列表（树结构由前端组装）
      */
-    @PostMapping("/queryPoolTree")
-    public ApiResponse<List<InvestmentPoolDto>> queryPoolTree(@RequestBody InvestmentPoolReq req) {
-        return ApiResponse.success(investmentPoolService.queryPoolTree());
+    @PostMapping("/queryPoolList")
+    public ApiResponse<List<InvestmentPoolDto>> queryPoolList(@RequestBody InvestmentPoolReq req) {
+        return ApiResponse.success(investmentPoolService.queryPoolList(req));
     }
 
     /**
@@ -86,30 +86,30 @@ public class InvestmentPoolController {
      */
     @PostMapping("/queryFlowOptionList")
     public ApiResponse<List<FlowOptionDto>> queryFlowOptionList(@RequestBody InvestmentPoolReq req) {
-        return ApiResponse.success(investmentPoolService.queryFlowOptionList());
+        return ApiResponse.success(investmentPoolService.queryFlowOptionList(req));
     }
 
     /**
-     * 初始化固定投资池树
+     * 初始化固定投资池列表（树结构由前端组装）
      */
-    @PostMapping("/initPoolTree")
-    public ApiResponse<List<InvestmentPoolDto>> initPoolTree(@RequestBody InvestmentPoolReq req) {
-        return ApiResponse.success(investmentPoolService.initPoolTree(req));
+    @PostMapping("/initPoolList")
+    public ApiResponse<List<InvestmentPoolDto>> initPoolList(@RequestBody InvestmentPoolReq req) {
+        return ApiResponse.success(investmentPoolService.initPoolList(req));
     }
 
     /**
      * 查询角色列表
      */
     @PostMapping("/queryRoleList")
-    public ApiResponse<List<RoleBo>> queryRoleList(@RequestBody InvestmentPoolReq req) {
-        return ApiResponse.success(investmentPoolService.queryRoleList());
+    public ApiResponse<List<RoleDto>> queryRoleList(@RequestBody InvestmentPoolReq req) {
+        return ApiResponse.success(investmentPoolService.queryRoleList(req));
     }
 
     /**
      * 查询人员列表
      */
     @PostMapping("/queryUserList")
-    public ApiResponse<List<UserBo>> queryUserList(@RequestBody InvestmentPoolReq req) {
+    public ApiResponse<List<UserDto>> queryUserList(@RequestBody InvestmentPoolReq req) {
         return ApiResponse.success(investmentPoolService.queryUserList(req));
     }
 

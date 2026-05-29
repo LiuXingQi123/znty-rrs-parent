@@ -51,23 +51,20 @@ public class FlowController {
 
     /** 更新流程基础信息。 */
     @PostMapping("/flows/updateFlow")
-    public ApiResponse<Void> updateFlow(@RequestBody FlowReq req) {
-        flowService.updateFlow(req);
-        return ApiResponse.success();
+    public ApiResponse<FlowDto> updateFlow(@RequestBody FlowReq req) {
+        return ApiResponse.success(flowService.updateFlow(req));
     }
 
     /** 删除流程。 */
     @PostMapping("/flows/deleteFlow")
-    public ApiResponse<Void> deleteFlow(@RequestBody IdRequest req) {
-        flowService.deleteFlow(req);
-        return ApiResponse.success();
+    public ApiResponse<FlowDto> deleteFlow(@RequestBody IdRequest req) {
+        return ApiResponse.success(flowService.deleteFlow(req));
     }
 
     /** 停用流程。 */
     @PostMapping("/flows/disableFlow")
-    public ApiResponse<Void> disableFlow(@RequestBody IdRequest req) {
-        flowService.disableFlow(req);
-        return ApiResponse.success();
+    public ApiResponse<FlowDto> disableFlow(@RequestBody IdRequest req) {
+        return ApiResponse.success(flowService.disableFlow(req));
     }
 
     // ==================== 流程设计器 ====================
@@ -101,20 +98,20 @@ public class FlowController {
     // ==================== 字典 ====================
 
     /** 查询角色字典。 */
-    @PostMapping("/dict/roles")
-    public ApiResponse<List<DictDto>> roles() {
-        return ApiResponse.success(flowService.roles());
+    @PostMapping("/dict/queryRoleList")
+    public ApiResponse<List<DictDto>> queryRoleList(@RequestBody FlowReq req) {
+        return ApiResponse.success(flowService.queryRoleList(req));
     }
 
     /** 查询自动任务选项。 */
-    @PostMapping("/dict/auto-tasks")
-    public ApiResponse<List<DictDto>> autoTasks() {
-        return ApiResponse.success(flowService.autoTasks());
+    @PostMapping("/dict/queryAutoTaskList")
+    public ApiResponse<List<DictDto>> queryAutoTaskList(@RequestBody FlowReq req) {
+        return ApiResponse.success(flowService.queryAutoTaskList(req));
     }
 
     /** 查询条件字段选项。 */
-    @PostMapping("/dict/cond-fields")
-    public ApiResponse<List<DictDto>> condFields() {
-        return ApiResponse.success(flowService.condFields());
+    @PostMapping("/dict/queryCondFieldList")
+    public ApiResponse<List<DictDto>> queryCondFieldList(@RequestBody FlowReq req) {
+        return ApiResponse.success(flowService.queryCondFieldList(req));
     }
 }

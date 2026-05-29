@@ -3,6 +3,8 @@ package com.znty.sirm.controller;
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.IdRequest;
 import com.znty.sirm.common.PageResult;
+import com.znty.sirm.model.CategoryDto;
+import com.znty.sirm.model.PresetSetDto;
 import com.znty.sirm.model.RuleDto;
 import com.znty.sirm.model.RuleReq;
 import com.znty.sirm.model.RuleRunResultDto;
@@ -17,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 规则管理统一 REST 接口，路由前缀 /api/v1。
@@ -61,7 +62,7 @@ public class RuleController {
 
     /** 软删除规则（标记删除，不物理删除） */
     @PostMapping("/rules/deleteRule")
-    public ApiResponse<Boolean> deleteRule(@RequestBody IdRequest req) {
+    public ApiResponse<RuleDto> deleteRule(@RequestBody IdRequest req) {
         return ApiResponse.success(ruleService.deleteRule(req));
     }
 
@@ -95,7 +96,7 @@ public class RuleController {
 
     /** 物理删除测试用例及其关联参数数据 */
     @PostMapping("/test-cases/deleteTestCase")
-    public ApiResponse<Boolean> deleteTestCase(@RequestBody IdRequest req) {
+    public ApiResponse<TestCaseDto> deleteTestCase(@RequestBody IdRequest req) {
         return ApiResponse.success(testCaseService.deleteTestCase(req));
     }
 
@@ -119,15 +120,15 @@ public class RuleController {
 
     // ==================== 选项字典 ====================
 
-    /** 查询所有启用的规则分类列表，返回 code/name 键值对 */
-    @PostMapping("/options/queryCategories")
-    public ApiResponse<List<Map<String, String>>> queryCategories() {
+    /** 查询所有启用的规则分类列表 */
+    @PostMapping("/options/queryCategoryList")
+    public ApiResponse<List<CategoryDto>> queryCategoryList() {
         return ApiResponse.success(ruleService.queryCategoryList());
     }
 
     /** 查询所有启用的预设选项集及其选项子项 */
-    @PostMapping("/options/queryPresetSets")
-    public ApiResponse<List<Map<String, Object>>> queryPresetSets() {
+    @PostMapping("/options/queryPresetSetList")
+    public ApiResponse<List<PresetSetDto>> queryPresetSetList() {
         return ApiResponse.success(ruleService.queryPresetSetList());
     }
 }

@@ -160,7 +160,7 @@ public class FlowService {
 
     @Transactional(rollbackFor = Exception.class)
     /** 更新流程基础信息。 */
-    public void updateFlow(FlowReq req) {
+    public FlowDto updateFlow(FlowReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
@@ -182,28 +182,34 @@ public class FlowService {
         def.setUpdtTime(new Date());
         flowMapper.updateFlowDefinition(def);
         flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, new Date(), "UPDATE"));
+        IdRequest idReq = new IdRequest();
+        idReq.setId(req.getId());
+        return queryFlowDetail(idReq);
     }
 
     // ==================== 删除流程（软删除） ====================
 
     @Transactional(rollbackFor = Exception.class)
     /** 删除流程。 */
-    public void deleteFlow(IdRequest req) {
+    public FlowDto deleteFlow(IdRequest req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
         }
+        // 删除前查出实体一并返回，便于前端展示
+        FlowDto deleted = queryFlowDetail(req);
         Date now = new Date();
         flowMapper.deleteFlowLogical(req.getId(), now);
         def.setIsDeleted(1); def.setUpdtTime(now);
         flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "DELETE"));
+        return deleted;
     }
 
     // ==================== 停用 ====================
 
     @Transactional(rollbackFor = Exception.class)
     /** 停用流程：更新定义状态 + 将当前活跃版本标为停用以反映在历史中。 */
-    public void disableFlow(IdRequest req) {
+    public FlowDto disableFlow(IdRequest req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
@@ -233,6 +239,7 @@ public class FlowService {
             latestActive.setStatus("disabled"); latestActive.setUpdtTime(now);
             flowMapper.createFlowVersionEvt(toFlowVerEvt(latestActive, L_OPTER, now, "UPDATE"));
         }
+        return queryFlowDetail(req);
     }
 
     // ==================== 保存草稿 ====================
@@ -453,7 +460,7 @@ public class FlowService {
     // ==================== 字典 ====================
 
     /** 查询角色字典。 */
-    public List<DictDto> roles() {
+    public List<DictDto> queryRoleList(FlowReq req) {
         return flowMapper.roleDictSelectAll().stream().map(r -> {
             DictDto d = new DictDto();
             d.setRoleCode(r.getRoleCode());
@@ -464,7 +471,7 @@ public class FlowService {
     }
 
     /** 查询自动任务选项。 */
-    public List<DictDto> autoTasks() {
+    public List<DictDto> queryAutoTaskList(FlowReq req) {
         List<DictDto> list = new ArrayList<>();
         list.add(buildTask("createAccount", "创建账号"));
         list.add(buildTask("updatePosition", "更新持仓状态"));
@@ -476,7 +483,7 @@ public class FlowService {
     }
 
     /** 查询条件字段选项。 */
-    public List<DictDto> condFields() {
+    public List<DictDto> queryCondFieldList(FlowReq req) {
         List<DictDto> groups = new ArrayList<>();
 
         DictDto g1 = new DictDto();

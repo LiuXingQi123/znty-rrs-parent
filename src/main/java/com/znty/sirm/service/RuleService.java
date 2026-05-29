@@ -7,6 +7,8 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.RuleMapper;
 import com.znty.sirm.mapper.TestCaseMapper;
+import com.znty.sirm.model.CategoryDto;
+import com.znty.sirm.model.PresetSetDto;
 import com.znty.sirm.model.RuleDefinitionBo;
 import com.znty.sirm.model.RuleDto;
 import com.znty.sirm.model.RuleParamBo;
@@ -135,15 +137,17 @@ public class RuleService {
      * 软删除规则（deleted_flag 置为 1，保留数据）。
      */
     @Transactional(rollbackFor = Exception.class)
-    public Boolean deleteRule(IdRequest req) {
+    public RuleDto deleteRule(IdRequest req) {
         if (req == null || req.getId() == null) {
             throw new BizException("规则ID不能为空");
         }
+        // 删除前查出实体一并返回，便于前端展示
+        RuleDto deleted = detailById(req.getId());
         int updated = ruleMapper.softDelete(req.getId());
         if (updated == 0) {
             throw new BizException("规则不存在");
         }
-        return true;
+        return deleted;
     }
 
     // ==================== 规则查询辅助 ====================
@@ -242,22 +246,22 @@ public class RuleService {
     // ==================== 选项字典 ====================
 
     /**
-     * 查询所有启用的规则分类，返回 code/name 键值对列表。
+     * 查询所有启用的规则分类
      */
-    public List<Map<String, String>> queryCategoryList() {
+    public List<CategoryDto> queryCategoryList() {
         return ruleMapper.selectCategories().stream().map(category -> {
-            Map<String, String> map = new LinkedHashMap<>();
-            map.put("code", category.getCategoryCode());
-            map.put("name", category.getCategoryName());
-            return map;
+            CategoryDto dto = new CategoryDto();
+            dto.setCode(category.getCategoryCode());
+            dto.setName(category.getCategoryName());
+            return dto;
         }).collect(Collectors.toList());
     }
 
     /**
-     * 查询所有启用的预设选项集及其选项子项。
+     * 查询所有启用的预设选项集及其选项子项
      * <p>采用批量加载：先查选项集 → 按 setId 批量查子项 → 分组组装。</p>
      */
-    public List<Map<String, Object>> queryPresetSetList() {
+    public List<PresetSetDto> queryPresetSetList() {
         List<RulePresetOptionSetBo> sets = ruleMapper.selectPresetSets();
         if (sets.isEmpty()) {
             return Collections.emptyList();
@@ -269,11 +273,11 @@ public class RuleService {
                         Collectors.mapping(RulePresetOptionItemBo::getOptionValue, Collectors.toList())
                 ));
         return sets.stream().map(set -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", set.getId());
-            map.put("name", set.getSetName());
-            map.put("options", itemMap.getOrDefault(set.getId(), Collections.emptyList()));
-            return map;
+            PresetSetDto dto = new PresetSetDto();
+            dto.setId(set.getId());
+            dto.setName(set.getSetName());
+            dto.setOptions(itemMap.getOrDefault(set.getId(), Collections.emptyList()));
+            return dto;
         }).collect(Collectors.toList());
     }
 

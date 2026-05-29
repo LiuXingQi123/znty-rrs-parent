@@ -119,11 +119,13 @@ public class TestCaseService {
      * 物理删除测试用例及其关联的参数数据。
      */
     @Transactional(rollbackFor = Exception.class)
-    public Boolean deleteTestCase(IdRequest req) {
+    public TestCaseDto deleteTestCase(IdRequest req) {
         RuleTestCaseBo testCase = requireCase(req == null ? null : req.getId());
+        // 删除前查出实体一并返回，便于前端展示
+        TestCaseDto deleted = detailById(testCase.getId());
         testCaseMapper.deleteParamsByCaseId(testCase.getId());
         testCaseMapper.deleteById(testCase.getId());
-        return true;
+        return deleted;
     }
 
     /**

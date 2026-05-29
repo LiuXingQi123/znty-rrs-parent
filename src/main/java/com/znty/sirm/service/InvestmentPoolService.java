@@ -12,13 +12,14 @@ import com.znty.sirm.model.PoolAutoRuleBo;
 import com.znty.sirm.model.PoolPermissionBo;
 import com.znty.sirm.model.PoolRelationBo;
 import com.znty.sirm.model.RoleBo;
+import com.znty.sirm.model.RoleDto;
 import com.znty.sirm.model.UserBo;
+import com.znty.sirm.model.UserDto;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,25 +56,12 @@ public class InvestmentPoolService {
     private ObjectMapper objectMapper;
 
     /**
-     * 查询投资池树
+     * 查询投资池列表（树结构由前端组装）
      */
-    public List<InvestmentPoolDto> queryPoolTree() {
-        List<InvestmentPoolDto> poolList = investmentPoolMapper.queryPoolList().stream()
+    public List<InvestmentPoolDto> queryPoolList(InvestmentPoolReq req) {
+        return investmentPoolMapper.queryPoolList().stream()
                 .map(this::convertPool)
                 .collect(Collectors.toList());
-        Map<Long, InvestmentPoolDto> poolMap = new LinkedHashMap<>();
-        for (InvestmentPoolDto pool : poolList) {
-            poolMap.put(pool.getId(), pool);
-        }
-        List<InvestmentPoolDto> tree = new ArrayList<>();
-        for (InvestmentPoolDto pool : poolList) {
-            if (pool.getParentId() == null || !poolMap.containsKey(pool.getParentId())) {
-                tree.add(pool);
-            } else {
-                poolMap.get(pool.getParentId()).getChildren().add(pool);
-            }
-        }
-        return tree;
     }
 
     /**
@@ -244,7 +232,7 @@ public class InvestmentPoolService {
     /**
      * 查询流程下拉选项
      */
-    public List<FlowOptionDto> queryFlowOptionList() {
+    public List<FlowOptionDto> queryFlowOptionList(InvestmentPoolReq req) {
         FlowOptionDto empty = new FlowOptionDto();
         empty.setFlowId(null);
         empty.setFlowKey("");
@@ -256,12 +244,12 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 初始化固定投资池树
+     * 初始化固定投资池列表（树结构由前端组装）
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<InvestmentPoolDto> initPoolTree(InvestmentPoolReq req) {
+    public List<InvestmentPoolDto> initPoolList(InvestmentPoolReq req) {
         if (investmentPoolMapper.queryPoolCount() > 0) {
-            return queryPoolTree();
+            return queryPoolList(req);
         }
         String operatorId = getOperatorId(req);
         InvestmentPoolBo credit = addSeedPool(null, "credit_bond_root", "信用债大库", "credit_bond", 1, 1, 1, operatorId);
@@ -270,20 +258,22 @@ public class InvestmentPoolService {
         addSeedPool(null, "convertible_bond_root", "转债库", "convertible_bond", 1, 3, 1, operatorId);
         InvestmentPoolBo special = addSeedPool(null, "special_account_root", "专户产品", "special_account", 1, 4, 1, operatorId);
         addLevelPools(special.getId(), "special_account", operatorId);
-        return queryPoolTree();
+        return queryPoolList(req);
     }
 
     /**
      * 查询角色列表
      */
-    public List<RoleBo> queryRoleList() {
-        return investmentPoolMapper.queryRoleList();
+    public List<RoleDto> queryRoleList(InvestmentPoolReq req) {
+        return investmentPoolMapper.queryRoleList().stream()
+                .map(this::convertRole)
+                .collect(Collectors.toList());
     }
 
     /**
      * 查询人员列表
      */
-    public List<UserBo> queryUserList(InvestmentPoolReq req) {
+    public List<UserDto> queryUserList(InvestmentPoolReq req) {
         Long roleId = req.getRoleId();
         String keyword = req.getKeyword();
         List<Long> roleIds = null;
@@ -292,7 +282,28 @@ public class InvestmentPoolService {
             List<RoleBo> allRoles = investmentPoolMapper.queryRoleList();
             collectDescendantRoleIds(roleId, roleIds, allRoles);
         }
-        return investmentPoolMapper.queryUserList(roleIds, keyword);
+        return investmentPoolMapper.queryUserList(roleIds, keyword).stream()
+                .map(this::convertUser)
+                .collect(Collectors.toList());
+    }
+
+    /** RoleBo → RoleDto */
+    private RoleDto convertRole(RoleBo bo) {
+        RoleDto dto = new RoleDto();
+        dto.setId(bo.getId());
+        dto.setRoleName(bo.getRoleName());
+        dto.setParentId(bo.getParentId());
+        dto.setSortOrder(bo.getSortOrder());
+        return dto;
+    }
+
+    /** UserBo → UserDto */
+    private UserDto convertUser(UserBo bo) {
+        UserDto dto = new UserDto();
+        dto.setId(bo.getId());
+        dto.setUserName(bo.getUserName());
+        dto.setRoleName(bo.getRoleName());
+        return dto;
     }
 
     /**
