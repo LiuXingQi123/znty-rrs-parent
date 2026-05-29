@@ -16,11 +16,13 @@ import com.znty.sirm.model.BondPoolAdjustSubmitReq;
 import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.PoolDto;
+import com.znty.sirm.model.PoolRelationBo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -67,7 +69,20 @@ public class BondPoolAdjustService {
         if (allPools == null || allPools.isEmpty()) {
             return new ArrayList<>();
         }
-        return allPools.stream().map(this::toPoolDto).collect(Collectors.toList());
+        List<PoolRelationBo> mutexList = investmentPoolMapper.queryMutexRelationList();
+        // 按池 ID 分组互斥关系：调入互斥 / 调出互斥
+        Map<Long, List<Long>> inMutexMap = new HashMap<>();
+        Map<Long, List<Long>> outMutexMap = new HashMap<>();
+        if (mutexList != null) {
+            for (PoolRelationBo r : mutexList) {
+                if ("in_mutex".equals(r.getRelationType())) {
+                    inMutexMap.computeIfAbsent(r.getPoolId(), k -> new ArrayList<>()).add(r.getRelationPoolId());
+                } else if ("out_mutex".equals(r.getRelationType())) {
+                    outMutexMap.computeIfAbsent(r.getPoolId(), k -> new ArrayList<>()).add(r.getRelationPoolId());
+                }
+            }
+        }
+        return allPools.stream().map(p -> toPoolDto(p, inMutexMap, outMutexMap)).collect(Collectors.toList());
     }
 
     /** BondInfoBo → BondInfoDto */
@@ -129,7 +144,9 @@ public class BondPoolAdjustService {
     }
 
     /** InvestmentPoolBo → PoolDto */
-    private PoolDto toPoolDto(InvestmentPoolBo pool) {
+    private PoolDto toPoolDto(InvestmentPoolBo pool,
+                              Map<Long, List<Long>> inMutexMap,
+                              Map<Long, List<Long>> outMutexMap) {
         PoolDto dto = new PoolDto();
         dto.setId(pool.getId());
         dto.setParentId(pool.getParentId());
@@ -139,6 +156,8 @@ public class BondPoolAdjustService {
         dto.setPoolLevel(pool.getPoolLevel());
         dto.setMaxCapacity(pool.getMaxCapacity());
         dto.setCurrentCount(0);
+        dto.setInMutexPoolIds(inMutexMap.getOrDefault(pool.getId(), Collections.emptyList()));
+        dto.setOutMutexPoolIds(outMutexMap.getOrDefault(pool.getId(), Collections.emptyList()));
         return dto;
     }
 

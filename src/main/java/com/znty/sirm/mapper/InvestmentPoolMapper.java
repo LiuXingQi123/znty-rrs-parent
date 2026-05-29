@@ -156,6 +156,11 @@ public interface InvestmentPoolMapper {
     int deleteAutoRuleByPoolIds(@Param("poolIds") List<Long> poolIds);
 
     /**
+     * 查询所有互斥关系（调入互斥 + 调出互斥）
+     */
+    List<PoolRelationBo> queryMutexRelationList();
+
+    /**
      * 查询流程下拉选项
      */
     List<FlowOptionDto> queryFlowOptionList();

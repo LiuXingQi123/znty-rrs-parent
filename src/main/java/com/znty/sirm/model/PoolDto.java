@@ -1,6 +1,7 @@
 package com.znty.sirm.model;
 
 import lombok.Data;
+import java.util.List;
 
 /**
  * 投资池返回对象（调库页面可调入/可调出投资池列表）
@@ -23,4 +24,8 @@ public class PoolDto {
     private Long maxCapacity;
     /** 现有数量（占位，当前无 bond-pool 映射表） */
     private Integer currentCount;
+    /** 调入互斥池 ID 列表 */
+    private List<Long> inMutexPoolIds;
+    /** 调出互斥池 ID 列表 */
+    private List<Long> outMutexPoolIds;
 }

@@ -332,6 +332,41 @@ INSERT INTO `ip_investment_pool` (`id`, `parent_id`, `pool_code`, `pool_name`, `
 (13, 9, 'special_account_level_4', '四级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 4, 4, 'enabled', 0, NOW(), NOW()),
 (14, 9, 'special_account_level_5', '五级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 4, 5, 'enabled', 0, NOW(), NOW());
 
+-- 初始化投资池互斥关系（信用债库 2-6 互斥，专户产品 10-14 互斥）
+INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`)
+SELECT a.id,
+       'in_mutex',
+       b.id,
+       b.pool_name,
+       0,
+       0,
+       NOW(),
+       NOW()
+FROM ip_investment_pool a
+         JOIN ip_investment_pool b ON a.parent_id = b.parent_id AND a.id != b.id
+WHERE a.parent_id IN (1, 9)
+  AND a.is_deleted = 0
+  AND b.is_deleted = 0;
+
+INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`)
+SELECT a.id,
+       'out_mutex',
+       b.id,
+       b.pool_name,
+       0,
+       0,
+       NOW(),
+       NOW()
+FROM ip_investment_pool a
+         JOIN ip_investment_pool b ON a.parent_id = b.parent_id AND a.id != b.id
+WHERE a.parent_id IN (1, 9)
+  AND a.is_deleted = 0
+  AND b.is_deleted = 0;
+
+INSERT INTO `ip_pool_relation_evt` (`id`, `pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
+SELECT id, pool_id, relation_type, relation_pool_id, relation_pool_name, sort_order, is_deleted, crte_time, updt_time, 'system', NOW(), '新增'
+FROM ip_pool_relation;
+
 INSERT INTO `ip_investment_pool_evt` (
     `id`, `parent_id`, `pool_code`, `pool_name`, `pool_type`, `pool_level`, `market_codes`, `variety_codes`,
     `hs_pool_name`, `in_flow_id`, `in_flow_key`, `in_flow_name`, `out_flow_id`, `out_flow_key`, `out_flow_name`,

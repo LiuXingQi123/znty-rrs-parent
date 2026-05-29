@@ -446,6 +446,18 @@
         </foreach>
     </update>
 
+    <!-- 查询所有互斥关系（调入互斥 + 调出互斥） -->
+    <select id="queryMutexRelationList" resultType="com.znty.sirm.model.PoolRelationBo">
+        SELECT pool_id          AS poolId,
+               relation_type    AS relationType,
+               relation_pool_id AS relationPoolId,
+               relation_pool_name AS relationPoolName
+        FROM ip_pool_relation
+        WHERE relation_type IN ('in_mutex', 'out_mutex')
+          AND is_deleted = 0
+        ORDER BY pool_id ASC, relation_type ASC, sort_order ASC
+    </select>
+
     <!-- 查询流程下拉选项 -->
     <select id="queryFlowOptionList" resultType="com.znty.sirm.model.FlowOptionDto">
         SELECT id AS flowId,
