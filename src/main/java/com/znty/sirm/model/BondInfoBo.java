@@ -2,6 +2,7 @@ package com.znty.sirm.model;
 
 import lombok.Data;
 import java.math.BigDecimal;
+import java.util.Date;
 
 /**
  * 债券信息业务对象，对应 sirm_bondinfo 表
@@ -10,7 +11,7 @@ import java.math.BigDecimal;
 public class BondInfoBo {
     /** 主键 ID */
     private Long id;
-    /** 关联代码代码（债券代码） */
+    /** 关联代码 */
     private String sInfoCode;
     /** 债券全称 */
     private String bInfoFullname;
@@ -24,9 +25,9 @@ public class BondInfoBo {
     private String sWindcodeSz;
     /** 银行间市场代码 */
     private String sWindcodeNib;
-    /** 其他市场代码 */
+    /** 其他 */
     private String sWindcodeNbc;
-    /** 债券类型（1=中期票据 2=公司债 3=可交换债 4=商业银行债 5=短期融资券 6=资产支持证券 7=超短期融资券） */
+    /** 债券类型 */
     private Integer dBondType;
     /** 债券期限(年) */
     private BigDecimal bInfoTermYear;
@@ -67,13 +68,13 @@ public class BondInfoBo {
     /** 基本利差(%) */
     private String bInfoSpread;
     /** 是否可赎回 */
-    private String bInfoRedemptionflag;
+    private String isRedemption;
     /** 赎回日期 */
     private String bInfoRedemptiondate;
     /** 赎回价格 */
     private BigDecimal bInfoRedemptionprice;
     /** 可回售性 */
-    private String bInfoRepurchaseflag;
+    private String isRepurchase;
     /** 回售日期 */
     private String bInfoRepurchasedate;
     /** 回售价格 */
@@ -82,14 +83,22 @@ public class BondInfoBo {
     private String bInfoPaymentdate;
     /** 摘牌日 */
     private String bInfoDelistdate;
-    /** 短期融资券利率说明 */
-    private String bInfoRedemptioncontent;
+    /** 短期融资券,如果F4_1090等于DQ时-1,否则为0 */
+    private Integer sInfoSecuritiestypesDq;
+    /** 利率说明 */
+    private String bInfoCoupontxt;
     /** 赎回条款 */
-    private String bInfoIssuetype;
+    private String bInfoRedemptioncontent;
     /** 发行方式 */
-    private String bInfoCallbkorputbkdate;
+    private String bInfoIssuetype;
     /** 行权日 */
+    private String bInfoCallbkorputbkdate;
+    /** 赎回条款 */
     private String bInfoContent;
+    /** 创建时间 */
+    private Date createtime;
+    /** 更新时间 */
+    private Date ts;
     /** 是否公司债 */
     private Integer isCorporateBond;
     /** 是否可提前兑付 */
@@ -112,34 +121,44 @@ public class BondInfoBo {
     private String isYx;
     /** 是否递延 */
     private String isDy;
-    /** 是否递延（重复字段） */
-    private String isDeferred;
-    /** 债券期限(文本形式) */
-    private String bInfoTermStr;
-    /** 主承销商 */
-    private String bInfoLeadUnderwriter;
-    /** 当期利率(%) */
-    private BigDecimal bInfoCurInterestrate;
-    /** 质押比率(%) */
-    private BigDecimal bInfoPledgeRatio;
-    /** 担保情况 */
-    private String bInfoGuaranteeStatus;
-    /** 行权剩余期限 */
-    private String bInfoRemExeTerm;
-    /** 回售行权期限 */
-    private String bInfoPutExeTerm;
-    /** 赎回行权剩余期限 */
-    private String bInfoCallRemTerm;
-    /** 含权债剩余期限 */
-    private String bInfoOptRemTerm;
-    /** 评级机构 */
-    private String creditRatingAgency;
+    /** 回售剩余期限-最新 */
+    private String dateRedemtionExists;
+    /** 赎回剩余期限-最新 */
+    private String dateCallExists;
+    /** 债券期限-最新 */
+    private String dateExists;
+    /** 含权债剩余期限-最新 */
+    private String dateInrightExists;
     /** 债券评级 */
-    private String bCreditRating;
+    private String ratingBond;
     /** 主体评级 */
-    private String issuerCreditRating;
+    private String ratingBondissuer;
     /** 展望评级 */
     private String ratingOutlook;
+    /** 债券评级机构 */
+    private String ratingBondAgency;
+    /** 主体评级机构 */
+    private String ratingBondissuerAgency;
+    /** 中债隐含评级 */
+    private String ratingCnbd;
+    /** 是否含权债 */
+    private String isInright;
+    /** 含权债下一个行权日 */
+    private String dateInrightNext;
+    /** 发行总额-亿 */
+    private BigDecimal bIssueAmountact;
+    /** 担保方式 */
+    private String bAgencyGrnttype;
+    /** 担保人 */
+    private String guarantor;
+    /** 担保人ID */
+    private String guarantorId;
+    /** 主承销商 */
+    private String bAgencyName;
+    /** 主承销商Id */
+    private String bAgencyNameid;
+    /** 质押比率(%) */
+    private BigDecimal bInfoPledgeRatio;
     /** 主体内评分档 */
     private String innerIssuerRating;
     /** 担保人主体内评分 */

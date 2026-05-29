@@ -81,11 +81,11 @@ public class BondPoolAdjustService {
         d.setIssueAmount(bo.getBIssueAmountplan());
         d.setCarryDate(bo.getBInfoCarrydate());
         d.setMaturityDate(bo.getBInfoMaturitydate());
-        d.setBondRating(bo.getBCreditRating());
-        d.setIssuerRating(bo.getIssuerCreditRating());
+        d.setBondRating(bo.getRatingBond());
+        d.setIssuerRating(bo.getRatingBondissuer());
         d.setBondType(mapBondType(bo.getDBondType()));
-        d.setCurrentRate(bo.getBInfoCurInterestrate());
-        d.setTermStr(bo.getBInfoTermStr());
+        d.setCurrentRate(null);
+        d.setTermStr(bo.getDateExists());
         return d;
     }
 
@@ -104,24 +104,24 @@ public class BondPoolAdjustService {
             d.setExchangeCode(bo.getSWindcodeSz());
         }
         d.setIssueAmount(bo.getBIssueAmountplan());
-        d.setCurrentRate(bo.getBInfoCurInterestrate());
-        d.setRemExeTerm(bo.getBInfoRemExeTerm());
+        d.setCurrentRate(null);
+        d.setRemExeTerm(bo.getDateInrightExists());
         d.setCarryDate(bo.getBInfoCarrydate());
         d.setMaturityDate(bo.getBInfoMaturitydate());
         d.setPledgeRatio(bo.getBInfoPledgeRatio());
-        d.setRatingAgency(bo.getCreditRatingAgency());
-        d.setBondRating(bo.getBCreditRating());
-        d.setIssuerRating(bo.getIssuerCreditRating());
+        d.setRatingAgency(bo.getRatingBondAgency());
+        d.setBondRating(bo.getRatingBond());
+        d.setIssuerRating(bo.getRatingBondissuer());
         d.setRatingOutlook(bo.getRatingOutlook());
-        d.setGuaranteeStatus(bo.getBInfoGuaranteeStatus());
-        d.setLeadUnderwriter(bo.getBInfoLeadUnderwriter());
+        d.setGuaranteeStatus(bo.getBAgencyGrnttype());
+        d.setLeadUnderwriter(bo.getBAgencyName());
         d.setInnerIssuerRating(bo.getInnerIssuerRating());
         d.setBondType(mapBondType(bo.getDBondType()));
-        d.setPutExeTerm(bo.getBInfoPutExeTerm());
-        d.setCallRemTerm(bo.getBInfoCallRemTerm());
+        d.setPutExeTerm(bo.getDateRedemtionExists());
+        d.setCallRemTerm(bo.getDateCallExists());
         d.setInnerGuarantorRating(bo.getInnerGuarantorRating());
-        d.setOptRemTerm(bo.getBInfoOptRemTerm());
-        d.setTermStr(bo.getBInfoTermStr());
+        d.setOptRemTerm(bo.getDateInrightExists());
+        d.setTermStr(bo.getDateExists());
         d.setFundUsage(bo.getBFundUsage());
         d.setPromptReason(bo.getBPromptReason());
         d.setAnalysis(bo.getBAnalysis());

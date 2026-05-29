@@ -66,7 +66,7 @@ Mapper       ── 数据库操作接口，对应 XML
 - 禁止 `PageList` / `ListPage` 混合写法
 - 禁止 `add()`、`query()` 等无功能描述的命名
 - 主键字段统一使用 `Long` 类型
-- 时间字段统一使用 `LocalDateTime` + `@JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")`
+- 时间字段统一使用 `Date` + `@JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")`
 - 类名使用 PascalCase + 后缀（`FlowBo`、`FlowDto`、`FlowReq`）
 - 方法名、字段名使用 camelCase
 
