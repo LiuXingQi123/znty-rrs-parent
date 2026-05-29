@@ -79,4 +79,32 @@
             #{attachmentFiles}, #{materialFiles}, NOW(), 0, NOW(), NOW())
     </insert>
 
+    <!-- 根据债券 ID 查询调库记录列表 -->
+    <select id="queryAdjustLogList" resultType="com.znty.sirm.model.IpAdjustLogBo">
+        SELECT al.id,
+               al.bond_id AS bondId,
+               al.bond_code AS bondCode,
+               al.bond_short_name AS bondShortName,
+               al.bond_type AS bondType,
+               al.adjust_type AS adjustType,
+               al.adjust_mode AS adjustMode,
+               al.target_pool_id AS targetPoolId,
+               al.target_pool_name AS targetPoolName,
+               al.pool_type AS poolType,
+               al.audit_status AS auditStatus,
+               al.adjuster_id AS adjusterId,
+               al.adjuster_name AS adjusterName,
+               al.adjust_reason AS adjustReason,
+               al.adjust_advice AS adjustAdvice,
+               al.attachment_files AS attachmentFiles,
+               al.material_files AS materialFiles,
+               al.submit_time AS submitTime,
+               al.audit_time AS auditTime,
+               al.entry_time AS entryTime
+        FROM ip_adjust_log al
+        WHERE al.bond_id = #{bondId}
+          AND al.is_deleted = 0
+        ORDER BY al.crte_time DESC
+    </select>
+
 </mapper>

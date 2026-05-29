@@ -2,6 +2,7 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
+import com.znty.sirm.model.AdjustLogDto;
 import com.znty.sirm.model.BondInfoDetailDto;
 import com.znty.sirm.model.BondInfoDto;
 import com.znty.sirm.model.BondPoolAdjustReq;
@@ -49,5 +50,11 @@ public class BondPoolAdjustController {
     public ApiResponse<String> submitAdjust(@RequestBody BondPoolAdjustSubmitReq req) {
         bondPoolAdjustService.submitAdjust(req);
         return ApiResponse.success("提交成功");
+    }
+
+    /** 查询债券的调库记录列表 */
+    @PostMapping("/queryAdjustLogList")
+    public ApiResponse<List<AdjustLogDto>> queryAdjustLogList(@RequestBody BondPoolAdjustReq req) {
+        return ApiResponse.success(bondPoolAdjustService.queryAdjustLogList(req.getBondId()));
     }
 }

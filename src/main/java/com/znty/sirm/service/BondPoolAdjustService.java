@@ -6,6 +6,7 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.BondPoolAdjustMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
+import com.znty.sirm.model.AdjustLogDto;
 import com.znty.sirm.model.BondInfoBo;
 import com.znty.sirm.model.BondInfoDetailDto;
 import com.znty.sirm.model.BondInfoDto;
@@ -195,6 +196,76 @@ public class BondPoolAdjustService {
         bo.setAttachmentFiles(item.getAttachmentFiles());
         bo.setMaterialFiles(item.getMaterialFiles());
         return bo;
+    }
+
+    /** 查询债券的调库记录列表 */
+    public List<AdjustLogDto> queryAdjustLogList(Long bondId) {
+        if (bondId == null) {
+            throw new BizException("债券ID不能为空");
+        }
+        List<IpAdjustLogBo> logs = bondPoolAdjustMapper.queryAdjustLogList(bondId);
+        if (logs == null || logs.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 获取所有目标池及其父级信息以构建路径
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
+        if (allPools != null) {
+            for (InvestmentPoolBo p : allPools) {
+                poolMap.put(p.getId(), p);
+            }
+        }
+
+        List<AdjustLogDto> result = new ArrayList<>();
+        for (IpAdjustLogBo log : logs) {
+            AdjustLogDto dto = new AdjustLogDto();
+            dto.setId(log.getId());
+            dto.setPoolPath(buildPoolPath(log.getTargetPoolId(), poolMap));
+            dto.setAdjustType(log.getAdjustType());
+            dto.setAdjustMode(log.getAdjustMode());
+            dto.setAttachmentFiles(log.getAttachmentFiles());
+            dto.setMaterialFiles(log.getMaterialFiles());
+            dto.setAuditStatus(log.getAuditStatus());
+            dto.setAuditStatusLabel(mapAuditStatus(log.getAuditStatus()));
+            dto.setAdjustReason(log.getAdjustReason());
+            dto.setAdjustAdvice(log.getAdjustAdvice());
+            dto.setSubmitTime(log.getSubmitTime());
+            result.add(dto);
+        }
+        return result;
+    }
+
+    /** 构建投资池路径（父级名称/名称） */
+    private String buildPoolPath(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
+        InvestmentPoolBo pool = poolMap.get(poolId);
+        if (pool == null) {
+            return "";
+        }
+        if (pool.getParentId() != null) {
+            InvestmentPoolBo parent = poolMap.get(pool.getParentId());
+            if (parent != null && parent.getPoolName() != null) {
+                return parent.getPoolName() + "/" + (pool.getPoolName() != null ? pool.getPoolName() : "");
+            }
+        }
+        return pool.getPoolName() != null ? pool.getPoolName() : "";
+    }
+
+    /** 审核状态码 → 中文 */
+    private String mapAuditStatus(String code) {
+        if (code == null) {
+            return "";
+        }
+        switch (code) {
+            case "-1": return "无效调整";
+            case "00": return "待审核";
+            case "10": return "审核通过";
+            case "11": return "驳回待修改";
+            case "20": return "审批通过";
+            case "21": return "审批驳回";
+            case "99": return "已撤回";
+            default: return code;
+        }
     }
 
     /** 债券类型 int → 中文 */
