@@ -39,6 +39,8 @@
                batch_out_flow_id AS batchOutFlowId,
                batch_out_flow_key AS batchOutFlowKey,
                batch_out_flow_name AS batchOutFlowName,
+               in_report_restriction AS inReportRestriction,
+               out_report_restriction AS outReportRestriction,
                max_capacity AS maxCapacity,
                outer_sort AS outerSort,
                inner_sort AS innerSort,
@@ -81,6 +83,8 @@
                batch_out_flow_id AS batchOutFlowId,
                batch_out_flow_key AS batchOutFlowKey,
                batch_out_flow_name AS batchOutFlowName,
+               in_report_restriction AS inReportRestriction,
+               out_report_restriction AS outReportRestriction,
                max_capacity AS maxCapacity,
                outer_sort AS outerSort,
                inner_sort AS innerSort,
@@ -113,14 +117,16 @@
             hs_pool_name, in_flow_id, in_flow_key, in_flow_name, out_flow_id, out_flow_key, out_flow_name,
             simple_in_flow_id, simple_in_flow_key, simple_in_flow_name, simple_out_flow_id, simple_out_flow_key,
             simple_out_flow_name, batch_in_flow_id, batch_in_flow_key, batch_in_flow_name, batch_out_flow_id,
-            batch_out_flow_key, batch_out_flow_name, max_capacity, outer_sort, inner_sort, description, status,
+            batch_out_flow_key, batch_out_flow_name, in_report_restriction, out_report_restriction,
+            max_capacity, outer_sort, inner_sort, description, status,
             is_deleted, crte_time, updt_time
         ) VALUES (
             #{parentId}, #{poolCode}, #{poolName}, #{poolType}, #{poolLevel}, #{marketCodes}, #{varietyCodes},
             #{hsPoolName}, #{inFlowId}, #{inFlowKey}, #{inFlowName}, #{outFlowId}, #{outFlowKey}, #{outFlowName},
             #{simpleInFlowId}, #{simpleInFlowKey}, #{simpleInFlowName}, #{simpleOutFlowId}, #{simpleOutFlowKey},
             #{simpleOutFlowName}, #{batchInFlowId}, #{batchInFlowKey}, #{batchInFlowName}, #{batchOutFlowId},
-            #{batchOutFlowKey}, #{batchOutFlowName}, #{maxCapacity}, #{outerSort}, #{innerSort}, #{description}, #{status},
+            #{batchOutFlowKey}, #{batchOutFlowName}, #{inReportRestriction}, #{outReportRestriction},
+            #{maxCapacity}, #{outerSort}, #{innerSort}, #{description}, #{status},
             #{isDeleted}, #{crteTime}, #{updtTime}
         )
     </insert>
@@ -182,6 +188,8 @@
             batch_out_flow_id = #{batchOutFlowId},
             batch_out_flow_key = #{batchOutFlowKey},
             batch_out_flow_name = #{batchOutFlowName},
+            in_report_restriction = #{inReportRestriction},
+            out_report_restriction = #{outReportRestriction},
             max_capacity = #{maxCapacity},
             outer_sort = #{outerSort},
             inner_sort = #{innerSort},
@@ -198,14 +206,16 @@
             hs_pool_name, in_flow_id, in_flow_key, in_flow_name, out_flow_id, out_flow_key, out_flow_name,
             simple_in_flow_id, simple_in_flow_key, simple_in_flow_name, simple_out_flow_id, simple_out_flow_key,
             simple_out_flow_name, batch_in_flow_id, batch_in_flow_key, batch_in_flow_name, batch_out_flow_id,
-            batch_out_flow_key, batch_out_flow_name, max_capacity, outer_sort, inner_sort, description, status,
+            batch_out_flow_key, batch_out_flow_name, in_report_restriction, out_report_restriction,
+            max_capacity, outer_sort, inner_sort, description, status,
             is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id, parent_id, pool_code, pool_name, pool_type, pool_level, market_codes, variety_codes,
                hs_pool_name, in_flow_id, in_flow_key, in_flow_name, out_flow_id, out_flow_key, out_flow_name,
                simple_in_flow_id, simple_in_flow_key, simple_in_flow_name, simple_out_flow_id, simple_out_flow_key,
                simple_out_flow_name, batch_in_flow_id, batch_in_flow_key, batch_in_flow_name, batch_out_flow_id,
-               batch_out_flow_key, batch_out_flow_name, max_capacity, outer_sort, inner_sort, description, status,
+               batch_out_flow_key, batch_out_flow_name, in_report_restriction, out_report_restriction,
+               max_capacity, outer_sort, inner_sort, description, status,
                is_deleted, crte_time, updt_time, #{operatorId}, NOW(), #{oprtType}
         FROM ip_investment_pool
         WHERE id = #{id}
@@ -218,14 +228,16 @@
             hs_pool_name, in_flow_id, in_flow_key, in_flow_name, out_flow_id, out_flow_key, out_flow_name,
             simple_in_flow_id, simple_in_flow_key, simple_in_flow_name, simple_out_flow_id, simple_out_flow_key,
             simple_out_flow_name, batch_in_flow_id, batch_in_flow_key, batch_in_flow_name, batch_out_flow_id,
-            batch_out_flow_key, batch_out_flow_name, max_capacity, outer_sort, inner_sort, description, status,
+            batch_out_flow_key, batch_out_flow_name, in_report_restriction, out_report_restriction,
+            max_capacity, outer_sort, inner_sort, description, status,
             is_deleted, crte_time, updt_time, opter_id, opt_time, oprt_type
         )
         SELECT id, parent_id, pool_code, pool_name, pool_type, pool_level, market_codes, variety_codes,
                hs_pool_name, in_flow_id, in_flow_key, in_flow_name, out_flow_id, out_flow_key, out_flow_name,
                simple_in_flow_id, simple_in_flow_key, simple_in_flow_name, simple_out_flow_id, simple_out_flow_key,
                simple_out_flow_name, batch_in_flow_id, batch_in_flow_key, batch_in_flow_name, batch_out_flow_id,
-               batch_out_flow_key, batch_out_flow_name, max_capacity, outer_sort, inner_sort, description, status,
+               batch_out_flow_key, batch_out_flow_name, in_report_restriction, out_report_restriction,
+               max_capacity, outer_sort, inner_sort, description, status,
                is_deleted, crte_time, updt_time, #{operatorId}, NOW(), #{oprtType}
         FROM ip_investment_pool
         WHERE id IN

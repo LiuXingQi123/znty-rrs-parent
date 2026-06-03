@@ -458,6 +458,8 @@ public class InvestmentPoolService {
         childPool.setBatchOutFlowId(parentPool.getBatchOutFlowId());
         childPool.setBatchOutFlowKey(parentPool.getBatchOutFlowKey());
         childPool.setBatchOutFlowName(parentPool.getBatchOutFlowName());
+        childPool.setInReportRestriction(parentPool.getInReportRestriction());
+        childPool.setOutReportRestriction(parentPool.getOutReportRestriction());
         childPool.setMaxCapacity(parentPool.getMaxCapacity());
         childPool.setDescription(parentPool.getDescription());
     }
@@ -516,6 +518,8 @@ public class InvestmentPoolService {
         pool.setVarietyCodes(toJson(req.getVarietyCodes()));
         pool.setHsPoolName(req.getHsPoolName());
         applyFlow(pool, req);
+        pool.setInReportRestriction(req.getInReportRestriction());
+        pool.setOutReportRestriction(req.getOutReportRestriction());
         pool.setMaxCapacity(req.getMaxCapacity());
         pool.setOuterSort(req.getOuterSort());
         pool.setInnerSort(req.getInnerSort());
@@ -726,6 +730,8 @@ public class InvestmentPoolService {
         dto.setSimpleOutFlow(buildFlow(pool.getSimpleOutFlowId(), pool.getSimpleOutFlowKey(), pool.getSimpleOutFlowName()));
         dto.setBatchInFlow(buildFlow(pool.getBatchInFlowId(), pool.getBatchInFlowKey(), pool.getBatchInFlowName()));
         dto.setBatchOutFlow(buildFlow(pool.getBatchOutFlowId(), pool.getBatchOutFlowKey(), pool.getBatchOutFlowName()));
+        dto.setInReportRestriction(pool.getInReportRestriction());
+        dto.setOutReportRestriction(pool.getOutReportRestriction());
         dto.setMaxCapacity(pool.getMaxCapacity());
         dto.setOuterSort(pool.getOuterSort());
         dto.setInnerSort(pool.getInnerSort());

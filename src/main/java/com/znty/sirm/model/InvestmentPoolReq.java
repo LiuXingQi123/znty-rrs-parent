@@ -49,6 +49,12 @@ public class InvestmentPoolReq {
     /** 批量调出流程 */
     private FlowOptionDto batchOutFlow;
 
+    /** 调入研报限制 */
+    private String inReportRestriction;
+
+    /** 调出研报限制 */
+    private String outReportRestriction;
+
     /** 最大上限数量 */
     private Long maxCapacity;
 

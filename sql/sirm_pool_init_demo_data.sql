@@ -28,21 +28,21 @@ TRUNCATE TABLE `ip_investment_pool`;
 -- ----------------------------------------------------------------------------
 -- 1. 初始化固定投资池树
 -- ----------------------------------------------------------------------------
-INSERT INTO `ip_investment_pool` (`id`, `parent_id`, `pool_code`, `pool_name`, `pool_type`, `pool_level`, `market_codes`, `variety_codes`, `outer_sort`, `inner_sort`, `status`, `is_deleted`, `crte_time`, `updt_time`) VALUES
-(1, NULL, 'credit_bond_root', '信用债大库', 'credit_bond', 1, JSON_ARRAY(), JSON_ARRAY('bond'), 1, 1, 'enabled', 0, NOW(), NOW()),
-(2, 1, 'credit_bond_level_1', '一级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 1, 1, 'enabled', 0, NOW(), NOW()),
-(3, 1, 'credit_bond_level_2', '二级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 1, 2, 'enabled', 0, NOW(), NOW()),
-(4, 1, 'credit_bond_level_3', '三级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 1, 3, 'enabled', 0, NOW(), NOW()),
-(5, 1, 'credit_bond_level_4', '四级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 1, 4, 'enabled', 0, NOW(), NOW()),
-(6, 1, 'credit_bond_level_5', '五级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 1, 5, 'enabled', 0, NOW(), NOW()),
-(7, NULL, 'offshore_bond_root', '境外债库', 'offshore_bond', 1, JSON_ARRAY(), JSON_ARRAY('bond'), 2, 1, 'enabled', 0, NOW(), NOW()),
-(8, NULL, 'convertible_bond_root', '转债库', 'convertible_bond', 1, JSON_ARRAY(), JSON_ARRAY('bond'), 3, 1, 'enabled', 0, NOW(), NOW()),
-(9, NULL, 'special_account_root', '专户产品', 'special_account', 1, JSON_ARRAY(), JSON_ARRAY('bond'), 4, 1, 'enabled', 0, NOW(), NOW()),
-(10, 9, 'special_account_level_1', '一级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 4, 1, 'enabled', 0, NOW(), NOW()),
-(11, 9, 'special_account_level_2', '二级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 4, 2, 'enabled', 0, NOW(), NOW()),
-(12, 9, 'special_account_level_3', '三级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 4, 3, 'enabled', 0, NOW(), NOW()),
-(13, 9, 'special_account_level_4', '四级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 4, 4, 'enabled', 0, NOW(), NOW()),
-(14, 9, 'special_account_level_5', '五级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), 4, 5, 'enabled', 0, NOW(), NOW());
+INSERT INTO `ip_investment_pool` (`id`, `parent_id`, `pool_code`, `pool_name`, `pool_type`, `pool_level`, `market_codes`, `variety_codes`, `in_report_restriction`, `out_report_restriction`, `outer_sort`, `inner_sort`, `status`, `is_deleted`, `crte_time`, `updt_time`) VALUES
+(1, NULL, 'credit_bond_root', '信用债大库', 'credit_bond', 1, JSON_ARRAY(), JSON_ARRAY('bond'), 'internal', 'internal', 1, 1, 'enabled', 0, NOW(), NOW()),
+(2, 1, 'credit_bond_level_1', '一级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 1, 1, 'enabled', 0, NOW(), NOW()),
+(3, 1, 'credit_bond_level_2', '二级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 1, 2, 'enabled', 0, NOW(), NOW()),
+(4, 1, 'credit_bond_level_3', '三级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 1, 3, 'enabled', 0, NOW(), NOW()),
+(5, 1, 'credit_bond_level_4', '四级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 1, 4, 'enabled', 0, NOW(), NOW()),
+(6, 1, 'credit_bond_level_5', '五级库', 'credit_bond', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 1, 5, 'enabled', 0, NOW(), NOW()),
+(7, NULL, 'offshore_bond_root', '境外债库', 'offshore_bond', 1, JSON_ARRAY(), JSON_ARRAY('bond'), 'internal', 'any', 2, 1, 'enabled', 0, NOW(), NOW()),
+(8, NULL, 'convertible_bond_root', '转债库', 'convertible_bond', 1, JSON_ARRAY(), JSON_ARRAY('bond'), 'any', 'any', 3, 1, 'enabled', 0, NOW(), NOW()),
+(9, NULL, 'special_account_root', '专户产品', 'special_account', 1, JSON_ARRAY(), JSON_ARRAY('bond'), 'internal', 'internal', 4, 1, 'enabled', 0, NOW(), NOW()),
+(10, 9, 'special_account_level_1', '一级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 1, 'enabled', 0, NOW(), NOW()),
+(11, 9, 'special_account_level_2', '二级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 2, 'enabled', 0, NOW(), NOW()),
+(12, 9, 'special_account_level_3', '三级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 3, 'enabled', 0, NOW(), NOW()),
+(13, 9, 'special_account_level_4', '四级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 4, 'enabled', 0, NOW(), NOW()),
+(14, 9, 'special_account_level_5', '五级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 5, 'enabled', 0, NOW(), NOW());
 
 -- 初始化投资池互斥关系（信用债库 2-6 互斥，专户产品 10-14 互斥）
 INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`)
@@ -84,14 +84,16 @@ INSERT INTO `ip_investment_pool_evt` (
     `hs_pool_name`, `in_flow_id`, `in_flow_key`, `in_flow_name`, `out_flow_id`, `out_flow_key`, `out_flow_name`,
     `simple_in_flow_id`, `simple_in_flow_key`, `simple_in_flow_name`, `simple_out_flow_id`, `simple_out_flow_key`,
     `simple_out_flow_name`, `batch_in_flow_id`, `batch_in_flow_key`, `batch_in_flow_name`, `batch_out_flow_id`,
-    `batch_out_flow_key`, `batch_out_flow_name`, `max_capacity`, `outer_sort`, `inner_sort`, `description`, `status`,
+    `batch_out_flow_key`, `batch_out_flow_name`, `in_report_restriction`, `out_report_restriction`,
+    `max_capacity`, `outer_sort`, `inner_sort`, `description`, `status`,
     `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`
 )
 SELECT `id`, `parent_id`, `pool_code`, `pool_name`, `pool_type`, `pool_level`, `market_codes`, `variety_codes`,
        `hs_pool_name`, `in_flow_id`, `in_flow_key`, `in_flow_name`, `out_flow_id`, `out_flow_key`, `out_flow_name`,
        `simple_in_flow_id`, `simple_in_flow_key`, `simple_in_flow_name`, `simple_out_flow_id`, `simple_out_flow_key`,
        `simple_out_flow_name`, `batch_in_flow_id`, `batch_in_flow_key`, `batch_in_flow_name`, `batch_out_flow_id`,
-       `batch_out_flow_key`, `batch_out_flow_name`, `max_capacity`, `outer_sort`, `inner_sort`, `description`, `status`,
+       `batch_out_flow_key`, `batch_out_flow_name`, `in_report_restriction`, `out_report_restriction`,
+       `max_capacity`, `outer_sort`, `inner_sort`, `description`, `status`,
        `is_deleted`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
 FROM `ip_investment_pool`;
 
