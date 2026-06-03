@@ -43,4 +43,7 @@ public interface BondPoolAdjustMapper {
 
     /** 查询全量投资池关系配置（不限关系类型） */
     List<PoolRelationBo> queryAllPoolRelations();
+
+    /** 查询债券是否存在进行中的调库流程（待审核或驳回待修改） */
+    boolean queryBondHasPendingProcess(@Param("bondCode") String bondCode);
 }

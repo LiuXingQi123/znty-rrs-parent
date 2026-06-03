@@ -313,6 +313,9 @@ public class BondPoolAdjustService {
         List<Long> currentPoolIdList = bondPoolAdjustMapper.queryBondCurrentPoolIds(req.getBondCode());
         Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList != null ? currentPoolIdList : Collections.emptyList());
 
+        // 查询债券是否存在进行中的调库流程
+        boolean hasPendingProcess = bondPoolAdjustMapper.queryBondHasPendingProcess(req.getBondCode());
+
         // 加载全量投资池关系配置
         List<PoolRelationBo> allRelations = bondPoolAdjustMapper.queryAllPoolRelations();
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(allRelations);
@@ -322,6 +325,7 @@ public class BondPoolAdjustService {
         for (AdjustCheckReq.CheckItem item : req.getItems()) {
             int poolCurrentCount = bondPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
             AdjustCheckContext ctx = buildCheckContext(bondInfo, item, poolMap, currentPoolIds, poolCurrentCount, poolRelationMap);
+            ctx.setHasPendingProcess(hasPendingProcess);
 
             List<String> failures = new ArrayList<>();
             failures.addAll(checkPreConditions(ctx));
@@ -375,7 +379,7 @@ public class BondPoolAdjustService {
     public List<String> checkPreConditions(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
         addIfFailed(failures, preCheckBondExpired(ctx));
-        // 后续可在此追加更多前置校验
+        addIfFailed(failures, preCheckPendingProcess(ctx));
         return failures;
     }
 
@@ -413,6 +417,14 @@ public class BondPoolAdjustService {
             if (maturityDate.compareTo(today) < 0) {
                 return "债券已到期，不支持调库操作";
             }
+        }
+        return null;
+    }
+
+    /** 债券是否存在进行中的调库流程（待审核或驳回待修改） */
+    private String preCheckPendingProcess(AdjustCheckContext ctx) {
+        if (ctx.isHasPendingProcess()) {
+            return "债券存在进行中的调库流程（待审核或驳回待修改），请等待流程结束后再发起调库";
         }
         return null;
     }

@@ -35,4 +35,7 @@ public class AdjustCheckContext {
 
     /** 全量投资池信息（ID → Bo），用于构建错误消息中的池路径名称 */
     private Map<Long, InvestmentPoolBo> poolMap;
+
+    /** 债券是否存在进行中的调库流程（audit_status IN ('00','11')） */
+    private boolean hasPendingProcess;
 }

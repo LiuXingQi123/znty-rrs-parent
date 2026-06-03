@@ -210,6 +210,15 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 查询债券是否存在进行中的调库流程（待审核或驳回待修改） -->
+    <select id="queryBondHasPendingProcess" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_adjust_log
+        WHERE bond_code = #{bondCode}
+          AND audit_status IN ('00', '11')
+          AND is_deleted = 0
+    </select>
+
     <!-- 查询全量投资池关系配置（不限关系类型） -->
     <select id="queryAllPoolRelations" resultType="com.znty.sirm.model.PoolRelationBo">
         SELECT pool_id
