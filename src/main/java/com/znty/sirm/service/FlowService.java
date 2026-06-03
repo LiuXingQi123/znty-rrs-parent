@@ -76,7 +76,7 @@ public class FlowService {
 
     @Transactional(rollbackFor = Exception.class)
     /** 新建流程。 */
-    public FlowDto createFlow(FlowReq req) {
+    public FlowDto addFlow(FlowReq req) {
         if (req.getName() == null || req.getName().trim().isEmpty()) {
             throw new BizException("流程名称不能为空");
         }
@@ -97,8 +97,8 @@ public class FlowService {
         def.setUpdatedBy(1L);
         def.setCrteTime(now);
         def.setUpdtTime(now);
-        flowMapper.createFlowDefinition(def);
-        flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "INSERT"));
+        flowMapper.addFlowDefinition(def);
+        flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "INSERT"));
 
         // 创建初始草稿版本
         FlowVersionBo ver = new FlowVersionBo();
@@ -109,8 +109,8 @@ public class FlowService {
         ver.setCreatedBy(1L);
         ver.setCrteTime(now);
         ver.setUpdtTime(now);
-        flowMapper.createFlowVersion(ver);
-        flowMapper.createFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
+        flowMapper.addFlowVersion(ver);
+        flowMapper.addFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
 
         FlowDto result = new FlowDto();
         result.setFlowId(def.getId());
@@ -160,7 +160,7 @@ public class FlowService {
 
     @Transactional(rollbackFor = Exception.class)
     /** 更新流程基础信息。 */
-    public FlowDto updateFlow(FlowReq req) {
+    public FlowDto editFlow(FlowReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
@@ -180,8 +180,8 @@ public class FlowService {
         if (req.getRemark() != null) def.setRemark(req.getRemark());
         def.setUpdatedBy(1L);
         def.setUpdtTime(new Date());
-        flowMapper.updateFlowDefinition(def);
-        flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, new Date(), "UPDATE"));
+        flowMapper.editFlowDefinition(def);
+        flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, new Date(), "UPDATE"));
         IdRequest idReq = new IdRequest();
         idReq.setId(req.getId());
         return queryFlowDetail(idReq);
@@ -201,7 +201,7 @@ public class FlowService {
         Date now = new Date();
         flowMapper.deleteFlowLogical(req.getId(), now);
         def.setIsDeleted(1); def.setUpdtTime(now);
-        flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "DELETE"));
+        flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "DELETE"));
         return deleted;
     }
 
@@ -209,7 +209,7 @@ public class FlowService {
 
     @Transactional(rollbackFor = Exception.class)
     /** 停用流程：更新定义状态 + 将当前活跃版本标为停用以反映在历史中。 */
-    public FlowDto disableFlow(IdRequest req) {
+    public FlowDto editFlowStatus(IdRequest req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
@@ -221,9 +221,9 @@ public class FlowService {
         // TODO 检查是否有其他数据引用此流程（如运行中实例），有则不允许停用
 
         Date now = new Date();
-        flowMapper.disableFlowDefinition(req.getId(), now);
+        flowMapper.editFlowDefinitionStatus(req.getId(), now);
         def.setStatus("disabled"); def.setUpdtTime(now);
-        flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
+        flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
 
         // 将当前活跃版本标为停用，历史中可追溯
         FlowVersionBo latestActive = null;
@@ -235,9 +235,9 @@ public class FlowService {
             }
         }
         if (latestActive != null) {
-            flowMapper.updateFlowVersionStatus(latestActive.getId(), "disabled", now);
+            flowMapper.editFlowVersionStatus(latestActive.getId(), "disabled", now);
             latestActive.setStatus("disabled"); latestActive.setUpdtTime(now);
-            flowMapper.createFlowVersionEvt(toFlowVerEvt(latestActive, L_OPTER, now, "UPDATE"));
+            flowMapper.addFlowVersionEvt(toFlowVerEvt(latestActive, L_OPTER, now, "UPDATE"));
         }
         return queryFlowDetail(req);
     }
@@ -246,7 +246,7 @@ public class FlowService {
 
     @Transactional(rollbackFor = Exception.class)
     /** 保存流程草稿。 */
-    public FlowDto saveFlowDraft(DesignerReq req) {
+    public FlowDto editFlowDraft(DesignerReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowByIdForUpdate(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
@@ -261,8 +261,8 @@ public class FlowService {
             def.setFlowKey(req.getFlowKey());
             def.setUpdatedBy(1L);
             def.setUpdtTime(now);
-            flowMapper.updateFlowDefinition(def);
-            flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
+            flowMapper.editFlowDefinition(def);
+            flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
         }
 
         String nodesJson = toJson(req.getNodes());
@@ -285,8 +285,8 @@ public class FlowService {
             latest.setCanvasZoom(req.getZoom());
             latest.setFlowKey(def.getFlowKey()); // 同步主表变更后的 Key
             latest.setUpdtTime(now);
-            flowMapper.updateFlowVersion(latest);
-            flowMapper.createFlowVersionEvt(toFlowVerEvt(latest, L_OPTER, now, "UPDATE"));
+            flowMapper.editFlowVersion(latest);
+            flowMapper.addFlowVersionEvt(toFlowVerEvt(latest, L_OPTER, now, "UPDATE"));
             versionId = latest.getId();
             verNum = latest.getVerNum();
         } else {
@@ -305,8 +305,8 @@ public class FlowService {
             ver.setCreatedBy(1L);
             ver.setCrteTime(now);
             ver.setUpdtTime(now);
-            flowMapper.createFlowVersion(ver);
-            flowMapper.createFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
+            flowMapper.addFlowVersion(ver);
+            flowMapper.addFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
             versionId = ver.getId();
 
             // active 流程首次创建新草稿时，同步定义状态为 draft
@@ -314,8 +314,8 @@ public class FlowService {
                 def.setStatus("draft");
                 def.setUpdatedBy(1L);
                 def.setUpdtTime(now);
-                flowMapper.updateFlowDefinition(def);
-                flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
+                flowMapper.editFlowDefinition(def);
+                flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
             }
         }
 
@@ -333,7 +333,7 @@ public class FlowService {
 
     @Transactional(rollbackFor = Exception.class)
     /** 发布流程。 */
-    public FlowDto publishFlow(DesignerReq req) {
+    public FlowDto editFlowToPublished(DesignerReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowByIdForUpdate(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
@@ -369,9 +369,9 @@ public class FlowService {
             latest.setPublishedBy(1L);
             latest.setPublishedTime(now);
             latest.setUpdtTime(now);
-            flowMapper.updateFlowVersion(latest);
-            flowMapper.updateFlowVersionStatus(latest.getId(), "active", now);
-            flowMapper.createFlowVersionEvt(toFlowVerEvt(latest, L_OPTER, now, "UPDATE"));
+            flowMapper.editFlowVersion(latest);
+            flowMapper.editFlowVersionStatus(latest.getId(), "active", now);
+            flowMapper.addFlowVersionEvt(toFlowVerEvt(latest, L_OPTER, now, "UPDATE"));
             versionId = latest.getId();
             verNum = latest.getVerNum();
         } else {
@@ -393,8 +393,8 @@ public class FlowService {
             ver.setCreatedBy(1L);
             ver.setCrteTime(now);
             ver.setUpdtTime(now);
-            flowMapper.createFlowVersion(ver);
-            flowMapper.createFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
+            flowMapper.addFlowVersion(ver);
+            flowMapper.addFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
             versionId = ver.getId();
         }
 
@@ -402,8 +402,8 @@ public class FlowService {
         def.setStatus("active");
         def.setUpdatedBy(1L);
         def.setUpdtTime(now);
-        flowMapper.updateFlowDefinition(def);
-        flowMapper.createFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
+        flowMapper.editFlowDefinition(def);
+        flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
 
         // 解析 JSON → 归一化表
         syncNormalized(def.getId(), versionId, nodes, edges, now);
@@ -461,7 +461,7 @@ public class FlowService {
 
     /** 查询角色字典。 */
     public List<DictDto> queryRoleList(FlowReq req) {
-        return flowMapper.roleDictSelectAll().stream().map(r -> {
+        return flowMapper.queryRoleDictList().stream().map(r -> {
             DictDto d = new DictDto();
             d.setRoleCode(r.getRoleCode());
             d.setRoleName(r.getRoleName());
@@ -625,8 +625,8 @@ public class FlowService {
             fn.setSortOrder(sort++);
             fn.setCrteTime(now);
             fn.setUpdtTime(now);
-            flowMapper.createFlowNode(fn);
-            flowMapper.createFlowNodeEvt(toFlowNodeEvt(fn, L_OPTER, now, "INSERT"));
+            flowMapper.addFlowNode(fn);
+            flowMapper.addFlowNodeEvt(toFlowNodeEvt(fn, L_OPTER, now, "INSERT"));
             nodeIdMap.put(cn.getId(), fn.getId());
 
             // 写入类型专属配置
@@ -638,8 +638,8 @@ public class FlowService {
                 cfg.setApprovalRemark(cn.getApprovalRemark());
                 cfg.setCrteTime(now);
                 cfg.setUpdtTime(now);
-                flowMapper.createApprovalConfig(cfg);
-                flowMapper.createApprovalConfigEvt(toApprovalCfgEvt(cfg, L_OPTER, now, "INSERT"));
+                flowMapper.addApprovalConfig(cfg);
+                flowMapper.addApprovalConfigEvt(toApprovalCfgEvt(cfg, L_OPTER, now, "INSERT"));
             } else if ("auto".equals(cn.getType())) {
                 if (cn.getAutoTasks() != null) {
                     int seq = 1;
@@ -651,8 +651,8 @@ public class FlowService {
                         cfg.setAutoRemark(cn.getAutoRemark()); // 节点级 → 行级（已知冗余）
                         cfg.setCrteTime(now);
                         cfg.setUpdtTime(now);
-                        flowMapper.createAutoConfig(cfg);
-                        flowMapper.createAutoConfigEvt(toAutoCfgEvt(cfg, L_OPTER, now, "INSERT"));
+                        flowMapper.addAutoConfig(cfg);
+                        flowMapper.addAutoConfigEvt(toAutoCfgEvt(cfg, L_OPTER, now, "INSERT"));
                     }
                 }
             } else if ("notify".equals(cn.getType())) {
@@ -665,16 +665,16 @@ public class FlowService {
                 cfg.setNotifyRemark(cn.getNotifyRemark());
                 cfg.setCrteTime(now);
                 cfg.setUpdtTime(now);
-                flowMapper.createNotifyConfig(cfg);
-                flowMapper.createNotifyConfigEvt(toNotifyCfgEvt(cfg, L_OPTER, now, "INSERT"));
+                flowMapper.addNotifyConfig(cfg);
+                flowMapper.addNotifyConfigEvt(toNotifyCfgEvt(cfg, L_OPTER, now, "INSERT"));
             } else if ("condition".equals(cn.getType())) {
                 NodeConditionConfigBo cfg = new NodeConditionConfigBo();
                 cfg.setNodeId(fn.getId());
                 cfg.setConditionRemark(cn.getConditionRemark());
                 cfg.setCrteTime(now);
                 cfg.setUpdtTime(now);
-                flowMapper.createConditionConfig(cfg);
-                flowMapper.createConditionConfigEvt(toCondCfgEvt(cfg, L_OPTER, now, "INSERT"));
+                flowMapper.addConditionConfig(cfg);
+                flowMapper.addConditionConfigEvt(toCondCfgEvt(cfg, L_OPTER, now, "INSERT"));
             }
         }
 
@@ -700,8 +700,8 @@ public class FlowService {
                 fe.setRemark(ce.getRemark());
                 fe.setCrteTime(now);
                 fe.setUpdtTime(now);
-                flowMapper.createFlowEdge(fe);
-                flowMapper.createFlowEdgeEvt(toFlowEdgeEvt(fe, L_OPTER, now, "INSERT"));
+                flowMapper.addFlowEdge(fe);
+                flowMapper.addFlowEdgeEvt(toFlowEdgeEvt(fe, L_OPTER, now, "INSERT"));
                 edgeIdMap.put(ce.getId(), fe.getId());
 
                 // 写入条件规则
@@ -716,8 +716,8 @@ public class FlowService {
                         rule.setFieldVal(cr.getVal());
                         rule.setCrteTime(now);
                         rule.setUpdtTime(now);
-                        flowMapper.createCondRule(rule);
-                        flowMapper.createCondRuleEvt(toCondRuleEvt(rule, L_OPTER, now, "INSERT"));
+                        flowMapper.addCondRule(rule);
+                        flowMapper.addCondRuleEvt(toCondRuleEvt(rule, L_OPTER, now, "INSERT"));
                     }
                 }
             }
@@ -830,25 +830,25 @@ public class FlowService {
     /** 捕获旧行并记录 DELETE 事件。 */
     private void logSyncDeletes(Long versionId, Date now) {
         for (FlowNodeBo node : flowMapper.queryFlowNodeListByVersionId(versionId)) {
-            flowMapper.createFlowNodeEvt(toFlowNodeEvt(node, L_OPTER, now, "DELETE"));
+            flowMapper.addFlowNodeEvt(toFlowNodeEvt(node, L_OPTER, now, "DELETE"));
         }
         for (NodeApprovalConfigBo cfg : flowMapper.queryApprovalConfigListByVersionId(versionId)) {
-            flowMapper.createApprovalConfigEvt(toApprovalCfgEvt(cfg, L_OPTER, now, "DELETE"));
+            flowMapper.addApprovalConfigEvt(toApprovalCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
         for (NodeAutoConfigBo cfg : flowMapper.queryAutoConfigListByVersionId(versionId)) {
-            flowMapper.createAutoConfigEvt(toAutoCfgEvt(cfg, L_OPTER, now, "DELETE"));
+            flowMapper.addAutoConfigEvt(toAutoCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
         for (NodeNotifyConfigBo cfg : flowMapper.queryNotifyConfigListByVersionId(versionId)) {
-            flowMapper.createNotifyConfigEvt(toNotifyCfgEvt(cfg, L_OPTER, now, "DELETE"));
+            flowMapper.addNotifyConfigEvt(toNotifyCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
         for (NodeConditionConfigBo cfg : flowMapper.queryConditionConfigListByVersionId(versionId)) {
-            flowMapper.createConditionConfigEvt(toCondCfgEvt(cfg, L_OPTER, now, "DELETE"));
+            flowMapper.addConditionConfigEvt(toCondCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
         for (FlowEdgeBo edge : flowMapper.queryFlowEdgeListByVersionId(versionId)) {
-            flowMapper.createFlowEdgeEvt(toFlowEdgeEvt(edge, L_OPTER, now, "DELETE"));
+            flowMapper.addFlowEdgeEvt(toFlowEdgeEvt(edge, L_OPTER, now, "DELETE"));
         }
         for (EdgeCondRuleBo rule : flowMapper.queryCondRuleListByVersionId(versionId)) {
-            flowMapper.createCondRuleEvt(toCondRuleEvt(rule, L_OPTER, now, "DELETE"));
+            flowMapper.addCondRuleEvt(toCondRuleEvt(rule, L_OPTER, now, "DELETE"));
         }
     }
 

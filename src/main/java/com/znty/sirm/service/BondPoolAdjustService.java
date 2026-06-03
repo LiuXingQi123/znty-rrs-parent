@@ -176,7 +176,7 @@ public class BondPoolAdjustService {
 
     /** 提交调库申请 */
     @Transactional(rollbackFor = Exception.class)
-    public AdjustSubmitDto submitAdjust(BondPoolAdjustSubmitReq req) {
+    public AdjustSubmitDto addAdjustLog(BondPoolAdjustSubmitReq req) {
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("调库项不能为空");
         }

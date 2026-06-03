@@ -38,9 +38,9 @@ public class FlowController {
     }
 
     /** 新建流程。 */
-    @PostMapping("/createFlow")
-    public ApiResponse<FlowDto> createFlow(@RequestBody FlowReq req) {
-        return ApiResponse.success(flowService.createFlow(req));
+    @PostMapping("/addFlow")
+    public ApiResponse<FlowDto> addFlow(@RequestBody FlowReq req) {
+        return ApiResponse.success(flowService.addFlow(req));
     }
 
     /** 查询流程详情。 */
@@ -50,9 +50,9 @@ public class FlowController {
     }
 
     /** 更新流程基础信息。 */
-    @PostMapping("/updateFlow")
-    public ApiResponse<FlowDto> updateFlow(@RequestBody FlowReq req) {
-        return ApiResponse.success(flowService.updateFlow(req));
+    @PostMapping("/editFlow")
+    public ApiResponse<FlowDto> editFlow(@RequestBody FlowReq req) {
+        return ApiResponse.success(flowService.editFlow(req));
     }
 
     /** 删除流程。 */
@@ -62,23 +62,23 @@ public class FlowController {
     }
 
     /** 停用流程。 */
-    @PostMapping("/disableFlow")
-    public ApiResponse<FlowDto> disableFlow(@RequestBody IdRequest req) {
-        return ApiResponse.success(flowService.disableFlow(req));
+    @PostMapping("/editFlowStatus")
+    public ApiResponse<FlowDto> editFlowStatus(@RequestBody IdRequest req) {
+        return ApiResponse.success(flowService.editFlowStatus(req));
     }
 
     // ==================== 流程设计器 ====================
 
     /** 保存流程草稿。 */
-    @PostMapping("/saveFlowDraft")
-    public ApiResponse<FlowDto> saveFlowDraft(@RequestBody DesignerReq req) {
-        return ApiResponse.success(flowService.saveFlowDraft(req));
+    @PostMapping("/editFlowDraft")
+    public ApiResponse<FlowDto> editFlowDraft(@RequestBody DesignerReq req) {
+        return ApiResponse.success(flowService.editFlowDraft(req));
     }
 
     /** 发布流程。 */
-    @PostMapping("/publishFlow")
-    public ApiResponse<FlowDto> publishFlow(@RequestBody DesignerReq req) {
-        return ApiResponse.success(flowService.publishFlow(req));
+    @PostMapping("/editFlowToPublished")
+    public ApiResponse<FlowDto> editFlowToPublished(@RequestBody DesignerReq req) {
+        return ApiResponse.success(flowService.editFlowToPublished(req));
     }
 
     // ==================== 版本管理 ====================

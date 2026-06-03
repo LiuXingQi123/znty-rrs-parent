@@ -54,9 +54,9 @@ public class BondPoolAdjustController {
     }
 
     /** 提交调库申请 */
-    @PostMapping("/submitAdjust")
-    public ApiResponse<AdjustSubmitDto> submitAdjust(@RequestBody BondPoolAdjustSubmitReq req) {
-        return ApiResponse.success(bondPoolAdjustService.submitAdjust(req));
+    @PostMapping("/addAdjustLog")
+    public ApiResponse<AdjustSubmitDto> addAdjustLog(@RequestBody BondPoolAdjustSubmitReq req) {
+        return ApiResponse.success(bondPoolAdjustService.addAdjustLog(req));
     }
 
     /** 查询债券的调库记录列表 */

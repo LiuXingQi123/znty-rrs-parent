@@ -32,15 +32,15 @@ public class TestCaseController {
     }
 
     /** 新增或编辑测试用例，含输入参数值绑定 */
-    @PostMapping("/saveTestCase")
-    public ApiResponse<TestCaseDto> saveTestCase(@RequestBody TestCaseReq req) {
-        return ApiResponse.success(testCaseService.saveTestCase(req));
+    @PostMapping("/addOrEditTestCase")
+    public ApiResponse<TestCaseDto> addOrEditTestCase(@RequestBody TestCaseReq req) {
+        return ApiResponse.success(testCaseService.addOrEditTestCase(req));
     }
 
     /** 修改测试用例名称（不涉及参数变更） */
-    @PostMapping("/renameTestCase")
-    public ApiResponse<TestCaseDto> renameTestCase(@RequestBody TestCaseReq req) {
-        return ApiResponse.success(testCaseService.renameTestCase(req));
+    @PostMapping("/editTestCaseName")
+    public ApiResponse<TestCaseDto> editTestCaseName(@RequestBody TestCaseReq req) {
+        return ApiResponse.success(testCaseService.editTestCaseName(req));
     }
 
     /** 物理删除测试用例及其关联参数数据 */
@@ -62,8 +62,8 @@ public class TestCaseController {
     }
 
     /** 查询指定测试用例的执行历史记录（含步骤日志） */
-    @PostMapping("/queryRunHistory")
-    public ApiResponse<List<RuleRunResultDto>> queryRunHistory(@RequestBody IdRequest req) {
-        return ApiResponse.success(testCaseService.queryRunHistory(req));
+    @PostMapping("/queryRunHistoryList")
+    public ApiResponse<List<RuleRunResultDto>> queryRunHistoryList(@RequestBody IdRequest req) {
+        return ApiResponse.success(testCaseService.queryRunHistoryList(req));
     }
 }

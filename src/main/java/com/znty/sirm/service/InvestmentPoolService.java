@@ -240,7 +240,7 @@ public class InvestmentPoolService {
      * 初始化固定投资池列表（树结构由前端组装）
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<InvestmentPoolDto> initPoolList(InvestmentPoolReq req) {
+    public List<InvestmentPoolDto> addSeedPoolList(InvestmentPoolReq req) {
         if (investmentPoolMapper.queryPoolCount() > 0) {
             return queryPoolList(req);
         }

@@ -14,10 +14,10 @@ public interface BondPoolQueryMapper {
     /**
      * 分页查询债券池中的债券列表
      */
-    List<BondPoolQueryDto> queryPage(BondPoolQueryReq req);
+    List<BondPoolQueryDto> queryBondPoolPage(BondPoolQueryReq req);
 
     /**
      * 查询所有债券类型选项
      */
-    List<String> queryBondTypeOptions();
+    List<String> queryBondTypeList();
 }

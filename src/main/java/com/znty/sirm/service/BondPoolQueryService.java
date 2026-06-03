@@ -28,20 +28,20 @@ public class BondPoolQueryService {
     private MyBondPoolMapper myBondPoolMapper;
 
     /** 分页查询债券池中的债券列表 */
-    public PageResult<BondPoolQueryDto> queryPage(BondPoolQueryReq req) {
+    public PageResult<BondPoolQueryDto> queryBondPoolPage(BondPoolQueryReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<BondPoolQueryDto> list = bondPoolQueryMapper.queryPage(req);
+        List<BondPoolQueryDto> list = bondPoolQueryMapper.queryBondPoolPage(req);
         PageInfo<BondPoolQueryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /** 查询债券类型下拉选项 */
-    public List<String> queryBondTypeOptions() {
-        return bondPoolQueryMapper.queryBondTypeOptions();
+    public List<String> queryBondTypeList() {
+        return bondPoolQueryMapper.queryBondTypeList();
     }
 
     /** 查询债券状态下拉选项 */
-    public List<String> queryBondStatusOptions() {
+    public List<String> queryBondStatusList() {
         List<String> options = new ArrayList<>();
         options.add("active");
         options.add("matured");
@@ -50,7 +50,7 @@ public class BondPoolQueryService {
 
     /** 添加债券到我的债券池 */
     public MyBondPoolBo addToMyPool(MyBondPoolReq req) {
-        MyBondPoolBo existing = myBondPoolMapper.findByUserAndCode(req.getUserId(), req.getSecurityCode());
+        MyBondPoolBo existing = myBondPoolMapper.queryByUserAndCode(req.getUserId(), req.getSecurityCode());
         if (existing != null) {
             return existing;
         }
@@ -64,17 +64,17 @@ public class BondPoolQueryService {
     }
 
     /** 从我的债券池移除 */
-    public MyBondPoolBo removeFromMyPool(MyBondPoolReq req) {
-        MyBondPoolBo existing = myBondPoolMapper.findByUserAndCode(req.getUserId(), req.getSecurityCode());
+    public MyBondPoolBo deleteFromMyPool(MyBondPoolReq req) {
+        MyBondPoolBo existing = myBondPoolMapper.queryByUserAndCode(req.getUserId(), req.getSecurityCode());
         if (existing != null) {
-            myBondPoolMapper.removeFromMyPool(req.getUserId(), req.getSecurityCode());
+            myBondPoolMapper.deleteFromMyPool(req.getUserId(), req.getSecurityCode());
         }
         return existing;
     }
 
     /** 批量查询用户已收藏的证券代码 */
-    public List<String> queryFavoritedCodes(String userId) {
-        return myBondPoolMapper.queryFavoritedCodes(userId);
+    public List<String> queryFavoritedCodeList(String userId) {
+        return myBondPoolMapper.queryFavoritedCodeList(userId);
     }
 
 }

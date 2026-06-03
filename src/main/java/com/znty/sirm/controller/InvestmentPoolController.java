@@ -92,9 +92,9 @@ public class InvestmentPoolController {
     /**
      * 初始化固定投资池列表（树结构由前端组装）
      */
-    @PostMapping("/initPoolList")
-    public ApiResponse<List<InvestmentPoolDto>> initPoolList(@RequestBody InvestmentPoolReq req) {
-        return ApiResponse.success(investmentPoolService.initPoolList(req));
+    @PostMapping("/addSeedPoolList")
+    public ApiResponse<List<InvestmentPoolDto>> addSeedPoolList(@RequestBody InvestmentPoolReq req) {
+        return ApiResponse.success(investmentPoolService.addSeedPoolList(req));
     }
 
     /**

@@ -42,15 +42,15 @@ public class RuleController {
     }
 
     /** 新增或编辑规则，含脚本和参数的全量保存 */
-    @PostMapping("/saveRule")
-    public ApiResponse<RuleDto> saveRule(@RequestBody RuleReq req) {
-        return ApiResponse.success(ruleService.saveRule(req));
+    @PostMapping("/addOrEditRule")
+    public ApiResponse<RuleDto> addOrEditRule(@RequestBody RuleReq req) {
+        return ApiResponse.success(ruleService.addOrEditRule(req));
     }
 
     /** 更新规则启用状态（active / disabled） */
-    @PostMapping("/updateRuleStatus")
-    public ApiResponse<RuleDto> updateRuleStatus(@RequestBody RuleReq req) {
-        return ApiResponse.success(ruleService.updateRuleStatus(req));
+    @PostMapping("/editRuleStatus")
+    public ApiResponse<RuleDto> editRuleStatus(@RequestBody RuleReq req) {
+        return ApiResponse.success(ruleService.editRuleStatus(req));
     }
 
     /** 软删除规则（标记删除，不物理删除） */

@@ -29,42 +29,42 @@ public interface RuleMapper {
     // ==================== rule_definition ====================
 
     /** 按关键字和状态统计规则数量（仅未删除记录） */
-    long countRules(@Param("keyword") String keyword, @Param("status") String status);
+    long queryRuleCount(@Param("keyword") String keyword, @Param("status") String status);
 
     /** 分页查询规则列表，支持按关键字（名称/描述/参数）和状态筛选 */
-    List<RuleDefinitionBo> selectRules(@Param("keyword") String keyword,
+    List<RuleDefinitionBo> queryRulePage(@Param("keyword") String keyword,
                                        @Param("status") String status,
                                        @Param("offset") int offset,
                                        @Param("pageSize") int pageSize);
 
     /** 按主键 ID 查询单条规则（仅未删除记录） */
-    RuleDefinitionBo selectById(@Param("id") Long id);
+    RuleDefinitionBo queryRuleById(@Param("id") Long id);
 
     /** 按主键 ID 列表批量查询规则（用于关联查询，避免 N+1） */
-    List<RuleDefinitionBo> selectByIds(@Param("ids") List<Long> ids);
+    List<RuleDefinitionBo> queryRuleByIds(@Param("ids") List<Long> ids);
 
     /** 新增规则定义，主键自增回填 */
-    int insertRule(RuleDefinitionBo rule);
+    int addRule(RuleDefinitionBo rule);
 
     /** 按主键更新规则定义字段（仅未删除记录） */
-    int updateRule(RuleDefinitionBo rule);
+    int editRule(RuleDefinitionBo rule);
 
     /** 按主键更新规则启用状态 */
-    int updateStatus(@Param("id") Long id, @Param("status") String status);
+    int editRuleStatus(@Param("id") Long id, @Param("status") String status);
 
     /** 按主键软删除（deleted_flag 置为 1） */
-    int softDelete(@Param("id") Long id);
+    int deleteRuleSoft(@Param("id") Long id);
 
     // ==================== rule_param ====================
 
     /** 按规则 ID 查询参数列表，按排序号升序 */
-    List<RuleParamBo> selectParamsByRuleId(@Param("ruleId") Long ruleId);
+    List<RuleParamBo> queryParamsByRuleId(@Param("ruleId") Long ruleId);
 
     /** 按规则 ID 列表批量查询参数 */
-    List<RuleParamBo> selectParamsByRuleIds(@Param("ruleIds") List<Long> ruleIds);
+    List<RuleParamBo> queryParamsByRuleIds(@Param("ruleIds") List<Long> ruleIds);
 
     /** 新增一条规则参数，主键自增回填 */
-    int insertParam(RuleParamBo param);
+    int addParam(RuleParamBo param);
 
     /** 按规则 ID 删除该规则下的所有参数 */
     int deleteParamsByRuleId(@Param("ruleId") Long ruleId);
@@ -72,10 +72,10 @@ public interface RuleMapper {
     // ==================== rule_param_option ====================
 
     /** 按参数 ID 列表批量查询选项 */
-    List<RuleParamOptionBo> selectOptionsByParamIds(@Param("paramIds") List<Long> paramIds);
+    List<RuleParamOptionBo> queryOptionsByParamIds(@Param("paramIds") List<Long> paramIds);
 
     /** 新增一条参数选项，主键自增回填 */
-    int insertParamOption(RuleParamOptionBo option);
+    int addParamOption(RuleParamOptionBo option);
 
     /** 按规则 ID 级联删除该规则下所有参数的选项 */
     int deleteParamOptionsByRuleId(@Param("ruleId") Long ruleId);
@@ -83,15 +83,15 @@ public interface RuleMapper {
     // ==================== rule_category ====================
 
     /** 查询所有启用的规则分类，按排序号和 ID 升序 */
-    List<RuleCategoryBo> selectCategories();
+    List<RuleCategoryBo> queryCategoryList();
 
     // ==================== rule_preset_option_set ====================
 
     /** 查询所有启用的预设选项集，按排序号和 ID 升序 */
-    List<RulePresetOptionSetBo> selectPresetSets();
+    List<RulePresetOptionSetBo> queryPresetSetList();
 
     // ==================== rule_preset_option_item ====================
 
     /** 按选项集 ID 列表批量查询预设选项明细 */
-    List<RulePresetOptionItemBo> selectPresetItems(@Param("setIds") List<Long> setIds);
+    List<RulePresetOptionItemBo> queryPresetItemList(@Param("setIds") List<Long> setIds);
 }

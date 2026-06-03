@@ -18,15 +18,15 @@ public interface MyBondPoolMapper {
     /**
      * 从我的债券池移除（软删除，状态改为 del）
      */
-    int removeFromMyPool(@Param("userId") String userId, @Param("securityCode") String securityCode);
+    int deleteFromMyPool(@Param("userId") String userId, @Param("securityCode") String securityCode);
 
     /**
      * 查询用户某证券的收藏记录（状态为 use）
      */
-    MyBondPoolBo findByUserAndCode(@Param("userId") String userId, @Param("securityCode") String securityCode);
+    MyBondPoolBo queryByUserAndCode(@Param("userId") String userId, @Param("securityCode") String securityCode);
 
     /**
      * 批量查询用户已收藏的证券代码列表
      */
-    List<String> queryFavoritedCodes(@Param("userId") String userId);
+    List<String> queryFavoritedCodeList(@Param("userId") String userId);
 }

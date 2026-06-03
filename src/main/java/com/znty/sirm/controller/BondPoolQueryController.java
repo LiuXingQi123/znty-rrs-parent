@@ -32,26 +32,26 @@ public class BondPoolQueryController {
     private InvestmentPoolMapper investmentPoolMapper;
 
     /** 分页查询债券池中的债券列表 */
-    @PostMapping("/queryPage")
-    public ApiResponse<PageResult<BondPoolQueryDto>> queryPage(@RequestBody BondPoolQueryReq req) {
-        return ApiResponse.success(bondPoolQueryService.queryPage(req));
+    @PostMapping("/queryBondPoolPage")
+    public ApiResponse<PageResult<BondPoolQueryDto>> queryBondPoolPage(@RequestBody BondPoolQueryReq req) {
+        return ApiResponse.success(bondPoolQueryService.queryBondPoolPage(req));
     }
 
     /** 查询债券类型下拉选项 */
-    @PostMapping("/queryBondTypeOptions")
-    public ApiResponse<List<String>> queryBondTypeOptions() {
-        return ApiResponse.success(bondPoolQueryService.queryBondTypeOptions());
+    @PostMapping("/queryBondTypeList")
+    public ApiResponse<List<String>> queryBondTypeList() {
+        return ApiResponse.success(bondPoolQueryService.queryBondTypeList());
     }
 
     /** 查询债券状态下拉选项 */
-    @PostMapping("/queryBondStatusOptions")
-    public ApiResponse<List<String>> queryBondStatusOptions() {
-        return ApiResponse.success(bondPoolQueryService.queryBondStatusOptions());
+    @PostMapping("/queryBondStatusList")
+    public ApiResponse<List<String>> queryBondStatusList() {
+        return ApiResponse.success(bondPoolQueryService.queryBondStatusList());
     }
 
     /** 查询投资池树 */
-    @PostMapping("/queryPoolTree")
-    public ApiResponse<List<InvestmentPoolBo>> queryPoolTree() {
+    @PostMapping("/queryPoolTreeList")
+    public ApiResponse<List<InvestmentPoolBo>> queryPoolTreeList() {
         return ApiResponse.success(investmentPoolMapper.queryPoolList());
     }
 
@@ -62,15 +62,15 @@ public class BondPoolQueryController {
     }
 
     /** 从我的债券池移除 */
-    @PostMapping("/removeFromMyPool")
-    public ApiResponse<MyBondPoolBo> removeFromMyPool(@RequestBody MyBondPoolReq req) {
-        return ApiResponse.success(bondPoolQueryService.removeFromMyPool(req));
+    @PostMapping("/deleteFromMyPool")
+    public ApiResponse<MyBondPoolBo> deleteFromMyPool(@RequestBody MyBondPoolReq req) {
+        return ApiResponse.success(bondPoolQueryService.deleteFromMyPool(req));
     }
 
     /** 批量查询用户已收藏的证券代码 */
-    @PostMapping("/queryFavoritedCodes")
-    public ApiResponse<List<String>> queryFavoritedCodes(@RequestBody Map<String, String> params) {
+    @PostMapping("/queryFavoritedCodeList")
+    public ApiResponse<List<String>> queryFavoritedCodeList(@RequestBody Map<String, String> params) {
         String userId = params.get("userId");
-        return ApiResponse.success(bondPoolQueryService.queryFavoritedCodes(userId));
+        return ApiResponse.success(bondPoolQueryService.queryFavoritedCodeList(userId));
     }
 }

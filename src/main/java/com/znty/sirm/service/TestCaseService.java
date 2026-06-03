@@ -59,8 +59,8 @@ public class TestCaseService {
      */
     public PageResult<TestCaseDto> queryTestCasePage(TestCaseReq req) {
         TestCaseReq safeReq = req == null ? new TestCaseReq() : req;
-        long total = testCaseMapper.countCases();
-        List<RuleTestCaseBo> cases = testCaseMapper.selectCases(safeReq.offset(), safeReq.getPageSize());
+        long total = testCaseMapper.queryCaseCount();
+        List<RuleTestCaseBo> cases = testCaseMapper.queryCasePage(safeReq.offset(), safeReq.getPageSize());
         Map<Long, Map<String, String>> paramMap = loadCaseParamMap(cases);
         Map<Long, RuleDefinitionBo> ruleMap = loadRuleMap(cases);
         List<TestCaseDto> records = cases.stream()
@@ -73,7 +73,7 @@ public class TestCaseService {
      * <p>保存时快照关联规则的名称，保证规则后续改名不影响历史用例的可读性。</p>
      */
     @Transactional(rollbackFor = Exception.class)
-    public TestCaseDto saveTestCase(TestCaseReq req) {
+    public TestCaseDto addOrEditTestCase(TestCaseReq req) {
         validateSaveReq(req);
         RuleDefinitionBo rule = ruleService.requireRule(req.getRuleId());
         RuleTestCaseBo testCase;
@@ -82,7 +82,7 @@ public class TestCaseService {
             testCase.setCaseName(req.getName().trim());
             testCase.setRuleId(rule.getId());
             testCase.setRuleNameSnapshot(rule.getRuleName());
-            testCaseMapper.updateCase(testCase);
+            testCaseMapper.editCase(testCase);
             replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
         } else {
             testCase = new RuleTestCaseBo();
@@ -91,7 +91,7 @@ public class TestCaseService {
             testCase.setRuleNameSnapshot(rule.getRuleName());
             testCase.setLastResult(null);
             testCase.setLastOutput(null);
-            testCaseMapper.insertCase(testCase);
+            testCaseMapper.addCase(testCase);
             replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
         }
         return detailById(testCase.getId());
@@ -101,14 +101,14 @@ public class TestCaseService {
      * 仅修改测试用例名称，不涉及参数变更。
      */
     @Transactional(rollbackFor = Exception.class)
-    public TestCaseDto renameTestCase(TestCaseReq req) {
+    public TestCaseDto editTestCaseName(TestCaseReq req) {
         if (req == null || req.getId() == null) {
             throw new BizException("测试用例ID不能为空");
         }
         if (!StringUtils.hasText(req.getName())) {
             throw new BizException("测试用例名称不能为空");
         }
-        int updated = testCaseMapper.updateCaseName(req.getId(), req.getName().trim());
+        int updated = testCaseMapper.editCaseName(req.getId(), req.getName().trim());
         if (updated == 0) {
             throw new BizException("测试用例不存在");
         }
@@ -124,7 +124,7 @@ public class TestCaseService {
         // 删除前查出实体一并返回，便于前端展示
         TestCaseDto deleted = detailById(testCase.getId());
         testCaseMapper.deleteParamsByCaseId(testCase.getId());
-        testCaseMapper.deleteById(testCase.getId());
+        testCaseMapper.deleteCaseById(testCase.getId());
         return deleted;
     }
 
@@ -135,7 +135,7 @@ public class TestCaseService {
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto runTestCase(IdRequest req) {
         RuleTestCaseBo testCase = requireCase(req == null ? null : req.getId());
-        RuleDefinitionBo rule = ruleMapper.selectById(testCase.getRuleId());
+        RuleDefinitionBo rule = ruleMapper.queryRuleById(testCase.getRuleId());
         if (rule == null) {
             throw new BizException("测试用例关联规则不存在");
         }
@@ -145,7 +145,7 @@ public class TestCaseService {
         testCase.setLastResult(runResult.getStatus());
         testCase.setLastOutput(runResult.getOutput());
         testCase.setLastRunTime(new Date());
-        testCaseMapper.updateLastResult(testCase);
+        testCaseMapper.editCaseLastResult(testCase);
         return detailById(testCase.getId());
     }
 
@@ -154,7 +154,7 @@ public class TestCaseService {
      * <p>每个用例通过代理调用 self.runTestCase() 获得独立事务，单个失败不影响其余用例继续执行。</p>
      */
     public List<TestCaseDto> runAllTestCases() {
-        List<RuleTestCaseBo> cases = testCaseMapper.selectAllCases();
+        List<RuleTestCaseBo> cases = testCaseMapper.queryAllCaseList();
         for (RuleTestCaseBo testCase : cases) {
             try {
                 self.runTestCase(newIdRequest(testCase.getId()));
@@ -162,10 +162,10 @@ public class TestCaseService {
                 testCase.setLastResult("fail");
                 testCase.setLastOutput(e.getMessage());
                 testCase.setLastRunTime(new Date());
-                testCaseMapper.updateLastResult(testCase);
+                testCaseMapper.editCaseLastResult(testCase);
             }
         }
-        List<RuleTestCaseBo> refreshedCases = testCaseMapper.selectAllCases();
+        List<RuleTestCaseBo> refreshedCases = testCaseMapper.queryAllCaseList();
         Map<Long, Map<String, String>> paramMap = loadCaseParamMap(refreshedCases);
         Map<Long, RuleDefinitionBo> ruleMap = loadRuleMap(refreshedCases);
         return refreshedCases.stream()
@@ -175,14 +175,14 @@ public class TestCaseService {
     /**
      * 查询指定测试用例的执行历史记录，含每次执行的步骤日志。
      */
-    public List<RuleRunResultDto> queryRunHistory(IdRequest req) {
+    public List<RuleRunResultDto> queryRunHistoryList(IdRequest req) {
         Long caseId = req == null ? null : req.getId();
         if (caseId == null) {
             throw new BizException("测试用例ID不能为空");
         }
-        List<RuleTestRunBo> runs = testCaseMapper.selectRunsByCaseId(caseId);
+        List<RuleTestRunBo> runs = testCaseMapper.queryRunsByCaseId(caseId);
         return runs.stream().map(run -> {
-            List<RuleTestRunLogBo> logEntities = testCaseMapper.selectRunLogs(run.getId());
+            List<RuleTestRunLogBo> logEntities = testCaseMapper.queryRunLogs(run.getId());
             List<Map<String, Object>> logMaps = logEntities.stream().map(bo -> {
                 Map<String, Object> log = new LinkedHashMap<>();
                 log.put("time", bo.getLogTime() == null ? null :
@@ -215,7 +215,7 @@ public class TestCaseService {
         if (id == null) {
             throw new BizException("测试用例ID不能为空");
         }
-        RuleTestCaseBo testCase = testCaseMapper.selectCaseById(id);
+        RuleTestCaseBo testCase = testCaseMapper.queryCaseById(id);
         if (testCase == null) {
             throw new BizException("测试用例不存在");
         }
@@ -228,7 +228,7 @@ public class TestCaseService {
         Map<String, String> params = loadCaseParamMap(Collections.singletonList(testCase))
                 .getOrDefault(testCase.getId(), Collections.emptyMap());
         RuleDefinitionBo rule = testCase.getRuleId() == null
-                ? null : ruleMapper.selectById(testCase.getRuleId());
+                ? null : ruleMapper.queryRuleById(testCase.getRuleId());
         return toDto(testCase, params, rule);
     }
 
@@ -249,7 +249,7 @@ public class TestCaseService {
             param.setParamValue(value);
             param.setParamLabelSnapshot(define == null ? name : define.getParamLabel());
             param.setParamTypeSnapshot(define == null ? null : define.getParamType());
-            testCaseMapper.insertCaseParam(param);
+            testCaseMapper.addCaseParam(param);
         });
     }
 
@@ -265,7 +265,7 @@ public class TestCaseService {
         if (caseIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return testCaseMapper.selectParamsByCaseIds(caseIds).stream()
+        return testCaseMapper.queryParamsByCaseIds(caseIds).stream()
                 .collect(Collectors.groupingBy(
                         RuleTestCaseParamBo::getCaseId,
                         Collectors.toMap(
@@ -311,7 +311,7 @@ public class TestCaseService {
         if (ruleIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return ruleMapper.selectByIds(ruleIds).stream()
+        return ruleMapper.queryRuleByIds(ruleIds).stream()
                 .collect(Collectors.toMap(RuleDefinitionBo::getId, rule -> rule, (left, right) -> left));
     }
 

@@ -61,7 +61,7 @@
 
 
     <!-- 新建流程定义。 -->
-    <insert id="createFlowDefinition" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addFlowDefinition" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_flow_definition (name
         ,flow_key
         ,category
@@ -89,7 +89,7 @@
     </insert>
 
     <!-- 更新流程定义。 -->
-    <update id="updateFlowDefinition">
+    <update id="editFlowDefinition">
         UPDATE wf_flow_definition
         SET updt_time = #{updtTime}
         <if test="name != null">, name = #{name}</if>
@@ -110,7 +110,7 @@
     </update>
 
     <!-- 停用流程定义。 -->
-    <update id="disableFlowDefinition">
+    <update id="editFlowDefinitionStatus">
         UPDATE wf_flow_definition SET status = 'disabled'
                                         ,updt_time = #{updtTime}
         WHERE id = #{id}
@@ -151,7 +151,7 @@
         ,id DESC</select>
 
     <!-- 新建流程版本。 -->
-    <insert id="createFlowVersion" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addFlowVersion" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_flow_version (flow_id
         ,flow_key
         ,ver_num
@@ -187,7 +187,7 @@
     </insert>
 
     <!-- 更新流程版本。 -->
-    <update id="updateFlowVersion">
+    <update id="editFlowVersion">
         UPDATE wf_flow_version
         SET canvas_nodes   = #{canvasNodes}
             ,canvas_edges   = #{canvasEdges}
@@ -204,7 +204,7 @@
     </update>
 
     <!-- 更新流程版本状态。 -->
-    <update id="updateFlowVersionStatus">
+    <update id="editFlowVersionStatus">
         UPDATE wf_flow_version SET status = #{status}
                                    ,updt_time = #{updtTime}
         WHERE id = #{id}
@@ -218,7 +218,7 @@
     </delete>
 
     <!-- 新建流程节点。 -->
-    <insert id="createFlowNode" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addFlowNode" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_flow_node (version_id
         ,flow_id
         ,node_id
@@ -256,7 +256,7 @@
     </delete>
 
     <!-- 新建审批配置。 -->
-    <insert id="createApprovalConfig" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addApprovalConfig" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_node_approval_config (node_id
         ,approval_strategy
         ,approval_persons
@@ -282,7 +282,7 @@
     </delete>
 
     <!-- 新建自动任务配置。 -->
-    <insert id="createAutoConfig" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addAutoConfig" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_node_auto_config (node_id, task_seq, task_code, auto_remark, crte_time, updt_time)
         VALUES (
                 #{nodeId}
@@ -302,7 +302,7 @@
     </delete>
 
     <!-- 新建通知配置。 -->
-    <insert id="createNotifyConfig" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addNotifyConfig" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_node_notify_config (node_id
         ,notify_channels
         ,notify_target
@@ -332,7 +332,7 @@
     </delete>
 
     <!-- 新建条件配置。 -->
-    <insert id="createConditionConfig" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addConditionConfig" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_node_condition_config (node_id, condition_remark, crte_time, updt_time)
         VALUES (
                 #{nodeId}
@@ -349,7 +349,7 @@
     </delete>
 
     <!-- 新建流程连线。 -->
-    <insert id="createFlowEdge" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addFlowEdge" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_flow_edge (version_id
         ,flow_id
         ,edge_id
@@ -383,7 +383,7 @@
     </delete>
 
     <!-- 新建连线条件规则。 -->
-    <insert id="createCondRule" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addCondRule" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_edge_cond_rule (edge_id, seq, field_code, operator, field_val, crte_time, updt_time)
         VALUES (
                 #{edgeId}
@@ -398,13 +398,13 @@
     <!-- ==================== 角色字典 ==================== -->
 
     <!-- 查询角色字典。 -->
-    <select id="roleDictSelectAll" resultType="com.znty.sirm.model.RoleDictBo">
+    <select id="queryRoleDictList" resultType="com.znty.sirm.model.RoleDictBo">
         SELECT * FROM wf_role_dict WHERE is_active = 1 ORDER BY sort_order</select>
 
     <!-- ==================== 事件表 INSERT ==================== -->
 
     <!-- 新建流程定义事件。 -->
-    <insert id="createFlowDefinitionEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addFlowDefinitionEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_flow_definition_evt (id
         ,name
         ,flow_key
@@ -440,7 +440,7 @@
     </insert>
 
     <!-- 新建流程版本事件。 -->
-    <insert id="createFlowVersionEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addFlowVersionEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_flow_version_evt (id
         ,flow_id
         ,flow_key
@@ -484,7 +484,7 @@
     </insert>
 
     <!-- 新建流程节点事件。 -->
-    <insert id="createFlowNodeEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addFlowNodeEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_flow_node_evt (id
         ,version_id
         ,flow_id
@@ -522,7 +522,7 @@
     </insert>
 
     <!-- 新建审批配置事件。 -->
-    <insert id="createApprovalConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addApprovalConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_node_approval_config_evt (id
         ,node_id
         ,approval_strategy
@@ -548,7 +548,7 @@
     </insert>
 
     <!-- 新建自动任务配置事件。 -->
-    <insert id="createAutoConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addAutoConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_node_auto_config_evt (id
         ,node_id
         ,task_seq
@@ -574,7 +574,7 @@
     </insert>
 
     <!-- 新建通知配置事件。 -->
-    <insert id="createNotifyConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addNotifyConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_node_notify_config_evt (id
         ,node_id
         ,notify_channels
@@ -604,7 +604,7 @@
     </insert>
 
     <!-- 新建条件配置事件。 -->
-    <insert id="createConditionConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addConditionConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_node_condition_config_evt (id
         ,node_id
         ,condition_remark
@@ -626,7 +626,7 @@
     </insert>
 
     <!-- 新建流程连线事件。 -->
-    <insert id="createFlowEdgeEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addFlowEdgeEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_flow_edge_evt (id
         ,version_id
         ,flow_id
@@ -660,7 +660,7 @@
     </insert>
 
     <!-- 新建连线条件规则事件。 -->
-    <insert id="createCondRuleEvt" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addCondRuleEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_edge_cond_rule_evt (id
         ,edge_id
         ,seq
@@ -688,7 +688,7 @@
     </insert>
 
     <!-- 新建角色字典事件。 -->
-    <insert id="roleDictEvtInsert" useGeneratedKeys="true" keyProperty="evtId">
+    <insert id="addRoleDictEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_role_dict_evt (id
         ,role_code
         ,role_name

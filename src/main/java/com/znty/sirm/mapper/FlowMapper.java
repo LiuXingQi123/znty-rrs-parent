@@ -29,16 +29,16 @@ public interface FlowMapper {
     FlowDefinitionBo queryFlowByIdForUpdate(@Param("id") Long id);
 
     /** 新建流程定义。 */
-    int createFlowDefinition(FlowDefinitionBo def);
+    int addFlowDefinition(FlowDefinitionBo def);
 
     /** 更新流程定义。 */
-    int updateFlowDefinition(FlowDefinitionBo def);
+    int editFlowDefinition(FlowDefinitionBo def);
 
     /** 逻辑删除流程定义。 */
     int deleteFlowLogical(@Param("id") Long id, @Param("updtTime") Date now);
 
     /** 停用流程定义。 */
-    int disableFlowDefinition(@Param("id") Long id, @Param("updtTime") Date now);
+    int editFlowDefinitionStatus(@Param("id") Long id, @Param("updtTime") Date now);
 
     // ==================== 流程版本 ====================
 
@@ -56,13 +56,13 @@ public interface FlowMapper {
                                                       @Param("verNum") Integer verNum);
 
     /** 新建流程版本。 */
-    int createFlowVersion(FlowVersionBo ver);
+    int addFlowVersion(FlowVersionBo ver);
 
     /** 更新流程版本。 */
-    int updateFlowVersion(FlowVersionBo ver);
+    int editFlowVersion(FlowVersionBo ver);
 
     /** 更新流程版本状态。 */
-    int updateFlowVersionStatus(@Param("id") Long id,
+    int editFlowVersionStatus(@Param("id") Long id,
                                 @Param("status") String status,
                                 @Param("updtTime") Date now);
 
@@ -72,7 +72,7 @@ public interface FlowMapper {
     int deleteFlowNodeByVersionId(@Param("versionId") Long versionId);
 
     /** 新建流程节点。 */
-    int createFlowNode(FlowNodeBo node);
+    int addFlowNode(FlowNodeBo node);
 
     // ==================== 审批节点配置 ====================
 
@@ -80,7 +80,7 @@ public interface FlowMapper {
     int deleteApprovalConfigByVersionId(@Param("versionId") Long versionId);
 
     /** 新建审批配置。 */
-    int createApprovalConfig(NodeApprovalConfigBo cfg);
+    int addApprovalConfig(NodeApprovalConfigBo cfg);
 
     // ==================== 自动执行节点配置 ====================
 
@@ -88,7 +88,7 @@ public interface FlowMapper {
     int deleteAutoConfigByVersionId(@Param("versionId") Long versionId);
 
     /** 新建自动任务配置。 */
-    int createAutoConfig(NodeAutoConfigBo cfg);
+    int addAutoConfig(NodeAutoConfigBo cfg);
 
     // ==================== 通知节点配置 ====================
 
@@ -96,7 +96,7 @@ public interface FlowMapper {
     int deleteNotifyConfigByVersionId(@Param("versionId") Long versionId);
 
     /** 新建通知配置。 */
-    int createNotifyConfig(NodeNotifyConfigBo cfg);
+    int addNotifyConfig(NodeNotifyConfigBo cfg);
 
     // ==================== 条件节点配置 ====================
 
@@ -104,7 +104,7 @@ public interface FlowMapper {
     int deleteConditionConfigByVersionId(@Param("versionId") Long versionId);
 
     /** 新建条件配置。 */
-    int createConditionConfig(NodeConditionConfigBo cfg);
+    int addConditionConfig(NodeConditionConfigBo cfg);
 
     // ==================== 流程连线 ====================
 
@@ -112,7 +112,7 @@ public interface FlowMapper {
     int deleteFlowEdgeByVersionId(@Param("versionId") Long versionId);
 
     /** 新建流程连线。 */
-    int createFlowEdge(FlowEdgeBo edge);
+    int addFlowEdge(FlowEdgeBo edge);
 
     // ==================== 连线条件规则 ====================
 
@@ -120,44 +120,44 @@ public interface FlowMapper {
     int deleteCondRuleByVersionId(@Param("versionId") Long versionId);
 
     /** 新建连线条件规则。 */
-    int createCondRule(EdgeCondRuleBo rule);
+    int addCondRule(EdgeCondRuleBo rule);
 
     // ==================== 角色字典 ====================
 
     /** 查询角色字典。 */
-    List<RoleDictBo> roleDictSelectAll();
+    List<RoleDictBo> queryRoleDictList();
 
     // ==================== 事件表 ====================
 
     /** 新建流程定义事件。 */
-    int createFlowDefinitionEvt(FlowDefinitionEvtBo evt);
+    int addFlowDefinitionEvt(FlowDefinitionEvtBo evt);
 
     /** 新建流程版本事件。 */
-    int createFlowVersionEvt(FlowVersionEvtBo evt);
+    int addFlowVersionEvt(FlowVersionEvtBo evt);
 
     /** 新建流程节点事件。 */
-    int createFlowNodeEvt(FlowNodeEvtBo evt);
+    int addFlowNodeEvt(FlowNodeEvtBo evt);
 
     /** 新建审批配置事件。 */
-    int createApprovalConfigEvt(NodeApprovalConfigEvtBo evt);
+    int addApprovalConfigEvt(NodeApprovalConfigEvtBo evt);
 
     /** 新建自动任务配置事件。 */
-    int createAutoConfigEvt(NodeAutoConfigEvtBo evt);
+    int addAutoConfigEvt(NodeAutoConfigEvtBo evt);
 
     /** 新建通知配置事件。 */
-    int createNotifyConfigEvt(NodeNotifyConfigEvtBo evt);
+    int addNotifyConfigEvt(NodeNotifyConfigEvtBo evt);
 
     /** 新建条件配置事件。 */
-    int createConditionConfigEvt(NodeConditionConfigEvtBo evt);
+    int addConditionConfigEvt(NodeConditionConfigEvtBo evt);
 
     /** 新建流程连线事件。 */
-    int createFlowEdgeEvt(FlowEdgeEvtBo evt);
+    int addFlowEdgeEvt(FlowEdgeEvtBo evt);
 
     /** 新建连线条件规则事件。 */
-    int createCondRuleEvt(EdgeCondRuleEvtBo evt);
+    int addCondRuleEvt(EdgeCondRuleEvtBo evt);
 
     /** 新建角色字典事件。 */
-    int roleDictEvtInsert(RoleDictEvtBo evt);
+    int addRoleDictEvt(RoleDictEvtBo evt);
 
     // ==================== 归一化表 SELECT（DELETE 前捕获旧数据用于事件记录） ====================
 

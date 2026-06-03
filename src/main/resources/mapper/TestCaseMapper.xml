@@ -6,12 +6,12 @@
     <!-- ==================== 测试用例（rule_test_case） ==================== -->
 
     <!-- 统计测试用例总数 -->
-    <select id="countCases" resultType="long">
+    <select id="queryCaseCount" resultType="long">
         SELECT COUNT(1) FROM rule_test_case
     </select>
 
     <!-- 分页查询测试用例列表，按创建时间倒序 -->
-    <select id="selectCases" resultType="com.znty.sirm.model.RuleTestCaseBo">
+    <select id="queryCasePage" resultType="com.znty.sirm.model.RuleTestCaseBo">
         SELECT id
                ,case_name
                ,rule_id
@@ -28,7 +28,7 @@
     </select>
 
     <!-- 查询全部测试用例（用于批量执行场景） -->
-    <select id="selectAllCases" resultType="com.znty.sirm.model.RuleTestCaseBo">
+    <select id="queryAllCaseList" resultType="com.znty.sirm.model.RuleTestCaseBo">
         SELECT id
                ,case_name
                ,rule_id
@@ -43,7 +43,7 @@
     </select>
 
     <!-- 按主键查询单条测试用例 -->
-    <select id="selectCaseById" resultType="com.znty.sirm.model.RuleTestCaseBo">
+    <select id="queryCaseById" resultType="com.znty.sirm.model.RuleTestCaseBo">
         SELECT id
                ,case_name
                ,rule_id
@@ -57,7 +57,7 @@
     </select>
 
     <!-- 新增测试用例，主键自增回填 -->
-    <insert id="insertCase" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addCase" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO rule_test_case (case_name
                                    ,rule_id
                                    ,rule_name_snapshot
@@ -77,7 +77,7 @@
     </insert>
 
     <!-- 按主键更新测试用例基本信息（名称、关联规则、规则名称快照） -->
-    <update id="updateCase">
+    <update id="editCase">
         UPDATE rule_test_case
         SET case_name = #{caseName}
             ,rule_id = #{ruleId}
@@ -87,13 +87,13 @@
     </update>
 
     <!-- 仅更新用例名称（重命名操作，不涉及规则关联变更） -->
-    <update id="updateCaseName">
+    <update id="editCaseName">
         UPDATE rule_test_case SET case_name = #{caseName}
                                   ,updt_time = NOW() WHERE id = #{id}
     </update>
 
     <!-- 更新用例最近一次执行结果：状态、输出、执行时间 -->
-    <update id="updateLastResult">
+    <update id="editCaseLastResult">
         UPDATE rule_test_case
         SET last_result = #{lastResult}
             ,last_output = #{lastOutput}
@@ -103,14 +103,14 @@
     </update>
 
     <!-- 按主键物理删除测试用例 -->
-    <delete id="deleteById">
+    <delete id="deleteCaseById">
         DELETE FROM rule_test_case WHERE id = #{id}
     </delete>
 
     <!-- ==================== 测试用例参数值（rule_test_case_param） ==================== -->
 
     <!-- 按用例 ID 列表批量查询参数值（用于用例列表页批量加载，避免 N+1） -->
-    <select id="selectParamsByCaseIds" resultType="com.znty.sirm.model.RuleTestCaseParamBo">
+    <select id="queryParamsByCaseIds" resultType="com.znty.sirm.model.RuleTestCaseParamBo">
         SELECT id
                ,case_id
                ,param_name
@@ -126,7 +126,7 @@
     </select>
 
     <!-- 新增用例参数值，含参数名、实际值及展示标签/类型的快照 -->
-    <insert id="insertCaseParam" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addCaseParam" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO rule_test_case_param (case_id
                                          ,param_name
                                          ,param_label_snapshot
@@ -151,7 +151,7 @@
     <!-- ==================== 测试执行记录 & 步骤日志 ==================== -->
 
     <!-- 按用例 ID 查询执行记录列表，按开始时间倒序（最近执行在前） -->
-    <select id="selectRunsByCaseId" resultType="com.znty.sirm.model.RuleTestRunBo">
+    <select id="queryRunsByCaseId" resultType="com.znty.sirm.model.RuleTestRunBo">
         SELECT id
                ,case_id
                ,rule_id
@@ -166,7 +166,7 @@
     </select>
 
     <!-- 按执行记录 ID 查询该次执行的所有步骤日志，按时间升序 -->
-    <select id="selectRunLogs" resultType="com.znty.sirm.model.RuleTestRunLogBo">
+    <select id="queryRunLogs" resultType="com.znty.sirm.model.RuleTestRunLogBo">
         SELECT id
                ,run_id
                ,log_time
@@ -179,7 +179,7 @@
     </select>
 
     <!-- 新增执行记录，含规则 ID、用例 ID、状态、输出、异常信息和起止时间 -->
-    <insert id="insertRun" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addRun" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO rule_test_run (case_id
                                   ,rule_id
                                   ,run_status
@@ -201,7 +201,7 @@
     </insert>
 
     <!-- 新增单条步骤日志，关联执行记录 ID -->
-    <insert id="insertRunLog" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addRunLog" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO rule_test_run_log (run_id
                                       ,log_time
                                       ,log_type

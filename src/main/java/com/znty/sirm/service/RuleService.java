@@ -64,8 +64,8 @@ public class RuleService {
      */
     public PageResult<RuleDto> queryRulePage(RuleReq req) {
         RuleReq safeReq = req == null ? new RuleReq() : req;
-        long total = ruleMapper.countRules(safeReq.getKeyword(), safeReq.getStatus());
-        List<RuleDefinitionBo> rules = ruleMapper.selectRules(
+        long total = ruleMapper.queryRuleCount(safeReq.getKeyword(), safeReq.getStatus());
+        List<RuleDefinitionBo> rules = ruleMapper.queryRulePage(
                 safeReq.getKeyword(),
                 safeReq.getStatus(),
                 safeReq.offset(),
@@ -90,7 +90,7 @@ public class RuleService {
      * <p>新增时默认状态为 active，编辑时保持原状态不变。</p>
      */
     @Transactional(rollbackFor = Exception.class)
-    public RuleDto saveRule(RuleReq req) {
+    public RuleDto addOrEditRule(RuleReq req) {
         validateSaveReq(req);
         RuleDefinitionBo rule;
         if (req.getId() != null) {
@@ -99,7 +99,7 @@ public class RuleService {
             rule.setDescription(req.getDescription());
             rule.setCategoryCode(defaultText(req.getCategory(), "business"));
             rule.setScript(req.getScript());
-            ruleMapper.updateRule(rule);
+            ruleMapper.editRule(rule);
             replaceParams(rule.getId(), req.getParamList());
         } else {
             rule = new RuleDefinitionBo();
@@ -109,7 +109,7 @@ public class RuleService {
             rule.setScript(req.getScript());
             rule.setStatus("active");
             rule.setDeletedFlag(0);
-            ruleMapper.insertRule(rule);
+            ruleMapper.addRule(rule);
             replaceParams(rule.getId(), req.getParamList());
         }
         return detailById(rule.getId());
@@ -119,14 +119,14 @@ public class RuleService {
      * 更新规则启用状态（active / disabled）。
      */
     @Transactional(rollbackFor = Exception.class)
-    public RuleDto updateRuleStatus(RuleReq req) {
+    public RuleDto editRuleStatus(RuleReq req) {
         if (req == null || req.getId() == null) {
             throw new BizException("规则ID不能为空");
         }
         if (!"active".equals(req.getStatus()) && !"disabled".equals(req.getStatus())) {
             throw new BizException("规则状态不合法");
         }
-        int updated = ruleMapper.updateStatus(req.getId(), req.getStatus());
+        int updated = ruleMapper.editRuleStatus(req.getId(), req.getStatus());
         if (updated == 0) {
             throw new BizException("规则不存在");
         }
@@ -143,7 +143,7 @@ public class RuleService {
         }
         // 删除前查出实体一并返回，便于前端展示
         RuleDto deleted = detailById(req.getId());
-        int updated = ruleMapper.softDelete(req.getId());
+        int updated = ruleMapper.deleteRuleSoft(req.getId());
         if (updated == 0) {
             throw new BizException("规则不存在");
         }
@@ -160,7 +160,7 @@ public class RuleService {
         if (id == null) {
             throw new BizException("规则ID不能为空");
         }
-        RuleDefinitionBo rule = ruleMapper.selectById(id);
+        RuleDefinitionBo rule = ruleMapper.queryRuleById(id);
         if (rule == null) {
             throw new BizException("规则不存在");
         }
@@ -174,7 +174,7 @@ public class RuleService {
         if (ruleId == null) {
             return Collections.emptyList();
         }
-        return ruleMapper.selectParamsByRuleId(ruleId);
+        return ruleMapper.queryParamsByRuleId(ruleId);
     }
 
     // ==================== 规则执行 ====================
@@ -235,7 +235,7 @@ public class RuleService {
         run.setErrorMessage(errorMessage);
         run.setStartTime(startTime);
         run.setFinishTime(finishTime);
-        testCaseMapper.insertRun(run);
+        testCaseMapper.addRun(run);
         saveLogs(run.getId(), result.getLogs());
 
         result.setStatus(status);
@@ -249,7 +249,7 @@ public class RuleService {
      * 查询所有启用的规则分类
      */
     public List<CategoryDto> queryCategoryList() {
-        return ruleMapper.selectCategories().stream().map(category -> {
+        return ruleMapper.queryCategoryList().stream().map(category -> {
             CategoryDto dto = new CategoryDto();
             dto.setCode(category.getCategoryCode());
             dto.setName(category.getCategoryName());
@@ -262,12 +262,12 @@ public class RuleService {
      * <p>采用批量加载：先查选项集 → 按 setId 批量查子项 → 分组组装。</p>
      */
     public List<PresetSetDto> queryPresetSetList() {
-        List<RulePresetOptionSetBo> sets = ruleMapper.selectPresetSets();
+        List<RulePresetOptionSetBo> sets = ruleMapper.queryPresetSetList();
         if (sets.isEmpty()) {
             return Collections.emptyList();
         }
         List<Long> setIds = sets.stream().map(RulePresetOptionSetBo::getId).collect(Collectors.toList());
-        Map<Long, List<String>> itemMap = ruleMapper.selectPresetItems(setIds).stream()
+        Map<Long, List<String>> itemMap = ruleMapper.queryPresetItemList(setIds).stream()
                 .collect(Collectors.groupingBy(
                         RulePresetOptionItemBo::getSetId,
                         Collectors.mapping(RulePresetOptionItemBo::getOptionValue, Collectors.toList())
@@ -324,7 +324,7 @@ public class RuleService {
             param.setParamType(defaultText((String) dto.get("type"), "string"));
             param.setRequired(0);
             param.setSortNo(i + 1);
-            ruleMapper.insertParam(param);
+            ruleMapper.addParam(param);
             saveOptions(param.getId(), dto.get("options"));
         }
     }
@@ -348,7 +348,7 @@ public class RuleService {
             option.setOptionValue(value);
             option.setOptionLabel(value);
             option.setSortNo(idx);
-            ruleMapper.insertParamOption(option);
+            ruleMapper.addParamOption(option);
         }
     }
 
@@ -364,11 +364,11 @@ public class RuleService {
         if (ruleIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        List<RuleParamBo> params = ruleMapper.selectParamsByRuleIds(ruleIds);
+        List<RuleParamBo> params = ruleMapper.queryParamsByRuleIds(ruleIds);
         List<Long> paramIds = params.stream().map(RuleParamBo::getId).filter(Objects::nonNull).collect(Collectors.toList());
         Map<Long, List<RuleParamOptionBo>> optionMap = paramIds.isEmpty()
                 ? Collections.emptyMap()
-                : ruleMapper.selectOptionsByParamIds(paramIds).stream()
+                : ruleMapper.queryOptionsByParamIds(paramIds).stream()
                 .collect(Collectors.groupingBy(RuleParamOptionBo::getParamId));
         return params.stream().collect(Collectors.groupingBy(
                 RuleParamBo::getRuleId,
@@ -452,7 +452,7 @@ public class RuleService {
             entity.setLogTime(new Date());
             entity.setLogType((String) log.get("type"));
             entity.setMessage((String) log.get("msg"));
-            testCaseMapper.insertRunLog(entity);
+            testCaseMapper.addRunLog(entity);
         }
     }
 

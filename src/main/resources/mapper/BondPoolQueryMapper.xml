@@ -3,7 +3,7 @@
 <mapper namespace="com.znty.sirm.mapper.BondPoolQueryMapper">
 
     <!-- 分页查询债券池中的债券列表 -->
-    <select id="queryPage" resultType="com.znty.sirm.model.BondPoolQueryDto">
+    <select id="queryBondPoolPage" resultType="com.znty.sirm.model.BondPoolQueryDto">
         SELECT ips.id
                ,ips.bond_code
                ,ips.bond_short_name
@@ -68,7 +68,7 @@
     </select>
 
     <!-- 查询所有债券类型选项 -->
-    <select id="queryBondTypeOptions" resultType="java.lang.String">
+    <select id="queryBondTypeList" resultType="java.lang.String">
         SELECT DISTINCT bond_type
         FROM ip_pool_status
         WHERE is_deleted = 0
