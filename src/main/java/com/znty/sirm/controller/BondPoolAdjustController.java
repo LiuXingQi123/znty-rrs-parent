@@ -8,6 +8,7 @@ import com.znty.sirm.model.BondInfoDetailDto;
 import com.znty.sirm.model.BondInfoDto;
 import com.znty.sirm.model.BondPoolAdjustReq;
 import com.znty.sirm.model.BondPoolAdjustSubmitReq;
+import com.znty.sirm.model.BondPoolStatusDto;
 import com.znty.sirm.model.PoolDto;
 import com.znty.sirm.service.BondPoolAdjustService;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,6 +45,12 @@ public class BondPoolAdjustController {
     @PostMapping("/queryAdjustPoolList")
     public ApiResponse<List<PoolDto>> queryAdjustPoolList(@RequestBody BondPoolAdjustReq req) {
         return ApiResponse.success(bondPoolAdjustService.queryAdjustPoolList(req));
+    }
+
+    /** 查询债券当前所在池及主体所在池 */
+    @PostMapping("/queryBondPoolStatus")
+    public ApiResponse<BondPoolStatusDto> queryBondPoolStatus(@RequestBody BondPoolAdjustReq req) {
+        return ApiResponse.success(bondPoolAdjustService.queryBondPoolStatus(req));
     }
 
     /** 提交调库申请 */

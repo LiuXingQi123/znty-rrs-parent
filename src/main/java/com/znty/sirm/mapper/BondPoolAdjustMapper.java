@@ -2,6 +2,7 @@ package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.BondInfoBo;
 import com.znty.sirm.model.IpAdjustLogBo;
+import com.znty.sirm.model.PoolStatusDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -26,4 +27,10 @@ public interface BondPoolAdjustMapper {
 
     /** 根据债券代码查询调库记录列表 */
     List<IpAdjustLogBo> queryAdjustLogList(@Param("bondCode") String bondCode);
+
+    /** 查询当前债券所在池列表 */
+    List<PoolStatusDto> queryBondPoolStatus(@Param("bondCode") String bondCode);
+
+    /** 查询当前债券主体（发行人）所在池列表 */
+    List<PoolStatusDto> queryIssuerPoolStatus(@Param("bondCode") String bondCode);
 }

@@ -13,6 +13,8 @@ import com.znty.sirm.model.BondInfoDetailDto;
 import com.znty.sirm.model.BondInfoDto;
 import com.znty.sirm.model.BondPoolAdjustReq;
 import com.znty.sirm.model.BondPoolAdjustSubmitReq;
+import com.znty.sirm.model.BondPoolStatusDto;
+import com.znty.sirm.model.PoolStatusDto;
 import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.PoolDto;
@@ -158,6 +160,17 @@ public class BondPoolAdjustService {
         dto.setCurrentCount(0);
         dto.setInMutexPoolIds(inMutexMap.getOrDefault(pool.getId(), Collections.emptyList()));
         dto.setOutMutexPoolIds(outMutexMap.getOrDefault(pool.getId(), Collections.emptyList()));
+        return dto;
+    }
+
+    /** 查询债券当前所在池及主体所在池 */
+    public BondPoolStatusDto queryBondPoolStatus(BondPoolAdjustReq req) {
+        if (req.getBondCode() == null || req.getBondCode().isEmpty()) {
+            throw new BizException("债券代码不能为空");
+        }
+        BondPoolStatusDto dto = new BondPoolStatusDto();
+        dto.setBondCurrentPools(bondPoolAdjustMapper.queryBondPoolStatus(req.getBondCode()));
+        dto.setIssuerCurrentPools(bondPoolAdjustMapper.queryIssuerPoolStatus(req.getBondCode()));
         return dto;
     }
 
