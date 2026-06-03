@@ -2,6 +2,7 @@ package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.BondInfoBo;
 import com.znty.sirm.model.IpAdjustLogBo;
+import com.znty.sirm.model.PoolRelationBo;
 import com.znty.sirm.model.PoolStatusDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -33,4 +34,13 @@ public interface BondPoolAdjustMapper {
 
     /** 查询当前债券主体（发行人）所在池列表 */
     List<PoolStatusDto> queryIssuerPoolStatus(@Param("bondCode") String bondCode);
+
+    /** 查询债券当前有效所在池 ID 列表（audit_status=20） */
+    List<Long> queryBondCurrentPoolIds(@Param("bondCode") String bondCode);
+
+    /** 查询目标投资池当前有效债券数量 */
+    int queryPoolCurrentCount(@Param("poolId") Long poolId);
+
+    /** 查询全量投资池关系配置（不限关系类型） */
+    List<PoolRelationBo> queryAllPoolRelations();
 }

@@ -6,6 +6,9 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.BondPoolAdjustMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
+import com.znty.sirm.model.AdjustCheckContext;
+import com.znty.sirm.model.AdjustCheckDto;
+import com.znty.sirm.model.AdjustCheckReq;
 import com.znty.sirm.model.AdjustLogDto;
 import com.znty.sirm.model.AdjustSubmitDto;
 import com.znty.sirm.model.BondInfoBo;
@@ -25,9 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -41,6 +47,17 @@ public class BondPoolAdjustService {
 
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
+    // 投资池关系类型常量
+    private static final String REL_SOURCE        = "source";              // 来源池
+    private static final String REL_IN_RESTRICT   = "in_restrict";         // 调入限制池
+    private static final String REL_OUT_RESTRICT  = "out_restrict";        // 调出限制池
+    private static final String REL_IN_LINKAGE    = "in_linkage";          // 调入联动池
+    private static final String REL_OUT_LINKAGE   = "out_linkage";         // 调出联动池
+    private static final String REL_IN_MUTEX      = "in_mutex";            // 调入互斥池
+    private static final String REL_OUT_MUTEX     = "out_mutex";           // 调出互斥池
+    private static final String REL_IN_ELASTIC    = "in_elastic";          // 调入弹性禁投池
+    private static final String REL_OUT_ELASTIC   = "out_elastic";         // 调出弹性禁投池
 
     /** 分页查询债券列表 */
     public PageResult<BondInfoDto> queryBondPage(BondPoolAdjustReq req) {
@@ -264,6 +281,301 @@ public class BondPoolAdjustService {
             }
         }
         return pool.getPoolName() != null ? pool.getPoolName() : "";
+    }
+
+    // ─────────────── 调库校验 ───────────────
+
+    /** 校验债券调库可行性 */
+    public AdjustCheckDto checkAdjust(AdjustCheckReq req) {
+        if (req.getBondCode() == null || req.getBondCode().isEmpty()) {
+            throw new BizException("债券代码不能为空");
+        }
+        if (req.getItems() == null || req.getItems().isEmpty()) {
+            throw new BizException("调库项不能为空");
+        }
+
+        // 加载债券基础信息
+        BondInfoBo bondInfo = bondPoolAdjustMapper.queryBondDetail(req.getBondId());
+        if (bondInfo == null) {
+            throw new BizException("债券不存在");
+        }
+
+        // 加载全量投资池 Map
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
+        if (allPools != null) {
+            for (InvestmentPoolBo p : allPools) {
+                poolMap.put(p.getId(), p);
+            }
+        }
+
+        // 加载债券当前有效所在池 ID
+        List<Long> currentPoolIdList = bondPoolAdjustMapper.queryBondCurrentPoolIds(req.getBondCode());
+        Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList != null ? currentPoolIdList : Collections.emptyList());
+
+        // 加载全量投资池关系配置
+        List<PoolRelationBo> allRelations = bondPoolAdjustMapper.queryAllPoolRelations();
+        Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(allRelations);
+
+        // 逐项构建上下文并执行三层校验
+        List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>();
+        for (AdjustCheckReq.CheckItem item : req.getItems()) {
+            int poolCurrentCount = bondPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
+            AdjustCheckContext ctx = buildCheckContext(bondInfo, item, poolMap, currentPoolIds, poolCurrentCount, poolRelationMap);
+
+            List<String> failures = new ArrayList<>();
+            failures.addAll(checkPreConditions(ctx));
+            if ("调入".equals(item.getAdjustMode())) {
+                failures.addAll(checkInConditions(ctx));
+            } else {
+                failures.addAll(checkOutConditions(ctx));
+            }
+
+            AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
+            resultItem.setTargetPoolId(item.getTargetPoolId());
+            resultItem.setPoolName(buildPoolPath(item.getTargetPoolId(), poolMap));
+            resultItem.setPoolType(item.getPoolType());
+            resultItem.setAdjustMode(item.getAdjustMode());
+            resultItem.setCanAdjust(failures.isEmpty());
+            resultItem.setFailReasons(failures);
+            resultItems.add(resultItem);
+        }
+
+        AdjustCheckDto dto = new AdjustCheckDto();
+        dto.setItems(resultItems);
+        return dto;
+    }
+
+    /** 获取调库校验基础参数上下文 */
+    public AdjustCheckContext buildCheckContext(BondInfoBo bondInfo,
+                                               AdjustCheckReq.CheckItem item,
+                                               Map<Long, InvestmentPoolBo> poolMap,
+                                               Set<Long> currentPoolIds,
+                                               int poolCurrentCount,
+                                               Map<Long, Map<String, List<Long>>> poolRelationMap) {
+        InvestmentPoolBo targetPool = poolMap.get(item.getTargetPoolId());
+        InvestmentPoolBo parentPool = (targetPool != null && targetPool.getParentId() != null)
+                ? poolMap.get(targetPool.getParentId()) : null;
+        Map<String, List<Long>> targetPoolRelations = poolRelationMap.getOrDefault(
+                item.getTargetPoolId(), Collections.emptyMap());
+
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setBondInfo(bondInfo);
+        ctx.setTargetPool(targetPool);
+        ctx.setParentPool(parentPool);
+        ctx.setCurrentPoolIds(currentPoolIds);
+        ctx.setPoolCurrentCount(poolCurrentCount);
+        ctx.setAdjustMode(item.getAdjustMode());
+        ctx.setTargetPoolRelations(targetPoolRelations);
+        ctx.setPoolMap(poolMap);
+        return ctx;
+    }
+
+    /** 前置校验（与调库方向无关的通用校验） */
+    public List<String> checkPreConditions(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        addIfFailed(failures, preCheckBondExpired(ctx));
+        // 后续可在此追加更多前置校验
+        return failures;
+    }
+
+    /** 调入校验 */
+    public List<String> checkInConditions(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        addIfFailed(failures, inCheckBondAlreadyInPool(ctx));
+        addIfFailed(failures, inCheckPoolCapacity(ctx));
+        addIfFailed(failures, inCheckSourcePool(ctx));
+        addIfFailed(failures, inCheckRestrictPool(ctx));
+        addIfFailed(failures, inCheckLinkagePool(ctx));
+        addIfFailed(failures, inCheckMutexPool(ctx));
+        addIfFailed(failures, inCheckElasticPool(ctx));
+        return failures;
+    }
+
+    /** 调出校验 */
+    public List<String> checkOutConditions(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        addIfFailed(failures, outCheckBondNotInPool(ctx));
+        addIfFailed(failures, outCheckRestrictPool(ctx));
+        addIfFailed(failures, outCheckLinkagePool(ctx));
+        addIfFailed(failures, outCheckMutexPool(ctx));
+        addIfFailed(failures, outCheckElasticPool(ctx));
+        return failures;
+    }
+
+    // ─── 前置校验规则 ───
+
+    /** 债券是否已到期 */
+    private String preCheckBondExpired(AdjustCheckContext ctx) {
+        String maturityDate = ctx.getBondInfo().getBInfoMaturitydate();
+        if (maturityDate != null && !maturityDate.isEmpty()) {
+            String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            if (maturityDate.compareTo(today) < 0) {
+                return "债券已到期，不支持调库操作";
+            }
+        }
+        return null;
+    }
+
+    // ─── 调入校验规则 ───
+
+    /** 债券是否已在目标池中（有效入池状态） */
+    private String inCheckBondAlreadyInPool(AdjustCheckContext ctx) {
+        Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
+        if (poolId != null && ctx.getCurrentPoolIds().contains(poolId)) {
+            return "债券已在目标投资池中，无需重复调入";
+        }
+        return null;
+    }
+
+    /** 目标池是否已达上限 */
+    private String inCheckPoolCapacity(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool != null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
+                && ctx.getPoolCurrentCount() >= pool.getMaxCapacity()) {
+            return "目标投资池已达持仓上限（" + pool.getMaxCapacity() + "），无法调入";
+        }
+        return null;
+    }
+
+    // ─── 调出校验规则 ───
+
+    /** 债券是否不在目标池中（不在池中则不可调出） */
+    private String outCheckBondNotInPool(AdjustCheckContext ctx) {
+        Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
+        if (poolId == null || !ctx.getCurrentPoolIds().contains(poolId)) {
+            return "债券当前不在该投资池中，无法调出";
+        }
+        return null;
+    }
+
+    // ─── 调入校验规则（关系型） ───
+
+    /** 来源池：目标池配置了来源池时，债券须当前在其中至少一个来源池 */
+    private String inCheckSourcePool(AdjustCheckContext ctx) {
+        List<Long> sourcePools = ctx.getTargetPoolRelations().get(REL_SOURCE);
+        if (sourcePools == null || sourcePools.isEmpty()) {
+            return null;
+        }
+        boolean inAny = sourcePools.stream().anyMatch(ctx.getCurrentPoolIds()::contains);
+        if (!inAny) {
+            String names = poolNames(sourcePools, ctx);
+            return "目标池配置了来源池限制，债券须先在以下池中：" + names;
+        }
+        return null;
+    }
+
+    /** 调入限制池：债券在限制池中则不可调入 */
+    private String inCheckRestrictPool(AdjustCheckContext ctx) {
+        return checkBlockedByPools(ctx, REL_IN_RESTRICT, "调入限制池");
+    }
+
+    /** 调入联动池：债券须已在所有联动池中，确保同步状态 */
+    private String inCheckLinkagePool(AdjustCheckContext ctx) {
+        List<Long> linkagePools = ctx.getTargetPoolRelations().get(REL_IN_LINKAGE);
+        if (linkagePools == null || linkagePools.isEmpty()) {
+            return null;
+        }
+        List<Long> missing = linkagePools.stream()
+                .filter(id -> !ctx.getCurrentPoolIds().contains(id))
+                .collect(Collectors.toList());
+        if (!missing.isEmpty()) {
+            String names = poolNames(missing, ctx);
+            return "调入联动池校验未通过，请同时将债券调入以下联动池：" + names;
+        }
+        return null;
+    }
+
+    /** 调入互斥池：债券在互斥池中则不可调入 */
+    private String inCheckMutexPool(AdjustCheckContext ctx) {
+        return checkBlockedByPools(ctx, REL_IN_MUTEX, "调入互斥池");
+    }
+
+    /** 调入弹性禁投池：债券在弹性禁投池中则不可调入 */
+    private String inCheckElasticPool(AdjustCheckContext ctx) {
+        return checkBlockedByPools(ctx, REL_IN_ELASTIC, "调入弹性禁投池");
+    }
+
+    // ─── 调出校验规则（关系型） ───
+
+    /** 调出限制池：债券在限制池中则不可调出 */
+    private String outCheckRestrictPool(AdjustCheckContext ctx) {
+        return checkBlockedByPools(ctx, REL_OUT_RESTRICT, "调出限制池");
+    }
+
+    /** 调出联动池：债券须已在所有联动池中，才可同步调出 */
+    private String outCheckLinkagePool(AdjustCheckContext ctx) {
+        List<Long> linkagePools = ctx.getTargetPoolRelations().get(REL_OUT_LINKAGE);
+        if (linkagePools == null || linkagePools.isEmpty()) {
+            return null;
+        }
+        List<Long> missing = linkagePools.stream()
+                .filter(id -> !ctx.getCurrentPoolIds().contains(id))
+                .collect(Collectors.toList());
+        if (!missing.isEmpty()) {
+            String names = poolNames(missing, ctx);
+            return "调出联动池校验未通过，请同时将债券从以下联动池调出：" + names;
+        }
+        return null;
+    }
+
+    /** 调出互斥池：债券在互斥池中则不可调出 */
+    private String outCheckMutexPool(AdjustCheckContext ctx) {
+        return checkBlockedByPools(ctx, REL_OUT_MUTEX, "调出互斥池");
+    }
+
+    /** 调出弹性禁投池：债券在弹性禁投池中则不可调出 */
+    private String outCheckElasticPool(AdjustCheckContext ctx) {
+        return checkBlockedByPools(ctx, REL_OUT_ELASTIC, "调出弹性禁投池");
+    }
+
+    // ─── 共用工具 ───
+
+    /**
+     * 通用：检查债券是否在指定关系类型的池中（在则阻断）
+     * @param relationType 关系类型常量
+     * @param label        用于错误消息的中文标签
+     */
+    private String checkBlockedByPools(AdjustCheckContext ctx, String relationType, String label) {
+        List<Long> relPools = ctx.getTargetPoolRelations().get(relationType);
+        if (relPools == null || relPools.isEmpty()) {
+            return null;
+        }
+        List<Long> blocked = relPools.stream()
+                .filter(ctx.getCurrentPoolIds()::contains)
+                .collect(Collectors.toList());
+        if (!blocked.isEmpty()) {
+            return "债券在" + label + "中，无法操作：" + poolNames(blocked, ctx);
+        }
+        return null;
+    }
+
+    /** 将池 ID 列表转为"父级/子级"路径名称，以顿号连接 */
+    private String poolNames(List<Long> poolIds, AdjustCheckContext ctx) {
+        return poolIds.stream()
+                .map(id -> buildPoolPath(id, ctx.getPoolMap()))
+                .collect(Collectors.joining("、"));
+    }
+
+    /** 构建全量投资池关系 Map：poolId → relationType → List<relationPoolId> */
+    private Map<Long, Map<String, List<Long>>> buildPoolRelationMap(List<PoolRelationBo> relations) {
+        Map<Long, Map<String, List<Long>>> map = new HashMap<>();
+        if (relations == null) {
+            return map;
+        }
+        for (PoolRelationBo r : relations) {
+            map.computeIfAbsent(r.getPoolId(), k -> new HashMap<>())
+               .computeIfAbsent(r.getRelationType(), k -> new ArrayList<>())
+               .add(r.getRelationPoolId());
+        }
+        return map;
+    }
+
+    /** 若 reason 非空则加入失败列表 */
+    private void addIfFailed(List<String> failures, String reason) {
+        if (reason != null) {
+            failures.add(reason);
+        }
     }
 
 }

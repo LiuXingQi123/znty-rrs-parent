@@ -192,4 +192,31 @@
         ORDER BY al.crte_time DESC
     </select>
 
+    <!-- 查询债券当前有效所在池 ID 列表 -->
+    <select id="queryBondCurrentPoolIds" resultType="java.lang.Long">
+        SELECT DISTINCT target_pool_id
+        FROM ip_pool_status
+        WHERE bond_code = #{bondCode}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询目标投资池当前有效债券数量 -->
+    <select id="queryPoolCurrentCount" resultType="int">
+        SELECT COUNT(DISTINCT bond_code)
+        FROM ip_pool_status
+        WHERE target_pool_id = #{poolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询全量投资池关系配置（不限关系类型） -->
+    <select id="queryAllPoolRelations" resultType="com.znty.sirm.model.PoolRelationBo">
+        SELECT pool_id
+               ,relation_type
+               ,relation_pool_id
+        FROM ip_pool_relation
+        WHERE is_deleted = 0
+    </select>
+
 </mapper>
