@@ -32,9 +32,6 @@ public class AdjustLogDto {
     /** 审核状态码 */
     private String auditStatus;
 
-    /** 审核状态中文 */
-    private String auditStatusLabel;
-
     /** 调整原因 */
     private String adjustReason;
 

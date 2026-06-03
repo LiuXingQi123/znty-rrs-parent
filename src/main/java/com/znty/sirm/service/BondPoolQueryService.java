@@ -13,9 +13,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 债券池查询业务逻辑
@@ -34,12 +32,6 @@ public class BondPoolQueryService {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<BondPoolQueryDto> list = bondPoolQueryMapper.queryPage(req);
         PageInfo<BondPoolQueryDto> pageInfo = new PageInfo<>(list);
-
-        // 根据到期日推导债券状态
-        for (BondPoolQueryDto dto : list) {
-            dto.setBondStatus(mapBondStatus(dto.getMaturityDate()));
-        }
-
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
@@ -49,25 +41,18 @@ public class BondPoolQueryService {
     }
 
     /** 查询债券状态下拉选项 */
-    public List<Map<String, String>> queryBondStatusOptions() {
-        List<Map<String, String>> options = new ArrayList<>();
-        Map<String, String> active = new HashMap<>();
-        active.put("value", "active");
-        active.put("label", "存续");
-        options.add(active);
-        Map<String, String> matured = new HashMap<>();
-        matured.put("value", "matured");
-        matured.put("label", "到期");
-        options.add(matured);
+    public List<String> queryBondStatusOptions() {
+        List<String> options = new ArrayList<>();
+        options.add("active");
+        options.add("matured");
         return options;
     }
 
     /** 添加债券到我的债券池 */
-    public void addToMyPool(MyBondPoolReq req) {
+    public MyBondPoolBo addToMyPool(MyBondPoolReq req) {
         MyBondPoolBo existing = myBondPoolMapper.findByUserAndCode(req.getUserId(), req.getSecurityCode());
         if (existing != null) {
-            // 已存在，无需重复添加
-            return;
+            return existing;
         }
         MyBondPoolBo bo = new MyBondPoolBo();
         bo.setSecurityCode(req.getSecurityCode());
@@ -75,11 +60,16 @@ public class BondPoolQueryService {
         bo.setMarket(req.getMarket());
         bo.setUserId(req.getUserId());
         myBondPoolMapper.addToMyPool(bo);
+        return bo;
     }
 
     /** 从我的债券池移除 */
-    public void removeFromMyPool(MyBondPoolReq req) {
-        myBondPoolMapper.removeFromMyPool(req.getUserId(), req.getSecurityCode());
+    public MyBondPoolBo removeFromMyPool(MyBondPoolReq req) {
+        MyBondPoolBo existing = myBondPoolMapper.findByUserAndCode(req.getUserId(), req.getSecurityCode());
+        if (existing != null) {
+            myBondPoolMapper.removeFromMyPool(req.getUserId(), req.getSecurityCode());
+        }
+        return existing;
     }
 
     /** 批量查询用户已收藏的证券代码 */
@@ -87,14 +77,4 @@ public class BondPoolQueryService {
         return myBondPoolMapper.queryFavoritedCodes(userId);
     }
 
-    /** 根据到期日推导债券状态 */
-    private String mapBondStatus(String maturityDate) {
-        if (maturityDate == null || maturityDate.isEmpty()) {
-            return "存续";
-        }
-        if (maturityDate.compareTo(java.time.LocalDate.now().toString()) < 0) {
-            return "到期";
-        }
-        return "存续";
-    }
 }

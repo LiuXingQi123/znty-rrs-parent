@@ -15,6 +15,4 @@ public class PoolStatusDto {
     private String entryDate;
     /** 主体在该池债券数（仅主体所在池使用） */
     private Integer bondCount;
-    /** 状态 */
-    private String status;
 }

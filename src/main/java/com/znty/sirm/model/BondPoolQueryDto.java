@@ -40,8 +40,6 @@ public class BondPoolQueryDto {
     private String carryDate;
     /** 到期日 */
     private String maturityDate;
-    /** 债券状态：存续/到期（Service 层根据到期日推导） */
-    private String bondStatus;
     /** 退市日期 */
     private String delistDate;
     /** 行权日期（回售） */

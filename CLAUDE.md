@@ -26,6 +26,7 @@
 
 - 统一使用 `POST`，禁止使用 GET / PUT / DELETE
 - 路径前缀：`/api/v1/`
+- URL 路径段使用 camelCase（如 `/api/v1/testCases`），禁止 kebab-case（如 `/api/v1/test-cases`）
 - 入参统一用 `@RequestBody XxxReq req`，禁止使用 `@RequestParam` / `@PathVariable`
 - 所有接口统一返回 `ApiResponse<T>`，分页接口数据字段使用 `PageResult<T>`
 
@@ -86,8 +87,9 @@ Mapper       ── 数据库操作接口，对应 XML
 
 - 只负责接收请求和返回响应，不写业务逻辑
 - 只调用 Service，禁止直接操作 Mapper
+- 类级别 `@RequestMapping` 必须使用完整资源路径（如 `/api/v1/flows`），禁止只写 `/api/v1`
 - 统一使用 `@PostMapping`
-- 返回类型统一为 `ApiResponse<XxxDto>`，禁止返回 `ApiResponse<Void>`
+- 返回类型统一为 `ApiResponse<XxxDto>`，禁止返回 `ApiResponse<?>` 或 `ApiResponse<Void>`
 
 ```java
 @RestController
@@ -184,6 +186,15 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 
 ---
 
+## 字典转换
+
+- 后端只返回原始 code，禁止在后端做 code → name 的中文转换
+- 所有 code → 中文名称的映射由前端维护字典完成
+- 下拉选项接口只返回 code 列表，中文 label 由前端映射
+- 例外：从数据库查出的名称字段（如角色表 `role_name`）不属于硬编码字典，可直接返回
+
+---
+
 ## 禁止事项
 
 | # | 禁止行为 |
@@ -198,8 +209,11 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 | 8 | 分页与列表后缀混用（如 `PageList`） |
 | 9 | 主键使用 `Integer` 类型 |
 | 10 | 时间字段使用 `Date` 类型 |
-| 11 | Controller 方法返回 `ApiResponse<Void>` |
+| 11 | Controller 方法返回 `ApiResponse<?>` 或 `ApiResponse<Void>` |
 | 12 | 未经确认引入新的第三方库 |
 | 13 | 类、方法、字段缺少注释 |
 | 14 | SELECT 列表中写可自动映射的 AS 别名（如 `column_name AS columnName`） |
 | 15 | SQL 逗号放行尾（统一逗号前置） |
+| 16 | 后端做 code → name 的中文字典映射（应由前端维护） |
+| 17 | `@RequestMapping` 类级别只写 `/api/v1`（应写完整路径） |
+| 18 | URL 路径使用 kebab-case（统一 camelCase） |

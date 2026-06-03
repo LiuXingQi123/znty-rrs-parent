@@ -32,6 +32,8 @@ public class DictDto {
     private String fieldName;
 
     // ===== 条件字段分组 =====
+    /** 分组编码 */
+    private String groupCode;
     /** 分组名称 */
     private String groupName;
     /** 字段列表 */

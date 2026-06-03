@@ -6,6 +6,7 @@ import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.model.BondPoolQueryDto;
 import com.znty.sirm.model.BondPoolQueryReq;
 import com.znty.sirm.model.InvestmentPoolBo;
+import com.znty.sirm.model.MyBondPoolBo;
 import com.znty.sirm.model.MyBondPoolReq;
 import com.znty.sirm.service.BondPoolQueryService;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,7 +45,7 @@ public class BondPoolQueryController {
 
     /** 查询债券状态下拉选项 */
     @PostMapping("/queryBondStatusOptions")
-    public ApiResponse<List<Map<String, String>>> queryBondStatusOptions() {
+    public ApiResponse<List<String>> queryBondStatusOptions() {
         return ApiResponse.success(bondPoolQueryService.queryBondStatusOptions());
     }
 
@@ -56,16 +57,14 @@ public class BondPoolQueryController {
 
     /** 添加债券到我的债券池 */
     @PostMapping("/addToMyPool")
-    public ApiResponse<?> addToMyPool(@RequestBody MyBondPoolReq req) {
-        bondPoolQueryService.addToMyPool(req);
-        return ApiResponse.success();
+    public ApiResponse<MyBondPoolBo> addToMyPool(@RequestBody MyBondPoolReq req) {
+        return ApiResponse.success(bondPoolQueryService.addToMyPool(req));
     }
 
     /** 从我的债券池移除 */
     @PostMapping("/removeFromMyPool")
-    public ApiResponse<?> removeFromMyPool(@RequestBody MyBondPoolReq req) {
-        bondPoolQueryService.removeFromMyPool(req);
-        return ApiResponse.success();
+    public ApiResponse<MyBondPoolBo> removeFromMyPool(@RequestBody MyBondPoolReq req) {
+        return ApiResponse.success(bondPoolQueryService.removeFromMyPool(req));
     }
 
     /** 批量查询用户已收藏的证券代码 */

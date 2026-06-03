@@ -233,14 +233,7 @@ public class InvestmentPoolService {
      * 查询流程下拉选项
      */
     public List<FlowOptionDto> queryFlowOptionList(InvestmentPoolReq req) {
-        FlowOptionDto empty = new FlowOptionDto();
-        empty.setFlowId(null);
-        empty.setFlowKey("");
-        empty.setFlowName("不需要审批");
-        List<FlowOptionDto> options = new ArrayList<>();
-        options.add(empty);
-        options.addAll(investmentPoolMapper.queryFlowOptionList());
-        return options;
+        return investmentPoolMapper.queryFlowOptionList();
     }
 
     /**

@@ -17,7 +17,7 @@ import java.util.List;
  * 流程定义模块，统一使用 POST + @RequestBody。
  */
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("/api/v1/flows")
 public class FlowController {
 
     @Resource
@@ -26,43 +26,43 @@ public class FlowController {
     // ==================== 流程定义管理 ====================
 
     /** 查询流程分页。 */
-    @PostMapping("/flows/queryFlowPage")
+    @PostMapping("/queryFlowPage")
     public ApiResponse<PageResult<FlowDto>> queryFlowPage(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.queryFlowPage(req));
     }
 
     /** 查询流程列表（不分页，用于下拉选项）。 */
-    @PostMapping("/flows/queryFlowList")
+    @PostMapping("/queryFlowList")
     public ApiResponse<List<FlowOptionDto>> queryFlowList(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.queryFlowList(req));
     }
 
     /** 新建流程。 */
-    @PostMapping("/flows/createFlow")
+    @PostMapping("/createFlow")
     public ApiResponse<FlowDto> createFlow(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.createFlow(req));
     }
 
     /** 查询流程详情。 */
-    @PostMapping("/flows/queryFlowDetail")
+    @PostMapping("/queryFlowDetail")
     public ApiResponse<FlowDto> queryFlowDetail(@RequestBody IdRequest req) {
         return ApiResponse.success(flowService.queryFlowDetail(req));
     }
 
     /** 更新流程基础信息。 */
-    @PostMapping("/flows/updateFlow")
+    @PostMapping("/updateFlow")
     public ApiResponse<FlowDto> updateFlow(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.updateFlow(req));
     }
 
     /** 删除流程。 */
-    @PostMapping("/flows/deleteFlow")
+    @PostMapping("/deleteFlow")
     public ApiResponse<FlowDto> deleteFlow(@RequestBody IdRequest req) {
         return ApiResponse.success(flowService.deleteFlow(req));
     }
 
     /** 停用流程。 */
-    @PostMapping("/flows/disableFlow")
+    @PostMapping("/disableFlow")
     public ApiResponse<FlowDto> disableFlow(@RequestBody IdRequest req) {
         return ApiResponse.success(flowService.disableFlow(req));
     }
@@ -70,13 +70,13 @@ public class FlowController {
     // ==================== 流程设计器 ====================
 
     /** 保存流程草稿。 */
-    @PostMapping("/flows/saveFlowDraft")
+    @PostMapping("/saveFlowDraft")
     public ApiResponse<FlowDto> saveFlowDraft(@RequestBody DesignerReq req) {
         return ApiResponse.success(flowService.saveFlowDraft(req));
     }
 
     /** 发布流程。 */
-    @PostMapping("/flows/publishFlow")
+    @PostMapping("/publishFlow")
     public ApiResponse<FlowDto> publishFlow(@RequestBody DesignerReq req) {
         return ApiResponse.success(flowService.publishFlow(req));
     }
@@ -84,13 +84,13 @@ public class FlowController {
     // ==================== 版本管理 ====================
 
     /** 查询流程版本列表，可按版本号筛选。 */
-    @PostMapping("/flows/queryFlowVersionList")
+    @PostMapping("/queryFlowVersionList")
     public ApiResponse<List<VersionDto>> queryFlowVersionList(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.queryFlowVersionList(req));
     }
 
     /** 查询流程版本详情。 */
-    @PostMapping("/flows/queryFlowVersionDetail")
+    @PostMapping("/queryFlowVersionDetail")
     public ApiResponse<VersionDto> queryFlowVersionDetail(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.queryFlowVersionDetail(req));
     }

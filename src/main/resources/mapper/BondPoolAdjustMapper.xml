@@ -113,7 +113,6 @@
         SELECT ips.target_pool_name AS poolName
                ,ips.pool_type
                ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
-               ,'在池' AS status
         FROM ip_pool_status ips
         WHERE ips.bond_code = #{bondCode}
           AND ips.audit_status = '20'
@@ -126,7 +125,6 @@
                ,ips.pool_type
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
                ,COUNT(DISTINCT ips.bond_code) AS bondCount
-               ,'在池' AS status
         FROM ip_pool_status ips
         INNER JOIN sirm_bondinfo sb ON ips.bond_code = sb.s_info_code
         WHERE sb.b_info_issuer = (

@@ -473,12 +473,12 @@ public class FlowService {
     /** 查询自动任务选项。 */
     public List<DictDto> queryAutoTaskList(FlowReq req) {
         List<DictDto> list = new ArrayList<>();
-        list.add(buildTask("createAccount", "创建账号"));
-        list.add(buildTask("updatePosition", "更新持仓状态"));
-        list.add(buildTask("syncSettlement", "同步清算数据"));
-        list.add(buildTask("riskCheck", "触发风控检查"));
-        list.add(buildTask("sendNotify", "发送系统通知"));
-        list.add(buildTask("archiveRecord", "归档流程记录"));
+        list.add(buildTask("createAccount"));
+        list.add(buildTask("updatePosition"));
+        list.add(buildTask("syncSettlement"));
+        list.add(buildTask("riskCheck"));
+        list.add(buildTask("sendNotify"));
+        list.add(buildTask("archiveRecord"));
         return list;
     }
 
@@ -487,28 +487,28 @@ public class FlowService {
         List<DictDto> groups = new ArrayList<>();
 
         DictDto g1 = new DictDto();
-        g1.setGroupName("审批结果");
+        g1.setGroupCode("approvalResult");
         g1.setFields(Arrays.asList(
-                buildField("auditStatus", "审核状态"),
-                buildField("auditComment", "审核意见")));
+                buildField("auditStatus"),
+                buildField("auditComment")));
         groups.add(g1);
 
         DictDto g2 = new DictDto();
-        g2.setGroupName("业务标志");
+        g2.setGroupCode("businessFlag");
         g2.setFields(Arrays.asList(
-                buildField("isDebtSimple", "债大库简易流程"),
-                buildField("isWhitelist", "白名单流程"),
-                buildField("isSimple", "简易流程"),
-                buildField("isRestricted", "禁止库标的"),
-                buildField("isLargeAmount", "大额交易")));
+                buildField("isDebtSimple"),
+                buildField("isWhitelist"),
+                buildField("isSimple"),
+                buildField("isRestricted"),
+                buildField("isLargeAmount")));
         groups.add(g2);
 
         DictDto g3 = new DictDto();
-        g3.setGroupName("流程变量");
+        g3.setGroupCode("flowVariable");
         g3.setFields(Arrays.asList(
-                buildField("applyAmount", "申请金额"),
-                buildField("creditRating", "标的评级"),
-                buildField("investType", "投资类型")));
+                buildField("applyAmount"),
+                buildField("creditRating"),
+                buildField("investType")));
         groups.add(g3);
 
         return groups;
@@ -875,18 +875,16 @@ public class FlowService {
     }
 
     /** 构建自动任务字典项。 */
-    private DictDto buildTask(String code, String name) {
+    private DictDto buildTask(String code) {
         DictDto d = new DictDto();
         d.setTaskCode(code);
-        d.setTaskName(name);
         return d;
     }
 
     /** 构建条件字段字典项。 */
-    private DictDto buildField(String code, String name) {
+    private DictDto buildField(String code) {
         DictDto d = new DictDto();
         d.setFieldCode(code);
-        d.setFieldName(name);
         return d;
     }
 }

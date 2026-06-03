@@ -100,7 +100,7 @@ public class BondPoolAdjustService {
         d.setMaturityDate(bo.getBInfoMaturitydate());
         d.setBondRating(bo.getRatingBond());
         d.setIssuerRating(bo.getRatingBondissuer());
-        d.setBondType(mapBondType(bo.getDBondType()));
+        d.setBondType(bo.getDBondType() != null ? String.valueOf(bo.getDBondType()) : null);
         d.setCurrentRate(null);
         d.setTermStr(bo.getDateExists());
         return d;
@@ -133,7 +133,7 @@ public class BondPoolAdjustService {
         d.setGuaranteeStatus(bo.getBAgencyGrnttype());
         d.setLeadUnderwriter(bo.getBAgencyName());
         d.setInnerIssuerRating(bo.getInnerIssuerRating());
-        d.setBondType(mapBondType(bo.getDBondType()));
+        d.setBondType(bo.getDBondType() != null ? String.valueOf(bo.getDBondType()) : null);
         d.setPutExeTerm(bo.getDateRedemtionExists());
         d.setCallRemTerm(bo.getDateCallExists());
         d.setInnerGuarantorRating(bo.getInnerGuarantorRating());
@@ -243,7 +243,6 @@ public class BondPoolAdjustService {
             dto.setAttachmentFiles(log.getAttachmentFiles());
             dto.setMaterialFiles(log.getMaterialFiles());
             dto.setAuditStatus(log.getAuditStatus());
-            dto.setAuditStatusLabel(mapAuditStatus(log.getAuditStatus()));
             dto.setAdjustReason(log.getAdjustReason());
             dto.setAdjustAdvice(log.getAdjustAdvice());
             dto.setSubmitTime(log.getSubmitTime());
@@ -267,37 +266,4 @@ public class BondPoolAdjustService {
         return pool.getPoolName() != null ? pool.getPoolName() : "";
     }
 
-    /** 审核状态码 → 中文 */
-    private String mapAuditStatus(String code) {
-        if (code == null) {
-            return "";
-        }
-        switch (code) {
-            case "-1": return "无效调整";
-            case "00": return "待审核";
-            case "10": return "审核通过";
-            case "11": return "驳回待修改";
-            case "20": return "审批通过";
-            case "21": return "审批驳回";
-            case "99": return "已撤回";
-            default: return code;
-        }
-    }
-
-    /** 债券类型 int → 中文 */
-    private String mapBondType(Integer dBondType) {
-        if (dBondType == null) {
-            return null;
-        }
-        switch (dBondType) {
-            case 1: return "中期票据";
-            case 2: return "公司债";
-            case 3: return "可交换债";
-            case 4: return "商业银行债";
-            case 5: return "短期融资券";
-            case 6: return "资产支持证券";
-            case 7: return "超短期融资券";
-            default: return "其他";
-        }
-    }
 }
