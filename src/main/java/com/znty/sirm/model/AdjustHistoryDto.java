@@ -1,0 +1,50 @@
+package com.znty.sirm.model;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.Data;
+
+import java.util.Date;
+
+/**
+ * 调整历史列表返回对象
+ */
+@Data
+public class AdjustHistoryDto {
+
+    /** 记录 ID */
+    private Long id;
+
+    /** 债券代码 */
+    private String bondCode;
+
+    /** 债券简称 */
+    private String bondShortName;
+
+    /** 债券类型（中文，来自表字段） */
+    private String bondType;
+
+    /** 调整类型（手工调整/联动调整/...） */
+    private String adjustType;
+
+    /** 调整方向（调入/调出） */
+    private String adjustMode;
+
+    /** 投资池路径名称（父级/子级 格式，如"信用债大库/一级库"） */
+    private String targetPoolPath;
+
+    /** 投资池类型 */
+    private String poolType;
+
+    /** 审核状态码（-1/00/10/11/20/21/99） */
+    private String auditStatus;
+
+    /** 调整人名称 */
+    private String adjusterName;
+
+    /** 调整原因 */
+    private String adjustReason;
+
+    /** 提交时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date submitTime;
+}

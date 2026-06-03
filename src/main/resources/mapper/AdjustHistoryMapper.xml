@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.AdjustHistoryMapper">
+
+    <!-- 分页查询调整历史列表 -->
+    <select id="queryAdjustHistoryPage" resultType="com.znty.sirm.model.AdjustHistoryDto">
+        SELECT al.id
+               ,al.bond_code
+               ,al.bond_short_name
+               ,al.bond_type
+               ,al.adjust_type
+               ,al.adjust_mode
+               ,CASE
+                    WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
+                    ELSE p.pool_name
+                END AS target_pool_path
+               ,al.pool_type
+               ,al.audit_status
+               ,al.adjuster_name
+               ,al.adjust_reason
+               ,al.submit_time
+        FROM ip_adjust_log al
+        LEFT JOIN ip_investment_pool p  ON p.id  = al.target_pool_id AND p.is_deleted  = 0
+        LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id       AND pp.is_deleted = 0
+        LEFT JOIN sirm_bondinfo sb      ON sb.s_info_code = al.bond_code
+        <where>
+            al.is_deleted = 0
+            <if test="poolIds != null and poolIds.size() > 0">
+                AND al.target_pool_id IN
+                <foreach collection="poolIds" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="bondCode != null and bondCode != ''">
+                AND al.bond_code LIKE CONCAT('%', #{bondCode}, '%')
+            </if>
+            <if test="bondType != null and bondType != ''">
+                AND al.bond_type = #{bondType}
+            </if>
+            <if test="bondStatus != null and bondStatus != ''">
+                AND (CASE
+                         WHEN sb.b_info_maturitydate IS NOT NULL
+                              AND sb.b_info_maturitydate &lt; DATE_FORMAT(NOW(), '%Y-%m-%d')
+                         THEN '到期'
+                         ELSE '存续'
+                     END) = #{bondStatus}
+            </if>
+            <if test="adjustTimeStart != null and adjustTimeStart != ''">
+                AND al.submit_time &gt;= #{adjustTimeStart}
+            </if>
+            <if test="adjustTimeEnd != null and adjustTimeEnd != ''">
+                AND al.submit_time &lt;= CONCAT(#{adjustTimeEnd}, ' 23:59:59')
+            </if>
+            <if test="adjusterName != null and adjusterName != ''">
+                AND al.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
+            </if>
+            <if test="issuer != null and issuer != ''">
+                AND sb.b_info_issuer LIKE CONCAT('%', #{issuer}, '%')
+            </if>
+            <if test="adjustMode != null and adjustMode != ''">
+                AND al.adjust_mode = #{adjustMode}
+            </if>
+            <if test="auditStatus != null and auditStatus != ''">
+                AND al.audit_status = #{auditStatus}
+            </if>
+            <if test="myBonds != null and myBonds == true and currentUserId != null and currentUserId != ''">
+                AND al.adjuster_id = #{currentUserId}
+            </if>
+        </where>
+        ORDER BY al.submit_time DESC
+                 ,al.id DESC
+    </select>
+
+</mapper>
