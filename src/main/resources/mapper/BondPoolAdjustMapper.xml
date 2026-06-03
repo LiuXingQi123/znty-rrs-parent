@@ -108,31 +108,60 @@
                ,NOW())
     </insert>
 
-    <!-- 查询当前债券所在池列表 -->
+    <!-- 查询当前债券所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
     <select id="queryBondPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
-        SELECT ips.target_pool_name AS poolName
+        SELECT CASE
+                   WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
+                   ELSE p.pool_name
+               END AS poolName
                ,ips.pool_type
                ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
         FROM ip_pool_status ips
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id
+                                       AND pp.is_deleted = 0
         WHERE ips.bond_code = #{bondCode}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_investment_pool child
+              WHERE child.parent_id = p.id
+                AND child.is_deleted = 0
+          )
     </select>
 
-    <!-- 查询当前债券主体（发行人）所在池列表 -->
+    <!-- 查询当前债券主体（发行人）所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
     <select id="queryIssuerPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
-        SELECT ips.target_pool_name AS poolName
+        SELECT CASE
+                   WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
+                   ELSE p.pool_name
+               END AS poolName
                ,ips.pool_type
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
                ,COUNT(DISTINCT ips.bond_code) AS bondCount
         FROM ip_pool_status ips
         INNER JOIN sirm_bondinfo sb ON ips.bond_code = sb.s_info_code
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id
+                                       AND pp.is_deleted = 0
         WHERE sb.b_info_issuer = (
             SELECT b_info_issuer FROM sirm_bondinfo WHERE s_info_code = #{bondCode} LIMIT 1
         )
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-        GROUP BY ips.target_pool_name
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_investment_pool child
+              WHERE child.parent_id = p.id
+                AND child.is_deleted = 0
+          )
+        GROUP BY p.id
+                 ,p.pool_name
+                 ,p.parent_id
+                 ,pp.pool_name
                  ,ips.pool_type
     </select>
 
