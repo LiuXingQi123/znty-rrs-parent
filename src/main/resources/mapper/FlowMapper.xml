@@ -6,7 +6,9 @@
 
     <!-- 分页查询流程定义。 -->
     <select id="queryFlowPage" resultType="com.znty.sirm.model.FlowDefinitionBo">
-        SELECT d.*, COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver, EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+        SELECT d.*
+               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.is_deleted = 0
         <if test="keyword != null and keyword != ''">
@@ -18,12 +20,13 @@
         <if test="category != null and category != ''">
             AND d.category = #{category}
         </if>
-        ORDER BY d.updt_time DESC
-    </select>
+        ORDER BY d.updt_time DESC</select>
 
     <!-- 列表查询流程定义（不分页，用于下拉选项）。 -->
     <select id="queryFlowList" resultType="com.znty.sirm.model.FlowDefinitionBo">
-        SELECT d.*, COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver, EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+        SELECT d.*
+               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.is_deleted = 0
         <if test="keyword != null and keyword != ''">
@@ -35,19 +38,22 @@
         <if test="category != null and category != ''">
             AND d.category = #{category}
         </if>
-        ORDER BY d.updt_time DESC
-    </select>
+        ORDER BY d.updt_time DESC</select>
 
     <!-- 根据 ID 查询流程定义。 -->
     <select id="queryFlowById" resultType="com.znty.sirm.model.FlowDefinitionBo">
-        SELECT d.*, COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver, EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+        SELECT d.*
+               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.id = #{id} AND d.is_deleted = 0
     </select>
 
     <!-- 根据 ID 查询流程定义（加行锁）。 -->
     <select id="queryFlowByIdForUpdate" resultType="com.znty.sirm.model.FlowDefinitionBo">
-        SELECT d.*, COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver, EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+        SELECT d.*
+               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
         FROM wf_flow_definition d
         WHERE d.id = #{id} AND d.is_deleted = 0
         FOR UPDATE
@@ -56,10 +62,30 @@
 
     <!-- 新建流程定义。 -->
     <insert id="createFlowDefinition" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_flow_definition (name, flow_key, category, description, remark, status,
-                                        created_by, updated_by, is_deleted, crte_time, updt_time)
-        VALUES (#{name}, #{flowKey}, #{category}, #{description}, #{remark}, #{status},
-                #{createdBy}, #{updatedBy}, 0, #{crteTime}, #{updtTime})
+        INSERT INTO wf_flow_definition (name
+        ,flow_key
+        ,category
+        ,description
+        ,remark
+        ,status
+                                        ,created_by
+                                        ,updated_by
+                                        ,is_deleted
+                                        ,crte_time
+                                        ,updt_time)
+        VALUES (
+                #{name}
+                ,#{flowKey}
+                ,#{category}
+                ,#{description}
+                ,#{remark}
+                ,#{status}
+                ,#{createdBy}
+                ,#{updatedBy}
+                ,0
+                ,#{crteTime}
+                ,#{updtTime}
+        )
     </insert>
 
     <!-- 更新流程定义。 -->
@@ -78,13 +104,15 @@
 
     <!-- 逻辑删除流程定义。 -->
     <update id="deleteFlowLogical">
-        UPDATE wf_flow_definition SET is_deleted = 1, updt_time = #{updtTime}
+        UPDATE wf_flow_definition SET is_deleted = 1
+                                        ,updt_time = #{updtTime}
         WHERE id = #{id}
     </update>
 
     <!-- 停用流程定义。 -->
     <update id="disableFlowDefinition">
-        UPDATE wf_flow_definition SET status = 'disabled', updt_time = #{updtTime}
+        UPDATE wf_flow_definition SET status = 'disabled'
+                                        ,updt_time = #{updtTime}
         WHERE id = #{id}
     </update>
 
@@ -94,7 +122,8 @@
     <select id="queryLatestFlowVersion" resultType="com.znty.sirm.model.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId}
-        ORDER BY ver_num DESC, id DESC
+        ORDER BY ver_num DESC
+        ,id DESC
         LIMIT 1
     </select>
 
@@ -102,14 +131,14 @@
     <select id="queryDraftFlowVersion" resultType="com.znty.sirm.model.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId} AND status = 'draft'
-        ORDER BY ver_num DESC, id DESC
+        ORDER BY ver_num DESC
+        ,id DESC
         LIMIT 1
     </select>
 
     <!-- 根据 ID 查询流程版本。 -->
     <select id="queryFlowVersionById" resultType="com.znty.sirm.model.FlowVersionBo">
-        SELECT * FROM wf_flow_version WHERE id = #{id}
-    </select>
+        SELECT * FROM wf_flow_version WHERE id = #{id}</select>
 
     <!-- 查询流程版本列表，可按版本号筛选。 -->
     <select id="queryFlowVersionListByFlowId" resultType="com.znty.sirm.model.FlowVersionBo">
@@ -118,28 +147,54 @@
         <if test="verNum != null">
             AND ver_num = #{verNum}
         </if>
-        ORDER BY ver_num DESC, id DESC
-    </select>
+        ORDER BY ver_num DESC
+        ,id DESC</select>
 
     <!-- 新建流程版本。 -->
     <insert id="createFlowVersion" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_flow_version (flow_id, flow_key, ver_num, status, publish_note,
-                                     canvas_nodes, canvas_edges, canvas_pan_x, canvas_pan_y, canvas_zoom,
-                                     published_by, published_time, created_by, crte_time, updt_time)
-        VALUES (#{flowId}, #{flowKey}, #{verNum}, #{status}, #{publishNote},
-                #{canvasNodes}, #{canvasEdges}, #{canvasPanX}, #{canvasPanY}, #{canvasZoom},
-                #{publishedBy}, #{publishedTime}, #{createdBy}, #{crteTime}, #{updtTime})
+        INSERT INTO wf_flow_version (flow_id
+        ,flow_key
+        ,ver_num
+        ,status
+        ,publish_note
+                                     ,canvas_nodes
+                                     ,canvas_edges
+                                     ,canvas_pan_x
+                                     ,canvas_pan_y
+                                     ,canvas_zoom
+                                     ,published_by
+                                     ,published_time
+                                     ,created_by
+                                     ,crte_time
+                                     ,updt_time)
+        VALUES (
+                #{flowId}
+                ,#{flowKey}
+                ,#{verNum}
+                ,#{status}
+                ,#{publishNote}
+                ,#{canvasNodes}
+                ,#{canvasEdges}
+                ,#{canvasPanX}
+                ,#{canvasPanY}
+                ,#{canvasZoom}
+                ,#{publishedBy}
+                ,#{publishedTime}
+                ,#{createdBy}
+                ,#{crteTime}
+                ,#{updtTime}
+        )
     </insert>
 
     <!-- 更新流程版本。 -->
     <update id="updateFlowVersion">
         UPDATE wf_flow_version
-        SET canvas_nodes   = #{canvasNodes},
-            canvas_edges   = #{canvasEdges},
-            canvas_pan_x   = #{canvasPanX},
-            canvas_pan_y   = #{canvasPanY},
-            canvas_zoom    = #{canvasZoom},
-            updt_time      = #{updtTime}
+        SET canvas_nodes   = #{canvasNodes}
+            ,canvas_edges   = #{canvasEdges}
+            ,canvas_pan_x   = #{canvasPanX}
+            ,canvas_pan_y   = #{canvasPanY}
+            ,canvas_zoom    = #{canvasZoom}
+            ,updt_time      = #{updtTime}
         <if test="flowKey != null">, flow_key = #{flowKey}</if>
         <if test="status != null">, status = #{status}</if>
         <if test="publishNote != null">, publish_note = #{publishNote}</if>
@@ -150,7 +205,8 @@
 
     <!-- 更新流程版本状态。 -->
     <update id="updateFlowVersionStatus">
-        UPDATE wf_flow_version SET status = #{status}, updt_time = #{updtTime}
+        UPDATE wf_flow_version SET status = #{status}
+                                   ,updt_time = #{updtTime}
         WHERE id = #{id}
     </update>
 
@@ -163,10 +219,32 @@
 
     <!-- 新建流程节点。 -->
     <insert id="createFlowNode" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_flow_node (version_id, flow_id, node_id, node_type, label, shape,
-                                  pos_x, pos_y, sub_label, sort_order, crte_time, updt_time)
-        VALUES (#{versionId}, #{flowId}, #{nodeId}, #{nodeType}, #{label}, #{shape},
-                #{posX}, #{posY}, #{subLabel}, #{sortOrder}, #{crteTime}, #{updtTime})
+        INSERT INTO wf_flow_node (version_id
+        ,flow_id
+        ,node_id
+        ,node_type
+        ,label
+        ,shape
+                                  ,pos_x
+                                  ,pos_y
+                                  ,sub_label
+                                  ,sort_order
+                                  ,crte_time
+                                  ,updt_time)
+        VALUES (
+                #{versionId}
+                ,#{flowId}
+                ,#{nodeId}
+                ,#{nodeType}
+                ,#{label}
+                ,#{shape}
+                ,#{posX}
+                ,#{posY}
+                ,#{subLabel}
+                ,#{sortOrder}
+                ,#{crteTime}
+                ,#{updtTime}
+        )
     </insert>
 
     <!-- ==================== 审批节点配置 ==================== -->
@@ -179,10 +257,20 @@
 
     <!-- 新建审批配置。 -->
     <insert id="createApprovalConfig" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_node_approval_config (node_id, approval_strategy, approval_persons,
-                                             approval_remark, crte_time, updt_time)
-        VALUES (#{nodeId}, #{approvalStrategy}, #{approvalPersons},
-                #{approvalRemark}, #{crteTime}, #{updtTime})
+        INSERT INTO wf_node_approval_config (node_id
+        ,approval_strategy
+        ,approval_persons
+                                             ,approval_remark
+                                             ,crte_time
+                                             ,updt_time)
+        VALUES (
+                #{nodeId}
+                ,#{approvalStrategy}
+                ,#{approvalPersons}
+                ,#{approvalRemark}
+                ,#{crteTime}
+                ,#{updtTime}
+        )
     </insert>
 
     <!-- ==================== 自动执行节点配置 ==================== -->
@@ -196,8 +284,14 @@
     <!-- 新建自动任务配置。 -->
     <insert id="createAutoConfig" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_node_auto_config (node_id, task_seq, task_code, auto_remark, crte_time, updt_time)
-        VALUES (#{nodeId}, #{taskSeq}, #{taskCode}, #{autoRemark}, #{crteTime}, #{updtTime})
-    </insert>
+        VALUES (
+                #{nodeId}
+                ,#{taskSeq}
+                ,#{taskCode}
+                ,#{autoRemark}
+                ,#{crteTime}
+                ,#{updtTime}
+        )</insert>
 
     <!-- ==================== 通知节点配置 ==================== -->
 
@@ -209,12 +303,24 @@
 
     <!-- 新建通知配置。 -->
     <insert id="createNotifyConfig" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_node_notify_config (node_id, notify_channels, notify_target,
-                                           notify_persons, notify_tpl, notify_remark,
-                                           crte_time, updt_time)
-        VALUES (#{nodeId}, #{notifyChannels}, #{notifyTarget},
-                #{notifyPersons}, #{notifyTpl}, #{notifyRemark},
-                #{crteTime}, #{updtTime})
+        INSERT INTO wf_node_notify_config (node_id
+        ,notify_channels
+        ,notify_target
+                                           ,notify_persons
+                                           ,notify_tpl
+                                           ,notify_remark
+                                           ,crte_time
+                                           ,updt_time)
+        VALUES (
+                #{nodeId}
+                ,#{notifyChannels}
+                ,#{notifyTarget}
+                ,#{notifyPersons}
+                ,#{notifyTpl}
+                ,#{notifyRemark}
+                ,#{crteTime}
+                ,#{updtTime}
+        )
     </insert>
 
     <!-- ==================== 条件节点配置 ==================== -->
@@ -228,8 +334,12 @@
     <!-- 新建条件配置。 -->
     <insert id="createConditionConfig" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_node_condition_config (node_id, condition_remark, crte_time, updt_time)
-        VALUES (#{nodeId}, #{conditionRemark}, #{crteTime}, #{updtTime})
-    </insert>
+        VALUES (
+                #{nodeId}
+                ,#{conditionRemark}
+                ,#{crteTime}
+                ,#{updtTime}
+        )</insert>
 
     <!-- ==================== 流程连线 ==================== -->
 
@@ -240,10 +350,28 @@
 
     <!-- 新建流程连线。 -->
     <insert id="createFlowEdge" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO wf_flow_edge (version_id, flow_id, edge_id, from_node_id, to_node_id,
-                                  label, cond_logic, remark, crte_time, updt_time)
-        VALUES (#{versionId}, #{flowId}, #{edgeId}, #{fromNodeId}, #{toNodeId},
-                #{label}, #{condLogic}, #{remark}, #{crteTime}, #{updtTime})
+        INSERT INTO wf_flow_edge (version_id
+        ,flow_id
+        ,edge_id
+        ,from_node_id
+        ,to_node_id
+                                  ,label
+                                  ,cond_logic
+                                  ,remark
+                                  ,crte_time
+                                  ,updt_time)
+        VALUES (
+                #{versionId}
+                ,#{flowId}
+                ,#{edgeId}
+                ,#{fromNodeId}
+                ,#{toNodeId}
+                ,#{label}
+                ,#{condLogic}
+                ,#{remark}
+                ,#{crteTime}
+                ,#{updtTime}
+        )
     </insert>
 
     <!-- ==================== 连线条件规则 ==================== -->
@@ -257,128 +385,339 @@
     <!-- 新建连线条件规则。 -->
     <insert id="createCondRule" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_edge_cond_rule (edge_id, seq, field_code, operator, field_val, crte_time, updt_time)
-        VALUES (#{edgeId}, #{seq}, #{fieldCode}, #{operator}, #{fieldVal}, #{crteTime}, #{updtTime})
-    </insert>
+        VALUES (
+                #{edgeId}
+                ,#{seq}
+                ,#{fieldCode}
+                ,#{operator}
+                ,#{fieldVal}
+                ,#{crteTime}
+                ,#{updtTime}
+        )</insert>
 
     <!-- ==================== 角色字典 ==================== -->
 
     <!-- 查询角色字典。 -->
     <select id="roleDictSelectAll" resultType="com.znty.sirm.model.RoleDictBo">
-        SELECT * FROM wf_role_dict WHERE is_active = 1 ORDER BY sort_order
-    </select>
+        SELECT * FROM wf_role_dict WHERE is_active = 1 ORDER BY sort_order</select>
 
     <!-- ==================== 事件表 INSERT ==================== -->
 
     <!-- 新建流程定义事件。 -->
     <insert id="createFlowDefinitionEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_flow_definition_evt (id, name, flow_key, category, description, remark, status,
-                                            created_by, updated_by, is_deleted, crte_time, updt_time,
-                                            opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{name}, #{flowKey}, #{category}, #{description}, #{remark}, #{status},
-                #{createdBy}, #{updatedBy}, #{isDeleted}, #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_flow_definition_evt (id
+        ,name
+        ,flow_key
+        ,category
+        ,description
+        ,remark
+        ,status
+        ,created_by
+        ,updated_by
+        ,is_deleted
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{name}
+        ,#{flowKey}
+        ,#{category}
+        ,#{description}
+        ,#{remark}
+        ,#{status}
+        ,#{createdBy}
+        ,#{updatedBy}
+        ,#{isDeleted}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建流程版本事件。 -->
     <insert id="createFlowVersionEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_flow_version_evt (id, flow_id, flow_key, ver_num, status, publish_note,
-                                         canvas_nodes, canvas_edges, canvas_pan_x, canvas_pan_y, canvas_zoom,
-                                         published_by, published_time, created_by, crte_time, updt_time,
-                                         opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{flowId}, #{flowKey}, #{verNum}, #{status}, #{publishNote},
-                #{canvasNodes}, #{canvasEdges}, #{canvasPanX}, #{canvasPanY}, #{canvasZoom},
-                #{publishedBy}, #{publishedTime}, #{createdBy}, #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_flow_version_evt (id
+        ,flow_id
+        ,flow_key
+        ,ver_num
+        ,status
+        ,publish_note
+        ,canvas_nodes
+        ,canvas_edges
+        ,canvas_pan_x
+        ,canvas_pan_y
+        ,canvas_zoom
+        ,published_by
+        ,published_time
+        ,created_by
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{flowId}
+        ,#{flowKey}
+        ,#{verNum}
+        ,#{status}
+        ,#{publishNote}
+        ,#{canvasNodes}
+        ,#{canvasEdges}
+        ,#{canvasPanX}
+        ,#{canvasPanY}
+        ,#{canvasZoom}
+        ,#{publishedBy}
+        ,#{publishedTime}
+        ,#{createdBy}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建流程节点事件。 -->
     <insert id="createFlowNodeEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_flow_node_evt (id, version_id, flow_id, node_id, node_type, label, shape,
-                                      pos_x, pos_y, sub_label, sort_order, crte_time, updt_time,
-                                      opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{versionId}, #{flowId}, #{nodeId}, #{nodeType}, #{label}, #{shape},
-                #{posX}, #{posY}, #{subLabel}, #{sortOrder}, #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_flow_node_evt (id
+        ,version_id
+        ,flow_id
+        ,node_id
+        ,node_type
+        ,label
+        ,shape
+        ,pos_x
+        ,pos_y
+        ,sub_label
+        ,sort_order
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{versionId}
+        ,#{flowId}
+        ,#{nodeId}
+        ,#{nodeType}
+        ,#{label}
+        ,#{shape}
+        ,#{posX}
+        ,#{posY}
+        ,#{subLabel}
+        ,#{sortOrder}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建审批配置事件。 -->
     <insert id="createApprovalConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_approval_config_evt (id, node_id, approval_strategy, approval_persons,
-                                                 approval_remark, crte_time, updt_time,
-                                                 opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{nodeId}, #{approvalStrategy}, #{approvalPersons},
-                #{approvalRemark}, #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_node_approval_config_evt (id
+        ,node_id
+        ,approval_strategy
+        ,approval_persons
+        ,approval_remark
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{nodeId}
+        ,#{approvalStrategy}
+        ,#{approvalPersons}
+        ,#{approvalRemark}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建自动任务配置事件。 -->
     <insert id="createAutoConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_auto_config_evt (id, node_id, task_seq, task_code, auto_remark,
-                                             crte_time, updt_time,
-                                             opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{nodeId}, #{taskSeq}, #{taskCode}, #{autoRemark},
-                #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_node_auto_config_evt (id
+        ,node_id
+        ,task_seq
+        ,task_code
+        ,auto_remark
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{nodeId}
+        ,#{taskSeq}
+        ,#{taskCode}
+        ,#{autoRemark}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建通知配置事件。 -->
     <insert id="createNotifyConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_notify_config_evt (id, node_id, notify_channels, notify_target,
-                                               notify_persons, notify_tpl, notify_remark,
-                                               crte_time, updt_time,
-                                               opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{nodeId}, #{notifyChannels}, #{notifyTarget},
-                #{notifyPersons}, #{notifyTpl}, #{notifyRemark},
-                #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_node_notify_config_evt (id
+        ,node_id
+        ,notify_channels
+        ,notify_target
+        ,notify_persons
+        ,notify_tpl
+        ,notify_remark
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{nodeId}
+        ,#{notifyChannels}
+        ,#{notifyTarget}
+        ,#{notifyPersons}
+        ,#{notifyTpl}
+        ,#{notifyRemark}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建条件配置事件。 -->
     <insert id="createConditionConfigEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_node_condition_config_evt (id, node_id, condition_remark,
-                                                  crte_time, updt_time,
-                                                  opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{nodeId}, #{conditionRemark},
-                #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_node_condition_config_evt (id
+        ,node_id
+        ,condition_remark
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{nodeId}
+        ,#{conditionRemark}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建流程连线事件。 -->
     <insert id="createFlowEdgeEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_flow_edge_evt (id, version_id, flow_id, edge_id, from_node_id, to_node_id,
-                                      label, cond_logic, remark, crte_time, updt_time,
-                                      opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{versionId}, #{flowId}, #{edgeId}, #{fromNodeId}, #{toNodeId},
-                #{label}, #{condLogic}, #{remark}, #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_flow_edge_evt (id
+        ,version_id
+        ,flow_id
+        ,edge_id
+        ,from_node_id
+        ,to_node_id
+        ,label
+        ,cond_logic
+        ,remark
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{versionId}
+        ,#{flowId}
+        ,#{edgeId}
+        ,#{fromNodeId}
+        ,#{toNodeId}
+        ,#{label}
+        ,#{condLogic}
+        ,#{remark}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建连线条件规则事件。 -->
     <insert id="createCondRuleEvt" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_edge_cond_rule_evt (id, edge_id, seq, field_code, operator, field_val,
-                                           crte_time, updt_time,
-                                           opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{edgeId}, #{seq}, #{fieldCode}, #{operator}, #{fieldVal},
-                #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_edge_cond_rule_evt (id
+        ,edge_id
+        ,seq
+        ,field_code
+        ,operator
+        ,field_val
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{edgeId}
+        ,#{seq}
+        ,#{fieldCode}
+        ,#{operator}
+        ,#{fieldVal}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- 新建角色字典事件。 -->
     <insert id="roleDictEvtInsert" useGeneratedKeys="true" keyProperty="evtId">
-        INSERT INTO wf_role_dict_evt (id, role_code, role_name, sort_order, is_active,
-                                      crte_time, updt_time,
-                                      opter_id, opt_time, oprt_type)
-        VALUES (#{id}, #{roleCode}, #{roleName}, #{sortOrder}, #{isActive},
-                #{crteTime}, #{updtTime},
-                #{opterId}, #{optTime}, #{oprtType})
+        INSERT INTO wf_role_dict_evt (id
+        ,role_code
+        ,role_name
+        ,sort_order
+        ,is_active
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{roleCode}
+        ,#{roleName}
+        ,#{sortOrder}
+        ,#{isActive}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
     </insert>
 
     <!-- ==================== 归一化表 SELECT（用于事件记录：捕获删除前的旧行） ==================== -->
 
     <!-- 查询指定版本的流程节点列表。 -->
     <select id="queryFlowNodeListByVersionId" resultType="com.znty.sirm.model.FlowNodeBo">
-        SELECT * FROM wf_flow_node WHERE version_id = #{versionId}
-    </select>
+        SELECT * FROM wf_flow_node WHERE version_id = #{versionId}</select>
 
     <!-- 查询指定版本的审批配置列表。 -->
     <select id="queryApprovalConfigListByVersionId" resultType="com.znty.sirm.model.NodeApprovalConfigBo">
@@ -410,8 +749,7 @@
 
     <!-- 查询指定版本的流程连线列表。 -->
     <select id="queryFlowEdgeListByVersionId" resultType="com.znty.sirm.model.FlowEdgeBo">
-        SELECT * FROM wf_flow_edge WHERE version_id = #{versionId}
-    </select>
+        SELECT * FROM wf_flow_edge WHERE version_id = #{versionId}</select>
 
     <!-- 查询指定版本的连线条件规则列表。 -->
     <select id="queryCondRuleListByVersionId" resultType="com.znty.sirm.model.EdgeCondRuleBo">

@@ -141,22 +141,45 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 
 ## XML 规范
 
+### SQL 格式
+
 - 每个 SQL 标签上方添加注释
 - 禁止使用 `<sql>` + `<include>` 抽取公共片段
 - 禁止手动拼 `WHERE 1=1`，统一使用 `<where>` + `<if>`
+- **逗号前置**：`,` 写在列/字段/排序项的前面，不写在后缀行尾
+  - SELECT 列表第二列起、INSERT 列名/值、UPDATE SET 第二项起、ORDER BY 第二项起 — 都以 `,column` 开头
+  - 第一项行不加逗号，后续每行以逗号打头
+- **禁止冗余 AS 别名**：已配置 `map-underscore-to-camel-case: true`，`column_name` 会自动映射为 `columnName`，无需 `AS columnName`
+  - 仅以下情况保留 AS：① 计算表达式（COALESCE、COUNT、GROUP_CONCAT 等）② 字面量（如 `'在池' AS status`）③ 返回字段名与数据库列名不一致（如 `id AS flowId`、`b_info_issuer AS issuer`）
 
 ```xml
 <!-- 分页查询流程列表 -->
 <select id="queryFlowPage" resultType="com.example.dto.FlowDto">
-    SELECT id, flow_code AS flowCode, flow_name AS flowName, create_time AS createTime
-    FROM t_flow
+    SELECT d.*
+           ,COALESCE(...) AS current_ver
+           ,EXISTS(...) AS has_published_version
+    FROM wf_flow_definition d
     <where>
         <if test="flowName != null and flowName != ''">
-            AND flow_name LIKE CONCAT('%', #{flowName}, '%')
+            AND d.name LIKE CONCAT('%', #{flowName}, '%')
         </if>
     </where>
-    ORDER BY create_time DESC
+    ORDER BY d.updt_time DESC
+             ,d.id DESC
 </select>
+
+<!-- 新增记录 -->
+<insert id="addFlow" useGeneratedKeys="true" keyProperty="id">
+    INSERT INTO t_flow (
+        name
+        ,flow_key
+        ,create_time
+    ) VALUES (
+        #{name}
+        ,#{flowKey}
+        ,#{crteTime}
+    )
+</insert>
 ```
 
 ---
@@ -178,3 +201,5 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 | 11 | Controller 方法返回 `ApiResponse<Void>` |
 | 12 | 未经确认引入新的第三方库 |
 | 13 | 类、方法、字段缺少注释 |
+| 14 | SELECT 列表中写可自动映射的 AS 别名（如 `column_name AS columnName`） |
+| 15 | SQL 逗号放行尾（统一逗号前置） |

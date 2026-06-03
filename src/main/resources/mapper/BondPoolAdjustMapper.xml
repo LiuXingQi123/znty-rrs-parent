@@ -4,19 +4,19 @@
 
     <!-- 分页查询债券列表 -->
     <select id="queryBondPage" resultType="com.znty.sirm.model.BondInfoBo">
-        SELECT id,
-               s_info_code              AS sInfoCode,
-               s_info_name              AS sInfoName,
-               b_info_fullname          AS bInfoFullname,
-               b_info_issuer            AS bInfoIssuer,
-               b_issue_amountplan       AS bIssueAmountplan,
-               b_info_carrydate         AS bInfoCarrydate,
-               b_info_maturitydate      AS bInfoMaturitydate,
-               rating_bond              AS ratingBond,
-               rating_bondissuer        AS ratingBondissuer,
-               d_bond_type              AS dBondType,
-               b_info_couponrate        AS bInfoCouponrate,
-               date_exists              AS dateExists
+        SELECT id
+               ,s_info_code
+               ,s_info_name
+               ,b_info_fullname
+               ,b_info_issuer
+               ,b_issue_amountplan
+               ,b_info_carrydate
+               ,b_info_maturitydate
+               ,rating_bond
+               ,rating_bondissuer
+               ,d_bond_type
+               ,b_info_couponrate
+               ,date_exists
         FROM sirm_bondinfo
         <where>
             <if test="bondCode != null and bondCode != ''">
@@ -34,56 +34,86 @@
 
     <!-- 查询债券详情 -->
     <select id="queryBondDetail" resultType="com.znty.sirm.model.BondInfoBo">
-        SELECT id,
-               s_info_code              AS sInfoCode,
-               s_info_name              AS sInfoName,
-               b_info_fullname          AS bInfoFullname,
-               b_info_issuer            AS bInfoIssuer,
-               s_windcode_nib           AS sWindcodeNib,
-               s_windcode_sh            AS sWindcodeSh,
-               s_windcode_sz            AS sWindcodeSz,
-               b_issue_amountplan       AS bIssueAmountplan,
-               b_issue_amountact        AS bIssueAmountact,
-               b_info_couponrate        AS bInfoCouponrate,
-               b_info_carrydate         AS bInfoCarrydate,
-               b_info_maturitydate      AS bInfoMaturitydate,
-               b_info_pledge_ratio      AS bInfoPledgeRatio,
-               rating_bond_agency       AS ratingBondAgency,
-               rating_bond              AS ratingBond,
-               rating_bondissuer        AS ratingBondissuer,
-               rating_outlook           AS ratingOutlook,
-               b_agency_grnttype        AS bAgencyGrnttype,
-               guarantor                AS guarantor,
-               b_agency_name            AS bAgencyName,
-               inner_issuer_rating      AS innerIssuerRating,
-               d_bond_type              AS dBondType,
-               inner_guarantor_rating   AS innerGuarantorRating,
-               date_exists              AS dateExists,
-               b_fund_usage             AS bFundUsage,
-               b_prompt_reason          AS bPromptReason,
-               b_analysis               AS bAnalysis
+        SELECT id
+               ,s_info_code
+               ,s_info_name
+               ,b_info_fullname
+               ,b_info_issuer
+               ,s_windcode_nib
+               ,s_windcode_sh
+               ,s_windcode_sz
+               ,b_issue_amountplan
+               ,b_issue_amountact
+               ,b_info_couponrate
+               ,b_info_carrydate
+               ,b_info_maturitydate
+               ,b_info_pledge_ratio
+               ,rating_bond_agency
+               ,rating_bond
+               ,rating_bondissuer
+               ,rating_outlook
+               ,b_agency_grnttype
+               ,guarantor
+               ,b_agency_name
+               ,inner_issuer_rating
+               ,d_bond_type
+               ,inner_guarantor_rating
+               ,date_exists
+               ,b_fund_usage
+               ,b_prompt_reason
+               ,b_analysis
         FROM sirm_bondinfo
         WHERE id = #{bondId}
     </select>
 
     <!-- 新增调库记录 -->
     <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ip_adjust_log (bond_code, bond_short_name, bond_type,
-            adjust_type, adjust_mode, target_pool_id, target_pool_name, pool_type,
-            audit_status, adjuster_id, adjuster_name, adjust_reason, adjust_advice,
-            attachment_files, material_files, submit_time, is_deleted, crte_time, updt_time)
-        VALUES (#{bondCode}, #{bondShortName}, #{bondType},
-            #{adjustType}, #{adjustMode}, #{targetPoolId}, #{targetPoolName}, #{poolType},
-            #{auditStatus}, #{adjusterId}, #{adjusterName}, #{adjustReason}, #{adjustAdvice},
-            #{attachmentFiles}, #{materialFiles}, NOW(), 0, NOW(), NOW())
+        INSERT INTO ip_adjust_log (bond_code
+                                  ,bond_short_name
+                                  ,bond_type
+                                  ,adjust_type
+                                  ,adjust_mode
+                                  ,target_pool_id
+                                  ,target_pool_name
+                                  ,pool_type
+                                  ,audit_status
+                                  ,adjuster_id
+                                  ,adjuster_name
+                                  ,adjust_reason
+                                  ,adjust_advice
+                                  ,attachment_files
+                                  ,material_files
+                                  ,submit_time
+                                  ,is_deleted
+                                  ,crte_time
+                                  ,updt_time)
+        VALUES (#{bondCode}
+               ,#{bondShortName}
+               ,#{bondType}
+               ,#{adjustType}
+               ,#{adjustMode}
+               ,#{targetPoolId}
+               ,#{targetPoolName}
+               ,#{poolType}
+               ,#{auditStatus}
+               ,#{adjusterId}
+               ,#{adjusterName}
+               ,#{adjustReason}
+               ,#{adjustAdvice}
+               ,#{attachmentFiles}
+               ,#{materialFiles}
+               ,NOW()
+               ,0
+               ,NOW()
+               ,NOW())
     </insert>
 
     <!-- 查询当前债券所在池列表 -->
     <select id="queryBondPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
-        SELECT ips.target_pool_name           AS poolName,
-               ips.pool_type                  AS poolType,
-               DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate,
-               '在池'                         AS status
+        SELECT ips.target_pool_name AS poolName
+               ,ips.pool_type
+               ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
+               ,'在池' AS status
         FROM ip_pool_status ips
         WHERE ips.bond_code = #{bondCode}
           AND ips.audit_status = '20'
@@ -92,11 +122,11 @@
 
     <!-- 查询当前债券主体（发行人）所在池列表 -->
     <select id="queryIssuerPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
-        SELECT ips.target_pool_name                    AS poolName,
-               ips.pool_type                           AS poolType,
-               DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate,
-               COUNT(DISTINCT ips.bond_code)           AS bondCount,
-               '在池'                                  AS status
+        SELECT ips.target_pool_name AS poolName
+               ,ips.pool_type
+               ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
+               ,COUNT(DISTINCT ips.bond_code) AS bondCount
+               ,'在池' AS status
         FROM ip_pool_status ips
         INNER JOIN sirm_bondinfo sb ON ips.bond_code = sb.s_info_code
         WHERE sb.b_info_issuer = (
@@ -104,30 +134,31 @@
         )
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-        GROUP BY ips.target_pool_name, ips.pool_type
+        GROUP BY ips.target_pool_name
+                 ,ips.pool_type
     </select>
 
     <!-- 根据债券代码查询调库记录列表 -->
     <select id="queryAdjustLogList" resultType="com.znty.sirm.model.IpAdjustLogBo">
-        SELECT al.id,
-               al.bond_code         AS bondCode,
-               al.bond_short_name   AS bondShortName,
-               al.bond_type         AS bondType,
-               al.adjust_type       AS adjustType,
-               al.adjust_mode       AS adjustMode,
-               al.target_pool_id    AS targetPoolId,
-               al.target_pool_name  AS targetPoolName,
-               al.pool_type         AS poolType,
-               al.audit_status      AS auditStatus,
-               al.adjuster_id       AS adjusterId,
-               al.adjuster_name     AS adjusterName,
-               al.adjust_reason     AS adjustReason,
-               al.adjust_advice     AS adjustAdvice,
-               al.attachment_files  AS attachmentFiles,
-               al.material_files    AS materialFiles,
-               al.submit_time       AS submitTime,
-               al.audit_time        AS auditTime,
-               al.entry_time        AS entryTime
+        SELECT al.id
+               ,al.bond_code
+               ,al.bond_short_name
+               ,al.bond_type
+               ,al.adjust_type
+               ,al.adjust_mode
+               ,al.target_pool_id
+               ,al.target_pool_name
+               ,al.pool_type
+               ,al.audit_status
+               ,al.adjuster_id
+               ,al.adjuster_name
+               ,al.adjust_reason
+               ,al.adjust_advice
+               ,al.attachment_files
+               ,al.material_files
+               ,al.submit_time
+               ,al.audit_time
+               ,al.entry_time
         FROM ip_adjust_log al
         WHERE al.bond_code = #{bondCode}
           AND al.is_deleted = 0
