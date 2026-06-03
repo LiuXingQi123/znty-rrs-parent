@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.MyBondPoolMapper">
+
+    <!-- 添加债券到我的债券池 -->
+    <insert id="addToMyPool" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO my_bond_pool (security_code, security_type, market, user_id, status, remark, create_time, update_time)
+        VALUES (#{securityCode}, #{securityType}, #{market}, #{userId}, 'use', #{remark}, NOW(), NOW())
+    </insert>
+
+    <!-- 从我的债券池移除（软删除） -->
+    <update id="removeFromMyPool">
+        UPDATE my_bond_pool
+        SET status = 'del', update_time = NOW()
+        WHERE user_id = #{userId}
+          AND security_code = #{securityCode}
+          AND status = 'use'
+    </update>
+
+    <!-- 查询用户某证券的有效收藏记录 -->
+    <select id="findByUserAndCode" resultType="com.znty.sirm.model.MyBondPoolBo">
+        SELECT id,
+               security_code AS securityCode,
+               security_type AS securityType,
+               market,
+               user_id       AS userId,
+               status,
+               remark,
+               create_time   AS createTime,
+               update_time   AS updateTime
+        FROM my_bond_pool
+        WHERE user_id = #{userId}
+          AND security_code = #{securityCode}
+          AND status = 'use'
+        LIMIT 1
+    </select>
+
+    <!-- 批量查询用户已收藏的证券代码列表 -->
+    <select id="queryFavoritedCodes" resultType="java.lang.String">
+        SELECT security_code
+        FROM my_bond_pool
+        WHERE user_id = #{userId}
+          AND status = 'use'
+    </select>
+
+</mapper>
