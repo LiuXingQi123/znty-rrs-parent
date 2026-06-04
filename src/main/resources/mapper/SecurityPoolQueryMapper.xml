@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.BondPoolQueryMapper">
+<mapper namespace="com.znty.sirm.mapper.SecurityPoolQueryMapper">
 
-    <!-- 分页查询债券池中的债券列表 -->
-    <select id="queryBondPoolPage" resultType="com.znty.sirm.model.BondPoolQueryDto">
+    <!-- 分页查询证券池中的证券列表 -->
+    <select id="querySecurityPoolPage" resultType="com.znty.sirm.model.SecurityPoolQueryDto">
         SELECT ips.id
-               ,ips.bond_code
-               ,ips.bond_short_name
+               ,ips.security_code
+               ,ips.security_short_name
                ,ips.adjuster_name
                ,ips.entry_time
                ,ips.target_pool_name
-               ,ips.bond_type
-               ,mbp.id AS myBondPoolId
+               ,ips.security_type
+               ,mbp.id AS mySecurityPoolId
                ,bi.b_info_couponrate AS couponRate
                ,bi.b_info_issuer AS issuer
                ,bi.b_info_fullname AS fullName
@@ -21,18 +21,18 @@
                ,bi.b_info_delistdate AS delistDate
                ,bi.b_info_repurchasedate AS repurchaseDate
         FROM ip_pool_status ips
-        LEFT JOIN sirm_bondinfo bi ON ips.bond_code = bi.s_info_code
-        LEFT JOIN my_bond_pool mbp
-            ON ips.bond_code = mbp.security_code
+        LEFT JOIN sirm_securityinfo bi ON ips.security_code = bi.s_info_code
+        LEFT JOIN my_security_pool mbp
+            ON ips.security_code = mbp.security_code
             AND mbp.user_id = #{currentUserId}
             AND mbp.status = 'use'
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
-            <if test="bondStatus == 'active'">
+            <if test="securityStatus == 'active'">
                 AND bi.b_info_maturitydate &gt;= CURDATE()
             </if>
-            <if test="bondStatus == 'matured'">
+            <if test="securityStatus == 'matured'">
                 AND bi.b_info_maturitydate &lt; CURDATE()
             </if>
             <if test="poolIds != null and poolIds.size() > 0">
@@ -41,11 +41,11 @@
                     #{pid}
                 </foreach>
             </if>
-            <if test="bondCode != null and bondCode != ''">
-                AND ips.bond_code LIKE CONCAT('%', #{bondCode}, '%')
+            <if test="securityCode != null and securityCode != ''">
+                AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
-            <if test="bondType != null and bondType != ''">
-                AND ips.bond_type = #{bondType}
+            <if test="securityType != null and securityType != ''">
+                AND ips.security_type = #{securityType}
             </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
                 AND ips.entry_time &gt;= #{entryTimeStart}
@@ -67,14 +67,14 @@
                  ,ips.id DESC
     </select>
 
-    <!-- 查询所有债券类型选项 -->
-    <select id="queryBondTypeList" resultType="java.lang.String">
-        SELECT DISTINCT bond_type
+    <!-- 查询所有证券类型选项 -->
+    <select id="querySecurityTypeList" resultType="java.lang.String">
+        SELECT DISTINCT security_type
         FROM ip_pool_status
         WHERE is_deleted = 0
           AND audit_status = '20'
-          AND bond_type IS NOT NULL
-        ORDER BY bond_type ASC
+          AND security_type IS NOT NULL
+        ORDER BY security_type ASC
     </select>
 
 </mapper>

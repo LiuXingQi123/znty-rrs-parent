@@ -1,5 +1,5 @@
--- ============================================================
--- znty-sirm 债券信息表 - 建库建表脚本
+﻿-- ============================================================
+-- znty-sirm 证券信息表 - 建库建表脚本
 -- MySQL version: 8.0.33
 -- 说明：首次部署执行，创建数据库和全部业务表结构
 -- ============================================================
@@ -13,12 +13,12 @@ FOREIGN_KEY_CHECKS = 0;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `sirm_bondinfo`;
+DROP TABLE IF EXISTS `sirm_securityinfo`;
 
 -- ----------------------------------------------------------------------------
--- 1. 债券信息表
+-- 1. 证券信息表
 -- ----------------------------------------------------------------------------
-CREATE TABLE `sirm_bondinfo`
+CREATE TABLE `sirm_securityinfo`
 (
     `id`                         BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
 
@@ -26,17 +26,17 @@ CREATE TABLE `sirm_bondinfo`
     -- 基础及标识信息
     -- ==========================================
     `s_info_code`                varchar(100)    DEFAULT NULL COMMENT '关联代码',
-    `b_info_fullname`            varchar(300)    DEFAULT NULL COMMENT '债券全称',
+    `b_info_fullname`            varchar(300)    DEFAULT NULL COMMENT '证券全称',
     `b_issue_announcement`       varchar(10)     DEFAULT NULL COMMENT '公告日期',
-    `s_info_name`                varchar(100)    DEFAULT NULL COMMENT '债券简称',
-    `s_windcode_sh`              varchar(100)    DEFAULT NULL COMMENT '沪市债券代码',
-    `s_windcode_sz`              varchar(100)    DEFAULT NULL COMMENT '深市债券代码',
+    `s_info_name`                varchar(100)    DEFAULT NULL COMMENT '证券简称',
+    `s_windcode_sh`              varchar(100)    DEFAULT NULL COMMENT '沪市证券代码',
+    `s_windcode_sz`              varchar(100)    DEFAULT NULL COMMENT '深市证券代码',
     `s_windcode_nib`             varchar(100)    DEFAULT NULL COMMENT '银行间市场代码',
     `s_windcode_nbc`             varchar(100)    DEFAULT NULL COMMENT '其他',
-    `d_bond_type`                int             DEFAULT NULL COMMENT '债券类型',
-    `b_info_term_year_`          decimal(20, 4)  DEFAULT NULL COMMENT '债券期限(年)',
-    `b_info_term_day_`           decimal(20, 4)  DEFAULT NULL COMMENT '债券期限(天)',
-    `b_info_form`                varchar(20)     DEFAULT NULL COMMENT '债券形式',
+    `d_security_type`                int             DEFAULT NULL COMMENT '证券类型',
+    `b_info_term_year_`          decimal(20, 4)  DEFAULT NULL COMMENT '证券期限(年)',
+    `b_info_term_day_`           decimal(20, 4)  DEFAULT NULL COMMENT '证券期限(天)',
+    `b_info_form`                varchar(20)     DEFAULT NULL COMMENT '证券形式',
     `s_info_sectypename`         varchar(300)    DEFAULT NULL COMMENT '品种类别',
     `s_info_comptype`            varchar(100)    DEFAULT NULL COMMENT '发行人类型',
     `b_info_issuer`              varchar(100)    DEFAULT NULL COMMENT '发行人',
@@ -81,11 +81,11 @@ CREATE TABLE `sirm_bondinfo`
     -- ==========================================
     -- 分类与特殊条款标识
     -- ==========================================
-    `is_corporate_bond`          int             DEFAULT NULL COMMENT '是否公司债',
+    `is_corporate_security`          int             DEFAULT NULL COMMENT '是否公司债',
     `is_payadvanced`             varchar(1)      DEFAULT NULL COMMENT '是否可提前兑付',
     `is_callable`                varchar(1)      DEFAULT NULL COMMENT '是否可赎回',
     `is_chooseright`             varchar(1)      DEFAULT NULL COMMENT '是否有选择权',
-    `is_incbonds`                varchar(1)      DEFAULT NULL COMMENT '是否增发债',
+    `is_incsecurities`                varchar(1)      DEFAULT NULL COMMENT '是否增发债',
     `s_info_industryname`        varchar(100)    DEFAULT NULL COMMENT '一级板块',
     `s_info_industryname2`       varchar(100)    DEFAULT NULL COMMENT '二级板块',
     `s_info_innerclass`          varchar(100)    DEFAULT NULL COMMENT '内部分类',
@@ -98,17 +98,17 @@ CREATE TABLE `sirm_bondinfo`
     -- ==========================================
     `date_redemtion_exists`      varchar(10)     DEFAULT NULL COMMENT '回售剩余期限-最新',
     `date_call_exists`           varchar(10)     DEFAULT NULL COMMENT '赎回剩余期限-最新',
-    `date_exists`                varchar(10)     DEFAULT NULL COMMENT '债券期限-最新',
+    `date_exists`                varchar(10)     DEFAULT NULL COMMENT '证券期限-最新',
     `date_inright_exists`        varchar(10)     DEFAULT NULL COMMENT '含权债剩余期限-最新',
 
     -- ==========================================
     -- 评级相关字段
     -- ==========================================
-    `rating_bond`                varchar(10)     DEFAULT NULL COMMENT '债券评级',
-    `rating_bondissuer`          varchar(10)     DEFAULT NULL COMMENT '主体评级',
+    `rating_security`                varchar(10)     DEFAULT NULL COMMENT '证券评级',
+    `rating_securityissuer`          varchar(10)     DEFAULT NULL COMMENT '主体评级',
     `rating_outlook`             varchar(10)     DEFAULT NULL COMMENT '展望评级',
-    `rating_bond_agency`         varchar(400)    DEFAULT NULL COMMENT '债券评级机构',
-    `rating_bondissuer_agency`   varchar(400)    DEFAULT NULL COMMENT '主体评级机构',
+    `rating_security_agency`         varchar(400)    DEFAULT NULL COMMENT '证券评级机构',
+    `rating_securityissuer_agency`   varchar(400)    DEFAULT NULL COMMENT '主体评级机构',
     `rating_cnbd`                varchar(400)    DEFAULT NULL COMMENT '中债隐含评级',
 
     -- ==========================================
@@ -135,25 +135,25 @@ CREATE TABLE `sirm_bondinfo`
     `inner_guarantor_rating`     varchar(50)     DEFAULT NULL COMMENT '担保人主体内评分',
     `b_fund_usage`               longtext        COMMENT '募集资金用途',
     `b_prompt_reason`            longtext        COMMENT '提示原因',
-    `b_analysis`                 longtext        COMMENT '债券分析',
+    `b_analysis`                 longtext        COMMENT '证券分析',
 
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
-    COMMENT = '债券信息表';
+    COMMENT = '证券信息表';
 
 -- ============================================================================
--- 2. 债券池调库记录表
+-- 2. 证券池调库记录表
 -- ============================================================================
 DROP TABLE IF EXISTS `ip_adjust_log`;
 
 CREATE TABLE `ip_adjust_log`
 (
     `id`               BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `bond_code`        VARCHAR(32)  DEFAULT NULL COMMENT '债券代码',
-    `bond_short_name`  VARCHAR(128) DEFAULT NULL COMMENT '债券简称',
-    `bond_type`        VARCHAR(32)  DEFAULT NULL COMMENT '债券类型：中期票据/公司债/可交换债/商业银行债/短期融资券/资产支持证券/超短期融资券/其他',
+    `security_code`        VARCHAR(32)  DEFAULT NULL COMMENT '证券代码',
+    `security_short_name`  VARCHAR(128) DEFAULT NULL COMMENT '证券简称',
+    `security_type`        VARCHAR(32)  DEFAULT NULL COMMENT '证券类型：中期票据/公司债/可交换债/商业银行债/短期融资券/资产支持证券/超短期融资券/其他',
     `adjust_type`      VARCHAR(32)  DEFAULT NULL COMMENT '调整类型：手工调整/联动调整/互斥调整/关联调整/Excel导入/手动批量调整',
     `adjust_mode`      VARCHAR(8)   DEFAULT NULL COMMENT '调整模式：调入/调出',
     `target_pool_id`   BIGINT       DEFAULT NULL COMMENT '目标投资池 ID，关联 ip_investment_pool.id',
@@ -176,7 +176,7 @@ CREATE TABLE `ip_adjust_log`
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
-    COMMENT = '债券池调库记录表';
+    COMMENT = '证券池调库记录表';
 
 -- ============================================================================
 -- 3. 投资池当前状态表
@@ -186,9 +186,9 @@ DROP TABLE IF EXISTS `ip_pool_status`;
 CREATE TABLE `ip_pool_status`
 (
     `id`               BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `bond_code`        VARCHAR(32)  DEFAULT NULL COMMENT '债券代码',
-    `bond_short_name`  VARCHAR(128) DEFAULT NULL COMMENT '债券简称',
-    `bond_type`        VARCHAR(32)  DEFAULT NULL COMMENT '债券类型：中期票据/公司债/可交换债/商业银行债/短期融资券/资产支持证券/超短期融资券/其他',
+    `security_code`        VARCHAR(32)  DEFAULT NULL COMMENT '证券代码',
+    `security_short_name`  VARCHAR(128) DEFAULT NULL COMMENT '证券简称',
+    `security_type`        VARCHAR(32)  DEFAULT NULL COMMENT '证券类型：中期票据/公司债/可交换债/商业银行债/短期融资券/资产支持证券/超短期融资券/其他',
     `adjust_type`      VARCHAR(32)  DEFAULT NULL COMMENT '调整类型：手工调整/联动调整/互斥调整/关联调整/Excel导入/手动批量调整',
     `adjust_mode`      VARCHAR(8)   DEFAULT NULL COMMENT '调整模式：调入/调出',
     `target_pool_id`   BIGINT       DEFAULT NULL COMMENT '目标投资池 ID，关联 ip_investment_pool.id',

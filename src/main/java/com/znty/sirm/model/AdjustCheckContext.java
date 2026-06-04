@@ -12,8 +12,8 @@ import java.util.Set;
 @Data
 public class AdjustCheckContext {
 
-    /** 债券基础信息 */
-    private BondInfoBo bondInfo;
+    /** 证券基础信息 */
+    private SecurityInfoBo securityInfo;
 
     /** 目标投资池信息 */
     private InvestmentPoolBo targetPool;
@@ -21,10 +21,10 @@ public class AdjustCheckContext {
     /** 目标投资池父级信息（顶级池时为 null） */
     private InvestmentPoolBo parentPool;
 
-    /** 债券当前有效所在池 ID 集合（audit_status=20） */
+    /** 证券当前有效所在池 ID 集合（audit_status=20） */
     private Set<Long> currentPoolIds;
 
-    /** 目标池当前债券数量（用于容量校验） */
+    /** 目标池当前证券数量（用于容量校验） */
     private int poolCurrentCount;
 
     /** 调整方向：调入 / 调出 */
@@ -36,6 +36,6 @@ public class AdjustCheckContext {
     /** 全量投资池信息（ID → Bo），用于构建错误消息中的池路径名称 */
     private Map<Long, InvestmentPoolBo> poolMap;
 
-    /** 债券是否存在进行中的调库流程（audit_status IN ('00','11')） */
+    /** 证券是否存在进行中的调库流程（audit_status IN ('00','11')） */
     private boolean hasPendingProcess;
 }

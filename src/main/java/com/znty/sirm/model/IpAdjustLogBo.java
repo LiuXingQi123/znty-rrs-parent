@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 债券池调库记录表实体
+ * 证券池调库记录表实体
  */
 @Data
 public class IpAdjustLogBo {
@@ -14,14 +14,14 @@ public class IpAdjustLogBo {
     /** 主键 ID */
     private Long id;
 
-    /** 债券代码 */
-    private String bondCode;
+    /** 证券代码 */
+    private String securityCode;
 
-    /** 债券简称 */
-    private String bondShortName;
+    /** 证券简称 */
+    private String securityShortName;
 
-    /** 债券类型 */
-    private String bondType;
+    /** 证券类型 */
+    private String securityType;
 
     /** 调整类型 */
     private String adjustType;

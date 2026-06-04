@@ -5,22 +5,22 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 债券池调库提交请求
+ * 证券池调库提交请求
  */
 @Data
-public class BondPoolAdjustSubmitReq {
+public class SecurityPoolAdjustSubmitReq {
 
-    /** 债券 ID */
-    private Long bondId;
+    /** 证券 ID */
+    private Long securityId;
 
-    /** 债券代码 */
-    private String bondCode;
+    /** 证券代码 */
+    private String securityCode;
 
-    /** 债券简称 */
-    private String bondShortName;
+    /** 证券简称 */
+    private String securityShortName;
 
-    /** 债券类型 */
-    private String bondType;
+    /** 证券类型 */
+    private String securityType;
 
     /** 调整类型 */
     private String adjustType;

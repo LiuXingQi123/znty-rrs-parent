@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- znty-sirm 规则管理库 - 演示数据初始化脚本
 -- 前提：需先执行 sirm_rule_schema.sql 完成建表
 -- 说明：
@@ -36,7 +36,7 @@ INSERT INTO `rule_category` (id, category_code, category_name, sort_no, enabled,
 
 INSERT INTO `rule_preset_option_set` (id, set_name, sort_no, enabled, crte_time, updt_time) VALUES
 (1,'主体评级',10,1,NOW(),NOW()),(2,'主体内评',20,1,NOW(),NOW()),(3,'外评机构',30,1,NOW(),NOW()),
-(4,'期限',40,1,NOW(),NOW()),(5,'债券类型',50,1,NOW(),NOW()),(6,'行业分类',60,1,NOW(),NOW()),
+(4,'期限',40,1,NOW(),NOW()),(5,'证券类型',50,1,NOW(),NOW()),(6,'行业分类',60,1,NOW(),NOW()),
 (7,'是否/布尔',70,1,NOW(),NOW()),(8,'风险等级',80,1,NOW(),NOW()),(9,'审批状态',90,1,NOW(),NOW()),
 (10,'交易场所',100,1,NOW(),NOW()),(11,'贷款用途',110,1,NOW(),NOW()),(12,'担保方式',120,1,NOW(),NOW());
 
@@ -121,14 +121,14 @@ if (monthlyIncome < 3000) {
 }
 return riskScore;','active',0,'2025-03-05 14:30:00','2025-03-05 14:30:00'),
 
-(4,'债券投资准入规则','string+select+select+multiselect+number 全类型','risk',
+(4,'证券投资准入规则','string+select+select+multiselect+number 全类型','risk',
 'approved = 1;
 reason = "";
 if (issuerRating == "D" || issuerRating == "C" || issuerRating == "CC" || issuerRating == "CCC") {
     approved = 0;
     reason = reason + "主体评级过低(" + issuerRating + ");";
 }
-if (bondType == "ABS" || bondType == "ABN") {
+if (securityType == "ABS" || securityType == "ABN") {
     reason = reason + "需审查底层资产;";
 }
 if (industry == "地产") {
@@ -264,7 +264,7 @@ INSERT INTO `rule_param` (id, rule_id, param_name, param_label, param_type, requ
 (9,3,'debtRatio','负债率','number',1,3,NOW(),NOW()),
 (10,3,'overdueTimes','逾期次数','number',1,4,NOW(),NOW()),
 (11,4,'issuerRating','发行人评级','string',1,1,NOW(),NOW()),
-(12,4,'bondType','债券类型','select',1,2,NOW(),NOW()),
+(12,4,'securityType','证券类型','select',1,2,NOW(),NOW()),
 (13,4,'industry','所属行业','select',1,3,NOW(),NOW()),
 (14,4,'allowedExchanges','允许交易场所','multiselect',1,4,NOW(),NOW()),
 (15,4,'minIssueAmount','最低发行规模(亿)','number',1,5,NOW(),NOW()),
@@ -327,8 +327,8 @@ INSERT INTO `rule_test_case` (id, case_name, rule_id, rule_name_snapshot, last_r
 (6,'中风险用户',3,'用户风控评分规则','pass','20','2025-03-05 14:40:00',NOW(),NOW()),
 (7,'高风险用户',3,'用户风控评分规则','pass','110','2025-03-05 14:45:00',NOW(),NOW()),
 (8,'低风险用户',3,'用户风控评分规则','pass','0','2025-03-05 14:50:00',NOW(),NOW()),
-(9,'AAA金融债通过',4,'债券投资准入规则','pass','通过:','2025-04-20 10:00:00',NOW(),NOW()),
-(10,'D级地产小规模否决',4,'债券投资准入规则','fail','否决:主体评级过低(D);规模不足5亿;','2025-04-20 10:05:00',NOW(),NOW()),
+(9,'AAA金融债通过',4,'证券投资准入规则','pass','通过:','2025-04-20 10:00:00',NOW(),NOW()),
+(10,'D级地产小规模否决',4,'证券投资准入规则','fail','否决:主体评级过低(D);规模不足5亿;','2025-04-20 10:05:00',NOW(),NOW()),
 (11,'大额高频跨境',5,'异常交易检测规则',NULL,NULL,NULL,NOW(),NOW()),
 (12,'VIP积分翻倍',6,'会员积分兑换规则','pass','100000','2025-02-20 10:00:00',NOW(),NOW()),
 (13,'普通会员积分',6,'会员积分兑换规则','pass','30000','2025-02-20 10:05:00',NOW(),NOW()),
@@ -366,12 +366,12 @@ INSERT INTO `rule_test_case_param` (id, case_id, param_name, param_label_snapsho
 (25,8,'debtRatio','负债率','number','0.15',NOW(),NOW()),
 (26,8,'overdueTimes','逾期次数','number','0',NOW(),NOW()),
 (27,9,'issuerRating','发行人评级','string','AAA',NOW(),NOW()),
-(28,9,'bondType','债券类型','select','金融债',NOW(),NOW()),
+(28,9,'securityType','证券类型','select','金融债',NOW(),NOW()),
 (29,9,'industry','所属行业','select','金融',NOW(),NOW()),
 (30,9,'allowedExchanges','允许交易场所','multiselect','银行间,上交所,深交所',NOW(),NOW()),
 (31,9,'minIssueAmount','最低发行规模(亿)','number','50',NOW(),NOW()),
 (32,10,'issuerRating','发行人评级','string','D',NOW(),NOW()),
-(33,10,'bondType','债券类型','select','企业债',NOW(),NOW()),
+(33,10,'securityType','证券类型','select','企业债',NOW(),NOW()),
 (34,10,'industry','所属行业','select','地产',NOW(),NOW()),
 (35,10,'allowedExchanges','允许交易场所','multiselect','上交所',NOW(),NOW()),
 (36,10,'minIssueAmount','最低发行规模(亿)','number','3',NOW(),NOW()),
@@ -427,8 +427,8 @@ INSERT INTO `rule_test_run_log` (id, run_id, log_time, log_type, message, crte_t
 (7,7,'2025-03-05 14:45:00','info','执行规则: 用户风控评分规则',NOW(),NOW()),
 (8,7,'2025-03-05 14:45:00','info','参数注入: creditScore=550, monthlyIncome=2500, debtRatio=0.85, overdueTimes=5',NOW(),NOW()),
 (9,7,'2025-03-05 14:45:01','success','风险评分: 110',NOW(),NOW()),
-(10,10,'2025-04-20 10:05:00','info','执行规则: 债券投资准入规则',NOW(),NOW()),
-(11,10,'2025-04-20 10:05:00','info','参数注入: issuerRating=D, bondType=企业债, industry=地产, minIssueAmount=3',NOW(),NOW()),
+(10,10,'2025-04-20 10:05:00','info','执行规则: 证券投资准入规则',NOW(),NOW()),
+(11,10,'2025-04-20 10:05:00','info','参数注入: issuerRating=D, securityType=企业债, industry=地产, minIssueAmount=3',NOW(),NOW()),
 (12,10,'2025-04-20 10:05:01','error','否决原因: 主体评级过低(D);',NOW(),NOW()),
 (13,10,'2025-04-20 10:05:01','error','否决原因: 规模不足5亿;',NOW(),NOW()),
 (14,15,'2025-04-25 16:00:00','info','执行规则: 合同审批权限规则',NOW(),NOW()),

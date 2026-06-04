@@ -15,10 +15,10 @@ public class ForbiddenPoolQueryDto {
     private Long id;
 
     /** 证券名称 */
-    private String bondShortName;
+    private String securityShortName;
 
     /** 证券代码 */
-    private String bondCode;
+    private String securityCode;
 
     /** 发行主体 */
     private String issuer;
@@ -27,7 +27,7 @@ public class ForbiddenPoolQueryDto {
     private String adjusterName;
 
     /** 证券类型 */
-    private String bondType;
+    private String securityType;
 
     /** 投资池名称 */
     private String targetPoolName;
@@ -36,7 +36,7 @@ public class ForbiddenPoolQueryDto {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date entryTime;
 
-    /** 到期日（前端用于派生债券状态：存续/到期） */
+    /** 到期日（前端用于派生证券状态：存续/到期） */
     private String maturityDate;
 
     /** 退市日期 */

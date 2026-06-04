@@ -3,10 +3,10 @@ package com.znty.sirm.model;
 import lombok.Data;
 
 /**
- * 我的债券池请求对象（添加/移除）
+ * 我的证券池请求对象（添加/移除）
  */
 @Data
-public class MyBondPoolReq {
+public class MySecurityPoolReq {
     /** 证券代码 */
     private String securityCode;
     /** 证券类型 */

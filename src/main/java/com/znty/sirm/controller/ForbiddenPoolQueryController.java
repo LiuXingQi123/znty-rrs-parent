@@ -30,8 +30,8 @@ public class ForbiddenPoolQueryController {
     }
 
     /** 查询证券类型下拉选项 */
-    @PostMapping("/queryBondTypeList")
-    public ApiResponse<List<String>> queryBondTypeList() {
-        return ApiResponse.success(forbiddenPoolQueryService.queryBondTypeList());
+    @PostMapping("/querySecurityTypeList")
+    public ApiResponse<List<String>> querySecurityTypeList() {
+        return ApiResponse.success(forbiddenPoolQueryService.querySecurityTypeList());
     }
 }

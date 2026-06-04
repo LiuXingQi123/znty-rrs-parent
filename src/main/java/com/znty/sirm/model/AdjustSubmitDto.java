@@ -10,8 +10,8 @@ import java.util.List;
 @Data
 public class AdjustSubmitDto {
 
-    /** 债券代码 */
-    private String bondCode;
+    /** 证券代码 */
+    private String securityCode;
 
     /** 已提交的调库项数量 */
     private Integer submitCount;

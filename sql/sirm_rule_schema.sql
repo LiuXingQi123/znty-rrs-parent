@@ -1,4 +1,4 @@
--- ============================================================
+﻿-- ============================================================
 -- znty-sirm 规则管理库 - 建库建表脚本
 -- MySQL version: 8.0.33
 -- 说明：首次部署执行，创建数据库和全部业务表结构
@@ -103,7 +103,7 @@ CREATE TABLE `rule_param_option` (
 -- ----------------------------------------------------------------------------
 CREATE TABLE `rule_preset_option_set` (
   `id`        BIGINT      NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
-  `set_name`  VARCHAR(50) DEFAULT NULL             COMMENT '预设选项集名称，如主体评级、债券类型',
+  `set_name`  VARCHAR(50) DEFAULT NULL             COMMENT '预设选项集名称，如主体评级、证券类型',
   `sort_no`   INT         DEFAULT NULL             COMMENT '排序号',
   `enabled`   TINYINT     DEFAULT NULL             COMMENT '是否启用：1=启用 / 0=停用',
   `crte_time` DATETIME    DEFAULT NULL             COMMENT '创建时间',

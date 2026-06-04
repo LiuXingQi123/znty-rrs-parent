@@ -10,17 +10,17 @@ import java.util.List;
 @Data
 public class AdjustCheckReq {
 
-    /** 债券 ID */
-    private Long bondId;
+    /** 证券 ID */
+    private Long securityId;
 
-    /** 债券代码 */
-    private String bondCode;
+    /** 证券代码 */
+    private String securityCode;
 
-    /** 债券简称 */
-    private String bondShortName;
+    /** 证券简称 */
+    private String securityShortName;
 
-    /** 债券类型 */
-    private String bondType;
+    /** 证券类型 */
+    private String securityType;
 
     /** 待校验的调库项列表 */
     private List<CheckItem> items;

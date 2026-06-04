@@ -14,14 +14,14 @@ public class AdjustHistoryDto {
     /** 记录 ID */
     private Long id;
 
-    /** 债券代码 */
-    private String bondCode;
+    /** 证券代码 */
+    private String securityCode;
 
-    /** 债券简称 */
-    private String bondShortName;
+    /** 证券简称 */
+    private String securityShortName;
 
-    /** 债券类型（中文，来自表字段） */
-    private String bondType;
+    /** 证券类型（中文，来自表字段） */
+    private String securityType;
 
     /** 调整类型（手工调整/联动调整/...） */
     private String adjustType;

@@ -29,7 +29,7 @@ public class ForbiddenPoolQueryService {
     }
 
     /** 查询证券类型下拉选项 */
-    public List<String> queryBondTypeList() {
-        return forbiddenPoolQueryMapper.queryBondTypeList();
+    public List<String> querySecurityTypeList() {
+        return forbiddenPoolQueryMapper.querySecurityTypeList();
     }
 }

@@ -4,19 +4,19 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 /**
- * 债券信息列表返回对象（债券查询列表用）
+ * 证券信息列表返回对象（证券查询列表用）
  */
 @Data
-public class BondInfoDto {
+public class SecurityInfoDto {
     /** 主键 ID */
     private Long id;
-    /** 债券代码 */
-    private String bondCode;
-    /** 债券简称 */
-    private String bondShortName;
+    /** 证券代码 */
+    private String securityCode;
+    /** 证券简称 */
+    private String securityShortName;
     /** 发行人 */
     private String issuer;
-    /** 债券全称 */
+    /** 证券全称 */
     private String fullName;
     /** 发行总额(亿元) */
     private BigDecimal issueAmount;
@@ -24,14 +24,14 @@ public class BondInfoDto {
     private String carryDate;
     /** 到期日 */
     private String maturityDate;
-    /** 债券评级 */
-    private String bondRating;
+    /** 证券评级 */
+    private String securityRating;
     /** 主体评级 */
     private String issuerRating;
-    /** 债券类型 */
-    private String bondType;
+    /** 证券类型 */
+    private String securityType;
     /** 当期利率(%) */
     private BigDecimal currentRate;
-    /** 债券期限 */
+    /** 证券期限 */
     private String termStr;
 }

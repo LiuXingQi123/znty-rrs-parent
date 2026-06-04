@@ -1,7 +1,7 @@
--- ============================================================
--- znty-sirm 我的债券池 - 建表脚本
+﻿-- ============================================================
+-- znty-sirm 我的证券池 - 建表脚本
 -- MySQL version: 8.0.33
--- 说明：用户可将关注的证券（债券/股票/基金/公司等）添加到个人收藏池
+-- 说明：用户可将关注的证券（证券/股票/基金/公司等）添加到个人收藏池
 -- ============================================================
 
 USE
@@ -13,16 +13,16 @@ FOREIGN_KEY_CHECKS = 0;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `my_bond_pool`;
+DROP TABLE IF EXISTS `my_security_pool`;
 
 -- ----------------------------------------------------------------------------
--- 我的债券池表
+-- 我的证券池表
 -- ----------------------------------------------------------------------------
-CREATE TABLE `my_bond_pool`
+CREATE TABLE `my_security_pool`
 (
     `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `security_code` VARCHAR(32)  DEFAULT NULL COMMENT '证券代码',
-    `security_type` VARCHAR(32)  DEFAULT NULL COMMENT '证券类型：股票/债券/基金/公司...',
+    `security_type` VARCHAR(32)  DEFAULT NULL COMMENT '证券类型：股票/证券/基金/公司...',
     `market`        VARCHAR(32)  DEFAULT NULL COMMENT '证券市场：上交所/深交所/银行间/北交所...',
     `user_id`       VARCHAR(32)  DEFAULT NULL COMMENT '用户 ID',
     `status`        VARCHAR(4)   DEFAULT 'use' COMMENT '状态：use=使用 / del=删除',
@@ -33,4 +33,4 @@ CREATE TABLE `my_bond_pool`
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
-    COMMENT = '我的债券池';
+    COMMENT = '我的证券池';

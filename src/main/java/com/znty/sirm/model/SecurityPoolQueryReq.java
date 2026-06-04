@@ -7,19 +7,19 @@ import lombok.EqualsAndHashCode;
 import java.util.List;
 
 /**
- * 债券池查询请求对象
+ * 证券池查询请求对象
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class BondPoolQueryReq extends PageRequest {
-    /** 债券池树选中节点ID列表 */
+public class SecurityPoolQueryReq extends PageRequest {
+    /** 证券池树选中节点ID列表 */
     private List<Long> poolIds;
-    /** 债券代码（模糊搜索） */
-    private String bondCode;
-    /** 债券类型（精确匹配） */
-    private String bondType;
-    /** 债券状态：active=存续 / matured=到期 */
-    private String bondStatus;
+    /** 证券代码（模糊搜索） */
+    private String securityCode;
+    /** 证券类型（精确匹配） */
+    private String securityType;
+    /** 证券状态：active=存续 / matured=到期 */
+    private String securityStatus;
     /** 入池时间起 */
     private String entryTimeStart;
     /** 入池时间止 */
@@ -28,8 +28,8 @@ public class BondPoolQueryReq extends PageRequest {
     private String adjusterName;
     /** 发行主体名称（模糊搜索） */
     private String issuer;
-    /** 我的债券 */
+    /** 我的证券 */
     private Boolean myBonds;
-    /** 当前用户ID（我的债券勾选时使用） */
+    /** 当前用户ID（我的证券勾选时使用） */
     private String currentUserId;
 }

@@ -12,13 +12,13 @@ import lombok.EqualsAndHashCode;
 public class ForbiddenPoolQueryReq extends PageRequest {
 
     /** 证券代码（模糊搜索） */
-    private String bondCode;
+    private String securityCode;
 
-    /** 债券类型（精确匹配） */
-    private String bondType;
+    /** 证券类型（精确匹配） */
+    private String securityType;
 
-    /** 债券状态：存续 / 到期 */
-    private String bondStatus;
+    /** 证券状态：存续 / 到期 */
+    private String securityStatus;
 
     /** 调整日期起（yyyy-MM-dd） */
     private String adjustTimeStart;

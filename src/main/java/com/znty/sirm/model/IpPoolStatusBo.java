@@ -14,14 +14,14 @@ public class IpPoolStatusBo {
     /** 主键 ID */
     private Long id;
 
-    /** 债券代码 */
-    private String bondCode;
+    /** 证券代码 */
+    private String securityCode;
 
-    /** 债券简称 */
-    private String bondShortName;
+    /** 证券简称 */
+    private String securityShortName;
 
-    /** 债券类型 */
-    private String bondType;
+    /** 证券类型 */
+    private String securityType;
 
     /** 调整类型 */
     private String adjustType;

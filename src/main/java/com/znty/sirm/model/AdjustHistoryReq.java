@@ -16,14 +16,14 @@ public class AdjustHistoryReq extends PageRequest {
     /** 投资池 ID 列表（树多选） */
     private List<Long> poolIds;
 
-    /** 债券代码（模糊） */
-    private String bondCode;
+    /** 证券代码（模糊） */
+    private String securityCode;
 
-    /** 债券类型（精确） */
-    private String bondType;
+    /** 证券类型（精确） */
+    private String securityType;
 
-    /** 债券状态：存续 / 到期 */
-    private String bondStatus;
+    /** 证券状态：存续 / 到期 */
+    private String securityStatus;
 
     /** 调整日期起（yyyy-MM-dd） */
     private String adjustTimeStart;
@@ -34,7 +34,7 @@ public class AdjustHistoryReq extends PageRequest {
     /** 调整人名称（模糊） */
     private String adjusterName;
 
-    /** 发行主体名称（模糊，联查 sirm_bondinfo） */
+    /** 发行主体名称（模糊，联查 sirm_securityinfo） */
     private String issuer;
 
     /** 调整方向：调入 / 调出 */

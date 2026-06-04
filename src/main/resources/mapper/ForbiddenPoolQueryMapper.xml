@@ -2,15 +2,15 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.ForbiddenPoolQueryMapper">
 
-    <!-- 分页查询禁投池债券列表 -->
+    <!-- 分页查询禁投池证券列表 -->
     <select id="queryForbiddenPoolPage" resultType="com.znty.sirm.model.ForbiddenPoolQueryDto">
         SELECT ips.id
-               ,ips.bond_code
-               ,ips.bond_short_name
+               ,ips.security_code
+               ,ips.security_short_name
                ,ips.adjuster_name
                ,ips.entry_time
                ,ips.target_pool_name
-               ,ips.bond_type
+               ,ips.security_type
                ,bi.b_info_issuer AS issuer
                ,bi.b_info_maturitydate AS maturityDate
                ,bi.b_info_delistdate AS delistDate
@@ -19,19 +19,19 @@
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
                                        AND p.pool_type = 'forbidden'
-        LEFT JOIN sirm_bondinfo bi ON bi.s_info_code = ips.bond_code
+        LEFT JOIN sirm_securityinfo bi ON bi.s_info_code = ips.security_code
         <where>
             ips.is_deleted = 0
-            <if test="bondCode != null and bondCode != ''">
-                AND ips.bond_code LIKE CONCAT('%', #{bondCode}, '%')
+            <if test="securityCode != null and securityCode != ''">
+                AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
-            <if test="bondType != null and bondType != ''">
-                AND ips.bond_type = #{bondType}
+            <if test="securityType != null and securityType != ''">
+                AND ips.security_type = #{securityType}
             </if>
-            <if test="bondStatus == '存续'">
+            <if test="securityStatus == '存续'">
                 AND (bi.b_info_maturitydate IS NULL OR bi.b_info_maturitydate &gt;= CURDATE())
             </if>
-            <if test="bondStatus == '到期'">
+            <if test="securityStatus == '到期'">
                 AND bi.b_info_maturitydate IS NOT NULL
                 AND bi.b_info_maturitydate &lt; CURDATE()
             </if>
@@ -56,12 +56,12 @@
     </select>
 
     <!-- 查询证券类型选项（取全量 ip_pool_status，保证有数据） -->
-    <select id="queryBondTypeList" resultType="java.lang.String">
-        SELECT DISTINCT bond_type
+    <select id="querySecurityTypeList" resultType="java.lang.String">
+        SELECT DISTINCT security_type
         FROM ip_pool_status
         WHERE is_deleted = 0
-          AND bond_type IS NOT NULL
-        ORDER BY bond_type ASC
+          AND security_type IS NOT NULL
+        ORDER BY security_type ASC
     </select>
 
 </mapper>

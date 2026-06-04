@@ -6,10 +6,10 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 我的债券池实体
+ * 我的证券池实体
  */
 @Data
-public class MyBondPoolBo {
+public class MySecurityPoolBo {
 
     /** 主键 ID */
     private Long id;

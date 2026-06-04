@@ -4,16 +4,16 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 /**
- * 债券详情返回对象（调库页面顶部信息展示）
+ * 证券详情返回对象（调库页面顶部信息展示）
  */
 @Data
-public class BondInfoDetailDto {
-    /** 债券全称 */
+public class SecurityInfoDetailDto {
+    /** 证券全称 */
     private String fullName;
-    /** 债券简称 */
-    private String bondShortName;
-    /** 债券代码 */
-    private String bondCode;
+    /** 证券简称 */
+    private String securityShortName;
+    /** 证券代码 */
+    private String securityCode;
     /** 发行人名称 */
     private String issuerName;
     /** 银行间代码 */
@@ -34,8 +34,8 @@ public class BondInfoDetailDto {
     private BigDecimal pledgeRatio;
     /** 评级机构 */
     private String ratingAgency;
-    /** 债券评级 */
-    private String bondRating;
+    /** 证券评级 */
+    private String securityRating;
     /** 主体评级 */
     private String issuerRating;
     /** 展望评级 */
@@ -46,22 +46,22 @@ public class BondInfoDetailDto {
     private String leadUnderwriter;
     /** 主体内评分档 */
     private String innerIssuerRating;
-    /** 债券类型 */
-    private String bondType;
+    /** 证券类型 */
+    private String securityType;
     /** 回售行权期限 */
     private String putExeTerm;
     /** 赎回行权剩余期限 */
     private String callRemTerm;
     /** 担保人主体内评分 */
     private String innerGuarantorRating;
-    /** 含权债剩余期限 */
+    /** 含权证券剩余期限 */
     private String optRemTerm;
-    /** 债券期限 */
+    /** 证券期限 */
     private String termStr;
     /** 募集资金用途 */
     private String fundUsage;
     /** 提示原因 */
     private String promptReason;
-    /** 债券分析 */
+    /** 证券分析 */
     private String analysis;
 }

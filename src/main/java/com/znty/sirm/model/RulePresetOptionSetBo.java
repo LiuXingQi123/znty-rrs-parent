@@ -12,7 +12,7 @@ import java.util.Date;
 @Data
 public class RulePresetOptionSetBo {
     private Long id;
-    /** 选项集名称（如"主体评级"、"债券类型"） */
+    /** 选项集名称（如"主体评级"、"证券类型"） */
     private String setName;
     /** 排序号 */
     private Integer sortNo;

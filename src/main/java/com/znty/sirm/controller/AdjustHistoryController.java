@@ -15,7 +15,7 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
- * 债券池调整历史查询接口
+ * 证券池调整历史查询接口
  */
 @RestController
 @RequestMapping("/api/v1/adjustHistory")

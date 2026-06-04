@@ -4,19 +4,19 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.exception.BizException;
-import com.znty.sirm.mapper.BondPoolAdjustMapper;
+import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.model.AdjustCheckContext;
 import com.znty.sirm.model.AdjustCheckDto;
 import com.znty.sirm.model.AdjustCheckReq;
 import com.znty.sirm.model.AdjustLogDto;
 import com.znty.sirm.model.AdjustSubmitDto;
-import com.znty.sirm.model.BondInfoBo;
-import com.znty.sirm.model.BondInfoDetailDto;
-import com.znty.sirm.model.BondInfoDto;
-import com.znty.sirm.model.BondPoolAdjustReq;
-import com.znty.sirm.model.BondPoolAdjustSubmitReq;
-import com.znty.sirm.model.BondPoolStatusDto;
+import com.znty.sirm.model.SecurityInfoBo;
+import com.znty.sirm.model.SecurityInfoDetailDto;
+import com.znty.sirm.model.SecurityInfoDto;
+import com.znty.sirm.model.SecurityPoolAdjustReq;
+import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
+import com.znty.sirm.model.SecurityPoolStatusDto;
 import com.znty.sirm.model.PoolStatusDto;
 import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.IpAdjustLogBo;
@@ -37,13 +37,13 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 债券池调库业务逻辑
+ * 证券池调库业务逻辑
  */
 @Service
-public class BondPoolAdjustService {
+public class SecurityPoolAdjustService {
 
     @Resource
-    private BondPoolAdjustMapper bondPoolAdjustMapper;
+    private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -59,31 +59,31 @@ public class BondPoolAdjustService {
     private static final String REL_IN_ELASTIC    = "in_soft_restrict";    // 调入弹性禁投池
     private static final String REL_OUT_ELASTIC   = "out_soft_restrict";   // 调出弹性禁投池
 
-    /** 分页查询债券列表 */
-    public PageResult<BondInfoDto> queryBondPage(BondPoolAdjustReq req) {
+    /** 分页查询证券列表 */
+    public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<BondInfoBo> entities = bondPoolAdjustMapper.queryBondPage(
-                req.getBondCode(), req.getBondShortName(), req.getIssuer());
-        PageInfo<BondInfoBo> pageInfo = new PageInfo<>(entities);
+        List<SecurityInfoBo> entities = securityPoolAdjustMapper.querySecurityPage(
+                req.getSecurityCode(), req.getSecurityShortName(), req.getIssuer());
+        PageInfo<SecurityInfoBo> pageInfo = new PageInfo<>(entities);
 
-        List<BondInfoDto> records = entities.stream().map(this::toBondInfoDto).collect(Collectors.toList());
+        List<SecurityInfoDto> records = entities.stream().map(this::toSecurityInfoDto).collect(Collectors.toList());
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
-    /** 查询债券详情 */
-    public BondInfoDetailDto queryBondDetail(BondPoolAdjustReq req) {
-        if (req.getBondId() == null) {
-            throw new BizException("债券ID不能为空");
+    /** 查询证券详情 */
+    public SecurityInfoDetailDto querySecurityDetail(SecurityPoolAdjustReq req) {
+        if (req.getSecurityId() == null) {
+            throw new BizException("证券ID不能为空");
         }
-        BondInfoBo bo = bondPoolAdjustMapper.queryBondDetail(req.getBondId());
+        SecurityInfoBo bo = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityId());
         if (bo == null) {
-            throw new BizException(404, "债券不存在");
+            throw new BizException(404, "证券不存在");
         }
-        return toBondInfoDetailDto(bo);
+        return toSecurityInfoDetailDto(bo);
     }
 
     /** 查询可调库/可调出库的投资池列表（树结构由前端组装） */
-    public List<PoolDto> queryAdjustPoolList(BondPoolAdjustReq req) {
+    public List<PoolDto> queryAdjustPoolList(SecurityPoolAdjustReq req) {
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
         if (allPools == null || allPools.isEmpty()) {
             return new ArrayList<>();
@@ -104,31 +104,31 @@ public class BondPoolAdjustService {
         return allPools.stream().map(p -> toPoolDto(p, inMutexMap, outMutexMap)).collect(Collectors.toList());
     }
 
-    /** BondInfoBo → BondInfoDto */
-    private BondInfoDto toBondInfoDto(BondInfoBo bo) {
-        BondInfoDto d = new BondInfoDto();
+    /** SecurityInfoBo → SecurityInfoDto */
+    private SecurityInfoDto toSecurityInfoDto(SecurityInfoBo bo) {
+        SecurityInfoDto d = new SecurityInfoDto();
         d.setId(bo.getId());
-        d.setBondCode(bo.getSInfoCode());
-        d.setBondShortName(bo.getSInfoName());
+        d.setSecurityCode(bo.getSInfoCode());
+        d.setSecurityShortName(bo.getSInfoName());
         d.setIssuer(bo.getBInfoIssuer());
         d.setFullName(bo.getBInfoFullname());
         d.setIssueAmount(bo.getBIssueAmountplan());
         d.setCarryDate(bo.getBInfoCarrydate());
         d.setMaturityDate(bo.getBInfoMaturitydate());
-        d.setBondRating(bo.getRatingBond());
-        d.setIssuerRating(bo.getRatingBondissuer());
-        d.setBondType(bo.getDBondType() != null ? String.valueOf(bo.getDBondType()) : null);
+        d.setSecurityRating(bo.getRatingSecurity());
+        d.setIssuerRating(bo.getRatingSecurityissuer());
+        d.setSecurityType(bo.getDSecurityType() != null ? String.valueOf(bo.getDSecurityType()) : null);
         d.setCurrentRate(null);
         d.setTermStr(bo.getDateExists());
         return d;
     }
 
-    /** BondInfoBo → BondInfoDetailDto */
-    private BondInfoDetailDto toBondInfoDetailDto(BondInfoBo bo) {
-        BondInfoDetailDto d = new BondInfoDetailDto();
+    /** SecurityInfoBo → SecurityInfoDetailDto */
+    private SecurityInfoDetailDto toSecurityInfoDetailDto(SecurityInfoBo bo) {
+        SecurityInfoDetailDto d = new SecurityInfoDetailDto();
         d.setFullName(bo.getBInfoFullname());
-        d.setBondShortName(bo.getSInfoName());
-        d.setBondCode(bo.getSInfoCode());
+        d.setSecurityShortName(bo.getSInfoName());
+        d.setSecurityCode(bo.getSInfoCode());
         d.setIssuerName(bo.getBInfoIssuer());
         d.setNibCode(bo.getSWindcodeNib());
         // 交易所代码：优先沪市，其次深市
@@ -143,14 +143,14 @@ public class BondPoolAdjustService {
         d.setCarryDate(bo.getBInfoCarrydate());
         d.setMaturityDate(bo.getBInfoMaturitydate());
         d.setPledgeRatio(bo.getBInfoPledgeRatio());
-        d.setRatingAgency(bo.getRatingBondAgency());
-        d.setBondRating(bo.getRatingBond());
-        d.setIssuerRating(bo.getRatingBondissuer());
+        d.setRatingAgency(bo.getRatingSecurityAgency());
+        d.setSecurityRating(bo.getRatingSecurity());
+        d.setIssuerRating(bo.getRatingSecurityissuer());
         d.setRatingOutlook(bo.getRatingOutlook());
         d.setGuaranteeStatus(bo.getBAgencyGrnttype());
         d.setLeadUnderwriter(bo.getBAgencyName());
         d.setInnerIssuerRating(bo.getInnerIssuerRating());
-        d.setBondType(bo.getDBondType() != null ? String.valueOf(bo.getDBondType()) : null);
+        d.setSecurityType(bo.getDSecurityType() != null ? String.valueOf(bo.getDSecurityType()) : null);
         d.setPutExeTerm(bo.getDateRedemtionExists());
         d.setCallRemTerm(bo.getDateCallExists());
         d.setInnerGuarantorRating(bo.getInnerGuarantorRating());
@@ -180,42 +180,42 @@ public class BondPoolAdjustService {
         return dto;
     }
 
-    /** 查询债券当前所在池及主体所在池 */
-    public BondPoolStatusDto queryBondPoolStatus(BondPoolAdjustReq req) {
-        if (req.getBondCode() == null || req.getBondCode().isEmpty()) {
-            throw new BizException("债券代码不能为空");
+    /** 查询证券当前所在池及主体所在池 */
+    public SecurityPoolStatusDto querySecurityPoolStatus(SecurityPoolAdjustReq req) {
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+            throw new BizException("证券代码不能为空");
         }
-        BondPoolStatusDto dto = new BondPoolStatusDto();
-        dto.setBondCurrentPools(bondPoolAdjustMapper.queryBondPoolStatus(req.getBondCode()));
-        dto.setIssuerCurrentPools(bondPoolAdjustMapper.queryIssuerPoolStatus(req.getBondCode()));
+        SecurityPoolStatusDto dto = new SecurityPoolStatusDto();
+        dto.setSecurityCurrentPools(securityPoolAdjustMapper.querySecurityPoolStatus(req.getSecurityCode()));
+        dto.setIssuerCurrentPools(securityPoolAdjustMapper.queryIssuerPoolStatus(req.getSecurityCode()));
         return dto;
     }
 
     /** 提交调库申请 */
     @Transactional(rollbackFor = Exception.class)
-    public AdjustSubmitDto addAdjustLog(BondPoolAdjustSubmitReq req) {
+    public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req) {
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("调库项不能为空");
         }
         List<Long> logIds = new ArrayList<>();
-        for (BondPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             IpAdjustLogBo bo = buildAdjustLog(req, item);
-            bondPoolAdjustMapper.addAdjustLog(bo);
+            securityPoolAdjustMapper.addAdjustLog(bo);
             logIds.add(bo.getId());
         }
         AdjustSubmitDto dto = new AdjustSubmitDto();
-        dto.setBondCode(req.getBondCode());
+        dto.setSecurityCode(req.getSecurityCode());
         dto.setSubmitCount(logIds.size());
         dto.setLogIds(logIds);
         return dto;
     }
 
     /** 构建调库记录实体 */
-    private IpAdjustLogBo buildAdjustLog(BondPoolAdjustSubmitReq req, BondPoolAdjustSubmitReq.AdjustItem item) {
+    private IpAdjustLogBo buildAdjustLog(SecurityPoolAdjustSubmitReq req, SecurityPoolAdjustSubmitReq.AdjustItem item) {
         IpAdjustLogBo bo = new IpAdjustLogBo();
-        bo.setBondCode(req.getBondCode());
-        bo.setBondShortName(req.getBondShortName());
-        bo.setBondType(req.getBondType());
+        bo.setSecurityCode(req.getSecurityCode());
+        bo.setSecurityShortName(req.getSecurityShortName());
+        bo.setSecurityType(req.getSecurityType());
         bo.setAdjustType(req.getAdjustType());
         bo.setAdjustMode(item.getAdjustMode());
         bo.setTargetPoolId(item.getTargetPoolId());
@@ -231,12 +231,12 @@ public class BondPoolAdjustService {
         return bo;
     }
 
-    /** 查询债券的调库记录列表 */
-    public List<AdjustLogDto> queryAdjustLogList(BondPoolAdjustReq req) {
-        if (req.getBondCode() == null || req.getBondCode().isEmpty()) {
-            throw new BizException("债券代码不能为空");
+    /** 查询证券的调库记录列表 */
+    public List<AdjustLogDto> queryAdjustLogList(SecurityPoolAdjustReq req) {
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+            throw new BizException("证券代码不能为空");
         }
-        List<IpAdjustLogBo> logs = bondPoolAdjustMapper.queryAdjustLogList(req.getBondCode());
+        List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(req.getSecurityCode());
         if (logs == null || logs.isEmpty()) {
             return new ArrayList<>();
         }
@@ -285,19 +285,19 @@ public class BondPoolAdjustService {
 
     // ─────────────── 调库校验 ───────────────
 
-    /** 校验债券调库可行性 */
+    /** 校验证券调库可行性 */
     public AdjustCheckDto checkAdjust(AdjustCheckReq req) {
-        if (req.getBondCode() == null || req.getBondCode().isEmpty()) {
-            throw new BizException("债券代码不能为空");
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+            throw new BizException("证券代码不能为空");
         }
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("调库项不能为空");
         }
 
-        // 加载债券基础信息
-        BondInfoBo bondInfo = bondPoolAdjustMapper.queryBondDetail(req.getBondId());
-        if (bondInfo == null) {
-            throw new BizException("债券不存在");
+        // 加载证券基础信息
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityId());
+        if (securityInfo == null) {
+            throw new BizException("证券不存在");
         }
 
         // 加载全量投资池 Map
@@ -309,22 +309,22 @@ public class BondPoolAdjustService {
             }
         }
 
-        // 加载债券当前有效所在池 ID
-        List<Long> currentPoolIdList = bondPoolAdjustMapper.queryBondCurrentPoolIds(req.getBondCode());
+        // 加载证券当前有效所在池 ID
+        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIds(req.getSecurityCode());
         Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList != null ? currentPoolIdList : Collections.emptyList());
 
-        // 查询债券是否存在进行中的调库流程
-        boolean hasPendingProcess = bondPoolAdjustMapper.queryBondHasPendingProcess(req.getBondCode());
+        // 查询证券是否存在进行中的调库流程
+        boolean hasPendingProcess = securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode());
 
         // 加载全量投资池关系配置
-        List<PoolRelationBo> allRelations = bondPoolAdjustMapper.queryAllPoolRelations();
+        List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelations();
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(allRelations);
 
         // 逐项构建上下文并执行三层校验（用户主动选择项）
         List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>();
         for (AdjustCheckReq.CheckItem item : req.getItems()) {
-            int poolCurrentCount = bondPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
-            AdjustCheckContext ctx = buildCheckContext(bondInfo, item, poolMap, currentPoolIds, poolCurrentCount, poolRelationMap);
+            int poolCurrentCount = securityPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
+            AdjustCheckContext ctx = buildCheckContext(securityInfo, item, poolMap, currentPoolIds, poolCurrentCount, poolRelationMap);
             ctx.setHasPendingProcess(hasPendingProcess);
 
             List<String> failures = new ArrayList<>();
@@ -363,11 +363,11 @@ public class BondPoolAdjustService {
                     for (Long linkedId : inLinkage) {
                         if (coveredKeys.add(linkedId + "_调入")) {
                             autoItems.add(buildAutoResultItem(linkedId, "调入", "linkage",
-                                    bondInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
+                                    securityInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
                         }
                     }
                 }
-                // 调入互斥池：债券当前在互斥池中时，自动生成"调出互斥池"校验项
+                // 调入互斥池：证券当前在互斥池中时，自动生成"调出互斥池"校验项
                 List<Long> inMutex = relations.get(REL_IN_MUTEX);
                 if (inMutex != null) {
                     for (Long mutexId : inMutex) {
@@ -376,7 +376,7 @@ public class BondPoolAdjustService {
                         }
                         if (coveredKeys.add(mutexId + "_调出")) {
                             autoItems.add(buildAutoResultItem(mutexId, "调出", "mutex",
-                                    bondInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
+                                    securityInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
                         }
                     }
                 }
@@ -387,7 +387,7 @@ public class BondPoolAdjustService {
                     for (Long linkedId : outLinkage) {
                         if (coveredKeys.add(linkedId + "_调出")) {
                             autoItems.add(buildAutoResultItem(linkedId, "调出", "linkage",
-                                    bondInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
+                                    securityInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
                         }
                     }
                 }
@@ -401,7 +401,7 @@ public class BondPoolAdjustService {
     }
 
     /** 获取调库校验基础参数上下文 */
-    public AdjustCheckContext buildCheckContext(BondInfoBo bondInfo,
+    public AdjustCheckContext buildCheckContext(SecurityInfoBo securityInfo,
                                                AdjustCheckReq.CheckItem item,
                                                Map<Long, InvestmentPoolBo> poolMap,
                                                Set<Long> currentPoolIds,
@@ -414,7 +414,7 @@ public class BondPoolAdjustService {
                 item.getTargetPoolId(), Collections.emptyMap());
 
         AdjustCheckContext ctx = new AdjustCheckContext();
-        ctx.setBondInfo(bondInfo);
+        ctx.setSecurityInfo(securityInfo);
         ctx.setTargetPool(targetPool);
         ctx.setParentPool(parentPool);
         ctx.setCurrentPoolIds(currentPoolIds);
@@ -428,7 +428,7 @@ public class BondPoolAdjustService {
     /** 前置校验（与调库方向无关的通用校验） */
     public List<String> checkPreConditions(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        addIfFailed(failures, preCheckBondExpired(ctx));
+        addIfFailed(failures, preCheckSecurityExpired(ctx));
         addIfFailed(failures, preCheckPendingProcess(ctx));
         return failures;
     }
@@ -436,7 +436,7 @@ public class BondPoolAdjustService {
     /** 调入校验 */
     public List<String> checkInConditions(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        addIfFailed(failures, inCheckBondAlreadyInPool(ctx));
+        addIfFailed(failures, inCheckSecurityAlreadyInPool(ctx));
         addIfFailed(failures, inCheckPoolCapacity(ctx));
         addIfFailed(failures, inCheckSourcePool(ctx));
         addIfFailed(failures, inCheckRestrictPool(ctx));
@@ -447,7 +447,7 @@ public class BondPoolAdjustService {
     /** 调出校验 */
     public List<String> checkOutConditions(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        addIfFailed(failures, outCheckBondNotInPool(ctx));
+        addIfFailed(failures, outCheckSecurityNotInPool(ctx));
         addIfFailed(failures, outCheckRestrictPool(ctx));
         addIfFailed(failures, outCheckMutexPool(ctx));
         addIfFailed(failures, outCheckElasticPool(ctx));
@@ -456,33 +456,33 @@ public class BondPoolAdjustService {
 
     // ─── 前置校验规则 ───
 
-    /** 债券是否已到期 */
-    private String preCheckBondExpired(AdjustCheckContext ctx) {
-        String maturityDate = ctx.getBondInfo().getBInfoMaturitydate();
+    /** 证券是否已到期 */
+    private String preCheckSecurityExpired(AdjustCheckContext ctx) {
+        String maturityDate = ctx.getSecurityInfo().getBInfoMaturitydate();
         if (maturityDate != null && !maturityDate.isEmpty()) {
             String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {
-                return "债券已到期，不支持调库操作";
+                return "证券已到期，不支持调库操作";
             }
         }
         return null;
     }
 
-    /** 债券是否存在进行中的调库流程（待审核或驳回待修改） */
+    /** 证券是否存在进行中的调库流程（待审核或驳回待修改） */
     private String preCheckPendingProcess(AdjustCheckContext ctx) {
         if (ctx.isHasPendingProcess()) {
-            return "债券存在进行中的调库流程（待审核或驳回待修改），请等待流程结束后再发起调库";
+            return "证券存在进行中的调库流程（待审核或驳回待修改），请等待流程结束后再发起调库";
         }
         return null;
     }
 
     // ─── 调入校验规则 ───
 
-    /** 债券是否已在目标池中（有效入池状态） */
-    private String inCheckBondAlreadyInPool(AdjustCheckContext ctx) {
+    /** 证券是否已在目标池中（有效入池状态） */
+    private String inCheckSecurityAlreadyInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
         if (poolId != null && ctx.getCurrentPoolIds().contains(poolId)) {
-            return "债券已在目标投资池中，无需重复调入";
+            return "证券已在目标投资池中，无需重复调入";
         }
         return null;
     }
@@ -499,18 +499,18 @@ public class BondPoolAdjustService {
 
     // ─── 调出校验规则 ───
 
-    /** 债券是否不在目标池中（不在池中则不可调出） */
-    private String outCheckBondNotInPool(AdjustCheckContext ctx) {
+    /** 证券是否不在目标池中（不在池中则不可调出） */
+    private String outCheckSecurityNotInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
         if (poolId == null || !ctx.getCurrentPoolIds().contains(poolId)) {
-            return "债券当前不在该投资池中，无法调出";
+            return "证券当前不在该投资池中，无法调出";
         }
         return null;
     }
 
     // ─── 调入校验规则（关系型） ───
 
-    /** 来源池：目标池配置了来源池时，债券须当前在其中至少一个来源池 */
+    /** 来源池：目标池配置了来源池时，证券须当前在其中至少一个来源池 */
     private String inCheckSourcePool(AdjustCheckContext ctx) {
         List<Long> sourcePools = ctx.getTargetPoolRelations().get(REL_SOURCE);
         if (sourcePools == null || sourcePools.isEmpty()) {
@@ -519,34 +519,34 @@ public class BondPoolAdjustService {
         boolean inAny = sourcePools.stream().anyMatch(ctx.getCurrentPoolIds()::contains);
         if (!inAny) {
             String names = poolNames(sourcePools, ctx);
-            return "目标池配置了来源池限制，债券须先在以下池中：" + names;
+            return "目标池配置了来源池限制，证券须先在以下池中：" + names;
         }
         return null;
     }
 
-    /** 调入限制池：债券在限制池中则不可调入 */
+    /** 调入限制池：证券在限制池中则不可调入 */
     private String inCheckRestrictPool(AdjustCheckContext ctx) {
         return checkBlockedByPools(ctx, REL_IN_RESTRICT, "调入限制池");
     }
 
-    /** 调入弹性禁投池：债券在弹性禁投池中则不可调入 */
+    /** 调入弹性禁投池：证券在弹性禁投池中则不可调入 */
     private String inCheckElasticPool(AdjustCheckContext ctx) {
         return checkBlockedByPools(ctx, REL_IN_ELASTIC, "调入弹性禁投池");
     }
 
     // ─── 调出校验规则（关系型） ───
 
-    /** 调出限制池：债券在限制池中则不可调出 */
+    /** 调出限制池：证券在限制池中则不可调出 */
     private String outCheckRestrictPool(AdjustCheckContext ctx) {
         return checkBlockedByPools(ctx, REL_OUT_RESTRICT, "调出限制池");
     }
 
-    /** 调出互斥池：债券在互斥池中则不可调出 */
+    /** 调出互斥池：证券在互斥池中则不可调出 */
     private String outCheckMutexPool(AdjustCheckContext ctx) {
         return checkBlockedByPools(ctx, REL_OUT_MUTEX, "调出互斥池");
     }
 
-    /** 调出弹性禁投池：债券在弹性禁投池中则不可调出 */
+    /** 调出弹性禁投池：证券在弹性禁投池中则不可调出 */
     private String outCheckElasticPool(AdjustCheckContext ctx) {
         return checkBlockedByPools(ctx, REL_OUT_ELASTIC, "调出弹性禁投池");
     }
@@ -554,7 +554,7 @@ public class BondPoolAdjustService {
     // ─── 共用工具 ───
 
     /**
-     * 通用：检查债券是否在指定关系类型的池中（在则阻断）
+     * 通用：检查证券是否在指定关系类型的池中（在则阻断）
      * @param relationType 关系类型常量
      * @param label        用于错误消息的中文标签
      */
@@ -567,7 +567,7 @@ public class BondPoolAdjustService {
                 .filter(ctx.getCurrentPoolIds()::contains)
                 .collect(Collectors.toList());
         if (!blocked.isEmpty()) {
-            return "债券在" + label + "中，无法操作：" + poolNames(blocked, ctx);
+            return "证券在" + label + "中，无法操作：" + poolNames(blocked, ctx);
         }
         return null;
     }
@@ -598,15 +598,15 @@ public class BondPoolAdjustService {
      * @param targetPoolId    自动生成项的目标池 ID
      * @param adjustMode      调整方向
      * @param itemTag         来源标签：linkage / mutex
-     * @param hasPendingProcess 债券是否存在进行中的调库流程
+     * @param hasPendingProcess 证券是否存在进行中的调库流程
      */
     private AdjustCheckDto.CheckResultItem  buildAutoResultItem(
             Long targetPoolId, String adjustMode, String itemTag,
-            BondInfoBo bondInfo, boolean hasPendingProcess,
+            SecurityInfoBo securityInfo, boolean hasPendingProcess,
             Map<Long, InvestmentPoolBo> poolMap, Set<Long> currentPoolIds,
             Map<Long, Map<String, List<Long>>> poolRelationMap) {
 
-        int poolCurrentCount = bondPoolAdjustMapper.queryPoolCurrentCount(targetPoolId);
+        int poolCurrentCount = securityPoolAdjustMapper.queryPoolCurrentCount(targetPoolId);
 
         AdjustCheckReq.CheckItem fakeItem = new AdjustCheckReq.CheckItem();
         fakeItem.setTargetPoolId(targetPoolId);
@@ -614,7 +614,7 @@ public class BondPoolAdjustService {
         InvestmentPoolBo pool = poolMap.get(targetPoolId);
         fakeItem.setPoolType(pool != null ? pool.getPoolType() : null);
 
-        AdjustCheckContext ctx = buildCheckContext(bondInfo, fakeItem, poolMap, currentPoolIds, poolCurrentCount, poolRelationMap);
+        AdjustCheckContext ctx = buildCheckContext(securityInfo, fakeItem, poolMap, currentPoolIds, poolCurrentCount, poolRelationMap);
         ctx.setHasPendingProcess(hasPendingProcess);
 
         List<String> failures = new ArrayList<>();

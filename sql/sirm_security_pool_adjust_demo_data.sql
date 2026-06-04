@@ -1,7 +1,7 @@
 ﻿-- ============================================================
--- znty-sirm 债券信息表 - 演示数据脚本
+-- znty-sirm 证券信息表 - 演示数据脚本
 -- MySQL version: 8.0.33
--- 说明：首次部署执行，插入测试用债券数据
+-- 说明：首次部署执行，插入测试用证券数据
 -- ============================================================
 USE
 znty_sirm;
@@ -12,15 +12,15 @@ FOREIGN_KEY_CHECKS = 0;
 -- ============================================================================
 -- 清空所有业务表
 -- ============================================================================
-TRUNCATE TABLE `sirm_bondinfo`;
+TRUNCATE TABLE `sirm_securityinfo`;
 TRUNCATE TABLE `ip_adjust_log`;
 TRUNCATE TABLE `ip_pool_status`;
 
--- 债券信息表插入测试数据
-INSERT INTO `sirm_bondinfo` (
+-- 证券信息表插入测试数据
+INSERT INTO `sirm_securityinfo` (
     `s_info_code`, `b_info_fullname`, `b_issue_announcement`, `s_info_name`,
     `s_windcode_sh`, `s_windcode_sz`, `s_windcode_nib`, `s_windcode_nbc`,
-    `d_bond_type`, `b_info_term_year_`, `b_info_term_day_`, `b_info_form`,
+    `d_security_type`, `b_info_term_year_`, `b_info_term_day_`, `b_info_form`,
     `s_info_sectypename`, `s_info_comptype`, `b_info_issuer`, `b_info_issuercode`,
     `crncy_code`, `b_issue_amountplan`, `b_info_listdate`, `b_issue_firstissue`,
     `b_info_maturitydate`, `b_info_carrydate`, `b_info_enddate`, `b_info_interesttype`,
@@ -30,12 +30,12 @@ INSERT INTO `sirm_bondinfo` (
     `b_info_paymentdate`, `b_info_delistdate`, `s_info_securitiestypes_dq`,
     `b_info_coupontxt`, `b_info_redemptioncontent`, `b_info_issuetype`,
     `b_info_callbkorputbkdate`, `b_info_content`, `createtime`, `ts`,
-    `is_corporate_bond`, `is_payadvanced`, `is_callable`, `is_chooseright`,
-    `is_incbonds`, `s_info_industryname`, `s_info_industryname2`, `s_info_innerclass`,
+    `is_corporate_security`, `is_payadvanced`, `is_callable`, `is_chooseright`,
+    `is_incsecurities`, `s_info_industryname`, `s_info_industryname2`, `s_info_innerclass`,
     `is_cj`, `is_yx`, `is_dy`,
     `date_redemtion_exists`, `date_call_exists`, `date_exists`, `date_inright_exists`,
-    `rating_bond`, `rating_bondissuer`, `rating_outlook`,
-    `rating_bond_agency`, `rating_bondissuer_agency`, `rating_cnbd`,
+    `rating_security`, `rating_securityissuer`, `rating_outlook`,
+    `rating_security_agency`, `rating_securityissuer_agency`, `rating_cnbd`,
     `is_inright`, `date_inright_next`,
     `b_issue_amountact`, `b_agency_grnttype`, `guarantor`, `guarantor_id`,
     `b_agency_name`, `b_agency_nameid`,
@@ -69,8 +69,8 @@ VALUES
  '用于补充流动资金及偿还到期债务', NULL,
  '主体信用评级AAA，偿债能力强'),
 
--- 2. 公司债券（5年期，含回售条款）
-('102002345', '2023年某城市投资开发建设有限公司公司债券', '2023-08-10', '23某城投债',
+-- 2. 公司证券（5年期，含回售条款）
+('102002345', '2023年某城市投资开发建设有限公司公司证券', '2023-08-10', '23某城投债',
  '139876.SH', NULL, '139876.IB', NULL,
  2, 5.0000, 0.0000, '实名记账式',
  '一般公司债', '地方国企', '某城市投资开发建设有限公司', 'C10002',
@@ -95,8 +95,8 @@ VALUES
  '用于城市基础设施项目建设', NULL,
  '含第3年末回售选择权，投资者可择机回售'),
 
--- 3. 可交换公司债券（2年期，含赎回条款）
-('103003456', '2024年某能源集团股份有限公司可交换公司债券', '2024-01-05', '24某能E1',
+-- 3. 可交换公司证券（2年期，含赎回条款）
+('103003456', '2024年某能源集团股份有限公司可交换公司证券', '2024-01-05', '24某能E1',
  '117654.SH', NULL, NULL, NULL,
  3, 2.0000, 0.0000, '实名记账式',
  '可交换债', '央企', '某能源集团股份有限公司', 'C10003',
@@ -121,8 +121,8 @@ VALUES
  '用于补充流动资金和项目投资', NULL,
  '可交换为某能源集团A股股票，初始换股溢价10%'),
 
--- 4. 二级资本债券（10年期，含赎回条款）
-('104004567', '2023年某银行股份有限公司二级资本债券', '2023-11-20', '23某行二级资本债01',
+-- 4. 二级资本证券（10年期，含赎回条款）
+('104004567', '2023年某银行股份有限公司二级资本证券', '2023-11-20', '23某行二级资本债01',
  '2023045.IB', NULL, '2023045.IB', NULL,
  4, 10.0000, 0.0000, '实名记账式',
  '商业银行债', '上市银行', '某银行股份有限公司', 'C10004',
@@ -199,8 +199,8 @@ VALUES
  '用于补充营运资金及项目建设', '永续债可计入权益',
  '含发行人续期选择权，票面利率重置机制，可计入所有者权益'),
 
--- 7. 科技创新公司债券（3年期，附回售条款）
-('107007890', '2024年某科技发展有限公司科技创新公司债券', '2024-04-01', '24某科技K1',
+-- 7. 科技创新公司证券（3年期，附回售条款）
+('107007890', '2024年某科技发展有限公司科技创新公司证券', '2024-04-01', '24某科技K1',
  '138765.SH', NULL, NULL, NULL,
  2, 3.0000, 0.0000, '实名记账式',
  '一般公司债', '民企', '某科技发展有限公司', 'C10007',
@@ -277,7 +277,7 @@ VALUES
  '用于补充营运资金和国际贸易结算', NULL,
  '超短期融资券，注册额度50亿元，本期发行12亿元，用于贸易融资'),
 
--- 10. 项目收益债券（7年期）
+-- 10. 项目收益证券（7年期）
 ('110010123', '2023年某基础设施建设投资集团有限公司项目收益债', '2023-06-15', '23某基建PRN001',
  '152345.SH', NULL, '152345.IB', NULL,
  2, 7.0000, 0.0000, '实名记账式',
@@ -288,7 +288,7 @@ VALUES
  '0', NULL, NULL,
  '0', NULL, NULL,
  '2030-06-19', '2030-06-19', 0,
- '项目收益专项公司债券，募投项目为某高速公路项目', NULL, '公开发行',
+ '项目收益专项公司证券，募投项目为某高速公路项目', NULL, '公开发行',
  NULL, NULL, NOW(), NOW(),
  1, '0', '0', '0',
  '0', '基建', '交通基建', '城投债',
@@ -301,16 +301,16 @@ VALUES
  '某证券股份有限公司', 'U10010',
  75.0000, 'AAA', NULL,
  '专项用于某高速公路项目建设', '项目收益与偿债资金专户管理',
- '项目收益债券，偿债资金来源为项目通行费收入，预测IRR为8.5%');
+ '项目收益证券，偿债资金来源为项目通行费收入，预测IRR为8.5%');
 
 -- ============================================================================
--- 债券池调库记录表 - 测试数据
+-- 证券池调库记录表 - 测试数据
 -- ============================================================================
 -- 说明：涵盖全部7种审核状态（-1/00/10/11/20/21/99），且已入池记录（status=20）
 --       均指向叶子节点，与 ip_pool_status 保持一致
 -- ============================================================================
 
-INSERT INTO `ip_adjust_log` (`bond_code`, `bond_short_name`, `bond_type`, `adjust_type`, `adjust_mode`,
+INSERT INTO `ip_adjust_log` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
                              `target_pool_id`, `target_pool_name`, `pool_type`,
                              `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
                              `attachment_files`, `material_files`,
@@ -359,7 +359,7 @@ VALUES
  '2026-05-18 16:00:00', '2026-05-19 11:30:00', '2026-05-20 09:00:00',
  0, NOW(), NOW()),
 
--- 6. 审批通过-已入池：信用债大库/一级库（pool_id=2，与第1条同池，验证同池多债券）
+-- 6. 审批通过-已入池：信用债大库/一级库（pool_id=2，与第1条同池，验证同池多证券）
 ('106006789', '22某电力MTN001', '中期票据', '手工调整', '调入',
  2, '一级库', 'credit_bond',
  '20', '1001', '管理员', '央企永续中票主体评级AAA，符合一级库准入标准', '审批通过，已入池',
@@ -467,7 +467,7 @@ VALUES
 --       pool_id=7（境外债库）和 pool_id=8（转债库）为无父级的独立叶子节点
 -- ============================================================================
 
-INSERT INTO `ip_pool_status` (`bond_code`, `bond_short_name`, `bond_type`, `adjust_type`, `adjust_mode`,
+INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
                               `target_pool_id`, `target_pool_name`, `pool_type`,
                               `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
                               `attachment_files`, `material_files`,
@@ -514,7 +514,7 @@ VALUES
  '2026-05-18 16:00:00', '2026-05-19 11:30:00', '2026-05-20 09:00:00',
  0, NOW(), NOW()),
 
--- 6. 信用债大库/一级库（pool_id=2，与第1条同池；验证同一叶子节点可容纳多只债券）
+-- 6. 信用债大库/一级库（pool_id=2，与第1条同池；验证同一叶子节点可容纳多只证券）
 ('106006789', '22某电力MTN001', '中期票据', '手工调整', '调入',
  2, '一级库', 'credit_bond',
  '20', '1001', '管理员', '央企永续中票主体评级AAA，符合一级库准入标准', '审批通过，已入池',

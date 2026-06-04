@@ -18,5 +18,5 @@ public interface ForbiddenPoolQueryMapper {
     /**
      * 查询证券类型下拉选项
      */
-    List<String> queryBondTypeList();
+    List<String> querySecurityTypeList();
 }

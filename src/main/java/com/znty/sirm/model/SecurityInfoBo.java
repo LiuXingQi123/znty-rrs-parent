@@ -5,35 +5,35 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 债券信息业务对象，对应 sirm_bondinfo 表
+ * 证券信息业务对象，对应 sirm_securityinfo 表
  */
 @Data
-public class BondInfoBo {
+public class SecurityInfoBo {
     /** 主键 ID */
     private Long id;
     /** 关联代码 */
     private String sInfoCode;
-    /** 债券全称 */
+    /** 证券全称 */
     private String bInfoFullname;
     /** 公告日期 */
     private String bIssueAnnouncement;
-    /** 债券简称 */
+    /** 证券简称 */
     private String sInfoName;
-    /** 沪市债券代码 */
+    /** 沪市证券代码 */
     private String sWindcodeSh;
-    /** 深市债券代码 */
+    /** 深市证券代码 */
     private String sWindcodeSz;
     /** 银行间市场代码 */
     private String sWindcodeNib;
     /** 其他 */
     private String sWindcodeNbc;
-    /** 债券类型 */
-    private Integer dBondType;
-    /** 债券期限(年) */
+    /** 证券类型 */
+    private Integer dSecurityType;
+    /** 证券期限(年) */
     private BigDecimal bInfoTermYear;
-    /** 债券期限(天) */
+    /** 证券期限(天) */
     private BigDecimal bInfoTermDay;
-    /** 债券形式 */
+    /** 证券形式 */
     private String bInfoForm;
     /** 品种类别 */
     private String sInfoSectypename;
@@ -99,16 +99,16 @@ public class BondInfoBo {
     private Date createtime;
     /** 更新时间 */
     private Date ts;
-    /** 是否公司债 */
-    private Integer isCorporateBond;
+    /** 是否公司证券 */
+    private Integer isCorporateSecurity;
     /** 是否可提前兑付 */
     private String isPayadvanced;
     /** 是否可赎回 */
     private String isCallable;
     /** 是否有选择权 */
     private String isChooseright;
-    /** 是否增发债 */
-    private String isIncbonds;
+    /** 是否增发证券 */
+    private String isIncsecurities;
     /** 一级板块 */
     private String sInfoIndustryname;
     /** 二级板块 */
@@ -125,25 +125,25 @@ public class BondInfoBo {
     private String dateRedemtionExists;
     /** 赎回剩余期限-最新 */
     private String dateCallExists;
-    /** 债券期限-最新 */
+    /** 证券期限-最新 */
     private String dateExists;
-    /** 含权债剩余期限-最新 */
+    /** 含权证券剩余期限-最新 */
     private String dateInrightExists;
-    /** 债券评级 */
-    private String ratingBond;
+    /** 证券评级 */
+    private String ratingSecurity;
     /** 主体评级 */
-    private String ratingBondissuer;
+    private String ratingSecurityissuer;
     /** 展望评级 */
     private String ratingOutlook;
-    /** 债券评级机构 */
-    private String ratingBondAgency;
+    /** 证券评级机构 */
+    private String ratingSecurityAgency;
     /** 主体评级机构 */
-    private String ratingBondissuerAgency;
+    private String ratingSecurityissuerAgency;
     /** 中债隐含评级 */
     private String ratingCnbd;
-    /** 是否含权债 */
+    /** 是否含权证券 */
     private String isInright;
-    /** 含权债下一个行权日 */
+    /** 含权证券下一个行权日 */
     private String dateInrightNext;
     /** 发行总额-亿 */
     private BigDecimal bIssueAmountact;
@@ -167,6 +167,6 @@ public class BondInfoBo {
     private String bFundUsage;
     /** 提示原因 */
     private String bPromptReason;
-    /** 债券分析 */
+    /** 证券分析 */
     private String bAnalysis;
 }

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.BondPoolAdjustMapper">
+<mapper namespace="com.znty.sirm.mapper.SecurityPoolAdjustMapper">
 
-    <!-- 分页查询债券列表 -->
-    <select id="queryBondPage" resultType="com.znty.sirm.model.BondInfoBo">
+    <!-- 分页查询证券列表 -->
+    <select id="querySecurityPage" resultType="com.znty.sirm.model.SecurityInfoBo">
         SELECT id
                ,s_info_code
                ,s_info_name
@@ -12,18 +12,18 @@
                ,b_issue_amountplan
                ,b_info_carrydate
                ,b_info_maturitydate
-               ,rating_bond
-               ,rating_bondissuer
-               ,d_bond_type
+               ,rating_security
+               ,rating_securityissuer
+               ,d_security_type
                ,b_info_couponrate
                ,date_exists
-        FROM sirm_bondinfo
+        FROM sirm_securityinfo
         <where>
-            <if test="bondCode != null and bondCode != ''">
-                AND s_info_code LIKE CONCAT('%', #{bondCode}, '%')
+            <if test="securityCode != null and securityCode != ''">
+                AND s_info_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
-            <if test="bondShortName != null and bondShortName != ''">
-                AND s_info_name LIKE CONCAT('%', #{bondShortName}, '%')
+            <if test="securityShortName != null and securityShortName != ''">
+                AND s_info_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
                 AND b_info_issuer LIKE CONCAT('%', #{issuer}, '%')
@@ -32,8 +32,8 @@
         ORDER BY id DESC
     </select>
 
-    <!-- 查询债券详情 -->
-    <select id="queryBondDetail" resultType="com.znty.sirm.model.BondInfoBo">
+    <!-- 查询证券详情 -->
+    <select id="querySecurityDetail" resultType="com.znty.sirm.model.SecurityInfoBo">
         SELECT id
                ,s_info_code
                ,s_info_name
@@ -48,29 +48,29 @@
                ,b_info_carrydate
                ,b_info_maturitydate
                ,b_info_pledge_ratio
-               ,rating_bond_agency
-               ,rating_bond
-               ,rating_bondissuer
+               ,rating_security_agency
+               ,rating_security
+               ,rating_securityissuer
                ,rating_outlook
                ,b_agency_grnttype
                ,guarantor
                ,b_agency_name
                ,inner_issuer_rating
-               ,d_bond_type
+               ,d_security_type
                ,inner_guarantor_rating
                ,date_exists
                ,b_fund_usage
                ,b_prompt_reason
                ,b_analysis
-        FROM sirm_bondinfo
-        WHERE id = #{bondId}
+        FROM sirm_securityinfo
+        WHERE id = #{securityId}
     </select>
 
     <!-- 新增调库记录 -->
     <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ip_adjust_log (bond_code
-                                  ,bond_short_name
-                                  ,bond_type
+        INSERT INTO ip_adjust_log (security_code
+                                  ,security_short_name
+                                  ,security_type
                                   ,adjust_type
                                   ,adjust_mode
                                   ,target_pool_id
@@ -87,9 +87,9 @@
                                   ,is_deleted
                                   ,crte_time
                                   ,updt_time)
-        VALUES (#{bondCode}
-               ,#{bondShortName}
-               ,#{bondType}
+        VALUES (#{securityCode}
+               ,#{securityShortName}
+               ,#{securityType}
                ,#{adjustType}
                ,#{adjustMode}
                ,#{targetPoolId}
@@ -108,8 +108,8 @@
                ,NOW())
     </insert>
 
-    <!-- 查询当前债券所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
-    <select id="queryBondPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
+    <!-- 查询当前证券所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
+    <select id="querySecurityPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
         SELECT ips.target_pool_id
                ,CASE
                    WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
@@ -122,7 +122,7 @@
                                        AND p.is_deleted = 0
         LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id
                                        AND pp.is_deleted = 0
-        WHERE ips.bond_code = #{bondCode}
+        WHERE ips.security_code = #{securityCode}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
           AND NOT EXISTS (
@@ -133,7 +133,7 @@
           )
     </select>
 
-    <!-- 查询当前债券主体（发行人）所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
+    <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
     <select id="queryIssuerPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
         SELECT CASE
                    WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
@@ -141,15 +141,15 @@
                END AS poolName
                ,ips.pool_type
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
-               ,COUNT(DISTINCT ips.bond_code) AS bondCount
+               ,COUNT(DISTINCT ips.security_code) AS bondCount
         FROM ip_pool_status ips
-        INNER JOIN sirm_bondinfo sb ON ips.bond_code = sb.s_info_code
+        INNER JOIN sirm_securityinfo sb ON ips.security_code = sb.s_info_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
         LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id
                                        AND pp.is_deleted = 0
         WHERE sb.b_info_issuer = (
-            SELECT b_info_issuer FROM sirm_bondinfo WHERE s_info_code = #{bondCode} LIMIT 1
+            SELECT b_info_issuer FROM sirm_securityinfo WHERE s_info_code = #{securityCode} LIMIT 1
         )
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -166,12 +166,12 @@
                  ,ips.pool_type
     </select>
 
-    <!-- 根据债券代码查询调库记录列表 -->
+    <!-- 根据证券代码查询调库记录列表 -->
     <select id="queryAdjustLogList" resultType="com.znty.sirm.model.IpAdjustLogBo">
         SELECT al.id
-               ,al.bond_code
-               ,al.bond_short_name
-               ,al.bond_type
+               ,al.security_code
+               ,al.security_short_name
+               ,al.security_type
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
@@ -188,34 +188,34 @@
                ,al.audit_time
                ,al.entry_time
         FROM ip_adjust_log al
-        WHERE al.bond_code = #{bondCode}
+        WHERE al.security_code = #{securityCode}
           AND al.is_deleted = 0
         ORDER BY al.crte_time DESC
     </select>
 
-    <!-- 查询债券当前有效所在池 ID 列表 -->
-    <select id="queryBondCurrentPoolIds" resultType="java.lang.Long">
+    <!-- 查询证券当前有效所在池 ID 列表 -->
+    <select id="querySecurityCurrentPoolIds" resultType="java.lang.Long">
         SELECT DISTINCT target_pool_id
         FROM ip_pool_status
-        WHERE bond_code = #{bondCode}
+        WHERE security_code = #{securityCode}
           AND audit_status = '20'
           AND is_deleted = 0
     </select>
 
-    <!-- 查询目标投资池当前有效债券数量 -->
+    <!-- 查询目标投资池当前有效证券数量 -->
     <select id="queryPoolCurrentCount" resultType="int">
-        SELECT COUNT(DISTINCT bond_code)
+        SELECT COUNT(DISTINCT security_code)
         FROM ip_pool_status
         WHERE target_pool_id = #{poolId}
           AND audit_status = '20'
           AND is_deleted = 0
     </select>
 
-    <!-- 查询债券是否存在进行中的调库流程（待审核或驳回待修改） -->
-    <select id="queryBondHasPendingProcess" resultType="boolean">
+    <!-- 查询证券是否存在进行中的调库流程（待审核或驳回待修改） -->
+    <select id="querySecurityHasPendingProcess" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_adjust_log
-        WHERE bond_code = #{bondCode}
+        WHERE security_code = #{securityCode}
           AND audit_status IN ('00', '11')
           AND is_deleted = 0
     </select>
