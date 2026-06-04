@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.SubjectPoolQueryMapper">
+
+    <!-- 分页查询主体池列表（通过 dict_security_type 过滤 category_type='company'） -->
+    <select id="querySubjectPoolPage" resultType="com.znty.sirm.model.SubjectPoolQueryDto">
+        SELECT ips.id
+               ,ips.security_code
+               ,ips.security_short_name
+               ,ips.adjuster_name
+               ,ips.entry_time
+               ,CASE WHEN pp.pool_name IS NOT NULL
+                     THEN CONCAT(pp.pool_name, '/', p.pool_name)
+                     ELSE p.pool_name
+                END AS target_pool_name
+        FROM ip_pool_status ips
+        JOIN dict_security_type dst ON ips.security_type = dst.security_type
+        LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
+        LEFT JOIN ip_investment_pool pp ON p.parent_id = pp.id
+        <where>
+            ips.is_deleted = 0
+            AND ips.audit_status = '20'
+            AND dst.category_type = 'company'
+            <if test="poolIds != null and poolIds.size() > 0">
+                AND ips.target_pool_id IN
+                <foreach collection="poolIds" item="pid" open="(" separator="," close=")">
+                    #{pid}
+                </foreach>
+            </if>
+            <if test="subjectCode != null and subjectCode != ''">
+                AND ips.security_code LIKE CONCAT('%', #{subjectCode}, '%')
+            </if>
+            <if test="entryTimeStart != null and entryTimeStart != ''">
+                AND ips.entry_time &gt;= #{entryTimeStart}
+            </if>
+            <if test="entryTimeEnd != null and entryTimeEnd != ''">
+                AND ips.entry_time &lt;= #{entryTimeEnd}
+            </if>
+            <if test="adjusterName != null and adjusterName != ''">
+                AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
+            </if>
+        </where>
+        ORDER BY ips.entry_time DESC
+                 ,ips.id DESC
+    </select>
+
+</mapper>

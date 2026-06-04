@@ -9,7 +9,10 @@
                ,ips.security_short_name
                ,ips.adjuster_name
                ,ips.entry_time
-               ,ips.target_pool_name
+               ,CASE WHEN pp.pool_name IS NOT NULL
+                     THEN CONCAT(pp.pool_name, '/', p.pool_name)
+                     ELSE p.pool_name
+                END AS target_pool_name
                ,ips.security_type
                ,bi.b_info_issuer AS issuer
                ,bi.b_info_maturitydate AS maturityDate
@@ -19,6 +22,7 @@
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
                                        AND p.pool_type = 'forbidden'
+        LEFT JOIN ip_investment_pool pp ON p.parent_id = pp.id
         LEFT JOIN sirm_securityinfo bi ON bi.s_info_code = ips.security_code
         <where>
             ips.is_deleted = 0
