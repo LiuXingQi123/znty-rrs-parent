@@ -1,0 +1,47 @@
+package com.znty.sirm.model;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.Data;
+
+import java.util.Date;
+
+/**
+ * 禁投池查询返回对象
+ */
+@Data
+public class ForbiddenPoolQueryDto {
+
+    /** 主键 ID */
+    private Long id;
+
+    /** 证券名称 */
+    private String bondShortName;
+
+    /** 证券代码 */
+    private String bondCode;
+
+    /** 发行主体 */
+    private String issuer;
+
+    /** 调整人 */
+    private String adjusterName;
+
+    /** 证券类型 */
+    private String bondType;
+
+    /** 投资池名称 */
+    private String targetPoolName;
+
+    /** 入池时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
+    private Date entryTime;
+
+    /** 到期日（前端用于派生债券状态：存续/到期） */
+    private String maturityDate;
+
+    /** 退市日期 */
+    private String delistDate;
+
+    /** 行权日期（回售） */
+    private String repurchaseDate;
+}

@@ -42,7 +42,8 @@ INSERT INTO `ip_investment_pool` (`id`, `parent_id`, `pool_code`, `pool_name`, `
 (11, 9, 'special_account_level_2', '二级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 2, 'enabled', 0, NOW(), NOW()),
 (12, 9, 'special_account_level_3', '三级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 3, 'enabled', 0, NOW(), NOW()),
 (13, 9, 'special_account_level_4', '四级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 4, 'enabled', 0, NOW(), NOW()),
-(14, 9, 'special_account_level_5', '五级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 5, 'enabled', 0, NOW(), NOW());
+(14, 9, 'special_account_level_5', '五级库', 'special_account', 2, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 4, 5, 'enabled', 0, NOW(), NOW()),
+(15, NULL, 'forbidden_root', '禁投池', 'forbidden', 1, JSON_ARRAY(), JSON_ARRAY('bond'), NULL, NULL, 5, 1, 'enabled', 0, NOW(), NOW());
 
 -- 初始化投资池互斥关系（信用债库 2-6 互斥，专户产品 10-14 互斥）
 INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`)
