@@ -46,4 +46,10 @@ public interface SecurityPoolAdjustMapper {
 
     /** 查询证券是否存在进行中的调库流程（待审核或驳回待修改） */
     boolean querySecurityHasPendingProcess(@Param("securityCode") String securityCode);
+
+    /** 查询当前证券是否在观察池（pool_type='observe'，audit_status='20'） */
+    boolean querySecurityInObservePool(@Param("securityCode") String securityCode);
+
+    /** 查询证券主体公司是否在观察池（同发行人的任意证券在观察池中） */
+    boolean queryIssuerInObservePool(@Param("securityCode") String securityCode);
 }

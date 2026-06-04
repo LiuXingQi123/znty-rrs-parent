@@ -220,6 +220,36 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 查询当前证券是否在观察池 -->
+    <select id="querySecurityInObservePool" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        WHERE ips.security_code = #{securityCode}
+          AND p.pool_type = 'observe'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+    </select>
+
+    <!-- 查询证券主体公司是否在观察池（同发行人的任意证券在观察池中） -->
+    <select id="queryIssuerInObservePool" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN sirm_securityinfo si ON si.s_info_code = ips.security_code
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        WHERE si.b_info_issuer = (
+            SELECT b_info_issuer
+            FROM sirm_securityinfo
+            WHERE s_info_code = #{securityCode}
+            LIMIT 1
+        )
+          AND p.pool_type = 'observe'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+    </select>
+
     <!-- 查询全量投资池关系配置（不限关系类型） -->
     <select id="queryAllPoolRelations" resultType="com.znty.sirm.model.PoolRelationBo">
         SELECT pool_id

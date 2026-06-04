@@ -38,4 +38,10 @@ public class AdjustCheckContext {
 
     /** 证券是否存在进行中的调库流程（audit_status IN ('00','11')） */
     private boolean hasPendingProcess;
+
+    /** 当前证券是否在观察池（pool_type='observe'，audit_status='20'） */
+    private boolean securityInObservePool;
+
+    /** 证券主体公司是否在观察池（同发行人的任意证券在观察池中） */
+    private boolean issuerInObservePool;
 }
