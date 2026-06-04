@@ -110,7 +110,8 @@
 
     <!-- 查询当前债券所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
     <select id="queryBondPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
-        SELECT CASE
+        SELECT ips.target_pool_id
+               ,CASE
                    WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
                    ELSE p.pool_name
                END AS poolName

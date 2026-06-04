@@ -31,6 +31,9 @@ public class AdjustCheckDto {
         /** 调整方向：调入 / 调出 */
         private String adjustMode;
 
+        /** 调整项来源：manual=用户主动选择, linkage=联动调整, mutex=互斥调整 */
+        private String itemTag;
+
         /** 是否可调整 */
         private boolean canAdjust;
 

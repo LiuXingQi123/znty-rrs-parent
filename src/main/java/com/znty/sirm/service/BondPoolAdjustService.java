@@ -52,12 +52,12 @@ public class BondPoolAdjustService {
     private static final String REL_SOURCE        = "source";              // 来源池
     private static final String REL_IN_RESTRICT   = "in_restrict";         // 调入限制池
     private static final String REL_OUT_RESTRICT  = "out_restrict";        // 调出限制池
-    private static final String REL_IN_LINKAGE    = "in_linkage";          // 调入联动池
-    private static final String REL_OUT_LINKAGE   = "out_linkage";         // 调出联动池
+    private static final String REL_IN_LINKAGE    = "in_linked";           // 调入联动池
+    private static final String REL_OUT_LINKAGE   = "out_linked";          // 调出联动池
     private static final String REL_IN_MUTEX      = "in_mutex";            // 调入互斥池
     private static final String REL_OUT_MUTEX     = "out_mutex";           // 调出互斥池
-    private static final String REL_IN_ELASTIC    = "in_elastic";          // 调入弹性禁投池
-    private static final String REL_OUT_ELASTIC   = "out_elastic";         // 调出弹性禁投池
+    private static final String REL_IN_ELASTIC    = "in_soft_restrict";    // 调入弹性禁投池
+    private static final String REL_OUT_ELASTIC   = "out_soft_restrict";   // 调出弹性禁投池
 
     /** 分页查询债券列表 */
     public PageResult<BondInfoDto> queryBondPage(BondPoolAdjustReq req) {
@@ -320,7 +320,7 @@ public class BondPoolAdjustService {
         List<PoolRelationBo> allRelations = bondPoolAdjustMapper.queryAllPoolRelations();
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(allRelations);
 
-        // 逐项构建上下文并执行三层校验
+        // 逐项构建上下文并执行三层校验（用户主动选择项）
         List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>();
         for (AdjustCheckReq.CheckItem item : req.getItems()) {
             int poolCurrentCount = bondPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
@@ -340,10 +340,60 @@ public class BondPoolAdjustService {
             resultItem.setPoolName(buildPoolPath(item.getTargetPoolId(), poolMap));
             resultItem.setPoolType(item.getPoolType());
             resultItem.setAdjustMode(item.getAdjustMode());
+            resultItem.setItemTag("manual");
             resultItem.setCanAdjust(failures.isEmpty());
             resultItem.setFailReasons(failures);
             resultItems.add(resultItem);
         }
+
+        // 生成联动调整项和互斥调整项（去重：已在用户主动选择项中出现的池不重复生成）
+        Set<String> coveredKeys = new HashSet<>();
+        for (AdjustCheckReq.CheckItem item : req.getItems()) {
+            coveredKeys.add(item.getTargetPoolId() + "_" + item.getAdjustMode());
+        }
+
+        List<AdjustCheckDto.CheckResultItem> autoItems = new ArrayList<>();
+        for (AdjustCheckReq.CheckItem item : req.getItems()) {
+            Map<String, List<Long>> relations = poolRelationMap.getOrDefault(item.getTargetPoolId(), Collections.emptyMap());
+
+            if ("调入".equals(item.getAdjustMode())) {
+                // 调入联动池：自动生成"调入联动池"校验项
+                List<Long> inLinkage = relations.get(REL_IN_LINKAGE);
+                if (inLinkage != null) {
+                    for (Long linkedId : inLinkage) {
+                        if (coveredKeys.add(linkedId + "_调入")) {
+                            autoItems.add(buildAutoResultItem(linkedId, "调入", "linkage",
+                                    bondInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
+                        }
+                    }
+                }
+                // 调入互斥池：债券当前在互斥池中时，自动生成"调出互斥池"校验项
+                List<Long> inMutex = relations.get(REL_IN_MUTEX);
+                if (inMutex != null) {
+                    for (Long mutexId : inMutex) {
+                        if (!currentPoolIds.contains(mutexId)) {
+                            continue;
+                        }
+                        if (coveredKeys.add(mutexId + "_调出")) {
+                            autoItems.add(buildAutoResultItem(mutexId, "调出", "mutex",
+                                    bondInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
+                        }
+                    }
+                }
+            } else {
+                // 调出联动池：自动生成"调出联动池"校验项
+                List<Long> outLinkage = relations.get(REL_OUT_LINKAGE);
+                if (outLinkage != null) {
+                    for (Long linkedId : outLinkage) {
+                        if (coveredKeys.add(linkedId + "_调出")) {
+                            autoItems.add(buildAutoResultItem(linkedId, "调出", "linkage",
+                                    bondInfo, hasPendingProcess, poolMap, currentPoolIds, poolRelationMap));
+                        }
+                    }
+                }
+            }
+        }
+        resultItems.addAll(autoItems);
 
         AdjustCheckDto dto = new AdjustCheckDto();
         dto.setItems(resultItems);
@@ -390,8 +440,6 @@ public class BondPoolAdjustService {
         addIfFailed(failures, inCheckPoolCapacity(ctx));
         addIfFailed(failures, inCheckSourcePool(ctx));
         addIfFailed(failures, inCheckRestrictPool(ctx));
-        addIfFailed(failures, inCheckLinkagePool(ctx));
-        addIfFailed(failures, inCheckMutexPool(ctx));
         addIfFailed(failures, inCheckElasticPool(ctx));
         return failures;
     }
@@ -401,7 +449,6 @@ public class BondPoolAdjustService {
         List<String> failures = new ArrayList<>();
         addIfFailed(failures, outCheckBondNotInPool(ctx));
         addIfFailed(failures, outCheckRestrictPool(ctx));
-        addIfFailed(failures, outCheckLinkagePool(ctx));
         addIfFailed(failures, outCheckMutexPool(ctx));
         addIfFailed(failures, outCheckElasticPool(ctx));
         return failures;
@@ -482,27 +529,6 @@ public class BondPoolAdjustService {
         return checkBlockedByPools(ctx, REL_IN_RESTRICT, "调入限制池");
     }
 
-    /** 调入联动池：债券须已在所有联动池中，确保同步状态 */
-    private String inCheckLinkagePool(AdjustCheckContext ctx) {
-        List<Long> linkagePools = ctx.getTargetPoolRelations().get(REL_IN_LINKAGE);
-        if (linkagePools == null || linkagePools.isEmpty()) {
-            return null;
-        }
-        List<Long> missing = linkagePools.stream()
-                .filter(id -> !ctx.getCurrentPoolIds().contains(id))
-                .collect(Collectors.toList());
-        if (!missing.isEmpty()) {
-            String names = poolNames(missing, ctx);
-            return "调入联动池校验未通过，请同时将债券调入以下联动池：" + names;
-        }
-        return null;
-    }
-
-    /** 调入互斥池：债券在互斥池中则不可调入 */
-    private String inCheckMutexPool(AdjustCheckContext ctx) {
-        return checkBlockedByPools(ctx, REL_IN_MUTEX, "调入互斥池");
-    }
-
     /** 调入弹性禁投池：债券在弹性禁投池中则不可调入 */
     private String inCheckElasticPool(AdjustCheckContext ctx) {
         return checkBlockedByPools(ctx, REL_IN_ELASTIC, "调入弹性禁投池");
@@ -513,22 +539,6 @@ public class BondPoolAdjustService {
     /** 调出限制池：债券在限制池中则不可调出 */
     private String outCheckRestrictPool(AdjustCheckContext ctx) {
         return checkBlockedByPools(ctx, REL_OUT_RESTRICT, "调出限制池");
-    }
-
-    /** 调出联动池：债券须已在所有联动池中，才可同步调出 */
-    private String outCheckLinkagePool(AdjustCheckContext ctx) {
-        List<Long> linkagePools = ctx.getTargetPoolRelations().get(REL_OUT_LINKAGE);
-        if (linkagePools == null || linkagePools.isEmpty()) {
-            return null;
-        }
-        List<Long> missing = linkagePools.stream()
-                .filter(id -> !ctx.getCurrentPoolIds().contains(id))
-                .collect(Collectors.toList());
-        if (!missing.isEmpty()) {
-            String names = poolNames(missing, ctx);
-            return "调出联动池校验未通过，请同时将债券从以下联动池调出：" + names;
-        }
-        return null;
     }
 
     /** 调出互斥池：债券在互斥池中则不可调出 */
@@ -581,6 +591,49 @@ public class BondPoolAdjustService {
                .add(r.getRelationPoolId());
         }
         return map;
+    }
+
+    /**
+     * 构建自动生成的联动/互斥调整项校验结果
+     * @param targetPoolId    自动生成项的目标池 ID
+     * @param adjustMode      调整方向
+     * @param itemTag         来源标签：linkage / mutex
+     * @param hasPendingProcess 债券是否存在进行中的调库流程
+     */
+    private AdjustCheckDto.CheckResultItem  buildAutoResultItem(
+            Long targetPoolId, String adjustMode, String itemTag,
+            BondInfoBo bondInfo, boolean hasPendingProcess,
+            Map<Long, InvestmentPoolBo> poolMap, Set<Long> currentPoolIds,
+            Map<Long, Map<String, List<Long>>> poolRelationMap) {
+
+        int poolCurrentCount = bondPoolAdjustMapper.queryPoolCurrentCount(targetPoolId);
+
+        AdjustCheckReq.CheckItem fakeItem = new AdjustCheckReq.CheckItem();
+        fakeItem.setTargetPoolId(targetPoolId);
+        fakeItem.setAdjustMode(adjustMode);
+        InvestmentPoolBo pool = poolMap.get(targetPoolId);
+        fakeItem.setPoolType(pool != null ? pool.getPoolType() : null);
+
+        AdjustCheckContext ctx = buildCheckContext(bondInfo, fakeItem, poolMap, currentPoolIds, poolCurrentCount, poolRelationMap);
+        ctx.setHasPendingProcess(hasPendingProcess);
+
+        List<String> failures = new ArrayList<>();
+        failures.addAll(checkPreConditions(ctx));
+        if ("调入".equals(adjustMode)) {
+            failures.addAll(checkInConditions(ctx));
+        } else {
+            failures.addAll(checkOutConditions(ctx));
+        }
+
+        AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
+        resultItem.setTargetPoolId(targetPoolId);
+        resultItem.setPoolName(buildPoolPath(targetPoolId, poolMap));
+        resultItem.setPoolType(pool != null ? pool.getPoolType() : null);
+        resultItem.setAdjustMode(adjustMode);
+        resultItem.setItemTag(itemTag);
+        resultItem.setCanAdjust(failures.isEmpty());
+        resultItem.setFailReasons(failures);
+        return resultItem;
     }
 
     /** 若 reason 非空则加入失败列表 */

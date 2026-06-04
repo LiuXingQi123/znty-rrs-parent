@@ -7,6 +7,8 @@ import lombok.Data;
  */
 @Data
 public class PoolStatusDto {
+    /** 投资池 ID */
+    private Long targetPoolId;
     /** 投资池名称 */
     private String poolName;
     /** 池类型 */
