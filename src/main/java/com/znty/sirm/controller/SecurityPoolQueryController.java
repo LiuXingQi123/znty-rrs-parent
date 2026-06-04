@@ -5,6 +5,7 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.model.SecurityPoolQueryDto;
 import com.znty.sirm.model.SecurityPoolQueryReq;
+import com.znty.sirm.model.SecurityTypeOptionDto;
 import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.MySecurityPoolBo;
 import com.znty.sirm.model.MySecurityPoolReq;
@@ -37,9 +38,9 @@ public class SecurityPoolQueryController {
         return ApiResponse.success(securityPoolQueryService.querySecurityPoolPage(req));
     }
 
-    /** 查询证券类型下拉选项 */
+    /** 查询证券类型下拉选项（code + name） */
     @PostMapping("/querySecurityTypeList")
-    public ApiResponse<List<String>> querySecurityTypeList() {
+    public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList() {
         return ApiResponse.success(securityPoolQueryService.querySecurityTypeList());
     }
 

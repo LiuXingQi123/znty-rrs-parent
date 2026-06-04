@@ -2,6 +2,7 @@ package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.SecurityPoolQueryDto;
 import com.znty.sirm.model.SecurityPoolQueryReq;
+import com.znty.sirm.model.SecurityTypeOptionDto;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -17,7 +18,7 @@ public interface SecurityPoolQueryMapper {
     List<SecurityPoolQueryDto> querySecurityPoolPage(SecurityPoolQueryReq req);
 
     /**
-     * 查询所有证券类型选项
+     * 查询证券池中出现的证券类型选项（code + name）
      */
-    List<String> querySecurityTypeList();
+    List<SecurityTypeOptionDto> querySecurityTypeList();
 }

@@ -9,6 +9,7 @@
                ,al.security_code
                ,al.security_short_name
                ,al.security_type
+               ,dst.security_type_name
                ,al.adjust_type
                ,al.adjust_mode
                ,CASE
@@ -24,6 +25,7 @@
         LEFT JOIN ip_investment_pool p  ON p.id  = al.target_pool_id AND p.is_deleted  = 0
         LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id       AND pp.is_deleted = 0
         LEFT JOIN sirm_securityinfo sb  ON sb.s_info_code = al.security_code
+        LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type AND dst.is_deleted = 0
         <where>
             al.is_deleted = 0
             <if test="poolIds != null and poolIds.size() > 0">
@@ -70,6 +72,18 @@
         </where>
         ORDER BY al.submit_time DESC
                  ,al.id DESC
+    </select>
+
+    <!-- 查询调整历史中出现的证券类型选项 -->
+    <select id="querySecurityTypeList" resultType="com.znty.sirm.model.SecurityTypeOptionDto">
+        SELECT DISTINCT al.security_type
+                       ,dst.security_type_name
+        FROM ip_adjust_log al
+        LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type AND dst.is_deleted = 0
+        WHERE al.is_deleted = 0
+          AND al.security_type IS NOT NULL
+        ORDER BY dst.sort_order ASC
+                 ,al.security_type ASC
     </select>
 
 </mapper>

@@ -14,6 +14,7 @@
                      ELSE p.pool_name
                 END AS target_pool_name
                ,ips.security_type
+               ,dst.security_type_name
                ,mbp.id AS mySecurityPoolId
                ,bi.b_info_couponrate AS couponRate
                ,bi.b_info_issuer AS issuer
@@ -27,6 +28,7 @@
         LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
         LEFT JOIN ip_investment_pool pp ON p.parent_id = pp.id
         LEFT JOIN sirm_securityinfo bi ON ips.security_code = bi.s_info_code
+        LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         LEFT JOIN my_security_pool mbp
             ON ips.security_code = mbp.security_code
             AND mbp.user_id = #{currentUserId}
@@ -72,14 +74,17 @@
                  ,ips.id DESC
     </select>
 
-    <!-- 查询所有证券类型选项 -->
-    <select id="querySecurityTypeList" resultType="java.lang.String">
-        SELECT DISTINCT security_type
-        FROM ip_pool_status
-        WHERE is_deleted = 0
-          AND audit_status = '20'
-          AND security_type IS NOT NULL
-        ORDER BY security_type ASC
+    <!-- 查询证券池中出现的证券类型选项 -->
+    <select id="querySecurityTypeList" resultType="com.znty.sirm.model.SecurityTypeOptionDto">
+        SELECT DISTINCT ips.security_type
+                       ,dst.security_type_name
+        FROM ip_pool_status ips
+        LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
+        WHERE ips.is_deleted = 0
+          AND ips.audit_status = '20'
+          AND ips.security_type IS NOT NULL
+        ORDER BY dst.sort_order ASC
+                 ,ips.security_type ASC
     </select>
 
 </mapper>

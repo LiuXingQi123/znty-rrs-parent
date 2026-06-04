@@ -20,8 +20,11 @@ public class AdjustHistoryDto {
     /** 证券简称 */
     private String securityShortName;
 
-    /** 证券类型（中文，来自表字段） */
+    /** 证券类型编码 */
     private String securityType;
+
+    /** 证券类型名称（关联 dict_security_type 表） */
+    private String securityTypeName;
 
     /** 调整类型（手工调整/联动调整/...） */
     private String adjustType;

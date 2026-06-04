@@ -4,6 +4,7 @@ import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.ForbiddenPoolQueryDto;
 import com.znty.sirm.model.ForbiddenPoolQueryReq;
+import com.znty.sirm.model.SecurityTypeOptionDto;
 import com.znty.sirm.service.ForbiddenPoolQueryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,9 +30,9 @@ public class ForbiddenPoolQueryController {
         return ApiResponse.success(forbiddenPoolQueryService.queryForbiddenPoolPage(req));
     }
 
-    /** 查询证券类型下拉选项 */
+    /** 查询禁投池中出现的证券类型下拉选项（code + name） */
     @PostMapping("/querySecurityTypeList")
-    public ApiResponse<List<String>> querySecurityTypeList() {
+    public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList() {
         return ApiResponse.success(forbiddenPoolQueryService.querySecurityTypeList());
     }
 }

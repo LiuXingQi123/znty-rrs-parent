@@ -24,8 +24,11 @@ public class SecurityPoolQueryDto {
     private Date entryTime;
     /** 投资池名称 */
     private String targetPoolName;
-    /** 证券类型 */
+    /** 证券类型编码 */
     private String securityType;
+
+    /** 证券类型名称（关联 dict_security_type 表） */
+    private String securityTypeName;
     /** 我的证券池记录ID（null=未收藏，非null=已收藏，用于前端爱心图标状态） */
     private Long mySecurityPoolId;
     /** 票面年利率 */

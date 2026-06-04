@@ -6,6 +6,7 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.ForbiddenPoolQueryMapper;
 import com.znty.sirm.model.ForbiddenPoolQueryDto;
 import com.znty.sirm.model.ForbiddenPoolQueryReq;
+import com.znty.sirm.model.SecurityTypeOptionDto;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -28,8 +29,8 @@ public class ForbiddenPoolQueryService {
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
-    /** 查询证券类型下拉选项 */
-    public List<String> querySecurityTypeList() {
+    /** 查询禁投池中出现的证券类型下拉选项（code + name） */
+    public List<SecurityTypeOptionDto> querySecurityTypeList() {
         return forbiddenPoolQueryMapper.querySecurityTypeList();
     }
 }

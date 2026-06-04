@@ -9,6 +9,7 @@ import com.znty.sirm.model.AdjustHistoryDto;
 import com.znty.sirm.model.AdjustHistoryReq;
 import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.PoolDto;
+import com.znty.sirm.model.SecurityTypeOptionDto;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -35,6 +36,13 @@ public class AdjustHistoryService {
         List<AdjustHistoryDto> list = adjustHistoryMapper.queryAdjustHistoryPage(req);
         PageInfo<AdjustHistoryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /**
+     * 查询调整历史中出现的证券类型选项
+     */
+    public List<SecurityTypeOptionDto> querySecurityTypeList() {
+        return adjustHistoryMapper.querySecurityTypeList();
     }
 
     /**

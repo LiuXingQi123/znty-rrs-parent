@@ -26,8 +26,11 @@ public class ForbiddenPoolQueryDto {
     /** 调整人 */
     private String adjusterName;
 
-    /** 证券类型 */
+    /** 证券类型编码 */
     private String securityType;
+
+    /** 证券类型名称（关联 dict_security_type 表） */
+    private String securityTypeName;
 
     /** 投资池名称 */
     private String targetPoolName;

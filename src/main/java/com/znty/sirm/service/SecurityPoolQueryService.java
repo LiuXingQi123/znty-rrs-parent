@@ -7,6 +7,7 @@ import com.znty.sirm.mapper.SecurityPoolQueryMapper;
 import com.znty.sirm.mapper.MySecurityPoolMapper;
 import com.znty.sirm.model.SecurityPoolQueryDto;
 import com.znty.sirm.model.SecurityPoolQueryReq;
+import com.znty.sirm.model.SecurityTypeOptionDto;
 import com.znty.sirm.model.MySecurityPoolBo;
 import com.znty.sirm.model.MySecurityPoolReq;
 import org.springframework.stereotype.Service;
@@ -35,8 +36,8 @@ public class SecurityPoolQueryService {
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
-    /** 查询证券类型下拉选项 */
-    public List<String> querySecurityTypeList() {
+    /** 查询证券类型下拉选项（code + name） */
+    public List<SecurityTypeOptionDto> querySecurityTypeList() {
         return securityPoolQueryMapper.querySecurityTypeList();
     }
 

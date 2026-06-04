@@ -2,6 +2,7 @@ package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.ForbiddenPoolQueryDto;
 import com.znty.sirm.model.ForbiddenPoolQueryReq;
+import com.znty.sirm.model.SecurityTypeOptionDto;
 
 import java.util.List;
 
@@ -16,7 +17,7 @@ public interface ForbiddenPoolQueryMapper {
     List<ForbiddenPoolQueryDto> queryForbiddenPoolPage(ForbiddenPoolQueryReq req);
 
     /**
-     * 查询证券类型下拉选项
+     * 查询禁投池中出现的证券类型下拉选项（code + name）
      */
-    List<String> querySecurityTypeList();
+    List<SecurityTypeOptionDto> querySecurityTypeList();
 }

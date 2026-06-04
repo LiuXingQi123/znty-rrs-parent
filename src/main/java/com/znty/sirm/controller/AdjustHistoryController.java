@@ -5,6 +5,7 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.AdjustHistoryDto;
 import com.znty.sirm.model.AdjustHistoryReq;
 import com.znty.sirm.model.PoolDto;
+import com.znty.sirm.model.SecurityTypeOptionDto;
 import com.znty.sirm.service.AdjustHistoryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,6 +31,14 @@ public class AdjustHistoryController {
     @PostMapping("/queryAdjustHistoryPage")
     public ApiResponse<PageResult<AdjustHistoryDto>> queryAdjustHistoryPage(@RequestBody AdjustHistoryReq req) {
         return ApiResponse.success(adjustHistoryService.queryAdjustHistoryPage(req));
+    }
+
+    /**
+     * 查询证券类型下拉选项
+     */
+    @PostMapping("/querySecurityTypeList")
+    public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList() {
+        return ApiResponse.success(adjustHistoryService.querySecurityTypeList());
     }
 
     /**
