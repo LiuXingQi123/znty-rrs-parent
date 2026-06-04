@@ -128,7 +128,8 @@ INSERT INTO `ip_user` (`id`, `user_name`, `is_deleted`, `crte_time`, `updt_time`
 (11, '权益2',   0, NOW(), NOW()),
 (12, '权益3',   0, NOW(), NOW()),
 (13, '量化1',   0, NOW(), NOW()),
-(14, '量化2',   0, NOW(), NOW());
+(14, '量化2',   0, NOW(), NOW()),
+(1001, '管理员', 0, NOW(), NOW());
 
 -- 人员角色关联（支持一人多角色）
 INSERT INTO `ip_user_role` (`id`, `user_id`, `role_id`, `is_deleted`, `crte_time`, `updt_time`) VALUES
@@ -164,3 +165,62 @@ FROM `ip_user`;
 INSERT INTO `ip_user_role_evt` (`id`, `user_id`, `role_id`, `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
 SELECT `id`, `user_id`, `role_id`, `is_deleted`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
 FROM `ip_user_role`;
+
+-- ----------------------------------------------------------------------------
+-- 3. 初始化投资池权限配置
+-- ----------------------------------------------------------------------------
+-- 权限说明：
+--   permission_type: viewable=可查看 / adjustable=可调整 / excel_importable=可Excel导入
+--   subject_type:    role=角色 / user=人员
+-- 叶子节点 pool_id: 2-6（信用债子库） / 7（境外债） / 8（转债） / 10-14（专户产品子库） / 15（禁投池）
+-- ----------------------------------------------------------------------------
+INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
+-- 管理员（user_id=1001）：对所有叶子节点拥有 adjustable + excel_importable 权限
+(2,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(3,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(4,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(5,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(6,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(7,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(8,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(10, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(11, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(12, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(13, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(14, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(15, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(2,  'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
+(3,  'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
+(10, 'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
+(11, 'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
+-- 信用研究组（role_id=2）：信用债子库 + 禁投池 可调整
+(2,  'adjustable',      'role', 2, '信用研究组', 0, NOW(), NOW()),
+(3,  'adjustable',      'role', 2, '信用研究组', 0, NOW(), NOW()),
+(4,  'adjustable',      'role', 2, '信用研究组', 0, NOW(), NOW()),
+(5,  'adjustable',      'role', 2, '信用研究组', 0, NOW(), NOW()),
+(6,  'adjustable',      'role', 2, '信用研究组', 0, NOW(), NOW()),
+(15, 'adjustable',      'role', 2, '信用研究组', 0, NOW(), NOW()),
+-- 利率研究组（role_id=3）：境外债库可调整
+(7,  'adjustable',      'role', 3, '利率研究组', 0, NOW(), NOW()),
+-- 固收部（role_id=4）：信用债 + 专户产品 + 境外债 可调整
+(2,  'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+(3,  'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+(7,  'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+(10, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+(11, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+-- 权益部（role_id=7）：转债库可调整
+(8,  'adjustable',      'role', 7, '权益部', 0, NOW(), NOW()),
+-- 量化部（role_id=9）：全部可查看（只读）
+(1,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
+(7,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
+(8,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
+(9,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
+(15, 'viewable',        'role', 9, '量化部', 0, NOW(), NOW());
+
+INSERT INTO `ip_pool_permission_evt` (
+    `pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`,
+    `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`
+)
+SELECT `pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`,
+       `is_deleted`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
+FROM `ip_pool_permission`;
