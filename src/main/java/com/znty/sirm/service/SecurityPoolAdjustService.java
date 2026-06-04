@@ -329,6 +329,17 @@ public class SecurityPoolAdjustService {
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(
                 securityPoolAdjustMapper.queryAllPoolRelations());
 
+        // 提取本次请求中调入/调出各自涉及的目标池 ID 集合，供互斥冲突校验使用
+        Set<Long> requestInPoolIds  = new HashSet<>();
+        Set<Long> requestOutPoolIds = new HashSet<>();
+        for (AdjustCheckReq.CheckItem item : req.getItems()) {
+            if ("调入".equals(item.getAdjustMode())) {
+                requestInPoolIds.add(item.getTargetPoolId());
+            } else if ("调出".equals(item.getAdjustMode())) {
+                requestOutPoolIds.add(item.getTargetPoolId());
+            }
+        }
+
         // 证券级别的状态标志（整个请求期间保持不变，统一在此查询）
         return new AdjustSharedData(
                 securityInfo,
@@ -337,7 +348,9 @@ public class SecurityPoolAdjustService {
                 poolRelationMap,
                 securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
                 securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
-                securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode())
+                securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
+                requestInPoolIds,
+                requestOutPoolIds
         );
     }
 
@@ -501,6 +514,8 @@ public class SecurityPoolAdjustService {
         addIfFailed(failures, inCheckSourcePool(ctx));
         // 入池检查：是否触碰禁投池限制
         addIfFailed(failures, inCheckRestrictPool(ctx));
+        // 入池检查：本次请求中是否同时勾选了互斥池（不可同时调入）
+        addIfFailed(failures, inCheckMutexConflict(ctx));
         // 入池检查：是否满足弹性池条件
         addIfFailed(failures, inCheckElasticPool(ctx));
         return failures;
@@ -524,8 +539,10 @@ public class SecurityPoolAdjustService {
         addIfFailed(failures, outCheckSecurityNotInPool(ctx));
         // 出池检查：是否触碰禁投池限制
         addIfFailed(failures, outCheckRestrictPool(ctx));
-        // 出池检查：是否与互斥池冲突
+        // 出池检查：是否与互斥池冲突（证券当前在互斥池中）
         addIfFailed(failures, outCheckMutexPool(ctx));
+        // 出池检查：本次请求中是否同时勾选了互斥池（不可同时调出）
+        addIfFailed(failures, outCheckMutexConflict(ctx));
         // 出池检查：是否满足弹性池条件
         addIfFailed(failures, outCheckElasticPool(ctx));
         return failures;
@@ -633,6 +650,27 @@ public class SecurityPoolAdjustService {
         return checkBlockedByPools(ctx, REL_IN_ELASTIC, "调入弹性禁投池");
     }
 
+    /**
+     * 规则：同一请求中同时勾选了互斥调入项
+     *
+     * <p>若目标池配置了互斥池（in_mutex），且本次请求中同时存在对这些互斥池的调入操作，
+     * 则两者不可并存，均应失败。例如：信用债大库/一级库与专户产品/一级库互斥，
+     * 不可同时勾选"调入信用债大库/一级库"和"调入专户产品/一级库"。
+     */
+    private String inCheckMutexConflict(AdjustCheckContext ctx) {
+        List<Long> inMutex = ctx.getTargetPoolRelations().get(REL_IN_MUTEX);
+        if (inMutex == null || inMutex.isEmpty()) {
+            return null;
+        }
+        List<Long> conflicting = inMutex.stream()
+                .filter(id -> ctx.getRequestInPoolIds().contains(id))
+                .collect(Collectors.toList());
+        if (!conflicting.isEmpty()) {
+            return "与以下互斥池不可同时调入：" + poolNames(conflicting, ctx);
+        }
+        return null;
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  调库可行性校验 — 调出校验规则
     // ═══════════════════════════════════════════════════════════
@@ -679,6 +717,27 @@ public class SecurityPoolAdjustService {
         return checkBlockedByPools(ctx, REL_OUT_ELASTIC, "调出弹性禁投池");
     }
 
+    /**
+     * 规则：同一请求中同时勾选了互斥调出项
+     *
+     * <p>若目标池配置了互斥池（in_mutex），且本次请求中同时存在对这些互斥池的调出操作，
+     * 则两者不可并存，均应失败。互斥池对代表"不可同时持有"，
+     * 因此也不应在同一批次中同时对两池执行调出操作。
+     */
+    private String outCheckMutexConflict(AdjustCheckContext ctx) {
+        List<Long> inMutex = ctx.getTargetPoolRelations().get(REL_IN_MUTEX);
+        if (inMutex == null || inMutex.isEmpty()) {
+            return null;
+        }
+        List<Long> conflicting = inMutex.stream()
+                .filter(id -> ctx.getRequestOutPoolIds().contains(id))
+                .collect(Collectors.toList());
+        if (!conflicting.isEmpty()) {
+            return "与以下互斥池不可同时调出：" + poolNames(conflicting, ctx);
+        }
+        return null;
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  调库可行性校验 — 私有工具方法
     // ═══════════════════════════════════════════════════════════
@@ -712,6 +771,8 @@ public class SecurityPoolAdjustService {
         ctx.setHasPendingProcess(shared.hasPendingProcess);
         ctx.setSecurityInObservePool(shared.securityInObservePool);
         ctx.setIssuerInObservePool(shared.issuerInObservePool);
+        ctx.setRequestInPoolIds(shared.requestInPoolIds);
+        ctx.setRequestOutPoolIds(shared.requestOutPoolIds);
         return ctx;
     }
 
@@ -992,13 +1053,21 @@ public class SecurityPoolAdjustService {
         /** 证券主体公司（发行人）旗下是否有证券在观察池中 */
         final boolean issuerInObservePool;
 
+        /** 本次请求中所有调入操作涉及的目标池 ID 集合，用于互斥池同时勾选校验 */
+        final Set<Long> requestInPoolIds;
+
+        /** 本次请求中所有调出操作涉及的目标池 ID 集合，用于互斥池同时勾选校验 */
+        final Set<Long> requestOutPoolIds;
+
         AdjustSharedData(SecurityInfoBo securityInfo,
                          Map<Long, InvestmentPoolBo> poolMap,
                          Set<Long> currentPoolIds,
                          Map<Long, Map<String, List<Long>>> poolRelationMap,
                          boolean hasPendingProcess,
                          boolean securityInObservePool,
-                         boolean issuerInObservePool) {
+                         boolean issuerInObservePool,
+                         Set<Long> requestInPoolIds,
+                         Set<Long> requestOutPoolIds) {
             this.securityInfo = securityInfo;
             this.poolMap = poolMap;
             this.currentPoolIds = currentPoolIds;
@@ -1006,6 +1075,8 @@ public class SecurityPoolAdjustService {
             this.hasPendingProcess = hasPendingProcess;
             this.securityInObservePool = securityInObservePool;
             this.issuerInObservePool = issuerInObservePool;
+            this.requestInPoolIds = requestInPoolIds;
+            this.requestOutPoolIds = requestOutPoolIds;
         }
     }
 
