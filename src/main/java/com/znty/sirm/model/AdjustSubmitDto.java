@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 调库提交返回对象
+ * 证券调库提交结果 DTO，返回本次提交成功的调库项数量及生成的记录 ID 列表
  */
 @Data
 public class AdjustSubmitDto {

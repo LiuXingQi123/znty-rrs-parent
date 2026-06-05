@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 投资池当前状态表实体
+ * 投资池证券当前状态表实体，存储证券最新一次有效调库记录（用于快速查询当前在池状态）
  */
 @Data
 public class IpPoolStatusBo {

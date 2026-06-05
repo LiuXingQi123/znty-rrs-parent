@@ -17,10 +17,10 @@ public class PageRequest {
         return pageIndex == null || pageIndex < 1 ? 1 : pageIndex;
     }
 
-    /** 获取合法每页条数。 */
+    /** 获取合法每页条数，最大不超过 100 条，防止单次查询数据量过大。 */
     public int getPageSize() {
         if (pageSize == null || pageSize < 1) return 20;
-        return Math.min(pageSize, 100);
+        return Math.min(pageSize, 100); // 硬限制最大 100 条，保护数据库性能
     }
 
     /** 获取 SQL 偏移量，用于分页查询。 */

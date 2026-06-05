@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 流程请求 —— 合并 FlowListReq / FlowCreateReq / FlowEditReq / VersionDetailReq
+ * 流程请求对象，合并列表查询、新建编辑和版本详情查询的入参，统一接收前端请求参数
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

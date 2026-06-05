@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 调库校验结果
+ * 证券调库校验结果 DTO，返回每个目标池是否可调整及不可调整的原因列表
  */
 @Data
 public class AdjustCheckDto {

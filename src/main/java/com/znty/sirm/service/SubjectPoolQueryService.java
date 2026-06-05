@@ -12,7 +12,8 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
- * 主体池查询业务逻辑
+ * 主体池查询服务。
+ * <p>负责发行主体池（issuer pool）证券的分页查询，支持按主体名称、评级等条件筛选。</p>
  */
 @Service
 public class SubjectPoolQueryService {

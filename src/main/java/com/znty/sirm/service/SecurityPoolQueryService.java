@@ -17,7 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 证券池查询业务逻辑
+ * 证券池查询服务。
+ * <p>负责证券池证券的分页查询、证券类型和状态下拉选项查询，以及"我的证券池"收藏管理。</p>
  */
 @Service
 public class SecurityPoolQueryService {
@@ -49,8 +50,9 @@ public class SecurityPoolQueryService {
         return options;
     }
 
-    /** 添加证券到我的证券池 */
+    /** 添加证券到我的证券池（幂等：若已收藏则直接返回已有记录，不重复插入） */
     public MySecurityPoolBo addToMyPool(MySecurityPoolReq req) {
+        // 先查询是否已收藏，避免重复写入
         MySecurityPoolBo existing = mySecurityPoolMapper.queryByUserAndCode(req.getUserId(), req.getSecurityCode());
         if (existing != null) {
             return existing;
@@ -64,8 +66,9 @@ public class SecurityPoolQueryService {
         return bo;
     }
 
-    /** 从我的证券池移除 */
+    /** 从我的证券池移除（证券不在收藏中时静默返回 null，不抛异常） */
     public MySecurityPoolBo deleteFromMyPool(MySecurityPoolReq req) {
+        // 删除前查询确认存在，并保留记录用于返回给前端展示
         MySecurityPoolBo existing = mySecurityPoolMapper.queryByUserAndCode(req.getUserId(), req.getSecurityCode());
         if (existing != null) {
             mySecurityPoolMapper.deleteFromMyPool(req.getUserId(), req.getSecurityCode());

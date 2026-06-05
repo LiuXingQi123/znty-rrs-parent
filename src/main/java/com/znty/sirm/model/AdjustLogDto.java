@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 调库记录列表返回对象
+ * 证券调库记录列表 DTO，用于证券调整详情页展示每条调库操作的状态及内容
  */
 @Data
 public class AdjustLogDto {

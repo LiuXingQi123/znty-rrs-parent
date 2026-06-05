@@ -16,7 +16,11 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
- * 主体池查询控制器
+ * 发行主体池查询控制器
+ * <p>
+ * 负责发行主体池的数据查询，发行主体池记录债券等证券对应的发行主体（企业/机构）
+ * 在各投资池中的准入状态，用于主体维度的风险管控和投资限额管理。
+ * </p>
  */
 @RestController
 @RequestMapping("/api/v1/subjectPoolQuery")
@@ -25,16 +29,21 @@ public class SubjectPoolQueryController {
     @Resource
     private SubjectPoolQueryService subjectPoolQueryService;
 
+    /** 直接调用 Mapper 获取投资池树列表，避免为简单查询额外创建 Service 方法 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
 
-    /** 分页查询主体池列表 */
+    /**
+     * 分页查询发行主体池列表，支持按主体名称、统一社会信用代码、投资池等条件筛选
+     */
     @PostMapping("/querySubjectPoolPage")
     public ApiResponse<PageResult<SubjectPoolQueryDto>> querySubjectPoolPage(@RequestBody SubjectPoolQueryReq req) {
         return ApiResponse.success(subjectPoolQueryService.querySubjectPoolPage(req));
     }
 
-    /** 查询投资池树 */
+    /**
+     * 查询投资池层级树数据，供前端筛选条件中的投资池树形选择器使用
+     */
     @PostMapping("/queryPoolTreeList")
     public ApiResponse<List<InvestmentPoolBo>> queryPoolTreeList() {
         return ApiResponse.success(investmentPoolMapper.queryPoolList());

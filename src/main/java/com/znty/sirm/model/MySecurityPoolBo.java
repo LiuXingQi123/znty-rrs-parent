@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 我的证券池实体
+ * 我的证券池实体，记录用户自定义关注的证券列表（个人自选池）
  */
 @Data
 public class MySecurityPoolBo {

@@ -5,7 +5,7 @@ import java.util.Map;
 import lombok.Data;
 
 /**
- * 投资池请求对象
+ * 投资池新增/编辑请求对象，携带投资池配置、关联流程、自动规则及权限信息
  */
 @Data
 public class InvestmentPoolReq {

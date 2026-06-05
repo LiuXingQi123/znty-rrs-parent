@@ -11,6 +11,7 @@ import java.util.Date;
  */
 @Data
 public class RuleCategoryBo {
+    /** 主键 ID */
     private Long id;
     /** 分类编码（唯一标识，如 risk、marketing） */
     private String categoryCode;

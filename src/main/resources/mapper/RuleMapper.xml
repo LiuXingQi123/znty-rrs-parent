@@ -2,6 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 规则管理 SQL 映射，对应接口 com.znty.sirm.mapper.RuleMapper -->
 <mapper namespace="com.znty.sirm.mapper.RuleMapper">
+    <!-- 规则管理 mapper，对应表：rule_definition（规则定义）、rule_param（规则参数）、rule_param_option（参数选项）、rule_category（规则分类）、rule_preset_option_set（预设选项集）、rule_preset_option_item（预设选项明细），提供风控规则的 CRUD 及参数/选项管理功能 -->
 
     <!-- ==================== 规则定义（rule_definition） ==================== -->
 

@@ -11,6 +11,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @MapperScan("com.znty.sirm.**.mapper")
 public class ZntySirmApplication {
 
+    /** 应用程序入口，启动 Spring Boot 容器并扫描所有 Mapper 接口。 */
     public static void main(String[] args) {
         SpringApplication.run(ZntySirmApplication.class, args);
     }

@@ -11,6 +11,7 @@ import java.util.Date;
  */
 @Data
 public class RuleDefinitionBo {
+    /** 主键 ID */
     private Long id;
     /** 规则名称 */
     private String ruleName;

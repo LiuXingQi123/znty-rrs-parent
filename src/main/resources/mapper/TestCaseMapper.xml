@@ -2,6 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 测试用例 SQL 映射，对应接口 com.znty.sirm.mapper.TestCaseMapper -->
 <mapper namespace="com.znty.sirm.mapper.TestCaseMapper">
+    <!-- 测试用例 mapper，对应表：rule_test_case（测试用例）、rule_test_case_param（用例参数值）、rule_test_run（执行记录）、rule_test_run_log（执行步骤日志），提供规则测试用例的 CRUD 及执行记录管理功能 -->
 
     <!-- ==================== 测试用例（rule_test_case） ==================== -->
 

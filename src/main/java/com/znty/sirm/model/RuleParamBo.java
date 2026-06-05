@@ -11,6 +11,7 @@ import java.util.Date;
  */
 @Data
 public class RuleParamBo {
+    /** 主键 ID */
     private Long id;
     /** 所属规则 ID */
     private Long ruleId;

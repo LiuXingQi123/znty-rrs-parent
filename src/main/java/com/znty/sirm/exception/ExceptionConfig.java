@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class ExceptionConfig {
 
-    private static final Logger log = LoggerFactory.getLogger(ExceptionConfig.class);
+    private static final Logger log = LoggerFactory.getLogger(ExceptionConfig.class); // 系统异常需记录日志，业务异常不记录
 
     /** 处理业务异常。 */
     @ExceptionHandler(BizException.class)

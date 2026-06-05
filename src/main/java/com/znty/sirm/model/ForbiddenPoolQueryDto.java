@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 禁投池查询返回对象
+ * 禁止交易池查询结果 DTO，返回当前处于禁投池中的证券信息及入池时间
  */
 @Data
 public class ForbiddenPoolQueryDto {

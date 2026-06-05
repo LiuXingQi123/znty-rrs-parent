@@ -3,7 +3,7 @@ package com.znty.sirm.model;
 import lombok.Data;
 
 /**
- * 条件规则项
+ * 流程连线条件规则项 DTO，表示单个条件判断的字段、操作符和比较值
  */
 @Data
 public class CondRuleItemDto {

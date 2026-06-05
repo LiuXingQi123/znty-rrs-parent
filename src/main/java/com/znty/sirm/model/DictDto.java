@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 字典 DTO —— 合并 RoleDictDto / AutoTaskDto / CondFieldDto / CondFieldGroupDto
+ * 通用字典 DTO，合并角色字典、自动任务字典和条件字段字典，用于流程设计器的下拉选项
  */
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)

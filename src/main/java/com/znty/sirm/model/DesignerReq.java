@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 设计器请求 —— 合并 FlowDraftReq / FlowPublishReq
+ * 流程设计器请求对象，合并草稿保存和发布请求，携带画布节点、连线及布局信息
  */
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)

@@ -19,6 +19,11 @@ import java.util.Date;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 审批流程服务。
+ * <p>负责流程定义的 CRUD、版本管理（草稿/发布/停用）、画布数据的保存与归一化持久化，
+ * 以及流程相关字典（角色、自动任务、条件字段）的查询。</p>
+ */
 @Service
 public class FlowService {
 
@@ -74,8 +79,10 @@ public class FlowService {
 
     // ==================== 新建流程 ====================
 
+    /**
+     * 新建流程定义，同时创建初始草稿版本（verNum=1）。
+     */
     @Transactional(rollbackFor = Exception.class)
-    /** 新建流程。 */
     public FlowDto addFlow(FlowReq req) {
         if (req.getName() == null || req.getName().trim().isEmpty()) {
             throw new BizException("流程名称不能为空");
@@ -158,8 +165,10 @@ public class FlowService {
 
     // ==================== 编辑基础信息 ====================
 
+    /**
+     * 更新流程基础信息（名称、flowKey、分类、描述、备注）。
+     */
     @Transactional(rollbackFor = Exception.class)
-    /** 更新流程基础信息。 */
     public FlowDto editFlow(FlowReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
@@ -189,8 +198,10 @@ public class FlowService {
 
     // ==================== 删除流程（软删除） ====================
 
+    /**
+     * 逻辑删除流程（is_deleted 置为 1），返回被删除的流程信息。
+     */
     @Transactional(rollbackFor = Exception.class)
-    /** 删除流程。 */
     public FlowDto deleteFlow(IdRequest req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
@@ -207,8 +218,10 @@ public class FlowService {
 
     // ==================== 停用 ====================
 
+    /**
+     * 停用流程：将定义状态由 active 改为 disabled，同时将当前活跃版本标为 disabled 以保留历史轨迹。
+     */
     @Transactional(rollbackFor = Exception.class)
-    /** 停用流程：更新定义状态 + 将当前活跃版本标为停用以反映在历史中。 */
     public FlowDto editFlowStatus(IdRequest req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
@@ -226,6 +239,7 @@ public class FlowService {
         flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
 
         // 将当前活跃版本标为停用，历史中可追溯
+        // 遍历全部版本，找到版本号最大的 active 版本，标记为 disabled
         FlowVersionBo latestActive = null;
         for (FlowVersionBo v : flowMapper.queryFlowVersionListByFlowId(def.getId(), null)) {
             if ("active".equals(v.getStatus())) {
@@ -244,8 +258,11 @@ public class FlowService {
 
     // ==================== 保存草稿 ====================
 
+    /**
+     * 保存流程画布草稿：若已有草稿版本则更新，否则新建草稿版本；
+     * 同步将画布节点/连线写入归一化表。
+     */
     @Transactional(rollbackFor = Exception.class)
-    /** 保存流程草稿。 */
     public FlowDto editFlowDraft(DesignerReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowByIdForUpdate(req.getId());
         if (def == null) {
@@ -331,8 +348,11 @@ public class FlowService {
 
     // ==================== 发布流程 ====================
 
+    /**
+     * 发布流程：将草稿版本转为正式版本（status=active），并通过校验后同步归一化表；
+     * 若无草稿则直接新建正式版本。
+     */
     @Transactional(rollbackFor = Exception.class)
-    /** 发布流程。 */
     public FlowDto editFlowToPublished(DesignerReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowByIdForUpdate(req.getId());
         if (def == null) {

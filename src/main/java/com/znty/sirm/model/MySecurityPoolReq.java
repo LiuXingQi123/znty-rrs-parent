@@ -3,7 +3,7 @@ package com.znty.sirm.model;
 import lombok.Data;
 
 /**
- * 我的证券池请求对象（添加/移除）
+ * 我的证券池操作请求对象，用于添加或移除用户自选证券池中的证券
  */
 @Data
 public class MySecurityPoolReq {

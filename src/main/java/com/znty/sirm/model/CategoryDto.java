@@ -3,7 +3,7 @@ package com.znty.sirm.model;
 import lombok.Data;
 
 /**
- * 规则分类字典返回对象
+ * 规则分类字典 DTO，用于规则管理页面下拉列表的分类编码与名称映射
  */
 @Data
 public class CategoryDto {

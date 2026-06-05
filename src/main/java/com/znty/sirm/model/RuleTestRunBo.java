@@ -11,6 +11,7 @@ import java.util.Date;
  */
 @Data
 public class RuleTestRunBo {
+    /** 主键 ID */
     private Long id;
     /** 关联用例 ID（临时执行时为 null） */
     private Long caseId;

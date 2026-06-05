@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 调整历史列表返回对象
+ * 证券池调整历史列表 DTO，用于调整历史查询页面展示调整记录的关键信息
  */
 @Data
 public class AdjustHistoryDto {

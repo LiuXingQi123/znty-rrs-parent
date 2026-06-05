@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.ForbiddenPoolQueryMapper">
+    <!-- 禁投池查询 mapper，对应表：ip_pool_status（证券池状态），过滤 pool_type='forbidden' 提供禁投池分页查询及证券类型选项查询功能 -->
 
     <!-- 分页查询禁投池证券列表 -->
     <select id="queryForbiddenPoolPage" resultType="com.znty.sirm.model.ForbiddenPoolQueryDto">

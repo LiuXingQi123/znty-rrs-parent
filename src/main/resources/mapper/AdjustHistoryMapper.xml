@@ -2,6 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.AdjustHistoryMapper">
+    <!-- 调整历史 mapper，对应表：ip_adjust_log（证券池调整记录），提供调整历史分页查询及证券类型选项查询功能 -->
 
     <!-- 分页查询调整历史列表 -->
     <select id="queryAdjustHistoryPage" resultType="com.znty.sirm.model.AdjustHistoryDto">

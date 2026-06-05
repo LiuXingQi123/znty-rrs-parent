@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.MySecurityPoolMapper">
+    <!-- 我的证券池 mapper，对应表：my_security_pool（用户自选证券），提供证券收藏的添加、软删除及查询功能 -->
 
     <!-- 添加证券到我的证券池 -->
     <insert id="addToMyPool" useGeneratedKeys="true" keyProperty="id">

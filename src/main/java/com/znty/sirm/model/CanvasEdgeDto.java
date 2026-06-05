@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 画布连线 JSON 结构
+ * 流程画布连线 DTO，表示流程设计器中节点间有向连线的配置，包含条件规则信息
  */
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)

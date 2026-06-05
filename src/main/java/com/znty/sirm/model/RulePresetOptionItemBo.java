@@ -8,6 +8,7 @@ import lombok.Data;
  */
 @Data
 public class RulePresetOptionItemBo {
+    /** 主键 ID */
     private Long id;
     /** 所属选项集 ID */
     private Long setId;

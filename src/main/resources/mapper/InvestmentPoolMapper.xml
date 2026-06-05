@@ -2,6 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.InvestmentPoolMapper">
+    <!-- 投资池维护 mapper，对应表：ip_investment_pool（投资池）、ip_pool_relation（投资池关系）、ip_pool_auto_rule（自动规则）、ip_pool_permission（权限），提供投资池配置、关系、规则、权限的 CRUD 及事件记录操作 -->
 
     <!-- 查询投资池数量 -->
     <select id="queryPoolCount" resultType="int">

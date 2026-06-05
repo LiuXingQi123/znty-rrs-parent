@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 画布节点 JSON 结构（保存/发布时由前端传入）
+ * 流程画布节点 DTO，表示流程设计器中各类节点的类型、位置及配置（审批/自动/通知/条件）
  */
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)

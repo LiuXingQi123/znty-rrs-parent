@@ -30,7 +30,10 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
 
 /**
- * 投资池维护业务服务
+ * 投资池维护服务。
+ * <p>负责投资池树结构的 CRUD（顶级池/子池新增、配置编辑、节点删除），
+ * 以及投资池关系配置、自动规则配置、权限配置的维护；
+ * 同时提供初始化种子数据、角色人员下拉选项等辅助查询功能。</p>
  */
 @Service
 public class InvestmentPoolService {
@@ -97,7 +100,7 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 保存投资池关系配置
+     * 保存投资池关系配置（全量替换模式：先删旧关系/规则，再逐条插入新数据）
      */
     @Transactional(rollbackFor = Exception.class)
     public InvestmentPoolDto editPoolRelation(InvestmentPoolReq req) {
@@ -107,16 +110,19 @@ public class InvestmentPoolService {
             throw new BizException("投资池不存在");
         }
         String operatorId = getOperatorId(req);
+        // 先记录删除事件，再删除旧关系，最后写入新关系
         investmentPoolMapper.addRelationEventByPoolId(poolId, operatorId, "删除");
         investmentPoolMapper.deleteRelationByPoolId(poolId);
         addRelations(req, poolId, operatorId);
 
+        // 全量替换自动规则：先删旧的调入/调出规则，再按请求顺序逐条插入
         investmentPoolMapper.addAutoRuleEventByPoolId(poolId, operatorId, "删除");
         investmentPoolMapper.deleteAutoRuleByPoolId(poolId);
         if (req.getAutoInRuleIds() != null) {
             List<String> inDescs = req.getAutoInRuleDescs();
             for (int i = 0; i < req.getAutoInRuleIds().size(); i++) {
                 Long ruleId = req.getAutoInRuleIds().get(i);
+                // 下标对齐取备注，防止 inDescs 列表长度不足时越界
                 String ruleDesc = (inDescs != null && i < inDescs.size()) ? inDescs.get(i) : "";
                 addAutoRule(poolId, "auto_in", ruleId, ruleDesc, operatorId);
             }
@@ -125,6 +131,7 @@ public class InvestmentPoolService {
             List<String> outDescs = req.getAutoOutRuleDescs();
             for (int i = 0; i < req.getAutoOutRuleIds().size(); i++) {
                 Long ruleId = req.getAutoOutRuleIds().get(i);
+                // 下标对齐取备注，防止 outDescs 列表长度不足时越界
                 String ruleDesc = (outDescs != null && i < outDescs.size()) ? outDescs.get(i) : "";
                 addAutoRule(poolId, "auto_out", ruleId, ruleDesc, operatorId);
             }
@@ -133,7 +140,7 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 添加顶级投资池
+     * 添加顶级投资池（parentId 为 null），可选指定模板池以复制其关系/规则/权限配置
      */
     @Transactional(rollbackFor = Exception.class)
     public InvestmentPoolDto addRootPool(InvestmentPoolReq req) {
@@ -145,6 +152,7 @@ public class InvestmentPoolService {
         }
         String operatorId = getOperatorId(req);
         InvestmentPoolBo templatePool = null;
+        // 指定了模板池时，校验模板池是否存在，后续将复制其配置
         if (req.getTemplatePoolId() != null) {
             templatePool = investmentPoolMapper.queryPoolById(req.getTemplatePoolId());
             if (templatePool == null) {
@@ -154,6 +162,7 @@ public class InvestmentPoolService {
         InvestmentPoolBo rootPool = buildRootPool(req, templatePool);
         investmentPoolMapper.addPool(rootPool);
         investmentPoolMapper.addPoolEvent(rootPool.getId(), operatorId, "新增");
+        // 有模板池时，将模板的关系/自动规则/权限配置复制到新顶级池
         if (templatePool != null) {
             copyParentRelationConfig(templatePool.getId(), rootPool.getId(), operatorId);
             copyParentAutoRuleConfig(templatePool.getId(), rootPool.getId(), operatorId);
@@ -165,7 +174,7 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 添加子投资池
+     * 添加子投资池（继承父级 poolType 和层级），可选指定模板池或继承父级配置
      */
     @Transactional(rollbackFor = Exception.class)
     public InvestmentPoolDto addChildPool(InvestmentPoolReq req) {
@@ -182,16 +191,19 @@ public class InvestmentPoolService {
         String operatorId = getOperatorId(req);
         InvestmentPoolBo templatePool = null;
         if (req.getTemplatePoolId() != null) {
+            // 明确指定了模板池，优先使用
             templatePool = investmentPoolMapper.queryPoolById(req.getTemplatePoolId());
             if (templatePool == null) {
                 throw new BizException("配置模板不存在");
             }
         } else if (Boolean.TRUE.equals(req.getInheritParentConfig())) {
+            // 未指定模板但勾选了继承父级配置，则以父级池作为模板
             templatePool = parentPool;
         }
         InvestmentPoolBo childPool = buildChildPool(req, parentPool, templatePool);
         investmentPoolMapper.addPool(childPool);
         investmentPoolMapper.addPoolEvent(childPool.getId(), operatorId, "新增");
+        // 有模板池时，将模板的关系/自动规则/权限配置复制到新子池
         if (templatePool != null) {
             copyParentRelationConfig(templatePool.getId(), childPool.getId(), operatorId);
             copyParentAutoRuleConfig(templatePool.getId(), childPool.getId(), operatorId);
@@ -203,7 +215,7 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 删除投资池节点及全部子节点
+     * 删除投资池节点及其全部后代节点（递归），同时级联删除关联的关系/规则/权限数据
      */
     @Transactional(rollbackFor = Exception.class)
     public InvestmentPoolDto deletePoolNode(InvestmentPoolReq req) {
@@ -212,12 +224,16 @@ public class InvestmentPoolService {
         if (pool == null) {
             throw new BizException("投资池不存在");
         }
+        // 删除前保留被删池信息用于返回
         InvestmentPoolDto deletedPool = convertPool(pool);
         String operatorId = getOperatorId(req);
+        // 递归收集当前节点及全部后代节点 ID，批量删除
         List<Long> deleteIds = new ArrayList<>();
         collectDescendantPoolIds(poolId, deleteIds);
+        // 删除这些池自身的关系记录（作为主池），并记录事件
         investmentPoolMapper.addRelationEventByPoolIds(deleteIds, operatorId, "删除");
         investmentPoolMapper.deleteRelationByPoolIds(deleteIds);
+        // 删除其他池引用这些池的关系记录（作为关联池），避免悬挂引用
         investmentPoolMapper.addRelationEventByRelationPoolIds(deleteIds, operatorId, "删除");
         investmentPoolMapper.deleteRelationByRelationPoolIds(deleteIds);
         investmentPoolMapper.addAutoRuleEventByPoolIds(deleteIds, operatorId, "删除");
@@ -237,18 +253,21 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 初始化固定投资池列表（树结构由前端组装）
+     * 初始化固定投资池列表（幂等：若已有数据则直接返回，避免重复创建种子数据）
      */
     @Transactional(rollbackFor = Exception.class)
     public List<InvestmentPoolDto> addSeedPoolList(InvestmentPoolReq req) {
+        // 幂等校验：已有投资池记录时直接返回，不重复初始化
         if (investmentPoolMapper.queryPoolCount() > 0) {
             return queryPoolList(req);
         }
         String operatorId = getOperatorId(req);
+        // 创建信用债大库顶级节点，并追加一级~五级子库
         InvestmentPoolBo credit = addSeedPool(null, "credit_bond_root", "信用债大库", "credit_bond", 1, 1, 1, operatorId);
         addLevelPools(credit.getId(), "credit_bond", operatorId);
         addSeedPool(null, "offshore_bond_root", "境外债库", "offshore_bond", 1, 2, 1, operatorId);
         addSeedPool(null, "convertible_bond_root", "转债库", "convertible_bond", 1, 3, 1, operatorId);
+        // 创建专户产品顶级节点，并追加一级~五级子库
         InvestmentPoolBo special = addSeedPool(null, "special_account_root", "专户产品", "special_account", 1, 4, 1, operatorId);
         addLevelPools(special.getId(), "special_account", operatorId);
         return queryPoolList(req);
@@ -264,13 +283,14 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 查询人员列表
+     * 查询人员列表（可按角色树过滤：传入角色 ID 时，递归包含其全部子角色下的人员）
      */
     public List<UserDto> queryUserList(InvestmentPoolReq req) {
         Long roleId = req.getRoleId();
         String keyword = req.getKeyword();
         List<Long> roleIds = null;
         if (roleId != null) {
+            // 指定了角色时，递归收集该角色及其子角色 ID，以支持角色树过滤
             roleIds = new ArrayList<>();
             List<RoleBo> allRoles = investmentPoolMapper.queryRoleList();
             collectDescendantRoleIds(roleId, roleIds, allRoles);
@@ -557,13 +577,14 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 新增投资池关系
+     * 新增投资池关系配置（按预定义类型顺序逐条写入，快照关联池名称以备展示）
      */
     private void addRelations(InvestmentPoolReq req, Long poolId, String operatorId) {
         Map<String, List<Long>> relationPoolIds = req.getRelationPoolIds();
         if (relationPoolIds == null || relationPoolIds.isEmpty()) {
             return;
         }
+        // 收集所有关联池 ID，批量查询名称快照，避免逐条查询
         List<Long> allIds = relationPoolIds.values().stream()
                 .filter(Objects::nonNull)
                 .flatMap(List::stream)
@@ -574,6 +595,7 @@ public class InvestmentPoolService {
                 ? new HashMap<>()
                 : investmentPoolMapper.queryPoolByIds(allIds).stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, InvestmentPoolBo::getPoolName, (a, b) -> a));
+        // 按固定类型顺序处理，保证写入顺序的一致性
         for (String relationType : RELATION_TYPES) {
             List<Long> ids = relationPoolIds.getOrDefault(relationType, Collections.emptyList());
             int sortOrder = 1;
@@ -585,6 +607,7 @@ public class InvestmentPoolService {
                 relation.setPoolId(poolId);
                 relation.setRelationType(relationType);
                 relation.setRelationPoolId(relationPoolId);
+                // 快照关联池名称，防止关联池改名后历史记录无法显示
                 relation.setRelationPoolName(poolNameMap.get(relationPoolId));
                 relation.setSortOrder(sortOrder++);
                 relation.setIsDeleted(0);

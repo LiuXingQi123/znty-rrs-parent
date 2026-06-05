@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 调库校验请求
+ * 证券调库校验请求对象，携带证券基本信息和待校验的目标池调整项列表
  */
 @Data
 public class AdjustCheckReq {

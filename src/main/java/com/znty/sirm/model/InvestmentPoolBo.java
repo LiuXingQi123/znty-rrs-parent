@@ -5,7 +5,7 @@ import java.util.Date;
 import lombok.Data;
 
 /**
- * 投资池业务对象，对应投资池主表
+ * 投资池业务对象，对应投资池主表，存储投资池的层级结构、流程配置及容量限制信息
  */
 @Data
 public class InvestmentPoolBo {

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.FlowMapper">
+    <!-- 审批流程 mapper，对应表：wf_flow_definition（流程定义）、wf_flow_version（流程版本）、wf_flow_node（流程节点）、wf_flow_edge（流程连线）及各节点配置表，提供流程定义、版本、节点、连线及事件记录的完整 CRUD 操作 -->
 
     <!-- ==================== 流程定义 ==================== -->
 

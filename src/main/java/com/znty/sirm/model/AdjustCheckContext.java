@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 调库校验基础参数上下文（供三层校验方法共享）
+ * 证券调库校验上下文，封装校验所需的证券信息、目标池信息及请求状态，在三层校验方法间共享传递
  */
 @Data
 public class AdjustCheckContext {

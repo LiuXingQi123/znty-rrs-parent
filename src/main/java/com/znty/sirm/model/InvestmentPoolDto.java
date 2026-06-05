@@ -9,7 +9,7 @@ import java.util.Map;
 import lombok.Data;
 
 /**
- * 投资池返回对象
+ * 投资池 DTO，返回投资池树形结构及关联的流程配置、规则、权限等完整信息
  */
 @Data
 public class InvestmentPoolDto {

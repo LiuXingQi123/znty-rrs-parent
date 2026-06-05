@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 禁投池查询请求对象
+ * 禁止交易池分页查询请求对象，支持按证券代码、类型、调整人、日期等多条件过滤
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

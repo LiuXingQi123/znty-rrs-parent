@@ -7,7 +7,7 @@ import lombok.EqualsAndHashCode;
 import java.util.List;
 
 /**
- * 调整历史查询请求
+ * 证券池调整历史分页查询请求对象，支持按投资池、证券代码、类型、调整人等多条件过滤
  */
 @Data
 @EqualsAndHashCode(callSuper = false)

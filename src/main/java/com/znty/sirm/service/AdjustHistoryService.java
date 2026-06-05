@@ -17,7 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 调整历史业务逻辑
+ * 调整历史服务。
+ * <p>负责证券池调整操作审计记录的分页查询，以及筛选条件所需的证券类型选项和投资池树列表查询。</p>
  */
 @Service
 public class AdjustHistoryService {
@@ -46,7 +47,7 @@ public class AdjustHistoryService {
     }
 
     /**
-     * 查询投资池树列表（用于前端树多选组件）
+     * 查询投资池树列表（用于前端树多选筛选组件，仅返回树节点基础字段）
      */
     public List<PoolDto> queryPoolTreeList() {
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
@@ -54,6 +55,7 @@ public class AdjustHistoryService {
             return new ArrayList<>();
         }
         List<PoolDto> result = new ArrayList<>();
+        // 将全量投资池 Bo 转换为精简 Dto，仅保留树组件所需字段
         for (InvestmentPoolBo p : allPools) {
             PoolDto dto = new PoolDto();
             dto.setId(p.getId());

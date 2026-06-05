@@ -11,6 +11,7 @@ import java.util.Date;
  */
 @Data
 public class RulePresetOptionSetBo {
+    /** 主键 ID */
     private Long id;
     /** 选项集名称（如"主体评级"、"证券类型"） */
     private String setName;

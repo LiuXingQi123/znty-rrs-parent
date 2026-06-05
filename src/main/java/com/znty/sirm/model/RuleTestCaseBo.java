@@ -11,6 +11,7 @@ import java.util.Date;
  */
 @Data
 public class RuleTestCaseBo {
+    /** 主键 ID */
     private Long id;
     /** 用例名称 */
     private String caseName;

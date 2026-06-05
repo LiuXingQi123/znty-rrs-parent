@@ -11,6 +11,7 @@ import java.util.Date;
  */
 @Data
 public class RuleTestRunLogBo {
+    /** 主键 ID */
     private Long id;
     /** 关联执行记录 ID */
     private Long runId;

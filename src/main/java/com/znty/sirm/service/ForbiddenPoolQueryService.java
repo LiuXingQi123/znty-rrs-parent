@@ -13,7 +13,8 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
- * 禁投池查询业务逻辑
+ * 禁止池查询服务。
+ * <p>负责禁止交易池（禁投池）证券的分页查询，以及筛选条件所需的证券类型下拉选项查询。</p>
  */
 @Service
 public class ForbiddenPoolQueryService {
