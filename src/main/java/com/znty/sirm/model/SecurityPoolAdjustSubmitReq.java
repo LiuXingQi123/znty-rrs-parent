@@ -58,6 +58,15 @@ public class SecurityPoolAdjustSubmitReq {
         /** 调整模式：调入/调出 */
         private String adjustMode;
 
+        /** 本次选择的流程 ID（当前仅透传，不落表） */
+        private Long flowId;
+
+        /** 本次选择的流程 Key（当前仅透传，不落表） */
+        private String flowKey;
+
+        /** 本次选择的流程类型（当前仅透传，不落表） */
+        private String flowType;
+
         /** 调整说明 */
         private String adjustmentNote;
 

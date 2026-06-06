@@ -13,6 +13,18 @@ public class AdjustCheckDto {
     /** 各目标池校验结果列表（顺序与请求 items 一致） */
     private List<CheckResultItem> items;
 
+    /** 本次调库可选流程列表 */
+    private List<FlowOption> flowOptions;
+
+    /** 推荐流程 ID */
+    private Long recommendedFlowId;
+
+    /** 推荐流程 Key */
+    private String recommendedFlowKey;
+
+    /** 推荐流程类型 */
+    private String recommendedFlowType;
+
     /**
      * 单个目标池校验结果
      */
@@ -39,5 +51,39 @@ public class AdjustCheckDto {
 
         /** 不可调整原因列表（可调整时为空列表） */
         private List<String> failReasons;
+    }
+
+    /**
+     * 调库流程候选项
+     */
+    @Data
+    public static class FlowOption {
+
+        /** 流程类型：whitelistInbound / simpleInbound / normalInbound / upgradeInbound / downgradeInbound */
+        private String flowType;
+
+        /** 流程名称 */
+        private String flowName;
+
+        /** 流程 ID */
+        private Long flowId;
+
+        /** 流程 Key */
+        private String flowKey;
+
+        /** 是否为后端推荐流程 */
+        private boolean recommended;
+
+        /** 业务条件是否命中 */
+        private boolean matched;
+
+        /** 前端是否可选择 */
+        private boolean selectable;
+
+        /** 匹配原因 */
+        private List<String> matchReasons;
+
+        /** 未匹配原因 */
+        private List<String> unmatchReasons;
     }
 }

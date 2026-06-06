@@ -50,6 +50,19 @@
         WHERE d.id = #{id} AND d.is_deleted = 0
     </select>
 
+    <!-- 根据流程 Key 查询启用流程定义。 -->
+    <select id="queryActiveFlowByKey" resultType="com.znty.sirm.model.FlowDefinitionBo">
+        SELECT d.*
+               ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
+               ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
+        FROM wf_flow_definition d
+        WHERE d.flow_key = #{flowKey}
+          AND d.status = 'active'
+          AND d.is_deleted = 0
+        ORDER BY d.id DESC
+        LIMIT 1
+    </select>
+
     <!-- 根据 ID 查询流程定义（加行锁）。 -->
     <select id="queryFlowByIdForUpdate" resultType="com.znty.sirm.model.FlowDefinitionBo">
         SELECT d.*

@@ -25,6 +25,9 @@ public interface FlowMapper {
     /** 根据 ID 查询流程定义。 */
     FlowDefinitionBo queryFlowById(@Param("id") Long id);
 
+    /** 根据流程 Key 查询启用流程定义。 */
+    FlowDefinitionBo queryActiveFlowByKey(@Param("flowKey") String flowKey);
+
     /** 根据 ID 查询流程定义（加行锁，用于并发安全的版本号计算）。 */
     FlowDefinitionBo queryFlowByIdForUpdate(@Param("id") Long id);
 
