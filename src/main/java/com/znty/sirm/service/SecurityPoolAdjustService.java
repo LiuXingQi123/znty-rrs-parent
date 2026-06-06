@@ -13,6 +13,9 @@ import com.znty.sirm.model.AdjustCheckReq;
 import com.znty.sirm.model.AdjustLogDto;
 import com.znty.sirm.model.AdjustSubmitDto;
 import com.znty.sirm.model.FlowDefinitionBo;
+import com.znty.sirm.model.FlowEdgeBo;
+import com.znty.sirm.model.FlowNodeBo;
+import com.znty.sirm.model.FlowVersionBo;
 import com.znty.sirm.model.SecurityInfoBo;
 import com.znty.sirm.model.SecurityInfoDetailDto;
 import com.znty.sirm.model.SecurityInfoDto;
@@ -177,27 +180,362 @@ public class SecurityPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 提交调库申请，每个调库项写入一条 ip_adjust_log 记录，初始审核状态为"00（待审核）"
+     * 提交调库申请（五阶段流程）
      *
-     * @param req 调库申请，包含证券信息及一个或多个调库项
+     * <p>分五个阶段顺序执行：
+     * <ol>
+     *   <li><b>前置校验</b>：校验请求入参合法性，不通过直接抛异常</li>
+     *   <li><b>参数初始化</b>：集中执行所有 DB 查询，构建 {@link SubmitSharedData}，
+     *       包含证券信息、投资池索引、池关系映射、各流程的快照数据</li>
+     *   <li><b>调入处理</b>：遍历全部调入方向的调库项，逐项判断是否直通流程，
+     *       直通则直接写入 ip_pool_status（audit_status='20'），否则写入 ip_adjust_log（audit_status='00'）</li>
+     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则软删除 ip_pool_status 记录，
+     *       否则写入 ip_adjust_log（audit_status='00'）</li>
+     *   <li><b>后续处理</b>：预留扩展点，当前为空实现</li>
+     * </ol>
+     *
+     * @param req 调库申请，包含证券信息及一个或多个调库项（每个项须携带 flowId 或 flowKey）
+     * @return 提交结果，包含生成的记录 ID 列表
      */
     @Transactional(rollbackFor = Exception.class)
     public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req) {
+
+        // ══ 第一阶段：前置校验 ══
+        validateSubmitReq(req);
+
+        // ══ 第二阶段：参数初始化 ══
+        SubmitSharedData shared = loadSubmitSharedData(req);
+
+        // ══ 第三阶段：调入处理 ══
+        List<Long> inboundIds = executeInboundSubmit(req, shared);
+
+        // ══ 第四阶段：调出处理 ══
+        List<Long> outboundIds = executeOutboundSubmit(req, shared);
+
+        // ══ 第五阶段：后续处理 ══
+        postSubmitProcess(req, shared);
+
+        // 组装返回结果
+        AdjustSubmitDto dto = new AdjustSubmitDto();
+        dto.setSecurityCode(req.getSecurityCode());
+        List<Long> allIds = new ArrayList<>(inboundIds);
+        allIds.addAll(outboundIds);
+        dto.setSubmitCount(allIds.size());
+        dto.setLogIds(allIds);
+        return dto;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  调库提交 — 五阶段实现
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * 第一阶段：前置校验
+     *
+     * <p>对请求入参进行合法性检查，均为内存操作，不涉及任何 DB 查询。
+     * 任意一项不通过则直接抛出异常，终止后续流程。
+     *
+     * @param req 调库提交请求
+     */
+    private void validateSubmitReq(SecurityPoolAdjustSubmitReq req) {
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+            throw new BizException("证券代码不能为空");
+        }
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("调库项不能为空");
         }
-        List<Long> logIds = new ArrayList<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
-            IpAdjustLogBo bo = buildAdjustLog(req, item);
-            securityPoolAdjustMapper.addAdjustLog(bo);
-            logIds.add(bo.getId());
+            if (item.getAdjustMode() == null || item.getAdjustMode().isEmpty()) {
+                throw new BizException("调库项的调整方向不能为空");
+            }
+            if (item.getTargetPoolId() == null) {
+                throw new BizException("调库项的目标投资池 ID 不能为空");
+            }
+            if (item.getFlowId() == null && (item.getFlowKey() == null || item.getFlowKey().isEmpty())) {
+                throw new BizException("调库项 [" + item.getTargetPoolName() + "] 缺少流程标识（flowId 或 flowKey）");
+            }
         }
-        AdjustSubmitDto dto = new AdjustSubmitDto();
-        dto.setSecurityCode(req.getSecurityCode());
-        dto.setSubmitCount(logIds.size());
-        dto.setLogIds(logIds);
-        return dto;
     }
+
+    /**
+     * 第二阶段：参数初始化
+     *
+     * <p>集中执行本次提交所需的全部 DB 查询，构建 {@link SubmitSharedData}。
+     * 包括证券基础信息、投资池索引、池关系映射、以及每个唯一流程的快照（定义+版本+节点+连线）。
+     * 第三、四阶段直接从 shared 中读取数据，无需重复查库。
+     *
+     * @param req 调库提交请求
+     * @return 封装了本次提交全量共享数据的 SubmitSharedData
+     */
+    private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req) {
+        // 证券基础信息（兼含存在性校验）
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityId());
+        if (securityInfo == null) {
+            throw new BizException("证券不存在");
+        }
+
+        // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
+        if (allPools != null) {
+            for (InvestmentPoolBo p : allPools) {
+                poolMap.put(p.getId(), p);
+            }
+        }
+
+        // 证券当前有效入池 ID 集合（audit_status='20' 表示已生效）
+        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIds(req.getSecurityCode());
+        Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList != null ? currentPoolIdList : Collections.emptyList());
+
+        // 全量投资池关系配置，构建三层嵌套 Map
+        Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(
+                securityPoolAdjustMapper.queryAllPoolRelations());
+
+        // 收集所有调库项中引用的唯一流程标识，批量加载流程快照
+        Set<Long> uniqueFlowIds = new HashSet<>();
+        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            Long resolvedId = resolveFlowIdFromItem(item);
+            if (resolvedId != null) {
+                uniqueFlowIds.add(resolvedId);
+            }
+        }
+
+        // 为每个唯一流程加载快照（定义 + 活跃版本 + 节点 + 连线）
+        Map<Long, FlowSnapshot> flowSnapshotMap = new HashMap<>();
+        for (Long flowId : uniqueFlowIds) {
+            FlowSnapshot snapshot = buildFlowSnapshot(flowId);
+            if (snapshot != null) {
+                flowSnapshotMap.put(flowId, snapshot);
+            }
+        }
+
+        return new SubmitSharedData(
+                securityInfo,
+                poolMap,
+                currentPoolIds,
+                poolRelationMap,
+                securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
+                securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
+                securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
+                flowSnapshotMap
+        );
+    }
+
+    /**
+     * 从调库项的 flowId 或 flowKey 解析出流程定义 ID。
+     *
+     * <p>优先使用 flowId（直接匹配），否则用 flowKey 查 DB 获取。
+     *
+     * @param item 调库项
+     * @return 流程定义 ID，解析失败返回 null
+     */
+    private Long resolveFlowIdFromItem(SecurityPoolAdjustSubmitReq.AdjustItem item) {
+        if (item.getFlowId() != null) {
+            return item.getFlowId();
+        }
+        if (item.getFlowKey() != null && !item.getFlowKey().isEmpty()) {
+            FlowDefinitionBo def = flowMapper.queryActiveFlowByKey(item.getFlowKey());
+            return def != null ? def.getId() : null;
+        }
+        return null;
+    }
+
+    /**
+     * 为指定流程 ID 构建运行时快照（定义 + 活跃版本 + 节点索引 + 连线列表）。
+     *
+     * <p>节点按 DB ID 建立索引，供遍历连线时快速查找目标节点。
+     *
+     * @param flowId 流程定义 ID
+     * @return FlowSnapshot，若流程不存在或无活跃版本则返回 null
+     */
+    private FlowSnapshot buildFlowSnapshot(Long flowId) {
+        FlowDefinitionBo def = flowMapper.queryFlowById(flowId);
+        if (def == null) {
+            return null;
+        }
+
+        // 查询该流程的所有版本（ORDER BY ver_num DESC），取第一个 status='active' 的版本
+        List<FlowVersionBo> versions = flowMapper.queryFlowVersionListByFlowId(flowId, null);
+        FlowVersionBo activeVersion = null;
+        if (versions != null) {
+            for (FlowVersionBo v : versions) {
+                if ("active".equals(v.getStatus())) {
+                    activeVersion = v;
+                    break;
+                }
+            }
+        }
+        if (activeVersion == null) {
+            return null;
+        }
+
+        // 加载该版本的节点和连线
+        List<FlowNodeBo> nodes = flowMapper.queryFlowNodeListByVersionId(activeVersion.getId());
+        List<FlowEdgeBo> edges = flowMapper.queryFlowEdgeListByVersionId(activeVersion.getId());
+
+        // 节点按 DB ID 建立索引，供后续边遍历快速查找目标节点
+        Map<Long, FlowNodeBo> nodeMap = new HashMap<>();
+        if (nodes != null) {
+            for (FlowNodeBo node : nodes) {
+                nodeMap.put(node.getId(), node);
+            }
+        }
+
+        return new FlowSnapshot(def, activeVersion, nodeMap, edges != null ? edges : Collections.emptyList());
+    }
+
+    /**
+     * 判断流程是否为直通流程（start 节点的所有出边直接指向 end 节点）。
+     *
+     * <p>判定逻辑：
+     * <ol>
+     *   <li>在节点列表中查找 nodeType='start' 的节点</li>
+     *   <li>在连线列表中查找 fromNodeId 等于 start 节点 DB ID 的所有出边</li>
+     *   <li>逐一检查每个出边的目标节点的 nodeType 是否都为 'end'</li>
+     *   <li>若所有目标节点都是 end → 直通流程；若存在非 end 目标节点 → 非直通（需审批）</li>
+     * </ol>
+     *
+     * @param snapshot 流程快照（含节点索引和连线列表）
+     * @return true 表示直通流程（可直接生效），false 表示需要审批
+     */
+    private boolean isDirectFlow(FlowSnapshot snapshot) {
+        // 查找 start 节点
+        FlowNodeBo startNode = null;
+        for (FlowNodeBo node : snapshot.nodeMap.values()) {
+            if ("start".equals(node.getNodeType())) {
+                startNode = node;
+                break;
+            }
+        }
+        if (startNode == null) {
+            return false;
+        }
+
+        // 收集所有从 start 节点出发的边
+        List<FlowEdgeBo> outEdges = new ArrayList<>();
+        for (FlowEdgeBo edge : snapshot.edges) {
+            if (edge.getFromNodeId().equals(startNode.getId())) {
+                outEdges.add(edge);
+            }
+        }
+        if (outEdges.isEmpty()) {
+            return false;
+        }
+
+        // 检查所有出边的目标节点是否都是 end 类型
+        for (FlowEdgeBo edge : outEdges) {
+            FlowNodeBo targetNode = snapshot.nodeMap.get(edge.getToNodeId());
+            if (targetNode == null || !"end".equals(targetNode.getNodeType())) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 第三阶段：调入处理
+     *
+     * <p>遍历请求中全部调入方向的调库项，逐项判断流程是否为直通（start→end），
+     * 决定写入 ip_pool_status（直接生效）还是 ip_adjust_log（需审批）。
+     *
+     * @param req    调库提交请求
+     * @param shared 本次提交的共享数据
+     * @return 本次调入处理生成的所有记录 ID（含 pool_status 和 adjust_log）
+     */
+    private List<Long> executeInboundSubmit(
+            SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+
+        List<Long> generatedIds = new ArrayList<>();
+
+        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if (!"调入".equals(item.getAdjustMode())) {
+                continue;
+            }
+
+            // 解析该调库项对应的流程快照
+            Long flowId = resolveFlowIdFromItem(item);
+            FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+
+            // 判断是否为直通流程
+            boolean isDirect = snapshot != null && isDirectFlow(snapshot);
+
+            if (isDirect) {
+                // 直通流程：直接写入 ip_pool_status（audit_status='20'，即时生效）
+                IpAdjustLogBo bo = buildAdjustLog(req, item);
+                bo.setAuditStatus("20");
+                securityPoolAdjustMapper.addPoolStatus(bo);
+                generatedIds.add(bo.getId());
+            } else {
+                // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
+                IpAdjustLogBo bo = buildAdjustLog(req, item);
+                bo.setAuditStatus("00");
+                securityPoolAdjustMapper.addAdjustLog(bo);
+                generatedIds.add(bo.getId());
+            }
+        }
+
+        return generatedIds;
+    }
+
+    /**
+     * 第四阶段：调出处理
+     *
+     * <p>遍历请求中全部调出方向的调库项，逐项判断流程是否为直通（start→end），
+     * 决定软删除 ip_pool_status 记录（直接生效）还是写入 ip_adjust_log（需审批）。
+     *
+     * @param req    调库提交请求
+     * @param shared 本次提交的共享数据
+     * @return 本次调出处理生成的所有记录 ID（直通无新 ID，仅含 adjust_log 的 ID）
+     */
+    private List<Long> executeOutboundSubmit(
+            SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+
+        List<Long> generatedIds = new ArrayList<>();
+
+        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if (!"调出".equals(item.getAdjustMode())) {
+                continue;
+            }
+
+            // 解析该调库项对应的流程快照
+            Long flowId = resolveFlowIdFromItem(item);
+            FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+
+            // 判断是否为直通流程
+            boolean isDirect = snapshot != null && isDirectFlow(snapshot);
+
+            if (isDirect) {
+                // 直通流程：软删除 ip_pool_status 中该证券在目标池的有效记录
+                securityPoolAdjustMapper.softDeletePoolStatus(
+                        req.getSecurityCode(), item.getTargetPoolId());
+            } else {
+                // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
+                IpAdjustLogBo bo = buildAdjustLog(req, item);
+                bo.setAuditStatus("00");
+                securityPoolAdjustMapper.addAdjustLog(bo);
+                generatedIds.add(bo.getId());
+            }
+        }
+
+        return generatedIds;
+    }
+
+    /**
+     * 第五阶段：后续处理（预留扩展点）
+     *
+     * <p>当前为空实现，预留给未来可能的扩展需求：通知发送、缓存刷新、事件记录等。
+     *
+     * @param req    调库提交请求
+     * @param shared 本次提交的共享数据
+     */
+    private void postSubmitProcess(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        // 预留扩展点，当前无操作
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  查询类接口
+    // ═══════════════════════════════════════════════════════════
 
     /**
      * 查询证券的历史调库记录列表（全量，不分页）
@@ -1392,6 +1730,95 @@ public class SecurityPoolAdjustService {
             this.issuerInObservePool = issuerInObservePool;
             this.requestInPoolIds = requestInPoolIds;
             this.requestOutPoolIds = requestOutPoolIds;
+        }
+    }
+
+    /**
+     * 单个流程的运行时快照，聚合流程定义、活跃版本、节点索引和连线列表。
+     *
+     * <p>用于 {@link #isDirectFlow(FlowSnapshot)} 方法快速判断流程是否为直通（start→end）模式，
+     * 避免在第三/四阶段逐项重复查询流程定义、版本、节点和连线。
+     */
+    private static class FlowSnapshot {
+
+        /** 流程定义 */
+        final FlowDefinitionBo definition;
+
+        /** 当前活跃版本 */
+        final FlowVersionBo activeVersion;
+
+        /** 节点索引（DB ID → FlowNodeBo），用于连线遍历时快速定位目标节点 */
+        final Map<Long, FlowNodeBo> nodeMap;
+
+        /** 该版本的全量连线列表 */
+        final List<FlowEdgeBo> edges;
+
+        FlowSnapshot(FlowDefinitionBo definition,
+                     FlowVersionBo activeVersion,
+                     Map<Long, FlowNodeBo> nodeMap,
+                     List<FlowEdgeBo> edges) {
+            this.definition = definition;
+            this.activeVersion = activeVersion;
+            this.nodeMap = nodeMap;
+            this.edges = edges;
+        }
+    }
+
+    /**
+     * 本次调库提交（addAdjustLog）的共享数据载体
+     *
+     * <p>addAdjustLog 每次调用需要加载多项证券/池/流程的基础数据，这些数据在整个调用过程中保持不变。
+     * 将其封装为此类后，第三、四阶段的处理方法只需接收一个 shared 参数即可获取所需数据，
+     * 避免逐级传递大量参数。
+     *
+     * <p>与 {@link AdjustSharedData} 的区别：
+     * <ul>
+     *   <li>不包含 requestInPoolIds / requestOutPoolIds（提交阶段无需互斥冲突校验）</li>
+     *   <li>新增 flowSnapshotMap，包含每个引用流程的快照数据</li>
+     * </ul>
+     */
+    private static class SubmitSharedData {
+
+        /** 证券基础信息（来自 sirm_securityinfo） */
+        final SecurityInfoBo securityInfo;
+
+        /** 全量投资池索引（ID → Bo），用于快速查找池详情和构建池路径名称 */
+        final Map<Long, InvestmentPoolBo> poolMap;
+
+        /** 证券当前有效所在池 ID 集合（ip_pool_status.audit_status='20'） */
+        final Set<Long> currentPoolIds;
+
+        /** 全量投资池关系配置（poolId → relationType → 关联池 ID 列表） */
+        final Map<Long, Map<String, List<Long>>> poolRelationMap;
+
+        /** 证券是否存在进行中的调库流程（audit_status IN ('00','11')） */
+        final boolean hasPendingProcess;
+
+        /** 当前证券自身是否在观察池（pool_type='observe'，audit_status='20'） */
+        final boolean securityInObservePool;
+
+        /** 证券主体公司（发行人）旗下是否有证券在观察池中 */
+        final boolean issuerInObservePool;
+
+        /** 流程快照索引（flowId → FlowSnapshot），供第三/四阶段快速判断直通流程 */
+        final Map<Long, FlowSnapshot> flowSnapshotMap;
+
+        SubmitSharedData(SecurityInfoBo securityInfo,
+                         Map<Long, InvestmentPoolBo> poolMap,
+                         Set<Long> currentPoolIds,
+                         Map<Long, Map<String, List<Long>>> poolRelationMap,
+                         boolean hasPendingProcess,
+                         boolean securityInObservePool,
+                         boolean issuerInObservePool,
+                         Map<Long, FlowSnapshot> flowSnapshotMap) {
+            this.securityInfo = securityInfo;
+            this.poolMap = poolMap;
+            this.currentPoolIds = currentPoolIds;
+            this.poolRelationMap = poolRelationMap;
+            this.hasPendingProcess = hasPendingProcess;
+            this.securityInObservePool = securityInObservePool;
+            this.issuerInObservePool = issuerInObservePool;
+            this.flowSnapshotMap = flowSnapshotMap;
         }
     }
 

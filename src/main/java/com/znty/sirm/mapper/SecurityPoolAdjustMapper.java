@@ -23,8 +23,15 @@ public interface SecurityPoolAdjustMapper {
     /** 根据 ID 查询证券详情 */
     SecurityInfoBo querySecurityDetail(@Param("securityId") Long securityId);
 
-    /** 新增调库记录 */
+    /** 新增调库记录（非直通流程，audit_status='00' 待审核） */
     int addAdjustLog(IpAdjustLogBo bo);
+
+    /** 新增入池状态记录（直通流程，audit_status='20' 即时生效） */
+    int addPoolStatus(IpAdjustLogBo bo);
+
+    /** 软删除入池状态（直通调出流程，将目标池中有效记录标记为已删除） */
+    int softDeletePoolStatus(@Param("securityCode") String securityCode,
+                             @Param("targetPoolId") Long targetPoolId);
 
     /** 根据证券代码查询调库记录列表 */
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode);

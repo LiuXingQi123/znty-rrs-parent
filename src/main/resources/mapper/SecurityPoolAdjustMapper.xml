@@ -251,6 +251,61 @@
           AND ips.is_deleted = 0
     </select>
 
+    <!-- 新增入池状态记录（直通流程：start→end 跳过审批，直接写入已生效状态） -->
+    <insert id="addPoolStatus" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_pool_status (security_code
+                                  ,security_short_name
+                                  ,security_type
+                                  ,adjust_type
+                                  ,adjust_mode
+                                  ,target_pool_id
+                                  ,target_pool_name
+                                  ,pool_type
+                                  ,audit_status
+                                  ,adjuster_id
+                                  ,adjuster_name
+                                  ,adjust_reason
+                                  ,adjust_advice
+                                  ,attachment_files
+                                  ,material_files
+                                  ,submit_time
+                                  ,entry_time
+                                  ,is_deleted
+                                  ,crte_time
+                                  ,updt_time)
+        VALUES (#{securityCode}
+               ,#{securityShortName}
+               ,#{securityType}
+               ,#{adjustType}
+               ,#{adjustMode}
+               ,#{targetPoolId}
+               ,#{targetPoolName}
+               ,#{poolType}
+               ,#{auditStatus}
+               ,#{adjusterId}
+               ,#{adjusterName}
+               ,#{adjustReason}
+               ,#{adjustAdvice}
+               ,#{attachmentFiles}
+               ,#{materialFiles}
+               ,NOW()
+               ,NOW()
+               ,0
+               ,NOW()
+               ,NOW())
+    </insert>
+
+    <!-- 软删除入池状态（直通调出：将该证券在目标池中的生效记录标记为删除） -->
+    <update id="softDeletePoolStatus">
+        UPDATE ip_pool_status
+        SET is_deleted = 1
+           ,updt_time = NOW()
+        WHERE security_code = #{securityCode}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </update>
+
     <!-- 查询全量投资池关系配置（不限关系类型） -->
     <select id="queryAllPoolRelations" resultType="com.znty.sirm.model.PoolRelationBo">
         SELECT pool_id
