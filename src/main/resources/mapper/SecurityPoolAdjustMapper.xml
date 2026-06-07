@@ -306,6 +306,64 @@
           AND is_deleted = 0
     </update>
 
+    <!-- 新增流程步骤记录 -->
+    <insert id="addAdjustStep" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_step (adjust_log_id
+                                   ,flow_node_id
+                                   ,node_code
+                                   ,node_label
+                                   ,node_type
+                                   ,approval_strategy
+                                   ,sort_order
+                                   ,step_status
+                                   ,handler_id
+                                   ,handler_name
+                                   ,process_action
+                                   ,process_comment
+                                   ,start_time
+                                   ,process_time
+                                   ,crte_time
+                                   ,updt_time)
+        VALUES (#{adjustLogId}
+               ,#{flowNodeId}
+               ,#{nodeCode}
+               ,#{nodeLabel}
+               ,#{nodeType}
+               ,#{approvalStrategy}
+               ,#{sortOrder}
+               ,#{stepStatus}
+               ,#{handlerId}
+               ,#{handlerName}
+               ,#{processAction}
+               ,#{processComment}
+               ,#{startTime}
+               ,#{processTime}
+               ,NOW()
+               ,NOW())
+    </insert>
+
+    <!-- 查询指定调库记录的流程步骤列表 -->
+    <select id="queryAdjustStepList" resultType="com.znty.sirm.model.IpAdjustStepBo">
+        SELECT id
+               ,adjust_log_id
+               ,flow_node_id
+               ,node_code
+               ,node_label
+               ,node_type
+               ,approval_strategy
+               ,sort_order
+               ,step_status
+               ,handler_id
+               ,handler_name
+               ,process_action
+               ,process_comment
+               ,start_time
+               ,process_time
+        FROM ip_adjust_step
+        WHERE adjust_log_id = #{adjustLogId}
+        ORDER BY sort_order, id
+    </select>
+
     <!-- 查询全量投资池关系配置（不限关系类型） -->
     <select id="queryAllPoolRelations" resultType="com.znty.sirm.model.PoolRelationBo">
         SELECT pool_id

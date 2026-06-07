@@ -10,6 +10,7 @@ import com.znty.sirm.model.SecurityInfoDetailDto;
 import com.znty.sirm.model.SecurityInfoDto;
 import com.znty.sirm.model.SecurityPoolAdjustReq;
 import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
+import com.znty.sirm.model.IpAdjustStepDto;
 import com.znty.sirm.model.SecurityPoolStatusDto;
 import com.znty.sirm.model.PoolDto;
 import com.znty.sirm.service.SecurityPoolAdjustService;
@@ -91,5 +92,13 @@ public class SecurityPoolAdjustController {
     @PostMapping("/checkAdjust")
     public ApiResponse<AdjustCheckDto> checkAdjust(@RequestBody AdjustCheckReq req) {
         return ApiResponse.success(securityPoolAdjustService.checkAdjust(req));
+    }
+
+    /**
+     * 查询指定调库记录的审批流程步骤列表
+     */
+    @PostMapping("/queryAdjustStepList")
+    public ApiResponse<List<IpAdjustStepDto>> queryAdjustStepList(@RequestBody SecurityPoolAdjustReq req) {
+        return ApiResponse.success(securityPoolAdjustService.queryAdjustStepList(req.getAdjustLogId()));
     }
 }

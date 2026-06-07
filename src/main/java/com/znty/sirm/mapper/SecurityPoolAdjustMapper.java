@@ -1,5 +1,6 @@
 package com.znty.sirm.mapper;
 
+import com.znty.sirm.model.IpAdjustStepBo;
 import com.znty.sirm.model.SecurityInfoBo;
 import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.PoolRelationBo;
@@ -59,4 +60,10 @@ public interface SecurityPoolAdjustMapper {
 
     /** 查询证券主体公司是否在观察池（同发行人的任意证券在观察池中） */
     boolean queryIssuerInObservePool(@Param("securityCode") String securityCode);
+
+    /** 新增流程步骤记录 */
+    int addAdjustStep(IpAdjustStepBo bo);
+
+    /** 查询指定调库记录的流程步骤列表 */
+    List<IpAdjustStepBo> queryAdjustStepList(@Param("adjustLogId") Long adjustLogId);
 }

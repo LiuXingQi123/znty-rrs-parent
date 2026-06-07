@@ -13,6 +13,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 TRUNCATE TABLE `sirm_securityinfo`;
 TRUNCATE TABLE `ip_adjust_log`;
 TRUNCATE TABLE `ip_pool_status`;
+TRUNCATE TABLE `ip_adjust_step`;
 
 -- 证券信息表插入测试数据
 INSERT INTO `sirm_securityinfo` (
@@ -587,3 +588,83 @@ VALUES
  '["report_subject_20260510_005.pdf"]', '["material_subject_20260510_005.pdf"]',
  '2026-05-10 09:00:00', '2026-05-11 10:00:00', '2026-05-12 09:00:00',
  0, NOW(), NOW());
+
+-- ============================================================================
+-- 证券池调库-流程步骤记录表 - 测试数据
+-- ============================================================================
+-- 说明：adjust_log_id=1（24某交投MTN001，已入池）完整审批通过路径 6 步
+--       流程节点：n1(开始)→n2(研究员A发起)→n3(研究员B复核)→n5(研究总监审批)→n6(O32自动审批)→n7(结束)
+--       跳过驳回回路 n4；n3 使用 preempt 抢占审批策略
+--       adjust_log_id=8（24某科技K1，待审核）进行中，停在 n3 待 3 人处理
+-- ============================================================================
+
+INSERT INTO `ip_adjust_step` (`adjust_log_id`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+                              `approval_strategy`, `sort_order`, `step_status`,
+                              `handler_id`, `handler_name`, `process_action`, `process_comment`,
+                              `start_time`, `process_time`, `crte_time`, `updt_time`)
+VALUES
+-- ── adjust_log_id=1：24某交投MTN001，完整审批通过 ────────────────────────────────
+-- n1 开始节点（自动完成）
+(1, 10101, 'n1', '开始', 'start',
+ NULL, 1, 'auto_completed',
+ '1001', '管理员', 'submit', NULL,
+ '2026-05-08 09:00:00', '2026-05-08 09:00:00', NOW(), NOW()),
+
+-- n2 研究员A发起（发起人提交即通过）
+(1, 10102, 'n2', '研究员A发起', 'approval',
+ 'preempt', 2, 'approved',
+ '1001', '管理员', 'submit', NULL,
+ '2026-05-08 09:00:00', '2026-05-08 09:00:00', NOW(), NOW()),
+
+-- n3 研究员B复核（preempt 策略，研究员2 复核通过）
+(1, 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approved',
+ '2', '研究员2', 'approve', '复核通过，债券资质符合入库标准',
+ '2026-05-08 09:00:00', '2026-05-08 14:00:00', NOW(), NOW()),
+
+-- n5 研究总监审批（通过）
+(1, 10105, 'n5', '研究总监审批', 'approval',
+ 'preempt', 5, 'approved',
+ '4', '研究总监', 'approve', '审批通过，同意入库',
+ '2026-05-08 14:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
+
+-- n6 O32自动审批（自动完成）
+(1, 10106, 'n6', 'O32自动审批', 'auto',
+ NULL, 6, 'auto_completed',
+ NULL, NULL, 'auto_process', NULL,
+ '2026-05-09 10:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
+
+-- n7 结束（自动完成）
+(1, 10107, 'n7', '结束', 'end',
+ NULL, 7, 'auto_completed',
+ NULL, NULL, 'auto_process', NULL,
+ '2026-05-09 10:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
+
+-- ── adjust_log_id=8：24某科技K1，待审核，进行中 ──────────────────────────────────
+-- n1 开始节点（自动完成）
+(8, 10101, 'n1', '开始', 'start',
+ NULL, 1, 'auto_completed',
+ '1001', '管理员', 'submit', NULL,
+ '2026-05-28 09:30:00', '2026-05-28 09:30:00', NOW(), NOW()),
+
+-- n2 研究员A发起（发起人提交即通过）
+(8, 10102, 'n2', '研究员A发起', 'approval',
+ 'preempt', 2, 'approved',
+ '1001', '管理员', 'submit', NULL,
+ '2026-05-28 09:30:00', '2026-05-28 09:30:00', NOW(), NOW()),
+
+-- n3 研究员B复核（preempt 策略，3 名处理人均待处理，任一人通过即可）
+(8, 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'pending',
+ '1', '研究员1', NULL, NULL,
+ '2026-05-28 09:30:00', NULL, NOW(), NOW()),
+
+(8, 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'pending',
+ '2', '研究员2', NULL, NULL,
+ '2026-05-28 09:30:00', NULL, NOW(), NOW()),
+
+(8, 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'pending',
+ '3', '研究员3', NULL, NULL,
+ '2026-05-28 09:30:00', NULL, NOW(), NOW());

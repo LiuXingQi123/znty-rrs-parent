@@ -27,8 +27,13 @@ import com.znty.sirm.model.SecurityPoolStatusDto;
 import com.znty.sirm.model.PoolStatusDto;
 import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.IpAdjustLogBo;
+import com.znty.sirm.model.IpAdjustStepBo;
+import com.znty.sirm.model.IpAdjustStepDto;
+import com.znty.sirm.model.NodeApprovalConfigBo;
 import com.znty.sirm.model.PoolDto;
 import com.znty.sirm.model.PoolRelationBo;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,6 +104,8 @@ public class SecurityPoolAdjustService {
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
     private static final String CREDIT_BOND_ROOT_CODE = "credit_bond_root";
     private static final String CREDIT_BOND_POOL_TYPE = "credit_bond";
+
+    private static final ObjectMapper om = new ObjectMapper();
 
     // ═══════════════════════════════════════════════════════════
     //  查询类接口
@@ -383,7 +390,16 @@ public class SecurityPoolAdjustService {
             }
         }
 
-        return new FlowSnapshot(def, activeVersion, nodeMap, edges != null ? edges : Collections.emptyList());
+        // 加载该版本的审批节点配置，按 nodeId 建立索引
+        List<NodeApprovalConfigBo> approvalConfigs = flowMapper.queryApprovalConfigListByVersionId(activeVersion.getId());
+        Map<Long, NodeApprovalConfigBo> approvalConfigMap = new HashMap<>();
+        if (approvalConfigs != null) {
+            for (NodeApprovalConfigBo cfg : approvalConfigs) {
+                approvalConfigMap.put(cfg.getNodeId(), cfg);
+            }
+        }
+
+        return new FlowSnapshot(def, activeVersion, nodeMap, edges != null ? edges : Collections.emptyList(), approvalConfigMap);
     }
 
     /**
@@ -476,6 +492,10 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                // 创建初始流程步骤记录（懒创建：开始→提交人→下一审批节点）
+                if (snapshot != null && bo.getId() != null) {
+                    createInitialSteps(bo.getId(), snapshot, req.getAdjusterId(), req.getAdjusterName());
+                }
             }
         }
 
@@ -520,6 +540,10 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                // 创建初始流程步骤记录（懒创建：开始→提交人→下一审批节点）
+                if (snapshot != null && bo.getId() != null) {
+                    createInitialSteps(bo.getId(), snapshot, req.getAdjusterId(), req.getAdjusterName());
+                }
             }
         }
 
@@ -578,6 +602,38 @@ public class SecurityPoolAdjustService {
             dto.setAdjustReason(log.getAdjustReason());
             dto.setAdjustAdvice(log.getAdjustAdvice());
             dto.setSubmitTime(log.getSubmitTime());
+            result.add(dto);
+        }
+        return result;
+    }
+
+    /** 查询指定调库记录的流程步骤列表 */
+    public List<IpAdjustStepDto> queryAdjustStepList(Long adjustLogId) {
+        if (adjustLogId == null) {
+            return Collections.emptyList();
+        }
+        List<IpAdjustStepBo> steps = securityPoolAdjustMapper.queryAdjustStepList(adjustLogId);
+        if (steps == null || steps.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<IpAdjustStepDto> result = new ArrayList<>();
+        for (IpAdjustStepBo bo : steps) {
+            IpAdjustStepDto dto = new IpAdjustStepDto();
+            dto.setId(bo.getId());
+            dto.setAdjustLogId(bo.getAdjustLogId());
+            dto.setFlowNodeId(bo.getFlowNodeId());
+            dto.setNodeCode(bo.getNodeCode());
+            dto.setNodeLabel(bo.getNodeLabel());
+            dto.setNodeType(bo.getNodeType());
+            dto.setApprovalStrategy(bo.getApprovalStrategy());
+            dto.setSortOrder(bo.getSortOrder());
+            dto.setStepStatus(bo.getStepStatus());
+            dto.setHandlerId(bo.getHandlerId());
+            dto.setHandlerName(bo.getHandlerName());
+            dto.setProcessAction(bo.getProcessAction());
+            dto.setProcessComment(bo.getProcessComment());
+            dto.setStartTime(bo.getStartTime());
+            dto.setProcessTime(bo.getProcessTime());
             result.add(dto);
         }
         return result;
@@ -1633,6 +1689,182 @@ public class SecurityPoolAdjustService {
         return dto;
     }
 
+    // ═══════════════════════════════════════════════════════════
+    //  流程步骤记录（ip_adjust_step）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * 为新建的调库记录创建初始流程步骤（懒创建）
+     *
+     * <p>仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理），
+     * 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）。
+     *
+     * @param adjustLogId  调库记录 ID
+     * @param snapshot     流程快照
+     * @param adjusterId   提交人 ID
+     * @param adjusterName 提交人名称
+     */
+    private void createInitialSteps(Long adjustLogId, FlowSnapshot snapshot,
+                                    String adjusterId, String adjusterName) {
+        if (snapshot == null) {
+            return;
+        }
+
+        Date now = new Date();
+
+        // 查找开始节点
+        FlowNodeBo startNode = findNodeByType(snapshot, "start");
+        if (startNode == null) {
+            return;
+        }
+
+        // 1. 创建开始节点步骤（auto_completed）
+        int sortOrder = startNode.getSortOrder() != null ? startNode.getSortOrder() : 1;
+        insertStepRecord(adjustLogId, startNode, null, sortOrder, "auto_completed",
+                         adjusterId, adjusterName, "submit", null, now);
+
+        // 2. 沿主路径找提交人节点（开始节点后第一个审批节点）
+        FlowNodeBo submitterNode = findNextNodeOnMainPath(snapshot, startNode, null);
+        if (submitterNode == null) {
+            return;
+        }
+        sortOrder = submitterNode.getSortOrder() != null ? submitterNode.getSortOrder() : 2;
+        NodeApprovalConfigBo submitterConfig = snapshot.approvalConfigMap.get(submitterNode.getId());
+        insertStepRecord(adjustLogId, submitterNode, submitterConfig, sortOrder, "approved",
+                         adjusterId, adjusterName, "submit", null, now);
+
+        // 3. 沿主路径找下一节点，创建待处理记录（到此为止，不继续级联）
+        FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, submitterNode, startNode);
+        if (nextNode == null) {
+            return;
+        }
+        // 创建下一审批节点的待处理步骤
+        createPendingSteps(adjustLogId, nextNode, snapshot, now);
+    }
+
+    /**
+     * 为审批节点创建待处理步骤记录（按 approval_persons 每人一条）
+     */
+    private void createPendingSteps(Long adjustLogId, FlowNodeBo node,
+                                    FlowSnapshot snapshot, Date now) {
+        NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(node.getId());
+        List<String> handlers = parseApprovalPersons(config);
+        int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
+
+        if (handlers.isEmpty()) {
+            // 无配置处理人时仍创建一条空处理人的待处理记录
+            insertStepRecord(adjustLogId, node, config, sortOrder, "pending",
+                             null, null, null, null, now);
+        } else {
+            for (String handlerCode : handlers) {
+                insertStepRecord(adjustLogId, node, config, sortOrder, "pending",
+                                 handlerCode, null, null, null, now);
+            }
+        }
+    }
+
+    /**
+     * 插入单条步骤记录到 ip_adjust_step
+     */
+    private void insertStepRecord(Long adjustLogId, FlowNodeBo node,
+                                  NodeApprovalConfigBo config, int sortOrder,
+                                  String stepStatus, String handlerId, String handlerName,
+                                  String processAction, String processComment, Date startTime) {
+        IpAdjustStepBo step = new IpAdjustStepBo();
+        step.setAdjustLogId(adjustLogId);
+        step.setFlowNodeId(node.getId());
+        step.setNodeCode(node.getNodeId());
+        step.setNodeLabel(node.getLabel());
+        step.setNodeType(node.getNodeType());
+        step.setApprovalStrategy(config != null ? config.getApprovalStrategy() : null);
+        step.setSortOrder(sortOrder);
+        step.setStepStatus(stepStatus);
+        step.setHandlerId(handlerId);
+        step.setHandlerName(handlerName);
+        step.setProcessAction(processAction);
+        step.setProcessComment(processComment);
+        step.setStartTime(startTime);
+        step.setProcessTime("pending".equals(stepStatus) ? null : startTime);
+        securityPoolAdjustMapper.addAdjustStep(step);
+    }
+
+    /**
+     * 按节点类型查找节点
+     */
+    private FlowNodeBo findNodeByType(FlowSnapshot snapshot, String nodeType) {
+        for (FlowNodeBo node : snapshot.nodeMap.values()) {
+            if (nodeType.equals(node.getNodeType())) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 沿流程主路径查找下一节点
+     *
+     * <p>从当前节点出发，遍历所有出边（连线），排除指向已访问节点的边，
+     * 优先选择无负面标签的边（排除含"驳回"/"不通过"的边），
+     * 返回目标节点。
+     *
+     * @param snapshot   流程快照
+     * @param currentNode 当前节点
+     * @param prevNode   前一个节点（用于排除回退边），可为 null
+     * @return 下一节点，无出边时返回 null
+     */
+    private FlowNodeBo findNextNodeOnMainPath(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode) {
+        // 收集当前节点所有的出边
+        List<FlowEdgeBo> outEdges = new ArrayList<>();
+        for (FlowEdgeBo edge : snapshot.edges) {
+            if (edge.getFromNodeId().equals(currentNode.getId())) {
+                outEdges.add(edge);
+            }
+        }
+
+        if (outEdges.isEmpty()) {
+            return null;
+        }
+
+        // 排除指向已访问节点的边（防止走上驳回回路）
+        if (prevNode != null) {
+            List<FlowEdgeBo> filtered = new ArrayList<>();
+            for (FlowEdgeBo edge : outEdges) {
+                if (!edge.getToNodeId().equals(prevNode.getId())) {
+                    filtered.add(edge);
+                }
+            }
+            if (!filtered.isEmpty()) {
+                outEdges = filtered;
+            }
+        }
+
+        // 优先选择非驳回/不通过标签的出边
+        for (FlowEdgeBo edge : outEdges) {
+            String label = edge.getLabel();
+            if (label == null || (!label.contains("驳回") && !label.contains("不通过"))) {
+                return snapshot.nodeMap.get(edge.getToNodeId());
+            }
+        }
+
+        // 兜底：返回第一条出边的目标节点
+        FlowEdgeBo firstEdge = outEdges.get(0);
+        return snapshot.nodeMap.get(firstEdge.getToNodeId());
+    }
+
+    /**
+     * 解析审批配置中的处理人 JSON 数组（如 {@code ["researcher-b"]}）为字符串列表
+     */
+    private List<String> parseApprovalPersons(NodeApprovalConfigBo config) {
+        if (config == null || config.getApprovalPersons() == null || config.getApprovalPersons().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            return om.readValue(config.getApprovalPersons(), new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
     /**
      * 构建调库记录实体（ip_adjust_log），由提交申请逻辑调用
      *
@@ -1704,14 +1936,19 @@ public class SecurityPoolAdjustService {
         /** 该版本的全量连线列表 */
         final List<FlowEdgeBo> edges;
 
+        /** 审批配置索引（nodeId → NodeApprovalConfigBo），用于创建步骤时获取审批策略和处理人 */
+        final Map<Long, NodeApprovalConfigBo> approvalConfigMap;
+
         FlowSnapshot(FlowDefinitionBo definition,
                      FlowVersionBo activeVersion,
                      Map<Long, FlowNodeBo> nodeMap,
-                     List<FlowEdgeBo> edges) {
+                     List<FlowEdgeBo> edges,
+                     Map<Long, NodeApprovalConfigBo> approvalConfigMap) {
             this.definition = definition;
             this.activeVersion = activeVersion;
             this.nodeMap = nodeMap;
             this.edges = edges;
+            this.approvalConfigMap = approvalConfigMap;
         }
     }
 

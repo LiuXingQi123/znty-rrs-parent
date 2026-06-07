@@ -212,3 +212,33 @@ CREATE TABLE `ip_pool_status`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
     COMMENT = '投资池当前状态表';
+
+-- ============================================================================
+-- 4. 证券池调库-流程步骤记录表
+-- ============================================================================
+DROP TABLE IF EXISTS `ip_adjust_step`;
+
+CREATE TABLE `ip_adjust_step`
+(
+    `id`                BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `adjust_log_id`     BIGINT       DEFAULT NULL COMMENT '关联调库记录 ID',
+    `flow_node_id`      BIGINT       DEFAULT NULL COMMENT '关联流程节点 ID',
+    `node_code`         VARCHAR(32)  DEFAULT NULL COMMENT '节点业务标识',
+    `node_label`        VARCHAR(128) DEFAULT NULL COMMENT '节点显示名称',
+    `node_type`         VARCHAR(32)  DEFAULT NULL COMMENT '节点类型：start/approval/auto/end/notify/condition',
+    `approval_strategy` VARCHAR(16)  DEFAULT NULL COMMENT '审批策略：preempt=抢占审批 / all=会签 / initiator=发起人',
+    `sort_order`        INT          DEFAULT NULL COMMENT '排序序号',
+    `step_status`       VARCHAR(16)  DEFAULT NULL COMMENT '步骤处理状态：pending=待处理 / approved=已通过 / rejected=已驳回 / auto_completed=自动完成 / skipped=已跳过 / canceled=已撤回',
+    `handler_id`        VARCHAR(32)  DEFAULT NULL COMMENT '处理人 ID',
+    `handler_name`      VARCHAR(64)  DEFAULT NULL COMMENT '处理人名称',
+    `process_action`    VARCHAR(16)  DEFAULT NULL COMMENT '处理动作：submit=提交 / approve=通过 / reject=驳回 / auto_process=自动处理',
+    `process_comment`   VARCHAR(500) DEFAULT NULL COMMENT '处理意见',
+    `start_time`        DATETIME     DEFAULT NULL COMMENT '步骤激活时间',
+    `process_time`      DATETIME     DEFAULT NULL COMMENT '处理时间',
+    `crte_time`         DATETIME     DEFAULT NULL COMMENT '创建时间',
+    `updt_time`         DATETIME     DEFAULT NULL COMMENT '修改时间',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+    COMMENT = '证券池调库-流程步骤记录表';
