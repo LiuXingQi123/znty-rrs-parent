@@ -261,9 +261,6 @@ public class SecurityPoolAdjustService {
             if (item.getTargetPoolId() == null) {
                 throw new BizException("调库项的目标投资池 ID 不能为空");
             }
-            if (item.getFlowId() == null && (item.getFlowKey() == null || item.getFlowKey().isEmpty())) {
-                throw new BizException("调库项 [" + item.getTargetPoolName() + "] 缺少流程标识（flowId 或 flowKey）");
-            }
         }
     }
 
@@ -490,7 +487,7 @@ public class SecurityPoolAdjustService {
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
 
             // 判断是否为直通流程
-            boolean isDirect = snapshot != null && isDirectFlow(snapshot);
+            boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
             if (isDirect) {
                 // 直通流程：直接写入 ip_pool_status（audit_status='20'，即时生效）
@@ -541,7 +538,7 @@ public class SecurityPoolAdjustService {
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
 
             // 判断是否为直通流程
-            boolean isDirect = snapshot != null && isDirectFlow(snapshot);
+            boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
             if (isDirect) {
                 // 直通流程：软删除 ip_pool_status 中该证券在目标池的有效记录
@@ -1178,12 +1175,13 @@ public class SecurityPoolAdjustService {
      */
     private AdjustCheckDto.FlowOption buildPoolFlowOption(FlowOptionParam p) {
         List<String> reasons = new ArrayList<>(p.getUnmatchReasons());
-        if (p.getFlowId() == null && (p.getFlowKey() == null || p.getFlowKey().isEmpty())) {
+        boolean noApproval = p.getFlowId() == null && (p.getFlowKey() == null || p.getFlowKey().isEmpty());
+        if (noApproval) {
             reasons.add("目标池未配置该流程，按不需要审批处理");
         }
         FlowOptionParam result = new FlowOptionParam();
         result.setFlowType(p.getFlowType());
-        result.setFlowName(p.getFlowName());
+        result.setFlowName(noApproval ? "不需要审批" : p.getFlowName());
         result.setFlowId(p.getFlowId());
         result.setFlowKey(p.getFlowKey());
         result.setRecommended(p.isRecommended());
@@ -1738,16 +1736,15 @@ public class SecurityPoolAdjustService {
                          adjusterId, adjusterName, "submit", null, now);
 
         FlowNodeBo prevNode = startNode;
-        FlowNodeBo currentNode = findNextNodeOnMainPath(snapshot, startNode, null);
+        FlowNodeBo currentNode = findNextNodeForInitialSteps(snapshot, startNode, null);
         while (currentNode != null) {
             NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(currentNode.getId());
             if ("approval".equals(currentNode.getNodeType())
-                    && config != null
-                    && "initiator".equals(config.getApprovalStrategy())) {
+                    && isInitiatorStep(currentNode, config, prevNode, startNode)) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
                 insertStepRecord(adjustLogId, currentNode, config, sortOrder, "approved",
                                  adjusterId, adjusterName, "submit", null, now);
-                FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, currentNode, prevNode);
+                FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
                 prevNode = currentNode;
                 currentNode = nextNode;
                 continue;
@@ -1758,10 +1755,32 @@ public class SecurityPoolAdjustService {
                 return;
             }
 
-            FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, currentNode, prevNode);
+            FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
             prevNode = currentNode;
             currentNode = nextNode;
         }
+    }
+
+    /**
+     * 判断当前审批节点是否应由流程发起人自动完成。
+     */
+    private boolean isInitiatorStep(FlowNodeBo node, NodeApprovalConfigBo config,
+                                    FlowNodeBo prevNode, FlowNodeBo startNode) {
+        if (node == null || !"approval".equals(node.getNodeType())) {
+            return false;
+        }
+        if (config != null && "initiator".equals(config.getApprovalStrategy())) {
+            return true;
+        }
+        boolean firstAfterStart = prevNode != null && startNode != null
+                && prevNode.getId() != null && prevNode.getId().equals(startNode.getId());
+        if (!firstAfterStart) {
+            return false;
+        }
+        String label = node.getLabel();
+        String subLabel = node.getSubLabel();
+        return (label != null && (label.contains("发起") || label.contains("提交")))
+                || (subLabel != null && ("researcher-a".equals(subLabel) || "initiator".equals(subLabel)));
     }
 
     /**
@@ -1871,6 +1890,45 @@ public class SecurityPoolAdjustService {
         // 兜底：返回第一条出边的目标节点
         FlowEdgeBo firstEdge = outEdges.get(0);
         return snapshot.nodeMap.get(firstEdge.getToNodeId());
+    }
+
+    /**
+     * 查找初始步骤的下一个节点，连线缺失时按 sort_order 兜底。
+     */
+    private FlowNodeBo findNextNodeForInitialSteps(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode) {
+        FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, currentNode, prevNode);
+        if (nextNode != null) {
+            return nextNode;
+        }
+        return findNextNodeBySortOrder(snapshot, currentNode, prevNode);
+    }
+
+    /**
+     * 按节点排序查找当前节点后的下一个节点。
+     */
+    private FlowNodeBo findNextNodeBySortOrder(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode) {
+        if (snapshot == null || currentNode == null || currentNode.getSortOrder() == null) {
+            return null;
+        }
+        FlowNodeBo result = null;
+        for (FlowNodeBo node : snapshot.nodeMap.values()) {
+            if (node == null || node.getSortOrder() == null || node.getId() == null) {
+                continue;
+            }
+            if (prevNode != null && node.getId().equals(prevNode.getId())) {
+                continue;
+            }
+            if (node.getId().equals(currentNode.getId())) {
+                continue;
+            }
+            if (node.getSortOrder() <= currentNode.getSortOrder()) {
+                continue;
+            }
+            if (result == null || node.getSortOrder() < result.getSortOrder()) {
+                result = node;
+            }
+        }
+        return result;
     }
 
     /**

@@ -6,9 +6,12 @@ import com.znty.sirm.model.FlowNodeBo;
 import com.znty.sirm.model.IpAdjustStepBo;
 import com.znty.sirm.model.NodeApprovalConfigBo;
 import com.znty.sirm.model.NodeApprovalHandlerBo;
+import com.znty.sirm.model.SecurityInfoBo;
+import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +22,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -88,6 +92,113 @@ public class SecurityPoolAdjustServiceStepTest {
                 .containsExactly("1", "2");
     }
 
+    @Test
+    public void createInitialStepsShouldSkipSubmitterNodeEvenWhenOldConfigIsPreempt() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+
+        FlowNodeBo start = buildNode(1L, "n1", "start", 1);
+        FlowNodeBo submitter = buildNode(2L, "n2", "approval", 2);
+        submitter.setLabel("研究员A发起");
+        submitter.setSubLabel("researcher-a");
+        FlowNodeBo reviewer = buildNode(3L, "n3", "approval", 3);
+        reviewer.setLabel("研究员B复核");
+        NodeApprovalConfigBo submitterConfig = buildConfig(20L, submitter.getId(), "preempt");
+        NodeApprovalConfigBo reviewerConfig = buildConfig(30L, reviewer.getId(), "preempt");
+        Object snapshot = buildSnapshot(
+                Arrays.asList(start, submitter, reviewer),
+                Arrays.asList(buildEdge(start.getId(), submitter.getId()), buildEdge(submitter.getId(), reviewer.getId())),
+                Arrays.asList(submitterConfig, reviewerConfig),
+                buildHandlerMap(reviewerConfig.getId(), 2));
+
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, snapshot, "1001", "admin");
+
+        ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
+        verify(mapper, times(4)).addAdjustStep(captor.capture());
+        List<IpAdjustStepBo> steps = captor.getAllValues();
+
+        assertThat(steps.get(0).getFlowNodeId()).isEqualTo(start.getId());
+        assertThat(steps.get(0).getHandlerId()).isEqualTo("1001");
+        assertThat(steps.get(1).getFlowNodeId()).isEqualTo(submitter.getId());
+        assertThat(steps.get(1).getStepStatus()).isEqualTo("approved");
+        assertThat(steps.get(1).getHandlerId()).isEqualTo("1001");
+        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getFlowNodeId)
+                .containsOnly(reviewer.getId());
+        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getStepStatus)
+                .containsOnly("pending");
+        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getHandlerId)
+                .containsExactly("1", "2");
+    }
+
+    @Test
+    public void createInitialStepsShouldCreateNextPendingStepWhenEdgeAfterSubmitterIsMissing() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+
+        FlowNodeBo start = buildNode(1L, "n1", "start", 1);
+        FlowNodeBo submitter = buildNode(2L, "n2", "approval", 2);
+        submitter.setLabel("研究员A发起");
+        submitter.setSubLabel("researcher-a");
+        FlowNodeBo reviewer = buildNode(3L, "n3", "approval", 3);
+        reviewer.setLabel("研究员B复核");
+        NodeApprovalConfigBo submitterConfig = buildConfig(20L, submitter.getId(), "initiator");
+        NodeApprovalConfigBo reviewerConfig = buildConfig(30L, reviewer.getId(), "preempt");
+        Object snapshot = buildSnapshot(
+                Arrays.asList(start, submitter, reviewer),
+                Collections.singletonList(buildEdge(start.getId(), submitter.getId())),
+                Arrays.asList(submitterConfig, reviewerConfig),
+                buildHandlerMap(reviewerConfig.getId(), 2));
+
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, snapshot, "1001", "admin");
+
+        ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
+        verify(mapper, times(4)).addAdjustStep(captor.capture());
+        List<IpAdjustStepBo> steps = captor.getAllValues();
+
+        assertThat(steps.get(1).getFlowNodeId()).isEqualTo(submitter.getId());
+        assertThat(steps.get(1).getStepStatus()).isEqualTo("approved");
+        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getFlowNodeId)
+                .containsOnly(reviewer.getId());
+        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getStepStatus)
+                .containsOnly("pending");
+        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getHandlerId)
+                .containsExactly("1", "2");
+    }
+
+    @Test
+    public void executeInboundSubmitShouldTreatMissingFlowAsDirect() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("S001");
+        req.setSecurityShortName("test");
+        req.setSecurityType("bond");
+        req.setAdjustType("manual");
+        req.setAdjusterId("1001");
+        req.setAdjusterName("admin");
+
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setAdjustMode("\u8c03\u5165");
+        item.setTargetPoolId(10L);
+        item.setTargetPoolName("pool");
+        item.setPoolType("special_account");
+        req.setItems(Collections.singletonList(item));
+
+        Object shared = buildSubmitSharedData();
+
+        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
+
+        ArgumentCaptor<com.znty.sirm.model.IpAdjustLogBo> captor =
+                ArgumentCaptor.forClass(com.znty.sirm.model.IpAdjustLogBo.class);
+        verify(mapper).addPoolStatus(captor.capture());
+        verify(mapper, never()).addAdjustLog(org.mockito.Matchers.any(com.znty.sirm.model.IpAdjustLogBo.class));
+        assertThat(captor.getValue().getAuditStatus()).isEqualTo("20");
+    }
+
     private Object buildSnapshot(List<FlowNodeBo> nodes, List<FlowEdgeBo> edges,
                                  List<NodeApprovalConfigBo> configs,
                                  Map<Long, List<NodeApprovalHandlerBo>> handlerMap) throws Exception {
@@ -103,6 +214,21 @@ public class SecurityPoolAdjustServiceStepTest {
         Constructor<?> constructor = snapshotClass.getDeclaredConstructors()[0];
         constructor.setAccessible(true);
         return constructor.newInstance(null, null, nodeMap, edges, configMap, handlerMap);
+    }
+
+    private Object buildSubmitSharedData() throws Exception {
+        Class<?> sharedClass = Class.forName("com.znty.sirm.service.SecurityPoolAdjustService$SubmitSharedData");
+        Constructor<?> constructor = sharedClass.getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        return constructor.newInstance(
+                new SecurityInfoBo(),
+                new HashMap<Long, com.znty.sirm.model.InvestmentPoolBo>(),
+                Collections.<Long>emptySet(),
+                new HashMap<Long, Map<String, List<Long>>>(),
+                false,
+                false,
+                false,
+                new HashMap<Long, Object>());
     }
 
     private FlowNodeBo buildNode(Long id, String nodeId, String nodeType, Integer sortOrder) {
