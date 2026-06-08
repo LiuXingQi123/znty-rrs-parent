@@ -28,8 +28,8 @@ public class CanvasNodeDto {
     // 审批节点
     /** 审批策略 */
     private String approvalStrategy;
-    /** 审批人列表 */
-    private List<String> approvalPersons;
+    /** 审批处理人列表（支持角色和人员） */
+    private List<PoolPermissionBo> approvalPersons;
     /** 审批备注 */
     private String approvalRemark;
     // 自动任务节点

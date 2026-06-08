@@ -39,4 +39,10 @@ public class FlowReq extends PageRequest {
     private Long versionId;
     /** 版本号筛选（版本历史查询） */
     private Integer verNum;
+
+    /** 角色 ID（人员查询用） */
+    private Long roleId;
+
+    /** 人员搜索关键词 */
+    private String userKeyword;
 }

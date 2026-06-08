@@ -269,19 +269,48 @@
         WHERE node_id IN (SELECT id FROM wf_flow_node WHERE version_id = #{versionId})
     </delete>
 
+    <!-- 删除指定版本的审批处理人明细 -->
+    <delete id="deleteApprovalHandlerByVersionId">
+        DELETE FROM wf_node_approval_handler
+        WHERE approval_config_id IN (
+            SELECT c.id
+            FROM wf_node_approval_config c
+            INNER JOIN wf_flow_node n ON n.id = c.node_id
+            WHERE n.version_id = #{versionId}
+        )
+    </delete>
+
     <!-- 新建审批配置。 -->
     <insert id="addApprovalConfig" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_node_approval_config (node_id
         ,approval_strategy
-        ,approval_persons
-                                             ,approval_remark
-                                             ,crte_time
-                                             ,updt_time)
+        ,approval_remark
+        ,crte_time
+        ,updt_time)
         VALUES (
                 #{nodeId}
                 ,#{approvalStrategy}
-                ,#{approvalPersons}
                 ,#{approvalRemark}
+                ,#{crteTime}
+                ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 新增审批处理人明细 -->
+    <insert id="addApprovalHandler" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO wf_node_approval_handler (approval_config_id
+        ,subject_type
+        ,subject_id
+        ,subject_name
+        ,sort_order
+        ,crte_time
+        ,updt_time)
+        VALUES (
+                #{approvalConfigId}
+                ,#{subjectType}
+                ,#{subjectId}
+                ,#{subjectName}
+                ,#{sortOrder}
                 ,#{crteTime}
                 ,#{updtTime}
         )
@@ -415,6 +444,56 @@
     <select id="queryRoleDictList" resultType="com.znty.sirm.model.RoleDictBo">
         SELECT * FROM wf_role_dict WHERE is_active = 1 ORDER BY sort_order</select>
 
+    <!-- 查询所有角色 -->
+    <select id="queryRoleList" resultType="com.znty.sirm.model.RoleBo">
+        SELECT id
+               ,name
+               ,parent_id
+               ,sort_order
+               ,enable
+               ,crte_time
+               ,updt_time
+        FROM t_sys_role
+        WHERE enable = 1
+        ORDER BY sort_order ASC
+                 ,id ASC
+    </select>
+
+    <!-- 查询人员列表 -->
+    <select id="queryUserList" resultType="com.znty.sirm.model.UserBo">
+        SELECT u.id
+               ,u.name
+               ,u.user_name
+               ,u.dr
+               ,u.crte_time
+               ,u.updt_time
+               ,GROUP_CONCAT(DISTINCT r.name ORDER BY r.sort_order ASC SEPARATOR '、') AS roleName
+        FROM t_sys_user u
+        LEFT JOIN t_sys_user_role ur ON ur.user_id = u.id AND ur.dr = 0
+        LEFT JOIN t_sys_role r ON r.id = ur.role_id AND r.enable = 1
+        WHERE u.dr = 0
+        <if test="roleIds != null and roleIds.size() > 0">
+            AND EXISTS (
+                SELECT 1 FROM t_sys_user_role ur2
+                WHERE ur2.user_id = u.id AND ur2.dr = 0
+                  AND ur2.role_id IN
+                <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+                    #{roleId}
+                </foreach>
+            )
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (u.name LIKE CONCAT('%', #{keyword}, '%') OR u.user_name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        GROUP BY u.id
+                 ,u.name
+                 ,u.user_name
+                 ,u.dr
+                 ,u.crte_time
+                 ,u.updt_time
+        ORDER BY u.id ASC
+    </select>
+
     <!-- ==================== 事件表 INSERT ==================== -->
 
     <!-- 新建流程定义事件。 -->
@@ -540,7 +619,6 @@
         INSERT INTO wf_node_approval_config_evt (id
         ,node_id
         ,approval_strategy
-        ,approval_persons
         ,approval_remark
         ,crte_time
         ,updt_time
@@ -551,8 +629,35 @@
         #{id}
         ,#{nodeId}
         ,#{approvalStrategy}
-        ,#{approvalPersons}
         ,#{approvalRemark}
+        ,#{crteTime}
+        ,#{updtTime}
+        ,#{opterId}
+        ,#{optTime}
+        ,#{oprtType}
+        )
+    </insert>
+
+    <!-- 新增审批处理人明细事件 -->
+    <insert id="addApprovalHandlerEvt" useGeneratedKeys="true" keyProperty="evtId">
+        INSERT INTO wf_node_approval_handler_evt (id
+        ,approval_config_id
+        ,subject_type
+        ,subject_id
+        ,subject_name
+        ,sort_order
+        ,crte_time
+        ,updt_time
+        ,opter_id
+        ,opt_time
+        ,oprt_type)
+        VALUES (
+        #{id}
+        ,#{approvalConfigId}
+        ,#{subjectType}
+        ,#{subjectId}
+        ,#{subjectName}
+        ,#{sortOrder}
         ,#{crteTime}
         ,#{updtTime}
         ,#{opterId}
@@ -738,6 +843,18 @@
         SELECT c.* FROM wf_node_approval_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
+    </select>
+
+    <!-- 查询指定版本的审批处理人明细列表 -->
+    <select id="queryApprovalHandlerListByVersionId" resultType="com.znty.sirm.model.NodeApprovalHandlerBo">
+        SELECT h.*
+        FROM wf_node_approval_handler h
+        INNER JOIN wf_node_approval_config c ON c.id = h.approval_config_id
+        INNER JOIN wf_flow_node n ON n.id = c.node_id
+        WHERE n.version_id = #{versionId}
+        ORDER BY h.approval_config_id ASC
+                 ,h.sort_order ASC
+                 ,h.id ASC
     </select>
 
     <!-- 查询指定版本的自动任务配置列表。 -->

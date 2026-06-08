@@ -129,8 +129,16 @@ public class FlowController {
      * 查询可用的审批角色字典，用于流程节点中配置审批人角色
      */
     @PostMapping("/dict/queryRoleList")
-    public ApiResponse<List<DictDto>> queryRoleList(@RequestBody FlowReq req) {
+    public ApiResponse<List<RoleDto>> queryRoleList(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.queryRoleList(req));
+    }
+
+    /**
+     * 查询可配置为审批处理人的人员列表，支持按角色及其子角色过滤
+     */
+    @PostMapping("/dict/queryUserList")
+    public ApiResponse<List<UserDto>> queryUserList(@RequestBody FlowReq req) {
+        return ApiResponse.success(flowService.queryUserList(req));
     }
 
     /**

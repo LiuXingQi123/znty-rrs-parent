@@ -11,16 +11,16 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- 清空所有业务表
 -- ----------------------------------------------------------------------------
 TRUNCATE TABLE `ip_pool_permission_evt`;
-TRUNCATE TABLE `ip_user_role_evt`;
-TRUNCATE TABLE `ip_user_evt`;
-TRUNCATE TABLE `ip_role_evt`;
+TRUNCATE TABLE `t_sys_user_role_evt`;
+TRUNCATE TABLE `t_sys_user_evt`;
+TRUNCATE TABLE `t_sys_role_evt`;
 TRUNCATE TABLE `ip_pool_auto_rule_evt`;
 TRUNCATE TABLE `ip_pool_relation_evt`;
 TRUNCATE TABLE `ip_investment_pool_evt`;
 TRUNCATE TABLE `ip_pool_permission`;
-TRUNCATE TABLE `ip_user_role`;
-TRUNCATE TABLE `ip_user`;
-TRUNCATE TABLE `ip_role`;
+TRUNCATE TABLE `t_sys_user_role`;
+TRUNCATE TABLE `t_sys_user`;
+TRUNCATE TABLE `t_sys_role`;
 TRUNCATE TABLE `ip_pool_auto_rule`;
 TRUNCATE TABLE `ip_pool_relation`;
 TRUNCATE TABLE `ip_investment_pool`;
@@ -102,37 +102,36 @@ FROM `ip_investment_pool`;
 -- 2. 初始化角色和人员数据
 -- ----------------------------------------------------------------------------
 -- 角色树：研究部 > 信用研究组 > 利率研究组
-INSERT INTO `ip_role` (`id`, `role_name`, `parent_id`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`) VALUES
-(1, '研究部',       NULL, 1, 0, NOW(), NOW()),
-(2, '信用研究组',   1,    2, 0, NOW(), NOW()),
-(3, '利率研究组',   2,    3, 0, NOW(), NOW()),
-(4, '固收部',       NULL, 4, 0, NOW(), NOW()),
-(5, '利率组',       4,    5, 0, NOW(), NOW()),
-(6, '信用组',       4,    6, 0, NOW(), NOW()),
-(7, '权益部',       NULL, 7, 0, NOW(), NOW()),
-(8, '行业研究组',   7,    8, 0, NOW(), NOW()),
-(9, '量化部',       NULL, 9, 0, NOW(), NOW());
+INSERT INTO `t_sys_role` (`id`, `name`, `parent_id`, `sort_order`, `enable`, `crte_time`, `updt_time`) VALUES
+(1, '研究部',       NULL, 1, 1, NOW(), NOW()),
+(2, '信用研究组',   1,    2, 1, NOW(), NOW()),
+(3, '利率研究组',   2,    3, 1, NOW(), NOW()),
+(4, '固收部',       NULL, 4, 1, NOW(), NOW()),
+(5, '利率组',       4,    5, 1, NOW(), NOW()),
+(6, '信用组',       4,    6, 1, NOW(), NOW()),
+(7, '权益部',       NULL, 7, 1, NOW(), NOW()),
+(8, '行业研究组',   7,    8, 1, NOW(), NOW()),
+(9, '量化部',       NULL, 9, 1, NOW(), NOW());
 
 -- 人员
-INSERT INTO `ip_user` (`id`, `user_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
-(1,  '研究员1', 0, NOW(), NOW()),
-(2,  '研究员2', 0, NOW(), NOW()),
-(3,  '研究员3', 0, NOW(), NOW()),
-(4,  '研究员4', 0, NOW(), NOW()),
-(5,  '研究员5', 0, NOW(), NOW()),
-(6,  '固收1',   0, NOW(), NOW()),
-(7,  '固收2',   0, NOW(), NOW()),
-(8,  '固收3',   0, NOW(), NOW()),
-(9,  '固收4',   0, NOW(), NOW()),
-(10, '权益1',   0, NOW(), NOW()),
-(11, '权益2',   0, NOW(), NOW()),
-(12, '权益3',   0, NOW(), NOW()),
-(13, '量化1',   0, NOW(), NOW()),
-(14, '量化2',   0, NOW(), NOW()),
-(1001, '管理员', 0, NOW(), NOW());
+INSERT INTO `t_sys_user` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`) VALUES
+(1,  '研究员1', 'yanjiuyuan1', 0, NOW(), NOW()),
+(2,  '叶伟', 'yewei', 0, NOW(), NOW()),
+(3,  '研究员3', 'yanjiuyuan3', 0, NOW(), NOW()),
+(4,  '研究员4', 'yanjiuyuan4', 0, NOW(), NOW()),
+(5,  '研究员5', 'yanjiuyuan5', 0, NOW(), NOW()),
+(6,  '固收1', 'gushou1', 0, NOW(), NOW()),
+(7,  '固收2', 'gushou2', 0, NOW(), NOW()),
+(8,  '固收3', 'gushou3', 0, NOW(), NOW()),
+(9,  '固收4', 'gushou4', 0, NOW(), NOW()),
+(10,  '权益1', 'quanyi1', 0, NOW(), NOW()),
+(11,  '权益2', 'quanyi2', 0, NOW(), NOW()),
+(12,  '权益3', 'quanyi3', 0, NOW(), NOW()),
+(13,  '量化1', 'lianghua1', 0, NOW(), NOW()),
+(14,  '量化2', 'lianghua2', 0, NOW(), NOW()),
+(1001,  '管理员', 'admin', 0, NOW(), NOW());
 
--- 人员角色关联（支持一人多角色）
-INSERT INTO `ip_user_role` (`id`, `user_id`, `role_id`, `is_deleted`, `crte_time`, `updt_time`) VALUES
+INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`) VALUES
 (1,  1,  1, 0, NOW(), NOW()),  -- 研究员1: 研究部
 (2,  1,  2, 0, NOW(), NOW()),  -- 研究员1: 信用研究组
 (3,  2,  2, 0, NOW(), NOW()),  -- 研究员2: 信用研究组
@@ -154,17 +153,17 @@ INSERT INTO `ip_user_role` (`id`, `user_id`, `role_id`, `is_deleted`, `crte_time
 (19, 13, 9, 0, NOW(), NOW()),  -- 量化1: 量化部
 (20, 14, 9, 0, NOW(), NOW());  -- 量化2: 量化部
 
-INSERT INTO `ip_role_evt` (`id`, `role_name`, `parent_id`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
-SELECT `id`, `role_name`, `parent_id`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
-FROM `ip_role`;
+INSERT INTO `t_sys_role_evt` (`id`, `name`, `parent_id`, `sort_order`, `enable`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
+SELECT `id`, `name`, `parent_id`, `sort_order`, `enable`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
+FROM `t_sys_role`;
 
-INSERT INTO `ip_user_evt` (`id`, `user_name`, `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
-SELECT `id`, `user_name`, `is_deleted`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
-FROM `ip_user`;
+INSERT INTO `t_sys_user_evt` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
+SELECT `id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
+FROM `t_sys_user`;
 
-INSERT INTO `ip_user_role_evt` (`id`, `user_id`, `role_id`, `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
-SELECT `id`, `user_id`, `role_id`, `is_deleted`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
-FROM `ip_user_role`;
+INSERT INTO `t_sys_user_role_evt` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
+SELECT `id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
+FROM `t_sys_user_role`;
 
 -- ----------------------------------------------------------------------------
 -- 3. 初始化投资池权限配置

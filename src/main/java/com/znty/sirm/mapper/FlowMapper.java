@@ -85,6 +85,12 @@ public interface FlowMapper {
     /** 新建审批配置。 */
     int addApprovalConfig(NodeApprovalConfigBo cfg);
 
+    /** 删除指定版本的审批处理人明细。 */
+    int deleteApprovalHandlerByVersionId(@Param("versionId") Long versionId);
+
+    /** 新增审批处理人明细。 */
+    int addApprovalHandler(NodeApprovalHandlerBo handler);
+
     // ==================== 自动执行节点配置 ====================
 
     /** 删除指定版本的自动任务配置。 */
@@ -130,6 +136,12 @@ public interface FlowMapper {
     /** 查询角色字典。 */
     List<RoleDictBo> queryRoleDictList();
 
+    /** 查询所有角色。 */
+    List<RoleBo> queryRoleList();
+
+    /** 查询人员列表。 */
+    List<UserBo> queryUserList(@Param("roleIds") List<Long> roleIds, @Param("keyword") String keyword);
+
     // ==================== 事件表 ====================
 
     /** 新建流程定义事件。 */
@@ -143,6 +155,9 @@ public interface FlowMapper {
 
     /** 新建审批配置事件。 */
     int addApprovalConfigEvt(NodeApprovalConfigEvtBo evt);
+
+    /** 新建审批处理人明细事件。 */
+    int addApprovalHandlerEvt(NodeApprovalHandlerEvtBo evt);
 
     /** 新建自动任务配置事件。 */
     int addAutoConfigEvt(NodeAutoConfigEvtBo evt);
@@ -169,6 +184,9 @@ public interface FlowMapper {
 
     /** 查询指定版本的审批配置列表。 */
     List<NodeApprovalConfigBo> queryApprovalConfigListByVersionId(@Param("versionId") Long versionId);
+
+    /** 查询指定版本的审批处理人明细列表。 */
+    List<NodeApprovalHandlerBo> queryApprovalHandlerListByVersionId(@Param("versionId") Long versionId);
 
     /** 查询指定版本的自动任务配置列表。 */
     List<NodeAutoConfigBo> queryAutoConfigListByVersionId(@Param("versionId") Long versionId);

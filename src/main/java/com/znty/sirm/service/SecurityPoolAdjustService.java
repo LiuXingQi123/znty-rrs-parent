@@ -30,10 +30,11 @@ import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.IpAdjustStepBo;
 import com.znty.sirm.model.IpAdjustStepDto;
 import com.znty.sirm.model.NodeApprovalConfigBo;
+import com.znty.sirm.model.NodeApprovalHandlerBo;
 import com.znty.sirm.model.PoolDto;
 import com.znty.sirm.model.PoolRelationBo;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.znty.sirm.model.RoleBo;
+import com.znty.sirm.model.UserBo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +44,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -105,7 +107,6 @@ public class SecurityPoolAdjustService {
     private static final String CREDIT_BOND_ROOT_CODE = "credit_bond_root";
     private static final String CREDIT_BOND_POOL_TYPE = "credit_bond";
 
-    private static final ObjectMapper om = new ObjectMapper();
 
     // ═══════════════════════════════════════════════════════════
     //  查询类接口
@@ -399,7 +400,20 @@ public class SecurityPoolAdjustService {
             }
         }
 
-        return new FlowSnapshot(def, activeVersion, nodeMap, edges != null ? edges : Collections.emptyList(), approvalConfigMap);
+        List<NodeApprovalHandlerBo> approvalHandlers = flowMapper.queryApprovalHandlerListByVersionId(activeVersion.getId());
+        Map<Long, List<NodeApprovalHandlerBo>> approvalHandlerMap = new HashMap<>();
+        if (approvalHandlers != null) {
+            for (NodeApprovalHandlerBo handler : approvalHandlers) {
+                List<NodeApprovalHandlerBo> list = approvalHandlerMap.get(handler.getApprovalConfigId());
+                if (list == null) {
+                    list = new ArrayList<>();
+                    approvalHandlerMap.put(handler.getApprovalConfigId(), list);
+                }
+                list.add(handler);
+            }
+        }
+
+        return new FlowSnapshot(def, activeVersion, nodeMap, edges != null ? edges : Collections.emptyList(), approvalConfigMap, approvalHandlerMap);
     }
 
     /**
@@ -1723,32 +1737,40 @@ public class SecurityPoolAdjustService {
         insertStepRecord(adjustLogId, startNode, null, sortOrder, "auto_completed",
                          adjusterId, adjusterName, "submit", null, now);
 
-        // 2. 沿主路径找提交人节点（开始节点后第一个审批节点）
-        FlowNodeBo submitterNode = findNextNodeOnMainPath(snapshot, startNode, null);
-        if (submitterNode == null) {
-            return;
-        }
-        sortOrder = submitterNode.getSortOrder() != null ? submitterNode.getSortOrder() : 2;
-        NodeApprovalConfigBo submitterConfig = snapshot.approvalConfigMap.get(submitterNode.getId());
-        insertStepRecord(adjustLogId, submitterNode, submitterConfig, sortOrder, "approved",
-                         adjusterId, adjusterName, "submit", null, now);
+        FlowNodeBo prevNode = startNode;
+        FlowNodeBo currentNode = findNextNodeOnMainPath(snapshot, startNode, null);
+        while (currentNode != null) {
+            NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(currentNode.getId());
+            if ("approval".equals(currentNode.getNodeType())
+                    && config != null
+                    && "initiator".equals(config.getApprovalStrategy())) {
+                sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
+                insertStepRecord(adjustLogId, currentNode, config, sortOrder, "approved",
+                                 adjusterId, adjusterName, "submit", null, now);
+                FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, currentNode, prevNode);
+                prevNode = currentNode;
+                currentNode = nextNode;
+                continue;
+            }
 
-        // 3. 沿主路径找下一节点，创建待处理记录（到此为止，不继续级联）
-        FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, submitterNode, startNode);
-        if (nextNode == null) {
-            return;
+            if ("approval".equals(currentNode.getNodeType())) {
+                createPendingSteps(adjustLogId, currentNode, snapshot, now);
+                return;
+            }
+
+            FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, currentNode, prevNode);
+            prevNode = currentNode;
+            currentNode = nextNode;
         }
-        // 创建下一审批节点的待处理步骤
-        createPendingSteps(adjustLogId, nextNode, snapshot, now);
     }
 
     /**
-     * 为审批节点创建待处理步骤记录（按 approval_persons 每人一条）
+     * 为审批节点创建待处理步骤记录（按处理人明细展开为具体人员）
      */
     private void createPendingSteps(Long adjustLogId, FlowNodeBo node,
                                     FlowSnapshot snapshot, Date now) {
         NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(node.getId());
-        List<String> handlers = parseApprovalPersons(config);
+        List<HandlerTarget> handlers = resolveApprovalHandlers(config, snapshot);
         int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
 
         if (handlers.isEmpty()) {
@@ -1756,9 +1778,9 @@ public class SecurityPoolAdjustService {
             insertStepRecord(adjustLogId, node, config, sortOrder, "pending",
                              null, null, null, null, now);
         } else {
-            for (String handlerCode : handlers) {
+            for (HandlerTarget handler : handlers) {
                 insertStepRecord(adjustLogId, node, config, sortOrder, "pending",
-                                 handlerCode, null, null, null, now);
+                                 handler.handlerId, handler.handlerName, null, null, now);
             }
         }
     }
@@ -1852,16 +1874,52 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 解析审批配置中的处理人 JSON 数组（如 {@code ["researcher-b"]}）为字符串列表
+     * 将审批处理人配置解析为具体人员，角色会递归展开到子角色下的人员并去重。
      */
-    private List<String> parseApprovalPersons(NodeApprovalConfigBo config) {
-        if (config == null || config.getApprovalPersons() == null || config.getApprovalPersons().isEmpty()) {
+    private List<HandlerTarget> resolveApprovalHandlers(NodeApprovalConfigBo config, FlowSnapshot snapshot) {
+        if (config == null || config.getId() == null) {
             return Collections.emptyList();
         }
-        try {
-            return om.readValue(config.getApprovalPersons(), new TypeReference<List<String>>() {});
-        } catch (Exception e) {
+        List<NodeApprovalHandlerBo> handlers = snapshot.approvalHandlerMap.get(config.getId());
+        if (handlers == null || handlers.isEmpty()) {
             return Collections.emptyList();
+        }
+        Map<String, HandlerTarget> resultMap = new LinkedHashMap<>();
+        for (NodeApprovalHandlerBo handler : handlers) {
+            if (handler == null || handler.getSubjectType() == null || handler.getSubjectId() == null) {
+                continue;
+            }
+            if ("user".equals(handler.getSubjectType())) {
+                String userId = String.valueOf(handler.getSubjectId());
+                resultMap.put(userId, new HandlerTarget(userId, handler.getSubjectName()));
+            } else if ("role".equals(handler.getSubjectType())) {
+                List<Long> roleIds = new ArrayList<>();
+                collectDescendantRoleIds(handler.getSubjectId(), roleIds, flowMapper.queryRoleList());
+                List<UserBo> users = flowMapper.queryUserList(roleIds, null);
+                if (users == null) {
+                    continue;
+                }
+                for (UserBo user : users) {
+                    if (user == null || user.getId() == null) {
+                        continue;
+                    }
+                    String userId = String.valueOf(user.getId());
+                    resultMap.put(userId, new HandlerTarget(userId, user.getName()));
+                }
+            }
+        }
+        return new ArrayList<>(resultMap.values());
+    }
+
+    /**
+     * 递归收集角色及其子角色 ID。
+     */
+    private void collectDescendantRoleIds(Long roleId, List<Long> roleIds, List<RoleBo> allRoles) {
+        roleIds.add(roleId);
+        for (RoleBo role : allRoles) {
+            if (roleId.equals(role.getParentId())) {
+                collectDescendantRoleIds(role.getId(), roleIds, allRoles);
+            }
         }
     }
 
@@ -1939,16 +1997,34 @@ public class SecurityPoolAdjustService {
         /** 审批配置索引（nodeId → NodeApprovalConfigBo），用于创建步骤时获取审批策略和处理人 */
         final Map<Long, NodeApprovalConfigBo> approvalConfigMap;
 
+        /** 审批处理人明细索引（approvalConfigId → handler 列表） */
+        final Map<Long, List<NodeApprovalHandlerBo>> approvalHandlerMap;
+
         FlowSnapshot(FlowDefinitionBo definition,
                      FlowVersionBo activeVersion,
                      Map<Long, FlowNodeBo> nodeMap,
                      List<FlowEdgeBo> edges,
-                     Map<Long, NodeApprovalConfigBo> approvalConfigMap) {
+                     Map<Long, NodeApprovalConfigBo> approvalConfigMap,
+                     Map<Long, List<NodeApprovalHandlerBo>> approvalHandlerMap) {
             this.definition = definition;
             this.activeVersion = activeVersion;
             this.nodeMap = nodeMap;
             this.edges = edges;
             this.approvalConfigMap = approvalConfigMap;
+            this.approvalHandlerMap = approvalHandlerMap;
+        }
+    }
+
+    /**
+     * 待处理步骤的具体处理人。
+     */
+    private static class HandlerTarget {
+        final String handlerId;
+        final String handlerName;
+
+        HandlerTarget(String handlerId, String handlerName) {
+            this.handlerId = handlerId;
+            this.handlerName = handlerName;
         }
     }
 

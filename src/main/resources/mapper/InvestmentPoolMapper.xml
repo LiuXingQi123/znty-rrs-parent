@@ -859,14 +859,14 @@
     <!-- 查询所有角色 -->
     <select id="queryRoleList" resultType="com.znty.sirm.model.RoleBo">
         SELECT id
-               ,role_name
+               ,name
                ,parent_id
                ,sort_order
-               ,is_deleted
+               ,enable
                ,crte_time
                ,updt_time
-        FROM ip_role
-        WHERE is_deleted = 0
+        FROM t_sys_role
+        WHERE enable = 1
         ORDER BY sort_order ASC
                  ,id ASC
     </select>
@@ -874,19 +874,20 @@
     <!-- 查询人员列表 -->
     <select id="queryUserList" resultType="com.znty.sirm.model.UserBo">
         SELECT u.id
+               ,u.name
                ,u.user_name
-               ,u.is_deleted
+               ,u.dr
                ,u.crte_time
                ,u.updt_time
-               ,GROUP_CONCAT(DISTINCT r.role_name ORDER BY r.sort_order ASC SEPARATOR '、') AS roleName
-        FROM ip_user u
-        LEFT JOIN ip_user_role ur ON ur.user_id = u.id AND ur.is_deleted = 0
-        LEFT JOIN ip_role r ON r.id = ur.role_id AND r.is_deleted = 0
-        WHERE u.is_deleted = 0
+               ,GROUP_CONCAT(DISTINCT r.name ORDER BY r.sort_order ASC SEPARATOR '、') AS roleName
+        FROM t_sys_user u
+        LEFT JOIN t_sys_user_role ur ON ur.user_id = u.id AND ur.dr = 0
+        LEFT JOIN t_sys_role r ON r.id = ur.role_id AND r.enable = 1
+        WHERE u.dr = 0
         <if test="roleIds != null and roleIds.size() > 0">
             AND EXISTS (
-                SELECT 1 FROM ip_user_role ur2
-                WHERE ur2.user_id = u.id AND ur2.is_deleted = 0
+                SELECT 1 FROM t_sys_user_role ur2
+                WHERE ur2.user_id = u.id AND ur2.dr = 0
                   AND ur2.role_id IN
                 <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
                     #{roleId}
@@ -894,11 +895,12 @@
             )
         </if>
         <if test="keyword != null and keyword != ''">
-            AND u.user_name LIKE CONCAT('%', #{keyword}, '%')
+            AND (u.name LIKE CONCAT('%', #{keyword}, '%') OR u.user_name LIKE CONCAT('%', #{keyword}, '%'))
         </if>
         GROUP BY u.id
+                 ,u.name
                  ,u.user_name
-                 ,u.is_deleted
+                 ,u.dr
                  ,u.crte_time
                  ,u.updt_time
         ORDER BY u.id ASC

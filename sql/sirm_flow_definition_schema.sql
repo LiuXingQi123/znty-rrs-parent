@@ -27,6 +27,8 @@ DROP TABLE IF EXISTS `wf_node_notify_config_evt`;
 DROP TABLE IF EXISTS `wf_node_notify_config`;
 DROP TABLE IF EXISTS `wf_node_auto_config_evt`;
 DROP TABLE IF EXISTS `wf_node_auto_config`;
+DROP TABLE IF EXISTS `wf_node_approval_handler_evt`;
+DROP TABLE IF EXISTS `wf_node_approval_handler`;
 DROP TABLE IF EXISTS `wf_node_approval_config_evt`;
 DROP TABLE IF EXISTS `wf_node_approval_config`;
 DROP TABLE IF EXISTS `wf_flow_node_evt`;
@@ -199,13 +201,12 @@ CREATE TABLE `wf_flow_node_evt` (
 
 -- ============================================================================
 -- 4. 审批节点配置表（approval 专属）
---    对应前端：selNode.approvalStrategy / approvalPersons / approvalRemark
+--    对应前端：selNode.approvalStrategy / approvalRemark
 -- ============================================================================
 CREATE TABLE `wf_node_approval_config` (
     `id`                BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `node_id`           BIGINT       DEFAULT NULL             COMMENT '关联节点 ID（wf_flow_node.id）',
     `approval_strategy` VARCHAR(32)  DEFAULT NULL             COMMENT '处理策略：preempt=抢占审批（任一人） / all=全部处理 / initiator=流程发起人',
-    `approval_persons`  JSON         DEFAULT NULL             COMMENT '处理人角色列表，如：["fund-manager","risk-officer"]，可用 JSON_CONTAINS 查询',
     `approval_remark`   VARCHAR(512) DEFAULT NULL             COMMENT '审批节点备注说明',
     `crte_time`         DATETIME     DEFAULT NULL             COMMENT '创建时间',
     `updt_time`         DATETIME     DEFAULT NULL             COMMENT '修改时间',
@@ -220,7 +221,6 @@ CREATE TABLE `wf_node_approval_config_evt` (
     `id`                BIGINT       DEFAULT NULL             COMMENT '主键 ID',
     `node_id`           BIGINT       DEFAULT NULL             COMMENT '关联节点 ID（wf_flow_node.id）',
     `approval_strategy` VARCHAR(32)  DEFAULT NULL             COMMENT '处理策略：preempt=抢占审批（任一人） / all=全部处理 / initiator=流程发起人',
-    `approval_persons`  JSON         DEFAULT NULL             COMMENT '处理人角色列表',
     `approval_remark`   VARCHAR(512) DEFAULT NULL             COMMENT '审批节点备注说明',
     `crte_time`         DATETIME     DEFAULT NULL             COMMENT '创建时间',
     `updt_time`         DATETIME     DEFAULT NULL             COMMENT '修改时间',
@@ -233,6 +233,42 @@ CREATE TABLE `wf_node_approval_config_evt` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
   COMMENT = '审批节点配置事件表（操作审计）';
+
+CREATE TABLE `wf_node_approval_handler` (
+    `id`                 BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
+    `approval_config_id` BIGINT       DEFAULT NULL             COMMENT '关联审批节点配置 ID（wf_node_approval_config.id）',
+    `subject_type`       VARCHAR(16)  DEFAULT NULL             COMMENT '处理人主体类型：role=角色 / user=人员',
+    `subject_id`         BIGINT       DEFAULT NULL             COMMENT '处理人主体 ID（角色 ID 或人员 ID）',
+    `subject_name`       VARCHAR(128) DEFAULT NULL             COMMENT '处理人主体名称快照',
+    `sort_order`         INT          DEFAULT NULL             COMMENT '排序号',
+    `crte_time`          DATETIME     DEFAULT NULL             COMMENT '创建时间',
+    `updt_time`          DATETIME     DEFAULT NULL             COMMENT '修改时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_approval_handler_config` (`approval_config_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  COMMENT = '审批节点处理人明细表，支持角色和人员混选';
+
+CREATE TABLE `wf_node_approval_handler_evt` (
+    `evt_id`             BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
+    `id`                 BIGINT       DEFAULT NULL             COMMENT '主键 ID',
+    `approval_config_id` BIGINT       DEFAULT NULL             COMMENT '关联审批节点配置 ID',
+    `subject_type`       VARCHAR(16)  DEFAULT NULL             COMMENT '处理人主体类型：role=角色 / user=人员',
+    `subject_id`         BIGINT       DEFAULT NULL             COMMENT '处理人主体 ID',
+    `subject_name`       VARCHAR(128) DEFAULT NULL             COMMENT '处理人主体名称快照',
+    `sort_order`         INT          DEFAULT NULL             COMMENT '排序号',
+    `crte_time`          DATETIME     DEFAULT NULL             COMMENT '创建时间',
+    `updt_time`          DATETIME     DEFAULT NULL             COMMENT '修改时间',
+    -- 审计字段
+    `opter_id`           VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
+    `opt_time`           DATETIME     DEFAULT NULL             COMMENT '经办时间',
+    `oprt_type`          VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    PRIMARY KEY (`evt_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  COMMENT = '审批节点处理人明细事件表（操作审计）';
 
 
 -- ============================================================================
@@ -505,7 +541,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 
 -- ============================================================================
--- 表清单汇总（共 20 张表：10 业务表 + 10 事件表）
+-- 表清单汇总（共 22 张表：11 业务表 + 11 事件表）
 -- ============================================================================
 --
 --  业务表                           事件表
@@ -514,6 +550,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 --  wf_flow_version                  wf_flow_version_evt
 --  wf_flow_node                     wf_flow_node_evt
 --  wf_node_approval_config          wf_node_approval_config_evt
+--  wf_node_approval_handler         wf_node_approval_handler_evt
 --  wf_node_auto_config              wf_node_auto_config_evt
 --  wf_node_notify_config            wf_node_notify_config_evt
 --  wf_node_condition_config         wf_node_condition_config_evt
@@ -530,6 +567,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 --    └── wf_flow_version (N)               flow_id → wf_flow_definition.id
 --          ├── wf_flow_node (N)            version_id → wf_flow_version.id
 --          │     ├── wf_node_approval_config  (1:1)  node_id → wf_flow_node.id
+--          │     │     └── wf_node_approval_handler (N) approval_config_id → wf_node_approval_config.id
 --          │     ├── wf_node_auto_config      (1:N)  node_id → wf_flow_node.id
 --          │     ├── wf_node_notify_config    (1:1)  node_id → wf_flow_node.id
 --          │     └── wf_node_condition_config (1:1)  node_id → wf_flow_node.id
@@ -552,8 +590,8 @@ SET FOREIGN_KEY_CHECKS = 1;
 --   2. wf_flow_edge.from_node_id / to_node_id：VARCHAR(32) → BIGINT
 --      改为关联 wf_flow_node.id（代理键），解决与配置表引用方式不一致的问题
 --      edge_id（VARCHAR）保留，仅用于画布还原
---   3. wf_node_approval_config.approval_persons：VARCHAR → JSON
---      wf_node_notify_config.notify_channels / notify_persons：VARCHAR → JSON
+--   3. wf_node_notify_config.notify_channels / notify_persons：VARCHAR → JSON
 --      利用 MySQL 8.4 原生 JSON 类型，支持 JSON_CONTAINS 精确查询和自动校验
 --   4. 同步修改所有受影响的事件表（_evt）
+--   5. 审批节点处理人由 wf_node_approval_handler 明细表维护，支持角色和人员混选
 -- ============================================================================

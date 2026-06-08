@@ -480,14 +480,23 @@ public class FlowService {
     // ==================== 字典 ====================
 
     /** 查询角色字典。 */
-    public List<DictDto> queryRoleList(FlowReq req) {
-        return flowMapper.queryRoleDictList().stream().map(r -> {
-            DictDto d = new DictDto();
-            d.setRoleCode(r.getRoleCode());
-            d.setRoleName(r.getRoleName());
-            d.setSortOrder(r.getSortOrder());
-            return d;
-        }).collect(Collectors.toList());
+    public List<RoleDto> queryRoleList(FlowReq req) {
+        return flowMapper.queryRoleList().stream()
+                .map(this::convertRole)
+                .collect(Collectors.toList());
+    }
+
+    /** 查询人员列表，支持按角色及子角色过滤。 */
+    public List<UserDto> queryUserList(FlowReq req) {
+        FlowReq safeReq = req == null ? new FlowReq() : req;
+        List<Long> roleIds = null;
+        if (safeReq.getRoleId() != null) {
+            roleIds = new ArrayList<>();
+            collectDescendantRoleIds(safeReq.getRoleId(), roleIds, flowMapper.queryRoleList());
+        }
+        return flowMapper.queryUserList(roleIds, safeReq.getUserKeyword()).stream()
+                .map(this::convertUser)
+                .collect(Collectors.toList());
     }
 
     /** 查询自动任务选项。 */
@@ -621,6 +630,7 @@ public class FlowService {
         flowMapper.deleteConditionConfigByVersionId(versionId);
         flowMapper.deleteNotifyConfigByVersionId(versionId);
         flowMapper.deleteAutoConfigByVersionId(versionId);
+        flowMapper.deleteApprovalHandlerByVersionId(versionId);
         flowMapper.deleteApprovalConfigByVersionId(versionId);
         flowMapper.deleteFlowNodeByVersionId(versionId);
 
@@ -654,12 +664,29 @@ public class FlowService {
                 NodeApprovalConfigBo cfg = new NodeApprovalConfigBo();
                 cfg.setNodeId(fn.getId());
                 cfg.setApprovalStrategy(cn.getApprovalStrategy());
-                cfg.setApprovalPersons(toJson(cn.getApprovalPersons()));
                 cfg.setApprovalRemark(cn.getApprovalRemark());
                 cfg.setCrteTime(now);
                 cfg.setUpdtTime(now);
                 flowMapper.addApprovalConfig(cfg);
                 flowMapper.addApprovalConfigEvt(toApprovalCfgEvt(cfg, L_OPTER, now, "INSERT"));
+                if (cn.getApprovalPersons() != null) {
+                    int seq = 1;
+                    for (PoolPermissionBo person : cn.getApprovalPersons()) {
+                        if (person == null || person.getSubjectType() == null || person.getSubjectId() == null) {
+                            continue;
+                        }
+                        NodeApprovalHandlerBo handler = new NodeApprovalHandlerBo();
+                        handler.setApprovalConfigId(cfg.getId());
+                        handler.setSubjectType(person.getSubjectType());
+                        handler.setSubjectId(person.getSubjectId());
+                        handler.setSubjectName(person.getSubjectName());
+                        handler.setSortOrder(seq++);
+                        handler.setCrteTime(now);
+                        handler.setUpdtTime(now);
+                        flowMapper.addApprovalHandler(handler);
+                        flowMapper.addApprovalHandlerEvt(toApprovalHandlerEvt(handler, L_OPTER, now, "INSERT"));
+                    }
+                }
             } else if ("auto".equals(cn.getType())) {
                 if (cn.getAutoTasks() != null) {
                     int seq = 1;
@@ -787,10 +814,27 @@ public class FlowService {
     private NodeApprovalConfigEvtBo toApprovalCfgEvt(NodeApprovalConfigBo cfg, String opterId, Date now, String oprtType) {
         NodeApprovalConfigEvtBo e = new NodeApprovalConfigEvtBo();
         e.setId(cfg.getId()); e.setNodeId(cfg.getNodeId());
-        e.setApprovalStrategy(cfg.getApprovalStrategy()); e.setApprovalPersons(cfg.getApprovalPersons());
+        e.setApprovalStrategy(cfg.getApprovalStrategy());
         e.setApprovalRemark(cfg.getApprovalRemark());
         e.setCrteTime(cfg.getCrteTime()); e.setUpdtTime(cfg.getUpdtTime());
         e.setOpterId(opterId); e.setOptTime(now); e.setOprtType(oprtType);
+        return e;
+    }
+
+    /** 构建审批处理人明细事件。 */
+    private NodeApprovalHandlerEvtBo toApprovalHandlerEvt(NodeApprovalHandlerBo handler, String opterId, Date now, String oprtType) {
+        NodeApprovalHandlerEvtBo e = new NodeApprovalHandlerEvtBo();
+        e.setId(handler.getId());
+        e.setApprovalConfigId(handler.getApprovalConfigId());
+        e.setSubjectType(handler.getSubjectType());
+        e.setSubjectId(handler.getSubjectId());
+        e.setSubjectName(handler.getSubjectName());
+        e.setSortOrder(handler.getSortOrder());
+        e.setCrteTime(handler.getCrteTime());
+        e.setUpdtTime(handler.getUpdtTime());
+        e.setOpterId(opterId);
+        e.setOptTime(now);
+        e.setOprtType(oprtType);
         return e;
     }
 
@@ -852,6 +896,9 @@ public class FlowService {
         for (FlowNodeBo node : flowMapper.queryFlowNodeListByVersionId(versionId)) {
             flowMapper.addFlowNodeEvt(toFlowNodeEvt(node, L_OPTER, now, "DELETE"));
         }
+        for (NodeApprovalHandlerBo handler : flowMapper.queryApprovalHandlerListByVersionId(versionId)) {
+            flowMapper.addApprovalHandlerEvt(toApprovalHandlerEvt(handler, L_OPTER, now, "DELETE"));
+        }
         for (NodeApprovalConfigBo cfg : flowMapper.queryApprovalConfigListByVersionId(versionId)) {
             flowMapper.addApprovalConfigEvt(toApprovalCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
@@ -895,6 +942,35 @@ public class FlowService {
     }
 
     /** 构建自动任务字典项。 */
+    /** RoleBo 转 RoleDto。 */
+    private RoleDto convertRole(RoleBo bo) {
+        RoleDto dto = new RoleDto();
+        dto.setId(bo.getId());
+        dto.setRoleName(bo.getName());
+        dto.setParentId(bo.getParentId());
+        dto.setSortOrder(bo.getSortOrder());
+        return dto;
+    }
+
+    /** UserBo 转 UserDto。 */
+    private UserDto convertUser(UserBo bo) {
+        UserDto dto = new UserDto();
+        dto.setId(bo.getId());
+        dto.setUserName(bo.getName());
+        dto.setRoleName(bo.getRoleName());
+        return dto;
+    }
+
+    /** 递归收集角色及其子角色 ID。 */
+    private void collectDescendantRoleIds(Long roleId, List<Long> roleIds, List<RoleBo> allRoles) {
+        roleIds.add(roleId);
+        for (RoleBo role : allRoles) {
+            if (roleId.equals(role.getParentId())) {
+                collectDescendantRoleIds(role.getId(), roleIds, allRoles);
+            }
+        }
+    }
+
     private DictDto buildTask(String code) {
         DictDto d = new DictDto();
         d.setTaskCode(code);

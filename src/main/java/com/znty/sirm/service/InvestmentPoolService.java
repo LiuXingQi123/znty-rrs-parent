@@ -304,7 +304,7 @@ public class InvestmentPoolService {
     private RoleDto convertRole(RoleBo bo) {
         RoleDto dto = new RoleDto();
         dto.setId(bo.getId());
-        dto.setRoleName(bo.getRoleName());
+        dto.setRoleName(bo.getName());
         dto.setParentId(bo.getParentId());
         dto.setSortOrder(bo.getSortOrder());
         return dto;
@@ -314,7 +314,7 @@ public class InvestmentPoolService {
     private UserDto convertUser(UserBo bo) {
         UserDto dto = new UserDto();
         dto.setId(bo.getId());
-        dto.setUserName(bo.getUserName());
+        dto.setUserName(bo.getName());
         dto.setRoleName(bo.getRoleName());
         return dto;
     }
