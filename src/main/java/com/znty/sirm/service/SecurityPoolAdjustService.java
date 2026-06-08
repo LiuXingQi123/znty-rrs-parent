@@ -32,6 +32,7 @@ import com.znty.sirm.model.IpAdjustStepDto;
 import com.znty.sirm.model.NodeApprovalConfigBo;
 import com.znty.sirm.model.NodeApprovalHandlerBo;
 import com.znty.sirm.model.PoolDto;
+import com.znty.sirm.model.PoolPermissionBo;
 import com.znty.sirm.model.PoolRelationBo;
 import com.znty.sirm.model.RoleBo;
 import com.znty.sirm.model.UserBo;
@@ -77,6 +78,11 @@ import java.util.stream.Collectors;
  */
 @Service
 public class SecurityPoolAdjustService {
+
+    private static final Long DEFAULT_ADMIN_USER_ID = 1001L;
+    private static final String PERMISSION_TYPE_ADJUSTABLE = "adjustable";
+    private static final String SUBJECT_TYPE_USER = "user";
+    private static final String SUBJECT_TYPE_ROLE = "role";
 
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
@@ -146,12 +152,19 @@ public class SecurityPoolAdjustService {
     /**
      * 查询可调入/可调出的投资池列表（含互斥关系，树结构由前端自行组装）
      *
-     * @param req 暂无过滤条件，返回全量启用池
+     * @param req 当前用户为管理员时返回全量启用池，普通用户仅返回有可调整权限的池及其祖先节点
      */
     public List<PoolDto> queryAdjustPoolList(SecurityPoolAdjustReq req) {
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
         if (allPools == null || allPools.isEmpty()) {
             return new ArrayList<>();
+        }
+
+        if (!DEFAULT_ADMIN_USER_ID.equals(1001L)) {
+            allPools = filterAdjustablePoolsByUser(allPools, DEFAULT_ADMIN_USER_ID);
+            if (allPools.isEmpty()) {
+                return new ArrayList<>();
+            }
         }
 
         // 查询所有互斥关系，按池 ID 分组后挂载到对应 PoolDto，供前端渲染调库约束提示
@@ -168,6 +181,63 @@ public class SecurityPoolAdjustService {
             }
         }
         return allPools.stream().map(p -> toPoolDto(p, inMutexMap, outMutexMap)).collect(Collectors.toList());
+    }
+
+    /**
+     * 按投资池“可调整人员”配置过滤可操作池，并保留祖先节点以保证前端树路径完整。
+     */
+    private List<InvestmentPoolBo> filterAdjustablePoolsByUser(List<InvestmentPoolBo> allPools, Long userId) {
+        Set<Long> adjustablePoolIds = queryAdjustablePoolIdsByUser(userId);
+        if (adjustablePoolIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        for (InvestmentPoolBo pool : allPools) {
+            poolMap.put(pool.getId(), pool);
+        }
+
+        Set<Long> visiblePoolIds = new HashSet<>();
+        for (Long poolId : adjustablePoolIds) {
+            InvestmentPoolBo pool = poolMap.get(poolId);
+            while (pool != null) {
+                visiblePoolIds.add(pool.getId());
+                pool = pool.getParentId() != null ? poolMap.get(pool.getParentId()) : null;
+            }
+        }
+
+        List<InvestmentPoolBo> result = new ArrayList<>();
+        for (InvestmentPoolBo pool : allPools) {
+            if (visiblePoolIds.contains(pool.getId())) {
+                result.add(pool);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 查询当前用户直接或通过角色拥有可调整权限的投资池 ID。
+     */
+    private Set<Long> queryAdjustablePoolIdsByUser(Long userId) {
+        List<Long> roleIds = investmentPoolMapper.queryUserRoleIdList(userId);
+        Set<Long> roleIdSet = roleIds != null ? new HashSet<>(roleIds) : new HashSet<>();
+        List<PoolPermissionBo> permissions = investmentPoolMapper.queryPermissionListByType(PERMISSION_TYPE_ADJUSTABLE);
+        Set<Long> poolIds = new HashSet<>();
+        if (permissions == null) {
+            return poolIds;
+        }
+
+        for (PoolPermissionBo permission : permissions) {
+            if (permission.getPoolId() == null || permission.getSubjectId() == null) {
+                continue;
+            }
+            if (SUBJECT_TYPE_USER.equals(permission.getSubjectType()) && permission.getSubjectId().equals(userId)) {
+                poolIds.add(permission.getPoolId());
+            } else if (SUBJECT_TYPE_ROLE.equals(permission.getSubjectType()) && roleIdSet.contains(permission.getSubjectId())) {
+                poolIds.add(permission.getPoolId());
+            }
+        }
+        return poolIds;
     }
 
     /**
@@ -1742,7 +1812,7 @@ public class SecurityPoolAdjustService {
             if ("approval".equals(currentNode.getNodeType())
                     && isInitiatorStep(currentNode, config, prevNode, startNode)) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
-                insertStepRecord(adjustLogId, currentNode, config, sortOrder, "approved",
+                insertStepRecord(adjustLogId, currentNode, config, sortOrder, "auto_completed",
                                  adjusterId, adjusterName, "submit", null, now);
                 FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
                 prevNode = currentNode;

@@ -181,6 +181,16 @@ public interface InvestmentPoolMapper {
     List<PoolPermissionBo> queryPermissionList(@Param("poolId") Long poolId);
 
     /**
+     * 按权限类型查询投资池权限列表
+     */
+    List<PoolPermissionBo> queryPermissionListByType(@Param("permissionType") String permissionType);
+
+    /**
+     * 查询用户所属启用角色 ID 列表
+     */
+    List<Long> queryUserRoleIdList(@Param("userId") Long userId);
+
+    /**
      * 新增投资池权限
      */
     int addPermission(PoolPermissionBo permission);

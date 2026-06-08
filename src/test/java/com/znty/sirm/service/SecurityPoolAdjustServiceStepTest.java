@@ -1,12 +1,17 @@
 package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
+import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.model.FlowEdgeBo;
 import com.znty.sirm.model.FlowNodeBo;
+import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.IpAdjustStepBo;
 import com.znty.sirm.model.NodeApprovalConfigBo;
 import com.znty.sirm.model.NodeApprovalHandlerBo;
+import com.znty.sirm.model.PoolDto;
+import com.znty.sirm.model.PoolPermissionBo;
 import com.znty.sirm.model.SecurityInfoBo;
+import com.znty.sirm.model.SecurityPoolAdjustReq;
 import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
@@ -25,8 +30,51 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class SecurityPoolAdjustServiceStepTest {
+
+    @Test
+    public void queryAdjustPoolListShouldSkipPermissionFilterForAdmin() {
+        InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
+        when(mapper.queryPoolList()).thenReturn(Arrays.asList(
+                buildPool(1L, null, "根库"),
+                buildPool(2L, 1L, "一级库")));
+        when(mapper.queryMutexRelationList()).thenReturn(Collections.emptyList());
+
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+
+        List<PoolDto> result = service.queryAdjustPoolList(req);
+
+        assertThat(result).extracting(PoolDto::getId).containsExactly(1L, 2L);
+        verify(mapper, never()).queryPermissionListByType(org.mockito.Matchers.anyString());
+        verify(mapper, never()).queryUserRoleIdList(org.mockito.Matchers.anyLong());
+    }
+
+    @Test
+    public void filterAdjustablePoolsByUserShouldKeepAncestors() {
+        InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
+        List<InvestmentPoolBo> pools = Arrays.asList(
+                buildPool(1L, null, "根库"),
+                buildPool(2L, 1L, "信用债"),
+                buildPool(3L, 2L, "一级库"),
+                buildPool(4L, 1L, "专户产品"),
+                buildPool(5L, 4L, "二级库"),
+                buildPool(6L, 1L, "未授权库"));
+        when(mapper.queryUserRoleIdList(2001L)).thenReturn(Collections.singletonList(20L));
+        when(mapper.queryPermissionListByType("adjustable")).thenReturn(Arrays.asList(
+                buildPermission(3L, "user", 2001L),
+                buildPermission(5L, "role", 20L),
+                buildPermission(6L, "user", 3001L)));
+
+        List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(service, "filterAdjustablePoolsByUser", pools, 2001L);
+
+        assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(1L, 2L, 3L, 4L, 5L);
+    }
 
     @Test
     public void createInitialStepsShouldCreatePendingStepForEachPreemptHandler() throws Exception {
@@ -84,7 +132,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         assertThat(steps.get(1).getFlowNodeId()).isEqualTo(initiator.getId());
         assertThat(steps.get(1).getApprovalStrategy()).isEqualTo("initiator");
-        assertThat(steps.get(1).getStepStatus()).isEqualTo("approved");
+        assertThat(steps.get(1).getStepStatus()).isEqualTo("auto_completed");
         assertThat(steps.get(1).getHandlerId()).isEqualTo("1001");
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getStepStatus)
                 .containsOnly("pending");
@@ -121,7 +169,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(steps.get(0).getFlowNodeId()).isEqualTo(start.getId());
         assertThat(steps.get(0).getHandlerId()).isEqualTo("1001");
         assertThat(steps.get(1).getFlowNodeId()).isEqualTo(submitter.getId());
-        assertThat(steps.get(1).getStepStatus()).isEqualTo("approved");
+        assertThat(steps.get(1).getStepStatus()).isEqualTo("auto_completed");
         assertThat(steps.get(1).getHandlerId()).isEqualTo("1001");
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getFlowNodeId)
                 .containsOnly(reviewer.getId());
@@ -158,7 +206,7 @@ public class SecurityPoolAdjustServiceStepTest {
         List<IpAdjustStepBo> steps = captor.getAllValues();
 
         assertThat(steps.get(1).getFlowNodeId()).isEqualTo(submitter.getId());
-        assertThat(steps.get(1).getStepStatus()).isEqualTo("approved");
+        assertThat(steps.get(1).getStepStatus()).isEqualTo("auto_completed");
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getFlowNodeId)
                 .containsOnly(reviewer.getId());
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getStepStatus)
@@ -246,6 +294,23 @@ public class SecurityPoolAdjustServiceStepTest {
         edge.setFromNodeId(fromNodeId);
         edge.setToNodeId(toNodeId);
         return edge;
+    }
+
+    private InvestmentPoolBo buildPool(Long id, Long parentId, String poolName) {
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(id);
+        pool.setParentId(parentId);
+        pool.setPoolName(poolName);
+        return pool;
+    }
+
+    private PoolPermissionBo buildPermission(Long poolId, String subjectType, Long subjectId) {
+        PoolPermissionBo permission = new PoolPermissionBo();
+        permission.setPoolId(poolId);
+        permission.setPermissionType("adjustable");
+        permission.setSubjectType(subjectType);
+        permission.setSubjectId(subjectId);
+        return permission;
     }
 
     private NodeApprovalConfigBo buildConfig(Long id, Long nodeId, String approvalStrategy) {

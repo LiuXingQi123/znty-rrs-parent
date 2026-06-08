@@ -925,6 +925,34 @@
                  ,id ASC
     </select>
 
+    <!-- 按权限类型查询投资池权限列表 -->
+    <select id="queryPermissionListByType" resultType="com.znty.sirm.model.PoolPermissionBo">
+        SELECT id
+               ,pool_id
+               ,permission_type
+               ,subject_type
+               ,subject_id
+               ,subject_name
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM ip_pool_permission
+        WHERE permission_type = #{permissionType}
+          AND is_deleted = 0
+        ORDER BY pool_id ASC
+                 ,subject_type ASC
+                 ,id ASC
+    </select>
+
+    <!-- 查询用户所属启用角色 ID 列表 -->
+    <select id="queryUserRoleIdList" resultType="long">
+        SELECT DISTINCT ur.role_id
+        FROM t_sys_user_role ur
+        INNER JOIN t_sys_role r ON r.id = ur.role_id AND r.enable = 1
+        WHERE ur.user_id = #{userId}
+          AND ur.dr = 0
+    </select>
+
     <!-- 新增投资池权限 -->
     <insert id="addPermission" parameterType="com.znty.sirm.model.PoolPermissionBo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_pool_permission (
