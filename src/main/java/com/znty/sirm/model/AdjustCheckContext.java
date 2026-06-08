@@ -39,6 +39,9 @@ public class AdjustCheckContext {
     /** 证券是否存在进行中的调库流程（audit_status IN ('00','11')） */
     private boolean hasPendingProcess;
 
+    /** 证券当前进行中流程所在步骤名称 */
+    private String pendingProcessNodeLabel;
+
     /** 当前证券是否在观察池（pool_type='observe'，audit_status='20'） */
     private boolean securityInObservePool;
 

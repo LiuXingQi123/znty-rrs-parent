@@ -853,6 +853,7 @@ public class SecurityPoolAdjustService {
         shared.setCurrentPoolIds(currentPoolIds);
         shared.setPoolRelationMap(poolRelationMap);
         shared.setHasPendingProcess(securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()));
+        shared.setPendingProcessNodeLabel(securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
         shared.setRequestInPoolIds(requestInPoolIds);
@@ -1375,7 +1376,11 @@ public class SecurityPoolAdjustService {
      */
     private String preCheckPendingProcess(AdjustCheckContext ctx) {
         if (ctx.isHasPendingProcess()) {
-            return "证券存在进行中的调库流程（待审核或驳回待修改），请等待流程结束后再发起调库";
+            String nodeLabel = ctx.getPendingProcessNodeLabel();
+            if (nodeLabel != null && !nodeLabel.trim().isEmpty()) {
+                return "证券存在进行中的调库流程（当前节点：" + nodeLabel.trim() + "），请等待流程结束后再发起调库";
+            }
+            return "证券存在进行中的调库流程，请等待流程结束后再发起调库";
         }
         return null;
     }
@@ -1568,6 +1573,7 @@ public class SecurityPoolAdjustService {
         ctx.setTargetPoolRelations(shared.getPoolRelationMap().getOrDefault(item.getTargetPoolId(), Collections.emptyMap()));
         ctx.setPoolMap(shared.getPoolMap());
         ctx.setHasPendingProcess(shared.isHasPendingProcess());
+        ctx.setPendingProcessNodeLabel(shared.getPendingProcessNodeLabel());
         ctx.setSecurityInObservePool(shared.isSecurityInObservePool());
         ctx.setIssuerInObservePool(shared.isIssuerInObservePool());
         ctx.setRequestInPoolIds(shared.getRequestInPoolIds());

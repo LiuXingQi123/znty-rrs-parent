@@ -221,6 +221,36 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 查询证券当前进行中流程所在步骤名称 -->
+    <select id="querySecurityPendingProcessNodeLabel" resultType="string">
+        SELECT COALESCE(
+            (
+                SELECT s.node_label
+                FROM ip_adjust_step s
+                WHERE s.adjust_log_id = al.id
+                  AND s.step_status = 'pending'
+                ORDER BY s.sort_order ASC
+                         ,s.id ASC
+                LIMIT 1
+            ),
+            (
+                SELECT s.node_label
+                FROM ip_adjust_step s
+                WHERE s.adjust_log_id = al.id
+                ORDER BY s.sort_order DESC
+                         ,s.id DESC
+                LIMIT 1
+            )
+        )
+        FROM ip_adjust_log al
+        WHERE al.security_code = #{securityCode}
+          AND al.audit_status IN ('00', '11')
+          AND al.is_deleted = 0
+        ORDER BY al.submit_time DESC
+                 ,al.id DESC
+        LIMIT 1
+    </select>
+
     <!-- 查询当前证券是否在观察池 -->
     <select id="querySecurityInObservePool" resultType="boolean">
         SELECT COUNT(1) > 0

@@ -2,6 +2,7 @@ package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
+import com.znty.sirm.model.AdjustCheckContext;
 import com.znty.sirm.model.FlowEdgeBo;
 import com.znty.sirm.model.FlowNodeBo;
 import com.znty.sirm.model.InvestmentPoolBo;
@@ -33,6 +34,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class SecurityPoolAdjustServiceStepTest {
+
+    @Test
+    public void checkInConditionsShouldShowPendingProcessNodeLabel() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(new SecurityInfoBo());
+        ctx.setHasPendingProcess(true);
+        ctx.setPendingProcessNodeLabel("研究员B复核");
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>emptyMap());
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("证券存在进行中的调库流程（当前节点：研究员B复核），请等待流程结束后再发起调库");
+    }
 
     @Test
     public void queryAdjustPoolListShouldSkipPermissionFilterForAdmin() {
