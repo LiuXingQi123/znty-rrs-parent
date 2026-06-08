@@ -30,6 +30,8 @@ public class SecurityInfoDto {
     private String issuerRating;
     /** 证券类型 */
     private String securityType;
+    /** 证券类型名称 */
+    private String securityTypeName;
     /** 当期利率(%) */
     private BigDecimal currentRate;
     /** 证券期限 */

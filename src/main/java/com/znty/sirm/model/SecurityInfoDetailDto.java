@@ -48,6 +48,8 @@ public class SecurityInfoDetailDto {
     private String innerIssuerRating;
     /** 证券类型 */
     private String securityType;
+    /** 证券类型名称 */
+    private String securityTypeName;
     /** 回售行权期限 */
     private String putExeTerm;
     /** 赎回行权剩余期限 */

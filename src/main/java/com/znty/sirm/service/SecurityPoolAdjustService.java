@@ -125,11 +125,10 @@ public class SecurityPoolAdjustService {
      */
     public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<SecurityInfoBo> entities = securityPoolAdjustMapper.querySecurityPage(
+        List<SecurityInfoDto> records = securityPoolAdjustMapper.querySecurityPage(
                 req.getSecurityCode(), req.getSecurityShortName(), req.getIssuer());
-        PageInfo<SecurityInfoBo> pageInfo = new PageInfo<>(entities);
+        PageInfo<SecurityInfoDto> pageInfo = new PageInfo<>(records);
 
-        List<SecurityInfoDto> records = entities.stream().map(this::toSecurityInfoDto).collect(Collectors.toList());
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
@@ -142,11 +141,11 @@ public class SecurityPoolAdjustService {
         if (req.getSecurityId() == null) {
             throw new BizException("证券ID不能为空");
         }
-        SecurityInfoBo bo = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityId());
-        if (bo == null) {
+        SecurityInfoDetailDto dto = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityId());
+        if (dto == null) {
             throw new BizException(404, "证券不存在");
         }
-        return toSecurityInfoDetailDto(bo);
+        return dto;
     }
 
     /**
@@ -268,8 +267,8 @@ public class SecurityPoolAdjustService {
      *   <li><b>参数初始化</b>：集中执行所有 DB 查询，构建 {@link SubmitSharedData}，
      *       包含证券信息、投资池索引、池关系映射、各流程的快照数据</li>
      *   <li><b>调入处理</b>：遍历全部调入方向的调库项，逐项判断是否直通流程，
-     *       直通则直接写入 ip_pool_status（audit_status='20'），否则写入 ip_adjust_log（audit_status='00'）</li>
-     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则软删除 ip_pool_status 记录，
+     *       直通则写入 ip_adjust_log（audit_status='20'）并直接写入 ip_pool_status，否则写入 ip_adjust_log（audit_status='00'）</li>
+     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'）并软删除 ip_pool_status 记录，
      *       否则写入 ip_adjust_log（audit_status='00'）</li>
      *   <li><b>后续处理</b>：预留扩展点，当前为空实现</li>
      * </ol>
@@ -346,7 +345,7 @@ public class SecurityPoolAdjustService {
      */
     private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityId());
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoById(req.getSecurityId());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
@@ -536,11 +535,11 @@ public class SecurityPoolAdjustService {
      * 第三阶段：调入处理
      *
      * <p>遍历请求中全部调入方向的调库项，逐项判断流程是否为直通（start→end），
-     * 决定写入 ip_pool_status（直接生效）还是 ip_adjust_log（需审批）。
+     * 决定写入已生效调库记录并直接更新 ip_pool_status，还是写入待审批调库记录。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
-     * @return 本次调入处理生成的所有记录 ID（含 pool_status 和 adjust_log）
+     * @return 本次调入处理生成的所有调库记录 ID
      */
     private List<Long> executeInboundSubmit(
             SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
@@ -560,12 +559,16 @@ public class SecurityPoolAdjustService {
             boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
             if (isDirect) {
-                // 直通流程：直接写入 ip_pool_status（audit_status='20'，即时生效）
-                // 构建调库日志实体
-                IpAdjustLogBo bo = buildAdjustLog(req, item);
-                bo.setAuditStatus("20");
-                securityPoolAdjustMapper.addPoolStatus(bo);
-                generatedIds.add(bo.getId());
+                // 直通流程：先写入已生效调库记录，保留操作日志
+                IpAdjustLogBo logBo = buildAdjustLog(req, item);
+                logBo.setAuditStatus("20");
+                securityPoolAdjustMapper.addAdjustLog(logBo);
+                generatedIds.add(logBo.getId());
+
+                // 直通流程：再直接写入 ip_pool_status（audit_status='20'，即时生效）
+                IpAdjustLogBo statusBo = buildAdjustLog(req, item);
+                statusBo.setAuditStatus("20");
+                securityPoolAdjustMapper.addPoolStatus(statusBo);
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
                 // 构建调库日志实体
@@ -587,11 +590,11 @@ public class SecurityPoolAdjustService {
      * 第四阶段：调出处理
      *
      * <p>遍历请求中全部调出方向的调库项，逐项判断流程是否为直通（start→end），
-     * 决定软删除 ip_pool_status 记录（直接生效）还是写入 ip_adjust_log（需审批）。
+     * 决定写入已生效调库记录并软删除 ip_pool_status，还是写入待审批调库记录。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
-     * @return 本次调出处理生成的所有记录 ID（直通无新 ID，仅含 adjust_log 的 ID）
+     * @return 本次调出处理生成的所有调库记录 ID
      */
     private List<Long> executeOutboundSubmit(
             SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
@@ -611,7 +614,13 @@ public class SecurityPoolAdjustService {
             boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
             if (isDirect) {
-                // 直通流程：软删除 ip_pool_status 中该证券在目标池的有效记录
+                // 直通流程：先写入已生效调库记录，保留操作日志
+                IpAdjustLogBo bo = buildAdjustLog(req, item);
+                bo.setAuditStatus("20");
+                securityPoolAdjustMapper.addAdjustLog(bo);
+                generatedIds.add(bo.getId());
+
+                // 直通流程：再软删除 ip_pool_status 中该证券在目标池的有效记录
                 securityPoolAdjustMapper.softDeletePoolStatus(
                         req.getSecurityCode(), item.getTargetPoolId());
             } else {
@@ -813,7 +822,7 @@ public class SecurityPoolAdjustService {
      */
     private AdjustSharedData loadSharedData(AdjustCheckReq req) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityId());
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoById(req.getSecurityId());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
@@ -1690,68 +1699,6 @@ public class SecurityPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
     //  对象转换方法
     // ═══════════════════════════════════════════════════════════
-
-    /**
-     * SecurityInfoBo → SecurityInfoDto（证券列表行数据，字段精简）
-     */
-    private SecurityInfoDto toSecurityInfoDto(SecurityInfoBo bo) {
-        SecurityInfoDto d = new SecurityInfoDto();
-        d.setId(bo.getId());
-        d.setSecurityCode(bo.getSInfoCode());
-        d.setSecurityShortName(bo.getSInfoName());
-        d.setIssuer(bo.getBInfoIssuer());
-        d.setFullName(bo.getBInfoFullname());
-        d.setIssueAmount(bo.getBIssueAmountplan());
-        d.setCarryDate(bo.getBInfoCarrydate());
-        d.setMaturityDate(bo.getBInfoMaturitydate());
-        d.setSecurityRating(bo.getRatingSecurity());
-        d.setIssuerRating(bo.getRatingSecurityissuer());
-        d.setSecurityType(bo.getDSecurityType() != null ? String.valueOf(bo.getDSecurityType()) : null);
-        d.setCurrentRate(null);
-        d.setTermStr(bo.getDateExists());
-        return d;
-    }
-
-    /**
-     * SecurityInfoBo → SecurityInfoDetailDto（调库页面顶部详情，字段完整）
-     */
-    private SecurityInfoDetailDto toSecurityInfoDetailDto(SecurityInfoBo bo) {
-        SecurityInfoDetailDto d = new SecurityInfoDetailDto();
-        d.setFullName(bo.getBInfoFullname());
-        d.setSecurityShortName(bo.getSInfoName());
-        d.setSecurityCode(bo.getSInfoCode());
-        d.setIssuerName(bo.getBInfoIssuer());
-        d.setNibCode(bo.getSWindcodeNib());
-        // 交易所代码：优先沪市（SH），其次深市（SZ）
-        if (bo.getSWindcodeSh() != null && !bo.getSWindcodeSh().isEmpty()) {
-            d.setExchangeCode(bo.getSWindcodeSh());
-        } else {
-            d.setExchangeCode(bo.getSWindcodeSz());
-        }
-        d.setIssueAmount(bo.getBIssueAmountplan());
-        d.setCurrentRate(null);
-        d.setRemExeTerm(bo.getDateInrightExists());
-        d.setCarryDate(bo.getBInfoCarrydate());
-        d.setMaturityDate(bo.getBInfoMaturitydate());
-        d.setPledgeRatio(bo.getBInfoPledgeRatio());
-        d.setRatingAgency(bo.getRatingSecurityAgency());
-        d.setSecurityRating(bo.getRatingSecurity());
-        d.setIssuerRating(bo.getRatingSecurityissuer());
-        d.setRatingOutlook(bo.getRatingOutlook());
-        d.setGuaranteeStatus(bo.getBAgencyGrnttype());
-        d.setLeadUnderwriter(bo.getBAgencyName());
-        d.setInnerIssuerRating(bo.getInnerIssuerRating());
-        d.setSecurityType(bo.getDSecurityType() != null ? String.valueOf(bo.getDSecurityType()) : null);
-        d.setPutExeTerm(bo.getDateRedemtionExists());
-        d.setCallRemTerm(bo.getDateCallExists());
-        d.setInnerGuarantorRating(bo.getInnerGuarantorRating());
-        d.setOptRemTerm(bo.getDateInrightExists());
-        d.setTermStr(bo.getDateExists());
-        d.setFundUsage(bo.getBFundUsage());
-        d.setPromptReason(bo.getBPromptReason());
-        d.setAnalysis(bo.getBAnalysis());
-        return d;
-    }
 
     /**
      * InvestmentPoolBo → PoolDto（投资池树节点数据，附带互斥池 ID 列表）

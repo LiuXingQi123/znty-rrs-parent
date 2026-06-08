@@ -6,6 +6,7 @@ import com.znty.sirm.model.AdjustCheckContext;
 import com.znty.sirm.model.FlowEdgeBo;
 import com.znty.sirm.model.FlowNodeBo;
 import com.znty.sirm.model.InvestmentPoolBo;
+import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.IpAdjustStepBo;
 import com.znty.sirm.model.NodeApprovalConfigBo;
 import com.znty.sirm.model.NodeApprovalHandlerBo;
@@ -27,6 +28,8 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -238,6 +241,11 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        doAnswer(invocation -> {
+            IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
+            bo.setId(99L);
+            return 1;
+        }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
 
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
         req.setSecurityCode("S001");
@@ -256,13 +264,52 @@ public class SecurityPoolAdjustServiceStepTest {
 
         Object shared = buildSubmitSharedData();
 
-        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
+        List<Long> result = ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
 
-        ArgumentCaptor<com.znty.sirm.model.IpAdjustLogBo> captor =
-                ArgumentCaptor.forClass(com.znty.sirm.model.IpAdjustLogBo.class);
-        verify(mapper).addPoolStatus(captor.capture());
-        verify(mapper, never()).addAdjustLog(org.mockito.Matchers.any(com.znty.sirm.model.IpAdjustLogBo.class));
+        ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        ArgumentCaptor<IpAdjustLogBo> statusCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(mapper).addAdjustLog(logCaptor.capture());
+        verify(mapper).addPoolStatus(statusCaptor.capture());
+        assertThat(logCaptor.getValue().getAuditStatus()).isEqualTo("20");
+        assertThat(statusCaptor.getValue().getAuditStatus()).isEqualTo("20");
+        assertThat(result).containsExactly(99L);
+    }
+
+    @Test
+    public void executeOutboundSubmitShouldCreateLogWhenFlowIsDirect() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        doAnswer(invocation -> {
+            IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
+            bo.setId(88L);
+            return 1;
+        }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
+
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("S001");
+        req.setSecurityShortName("test");
+        req.setSecurityType("bond");
+        req.setAdjustType("manual");
+        req.setAdjusterId("1001");
+        req.setAdjusterName("admin");
+
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setAdjustMode("\u8c03\u51fa");
+        item.setTargetPoolId(10L);
+        item.setTargetPoolName("pool");
+        item.setPoolType("special_account");
+        req.setItems(Collections.singletonList(item));
+
+        Object shared = buildSubmitSharedData();
+
+        List<Long> result = ReflectionTestUtils.invokeMethod(service, "executeOutboundSubmit", req, shared);
+
+        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(mapper).addAdjustLog(captor.capture());
+        verify(mapper).softDeletePoolStatus("S001", 10L);
         assertThat(captor.getValue().getAuditStatus()).isEqualTo("20");
+        assertThat(result).containsExactly(88L);
     }
 
     private Object buildSnapshot(List<FlowNodeBo> nodes, List<FlowEdgeBo> edges,

@@ -4,37 +4,73 @@
     <!-- 证券池调整 mapper，对应表：sirm_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status（证券池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
 
     <!-- 分页查询证券列表 -->
-    <select id="querySecurityPage" resultType="com.znty.sirm.model.SecurityInfoBo">
-        SELECT id
-               ,s_info_code
-               ,s_info_name
-               ,b_info_fullname
-               ,b_info_issuer
-               ,b_issue_amountplan
-               ,b_info_carrydate
-               ,b_info_maturitydate
-               ,rating_security
-               ,rating_securityissuer
-               ,d_security_type
-               ,b_info_couponrate
-               ,date_exists
-        FROM sirm_securityinfo
+    <select id="querySecurityPage" resultType="com.znty.sirm.model.SecurityInfoDto">
+        SELECT si.id
+               ,si.s_info_code AS securityCode
+               ,si.s_info_name AS securityShortName
+               ,si.b_info_fullname AS fullName
+               ,si.b_info_issuer AS issuer
+               ,si.b_issue_amountplan AS issueAmount
+               ,si.b_info_carrydate AS carryDate
+               ,si.b_info_maturitydate AS maturityDate
+               ,si.rating_security AS securityRating
+               ,si.rating_securityissuer AS issuerRating
+               ,si.security_type AS securityType
+               ,dst.security_type_name AS securityTypeName
+               ,si.date_exists AS termStr
+        FROM sirm_securityinfo si
+        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         <where>
             <if test="securityCode != null and securityCode != ''">
-                AND s_info_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND si.s_info_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
-                AND s_info_name LIKE CONCAT('%', #{securityShortName}, '%')
+                AND si.s_info_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
-                AND b_info_issuer LIKE CONCAT('%', #{issuer}, '%')
+                AND si.b_info_issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
         </where>
-        ORDER BY id DESC
+        ORDER BY si.id DESC
     </select>
 
     <!-- 查询证券详情 -->
-    <select id="querySecurityDetail" resultType="com.znty.sirm.model.SecurityInfoBo">
+    <select id="querySecurityDetail" resultType="com.znty.sirm.model.SecurityInfoDetailDto">
+        SELECT si.b_info_fullname AS fullName
+               ,si.s_info_name AS securityShortName
+               ,si.s_info_code AS securityCode
+               ,si.b_info_issuer AS issuerName
+               ,si.s_windcode_nib AS nibCode
+               ,COALESCE(si.s_windcode_sh, si.s_windcode_sz) AS exchangeCode
+               ,si.b_issue_amountplan AS issueAmount
+               ,si.date_inright_exists AS remExeTerm
+               ,si.b_info_carrydate AS carryDate
+               ,si.b_info_maturitydate AS maturityDate
+               ,si.b_info_pledge_ratio AS pledgeRatio
+               ,si.rating_security_agency AS ratingAgency
+               ,si.rating_security AS securityRating
+               ,si.rating_securityissuer AS issuerRating
+               ,si.rating_outlook AS ratingOutlook
+               ,si.b_agency_grnttype AS guaranteeStatus
+               ,si.b_agency_name AS leadUnderwriter
+               ,si.inner_issuer_rating AS innerIssuerRating
+               ,si.security_type AS securityType
+               ,dst.security_type_name AS securityTypeName
+               ,si.date_redemtion_exists AS putExeTerm
+               ,si.date_call_exists AS callRemTerm
+               ,si.inner_guarantor_rating AS innerGuarantorRating
+               ,si.date_inright_exists AS optRemTerm
+               ,si.date_exists AS termStr
+               ,si.b_fund_usage AS fundUsage
+               ,si.b_prompt_reason AS promptReason
+               ,si.b_analysis AS analysis
+        FROM sirm_securityinfo si
+        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
+        WHERE si.id = #{securityId}
+    </select>
+
+    <!-- 根据 ID 查询证券基础信息实体 -->
+    <select id="querySecurityBoById" resultType="com.znty.sirm.model.SecurityInfoBo">
         SELECT id
                ,s_info_code
                ,s_info_name
@@ -57,9 +93,12 @@
                ,guarantor
                ,b_agency_name
                ,inner_issuer_rating
-               ,d_security_type
+               ,security_type
                ,inner_guarantor_rating
                ,date_exists
+               ,date_redemtion_exists
+               ,date_call_exists
+               ,date_inright_exists
                ,b_fund_usage
                ,b_prompt_reason
                ,b_analysis

@@ -2,6 +2,8 @@ package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.IpAdjustStepBo;
 import com.znty.sirm.model.SecurityInfoBo;
+import com.znty.sirm.model.SecurityInfoDetailDto;
+import com.znty.sirm.model.SecurityInfoDto;
 import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.PoolRelationBo;
 import com.znty.sirm.model.PoolStatusDto;
@@ -17,12 +19,15 @@ import java.util.List;
 public interface SecurityPoolAdjustMapper {
 
     /** 分页查询证券列表 */
-    List<SecurityInfoBo> querySecurityPage(@Param("securityCode") String securityCode,
+    List<SecurityInfoDto> querySecurityPage(@Param("securityCode") String securityCode,
                                            @Param("securityShortName") String securityShortName,
                                            @Param("issuer") String issuer);
 
     /** 根据 ID 查询证券详情 */
-    SecurityInfoBo querySecurityDetail(@Param("securityId") Long securityId);
+    SecurityInfoDetailDto querySecurityDetail(@Param("securityId") Long securityId);
+
+    /** 根据 ID 查询证券基础信息实体 */
+    SecurityInfoBo querySecurityBoById(@Param("securityId") Long securityId);
 
     /** 新增调库记录（非直通流程，audit_status='00' 待审核） */
     int addAdjustLog(IpAdjustLogBo bo);

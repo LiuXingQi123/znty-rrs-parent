@@ -27,8 +27,8 @@ public class SecurityInfoBo {
     private String sWindcodeNib;
     /** 其他 */
     private String sWindcodeNbc;
-    /** 证券类型 */
-    private Integer dSecurityType;
+    /** 证券类型编码 */
+    private String securityType;
     /** 证券期限(年) */
     private BigDecimal bInfoTermYear;
     /** 证券期限(天) */
