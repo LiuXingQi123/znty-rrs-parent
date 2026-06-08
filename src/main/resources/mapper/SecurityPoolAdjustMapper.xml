@@ -6,13 +6,13 @@
     <!-- 分页查询证券列表 -->
     <select id="querySecurityPage" resultType="com.znty.sirm.model.SecurityInfoDto">
         SELECT si.id
-               ,si.s_info_code AS securityCode
-               ,si.s_info_name AS securityShortName
-               ,si.b_info_fullname AS fullName
-               ,si.b_info_issuer AS issuer
-               ,si.b_issue_amountplan AS issueAmount
-               ,si.b_info_carrydate AS carryDate
-               ,si.b_info_maturitydate AS maturityDate
+               ,si.wind_code AS securityCode
+               ,si.info_name AS securityShortName
+               ,si.full_name AS fullName
+               ,si.info_issuer AS issuer
+               ,si.issue_amountplan AS issueAmount
+               ,si.info_carrydate AS carryDate
+               ,si.info_maturitydate AS maturityDate
                ,si.rating_security AS securityRating
                ,si.rating_securityissuer AS issuerRating
                ,si.security_type AS securityType
@@ -22,13 +22,13 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         <where>
             <if test="securityCode != null and securityCode != ''">
-                AND si.s_info_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
-                AND si.s_info_name LIKE CONCAT('%', #{securityShortName}, '%')
+                AND si.info_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
-                AND si.b_info_issuer LIKE CONCAT('%', #{issuer}, '%')
+                AND si.info_issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
         </where>
         ORDER BY si.id DESC
@@ -36,23 +36,23 @@
 
     <!-- 查询证券详情 -->
     <select id="querySecurityDetail" resultType="com.znty.sirm.model.SecurityInfoDetailDto">
-        SELECT si.b_info_fullname AS fullName
-               ,si.s_info_name AS securityShortName
-               ,si.s_info_code AS securityCode
-               ,si.b_info_issuer AS issuerName
-               ,si.s_windcode_nib AS nibCode
-               ,COALESCE(si.s_windcode_sh, si.s_windcode_sz) AS exchangeCode
-               ,si.b_issue_amountplan AS issueAmount
+        SELECT si.full_name AS fullName
+               ,si.info_name AS securityShortName
+               ,si.wind_code AS securityCode
+               ,si.info_issuer AS issuerName
+               ,si.wind_code_nib AS nibCode
+               ,COALESCE(si.wind_code_sh, si.wind_code_sz, si.wind_code_bj) AS exchangeCode
+               ,si.issue_amountplan AS issueAmount
                ,si.date_inright_exists AS remExeTerm
-               ,si.b_info_carrydate AS carryDate
-               ,si.b_info_maturitydate AS maturityDate
-               ,si.b_info_pledge_ratio AS pledgeRatio
+               ,si.info_carrydate AS carryDate
+               ,si.info_maturitydate AS maturityDate
+               ,si.info_pledge_ratio AS pledgeRatio
                ,si.rating_security_agency AS ratingAgency
                ,si.rating_security AS securityRating
                ,si.rating_securityissuer AS issuerRating
                ,si.rating_outlook AS ratingOutlook
-               ,si.b_agency_grnttype AS guaranteeStatus
-               ,si.b_agency_name AS leadUnderwriter
+               ,si.agency_grnttype AS guaranteeStatus
+               ,si.agency_name AS leadUnderwriter
                ,si.inner_issuer_rating AS innerIssuerRating
                ,si.security_type AS securityType
                ,dst.security_type_name AS securityTypeName
@@ -61,9 +61,9 @@
                ,si.inner_guarantor_rating AS innerGuarantorRating
                ,si.date_inright_exists AS optRemTerm
                ,si.date_exists AS termStr
-               ,si.b_fund_usage AS fundUsage
-               ,si.b_prompt_reason AS promptReason
-               ,si.b_analysis AS analysis
+               ,si.fund_usage AS fundUsage
+               ,si.prompt_reason AS promptReason
+               ,si.analysis AS analysis
         FROM sirm_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         WHERE si.id = #{securityId}
@@ -72,26 +72,27 @@
     <!-- 根据 ID 查询证券基础信息实体 -->
     <select id="querySecurityBoById" resultType="com.znty.sirm.model.SecurityInfoBo">
         SELECT id
-               ,s_info_code
-               ,s_info_name
-               ,b_info_fullname
-               ,b_info_issuer
-               ,s_windcode_nib
-               ,s_windcode_sh
-               ,s_windcode_sz
-               ,b_issue_amountplan
-               ,b_issue_amountact
-               ,b_info_couponrate
-               ,b_info_carrydate
-               ,b_info_maturitydate
-               ,b_info_pledge_ratio
+               ,wind_code
+               ,info_name
+               ,full_name
+               ,info_issuer
+               ,wind_code_nib
+               ,wind_code_bj
+               ,wind_code_sh
+               ,wind_code_sz
+               ,issue_amountplan
+               ,issue_amountact
+               ,info_couponrate
+               ,info_carrydate
+               ,info_maturitydate
+               ,info_pledge_ratio
                ,rating_security_agency
                ,rating_security
                ,rating_securityissuer
                ,rating_outlook
-               ,b_agency_grnttype
+               ,agency_grnttype
                ,guarantor
-               ,b_agency_name
+               ,agency_name
                ,inner_issuer_rating
                ,security_type
                ,inner_guarantor_rating
@@ -99,9 +100,9 @@
                ,date_redemtion_exists
                ,date_call_exists
                ,date_inright_exists
-               ,b_fund_usage
-               ,b_prompt_reason
-               ,b_analysis
+               ,fund_usage
+               ,prompt_reason
+               ,analysis
         FROM sirm_securityinfo
         WHERE id = #{securityId}
     </select>
@@ -183,13 +184,13 @@
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
                ,COUNT(DISTINCT ips.security_code) AS bondCount
         FROM ip_pool_status ips
-        INNER JOIN sirm_securityinfo sb ON ips.security_code = sb.s_info_code
+        INNER JOIN sirm_securityinfo sb ON ips.security_code = sb.wind_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
         LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id
                                        AND pp.is_deleted = 0
-        WHERE sb.b_info_issuer = (
-            SELECT b_info_issuer FROM sirm_securityinfo WHERE s_info_code = #{securityCode} LIMIT 1
+        WHERE sb.info_issuer = (
+            SELECT info_issuer FROM sirm_securityinfo WHERE wind_code = #{securityCode} LIMIT 1
         )
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -306,13 +307,13 @@
     <select id="queryIssuerInObservePool" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips
-        INNER JOIN sirm_securityinfo si ON si.s_info_code = ips.security_code
+        INNER JOIN sirm_securityinfo si ON si.wind_code = ips.security_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        WHERE si.b_info_issuer = (
-            SELECT b_info_issuer
+        WHERE si.info_issuer = (
+            SELECT info_issuer
             FROM sirm_securityinfo
-            WHERE s_info_code = #{securityCode}
+            WHERE wind_code = #{securityCode}
             LIMIT 1
         )
           AND p.pool_type = 'observe'

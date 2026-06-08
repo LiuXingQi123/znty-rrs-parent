@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- znty-sirm 证券信息表 - 演示数据脚本
 -- MySQL version: 8.0.33
 -- 说明：首次部署执行，插入测试用证券数据
@@ -17,34 +17,34 @@ TRUNCATE TABLE `ip_adjust_step`;
 
 -- 证券信息表插入测试数据
 INSERT INTO `sirm_securityinfo` (
-    `s_info_code`, `b_info_fullname`, `b_issue_announcement`, `s_info_name`,
-    `s_windcode_sh`, `s_windcode_sz`, `s_windcode_nib`, `s_windcode_nbc`,
-    `security_type`, `b_info_term_year_`, `b_info_term_day_`, `b_info_form`,
-    `s_info_sectypename`, `s_info_comptype`, `b_info_issuer`, `b_info_issuercode`,
-    `crncy_code`, `b_issue_amountplan`, `b_info_listdate`, `b_issue_firstissue`,
-    `b_info_maturitydate`, `b_info_carrydate`, `b_info_enddate`, `b_info_interesttype`,
-    `b_info_interestfrequency`, `b_info_interestyearcount`, `b_info_couponrate`,
-    `b_info_spread`, `is_redemption`, `b_info_redemptiondate`, `b_info_redemptionprice`,
-    `is_repurchase`, `b_info_repurchasedate`, `b_info_repurchaseprice`,
-    `b_info_paymentdate`, `b_info_delistdate`, `s_info_securitiestypes_dq`,
-    `b_info_coupontxt`, `b_info_redemptioncontent`, `b_info_issuetype`,
-    `b_info_callbkorputbkdate`, `b_info_content`, `createtime`, `ts`,
+    `wind_code`, `full_name`, `issue_announcement`, `info_name`,
+    `wind_code_sh`, `wind_code_sz`, `wind_code_nib`, `wind_code_bj`, `wind_code_nbc`,
+    `security_type`, `info_term_year_`, `info_term_day_`, `info_form`,
+    `info_sectypename`, `info_comptype`, `info_issuer`, `info_issuercode`,
+    `crncy_code`, `issue_amountplan`, `info_listdate`, `issue_firstissue`,
+    `info_maturitydate`, `info_carrydate`, `info_enddate`, `info_interesttype`,
+    `info_interestfrequency`, `info_interestyearcount`, `info_couponrate`,
+    `info_spread`, `is_redemption`, `info_redemptiondate`, `info_redemptionprice`,
+    `is_repurchase`, `info_repurchasedate`, `info_repurchaseprice`,
+    `info_paymentdate`, `info_delistdate`, `info_securitiestypes_dq`,
+    `info_coupontxt`, `info_redemptioncontent`, `info_issuetype`,
+    `info_callbkorputbkdate`, `info_content`, `createtime`, `ts`,
     `is_corporate_security`, `is_payadvanced`, `is_callable`, `is_chooseright`,
-    `is_incsecurities`, `s_info_industryname`, `s_info_industryname2`, `s_info_innerclass`,
+    `is_incsecurities`, `info_industryname`, `info_industryname2`, `info_innerclass`,
     `is_cj`, `is_yx`, `is_dy`,
     `date_redemtion_exists`, `date_call_exists`, `date_exists`, `date_inright_exists`,
     `rating_security`, `rating_securityissuer`, `rating_outlook`,
     `rating_security_agency`, `rating_securityissuer_agency`, `rating_cnbd`,
     `is_inright`, `date_inright_next`,
-    `b_issue_amountact`, `b_agency_grnttype`, `guarantor`, `guarantor_id`,
-    `b_agency_name`, `b_agency_nameid`,
-    `b_info_pledge_ratio`, `inner_issuer_rating`, `inner_guarantor_rating`,
-    `b_fund_usage`, `b_prompt_reason`, `b_analysis`
+    `issue_amountact`, `agency_grnttype`, `guarantor`, `guarantor_id`,
+    `agency_name`, `agency_nameid`,
+    `info_pledge_ratio`, `inner_issuer_rating`, `inner_guarantor_rating`,
+    `fund_usage`, `prompt_reason`, `analysis`
 )
 VALUES
 -- 1. 中期票据（3年期，固定利率）
 ('101901234', '2024年第一期某省交通投资集团中期票据', '2024-03-15', '24某交投MTN001',
- '102401234', NULL, '102401234.IB', NULL,
+ '102401234', NULL, '102401234.IB', NULL, NULL,
  'mtn', 3.0000, 0.0000, '实名记账式',
  '中期票据', '央企', '某省交通投资集团', 'C10001',
  'CNY', 20, '2024-03-20', '2024-03-18',
@@ -70,7 +70,7 @@ VALUES
 
 -- 2. 公司证券（5年期，含回售条款）
 ('102002345', '2023年某城市投资开发建设有限公司公司证券', '2023-08-10', '23某城投债',
- '139876.SH', NULL, '139876.IB', NULL,
+ '139876.SH', NULL, '139876.IB', NULL, NULL,
  'company_bond', 5.0000, 0.0000, '实名记账式',
  '一般公司债', '地方国企', '某城市投资开发建设有限公司', 'C10002',
  'CNY', 15, '2023-08-18', '2023-08-15',
@@ -96,7 +96,7 @@ VALUES
 
 -- 3. 可交换公司证券（2年期，含赎回条款）
 ('103003456', '2024年某能源集团股份有限公司可交换公司证券', '2024-01-05', '24某能E1',
- '117654.SH', NULL, NULL, NULL,
+ '117654.SH', NULL, NULL, NULL, NULL,
  'exchangeable_bond', 2.0000, 0.0000, '实名记账式',
  '可交换债', '央企', '某能源集团股份有限公司', 'C10003',
  'CNY', 30, '2024-01-12', '2024-01-10',
@@ -122,7 +122,7 @@ VALUES
 
 -- 4. 二级资本证券（10年期，含赎回条款）
 ('104004567', '2023年某银行股份有限公司二级资本证券', '2023-11-20', '23某行二级资本债01',
- '2023045.IB', NULL, '2023045.IB', NULL,
+ '2023045.IB', NULL, '2023045.IB', NULL, NULL,
  'bank_bond', 10.0000, 0.0000, '实名记账式',
  '商业银行债', '上市银行', '某银行股份有限公司', 'C10004',
  'CNY', 100, '2023-11-28', '2023-11-24',
@@ -148,7 +148,7 @@ VALUES
 
 -- 5. 短期融资券（365天，到期一次性还本付息）
 ('105005678', '2024年某地产集团股份有限公司短期融资券', '2024-02-20', '24某地产CP001',
- '042400123.IB', NULL, '042400123.IB', NULL,
+ '042400123.IB', NULL, '042400123.IB', NULL, NULL,
  'cp', 0.0000, 365.0000, '实名记账式',
  '一般短期融资券', '民营房企', '某地产集团股份有限公司', 'C10005',
  'CNY', 8, '2024-02-28', '2024-02-26',
@@ -174,7 +174,7 @@ VALUES
 
 -- 6. 永续中期票据（3+N年，浮动利率）
 ('106006789', '2022年某电力开发有限公司永续中期票据', '2022-09-10', '22某电力MTN001',
- '102281234.IB', NULL, '102281234.IB', NULL,
+ '102281234.IB', NULL, '102281234.IB', NULL, NULL,
  'mtn', 3.0000, 0.0000, '实名记账式',
  '中期票据', '央企', '某电力开发有限公司', 'C10006',
  'CNY', 25, '2022-09-20', '2022-09-16',
@@ -200,7 +200,7 @@ VALUES
 
 -- 7. 科技创新公司证券（3年期，附回售条款）
 ('107007890', '2024年某科技发展有限公司科技创新公司证券', '2024-04-01', '24某科技K1',
- '138765.SH', NULL, NULL, NULL,
+ '138765.SH', NULL, NULL, NULL, NULL,
  'company_bond', 3.0000, 0.0000, '实名记账式',
  '一般公司债', '民企', '某科技发展有限公司', 'C10007',
  'CNY', 5, '2024-04-10', '2024-04-08',
@@ -226,7 +226,7 @@ VALUES
 
 -- 8. 资产支持证券（1年期，优先级）
 ('108008901', '2023年某资产管理有限公司资产支持证券', '2023-12-01', '23某资A1',
- '198032.SH', NULL, NULL, NULL,
+ '198032.SH', NULL, NULL, NULL, NULL,
  'abs', 1.0000, 0.0000, '实名记账式',
  '资产支持证券', '其他', '某资产管理有限公司', 'C10008',
  'CNY', 10, '2023-12-08', '2023-12-06',
@@ -252,7 +252,7 @@ VALUES
 
 -- 9. 超短期融资券（270天）
 ('109009012', '2025年某国际贸易有限公司超短期融资券', '2025-11-25', '25某国贸SCP001',
- '012401234.IB', NULL, '012401234.IB', NULL,
+ '012401234.IB', NULL, '012401234.IB', NULL, NULL,
  'scp', 0.0000, 270.0000, '实名记账式',
  '超短期融资券', '国企', '某国际贸易有限公司', 'C10009',
  'CNY', 12, '2025-12-03', '2025-12-01',
@@ -278,7 +278,7 @@ VALUES
 
 -- 10. 项目收益证券（7年期）
 ('110010123', '2023年某基础设施建设投资集团有限公司项目收益债', '2023-06-15', '23某基建PRN001',
- '152345.SH', NULL, '152345.IB', NULL,
+ '152345.SH', NULL, '152345.IB', NULL, NULL,
  'company_bond', 7.0000, 0.0000, '实名记账式',
  '一般公司债', '地方国企', '某基础设施建设投资集团有限公司', 'C10010',
  'CNY', 18, '2023-06-22', '2023-06-19',

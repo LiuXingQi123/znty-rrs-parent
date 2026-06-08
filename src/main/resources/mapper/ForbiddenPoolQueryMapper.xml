@@ -16,16 +16,16 @@
                 END AS target_pool_name
                ,ips.security_type
                ,dst.security_type_name
-               ,bi.b_info_issuer AS issuer
-               ,bi.b_info_maturitydate AS maturityDate
-               ,bi.b_info_delistdate AS delistDate
-               ,bi.b_info_repurchasedate AS repurchaseDate
+               ,bi.info_issuer AS issuer
+               ,bi.info_maturitydate AS maturityDate
+               ,bi.info_delistdate AS delistDate
+               ,bi.info_repurchasedate AS repurchaseDate
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
                                        AND p.pool_type = 'forbidden'
         LEFT JOIN ip_investment_pool pp ON p.parent_id = pp.id
-        LEFT JOIN sirm_securityinfo bi ON bi.s_info_code = ips.security_code
+        LEFT JOIN sirm_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         <where>
             ips.is_deleted = 0
@@ -36,11 +36,11 @@
                 AND ips.security_type = #{securityType}
             </if>
             <if test="securityStatus == '存续'">
-                AND (bi.b_info_maturitydate IS NULL OR bi.b_info_maturitydate &gt;= CURDATE())
+                AND (bi.info_maturitydate IS NULL OR bi.info_maturitydate &gt;= CURDATE())
             </if>
             <if test="securityStatus == '到期'">
-                AND bi.b_info_maturitydate IS NOT NULL
-                AND bi.b_info_maturitydate &lt; CURDATE()
+                AND bi.info_maturitydate IS NOT NULL
+                AND bi.info_maturitydate &lt; CURDATE()
             </if>
             <if test="adjustTimeStart != null and adjustTimeStart != ''">
                 AND ips.submit_time &gt;= #{adjustTimeStart}
@@ -52,7 +52,7 @@
                 AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
-                AND bi.b_info_issuer LIKE CONCAT('%', #{issuer}, '%')
+                AND bi.info_issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
             <if test="auditStatus != null and auditStatus != ''">
                 AND ips.audit_status = #{auditStatus}

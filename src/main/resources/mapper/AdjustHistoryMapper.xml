@@ -25,7 +25,7 @@
         FROM ip_adjust_log al
         LEFT JOIN ip_investment_pool p  ON p.id  = al.target_pool_id AND p.is_deleted  = 0
         LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id       AND pp.is_deleted = 0
-        LEFT JOIN sirm_securityinfo sb  ON sb.s_info_code = al.security_code
+        LEFT JOIN sirm_securityinfo sb  ON sb.wind_code = al.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type AND dst.is_deleted = 0
         <where>
             al.is_deleted = 0
@@ -43,8 +43,8 @@
             </if>
             <if test="securityStatus != null and securityStatus != ''">
                 AND (CASE
-                         WHEN sb.b_info_maturitydate IS NOT NULL
-                              AND sb.b_info_maturitydate &lt; DATE_FORMAT(NOW(), '%Y-%m-%d')
+                         WHEN sb.info_maturitydate IS NOT NULL
+                              AND sb.info_maturitydate &lt; DATE_FORMAT(NOW(), '%Y-%m-%d')
                          THEN '到期'
                          ELSE '存续'
                      END) = #{securityStatus}
@@ -59,7 +59,7 @@
                 AND al.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
-                AND sb.b_info_issuer LIKE CONCAT('%', #{issuer}, '%')
+                AND sb.info_issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
             <if test="adjustMode != null and adjustMode != ''">
                 AND al.adjust_mode = #{adjustMode}
