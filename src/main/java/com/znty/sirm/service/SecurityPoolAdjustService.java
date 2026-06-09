@@ -1364,10 +1364,10 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：证券是否已到期
      *
-     * <p>到期日（info_maturitydate）早于今日则视为已到期，禁止发起任何调库操作。
+     * <p>到期日（maturity_date）早于今日则视为已到期，禁止发起任何调库操作。
      */
     private String preCheckSecurityExpired(AdjustCheckContext ctx) {
-        String maturityDate = ctx.getSecurityInfo().getInfoMaturitydate();
+        String maturityDate = ctx.getSecurityInfo().getMaturityDate();
         if (maturityDate != null && !maturityDate.isEmpty()) {
             String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {

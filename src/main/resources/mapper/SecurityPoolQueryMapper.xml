@@ -17,14 +17,14 @@
                ,ips.security_type
                ,dst.security_type_name
                ,mbp.id AS mySecurityPoolId
-               ,bi.info_couponrate AS couponRate
-               ,bi.info_issuer AS issuer
-               ,bi.full_name AS fullName
-               ,bi.issue_firstissue AS issueDate
-               ,bi.info_carrydate AS carryDate
-               ,bi.info_maturitydate AS maturityDate
-               ,bi.info_delistdate AS delistDate
-               ,bi.info_repurchasedate AS repurchaseDate
+               ,bi.coupon_rate AS couponRate
+               ,bi.issuer
+               ,bi.full_name
+               ,bi.firstissue_date AS issueDate
+               ,bi.carry_date
+               ,bi.maturity_date
+               ,bi.delist_date
+               ,bi.repurchase_date
         FROM ip_pool_status ips
         LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
         LEFT JOIN ip_investment_pool pp ON p.parent_id = pp.id
@@ -38,10 +38,10 @@
             ips.is_deleted = 0
             AND ips.audit_status = '20'
             <if test="securityStatus == 'active'">
-                AND bi.info_maturitydate &gt;= CURDATE()
+                AND bi.maturity_date &gt;= CURDATE()
             </if>
             <if test="securityStatus == 'matured'">
-                AND bi.info_maturitydate &lt; CURDATE()
+                AND bi.maturity_date &lt; CURDATE()
             </if>
             <if test="poolIds != null and poolIds.size() > 0">
                 AND ips.target_pool_id IN
@@ -65,7 +65,7 @@
                 AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
-                AND bi.info_issuer LIKE CONCAT('%', #{issuer}, '%')
+                AND bi.issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
             <if test="myBonds != null and myBonds == true">
                 AND mbp.id IS NOT NULL

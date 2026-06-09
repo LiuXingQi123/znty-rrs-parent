@@ -18,7 +18,7 @@ public class SecurityInfoBo {
     /** 公告日期 */
     private String issueAnnouncement;
     /** 证券简称 */
-    private String infoName;
+    private String shortName;
     /** 沪市证券代码 */
     private String windCodeSh;
     /** 深市证券代码 */
@@ -32,97 +32,97 @@ public class SecurityInfoBo {
     /** 证券类型编码 */
     private String securityType;
     /** 证券期限(年) */
-    private BigDecimal infoTermYear;
+    private BigDecimal termYear;
     /** 证券期限(天) */
-    private BigDecimal infoTermDay;
+    private BigDecimal termDay;
+    /** 含权期限说明 */
+    private String maturityembeddedDesc;
     /** 证券形式 */
-    private String infoForm;
+    private String formDesc;
     /** 品种类别 */
-    private String infoSectypename;
+    private String secTypename;
     /** 发行人类型 */
-    private String infoComptype;
+    private String compType;
     /** 发行人 */
-    private String infoIssuer;
+    private String issuer;
     /** 发行人代码 */
-    private String infoIssuercode;
+    private String issuerCode;
     /** 币种 */
     private String crncyCode;
     /** 发行规模(亿元) */
     private BigDecimal issueAmountplan;
     /** 上市日期 */
-    private String infoListdate;
+    private String listDate;
     /** 发行日期 */
-    private String issueFirstissue;
+    private String firstissueDate;
     /** 到期日期 */
-    private String infoMaturitydate;
+    private String maturityDate;
     /** 起息日期 */
-    private String infoCarrydate;
+    private String carryDate;
     /** 止息日期 */
-    private String infoEnddate;
+    private String endDate;
     /** 利率类型 */
-    private String infoInteresttype;
+    private String interestType;
     /** 付息方式 */
-    private String infoInterestfrequency;
+    private String interestFrequency;
     /** 每年付息次数 */
-    private Integer infoInterestyearcount;
+    private Integer interestYearcount;
     /** 票面利率(%) */
-    private String infoCouponrate;
+    private String couponRate;
     /** 基本利差(%) */
-    private String infoSpread;
+    private String spread;
     /** 是否可赎回 */
-    private String isRedemption;
+    private Integer redemptionFlag;
     /** 赎回日期 */
-    private String infoRedemptiondate;
+    private String redemptionDate;
     /** 赎回价格 */
-    private BigDecimal infoRedemptionprice;
+    private BigDecimal redemptionPrice;
+    /** 赎回行权日 */
+    private String callbkorputbkDate;
+    /** 赎回条款 */
+    private String redemptionContent;
     /** 可回售性 */
-    private String isRepurchase;
+    private Integer repurchaseFlag;
     /** 回售日期 */
-    private String infoRepurchasedate;
+    private String repurchaseDate;
     /** 回售价格 */
-    private BigDecimal infoRepurchaseprice;
+    private BigDecimal repurchasePrice;
+    /** 回售条款 */
+    private String repurchaseContent;
     /** 兑付起始日 */
-    private String infoPaymentdate;
+    private String paymentDate;
     /** 摘牌日 */
-    private String infoDelistdate;
+    private String delistDate;
     /** 短期融资券,如果F4_1090等于DQ时-1,否则为0 */
-    private Integer infoSecuritiestypesDq;
+    private Integer securitiesTypesDq;
     /** 利率说明 */
-    private String infoCoupontxt;
-    /** 赎回条款 */
-    private String infoRedemptioncontent;
+    private String couponDesc;
     /** 发行方式 */
-    private String infoIssuetype;
-    /** 行权日 */
-    private String infoCallbkorputbkdate;
-    /** 赎回条款 */
-    private String infoContent;
+    private String issueType;
     /** 创建时间 */
-    private Date createtime;
+    private Date createTime;
     /** 更新时间 */
     private Date ts;
-    /** 是否公司证券 */
-    private Integer isCorporateSecurity;
+    /** 是否公司债 */
+    private Integer corporateBondFlag;
     /** 是否可提前兑付 */
-    private String isPayadvanced;
-    /** 是否可赎回 */
-    private String isCallable;
+    private Integer payadvancedFlag;
     /** 是否有选择权 */
-    private String isChooseright;
+    private Integer chooserightFlag;
     /** 是否增发证券 */
-    private String isIncsecurities;
+    private Integer incbondsFlag;
     /** 一级板块 */
-    private String infoIndustryname;
+    private String industryName;
     /** 二级板块 */
-    private String infoIndustryname2;
+    private String industryName2;
     /** 内部分类 */
-    private String infoInnerclass;
+    private String innerClass;
     /** 是否次级 */
-    private String isCj;
+    private Integer cjFlag;
     /** 是否永续 */
-    private String isYx;
+    private Integer yxFlag;
     /** 是否递延 */
-    private String isDy;
+    private Integer dyFlag;
     /** 回售剩余期限-最新 */
     private String dateRedemtionExists;
     /** 赎回剩余期限-最新 */
@@ -132,19 +132,19 @@ public class SecurityInfoBo {
     /** 含权证券剩余期限-最新 */
     private String dateInrightExists;
     /** 证券评级 */
-    private String ratingSecurity;
+    private String ratingBond;
     /** 主体评级 */
-    private String ratingSecurityissuer;
+    private String ratingBondissuer;
     /** 展望评级 */
     private String ratingOutlook;
     /** 证券评级机构 */
-    private String ratingSecurityAgency;
+    private String ratingBondAgency;
     /** 主体评级机构 */
-    private String ratingSecurityissuerAgency;
+    private String ratingBondissuerAgency;
     /** 中债隐含评级 */
     private String ratingCnbd;
     /** 是否含权证券 */
-    private String isInright;
+    private Integer inrightFlag;
     /** 含权证券下一个行权日 */
     private String dateInrightNext;
     /** 发行总额-亿 */
@@ -159,14 +159,20 @@ public class SecurityInfoBo {
     private String agencyName;
     /** 主承销商Id */
     private String agencyNameid;
+    /** 证券状态 */
+    private String securityStatus;
+    /** 下一个行权日 */
+    private String dateNext;
+    /** 资金募集用途 */
+    private String fundUse;
+    /** 面值 */
+    private BigDecimal par;
     /** 质押比率(%) */
     private BigDecimal infoPledgeRatio;
     /** 主体内评分档 */
     private String innerIssuerRating;
     /** 担保人主体内评分 */
     private String innerGuarantorRating;
-    /** 募集资金用途 */
-    private String fundUsage;
     /** 提示原因 */
     private String promptReason;
     /** 证券分析 */

@@ -16,10 +16,10 @@
                 END AS target_pool_name
                ,ips.security_type
                ,dst.security_type_name
-               ,bi.info_issuer AS issuer
-               ,bi.info_maturitydate AS maturityDate
-               ,bi.info_delistdate AS delistDate
-               ,bi.info_repurchasedate AS repurchaseDate
+               ,bi.issuer
+               ,bi.maturity_date
+               ,bi.delist_date
+               ,bi.repurchase_date
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
@@ -36,11 +36,11 @@
                 AND ips.security_type = #{securityType}
             </if>
             <if test="securityStatus == '存续'">
-                AND (bi.info_maturitydate IS NULL OR bi.info_maturitydate &gt;= CURDATE())
+                AND (bi.maturity_date IS NULL OR bi.maturity_date &gt;= CURDATE())
             </if>
             <if test="securityStatus == '到期'">
-                AND bi.info_maturitydate IS NOT NULL
-                AND bi.info_maturitydate &lt; CURDATE()
+                AND bi.maturity_date IS NOT NULL
+                AND bi.maturity_date &lt; CURDATE()
             </if>
             <if test="adjustTimeStart != null and adjustTimeStart != ''">
                 AND ips.submit_time &gt;= #{adjustTimeStart}
@@ -52,7 +52,7 @@
                 AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
-                AND bi.info_issuer LIKE CONCAT('%', #{issuer}, '%')
+                AND bi.issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
             <if test="auditStatus != null and auditStatus != ''">
                 AND ips.audit_status = #{auditStatus}
