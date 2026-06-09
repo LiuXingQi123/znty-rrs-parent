@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.TodoProcessMapper">
-    <!-- 待办处理 mapper，对应调库记录、调库步骤和流程定义表，提供待审批步骤查询功能 -->
+<mapper namespace="com.znty.sirm.mapper.MyMattersMapper">
+    <!-- 我的事宜 mapper，对应调库记录、调库步骤和流程定义表，提供当前用户相关流程事项查询功能 -->
 
-    <!-- 分页查询待办处理列表 -->
-    <select id="queryTodoProcessPage" resultType="com.znty.sirm.model.TodoProcessDto">
+    <!-- 分页查询我的事宜列表 -->
+    <select id="queryMyMattersPage" resultType="com.znty.sirm.model.MyMattersDto">
         SELECT s.id
                ,s.adjust_log_id
                ,s.id AS stepId
                ,f.name AS flowName
                ,s.node_label AS stepName
+               ,al.audit_status
+               ,s.step_status
                ,CONCAT(
                     COALESCE(al.adjuster_name, ''),
                     ' 将 ',
@@ -23,14 +25,25 @@
                 ) AS processDescription
                ,al.adjuster_name AS initiatorName
                ,s.start_time
-        FROM ip_adjust_step s
-        INNER JOIN ip_adjust_log al ON al.id = s.adjust_log_id AND al.is_deleted = 0
+        FROM ip_adjust_log al
+        INNER JOIN (
+            SELECT adjust_log_id
+                   ,MAX(id) AS step_id
+            FROM ip_adjust_step
+            GROUP BY adjust_log_id
+        ) latest ON latest.adjust_log_id = al.id
+        INNER JOIN ip_adjust_step s ON s.id = latest.step_id
         LEFT JOIN wf_flow_node n ON n.id = s.flow_node_id
         LEFT JOIN wf_flow_definition f ON f.id = n.flow_id AND f.is_deleted = 0
         <where>
-            s.step_status = 'pending'
+            al.is_deleted = 0
             <if test="currentUserId != null and currentUserId != '' and currentUserId != '1001'">
-                AND s.handler_id = #{currentUserId}
+                AND EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step us
+                    WHERE us.adjust_log_id = al.id
+                      AND us.handler_id = #{currentUserId}
+                )
             </if>
             <if test="flowIds != null and flowIds.size() > 0">
                 AND f.id IN
@@ -56,28 +69,42 @@
                         ' 的审批申请'
                     ) LIKE CONCAT('%', #{processDescription}, '%')
             </if>
+            <if test="auditStatus != null and auditStatus != ''">
+                AND al.audit_status = #{auditStatus}
+            </if>
             <if test="initiatorName != null and initiatorName != ''">
                 AND al.adjuster_name LIKE CONCAT('%', #{initiatorName}, '%')
             </if>
         </where>
-        ORDER BY s.start_time DESC
-                 ,s.id DESC
+        GROUP BY s.adjust_log_id
+        ORDER BY s.id DESC
     </select>
 
-    <!-- 查询待办流程名称下拉选项 -->
+    <!-- 查询我的事宜流程名称下拉选项 -->
     <select id="queryFlowOptionList" resultType="com.znty.sirm.model.FlowOptionDto">
         SELECT DISTINCT f.id AS flowId
                        ,f.flow_key
                        ,f.name AS flowName
                        ,f.description
-        FROM ip_adjust_step s
-        INNER JOIN ip_adjust_log al ON al.id = s.adjust_log_id AND al.is_deleted = 0
+        FROM ip_adjust_log al
+        INNER JOIN (
+            SELECT adjust_log_id
+                   ,MAX(id) AS step_id
+            FROM ip_adjust_step
+            GROUP BY adjust_log_id
+        ) latest ON latest.adjust_log_id = al.id
+        INNER JOIN ip_adjust_step s ON s.id = latest.step_id
         INNER JOIN wf_flow_node n ON n.id = s.flow_node_id
         INNER JOIN wf_flow_definition f ON f.id = n.flow_id AND f.is_deleted = 0
         <where>
-            s.step_status = 'pending'
+            al.is_deleted = 0
             <if test="currentUserId != null and currentUserId != '' and currentUserId != '1001'">
-                AND s.handler_id = #{currentUserId}
+                AND EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step us
+                    WHERE us.adjust_log_id = al.id
+                      AND us.handler_id = #{currentUserId}
+                )
             </if>
         </where>
         ORDER BY f.name ASC

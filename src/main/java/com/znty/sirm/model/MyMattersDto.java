@@ -6,12 +6,12 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 待办处理列表返回对象。
+ * 我的事宜列表返回对象。
  */
 @Data
-public class TodoProcessDto {
+public class MyMattersDto {
 
-    /** 待办步骤 ID，作为列表主键 */
+    /** 步骤 ID，作为列表主键 */
     private Long id;
 
     /** 调库记录 ID */
@@ -28,6 +28,12 @@ public class TodoProcessDto {
 
     /** 流程描述 */
     private String processDescription;
+
+    /** 审核状态 */
+    private String auditStatus;
+
+    /** 步骤状态 */
+    private String stepStatus;
 
     /** 发起人 */
     private String initiatorName;

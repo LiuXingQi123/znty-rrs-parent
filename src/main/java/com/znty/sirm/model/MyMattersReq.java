@@ -7,11 +7,11 @@ import lombok.EqualsAndHashCode;
 import java.util.List;
 
 /**
- * 待办处理分页查询请求对象。
+ * 我的事宜分页查询请求对象。
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
-public class TodoProcessReq extends PageRequest {
+public class MyMattersReq extends PageRequest {
 
     /** 流程 ID 列表，多选筛选 */
     private List<Long> flowIds;
@@ -24,6 +24,9 @@ public class TodoProcessReq extends PageRequest {
 
     /** 流程描述关键词 */
     private String processDescription;
+
+    /** 审核状态 */
+    private String auditStatus;
 
     /** 发起人姓名关键词 */
     private String initiatorName;
