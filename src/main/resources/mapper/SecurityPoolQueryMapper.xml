@@ -23,6 +23,11 @@
                ,bi.firstissue_date AS issueDate
                ,bi.carry_date
                ,bi.maturity_date
+               ,CASE
+                    WHEN bi.maturity_date IS NULL OR bi.maturity_date = '' THEN NULL
+                    WHEN bi.maturity_date &gt;= CURDATE() THEN 'active'
+                    ELSE 'matured'
+                END AS securityStatus
                ,bi.delist_date
                ,bi.repurchase_date
         FROM ip_pool_status ips
@@ -67,7 +72,7 @@
             <if test="issuer != null and issuer != ''">
                 AND bi.issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
-            <if test="myBonds != null and myBonds == true">
+            <if test="mySecurities != null and mySecurities == true">
                 AND mbp.id IS NOT NULL
             </if>
         </where>

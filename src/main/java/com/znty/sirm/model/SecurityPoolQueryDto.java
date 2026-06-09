@@ -43,6 +43,8 @@ public class SecurityPoolQueryDto {
     private String carryDate;
     /** 到期日 */
     private String maturityDate;
+    /** 证券状态：active=存续 / matured=到期 */
+    private String securityStatus;
     /** 退市日期 */
     private String delistDate;
     /** 行权日期（回售） */

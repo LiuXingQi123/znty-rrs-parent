@@ -29,7 +29,7 @@ public class SecurityPoolQueryReq extends PageRequest {
     /** 发行主体名称（模糊搜索） */
     private String issuer;
     /** 我的证券 */
-    private Boolean myBonds;
+    private Boolean mySecurities;
     /** 当前用户ID（我的证券勾选时使用） */
     private String currentUserId;
 }
