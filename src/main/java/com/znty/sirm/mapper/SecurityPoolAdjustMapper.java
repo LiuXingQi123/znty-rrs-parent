@@ -7,6 +7,7 @@ import com.znty.sirm.model.SecurityInfoDto;
 import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.PoolRelationBo;
 import com.znty.sirm.model.PoolStatusDto;
+import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -38,6 +39,9 @@ public interface SecurityPoolAdjustMapper {
     /** 软删除入池状态（直通调出流程，将目标池中有效记录标记为已删除） */
     int softDeletePoolStatus(@Param("securityCode") String securityCode,
                              @Param("targetPoolId") Long targetPoolId);
+
+    /** 更新调库详情页传入的证券基础信息字段 */
+    int editSecurityInfoForAdjust(SecurityPoolAdjustSubmitReq req);
 
     /** 根据证券代码查询调库记录列表 */
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode);

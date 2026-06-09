@@ -31,6 +31,9 @@ public class SecurityPoolAdjustSubmitReq {
     /** 调整意见 */
     private String adjustAdvice;
 
+    /** 证券基础信息 */
+    private SecurityInfoBo securityInfo;
+
     /** 调整人 ID */
     private String adjusterId;
 

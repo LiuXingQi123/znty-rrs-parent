@@ -643,13 +643,72 @@ public class SecurityPoolAdjustService {
     /**
      * 第五阶段：后续处理（预留扩展点）
      *
-     * <p>当前为空实现，预留给未来可能的扩展需求：通知发送、缓存刷新、事件记录等。
+     * <p>当前用于同步更新调库详情页传入的证券基础信息字段。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
      */
     private void postSubmitProcess(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
-        // 预留扩展点，当前无操作
+        if (req.getSecurityInfo() == null) {
+            return;
+        }
+        // 合并数据库当前完整快照与前端传入的变更字段
+        req.setSecurityInfo(buildMergedSecurityInfo(req.getSecurityId(), req.getSecurityInfo()));
+        // 同步更新证券基础信息表中本次传入的字段
+        securityPoolAdjustMapper.editSecurityInfoForAdjust(req);
+    }
+
+    /**
+     * 构建证券基础信息全量更新参数。
+     *
+     * <p>前端只需要传入可能变更的字段；这里先加载数据库当前完整快照，
+     * 再用前端传入字段覆盖同名字段。若前端显式传入 null，也会覆盖为 null，用于清空字段。
+     *
+     * @param securityId   证券 ID
+     * @param changedField 前端传入的变更字段
+     */
+    private SecurityInfoBo buildMergedSecurityInfo(Long securityId, SecurityInfoBo changedField) {
+        SecurityInfoBo current = securityPoolAdjustMapper.querySecurityBoById(securityId);
+        if (current == null) {
+            throw new BizException("证券不存在");
+        }
+        // 使用前端本次可编辑字段覆盖数据库当前实体
+        mergeSecurityInfo(current, changedField);
+        return current;
+    }
+
+    /**
+     * 将调库详情页可编辑字段逐项覆盖到当前证券实体。
+     */
+    private void mergeSecurityInfo(SecurityInfoBo current, SecurityInfoBo changedField) {
+        current.setFullName(changedField.getFullName());
+        current.setShortName(changedField.getShortName());
+        current.setWindCode(changedField.getWindCode());
+        current.setIssuer(changedField.getIssuer());
+        current.setWindCodeNib(changedField.getWindCodeNib());
+        current.setWindCodeSh(changedField.getWindCodeSh());
+        current.setWindCodeSz(changedField.getWindCodeSz());
+        current.setWindCodeBj(changedField.getWindCodeBj());
+        current.setIssueAmountplan(changedField.getIssueAmountplan());
+        current.setCouponRate(changedField.getCouponRate());
+        current.setDateInrightExists(changedField.getDateInrightExists());
+        current.setCarryDate(changedField.getCarryDate());
+        current.setMaturityDate(changedField.getMaturityDate());
+        current.setInfoPledgeRatio(changedField.getInfoPledgeRatio());
+        current.setRatingBondAgency(changedField.getRatingBondAgency());
+        current.setRatingBond(changedField.getRatingBond());
+        current.setRatingBondissuer(changedField.getRatingBondissuer());
+        current.setRatingOutlook(changedField.getRatingOutlook());
+        current.setAgencyGrnttype(changedField.getAgencyGrnttype());
+        current.setAgencyName(changedField.getAgencyName());
+        current.setInnerIssuerRating(changedField.getInnerIssuerRating());
+        current.setDateRedemtionExists(changedField.getDateRedemtionExists());
+        current.setDateCallExists(changedField.getDateCallExists());
+        current.setInnerGuarantorRating(changedField.getInnerGuarantorRating());
+        current.setDateExists(changedField.getDateExists());
+        current.setFundUse(changedField.getFundUse());
+        current.setPromptReason(changedField.getPromptReason());
+        current.setAnalysis(changedField.getAnalysis());
     }
 
     // ═══════════════════════════════════════════════════════════

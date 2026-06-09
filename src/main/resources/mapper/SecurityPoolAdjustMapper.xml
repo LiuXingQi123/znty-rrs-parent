@@ -5,19 +5,8 @@
 
     <!-- 分页查询证券列表 -->
     <select id="querySecurityPage" resultType="com.znty.sirm.model.SecurityInfoDto">
-        SELECT si.id
-               ,si.wind_code AS securityCode
-               ,si.short_name AS securityShortName
-               ,si.full_name
-               ,si.issuer
-               ,si.issue_amountplan AS issueAmount
-               ,si.carry_date
-               ,si.maturity_date
-               ,si.rating_bond AS securityRating
-               ,si.rating_bondissuer AS issuerRating
-               ,si.security_type
+        SELECT si.*
                ,dst.security_type_name
-               ,si.date_exists AS termStr
         FROM sirm_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         <where>
@@ -36,34 +25,8 @@
 
     <!-- 查询证券详情 -->
     <select id="querySecurityDetail" resultType="com.znty.sirm.model.SecurityInfoDetailDto">
-        SELECT si.full_name
-               ,si.short_name AS securityShortName
-               ,si.wind_code AS securityCode
-               ,si.issuer AS issuerName
-               ,si.wind_code_nib AS nibCode
-               ,COALESCE(si.wind_code_sh, si.wind_code_sz, si.wind_code_bj) AS exchangeCode
-               ,si.issue_amountplan AS issueAmount
-               ,si.date_inright_exists AS remExeTerm
-               ,si.carry_date
-               ,si.maturity_date
-               ,si.info_pledge_ratio AS pledgeRatio
-               ,si.rating_bond_agency AS ratingAgency
-               ,si.rating_bond AS securityRating
-               ,si.rating_bondissuer AS issuerRating
-               ,si.rating_outlook
-               ,si.agency_grnttype AS guaranteeStatus
-               ,si.agency_name AS leadUnderwriter
-               ,si.inner_issuer_rating
-               ,si.security_type
+        SELECT si.*
                ,dst.security_type_name
-               ,si.date_redemtion_exists AS putExeTerm
-               ,si.date_call_exists AS callRemTerm
-               ,si.inner_guarantor_rating
-               ,si.date_inright_exists AS optRemTerm
-               ,si.date_exists AS termStr
-               ,si.fund_use AS fundUsage
-               ,si.prompt_reason
-               ,si.analysis
         FROM sirm_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         WHERE si.id = #{securityId}
@@ -71,38 +34,7 @@
 
     <!-- 根据 ID 查询证券基础信息实体 -->
     <select id="querySecurityBoById" resultType="com.znty.sirm.model.SecurityInfoBo">
-        SELECT id
-               ,wind_code
-               ,short_name
-               ,full_name
-               ,issuer
-               ,wind_code_nib
-               ,wind_code_bj
-               ,wind_code_sh
-               ,wind_code_sz
-               ,issue_amountplan
-               ,issue_amountact
-               ,coupon_rate
-               ,carry_date
-               ,maturity_date
-               ,info_pledge_ratio
-               ,rating_bond_agency
-               ,rating_bond
-               ,rating_bondissuer
-               ,rating_outlook
-               ,agency_grnttype
-               ,guarantor
-               ,agency_name
-               ,inner_issuer_rating
-               ,security_type
-               ,inner_guarantor_rating
-               ,date_exists
-               ,date_redemtion_exists
-               ,date_call_exists
-               ,date_inright_exists
-               ,fund_use
-               ,prompt_reason
-               ,analysis
+        SELECT *
         FROM sirm_securityinfo
         WHERE id = #{securityId}
     </select>
@@ -374,6 +306,95 @@
           AND target_pool_id = #{targetPoolId}
           AND audit_status = '20'
           AND is_deleted = 0
+    </update>
+
+    <!-- 更新调库详情页传入的证券基础信息字段 -->
+    <update id="editSecurityInfoForAdjust">
+        UPDATE sirm_securityinfo
+        SET wind_code = #{securityInfo.windCode}
+           ,full_name = #{securityInfo.fullName}
+           ,issue_announcement = #{securityInfo.issueAnnouncement}
+           ,short_name = #{securityInfo.shortName}
+           ,wind_code_sh = #{securityInfo.windCodeSh}
+           ,wind_code_sz = #{securityInfo.windCodeSz}
+           ,wind_code_nib = #{securityInfo.windCodeNib}
+           ,wind_code_bj = #{securityInfo.windCodeBj}
+           ,wind_code_nbc = #{securityInfo.windCodeNbc}
+           ,security_type = #{securityInfo.securityType}
+           ,term_year = #{securityInfo.termYear}
+           ,term_day = #{securityInfo.termDay}
+           ,maturityembedded_desc = #{securityInfo.maturityembeddedDesc}
+           ,form_desc = #{securityInfo.formDesc}
+           ,sec_typename = #{securityInfo.secTypename}
+           ,comp_type = #{securityInfo.compType}
+           ,issuer = #{securityInfo.issuer}
+           ,issuer_code = #{securityInfo.issuerCode}
+           ,crncy_code = #{securityInfo.crncyCode}
+           ,issue_amountplan = #{securityInfo.issueAmountplan}
+           ,list_date = #{securityInfo.listDate}
+           ,firstissue_date = #{securityInfo.firstissueDate}
+           ,maturity_date = #{securityInfo.maturityDate}
+           ,carry_date = #{securityInfo.carryDate}
+           ,end_date = #{securityInfo.endDate}
+           ,interest_type = #{securityInfo.interestType}
+           ,interest_frequency = #{securityInfo.interestFrequency}
+           ,interest_yearcount = #{securityInfo.interestYearcount}
+           ,coupon_rate = #{securityInfo.couponRate}
+           ,spread = #{securityInfo.spread}
+           ,redemption_flag = #{securityInfo.redemptionFlag}
+           ,redemption_date = #{securityInfo.redemptionDate}
+           ,redemption_price = #{securityInfo.redemptionPrice}
+           ,date_call_exists = #{securityInfo.dateCallExists}
+           ,callbkorputbk_date = #{securityInfo.callbkorputbkDate}
+           ,redemption_content = #{securityInfo.redemptionContent}
+           ,repurchase_flag = #{securityInfo.repurchaseFlag}
+           ,date_redemtion_exists = #{securityInfo.dateRedemtionExists}
+           ,repurchase_date = #{securityInfo.repurchaseDate}
+           ,repurchase_price = #{securityInfo.repurchasePrice}
+           ,repurchase_content = #{securityInfo.repurchaseContent}
+           ,payment_date = #{securityInfo.paymentDate}
+           ,delist_date = #{securityInfo.delistDate}
+           ,securities_types_dq = #{securityInfo.securitiesTypesDq}
+           ,coupon_desc = #{securityInfo.couponDesc}
+           ,issue_type = #{securityInfo.issueType}
+           ,corporate_bond_flag = #{securityInfo.corporateBondFlag}
+           ,payadvanced_flag = #{securityInfo.payadvancedFlag}
+           ,chooseright_flag = #{securityInfo.chooserightFlag}
+           ,incbonds_flag = #{securityInfo.incbondsFlag}
+           ,industry_name = #{securityInfo.industryName}
+           ,industry_name2 = #{securityInfo.industryName2}
+           ,inner_class = #{securityInfo.innerClass}
+           ,cj_flag = #{securityInfo.cjFlag}
+           ,yx_flag = #{securityInfo.yxFlag}
+           ,dy_flag = #{securityInfo.dyFlag}
+           ,date_exists = #{securityInfo.dateExists}
+           ,rating_bond = #{securityInfo.ratingBond}
+           ,rating_bondissuer = #{securityInfo.ratingBondissuer}
+           ,rating_outlook = #{securityInfo.ratingOutlook}
+           ,rating_bond_agency = #{securityInfo.ratingBondAgency}
+           ,rating_bondissuer_agency = #{securityInfo.ratingBondissuerAgency}
+           ,rating_cnbd = #{securityInfo.ratingCnbd}
+           ,inright_flag = #{securityInfo.inrightFlag}
+           ,date_inright_exists = #{securityInfo.dateInrightExists}
+           ,date_inright_next = #{securityInfo.dateInrightNext}
+           ,issue_amountact = #{securityInfo.issueAmountact}
+           ,agency_grnttype = #{securityInfo.agencyGrnttype}
+           ,guarantor = #{securityInfo.guarantor}
+           ,guarantor_id = #{securityInfo.guarantorId}
+           ,agency_name = #{securityInfo.agencyName}
+           ,agency_nameid = #{securityInfo.agencyNameid}
+           ,create_time = #{securityInfo.createTime}
+           ,ts = NOW()
+           ,security_status = #{securityInfo.securityStatus}
+           ,date_next = #{securityInfo.dateNext}
+           ,fund_use = #{securityInfo.fundUse}
+           ,par = #{securityInfo.par}
+           ,info_pledge_ratio = #{securityInfo.infoPledgeRatio}
+           ,inner_issuer_rating = #{securityInfo.innerIssuerRating}
+           ,inner_guarantor_rating = #{securityInfo.innerGuarantorRating}
+           ,prompt_reason = #{securityInfo.promptReason}
+           ,analysis = #{securityInfo.analysis}
+        WHERE id = #{securityId}
     </update>
 
     <!-- 新增流程步骤记录 -->
