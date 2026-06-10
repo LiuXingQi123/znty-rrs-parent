@@ -109,6 +109,7 @@ public class SecurityPoolAdjustService {
     private static final String FLOW_TYPE_NORMAL_INBOUND = "normalInbound";
     private static final String FLOW_TYPE_UPGRADE_INBOUND = "upgradeInbound";
     private static final String FLOW_TYPE_DOWNGRADE_INBOUND = "downgradeInbound";
+    private static final String FLOW_TYPE_NORMAL_OUTBOUND = "normalOutbound";
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
     private static final String CREDIT_BOND_ROOT_CODE = "credit_bond_root";
     private static final String CREDIT_BOND_POOL_TYPE = "credit_bond";
@@ -1066,8 +1067,9 @@ public class SecurityPoolAdjustService {
     /**
      * 第五阶段：判断本次调库可选择的审批流程。
      *
-     * <p>当前只考虑债券调入：信用债已在库返回上调/下调单流程，信用债未在库返回白名单/简易/普通三类候选，
-     * 非信用债大库返回普通流程。白名单和简易规则按伪代码保留入口，不改表结构。</p>
+     * <p>调出时直接使用目标投资池配置的标准调出流程。调入时：信用债已在库返回上调/下调单流程，
+     * 信用债未在库返回白名单/简易/普通三类候选，非信用债大库返回普通流程。
+     * 白名单和简易规则按伪代码保留入口，不改表结构。</p>
      *
      * @param req         调库校验请求
      * @param shared      本次校验的共享数据
@@ -1077,9 +1079,57 @@ public class SecurityPoolAdjustService {
     private List<AdjustCheckDto.FlowOption> resolveAdjustFlowOptions(
             AdjustCheckReq req, AdjustSharedData shared, List<AdjustCheckDto.CheckResultItem> resultItems) {
 
-        // 取第一个可提交的手工调入目标池，作为流程判断依据
-        InvestmentPoolBo targetPool = findFirstValidManualInboundTargetPool(resultItems, shared);
+        List<AdjustCheckDto.FlowOption> allOptions = new ArrayList<>();
+        Set<String> optionKeys = new HashSet<>();
+        if (resultItems == null || resultItems.isEmpty()) {
+            return allOptions;
+        }
+
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            List<AdjustCheckDto.FlowOption> itemOptions = resolveAdjustFlowOptionsForItem(req, shared, item);
+            item.setFlowOptions(itemOptions);
+            for (AdjustCheckDto.FlowOption option : itemOptions) {
+                String key = buildFlowOptionUniqueKey(option);
+                if (optionKeys.add(key)) {
+                    allOptions.add(option);
+                }
+            }
+        }
+        return allOptions;
+    }
+
+    /**
+     * 判断单条手工调库项可选择的审批流程。
+     */
+    private List<AdjustCheckDto.FlowOption> resolveAdjustFlowOptionsForItem(
+            AdjustCheckReq req, AdjustSharedData shared, AdjustCheckDto.CheckResultItem item) {
+
+        if (item == null || !item.isCanAdjust() || !"manual".equals(item.getItemTag())) {
+            return new ArrayList<>();
+        }
+        InvestmentPoolBo targetPool = shared.getPoolMap().get(item.getTargetPoolId());
         if (targetPool == null) {
+            return new ArrayList<>();
+        }
+
+        // 手工调出：使用投资池定义的标准调出流程
+        if ("调出".equals(item.getAdjustMode())) {
+            String flowName = resolveFlowName(targetPool.getOutFlowName(), "调出流程");
+            FlowOptionParam p = new FlowOptionParam();
+            p.setFlowType(FLOW_TYPE_NORMAL_OUTBOUND);
+            p.setFlowName(flowName);
+            p.setFlowId(targetPool.getOutFlowId());
+            p.setFlowKey(targetPool.getOutFlowKey());
+            p.setRecommended(true);
+            p.setMatched(true);
+            p.setSelectable(true);
+            p.setMatchReasons(Collections.singletonList("调出目标池使用投资池定义的标准调出流程"));
+            p.setUnmatchReasons(new ArrayList<>());
+            // 构建调出流程候选项
+            return Collections.singletonList(buildPoolFlowOption(p));
+        }
+
+        if (!"调入".equals(item.getAdjustMode())) {
             return new ArrayList<>();
         }
 
@@ -1176,19 +1226,16 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 查找第一个可提交的手工调入目标池。
+     * 生成流程候选项去重 key。
      */
-    private InvestmentPoolBo findFirstValidManualInboundTargetPool(
-            List<AdjustCheckDto.CheckResultItem> resultItems, AdjustSharedData shared) {
-        if (resultItems == null || resultItems.isEmpty()) {
-            return null;
+    private String buildFlowOptionUniqueKey(AdjustCheckDto.FlowOption option) {
+        if (option == null) {
+            return "";
         }
-        for (AdjustCheckDto.CheckResultItem item : resultItems) {
-            if ("manual".equals(item.getItemTag()) && "调入".equals(item.getAdjustMode()) && item.isCanAdjust()) {
-                return shared.getPoolMap().get(item.getTargetPoolId());
-            }
-        }
-        return null;
+        return String.valueOf(option.getFlowId()) + "|"
+                + String.valueOf(option.getFlowKey()) + "|"
+                + String.valueOf(option.getFlowType()) + "|"
+                + String.valueOf(option.getFlowName());
     }
 
     /**

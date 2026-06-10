@@ -51,6 +51,9 @@ public class AdjustCheckDto {
 
         /** 不可调整原因列表（可调整时为空列表） */
         private List<String> failReasons;
+
+        /** 当前调库项可选流程列表 */
+        private List<FlowOption> flowOptions;
     }
 
     /**
@@ -59,7 +62,7 @@ public class AdjustCheckDto {
     @Data
     public static class FlowOption {
 
-        /** 流程类型：whitelistInbound / simpleInbound / normalInbound / upgradeInbound / downgradeInbound */
+        /** 流程类型：whitelistInbound / simpleInbound / normalInbound / upgradeInbound / downgradeInbound / normalOutbound */
         private String flowType;
 
         /** 流程名称 */
