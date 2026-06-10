@@ -71,7 +71,8 @@
                 AND al.adjuster_id = #{currentUserId}
             </if>
         </where>
-        ORDER BY al.submit_time DESC
+        ORDER BY COALESCE(al.adjust_batch_no, CONCAT('BOND', DATE_FORMAT(al.submit_time, '%Y%m%d%H%i%s'), LPAD(al.id, 20, '0'))) DESC
+                 ,al.submit_time DESC
                  ,al.id DESC
     </select>
 

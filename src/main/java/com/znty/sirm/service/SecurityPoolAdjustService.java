@@ -428,9 +428,9 @@ public class SecurityPoolAdjustService {
     /**
      * 生成调库批次号。
      */
-    private String buildAdjustBatchNo(SecurityPoolAdjustSubmitReq.AdjustItem item, SubmitSharedData shared) {
+    private String buildAdjustBatchNo(SecurityPoolAdjustSubmitReq.AdjustItem manualItem, SubmitSharedData shared) {
         int serial;
-        if ("调入".equals(item.getAdjustMode())) {
+        if ("调入".equals(manualItem.getAdjustMode())) {
             serial = 1000 + ++shared.inboundBatchSeq;
         } else {
             serial = 2000 + ++shared.outboundBatchSeq;
@@ -441,17 +441,37 @@ public class SecurityPoolAdjustService {
     /**
      * 获取或生成同组调库批次号。
      */
-    private String resolveAdjustBatchNo(SecurityPoolAdjustSubmitReq.AdjustItem item, SubmitSharedData shared) {
+    private String resolveAdjustBatchNo(
+            SecurityPoolAdjustSubmitReq req,
+            SecurityPoolAdjustSubmitReq.AdjustItem item,
+            SubmitSharedData shared) {
         String groupKey = item.getAdjustGroupKey();
         if (groupKey == null || groupKey.isEmpty()) {
             throw new BizException("调库分组标识不能为空");
         }
         String batchNo = shared.adjustBatchNoMap.get(groupKey);
         if (batchNo == null) {
-            batchNo = buildAdjustBatchNo(item, shared);
+            batchNo = buildAdjustBatchNo(resolveManualSubmitItem(req, item), shared);
             shared.adjustBatchNoMap.put(groupKey, batchNo);
         }
         return batchNo;
+    }
+
+    /**
+     * 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号。
+     */
+    private SecurityPoolAdjustSubmitReq.AdjustItem resolveManualSubmitItem(
+            SecurityPoolAdjustSubmitReq req, SecurityPoolAdjustSubmitReq.AdjustItem item) {
+        if (isManualSubmitItem(item)) {
+            return item;
+        }
+        String groupKey = item.getAdjustGroupKey();
+        for (SecurityPoolAdjustSubmitReq.AdjustItem candidate : req.getItems()) {
+            if (isManualSubmitItem(candidate) && groupKey != null && groupKey.equals(candidate.getAdjustGroupKey())) {
+                return candidate;
+            }
+        }
+        throw new BizException("未找到调库分组对应的手工调整记录");
     }
 
     /**
@@ -587,7 +607,8 @@ public class SecurityPoolAdjustService {
             if (!"调入".equals(item.getAdjustMode())) {
                 continue;
             }
-            Long flowId = resolveFlowIdFromItem(item);
+            SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
+            Long flowId = resolveFlowIdFromItem(manualItem);
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
             boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
@@ -606,7 +627,7 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
-                String adjustBatchNo = resolveAdjustBatchNo(item, shared);
+                String adjustBatchNo = resolveAdjustBatchNo(req, item, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
@@ -639,7 +660,8 @@ public class SecurityPoolAdjustService {
             if (!"调出".equals(item.getAdjustMode())) {
                 continue;
             }
-            Long flowId = resolveFlowIdFromItem(item);
+            SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
+            Long flowId = resolveFlowIdFromItem(manualItem);
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
             boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
@@ -657,7 +679,7 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
-                String adjustBatchNo = resolveAdjustBatchNo(item, shared);
+                String adjustBatchNo = resolveAdjustBatchNo(req, item, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
