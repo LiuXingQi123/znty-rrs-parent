@@ -827,12 +827,12 @@ public class SecurityPoolAdjustService {
         return result;
     }
 
-    /** 查询指定调库记录的流程步骤列表 */
-    public List<IpAdjustStepDto> queryAdjustStepList(Long adjustLogId) {
-        if (adjustLogId == null) {
+    /** 查询指定调库记录或同批次共用流程的步骤列表 */
+    public List<IpAdjustStepDto> queryAdjustStepList(Long adjustLogId, String adjustBatchNo) {
+        if (adjustLogId == null && (adjustBatchNo == null || adjustBatchNo.isEmpty())) {
             return Collections.emptyList();
         }
-        List<IpAdjustStepBo> steps = securityPoolAdjustMapper.queryAdjustStepListWithBatch(adjustLogId);
+        List<IpAdjustStepBo> steps = securityPoolAdjustMapper.queryAdjustStepListWithBatch(adjustLogId, adjustBatchNo);
         if (steps == null || steps.isEmpty()) {
             return Collections.emptyList();
         }

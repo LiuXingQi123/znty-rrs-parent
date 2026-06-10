@@ -22,4 +22,6 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private Long targetPoolId;
     /** 调库记录 ID（查询流程步骤时使用） */
     private Long adjustLogId;
+    /** 调库批次号（查询同批次共用流程步骤时使用） */
+    private String adjustBatchNo;
 }

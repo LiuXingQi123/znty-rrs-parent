@@ -483,7 +483,7 @@
         ORDER BY sort_order, id
     </select>
 
-    <!-- 查询指定调库记录或同批记录的流程步骤列表 -->
+    <!-- 查询指定批次或调库记录的流程步骤列表 -->
     <select id="queryAdjustStepListWithBatch" resultType="com.znty.sirm.model.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
@@ -502,17 +502,16 @@
                ,start_time
                ,process_time
         FROM ip_adjust_step
-        WHERE adjust_log_id = #{adjustLogId}
-           OR (
-               adjust_batch_no IS NOT NULL
-               AND adjust_batch_no = (
-                   SELECT adjust_batch_no
-                   FROM ip_adjust_log
-                   WHERE id = #{adjustLogId}
-                     AND adjust_batch_no IS NOT NULL
-                   LIMIT 1
-               )
-           )
+        <where>
+            <choose>
+                <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                    adjust_batch_no = #{adjustBatchNo}
+                </when>
+                <otherwise>
+                    adjust_log_id = #{adjustLogId}
+                </otherwise>
+            </choose>
+        </where>
         ORDER BY sort_order, id
     </select>
 

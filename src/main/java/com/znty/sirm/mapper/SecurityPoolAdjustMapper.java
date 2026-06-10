@@ -81,6 +81,7 @@ public interface SecurityPoolAdjustMapper {
     /** 查询指定调库记录的流程步骤列表 */
     List<IpAdjustStepBo> queryAdjustStepList(@Param("adjustLogId") Long adjustLogId);
 
-    /** 查询指定调库记录或同批记录的流程步骤列表 */
-    List<IpAdjustStepBo> queryAdjustStepListWithBatch(@Param("adjustLogId") Long adjustLogId);
+    /** 查询指定批次或调库记录的流程步骤列表 */
+    List<IpAdjustStepBo> queryAdjustStepListWithBatch(@Param("adjustLogId") Long adjustLogId,
+                                                       @Param("adjustBatchNo") String adjustBatchNo);
 }
