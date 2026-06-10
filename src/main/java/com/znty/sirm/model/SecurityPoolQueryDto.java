@@ -26,6 +26,8 @@ public class SecurityPoolQueryDto {
     private String targetPoolName;
     /** 目标投资池 ID */
     private Long targetPoolId;
+    /** 调库批次号 */
+    private String adjustBatchNo;
     /** 证券类型编码 */
     private String securityType;
 

@@ -8,3 +8,7 @@ ALTER TABLE `ip_adjust_log`
 ALTER TABLE `ip_adjust_step`
     ADD COLUMN `adjust_batch_no` VARCHAR(64) DEFAULT NULL COMMENT '调库批次号，同一组调库记录共用'
     AFTER `adjust_log_id`;
+
+ALTER TABLE `ip_pool_status`
+    ADD COLUMN `adjust_batch_no` VARCHAR(64) DEFAULT NULL COMMENT '调库批次号，同一组调库记录共用'
+    AFTER `adjust_mode`;

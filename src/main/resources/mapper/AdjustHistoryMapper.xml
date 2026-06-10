@@ -14,6 +14,7 @@
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
+               ,al.adjust_batch_no
                ,p.pool_name AS target_pool_path
                ,al.pool_type
                ,al.audit_status

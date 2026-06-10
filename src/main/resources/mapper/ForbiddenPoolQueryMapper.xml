@@ -11,6 +11,7 @@
                ,ips.adjuster_name
                ,ips.entry_time
                ,ips.target_pool_id
+               ,ips.adjust_batch_no
                ,p.pool_name AS target_pool_name
                ,ips.security_type
                ,dst.security_type_name

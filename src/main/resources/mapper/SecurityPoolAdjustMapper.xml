@@ -88,6 +88,7 @@
         SELECT ips.target_pool_id
                ,p.pool_name AS poolName
                ,ips.pool_type
+               ,ips.adjust_batch_no
                ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
@@ -108,6 +109,7 @@
         SELECT ips.target_pool_id
                ,p.pool_name AS poolName
                ,ips.pool_type
+               ,MAX(ips.adjust_batch_no) AS adjustBatchNo
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
                ,COUNT(DISTINCT ips.security_code) AS bondCount
         FROM ip_pool_status ips
@@ -156,37 +158,8 @@
         FROM ip_adjust_log al
         WHERE al.security_code = #{securityCode}
           AND al.is_deleted = 0
-          <if test="targetPoolId != null">
-              AND (
-                  al.target_pool_id = #{targetPoolId}
-                  OR (
-                      al.adjust_batch_no IS NOT NULL
-                      AND al.adjust_batch_no IN (
-                          SELECT DISTINCT rel.adjust_batch_no
-                          FROM ip_adjust_log rel
-                          WHERE rel.security_code = #{securityCode}
-                            AND rel.target_pool_id = #{targetPoolId}
-                            AND rel.adjust_batch_no IS NOT NULL
-                            AND rel.is_deleted = 0
-                      )
-                  )
-              )
-          </if>
-          <if test="adjustLogId != null">
-              AND (
-                  al.id = #{adjustLogId}
-                  OR (
-                      al.adjust_batch_no IS NOT NULL
-                      AND al.adjust_batch_no = (
-                          SELECT rel.adjust_batch_no
-                          FROM ip_adjust_log rel
-                          WHERE rel.id = #{adjustLogId}
-                            AND rel.adjust_batch_no IS NOT NULL
-                            AND rel.is_deleted = 0
-                          LIMIT 1
-                      )
-                  )
-              )
+          <if test="adjustBatchNo != null and adjustBatchNo != ''">
+              AND al.adjust_batch_no = #{adjustBatchNo}
           </if>
         ORDER BY al.crte_time DESC
     </select>
@@ -285,6 +258,7 @@
                                   ,security_type
                                   ,adjust_type
                                   ,adjust_mode
+                                  ,adjust_batch_no
                                   ,target_pool_id
                                   ,target_pool_name
                                   ,pool_type
@@ -305,6 +279,7 @@
                ,#{securityType}
                ,#{adjustType}
                ,#{adjustMode}
+               ,#{adjustBatchNo}
                ,#{targetPoolId}
                ,#{targetPoolName}
                ,#{poolType}

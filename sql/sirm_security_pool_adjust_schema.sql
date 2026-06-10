@@ -192,6 +192,7 @@ CREATE TABLE `ip_pool_status`
     `security_type`        VARCHAR(32)  DEFAULT NULL COMMENT '证券类型编码，关联 dict_security_type.security_type',
     `adjust_type`      VARCHAR(32)  DEFAULT NULL COMMENT '调整类型：手工调整/联动调整/互斥调整/关联调整/Excel导入/手动批量调整',
     `adjust_mode`      VARCHAR(8)   DEFAULT NULL COMMENT '调整模式：调入/调出',
+    `adjust_batch_no`  VARCHAR(64)  DEFAULT NULL COMMENT '调库批次号，同一组调库记录共用',
     `target_pool_id`   BIGINT       DEFAULT NULL COMMENT '目标投资池 ID，关联 ip_investment_pool.id',
     `target_pool_name` VARCHAR(128) DEFAULT NULL COMMENT '目标投资池名称',
     `pool_type`        VARCHAR(32)  DEFAULT NULL COMMENT '投资池类型：research=研究池 / fund=基金池 / restricted=限制池 / other=其他池 / industry=行业池 / whitelist=白名单 / blacklist=黑名单 / private_placement=私募池',

@@ -800,7 +800,7 @@ public class SecurityPoolAdjustService {
             throw new BizException("证券代码不能为空");
         }
         List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(
-                req.getSecurityCode(), req.getTargetPoolId(), req.getAdjustLogId());
+                req.getSecurityCode(), req.getAdjustBatchNo());
         if (logs == null || logs.isEmpty()) {
             return new ArrayList<>();
         }

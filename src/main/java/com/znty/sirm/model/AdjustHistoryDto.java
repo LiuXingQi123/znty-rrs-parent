@@ -38,6 +38,9 @@ public class AdjustHistoryDto {
     /** 目标投资池 ID */
     private Long targetPoolId;
 
+    /** 调库批次号 */
+    private String adjustBatchNo;
+
     /** 投资池类型 */
     private String poolType;
 

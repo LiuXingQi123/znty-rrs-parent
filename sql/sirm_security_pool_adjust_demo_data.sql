@@ -636,3 +636,141 @@ VALUES
  'preempt', 3, 'pending',
  '3', '研究员3', NULL, NULL,
  '2026-05-28 09:30:00', NULL, NOW(), NOW());
+
+-- ============================================================================
+-- 原有测试数据批次号补全
+-- ============================================================================
+-- 说明：不改动前面的原始 INSERT，仅在插入后按原有记录补齐 adjust_batch_no。
+--       批次号格式：BOND + yyyyMMddHHmmss + 调入1001/调出2001 等序号。
+-- ============================================================================
+
+UPDATE `ip_adjust_log`
+SET `adjust_batch_no` = CASE `id`
+    WHEN 1 THEN 'BOND202605080900001001'
+    WHEN 2 THEN 'BOND202605101000001001'
+    WHEN 3 THEN 'BOND202605120930001001'
+    WHEN 4 THEN 'BOND202605151400001001'
+    WHEN 5 THEN 'BOND202605181600001001'
+    WHEN 6 THEN 'BOND202605190900001001'
+    WHEN 7 THEN 'BOND202605221000001001'
+    WHEN 8 THEN 'BOND202605280930001001'
+    WHEN 9 THEN 'BOND202605261400001001'
+    WHEN 10 THEN 'BOND202605240900001001'
+    WHEN 11 THEN 'BOND202605221000001002'
+    WHEN 12 THEN 'BOND202605201100001001'
+    WHEN 13 THEN 'BOND202605231700001001'
+    WHEN 14 THEN 'BOND202605100900001001'
+    WHEN 15 THEN 'BOND202605151400001002'
+    WHEN 16 THEN 'BOND202606011030001001'
+    WHEN 17 THEN 'BOND202605250900002001'
+    ELSE `adjust_batch_no`
+END
+WHERE `id` BETWEEN 1 AND 17;
+
+UPDATE `ip_pool_status`
+SET `adjust_batch_no` = CASE
+    WHEN `security_code` = '101901234' AND `target_pool_id` = 2 THEN 'BOND202605080900001001'
+    WHEN `security_code` = '102002345' AND `target_pool_id` = 3 THEN 'BOND202605101000001001'
+    WHEN `security_code` = '103003456' AND `target_pool_id` = 8 THEN 'BOND202605120930001001'
+    WHEN `security_code` = '104004567' AND `target_pool_id` = 10 THEN 'BOND202605151400001001'
+    WHEN `security_code` = '105005678' AND `target_pool_id` = 11 THEN 'BOND202605181600001001'
+    WHEN `security_code` = '106006789' AND `target_pool_id` = 2 THEN 'BOND202605190900001001'
+    WHEN `security_code` = '109009012' AND `target_pool_id` = 7 THEN 'BOND202605221000001001'
+    WHEN `security_code` = '107007890' AND `target_pool_id` = 15 THEN 'BOND202605151400001002'
+    WHEN `security_code` = 'C10001' AND `target_pool_id` = 2 THEN 'BOND202605080900001002'
+    WHEN `security_code` = 'C10002' AND `target_pool_id` = 3 THEN 'BOND202605101000001002'
+    WHEN `security_code` = 'C10003' AND `target_pool_id` = 2 THEN 'BOND202605120930001002'
+    WHEN `security_code` = 'C10004' AND `target_pool_id` = 7 THEN 'BOND202605151400001003'
+    WHEN `security_code` = 'C10005' AND `target_pool_id` = 15 THEN 'BOND202605100900001002'
+    ELSE `adjust_batch_no`
+END
+WHERE `adjust_batch_no` IS NULL;
+
+UPDATE `ip_adjust_step`
+SET `adjust_batch_no` = CASE `adjust_log_id`
+    WHEN 1 THEN 'BOND202605080900001001'
+    WHEN 8 THEN 'BOND202605280930001001'
+    ELSE `adjust_batch_no`
+END
+WHERE `adjust_log_id` IN (1, 8);
+
+-- ============================================================================
+-- 调库批次号联动测试数据
+-- ============================================================================
+-- 说明：同一批次中，手工调入和互斥调出共用 adjust_batch_no。
+--       点击 ip_pool_status 中专户产品/五级库的证券记录时，可按 adjust_batch_no 查询到同批调库日志与流程步骤。
+-- ============================================================================
+
+INSERT INTO `ip_adjust_log` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+                             `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
+                             `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+                             `attachment_files`, `material_files`,
+                             `submit_time`, `audit_time`, `entry_time`,
+                             `is_deleted`, `crte_time`, `updt_time`)
+VALUES
+-- 18. 专户产品/五级库手工调入，流程主记录
+('110010123', '23某基建PRN001', 'company_bond', '手工调整', '调入',
+ 'BOND202606051030001001', 14, '五级库', 'special_account',
+ '20', '1001', '管理员', '补充材料后重新评估，准入专户产品五级库', '审批通过，已调入专户产品五级库',
+ '["report_batch_20260605_001.pdf"]', '["material_batch_20260605_001.pdf"]',
+ '2026-06-05 10:30:00', '2026-06-06 15:00:00', '2026-06-07 09:00:00',
+ 0, NOW(), NOW()),
+
+-- 19. 专户产品/一级库互斥调出，共用同一批次号
+('110010123', '23某基建PRN001', 'company_bond', '互斥调整', '调出',
+ 'BOND202606051030001001', 10, '一级库', 'special_account',
+ '20', '1001', '管理员', '调入专户产品五级库时，互斥调出专户产品一级库', '跟随同批手工调入流程审批通过',
+ '["report_batch_20260605_001.pdf"]', '["material_batch_20260605_001.pdf"]',
+ '2026-06-05 10:30:00', '2026-06-06 15:00:00', NULL,
+ 0, NOW(), NOW());
+
+INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+                              `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
+                              `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+                              `attachment_files`, `material_files`,
+                              `submit_time`, `audit_time`, `entry_time`,
+                              `is_deleted`, `crte_time`, `updt_time`)
+VALUES
+-- 当前有效所在池：专户产品/五级库，批次号与同批调库日志一致
+('110010123', '23某基建PRN001', 'company_bond', '手工调整', '调入',
+ 'BOND202606051030001001', 14, '五级库', 'special_account',
+ '20', '1001', '管理员', '补充材料后重新评估，准入专户产品五级库', '审批通过，已调入专户产品五级库',
+ '["report_batch_20260605_001.pdf"]', '["material_batch_20260605_001.pdf"]',
+ '2026-06-05 10:30:00', '2026-06-06 15:00:00', '2026-06-07 09:00:00',
+ 0, NOW(), NOW());
+
+INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+                              `approval_strategy`, `sort_order`, `step_status`,
+                              `handler_id`, `handler_name`, `process_action`, `process_comment`,
+                              `start_time`, `process_time`, `crte_time`, `updt_time`)
+VALUES
+-- adjust_log_id=18：同批流程步骤，adjust_log_id=19 通过批次号共用该流程
+(18, 'BOND202606051030001001', 10101, 'n1', '开始', 'start',
+ NULL, 1, 'auto_completed',
+ '1001', '管理员', 'submit', NULL,
+ '2026-06-05 10:30:00', '2026-06-05 10:30:00', NOW(), NOW()),
+
+(18, 'BOND202606051030001001', 10102, 'n2', '研究员A发起', 'approval',
+ 'preempt', 2, 'approved',
+ '1001', '管理员', 'submit', NULL,
+ '2026-06-05 10:30:00', '2026-06-05 10:30:00', NOW(), NOW()),
+
+(18, 'BOND202606051030001001', 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approved',
+ '2', '研究员2', 'approve', '复核通过，同意本批次调库',
+ '2026-06-05 10:30:00', '2026-06-05 14:20:00', NOW(), NOW()),
+
+(18, 'BOND202606051030001001', 10105, 'n5', '研究总监审批', 'approval',
+ 'preempt', 5, 'approved',
+ '4', '研究总监', 'approve', '审批通过，手工调入与互斥调出同批生效',
+ '2026-06-05 14:20:00', '2026-06-06 15:00:00', NOW(), NOW()),
+
+(18, 'BOND202606051030001001', 10106, 'n6', 'O32自动审批', 'auto',
+ NULL, 6, 'auto_completed',
+ NULL, NULL, 'auto_process', NULL,
+ '2026-06-06 15:00:00', '2026-06-06 15:00:00', NOW(), NOW()),
+
+(18, 'BOND202606051030001001', 10107, 'n7', '结束', 'end',
+ NULL, 7, 'auto_completed',
+ NULL, NULL, 'auto_process', NULL,
+ '2026-06-06 15:00:00', '2026-06-06 15:00:00', NOW(), NOW());
