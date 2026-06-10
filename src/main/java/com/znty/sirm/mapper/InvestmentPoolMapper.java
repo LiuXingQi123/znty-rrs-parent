@@ -2,6 +2,7 @@ package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.FlowOptionDto;
 import com.znty.sirm.model.InvestmentPoolBo;
+import com.znty.sirm.model.InvestmentPoolDto;
 import com.znty.sirm.model.PoolAutoRuleBo;
 import com.znty.sirm.model.PoolPermissionBo;
 import com.znty.sirm.model.PoolRelationBo;
@@ -24,6 +25,11 @@ public interface InvestmentPoolMapper {
      * 查询投资池列表
      */
     List<InvestmentPoolBo> queryPoolList();
+
+    /**
+     * 查询投资池全路径名称列表
+     */
+    List<InvestmentPoolDto> queryPoolFullNameList();
 
     /**
      * 根据 ID 查询投资池

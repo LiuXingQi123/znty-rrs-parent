@@ -35,6 +35,9 @@ public class AdjustHistoryDto {
     /** 投资池路径名称（父级/子级 格式，如"信用债大库/一级库"） */
     private String targetPoolPath;
 
+    /** 目标投资池 ID */
+    private Long targetPoolId;
+
     /** 投资池类型 */
     private String poolType;
 

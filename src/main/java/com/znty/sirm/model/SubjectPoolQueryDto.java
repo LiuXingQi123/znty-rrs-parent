@@ -29,4 +29,7 @@ public class SubjectPoolQueryDto {
 
     /** 投资池名称 */
     private String targetPoolName;
+
+    /** 目标投资池 ID */
+    private Long targetPoolId;
 }

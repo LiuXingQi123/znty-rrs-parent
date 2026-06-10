@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 证券池查询服务。
@@ -29,12 +30,30 @@ public class SecurityPoolQueryService {
     @Resource
     private MySecurityPoolMapper mySecurityPoolMapper;
 
+    @Resource
+    private InvestmentPoolService investmentPoolService;
+
     /** 分页查询证券池中的证券列表 */
     public PageResult<SecurityPoolQueryDto> querySecurityPoolPage(SecurityPoolQueryReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityPoolQueryDto> list = securityPoolQueryMapper.querySecurityPoolPage(req);
+        fillPoolFullName(list);
         PageInfo<SecurityPoolQueryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /** 填充投资池全路径名称 */
+    private void fillPoolFullName(List<SecurityPoolQueryDto> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
+        for (SecurityPoolQueryDto dto : list) {
+            String fullName = poolFullNameMap.get(dto.getTargetPoolId());
+            if (fullName != null) {
+                dto.setTargetPoolName(fullName);
+            }
+        }
     }
 
     /** 查询证券类型下拉选项（code + name） */

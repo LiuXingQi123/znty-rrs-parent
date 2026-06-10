@@ -10,14 +10,11 @@
                ,ips.security_short_name
                ,ips.adjuster_name
                ,ips.entry_time
-               ,CASE WHEN pp.pool_name IS NOT NULL
-                     THEN CONCAT(pp.pool_name, '/', p.pool_name)
-                     ELSE p.pool_name
-                END AS target_pool_name
+               ,ips.target_pool_id
+               ,p.pool_name AS target_pool_name
         FROM ip_pool_status ips
         JOIN dict_security_type dst ON ips.security_type = dst.security_type
         LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
-        LEFT JOIN ip_investment_pool pp ON p.parent_id = pp.id
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'

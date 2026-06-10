@@ -26,6 +26,9 @@ public class InvestmentPoolDto {
     /** 投资池名称 */
     private String poolName;
 
+    /** 投资池全路径名称 */
+    private String poolFullName;
+
     /** 投资池类型 */
     private String poolType;
 

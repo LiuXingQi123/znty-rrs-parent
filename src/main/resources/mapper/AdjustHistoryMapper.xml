@@ -13,10 +13,8 @@
                ,dst.security_type_name
                ,al.adjust_type
                ,al.adjust_mode
-               ,CASE
-                    WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
-                    ELSE p.pool_name
-                END AS target_pool_path
+               ,al.target_pool_id
+               ,p.pool_name AS target_pool_path
                ,al.pool_type
                ,al.audit_status
                ,al.adjuster_name
@@ -24,7 +22,6 @@
                ,al.submit_time
         FROM ip_adjust_log al
         LEFT JOIN ip_investment_pool p  ON p.id  = al.target_pool_id AND p.is_deleted  = 0
-        LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id       AND pp.is_deleted = 0
         LEFT JOIN sirm_securityinfo sb  ON sb.wind_code = al.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type AND dst.is_deleted = 0
         <where>

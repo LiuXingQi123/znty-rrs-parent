@@ -10,10 +10,8 @@
                ,ips.security_short_name
                ,ips.adjuster_name
                ,ips.entry_time
-               ,CASE WHEN pp.pool_name IS NOT NULL
-                     THEN CONCAT(pp.pool_name, '/', p.pool_name)
-                     ELSE p.pool_name
-                END AS target_pool_name
+               ,ips.target_pool_id
+               ,p.pool_name AS target_pool_name
                ,ips.security_type
                ,dst.security_type_name
                ,bi.issuer
@@ -24,7 +22,6 @@
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
                                        AND p.pool_type = 'forbidden'
-        LEFT JOIN ip_investment_pool pp ON p.parent_id = pp.id
         LEFT JOIN sirm_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         <where>

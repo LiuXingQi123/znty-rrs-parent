@@ -67,6 +67,18 @@ public class InvestmentPoolService {
                 .collect(Collectors.toList());
     }
 
+    /** 查询全部投资池 ID → 全路径名称映射 */
+    public Map<Long, String> queryPoolFullNameMap() {
+        Map<Long, String> fullNameMap = new HashMap<>();
+        List<InvestmentPoolDto> poolList = investmentPoolMapper.queryPoolFullNameList();
+        if (poolList != null) {
+            for (InvestmentPoolDto pool : poolList) {
+                fullNameMap.put(pool.getId(), pool.getPoolFullName());
+            }
+        }
+        return fullNameMap;
+    }
+
     /**
      * 查询投资池详情
      */

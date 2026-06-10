@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 禁止池查询服务。
@@ -22,12 +23,30 @@ public class ForbiddenPoolQueryService {
     @Resource
     private ForbiddenPoolQueryMapper forbiddenPoolQueryMapper;
 
+    @Resource
+    private InvestmentPoolService investmentPoolService;
+
     /** 分页查询禁投池证券列表 */
     public PageResult<ForbiddenPoolQueryDto> queryForbiddenPoolPage(ForbiddenPoolQueryReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ForbiddenPoolQueryDto> list = forbiddenPoolQueryMapper.queryForbiddenPoolPage(req);
+        fillPoolFullName(list);
         PageInfo<ForbiddenPoolQueryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /** 填充投资池全路径名称 */
+    private void fillPoolFullName(List<ForbiddenPoolQueryDto> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
+        for (ForbiddenPoolQueryDto dto : list) {
+            String fullName = poolFullNameMap.get(dto.getTargetPoolId());
+            if (fullName != null) {
+                dto.setTargetPoolName(fullName);
+            }
+        }
     }
 
     /** 查询禁投池中出现的证券类型下拉选项（code + name） */

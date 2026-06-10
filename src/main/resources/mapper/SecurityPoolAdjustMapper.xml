@@ -83,20 +83,15 @@
                ,NOW())
     </insert>
 
-    <!-- 查询当前证券所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
+    <!-- 查询当前证券所在池列表（仅叶子节点） -->
     <select id="querySecurityPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
         SELECT ips.target_pool_id
-               ,CASE
-                   WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
-                   ELSE p.pool_name
-               END AS poolName
+               ,p.pool_name AS poolName
                ,ips.pool_type
                ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id
-                                       AND pp.is_deleted = 0
         WHERE ips.security_code = #{securityCode}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -108,12 +103,10 @@
           )
     </select>
 
-    <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点，名称显示"父级/子级"路径） -->
+    <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点） -->
     <select id="queryIssuerPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
-        SELECT CASE
-                   WHEN p.parent_id IS NOT NULL THEN CONCAT(pp.pool_name, '/', p.pool_name)
-                   ELSE p.pool_name
-               END AS poolName
+        SELECT ips.target_pool_id
+               ,p.pool_name AS poolName
                ,ips.pool_type
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
                ,COUNT(DISTINCT ips.security_code) AS bondCount
@@ -121,8 +114,6 @@
         INNER JOIN sirm_securityinfo sb ON ips.security_code = sb.wind_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        LEFT JOIN ip_investment_pool pp ON pp.id = p.parent_id
-                                       AND pp.is_deleted = 0
         WHERE sb.issuer = (
             SELECT issuer FROM sirm_securityinfo WHERE wind_code = #{securityCode} LIMIT 1
         )
@@ -135,9 +126,8 @@
                 AND child.is_deleted = 0
           )
         GROUP BY p.id
+                 ,ips.target_pool_id
                  ,p.pool_name
-                 ,p.parent_id
-                 ,pp.pool_name
                  ,ips.pool_type
     </select>
 

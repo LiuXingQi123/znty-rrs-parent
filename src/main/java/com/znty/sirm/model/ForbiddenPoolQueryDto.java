@@ -35,6 +35,9 @@ public class ForbiddenPoolQueryDto {
     /** 投资池名称 */
     private String targetPoolName;
 
+    /** 目标投资池 ID */
+    private Long targetPoolId;
+
     /** 入池时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date entryTime;

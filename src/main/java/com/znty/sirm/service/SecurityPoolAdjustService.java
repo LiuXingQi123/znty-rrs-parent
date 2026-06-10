@@ -92,6 +92,9 @@ public class SecurityPoolAdjustService {
     private InvestmentPoolMapper investmentPoolMapper;
 
     @Resource
+    private InvestmentPoolService investmentPoolService;
+
+    @Resource
     private FlowMapper flowMapper;
 
     // ─── 投资池关系类型常量（对应 ip_pool_relation.relation_type 字段值） ───
@@ -251,9 +254,27 @@ public class SecurityPoolAdjustService {
             throw new BizException("证券代码不能为空");
         }
         SecurityPoolStatusDto dto = new SecurityPoolStatusDto();
-        dto.setSecurityCurrentPools(securityPoolAdjustMapper.querySecurityPoolStatus(req.getSecurityCode()));
-        dto.setIssuerCurrentPools(securityPoolAdjustMapper.queryIssuerPoolStatus(req.getSecurityCode()));
+        List<PoolStatusDto> securityCurrentPools = securityPoolAdjustMapper.querySecurityPoolStatus(req.getSecurityCode());
+        List<PoolStatusDto> issuerCurrentPools = securityPoolAdjustMapper.queryIssuerPoolStatus(req.getSecurityCode());
+        Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
+        fillPoolStatusFullName(securityCurrentPools, poolFullNameMap);
+        fillPoolStatusFullName(issuerCurrentPools, poolFullNameMap);
+        dto.setSecurityCurrentPools(securityCurrentPools);
+        dto.setIssuerCurrentPools(issuerCurrentPools);
         return dto;
+    }
+
+    /** 填充当前所在池的全路径名称 */
+    private void fillPoolStatusFullName(List<PoolStatusDto> poolStatusList, Map<Long, String> poolFullNameMap) {
+        if (poolStatusList == null || poolStatusList.isEmpty()) {
+            return;
+        }
+        for (PoolStatusDto status : poolStatusList) {
+            String fullName = poolFullNameMap.get(status.getTargetPoolId());
+            if (fullName != null && !fullName.isEmpty()) {
+                status.setPoolName(fullName);
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -784,21 +805,15 @@ public class SecurityPoolAdjustService {
             return new ArrayList<>();
         }
 
-        // 加载全量投资池用于构建"父级/子级"路径名称
-        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
-        List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
-        if (allPools != null) {
-            for (InvestmentPoolBo p : allPools) {
-                poolMap.put(p.getId(), p);
-            }
-        }
+        // 查询投资池全路径名称，用于调库记录展示
+        Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
 
         List<AdjustLogDto> result = new ArrayList<>();
         for (IpAdjustLogBo log : logs) {
             AdjustLogDto dto = new AdjustLogDto();
             dto.setId(log.getId());
             dto.setAdjustBatchNo(log.getAdjustBatchNo());
-            dto.setPoolPath(buildPoolPath(log.getTargetPoolId(), poolMap));
+            dto.setPoolPath(poolFullNameMap.get(log.getTargetPoolId()));
             dto.setAdjustType(log.getAdjustType());
             dto.setAdjustMode(log.getAdjustMode());
             dto.setAttachmentFiles(log.getAttachmentFiles());
@@ -2220,24 +2235,18 @@ public class SecurityPoolAdjustService {
         return req.getAdjustType();
     }
 
-    /**
-     * 构建投资池显示路径（格式：父级名称/子级名称，顶级池只返回池名称）
-     *
-     * @param poolId  目标池 ID
-     * @param poolMap 全量投资池索引 Map
-     */
+    /** 构建投资池全路径名称 */
     private String buildPoolPath(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
         InvestmentPoolBo pool = poolMap.get(poolId);
         if (pool == null) {
             return "";
         }
-        if (pool.getParentId() != null) {
-            InvestmentPoolBo parent = poolMap.get(pool.getParentId());
-            if (parent != null && parent.getPoolName() != null) {
-                return parent.getPoolName() + "/" + (pool.getPoolName() != null ? pool.getPoolName() : "");
-            }
+        String poolName = pool.getPoolName() != null ? pool.getPoolName() : "";
+        if (pool.getParentId() == null) {
+            return poolName;
         }
-        return pool.getPoolName() != null ? pool.getPoolName() : "";
+        String parentName = buildPoolPath(pool.getParentId(), poolMap);
+        return parentName == null || parentName.isEmpty() ? poolName : parentName + "/" + poolName;
     }
 
     // ═══════════════════════════════════════════════════════════

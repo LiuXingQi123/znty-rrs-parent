@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 调整历史服务。
@@ -29,14 +30,32 @@ public class AdjustHistoryService {
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
 
+    @Resource
+    private InvestmentPoolService investmentPoolService;
+
     /**
      * 分页查询调整历史列表
      */
     public PageResult<AdjustHistoryDto> queryAdjustHistoryPage(AdjustHistoryReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<AdjustHistoryDto> list = adjustHistoryMapper.queryAdjustHistoryPage(req);
+        fillPoolFullName(list);
         PageInfo<AdjustHistoryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /** 填充投资池全路径名称 */
+    private void fillPoolFullName(List<AdjustHistoryDto> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
+        for (AdjustHistoryDto dto : list) {
+            String fullName = poolFullNameMap.get(dto.getTargetPoolId());
+            if (fullName != null) {
+                dto.setTargetPoolPath(fullName);
+            }
+        }
     }
 
     /**
