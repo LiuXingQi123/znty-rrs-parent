@@ -8,6 +8,9 @@
     <select id="queryMyMattersPage" resultType="com.znty.sirm.model.MyMattersDto">
         SELECT s.id
                ,s.adjust_log_id
+               ,al.security_code
+               ,al.target_pool_id
+               ,al.adjust_batch_no
                ,s.id AS stepId
                ,f.name AS flowName
                ,s.node_label AS stepName
@@ -71,6 +74,12 @@
             </if>
             <if test="auditStatus != null and auditStatus != ''">
                 AND al.audit_status = #{auditStatus}
+            </if>
+            <if test="stepStatus == 'pending'">
+                AND s.step_status = 'pending'
+            </if>
+            <if test="stepStatus == 'completed'">
+                AND s.step_status != 'pending'
             </if>
             <if test="initiatorName != null and initiatorName != ''">
                 AND al.adjuster_name LIKE CONCAT('%', #{initiatorName}, '%')

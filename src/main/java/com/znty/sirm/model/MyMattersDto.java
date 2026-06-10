@@ -17,6 +17,15 @@ public class MyMattersDto {
     /** 调库记录 ID */
     private Long adjustLogId;
 
+    /** 证券代码 */
+    private String securityCode;
+
+    /** 目标投资池 ID */
+    private Long targetPoolId;
+
+    /** 调库批次号 */
+    private String adjustBatchNo;
+
     /** 审批步骤 ID */
     private Long stepId;
 
