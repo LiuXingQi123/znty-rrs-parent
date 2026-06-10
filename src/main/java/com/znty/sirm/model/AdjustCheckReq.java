@@ -10,9 +10,6 @@ import java.util.List;
 @Data
 public class AdjustCheckReq {
 
-    /** 证券 ID */
-    private Long securityId;
-
     /** 证券代码 */
     private String securityCode;
 

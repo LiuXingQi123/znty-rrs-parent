@@ -137,13 +137,13 @@ public class SecurityPoolAdjustService {
     /**
      * 查询证券详情（调库页面顶部基础信息展示）
      *
-     * @param req 需携带 securityId
+     * @param req 需携带 securityCode
      */
     public SecurityInfoDetailDto querySecurityDetail(SecurityPoolAdjustReq req) {
-        if (req.getSecurityId() == null) {
-            throw new BizException("证券ID不能为空");
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+            throw new BizException("证券代码不能为空");
         }
-        SecurityInfoDetailDto dto = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityId());
+        SecurityInfoDetailDto dto = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityCode());
         if (dto == null) {
             throw new BizException(404, "证券不存在");
         }
@@ -347,7 +347,7 @@ public class SecurityPoolAdjustService {
      */
     private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoById(req.getSecurityId());
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
@@ -707,7 +707,7 @@ public class SecurityPoolAdjustService {
             return;
         }
         // 合并数据库当前完整快照与前端传入的变更字段
-        req.setSecurityInfo(buildMergedSecurityInfo(req.getSecurityId(), req.getSecurityInfo()));
+        req.setSecurityInfo(buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo()));
         // 同步更新证券基础信息表中本次传入的字段
         securityPoolAdjustMapper.editSecurityInfoForAdjust(req);
     }
@@ -718,11 +718,11 @@ public class SecurityPoolAdjustService {
      * <p>前端只需要传入可能变更的字段；这里先加载数据库当前完整快照，
      * 再用前端传入字段覆盖同名字段。若前端显式传入 null，也会覆盖为 null，用于清空字段。
      *
-     * @param securityId   证券 ID
+     * @param securityCode 证券代码
      * @param changedField 前端传入的变更字段
      */
-    private SecurityInfoBo buildMergedSecurityInfo(Long securityId, SecurityInfoBo changedField) {
-        SecurityInfoBo current = securityPoolAdjustMapper.querySecurityBoById(securityId);
+    private SecurityInfoBo buildMergedSecurityInfo(String securityCode, SecurityInfoBo changedField) {
+        SecurityInfoBo current = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
         if (current == null) {
             throw new BizException("证券不存在");
         }
@@ -778,7 +778,8 @@ public class SecurityPoolAdjustService {
         if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(req.getSecurityCode(), req.getTargetPoolId());
+        List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(
+                req.getSecurityCode(), req.getTargetPoolId(), req.getAdjustLogId());
         if (logs == null || logs.isEmpty()) {
             return new ArrayList<>();
         }
@@ -932,12 +933,12 @@ public class SecurityPoolAdjustService {
      * 第三、四阶段直接从 shared 中读取数据，无需重复查库。
      * 证券存在性校验也在此阶段完成（查到 null 则抛异常）。
      *
-     * @param req 调库校验请求（需携带 securityId、securityCode）
+     * @param req 调库校验请求（需携带 securityCode）
      * @return 封装了本次校验全量共享数据的 AdjustSharedData
      */
     private AdjustSharedData loadSharedData(AdjustCheckReq req) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoById(req.getSecurityId());
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }

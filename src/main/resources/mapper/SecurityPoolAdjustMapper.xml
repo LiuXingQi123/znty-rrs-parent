@@ -29,14 +29,14 @@
                ,dst.security_type_name
         FROM sirm_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
-        WHERE si.id = #{securityId}
+        WHERE si.wind_code = #{securityCode}
     </select>
 
-    <!-- 根据 ID 查询证券基础信息实体 -->
-    <select id="querySecurityBoById" resultType="com.znty.sirm.model.SecurityInfoBo">
+    <!-- 根据证券代码查询证券基础信息实体 -->
+    <select id="querySecurityBoByCode" resultType="com.znty.sirm.model.SecurityInfoBo">
         SELECT *
         FROM sirm_securityinfo
-        WHERE id = #{securityId}
+        WHERE wind_code = #{securityCode}
     </select>
 
     <!-- 新增调库记录 -->
@@ -178,6 +178,22 @@
                             AND rel.target_pool_id = #{targetPoolId}
                             AND rel.adjust_batch_no IS NOT NULL
                             AND rel.is_deleted = 0
+                      )
+                  )
+              )
+          </if>
+          <if test="adjustLogId != null">
+              AND (
+                  al.id = #{adjustLogId}
+                  OR (
+                      al.adjust_batch_no IS NOT NULL
+                      AND al.adjust_batch_no = (
+                          SELECT rel.adjust_batch_no
+                          FROM ip_adjust_log rel
+                          WHERE rel.id = #{adjustLogId}
+                            AND rel.adjust_batch_no IS NOT NULL
+                            AND rel.is_deleted = 0
+                          LIMIT 1
                       )
                   )
               )
@@ -413,7 +429,7 @@
            ,inner_guarantor_rating = #{securityInfo.innerGuarantorRating}
            ,prompt_reason = #{securityInfo.promptReason}
            ,analysis = #{securityInfo.analysis}
-        WHERE id = #{securityId}
+        WHERE wind_code = #{securityCode}
     </update>
 
     <!-- 新增流程步骤记录 -->

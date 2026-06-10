@@ -16,8 +16,6 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private String securityShortName;
     /** 发行人（模糊搜索） */
     private String issuer;
-    /** 证券 ID（查看详情用） */
-    private Long securityId;
     /** 调库方向：in=可调入库 / out=可调出库 */
     private String adjustDirection;
     /** 目标投资池 ID（从具体投资池入口查看时使用） */

@@ -24,11 +24,11 @@ public interface SecurityPoolAdjustMapper {
                                            @Param("securityShortName") String securityShortName,
                                            @Param("issuer") String issuer);
 
-    /** 根据 ID 查询证券详情 */
-    SecurityInfoDetailDto querySecurityDetail(@Param("securityId") Long securityId);
+    /** 根据证券代码查询证券详情 */
+    SecurityInfoDetailDto querySecurityDetail(@Param("securityCode") String securityCode);
 
-    /** 根据 ID 查询证券基础信息实体 */
-    SecurityInfoBo querySecurityBoById(@Param("securityId") Long securityId);
+    /** 根据证券代码查询证券基础信息实体 */
+    SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
 
     /** 新增调库记录（非直通流程，audit_status='00' 待审核） */
     int addAdjustLog(IpAdjustLogBo bo);
@@ -45,7 +45,8 @@ public interface SecurityPoolAdjustMapper {
 
     /** 根据证券代码和可选目标池查询调库记录列表 */
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
-                                           @Param("targetPoolId") Long targetPoolId);
+                                           @Param("targetPoolId") Long targetPoolId,
+                                           @Param("adjustLogId") Long adjustLogId);
 
     /** 查询当前证券所在池列表 */
     List<PoolStatusDto> querySecurityPoolStatus(@Param("securityCode") String securityCode);
