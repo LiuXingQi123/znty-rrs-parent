@@ -40,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -386,9 +387,6 @@ public class SecurityPoolAdjustService {
             }
         }
 
-        // 按手工调库项及其联动/互斥项构建提交分组信息
-        Map<String, SubmitGroupInfo> submitGroupMap = buildSubmitGroupMap(req, flowSnapshotMap);
-
         return new SubmitSharedData(
                 securityInfo,
                 poolMap,
@@ -397,8 +395,7 @@ public class SecurityPoolAdjustService {
                 securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
                 securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
                 securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
-                flowSnapshotMap,
-                submitGroupMap
+                flowSnapshotMap
         );
     }
 
@@ -422,62 +419,6 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 按调库分组构建提交信息。
-     */
-    private Map<String, SubmitGroupInfo> buildSubmitGroupMap(
-            SecurityPoolAdjustSubmitReq req, Map<Long, FlowSnapshot> flowSnapshotMap) {
-        Map<String, SubmitGroupInfo> groupInfoMap = new HashMap<>();
-        if (req.getItems() == null) {
-            return groupInfoMap;
-        }
-        int index = 1;
-        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
-            String groupKey = resolveAdjustGroupKey(item);
-            if (groupInfoMap.containsKey(groupKey) && !isManualSubmitItem(item)) {
-                continue;
-            }
-
-            Long flowId = resolveFlowIdFromItem(item);
-            FlowSnapshot snapshot = flowId != null ? flowSnapshotMap.get(flowId) : null;
-            boolean direct = flowId == null || (snapshot != null && isDirectFlow(snapshot));
-            String batchNo = direct ? null : buildAdjustBatchNo(req, index++);
-            groupInfoMap.put(groupKey, new SubmitGroupInfo(flowId, snapshot, direct, batchNo));
-        }
-        return groupInfoMap;
-    }
-
-    /**
-     * 获取调库项所属提交分组信息。
-     */
-    private SubmitGroupInfo resolveSubmitGroupInfo(
-            SecurityPoolAdjustSubmitReq req,
-            SecurityPoolAdjustSubmitReq.AdjustItem item,
-            SubmitSharedData shared) {
-        String groupKey = resolveAdjustGroupKey(item);
-        SubmitGroupInfo info = shared.submitGroupMap.get(groupKey);
-        if (info != null) {
-            return info;
-        }
-        Long flowId = resolveFlowIdFromItem(item);
-        FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
-        boolean direct = flowId == null || (snapshot != null && isDirectFlow(snapshot));
-        String batchNo = direct ? null : buildAdjustBatchNo(req, shared.submitGroupMap.size() + 1);
-        info = new SubmitGroupInfo(flowId, snapshot, direct, batchNo);
-        shared.submitGroupMap.put(groupKey, info);
-        return info;
-    }
-
-    /**
-     * 解析调库项分组 Key。
-     */
-    private String resolveAdjustGroupKey(SecurityPoolAdjustSubmitReq.AdjustItem item) {
-        if (item.getAdjustGroupKey() != null && !item.getAdjustGroupKey().isEmpty()) {
-            return item.getAdjustGroupKey();
-        }
-        return "manual_" + item.getTargetPoolId() + "_" + item.getAdjustMode();
-    }
-
-    /**
      * 判断提交项是否为手工调库项。
      */
     private boolean isManualSubmitItem(SecurityPoolAdjustSubmitReq.AdjustItem item) {
@@ -487,9 +428,30 @@ public class SecurityPoolAdjustService {
     /**
      * 生成调库批次号。
      */
-    private String buildAdjustBatchNo(SecurityPoolAdjustSubmitReq req, int index) {
-        String securityCode = req.getSecurityCode() != null ? req.getSecurityCode().replaceAll("[^A-Za-z0-9]", "") : "SEC";
-        return "BOND" + securityCode + System.currentTimeMillis() + String.format("%03d", index);
+    private String buildAdjustBatchNo(SecurityPoolAdjustSubmitReq.AdjustItem item, SubmitSharedData shared) {
+        int serial;
+        if ("调入".equals(item.getAdjustMode())) {
+            serial = 1000 + ++shared.inboundBatchSeq;
+        } else {
+            serial = 2000 + ++shared.outboundBatchSeq;
+        }
+        return "BOND" + shared.batchTimeText + String.format("%04d", serial);
+    }
+
+    /**
+     * 获取或生成同组调库批次号。
+     */
+    private String resolveAdjustBatchNo(SecurityPoolAdjustSubmitReq.AdjustItem item, SubmitSharedData shared) {
+        String groupKey = item.getAdjustGroupKey();
+        if (groupKey == null || groupKey.isEmpty()) {
+            throw new BizException("调库分组标识不能为空");
+        }
+        String batchNo = shared.adjustBatchNoMap.get(groupKey);
+        if (batchNo == null) {
+            batchNo = buildAdjustBatchNo(item, shared);
+            shared.adjustBatchNoMap.put(groupKey, batchNo);
+        }
+        return batchNo;
     }
 
     /**
@@ -625,9 +587,11 @@ public class SecurityPoolAdjustService {
             if (!"调入".equals(item.getAdjustMode())) {
                 continue;
             }
-            SubmitGroupInfo groupInfo = resolveSubmitGroupInfo(req, item, shared);
+            Long flowId = resolveFlowIdFromItem(item);
+            FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+            boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
-            if (groupInfo.direct) {
+            if (isDirect) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
                 IpAdjustLogBo logBo = buildAdjustLog(req, item);
                 logBo.setAuditStatus("20");
@@ -642,13 +606,14 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
-                bo.setAdjustBatchNo(groupInfo.adjustBatchNo);
+                String adjustBatchNo = resolveAdjustBatchNo(item, shared);
+                bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
-                if (isManualSubmitItem(item) && groupInfo.snapshot != null && bo.getId() != null) {
-                    createInitialSteps(bo.getId(), groupInfo.adjustBatchNo, groupInfo.snapshot, req.getAdjusterId(), req.getAdjusterName());
+                if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
+                    createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
             }
         }
@@ -674,9 +639,11 @@ public class SecurityPoolAdjustService {
             if (!"调出".equals(item.getAdjustMode())) {
                 continue;
             }
-            SubmitGroupInfo groupInfo = resolveSubmitGroupInfo(req, item, shared);
+            Long flowId = resolveFlowIdFromItem(item);
+            FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+            boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
-            if (groupInfo.direct) {
+            if (isDirect) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
                 bo.setAuditStatus("20");
@@ -690,13 +657,14 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
-                bo.setAdjustBatchNo(groupInfo.adjustBatchNo);
+                String adjustBatchNo = resolveAdjustBatchNo(item, shared);
+                bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
-                if (isManualSubmitItem(item) && groupInfo.snapshot != null && bo.getId() != null) {
-                    createInitialSteps(bo.getId(), groupInfo.adjustBatchNo, groupInfo.snapshot, req.getAdjusterId(), req.getAdjusterName());
+                if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
+                    createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
             }
         }
@@ -2201,7 +2169,7 @@ public class SecurityPoolAdjustService {
         bo.setSecurityCode(req.getSecurityCode());
         bo.setSecurityShortName(req.getSecurityShortName());
         bo.setSecurityType(req.getSecurityType());
-        bo.setAdjustType(req.getAdjustType());
+        bo.setAdjustType(resolveAdjustType(req, item));
         bo.setAdjustMode(item.getAdjustMode());
         bo.setTargetPoolId(item.getTargetPoolId());
         bo.setTargetPoolName(item.getTargetPoolName());
@@ -2214,6 +2182,19 @@ public class SecurityPoolAdjustService {
         bo.setAttachmentFiles(item.getAttachmentFiles());
         bo.setMaterialFiles(item.getMaterialFiles());
         return bo;
+    }
+
+    /**
+     * 根据调库项来源确定落表调整类型。
+     */
+    private String resolveAdjustType(SecurityPoolAdjustSubmitReq req, SecurityPoolAdjustSubmitReq.AdjustItem item) {
+        if ("mutex".equals(item.getItemTag())) {
+            return "互斥调整";
+        }
+        if ("linkage".equals(item.getItemTag())) {
+            return "联动调整";
+        }
+        return req.getAdjustType();
     }
 
     /**
@@ -2239,23 +2220,6 @@ public class SecurityPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
     //  内部数据类
     // ═══════════════════════════════════════════════════════════
-
-    /**
-     * 调库提交分组信息。
-     */
-    private static class SubmitGroupInfo {
-        final Long flowId;
-        final FlowSnapshot snapshot;
-        final boolean direct;
-        final String adjustBatchNo;
-
-        SubmitGroupInfo(Long flowId, FlowSnapshot snapshot, boolean direct, String adjustBatchNo) {
-            this.flowId = flowId;
-            this.snapshot = snapshot;
-            this.direct = direct;
-            this.adjustBatchNo = adjustBatchNo;
-        }
-    }
 
     /**
      * 单个流程的运行时快照，聚合流程定义、活跃版本、节点索引和连线列表。
@@ -2321,7 +2285,7 @@ public class SecurityPoolAdjustService {
      * <p>与 {@link AdjustSharedData} 的区别：
      * <ul>
      *   <li>不包含 requestInPoolIds / requestOutPoolIds（提交阶段无需互斥冲突校验）</li>
-     *   <li>新增 flowSnapshotMap / submitGroupMap，包含流程快照和提交分组信息</li>
+     *   <li>新增 flowSnapshotMap，包含每个引用流程的快照数据</li>
      * </ul>
      */
     private static class SubmitSharedData {
@@ -2350,8 +2314,17 @@ public class SecurityPoolAdjustService {
         /** 流程快照索引（flowId → FlowSnapshot），供第三/四阶段快速判断直通流程 */
         final Map<Long, FlowSnapshot> flowSnapshotMap;
 
-        /** 提交分组索引（adjustGroupKey → SubmitGroupInfo），用于联动/互斥记录共用流程 */
-        final Map<String, SubmitGroupInfo> submitGroupMap;
+        /** 本次提交批次号时间片，保证同一次提交内批次号时间一致 */
+        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+
+        /** 调入方向批次序号 */
+        int inboundBatchSeq = 0;
+
+        /** 调出方向批次序号 */
+        int outboundBatchSeq = 0;
+
+        /** 调库分组批次号索引（adjustGroupKey → adjustBatchNo），用于联动/互斥记录复用 */
+        final Map<String, String> adjustBatchNoMap = new HashMap<>();
 
         SubmitSharedData(SecurityInfoBo securityInfo,
                          Map<Long, InvestmentPoolBo> poolMap,
@@ -2360,8 +2333,7 @@ public class SecurityPoolAdjustService {
                          boolean hasPendingProcess,
                          boolean securityInObservePool,
                          boolean issuerInObservePool,
-                         Map<Long, FlowSnapshot> flowSnapshotMap,
-                         Map<String, SubmitGroupInfo> submitGroupMap) {
+                         Map<Long, FlowSnapshot> flowSnapshotMap) {
             this.securityInfo = securityInfo;
             this.poolMap = poolMap;
             this.currentPoolIds = currentPoolIds;
@@ -2370,7 +2342,6 @@ public class SecurityPoolAdjustService {
             this.securityInObservePool = securityInObservePool;
             this.issuerInObservePool = issuerInObservePool;
             this.flowSnapshotMap = flowSnapshotMap;
-            this.submitGroupMap = submitGroupMap;
         }
     }
 
