@@ -14,6 +14,9 @@ public class AdjustLogDto {
     /** 记录 ID */
     private Long id;
 
+    /** 调库批次号 */
+    private String adjustBatchNo;
+
     /** 投资池路径（父级名称/名称） */
     private String poolPath;
 

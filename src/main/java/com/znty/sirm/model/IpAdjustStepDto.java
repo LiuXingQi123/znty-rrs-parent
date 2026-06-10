@@ -17,6 +17,9 @@ public class IpAdjustStepDto {
     /** 关联调库记录 ID */
     private Long adjustLogId;
 
+    /** 调库批次号 */
+    private String adjustBatchNo;
+
     /** 关联流程节点 ID */
     private Long flowNodeId;
 

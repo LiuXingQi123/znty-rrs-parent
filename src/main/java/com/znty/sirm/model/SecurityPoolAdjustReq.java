@@ -20,6 +20,8 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private Long securityId;
     /** 调库方向：in=可调入库 / out=可调出库 */
     private String adjustDirection;
+    /** 目标投资池 ID（从具体投资池入口查看时使用） */
+    private Long targetPoolId;
     /** 调库记录 ID（查询流程步骤时使用） */
     private Long adjustLogId;
 }

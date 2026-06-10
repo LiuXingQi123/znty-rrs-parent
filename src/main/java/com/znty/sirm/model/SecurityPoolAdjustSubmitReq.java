@@ -61,6 +61,12 @@ public class SecurityPoolAdjustSubmitReq {
         /** 调整模式：调入/调出 */
         private String adjustMode;
 
+        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 */
+        private String itemTag;
+
+        /** 调库分组 Key：手工项及其触发的联动/互斥项共用 */
+        private String adjustGroupKey;
+
         /** 本次选择的流程 ID（当前仅透传，不落表） */
         private Long flowId;
 

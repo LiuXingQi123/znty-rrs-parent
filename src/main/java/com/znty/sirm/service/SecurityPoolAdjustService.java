@@ -386,6 +386,9 @@ public class SecurityPoolAdjustService {
             }
         }
 
+        // 按手工调库项及其联动/互斥项构建提交分组信息
+        Map<String, SubmitGroupInfo> submitGroupMap = buildSubmitGroupMap(req, flowSnapshotMap);
+
         return new SubmitSharedData(
                 securityInfo,
                 poolMap,
@@ -394,7 +397,8 @@ public class SecurityPoolAdjustService {
                 securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
                 securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
                 securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
-                flowSnapshotMap
+                flowSnapshotMap,
+                submitGroupMap
         );
     }
 
@@ -415,6 +419,77 @@ public class SecurityPoolAdjustService {
             return def != null ? def.getId() : null;
         }
         return null;
+    }
+
+    /**
+     * 按调库分组构建提交信息。
+     */
+    private Map<String, SubmitGroupInfo> buildSubmitGroupMap(
+            SecurityPoolAdjustSubmitReq req, Map<Long, FlowSnapshot> flowSnapshotMap) {
+        Map<String, SubmitGroupInfo> groupInfoMap = new HashMap<>();
+        if (req.getItems() == null) {
+            return groupInfoMap;
+        }
+        int index = 1;
+        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            String groupKey = resolveAdjustGroupKey(item);
+            if (groupInfoMap.containsKey(groupKey) && !isManualSubmitItem(item)) {
+                continue;
+            }
+
+            Long flowId = resolveFlowIdFromItem(item);
+            FlowSnapshot snapshot = flowId != null ? flowSnapshotMap.get(flowId) : null;
+            boolean direct = flowId == null || (snapshot != null && isDirectFlow(snapshot));
+            String batchNo = direct ? null : buildAdjustBatchNo(req, index++);
+            groupInfoMap.put(groupKey, new SubmitGroupInfo(flowId, snapshot, direct, batchNo));
+        }
+        return groupInfoMap;
+    }
+
+    /**
+     * 获取调库项所属提交分组信息。
+     */
+    private SubmitGroupInfo resolveSubmitGroupInfo(
+            SecurityPoolAdjustSubmitReq req,
+            SecurityPoolAdjustSubmitReq.AdjustItem item,
+            SubmitSharedData shared) {
+        String groupKey = resolveAdjustGroupKey(item);
+        SubmitGroupInfo info = shared.submitGroupMap.get(groupKey);
+        if (info != null) {
+            return info;
+        }
+        Long flowId = resolveFlowIdFromItem(item);
+        FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+        boolean direct = flowId == null || (snapshot != null && isDirectFlow(snapshot));
+        String batchNo = direct ? null : buildAdjustBatchNo(req, shared.submitGroupMap.size() + 1);
+        info = new SubmitGroupInfo(flowId, snapshot, direct, batchNo);
+        shared.submitGroupMap.put(groupKey, info);
+        return info;
+    }
+
+    /**
+     * 解析调库项分组 Key。
+     */
+    private String resolveAdjustGroupKey(SecurityPoolAdjustSubmitReq.AdjustItem item) {
+        if (item.getAdjustGroupKey() != null && !item.getAdjustGroupKey().isEmpty()) {
+            return item.getAdjustGroupKey();
+        }
+        return "manual_" + item.getTargetPoolId() + "_" + item.getAdjustMode();
+    }
+
+    /**
+     * 判断提交项是否为手工调库项。
+     */
+    private boolean isManualSubmitItem(SecurityPoolAdjustSubmitReq.AdjustItem item) {
+        return item.getItemTag() == null || item.getItemTag().isEmpty() || "manual".equals(item.getItemTag());
+    }
+
+    /**
+     * 生成调库批次号。
+     */
+    private String buildAdjustBatchNo(SecurityPoolAdjustSubmitReq req, int index) {
+        String securityCode = req.getSecurityCode() != null ? req.getSecurityCode().replaceAll("[^A-Za-z0-9]", "") : "SEC";
+        return "BOND" + securityCode + System.currentTimeMillis() + String.format("%03d", index);
     }
 
     /**
@@ -542,8 +617,7 @@ public class SecurityPoolAdjustService {
      * @param shared 本次提交的共享数据
      * @return 本次调入处理生成的所有调库记录 ID
      */
-    private List<Long> executeInboundSubmit(
-            SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+    private List<Long> executeInboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
 
         List<Long> generatedIds = new ArrayList<>();
 
@@ -551,15 +625,9 @@ public class SecurityPoolAdjustService {
             if (!"调入".equals(item.getAdjustMode())) {
                 continue;
             }
+            SubmitGroupInfo groupInfo = resolveSubmitGroupInfo(req, item, shared);
 
-            // 解析该调库项对应的流程快照
-            Long flowId = resolveFlowIdFromItem(item);
-            FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
-
-            // 判断是否为直通流程
-            boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
-
-            if (isDirect) {
+            if (groupInfo.direct) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
                 IpAdjustLogBo logBo = buildAdjustLog(req, item);
                 logBo.setAuditStatus("20");
@@ -574,12 +642,13 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
+                bo.setAdjustBatchNo(groupInfo.adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
-                // 创建初始流程步骤记录（懒创建：开始→提交人→下一审批节点）
-                if (snapshot != null && bo.getId() != null) {
-                    createInitialSteps(bo.getId(), snapshot, req.getAdjusterId(), req.getAdjusterName());
+                // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
+                if (isManualSubmitItem(item) && groupInfo.snapshot != null && bo.getId() != null) {
+                    createInitialSteps(bo.getId(), groupInfo.adjustBatchNo, groupInfo.snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
             }
         }
@@ -597,8 +666,7 @@ public class SecurityPoolAdjustService {
      * @param shared 本次提交的共享数据
      * @return 本次调出处理生成的所有调库记录 ID
      */
-    private List<Long> executeOutboundSubmit(
-            SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+    private List<Long> executeOutboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
 
         List<Long> generatedIds = new ArrayList<>();
 
@@ -606,15 +674,9 @@ public class SecurityPoolAdjustService {
             if (!"调出".equals(item.getAdjustMode())) {
                 continue;
             }
+            SubmitGroupInfo groupInfo = resolveSubmitGroupInfo(req, item, shared);
 
-            // 解析该调库项对应的流程快照
-            Long flowId = resolveFlowIdFromItem(item);
-            FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
-
-            // 判断是否为直通流程
-            boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
-
-            if (isDirect) {
+            if (groupInfo.direct) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
                 bo.setAuditStatus("20");
@@ -628,12 +690,13 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
+                bo.setAdjustBatchNo(groupInfo.adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
-                // 创建初始流程步骤记录（懒创建：开始→提交人→下一审批节点）
-                if (snapshot != null && bo.getId() != null) {
-                    createInitialSteps(bo.getId(), snapshot, req.getAdjusterId(), req.getAdjusterName());
+                // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
+                if (isManualSubmitItem(item) && groupInfo.snapshot != null && bo.getId() != null) {
+                    createInitialSteps(bo.getId(), groupInfo.adjustBatchNo, groupInfo.snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
             }
         }
@@ -725,7 +788,7 @@ public class SecurityPoolAdjustService {
         if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(req.getSecurityCode());
+        List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(req.getSecurityCode(), req.getTargetPoolId());
         if (logs == null || logs.isEmpty()) {
             return new ArrayList<>();
         }
@@ -743,6 +806,7 @@ public class SecurityPoolAdjustService {
         for (IpAdjustLogBo log : logs) {
             AdjustLogDto dto = new AdjustLogDto();
             dto.setId(log.getId());
+            dto.setAdjustBatchNo(log.getAdjustBatchNo());
             dto.setPoolPath(buildPoolPath(log.getTargetPoolId(), poolMap));
             dto.setAdjustType(log.getAdjustType());
             dto.setAdjustMode(log.getAdjustMode());
@@ -762,7 +826,7 @@ public class SecurityPoolAdjustService {
         if (adjustLogId == null) {
             return Collections.emptyList();
         }
-        List<IpAdjustStepBo> steps = securityPoolAdjustMapper.queryAdjustStepList(adjustLogId);
+        List<IpAdjustStepBo> steps = securityPoolAdjustMapper.queryAdjustStepListWithBatch(adjustLogId);
         if (steps == null || steps.isEmpty()) {
             return Collections.emptyList();
         }
@@ -771,6 +835,7 @@ public class SecurityPoolAdjustService {
             IpAdjustStepDto dto = new IpAdjustStepDto();
             dto.setId(bo.getId());
             dto.setAdjustLogId(bo.getAdjustLogId());
+            dto.setAdjustBatchNo(bo.getAdjustBatchNo());
             dto.setFlowNodeId(bo.getFlowNodeId());
             dto.setNodeCode(bo.getNodeCode());
             dto.setNodeLabel(bo.getNodeLabel());
@@ -955,6 +1020,7 @@ public class SecurityPoolAdjustService {
             if (!"调入".equals(item.getAdjustMode())) {
                 continue;
             }
+            String adjustGroupKey = buildAdjustGroupKey(item);
 
             // 手动调入项：前置校验 + 调入校验
             int poolCurrentCount = securityPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
@@ -967,6 +1033,7 @@ public class SecurityPoolAdjustService {
             resultItem.setPoolType(item.getPoolType());
             resultItem.setAdjustMode("调入");
             resultItem.setItemTag("manual");
+            resultItem.setAdjustGroupKey(adjustGroupKey);
             resultItem.setCanAdjust(failures.isEmpty());
             resultItem.setFailReasons(failures);
             results.add(resultItem);
@@ -981,7 +1048,7 @@ public class SecurityPoolAdjustService {
                 for (Long linkedId : inLinkage) {
                     // coveredKeys.add 返回 true 表示该 key 是首次出现，生成自动项
                     if (coveredKeys.add(linkedId + "_调入")) {
-                        results.add(buildAutoResultItem(linkedId, "调入", "linkage", shared));
+                        results.add(buildAutoResultItem(linkedId, "调入", "linkage", adjustGroupKey, shared));
                     }
                 }
             }
@@ -996,7 +1063,7 @@ public class SecurityPoolAdjustService {
                         continue;
                     }
                     if (coveredKeys.add(mutexId + "_调出")) {
-                        results.add(buildAutoResultItem(mutexId, "调出", "mutex", shared));
+                        results.add(buildAutoResultItem(mutexId, "调出", "mutex", adjustGroupKey, shared));
                     }
                 }
             }
@@ -1032,6 +1099,7 @@ public class SecurityPoolAdjustService {
             if (!"调出".equals(item.getAdjustMode())) {
                 continue;
             }
+            String adjustGroupKey = buildAdjustGroupKey(item);
 
             // 手动调出项：前置校验 + 调出校验
             int poolCurrentCount = securityPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
@@ -1044,6 +1112,7 @@ public class SecurityPoolAdjustService {
             resultItem.setPoolType(item.getPoolType());
             resultItem.setAdjustMode("调出");
             resultItem.setItemTag("manual");
+            resultItem.setAdjustGroupKey(adjustGroupKey);
             resultItem.setCanAdjust(failures.isEmpty());
             resultItem.setFailReasons(failures);
             results.add(resultItem);
@@ -1055,7 +1124,7 @@ public class SecurityPoolAdjustService {
             if (outLinkage != null) {
                 for (Long linkedId : outLinkage) {
                     if (coveredKeys.add(linkedId + "_调出")) {
-                        results.add(buildAutoResultItem(linkedId, "调出", "linkage", shared));
+                        results.add(buildAutoResultItem(linkedId, "调出", "linkage", adjustGroupKey, shared));
                     }
                 }
             }
@@ -1708,10 +1777,11 @@ public class SecurityPoolAdjustService {
      * @param targetPoolId 自动生成项的目标池 ID
      * @param adjustMode   调整方向（"调入"或"调出"）
      * @param itemTag      来源标签：linkage（联动）/ mutex（互斥）
+     * @param adjustGroupKey 触发该自动项的手工调库分组 Key
      * @param shared       本次 checkAdjust 调用的共享数据
      */
     private AdjustCheckDto.CheckResultItem buildAutoResultItem(
-            Long targetPoolId, String adjustMode, String itemTag, AdjustSharedData shared) {
+            Long targetPoolId, String adjustMode, String itemTag, String adjustGroupKey, AdjustSharedData shared) {
 
         int poolCurrentCount = securityPoolAdjustMapper.queryPoolCurrentCount(targetPoolId);
         InvestmentPoolBo pool = shared.getPoolMap().get(targetPoolId);
@@ -1732,9 +1802,17 @@ public class SecurityPoolAdjustService {
         resultItem.setPoolType(pool != null ? pool.getPoolType() : null);
         resultItem.setAdjustMode(adjustMode);
         resultItem.setItemTag(itemTag);
+        resultItem.setAdjustGroupKey(adjustGroupKey);
         resultItem.setCanAdjust(failures.isEmpty());
         resultItem.setFailReasons(failures);
         return resultItem;
+    }
+
+    /**
+     * 构建手工调库项分组 Key。
+     */
+    private String buildAdjustGroupKey(AdjustCheckReq.CheckItem item) {
+        return "manual_" + item.getTargetPoolId() + "_" + item.getAdjustMode();
     }
 
     /**
@@ -1845,7 +1923,7 @@ public class SecurityPoolAdjustService {
      * @param adjusterId   提交人 ID
      * @param adjusterName 提交人名称
      */
-    private void createInitialSteps(Long adjustLogId, FlowSnapshot snapshot,
+    private void createInitialSteps(Long adjustLogId, String adjustBatchNo, FlowSnapshot snapshot,
                                     String adjusterId, String adjusterName) {
         if (snapshot == null) {
             return;
@@ -1861,7 +1939,7 @@ public class SecurityPoolAdjustService {
 
         // 1. 创建开始节点步骤（auto_completed）
         int sortOrder = startNode.getSortOrder() != null ? startNode.getSortOrder() : 1;
-        insertStepRecord(adjustLogId, startNode, null, sortOrder, "auto_completed",
+        insertStepRecord(adjustLogId, adjustBatchNo, startNode, null, sortOrder, "auto_completed",
                          adjusterId, adjusterName, "submit", null, now);
 
         FlowNodeBo prevNode = startNode;
@@ -1871,7 +1949,7 @@ public class SecurityPoolAdjustService {
             if ("approval".equals(currentNode.getNodeType())
                     && isInitiatorStep(currentNode, config, prevNode, startNode)) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
-                insertStepRecord(adjustLogId, currentNode, config, sortOrder, "auto_completed",
+                insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, "auto_completed",
                                  adjusterId, adjusterName, "submit", null, now);
                 FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
                 prevNode = currentNode;
@@ -1880,7 +1958,7 @@ public class SecurityPoolAdjustService {
             }
 
             if ("approval".equals(currentNode.getNodeType())) {
-                createPendingSteps(adjustLogId, currentNode, snapshot, now);
+                createPendingSteps(adjustLogId, adjustBatchNo, currentNode, snapshot, now);
                 return;
             }
 
@@ -1915,7 +1993,7 @@ public class SecurityPoolAdjustService {
     /**
      * 为审批节点创建待处理步骤记录（按处理人明细展开为具体人员）
      */
-    private void createPendingSteps(Long adjustLogId, FlowNodeBo node,
+    private void createPendingSteps(Long adjustLogId, String adjustBatchNo, FlowNodeBo node,
                                     FlowSnapshot snapshot, Date now) {
         NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(node.getId());
         List<HandlerTarget> handlers = resolveApprovalHandlers(config, snapshot);
@@ -1923,11 +2001,11 @@ public class SecurityPoolAdjustService {
 
         if (handlers.isEmpty()) {
             // 无配置处理人时仍创建一条空处理人的待处理记录
-            insertStepRecord(adjustLogId, node, config, sortOrder, "pending",
+            insertStepRecord(adjustLogId, adjustBatchNo, node, config, sortOrder, "pending",
                              null, null, null, null, now);
         } else {
             for (HandlerTarget handler : handlers) {
-                insertStepRecord(adjustLogId, node, config, sortOrder, "pending",
+                insertStepRecord(adjustLogId, adjustBatchNo, node, config, sortOrder, "pending",
                                  handler.handlerId, handler.handlerName, null, null, now);
             }
         }
@@ -1936,12 +2014,13 @@ public class SecurityPoolAdjustService {
     /**
      * 插入单条步骤记录到 ip_adjust_step
      */
-    private void insertStepRecord(Long adjustLogId, FlowNodeBo node,
+    private void insertStepRecord(Long adjustLogId, String adjustBatchNo, FlowNodeBo node,
                                   NodeApprovalConfigBo config, int sortOrder,
                                   String stepStatus, String handlerId, String handlerName,
                                   String processAction, String processComment, Date startTime) {
         IpAdjustStepBo step = new IpAdjustStepBo();
         step.setAdjustLogId(adjustLogId);
+        step.setAdjustBatchNo(adjustBatchNo);
         step.setFlowNodeId(node.getId());
         step.setNodeCode(node.getNodeId());
         step.setNodeLabel(node.getLabel());
@@ -2162,6 +2241,23 @@ public class SecurityPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
 
     /**
+     * 调库提交分组信息。
+     */
+    private static class SubmitGroupInfo {
+        final Long flowId;
+        final FlowSnapshot snapshot;
+        final boolean direct;
+        final String adjustBatchNo;
+
+        SubmitGroupInfo(Long flowId, FlowSnapshot snapshot, boolean direct, String adjustBatchNo) {
+            this.flowId = flowId;
+            this.snapshot = snapshot;
+            this.direct = direct;
+            this.adjustBatchNo = adjustBatchNo;
+        }
+    }
+
+    /**
      * 单个流程的运行时快照，聚合流程定义、活跃版本、节点索引和连线列表。
      *
      * <p>用于 {@link #isDirectFlow(FlowSnapshot)} 方法快速判断流程是否为直通（start→end）模式，
@@ -2225,7 +2321,7 @@ public class SecurityPoolAdjustService {
      * <p>与 {@link AdjustSharedData} 的区别：
      * <ul>
      *   <li>不包含 requestInPoolIds / requestOutPoolIds（提交阶段无需互斥冲突校验）</li>
-     *   <li>新增 flowSnapshotMap，包含每个引用流程的快照数据</li>
+     *   <li>新增 flowSnapshotMap / submitGroupMap，包含流程快照和提交分组信息</li>
      * </ul>
      */
     private static class SubmitSharedData {
@@ -2254,6 +2350,9 @@ public class SecurityPoolAdjustService {
         /** 流程快照索引（flowId → FlowSnapshot），供第三/四阶段快速判断直通流程 */
         final Map<Long, FlowSnapshot> flowSnapshotMap;
 
+        /** 提交分组索引（adjustGroupKey → SubmitGroupInfo），用于联动/互斥记录共用流程 */
+        final Map<String, SubmitGroupInfo> submitGroupMap;
+
         SubmitSharedData(SecurityInfoBo securityInfo,
                          Map<Long, InvestmentPoolBo> poolMap,
                          Set<Long> currentPoolIds,
@@ -2261,7 +2360,8 @@ public class SecurityPoolAdjustService {
                          boolean hasPendingProcess,
                          boolean securityInObservePool,
                          boolean issuerInObservePool,
-                         Map<Long, FlowSnapshot> flowSnapshotMap) {
+                         Map<Long, FlowSnapshot> flowSnapshotMap,
+                         Map<String, SubmitGroupInfo> submitGroupMap) {
             this.securityInfo = securityInfo;
             this.poolMap = poolMap;
             this.currentPoolIds = currentPoolIds;
@@ -2270,6 +2370,7 @@ public class SecurityPoolAdjustService {
             this.securityInObservePool = securityInObservePool;
             this.issuerInObservePool = issuerInObservePool;
             this.flowSnapshotMap = flowSnapshotMap;
+            this.submitGroupMap = submitGroupMap;
         }
     }
 

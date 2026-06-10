@@ -43,8 +43,9 @@ public interface SecurityPoolAdjustMapper {
     /** 更新调库详情页传入的证券基础信息字段 */
     int editSecurityInfoForAdjust(SecurityPoolAdjustSubmitReq req);
 
-    /** 根据证券代码查询调库记录列表 */
-    List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode);
+    /** 根据证券代码和可选目标池查询调库记录列表 */
+    List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
+                                           @Param("targetPoolId") Long targetPoolId);
 
     /** 查询当前证券所在池列表 */
     List<PoolStatusDto> querySecurityPoolStatus(@Param("securityCode") String securityCode);
@@ -78,4 +79,7 @@ public interface SecurityPoolAdjustMapper {
 
     /** 查询指定调库记录的流程步骤列表 */
     List<IpAdjustStepBo> queryAdjustStepList(@Param("adjustLogId") Long adjustLogId);
+
+    /** 查询指定调库记录或同批记录的流程步骤列表 */
+    List<IpAdjustStepBo> queryAdjustStepListWithBatch(@Param("adjustLogId") Long adjustLogId);
 }

@@ -29,6 +29,9 @@ public class IpAdjustLogBo {
     /** 调整模式：调入/调出 */
     private String adjustMode;
 
+    /** 调库批次号，同一次提交产生的多条记录共用 */
+    private String adjustBatchNo;
+
     /** 目标投资池 ID */
     private Long targetPoolId;
 

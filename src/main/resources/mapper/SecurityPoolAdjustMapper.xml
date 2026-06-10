@@ -46,6 +46,7 @@
                                   ,security_type
                                   ,adjust_type
                                   ,adjust_mode
+                                  ,adjust_batch_no
                                   ,target_pool_id
                                   ,target_pool_name
                                   ,pool_type
@@ -65,6 +66,7 @@
                ,#{securityType}
                ,#{adjustType}
                ,#{adjustMode}
+               ,#{adjustBatchNo}
                ,#{targetPoolId}
                ,#{targetPoolName}
                ,#{poolType}
@@ -147,6 +149,7 @@
                ,al.security_type
                ,al.adjust_type
                ,al.adjust_mode
+               ,al.adjust_batch_no
                ,al.target_pool_id
                ,al.target_pool_name
                ,al.pool_type
@@ -163,6 +166,22 @@
         FROM ip_adjust_log al
         WHERE al.security_code = #{securityCode}
           AND al.is_deleted = 0
+          <if test="targetPoolId != null">
+              AND (
+                  al.target_pool_id = #{targetPoolId}
+                  OR (
+                      al.adjust_batch_no IS NOT NULL
+                      AND al.adjust_batch_no IN (
+                          SELECT DISTINCT rel.adjust_batch_no
+                          FROM ip_adjust_log rel
+                          WHERE rel.security_code = #{securityCode}
+                            AND rel.target_pool_id = #{targetPoolId}
+                            AND rel.adjust_batch_no IS NOT NULL
+                            AND rel.is_deleted = 0
+                      )
+                  )
+              )
+          </if>
         ORDER BY al.crte_time DESC
     </select>
 
@@ -400,6 +419,7 @@
     <!-- 新增流程步骤记录 -->
     <insert id="addAdjustStep" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_adjust_step (adjust_log_id
+                                   ,adjust_batch_no
                                    ,flow_node_id
                                    ,node_code
                                    ,node_label
@@ -416,6 +436,7 @@
                                    ,crte_time
                                    ,updt_time)
         VALUES (#{adjustLogId}
+               ,#{adjustBatchNo}
                ,#{flowNodeId}
                ,#{nodeCode}
                ,#{nodeLabel}
@@ -437,6 +458,7 @@
     <select id="queryAdjustStepList" resultType="com.znty.sirm.model.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
+               ,adjust_batch_no
                ,flow_node_id
                ,node_code
                ,node_label
@@ -452,6 +474,39 @@
                ,process_time
         FROM ip_adjust_step
         WHERE adjust_log_id = #{adjustLogId}
+        ORDER BY sort_order, id
+    </select>
+
+    <!-- 查询指定调库记录或同批记录的流程步骤列表 -->
+    <select id="queryAdjustStepListWithBatch" resultType="com.znty.sirm.model.IpAdjustStepBo">
+        SELECT id
+               ,adjust_log_id
+               ,adjust_batch_no
+               ,flow_node_id
+               ,node_code
+               ,node_label
+               ,node_type
+               ,approval_strategy
+               ,sort_order
+               ,step_status
+               ,handler_id
+               ,handler_name
+               ,process_action
+               ,process_comment
+               ,start_time
+               ,process_time
+        FROM ip_adjust_step
+        WHERE adjust_log_id = #{adjustLogId}
+           OR (
+               adjust_batch_no IS NOT NULL
+               AND adjust_batch_no = (
+                   SELECT adjust_batch_no
+                   FROM ip_adjust_log
+                   WHERE id = #{adjustLogId}
+                     AND adjust_batch_no IS NOT NULL
+                   LIMIT 1
+               )
+           )
         ORDER BY sort_order, id
     </select>
 
