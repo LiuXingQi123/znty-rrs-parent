@@ -161,6 +161,9 @@
           <if test="adjustBatchNo != null and adjustBatchNo != ''">
               AND al.adjust_batch_no = #{adjustBatchNo}
           </if>
+          <if test="adjustBatchNo == null or adjustBatchNo == ''">
+              AND (al.audit_status IS NULL OR al.audit_status NOT IN ('-1', '99', '21'))
+          </if>
         ORDER BY al.crte_time DESC
     </select>
 
