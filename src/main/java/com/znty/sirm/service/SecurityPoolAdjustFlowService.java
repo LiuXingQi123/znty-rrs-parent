@@ -135,8 +135,10 @@ public class SecurityPoolAdjustFlowService {
 
         // 判断当前节点是否已经终止流程
         if (isTerminalByCurrentNode(processingNode, req.getProcessAction())) {
+            // 终止流程时按流程定义继续记录结束节点
+            boolean endStepCreated = createTerminalEndStep(step, snapshot, processingNode, req.getProcessAction());
             // 构建审批处理返回对象
-            return buildAuditDto(step, auditStatus, true, false, "审批流程已结束");
+            return buildAuditDto(step, auditStatus, true, endStepCreated, "审批流程已结束");
         }
 
         // 推进到下一可处理节点
@@ -223,6 +225,40 @@ public class SecurityPoolAdjustFlowService {
 
         result.finished = true;
         return result;
+    }
+
+    /**
+     * 终止流程时创建流程定义中的结束节点步骤。
+     */
+    private boolean createTerminalEndStep(IpAdjustStepBo step, FlowSnapshot snapshot,
+                                          FlowNodeBo currentNode, String processAction) {
+        // 判断当前节点是否为修改节点
+        boolean modifyNode = isModifyNode(currentNode);
+        // 判断当前节点是否为审批节点
+        boolean approveNode = isApproveNode(currentNode);
+        if (snapshot == null || currentNode == null || !"reject".equals(processAction)
+                || (!modifyNode && !approveNode)) {
+            return false;
+        }
+        Date now = new Date();
+        // 按当前审批动作查找下一节点
+        FlowNodeBo nextNode = findNextNode(snapshot, currentNode, null, processAction);
+        while (nextNode != null) {
+            NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(nextNode.getId());
+            int sortOrder = nextNode.getSortOrder() != null ? nextNode.getSortOrder() : 1;
+            // 插入自动完成节点步骤
+            insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
+                    "auto_completed", null, null, "auto_process", null, now);
+            if ("end".equals(nextNode.getNodeType())) {
+                return true;
+            }
+            if ("approval".equals(nextNode.getNodeType())) {
+                return false;
+            }
+            // 继续沿终止分支查找结束节点
+            nextNode = findNextNode(snapshot, nextNode, currentNode, processAction);
+        }
+        return false;
     }
 
     /**
