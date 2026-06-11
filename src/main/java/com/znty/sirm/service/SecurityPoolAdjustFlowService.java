@@ -488,8 +488,7 @@ public class SecurityPoolAdjustFlowService {
         if (nextNode != null) {
             return nextNode;
         }
-        // 连线缺失时按排序号兜底
-        return findNextNodeBySortOrder(snapshot, currentNode, prevNode);
+        throw new BizException("流程配置异常：节点[" + currentNode.getLabel() + "]缺少下一步连线");
     }
 
     /**
@@ -771,31 +770,6 @@ public class SecurityPoolAdjustFlowService {
             }
         }
         return false;
-    }
-
-    /**
-     * 连线缺失时按排序号兜底查找下一节点。
-     */
-    private FlowNodeBo findNextNodeBySortOrder(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode) {
-        if (snapshot == null || currentNode == null || currentNode.getSortOrder() == null) {
-            return null;
-        }
-        FlowNodeBo result = null;
-        for (FlowNodeBo node : snapshot.getNodeMap().values()) {
-            if (node == null || node.getSortOrder() == null || node.getId() == null) {
-                continue;
-            }
-            if (prevNode != null && node.getId().equals(prevNode.getId())) {
-                continue;
-            }
-            if (node.getId().equals(currentNode.getId()) || node.getSortOrder() <= currentNode.getSortOrder()) {
-                continue;
-            }
-            if (result == null || node.getSortOrder() < result.getSortOrder()) {
-                result = node;
-            }
-        }
-        return result;
     }
 
     /**

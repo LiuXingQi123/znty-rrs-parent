@@ -2107,42 +2107,14 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 查找初始步骤的下一个节点，连线缺失时按 sort_order 兜底。
+     * 查找初始步骤的下一个节点。
      */
     private FlowNodeBo findNextNodeForInitialSteps(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode) {
         FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, currentNode, prevNode);
         if (nextNode != null) {
             return nextNode;
         }
-        return findNextNodeBySortOrder(snapshot, currentNode, prevNode);
-    }
-
-    /**
-     * 按节点排序查找当前节点后的下一个节点。
-     */
-    private FlowNodeBo findNextNodeBySortOrder(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode) {
-        if (snapshot == null || currentNode == null || currentNode.getSortOrder() == null) {
-            return null;
-        }
-        FlowNodeBo result = null;
-        for (FlowNodeBo node : snapshot.nodeMap.values()) {
-            if (node == null || node.getSortOrder() == null || node.getId() == null) {
-                continue;
-            }
-            if (prevNode != null && node.getId().equals(prevNode.getId())) {
-                continue;
-            }
-            if (node.getId().equals(currentNode.getId())) {
-                continue;
-            }
-            if (node.getSortOrder() <= currentNode.getSortOrder()) {
-                continue;
-            }
-            if (result == null || node.getSortOrder() < result.getSortOrder()) {
-                result = node;
-            }
-        }
-        return result;
+        throw new BizException("流程配置异常：节点[" + currentNode.getLabel() + "]缺少下一步连线");
     }
 
     /**
