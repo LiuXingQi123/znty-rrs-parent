@@ -77,6 +77,9 @@ public interface FlowMapper {
     /** 新建流程节点。 */
     int addFlowNode(FlowNodeBo node);
 
+    /** 根据 ID 查询流程节点。 */
+    FlowNodeBo queryFlowNodeById(@Param("id") Long id);
+
     // ==================== 审批节点配置 ====================
 
     /** 删除指定版本的审批配置。 */

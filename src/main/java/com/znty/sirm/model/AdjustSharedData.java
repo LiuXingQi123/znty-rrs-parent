@@ -29,7 +29,7 @@ public class AdjustSharedData {
     /** 全量投资池关系配置（poolId → relationType → 关联池 ID 列表） */
     private Map<Long, Map<String, List<Long>>> poolRelationMap;
 
-    /** 证券是否存在进行中的调库流程（audit_status IN ('00','11')） */
+    /** 证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
     private boolean hasPendingProcess;
 
     /** 证券当前进行中流程所在步骤名称 */

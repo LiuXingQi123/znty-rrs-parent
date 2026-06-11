@@ -76,10 +76,26 @@
                 AND al.audit_status = #{auditStatus}
             </if>
             <if test="stepStatus == 'pending'">
-                AND s.step_status = 'pending'
+                AND EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step ps
+                    WHERE ps.step_status = 'pending'
+                      AND (
+                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != '' AND ps.adjust_batch_no = al.adjust_batch_no)
+                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '') AND ps.adjust_log_id = al.id)
+                      )
+                )
             </if>
             <if test="stepStatus == 'completed'">
-                AND s.step_status != 'pending'
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step ps
+                    WHERE ps.step_status = 'pending'
+                      AND (
+                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != '' AND ps.adjust_batch_no = al.adjust_batch_no)
+                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '') AND ps.adjust_log_id = al.id)
+                      )
+                )
             </if>
             <if test="initiatorName != null and initiatorName != ''">
                 AND al.adjuster_name LIKE CONCAT('%', #{initiatorName}, '%')

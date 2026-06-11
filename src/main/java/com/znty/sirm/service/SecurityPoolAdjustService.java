@@ -1561,7 +1561,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：证券是否存在进行中的调库流程
      *
-     * <p>audit_status 为"00（待审核）"或"11（驳回待修改）"的记录视为进行中，
+     * <p>存在 pending 流程步骤的调库记录视为进行中，
      * 需等待该流程终结后方可再次发起调库，避免并发操作导致入池状态混乱。
      */
     private String preCheckPendingProcess(AdjustCheckContext ctx) {
@@ -2334,7 +2334,7 @@ public class SecurityPoolAdjustService {
         /** 全量投资池关系配置（poolId → relationType → 关联池 ID 列表） */
         final Map<Long, Map<String, List<Long>>> poolRelationMap;
 
-        /** 证券是否存在进行中的调库流程（audit_status IN ('00','11')） */
+        /** 证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
         final boolean hasPendingProcess;
 
         /** 当前证券自身是否在观察池（pool_type='observe'，audit_status='20'） */

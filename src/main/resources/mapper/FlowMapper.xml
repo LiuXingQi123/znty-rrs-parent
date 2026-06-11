@@ -261,6 +261,13 @@
         )
     </insert>
 
+    <!-- 根据 ID 查询流程节点。 -->
+    <select id="queryFlowNodeById" resultType="com.znty.sirm.model.FlowNodeBo">
+        SELECT *
+        FROM wf_flow_node
+        WHERE id = #{id}
+    </select>
+
     <!-- ==================== 审批节点配置 ==================== -->
 
     <!-- 删除指定版本的审批配置。 -->

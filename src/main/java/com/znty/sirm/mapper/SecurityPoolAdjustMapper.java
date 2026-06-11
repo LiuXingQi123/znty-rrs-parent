@@ -62,7 +62,7 @@ public interface SecurityPoolAdjustMapper {
     /** 查询全量投资池关系配置（不限关系类型） */
     List<PoolRelationBo> queryAllPoolRelations();
 
-    /** 查询证券是否存在进行中的调库流程（待审核或驳回待修改） */
+    /** 查询证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
     boolean querySecurityHasPendingProcess(@Param("securityCode") String securityCode);
 
     /** 查询证券当前进行中流程所在步骤名称 */
@@ -83,4 +83,33 @@ public interface SecurityPoolAdjustMapper {
     /** 查询指定批次或调库记录的流程步骤列表 */
     List<IpAdjustStepBo> queryAdjustStepListWithBatch(@Param("adjustLogId") Long adjustLogId,
                                                        @Param("adjustBatchNo") String adjustBatchNo);
+
+    /** 根据 ID 查询流程步骤 */
+    IpAdjustStepBo queryAdjustStepById(@Param("id") Long id);
+
+    /** 更新当前待处理步骤的处理结果 */
+    int editAdjustStepProcess(@Param("id") Long id,
+                              @Param("stepStatus") String stepStatus,
+                              @Param("processAction") String processAction,
+                              @Param("processComment") String processComment);
+
+    /** 跳过同批次同节点的其他待处理步骤 */
+    int editOtherPendingStepSkipped(@Param("id") Long id,
+                                    @Param("adjustLogId") Long adjustLogId,
+                                    @Param("adjustBatchNo") String adjustBatchNo,
+                                    @Param("flowNodeId") Long flowNodeId);
+
+    /** 查询同批次同节点剩余待处理步骤数量 */
+    int queryPendingStepCountByNode(@Param("adjustLogId") Long adjustLogId,
+                                    @Param("adjustBatchNo") String adjustBatchNo,
+                                    @Param("flowNodeId") Long flowNodeId);
+
+    /** 查询指定批次或调库记录的调库日志列表 */
+    List<IpAdjustLogBo> queryAdjustLogListForAudit(@Param("adjustLogId") Long adjustLogId,
+                                                   @Param("adjustBatchNo") String adjustBatchNo);
+
+    /** 更新指定批次或调库记录的审核状态 */
+    int editAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
+                                 @Param("adjustBatchNo") String adjustBatchNo,
+                                 @Param("auditStatus") String auditStatus);
 }
