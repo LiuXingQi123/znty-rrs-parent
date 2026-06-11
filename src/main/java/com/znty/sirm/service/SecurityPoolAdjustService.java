@@ -1946,7 +1946,7 @@ public class SecurityPoolAdjustService {
         // 1. 创建开始节点步骤（auto_completed）
         int sortOrder = startNode.getSortOrder() != null ? startNode.getSortOrder() : 1;
         insertStepRecord(adjustLogId, adjustBatchNo, startNode, null, sortOrder, "auto_completed",
-                         adjusterId, adjusterName, "submit", null, now);
+                         null, null, "auto_process", null, now);
 
         FlowNodeBo prevNode = startNode;
         FlowNodeBo currentNode = findNextNodeForInitialSteps(snapshot, startNode, null);
