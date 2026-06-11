@@ -32,6 +32,6 @@ public class ForbiddenPoolQueryReq extends PageRequest {
     /** 发行主体名称（模糊搜索） */
     private String issuer;
 
-    /** 审核状态（调整状态）：00=待审核 10=审核中 11=已驳回 20=已生效 */
+    /** 审核状态（调整状态）：-1=无效调整 / 00=已提交待审核 / 10=审核通过待审批 / 11=驳回待修改 / 20=审批通过 / 21=审批驳回 / 99=发起人已撤回 */
     private String auditStatus;
 }

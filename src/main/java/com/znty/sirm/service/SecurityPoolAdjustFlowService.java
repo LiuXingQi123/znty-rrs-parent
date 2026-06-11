@@ -576,7 +576,7 @@ public class SecurityPoolAdjustFlowService {
             }
             return "21";
         }
-        // 发起或修改通过后回到待审核状态
+        // 发起或修改通过后回到已提交待审核状态
         if (isInitiatorNode(node) || isModifyNode(node)) {
             return "00";
         }
