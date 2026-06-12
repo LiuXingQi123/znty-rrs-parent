@@ -87,9 +87,15 @@ public class FlowService {
         if (req.getName() == null || req.getName().trim().isEmpty()) {
             throw new BizException("流程名称不能为空");
         }
-        // flowKey 非必填，空值转为 null
-        String flowKey = (req.getFlowKey() != null && !req.getFlowKey().trim().isEmpty())
-                ? req.getFlowKey().trim() : null;
+        // flowKey 必填校验
+        if (req.getFlowKey() == null || req.getFlowKey().trim().isEmpty()) {
+            throw new BizException("流程 Key 不能为空");
+        }
+        String flowKey = req.getFlowKey().trim();
+        // flowKey 唯一性校验
+        if (flowMapper.countByFlowKey(flowKey, null) > 0) {
+            throw new BizException("流程 Key 已存在：" + flowKey);
+        }
 
         Date now = new Date();
 
@@ -177,11 +183,20 @@ public class FlowService {
         if (req.getName() != null && req.getName().trim().isEmpty()) {
             throw new BizException("流程名称不能为空");
         }
-        // flowKey 非必填，允许置空
-        if (req.getFlowKey() != null) {
-            String v = req.getFlowKey().trim();
-            def.setFlowKey(v.isEmpty() ? null : v);
+        // flowKey 必填校验
+        if (req.getFlowKey() == null || req.getFlowKey().trim().isEmpty()) {
+            throw new BizException("流程 Key 不能为空");
         }
+        String newFlowKey = req.getFlowKey().trim();
+        // 仅 draft 状态允许修改 flowKey
+        if (!"draft".equals(def.getStatus()) && !newFlowKey.equals(def.getFlowKey())) {
+            throw new BizException("仅未发布状态的流程可修改流程 Key");
+        }
+        // flowKey 唯一性校验（排除自身）
+        if (!newFlowKey.equals(def.getFlowKey()) && flowMapper.countByFlowKey(newFlowKey, def.getId()) > 0) {
+            throw new BizException("流程 Key 已存在：" + newFlowKey);
+        }
+        def.setFlowKey(newFlowKey);
 
         if (req.getName() != null) def.setName(req.getName().trim());
         if (req.getCategory() != null) def.setCategory(req.getCategory());
@@ -273,6 +288,16 @@ public class FlowService {
         Date now = new Date();
         boolean nameChanged = req.getName() != null && !req.getName().equals(def.getName());
         boolean keyChanged = req.getFlowKey() != null && !req.getFlowKey().equals(def.getFlowKey());
+        if (keyChanged) {
+            // 仅 draft 状态允许修改 flowKey
+            if (!"draft".equals(def.getStatus())) {
+                throw new BizException("仅未发布状态的流程可修改流程 Key");
+            }
+            // flowKey 唯一性校验（排除自身）
+            if (flowMapper.countByFlowKey(req.getFlowKey(), def.getId()) > 0) {
+                throw new BizException("流程 Key 已存在：" + req.getFlowKey());
+            }
+        }
         if (nameChanged || keyChanged) {
             def.setName(req.getName());
             def.setFlowKey(req.getFlowKey());

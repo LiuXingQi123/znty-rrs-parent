@@ -63,6 +63,17 @@
         LIMIT 1
     </select>
 
+    <!-- 统计指定 flowKey 的非删除记录数（用于唯一性校验）。 -->
+    <select id="countByFlowKey" resultType="int">
+        SELECT COUNT(1)
+        FROM wf_flow_definition
+        WHERE flow_key = #{flowKey}
+          AND is_deleted = 0
+        <if test="excludeId != null">
+          AND id != #{excludeId}
+        </if>
+    </select>
+
     <!-- 根据 ID 查询流程定义（加行锁）。 -->
     <select id="queryFlowByIdForUpdate" resultType="com.znty.sirm.model.FlowDefinitionBo">
         SELECT d.*

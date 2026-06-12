@@ -28,6 +28,9 @@ public interface FlowMapper {
     /** 根据流程 Key 查询启用流程定义。 */
     FlowDefinitionBo queryActiveFlowByKey(@Param("flowKey") String flowKey);
 
+    /** 统计指定 flowKey 的非删除记录数（用于唯一性校验）。excludeId 不为 null 时排除自身（编辑场景）。 */
+    int countByFlowKey(@Param("flowKey") String flowKey, @Param("excludeId") Long excludeId);
+
     /** 根据 ID 查询流程定义（加行锁，用于并发安全的版本号计算）。 */
     FlowDefinitionBo queryFlowByIdForUpdate(@Param("id") Long id);
 
