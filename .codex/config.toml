@@ -1,0 +1,13 @@
+[mcp_servers.mysql]
+command = "npx"
+# 1. 修正了官方 npm 包的名称
+args = ["-y", "@modelcontextprotocol/server-mysql"]
+enabled = true
+
+[mcp_servers.mysql.env]
+MYSQL_HOST = "127.0.0.1"
+MYSQL_PORT = "3306"
+MYSQL_USER = "root"
+MYSQL_PASSWORD = "123456"
+# 2. 如果不指定特定数据库，建议直接删掉这行，或者保持为空字符串
+MYSQL_DATABASE = "znty_sirm"

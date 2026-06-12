@@ -15,6 +15,7 @@ import com.znty.sirm.model.PoolPermissionBo;
 import com.znty.sirm.model.SecurityInfoBo;
 import com.znty.sirm.model.SecurityPoolAdjustReq;
 import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
+import com.znty.sirm.exception.BizException;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -112,14 +113,14 @@ public class SecurityPoolAdjustServiceStepTest {
                 Arrays.asList(config),
                 buildHandlerMap(config.getId(), 5));
 
-        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, snapshot, "1001", "admin");
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
 
         ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
         verify(mapper, times(6)).addAdjustStep(captor.capture());
         List<IpAdjustStepBo> steps = captor.getAllValues();
 
         assertThat(steps.get(0).getNodeType()).isEqualTo("start");
-        assertThat(steps.get(0).getStepStatus()).isEqualTo("auto_completed");
+        assertThat(steps.get(0).getStepStatus()).isEqualTo("auto_process");
         assertThat(steps.subList(1, 6)).extracting(IpAdjustStepBo::getStepStatus)
                 .containsOnly("pending");
         assertThat(steps.subList(1, 6)).extracting(IpAdjustStepBo::getApprovalStrategy)
@@ -145,7 +146,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 Arrays.asList(initiatorConfig, approvalConfig),
                 buildHandlerMap(approvalConfig.getId(), 2));
 
-        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, snapshot, "1001", "admin");
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
 
         ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
         verify(mapper, times(4)).addAdjustStep(captor.capture());
@@ -153,7 +154,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         assertThat(steps.get(1).getFlowNodeId()).isEqualTo(initiator.getId());
         assertThat(steps.get(1).getApprovalStrategy()).isEqualTo("initiator");
-        assertThat(steps.get(1).getStepStatus()).isEqualTo("auto_completed");
+        assertThat(steps.get(1).getStepStatus()).isEqualTo("submit");
         assertThat(steps.get(1).getHandlerId()).isEqualTo("1001");
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getStepStatus)
                 .containsOnly("pending");
@@ -181,16 +182,16 @@ public class SecurityPoolAdjustServiceStepTest {
                 Arrays.asList(submitterConfig, reviewerConfig),
                 buildHandlerMap(reviewerConfig.getId(), 2));
 
-        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, snapshot, "1001", "admin");
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
 
         ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
         verify(mapper, times(4)).addAdjustStep(captor.capture());
         List<IpAdjustStepBo> steps = captor.getAllValues();
 
         assertThat(steps.get(0).getFlowNodeId()).isEqualTo(start.getId());
-        assertThat(steps.get(0).getHandlerId()).isEqualTo("1001");
+        assertThat(steps.get(0).getHandlerId()).isNull();
         assertThat(steps.get(1).getFlowNodeId()).isEqualTo(submitter.getId());
-        assertThat(steps.get(1).getStepStatus()).isEqualTo("auto_completed");
+        assertThat(steps.get(1).getStepStatus()).isEqualTo("submit");
         assertThat(steps.get(1).getHandlerId()).isEqualTo("1001");
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getFlowNodeId)
                 .containsOnly(reviewer.getId());
@@ -201,7 +202,7 @@ public class SecurityPoolAdjustServiceStepTest {
     }
 
     @Test
-    public void createInitialStepsShouldCreateNextPendingStepWhenEdgeAfterSubmitterIsMissing() throws Exception {
+    public void createInitialStepsShouldThrowWhenEdgeAfterSubmitterIsMissing() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
@@ -220,20 +221,14 @@ public class SecurityPoolAdjustServiceStepTest {
                 Arrays.asList(submitterConfig, reviewerConfig),
                 buildHandlerMap(reviewerConfig.getId(), 2));
 
-        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, snapshot, "1001", "admin");
-
-        ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
-        verify(mapper, times(4)).addAdjustStep(captor.capture());
-        List<IpAdjustStepBo> steps = captor.getAllValues();
-
-        assertThat(steps.get(1).getFlowNodeId()).isEqualTo(submitter.getId());
-        assertThat(steps.get(1).getStepStatus()).isEqualTo("auto_completed");
-        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getFlowNodeId)
-                .containsOnly(reviewer.getId());
-        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getStepStatus)
-                .containsOnly("pending");
-        assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getHandlerId)
-                .containsExactly("1", "2");
+        try {
+            ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains("缺少下一步连线");
+            return;
+        }
+        throw new AssertionError("缺少下一步连线时应抛出流程配置异常");
     }
 
     @Test

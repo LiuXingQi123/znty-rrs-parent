@@ -562,14 +562,14 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 判断流程是否为直通流程（start 节点的所有出边直接指向 end 节点）。
+     * 判断流程是否为直通流程（开始后无需人工处理即可到结束节点）。
      *
      * <p>判定逻辑：
      * <ol>
      *   <li>在节点列表中查找 nodeType='start' 的节点</li>
      *   <li>在连线列表中查找 fromNodeId 等于 start 节点 DB ID 的所有出边</li>
-     *   <li>逐一检查每个出边的目标节点的 nodeType 是否都为 'end'</li>
-     *   <li>若所有目标节点都是 end → 直通流程；若存在非 end 目标节点 → 非直通（需审批）</li>
+     *   <li>逐一检查每个出边的目标节点是否为 end，或是否为发起人自动提交节点且继续指向 end</li>
+     *   <li>若所有路径都能无需人工处理到 end → 直通流程；若存在人工待办节点 → 非直通（需审批）</li>
      * </ol>
      *
      * @param snapshot 流程快照（含节点索引和连线列表）
@@ -599,10 +599,33 @@ public class SecurityPoolAdjustService {
             return false;
         }
 
-        // 检查所有出边的目标节点是否都是 end 类型
+        // 检查所有出边是否都能直达结束节点
         for (FlowEdgeBo edge : outEdges) {
             FlowNodeBo targetNode = snapshot.nodeMap.get(edge.getToNodeId());
-            if (targetNode == null || !"end".equals(targetNode.getNodeType())) {
+            if (targetNode == null) {
+                return false;
+            }
+            if ("end".equals(targetNode.getNodeType())) {
+                continue;
+            }
+
+            NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(targetNode.getId());
+            if (!isInitiatorStep(targetNode, config, startNode, startNode)) {
+                return false;
+            }
+
+            boolean targetCanEnd = false;
+            for (FlowEdgeBo nextEdge : snapshot.edges) {
+                if (!nextEdge.getFromNodeId().equals(targetNode.getId())) {
+                    continue;
+                }
+                FlowNodeBo nextNode = snapshot.nodeMap.get(nextEdge.getToNodeId());
+                if (nextNode != null && "end".equals(nextNode.getNodeType())) {
+                    targetCanEnd = true;
+                    break;
+                }
+            }
+            if (!targetCanEnd) {
                 return false;
             }
         }
@@ -639,6 +662,10 @@ public class SecurityPoolAdjustService {
                 logBo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(logBo);
                 generatedIds.add(logBo.getId());
+                // 有流程定义的直通流程仍记录开始、发起、结束步骤
+                if (isManualSubmitItem(item) && snapshot != null && logBo.getId() != null) {
+                    createInitialSteps(logBo.getId(), null, snapshot, req.getAdjusterId(), req.getAdjusterName());
+                }
 
                 // 直通流程：再直接写入 ip_pool_status（audit_status='20'，即时生效）
                 IpAdjustLogBo statusBo = buildAdjustLog(req, item);
@@ -655,7 +682,12 @@ public class SecurityPoolAdjustService {
                 generatedIds.add(bo.getId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
-                    createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
+                    boolean flowFinished = createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
+                    if (flowFinished) {
+                        bo.setAuditStatus("20");
+                        securityPoolAdjustMapper.editAdjustLogAuditStatus(bo.getId(), adjustBatchNo, "20");
+                        securityPoolAdjustMapper.addPoolStatus(bo);
+                    }
                 }
             }
         }
@@ -692,6 +724,10 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                // 有流程定义的直通流程仍记录开始、发起、结束步骤
+                if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
+                    createInitialSteps(bo.getId(), null, snapshot, req.getAdjusterId(), req.getAdjusterName());
+                }
 
                 // 直通流程：再软删除 ip_pool_status 中该证券在目标池的有效记录
                 securityPoolAdjustMapper.softDeletePoolStatus(
@@ -707,7 +743,12 @@ public class SecurityPoolAdjustService {
                 generatedIds.add(bo.getId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
-                    createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
+                    boolean flowFinished = createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
+                    if (flowFinished) {
+                        securityPoolAdjustMapper.editAdjustLogAuditStatus(bo.getId(), adjustBatchNo, "20");
+                        securityPoolAdjustMapper.softDeletePoolStatus(
+                                req.getSecurityCode(), item.getTargetPoolId());
+                    }
                 }
             }
         }
@@ -1928,11 +1969,12 @@ public class SecurityPoolAdjustService {
      * @param snapshot     流程快照
      * @param adjusterId   提交人 ID
      * @param adjusterName 提交人名称
+     * @return true 表示初始步骤已走到结束节点，false 表示仍需后续人工处理
      */
-    private void createInitialSteps(Long adjustLogId, String adjustBatchNo, FlowSnapshot snapshot,
-                                    String adjusterId, String adjusterName) {
+    private boolean createInitialSteps(Long adjustLogId, String adjustBatchNo, FlowSnapshot snapshot,
+                                       String adjusterId, String adjusterName) {
         if (snapshot == null) {
-            return;
+            return false;
         }
 
         Date now = new Date();
@@ -1940,12 +1982,12 @@ public class SecurityPoolAdjustService {
         // 查找开始节点
         FlowNodeBo startNode = findNodeByType(snapshot, "start");
         if (startNode == null) {
-            return;
+            return false;
         }
 
-        // 1. 创建开始节点步骤（auto_completed）
+        // 1. 创建开始节点步骤（auto_process）
         int sortOrder = startNode.getSortOrder() != null ? startNode.getSortOrder() : 1;
-        insertStepRecord(adjustLogId, adjustBatchNo, startNode, null, sortOrder, "auto_completed",
+        insertStepRecord(adjustLogId, adjustBatchNo, startNode, null, sortOrder, "auto_process",
                          null, null, "auto_process", null, now);
 
         FlowNodeBo prevNode = startNode;
@@ -1955,7 +1997,7 @@ public class SecurityPoolAdjustService {
             if ("approval".equals(currentNode.getNodeType())
                     && isInitiatorStep(currentNode, config, prevNode, startNode)) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
-                insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, "auto_completed",
+                insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, "submit",
                                  adjusterId, adjusterName, "submit", null, now);
                 FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
                 prevNode = currentNode;
@@ -1965,13 +2007,21 @@ public class SecurityPoolAdjustService {
 
             if ("approval".equals(currentNode.getNodeType())) {
                 createPendingSteps(adjustLogId, adjustBatchNo, currentNode, snapshot, now);
-                return;
+                return false;
+            }
+
+            if ("end".equals(currentNode.getNodeType())) {
+                sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
+                insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, "auto_process",
+                                 null, null, "auto_process", null, now);
+                return true;
             }
 
             FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
             prevNode = currentNode;
             currentNode = nextNode;
         }
+        return false;
     }
 
     /**

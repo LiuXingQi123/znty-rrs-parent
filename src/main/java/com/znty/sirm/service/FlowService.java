@@ -743,6 +743,7 @@ public class FlowService {
                 fe.setFromNodeId(fromSid);
                 fe.setToNodeId(toSid);
                 fe.setLabel(ce.getLabel());
+                fe.setRouteAction(ce.getRouteAction());
                 fe.setCondLogic(ce.getCondLogic());
                 fe.setRemark(ce.getRemark());
                 fe.setCrteTime(now);
@@ -874,7 +875,7 @@ public class FlowService {
         FlowEdgeEvtBo e = new FlowEdgeEvtBo();
         e.setId(edge.getId()); e.setVersionId(edge.getVersionId()); e.setFlowId(edge.getFlowId());
         e.setEdgeId(edge.getEdgeId()); e.setFromNodeId(edge.getFromNodeId()); e.setToNodeId(edge.getToNodeId());
-        e.setLabel(edge.getLabel()); e.setCondLogic(edge.getCondLogic()); e.setRemark(edge.getRemark());
+        e.setLabel(edge.getLabel()); e.setRouteAction(edge.getRouteAction()); e.setCondLogic(edge.getCondLogic()); e.setRemark(edge.getRemark());
         e.setCrteTime(edge.getCrteTime()); e.setUpdtTime(edge.getUpdtTime());
         e.setOpterId(opterId); e.setOptTime(now); e.setOprtType(oprtType);
         return e;

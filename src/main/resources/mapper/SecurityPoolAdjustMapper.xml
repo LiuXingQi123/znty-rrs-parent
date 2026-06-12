@@ -450,7 +450,7 @@
                ,process_time
         FROM ip_adjust_step
         WHERE adjust_log_id = #{adjustLogId}
-        ORDER BY sort_order, id
+        ORDER BY id ASC
     </select>
 
     <!-- 查询指定批次或调库记录的流程步骤列表 -->
@@ -482,7 +482,7 @@
                 </otherwise>
             </choose>
         </where>
-        ORDER BY sort_order, id
+        ORDER BY id ASC
     </select>
 
     <!-- 根据 ID 查询流程步骤 -->
@@ -507,6 +507,40 @@
         WHERE id = #{id}
     </select>
 
+    <!-- 按处理人查询同批次同节点待处理步骤 -->
+    <select id="queryPendingStepByHandler" resultType="com.znty.sirm.model.IpAdjustStepBo">
+        SELECT id
+               ,adjust_log_id
+               ,adjust_batch_no
+               ,flow_node_id
+               ,node_code
+               ,node_label
+               ,node_type
+               ,approval_strategy
+               ,sort_order
+               ,step_status
+               ,handler_id
+               ,handler_name
+               ,process_action
+               ,process_comment
+               ,start_time
+               ,process_time
+        FROM ip_adjust_step
+        WHERE flow_node_id = #{flowNodeId}
+          AND handler_id = #{handlerId}
+          AND step_status = 'pending'
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>
+                  AND adjust_log_id = #{adjustLogId}
+              </otherwise>
+          </choose>
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
     <!-- 更新当前待处理步骤的处理结果 -->
     <update id="editAdjustStepProcess">
         UPDATE ip_adjust_step
@@ -522,9 +556,9 @@
     <!-- 跳过同批次同节点的其他待处理步骤 -->
     <update id="editOtherPendingStepSkipped">
         UPDATE ip_adjust_step
-        SET step_status = 'skipped'
-           ,process_action = 'auto_process'
-           ,process_comment = '同节点其他处理人已完成审批'
+        SET step_status = #{stepStatus}
+           ,process_action = 'skipped'
+           ,process_comment = NULL
            ,process_time = NOW()
            ,updt_time = NOW()
         WHERE id != #{id}

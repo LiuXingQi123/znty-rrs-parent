@@ -38,7 +38,7 @@ public class IpAdjustStepBo {
     /** 排序序号 */
     private Integer sortOrder;
 
-    /** 步骤处理状态：pending=待处理 / approved=已通过 / rejected=已驳回 / auto_completed=自动完成 / skipped=已跳过 / canceled=已撤回 */
+    /** 步骤处理状态：pending=待处理 / approve=通过 / reject=驳回 / submit=提交 / auto_process=自动处理 / canceled=已撤回 */
     private String stepStatus;
 
     /** 处理人 ID */
@@ -47,7 +47,7 @@ public class IpAdjustStepBo {
     /** 处理人名称 */
     private String handlerName;
 
-    /** 处理动作：submit=提交 / approve=通过 / reject=驳回 / auto_process=自动处理 */
+    /** 处理动作：submit=提交 / approve=通过 / reject=驳回 / auto_process=自动处理 / skipped=被跳过 */
     private String processAction;
 
     /** 处理意见 */

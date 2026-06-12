@@ -574,50 +574,50 @@ VALUES
 -- ── adjust_log_id=1：24某交投MTN001，完整审批通过 ────────────────────────────────
 -- n1 开始节点（自动完成）
 (1, 10101, 'n1', '开始', 'start',
- NULL, 1, 'auto_completed',
- '1001', '管理员', 'submit', NULL,
+ NULL, 1, 'auto_process',
+ '1001', '管理员', 'auto_process', NULL,
  '2026-05-08 09:00:00', '2026-05-08 09:00:00', NOW(), NOW()),
 
 -- n2 研究员A发起（发起人提交即通过）
 (1, 10102, 'n2', '研究员A发起', 'approval',
- 'preempt', 2, 'approved',
+ 'preempt', 2, 'submit',
  '1001', '管理员', 'submit', NULL,
  '2026-05-08 09:00:00', '2026-05-08 09:00:00', NOW(), NOW()),
 
 -- n3 研究员B复核（preempt 策略，研究员2 复核通过）
 (1, 10103, 'n3', '研究员B复核', 'approval',
- 'preempt', 3, 'approved',
+ 'preempt', 3, 'approve',
  '2', '研究员2', 'approve', '复核通过，债券资质符合入库标准',
  '2026-05-08 09:00:00', '2026-05-08 14:00:00', NOW(), NOW()),
 
 -- n5 研究总监审批（通过）
 (1, 10105, 'n5', '研究总监审批', 'approval',
- 'preempt', 5, 'approved',
+ 'preempt', 5, 'approve',
  '4', '研究总监', 'approve', '审批通过，同意入库',
  '2026-05-08 14:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
 
 -- n6 O32自动审批（自动完成）
 (1, 10106, 'n6', 'O32自动审批', 'auto',
- NULL, 6, 'auto_completed',
+ NULL, 6, 'auto_process',
  NULL, NULL, 'auto_process', NULL,
  '2026-05-09 10:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
 
 -- n7 结束（自动完成）
 (1, 10107, 'n7', '结束', 'end',
- NULL, 7, 'auto_completed',
+ NULL, 7, 'auto_process',
  NULL, NULL, 'auto_process', NULL,
  '2026-05-09 10:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
 
 -- ── adjust_log_id=8：24某科技K1，已提交待审核，进行中 ─────────────────────────────
 -- n1 开始节点（自动完成）
 (8, 10101, 'n1', '开始', 'start',
- NULL, 1, 'auto_completed',
- '1001', '管理员', 'submit', NULL,
+ NULL, 1, 'auto_process',
+ '1001', '管理员', 'auto_process', NULL,
  '2026-05-28 09:30:00', '2026-05-28 09:30:00', NOW(), NOW()),
 
 -- n2 研究员A发起（发起人提交即通过）
 (8, 10102, 'n2', '研究员A发起', 'approval',
- 'preempt', 2, 'approved',
+ 'preempt', 2, 'submit',
  '1001', '管理员', 'submit', NULL,
  '2026-05-28 09:30:00', '2026-05-28 09:30:00', NOW(), NOW()),
 
@@ -746,31 +746,31 @@ INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`
 VALUES
 -- adjust_log_id=18：同批流程步骤，adjust_log_id=19 通过批次号共用该流程
 (18, 'BOND202606051030001001', 10101, 'n1', '开始', 'start',
- NULL, 1, 'auto_completed',
- '1001', '管理员', 'submit', NULL,
+ NULL, 1, 'auto_process',
+ '1001', '管理员', 'auto_process', NULL,
  '2026-06-05 10:30:00', '2026-06-05 10:30:00', NOW(), NOW()),
 
 (18, 'BOND202606051030001001', 10102, 'n2', '研究员A发起', 'approval',
- 'preempt', 2, 'approved',
+ 'preempt', 2, 'submit',
  '1001', '管理员', 'submit', NULL,
  '2026-06-05 10:30:00', '2026-06-05 10:30:00', NOW(), NOW()),
 
 (18, 'BOND202606051030001001', 10103, 'n3', '研究员B复核', 'approval',
- 'preempt', 3, 'approved',
+ 'preempt', 3, 'approve',
  '2', '研究员2', 'approve', '复核通过，同意本批次调库',
  '2026-06-05 10:30:00', '2026-06-05 14:20:00', NOW(), NOW()),
 
 (18, 'BOND202606051030001001', 10105, 'n5', '研究总监审批', 'approval',
- 'preempt', 5, 'approved',
+ 'preempt', 5, 'approve',
  '4', '研究总监', 'approve', '审批通过，手工调入与互斥调出同批生效',
  '2026-06-05 14:20:00', '2026-06-06 15:00:00', NOW(), NOW()),
 
 (18, 'BOND202606051030001001', 10106, 'n6', 'O32自动审批', 'auto',
- NULL, 6, 'auto_completed',
+ NULL, 6, 'auto_process',
  NULL, NULL, 'auto_process', NULL,
  '2026-06-06 15:00:00', '2026-06-06 15:00:00', NOW(), NOW()),
 
 (18, 'BOND202606051030001001', 10107, 'n7', '结束', 'end',
- NULL, 7, 'auto_completed',
+ NULL, 7, 'auto_process',
  NULL, NULL, 'auto_process', NULL,
  '2026-06-06 15:00:00', '2026-06-06 15:00:00', NOW(), NOW());

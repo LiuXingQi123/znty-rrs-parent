@@ -91,7 +91,7 @@ VALUES
  '基金标准降库审批：研究员A发起→研究员B复核→研究总监审批→O32自动审批', '', 'active', 1001, 1001, 0,
  '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 -- 债券快速/白名单/批量/特殊策略 入库
-(105, '债券快速入库流程', 'bond:fast-inbound', 'bond', '债券快速入库：研究员A发起后直接入库，无需审批', '', 'active',
+(105, '债券快速入库流程', 'bond:fast-inbound', 'bond', '债券快速入库：研究员A发起→研究员B复核→O32自动审批后入库', '', 'active',
  1001, 1001, 0, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (106, '债券白名单入库流程', 'bond:whitelist-inbound', 'bond', '债券白名单入库：研究员A发起后直接入库', '', 'active',
  1001, 1001, 0, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
@@ -100,7 +100,7 @@ VALUES
 (108, '债券特殊策略入库流程', 'bond:special-inbound', 'bond', '债券特殊策略入库：同标准升库流程，适用于特殊投资策略标的',
  '', 'active', 1001, 1001, 0, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 -- 基金快速/白名单/批量/特殊策略 入库
-(109, '基金快速入库流程', 'fund:fast-inbound', 'fund', '基金快速入库：研究员A发起后直接入库，无需审批', '', 'active',
+(109, '基金快速入库流程', 'fund:fast-inbound', 'fund', '基金快速入库：研究员A发起→研究员B复核→O32自动审批后入库', '', 'active',
  1001, 1001, 0, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (110, '基金白名单入库流程', 'fund:whitelist-inbound', 'fund', '基金白名单入库：研究员A发起后直接入库', '', 'active',
  1001, 1001, 0, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
@@ -143,7 +143,8 @@ VALUES
 
 -- 版本说明：
 --   标准流程（flow 101-104, 108, 112, 116, 120）：7节点画布
---   简单直通流程（flow 105-107, 109-111, 113-115, 117-119）：3节点画布
+--   快速入库复核流程（flow 105, 109）：6节点画布
+--   简单直通流程（flow 106-107, 110-111, 113-115, 117-119）：3节点画布
 
 INSERT INTO `wf_flow_version`
 (`id`, `flow_id`, `flow_key`, `ver_num`, `status`, `publish_note`,
@@ -158,31 +159,34 @@ VALUES
 
 (101, 101, 'bond:standard-upgrade', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":2,"subjectName":"信用研究组"},{"subjectType":"user","subjectId":4,"subjectName":"研究员4"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"approval","label":"研究总监审批","x":400,"y":410,"shape":"rect","sub":"research-director","approvalStrategy":"all","approvalPersons":[{"subjectType":"user","subjectId":2,"subjectName":"叶伟"},{"subjectType":"user","subjectId":1001,"subjectName":"管理员"}],"approvalRemark":"终审节点，配置的全部处理人均需处理"},{"id":"n6","type":"auto","label":"O32自动审批","x":400,"y":540,"shape":"rect"},{"id":"n7","type":"end","label":"结束","x":400,"y":660,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
 (102, 102, 'bond:standard-downgrade', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":4,"subjectName":"固收部"},{"subjectType":"user","subjectId":6,"subjectName":"固收1"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"approval","label":"研究总监审批","x":400,"y":410,"shape":"rect","sub":"research-director","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":4,"subjectName":"固收部"},{"subjectType":"user","subjectId":2,"subjectName":"叶伟"}],"approvalRemark":"终审节点，按配置处理人审批"},{"id":"n6","type":"auto","label":"O32自动审批","x":400,"y":540,"shape":"rect"},{"id":"n7","type":"end","label":"结束","x":400,"y":660,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
 (103, 103, 'fund:standard-upgrade', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":7,"subjectName":"权益部"},{"subjectType":"user","subjectId":12,"subjectName":"权益3"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"approval","label":"研究总监审批","x":400,"y":410,"shape":"rect","sub":"research-director","approvalStrategy":"all","approvalPersons":[{"subjectType":"role","subjectId":7,"subjectName":"权益部"},{"subjectType":"user","subjectId":1001,"subjectName":"管理员"}],"approvalRemark":"终审节点，配置的全部处理人均需处理"},{"id":"n6","type":"auto","label":"O32自动审批","x":400,"y":540,"shape":"rect"},{"id":"n7","type":"end","label":"结束","x":400,"y":660,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
 (104, 104, 'fund:standard-downgrade', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":9,"subjectName":"量化部"},{"subjectType":"user","subjectId":13,"subjectName":"量化1"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"approval","label":"研究总监审批","x":400,"y":410,"shape":"rect","sub":"research-director","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":9,"subjectName":"量化部"},{"subjectType":"user","subjectId":1001,"subjectName":"管理员"}],"approvalRemark":"终审节点，按配置处理人审批"},{"id":"n6","type":"auto","label":"O32自动审批","x":400,"y":540,"shape":"rect"},{"id":"n7","type":"end","label":"结束","x":400,"y":660,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
--- ===== 债券快速/白名单/批量入库（直通，flow 105-107） =====
--- 节点：n1=开始 n2=研究员A发起 n3=结束
+-- ===== 债券快速入库（复核后 O32 自动审批，flow 105） =====
+-- 节点：n1=开始 n2=研究员A发起 n3=研究员B复核 n4=研究员A修改 n5=O32自动审批 n6=结束
 
 (105, 105, 'bond:fast-inbound', 1, 'active', '初始版本',
- '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":160,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"end","label":"结束","x":400,"y":280,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"直接入库","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":2,"subjectName":"信用研究组"},{"subjectType":"user","subjectId":2,"subjectName":"叶伟"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"auto","label":"O32自动审批","x":400,"y":410,"shape":"rect"},{"id":"n6","type":"end","label":"结束","x":400,"y":530,"shape":"circle"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n4","to":"n6","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+
+-- ===== 债券白名单/批量入库（直通，flow 106-107） =====
+-- 节点：n1=开始 n2=研究员A发起 n3=结束
 
 (106, 106, 'bond:whitelist-inbound', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":160,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"end","label":"结束","x":400,"y":280,"shape":"circle"}]',
@@ -197,15 +201,16 @@ VALUES
 -- ===== 债券特殊策略入库（同标准流程，flow 108） =====
 (108, 108, 'bond:special-inbound', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":2,"subjectName":"信用研究组"},{"subjectType":"user","subjectId":2,"subjectName":"叶伟"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"approval","label":"研究总监审批","x":400,"y":410,"shape":"rect","sub":"research-director","approvalStrategy":"all","approvalPersons":[{"subjectType":"user","subjectId":2,"subjectName":"叶伟"},{"subjectType":"role","subjectId":4,"subjectName":"固收部"}],"approvalRemark":"终审节点，配置的全部处理人均需处理"},{"id":"n6","type":"auto","label":"O32自动审批","x":400,"y":540,"shape":"rect"},{"id":"n7","type":"end","label":"结束","x":400,"y":660,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
--- ===== 基金快速/白名单/批量入库（直通，flow 109-111） =====
+-- ===== 基金快速入库（复核后 O32 自动审批，flow 109） =====
 (109, 109, 'fund:fast-inbound', 1, 'active', '初始版本',
- '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":160,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"end","label":"结束","x":400,"y":280,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"直接入库","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":7,"subjectName":"权益部"},{"subjectType":"user","subjectId":12,"subjectName":"权益3"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"auto","label":"O32自动审批","x":400,"y":410,"shape":"rect"},{"id":"n6","type":"end","label":"结束","x":400,"y":530,"shape":"circle"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n4","to":"n6","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
+-- ===== 基金白名单/批量入库（直通，flow 110-111） =====
 (110, 110, 'fund:whitelist-inbound', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":160,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"end","label":"结束","x":400,"y":280,"shape":"circle"}]',
  '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"直接入库","condRules":[],"condLogic":"AND"}]',
@@ -219,7 +224,7 @@ VALUES
 -- ===== 基金特殊策略入库（同标准，flow 112） =====
 (112, 112, 'fund:special-inbound', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":7,"subjectName":"权益部"},{"subjectType":"user","subjectId":12,"subjectName":"权益3"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"approval","label":"研究总监审批","x":400,"y":410,"shape":"rect","sub":"research-director","approvalStrategy":"all","approvalPersons":[{"subjectType":"role","subjectId":7,"subjectName":"权益部"},{"subjectType":"user","subjectId":1001,"subjectName":"管理员"}],"approvalRemark":"终审节点，配置的全部处理人均需处理"},{"id":"n6","type":"auto","label":"O32自动审批","x":400,"y":540,"shape":"rect"},{"id":"n7","type":"end","label":"结束","x":400,"y":660,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
 -- ===== 债券快速/白名单/批量出库（直通，flow 113-115） =====
@@ -241,7 +246,7 @@ VALUES
 -- ===== 债券特殊策略出库（同标准，flow 116） =====
 (116, 116, 'bond:special-outbound', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":4,"subjectName":"固收部"},{"subjectType":"user","subjectId":6,"subjectName":"固收1"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"approval","label":"研究总监审批","x":400,"y":410,"shape":"rect","sub":"research-director","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"user","subjectId":2,"subjectName":"叶伟"},{"subjectType":"role","subjectId":4,"subjectName":"固收部"}],"approvalRemark":"终审节点，按配置处理人审批"},{"id":"n6","type":"auto","label":"O32自动审批","x":400,"y":540,"shape":"rect"},{"id":"n7","type":"end","label":"结束","x":400,"y":660,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
 -- ===== 基金快速/白名单/批量出库（直通，flow 117-119） =====
@@ -263,7 +268,7 @@ VALUES
 -- ===== 基金特殊策略出库（同标准，flow 120） =====
 (120, 120, 'fund:special-outbound', 1, 'active', '初始版本',
  '[{"id":"n1","type":"start","label":"开始","x":400,"y":40,"shape":"circle"},{"id":"n2","type":"approval","label":"研究员A发起","x":400,"y":150,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"由流程发起人提交，系统自动完成该节点"},{"id":"n3","type":"approval","label":"研究员B复核","x":400,"y":280,"shape":"rect","sub":"researcher-b","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":9,"subjectName":"量化部"},{"subjectType":"user","subjectId":13,"subjectName":"量化1"}],"approvalRemark":"复核节点，支持角色和人员混选，任一处理人通过即可"},{"id":"n4","type":"approval","label":"研究员A修改","x":650,"y":280,"shape":"rect","sub":"researcher-a","approvalStrategy":"initiator","approvalPersons":[],"approvalRemark":"驳回后由流程发起人修改并重新提交"},{"id":"n5","type":"approval","label":"研究总监审批","x":400,"y":410,"shape":"rect","sub":"research-director","approvalStrategy":"preempt","approvalPersons":[{"subjectType":"role","subjectId":9,"subjectName":"量化部"},{"subjectType":"user","subjectId":1001,"subjectName":"管理员"}],"approvalRemark":"终审节点，按配置处理人审批"},{"id":"n6","type":"auto","label":"O32自动审批","x":400,"y":540,"shape":"rect"},{"id":"n7","type":"end","label":"结束","x":400,"y":660,"shape":"circle"}]',
- '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
+ '[{"id":"e1","from":"n1","to":"n2","label":"","condRules":[],"condLogic":"AND"},{"id":"e2","from":"n2","to":"n3","label":"提交","condRules":[],"condLogic":"AND"},{"id":"e3","from":"n3","to":"n4","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e4","from":"n4","to":"n3","label":"重新提交","condRules":[],"condLogic":"AND","routeAction":"approve"},{"id":"e5","from":"n3","to":"n5","label":"复核通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e6","from":"n5","to":"n7","label":"不通过","condRules":[{"field":"auditStatus","op":"eq","val":"不通过"}],"condLogic":"AND","routeAction":"reject"},{"id":"e7","from":"n5","to":"n6","label":"通过","condRules":[{"field":"auditStatus","op":"eq","val":"通过"}],"condLogic":"AND","routeAction":"approve"},{"id":"e8","from":"n4","to":"n7","label":"驳回","condRules":[{"field":"auditStatus","op":"eq","val":"驳回"}],"condLogic":"AND","routeAction":"reject"},{"id":"e9","from":"n6","to":"n7","label":"","condRules":[],"condLogic":"AND"}]',
  0, 0, 1, 1001, '2026-05-20 09:00:00', 1001, '2026-05-20 09:00:00', '2026-05-20 09:00:00');
 
 
@@ -332,11 +337,16 @@ VALUES
 (10406, 104, 104, 'n6', 'auto', 'O32自动审批', 'rect', 400, 540, NULL, 6, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (10407, 104, 104, 'n7', 'end', '结束', 'circle', 400, 660, NULL, 7, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
--- ===== flow 105 (version 105) — 债券快速入库，3节点 =====
+-- ===== flow 105 (version 105) — 债券快速入库，6节点 =====
 (10501, 105, 105, 'n1', 'start', '开始', 'circle', 400, 40, NULL, 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
-(10502, 105, 105, 'n2', 'approval', '研究员A发起', 'rect', 400, 160, 'researcher-a', 2, '2026-05-20 09:00:00',
+(10502, 105, 105, 'n2', 'approval', '研究员A发起', 'rect', 400, 150, 'researcher-a', 2, '2026-05-20 09:00:00',
  '2026-05-20 09:00:00'),
-(10503, 105, 105, 'n3', 'end', '结束', 'circle', 400, 280, NULL, 3, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10503, 105, 105, 'n3', 'approval', '研究员B复核', 'rect', 400, 280, 'researcher-b', 3, '2026-05-20 09:00:00',
+ '2026-05-20 09:00:00'),
+(10504, 105, 105, 'n4', 'approval', '研究员A修改', 'rect', 650, 280, 'researcher-a', 4, '2026-05-20 09:00:00',
+ '2026-05-20 09:00:00'),
+(10505, 105, 105, 'n5', 'auto', 'O32自动审批', 'rect', 400, 410, NULL, 5, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10506, 105, 105, 'n6', 'end', '结束', 'circle', 400, 530, NULL, 6, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
 -- ===== flow 106 (version 106) — 债券白名单入库，3节点 =====
 (10601, 106, 106, 'n1', 'start', '开始', 'circle', 400, 40, NULL, 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
@@ -363,11 +373,16 @@ VALUES
 (10806, 108, 108, 'n6', 'auto', 'O32自动审批', 'rect', 400, 540, NULL, 6, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (10807, 108, 108, 'n7', 'end', '结束', 'circle', 400, 660, NULL, 7, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
--- ===== flow 109 (version 109) — 基金快速入库，3节点 =====
+-- ===== flow 109 (version 109) — 基金快速入库，6节点 =====
 (10901, 109, 109, 'n1', 'start', '开始', 'circle', 400, 40, NULL, 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
-(10902, 109, 109, 'n2', 'approval', '研究员A发起', 'rect', 400, 160, 'researcher-a', 2, '2026-05-20 09:00:00',
+(10902, 109, 109, 'n2', 'approval', '研究员A发起', 'rect', 400, 150, 'researcher-a', 2, '2026-05-20 09:00:00',
  '2026-05-20 09:00:00'),
-(10903, 109, 109, 'n3', 'end', '结束', 'circle', 400, 280, NULL, 3, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10903, 109, 109, 'n3', 'approval', '研究员B复核', 'rect', 400, 280, 'researcher-b', 3, '2026-05-20 09:00:00',
+ '2026-05-20 09:00:00'),
+(10904, 109, 109, 'n4', 'approval', '研究员A修改', 'rect', 650, 280, 'researcher-a', 4, '2026-05-20 09:00:00',
+ '2026-05-20 09:00:00'),
+(10905, 109, 109, 'n5', 'auto', 'O32自动审批', 'rect', 400, 410, NULL, 5, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10906, 109, 109, 'n6', 'end', '结束', 'circle', 400, 530, NULL, 6, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 
 -- ===== flow 110 (version 110) — 基金白名单入库，3节点 =====
 (11001, 110, 110, 'n1', 'start', '开始', 'circle', 400, 40, NULL, 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
@@ -464,7 +479,7 @@ VALUES
 
 -- 标准流程：开始→发起→复核→修改/审批→O32→结束，修改驳回也直接结束
 INSERT INTO `wf_flow_edge`
-(`id`, `version_id`, `flow_id`, `edge_id`, `from_node_id`, `to_node_id`, `label`, `cond_logic`, `remark`,
+(`id`, `version_id`, `flow_id`, `edge_id`, `from_node_id`, `to_node_id`, `label`, `route_action`, `cond_logic`, `remark`,
  `crte_time`, `updt_time`)
 SELECT v.id * 1000 + e.seq
       ,v.id
@@ -473,29 +488,60 @@ SELECT v.id * 1000 + e.seq
       ,fn.id
       ,tn.id
       ,e.label
+      ,e.route_action
       ,'AND'
       ,NULL
       ,'2026-05-20 09:00:00'
       ,'2026-05-20 09:00:00'
 FROM `wf_flow_version` v
 INNER JOIN (
-    SELECT 1 AS seq, 'e1' AS edge_code, 'n1' AS from_code, 'n2' AS to_code, '' AS label
-    UNION ALL SELECT 2, 'e2', 'n2', 'n3', '提交'
-    UNION ALL SELECT 3, 'e3', 'n3', 'n4', '驳回'
-    UNION ALL SELECT 4, 'e4', 'n4', 'n3', '重新提交'
-    UNION ALL SELECT 5, 'e5', 'n3', 'n5', '复核通过'
-    UNION ALL SELECT 6, 'e6', 'n5', 'n7', '不通过'
-    UNION ALL SELECT 7, 'e7', 'n5', 'n6', '通过'
-    UNION ALL SELECT 8, 'e8', 'n4', 'n7', '驳回'
-    UNION ALL SELECT 9, 'e9', 'n6', 'n7', ''
+    SELECT 1 AS seq, 'e1' AS edge_code, 'n1' AS from_code, 'n2' AS to_code, '' AS label, NULL AS route_action
+    UNION ALL SELECT 2, 'e2', 'n2', 'n3', '提交', NULL
+    UNION ALL SELECT 3, 'e3', 'n3', 'n4', '驳回', 'reject'
+    UNION ALL SELECT 4, 'e4', 'n4', 'n3', '重新提交', 'approve'
+    UNION ALL SELECT 5, 'e5', 'n3', 'n5', '复核通过', 'approve'
+    UNION ALL SELECT 6, 'e6', 'n5', 'n7', '不通过', 'reject'
+    UNION ALL SELECT 7, 'e7', 'n5', 'n6', '通过', 'approve'
+    UNION ALL SELECT 8, 'e8', 'n4', 'n7', '驳回', 'reject'
+    UNION ALL SELECT 9, 'e9', 'n6', 'n7', '', NULL
 ) e
 INNER JOIN `wf_flow_node` fn ON fn.version_id = v.id AND fn.node_id = e.from_code
 INNER JOIN `wf_flow_node` tn ON tn.version_id = v.id AND tn.node_id = e.to_code
 WHERE v.id IN (101, 102, 103, 104, 108, 112, 116, 120);
 
+-- 快速入库复核流程：开始→发起→复核→O32→结束，复核驳回后修改再提交
+INSERT INTO `wf_flow_edge`
+(`id`, `version_id`, `flow_id`, `edge_id`, `from_node_id`, `to_node_id`, `label`, `route_action`, `cond_logic`, `remark`,
+ `crte_time`, `updt_time`)
+SELECT v.id * 1000 + e.seq
+      ,v.id
+      ,v.flow_id
+      ,e.edge_code
+      ,fn.id
+      ,tn.id
+      ,e.label
+      ,e.route_action
+      ,'AND'
+      ,NULL
+      ,'2026-05-20 09:00:00'
+      ,'2026-05-20 09:00:00'
+FROM `wf_flow_version` v
+INNER JOIN (
+    SELECT 1 AS seq, 'e1' AS edge_code, 'n1' AS from_code, 'n2' AS to_code, '' AS label, NULL AS route_action
+    UNION ALL SELECT 2, 'e2', 'n2', 'n3', '提交', NULL
+    UNION ALL SELECT 3, 'e3', 'n3', 'n4', '驳回', 'reject'
+    UNION ALL SELECT 4, 'e4', 'n4', 'n3', '重新提交', 'approve'
+    UNION ALL SELECT 5, 'e5', 'n3', 'n5', '复核通过', 'approve'
+    UNION ALL SELECT 6, 'e6', 'n4', 'n6', '驳回', 'reject'
+    UNION ALL SELECT 7, 'e7', 'n5', 'n6', '', NULL
+) e
+INNER JOIN `wf_flow_node` fn ON fn.version_id = v.id AND fn.node_id = e.from_code
+INNER JOIN `wf_flow_node` tn ON tn.version_id = v.id AND tn.node_id = e.to_code
+WHERE v.id IN (105, 109);
+
 -- 直通流程：开始→发起→结束
 INSERT INTO `wf_flow_edge`
-(`id`, `version_id`, `flow_id`, `edge_id`, `from_node_id`, `to_node_id`, `label`, `cond_logic`, `remark`,
+(`id`, `version_id`, `flow_id`, `edge_id`, `from_node_id`, `to_node_id`, `label`, `route_action`, `cond_logic`, `remark`,
  `crte_time`, `updt_time`)
 SELECT v.id * 1000 + e.seq
       ,v.id
@@ -511,6 +557,7 @@ SELECT v.id * 1000 + e.seq
            WHEN v.flow_key LIKE '%outbound' THEN '直接出库'
            ELSE '直接处理'
        END
+      ,NULL
       ,'AND'
       ,NULL
       ,'2026-05-20 09:00:00'
@@ -522,10 +569,10 @@ INNER JOIN (
 ) e
 INNER JOIN `wf_flow_node` fn ON fn.version_id = v.id AND fn.node_id = e.from_code
 INNER JOIN `wf_flow_node` tn ON tn.version_id = v.id AND tn.node_id = e.to_code
-WHERE v.id IN (105, 106, 107, 109, 110, 111, 113, 114, 115, 117, 118, 119);
+WHERE v.id IN (106, 107, 110, 111, 113, 114, 115, 117, 118, 119);
 
 INSERT INTO `wf_flow_edge_evt`
-(`id`, `version_id`, `flow_id`, `edge_id`, `from_node_id`, `to_node_id`, `label`, `cond_logic`, `remark`,
+(`id`, `version_id`, `flow_id`, `edge_id`, `from_node_id`, `to_node_id`, `label`, `route_action`, `cond_logic`, `remark`,
  `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
 SELECT `id`
       ,`version_id`
@@ -534,6 +581,7 @@ SELECT `id`
       ,`from_node_id`
       ,`to_node_id`
       ,`label`
+      ,`route_action`
       ,`cond_logic`
       ,`remark`
       ,`crte_time`
@@ -613,7 +661,9 @@ VALUES
 (10404, 10404, 'initiator', '研究员A根据驳回意见修改后重新提交', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (10405, 10405, 'preempt', '研究总监审批，不通过则流程直接结束', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 -- flow 105 债券快速入库
-(10502, 10502, 'initiator', '研究员A发起债券快速入库，直接入库无需审批', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10502, 10502, 'initiator', '研究员A发起债券快速入库申请', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10503, 10503, 'preempt', '研究员B复核债券快速入库，通过后进入O32自动审批', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10504, 10504, 'initiator', '研究员A修改后重新提交债券快速入库申请', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 -- flow 106 债券白名单入库
 (10602, 10602, 'initiator', '研究员A发起债券白名单入库，直接入库', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 -- flow 107 债券批量入库
@@ -624,7 +674,9 @@ VALUES
 (10804, 10804, 'initiator', '研究员A修改后重新提交', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (10805, 10805, 'all', '研究总监审批，不通过则流程结束', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 -- flow 109 基金快速入库
-(10902, 10902, 'initiator', '研究员A发起基金快速入库，直接入库无需审批', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10902, 10902, 'initiator', '研究员A发起基金快速入库申请', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10903, 10903, 'preempt', '研究员B复核基金快速入库，通过后进入O32自动审批', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(10904, 10904, 'initiator', '研究员A修改后重新提交基金快速入库申请', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 -- flow 110 基金白名单入库
 (11002, 11002, 'initiator', '研究员A发起基金白名单入库，直接入库', '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 -- flow 111 基金批量入库
@@ -682,10 +734,14 @@ VALUES
 (104032, 10403, 'user', 13, '量化1', 2, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (104051, 10405, 'role', 9, '量化部', 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (104052, 10405, 'user', 1001, '管理员', 2, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(105031, 10503, 'role', 2, '信用研究组', 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(105032, 10503, 'user', 2, '叶伟', 2, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (108031, 10803, 'role', 2, '信用研究组', 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (108032, 10803, 'user', 2, '叶伟', 2, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (108051, 10805, 'user', 2, '叶伟', 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (108052, 10805, 'role', 4, '固收部', 2, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(109031, 10903, 'role', 7, '权益部', 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
+(109032, 10903, 'user', 12, '权益3', 2, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (112031, 11203, 'role', 7, '权益部', 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (112032, 11203, 'user', 12, '权益3', 2, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (112051, 11205, 'role', 7, '权益部', 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),

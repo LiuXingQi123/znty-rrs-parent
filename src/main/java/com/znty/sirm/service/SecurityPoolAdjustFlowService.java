@@ -56,11 +56,29 @@ public class SecurityPoolAdjustFlowService {
 
         // 查询并校验当前待处理步骤
         IpAdjustStepBo step = securityPoolAdjustMapper.queryAdjustStepById(req.getStepId());
+        // 管理员也是处理人时，优先定位到管理员自己的待处理步骤
+        step = resolveActualProcessStep(req, step);
         // 校验当前步骤是否可处理
         validatePendingStep(req, step);
 
         // 处理当前步骤并按流程配置推进
         return processAdjustAudit(req, step);
+    }
+
+    /**
+     * 解析实际处理步骤：管理员本人也在当前节点处理人列表中时，优先处理管理员自己的步骤。
+     */
+    private IpAdjustStepBo resolveActualProcessStep(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
+        if (step == null || !isAdminOperator(req) || !hasText(req.getHandlerId())) {
+            return step;
+        }
+        if (req.getHandlerId().equals(step.getHandlerId())) {
+            return step;
+        }
+        // 查询当前节点中管理员自己的待处理步骤
+        IpAdjustStepBo adminStep = securityPoolAdjustMapper.queryPendingStepByHandler(
+                step.getAdjustLogId(), step.getAdjustBatchNo(), step.getFlowNodeId(), req.getHandlerId());
+        return adminStep != null ? adminStep : step;
     }
 
     /**
@@ -111,15 +129,18 @@ public class SecurityPoolAdjustFlowService {
     private SecurityPoolAdjustAuditDto processAdjustAudit(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
         // 构建实际写入的处理意见
         String processComment = buildProcessComment(req, step);
-        String stepStatus = "approve".equals(req.getProcessAction()) ? "approved" : "rejected";
+        // 根据本次处理节点语义解析步骤整体结果
+        String stepStatus = resolveStepStatusForProcess(step, req.getProcessAction());
+        // 根据本次处理节点语义解析个人处理动作
+        String processAction = resolveProcessActionForStore(req.getProcessAction(), stepStatus);
         int updated = securityPoolAdjustMapper.editAdjustStepProcess(
-                step.getId(), stepStatus, req.getProcessAction(), processComment);
+                step.getId(), stepStatus, processAction, processComment);
         if (updated == 0) {
             throw new BizException("当前流程步骤已处理，请刷新后重试");
         }
 
         // 判断当前审批节点是否已完成
-        boolean nodeCompleted = completeCurrentApprovalNodeIfNeeded(step, req.getProcessAction());
+        boolean nodeCompleted = completeCurrentApprovalNodeIfNeeded(step, req.getProcessAction(), stepStatus);
         if (!nodeCompleted) {
             String currentAuditStatus = queryCurrentAuditStatus(step);
             // 构建审批处理返回对象
@@ -158,7 +179,7 @@ public class SecurityPoolAdjustFlowService {
     /**
      * 根据审批策略判断当前节点是否已经完成。
      */
-    private boolean completeCurrentApprovalNodeIfNeeded(IpAdjustStepBo step, String processAction) {
+    private boolean completeCurrentApprovalNodeIfNeeded(IpAdjustStepBo step, String processAction, String stepStatus) {
         if ("all".equals(step.getApprovalStrategy()) && "approve".equals(processAction)) {
             int pendingCount = securityPoolAdjustMapper.queryPendingStepCountByNode(
                     step.getAdjustLogId(), step.getAdjustBatchNo(), step.getFlowNodeId());
@@ -167,8 +188,39 @@ public class SecurityPoolAdjustFlowService {
 
         // 抢占审批或未配置策略时，一个人通过即完成当前节点
         securityPoolAdjustMapper.editOtherPendingStepSkipped(
-                step.getId(), step.getAdjustLogId(), step.getAdjustBatchNo(), step.getFlowNodeId());
+                step.getId(), step.getAdjustLogId(), step.getAdjustBatchNo(), step.getFlowNodeId(), stepStatus);
         return true;
+    }
+
+    /**
+     * 根据处理节点语义解析步骤整体结果，修改/发起节点的正向动作展示为提交。
+     */
+    private String resolveStepStatusForProcess(IpAdjustStepBo step, String processAction) {
+        if ("approve".equals(processAction) && isSubmitSemanticStep(step)) {
+            return "submit";
+        }
+        return processAction;
+    }
+
+    /**
+     * 根据步骤整体结果解析实际存储的个人处理动作。
+     */
+    private String resolveProcessActionForStore(String processAction, String stepStatus) {
+        if ("submit".equals(stepStatus)) {
+            return "submit";
+        }
+        return processAction;
+    }
+
+    /**
+     * 判断当前步骤是否是提交语义节点。
+     */
+    private boolean isSubmitSemanticStep(IpAdjustStepBo step) {
+        if (step == null) {
+            return false;
+        }
+        String text = String.valueOf(step.getNodeLabel()) + " " + String.valueOf(step.getNodeCode()) + " " + String.valueOf(step.getNodeType());
+        return text.contains("发起") || text.contains("修改") || text.contains("提交");
     }
 
     /**
@@ -193,7 +245,7 @@ public class SecurityPoolAdjustFlowService {
             if (isAutoApprovalNode(nextNode)) {
                 // O32 自动审批节点直接记录为自动完成，并继续流转到结束节点
                 insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                        "auto_completed", null, null, "auto_process", null, now);
+                        "auto_process", null, null, "auto_process", null, now);
                 FlowNodeBo afterNode = findNextNode(snapshot, nextNode, prevNode, processAction);
                 prevNode = nextNode;
                 nextNode = afterNode;
@@ -210,7 +262,7 @@ public class SecurityPoolAdjustFlowService {
 
             // 插入自动完成节点步骤
             insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                    "auto_completed", null, null, "auto_process", null, now);
+                    "auto_process", null, null, "auto_process", null, now);
 
             if ("end".equals(nextNode.getNodeType())) {
                 result.finished = true;
@@ -248,7 +300,7 @@ public class SecurityPoolAdjustFlowService {
             int sortOrder = nextNode.getSortOrder() != null ? nextNode.getSortOrder() : 1;
             // 插入自动完成节点步骤
             insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                    "auto_completed", null, null, "auto_process", null, now);
+                    "auto_process", null, null, "auto_process", null, now);
             if ("end".equals(nextNode.getNodeType())) {
                 return true;
             }
@@ -517,75 +569,39 @@ public class SecurityPoolAdjustFlowService {
             }
         }
 
+        if (outEdges.size() == 1) {
+            return snapshot.getNodeMap().get(outEdges.get(0).getToNodeId());
+        }
+
         for (FlowEdgeBo edge : outEdges) {
-            // 判断连线是否匹配审批动作
-            if (matchesProcessAction(edge, snapshot, processAction)) {
+            // 预留条件路由扩展入口
+            if (matchesConditionRoute(edge, snapshot, processAction)) {
+                return snapshot.getNodeMap().get(edge.getToNodeId());
+            }
+            // 根据审批动作匹配流转连线
+            if (matchesActionRoute(edge, processAction)) {
                 return snapshot.getNodeMap().get(edge.getToNodeId());
             }
         }
-        for (FlowEdgeBo edge : outEdges) {
-            // 排除驳回或不通过方向的连线
-            if (!isNegativeEdge(edge, snapshot)) {
-                return snapshot.getNodeMap().get(edge.getToNodeId());
-            }
-        }
-        return snapshot.getNodeMap().get(outEdges.get(0).getToNodeId());
+        throw new BizException("流程配置异常：节点[" + currentNode.getLabel() + "]缺少匹配审批动作的流转连线");
     }
 
     /**
-     * 判断连线是否匹配当前审批动作。
+     * 判断条件路由是否匹配当前审批动作。
      */
-    private boolean matchesProcessAction(FlowEdgeBo edge, FlowSnapshot snapshot, String processAction) {
-        List<EdgeCondRuleBo> rules = snapshot.getCondRuleMap().get(edge.getId());
-        if (rules != null) {
-            for (EdgeCondRuleBo rule : rules) {
-                // 判断审核状态条件是否匹配审批动作
-                if (matchesAuditStatusRule(rule, processAction)) {
-                    return true;
-                }
-            }
-        }
-        String label = edge.getLabel();
-        // 条件缺失时判断连线标签是否匹配审批动作
-        return matchesActionText(label, processAction);
+    private boolean matchesConditionRoute(FlowEdgeBo edge, FlowSnapshot snapshot, String processAction) {
+        // 后续如启用条件引擎，在这里统一支持 condLogic 的 AND/OR 和多字段条件判断
+        return false;
     }
 
     /**
-     * 判断审核状态条件是否匹配当前审批动作。
+     * 判断连线动作是否匹配当前审批动作。
      */
-    private boolean matchesAuditStatusRule(EdgeCondRuleBo rule, String processAction) {
-        if (rule == null || !"auditStatus".equals(rule.getFieldCode())) {
+    private boolean matchesActionRoute(FlowEdgeBo edge, String processAction) {
+        if (edge == null || edge.getRouteAction() == null || processAction == null) {
             return false;
         }
-        String fieldVal = rule.getFieldVal();
-        if ("reject".equals(processAction)) {
-            return fieldVal != null && (fieldVal.contains("驳回") || fieldVal.contains("不通过"));
-        }
-        return fieldVal != null && fieldVal.contains("通过") && !fieldVal.contains("不通过") && !fieldVal.contains("驳回");
-    }
-
-    /**
-     * 判断流程中是否存在审核状态条件规则。
-     */
-    private boolean hasAuditStatusRule(FlowSnapshot snapshot) {
-        for (List<EdgeCondRuleBo> rules : snapshot.getCondRuleMap().values()) {
-            if (rules == null) {
-                continue;
-            }
-            for (EdgeCondRuleBo rule : rules) {
-                if (rule != null && "auditStatus".equals(rule.getFieldCode())) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 保留其他流程条件类型的扩展入口。
-     */
-    private boolean matchesReservedConditionRule(EdgeCondRuleBo rule, String processAction) {
-        return false;
+        return processAction.equals(edge.getRouteAction());
     }
 
     /**
@@ -719,57 +735,6 @@ public class SecurityPoolAdjustFlowService {
         // 查询同批次首条调库记录获取当前审核状态
         IpAdjustLogBo log = queryFirstAdjustLog(step);
         return log != null ? log.getAuditStatus() : "";
-    }
-
-    /**
-     * 判断连线是否包含非审核状态条件。
-     */
-    private boolean hasReservedConditionRule(FlowEdgeBo edge, FlowSnapshot snapshot) {
-        List<EdgeCondRuleBo> rules = snapshot.getCondRuleMap().get(edge.getId());
-        if (rules == null) {
-            return false;
-        }
-        for (EdgeCondRuleBo rule : rules) {
-            // 预留非审核状态条件的匹配入口
-            if (rule != null && !"auditStatus".equals(rule.getFieldCode()) && matchesReservedConditionRule(rule, "")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 判断连线文本是否匹配当前审批动作。
-     */
-    private boolean matchesActionText(String text, String processAction) {
-        if (text == null) {
-            return false;
-        }
-        if ("reject".equals(processAction)) {
-            return text.contains("驳回") || text.contains("不通过");
-        }
-        return text.contains("通过") && !text.contains("不通过") && !text.contains("驳回");
-    }
-
-    /**
-     * 判断连线是否属于驳回或不通过方向。
-     */
-    private boolean isNegativeEdge(FlowEdgeBo edge, FlowSnapshot snapshot) {
-        String label = edge.getLabel();
-        if (label != null && (label.contains("驳回") || label.contains("不通过"))) {
-            return true;
-        }
-        List<EdgeCondRuleBo> rules = snapshot.getCondRuleMap().get(edge.getId());
-        if (rules == null) {
-            return false;
-        }
-        for (EdgeCondRuleBo rule : rules) {
-            String fieldVal = rule != null ? rule.getFieldVal() : null;
-            if (fieldVal != null && (fieldVal.contains("驳回") || fieldVal.contains("不通过"))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

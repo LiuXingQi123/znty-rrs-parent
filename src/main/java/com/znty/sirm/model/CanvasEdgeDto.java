@@ -19,6 +19,8 @@ public class CanvasEdgeDto {
     private String to;
     /** 连线标签 */
     private String label;
+    /** 流转动作：approve=通过 / reject=驳回 / auto=自动 / submit=提交 */
+    private String routeAction;
     /** 连线备注 */
     private String remark;
     /** 条件逻辑：and/or */

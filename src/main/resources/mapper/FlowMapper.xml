@@ -406,6 +406,7 @@
         ,from_node_id
         ,to_node_id
                                   ,label
+                                  ,route_action
                                   ,cond_logic
                                   ,remark
                                   ,crte_time
@@ -417,6 +418,7 @@
                 ,#{fromNodeId}
                 ,#{toNodeId}
                 ,#{label}
+                ,#{routeAction}
                 ,#{condLogic}
                 ,#{remark}
                 ,#{crteTime}
@@ -760,6 +762,7 @@
         ,from_node_id
         ,to_node_id
         ,label
+        ,route_action
         ,cond_logic
         ,remark
         ,crte_time
@@ -775,6 +778,7 @@
         ,#{fromNodeId}
         ,#{toNodeId}
         ,#{label}
+        ,#{routeAction}
         ,#{condLogic}
         ,#{remark}
         ,#{crteTime}

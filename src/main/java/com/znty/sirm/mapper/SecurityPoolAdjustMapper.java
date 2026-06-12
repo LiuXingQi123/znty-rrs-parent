@@ -87,6 +87,12 @@ public interface SecurityPoolAdjustMapper {
     /** 根据 ID 查询流程步骤 */
     IpAdjustStepBo queryAdjustStepById(@Param("id") Long id);
 
+    /** 按处理人查询同批次同节点待处理步骤 */
+    IpAdjustStepBo queryPendingStepByHandler(@Param("adjustLogId") Long adjustLogId,
+                                             @Param("adjustBatchNo") String adjustBatchNo,
+                                             @Param("flowNodeId") Long flowNodeId,
+                                             @Param("handlerId") String handlerId);
+
     /** 更新当前待处理步骤的处理结果 */
     int editAdjustStepProcess(@Param("id") Long id,
                               @Param("stepStatus") String stepStatus,
@@ -97,7 +103,8 @@ public interface SecurityPoolAdjustMapper {
     int editOtherPendingStepSkipped(@Param("id") Long id,
                                     @Param("adjustLogId") Long adjustLogId,
                                     @Param("adjustBatchNo") String adjustBatchNo,
-                                    @Param("flowNodeId") Long flowNodeId);
+                                    @Param("flowNodeId") Long flowNodeId,
+                                    @Param("stepStatus") String stepStatus);
 
     /** 查询同批次同节点剩余待处理步骤数量 */
     int queryPendingStepCountByNode(@Param("adjustLogId") Long adjustLogId,
