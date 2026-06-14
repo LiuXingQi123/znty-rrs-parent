@@ -1,6 +1,6 @@
 -- ============================================================
 -- znty-sirm 投资池初始化 - 演示数据脚本
--- MySQL version: 8.0.33
+-- MySQL version: 8.0.28
 -- 说明：首次部署执行，插入投资池、角色、人员等测试数据
 -- ============================================================
 USE `znty_sirm`;
@@ -174,7 +174,7 @@ INSERT INTO `ip_investment_pool` (`id`, `parent_id`, `pool_code`, `pool_name`, `
  NULL, NULL, NULL,
  NULL, NULL, 5, 1, 'enabled', 0, NOW(), NOW());
 
--- 初始化投资池互斥关系（信用债库 2-6 互斥，专户产品 10-14 互斥）
+-- 初始化投资池关系：信用债库与专户产品子池互斥
 INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`)
 SELECT a.id,
        'in_mutex',
@@ -205,27 +205,35 @@ WHERE a.parent_id IN (1, 9)
   AND a.is_deleted = 0
   AND b.is_deleted = 0;
 
-INSERT INTO `ip_pool_relation_evt` (`id`, `pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
-SELECT id, pool_id, relation_type, relation_pool_id, relation_pool_name, sort_order, is_deleted, crte_time, updt_time, 'system', NOW(), '新增'
-FROM ip_pool_relation;
+-- 补齐来源、限制、联动和弹性禁投关系，覆盖全部关系类型
+INSERT INTO `ip_pool_relation` (
+    `pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `remark`,
+    `is_deleted`, `crte_time`, `updt_time`
+) VALUES
+(3,  'source',            2,  '一级库',   1, '二级库调整来源于一级库',               0, NOW(), NOW()),
+(4,  'in_restrict',       15, '禁投池',   1, '禁投证券不得调入信用债三级库',         0, NOW(), NOW()),
+(4,  'out_restrict',      15, '禁投池',   2, '命中禁投条件时限制直接调出',           0, NOW(), NOW()),
+(7,  'in_linked',         2,  '一级库',   1, '境外债调入时联动维护信用债一级库',     0, NOW(), NOW()),
+(7,  'out_linked',        2,  '一级库',   2, '境外债调出时联动维护信用债一级库',     0, NOW(), NOW()),
+(8,  'in_soft_restrict',  15, '禁投池',   1, '命中禁投池时提示并允许授权后继续',     0, NOW(), NOW()),
+(8,  'out_soft_restrict', 15, '禁投池',   2, '调出时保留禁投风险提示',               0, NOW(), NOW());
 
-INSERT INTO `ip_investment_pool_evt` (
-    `id`, `parent_id`, `pool_code`, `pool_name`, `pool_type`, `pool_level`, `market_codes`, `variety_codes`,
-    `hs_pool_name`, `in_flow_id`, `in_flow_key`, `in_flow_name`, `out_flow_id`, `out_flow_key`, `out_flow_name`,
-    `simple_in_flow_id`, `simple_in_flow_key`, `simple_in_flow_name`, `simple_out_flow_id`, `simple_out_flow_key`,
-    `simple_out_flow_name`, `batch_in_flow_id`, `batch_in_flow_key`, `batch_in_flow_name`, `batch_out_flow_id`,
-    `batch_out_flow_key`, `batch_out_flow_name`, `in_report_restriction`, `out_report_restriction`,
-    `max_capacity`, `outer_sort`, `inner_sort`, `description`, `status`,
-    `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`
-)
-SELECT `id`, `parent_id`, `pool_code`, `pool_name`, `pool_type`, `pool_level`, `market_codes`, `variety_codes`,
-       `hs_pool_name`, `in_flow_id`, `in_flow_key`, `in_flow_name`, `out_flow_id`, `out_flow_key`, `out_flow_name`,
-       `simple_in_flow_id`, `simple_in_flow_key`, `simple_in_flow_name`, `simple_out_flow_id`, `simple_out_flow_key`,
-       `simple_out_flow_name`, `batch_in_flow_id`, `batch_in_flow_key`, `batch_in_flow_name`, `batch_out_flow_id`,
-       `batch_out_flow_key`, `batch_out_flow_name`, `in_report_restriction`, `out_report_restriction`,
-       `max_capacity`, `outer_sort`, `inner_sort`, `description`, `status`,
-       `is_deleted`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
-FROM `ip_investment_pool`;
+-- 自动调入调出规则，rule_id 对应 sirm_rule_demo_data.sql
+INSERT INTO `ip_pool_auto_rule` (
+    `id`, `pool_id`, `rule_type`, `rule_id`, `rule_desc`, `is_deleted`, `crte_time`, `updt_time`
+) VALUES
+(1,  2,  'auto_in',  1,  '信用债分级准入结果为一级库时自动调入',       0, NOW(), NOW()),
+(2,  3,  'auto_in',  1,  '信用债分级准入结果为二级库时自动调入',       0, NOW(), NOW()),
+(3,  4,  'auto_in',  1,  '信用债分级准入结果为三级库时自动调入',       0, NOW(), NOW()),
+(4,  5,  'auto_in',  3,  '信用风险评分达到四级库区间时自动调入',       0, NOW(), NOW()),
+(5,  6,  'auto_in',  3,  '高风险但未触发禁投时自动调入五级库',         0, NOW(), NOW()),
+(6,  15, 'auto_in',  5,  '风险预警规则触发时自动列入禁投池',           0, NOW(), NOW()),
+(7,  2,  'auto_out', 3,  '信用风险评分恶化时自动调出一级库',           0, NOW(), NOW()),
+(8,  3,  'auto_out', 5,  '触发风险预警时自动调出二级库',               0, NOW(), NOW()),
+(9,  7,  'auto_in',  4,  '证券投资准入检查通过后自动调入境外债库',     0, NOW(), NOW()),
+(10, 8,  'auto_in',  4,  '证券投资准入检查通过后自动调入转债库',       0, NOW(), NOW()),
+(11, 10, 'auto_in', 10,  '大额债券交易审批通过后自动调入专户一级库',   0, NOW(), NOW()),
+(12, 15, 'auto_out', 5,  '风险预警解除并复核通过后自动移出禁投池',     0, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
 -- 2. 初始化角色和人员数据
@@ -240,7 +248,8 @@ INSERT INTO `t_sys_role` (`id`, `name`, `parent_id`, `sort_order`, `enable`, `cr
 (6, '信用组',       4,    6, 1, NOW(), NOW()),
 (7, '权益部',       NULL, 7, 1, NOW(), NOW()),
 (8, '行业研究组',   7,    8, 1, NOW(), NOW()),
-(9, '量化部',       NULL, 9, 1, NOW(), NOW());
+(9, '量化部',       NULL, 9, 1, NOW(), NOW()),
+(10, '风险管理部',  NULL, 10, 1, NOW(), NOW());
 
 -- 人员
 INSERT INTO `t_sys_user` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`) VALUES
@@ -258,6 +267,7 @@ INSERT INTO `t_sys_user` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_ti
 (12,  '权益3', 'quanyi3', 0, NOW(), NOW()),
 (13,  '量化1', 'lianghua1', 0, NOW(), NOW()),
 (14,  '量化2', 'lianghua2', 0, NOW(), NOW()),
+(15,  '风控经理', 'fengkongjingli', 0, NOW(), NOW()),
 (1001,  '管理员', 'admin', 0, NOW(), NOW());
 
 INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`) VALUES
@@ -280,19 +290,8 @@ INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `u
 (17, 11, 7, 0, NOW(), NOW()),  -- 权益2: 权益部
 (18, 12, 8, 0, NOW(), NOW()),  -- 权益3: 行业研究组
 (19, 13, 9, 0, NOW(), NOW()),  -- 量化1: 量化部
-(20, 14, 9, 0, NOW(), NOW());  -- 量化2: 量化部
-
-INSERT INTO `t_sys_role_evt` (`id`, `name`, `parent_id`, `sort_order`, `enable`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
-SELECT `id`, `name`, `parent_id`, `sort_order`, `enable`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
-FROM `t_sys_role`;
-
-INSERT INTO `t_sys_user_evt` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
-SELECT `id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
-FROM `t_sys_user`;
-
-INSERT INTO `t_sys_user_role_evt` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`)
-SELECT `id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
-FROM `t_sys_user_role`;
+(20, 14, 9, 0, NOW(), NOW()),  -- 量化2: 量化部
+(21, 15, 10, 0, NOW(), NOW()); -- 风控经理: 风险管理部
 
 -- ----------------------------------------------------------------------------
 -- 3. 初始化投资池权限配置
@@ -343,12 +342,10 @@ INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, 
 (7,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
 (8,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
 (9,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
-(15, 'viewable',        'role', 9, '量化部', 0, NOW(), NOW());
-
-INSERT INTO `ip_pool_permission_evt` (
-    `pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`,
-    `is_deleted`, `crte_time`, `updt_time`, `opter_id`, `opt_time`, `oprt_type`
-)
-SELECT `pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`,
-       `is_deleted`, `crte_time`, `updt_time`, 'system', NOW(), '新增'
-FROM `ip_pool_permission`;
+(15, 'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
+-- 风险管理部：禁投池可调整，全部一级目录可查看
+(15, 'adjustable',      'role', 10, '风险管理部', 0, NOW(), NOW()),
+(1,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW()),
+(7,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW()),
+(8,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW()),
+(9,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW());

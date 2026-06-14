@@ -1,6 +1,6 @@
 -- ============================================================
 -- znty-sirm 证券信息表 - 演示数据脚本
--- MySQL version: 8.0.33
+-- MySQL version: 8.0.28
 -- 说明：首次部署执行，插入测试用证券数据
 -- ============================================================
 USE znty_sirm;
@@ -273,11 +273,11 @@ VALUES
 -- ============================================================================
 -- 证券池调库记录表 - 测试数据
 -- ============================================================================
--- 说明：涵盖全部7种审核状态（-1/00/10/11/20/21/99），且已入池记录（status=20）
+-- 说明：涵盖全部7种实际使用的审核状态（00/10/11/20/21/32/99），且已入池记录（status=20）
 --       均指向叶子节点，与 ip_pool_status 保持一致
 -- ============================================================================
 
-INSERT INTO `ip_adjust_log` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
                              `target_pool_id`, `target_pool_name`, `pool_type`,
                              `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
                              `attachment_files`, `material_files`,
@@ -287,7 +287,7 @@ VALUES
 -- ── 已入池记录（对应 ip_pool_status 全量数据）────────────────────────────────
 
 -- 1. 审批通过-已入池：信用债大库/一级库（pool_id=2，叶子节点）
-('101901234', '24某交投MTN001', 'mtn', '手工调整', '调入',
+(1, '101901234', '24某交投MTN001', 'mtn', '手工调整', '调入',
  2, '一级库', 'credit_bond',
  '20', '1001', '管理员', '央企中期票据主体评级AAA，符合一级库准入标准', '审批通过，已入池',
  '["report_20260508_001.pdf"]', '["material_20260508_001.pdf"]',
@@ -295,7 +295,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 2. 审批通过-已入池：信用债大库/二级库（pool_id=3，叶子节点，联动调入）
-('102002345', '23某城投债', 'company_bond', '联动调整', '调入',
+(2, '102002345', '23某城投债', 'company_bond', '联动调整', '调入',
  3, '二级库', 'credit_bond',
  '20', '1001', '管理员', '城投债评级AA+，联动调入信用债二级库', '审批通过，已入池',
  '["report_20260510_002.pdf"]', '["material_20260510_002.pdf"]',
@@ -303,7 +303,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 3. 审批通过-已入池：转债库（pool_id=8，无父级叶子节点）
-('103003456', '24某能E1', 'exchangeable_bond', '手工调整', '调入',
+(3, '103003456', '24某能E1', 'exchangeable_bond', '手工调整', '调入',
  8, '转债库', 'convertible_bond',
  '20', '1001', '管理员', '可交换公司债符合转债库准入条件', '审批通过，已入池',
  '["report_20260512_003.pdf"]', NULL,
@@ -311,7 +311,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 4. 审批通过-已入池：专户产品/一级库（pool_id=10，叶子节点，与信用债"一级库"同名需靠父级区分）
-('104004567', '23某行二级资本债01', 'bank_bond', '手工调整', '调入',
+(4, '104004567', '23某行二级资本债01', 'bank_bond', '手工调整', '调入',
  10, '一级库', 'special_account',
  '20', '1001', '管理员', '银行二级资本债符合专户产品一级库准入要求', '审批通过，已入池',
  '["report_20260515_004.pdf"]', '["material_20260515_004.pdf"]',
@@ -319,7 +319,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 5. 审批通过-已入池：专户产品/二级库（pool_id=11，叶子节点，Excel批量导入）
-('105005678', '24某地产CP001', 'cp', 'Excel导入', '调入',
+(5, '105005678', '24某地产CP001', 'cp', 'Excel导入', '调入',
  11, '二级库', 'special_account',
  '20', '1001', '管理员', '批量Excel导入，短期融资券调入专户产品二级库管理', '审批通过，已入池',
  '["batch_import_20260518.xlsx"]', '["approval_20260518_signed.pdf"]',
@@ -327,7 +327,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 6. 审批通过-已入池：信用债大库/一级库（pool_id=2，与第1条同池，验证同池多证券）
-('106006789', '22某电力MTN001', 'mtn', '手工调整', '调入',
+(6, '106006789', '22某电力MTN001', 'mtn', '手工调整', '调入',
  2, '一级库', 'credit_bond',
  '20', '1001', '管理员', '央企永续中票主体评级AAA，符合一级库准入标准', '审批通过，已入池',
  '["report_20260519_006.pdf"]', '["material_20260519_006.pdf"]',
@@ -335,7 +335,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 7. 审批通过-已入池：境外债库（pool_id=7，无父级叶子节点）
-('109009012', '25某国贸SCP001', 'scp', '手工调整', '调入',
+(7, '109009012', '25某国贸SCP001', 'scp', '手工调整', '调入',
  7, '境外债库', 'offshore_bond',
  '20', '1001', '管理员', '国际贸易短融符合境外债库准入标准', '审批通过，已入池',
  '["report_20260522_007.pdf"]', NULL,
@@ -345,7 +345,7 @@ VALUES
 -- ── 进行中/终态记录（覆盖其余审核状态）───────────────────────────────────────
 
 -- 8. 已提交待审核（00）：科技公司债申请调入信用债三级库
-('107007890', '24某科技K1', 'company_bond', '手工调整', '调入',
+(8, '107007890', '24某科技K1', 'company_bond', '手工调整', '调入',
  4, '三级库', 'credit_bond',
  '00', '1001', '管理员', '科技创新公司债申请调入信用债三级库', NULL,
  '["report_20260528_008.pdf"]', '["material_20260528_008.pdf"]',
@@ -353,7 +353,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 9. 审核通过待审批（10）：ABS申请调入信用债四级库，待审批
-('108008901', '23某资A1', 'abs', '手工调整', '调入',
+(9, '108008901', '23某资A1', 'abs', '手工调整', '调入',
  5, '四级库', 'credit_bond',
  '10', '1001', '管理员', 'ABS优先级产品申请调入信用债四级库', '审核通过，提交审批',
  '["report_20260526_009.pdf"]', '["material_20260526_009.pdf"]',
@@ -361,7 +361,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 10. 驳回待修改（11）：项目收益债申请调入二级库，一级审核驳回
-('110010123', '23某基建PRN001', 'company_bond', '手工调整', '调入',
+(10, '110010123', '23某基建PRN001', 'company_bond', '手工调整', '调入',
  3, '二级库', 'credit_bond',
  '11', '1001', '管理员', '项目收益债申请调入信用债二级库', '一级审核驳回：附件研报材料不足，请补充后重新提交',
  '["report_20260524_010.pdf"]', NULL,
@@ -369,7 +369,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 11. 审批驳回（21）：ABS申请调入五级库，二级审批驳回，流程终止
-('108008901', '23某资A1', 'abs', '手工调整', '调入',
+(11, '108008901', '23某资A1', 'abs', '手工调整', '调入',
  6, '五级库', 'credit_bond',
  '21', '1001', '管理员', 'ABS产品申请调入信用债五级库', '二级审批驳回：ABS产品不满足信用债池准入资质，流程终止',
  '["report_20260522_011.pdf"]', '["material_20260522_011.pdf"]',
@@ -377,25 +377,25 @@ VALUES
  0, NOW(), NOW()),
 
 -- 12. 发起人已撤回（99）：科技公司债早期申请一级库，后主动撤回改申请三级库（见第8条）
-('107007890', '24某科技K1', 'company_bond', '手工调整', '调入',
+(12, '107007890', '24某科技K1', 'company_bond', '手工调整', '调入',
  2, '一级库', 'credit_bond',
  '99', '1001', '管理员', '申请将科技公司债调入信用债一级库', '发起人主动撤回，已重新申请三级库',
  '["report_20260520_012.pdf"]', NULL,
  '2026-05-20 11:00:00', NULL, NULL,
  0, NOW(), NOW()),
 
--- 13. 无效调整（-1）：基建债批量调整校验不通过
-('110010123', '23某基建PRN001', 'company_bond', '手动批量调整', '调入',
+-- 13. 审批通过（20）：基建债批量调入二级库
+(13, '110010123', '23某基建PRN001', 'company_bond', '手动批量调整', '调入',
  3, '二级库', 'credit_bond',
- '-1', '1001', '管理员', '批量操作将项目收益债调入信用债二级库', '校验不通过：缺少必要附件材料，批量操作中止',
- '["batch_list_20260523.xlsx"]', NULL,
- '2026-05-23 17:00:00', NULL, NULL,
+ '20', '1001', '管理员', '批量操作将项目收益债调入信用债二级库', '批量直通流程处理完成',
+ '["batch_list_20260523.xlsx"]', '["material_batch_20260523.pdf"]',
+ '2026-05-23 17:00:00', '2026-05-23 17:05:00', '2026-05-23 17:05:00',
  0, NOW(), NOW()),
 
 -- ── 禁投池相关调整记录（pool_id=15）────────────────────────────────────────────
 
 -- 14. 审批通过-已入禁投池：地产CP债信用资质恶化
-('105005678', '24某地产CP001', 'cp', '手工调整', '调入',
+(14, '105005678', '24某地产CP001', 'cp', '手工调整', '调入',
  15, '禁投池', 'forbidden',
  '20', '1001', '管理员', '发行人资产负债率持续攀升，流动性紧张，触发禁投条件', '审批通过，已列入禁投池',
  '["report_forbidden_20260510_001.pdf"]', '["material_forbidden_20260510_001.pdf"]',
@@ -403,7 +403,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 15. 审批通过-已入禁投池：科技公司债主体评级下调
-('107007890', '24某科技K1', 'company_bond', '手工调整', '调入',
+(15, '107007890', '24某科技K1', 'company_bond', '手工调整', '调入',
  15, '禁投池', 'forbidden',
  '20', '1', '研究员1', '主体评级由AA+下调至AA，内部评级触线，列入禁投', '审批通过，已列入禁投池',
  '["report_forbidden_20260515_002.pdf"]', NULL,
@@ -411,7 +411,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 16. 已提交待审核（00）：ABS申请列入禁投池
-('108008901', '23某资A1', 'abs', '手工调整', '调入',
+(16, '108008901', '23某资A1', 'abs', '手工调整', '调入',
  15, '禁投池', 'forbidden',
  '00', '2', '研究员2', '基础资产逾期率超阈值，存在流动性风险，申请列入禁投', NULL,
  '["report_forbidden_20260601_003.pdf"]', '["material_forbidden_20260601_003.pdf"]',
@@ -419,7 +419,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 17. 审批通过-已调出禁投池（解禁）：地产CP债主体恢复正常，移出禁投
-('105005678', '24某地产CP001', 'cp', '手工调整', '调出',
+(17, '105005678', '24某地产CP001', 'cp', '手工调整', '调出',
  15, '禁投池', 'forbidden',
  '20', '1001', '管理员', '发行人完成债务重组，流动性恢复正常，评级上调，解除禁投', '审批通过，已移出禁投池',
  '["report_forbidden_20260525_004.pdf"]', NULL,
@@ -590,10 +590,25 @@ VALUES
  '2', '研究员2', 'approve', '复核通过，债券资质符合入库标准',
  '2026-05-08 09:00:00', '2026-05-08 14:00:00', NOW(), NOW()),
 
+(1, 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approve',
+ '1', '研究员1', 'skipped', '抢占审批已由研究员2处理',
+ '2026-05-08 09:00:00', '2026-05-08 14:00:00', NOW(), NOW()),
+
+(1, 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approve',
+ '4', '研究员4', 'skipped', '抢占审批已由研究员2处理',
+ '2026-05-08 09:00:00', '2026-05-08 14:00:00', NOW(), NOW()),
+
 -- n5 研究总监审批（通过）
 (1, 10105, 'n5', '研究总监审批', 'approval',
- 'preempt', 5, 'approve',
- '4', '研究总监', 'approve', '审批通过，同意入库',
+ 'all', 5, 'approve',
+ '2', '叶伟', 'approve', '审批通过，同意入库',
+ '2026-05-08 14:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
+
+(1, 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'approve',
+ '1001', '管理员', 'approve', '会签审批通过，同意入库',
  '2026-05-08 14:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
 
 -- n6 O32自动审批（自动完成）
@@ -634,7 +649,7 @@ VALUES
 
 (8, 10103, 'n3', '研究员B复核', 'approval',
  'preempt', 3, 'pending',
- '3', '研究员3', NULL, NULL,
+ '4', '研究员4', NULL, NULL,
  '2026-05-28 09:30:00', NULL, NOW(), NOW());
 
 -- ============================================================================
@@ -647,7 +662,7 @@ VALUES
 UPDATE `ip_adjust_log`
 SET `adjust_batch_no` = CASE `id`
     WHEN 1 THEN 'BOND202605080900001001'
-    WHEN 2 THEN 'BOND202605101000001001'
+    WHEN 2 THEN 'BOND202605101000001002'
     WHEN 3 THEN 'BOND202605120930001001'
     WHEN 4 THEN 'BOND202605151400001001'
     WHEN 5 THEN 'BOND202605181600001001'
@@ -670,7 +685,7 @@ WHERE `id` BETWEEN 1 AND 17;
 UPDATE `ip_pool_status`
 SET `adjust_batch_no` = CASE
     WHEN `security_code` = '101901234' AND `target_pool_id` = 2 THEN 'BOND202605080900001001'
-    WHEN `security_code` = '102002345' AND `target_pool_id` = 3 THEN 'BOND202605101000001001'
+    WHEN `security_code` = '102002345' AND `target_pool_id` = 3 THEN 'BOND202605101000001002'
     WHEN `security_code` = '103003456' AND `target_pool_id` = 8 THEN 'BOND202605120930001001'
     WHEN `security_code` = '104004567' AND `target_pool_id` = 10 THEN 'BOND202605151400001001'
     WHEN `security_code` = '105005678' AND `target_pool_id` = 11 THEN 'BOND202605181600001001'
@@ -701,7 +716,7 @@ WHERE `adjust_log_id` IN (1, 8);
 --       点击 ip_pool_status 中专户产品/五级库的证券记录时，可按 adjust_batch_no 查询到同批调库日志与流程步骤。
 -- ============================================================================
 
-INSERT INTO `ip_adjust_log` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
                              `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
                              `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
                              `attachment_files`, `material_files`,
@@ -709,7 +724,7 @@ INSERT INTO `ip_adjust_log` (`security_code`, `security_short_name`, `security_t
                              `is_deleted`, `crte_time`, `updt_time`)
 VALUES
 -- 18. 专户产品/五级库手工调入，流程主记录
-('110010123', '23某基建PRN001', 'company_bond', '手工调整', '调入',
+(18, '110010123', '23某基建PRN001', 'company_bond', '手工调整', '调入',
  'BOND202606051030001001', 14, '五级库', 'special_account',
  '20', '1001', '管理员', '补充材料后重新评估，准入专户产品五级库', '审批通过，已调入专户产品五级库',
  '["report_batch_20260605_001.pdf"]', '["material_batch_20260605_001.pdf"]',
@@ -717,7 +732,7 @@ VALUES
  0, NOW(), NOW()),
 
 -- 19. 专户产品/一级库互斥调出，共用同一批次号
-('110010123', '23某基建PRN001', 'company_bond', '互斥调整', '调出',
+(19, '110010123', '23某基建PRN001', 'company_bond', '互斥调整', '调出',
  'BOND202606051030001001', 10, '一级库', 'special_account',
  '20', '1001', '管理员', '调入专户产品五级库时，互斥调出专户产品一级库', '跟随同批手工调入流程审批通过',
  '["report_batch_20260605_001.pdf"]', '["material_batch_20260605_001.pdf"]',
@@ -760,9 +775,24 @@ VALUES
  '2', '研究员2', 'approve', '复核通过，同意本批次调库',
  '2026-06-05 10:30:00', '2026-06-05 14:20:00', NOW(), NOW()),
 
+(18, 'BOND202606051030001001', 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approve',
+ '1', '研究员1', 'skipped', '抢占审批已由研究员2处理',
+ '2026-06-05 10:30:00', '2026-06-05 14:20:00', NOW(), NOW()),
+
+(18, 'BOND202606051030001001', 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approve',
+ '4', '研究员4', 'skipped', '抢占审批已由研究员2处理',
+ '2026-06-05 10:30:00', '2026-06-05 14:20:00', NOW(), NOW()),
+
 (18, 'BOND202606051030001001', 10105, 'n5', '研究总监审批', 'approval',
- 'preempt', 5, 'approve',
- '4', '研究总监', 'approve', '审批通过，手工调入与互斥调出同批生效',
+ 'all', 5, 'approve',
+ '2', '叶伟', 'approve', '审批通过，手工调入与互斥调出同批生效',
+ '2026-06-05 14:20:00', '2026-06-06 15:00:00', NOW(), NOW()),
+
+(18, 'BOND202606051030001001', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'approve',
+ '1001', '管理员', 'approve', '会签审批通过，同批调库生效',
  '2026-06-05 14:20:00', '2026-06-06 15:00:00', NOW(), NOW()),
 
 (18, 'BOND202606051030001001', 10106, 'n6', 'O32自动审批', 'auto',
@@ -774,3 +804,416 @@ VALUES
  NULL, 7, 'auto_process',
  NULL, NULL, 'auto_process', NULL,
  '2026-06-06 15:00:00', '2026-06-06 15:00:00', NOW(), NOW());
+
+-- ============================================================================
+-- O32 自动审批与关联调整测试数据
+-- ============================================================================
+-- 说明：状态 32 表示 O32 已自动审批但尚未完成最终池状态落地，因此不写入 ip_pool_status。
+-- ============================================================================
+
+INSERT INTO `ip_adjust_log` (
+    `id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+    `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
+    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+    `attachment_files`, `material_files`, `submit_time`, `audit_time`, `entry_time`,
+    `is_deleted`, `crte_time`, `updt_time`
+) VALUES
+(20, '109009012', '25某国贸SCP001', 'scp', '关联调整', '调入',
+ 'BOND202606081000001001', 7, '境外债库', 'offshore_bond',
+ '32', '15', '风控经理', '境外债评级复核通过后关联调入信用债二级库', 'O32自动审批通过，等待日终批次落地',
+ '["report_o32_20260608_001.pdf"]', '["o32_result_20260608_001.json"]',
+ '2026-06-08 10:00:00', '2026-06-08 10:05:00', NULL,
+ 0, NOW(), NOW());
+
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+) VALUES
+(21, 'BOND202606081000001001', 10101, 'n1', '开始', 'start',
+ NULL, 1, 'auto_process', '15', '风控经理',
+ 'auto_process', NULL, '2026-06-08 10:00:00', '2026-06-08 10:00:00', NOW(), NOW()),
+(21, 'BOND202606081000001001', 10102, 'n2', '研究员A发起', 'approval',
+ 'initiator', 2, 'submit', '15', '风控经理',
+ 'submit', '发起关联调入申请', '2026-06-08 10:00:00', '2026-06-08 10:00:00', NOW(), NOW()),
+(21, 'BOND202606081000001001', 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approve', '1', '研究员1',
+ 'approve', '复核通过，同意进入O32自动审批', '2026-06-08 10:00:00', '2026-06-08 10:02:00', NOW(), NOW()),
+(21, 'BOND202606081000001001', 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approve', '2', '叶伟',
+ 'skipped', '抢占审批已由研究员1处理', '2026-06-08 10:00:00', '2026-06-08 10:02:00', NOW(), NOW()),
+(21, 'BOND202606081000001001', 10103, 'n3', '研究员B复核', 'approval',
+ 'preempt', 3, 'approve', '4', '研究员4',
+ 'skipped', '抢占审批已由研究员1处理', '2026-06-08 10:00:00', '2026-06-08 10:02:00', NOW(), NOW()),
+(21, 'BOND202606081000001001', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'approve', '2', '叶伟',
+ 'approve', '会签通过', '2026-06-08 10:02:00', '2026-06-08 10:04:00', NOW(), NOW()),
+(21, 'BOND202606081000001001', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'approve', '1001', '管理员',
+ 'approve', '会签通过', '2026-06-08 10:02:00', '2026-06-08 10:04:00', NOW(), NOW()),
+(21, 'BOND202606081000001001', 10106, 'n6', 'O32自动审批', 'auto',
+ NULL, 6, 'auto_process', NULL, NULL,
+ 'auto_process', 'O32校验通过，等待日终批次落地', '2026-06-08 10:04:00', '2026-06-08 10:05:00', NOW(), NOW());
+
+-- ============================================================================
+-- 补充批次主记录
+-- ============================================================================
+-- 说明：联动、互斥、关联记录不单独生成步骤，由同批次手工主记录承载流程。
+-- ============================================================================
+
+INSERT INTO `ip_adjust_log` (
+    `id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+    `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
+    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+    `attachment_files`, `material_files`, `submit_time`, `audit_time`, `entry_time`,
+    `is_deleted`, `crte_time`, `updt_time`
+) VALUES
+(21, '109009012', '25某国贸SCP001', 'scp', '手工调整', '调入',
+ 'BOND202606081000001001', 3, '二级库', 'credit_bond',
+ '32', '15', '风控经理', '境外债评级复核通过后手工调入信用债二级库', 'O32自动审批通过，等待日终批次落地',
+ '["report_o32_20260608_001.pdf"]', '["o32_result_20260608_001.json"]',
+ '2026-06-08 10:00:00', '2026-06-08 10:05:00', NULL,
+ 0, NOW(), NOW()),
+(22, '102002345', '23某城投债', 'company_bond', '手工调整', '调入',
+ 'BOND202605101000001002', 7, '境外债库', 'offshore_bond',
+ '20', '1001', '管理员', '城投债境外发行品种调入境外债库，并联动维护信用债二级库', '直通流程处理完成',
+ '["report_20260510_002.pdf"]', '["material_20260510_002.pdf"]',
+ '2026-05-10 10:00:00', '2026-05-10 10:05:00', '2026-05-10 10:05:00',
+ 0, NOW(), NOW());
+
+INSERT INTO `ip_pool_status` (
+    `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+    `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
+    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+    `attachment_files`, `material_files`, `submit_time`, `audit_time`, `entry_time`,
+    `is_deleted`, `crte_time`, `updt_time`
+) VALUES
+('102002345', '23某城投债', 'company_bond', '手工调整', '调入',
+ 'BOND202605101000001002', 7, '境外债库', 'offshore_bond',
+ '20', '1001', '管理员', '城投债境外发行品种调入境外债库，并联动维护信用债二级库', '直通流程处理完成',
+ '["report_20260510_002.pdf"]', '["material_20260510_002.pdf"]',
+ '2026-05-10 10:00:00', '2026-05-10 10:05:00', '2026-05-10 10:05:00',
+ 0, NOW(), NOW()),
+('110010123', '23某基建PRN001', 'company_bond', '手动批量调整', '调入',
+ 'BOND202605231700001001', 3, '二级库', 'credit_bond',
+ '20', '1001', '管理员', '批量操作将项目收益债调入信用债二级库', '批量直通流程处理完成',
+ '["batch_list_20260523.xlsx"]', '["material_batch_20260523.pdf"]',
+ '2026-05-23 17:00:00', '2026-05-23 17:05:00', '2026-05-23 17:05:00',
+ 0, NOW(), NOW());
+
+-- ============================================================================
+-- 补齐历史流程步骤
+-- ============================================================================
+
+-- 直通成功流程：开始 → 发起人提交 → 结束
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,n.id
+      ,n.node_id
+      ,n.label
+      ,n.node_type
+      ,CASE WHEN n.id = 10702 THEN 'initiator' ELSE NULL END
+      ,n.sort_order
+      ,CASE WHEN n.id = 10702 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10702 THEN l.adjuster_id ELSE NULL END
+      ,CASE WHEN n.id = 10702 THEN l.adjuster_name ELSE NULL END
+      ,CASE WHEN n.id = 10702 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10702 THEN '发起人提交直通流程' ELSE NULL END
+      ,l.submit_time
+      ,COALESCE(l.audit_time, l.submit_time)
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN `wf_flow_node` n ON n.id IN (10701, 10702, 10703)
+WHERE l.id IN (3, 5, 7, 13, 17, 22)
+ORDER BY l.id, n.sort_order;
+
+-- 标准成功流程公共节点：开始和发起人提交
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,n.id
+      ,n.node_id
+      ,n.label
+      ,n.node_type
+      ,CASE WHEN n.id = 10102 THEN 'initiator' ELSE NULL END
+      ,n.sort_order
+      ,CASE WHEN n.id = 10102 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10102 THEN l.adjuster_id ELSE NULL END
+      ,CASE WHEN n.id = 10102 THEN l.adjuster_name ELSE NULL END
+      ,CASE WHEN n.id = 10102 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10102 THEN '发起人提交审批流程' ELSE NULL END
+      ,l.submit_time
+      ,l.submit_time
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN `wf_flow_node` n ON n.id IN (10101, 10102)
+WHERE l.id IN (4, 6, 14, 15)
+ORDER BY l.id, n.sort_order;
+
+-- 标准成功流程抢占复核：一人通过，其余处理人跳过
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,10103
+      ,'n3'
+      ,'研究员B复核'
+      ,'approval'
+      ,'preempt'
+      ,3
+      ,'approve'
+      ,h.handler_id
+      ,h.handler_name
+      ,CASE WHEN h.handler_id = '2' THEN 'approve' ELSE 'skipped' END
+      ,CASE WHEN h.handler_id = '2' THEN '复核通过' ELSE '抢占审批已由叶伟处理' END
+      ,l.submit_time
+      ,DATE_ADD(l.submit_time, INTERVAL 2 HOUR)
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id IN (4, 6, 14, 15)
+ORDER BY l.id, h.handler_id;
+
+-- 标准成功流程会签审批
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,10105
+      ,'n5'
+      ,'研究总监审批'
+      ,'approval'
+      ,'all'
+      ,5
+      ,'approve'
+      ,h.handler_id
+      ,h.handler_name
+      ,'approve'
+      ,'会签审批通过'
+      ,DATE_ADD(l.submit_time, INTERVAL 2 HOUR)
+      ,COALESCE(l.audit_time, DATE_ADD(l.submit_time, INTERVAL 4 HOUR))
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '2' AS handler_id, '叶伟' AS handler_name
+    UNION ALL SELECT '1001', '管理员'
+) h
+WHERE l.id IN (4, 6, 14, 15)
+ORDER BY l.id, h.handler_id;
+
+-- 标准成功流程自动审批和结束
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,n.id
+      ,n.node_id
+      ,n.label
+      ,n.node_type
+      ,NULL
+      ,n.sort_order
+      ,'auto_process'
+      ,NULL
+      ,NULL
+      ,'auto_process'
+      ,CASE WHEN n.id = 10106 THEN 'O32自动审批通过' ELSE NULL END
+      ,COALESCE(l.audit_time, l.submit_time)
+      ,COALESCE(l.audit_time, l.submit_time)
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN `wf_flow_node` n ON n.id IN (10106, 10107)
+WHERE l.id IN (4, 6, 14, 15)
+ORDER BY l.id, n.sort_order;
+
+-- 进行中与驳回流程公共节点：开始和发起人提交
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,n.id
+      ,n.node_id
+      ,n.label
+      ,n.node_type
+      ,CASE WHEN n.id = 10102 THEN 'initiator' ELSE NULL END
+      ,n.sort_order
+      ,CASE WHEN n.id = 10102 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10102 THEN l.adjuster_id ELSE NULL END
+      ,CASE WHEN n.id = 10102 THEN l.adjuster_name ELSE NULL END
+      ,CASE WHEN n.id = 10102 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10102 THEN '发起人提交审批流程' ELSE NULL END
+      ,l.submit_time
+      ,l.submit_time
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN `wf_flow_node` n ON n.id IN (10101, 10102)
+WHERE l.id IN (9, 10, 11, 12, 16)
+ORDER BY l.id, n.sort_order;
+
+-- 00：复核节点待处理
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
+       'preempt', 3, 'pending', h.handler_id, h.handler_name,
+       NULL, NULL, l.submit_time, NULL, NOW(), NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id = 16
+ORDER BY h.handler_id;
+
+-- 10：复核通过，进入总监会签待处理
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
+       'preempt', 3, 'approve', h.handler_id, h.handler_name,
+       CASE WHEN h.handler_id = '2' THEN 'approve' ELSE 'skipped' END,
+       CASE WHEN h.handler_id = '2' THEN '复核通过，提交总监审批' ELSE '抢占审批已由叶伟处理' END,
+       l.submit_time, l.audit_time, NOW(), NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id = 9
+ORDER BY h.handler_id;
+
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+) VALUES
+(9, 'BOND202605261400001001', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'pending', '2', '叶伟', NULL, NULL, '2026-05-27 10:00:00', NULL, NOW(), NOW()),
+(9, 'BOND202605261400001001', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'pending', '1001', '管理员', NULL, NULL, '2026-05-27 10:00:00', NULL, NOW(), NOW());
+
+-- 11：复核驳回，发起人修改节点待处理
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
+       'preempt', 3, 'reject', h.handler_id, h.handler_name,
+       CASE WHEN h.handler_id = '2' THEN 'reject' ELSE 'skipped' END,
+       CASE WHEN h.handler_id = '2' THEN '附件研报材料不足，请补充后重新提交' ELSE '抢占审批已由叶伟处理' END,
+       l.submit_time, l.audit_time, NOW(), NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id = 10
+ORDER BY h.handler_id;
+
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+) VALUES
+(10, 'BOND202605240900001001', 10104, 'n4', '研究员A修改', 'approval',
+ 'initiator', 4, 'pending', '1001', '管理员', NULL, NULL, '2026-05-25 11:00:00', NULL, NOW(), NOW());
+
+-- 21：复核通过，总监审批驳回并结束
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
+       'preempt', 3, 'approve', h.handler_id, h.handler_name,
+       CASE WHEN h.handler_id = '2' THEN 'approve' ELSE 'skipped' END,
+       CASE WHEN h.handler_id = '2' THEN '复核通过' ELSE '抢占审批已由叶伟处理' END,
+       l.submit_time, DATE_ADD(l.submit_time, INTERVAL 2 HOUR), NOW(), NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id = 11
+ORDER BY h.handler_id;
+
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+) VALUES
+(11, 'BOND202605221000001002', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'reject', '2', '叶伟', 'reject', 'ABS产品不满足信用债池准入资质', '2026-05-22 12:00:00', '2026-05-23 16:00:00', NOW(), NOW()),
+(11, 'BOND202605221000001002', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'reject', '1001', '管理员', 'skipped', '会签已被驳回，后续处理跳过', '2026-05-22 12:00:00', '2026-05-23 16:00:00', NOW(), NOW()),
+(11, 'BOND202605221000001002', 10107, 'n7', '结束', 'end',
+ NULL, 7, 'auto_process', NULL, NULL, 'auto_process', '审批驳回，流程结束', '2026-05-23 16:00:00', '2026-05-23 16:00:00', NOW(), NOW());
+
+-- 99：复核驳回后发起人在修改节点撤回
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
+       'preempt', 3, 'reject', h.handler_id, h.handler_name,
+       CASE WHEN h.handler_id = '2' THEN 'reject' ELSE 'skipped' END,
+       CASE WHEN h.handler_id = '2' THEN '申请库级与当前资质不匹配，请修改' ELSE '抢占审批已由叶伟处理' END,
+       l.submit_time, DATE_ADD(l.submit_time, INTERVAL 2 HOUR), NOW(), NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id = 12
+ORDER BY h.handler_id;
+
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+) VALUES
+(12, 'BOND202605201100001001', 10104, 'n4', '研究员A修改', 'approval',
+ 'initiator', 4, 'reject', '1001', '管理员', 'reject', '撤回原申请，改为申请信用债三级库', '2026-05-20 13:00:00', '2026-05-20 15:00:00', NOW(), NOW()),
+(12, 'BOND202605201100001001', 10107, 'n7', '结束', 'end',
+ NULL, 7, 'auto_process', NULL, NULL, 'auto_process', '发起人撤回，流程结束', '2026-05-20 15:00:00', '2026-05-20 15:00:00', NOW(), NOW());
