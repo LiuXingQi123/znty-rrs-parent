@@ -14,8 +14,10 @@ import static org.mockito.Mockito.mock;
  */
 public class FlowDefinitionApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         FlowController controller = new FlowController();
@@ -23,6 +25,7 @@ public class FlowDefinitionApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
+    /** 验证 shouldSupportFlowDefinitionCrud 测试场景。 */
     @Test
     public void shouldSupportFlowDefinitionCrud() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/flows/queryFlowPage", "{}");
@@ -34,18 +37,21 @@ public class FlowDefinitionApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/flows/editFlowStatus", "{\"id\":1}");
     }
 
+    /** 验证 shouldSupportDesignerDraftAndPublish 测试场景。 */
     @Test
     public void shouldSupportDesignerDraftAndPublish() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/flows/editFlowDraft", "{}");
         assertPostSuccess(mockMvc, "/api/v1/flows/editFlowToPublished", "{}");
     }
 
+    /** 验证 shouldSupportVersionHistory 测试场景。 */
     @Test
     public void shouldSupportVersionHistory() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/flows/queryFlowVersionList", "{\"id\":1}");
         assertPostSuccess(mockMvc, "/api/v1/flows/queryFlowVersionDetail", "{\"flowId\":1,\"versionId\":1}");
     }
 
+    /** 验证 shouldSupportDesignerDictionaries 测试场景。 */
     @Test
     public void shouldSupportDesignerDictionaries() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/flows/dict/queryRoleList", "{}");

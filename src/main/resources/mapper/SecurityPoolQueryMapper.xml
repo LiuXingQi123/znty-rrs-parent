@@ -16,7 +16,7 @@
                ,ips.security_type
                ,dst.security_type_name
                ,mbp.id AS mySecurityPoolId
-               ,bi.coupon_rate AS couponRate
+               ,bi.coupon_rate
                ,bi.issuer
                ,bi.full_name
                ,bi.firstissue_date AS issueDate

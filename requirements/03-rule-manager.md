@@ -19,7 +19,7 @@
 | 业务线 | 接口 |
 |---|---|
 | 规则查询维护 | `/api/v1/rules/queryRulePage`、`queryRuleDetail`、`addOrEditRule`、`editRuleStatus`、`deleteRule` |
-| 规则执行 | `/api/v1/rules/rule-runs/executeRule` |
+| 规则执行 | `/api/v1/rules/ruleRuns/executeRule` |
 | 规则选项 | `/api/v1/rules/options/queryCategoryList`、`queryPresetSetList` |
 | 用例维护 | `/api/v1/testCases/queryTestCasePage`、`addOrEditTestCase`、`editTestCaseName`、`deleteTestCase` |
 | 用例执行 | `/api/v1/testCases/runTestCase`、`runAllTestCases`、`queryRunHistoryList` |

@@ -13,7 +13,7 @@ public class RoleDictEvtBo {
     /** 事件主键 */
     private Long evtId;
     /** 原始记录 ID */
-    private Integer id;
+    private Long id;
     /** 角色编码 */
     private String roleCode;
     /** 角色名称 */

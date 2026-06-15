@@ -8,6 +8,7 @@ import com.znty.sirm.mapper.MySecurityPoolMapper;
 import com.znty.sirm.model.SecurityPoolQueryDto;
 import com.znty.sirm.model.SecurityPoolQueryReq;
 import com.znty.sirm.model.SecurityTypeOptionDto;
+import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.MySecurityPoolBo;
 import com.znty.sirm.model.MySecurityPoolReq;
 import org.springframework.stereotype.Service;
@@ -24,19 +25,24 @@ import java.util.Map;
 @Service
 public class SecurityPoolQueryService {
 
+    /** 证券池查询数据访问组件 */
     @Resource
     private SecurityPoolQueryMapper securityPoolQueryMapper;
 
+    /** 我的证券池数据访问组件 */
     @Resource
     private MySecurityPoolMapper mySecurityPoolMapper;
 
+    /** 投资池服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 
     /** 分页查询证券池中的证券列表 */
     public PageResult<SecurityPoolQueryDto> querySecurityPoolPage(SecurityPoolQueryReq req) {
+        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityPoolQueryDto> list = securityPoolQueryMapper.querySecurityPoolPage(req);
+        // 填充投资池全路径名称
         fillPoolFullName(list);
         PageInfo<SecurityPoolQueryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
@@ -67,6 +73,11 @@ public class SecurityPoolQueryService {
         options.add("active");
         options.add("matured");
         return options;
+    }
+
+    /** 查询投资池层级树列表 */
+    public List<InvestmentPoolBo> queryPoolTreeList() {
+        return investmentPoolService.queryPoolBoList();
     }
 
     /** 添加证券到我的证券池（幂等：若已收藏则直接返回已有记录，不重复插入） */

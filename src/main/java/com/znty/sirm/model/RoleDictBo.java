@@ -11,7 +11,7 @@ import java.util.Date;
 @Data
 public class RoleDictBo {
     /** 主键 */
-    private Integer id;
+    private Long id;
     /** 角色编码 */
     private String roleCode;
     /** 角色名称 */

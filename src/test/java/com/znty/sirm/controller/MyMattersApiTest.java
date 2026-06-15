@@ -14,8 +14,10 @@ import static org.mockito.Mockito.mock;
  */
 public class MyMattersApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         MyMattersController controller = new MyMattersController();
@@ -23,6 +25,7 @@ public class MyMattersApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
+    /** 验证 shouldSupportMatterQueryAndFiltering 测试场景。 */
     @Test
     public void shouldSupportMatterQueryAndFiltering() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/myMatters/queryMyMattersPage", "{\"handlerId\":\"1001\"}");

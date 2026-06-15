@@ -30,6 +30,7 @@ import java.util.List;
 @RequestMapping("/api/v1/rules")
 public class RuleController {
 
+    /** 规则管理服务 */
     @Resource
     private RuleService ruleService;
 
@@ -82,7 +83,7 @@ public class RuleController {
      * 临时执行规则：按规则 ID 和传入的参数值调用 QLExpress 引擎运行规则脚本，
      * 返回执行结果和每一步的日志明细，执行记录同时持久化到历史表
      */
-    @PostMapping("/rule-runs/executeRule")
+    @PostMapping("/ruleRuns/executeRule")
     public ApiResponse<RuleRunResultDto> executeRule(@RequestBody RuleReq req) {
         return ApiResponse.success(ruleService.executeRule(req));
     }
@@ -93,7 +94,7 @@ public class RuleController {
      * 查询所有启用状态的规则分类列表，用于规则编辑时选择所属分类
      */
     @PostMapping("/options/queryCategoryList")
-    public ApiResponse<List<CategoryDto>> queryCategoryList() {
+    public ApiResponse<List<CategoryDto>> queryCategoryList(@RequestBody(required = false) RuleReq req) {
         return ApiResponse.success(ruleService.queryCategoryList());
     }
 
@@ -101,7 +102,7 @@ public class RuleController {
      * 查询所有启用状态的预设选项集及其子选项，用于规则参数类型为枚举时绑定可选值
      */
     @PostMapping("/options/queryPresetSetList")
-    public ApiResponse<List<PresetSetDto>> queryPresetSetList() {
+    public ApiResponse<List<PresetSetDto>> queryPresetSetList(@RequestBody(required = false) RuleReq req) {
         return ApiResponse.success(ruleService.queryPresetSetList());
     }
 }

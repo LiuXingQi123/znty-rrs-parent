@@ -28,14 +28,9 @@ public interface RuleMapper {
 
     // ==================== rule_definition ====================
 
-    /** 按关键字和状态统计规则数量（仅未删除记录） */
-    long queryRuleCount(@Param("keyword") String keyword, @Param("status") String status);
-
     /** 分页查询规则列表，支持按关键字（名称/描述/参数）和状态筛选 */
     List<RuleDefinitionBo> queryRulePage(@Param("keyword") String keyword,
-                                       @Param("status") String status,
-                                       @Param("offset") int offset,
-                                       @Param("pageSize") int pageSize);
+                                       @Param("status") String status);
 
     /** 按主键 ID 查询单条规则（仅未删除记录） */
     RuleDefinitionBo queryRuleById(@Param("id") Long id);

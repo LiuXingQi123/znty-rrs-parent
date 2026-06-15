@@ -27,9 +27,12 @@ import java.util.stream.Collectors;
 @Service
 public class FlowService {
 
+    /** 流程定义数据访问组件 */
     @Resource
     private FlowMapper flowMapper;
+    /** 日志记录器 */
     private static final Logger log = LoggerFactory.getLogger(FlowService.class);
+    /** JSON 序列化组件 */
     private static final ObjectMapper om = new ObjectMapper();
     private static final String L_OPTER = "1"; // TODO 对接用户系统后替换
 
@@ -37,6 +40,7 @@ public class FlowService {
 
     /** 查询流程分页。 */
     public PageResult<FlowDto> queryFlowPage(FlowReq req) {
+        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<FlowDefinitionBo> entities = flowMapper.queryFlowPage(
                 req.getKeyword(), req.getStatus(), req.getCategory());
@@ -111,6 +115,7 @@ public class FlowService {
         def.setCrteTime(now);
         def.setUpdtTime(now);
         flowMapper.addFlowDefinition(def);
+        // 构建流程定义事件
         flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "INSERT"));
 
         // 创建初始草稿版本
@@ -123,6 +128,7 @@ public class FlowService {
         ver.setCrteTime(now);
         ver.setUpdtTime(now);
         flowMapper.addFlowVersion(ver);
+        // 构建流程版本事件
         flowMapper.addFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
 
         FlowDto result = new FlowDto();
@@ -156,6 +162,7 @@ public class FlowService {
         // 优先返回已有草稿
         FlowVersionBo draftVersion = flowMapper.queryDraftFlowVersion(def.getId());
         if (draftVersion != null) {
+            // 转换草稿版本信息
             dto.setDraft(toDraftInfo(draftVersion));
             return dto;
         }
@@ -163,6 +170,7 @@ public class FlowService {
         // 无草稿时，加载最新版本画布数据作为编辑基础（不创建草稿记录）
         FlowVersionBo latest = flowMapper.queryLatestFlowVersion(def.getId());
         if (latest != null) {
+            // 转换草稿版本信息
             dto.setDraft(toDraftInfo(latest));
         }
 
@@ -205,6 +213,7 @@ public class FlowService {
         def.setUpdatedBy(1L);
         def.setUpdtTime(new Date());
         flowMapper.editFlowDefinition(def);
+        // 构建流程定义事件
         flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, new Date(), "UPDATE"));
         IdRequest idReq = new IdRequest();
         idReq.setId(req.getId());
@@ -227,6 +236,7 @@ public class FlowService {
         Date now = new Date();
         flowMapper.deleteFlowLogical(req.getId(), now);
         def.setIsDeleted(1); def.setUpdtTime(now);
+        // 构建流程定义事件
         flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "DELETE"));
         return deleted;
     }
@@ -251,6 +261,7 @@ public class FlowService {
         Date now = new Date();
         flowMapper.editFlowDefinitionStatus(req.getId(), now);
         def.setStatus("disabled"); def.setUpdtTime(now);
+        // 构建流程定义事件
         flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
 
         // 将当前活跃版本标为停用，历史中可追溯
@@ -266,6 +277,7 @@ public class FlowService {
         if (latestActive != null) {
             flowMapper.editFlowVersionStatus(latestActive.getId(), "disabled", now);
             latestActive.setStatus("disabled"); latestActive.setUpdtTime(now);
+            // 构建流程版本事件
             flowMapper.addFlowVersionEvt(toFlowVerEvt(latestActive, L_OPTER, now, "UPDATE"));
         }
         return queryFlowDetail(req);
@@ -304,10 +316,13 @@ public class FlowService {
             def.setUpdatedBy(1L);
             def.setUpdtTime(now);
             flowMapper.editFlowDefinition(def);
+            // 构建流程定义事件
             flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
         }
 
+        // 序列化业务数据为 JSON
         String nodesJson = toJson(req.getNodes());
+        // 序列化业务数据为 JSON
         String edgesJson = toJson(req.getEdges());
 
         FlowVersionBo latest = flowMapper.queryDraftFlowVersion(def.getId());
@@ -328,6 +343,7 @@ public class FlowService {
             latest.setFlowKey(def.getFlowKey()); // 同步主表变更后的 Key
             latest.setUpdtTime(now);
             flowMapper.editFlowVersion(latest);
+            // 构建流程版本事件
             flowMapper.addFlowVersionEvt(toFlowVerEvt(latest, L_OPTER, now, "UPDATE"));
             versionId = latest.getId();
             verNum = latest.getVerNum();
@@ -348,6 +364,7 @@ public class FlowService {
             ver.setCrteTime(now);
             ver.setUpdtTime(now);
             flowMapper.addFlowVersion(ver);
+            // 构建流程版本事件
             flowMapper.addFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
             versionId = ver.getId();
 
@@ -357,6 +374,7 @@ public class FlowService {
                 def.setUpdatedBy(1L);
                 def.setUpdtTime(now);
                 flowMapper.editFlowDefinition(def);
+                // 构建流程定义事件
                 flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
             }
         }
@@ -391,7 +409,9 @@ public class FlowService {
         validateBeforePublish(nodes, edges);
 
         Date now = new Date();
+        // 序列化业务数据为 JSON
         String nodesJson = toJson(nodes);
+        // 序列化业务数据为 JSON
         String edgesJson = toJson(edges);
 
         FlowVersionBo latest = flowMapper.queryDraftFlowVersion(def.getId());
@@ -416,6 +436,7 @@ public class FlowService {
             latest.setUpdtTime(now);
             flowMapper.editFlowVersion(latest);
             flowMapper.editFlowVersionStatus(latest.getId(), "active", now);
+            // 构建流程版本事件
             flowMapper.addFlowVersionEvt(toFlowVerEvt(latest, L_OPTER, now, "UPDATE"));
             versionId = latest.getId();
             verNum = latest.getVerNum();
@@ -439,6 +460,7 @@ public class FlowService {
             ver.setCrteTime(now);
             ver.setUpdtTime(now);
             flowMapper.addFlowVersion(ver);
+            // 构建流程版本事件
             flowMapper.addFlowVersionEvt(toFlowVerEvt(ver, L_OPTER, now, "INSERT"));
             versionId = ver.getId();
         }
@@ -448,6 +470,7 @@ public class FlowService {
         def.setUpdatedBy(1L);
         def.setUpdtTime(now);
         flowMapper.editFlowDefinition(def);
+        // 构建流程定义事件
         flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, now, "UPDATE"));
 
         // 解析 JSON → 归一化表
@@ -494,7 +517,9 @@ public class FlowService {
         d.setPublishNote(ver.getPublishNote());
         d.setPublishedBy(ver.getPublishedBy());
         d.setPublishedTime(ver.getPublishedTime());
+        // 安全解析画布 JSON
         d.setNodes(parseJsonSafe(ver.getCanvasNodes()));
+        // 安全解析画布 JSON
         d.setEdges(parseJsonSafe(ver.getCanvasEdges()));
         d.setPanX(ver.getCanvasPanX() != null ? ver.getCanvasPanX() : 0);
         d.setPanY(ver.getCanvasPanY() != null ? ver.getCanvasPanY() : 0);
@@ -507,6 +532,7 @@ public class FlowService {
     /** 查询角色字典。 */
     public List<RoleDto> queryRoleList(FlowReq req) {
         return flowMapper.queryRoleList().stream()
+                // 将角色持久化对象转换为接口返回对象
                 .map(this::convertRole)
                 .collect(Collectors.toList());
     }
@@ -517,9 +543,11 @@ public class FlowService {
         List<Long> roleIds = null;
         if (safeReq.getRoleId() != null) {
             roleIds = new ArrayList<>();
+            // 递归收集角色及其子角色 ID
             collectDescendantRoleIds(safeReq.getRoleId(), roleIds, flowMapper.queryRoleList());
         }
         return flowMapper.queryUserList(roleIds, safeReq.getUserKeyword()).stream()
+                // 将用户持久化对象转换为接口返回对象
                 .map(this::convertUser)
                 .collect(Collectors.toList());
     }
@@ -527,11 +555,17 @@ public class FlowService {
     /** 查询自动任务选项。 */
     public List<DictDto> queryAutoTaskList(FlowReq req) {
         List<DictDto> list = new ArrayList<>();
+        // 根据任务编码构建自动任务字典项
         list.add(buildTask("createAccount"));
+        // 根据任务编码构建自动任务字典项
         list.add(buildTask("updatePosition"));
+        // 根据任务编码构建自动任务字典项
         list.add(buildTask("syncSettlement"));
+        // 根据任务编码构建自动任务字典项
         list.add(buildTask("riskCheck"));
+        // 根据任务编码构建自动任务字典项
         list.add(buildTask("sendNotify"));
+        // 根据任务编码构建自动任务字典项
         list.add(buildTask("archiveRecord"));
         return list;
     }
@@ -543,25 +577,35 @@ public class FlowService {
         DictDto g1 = new DictDto();
         g1.setGroupCode("approvalResult");
         g1.setFields(Arrays.asList(
+                // 构建条件字段字典项
                 buildField("auditStatus"),
+                // 构建条件字段字典项
                 buildField("auditComment")));
         groups.add(g1);
 
         DictDto g2 = new DictDto();
         g2.setGroupCode("businessFlag");
         g2.setFields(Arrays.asList(
+                // 构建条件字段字典项
                 buildField("isDebtSimple"),
+                // 构建条件字段字典项
                 buildField("isWhitelist"),
+                // 构建条件字段字典项
                 buildField("isSimple"),
+                // 构建条件字段字典项
                 buildField("isRestricted"),
+                // 构建条件字段字典项
                 buildField("isLargeAmount")));
         groups.add(g2);
 
         DictDto g3 = new DictDto();
         g3.setGroupCode("flowVariable");
         g3.setFields(Arrays.asList(
+                // 构建条件字段字典项
                 buildField("applyAmount"),
+                // 构建条件字段字典项
                 buildField("creditRating"),
+                // 构建条件字段字典项
                 buildField("investType")));
         groups.add(g3);
 
@@ -575,7 +619,9 @@ public class FlowService {
         FlowDto.DraftInfo draft = new FlowDto.DraftInfo();
         draft.setVersionId(ver.getId());
         draft.setVerNum(ver.getVerNum());
+        // 安全解析画布 JSON
         draft.setNodes(parseJsonSafe(ver.getCanvasNodes()));
+        // 安全解析画布 JSON
         draft.setEdges(parseJsonSafe(ver.getCanvasEdges()));
         draft.setPanX(ver.getCanvasPanX() != null ? ver.getCanvasPanX() : 0);
         draft.setPanY(ver.getCanvasPanY() != null ? ver.getCanvasPanY() : 0);
@@ -681,6 +727,7 @@ public class FlowService {
             fn.setCrteTime(now);
             fn.setUpdtTime(now);
             flowMapper.addFlowNode(fn);
+            // 构建流程节点事件
             flowMapper.addFlowNodeEvt(toFlowNodeEvt(fn, L_OPTER, now, "INSERT"));
             nodeIdMap.put(cn.getId(), fn.getId());
 
@@ -693,6 +740,7 @@ public class FlowService {
                 cfg.setCrteTime(now);
                 cfg.setUpdtTime(now);
                 flowMapper.addApprovalConfig(cfg);
+                // 构建审批配置事件
                 flowMapper.addApprovalConfigEvt(toApprovalCfgEvt(cfg, L_OPTER, now, "INSERT"));
                 if (cn.getApprovalPersons() != null) {
                     int seq = 1;
@@ -709,6 +757,7 @@ public class FlowService {
                         handler.setCrteTime(now);
                         handler.setUpdtTime(now);
                         flowMapper.addApprovalHandler(handler);
+                        // 构建审批处理人明细事件
                         flowMapper.addApprovalHandlerEvt(toApprovalHandlerEvt(handler, L_OPTER, now, "INSERT"));
                     }
                 }
@@ -724,20 +773,24 @@ public class FlowService {
                         cfg.setCrteTime(now);
                         cfg.setUpdtTime(now);
                         flowMapper.addAutoConfig(cfg);
+                        // 构建自动任务配置事件
                         flowMapper.addAutoConfigEvt(toAutoCfgEvt(cfg, L_OPTER, now, "INSERT"));
                     }
                 }
             } else if ("notify".equals(cn.getType())) {
                 NodeNotifyConfigBo cfg = new NodeNotifyConfigBo();
                 cfg.setNodeId(fn.getId());
+                // 序列化业务数据为 JSON
                 cfg.setNotifyChannels(toJson(cn.getNotifyChannels()));
                 cfg.setNotifyTarget(cn.getNotifyTarget());
+                // 序列化业务数据为 JSON
                 cfg.setNotifyPersons(toJson(cn.getNotifyPersons()));
                 cfg.setNotifyTpl(cn.getNotifyTpl());
                 cfg.setNotifyRemark(cn.getNotifyRemark());
                 cfg.setCrteTime(now);
                 cfg.setUpdtTime(now);
                 flowMapper.addNotifyConfig(cfg);
+                // 构建通知配置事件
                 flowMapper.addNotifyConfigEvt(toNotifyCfgEvt(cfg, L_OPTER, now, "INSERT"));
             } else if ("condition".equals(cn.getType())) {
                 NodeConditionConfigBo cfg = new NodeConditionConfigBo();
@@ -746,6 +799,7 @@ public class FlowService {
                 cfg.setCrteTime(now);
                 cfg.setUpdtTime(now);
                 flowMapper.addConditionConfig(cfg);
+                // 构建条件配置事件
                 flowMapper.addConditionConfigEvt(toCondCfgEvt(cfg, L_OPTER, now, "INSERT"));
             }
         }
@@ -774,6 +828,7 @@ public class FlowService {
                 fe.setCrteTime(now);
                 fe.setUpdtTime(now);
                 flowMapper.addFlowEdge(fe);
+                // 构建流程连线事件
                 flowMapper.addFlowEdgeEvt(toFlowEdgeEvt(fe, L_OPTER, now, "INSERT"));
                 edgeIdMap.put(ce.getId(), fe.getId());
 
@@ -790,6 +845,7 @@ public class FlowService {
                         rule.setCrteTime(now);
                         rule.setUpdtTime(now);
                         flowMapper.addCondRule(rule);
+                        // 构建连线条件规则事件
                         flowMapper.addCondRuleEvt(toCondRuleEvt(rule, L_OPTER, now, "INSERT"));
                     }
                 }
@@ -920,27 +976,35 @@ public class FlowService {
     /** 捕获旧行并记录 DELETE 事件。 */
     private void logSyncDeletes(Long versionId, Date now) {
         for (FlowNodeBo node : flowMapper.queryFlowNodeListByVersionId(versionId)) {
+            // 构建流程节点事件
             flowMapper.addFlowNodeEvt(toFlowNodeEvt(node, L_OPTER, now, "DELETE"));
         }
         for (NodeApprovalHandlerBo handler : flowMapper.queryApprovalHandlerListByVersionId(versionId)) {
+            // 构建审批处理人明细事件
             flowMapper.addApprovalHandlerEvt(toApprovalHandlerEvt(handler, L_OPTER, now, "DELETE"));
         }
         for (NodeApprovalConfigBo cfg : flowMapper.queryApprovalConfigListByVersionId(versionId)) {
+            // 构建审批配置事件
             flowMapper.addApprovalConfigEvt(toApprovalCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
         for (NodeAutoConfigBo cfg : flowMapper.queryAutoConfigListByVersionId(versionId)) {
+            // 构建自动任务配置事件
             flowMapper.addAutoConfigEvt(toAutoCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
         for (NodeNotifyConfigBo cfg : flowMapper.queryNotifyConfigListByVersionId(versionId)) {
+            // 构建通知配置事件
             flowMapper.addNotifyConfigEvt(toNotifyCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
         for (NodeConditionConfigBo cfg : flowMapper.queryConditionConfigListByVersionId(versionId)) {
+            // 构建条件配置事件
             flowMapper.addConditionConfigEvt(toCondCfgEvt(cfg, L_OPTER, now, "DELETE"));
         }
         for (FlowEdgeBo edge : flowMapper.queryFlowEdgeListByVersionId(versionId)) {
+            // 构建流程连线事件
             flowMapper.addFlowEdgeEvt(toFlowEdgeEvt(edge, L_OPTER, now, "DELETE"));
         }
         for (EdgeCondRuleBo rule : flowMapper.queryCondRuleListByVersionId(versionId)) {
+            // 构建连线条件规则事件
             flowMapper.addCondRuleEvt(toCondRuleEvt(rule, L_OPTER, now, "DELETE"));
         }
     }
@@ -967,7 +1031,6 @@ public class FlowService {
         }
     }
 
-    /** 构建自动任务字典项。 */
     /** RoleBo 转 RoleDto。 */
     private RoleDto convertRole(RoleBo bo) {
         RoleDto dto = new RoleDto();
@@ -992,11 +1055,13 @@ public class FlowService {
         roleIds.add(roleId);
         for (RoleBo role : allRoles) {
             if (roleId.equals(role.getParentId())) {
+                // 递归收集角色及其子角色 ID
                 collectDescendantRoleIds(role.getId(), roleIds, allRoles);
             }
         }
     }
 
+    /** 根据任务编码构建自动任务字典项 */
     private DictDto buildTask(String code) {
         DictDto d = new DictDto();
         d.setTaskCode(code);

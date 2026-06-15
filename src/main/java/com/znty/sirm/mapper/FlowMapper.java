@@ -7,6 +7,9 @@ import org.apache.ibatis.annotations.Param;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * 流程定义数据访问接口，负责流程定义、版本、节点、连线及配置数据的持久化操作。
+ */
 @Mapper
 public interface FlowMapper {
 

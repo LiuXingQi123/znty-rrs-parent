@@ -1,9 +1,10 @@
 package com.znty.sirm.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -13,8 +14,6 @@ import java.util.Map;
  */
 @Data
 public class RuleRunResultDto {
-    private static final SimpleDateFormat FMT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-
     /** 执行记录 ID（历史查询时有值，临时执行时为 null） */
     private Long id;
     /** 规则 ID（历史查询时有值） */
@@ -28,9 +27,11 @@ public class RuleRunResultDto {
     /** 错误信息（执行失败时填充） */
     private String errorMessage;
     /** 开始时间（yyyy-MM-dd HH:mm:ss 格式，历史查询时有值） */
-    private String startTime;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date startTime;
     /** 结束时间（yyyy-MM-dd HH:mm:ss 格式，历史查询时有值） */
-    private String finishTime;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date finishTime;
     /** 步骤日志列表，每项含 time/type/msg 键 */
     private List<Map<String, Object>> logs = new ArrayList<>();
 
@@ -45,8 +46,8 @@ public class RuleRunResultDto {
         dto.setStatus(run.getRunStatus());
         dto.setOutput(run.getOutput());
         dto.setErrorMessage(run.getErrorMessage());
-        dto.setStartTime(run.getStartTime() == null ? null : FMT.format(run.getStartTime()));
-        dto.setFinishTime(run.getFinishTime() == null ? null : FMT.format(run.getFinishTime()));
+        dto.setStartTime(run.getStartTime());
+        dto.setFinishTime(run.getFinishTime());
         dto.setLogs(logs);
         return dto;
     }

@@ -14,8 +14,10 @@ import static org.mockito.Mockito.mock;
  */
 public class SecurityPoolAdjustDetailApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         SecurityPoolAdjustController controller = new SecurityPoolAdjustController();
@@ -23,6 +25,7 @@ public class SecurityPoolAdjustDetailApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
+    /** 验证 shouldSupportCompleteAdjustDetailLoading 测试场景。 */
     @Test
     public void shouldSupportCompleteAdjustDetailLoading() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityPage", "{}");
@@ -33,6 +36,7 @@ public class SecurityPoolAdjustDetailApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustStepList", "{\"adjustLogId\":1,\"adjustBatchNo\":\"BATCH001\"}");
     }
 
+    /** 验证 shouldSupportDetailPageValidationAndResubmission 测试场景。 */
     @Test
     public void shouldSupportDetailPageValidationAndResubmission() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/checkAdjust", "{}");

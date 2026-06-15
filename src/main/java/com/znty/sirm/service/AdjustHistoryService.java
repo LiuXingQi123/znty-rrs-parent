@@ -24,12 +24,15 @@ import java.util.Map;
 @Service
 public class AdjustHistoryService {
 
+    /** 调库历史数据访问组件 */
     @Resource
     private AdjustHistoryMapper adjustHistoryMapper;
 
+    /** 投资池数据访问组件 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
 
+    /** 投资池服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 
@@ -37,8 +40,10 @@ public class AdjustHistoryService {
      * 分页查询调整历史列表
      */
     public PageResult<AdjustHistoryDto> queryAdjustHistoryPage(AdjustHistoryReq req) {
+        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<AdjustHistoryDto> list = adjustHistoryMapper.queryAdjustHistoryPage(req);
+        // 填充投资池全路径名称
         fillPoolFullName(list);
         PageInfo<AdjustHistoryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());

@@ -35,6 +35,7 @@ import java.util.List;
 @RequestMapping("/api/v1/securityPoolAdjust")
 public class SecurityPoolAdjustController {
 
+    /** 证券池调库服务 */
     @Resource
     private SecurityPoolAdjustService securityPoolAdjustService;
 

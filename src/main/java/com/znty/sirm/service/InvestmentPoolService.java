@@ -38,6 +38,7 @@ import javax.annotation.Resource;
 @Service
 public class InvestmentPoolService {
 
+    /** 默认操作人标识 */
     private static final String OPERATOR_DEFAULT = "system";
 
     private static final List<String> RELATION_TYPES = Arrays.asList(
@@ -52,9 +53,11 @@ public class InvestmentPoolService {
             "out_soft_restrict"
     );
 
+    /** 投资池数据访问组件 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
 
+    /** JSON 序列化组件 */
     @Resource
     private ObjectMapper objectMapper;
 
@@ -63,8 +66,14 @@ public class InvestmentPoolService {
      */
     public List<InvestmentPoolDto> queryPoolList(InvestmentPoolReq req) {
         return investmentPoolMapper.queryPoolList().stream()
+                // 将投资池持久化对象转换为接口返回对象
                 .map(this::convertPool)
                 .collect(Collectors.toList());
+    }
+
+    /** 查询投资池基础数据列表，供其他查询模块复用 */
+    public List<InvestmentPoolBo> queryPoolBoList() {
+        return investmentPoolMapper.queryPoolList();
     }
 
     /** 查询全部投资池 ID → 全路径名称映射 */
@@ -83,14 +92,19 @@ public class InvestmentPoolService {
      * 查询投资池详情
      */
     public InvestmentPoolDto queryPoolDetail(InvestmentPoolReq req) {
+        // 校验投资池 ID
         Long poolId = requirePoolId(req);
         InvestmentPoolBo pool = investmentPoolMapper.queryPoolById(poolId);
         if (pool == null) {
             throw new BizException("投资池不存在");
         }
+        // 转换投资池对象
         InvestmentPoolDto dto = convertPool(pool);
+        // 填充关系配置
         fillRelationConfig(dto);
+        // 填充自动规则配置
         fillAutoRuleConfig(dto);
+        // 填充权限配置
         fillPermissionConfig(dto);
         return dto;
     }
@@ -100,13 +114,16 @@ public class InvestmentPoolService {
      */
     @Transactional(rollbackFor = Exception.class)
     public InvestmentPoolDto editPoolConfig(InvestmentPoolReq req) {
+        // 校验投资池 ID
         Long poolId = requirePoolId(req);
         InvestmentPoolBo oldPool = investmentPoolMapper.queryPoolById(poolId);
         if (oldPool == null) {
             throw new BizException("投资池不存在");
         }
+        // 构建投资池修改对象
         InvestmentPoolBo pool = buildPoolForEdit(req, oldPool);
         investmentPoolMapper.editPoolConfig(pool);
+        // 解析经办人 ID
         investmentPoolMapper.addPoolEvent(poolId, getOperatorId(req), "修改");
         return queryPoolDetail(req);
     }
@@ -116,15 +133,18 @@ public class InvestmentPoolService {
      */
     @Transactional(rollbackFor = Exception.class)
     public InvestmentPoolDto editPoolRelation(InvestmentPoolReq req) {
+        // 校验投资池 ID
         Long poolId = requirePoolId(req);
         InvestmentPoolBo pool = investmentPoolMapper.queryPoolById(poolId);
         if (pool == null) {
             throw new BizException("投资池不存在");
         }
+        // 解析经办人 ID
         String operatorId = getOperatorId(req);
         // 先记录删除事件，再删除旧关系，最后写入新关系
         investmentPoolMapper.addRelationEventByPoolId(poolId, operatorId, "删除");
         investmentPoolMapper.deleteRelationByPoolId(poolId);
+        // 新增投资池关系配置（按预定义类型顺序逐条写入
         addRelations(req, poolId, operatorId);
 
         // 全量替换自动规则：先删旧的调入/调出规则，再按请求顺序逐条插入
@@ -136,6 +156,7 @@ public class InvestmentPoolService {
                 Long ruleId = req.getAutoInRuleIds().get(i);
                 // 下标对齐取备注，防止 inDescs 列表长度不足时越界
                 String ruleDesc = (inDescs != null && i < inDescs.size()) ? inDescs.get(i) : "";
+                // 新增自动规则备注
                 addAutoRule(poolId, "auto_in", ruleId, ruleDesc, operatorId);
             }
         }
@@ -145,6 +166,7 @@ public class InvestmentPoolService {
                 Long ruleId = req.getAutoOutRuleIds().get(i);
                 // 下标对齐取备注，防止 outDescs 列表长度不足时越界
                 String ruleDesc = (outDescs != null && i < outDescs.size()) ? outDescs.get(i) : "";
+                // 新增自动规则备注
                 addAutoRule(poolId, "auto_out", ruleId, ruleDesc, operatorId);
             }
         }
@@ -162,6 +184,7 @@ public class InvestmentPoolService {
         if (req.getPoolType() == null || req.getPoolType().trim().isEmpty()) {
             throw new BizException("投资池类型不能为空");
         }
+        // 解析经办人 ID
         String operatorId = getOperatorId(req);
         InvestmentPoolBo templatePool = null;
         // 指定了模板池时，校验模板池是否存在，后续将复制其配置
@@ -171,13 +194,17 @@ public class InvestmentPoolService {
                 throw new BizException("模板投资池不存在");
             }
         }
+        // 构建顶级投资池
         InvestmentPoolBo rootPool = buildRootPool(req, templatePool);
         investmentPoolMapper.addPool(rootPool);
         investmentPoolMapper.addPoolEvent(rootPool.getId(), operatorId, "新增");
         // 有模板池时，将模板的关系/自动规则/权限配置复制到新顶级池
         if (templatePool != null) {
+            // 复制父级关系配置
             copyParentRelationConfig(templatePool.getId(), rootPool.getId(), operatorId);
+            // 复制父级自动规则配置
             copyParentAutoRuleConfig(templatePool.getId(), rootPool.getId(), operatorId);
+            // 复制父级权限配置
             copyParentPermissionConfig(templatePool.getId(), rootPool.getId(), operatorId);
         }
         InvestmentPoolReq detailReq = new InvestmentPoolReq();
@@ -200,6 +227,7 @@ public class InvestmentPoolService {
         if (parentPool == null) {
             throw new BizException("父级投资池不存在");
         }
+        // 解析经办人 ID
         String operatorId = getOperatorId(req);
         InvestmentPoolBo templatePool = null;
         if (req.getTemplatePoolId() != null) {
@@ -212,13 +240,17 @@ public class InvestmentPoolService {
             // 未指定模板但勾选了继承父级配置，则以父级池作为模板
             templatePool = parentPool;
         }
+        // 构建子投资池
         InvestmentPoolBo childPool = buildChildPool(req, parentPool, templatePool);
         investmentPoolMapper.addPool(childPool);
         investmentPoolMapper.addPoolEvent(childPool.getId(), operatorId, "新增");
         // 有模板池时，将模板的关系/自动规则/权限配置复制到新子池
         if (templatePool != null) {
+            // 复制父级关系配置
             copyParentRelationConfig(templatePool.getId(), childPool.getId(), operatorId);
+            // 复制父级自动规则配置
             copyParentAutoRuleConfig(templatePool.getId(), childPool.getId(), operatorId);
+            // 复制父级权限配置
             copyParentPermissionConfig(templatePool.getId(), childPool.getId(), operatorId);
         }
         InvestmentPoolReq detailReq = new InvestmentPoolReq();
@@ -231,6 +263,7 @@ public class InvestmentPoolService {
      */
     @Transactional(rollbackFor = Exception.class)
     public InvestmentPoolDto deletePoolNode(InvestmentPoolReq req) {
+        // 校验投资池 ID
         Long poolId = requirePoolId(req);
         InvestmentPoolBo pool = investmentPoolMapper.queryPoolById(poolId);
         if (pool == null) {
@@ -238,9 +271,11 @@ public class InvestmentPoolService {
         }
         // 删除前保留被删池信息用于返回
         InvestmentPoolDto deletedPool = convertPool(pool);
+        // 解析经办人 ID
         String operatorId = getOperatorId(req);
         // 递归收集当前节点及全部后代节点 ID，批量删除
         List<Long> deleteIds = new ArrayList<>();
+        // 递归收集节点及后代节点 ID
         collectDescendantPoolIds(poolId, deleteIds);
         // 删除这些池自身的关系记录（作为主池），并记录事件
         investmentPoolMapper.addRelationEventByPoolIds(deleteIds, operatorId, "删除");
@@ -273,14 +308,19 @@ public class InvestmentPoolService {
         if (investmentPoolMapper.queryPoolCount() > 0) {
             return queryPoolList(req);
         }
+        // 解析经办人 ID
         String operatorId = getOperatorId(req);
         // 创建信用债大库顶级节点，并追加一级~五级子库
         InvestmentPoolBo credit = addSeedPool(null, "credit_bond_root", "信用债大库", "credit_bond", 1, 1, 1, operatorId);
+        // 新增固定层级池
         addLevelPools(credit.getId(), "credit_bond", operatorId);
+        // 新增初始化投资池
         addSeedPool(null, "offshore_bond_root", "境外债库", "offshore_bond", 1, 2, 1, operatorId);
+        // 新增初始化投资池
         addSeedPool(null, "convertible_bond_root", "转债库", "convertible_bond", 1, 3, 1, operatorId);
         // 创建专户产品顶级节点，并追加一级~五级子库
         InvestmentPoolBo special = addSeedPool(null, "special_account_root", "专户产品", "special_account", 1, 4, 1, operatorId);
+        // 新增固定层级池
         addLevelPools(special.getId(), "special_account", operatorId);
         return queryPoolList(req);
     }
@@ -290,6 +330,7 @@ public class InvestmentPoolService {
      */
     public List<RoleDto> queryRoleList(InvestmentPoolReq req) {
         return investmentPoolMapper.queryRoleList().stream()
+                // 将角色持久化对象转换为接口返回对象
                 .map(this::convertRole)
                 .collect(Collectors.toList());
     }
@@ -305,9 +346,11 @@ public class InvestmentPoolService {
             // 指定了角色时，递归收集该角色及其子角色 ID，以支持角色树过滤
             roleIds = new ArrayList<>();
             List<RoleBo> allRoles = investmentPoolMapper.queryRoleList();
+            // 递归收集角色及后代角色 ID
             collectDescendantRoleIds(roleId, roleIds, allRoles);
         }
         return investmentPoolMapper.queryUserList(roleIds, keyword).stream()
+                // 将用户持久化对象转换为接口返回对象
                 .map(this::convertUser)
                 .collect(Collectors.toList());
     }
@@ -338,6 +381,7 @@ public class InvestmentPoolService {
         roleIds.add(roleId);
         for (RoleBo role : allRoles) {
             if (roleId.equals(role.getParentId())) {
+                // 递归收集角色及后代角色 ID
                 collectDescendantRoleIds(role.getId(), roleIds, allRoles);
             }
         }
@@ -348,14 +392,17 @@ public class InvestmentPoolService {
      */
     @Transactional(rollbackFor = Exception.class)
     public InvestmentPoolDto editPoolPermission(InvestmentPoolReq req) {
+        // 校验投资池 ID
         Long poolId = requirePoolId(req);
         InvestmentPoolBo pool = investmentPoolMapper.queryPoolById(poolId);
         if (pool == null) {
             throw new BizException("投资池不存在");
         }
+        // 解析经办人 ID
         String operatorId = getOperatorId(req);
         investmentPoolMapper.addPermissionEventByPoolId(poolId, operatorId, "删除");
         investmentPoolMapper.deletePermissionByPoolId(poolId);
+        // 新增权限配置
         addPermissions(req, poolId, operatorId);
         return queryPoolDetail(req);
     }
@@ -364,10 +411,15 @@ public class InvestmentPoolService {
      * 新增固定层级池
      */
     private void addLevelPools(Long parentId, String prefix, String operatorId) {
+        // 新增初始化投资池
         addSeedPool(parentId, prefix + "_level_1", "一级库", prefix, 2, 1, 1, operatorId);
+        // 新增初始化投资池
         addSeedPool(parentId, prefix + "_level_2", "二级库", prefix, 2, 1, 2, operatorId);
+        // 新增初始化投资池
         addSeedPool(parentId, prefix + "_level_3", "三级库", prefix, 2, 1, 3, operatorId);
+        // 新增初始化投资池
         addSeedPool(parentId, prefix + "_level_4", "四级库", prefix, 2, 1, 4, operatorId);
+        // 新增初始化投资池
         addSeedPool(parentId, prefix + "_level_5", "五级库", prefix, 2, 1, 5, operatorId);
     }
 
@@ -414,6 +466,7 @@ public class InvestmentPoolService {
         rootPool.setOuterSort(outerSort);
         rootPool.setInnerSort(1);
         if (templatePool != null) {
+            // 复制父级基础配置
             copyBaseConfig(templatePool, rootPool);
         } else {
             rootPool.setMarketCodes("[]");
@@ -445,6 +498,7 @@ public class InvestmentPoolService {
         }
         childPool.setInnerSort(innerSort);
         if (templatePool != null) {
+            // 复制父级基础配置
             copyBaseConfig(templatePool, childPool);
         } else {
             childPool.setMarketCodes("[]");
@@ -517,6 +571,7 @@ public class InvestmentPoolService {
     private void copyParentAutoRuleConfig(Long parentPoolId, Long childPoolId, String operatorId) {
         List<PoolAutoRuleBo> rules = investmentPoolMapper.queryAutoRuleList(parentPoolId);
         for (PoolAutoRuleBo parentRule : rules) {
+            // 新增自动规则备注
             addAutoRule(childPoolId, parentRule.getRuleType(), parentRule.getRuleId(), parentRule.getRuleDesc(), operatorId);
         }
     }
@@ -528,6 +583,7 @@ public class InvestmentPoolService {
         poolIds.add(poolId);
         List<InvestmentPoolBo> childPools = investmentPoolMapper.queryChildPoolList(poolId);
         for (InvestmentPoolBo childPool : childPools) {
+            // 递归收集节点及后代节点 ID
             collectDescendantPoolIds(childPool.getId(), poolIds);
         }
     }
@@ -539,9 +595,12 @@ public class InvestmentPoolService {
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(oldPool.getId());
         pool.setPoolName(req.getPoolName());
+        // 序列化业务数据为 JSON
         pool.setMarketCodes(toJson(req.getMarketCodes()));
+        // 序列化业务数据为 JSON
         pool.setVarietyCodes(toJson(req.getVarietyCodes()));
         pool.setHsPoolName(req.getHsPoolName());
+        // 填充流程快照字段
         applyFlow(pool, req);
         pool.setInReportRestriction(req.getInReportRestriction());
         pool.setOutReportRestriction(req.getOutReportRestriction());
@@ -557,31 +616,37 @@ public class InvestmentPoolService {
      * 填充流程快照字段
      */
     private void applyFlow(InvestmentPoolBo pool, InvestmentPoolReq req) {
+        // 规范化流程选项
         FlowOptionDto inFlow = normalizeFlow(req.getInFlow());
         pool.setInFlowId(inFlow.getFlowId());
         pool.setInFlowKey(inFlow.getFlowKey());
         pool.setInFlowName(inFlow.getFlowName());
 
+        // 规范化流程选项
         FlowOptionDto outFlow = normalizeFlow(req.getOutFlow());
         pool.setOutFlowId(outFlow.getFlowId());
         pool.setOutFlowKey(outFlow.getFlowKey());
         pool.setOutFlowName(outFlow.getFlowName());
 
+        // 规范化流程选项
         FlowOptionDto simpleInFlow = normalizeFlow(req.getSimpleInFlow());
         pool.setSimpleInFlowId(simpleInFlow.getFlowId());
         pool.setSimpleInFlowKey(simpleInFlow.getFlowKey());
         pool.setSimpleInFlowName(simpleInFlow.getFlowName());
 
+        // 规范化流程选项
         FlowOptionDto simpleOutFlow = normalizeFlow(req.getSimpleOutFlow());
         pool.setSimpleOutFlowId(simpleOutFlow.getFlowId());
         pool.setSimpleOutFlowKey(simpleOutFlow.getFlowKey());
         pool.setSimpleOutFlowName(simpleOutFlow.getFlowName());
 
+        // 规范化流程选项
         FlowOptionDto batchInFlow = normalizeFlow(req.getBatchInFlow());
         pool.setBatchInFlowId(batchInFlow.getFlowId());
         pool.setBatchInFlowKey(batchInFlow.getFlowKey());
         pool.setBatchInFlowName(batchInFlow.getFlowName());
 
+        // 规范化流程选项
         FlowOptionDto batchOutFlow = normalizeFlow(req.getBatchOutFlow());
         pool.setBatchOutFlowId(batchOutFlow.getFlowId());
         pool.setBatchOutFlowKey(batchOutFlow.getFlowKey());
@@ -648,6 +713,7 @@ public class InvestmentPoolService {
         Date now = new Date();
         rule.setCrteTime(now);
         rule.setUpdtTime(now);
+        // 新增自动规则备注
         investmentPoolMapper.addAutoRule(rule);
         investmentPoolMapper.addAutoRuleEvent(rule.getId(), operatorId, "新增");
     }
@@ -749,14 +815,22 @@ public class InvestmentPoolService {
         dto.setPoolName(pool.getPoolName());
         dto.setPoolType(pool.getPoolType());
         dto.setPoolLevel(pool.getPoolLevel());
+        // 解析 JSON 列表
         dto.setMarketCodes(fromJson(pool.getMarketCodes()));
+        // 解析 JSON 列表
         dto.setVarietyCodes(fromJson(pool.getVarietyCodes()));
         dto.setHsPoolName(pool.getHsPoolName());
+        // 构建流程选项
         dto.setInFlow(buildFlow(pool.getInFlowId(), pool.getInFlowKey(), pool.getInFlowName()));
+        // 构建流程选项
         dto.setOutFlow(buildFlow(pool.getOutFlowId(), pool.getOutFlowKey(), pool.getOutFlowName()));
+        // 构建流程选项
         dto.setSimpleInFlow(buildFlow(pool.getSimpleInFlowId(), pool.getSimpleInFlowKey(), pool.getSimpleInFlowName()));
+        // 构建流程选项
         dto.setSimpleOutFlow(buildFlow(pool.getSimpleOutFlowId(), pool.getSimpleOutFlowKey(), pool.getSimpleOutFlowName()));
+        // 构建流程选项
         dto.setBatchInFlow(buildFlow(pool.getBatchInFlowId(), pool.getBatchInFlowKey(), pool.getBatchInFlowName()));
+        // 构建流程选项
         dto.setBatchOutFlow(buildFlow(pool.getBatchOutFlowId(), pool.getBatchOutFlowKey(), pool.getBatchOutFlowName()));
         dto.setInReportRestriction(pool.getInReportRestriction());
         dto.setOutReportRestriction(pool.getOutReportRestriction());
@@ -805,9 +879,11 @@ public class InvestmentPoolService {
      * 获取经办人 ID
      */
     private String getOperatorId(InvestmentPoolReq req) {
+        // 解析经办人 ID
         if (req == null || req.getOperatorId() == null || req.getOperatorId().trim().isEmpty()) {
             return OPERATOR_DEFAULT;
         }
+        // 解析经办人 ID
         return req.getOperatorId();
     }
 

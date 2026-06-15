@@ -1,5 +1,7 @@
 package com.znty.sirm.service;
 
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.IdRequest;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.exception.BizException;
@@ -36,15 +38,15 @@ import java.util.stream.Collectors;
 @Service
 public class TestCaseService {
 
-    /** 日期时间格式化（yyyy-MM-dd HH:mm:ss），用于 lastRunTime 字段 */
-    private static final SimpleDateFormat DATE_TIME_FORMATTER = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-
+    /** 规则管理服务 */
     @Resource
     private RuleService ruleService;
 
+    /** 规则管理数据访问组件 */
     @Resource
     private RuleMapper ruleMapper;
 
+    /** 测试用例数据访问组件 */
     @Resource
     private TestCaseMapper testCaseMapper;
 
@@ -59,13 +61,18 @@ public class TestCaseService {
      */
     public PageResult<TestCaseDto> queryTestCasePage(TestCaseReq req) {
         TestCaseReq safeReq = req == null ? new TestCaseReq() : req;
-        long total = testCaseMapper.queryCaseCount();
-        List<RuleTestCaseBo> cases = testCaseMapper.queryCasePage(safeReq.offset(), safeReq.getPageSize());
+        // 开启分页查询
+        PageHelper.startPage(safeReq.getPageIndex(), safeReq.getPageSize());
+        List<RuleTestCaseBo> cases = testCaseMapper.queryCasePage();
+        PageInfo<RuleTestCaseBo> pageInfo = new PageInfo<>(cases);
+        // 批量加载测试用例的参数值
         Map<Long, Map<String, String>> paramMap = loadCaseParamMap(cases);
+        // 批量加载测试用例关联的规则定义
         Map<Long, RuleDefinitionBo> ruleMap = loadRuleMap(cases);
         List<TestCaseDto> records = cases.stream()
+                // 组装测试用例返回对象
                 .map(c -> toDto(c, paramMap.get(c.getId()), ruleMap.get(c.getRuleId()))).collect(Collectors.toList());
-        return new PageResult<>(records, total, safeReq.getPageIndex(), safeReq.getPageSize());
+        return new PageResult<>(records, pageInfo.getTotal(), safeReq.getPageIndex(), safeReq.getPageSize());
     }
 
     /**
@@ -74,15 +81,18 @@ public class TestCaseService {
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto addOrEditTestCase(TestCaseReq req) {
+        // 校验保存请求的必填字段（名称、关联规则）
         validateSaveReq(req);
         RuleDefinitionBo rule = ruleService.requireRule(req.getRuleId());
         RuleTestCaseBo testCase;
         if (req.getId() != null) {
+            // 按 ID 查询测试用例实体
             testCase = requireCase(req.getId());
             testCase.setCaseName(req.getName().trim());
             testCase.setRuleId(rule.getId());
             testCase.setRuleNameSnapshot(rule.getRuleName());
             testCaseMapper.editCase(testCase);
+            // 全量替换测试用例的参数值（先删后增）
             replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
         } else {
             testCase = new RuleTestCaseBo();
@@ -92,8 +102,10 @@ public class TestCaseService {
             testCase.setLastResult(null);
             testCase.setLastOutput(null);
             testCaseMapper.addCase(testCase);
+            // 全量替换测试用例的参数值（先删后增）
             replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
         }
+        // 按 ID 查询测试用例并组装为完整的 TestCaseDto
         return detailById(testCase.getId());
     }
 
@@ -112,6 +124,7 @@ public class TestCaseService {
         if (updated == 0) {
             throw new BizException("测试用例不存在");
         }
+        // 按 ID 查询测试用例并组装为完整的 TestCaseDto
         return detailById(req.getId());
     }
 
@@ -120,6 +133,7 @@ public class TestCaseService {
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto deleteTestCase(IdRequest req) {
+        // 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req == null ? null : req.getId());
         // 删除前查出实体一并返回，便于前端展示
         TestCaseDto deleted = detailById(testCase.getId());
@@ -134,11 +148,13 @@ public class TestCaseService {
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto runTestCase(IdRequest req) {
+        // 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req == null ? null : req.getId());
         RuleDefinitionBo rule = ruleMapper.queryRuleById(testCase.getRuleId());
         if (rule == null) {
             throw new BizException("测试用例关联规则不存在");
         }
+        // 批量加载测试用例的参数值
         Map<String, String> params = loadCaseParamMap(Collections.singletonList(testCase))
                 .getOrDefault(testCase.getId(), Collections.emptyMap());
         RuleRunResultDto runResult = ruleService.executeAndRecord(rule, params, testCase.getId());
@@ -146,6 +162,7 @@ public class TestCaseService {
         testCase.setLastOutput(runResult.getOutput());
         testCase.setLastRunTime(new Date());
         testCaseMapper.editCaseLastResult(testCase);
+        // 按 ID 查询测试用例并组装为完整的 TestCaseDto
         return detailById(testCase.getId());
     }
 
@@ -157,6 +174,7 @@ public class TestCaseService {
         List<RuleTestCaseBo> cases = testCaseMapper.queryAllCaseList();
         for (RuleTestCaseBo testCase : cases) {
             try {
+                // 构建仅含 ID 的 IdRequest
                 self.runTestCase(newIdRequest(testCase.getId()));
             } catch (Exception e) {
                 testCase.setLastResult("fail");
@@ -166,9 +184,12 @@ public class TestCaseService {
             }
         }
         List<RuleTestCaseBo> refreshedCases = testCaseMapper.queryAllCaseList();
+        // 批量加载测试用例的参数值
         Map<Long, Map<String, String>> paramMap = loadCaseParamMap(refreshedCases);
+        // 批量加载测试用例关联的规则定义
         Map<Long, RuleDefinitionBo> ruleMap = loadRuleMap(refreshedCases);
         return refreshedCases.stream()
+                // 组装测试用例返回对象
                 .map(c -> toDto(c, paramMap.get(c.getId()), ruleMap.get(c.getRuleId()))).collect(Collectors.toList());
     }
 
@@ -224,11 +245,14 @@ public class TestCaseService {
 
     /** 按 ID 查询测试用例并组装为完整的 TestCaseDto */
     private TestCaseDto detailById(Long id) {
+        // 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(id);
+        // 批量加载测试用例的参数值
         Map<String, String> params = loadCaseParamMap(Collections.singletonList(testCase))
                 .getOrDefault(testCase.getId(), Collections.emptyMap());
         RuleDefinitionBo rule = testCase.getRuleId() == null
                 ? null : ruleMapper.queryRuleById(testCase.getRuleId());
+        // 组装测试用例返回对象
         return toDto(testCase, params, rule);
     }
 
@@ -293,8 +317,7 @@ public class TestCaseService {
         dto.setParams(new LinkedHashMap<>(params == null ? Collections.emptyMap() : params));
         dto.setLastResult(testCase.getLastResult());
         dto.setLastOutput(testCase.getLastOutput());
-        dto.setLastRunTime(testCase.getLastRunTime() == null
-                ? null : DATE_TIME_FORMATTER.format(testCase.getLastRunTime()));
+        dto.setLastRunTime(testCase.getLastRunTime());
         return dto;
     }
 

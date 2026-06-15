@@ -37,8 +37,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/** SecurityPoolAdjustServiceStepTest 测试类。 */
 public class SecurityPoolAdjustServiceStepTest {
 
+    /** 验证 checkInConditionsShouldShowPendingProcessNodeLabel 测试场景。 */
     @Test
     public void checkInConditionsShouldShowPendingProcessNodeLabel() {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
@@ -56,13 +58,16 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failures).contains("证券存在进行中的调库流程（当前节点：研究员B复核），请等待流程结束后再发起调库");
     }
 
+    /** 验证 queryAdjustPoolListShouldSkipPermissionFilterForAdmin 测试场景。 */
     @Test
     public void queryAdjustPoolListShouldSkipPermissionFilterForAdmin() {
         InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
         when(mapper.queryPoolList()).thenReturn(Arrays.asList(
+                // 构建投资池测试数据
                 buildPool(1L, null, "根库"),
+                // 构建投资池测试数据
                 buildPool(2L, 1L, "一级库")));
         when(mapper.queryMutexRelationList()).thenReturn(Collections.emptyList());
 
@@ -75,22 +80,32 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(mapper, never()).queryUserRoleIdList(org.mockito.Matchers.anyLong());
     }
 
+    /** 验证 filterAdjustablePoolsByUserShouldKeepAncestors 测试场景。 */
     @Test
     public void filterAdjustablePoolsByUserShouldKeepAncestors() {
         InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
         List<InvestmentPoolBo> pools = Arrays.asList(
+                // 构建投资池测试数据
                 buildPool(1L, null, "根库"),
+                // 构建投资池测试数据
                 buildPool(2L, 1L, "信用债"),
+                // 构建投资池测试数据
                 buildPool(3L, 2L, "一级库"),
+                // 构建投资池测试数据
                 buildPool(4L, 1L, "专户产品"),
+                // 构建投资池测试数据
                 buildPool(5L, 4L, "二级库"),
+                // 构建投资池测试数据
                 buildPool(6L, 1L, "未授权库"));
         when(mapper.queryUserRoleIdList(2001L)).thenReturn(Collections.singletonList(20L));
         when(mapper.queryPermissionListByType("adjustable")).thenReturn(Arrays.asList(
+                // 构建投资池权限测试数据
                 buildPermission(3L, "user", 2001L),
+                // 构建投资池权限测试数据
                 buildPermission(5L, "role", 20L),
+                // 构建投资池权限测试数据
                 buildPermission(6L, "user", 3001L)));
 
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(service, "filterAdjustablePoolsByUser", pools, 2001L);
@@ -98,19 +113,26 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(1L, 2L, 3L, 4L, 5L);
     }
 
+    /** 验证 createInitialStepsShouldCreatePendingStepForEachPreemptHandler 测试场景。 */
     @Test
     public void createInitialStepsShouldCreatePendingStepForEachPreemptHandler() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
 
+        // 构建流程节点测试数据
         FlowNodeBo start = buildNode(1L, "start", "start", 1);
+        // 构建流程节点测试数据
         FlowNodeBo approval = buildNode(2L, "approval", "approval", 2);
+        // 构建审批配置测试数据
         NodeApprovalConfigBo config = buildConfig(20L, approval.getId(), "preempt");
+        // 构建流程快照测试数据
         Object snapshot = buildSnapshot(
                 Arrays.asList(start, approval),
+                // 构建流程连线测试数据
                 Arrays.asList(buildEdge(start.getId(), approval.getId())),
                 Arrays.asList(config),
+                // 构建审批处理人映射测试数据
                 buildHandlerMap(config.getId(), 5));
 
         ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
@@ -129,21 +151,30 @@ public class SecurityPoolAdjustServiceStepTest {
                 .containsExactly("1", "2", "3", "4", "5");
     }
 
+    /** 验证 createInitialStepsShouldApproveInitiatorThenCreateConfiguredPendingSteps 测试场景。 */
     @Test
     public void createInitialStepsShouldApproveInitiatorThenCreateConfiguredPendingSteps() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
 
+        // 构建流程节点测试数据
         FlowNodeBo start = buildNode(1L, "start", "start", 1);
+        // 构建流程节点测试数据
         FlowNodeBo initiator = buildNode(2L, "initiator", "approval", 2);
+        // 构建流程节点测试数据
         FlowNodeBo approval = buildNode(3L, "approval", "approval", 3);
+        // 构建审批配置测试数据
         NodeApprovalConfigBo initiatorConfig = buildConfig(20L, initiator.getId(), "initiator");
+        // 构建审批配置测试数据
         NodeApprovalConfigBo approvalConfig = buildConfig(30L, approval.getId(), "preempt");
+        // 构建流程快照测试数据
         Object snapshot = buildSnapshot(
                 Arrays.asList(start, initiator, approval),
+                // 构建流程连线测试数据
                 Arrays.asList(buildEdge(start.getId(), initiator.getId()), buildEdge(initiator.getId(), approval.getId())),
                 Arrays.asList(initiatorConfig, approvalConfig),
+                // 构建审批处理人映射测试数据
                 buildHandlerMap(approvalConfig.getId(), 2));
 
         ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
@@ -162,24 +193,33 @@ public class SecurityPoolAdjustServiceStepTest {
                 .containsExactly("1", "2");
     }
 
+    /** 验证 createInitialStepsShouldSkipSubmitterNodeEvenWhenOldConfigIsPreempt 测试场景。 */
     @Test
     public void createInitialStepsShouldSkipSubmitterNodeEvenWhenOldConfigIsPreempt() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
 
+        // 构建流程节点测试数据
         FlowNodeBo start = buildNode(1L, "n1", "start", 1);
+        // 构建流程节点测试数据
         FlowNodeBo submitter = buildNode(2L, "n2", "approval", 2);
         submitter.setLabel("研究员A发起");
         submitter.setSubLabel("researcher-a");
+        // 构建流程节点测试数据
         FlowNodeBo reviewer = buildNode(3L, "n3", "approval", 3);
         reviewer.setLabel("研究员B复核");
+        // 构建审批配置测试数据
         NodeApprovalConfigBo submitterConfig = buildConfig(20L, submitter.getId(), "preempt");
+        // 构建审批配置测试数据
         NodeApprovalConfigBo reviewerConfig = buildConfig(30L, reviewer.getId(), "preempt");
+        // 构建流程快照测试数据
         Object snapshot = buildSnapshot(
                 Arrays.asList(start, submitter, reviewer),
+                // 构建流程连线测试数据
                 Arrays.asList(buildEdge(start.getId(), submitter.getId()), buildEdge(submitter.getId(), reviewer.getId())),
                 Arrays.asList(submitterConfig, reviewerConfig),
+                // 构建审批处理人映射测试数据
                 buildHandlerMap(reviewerConfig.getId(), 2));
 
         ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
@@ -201,24 +241,33 @@ public class SecurityPoolAdjustServiceStepTest {
                 .containsExactly("1", "2");
     }
 
+    /** 验证 createInitialStepsShouldThrowWhenEdgeAfterSubmitterIsMissing 测试场景。 */
     @Test
     public void createInitialStepsShouldThrowWhenEdgeAfterSubmitterIsMissing() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
 
+        // 构建流程节点测试数据
         FlowNodeBo start = buildNode(1L, "n1", "start", 1);
+        // 构建流程节点测试数据
         FlowNodeBo submitter = buildNode(2L, "n2", "approval", 2);
         submitter.setLabel("研究员A发起");
         submitter.setSubLabel("researcher-a");
+        // 构建流程节点测试数据
         FlowNodeBo reviewer = buildNode(3L, "n3", "approval", 3);
         reviewer.setLabel("研究员B复核");
+        // 构建审批配置测试数据
         NodeApprovalConfigBo submitterConfig = buildConfig(20L, submitter.getId(), "initiator");
+        // 构建审批配置测试数据
         NodeApprovalConfigBo reviewerConfig = buildConfig(30L, reviewer.getId(), "preempt");
+        // 构建流程快照测试数据
         Object snapshot = buildSnapshot(
                 Arrays.asList(start, submitter, reviewer),
+                // 构建流程连线测试数据
                 Collections.singletonList(buildEdge(start.getId(), submitter.getId())),
                 Arrays.asList(submitterConfig, reviewerConfig),
+                // 构建审批处理人映射测试数据
                 buildHandlerMap(reviewerConfig.getId(), 2));
 
         try {
@@ -231,6 +280,7 @@ public class SecurityPoolAdjustServiceStepTest {
         throw new AssertionError("缺少下一步连线时应抛出流程配置异常");
     }
 
+    /** 验证 executeInboundSubmitShouldTreatMissingFlowAsDirect 测试场景。 */
     @Test
     public void executeInboundSubmitShouldTreatMissingFlowAsDirect() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
@@ -257,6 +307,7 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setPoolType("special_account");
         req.setItems(Collections.singletonList(item));
 
+        // 构建调库提交共享数据测试数据
         Object shared = buildSubmitSharedData();
 
         List<Long> result = ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
@@ -270,6 +321,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).containsExactly(99L);
     }
 
+    /** 验证 executeOutboundSubmitShouldCreateLogWhenFlowIsDirect 测试场景。 */
     @Test
     public void executeOutboundSubmitShouldCreateLogWhenFlowIsDirect() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
@@ -296,6 +348,7 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setPoolType("special_account");
         req.setItems(Collections.singletonList(item));
 
+        // 构建调库提交共享数据测试数据
         Object shared = buildSubmitSharedData();
 
         List<Long> result = ReflectionTestUtils.invokeMethod(service, "executeOutboundSubmit", req, shared);
@@ -324,6 +377,7 @@ public class SecurityPoolAdjustServiceStepTest {
         return constructor.newInstance(null, null, nodeMap, edges, configMap, handlerMap);
     }
 
+    /** 构建调库提交共享数据测试数据。 */
     private Object buildSubmitSharedData() throws Exception {
         Class<?> sharedClass = Class.forName("com.znty.sirm.service.SecurityPoolAdjustService$SubmitSharedData");
         Constructor<?> constructor = sharedClass.getDeclaredConstructors()[0];
@@ -339,6 +393,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 new HashMap<Long, Object>());
     }
 
+    /** 构建流程节点测试数据。 */
     private FlowNodeBo buildNode(Long id, String nodeId, String nodeType, Integer sortOrder) {
         FlowNodeBo node = new FlowNodeBo();
         node.setId(id);
@@ -349,6 +404,7 @@ public class SecurityPoolAdjustServiceStepTest {
         return node;
     }
 
+    /** 构建流程连线测试数据。 */
     private FlowEdgeBo buildEdge(Long fromNodeId, Long toNodeId) {
         FlowEdgeBo edge = new FlowEdgeBo();
         edge.setFromNodeId(fromNodeId);
@@ -356,6 +412,7 @@ public class SecurityPoolAdjustServiceStepTest {
         return edge;
     }
 
+    /** 构建投资池测试数据。 */
     private InvestmentPoolBo buildPool(Long id, Long parentId, String poolName) {
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(id);
@@ -364,6 +421,7 @@ public class SecurityPoolAdjustServiceStepTest {
         return pool;
     }
 
+    /** 构建投资池权限测试数据。 */
     private PoolPermissionBo buildPermission(Long poolId, String subjectType, Long subjectId) {
         PoolPermissionBo permission = new PoolPermissionBo();
         permission.setPoolId(poolId);
@@ -373,6 +431,7 @@ public class SecurityPoolAdjustServiceStepTest {
         return permission;
     }
 
+    /** 构建审批配置测试数据。 */
     private NodeApprovalConfigBo buildConfig(Long id, Long nodeId, String approvalStrategy) {
         NodeApprovalConfigBo config = new NodeApprovalConfigBo();
         config.setId(id);
@@ -381,6 +440,7 @@ public class SecurityPoolAdjustServiceStepTest {
         return config;
     }
 
+    /** 构建审批处理人映射测试数据。 */
     private Map<Long, List<NodeApprovalHandlerBo>> buildHandlerMap(Long configId, int count) {
         Map<Long, List<NodeApprovalHandlerBo>> map = new HashMap<>();
         List<NodeApprovalHandlerBo> handlers = new ArrayList<>();

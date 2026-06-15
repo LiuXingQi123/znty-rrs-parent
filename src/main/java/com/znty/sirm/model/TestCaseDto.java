@@ -1,7 +1,9 @@
 package com.znty.sirm.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -25,5 +27,6 @@ public class TestCaseDto {
     /** 最近一次执行输出 */
     private String lastOutput;
     /** 最近一次执行时间（格式化） */
-    private String lastRunTime;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private Date lastRunTime;
 }

@@ -24,11 +24,8 @@ public interface TestCaseMapper {
 
     // ==================== rule_test_case ====================
 
-    /** 统计测试用例总数 */
-    long queryCaseCount();
-
     /** 分页查询测试用例列表，按创建时间倒序 */
-    List<RuleTestCaseBo> queryCasePage(@Param("offset") int offset, @Param("pageSize") int pageSize);
+    List<RuleTestCaseBo> queryCasePage();
 
     /** 查询全部测试用例（用于批量执行） */
     List<RuleTestCaseBo> queryAllCaseList();

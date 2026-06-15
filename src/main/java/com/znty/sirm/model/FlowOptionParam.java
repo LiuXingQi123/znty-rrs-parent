@@ -40,10 +40,12 @@ public class FlowOptionParam {
     /** 未命中的原因 */
     private List<String> unmatchReasons;
 
+    /** 获取流程匹配原因列表 */
     public List<String> getMatchReasons() {
         return matchReasons != null ? matchReasons : new ArrayList<>();
     }
 
+    /** 获取流程不匹配原因列表 */
     public List<String> getUnmatchReasons() {
         return unmatchReasons != null ? unmatchReasons : new ArrayList<>();
     }

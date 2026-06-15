@@ -494,7 +494,7 @@ CREATE TABLE `wf_edge_cond_rule_evt` (
 --               invest-director / admin
 -- ============================================================================
 CREATE TABLE `wf_role_dict` (
-    `id`         INT          NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
+    `id`         BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `role_code`  VARCHAR(64)  DEFAULT NULL             COMMENT '角色编码，如：fund-manager',
     `role_name`  VARCHAR(64)  DEFAULT NULL             COMMENT '角色中文名，如：投资经理',
     `sort_order` INT          DEFAULT NULL             COMMENT '排序序号',
@@ -509,7 +509,7 @@ CREATE TABLE `wf_role_dict` (
 
 CREATE TABLE `wf_role_dict_evt` (
     `evt_id`     BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
-    `id`         INT          DEFAULT NULL             COMMENT '主键 ID',
+    `id`         BIGINT       DEFAULT NULL             COMMENT '主键 ID',
     `role_code`  VARCHAR(64)  DEFAULT NULL             COMMENT '角色编码，如：fund-manager',
     `role_name`  VARCHAR(64)  DEFAULT NULL             COMMENT '角色中文名，如：投资经理',
     `sort_order` INT          DEFAULT NULL             COMMENT '排序序号',

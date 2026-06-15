@@ -1,6 +1,5 @@
 package com.znty.sirm.controller;
 
-import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.service.SecurityPoolQueryService;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,16 +14,18 @@ import static org.mockito.Mockito.mock;
  */
 public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         SecurityPoolQueryController controller = new SecurityPoolQueryController();
         ReflectionTestUtils.setField(controller, "securityPoolQueryService", mock(SecurityPoolQueryService.class));
-        ReflectionTestUtils.setField(controller, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
+    /** 验证 shouldSupportSecurityPoolQuery 测试场景。 */
     @Test
     public void shouldSupportSecurityPoolQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityPoolPage", "{}");
@@ -33,6 +34,7 @@ public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/queryPoolTreeList");
     }
 
+    /** 验证 shouldSupportMyPoolFavorites 测试场景。 */
     @Test
     public void shouldSupportMyPoolFavorites() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/addToMyPool", "{\"userId\":\"1001\",\"securityCode\":\"100001\"}");

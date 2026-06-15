@@ -69,6 +69,7 @@ public class SecurityPoolAdjustFlowService {
      * 解析实际处理步骤：管理员本人也在当前节点处理人列表中时，优先处理管理员自己的步骤。
      */
     private IpAdjustStepBo resolveActualProcessStep(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
+        // 判断字符串是否有有效内容；判断当前操作人是否为管理员
         if (step == null || !isAdminOperator(req) || !hasText(req.getHandlerId())) {
             return step;
         }
@@ -142,6 +143,7 @@ public class SecurityPoolAdjustFlowService {
         // 判断当前审批节点是否已完成
         boolean nodeCompleted = completeCurrentApprovalNodeIfNeeded(step, req.getProcessAction(), stepStatus);
         if (!nodeCompleted) {
+            // 查询当前调库记录审核状态
             String currentAuditStatus = queryCurrentAuditStatus(step);
             // 构建审批处理返回对象
             return buildAuditDto(step, currentAuditStatus, false, false, "当前会签节点仍有待处理人员");
@@ -196,6 +198,7 @@ public class SecurityPoolAdjustFlowService {
      * 根据处理节点语义解析步骤整体结果，修改/发起节点的正向动作展示为提交。
      */
     private String resolveStepStatusForProcess(IpAdjustStepBo step, String processAction) {
+        // 判断当前步骤是否是提交语义节点
         if ("approve".equals(processAction) && isSubmitSemanticStep(step)) {
             return "submit";
         }
@@ -242,10 +245,12 @@ public class SecurityPoolAdjustFlowService {
             NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(nextNode.getId());
             int sortOrder = nextNode.getSortOrder() != null ? nextNode.getSortOrder() : 1;
 
+            // 判断是否为自动审批节点
             if (isAutoApprovalNode(nextNode)) {
                 // O32 自动审批节点直接记录为自动完成，并继续流转到结束节点
                 insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
                         "auto_process", null, null, "auto_process", null, now);
+                // 查找审批通过主路径上的下一节点
                 FlowNodeBo afterNode = findNextNode(snapshot, nextNode, prevNode, processAction);
                 prevNode = nextNode;
                 nextNode = afterNode;
@@ -775,6 +780,7 @@ public class SecurityPoolAdjustFlowService {
         // 判断是否为管理员代办其他处理人的步骤
         boolean adminOperateOther = isAdminOperator(req)
                 && step != null
+                // 判断字符串是否有有效内容
                 && hasText(step.getHandlerId())
                 && !step.getHandlerId().equals(req.getHandlerId());
         if (!adminOperateOther) {

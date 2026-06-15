@@ -86,7 +86,7 @@
     <!-- 查询当前证券所在池列表（仅叶子节点） -->
     <select id="querySecurityPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
         SELECT ips.target_pool_id
-               ,p.pool_name AS poolName
+               ,p.pool_name
                ,ips.pool_type
                ,ips.adjust_batch_no
                ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
@@ -107,7 +107,7 @@
     <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点） -->
     <select id="queryIssuerPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
         SELECT ips.target_pool_id
-               ,p.pool_name AS poolName
+               ,p.pool_name
                ,ips.pool_type
                ,MAX(ips.adjust_batch_no) AS adjustBatchNo
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate

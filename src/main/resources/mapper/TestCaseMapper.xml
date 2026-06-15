@@ -6,11 +6,6 @@
 
     <!-- ==================== 测试用例（rule_test_case） ==================== -->
 
-    <!-- 统计测试用例总数 -->
-    <select id="queryCaseCount" resultType="long">
-        SELECT COUNT(1) FROM rule_test_case
-    </select>
-
     <!-- 分页查询测试用例列表，按创建时间倒序 -->
     <select id="queryCasePage" resultType="com.znty.sirm.model.RuleTestCaseBo">
         SELECT id
@@ -24,8 +19,6 @@
                ,updt_time
         FROM rule_test_case ORDER BY crte_time DESC
                                      ,id DESC
-        LIMIT #{offset}
-               ,#{pageSize}
     </select>
 
     <!-- 查询全部测试用例（用于批量执行场景） -->

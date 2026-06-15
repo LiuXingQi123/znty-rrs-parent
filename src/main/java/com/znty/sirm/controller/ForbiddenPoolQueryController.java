@@ -25,6 +25,7 @@ import java.util.List;
 @RequestMapping("/api/v1/forbiddenPoolQuery")
 public class ForbiddenPoolQueryController {
 
+    /** 禁止池查询服务 */
     @Resource
     private ForbiddenPoolQueryService forbiddenPoolQueryService;
 
@@ -40,7 +41,8 @@ public class ForbiddenPoolQueryController {
      * 查询禁投池中涉及的证券类型下拉选项（code + name），用于页面筛选条件
      */
     @PostMapping("/querySecurityTypeList")
-    public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList() {
+    public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList(
+            @RequestBody(required = false) ForbiddenPoolQueryReq req) {
         return ApiResponse.success(forbiddenPoolQueryService.querySecurityTypeList());
     }
 }

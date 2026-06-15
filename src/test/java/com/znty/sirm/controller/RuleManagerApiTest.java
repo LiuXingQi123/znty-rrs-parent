@@ -15,8 +15,10 @@ import static org.mockito.Mockito.mock;
  */
 public class RuleManagerApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         RuleController ruleController = new RuleController();
@@ -26,6 +28,7 @@ public class RuleManagerApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(ruleController, testCaseController).build();
     }
 
+    /** 验证 shouldSupportRuleLifecycle 测试场景。 */
     @Test
     public void shouldSupportRuleLifecycle() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/rules/queryRulePage", "{}");
@@ -33,15 +36,17 @@ public class RuleManagerApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/rules/addOrEditRule", "{}");
         assertPostSuccess(mockMvc, "/api/v1/rules/editRuleStatus", "{\"id\":1,\"status\":\"active\"}");
         assertPostSuccess(mockMvc, "/api/v1/rules/deleteRule", "{\"id\":1}");
-        assertPostSuccess(mockMvc, "/api/v1/rules/rule-runs/executeRule", "{\"id\":1}");
+        assertPostSuccess(mockMvc, "/api/v1/rules/ruleRuns/executeRule", "{\"id\":1}");
     }
 
+    /** 验证 shouldSupportRuleOptions 测试场景。 */
     @Test
     public void shouldSupportRuleOptions() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/rules/options/queryCategoryList");
         assertPostSuccess(mockMvc, "/api/v1/rules/options/queryPresetSetList");
     }
 
+    /** 验证 shouldSupportTestCaseRegressionFlow 测试场景。 */
     @Test
     public void shouldSupportTestCaseRegressionFlow() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/testCases/queryTestCasePage", "{}");

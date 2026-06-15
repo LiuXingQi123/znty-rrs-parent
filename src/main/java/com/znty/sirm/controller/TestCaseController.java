@@ -27,6 +27,7 @@ import java.util.List;
 @RequestMapping("/api/v1/testCases")
 public class TestCaseController {
 
+    /** 测试用例服务 */
     @Resource
     private TestCaseService testCaseService;
 
@@ -75,7 +76,7 @@ public class TestCaseController {
      * 批量执行所有测试用例，每个用例在独立事务中执行，单条失败不影响其他用例的执行
      */
     @PostMapping("/runAllTestCases")
-    public ApiResponse<List<TestCaseDto>> runAllTestCases() {
+    public ApiResponse<List<TestCaseDto>> runAllTestCases(@RequestBody(required = false) TestCaseReq req) {
         return ApiResponse.success(testCaseService.runAllTestCases());
     }
 

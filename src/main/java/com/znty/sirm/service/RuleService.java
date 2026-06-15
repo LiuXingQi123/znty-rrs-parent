@@ -1,5 +1,7 @@
 package com.znty.sirm.service;
 
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import com.ql.util.express.DefaultContext;
 import com.ql.util.express.ExpressRunner;
 import com.znty.sirm.common.IdRequest;
@@ -47,12 +49,15 @@ public class RuleService {
     /** 时间格式化（HH:mm:ss），用于执行日志 */
     private static final SimpleDateFormat TIME_FORMATTER = new SimpleDateFormat("HH:mm:ss");
 
+    /** 规则管理数据访问组件 */
     @Resource
     private RuleMapper ruleMapper;
 
+    /** 测试用例数据访问组件 */
     @Resource
     private TestCaseMapper testCaseMapper;
 
+    /** QLExpress 规则执行器 */
     @Resource
     private ExpressRunner expressRunner;
 
@@ -64,16 +69,15 @@ public class RuleService {
      */
     public PageResult<RuleDto> queryRulePage(RuleReq req) {
         RuleReq safeReq = req == null ? new RuleReq() : req;
-        long total = ruleMapper.queryRuleCount(safeReq.getKeyword(), safeReq.getStatus());
-        List<RuleDefinitionBo> rules = ruleMapper.queryRulePage(
-                safeReq.getKeyword(),
-                safeReq.getStatus(),
-                safeReq.offset(),
-                safeReq.getPageSize()
-        );
+        // 开启分页查询
+        PageHelper.startPage(safeReq.getPageIndex(), safeReq.getPageSize());
+        List<RuleDefinitionBo> rules = ruleMapper.queryRulePage(safeReq.getKeyword(), safeReq.getStatus());
+        PageInfo<RuleDefinitionBo> pageInfo = new PageInfo<>(rules);
+        // 批量加载规则列表的参数和选项
         Map<Long, List<Map<String, Object>>> paramMap = loadRuleParamMap(rules);
+        // RuleDefinitionBo → RuleDto
         List<RuleDto> records = rules.stream().map(rule -> toRuleDto(rule, paramMap.get(rule.getId()))).collect(Collectors.toList());
-        return new PageResult<>(records, total, safeReq.getPageIndex(), safeReq.getPageSize());
+        return new PageResult<>(records, pageInfo.getTotal(), safeReq.getPageIndex(), safeReq.getPageSize());
     }
 
     /**
@@ -81,7 +85,9 @@ public class RuleService {
      */
     public RuleDto queryRuleDetail(IdRequest req) {
         RuleDefinitionBo rule = requireRule(req == null ? null : req.getId());
+        // 批量加载规则列表的参数和选项
         Map<Long, List<Map<String, Object>>> paramMap = loadRuleParamMap(Collections.singletonList(rule));
+        // RuleDefinitionBo → RuleDto
         return toRuleDto(rule, paramMap.get(rule.getId()));
     }
 
@@ -91,27 +97,33 @@ public class RuleService {
      */
     @Transactional(rollbackFor = Exception.class)
     public RuleDto addOrEditRule(RuleReq req) {
+        // 校验保存请求的必填字段（名称、脚本）
         validateSaveReq(req);
         RuleDefinitionBo rule;
         if (req.getId() != null) {
             rule = requireRule(req.getId());
             rule.setRuleName(req.getName().trim());
             rule.setDescription(req.getDescription());
+            // 填充字符串默认值
             rule.setCategoryCode(defaultText(req.getCategory(), "business"));
             rule.setScript(req.getScript());
             ruleMapper.editRule(rule);
+            // 全量替换规则的参数和选项（先删后增）
             replaceParams(rule.getId(), req.getParamList());
         } else {
             rule = new RuleDefinitionBo();
             rule.setRuleName(req.getName().trim());
             rule.setDescription(req.getDescription());
+            // 填充字符串默认值
             rule.setCategoryCode(defaultText(req.getCategory(), "business"));
             rule.setScript(req.getScript());
             rule.setStatus("active");
             rule.setDeletedFlag(0);
             ruleMapper.addRule(rule);
+            // 全量替换规则的参数和选项（先删后增）
             replaceParams(rule.getId(), req.getParamList());
         }
+        // 按 ID 查询规则并组装为完整的 RuleDto
         return detailById(rule.getId());
     }
 
@@ -130,6 +142,7 @@ public class RuleService {
         if (updated == 0) {
             throw new BizException("规则不存在");
         }
+        // 按 ID 查询规则并组装为完整的 RuleDto
         return detailById(req.getId());
     }
 
@@ -204,18 +217,22 @@ public class RuleService {
     public RuleRunResultDto executeAndRecord(RuleDefinitionBo rule, Map<String, String> params, Long caseId) {
         Date startTime = new Date();
         RuleRunResultDto result = new RuleRunResultDto();
+        // 记录规则执行步骤
         addLog(result, startTime, "info", "开始执行规则: " + rule.getRuleName());
 
         Map<String, String> safeParams = params == null ? Collections.emptyMap() : params;
         safeParams.forEach((key, value) ->
+                // 记录规则执行步骤
                 addLog(result, new Date(), "info", "参数绑定: " + key + " = " + value));
 
         String output;
         String errorMessage;
         String status;
         try {
+            // 调用 QLExpress 引擎执行规则脚本
             Object executeResult = executeScript(rule, safeParams);
             output = String.valueOf(executeResult == null ? "(void)" : executeResult);
+            // 记录规则执行步骤
             addLog(result, new Date(), "success", "执行完成，返回值: " + output);
             status = "pass";
             errorMessage = null;
@@ -223,6 +240,7 @@ public class RuleService {
             status = "fail";
             errorMessage = e.getMessage();
             output = errorMessage;
+            // 记录规则执行步骤
             addLog(result, new Date(), "error", "执行异常: " + errorMessage);
         }
 
@@ -236,6 +254,7 @@ public class RuleService {
         run.setStartTime(startTime);
         run.setFinishTime(finishTime);
         testCaseMapper.addRun(run);
+        // 持久化规则执行日志
         saveLogs(run.getId(), result.getLogs());
 
         result.setStatus(status);
@@ -286,7 +305,9 @@ public class RuleService {
     /** 按 ID 查询规则并组装为完整的 RuleDto */
     private RuleDto detailById(Long id) {
         RuleDefinitionBo rule = requireRule(id);
+        // 批量加载规则列表的参数和选项
         Map<Long, List<Map<String, Object>>> paramMap = loadRuleParamMap(Collections.singletonList(rule));
+        // RuleDefinitionBo → RuleDto
         return toRuleDto(rule, paramMap.get(rule.getId()));
     }
 
@@ -320,11 +341,14 @@ public class RuleService {
             RuleParamBo param = new RuleParamBo();
             param.setRuleId(ruleId);
             param.setParamName(paramName.trim());
+            // 填充字符串默认值
             param.setParamLabel(defaultText((String) dto.get("label"), paramName.trim()));
+            // 填充字符串默认值
             param.setParamType(defaultText((String) dto.get("type"), "string"));
             param.setRequired(0);
             param.setSortNo(i + 1);
             ruleMapper.addParam(param);
+            // 保存参数候选项列表
             saveOptions(param.getId(), dto.get("options"));
         }
     }
@@ -372,6 +396,7 @@ public class RuleService {
                 .collect(Collectors.groupingBy(RuleParamOptionBo::getParamId));
         return params.stream().collect(Collectors.groupingBy(
                 RuleParamBo::getRuleId,
+                // RuleParamBo → Map
                 Collectors.mapping(param -> toParamMap(param, optionMap.get(param.getId())), Collectors.toList())
         ));
     }
@@ -411,6 +436,7 @@ public class RuleService {
         DefaultContext<String, Object> context = new DefaultContext<>();
         Map<String, RuleParamBo> paramDefineMap = listParams(rule.getId()).stream()
                 .collect(Collectors.toMap(RuleParamBo::getParamName, param -> param, (left, right) -> left));
+        // 转换规则参数值类型
         params.forEach((key, value) -> context.put(key, convertValue(value, paramDefineMap.get(key))));
         return expressRunner.execute(rule.getScript(), context, null, true, false);
     }

@@ -27,6 +27,7 @@ import javax.annotation.Resource;
 @RequestMapping("/api/v1/investmentPool")
 public class InvestmentPoolController {
 
+    /** 投资池服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 

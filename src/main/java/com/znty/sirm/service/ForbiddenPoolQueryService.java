@@ -20,16 +20,20 @@ import java.util.Map;
 @Service
 public class ForbiddenPoolQueryService {
 
+    /** 禁止池查询数据访问组件 */
     @Resource
     private ForbiddenPoolQueryMapper forbiddenPoolQueryMapper;
 
+    /** 投资池服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 
     /** 分页查询禁投池证券列表 */
     public PageResult<ForbiddenPoolQueryDto> queryForbiddenPoolPage(ForbiddenPoolQueryReq req) {
+        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ForbiddenPoolQueryDto> list = forbiddenPoolQueryMapper.queryForbiddenPoolPage(req);
+        // 填充投资池全路径名称
         fillPoolFullName(list);
         PageInfo<ForbiddenPoolQueryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());

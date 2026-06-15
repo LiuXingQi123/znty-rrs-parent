@@ -14,8 +14,10 @@ import static org.mockito.Mockito.mock;
  */
 public class ForbiddenPoolQueryApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         ForbiddenPoolQueryController controller = new ForbiddenPoolQueryController();
@@ -23,6 +25,7 @@ public class ForbiddenPoolQueryApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
+    /** 验证 shouldSupportForbiddenPoolQuery 测试场景。 */
     @Test
     public void shouldSupportForbiddenPoolQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolQuery/queryForbiddenPoolPage", "{}");

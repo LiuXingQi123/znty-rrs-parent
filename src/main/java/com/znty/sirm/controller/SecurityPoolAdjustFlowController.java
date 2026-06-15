@@ -18,6 +18,7 @@ import javax.annotation.Resource;
 @RequestMapping("/api/v1/securityPoolAdjustFlow")
 public class SecurityPoolAdjustFlowController {
 
+    /** 证券池调库流程服务 */
     @Resource
     private SecurityPoolAdjustFlowService securityPoolAdjustFlowService;
 

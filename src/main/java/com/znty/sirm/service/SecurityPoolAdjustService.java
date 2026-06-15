@@ -80,20 +80,28 @@ import java.util.stream.Collectors;
 @Service
 public class SecurityPoolAdjustService {
 
+    /** 默认管理员用户 ID */
     private static final Long DEFAULT_ADMIN_USER_ID = 1001L;
+    /** 可调库权限类型 */
     private static final String PERMISSION_TYPE_ADJUSTABLE = "adjustable";
+    /** 用户主体类型 */
     private static final String SUBJECT_TYPE_USER = "user";
+    /** 角色主体类型 */
     private static final String SUBJECT_TYPE_ROLE = "role";
 
+    /** 证券池调库数据访问组件 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
+    /** 投资池数据访问组件 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
 
+    /** 投资池服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 
+    /** 流程定义数据访问组件 */
     @Resource
     private FlowMapper flowMapper;
 
@@ -108,14 +116,23 @@ public class SecurityPoolAdjustService {
     private static final String REL_IN_ELASTIC   = "in_soft_restrict"; // 调入弹性禁投池：证券在此池则不可调入目标池
     private static final String REL_OUT_ELASTIC  = "out_soft_restrict";// 调出弹性禁投池：证券在此池则不可调出目标池
 
+    /** 白名单调入流程类型 */
     private static final String FLOW_TYPE_WHITELIST_INBOUND = "whitelistInbound";
+    /** 简易调入流程类型 */
     private static final String FLOW_TYPE_SIMPLE_INBOUND = "simpleInbound";
+    /** 普通调入流程类型 */
     private static final String FLOW_TYPE_NORMAL_INBOUND = "normalInbound";
+    /** 升级调入流程类型 */
     private static final String FLOW_TYPE_UPGRADE_INBOUND = "upgradeInbound";
+    /** 降级调入流程类型 */
     private static final String FLOW_TYPE_DOWNGRADE_INBOUND = "downgradeInbound";
+    /** 普通调出流程类型 */
     private static final String FLOW_TYPE_NORMAL_OUTBOUND = "normalOutbound";
+    /** 白名单调入流程 Key */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
+    /** 信用债根池编码 */
     private static final String CREDIT_BOND_ROOT_CODE = "credit_bond_root";
+    /** 信用债池类型 */
     private static final String CREDIT_BOND_POOL_TYPE = "credit_bond";
 
 
@@ -129,6 +146,7 @@ public class SecurityPoolAdjustService {
      * @param req 查询条件（证券代码、简称、发行人，均为模糊匹配）
      */
     public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
+        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityInfoDto> records = securityPoolAdjustMapper.querySecurityPage(
                 req.getSecurityCode(), req.getSecurityShortName(), req.getIssuer());
@@ -165,6 +183,7 @@ public class SecurityPoolAdjustService {
         }
 
         if (!DEFAULT_ADMIN_USER_ID.equals(1001L)) {
+            // 按投资池“可调整人员”配置过滤可操作池
             allPools = filterAdjustablePoolsByUser(allPools, DEFAULT_ADMIN_USER_ID);
             if (allPools.isEmpty()) {
                 return new ArrayList<>();
@@ -184,6 +203,7 @@ public class SecurityPoolAdjustService {
                 }
             }
         }
+        // InvestmentPoolBo → PoolDto（投资池树节点数据，附带互斥池 ID 列表）
         return allPools.stream().map(p -> toPoolDto(p, inMutexMap, outMutexMap)).collect(Collectors.toList());
     }
 
@@ -191,6 +211,7 @@ public class SecurityPoolAdjustService {
      * 按投资池“可调整人员”配置过滤可操作池，并保留祖先节点以保证前端树路径完整。
      */
     private List<InvestmentPoolBo> filterAdjustablePoolsByUser(List<InvestmentPoolBo> allPools, Long userId) {
+        // 查询当前用户直接或通过角色拥有可调整权限的投资池 ID
         Set<Long> adjustablePoolIds = queryAdjustablePoolIdsByUser(userId);
         if (adjustablePoolIds.isEmpty()) {
             return new ArrayList<>();
@@ -257,7 +278,9 @@ public class SecurityPoolAdjustService {
         List<PoolStatusDto> securityCurrentPools = securityPoolAdjustMapper.querySecurityPoolStatus(req.getSecurityCode());
         List<PoolStatusDto> issuerCurrentPools = securityPoolAdjustMapper.queryIssuerPoolStatus(req.getSecurityCode());
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
+        // 填充当前所在池的全路径名称
         fillPoolStatusFullName(securityCurrentPools, poolFullNameMap);
+        // 填充当前所在池的全路径名称
         fillPoolStatusFullName(issuerCurrentPools, poolFullNameMap);
         dto.setSecurityCurrentPools(securityCurrentPools);
         dto.setIssuerCurrentPools(issuerCurrentPools);
@@ -393,6 +416,7 @@ public class SecurityPoolAdjustService {
         // 收集所有调库项中引用的唯一流程标识，批量加载流程快照
         Set<Long> uniqueFlowIds = new HashSet<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
             Long resolvedId = resolveFlowIdFromItem(item);
             if (resolvedId != null) {
                 uniqueFlowIds.add(resolvedId);
@@ -402,6 +426,7 @@ public class SecurityPoolAdjustService {
         // 为每个唯一流程加载快照（定义 + 活跃版本 + 节点 + 连线）
         Map<Long, FlowSnapshot> flowSnapshotMap = new HashMap<>();
         for (Long flowId : uniqueFlowIds) {
+            // 为指定流程 ID 构建运行时快照（定义 + 活跃版本 + 节点索引 + 连线列表）
             FlowSnapshot snapshot = buildFlowSnapshot(flowId);
             if (snapshot != null) {
                 flowSnapshotMap.put(flowId, snapshot);
@@ -472,6 +497,7 @@ public class SecurityPoolAdjustService {
         }
         String batchNo = shared.adjustBatchNoMap.get(groupKey);
         if (batchNo == null) {
+            // 生成调库批次号
             batchNo = buildAdjustBatchNo(resolveManualSubmitItem(req, item), shared);
             shared.adjustBatchNoMap.put(groupKey, batchNo);
         }
@@ -483,11 +509,13 @@ public class SecurityPoolAdjustService {
      */
     private SecurityPoolAdjustSubmitReq.AdjustItem resolveManualSubmitItem(
             SecurityPoolAdjustSubmitReq req, SecurityPoolAdjustSubmitReq.AdjustItem item) {
+        // 判断提交项是否为手工调库项
         if (isManualSubmitItem(item)) {
             return item;
         }
         String groupKey = item.getAdjustGroupKey();
         for (SecurityPoolAdjustSubmitReq.AdjustItem candidate : req.getItems()) {
+            // 判断提交项是否为手工调库项
             if (isManualSubmitItem(candidate) && groupKey != null && groupKey.equals(candidate.getAdjustGroupKey())) {
                 return candidate;
             }
@@ -610,6 +638,7 @@ public class SecurityPoolAdjustService {
             }
 
             NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(targetNode.getId());
+            // 判断当前审批节点是否应由流程发起人自动完成
             if (!isInitiatorStep(targetNode, config, startNode, startNode)) {
                 return false;
             }
@@ -651,9 +680,12 @@ public class SecurityPoolAdjustService {
             if (!"调入".equals(item.getAdjustMode())) {
                 continue;
             }
+            // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
+            // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
             Long flowId = resolveFlowIdFromItem(manualItem);
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+            // 判断流程是否为直通流程（开始后无需人工处理即可到结束节点）
             boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
             if (isDirect) {
@@ -664,6 +696,7 @@ public class SecurityPoolAdjustService {
                 generatedIds.add(logBo.getId());
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
                 if (isManualSubmitItem(item) && snapshot != null && logBo.getId() != null) {
+                    // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
                     createInitialSteps(logBo.getId(), null, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
@@ -675,6 +708,7 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
+                // 获取或生成同组调库批次号
                 String adjustBatchNo = resolveAdjustBatchNo(req, item, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
@@ -682,6 +716,7 @@ public class SecurityPoolAdjustService {
                 generatedIds.add(bo.getId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
+                    // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
                     boolean flowFinished = createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                     if (flowFinished) {
                         bo.setAuditStatus("20");
@@ -713,9 +748,12 @@ public class SecurityPoolAdjustService {
             if (!"调出".equals(item.getAdjustMode())) {
                 continue;
             }
+            // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
+            // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
             Long flowId = resolveFlowIdFromItem(manualItem);
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+            // 判断流程是否为直通流程（开始后无需人工处理即可到结束节点）
             boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
 
             if (isDirect) {
@@ -726,6 +764,7 @@ public class SecurityPoolAdjustService {
                 generatedIds.add(bo.getId());
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
+                    // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
                     createInitialSteps(bo.getId(), null, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
@@ -736,6 +775,7 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
+                // 获取或生成同组调库批次号
                 String adjustBatchNo = resolveAdjustBatchNo(req, item, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
@@ -743,6 +783,7 @@ public class SecurityPoolAdjustService {
                 generatedIds.add(bo.getId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
+                    // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
                     boolean flowFinished = createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                     if (flowFinished) {
                         securityPoolAdjustMapper.editAdjustLogAuditStatus(bo.getId(), adjustBatchNo, "20");
@@ -939,6 +980,7 @@ public class SecurityPoolAdjustService {
 
         // ══ 第三阶段：调入校验 ══
         List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>(
+                // 执行调入校验并补充联动、互斥调库项
                 executeInAdjustCheck(req, shared, coveredKeys));
 
         // ══ 第四阶段：调出校验 ══
@@ -1067,15 +1109,18 @@ public class SecurityPoolAdjustService {
             if (!"调入".equals(item.getAdjustMode())) {
                 continue;
             }
+            // 构建手工调库项分组 Key
             String adjustGroupKey = buildAdjustGroupKey(item);
 
             // 手动调入项：前置校验 + 调入校验
             int poolCurrentCount = securityPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
+            // 构建调库校验上下文
             AdjustCheckContext ctx = buildCheckContext(item, poolCurrentCount, shared);
             List<String> failures = checkInConditions(ctx);
 
             AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
             resultItem.setTargetPoolId(item.getTargetPoolId());
+            // 构建投资池全路径名称
             resultItem.setPoolName(buildPoolPath(item.getTargetPoolId(), shared.getPoolMap()));
             resultItem.setPoolType(item.getPoolType());
             resultItem.setAdjustMode("调入");
@@ -1095,6 +1140,7 @@ public class SecurityPoolAdjustService {
                 for (Long linkedId : inLinkage) {
                     // coveredKeys.add 返回 true 表示该 key 是首次出现，生成自动项
                     if (coveredKeys.add(linkedId + "_调入")) {
+                        // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为"linkage"或"mutex"，前端据此区分显示样式
                         results.add(buildAutoResultItem(linkedId, "调入", "linkage", adjustGroupKey, shared));
                     }
                 }
@@ -1110,6 +1156,7 @@ public class SecurityPoolAdjustService {
                         continue;
                     }
                     if (coveredKeys.add(mutexId + "_调出")) {
+                        // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为"linkage"或"mutex"，前端据此区分显示样式
                         results.add(buildAutoResultItem(mutexId, "调出", "mutex", adjustGroupKey, shared));
                     }
                 }
@@ -1146,15 +1193,18 @@ public class SecurityPoolAdjustService {
             if (!"调出".equals(item.getAdjustMode())) {
                 continue;
             }
+            // 构建手工调库项分组 Key
             String adjustGroupKey = buildAdjustGroupKey(item);
 
             // 手动调出项：前置校验 + 调出校验
             int poolCurrentCount = securityPoolAdjustMapper.queryPoolCurrentCount(item.getTargetPoolId());
+            // 构建调库校验上下文
             AdjustCheckContext ctx = buildCheckContext(item, poolCurrentCount, shared);
             List<String> failures = checkOutConditions(ctx);
 
             AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
             resultItem.setTargetPoolId(item.getTargetPoolId());
+            // 构建投资池全路径名称
             resultItem.setPoolName(buildPoolPath(item.getTargetPoolId(), shared.getPoolMap()));
             resultItem.setPoolType(item.getPoolType());
             resultItem.setAdjustMode("调出");
@@ -1171,6 +1221,7 @@ public class SecurityPoolAdjustService {
             if (outLinkage != null) {
                 for (Long linkedId : outLinkage) {
                     if (coveredKeys.add(linkedId + "_调出")) {
+                        // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为"linkage"或"mutex"，前端据此区分显示样式
                         results.add(buildAutoResultItem(linkedId, "调出", "linkage", adjustGroupKey, shared));
                     }
                 }
@@ -1202,9 +1253,11 @@ public class SecurityPoolAdjustService {
         }
 
         for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            // 判断单条手工调库项可选择的审批流程
             List<AdjustCheckDto.FlowOption> itemOptions = resolveAdjustFlowOptionsForItem(req, shared, item);
             item.setFlowOptions(itemOptions);
             for (AdjustCheckDto.FlowOption option : itemOptions) {
+                // 生成流程候选项去重 key
                 String key = buildFlowOptionUniqueKey(option);
                 if (optionKeys.add(key)) {
                     allOptions.add(option);
@@ -1230,6 +1283,7 @@ public class SecurityPoolAdjustService {
 
         // 手工调出：使用投资池定义的标准调出流程
         if ("调出".equals(item.getAdjustMode())) {
+            // 解析流程名称：优先使用配置名称
             String flowName = resolveFlowName(targetPool.getOutFlowName(), "调出流程");
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(FLOW_TYPE_NORMAL_OUTBOUND);
@@ -1251,6 +1305,7 @@ public class SecurityPoolAdjustService {
 
         // ── 目标池非信用债大库：仅返回普通流程 ──
         if (!isCreditBondPool(targetPool, shared)) {
+            // 解析流程名称：优先使用配置名称
             String flowName = resolveFlowName(targetPool.getInFlowName(), "普通流程");
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(FLOW_TYPE_NORMAL_INBOUND);
@@ -1268,8 +1323,10 @@ public class SecurityPoolAdjustService {
 
         // ── 证券已在信用债大库中：按库位层级判断上调/下调 ──
         if (isSecurityInCreditBondPool(shared)) {
+            // 判断信用债在库调整流程是上调还是下调
             String flowType = resolveCreditBondAdjustFlowType(targetPool, shared);
             String fallbackName = FLOW_TYPE_DOWNGRADE_INBOUND.equals(flowType) ? "下调流程" : "上调流程";
+            // 解析流程名称：优先使用配置名称
             String flowName = resolveFlowName(targetPool.getInFlowName(), fallbackName);
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(flowType);
@@ -1289,11 +1346,13 @@ public class SecurityPoolAdjustService {
         // 白名单流程命中判断
         List<String> whitelistMatchReasons = new ArrayList<>();
         List<String> whitelistUnmatchReasons = new ArrayList<>();
+        // 白名单流程命中判断入口。  伪代码口径： 1. 剩余期限   当前版本不新增白名单配置表、不修改表结构，因此仅保留入口并返回未命中
         boolean whitelistMatched = isWhitelistFlowMatched(req, shared, whitelistMatchReasons, whitelistUnmatchReasons);
 
         // 简易流程命中判断
         List<String> simpleMatchReasons = new ArrayList<>();
         List<String> simpleUnmatchReasons = new ArrayList<>();
+        // 简易流程命中判断入口。  伪代码口径： 1. 剩余期限合理； 2. 处于一年有效期内； 3. 主体评级和展望评级均未下调； 4. 无担保人，或担保人评级也未下调。  当前证券表没有评级历史和评级有效期字段，因此仅保留入口并返回未命中
         boolean simpleMatched = isSimpleInboundFlowMatched(req, shared, simpleMatchReasons, simpleUnmatchReasons);
 
         // 推荐优先级：白名单 > 简易 > 普通
@@ -1442,6 +1501,7 @@ public class SecurityPoolAdjustService {
     private boolean isSecurityInCreditBondPool(AdjustSharedData shared) {
         for (Long currentPoolId : shared.getCurrentPoolIds()) {
             InvestmentPoolBo currentPool = shared.getPoolMap().get(currentPoolId);
+            // 判断目标池是否属于信用债大库
             if (isCreditBondPool(currentPool, shared)) {
                 return true;
             }
@@ -1466,6 +1526,7 @@ public class SecurityPoolAdjustService {
         p.setFlowKey(FLOW_KEY_WHITELIST_INBOUND);
         p.setSelectable(p.isMatched());
         p.setUnmatchReasons(reasons);
+        // 构建流程候选项（统一入口）
         return buildFlowOption(p);
     }
 
@@ -1491,6 +1552,7 @@ public class SecurityPoolAdjustService {
         result.setSelectable(p.isSelectable());
         result.setMatchReasons(p.getMatchReasons());
         result.setUnmatchReasons(reasons);
+        // 构建流程候选项（统一入口）
         return buildFlowOption(result);
     }
 
@@ -1661,6 +1723,7 @@ public class SecurityPoolAdjustService {
         }
         boolean inAny = sourcePools.stream().anyMatch(ctx.getCurrentPoolIds()::contains);
         if (!inAny) {
+            // 构建关联池路径名称
             return "目标池配置了来源池限制，证券须先在以下池中：" + poolNames(sourcePools, ctx);
         }
         return null;
@@ -1672,6 +1735,7 @@ public class SecurityPoolAdjustService {
      * <p>证券当前在配置的限制池中，则不允许调入目标池。
      */
     private String inCheckRestrictPool(AdjustCheckContext ctx) {
+        // 通用阻断校验：检查证券是否在指定关系类型的池中
         return checkBlockedByPools(ctx, REL_IN_RESTRICT, "调入限制池");
     }
 
@@ -1682,6 +1746,7 @@ public class SecurityPoolAdjustService {
      * 业务层面可由特定角色绕过（绕过逻辑在审批流程中处理，此处只做初步拦截）。
      */
     private String inCheckElasticPool(AdjustCheckContext ctx) {
+        // 通用阻断校验：检查证券是否在指定关系类型的池中
         return checkBlockedByPools(ctx, REL_IN_ELASTIC, "调入弹性禁投池");
     }
 
@@ -1701,6 +1766,7 @@ public class SecurityPoolAdjustService {
                 .filter(id -> ctx.getRequestInPoolIds().contains(id))
                 .collect(Collectors.toList());
         if (!conflicting.isEmpty()) {
+            // 构建关联池路径名称
             return "与以下互斥池不可同时调入：" + poolNames(conflicting, ctx);
         }
         return null;
@@ -1729,6 +1795,7 @@ public class SecurityPoolAdjustService {
      * <p>证券当前在配置的限制池中，则不允许从目标池调出。
      */
     private String outCheckRestrictPool(AdjustCheckContext ctx) {
+        // 通用阻断校验：检查证券是否在指定关系类型的池中
         return checkBlockedByPools(ctx, REL_OUT_RESTRICT, "调出限制池");
     }
 
@@ -1740,6 +1807,7 @@ public class SecurityPoolAdjustService {
      * in_mutex 用于在第三阶段自动生成配套调出项；out_mutex 用于阻止调出操作本身。
      */
     private String outCheckMutexPool(AdjustCheckContext ctx) {
+        // 通用阻断校验：检查证券是否在指定关系类型的池中
         return checkBlockedByPools(ctx, REL_OUT_MUTEX, "调出互斥池");
     }
 
@@ -1749,6 +1817,7 @@ public class SecurityPoolAdjustService {
      * <p>证券当前在配置的弹性禁投池中，则不允许从目标池调出。
      */
     private String outCheckElasticPool(AdjustCheckContext ctx) {
+        // 通用阻断校验：检查证券是否在指定关系类型的池中
         return checkBlockedByPools(ctx, REL_OUT_ELASTIC, "调出弹性禁投池");
     }
 
@@ -1768,6 +1837,7 @@ public class SecurityPoolAdjustService {
                 .filter(id -> ctx.getRequestOutPoolIds().contains(id))
                 .collect(Collectors.toList());
         if (!conflicting.isEmpty()) {
+            // 构建关联池路径名称
             return "与以下互斥池不可同时调出：" + poolNames(conflicting, ctx);
         }
         return null;
@@ -1839,12 +1909,14 @@ public class SecurityPoolAdjustService {
         fakeItem.setAdjustMode(adjustMode);
         fakeItem.setPoolType(pool != null ? pool.getPoolType() : null);
 
+        // 构建调库校验上下文
         AdjustCheckContext ctx = buildCheckContext(fakeItem, poolCurrentCount, shared);
 
         List<String> failures = "调入".equals(adjustMode) ? checkInConditions(ctx) : checkOutConditions(ctx);
 
         AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
         resultItem.setTargetPoolId(targetPoolId);
+        // 构建投资池全路径名称
         resultItem.setPoolName(buildPoolPath(targetPoolId, shared.getPoolMap()));
         resultItem.setPoolType(pool != null ? pool.getPoolType() : null);
         resultItem.setAdjustMode(adjustMode);
@@ -1878,6 +1950,7 @@ public class SecurityPoolAdjustService {
                 .filter(ctx.getCurrentPoolIds()::contains)
                 .collect(Collectors.toList());
         if (!blocked.isEmpty()) {
+            // 构建关联池路径名称
             return "证券在" + label + "中，无法操作：" + poolNames(blocked, ctx);
         }
         return null;
@@ -1911,6 +1984,7 @@ public class SecurityPoolAdjustService {
      */
     private String poolNames(List<Long> poolIds, AdjustCheckContext ctx) {
         return poolIds.stream()
+                // 构建投资池全路径名称
                 .map(id -> buildPoolPath(id, ctx.getPoolMap()))
                 .collect(Collectors.joining("、"));
     }
@@ -1987,18 +2061,23 @@ public class SecurityPoolAdjustService {
 
         // 1. 创建开始节点步骤（auto_process）
         int sortOrder = startNode.getSortOrder() != null ? startNode.getSortOrder() : 1;
+        // 插入单条步骤记录到 ip_adjust_step
         insertStepRecord(adjustLogId, adjustBatchNo, startNode, null, sortOrder, "auto_process",
                          null, null, "auto_process", null, now);
 
         FlowNodeBo prevNode = startNode;
+        // 查找初始步骤的下一个节点
         FlowNodeBo currentNode = findNextNodeForInitialSteps(snapshot, startNode, null);
         while (currentNode != null) {
             NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(currentNode.getId());
             if ("approval".equals(currentNode.getNodeType())
+                    // 判断当前审批节点是否应由流程发起人自动完成
                     && isInitiatorStep(currentNode, config, prevNode, startNode)) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
+                // 插入单条步骤记录到 ip_adjust_step
                 insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, "submit",
                                  adjusterId, adjusterName, "submit", null, now);
+                // 查找初始步骤的下一个节点
                 FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
                 prevNode = currentNode;
                 currentNode = nextNode;
@@ -2006,17 +2085,20 @@ public class SecurityPoolAdjustService {
             }
 
             if ("approval".equals(currentNode.getNodeType())) {
+                // 为审批节点创建待处理步骤记录（按处理人明细展开为具体人员）
                 createPendingSteps(adjustLogId, adjustBatchNo, currentNode, snapshot, now);
                 return false;
             }
 
             if ("end".equals(currentNode.getNodeType())) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
+                // 插入单条步骤记录到 ip_adjust_step
                 insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, "auto_process",
                                  null, null, "auto_process", null, now);
                 return true;
             }
 
+            // 查找初始步骤的下一个节点
             FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
             prevNode = currentNode;
             currentNode = nextNode;
@@ -2052,6 +2134,7 @@ public class SecurityPoolAdjustService {
     private void createPendingSteps(Long adjustLogId, String adjustBatchNo, FlowNodeBo node,
                                     FlowSnapshot snapshot, Date now) {
         NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(node.getId());
+        // 将审批处理人配置解析为具体人员
         List<HandlerTarget> handlers = resolveApprovalHandlers(config, snapshot);
         int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
 
@@ -2061,6 +2144,7 @@ public class SecurityPoolAdjustService {
                              null, null, null, null, now);
         } else {
             for (HandlerTarget handler : handlers) {
+                // 插入单条步骤记录到 ip_adjust_step
                 insertStepRecord(adjustLogId, adjustBatchNo, node, config, sortOrder, "pending",
                                  handler.handlerId, handler.handlerName, null, null, now);
             }
@@ -2160,6 +2244,7 @@ public class SecurityPoolAdjustService {
      * 查找初始步骤的下一个节点。
      */
     private FlowNodeBo findNextNodeForInitialSteps(FlowSnapshot snapshot, FlowNodeBo currentNode, FlowNodeBo prevNode) {
+        // 沿流程主路径查找下一节点
         FlowNodeBo nextNode = findNextNodeOnMainPath(snapshot, currentNode, prevNode);
         if (nextNode != null) {
             return nextNode;
@@ -2188,6 +2273,7 @@ public class SecurityPoolAdjustService {
                 resultMap.put(userId, new HandlerTarget(userId, handler.getSubjectName()));
             } else if ("role".equals(handler.getSubjectType())) {
                 List<Long> roleIds = new ArrayList<>();
+                // 递归收集角色及其子角色 ID
                 collectDescendantRoleIds(handler.getSubjectId(), roleIds, flowMapper.queryRoleList());
                 List<UserBo> users = flowMapper.queryUserList(roleIds, null);
                 if (users == null) {
@@ -2212,6 +2298,7 @@ public class SecurityPoolAdjustService {
         roleIds.add(roleId);
         for (RoleBo role : allRoles) {
             if (roleId.equals(role.getParentId())) {
+                // 递归收集角色及其子角色 ID
                 collectDescendantRoleIds(role.getId(), roleIds, allRoles);
             }
         }
@@ -2229,6 +2316,7 @@ public class SecurityPoolAdjustService {
         bo.setSecurityCode(req.getSecurityCode());
         bo.setSecurityShortName(req.getSecurityShortName());
         bo.setSecurityType(req.getSecurityType());
+        // 根据调库项来源确定落表调整类型
         bo.setAdjustType(resolveAdjustType(req, item));
         bo.setAdjustMode(item.getAdjustMode());
         bo.setTargetPoolId(item.getTargetPoolId());
@@ -2267,6 +2355,7 @@ public class SecurityPoolAdjustService {
         if (pool.getParentId() == null) {
             return poolName;
         }
+        // 构建投资池全路径名称
         String parentName = buildPoolPath(pool.getParentId(), poolMap);
         return parentName == null || parentName.isEmpty() ? poolName : parentName + "/" + poolName;
     }

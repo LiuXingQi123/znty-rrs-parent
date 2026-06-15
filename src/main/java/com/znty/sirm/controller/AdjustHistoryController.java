@@ -26,6 +26,7 @@ import java.util.List;
 @RequestMapping("/api/v1/adjustHistory")
 public class AdjustHistoryController {
 
+    /** 调库历史服务 */
     @Resource
     private AdjustHistoryService adjustHistoryService;
 
@@ -43,7 +44,8 @@ public class AdjustHistoryController {
      * <p>返回系统中存在调整历史的证券类型列表，供前端筛选条件使用。</p>
      */
     @PostMapping("/querySecurityTypeList")
-    public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList() {
+    public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList(
+            @RequestBody(required = false) AdjustHistoryReq req) {
         return ApiResponse.success(adjustHistoryService.querySecurityTypeList());
     }
 

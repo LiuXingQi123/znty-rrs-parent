@@ -22,9 +22,4 @@ public class PageRequest {
         if (pageSize == null || pageSize < 1) return 20;
         return Math.min(pageSize, 100); // 硬限制最大 100 条，保护数据库性能
     }
-
-    /** 获取 SQL 偏移量，用于分页查询。 */
-    public int offset() {
-        return (getPageIndex() - 1) * getPageSize();
-    }
 }

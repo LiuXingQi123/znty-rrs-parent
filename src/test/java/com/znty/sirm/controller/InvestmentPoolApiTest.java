@@ -16,8 +16,10 @@ import static org.mockito.Mockito.mock;
  */
 public class InvestmentPoolApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         InvestmentPoolController poolController = new InvestmentPoolController();
@@ -29,6 +31,7 @@ public class InvestmentPoolApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(poolController, flowController, ruleController).build();
     }
 
+    /** 验证 shouldSupportPoolTreeMaintenance 测试场景。 */
     @Test
     public void shouldSupportPoolTreeMaintenance() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/queryPoolList", "{}");
@@ -39,6 +42,7 @@ public class InvestmentPoolApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/addSeedPoolList", "{}");
     }
 
+    /** 验证 shouldSupportPoolConfiguration 测试场景。 */
     @Test
     public void shouldSupportPoolConfiguration() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/editPoolConfig", "{\"id\":1}");
@@ -46,6 +50,7 @@ public class InvestmentPoolApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/editPoolPermission", "{\"id\":1}");
     }
 
+    /** 验证 shouldSupportPoolConfigurationOptions 测试场景。 */
     @Test
     public void shouldSupportPoolConfigurationOptions() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/queryFlowOptionList", "{}");

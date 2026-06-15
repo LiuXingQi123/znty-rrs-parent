@@ -14,8 +14,10 @@ import static org.mockito.Mockito.mock;
  */
 public class AdjustHistoryApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         AdjustHistoryController controller = new AdjustHistoryController();
@@ -23,6 +25,7 @@ public class AdjustHistoryApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
+    /** 验证 shouldSupportAdjustHistoryQuery 测试场景。 */
     @Test
     public void shouldSupportAdjustHistoryQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/adjustHistory/queryAdjustHistoryPage", "{}");

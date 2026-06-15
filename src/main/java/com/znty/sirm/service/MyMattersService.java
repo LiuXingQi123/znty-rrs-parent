@@ -18,6 +18,7 @@ import java.util.List;
 @Service
 public class MyMattersService {
 
+    /** 我的事项数据访问组件 */
     @Resource
     private MyMattersMapper myMattersMapper;
 
@@ -26,6 +27,7 @@ public class MyMattersService {
      */
     public PageResult<MyMattersDto> queryMyMattersPage(MyMattersReq req) {
         MyMattersReq safeReq = req == null ? new MyMattersReq() : req;
+        // 开启分页查询
         PageHelper.startPage(safeReq.getPageIndex(), safeReq.getPageSize());
         List<MyMattersDto> list = myMattersMapper.queryMyMattersPage(safeReq);
         PageInfo<MyMattersDto> pageInfo = new PageInfo<>(list);

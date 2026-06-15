@@ -6,29 +6,6 @@
 
     <!-- ==================== 规则定义（rule_definition） ==================== -->
 
-    <!-- 统计符合条件的规则数量 -->
-    <select id="queryRuleCount" resultType="long">
-        SELECT COUNT(1) FROM rule_definition
-        <where>
-            IFNULL(deleted_flag, 0) = 0
-            <if test="status != null and status != ''">
-                AND status = #{status}
-            </if>
-            <if test="keyword != null and keyword != ''">
-                AND (
-                    rule_name LIKE CONCAT('%', #{keyword}, '%')
-                    OR description LIKE CONCAT('%', #{keyword}, '%')
-                    OR EXISTS (
-                        SELECT 1 FROM rule_param p
-                        WHERE p.rule_id = rule_definition.id
-                        AND (p.param_name LIKE CONCAT('%', #{keyword}, '%')
-                             OR p.param_label LIKE CONCAT('%', #{keyword}, '%'))
-                    )
-                )
-            </if>
-        </where>
-    </select>
-
     <!-- 分页查询规则列表，按创建时间倒序 -->
     <select id="queryRulePage" resultType="com.znty.sirm.model.RuleDefinitionBo">
         SELECT id
@@ -61,8 +38,6 @@
         </where>
         ORDER BY crte_time DESC
                  ,id DESC
-        LIMIT #{offset}
-              ,#{pageSize}
     </select>
 
     <!-- 按主键查询单条规则（仅未删除记录） -->

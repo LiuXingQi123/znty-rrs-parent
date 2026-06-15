@@ -15,8 +15,10 @@ import static org.mockito.Mockito.mock;
  */
 public class SecurityPoolAdjustApproveApiTest extends ControllerApiTestSupport {
 
+    /** 接口测试客户端。 */
     private MockMvc mockMvc;
 
+    /** 初始化测试环境。 */
     @Before
     public void setUp() {
         SecurityPoolAdjustController adjustController = new SecurityPoolAdjustController();
@@ -26,6 +28,7 @@ public class SecurityPoolAdjustApproveApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(adjustController, flowController).build();
     }
 
+    /** 验证 shouldSupportApprovalContextQuery 测试场景。 */
     @Test
     public void shouldSupportApprovalContextQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityPage", "{}");
@@ -36,6 +39,7 @@ public class SecurityPoolAdjustApproveApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustStepList", "{\"adjustLogId\":1,\"adjustBatchNo\":\"BATCH001\"}");
     }
 
+    /** 验证 shouldSupportApprovalDecision 测试场景。 */
     @Test
     public void shouldSupportApprovalDecision() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjustFlow/submitAdjustAudit",

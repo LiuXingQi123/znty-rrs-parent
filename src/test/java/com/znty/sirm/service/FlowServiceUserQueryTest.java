@@ -22,14 +22,18 @@ import static org.mockito.Mockito.when;
  */
 public class FlowServiceUserQueryTest {
 
+    /** 验证 queryUserListShouldIncludeDescendantRoles 测试场景。 */
     @Test
     public void queryUserListShouldIncludeDescendantRoles() {
         FlowMapper flowMapper = mock(FlowMapper.class);
         FlowService flowService = new FlowService();
         ReflectionTestUtils.setField(flowService, "flowMapper", flowMapper);
 
+        // 构建角色测试数据
         RoleBo parent = buildRole(1L, null);
+        // 构建角色测试数据
         RoleBo child = buildRole(2L, 1L);
+        // 构建角色测试数据
         RoleBo other = buildRole(3L, null);
         when(flowMapper.queryRoleList()).thenReturn(Arrays.asList(parent, child, other));
 
@@ -50,6 +54,7 @@ public class FlowServiceUserQueryTest {
         verify(flowMapper).queryUserList(eq(Arrays.asList(1L, 2L)), isNull(String.class));
     }
 
+    /** 构建角色测试数据。 */
     private RoleBo buildRole(Long id, Long parentId) {
         RoleBo role = new RoleBo();
         role.setId(id);

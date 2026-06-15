@@ -2,7 +2,6 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.SubjectPoolQueryDto;
 import com.znty.sirm.model.SubjectPoolQueryReq;
@@ -26,12 +25,9 @@ import java.util.List;
 @RequestMapping("/api/v1/subjectPoolQuery")
 public class SubjectPoolQueryController {
 
+    /** 主体池查询服务 */
     @Resource
     private SubjectPoolQueryService subjectPoolQueryService;
-
-    /** 直接调用 Mapper 获取投资池树列表，避免为简单查询额外创建 Service 方法 */
-    @Resource
-    private InvestmentPoolMapper investmentPoolMapper;
 
     /**
      * 分页查询发行主体池列表，支持按主体名称、统一社会信用代码、投资池等条件筛选
@@ -45,7 +41,8 @@ public class SubjectPoolQueryController {
      * 查询投资池层级树数据，供前端筛选条件中的投资池树形选择器使用
      */
     @PostMapping("/queryPoolTreeList")
-    public ApiResponse<List<InvestmentPoolBo>> queryPoolTreeList() {
-        return ApiResponse.success(investmentPoolMapper.queryPoolList());
+    public ApiResponse<List<InvestmentPoolBo>> queryPoolTreeList(
+            @RequestBody(required = false) SubjectPoolQueryReq req) {
+        return ApiResponse.success(subjectPoolQueryService.queryPoolTreeList());
     }
 }
