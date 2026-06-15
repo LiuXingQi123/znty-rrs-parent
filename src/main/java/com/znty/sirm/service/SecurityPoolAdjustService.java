@@ -483,9 +483,12 @@ public class SecurityPoolAdjustService {
     /**
      * 生成调库批次号。
      */
-    private String buildAdjustBatchNo(SecurityPoolAdjustSubmitReq.AdjustItem manualItem, SubmitSharedData shared) {
+    private String buildAdjustBatchNo(
+            SecurityPoolAdjustSubmitReq.AdjustItem manualItem, boolean noFlow, SubmitSharedData shared) {
         int serial;
-        if ("调入".equals(manualItem.getAdjustMode())) {
+        if (noFlow) {
+            serial = 3000 + ++shared.noFlowBatchSeq;
+        } else if ("调入".equals(manualItem.getAdjustMode())) {
             serial = 1000 + ++shared.inboundBatchSeq;
         } else {
             serial = 2000 + ++shared.outboundBatchSeq;
@@ -499,6 +502,7 @@ public class SecurityPoolAdjustService {
     private String resolveAdjustBatchNo(
             SecurityPoolAdjustSubmitReq req,
             SecurityPoolAdjustSubmitReq.AdjustItem item,
+            boolean noFlow,
             SubmitSharedData shared) {
         String groupKey = item.getAdjustGroupKey();
         if (groupKey == null || groupKey.isEmpty()) {
@@ -507,7 +511,7 @@ public class SecurityPoolAdjustService {
         String batchNo = shared.adjustBatchNoMap.get(groupKey);
         if (batchNo == null) {
             // 生成调库批次号
-            batchNo = buildAdjustBatchNo(resolveManualSubmitItem(req, item), shared);
+            batchNo = buildAdjustBatchNo(resolveManualSubmitItem(req, item), noFlow, shared);
             shared.adjustBatchNoMap.put(groupKey, batchNo);
         }
         return batchNo;
@@ -694,31 +698,34 @@ public class SecurityPoolAdjustService {
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
             Long flowId = resolveFlowIdFromItem(manualItem);
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+            boolean noFlow = flowId == null;
+            // 获取或生成同组调库批次号
+            String adjustBatchNo = resolveAdjustBatchNo(req, item, noFlow, shared);
             // 判断流程是否为直通流程（开始后无需人工处理即可到结束节点）
-            boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
+            boolean isDirect = noFlow || (snapshot != null && isDirectFlow(snapshot));
 
             if (isDirect) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
                 IpAdjustLogBo logBo = buildAdjustLog(req, item);
+                logBo.setAdjustBatchNo(adjustBatchNo);
                 logBo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(logBo);
                 generatedIds.add(logBo.getId());
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
                 if (isManualSubmitItem(item) && snapshot != null && logBo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
-                    createInitialSteps(logBo.getId(), null, snapshot, req.getAdjusterId(), req.getAdjusterName());
+                    createInitialSteps(logBo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
                 // 直通流程：再直接写入 ip_pool_status（audit_status='20'，即时生效）
                 IpAdjustLogBo statusBo = buildAdjustLog(req, item);
+                statusBo.setAdjustBatchNo(adjustBatchNo);
                 statusBo.setAuditStatus("20");
                 securityPoolAdjustMapper.addPoolStatus(statusBo);
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
-                // 获取或生成同组调库批次号
-                String adjustBatchNo = resolveAdjustBatchNo(req, item, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
@@ -762,19 +769,23 @@ public class SecurityPoolAdjustService {
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
             Long flowId = resolveFlowIdFromItem(manualItem);
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
+            boolean noFlow = flowId == null;
+            // 获取或生成同组调库批次号
+            String adjustBatchNo = resolveAdjustBatchNo(req, item, noFlow, shared);
             // 判断流程是否为直通流程（开始后无需人工处理即可到结束节点）
-            boolean isDirect = flowId == null || (snapshot != null && isDirectFlow(snapshot));
+            boolean isDirect = noFlow || (snapshot != null && isDirectFlow(snapshot));
 
             if (isDirect) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
+                bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
-                    createInitialSteps(bo.getId(), null, snapshot, req.getAdjusterId(), req.getAdjusterName());
+                    createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
                 // 直通流程：再软删除 ip_pool_status 中该证券在目标池的有效记录
@@ -784,8 +795,6 @@ public class SecurityPoolAdjustService {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item);
-                // 获取或生成同组调库批次号
-                String adjustBatchNo = resolveAdjustBatchNo(req, item, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
@@ -1150,7 +1159,11 @@ public class SecurityPoolAdjustService {
                     // coveredKeys.add 返回 true 表示该 key 是首次出现，生成自动项
                     if (coveredKeys.add(linkedId + "_调入")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为"linkage"或"mutex"，前端据此区分显示样式
-                        results.add(buildAutoResultItem(linkedId, "调入", "linkage", adjustGroupKey, shared));
+                        AdjustCheckDto.CheckResultItem autoItem =
+                                buildAutoResultItem(linkedId, "调入", "linkage", adjustGroupKey, shared);
+                        // 关联手工项失败时阻断自动联动项
+                        inheritManualItemFailure(autoItem, resultItem);
+                        results.add(autoItem);
                     }
                 }
             }
@@ -1166,7 +1179,11 @@ public class SecurityPoolAdjustService {
                     }
                     if (coveredKeys.add(mutexId + "_调出")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为"linkage"或"mutex"，前端据此区分显示样式
-                        results.add(buildAutoResultItem(mutexId, "调出", "mutex", adjustGroupKey, shared));
+                        AdjustCheckDto.CheckResultItem autoItem =
+                                buildAutoResultItem(mutexId, "调出", "mutex", adjustGroupKey, shared);
+                        // 关联手工项失败时阻断自动互斥项
+                        inheritManualItemFailure(autoItem, resultItem);
+                        results.add(autoItem);
                     }
                 }
             }
@@ -1231,7 +1248,11 @@ public class SecurityPoolAdjustService {
                 for (Long linkedId : outLinkage) {
                     if (coveredKeys.add(linkedId + "_调出")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为"linkage"或"mutex"，前端据此区分显示样式
-                        results.add(buildAutoResultItem(linkedId, "调出", "linkage", adjustGroupKey, shared));
+                        AdjustCheckDto.CheckResultItem autoItem =
+                                buildAutoResultItem(linkedId, "调出", "linkage", adjustGroupKey, shared);
+                        // 关联手工项失败时阻断自动联动项
+                        inheritManualItemFailure(autoItem, resultItem);
+                        results.add(autoItem);
                     }
                 }
             }
@@ -1437,7 +1458,7 @@ public class SecurityPoolAdjustService {
         unmatchReasons.add("白名单流程伪代码入口已保留：优先回售/行权日，否则到期日，剩余期限需 <= 1895 天");
         unmatchReasons.add("待接入真实 SQL：排除永续债/私募债/ABS，主体在 WHITEPOOLID_XYJJ，ptype=4000，bonddt52='0' 或为空");
         unmatchReasons.add("当前投资池未配置白名单流程字段，暂按已启用流程 Key 查询：" + FLOW_KEY_WHITELIST_INBOUND);
-        return false;
+        return true;
     }
 
     /**
@@ -1456,7 +1477,7 @@ public class SecurityPoolAdjustService {
 
         unmatchReasons.add("简易流程伪代码入口已保留：待接入 IP_SIMPLEWORKFLOWDATE 一年有效期校验");
         unmatchReasons.add("待接入 sdc_sirm_bondcompanylevel 主体/展望/担保人评级历史对比，确认评级未下调");
-        return false;
+        return true;
     }
 
     /**
@@ -1931,6 +1952,22 @@ public class SecurityPoolAdjustService {
         resultItem.setCanAdjust(failures.isEmpty());
         resultItem.setFailReasons(failures);
         return resultItem;
+    }
+
+    /**
+     * 手工调库项失败时，将失败状态传递给同组自动生成项。
+     */
+    private void inheritManualItemFailure(
+            AdjustCheckDto.CheckResultItem autoItem, AdjustCheckDto.CheckResultItem manualItem) {
+        if (manualItem.isCanAdjust()) {
+            return;
+        }
+        List<String> failures = new ArrayList<>();
+        failures.add("关联手工" + manualItem.getAdjustMode() + "项“" + manualItem.getPoolName()
+                + "”校验未通过");
+        failures.addAll(autoItem.getFailReasons());
+        autoItem.setCanAdjust(false);
+        autoItem.setFailReasons(failures);
     }
 
     /**
@@ -2473,6 +2510,9 @@ public class SecurityPoolAdjustService {
 
         /** 调出方向批次序号 */
         int outboundBatchSeq = 0;
+
+        /** 无流程批次序号 */
+        int noFlowBatchSeq = 0;
 
         /** 调库分组批次号索引（adjustGroupKey → adjustBatchNo），用于联动/互斥记录复用 */
         final Map<String, String> adjustBatchNoMap = new HashMap<>();

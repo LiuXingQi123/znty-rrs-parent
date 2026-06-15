@@ -26,9 +26,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -317,6 +319,8 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setTargetPoolId(10L);
         item.setTargetPoolName("pool");
         item.setPoolType("special_account");
+        item.setItemTag("manual");
+        item.setAdjustGroupKey("manual_10_调入");
         req.setItems(Collections.singletonList(item));
 
         // 构建调库提交共享数据测试数据
@@ -329,7 +333,9 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(mapper).addAdjustLog(logCaptor.capture());
         verify(mapper).addPoolStatus(statusCaptor.capture());
         assertThat(logCaptor.getValue().getAuditStatus()).isEqualTo("20");
+        assertThat(logCaptor.getValue().getAdjustBatchNo()).endsWith("3001");
         assertThat(statusCaptor.getValue().getAuditStatus()).isEqualTo("20");
+        assertThat(statusCaptor.getValue().getAdjustBatchNo()).isEqualTo(logCaptor.getValue().getAdjustBatchNo());
         assertThat(result).containsExactly(99L);
     }
 
@@ -358,6 +364,8 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setTargetPoolId(10L);
         item.setTargetPoolName("pool");
         item.setPoolType("special_account");
+        item.setItemTag("manual");
+        item.setAdjustGroupKey("manual_10_调出");
         req.setItems(Collections.singletonList(item));
 
         // 构建调库提交共享数据测试数据
@@ -369,7 +377,66 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(mapper).addAdjustLog(captor.capture());
         verify(mapper).softDeletePoolStatus("S001", 10L);
         assertThat(captor.getValue().getAuditStatus()).isEqualTo("20");
+        assertThat(captor.getValue().getAdjustBatchNo()).endsWith("3001");
         assertThat(result).containsExactly(88L);
+    }
+
+    /** 验证白名单直通流程应记录调入批次号及流程步骤。 */
+    @Test
+    public void executeInboundSubmitShouldCreateStepsWithBatchNoForWhitelistFlow() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        doAnswer(invocation -> {
+            IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
+            bo.setId(106L);
+            return 1;
+        }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
+
+        FlowNodeBo start = buildNode(10601L, "n1", "start", 1);
+        FlowNodeBo submitter = buildNode(10602L, "n2", "approval", 2);
+        submitter.setLabel("研究员A发起");
+        FlowNodeBo end = buildNode(10603L, "n3", "end", 3);
+        NodeApprovalConfigBo submitterConfig = buildConfig(106L, submitter.getId(), "initiator");
+        Object snapshot = buildSnapshot(
+                Arrays.asList(start, submitter, end),
+                Arrays.asList(buildEdge(start.getId(), submitter.getId()), buildEdge(submitter.getId(), end.getId())),
+                Collections.singletonList(submitterConfig),
+                Collections.<Long, List<NodeApprovalHandlerBo>>emptyMap());
+        Map<Long, Object> snapshotMap = new HashMap<>();
+        snapshotMap.put(106L, snapshot);
+
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("S001");
+        req.setSecurityShortName("test");
+        req.setSecurityType("bond");
+        req.setAdjustType("manual");
+        req.setAdjusterId("1001");
+        req.setAdjusterName("admin");
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setAdjustMode("调入");
+        item.setTargetPoolId(10L);
+        item.setTargetPoolName("pool");
+        item.setPoolType("credit_bond");
+        item.setItemTag("manual");
+        item.setAdjustGroupKey("manual_10_调入");
+        item.setFlowId(106L);
+        item.setFlowKey("bond:whitelist-inbound");
+        item.setFlowType("whitelistInbound");
+        req.setItems(Collections.singletonList(item));
+
+        // 构建包含白名单流程快照的提交共享数据
+        Object shared = buildSubmitSharedData(snapshotMap);
+        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
+
+        ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        ArgumentCaptor<IpAdjustStepBo> stepCaptor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
+        verify(mapper).addAdjustLog(logCaptor.capture());
+        verify(mapper, times(3)).addAdjustStep(stepCaptor.capture());
+        String batchNo = logCaptor.getValue().getAdjustBatchNo();
+        assertThat(batchNo).endsWith("1001");
+        assertThat(stepCaptor.getAllValues()).extracting(IpAdjustStepBo::getAdjustBatchNo)
+                .containsOnly(batchNo);
     }
 
     /** 验证信用债在库调整应按上调或下调流程编码获取流程。 */
@@ -394,6 +461,61 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(downgradeOption.getFlowType()).isEqualTo("downgradeInbound");
         assertThat(downgradeOption.getFlowId()).isEqualTo(102L);
         assertThat(downgradeOption.getFlowKey()).isEqualTo("bond:standard-downgrade");
+    }
+
+    /** 验证手工调入失败时应同步阻断派生的互斥调出项。 */
+    @Test
+    public void executeInAdjustCheckShouldBlockMutexOutboundWhenManualInboundFails() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryPoolCurrentCount(any(Long.class))).thenReturn(1);
+
+        InvestmentPoolBo rootPool = buildPool(1L, null, "信用债大库");
+        InvestmentPoolBo currentPool = buildPool(2L, 1L, "二级库");
+        InvestmentPoolBo targetPool = buildPool(3L, 1L, "三级库");
+        InvestmentPoolBo forbiddenPool = buildPool(4L, null, "禁投池");
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(rootPool.getId(), rootPool);
+        poolMap.put(currentPool.getId(), currentPool);
+        poolMap.put(targetPool.getId(), targetPool);
+        poolMap.put(forbiddenPool.getId(), forbiddenPool);
+
+        Map<String, List<Long>> targetRelations = new HashMap<>();
+        targetRelations.put("in_restrict", Collections.singletonList(forbiddenPool.getId()));
+        targetRelations.put("in_mutex", Collections.singletonList(currentPool.getId()));
+        Map<Long, Map<String, List<Long>>> relationMap = new HashMap<>();
+        relationMap.put(targetPool.getId(), targetRelations);
+
+        Set<Long> currentPoolIds = new HashSet<>(Arrays.asList(currentPool.getId(), forbiddenPool.getId()));
+        AdjustSharedData shared = new AdjustSharedData();
+        shared.setSecurityInfo(new SecurityInfoBo());
+        shared.setPoolMap(poolMap);
+        shared.setCurrentPoolIds(currentPoolIds);
+        shared.setPoolRelationMap(relationMap);
+        shared.setRequestInPoolIds(Collections.singleton(targetPool.getId()));
+        shared.setRequestOutPoolIds(Collections.<Long>emptySet());
+
+        AdjustCheckReq.CheckItem item = new AdjustCheckReq.CheckItem();
+        item.setTargetPoolId(targetPool.getId());
+        item.setPoolType("credit_bond");
+        item.setAdjustMode("调入");
+        AdjustCheckReq req = new AdjustCheckReq();
+        req.setItems(Collections.singletonList(item));
+        Set<String> coveredKeys = new HashSet<>();
+        coveredKeys.add(targetPool.getId() + "_调入");
+
+        List<AdjustCheckDto.CheckResultItem> results = ReflectionTestUtils.invokeMethod(
+                service, "executeInAdjustCheck", req, shared, coveredKeys);
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).isCanAdjust()).isFalse();
+        assertThat(results.get(0).getFailReasons()).contains(
+                "证券在调入限制池中，无法操作：禁投池");
+        assertThat(results.get(1).getItemTag()).isEqualTo("mutex");
+        assertThat(results.get(1).isCanAdjust()).isFalse();
+        assertThat(results.get(1).getFailReasons().get(0))
+                .isEqualTo("关联手工调入项“信用债大库/三级库”校验未通过");
     }
 
     /** 构造信用债在库调整场景并获取流程候选项。 */
@@ -452,6 +574,11 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 构建调库提交共享数据测试数据。 */
     private Object buildSubmitSharedData() throws Exception {
+        return buildSubmitSharedData(new HashMap<Long, Object>());
+    }
+
+    /** 构建包含流程快照的调库提交共享数据测试数据。 */
+    private Object buildSubmitSharedData(Map<Long, Object> snapshotMap) throws Exception {
         Class<?> sharedClass = Class.forName("com.znty.sirm.service.SecurityPoolAdjustService$SubmitSharedData");
         Constructor<?> constructor = sharedClass.getDeclaredConstructors()[0];
         constructor.setAccessible(true);
@@ -463,7 +590,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 false,
                 false,
                 false,
-                new HashMap<Long, Object>());
+                snapshotMap);
     }
 
     /** 构建流程节点测试数据。 */
