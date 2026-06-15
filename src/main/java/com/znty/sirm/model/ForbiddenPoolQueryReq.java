@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 禁止交易池分页查询请求对象，支持按证券代码、类型、调整人、日期等多条件过滤
+ * 禁止交易池分页查询请求对象，支持按证券代码、证券简称、类型、调整人、日期等多条件过滤
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -13,6 +13,9 @@ public class ForbiddenPoolQueryReq extends PageRequest {
 
     /** 证券代码（模糊搜索） */
     private String securityCode;
+
+    /** 证券简称（模糊搜索） */
+    private String securityShortName;
 
     /** 证券类型（精确匹配） */
     private String securityType;

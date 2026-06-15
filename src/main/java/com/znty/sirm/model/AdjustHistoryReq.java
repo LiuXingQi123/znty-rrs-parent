@@ -7,7 +7,7 @@ import lombok.EqualsAndHashCode;
 import java.util.List;
 
 /**
- * 证券池调整历史分页查询请求对象，支持按投资池、证券代码、类型、调整人等多条件过滤
+ * 证券池调整历史分页查询请求对象，支持按投资池、证券代码、证券简称、类型、调整人等多条件过滤
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
@@ -18,6 +18,9 @@ public class AdjustHistoryReq extends PageRequest {
 
     /** 证券代码（模糊） */
     private String securityCode;
+
+    /** 证券简称（模糊） */
+    private String securityShortName;
 
     /** 证券类型（精确） */
     private String securityType;

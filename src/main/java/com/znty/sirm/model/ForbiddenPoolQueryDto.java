@@ -14,7 +14,7 @@ public class ForbiddenPoolQueryDto {
     /** 主键 ID */
     private Long id;
 
-    /** 证券名称 */
+    /** 证券简称 */
     private String securityShortName;
 
     /** 证券代码 */

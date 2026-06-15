@@ -55,6 +55,9 @@
             <if test="securityCode != null and securityCode != ''">
                 AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
+            <if test="securityShortName != null and securityShortName != ''">
+                AND ips.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')
+            </if>
             <if test="securityType != null and securityType != ''">
                 AND ips.security_type = #{securityType}
             </if>
