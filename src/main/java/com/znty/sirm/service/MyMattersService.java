@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 我的事宜服务，负责查询当前用户相关的流程事项。
@@ -22,6 +23,10 @@ public class MyMattersService {
     @Resource
     private MyMattersMapper myMattersMapper;
 
+    /** 投资池服务，用于获取池全路径映射 */
+    @Resource
+    private InvestmentPoolService investmentPoolService;
+
     /**
      * 分页查询我的事宜列表。
      */
@@ -30,6 +35,8 @@ public class MyMattersService {
         // 开启分页查询
         PageHelper.startPage(safeReq.getPageIndex(), safeReq.getPageSize());
         List<MyMattersDto> list = myMattersMapper.queryMyMattersPage(safeReq);
+        // 将流程描述中的目标池叶子名称替换为全路径
+        replacePoolNameWithFullPath(list);
         PageInfo<MyMattersDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), safeReq.getPageIndex(), safeReq.getPageSize());
     }
@@ -40,5 +47,34 @@ public class MyMattersService {
     public List<FlowOptionDto> queryFlowOptionList(MyMattersReq req) {
         MyMattersReq safeReq = req == null ? new MyMattersReq() : req;
         return myMattersMapper.queryFlowOptionList(safeReq);
+    }
+
+    /**
+     * 将流程描述中的目标池叶子名称替换为全路径名称。
+     * 例如："管理员 将 23某基建PRN001 调入 二级库 的审批申请"
+     *    → "管理员 将 23某基建PRN001 调入 信用债大库/二级库 的审批申请"
+     */
+    private void replacePoolNameWithFullPath(List<MyMattersDto> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        // 获取池 ID → 全路径名称映射
+        Map<Long, String> fullNameMap = investmentPoolService.queryPoolFullNameMap();
+        if (fullNameMap == null || fullNameMap.isEmpty()) {
+            return;
+        }
+        for (MyMattersDto dto : list) {
+            if (dto.getTargetPoolId() == null || dto.getTargetPoolName() == null) {
+                continue;
+            }
+            String fullName = fullNameMap.get(dto.getTargetPoolId());
+            if (fullName == null || fullName.equals(dto.getTargetPoolName())) {
+                continue;
+            }
+            // 将描述中的叶子名称替换为全路径
+            dto.setProcessDescription(
+                dto.getProcessDescription().replace(dto.getTargetPoolName(), fullName)
+            );
+        }
     }
 }

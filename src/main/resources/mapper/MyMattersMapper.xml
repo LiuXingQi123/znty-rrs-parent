@@ -10,6 +10,7 @@
                ,s.adjust_log_id
                ,al.security_code
                ,al.target_pool_id
+               ,al.target_pool_name
                ,al.adjust_batch_no
                ,s.id AS stepId
                ,f.name AS flowName

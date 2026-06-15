@@ -23,6 +23,9 @@ public class MyMattersDto {
     /** 目标投资池 ID */
     private Long targetPoolId;
 
+    /** 目标投资池名称（叶子名称） */
+    private String targetPoolName;
+
     /** 调库批次号 */
     private String adjustBatchNo;
 
