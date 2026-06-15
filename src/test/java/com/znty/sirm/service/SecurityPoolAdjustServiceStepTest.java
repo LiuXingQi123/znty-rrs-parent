@@ -2,7 +2,12 @@ package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
+import com.znty.sirm.mapper.FlowMapper;
 import com.znty.sirm.model.AdjustCheckContext;
+import com.znty.sirm.model.AdjustCheckDto;
+import com.znty.sirm.model.AdjustCheckReq;
+import com.znty.sirm.model.AdjustSharedData;
+import com.znty.sirm.model.FlowDefinitionBo;
 import com.znty.sirm.model.FlowEdgeBo;
 import com.znty.sirm.model.FlowNodeBo;
 import com.znty.sirm.model.InvestmentPoolBo;
@@ -62,20 +67,27 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void queryAdjustPoolListShouldSkipPermissionFilterForAdmin() {
         InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         when(mapper.queryPoolList()).thenReturn(Arrays.asList(
                 // 构建投资池测试数据
                 buildPool(1L, null, "根库"),
                 // 构建投资池测试数据
                 buildPool(2L, 1L, "一级库")));
         when(mapper.queryMutexRelationList()).thenReturn(Collections.emptyList());
+        PoolDto poolCount = new PoolDto();
+        poolCount.setId(2L);
+        poolCount.setCurrentCount(3);
+        when(adjustMapper.queryPoolCurrentCountList()).thenReturn(Collections.singletonList(poolCount));
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
 
         List<PoolDto> result = service.queryAdjustPoolList(req);
 
         assertThat(result).extracting(PoolDto::getId).containsExactly(1L, 2L);
+        assertThat(result).extracting(PoolDto::getCurrentCount).containsExactly(0, 3);
         verify(mapper, never()).queryPermissionListByType(org.mockito.Matchers.anyString());
         verify(mapper, never()).queryUserRoleIdList(org.mockito.Matchers.anyLong());
     }
@@ -358,6 +370,67 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(mapper).softDeletePoolStatus("S001", 10L);
         assertThat(captor.getValue().getAuditStatus()).isEqualTo("20");
         assertThat(result).containsExactly(88L);
+    }
+
+    /** 验证信用债在库调整应按上调或下调流程编码获取流程。 */
+    @Test
+    public void resolveAdjustFlowOptionsShouldQueryFlowByCreditBondAdjustDirection() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        FlowDefinitionBo upgradeFlow = buildFlowDefinition(101L, "bond:standard-upgrade", "债券标准升库流程");
+        FlowDefinitionBo downgradeFlow = buildFlowDefinition(102L, "bond:standard-downgrade", "债券标准降库流程");
+        when(flowMapper.queryActiveFlowByKey("bond:standard-upgrade")).thenReturn(upgradeFlow);
+        when(flowMapper.queryActiveFlowByKey("bond:standard-downgrade")).thenReturn(downgradeFlow);
+
+        // 校验目标池层级高于当前池时使用上调流程
+        AdjustCheckDto.FlowOption upgradeOption = resolveCreditBondFlowOption(service, 1, 2);
+        assertThat(upgradeOption.getFlowType()).isEqualTo("upgradeInbound");
+        assertThat(upgradeOption.getFlowId()).isEqualTo(101L);
+        assertThat(upgradeOption.getFlowKey()).isEqualTo("bond:standard-upgrade");
+
+        // 校验目标池层级低于当前池时使用下调流程
+        AdjustCheckDto.FlowOption downgradeOption = resolveCreditBondFlowOption(service, 3, 2);
+        assertThat(downgradeOption.getFlowType()).isEqualTo("downgradeInbound");
+        assertThat(downgradeOption.getFlowId()).isEqualTo(102L);
+        assertThat(downgradeOption.getFlowKey()).isEqualTo("bond:standard-downgrade");
+    }
+
+    /** 构造信用债在库调整场景并获取流程候选项。 */
+    private AdjustCheckDto.FlowOption resolveCreditBondFlowOption(
+            SecurityPoolAdjustService service, int targetSort, int currentSort) {
+        InvestmentPoolBo targetPool = buildPool(2L, 1L, "目标池");
+        targetPool.setPoolType("credit_bond");
+        targetPool.setInnerSort(targetSort);
+        InvestmentPoolBo currentPool = buildPool(3L, 1L, "当前池");
+        currentPool.setPoolType("credit_bond");
+        currentPool.setInnerSort(currentSort);
+
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(targetPool.getId(), targetPool);
+        poolMap.put(currentPool.getId(), currentPool);
+        AdjustSharedData shared = new AdjustSharedData();
+        shared.setPoolMap(poolMap);
+        shared.setCurrentPoolIds(Collections.singleton(currentPool.getId()));
+
+        AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+        item.setTargetPoolId(targetPool.getId());
+        item.setAdjustMode("调入");
+        item.setItemTag("manual");
+        item.setCanAdjust(true);
+
+        List<AdjustCheckDto.FlowOption> options = ReflectionTestUtils.invokeMethod(
+                service, "resolveAdjustFlowOptionsForItem", new AdjustCheckReq(), shared, item);
+        return options.get(0);
+    }
+
+    /** 构建流程定义测试数据。 */
+    private FlowDefinitionBo buildFlowDefinition(Long id, String flowKey, String name) {
+        FlowDefinitionBo flow = new FlowDefinitionBo();
+        flow.setId(id);
+        flow.setFlowKey(flowKey);
+        flow.setName(name);
+        return flow;
     }
 
     private Object buildSnapshot(List<FlowNodeBo> nodes, List<FlowEdgeBo> edges,

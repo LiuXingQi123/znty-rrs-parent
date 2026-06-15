@@ -185,6 +185,16 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 查询各投资池当前有效证券数量 -->
+    <select id="queryPoolCurrentCountList" resultType="com.znty.sirm.model.PoolDto">
+        SELECT target_pool_id AS id
+               ,COUNT(DISTINCT security_code) AS currentCount
+        FROM ip_pool_status
+        WHERE audit_status = '20'
+          AND is_deleted = 0
+        GROUP BY target_pool_id
+    </select>
+
     <!-- 查询证券是否存在进行中的调库流程（以是否存在待处理步骤为准） -->
     <select id="querySecurityHasPendingProcess" resultType="boolean">
         SELECT COUNT(1) > 0

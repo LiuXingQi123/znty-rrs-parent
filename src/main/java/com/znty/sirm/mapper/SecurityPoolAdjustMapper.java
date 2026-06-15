@@ -5,6 +5,7 @@ import com.znty.sirm.model.SecurityInfoBo;
 import com.znty.sirm.model.SecurityInfoDetailDto;
 import com.znty.sirm.model.SecurityInfoDto;
 import com.znty.sirm.model.IpAdjustLogBo;
+import com.znty.sirm.model.PoolDto;
 import com.znty.sirm.model.PoolRelationBo;
 import com.znty.sirm.model.PoolStatusDto;
 import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
@@ -58,6 +59,9 @@ public interface SecurityPoolAdjustMapper {
 
     /** 查询目标投资池当前有效证券数量 */
     int queryPoolCurrentCount(@Param("poolId") Long poolId);
+
+    /** 查询各投资池当前有效证券数量 */
+    List<PoolDto> queryPoolCurrentCountList();
 
     /** 查询全量投资池关系配置（不限关系类型） */
     List<PoolRelationBo> queryAllPoolRelations();

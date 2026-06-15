@@ -130,6 +130,10 @@ public class SecurityPoolAdjustService {
     private static final String FLOW_TYPE_NORMAL_OUTBOUND = "normalOutbound";
     /** 白名单调入流程 Key */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
+    /** 信用债标准上调流程 Key */
+    private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
+    /** 信用债标准下调流程 Key */
+    private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";
     /** 信用债根池编码 */
     private static final String CREDIT_BOND_ROOT_CODE = "credit_bond_root";
     /** 信用债池类型 */
@@ -203,8 +207,13 @@ public class SecurityPoolAdjustService {
                 }
             }
         }
+        // 查询各投资池当前有效证券数量
+        Map<Long, Integer> currentCountMap = securityPoolAdjustMapper.queryPoolCurrentCountList().stream()
+                .collect(Collectors.toMap(PoolDto::getId, PoolDto::getCurrentCount));
         // InvestmentPoolBo → PoolDto（投资池树节点数据，附带互斥池 ID 列表）
-        return allPools.stream().map(p -> toPoolDto(p, inMutexMap, outMutexMap)).collect(Collectors.toList());
+        return allPools.stream()
+                .map(p -> toPoolDto(p, inMutexMap, outMutexMap, currentCountMap))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -1299,10 +1308,6 @@ public class SecurityPoolAdjustService {
             return Collections.singletonList(buildPoolFlowOption(p));
         }
 
-        if (!"调入".equals(item.getAdjustMode())) {
-            return new ArrayList<>();
-        }
-
         // ── 目标池非信用债大库：仅返回普通流程 ──
         if (!isCreditBondPool(targetPool, shared)) {
             // 解析流程名称：优先使用配置名称
@@ -1326,13 +1331,14 @@ public class SecurityPoolAdjustService {
             // 判断信用债在库调整流程是上调还是下调
             String flowType = resolveCreditBondAdjustFlowType(targetPool, shared);
             String fallbackName = FLOW_TYPE_DOWNGRADE_INBOUND.equals(flowType) ? "下调流程" : "上调流程";
-            // 解析流程名称：优先使用配置名称
-            String flowName = resolveFlowName(targetPool.getInFlowName(), fallbackName);
+            String flowKey = FLOW_TYPE_DOWNGRADE_INBOUND.equals(flowType)
+                    ? FLOW_KEY_STANDARD_DOWNGRADE : FLOW_KEY_STANDARD_UPGRADE;
+            FlowDefinitionBo flow = flowMapper.queryActiveFlowByKey(flowKey);
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(flowType);
-            p.setFlowName(flowName);
-            p.setFlowId(targetPool.getInFlowId());
-            p.setFlowKey(targetPool.getInFlowKey());
+            p.setFlowName(flow != null && flow.getName() != null ? flow.getName() : fallbackName);
+            p.setFlowId(flow != null ? flow.getId() : null);
+            p.setFlowKey(flowKey);
             p.setRecommended(true);
             p.setMatched(true);
             p.setSelectable(true);
@@ -1430,6 +1436,7 @@ public class SecurityPoolAdjustService {
 
         unmatchReasons.add("白名单流程伪代码入口已保留：优先回售/行权日，否则到期日，剩余期限需 <= 1895 天");
         unmatchReasons.add("待接入真实 SQL：排除永续债/私募债/ABS，主体在 WHITEPOOLID_XYJJ，ptype=4000，bonddt52='0' 或为空");
+        unmatchReasons.add("当前投资池未配置白名单流程字段，暂按已启用流程 Key 查询：" + FLOW_KEY_WHITELIST_INBOUND);
         return false;
     }
 
@@ -1516,7 +1523,6 @@ public class SecurityPoolAdjustService {
 
         FlowDefinitionBo flow = flowMapper.queryActiveFlowByKey(FLOW_KEY_WHITELIST_INBOUND);
         List<String> reasons = new ArrayList<>(p.getUnmatchReasons());
-        reasons.add("当前投资池未配置白名单流程字段，暂按已启用流程 Key 查询：" + FLOW_KEY_WHITELIST_INBOUND);
         if (flow == null) {
             reasons.add("未找到已启用流程定义：" + FLOW_KEY_WHITELIST_INBOUND);
         }
@@ -2011,10 +2017,12 @@ public class SecurityPoolAdjustService {
      * @param pool        投资池实体
      * @param inMutexMap  调入互斥关系（poolId → 互斥池 ID 列表）
      * @param outMutexMap 调出互斥关系（poolId → 互斥池 ID 列表）
+     * @param currentCountMap 投资池当前有效证券数量映射
      */
     private PoolDto toPoolDto(InvestmentPoolBo pool,
                               Map<Long, List<Long>> inMutexMap,
-                              Map<Long, List<Long>> outMutexMap) {
+                              Map<Long, List<Long>> outMutexMap,
+                              Map<Long, Integer> currentCountMap) {
         PoolDto dto = new PoolDto();
         dto.setId(pool.getId());
         dto.setParentId(pool.getParentId());
@@ -2023,7 +2031,7 @@ public class SecurityPoolAdjustService {
         dto.setPoolType(pool.getPoolType());
         dto.setPoolLevel(pool.getPoolLevel());
         dto.setMaxCapacity(pool.getMaxCapacity());
-        dto.setCurrentCount(0);
+        dto.setCurrentCount(currentCountMap.getOrDefault(pool.getId(), 0));
         dto.setInMutexPoolIds(inMutexMap.getOrDefault(pool.getId(), Collections.emptyList()));
         dto.setOutMutexPoolIds(outMutexMap.getOrDefault(pool.getId(), Collections.emptyList()));
         return dto;
