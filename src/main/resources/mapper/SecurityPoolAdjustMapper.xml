@@ -199,10 +199,7 @@
     <select id="querySecurityHasPendingProcess" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_adjust_log al
-        INNER JOIN ip_adjust_step s ON (
-            (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != '' AND s.adjust_batch_no = al.adjust_batch_no)
-            OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '') AND s.adjust_log_id = al.id)
-        )
+        INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{securityCode}
           AND al.is_deleted = 0
           AND s.step_status = 'pending'
@@ -212,10 +209,7 @@
     <select id="querySecurityPendingProcessNodeLabel" resultType="string">
         SELECT s.node_label
         FROM ip_adjust_log al
-        INNER JOIN ip_adjust_step s ON (
-            (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != '' AND s.adjust_batch_no = al.adjust_batch_no)
-            OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '') AND s.adjust_log_id = al.id)
-        )
+        INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{securityCode}
           AND al.is_deleted = 0
           AND s.step_status = 'pending'

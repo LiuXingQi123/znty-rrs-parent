@@ -80,10 +80,7 @@
                     SELECT 1
                     FROM ip_adjust_step ps
                     WHERE ps.step_status = 'pending'
-                      AND (
-                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != '' AND ps.adjust_batch_no = al.adjust_batch_no)
-                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '') AND ps.adjust_log_id = al.id)
-                      )
+                      AND ps.adjust_batch_no = al.adjust_batch_no
                 )
             </if>
             <if test="stepStatus == 'completed'">
@@ -91,10 +88,7 @@
                     SELECT 1
                     FROM ip_adjust_step ps
                     WHERE ps.step_status = 'pending'
-                      AND (
-                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != '' AND ps.adjust_batch_no = al.adjust_batch_no)
-                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '') AND ps.adjust_log_id = al.id)
-                      )
+                      AND ps.adjust_batch_no = al.adjust_batch_no
                 )
             </if>
             <if test="initiatorName != null and initiatorName != ''">

@@ -877,7 +877,7 @@
         SELECT id AS flowId
                ,flow_key
                ,name AS flowName
-        FROM znty_flow.wf_flow_definition
+        FROM wf_flow_definition
         WHERE status = 'active'
           AND (is_deleted IS NULL OR is_deleted = 0)
         ORDER BY id DESC
