@@ -26,6 +26,9 @@ public class AdjustHistoryDto {
     /** 证券类型名称（关联 dict_security_type 表） */
     private String securityTypeName;
 
+    /** 发行主体名称 */
+    private String issuer;
+
     /** 调整类型（手工调整/联动调整/...） */
     private String adjustType;
 

@@ -11,6 +11,7 @@
                ,al.security_short_name
                ,al.security_type
                ,dst.security_type_name
+               ,sb.issuer
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
