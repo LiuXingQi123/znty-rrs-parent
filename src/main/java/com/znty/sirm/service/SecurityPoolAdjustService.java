@@ -124,7 +124,7 @@ public class SecurityPoolAdjustService {
     private static final String FLOW_TYPE_WHITELIST_INBOUND = "whitelistInbound";
     /** 简易调入流程类型 */
     private static final String FLOW_TYPE_SIMPLE_INBOUND = "simpleInbound";
-    /** 普通调入流程类型 */
+    /** 默认调入流程类型 */
     private static final String FLOW_TYPE_NORMAL_INBOUND = "normalInbound";
     /** 升级调入流程类型 */
     private static final String FLOW_TYPE_UPGRADE_INBOUND = "upgradeInbound";
@@ -138,12 +138,8 @@ public class SecurityPoolAdjustService {
     private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
     /** 信用债标准下调流程 Key */
     private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";
-    /** 信用债根池编码 */
-    private static final String CREDIT_BOND_ROOT_CODE = "credit_bond_root";
     /** 信用债池类型 */
     private static final String CREDIT_BOND_POOL_TYPE = "credit_bond";
-    /** 简易流程最大剩余期限天数（三年） */
-    private static final int SIMPLE_FLOW_MAX_REMAIN_DAYS = 365 * 3;
     /** 日期字段格式：yyyyMMdd */
     private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -1343,7 +1339,7 @@ public class SecurityPoolAdjustService {
         }
 
         // ── 目标池非信用债大库：仅返回默认调入流程 ──
-        if (!isCreditBondPool(targetPool, shared)) {
+        if (!isCreditBondPool(targetPool)) {
             // 解析流程名称：优先使用配置名称
             String flowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
             boolean noApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
@@ -1507,7 +1503,7 @@ public class SecurityPoolAdjustService {
             unmatchReasons.add("剩余期限无法解析，dateNext 需为 yyyyMMdd 格式");
         } else if (remainDays < 0) {
             unmatchReasons.add("剩余期限已小于 0 天");
-        } else if (remainDays <= SIMPLE_FLOW_MAX_REMAIN_DAYS) {
+        } else if (remainDays <= 365 * 3) {
             matchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，未超过 3 年");
         } else {
             unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，超过 3 年");
@@ -1583,15 +1579,11 @@ public class SecurityPoolAdjustService {
     /**
      * 判断目标池是否属于信用债大库。
      */
-    private boolean isCreditBondPool(InvestmentPoolBo pool, AdjustSharedData shared) {
+    private boolean isCreditBondPool(InvestmentPoolBo pool) {
         if (pool == null) {
             return false;
         }
-        if (CREDIT_BOND_ROOT_CODE.equals(pool.getPoolCode()) || CREDIT_BOND_POOL_TYPE.equals(pool.getPoolType())) {
-            return true;
-        }
-        InvestmentPoolBo parent = pool.getParentId() != null ? shared.getPoolMap().get(pool.getParentId()) : null;
-        return parent != null && CREDIT_BOND_ROOT_CODE.equals(parent.getPoolCode());
+        return CREDIT_BOND_POOL_TYPE.equals(pool.getPoolType());
     }
 
     /**
@@ -1600,8 +1592,8 @@ public class SecurityPoolAdjustService {
     private boolean isSecurityInCreditBondPool(AdjustSharedData shared) {
         for (Long currentPoolId : shared.getCurrentPoolIds()) {
             InvestmentPoolBo currentPool = shared.getPoolMap().get(currentPoolId);
-            // 判断目标池是否属于信用债大库
-            if (isCreditBondPool(currentPool, shared)) {
+            // 判断当前池是否属于信用债大库
+            if (isCreditBondPool(currentPool)) {
                 return true;
             }
         }
