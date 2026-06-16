@@ -50,6 +50,9 @@
                                   ,target_pool_id
                                   ,target_pool_name
                                   ,pool_type
+                                  ,flow_id
+                                  ,flow_key
+                                  ,flow_type
                                   ,audit_status
                                   ,adjuster_id
                                   ,adjuster_name
@@ -70,6 +73,9 @@
                ,#{targetPoolId}
                ,#{targetPoolName}
                ,#{poolType}
+               ,#{flowId}
+               ,#{flowKey}
+               ,#{flowType}
                ,#{auditStatus}
                ,#{adjusterId}
                ,#{adjusterName}
@@ -145,6 +151,9 @@
                ,al.target_pool_id
                ,al.target_pool_name
                ,al.pool_type
+               ,al.flow_id
+               ,al.flow_key
+               ,al.flow_type
                ,al.audit_status
                ,al.adjuster_id
                ,al.adjuster_name
@@ -250,6 +259,41 @@
           AND ips.is_deleted = 0
     </select>
 
+    <!-- 查询同主体在目标池中已有债券的最大剩余期限天数 -->
+    <select id="queryIssuerTargetPoolMaxRemainDays" resultType="java.lang.Integer">
+        SELECT MAX(DATEDIFF(STR_TO_DATE(si.date_next, '%Y%m%d'), CURDATE()))
+        FROM ip_pool_status ips
+        INNER JOIN sirm_securityinfo si ON si.wind_code = ips.security_code
+        WHERE si.issuer = (
+            SELECT issuer
+            FROM sirm_securityinfo
+            WHERE wind_code = #{securityCode}
+            LIMIT 1
+        )
+          AND ips.target_pool_id = #{targetPoolId}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND si.date_next REGEXP '^[0-9]{8}$'
+    </select>
+
+    <!-- 查询同主体在目标池近一年是否走过简易调入流程 -->
+    <select id="queryIssuerRecentSimpleInboundExists" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN sirm_securityinfo si ON si.wind_code = ips.security_code
+        WHERE si.issuer = (
+            SELECT issuer
+            FROM sirm_securityinfo
+            WHERE wind_code = #{securityCode}
+            LIMIT 1
+        )
+          AND ips.target_pool_id = #{targetPoolId}
+          AND ips.flow_type = 'simpleInbound'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL 1 YEAR)
+    </select>
+
     <!-- 新增入池状态记录（直通流程：start→end 跳过审批，直接写入已生效状态） -->
     <insert id="addPoolStatus" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_pool_status (security_code
@@ -261,6 +305,9 @@
                                   ,target_pool_id
                                   ,target_pool_name
                                   ,pool_type
+                                  ,flow_id
+                                  ,flow_key
+                                  ,flow_type
                                   ,audit_status
                                   ,adjuster_id
                                   ,adjuster_name
@@ -282,6 +329,9 @@
                ,#{targetPoolId}
                ,#{targetPoolName}
                ,#{poolType}
+               ,#{flowId}
+               ,#{flowKey}
+               ,#{flowType}
                ,#{auditStatus}
                ,#{adjusterId}
                ,#{adjusterName}
@@ -606,6 +656,9 @@
                ,target_pool_id
                ,target_pool_name
                ,pool_type
+               ,flow_id
+               ,flow_key
+               ,flow_type
                ,audit_status
                ,adjuster_id
                ,adjuster_name

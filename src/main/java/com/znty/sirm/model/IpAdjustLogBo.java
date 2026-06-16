@@ -41,6 +41,15 @@ public class IpAdjustLogBo {
     /** 投资池类型 */
     private String poolType;
 
+    /** 流程定义 ID 快照 */
+    private Long flowId;
+
+    /** 流程 Key 快照 */
+    private String flowKey;
+
+    /** 流程类型快照 */
+    private String flowType;
+
     /** 审核状态 */
     private String auditStatus;
 

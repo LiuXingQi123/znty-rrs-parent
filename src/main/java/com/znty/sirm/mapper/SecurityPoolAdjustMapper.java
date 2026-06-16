@@ -78,6 +78,14 @@ public interface SecurityPoolAdjustMapper {
     /** 查询证券主体公司是否在观察池（同发行人的任意证券在观察池中） */
     boolean queryIssuerInObservePool(@Param("securityCode") String securityCode);
 
+    /** 查询同主体在目标池中已有债券的最大剩余期限天数 */
+    Integer queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
+                                               @Param("targetPoolId") Long targetPoolId);
+
+    /** 查询同主体在目标池近一年是否走过简易调入流程 */
+    boolean queryIssuerRecentSimpleInboundExists(@Param("securityCode") String securityCode,
+                                                 @Param("targetPoolId") Long targetPoolId);
+
     /** 新增流程步骤记录 */
     int addAdjustStep(IpAdjustStepBo bo);
 

@@ -41,6 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -138,6 +142,10 @@ public class SecurityPoolAdjustService {
     private static final String CREDIT_BOND_ROOT_CODE = "credit_bond_root";
     /** 信用债池类型 */
     private static final String CREDIT_BOND_POOL_TYPE = "credit_bond";
+    /** 简易流程最大剩余期限天数（三年） */
+    private static final int SIMPLE_FLOW_MAX_REMAIN_DAYS = 365 * 3;
+    /** 日期字段格式：yyyyMMdd */
+    private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
 
 
     // ═══════════════════════════════════════════════════════════
@@ -706,7 +714,7 @@ public class SecurityPoolAdjustService {
 
             if (isDirect) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
-                IpAdjustLogBo logBo = buildAdjustLog(req, item);
+                IpAdjustLogBo logBo = buildAdjustLog(req, item, manualItem);
                 logBo.setAdjustBatchNo(adjustBatchNo);
                 logBo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(logBo);
@@ -718,14 +726,14 @@ public class SecurityPoolAdjustService {
                 }
 
                 // 直通流程：再直接写入 ip_pool_status（audit_status='20'，即时生效）
-                IpAdjustLogBo statusBo = buildAdjustLog(req, item);
+                IpAdjustLogBo statusBo = buildAdjustLog(req, item, manualItem);
                 statusBo.setAdjustBatchNo(adjustBatchNo);
                 statusBo.setAuditStatus("20");
                 securityPoolAdjustMapper.addPoolStatus(statusBo);
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
                 // 构建调库日志实体
-                IpAdjustLogBo bo = buildAdjustLog(req, item);
+                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
@@ -777,7 +785,7 @@ public class SecurityPoolAdjustService {
 
             if (isDirect) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
-                IpAdjustLogBo bo = buildAdjustLog(req, item);
+                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(bo);
@@ -794,7 +802,7 @@ public class SecurityPoolAdjustService {
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
                 // 构建调库日志实体
-                IpAdjustLogBo bo = buildAdjustLog(req, item);
+                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
@@ -1097,6 +1105,9 @@ public class SecurityPoolAdjustService {
         shared.setPendingProcessNodeLabel(securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
+        shared.setIssuerRatingDowngraded(false);
+        shared.setOutlookRatingDowngraded(false);
+        shared.setGuarantorRatingDowngraded(false);
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         return shared;
@@ -1265,7 +1276,7 @@ public class SecurityPoolAdjustService {
      * 第五阶段：判断本次调库可选择的审批流程。
      *
      * <p>调出时直接使用目标投资池配置的标准调出流程。调入时：信用债已在库返回上调/下调单流程，
-     * 信用债未在库返回白名单/简易/普通三类候选，非信用债大库返回普通流程。
+     * 信用债未在库返回白名单/简易/默认调入三类候选，非信用债大库返回默认调入流程。
      * 白名单和简易规则按伪代码保留入口，不改表结构。</p>
      *
      * @param req         调库校验请求
@@ -1315,6 +1326,7 @@ public class SecurityPoolAdjustService {
         if ("调出".equals(item.getAdjustMode())) {
             // 解析流程名称：优先使用配置名称
             String flowName = resolveFlowName(targetPool.getOutFlowName(), "调出流程");
+            boolean noApproval = isNoApprovalFlow(targetPool.getOutFlowId(), targetPool.getOutFlowKey());
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(FLOW_TYPE_NORMAL_OUTBOUND);
             p.setFlowName(flowName);
@@ -1323,16 +1335,18 @@ public class SecurityPoolAdjustService {
             p.setRecommended(true);
             p.setMatched(true);
             p.setSelectable(true);
-            p.setMatchReasons(Collections.singletonList("调出目标池使用投资池定义的标准调出流程"));
+            p.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
+                    null, flowName, noApproval, "默认调出流程")));
             p.setUnmatchReasons(new ArrayList<>());
             // 构建调出流程候选项
             return Collections.singletonList(buildPoolFlowOption(p));
         }
 
-        // ── 目标池非信用债大库：仅返回普通流程 ──
+        // ── 目标池非信用债大库：仅返回默认调入流程 ──
         if (!isCreditBondPool(targetPool, shared)) {
             // 解析流程名称：优先使用配置名称
-            String flowName = resolveFlowName(targetPool.getInFlowName(), "普通流程");
+            String flowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
+            boolean noApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
             FlowOptionParam p = new FlowOptionParam();
             p.setFlowType(FLOW_TYPE_NORMAL_INBOUND);
             p.setFlowName(flowName);
@@ -1341,16 +1355,22 @@ public class SecurityPoolAdjustService {
             p.setRecommended(true);
             p.setMatched(true);
             p.setSelectable(true);
-            p.setMatchReasons(Collections.singletonList("目标池非信用债大库，走普通流程"));
+            p.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
+                    "目标池不在信用债大库中", flowName, noApproval, "默认调入流程")));
             p.setUnmatchReasons(new ArrayList<>());
-            // 构建普通流程候选项
+            // 构建默认调入流程候选项
             return Collections.singletonList(buildPoolFlowOption(p));
         }
 
-        // ── 证券已在信用债大库中：按库位层级判断上调/下调 ──
+        // ── 证券已在信用债大库中：按当前池与目标池层级判断上调/下调 ──
         if (isSecurityInCreditBondPool(shared)) {
             // 判断信用债在库调整流程是上调还是下调
             String flowType = resolveCreditBondAdjustFlowType(targetPool, shared);
+            if (flowType == null) {
+                // 构建默认调入流程候选项
+                return Collections.singletonList(buildNormalInboundFlowOption(
+                        targetPool, "当前池与目标池不适用升降级判断"));
+            }
             String fallbackName = FLOW_TYPE_DOWNGRADE_INBOUND.equals(flowType) ? "下调流程" : "上调流程";
             String flowKey = FLOW_TYPE_DOWNGRADE_INBOUND.equals(flowType)
                     ? FLOW_KEY_STANDARD_DOWNGRADE : FLOW_KEY_STANDARD_UPGRADE;
@@ -1363,26 +1383,27 @@ public class SecurityPoolAdjustService {
             p.setRecommended(true);
             p.setMatched(true);
             p.setSelectable(true);
-            p.setMatchReasons(Collections.singletonList("证券已在信用债大库中，按当前库位与目标库位判断上调/下调"));
+            p.setMatchReasons(Collections.singletonList("按当前池与目标池层级变化匹配升降级流程"));
             p.setUnmatchReasons(new ArrayList<>());
             // 构建上调/下调流程候选项
             return Collections.singletonList(buildPoolFlowOption(p));
         }
 
-        // ── 证券不在信用债大库中：依次评估白名单 → 简易 → 普通流程 ──
+        // ── 证券不在信用债大库中：依次评估白名单 → 简易 → 默认调入流程 ──
         // 白名单流程命中判断
         List<String> whitelistMatchReasons = new ArrayList<>();
         List<String> whitelistUnmatchReasons = new ArrayList<>();
-        // 白名单流程命中判断入口。  伪代码口径： 1. 剩余期限   当前版本不新增白名单配置表、不修改表结构，因此仅保留入口并返回未命中
+        // 判断白名单流程是否命中
         boolean whitelistMatched = isWhitelistFlowMatched(req, shared, whitelistMatchReasons, whitelistUnmatchReasons);
 
         // 简易流程命中判断
         List<String> simpleMatchReasons = new ArrayList<>();
         List<String> simpleUnmatchReasons = new ArrayList<>();
-        // 简易流程命中判断入口。  伪代码口径： 1. 剩余期限合理； 2. 处于一年有效期内； 3. 主体评级和展望评级均未下调； 4. 无担保人，或担保人评级也未下调。  当前证券表没有评级历史和评级有效期字段，因此仅保留入口并返回未命中
-        boolean simpleMatched = isSimpleInboundFlowMatched(req, shared, simpleMatchReasons, simpleUnmatchReasons);
+        // 判断简易流程是否命中
+        boolean simpleMatched = isSimpleInboundFlowMatched(
+                req, shared, targetPool, simpleMatchReasons, simpleUnmatchReasons);
 
-        // 推荐优先级：白名单 > 简易 > 普通
+        // 推荐优先级：白名单 > 简易 > 默认调入
         String recommendedType = whitelistMatched ? FLOW_TYPE_WHITELIST_INBOUND
                 : (simpleMatched ? FLOW_TYPE_SIMPLE_INBOUND : FLOW_TYPE_NORMAL_INBOUND);
 
@@ -1410,8 +1431,9 @@ public class SecurityPoolAdjustService {
         simpleP.setUnmatchReasons(simpleUnmatchReasons);
         // 构建简易流程候选项
         options.add(buildPoolFlowOption(simpleP));
-        // 普通流程
-        String normalFlowName = resolveFlowName(targetPool.getInFlowName(), "普通流程");
+        // 默认调入流程
+        String normalFlowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
+        boolean normalNoApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
         FlowOptionParam normalP = new FlowOptionParam();
         normalP.setFlowType(FLOW_TYPE_NORMAL_INBOUND);
         normalP.setFlowName(normalFlowName);
@@ -1420,9 +1442,10 @@ public class SecurityPoolAdjustService {
         normalP.setRecommended(FLOW_TYPE_NORMAL_INBOUND.equals(recommendedType));
         normalP.setMatched(true);
         normalP.setSelectable(true);
-        normalP.setMatchReasons(Collections.singletonList("证券不在信用债大库中，普通流程始终可选"));
+        normalP.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
+                null, normalFlowName, normalNoApproval, "默认调入流程")));
         normalP.setUnmatchReasons(new ArrayList<>());
-        // 构建普通流程候选项
+        // 构建默认调入流程候选项
         options.add(buildPoolFlowOption(normalP));
         return options;
     }
@@ -1455,10 +1478,8 @@ public class SecurityPoolAdjustService {
     private boolean isWhitelistFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
 
-        unmatchReasons.add("白名单流程伪代码入口已保留：优先回售/行权日，否则到期日，剩余期限需 <= 1895 天");
-        unmatchReasons.add("待接入真实 SQL：排除永续债/私募债/ABS，主体在 WHITEPOOLID_XYJJ，ptype=4000，bonddt52='0' 或为空");
-        unmatchReasons.add("当前投资池未配置白名单流程字段，暂按已启用流程 Key 查询：" + FLOW_KEY_WHITELIST_INBOUND);
-        return true;
+        unmatchReasons.add("白名单流程当前默认关闭，暂不作为可选流程");
+        return false;
     }
 
     /**
@@ -1467,28 +1488,78 @@ public class SecurityPoolAdjustService {
      * <p>伪代码口径：
      * 1. 剩余期限合理；
      * 2. 处于一年有效期内；
-     * 3. 主体评级和展望评级均未下调；
-     * 4. 无担保人，或担保人评级也未下调。</p>
+     * 3. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
      *
-     * <p>当前证券表没有评级历史和评级有效期字段，因此仅保留入口并返回未命中。</p>
+     * <p>评级下调标识当前由共享上下文初始化，后续可替换为真实评级历史查询。</p>
      */
     private boolean isSimpleInboundFlowMatched(
-            AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
+            AdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,
+            List<String> matchReasons, List<String> unmatchReasons) {
 
-        unmatchReasons.add("简易流程伪代码入口已保留：待接入 IP_SIMPLEWORKFLOWDATE 一年有效期校验");
-        unmatchReasons.add("待接入 sdc_sirm_bondcompanylevel 主体/展望/担保人评级历史对比，确认评级未下调");
-        return true;
+        if (isCreditBondLevelOneToThree(targetPool)) {
+            matchReasons.add("目标池属于信用债大库一、二、三级库");
+        } else {
+            unmatchReasons.add("目标池不是信用债大库一、二、三级库");
+        }
+
+        Integer remainDays = parseRemainDays(shared.getSecurityInfo().getDateNext());
+        if (remainDays == null) {
+            unmatchReasons.add("剩余期限无法解析，dateNext 需为 yyyyMMdd 格式");
+        } else if (remainDays < 0) {
+            unmatchReasons.add("剩余期限已小于 0 天");
+        } else if (remainDays <= SIMPLE_FLOW_MAX_REMAIN_DAYS) {
+            matchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，未超过 3 年");
+        } else {
+            unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，超过 3 年");
+        }
+
+        if (remainDays != null && remainDays >= 0) {
+            Integer issuerPoolMaxRemainDays = securityPoolAdjustMapper.queryIssuerTargetPoolMaxRemainDays(
+                    req.getSecurityCode(), targetPool.getId());
+            if (issuerPoolMaxRemainDays == null) {
+                matchReasons.add("目标池暂无同主体有效债券，不受在池最大期限限制");
+            } else if (remainDays <= issuerPoolMaxRemainDays) {
+                matchReasons.add("剩余期限为 " + formatRemainDays(remainDays)
+                        + "，未超过同主体在池最大期限 " + formatRemainDays(issuerPoolMaxRemainDays));
+            } else {
+                unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays)
+                        + "，超过同主体在池最大期限 " + formatRemainDays(issuerPoolMaxRemainDays));
+            }
+        }
+
+        boolean recentSimpleInbound = securityPoolAdjustMapper.queryIssuerRecentSimpleInboundExists(
+                req.getSecurityCode(), targetPool.getId());
+        if (recentSimpleInbound) {
+            unmatchReasons.add("该主体在目标池中近一年已走过简易流程，需满一年后再次适用");
+        } else {
+            matchReasons.add("该主体在目标池中近一年未走过简易流程");
+        }
+
+        boolean issuerOrOutlookDowngraded = shared.isIssuerRatingDowngraded() || shared.isOutlookRatingDowngraded();
+        if (!issuerOrOutlookDowngraded) {
+            matchReasons.add("主体评级和展望评级未下调");
+        } else {
+            if (!hasGuarantor(shared.getSecurityInfo())) {
+                unmatchReasons.add("主体评级或展望评级已下调，且无担保人评级可补充判断");
+            } else if (shared.isGuarantorRatingDowngraded()) {
+                unmatchReasons.add("主体评级或展望评级已下调，且担保人评级也已下调");
+            } else {
+                matchReasons.add("主体评级或展望评级已下调，但担保人评级未下调");
+            }
+        }
+
+        return unmatchReasons.isEmpty();
     }
 
     /**
      * 判断信用债在库调整流程是上调还是下调。
      *
      * <p>同一父级下，目标池 innerSort 小于当前所在池为升库，大于当前所在池为降库；
-     * 未找到同父级当前池时，默认按升库入库流程处理。</p>
+     * 未找到同父级当前池时返回 null，由调用方走目标池标准调入流程。</p>
      */
     private String resolveCreditBondAdjustFlowType(InvestmentPoolBo targetPool, AdjustSharedData shared) {
         if (targetPool == null || targetPool.getParentId() == null || targetPool.getInnerSort() == null) {
-            return FLOW_TYPE_UPGRADE_INBOUND;
+            return null;
         }
 
         for (Long currentPoolId : shared.getCurrentPoolIds()) {
@@ -1506,7 +1577,7 @@ public class SecurityPoolAdjustService {
                 return FLOW_TYPE_UPGRADE_INBOUND;
             }
         }
-        return FLOW_TYPE_UPGRADE_INBOUND;
+        return null;
     }
 
     /**
@@ -1538,6 +1609,53 @@ public class SecurityPoolAdjustService {
     }
 
     /**
+     * 判断目标池是否为信用债大库一、二、三级库。
+     */
+    private boolean isCreditBondLevelOneToThree(InvestmentPoolBo pool) {
+        return pool != null
+                && CREDIT_BOND_POOL_TYPE.equals(pool.getPoolType())
+                && pool.getInnerSort() != null
+                && pool.getInnerSort() >= 1
+                && pool.getInnerSort() <= 3;
+    }
+
+    /**
+     * 解析 dateNext 到当前日期的剩余天数。
+     */
+    private Integer parseRemainDays(String dateNext) {
+        if (dateNext == null || !dateNext.matches("\\d{8}")) {
+            return null;
+        }
+        try {
+            LocalDate nextDate = LocalDate.parse(dateNext, BASIC_DATE_FORMATTER);
+            return (int) ChronoUnit.DAYS.between(LocalDate.now(), nextDate);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 格式化剩余期限展示文本。
+     */
+    private String formatRemainDays(Integer remainDays) {
+        if (remainDays == null) {
+            return "";
+        }
+        return remainDays + " 天（约 " + String.format("%.2f", remainDays / 365.0D) + " 年）";
+    }
+
+    /**
+     * 判断证券是否存在担保人。
+     */
+    private boolean hasGuarantor(SecurityInfoBo securityInfo) {
+        if (securityInfo == null) {
+            return false;
+        }
+        return (securityInfo.getGuarantor() != null && !securityInfo.getGuarantor().trim().isEmpty())
+                || (securityInfo.getGuarantorId() != null && !securityInfo.getGuarantorId().trim().isEmpty());
+    }
+
+    /**
      * 构建白名单流程候选项。
      */
     private AdjustCheckDto.FlowOption buildWhitelistFlowOption(FlowOptionParam p) {
@@ -1558,17 +1676,45 @@ public class SecurityPoolAdjustService {
     }
 
     /**
+     * 构建目标池标准调入流程候选项。
+     */
+    private AdjustCheckDto.FlowOption buildNormalInboundFlowOption(InvestmentPoolBo targetPool, String matchReason) {
+        String flowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
+        boolean noApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
+        FlowOptionParam p = new FlowOptionParam();
+        p.setFlowType(FLOW_TYPE_NORMAL_INBOUND);
+        p.setFlowName(flowName);
+        p.setFlowId(targetPool.getInFlowId());
+        p.setFlowKey(targetPool.getInFlowKey());
+        p.setRecommended(true);
+        p.setMatched(true);
+        p.setSelectable(true);
+        p.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
+                matchReason, flowName, noApproval, "默认调入流程")));
+        p.setUnmatchReasons(new ArrayList<>());
+        // 构建默认调入流程候选项
+        return buildPoolFlowOption(p);
+    }
+
+    /**
+     * 构建目标池默认流程说明。
+     */
+    private String buildTargetFlowReason(String prefix, String flowName, boolean noApproval, String flowLabel) {
+        String reasonPrefix = prefix != null && !prefix.isEmpty() ? prefix + "，" : "";
+        if (noApproval) {
+            return reasonPrefix + "目标池未配置" + flowLabel + "，按不需要审批处理";
+        }
+        return reasonPrefix + "使用目标池配置的默认「" + flowName + "」";
+    }
+
+    /**
      * 使用目标池配置构建流程候选项。
      *
      * <p>调用方需先将 {@code configuredFlowName} 与 {@code fallbackFlowName} 决议为最终的
      * {@code flowName} 后传入 {@link FlowOptionParam}。
      */
     private AdjustCheckDto.FlowOption buildPoolFlowOption(FlowOptionParam p) {
-        List<String> reasons = new ArrayList<>(p.getUnmatchReasons());
-        boolean noApproval = p.getFlowId() == null && (p.getFlowKey() == null || p.getFlowKey().isEmpty());
-        if (noApproval) {
-            reasons.add("目标池未配置该流程，按不需要审批处理");
-        }
+        boolean noApproval = isNoApprovalFlow(p.getFlowId(), p.getFlowKey());
         FlowOptionParam result = new FlowOptionParam();
         result.setFlowType(p.getFlowType());
         result.setFlowName(noApproval ? "不需要审批" : p.getFlowName());
@@ -1578,9 +1724,16 @@ public class SecurityPoolAdjustService {
         result.setMatched(p.isMatched());
         result.setSelectable(p.isSelectable());
         result.setMatchReasons(p.getMatchReasons());
-        result.setUnmatchReasons(reasons);
+        result.setUnmatchReasons(p.getUnmatchReasons());
         // 构建流程候选项（统一入口）
         return buildFlowOption(result);
+    }
+
+    /**
+     * 判断目标池是否未配置审批流程。
+     */
+    private boolean isNoApprovalFlow(Long flowId, String flowKey) {
+        return flowId == null && (flowKey == null || flowKey.isEmpty());
     }
 
     /**
@@ -2354,10 +2507,12 @@ public class SecurityPoolAdjustService {
      *
      * @param req  调库申请（含证券级别信息）
      * @param item 单个调库项（含目标池、调整方向等）
+     * @param flowSource 同组手工调库项，用于写入流程快照
      */
-    private IpAdjustLogBo buildAdjustLog(SecurityPoolAdjustSubmitReq req, SecurityPoolAdjustSubmitReq.AdjustItem item) {
+    private IpAdjustLogBo buildAdjustLog(SecurityPoolAdjustSubmitReq req,
+                                         SecurityPoolAdjustSubmitReq.AdjustItem item,
+                                         SecurityPoolAdjustSubmitReq.AdjustItem flowSource) {
         IpAdjustLogBo bo = new IpAdjustLogBo();
-        // item 中的 flowId/flowKey/flowType 当前仅作为流程实例接入预留参数，不写入 ip_adjust_log。
         bo.setSecurityCode(req.getSecurityCode());
         bo.setSecurityShortName(req.getSecurityShortName());
         bo.setSecurityType(req.getSecurityType());
@@ -2367,6 +2522,9 @@ public class SecurityPoolAdjustService {
         bo.setTargetPoolId(item.getTargetPoolId());
         bo.setTargetPoolName(item.getTargetPoolName());
         bo.setPoolType(item.getPoolType());
+        bo.setFlowId(flowSource != null ? flowSource.getFlowId() : item.getFlowId());
+        bo.setFlowKey(flowSource != null ? flowSource.getFlowKey() : item.getFlowKey());
+        bo.setFlowType(flowSource != null ? flowSource.getFlowType() : item.getFlowType());
         bo.setAuditStatus("00");  // 初始状态：已提交待审核
         bo.setAdjusterId(req.getAdjusterId());
         bo.setAdjusterName(req.getAdjusterName());
