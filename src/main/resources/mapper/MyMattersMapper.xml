@@ -30,12 +30,33 @@
                ,al.adjuster_name AS initiatorName
                ,s.start_time
         FROM ip_adjust_log al
-        INNER JOIN (
-            SELECT adjust_log_id
-                   ,MAX(id) AS step_id
-            FROM ip_adjust_step
-            GROUP BY adjust_log_id
-        ) latest ON latest.adjust_log_id = al.id
+        <choose>
+            <when test="stepStatus == 'pending'">
+                INNER JOIN (
+                    SELECT adjust_log_id
+                           ,MAX(id) AS step_id
+                    FROM ip_adjust_step
+                    <where>
+                        step_status = 'pending'
+                        <if test="currentUserId != null and currentUserId != '' and currentUserId != '1001'">
+                            AND handler_id = #{currentUserId}
+                        </if>
+                        <if test="currentUserId == null or currentUserId == ''">
+                            AND 1 = 0
+                        </if>
+                    </where>
+                    GROUP BY adjust_log_id
+                ) latest ON latest.adjust_log_id = al.id
+            </when>
+            <otherwise>
+                INNER JOIN (
+                    SELECT adjust_log_id
+                           ,MAX(id) AS step_id
+                    FROM ip_adjust_step
+                    GROUP BY adjust_log_id
+                ) latest ON latest.adjust_log_id = al.id
+            </otherwise>
+        </choose>
         INNER JOIN ip_adjust_step s ON s.id = latest.step_id
         LEFT JOIN wf_flow_node n ON n.id = s.flow_node_id
         LEFT JOIN wf_flow_definition f ON f.id = n.flow_id AND f.is_deleted = 0
@@ -75,14 +96,6 @@
             </if>
             <if test="auditStatus != null and auditStatus != ''">
                 AND al.audit_status = #{auditStatus}
-            </if>
-            <if test="stepStatus == 'pending'">
-                AND EXISTS (
-                    SELECT 1
-                    FROM ip_adjust_step ps
-                    WHERE ps.step_status = 'pending'
-                      AND ps.adjust_batch_no = al.adjust_batch_no
-                )
             </if>
             <if test="stepStatus == 'completed'">
                 AND NOT EXISTS (
