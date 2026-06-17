@@ -84,8 +84,8 @@ import java.util.stream.Collectors;
 @Service
 public class SecurityPoolAdjustService {
 
-    /** 默认管理员用户 ID */
-    private static final Long DEFAULT_ADMIN_USER_ID = 1001L;
+    /** 管理员用户 ID */
+    private static final String ADMIN_USER_ID = "1001";
     /** 可调库权限类型 */
     private static final String PERMISSION_TYPE_ADJUSTABLE = "adjustable";
     /** 用户主体类型 */
@@ -190,9 +190,10 @@ public class SecurityPoolAdjustService {
             return new ArrayList<>();
         }
 
-        if (!DEFAULT_ADMIN_USER_ID.equals(1001L)) {
+        Long currentUserId = parseCurrentUserId(req.getCurrentUserId());
+        if (!isAdminUser(req.getCurrentUserId())) {
             // 按投资池“可调整人员”配置过滤可操作池
-            allPools = filterAdjustablePoolsByUser(allPools, DEFAULT_ADMIN_USER_ID);
+            allPools = filterAdjustablePoolsByUser(allPools, currentUserId);
             if (allPools.isEmpty()) {
                 return new ArrayList<>();
             }
@@ -218,6 +219,27 @@ public class SecurityPoolAdjustService {
         return allPools.stream()
                 .map(p -> toPoolDto(p, inMutexMap, outMutexMap, currentCountMap))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 判断当前用户是否为管理员。
+     */
+    private boolean isAdminUser(String currentUserId) {
+        return ADMIN_USER_ID.equals(currentUserId);
+    }
+
+    /**
+     * 解析当前用户 ID。
+     */
+    private Long parseCurrentUserId(String currentUserId) {
+        if (currentUserId == null || currentUserId.trim().isEmpty()) {
+            throw new BizException("当前用户 ID 不能为空");
+        }
+        try {
+            return Long.valueOf(currentUserId.trim());
+        } catch (NumberFormatException e) {
+            throw new BizException("当前用户 ID 不合法");
+        }
     }
 
     /**

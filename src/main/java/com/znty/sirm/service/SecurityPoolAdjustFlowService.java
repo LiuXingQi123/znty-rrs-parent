@@ -60,6 +60,8 @@ public class SecurityPoolAdjustFlowService {
         step = resolveActualProcessStep(req, step);
         // 校验当前步骤是否可处理
         validatePendingStep(req, step);
+        // 校验发起人不能参与后续流程操作
+        validateSubmitterCannotProcess(req, step);
 
         // 处理当前步骤并按流程配置推进
         return processAdjustAudit(req, step);
@@ -121,6 +123,29 @@ public class SecurityPoolAdjustFlowService {
         }
         if (req.getAdjustLogId() == null) {
             req.setAdjustLogId(step.getAdjustLogId());
+        }
+    }
+
+    /**
+     * 校验发起人不能参与后续流程操作，管理员除外。
+     */
+    private void validateSubmitterCannotProcess(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
+        if (isAdminOperator(req) || step == null || !hasText(req.getHandlerId())) {
+            return;
+        }
+        if (isSubmitSemanticStep(step)) {
+            return;
+        }
+        // 查询当前批次调库记录，识别原始发起人
+        List<IpAdjustLogBo> adjustLogList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
+                step.getAdjustLogId(), step.getAdjustBatchNo());
+        if (adjustLogList == null || adjustLogList.isEmpty()) {
+            return;
+        }
+        for (IpAdjustLogBo log : adjustLogList) {
+            if (log != null && req.getHandlerId().equals(log.getAdjusterId())) {
+                throw new BizException("发起人不能参与后续流程操作");
+            }
         }
     }
 
@@ -769,7 +794,7 @@ public class SecurityPoolAdjustFlowService {
      * 判断当前操作人是否为管理员。
      */
     private boolean isAdminOperator(SecurityPoolAdjustAuditReq req) {
-        return req != null && ("1001".equals(req.getHandlerId()) || "管理员".equals(req.getHandlerName()));
+        return req != null && "1001".equals(req.getHandlerId());
     }
 
     /**

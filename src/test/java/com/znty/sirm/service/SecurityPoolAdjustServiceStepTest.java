@@ -85,6 +85,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(adjustMapper.queryPoolCurrentCountList()).thenReturn(Collections.singletonList(poolCount));
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setCurrentUserId("1001");
 
         List<PoolDto> result = service.queryAdjustPoolList(req);
 
