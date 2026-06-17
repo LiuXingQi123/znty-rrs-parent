@@ -39,8 +39,8 @@ public class FlowServiceUserQueryTest {
 
         UserBo user = new UserBo();
         user.setId(10L);
-        user.setName("叶伟");
-        user.setUserName("yewei");
+        user.setName("研究员2");
+        user.setUserName("yanjiuyuan2");
         user.setRoleName("role-child");
         when(flowMapper.queryUserList(Arrays.asList(1L, 2L), null)).thenReturn(Arrays.asList(user));
 
@@ -50,7 +50,7 @@ public class FlowServiceUserQueryTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getId()).isEqualTo(10L);
-        assertThat(result.get(0).getUserName()).isEqualTo("叶伟");
+        assertThat(result.get(0).getUserName()).isEqualTo("研究员2");
         verify(flowMapper).queryUserList(eq(Arrays.asList(1L, 2L)), isNull(String.class));
     }
 

@@ -636,7 +636,7 @@ VALUES
 -- n5 研究总监审批（通过）
 (1, 10105, 'n5', '研究总监审批', 'approval',
  'all', 5, 'approve',
- '2', '叶伟', 'approve', '审批通过，同意入库',
+ '2', '研究员2', 'approve', '审批通过，同意入库',
  '2026-05-08 14:00:00', '2026-05-09 10:00:00', NOW(), NOW()),
 
 (1, 10105, 'n5', '研究总监审批', 'approval',
@@ -825,7 +825,7 @@ VALUES
 
 (18, 'BOND202606051030001001', 10105, 'n5', '研究总监审批', 'approval',
  'all', 5, 'approve',
- '2', '叶伟', 'approve', '审批通过，手工调入与互斥调出同批生效',
+ '2', '研究员2', 'approve', '审批通过，手工调入与互斥调出同批生效',
  '2026-06-05 14:20:00', '2026-06-06 15:00:00', NOW(), NOW()),
 
 (18, 'BOND202606051030001001', 10105, 'n5', '研究总监审批', 'approval',
@@ -880,13 +880,13 @@ INSERT INTO `ip_adjust_step` (
  'preempt', 3, 'approve', '1', '研究员1',
  'approve', '复核通过，同意进入O32自动审批', '2026-06-08 10:00:00', '2026-06-08 10:02:00', NOW(), NOW()),
 (21, 'BOND202606081000001001', 10103, 'n3', '研究员B复核', 'approval',
- 'preempt', 3, 'approve', '2', '叶伟',
+ 'preempt', 3, 'approve', '2', '研究员2',
  'skipped', '抢占审批已由研究员1处理', '2026-06-08 10:00:00', '2026-06-08 10:02:00', NOW(), NOW()),
 (21, 'BOND202606081000001001', 10103, 'n3', '研究员B复核', 'approval',
  'preempt', 3, 'approve', '4', '研究员4',
  'skipped', '抢占审批已由研究员1处理', '2026-06-08 10:00:00', '2026-06-08 10:02:00', NOW(), NOW()),
 (21, 'BOND202606081000001001', 10105, 'n5', '研究总监审批', 'approval',
- 'all', 5, 'approve', '2', '叶伟',
+ 'all', 5, 'approve', '2', '研究员2',
  'approve', '会签通过', '2026-06-08 10:02:00', '2026-06-08 10:04:00', NOW(), NOW()),
 (21, 'BOND202606081000001001', 10105, 'n5', '研究总监审批', 'approval',
  'all', 5, 'approve', '1001', '管理员',
@@ -1025,7 +1025,7 @@ SELECT l.id
       ,h.handler_id
       ,h.handler_name
       ,CASE WHEN h.handler_id = '2' THEN 'approve' ELSE 'skipped' END
-      ,CASE WHEN h.handler_id = '2' THEN '复核通过' ELSE '抢占审批已由叶伟处理' END
+      ,CASE WHEN h.handler_id = '2' THEN '复核通过' ELSE '抢占审批已由研究员2处理' END
       ,l.submit_time
       ,DATE_ADD(l.submit_time, INTERVAL 2 HOUR)
       ,NOW()
@@ -1033,7 +1033,7 @@ SELECT l.id
 FROM `ip_adjust_log` l
 JOIN (
     SELECT '1' AS handler_id, '研究员1' AS handler_name
-    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '2', '研究员2'
     UNION ALL SELECT '4', '研究员4'
 ) h
 WHERE l.id IN (4, 6, 14, 15)
@@ -1064,7 +1064,7 @@ SELECT l.id
       ,NOW()
 FROM `ip_adjust_log` l
 JOIN (
-    SELECT '2' AS handler_id, '叶伟' AS handler_name
+    SELECT '2' AS handler_id, '研究员2' AS handler_name
     UNION ALL SELECT '1001', '管理员'
 ) h
 WHERE l.id IN (4, 6, 14, 15)
@@ -1138,7 +1138,7 @@ SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
 FROM `ip_adjust_log` l
 JOIN (
     SELECT '1' AS handler_id, '研究员1' AS handler_name
-    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '2', '研究员2'
     UNION ALL SELECT '4', '研究员4'
 ) h
 WHERE l.id = 16
@@ -1153,12 +1153,12 @@ INSERT INTO `ip_adjust_step` (
 SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
        'preempt', 3, 'approve', h.handler_id, h.handler_name,
        CASE WHEN h.handler_id = '2' THEN 'approve' ELSE 'skipped' END,
-       CASE WHEN h.handler_id = '2' THEN '复核通过，提交总监审批' ELSE '抢占审批已由叶伟处理' END,
+       CASE WHEN h.handler_id = '2' THEN '复核通过，提交总监审批' ELSE '抢占审批已由研究员2处理' END,
        l.submit_time, l.audit_time, NOW(), NOW()
 FROM `ip_adjust_log` l
 JOIN (
     SELECT '1' AS handler_id, '研究员1' AS handler_name
-    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '2', '研究员2'
     UNION ALL SELECT '4', '研究员4'
 ) h
 WHERE l.id = 9
@@ -1170,7 +1170,7 @@ INSERT INTO `ip_adjust_step` (
     `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
 ) VALUES
 (9, 'BOND202605261400001001', 10105, 'n5', '研究总监审批', 'approval',
- 'all', 5, 'pending', '2', '叶伟', NULL, NULL, '2026-05-27 10:00:00', NULL, NOW(), NOW()),
+ 'all', 5, 'pending', '2', '研究员2', NULL, NULL, '2026-05-27 10:00:00', NULL, NOW(), NOW()),
 (9, 'BOND202605261400001001', 10105, 'n5', '研究总监审批', 'approval',
  'all', 5, 'pending', '1001', '管理员', NULL, NULL, '2026-05-27 10:00:00', NULL, NOW(), NOW());
 
@@ -1183,12 +1183,12 @@ INSERT INTO `ip_adjust_step` (
 SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
        'preempt', 3, 'reject', h.handler_id, h.handler_name,
        CASE WHEN h.handler_id = '2' THEN 'reject' ELSE 'skipped' END,
-       CASE WHEN h.handler_id = '2' THEN '附件研报材料不足，请补充后重新提交' ELSE '抢占审批已由叶伟处理' END,
+       CASE WHEN h.handler_id = '2' THEN '附件研报材料不足，请补充后重新提交' ELSE '抢占审批已由研究员2处理' END,
        l.submit_time, l.audit_time, NOW(), NOW()
 FROM `ip_adjust_log` l
 JOIN (
     SELECT '1' AS handler_id, '研究员1' AS handler_name
-    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '2', '研究员2'
     UNION ALL SELECT '4', '研究员4'
 ) h
 WHERE l.id = 10
@@ -1211,12 +1211,12 @@ INSERT INTO `ip_adjust_step` (
 SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
        'preempt', 3, 'approve', h.handler_id, h.handler_name,
        CASE WHEN h.handler_id = '2' THEN 'approve' ELSE 'skipped' END,
-       CASE WHEN h.handler_id = '2' THEN '复核通过' ELSE '抢占审批已由叶伟处理' END,
+       CASE WHEN h.handler_id = '2' THEN '复核通过' ELSE '抢占审批已由研究员2处理' END,
        l.submit_time, DATE_ADD(l.submit_time, INTERVAL 2 HOUR), NOW(), NOW()
 FROM `ip_adjust_log` l
 JOIN (
     SELECT '1' AS handler_id, '研究员1' AS handler_name
-    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '2', '研究员2'
     UNION ALL SELECT '4', '研究员4'
 ) h
 WHERE l.id = 11
@@ -1228,7 +1228,7 @@ INSERT INTO `ip_adjust_step` (
     `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
 ) VALUES
 (11, 'BOND202605221000001002', 10105, 'n5', '研究总监审批', 'approval',
- 'all', 5, 'reject', '2', '叶伟', 'reject', 'ABS产品不满足信用债池准入资质', '2026-05-22 12:00:00', '2026-05-23 16:00:00', NOW(), NOW()),
+ 'all', 5, 'reject', '2', '研究员2', 'reject', 'ABS产品不满足信用债池准入资质', '2026-05-22 12:00:00', '2026-05-23 16:00:00', NOW(), NOW()),
 (11, 'BOND202605221000001002', 10105, 'n5', '研究总监审批', 'approval',
  'all', 5, 'reject', '1001', '管理员', 'skipped', '会签已被驳回，后续处理跳过', '2026-05-22 12:00:00', '2026-05-23 16:00:00', NOW(), NOW()),
 (11, 'BOND202605221000001002', 10107, 'n7', '结束', 'end',
@@ -1243,12 +1243,12 @@ INSERT INTO `ip_adjust_step` (
 SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
        'preempt', 3, 'reject', h.handler_id, h.handler_name,
        CASE WHEN h.handler_id = '2' THEN 'reject' ELSE 'skipped' END,
-       CASE WHEN h.handler_id = '2' THEN '申请库级与当前资质不匹配，请修改' ELSE '抢占审批已由叶伟处理' END,
+       CASE WHEN h.handler_id = '2' THEN '申请库级与当前资质不匹配，请修改' ELSE '抢占审批已由研究员2处理' END,
        l.submit_time, DATE_ADD(l.submit_time, INTERVAL 2 HOUR), NOW(), NOW()
 FROM `ip_adjust_log` l
 JOIN (
     SELECT '1' AS handler_id, '研究员1' AS handler_name
-    UNION ALL SELECT '2', '叶伟'
+    UNION ALL SELECT '2', '研究员2'
     UNION ALL SELECT '4', '研究员4'
 ) h
 WHERE l.id = 12

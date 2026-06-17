@@ -254,7 +254,7 @@ INSERT INTO `t_sys_role` (`id`, `name`, `parent_id`, `sort_order`, `enable`, `cr
 -- 人员
 INSERT INTO `t_sys_user` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`) VALUES
 (1,  '研究员1', 'yanjiuyuan1', 0, NOW(), NOW()),
-(2,  '叶伟', 'yewei', 0, NOW(), NOW()),
+(2,  '研究员2', 'yanjiuyuan2', 0, NOW(), NOW()),
 (3,  '研究员3', 'yanjiuyuan3', 0, NOW(), NOW()),
 (4,  '研究员4', 'yanjiuyuan4', 0, NOW(), NOW()),
 (5,  '研究员5', 'yanjiuyuan5', 0, NOW(), NOW()),
