@@ -153,6 +153,7 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
   - 第一项行不加逗号，后续每行以逗号打头
 - **禁止冗余 AS 别名**：已配置 `map-underscore-to-camel-case: true`，`column_name` 会自动映射为 `columnName`，无需 `AS columnName`
   - 仅以下情况保留 AS：① 计算表达式（COALESCE、COUNT、GROUP_CONCAT 等）② 字面量（如 `'在池' AS status`）③ 返回字段名与数据库列名不一致（如 `id AS flowId`、`b_info_issuer AS issuer`）
+- 演示/初始化 SQL 中新增测试数据字段时，应优先在原始 `INSERT INTO` 数据中补全；不要用后置 `UPDATE` 修补初始化数据，除非是明确的数据迁移脚本或用户特别要求。
 
 ```xml
 <!-- 分页查询流程列表 -->
