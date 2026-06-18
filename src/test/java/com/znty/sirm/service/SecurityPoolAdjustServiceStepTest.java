@@ -3,6 +3,7 @@ package com.znty.sirm.service;
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.mapper.FlowMapper;
+import com.znty.sirm.model.AdjustLogDto;
 import com.znty.sirm.model.AdjustCheckContext;
 import com.znty.sirm.model.AdjustCheckDto;
 import com.znty.sirm.model.AdjustCheckReq;
@@ -46,6 +47,32 @@ import static org.mockito.Mockito.when;
 
 /** SecurityPoolAdjustServiceStepTest 测试类。 */
 public class SecurityPoolAdjustServiceStepTest {
+
+    /** 验证调库记录应返回流程名称。 */
+    @Test
+    public void queryAdjustLogListShouldReturnFlowName() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
+
+        IpAdjustLogBo log = new IpAdjustLogBo();
+        log.setId(10L);
+        log.setTargetPoolId(3L);
+        log.setFlowName("信用债入库审批流程");
+        when(mapper.queryAdjustLogList("110010123", "BATCH001")).thenReturn(Collections.singletonList(log));
+        when(investmentPoolService.queryPoolFullNameMap()).thenReturn(Collections.singletonMap(3L, "信用债大库/二级库"));
+
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityCode("110010123");
+        req.setAdjustBatchNo("BATCH001");
+
+        List<AdjustLogDto> result = service.queryAdjustLogList(req);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getFlowName()).isEqualTo("信用债入库审批流程");
+    }
 
     /** 验证 checkInConditionsShouldShowPendingProcessNodeLabel 测试场景。 */
     @Test

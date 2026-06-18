@@ -942,6 +942,7 @@ public class SecurityPoolAdjustService {
             dto.setPoolPath(poolFullNameMap.get(log.getTargetPoolId()));
             dto.setAdjustType(log.getAdjustType());
             dto.setAdjustMode(log.getAdjustMode());
+            dto.setFlowName(log.getFlowName());
             dto.setAttachmentFiles(log.getAttachmentFiles());
             dto.setMaterialFiles(log.getMaterialFiles());
             dto.setAuditStatus(log.getAuditStatus());

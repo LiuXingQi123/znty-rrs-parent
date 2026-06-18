@@ -50,6 +50,9 @@ public class IpAdjustLogBo {
     /** 流程类型快照 */
     private String flowType;
 
+    /** 流程名称 */
+    private String flowName;
+
     /** 审核状态 */
     private String auditStatus;
 

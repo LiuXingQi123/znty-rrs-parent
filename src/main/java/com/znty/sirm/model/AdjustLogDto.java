@@ -26,6 +26,9 @@ public class AdjustLogDto {
     /** 调整方向 */
     private String adjustMode;
 
+    /** 流程名称 */
+    private String flowName;
+
     /** 附件报告 */
     private String attachmentFiles;
 

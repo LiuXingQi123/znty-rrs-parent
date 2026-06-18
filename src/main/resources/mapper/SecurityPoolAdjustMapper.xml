@@ -154,6 +154,7 @@
                ,al.flow_id
                ,al.flow_key
                ,al.flow_type
+               ,fd.name AS flowName
                ,al.audit_status
                ,al.adjuster_id
                ,al.adjuster_name
@@ -165,6 +166,7 @@
                ,al.audit_time
                ,al.entry_time
         FROM ip_adjust_log al
+        LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
         WHERE al.security_code = #{securityCode}
           AND al.is_deleted = 0
           <if test="adjustBatchNo != null and adjustBatchNo != ''">
