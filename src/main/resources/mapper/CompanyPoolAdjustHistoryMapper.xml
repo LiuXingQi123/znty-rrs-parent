@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.CompanyPoolAdjustHistoryMapper">
+    <!-- 主体池调整历史 mapper，对应表：ip_adjust_log（调库记录） -->
+
+    <!-- 分页查询主体池调整历史 -->
+    <select id="queryCompanyPoolAdjustHistoryPage" resultType="com.znty.sirm.model.CompanyPoolAdjustHistoryDto">
+        SELECT al.id
+               ,al.adjuster_name
+               ,al.submit_time
+               ,al.security_short_name AS companyName
+               ,al.security_code AS companyCode
+               ,al.adjust_type
+               ,al.adjust_mode
+               ,al.target_pool_id
+               ,p.pool_name AS target_pool_name
+               ,al.audit_status
+        FROM ip_adjust_log al
+        INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'company'
+        LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id
+                                      AND p.is_deleted = 0
+        <where>
+            al.is_deleted = 0
+            <if test="poolIds != null and poolIds.size() > 0">
+                AND al.target_pool_id IN
+                <foreach collection="poolIds" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="companyCode != null and companyCode != ''">
+                AND al.security_code LIKE CONCAT('%', #{companyCode}, '%')
+            </if>
+            <if test="companyName != null and companyName != ''">
+                AND al.security_short_name LIKE CONCAT('%', #{companyName}, '%')
+            </if>
+            <if test="adjustTimeStart != null and adjustTimeStart != ''">
+                AND al.submit_time &gt;= #{adjustTimeStart}
+            </if>
+            <if test="adjustTimeEnd != null and adjustTimeEnd != ''">
+                AND al.submit_time &lt;= CONCAT(#{adjustTimeEnd}, ' 23:59:59')
+            </if>
+            <if test="adjusterName != null and adjusterName != ''">
+                AND al.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
+            </if>
+            <if test="adjustMode != null and adjustMode != ''">
+                AND al.adjust_mode = #{adjustMode}
+            </if>
+            <if test="auditStatus != null and auditStatus != ''">
+                AND al.audit_status = #{auditStatus}
+            </if>
+        </where>
+        ORDER BY al.submit_time DESC
+                 ,al.id DESC
+    </select>
+
+</mapper>
