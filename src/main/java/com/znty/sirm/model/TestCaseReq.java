@@ -22,4 +22,8 @@ public class TestCaseReq extends PageRequest {
     private Long ruleId;
     /** 用例参数键值对（新增/编辑时使用） */
     private Map<String, String> params = new LinkedHashMap<>();
+    /** 搜索关键字（列表查询时匹配用例名称、规则名称和参数名） */
+    private String keyword;
+    /** 最近执行结果筛选：pass / fail / pending */
+    private String result;
 }

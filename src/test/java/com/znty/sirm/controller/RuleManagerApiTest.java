@@ -49,7 +49,8 @@ public class RuleManagerApiTest extends ControllerApiTestSupport {
     /** 验证 shouldSupportTestCaseRegressionFlow 测试场景。 */
     @Test
     public void shouldSupportTestCaseRegressionFlow() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/testCases/queryTestCasePage", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/testCases/queryTestCasePage",
+                "{\"keyword\":\"评级\",\"result\":\"pass\",\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/testCases/addOrEditTestCase", "{}");
         assertPostSuccess(mockMvc, "/api/v1/testCases/editTestCaseName", "{\"id\":1,\"name\":\"回归用例\"}");
         assertPostSuccess(mockMvc, "/api/v1/testCases/deleteTestCase", "{\"id\":1}");

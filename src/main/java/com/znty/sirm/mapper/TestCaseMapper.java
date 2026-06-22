@@ -25,7 +25,8 @@ public interface TestCaseMapper {
     // ==================== rule_test_case ====================
 
     /** 分页查询测试用例列表，按创建时间倒序 */
-    List<RuleTestCaseBo> queryCasePage();
+    List<RuleTestCaseBo> queryCasePage(@Param("keyword") String keyword,
+                                       @Param("result") String result);
 
     /** 查询全部测试用例（用于批量执行） */
     List<RuleTestCaseBo> queryAllCaseList();

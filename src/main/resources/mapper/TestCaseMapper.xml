@@ -17,8 +17,29 @@
                ,last_run_time
                ,crte_time
                ,updt_time
-        FROM rule_test_case ORDER BY crte_time DESC
-                                     ,id DESC
+        FROM rule_test_case c
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    c.case_name LIKE CONCAT('%', #{keyword}, '%')
+                    OR c.rule_name_snapshot LIKE CONCAT('%', #{keyword}, '%')
+                    OR EXISTS (
+                        SELECT 1
+                        FROM rule_test_case_param p
+                        WHERE p.case_id = c.id
+                          AND p.param_name LIKE CONCAT('%', #{keyword}, '%')
+                    )
+                )
+            </if>
+            <if test="result != null and result != '' and result != 'pending'">
+                AND c.last_result = #{result}
+            </if>
+            <if test="result == 'pending'">
+                AND c.last_result IS NULL
+            </if>
+        </where>
+        ORDER BY c.crte_time DESC
+                 ,c.id DESC
     </select>
 
     <!-- 查询全部测试用例（用于批量执行场景） -->

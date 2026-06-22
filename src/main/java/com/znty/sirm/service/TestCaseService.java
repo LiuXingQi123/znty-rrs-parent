@@ -63,7 +63,7 @@ public class TestCaseService {
         TestCaseReq safeReq = req == null ? new TestCaseReq() : req;
         // 开启分页查询
         PageHelper.startPage(safeReq.getPageIndex(), safeReq.getPageSize());
-        List<RuleTestCaseBo> cases = testCaseMapper.queryCasePage();
+        List<RuleTestCaseBo> cases = testCaseMapper.queryCasePage(safeReq.getKeyword(), safeReq.getResult());
         PageInfo<RuleTestCaseBo> pageInfo = new PageInfo<>(cases);
         // 批量加载测试用例的参数值
         Map<Long, Map<String, String>> paramMap = loadCaseParamMap(cases);
