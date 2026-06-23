@@ -18,6 +18,9 @@ public class BatchSecurityCandidateDto {
     /** 证券简称 */
     private String securityShortName;
 
+    /** 证券类型 */
+    private String securityType;
+
     /** 市场编码列表 */
     private List<String> marketCodes = new ArrayList<>();
 

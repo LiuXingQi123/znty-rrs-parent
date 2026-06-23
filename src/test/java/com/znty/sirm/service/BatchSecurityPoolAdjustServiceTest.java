@@ -1,9 +1,11 @@
 package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.BatchSecurityPoolAdjustMapper;
+import com.znty.sirm.exception.BizException;
+import com.znty.sirm.model.BatchSecurityInboundAdjustReq;
 import com.znty.sirm.model.BatchSecurityPoolAdjustReq;
 import com.znty.sirm.model.BatchSecurityPoolDto;
-import com.znty.sirm.exception.BizException;
+import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -75,5 +77,33 @@ public class BatchSecurityPoolAdjustServiceTest {
         req.setDirection("unknown");
 
         ReflectionTestUtils.invokeMethod(service, "validateSecurityPageReq", req);
+    }
+
+    /** 验证批量提交转单条提交时保留证券类型 */
+    @Test
+    public void buildSingleSubmitReqShouldKeepSecurityType() {
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+
+        BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
+        req.setAdjustReason("原因");
+        req.setAdjustAdvice("建议");
+        req.setAdjusterId("1001");
+        req.setAdjusterName("管理员");
+
+        BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
+        item.setSecurityCode("102002345");
+        item.setSecurityShortName("23某城投债");
+        item.setSecurityType("company_bond");
+        item.setTargetPoolId(11L);
+        item.setAdjustMode("调入");
+        item.setFlowId(1L);
+
+        SecurityPoolAdjustSubmitReq submitReq = ReflectionTestUtils.invokeMethod(
+                service,
+                "buildSingleSubmitReq",
+                req,
+                Collections.singletonList(item));
+
+        assertThat(submitReq.getSecurityType()).isEqualTo("company_bond");
     }
 }
