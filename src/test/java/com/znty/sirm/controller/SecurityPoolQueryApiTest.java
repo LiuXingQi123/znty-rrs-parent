@@ -31,7 +31,6 @@ public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityPoolPage", "{}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityTypeList");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityStatusList");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/queryPoolTreeList");
     }
 
     /** 验证 shouldSupportMyPoolFavorites 测试场景。 */

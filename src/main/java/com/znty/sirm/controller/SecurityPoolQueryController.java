@@ -5,7 +5,6 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.SecurityPoolQueryDto;
 import com.znty.sirm.model.SecurityPoolQueryReq;
 import com.znty.sirm.model.SecurityTypeOptionDto;
-import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.MySecurityPoolBo;
 import com.znty.sirm.model.MySecurityPoolReq;
 import com.znty.sirm.service.SecurityPoolQueryService;
@@ -56,15 +55,6 @@ public class SecurityPoolQueryController {
     public ApiResponse<List<String>> querySecurityStatusList(
             @RequestBody(required = false) SecurityPoolQueryReq req) {
         return ApiResponse.success(securityPoolQueryService.querySecurityStatusList());
-    }
-
-    /**
-     * 查询投资池层级树数据，供前端筛选条件中的投资池树形选择器使用
-     */
-    @PostMapping("/queryPoolTreeList")
-    public ApiResponse<List<InvestmentPoolBo>> queryPoolTreeList(
-            @RequestBody(required = false) SecurityPoolQueryReq req) {
-        return ApiResponse.success(securityPoolQueryService.queryPoolTreeList());
     }
 
     /**

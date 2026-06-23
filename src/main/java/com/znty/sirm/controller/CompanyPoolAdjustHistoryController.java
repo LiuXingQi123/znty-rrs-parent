@@ -4,7 +4,6 @@ import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.CompanyPoolAdjustHistoryDto;
 import com.znty.sirm.model.CompanyPoolAdjustHistoryReq;
-import com.znty.sirm.model.PoolDto;
 import com.znty.sirm.service.CompanyPoolAdjustHistoryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
-import java.util.List;
 
 /**
  * 主体池调整历史查询控制器
@@ -32,9 +30,4 @@ public class CompanyPoolAdjustHistoryController {
         return ApiResponse.success(companyPoolAdjustHistoryService.queryCompanyPoolAdjustHistoryPage(req));
     }
 
-    /** 查询投资池树列表 */
-    @PostMapping("/queryPoolTreeList")
-    public ApiResponse<List<PoolDto>> queryPoolTreeList(@RequestBody CompanyPoolAdjustHistoryReq req) {
-        return ApiResponse.success(companyPoolAdjustHistoryService.queryPoolTreeList());
-    }
 }

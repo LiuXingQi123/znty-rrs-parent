@@ -29,6 +29,5 @@ public class SubjectPoolQueryApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldSupportSubjectPoolQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/subjectPoolQuery/querySubjectPoolPage", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/subjectPoolQuery/queryPoolTreeList");
     }
 }

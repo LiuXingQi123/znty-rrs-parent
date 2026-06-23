@@ -8,7 +8,6 @@ import com.znty.sirm.mapper.MySecurityPoolMapper;
 import com.znty.sirm.model.SecurityPoolQueryDto;
 import com.znty.sirm.model.SecurityPoolQueryReq;
 import com.znty.sirm.model.SecurityTypeOptionDto;
-import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.MySecurityPoolBo;
 import com.znty.sirm.model.MySecurityPoolReq;
 import org.springframework.stereotype.Service;
@@ -73,11 +72,6 @@ public class SecurityPoolQueryService {
         options.add("active");
         options.add("matured");
         return options;
-    }
-
-    /** 查询投资池层级树列表 */
-    public List<InvestmentPoolBo> queryPoolTreeList() {
-        return investmentPoolService.queryPoolBoList();
     }
 
     /** 添加证券到我的证券池（幂等：若已收藏则直接返回已有记录，不重复插入） */

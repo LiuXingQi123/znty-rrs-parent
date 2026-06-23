@@ -4,7 +4,6 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.SubjectPoolQueryMapper;
-import com.znty.sirm.model.InvestmentPoolBo;
 import com.znty.sirm.model.SubjectPoolQueryDto;
 import com.znty.sirm.model.SubjectPoolQueryReq;
 import org.springframework.stereotype.Service;
@@ -37,11 +36,6 @@ public class SubjectPoolQueryService {
         fillPoolFullName(list);
         PageInfo<SubjectPoolQueryDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
-    }
-
-    /** 查询投资池层级树列表 */
-    public List<InvestmentPoolBo> queryPoolTreeList() {
-        return investmentPoolService.queryPoolBoList();
     }
 
     /** 填充投资池全路径名称 */
