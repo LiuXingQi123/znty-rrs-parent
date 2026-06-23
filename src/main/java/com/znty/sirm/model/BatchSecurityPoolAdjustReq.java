@@ -16,6 +16,9 @@ public class BatchSecurityPoolAdjustReq extends PageRequest {
     /** 当前用户 ID，1001 视为管理员 */
     private String currentUserId;
 
+    /** 投资池 ID 筛选列表 */
+    private List<Long> poolIds;
+
     /** 目标投资池 ID */
     private Long poolId;
 

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.CommonMapper">
+    <!-- 公共查询 mapper，提供跨业务页面复用的基础数据查询 -->
+
+    <!-- 查询投资池树节点列表，同时生成投资池全路径名称 -->
+    <select id="queryPoolTreeList" resultType="com.znty.sirm.model.PoolTreeDto">
+        WITH RECURSIVE pool_tree AS (
+            SELECT id
+                   ,parent_id
+                   ,pool_name
+                   ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
+                   ,CAST(LPAD(COALESCE(outer_sort, 0), 10, '0') AS CHAR(2000)) AS sort_path
+            FROM ip_investment_pool
+            WHERE is_deleted = 0
+              AND parent_id IS NULL
+            UNION ALL
+            SELECT child.id
+                   ,child.parent_id
+                   ,child.pool_name
+                   ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
+                   ,CONCAT(parent.sort_path, '/', LPAD(COALESCE(child.inner_sort, 0), 10, '0')) AS sort_path
+            FROM ip_investment_pool child
+            INNER JOIN pool_tree parent ON parent.id = child.parent_id
+            WHERE child.is_deleted = 0
+        )
+        SELECT id
+               ,parent_id
+               ,pool_name
+               ,pool_full_name
+        FROM pool_tree
+        ORDER BY sort_path ASC
+                 ,id ASC
+    </select>
+</mapper>

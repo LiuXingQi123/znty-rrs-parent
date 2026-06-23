@@ -44,13 +44,6 @@ public class BatchSecurityPoolAdjustService {
     /** 可调整权限类型 */
     private static final String PERMISSION_TYPE_ADJUSTABLE = "adjustable";
 
-    /** 支持的调整方向 */
-    private static final Set<String> DIRECTION_SET = new HashSet<>(Arrays.asList("in", "out"));
-
-    /** 支持的市场编码 */
-    private static final Set<String> MARKET_CODE_SET =
-            new HashSet<>(Arrays.asList("SH", "SZ", "IB", "BJ", "NBC"));
-
     /** 证券池批量调整数据访问组件 */
     @Resource
     private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;
@@ -64,25 +57,34 @@ public class BatchSecurityPoolAdjustService {
     private SecurityPoolAdjustService securityPoolAdjustService;
 
     /**
-     * 查询当前用户可调整的启用叶子投资池
+     * 分页查询当前用户可调整的启用叶子投资池
      */
-    public List<BatchSecurityPoolDto> queryPoolList(BatchSecurityPoolAdjustReq req) {
-        List<BatchSecurityPoolDto> poolList = batchSecurityPoolAdjustMapper.queryLeafPoolList();
-        fillPoolFullName(poolList);
-        if (!isAdminUser(req.getCurrentUserId())) {
-            Set<Long> adjustablePoolIds = queryAdjustablePoolIds(req.getCurrentUserId());
-            poolList = poolList.stream()
-                    .filter(pool -> adjustablePoolIds.contains(pool.getId()))
-                    .collect(Collectors.toList());
+    public PageResult<BatchSecurityPoolDto> queryPoolPage(BatchSecurityPoolAdjustReq req) {
+        // 处理当前用户可调整投资池筛选条件
+        if (!prepareAdjustablePoolIds(req)) {
+            return new PageResult<>(
+                    new ArrayList<>(), 0L, req.getPageIndex(), req.getPageSize());
         }
-        return poolList;
+
+        // 开启分页查询
+        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
+        List<BatchSecurityPoolDto> poolList = batchSecurityPoolAdjustMapper.queryPoolPage(req);
+        PageInfo<BatchSecurityPoolDto> pageInfo = new PageInfo<>(poolList);
+        // 填充当前页投资池现有证券数量
+        fillPoolCurrentCount(poolList);
+        // 填充投资池全路径名称
+        fillPoolFullName(poolList);
+        return new PageResult<>(
+                poolList, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /**
      * 分页查询目标池批量调整候选证券
      */
     public PageResult<BatchSecurityCandidateDto> querySecurityPage(BatchSecurityPoolAdjustReq req) {
+        // 校验候选证券查询参数
         validateSecurityPageReq(req);
+        // 校验目标投资池调整权限
         validatePoolPermission(req);
 
         // 开启分页查询
@@ -99,12 +101,16 @@ public class BatchSecurityPoolAdjustService {
      * 批量调库下一步校验
      */
     public BatchSecurityInboundAdjustDto checkAdjust(BatchSecurityInboundAdjustReq req) {
+        // 校验批量调库下一步参数
         validateAdjustCheckReq(req);
+        // 校验批量调库目标池权限
         validateAdjustPoolPermission(req.getCurrentUserId(), req.getPoolId());
 
         BatchSecurityInboundAdjustDto dto = new BatchSecurityInboundAdjustDto();
+        // 解析批量调库中文方向
         String adjustMode = resolveAdjustMode(req);
         for (BatchSecurityInboundAdjustReq.SecurityItem security : req.getSecurities()) {
+            // 构建单证券调库校验请求
             AdjustCheckDto checkDto = securityPoolAdjustService.checkAdjust(buildSingleCheckReq(req, security));
             if (checkDto == null || checkDto.getItems() == null) {
                 continue;
@@ -113,6 +119,7 @@ public class BatchSecurityPoolAdjustService {
                 if (!adjustMode.equals(item.getAdjustMode())) {
                     continue;
                 }
+                // 构建批量调库校验结果
                 dto.getItems().add(buildBatchCheckResult(security, item));
             }
         }
@@ -124,7 +131,9 @@ public class BatchSecurityPoolAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public BatchSecurityInboundAdjustDto addAdjustLog(BatchSecurityInboundAdjustReq req) {
+        // 校验批量调库提交参数
         validateAdjustSubmitReq(req);
+        // 校验批量调库目标池权限
         validateAdjustPoolPermission(req.getCurrentUserId(), req.getPoolId());
 
         Map<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> itemMap = new HashMap<>();
@@ -141,6 +150,7 @@ public class BatchSecurityPoolAdjustService {
         dto.setSecurityCount(itemMap.size());
         dto.setSubmitCount(0);
         for (Map.Entry<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> entry : itemMap.entrySet()) {
+            // 构建单证券调库提交请求
             AdjustSubmitDto submitDto = securityPoolAdjustService.addAdjustLog(buildSingleSubmitReq(req, entry.getValue()));
             if (submitDto == null) {
                 continue;
@@ -160,18 +170,10 @@ public class BatchSecurityPoolAdjustService {
         if (req.getPoolId() == null) {
             throw new BizException("目标投资池 ID 不能为空");
         }
-        if (!DIRECTION_SET.contains(req.getDirection())) {
-            throw new BizException("调整方向必须为 in 或 out");
-        }
+        // 校验批量调库方向
+        validateAdjustDirection(req.getDirection());
         if (batchSecurityPoolAdjustMapper.queryEnabledLeafPoolCount(req.getPoolId()) == 0) {
             throw new BizException("目标投资池不存在、未启用或不是叶子池");
-        }
-        if (req.getMarketCodes() != null) {
-            for (String marketCode : req.getMarketCodes()) {
-                if (!MARKET_CODE_SET.contains(marketCode)) {
-                    throw new BizException("不支持的市场编码：" + marketCode);
-                }
-            }
         }
     }
 
@@ -182,6 +184,7 @@ public class BatchSecurityPoolAdjustService {
         if (req.getPoolId() == null) {
             throw new BizException("目标投资池 ID 不能为空");
         }
+        // 校验批量调库方向
         validateAdjustDirection(req.getDirection());
         if (req.getSecurities() == null || req.getSecurities().isEmpty()) {
             throw new BizException("已选证券不能为空");
@@ -203,6 +206,7 @@ public class BatchSecurityPoolAdjustService {
         if (req.getPoolId() == null) {
             throw new BizException("目标投资池 ID 不能为空");
         }
+        // 校验批量调库方向
         validateAdjustDirection(req.getDirection());
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("可提交调库明细不能为空");
@@ -216,6 +220,7 @@ public class BatchSecurityPoolAdjustService {
         if (batchSecurityPoolAdjustMapper.queryEnabledLeafPoolCount(req.getPoolId()) == 0) {
             throw new BizException("目标投资池不存在、未启用或不是叶子池");
         }
+        // 解析批量调库中文方向
         String adjustMode = resolveAdjustMode(req);
         for (BatchSecurityInboundAdjustReq.AdjustItem item : req.getItems()) {
             if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
@@ -237,7 +242,7 @@ public class BatchSecurityPoolAdjustService {
      * 校验批量调库方向
      */
     private void validateAdjustDirection(String direction) {
-        if (!DIRECTION_SET.contains(direction)) {
+        if (!"in".equals(direction) && !"out".equals(direction)) {
             throw new BizException("调整方向必须为 in 或 out");
         }
     }
@@ -246,6 +251,7 @@ public class BatchSecurityPoolAdjustService {
      * 解析批量调库中文方向
      */
     private String resolveAdjustMode(BatchSecurityInboundAdjustReq req) {
+        // 校验批量调库方向
         validateAdjustDirection(req.getDirection());
         return "out".equals(req.getDirection()) ? "调出" : "调入";
     }
@@ -257,6 +263,7 @@ public class BatchSecurityPoolAdjustService {
         BatchSecurityPoolAdjustReq permissionReq = new BatchSecurityPoolAdjustReq();
         permissionReq.setCurrentUserId(currentUserId);
         permissionReq.setPoolId(poolId);
+        // 校验目标投资池调整权限
         validatePoolPermission(permissionReq);
     }
 
@@ -269,6 +276,7 @@ public class BatchSecurityPoolAdjustService {
         item.setTargetPoolId(req.getPoolId());
         item.setTargetPoolName(req.getPoolName());
         item.setPoolType(req.getPoolType());
+        // 解析批量调库中文方向
         item.setAdjustMode(resolveAdjustMode(req));
 
         AdjustCheckReq checkReq = new AdjustCheckReq();
@@ -343,18 +351,50 @@ public class BatchSecurityPoolAdjustService {
      * 校验当前用户是否拥有目标池调整权限
      */
     private void validatePoolPermission(BatchSecurityPoolAdjustReq req) {
+        // 判断当前用户是否为管理员
         if (isAdminUser(req.getCurrentUserId())) {
             return;
         }
+        // 查询当前用户拥有调整权限的投资池
         if (!queryAdjustablePoolIds(req.getCurrentUserId()).contains(req.getPoolId())) {
             throw new BizException("当前用户无权调整目标投资池");
         }
     }
 
     /**
+     * 处理当前用户可调整投资池筛选条件
+     *
+     * @return 是否存在可查询的投资池
+     */
+    private boolean prepareAdjustablePoolIds(BatchSecurityPoolAdjustReq req) {
+        // 判断当前用户是否为管理员
+        if (isAdminUser(req.getCurrentUserId())) {
+            return true;
+        }
+        // 查询当前用户拥有调整权限的投资池
+        Set<Long> adjustablePoolIds = queryAdjustablePoolIds(req.getCurrentUserId());
+        if (adjustablePoolIds.isEmpty()) {
+            return false;
+        }
+        if (req.getPoolIds() == null || req.getPoolIds().isEmpty()) {
+            req.setPoolIds(new ArrayList<>(adjustablePoolIds));
+            return true;
+        }
+        List<Long> permittedPoolIds = req.getPoolIds().stream()
+                .filter(adjustablePoolIds::contains)
+                .collect(Collectors.toList());
+        if (permittedPoolIds.isEmpty()) {
+            return false;
+        }
+        req.setPoolIds(permittedPoolIds);
+        return true;
+    }
+
+    /**
      * 查询当前用户直接或通过角色拥有调整权限的投资池 ID
      */
     private Set<Long> queryAdjustablePoolIds(String currentUserId) {
+        // 解析当前用户 ID
         Long userId = parseCurrentUserId(currentUserId);
         List<Long> roleIds = investmentPoolMapper.queryUserRoleIdList(userId);
         Set<Long> roleIdSet = roleIds == null ? new HashSet<>() : new HashSet<>(roleIds);
@@ -413,6 +453,26 @@ public class BatchSecurityPoolAdjustService {
     }
 
     /**
+     * 填充当前页投资池现有证券数量
+     */
+    private void fillPoolCurrentCount(List<BatchSecurityPoolDto> poolList) {
+        if (poolList == null || poolList.isEmpty()) {
+            return;
+        }
+        List<Long> poolIds = poolList.stream()
+                .map(BatchSecurityPoolDto::getId)
+                .collect(Collectors.toList());
+        List<BatchSecurityPoolDto> countList =
+                batchSecurityPoolAdjustMapper.queryPoolCurrentCountList(poolIds);
+        Map<Long, Integer> currentCountMap = countList.stream()
+                .collect(Collectors.toMap(
+                        BatchSecurityPoolDto::getId, BatchSecurityPoolDto::getCurrentCount));
+        for (BatchSecurityPoolDto pool : poolList) {
+            pool.setCurrentCount(currentCountMap.getOrDefault(pool.getId(), 0));
+        }
+    }
+
+    /**
      * 填充投资池全路径名称
      */
     private void fillPoolFullName(List<BatchSecurityPoolDto> poolList) {
@@ -426,6 +486,7 @@ public class BatchSecurityPoolAdjustService {
         Map<Long, InvestmentPoolBo> poolMap = allPools.stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, Function.identity()));
         for (BatchSecurityPoolDto dto : poolList) {
+            // 构建投资池全路径名称
             dto.setPoolFullName(buildPoolFullName(dto.getId(), poolMap));
         }
     }

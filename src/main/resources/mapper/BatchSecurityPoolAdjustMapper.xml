@@ -4,8 +4,8 @@
 <mapper namespace="com.znty.sirm.mapper.BatchSecurityPoolAdjustMapper">
     <!-- 证券池批量调整 mapper，提供可调整投资池及候选证券查询 -->
 
-    <!-- 查询启用叶子投资池及当前有效证券数量 -->
-    <select id="queryLeafPoolList" resultType="com.znty.sirm.model.BatchSecurityPoolDto">
+    <!-- 分页查询启用叶子投资池 -->
+    <select id="queryPoolPage" resultType="com.znty.sirm.model.BatchSecurityPoolDto">
         SELECT p.id
                ,p.pool_name
                ,p.pool_type
@@ -13,13 +13,15 @@
                ,p.variety_codes
                ,p.description
                ,p.max_capacity
-               ,COUNT(DISTINCT ips.security_code) AS currentCount
         FROM ip_investment_pool p
-        LEFT JOIN ip_pool_status ips ON ips.target_pool_id = p.id
-                                    AND ips.audit_status = '20'
-                                    AND ips.is_deleted = 0
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
+        <if test="poolIds != null and poolIds.size() > 0">
+          AND p.id IN
+            <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+                #{poolId}
+            </foreach>
+        </if>
           AND NOT EXISTS (
               SELECT 1
               FROM ip_investment_pool child
@@ -27,18 +29,23 @@
                 AND child.status = 'enabled'
                 AND child.is_deleted = 0
           )
-        GROUP BY p.id
-                 ,p.pool_name
-                 ,p.pool_type
-                 ,p.market_codes
-                 ,p.variety_codes
-                 ,p.description
-                 ,p.max_capacity
-                 ,p.outer_sort
-                 ,p.inner_sort
         ORDER BY p.outer_sort ASC
                  ,p.inner_sort ASC
                  ,p.id ASC
+    </select>
+
+    <!-- 查询指定投资池当前有效证券数量 -->
+    <select id="queryPoolCurrentCountList" resultType="com.znty.sirm.model.BatchSecurityPoolDto">
+        SELECT target_pool_id AS id
+               ,COUNT(DISTINCT security_code) AS currentCount
+        FROM ip_pool_status
+        WHERE audit_status = '20'
+          AND is_deleted = 0
+          AND target_pool_id IN
+            <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+                #{poolId}
+            </foreach>
+        GROUP BY target_pool_id
     </select>
 
     <!-- 分页查询目标池批量调整候选证券 -->
@@ -92,6 +99,7 @@
                             <when test="marketCode == 'IB'">si.wind_code_nib IS NOT NULL AND si.wind_code_nib != ''</when>
                             <when test="marketCode == 'BJ'">si.wind_code_bj IS NOT NULL AND si.wind_code_bj != ''</when>
                             <when test="marketCode == 'NBC'">si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != ''</when>
+                            <otherwise>1 = 0</otherwise>
                         </choose>
                     </foreach>
                 )

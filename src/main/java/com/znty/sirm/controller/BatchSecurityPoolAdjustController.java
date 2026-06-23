@@ -14,8 +14,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
-import java.util.List;
-
 /**
  * 证券池批量调整控制器
  */
@@ -28,12 +26,12 @@ public class BatchSecurityPoolAdjustController {
     private BatchSecurityPoolAdjustService batchSecurityPoolAdjustService;
 
     /**
-     * 查询当前用户可调整的启用叶子投资池
+     * 分页查询当前用户可调整的启用叶子投资池
      */
-    @PostMapping("/queryPoolList")
-    public ApiResponse<List<BatchSecurityPoolDto>> queryPoolList(
+    @PostMapping("/queryPoolPage")
+    public ApiResponse<PageResult<BatchSecurityPoolDto>> queryPoolPage(
             @RequestBody BatchSecurityPoolAdjustReq req) {
-        return ApiResponse.success(batchSecurityPoolAdjustService.queryPoolList(req));
+        return ApiResponse.success(batchSecurityPoolAdjustService.queryPoolPage(req));
     }
 
     /**

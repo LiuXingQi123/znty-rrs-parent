@@ -14,8 +14,11 @@ import java.util.List;
 @Mapper
 public interface BatchSecurityPoolAdjustMapper {
 
-    /** 查询启用叶子投资池及当前有效证券数量 */
-    List<BatchSecurityPoolDto> queryLeafPoolList();
+    /** 分页查询启用叶子投资池 */
+    List<BatchSecurityPoolDto> queryPoolPage(BatchSecurityPoolAdjustReq req);
+
+    /** 查询指定投资池当前有效证券数量 */
+    List<BatchSecurityPoolDto> queryPoolCurrentCountList(@Param("poolIds") List<Long> poolIds);
 
     /** 分页查询目标池批量调整候选证券 */
     List<BatchSecurityCandidateDto> querySecurityPage(BatchSecurityPoolAdjustReq req);

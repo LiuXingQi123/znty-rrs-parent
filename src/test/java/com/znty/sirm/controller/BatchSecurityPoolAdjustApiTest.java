@@ -28,13 +28,13 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
-    /** 验证批量调整投资池列表接口 */
+    /** 验证批量调整投资池分页接口 */
     @Test
-    public void shouldQueryBatchAdjustPoolList() throws Exception {
+    public void shouldQueryBatchAdjustPoolPage() throws Exception {
         assertPostSuccess(
                 mockMvc,
-                "/api/v1/batchSecurityPoolAdjust/queryPoolList",
-                "{\"currentUserId\":\"1001\"}");
+                "/api/v1/batchSecurityPoolAdjust/queryPoolPage",
+                "{\"currentUserId\":\"1001\",\"pageIndex\":1,\"pageSize\":10}");
     }
 
     /** 验证批量调整候选证券分页接口 */
