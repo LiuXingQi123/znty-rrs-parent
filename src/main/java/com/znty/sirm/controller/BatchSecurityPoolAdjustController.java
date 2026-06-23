@@ -3,6 +3,8 @@ package com.znty.sirm.controller;
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.BatchSecurityCandidateDto;
+import com.znty.sirm.model.BatchSecurityInboundAdjustDto;
+import com.znty.sirm.model.BatchSecurityInboundAdjustReq;
 import com.znty.sirm.model.BatchSecurityPoolAdjustReq;
 import com.znty.sirm.model.BatchSecurityPoolDto;
 import com.znty.sirm.service.BatchSecurityPoolAdjustService;
@@ -41,5 +43,23 @@ public class BatchSecurityPoolAdjustController {
     public ApiResponse<PageResult<BatchSecurityCandidateDto>> querySecurityPage(
             @RequestBody BatchSecurityPoolAdjustReq req) {
         return ApiResponse.success(batchSecurityPoolAdjustService.querySecurityPage(req));
+    }
+
+    /**
+     * 批量调库下一步校验
+     */
+    @PostMapping("/checkAdjust")
+    public ApiResponse<BatchSecurityInboundAdjustDto> checkAdjust(
+            @RequestBody BatchSecurityInboundAdjustReq req) {
+        return ApiResponse.success(batchSecurityPoolAdjustService.checkAdjust(req));
+    }
+
+    /**
+     * 批量提交调库申请
+     */
+    @PostMapping("/addAdjustLog")
+    public ApiResponse<BatchSecurityInboundAdjustDto> addAdjustLog(
+            @RequestBody BatchSecurityInboundAdjustReq req) {
+        return ApiResponse.success(batchSecurityPoolAdjustService.addAdjustLog(req));
     }
 }

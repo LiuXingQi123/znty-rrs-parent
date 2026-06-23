@@ -1,0 +1,119 @@
+package com.znty.sirm.model;
+
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * 批量证券调库请求对象
+ */
+@Data
+public class BatchSecurityInboundAdjustReq {
+
+    /** 当前用户 ID，1001 视为管理员 */
+    private String currentUserId;
+
+    /** 调整人 ID */
+    private String adjusterId;
+
+    /** 调整人名称 */
+    private String adjusterName;
+
+    /** 目标投资池 ID */
+    private Long poolId;
+
+    /** 调整方向：in=调入 / out=调出 */
+    private String direction;
+
+    /** 目标投资池名称 */
+    private String poolName;
+
+    /** 投资池类型 */
+    private String poolType;
+
+    /** 调整原因 */
+    private String adjustReason;
+
+    /** 调整建议 */
+    private String adjustAdvice;
+
+    /** 整批信评报告及附件 JSON */
+    private String attachmentFiles;
+
+    /** 整批其他材料 JSON */
+    private String materialFiles;
+
+    /** 已选证券列表，用于下一步校验 */
+    private List<SecurityItem> securities;
+
+    /** 已确认的调库明细列表，用于提交 */
+    private List<AdjustItem> items;
+
+    /**
+     * 批量选择的证券
+     */
+    @Data
+    public static class SecurityItem {
+
+        /** 证券代码 */
+        private String securityCode;
+
+        /** 证券简称 */
+        private String securityShortName;
+
+        /** 证券类型 */
+        private String securityType;
+    }
+
+    /**
+     * 批量提交的单条调库明细
+     */
+    @Data
+    public static class AdjustItem {
+
+        /** 证券代码 */
+        private String securityCode;
+
+        /** 证券简称 */
+        private String securityShortName;
+
+        /** 证券类型 */
+        private String securityType;
+
+        /** 目标投资池 ID */
+        private Long targetPoolId;
+
+        /** 目标投资池名称 */
+        private String targetPoolName;
+
+        /** 投资池类型 */
+        private String poolType;
+
+        /** 调整方向：调入 / 调出 */
+        private String adjustMode;
+
+        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 */
+        private String itemTag;
+
+        /** 调库分组 Key */
+        private String adjustGroupKey;
+
+        /** 审批流程 ID */
+        private Long flowId;
+
+        /** 审批流程 Key */
+        private String flowKey;
+
+        /** 审批流程类型 */
+        private String flowType;
+
+        /** 调整说明 */
+        private String adjustmentNote;
+
+        /** 信评报告及附件 JSON */
+        private String attachmentFiles;
+
+        /** 其他材料 JSON */
+        private String materialFiles;
+    }
+}
