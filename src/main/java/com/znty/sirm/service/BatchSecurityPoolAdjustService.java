@@ -19,6 +19,7 @@ import com.znty.sirm.model.PoolPermissionBo;
 import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
@@ -55,6 +56,10 @@ public class BatchSecurityPoolAdjustService {
     /** 证券池调库服务 */
     @Resource
     private SecurityPoolAdjustService securityPoolAdjustService;
+
+    /** 系统附件业务服务 */
+    @Resource
+    private SysAttachmentService sysAttachmentService;
 
     /**
      * 分页查询当前用户可调整的启用叶子投资池
@@ -131,6 +136,15 @@ public class BatchSecurityPoolAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public BatchSecurityInboundAdjustDto addAdjustLog(BatchSecurityInboundAdjustReq req) {
+        return addAdjustLog(req, Collections.<MultipartFile>emptyList());
+    }
+
+    /**
+     * 批量提交调库申请及附件。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public BatchSecurityInboundAdjustDto addAdjustLog(
+            BatchSecurityInboundAdjustReq req, List<MultipartFile> files) {
         // 校验批量调库提交参数
         validateAdjustSubmitReq(req);
         // 校验批量调库目标池权限
@@ -149,9 +163,12 @@ public class BatchSecurityPoolAdjustService {
         BatchSecurityInboundAdjustDto dto = new BatchSecurityInboundAdjustDto();
         dto.setSecurityCount(itemMap.size());
         dto.setSubmitCount(0);
+        SysAttachmentService.SubmissionFiles submissionFiles =
+                sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
         for (Map.Entry<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> entry : itemMap.entrySet()) {
             // 构建单证券调库提交请求
-            AdjustSubmitDto submitDto = securityPoolAdjustService.addAdjustLog(buildSingleSubmitReq(req, entry.getValue()));
+            AdjustSubmitDto submitDto = securityPoolAdjustService.addAdjustLog(
+                    buildSingleSubmitReq(req, entry.getValue()), submissionFiles);
             if (submitDto == null) {
                 continue;
             }
@@ -339,8 +356,8 @@ public class BatchSecurityPoolAdjustService {
             submitItem.setFlowKey(item.getFlowKey());
             submitItem.setFlowType(item.getFlowType());
             submitItem.setAdjustmentNote(item.getAdjustmentNote());
-            submitItem.setAttachmentFiles(item.getAttachmentFiles());
-            submitItem.setMaterialFiles(item.getMaterialFiles());
+            submitItem.setCreditReportFileIndexes(item.getCreditReportFileIndexes());
+            submitItem.setMaterialFileIndexes(item.getMaterialFileIndexes());
             submitItems.add(submitItem);
         }
         submitReq.setItems(submitItems);

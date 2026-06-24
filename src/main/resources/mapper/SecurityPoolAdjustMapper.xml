@@ -58,8 +58,6 @@
                                   ,adjuster_name
                                   ,adjust_reason
                                   ,adjust_advice
-                                  ,attachment_files
-                                  ,material_files
                                   ,submit_time
                                   ,is_deleted
                                   ,crte_time
@@ -81,8 +79,6 @@
                ,#{adjusterName}
                ,#{adjustReason}
                ,#{adjustAdvice}
-               ,#{attachmentFiles}
-               ,#{materialFiles}
                ,NOW()
                ,0
                ,NOW()
@@ -95,6 +91,7 @@
                ,p.pool_name
                ,ips.pool_type
                ,ips.adjust_batch_no
+               ,ips.adjust_log_id
                ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
@@ -160,8 +157,6 @@
                ,al.adjuster_name
                ,al.adjust_reason
                ,al.adjust_advice
-               ,al.attachment_files
-               ,al.material_files
                ,al.submit_time
                ,al.audit_time
                ,al.entry_time
@@ -297,13 +292,14 @@
     </select>
 
     <!-- 新增入池状态记录（直通流程：start→end 跳过审批，直接写入已生效状态） -->
-    <insert id="addPoolStatus" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addPoolStatus">
         INSERT INTO ip_pool_status (security_code
                                   ,security_short_name
                                   ,security_type
                                   ,adjust_type
                                   ,adjust_mode
                                   ,adjust_batch_no
+                                  ,adjust_log_id
                                   ,target_pool_id
                                   ,target_pool_name
                                   ,pool_type
@@ -315,8 +311,6 @@
                                   ,adjuster_name
                                   ,adjust_reason
                                   ,adjust_advice
-                                  ,attachment_files
-                                  ,material_files
                                   ,submit_time
                                   ,entry_time
                                   ,is_deleted
@@ -328,6 +322,7 @@
                ,#{adjustType}
                ,#{adjustMode}
                ,#{adjustBatchNo}
+               ,#{adjustLogId}
                ,#{targetPoolId}
                ,#{targetPoolName}
                ,#{poolType}
@@ -339,8 +334,6 @@
                ,#{adjusterName}
                ,#{adjustReason}
                ,#{adjustAdvice}
-               ,#{attachmentFiles}
-               ,#{materialFiles}
                ,NOW()
                ,NOW()
                ,0
@@ -666,8 +659,6 @@
                ,adjuster_name
                ,adjust_reason
                ,adjust_advice
-               ,attachment_files
-               ,material_files
                ,submit_time
                ,audit_time
                ,entry_time

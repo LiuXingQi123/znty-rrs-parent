@@ -17,9 +17,13 @@ import com.znty.sirm.service.SecurityPoolAdjustService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -74,9 +78,20 @@ public class SecurityPoolAdjustController {
     /**
      * 提交证券入池/出池调整申请，申请记录入库后触发对应投资池的审批流程
      */
-    @PostMapping("/addAdjustLog")
+    @PostMapping(value = "/addAdjustLog", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<AdjustSubmitDto> addAdjustLog(@RequestBody SecurityPoolAdjustSubmitReq req) {
         return ApiResponse.success(securityPoolAdjustService.addAdjustLog(req));
+    }
+
+    /**
+     * 以 multipart 方式提交调库申请及附件
+     */
+    @PostMapping(value = "/addAdjustLog", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<AdjustSubmitDto> addAdjustLogWithFiles(
+            @RequestPart("request") SecurityPoolAdjustSubmitReq req,
+            @RequestPart(value = "files", required = false) MultipartFile[] files) {
+        return ApiResponse.success(securityPoolAdjustService.addAdjustLog(
+                req, files == null ? null : Arrays.asList(files)));
     }
 
     /**

@@ -38,6 +38,7 @@ import com.znty.sirm.model.RoleBo;
 import com.znty.sirm.model.UserBo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
@@ -108,6 +109,10 @@ public class SecurityPoolAdjustService {
     /** 流程定义数据访问组件 */
     @Resource
     private FlowMapper flowMapper;
+
+    /** 系统附件业务服务 */
+    @Resource
+    private SysAttachmentService sysAttachmentService;
 
     // ─── 投资池关系类型常量（对应 ip_pool_relation.relation_type 字段值） ───
     private static final String REL_SOURCE       = "source";           // 来源池：调入目标池须先在来源池中
@@ -359,7 +364,24 @@ public class SecurityPoolAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req) {
+        return addAdjustLog(req, Collections.<MultipartFile>emptyList());
+    }
 
+    /**
+     * 提交调库申请及附件。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req, List<MultipartFile> files) {
+        SysAttachmentService.SubmissionFiles submissionFiles =
+                sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
+        return addAdjustLog(req, submissionFiles);
+    }
+
+    /**
+     * 使用共享文件上下文提交调库申请，供批量调整复用同一份物理文件。
+     */
+    public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req,
+                                        SysAttachmentService.SubmissionFiles submissionFiles) {
         // ══ 第一阶段：前置校验 ══
         validateSubmitReq(req);
 
@@ -367,10 +389,10 @@ public class SecurityPoolAdjustService {
         SubmitSharedData shared = loadSubmitSharedData(req);
 
         // ══ 第三阶段：调入处理 ══
-        List<Long> inboundIds = executeInboundSubmit(req, shared);
+        List<Long> inboundIds = executeInboundSubmit(req, shared, submissionFiles);
 
         // ══ 第四阶段：调出处理 ══
-        List<Long> outboundIds = executeOutboundSubmit(req, shared);
+        List<Long> outboundIds = executeOutboundSubmit(req, shared, submissionFiles);
 
         // ══ 第五阶段：后续处理 ══
         postSubmitProcess(req, shared);
@@ -712,6 +734,15 @@ public class SecurityPoolAdjustService {
      * @return 本次调入处理生成的所有调库记录 ID
      */
     private List<Long> executeInboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        return executeInboundSubmit(req, shared,
+                sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
+    }
+
+    /**
+     * 执行调入提交并绑定本次 multipart 文件。
+     */
+    private List<Long> executeInboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
+                                            SysAttachmentService.SubmissionFiles submissionFiles) {
 
         List<Long> generatedIds = new ArrayList<>();
 
@@ -737,6 +768,8 @@ public class SecurityPoolAdjustService {
                 logBo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(logBo);
                 generatedIds.add(logBo.getId());
+                // 将已上传附件绑定到新建调库日志
+                bindSubmitAttachments(logBo.getId(), item, submissionFiles);
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
                 if (isManualSubmitItem(item) && snapshot != null && logBo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
@@ -744,10 +777,8 @@ public class SecurityPoolAdjustService {
                 }
 
                 // 直通流程：再直接写入 ip_pool_status（audit_status='20'，即时生效）
-                IpAdjustLogBo statusBo = buildAdjustLog(req, item, manualItem);
-                statusBo.setAdjustBatchNo(adjustBatchNo);
-                statusBo.setAuditStatus("20");
-                securityPoolAdjustMapper.addPoolStatus(statusBo);
+                logBo.setAdjustLogId(logBo.getId());
+                securityPoolAdjustMapper.addPoolStatus(logBo);
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
                 // 构建调库日志实体
@@ -756,6 +787,8 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                // 将已上传附件绑定到新建调库日志
+                bindSubmitAttachments(bo.getId(), item, submissionFiles);
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
@@ -763,6 +796,7 @@ public class SecurityPoolAdjustService {
                     if (flowFinished) {
                         bo.setAuditStatus("20");
                         securityPoolAdjustMapper.editAdjustLogAuditStatus(bo.getId(), adjustBatchNo, "20");
+                        bo.setAdjustLogId(bo.getId());
                         securityPoolAdjustMapper.addPoolStatus(bo);
                     }
                 }
@@ -783,6 +817,15 @@ public class SecurityPoolAdjustService {
      * @return 本次调出处理生成的所有调库记录 ID
      */
     private List<Long> executeOutboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        return executeOutboundSubmit(req, shared,
+                sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
+    }
+
+    /**
+     * 执行调出提交并绑定本次 multipart 文件。
+     */
+    private List<Long> executeOutboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
+                                             SysAttachmentService.SubmissionFiles submissionFiles) {
 
         List<Long> generatedIds = new ArrayList<>();
 
@@ -808,6 +851,8 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                // 将已上传附件绑定到新建调库日志
+                bindSubmitAttachments(bo.getId(), item, submissionFiles);
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
@@ -825,6 +870,8 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                // 将已上传附件绑定到新建调库日志
+                bindSubmitAttachments(bo.getId(), item, submissionFiles);
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
@@ -943,8 +990,6 @@ public class SecurityPoolAdjustService {
             dto.setAdjustType(log.getAdjustType());
             dto.setAdjustMode(log.getAdjustMode());
             dto.setFlowName(log.getFlowName());
-            dto.setAttachmentFiles(log.getAttachmentFiles());
-            dto.setMaterialFiles(log.getMaterialFiles());
             dto.setAuditStatus(log.getAuditStatus());
             dto.setAdjustReason(log.getAdjustReason());
             dto.setAdjustAdvice(log.getAdjustAdvice());
@@ -2545,9 +2590,20 @@ public class SecurityPoolAdjustService {
         bo.setAdjusterName(req.getAdjusterName());
         bo.setAdjustReason(req.getAdjustReason());
         bo.setAdjustAdvice(req.getAdjustAdvice());
-        bo.setAttachmentFiles(item.getAttachmentFiles());
-        bo.setMaterialFiles(item.getMaterialFiles());
         return bo;
+    }
+
+    /**
+     * 将调库项携带的临时附件绑定到新建调库日志。
+     */
+    private void bindSubmitAttachments(Long adjustLogId, SecurityPoolAdjustSubmitReq.AdjustItem item,
+                                       SysAttachmentService.SubmissionFiles submissionFiles) {
+        // 绑定信评报告附件
+        sysAttachmentService.bindAttachments(adjustLogId, item.getCreditReportFileIndexes(),
+                SysAttachmentService.CATEGORY_CREDIT_REPORT, submissionFiles);
+        // 绑定其他材料附件
+        sysAttachmentService.bindAttachments(adjustLogId, item.getMaterialFileIndexes(),
+                SysAttachmentService.CATEGORY_MATERIAL, submissionFiles);
     }
 
     /**

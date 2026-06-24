@@ -1,5 +1,5 @@
 # ============================================================
-# 智慧风控平台 — 统一后端服务配置
+# SIRM — 后端服务配置
 # ============================================================
 
 spring:
@@ -11,14 +11,31 @@ spring:
     username: root
     password: 123456
 
+  # HTTP 文件上传配置
+  http:
+    multipart:
+      # 单个文件最大 50MB
+      max-file-size: 50MB
+      # 单次请求总大小最大 200MB（含多文件）
+      max-request-size: 200MB
+
 server:
   port: 18090
 
+# MyBatis ORM 框架配置
 mybatis:
+  # Mapper XML 文件扫描路径（classpath* 表示扫描所有 jar 包中的 mapper 目录）
   mapper-locations: classpath*:mapper/**/*.xml
+  # 开启驼峰命名映射：数据库字段 user_name 自动映射为 Java 属性 userName
   configuration:
     map-underscore-to-camel-case: true
 
+# 日志配置
 logging:
   level:
     com.znty.sirm.mapper: DEBUG
+
+# SIRM 业务配置：附件管理模块
+sirm:
+  attachment:
+    storage-path: ${SIRM_ATTACHMENT_STORAGE_PATH:D:/data/uploads}

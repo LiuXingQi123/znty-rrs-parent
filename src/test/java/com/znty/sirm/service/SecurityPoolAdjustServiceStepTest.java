@@ -55,6 +55,7 @@ public class SecurityPoolAdjustServiceStepTest {
         InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
 
         IpAdjustLogBo log = new IpAdjustLogBo();
@@ -161,6 +162,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
         // 构建流程节点测试数据
         FlowNodeBo start = buildNode(1L, "start", "start", 1);
@@ -199,6 +201,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
         // 构建流程节点测试数据
         FlowNodeBo start = buildNode(1L, "start", "start", 1);
@@ -328,6 +331,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
             bo.setId(99L);
@@ -373,6 +377,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
             bo.setId(88L);
@@ -415,6 +420,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
             bo.setId(106L);

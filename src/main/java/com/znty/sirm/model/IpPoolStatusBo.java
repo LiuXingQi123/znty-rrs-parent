@@ -32,6 +32,9 @@ public class IpPoolStatusBo {
     /** 调库批次号 */
     private String adjustBatchNo;
 
+    /** 来源调库日志 ID */
+    private Long adjustLogId;
+
     /** 目标投资池 ID */
     private Long targetPoolId;
 
@@ -55,12 +58,6 @@ public class IpPoolStatusBo {
 
     /** 调整意见 */
     private String adjustAdvice;
-
-    /** 附件报告文件路径（JSON数组） */
-    private String attachmentFiles;
-
-    /** 其他材料文件路径（JSON数组） */
-    private String materialFiles;
 
     /** 提交时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

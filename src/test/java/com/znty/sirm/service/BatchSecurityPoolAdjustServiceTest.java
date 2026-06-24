@@ -97,6 +97,8 @@ public class BatchSecurityPoolAdjustServiceTest {
         item.setTargetPoolId(11L);
         item.setAdjustMode("调入");
         item.setFlowId(1L);
+        item.setCreditReportFileIndexes(Collections.singletonList(0));
+        item.setMaterialFileIndexes(Collections.singletonList(1));
 
         SecurityPoolAdjustSubmitReq submitReq = ReflectionTestUtils.invokeMethod(
                 service,
@@ -105,5 +107,9 @@ public class BatchSecurityPoolAdjustServiceTest {
                 Collections.singletonList(item));
 
         assertThat(submitReq.getSecurityType()).isEqualTo("company_bond");
+        assertThat(submitReq.getItems().get(0).getCreditReportFileIndexes())
+                .containsExactly(0);
+        assertThat(submitReq.getItems().get(0).getMaterialFileIndexes())
+                .containsExactly(1);
     }
 }

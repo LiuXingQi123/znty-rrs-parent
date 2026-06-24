@@ -29,12 +29,6 @@ public class AdjustLogDto {
     /** 流程名称 */
     private String flowName;
 
-    /** 附件报告 */
-    private String attachmentFiles;
-
-    /** 其他材料 */
-    private String materialFiles;
-
     /** 审核状态码 */
     private String auditStatus;
 

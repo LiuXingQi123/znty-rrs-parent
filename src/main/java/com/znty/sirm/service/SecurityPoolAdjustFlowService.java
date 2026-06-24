@@ -358,6 +358,7 @@ public class SecurityPoolAdjustFlowService {
         for (IpAdjustLogBo log : logList) {
             if ("调入".equals(log.getAdjustMode())) {
                 log.setAuditStatus("20");
+                log.setAdjustLogId(log.getId());
                 securityPoolAdjustMapper.addPoolStatus(log);
             } else if ("调出".equals(log.getAdjustMode())) {
                 securityPoolAdjustMapper.softDeletePoolStatus(log.getSecurityCode(), log.getTargetPoolId());

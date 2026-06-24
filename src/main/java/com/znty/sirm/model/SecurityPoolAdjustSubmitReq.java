@@ -76,10 +76,10 @@ public class SecurityPoolAdjustSubmitReq {
         /** 调整说明 */
         private String adjustmentNote;
 
-        /** 附件报告（JSON字符串） */
-        private String attachmentFiles;
+        /** 信评报告附件在 multipart 文件数组中的下标 */
+        private List<Integer> creditReportFileIndexes;
 
-        /** 其他材料（JSON字符串） */
-        private String materialFiles;
+        /** 其他材料附件在 multipart 文件数组中的下标 */
+        private List<Integer> materialFileIndexes;
     }
 }

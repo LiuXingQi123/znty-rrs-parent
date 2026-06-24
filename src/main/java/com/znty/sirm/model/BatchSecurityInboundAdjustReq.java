@@ -37,11 +37,11 @@ public class BatchSecurityInboundAdjustReq {
     /** 调整建议 */
     private String adjustAdvice;
 
-    /** 整批信评报告及附件 JSON */
-    private String attachmentFiles;
+    /** 整批信评报告附件在 multipart 文件数组中的下标 */
+    private List<Integer> creditReportFileIndexes;
 
-    /** 整批其他材料 JSON */
-    private String materialFiles;
+    /** 整批其他材料附件在 multipart 文件数组中的下标 */
+    private List<Integer> materialFileIndexes;
 
     /** 已选证券列表，用于下一步校验 */
     private List<SecurityItem> securities;
@@ -110,10 +110,10 @@ public class BatchSecurityInboundAdjustReq {
         /** 调整说明 */
         private String adjustmentNote;
 
-        /** 信评报告及附件 JSON */
-        private String attachmentFiles;
+        /** 信评报告附件在 multipart 文件数组中的下标 */
+        private List<Integer> creditReportFileIndexes;
 
-        /** 其他材料 JSON */
-        private String materialFiles;
+        /** 其他材料附件在 multipart 文件数组中的下标 */
+        private List<Integer> materialFileIndexes;
     }
 }

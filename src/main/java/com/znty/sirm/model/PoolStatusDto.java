@@ -15,6 +15,8 @@ public class PoolStatusDto {
     private String poolType;
     /** 调库批次号 */
     private String adjustBatchNo;
+    /** 来源调库日志 ID */
+    private Long adjustLogId;
     /** 入池日期 */
     private String entryDate;
     /** 主体在该池证券数（仅主体所在池使用） */

@@ -281,7 +281,6 @@ INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `secu
                              `target_pool_id`, `target_pool_name`, `pool_type`,
                              `flow_id`, `flow_key`, `flow_type`,
                              `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-                             `attachment_files`, `material_files`,
                              `submit_time`, `audit_time`, `entry_time`,
                              `is_deleted`, `crte_time`, `updt_time`)
 VALUES
@@ -292,7 +291,6 @@ VALUES
  2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '央企中期票据主体评级AAA，符合一级库准入标准', '审批通过，已入池',
- '["report_20260508_001.pdf"]', '["material_20260508_001.pdf"]',
  '2026-05-08 09:00:00', '2026-05-09 15:00:00', '2026-05-10 09:00:00',
  0, NOW(), NOW()),
 
@@ -301,7 +299,6 @@ VALUES
  3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '城投债评级AA+，联动调入信用债二级库', '审批通过，已入池',
- '["report_20260510_002.pdf"]', '["material_20260510_002.pdf"]',
  '2026-05-10 10:00:00', '2026-05-11 14:00:00', '2026-05-12 09:00:00',
  0, NOW(), NOW()),
 
@@ -310,7 +307,6 @@ VALUES
  8, '转债库', 'convertible_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '可交换公司债符合转债库准入条件', '审批通过，已入池',
- '["report_20260512_003.pdf"]', NULL,
  '2026-05-12 09:30:00', '2026-05-13 11:00:00', '2026-05-15 09:00:00',
  0, NOW(), NOW()),
 
@@ -319,7 +315,6 @@ VALUES
  10, '一级库', 'special_account',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '银行二级资本债符合专户产品一级库准入要求', '审批通过，已入池',
- '["report_20260515_004.pdf"]', '["material_20260515_004.pdf"]',
  '2026-05-15 14:00:00', '2026-05-16 10:00:00', '2026-05-18 09:00:00',
  0, NOW(), NOW()),
 
@@ -328,7 +323,6 @@ VALUES
  11, '二级库', 'special_account',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '批量Excel导入，短期融资券调入专户产品二级库管理', '审批通过，已入池',
- '["batch_import_20260518.xlsx"]', '["approval_20260518_signed.pdf"]',
  '2026-05-18 16:00:00', '2026-05-19 11:30:00', '2026-05-20 09:00:00',
  0, NOW(), NOW()),
 
@@ -337,7 +331,6 @@ VALUES
  2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '央企永续中票主体评级AAA，符合一级库准入标准', '审批通过，已入池',
- '["report_20260519_006.pdf"]', '["material_20260519_006.pdf"]',
  '2026-05-19 09:00:00', '2026-05-20 14:00:00', '2026-05-22 09:00:00',
  0, NOW(), NOW()),
 
@@ -346,7 +339,6 @@ VALUES
  7, '境外债库', 'offshore_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '国际贸易短融符合境外债库准入标准', '审批通过，已入池',
- '["report_20260522_007.pdf"]', NULL,
  '2026-05-22 10:00:00', '2026-05-23 15:00:00', '2026-05-25 09:00:00',
  0, NOW(), NOW()),
 
@@ -357,7 +349,6 @@ VALUES
  4, '三级库', 'credit_bond',
  NULL, NULL, NULL,
  '00', '1001', '管理员', '科技创新公司债申请调入信用债三级库', NULL,
- '["report_20260528_008.pdf"]', '["material_20260528_008.pdf"]',
  '2026-05-28 09:30:00', NULL, NULL,
  0, NOW(), NOW()),
 
@@ -366,7 +357,6 @@ VALUES
  5, '四级库', 'credit_bond',
  NULL, NULL, NULL,
  '10', '1001', '管理员', 'ABS优先级产品申请调入信用债四级库', '审核通过，提交审批',
- '["report_20260526_009.pdf"]', '["material_20260526_009.pdf"]',
  '2026-05-26 14:00:00', '2026-05-27 10:00:00', NULL,
  0, NOW(), NOW()),
 
@@ -375,7 +365,6 @@ VALUES
  3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '11', '1001', '管理员', '项目收益债申请调入信用债二级库', '一级审核驳回：附件研报材料不足，请补充后重新提交',
- '["report_20260524_010.pdf"]', NULL,
  '2026-05-24 09:00:00', '2026-05-25 11:00:00', NULL,
  0, NOW(), NOW()),
 
@@ -384,7 +373,6 @@ VALUES
  6, '五级库', 'credit_bond',
  NULL, NULL, NULL,
  '21', '1001', '管理员', 'ABS产品申请调入信用债五级库', '二级审批驳回：ABS产品不满足信用债池准入资质，流程终止',
- '["report_20260522_011.pdf"]', '["material_20260522_011.pdf"]',
  '2026-05-22 10:00:00', '2026-05-23 16:00:00', NULL,
  0, NOW(), NOW()),
 
@@ -393,7 +381,6 @@ VALUES
  2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '99', '1001', '管理员', '申请将科技公司债调入信用债一级库', '发起人主动撤回，已重新申请三级库',
- '["report_20260520_012.pdf"]', NULL,
  '2026-05-20 11:00:00', NULL, NULL,
  0, NOW(), NOW()),
 
@@ -402,7 +389,6 @@ VALUES
  3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '批量操作将项目收益债调入信用债二级库', '批量直通流程处理完成',
- '["batch_list_20260523.xlsx"]', '["material_batch_20260523.pdf"]',
  '2026-05-23 17:00:00', '2026-05-23 17:05:00', '2026-05-23 17:05:00',
  0, NOW(), NOW()),
 
@@ -413,7 +399,6 @@ VALUES
  15, '禁投池', 'forbidden',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '发行人资产负债率持续攀升，流动性紧张，触发禁投条件', '审批通过，已列入禁投池',
- '["report_forbidden_20260510_001.pdf"]', '["material_forbidden_20260510_001.pdf"]',
  '2026-05-10 09:00:00', '2026-05-11 10:00:00', '2026-05-12 09:00:00',
  0, NOW(), NOW()),
 
@@ -422,7 +407,6 @@ VALUES
  15, '禁投池', 'forbidden',
  NULL, NULL, NULL,
  '20', '1', '研究员1', '主体评级由AA+下调至AA，内部评级触线，列入禁投', '审批通过，已列入禁投池',
- '["report_forbidden_20260515_002.pdf"]', NULL,
  '2026-05-15 14:00:00', '2026-05-16 11:00:00', '2026-05-17 09:00:00',
  0, NOW(), NOW()),
 
@@ -431,7 +415,6 @@ VALUES
  15, '禁投池', 'forbidden',
  NULL, NULL, NULL,
  '00', '2', '研究员2', '基础资产逾期率超阈值，存在流动性风险，申请列入禁投', NULL,
- '["report_forbidden_20260601_003.pdf"]', '["material_forbidden_20260601_003.pdf"]',
  '2026-06-01 10:30:00', NULL, NULL,
  0, NOW(), NOW()),
 
@@ -440,7 +423,6 @@ VALUES
  15, '禁投池', 'forbidden',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '发行人完成债务重组，流动性恢复正常，评级上调，解除禁投', '审批通过，已移出禁投池',
- '["report_forbidden_20260525_004.pdf"]', NULL,
  '2026-05-25 09:00:00', '2026-05-26 14:00:00', '2026-05-27 09:00:00',
  0, NOW(), NOW());
 
@@ -452,141 +434,126 @@ VALUES
 --       pool_id=7（境外债库）和 pool_id=8（转债库）为无父级的独立叶子节点
 -- ============================================================================
 
-INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_log_id`,
                               `target_pool_id`, `target_pool_name`, `pool_type`,
                               `flow_id`, `flow_key`, `flow_type`,
                               `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-                              `attachment_files`, `material_files`,
                               `submit_time`, `audit_time`, `entry_time`,
                               `is_deleted`, `crte_time`, `updt_time`)
 VALUES
 -- 1. 信用债大库/一级库（pool_id=2，有父级叶子节点）
-('101901234', '24某交投MTN001', 'mtn', '手工调整', '调入',
+('101901234', '24某交投MTN001', 'mtn', '手工调整', '调入', 1,
  2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '央企中期票据主体评级AAA，符合一级库准入标准', '审批通过，已入池',
- '["report_20260508_001.pdf"]', '["material_20260508_001.pdf"]',
  '2026-05-08 09:00:00', '2026-05-09 15:00:00', '2026-05-10 09:00:00',
  0, NOW(), NOW()),
 
 -- 2. 信用债大库/二级库（pool_id=3，有父级叶子节点）
-('102002345', '23某城投债', 'company_bond', '联动调整', '调入',
+('102002345', '23某城投债', 'company_bond', '联动调整', '调入', 2,
  3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '城投债评级AA+，联动调入信用债二级库', '审批通过，已入池',
- '["report_20260510_002.pdf"]', '["material_20260510_002.pdf"]',
  '2026-05-10 10:00:00', '2026-05-11 14:00:00', '2026-05-12 09:00:00',
  0, NOW(), NOW()),
 
 -- 3. 转债库（pool_id=8，无父级叶子节点，显示名称直接为"转债库"）
-('103003456', '24某能E1', 'exchangeable_bond', '手工调整', '调入',
+('103003456', '24某能E1', 'exchangeable_bond', '手工调整', '调入', 3,
  8, '转债库', 'convertible_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '可交换公司债符合转债库准入条件', '审批通过，已入池',
- '["report_20260512_003.pdf"]', NULL,
  '2026-05-12 09:30:00', '2026-05-13 11:00:00', '2026-05-15 09:00:00',
  0, NOW(), NOW()),
 
 -- 4. 专户产品/一级库（pool_id=10，有父级叶子节点；"一级库"同名，需靠父级名区分）
-('104004567', '23某行二级资本债01', 'bank_bond', '手工调整', '调入',
+('104004567', '23某行二级资本债01', 'bank_bond', '手工调整', '调入', 4,
  10, '一级库', 'special_account',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '银行二级资本债符合专户产品一级库准入要求', '审批通过，已入池',
- '["report_20260515_004.pdf"]', '["material_20260515_004.pdf"]',
  '2026-05-15 14:00:00', '2026-05-16 10:00:00', '2026-05-18 09:00:00',
  0, NOW(), NOW()),
 
 -- 5. 专户产品/二级库（pool_id=11，有父级叶子节点）
-('105005678', '24某地产CP001', 'cp', 'Excel导入', '调入',
+('105005678', '24某地产CP001', 'cp', 'Excel导入', '调入', 5,
  11, '二级库', 'special_account',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '批量Excel导入，短期融资券调入专户产品二级库', '审批通过，已入池',
- '["batch_import_20260518.xlsx"]', '["approval_20260518_signed.pdf"]',
  '2026-05-18 16:00:00', '2026-05-19 11:30:00', '2026-05-20 09:00:00',
  0, NOW(), NOW()),
 
 -- 6. 信用债大库/一级库（pool_id=2，与第1条同池；验证同一叶子节点可容纳多只证券）
-('106006789', '22某电力MTN001', 'mtn', '手工调整', '调入',
+('106006789', '22某电力MTN001', 'mtn', '手工调整', '调入', 6,
  2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '央企永续中票主体评级AAA，符合一级库准入标准', '审批通过，已入池',
- '["report_20260519_006.pdf"]', '["material_20260519_006.pdf"]',
  '2026-05-19 09:00:00', '2026-05-20 14:00:00', '2026-05-22 09:00:00',
  0, NOW(), NOW()),
 
 -- 7. 境外债库（pool_id=7，无父级叶子节点，显示名称直接为"境外债库"）
-('109009012', '25某国贸SCP001', 'scp', '手工调整', '调入',
+('109009012', '25某国贸SCP001', 'scp', '手工调整', '调入', 7,
  7, '境外债库', 'offshore_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '国际贸易短融符合境外债库准入标准', '审批通过，已入池',
- '["report_20260522_007.pdf"]', NULL,
  '2026-05-22 10:00:00', '2026-05-23 15:00:00', '2026-05-25 09:00:00',
  0, NOW(), NOW()),
 
 -- ── 禁投池相关状态记录（pool_id=15）────────────────────────────────────────────
 
 -- 8. 禁投池（pool_id=15）：科技公司债，已生效
-('107007890', '24某科技K1', 'company_bond', '手工调整', '调入',
+('107007890', '24某科技K1', 'company_bond', '手工调整', '调入', 15,
  15, '禁投池', 'forbidden',
  NULL, NULL, NULL,
  '20', '1', '研究员1', '主体评级由AA+下调至AA，内部评级触线，列入禁投', '审批通过，已列入禁投池',
- '["report_forbidden_20260515_002.pdf"]', NULL,
  '2026-05-15 14:00:00', '2026-05-16 11:00:00', '2026-05-17 09:00:00',
  0, NOW(), NOW());
 
 -- ============================================================================
 -- 主体池状态数据（security_type='company'，对应 dict_security_type 公司主体大类）
 -- ============================================================================
-INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_log_id`,
                               `target_pool_id`, `target_pool_name`, `pool_type`,
                               `flow_id`, `flow_key`, `flow_type`,
                               `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-                              `attachment_files`, `material_files`,
                               `submit_time`, `audit_time`, `entry_time`,
                               `is_deleted`, `crte_time`, `updt_time`)
 VALUES
 -- 1. 信用债大库/一级库（pool_id=2）：央企主体，已入池
-('C10001', '某省交通投资集团', 'company', '手工调整', '调入',
+('C10001', '某省交通投资集团', 'company', '手工调整', '调入', 23,
  2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '央企主体，综合实力强，纳入一级库主体白名单', '审批通过，已入池',
- '["report_subject_20260508_001.pdf"]', '["material_subject_20260508_001.pdf"]',
  '2026-05-08 09:00:00', '2026-05-09 15:00:00', '2026-05-10 09:00:00',
  0, NOW(), NOW()),
 
 -- 2. 信用债大库/二级库（pool_id=3）：地方国企主体，已入池
-('C10002', '某城市投资开发建设有限公司', 'company', '手工调整', '调入',
+('C10002', '某城市投资开发建设有限公司', 'company', '手工调整', '调入', 24,
  3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1', '研究员1', '地方国企，主体评级AA+，纳入二级库主体白名单', '审批通过，已入池',
- '["report_subject_20260510_002.pdf"]', '["material_subject_20260510_002.pdf"]',
  '2026-05-10 10:00:00', '2026-05-11 14:00:00', '2026-05-12 09:00:00',
  0, NOW(), NOW()),
 
 -- 3. 信用债大库/一级库（pool_id=2）：央企能源主体，已入池
-('C10003', '某能源集团股份有限公司', 'company', '手工调整', '调入',
+('C10003', '某能源集团股份有限公司', 'company', '手工调整', '调入', 25,
  2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '央企能源主体，主体评级AAA，纳入一级库主体白名单', '审批通过，已入池',
- '["report_subject_20260512_003.pdf"]', NULL,
  '2026-05-12 09:30:00', '2026-05-13 11:00:00', '2026-05-15 09:00:00',
  0, NOW(), NOW()),
 
 -- 4. 境外债库（pool_id=7）：银行主体，已入池
-('C10004', '某银行股份有限公司', 'company', '手工调整', '调入',
+('C10004', '某银行股份有限公司', 'company', '手工调整', '调入', 26,
  7, '境外债库', 'offshore_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '股份制银行，发行境外债，主体资质符合境外债库准入要求', '审批通过，已入池',
- '["report_subject_20260515_004.pdf"]', '["material_subject_20260515_004.pdf"]',
  '2026-05-15 14:00:00', '2026-05-16 10:00:00', '2026-05-18 09:00:00',
  0, NOW(), NOW()),
 
 -- 5. 禁投池（pool_id=15）：民企地产主体，主体资质恶化
-('C10005', '某地产集团股份有限公司', 'company', '手工调整', '调入',
+('C10005', '某地产集团股份有限公司', 'company', '手工调整', '调入', 27,
  15, '禁投池', 'forbidden',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '主体资产负债率持续攀升，流动性紧张，触发禁投条件', '审批通过，已列入禁投',
- '["report_subject_20260510_005.pdf"]', '["material_subject_20260510_005.pdf"]',
  '2026-05-10 09:00:00', '2026-05-11 10:00:00', '2026-05-12 09:00:00',
  0, NOW(), NOW());
 
@@ -600,7 +567,6 @@ INSERT INTO `ip_adjust_log` (
     `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
     `flow_id`, `flow_key`, `flow_type`,
     `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-    `attachment_files`, `material_files`,
     `submit_time`, `audit_time`, `entry_time`,
     `is_deleted`, `crte_time`, `updt_time`
 )
@@ -610,7 +576,6 @@ VALUES
  'COMP202606010900001001', 2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '央企交通主体经营稳健，申请纳入信用债一级库主体名单', '审批通过，已纳入主体池',
- '["report_company_20260601_001.pdf"]', '["material_company_20260601_001.pdf"]',
  '2026-06-01 09:00:00', '2026-06-01 15:00:00', '2026-06-02 09:00:00',
  0, NOW(), NOW()),
 
@@ -619,7 +584,6 @@ VALUES
  'COMP202606021030001001', 3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1', '研究员1', '地方国企城投主体资质稳定，申请纳入信用债二级库主体名单', '审批通过，已纳入主体池',
- '["report_company_20260602_001.pdf"]', NULL,
  '2026-06-02 10:30:00', '2026-06-03 11:00:00', '2026-06-04 09:00:00',
  0, NOW(), NOW()),
 
@@ -628,7 +592,6 @@ VALUES
  'COMP202606031400001001', 2, '一级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '能源央企主体评级保持AAA，联动纳入信用债一级库主体名单', '审批通过，已纳入主体池',
- '["report_company_20260603_001.pdf"]', '["material_company_20260603_001.pdf"]',
  '2026-06-03 14:00:00', '2026-06-04 10:00:00', '2026-06-05 09:00:00',
  0, NOW(), NOW()),
 
@@ -637,7 +600,6 @@ VALUES
  'COMP202606041100001001', 7, '境外债库', 'offshore_bond',
  NULL, NULL, NULL,
  '20', '4', '研究员4', '银行主体境外融资记录良好，申请纳入境外债库主体名单', '审批通过，已纳入主体池',
- '["report_company_20260604_001.pdf"]', NULL,
  '2026-06-04 11:00:00', '2026-06-05 14:00:00', '2026-06-06 09:00:00',
  0, NOW(), NOW()),
 
@@ -646,7 +608,6 @@ VALUES
  'COMP202606051000001001', 15, '禁投池', 'forbidden',
  NULL, NULL, NULL,
  '20', '2', '研究员2', '地产主体流动性承压，触发主体禁投规则', '审批通过，已列入禁投池',
- '["report_company_20260605_001.pdf"]', '["material_company_20260605_001.pdf"]',
  '2026-06-05 10:00:00', '2026-06-06 10:30:00', '2026-06-07 09:00:00',
  0, NOW(), NOW()),
 
@@ -655,7 +616,6 @@ VALUES
  'COMP202606061500001001', 4, '三级库', 'credit_bond',
  NULL, NULL, NULL,
  '00', '6', '固收1', '制造业主体新增覆盖，申请纳入信用债三级库主体名单', NULL,
- '["report_company_20260606_001.pdf"]', NULL,
  '2026-06-06 15:00:00', NULL, NULL,
  0, NOW(), NOW()),
 
@@ -664,7 +624,6 @@ VALUES
  'COMP202606071030001001', 10, '一级库', 'special_account',
  NULL, NULL, NULL,
  '10', '7', '固收2', '公用事业主体现金流稳定，申请纳入专户产品一级库主体名单', '审核通过，提交审批',
- '["report_company_20260607_001.pdf"]', '["material_company_20260607_001.pdf"]',
  '2026-06-07 10:30:00', '2026-06-08 10:00:00', NULL,
  0, NOW(), NOW()),
 
@@ -673,7 +632,6 @@ VALUES
  'COMP202606081400001001', 5, '四级库', 'credit_bond',
  NULL, NULL, NULL,
  '11', '8', '固收3', '民企科技主体申请纳入信用债四级库主体名单', '一级审核驳回：请补充最新财务报表和评级跟踪报告',
- '["report_company_20260608_001.pdf"]', NULL,
  '2026-06-08 14:00:00', '2026-06-09 11:00:00', NULL,
  0, NOW(), NOW()),
 
@@ -682,7 +640,6 @@ VALUES
  'COMP202606091600001001', 11, '二级库', 'special_account',
  NULL, NULL, NULL,
  '21', '9', '固收4', '消费产业主体申请纳入专户产品二级库主体名单', '审批驳回：近期经营波动较大，暂不纳入主体池',
- '["report_company_20260609_001.pdf"]', '["material_company_20260609_001.pdf"]',
  '2026-06-09 16:00:00', '2026-06-10 15:30:00', NULL,
  0, NOW(), NOW()),
 
@@ -691,7 +648,6 @@ VALUES
  'COMP202606101100001001', 6, '五级库', 'credit_bond',
  NULL, NULL, NULL,
  '32', '15', '风控经理', '项目收益债发行主体关联调入信用债五级库主体名单', 'O32自动审批通过，等待日终批次落地',
- '["report_company_20260610_001.pdf"]', '["o32_company_20260610_001.json"]',
  '2026-06-10 11:00:00', '2026-06-10 11:05:00', NULL,
  0, NOW(), NOW()),
 
@@ -700,7 +656,6 @@ VALUES
  'COMP202606111000001001', 3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1', '研究员1', '城投主体区域财政承压，申请调出信用债二级库主体名单', '审批通过，已调出主体池',
- '["report_company_20260611_001.pdf"]', NULL,
  '2026-06-11 10:00:00', '2026-06-12 10:00:00', '2026-06-12 10:00:00',
  0, NOW(), NOW()),
 
@@ -709,7 +664,6 @@ VALUES
  'COMP202606121430001001', 15, '禁投池', 'forbidden',
  NULL, NULL, NULL,
  '99', '1001', '管理员', '地产主体申请解除禁投池限制', '发起人撤回：等待债务重组方案落地后重新提交',
- '["report_company_20260612_001.pdf"]', '["material_company_20260612_001.pdf"]',
  '2026-06-12 14:30:00', NULL, NULL,
  0, NOW(), NOW());
 
@@ -876,7 +830,6 @@ INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `secu
                              `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
                              `flow_id`, `flow_key`, `flow_type`,
                              `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-                             `attachment_files`, `material_files`,
                              `submit_time`, `audit_time`, `entry_time`,
                              `is_deleted`, `crte_time`, `updt_time`)
 VALUES
@@ -885,7 +838,6 @@ VALUES
  'BOND202606051030001001', 14, '五级库', 'special_account',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '补充材料后重新评估，准入专户产品五级库', '审批通过，已调入专户产品五级库',
- '["report_batch_20260605_001.pdf"]', '["material_batch_20260605_001.pdf"]',
  '2026-06-05 10:30:00', '2026-06-06 15:00:00', '2026-06-07 09:00:00',
  0, NOW(), NOW()),
 
@@ -894,24 +846,21 @@ VALUES
  'BOND202606051030001001', 10, '一级库', 'special_account',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '调入专户产品五级库时，互斥调出专户产品一级库', '跟随同批手工调入流程审批通过',
- '["report_batch_20260605_001.pdf"]', '["material_batch_20260605_001.pdf"]',
  '2026-06-05 10:30:00', '2026-06-06 15:00:00', NULL,
  0, NOW(), NOW());
 
-INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_log_id`,
                               `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
                               `flow_id`, `flow_key`, `flow_type`,
                               `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-                              `attachment_files`, `material_files`,
                               `submit_time`, `audit_time`, `entry_time`,
                               `is_deleted`, `crte_time`, `updt_time`)
 VALUES
 -- 当前有效所在池：专户产品/五级库，批次号与同批调库日志一致
-('110010123', '23某基建PRN001', 'company_bond', '手工调整', '调入',
+('110010123', '23某基建PRN001', 'company_bond', '手工调整', '调入', 18,
  'BOND202606051030001001', 14, '五级库', 'special_account',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '补充材料后重新评估，准入专户产品五级库', '审批通过，已调入专户产品五级库',
- '["report_batch_20260605_001.pdf"]', '["material_batch_20260605_001.pdf"]',
  '2026-06-05 10:30:00', '2026-06-06 15:00:00', '2026-06-07 09:00:00',
  0, NOW(), NOW());
 
@@ -977,14 +926,13 @@ INSERT INTO `ip_adjust_log` (
     `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
     `flow_id`, `flow_key`, `flow_type`,
     `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-    `attachment_files`, `material_files`, `submit_time`, `audit_time`, `entry_time`,
+    `submit_time`, `audit_time`, `entry_time`,
     `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
 (20, '109009012', '25某国贸SCP001', 'scp', '关联调整', '调入',
  'BOND202606081000001001', 7, '境外债库', 'offshore_bond',
  NULL, NULL, NULL,
  '32', '15', '风控经理', '境外债评级复核通过后关联调入信用债二级库', 'O32自动审批通过，等待日终批次落地',
- '["report_o32_20260608_001.pdf"]', '["o32_result_20260608_001.json"]',
  '2026-06-08 10:00:00', '2026-06-08 10:05:00', NULL,
  0, NOW(), NOW());
 
@@ -1029,44 +977,40 @@ INSERT INTO `ip_adjust_log` (
     `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
     `flow_id`, `flow_key`, `flow_type`,
     `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-    `attachment_files`, `material_files`, `submit_time`, `audit_time`, `entry_time`,
+    `submit_time`, `audit_time`, `entry_time`,
     `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
 (21, '109009012', '25某国贸SCP001', 'scp', '手工调整', '调入',
  'BOND202606081000001001', 3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '32', '15', '风控经理', '境外债评级复核通过后手工调入信用债二级库', 'O32自动审批通过，等待日终批次落地',
- '["report_o32_20260608_001.pdf"]', '["o32_result_20260608_001.json"]',
  '2026-06-08 10:00:00', '2026-06-08 10:05:00', NULL,
  0, NOW(), NOW()),
 (22, '102002345', '23某城投债', 'company_bond', '手工调整', '调入',
  'BOND202605101000001002', 7, '境外债库', 'offshore_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '城投债境外发行品种调入境外债库，并联动维护信用债二级库', '直通流程处理完成',
- '["report_20260510_002.pdf"]', '["material_20260510_002.pdf"]',
  '2026-05-10 10:00:00', '2026-05-10 10:05:00', '2026-05-10 10:05:00',
  0, NOW(), NOW());
 
 INSERT INTO `ip_pool_status` (
-    `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
+    `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_log_id`,
     `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
     `flow_id`, `flow_key`, `flow_type`,
     `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-    `attachment_files`, `material_files`, `submit_time`, `audit_time`, `entry_time`,
+    `submit_time`, `audit_time`, `entry_time`,
     `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
-('102002345', '23某城投债', 'company_bond', '手工调整', '调入',
+('102002345', '23某城投债', 'company_bond', '手工调整', '调入', 22,
  'BOND202605101000001002', 7, '境外债库', 'offshore_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '城投债境外发行品种调入境外债库，并联动维护信用债二级库', '直通流程处理完成',
- '["report_20260510_002.pdf"]', '["material_20260510_002.pdf"]',
  '2026-05-10 10:00:00', '2026-05-10 10:05:00', '2026-05-10 10:05:00',
  0, NOW(), NOW()),
-('110010123', '23某基建PRN001', 'company_bond', '手动批量调整', '调入',
+('110010123', '23某基建PRN001', 'company_bond', '手动批量调整', '调入', 13,
  'BOND202605231700001001', 3, '二级库', 'credit_bond',
  NULL, NULL, NULL,
  '20', '1001', '管理员', '批量操作将项目收益债调入信用债二级库', '批量直通流程处理完成',
- '["batch_list_20260523.xlsx"]', '["material_batch_20260523.pdf"]',
  '2026-05-23 17:00:00', '2026-05-23 17:05:00', '2026-05-23 17:05:00',
  0, NOW(), NOW());
 

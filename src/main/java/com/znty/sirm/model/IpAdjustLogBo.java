@@ -32,6 +32,9 @@ public class IpAdjustLogBo {
     /** 调库批次号，同一次提交产生的多条记录共用 */
     private String adjustBatchNo;
 
+    /** 来源调库日志 ID，写入当前状态表时使用 */
+    private Long adjustLogId;
+
     /** 目标投资池 ID */
     private Long targetPoolId;
 
@@ -67,12 +70,6 @@ public class IpAdjustLogBo {
 
     /** 调整意见 */
     private String adjustAdvice;
-
-    /** 附件报告文件路径（JSON数组） */
-    private String attachmentFiles;
-
-    /** 其他材料文件路径（JSON数组） */
-    private String materialFiles;
 
     /** 提交时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
