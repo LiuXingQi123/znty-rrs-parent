@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.ReportMapper">
+    <!-- 报告库 mapper，对应表：sirm_report_in / sirm_report_out，提供内部 / 外部报告分页查询功能 -->
+
+    <!-- 分页查询内部报告库列表 -->
+    <select id="queryInReportPage" resultType="com.znty.sirm.model.ReportDto">
+        SELECT id
+               ,author_name
+               ,report_title
+               ,report_type
+               ,security_code
+               ,company_code
+               ,security_type
+               ,data_source
+               ,crte_time
+        FROM sirm_report_in
+        <where>
+            is_deleted = 0
+            <if test="reportTitle != null and reportTitle != ''">
+                AND report_title LIKE CONCAT('%', #{reportTitle}, '%')
+            </if>
+            <if test="securityCode != null and securityCode != ''">
+                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="reportType != null and reportType != ''">
+                AND report_type = #{reportType}
+            </if>
+            <if test="crteTimeStart != null and crteTimeStart != ''">
+                AND crte_time &gt;= #{crteTimeStart}
+            </if>
+            <if test="crteTimeEnd != null and crteTimeEnd != ''">
+                AND crte_time &lt;= CONCAT(#{crteTimeEnd}, ' 23:59:59')
+            </if>
+        </where>
+        ORDER BY crte_time DESC
+                 ,id DESC
+    </select>
+
+    <!-- 分页查询外部报告库列表 -->
+    <select id="queryOutReportPage" resultType="com.znty.sirm.model.ReportDto">
+        SELECT id
+               ,author_name
+               ,source_org_name
+               ,report_title
+               ,report_type
+               ,security_code
+               ,company_code
+               ,security_type
+               ,data_source
+               ,crte_time
+        FROM sirm_report_out
+        <where>
+            is_deleted = 0
+            <if test="reportTitle != null and reportTitle != ''">
+                AND report_title LIKE CONCAT('%', #{reportTitle}, '%')
+            </if>
+            <if test="securityCode != null and securityCode != ''">
+                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="reportType != null and reportType != ''">
+                AND report_type = #{reportType}
+            </if>
+            <if test="crteTimeStart != null and crteTimeStart != ''">
+                AND crte_time &gt;= #{crteTimeStart}
+            </if>
+            <if test="crteTimeEnd != null and crteTimeEnd != ''">
+                AND crte_time &lt;= CONCAT(#{crteTimeEnd}, ' 23:59:59')
+            </if>
+        </where>
+        ORDER BY crte_time DESC
+                 ,id DESC
+    </select>
+</mapper>
