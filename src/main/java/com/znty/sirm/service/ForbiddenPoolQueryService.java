@@ -30,7 +30,6 @@ public class ForbiddenPoolQueryService {
 
     /** 分页查询禁投池证券列表 */
     public PageResult<ForbiddenPoolQueryDto> queryForbiddenPoolPage(ForbiddenPoolQueryReq req) {
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ForbiddenPoolQueryDto> list = forbiddenPoolQueryMapper.queryForbiddenPoolPage(req);
         // 填充投资池全路径名称
@@ -41,7 +40,7 @@ public class ForbiddenPoolQueryService {
 
     /** 填充投资池全路径名称 */
     private void fillPoolFullName(List<ForbiddenPoolQueryDto> list) {
-        if (list == null || list.isEmpty()) {
+        if (list.isEmpty()) {
             return;
         }
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();

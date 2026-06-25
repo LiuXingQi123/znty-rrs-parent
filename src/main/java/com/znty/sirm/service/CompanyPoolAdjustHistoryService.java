@@ -29,7 +29,6 @@ public class CompanyPoolAdjustHistoryService {
     /** 分页查询主体池调整历史 */
     public PageResult<CompanyPoolAdjustHistoryDto> queryCompanyPoolAdjustHistoryPage(
             CompanyPoolAdjustHistoryReq req) {
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<CompanyPoolAdjustHistoryDto> list = companyPoolAdjustHistoryMapper.queryCompanyPoolAdjustHistoryPage(req);
         // 填充投资池全路径名称
@@ -40,7 +39,7 @@ public class CompanyPoolAdjustHistoryService {
 
     /** 填充投资池全路径名称 */
     private void fillPoolFullName(List<CompanyPoolAdjustHistoryDto> list) {
-        if (list == null || list.isEmpty()) {
+        if (list.isEmpty()) {
             return;
         }
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();

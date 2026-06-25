@@ -88,9 +88,6 @@ public class SecurityPoolAdjustFlowService {
      * 校验审批提交参数。
      */
     private void validateAuditReq(SecurityPoolAdjustAuditReq req) {
-        if (req == null) {
-            throw new BizException("审批参数不能为空");
-        }
         if (req.getStepId() == null) {
             throw new BizException("流程步骤 ID 不能为空");
         }
@@ -139,7 +136,7 @@ public class SecurityPoolAdjustFlowService {
         // 查询当前批次调库记录，识别原始发起人
         List<IpAdjustLogBo> adjustLogList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
-        if (adjustLogList == null || adjustLogList.isEmpty()) {
+        if (adjustLogList.isEmpty()) {
             return;
         }
         for (IpAdjustLogBo log : adjustLogList) {
@@ -349,7 +346,7 @@ public class SecurityPoolAdjustFlowService {
     private void finishAdjustBatch(IpAdjustStepBo step) {
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
-        if (logList == null || logList.isEmpty()) {
+        if (logList.isEmpty()) {
             securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), "20");
             return;
         }
@@ -387,55 +384,46 @@ public class SecurityPoolAdjustFlowService {
         List<FlowEdgeBo> edges = flowMapper.queryFlowEdgeListByVersionId(currentNode.getVersionId());
         List<EdgeCondRuleBo> condRules = flowMapper.queryCondRuleListByVersionId(currentNode.getVersionId());
         Map<Long, FlowNodeBo> nodeMap = new HashMap<>();
-        if (nodes != null) {
-            // 构建节点 ID 到节点对象的索引，便于后续通过连线快速定位下一节点
-            for (FlowNodeBo node : nodes) {
-                nodeMap.put(node.getId(), node);
-            }
+        // 构建节点 ID 到节点对象的索引，便于后续通过连线快速定位下一节点
+        for (FlowNodeBo node : nodes) {
+            nodeMap.put(node.getId(), node);
         }
 
         // 查询并整理节点审批配置
         List<NodeApprovalConfigBo> configs = flowMapper.queryApprovalConfigListByVersionId(currentNode.getVersionId());
         Map<Long, NodeApprovalConfigBo> approvalConfigMap = new HashMap<>();
-        if (configs != null) {
-            // 构建节点 ID 到审批配置的索引
-            for (NodeApprovalConfigBo config : configs) {
-                approvalConfigMap.put(config.getNodeId(), config);
-            }
+        // 构建节点 ID 到审批配置的索引
+        for (NodeApprovalConfigBo config : configs) {
+            approvalConfigMap.put(config.getNodeId(), config);
         }
 
         // 查询并整理节点审批处理人配置
         List<NodeApprovalHandlerBo> handlers = flowMapper.queryApprovalHandlerListByVersionId(currentNode.getVersionId());
         Map<Long, List<NodeApprovalHandlerBo>> approvalHandlerMap = new HashMap<>();
-        if (handlers != null) {
-            // 按审批配置 ID 分组处理人，便于创建待处理步骤
-            for (NodeApprovalHandlerBo handler : handlers) {
-                List<NodeApprovalHandlerBo> list = approvalHandlerMap.get(handler.getApprovalConfigId());
-                if (list == null) {
-                    list = new ArrayList<>();
-                    approvalHandlerMap.put(handler.getApprovalConfigId(), list);
-                }
-                list.add(handler);
+        // 按审批配置 ID 分组处理人，便于创建待处理步骤
+        for (NodeApprovalHandlerBo handler : handlers) {
+            List<NodeApprovalHandlerBo> list = approvalHandlerMap.get(handler.getApprovalConfigId());
+            if (list == null) {
+                list = new ArrayList<>();
+                approvalHandlerMap.put(handler.getApprovalConfigId(), list);
             }
+            list.add(handler);
         }
 
         Map<Long, List<EdgeCondRuleBo>> condRuleMap = new HashMap<>();
-        if (condRules != null) {
-            // 按连线 ID 分组条件规则，便于按审批动作判断流转方向
-            for (EdgeCondRuleBo rule : condRules) {
-                List<EdgeCondRuleBo> list = condRuleMap.get(rule.getEdgeId());
-                if (list == null) {
-                    list = new ArrayList<>();
-                    condRuleMap.put(rule.getEdgeId(), list);
-                }
-                list.add(rule);
+        // 按连线 ID 分组条件规则，便于按审批动作判断流转方向
+        for (EdgeCondRuleBo rule : condRules) {
+            List<EdgeCondRuleBo> list = condRuleMap.get(rule.getEdgeId());
+            if (list == null) {
+                list = new ArrayList<>();
+                condRuleMap.put(rule.getEdgeId(), list);
             }
+            list.add(rule);
         }
 
         // 组装流程运行时快照，供本次审批流转复用
         return new FlowSnapshot(definition, version, nodeMap,
-                edges != null ? edges : Collections.<FlowEdgeBo>emptyList(),
-                approvalConfigMap, approvalHandlerMap, condRuleMap);
+                edges, approvalConfigMap, approvalHandlerMap, condRuleMap);
     }
 
     /**
@@ -753,7 +741,7 @@ public class SecurityPoolAdjustFlowService {
     private IpAdjustLogBo queryFirstAdjustLog(IpAdjustStepBo step) {
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
-        if (logList == null || logList.isEmpty()) {
+        if (logList.isEmpty()) {
             return null;
         }
         return logList.get(0);

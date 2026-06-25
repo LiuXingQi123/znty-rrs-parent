@@ -28,7 +28,6 @@ public class ForbiddenPoolHistoryService {
 
     /** 分页查询禁投池调整历史 */
     public PageResult<ForbiddenPoolHistoryDto> queryForbiddenPoolHistoryPage(ForbiddenPoolHistoryReq req) {
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ForbiddenPoolHistoryDto> list = forbiddenPoolHistoryMapper.queryForbiddenPoolHistoryPage(req);
         // 填充投资池全路径名称
@@ -39,7 +38,7 @@ public class ForbiddenPoolHistoryService {
 
     /** 填充投资池全路径名称 */
     private void fillPoolFullName(List<ForbiddenPoolHistoryDto> list) {
-        if (list == null || list.isEmpty()) {
+        if (list.isEmpty()) {
             return;
         }
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();

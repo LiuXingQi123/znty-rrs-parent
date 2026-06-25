@@ -31,22 +31,19 @@ public class MyMattersService {
      * 分页查询我的事宜列表。
      */
     public PageResult<MyMattersDto> queryMyMattersPage(MyMattersReq req) {
-        MyMattersReq safeReq = req == null ? new MyMattersReq() : req;
-        // 开启分页查询
-        PageHelper.startPage(safeReq.getPageIndex(), safeReq.getPageSize());
-        List<MyMattersDto> list = myMattersMapper.queryMyMattersPage(safeReq);
+        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
+        List<MyMattersDto> list = myMattersMapper.queryMyMattersPage(req);
         // 将流程描述中的目标池叶子名称替换为全路径
         replacePoolNameWithFullPath(list);
         PageInfo<MyMattersDto> pageInfo = new PageInfo<>(list);
-        return new PageResult<>(list, pageInfo.getTotal(), safeReq.getPageIndex(), safeReq.getPageSize());
+        return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /**
      * 查询当前用户事宜中出现过的流程下拉选项。
      */
     public List<FlowOptionDto> queryFlowOptionList(MyMattersReq req) {
-        MyMattersReq safeReq = req == null ? new MyMattersReq() : req;
-        return myMattersMapper.queryFlowOptionList(safeReq);
+        return myMattersMapper.queryFlowOptionList(req);
     }
 
     /**
@@ -55,12 +52,12 @@ public class MyMattersService {
      *    → "管理员 将 23某基建PRN001 调入 信用债大库/二级库 的审批申请"
      */
     private void replacePoolNameWithFullPath(List<MyMattersDto> list) {
-        if (list == null || list.isEmpty()) {
+        if (list.isEmpty()) {
             return;
         }
         // 获取池 ID → 全路径名称映射
         Map<Long, String> fullNameMap = investmentPoolService.queryPoolFullNameMap();
-        if (fullNameMap == null || fullNameMap.isEmpty()) {
+        if (fullNameMap.isEmpty()) {
             return;
         }
         for (MyMattersDto dto : list) {

@@ -76,9 +76,9 @@ Mapper       ── 数据库操作接口，对应 XML
 ## 注释规范
 
 - **类**：Javadoc，说明职责
-- **字段**：`/** 字段说明 */`
+- **字段**：`/** 字段说明 */`，**必须保留**（如 `/** 证券池批量调整数据访问组件 */` 紧邻 `private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;`），禁止以"字面翻译型注释"为由删除；判断特征：注释描述的是该字段的用途/类型/职责，与下一行字段声明直接对应
 - **方法**：Javadoc，说明用途，关键参数加 `@param`
-- **方法内部**：关键步骤添加简洁单行注释；调用其他私有方法时，在调用行上方添加 `//` 注释说明调用目的（如 `// 构建白名单流程候选项`）
+- **方法内部**：关键步骤添加简洁单行注释；**调用其他私有方法时，必须在调用行上方添加 `//` 注释说明调用目的**（如 `// 构建白名单流程候选项`），禁止省略；该注释属于"调用目的说明"，不得当作"字面翻译型注释"误删
 - **XML**：每个 `<select>` / `<insert>` / `<update>` / `<delete>` 上方添加注释
 
 ---
@@ -224,15 +224,15 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 | 7 | 方法名只用前缀不加功能描述（如 `add()`） |
 | 8 | 分页与列表后缀混用（如 `PageList`） |
 | 9 | 主键使用 `Integer` 类型 |
-| 10 | 时间字段使用 `Date` 类型 |
-| 11 | Controller 方法返回 `ApiResponse<?>` 或 `ApiResponse<Void>` |
-| 12 | 未经确认引入新的第三方库 |
-| 13 | 类、方法、字段缺少注释 |
-| 14 | SELECT 列表中写可自动映射的 AS 别名（如 `column_name AS columnName`） |
-| 15 | SQL 逗号放行尾（统一逗号前置） |
-| 16 | 后端做 code → name 的中文字典映射（应由前端维护） |
-| 17 | `@RequestMapping` 类级别只写 `/api/v1`（应写完整路径） |
-| 18 | URL 路径使用 kebab-case（统一 camelCase） |
+| 10 | Controller 方法返回 `ApiResponse<?>` 或 `ApiResponse<Void>` |
+| 11 | 未经确认引入新的第三方库 |
+| 12 | 类、方法、字段缺少注释 |
+| 13 | SELECT 列表中写可自动映射的 AS 别名（如 `column_name AS columnName`） |
+| 14 | SQL 逗号放行尾（统一逗号前置） |
+| 15 | 后端做 code → name 的中文字典映射（应由前端维护） |
+| 16 | `@RequestMapping` 类级别只写 `/api/v1`（应写完整路径） |
+| 17 | URL 路径使用 kebab-case（统一 camelCase） |
+| 18 | 方法内部调用私有方法时，调用行上方缺少 `//` 注释说明调用目的 |
 
 ---
 

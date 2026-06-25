@@ -29,6 +29,7 @@ public class ReportService {
     public PageResult<ReportDto> queryInReportPage(ReportReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ReportDto> list = reportMapper.queryInReportPage(req);
+        // 回填内部报告附件
         fillReportAttachments(list, true);
         PageInfo<ReportDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
@@ -38,12 +39,17 @@ public class ReportService {
     public PageResult<ReportDto> queryOutReportPage(ReportReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ReportDto> list = reportMapper.queryOutReportPage(req);
+        // 回填外部报告附件
         fillReportAttachments(list, false);
         PageInfo<ReportDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
-    /** 回填报告附件列表 */
+    /**
+     * 回填报告附件列表
+     * @param list 报告列表
+     * @param internal true=内部报告库，false=外部报告库
+     */
     private void fillReportAttachments(List<ReportDto> list, boolean internal) {
         if (list.isEmpty()) {
             return;
@@ -68,7 +74,7 @@ public class ReportService {
                 continue;
             }
             if (!attachmentMap.containsKey(mainId)) {
-                attachmentMap.put(mainId, new ArrayList<SysAttachmentDto>());
+                attachmentMap.put(mainId, new ArrayList<>());
             }
             attachmentMap.get(mainId).add(attachment);
         }

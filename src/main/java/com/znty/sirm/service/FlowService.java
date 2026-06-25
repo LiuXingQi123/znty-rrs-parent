@@ -40,7 +40,6 @@ public class FlowService {
 
     /** 查询流程分页。 */
     public PageResult<FlowDto> queryFlowPage(FlowReq req) {
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<FlowDefinitionBo> entities = flowMapper.queryFlowPage(
                 req.getKeyword(), req.getStatus(), req.getCategory());
@@ -68,9 +67,8 @@ public class FlowService {
 
     /** 查询流程列表（不分页，用于下拉选项），仅返回 id/name/key/description。 */
     public List<FlowOptionDto> queryFlowList(FlowReq req) {
-        FlowReq safeReq = req == null ? new FlowReq() : req;
         List<FlowDefinitionBo> entities = flowMapper.queryFlowList(
-                safeReq.getKeyword(), safeReq.getStatus(), safeReq.getCategory());
+                req.getKeyword(), req.getStatus(), req.getCategory());
         return entities.stream().map(e -> {
             FlowOptionDto d = new FlowOptionDto();
             d.setFlowId(e.getId());
@@ -539,14 +537,13 @@ public class FlowService {
 
     /** 查询人员列表，支持按角色及子角色过滤。 */
     public List<UserDto> queryUserList(FlowReq req) {
-        FlowReq safeReq = req == null ? new FlowReq() : req;
         List<Long> roleIds = null;
-        if (safeReq.getRoleId() != null) {
+        if (req.getRoleId() != null) {
             roleIds = new ArrayList<>();
             // 递归收集角色及其子角色 ID
-            collectDescendantRoleIds(safeReq.getRoleId(), roleIds, flowMapper.queryRoleList());
+            collectDescendantRoleIds(req.getRoleId(), roleIds, flowMapper.queryRoleList());
         }
-        return flowMapper.queryUserList(roleIds, safeReq.getUserKeyword()).stream()
+        return flowMapper.queryUserList(roleIds, req.getUserKeyword()).stream()
                 // 将用户持久化对象转换为接口返回对象
                 .map(this::convertUser)
                 .collect(Collectors.toList());

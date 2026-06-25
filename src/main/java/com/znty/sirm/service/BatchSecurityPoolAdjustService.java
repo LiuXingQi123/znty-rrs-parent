@@ -71,7 +71,6 @@ public class BatchSecurityPoolAdjustService {
                     new ArrayList<>(), 0L, req.getPageIndex(), req.getPageSize());
         }
 
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<BatchSecurityPoolDto> poolList = batchSecurityPoolAdjustMapper.queryPoolPage(req);
         PageInfo<BatchSecurityPoolDto> pageInfo = new PageInfo<>(poolList);
@@ -92,7 +91,6 @@ public class BatchSecurityPoolAdjustService {
         // 校验目标投资池调整权限
         validatePoolPermission(req);
 
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<BatchSecurityCandidateDto> list = batchSecurityPoolAdjustMapper.querySecurityPage(req);
         PageInfo<BatchSecurityCandidateDto> pageInfo = new PageInfo<>(list);
@@ -414,13 +412,10 @@ public class BatchSecurityPoolAdjustService {
         // 解析当前用户 ID
         Long userId = parseCurrentUserId(currentUserId);
         List<Long> roleIds = investmentPoolMapper.queryUserRoleIdList(userId);
-        Set<Long> roleIdSet = roleIds == null ? new HashSet<>() : new HashSet<>(roleIds);
+        Set<Long> roleIdSet = new HashSet<>(roleIds);
         List<PoolPermissionBo> permissions =
                 investmentPoolMapper.queryPermissionListByType(PERMISSION_TYPE_ADJUSTABLE);
         Set<Long> poolIds = new HashSet<>();
-        if (permissions == null) {
-            return poolIds;
-        }
         for (PoolPermissionBo permission : permissions) {
             if (permission.getPoolId() == null || permission.getSubjectId() == null) {
                 continue;
@@ -473,7 +468,7 @@ public class BatchSecurityPoolAdjustService {
      * 填充当前页投资池现有证券数量
      */
     private void fillPoolCurrentCount(List<BatchSecurityPoolDto> poolList) {
-        if (poolList == null || poolList.isEmpty()) {
+        if (poolList.isEmpty()) {
             return;
         }
         List<Long> poolIds = poolList.stream()
@@ -493,11 +488,11 @@ public class BatchSecurityPoolAdjustService {
      * 填充投资池全路径名称
      */
     private void fillPoolFullName(List<BatchSecurityPoolDto> poolList) {
-        if (poolList == null || poolList.isEmpty()) {
+        if (poolList.isEmpty()) {
             return;
         }
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
-        if (allPools == null || allPools.isEmpty()) {
+        if (allPools.isEmpty()) {
             return;
         }
         Map<Long, InvestmentPoolBo> poolMap = allPools.stream()

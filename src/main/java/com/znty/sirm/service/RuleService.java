@@ -68,23 +68,21 @@ public class RuleService {
      * <p>采用两阶段批量加载避免 N+1 查询：先查规则 → 批量查参数 → 批量查选项。</p>
      */
     public PageResult<RuleDto> queryRulePage(RuleReq req) {
-        RuleReq safeReq = req == null ? new RuleReq() : req;
-        // 开启分页查询
-        PageHelper.startPage(safeReq.getPageIndex(), safeReq.getPageSize());
-        List<RuleDefinitionBo> rules = ruleMapper.queryRulePage(safeReq.getKeyword(), safeReq.getStatus());
+        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
+        List<RuleDefinitionBo> rules = ruleMapper.queryRulePage(req.getKeyword(), req.getStatus());
         PageInfo<RuleDefinitionBo> pageInfo = new PageInfo<>(rules);
         // 批量加载规则列表的参数和选项
         Map<Long, List<Map<String, Object>>> paramMap = loadRuleParamMap(rules);
         // RuleDefinitionBo → RuleDto
         List<RuleDto> records = rules.stream().map(rule -> toRuleDto(rule, paramMap.get(rule.getId()))).collect(Collectors.toList());
-        return new PageResult<>(records, pageInfo.getTotal(), safeReq.getPageIndex(), safeReq.getPageSize());
+        return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /**
      * 按规则 ID 查询规则详情，包含关联的参数和选项列表。
      */
     public RuleDto queryRuleDetail(IdRequest req) {
-        RuleDefinitionBo rule = requireRule(req == null ? null : req.getId());
+        RuleDefinitionBo rule = requireRule(req.getId());
         // 批量加载规则列表的参数和选项
         Map<Long, List<Map<String, Object>>> paramMap = loadRuleParamMap(Collections.singletonList(rule));
         // RuleDefinitionBo → RuleDto
@@ -132,7 +130,7 @@ public class RuleService {
      */
     @Transactional(rollbackFor = Exception.class)
     public RuleDto editRuleStatus(RuleReq req) {
-        if (req == null || req.getId() == null) {
+        if (req.getId() == null) {
             throw new BizException("规则ID不能为空");
         }
         if (!"active".equals(req.getStatus()) && !"disabled".equals(req.getStatus())) {
@@ -151,7 +149,7 @@ public class RuleService {
      */
     @Transactional(rollbackFor = Exception.class)
     public RuleDto deleteRule(IdRequest req) {
-        if (req == null || req.getId() == null) {
+        if (req.getId() == null) {
             throw new BizException("规则ID不能为空");
         }
         // 删除前查出实体一并返回，便于前端展示
@@ -197,7 +195,7 @@ public class RuleService {
      */
     @Transactional(rollbackFor = Exception.class)
     public RuleRunResultDto executeRule(RuleReq req) {
-        if (req == null || req.getId() == null) {
+        if (req.getId() == null) {
             throw new BizException("规则ID不能为空");
         }
         RuleDefinitionBo rule = requireRule(req.getId());
@@ -313,9 +311,6 @@ public class RuleService {
 
     /** 校验保存请求的必填字段（名称、脚本） */
     private void validateSaveReq(RuleReq req) {
-        if (req == null) {
-            throw new BizException("请求参数不能为空");
-        }
         if (!StringUtils.hasText(req.getName())) {
             throw new BizException("规则名称不能为空");
         }
@@ -381,7 +376,7 @@ public class RuleService {
      * <p>两阶段加载：规则 → 批量参数 → 批量选项，再按规则 ID 分组组装。</p>
      */
     private Map<Long, List<Map<String, Object>>> loadRuleParamMap(List<RuleDefinitionBo> rules) {
-        if (rules == null || rules.isEmpty()) {
+        if (rules.isEmpty()) {
             return Collections.emptyMap();
         }
         List<Long> ruleIds = rules.stream().map(RuleDefinitionBo::getId).filter(Objects::nonNull).collect(Collectors.toList());

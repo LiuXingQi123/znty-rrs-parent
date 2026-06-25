@@ -60,10 +60,8 @@ public class TestCaseService {
      * <p>采用批量加载避免 N+1：用例 → 批量参数值 → 批量规则名称。</p>
      */
     public PageResult<TestCaseDto> queryTestCasePage(TestCaseReq req) {
-        TestCaseReq safeReq = req == null ? new TestCaseReq() : req;
-        // 开启分页查询
-        PageHelper.startPage(safeReq.getPageIndex(), safeReq.getPageSize());
-        List<RuleTestCaseBo> cases = testCaseMapper.queryCasePage(safeReq.getKeyword(), safeReq.getResult());
+        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
+        List<RuleTestCaseBo> cases = testCaseMapper.queryCasePage(req.getKeyword(), req.getResult());
         PageInfo<RuleTestCaseBo> pageInfo = new PageInfo<>(cases);
         // 批量加载测试用例的参数值
         Map<Long, Map<String, String>> paramMap = loadCaseParamMap(cases);
@@ -72,7 +70,7 @@ public class TestCaseService {
         List<TestCaseDto> records = cases.stream()
                 // 组装测试用例返回对象
                 .map(c -> toDto(c, paramMap.get(c.getId()), ruleMap.get(c.getRuleId()))).collect(Collectors.toList());
-        return new PageResult<>(records, pageInfo.getTotal(), safeReq.getPageIndex(), safeReq.getPageSize());
+        return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /**
@@ -114,7 +112,7 @@ public class TestCaseService {
      */
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto editTestCaseName(TestCaseReq req) {
-        if (req == null || req.getId() == null) {
+        if (req.getId() == null) {
             throw new BizException("测试用例ID不能为空");
         }
         if (!StringUtils.hasText(req.getName())) {
@@ -134,7 +132,7 @@ public class TestCaseService {
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto deleteTestCase(IdRequest req) {
         // 按 ID 查询测试用例实体
-        RuleTestCaseBo testCase = requireCase(req == null ? null : req.getId());
+        RuleTestCaseBo testCase = requireCase(req.getId());
         // 删除前查出实体一并返回，便于前端展示
         TestCaseDto deleted = detailById(testCase.getId());
         testCaseMapper.deleteParamsByCaseId(testCase.getId());
@@ -149,7 +147,7 @@ public class TestCaseService {
     @Transactional(rollbackFor = Exception.class)
     public TestCaseDto runTestCase(IdRequest req) {
         // 按 ID 查询测试用例实体
-        RuleTestCaseBo testCase = requireCase(req == null ? null : req.getId());
+        RuleTestCaseBo testCase = requireCase(req.getId());
         RuleDefinitionBo rule = ruleMapper.queryRuleById(testCase.getRuleId());
         if (rule == null) {
             throw new BizException("测试用例关联规则不存在");
@@ -197,7 +195,7 @@ public class TestCaseService {
      * 查询指定测试用例的执行历史记录，含每次执行的步骤日志。
      */
     public List<RuleRunResultDto> queryRunHistoryList(IdRequest req) {
-        Long caseId = req == null ? null : req.getId();
+        Long caseId = req.getId();
         if (caseId == null) {
             throw new BizException("测试用例ID不能为空");
         }
@@ -220,9 +218,6 @@ public class TestCaseService {
 
     /** 校验保存请求的必填字段（名称、关联规则） */
     private void validateSaveReq(TestCaseReq req) {
-        if (req == null) {
-            throw new BizException("请求参数不能为空");
-        }
         if (!StringUtils.hasText(req.getName())) {
             throw new BizException("测试用例名称不能为空");
         }
@@ -282,7 +277,7 @@ public class TestCaseService {
      * <p>使用 LinkedHashMap 保持参数插入顺序。</p>
      */
     private Map<Long, Map<String, String>> loadCaseParamMap(List<RuleTestCaseBo> cases) {
-        if (cases == null || cases.isEmpty()) {
+        if (cases.isEmpty()) {
             return Collections.emptyMap();
         }
         List<Long> caseIds = cases.stream().map(RuleTestCaseBo::getId).filter(Objects::nonNull).collect(Collectors.toList());
@@ -326,7 +321,7 @@ public class TestCaseService {
      * <p>避免 N+1 查询。</p>
      */
     private Map<Long, RuleDefinitionBo> loadRuleMap(List<RuleTestCaseBo> cases) {
-        if (cases == null || cases.isEmpty()) {
+        if (cases.isEmpty()) {
             return Collections.emptyMap();
         }
         List<Long> ruleIds = cases.stream()

@@ -29,7 +29,6 @@ public class SubjectPoolQueryService {
 
     /** 分页查询主体池列表 */
     public PageResult<SubjectPoolQueryDto> querySubjectPoolPage(SubjectPoolQueryReq req) {
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SubjectPoolQueryDto> list = subjectPoolQueryMapper.querySubjectPoolPage(req);
         // 填充投资池全路径名称
@@ -40,7 +39,7 @@ public class SubjectPoolQueryService {
 
     /** 填充投资池全路径名称 */
     private void fillPoolFullName(List<SubjectPoolQueryDto> list) {
-        if (list == null || list.isEmpty()) {
+        if (list.isEmpty()) {
             return;
         }
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();

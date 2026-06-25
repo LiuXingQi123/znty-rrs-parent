@@ -159,7 +159,6 @@ public class SecurityPoolAdjustService {
      * @param req 查询条件（证券代码、简称、发行人，均为模糊匹配）
      */
     public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityInfoDto> records = securityPoolAdjustMapper.querySecurityPage(
                 req.getSecurityCode(), req.getSecurityShortName(), req.getIssuer());
@@ -191,7 +190,7 @@ public class SecurityPoolAdjustService {
      */
     public List<PoolDto> queryAdjustPoolList(SecurityPoolAdjustReq req) {
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
-        if (allPools == null || allPools.isEmpty()) {
+        if (allPools.isEmpty()) {
             return new ArrayList<>();
         }
 
@@ -208,13 +207,11 @@ public class SecurityPoolAdjustService {
         List<PoolRelationBo> mutexList = investmentPoolMapper.queryMutexRelationList();
         Map<Long, List<Long>> inMutexMap  = new HashMap<>();
         Map<Long, List<Long>> outMutexMap = new HashMap<>();
-        if (mutexList != null) {
-            for (PoolRelationBo r : mutexList) {
-                if ("in_mutex".equals(r.getRelationType())) {
-                    inMutexMap.computeIfAbsent(r.getPoolId(), k -> new ArrayList<>()).add(r.getRelationPoolId());
-                } else if ("out_mutex".equals(r.getRelationType())) {
-                    outMutexMap.computeIfAbsent(r.getPoolId(), k -> new ArrayList<>()).add(r.getRelationPoolId());
-                }
+        for (PoolRelationBo r : mutexList) {
+            if ("in_mutex".equals(r.getRelationType())) {
+                inMutexMap.computeIfAbsent(r.getPoolId(), k -> new ArrayList<>()).add(r.getRelationPoolId());
+            } else if ("out_mutex".equals(r.getRelationType())) {
+                outMutexMap.computeIfAbsent(r.getPoolId(), k -> new ArrayList<>()).add(r.getRelationPoolId());
             }
         }
         // 查询各投资池当前有效证券数量
@@ -285,12 +282,9 @@ public class SecurityPoolAdjustService {
      */
     private Set<Long> queryAdjustablePoolIdsByUser(Long userId) {
         List<Long> roleIds = investmentPoolMapper.queryUserRoleIdList(userId);
-        Set<Long> roleIdSet = roleIds != null ? new HashSet<>(roleIds) : new HashSet<>();
+        Set<Long> roleIdSet = new HashSet<>(roleIds);
         List<PoolPermissionBo> permissions = investmentPoolMapper.queryPermissionListByType(PERMISSION_TYPE_ADJUSTABLE);
         Set<Long> poolIds = new HashSet<>();
-        if (permissions == null) {
-            return poolIds;
-        }
 
         for (PoolPermissionBo permission : permissions) {
             if (permission.getPoolId() == null || permission.getSubjectId() == null) {
@@ -329,7 +323,7 @@ public class SecurityPoolAdjustService {
 
     /** 填充当前所在池的全路径名称 */
     private void fillPoolStatusFullName(List<PoolStatusDto> poolStatusList, Map<Long, String> poolFullNameMap) {
-        if (poolStatusList == null || poolStatusList.isEmpty()) {
+        if (poolStatusList.isEmpty()) {
             return;
         }
         for (PoolStatusDto status : poolStatusList) {
@@ -456,15 +450,13 @@ public class SecurityPoolAdjustService {
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
-        if (allPools != null) {
-            for (InvestmentPoolBo p : allPools) {
-                poolMap.put(p.getId(), p);
-            }
+        for (InvestmentPoolBo p : allPools) {
+            poolMap.put(p.getId(), p);
         }
 
         // 证券当前有效入池 ID 集合（audit_status='20' 表示已生效）
         List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIds(req.getSecurityCode());
-        Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList != null ? currentPoolIdList : Collections.emptyList());
+        Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList);
 
         // 全量投资池关系配置，构建三层嵌套 Map
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(
@@ -601,12 +593,10 @@ public class SecurityPoolAdjustService {
         // 查询该流程的所有版本（ORDER BY ver_num DESC），取第一个 status='active' 的版本
         List<FlowVersionBo> versions = flowMapper.queryFlowVersionListByFlowId(flowId, null);
         FlowVersionBo activeVersion = null;
-        if (versions != null) {
-            for (FlowVersionBo v : versions) {
-                if ("active".equals(v.getStatus())) {
-                    activeVersion = v;
-                    break;
-                }
+        for (FlowVersionBo v : versions) {
+            if ("active".equals(v.getStatus())) {
+                activeVersion = v;
+                break;
             }
         }
         if (activeVersion == null) {
@@ -619,35 +609,29 @@ public class SecurityPoolAdjustService {
 
         // 节点按 DB ID 建立索引，供后续边遍历快速查找目标节点
         Map<Long, FlowNodeBo> nodeMap = new HashMap<>();
-        if (nodes != null) {
-            for (FlowNodeBo node : nodes) {
-                nodeMap.put(node.getId(), node);
-            }
+        for (FlowNodeBo node : nodes) {
+            nodeMap.put(node.getId(), node);
         }
 
         // 加载该版本的审批节点配置，按 nodeId 建立索引
         List<NodeApprovalConfigBo> approvalConfigs = flowMapper.queryApprovalConfigListByVersionId(activeVersion.getId());
         Map<Long, NodeApprovalConfigBo> approvalConfigMap = new HashMap<>();
-        if (approvalConfigs != null) {
-            for (NodeApprovalConfigBo cfg : approvalConfigs) {
-                approvalConfigMap.put(cfg.getNodeId(), cfg);
-            }
+        for (NodeApprovalConfigBo cfg : approvalConfigs) {
+            approvalConfigMap.put(cfg.getNodeId(), cfg);
         }
 
         List<NodeApprovalHandlerBo> approvalHandlers = flowMapper.queryApprovalHandlerListByVersionId(activeVersion.getId());
         Map<Long, List<NodeApprovalHandlerBo>> approvalHandlerMap = new HashMap<>();
-        if (approvalHandlers != null) {
-            for (NodeApprovalHandlerBo handler : approvalHandlers) {
-                List<NodeApprovalHandlerBo> list = approvalHandlerMap.get(handler.getApprovalConfigId());
-                if (list == null) {
-                    list = new ArrayList<>();
-                    approvalHandlerMap.put(handler.getApprovalConfigId(), list);
-                }
-                list.add(handler);
+        for (NodeApprovalHandlerBo handler : approvalHandlers) {
+            List<NodeApprovalHandlerBo> list = approvalHandlerMap.get(handler.getApprovalConfigId());
+            if (list == null) {
+                list = new ArrayList<>();
+                approvalHandlerMap.put(handler.getApprovalConfigId(), list);
             }
+            list.add(handler);
         }
 
-        return new FlowSnapshot(def, activeVersion, nodeMap, edges != null ? edges : Collections.emptyList(), approvalConfigMap, approvalHandlerMap);
+        return new FlowSnapshot(def, activeVersion, nodeMap, edges, approvalConfigMap, approvalHandlerMap);
     }
 
     /**
@@ -974,7 +958,7 @@ public class SecurityPoolAdjustService {
         }
         List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(
                 req.getSecurityCode(), req.getAdjustBatchNo());
-        if (logs == null || logs.isEmpty()) {
+        if (logs.isEmpty()) {
             return new ArrayList<>();
         }
 
@@ -1005,7 +989,7 @@ public class SecurityPoolAdjustService {
             return Collections.emptyList();
         }
         List<IpAdjustStepBo> steps = securityPoolAdjustMapper.queryAdjustStepListWithBatch(adjustLogId, adjustBatchNo);
-        if (steps == null || steps.isEmpty()) {
+        if (steps.isEmpty()) {
             return Collections.emptyList();
         }
         List<IpAdjustStepDto> result = new ArrayList<>();
@@ -1134,15 +1118,13 @@ public class SecurityPoolAdjustService {
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
-        if (allPools != null) {
-            for (InvestmentPoolBo p : allPools) {
-                poolMap.put(p.getId(), p);
-            }
+        for (InvestmentPoolBo p : allPools) {
+            poolMap.put(p.getId(), p);
         }
 
         // 证券当前有效入池 ID 集合（audit_status='20' 表示已生效）
         List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIds(req.getSecurityCode());
-        Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList != null ? currentPoolIdList : Collections.emptyList());
+        Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList);
 
         // 全量投资池关系配置，构建三层嵌套 Map（poolId → relationType → 关联池列表）
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(

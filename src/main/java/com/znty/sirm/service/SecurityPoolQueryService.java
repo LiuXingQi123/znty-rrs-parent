@@ -38,7 +38,6 @@ public class SecurityPoolQueryService {
 
     /** 分页查询证券池中的证券列表 */
     public PageResult<SecurityPoolQueryDto> querySecurityPoolPage(SecurityPoolQueryReq req) {
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityPoolQueryDto> list = securityPoolQueryMapper.querySecurityPoolPage(req);
         // 填充投资池全路径名称
@@ -49,7 +48,7 @@ public class SecurityPoolQueryService {
 
     /** 填充投资池全路径名称 */
     private void fillPoolFullName(List<SecurityPoolQueryDto> list) {
-        if (list == null || list.isEmpty()) {
+        if (list.isEmpty()) {
             return;
         }
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();

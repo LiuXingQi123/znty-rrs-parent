@@ -80,10 +80,8 @@ public class InvestmentPoolService {
     public Map<Long, String> queryPoolFullNameMap() {
         Map<Long, String> fullNameMap = new HashMap<>();
         List<InvestmentPoolDto> poolList = investmentPoolMapper.queryPoolFullNameList();
-        if (poolList != null) {
-            for (InvestmentPoolDto pool : poolList) {
-                fullNameMap.put(pool.getId(), pool.getPoolFullName());
-            }
+        for (InvestmentPoolDto pool : poolList) {
+            fullNameMap.put(pool.getId(), pool.getPoolFullName());
         }
         return fullNameMap;
     }
@@ -756,7 +754,7 @@ public class InvestmentPoolService {
      */
     private void fillPermissionConfig(InvestmentPoolDto dto) {
         List<PoolPermissionBo> permissions = investmentPoolMapper.queryPermissionList(dto.getId());
-        dto.setPermissions(permissions != null ? permissions : new ArrayList<>());
+        dto.setPermissions(permissions);
     }
 
     /**
@@ -879,11 +877,9 @@ public class InvestmentPoolService {
      * 获取经办人 ID
      */
     private String getOperatorId(InvestmentPoolReq req) {
-        // 解析经办人 ID
         if (req == null || req.getOperatorId() == null || req.getOperatorId().trim().isEmpty()) {
             return OPERATOR_DEFAULT;
         }
-        // 解析经办人 ID
         return req.getOperatorId();
     }
 

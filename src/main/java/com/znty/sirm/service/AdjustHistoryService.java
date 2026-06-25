@@ -32,7 +32,6 @@ public class AdjustHistoryService {
      * 分页查询调整历史列表
      */
     public PageResult<AdjustHistoryDto> queryAdjustHistoryPage(AdjustHistoryReq req) {
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<AdjustHistoryDto> list = adjustHistoryMapper.queryAdjustHistoryPage(req);
         // 填充投资池全路径名称
@@ -43,7 +42,7 @@ public class AdjustHistoryService {
 
     /** 填充投资池全路径名称 */
     private void fillPoolFullName(List<AdjustHistoryDto> list) {
-        if (list == null || list.isEmpty()) {
+        if (list.isEmpty()) {
             return;
         }
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
