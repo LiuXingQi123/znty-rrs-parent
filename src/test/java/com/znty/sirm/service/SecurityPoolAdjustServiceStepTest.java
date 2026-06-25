@@ -414,6 +414,31 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).containsExactly(88L);
     }
 
+    /** 验证普通提交应同时绑定本地上传附件和报告库来源附件。 */
+    @Test
+    public void bindSubmitAttachmentsShouldBindUploadedFilesAndCopyReportSources() {
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
+
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setCreditReportFileIndexes(Collections.singletonList(0));
+        item.setMaterialFileIndexes(Collections.singletonList(1));
+        item.setCreditReportSourceAttachmentIds(Collections.singletonList(7L));
+        item.setMaterialSourceAttachmentIds(Collections.singletonList(8L));
+
+        ReflectionTestUtils.invokeMethod(service, "bindSubmitAttachments", 88L, item, null, "1001");
+
+        verify(attachmentService).bindAttachments(88L, Collections.singletonList(0),
+                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, null);
+        verify(attachmentService).bindAttachments(88L, Collections.singletonList(1),
+                SysAttachmentService.CATEGORY_MATERIAL_HAND, null);
+        verify(attachmentService).copyReportAttachments(88L, Collections.singletonList(7L),
+                SysAttachmentService.PURPOSE_CREDIT_REPORT, "1001");
+        verify(attachmentService).copyReportAttachments(88L, Collections.singletonList(8L),
+                SysAttachmentService.PURPOSE_MATERIAL, "1001");
+    }
+
     /** 验证白名单直通流程应记录调入批次号及流程步骤。 */
     @Test
     public void executeInboundSubmitShouldCreateStepsWithBatchNoForWhitelistFlow() throws Exception {

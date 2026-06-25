@@ -752,8 +752,8 @@ public class SecurityPoolAdjustService {
                 logBo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(logBo);
                 generatedIds.add(logBo.getId());
-                // 将已上传附件绑定到新建调库日志
-                bindSubmitAttachments(logBo.getId(), item, submissionFiles);
+                // 将提交附件绑定到新建调库日志
+                bindSubmitAttachments(logBo.getId(), item, submissionFiles, req.getAdjusterId());
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
                 if (isManualSubmitItem(item) && snapshot != null && logBo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
@@ -771,8 +771,8 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
-                // 将已上传附件绑定到新建调库日志
-                bindSubmitAttachments(bo.getId(), item, submissionFiles);
+                // 将提交附件绑定到新建调库日志
+                bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
@@ -835,8 +835,8 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("20");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
-                // 将已上传附件绑定到新建调库日志
-                bindSubmitAttachments(bo.getId(), item, submissionFiles);
+                // 将提交附件绑定到新建调库日志
+                bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
@@ -854,8 +854,8 @@ public class SecurityPoolAdjustService {
                 bo.setAuditStatus("00");
                 securityPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
-                // 将已上传附件绑定到新建调库日志
-                bindSubmitAttachments(bo.getId(), item, submissionFiles);
+                // 将提交附件绑定到新建调库日志
+                bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
                 if (isManualSubmitItem(item) && snapshot != null && bo.getId() != null) {
                     // 为新建的调库记录创建初始流程步骤（懒创建）  仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理）， 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）
@@ -2578,16 +2578,22 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 将调库项携带的临时附件绑定到新建调库日志。
+     * 将调库项携带的提交附件绑定到新建调库日志。
      */
     private void bindSubmitAttachments(Long adjustLogId, SecurityPoolAdjustSubmitReq.AdjustItem item,
-                                       SysAttachmentService.SubmissionFiles submissionFiles) {
+                                       SysAttachmentService.SubmissionFiles submissionFiles, String uploaderId) {
         // 绑定信评报告附件
         sysAttachmentService.bindAttachments(adjustLogId, item.getCreditReportFileIndexes(),
                 SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, submissionFiles);
         // 绑定其他材料附件
         sysAttachmentService.bindAttachments(adjustLogId, item.getMaterialFileIndexes(),
                 SysAttachmentService.CATEGORY_MATERIAL_HAND, submissionFiles);
+        // 复制报告库附件为信评报告附件
+        sysAttachmentService.copyReportAttachments(adjustLogId, item.getCreditReportSourceAttachmentIds(),
+                SysAttachmentService.PURPOSE_CREDIT_REPORT, uploaderId);
+        // 复制报告库附件为其他材料附件
+        sysAttachmentService.copyReportAttachments(adjustLogId, item.getMaterialSourceAttachmentIds(),
+                SysAttachmentService.PURPOSE_MATERIAL, uploaderId);
     }
 
     /**

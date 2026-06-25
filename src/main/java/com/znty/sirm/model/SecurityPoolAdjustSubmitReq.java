@@ -81,5 +81,11 @@ public class SecurityPoolAdjustSubmitReq {
 
         /** 其他材料附件在 multipart 文件数组中的下标 */
         private List<Integer> materialFileIndexes;
+
+        /** 需要复制为信评报告附件的报告库附件 ID */
+        private List<Long> creditReportSourceAttachmentIds;
+
+        /** 需要复制为其他材料附件的报告库附件 ID */
+        private List<Long> materialSourceAttachmentIds;
     }
 }
