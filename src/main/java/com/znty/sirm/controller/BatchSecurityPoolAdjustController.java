@@ -18,8 +18,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.util.Arrays;
+
 /**
  * 证券池批量调整控制器
+ * <p>
+ * 负责批量调库目标池查询、候选证券筛选、批量调库校验及批量调库申请提交。
+ * 支持 JSON 与 multipart 两种提交方式，multipart 场景用于随申请一并上传材料附件。
+ * </p>
  */
 @RestController
 @RequestMapping("/api/v1/batchSecurityPoolAdjust")

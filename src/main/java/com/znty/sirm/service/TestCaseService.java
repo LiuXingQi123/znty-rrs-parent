@@ -74,35 +74,42 @@ public class TestCaseService {
     }
 
     /**
-     * 新增或编辑测试用例，含参数值的全量替换（先删后增）。
-     * <p>保存时快照关联规则的名称，保证规则后续改名不影响历史用例的可读性。</p>
+     * 新增测试用例，含参数值的全量保存。
      */
     @Transactional(rollbackFor = Exception.class)
-    public TestCaseDto addOrEditTestCase(TestCaseReq req) {
+    public TestCaseDto addTestCase(TestCaseReq req) {
         // 校验保存请求的必填字段（名称、关联规则）
         validateSaveReq(req);
         RuleDefinitionBo rule = ruleService.requireRule(req.getRuleId());
-        RuleTestCaseBo testCase;
-        if (req.getId() != null) {
-            // 按 ID 查询测试用例实体
-            testCase = requireCase(req.getId());
-            testCase.setCaseName(req.getName().trim());
-            testCase.setRuleId(rule.getId());
-            testCase.setRuleNameSnapshot(rule.getRuleName());
-            testCaseMapper.editCase(testCase);
-            // 全量替换测试用例的参数值（先删后增）
-            replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
-        } else {
-            testCase = new RuleTestCaseBo();
-            testCase.setCaseName(req.getName().trim());
-            testCase.setRuleId(rule.getId());
-            testCase.setRuleNameSnapshot(rule.getRuleName());
-            testCase.setLastResult(null);
-            testCase.setLastOutput(null);
-            testCaseMapper.addCase(testCase);
-            // 全量替换测试用例的参数值（先删后增）
-            replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
-        }
+        RuleTestCaseBo testCase = new RuleTestCaseBo();
+        testCase.setCaseName(req.getName().trim());
+        testCase.setRuleId(rule.getId());
+        testCase.setRuleNameSnapshot(rule.getRuleName());
+        testCase.setLastResult(null);
+        testCase.setLastOutput(null);
+        testCaseMapper.addCase(testCase);
+        // 全量替换测试用例的参数值（先删后增）
+        replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
+        // 按 ID 查询测试用例并组装为完整的 TestCaseDto
+        return detailById(testCase.getId());
+    }
+
+    /**
+     * 编辑测试用例，含参数值的全量替换（先删后增）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public TestCaseDto editTestCase(TestCaseReq req) {
+        // 校验保存请求的必填字段（名称、关联规则）
+        validateSaveReq(req);
+        RuleDefinitionBo rule = ruleService.requireRule(req.getRuleId());
+        // 按 ID 查询测试用例实体
+        RuleTestCaseBo testCase = requireCase(req.getId());
+        testCase.setCaseName(req.getName().trim());
+        testCase.setRuleId(rule.getId());
+        testCase.setRuleNameSnapshot(rule.getRuleName());
+        testCaseMapper.editCase(testCase);
+        // 全量替换测试用例的参数值（先删后增）
+        replaceCaseParams(testCase.getId(), rule.getId(), req.getParams());
         // 按 ID 查询测试用例并组装为完整的 TestCaseDto
         return detailById(testCase.getId());
     }

@@ -35,17 +35,24 @@ public class TestCaseController {
      * 分页查询测试用例列表，每条记录附带最近一次执行的结果状态（通过/失败/未执行）
      */
     @PostMapping("/queryTestCasePage")
-    public ApiResponse<PageResult<TestCaseDto>> queryTestCasePage(@RequestBody(required = false) TestCaseReq req) {
+    public ApiResponse<PageResult<TestCaseDto>> queryTestCasePage(@RequestBody TestCaseReq req) {
         return ApiResponse.success(testCaseService.queryTestCasePage(req));
     }
 
     /**
-     * 新增或编辑测试用例，含所关联规则的输入参数与期望值的全量绑定
-     * <p>req.id 为空时新增，非空时全量覆盖更新。</p>
+     * 新增测试用例，含所关联规则的输入参数与期望值的全量绑定
      */
-    @PostMapping("/addOrEditTestCase")
-    public ApiResponse<TestCaseDto> addOrEditTestCase(@RequestBody TestCaseReq req) {
-        return ApiResponse.success(testCaseService.addOrEditTestCase(req));
+    @PostMapping("/addTestCase")
+    public ApiResponse<TestCaseDto> addTestCase(@RequestBody TestCaseReq req) {
+        return ApiResponse.success(testCaseService.addTestCase(req));
+    }
+
+    /**
+     * 编辑测试用例，含所关联规则的输入参数与期望值的全量绑定
+     */
+    @PostMapping("/editTestCase")
+    public ApiResponse<TestCaseDto> editTestCase(@RequestBody TestCaseReq req) {
+        return ApiResponse.success(testCaseService.editTestCase(req));
     }
 
     /**
@@ -76,7 +83,7 @@ public class TestCaseController {
      * 批量执行所有测试用例，每个用例在独立事务中执行，单条失败不影响其他用例的执行
      */
     @PostMapping("/runAllTestCases")
-    public ApiResponse<List<TestCaseDto>> runAllTestCases(@RequestBody(required = false) TestCaseReq req) {
+    public ApiResponse<List<TestCaseDto>> runAllTestCases(@RequestBody TestCaseReq req) {
         return ApiResponse.success(testCaseService.runAllTestCases());
     }
 

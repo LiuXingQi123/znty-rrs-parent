@@ -4,7 +4,7 @@
     <!-- 我的证券池 mapper，对应表：my_security_pool（用户自选证券），提供证券收藏的添加、软删除及查询功能 -->
 
     <!-- 添加证券到我的证券池 -->
-    <insert id="addToMyPool" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addSecurityToMyPool" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO my_security_pool (security_code
                                      ,security_type
                                      ,market
@@ -24,7 +24,7 @@
     </insert>
 
     <!-- 从我的证券池移除（软删除） -->
-    <update id="deleteFromMyPool">
+    <update id="deleteSecurityFromMyPool">
         UPDATE my_security_pool
         SET status = 'del'
             ,update_time = NOW()

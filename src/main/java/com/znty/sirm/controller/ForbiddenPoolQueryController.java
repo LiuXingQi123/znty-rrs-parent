@@ -42,7 +42,7 @@ public class ForbiddenPoolQueryController {
      */
     @PostMapping("/querySecurityTypeList")
     public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList(
-            @RequestBody(required = false) ForbiddenPoolQueryReq req) {
+            @RequestBody ForbiddenPoolQueryReq req) {
         return ApiResponse.success(forbiddenPoolQueryService.querySecurityTypeList());
     }
 }

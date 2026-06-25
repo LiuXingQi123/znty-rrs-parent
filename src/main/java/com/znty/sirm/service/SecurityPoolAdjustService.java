@@ -984,7 +984,9 @@ public class SecurityPoolAdjustService {
     }
 
     /** 查询指定调库记录或同批次共用流程的步骤列表 */
-    public List<IpAdjustStepDto> queryAdjustStepList(Long adjustLogId, String adjustBatchNo) {
+    public List<IpAdjustStepDto> queryAdjustStepList(SecurityPoolAdjustReq req) {
+        Long adjustLogId = req.getAdjustLogId();
+        String adjustBatchNo = req.getAdjustBatchNo();
         if (adjustLogId == null && (adjustBatchNo == null || adjustBatchNo.isEmpty())) {
             return Collections.emptyList();
         }

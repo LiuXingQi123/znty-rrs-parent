@@ -4,6 +4,9 @@ import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.SysAttachmentMapper;
 import com.znty.sirm.model.SysAttachmentBo;
 import com.znty.sirm.model.SysAttachmentDto;
+import com.znty.sirm.model.SysAttachmentReq;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronizationAdapter;
@@ -12,12 +15,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -186,7 +185,8 @@ public class SysAttachmentService {
     }
 
     /** 按调库日志 ID 查询附件列表 */
-    public List<SysAttachmentDto> queryAttachmentList(Long adjustLogId) {
+    public List<SysAttachmentDto> queryAttachmentList(SysAttachmentReq req) {
+        Long adjustLogId = req.getAdjustLogId();
         if (adjustLogId == null) {
             throw new BizException("调库日志 ID 不能为空");
         }
@@ -194,7 +194,8 @@ public class SysAttachmentService {
     }
 
     /** 下载附件 */
-    public void downloadAttachment(Long id, HttpServletResponse response) {
+    public DownloadFile downloadAttachment(SysAttachmentReq req) {
+        Long id = req.getId();
         if (id == null) {
             throw new BizException("附件 ID 不能为空");
         }
@@ -208,23 +209,12 @@ public class SysAttachmentService {
             throw new BizException("附件文件不存在，附件 ID：" + id);
         }
 
-        response.setContentType(attachment.getContentType() == null || attachment.getContentType().isEmpty()
-                ? "application/octet-stream" : attachment.getContentType());
-        response.setContentLengthLong(attachment.getFileSize() == null
-                ? filePath.toFile().length() : attachment.getFileSize());
         try {
-            String encodedName = URLEncoder.encode(
-                    attachment.getOriginalFileName(), StandardCharsets.UTF_8.name()).replace("+", "%20");
-            response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodedName);
-            try (InputStream inputStream = Files.newInputStream(filePath);
-                 OutputStream outputStream = response.getOutputStream()) {
-                byte[] buffer = new byte[8192];
-                int length;
-                while ((length = inputStream.read(buffer)) >= 0) {
-                    outputStream.write(buffer, 0, length);
-                }
-                outputStream.flush();
-            }
+            byte[] content = Files.readAllBytes(filePath);
+            String contentType = attachment.getContentType() == null || attachment.getContentType().isEmpty()
+                    ? "application/octet-stream" : attachment.getContentType();
+            Long fileSize = attachment.getFileSize() == null ? filePath.toFile().length() : attachment.getFileSize();
+            return new DownloadFile(attachment.getOriginalFileName(), contentType, fileSize, content);
         } catch (IOException e) {
             throw new BizException("附件下载失败，附件 ID：" + id);
         }
@@ -354,6 +344,22 @@ public class SysAttachmentService {
         } catch (IOException ignored) {
             // 回滚清理失败时保留文件，便于人工排查
         }
+    }
+
+    /**
+     * 附件下载文件内容。
+     */
+    @Getter
+    @AllArgsConstructor
+    public static class DownloadFile {
+        /** 原始文件名 */
+        private final String originalFileName;
+        /** MIME 类型 */
+        private final String contentType;
+        /** 文件大小 */
+        private final Long fileSize;
+        /** 文件内容 */
+        private final byte[] content;
     }
 
     /**

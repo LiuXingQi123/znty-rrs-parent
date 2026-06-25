@@ -27,7 +27,7 @@ public class ReportController {
      * 分页查询内部报告列表
      */
     @PostMapping("/queryInReportPage")
-    public ApiResponse<PageResult<ReportDto>> queryInReportPage(@RequestBody(required = false) ReportReq req) {
+    public ApiResponse<PageResult<ReportDto>> queryInReportPage(@RequestBody ReportReq req) {
         return ApiResponse.success(reportService.queryInReportPage(req));
     }
 
@@ -35,7 +35,7 @@ public class ReportController {
      * 分页查询外部报告列表
      */
     @PostMapping("/queryOutReportPage")
-    public ApiResponse<PageResult<ReportDto>> queryOutReportPage(@RequestBody(required = false) ReportReq req) {
+    public ApiResponse<PageResult<ReportDto>> queryOutReportPage(@RequestBody ReportReq req) {
         return ApiResponse.success(reportService.queryOutReportPage(req));
     }
 }

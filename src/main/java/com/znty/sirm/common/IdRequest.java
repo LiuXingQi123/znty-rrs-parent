@@ -7,5 +7,6 @@ import lombok.Data;
  */
 @Data
 public class IdRequest {
-    private Long id; // 目标记录的主键 ID
+    /** 目标记录的主键 ID */
+    private Long id;
 }

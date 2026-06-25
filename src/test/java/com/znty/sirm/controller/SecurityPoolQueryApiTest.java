@@ -29,15 +29,15 @@ public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldSupportSecurityPoolQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityPoolPage", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityTypeList");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityStatusList");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityTypeList", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityStatusList", "{}");
     }
 
     /** 验证 shouldSupportMyPoolFavorites 测试场景。 */
     @Test
     public void shouldSupportMyPoolFavorites() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/addToMyPool", "{\"userId\":\"1001\",\"securityCode\":\"100001\"}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/deleteFromMyPool", "{\"userId\":\"1001\",\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/addSecurityToMyPool", "{\"userId\":\"1001\",\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/deleteSecurityFromMyPool", "{\"userId\":\"1001\",\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/queryFavoritedCodeList", "{\"userId\":\"1001\"}");
     }
 }

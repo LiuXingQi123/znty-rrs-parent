@@ -40,7 +40,7 @@ public class RuleController {
      * 分页查询规则列表，支持按规则名称关键字和启用状态筛选
      */
     @PostMapping("/queryRulePage")
-    public ApiResponse<PageResult<RuleDto>> queryRulePage(@RequestBody(required = false) RuleReq req) {
+    public ApiResponse<PageResult<RuleDto>> queryRulePage(@RequestBody RuleReq req) {
         return ApiResponse.success(ruleService.queryRulePage(req));
     }
 
@@ -53,12 +53,19 @@ public class RuleController {
     }
 
     /**
-     * 新增或编辑规则，对规则基础信息、QLExpress 脚本及参数定义做全量覆盖保存
-     * <p>req.id 为空时新增，非空时更新。</p>
+     * 新增规则，对规则基础信息、QLExpress 脚本及参数定义做全量保存
      */
-    @PostMapping("/addOrEditRule")
-    public ApiResponse<RuleDto> addOrEditRule(@RequestBody RuleReq req) {
-        return ApiResponse.success(ruleService.addOrEditRule(req));
+    @PostMapping("/addRule")
+    public ApiResponse<RuleDto> addRule(@RequestBody RuleReq req) {
+        return ApiResponse.success(ruleService.addRule(req));
+    }
+
+    /**
+     * 编辑规则，对规则基础信息、QLExpress 脚本及参数定义做全量覆盖保存
+     */
+    @PostMapping("/editRule")
+    public ApiResponse<RuleDto> editRule(@RequestBody RuleReq req) {
+        return ApiResponse.success(ruleService.editRule(req));
     }
 
     /**
@@ -83,7 +90,7 @@ public class RuleController {
      * 临时执行规则：按规则 ID 和传入的参数值调用 QLExpress 引擎运行规则脚本，
      * 返回执行结果和每一步的日志明细，执行记录同时持久化到历史表
      */
-    @PostMapping("/ruleRuns/executeRule")
+    @PostMapping("/executeRule")
     public ApiResponse<RuleRunResultDto> executeRule(@RequestBody RuleReq req) {
         return ApiResponse.success(ruleService.executeRule(req));
     }
@@ -94,7 +101,7 @@ public class RuleController {
      * 查询所有启用状态的规则分类列表，用于规则编辑时选择所属分类
      */
     @PostMapping("/options/queryCategoryList")
-    public ApiResponse<List<CategoryDto>> queryCategoryList(@RequestBody(required = false) RuleReq req) {
+    public ApiResponse<List<CategoryDto>> queryCategoryList(@RequestBody RuleReq req) {
         return ApiResponse.success(ruleService.queryCategoryList());
     }
 
@@ -102,7 +109,7 @@ public class RuleController {
      * 查询所有启用状态的预设选项集及其子选项，用于规则参数类型为枚举时绑定可选值
      */
     @PostMapping("/options/queryPresetSetList")
-    public ApiResponse<List<PresetSetDto>> queryPresetSetList(@RequestBody(required = false) RuleReq req) {
+    public ApiResponse<List<PresetSetDto>> queryPresetSetList(@RequestBody RuleReq req) {
         return ApiResponse.success(ruleService.queryPresetSetList());
     }
 }

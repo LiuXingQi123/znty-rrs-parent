@@ -44,7 +44,7 @@ public class AdjustHistoryController {
      */
     @PostMapping("/querySecurityTypeList")
     public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList(
-            @RequestBody(required = false) AdjustHistoryReq req) {
+            @RequestBody AdjustHistoryReq req) {
         return ApiResponse.success(adjustHistoryService.querySecurityTypeList());
     }
 

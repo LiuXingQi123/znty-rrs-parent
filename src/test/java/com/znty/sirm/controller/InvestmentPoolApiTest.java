@@ -57,7 +57,7 @@ public class InvestmentPoolApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/queryRoleList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/queryUserList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/flows/queryFlowList", "{\"status\":\"active\"}");
-        assertPostSuccess(mockMvc, "/api/v1/rules/options/queryCategoryList");
+        assertPostSuccess(mockMvc, "/api/v1/rules/options/queryCategoryList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/rules/queryRulePage", "{\"status\":\"active\"}");
     }
 }

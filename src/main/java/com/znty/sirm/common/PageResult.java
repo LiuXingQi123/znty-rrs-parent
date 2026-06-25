@@ -13,8 +13,12 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PageResult<T> {
-    private List<T> records;  // 当前页的数据列表
-    private long total;       // 满足条件的总记录数，用于前端计算总页数
-    private int pageIndex;    // 当前页码（从 1 开始）
-    private int pageSize;     // 每页条数
+    /** 当前页的数据列表 */
+    private List<T> records;
+    /** 满足条件的总记录数，用于前端计算总页数 */
+    private long total;
+    /** 当前页码（从 1 开始） */
+    private int pageIndex;
+    /** 每页条数 */
+    private int pageSize;
 }

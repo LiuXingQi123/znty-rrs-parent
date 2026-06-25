@@ -90,37 +90,43 @@ public class RuleService {
     }
 
     /**
-     * 新增或编辑规则，含参数和选项的全量替换（先删后增）。
-     * <p>新增时默认状态为 active，编辑时保持原状态不变。</p>
+     * 新增规则，含参数和选项的全量保存。
      */
     @Transactional(rollbackFor = Exception.class)
-    public RuleDto addOrEditRule(RuleReq req) {
+    public RuleDto addRule(RuleReq req) {
         // 校验保存请求的必填字段（名称、脚本）
         validateSaveReq(req);
-        RuleDefinitionBo rule;
-        if (req.getId() != null) {
-            rule = requireRule(req.getId());
-            rule.setRuleName(req.getName().trim());
-            rule.setDescription(req.getDescription());
-            // 填充字符串默认值
-            rule.setCategoryCode(defaultText(req.getCategory(), "business"));
-            rule.setScript(req.getScript());
-            ruleMapper.editRule(rule);
-            // 全量替换规则的参数和选项（先删后增）
-            replaceParams(rule.getId(), req.getParamList());
-        } else {
-            rule = new RuleDefinitionBo();
-            rule.setRuleName(req.getName().trim());
-            rule.setDescription(req.getDescription());
-            // 填充字符串默认值
-            rule.setCategoryCode(defaultText(req.getCategory(), "business"));
-            rule.setScript(req.getScript());
-            rule.setStatus("active");
-            rule.setDeletedFlag(0);
-            ruleMapper.addRule(rule);
-            // 全量替换规则的参数和选项（先删后增）
-            replaceParams(rule.getId(), req.getParamList());
-        }
+        RuleDefinitionBo rule = new RuleDefinitionBo();
+        rule.setRuleName(req.getName().trim());
+        rule.setDescription(req.getDescription());
+        // 填充字符串默认值
+        rule.setCategoryCode(defaultText(req.getCategory(), "business"));
+        rule.setScript(req.getScript());
+        rule.setStatus("active");
+        rule.setDeletedFlag(0);
+        ruleMapper.addRule(rule);
+        // 全量替换规则的参数和选项（先删后增）
+        replaceParams(rule.getId(), req.getParamList());
+        // 按 ID 查询规则并组装为完整的 RuleDto
+        return detailById(rule.getId());
+    }
+
+    /**
+     * 编辑规则，含参数和选项的全量替换（先删后增）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public RuleDto editRule(RuleReq req) {
+        // 校验保存请求的必填字段（名称、脚本）
+        validateSaveReq(req);
+        RuleDefinitionBo rule = requireRule(req.getId());
+        rule.setRuleName(req.getName().trim());
+        rule.setDescription(req.getDescription());
+        // 填充字符串默认值
+        rule.setCategoryCode(defaultText(req.getCategory(), "business"));
+        rule.setScript(req.getScript());
+        ruleMapper.editRule(rule);
+        // 全量替换规则的参数和选项（先删后增）
+        replaceParams(rule.getId(), req.getParamList());
         // 按 ID 查询规则并组装为完整的 RuleDto
         return detailById(rule.getId());
     }

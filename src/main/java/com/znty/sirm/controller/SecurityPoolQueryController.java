@@ -44,7 +44,7 @@ public class SecurityPoolQueryController {
      */
     @PostMapping("/querySecurityTypeList")
     public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList(
-            @RequestBody(required = false) SecurityPoolQueryReq req) {
+            @RequestBody SecurityPoolQueryReq req) {
         return ApiResponse.success(securityPoolQueryService.querySecurityTypeList());
     }
 
@@ -53,24 +53,24 @@ public class SecurityPoolQueryController {
      */
     @PostMapping("/querySecurityStatusList")
     public ApiResponse<List<String>> querySecurityStatusList(
-            @RequestBody(required = false) SecurityPoolQueryReq req) {
+            @RequestBody SecurityPoolQueryReq req) {
         return ApiResponse.success(securityPoolQueryService.querySecurityStatusList());
     }
 
     /**
      * 将指定证券添加到当前用户的个人收藏池（我的证券池）
      */
-    @PostMapping("/addToMyPool")
-    public ApiResponse<MySecurityPoolBo> addToMyPool(@RequestBody MySecurityPoolReq req) {
-        return ApiResponse.success(securityPoolQueryService.addToMyPool(req));
+    @PostMapping("/addSecurityToMyPool")
+    public ApiResponse<MySecurityPoolBo> addSecurityToMyPool(@RequestBody MySecurityPoolReq req) {
+        return ApiResponse.success(securityPoolQueryService.addSecurityToMyPool(req));
     }
 
     /**
      * 将指定证券从当前用户的个人收藏池中移除
      */
-    @PostMapping("/deleteFromMyPool")
-    public ApiResponse<MySecurityPoolBo> deleteFromMyPool(@RequestBody MySecurityPoolReq req) {
-        return ApiResponse.success(securityPoolQueryService.deleteFromMyPool(req));
+    @PostMapping("/deleteSecurityFromMyPool")
+    public ApiResponse<MySecurityPoolBo> deleteSecurityFromMyPool(@RequestBody MySecurityPoolReq req) {
+        return ApiResponse.success(securityPoolQueryService.deleteSecurityFromMyPool(req));
     }
 
     /**
@@ -78,6 +78,6 @@ public class SecurityPoolQueryController {
      */
     @PostMapping("/queryFavoritedCodeList")
     public ApiResponse<List<String>> queryFavoritedCodeList(@RequestBody MySecurityPoolReq req) {
-        return ApiResponse.success(securityPoolQueryService.queryFavoritedCodeList(req.getUserId()));
+        return ApiResponse.success(securityPoolQueryService.queryFavoritedCodeList(req));
     }
 }

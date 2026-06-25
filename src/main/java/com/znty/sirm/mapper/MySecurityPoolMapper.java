@@ -15,12 +15,12 @@ public interface MySecurityPoolMapper {
     /**
      * 添加证券到我的证券池（已存在则更新状态为 use）
      */
-    int addToMyPool(MySecurityPoolBo bo);
+    int addSecurityToMyPool(MySecurityPoolBo bo);
 
     /**
      * 从我的证券池移除（软删除，状态改为 del）
      */
-    int deleteFromMyPool(@Param("userId") String userId, @Param("securityCode") String securityCode);
+    int deleteSecurityFromMyPool(@Param("userId") String userId, @Param("securityCode") String securityCode);
 
     /**
      * 查询用户某证券的收藏记录（状态为 use）

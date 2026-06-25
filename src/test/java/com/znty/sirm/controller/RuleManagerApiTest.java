@@ -33,17 +33,18 @@ public class RuleManagerApiTest extends ControllerApiTestSupport {
     public void shouldSupportRuleLifecycle() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/rules/queryRulePage", "{}");
         assertPostSuccess(mockMvc, "/api/v1/rules/queryRuleDetail", "{\"id\":1}");
-        assertPostSuccess(mockMvc, "/api/v1/rules/addOrEditRule", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/rules/addRule", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/rules/editRule", "{\"id\":1}");
         assertPostSuccess(mockMvc, "/api/v1/rules/editRuleStatus", "{\"id\":1,\"status\":\"active\"}");
         assertPostSuccess(mockMvc, "/api/v1/rules/deleteRule", "{\"id\":1}");
-        assertPostSuccess(mockMvc, "/api/v1/rules/ruleRuns/executeRule", "{\"id\":1}");
+        assertPostSuccess(mockMvc, "/api/v1/rules/executeRule", "{\"id\":1}");
     }
 
     /** 验证 shouldSupportRuleOptions 测试场景。 */
     @Test
     public void shouldSupportRuleOptions() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/rules/options/queryCategoryList");
-        assertPostSuccess(mockMvc, "/api/v1/rules/options/queryPresetSetList");
+        assertPostSuccess(mockMvc, "/api/v1/rules/options/queryCategoryList", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/rules/options/queryPresetSetList", "{}");
     }
 
     /** 验证 shouldSupportTestCaseRegressionFlow 测试场景。 */
@@ -51,11 +52,12 @@ public class RuleManagerApiTest extends ControllerApiTestSupport {
     public void shouldSupportTestCaseRegressionFlow() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/testCases/queryTestCasePage",
                 "{\"keyword\":\"评级\",\"result\":\"pass\",\"pageIndex\":1,\"pageSize\":20}");
-        assertPostSuccess(mockMvc, "/api/v1/testCases/addOrEditTestCase", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/testCases/addTestCase", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/testCases/editTestCase", "{\"id\":1}");
         assertPostSuccess(mockMvc, "/api/v1/testCases/editTestCaseName", "{\"id\":1,\"name\":\"回归用例\"}");
         assertPostSuccess(mockMvc, "/api/v1/testCases/deleteTestCase", "{\"id\":1}");
         assertPostSuccess(mockMvc, "/api/v1/testCases/runTestCase", "{\"id\":1}");
-        assertPostSuccess(mockMvc, "/api/v1/testCases/runAllTestCases");
+        assertPostSuccess(mockMvc, "/api/v1/testCases/runAllTestCases", "{}");
         assertPostSuccess(mockMvc, "/api/v1/testCases/queryRunHistoryList", "{\"id\":1}");
     }
 }

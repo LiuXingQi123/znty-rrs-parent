@@ -74,7 +74,7 @@ public class SecurityPoolQueryService {
     }
 
     /** 添加证券到我的证券池（幂等：若已收藏则直接返回已有记录，不重复插入） */
-    public MySecurityPoolBo addToMyPool(MySecurityPoolReq req) {
+    public MySecurityPoolBo addSecurityToMyPool(MySecurityPoolReq req) {
         // 先查询是否已收藏，避免重复写入
         MySecurityPoolBo existing = mySecurityPoolMapper.queryByUserAndCode(req.getUserId(), req.getSecurityCode());
         if (existing != null) {
@@ -85,23 +85,23 @@ public class SecurityPoolQueryService {
         bo.setSecurityType(req.getSecurityType());
         bo.setMarket(req.getMarket());
         bo.setUserId(req.getUserId());
-        mySecurityPoolMapper.addToMyPool(bo);
+        mySecurityPoolMapper.addSecurityToMyPool(bo);
         return bo;
     }
 
     /** 从我的证券池移除（证券不在收藏中时静默返回 null，不抛异常） */
-    public MySecurityPoolBo deleteFromMyPool(MySecurityPoolReq req) {
+    public MySecurityPoolBo deleteSecurityFromMyPool(MySecurityPoolReq req) {
         // 删除前查询确认存在，并保留记录用于返回给前端展示
         MySecurityPoolBo existing = mySecurityPoolMapper.queryByUserAndCode(req.getUserId(), req.getSecurityCode());
         if (existing != null) {
-            mySecurityPoolMapper.deleteFromMyPool(req.getUserId(), req.getSecurityCode());
+            mySecurityPoolMapper.deleteSecurityFromMyPool(req.getUserId(), req.getSecurityCode());
         }
         return existing;
     }
 
     /** 批量查询用户已收藏的证券代码 */
-    public List<String> queryFavoritedCodeList(String userId) {
-        return mySecurityPoolMapper.queryFavoritedCodeList(userId);
+    public List<String> queryFavoritedCodeList(MySecurityPoolReq req) {
+        return mySecurityPoolMapper.queryFavoritedCodeList(req.getUserId());
     }
 
 }

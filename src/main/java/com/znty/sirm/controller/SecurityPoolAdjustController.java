@@ -115,6 +115,6 @@ public class SecurityPoolAdjustController {
      */
     @PostMapping("/queryAdjustStepList")
     public ApiResponse<List<IpAdjustStepDto>> queryAdjustStepList(@RequestBody SecurityPoolAdjustReq req) {
-        return ApiResponse.success(securityPoolAdjustService.queryAdjustStepList(req.getAdjustLogId(), req.getAdjustBatchNo()));
+        return ApiResponse.success(securityPoolAdjustService.queryAdjustStepList(req));
     }
 }
