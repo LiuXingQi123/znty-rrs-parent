@@ -211,18 +211,18 @@ public class SecurityPoolAdjustFlowService {
             sysAttachmentService.deleteAdjustLogAttachments(change.getAdjustLogId(), change.getDeleteAttachmentIds());
             // 绑定本地上传的信评报告附件
             sysAttachmentService.bindAttachments(change.getAdjustLogId(), change.getCreditReportFileIndexes(),
-                    SysAttachmentService.CATEGORY_CREDIT_REPORT, submissionFiles);
+                    SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, submissionFiles);
             // 绑定本地上传的其他材料附件
             sysAttachmentService.bindAttachments(change.getAdjustLogId(), change.getMaterialFileIndexes(),
-                    SysAttachmentService.CATEGORY_MATERIAL, submissionFiles);
+                    SysAttachmentService.CATEGORY_MATERIAL_HAND, submissionFiles);
             // 复制报告库附件为信评报告附件
             sysAttachmentService.copyReportAttachments(change.getAdjustLogId(),
                     change.getCreditReportSourceAttachmentIds(),
-                    SysAttachmentService.CATEGORY_CREDIT_REPORT, req.getHandlerId());
+                    SysAttachmentService.PURPOSE_CREDIT_REPORT, req.getHandlerId());
             // 复制报告库附件为其他材料附件
             sysAttachmentService.copyReportAttachments(change.getAdjustLogId(),
                     change.getMaterialSourceAttachmentIds(),
-                    SysAttachmentService.CATEGORY_MATERIAL, req.getHandlerId());
+                    SysAttachmentService.PURPOSE_MATERIAL, req.getHandlerId());
         }
     }
 
@@ -452,14 +452,14 @@ public class SecurityPoolAdjustFlowService {
                 securityPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
             }
         }
-        // 审批通过结束后，将手动上传的信评报告沉淀为内部报告
+        // 审批通过结束后，将手工上传的信评报告沉淀为内部报告
         generateInternalReportsOnFinish(logList);
     }
 
     /**
-     * 审批通过结束后，逐条调库记录将手动上传的信评报告附件沉淀为内部报告库记录。
-     * 每条调库记录生成 1 条 sirm_report_in，其下所有手动上传信评报告附件复制为该报告的 report_file 附件。
-     * 无手动上传信评报告附件的调库记录跳过。
+     * 审批通过结束后，逐条调库记录将手工上传的信评报告附件沉淀为内部报告库记录。
+     * 每条调库记录生成 1 条 sirm_report_in，其下所有手工上传信评报告附件复制为该报告的 report_in 附件。
+     * 无手工上传信评报告附件的调库记录跳过。
      *
      * @param logList 同批次调库记录列表
      */
@@ -470,9 +470,9 @@ public class SecurityPoolAdjustFlowService {
         // 整批只查一次投资池全路径映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         for (IpAdjustLogBo log : logList) {
-            // 查询该调库记录下手动上传的信评报告附件
-            List<SysAttachmentBo> manualAttachments = sysAttachmentService.queryManualCreditReportAttachments(log.getId());
-            if (manualAttachments == null || manualAttachments.isEmpty()) {
+            // 查询该调库记录下手工上传的信评报告附件
+            List<SysAttachmentBo> handAttachments = sysAttachmentService.queryHandCreditReportAttachments(log.getId());
+            if (handAttachments == null || handAttachments.isEmpty()) {
                 continue;
             }
             // 查询证券基础信息，取证券全称与主体编码
@@ -498,8 +498,8 @@ public class SecurityPoolAdjustFlowService {
             reportInBo.setDataSource("uploaded");
             // 写入内部报告并回填主键 ID
             Long reportId = reportService.addInReport(reportInBo);
-            // 将手动上传信评报告附件复制为该内部报告的附件
-            sysAttachmentService.bindReportFileAttachments(reportId, manualAttachments);
+            // 将手工上传信评报告附件复制为该内部报告的附件
+            sysAttachmentService.bindReportFileAttachments(reportId, handAttachments);
         }
     }
 

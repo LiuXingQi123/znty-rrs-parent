@@ -208,13 +208,13 @@ public class SecurityPoolAdjustFlowServiceTest {
 
         verify(attachmentService).deleteAdjustLogAttachments(1L, Collections.singletonList(9L));
         verify(attachmentService).bindAttachments(1L, Collections.singletonList(0),
-                SysAttachmentService.CATEGORY_CREDIT_REPORT, null);
+                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, null);
         verify(attachmentService).bindAttachments(1L, Collections.singletonList(1),
-                SysAttachmentService.CATEGORY_MATERIAL, null);
+                SysAttachmentService.CATEGORY_MATERIAL_HAND, null);
         verify(attachmentService).copyReportAttachments(1L, Collections.singletonList(7L),
-                SysAttachmentService.CATEGORY_CREDIT_REPORT, "1");
+                SysAttachmentService.PURPOSE_CREDIT_REPORT, "1");
         verify(attachmentService).copyReportAttachments(1L, Collections.singletonList(8L),
-                SysAttachmentService.CATEGORY_MATERIAL, "1");
+                SysAttachmentService.PURPOSE_MATERIAL, "1");
         verify(mapper).editAdjustStepProcess(10L, "submit", "submit", "已修改");
     }
 

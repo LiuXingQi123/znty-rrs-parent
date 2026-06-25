@@ -2584,10 +2584,10 @@ public class SecurityPoolAdjustService {
                                        SysAttachmentService.SubmissionFiles submissionFiles) {
         // 绑定信评报告附件
         sysAttachmentService.bindAttachments(adjustLogId, item.getCreditReportFileIndexes(),
-                SysAttachmentService.CATEGORY_CREDIT_REPORT, submissionFiles);
+                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, submissionFiles);
         // 绑定其他材料附件
         sysAttachmentService.bindAttachments(adjustLogId, item.getMaterialFileIndexes(),
-                SysAttachmentService.CATEGORY_MATERIAL, submissionFiles);
+                SysAttachmentService.CATEGORY_MATERIAL_HAND, submissionFiles);
     }
 
     /**

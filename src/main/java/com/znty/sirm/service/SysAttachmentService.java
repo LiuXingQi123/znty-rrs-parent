@@ -42,14 +42,35 @@ public class SysAttachmentService {
     /** 调库日志表名称 */
     private static final String ADJUST_LOG_TABLE = "ip_adjust_log";
 
-    /** 信评报告附件分类 */
-    public static final String CATEGORY_CREDIT_REPORT = "credit_report";
+    /** 信评报告用途 */
+    public static final String PURPOSE_CREDIT_REPORT = "credit_report";
 
-    /** 其他材料附件分类 */
-    public static final String CATEGORY_MATERIAL = "material";
+    /** 其他材料用途 */
+    public static final String PURPOSE_MATERIAL = "material";
 
-    /** 报告库文件分类 */
-    private static final String CATEGORY_REPORT_FILE = "report_file";
+    /** 手工上传信评报告分类 */
+    public static final String CATEGORY_CREDIT_REPORT_HAND = "credit_report_hand";
+
+    /** 内部报告库信评报告分类 */
+    public static final String CATEGORY_CREDIT_REPORT_IN = "credit_report_in";
+
+    /** 外部报告库信评报告分类 */
+    public static final String CATEGORY_CREDIT_REPORT_OUT = "credit_report_out";
+
+    /** 手工上传其他材料分类 */
+    public static final String CATEGORY_MATERIAL_HAND = "material_hand";
+
+    /** 内部报告库其他材料分类 */
+    public static final String CATEGORY_MATERIAL_IN = "material_in";
+
+    /** 外部报告库其他材料分类 */
+    public static final String CATEGORY_MATERIAL_OUT = "material_out";
+
+    /** 内部报告库附件分类 */
+    private static final String CATEGORY_REPORT_IN = "report_in";
+
+    /** 外部报告库附件分类 */
+    private static final String CATEGORY_REPORT_OUT = "report_out";
 
     /** 支持的文件扩展名 */
     private static final Set<String> ALLOWED_FILE_TYPES =
@@ -123,7 +144,7 @@ public class SysAttachmentService {
     }
 
     /** 将报告库附件复制绑定到调库日志 */
-    public void copyReportAttachments(Long adjustLogId, List<Long> sourceAttachmentIds, String attachmentCategory,
+    public void copyReportAttachments(Long adjustLogId, List<Long> sourceAttachmentIds, String attachmentPurpose,
                                       String uploaderId) {
         if (sourceAttachmentIds == null || sourceAttachmentIds.isEmpty()) {
             return;
@@ -131,7 +152,7 @@ public class SysAttachmentService {
         if (adjustLogId == null) {
             throw new BizException("复制报告附件失败：调库日志 ID 不能为空");
         }
-        if (!CATEGORY_CREDIT_REPORT.equals(attachmentCategory) && !CATEGORY_MATERIAL.equals(attachmentCategory)) {
+        if (!PURPOSE_CREDIT_REPORT.equals(attachmentPurpose) && !PURPOSE_MATERIAL.equals(attachmentPurpose)) {
             throw new BizException("复制报告附件失败：附件分类不合法");
         }
         List<Long> distinctIds = new ArrayList<>(new LinkedHashSet<>(sourceAttachmentIds));
@@ -142,6 +163,7 @@ public class SysAttachmentService {
         }
         for (SysAttachmentBo source : sourceAttachments) {
             validateReportSourceAttachment(source);
+            String attachmentCategory = resolveAdjustLogReportCategory(source, attachmentPurpose);
             SysAttachmentBo bo = new SysAttachmentBo();
             bo.setTableName(ADJUST_LOG_TABLE);
             bo.setMainId(adjustLogId);
@@ -194,24 +216,23 @@ public class SysAttachmentService {
     }
 
     /**
-     * 查询指定调库记录下手动上传的信评报告附件。
-     * 手动上传附件 new_file_name 以 credit_report_ 开头，从报告库复制的附件继承源报告 report_file_ 前缀。
+     * 查询指定调库记录下手工上传的信评报告附件。
      *
      * @param adjustLogId 调库日志 ID
      */
-    public List<SysAttachmentBo> queryManualCreditReportAttachments(Long adjustLogId) {
+    public List<SysAttachmentBo> queryHandCreditReportAttachments(Long adjustLogId) {
         if (adjustLogId == null) {
             throw new BizException("调库日志 ID 不能为空");
         }
-        return sysAttachmentMapper.queryManualCreditReportAttachments(adjustLogId);
+        return sysAttachmentMapper.queryHandCreditReportAttachments(adjustLogId);
     }
 
     /**
-     * 将手动上传的信评报告附件复制为内部报告库附件（table_name=sirm_report_in，attachment_category=report_file）。
+     * 将手工上传的信评报告附件复制为内部报告库附件（table_name=sirm_report_in，attachment_category=report_in）。
      * 物理文件信息原样复用，使报告库附件指向同一物理文件、可下载。
      *
      * @param reportId 内部报告 ID
-     * @param sources  待复制的手动上传信评报告附件列表
+     * @param sources  待复制的手工上传信评报告附件列表
      */
     public void bindReportFileAttachments(Long reportId, List<SysAttachmentBo> sources) {
         if (sources == null || sources.isEmpty()) {
@@ -224,7 +245,7 @@ public class SysAttachmentService {
             SysAttachmentBo bo = new SysAttachmentBo();
             bo.setTableName("sirm_report_in");
             bo.setMainId(reportId);
-            bo.setAttachmentCategory(CATEGORY_REPORT_FILE);
+            bo.setAttachmentCategory(CATEGORY_REPORT_IN);
             bo.setFileType(source.getFileType());
             bo.setOriginalFileName(source.getOriginalFileName());
             bo.setNewFileName(source.getNewFileName());
@@ -279,10 +300,22 @@ public class SysAttachmentService {
     /** 校验复制来源必须为报告库附件 */
     private void validateReportSourceAttachment(SysAttachmentBo attachment) {
         String tableName = attachment.getTableName();
-        if (!("sirm_report_in".equals(tableName) || "sirm_report_out".equals(tableName))
-                || !CATEGORY_REPORT_FILE.equals(attachment.getAttachmentCategory())) {
+        boolean inReport = "sirm_report_in".equals(tableName)
+                && CATEGORY_REPORT_IN.equals(attachment.getAttachmentCategory());
+        boolean outReport = "sirm_report_out".equals(tableName)
+                && CATEGORY_REPORT_OUT.equals(attachment.getAttachmentCategory());
+        if (!inReport && !outReport) {
             throw new BizException("复制报告附件失败：附件不是报告库文件，附件 ID：" + attachment.getId());
         }
+    }
+
+    /** 根据报告库来源和调库附件用途解析落库分类 */
+    private String resolveAdjustLogReportCategory(SysAttachmentBo source, String attachmentPurpose) {
+        boolean inReport = "sirm_report_in".equals(source.getTableName());
+        if (PURPOSE_CREDIT_REPORT.equals(attachmentPurpose)) {
+            return inReport ? CATEGORY_CREDIT_REPORT_IN : CATEGORY_CREDIT_REPORT_OUT;
+        }
+        return inReport ? CATEGORY_MATERIAL_IN : CATEGORY_MATERIAL_OUT;
     }
 
     /** 解析并校验文件类型 */

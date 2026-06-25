@@ -84,7 +84,7 @@
                ,full_url
         FROM sys_attachment
         WHERE table_name = 'sirm_report_in'
-          AND attachment_category = 'report_file'
+          AND attachment_category = 'report_in'
           AND is_deleted = 0
           AND main_id IN
         <foreach collection="reportIds" item="reportId" open="(" separator="," close=")">
@@ -106,7 +106,7 @@
                ,full_url
         FROM sys_attachment
         WHERE table_name = 'sirm_report_out'
-          AND attachment_category = 'report_file'
+          AND attachment_category = 'report_out'
           AND is_deleted = 0
           AND main_id IN
         <foreach collection="reportIds" item="reportId" open="(" separator="," close=")">
