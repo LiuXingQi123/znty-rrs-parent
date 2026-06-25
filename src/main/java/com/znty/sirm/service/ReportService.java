@@ -6,10 +6,15 @@ import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.ReportMapper;
 import com.znty.sirm.model.ReportDto;
 import com.znty.sirm.model.ReportReq;
+import com.znty.sirm.model.SysAttachmentDto;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 报告库查询服务
@@ -17,31 +22,61 @@ import java.util.List;
 @Service
 public class ReportService {
 
-    /** 报告库数据访问组件 */
     @Resource
     private ReportMapper reportMapper;
 
     /** 分页查询内部报告库列表 */
     public PageResult<ReportDto> queryInReportPage(ReportReq req) {
-        if (req == null) {
-            req = new ReportReq();
-        }
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ReportDto> list = reportMapper.queryInReportPage(req);
+        fillReportAttachments(list, true);
         PageInfo<ReportDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
     /** 分页查询外部报告库列表 */
     public PageResult<ReportDto> queryOutReportPage(ReportReq req) {
-        if (req == null) {
-            req = new ReportReq();
-        }
-        // 开启分页查询
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ReportDto> list = reportMapper.queryOutReportPage(req);
+        fillReportAttachments(list, false);
         PageInfo<ReportDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /** 回填报告附件列表 */
+    private void fillReportAttachments(List<ReportDto> list, boolean internal) {
+        if (list.isEmpty()) {
+            return;
+        }
+        List<Long> reportIds = new ArrayList<>();
+        for (ReportDto report : list) {
+            report.setAttachments(Collections.<SysAttachmentDto>emptyList());
+            if (report.getId() != null) {
+                reportIds.add(report.getId());
+            }
+        }
+        if (reportIds.isEmpty()) {
+            return;
+        }
+        List<SysAttachmentDto> attachments = internal
+                ? reportMapper.queryInReportAttachmentList(reportIds)
+                : reportMapper.queryOutReportAttachmentList(reportIds);
+        Map<Long, List<SysAttachmentDto>> attachmentMap = new HashMap<>();
+        for (SysAttachmentDto attachment : attachments) {
+            Long mainId = attachment.getMainId();
+            if (mainId == null) {
+                continue;
+            }
+            if (!attachmentMap.containsKey(mainId)) {
+                attachmentMap.put(mainId, new ArrayList<SysAttachmentDto>());
+            }
+            attachmentMap.get(mainId).add(attachment);
+        }
+        for (ReportDto report : list) {
+            List<SysAttachmentDto> reportAttachments = attachmentMap.get(report.getId());
+            if (reportAttachments != null) {
+                report.setAttachments(reportAttachments);
+            }
+        }
     }
 }

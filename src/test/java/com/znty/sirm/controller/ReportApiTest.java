@@ -3,6 +3,7 @@ package com.znty.sirm.controller;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.ReportDto;
 import com.znty.sirm.model.ReportReq;
+import com.znty.sirm.model.SysAttachmentDto;
 import com.znty.sirm.service.ReportService;
 import org.junit.Before;
 import org.junit.Test;
@@ -11,6 +12,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,6 +20,8 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * 报告库查询接口测试
@@ -85,5 +89,25 @@ public class ReportApiTest extends ControllerApiTestSupport {
         assertThat(req.getReportType()).isEqualTo("stock_out_report");
         assertThat(req.getCrteTimeStart()).isEqualTo("2026-06-01");
         assertThat(req.getCrteTimeEnd()).isEqualTo("2026-06-30");
+    }
+
+    /** 验证报告分页接口返回附件列表 */
+    @Test
+    public void shouldReturnReportAttachments() throws Exception {
+        ReportDto report = new ReportDto();
+        report.setId(1L);
+        SysAttachmentDto attachment = new SysAttachmentDto();
+        attachment.setId(10L);
+        attachment.setMainId(1L);
+        attachment.setOriginalFileName("报告附件.pdf");
+        report.setAttachments(Arrays.asList(attachment));
+        when(reportService.queryInReportPage(any(ReportReq.class)))
+                .thenReturn(new PageResult<ReportDto>(Arrays.asList(report), 1, 1, 20));
+
+        postJson(mockMvc, "/api/v1/reports/queryInReportPage", "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.records[0].attachments[0].mainId").value(1))
+                .andExpect(jsonPath("$.data.records[0].attachments[0].originalFileName").value("报告附件.pdf"));
     }
 }

@@ -3,6 +3,7 @@ package com.znty.sirm.model;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
+import java.util.List;
 import java.util.Date;
 
 /**
@@ -41,4 +42,7 @@ public class ReportDto {
     /** 创建时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date crteTime;
+
+    /** 报告附件列表 */
+    private List<SysAttachmentDto> attachments;
 }

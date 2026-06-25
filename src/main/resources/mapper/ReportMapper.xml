@@ -71,4 +71,48 @@
         ORDER BY crte_time DESC
                  ,id DESC
     </select>
+
+    <!-- 按内部报告 ID 批量查询报告附件 -->
+    <select id="queryInReportAttachmentList" resultType="com.znty.sirm.model.SysAttachmentDto">
+        SELECT id
+               ,main_id
+               ,attachment_category
+               ,original_file_name
+               ,file_type
+               ,file_size
+               ,content_type
+               ,full_url
+        FROM sys_attachment
+        WHERE table_name = 'sirm_report_in'
+          AND attachment_category = 'report_file'
+          AND is_deleted = 0
+          AND main_id IN
+        <foreach collection="reportIds" item="reportId" open="(" separator="," close=")">
+            #{reportId}
+        </foreach>
+        ORDER BY main_id ASC
+                 ,id ASC
+    </select>
+
+    <!-- 按外部报告 ID 批量查询报告附件 -->
+    <select id="queryOutReportAttachmentList" resultType="com.znty.sirm.model.SysAttachmentDto">
+        SELECT id
+               ,main_id
+               ,attachment_category
+               ,original_file_name
+               ,file_type
+               ,file_size
+               ,content_type
+               ,full_url
+        FROM sys_attachment
+        WHERE table_name = 'sirm_report_out'
+          AND attachment_category = 'report_file'
+          AND is_deleted = 0
+          AND main_id IN
+        <foreach collection="reportIds" item="reportId" open="(" separator="," close=")">
+            #{reportId}
+        </foreach>
+        ORDER BY main_id ASC
+                 ,id ASC
+    </select>
 </mapper>

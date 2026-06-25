@@ -1,12 +1,17 @@
 package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.ReportMapper;
+import com.znty.sirm.common.PageResult;
+import com.znty.sirm.model.ReportDto;
 import com.znty.sirm.model.ReportReq;
+import com.znty.sirm.model.SysAttachmentDto;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -66,5 +71,53 @@ public class ReportServiceTest {
         assertThat(captor.getValue().getReportType()).isEqualTo("stock_out_report");
         assertThat(captor.getValue().getCrteTimeStart()).isEqualTo("2026-06-01");
         assertThat(captor.getValue().getCrteTimeEnd()).isEqualTo("2026-06-30");
+    }
+
+    /** 验证内部报告分页查询会回填报告附件 */
+    @Test
+    public void queryInReportPageShouldFillAttachments() {
+        ReportMapper mapper = mock(ReportMapper.class);
+        ReportService service = new ReportService();
+        ReflectionTestUtils.setField(service, "reportMapper", mapper);
+        ReportReq req = new ReportReq();
+        ReportDto report = new ReportDto();
+        report.setId(10L);
+        SysAttachmentDto attachment = new SysAttachmentDto();
+        attachment.setId(100L);
+        attachment.setMainId(10L);
+        attachment.setOriginalFileName("内部报告附件.pdf");
+        when(mapper.queryInReportPage(req)).thenReturn(Arrays.asList(report));
+        when(mapper.queryInReportAttachmentList(Arrays.asList(10L))).thenReturn(Arrays.asList(attachment));
+
+        PageResult<ReportDto> result = service.queryInReportPage(req);
+
+        verify(mapper).queryInReportAttachmentList(Arrays.asList(10L));
+        List<SysAttachmentDto> attachments = result.getRecords().get(0).getAttachments();
+        assertThat(attachments).hasSize(1);
+        assertThat(attachments.get(0).getOriginalFileName()).isEqualTo("内部报告附件.pdf");
+    }
+
+    /** 验证外部报告分页查询会回填报告附件 */
+    @Test
+    public void queryOutReportPageShouldFillAttachments() {
+        ReportMapper mapper = mock(ReportMapper.class);
+        ReportService service = new ReportService();
+        ReflectionTestUtils.setField(service, "reportMapper", mapper);
+        ReportReq req = new ReportReq();
+        ReportDto report = new ReportDto();
+        report.setId(20L);
+        SysAttachmentDto attachment = new SysAttachmentDto();
+        attachment.setId(200L);
+        attachment.setMainId(20L);
+        attachment.setOriginalFileName("外部报告附件.pdf");
+        when(mapper.queryOutReportPage(req)).thenReturn(Arrays.asList(report));
+        when(mapper.queryOutReportAttachmentList(Arrays.asList(20L))).thenReturn(Arrays.asList(attachment));
+
+        PageResult<ReportDto> result = service.queryOutReportPage(req);
+
+        verify(mapper).queryOutReportAttachmentList(Arrays.asList(20L));
+        List<SysAttachmentDto> attachments = result.getRecords().get(0).getAttachments();
+        assertThat(attachments).hasSize(1);
+        assertThat(attachments.get(0).getOriginalFileName()).isEqualTo("外部报告附件.pdf");
     }
 }

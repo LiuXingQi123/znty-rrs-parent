@@ -132,3 +132,79 @@ INSERT INTO `sys_attachment` (
  '/api/v1/attachments/downloadAttachment', '20260608/material_20260608100000_21.json',
  '1001', 0, NOW(), NOW());
 
+-- ----------------------------------------------------------------------------
+-- 报告库附件关联表插入测试数据
+-- ----------------------------------------------------------------------------
+INSERT INTO `sys_attachment` (
+    `table_name`
+    ,`main_id`
+    ,`attachment_category`
+    ,`file_type`
+    ,`original_file_name`
+    ,`new_file_name`
+    ,`file_size`
+    ,`content_type`
+    ,`full_url`
+    ,`file_name`
+    ,`uploader_id`
+    ,`is_deleted`
+    ,`crte_time`
+    ,`updt_time`
+) VALUES
+('sirm_report_in', 1, 'report_file', 'pdf', '万科企业股票入库分析报告.pdf',
+ 'report_file_in_20260508090000_1.pdf', 1536000, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260508/report_file_in_20260508090000_1.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_in', 2, 'report_file', 'pdf', '中国石油债券入库报告.pdf',
+ 'report_file_in_20260512142000_2.pdf', 2048000, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260512/report_file_in_20260512142000_2.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_in', 3, 'report_file', 'pdf', '深圳地铁集团债券出库报告.pdf',
+ 'report_file_in_20260515111500_3.pdf', 1843200, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260515/report_file_in_20260515111500_3.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_in', 4, 'report_file', 'pdf', '稳健收益基金入库报告.pdf',
+ 'report_file_in_20260522151000_4.pdf', 1433600, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260522/report_file_in_20260522151000_4.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_in', 5, 'report_file', 'pdf', '地产主题基金出库报告.pdf',
+ 'report_file_in_20260525133500_5.pdf', 1320960, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260525/report_file_in_20260525133500_5.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_in', 6, 'report_file', 'pdf', '平安集团股票出库复核报告.pdf',
+ 'report_file_in_20260527100000_6.pdf', 1740800, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260527/report_file_in_20260527100000_6.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_in', 7, 'report_file', 'pdf', '主体信用风险专项报告.pdf',
+ 'report_file_in_20260529133000_7.pdf', 1126400, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260529/report_file_in_20260529133000_7.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_out', 1, 'report_file', 'pdf', '万科企业股票入库外部研究报告.pdf',
+ 'report_file_out_20260528100500_1.pdf', 1638400, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260528/report_file_out_20260528100500_1.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_out', 2, 'report_file', 'pdf', '中国石油债券跟踪入库报告.pdf',
+ 'report_file_out_20260601092500_2.pdf', 1945600, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260601/report_file_out_20260601092500_2.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_out', 3, 'report_file', 'pdf', '交通运输基础设施其他报告.pdf',
+ 'report_file_out_20260603140000_3.pdf', 1228800, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260603/report_file_out_20260603140000_3.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_out', 4, 'report_file', 'pdf', '三一重工债券出库信用报告.pdf',
+ 'report_file_out_20260605163000_4.pdf', 2150400, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260605/report_file_out_20260605163000_4.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_out', 5, 'report_file', 'pdf', '华夏幸福主体风险评估报告.pdf',
+ 'report_file_out_20260608112000_5.pdf', 1843200, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260608/report_file_out_20260608112000_5.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_out', 6, 'report_file', 'pdf', '比亚迪股票出库产业链研究报告.pdf',
+ 'report_file_out_20260610154500_6.pdf', 1761280, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260610/report_file_out_20260610154500_6.pdf',
+ '1001', 0, NOW(), NOW()),
+('sirm_report_out', 7, 'report_file', 'pdf', '全球能源基金入库配置报告.pdf',
+ 'report_file_out_20260612105000_7.pdf', 1515520, 'application/pdf',
+ '/api/v1/attachments/downloadAttachment', '20260612/report_file_out_20260612105000_7.pdf',
+ '1001', 0, NOW(), NOW());
+

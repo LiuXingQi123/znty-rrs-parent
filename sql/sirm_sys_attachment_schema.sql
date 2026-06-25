@@ -22,7 +22,7 @@ CREATE TABLE `sys_attachment`
     `id`                  BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `table_name`          VARCHAR(64)  DEFAULT NULL            COMMENT '关联表名称',
     `main_id`             BIGINT       DEFAULT NULL            COMMENT '关联主键 ID',
-    `attachment_category` VARCHAR(32)  DEFAULT NULL            COMMENT '业务附件分类：credit_report=信评报告 / material=其他材料',
+    `attachment_category` VARCHAR(32)  DEFAULT NULL            COMMENT '业务附件分类：credit_report=信评报告 / material=其他材料 / report_file=报告库文件',
     `file_type`           VARCHAR(16)  DEFAULT NULL            COMMENT '附件类型：xls=xls文件 / xlsx=xlsx文件 / pdf=pdf文件 / doc=doc文件 / docx=docx文件 / json=json文件',
     `original_file_name`  VARCHAR(255) DEFAULT NULL            COMMENT '用户上传的原始文件名称',
     `new_file_name`       VARCHAR(255) DEFAULT NULL            COMMENT '新附件名称',

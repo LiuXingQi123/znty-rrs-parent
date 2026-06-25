@@ -11,6 +11,9 @@ public class SysAttachmentDto {
     /** 附件 ID */
     private Long id;
 
+    /** 关联主键 ID */
+    private Long mainId;
+
     /** 业务附件分类 */
     private String attachmentCategory;
 
