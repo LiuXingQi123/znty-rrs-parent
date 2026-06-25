@@ -166,7 +166,7 @@
         SELECT * FROM wf_flow_version WHERE id = #{id}</select>
 
     <!-- 查询流程版本列表，可按版本号筛选。 -->
-    <select id="queryFlowVersionListByFlowId" resultType="com.znty.sirm.model.FlowVersionBo">
+    <select id="queryFlowVersionByFlowIdList" resultType="com.znty.sirm.model.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId}
         <if test="verNum != null">

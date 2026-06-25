@@ -61,7 +61,7 @@ public interface FlowMapper {
     FlowVersionBo queryFlowVersionById(@Param("id") Long id);
 
     /** 查询流程版本列表，可按版本号筛选。 */
-    List<FlowVersionBo> queryFlowVersionListByFlowId(@Param("flowId") Long flowId,
+    List<FlowVersionBo> queryFlowVersionByFlowIdList(@Param("flowId") Long flowId,
                                                       @Param("verNum") Integer verNum);
 
     /** 新建流程版本。 */

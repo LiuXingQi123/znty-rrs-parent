@@ -75,7 +75,7 @@
     </select>
 
     <!-- 逻辑删除指定调库日志下的附件 -->
-    <update id="deleteAttachmentByIds">
+    <update id="deleteAttachmentByIdsList">
         UPDATE sys_attachment
         SET is_deleted = 1
             ,updt_time = NOW()

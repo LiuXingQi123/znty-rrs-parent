@@ -3,6 +3,7 @@ package com.znty.sirm.mapper;
 import com.znty.sirm.model.SecurityPoolQueryDto;
 import com.znty.sirm.model.SecurityPoolQueryReq;
 import com.znty.sirm.model.SecurityTypeOptionDto;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.List;
 /**
  * 证券池查询数据访问层
  */
+@Mapper
 public interface SecurityPoolQueryMapper {
 
     /**

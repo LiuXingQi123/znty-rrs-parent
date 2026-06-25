@@ -36,7 +36,7 @@ public interface RuleMapper {
     RuleDefinitionBo queryRuleById(@Param("id") Long id);
 
     /** 按主键 ID 列表批量查询规则（用于关联查询，避免 N+1） */
-    List<RuleDefinitionBo> queryRuleByIds(@Param("ids") List<Long> ids);
+    List<RuleDefinitionBo> queryRuleByIdsList(@Param("ids") List<Long> ids);
 
     /** 新增规则定义，主键自增回填 */
     int addRule(RuleDefinitionBo rule);
@@ -56,7 +56,7 @@ public interface RuleMapper {
     List<RuleParamBo> queryParamsByRuleId(@Param("ruleId") Long ruleId);
 
     /** 按规则 ID 列表批量查询参数 */
-    List<RuleParamBo> queryParamsByRuleIds(@Param("ruleIds") List<Long> ruleIds);
+    List<RuleParamBo> queryParamsByRuleIdsList(@Param("ruleIds") List<Long> ruleIds);
 
     /** 新增一条规则参数，主键自增回填 */
     int addParam(RuleParamBo param);
@@ -67,7 +67,7 @@ public interface RuleMapper {
     // ==================== rule_param_option ====================
 
     /** 按参数 ID 列表批量查询选项 */
-    List<RuleParamOptionBo> queryOptionsByParamIds(@Param("paramIds") List<Long> paramIds);
+    List<RuleParamOptionBo> queryOptionsByParamIdsList(@Param("paramIds") List<Long> paramIds);
 
     /** 新增一条参数选项，主键自增回填 */
     int addParamOption(RuleParamOptionBo option);

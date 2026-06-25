@@ -57,7 +57,7 @@
     </select>
 
     <!-- 按 ID 列表批量查询规则（用于关联查询，避免逐条查询的 N+1 问题） -->
-    <select id="queryRuleByIds" resultType="com.znty.sirm.model.RuleDefinitionBo">
+    <select id="queryRuleByIdsList" resultType="com.znty.sirm.model.RuleDefinitionBo">
         SELECT id
                ,rule_name
                ,description
@@ -138,7 +138,7 @@
     </select>
 
     <!-- 按规则 ID 列表批量查询参数（用于规则列表页批量加载，避免 N+1） -->
-    <select id="queryParamsByRuleIds" resultType="com.znty.sirm.model.RuleParamBo">
+    <select id="queryParamsByRuleIdsList" resultType="com.znty.sirm.model.RuleParamBo">
         SELECT id
                ,rule_id
                ,param_name
@@ -183,7 +183,7 @@
     <!-- ==================== 规则参数选项（rule_param_option） ==================== -->
 
     <!-- 按参数 ID 列表批量查询选项（用于规则详情批量加载，避免 N+1） -->
-    <select id="queryOptionsByParamIds" resultType="com.znty.sirm.model.RuleParamOptionBo">
+    <select id="queryOptionsByParamIdsList" resultType="com.znty.sirm.model.RuleParamOptionBo">
         SELECT id
                ,param_id
                ,option_value

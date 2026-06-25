@@ -438,7 +438,7 @@ public class SecurityPoolAdjustFlowService {
                 log.setAdjustLogId(log.getId());
                 securityPoolAdjustMapper.addPoolStatus(log);
             } else if ("调出".equals(log.getAdjustMode())) {
-                securityPoolAdjustMapper.softDeletePoolStatus(log.getSecurityCode(), log.getTargetPoolId());
+                securityPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
             }
         }
     }

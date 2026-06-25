@@ -110,11 +110,11 @@ public class SysAttachmentServiceTest {
         SysAttachmentBo attachment = buildAttachment(8L, "ip_adjust_log", 88L,
                 SysAttachmentService.CATEGORY_CREDIT_REPORT);
         when(mapper.queryAttachmentListByIds(Collections.singletonList(8L))).thenReturn(Collections.singletonList(attachment));
-        when(mapper.deleteAttachmentByIds(88L, Collections.singletonList(8L))).thenReturn(1);
+        when(mapper.deleteAttachmentByIdsList(88L, Collections.singletonList(8L))).thenReturn(1);
 
         service.deleteAdjustLogAttachments(88L, Collections.singletonList(8L));
 
-        verify(mapper).deleteAttachmentByIds(88L, Collections.singletonList(8L));
+        verify(mapper).deleteAttachmentByIdsList(88L, Collections.singletonList(8L));
     }
 
     /** 验证不能删除其他调库记录的附件 */

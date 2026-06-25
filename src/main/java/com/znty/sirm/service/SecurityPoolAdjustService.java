@@ -309,8 +309,8 @@ public class SecurityPoolAdjustService {
             throw new BizException("证券代码不能为空");
         }
         SecurityPoolStatusDto dto = new SecurityPoolStatusDto();
-        List<PoolStatusDto> securityCurrentPools = securityPoolAdjustMapper.querySecurityPoolStatus(req.getSecurityCode());
-        List<PoolStatusDto> issuerCurrentPools = securityPoolAdjustMapper.queryIssuerPoolStatus(req.getSecurityCode());
+        List<PoolStatusDto> securityCurrentPools = securityPoolAdjustMapper.querySecurityPoolStatusList(req.getSecurityCode());
+        List<PoolStatusDto> issuerCurrentPools = securityPoolAdjustMapper.queryIssuerPoolStatusList(req.getSecurityCode());
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         // 填充当前所在池的全路径名称
         fillPoolStatusFullName(securityCurrentPools, poolFullNameMap);
@@ -455,12 +455,12 @@ public class SecurityPoolAdjustService {
         }
 
         // 证券当前有效入池 ID 集合（audit_status='20' 表示已生效）
-        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIds(req.getSecurityCode());
+        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
         Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList);
 
         // 全量投资池关系配置，构建三层嵌套 Map
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(
-                securityPoolAdjustMapper.queryAllPoolRelations());
+                securityPoolAdjustMapper.queryAllPoolRelationList());
 
         // 收集所有调库项中引用的唯一流程标识，批量加载流程快照
         Set<Long> uniqueFlowIds = new HashSet<>();
@@ -591,7 +591,7 @@ public class SecurityPoolAdjustService {
         }
 
         // 查询该流程的所有版本（ORDER BY ver_num DESC），取第一个 status='active' 的版本
-        List<FlowVersionBo> versions = flowMapper.queryFlowVersionListByFlowId(flowId, null);
+        List<FlowVersionBo> versions = flowMapper.queryFlowVersionByFlowIdList(flowId, null);
         FlowVersionBo activeVersion = null;
         for (FlowVersionBo v : versions) {
             if ("active".equals(v.getStatus())) {
@@ -844,7 +844,7 @@ public class SecurityPoolAdjustService {
                 }
 
                 // 直通流程：再软删除 ip_pool_status 中该证券在目标池的有效记录
-                securityPoolAdjustMapper.softDeletePoolStatus(
+                securityPoolAdjustMapper.deletePoolStatusSoft(
                         req.getSecurityCode(), item.getTargetPoolId());
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
@@ -862,7 +862,7 @@ public class SecurityPoolAdjustService {
                     boolean flowFinished = createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                     if (flowFinished) {
                         securityPoolAdjustMapper.editAdjustLogAuditStatus(bo.getId(), adjustBatchNo, "20");
-                        securityPoolAdjustMapper.softDeletePoolStatus(
+                        securityPoolAdjustMapper.deletePoolStatusSoft(
                                 req.getSecurityCode(), item.getTargetPoolId());
                     }
                 }
@@ -988,7 +988,7 @@ public class SecurityPoolAdjustService {
         if (adjustLogId == null && (adjustBatchNo == null || adjustBatchNo.isEmpty())) {
             return Collections.emptyList();
         }
-        List<IpAdjustStepBo> steps = securityPoolAdjustMapper.queryAdjustStepListWithBatch(adjustLogId, adjustBatchNo);
+        List<IpAdjustStepBo> steps = securityPoolAdjustMapper.queryAdjustStepByBatchList(adjustLogId, adjustBatchNo);
         if (steps.isEmpty()) {
             return Collections.emptyList();
         }
@@ -1123,12 +1123,12 @@ public class SecurityPoolAdjustService {
         }
 
         // 证券当前有效入池 ID 集合（audit_status='20' 表示已生效）
-        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIds(req.getSecurityCode());
+        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
         Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList);
 
         // 全量投资池关系配置，构建三层嵌套 Map（poolId → relationType → 关联池列表）
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(
-                securityPoolAdjustMapper.queryAllPoolRelations());
+                securityPoolAdjustMapper.queryAllPoolRelationList());
 
         // 提取本次请求中调入/调出各自涉及的目标池 ID 集合，供互斥冲突校验使用
         Set<Long> requestInPoolIds  = new HashSet<>();

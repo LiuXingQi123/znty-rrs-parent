@@ -86,7 +86,7 @@
     </insert>
 
     <!-- 查询当前证券所在池列表（仅叶子节点） -->
-    <select id="querySecurityPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
+    <select id="querySecurityPoolStatusList" resultType="com.znty.sirm.model.PoolStatusDto">
         SELECT ips.target_pool_id
                ,p.pool_name
                ,ips.pool_type
@@ -108,7 +108,7 @@
     </select>
 
     <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点） -->
-    <select id="queryIssuerPoolStatus" resultType="com.znty.sirm.model.PoolStatusDto">
+    <select id="queryIssuerPoolStatusList" resultType="com.znty.sirm.model.PoolStatusDto">
         SELECT ips.target_pool_id
                ,p.pool_name
                ,ips.pool_type
@@ -174,7 +174,7 @@
     </select>
 
     <!-- 查询证券当前有效所在池 ID 列表 -->
-    <select id="querySecurityCurrentPoolIds" resultType="java.lang.Long">
+    <select id="querySecurityCurrentPoolIdList" resultType="java.lang.Long">
         SELECT DISTINCT target_pool_id
         FROM ip_pool_status
         WHERE security_code = #{securityCode}
@@ -342,7 +342,7 @@
     </insert>
 
     <!-- 软删除入池状态（直通调出：将该证券在目标池中的生效记录标记为删除） -->
-    <update id="softDeletePoolStatus">
+    <update id="deletePoolStatusSoft">
         UPDATE ip_pool_status
         SET is_deleted = 1
            ,updt_time = NOW()
@@ -503,7 +503,7 @@
     </select>
 
     <!-- 查询指定批次或调库记录的流程步骤列表 -->
-    <select id="queryAdjustStepListWithBatch" resultType="com.znty.sirm.model.IpAdjustStepBo">
+    <select id="queryAdjustStepByBatchList" resultType="com.znty.sirm.model.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -695,7 +695,7 @@
     </update>
 
     <!-- 查询全量投资池关系配置（不限关系类型） -->
-    <select id="queryAllPoolRelations" resultType="com.znty.sirm.model.PoolRelationBo">
+    <select id="queryAllPoolRelationList" resultType="com.znty.sirm.model.PoolRelationBo">
         SELECT pool_id
                ,relation_type
                ,relation_pool_id

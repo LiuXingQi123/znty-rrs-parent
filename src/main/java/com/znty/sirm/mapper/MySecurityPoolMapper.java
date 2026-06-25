@@ -1,6 +1,7 @@
 package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.MySecurityPoolBo;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.List;
 /**
  * 我的证券池数据访问层
  */
+@Mapper
 public interface MySecurityPoolMapper {
 
     /**

@@ -383,11 +383,11 @@ public class RuleService {
         if (ruleIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        List<RuleParamBo> params = ruleMapper.queryParamsByRuleIds(ruleIds);
+        List<RuleParamBo> params = ruleMapper.queryParamsByRuleIdsList(ruleIds);
         List<Long> paramIds = params.stream().map(RuleParamBo::getId).filter(Objects::nonNull).collect(Collectors.toList());
         Map<Long, List<RuleParamOptionBo>> optionMap = paramIds.isEmpty()
                 ? Collections.emptyMap()
-                : ruleMapper.queryOptionsByParamIds(paramIds).stream()
+                : ruleMapper.queryOptionsByParamIdsList(paramIds).stream()
                 .collect(Collectors.groupingBy(RuleParamOptionBo::getParamId));
         return params.stream().collect(Collectors.groupingBy(
                 RuleParamBo::getRuleId,

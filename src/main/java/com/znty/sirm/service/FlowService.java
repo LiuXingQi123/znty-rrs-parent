@@ -265,7 +265,7 @@ public class FlowService {
         // 将当前活跃版本标为停用，历史中可追溯
         // 遍历全部版本，找到版本号最大的 active 版本，标记为 disabled
         FlowVersionBo latestActive = null;
-        for (FlowVersionBo v : flowMapper.queryFlowVersionListByFlowId(def.getId(), null)) {
+        for (FlowVersionBo v : flowMapper.queryFlowVersionByFlowIdList(def.getId(), null)) {
             if ("active".equals(v.getStatus())) {
                 if (latestActive == null || v.getVerNum() > latestActive.getVerNum()) {
                     latestActive = v;
@@ -486,7 +486,7 @@ public class FlowService {
 
     /** 查询流程版本列表，可按版本号筛选。 */
     public List<VersionDto> queryFlowVersionList(FlowReq req) {
-        List<FlowVersionBo> vers = flowMapper.queryFlowVersionListByFlowId(req.getId(), req.getVerNum());
+        List<FlowVersionBo> vers = flowMapper.queryFlowVersionByFlowIdList(req.getId(), req.getVerNum());
         return vers.stream().map(v -> {
             VersionDto d = new VersionDto();
             d.setVersionId(v.getId());

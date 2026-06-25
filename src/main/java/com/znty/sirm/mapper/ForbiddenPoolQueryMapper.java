@@ -3,12 +3,14 @@ package com.znty.sirm.mapper;
 import com.znty.sirm.model.ForbiddenPoolQueryDto;
 import com.znty.sirm.model.ForbiddenPoolQueryReq;
 import com.znty.sirm.model.SecurityTypeOptionDto;
+import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
 
 /**
  * 禁投池查询数据访问层
  */
+@Mapper
 public interface ForbiddenPoolQueryMapper {
 
     /**

@@ -199,9 +199,9 @@ public class TestCaseService {
         if (caseId == null) {
             throw new BizException("测试用例ID不能为空");
         }
-        List<RuleTestRunBo> runs = testCaseMapper.queryRunsByCaseId(caseId);
+        List<RuleTestRunBo> runs = testCaseMapper.queryRunsByCaseIdList(caseId);
         return runs.stream().map(run -> {
-            List<RuleTestRunLogBo> logEntities = testCaseMapper.queryRunLogs(run.getId());
+            List<RuleTestRunLogBo> logEntities = testCaseMapper.queryRunLogList(run.getId());
             List<Map<String, Object>> logMaps = logEntities.stream().map(bo -> {
                 Map<String, Object> log = new LinkedHashMap<>();
                 log.put("time", bo.getLogTime() == null ? null :
@@ -284,7 +284,7 @@ public class TestCaseService {
         if (caseIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return testCaseMapper.queryParamsByCaseIds(caseIds).stream()
+        return testCaseMapper.queryParamsByCaseIdsList(caseIds).stream()
                 .collect(Collectors.groupingBy(
                         RuleTestCaseParamBo::getCaseId,
                         Collectors.toMap(
@@ -329,7 +329,7 @@ public class TestCaseService {
         if (ruleIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return ruleMapper.queryRuleByIds(ruleIds).stream()
+        return ruleMapper.queryRuleByIdsList(ruleIds).stream()
                 .collect(Collectors.toMap(RuleDefinitionBo::getId, rule -> rule, (left, right) -> left));
     }
 

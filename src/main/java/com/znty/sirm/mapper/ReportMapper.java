@@ -3,6 +3,7 @@ package com.znty.sirm.mapper;
 import com.znty.sirm.model.ReportDto;
 import com.znty.sirm.model.ReportReq;
 import com.znty.sirm.model.SysAttachmentDto;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.List;
 /**
  * 报告库数据访问接口
  */
+@Mapper
 public interface ReportMapper {
 
     /**

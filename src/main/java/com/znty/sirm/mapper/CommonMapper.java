@@ -1,12 +1,14 @@
 package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.PoolTreeDto;
+import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
 
 /**
  * 公共查询数据访问接口
  */
+@Mapper
 public interface CommonMapper {
 
     /**

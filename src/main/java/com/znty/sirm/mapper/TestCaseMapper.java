@@ -52,7 +52,7 @@ public interface TestCaseMapper {
     // ==================== rule_test_case_param ====================
 
     /** 按用例 ID 列表批量查询参数值 */
-    List<RuleTestCaseParamBo> queryParamsByCaseIds(@Param("caseIds") List<Long> caseIds);
+    List<RuleTestCaseParamBo> queryParamsByCaseIdsList(@Param("caseIds") List<Long> caseIds);
 
     /** 新增一条用例参数值，主键自增回填 */
     int addCaseParam(RuleTestCaseParamBo param);
@@ -71,8 +71,8 @@ public interface TestCaseMapper {
     int addRunLog(RuleTestRunLogBo log);
 
     /** 按用例 ID 查询执行记录列表，最近优先 */
-    List<RuleTestRunBo> queryRunsByCaseId(@Param("caseId") Long caseId);
+    List<RuleTestRunBo> queryRunsByCaseIdList(@Param("caseId") Long caseId);
 
     /** 按执行记录 ID 查询步骤日志列表 */
-    List<RuleTestRunLogBo> queryRunLogs(@Param("runId") Long runId);
+    List<RuleTestRunLogBo> queryRunLogList(@Param("runId") Long runId);
 }

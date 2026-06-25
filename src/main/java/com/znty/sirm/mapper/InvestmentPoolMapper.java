@@ -9,17 +9,19 @@ import com.znty.sirm.model.PoolRelationBo;
 import com.znty.sirm.model.RoleBo;
 import com.znty.sirm.model.UserBo;
 import java.util.List;
+import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
  * 投资池维护数据访问接口
  */
+@Mapper
 public interface InvestmentPoolMapper {
 
     /**
      * 查询投资池数量
      */
-    int queryPoolCount();
+    int queryPoolTotalCount();
 
     /**
      * 查询投资池列表
@@ -39,7 +41,7 @@ public interface InvestmentPoolMapper {
     /**
      * 查询指定 ID 的投资池列表
      */
-    List<InvestmentPoolBo> queryPoolByIds(@Param("ids") List<Long> ids);
+    List<InvestmentPoolBo> queryPoolByIdsList(@Param("ids") List<Long> ids);
 
     /**
      * 新增投资池
@@ -49,12 +51,12 @@ public interface InvestmentPoolMapper {
     /**
      * 查询同父级最大内部排序
      */
-    Integer queryMaxInnerSort(@Param("parentId") Long parentId);
+    Integer queryMaxInnerSortValue(@Param("parentId") Long parentId);
 
     /**
      * 查询顶级投资池最大外部排序
      */
-    Integer queryMaxOuterSort();
+    Integer queryMaxOuterSortValue();
 
     /**
      * 查询子投资池列表

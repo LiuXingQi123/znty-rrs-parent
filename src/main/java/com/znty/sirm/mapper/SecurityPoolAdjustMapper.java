@@ -38,7 +38,7 @@ public interface SecurityPoolAdjustMapper {
     int addPoolStatus(IpAdjustLogBo bo);
 
     /** 软删除入池状态（直通调出流程，将目标池中有效记录标记为已删除） */
-    int softDeletePoolStatus(@Param("securityCode") String securityCode,
+    int deletePoolStatusSoft(@Param("securityCode") String securityCode,
                              @Param("targetPoolId") Long targetPoolId);
 
     /** 更新调库详情页传入的证券基础信息字段 */
@@ -49,13 +49,13 @@ public interface SecurityPoolAdjustMapper {
                                            @Param("adjustBatchNo") String adjustBatchNo);
 
     /** 查询当前证券所在池列表 */
-    List<PoolStatusDto> querySecurityPoolStatus(@Param("securityCode") String securityCode);
+    List<PoolStatusDto> querySecurityPoolStatusList(@Param("securityCode") String securityCode);
 
     /** 查询当前证券主体（发行人）所在池列表 */
-    List<PoolStatusDto> queryIssuerPoolStatus(@Param("securityCode") String securityCode);
+    List<PoolStatusDto> queryIssuerPoolStatusList(@Param("securityCode") String securityCode);
 
     /** 查询证券当前有效所在池 ID 列表（audit_status=20） */
-    List<Long> querySecurityCurrentPoolIds(@Param("securityCode") String securityCode);
+    List<Long> querySecurityCurrentPoolIdList(@Param("securityCode") String securityCode);
 
     /** 查询目标投资池当前有效证券数量 */
     int queryPoolCurrentCount(@Param("poolId") Long poolId);
@@ -64,7 +64,7 @@ public interface SecurityPoolAdjustMapper {
     List<PoolDto> queryPoolCurrentCountList();
 
     /** 查询全量投资池关系配置（不限关系类型） */
-    List<PoolRelationBo> queryAllPoolRelations();
+    List<PoolRelationBo> queryAllPoolRelationList();
 
     /** 查询证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
     boolean querySecurityHasPendingProcess(@Param("securityCode") String securityCode);
@@ -93,7 +93,7 @@ public interface SecurityPoolAdjustMapper {
     List<IpAdjustStepBo> queryAdjustStepList(@Param("adjustLogId") Long adjustLogId);
 
     /** 查询指定批次或调库记录的流程步骤列表 */
-    List<IpAdjustStepBo> queryAdjustStepListWithBatch(@Param("adjustLogId") Long adjustLogId,
+    List<IpAdjustStepBo> queryAdjustStepByBatchList(@Param("adjustLogId") Long adjustLogId,
                                                        @Param("adjustBatchNo") String adjustBatchNo);
 
     /** 根据 ID 查询流程步骤 */

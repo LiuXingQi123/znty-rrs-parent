@@ -179,7 +179,7 @@ public class SysAttachmentService {
                 throw new BizException("删除附件失败：附件不属于当前调库记录，附件 ID：" + attachment.getId());
             }
         }
-        int updated = sysAttachmentMapper.deleteAttachmentByIds(adjustLogId, distinctIds);
+        int updated = sysAttachmentMapper.deleteAttachmentByIdsList(adjustLogId, distinctIds);
         if (updated != distinctIds.size()) {
             throw new BizException("删除附件失败：附件状态已变化，请刷新后重试");
         }

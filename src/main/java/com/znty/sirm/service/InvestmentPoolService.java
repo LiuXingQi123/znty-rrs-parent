@@ -303,7 +303,7 @@ public class InvestmentPoolService {
     @Transactional(rollbackFor = Exception.class)
     public List<InvestmentPoolDto> addSeedPoolList(InvestmentPoolReq req) {
         // 幂等校验：已有投资池记录时直接返回，不重复初始化
-        if (investmentPoolMapper.queryPoolCount() > 0) {
+        if (investmentPoolMapper.queryPoolTotalCount() > 0) {
             return queryPoolList(req);
         }
         // 解析经办人 ID
@@ -458,7 +458,7 @@ public class InvestmentPoolService {
         rootPool.setPoolLevel(1);
         Integer outerSort = req.getOuterSort();
         if (outerSort == null) {
-            Integer maxOuterSort = investmentPoolMapper.queryMaxOuterSort();
+            Integer maxOuterSort = investmentPoolMapper.queryMaxOuterSortValue();
             outerSort = maxOuterSort == null ? 1 : maxOuterSort + 1;
         }
         rootPool.setOuterSort(outerSort);
@@ -491,7 +491,7 @@ public class InvestmentPoolService {
         childPool.setOuterSort(parentPool.getOuterSort());
         Integer innerSort = req.getInnerSort();
         if (innerSort == null) {
-            Integer maxInnerSort = investmentPoolMapper.queryMaxInnerSort(parentPool.getId());
+            Integer maxInnerSort = investmentPoolMapper.queryMaxInnerSortValue(parentPool.getId());
             innerSort = maxInnerSort == null ? 1 : maxInnerSort + 1;
         }
         childPool.setInnerSort(innerSort);
@@ -668,7 +668,7 @@ public class InvestmentPoolService {
                 .collect(Collectors.toList());
         Map<Long, String> poolNameMap = allIds.isEmpty()
                 ? new HashMap<>()
-                : investmentPoolMapper.queryPoolByIds(allIds).stream()
+                : investmentPoolMapper.queryPoolByIdsList(allIds).stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, InvestmentPoolBo::getPoolName, (a, b) -> a));
         // 按固定类型顺序处理，保证写入顺序的一致性
         for (String relationType : RELATION_TYPES) {

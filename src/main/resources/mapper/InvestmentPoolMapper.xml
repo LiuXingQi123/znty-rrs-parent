@@ -5,7 +5,7 @@
     <!-- 投资池维护 mapper，对应表：ip_investment_pool（投资池）、ip_pool_relation（投资池关系）、ip_pool_auto_rule（自动规则）、ip_pool_permission（权限），提供投资池配置、关系、规则、权限的 CRUD 及事件记录操作 -->
 
     <!-- 查询投资池数量 -->
-    <select id="queryPoolCount" resultType="int">
+    <select id="queryPoolTotalCount" resultType="int">
         SELECT COUNT(1)
         FROM ip_investment_pool
         WHERE is_deleted = 0
@@ -130,7 +130,7 @@
     </select>
 
     <!-- 查询指定 ID 的投资池列表 -->
-    <select id="queryPoolByIds" resultType="com.znty.sirm.model.InvestmentPoolBo">
+    <select id="queryPoolByIdsList" resultType="com.znty.sirm.model.InvestmentPoolBo">
         SELECT id
                ,pool_name
         FROM ip_investment_pool
@@ -221,7 +221,7 @@
     </insert>
 
     <!-- 查询同父级最大内部排序 -->
-    <select id="queryMaxInnerSort" resultType="java.lang.Integer">
+    <select id="queryMaxInnerSortValue" resultType="java.lang.Integer">
         SELECT MAX(inner_sort)
         FROM ip_investment_pool
         WHERE is_deleted = 0
@@ -229,7 +229,7 @@
     </select>
 
     <!-- 查询顶级投资池最大外部排序 -->
-    <select id="queryMaxOuterSort" resultType="java.lang.Integer">
+    <select id="queryMaxOuterSortValue" resultType="java.lang.Integer">
         SELECT MAX(outer_sort)
         FROM ip_investment_pool
         WHERE is_deleted = 0

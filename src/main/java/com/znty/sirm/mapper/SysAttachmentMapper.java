@@ -26,6 +26,5 @@ public interface SysAttachmentMapper {
     List<SysAttachmentBo> queryAttachmentListByIds(@Param("ids") List<Long> ids);
 
     /** 逻辑删除指定调库日志下的附件 */
-    int deleteAttachmentByIds(@Param("adjustLogId") Long adjustLogId, @Param("ids") List<Long> ids);
-
+    int deleteAttachmentByIdsList(@Param("adjustLogId") Long adjustLogId, @Param("ids") List<Long> ids);
 }

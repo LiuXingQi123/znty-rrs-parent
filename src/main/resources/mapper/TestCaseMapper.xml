@@ -125,7 +125,7 @@
     <!-- ==================== 测试用例参数值（rule_test_case_param） ==================== -->
 
     <!-- 按用例 ID 列表批量查询参数值（用于用例列表页批量加载，避免 N+1） -->
-    <select id="queryParamsByCaseIds" resultType="com.znty.sirm.model.RuleTestCaseParamBo">
+    <select id="queryParamsByCaseIdsList" resultType="com.znty.sirm.model.RuleTestCaseParamBo">
         SELECT id
                ,case_id
                ,param_name
@@ -166,7 +166,7 @@
     <!-- ==================== 测试执行记录 & 步骤日志 ==================== -->
 
     <!-- 按用例 ID 查询执行记录列表，按开始时间倒序（最近执行在前） -->
-    <select id="queryRunsByCaseId" resultType="com.znty.sirm.model.RuleTestRunBo">
+    <select id="queryRunsByCaseIdList" resultType="com.znty.sirm.model.RuleTestRunBo">
         SELECT id
                ,case_id
                ,rule_id
@@ -181,7 +181,7 @@
     </select>
 
     <!-- 按执行记录 ID 查询该次执行的所有步骤日志，按时间升序 -->
-    <select id="queryRunLogs" resultType="com.znty.sirm.model.RuleTestRunLogBo">
+    <select id="queryRunLogList" resultType="com.znty.sirm.model.RuleTestRunLogBo">
         SELECT id
                ,run_id
                ,log_time

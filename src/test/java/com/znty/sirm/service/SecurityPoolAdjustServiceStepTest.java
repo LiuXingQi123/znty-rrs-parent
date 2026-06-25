@@ -408,7 +408,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(mapper).addAdjustLog(captor.capture());
-        verify(mapper).softDeletePoolStatus("S001", 10L);
+        verify(mapper).deletePoolStatusSoft("S001", 10L);
         assertThat(captor.getValue().getAuditStatus()).isEqualTo("20");
         assertThat(captor.getValue().getAdjustBatchNo()).endsWith("3001");
         assertThat(result).containsExactly(88L);

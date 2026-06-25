@@ -2,12 +2,14 @@ package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.SubjectPoolQueryDto;
 import com.znty.sirm.model.SubjectPoolQueryReq;
+import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
 
 /**
  * 主体池查询数据访问层
  */
+@Mapper
 public interface SubjectPoolQueryMapper {
 
     /**

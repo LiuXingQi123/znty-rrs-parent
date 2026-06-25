@@ -2,12 +2,14 @@ package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.CompanyPoolAdjustHistoryDto;
 import com.znty.sirm.model.CompanyPoolAdjustHistoryReq;
+import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;
 
 /**
  * 主体池调整历史数据访问层
  */
+@Mapper
 public interface CompanyPoolAdjustHistoryMapper {
 
     /**
