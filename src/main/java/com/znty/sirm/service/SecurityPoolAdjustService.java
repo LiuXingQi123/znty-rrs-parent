@@ -376,11 +376,21 @@ public class SecurityPoolAdjustService {
      */
     public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req,
                                         SysAttachmentService.SubmissionFiles submissionFiles) {
+        // 创建本次提交独立批次号上下文
+        return addAdjustLog(req, submissionFiles, new BatchNoContext());
+    }
+
+    /**
+     * 使用共享文件和批次号上下文提交调库申请，供批量调整在多只证券间保持批次号递增。
+     */
+    AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req,
+                                 SysAttachmentService.SubmissionFiles submissionFiles,
+                                 BatchNoContext batchNoContext) {
         // ══ 第一阶段：前置校验 ══
         validateSubmitReq(req);
 
         // ══ 第二阶段：参数初始化 ══
-        SubmitSharedData shared = loadSubmitSharedData(req);
+        SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
 
         // ══ 第三阶段：调入处理 ══
         List<Long> inboundIds = executeInboundSubmit(req, shared, submissionFiles);
@@ -399,6 +409,13 @@ public class SecurityPoolAdjustService {
         dto.setSubmitCount(allIds.size());
         dto.setLogIds(allIds);
         return dto;
+    }
+
+    /**
+     * 创建批量提交共用的批次号上下文。
+     */
+    BatchNoContext createBatchNoContext() {
+        return new BatchNoContext();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -441,6 +458,14 @@ public class SecurityPoolAdjustService {
      * @return 封装了本次提交全量共享数据的 SubmitSharedData
      */
     private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req) {
+        // 创建本次提交独立批次号上下文
+        return loadSubmitSharedData(req, new BatchNoContext());
+    }
+
+    /**
+     * 第二阶段：参数初始化，使用指定批次号上下文。
+     */
+    private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req, BatchNoContext batchNoContext) {
         // 证券基础信息（兼含存在性校验）
         SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
@@ -490,7 +515,8 @@ public class SecurityPoolAdjustService {
                 securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
                 securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
                 securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
-                flowSnapshotMap
+                flowSnapshotMap,
+                batchNoContext
         );
     }
 
@@ -527,13 +553,13 @@ public class SecurityPoolAdjustService {
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem, boolean noFlow, SubmitSharedData shared) {
         int serial;
         if (noFlow) {
-            serial = 3000 + ++shared.noFlowBatchSeq;
+            serial = 3000 + ++shared.batchNoContext.noFlowBatchSeq;
         } else if ("调入".equals(manualItem.getAdjustMode())) {
-            serial = 1000 + ++shared.inboundBatchSeq;
+            serial = 1000 + ++shared.batchNoContext.inboundBatchSeq;
         } else {
-            serial = 2000 + ++shared.outboundBatchSeq;
+            serial = 2000 + ++shared.batchNoContext.outboundBatchSeq;
         }
-        return "BOND" + shared.batchTimeText + String.format("%04d", serial);
+        return "BOND" + shared.batchNoContext.batchTimeText + String.format("%04d", serial);
     }
 
     /**
@@ -2721,17 +2747,8 @@ public class SecurityPoolAdjustService {
         /** 流程快照索引（flowId → FlowSnapshot），供第三/四阶段快速判断直通流程 */
         final Map<Long, FlowSnapshot> flowSnapshotMap;
 
-        /** 本次提交批次号时间片，保证同一次提交内批次号时间一致 */
-        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-
-        /** 调入方向批次序号 */
-        int inboundBatchSeq = 0;
-
-        /** 调出方向批次序号 */
-        int outboundBatchSeq = 0;
-
-        /** 无流程批次序号 */
-        int noFlowBatchSeq = 0;
+        /** 批次号生成上下文 */
+        final BatchNoContext batchNoContext;
 
         /** 调库分组批次号索引（adjustGroupKey → adjustBatchNo），用于联动/互斥记录复用 */
         final Map<String, String> adjustBatchNoMap = new HashMap<>();
@@ -2743,7 +2760,8 @@ public class SecurityPoolAdjustService {
                          boolean hasPendingProcess,
                          boolean securityInObservePool,
                          boolean issuerInObservePool,
-                         Map<Long, FlowSnapshot> flowSnapshotMap) {
+                         Map<Long, FlowSnapshot> flowSnapshotMap,
+                         BatchNoContext batchNoContext) {
             this.securityInfo = securityInfo;
             this.poolMap = poolMap;
             this.currentPoolIds = currentPoolIds;
@@ -2752,7 +2770,26 @@ public class SecurityPoolAdjustService {
             this.securityInObservePool = securityInObservePool;
             this.issuerInObservePool = issuerInObservePool;
             this.flowSnapshotMap = flowSnapshotMap;
+            this.batchNoContext = batchNoContext;
         }
+    }
+
+    /**
+     * 批次号生成上下文。
+     */
+    static class BatchNoContext {
+
+        /** 本次提交批次号时间片 */
+        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+
+        /** 调入方向批次序号 */
+        int inboundBatchSeq = 0;
+
+        /** 调出方向批次序号 */
+        int outboundBatchSeq = 0;
+
+        /** 无流程批次序号 */
+        int noFlowBatchSeq = 0;
     }
 
 }

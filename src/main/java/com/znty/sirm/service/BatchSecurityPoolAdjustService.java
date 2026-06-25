@@ -163,10 +163,12 @@ public class BatchSecurityPoolAdjustService {
         dto.setSubmitCount(0);
         SysAttachmentService.SubmissionFiles submissionFiles =
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
+        SecurityPoolAdjustService.BatchNoContext batchNoContext =
+                securityPoolAdjustService.createBatchNoContext();
         for (Map.Entry<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> entry : itemMap.entrySet()) {
             // 构建单证券调库提交请求
             AdjustSubmitDto submitDto = securityPoolAdjustService.addAdjustLog(
-                    buildSingleSubmitReq(req, entry.getValue()), submissionFiles);
+                    buildSingleSubmitReq(req, entry.getValue()), submissionFiles, batchNoContext);
             if (submitDto == null) {
                 continue;
             }

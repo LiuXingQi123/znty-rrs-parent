@@ -414,6 +414,37 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).containsExactly(88L);
     }
 
+    /** 验证共享批次号上下文下连续提交应递增批次号。 */
+    @Test
+    public void executeInboundSubmitShouldIncreaseBatchNoWithSharedContext() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
+        doAnswer(invocation -> {
+            IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
+            bo.setId(99L);
+            return 1;
+        }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
+
+        SecurityPoolAdjustService.BatchNoContext batchNoContext = service.createBatchNoContext();
+        SecurityPoolAdjustSubmitReq firstReq = buildDirectInboundSubmitReq("S001", "S001_manual_10_调入");
+        SecurityPoolAdjustSubmitReq secondReq = buildDirectInboundSubmitReq("S002", "S002_manual_10_调入");
+
+        Object firstShared = buildSubmitSharedData(batchNoContext);
+        Object secondShared = buildSubmitSharedData(batchNoContext);
+
+        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", firstReq, firstShared);
+        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", secondReq, secondShared);
+
+        ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(mapper, times(2)).addAdjustLog(logCaptor.capture());
+        assertThat(logCaptor.getAllValues()).extracting(IpAdjustLogBo::getAdjustBatchNo)
+                .doesNotHaveDuplicates();
+        assertThat(logCaptor.getAllValues().get(0).getAdjustBatchNo()).endsWith("3001");
+        assertThat(logCaptor.getAllValues().get(1).getAdjustBatchNo()).endsWith("3002");
+    }
+
     /** 验证普通提交应同时绑定本地上传附件和报告库来源附件。 */
     @Test
     public void bindSubmitAttachmentsShouldBindUploadedFilesAndCopyReportSources() {
@@ -638,6 +669,20 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 构建包含流程快照的调库提交共享数据测试数据。 */
     private Object buildSubmitSharedData(Map<Long, Object> snapshotMap) throws Exception {
+        Class<?> batchNoClass = Class.forName("com.znty.sirm.service.SecurityPoolAdjustService$BatchNoContext");
+        Constructor<?> batchNoConstructor = batchNoClass.getDeclaredConstructors()[0];
+        batchNoConstructor.setAccessible(true);
+        Object batchNoContext = batchNoConstructor.newInstance();
+        return buildSubmitSharedData(snapshotMap, batchNoContext);
+    }
+
+    /** 构建指定批次号上下文的调库提交共享数据测试数据。 */
+    private Object buildSubmitSharedData(SecurityPoolAdjustService.BatchNoContext batchNoContext) throws Exception {
+        return buildSubmitSharedData(new HashMap<Long, Object>(), batchNoContext);
+    }
+
+    /** 构建包含流程快照和批次号上下文的调库提交共享数据测试数据。 */
+    private Object buildSubmitSharedData(Map<Long, Object> snapshotMap, Object batchNoContext) throws Exception {
         Class<?> sharedClass = Class.forName("com.znty.sirm.service.SecurityPoolAdjustService$SubmitSharedData");
         Constructor<?> constructor = sharedClass.getDeclaredConstructors()[0];
         constructor.setAccessible(true);
@@ -649,7 +694,29 @@ public class SecurityPoolAdjustServiceStepTest {
                 false,
                 false,
                 false,
-                snapshotMap);
+                snapshotMap,
+                batchNoContext);
+    }
+
+    /** 构建直通调入提交请求。 */
+    private SecurityPoolAdjustSubmitReq buildDirectInboundSubmitReq(String securityCode, String groupKey) {
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode(securityCode);
+        req.setSecurityShortName("test");
+        req.setSecurityType("bond");
+        req.setAdjustType("manual");
+        req.setAdjusterId("1001");
+        req.setAdjusterName("admin");
+
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setAdjustMode("调入");
+        item.setTargetPoolId(10L);
+        item.setTargetPoolName("pool");
+        item.setPoolType("special_account");
+        item.setItemTag("manual");
+        item.setAdjustGroupKey(groupKey);
+        req.setItems(Collections.singletonList(item));
+        return req;
     }
 
     /** 构建流程节点测试数据。 */

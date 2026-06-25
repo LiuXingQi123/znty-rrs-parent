@@ -5,16 +5,21 @@ import com.znty.sirm.exception.BizException;
 import com.znty.sirm.model.BatchSecurityInboundAdjustReq;
 import com.znty.sirm.model.BatchSecurityPoolAdjustReq;
 import com.znty.sirm.model.BatchSecurityPoolDto;
+import com.znty.sirm.model.AdjustSubmitDto;
 import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -117,5 +122,58 @@ public class BatchSecurityPoolAdjustServiceTest {
                 .containsExactly(7L, 8L);
         assertThat(submitReq.getItems().get(0).getMaterialSourceAttachmentIds())
                 .containsExactly(9L);
+    }
+
+    /** 验证批量提交多只证券时复用同一个批次号上下文。 */
+    @Test
+    public void addAdjustLogShouldReuseBatchNoContextForMultipleSecurities() {
+        BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService adjustService = mock(SecurityPoolAdjustService.class);
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", adjustService);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
+
+        when(mapper.queryEnabledLeafPoolCount(11L)).thenReturn(1);
+        SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
+        when(attachmentService.createSubmissionFiles(
+                org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1001")))
+                .thenReturn(submissionFiles);
+        SecurityPoolAdjustService.BatchNoContext batchNoContext = new SecurityPoolAdjustService.BatchNoContext();
+        when(adjustService.createBatchNoContext()).thenReturn(batchNoContext);
+        AdjustSubmitDto submitDto = new AdjustSubmitDto();
+        submitDto.setSubmitCount(1);
+        when(adjustService.addAdjustLog(any(SecurityPoolAdjustSubmitReq.class), same(submissionFiles),
+                same(batchNoContext))).thenReturn(submitDto);
+
+        BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
+        req.setCurrentUserId("1001");
+        req.setDirection("in");
+        req.setAdjusterId("1001");
+        req.setAdjusterName("管理员");
+        req.setPoolId(11L);
+        req.setItems(Arrays.asList(
+                buildBatchSubmitItem("102002345"),
+                buildBatchSubmitItem("102002346")));
+
+        service.addAdjustLog(req, Collections.<MultipartFile>emptyList());
+
+        verify(adjustService).createBatchNoContext();
+        verify(adjustService, times(2)).addAdjustLog(any(SecurityPoolAdjustSubmitReq.class),
+                same(submissionFiles), same(batchNoContext));
+    }
+
+    /** 构建批量提交明细。 */
+    private BatchSecurityInboundAdjustReq.AdjustItem buildBatchSubmitItem(String securityCode) {
+        BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
+        item.setSecurityCode(securityCode);
+        item.setSecurityShortName("测试证券");
+        item.setSecurityType("company_bond");
+        item.setTargetPoolId(11L);
+        item.setAdjustMode("调入");
+        item.setFlowId(1L);
+        item.setAdjustGroupKey(securityCode + "_manual_11_调入");
+        return item;
     }
 }
