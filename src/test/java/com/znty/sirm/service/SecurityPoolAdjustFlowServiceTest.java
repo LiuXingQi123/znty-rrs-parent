@@ -179,11 +179,56 @@ public class SecurityPoolAdjustFlowServiceTest {
         verify(mapper).editAdjustStepProcess(10L, "submit", "submit", "已修改");
     }
 
+    /** 验证驳回待修改提交时保存附件变更。 */
+    @Test
+    public void submitAdjustAuditShouldSaveAttachmentChangesWhenModifySubmit() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        // 构建流程审批服务实例测试数据
+        SecurityPoolAdjustFlowService service = buildService(mapper, attachmentService);
+        // 构建发起人修改节点待处理步骤测试数据
+        IpAdjustStepBo step = buildPendingStep(10L, "1", "研究员1");
+        step.setNodeLabel("流程发起人修改");
+        // 构建发起人审批请求测试数据
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "研究员1", "已修改");
+        SecurityPoolAdjustAuditReq.AttachmentChange change = new SecurityPoolAdjustAuditReq.AttachmentChange();
+        change.setAdjustLogId(1L);
+        change.setCreditReportFileIndexes(Collections.singletonList(0));
+        change.setMaterialFileIndexes(Collections.singletonList(1));
+        change.setCreditReportSourceAttachmentIds(Collections.singletonList(7L));
+        change.setMaterialSourceAttachmentIds(Collections.singletonList(8L));
+        change.setDeleteAttachmentIds(Collections.singletonList(9L));
+        req.setAttachmentChanges(Collections.singletonList(change));
+        when(mapper.queryAdjustStepById(10L)).thenReturn(step);
+        when(mapper.editAdjustStepProcess(10L, "submit", "submit", "已修改")).thenReturn(1);
+        when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog(1L, "11", "1")));
+
+        service.submitAdjustAudit(req, Collections.emptyList());
+
+        verify(attachmentService).deleteAdjustLogAttachments(1L, Collections.singletonList(9L));
+        verify(attachmentService).bindAttachments(1L, Collections.singletonList(0),
+                SysAttachmentService.CATEGORY_CREDIT_REPORT, null);
+        verify(attachmentService).bindAttachments(1L, Collections.singletonList(1),
+                SysAttachmentService.CATEGORY_MATERIAL, null);
+        verify(attachmentService).copyReportAttachments(1L, Collections.singletonList(7L),
+                SysAttachmentService.CATEGORY_CREDIT_REPORT, "1");
+        verify(attachmentService).copyReportAttachments(1L, Collections.singletonList(8L),
+                SysAttachmentService.CATEGORY_MATERIAL, "1");
+        verify(mapper).editAdjustStepProcess(10L, "submit", "submit", "已修改");
+    }
+
     /** 构建流程审批服务实例测试数据。 */
     private SecurityPoolAdjustFlowService buildService(SecurityPoolAdjustMapper mapper) {
+        return buildService(mapper, mock(SysAttachmentService.class));
+    }
+
+    /** 构建流程审批服务实例测试数据。 */
+    private SecurityPoolAdjustFlowService buildService(SecurityPoolAdjustMapper mapper, SysAttachmentService attachmentService) {
         SecurityPoolAdjustFlowService service = new SecurityPoolAdjustFlowService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "flowMapper", mock(FlowMapper.class));
+        ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
         return service;
     }
 
@@ -227,6 +272,13 @@ public class SecurityPoolAdjustFlowServiceTest {
     private IpAdjustLogBo buildLog(String auditStatus, String adjusterId) {
         IpAdjustLogBo log = buildLog(auditStatus);
         log.setAdjusterId(adjusterId);
+        return log;
+    }
+
+    /** 构建调库日志测试数据。 */
+    private IpAdjustLogBo buildLog(Long id, String auditStatus, String adjusterId) {
+        IpAdjustLogBo log = buildLog(auditStatus, adjusterId);
+        log.setId(id);
         return log;
     }
 }

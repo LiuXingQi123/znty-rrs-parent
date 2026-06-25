@@ -22,4 +22,10 @@ public interface SysAttachmentMapper {
     /** 按附件 ID 查询附件 */
     SysAttachmentBo queryAttachmentById(@Param("id") Long id);
 
+    /** 按附件 ID 列表查询附件 */
+    List<SysAttachmentBo> queryAttachmentListByIds(@Param("ids") List<Long> ids);
+
+    /** 逻辑删除指定调库日志下的附件 */
+    int deleteAttachmentByIds(@Param("adjustLogId") Long adjustLogId, @Param("ids") List<Long> ids);
+
 }

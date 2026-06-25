@@ -19,15 +19,18 @@ import com.znty.sirm.model.SecurityPoolAdjustAuditReq;
 import com.znty.sirm.model.UserBo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 证券池调库流程服务，负责调库审批步骤处理、流程推进和最终池状态落地。
@@ -43,6 +46,10 @@ public class SecurityPoolAdjustFlowService {
     @Resource
     private FlowMapper flowMapper;
 
+    /** 系统附件服务 */
+    @Resource
+    private SysAttachmentService sysAttachmentService;
+
     /**
      * 提交调库审批处理意见，更新当前步骤并按审批流程推进。
      *
@@ -51,6 +58,18 @@ public class SecurityPoolAdjustFlowService {
      */
     @Transactional(rollbackFor = Exception.class)
     public SecurityPoolAdjustAuditDto submitAdjustAudit(SecurityPoolAdjustAuditReq req) {
+        return submitAdjustAudit(req, Collections.<MultipartFile>emptyList());
+    }
+
+    /**
+     * 提交调库审批处理意见，并在驳回待修改提交时保存附件变更。
+     *
+     * @param req 审批处理请求
+     * @param files 本次提交的本地上传附件
+     * @return 审批处理结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SecurityPoolAdjustAuditDto submitAdjustAudit(SecurityPoolAdjustAuditReq req, List<MultipartFile> files) {
         // 校验审批提交参数
         validateAuditReq(req);
 
@@ -62,6 +81,9 @@ public class SecurityPoolAdjustFlowService {
         validatePendingStep(req, step);
         // 校验发起人不能参与后续流程操作
         validateSubmitterCannotProcess(req, step);
+
+        // 驳回待修改提交时保存调库记录附件变更
+        applyAttachmentChangesForModifySubmit(req, step, files);
 
         // 处理当前步骤并按流程配置推进
         return processAdjustAudit(req, step);
@@ -143,6 +165,53 @@ public class SecurityPoolAdjustFlowService {
             if (log != null && req.getHandlerId().equals(log.getAdjusterId())) {
                 throw new BizException("发起人不能参与后续流程操作");
             }
+        }
+    }
+
+    /**
+     * 驳回待修改节点提交时保存附件新增、报告附件复制和删除。
+     */
+    private void applyAttachmentChangesForModifySubmit(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step,
+                                                       List<MultipartFile> files) {
+        if (req.getAttachmentChanges() == null || req.getAttachmentChanges().isEmpty()) {
+            return;
+        }
+        if (!"approve".equals(req.getProcessAction()) || !isModifyStep(step)) {
+            throw new BizException("仅驳回待修改提交时允许修改附件");
+        }
+        List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
+                step.getAdjustLogId(), step.getAdjustBatchNo());
+        Set<Long> allowedLogIds = new HashSet<>();
+        for (IpAdjustLogBo log : logList) {
+            if (log != null && log.getId() != null) {
+                allowedLogIds.add(log.getId());
+            }
+        }
+        SysAttachmentService.SubmissionFiles submissionFiles =
+                sysAttachmentService.createSubmissionFiles(files, req.getHandlerId());
+        for (SecurityPoolAdjustAuditReq.AttachmentChange change : req.getAttachmentChanges()) {
+            if (change == null || change.getAdjustLogId() == null) {
+                throw new BizException("附件变更调库记录 ID 不能为空");
+            }
+            if (!allowedLogIds.contains(change.getAdjustLogId())) {
+                throw new BizException("附件变更不属于当前调库批次，调库记录 ID：" + change.getAdjustLogId());
+            }
+            // 删除已移除的调库记录附件
+            sysAttachmentService.deleteAdjustLogAttachments(change.getAdjustLogId(), change.getDeleteAttachmentIds());
+            // 绑定本地上传的信评报告附件
+            sysAttachmentService.bindAttachments(change.getAdjustLogId(), change.getCreditReportFileIndexes(),
+                    SysAttachmentService.CATEGORY_CREDIT_REPORT, submissionFiles);
+            // 绑定本地上传的其他材料附件
+            sysAttachmentService.bindAttachments(change.getAdjustLogId(), change.getMaterialFileIndexes(),
+                    SysAttachmentService.CATEGORY_MATERIAL, submissionFiles);
+            // 复制报告库附件为信评报告附件
+            sysAttachmentService.copyReportAttachments(change.getAdjustLogId(),
+                    change.getCreditReportSourceAttachmentIds(),
+                    SysAttachmentService.CATEGORY_CREDIT_REPORT, req.getHandlerId());
+            // 复制报告库附件为其他材料附件
+            sysAttachmentService.copyReportAttachments(change.getAdjustLogId(),
+                    change.getMaterialSourceAttachmentIds(),
+                    SysAttachmentService.CATEGORY_MATERIAL, req.getHandlerId());
         }
     }
 
@@ -246,6 +315,17 @@ public class SecurityPoolAdjustFlowService {
         }
         String text = String.valueOf(step.getNodeLabel()) + " " + String.valueOf(step.getNodeCode()) + " " + String.valueOf(step.getNodeType());
         return text.contains("发起") || text.contains("修改") || text.contains("提交");
+    }
+
+    /**
+     * 判断当前步骤是否为驳回修改节点。
+     */
+    private boolean isModifyStep(IpAdjustStepBo step) {
+        if (step == null) {
+            return false;
+        }
+        String text = String.valueOf(step.getNodeLabel()) + " " + String.valueOf(step.getNodeCode()) + " " + String.valueOf(step.getNodeType());
+        return text.contains("修改");
     }
 
     /**

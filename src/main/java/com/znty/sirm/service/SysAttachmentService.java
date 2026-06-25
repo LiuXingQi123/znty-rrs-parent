@@ -49,6 +49,9 @@ public class SysAttachmentService {
     /** 其他材料附件分类 */
     public static final String CATEGORY_MATERIAL = "material";
 
+    /** 报告库文件分类 */
+    private static final String CATEGORY_REPORT_FILE = "report_file";
+
     /** 支持的文件扩展名 */
     private static final Set<String> ALLOWED_FILE_TYPES =
             new HashSet<>(Arrays.asList("xls", "xlsx", "pdf", "doc", "docx", "json"));
@@ -120,6 +123,68 @@ public class SysAttachmentService {
         }
     }
 
+    /** 将报告库附件复制绑定到调库日志 */
+    public void copyReportAttachments(Long adjustLogId, List<Long> sourceAttachmentIds, String attachmentCategory,
+                                      String uploaderId) {
+        if (sourceAttachmentIds == null || sourceAttachmentIds.isEmpty()) {
+            return;
+        }
+        if (adjustLogId == null) {
+            throw new BizException("复制报告附件失败：调库日志 ID 不能为空");
+        }
+        if (!CATEGORY_CREDIT_REPORT.equals(attachmentCategory) && !CATEGORY_MATERIAL.equals(attachmentCategory)) {
+            throw new BizException("复制报告附件失败：附件分类不合法");
+        }
+        List<Long> distinctIds = new ArrayList<>(new LinkedHashSet<>(sourceAttachmentIds));
+        List<SysAttachmentBo> sourceAttachments = sysAttachmentMapper.queryAttachmentListByIds(distinctIds);
+        sourceAttachments = sourceAttachments == null ? new ArrayList<SysAttachmentBo>() : sourceAttachments;
+        if (sourceAttachments.size() != distinctIds.size()) {
+            throw new BizException("复制报告附件失败：存在无效报告附件 ID");
+        }
+        for (SysAttachmentBo source : sourceAttachments) {
+            validateReportSourceAttachment(source);
+            SysAttachmentBo bo = new SysAttachmentBo();
+            bo.setTableName(ADJUST_LOG_TABLE);
+            bo.setMainId(adjustLogId);
+            bo.setAttachmentCategory(attachmentCategory);
+            bo.setFileType(source.getFileType());
+            bo.setOriginalFileName(source.getOriginalFileName());
+            bo.setNewFileName(source.getNewFileName());
+            bo.setFileSize(source.getFileSize());
+            bo.setContentType(source.getContentType());
+            bo.setFullUrl("/api/v1/attachments/downloadAttachment");
+            bo.setFileName(source.getFileName());
+            bo.setUploaderId(uploaderId);
+            sysAttachmentMapper.addAttachment(bo);
+        }
+    }
+
+    /** 逻辑删除指定调库日志下的附件 */
+    public void deleteAdjustLogAttachments(Long adjustLogId, List<Long> attachmentIds) {
+        if (attachmentIds == null || attachmentIds.isEmpty()) {
+            return;
+        }
+        if (adjustLogId == null) {
+            throw new BizException("删除附件失败：调库日志 ID 不能为空");
+        }
+        List<Long> distinctIds = new ArrayList<>(new LinkedHashSet<>(attachmentIds));
+        List<SysAttachmentBo> attachments = sysAttachmentMapper.queryAttachmentListByIds(distinctIds);
+        attachments = attachments == null ? new ArrayList<SysAttachmentBo>() : attachments;
+        if (attachments.size() != distinctIds.size()) {
+            throw new BizException("删除附件失败：存在无效附件 ID");
+        }
+        for (SysAttachmentBo attachment : attachments) {
+            if (!ADJUST_LOG_TABLE.equals(attachment.getTableName())
+                    || !adjustLogId.equals(attachment.getMainId())) {
+                throw new BizException("删除附件失败：附件不属于当前调库记录，附件 ID：" + attachment.getId());
+            }
+        }
+        int updated = sysAttachmentMapper.deleteAttachmentByIds(adjustLogId, distinctIds);
+        if (updated != distinctIds.size()) {
+            throw new BizException("删除附件失败：附件状态已变化，请刷新后重试");
+        }
+    }
+
     /** 按调库日志 ID 查询附件列表 */
     public List<SysAttachmentDto> queryAttachmentList(Long adjustLogId) {
         if (adjustLogId == null) {
@@ -175,6 +240,15 @@ public class SysAttachmentService {
             throw new BizException("上传文件名称不能为空");
         }
         resolveFileType(Paths.get(originalFileName).getFileName().toString());
+    }
+
+    /** 校验复制来源必须为报告库附件 */
+    private void validateReportSourceAttachment(SysAttachmentBo attachment) {
+        String tableName = attachment.getTableName();
+        if (!("sirm_report_in".equals(tableName) || "sirm_report_out".equals(tableName))
+                || !CATEGORY_REPORT_FILE.equals(attachment.getAttachmentCategory())) {
+            throw new BizException("复制报告附件失败：附件不是报告库文件，附件 ID：" + attachment.getId());
+        }
     }
 
     /** 解析并校验文件类型 */

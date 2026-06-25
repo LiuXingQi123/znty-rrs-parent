@@ -63,4 +63,29 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 按附件 ID 列表查询附件 -->
+    <select id="queryAttachmentListByIds" resultType="com.znty.sirm.model.SysAttachmentBo">
+        SELECT *
+        FROM sys_attachment
+        WHERE is_deleted = 0
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <!-- 逻辑删除指定调库日志下的附件 -->
+    <update id="deleteAttachmentByIds">
+        UPDATE sys_attachment
+        SET is_deleted = 1
+            ,updt_time = NOW()
+        WHERE table_name = 'ip_adjust_log'
+          AND main_id = #{adjustLogId}
+          AND is_deleted = 0
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
 </mapper>

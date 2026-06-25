@@ -15,9 +15,9 @@ import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * 系统附件服务测试
@@ -81,6 +81,56 @@ public class SysAttachmentServiceTest {
                 .hasMessageContaining("不支持的附件类型");
     }
 
+    /** 验证报告库附件可以复制绑定为调库日志附件 */
+    @Test
+    public void copyReportAttachments_ReportFile_InsertsAdjustLogAttachment() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        SysAttachmentBo source = buildAttachment(7L, "sirm_report_in", 20L, "report_file");
+        when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
+
+        service.copyReportAttachments(88L, Collections.singletonList(7L),
+                SysAttachmentService.CATEGORY_CREDIT_REPORT, "1001");
+
+        ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
+        verify(mapper).addAttachment(captor.capture());
+        SysAttachmentBo attachment = captor.getValue();
+        assertThat(attachment.getTableName()).isEqualTo("ip_adjust_log");
+        assertThat(attachment.getMainId()).isEqualTo(88L);
+        assertThat(attachment.getAttachmentCategory()).isEqualTo(SysAttachmentService.CATEGORY_CREDIT_REPORT);
+        assertThat(attachment.getOriginalFileName()).isEqualTo("报告附件.pdf");
+        assertThat(attachment.getFileName()).isEqualTo("20260601/report.pdf");
+    }
+
+    /** 验证指定调库日志下的附件可以逻辑删除 */
+    @Test
+    public void deleteAdjustLogAttachments_ValidAttachment_DeletesByLogId() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        SysAttachmentBo attachment = buildAttachment(8L, "ip_adjust_log", 88L,
+                SysAttachmentService.CATEGORY_CREDIT_REPORT);
+        when(mapper.queryAttachmentListByIds(Collections.singletonList(8L))).thenReturn(Collections.singletonList(attachment));
+        when(mapper.deleteAttachmentByIds(88L, Collections.singletonList(8L))).thenReturn(1);
+
+        service.deleteAdjustLogAttachments(88L, Collections.singletonList(8L));
+
+        verify(mapper).deleteAttachmentByIds(88L, Collections.singletonList(8L));
+    }
+
+    /** 验证不能删除其他调库记录的附件 */
+    @Test
+    public void deleteAdjustLogAttachments_OtherLogAttachment_ThrowsBizException() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        SysAttachmentBo attachment = buildAttachment(8L, "ip_adjust_log", 99L,
+                SysAttachmentService.CATEGORY_CREDIT_REPORT);
+        when(mapper.queryAttachmentListByIds(Collections.singletonList(8L))).thenReturn(Collections.singletonList(attachment));
+
+        assertThatThrownBy(() -> service.deleteAdjustLogAttachments(88L, Collections.singletonList(8L)))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("附件不属于当前调库记录");
+    }
+
     /** 构建附件服务 */
     private SysAttachmentService buildService(SysAttachmentMapper mapper) throws Exception {
         SysAttachmentService service = new SysAttachmentService();
@@ -88,5 +138,23 @@ public class SysAttachmentServiceTest {
         ReflectionTestUtils.setField(service, "storagePath", temporaryFolder.getRoot().getAbsolutePath());
         service.initializeStorage();
         return service;
+    }
+
+    /** 构建附件实体 */
+    private SysAttachmentBo buildAttachment(Long id, String tableName, Long mainId, String category) {
+        SysAttachmentBo attachment = new SysAttachmentBo();
+        attachment.setId(id);
+        attachment.setTableName(tableName);
+        attachment.setMainId(mainId);
+        attachment.setAttachmentCategory(category);
+        attachment.setFileType("pdf");
+        attachment.setOriginalFileName("报告附件.pdf");
+        attachment.setNewFileName("report.pdf");
+        attachment.setFileSize(1024L);
+        attachment.setContentType("application/pdf");
+        attachment.setFullUrl("/api/v1/attachments/downloadAttachment");
+        attachment.setFileName("20260601/report.pdf");
+        attachment.setUploaderId("1001");
+        return attachment;
     }
 }
