@@ -115,4 +115,31 @@
         ORDER BY main_id ASC
                  ,id ASC
     </select>
+
+    <!-- 新增内部报告记录 -->
+    <insert id="addInReport" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sirm_report_in (
+            author_name
+            ,report_title
+            ,report_type
+            ,security_code
+            ,company_code
+            ,security_type
+            ,data_source
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        ) VALUES (
+            #{authorName}
+            ,#{reportTitle}
+            ,#{reportType}
+            ,#{securityCode}
+            ,#{companyCode}
+            ,#{securityType}
+            ,#{dataSource}
+            ,0
+            ,NOW()
+            ,NOW()
+        )
+    </insert>
 </mapper>

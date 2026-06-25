@@ -5,6 +5,7 @@ import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.ReportMapper;
 import com.znty.sirm.model.ReportDto;
+import com.znty.sirm.model.ReportInBo;
 import com.znty.sirm.model.ReportReq;
 import com.znty.sirm.model.SysAttachmentDto;
 import org.springframework.stereotype.Service;
@@ -84,5 +85,15 @@ public class ReportService {
                 report.setAttachments(reportAttachments);
             }
         }
+    }
+
+    /**
+     * 新增内部报告记录，返回回填的主键 ID。
+     *
+     * @param bo 内部报告记录
+     */
+    public Long addInReport(ReportInBo bo) {
+        reportMapper.addInReport(bo);
+        return bo.getId();
     }
 }

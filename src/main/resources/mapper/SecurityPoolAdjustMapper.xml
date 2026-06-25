@@ -703,4 +703,13 @@
         WHERE is_deleted = 0
     </select>
 
+    <!-- 根据证券类型编码查询所属大类 -->
+    <select id="queryCategoryTypeBySecurityType" resultType="string">
+        SELECT category_type
+        FROM dict_security_type
+        WHERE security_type = #{securityType}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
 </mapper>

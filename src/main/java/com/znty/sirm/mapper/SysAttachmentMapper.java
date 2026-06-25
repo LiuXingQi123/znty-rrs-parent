@@ -27,4 +27,7 @@ public interface SysAttachmentMapper {
 
     /** 逻辑删除指定调库日志下的附件 */
     int deleteAttachmentByIdsList(@Param("adjustLogId") Long adjustLogId, @Param("ids") List<Long> ids);
+
+    /** 查询指定调库记录下手动上传的信评报告附件（new_file_name 以 credit_report_ 开头） */
+    List<SysAttachmentBo> queryManualCreditReportAttachments(@Param("adjustLogId") Long adjustLogId);
 }

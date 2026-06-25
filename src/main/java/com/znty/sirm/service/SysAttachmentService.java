@@ -193,6 +193,50 @@ public class SysAttachmentService {
         return sysAttachmentMapper.queryAttachmentList(adjustLogId);
     }
 
+    /**
+     * 查询指定调库记录下手动上传的信评报告附件。
+     * 手动上传附件 new_file_name 以 credit_report_ 开头，从报告库复制的附件继承源报告 report_file_ 前缀。
+     *
+     * @param adjustLogId 调库日志 ID
+     */
+    public List<SysAttachmentBo> queryManualCreditReportAttachments(Long adjustLogId) {
+        if (adjustLogId == null) {
+            throw new BizException("调库日志 ID 不能为空");
+        }
+        return sysAttachmentMapper.queryManualCreditReportAttachments(adjustLogId);
+    }
+
+    /**
+     * 将手动上传的信评报告附件复制为内部报告库附件（table_name=sirm_report_in，attachment_category=report_file）。
+     * 物理文件信息原样复用，使报告库附件指向同一物理文件、可下载。
+     *
+     * @param reportId 内部报告 ID
+     * @param sources  待复制的手动上传信评报告附件列表
+     */
+    public void bindReportFileAttachments(Long reportId, List<SysAttachmentBo> sources) {
+        if (sources == null || sources.isEmpty()) {
+            return;
+        }
+        if (reportId == null) {
+            throw new BizException("绑定报告附件失败：内部报告 ID 不能为空");
+        }
+        for (SysAttachmentBo source : sources) {
+            SysAttachmentBo bo = new SysAttachmentBo();
+            bo.setTableName("sirm_report_in");
+            bo.setMainId(reportId);
+            bo.setAttachmentCategory(CATEGORY_REPORT_FILE);
+            bo.setFileType(source.getFileType());
+            bo.setOriginalFileName(source.getOriginalFileName());
+            bo.setNewFileName(source.getNewFileName());
+            bo.setFileSize(source.getFileSize());
+            bo.setContentType(source.getContentType());
+            bo.setFullUrl(source.getFullUrl());
+            bo.setFileName(source.getFileName());
+            bo.setUploaderId(source.getUploaderId());
+            sysAttachmentMapper.addAttachment(bo);
+        }
+    }
+
     /** 下载附件 */
     public DownloadFile downloadAttachment(SysAttachmentReq req) {
         Long id = req.getId();

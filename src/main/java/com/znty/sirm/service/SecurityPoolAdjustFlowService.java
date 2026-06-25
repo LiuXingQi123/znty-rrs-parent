@@ -13,9 +13,12 @@ import com.znty.sirm.model.IpAdjustLogBo;
 import com.znty.sirm.model.IpAdjustStepBo;
 import com.znty.sirm.model.NodeApprovalConfigBo;
 import com.znty.sirm.model.NodeApprovalHandlerBo;
+import com.znty.sirm.model.ReportInBo;
 import com.znty.sirm.model.RoleBo;
+import com.znty.sirm.model.SecurityInfoBo;
 import com.znty.sirm.model.SecurityPoolAdjustAuditDto;
 import com.znty.sirm.model.SecurityPoolAdjustAuditReq;
+import com.znty.sirm.model.SysAttachmentBo;
 import com.znty.sirm.model.UserBo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +52,14 @@ public class SecurityPoolAdjustFlowService {
     /** 系统附件服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+
+    /** 投资池服务，用于查询投资池全路径名称 */
+    @Resource
+    private InvestmentPoolService investmentPoolService;
+
+    /** 报告库服务，用于审批通过后写入内部报告 */
+    @Resource
+    private ReportService reportService;
 
     /**
      * 提交调库审批处理意见，更新当前步骤并按审批流程推进。
@@ -441,6 +452,88 @@ public class SecurityPoolAdjustFlowService {
                 securityPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
             }
         }
+        // 审批通过结束后，将手动上传的信评报告沉淀为内部报告
+        generateInternalReportsOnFinish(logList);
+    }
+
+    /**
+     * 审批通过结束后，逐条调库记录将手动上传的信评报告附件沉淀为内部报告库记录。
+     * 每条调库记录生成 1 条 sirm_report_in，其下所有手动上传信评报告附件复制为该报告的 report_file 附件。
+     * 无手动上传信评报告附件的调库记录跳过。
+     *
+     * @param logList 同批次调库记录列表
+     */
+    private void generateInternalReportsOnFinish(List<IpAdjustLogBo> logList) {
+        if (logList == null || logList.isEmpty()) {
+            return;
+        }
+        // 整批只查一次投资池全路径映射
+        Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
+        for (IpAdjustLogBo log : logList) {
+            // 查询该调库记录下手动上传的信评报告附件
+            List<SysAttachmentBo> manualAttachments = sysAttachmentService.queryManualCreditReportAttachments(log.getId());
+            if (manualAttachments == null || manualAttachments.isEmpty()) {
+                continue;
+            }
+            // 查询证券基础信息，取证券全称与主体编码
+            SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(log.getSecurityCode());
+            // 查询证券所属大类，用于映射报告类型
+            String categoryType = securityPoolAdjustMapper.queryCategoryTypeBySecurityType(log.getSecurityType());
+            // 组装报告标题：证券全称 + 调入/调出 + 投资池全路径名称 + 报告
+            String securityFullName = securityInfo != null && securityInfo.getFullName() != null
+                    ? securityInfo.getFullName() : log.getSecurityShortName();
+            String poolFullName = poolFullNameMap.get(log.getTargetPoolId());
+            if (poolFullName == null || poolFullName.isEmpty()) {
+                poolFullName = log.getTargetPoolName();
+            }
+            String reportTitle = securityFullName + log.getAdjustMode() + poolFullName + "报告";
+            // 构建内部报告记录
+            ReportInBo reportInBo = new ReportInBo();
+            reportInBo.setAuthorName(log.getAdjusterName());
+            reportInBo.setReportTitle(reportTitle);
+            reportInBo.setReportType(resolveReportType(categoryType, log.getAdjustMode()));
+            reportInBo.setSecurityCode(log.getSecurityCode());
+            reportInBo.setCompanyCode(securityInfo != null ? securityInfo.getIssuerCode() : null);
+            reportInBo.setSecurityType(resolveReportSecurityType(categoryType));
+            reportInBo.setDataSource("uploaded");
+            // 写入内部报告并回填主键 ID
+            Long reportId = reportService.addInReport(reportInBo);
+            // 将手动上传信评报告附件复制为该内部报告的附件
+            sysAttachmentService.bindReportFileAttachments(reportId, manualAttachments);
+        }
+    }
+
+    /**
+     * 根据证券大类与调入/调出方向映射内部报告类型。
+     *
+     * @param categoryType 证券大类（bond/fund/stock/company 等）
+     * @param adjustMode   调整方向（调入/调出）
+     */
+    private String resolveReportType(String categoryType, String adjustMode) {
+        boolean outbound = "调出".equals(adjustMode);
+        if ("bond".equals(categoryType)) {
+            return outbound ? "bond_out_report" : "bond_in_report";
+        }
+        if ("fund".equals(categoryType)) {
+            return outbound ? "fund_out_report" : "fund_in_report";
+        }
+        if ("stock".equals(categoryType)) {
+            return outbound ? "stock_out_report" : "stock_in_report";
+        }
+        return "other_report";
+    }
+
+    /**
+     * 根据证券大类映射内部报告证券类型，未匹配归为其他。
+     *
+     * @param categoryType 证券大类（bond/fund/stock/company 等）
+     */
+    private String resolveReportSecurityType(String categoryType) {
+        if ("bond".equals(categoryType) || "fund".equals(categoryType)
+                || "stock".equals(categoryType) || "company".equals(categoryType)) {
+            return categoryType;
+        }
+        return "other";
     }
 
     /**

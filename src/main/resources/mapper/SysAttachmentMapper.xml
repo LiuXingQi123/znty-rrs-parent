@@ -88,4 +88,30 @@
         </foreach>
     </update>
 
+    <!-- 查询指定调库记录下手动上传的信评报告附件 -->
+    <select id="queryManualCreditReportAttachments" resultType="com.znty.sirm.model.SysAttachmentBo">
+        SELECT id
+               ,table_name
+               ,main_id
+               ,attachment_category
+               ,file_type
+               ,original_file_name
+               ,new_file_name
+               ,file_size
+               ,content_type
+               ,full_url
+               ,file_name
+               ,uploader_id
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_attachment
+        WHERE table_name = 'ip_adjust_log'
+          AND main_id = #{adjustLogId}
+          AND attachment_category = 'credit_report'
+          AND is_deleted = 0
+          AND new_file_name LIKE 'credit_report_%'
+        ORDER BY id ASC
+    </select>
+
 </mapper>

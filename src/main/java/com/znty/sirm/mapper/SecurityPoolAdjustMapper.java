@@ -131,4 +131,7 @@ public interface SecurityPoolAdjustMapper {
     int editAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
                                  @Param("adjustBatchNo") String adjustBatchNo,
                                  @Param("auditStatus") String auditStatus);
+
+    /** 根据证券类型编码查询所属大类（dict_security_type.category_type） */
+    String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);
 }

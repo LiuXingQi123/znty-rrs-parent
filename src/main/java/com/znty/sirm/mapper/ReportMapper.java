@@ -1,6 +1,7 @@
 package com.znty.sirm.mapper;
 
 import com.znty.sirm.model.ReportDto;
+import com.znty.sirm.model.ReportInBo;
 import com.znty.sirm.model.ReportReq;
 import com.znty.sirm.model.SysAttachmentDto;
 import org.apache.ibatis.annotations.Mapper;
@@ -33,4 +34,9 @@ public interface ReportMapper {
      * 按外部报告 ID 批量查询报告附件
      */
     List<SysAttachmentDto> queryOutReportAttachmentList(@Param("reportIds") List<Long> reportIds);
+
+    /**
+     * 新增内部报告记录，回填主键 ID
+     */
+    int addInReport(ReportInBo bo);
 }
