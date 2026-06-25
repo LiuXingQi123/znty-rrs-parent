@@ -99,6 +99,8 @@ public class BatchSecurityPoolAdjustServiceTest {
         item.setFlowId(1L);
         item.setCreditReportFileIndexes(Collections.singletonList(0));
         item.setMaterialFileIndexes(Collections.singletonList(1));
+        item.setCreditReportSourceAttachmentIds(Arrays.asList(7L, 8L));
+        item.setMaterialSourceAttachmentIds(Collections.singletonList(9L));
 
         SecurityPoolAdjustSubmitReq submitReq = ReflectionTestUtils.invokeMethod(
                 service,
@@ -111,5 +113,9 @@ public class BatchSecurityPoolAdjustServiceTest {
                 .containsExactly(0);
         assertThat(submitReq.getItems().get(0).getMaterialFileIndexes())
                 .containsExactly(1);
+        assertThat(submitReq.getItems().get(0).getCreditReportSourceAttachmentIds())
+                .containsExactly(7L, 8L);
+        assertThat(submitReq.getItems().get(0).getMaterialSourceAttachmentIds())
+                .containsExactly(9L);
     }
 }

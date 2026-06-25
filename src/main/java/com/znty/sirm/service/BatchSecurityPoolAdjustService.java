@@ -356,6 +356,8 @@ public class BatchSecurityPoolAdjustService {
             submitItem.setAdjustmentNote(item.getAdjustmentNote());
             submitItem.setCreditReportFileIndexes(item.getCreditReportFileIndexes());
             submitItem.setMaterialFileIndexes(item.getMaterialFileIndexes());
+            submitItem.setCreditReportSourceAttachmentIds(item.getCreditReportSourceAttachmentIds());
+            submitItem.setMaterialSourceAttachmentIds(item.getMaterialSourceAttachmentIds());
             submitItems.add(submitItem);
         }
         submitReq.setItems(submitItems);
