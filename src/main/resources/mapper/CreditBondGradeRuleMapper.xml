@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.CreditBondGradeRuleMapper">
+    <!-- 主体内评分档规则 mapper，对应信用债期限分组、主体内评分档和投资池关系矩阵配置 -->
+
+    <!-- 查询启用的期限分组列表 -->
+    <select id="queryEnabledTermBucketList" resultType="com.znty.sirm.entity.bo.CreditBondTermBucketBo">
+        SELECT id
+               ,bucket_code
+               ,bucket_name
+               ,min_term_year
+               ,min_inclusive
+               ,max_term_year
+               ,max_inclusive
+               ,expression_text
+               ,sort_no
+               ,enabled
+               ,crte_time
+               ,updt_time
+        FROM credit_bond_term_bucket
+        WHERE enabled = 1
+        ORDER BY sort_no ASC
+                 ,id ASC
+    </select>
+
+    <!-- 查询启用的主体内评分档列表 -->
+    <select id="queryEnabledRatingGradeList" resultType="com.znty.sirm.entity.bo.CreditBondInnerRatingGradeBo">
+        SELECT id
+               ,grade_code
+               ,grade_name
+               ,sort_no
+               ,enabled
+               ,crte_time
+               ,updt_time
+        FROM credit_bond_inner_rating_grade
+        WHERE enabled = 1
+        ORDER BY sort_no ASC
+                 ,id ASC
+    </select>
+
+    <!-- 查询信用债大库一至五级库列表 -->
+    <select id="queryCreditBondPoolList" resultType="com.znty.sirm.entity.bo.InvestmentPoolBo">
+        SELECT id
+               ,parent_id
+               ,pool_code
+               ,pool_name
+               ,pool_type
+               ,pool_level
+               ,inner_sort
+               ,status
+        FROM ip_investment_pool
+        WHERE parent_id = 1
+          AND pool_type = 'credit_bond'
+          AND pool_level = 2
+          AND inner_sort BETWEEN 1 AND 5
+          AND status = 'enabled'
+          AND is_deleted = 0
+        ORDER BY inner_sort ASC
+                 ,id ASC
+    </select>
+
+    <!-- 查询启用的矩阵关系列表 -->
+    <select id="queryEnabledRuleList" resultType="com.znty.sirm.entity.bo.CreditBondPoolGradeRuleBo">
+        SELECT id
+               ,term_bucket_id
+               ,inner_rating_grade_id
+               ,pool_id
+               ,pool_code_snapshot
+               ,pool_name_snapshot
+               ,enabled
+               ,sort_no
+               ,crte_time
+               ,updt_time
+        FROM credit_bond_pool_grade_rule
+        WHERE enabled = 1
+        ORDER BY term_bucket_id ASC
+                 ,inner_rating_grade_id ASC
+                 ,sort_no ASC
+                 ,id ASC
+    </select>
+
+    <!-- 删除全部矩阵关系 -->
+    <delete id="deleteAllRule">
+        DELETE FROM credit_bond_pool_grade_rule
+    </delete>
+
+    <!-- 批量新增矩阵关系 -->
+    <insert id="addRuleList" parameterType="java.util.List" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO credit_bond_pool_grade_rule (
+            term_bucket_id
+            ,inner_rating_grade_id
+            ,pool_id
+            ,pool_code_snapshot
+            ,pool_name_snapshot
+            ,enabled
+            ,sort_no
+            ,crte_time
+            ,updt_time
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.termBucketId}
+                ,#{item.innerRatingGradeId}
+                ,#{item.poolId}
+                ,#{item.poolCodeSnapshot}
+                ,#{item.poolNameSnapshot}
+                ,#{item.enabled}
+                ,#{item.sortNo}
+                ,#{item.crteTime}
+                ,#{item.updtTime}
+            )
+        </foreach>
+    </insert>
+</mapper>
