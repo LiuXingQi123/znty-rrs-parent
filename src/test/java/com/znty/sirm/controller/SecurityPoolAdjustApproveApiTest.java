@@ -71,6 +71,6 @@ public class SecurityPoolAdjustApproveApiTest extends ControllerApiTestSupport {
                         .file(request)
                         .file(file))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
+                .andExpect(jsonPath("$.success").value(true));
     }
 }

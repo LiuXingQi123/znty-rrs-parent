@@ -18,13 +18,15 @@ public class ExceptionConfig {
     /** 处理业务异常。 */
     @ExceptionHandler(BizException.class)
     public ApiResponse<?> handleBiz(BizException e) {
-        return ApiResponse.fail(e.getCode(), e.getMessage());
+        // code 仅用于日志区分（400/404 等），不再进入响应体
+        log.warn("业务异常 code={}: {}", e.getCode(), e.getMessage());
+        return ApiResponse.fail(e.getMessage());
     }
 
     /** 处理系统异常。 */
     @ExceptionHandler(Exception.class)
     public ApiResponse<?> handleOther(Exception e) {
         log.error("系统异常", e);
-        return ApiResponse.fail(500, "系统繁忙，请稍后重试");
+        return ApiResponse.fail("系统繁忙，请稍后重试");
     }
 }

@@ -17,7 +17,7 @@ public abstract class ControllerApiTestSupport {
     protected void assertPostSuccess(MockMvc mockMvc, String path, String body) throws Exception {
         postJson(mockMvc, path, body)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 
@@ -25,7 +25,7 @@ public abstract class ControllerApiTestSupport {
     protected void assertPostSuccess(MockMvc mockMvc, String path) throws Exception {
         mockMvc.perform(post(path))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("success"));
     }
 

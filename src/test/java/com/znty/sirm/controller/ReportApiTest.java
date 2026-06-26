@@ -106,7 +106,7 @@ public class ReportApiTest extends ControllerApiTestSupport {
 
         postJson(mockMvc, "/api/v1/reports/queryInReportPage", "{}")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.records[0].attachments[0].mainId").value(1))
                 .andExpect(jsonPath("$.data.records[0].attachments[0].originalFileName").value("报告附件.pdf"));
     }

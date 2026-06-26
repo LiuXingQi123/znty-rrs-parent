@@ -18,7 +18,7 @@ this.loadSecurityTypeOptions();   // 证券类型下拉
 this.loadList();                  // 列表数据
 ```
 
-统一请求封装 `apiPost`：`json.code !== 0` 报错并抛异常，成功返回 `json.data`。后端统一响应 `ApiResponse<T> = {code, message, data}`，`code=0` 为成功。
+统一请求封装 `apiPost`：`!json.success` 报错并抛异常，成功返回 `json.data`。后端统一响应 `ApiResponse<T> = {success, message, data}`，`success=true` 为成功。
 
 ---
 

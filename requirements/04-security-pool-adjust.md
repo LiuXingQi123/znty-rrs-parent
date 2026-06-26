@@ -17,7 +17,7 @@
 
 **初始化**（`created`）：设置 `axios.defaults.baseURL = 'http://localhost:18090'`，调用 `loadList()` 加载证券列表。
 
-**apiPost 封装**：页面内置方法，返回 `{ code, data, message }`，`code !== 0` 弹错并抛异常；支持 `responseType === 'blob'` 用于附件下载。
+**apiPost 封装**：页面内置方法，返回 `{ success, data, message }`，`!json.success` 弹错并抛异常；支持 `responseType === 'blob'` 用于附件下载。
 
 ---
 

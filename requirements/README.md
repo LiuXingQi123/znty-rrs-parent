@@ -1,6 +1,6 @@
 # 智慧风控平台功能需求说明
 
-本目录按前端业务页面整理需求，共 14 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `code=0`、`message=success`。
+本目录按前端业务页面整理需求，共 14 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
 
 | 序号 | 功能 | 前端页面 | 需求文档 | 接口测试 |
 |---|---|---|---|---|

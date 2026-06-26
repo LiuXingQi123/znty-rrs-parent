@@ -25,7 +25,7 @@
 3. `loadPoolTree()`：`POST /api/v1/investmentPool/queryPoolList`，`buildPoolTree` 组装树、`flattenPools` 展平、`buildPoolParentMap` 构建面包屑映射，默认选中第一个节点并 `loadPoolDetail`。
 4. `loadRuleCategories()` + `loadRules()`：请求规则分类和启用规则，用于自动规则选择弹窗。
 
-请求封装 `Vue.prototype.apiPost`：`apiBase='http://localhost:18090'`，统一 POST，`code !== 0` 弹错并抛异常。
+请求封装 `Vue.prototype.apiPost`：`apiBase='http://localhost:18090'`，统一 POST，`!json.success` 弹错并抛异常。
 
 ---
 
