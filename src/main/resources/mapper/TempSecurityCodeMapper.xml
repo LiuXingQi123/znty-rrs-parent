@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.TempSecurityCodeMapper">
+    <!-- 临时代码管理 mapper，对应表：sirm_temp_security_code，提供临时代码查询、新增、更新、取消发行和删除功能 -->
+
+    <!-- 分页查询临时代码列表 -->
+    <select id="queryTempSecurityCodePage" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto">
+        SELECT t.id
+               ,t.temp_security_name
+               ,t.temp_security_code
+               ,t.temp_security_market
+               ,t.temp_security_type
+               ,dst_temp.security_type_name AS tempSecurityTypeName
+               ,t.temp_mitigation_code
+               ,t.temp_company_id
+               ,t.temp_company_name_snapshot
+               ,t.temp_issue_date
+               ,t.temp_maturity_date
+               ,t.security_name
+               ,t.security_code
+               ,t.security_market
+               ,t.security_type
+               ,dst.security_type_name
+               ,t.update_time
+               ,t.status
+               ,t.operation_type
+               ,t.crte_time
+               ,t.updt_time
+        FROM sirm_temp_security_code t
+        LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type
+                                             AND dst_temp.is_deleted = 0
+        LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type
+                                        AND dst.is_deleted = 0
+        <where>
+            <if test="tempSecurityCode != null and tempSecurityCode != ''">
+                AND t.temp_security_code LIKE CONCAT('%', #{tempSecurityCode}, '%')
+            </if>
+            <if test="tempSecurityName != null and tempSecurityName != ''">
+                AND t.temp_security_name LIKE CONCAT('%', #{tempSecurityName}, '%')
+            </if>
+        </where>
+        ORDER BY t.crte_time DESC
+                 ,t.id DESC
+    </select>
+
+    <!-- 根据 ID 查询临时代码 -->
+    <select id="queryTempSecurityCodeById" resultType="com.znty.sirm.entity.bo.TempSecurityCodeBo">
+        SELECT id
+               ,temp_security_name
+               ,temp_security_code
+               ,temp_security_market
+               ,temp_security_type
+               ,temp_mitigation_code
+               ,temp_company_id
+               ,temp_company_name_snapshot
+               ,temp_issue_date
+               ,temp_maturity_date
+               ,security_name
+               ,security_code
+               ,security_market
+               ,security_type
+               ,update_time
+               ,status
+               ,operation_type
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sirm_temp_security_code
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 根据 ID 查询临时代码详情 -->
+    <select id="queryTempSecurityCodeDetail" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto">
+        SELECT t.id
+               ,t.temp_security_name
+               ,t.temp_security_code
+               ,t.temp_security_market
+               ,t.temp_security_type
+               ,dst_temp.security_type_name AS tempSecurityTypeName
+               ,t.temp_mitigation_code
+               ,t.temp_company_id
+               ,t.temp_company_name_snapshot
+               ,t.temp_issue_date
+               ,t.temp_maturity_date
+               ,t.security_name
+               ,t.security_code
+               ,t.security_market
+               ,t.security_type
+               ,dst.security_type_name
+               ,t.update_time
+               ,t.status
+               ,t.operation_type
+               ,t.crte_time
+               ,t.updt_time
+        FROM sirm_temp_security_code t
+        LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type
+                                             AND dst_temp.is_deleted = 0
+        LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type
+                                        AND dst.is_deleted = 0
+        WHERE t.id = #{id}
+          AND t.is_deleted = 0
+    </select>
+
+    <!-- 查询临时代码未删除记录数量 -->
+    <select id="queryTempSecurityCodeCount" resultType="int">
+        SELECT COUNT(1)
+        FROM sirm_temp_security_code
+        <where>
+            is_deleted = 0
+            AND temp_security_code = #{tempSecurityCode}
+            <if test="excludeId != null">
+                AND id != #{excludeId}
+            </if>
+        </where>
+    </select>
+
+    <!-- 查询发行主体选项 -->
+    <select id="queryCompanyOptionList" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
+        SELECT id AS companyId
+               ,code AS companyCode
+               ,full_name
+               ,short_name
+        FROM t_inv_company
+        <where>
+            <if test="tempCompanyId != null">
+                AND id = #{tempCompanyId}
+            </if>
+            <if test="tempSecurityName != null and tempSecurityName != ''">
+                AND (full_name LIKE CONCAT('%', #{tempSecurityName}, '%')
+                     OR short_name LIKE CONCAT('%', #{tempSecurityName}, '%'))
+            </if>
+        </where>
+        ORDER BY id ASC
+        LIMIT 100
+    </select>
+
+    <!-- 根据主体 ID 查询发行主体 -->
+    <select id="queryCompanyById" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
+        SELECT id AS companyId
+               ,code AS companyCode
+               ,full_name
+               ,short_name
+        FROM t_inv_company
+        WHERE id = #{companyId}
+        LIMIT 1
+    </select>
+
+    <!-- 查询证券类型选项 -->
+    <select id="querySecurityTypeList" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto$SecurityTypeOption">
+        SELECT security_type
+               ,security_type_name
+               ,category_type
+               ,category_type_name
+        FROM dict_security_type
+        WHERE is_deleted = 0
+          AND category_type != 'company'
+        ORDER BY category_type ASC
+                 ,sort_order ASC
+                 ,id ASC
+    </select>
+
+    <!-- 查询证券类型数量 -->
+    <select id="querySecurityTypeCount" resultType="int">
+        SELECT COUNT(1)
+        FROM dict_security_type
+        WHERE is_deleted = 0
+          AND security_type = #{securityType}
+    </select>
+
+    <!-- 根据正式证券代码查询证券信息数量 -->
+    <select id="querySecurityInfoCount" resultType="int">
+        SELECT COUNT(1)
+        FROM sirm_securityinfo
+        WHERE wind_code = #{securityCode}
+    </select>
+
+    <!-- 新增证券信息 -->
+    <insert id="addSecurityInfo">
+        INSERT INTO sirm_securityinfo (
+            wind_code
+            ,full_name
+            ,short_name
+            ,wind_code_sh
+            ,wind_code_sz
+            ,wind_code_nib
+            ,wind_code_nbc
+            ,security_type
+            ,issuer
+            ,firstissue_date
+            ,maturity_date
+            ,create_time
+            ,ts
+        ) VALUES (
+            #{securityCode}
+            ,#{securityName}
+            ,#{securityName}
+            ,CASE WHEN #{securityMarket} = 'SSE' THEN #{securityCode} ELSE NULL END
+            ,CASE WHEN #{securityMarket} = 'SZSE' THEN #{securityCode} ELSE NULL END
+            ,CASE WHEN #{securityMarket} = 'CIBM' THEN #{securityCode} ELSE NULL END
+            ,CASE WHEN #{securityMarket} IN ('OTC', 'UNKNOWN', 'JWCW') THEN #{securityCode} ELSE NULL END
+            ,#{securityType}
+            ,#{tempCompanyNameSnapshot}
+            ,DATE_FORMAT(#{tempIssueDate}, '%Y-%m-%d')
+            ,DATE_FORMAT(#{tempMaturityDate}, '%Y-%m-%d')
+            ,#{updateTime}
+            ,#{updateTime}
+        )
+    </insert>
+
+    <!-- 更新证券信息 -->
+    <update id="editSecurityInfo">
+        UPDATE sirm_securityinfo
+        SET full_name = #{securityName}
+           ,short_name = #{securityName}
+           ,wind_code_sh = CASE WHEN #{securityMarket} = 'SSE' THEN #{securityCode} ELSE NULL END
+           ,wind_code_sz = CASE WHEN #{securityMarket} = 'SZSE' THEN #{securityCode} ELSE NULL END
+           ,wind_code_nib = CASE WHEN #{securityMarket} = 'CIBM' THEN #{securityCode} ELSE NULL END
+           ,wind_code_nbc = CASE WHEN #{securityMarket} IN ('OTC', 'UNKNOWN', 'JWCW') THEN #{securityCode} ELSE NULL END
+           ,security_type = #{securityType}
+           ,issuer = #{tempCompanyNameSnapshot}
+           ,firstissue_date = DATE_FORMAT(#{tempIssueDate}, '%Y-%m-%d')
+           ,maturity_date = DATE_FORMAT(#{tempMaturityDate}, '%Y-%m-%d')
+           ,ts = #{updateTime}
+        WHERE wind_code = #{securityCode}
+    </update>
+
+    <!-- 新增临时代码 -->
+    <insert id="addTempSecurityCode" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sirm_temp_security_code (
+            temp_security_name
+            ,temp_security_code
+            ,temp_security_market
+            ,temp_security_type
+            ,temp_mitigation_code
+            ,temp_company_id
+            ,temp_company_name_snapshot
+            ,temp_issue_date
+            ,temp_maturity_date
+            ,status
+            ,operation_type
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        ) VALUES (
+            #{tempSecurityName}
+            ,#{tempSecurityCode}
+            ,#{tempSecurityMarket}
+            ,#{tempSecurityType}
+            ,#{tempMitigationCode}
+            ,#{tempCompanyId}
+            ,#{tempCompanyNameSnapshot}
+            ,#{tempIssueDate}
+            ,#{tempMaturityDate}
+            ,#{status}
+            ,#{operationType}
+            ,#{isDeleted}
+            ,#{crteTime}
+            ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 更新临时代码为已更新 -->
+    <update id="editTempSecurityCodeToUpdated">
+        UPDATE sirm_temp_security_code
+        SET temp_security_name = #{tempSecurityName}
+           ,temp_security_code = #{tempSecurityCode}
+           ,temp_security_market = #{tempSecurityMarket}
+           ,temp_security_type = #{tempSecurityType}
+           ,temp_mitigation_code = #{tempMitigationCode}
+           ,temp_company_id = #{tempCompanyId}
+           ,temp_company_name_snapshot = #{tempCompanyNameSnapshot}
+           ,temp_issue_date = #{tempIssueDate}
+           ,temp_maturity_date = #{tempMaturityDate}
+           ,security_name = #{securityName}
+           ,security_code = #{securityCode}
+           ,security_market = #{securityMarket}
+           ,security_type = #{securityType}
+           ,update_time = #{updateTime}
+           ,status = #{status}
+           ,operation_type = #{operationType}
+           ,updt_time = #{updtTime}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <!-- 取消发行临时代码 -->
+    <update id="editTempSecurityCodeToCancelled">
+        UPDATE sirm_temp_security_code
+        SET update_time = #{updateTime}
+           ,status = #{status}
+           ,operation_type = #{operationType}
+           ,updt_time = #{updtTime}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <!-- 删除临时代码 -->
+    <update id="deleteTempSecurityCode">
+        UPDATE sirm_temp_security_code
+        SET update_time = #{updateTime}
+           ,status = #{status}
+           ,operation_type = #{operationType}
+           ,is_deleted = #{isDeleted}
+           ,updt_time = #{updtTime}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+</mapper>
