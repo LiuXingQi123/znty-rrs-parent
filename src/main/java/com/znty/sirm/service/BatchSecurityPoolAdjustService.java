@@ -340,7 +340,10 @@ public class BatchSecurityPoolAdjustService {
             if (item.getTargetPoolId() == null) {
                 throw new BizException("调库明细目标投资池 ID 不能为空");
             }
-            if (item.getFlowId() == null && (item.getFlowKey() == null || item.getFlowKey().isEmpty())) {
+            // 仅手工项要求选择审批流程，联动/互斥项共用同组手工项的流程（后端 resolveManualSubmitItem 自动取用）
+            if (isManualBatchSubmitItem(item)
+                    && item.getFlowId() == null
+                    && (item.getFlowKey() == null || item.getFlowKey().isEmpty())) {
                 throw new BizException("调库明细审批流程不能为空");
             }
         }
