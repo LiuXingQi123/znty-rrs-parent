@@ -204,8 +204,6 @@ public class BatchSecurityPoolAdjustService {
         validateAdjustPoolPermission(req.getCurrentUserId(), req.getPoolId());
 
         BatchSecurityInboundAdjustDto dto = new BatchSecurityInboundAdjustDto();
-        // 解析批量调库中文方向
-        String adjustMode = resolveAdjustMode(req);
         for (BatchSecurityInboundAdjustReq.SecurityItem security : req.getSecurities()) {
             // 构建单证券调库校验请求
             AdjustCheckDto checkDto = checkSingleAdjust(buildSingleCheckReq(req, security));
@@ -213,9 +211,6 @@ public class BatchSecurityPoolAdjustService {
                 continue;
             }
             for (AdjustCheckDto.CheckResultItem item : checkDto.getItems()) {
-                if (!adjustMode.equals(item.getAdjustMode())) {
-                    continue;
-                }
                 // 构建批量调库校验结果
                 dto.getItems().add(buildBatchCheckResult(security, item));
             }
@@ -336,7 +331,10 @@ public class BatchSecurityPoolAdjustService {
             if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
                 throw new BizException("调库明细证券代码不能为空");
             }
-            if (!adjustMode.equals(item.getAdjustMode())) {
+            if (!"调入".equals(item.getAdjustMode()) && !"调出".equals(item.getAdjustMode())) {
+                throw new BizException("调库明细调整方向必须为调入或调出");
+            }
+            if (isManualBatchSubmitItem(item) && !adjustMode.equals(item.getAdjustMode())) {
                 throw new BizException("调库明细调整方向必须与本次批量调整方向一致");
             }
             if (item.getTargetPoolId() == null) {
@@ -346,6 +344,13 @@ public class BatchSecurityPoolAdjustService {
                 throw new BizException("调库明细审批流程不能为空");
             }
         }
+    }
+
+    /**
+     * 判断批量提交项是否为手工调库项。
+     */
+    private boolean isManualBatchSubmitItem(BatchSecurityInboundAdjustReq.AdjustItem item) {
+        return item.getItemTag() == null || item.getItemTag().isEmpty() || "manual".equals(item.getItemTag());
     }
 
     /**

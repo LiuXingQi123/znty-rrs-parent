@@ -5,10 +5,13 @@ import com.znty.sirm.mapper.FlowMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
 import com.znty.sirm.exception.BizException;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustDto;
 import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
 import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
 import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
+import com.znty.sirm.entity.bo.InvestmentPoolBo;
 import com.znty.sirm.entity.bo.IpAdjustLogBo;
+import com.znty.sirm.entity.bo.PoolRelationBo;
 import com.znty.sirm.entity.bo.SecurityInfoBo;
 import com.znty.sirm.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
@@ -180,6 +183,107 @@ public class BatchSecurityPoolAdjustServiceTest {
                 .doesNotHaveDuplicates();
     }
 
+    /** 验证批量提交同一证券的手工调入和互斥调出时写入两条调库记录。 */
+    @Test
+    public void addAdjustLogShouldInsertManualInboundAndMutexOutboundForSameSecurity() {
+        BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
+
+        when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
+        SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
+        when(attachmentService.createSubmissionFiles(
+                org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1001")))
+                .thenReturn(submissionFiles);
+        when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(new SecurityInfoBo());
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(
+                buildPool(1L, null, "信用债大库", "credit_bond"),
+                buildPool(2L, 1L, "一级库", "credit_bond"),
+                buildPool(3L, 1L, "二级库", "credit_bond")));
+        when(adjustMapper.querySecurityCurrentPoolIdList("106006789"))
+                .thenReturn(Collections.singletonList(2L));
+        when(adjustMapper.queryAllPoolRelationList()).thenReturn(Collections.emptyList());
+        doAnswer(invocation -> {
+            IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
+            bo.setId(System.nanoTime());
+            return 1;
+        }).when(adjustMapper).addAdjustLog(any(IpAdjustLogBo.class));
+
+        String groupKey = "106006789_manual_3_调入";
+        BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
+        req.setCurrentUserId("1001");
+        req.setDirection("in");
+        req.setAdjusterId("1001");
+        req.setAdjusterName("管理员");
+        req.setPoolId(3L);
+        req.setItems(Arrays.asList(
+                buildBatchSubmitItem("106006789", 3L, "二级库", "调入", "manual", groupKey),
+                buildBatchSubmitItem("106006789", 2L, "一级库", "调出", "mutex", groupKey)));
+
+        service.addAdjustLog(req, Collections.<MultipartFile>emptyList());
+
+        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(adjustMapper, org.mockito.Mockito.times(2)).addAdjustLog(captor.capture());
+        assertThat(captor.getAllValues()).extracting(IpAdjustLogBo::getTargetPoolId)
+                .containsExactly(3L, 2L);
+        assertThat(captor.getAllValues()).extracting(IpAdjustLogBo::getAdjustMode)
+                .containsExactly("调入", "调出");
+        assertThat(captor.getAllValues()).extracting(IpAdjustLogBo::getAdjustType)
+                .containsExactly("手工调整", "互斥调整");
+        assertThat(captor.getAllValues()).extracting(IpAdjustLogBo::getAdjustBatchNo)
+                .containsOnly(captor.getAllValues().get(0).getAdjustBatchNo());
+    }
+
+    /** 验证批量调入时保留同证券当前所在互斥池的自动调出项。 */
+    @Test
+    public void checkAdjustShouldKeepMutexOutItemWhenInboundSecurityAlreadyInMutexPool() {
+        BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+
+        when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
+        when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(new SecurityInfoBo());
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(
+                buildPool(1L, null, "信用债大库", "credit_bond"),
+                buildPool(2L, 1L, "一级库", "credit_bond"),
+                buildPool(3L, 1L, "二级库", "credit_bond")));
+        when(adjustMapper.querySecurityCurrentPoolIdList("106006789"))
+                .thenReturn(Collections.singletonList(2L));
+        when(adjustMapper.queryAllPoolRelationList())
+                .thenReturn(Collections.singletonList(buildRelation(3L, "in_mutex", 2L, "一级库")));
+        when(adjustMapper.queryPoolCurrentCount(org.mockito.Matchers.anyLong())).thenReturn(0);
+
+        BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
+        req.setCurrentUserId("1001");
+        req.setDirection("in");
+        req.setPoolId(3L);
+        req.setPoolName("二级库");
+        req.setPoolType("credit_bond");
+        req.setSecurities(Collections.singletonList(buildSecurityItem("106006789")));
+
+        BatchSecurityInboundAdjustDto dto = service.checkAdjust(req);
+
+        assertThat(dto.getItems()).hasSize(2);
+        assertThat(dto.getItems()).extracting(BatchSecurityInboundAdjustDto.CheckResultItem::getItemTag)
+                .containsExactly("manual", "mutex");
+        assertThat(dto.getItems().get(1).getSecurityCode()).isEqualTo("106006789");
+        assertThat(dto.getItems().get(1).getTargetPoolId()).isEqualTo(2L);
+        assertThat(dto.getItems().get(1).getPoolName()).isEqualTo("信用债大库/一级库");
+        assertThat(dto.getItems().get(1).getAdjustMode()).isEqualTo("调出");
+    }
+
     /** 构建批量提交明细。 */
     private BatchSecurityInboundAdjustReq.AdjustItem buildBatchSubmitItem(String securityCode) {
         BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
@@ -191,5 +295,52 @@ public class BatchSecurityPoolAdjustServiceTest {
         item.setFlowId(1L);
         item.setAdjustGroupKey(securityCode + "_manual_11_调入");
         return item;
+    }
+
+    /** 构建指定属性的批量提交明细。 */
+    private BatchSecurityInboundAdjustReq.AdjustItem buildBatchSubmitItem(
+            String securityCode, Long targetPoolId, String targetPoolName,
+            String adjustMode, String itemTag, String adjustGroupKey) {
+        BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
+        item.setSecurityCode(securityCode);
+        item.setSecurityShortName("22某电力MTN001");
+        item.setSecurityType("mtn");
+        item.setTargetPoolId(targetPoolId);
+        item.setTargetPoolName(targetPoolName);
+        item.setPoolType("credit_bond");
+        item.setAdjustMode(adjustMode);
+        item.setItemTag(itemTag);
+        item.setAdjustGroupKey(adjustGroupKey);
+        item.setFlowId(1L);
+        return item;
+    }
+
+    /** 构建批量校验证券。 */
+    private BatchSecurityInboundAdjustReq.SecurityItem buildSecurityItem(String securityCode) {
+        BatchSecurityInboundAdjustReq.SecurityItem item = new BatchSecurityInboundAdjustReq.SecurityItem();
+        item.setSecurityCode(securityCode);
+        item.setSecurityShortName("22某电力MTN001");
+        item.setSecurityType("mtn");
+        return item;
+    }
+
+    /** 构建投资池。 */
+    private InvestmentPoolBo buildPool(Long id, Long parentId, String poolName, String poolType) {
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(id);
+        pool.setParentId(parentId);
+        pool.setPoolName(poolName);
+        pool.setPoolType(poolType);
+        return pool;
+    }
+
+    /** 构建投资池关系。 */
+    private PoolRelationBo buildRelation(Long poolId, String relationType, Long relationPoolId, String relationPoolName) {
+        PoolRelationBo relation = new PoolRelationBo();
+        relation.setPoolId(poolId);
+        relation.setRelationType(relationType);
+        relation.setRelationPoolId(relationPoolId);
+        relation.setRelationPoolName(relationPoolName);
+        return relation;
     }
 }
