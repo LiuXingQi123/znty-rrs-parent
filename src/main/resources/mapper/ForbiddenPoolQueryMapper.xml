@@ -4,7 +4,7 @@
     <!-- 禁投池查询 mapper，对应表：ip_pool_status（证券池状态），过滤 pool_type='forbidden' 提供禁投池分页查询及证券类型选项查询功能 -->
 
     <!-- 分页查询禁投池证券列表 -->
-    <select id="queryForbiddenPoolPage" resultType="com.znty.sirm.model.ForbiddenPoolQueryDto">
+    <select id="queryForbiddenPoolPage" resultType="com.znty.sirm.entity.forbiddenpoolquery.ForbiddenPoolQueryDto">
         SELECT ips.id
                ,ips.security_code
                ,ips.security_short_name
@@ -64,7 +64,7 @@
     </select>
 
     <!-- 查询禁投池中出现的证券类型选项 -->
-    <select id="querySecurityTypeList" resultType="com.znty.sirm.model.SecurityTypeOptionDto">
+    <select id="querySecurityTypeList" resultType="com.znty.sirm.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
                        ,dst.security_type_name
         FROM ip_pool_status ips

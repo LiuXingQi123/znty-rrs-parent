@@ -1,9 +1,9 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.RuleTestCaseBo;
-import com.znty.sirm.model.RuleTestCaseParamBo;
-import com.znty.sirm.model.RuleTestRunBo;
-import com.znty.sirm.model.RuleTestRunLogBo;
+import com.znty.sirm.entity.bo.RuleTestCaseBo;
+import com.znty.sirm.entity.bo.RuleTestCaseParamBo;
+import com.znty.sirm.entity.bo.RuleTestRunBo;
+import com.znty.sirm.entity.bo.RuleTestRunLogBo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

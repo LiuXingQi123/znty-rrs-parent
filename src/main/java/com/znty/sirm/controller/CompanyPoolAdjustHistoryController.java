@@ -2,8 +2,8 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.CompanyPoolAdjustHistoryDto;
-import com.znty.sirm.model.CompanyPoolAdjustHistoryReq;
+import com.znty.sirm.entity.companypool.CompanyPoolAdjustHistoryDto;
+import com.znty.sirm.entity.companypool.CompanyPoolAdjustHistoryReq;
 import com.znty.sirm.service.CompanyPoolAdjustHistoryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

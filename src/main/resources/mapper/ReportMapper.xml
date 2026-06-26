@@ -4,7 +4,7 @@
     <!-- 报告库 mapper，对应表：sirm_report_in / sirm_report_out，提供内部 / 外部报告分页查询功能 -->
 
     <!-- 分页查询内部报告库列表 -->
-    <select id="queryInReportPage" resultType="com.znty.sirm.model.ReportDto">
+    <select id="queryInReportPage" resultType="com.znty.sirm.entity.report.ReportDto">
         SELECT id
                ,author_name
                ,report_title
@@ -38,7 +38,7 @@
     </select>
 
     <!-- 分页查询外部报告库列表 -->
-    <select id="queryOutReportPage" resultType="com.znty.sirm.model.ReportDto">
+    <select id="queryOutReportPage" resultType="com.znty.sirm.entity.report.ReportDto">
         SELECT id
                ,author_name
                ,source_org_name
@@ -73,7 +73,7 @@
     </select>
 
     <!-- 按内部报告 ID 批量查询报告附件 -->
-    <select id="queryInReportAttachmentList" resultType="com.znty.sirm.model.SysAttachmentDto">
+    <select id="queryInReportAttachmentList" resultType="com.znty.sirm.entity.sysattachment.SysAttachmentDto">
         SELECT id
                ,main_id
                ,attachment_category
@@ -95,7 +95,7 @@
     </select>
 
     <!-- 按外部报告 ID 批量查询报告附件 -->
-    <select id="queryOutReportAttachmentList" resultType="com.znty.sirm.model.SysAttachmentDto">
+    <select id="queryOutReportAttachmentList" resultType="com.znty.sirm.entity.sysattachment.SysAttachmentDto">
         SELECT id
                ,main_id
                ,attachment_category

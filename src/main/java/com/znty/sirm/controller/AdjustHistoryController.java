@@ -2,9 +2,9 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.AdjustHistoryDto;
-import com.znty.sirm.model.AdjustHistoryReq;
-import com.znty.sirm.model.SecurityTypeOptionDto;
+import com.znty.sirm.entity.adjusthistory.AdjustHistoryDto;
+import com.znty.sirm.entity.adjusthistory.AdjustHistoryReq;
+import com.znty.sirm.entity.common.SecurityTypeOptionDto;
 import com.znty.sirm.service.AdjustHistoryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

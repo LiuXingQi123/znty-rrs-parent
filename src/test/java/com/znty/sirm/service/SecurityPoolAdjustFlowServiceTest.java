@@ -3,9 +3,9 @@ package com.znty.sirm.service;
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.FlowMapper;
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
-import com.znty.sirm.model.IpAdjustLogBo;
-import com.znty.sirm.model.IpAdjustStepBo;
-import com.znty.sirm.model.SecurityPoolAdjustAuditReq;
+import com.znty.sirm.entity.bo.IpAdjustLogBo;
+import com.znty.sirm.entity.bo.IpAdjustStepBo;
+import com.znty.sirm.entity.securitypooladjustflow.SecurityPoolAdjustAuditReq;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 

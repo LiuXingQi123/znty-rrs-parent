@@ -1,10 +1,10 @@
 package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.FlowMapper;
-import com.znty.sirm.model.FlowReq;
-import com.znty.sirm.model.RoleBo;
-import com.znty.sirm.model.UserBo;
-import com.znty.sirm.model.UserDto;
+import com.znty.sirm.entity.flow.FlowReq;
+import com.znty.sirm.entity.bo.RoleBo;
+import com.znty.sirm.entity.bo.UserBo;
+import com.znty.sirm.entity.common.UserDto;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.Test;

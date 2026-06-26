@@ -1,6 +1,29 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.*;
+import com.znty.sirm.entity.bo.EdgeCondRuleBo;
+import com.znty.sirm.entity.bo.EdgeCondRuleEvtBo;
+import com.znty.sirm.entity.bo.FlowDefinitionBo;
+import com.znty.sirm.entity.bo.FlowDefinitionEvtBo;
+import com.znty.sirm.entity.bo.FlowEdgeBo;
+import com.znty.sirm.entity.bo.FlowEdgeEvtBo;
+import com.znty.sirm.entity.bo.FlowNodeBo;
+import com.znty.sirm.entity.bo.FlowNodeEvtBo;
+import com.znty.sirm.entity.bo.FlowVersionBo;
+import com.znty.sirm.entity.bo.FlowVersionEvtBo;
+import com.znty.sirm.entity.bo.NodeApprovalConfigBo;
+import com.znty.sirm.entity.bo.NodeApprovalConfigEvtBo;
+import com.znty.sirm.entity.bo.NodeApprovalHandlerBo;
+import com.znty.sirm.entity.bo.NodeApprovalHandlerEvtBo;
+import com.znty.sirm.entity.bo.NodeAutoConfigBo;
+import com.znty.sirm.entity.bo.NodeAutoConfigEvtBo;
+import com.znty.sirm.entity.bo.NodeConditionConfigBo;
+import com.znty.sirm.entity.bo.NodeConditionConfigEvtBo;
+import com.znty.sirm.entity.bo.NodeNotifyConfigBo;
+import com.znty.sirm.entity.bo.NodeNotifyConfigEvtBo;
+import com.znty.sirm.entity.bo.RoleBo;
+import com.znty.sirm.entity.bo.RoleDictBo;
+import com.znty.sirm.entity.bo.RoleDictEvtBo;
+import com.znty.sirm.entity.bo.UserBo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

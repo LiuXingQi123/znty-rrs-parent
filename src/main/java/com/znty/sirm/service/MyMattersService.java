@@ -4,9 +4,9 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.MyMattersMapper;
-import com.znty.sirm.model.FlowOptionDto;
-import com.znty.sirm.model.MyMattersDto;
-import com.znty.sirm.model.MyMattersReq;
+import com.znty.sirm.entity.flow.FlowOptionDto;
+import com.znty.sirm.entity.mymatters.MyMattersDto;
+import com.znty.sirm.entity.mymatters.MyMattersReq;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;

@@ -1,7 +1,7 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.SubjectPoolQueryDto;
-import com.znty.sirm.model.SubjectPoolQueryReq;
+import com.znty.sirm.entity.subjectpool.SubjectPoolQueryDto;
+import com.znty.sirm.entity.subjectpool.SubjectPoolQueryReq;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

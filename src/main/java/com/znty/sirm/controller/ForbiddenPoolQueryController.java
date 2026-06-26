@@ -2,9 +2,9 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.ForbiddenPoolQueryDto;
-import com.znty.sirm.model.ForbiddenPoolQueryReq;
-import com.znty.sirm.model.SecurityTypeOptionDto;
+import com.znty.sirm.entity.forbiddenpoolquery.ForbiddenPoolQueryDto;
+import com.znty.sirm.entity.forbiddenpoolquery.ForbiddenPoolQueryReq;
+import com.znty.sirm.entity.common.SecurityTypeOptionDto;
 import com.znty.sirm.service.ForbiddenPoolQueryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

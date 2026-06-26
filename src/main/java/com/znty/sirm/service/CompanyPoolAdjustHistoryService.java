@@ -4,8 +4,8 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.CompanyPoolAdjustHistoryMapper;
-import com.znty.sirm.model.CompanyPoolAdjustHistoryDto;
-import com.znty.sirm.model.CompanyPoolAdjustHistoryReq;
+import com.znty.sirm.entity.companypool.CompanyPoolAdjustHistoryDto;
+import com.znty.sirm.entity.companypool.CompanyPoolAdjustHistoryReq;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;

@@ -1,8 +1,8 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.SecurityPoolQueryDto;
-import com.znty.sirm.model.SecurityPoolQueryReq;
-import com.znty.sirm.model.SecurityTypeOptionDto;
+import com.znty.sirm.entity.securitypoolquery.SecurityPoolQueryDto;
+import com.znty.sirm.entity.securitypoolquery.SecurityPoolQueryReq;
+import com.znty.sirm.entity.common.SecurityTypeOptionDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

@@ -1,6 +1,6 @@
 package com.znty.sirm.controller;
 
-import com.znty.sirm.model.SysAttachmentReq;
+import com.znty.sirm.entity.sysattachment.SysAttachmentReq;
 import com.znty.sirm.service.SysAttachmentService;
 import org.junit.Before;
 import org.junit.Test;

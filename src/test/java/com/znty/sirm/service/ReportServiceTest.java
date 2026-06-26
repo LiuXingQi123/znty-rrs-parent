@@ -2,9 +2,9 @@ package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.ReportMapper;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.ReportDto;
-import com.znty.sirm.model.ReportReq;
-import com.znty.sirm.model.SysAttachmentDto;
+import com.znty.sirm.entity.report.ReportDto;
+import com.znty.sirm.entity.report.ReportReq;
+import com.znty.sirm.entity.sysattachment.SysAttachmentDto;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;

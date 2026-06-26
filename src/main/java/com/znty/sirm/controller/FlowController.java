@@ -2,7 +2,14 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.*;
+import com.znty.sirm.entity.common.RoleDto;
+import com.znty.sirm.entity.common.UserDto;
+import com.znty.sirm.entity.flow.DesignerReq;
+import com.znty.sirm.entity.flow.DictDto;
+import com.znty.sirm.entity.flow.FlowDto;
+import com.znty.sirm.entity.flow.FlowOptionDto;
+import com.znty.sirm.entity.flow.FlowReq;
+import com.znty.sirm.entity.flow.VersionDto;
 import com.znty.sirm.service.FlowService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

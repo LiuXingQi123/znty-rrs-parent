@@ -1,11 +1,11 @@
 package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
-import com.znty.sirm.model.FlowOptionDto;
-import com.znty.sirm.model.InvestmentPoolDto;
-import com.znty.sirm.model.InvestmentPoolReq;
-import com.znty.sirm.model.RoleDto;
-import com.znty.sirm.model.UserDto;
+import com.znty.sirm.entity.flow.FlowOptionDto;
+import com.znty.sirm.entity.investmentpool.InvestmentPoolDto;
+import com.znty.sirm.entity.investmentpool.InvestmentPoolReq;
+import com.znty.sirm.entity.common.RoleDto;
+import com.znty.sirm.entity.common.UserDto;
 import com.znty.sirm.service.InvestmentPoolService;
 import java.util.List;
 import org.springframework.web.bind.annotation.PostMapping;

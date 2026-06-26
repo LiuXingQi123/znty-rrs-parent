@@ -3,24 +3,24 @@ package com.znty.sirm.service;
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
 import com.znty.sirm.mapper.InvestmentPoolMapper;
 import com.znty.sirm.mapper.FlowMapper;
-import com.znty.sirm.model.AdjustLogDto;
-import com.znty.sirm.model.AdjustCheckContext;
-import com.znty.sirm.model.AdjustCheckDto;
-import com.znty.sirm.model.AdjustCheckReq;
-import com.znty.sirm.model.AdjustSharedData;
-import com.znty.sirm.model.FlowDefinitionBo;
-import com.znty.sirm.model.FlowEdgeBo;
-import com.znty.sirm.model.FlowNodeBo;
-import com.znty.sirm.model.InvestmentPoolBo;
-import com.znty.sirm.model.IpAdjustLogBo;
-import com.znty.sirm.model.IpAdjustStepBo;
-import com.znty.sirm.model.NodeApprovalConfigBo;
-import com.znty.sirm.model.NodeApprovalHandlerBo;
-import com.znty.sirm.model.PoolDto;
-import com.znty.sirm.model.PoolPermissionBo;
-import com.znty.sirm.model.SecurityInfoBo;
-import com.znty.sirm.model.SecurityPoolAdjustReq;
-import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
+import com.znty.sirm.entity.securitypooladjust.AdjustLogDto;
+import com.znty.sirm.entity.securitypooladjust.AdjustCheckContext;
+import com.znty.sirm.entity.securitypooladjust.AdjustCheckDto;
+import com.znty.sirm.entity.securitypooladjust.AdjustCheckReq;
+import com.znty.sirm.entity.securitypooladjust.AdjustSharedData;
+import com.znty.sirm.entity.bo.FlowDefinitionBo;
+import com.znty.sirm.entity.bo.FlowEdgeBo;
+import com.znty.sirm.entity.bo.FlowNodeBo;
+import com.znty.sirm.entity.bo.InvestmentPoolBo;
+import com.znty.sirm.entity.bo.IpAdjustLogBo;
+import com.znty.sirm.entity.bo.IpAdjustStepBo;
+import com.znty.sirm.entity.bo.NodeApprovalConfigBo;
+import com.znty.sirm.entity.bo.NodeApprovalHandlerBo;
+import com.znty.sirm.entity.securitypooladjust.PoolDto;
+import com.znty.sirm.entity.bo.PoolPermissionBo;
+import com.znty.sirm.entity.bo.SecurityInfoBo;
+import com.znty.sirm.entity.securitypooladjust.SecurityPoolAdjustReq;
+import com.znty.sirm.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.sirm.exception.BizException;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
@@ -688,7 +688,7 @@ public class SecurityPoolAdjustServiceStepTest {
         constructor.setAccessible(true);
         return constructor.newInstance(
                 new SecurityInfoBo(),
-                new HashMap<Long, com.znty.sirm.model.InvestmentPoolBo>(),
+                new HashMap<Long, com.znty.sirm.entity.bo.InvestmentPoolBo>(),
                 Collections.<Long>emptySet(),
                 new HashMap<Long, Map<String, List<Long>>>(),
                 false,

@@ -2,8 +2,8 @@ package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.RuleMapper;
 import com.znty.sirm.mapper.TestCaseMapper;
-import com.znty.sirm.model.RuleDefinitionBo;
-import com.znty.sirm.model.RuleReq;
+import com.znty.sirm.entity.bo.RuleDefinitionBo;
+import com.znty.sirm.entity.rule.RuleReq;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;

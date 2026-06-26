@@ -2,11 +2,11 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.BatchSecurityCandidateDto;
-import com.znty.sirm.model.BatchSecurityInboundAdjustDto;
-import com.znty.sirm.model.BatchSecurityInboundAdjustReq;
-import com.znty.sirm.model.BatchSecurityPoolAdjustReq;
-import com.znty.sirm.model.BatchSecurityPoolDto;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityCandidateDto;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustDto;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
 import com.znty.sirm.service.BatchSecurityPoolAdjustService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

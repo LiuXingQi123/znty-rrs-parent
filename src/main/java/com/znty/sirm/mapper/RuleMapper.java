@@ -1,11 +1,11 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.RuleCategoryBo;
-import com.znty.sirm.model.RuleDefinitionBo;
-import com.znty.sirm.model.RuleParamBo;
-import com.znty.sirm.model.RuleParamOptionBo;
-import com.znty.sirm.model.RulePresetOptionItemBo;
-import com.znty.sirm.model.RulePresetOptionSetBo;
+import com.znty.sirm.entity.bo.RuleCategoryBo;
+import com.znty.sirm.entity.bo.RuleDefinitionBo;
+import com.znty.sirm.entity.bo.RuleParamBo;
+import com.znty.sirm.entity.bo.RuleParamOptionBo;
+import com.znty.sirm.entity.bo.RulePresetOptionItemBo;
+import com.znty.sirm.entity.bo.RulePresetOptionSetBo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

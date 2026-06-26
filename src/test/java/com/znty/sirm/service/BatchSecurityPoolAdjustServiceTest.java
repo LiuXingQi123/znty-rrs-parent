@@ -2,11 +2,11 @@ package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.BatchSecurityPoolAdjustMapper;
 import com.znty.sirm.exception.BizException;
-import com.znty.sirm.model.BatchSecurityInboundAdjustReq;
-import com.znty.sirm.model.BatchSecurityPoolAdjustReq;
-import com.znty.sirm.model.BatchSecurityPoolDto;
-import com.znty.sirm.model.AdjustSubmitDto;
-import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
+import com.znty.sirm.entity.securitypooladjust.AdjustSubmitDto;
+import com.znty.sirm.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;

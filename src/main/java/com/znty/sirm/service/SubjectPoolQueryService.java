@@ -4,8 +4,8 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.SubjectPoolQueryMapper;
-import com.znty.sirm.model.SubjectPoolQueryDto;
-import com.znty.sirm.model.SubjectPoolQueryReq;
+import com.znty.sirm.entity.subjectpool.SubjectPoolQueryDto;
+import com.znty.sirm.entity.subjectpool.SubjectPoolQueryReq;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;

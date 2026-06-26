@@ -2,9 +2,9 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.FlowOptionDto;
-import com.znty.sirm.model.MyMattersDto;
-import com.znty.sirm.model.MyMattersReq;
+import com.znty.sirm.entity.flow.FlowOptionDto;
+import com.znty.sirm.entity.mymatters.MyMattersDto;
+import com.znty.sirm.entity.mymatters.MyMattersReq;
 import com.znty.sirm.service.MyMattersService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

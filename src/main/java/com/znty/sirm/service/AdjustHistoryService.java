@@ -4,9 +4,9 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.AdjustHistoryMapper;
-import com.znty.sirm.model.AdjustHistoryDto;
-import com.znty.sirm.model.AdjustHistoryReq;
-import com.znty.sirm.model.SecurityTypeOptionDto;
+import com.znty.sirm.entity.adjusthistory.AdjustHistoryDto;
+import com.znty.sirm.entity.adjusthistory.AdjustHistoryReq;
+import com.znty.sirm.entity.common.SecurityTypeOptionDto;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;

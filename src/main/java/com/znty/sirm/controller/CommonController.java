@@ -1,8 +1,8 @@
 package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
-import com.znty.sirm.model.CommonReq;
-import com.znty.sirm.model.PoolTreeDto;
+import com.znty.sirm.entity.common.CommonReq;
+import com.znty.sirm.entity.common.PoolTreeDto;
 import com.znty.sirm.service.CommonService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

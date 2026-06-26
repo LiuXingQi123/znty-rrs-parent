@@ -2,11 +2,11 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.SecurityPoolQueryDto;
-import com.znty.sirm.model.SecurityPoolQueryReq;
-import com.znty.sirm.model.SecurityTypeOptionDto;
-import com.znty.sirm.model.MySecurityPoolBo;
-import com.znty.sirm.model.MySecurityPoolReq;
+import com.znty.sirm.entity.securitypoolquery.SecurityPoolQueryDto;
+import com.znty.sirm.entity.securitypoolquery.SecurityPoolQueryReq;
+import com.znty.sirm.entity.common.SecurityTypeOptionDto;
+import com.znty.sirm.entity.bo.MySecurityPoolBo;
+import com.znty.sirm.entity.securitypoolquery.MySecurityPoolReq;
 import com.znty.sirm.service.SecurityPoolQueryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

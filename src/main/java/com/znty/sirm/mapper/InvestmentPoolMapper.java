@@ -1,13 +1,13 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.FlowOptionDto;
-import com.znty.sirm.model.InvestmentPoolBo;
-import com.znty.sirm.model.InvestmentPoolDto;
-import com.znty.sirm.model.PoolAutoRuleBo;
-import com.znty.sirm.model.PoolPermissionBo;
-import com.znty.sirm.model.PoolRelationBo;
-import com.znty.sirm.model.RoleBo;
-import com.znty.sirm.model.UserBo;
+import com.znty.sirm.entity.flow.FlowOptionDto;
+import com.znty.sirm.entity.bo.InvestmentPoolBo;
+import com.znty.sirm.entity.investmentpool.InvestmentPoolDto;
+import com.znty.sirm.entity.bo.PoolAutoRuleBo;
+import com.znty.sirm.entity.bo.PoolPermissionBo;
+import com.znty.sirm.entity.bo.PoolRelationBo;
+import com.znty.sirm.entity.bo.RoleBo;
+import com.znty.sirm.entity.bo.UserBo;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;

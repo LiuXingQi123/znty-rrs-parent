@@ -1,7 +1,7 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.ForbiddenPoolHistoryDto;
-import com.znty.sirm.model.ForbiddenPoolHistoryReq;
+import com.znty.sirm.entity.forbiddenpoolhistory.ForbiddenPoolHistoryDto;
+import com.znty.sirm.entity.forbiddenpoolhistory.ForbiddenPoolHistoryReq;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

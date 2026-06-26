@@ -40,7 +40,7 @@
     </insert>
 
     <!-- 按调库日志 ID 查询附件列表 -->
-    <select id="queryAttachmentList" resultType="com.znty.sirm.model.SysAttachmentDto">
+    <select id="queryAttachmentList" resultType="com.znty.sirm.entity.sysattachment.SysAttachmentDto">
         SELECT id
                ,attachment_category
                ,original_file_name
@@ -56,7 +56,7 @@
     </select>
 
     <!-- 按附件 ID 查询附件 -->
-    <select id="queryAttachmentById" resultType="com.znty.sirm.model.SysAttachmentBo">
+    <select id="queryAttachmentById" resultType="com.znty.sirm.entity.bo.SysAttachmentBo">
         SELECT *
         FROM sys_attachment
         WHERE id = #{id}
@@ -64,7 +64,7 @@
     </select>
 
     <!-- 按附件 ID 列表查询附件 -->
-    <select id="queryAttachmentListByIds" resultType="com.znty.sirm.model.SysAttachmentBo">
+    <select id="queryAttachmentListByIds" resultType="com.znty.sirm.entity.bo.SysAttachmentBo">
         SELECT *
         FROM sys_attachment
         WHERE is_deleted = 0
@@ -89,7 +89,7 @@
     </update>
 
     <!-- 查询指定调库记录下手工上传的信评报告附件 -->
-    <select id="queryHandCreditReportAttachments" resultType="com.znty.sirm.model.SysAttachmentBo">
+    <select id="queryHandCreditReportAttachments" resultType="com.znty.sirm.entity.bo.SysAttachmentBo">
         SELECT id
                ,table_name
                ,main_id

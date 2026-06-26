@@ -6,7 +6,7 @@
     <!-- ==================== 流程定义 ==================== -->
 
     <!-- 分页查询流程定义。 -->
-    <select id="queryFlowPage" resultType="com.znty.sirm.model.FlowDefinitionBo">
+    <select id="queryFlowPage" resultType="com.znty.sirm.entity.bo.FlowDefinitionBo">
         SELECT d.*
                ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
                ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
@@ -24,7 +24,7 @@
         ORDER BY d.updt_time DESC</select>
 
     <!-- 列表查询流程定义（不分页，用于下拉选项）。 -->
-    <select id="queryFlowList" resultType="com.znty.sirm.model.FlowDefinitionBo">
+    <select id="queryFlowList" resultType="com.znty.sirm.entity.bo.FlowDefinitionBo">
         SELECT d.*
                ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
                ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
@@ -42,7 +42,7 @@
         ORDER BY d.updt_time DESC</select>
 
     <!-- 根据 ID 查询流程定义。 -->
-    <select id="queryFlowById" resultType="com.znty.sirm.model.FlowDefinitionBo">
+    <select id="queryFlowById" resultType="com.znty.sirm.entity.bo.FlowDefinitionBo">
         SELECT d.*
                ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
                ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
@@ -51,7 +51,7 @@
     </select>
 
     <!-- 根据流程 Key 查询启用流程定义。 -->
-    <select id="queryActiveFlowByKey" resultType="com.znty.sirm.model.FlowDefinitionBo">
+    <select id="queryActiveFlowByKey" resultType="com.znty.sirm.entity.bo.FlowDefinitionBo">
         SELECT d.*
                ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
                ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
@@ -75,7 +75,7 @@
     </select>
 
     <!-- 根据 ID 查询流程定义（加行锁）。 -->
-    <select id="queryFlowByIdForUpdate" resultType="com.znty.sirm.model.FlowDefinitionBo">
+    <select id="queryFlowByIdForUpdate" resultType="com.znty.sirm.entity.bo.FlowDefinitionBo">
         SELECT d.*
                ,COALESCE((SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status != 'draft'), (SELECT MAX(v.ver_num) FROM wf_flow_version v WHERE v.flow_id = d.id)) AS current_ver
                ,EXISTS (SELECT 1 FROM wf_flow_version v WHERE v.flow_id = d.id AND v.status = 'active') AS has_published_version
@@ -144,7 +144,7 @@
     <!-- ==================== 流程版本 ==================== -->
 
     <!-- 查询最新流程版本。 -->
-    <select id="queryLatestFlowVersion" resultType="com.znty.sirm.model.FlowVersionBo">
+    <select id="queryLatestFlowVersion" resultType="com.znty.sirm.entity.bo.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId}
         ORDER BY ver_num DESC
@@ -153,7 +153,7 @@
     </select>
 
     <!-- 查询当前草稿版本。 -->
-    <select id="queryDraftFlowVersion" resultType="com.znty.sirm.model.FlowVersionBo">
+    <select id="queryDraftFlowVersion" resultType="com.znty.sirm.entity.bo.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId} AND status = 'draft'
         ORDER BY ver_num DESC
@@ -162,11 +162,11 @@
     </select>
 
     <!-- 根据 ID 查询流程版本。 -->
-    <select id="queryFlowVersionById" resultType="com.znty.sirm.model.FlowVersionBo">
+    <select id="queryFlowVersionById" resultType="com.znty.sirm.entity.bo.FlowVersionBo">
         SELECT * FROM wf_flow_version WHERE id = #{id}</select>
 
     <!-- 查询流程版本列表，可按版本号筛选。 -->
-    <select id="queryFlowVersionByFlowIdList" resultType="com.znty.sirm.model.FlowVersionBo">
+    <select id="queryFlowVersionByFlowIdList" resultType="com.znty.sirm.entity.bo.FlowVersionBo">
         SELECT * FROM wf_flow_version
         WHERE flow_id = #{flowId}
         <if test="verNum != null">
@@ -273,7 +273,7 @@
     </insert>
 
     <!-- 根据 ID 查询流程节点。 -->
-    <select id="queryFlowNodeById" resultType="com.znty.sirm.model.FlowNodeBo">
+    <select id="queryFlowNodeById" resultType="com.znty.sirm.entity.bo.FlowNodeBo">
         SELECT *
         FROM wf_flow_node
         WHERE id = #{id}
@@ -461,11 +461,11 @@
     <!-- ==================== 角色字典 ==================== -->
 
     <!-- 查询角色字典。 -->
-    <select id="queryRoleDictList" resultType="com.znty.sirm.model.RoleDictBo">
+    <select id="queryRoleDictList" resultType="com.znty.sirm.entity.bo.RoleDictBo">
         SELECT * FROM wf_role_dict WHERE is_active = 1 ORDER BY sort_order</select>
 
     <!-- 查询所有角色 -->
-    <select id="queryRoleList" resultType="com.znty.sirm.model.RoleBo">
+    <select id="queryRoleList" resultType="com.znty.sirm.entity.bo.RoleBo">
         SELECT id
                ,name
                ,parent_id
@@ -480,7 +480,7 @@
     </select>
 
     <!-- 查询人员列表 -->
-    <select id="queryUserList" resultType="com.znty.sirm.model.UserBo">
+    <select id="queryUserList" resultType="com.znty.sirm.entity.bo.UserBo">
         SELECT u.id
                ,u.name
                ,u.user_name
@@ -857,18 +857,18 @@
     <!-- ==================== 归一化表 SELECT（用于事件记录：捕获删除前的旧行） ==================== -->
 
     <!-- 查询指定版本的流程节点列表。 -->
-    <select id="queryFlowNodeListByVersionId" resultType="com.znty.sirm.model.FlowNodeBo">
+    <select id="queryFlowNodeListByVersionId" resultType="com.znty.sirm.entity.bo.FlowNodeBo">
         SELECT * FROM wf_flow_node WHERE version_id = #{versionId}</select>
 
     <!-- 查询指定版本的审批配置列表。 -->
-    <select id="queryApprovalConfigListByVersionId" resultType="com.znty.sirm.model.NodeApprovalConfigBo">
+    <select id="queryApprovalConfigListByVersionId" resultType="com.znty.sirm.entity.bo.NodeApprovalConfigBo">
         SELECT c.* FROM wf_node_approval_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
     </select>
 
     <!-- 查询指定版本的审批处理人明细列表 -->
-    <select id="queryApprovalHandlerListByVersionId" resultType="com.znty.sirm.model.NodeApprovalHandlerBo">
+    <select id="queryApprovalHandlerListByVersionId" resultType="com.znty.sirm.entity.bo.NodeApprovalHandlerBo">
         SELECT h.*
         FROM wf_node_approval_handler h
         INNER JOIN wf_node_approval_config c ON c.id = h.approval_config_id
@@ -880,32 +880,32 @@
     </select>
 
     <!-- 查询指定版本的自动任务配置列表。 -->
-    <select id="queryAutoConfigListByVersionId" resultType="com.znty.sirm.model.NodeAutoConfigBo">
+    <select id="queryAutoConfigListByVersionId" resultType="com.znty.sirm.entity.bo.NodeAutoConfigBo">
         SELECT c.* FROM wf_node_auto_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
     </select>
 
     <!-- 查询指定版本的通知配置列表。 -->
-    <select id="queryNotifyConfigListByVersionId" resultType="com.znty.sirm.model.NodeNotifyConfigBo">
+    <select id="queryNotifyConfigListByVersionId" resultType="com.znty.sirm.entity.bo.NodeNotifyConfigBo">
         SELECT c.* FROM wf_node_notify_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
     </select>
 
     <!-- 查询指定版本的条件配置列表。 -->
-    <select id="queryConditionConfigListByVersionId" resultType="com.znty.sirm.model.NodeConditionConfigBo">
+    <select id="queryConditionConfigListByVersionId" resultType="com.znty.sirm.entity.bo.NodeConditionConfigBo">
         SELECT c.* FROM wf_node_condition_config c
         INNER JOIN wf_flow_node n ON n.id = c.node_id
         WHERE n.version_id = #{versionId}
     </select>
 
     <!-- 查询指定版本的流程连线列表。 -->
-    <select id="queryFlowEdgeListByVersionId" resultType="com.znty.sirm.model.FlowEdgeBo">
+    <select id="queryFlowEdgeListByVersionId" resultType="com.znty.sirm.entity.bo.FlowEdgeBo">
         SELECT * FROM wf_flow_edge WHERE version_id = #{versionId}</select>
 
     <!-- 查询指定版本的连线条件规则列表。 -->
-    <select id="queryCondRuleListByVersionId" resultType="com.znty.sirm.model.EdgeCondRuleBo">
+    <select id="queryCondRuleListByVersionId" resultType="com.znty.sirm.entity.bo.EdgeCondRuleBo">
         SELECT r.* FROM wf_edge_cond_rule r
         INNER JOIN wf_flow_edge e ON e.id = r.edge_id
         WHERE e.version_id = #{versionId}

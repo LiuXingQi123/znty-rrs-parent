@@ -1,8 +1,8 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.AdjustHistoryDto;
-import com.znty.sirm.model.AdjustHistoryReq;
-import com.znty.sirm.model.SecurityTypeOptionDto;
+import com.znty.sirm.entity.adjusthistory.AdjustHistoryDto;
+import com.znty.sirm.entity.adjusthistory.AdjustHistoryReq;
+import com.znty.sirm.entity.common.SecurityTypeOptionDto;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

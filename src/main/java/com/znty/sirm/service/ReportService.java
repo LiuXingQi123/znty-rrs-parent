@@ -4,10 +4,10 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.ReportMapper;
-import com.znty.sirm.model.ReportDto;
-import com.znty.sirm.model.ReportInBo;
-import com.znty.sirm.model.ReportReq;
-import com.znty.sirm.model.SysAttachmentDto;
+import com.znty.sirm.entity.report.ReportDto;
+import com.znty.sirm.entity.bo.ReportInBo;
+import com.znty.sirm.entity.report.ReportReq;
+import com.znty.sirm.entity.sysattachment.SysAttachmentDto;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;

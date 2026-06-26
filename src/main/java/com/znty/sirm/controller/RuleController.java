@@ -2,11 +2,11 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.CategoryDto;
-import com.znty.sirm.model.PresetSetDto;
-import com.znty.sirm.model.RuleDto;
-import com.znty.sirm.model.RuleReq;
-import com.znty.sirm.model.RuleRunResultDto;
+import com.znty.sirm.entity.rule.CategoryDto;
+import com.znty.sirm.entity.rule.PresetSetDto;
+import com.znty.sirm.entity.rule.RuleDto;
+import com.znty.sirm.entity.rule.RuleReq;
+import com.znty.sirm.entity.testcase.RuleRunResultDto;
 import com.znty.sirm.service.RuleService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

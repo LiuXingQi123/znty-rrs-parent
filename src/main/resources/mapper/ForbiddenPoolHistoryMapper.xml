@@ -4,7 +4,7 @@
     <!-- 禁投池历史查询 mapper，对应表：ip_adjust_log（调库记录） -->
 
     <!-- 分页查询禁投池调整历史 -->
-    <select id="queryForbiddenPoolHistoryPage" resultType="com.znty.sirm.model.ForbiddenPoolHistoryDto">
+    <select id="queryForbiddenPoolHistoryPage" resultType="com.znty.sirm.entity.forbiddenpoolhistory.ForbiddenPoolHistoryDto">
         SELECT al.id
                ,al.adjuster_name
                ,al.submit_time

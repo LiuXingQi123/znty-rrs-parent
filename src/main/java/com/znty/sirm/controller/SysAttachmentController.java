@@ -1,8 +1,8 @@
 package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
-import com.znty.sirm.model.SysAttachmentDto;
-import com.znty.sirm.model.SysAttachmentReq;
+import com.znty.sirm.entity.sysattachment.SysAttachmentDto;
+import com.znty.sirm.entity.sysattachment.SysAttachmentReq;
 import com.znty.sirm.service.SysAttachmentService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;

@@ -5,7 +5,7 @@
     <!-- 调整历史 mapper，对应表：ip_adjust_log（证券池调整记录），提供调整历史分页查询及证券类型选项查询功能 -->
 
     <!-- 分页查询调整历史列表 -->
-    <select id="queryAdjustHistoryPage" resultType="com.znty.sirm.model.AdjustHistoryDto">
+    <select id="queryAdjustHistoryPage" resultType="com.znty.sirm.entity.adjusthistory.AdjustHistoryDto">
         SELECT al.id
                ,al.security_code
                ,al.security_short_name
@@ -79,7 +79,7 @@
     </select>
 
     <!-- 查询调整历史中出现的证券类型选项 -->
-    <select id="querySecurityTypeList" resultType="com.znty.sirm.model.SecurityTypeOptionDto">
+    <select id="querySecurityTypeList" resultType="com.znty.sirm.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT al.security_type
                        ,dst.security_type_name
         FROM ip_adjust_log al

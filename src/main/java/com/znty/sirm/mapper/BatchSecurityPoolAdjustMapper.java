@@ -1,8 +1,8 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.BatchSecurityCandidateDto;
-import com.znty.sirm.model.BatchSecurityPoolAdjustReq;
-import com.znty.sirm.model.BatchSecurityPoolDto;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityCandidateDto;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
+import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

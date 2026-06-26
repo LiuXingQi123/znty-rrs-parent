@@ -34,7 +34,7 @@
     </update>
 
     <!-- 查询用户某证券的有效收藏记录 -->
-    <select id="queryByUserAndCode" resultType="com.znty.sirm.model.MySecurityPoolBo">
+    <select id="queryByUserAndCode" resultType="com.znty.sirm.entity.bo.MySecurityPoolBo">
         SELECT id
                ,security_code
                ,security_type

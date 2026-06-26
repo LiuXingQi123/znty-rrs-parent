@@ -1,7 +1,7 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.SysAttachmentBo;
-import com.znty.sirm.model.SysAttachmentDto;
+import com.znty.sirm.entity.bo.SysAttachmentBo;
+import com.znty.sirm.entity.sysattachment.SysAttachmentDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

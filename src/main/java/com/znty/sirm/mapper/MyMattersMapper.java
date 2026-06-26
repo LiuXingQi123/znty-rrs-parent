@@ -1,8 +1,8 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.FlowOptionDto;
-import com.znty.sirm.model.MyMattersDto;
-import com.znty.sirm.model.MyMattersReq;
+import com.znty.sirm.entity.flow.FlowOptionDto;
+import com.znty.sirm.entity.mymatters.MyMattersDto;
+import com.znty.sirm.entity.mymatters.MyMattersReq;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

@@ -2,8 +2,8 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.ForbiddenPoolHistoryDto;
-import com.znty.sirm.model.ForbiddenPoolHistoryReq;
+import com.znty.sirm.entity.forbiddenpoolhistory.ForbiddenPoolHistoryDto;
+import com.znty.sirm.entity.forbiddenpoolhistory.ForbiddenPoolHistoryReq;
 import com.znty.sirm.service.ForbiddenPoolHistoryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

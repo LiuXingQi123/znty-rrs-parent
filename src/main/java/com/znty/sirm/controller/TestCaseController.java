@@ -2,9 +2,9 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.RuleRunResultDto;
-import com.znty.sirm.model.TestCaseDto;
-import com.znty.sirm.model.TestCaseReq;
+import com.znty.sirm.entity.testcase.RuleRunResultDto;
+import com.znty.sirm.entity.testcase.TestCaseDto;
+import com.znty.sirm.entity.testcase.TestCaseReq;
 import com.znty.sirm.service.TestCaseService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

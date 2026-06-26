@@ -4,7 +4,7 @@
     <!-- 证券池调整 mapper，对应表：sirm_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status（证券池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
 
     <!-- 分页查询证券列表 -->
-    <select id="querySecurityPage" resultType="com.znty.sirm.model.SecurityInfoDto">
+    <select id="querySecurityPage" resultType="com.znty.sirm.entity.securitypooladjust.SecurityInfoDto">
         SELECT si.*
                ,dst.security_type_name
         FROM sirm_securityinfo si
@@ -24,7 +24,7 @@
     </select>
 
     <!-- 查询证券详情 -->
-    <select id="querySecurityDetail" resultType="com.znty.sirm.model.SecurityInfoDetailDto">
+    <select id="querySecurityDetail" resultType="com.znty.sirm.entity.securitypooladjust.SecurityInfoDetailDto">
         SELECT si.*
                ,dst.security_type_name
         FROM sirm_securityinfo si
@@ -33,7 +33,7 @@
     </select>
 
     <!-- 根据证券代码查询证券基础信息实体 -->
-    <select id="querySecurityBoByCode" resultType="com.znty.sirm.model.SecurityInfoBo">
+    <select id="querySecurityBoByCode" resultType="com.znty.sirm.entity.bo.SecurityInfoBo">
         SELECT *
         FROM sirm_securityinfo
         WHERE wind_code = #{securityCode}
@@ -86,7 +86,7 @@
     </insert>
 
     <!-- 查询当前证券所在池列表（仅叶子节点） -->
-    <select id="querySecurityPoolStatusList" resultType="com.znty.sirm.model.PoolStatusDto">
+    <select id="querySecurityPoolStatusList" resultType="com.znty.sirm.entity.securitypooladjust.PoolStatusDto">
         SELECT ips.target_pool_id
                ,p.pool_name
                ,ips.pool_type
@@ -108,7 +108,7 @@
     </select>
 
     <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点） -->
-    <select id="queryIssuerPoolStatusList" resultType="com.znty.sirm.model.PoolStatusDto">
+    <select id="queryIssuerPoolStatusList" resultType="com.znty.sirm.entity.securitypooladjust.PoolStatusDto">
         SELECT ips.target_pool_id
                ,p.pool_name
                ,ips.pool_type
@@ -137,7 +137,7 @@
     </select>
 
     <!-- 根据证券代码查询调库记录列表 -->
-    <select id="queryAdjustLogList" resultType="com.znty.sirm.model.IpAdjustLogBo">
+    <select id="queryAdjustLogList" resultType="com.znty.sirm.entity.bo.IpAdjustLogBo">
         SELECT al.id
                ,al.security_code
                ,al.security_short_name
@@ -192,7 +192,7 @@
     </select>
 
     <!-- 查询各投资池当前有效证券数量 -->
-    <select id="queryPoolCurrentCountList" resultType="com.znty.sirm.model.PoolDto">
+    <select id="queryPoolCurrentCountList" resultType="com.znty.sirm.entity.securitypooladjust.PoolDto">
         SELECT target_pool_id AS id
                ,COUNT(DISTINCT security_code) AS currentCount
         FROM ip_pool_status
@@ -480,7 +480,7 @@
     </insert>
 
     <!-- 查询指定调库记录的流程步骤列表 -->
-    <select id="queryAdjustStepList" resultType="com.znty.sirm.model.IpAdjustStepBo">
+    <select id="queryAdjustStepList" resultType="com.znty.sirm.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -503,7 +503,7 @@
     </select>
 
     <!-- 查询指定批次或调库记录的流程步骤列表 -->
-    <select id="queryAdjustStepByBatchList" resultType="com.znty.sirm.model.IpAdjustStepBo">
+    <select id="queryAdjustStepByBatchList" resultType="com.znty.sirm.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -535,7 +535,7 @@
     </select>
 
     <!-- 根据 ID 查询流程步骤 -->
-    <select id="queryAdjustStepById" resultType="com.znty.sirm.model.IpAdjustStepBo">
+    <select id="queryAdjustStepById" resultType="com.znty.sirm.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -557,7 +557,7 @@
     </select>
 
     <!-- 按处理人查询同批次同节点待处理步骤 -->
-    <select id="queryPendingStepByHandler" resultType="com.znty.sirm.model.IpAdjustStepBo">
+    <select id="queryPendingStepByHandler" resultType="com.znty.sirm.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -640,7 +640,7 @@
     </select>
 
     <!-- 查询指定批次或调库记录的调库日志列表 -->
-    <select id="queryAdjustLogListForAudit" resultType="com.znty.sirm.model.IpAdjustLogBo">
+    <select id="queryAdjustLogListForAudit" resultType="com.znty.sirm.entity.bo.IpAdjustLogBo">
         SELECT id
                ,security_code
                ,security_short_name
@@ -695,7 +695,7 @@
     </update>
 
     <!-- 查询全量投资池关系配置（不限关系类型） -->
-    <select id="queryAllPoolRelationList" resultType="com.znty.sirm.model.PoolRelationBo">
+    <select id="queryAllPoolRelationList" resultType="com.znty.sirm.entity.bo.PoolRelationBo">
         SELECT pool_id
                ,relation_type
                ,relation_pool_id

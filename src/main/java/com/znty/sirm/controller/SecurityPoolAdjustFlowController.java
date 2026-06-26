@@ -1,8 +1,8 @@
 package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
-import com.znty.sirm.model.SecurityPoolAdjustAuditDto;
-import com.znty.sirm.model.SecurityPoolAdjustAuditReq;
+import com.znty.sirm.entity.securitypooladjustflow.SecurityPoolAdjustAuditDto;
+import com.znty.sirm.entity.securitypooladjustflow.SecurityPoolAdjustAuditReq;
 import com.znty.sirm.service.SecurityPoolAdjustFlowService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;

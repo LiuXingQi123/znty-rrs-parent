@@ -1,6 +1,6 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.PoolTreeDto;
+import com.znty.sirm.entity.common.PoolTreeDto;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

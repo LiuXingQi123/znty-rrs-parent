@@ -1,7 +1,7 @@
 package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.CommonMapper;
-import com.znty.sirm.model.PoolTreeDto;
+import com.znty.sirm.entity.common.PoolTreeDto;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;

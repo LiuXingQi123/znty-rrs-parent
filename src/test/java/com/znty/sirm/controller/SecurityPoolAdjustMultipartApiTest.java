@@ -1,6 +1,6 @@
 package com.znty.sirm.controller;
 
-import com.znty.sirm.model.AdjustSubmitDto;
+import com.znty.sirm.entity.securitypooladjust.AdjustSubmitDto;
 import com.znty.sirm.service.SecurityPoolAdjustService;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,7 +32,7 @@ public class SecurityPoolAdjustMultipartApiTest {
         SecurityPoolAdjustController controller = new SecurityPoolAdjustController();
         SecurityPoolAdjustService service = mock(SecurityPoolAdjustService.class);
         when(service.addAdjustLog(
-                any(com.znty.sirm.model.SecurityPoolAdjustSubmitReq.class), any(java.util.List.class)))
+                any(com.znty.sirm.entity.securitypooladjust.SecurityPoolAdjustSubmitReq.class), any(java.util.List.class)))
                 .thenReturn(new AdjustSubmitDto());
         ReflectionTestUtils.setField(controller, "securityPoolAdjustService", service);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();

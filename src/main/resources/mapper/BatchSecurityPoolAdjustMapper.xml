@@ -5,7 +5,7 @@
     <!-- 证券池批量调整 mapper，提供可调整投资池及候选证券查询 -->
 
     <!-- 分页查询启用叶子投资池 -->
-    <select id="queryPoolPage" resultType="com.znty.sirm.model.BatchSecurityPoolDto">
+    <select id="queryPoolPage" resultType="com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolDto">
         SELECT p.id
                ,p.pool_name
                ,p.pool_type
@@ -35,7 +35,7 @@
     </select>
 
     <!-- 查询指定投资池当前有效证券数量 -->
-    <select id="queryPoolCurrentCountList" resultType="com.znty.sirm.model.BatchSecurityPoolDto">
+    <select id="queryPoolCurrentCountList" resultType="com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolDto">
         SELECT target_pool_id AS id
                ,COUNT(DISTINCT security_code) AS currentCount
         FROM ip_pool_status
@@ -49,7 +49,7 @@
     </select>
 
     <!-- 分页查询目标池批量调整候选证券 -->
-    <select id="querySecurityPage" resultType="com.znty.sirm.model.BatchSecurityCandidateDto">
+    <select id="querySecurityPage" resultType="com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityCandidateDto">
         SELECT si.wind_code AS securityCode
                ,si.short_name AS securityShortName
                ,si.security_type

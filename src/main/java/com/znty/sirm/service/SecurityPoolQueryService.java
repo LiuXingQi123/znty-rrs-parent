@@ -5,11 +5,11 @@ import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.mapper.SecurityPoolQueryMapper;
 import com.znty.sirm.mapper.MySecurityPoolMapper;
-import com.znty.sirm.model.SecurityPoolQueryDto;
-import com.znty.sirm.model.SecurityPoolQueryReq;
-import com.znty.sirm.model.SecurityTypeOptionDto;
-import com.znty.sirm.model.MySecurityPoolBo;
-import com.znty.sirm.model.MySecurityPoolReq;
+import com.znty.sirm.entity.securitypoolquery.SecurityPoolQueryDto;
+import com.znty.sirm.entity.securitypoolquery.SecurityPoolQueryReq;
+import com.znty.sirm.entity.common.SecurityTypeOptionDto;
+import com.znty.sirm.entity.bo.MySecurityPoolBo;
+import com.znty.sirm.entity.securitypoolquery.MySecurityPoolReq;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;

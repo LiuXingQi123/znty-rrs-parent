@@ -2,8 +2,8 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.ReportDto;
-import com.znty.sirm.model.ReportReq;
+import com.znty.sirm.entity.report.ReportDto;
+import com.znty.sirm.entity.report.ReportReq;
 import com.znty.sirm.service.ReportService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

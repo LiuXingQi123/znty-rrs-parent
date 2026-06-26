@@ -1,9 +1,9 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.ReportDto;
-import com.znty.sirm.model.ReportInBo;
-import com.znty.sirm.model.ReportReq;
-import com.znty.sirm.model.SysAttachmentDto;
+import com.znty.sirm.entity.report.ReportDto;
+import com.znty.sirm.entity.bo.ReportInBo;
+import com.znty.sirm.entity.report.ReportReq;
+import com.znty.sirm.entity.sysattachment.SysAttachmentDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

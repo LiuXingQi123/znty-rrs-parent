@@ -1,14 +1,14 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.IpAdjustStepBo;
-import com.znty.sirm.model.SecurityInfoBo;
-import com.znty.sirm.model.SecurityInfoDetailDto;
-import com.znty.sirm.model.SecurityInfoDto;
-import com.znty.sirm.model.IpAdjustLogBo;
-import com.znty.sirm.model.PoolDto;
-import com.znty.sirm.model.PoolRelationBo;
-import com.znty.sirm.model.PoolStatusDto;
-import com.znty.sirm.model.SecurityPoolAdjustSubmitReq;
+import com.znty.sirm.entity.bo.IpAdjustStepBo;
+import com.znty.sirm.entity.bo.SecurityInfoBo;
+import com.znty.sirm.entity.securitypooladjust.SecurityInfoDetailDto;
+import com.znty.sirm.entity.securitypooladjust.SecurityInfoDto;
+import com.znty.sirm.entity.bo.IpAdjustLogBo;
+import com.znty.sirm.entity.securitypooladjust.PoolDto;
+import com.znty.sirm.entity.bo.PoolRelationBo;
+import com.znty.sirm.entity.securitypooladjust.PoolStatusDto;
+import com.znty.sirm.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

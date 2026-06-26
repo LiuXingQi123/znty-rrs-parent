@@ -1,8 +1,8 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.ForbiddenPoolQueryDto;
-import com.znty.sirm.model.ForbiddenPoolQueryReq;
-import com.znty.sirm.model.SecurityTypeOptionDto;
+import com.znty.sirm.entity.forbiddenpoolquery.ForbiddenPoolQueryDto;
+import com.znty.sirm.entity.forbiddenpoolquery.ForbiddenPoolQueryReq;
+import com.znty.sirm.entity.common.SecurityTypeOptionDto;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

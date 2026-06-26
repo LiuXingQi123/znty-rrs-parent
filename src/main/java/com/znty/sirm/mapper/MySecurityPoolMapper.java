@@ -1,6 +1,6 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.MySecurityPoolBo;
+import com.znty.sirm.entity.bo.MySecurityPoolBo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

@@ -5,7 +5,7 @@
     <!-- 公共查询 mapper，提供跨业务页面复用的基础数据查询 -->
 
     <!-- 查询投资池树节点列表，同时生成投资池全路径名称 -->
-    <select id="queryPoolTreeList" resultType="com.znty.sirm.model.PoolTreeDto">
+    <select id="queryPoolTreeList" resultType="com.znty.sirm.entity.common.PoolTreeDto">
         WITH RECURSIVE pool_tree AS (
             SELECT id
                    ,parent_id

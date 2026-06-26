@@ -1,7 +1,7 @@
 package com.znty.sirm.mapper;
 
-import com.znty.sirm.model.CompanyPoolAdjustHistoryDto;
-import com.znty.sirm.model.CompanyPoolAdjustHistoryReq;
+import com.znty.sirm.entity.companypool.CompanyPoolAdjustHistoryDto;
+import com.znty.sirm.entity.companypool.CompanyPoolAdjustHistoryReq;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.util.List;

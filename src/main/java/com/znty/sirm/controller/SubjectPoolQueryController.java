@@ -2,8 +2,8 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.model.SubjectPoolQueryDto;
-import com.znty.sirm.model.SubjectPoolQueryReq;
+import com.znty.sirm.entity.subjectpool.SubjectPoolQueryDto;
+import com.znty.sirm.entity.subjectpool.SubjectPoolQueryReq;
 import com.znty.sirm.service.SubjectPoolQueryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

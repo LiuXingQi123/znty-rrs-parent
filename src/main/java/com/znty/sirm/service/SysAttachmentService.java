@@ -2,9 +2,9 @@ package com.znty.sirm.service;
 
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.SysAttachmentMapper;
-import com.znty.sirm.model.SysAttachmentBo;
-import com.znty.sirm.model.SysAttachmentDto;
-import com.znty.sirm.model.SysAttachmentReq;
+import com.znty.sirm.entity.bo.SysAttachmentBo;
+import com.znty.sirm.entity.sysattachment.SysAttachmentDto;
+import com.znty.sirm.entity.sysattachment.SysAttachmentReq;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
