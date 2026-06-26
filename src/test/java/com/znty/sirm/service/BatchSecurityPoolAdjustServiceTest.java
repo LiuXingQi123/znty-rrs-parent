@@ -1,25 +1,30 @@
 package com.znty.sirm.service;
 
 import com.znty.sirm.mapper.BatchSecurityPoolAdjustMapper;
+import com.znty.sirm.mapper.FlowMapper;
+import com.znty.sirm.mapper.InvestmentPoolMapper;
+import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
 import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
 import com.znty.sirm.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
-import com.znty.sirm.entity.securitypooladjust.AdjustSubmitDto;
+import com.znty.sirm.entity.bo.IpAdjustLogBo;
+import com.znty.sirm.entity.bo.SecurityInfoBo;
 import com.znty.sirm.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.doAnswer;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -128,11 +133,15 @@ public class BatchSecurityPoolAdjustServiceTest {
     @Test
     public void addAdjustLogShouldReuseBatchNoContextForMultipleSecurities() {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService adjustService = mock(SecurityPoolAdjustService.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
-        ReflectionTestUtils.setField(service, "securityPoolAdjustService", adjustService);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
 
         when(mapper.queryEnabledLeafPoolCount(11L)).thenReturn(1);
@@ -140,12 +149,17 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(attachmentService.createSubmissionFiles(
                 org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1001")))
                 .thenReturn(submissionFiles);
-        SecurityPoolAdjustService.BatchNoContext batchNoContext = new SecurityPoolAdjustService.BatchNoContext();
-        when(adjustService.createBatchNoContext()).thenReturn(batchNoContext);
-        AdjustSubmitDto submitDto = new AdjustSubmitDto();
-        submitDto.setSubmitCount(1);
-        when(adjustService.addAdjustLog(any(SecurityPoolAdjustSubmitReq.class), same(submissionFiles),
-                same(batchNoContext))).thenReturn(submitDto);
+        when(adjustMapper.querySecurityBoByCode(org.mockito.Matchers.anyString()))
+                .thenReturn(new SecurityInfoBo());
+        when(investmentPoolMapper.queryPoolList()).thenReturn(new ArrayList<>());
+        when(adjustMapper.querySecurityCurrentPoolIdList(org.mockito.Matchers.anyString()))
+                .thenReturn(Collections.<Long>emptyList());
+        when(adjustMapper.queryAllPoolRelationList()).thenReturn(Collections.emptyList());
+        doAnswer(invocation -> {
+            IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
+            bo.setId(System.nanoTime());
+            return 1;
+        }).when(adjustMapper).addAdjustLog(any(IpAdjustLogBo.class));
 
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
         req.setCurrentUserId("1001");
@@ -159,9 +173,11 @@ public class BatchSecurityPoolAdjustServiceTest {
 
         service.addAdjustLog(req, Collections.<MultipartFile>emptyList());
 
-        verify(adjustService).createBatchNoContext();
-        verify(adjustService, times(2)).addAdjustLog(any(SecurityPoolAdjustSubmitReq.class),
-                same(submissionFiles), same(batchNoContext));
+        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(adjustMapper, org.mockito.Mockito.times(2)).addAdjustLog(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(IpAdjustLogBo::getAdjustBatchNo)
+                .doesNotHaveDuplicates();
     }
 
     /** 构建批量提交明细。 */

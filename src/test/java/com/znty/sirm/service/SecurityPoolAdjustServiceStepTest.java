@@ -427,7 +427,7 @@ public class SecurityPoolAdjustServiceStepTest {
             return 1;
         }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
 
-        SecurityPoolAdjustService.BatchNoContext batchNoContext = service.createBatchNoContext();
+        Object batchNoContext = buildBatchNoContext();
         SecurityPoolAdjustSubmitReq firstReq = buildDirectInboundSubmitReq("S001", "S001_manual_10_调入");
         SecurityPoolAdjustSubmitReq secondReq = buildDirectInboundSubmitReq("S002", "S002_manual_10_调入");
 
@@ -669,16 +669,21 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 构建包含流程快照的调库提交共享数据测试数据。 */
     private Object buildSubmitSharedData(Map<Long, Object> snapshotMap) throws Exception {
-        Class<?> batchNoClass = Class.forName("com.znty.sirm.service.SecurityPoolAdjustService$BatchNoContext");
-        Constructor<?> batchNoConstructor = batchNoClass.getDeclaredConstructors()[0];
-        batchNoConstructor.setAccessible(true);
-        Object batchNoContext = batchNoConstructor.newInstance();
+        Object batchNoContext = buildBatchNoContext();
         return buildSubmitSharedData(snapshotMap, batchNoContext);
     }
 
     /** 构建指定批次号上下文的调库提交共享数据测试数据。 */
-    private Object buildSubmitSharedData(SecurityPoolAdjustService.BatchNoContext batchNoContext) throws Exception {
+    private Object buildSubmitSharedData(Object batchNoContext) throws Exception {
         return buildSubmitSharedData(new HashMap<Long, Object>(), batchNoContext);
+    }
+
+    /** 构建批次号上下文测试数据。 */
+    private Object buildBatchNoContext() throws Exception {
+        Class<?> batchNoClass = Class.forName("com.znty.sirm.service.SecurityPoolAdjustService$BatchNoContext");
+        Constructor<?> batchNoConstructor = batchNoClass.getDeclaredConstructors()[0];
+        batchNoConstructor.setAccessible(true);
+        return batchNoConstructor.newInstance();
     }
 
     /** 构建包含流程快照和批次号上下文的调库提交共享数据测试数据。 */

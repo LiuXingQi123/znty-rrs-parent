@@ -368,24 +368,15 @@ public class SecurityPoolAdjustService {
     public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req, List<MultipartFile> files) {
         SysAttachmentService.SubmissionFiles submissionFiles =
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
-        return addAdjustLog(req, submissionFiles);
+        return submitAdjustLog(req, submissionFiles, new BatchNoContext());
     }
 
     /**
-     * 使用共享文件上下文提交调库申请，供批量调整复用同一份物理文件。
+     * 提交调库申请内部实现。
      */
-    public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req,
-                                        SysAttachmentService.SubmissionFiles submissionFiles) {
-        // 创建本次提交独立批次号上下文
-        return addAdjustLog(req, submissionFiles, new BatchNoContext());
-    }
-
-    /**
-     * 使用共享文件和批次号上下文提交调库申请，供批量调整在多只证券间保持批次号递增。
-     */
-    AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req,
-                                 SysAttachmentService.SubmissionFiles submissionFiles,
-                                 BatchNoContext batchNoContext) {
+    private AdjustSubmitDto submitAdjustLog(SecurityPoolAdjustSubmitReq req,
+                                            SysAttachmentService.SubmissionFiles submissionFiles,
+                                            BatchNoContext batchNoContext) {
         // ══ 第一阶段：前置校验 ══
         validateSubmitReq(req);
 
@@ -409,13 +400,6 @@ public class SecurityPoolAdjustService {
         dto.setSubmitCount(allIds.size());
         dto.setLogIds(allIds);
         return dto;
-    }
-
-    /**
-     * 创建批量提交共用的批次号上下文。
-     */
-    BatchNoContext createBatchNoContext() {
-        return new BatchNoContext();
     }
 
     // ═══════════════════════════════════════════════════════════
