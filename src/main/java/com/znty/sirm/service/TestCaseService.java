@@ -2,7 +2,6 @@ package com.znty.sirm.service;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
-import com.znty.sirm.common.IdRequest;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.RuleMapper;
@@ -137,7 +136,7 @@ public class TestCaseService {
      * 物理删除测试用例及其关联的参数数据。
      */
     @Transactional(rollbackFor = Exception.class)
-    public TestCaseDto deleteTestCase(IdRequest req) {
+    public TestCaseDto deleteTestCase(TestCaseReq req) {
         // 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req.getId());
         // 删除前查出实体一并返回，便于前端展示
@@ -152,7 +151,7 @@ public class TestCaseService {
      * <p>流程：加载用例参数 → 调用规则引擎执行 → 更新用例的最近执行结果。</p>
      */
     @Transactional(rollbackFor = Exception.class)
-    public TestCaseDto runTestCase(IdRequest req) {
+    public TestCaseDto runTestCase(TestCaseReq req) {
         // 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req.getId());
         RuleDefinitionBo rule = ruleMapper.queryRuleById(testCase.getRuleId());
@@ -179,8 +178,8 @@ public class TestCaseService {
         List<RuleTestCaseBo> cases = testCaseMapper.queryAllCaseList();
         for (RuleTestCaseBo testCase : cases) {
             try {
-                // 构建仅含 ID 的 IdRequest
-                self.runTestCase(newIdRequest(testCase.getId()));
+                // 构建仅含 ID 的 TestCaseReq，供批量调用 runTestCase 使用
+                self.runTestCase(newTestCaseReq(testCase.getId()));
             } catch (Exception e) {
                 testCase.setLastResult("fail");
                 testCase.setLastOutput(e.getMessage());
@@ -201,7 +200,7 @@ public class TestCaseService {
     /**
      * 查询指定测试用例的执行历史记录，含每次执行的步骤日志。
      */
-    public List<RuleRunResultDto> queryRunHistoryList(IdRequest req) {
+    public List<RuleRunResultDto> queryRunHistoryList(TestCaseReq req) {
         Long caseId = req.getId();
         if (caseId == null) {
             throw new BizException("测试用例ID不能为空");
@@ -340,9 +339,9 @@ public class TestCaseService {
                 .collect(Collectors.toMap(RuleDefinitionBo::getId, rule -> rule, (left, right) -> left));
     }
 
-    /** 构建仅含 ID 的 IdRequest，供批量调用 runTestCase 使用 */
-    private IdRequest newIdRequest(Long id) {
-        IdRequest req = new IdRequest();
+    /** 构建仅含 ID 的 TestCaseReq，供批量调用 runTestCase 使用 */
+    private TestCaseReq newTestCaseReq(Long id) {
+        TestCaseReq req = new TestCaseReq();
         req.setId(id);
         return req;
     }

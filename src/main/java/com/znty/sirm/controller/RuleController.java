@@ -1,7 +1,6 @@
 package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
-import com.znty.sirm.common.IdRequest;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.CategoryDto;
 import com.znty.sirm.model.PresetSetDto;
@@ -48,7 +47,7 @@ public class RuleController {
      * 按规则 ID 查询规则详情，含关联的输入参数定义和参数可选项
      */
     @PostMapping("/queryRuleDetail")
-    public ApiResponse<RuleDto> queryRuleDetail(@RequestBody IdRequest req) {
+    public ApiResponse<RuleDto> queryRuleDetail(@RequestBody RuleReq req) {
         return ApiResponse.success(ruleService.queryRuleDetail(req));
     }
 
@@ -80,7 +79,7 @@ public class RuleController {
      * 软删除规则，标记为已删除状态而非物理删除，保留历史执行记录
      */
     @PostMapping("/deleteRule")
-    public ApiResponse<RuleDto> deleteRule(@RequestBody IdRequest req) {
+    public ApiResponse<RuleDto> deleteRule(@RequestBody RuleReq req) {
         return ApiResponse.success(ruleService.deleteRule(req));
     }
 

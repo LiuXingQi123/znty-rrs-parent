@@ -4,7 +4,6 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.ql.util.express.DefaultContext;
 import com.ql.util.express.ExpressRunner;
-import com.znty.sirm.common.IdRequest;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.RuleMapper;
@@ -81,7 +80,7 @@ public class RuleService {
     /**
      * 按规则 ID 查询规则详情，包含关联的参数和选项列表。
      */
-    public RuleDto queryRuleDetail(IdRequest req) {
+    public RuleDto queryRuleDetail(RuleReq req) {
         RuleDefinitionBo rule = requireRule(req.getId());
         // 批量加载规则列表的参数和选项
         Map<Long, List<Map<String, Object>>> paramMap = loadRuleParamMap(Collections.singletonList(rule));
@@ -154,7 +153,7 @@ public class RuleService {
      * 软删除规则（deleted_flag 置为 1，保留数据）。
      */
     @Transactional(rollbackFor = Exception.class)
-    public RuleDto deleteRule(IdRequest req) {
+    public RuleDto deleteRule(RuleReq req) {
         if (req.getId() == null) {
             throw new BizException("规则ID不能为空");
         }

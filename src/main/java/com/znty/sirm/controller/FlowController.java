@@ -1,7 +1,6 @@
 package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
-import com.znty.sirm.common.IdRequest;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.*;
 import com.znty.sirm.service.FlowService;
@@ -60,7 +59,7 @@ public class FlowController {
      * 按流程 ID 查询流程详情，含最新版本的节点和边配置
      */
     @PostMapping("/queryFlowDetail")
-    public ApiResponse<FlowDto> queryFlowDetail(@RequestBody IdRequest req) {
+    public ApiResponse<FlowDto> queryFlowDetail(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.queryFlowDetail(req));
     }
 
@@ -76,7 +75,7 @@ public class FlowController {
      * 删除流程定义，已有关联业务数据的流程不允许删除
      */
     @PostMapping("/deleteFlow")
-    public ApiResponse<FlowDto> deleteFlow(@RequestBody IdRequest req) {
+    public ApiResponse<FlowDto> deleteFlow(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.deleteFlow(req));
     }
 
@@ -84,7 +83,7 @@ public class FlowController {
      * 切换流程启用/停用状态，停用后不可发起新的审批申请
      */
     @PostMapping("/editFlowStatus")
-    public ApiResponse<FlowDto> editFlowStatus(@RequestBody IdRequest req) {
+    public ApiResponse<FlowDto> editFlowStatus(@RequestBody FlowReq req) {
         return ApiResponse.success(flowService.editFlowStatus(req));
     }
 

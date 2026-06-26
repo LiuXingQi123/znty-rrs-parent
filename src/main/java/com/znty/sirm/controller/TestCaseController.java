@@ -1,7 +1,6 @@
 package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
-import com.znty.sirm.common.IdRequest;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.model.RuleRunResultDto;
 import com.znty.sirm.model.TestCaseDto;
@@ -67,7 +66,7 @@ public class TestCaseController {
      * 物理删除测试用例，同时级联删除其关联的参数绑定数据和执行历史记录
      */
     @PostMapping("/deleteTestCase")
-    public ApiResponse<TestCaseDto> deleteTestCase(@RequestBody IdRequest req) {
+    public ApiResponse<TestCaseDto> deleteTestCase(@RequestBody TestCaseReq req) {
         return ApiResponse.success(testCaseService.deleteTestCase(req));
     }
 
@@ -75,7 +74,7 @@ public class TestCaseController {
      * 执行指定的单个测试用例，使用其绑定参数调用 QLExpress 引擎，并更新最近执行结果
      */
     @PostMapping("/runTestCase")
-    public ApiResponse<TestCaseDto> runTestCase(@RequestBody IdRequest req) {
+    public ApiResponse<TestCaseDto> runTestCase(@RequestBody TestCaseReq req) {
         return ApiResponse.success(testCaseService.runTestCase(req));
     }
 
@@ -91,7 +90,7 @@ public class TestCaseController {
      * 查询指定测试用例的执行历史记录列表，每条记录含详细的步骤日志和最终执行结果
      */
     @PostMapping("/queryRunHistoryList")
-    public ApiResponse<List<RuleRunResultDto>> queryRunHistoryList(@RequestBody IdRequest req) {
+    public ApiResponse<List<RuleRunResultDto>> queryRunHistoryList(@RequestBody TestCaseReq req) {
         return ApiResponse.success(testCaseService.queryRunHistoryList(req));
     }
 }

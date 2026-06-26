@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
-import com.znty.sirm.common.IdRequest;
 import com.znty.sirm.common.PageResult;
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.FlowMapper;
@@ -141,7 +140,7 @@ public class FlowService {
     // ==================== 流程详情（进入设计器） ====================
 
     /** 查询流程详情（进入设计器，只读不写）。 */
-    public FlowDto queryFlowDetail(IdRequest req) {
+    public FlowDto queryFlowDetail(FlowReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
@@ -213,9 +212,8 @@ public class FlowService {
         flowMapper.editFlowDefinition(def);
         // 构建流程定义事件
         flowMapper.addFlowDefinitionEvt(toFlowDefEvt(def, L_OPTER, new Date(), "UPDATE"));
-        IdRequest idReq = new IdRequest();
-        idReq.setId(req.getId());
-        return queryFlowDetail(idReq);
+        // 直接复用入参 FlowReq 回查详情
+        return queryFlowDetail(req);
     }
 
     // ==================== 删除流程（软删除） ====================
@@ -224,7 +222,7 @@ public class FlowService {
      * 逻辑删除流程（is_deleted 置为 1），返回被删除的流程信息。
      */
     @Transactional(rollbackFor = Exception.class)
-    public FlowDto deleteFlow(IdRequest req) {
+    public FlowDto deleteFlow(FlowReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");
@@ -245,7 +243,7 @@ public class FlowService {
      * 停用流程：将定义状态由 active 改为 disabled，同时将当前活跃版本标为 disabled 以保留历史轨迹。
      */
     @Transactional(rollbackFor = Exception.class)
-    public FlowDto editFlowStatus(IdRequest req) {
+    public FlowDto editFlowStatus(FlowReq req) {
         FlowDefinitionBo def = flowMapper.queryFlowById(req.getId());
         if (def == null) {
             throw new BizException(404, "流程不存在");

@@ -221,7 +221,7 @@
 | `dict/queryAutoTaskList` | `{}` | `List<DictDto{taskCode}>` | 自动任务字典（6 项硬编码） |
 | `dict/queryCondFieldList` | `{}` | `List<DictDto{groupCode, fields}>` | 条件字段字典（3 组硬编码） |
 
-> 路径均带前缀 `/api/v1/flows`。入参对象：列表/新增/编辑/版本用 `FlowReq`，详情/删除/停用用 `IdRequest`，设计器保存/发布用 `DesignerReq`。
+> 路径均带前缀 `/api/v1/flows`。入参对象：列表/新增/编辑/版本/详情/删除/停用均用 `FlowReq`（详情/删除/停用仅需 `id`），设计器保存/发布用 `DesignerReq`。
 
 ---
 
