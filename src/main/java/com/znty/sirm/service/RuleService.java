@@ -1,5 +1,10 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.RuleStatus;
+import com.znty.sirm.common.enums.RunStatus;
+import com.znty.sirm.common.enums.LogType;
+import com.znty.sirm.common.enums.ParamType;
+
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.ql.util.express.DefaultContext;
@@ -101,7 +106,7 @@ public class RuleService {
         // 填充字符串默认值
         rule.setCategoryCode(defaultText(req.getCategory(), "business"));
         rule.setScript(req.getScript());
-        rule.setStatus("active");
+        rule.setStatus(RuleStatus.ACTIVE.getCode());
         rule.setDeletedFlag(0);
         ruleMapper.addRule(rule);
         // 全量替换规则的参数和选项（先删后增）
@@ -138,7 +143,7 @@ public class RuleService {
         if (req.getId() == null) {
             throw new BizException("规则ID不能为空");
         }
-        if (!"active".equals(req.getStatus()) && !"disabled".equals(req.getStatus())) {
+        if (!RuleStatus.ACTIVE.getCode().equals(req.getStatus()) && !RuleStatus.DISABLED.getCode().equals(req.getStatus())) {
             throw new BizException("规则状态不合法");
         }
         int updated = ruleMapper.editRuleStatus(req.getId(), req.getStatus());
@@ -221,12 +226,12 @@ public class RuleService {
         Date startTime = new Date();
         RuleRunResultDto result = new RuleRunResultDto();
         // 记录规则执行步骤
-        addLog(result, startTime, "info", "开始执行规则: " + rule.getRuleName());
+        addLog(result, startTime, LogType.INFO.getCode(), "开始执行规则: " + rule.getRuleName());
 
         Map<String, String> safeParams = params == null ? Collections.emptyMap() : params;
         safeParams.forEach((key, value) ->
                 // 记录规则执行步骤
-                addLog(result, new Date(), "info", "参数绑定: " + key + " = " + value));
+                addLog(result, new Date(), LogType.INFO.getCode(), "参数绑定: " + key + " = " + value));
 
         String output;
         String errorMessage;
@@ -236,15 +241,15 @@ public class RuleService {
             Object executeResult = executeScript(rule, safeParams);
             output = String.valueOf(executeResult == null ? "(void)" : executeResult);
             // 记录规则执行步骤
-            addLog(result, new Date(), "success", "执行完成，返回值: " + output);
-            status = "pass";
+            addLog(result, new Date(), LogType.SUCCESS.getCode(), "执行完成，返回值: " + output);
+            status = RunStatus.PASS.getCode();
             errorMessage = null;
         } catch (Exception e) {
-            status = "fail";
+            status = RunStatus.FAIL.getCode();
             errorMessage = e.getMessage();
             output = errorMessage;
             // 记录规则执行步骤
-            addLog(result, new Date(), "error", "执行异常: " + errorMessage);
+            addLog(result, new Date(), LogType.ERROR.getCode(), "执行异常: " + errorMessage);
         }
 
         Date finishTime = new Date();
@@ -344,7 +349,7 @@ public class RuleService {
             // 填充字符串默认值
             param.setParamLabel(defaultText((String) dto.get("label"), paramName.trim()));
             // 填充字符串默认值
-            param.setParamType(defaultText((String) dto.get("type"), "string"));
+            param.setParamType(defaultText((String) dto.get("type"), ParamType.STRING.getCode()));
             param.setRequired(0);
             param.setSortNo(i + 1);
             ruleMapper.addParam(param);
@@ -450,7 +455,7 @@ public class RuleService {
             return null;
         }
         String type = param == null ? null : param.getParamType();
-        if ("number".equals(type)) {
+        if (ParamType.NUMBER.getCode().equals(type)) {
             try {
                 BigDecimal decimal = new BigDecimal(value);
                 return value.contains(".") ? decimal.doubleValue() : decimal.longValue();

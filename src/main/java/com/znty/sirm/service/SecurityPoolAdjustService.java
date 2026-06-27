@@ -1,5 +1,14 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.AttachmentPurpose;
+import com.znty.sirm.common.enums.AttachmentCategory;
+
+import com.znty.sirm.common.enums.RelationType;
+import com.znty.sirm.common.enums.FlowType;
+import com.znty.sirm.common.enums.PoolType;
+import com.znty.sirm.common.enums.PermissionType;
+import com.znty.sirm.common.enums.SubjectType;
+
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
@@ -87,13 +96,6 @@ public class SecurityPoolAdjustService {
 
     /** 管理员用户 ID */
     private static final String ADMIN_USER_ID = "1001";
-    /** 可调库权限类型 */
-    private static final String PERMISSION_TYPE_ADJUSTABLE = "adjustable";
-    /** 用户主体类型 */
-    private static final String SUBJECT_TYPE_USER = "user";
-    /** 角色主体类型 */
-    private static final String SUBJECT_TYPE_ROLE = "role";
-
     /** 证券池调库数据访问组件 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
@@ -112,40 +114,11 @@ public class SecurityPoolAdjustService {
 
     /** 系统附件业务服务 */
     @Resource
-    private SysAttachmentService sysAttachmentService;
-
-    // ─── 投资池关系类型常量（对应 ip_pool_relation.relation_type 字段值） ───
-    private static final String REL_SOURCE       = "source";           // 来源池：调入目标池须先在来源池中
-    private static final String REL_IN_RESTRICT  = "in_restrict";      // 调入限制池：证券在此池则不可调入目标池
-    private static final String REL_OUT_RESTRICT = "out_restrict";     // 调出限制池：证券在此池则不可调出目标池
-    private static final String REL_IN_LINKAGE   = "in_linked";        // 调入联动池：调入目标池时需同步调入此池
-    private static final String REL_OUT_LINKAGE  = "out_linked";       // 调出联动池：调出目标池时需同步调出此池
-    private static final String REL_IN_MUTEX     = "in_mutex";         // 调入互斥池：目标池与此池互斥，调入前需先调出互斥池
-    private static final String REL_OUT_MUTEX    = "out_mutex";        // 调出互斥池：证券在互斥池中则不可调出目标池
-    private static final String REL_IN_ELASTIC   = "in_soft_restrict"; // 调入弹性禁投池：证券在此池则不可调入目标池
-    private static final String REL_OUT_ELASTIC  = "out_soft_restrict";// 调出弹性禁投池：证券在此池则不可调出目标池
-
-    /** 白名单调入流程类型 */
-    private static final String FLOW_TYPE_WHITELIST_INBOUND = "whitelistInbound";
-    /** 简易调入流程类型 */
-    private static final String FLOW_TYPE_SIMPLE_INBOUND = "simpleInbound";
-    /** 默认调入流程类型 */
-    private static final String FLOW_TYPE_NORMAL_INBOUND = "normalInbound";
-    /** 升级调入流程类型 */
-    private static final String FLOW_TYPE_UPGRADE_INBOUND = "upgradeInbound";
-    /** 降级调入流程类型 */
-    private static final String FLOW_TYPE_DOWNGRADE_INBOUND = "downgradeInbound";
-    /** 普通调出流程类型 */
-    private static final String FLOW_TYPE_NORMAL_OUTBOUND = "normalOutbound";
-    /** 白名单调入流程 Key */
-    private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
+    private SysAttachmentService sysAttachmentService;    private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
     /** 信用债标准上调流程 Key */
     private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
     /** 信用债标准下调流程 Key */
-    private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";
-    /** 信用债池类型 */
-    private static final String CREDIT_BOND_POOL_TYPE = "credit_bond";
-    /** 日期字段格式：yyyyMMdd */
+    private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";    /** 日期字段格式：yyyyMMdd */
     private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
 
 
@@ -208,9 +181,9 @@ public class SecurityPoolAdjustService {
         Map<Long, List<Long>> inMutexMap  = new HashMap<>();
         Map<Long, List<Long>> outMutexMap = new HashMap<>();
         for (PoolRelationBo r : mutexList) {
-            if ("in_mutex".equals(r.getRelationType())) {
+            if (RelationType.IN_MUTEX.getCode().equals(r.getRelationType())) {
                 inMutexMap.computeIfAbsent(r.getPoolId(), k -> new ArrayList<>()).add(r.getRelationPoolId());
-            } else if ("out_mutex".equals(r.getRelationType())) {
+            } else if (RelationType.OUT_MUTEX.getCode().equals(r.getRelationType())) {
                 outMutexMap.computeIfAbsent(r.getPoolId(), k -> new ArrayList<>()).add(r.getRelationPoolId());
             }
         }
@@ -283,16 +256,16 @@ public class SecurityPoolAdjustService {
     private Set<Long> queryAdjustablePoolIdsByUser(Long userId) {
         List<Long> roleIds = investmentPoolMapper.queryUserRoleIdList(userId);
         Set<Long> roleIdSet = new HashSet<>(roleIds);
-        List<PoolPermissionBo> permissions = investmentPoolMapper.queryPermissionListByType(PERMISSION_TYPE_ADJUSTABLE);
+        List<PoolPermissionBo> permissions = investmentPoolMapper.queryPermissionListByType(PermissionType.ADJUSTABLE.getCode());
         Set<Long> poolIds = new HashSet<>();
 
         for (PoolPermissionBo permission : permissions) {
             if (permission.getPoolId() == null || permission.getSubjectId() == null) {
                 continue;
             }
-            if (SUBJECT_TYPE_USER.equals(permission.getSubjectType()) && permission.getSubjectId().equals(userId)) {
+            if (SubjectType.USER.getCode().equals(permission.getSubjectType()) && permission.getSubjectId().equals(userId)) {
                 poolIds.add(permission.getPoolId());
-            } else if (SUBJECT_TYPE_ROLE.equals(permission.getSubjectType()) && roleIdSet.contains(permission.getSubjectId())) {
+            } else if (SubjectType.ROLE.getCode().equals(permission.getSubjectType()) && roleIdSet.contains(permission.getSubjectId())) {
                 poolIds.add(permission.getPoolId());
             }
         }
@@ -1222,7 +1195,7 @@ public class SecurityPoolAdjustService {
                     item.getTargetPoolId(), Collections.emptyMap());
 
             // 联动调入：目标池调入时，其联动池（in_linked）需同步调入
-            List<Long> inLinkage = relations.get(REL_IN_LINKAGE);
+            List<Long> inLinkage = relations.get(RelationType.IN_LINKED.getCode());
             if (inLinkage != null) {
                 for (Long linkedId : inLinkage) {
                     // coveredKeys.add 返回 true 表示该 key 是首次出现，生成自动项
@@ -1239,7 +1212,7 @@ public class SecurityPoolAdjustService {
 
             // 互斥配套调出：目标池调入时，若证券已在其互斥池（in_mutex）中，
             // 则需同步调出该互斥池，由系统自动追加调出校验项
-            List<Long> inMutex = relations.get(REL_IN_MUTEX);
+            List<Long> inMutex = relations.get(RelationType.IN_MUTEX.getCode());
             if (inMutex != null) {
                 for (Long mutexId : inMutex) {
                     // 证券不在该互斥池中则无需生成配套调出项
@@ -1312,7 +1285,7 @@ public class SecurityPoolAdjustService {
             // 联动调出：目标池调出时，其联动池（out_linked）需同步调出
             Map<String, List<Long>> relations = shared.getPoolRelationMap().getOrDefault(
                     item.getTargetPoolId(), Collections.emptyMap());
-            List<Long> outLinkage = relations.get(REL_OUT_LINKAGE);
+            List<Long> outLinkage = relations.get(RelationType.OUT_LINKED.getCode());
             if (outLinkage != null) {
                 for (Long linkedId : outLinkage) {
                     if (coveredKeys.add(linkedId + "_调出")) {
@@ -1386,7 +1359,7 @@ public class SecurityPoolAdjustService {
             String flowName = resolveFlowName(targetPool.getOutFlowName(), "调出流程");
             boolean noApproval = isNoApprovalFlow(targetPool.getOutFlowId(), targetPool.getOutFlowKey());
             FlowOptionParam p = new FlowOptionParam();
-            p.setFlowType(FLOW_TYPE_NORMAL_OUTBOUND);
+            p.setFlowType(FlowType.NORMAL_OUTBOUND.getCode());
             p.setFlowName(flowName);
             p.setFlowId(targetPool.getOutFlowId());
             p.setFlowKey(targetPool.getOutFlowKey());
@@ -1406,7 +1379,7 @@ public class SecurityPoolAdjustService {
             String flowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
             boolean noApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
             FlowOptionParam p = new FlowOptionParam();
-            p.setFlowType(FLOW_TYPE_NORMAL_INBOUND);
+            p.setFlowType(FlowType.NORMAL_INBOUND.getCode());
             p.setFlowName(flowName);
             p.setFlowId(targetPool.getInFlowId());
             p.setFlowKey(targetPool.getInFlowKey());
@@ -1429,8 +1402,8 @@ public class SecurityPoolAdjustService {
                 return Collections.singletonList(buildNormalInboundFlowOption(
                         targetPool, "当前池与目标池不适用升降级判断"));
             }
-            String fallbackName = FLOW_TYPE_DOWNGRADE_INBOUND.equals(flowType) ? "下调流程" : "上调流程";
-            String flowKey = FLOW_TYPE_DOWNGRADE_INBOUND.equals(flowType)
+            String fallbackName = FlowType.DOWNGRADE_INBOUND.getCode().equals(flowType) ? "下调流程" : "上调流程";
+            String flowKey = FlowType.DOWNGRADE_INBOUND.getCode().equals(flowType)
                     ? FLOW_KEY_STANDARD_DOWNGRADE : FLOW_KEY_STANDARD_UPGRADE;
             FlowDefinitionBo flow = flowMapper.queryActiveFlowByKey(flowKey);
             FlowOptionParam p = new FlowOptionParam();
@@ -1462,14 +1435,14 @@ public class SecurityPoolAdjustService {
                 req, shared, targetPool, simpleMatchReasons, simpleUnmatchReasons);
 
         // 推荐优先级：白名单 > 简易 > 默认调入
-        String recommendedType = whitelistMatched ? FLOW_TYPE_WHITELIST_INBOUND
-                : (simpleMatched ? FLOW_TYPE_SIMPLE_INBOUND : FLOW_TYPE_NORMAL_INBOUND);
+        String recommendedType = whitelistMatched ? FlowType.WHITELIST_INBOUND.getCode()
+                : (simpleMatched ? FlowType.SIMPLE_INBOUND.getCode() : FlowType.NORMAL_INBOUND.getCode());
 
         // 构建三种流程候选项返回前端，由前端根据 recommended 标识决定默认选中项
         List<AdjustCheckDto.FlowOption> options = new ArrayList<>();
         // 白名单流程
         FlowOptionParam whitelistP = new FlowOptionParam();
-        whitelistP.setRecommended(FLOW_TYPE_WHITELIST_INBOUND.equals(recommendedType));
+        whitelistP.setRecommended(FlowType.WHITELIST_INBOUND.getCode().equals(recommendedType));
         whitelistP.setMatched(whitelistMatched);
         whitelistP.setMatchReasons(whitelistMatchReasons);
         whitelistP.setUnmatchReasons(whitelistUnmatchReasons);
@@ -1478,11 +1451,11 @@ public class SecurityPoolAdjustService {
         // 简易流程
         String simpleFlowName = resolveFlowName(targetPool.getSimpleInFlowName(), "简易流程");
         FlowOptionParam simpleP = new FlowOptionParam();
-        simpleP.setFlowType(FLOW_TYPE_SIMPLE_INBOUND);
+        simpleP.setFlowType(FlowType.SIMPLE_INBOUND.getCode());
         simpleP.setFlowName(simpleFlowName);
         simpleP.setFlowId(targetPool.getSimpleInFlowId());
         simpleP.setFlowKey(targetPool.getSimpleInFlowKey());
-        simpleP.setRecommended(FLOW_TYPE_SIMPLE_INBOUND.equals(recommendedType));
+        simpleP.setRecommended(FlowType.SIMPLE_INBOUND.getCode().equals(recommendedType));
         simpleP.setMatched(simpleMatched);
         simpleP.setSelectable(simpleMatched);
         simpleP.setMatchReasons(simpleMatchReasons);
@@ -1493,11 +1466,11 @@ public class SecurityPoolAdjustService {
         String normalFlowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
         boolean normalNoApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
         FlowOptionParam normalP = new FlowOptionParam();
-        normalP.setFlowType(FLOW_TYPE_NORMAL_INBOUND);
+        normalP.setFlowType(FlowType.NORMAL_INBOUND.getCode());
         normalP.setFlowName(normalFlowName);
         normalP.setFlowId(targetPool.getInFlowId());
         normalP.setFlowKey(targetPool.getInFlowKey());
-        normalP.setRecommended(FLOW_TYPE_NORMAL_INBOUND.equals(recommendedType));
+        normalP.setRecommended(FlowType.NORMAL_INBOUND.getCode().equals(recommendedType));
         normalP.setMatched(true);
         normalP.setSelectable(true);
         normalP.setMatchReasons(Collections.singletonList(buildTargetFlowReason(
@@ -1629,10 +1602,10 @@ public class SecurityPoolAdjustService {
                 continue;
             }
             if (targetPool.getInnerSort() > currentPool.getInnerSort()) {
-                return FLOW_TYPE_DOWNGRADE_INBOUND;
+                return FlowType.DOWNGRADE_INBOUND.getCode();
             }
             if (targetPool.getInnerSort() < currentPool.getInnerSort()) {
-                return FLOW_TYPE_UPGRADE_INBOUND;
+                return FlowType.UPGRADE_INBOUND.getCode();
             }
         }
         return null;
@@ -1645,7 +1618,7 @@ public class SecurityPoolAdjustService {
         if (pool == null) {
             return false;
         }
-        return CREDIT_BOND_POOL_TYPE.equals(pool.getPoolType());
+        return PoolType.CREDIT_BOND.getCode().equals(pool.getPoolType());
     }
 
     /**
@@ -1667,7 +1640,7 @@ public class SecurityPoolAdjustService {
      */
     private boolean isCreditBondLevelOneToThree(InvestmentPoolBo pool) {
         return pool != null
-                && CREDIT_BOND_POOL_TYPE.equals(pool.getPoolType())
+                && PoolType.CREDIT_BOND.getCode().equals(pool.getPoolType())
                 && pool.getInnerSort() != null
                 && pool.getInnerSort() >= 1
                 && pool.getInnerSort() <= 3;
@@ -1719,7 +1692,7 @@ public class SecurityPoolAdjustService {
         if (flow == null) {
             reasons.add("未找到已启用流程定义：" + FLOW_KEY_WHITELIST_INBOUND);
         }
-        p.setFlowType(FLOW_TYPE_WHITELIST_INBOUND);
+        p.setFlowType(FlowType.WHITELIST_INBOUND.getCode());
         p.setFlowName(flow != null && flow.getName() != null ? flow.getName() : "白名单流程");
         p.setFlowId(flow != null ? flow.getId() : null);
         p.setFlowKey(FLOW_KEY_WHITELIST_INBOUND);
@@ -1736,7 +1709,7 @@ public class SecurityPoolAdjustService {
         String flowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
         boolean noApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
         FlowOptionParam p = new FlowOptionParam();
-        p.setFlowType(FLOW_TYPE_NORMAL_INBOUND);
+        p.setFlowType(FlowType.NORMAL_INBOUND.getCode());
         p.setFlowName(flowName);
         p.setFlowId(targetPool.getInFlowId());
         p.setFlowKey(targetPool.getInFlowKey());
@@ -1951,7 +1924,7 @@ public class SecurityPoolAdjustService {
      * 满足"从低级库向高级库晋升"等分层调库规则。未配置来源池时不做限制。
      */
     private String inCheckSourcePool(AdjustCheckContext ctx) {
-        List<Long> sourcePools = ctx.getTargetPoolRelations().get(REL_SOURCE);
+        List<Long> sourcePools = ctx.getTargetPoolRelations().get(RelationType.SOURCE.getCode());
         if (sourcePools == null || sourcePools.isEmpty()) {
             return null;
         }
@@ -1970,7 +1943,7 @@ public class SecurityPoolAdjustService {
      */
     private String inCheckRestrictPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
-        return checkBlockedByPools(ctx, REL_IN_RESTRICT, "调入限制池");
+        return checkBlockedByPools(ctx, RelationType.IN_RESTRICT.getCode(), "调入限制池");
     }
 
     /**
@@ -1981,7 +1954,7 @@ public class SecurityPoolAdjustService {
      */
     private String inCheckElasticPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
-        return checkBlockedByPools(ctx, REL_IN_ELASTIC, "调入弹性禁投池");
+        return checkBlockedByPools(ctx, RelationType.IN_SOFT_RESTRICT.getCode(), "调入弹性禁投池");
     }
 
     /**
@@ -1992,7 +1965,7 @@ public class SecurityPoolAdjustService {
      * 不可同时勾选"调入信用债大库/一级库"和"调入专户产品/一级库"。
      */
     private String inCheckMutexConflict(AdjustCheckContext ctx) {
-        List<Long> inMutex = ctx.getTargetPoolRelations().get(REL_IN_MUTEX);
+        List<Long> inMutex = ctx.getTargetPoolRelations().get(RelationType.IN_MUTEX.getCode());
         if (inMutex == null || inMutex.isEmpty()) {
             return null;
         }
@@ -2030,7 +2003,7 @@ public class SecurityPoolAdjustService {
      */
     private String outCheckRestrictPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
-        return checkBlockedByPools(ctx, REL_OUT_RESTRICT, "调出限制池");
+        return checkBlockedByPools(ctx, RelationType.OUT_RESTRICT.getCode(), "调出限制池");
     }
 
     /**
@@ -2042,7 +2015,7 @@ public class SecurityPoolAdjustService {
      */
     private String outCheckMutexPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
-        return checkBlockedByPools(ctx, REL_OUT_MUTEX, "调出互斥池");
+        return checkBlockedByPools(ctx, RelationType.OUT_MUTEX.getCode(), "调出互斥池");
     }
 
     /**
@@ -2052,7 +2025,7 @@ public class SecurityPoolAdjustService {
      */
     private String outCheckElasticPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
-        return checkBlockedByPools(ctx, REL_OUT_ELASTIC, "调出弹性禁投池");
+        return checkBlockedByPools(ctx, RelationType.OUT_SOFT_RESTRICT.getCode(), "调出弹性禁投池");
     }
 
     /**
@@ -2063,7 +2036,7 @@ public class SecurityPoolAdjustService {
      * 因此也不应在同一批次中同时对两池执行调出操作。
      */
     private String outCheckMutexConflict(AdjustCheckContext ctx) {
-        List<Long> inMutex = ctx.getTargetPoolRelations().get(REL_IN_MUTEX);
+        List<Long> inMutex = ctx.getTargetPoolRelations().get(RelationType.IN_MUTEX.getCode());
         if (inMutex == null || inMutex.isEmpty()) {
             return null;
         }
@@ -2187,7 +2160,7 @@ public class SecurityPoolAdjustService {
     /**
      * 通用阻断校验：检查证券是否在指定关系类型的池中，在则返回失败原因，不在则返回 null
      *
-     * @param relationType 关系类型常量（REL_IN_RESTRICT / REL_OUT_RESTRICT 等）
+     * @param relationType 关系类型常量（RelationType.IN_RESTRICT.getCode() / RelationType.OUT_RESTRICT.getCode() 等）
      * @param label        用于错误消息的中文标签（如"调入限制池"）
      */
     private String checkBlockedByPools(AdjustCheckContext ctx, String relationType, String label) {
@@ -2594,16 +2567,16 @@ public class SecurityPoolAdjustService {
                                        SysAttachmentService.SubmissionFiles submissionFiles, String uploaderId) {
         // 绑定信评报告附件
         sysAttachmentService.bindAttachments(adjustLogId, item.getCreditReportFileIndexes(),
-                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, submissionFiles);
+                AttachmentCategory.CREDIT_REPORT_HAND.getCode(), submissionFiles);
         // 绑定其他材料附件
         sysAttachmentService.bindAttachments(adjustLogId, item.getMaterialFileIndexes(),
-                SysAttachmentService.CATEGORY_MATERIAL_HAND, submissionFiles);
+                AttachmentCategory.MATERIAL_HAND.getCode(), submissionFiles);
         // 复制报告库附件为信评报告附件
         sysAttachmentService.copyReportAttachments(adjustLogId, item.getCreditReportSourceAttachmentIds(),
-                SysAttachmentService.PURPOSE_CREDIT_REPORT, uploaderId);
+                AttachmentPurpose.CREDIT_REPORT.getCode(), uploaderId);
         // 复制报告库附件为其他材料附件
         sysAttachmentService.copyReportAttachments(adjustLogId, item.getMaterialSourceAttachmentIds(),
-                SysAttachmentService.PURPOSE_MATERIAL, uploaderId);
+                AttachmentPurpose.MATERIAL.getCode(), uploaderId);
     }
 
     /**

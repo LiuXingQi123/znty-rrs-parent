@@ -1,5 +1,9 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.MarketCode;
+import com.znty.sirm.common.enums.TempStatus;
+import com.znty.sirm.common.enums.TempOperationType;
+
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
@@ -18,45 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class TempSecurityCodeService {
-
-    /** 临时状态 */
-    private static final String STATUS_TEMPORARY = "temporary";
-
-    /** 已更新状态 */
-    private static final String STATUS_UPDATED = "updated";
-
-    /** 已取消状态 */
-    private static final String STATUS_CANCELLED = "cancelled";
-
-    /** 已删除状态 */
-    private static final String STATUS_DELETED = "deleted";
-
-    /** 新增操作 */
-    private static final String OPERATION_ADD = "add";
-
-    /** 更新操作 */
-    private static final String OPERATION_UPDATE = "update";
-
-    /** 取消发行操作 */
-    private static final String OPERATION_CANCEL_ISSUE = "cancel_issue";
-
-    /** 删除操作 */
-    private static final String OPERATION_DELETE = "delete";
-
-    /** 上海证券交易所 */
-    private static final String MARKET_SSE = "SSE";
-
-    /** 深圳证券交易所 */
-    private static final String MARKET_SZSE = "SZSE";
-
-    /** 银行间市场 */
-    private static final String MARKET_CIBM = "CIBM";
-
-    /** 场外市场 */
-    private static final String MARKET_OTC = "OTC";
-
-    /** JWCW 市场 */
-    private static final String MARKET_JWCW = "JWCW";
 
     /** 临时代码管理数据访问组件 */
     @Resource
@@ -113,8 +78,8 @@ public class TempSecurityCodeService {
         bo.setTempCompanyNameSnapshot(resolveCompanyName(company));
         bo.setTempIssueDate(req.getTempIssueDate());
         bo.setTempMaturityDate(req.getTempMaturityDate());
-        bo.setStatus(STATUS_TEMPORARY);
-        bo.setOperationType(OPERATION_ADD);
+        bo.setStatus(TempStatus.TEMPORARY.getCode());
+        bo.setOperationType(TempOperationType.ADD.getCode());
         bo.setIsDeleted(0);
         bo.setCrteTime(now);
         bo.setUpdtTime(now);
@@ -159,8 +124,8 @@ public class TempSecurityCodeService {
         bo.setSecurityMarket(req.getSecurityMarket());
         bo.setSecurityType(req.getSecurityType());
         bo.setUpdateTime(now);
-        bo.setStatus(STATUS_UPDATED);
-        bo.setOperationType(OPERATION_UPDATE);
+        bo.setStatus(TempStatus.UPDATED.getCode());
+        bo.setOperationType(TempOperationType.UPDATE.getCode());
         bo.setUpdtTime(now);
         // 同步正式证券基础信息
         upsertSecurityInfo(bo);
@@ -181,8 +146,8 @@ public class TempSecurityCodeService {
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setId(oldBo.getId());
         bo.setUpdateTime(now);
-        bo.setStatus(STATUS_CANCELLED);
-        bo.setOperationType(OPERATION_CANCEL_ISSUE);
+        bo.setStatus(TempStatus.CANCELLED.getCode());
+        bo.setOperationType(TempOperationType.CANCEL_ISSUE.getCode());
         bo.setUpdtTime(now);
         tempSecurityCodeMapper.editTempSecurityCodeToCancelled(bo);
         // 查询取消后的临时代码详情
@@ -201,8 +166,8 @@ public class TempSecurityCodeService {
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setId(oldBo.getId());
         bo.setUpdateTime(now);
-        bo.setStatus(STATUS_DELETED);
-        bo.setOperationType(OPERATION_DELETE);
+        bo.setStatus(TempStatus.DELETED.getCode());
+        bo.setOperationType(TempOperationType.DELETE.getCode());
         bo.setIsDeleted(1);
         bo.setUpdtTime(now);
         tempSecurityCodeMapper.deleteTempSecurityCode(bo);
@@ -300,12 +265,12 @@ public class TempSecurityCodeService {
      * 校验证券市场
      */
     private void validateMarket(String market, String message) {
-        if (!MARKET_SSE.equals(market)
-                && !MARKET_SZSE.equals(market)
-                && !MARKET_CIBM.equals(market)
-                && !MARKET_OTC.equals(market)
+        if (!MarketCode.SSE.getCode().equals(market)
+                && !MarketCode.SZSE.getCode().equals(market)
+                && !MarketCode.CIBM.getCode().equals(market)
+                && !MarketCode.OTC.getCode().equals(market)
                 && !"UNKNOWN".equals(market)
-                && !MARKET_JWCW.equals(market)) {
+                && !MarketCode.JWCW.getCode().equals(market)) {
             throw new BizException(message + "，market=" + market);
         }
     }
@@ -326,7 +291,7 @@ public class TempSecurityCodeService {
     private TempSecurityCodeBo queryOperableTempSecurityCode(Long id) {
         // 查询临时代码原始记录
         TempSecurityCodeBo bo = queryExistingTempSecurityCode(id);
-        if (!STATUS_TEMPORARY.equals(bo.getStatus())) {
+        if (!TempStatus.TEMPORARY.getCode().equals(bo.getStatus())) {
             throw new BizException("只有临时状态可以执行该操作，id=" + id + "，status=" + bo.getStatus());
         }
         return bo;

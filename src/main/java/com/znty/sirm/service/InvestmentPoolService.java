@@ -1,5 +1,9 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.RelationType;
+import com.znty.sirm.common.enums.RuleType;
+import com.znty.sirm.common.enums.PoolStatus;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.sirm.exception.BizException;
@@ -40,18 +44,6 @@ public class InvestmentPoolService {
 
     /** 默认操作人标识 */
     private static final String OPERATOR_DEFAULT = "system";
-
-    private static final List<String> RELATION_TYPES = Arrays.asList(
-            "source",
-            "in_restrict",
-            "out_restrict",
-            "in_linked",
-            "out_linked",
-            "in_mutex",
-            "out_mutex",
-            "in_soft_restrict",
-            "out_soft_restrict"
-    );
 
     /** 投资池数据访问组件 */
     @Resource
@@ -155,7 +147,7 @@ public class InvestmentPoolService {
                 // 下标对齐取备注，防止 inDescs 列表长度不足时越界
                 String ruleDesc = (inDescs != null && i < inDescs.size()) ? inDescs.get(i) : "";
                 // 新增自动规则备注
-                addAutoRule(poolId, "auto_in", ruleId, ruleDesc, operatorId);
+                addAutoRule(poolId, RuleType.AUTO_IN.getCode(), ruleId, ruleDesc, operatorId);
             }
         }
         if (req.getAutoOutRuleIds() != null) {
@@ -165,7 +157,7 @@ public class InvestmentPoolService {
                 // 下标对齐取备注，防止 outDescs 列表长度不足时越界
                 String ruleDesc = (outDescs != null && i < outDescs.size()) ? outDescs.get(i) : "";
                 // 新增自动规则备注
-                addAutoRule(poolId, "auto_out", ruleId, ruleDesc, operatorId);
+                addAutoRule(poolId, RuleType.AUTO_OUT.getCode(), ruleId, ruleDesc, operatorId);
             }
         }
         return queryPoolDetail(req);
@@ -436,7 +428,7 @@ public class InvestmentPoolService {
         pool.setVarietyCodes("[\"bond\"]");
         pool.setOuterSort(outerSort);
         pool.setInnerSort(innerSort);
-        pool.setStatus("enabled");
+        pool.setStatus(PoolStatus.ENABLED.getCode());
         pool.setIsDeleted(0);
         Date now = new Date();
         pool.setCrteTime(now);
@@ -470,7 +462,7 @@ public class InvestmentPoolService {
             rootPool.setMarketCodes("[]");
             rootPool.setVarietyCodes("[\"bond\"]");
         }
-        rootPool.setStatus("enabled");
+        rootPool.setStatus(PoolStatus.ENABLED.getCode());
         rootPool.setIsDeleted(0);
         Date now = new Date();
         rootPool.setCrteTime(now);
@@ -502,7 +494,7 @@ public class InvestmentPoolService {
             childPool.setMarketCodes("[]");
             childPool.setVarietyCodes("[\"bond\"]");
         }
-        childPool.setStatus("enabled");
+        childPool.setStatus(PoolStatus.ENABLED.getCode());
         childPool.setIsDeleted(0);
         Date now = new Date();
         childPool.setCrteTime(now);
@@ -671,7 +663,7 @@ public class InvestmentPoolService {
                 : investmentPoolMapper.queryPoolByIdsList(allIds).stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, InvestmentPoolBo::getPoolName, (a, b) -> a));
         // 按固定类型顺序处理，保证写入顺序的一致性
-        for (String relationType : RELATION_TYPES) {
+        for (String relationType : java.util.Arrays.stream(RelationType.values()).map(RelationType::getCode).collect(java.util.stream.Collectors.toList())) {
             List<Long> ids = relationPoolIds.getOrDefault(relationType, Collections.emptyList());
             int sortOrder = 1;
             for (Long relationPoolId : ids) {
@@ -721,7 +713,7 @@ public class InvestmentPoolService {
      */
     private void fillRelationConfig(InvestmentPoolDto dto) {
         Map<String, List<Long>> relationPoolIds = new HashMap<>();
-        for (String relationType : RELATION_TYPES) {
+        for (String relationType : java.util.Arrays.stream(RelationType.values()).map(RelationType::getCode).collect(java.util.stream.Collectors.toList())) {
             relationPoolIds.put(relationType, new ArrayList<>());
         }
         List<PoolRelationBo> relations = investmentPoolMapper.queryRelationList(dto.getId());
@@ -738,11 +730,11 @@ public class InvestmentPoolService {
     private void fillAutoRuleConfig(InvestmentPoolDto dto) {
         List<PoolAutoRuleBo> rules = investmentPoolMapper.queryAutoRuleList(dto.getId());
         for (PoolAutoRuleBo rule : rules) {
-            if ("auto_in".equals(rule.getRuleType())) {
+            if (RuleType.AUTO_IN.getCode().equals(rule.getRuleType())) {
                 dto.getAutoInRuleIds().add(rule.getRuleId());
                 dto.getAutoInRuleDescs().add(rule.getRuleDesc());
             }
-            if ("auto_out".equals(rule.getRuleType())) {
+            if (RuleType.AUTO_OUT.getCode().equals(rule.getRuleType())) {
                 dto.getAutoOutRuleIds().add(rule.getRuleId());
                 dto.getAutoOutRuleDescs().add(rule.getRuleDesc());
             }

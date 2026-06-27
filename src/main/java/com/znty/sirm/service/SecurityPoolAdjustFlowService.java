@@ -1,5 +1,14 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.ProcessAction;
+import com.znty.sirm.common.enums.StepStatus;
+import com.znty.sirm.common.enums.AuditStatus;
+import com.znty.sirm.common.enums.ApprovalStrategy;
+import com.znty.sirm.common.enums.AdjustMode;
+
+import com.znty.sirm.common.enums.AttachmentPurpose;
+import com.znty.sirm.common.enums.AttachmentCategory;
+
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.FlowMapper;
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
@@ -124,11 +133,11 @@ public class SecurityPoolAdjustFlowService {
         if (req.getStepId() == null) {
             throw new BizException("流程步骤 ID 不能为空");
         }
-        if (!"approve".equals(req.getProcessAction()) && !"reject".equals(req.getProcessAction())) {
+        if (!ProcessAction.APPROVE.getCode().equals(req.getProcessAction()) && !ProcessAction.REJECT.getCode().equals(req.getProcessAction())) {
             throw new BizException("审批动作不合法");
         }
         // 判断驳回意见是否已填写
-        if ("reject".equals(req.getProcessAction()) && !hasText(req.getProcessComment())) {
+        if (ProcessAction.REJECT.getCode().equals(req.getProcessAction()) && !hasText(req.getProcessComment())) {
             throw new BizException("驳回时处理意见不能为空");
         }
     }
@@ -140,7 +149,7 @@ public class SecurityPoolAdjustFlowService {
         if (step == null) {
             throw new BizException("流程步骤不存在");
         }
-        if (!"pending".equals(step.getStepStatus())) {
+        if (!StepStatus.PENDING.getCode().equals(step.getStepStatus())) {
             throw new BizException("当前流程步骤已处理，请刷新后重试");
         }
         // 判断当前处理人是否可处理该步骤
@@ -187,7 +196,7 @@ public class SecurityPoolAdjustFlowService {
         if (req.getAttachmentChanges() == null || req.getAttachmentChanges().isEmpty()) {
             return;
         }
-        if (!"approve".equals(req.getProcessAction()) || !isModifyStep(step)) {
+        if (!ProcessAction.APPROVE.getCode().equals(req.getProcessAction()) || !isModifyStep(step)) {
             throw new BizException("仅驳回待修改提交时允许修改附件");
         }
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
@@ -211,18 +220,18 @@ public class SecurityPoolAdjustFlowService {
             sysAttachmentService.deleteAdjustLogAttachments(change.getAdjustLogId(), change.getDeleteAttachmentIds());
             // 绑定本地上传的信评报告附件
             sysAttachmentService.bindAttachments(change.getAdjustLogId(), change.getCreditReportFileIndexes(),
-                    SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, submissionFiles);
+                    AttachmentCategory.CREDIT_REPORT_HAND.getCode(), submissionFiles);
             // 绑定本地上传的其他材料附件
             sysAttachmentService.bindAttachments(change.getAdjustLogId(), change.getMaterialFileIndexes(),
-                    SysAttachmentService.CATEGORY_MATERIAL_HAND, submissionFiles);
+                    AttachmentCategory.MATERIAL_HAND.getCode(), submissionFiles);
             // 复制报告库附件为信评报告附件
             sysAttachmentService.copyReportAttachments(change.getAdjustLogId(),
                     change.getCreditReportSourceAttachmentIds(),
-                    SysAttachmentService.PURPOSE_CREDIT_REPORT, req.getHandlerId());
+                    AttachmentPurpose.CREDIT_REPORT.getCode(), req.getHandlerId());
             // 复制报告库附件为其他材料附件
             sysAttachmentService.copyReportAttachments(change.getAdjustLogId(),
                     change.getMaterialSourceAttachmentIds(),
-                    SysAttachmentService.PURPOSE_MATERIAL, req.getHandlerId());
+                    AttachmentPurpose.MATERIAL.getCode(), req.getHandlerId());
         }
     }
 
@@ -273,7 +282,7 @@ public class SecurityPoolAdjustFlowService {
             // 落地同批次调库结果
             finishAdjustBatch(step);
             // 构建审批处理返回对象
-            return buildAuditDto(step, "20", true, advanceResult.nextStepCreated, "审批已通过，调库结果已生效");
+            return buildAuditDto(step, AuditStatus.APPROVED.getCode(), true, advanceResult.nextStepCreated, "审批已通过，调库结果已生效");
         }
 
         // 构建审批处理返回对象
@@ -284,7 +293,7 @@ public class SecurityPoolAdjustFlowService {
      * 根据审批策略判断当前节点是否已经完成。
      */
     private boolean completeCurrentApprovalNodeIfNeeded(IpAdjustStepBo step, String processAction, String stepStatus) {
-        if ("all".equals(step.getApprovalStrategy()) && "approve".equals(processAction)) {
+        if (ApprovalStrategy.ALL.getCode().equals(step.getApprovalStrategy()) && ProcessAction.APPROVE.getCode().equals(processAction)) {
             int pendingCount = securityPoolAdjustMapper.queryPendingStepCountByNode(
                     step.getAdjustLogId(), step.getAdjustBatchNo(), step.getFlowNodeId());
             return pendingCount == 0;
@@ -301,8 +310,8 @@ public class SecurityPoolAdjustFlowService {
      */
     private String resolveStepStatusForProcess(IpAdjustStepBo step, String processAction) {
         // 判断当前步骤是否是提交语义节点
-        if ("approve".equals(processAction) && isSubmitSemanticStep(step)) {
-            return "submit";
+        if (ProcessAction.APPROVE.getCode().equals(processAction) && isSubmitSemanticStep(step)) {
+            return ProcessAction.SUBMIT.getCode();
         }
         return processAction;
     }
@@ -311,8 +320,8 @@ public class SecurityPoolAdjustFlowService {
      * 根据步骤整体结果解析实际存储的个人处理动作。
      */
     private String resolveProcessActionForStore(String processAction, String stepStatus) {
-        if ("submit".equals(stepStatus)) {
-            return "submit";
+        if (ProcessAction.SUBMIT.getCode().equals(stepStatus)) {
+            return ProcessAction.SUBMIT.getCode();
         }
         return processAction;
     }
@@ -362,7 +371,7 @@ public class SecurityPoolAdjustFlowService {
             if (isAutoApprovalNode(nextNode)) {
                 // O32 自动审批节点直接记录为自动完成，并继续流转到结束节点
                 insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                        "auto_process", null, null, "auto_process", null, now);
+                        ProcessAction.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
                 // 查找审批通过主路径上的下一节点
                 FlowNodeBo afterNode = findNextNode(snapshot, nextNode, prevNode, processAction);
                 prevNode = nextNode;
@@ -380,7 +389,7 @@ public class SecurityPoolAdjustFlowService {
 
             // 插入自动完成节点步骤
             insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                    "auto_process", null, null, "auto_process", null, now);
+                    ProcessAction.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
 
             if ("end".equals(nextNode.getNodeType())) {
                 result.finished = true;
@@ -406,7 +415,7 @@ public class SecurityPoolAdjustFlowService {
         boolean modifyNode = isModifyNode(currentNode);
         // 判断当前节点是否为审批节点
         boolean approveNode = isApproveNode(currentNode);
-        if (snapshot == null || currentNode == null || !"reject".equals(processAction)
+        if (snapshot == null || currentNode == null || !ProcessAction.REJECT.getCode().equals(processAction)
                 || (!modifyNode && !approveNode)) {
             return false;
         }
@@ -418,7 +427,7 @@ public class SecurityPoolAdjustFlowService {
             int sortOrder = nextNode.getSortOrder() != null ? nextNode.getSortOrder() : 1;
             // 插入自动完成节点步骤
             insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                    "auto_process", null, null, "auto_process", null, now);
+                    ProcessAction.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
             if ("end".equals(nextNode.getNodeType())) {
                 return true;
             }
@@ -438,17 +447,17 @@ public class SecurityPoolAdjustFlowService {
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
         if (logList.isEmpty()) {
-            securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), "20");
+            securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
             return;
         }
 
-        securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), "20");
+        securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
         for (IpAdjustLogBo log : logList) {
-            if ("调入".equals(log.getAdjustMode())) {
-                log.setAuditStatus("20");
+            if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
+                log.setAuditStatus(AuditStatus.APPROVED.getCode());
                 log.setAdjustLogId(log.getId());
                 securityPoolAdjustMapper.addPoolStatus(log);
-            } else if ("调出".equals(log.getAdjustMode())) {
+            } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
                 securityPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
             }
         }
@@ -510,7 +519,7 @@ public class SecurityPoolAdjustFlowService {
      * @param adjustMode   调整方向（调入/调出）
      */
     private String resolveReportType(String categoryType, String adjustMode) {
-        boolean outbound = "调出".equals(adjustMode);
+        boolean outbound = AdjustMode.OUT.getCode().equals(adjustMode);
         if ("bond".equals(categoryType)) {
             return outbound ? "bond_out_report" : "bond_in_report";
         }
@@ -617,13 +626,13 @@ public class SecurityPoolAdjustFlowService {
         if (handlers.isEmpty()) {
             // 无处理人配置时创建空处理人待处理步骤
             insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
-                    "pending", null, null, null, null, now);
+                    StepStatus.PENDING.getCode(), null, null, null, null, now);
             return;
         }
         for (HandlerTarget handler : handlers) {
             // 按处理人创建待处理步骤
             insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
-                    "pending", handler.handlerId, handler.handlerName, null, null, now);
+                    StepStatus.PENDING.getCode(), handler.handlerId, handler.handlerName, null, null, now);
         }
     }
 
@@ -639,7 +648,7 @@ public class SecurityPoolAdjustFlowService {
         int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
         // 插入发起人待处理步骤
         insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
-                "pending", handlerId, handlerName, null, null, now);
+                StepStatus.PENDING.getCode(), handlerId, handlerName, null, null, now);
     }
 
     /**
@@ -664,7 +673,7 @@ public class SecurityPoolAdjustFlowService {
         nextStep.setProcessAction(processAction);
         nextStep.setProcessComment(processComment);
         nextStep.setStartTime(startTime);
-        nextStep.setProcessTime("pending".equals(stepStatus) ? null : startTime);
+        nextStep.setProcessTime(StepStatus.PENDING.getCode().equals(stepStatus) ? null : startTime);
         securityPoolAdjustMapper.addAdjustStep(nextStep);
     }
 
@@ -804,34 +813,34 @@ public class SecurityPoolAdjustFlowService {
      * @return 调库记录审核状态
      */
     private String resolveProcessingNodeAuditStatus(FlowNodeBo node, String processAction) {
-        if ("reject".equals(processAction)) {
+        if (ProcessAction.REJECT.getCode().equals(processAction)) {
             // 复核驳回后进入待修改状态
             if (isReviewNode(node)) {
-                return "11";
+                return AuditStatus.REJECT_MODIFY.getCode();
             }
             // 修改节点驳回后按撤回处理
             if (isModifyNode(node)) {
-                return "99";
+                return AuditStatus.REVOKED.getCode();
             }
             // 审批节点驳回后终止审批
             if (isApproveNode(node)) {
-                return "21";
+                return AuditStatus.REJECTED.getCode();
             }
-            return "21";
+            return AuditStatus.REJECTED.getCode();
         }
         // 发起或修改通过后回到已提交待审核状态
         if (isInitiatorNode(node) || isModifyNode(node)) {
-            return "00";
+            return AuditStatus.SUBMITTED.getCode();
         }
         // 复核通过后进入审核通过、待后续审批状态
         if (isReviewNode(node)) {
-            return "10";
+            return AuditStatus.REVIEWED.getCode();
         }
         // 审批、自动审批通过记录最终审批通过状态
         if (isApproveNode(node) || isAutoApprovalNode(node)) {
-            return "20";
+            return AuditStatus.APPROVED.getCode();
         }
-        return "20";
+        return AuditStatus.APPROVED.getCode();
     }
 
     /**
@@ -839,7 +848,7 @@ public class SecurityPoolAdjustFlowService {
      */
     private boolean isTerminalByCurrentNode(FlowNodeBo node, String processAction) {
         // 修改驳回或审批驳回时流程直接结束
-        return "reject".equals(processAction) && (isModifyNode(node) || isApproveNode(node));
+        return ProcessAction.REJECT.getCode().equals(processAction) && (isModifyNode(node) || isApproveNode(node));
     }
 
     /**

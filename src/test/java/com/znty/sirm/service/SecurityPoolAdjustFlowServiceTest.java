@@ -1,5 +1,8 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.AttachmentPurpose;
+import com.znty.sirm.common.enums.AttachmentCategory;
+
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.FlowMapper;
 import com.znty.sirm.mapper.SecurityPoolAdjustMapper;
@@ -208,13 +211,13 @@ public class SecurityPoolAdjustFlowServiceTest {
 
         verify(attachmentService).deleteAdjustLogAttachments(1L, Collections.singletonList(9L));
         verify(attachmentService).bindAttachments(1L, Collections.singletonList(0),
-                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, null);
+                AttachmentCategory.CREDIT_REPORT_HAND.getCode(), null);
         verify(attachmentService).bindAttachments(1L, Collections.singletonList(1),
-                SysAttachmentService.CATEGORY_MATERIAL_HAND, null);
+                AttachmentCategory.MATERIAL_HAND.getCode(), null);
         verify(attachmentService).copyReportAttachments(1L, Collections.singletonList(7L),
-                SysAttachmentService.PURPOSE_CREDIT_REPORT, "1");
+                AttachmentPurpose.CREDIT_REPORT.getCode(), "1");
         verify(attachmentService).copyReportAttachments(1L, Collections.singletonList(8L),
-                SysAttachmentService.PURPOSE_MATERIAL, "1");
+                AttachmentPurpose.MATERIAL.getCode(), "1");
         verify(mapper).editAdjustStepProcess(10L, "submit", "submit", "已修改");
     }
 

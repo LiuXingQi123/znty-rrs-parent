@@ -1,5 +1,8 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.AttachmentPurpose;
+import com.znty.sirm.common.enums.AttachmentCategory;
+
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.SysAttachmentMapper;
 import com.znty.sirm.entity.bo.SysAttachmentBo;
@@ -40,12 +43,12 @@ public class SysAttachmentServiceTest {
                 service.createSubmissionFiles(Collections.singletonList(file), "1001");
 
         service.bindAttachments(88L, Collections.singletonList(0),
-                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, submissionFiles);
+                AttachmentCategory.CREDIT_REPORT_HAND.getCode(), submissionFiles);
 
         ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
         verify(mapper).addAttachment(captor.capture());
         SysAttachmentBo attachment = captor.getValue();
-        assertThat(attachment.getAttachmentCategory()).isEqualTo(SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND);
+        assertThat(attachment.getAttachmentCategory()).isEqualTo(AttachmentCategory.CREDIT_REPORT_HAND.getCode());
         assertThat(attachment.getNewFileName()).matches("credit_report_hand_\\d{14}_88\\.pdf");
         assertThat(attachment.getFileName()).matches("\\d{8}/credit_report_hand_\\d{14}_88\\.pdf");
         assertThat(attachment.getFileName()).endsWith("/" + attachment.getNewFileName());
@@ -63,7 +66,7 @@ public class SysAttachmentServiceTest {
 
         assertThatThrownBy(() -> service.bindAttachments(
                 88L, Collections.singletonList(1),
-                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND, submissionFiles))
+                AttachmentCategory.CREDIT_REPORT_HAND.getCode(), submissionFiles))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("文件下标不合法");
     }
@@ -91,14 +94,14 @@ public class SysAttachmentServiceTest {
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         service.copyReportAttachments(88L, Collections.singletonList(7L),
-                SysAttachmentService.PURPOSE_CREDIT_REPORT, "1001");
+                AttachmentPurpose.CREDIT_REPORT.getCode(), "1001");
 
         ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
         verify(mapper).addAttachment(captor.capture());
         SysAttachmentBo attachment = captor.getValue();
         assertThat(attachment.getTableName()).isEqualTo("ip_adjust_log");
         assertThat(attachment.getMainId()).isEqualTo(88L);
-        assertThat(attachment.getAttachmentCategory()).isEqualTo(SysAttachmentService.CATEGORY_CREDIT_REPORT_IN);
+        assertThat(attachment.getAttachmentCategory()).isEqualTo(AttachmentCategory.CREDIT_REPORT_IN.getCode());
         assertThat(attachment.getOriginalFileName()).isEqualTo("报告附件.pdf");
         assertThat(attachment.getFileName()).isEqualTo("20260601/report.pdf");
     }
@@ -112,11 +115,11 @@ public class SysAttachmentServiceTest {
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         service.copyReportAttachments(88L, Collections.singletonList(7L),
-                SysAttachmentService.PURPOSE_MATERIAL, "1001");
+                AttachmentPurpose.MATERIAL.getCode(), "1001");
 
         ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
         verify(mapper).addAttachment(captor.capture());
-        assertThat(captor.getValue().getAttachmentCategory()).isEqualTo(SysAttachmentService.CATEGORY_MATERIAL_OUT);
+        assertThat(captor.getValue().getAttachmentCategory()).isEqualTo(AttachmentCategory.MATERIAL_OUT.getCode());
     }
 
     /** 验证非报告库分类不能作为复制来源 */
@@ -128,7 +131,7 @@ public class SysAttachmentServiceTest {
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         assertThatThrownBy(() -> service.copyReportAttachments(88L, Collections.singletonList(7L),
-                SysAttachmentService.PURPOSE_CREDIT_REPORT, "1001"))
+                AttachmentPurpose.CREDIT_REPORT.getCode(), "1001"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("附件不是报告库文件");
     }
@@ -139,7 +142,7 @@ public class SysAttachmentServiceTest {
         SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
         SysAttachmentService service = buildService(mapper);
         SysAttachmentBo attachment = buildAttachment(8L, "ip_adjust_log", 88L,
-                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND);
+                AttachmentCategory.CREDIT_REPORT_HAND.getCode());
         when(mapper.queryAttachmentListByIds(Collections.singletonList(8L))).thenReturn(Collections.singletonList(attachment));
         when(mapper.deleteAttachmentByIdsList(88L, Collections.singletonList(8L))).thenReturn(1);
 
@@ -154,7 +157,7 @@ public class SysAttachmentServiceTest {
         SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
         SysAttachmentService service = buildService(mapper);
         SysAttachmentBo attachment = buildAttachment(8L, "ip_adjust_log", 99L,
-                SysAttachmentService.CATEGORY_CREDIT_REPORT_HAND);
+                AttachmentCategory.CREDIT_REPORT_HAND.getCode());
         when(mapper.queryAttachmentListByIds(Collections.singletonList(8L))).thenReturn(Collections.singletonList(attachment));
 
         assertThatThrownBy(() -> service.deleteAdjustLogAttachments(88L, Collections.singletonList(8L)))

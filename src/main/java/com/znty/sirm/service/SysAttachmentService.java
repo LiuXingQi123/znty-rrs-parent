@@ -1,5 +1,8 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.AttachmentPurpose;
+import com.znty.sirm.common.enums.AttachmentCategory;
+
 import com.znty.sirm.exception.BizException;
 import com.znty.sirm.mapper.SysAttachmentMapper;
 import com.znty.sirm.entity.bo.SysAttachmentBo;
@@ -41,30 +44,6 @@ public class SysAttachmentService {
 
     /** 调库日志表名称 */
     private static final String ADJUST_LOG_TABLE = "ip_adjust_log";
-
-    /** 信评报告用途 */
-    public static final String PURPOSE_CREDIT_REPORT = "credit_report";
-
-    /** 其他材料用途 */
-    public static final String PURPOSE_MATERIAL = "material";
-
-    /** 手工上传信评报告分类 */
-    public static final String CATEGORY_CREDIT_REPORT_HAND = "credit_report_hand";
-
-    /** 内部报告库信评报告分类 */
-    public static final String CATEGORY_CREDIT_REPORT_IN = "credit_report_in";
-
-    /** 外部报告库信评报告分类 */
-    public static final String CATEGORY_CREDIT_REPORT_OUT = "credit_report_out";
-
-    /** 手工上传其他材料分类 */
-    public static final String CATEGORY_MATERIAL_HAND = "material_hand";
-
-    /** 内部报告库其他材料分类 */
-    public static final String CATEGORY_MATERIAL_IN = "material_in";
-
-    /** 外部报告库其他材料分类 */
-    public static final String CATEGORY_MATERIAL_OUT = "material_out";
 
     /** 内部报告库附件分类 */
     private static final String CATEGORY_REPORT_IN = "report_in";
@@ -152,7 +131,7 @@ public class SysAttachmentService {
         if (adjustLogId == null) {
             throw new BizException("复制报告附件失败：调库日志 ID 不能为空");
         }
-        if (!PURPOSE_CREDIT_REPORT.equals(attachmentPurpose) && !PURPOSE_MATERIAL.equals(attachmentPurpose)) {
+        if (!AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose) && !AttachmentPurpose.MATERIAL.getCode().equals(attachmentPurpose)) {
             throw new BizException("复制报告附件失败：附件分类不合法");
         }
         List<Long> distinctIds = new ArrayList<>(new LinkedHashSet<>(sourceAttachmentIds));
@@ -312,10 +291,10 @@ public class SysAttachmentService {
     /** 根据报告库来源和调库附件用途解析落库分类 */
     private String resolveAdjustLogReportCategory(SysAttachmentBo source, String attachmentPurpose) {
         boolean inReport = "sirm_report_in".equals(source.getTableName());
-        if (PURPOSE_CREDIT_REPORT.equals(attachmentPurpose)) {
-            return inReport ? CATEGORY_CREDIT_REPORT_IN : CATEGORY_CREDIT_REPORT_OUT;
+        if (AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose)) {
+            return inReport ? AttachmentCategory.CREDIT_REPORT_IN.getCode() : AttachmentCategory.CREDIT_REPORT_OUT.getCode();
         }
-        return inReport ? CATEGORY_MATERIAL_IN : CATEGORY_MATERIAL_OUT;
+        return inReport ? AttachmentCategory.MATERIAL_IN.getCode() : AttachmentCategory.MATERIAL_OUT.getCode();
     }
 
     /** 解析并校验文件类型 */
