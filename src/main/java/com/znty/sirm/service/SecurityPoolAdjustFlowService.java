@@ -1,5 +1,13 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.CategoryType;
+
+import com.znty.sirm.common.enums.ReportType;
+
+import com.znty.sirm.common.enums.SubjectType;
+
+import com.znty.sirm.common.enums.NodeType;
+
 import com.znty.sirm.common.enums.ProcessAction;
 import com.znty.sirm.common.enums.StepStatus;
 import com.znty.sirm.common.enums.AuditStatus;
@@ -49,6 +57,9 @@ import java.util.Set;
  */
 @Service
 public class SecurityPoolAdjustFlowService {
+
+    /** 管理员用户 ID */
+    private static final String ADMIN_USER_ID = "1001";
 
     /** 证券池调库数据库操作 */
     @Resource
@@ -371,7 +382,7 @@ public class SecurityPoolAdjustFlowService {
             if (isAutoApprovalNode(nextNode)) {
                 // O32 自动审批节点直接记录为自动完成，并继续流转到结束节点
                 insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                        ProcessAction.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
+                        StepStatus.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
                 // 查找审批通过主路径上的下一节点
                 FlowNodeBo afterNode = findNextNode(snapshot, nextNode, prevNode, processAction);
                 prevNode = nextNode;
@@ -379,7 +390,7 @@ public class SecurityPoolAdjustFlowService {
                 continue;
             }
 
-            if ("approval".equals(nextNode.getNodeType())) {
+            if (NodeType.APPROVAL.getCode().equals(nextNode.getNodeType())) {
                 // 为下一审批节点创建待处理步骤
                 createPendingSteps(step, nextNode, snapshot, now);
                 result.nextStepCreated = true;
@@ -391,7 +402,7 @@ public class SecurityPoolAdjustFlowService {
             insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
                     ProcessAction.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
 
-            if ("end".equals(nextNode.getNodeType())) {
+            if (NodeType.END.getCode().equals(nextNode.getNodeType())) {
                 result.finished = true;
                 return result;
             }
@@ -428,10 +439,10 @@ public class SecurityPoolAdjustFlowService {
             // 插入自动完成节点步骤
             insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
                     ProcessAction.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
-            if ("end".equals(nextNode.getNodeType())) {
+            if (NodeType.END.getCode().equals(nextNode.getNodeType())) {
                 return true;
             }
-            if ("approval".equals(nextNode.getNodeType())) {
+            if (NodeType.APPROVAL.getCode().equals(nextNode.getNodeType())) {
                 return false;
             }
             // 继续沿终止分支查找结束节点
@@ -520,16 +531,16 @@ public class SecurityPoolAdjustFlowService {
      */
     private String resolveReportType(String categoryType, String adjustMode) {
         boolean outbound = AdjustMode.OUT.getCode().equals(adjustMode);
-        if ("bond".equals(categoryType)) {
-            return outbound ? "bond_out_report" : "bond_in_report";
+        if (CategoryType.BOND.getCode().equals(categoryType)) {
+            return outbound ? ReportType.BOND_OUT_REPORT.getCode() : ReportType.BOND_IN_REPORT.getCode();
         }
-        if ("fund".equals(categoryType)) {
-            return outbound ? "fund_out_report" : "fund_in_report";
+        if (CategoryType.FUND.getCode().equals(categoryType)) {
+            return outbound ? ReportType.FUND_OUT_REPORT.getCode() : ReportType.FUND_IN_REPORT.getCode();
         }
-        if ("stock".equals(categoryType)) {
-            return outbound ? "stock_out_report" : "stock_in_report";
+        if (CategoryType.STOCK.getCode().equals(categoryType)) {
+            return outbound ? ReportType.STOCK_OUT_REPORT.getCode() : ReportType.STOCK_IN_REPORT.getCode();
         }
-        return "other_report";
+        return ReportType.OTHER_REPORT.getCode();
     }
 
     /**
@@ -538,8 +549,8 @@ public class SecurityPoolAdjustFlowService {
      * @param categoryType 证券大类（bond/fund/stock/company 等）
      */
     private String resolveReportSecurityType(String categoryType) {
-        if ("bond".equals(categoryType) || "fund".equals(categoryType)
-                || "stock".equals(categoryType) || "company".equals(categoryType)) {
+        if (CategoryType.BOND.getCode().equals(categoryType) || CategoryType.FUND.getCode().equals(categoryType)
+                || CategoryType.STOCK.getCode().equals(categoryType) || CategoryType.COMPANY.getCode().equals(categoryType)) {
             return categoryType;
         }
         return "other";
@@ -693,10 +704,10 @@ public class SecurityPoolAdjustFlowService {
             if (handler == null || handler.getSubjectType() == null || handler.getSubjectId() == null) {
                 continue;
             }
-            if ("user".equals(handler.getSubjectType())) {
+            if (SubjectType.USER.getCode().equals(handler.getSubjectType())) {
                 String userId = String.valueOf(handler.getSubjectId());
                 resultMap.put(userId, new HandlerTarget(userId, handler.getSubjectName()));
-            } else if ("role".equals(handler.getSubjectType())) {
+            } else if (SubjectType.ROLE.getCode().equals(handler.getSubjectType())) {
                 List<Long> roleIds = new ArrayList<>();
                 // 递归收集角色及其子角色
                 collectDescendantRoleIds(handler.getSubjectId(), roleIds, flowMapper.queryRoleList());
@@ -965,7 +976,7 @@ public class SecurityPoolAdjustFlowService {
      * 判断当前操作人是否为管理员。
      */
     private boolean isAdminOperator(SecurityPoolAdjustAuditReq req) {
-        return req != null && "1001".equals(req.getHandlerId());
+        return req != null && ADMIN_USER_ID.equals(req.getHandlerId());
     }
 
     /**

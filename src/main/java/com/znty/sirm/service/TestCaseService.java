@@ -1,5 +1,7 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.TestResult;
+
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
@@ -181,7 +183,7 @@ public class TestCaseService {
                 // 构建仅含 ID 的 TestCaseReq，供批量调用 runTestCase 使用
                 self.runTestCase(newTestCaseReq(testCase.getId()));
             } catch (Exception e) {
-                testCase.setLastResult("fail");
+                testCase.setLastResult(TestResult.FAIL.getCode());
                 testCase.setLastOutput(e.getMessage());
                 testCase.setLastRunTime(new Date());
                 testCaseMapper.editCaseLastResult(testCase);

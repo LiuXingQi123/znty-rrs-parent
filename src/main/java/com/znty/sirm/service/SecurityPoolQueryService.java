@@ -1,5 +1,7 @@
 package com.znty.sirm.service;
 
+import com.znty.sirm.common.enums.BondStatus;
+
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.sirm.common.PageResult;
@@ -68,8 +70,8 @@ public class SecurityPoolQueryService {
     /** 查询证券状态下拉选项 */
     public List<String> querySecurityStatusList() {
         List<String> options = new ArrayList<>();
-        options.add("active");
-        options.add("matured");
+        options.add(BondStatus.ACTIVE.getCode());
+        options.add(BondStatus.MATURED.getCode());
         return options;
     }
 

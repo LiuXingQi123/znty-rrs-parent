@@ -1,6 +1,6 @@
 package com.znty.sirm.common.enums;
 
-/** 附件用途（对应 sys_attachment.purpose） */
+/** 附件逻辑用途（由 sys_attachment.attachment_category 派生，非独立 DB 列） */
 public enum AttachmentPurpose {
     /** 信评报告 */
     CREDIT_REPORT("credit_report"),
