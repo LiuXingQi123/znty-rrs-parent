@@ -14,7 +14,7 @@ public enum AuditStatus {
     APPROVED("20"),
     /** 审批驳回 */
     REJECTED("21"),
-    /** O32 自动审批 */
+    /** O32 自动审批（预留：当前自动审批节点通过后落地为 APPROVED('20')，此 code 运行时不直接写入） */
     O32("32"),
     /** 发起人已撤回 */
     REVOKED("99");

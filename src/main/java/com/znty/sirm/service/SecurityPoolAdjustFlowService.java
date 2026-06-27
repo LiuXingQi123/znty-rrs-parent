@@ -310,7 +310,7 @@ public class SecurityPoolAdjustFlowService {
             return pendingCount == 0;
         }
 
-        // 抢占审批或未配置策略时，一个人通过即完成当前节点
+        // 非会签通过场景：抢占/发起人策略、未配置策略，或任意策略下的驳回动作，单人处理即完成当前节点
         securityPoolAdjustMapper.editOtherPendingStepSkipped(
                 step.getId(), step.getAdjustLogId(), step.getAdjustBatchNo(), step.getFlowNodeId(), stepStatus);
         return true;

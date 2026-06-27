@@ -95,9 +95,9 @@ import java.util.stream.Collectors;
  * <p>校验结构：
  * <ul>
  *   <li>调入校验（checkInConditions）：前置规则（到期、流程进行中）+ 调入方向规则
- *       （重复入池、容量上限、来源池、限制池、弹性禁投池）</li>
+ *       （重复入池、容量上限、来源池、限制池、互斥冲突、弹性禁投池）</li>
  *   <li>调出校验（checkOutConditions）：前置规则（到期、流程进行中）+ 调出方向规则
- *       （未入池、限制池、互斥池、弹性禁投池）</li>
+ *       （未入池、限制池、互斥池、互斥冲突、弹性禁投池）</li>
  * </ul>
  *
  * <p>自动生成项规则：
@@ -335,13 +335,16 @@ public class SecurityPoolAdjustService {
      *   <li><b>参数初始化</b>：集中执行所有 DB 查询，构建 {@link SubmitSharedData}，
      *       包含证券信息、投资池索引、池关系映射、各流程的快照数据</li>
      *   <li><b>调入处理</b>：遍历全部调入方向的调库项，逐项判断是否直通流程，
-     *       直通则写入 ip_adjust_log（audit_status='20'）并直接写入 ip_pool_status，否则写入 ip_adjust_log（audit_status='00'）</li>
-     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'）并软删除 ip_pool_status 记录，
-     *       否则写入 ip_adjust_log（audit_status='00'）</li>
-     *   <li><b>后续处理</b>：预留扩展点，当前为空实现</li>
+     *       直通则写入 ip_adjust_log（audit_status='20'）并直接写入 ip_pool_status；
+     *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
+     *       则升级为 audit_status='20' 并写入 ip_pool_status</li>
+     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'）并软删除 ip_pool_status 记录；
+     *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
+     *       则升级为 audit_status='20' 并软删除 ip_pool_status</li>
+     *   <li><b>后续处理</b>：合并并同步更新调库详情页传入的证券基础信息字段（editSecurityInfoForAdjust）</li>
      * </ol>
      *
-     * @param req 调库申请，包含证券信息及一个或多个调库项（每个项须携带 flowId 或 flowKey）
+     * @param req 调库申请，包含证券信息及一个或多个调库项（手工项须携带 flowId 或 flowKey，无流程时走直通）
      * @return 提交结果，包含生成的记录 ID 列表
      */
     @Transactional(rollbackFor = Exception.class)
@@ -1532,9 +1535,11 @@ public class SecurityPoolAdjustService {
      * 简易流程命中判断入口。
      *
      * <p>伪代码口径：
-     * 1. 剩余期限合理；
-     * 2. 处于一年有效期内；
-     * 3. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
+     * 1. 目标池须为信用债大库一/二/三级库；
+     * 2. 剩余期限合理（≤3 年且 ≥0）；
+     * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限；
+     * 4. 该主体近一年未在目标池走过简易调入流程；
+     * 5. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
      *
      * <p>评级下调标识当前由共享上下文初始化，后续可替换为真实评级历史查询。</p>
      */
@@ -1810,7 +1815,7 @@ public class SecurityPoolAdjustService {
     /**
      * 调入校验：前置规则 + 调入方向规则
      *
-     * <p>校验顺序：证券到期 → 流程进行中 → 重复入池 → 容量上限 → 来源池 → 调入限制池 → 调入弹性禁投池
+     * <p>校验顺序：证券到期 → 流程进行中 → 重复入池 → 容量上限 → 来源池 → 调入限制池 → 互斥冲突 → 调入弹性禁投池
      *
      * @param ctx 调库校验上下文
      * @return 不通过的失败原因列表，通过则返回空列表
@@ -1839,7 +1844,7 @@ public class SecurityPoolAdjustService {
     /**
      * 调出校验：前置规则 + 调出方向规则
      *
-     * <p>校验顺序：证券到期 → 流程进行中 → 未入池 → 调出限制池 → 调出互斥池 → 调出弹性禁投池
+     * <p>校验顺序：证券到期 → 流程进行中 → 未入池 → 调出限制池 → 调出互斥池 → 互斥冲突 → 调出弹性禁投池
      *
      * @param ctx 调库校验上下文
      * @return 不通过的失败原因列表，通过则返回空列表

@@ -12,6 +12,8 @@ public enum PoolType {
     SPECIAL_ACCOUNT("special_account"),
     /** 禁投池 */
     FORBIDDEN("forbidden"),
+    /** 观察池 */
+    OBSERVE("observe"),
     /** 研究池 */
     RESEARCH("research"),
     /** 基金池 */

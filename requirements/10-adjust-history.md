@@ -103,7 +103,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树 |
-| `adjustHistory/queryAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<AdjustHistoryDto>`（含 targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态记录） |
+| `adjustHistory/queryAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<AdjustHistoryDto>`（含 targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态记录） |
 | `adjustHistory/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（不限 audit_status） |
 
 > 路径均带前缀 `/api/v1/`。
@@ -132,7 +132,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
   - `LEFT JOIN ip_investment_pool p ON p.id=al.target_pool_id AND p.is_deleted=0`（带删除过滤，与证券池查询不同）
   - `LEFT JOIN sirm_securityinfo sb ON sb.wind_code=al.security_code`
   - `LEFT JOIN dict_security_type dst ON dst.security_type=al.security_type AND dst.is_deleted=0`
-- **WHERE**：仅 `al.is_deleted=0`（不限 audit_status，含全量历史）；`securityStatus` 用 `CASE WHEN sb.maturity_date < DATE_FORMAT(NOW(),'%Y-%m-%d') THEN '到期' ELSE '存续' END = #{securityStatus}`（注意此处用中文值匹配，与 dict.js 注释一致）
+- **WHERE**：仅 `al.is_deleted=0`（不限 audit_status，含全量历史）；本接口不按证券状态筛选（无 securityStatus 参数）
   - `adjustTimeEnd` 后端补 `CONCAT(#{adjustTimeEnd}, ' 23:59:59')`，start 直接用日期串
   - `myBonds==true` → `al.adjuster_id = #{currentUserId}`
 - **SELECT**：`p.pool_name AS target_pool_path`（先取叶子名）

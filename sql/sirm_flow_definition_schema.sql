@@ -82,7 +82,7 @@ CREATE TABLE `wf_flow_definition_evt` (
     -- 审计字段
     `opter_id`    VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`    DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`   VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`   VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -139,7 +139,7 @@ CREATE TABLE `wf_flow_version_evt` (
     -- 审计字段
     `opter_id`       VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`       DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`      VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`      VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -191,7 +191,7 @@ CREATE TABLE `wf_flow_node_evt` (
     -- 审计字段
     `opter_id`   VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`   DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`  VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`  VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -227,7 +227,7 @@ CREATE TABLE `wf_node_approval_config_evt` (
     -- 审计字段
     `opter_id`          VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`          DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`         VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`         VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -263,7 +263,7 @@ CREATE TABLE `wf_node_approval_handler_evt` (
     -- 审计字段
     `opter_id`           VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`           DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`          VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`          VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -304,7 +304,7 @@ CREATE TABLE `wf_node_auto_config_evt` (
     -- 审计字段
     `opter_id`    VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`    DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`   VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`   VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -347,7 +347,7 @@ CREATE TABLE `wf_node_notify_config_evt` (
     -- 审计字段
     `opter_id`        VARCHAR(20)   DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`        DATETIME      DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`       VARCHAR(20)   DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`       VARCHAR(20)   DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -384,7 +384,7 @@ CREATE TABLE `wf_node_condition_config_evt` (
     -- 审计字段
     `opter_id`         VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`         DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`        VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`        VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -434,7 +434,7 @@ CREATE TABLE `wf_flow_edge_evt` (
     -- 审计字段
     `opter_id`     VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`     DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`    VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`    VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -479,7 +479,7 @@ CREATE TABLE `wf_edge_cond_rule_evt` (
     -- 审计字段
     `opter_id`   VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`   DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`  VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`  VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -519,7 +519,7 @@ CREATE TABLE `wf_role_dict_evt` (
     -- 审计字段
     `opter_id`   VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`   DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`  VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型',
+    `oprt_type`  VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
