@@ -132,7 +132,13 @@
     <!-- 查询指定 ID 的投资池列表 -->
     <select id="queryPoolByIdsList" resultType="com.znty.sirm.entity.bo.InvestmentPoolBo">
         SELECT id
+               ,parent_id
+               ,pool_code
                ,pool_name
+               ,pool_type
+               ,pool_level
+               ,status
+               ,is_deleted
         FROM ip_investment_pool
         WHERE is_deleted = 0
           AND id IN

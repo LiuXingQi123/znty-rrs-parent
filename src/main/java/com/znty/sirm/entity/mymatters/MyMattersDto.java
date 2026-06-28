@@ -41,6 +41,9 @@ public class MyMattersDto {
     /** 流程描述 */
     private String processDescription;
 
+    /** 业务场景：forbiddenCompanyAdjust=禁投池主体调整 / securityAdjust=证券池调整 */
+    private String businessScene;
+
     /** 审核状态 */
     private String auditStatus;
 

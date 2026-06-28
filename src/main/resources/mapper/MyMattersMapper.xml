@@ -15,6 +15,10 @@
                ,s.id AS stepId
                ,f.name AS flowName
                ,s.node_label AS stepName
+               ,CASE WHEN dst.category_type = 'company' AND al.target_pool_id IN (15, 16, 17)
+                     THEN 'forbiddenCompanyAdjust'
+                     ELSE 'securityAdjust'
+                END AS businessScene
                ,al.audit_status
                ,s.step_status
                ,CONCAT(
@@ -30,6 +34,8 @@
                ,al.adjuster_name AS initiatorName
                ,s.start_time
         FROM ip_adjust_log al
+        INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
+                                         AND dst.is_deleted = 0
         <choose>
             <when test="stepStatus == 'pending'">
                 INNER JOIN (
