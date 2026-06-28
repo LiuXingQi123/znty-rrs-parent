@@ -81,6 +81,7 @@ public class TestCaseService {
     public TestCaseDto addTestCase(TestCaseReq req) {
         // 校验保存请求的必填字段（名称、关联规则）
         validateSaveReq(req);
+        // 校验并加载关联规则定义
         RuleDefinitionBo rule = ruleService.requireRule(req.getRuleId());
         RuleTestCaseBo testCase = new RuleTestCaseBo();
         testCase.setCaseName(req.getName().trim());
@@ -102,6 +103,7 @@ public class TestCaseService {
     public TestCaseDto editTestCase(TestCaseReq req) {
         // 校验保存请求的必填字段（名称、关联规则）
         validateSaveReq(req);
+        // 校验并加载关联规则定义
         RuleDefinitionBo rule = ruleService.requireRule(req.getRuleId());
         // 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req.getId());
@@ -156,6 +158,7 @@ public class TestCaseService {
     public TestCaseDto runTestCase(TestCaseReq req) {
         // 按 ID 查询测试用例实体
         RuleTestCaseBo testCase = requireCase(req.getId());
+        // 查询测试用例关联的规则定义
         RuleDefinitionBo rule = ruleMapper.queryRuleById(testCase.getRuleId());
         if (rule == null) {
             throw new BizException("测试用例关联规则不存在");
@@ -163,6 +166,7 @@ public class TestCaseService {
         // 批量加载测试用例的参数值
         Map<String, String> params = loadCaseParamMap(Collections.singletonList(testCase))
                 .getOrDefault(testCase.getId(), Collections.emptyMap());
+        // 调用规则引擎执行并记录运行结果
         RuleRunResultDto runResult = ruleService.executeAndRecord(rule, params, testCase.getId());
         testCase.setLastResult(runResult.getStatus());
         testCase.setLastOutput(runResult.getOutput());
@@ -254,6 +258,7 @@ public class TestCaseService {
         Map<String, String> params = loadCaseParamMap(Collections.singletonList(testCase))
                 .getOrDefault(testCase.getId(), Collections.emptyMap());
         RuleDefinitionBo rule = testCase.getRuleId() == null
+                // 查询测试用例关联的规则定义
                 ? null : ruleMapper.queryRuleById(testCase.getRuleId());
         // 组装测试用例返回对象
         return toDto(testCase, params, rule);
@@ -266,6 +271,7 @@ public class TestCaseService {
     private void replaceCaseParams(Long caseId, Long ruleId, Map<String, String> params) {
         testCaseMapper.deleteParamsByCaseId(caseId);
         Map<String, String> safeParams = params == null ? Collections.emptyMap() : params;
+        // 加载规则参数定义用于快照
         Map<String, RuleParamBo> paramDefineMap = ruleService.listParams(ruleId).stream()
                 .collect(Collectors.toMap(RuleParamBo::getParamName, param -> param, (left, right) -> left));
         safeParams.forEach((name, value) -> {

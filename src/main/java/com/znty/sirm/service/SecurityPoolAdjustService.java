@@ -182,7 +182,9 @@ public class SecurityPoolAdjustService {
             return new ArrayList<>();
         }
 
+        // 解析当前用户 ID
         Long currentUserId = parseCurrentUserId(req.getCurrentUserId());
+        // 判断当前用户是否为管理员
         if (!isAdminUser(req.getCurrentUserId())) {
             // 按投资池“可调整人员”配置过滤可操作池
             allPools = filterAdjustablePoolsByUser(allPools, currentUserId);
@@ -299,6 +301,7 @@ public class SecurityPoolAdjustService {
         SecurityPoolStatusDto dto = new SecurityPoolStatusDto();
         List<PoolStatusDto> securityCurrentPools = securityPoolAdjustMapper.querySecurityPoolStatusList(req.getSecurityCode());
         List<PoolStatusDto> issuerCurrentPools = securityPoolAdjustMapper.queryIssuerPoolStatusList(req.getSecurityCode());
+        // 加载投资池全路径名称映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         // 填充当前所在池的全路径名称
         fillPoolStatusFullName(securityCurrentPools, poolFullNameMap);
@@ -358,6 +361,7 @@ public class SecurityPoolAdjustService {
     @Transactional(rollbackFor = Exception.class)
     public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req, List<MultipartFile> files) {
         SysAttachmentService.SubmissionFiles submissionFiles =
+                // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
         return submitAdjustLog(req, submissionFiles, new BatchNoContext());
     }
@@ -720,6 +724,7 @@ public class SecurityPoolAdjustService {
      */
     private List<Long> executeInboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
         return executeInboundSubmit(req, shared,
+                // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
     }
 
@@ -803,6 +808,7 @@ public class SecurityPoolAdjustService {
      */
     private List<Long> executeOutboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
         return executeOutboundSubmit(req, shared,
+                // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
     }
 

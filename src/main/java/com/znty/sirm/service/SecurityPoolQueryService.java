@@ -53,6 +53,7 @@ public class SecurityPoolQueryService {
         if (list.isEmpty()) {
             return;
         }
+        // 查询投资池全路径名称映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         for (SecurityPoolQueryDto dto : list) {
             String fullName = poolFullNameMap.get(dto.getTargetPoolId());

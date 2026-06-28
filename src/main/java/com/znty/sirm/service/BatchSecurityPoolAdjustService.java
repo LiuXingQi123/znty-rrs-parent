@@ -217,6 +217,7 @@ public class BatchSecurityPoolAdjustService {
         dto.setSecurityCount(itemMap.size());
         dto.setSubmitCount(0);
         SysAttachmentService.SubmissionFiles submissionFiles =
+                // 创建批量提交附件上下文
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
         BatchNoContext batchNoContext = new BatchNoContext();
         for (Map.Entry<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> entry : itemMap.entrySet()) {
@@ -300,6 +301,7 @@ public class BatchSecurityPoolAdjustService {
             if (!AdjustMode.IN.getCode().equals(item.getAdjustMode()) && !AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
                 throw new BizException("调库明细调整方向必须为调入或调出");
             }
+            // 判断批量提交项是否为手工调库项
             if (isManualBatchSubmitItem(item) && !adjustMode.equals(item.getAdjustMode())) {
                 throw new BizException("调库明细调整方向必须与本次批量调整方向一致");
             }
@@ -433,6 +435,7 @@ public class BatchSecurityPoolAdjustService {
         return submitReq;
     }
 
+    /** 校验批量调库提交请求参数合法性 */
     private void validateSubmitReq(SecurityPoolAdjustSubmitReq req) {
         if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
@@ -748,6 +751,7 @@ public class BatchSecurityPoolAdjustService {
      */
     private List<Long> executeInboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
         return executeInboundSubmit(req, shared,
+                // 创建批量提交附件上下文
                 sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
     }
 
@@ -831,6 +835,7 @@ public class BatchSecurityPoolAdjustService {
      */
     private List<Long> executeOutboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
         return executeOutboundSubmit(req, shared,
+                // 创建批量提交附件上下文
                 sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
     }
 
@@ -1008,6 +1013,7 @@ public class BatchSecurityPoolAdjustService {
         return dto;
     }
 
+    /** 执行单证券调库校验 */
     private AdjustCheckDto checkSingleAdjust(AdjustCheckReq req) {
 
         // ══ 第一阶段：前置校验 ══

@@ -74,6 +74,7 @@ public class SysAttachmentService {
     @PostConstruct
     public void initializeStorage() {
         try {
+            // 获取正式文件目录
             Files.createDirectories(resolveFileRoot());
         } catch (IOException e) {
             throw new IllegalStateException("初始化附件存储目录失败：" + storagePath, e);
@@ -87,6 +88,7 @@ public class SysAttachmentService {
         }
         List<MultipartFile> fileList = files == null ? new ArrayList<MultipartFile>() : files;
         for (MultipartFile file : fileList) {
+            // 校验单个提交文件
             validateFile(file);
         }
         return new SubmissionFiles(fileList, uploaderId);
@@ -141,7 +143,9 @@ public class SysAttachmentService {
             throw new BizException("复制报告附件失败：存在无效报告附件 ID");
         }
         for (SysAttachmentBo source : sourceAttachments) {
+            // 校验复制来源必须为报告库附件
             validateReportSourceAttachment(source);
+            // 根据报告库来源解析落库分类
             String attachmentCategory = resolveAdjustLogReportCategory(source, attachmentPurpose);
             SysAttachmentBo bo = new SysAttachmentBo();
             bo.setTableName(ADJUST_LOG_TABLE);
@@ -247,7 +251,9 @@ public class SysAttachmentService {
         if (attachment == null) {
             throw new BizException("附件不存在或已删除，附件 ID：" + id);
         }
+        // 获取附件存储根目录
         Path filePath = resolveStorageRoot().resolve(attachment.getFileName()).normalize();
+        // 获取附件存储根目录
         validatePathInRoot(filePath, resolveStorageRoot());
         if (!Files.isRegularFile(filePath)) {
             throw new BizException("附件文件不存在，附件 ID：" + id);
@@ -310,18 +316,22 @@ public class SysAttachmentService {
         return fileType;
     }
 
-    /** 保存提交文件 */
+    /** 保存提交文件并返回存储信息 */
     private StoredFile storeFile(MultipartFile file, String attachmentCategory, Long adjustLogId) {
         String originalFileName = Paths.get(file.getOriginalFilename()).getFileName().toString();
+        // 解析并校验文件类型
         String fileType = resolveFileType(originalFileName);
         String dateDirectory = LocalDate.now().format(DATE_DIRECTORY_FORMATTER);
         String newFileNamePrefix = attachmentCategory + "_"
                 + LocalDateTime.now().format(FILE_NAME_TIME_FORMATTER) + "_"
                 + adjustLogId;
+        // 获取正式文件目录
         Path fileRoot = resolveFileRoot();
         Path targetDirectory = fileRoot.resolve(dateDirectory);
+        // 生成不覆盖已有文件的附件名称
         String newFileName = resolveAvailableFileName(targetDirectory, newFileNamePrefix, fileType);
         Path targetPath = targetDirectory.resolve(newFileName).normalize();
+        // 校验目标路径位于根目录内
         validatePathInRoot(targetPath, fileRoot);
         try {
             Files.createDirectories(targetDirectory);
@@ -340,6 +350,7 @@ public class SysAttachmentService {
         storedFile.fileType = fileType;
         storedFile.fileSize = file.getSize();
         storedFile.contentType = file.getContentType();
+        // 转换为统一的相对路径
         storedFile.relativeFileName = toRelativePath(targetPath);
         return storedFile;
     }
@@ -377,11 +388,13 @@ public class SysAttachmentService {
 
     /** 获取正式文件目录 */
     private Path resolveFileRoot() {
+        // 获取附件存储根目录
         return resolveStorageRoot();
     }
 
     /** 转换为统一的相对路径 */
     private String toRelativePath(Path path) {
+        // 获取附件存储根目录
         return resolveStorageRoot().relativize(path.toAbsolutePath().normalize())
                 .toString().replace('\\', '/');
     }
@@ -442,6 +455,7 @@ public class SysAttachmentService {
             String storedFileKey = fileIndex + "|" + attachmentCategory + "|" + adjustLogId;
             StoredFile storedFile = storedFileMap.get(storedFileKey);
             if (storedFile == null) {
+                // 保存提交文件并返回存储信息
                 storedFile = storeFile(files.get(fileIndex), attachmentCategory, adjustLogId);
                 storedFileMap.put(storedFileKey, storedFile);
             }

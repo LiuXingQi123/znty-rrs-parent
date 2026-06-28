@@ -178,6 +178,7 @@ public class ForbiddenPoolAdjustService {
      * 查询公司主体详情。
      */
     public ForbiddenPoolAdjustDto queryCompanyDetail(ForbiddenPoolAdjustReq req) {
+        // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         ForbiddenPoolAdjustDto dto = forbiddenPoolAdjustMapper.queryCompanyDetail(req.getCompanyCode());
         if (dto == null) {
@@ -192,6 +193,7 @@ public class ForbiddenPoolAdjustService {
      * 查询当前主体和旗下债券所在池。
      */
     public ForbiddenPoolAdjustDto.PoolStatusBundle queryCompanyPoolStatus(ForbiddenPoolAdjustReq req) {
+        // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         // 校验主体记录存在且类型正确
         queryCompanyDetail(req);
@@ -200,6 +202,7 @@ public class ForbiddenPoolAdjustService {
                 forbiddenPoolAdjustMapper.queryCompanyPoolStatusList(req.getCompanyCode());
         List<ForbiddenPoolAdjustDto.PoolStatus> bondPools =
                 forbiddenPoolAdjustMapper.queryCompanyBondPoolList(req.getCompanyCode());
+        // 加载投资池全路径名称映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         // 填充主体所在池全路径
         fillCompanyPoolFullName(companyPools, poolFullNameMap);
@@ -214,6 +217,7 @@ public class ForbiddenPoolAdjustService {
      * 查询主体旗下债券明细。
      */
     public List<ForbiddenPoolAdjustDto.CompanyBond> queryCompanyBondList(ForbiddenPoolAdjustReq req) {
+        // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         if (req.getTargetPoolId() == null) {
             throw new BizException("查看旗下债券明细时投资池 ID 不能为空");
@@ -222,6 +226,7 @@ public class ForbiddenPoolAdjustService {
         queryCompanyDetail(req);
         List<ForbiddenPoolAdjustDto.CompanyBond> bonds = forbiddenPoolAdjustMapper.queryCompanyBondList(
                 req.getCompanyCode(), req.getTargetPoolId());
+        // 加载投资池全路径名称映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         for (ForbiddenPoolAdjustDto.CompanyBond bond : bonds) {
             if (bond.getTargetPoolId() != null && poolFullNameMap.containsKey(bond.getTargetPoolId())) {
@@ -247,7 +252,9 @@ public class ForbiddenPoolAdjustService {
                 throw new BizException("禁投池调整目标池未启用，poolId=" + pool.getId());
             }
         }
+        // 判断当前用户是否为管理员
         if (!isAdminUser(req.getCurrentUserId())) {
+            // 非管理员：解析当前用户 ID 并按权限过滤可调池
             Long userId = parseCurrentUserId(req.getCurrentUserId());
             Set<Long> adjustablePoolIds = queryAdjustablePoolIdsByUser(userId);
             configuredPools = configuredPools.stream()
@@ -269,6 +276,7 @@ public class ForbiddenPoolAdjustService {
         Map<Long, Integer> countMap = forbiddenPoolAdjustMapper.queryPoolCurrentCountList().stream()
                 .collect(Collectors.toMap(PoolDto::getId, PoolDto::getCurrentCount));
         return configuredPools.stream()
+                // 转换投资池为树节点 DTO
                 .map(pool -> toPoolDto(pool, inMutexMap, outMutexMap, countMap))
                 .collect(Collectors.toList());
     }
@@ -277,10 +285,13 @@ public class ForbiddenPoolAdjustService {
      * 校验主体调整并生成关系配置对应的自动项。
      */
     public AdjustCheckDto checkCompanyAdjust(ForbiddenPoolAdjustCheckReq req) {
+        // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         ForbiddenPoolAdjustReq detailReq = new ForbiddenPoolAdjustReq();
         detailReq.setCompanyCode(req.getCompanyCode());
+        // 查询主体详情并校验存在
         ForbiddenPoolAdjustDto company = queryCompanyDetail(detailReq);
+        // 校验手工调整池 ID 合法性
         validateManualCheckPoolIds(req.getItems());
         AdjustCheckReq checkReq = new AdjustCheckReq();
         checkReq.setSecurityCode(company.getCompanyCode());
@@ -306,11 +317,15 @@ public class ForbiddenPoolAdjustService {
     @Transactional(rollbackFor = Exception.class)
     public ForbiddenPoolAdjustSubmitDto addCompanyAdjustLog(ForbiddenPoolAdjustSubmitReq req,
                                                              List<MultipartFile> files) {
+        // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         ForbiddenPoolAdjustReq detailReq = new ForbiddenPoolAdjustReq();
         detailReq.setCompanyCode(req.getCompanyCode());
+        // 查询主体详情并校验存在
         ForbiddenPoolAdjustDto company = queryCompanyDetail(detailReq);
+        // 校验提交参数与主体一致性
         validateSubmitCompany(req, company);
+        // 转换为主体对应的调库提交请求
         SecurityPoolAdjustSubmitReq submitReq = convertCompanySubmitReq(req, company);
         // 调用本类独立复制的调库提交实现
         AdjustSubmitDto result = addAdjustLog(submitReq, files);
@@ -325,6 +340,7 @@ public class ForbiddenPoolAdjustService {
      * 查询主体调库记录。
      */
     public List<AdjustLogDto> queryCompanyAdjustLogList(ForbiddenPoolAdjustReq req) {
+        // 转换为主体对应的调库查询请求
         SecurityPoolAdjustReq securityReq = convertCompanyQueryReq(req);
         // 查询本模块主体调库记录
         return queryAdjustLogList(securityReq);
@@ -334,6 +350,7 @@ public class ForbiddenPoolAdjustService {
      * 查询主体调库流程步骤。
      */
     public List<IpAdjustStepDto> queryCompanyAdjustStepList(ForbiddenPoolAdjustReq req) {
+        // 转换为主体对应的调库查询请求
         SecurityPoolAdjustReq securityReq = convertCompanyQueryReq(req);
         // 查询本模块主体调库流程步骤
         return queryAdjustStepList(securityReq);
@@ -513,7 +530,9 @@ public class ForbiddenPoolAdjustService {
             return new ArrayList<>();
         }
 
+        // 解析当前用户 ID
         Long currentUserId = parseCurrentUserId(req.getCurrentUserId());
+        // 判断当前用户是否为管理员
         if (!isAdminUser(req.getCurrentUserId())) {
             // 按投资池“可调整人员”配置过滤可操作池
             allPools = filterAdjustablePoolsByUser(allPools, currentUserId);
