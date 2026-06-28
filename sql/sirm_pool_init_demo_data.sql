@@ -187,7 +187,27 @@ INSERT INTO `ip_investment_pool` (`id`, `parent_id`, `pool_code`, `pool_name`, `
  NULL, NULL, NULL,
  NULL, NULL, NULL,
  NULL, NULL, NULL,
- NULL, NULL, 5, 1, 'enabled', 0, NOW(), NOW());
+ NULL, NULL, 5, 1, 'enabled', 0, NOW(), NOW()),
+(16, NULL, 'observe_root', '观察池', 'observe', 1, JSON_ARRAY('SSE', 'SZSE', 'CIBM'), JSON_ARRAY('bond'),
+ '观察池，维护需持续跟踪、重点观察但暂未纳入禁投限制的投资标的。',
+ NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, 6, 1, 'enabled', 0, NOW(), NOW()),
+(17, NULL, 'pledge_blacklist_root', '黑名单质押库', 'blacklist', 1, JSON_ARRAY('SSE', 'SZSE', 'CIBM'), JSON_ARRAY('bond'),
+ '黑名单质押库，维护质押业务黑名单范围内的投资标的。',
+ NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, NULL,
+ NULL, NULL, 7, 1, 'enabled', 0, NOW(), NOW());
 
 -- 初始化投资池关系：信用债库与专户产品子池互斥
 INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`)
@@ -314,7 +334,7 @@ INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `u
 -- 权限说明：
 --   permission_type: viewable=可查看 / adjustable=可调整 / excel_importable=可Excel导入
 --   subject_type:    role=角色 / user=人员
--- 叶子节点 pool_id: 2-6（信用债子库） / 7（境外债） / 8（转债） / 10-14（专户产品子库） / 15（禁投池）
+-- 叶子节点 pool_id: 2-6（信用债子库） / 7（境外债） / 8（转债） / 10-14（专户产品子库） / 15（禁投池） / 16（观察池） / 17（黑名单质押库）
 -- ----------------------------------------------------------------------------
 INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 -- 管理员（user_id=1001）：对所有叶子节点拥有 adjustable + excel_importable 权限
@@ -331,6 +351,8 @@ INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, 
 (13, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (14, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (15, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(16, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(17, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (2,  'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
 (3,  'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
 (10, 'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
@@ -358,8 +380,12 @@ INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, 
 (8,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
 (9,  'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
 (15, 'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
+(16, 'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
+(17, 'viewable',        'role', 9, '量化部', 0, NOW(), NOW()),
 -- 风险管理部：禁投池可调整，全部一级目录可查看
 (15, 'adjustable',      'role', 10, '风险管理部', 0, NOW(), NOW()),
+(16, 'adjustable',      'role', 10, '风险管理部', 0, NOW(), NOW()),
+(17, 'adjustable',      'role', 10, '风险管理部', 0, NOW(), NOW()),
 (1,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW()),
 (7,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW()),
 (8,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW()),
