@@ -2922,6 +2922,9 @@ public class ForbiddenPoolAdjustService {
         bo.setSecurityCode(req.getSecurityCode());
         bo.setSecurityShortName(req.getSecurityShortName());
         bo.setSecurityType(req.getSecurityType());
+        bo.setCrmwScode(req.getCrmwScode());
+        bo.setCrmwMktcode(req.getCrmwMktcode());
+        bo.setCrmwStype(req.getCrmwStype());
         // 根据调库项来源确定落表调整类型
         bo.setAdjustType(resolveAdjustType(req, item));
         bo.setAdjustMode(item.getAdjustMode());

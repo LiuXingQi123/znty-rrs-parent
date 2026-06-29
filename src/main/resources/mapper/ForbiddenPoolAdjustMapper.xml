@@ -184,6 +184,9 @@
         INSERT INTO ip_adjust_log (security_code
                                   ,security_short_name
                                   ,security_type
+                                  ,crmw_scode
+                                  ,crmw_mktcode
+                                  ,crmw_stype
                                   ,adjust_type
                                   ,adjust_mode
                                   ,adjust_batch_no
@@ -205,6 +208,9 @@
         VALUES (#{securityCode}
                ,#{securityShortName}
                ,#{securityType}
+               ,#{crmwScode}
+               ,#{crmwMktcode}
+               ,#{crmwStype}
                ,#{adjustType}
                ,#{adjustMode}
                ,#{adjustBatchNo}
@@ -481,6 +487,9 @@
         INSERT INTO ip_pool_status (security_code
                                   ,security_short_name
                                   ,security_type
+                                  ,crmw_scode
+                                  ,crmw_mktcode
+                                  ,crmw_stype
                                   ,adjust_type
                                   ,adjust_mode
                                   ,adjust_batch_no
@@ -504,6 +513,9 @@
         VALUES (#{securityCode}
                ,#{securityShortName}
                ,#{securityType}
+               ,#{crmwScode}
+               ,#{crmwMktcode}
+               ,#{crmwStype}
                ,#{adjustType}
                ,#{adjustMode}
                ,#{adjustBatchNo}

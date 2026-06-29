@@ -406,6 +406,9 @@ public class BatchSecurityPoolAdjustService {
         submitReq.setSecurityCode(first.getSecurityCode());
         submitReq.setSecurityShortName(first.getSecurityShortName());
         submitReq.setSecurityType(first.getSecurityType());
+        submitReq.setCrmwScode(first.getCrmwScode());
+        submitReq.setCrmwMktcode(first.getCrmwMktcode());
+        submitReq.setCrmwStype(first.getCrmwStype());
         submitReq.setAdjustType("手工调整");
         submitReq.setAdjustReason(req.getAdjustReason());
         submitReq.setAdjustAdvice(req.getAdjustAdvice());
@@ -2507,6 +2510,9 @@ public class BatchSecurityPoolAdjustService {
         bo.setSecurityCode(req.getSecurityCode());
         bo.setSecurityShortName(req.getSecurityShortName());
         bo.setSecurityType(req.getSecurityType());
+        bo.setCrmwScode(req.getCrmwScode());
+        bo.setCrmwMktcode(req.getCrmwMktcode());
+        bo.setCrmwStype(req.getCrmwStype());
         // 根据调库项来源确定落表调整类型
         bo.setAdjustType(resolveAdjustType(req, item));
         bo.setAdjustMode(item.getAdjustMode());

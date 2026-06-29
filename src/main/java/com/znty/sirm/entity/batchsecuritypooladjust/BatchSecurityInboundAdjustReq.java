@@ -80,6 +80,15 @@ public class BatchSecurityInboundAdjustReq {
         /** 证券类型 */
         private String securityType;
 
+        /** CRMW 证券代码 */
+        private String crmwScode;
+
+        /** CRMW 市场代码 */
+        private String crmwMktcode;
+
+        /** CRMW 证券类型 */
+        private String crmwStype;
+
         /** 目标投资池 ID */
         private Long targetPoolId;
 
