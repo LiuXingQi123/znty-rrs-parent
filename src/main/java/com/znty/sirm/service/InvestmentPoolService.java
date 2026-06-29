@@ -316,6 +316,8 @@ public class InvestmentPoolService {
         InvestmentPoolBo special = addSeedPool(null, "special_account_root", "专户产品", PoolType.SPECIAL_ACCOUNT.getCode(), 1, 4, 1, operatorId);
         // 新增固定层级池
         addLevelPools(special.getId(), PoolType.SPECIAL_ACCOUNT.getCode(), operatorId);
+        // 新增初始化投资池
+        addSeedPool(null, "crmw_root", "CRMW库", PoolType.CRMW.getCode(), 1, 8, 1, operatorId);
         return queryPoolList(req);
     }
 

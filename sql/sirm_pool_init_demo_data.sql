@@ -207,7 +207,17 @@ INSERT INTO `ip_investment_pool` (`id`, `parent_id`, `pool_code`, `pool_name`, `
  NULL, NULL, NULL,
  NULL, NULL, NULL,
  NULL, NULL, NULL,
- NULL, NULL, 7, 1, 'enabled', 0, NOW(), NOW());
+ NULL, NULL, 7, 1, 'enabled', 0, NOW(), NOW()),
+(18, NULL, 'crmw_root', 'CRMW库', 'crmw', 1, JSON_ARRAY('SSE', 'SZSE', 'CIBM'), JSON_ARRAY('bond'),
+ 'CRMW库，维护信用风险缓释凭证相关投资标的。',
+ NULL,
+ 101, 'bond:standard-upgrade', '债券标准升库流程',
+ 102, 'bond:standard-downgrade', '债券标准降库流程',
+ 105, 'bond:fast-inbound', '债券快速入库流程',
+ 113, 'bond:fast-outbound', '债券快速出库流程',
+ 107, 'bond:batch-inbound', '债券批量入库流程',
+ 115, 'bond:batch-outbound', '债券批量出库流程',
+ 'internal', 'internal', 8, 1, 'enabled', 0, NOW(), NOW());
 
 -- 初始化投资池关系：信用债库与专户产品子池互斥
 INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`)
@@ -334,7 +344,7 @@ INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `u
 -- 权限说明：
 --   permission_type: viewable=可查看 / adjustable=可调整 / excel_importable=可Excel导入
 --   subject_type:    role=角色 / user=人员
--- 叶子节点 pool_id: 2-6（信用债子库） / 7（境外债） / 8（转债） / 10-14（专户产品子库） / 15（禁投池） / 16（观察池） / 17（黑名单质押库）
+-- 叶子节点 pool_id: 2-6（信用债子库） / 7（境外债） / 8（转债） / 10-14（专户产品子库） / 15（禁投池） / 16（观察池） / 17（黑名单质押库） / 18（CRMW库）
 -- ----------------------------------------------------------------------------
 INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 -- 管理员（user_id=1001）：对所有叶子节点拥有 adjustable + excel_importable 权限
@@ -353,6 +363,7 @@ INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, 
 (15, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (16, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (17, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(18, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (2,  'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
 (3,  'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
 (10, 'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
@@ -366,12 +377,13 @@ INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, 
 (15, 'adjustable',      'role', 2, '信用研究组', 0, NOW(), NOW()),
 -- 利率研究组（role_id=3）：境外债库可调整
 (7,  'adjustable',      'role', 3, '利率研究组', 0, NOW(), NOW()),
--- 固收部（role_id=4）：信用债 + 专户产品 + 境外债 可调整
+-- 固收部（role_id=4）：信用债 + 专户产品 + 境外债 + CRMW库 可调整
 (2,  'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
 (3,  'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
 (7,  'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
 (10, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
 (11, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+(18, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
 -- 权益部（role_id=7）：转债库可调整
 (8,  'adjustable',      'role', 7, '权益部', 0, NOW(), NOW()),
 -- 量化部（role_id=9）：全部可查看（只读）

@@ -10,6 +10,8 @@ public enum PoolType {
     CONVERTIBLE_BOND("convertible_bond"),
     /** 专户产品 */
     SPECIAL_ACCOUNT("special_account"),
+    /** CRMW库 */
+    CRMW("crmw"),
     /** 禁投池 */
     FORBIDDEN("forbidden"),
     /** 观察池 */
