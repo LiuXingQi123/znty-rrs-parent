@@ -217,7 +217,37 @@ INSERT INTO `ip_investment_pool` (`id`, `parent_id`, `pool_code`, `pool_name`, `
  113, 'bond:fast-outbound', '债券快速出库流程',
  107, 'bond:batch-inbound', '债券批量入库流程',
  115, 'bond:batch-outbound', '债券批量出库流程',
- 'internal', 'internal', 8, 1, 'enabled', 0, NOW(), NOW());
+ 'internal', 'internal', 8, 1, 'enabled', 0, NOW(), NOW()),
+(19, 18, 'crmw_core_pool', 'CRMW核心库', 'crmw', 2, JSON_ARRAY('SSE', 'SZSE', 'CIBM'), JSON_ARRAY('bond'),
+ 'CRMW核心库，收录凭证要素完整、标的主体资质较优的信用风险缓释凭证组合。',
+ NULL,
+ 101, 'bond:standard-upgrade', '债券标准升库流程',
+ 102, 'bond:standard-downgrade', '债券标准降库流程',
+ 105, 'bond:fast-inbound', '债券快速入库流程',
+ 113, 'bond:fast-outbound', '债券快速出库流程',
+ 107, 'bond:batch-inbound', '债券批量入库流程',
+ 115, 'bond:batch-outbound', '债券批量出库流程',
+ 'internal', 'internal', 8, 1, 'enabled', 0, NOW(), NOW()),
+(20, 18, 'crmw_watch_pool', 'CRMW关注库', 'crmw', 2, JSON_ARRAY('SSE', 'SZSE', 'CIBM'), JSON_ARRAY('bond'),
+ 'CRMW关注库，收录需持续跟踪标的信用变化、凭证剩余期限或缓释效果的组合。',
+ NULL,
+ 101, 'bond:standard-upgrade', '债券标准升库流程',
+ 102, 'bond:standard-downgrade', '债券标准降库流程',
+ 105, 'bond:fast-inbound', '债券快速入库流程',
+ 113, 'bond:fast-outbound', '债券快速出库流程',
+ 107, 'bond:batch-inbound', '债券批量入库流程',
+ 115, 'bond:batch-outbound', '债券批量出库流程',
+ 'internal', 'internal', 8, 2, 'enabled', 0, NOW(), NOW()),
+(21, 18, 'crmw_exit_watch_pool', 'CRMW退出观察库', 'crmw', 2, JSON_ARRAY('SSE', 'SZSE', 'CIBM'), JSON_ARRAY('bond'),
+ 'CRMW退出观察库，收录凭证临近到期、标的资质变化或需压降退出的组合。',
+ NULL,
+ 101, 'bond:standard-upgrade', '债券标准升库流程',
+ 102, 'bond:standard-downgrade', '债券标准降库流程',
+ 105, 'bond:fast-inbound', '债券快速入库流程',
+ 113, 'bond:fast-outbound', '债券快速出库流程',
+ 107, 'bond:batch-inbound', '债券批量入库流程',
+ 115, 'bond:batch-outbound', '债券批量出库流程',
+ 'internal', 'internal', 8, 3, 'enabled', 0, NOW(), NOW());
 
 -- 初始化投资池关系：信用债库与专户产品子池互斥
 INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`)
@@ -231,7 +261,7 @@ SELECT a.id,
        NOW()
 FROM ip_investment_pool a
          JOIN ip_investment_pool b ON a.parent_id = b.parent_id AND a.id != b.id
-WHERE a.parent_id IN (1, 9)
+WHERE a.parent_id IN (1, 9, 18)
   AND a.is_deleted = 0
   AND b.is_deleted = 0;
 
@@ -246,7 +276,7 @@ SELECT a.id,
        NOW()
 FROM ip_investment_pool a
          JOIN ip_investment_pool b ON a.parent_id = b.parent_id AND a.id != b.id
-WHERE a.parent_id IN (1, 9)
+WHERE a.parent_id IN (1, 9, 18)
   AND a.is_deleted = 0
   AND b.is_deleted = 0;
 
@@ -261,7 +291,11 @@ INSERT INTO `ip_pool_relation` (
 (7,  'in_linked',         2,  '一级库',   1, '境外债调入时联动维护信用债一级库',     0, NOW(), NOW()),
 (7,  'out_linked',        2,  '一级库',   2, '境外债调出时联动维护信用债一级库',     0, NOW(), NOW()),
 (8,  'in_soft_restrict',  15, '禁投池',   1, '命中禁投池时提示并允许授权后继续',     0, NOW(), NOW()),
-(8,  'out_soft_restrict', 15, '禁投池',   2, '调出时保留禁投风险提示',               0, NOW(), NOW());
+(8,  'out_soft_restrict', 15, '禁投池',   2, '调出时保留禁投风险提示',               0, NOW(), NOW()),
+(20, 'source',            19, 'CRMW核心库',     1, 'CRMW关注库调整来源于核心库',          0, NOW(), NOW()),
+(21, 'source',            20, 'CRMW关注库',     1, 'CRMW退出观察库调整来源于关注库',      0, NOW(), NOW()),
+(20, 'in_soft_restrict',  16, '观察池',         1, '标的在观察池时提示后允许调入关注库',  0, NOW(), NOW()),
+(21, 'out_soft_restrict', 16, '观察池',         1, '调出退出观察库时提示关注观察池状态',  0, NOW(), NOW());
 
 -- 自动调入调出规则，rule_id 对应 sirm_rule_demo_data.sql
 INSERT INTO `ip_pool_auto_rule` (
@@ -344,7 +378,7 @@ INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `u
 -- 权限说明：
 --   permission_type: viewable=可查看 / adjustable=可调整 / excel_importable=可Excel导入
 --   subject_type:    role=角色 / user=人员
--- 叶子节点 pool_id: 2-6（信用债子库） / 7（境外债） / 8（转债） / 10-14（专户产品子库） / 15（禁投池） / 16（观察池） / 17（黑名单质押库） / 18（CRMW库）
+-- 叶子节点 pool_id: 2-6（信用债子库） / 7（境外债） / 8（转债） / 10-14（专户产品子库） / 15（禁投池） / 16（观察池） / 17（黑名单质押库） / 19-21（CRMW子库）
 -- ----------------------------------------------------------------------------
 INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 -- 管理员（user_id=1001）：对所有叶子节点拥有 adjustable + excel_importable 权限
@@ -364,6 +398,9 @@ INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, 
 (16, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (17, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (18, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(19, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(20, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
+(21, 'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (2,  'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
 (3,  'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
 (10, 'excel_importable','user', 1001, '管理员', 0, NOW(), NOW()),
@@ -384,6 +421,9 @@ INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, 
 (10, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
 (11, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
 (18, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+(19, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+(20, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
+(21, 'adjustable',      'role', 4, '固收部', 0, NOW(), NOW()),
 -- 权益部（role_id=7）：转债库可调整
 (8,  'adjustable',      'role', 7, '权益部', 0, NOW(), NOW()),
 -- 量化部（role_id=9）：全部可查看（只读）
