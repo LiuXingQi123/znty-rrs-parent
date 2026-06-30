@@ -1299,3 +1299,303 @@ INSERT INTO `ip_adjust_step` (
  'initiator', 4, 'reject', '1001', '管理员', 'reject', '撤回原申请，改为申请信用债三级库', '2026-05-20 13:00:00', '2026-05-20 15:00:00', NOW(), NOW()),
 (12, 'BOND202605201100001001', 10107, 'n7', '结束', 'end',
  NULL, 7, 'auto_process', NULL, NULL, 'auto_process', '发起人撤回，流程结束', '2026-05-20 15:00:00', '2026-05-20 15:00:00', NOW(), NOW());
+
+-- ============================================================================
+-- CRMW池查询与CRMW池调整历史查询测试数据
+-- ============================================================================
+-- 说明：
+-- 1. pool_id=18 对应 CRMW库，pool_type='crmw'。
+-- 2. audit_status='20' 且调入的数据同步写入 ip_pool_status，用于 CRMW池查询。
+-- 3. 进行中、审批驳回、调出记录仅保留在 ip_adjust_log，用于 CRMW池调整历史查询。
+-- ============================================================================
+
+INSERT INTO `ip_adjust_log` (
+    `id`, `security_code`, `security_short_name`, `security_type`,
+    `crmw_name`, `crmw_scode`, `crmw_mktcode`, `crmw_stype`,
+    `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
+    `flow_id`, `flow_key`, `flow_type`,
+    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+    `submit_time`, `audit_time`, `entry_time`,
+    `is_deleted`, `crte_time`, `updt_time`
+) VALUES
+-- 35. 审批通过-已入CRMW库：交投中票对应CRMW
+(35, '101901234', '24某交投MTN001', 'mtn',
+ '24某交投CRMW001', 'CRMW24001.IB', 'CIBM', 'crmw',
+ '手工调整', '调入', 'CRMW202606131000001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '20', '1001', '管理员', '交投主体资质稳定，挂钩债券符合CRMW库准入标准', '审批通过，已调入CRMW库',
+ '2026-06-13 10:00:00', '2026-06-13 15:00:00', '2026-06-14 09:00:00',
+ 0, NOW(), NOW()),
+
+-- 36. 审批通过-已入CRMW库：城投债对应CRMW
+(36, '102002345', '23某城投债', 'company_bond',
+ '23某城投CRMW001', 'CRMW23001.IB', 'CIBM', 'crmw',
+ '手工调整', '调入', 'CRMW202606141030001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '20', '2', '研究员2', '城投债增信凭证发行要素完整，调入CRMW库跟踪', '审批通过，已调入CRMW库',
+ '2026-06-14 10:30:00', '2026-06-14 16:30:00', '2026-06-15 09:00:00',
+ 0, NOW(), NOW()),
+
+-- 37. 已提交待审核：能源集团CRMW待复核
+(37, '103003456', '24某能E1', 'exchangeable_bond',
+ '24某能源CRMW001', 'CRMW24002.IB', 'CIBM', 'crmw',
+ '手工调整', '调入', 'CRMW202606151400001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '00', '4', '研究员4', '能源集团CRMW新发行，申请纳入CRMW库观察', NULL,
+ '2026-06-15 14:00:00', NULL, NULL,
+ 0, NOW(), NOW()),
+
+-- 38. 审批驳回：银行二级资本债对应CRMW材料不足
+(38, '104004567', '23某行二级资本债01', 'bank_bond',
+ '23某银行CRMW001', 'CRMW23002.IB', 'CIBM', 'crmw',
+ '手工调整', '调入', 'CRMW202606161000001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '21', '6', '固收1', '银行资本工具CRMW申请入库，待确认外部评级材料', '审批驳回：外部评级和发行确认材料不完整',
+ '2026-06-16 10:00:00', '2026-06-16 16:00:00', NULL,
+ 0, NOW(), NOW()),
+
+-- 39. 审批通过-已调出CRMW库：旧CRMW到期移出
+(39, '105005678', '24某地产CP001', 'cp',
+ '24某地产CRMW001', 'CRMW24003.IB', 'CIBM', 'crmw',
+ '手工调整', '调出', 'CRMW202606171100001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '20', '7', '固收2', '对应CRMW到期兑付，申请移出CRMW库', '审批通过，已移出CRMW库',
+ '2026-06-17 11:00:00', '2026-06-17 15:00:00', '2026-06-18 09:00:00',
+ 0, NOW(), NOW()),
+
+-- 40. 审批通过-已入CRMW库：电力MTN对应CRMW
+(40, '106006789', '22某电力MTN001', 'mtn',
+ '22某电力CRMW001', 'CRMW22001.IB', 'CIBM', 'crmw',
+ '手工调整', '调入', 'CRMW202606181430001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '20', '9', '固收4', '电力央企经营稳定，CRMW风险缓释效果明确', '审批通过，已调入CRMW库',
+ '2026-06-18 14:30:00', '2026-06-18 17:30:00', '2026-06-19 09:00:00',
+ 0, NOW(), NOW());
+
+INSERT INTO `ip_pool_status` (
+    `security_code`, `security_short_name`, `security_type`,
+    `crmw_name`, `crmw_scode`, `crmw_mktcode`, `crmw_stype`,
+    `adjust_type`, `adjust_mode`, `adjust_log_id`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
+    `flow_id`, `flow_key`, `flow_type`,
+    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+    `submit_time`, `audit_time`, `entry_time`,
+    `is_deleted`, `crte_time`, `updt_time`
+) VALUES
+('101901234', '24某交投MTN001', 'mtn',
+ '24某交投CRMW001', 'CRMW24001.IB', 'CIBM', 'crmw',
+ '手工调整', '调入', 35, 'CRMW202606131000001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '20', '1001', '管理员', '交投主体资质稳定，挂钩债券符合CRMW库准入标准', '审批通过，已调入CRMW库',
+ '2026-06-13 10:00:00', '2026-06-13 15:00:00', '2026-06-14 09:00:00',
+ 0, NOW(), NOW()),
+('102002345', '23某城投债', 'company_bond',
+ '23某城投CRMW001', 'CRMW23001.IB', 'CIBM', 'crmw',
+ '手工调整', '调入', 36, 'CRMW202606141030001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '20', '2', '研究员2', '城投债增信凭证发行要素完整，调入CRMW库跟踪', '审批通过，已调入CRMW库',
+ '2026-06-14 10:30:00', '2026-06-14 16:30:00', '2026-06-15 09:00:00',
+ 0, NOW(), NOW()),
+('106006789', '22某电力MTN001', 'mtn',
+ '22某电力CRMW001', 'CRMW22001.IB', 'CIBM', 'crmw',
+ '手工调整', '调入', 40, 'CRMW202606181430001001', 18, 'CRMW库', 'crmw',
+ NULL, NULL, NULL,
+ '20', '9', '固收4', '电力央企经营稳定，CRMW风险缓释效果明确', '审批通过，已调入CRMW库',
+ '2026-06-18 14:30:00', '2026-06-18 17:30:00', '2026-06-19 09:00:00',
+ 0, NOW(), NOW());
+
+-- CRMW标准成功流程公共节点：开始和发起人提交
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,n.id
+      ,n.node_id
+      ,n.label
+      ,n.node_type
+      ,CASE WHEN n.id = 10102 THEN 'initiator' ELSE NULL END
+      ,n.sort_order
+      ,CASE WHEN n.id = 10102 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10102 THEN l.adjuster_id ELSE NULL END
+      ,CASE WHEN n.id = 10102 THEN l.adjuster_name ELSE NULL END
+      ,CASE WHEN n.id = 10102 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10102 THEN '发起CRMW库调库申请' ELSE NULL END
+      ,l.submit_time
+      ,l.submit_time
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN `wf_flow_node` n ON n.id IN (10101, 10102)
+WHERE l.id IN (35, 36, 37, 38, 40)
+ORDER BY l.id, n.sort_order;
+
+-- CRMW标准成功流程抢占复核
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,10103
+      ,'n3'
+      ,'研究员B复核'
+      ,'approval'
+      ,'preempt'
+      ,3
+      ,'approve'
+      ,h.handler_id
+      ,h.handler_name
+      ,CASE WHEN h.handler_id = '2' THEN 'approve' ELSE 'skipped' END
+      ,CASE WHEN h.handler_id = '2' THEN 'CRMW要素复核通过' ELSE '抢占审批已由研究员2处理' END
+      ,l.submit_time
+      ,DATE_ADD(l.submit_time, INTERVAL 2 HOUR)
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '研究员2'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id IN (35, 36, 40)
+ORDER BY l.id, h.handler_id;
+
+-- CRMW标准成功流程会签审批
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,10105
+      ,'n5'
+      ,'研究总监审批'
+      ,'approval'
+      ,'all'
+      ,5
+      ,'approve'
+      ,h.handler_id
+      ,h.handler_name
+      ,'approve'
+      ,'同意CRMW库调库生效'
+      ,DATE_ADD(l.submit_time, INTERVAL 2 HOUR)
+      ,l.audit_time
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '2' AS handler_id, '研究员2' AS handler_name
+    UNION ALL SELECT '1001', '管理员'
+) h
+WHERE l.id IN (35, 36, 40)
+ORDER BY l.id, h.handler_id;
+
+-- CRMW标准成功流程自动审批和结束
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,n.id
+      ,n.node_id
+      ,n.label
+      ,n.node_type
+      ,NULL
+      ,n.sort_order
+      ,'auto_process'
+      ,NULL
+      ,NULL
+      ,'auto_process'
+      ,CASE WHEN n.id = 10106 THEN 'O32自动审批通过' ELSE NULL END
+      ,l.audit_time
+      ,l.audit_time
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN `wf_flow_node` n ON n.id IN (10106, 10107)
+WHERE l.id IN (35, 36, 40)
+ORDER BY l.id, n.sort_order;
+
+-- CRMW待审核流程：停留在复核节点
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
+       'preempt', 3, 'pending', h.handler_id, h.handler_name,
+       NULL, NULL, l.submit_time, NULL, NOW(), NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '研究员2'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id = 37
+ORDER BY h.handler_id;
+
+-- CRMW审批驳回流程：复核通过后总监会签驳回并结束
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id, l.adjust_batch_no, 10103, 'n3', '研究员B复核', 'approval',
+       'preempt', 3, 'approve', h.handler_id, h.handler_name,
+       CASE WHEN h.handler_id = '2' THEN 'approve' ELSE 'skipped' END,
+       CASE WHEN h.handler_id = '2' THEN 'CRMW要素复核通过，提交总监审批' ELSE '抢占审批已由研究员2处理' END,
+       l.submit_time, DATE_ADD(l.submit_time, INTERVAL 2 HOUR), NOW(), NOW()
+FROM `ip_adjust_log` l
+JOIN (
+    SELECT '1' AS handler_id, '研究员1' AS handler_name
+    UNION ALL SELECT '2', '研究员2'
+    UNION ALL SELECT '4', '研究员4'
+) h
+WHERE l.id = 38
+ORDER BY h.handler_id;
+
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+) VALUES
+(38, 'CRMW202606161000001001', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'reject', '2', '研究员2', 'reject', '外部评级和发行确认材料不完整，暂不入库', '2026-06-16 12:00:00', '2026-06-16 16:00:00', NOW(), NOW()),
+(38, 'CRMW202606161000001001', 10105, 'n5', '研究总监审批', 'approval',
+ 'all', 5, 'reject', '1001', '管理员', 'skipped', '会签已被驳回，后续处理跳过', '2026-06-16 12:00:00', '2026-06-16 16:00:00', NOW(), NOW()),
+(38, 'CRMW202606161000001001', 10107, 'n7', '结束', 'end',
+ NULL, 7, 'auto_process', NULL, NULL, 'auto_process', '审批驳回，流程结束', '2026-06-16 16:00:00', '2026-06-16 16:00:00', NOW(), NOW());
+
+-- CRMW调出直通流程
+INSERT INTO `ip_adjust_step` (
+    `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+)
+SELECT l.id
+      ,l.adjust_batch_no
+      ,n.id
+      ,n.node_id
+      ,n.label
+      ,n.node_type
+      ,CASE WHEN n.id = 10702 THEN 'initiator' ELSE NULL END
+      ,n.sort_order
+      ,CASE WHEN n.id = 10702 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10702 THEN l.adjuster_id ELSE NULL END
+      ,CASE WHEN n.id = 10702 THEN l.adjuster_name ELSE NULL END
+      ,CASE WHEN n.id = 10702 THEN 'submit' ELSE 'auto_process' END
+      ,CASE WHEN n.id = 10702 THEN 'CRMW到期调出直通流程' ELSE NULL END
+      ,l.submit_time
+      ,COALESCE(l.audit_time, l.submit_time)
+      ,NOW()
+      ,NOW()
+FROM `ip_adjust_log` l
+JOIN `wf_flow_node` n ON n.id IN (10701, 10702, 10703)
+WHERE l.id = 39
+ORDER BY n.sort_order;

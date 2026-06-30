@@ -23,6 +23,9 @@ public class IpPoolStatusBo {
     /** 证券类型 */
     private String securityType;
 
+    /** CRMW名称 */
+    private String crmwName;
+
     /** CRMW 证券代码 */
     private String crmwScode;
 

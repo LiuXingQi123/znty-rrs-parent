@@ -406,6 +406,7 @@ public class BatchSecurityPoolAdjustService {
         submitReq.setSecurityCode(first.getSecurityCode());
         submitReq.setSecurityShortName(first.getSecurityShortName());
         submitReq.setSecurityType(first.getSecurityType());
+        submitReq.setCrmwName(first.getCrmwName());
         submitReq.setCrmwScode(first.getCrmwScode());
         submitReq.setCrmwMktcode(first.getCrmwMktcode());
         submitReq.setCrmwStype(first.getCrmwStype());
@@ -2510,6 +2511,7 @@ public class BatchSecurityPoolAdjustService {
         bo.setSecurityCode(req.getSecurityCode());
         bo.setSecurityShortName(req.getSecurityShortName());
         bo.setSecurityType(req.getSecurityType());
+        bo.setCrmwName(req.getCrmwName());
         bo.setCrmwScode(req.getCrmwScode());
         bo.setCrmwMktcode(req.getCrmwMktcode());
         bo.setCrmwStype(req.getCrmwStype());

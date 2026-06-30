@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.CrmwPoolAdjustHistoryMapper">
+    <!-- CRMW池调整历史 mapper，对应表：ip_adjust_log（证券池调库记录表） -->
+
+    <!-- 分页查询CRMW池调整历史列表 -->
+    <select id="queryCrmwPoolAdjustHistoryPage" resultType="com.znty.sirm.entity.crmwpoolhistory.CrmwPoolAdjustHistoryDto">
+        SELECT al.id
+               ,al.adjuster_name
+               ,al.submit_time
+               ,al.crmw_name
+               ,al.crmw_scode
+               ,al.security_short_name
+               ,al.security_code
+               ,al.adjust_type
+               ,al.adjust_mode
+               ,al.target_pool_id
+               ,p.pool_name AS target_pool_name
+               ,al.audit_status
+        FROM ip_adjust_log al
+        LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id
+                                      AND p.is_deleted = 0
+        <where>
+            al.is_deleted = 0
+            AND al.pool_type = 'crmw'
+            <if test="crmwScode != null and crmwScode != ''">
+                AND al.crmw_scode LIKE CONCAT('%', #{crmwScode}, '%')
+            </if>
+            <if test="crmwName != null and crmwName != ''">
+                AND al.crmw_name LIKE CONCAT('%', #{crmwName}, '%')
+            </if>
+            <if test="adjustTimeStart != null and adjustTimeStart != ''">
+                AND al.submit_time &gt;= #{adjustTimeStart}
+            </if>
+            <if test="adjustTimeEnd != null and adjustTimeEnd != ''">
+                AND al.submit_time &lt;= CONCAT(#{adjustTimeEnd}, ' 23:59:59')
+            </if>
+            <if test="adjusterName != null and adjusterName != ''">
+                AND al.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
+            </if>
+            <if test="adjustMode != null and adjustMode != ''">
+                AND al.adjust_mode = #{adjustMode}
+            </if>
+            <if test="auditStatus != null and auditStatus != ''">
+                AND al.audit_status = #{auditStatus}
+            </if>
+        </where>
+        ORDER BY al.submit_time DESC
+                 ,al.id DESC
+    </select>
+</mapper>

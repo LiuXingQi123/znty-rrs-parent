@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.sirm.mapper.CrmwPoolQueryMapper">
+    <!-- CRMW池查询 mapper，对应表：ip_pool_status（投资池当前状态表） -->
+
+    <!-- 分页查询CRMW池列表 -->
+    <select id="queryCrmwPoolPage" resultType="com.znty.sirm.entity.crmwpoolquery.CrmwPoolQueryDto">
+        SELECT ips.id
+               ,ips.crmw_name
+               ,ips.crmw_scode
+               ,ips.security_short_name
+               ,ips.security_code
+               ,ips.adjuster_name
+               ,ips.entry_time
+               ,ips.target_pool_id
+               ,p.pool_name AS target_pool_name
+        FROM ip_pool_status ips
+        LEFT JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                      AND p.is_deleted = 0
+        <where>
+            ips.is_deleted = 0
+            AND ips.audit_status = '20'
+            AND ips.pool_type = 'crmw'
+            <if test="crmwScode != null and crmwScode != ''">
+                AND ips.crmw_scode LIKE CONCAT('%', #{crmwScode}, '%')
+            </if>
+            <if test="crmwName != null and crmwName != ''">
+                AND ips.crmw_name LIKE CONCAT('%', #{crmwName}, '%')
+            </if>
+            <if test="entryTimeStart != null and entryTimeStart != ''">
+                AND ips.entry_time &gt;= #{entryTimeStart}
+            </if>
+            <if test="entryTimeEnd != null and entryTimeEnd != ''">
+                AND ips.entry_time &lt;= #{entryTimeEnd}
+            </if>
+            <if test="adjusterName != null and adjusterName != ''">
+                AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
+            </if>
+        </where>
+        ORDER BY ips.entry_time DESC
+                 ,ips.id DESC
+    </select>
+</mapper>
