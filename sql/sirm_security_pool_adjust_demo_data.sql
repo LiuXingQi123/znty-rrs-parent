@@ -1384,7 +1384,7 @@ INSERT INTO `ip_adjust_step` (
 -- ============================================================================
 -- 说明：
 -- 1. pool_id=18 对应 CRMW库根节点，pool_id=19/20/21 对应 CRMW子库，pool_type='crmw'。
--- 2. audit_status='20' 且调入的数据同步写入 ip_pool_status，用于 CRMW池查询。
+-- 2. audit_status='20' 且调入的数据由 sirm_crmw_pool_status_demo_data.sql 写入 ip_pool_status_crmw，用于 CRMW池查询。
 -- 3. 进行中、审批驳回、调出记录仅保留在 ip_adjust_log，用于 CRMW池调整历史查询。
 -- ============================================================================
 
@@ -1446,37 +1446,6 @@ INSERT INTO `ip_adjust_log` (
 (40, '106006789', '22某电力MTN001', 'mtn',
  '22某电力CRMW001', 'CRMW22001.IB', 'CIBM', 'crmw',
  '手工调整', '调入', 'CRMW202606181430001001', 19, 'CRMW核心库', 'crmw',
- NULL, NULL, NULL,
- '20', '9', '固收4', '电力央企经营稳定，CRMW风险缓释效果明确', '审批通过，已调入CRMW库',
- '2026-06-18 14:30:00', '2026-06-18 17:30:00', '2026-06-19 09:00:00',
- 0, NOW(), NOW());
-
-INSERT INTO `ip_pool_status` (
-    `security_code`, `security_short_name`, `security_type`,
-    `crmw_name`, `crmw_scode`, `crmw_mktcode`, `crmw_stype`,
-    `adjust_type`, `adjust_mode`, `adjust_log_id`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
-    `flow_id`, `flow_key`, `flow_type`,
-    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
-    `submit_time`, `audit_time`, `entry_time`,
-    `is_deleted`, `crte_time`, `updt_time`
-) VALUES
-('101901234', '24某交投MTN001', 'mtn',
- '24某交投CRMW001', 'CRMW24001.IB', 'CIBM', 'crmw',
- '手工调整', '调入', 35, 'CRMW202606131000001001', 19, 'CRMW核心库', 'crmw',
- NULL, NULL, NULL,
- '20', '1001', '管理员', '交投主体资质稳定，挂钩债券符合CRMW库准入标准', '审批通过，已调入CRMW库',
- '2026-06-13 10:00:00', '2026-06-13 15:00:00', '2026-06-14 09:00:00',
- 0, NOW(), NOW()),
-('102002345', '23某城投债', 'company_bond',
- '23某城投CRMW001', 'CRMW23001.IB', 'CIBM', 'crmw',
- '手工调整', '调入', 36, 'CRMW202606141030001001', 20, 'CRMW关注库', 'crmw',
- NULL, NULL, NULL,
- '20', '2', '研究员2', '城投债增信凭证发行要素完整，调入CRMW库跟踪', '审批通过，已调入CRMW库',
- '2026-06-14 10:30:00', '2026-06-14 16:30:00', '2026-06-15 09:00:00',
- 0, NOW(), NOW()),
-('106006789', '22某电力MTN001', 'mtn',
- '22某电力CRMW001', 'CRMW22001.IB', 'CIBM', 'crmw',
- '手工调整', '调入', 40, 'CRMW202606181430001001', 19, 'CRMW核心库', 'crmw',
  NULL, NULL, NULL,
  '20', '9', '固收4', '电力央企经营稳定，CRMW风险缓释效果明确', '审批通过，已调入CRMW库',
  '2026-06-18 14:30:00', '2026-06-18 17:30:00', '2026-06-19 09:00:00',

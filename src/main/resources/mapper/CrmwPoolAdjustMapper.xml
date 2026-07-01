@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.CrmwPoolAdjustMapper">
-    <!-- CRMW池调整 mapper，对应表：sirm_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status（证券池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
+    <!-- CRMW池调整 mapper，对应表：sirm_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status_crmw（CRMW池状态）、ip_pool_status（通用池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
 
     <!-- 分页查询 CRMW 凭证列表 -->
     <select id="queryCrmwPage" resultType="com.znty.sirm.entity.crmwpooladjust.SecurityInfoDto">
@@ -123,7 +123,7 @@
                ,ips.adjust_batch_no
                ,ips.adjust_log_id
                ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
-        FROM ip_pool_status ips
+        FROM ip_pool_status_crmw ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
         WHERE ips.security_code = #{securityCode}
@@ -146,7 +146,7 @@
                ,MAX(ips.adjust_batch_no) AS adjustBatchNo
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
                ,COUNT(DISTINCT ips.security_code) AS bondCount
-        FROM ip_pool_status ips
+        FROM ip_pool_status_crmw ips
         INNER JOIN sirm_securityinfo sb ON ips.security_code = sb.wind_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
@@ -209,7 +209,7 @@
     <!-- 查询证券当前有效所在池 ID 列表 -->
     <select id="querySecurityCurrentPoolIdList" resultType="java.lang.Long">
         SELECT DISTINCT target_pool_id
-        FROM ip_pool_status
+        FROM ip_pool_status_crmw
         WHERE security_code = #{securityCode}
           AND audit_status = '20'
           AND is_deleted = 0
@@ -219,7 +219,7 @@
     <!-- 查询目标投资池当前有效证券数量 -->
     <select id="queryPoolCurrentCount" resultType="int">
         SELECT COUNT(DISTINCT security_code)
-        FROM ip_pool_status
+        FROM ip_pool_status_crmw
         WHERE target_pool_id = #{poolId}
           AND audit_status = '20'
           AND is_deleted = 0
@@ -229,7 +229,7 @@
     <select id="queryPoolCurrentCountList" resultType="com.znty.sirm.entity.crmwpooladjust.PoolDto">
         SELECT target_pool_id AS id
                ,COUNT(DISTINCT security_code) AS currentCount
-        FROM ip_pool_status
+        FROM ip_pool_status_crmw
         WHERE audit_status = '20'
           AND is_deleted = 0
         GROUP BY target_pool_id
@@ -295,7 +295,7 @@
     <!-- 查询同主体在目标池中已有债券的最大剩余期限天数 -->
     <select id="queryIssuerTargetPoolMaxRemainDays" resultType="java.lang.Integer">
         SELECT MAX(DATEDIFF(STR_TO_DATE(si.date_next, '%Y%m%d'), CURDATE()))
-        FROM ip_pool_status ips
+        FROM ip_pool_status_crmw ips
         INNER JOIN sirm_securityinfo si ON si.wind_code = ips.security_code
         WHERE si.issuer = (
             SELECT issuer
@@ -312,7 +312,7 @@
     <!-- 查询同主体在目标池近一年是否走过简易调入流程 -->
     <select id="queryIssuerRecentSimpleInboundExists" resultType="boolean">
         SELECT COUNT(1) > 0
-        FROM ip_pool_status ips
+        FROM ip_pool_status_crmw ips
         INNER JOIN sirm_securityinfo si ON si.wind_code = ips.security_code
         WHERE si.issuer = (
             SELECT issuer
@@ -329,7 +329,7 @@
 
     <!-- 新增入池状态记录（直通流程：start→end 跳过审批，直接写入已生效状态） -->
     <insert id="addPoolStatus">
-        INSERT INTO ip_pool_status (security_code
+        INSERT INTO ip_pool_status_crmw (security_code
                                   ,security_short_name
                                   ,security_type
                                   ,crmw_name
@@ -387,7 +387,7 @@
 
     <!-- 软删除入池状态（直通调出：将该证券在目标池中的生效记录标记为删除） -->
     <update id="deletePoolStatusSoft">
-        UPDATE ip_pool_status
+        UPDATE ip_pool_status_crmw
         SET is_deleted = 1
            ,updt_time = NOW()
         WHERE security_code = #{securityCode}

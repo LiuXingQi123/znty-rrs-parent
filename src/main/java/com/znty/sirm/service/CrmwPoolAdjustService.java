@@ -384,12 +384,12 @@ public class CrmwPoolAdjustService {
      *   <li><b>参数初始化</b>：集中执行所有 DB 查询，构建 {@link SubmitSharedData}，
      *       包含证券信息、投资池索引、池关系映射、各流程的快照数据</li>
      *   <li><b>调入处理</b>：遍历全部调入方向的调库项，逐项判断是否直通流程，
-     *       直通则写入 ip_adjust_log（audit_status='20'）并直接写入 ip_pool_status；
+     *       直通则写入 ip_adjust_log（audit_status='20'）并直接写入 ip_pool_status_crmw；
      *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
-     *       则升级为 audit_status='20' 并写入 ip_pool_status</li>
-     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'）并软删除 ip_pool_status 记录；
+     *       则升级为 audit_status='20' 并写入 ip_pool_status_crmw</li>
+     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'）并软删除 ip_pool_status_crmw 记录；
      *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
-     *       则升级为 audit_status='20' 并软删除 ip_pool_status</li>
+     *       则升级为 audit_status='20' 并软删除 ip_pool_status_crmw</li>
      *   <li><b>后续处理</b>：合并并同步更新调库详情页传入的证券基础信息字段（editSecurityInfoForAdjust）</li>
      * </ol>
      *
@@ -794,7 +794,7 @@ public class CrmwPoolAdjustService {
      * 第三阶段：调入处理
      *
      * <p>遍历请求中全部调入方向的调库项，逐项判断流程是否为直通（start→end），
-     * 决定写入已生效调库记录并直接更新 ip_pool_status，还是写入待审批调库记录。
+     * 决定写入已生效调库记录并直接更新 ip_pool_status_crmw，还是写入待审批调库记录。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
@@ -844,7 +844,7 @@ public class CrmwPoolAdjustService {
                     createInitialSteps(logBo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
-                // 直通流程：再直接写入 ip_pool_status（audit_status='20'，即时生效）
+                // 直通流程：再直接写入 ip_pool_status_crmw（audit_status='20'，即时生效）
                 logBo.setAdjustLogId(logBo.getId());
                 crmwPoolAdjustMapper.addPoolStatus(logBo);
             } else {
@@ -878,7 +878,7 @@ public class CrmwPoolAdjustService {
      * 第四阶段：调出处理
      *
      * <p>遍历请求中全部调出方向的调库项，逐项判断流程是否为直通（start→end），
-     * 决定写入已生效调库记录并软删除 ip_pool_status，还是写入待审批调库记录。
+     * 决定写入已生效调库记录并软删除 ip_pool_status_crmw，还是写入待审批调库记录。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
@@ -928,7 +928,7 @@ public class CrmwPoolAdjustService {
                     createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
-                // 直通流程：再软删除 ip_pool_status 中该证券在目标池的有效记录
+                // 直通流程：再软删除 ip_pool_status_crmw 中该证券在目标池的有效记录
                 crmwPoolAdjustMapper.deletePoolStatusSoft(
                         req.getSecurityCode(), item.getTargetPoolId());
             } else {
@@ -2024,7 +2024,7 @@ public class CrmwPoolAdjustService {
     /**
      * 规则：证券是否已在目标池中
      *
-     * <p>以 ip_pool_status 中 audit_status='20' 的有效记录为准，重复调入无实际意义。
+     * <p>以 ip_pool_status_crmw 中 audit_status='20' 的有效记录为准，重复调入无实际意义。
      */
     private String inCheckSecurityAlreadyInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
@@ -2822,7 +2822,7 @@ public class CrmwPoolAdjustService {
         /** 全量投资池索引（ID → Bo），用于快速查找池详情和构建池路径名称 */
         final Map<Long, InvestmentPoolBo> poolMap;
 
-        /** 证券当前有效所在池 ID 集合（ip_pool_status.audit_status='20'） */
+        /** 证券当前有效所在池 ID 集合（ip_pool_status_crmw.audit_status='20'） */
         final Set<Long> currentPoolIds;
 
         /** 全量投资池关系配置（poolId → relationType → 关联池 ID 列表） */

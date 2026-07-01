@@ -26,7 +26,7 @@ public class AdjustSharedData {
     /** 全量投资池索引（ID → Bo），用于快速查找池详情和构建池路径名称 */
     private Map<Long, InvestmentPoolBo> poolMap;
 
-    /** 证券当前有效所在池 ID 集合（ip_pool_status.audit_status='20'） */
+    /** 证券当前有效所在池 ID 集合（ip_pool_status_crmw.audit_status='20'） */
     private Set<Long> currentPoolIds;
 
     /** 全量投资池关系配置（poolId → relationType → 关联池 ID 列表） */
