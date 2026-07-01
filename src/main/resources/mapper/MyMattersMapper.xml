@@ -9,13 +9,16 @@
         SELECT s.id
                ,s.adjust_log_id
                ,al.security_code
+               ,al.crmw_scode
                ,al.target_pool_id
                ,al.target_pool_name
                ,al.adjust_batch_no
                ,s.id AS stepId
                ,f.name AS flowName
                ,s.node_label AS stepName
-               ,CASE WHEN dst.category_type = 'company' AND al.target_pool_id IN (15, 16, 17)
+               ,CASE WHEN al.pool_type = 'crmw'
+                     THEN 'crmwAdjust'
+                     WHEN dst.category_type = 'company' AND al.target_pool_id IN (15, 16, 17)
                      THEN 'forbiddenCompanyAdjust'
                      ELSE 'securityAdjust'
                 END AS businessScene

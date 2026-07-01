@@ -20,6 +20,9 @@ public class MyMattersDto {
     /** 证券代码 */
     private String securityCode;
 
+    /** CRMW代码 */
+    private String crmwScode;
+
     /** 目标投资池 ID */
     private Long targetPoolId;
 
@@ -41,7 +44,7 @@ public class MyMattersDto {
     /** 流程描述 */
     private String processDescription;
 
-    /** 业务场景：forbiddenCompanyAdjust=禁投池主体调整 / securityAdjust=证券池调整 */
+    /** 业务场景：crmwAdjust=CRMW池调整 / forbiddenCompanyAdjust=禁投池主体调整 / securityAdjust=证券池调整 */
     private String businessScene;
 
     /** 审核状态 */

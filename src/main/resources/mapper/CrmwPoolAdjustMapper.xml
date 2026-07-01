@@ -690,6 +690,10 @@
                ,security_code
                ,security_short_name
                ,security_type
+               ,crmw_name
+               ,crmw_scode
+               ,crmw_mktcode
+               ,crmw_stype
                ,adjust_type
                ,adjust_mode
                ,adjust_batch_no
@@ -710,6 +714,7 @@
         FROM ip_adjust_log
         <where>
             is_deleted = 0
+            AND pool_type = 'crmw'
             <choose>
                 <when test="adjustBatchNo != null and adjustBatchNo != ''">
                     AND adjust_batch_no = #{adjustBatchNo}
@@ -729,6 +734,7 @@
            ,audit_time = NOW()
            ,updt_time = NOW()
         WHERE is_deleted = 0
+          AND pool_type = 'crmw'
           <choose>
               <when test="adjustBatchNo != null and adjustBatchNo != ''">
                   AND adjust_batch_no = #{adjustBatchNo}

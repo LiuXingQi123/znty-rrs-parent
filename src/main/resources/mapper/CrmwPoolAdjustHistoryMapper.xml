@@ -6,6 +6,7 @@
     <!-- 分页查询CRMW池调整历史列表 -->
     <select id="queryCrmwPoolAdjustHistoryPage" resultType="com.znty.sirm.entity.crmwpoolhistory.CrmwPoolAdjustHistoryDto">
         SELECT al.id
+               ,al.adjust_batch_no
                ,al.adjuster_name
                ,al.submit_time
                ,al.crmw_name

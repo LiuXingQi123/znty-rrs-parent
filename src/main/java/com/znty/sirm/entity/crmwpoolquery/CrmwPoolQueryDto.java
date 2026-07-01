@@ -14,6 +14,12 @@ public class CrmwPoolQueryDto {
     /** 主键 ID */
     private Long id;
 
+    /** 来源调库记录 ID */
+    private Long adjustLogId;
+
+    /** 调库批次号 */
+    private String adjustBatchNo;
+
     /** CRMW名称 */
     private String crmwName;
 

@@ -6,6 +6,8 @@
     <!-- 分页查询CRMW池列表 -->
     <select id="queryCrmwPoolPage" resultType="com.znty.sirm.entity.crmwpoolquery.CrmwPoolQueryDto">
         SELECT ips.id
+               ,ips.adjust_log_id
+               ,ips.adjust_batch_no
                ,ips.crmw_name
                ,ips.crmw_scode
                ,ips.security_short_name
