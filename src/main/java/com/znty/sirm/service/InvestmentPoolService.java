@@ -764,9 +764,9 @@ public class InvestmentPoolService {
             PoolPermissionBo permission = new PoolPermissionBo();
             permission.setPoolId(childPoolId);
             permission.setPermissionType(parentPermission.getPermissionType());
-            permission.setSubjectType(parentPermission.getSubjectType());
-            permission.setSubjectId(parentPermission.getSubjectId());
-            permission.setSubjectName(parentPermission.getSubjectName());
+            permission.setHandlerType(parentPermission.getHandlerType());
+            permission.setHandlerId(parentPermission.getHandlerId());
+            permission.setHandlerName(parentPermission.getHandlerName());
             permission.setIsDeleted(0);
             Date now = new Date();
             permission.setCrteTime(now);
@@ -788,9 +788,9 @@ public class InvestmentPoolService {
             PoolPermissionBo permission = new PoolPermissionBo();
             permission.setPoolId(poolId);
             permission.setPermissionType(perm.getPermissionType());
-            permission.setSubjectType(perm.getSubjectType());
-            permission.setSubjectId(perm.getSubjectId());
-            permission.setSubjectName(perm.getSubjectName());
+            permission.setHandlerType(perm.getHandlerType());
+            permission.setHandlerId(perm.getHandlerId());
+            permission.setHandlerName(perm.getHandlerName());
             permission.setIsDeleted(0);
             Date now = new Date();
             permission.setCrteTime(now);

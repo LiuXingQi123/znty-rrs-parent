@@ -377,10 +377,10 @@ INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `u
 -- ----------------------------------------------------------------------------
 -- 权限说明：
 --   permission_type: viewable=可查看 / adjustable=可调整 / excel_importable=可Excel导入
---   subject_type:    role=角色 / user=人员
+--   handler_type:    role=角色 / user=人员
 -- 叶子节点 pool_id: 2-6（信用债子库） / 7（境外债） / 8（转债） / 10-14（专户产品子库） / 15（禁投池） / 16（观察池） / 17（黑名单质押库） / 19-21（CRMW子库）
 -- ----------------------------------------------------------------------------
-INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `subject_type`, `subject_id`, `subject_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
+INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `handler_type`, `handler_id`, `handler_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 -- 管理员（user_id=1001）：对所有叶子节点拥有 adjustable + excel_importable 权限
 (2,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),
 (3,  'adjustable',      'user', 1001, '管理员', 0, NOW(), NOW()),

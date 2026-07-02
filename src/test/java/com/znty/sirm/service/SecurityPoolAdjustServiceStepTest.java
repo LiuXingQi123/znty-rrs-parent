@@ -756,12 +756,12 @@ public class SecurityPoolAdjustServiceStepTest {
     }
 
     /** 构建投资池权限测试数据。 */
-    private PoolPermissionBo buildPermission(Long poolId, String subjectType, Long subjectId) {
+    private PoolPermissionBo buildPermission(Long poolId, String handlerType, Long handlerId) {
         PoolPermissionBo permission = new PoolPermissionBo();
         permission.setPoolId(poolId);
         permission.setPermissionType("adjustable");
-        permission.setSubjectType(subjectType);
-        permission.setSubjectId(subjectId);
+        permission.setHandlerType(handlerType);
+        permission.setHandlerId(handlerId);
         return permission;
     }
 
@@ -781,9 +781,9 @@ public class SecurityPoolAdjustServiceStepTest {
         for (long i = 1; i <= count; i++) {
             NodeApprovalHandlerBo handler = new NodeApprovalHandlerBo();
             handler.setApprovalConfigId(configId);
-            handler.setSubjectType("user");
-            handler.setSubjectId(i);
-            handler.setSubjectName("user" + i);
+            handler.setHandlerType("user");
+            handler.setHandlerId(i);
+            handler.setHandlerName("user" + i);
             handlers.add(handler);
         }
         map.put(configId, handlers);

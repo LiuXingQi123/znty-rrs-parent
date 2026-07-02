@@ -19,14 +19,14 @@ public class NodeApprovalHandlerEvtBo {
     /** 审批节点配置 ID */
     private Long approvalConfigId;
 
-    /** 主体类型：role / user */
-    private String subjectType;
+    /** 处理人类型：role / user */
+    private String handlerType;
 
-    /** 主体 ID */
-    private Long subjectId;
+    /** 处理人 ID */
+    private Long handlerId;
 
-    /** 主体名称快照 */
-    private String subjectName;
+    /** 处理人名称快照 */
+    private String handlerName;
 
     /** 排序序号 */
     private Integer sortOrder;

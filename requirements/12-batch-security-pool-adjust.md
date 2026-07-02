@@ -248,7 +248,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 `relation_type`：source(来源池)/in_restrict(调入限制)/out_restrict(调出限制)/in_linked(调入联动)/out_linked(调出联动)/in_mutex(调入互斥)/out_mutex(调出互斥)/in_soft_restrict(调入弹性禁投)/out_soft_restrict(调出弹性禁投)。
 
 ### 5.6 `ip_pool_permission`（权限表）
-`permission_type`：viewable/adjustable/excel_importable；`subject_type`：role/user。
+`permission_type`：viewable/adjustable/excel_importable；`handler_type`：role/user。
 
 ### 5.7 `sys_attachment`（附件表）
 `table_name='ip_adjust_log'`、`main_id=调库日志ID`、`attachment_category`（credit_report_hand/credit_report_in/credit_report_out/material_hand/material_in/material_out）、文件元信息。

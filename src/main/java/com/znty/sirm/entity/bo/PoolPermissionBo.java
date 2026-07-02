@@ -19,14 +19,14 @@ public class PoolPermissionBo {
     /** 权限类型：viewable / adjustable / excel_importable */
     private String permissionType;
 
-    /** 主体类型：role / user */
-    private String subjectType;
+    /** 处理人类型：role / user */
+    private String handlerType;
 
-    /** 主体 ID（角色 ID 或人员 ID） */
-    private Long subjectId;
+    /** 处理人 ID（角色 ID 或人员 ID） */
+    private Long handlerId;
 
-    /** 主体名称快照 */
-    private String subjectName;
+    /** 处理人名称快照 */
+    private String handlerName;
 
     /** 逻辑删除标志 */
     private Integer isDeleted;

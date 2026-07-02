@@ -70,11 +70,11 @@
 
 ### 1.4 候选处理人配置
 
-`wf_node_approval_handler.subject_type`：
+`wf_node_approval_handler.handler_type`：
 
-| subject_type | 含义 | 展开 |
+| handler_type | 含义 | 展开 |
 |---|---|---|
-| `user` | 指定人员 | 直接取 `subject_id` 作为 handlerId |
+| `user` | 指定人员 | 直接取 `handler_id` 作为 handlerId |
 | `role` | 指定角色 | 递归收集子角色 → 查询所有关联用户去重展开 |
 
 展开逻辑见 `resolveApprovalHandlers`，使用 `collectDescendantRoleIds` 递归收集角色树。

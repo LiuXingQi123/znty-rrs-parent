@@ -317,17 +317,17 @@
     <!-- 新增审批处理人明细 -->
     <insert id="addApprovalHandler" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO wf_node_approval_handler (approval_config_id
-        ,subject_type
-        ,subject_id
-        ,subject_name
+        ,handler_type
+        ,handler_id
+        ,handler_name
         ,sort_order
         ,crte_time
         ,updt_time)
         VALUES (
                 #{approvalConfigId}
-                ,#{subjectType}
-                ,#{subjectId}
-                ,#{subjectName}
+                ,#{handlerType}
+                ,#{handlerId}
+                ,#{handlerName}
                 ,#{sortOrder}
                 ,#{crteTime}
                 ,#{updtTime}
@@ -662,9 +662,9 @@
     <insert id="addApprovalHandlerEvt" useGeneratedKeys="true" keyProperty="evtId">
         INSERT INTO wf_node_approval_handler_evt (id
         ,approval_config_id
-        ,subject_type
-        ,subject_id
-        ,subject_name
+        ,handler_type
+        ,handler_id
+        ,handler_name
         ,sort_order
         ,crte_time
         ,updt_time
@@ -674,9 +674,9 @@
         VALUES (
         #{id}
         ,#{approvalConfigId}
-        ,#{subjectType}
-        ,#{subjectId}
-        ,#{subjectName}
+        ,#{handlerType}
+        ,#{handlerId}
+        ,#{handlerName}
         ,#{sortOrder}
         ,#{crteTime}
         ,#{updtTime}

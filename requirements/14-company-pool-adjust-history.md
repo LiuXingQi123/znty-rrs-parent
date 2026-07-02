@@ -12,7 +12,7 @@
 
 核心机制：
 1. `ip_adjust_log` 是证券池调库与主体池调库**共用**的流水表。每一次调库申请（无论调入/调出、无论状态）都写一条。
-2. 主体与证券的区分靠 `dict_security_type.category_type='company'`（与主体池查询 [09](09-subject-pool-query.md) 一致）。
+2. 主体与证券的区分靠 `dict_security_type.category_type='company'`（与主体池查询 [09](09-company-pool-query.md) 一致）。
 3. **字段重命名映射**：`al.security_short_name AS companyName`、`al.security_code AS companyCode`。即调库记录里 `security_*` 字段存的就是主体代码/主体名称（主体作为伪证券入调库流水）。
 4. **展示全部状态**：WHERE 只限定 `al.is_deleted=0`，**不限定 `audit_status`**。一条主体从「已提交待审核(00)→审核通过待审批(10)→审批通过(20)」会形成多条 `ip_adjust_log`（不同批次号），每条都列出。
 5. **不按主体聚合、不按批次号聚合**：无 GROUP BY、无 DISTINCT、无 `adjust_batch_no` 排序。同一主体的多次调库各自成行，仅按 `submit_time` 倒序——这与证券级 `AdjustHistoryMapper`（按 `adjust_batch_no DESC` 聚拢）不同。

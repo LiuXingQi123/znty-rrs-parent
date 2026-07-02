@@ -22,7 +22,7 @@ import com.znty.sirm.common.enums.RelationType;
 import com.znty.sirm.common.enums.FlowType;
 import com.znty.sirm.common.enums.PoolType;
 import com.znty.sirm.common.enums.PermissionType;
-import com.znty.sirm.common.enums.SubjectType;
+import com.znty.sirm.common.enums.HandlerType;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -277,12 +277,12 @@ public class SecurityPoolAdjustService {
         Set<Long> poolIds = new HashSet<>();
 
         for (PoolPermissionBo permission : permissions) {
-            if (permission.getPoolId() == null || permission.getSubjectId() == null) {
+            if (permission.getPoolId() == null || permission.getHandlerId() == null) {
                 continue;
             }
-            if (SubjectType.USER.getCode().equals(permission.getSubjectType()) && permission.getSubjectId().equals(userId)) {
+            if (HandlerType.USER.getCode().equals(permission.getHandlerType()) && permission.getHandlerId().equals(userId)) {
                 poolIds.add(permission.getPoolId());
-            } else if (SubjectType.ROLE.getCode().equals(permission.getSubjectType()) && roleIdSet.contains(permission.getSubjectId())) {
+            } else if (HandlerType.ROLE.getCode().equals(permission.getHandlerType()) && roleIdSet.contains(permission.getHandlerId())) {
                 poolIds.add(permission.getPoolId());
             }
         }
@@ -2516,16 +2516,16 @@ public class SecurityPoolAdjustService {
         }
         Map<String, HandlerTarget> resultMap = new LinkedHashMap<>();
         for (NodeApprovalHandlerBo handler : handlers) {
-            if (handler == null || handler.getSubjectType() == null || handler.getSubjectId() == null) {
+            if (handler == null || handler.getHandlerType() == null || handler.getHandlerId() == null) {
                 continue;
             }
-            if ("user".equals(handler.getSubjectType())) {
-                String userId = String.valueOf(handler.getSubjectId());
-                resultMap.put(userId, new HandlerTarget(userId, handler.getSubjectName()));
-            } else if ("role".equals(handler.getSubjectType())) {
+            if ("user".equals(handler.getHandlerType())) {
+                String userId = String.valueOf(handler.getHandlerId());
+                resultMap.put(userId, new HandlerTarget(userId, handler.getHandlerName()));
+            } else if ("role".equals(handler.getHandlerType())) {
                 List<Long> roleIds = new ArrayList<>();
                 // 递归收集角色及其子角色 ID
-                collectDescendantRoleIds(handler.getSubjectId(), roleIds, flowMapper.queryRoleList());
+                collectDescendantRoleIds(handler.getHandlerId(), roleIds, flowMapper.queryRoleList());
                 List<UserBo> users = flowMapper.queryUserList(roleIds, null);
                 if (users == null) {
                     continue;

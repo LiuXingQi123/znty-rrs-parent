@@ -77,7 +77,7 @@
 | `auto` | 自动执行 | rect | 紫 |
 | `notify` | 消息通知 | rect | 青 |
 
-**节点对象**：`{ id, type, label, x, y, shape, sub, approvalStrategy, approvalPersons:[{subjectType, subjectId, subjectName}], approvalRemark, autoTasks:[{task}], autoRemark, notifyTarget, notifyChannels, notifyPersons, notifyTpl, notifyRemark, conditionRemark }`。
+**节点对象**：`{ id, type, label, x, y, shape, sub, approvalStrategy, approvalPersons:[{handlerType, handlerId, handlerName}], approvalRemark, autoTasks:[{task}], autoRemark, notifyTarget, notifyChannels, notifyPersons, notifyTpl, notifyRemark, conditionRemark }`。
 
 **边对象**：`{ id, from, to, label, routeAction, remark, condLogic, condRules:[{field, op, val}] }`。
 
@@ -235,7 +235,7 @@
 | `wf_flow_version` | 版本表（画布真源） | `flow_id, ver_num, status(draft/active/disabled), canvas_nodes(LONGTEXT JSON), canvas_edges(LONGTEXT JSON), canvas_pan_x/y/zoom(0.25~2.5), publish_note, published_by/time` |
 | `wf_flow_node` | 节点表 | `version_id, node_id(画布标识如 n101), node_type(start/end/approval/condition/auto/notify), label, shape(circle/rect/diamond), pos_x/y, sub_label` |
 | `wf_node_approval_config` | 审批节点配置（1:1） | `node_id, approval_strategy(preempt/all/initiator), approval_remark` |
-| `wf_node_approval_handler` | 审批处理人（1:N） | `approval_config_id, subject_type(role/user), subject_id, subject_name(快照), sort_order` |
+| `wf_node_approval_handler` | 审批处理人（1:N） | `approval_config_id, handler_type(role/user), handler_id, handler_name(快照), sort_order` |
 | `wf_node_auto_config` | 自动任务配置（1:N） | `node_id, task_seq, task_code(createAccount/updatePosition/syncSettlement/riskCheck/sendNotify/archiveRecord), auto_remark` |
 | `wf_node_notify_config` | 通知节点配置（1:1） | `node_id, notify_channels(JSON), notify_target(initiator/person), notify_persons(JSON), notify_tpl, notify_remark` |
 | `wf_node_condition_config` | 条件节点配置（1:1） | `node_id, condition_remark`（分支逻辑在出线维护） |
@@ -275,7 +275,7 @@
 ### 7.6 归一化数据一致性
 
 - `syncNormalized` 全量替换：先删后插，保证归一化表与画布 JSON 一致；删除前 `logSyncDeletes` 捕获旧行写 `_evt` DELETE，保留完整审计。
-- 连线引用不存在节点时 `log.warn` 跳过；处理人明细跳过 `subjectType`/`subjectId` 为空者。
+- 连线引用不存在节点时 `log.warn` 跳过；处理人明细跳过 `handlerType`/`handlerId` 为空者。
 
 ### 7.7 软删除与引用检查
 

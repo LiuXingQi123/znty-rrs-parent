@@ -4,7 +4,7 @@ import com.znty.sirm.common.enums.CategoryType;
 
 import com.znty.sirm.common.enums.ReportType;
 
-import com.znty.sirm.common.enums.SubjectType;
+import com.znty.sirm.common.enums.HandlerType;
 
 import com.znty.sirm.common.enums.NodeType;
 
@@ -701,16 +701,16 @@ public class SecurityPoolAdjustFlowService {
         }
         Map<String, HandlerTarget> resultMap = new LinkedHashMap<>();
         for (NodeApprovalHandlerBo handler : handlers) {
-            if (handler == null || handler.getSubjectType() == null || handler.getSubjectId() == null) {
+            if (handler == null || handler.getHandlerType() == null || handler.getHandlerId() == null) {
                 continue;
             }
-            if (SubjectType.USER.getCode().equals(handler.getSubjectType())) {
-                String userId = String.valueOf(handler.getSubjectId());
-                resultMap.put(userId, new HandlerTarget(userId, handler.getSubjectName()));
-            } else if (SubjectType.ROLE.getCode().equals(handler.getSubjectType())) {
+            if (HandlerType.USER.getCode().equals(handler.getHandlerType())) {
+                String userId = String.valueOf(handler.getHandlerId());
+                resultMap.put(userId, new HandlerTarget(userId, handler.getHandlerName()));
+            } else if (HandlerType.ROLE.getCode().equals(handler.getHandlerType())) {
                 List<Long> roleIds = new ArrayList<>();
                 // 递归收集角色及其子角色
-                collectDescendantRoleIds(handler.getSubjectId(), roleIds, flowMapper.queryRoleList());
+                collectDescendantRoleIds(handler.getHandlerId(), roleIds, flowMapper.queryRoleList());
                 List<UserBo> users = flowMapper.queryUserList(roleIds, null);
                 if (users == null) {
                     continue;

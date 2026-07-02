@@ -129,12 +129,12 @@
 ### 3.7 权限配置
 
 - 路径：`POST /api/v1/investmentPool/editPoolPermission`
-- 请求体：`{id, permissions:List<PoolPermissionBo>{permissionType, subjectType, subjectId, subjectName}, operatorId?}`
+- 请求体：`{id, permissions:List<PoolPermissionBo>{permissionType, handlerType, handlerId, handlerName}, operatorId?}`
 
 **权限类型**（3 种）：`viewable` 可查看 / `adjustable` 可调整 / `excel_importable` 可 Excel 导入。
 **主体类型**（2 种）：`role` 角色（橙色 tag）/ `user` 人员（蓝色 tag）。
 
-- 后端 `editPoolPermission`（`@Transactional`）：全量替换——审计+逻辑删旧权限，再逐条 `addPermission` + 审计，存 `subject_name` 快照。
+- 后端 `editPoolPermission`（`@Transactional`）：全量替换——审计+逻辑删旧权限，再逐条 `addPermission` + 审计，存 `handler_name` 快照。
 - 前端：权限人员选择弹窗（左侧角色树 `show-checkbox`/`check-strictly`/可「显示全部人员」，右侧人员表格搜索+多选）。前端 `permissionType` 用驼峰（excelImportable），写入时映射成数据库下划线（excel_importable）。
 - 人员/角色下拉：
   - `/queryRoleList`：查 `t_sys_role WHERE enable=1`，返回 `RoleDto{id, roleName, parentId, sortOrder}`，前端 `buildRoleTree` 组装角色树。
@@ -197,7 +197,7 @@
 
 ### 5.4 `ip_pool_permission`（投资池权限配置表）
 
-`id, pool_id, permission_type(viewable/adjustable/excel_importable), subject_type(role/user), subject_id, subject_name(快照), is_deleted`。
+`id, pool_id, permission_type(viewable/adjustable/excel_importable), handler_type(role/user), handler_id, handler_name(快照), is_deleted`。
 
 ### 5.5 辅助表
 
@@ -270,7 +270,7 @@
 ## 8. 关键源码索引
 
 - 前端：`znty-sirm-ui/investment_pool.html`（树 `loadPoolTree`/`buildPoolTree`、基础配置 `handleSaveBase`、关系配置 `handleSaveRelation`/`openPoolTreePicker`、权限 `handleSavePermission`/`handleConfirmPermissionDialog`、删除 `handleDeletePool`）
-- dict.js：`DICT_POOL_TYPE`、`DICT_POOL_LEVEL`、`DICT_POOL_STATUS`、`DICT_POOL_RELATION_TYPE`、`DICT_POOL_PERMISSION_TYPE`、`DICT_POOL_PERMISSION_SUBJECT_TYPE`、`DICT_AUTO_RULE_TYPE`、`DICT_REPORT_RESTRICTION`
+- dict.js：`DICT_POOL_TYPE`、`DICT_POOL_LEVEL`、`DICT_POOL_STATUS`、`DICT_POOL_RELATION_TYPE`、`DICT_POOL_PERMISSION_TYPE`、`DICT_PERMISSION_HANDLER_TYPE`、`DICT_AUTO_RULE_TYPE`、`DICT_REPORT_RESTRICTION`
 - Controller：`InvestmentPoolController.java`
 - Service：`InvestmentPoolService.java`（`queryPoolList/Detail`、`addRootPool`、`addChildPool`、`editPoolConfig`、`editPoolRelation`、`editPoolPermission`、`deletePoolNode`、`syncNormalized`、`fillRelationConfig`/`fillAutoRuleConfig`/`fillPermissionConfig`）
 - Mapper：`InvestmentPoolMapper.xml`

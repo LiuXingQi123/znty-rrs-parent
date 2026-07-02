@@ -944,9 +944,9 @@
         SELECT id
                ,pool_id
                ,permission_type
-               ,subject_type
-               ,subject_id
-               ,subject_name
+               ,handler_type
+               ,handler_id
+               ,handler_name
                ,is_deleted
                ,crte_time
                ,updt_time
@@ -954,7 +954,7 @@
         WHERE pool_id = #{poolId}
           AND is_deleted = 0
         ORDER BY permission_type ASC
-                 ,subject_type ASC
+                 ,handler_type ASC
                  ,id ASC
     </select>
 
@@ -963,9 +963,9 @@
         SELECT id
                ,pool_id
                ,permission_type
-               ,subject_type
-               ,subject_id
-               ,subject_name
+               ,handler_type
+               ,handler_id
+               ,handler_name
                ,is_deleted
                ,crte_time
                ,updt_time
@@ -973,7 +973,7 @@
         WHERE permission_type = #{permissionType}
           AND is_deleted = 0
         ORDER BY pool_id ASC
-                 ,subject_type ASC
+                 ,handler_type ASC
                  ,id ASC
     </select>
 
@@ -991,18 +991,18 @@
         INSERT INTO ip_pool_permission (
             pool_id
             ,permission_type
-            ,subject_type
-            ,subject_id
-            ,subject_name
+            ,handler_type
+            ,handler_id
+            ,handler_name
             ,is_deleted
             ,crte_time
             ,updt_time
         ) VALUES (
             #{poolId}
             ,#{permissionType}
-            ,#{subjectType}
-            ,#{subjectId}
-            ,#{subjectName}
+            ,#{handlerType}
+            ,#{handlerId}
+            ,#{handlerName}
             ,#{isDeleted}
             ,#{crteTime}
             ,#{updtTime}
@@ -1015,9 +1015,9 @@
             id
             ,pool_id
             ,permission_type
-            ,subject_type
-            ,subject_id
-            ,subject_name
+            ,handler_type
+            ,handler_id
+            ,handler_name
             ,is_deleted
             ,crte_time
             ,updt_time
@@ -1028,9 +1028,9 @@
         SELECT id
                ,pool_id
                ,permission_type
-               ,subject_type
-               ,subject_id
-               ,subject_name
+               ,handler_type
+               ,handler_id
+               ,handler_name
                ,is_deleted
                ,crte_time
                ,updt_time
@@ -1047,9 +1047,9 @@
             id
             ,pool_id
             ,permission_type
-            ,subject_type
-            ,subject_id
-            ,subject_name
+            ,handler_type
+            ,handler_id
+            ,handler_name
             ,is_deleted
             ,crte_time
             ,updt_time
@@ -1060,9 +1060,9 @@
         SELECT id
                ,pool_id
                ,permission_type
-               ,subject_type
-               ,subject_id
-               ,subject_name
+               ,handler_type
+               ,handler_id
+               ,handler_name
                ,is_deleted
                ,crte_time
                ,updt_time
@@ -1080,9 +1080,9 @@
             id
             ,pool_id
             ,permission_type
-            ,subject_type
-            ,subject_id
-            ,subject_name
+            ,handler_type
+            ,handler_id
+            ,handler_name
             ,is_deleted
             ,crte_time
             ,updt_time
@@ -1093,9 +1093,9 @@
         SELECT id
                ,pool_id
                ,permission_type
-               ,subject_type
-               ,subject_id
-               ,subject_name
+               ,handler_type
+               ,handler_id
+               ,handler_name
                ,is_deleted
                ,crte_time
                ,updt_time

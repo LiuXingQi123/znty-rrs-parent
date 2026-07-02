@@ -778,14 +778,14 @@ public class FlowService {
                 if (cn.getApprovalPersons() != null) {
                     int seq = 1;
                     for (PoolPermissionBo person : cn.getApprovalPersons()) {
-                        if (person == null || person.getSubjectType() == null || person.getSubjectId() == null) {
+                        if (person == null || person.getHandlerType() == null || person.getHandlerId() == null) {
                             continue;
                         }
                         NodeApprovalHandlerBo handler = new NodeApprovalHandlerBo();
                         handler.setApprovalConfigId(cfg.getId());
-                        handler.setSubjectType(person.getSubjectType());
-                        handler.setSubjectId(person.getSubjectId());
-                        handler.setSubjectName(person.getSubjectName());
+                        handler.setHandlerType(person.getHandlerType());
+                        handler.setHandlerId(person.getHandlerId());
+                        handler.setHandlerName(person.getHandlerName());
                         handler.setSortOrder(seq++);
                         handler.setCrteTime(now);
                         handler.setUpdtTime(now);
@@ -941,9 +941,9 @@ public class FlowService {
         NodeApprovalHandlerEvtBo e = new NodeApprovalHandlerEvtBo();
         e.setId(handler.getId());
         e.setApprovalConfigId(handler.getApprovalConfigId());
-        e.setSubjectType(handler.getSubjectType());
-        e.setSubjectId(handler.getSubjectId());
-        e.setSubjectName(handler.getSubjectName());
+        e.setHandlerType(handler.getHandlerType());
+        e.setHandlerId(handler.getHandlerId());
+        e.setHandlerName(handler.getHandlerName());
         e.setSortOrder(handler.getSortOrder());
         e.setCrteTime(handler.getCrteTime());
         e.setUpdtTime(handler.getUpdtTime());
