@@ -15,6 +15,7 @@
                ,p.pool_name AS target_pool_name
                ,ips.security_type
                ,dst.security_type_name
+               ,dst.category_type
                ,bi.issuer
                ,bi.maturity_date
                ,bi.delist_date

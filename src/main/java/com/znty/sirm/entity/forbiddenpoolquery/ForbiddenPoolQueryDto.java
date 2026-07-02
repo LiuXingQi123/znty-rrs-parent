@@ -32,6 +32,9 @@ public class ForbiddenPoolQueryDto {
     /** 证券类型名称（关联 dict_security_type 表） */
     private String securityTypeName;
 
+    /** 证券类型分类（company=公司主体） */
+    private String categoryType;
+
     /** 投资池名称 */
     private String targetPoolName;
 

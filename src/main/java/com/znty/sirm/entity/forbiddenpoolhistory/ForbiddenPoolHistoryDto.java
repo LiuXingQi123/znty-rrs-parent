@@ -27,6 +27,9 @@ public class ForbiddenPoolHistoryDto {
     /** 证券代码 */
     private String securityCode;
 
+    /** 证券类型分类（company=公司主体） */
+    private String categoryType;
+
     /** 发行主体 */
     private String issuer;
 

@@ -10,6 +10,7 @@
                ,al.submit_time
                ,al.security_short_name
                ,al.security_code
+               ,dst.category_type
                ,bi.issuer
                ,al.adjust_type
                ,al.adjust_mode
@@ -20,6 +21,8 @@
         INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
                                        AND p.is_deleted = 0
                                        AND p.pool_type = 'forbidden'
+        LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type
+                                        AND dst.is_deleted = 0
         LEFT JOIN sirm_securityinfo bi ON bi.wind_code = al.security_code
         <where>
             al.is_deleted = 0
