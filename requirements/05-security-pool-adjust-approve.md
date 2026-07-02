@@ -183,7 +183,7 @@
      handlerName: this.currentLoginUserName
    }
    ```
-5. 若 `shouldSubmitAuditAttachments()` 为 true（即 `isProcessMode && isModifyAuditStage && auditAction==='approve' && currentPendingStep`），调用 `buildAuditAttachmentChanges` 收集每条调库记录的 `creditReportFileIndexes/materialFileIndexes/creditReportSourceAttachmentIds/materialSourceAttachmentIds/deleteAttachmentIds`，组装为 `payload.attachmentChanges`，调 `submitAdjustAuditMultipart`：用 `FormData` 同时提交 `request`（JSON Blob）和 `files` 数组到 `POST /api/v1/securityPoolAdjustFlow/submitAdjustAudit`（consumes=multipart/form-data）
+5. 若 `shouldSubmitAuditAttachments()` 为 true（即 `isProcessMode && isModifyAuditStage && auditAction==='approve' && currentPendingStep`），调用 `buildAuditAttachmentChanges` 收集每条调库记录的 `creditReportFileIndexes/materialFileIndexes/creditReportSourceAttachmentIds/materialSourceAttachmentIds/deleteAttachmentIds`，组装为 `payload.attachmentChanges`，调 `submitAdjustAuditMultipart`：用 `FormData` 同时提交 `request`（JSON Blob）和 `files` 数组到 `POST /api/v1/securityPoolAdjustFlow/submitAdjustAuditWithFiles`（consumes=multipart/form-data，multipart 入口路径与 JSON 入口 `submitAdjustAudit` 不同）
 6. 否则直接调 `POST /api/v1/securityPoolAdjustFlow/submitAdjustAudit`（consumes=application/json）
 7. 成功后 `$message.success(result.message)`，重置 `auditAction='approve'`/`auditComment=''`，再次调 `loadDetailData(securityCode)` 刷新
 
@@ -370,7 +370,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `securityPoolAdjustFlow/submitAdjustAudit`（application/json） | `SecurityPoolAdjustAuditReq`：stepId/adjustLogId/adjustBatchNo/processAction(approve\|reject)/processComment/handlerId/handlerName | `SecurityPoolAdjustAuditDto` | 提交审批处理意见，纯文本场景 |
-| `securityPoolAdjustFlow/submitAdjustAudit`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | 同上 | 修改节点提交时同时上传附件变更 |
+| `securityPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | 同上 | 修改节点提交时同时上传附件变更（multipart 入口；JSON 入口为 `submitAdjustAudit`） |
 | `securityPoolAdjust/querySecurityPage` | securityCode/securityShortName/issuer + 分页 | `PageResult<SecurityInfoDto>` | 列表页证券检索 |
 | `securityPoolAdjust/querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 证券详情 |
 | `securityPoolAdjust/queryAdjustPoolList` | securityCode/adjustDirection(in\|out)/currentUserId | `List<PoolDto>` | 可调入/调出投资池树（含互斥关系） |
@@ -378,7 +378,8 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 | `securityPoolAdjust/queryAdjustLogList` | securityCode/adjustBatchNo | `List<AdjustLogDto>` | 调库记录列表（按批次过滤；不传批次仅返回未终结流程） |
 | `securityPoolAdjust/queryAdjustStepList` | adjustLogId/adjustBatchNo | `List<IpAdjustStepDto>` | 同批次流程步骤列表 |
 | `securityPoolAdjust/checkAdjust` | securityCode/items[{targetPoolId,adjustMode,poolType}] | `AdjustCheckDto` | 调库可行性校验 + 推荐流程 |
-| `securityPoolAdjust/addAdjustLog`（JSON 或 multipart） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（含直通流程即时入池） |
+| `securityPoolAdjust/addAdjustLog`（application/json） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
+| `securityPoolAdjust/addAdjustLogWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `AdjustSubmitDto` | 提交调库申请（带附件，含直通流程即时入池） |
 | `myMatters/queryMyMattersPage` | flowIds/startDateStart/startDateEnd/processDescription/auditStatus/stepStatus(pending\|completed)/initiatorName/currentUserId + 分页 | `PageResult<MyMattersDto>` | 我的事宜分页列表 |
 | `myMatters/queryFlowOptionList` | `{currentUserId}` | `List<FlowOptionDto>` | 我的事宜流程名称下拉 |
 | `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |

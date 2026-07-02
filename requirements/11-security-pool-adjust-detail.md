@@ -72,7 +72,7 @@
 - `isAdjustMode=true`，隐藏调库记录区与流程状态区，显示调库操作区（步骤1）。
 - 步骤1：左右双栏——「可调入库」（绿）+「可调出库」（红），均为树形 `el-table`，叶子节点可勾选。勾选时做互斥校验（`handleInPoolSelect`/`handleOutPoolSelect`，同面板+跨面板互斥）。每池可挂信评报告/其他材料附件。
 - 点「下一步」（`goToStep2`）：调 `checkAdjust` 校验 → 进入步骤2，展示校验结果表 + 原因建议。
-- 点「提交」（`handleSubmit`）：打开流程选择弹窗，为每个手工项选流程后 `confirmFlowSelection` → `submitAdjustLog` → `addAdjustLog`（multipart）→ 成功后 `backToList`。
+- 点「提交」（`handleSubmit`）：打开流程选择弹窗，为每个手工项选流程后 `confirmFlowSelection` → `submitAdjustLog` → `addAdjustLogWithFiles`（multipart）→ 成功后 `backToList`。
 
 ### 2.3 修改节点重新提交（实际在 approve.html，非详情页）
 
@@ -130,13 +130,13 @@
 1. **允许提交的状态**：无显式状态判断；只要用户在步骤1选了池即可。后端 `checkAdjust` 会前置校验「证券是否已到期」和「是否存在进行中的调库流程」（`preCheckPendingProcess`，有 pending 步骤则拒绝），从而间接阻止对已有进行中流程的证券再次提交。
 2. **调用顺序**：
    - 步骤1→步骤2：`goToStep2` 调 `checkAdjust`（`POST /api/v1/securityPoolAdjust/checkAdjust`），请求体 `{ securityCode, securityShortName, securityType, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`。
-   - 步骤2→提交：`handleSubmit`→`confirmFlowSelection`→`submitAdjustLog` 调 `addAdjustLog`（`POST /api/v1/securityPoolAdjust/addAdjustLog`，multipart）。请求体 `payload`：`securityCode/securityShortName/securityType/adjustType:'手工调整'/adjustReason/adjustAdvice/securityInfo(全量字段)/adjusterId/adjusterName/items:[{targetPoolId,targetPoolName,poolType,adjustMode,itemTag,adjustGroupKey,flowId,flowKey,flowType,adjustmentNote,creditReportFileIndexes,materialFileIndexes}]`，附件通过 `files` 字段追加，下标由 `collectSubmitFiles` 回填。
+   - 步骤2→提交：`handleSubmit`→`confirmFlowSelection`→`submitAdjustLog` 调 `addAdjustLogWithFiles`（`POST /api/v1/securityPoolAdjust/addAdjustLogWithFiles`，multipart）。请求体 `payload`：`securityCode/securityShortName/securityType/adjustType:'手工调整'/adjustReason/adjustAdvice/securityInfo(全量字段)/adjusterId/adjusterName/items:[{targetPoolId,targetPoolName,poolType,adjustMode,itemTag,adjustGroupKey,flowId,flowKey,flowType,adjustmentNote,creditReportFileIndexes,materialFileIndexes}]`，附件通过 `files` 字段追加，下标由 `collectSubmitFiles` 回填。
 3. **与首次申请差异**：无——详情页 adjust 模式即首次申请本身。
 
 ### 4.2 真正的「修改节点重新提交」（approve.html，audit_status='11'）
 
 1. **允许状态**：`audit_status='11'`（驳回待修改）且当前有待处理步骤落在「修改」节点。
-2. **调用顺序**：`submitAdjustAudit`（approve.html）→ `POST /api/v1/securityPoolAdjustFlow/submitAdjustAudit`。请求体：`{ adjustLogId, adjustBatchNo, stepId, processAction:'approve', processComment, handlerId, handlerName, attachmentChanges? }`。有附件变更时走 multipart，`attachmentChanges` 每项含 `{ adjustLogId, creditReportFileIndexes, materialFileIndexes, creditReportSourceAttachmentIds, materialSourceAttachmentIds, deleteAttachmentIds }`。
+2. **调用顺序**：`submitAdjustAudit`（approve.html）→ `POST /api/v1/securityPoolAdjustFlow/submitAdjustAudit`（无附件变更）或 `POST /api/v1/securityPoolAdjustFlow/submitAdjustAuditWithFiles`（有附件变更，multipart）。请求体：`{ adjustLogId, adjustBatchNo, stepId, processAction:'approve', processComment, handlerId, handlerName, attachmentChanges? }`。有附件变更时走 multipart，`attachmentChanges` 每项含 `{ adjustLogId, creditReportFileIndexes, materialFileIndexes, creditReportSourceAttachmentIds, materialSourceAttachmentIds, deleteAttachmentIds }`。
 3. **与首次申请差异**：
    - 不调 `checkAdjust`（不重新校验池可行性）；
    - 不调 `addAdjustLog`（不新建 `ip_adjust_log`），而是更新现有 `ip_adjust_step`（`editAdjustStepProcess`）并把同批次 `ip_adjust_log.audit_status` 从 `11` 改回 `00`；
@@ -155,9 +155,11 @@
 | `securityPoolAdjust/querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools + issuerCurrentPools） | 当前证券所在池 + 主体所在池 |
 | `securityPoolAdjust/queryAdjustLogList` | securityCode, adjustBatchNo? | `List<AdjustLogDto>` | 调库记录（无批次时排除终态） |
 | `securityPoolAdjust/checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 调库可行性预校验 + 流程候选 |
-| `securityPoolAdjust/addAdjustLog`（JSON/multipart） | `SecurityPoolAdjustSubmitReq` + `files` | `AdjustSubmitDto` | 提交调库申请（新建记录，状态 00/20） |
+| `securityPoolAdjust/addAdjustLog`（application/json） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件，新建记录，状态 00/20） |
+| `securityPoolAdjust/addAdjustLogWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `AdjustSubmitDto` | 提交调库申请（带附件，新建记录，状态 00/20） |
 | `securityPoolAdjust/queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表（批次号优先） |
-| `securityPoolAdjustFlow/submitAdjustAudit`（JSON/multipart） | adjustLogId, adjustBatchNo, stepId, processAction(approve/reject), processComment, handlerId, handlerName, attachmentChanges? + files | `SecurityPoolAdjustAuditDto` | 审批/修改节点重新提交（approve.html 用） |
+| `securityPoolAdjustFlow/submitAdjustAudit`（application/json） | adjustLogId, adjustBatchNo, stepId, processAction(approve/reject), processComment, handlerId, handlerName, attachmentChanges? | `SecurityPoolAdjustAuditDto` | 审批/修改节点重新提交（无附件变更） |
+| `securityPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `SecurityPoolAdjustAuditDto` | 审批/修改节点重新提交（带附件变更，approve.html 用） |
 | `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
 | `attachments/downloadAttachment` | id | blob | 下载附件 |
 | `reports/queryInReportPage` / `queryOutReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 信评报告弹窗内/外报告查询 |

@@ -81,7 +81,7 @@
 2. 步骤 1：在候选证券表勾选证券（跨页）；可选填调整材料（信评报告/其他附件，支持从报告库选 + 本地上传；是否放开规则 `releaseRules` yes/no）。
 3. 点「下一步」→ `goToStep2()`：调用**校验接口**，渲染校验结果表，`adjustStep=2`。
 4. 步骤 2：逐行查看校验结果，为可调整行选择审批流程（行内 `el-select`），填写调整原因/建议。
-5. 点「提交」→ `submitAdjust()`：调用**提交接口**（multipart），成功后 `backToPoolList()` + `initPage()` 刷新。
+5. 点「提交」→ `submitAdjust()`：调用**提交接口** `addAdjustLogWithFiles`（multipart），成功后 `backToPoolList()` + `initPage()` 刷新。
 
 ### 3.2 校验接口（`checkAdjust`）
 
@@ -137,7 +137,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
    }
    ```
    注意：**附件下标和报告库附件 ID 是「整批共享」的**（每个 item 都带相同的 `creditReportFileIndexes` 等），由后端按需绑定到每条调库日志。
-4. `submitAdjustMultipart`：`FormData`，`request` 字段为 JSON Blob，`files` 字段为多文件；`POST /api/v1/batchSecurityPoolAdjust/addAdjustLog`（multipart）。
+4. `submitAdjustMultipart`：`FormData`，`request` 字段为 JSON Blob，`files` 字段为多文件；`POST /api/v1/batchSecurityPoolAdjust/addAdjustLogWithFiles`（multipart；JSON 无附件入口为 `addAdjustLog`）。
 5. 成功提示并返回投资池列表刷新。
 
 **后端 `addAdjustLog(req, files)`**：
@@ -214,7 +214,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 | `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), securityCode, securityShortName, marketCodes, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券 |
 | `batchSecurityPoolAdjust/checkAdjust` | `BatchSecurityInboundAdjustReq`: currentUserId, direction, poolId, poolName, poolType, securities:[{securityCode,securityShortName,securityType}] | `BatchSecurityInboundAdjustDto`（items:[{...,canAdjust,failReasons,flowOptions}]） | 批量调库下一步校验 |
 | `batchSecurityPoolAdjust/addAdjustLog`（JSON） | `BatchSecurityInboundAdjustReq`（含 items:[{...,flowId/flowKey/flowType,creditReportFileIndexes,...}]） | `BatchSecurityInboundAdjustDto`（securityCount, submitCount, logIds） | 批量提交调库申请（无附件） |
-| `batchSecurityPoolAdjust/addAdjustLog`（multipart） | `request`=JSON Blob + `files`=MultipartFile[] | 同上 | 批量提交调库申请及附件（前端实际用此入口） |
+| `batchSecurityPoolAdjust/addAdjustLogWithFiles`（multipart） | `request`=JSON Blob + `files`=MultipartFile[] | 同上 | 批量提交调库申请及附件（前端实际用此入口；JSON 无附件入口为 `addAdjustLog`） |
 | `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 报告弹窗内部报告查询 |
 | `reports/queryOutReportPage` | 同上 | 同上 | 报告弹窗外部报告查询 |
 | `attachments/downloadAttachment` | `{id}` (responseType=blob) | blob | 下载报告库附件 |
