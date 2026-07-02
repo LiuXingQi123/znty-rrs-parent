@@ -82,7 +82,7 @@ public class ForbiddenPoolAdjustController {
     }
 
     /** 以 multipart 方式提交主体调库和附件 */
-    @PostMapping(value = "/addAdjustLog", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/addAdjustLogWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ForbiddenPoolAdjustSubmitDto> addAdjustLogWithFiles(
             @RequestPart("request") ForbiddenPoolAdjustSubmitReq req,
             @RequestPart(value = "files", required = false) MultipartFile[] files) {

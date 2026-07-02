@@ -37,7 +37,7 @@ public class ForbiddenPoolAdjustFlowController {
     /**
      * 以 multipart 方式提交调库审批处理意见和驳回修改附件变更。
      */
-    @PostMapping(value = "/submitAdjustAudit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/submitAdjustAuditWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<SecurityPoolAdjustAuditDto> submitAdjustAuditWithFiles(
             @RequestPart("request") SecurityPoolAdjustAuditReq req,
             @RequestPart(value = "files", required = false) MultipartFile[] files) {

@@ -86,7 +86,7 @@ public class SecurityPoolAdjustController {
     /**
      * 以 multipart 方式提交调库申请及附件
      */
-    @PostMapping(value = "/addAdjustLog", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/addAdjustLogWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<AdjustSubmitDto> addAdjustLogWithFiles(
             @RequestPart("request") SecurityPoolAdjustSubmitReq req,
             @RequestPart(value = "files", required = false) MultipartFile[] files) {

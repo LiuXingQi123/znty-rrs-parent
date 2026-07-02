@@ -68,7 +68,7 @@ public class CrmwPoolAdjustFlowApiTest extends ControllerApiTestSupport {
                 "files", "信评报告.pdf", "application/pdf",
                 "report".getBytes(StandardCharsets.UTF_8));
 
-        mockMvc.perform(fileUpload("/api/v1/crmwPoolAdjustFlow/submitAdjustAudit")
+        mockMvc.perform(fileUpload("/api/v1/crmwPoolAdjustFlow/submitAdjustAuditWithFiles")
                         .file(request)
                         .file(file))
                 .andExpect(status().isOk())

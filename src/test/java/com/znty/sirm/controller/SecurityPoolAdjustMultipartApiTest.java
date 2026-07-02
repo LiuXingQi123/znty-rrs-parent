@@ -49,7 +49,7 @@ public class SecurityPoolAdjustMultipartApiTest {
                 "files", "信评报告.pdf", "application/pdf",
                 "report".getBytes(StandardCharsets.UTF_8));
 
-        mockMvc.perform(fileUpload("/api/v1/securityPoolAdjust/addAdjustLog")
+        mockMvc.perform(fileUpload("/api/v1/securityPoolAdjust/addAdjustLogWithFiles")
                         .file(request)
                         .file(file))
                 .andExpect(status().isOk())
