@@ -20,6 +20,9 @@ public class MyMattersDto {
     /** 证券代码 */
     private String securityCode;
 
+    /** 证券名称 */
+    private String securityShortName;
+
     /** CRMW代码 */
     private String crmwScode;
 

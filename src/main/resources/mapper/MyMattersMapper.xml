@@ -9,6 +9,7 @@
         SELECT s.id
                ,s.adjust_log_id
                ,al.security_code
+               ,al.security_short_name
                ,al.crmw_scode
                ,al.target_pool_id
                ,al.target_pool_name
@@ -84,6 +85,12 @@
                 <foreach collection="flowIds" item="flowId" open="(" separator="," close=")">
                     #{flowId}
                 </foreach>
+            </if>
+            <if test="securityCode != null and securityCode != ''">
+                AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="securityShortName != null and securityShortName != ''">
+                AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
             <if test="startDateStart != null and startDateStart != ''">
                 AND s.start_time &gt;= CONCAT(#{startDateStart}, ' 00:00:00')

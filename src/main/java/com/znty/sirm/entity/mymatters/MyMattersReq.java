@@ -16,6 +16,12 @@ public class MyMattersReq extends PageRequest {
     /** 流程 ID 列表，多选筛选 */
     private List<Long> flowIds;
 
+    /** 证券编码关键词 */
+    private String securityCode;
+
+    /** 证券名称关键词 */
+    private String securityShortName;
+
     /** 开始日期起，格式 yyyy-MM-dd */
     private String startDateStart;
 
