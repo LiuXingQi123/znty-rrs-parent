@@ -1,18 +1,24 @@
 -- ============================================================
--- znty-sirm 主体评级原始表 - 演示数据初始化脚本
--- 前提：需先执行 sirm_company_grade_schema.sql 完成建表
--- 说明：初始化主体基础信息与主体评级结果样例数据
+-- AIS 投资分析库 - 演示数据初始化脚本
+-- 前提：需先执行 ais_inv_analysis_schema.sql 完成建表
+-- 说明：初始化主体评级、角色、人员及人员角色关联样例数据
 -- ============================================================
 
-USE znty_sirm;
+USE `ais_inv_analysis`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 清空业务表
 -- ----------------------------------------------------------------------------
+TRUNCATE TABLE `t_sys_user_role_evt`;
+TRUNCATE TABLE `t_sys_user_evt`;
+TRUNCATE TABLE `t_sys_role_evt`;
 TRUNCATE TABLE `t_inv_grade_result`;
+TRUNCATE TABLE `t_sys_user_role`;
 TRUNCATE TABLE `t_inv_company`;
+TRUNCATE TABLE `t_sys_user`;
+TRUNCATE TABLE `t_sys_role`;
 
 -- ----------------------------------------------------------------------------
 -- 主体基础信息样例
@@ -93,5 +99,63 @@ INSERT INTO `t_inv_grade_result` (
 (3, 3, 440000, 102, 2001, '2026-06-03 15:00:00', 63.80, 66.00,
  '{"external_rating":"AA","finance_score":61.4,"industry_score":58.2}', '压力映射', 5, '风险复核',
  1003, '2026-06-03 15:30:00', '地产销售回款承压，纳入重点观察。', 2, 64.20, 'focus');
+
+-- ----------------------------------------------------------------------------
+-- 角色和人员样例
+-- ----------------------------------------------------------------------------
+-- 角色树：研究部 > 信用研究组 > 利率研究组
+INSERT INTO `t_sys_role` (`id`, `name`, `parent_id`, `sort_order`, `enable`, `crte_time`, `updt_time`) VALUES
+(1, '研究部',       NULL, 1, 1, NOW(), NOW()),
+(2, '信用研究组',   1,    2, 1, NOW(), NOW()),
+(3, '利率研究组',   2,    3, 1, NOW(), NOW()),
+(4, '固收部',       NULL, 4, 1, NOW(), NOW()),
+(5, '利率组',       4,    5, 1, NOW(), NOW()),
+(6, '信用组',       4,    6, 1, NOW(), NOW()),
+(7, '权益部',       NULL, 7, 1, NOW(), NOW()),
+(8, '行业研究组',   7,    8, 1, NOW(), NOW()),
+(9, '量化部',       NULL, 9, 1, NOW(), NOW()),
+(10, '风险管理部',  NULL, 10, 1, NOW(), NOW());
+
+-- 人员
+INSERT INTO `t_sys_user` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`) VALUES
+(1,  '研究员1', 'yanjiuyuan1', 0, NOW(), NOW()),
+(2,  '研究员2', 'yanjiuyuan2', 0, NOW(), NOW()),
+(3,  '研究员3', 'yanjiuyuan3', 0, NOW(), NOW()),
+(4,  '研究员4', 'yanjiuyuan4', 0, NOW(), NOW()),
+(5,  '研究员5', 'yanjiuyuan5', 0, NOW(), NOW()),
+(6,  '固收1', 'gushou1', 0, NOW(), NOW()),
+(7,  '固收2', 'gushou2', 0, NOW(), NOW()),
+(8,  '固收3', 'gushou3', 0, NOW(), NOW()),
+(9,  '固收4', 'gushou4', 0, NOW(), NOW()),
+(10,  '权益1', 'quanyi1', 0, NOW(), NOW()),
+(11,  '权益2', 'quanyi2', 0, NOW(), NOW()),
+(12,  '权益3', 'quanyi3', 0, NOW(), NOW()),
+(13,  '量化1', 'lianghua1', 0, NOW(), NOW()),
+(14,  '量化2', 'lianghua2', 0, NOW(), NOW()),
+(15,  '风控经理', 'fengkongjingli', 0, NOW(), NOW()),
+(1001,  '管理员', 'admin', 0, NOW(), NOW());
+
+INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`) VALUES
+(1,  1,  1, 0, NOW(), NOW()),  -- 研究员1: 研究部
+(2,  1,  2, 0, NOW(), NOW()),  -- 研究员1: 信用研究组
+(3,  2,  2, 0, NOW(), NOW()),  -- 研究员2: 信用研究组
+(4,  2,  3, 0, NOW(), NOW()),  -- 研究员2: 利率研究组
+(5,  3,  1, 0, NOW(), NOW()),  -- 研究员3: 研究部
+(6,  3,  3, 0, NOW(), NOW()),  -- 研究员3: 利率研究组
+(7,  4,  2, 0, NOW(), NOW()),  -- 研究员4: 信用研究组
+(8,  5,  3, 0, NOW(), NOW()),  -- 研究员5: 利率研究组
+(9,  6,  4, 0, NOW(), NOW()),  -- 固收1: 固收部
+(10, 6,  5, 0, NOW(), NOW()),  -- 固收1: 利率组
+(11, 7,  4, 0, NOW(), NOW()),  -- 固收2: 固收部
+(12, 7,  6, 0, NOW(), NOW()),  -- 固收2: 信用组
+(13, 8,  5, 0, NOW(), NOW()),  -- 固收3: 利率组
+(14, 9,  6, 0, NOW(), NOW()),  -- 固收4: 信用组
+(15, 10, 7, 0, NOW(), NOW()),  -- 权益1: 权益部
+(16, 10, 8, 0, NOW(), NOW()),  -- 权益1: 行业研究组
+(17, 11, 7, 0, NOW(), NOW()),  -- 权益2: 权益部
+(18, 12, 8, 0, NOW(), NOW()),  -- 权益3: 行业研究组
+(19, 13, 9, 0, NOW(), NOW()),  -- 量化1: 量化部
+(20, 14, 9, 0, NOW(), NOW()),  -- 量化2: 量化部
+(21, 15, 10, 0, NOW(), NOW()); -- 风控经理: 风险管理部
 
 SET FOREIGN_KEY_CHECKS = 1;

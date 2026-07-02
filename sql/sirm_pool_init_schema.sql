@@ -14,16 +14,10 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- 2. 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `ip_pool_permission_evt`;
-DROP TABLE IF EXISTS `t_sys_user_role_evt`;
-DROP TABLE IF EXISTS `t_sys_user_evt`;
-DROP TABLE IF EXISTS `t_sys_role_evt`;
 DROP TABLE IF EXISTS `ip_pool_auto_rule_evt`;
 DROP TABLE IF EXISTS `ip_pool_relation_evt`;
 DROP TABLE IF EXISTS `ip_investment_pool_evt`;
 DROP TABLE IF EXISTS `ip_pool_permission`;
-DROP TABLE IF EXISTS `t_sys_user_role`;
-DROP TABLE IF EXISTS `t_sys_user`;
-DROP TABLE IF EXISTS `t_sys_role`;
 DROP TABLE IF EXISTS `ip_pool_auto_rule`;
 DROP TABLE IF EXISTS `ip_pool_relation`;
 DROP TABLE IF EXISTS `ip_investment_pool`;
@@ -106,46 +100,6 @@ CREATE TABLE `ip_pool_auto_rule` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
   COMMENT = '投资池自动调入调出规则备注表';
-
-CREATE TABLE `t_sys_role` (
-    `id`         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `name`       VARCHAR(64)  DEFAULT NULL            COMMENT '角色名称',
-    `parent_id`  BIGINT       DEFAULT NULL            COMMENT '父级角色 ID',
-    `sort_order` INT          DEFAULT NULL            COMMENT '排序序号',
-    `enable`     TINYINT(1)   DEFAULT NULL            COMMENT '是否启用：1=启用 / 0=禁用',
-    `crte_time`  DATETIME     DEFAULT NULL            COMMENT '创建时间',
-    `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    PRIMARY KEY (`id`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
-  COMMENT = '角色/部门表';
-
-CREATE TABLE `t_sys_user` (
-    `id`         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `name`       VARCHAR(64)  DEFAULT NULL            COMMENT '人员姓名',
-    `user_name`  VARCHAR(64)  DEFAULT NULL            COMMENT '登录用户名/拼音',
-    `dr`         TINYINT(1)   DEFAULT NULL            COMMENT '删除标志：0=正常 / 1=已删除',
-    `crte_time`  DATETIME     DEFAULT NULL            COMMENT '创建时间',
-    `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    PRIMARY KEY (`id`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
-  COMMENT = '人员表';
-
-CREATE TABLE `t_sys_user_role` (
-    `id`         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `user_id`    BIGINT       DEFAULT NULL            COMMENT '人员 ID，关联 t_sys_user.id',
-    `role_id`    BIGINT       DEFAULT NULL            COMMENT '角色 ID，关联 t_sys_role.id',
-    `dr`         TINYINT(1)   DEFAULT NULL            COMMENT '删除标志：0=正常 / 1=已删除',
-    `crte_time`  DATETIME     DEFAULT NULL            COMMENT '创建时间',
-    `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    PRIMARY KEY (`id`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
-  COMMENT = '人员角色关联表';
 
 CREATE TABLE `ip_pool_permission` (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
@@ -253,58 +207,6 @@ CREATE TABLE `ip_pool_auto_rule_evt` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
   COMMENT = '投资池自动调入调出规则备注表（操作审计）';
-
-CREATE TABLE `t_sys_role_evt` (
-    `evt_id`     BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
-    `id`         BIGINT       DEFAULT NULL            COMMENT '主键 ID',
-    `name`       VARCHAR(64)  DEFAULT NULL            COMMENT '角色名称',
-    `parent_id`  BIGINT       DEFAULT NULL            COMMENT '父级角色 ID',
-    `sort_order` INT          DEFAULT NULL            COMMENT '排序序号',
-    `enable`     TINYINT(1)   DEFAULT NULL            COMMENT '是否启用：1=启用 / 0=禁用',
-    `crte_time`  DATETIME     DEFAULT NULL            COMMENT '创建时间',
-    `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    `opter_id`   VARCHAR(20)  DEFAULT NULL            COMMENT '经办人 ID',
-    `opt_time`   DATETIME     DEFAULT NULL            COMMENT '经办时间',
-    `oprt_type`  VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储中文：新增 / 修改 / 删除',
-    PRIMARY KEY (`evt_id`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
-  COMMENT = '角色/部门表（操作审计）';
-
-CREATE TABLE `t_sys_user_evt` (
-    `evt_id`     BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
-    `id`         BIGINT       DEFAULT NULL            COMMENT '主键 ID',
-    `name`       VARCHAR(64)  DEFAULT NULL            COMMENT '人员姓名',
-    `user_name`  VARCHAR(64)  DEFAULT NULL            COMMENT '登录用户名/拼音',
-    `dr`         TINYINT(1)   DEFAULT NULL            COMMENT '删除标志：0=正常 / 1=已删除',
-    `crte_time`  DATETIME     DEFAULT NULL            COMMENT '创建时间',
-    `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    `opter_id`   VARCHAR(20)  DEFAULT NULL            COMMENT '经办人 ID',
-    `opt_time`   DATETIME     DEFAULT NULL            COMMENT '经办时间',
-    `oprt_type`  VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储中文：新增 / 修改 / 删除',
-    PRIMARY KEY (`evt_id`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
-  COMMENT = '人员表（操作审计）';
-
-CREATE TABLE `t_sys_user_role_evt` (
-    `evt_id`     BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
-    `id`         BIGINT       DEFAULT NULL            COMMENT '主键 ID',
-    `user_id`    BIGINT       DEFAULT NULL            COMMENT '人员 ID，关联 t_sys_user.id',
-    `role_id`    BIGINT       DEFAULT NULL            COMMENT '角色 ID，关联 t_sys_role.id',
-    `dr`         TINYINT(1)   DEFAULT NULL            COMMENT '删除标志：0=正常 / 1=已删除',
-    `crte_time`  DATETIME     DEFAULT NULL            COMMENT '创建时间',
-    `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    `opter_id`   VARCHAR(20)  DEFAULT NULL            COMMENT '经办人 ID',
-    `opt_time`   DATETIME     DEFAULT NULL            COMMENT '经办时间',
-    `oprt_type`  VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储中文：新增 / 修改 / 删除',
-    PRIMARY KEY (`evt_id`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
-  COMMENT = '人员角色关联表（操作审计）';
 
 CREATE TABLE `ip_pool_permission_evt` (
     `evt_id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',

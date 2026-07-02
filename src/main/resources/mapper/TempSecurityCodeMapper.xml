@@ -122,7 +122,7 @@
                ,code AS companyCode
                ,full_name
                ,short_name
-        FROM t_inv_company
+        FROM ais_inv_analysis.t_inv_company
         <where>
             <if test="tempCompanyId != null">
                 AND id = #{tempCompanyId}
@@ -142,7 +142,7 @@
                ,code AS companyCode
                ,full_name
                ,short_name
-        FROM t_inv_company
+        FROM ais_inv_analysis.t_inv_company
         WHERE id = #{companyId}
         LIMIT 1
     </select>

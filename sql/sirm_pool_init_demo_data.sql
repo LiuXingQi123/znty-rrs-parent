@@ -1,7 +1,7 @@
 -- ============================================================
 -- znty-sirm 投资池初始化 - 演示数据脚本
 -- MySQL version: 8.0.28
--- 说明：首次部署执行，插入投资池、角色、人员等测试数据
+-- 说明：首次部署执行，插入投资池相关测试数据
 -- ============================================================
 USE `znty_sirm`;
 SET NAMES utf8mb4;
@@ -11,16 +11,10 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- 清空所有业务表
 -- ----------------------------------------------------------------------------
 TRUNCATE TABLE `ip_pool_permission_evt`;
-TRUNCATE TABLE `t_sys_user_role_evt`;
-TRUNCATE TABLE `t_sys_user_evt`;
-TRUNCATE TABLE `t_sys_role_evt`;
 TRUNCATE TABLE `ip_pool_auto_rule_evt`;
 TRUNCATE TABLE `ip_pool_relation_evt`;
 TRUNCATE TABLE `ip_investment_pool_evt`;
 TRUNCATE TABLE `ip_pool_permission`;
-TRUNCATE TABLE `t_sys_user_role`;
-TRUNCATE TABLE `t_sys_user`;
-TRUNCATE TABLE `t_sys_role`;
 TRUNCATE TABLE `ip_pool_auto_rule`;
 TRUNCATE TABLE `ip_pool_relation`;
 TRUNCATE TABLE `ip_investment_pool`;
@@ -315,65 +309,7 @@ INSERT INTO `ip_pool_auto_rule` (
 (12, 15, 'auto_out', 5,  '风险预警解除并复核通过后自动移出禁投池',     0, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
--- 2. 初始化角色和人员数据
--- ----------------------------------------------------------------------------
--- 角色树：研究部 > 信用研究组 > 利率研究组
-INSERT INTO `t_sys_role` (`id`, `name`, `parent_id`, `sort_order`, `enable`, `crte_time`, `updt_time`) VALUES
-(1, '研究部',       NULL, 1, 1, NOW(), NOW()),
-(2, '信用研究组',   1,    2, 1, NOW(), NOW()),
-(3, '利率研究组',   2,    3, 1, NOW(), NOW()),
-(4, '固收部',       NULL, 4, 1, NOW(), NOW()),
-(5, '利率组',       4,    5, 1, NOW(), NOW()),
-(6, '信用组',       4,    6, 1, NOW(), NOW()),
-(7, '权益部',       NULL, 7, 1, NOW(), NOW()),
-(8, '行业研究组',   7,    8, 1, NOW(), NOW()),
-(9, '量化部',       NULL, 9, 1, NOW(), NOW()),
-(10, '风险管理部',  NULL, 10, 1, NOW(), NOW());
-
--- 人员
-INSERT INTO `t_sys_user` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`) VALUES
-(1,  '研究员1', 'yanjiuyuan1', 0, NOW(), NOW()),
-(2,  '研究员2', 'yanjiuyuan2', 0, NOW(), NOW()),
-(3,  '研究员3', 'yanjiuyuan3', 0, NOW(), NOW()),
-(4,  '研究员4', 'yanjiuyuan4', 0, NOW(), NOW()),
-(5,  '研究员5', 'yanjiuyuan5', 0, NOW(), NOW()),
-(6,  '固收1', 'gushou1', 0, NOW(), NOW()),
-(7,  '固收2', 'gushou2', 0, NOW(), NOW()),
-(8,  '固收3', 'gushou3', 0, NOW(), NOW()),
-(9,  '固收4', 'gushou4', 0, NOW(), NOW()),
-(10,  '权益1', 'quanyi1', 0, NOW(), NOW()),
-(11,  '权益2', 'quanyi2', 0, NOW(), NOW()),
-(12,  '权益3', 'quanyi3', 0, NOW(), NOW()),
-(13,  '量化1', 'lianghua1', 0, NOW(), NOW()),
-(14,  '量化2', 'lianghua2', 0, NOW(), NOW()),
-(15,  '风控经理', 'fengkongjingli', 0, NOW(), NOW()),
-(1001,  '管理员', 'admin', 0, NOW(), NOW());
-
-INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`) VALUES
-(1,  1,  1, 0, NOW(), NOW()),  -- 研究员1: 研究部
-(2,  1,  2, 0, NOW(), NOW()),  -- 研究员1: 信用研究组
-(3,  2,  2, 0, NOW(), NOW()),  -- 研究员2: 信用研究组
-(4,  2,  3, 0, NOW(), NOW()),  -- 研究员2: 利率研究组
-(5,  3,  1, 0, NOW(), NOW()),  -- 研究员3: 研究部
-(6,  3,  3, 0, NOW(), NOW()),  -- 研究员3: 利率研究组
-(7,  4,  2, 0, NOW(), NOW()),  -- 研究员4: 信用研究组
-(8,  5,  3, 0, NOW(), NOW()),  -- 研究员5: 利率研究组
-(9,  6,  4, 0, NOW(), NOW()),  -- 固收1: 固收部
-(10, 6,  5, 0, NOW(), NOW()),  -- 固收1: 利率组
-(11, 7,  4, 0, NOW(), NOW()),  -- 固收2: 固收部
-(12, 7,  6, 0, NOW(), NOW()),  -- 固收2: 信用组
-(13, 8,  5, 0, NOW(), NOW()),  -- 固收3: 利率组
-(14, 9,  6, 0, NOW(), NOW()),  -- 固收4: 信用组
-(15, 10, 7, 0, NOW(), NOW()),  -- 权益1: 权益部
-(16, 10, 8, 0, NOW(), NOW()),  -- 权益1: 行业研究组
-(17, 11, 7, 0, NOW(), NOW()),  -- 权益2: 权益部
-(18, 12, 8, 0, NOW(), NOW()),  -- 权益3: 行业研究组
-(19, 13, 9, 0, NOW(), NOW()),  -- 量化1: 量化部
-(20, 14, 9, 0, NOW(), NOW()),  -- 量化2: 量化部
-(21, 15, 10, 0, NOW(), NOW()); -- 风控经理: 风险管理部
-
--- ----------------------------------------------------------------------------
--- 3. 初始化投资池权限配置
+-- 2. 初始化投资池权限配置
 -- ----------------------------------------------------------------------------
 -- 权限说明：
 --   permission_type: viewable=可查看 / adjustable=可调整 / excel_importable=可Excel导入

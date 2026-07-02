@@ -898,7 +898,7 @@
                ,enable
                ,crte_time
                ,updt_time
-        FROM t_sys_role
+        FROM ais_inv_analysis.t_sys_role
         WHERE enable = 1
         ORDER BY sort_order ASC
                  ,id ASC
@@ -913,13 +913,13 @@
                ,u.crte_time
                ,u.updt_time
                ,GROUP_CONCAT(DISTINCT r.name ORDER BY r.sort_order ASC SEPARATOR '、') AS roleName
-        FROM t_sys_user u
-        LEFT JOIN t_sys_user_role ur ON ur.user_id = u.id AND ur.dr = 0
-        LEFT JOIN t_sys_role r ON r.id = ur.role_id AND r.enable = 1
+        FROM ais_inv_analysis.t_sys_user u
+        LEFT JOIN ais_inv_analysis.t_sys_user_role ur ON ur.user_id = u.id AND ur.dr = 0
+        LEFT JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
         WHERE u.dr = 0
         <if test="roleIds != null and roleIds.size() > 0">
             AND EXISTS (
-                SELECT 1 FROM t_sys_user_role ur2
+                SELECT 1 FROM ais_inv_analysis.t_sys_user_role ur2
                 WHERE ur2.user_id = u.id AND ur2.dr = 0
                   AND ur2.role_id IN
                 <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
@@ -980,8 +980,8 @@
     <!-- 查询用户所属启用角色 ID 列表 -->
     <select id="queryUserRoleIdList" resultType="long">
         SELECT DISTINCT ur.role_id
-        FROM t_sys_user_role ur
-        INNER JOIN t_sys_role r ON r.id = ur.role_id AND r.enable = 1
+        FROM ais_inv_analysis.t_sys_user_role ur
+        INNER JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
         WHERE ur.user_id = #{userId}
           AND ur.dr = 0
     </select>
