@@ -1,4 +1,4 @@
-package com.znty.sirm.entity.subjectpool;
+package com.znty.sirm.entity.companypool;
 
 import com.znty.sirm.common.PageRequest;
 import lombok.Data;
@@ -11,13 +11,13 @@ import java.util.List;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-public class SubjectPoolQueryReq extends PageRequest {
+public class CompanyPoolQueryReq extends PageRequest {
 
     /** 投资池 ID 列表（树多选） */
     private List<Long> poolIds;
 
     /** 主体代码（模糊搜索） */
-    private String subjectCode;
+    private String companyCode;
 
     /** 入池时间起 */
     private String entryTimeStart;

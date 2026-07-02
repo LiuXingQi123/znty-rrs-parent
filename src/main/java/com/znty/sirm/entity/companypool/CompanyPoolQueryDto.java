@@ -1,4 +1,4 @@
-package com.znty.sirm.entity.subjectpool;
+package com.znty.sirm.entity.companypool;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
@@ -9,7 +9,7 @@ import java.util.Date;
  * 主体池查询返回对象
  */
 @Data
-public class SubjectPoolQueryDto {
+public class CompanyPoolQueryDto {
 
     /** 主键 ID */
     private Long id;

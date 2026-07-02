@@ -12,7 +12,7 @@
 | 06 | 我的事宜 | `my_matters.html` | [06-my-matters.md](06-my-matters.md) | `MyMattersApiTest` |
 | 07 | 证券池查询 | `security_pool_query.html` | [07-security-pool-query.md](07-security-pool-query.md) | `SecurityPoolQueryApiTest` |
 | 08 | 禁投池查询 | `forbidden_pool_query.html` | [08-forbidden-pool-query.md](08-forbidden-pool-query.md) | `ForbiddenPoolQueryApiTest` |
-| 09 | 主体池查询 | `company_pool_query.html` | [09-subject-pool-query.md](09-subject-pool-query.md) | `SubjectPoolQueryApiTest` |
+| 09 | 主体池查询 | `company_pool_query.html` | [09-company-pool-query.md](09-company-pool-query.md) | `CompanyPoolQueryApiTest` |
 | 10 | 证券池调整历史 | `security_pool_adjust_history.html` | [10-adjust-history.md](10-adjust-history.md) | `AdjustHistoryApiTest` |
 | 11 | 证券池调库详情 | `security_pool_adjust_detail.html` | [11-security-pool-adjust-detail.md](11-security-pool-adjust-detail.md) | `SecurityPoolAdjustDetailApiTest` |
 | 12 | 证券池批量调整（批量调入/调出） | `batch_security_pool_adjust.html` | [12-batch-security-pool-adjust.md](12-batch-security-pool-adjust.md) | `BatchSecurityPoolAdjustApiTest` |
@@ -29,7 +29,7 @@
 - **查询入口**：[07](07-security-pool-query.md) 证券池当前状态查询、[10](10-adjust-history.md) 调库历史追溯、[06](06-my-matters.md) 我的待办/已办。
 - **详情查看**：[11](11-security-pool-adjust-detail.md) 单只证券及批次完整业务上下文（只读 / 首次调库提交；修改节点重新提交在 [05]）。
 - **禁投池视角**：[08](08-forbidden-pool-query.md) 当前在禁投池的证券、[13](13-forbidden-pool-history.md) 禁投池调库流水（`pool_type='forbidden'` 过滤）。
-- **主体池视角**：[09](09-subject-pool-query.md) 当前在池的主体、[14](14-company-pool-adjust-history.md) 主体调库流水（`category_type='company'` 过滤，主体作为伪证券入池/调库）。
+- **主体池视角**：[09](09-company-pool-query.md) 当前在池的主体、[14](14-company-pool-adjust-history.md) 主体调库流水（`category_type='company'` 过滤，主体作为伪证券入池/调库）。
 - **基础配置**：[01](01-flow-definition.md) 审批流程定义（设计器/节点/版本）、[02](02-investment-pool.md) 投资池树/关系/流程/权限维护、[03](03-rule-manager.md) QLExpress 风控规则与测试用例。
 
 核心状态枚举（`ip_adjust_log.audit_status`）：`-1`无效 / `00`待审核 / `10`审核通过待审批 / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。仅 `20` 落地 `ip_pool_status`。

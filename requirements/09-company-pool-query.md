@@ -1,7 +1,7 @@
 # 主体池查询需求说明
 
 > 前端页面：`company_pool_query.html`（发行主体池查询）
-> 后端前缀：`/api/v1/subjectPoolQuery`、`/api/v1/common`
+> 后端前缀：`/api/v1/companyPoolQuery`、`/api/v1/common`
 > 角色定位：信用研究、投资和风控人员从发行主体维度查询主体在各投资池中的准入状态，辅助主体风险和投资限额管理。
 
 ---
@@ -41,7 +41,7 @@
 | 控件 | 字段 | 说明 |
 |---|---|---|
 | 投资池选择器（popover + tree，多选） | `poolIds` | 父节点禁用，仅叶子可选；`check-strictly` |
-| 主体代码（文本输入） | `subjectCode` | 模糊，回车查询 |
+| 主体代码（文本输入） | `companyCode` | 模糊，回车查询 |
 | 入池时间范围（daterange） | `entryTimeRange` | `value-format='yyyy-MM-dd'` |
 | 调整人（文本输入） | `adjusterName` | 模糊，回车查询 |
 | 查询 / 重置 | — | 查询重置页码为 1；重置清空全部条件并清树勾选 |
@@ -50,16 +50,16 @@
 
 ### 2.2 查询接口
 
-- 路径：`POST /api/v1/subjectPoolQuery/querySubjectPoolPage`
-- 请求体（`SubjectPoolQueryReq`）：
+- 路径：`POST /api/v1/companyPoolQuery/queryCompanyPoolPage`
+- 请求体（`CompanyPoolQueryReq`）：
   ```json
-  { "poolIds": [2,3] | null, "subjectCode": "C100" | null,
+  { "poolIds": [2,3] | null, "companyCode": "C100" | null,
     "entryTimeStart": "2026-05-01 00:00:00" | null, "entryTimeEnd": "2026-05-31 23:59:59" | null,
     "adjusterName": "管理" | null, "pageIndex": 1, "pageSize": 20 }
   ```
   前端将日期范围补全为 `起 00:00:00`/`止 23:59:59`；`poolIds` 为空数组时传 null。
-- 后端 `SubjectPoolQueryService`：`PageHelper.startPage` 分页；`querySubjectPoolPage` SQL；`fillPoolFullName`（用投资池全路径名覆盖 `targetPoolName`）；返回 `PageResult`。
-- 返回 `PageResult<SubjectPoolQueryDto>`（`id, securityShortName(主体名称), securityCode(主体代码), adjusterName, entryTime, targetPoolName, targetPoolId`）。
+- 后端 `CompanyPoolQueryService`：`PageHelper.startPage` 分页；`queryCompanyPoolPage` SQL；`fillPoolFullName`（用投资池全路径名覆盖 `targetPoolName`）；返回 `PageResult`。
+- 返回 `PageResult<CompanyPoolQueryDto>`（`id, securityShortName(主体名称), securityCode(主体代码), adjusterName, entryTime, targetPoolName, targetPoolId`）。
 
 ### 2.3 分页
 
@@ -70,7 +70,7 @@
 ## 3. 关键校验与可见数据范围
 
 - **可见范围** = `ip_pool_status` 中 `is_deleted=0` 且 `audit_status='20'` 且 `security_type` 属于 `category_type='company'` 的记录。无角色/用户级数据权限过滤（无「我的主体池」概念）。
-- 筛选条件全部可选；`poolIds` 为空时不过滤投资池；`subjectCode`/`adjusterName` 走 `LIKE CONCAT('%', ?, '%')`。
+- 筛选条件全部可选；`poolIds` 为空时不过滤投资池；`companyCode`/`adjusterName` 走 `LIKE CONCAT('%', ?, '%')`。
 - 时间范围：`entry_time >= start` 且 `entry_time <= end`，前端补秒。
 - `pageSize` 后端封顶 100；`pageIndex` <1 自动归 1。
 - 投资池树只返回 `is_deleted=0` 的池；已停用（`status='disabled'`）的池**仍会出现在树中**（SQL 未过滤 status）。
@@ -82,7 +82,7 @@
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<PoolTreeDto>{id, parentId, poolName, poolFullName}` | 投资池树（含全路径） |
-| `subjectPoolQuery/querySubjectPoolPage` | poolIds, subjectCode, entryTimeStart, entryTimeEnd, adjusterName, pageIndex, pageSize | `PageResult<SubjectPoolQueryDto>` | 主体池分页查询（仅 audit_status='20' 且 category_type='company'） |
+| `companyPoolQuery/queryCompanyPoolPage` | poolIds, companyCode, entryTimeStart, entryTimeEnd, adjusterName, pageIndex, pageSize | `PageResult<CompanyPoolQueryDto>` | 主体池分页查询（仅 audit_status='20' 且 category_type='company'） |
 
 > 路径均带前缀 `/api/v1/`。
 
@@ -95,7 +95,7 @@
 - `dict_security_type`（证券类型字典）：`security_type` + `category_type`（bond/stock/fund/company）。主体池查询靠 `category_type='company'` 切分主体记录。
 - `ip_investment_pool`（投资池主表）：提供 `pool_name`，并通过递归 CTE 生成 `pool_full_name`。
 
-**核心 SQL**（`SubjectPoolQueryMapper.xml`）：
+**核心 SQL**（`CompanyPoolQueryMapper.xml`）：
 ```sql
 SELECT ips.id, ips.security_code, ips.security_short_name, ips.adjuster_name,
        ips.entry_time, ips.target_pool_id, p.pool_name AS target_pool_name
@@ -136,13 +136,13 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 
 - 主体关键字和投资池组合筛选正确，只返回当前在池（audit_status='20'）的主体。
 - 投资池名称显示全路径。
-- `SubjectPoolQueryApiTest` 覆盖页面全部接口。
+- `CompanyPoolQueryApiTest` 覆盖页面全部接口。
 
 ## 8. 关键源码索引
 
 - 前端：`znty-sirm-ui/company_pool_query.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`handlePoolTreeConfirm`）
-- Controller：`SubjectPoolQueryController.java`、`CommonController.java`
-- Service：`SubjectPoolQueryService.java`（`querySubjectPoolPage`、`fillPoolFullName`）、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
-- Mapper：`SubjectPoolQueryMapper.xml`、`CommonMapper.xml`
-- 实体：`SubjectPoolQueryReq`、`SubjectPoolQueryDto`、`PoolTreeDto`
+- Controller：`CompanyPoolQueryController.java`、`CommonController.java`
+- Service：`CompanyPoolQueryService.java`（`queryCompanyPoolPage`、`fillPoolFullName`）、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
+- Mapper：`CompanyPoolQueryMapper.xml`、`CommonMapper.xml`
+- 实体：`CompanyPoolQueryReq`、`CompanyPoolQueryDto`、`PoolTreeDto`
 - SQL：`sql/sirm_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/sirm_dict_schema.sql`（dict_security_type）、`sql/sirm_pool_init_schema.sql`

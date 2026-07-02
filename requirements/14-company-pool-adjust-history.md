@@ -141,7 +141,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 | 数据源表 | `ip_pool_status`（当前状态表） | `ip_adjust_log`（调库流水表） |
 | 语义 | 「当前在池的主体」——快照 | 「主体调库的全量历史」——流水 |
 | `audit_status` 过滤 | **仅 `='20'`**（审批通过/已入池） | **不过滤**，全部状态可见（可用筛选举某状态） |
-| 主体字段命名 | `subjectCode`(Req) / `securityCode,securityShortName`(DTO) | `companyCode,companyName`(Req/DTO，SQL AS 重命名) |
+| 主体字段命名 | `companyCode`(Req) / `securityCode,securityShortName`(DTO) | `companyCode,companyName`(Req/DTO，SQL AS 重命名) |
 | 时间筛选项 | 入池时间 `entryTime` | 提交时间 `submitTime`（调整日期） |
 | 时间补秒方 | 前端补 `00:00:00`/`23:59:59` | 后端对 end 拼 ` 23:59:59` |
 | 额外筛选 | 无 | 多 `companyName`、`adjustMode`、`auditStatus` 三个 |

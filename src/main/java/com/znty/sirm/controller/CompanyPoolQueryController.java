@@ -2,9 +2,9 @@ package com.znty.sirm.controller;
 
 import com.znty.sirm.common.ApiResponse;
 import com.znty.sirm.common.PageResult;
-import com.znty.sirm.entity.subjectpool.SubjectPoolQueryDto;
-import com.znty.sirm.entity.subjectpool.SubjectPoolQueryReq;
-import com.znty.sirm.service.SubjectPoolQueryService;
+import com.znty.sirm.entity.companypool.CompanyPoolQueryDto;
+import com.znty.sirm.entity.companypool.CompanyPoolQueryReq;
+import com.znty.sirm.service.CompanyPoolQueryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,19 +20,19 @@ import javax.annotation.Resource;
  * </p>
  */
 @RestController
-@RequestMapping("/api/v1/subjectPoolQuery")
-public class SubjectPoolQueryController {
+@RequestMapping("/api/v1/companyPoolQuery")
+public class CompanyPoolQueryController {
 
     /** 主体池查询服务 */
     @Resource
-    private SubjectPoolQueryService subjectPoolQueryService;
+    private CompanyPoolQueryService companyPoolQueryService;
 
     /**
      * 分页查询发行主体池列表，支持按主体名称、统一社会信用代码、投资池等条件筛选
      */
-    @PostMapping("/querySubjectPoolPage")
-    public ApiResponse<PageResult<SubjectPoolQueryDto>> querySubjectPoolPage(@RequestBody SubjectPoolQueryReq req) {
-        return ApiResponse.success(subjectPoolQueryService.querySubjectPoolPage(req));
+    @PostMapping("/queryCompanyPoolPage")
+    public ApiResponse<PageResult<CompanyPoolQueryDto>> queryCompanyPoolPage(@RequestBody CompanyPoolQueryReq req) {
+        return ApiResponse.success(companyPoolQueryService.queryCompanyPoolPage(req));
     }
 
 }
