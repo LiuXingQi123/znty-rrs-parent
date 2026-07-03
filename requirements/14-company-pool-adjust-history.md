@@ -158,7 +158,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 | 维度 | 主体池调整历史（本文） | 证券池调整历史（AdjustHistory，[10](10-adjust-history.md)） |
 |---|---|---|
 | category_type 过滤 | `='company'`（INNER JOIN dict） | 不过滤，全部证券类型 |
-| 关联 sirm_securityinfo | 否 | 是（取 issuer、到期状态） |
+| 关联 rrs_securityinfo | 否 | 是（取 issuer、到期状态） |
 | 字段口径 | `security_short_name`→主体名称 | `security_short_name`→证券简称，另带 `issuer` |
 | 证券状态筛选 | 无 | 有（存续/到期，CASE WHEN 计算） |
 | 发行主体筛选 | 无（用「主体名称」替代） | 有（issuer LIKE） |
@@ -185,4 +185,4 @@ ORDER BY al.submit_time DESC, al.id DESC
 - Service：`CompanyPoolAdjustHistoryService.java`（`queryCompanyPoolAdjustHistoryPage`、`fillPoolFullName`）、`InvestmentPoolService.java`
 - Mapper：`CompanyPoolAdjustHistoryMapper.xml`、`CommonMapper.xml`
 - 实体：`CompanyPoolAdjustHistoryReq`、`CompanyPoolAdjustHistoryDto`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（ip_adjust_log）、`sql/sirm_dict_schema.sql`、`sql/sirm_pool_init_schema.sql`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log）、`sql/rrs_dict_schema.sql`、`sql/rrs_pool_init_schema.sql`

@@ -247,7 +247,7 @@
 
 **④ 调出处理** `executeOutboundSubmit`：逻辑对称，生效操作为 `deletePoolStatusSoft`（软删除 `ip_pool_status` 中该证券在目标池的 `audit_status='20'` 记录，`is_deleted=1`）。
 
-**⑤ 后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` 用 DB 当前快照 + 前端传入字段合并，`editSecurityInfoForAdjust` 全量更新 `sirm_securityinfo`（约 80 字段）。
+**⑤ 后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` 用 DB 当前快照 + 前端传入字段合并，`editSecurityInfoForAdjust` 全量更新 `rrs_securityinfo`（约 80 字段）。
 
 **`createInitialSteps`**（懒创建）：start（auto_process）→ 若下一节点是发起人节点则自动 submit 并继续 → 若是审批节点则 `createPendingSteps`（按处理人展开为多条 pending 记录）返回 false → 若是 end 则 auto_process 并返回 true。
 
@@ -258,7 +258,7 @@
 | `ip_adjust_log` | INSERT | security_code, adjust_type, adjust_mode, **adjust_batch_no**, target_pool_id, flow_id/key/type, **audit_status**(00 或 20), adjuster_id/name, adjust_reason/advice, submit_time |
 | `ip_pool_status` | INSERT（调入生效）/ UPDATE 软删（调出生效） | security_code, adjust_log_id, target_pool_id, **audit_status='20'**, entry_time, is_deleted |
 | `ip_adjust_step` | INSERT（初始 3 步 + 审批时按需创建） | adjust_log_id, **adjust_batch_no**, flow_node_id, node_type, approval_strategy, **step_status**(pending/auto_process/submit), handler_id/name |
-| `sirm_securityinfo` | UPDATE | 详情页可编辑字段全量 |
+| `rrs_securityinfo` | UPDATE | 详情页可编辑字段全量 |
 | `sys_attachment` | 绑定/复制附件 | adjustLogId, attachment_category(credit_report_hand/material_hand) |
 | `wf_flow_*` | 只读（构建流程快照） | — |
 
@@ -333,7 +333,7 @@
 | in_mutex / out_mutex | 调入/调出互斥池 |
 | in_soft_restrict / out_soft_restrict | 调入/调出弹性禁投池 |
 
-### 5.5 `sirm_securityinfo`（证券信息表）
+### 5.5 `rrs_securityinfo`（证券信息表）
 
 详情页可编辑字段约 28 个。关键只读字段：`maturity_date`（到期校验）、`date_next`（剩余期限，yyyyMMdd）、`guarantor`/`guarantor_id`（担保人判断）。
 
@@ -394,4 +394,4 @@
 - Service：`SecurityPoolAdjustService.java`（`checkAdjust`、`addAdjustLog`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`）
 - Mapper：`SecurityPoolAdjustMapper.java` / `SecurityPoolAdjustMapper.xml`
 - 实体：`SecurityPoolAdjustSubmitReq`、`AdjustCheckReq`、`AdjustCheckDto`、`IpAdjustLogBo`、`IpAdjustStepBo`、`PoolDto`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`、`sql/sirm_pool_init_schema.sql`（`ip_pool_relation`）
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）

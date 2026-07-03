@@ -82,7 +82,7 @@
 10. `finished=true` 时调 `finishAdjustBatch(step)`：
     - `editAdjustLogAuditStatus(..., '20')` 整批置审批通过。
     - 逐条：调入→`addPoolStatus`（写 `ip_pool_status_crmw`）；调出→`deletePoolStatusSoft`。
-    - `generateInternalReportsOnFinish`：手工信评报告附件沉淀为 `sirm_report_in` 内部报告。
+    - `generateInternalReportsOnFinish`：手工信评报告附件沉淀为 `rrs_report_in` 内部报告。
 
 ### 3.2 前端提交逻辑
 
@@ -113,7 +113,7 @@
 | `ip_adjust_log`（调库记录表） | `editAdjustLogAuditStatus` 按 `adjust_batch_no` 批量更新 `audit_status` | adjust_batch_no, audit_status |
 | `ip_pool_status_crmw`（落地池状态） | `addPoolStatus`（调入生效）/`deletePoolStatusSoft`（调出软删） | security_code, target_pool_id, pool_type='crmw', audit_status='20', is_deleted |
 | `wf_flow_*`（流程定义，构建 FlowSnapshot） | 只读 | — |
-| `sirm_report_in` | INSERT（`generateInternalReportsOnFinish` 审批通过后沉淀手工信评报告） | report_title, report_type, security_code, data_source='uploaded' |
+| `rrs_report_in` | INSERT（`generateInternalReportsOnFinish` 审批通过后沉淀手工信评报告） | report_title, report_type, security_code, data_source='uploaded' |
 
 ---
 
@@ -161,5 +161,5 @@
 - Service：`CrmwPoolAdjustFlowService.java`（`submitAdjustAudit`、`resolveProcessingNodeAuditStatus`、`finishAdjustBatch`、`applyAttachmentChangesForModifySubmit`、`advanceToNextAvailableStep`、`createTerminalEndStep`、`generateInternalReportsOnFinish`）
 - Mapper：复用 `mapper/CrmwPoolAdjustMapper.java` / `CrmwPoolAdjustMapper.xml`（**无独立 FlowMapper**）
 - 实体：`entity/crmwpooladjustflow/CrmwPoolAdjustAuditReq.java`（含 `AttachmentChange` 内部类）、`CrmwPoolAdjustAuditDto.java`
-- SQL：`sql/sirm_crmw_pool_status_schema.sql`、`sql/sirm_flow_definition_schema.sql`
+- SQL：`sql/rrs_crmw_pool_status_schema.sql`、`sql/rrs_flow_definition_schema.sql`
 - 测试：`CrmwPoolAdjustFlowApiTest.java`、`CrmwPoolAdjustFlowServiceTest.java`

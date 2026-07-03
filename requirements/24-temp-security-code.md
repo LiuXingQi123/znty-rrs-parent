@@ -2,7 +2,7 @@
 
 > 前端页面：`temp_security_code.html`
 > 后端前缀：`/api/v1/tempSecurityCode`
-> 角色定位：为尚未取得正式 Wind 代码的信用债维护临时证券代码，待正式证券信息明确后「更新为正式证券」并同步写入 `sirm_securityinfo`，或「取消发行」终止流程。提供查询、新增、更新、取消发行和删除能力。
+> 角色定位：为尚未取得正式 Wind 代码的信用债维护临时证券代码，待正式证券信息明确后「更新为正式证券」并同步写入 `rrs_securityinfo`，或「取消发行」终止流程。提供查询、新增、更新、取消发行和删除能力。
 
 ---
 
@@ -34,7 +34,7 @@
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodePage`
 - 请求体：`{ tempSecurityCode, tempSecurityName, pageIndex, pageSize }`（`TempSecurityCodeReq extends PageRequest`）
 - 后端 `TempSecurityCodeService.queryTempSecurityCodePage`：`PageHelper.startPage(pageIndex, pageSize)` → `tempSecurityCodeMapper.queryTempSecurityCodePage(req)` → `PageInfo` → `PageResult`。
-- SQL 行为：`FROM sirm_temp_security_code t`，`LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type AND dst_temp.is_deleted = 0`（取 `tempSecurityTypeName`），`LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type AND dst.is_deleted = 0`（取正式 `security_type_name`）；`<where>` 仅拼 `temp_security_code LIKE` 与 `temp_security_name LIKE`；`ORDER BY t.crte_time DESC, t.id DESC`。
+- SQL 行为：`FROM rrs_temp_security_code t`，`LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type AND dst_temp.is_deleted = 0`（取 `tempSecurityTypeName`），`LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type AND dst.is_deleted = 0`（取正式 `security_type_name`）；`<where>` 仅拼 `temp_security_code LIKE` 与 `temp_security_name LIKE`；`ORDER BY t.crte_time DESC, t.id DESC`。
 - **注意**：列表 SQL **未过滤 `is_deleted = 0`**，而 `queryTempSecurityCodeById`/`queryTempSecurityCodeDetail` 均 `AND is_deleted = 0`。即软删除后（`is_deleted=1, status='deleted'`）的记录仍会出现在列表中（显示「已删除」tag），但按 id 查详情会返回 null。这是列表与详情的过滤口径不一致点。
 - 分页：前端 `page-sizes=[10,20,50,100]`，默认 `pageSize=20`；`PageRequest` 后端 pageSize 上限 100。
 - 表格列：序号、临时证券名称/代码/市场(el-tag)/类型(el-tag `tempSecurityTypeName`)、临时缓释凭证代码、临时关联主体(`tempCompanyNameSnapshot`)、临时发行/到期日期、证券名称/代码/市场(el-tag)/类型(el-tag `securityTypeName`)、更新时间(`updateTime`)、状态(el-tag)、操作（更新/取消发行/删除）。
@@ -80,7 +80,7 @@
 | `queryTempSecurityCodePage` | `tempSecurityCode?, tempSecurityName?, pageIndex, pageSize` | `ApiResponse<PageResult<TempSecurityCodeDto>>` | 分页查询临时代码列表 |
 | `queryTempSecurityCodeOptions` | `{}`（或 `tempCompanyId?/tempSecurityName?` 用于主体过滤） | `ApiResponse<TempSecurityCodeDto.OptionBundle>` | 查新增页下拉：发行主体 + 证券类型 |
 | `addTempSecurityCode` | `tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyId, tempIssueDate, tempMaturityDate` | `ApiResponse<TempSecurityCodeDto>` | 新增临时代码（status=temporary） |
-| `editTempSecurityCodeToUpdated` | `id, tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyId, tempIssueDate, tempMaturityDate, securityName, securityCode, securityMarket, securityType` | `ApiResponse<TempSecurityCodeDto>` | 更新为正式证券（status=updated，同步 upsert sirm_securityinfo） |
+| `editTempSecurityCodeToUpdated` | `id, tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyId, tempIssueDate, tempMaturityDate, securityName, securityCode, securityMarket, securityType` | `ApiResponse<TempSecurityCodeDto>` | 更新为正式证券（status=updated，同步 upsert rrs_securityinfo） |
 | `editTempSecurityCodeToCancelled` | `id` | `ApiResponse<TempSecurityCodeDto>` | 取消发行（status=cancelled） |
 | `deleteTempSecurityCode` | `id` | `ApiResponse<TempSecurityCodeDto>`（实返 null） | 软删除（status=deleted, is_deleted=1） |
 
@@ -90,20 +90,20 @@
 
 ## 5. 关键数据库表
 
-建表脚本 `sql/sirm_temp_security_code_schema.sql`，演示数据 `sql/sirm_temp_security_code_demo_data.sql`。本模块无 `_evt` 审计表。
+建表脚本 `sql/rrs_temp_security_code_schema.sql`，演示数据 `sql/rrs_temp_security_code_demo_data.sql`。本模块无 `_evt` 审计表。
 
 | 表 | 用途 | 关键字段/枚举 |
 |---|---|---|
-| `sirm_temp_security_code`（主表） | 临时代码 | `id, temp_security_name, temp_security_code, temp_security_market, temp_security_type, temp_mitigation_code, temp_company_id, temp_company_name_snapshot, temp_issue_date DATE, temp_maturity_date DATE, security_name, security_code, security_market, security_type, update_time, status, operation_type, is_deleted, crte_time, updt_time`；索引 `idx_..._temp_code`/`_security_code`/`_company`/`_status` |
+| `rrs_temp_security_code`（主表） | 临时代码 | `id, temp_security_name, temp_security_code, temp_security_market, temp_security_type, temp_mitigation_code, temp_company_id, temp_company_name_snapshot, temp_issue_date DATE, temp_maturity_date DATE, security_name, security_code, security_market, security_type, update_time, status, operation_type, is_deleted, crte_time, updt_time`；索引 `idx_..._temp_code`/`_security_code`/`_company`/`_status` |
 | `dict_security_type`（只读+校验） | 证券类型字典 | `security_type, security_type_name, category_type(bond/stock/fund/company), category_type_name, sort_order, is_deleted`；`querySecurityTypeList` 过滤 `category_type != 'company'`，`querySecurityTypeCount` 校验类型存在 |
 | `ais_inv_analysis.t_inv_company`（跨库只读） | 发行主体 | `id, code, full_name, short_name`；`queryCompanyOptionList`/`queryCompanyById` 读取，`LIMIT 100` |
-| `sirm_securityinfo`（upsert 写入） | 正式证券基础信息库 | key=`wind_code`；`addSecurityInfo`/`editSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、`wind_code_sh`(SSE)/`wind_code_sz`(SZSE)/`wind_code_nib`(CIBM)/`wind_code_nbc`(OTC/UNKNOWN/JWCW) 按 market 用 `CASE WHEN` 填充、`security_type`、`issuer=tempCompanyNameSnapshot`、`firstissue_date`/`maturity_date` 由 `tempIssueDate`/`tempMaturityDate` 经 `DATE_FORMAT(...,'%Y-%m-%d')` 写入、`create_time`/`ts=updateTime` |
+| `rrs_securityinfo`（upsert 写入） | 正式证券基础信息库 | key=`wind_code`；`addSecurityInfo`/`editSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、`wind_code_sh`(SSE)/`wind_code_sz`(SZSE)/`wind_code_nib`(CIBM)/`wind_code_nbc`(OTC/UNKNOWN/JWCW) 按 market 用 `CASE WHEN` 填充、`security_type`、`issuer=tempCompanyNameSnapshot`、`firstissue_date`/`maturity_date` 由 `tempIssueDate`/`tempMaturityDate` 经 `DATE_FORMAT(...,'%Y-%m-%d')` 写入、`create_time`/`ts=updateTime` |
 
 ---
 
 ## 6. 状态流转
 
-状态枚举（`sirm_temp_security_code.status`，注释「temporary=临时 / updated=已更新 / cancelled=已取消 / deleted=已删除」）：
+状态枚举（`rrs_temp_security_code.status`，注释「temporary=临时 / updated=已更新 / cancelled=已取消 / deleted=已删除」）：
 - `TempStatus.TEMPORARY("temporary")` — 新增默认
 - `TempStatus.UPDATED("updated")` — 更新为正式证券
 - `TempStatus.CANCELLED("cancelled")` — 取消发行
@@ -151,7 +151,7 @@
 - **更新校验** `validateUpdateReq`：同新增全部临时字段校验 + `validateIdReq`（id 必填）+ 唯一性排除自身 `queryTempSecurityCodeCount(tempSecurityCode, id)` + 正式证券字段 `securityName`/`securityCode`/`securityMarket`/`securityType` 必填 + `validateMarket(securityMarket)` + `validateSecurityType(securityType)`。
 - **取消发行/删除校验**：`validateIdReq`（id 必填）；取消发行额外要求 `temporary` 状态；删除仅要求存在且未删。
 - **主体快照** `resolveCompanyName`：`fullName` 优先，其次 `shortName`，两者皆空抛「发行主体缺少名称，companyId=...」。
-- **`sirm_securityinfo` upsert**：以 `securityCode` 为 `wind_code` 主键判定。市场→wind_code 列映射：`SSE→wind_code_sh`、`SZSE→wind_code_sz`、`CIBM→wind_code_nib`、`OTC/UNKNOWN/JWCW→wind_code_nbc`（其余列置 NULL）。`issuer` 取 `tempCompanyNameSnapshot`。`firstissue_date`/`maturity_date` 用 `DATE_FORMAT(...,'%Y-%m-%d')`。upsert 在主表状态更新**之前**执行，同 `@Transactional`。
+- **`rrs_securityinfo` upsert**：以 `securityCode` 为 `wind_code` 主键判定。市场→wind_code 列映射：`SSE→wind_code_sh`、`SZSE→wind_code_sz`、`CIBM→wind_code_nib`、`OTC/UNKNOWN/JWCW→wind_code_nbc`（其余列置 NULL）。`issuer` 取 `tempCompanyNameSnapshot`。`firstissue_date`/`maturity_date` 用 `DATE_FORMAT(...,'%Y-%m-%d')`。upsert 在主表状态更新**之前**执行，同 `@Transactional`。
 - **事务**：`addTempSecurityCode`/`editTempSecurityCodeToUpdated`/`editTempSecurityCodeToCancelled`/`deleteTempSecurityCode` 均 `@Transactional(rollbackFor = Exception.class)`。
 - **前端校验** `addRules`/`updateRules`：与后端必填项对齐（`required:true`）；日期 `value-format="yyyy-MM-dd"`；`openUpdateDialog` 回显时正式证券字段缺省取临时字段（`securityName: row.securityName || row.tempSecurityName || ''` 等）。
 
@@ -160,7 +160,7 @@
 2. **删除返回 null**：`deleteTempSecurityCode` 服务方法 `return null`，故 `ApiResponse.success(null)`，前端 `loadList()` 刷新即可。
 3. **无审计表**：与投资池模块的 `_evt` 审计表不同，`operatorId` 字段定义但全程未用。
 4. **跨库读主体**：`queryCompanyOptionList`/`queryCompanyById` 读 `ais_inv_analysis.t_inv_company`，依赖跨库访问权限与该库 schema 稳定。
-5. **`sirm_securityinfo` 无幂等保护**：upsert 以 `wind_code=securityCode` 判重，若多个临时代码映射到同一 `securityCode`，后到的更新会覆盖已有记录。
+5. **`rrs_securityinfo` 无幂等保护**：upsert 以 `wind_code=securityCode` 判重，若多个临时代码映射到同一 `securityCode`，后到的更新会覆盖已有记录。
 6. **更新时主体变更才重查**：仅 `tempCompanyId` 变化时重查主体并刷新快照，未变更时保留旧 `tempCompanyNameSnapshot`（即使主体名已被改名）。
 
 ---
@@ -168,7 +168,7 @@
 ## 8. 验收标准
 
 - 新增临时代码初始 `temporary`，临时证券代码在未删除记录中唯一。
-- 更新为正式证券要求 `temporary` 状态，成功后 `updated` 且 `sirm_securityinfo` 同步 upsert（按 `wind_code` 判重）。
+- 更新为正式证券要求 `temporary` 状态，成功后 `updated` 且 `rrs_securityinfo` 同步 upsert（按 `wind_code` 判重）。
 - 取消发行要求 `temporary` 状态，成功后 `cancelled`，不修改证券字段。
 - 删除为软删（`is_deleted=1, status=deleted`），任意非 `deleted` 状态均可删，返回 null。
 - 必填校验、市场白名单、证券类型存在性、到期晚于发行日期校验生效。
@@ -182,4 +182,4 @@
 - Mapper：`mapper/TempSecurityCodeMapper.java` / `resources/mapper/TempSecurityCodeMapper.xml`
 - 实体：`entity/tempsecuritycode/TempSecurityCodeDto.java`（含 `CompanyOption`/`SecurityTypeOption`/`OptionBundle`）、`entity/tempsecuritycode/TempSecurityCodeReq.java`；`entity/bo/TempSecurityCodeBo.java`
 - 枚举：`common/enums/TempStatus.java`、`common/enums/TempOperationType.java`、`common/enums/MarketCode.java`
-- SQL：`sql/sirm_temp_security_code_schema.sql`、`sql/sirm_temp_security_code_demo_data.sql`；关联 `sql/sirm_dict_schema.sql`（`dict_security_type`）
+- SQL：`sql/rrs_temp_security_code_schema.sql`、`sql/rrs_temp_security_code_demo_data.sql`；关联 `sql/rrs_dict_schema.sql`（`dict_security_type`）

@@ -93,7 +93,7 @@
 
 ### 1.7 实际流程样例（标准升/降库）
 
-来自 `sirm_flow_definition_demo_data.sql`，节点 `n1=开始 → n2=研究员A发起(initiator) → n3=研究员B复核(preempt) → n5=研究总监审批(all) → n6=O32自动审批(auto) → n7=结束`，n3/n5/n4 都有「驳回/不通过」分支分别路由到 n4（修改）或 n7（结束）：
+来自 `rrs_flow_definition_demo_data.sql`，节点 `n1=开始 → n2=研究员A发起(initiator) → n3=研究员B复核(preempt) → n5=研究总监审批(all) → n6=O32自动审批(auto) → n7=结束`，n3/n5/n4 都有「驳回/不通过」分支分别路由到 n4（修改）或 n7（结束）：
 - e3: n3→n4 `routeAction=reject`（复核驳回 → 修改）
 - e4: n4→n3 `routeAction=approve`（修改后重新提交 → 回复核）
 - e5: n3→n5 `routeAction=approve`（复核通过 → 审批）
@@ -296,7 +296,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 3. 逐条按 `adjustMode` 处理：
    - `调入` → `addPoolStatus` 向 `ip_pool_status` 插入生效记录（audit_status='20'）。
    - `调出` → `deletePoolStatusSoft` 将 `ip_pool_status` 中该证券在该池的 `audit_status='20'` 记录 `is_deleted=1`。
-4. `generateInternalReportsOnFinish`：对每条调库记录查手工上传信评报告附件，若有则新建一条 `sirm_report_in` 内部报告记录并复制附件，标题格式「证券全称 + 调入/调出 + 投资池全路径 + 报告」。
+4. `generateInternalReportsOnFinish`：对每条调库记录查手工上传信评报告附件，若有则新建一条 `rrs_report_in` 内部报告记录并复制附件，标题格式「证券全称 + 调入/调出 + 投资池全路径 + 报告」。
 
 ### 3.4 驳回 / 撤回对池状态的影响
 
@@ -441,7 +441,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
 ### 6.6 流程定义相关表
 
-见 1.1 节，均在 `sirm_flow_definition_schema.sql` 中定义，每张业务表都有同结构 `_evt` 事件表。
+见 1.1 节，均在 `rrs_flow_definition_schema.sql` 中定义，每张业务表都有同结构 `_evt` 事件表。
 
 ---
 
@@ -526,4 +526,4 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 - Service：`SecurityPoolAdjustFlowService.java`（核心流转，`submitAdjustAudit`/`resolveProcessingNodeAuditStatus`/`finishAdjustBatch`）、`SecurityPoolAdjustService.java`（提交与初始步骤）、`MyMattersService.java`、`FlowService.java`
 - Mapper：`SecurityPoolAdjustMapper.xml`、`MyMattersMapper.xml`
 - 实体：`SecurityPoolAdjustAuditReq`、`SecurityPoolAdjustAuditDto`、`IpAdjustStepBo`、`IpAdjustLogBo`、`FlowSnapshot`、`FlowNodeBo`、`FlowEdgeBo`、`NodeApprovalConfigBo`、`NodeApprovalHandlerBo`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`、`sql/sirm_flow_definition_schema.sql`、`sql/sirm_flow_definition_demo_data.sql`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_flow_definition_schema.sql`、`sql/rrs_flow_definition_demo_data.sql`

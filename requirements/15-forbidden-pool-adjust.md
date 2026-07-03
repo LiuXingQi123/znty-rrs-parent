@@ -75,7 +75,7 @@
 ### 2.7 当前所在池两个子块
 
 - **当前主体所在池**（`companyCurrentPools`）：SQL `ip_pool_status ips INNER JOIN dict_security_type ... category_type='company' INNER JOIN ip_investment_pool p`，`WHERE ips.security_code=#{companyCode} AND ips.audit_status='20' AND ips.is_deleted=0`，`ORDER BY entry_time DESC, id DESC`。
-- **当前主体旗下债券所在池**（`companyBondCurrentPools`）：`sirm_securityinfo bond INNER JOIN dict_security_type ... category_type='bond' INNER JOIN ip_pool_status ips ON ips.security_code=bond.wind_code AND ips.audit_status='20'`，`WHERE bond.issuer_code=#{companyCode}`，`GROUP BY target_pool_id`，含 `COUNT(DISTINCT bond.wind_code) AS bondCount`、`MIN(entry_time)` 最早入池日期。每行「查看债券」按钮 → `openCompanyBondDialog` 调 `queryCompanyBondList`。
+- **当前主体旗下债券所在池**（`companyBondCurrentPools`）：`rrs_securityinfo bond INNER JOIN dict_security_type ... category_type='bond' INNER JOIN ip_pool_status ips ON ips.security_code=bond.wind_code AND ips.audit_status='20'`，`WHERE bond.issuer_code=#{companyCode}`，`GROUP BY target_pool_id`，含 `COUNT(DISTINCT bond.wind_code) AS bondCount`、`MIN(entry_time)` 最早入池日期。每行「查看债券」按钮 → `openCompanyBondDialog` 调 `queryCompanyBondList`。
 - 池名通过 `investmentPoolService.queryPoolFullNameMap()` 填全路径。
 
 ---
@@ -174,7 +174,7 @@ syncCompanyBondsOnDirect(companyLog):
 | `ip_adjust_log` | INSERT（主体记录 + 旗下债券自动调整记录） | security_code(=companyCode 或 bond.windCode), adjust_type(手工调整/联动调整/互斥调整/**自动调整**), adjust_mode, adjust_batch_no, target_pool_id, pool_type(forbidden/observe/blacklist), flow_id/key/type, **audit_status**(00 或 20), adjuster_id/name, submit_time |
 | `ip_pool_status` | INSERT（调入生效）/ UPDATE 软删（调出生效） | security_code, adjust_log_id, target_pool_id, pool_type, **audit_status='20'**, entry_time, is_deleted |
 | `ip_adjust_step` | INSERT（初始 3 步 + 审批时按需创建） | adjust_log_id, adjust_batch_no, flow_node_id, node_type, approval_strategy, **step_status**(pending/auto_process/submit), handler_id/name |
-| `sirm_securityinfo` | 读（主体行 `category_type='company'`，债券行 `category_type='bond'`，关联 `issuer_code`） | wind_code, short_name, full_name, security_type, comp_type, industry_name/2, rating_bondissuer, rating_outlook, inner_issuer_rating, issuer_code |
+| `rrs_securityinfo` | 读（主体行 `category_type='company'`，债券行 `category_type='bond'`，关联 `issuer_code`） | wind_code, short_name, full_name, security_type, comp_type, industry_name/2, rating_bondissuer, rating_outlook, inner_issuer_rating, issuer_code |
 | `sys_attachment` | 绑定/复制附件 | adjustLogId, attachment_category(credit_report_hand/material_hand) |
 | `wf_flow_*` | 只读（构建流程快照） | — |
 
@@ -217,7 +217,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 `approval_strategy`：preempt=抢占 / all=会签 / initiator=发起人；`step_status`：pending/approve/reject/submit/auto_process/canceled；`process_action`：submit/approve/reject/auto_process/skipped。
 
-### 5.4 `sirm_securityinfo` + `dict_security_type`
+### 5.4 `rrs_securityinfo` + `dict_security_type`
 
 主体行 `dict_security_type.category_type='company'`，债券行 `category_type='bond'`，通过 `issuer_code` 关联。主体信息在禁投池调整中**全部只读**，不在提交时更新。
 
@@ -284,5 +284,5 @@ syncCompanyBondsOnDirect(companyLog):
 - Service：`ForbiddenPoolAdjustService.java`（`queryCompanyPage`/`queryCompanyDetail`/`queryCompanyPoolStatus`/`queryCompanyBondList`/`checkCompanyAdjust`/`addCompanyAdjustLog`/`checkAdjust`/`addAdjustLog`/`checkIn/OutConditions`/`isDirectFlow`/`createInitialSteps`/`buildAdjustBatchNo`/`syncCompanyBondsOnDirect`/`buildCompanyBondAutoLog`，`ALLOWED_MANUAL_POOL_IDS={15L,16L,17L}`）
 - Mapper：`ForbiddenPoolAdjustMapper.java` / `ForbiddenPoolAdjustMapper.xml`
 - 实体：`entity/forbiddenpooladjust/`（`ForbiddenPoolAdjustReq`/`Dto`（含内部类 `CompanyBondCount`/`PoolStatus`/`CompanyBond`/`PoolStatusBundle`）/`CheckReq`/`SubmitReq`/`SubmitDto`）；复用 `entity/securitypooladjust/`（`AdjustCheckDto`/`AdjustCheckReq`/`AdjustLogDto`/`AdjustSubmitDto`/`IpAdjustStepDto`/`PoolDto`/`SecurityPoolAdjustSubmitReq`）
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（共享 `sirm_securityinfo`/`ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`）、`sql/sirm_pool_init_schema.sql`（`ip_investment_pool`/`ip_pool_relation`）、`sql/sirm_dict_schema.sql`（`dict_security_type`）、`sql/sirm_flow_definition_schema.sql`（流程表）
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（共享 `rrs_securityinfo`/`ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`）、`sql/rrs_pool_init_schema.sql`（`ip_investment_pool`/`ip_pool_relation`）、`sql/rrs_dict_schema.sql`（`dict_security_type`）、`sql/rrs_flow_definition_schema.sql`（流程表）
 - 测试：`ForbiddenPoolAdjustApiTest.java`、`ForbiddenPoolAdjustServiceTest.java`

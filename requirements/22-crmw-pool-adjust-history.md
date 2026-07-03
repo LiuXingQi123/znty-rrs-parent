@@ -132,4 +132,4 @@ ORDER BY al.submit_time DESC, al.id DESC
 - Service：`CrmwPoolAdjustHistoryService.java`（`queryCrmwPoolAdjustHistoryPage`、`fillPoolFullName`）
 - Mapper：`CrmwPoolAdjustHistoryMapper.java` / `resources/mapper/CrmwPoolAdjustHistoryMapper.xml`
 - 实体：`entity/crmwpoolhistory/CrmwPoolAdjustHistoryReq.java`、`CrmwPoolAdjustHistoryDto.java`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（`ip_adjust_log`）
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（`ip_adjust_log`）

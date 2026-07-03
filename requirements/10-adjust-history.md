@@ -118,7 +118,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 |---|---|---|
 | `ip_adjust_log` | 证券池调库记录（主表） | id, security_code, security_short_name, security_type, adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name, pool_type, flow_id, audit_status, adjuster_id, adjuster_name, adjust_reason, submit_time, entry_time, is_deleted |
 | `ip_investment_pool` | 投资池定义（树/全路径/名称） | id, parent_id, pool_name, pool_type, outer_sort, inner_sort, status, is_deleted |
-| `sirm_securityinfo` | 证券基础信息 | wind_code, issuer, full_name, maturity_date |
+| `rrs_securityinfo` | 证券基础信息 | wind_code, issuer, full_name, maturity_date |
 | `dict_security_type` | 证券类型字典 | security_type, security_type_name, sort_order, is_deleted |
 
 ### 7.2 可见数据范围控制
@@ -130,7 +130,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 - **主表**：`ip_adjust_log al`
 - **JOIN**：
   - `LEFT JOIN ip_investment_pool p ON p.id=al.target_pool_id AND p.is_deleted=0`（带删除过滤，与证券池查询不同）
-  - `LEFT JOIN sirm_securityinfo sb ON sb.wind_code=al.security_code`
+  - `LEFT JOIN rrs_securityinfo sb ON sb.wind_code=al.security_code`
   - `LEFT JOIN dict_security_type dst ON dst.security_type=al.security_type AND dst.is_deleted=0`
 - **WHERE**：仅 `al.is_deleted=0`（不限 audit_status，含全量历史）；本接口不按证券状态筛选（无 securityStatus 参数）
   - `adjustTimeEnd` 后端补 `CONCAT(#{adjustTimeEnd}, ' 23:59:59')`，start 直接用日期串
@@ -161,4 +161,4 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 - Service：`AdjustHistoryService.java`、`InvestmentPoolService.java`
 - Mapper：`AdjustHistoryMapper.xml`、`CommonMapper.xml`
 - 实体：`AdjustHistoryDto`、`AdjustHistoryReq`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（ip_adjust_log）
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log）

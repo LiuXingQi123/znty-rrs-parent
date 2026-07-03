@@ -28,7 +28,7 @@
 | `issuer` | el-input | 模糊 |
 
 - 接口：`POST /api/v1/crmwPoolAdjust/queryCrmwPage`，请求体 `{ securityCode, securityShortName, issuer, pageIndex, pageSize }`，返回 `PageResult<SecurityInfoDto>`。
-- SQL（`queryCrmwPage`）：`FROM sirm_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type='crmw'`，按 `wind_code`/`short_name`/`issuer` 模糊，`ORDER BY si.id DESC`。
+- SQL（`queryCrmwPage`）：`FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type='crmw'`，按 `wind_code`/`short_name`/`issuer` 模糊，`ORDER BY si.id DESC`。
 - 分页：`crmwPagination: {pageIndex:1, pageSize:5, total:0}`，`page-sizes=[5,10,20,50]`。
 
 ### 2.2 可绑定证券列表（`searchForm`）
@@ -125,7 +125,7 @@
    - **直通**：`buildAdjustLog` → `auditStatus=APPROVED('20')` → `addAdjustLog`（写 `ip_adjust_log`）→ `bindSubmitAttachments` → 手工项 `createInitialSteps` → `addPoolStatus`（写 `ip_pool_status_crmw`，`audit_status='20'` 即时生效）。
    - **非直通**：`auditStatus=SUBMITTED('00')` → `addAdjustLog` → `bindSubmitAttachments` → `createInitialSteps`（返回 true 即流程已到 end，升 `'20'` + `addPoolStatus`）。
 4. **调出处理** `executeOutboundSubmit`：对称，生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE security_code AND target_pool_id AND audit_status='20' AND pool_type='crmw'`）。
-5. **后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` → `editSecurityInfoForAdjust`（全量更新 `sirm_securityinfo` 约 80 字段）。
+5. **后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` → `editSecurityInfoForAdjust`（全量更新 `rrs_securityinfo` 约 80 字段）。
 
 **批次号规则** `buildAdjustBatchNo`：
 - 无流程：`"CRMW" + batchTimeText + (3000 + ++noFlowBatchSeq)`
@@ -176,7 +176,7 @@
 
 ### 5.4 其他
 
-`ip_investment_pool`（过滤 `pool_type='crmw'`）、`ip_pool_relation`、`sirm_securityinfo`、`dict_security_type`、`wf_flow_*`（流程定义，只读构建快照）、`sys_attachment`。
+`ip_investment_pool`（过滤 `pool_type='crmw'`）、`ip_pool_relation`、`rrs_securityinfo`、`dict_security_type`、`wf_flow_*`（流程定义，只读构建快照）、`sys_attachment`。
 
 ---
 
@@ -231,5 +231,5 @@
 - Service：`CrmwPoolAdjustService.java`（`checkCrmwAdjust`、`addCrmwAdjustLog`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`、`resolveAdjustFlowOptions`）
 - Mapper：`CrmwPoolAdjustMapper.java` / `resources/mapper/CrmwPoolAdjustMapper.xml`
 - 实体：`entity/crmwpooladjust/`（`CrmwPoolAdjustReq`、`CrmwPoolAdjustSubmitReq`、`AdjustCheckReq`、`AdjustCheckDto`、`AdjustSubmitDto`、`AdjustLogDto`、`PoolDto`、`SecurityInfoDto`、`SecurityInfoDetailDto`、`SecurityPoolStatusDto`、`IpAdjustStepDto` 等）
-- SQL：`sql/sirm_crmw_pool_status_schema.sql`、`sql/sirm_security_pool_adjust_schema.sql`（`ip_adjust_log`）、`sql/sirm_pool_init_schema.sql`（`ip_pool_relation`）
+- SQL：`sql/rrs_crmw_pool_status_schema.sql`、`sql/rrs_security_pool_adjust_schema.sql`（`ip_adjust_log`）、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）
 - 测试：`CrmwPoolAdjustApiTest.java`

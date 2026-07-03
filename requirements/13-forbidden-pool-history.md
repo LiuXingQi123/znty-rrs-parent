@@ -110,7 +110,7 @@
 涉及表：
 - `ip_adjust_log`（证券池调库记录表）：每次调库申请的流水。
 - `ip_investment_pool`（投资池主表）：过滤 `pool_type='forbidden'`。
-- `sirm_securityinfo`（证券信息表）：关联 `wind_code = al.security_code`，提供 `issuer/issuer_code`。
+- `rrs_securityinfo`（证券信息表）：关联 `wind_code = al.security_code`，提供 `issuer/issuer_code`。
 - **未关联** `dict_security_type`（历史页 DTO 不返回证券类型，表格也无证券类型列）。
 
 **主查询 SQL**（`ForbiddenPoolHistoryMapper.xml`）：
@@ -122,7 +122,7 @@ FROM ip_adjust_log al
 INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
                                  AND p.is_deleted = 0
                                  AND p.pool_type = 'forbidden'
-LEFT JOIN sirm_securityinfo bi ON bi.wind_code = al.security_code
+LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
 <where>
     al.is_deleted = 0
     <if companyCode>   AND bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%') </if>
@@ -139,7 +139,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 ```
 
 特点：
-- 主体代码/名称通过 `sirm_securityinfo` 的 `issuer_code`/`issuer` 模糊匹配，即按发行主体反查该主体下所有证券的禁投池调整记录。
+- 主体代码/名称通过 `rrs_securityinfo` 的 `issuer_code`/`issuer` 模糊匹配，即按发行主体反查该主体下所有证券的禁投池调整记录。
 - 排序按 `submit_time DESC, id DESC`。
 - `target_pool_name` 同样被 Service 覆盖为全路径名。
 - **无可见数据范围/权限校验**。
@@ -158,7 +158,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 | 证券名称/代码 | 可点击跳详情 | **仅样式，不可点击** |
 | 接口数 | 2（分页 + 类型下拉） | 1（仅分页） |
 
-两页**共享** `ip_investment_pool`（用 `pool_type='forbidden'` 过滤）与 `sirm_securityinfo`，但主数据表不同：查询页看「当前状态」，历史页看「调整流水」。
+两页**共享** `ip_investment_pool`（用 `pool_type='forbidden'` 过滤）与 `rrs_securityinfo`，但主数据表不同：查询页看「当前状态」，历史页看「调整流水」。
 
 ---
 
@@ -182,4 +182,4 @@ ORDER BY al.submit_time DESC, al.id DESC
 - Service：`ForbiddenPoolHistoryService.java`（`queryForbiddenPoolHistoryPage`、`fillPoolFullName`）
 - Mapper：`ForbiddenPoolHistoryMapper.xml`
 - 实体：`ForbiddenPoolHistoryReq`、`ForbiddenPoolHistoryDto`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（ip_adjust_log）、`sql/sirm_pool_init_schema.sql`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log）、`sql/rrs_pool_init_schema.sql`

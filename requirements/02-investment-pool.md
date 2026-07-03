@@ -178,7 +178,7 @@
 
 ## 5. 关键数据库表
 
-来源 `sirm_pool_init_schema.sql`。每业务表配同结构 `_evt` 审计表（增 `evt_id/opter_id/opt_time/oprt_type`，oprt_type 存中文：新增/删除/修改/审核）。逻辑删除 `is_deleted TINYINT(1)`。
+来源 `rrs_pool_init_schema.sql`。每业务表配同结构 `_evt` 审计表（增 `evt_id/opter_id/opt_time/oprt_type`，oprt_type 存中文：新增/删除/修改/审核）。逻辑删除 `is_deleted TINYINT(1)`。
 
 ### 5.1 `ip_investment_pool`（投资池主表）
 
@@ -275,4 +275,4 @@
 - Service：`InvestmentPoolService.java`（`queryPoolList/Detail`、`addRootPool`、`addChildPool`、`editPoolConfig`、`editPoolRelation`、`editPoolPermission`、`deletePoolNode`、`syncNormalized`、`fillRelationConfig`/`fillAutoRuleConfig`/`fillPermissionConfig`）
 - Mapper：`InvestmentPoolMapper.xml`
 - 实体：`InvestmentPoolReq`、`InvestmentPoolDto`、`InvestmentPoolBo`、`PoolPermissionBo`、`FlowOptionDto`、`RoleDto`、`UserDto`
-- SQL：`sql/sirm_pool_init_schema.sql`、`sql/sirm_pool_init_demo_data.sql`
+- SQL：`sql/rrs_pool_init_schema.sql`、`sql/rrs_pool_init_demo_data.sql`

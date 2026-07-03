@@ -89,7 +89,7 @@
 
 ## 5. 关键数据库表
 
-view 模式纯读：`sirm_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip_investment_pool`/`ip_adjust_log`/`wf_flow_definition`/`ip_adjust_step`/`sys_attachment`。adjust 模式提交时写 `ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`/`sys_attachment`，与 [15] 完全一致（含 `syncCompanyBondsOnDirect`）。
+view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip_investment_pool`/`ip_adjust_log`/`wf_flow_definition`/`ip_adjust_step`/`sys_attachment`。adjust 模式提交时写 `ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`/`sys_attachment`，与 [15] 完全一致（含 `syncCompanyBondsOnDirect`）。
 
 ---
 
@@ -131,5 +131,5 @@ view 模式纯读：`sirm_securityinfo`/`dict_security_type`/`ip_pool_status`/`i
 - Service：`ForbiddenPoolAdjustService.java`（详情查询方法 + adjust 模式 `checkCompanyAdjust`/`addCompanyAdjustLog`/`addAdjustLog`/`createInitialSteps`/`syncCompanyBondsOnDirect`）
 - Mapper：`ForbiddenPoolAdjustMapper.java` / `ForbiddenPoolAdjustMapper.xml`
 - 实体：同 [15]（`ForbiddenPoolAdjustReq/Dto/CheckReq/SubmitReq/SubmitDto` + 复用 `AdjustLogDto/IpAdjustStepDto/PoolDto`）
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（共享表结构）
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（共享表结构）
 - 测试：`ForbiddenPoolAdjustApiTest.java`

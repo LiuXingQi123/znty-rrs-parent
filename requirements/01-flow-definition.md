@@ -227,7 +227,7 @@
 
 ## 6. 关键数据库表
 
-数据库 22 张表（11 业务表 + 11 `_evt` 事件表），定义于 `sirm_flow_definition_schema.sql`。每业务表配同结构 `_evt` 审计表（增 `evt_id/opter_id/opt_time/oprt_type`）。
+数据库 22 张表（11 业务表 + 11 `_evt` 事件表），定义于 `rrs_flow_definition_schema.sql`。每业务表配同结构 `_evt` 审计表（增 `evt_id/opter_id/opt_time/oprt_type`）。
 
 | 表 | 用途 | 关键字段/枚举 |
 |---|---|---|
@@ -305,4 +305,4 @@
 - Service：`FlowService.java`（`queryFlowPage`、`addFlow`、`editFlowDraft`、`editFlowToPublished`、`validateBeforePublish`、`syncNormalized`、`editFlowStatus`、`queryFlowVersionList/Detail`）
 - Mapper：`FlowMapper.xml`
 - 实体：`FlowReq`、`DesignerReq`、`FlowDto`、`VersionDto`、`CanvasNodeDto`、`CanvasEdgeDto`、`RoleDto`、`UserDto`、`NodeApprovalConfigBo`、`NodeApprovalHandlerBo`、`EdgeCondRuleBo`
-- SQL：`sql/sirm_flow_definition_schema.sql`、`sql/sirm_flow_definition_demo_data.sql`
+- SQL：`sql/rrs_flow_definition_schema.sql`、`sql/rrs_flow_definition_demo_data.sql`

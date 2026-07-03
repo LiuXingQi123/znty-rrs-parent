@@ -110,12 +110,12 @@ finishAdjustBatch(step):
     if log.adjustMode == '调入': addPoolStatus(log)
     elif log.adjustMode == '调出': deletePoolStatusSoft(log.securityCode, log.targetPoolId)
     syncCompanyBonds(log)                       // ★ 主体级特有：同步旗下全部债券
-  generateInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 sirm_report_in
+  generateInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 rrs_report_in
 ```
 
 `syncCompanyBonds`（与 `syncCompanyBondsOnDirect` 同构）：仅 `categoryType==='company'` 触发；查 `queryCompanyBondForAutoList(companyLog.securityCode)` 全部旗下债券；逐条判断是否已在/不在目标池，跳过冗余；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。
 
-`generateInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `sirm_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
+`generateInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `rrs_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
 
 ### 3.7 驳回/撤回对池状态影响
 
@@ -155,7 +155,7 @@ finishAdjustBatch(step):
 | `ip_adjust_step` | UPDATE（`editAdjustStepProcess` 乐观锁 / `editOtherPendingStepSkipped`）/ INSERT（`addAdjustStep` 创建下一步 pending / 终止分支 auto_process） | id, step_status, process_action, process_comment, process_time |
 | `ip_adjust_log` | UPDATE（`editAdjustLogAuditStatus` 按 adjustBatchNo 批量更新 `audit_status`+`audit_time`）；INSERT（旗下债券自动调整记录） | adjust_batch_no, audit_status, adjust_type(自动调整) |
 | `ip_pool_status` | INSERT（调入生效）/ UPDATE 软删（调出生效） | security_code, target_pool_id, pool_type, audit_status='20', is_deleted |
-| `sirm_report_in` | INSERT（`generateInternalReportsOnFinish` 审批通过后沉淀手工信评报告） | report_title, report_type, security_code, company_code, data_source='uploaded' |
+| `rrs_report_in` | INSERT（`generateInternalReportsOnFinish` 审批通过后沉淀手工信评报告） | report_title, report_type, security_code, company_code, data_source='uploaded' |
 | `wf_flow_*` | 只读（构建 FlowSnapshot） | 流程定义/版本/节点/连线/审批配置/处理人/角色 |
 | `sys_attachment` | 绑定/复制附件 | adjustLogId, attachment_category |
 
@@ -228,5 +228,5 @@ finishAdjustBatch(step):
 - Service：`ForbiddenPoolAdjustFlowService.java`（`submitAdjustAudit`/`validateAuditReq`/`resolveActualProcessStep`/`validatePendingStep`/`validateSubmitterCannotProcess`/`applyAttachmentChangesForModifySubmit`/`processAdjustAudit`/`resolveProcessingNodeAuditStatus`/`advanceToNextAvailableStep`/`createTerminalEndStep`/`finishAdjustBatch`/`syncCompanyBonds`/`buildCompanyBondAutoLog`/`generateInternalReportsOnFinish`/`resolveReportType`/`buildFlowSnapshot`，`ADMIN_USER_ID='1001'`）
 - Mapper：复用 `ForbiddenPoolAdjustMapper.java` / `.xml`（审批用 `queryAdjustStepById`/`editAdjustStepProcess`/`editOtherPendingStepSkipped`/`queryPendingStepCountByNode`/`queryAdjustLogListForAudit`/`editAdjustLogAuditStatus`/`addAdjustStep`/`addPoolStatus`/`deletePoolStatusSoft`/`queryCompanyBondForAutoList`/`querySecurityCurrentPoolIdList`/`querySecurityBoByCode`/`queryCategoryTypeBySecurityType`）
 - 复用实体：`entity/securitypooladjustflow/SecurityPoolAdjustAuditReq/Dto`、`entity/bo/`（`IpAdjustStepBo`/`IpAdjustLogBo`/`FlowSnapshot`/`FlowNodeBo`/`FlowEdgeBo`/`NodeApprovalConfigBo`/`NodeApprovalHandlerBo`/`SysAttachmentBo`/`ReportInBo`/`SecurityInfoBo`）
-- SQL：同 [15]（`sirm_security_pool_adjust_schema.sql` + `sirm_flow_definition_schema.sql`）
+- SQL：同 [15]（`rrs_security_pool_adjust_schema.sql` + `rrs_flow_definition_schema.sql`）
 - 测试：`ForbiddenPoolAdjustFlowServiceTest.java`

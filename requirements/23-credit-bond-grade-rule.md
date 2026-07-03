@@ -48,7 +48,7 @@
 **CRUD 操作**（仅 2 个接口，无单条增删改、无启用/停用单条规则）：
 - 查询矩阵：`queryGradeRuleMatrix`（只读）
 - 保存矩阵：`editGradeRuleMatrix`（`@Transactional`）——**全量替换**：`buildRulesForSave` 校验+去重+组装 → `deleteAllRule()`（`DELETE FROM credit_bond_pool_grade_rule`，硬删除全部）→ `addRuleList(rules)`（批量 INSERT）。保存后再次 `queryGradeRuleMatrix` 返回最新矩阵。
-- 期限分组、主体内评分档、投资池本身**均不在本页面维护**，由 SQL 演示数据预置（`sirm_credit_bond_grade_rule_demo_data.sql`）。
+- 期限分组、主体内评分档、投资池本身**均不在本页面维护**，由 SQL 演示数据预置（`rrs_credit_bond_grade_rule_demo_data.sql`）。
 
 **前端编辑态**：每个单元格用 `el-popover` + `el-tree`（`show-checkbox check-strictly default-expand-all`）多选投资池；`filterValidPoolIds` 过滤掉根节点 `credit_bond_root`；`handlePoolTreeCheckChange` 即时同步 `matrixMap`；`removeCellPool` 支持标签直接移除。`collectRules()` 展开矩阵为 `[{termBucketId, innerRatingGradeId, poolId}]` 保存参数。
 
@@ -69,7 +69,7 @@
 
 ## 5. 关键数据库表
 
-建表脚本 `sql/sirm_credit_bond_grade_rule_schema.sql`，演示数据 `sql/sirm_credit_bond_grade_rule_demo_data.sql`。无物理外键，靠应用层维护。
+建表脚本 `sql/rrs_credit_bond_grade_rule_schema.sql`，演示数据 `sql/rrs_credit_bond_grade_rule_demo_data.sql`。无物理外键，靠应用层维护。
 
 | 表 | 用途 | 关键字段 |
 |---|---|---|
@@ -120,4 +120,4 @@
 - Service：`service/CreditBondGradeRuleService.java`（`queryGradeRuleMatrix`、`editGradeRuleMatrix`、`buildMatrixDto`、`buildRulesForSave`、`buildTermBucketMap`/`buildRatingGradeMap`/`buildPoolMap`）
 - Mapper：`mapper/CreditBondGradeRuleMapper.java` / `resources/mapper/CreditBondGradeRuleMapper.xml`
 - 实体：`entity/creditbondgraderule/CreditBondGradeRuleDto.java`（含静态内部类 `TermBucketItem`/`InnerRatingGradeItem`/`PoolOptionItem`/`RuleItem`）、`entity/creditbondgraderule/CreditBondGradeRuleReq.java`（含 `RuleItem`）；`entity/bo/CreditBondTermBucketBo.java`、`CreditBondInnerRatingGradeBo.java`、`CreditBondPoolGradeRuleBo.java`、`InvestmentPoolBo.java`
-- SQL：`sql/sirm_credit_bond_grade_rule_schema.sql`、`sql/sirm_credit_bond_grade_rule_demo_data.sql`
+- SQL：`sql/rrs_credit_bond_grade_rule_schema.sql`、`sql/rrs_credit_bond_grade_rule_demo_data.sql`

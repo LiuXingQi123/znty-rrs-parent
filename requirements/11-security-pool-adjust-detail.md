@@ -216,4 +216,4 @@
 - Controller：`SecurityPoolAdjustController.java`、`SecurityPoolAdjustFlowController.java`
 - Service：`SecurityPoolAdjustService.java`（查询/校验/提交/`createInitialSteps`）、`SecurityPoolAdjustFlowService.java`（修改节点重新提交/`resolveProcessingNodeAuditStatus`/`applyAttachmentChangesForModifySubmit`）
 - Mapper：`SecurityPoolAdjustMapper.xml`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`

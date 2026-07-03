@@ -154,7 +154,7 @@ this.loadList();                  // 列表数据
 |---|---|---|
 | `ip_pool_status` | 投资池当前状态（主表） | id, security_code, security_short_name, security_type, target_pool_id, target_pool_name, adjust_batch_no, audit_status, adjuster_name, entry_time, is_deleted |
 | `ip_investment_pool` | 投资池定义（树/全路径/名称） | id, parent_id, pool_code, pool_name, pool_type, pool_level, outer_sort, inner_sort, status, is_deleted |
-| `sirm_securityinfo` | 证券基础信息（利率/发行主体/到期日等） | wind_code, issuer, full_name, coupon_rate, firstissue_date, carry_date, maturity_date, delist_date, repurchase_date |
+| `rrs_securityinfo` | 证券基础信息（利率/发行主体/到期日等） | wind_code, issuer, full_name, coupon_rate, firstissue_date, carry_date, maturity_date, delist_date, repurchase_date |
 | `dict_security_type` | 证券类型字典 | security_type, security_type_name, category_type, sort_order, is_deleted |
 | `my_security_pool` | 用户自选证券（收藏） | id, security_code, security_type, market, user_id, status(use/del), create_time, update_time |
 
@@ -168,7 +168,7 @@ this.loadList();                  // 列表数据
 - **主表**：`ip_pool_status ips`
 - **JOIN**：
   - `LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id`（取池名称，注意此 JOIN 未带 `p.is_deleted=0`）
-  - `LEFT JOIN sirm_securityinfo bi ON ips.security_code = bi.wind_code`（取证券基础信息）
+  - `LEFT JOIN rrs_securityinfo bi ON ips.security_code = bi.wind_code`（取证券基础信息）
   - `LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted=0`（取证券类型名称）
   - `LEFT JOIN my_security_pool mbp ON ips.security_code = mbp.security_code AND mbp.user_id=#{currentUserId} AND mbp.status='use'`（取收藏 ID，用户隔离）
 - **WHERE 条件构造**：固定 `ips.is_deleted=0 AND ips.audit_status='20'`；动态条件用 `<if>`：
@@ -210,4 +210,4 @@ this.loadList();                  // 列表数据
 - Service：`SecurityPoolQueryService.java`、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
 - Mapper：`SecurityPoolQueryMapper.xml`、`CommonMapper.xml`、`MySecurityPoolMapper.xml`、`InvestmentPoolMapper.xml`
 - 实体：`SecurityPoolQueryDto`、`SecurityPoolQueryReq`、`SecurityTypeOptionDto`、`PoolTreeDto`、`MySecurityPoolBo`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/sirm_my_security_pool_schema.sql`、`sql/sirm_dict_schema.sql`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/rrs_my_security_pool_schema.sql`、`sql/rrs_dict_schema.sql`

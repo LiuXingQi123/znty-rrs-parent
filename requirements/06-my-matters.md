@@ -173,4 +173,4 @@ window.location.href = page + '?' + params.toString();
 - Service：`MyMattersService.java`、`InvestmentPoolService.java`
 - Mapper：`MyMattersMapper.xml`
 - 实体：`MyMattersDto`、`MyMattersReq`、`FlowOptionDto`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（ip_adjust_log / ip_adjust_step）、`sql/sirm_flow_definition_schema.sql`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log / ip_adjust_step）、`sql/rrs_flow_definition_schema.sql`

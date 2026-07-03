@@ -122,7 +122,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 | 维度 | 主体池查询 | 证券池查询（SecurityPoolQuery） |
 |---|---|---|
 | category_type 过滤 | `='company'`（INNER JOIN dict） | 不过滤，全部证券类型 |
-| 关联 sirm_securityinfo | 否 | 是（取 issuer/评级/到期/票面/全称等） |
+| 关联 rrs_securityinfo | 否 | 是（取 issuer/评级/到期/票面/全称等） |
 | 字段口径 | `security_short_name`→主体名称 | `security_short_name`→证券简称，另带 `issuer` |
 | 证券状态筛选 | 无 | 有（active/matured，按 maturity_date 与 CURDATE 比较） |
 | 发行主体筛选 | 无 | 有（issuer LIKE） |
@@ -130,7 +130,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 | 「我的」过滤 | 无 | 有（mySecurities + currentUserId，联 my_security_pool） |
 | 收藏功能 | 无 | 有 |
 
-核心区别：主体池 = 证券池的「主体子集」视图。两者**共用同一物理表** `ip_pool_status`，区别仅在 SQL 是否 JOIN `dict_security_type` 并限定 `category_type='company'`。主体被当作一类 `security_type='company'` 的伪证券登记入池。主体池是简化版：不联 `sirm_securityinfo`（主体没有到期日/票面利率等债券属性），因此没有证券状态、发行主体、证券类型、收藏等筛选。
+核心区别：主体池 = 证券池的「主体子集」视图。两者**共用同一物理表** `ip_pool_status`，区别仅在 SQL 是否 JOIN `dict_security_type` 并限定 `category_type='company'`。主体被当作一类 `security_type='company'` 的伪证券登记入池。主体池是简化版：不联 `rrs_securityinfo`（主体没有到期日/票面利率等债券属性），因此没有证券状态、发行主体、证券类型、收藏等筛选。
 
 ## 7. 验收标准
 
@@ -145,4 +145,4 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 - Service：`CompanyPoolQueryService.java`（`queryCompanyPoolPage`、`fillPoolFullName`）、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
 - Mapper：`CompanyPoolQueryMapper.xml`、`CommonMapper.xml`
 - 实体：`CompanyPoolQueryReq`、`CompanyPoolQueryDto`、`PoolTreeDto`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/sirm_dict_schema.sql`（dict_security_type）、`sql/sirm_pool_init_schema.sql`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/rrs_dict_schema.sql`（dict_security_type）、`sql/rrs_pool_init_schema.sql`

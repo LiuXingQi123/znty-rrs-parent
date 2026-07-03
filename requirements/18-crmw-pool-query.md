@@ -123,4 +123,4 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 - Service：`CrmwPoolQueryService.java`（`queryCrmwPoolPage`、`fillPoolFullName`）
 - Mapper：`CrmwPoolQueryMapper.java` / `resources/mapper/CrmwPoolQueryMapper.xml`
 - 实体：`entity/crmwpoolquery/CrmwPoolQueryReq.java`、`CrmwPoolQueryDto.java`
-- SQL：`sql/sirm_crmw_pool_status_schema.sql`、`sql/sirm_crmw_pool_status_demo_data.sql`
+- SQL：`sql/rrs_crmw_pool_status_schema.sql`、`sql/rrs_crmw_pool_status_demo_data.sql`

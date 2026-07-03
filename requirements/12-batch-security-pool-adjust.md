@@ -201,7 +201,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 | `ip_adjust_step` | `addAdjustStep`(每步一条，审批节点按处理人展开多条) | adjust_log_id, adjust_batch_no, flow_node_id, node_code/label/type, approval_strategy, sort_order, step_status(pending/submit/auto_process), handler_id/name, process_action, start_time/process_time |
 | `sys_attachment` | `bindAttachments` / `copyReportAttachments` | table_name='ip_adjust_log', main_id=日志ID, attachment_category(credit_report_hand/material_hand/credit_report_in/out/...), file_type, original/new_file_name, file_size, content_type, full_url |
 
-查询用到的表：`ip_investment_pool`（投资池，status='enabled' 且无启用子节点=叶子池）、`ip_pool_relation`（池关系）、`ip_pool_permission`（权限）、`sirm_securityinfo`（证券基础信息）、`wf_flow_definition/version/node/edge` 等（流程快照）。
+查询用到的表：`ip_investment_pool`（投资池，status='enabled' 且无启用子节点=叶子池）、`ip_pool_relation`（池关系）、`ip_pool_permission`（权限）、`rrs_securityinfo`（证券基础信息）、`wf_flow_definition/version/node/edge` 等（流程快照）。
 
 ---
 
@@ -298,4 +298,4 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 - Service：`BatchSecurityPoolAdjustService.java`（编排层）、`SecurityPoolAdjustService.java`（被复用的单笔服务）、`SysAttachmentService.java`
 - Mapper：`BatchSecurityPoolAdjustMapper.java` / `BatchSecurityPoolAdjustMapper.xml`
 - 实体：`BatchSecurityPoolAdjustReq`、`BatchSecurityInboundAdjustReq`、`BatchSecurityInboundAdjustDto`、`BatchSecurityPoolDto`、`BatchSecurityCandidateDto`
-- SQL：`sql/sirm_security_pool_adjust_schema.sql`、`sql/sirm_pool_init_schema.sql`、`sql/sirm_sys_attachment_schema.sql`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_pool_init_schema.sql`、`sql/rrs_sys_attachment_schema.sql`
