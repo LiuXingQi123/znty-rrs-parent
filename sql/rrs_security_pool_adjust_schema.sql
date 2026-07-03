@@ -5,7 +5,7 @@
 -- ============================================================
 
 USE
-znty_sirm;
+znty_rrs;
 SET NAMES utf8mb4;
 SET
 FOREIGN_KEY_CHECKS = 0;
@@ -13,12 +13,12 @@ FOREIGN_KEY_CHECKS = 0;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `sirm_securityinfo`;
+DROP TABLE IF EXISTS `rrs_securityinfo`;
 
 -- ----------------------------------------------------------------------------
 -- 1. 证券信息表
 -- ----------------------------------------------------------------------------
-CREATE TABLE `sirm_securityinfo`
+CREATE TABLE `rrs_securityinfo`
 (
     `id`                         BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
 

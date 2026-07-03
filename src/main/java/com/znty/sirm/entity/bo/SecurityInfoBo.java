@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.util.Date;
 
 /**
- * 证券信息业务对象，对应 sirm_securityinfo 表
+ * 证券信息业务对象，对应 rrs_securityinfo 表
  */
 @Data
 public class SecurityInfoBo {

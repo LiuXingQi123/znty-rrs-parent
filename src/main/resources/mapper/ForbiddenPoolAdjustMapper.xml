@@ -19,7 +19,7 @@
                ,si.rating_bondissuer_agency
                ,si.inner_issuer_rating AS companyInnerRating
                ,si.ts
-        FROM sirm_securityinfo si
+        FROM rrs_securityinfo si
         INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'company'
@@ -66,7 +66,7 @@
                ,si.rating_bondissuer_agency
                ,si.inner_issuer_rating AS companyInnerRating
                ,si.ts
-        FROM sirm_securityinfo si
+        FROM rrs_securityinfo si
         INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'company'
@@ -76,7 +76,7 @@
     <!-- 根据代码查询证券信息实体，主体提交与自动债券调整共用 -->
     <select id="querySecurityBoByCode" resultType="com.znty.sirm.entity.bo.SecurityInfoBo">
         SELECT *
-        FROM sirm_securityinfo
+        FROM rrs_securityinfo
         WHERE wind_code = #{securityCode}
     </select>
 
@@ -84,7 +84,7 @@
     <select id="queryCompanyBondCountList" resultType="com.znty.sirm.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBondCount">
         SELECT bond.issuer_code AS companyCode
                ,COUNT(DISTINCT bond.wind_code) AS bondCount
-        FROM sirm_securityinfo bond
+        FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
@@ -123,7 +123,7 @@
                ,ips.pool_type
                ,COUNT(DISTINCT bond.wind_code) AS bondCount
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
-        FROM sirm_securityinfo bond
+        FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
@@ -154,7 +154,7 @@
                ,ips.target_pool_id
                ,p.pool_name
                ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
-        FROM sirm_securityinfo bond
+        FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
@@ -171,7 +171,7 @@
     <!-- 查询主体旗下全部债券 -->
     <select id="queryCompanyBondForAutoList" resultType="com.znty.sirm.entity.bo.SecurityInfoBo">
         SELECT bond.*
-        FROM sirm_securityinfo bond
+        FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
@@ -264,11 +264,11 @@
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
                ,COUNT(DISTINCT ips.security_code) AS bondCount
         FROM ip_pool_status ips
-        INNER JOIN sirm_securityinfo sb ON ips.security_code = sb.wind_code
+        INNER JOIN rrs_securityinfo sb ON ips.security_code = sb.wind_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
         WHERE sb.issuer = (
-            SELECT issuer FROM sirm_securityinfo WHERE wind_code = #{securityCode} LIMIT 1
+            SELECT issuer FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1
         )
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -435,12 +435,12 @@
     <select id="queryIssuerInObservePool" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips
-        INNER JOIN sirm_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
         WHERE si.issuer = (
             SELECT issuer
-            FROM sirm_securityinfo
+            FROM rrs_securityinfo
             WHERE wind_code = #{securityCode}
             LIMIT 1
         )
@@ -453,10 +453,10 @@
     <select id="queryIssuerTargetPoolMaxRemainDays" resultType="java.lang.Integer">
         SELECT MAX(DATEDIFF(STR_TO_DATE(si.date_next, '%Y%m%d'), CURDATE()))
         FROM ip_pool_status ips
-        INNER JOIN sirm_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         WHERE si.issuer = (
             SELECT issuer
-            FROM sirm_securityinfo
+            FROM rrs_securityinfo
             WHERE wind_code = #{securityCode}
             LIMIT 1
         )
@@ -470,10 +470,10 @@
     <select id="queryIssuerRecentSimpleInboundExists" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips
-        INNER JOIN sirm_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         WHERE si.issuer = (
             SELECT issuer
-            FROM sirm_securityinfo
+            FROM rrs_securityinfo
             WHERE wind_code = #{securityCode}
             LIMIT 1
         )
@@ -555,7 +555,7 @@
 
     <!-- 更新调库详情页传入的证券基础信息字段 -->
     <update id="editSecurityInfoForAdjust">
-        UPDATE sirm_securityinfo
+        UPDATE rrs_securityinfo
         SET wind_code = #{securityInfo.windCode}
            ,full_name = #{securityInfo.fullName}
            ,issue_announcement = #{securityInfo.issueAnnouncement}

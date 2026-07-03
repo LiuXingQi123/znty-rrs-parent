@@ -211,7 +211,7 @@ public class SysAttachmentService {
     }
 
     /**
-     * 将手工上传的信评报告附件复制为内部报告库附件（table_name=sirm_report_in，attachment_category=report_in）。
+     * 将手工上传的信评报告附件复制为内部报告库附件（table_name=rrs_report_in，attachment_category=report_in）。
      * 物理文件信息原样复用，使报告库附件指向同一物理文件、可下载。
      *
      * @param reportId 内部报告 ID
@@ -226,7 +226,7 @@ public class SysAttachmentService {
         }
         for (SysAttachmentBo source : sources) {
             SysAttachmentBo bo = new SysAttachmentBo();
-            bo.setTableName("sirm_report_in");
+            bo.setTableName("rrs_report_in");
             bo.setMainId(reportId);
             bo.setAttachmentCategory(CATEGORY_REPORT_IN);
             bo.setFileType(source.getFileType());
@@ -285,9 +285,9 @@ public class SysAttachmentService {
     /** 校验复制来源必须为报告库附件 */
     private void validateReportSourceAttachment(SysAttachmentBo attachment) {
         String tableName = attachment.getTableName();
-        boolean inReport = "sirm_report_in".equals(tableName)
+        boolean inReport = "rrs_report_in".equals(tableName)
                 && CATEGORY_REPORT_IN.equals(attachment.getAttachmentCategory());
-        boolean outReport = "sirm_report_out".equals(tableName)
+        boolean outReport = "rrs_report_out".equals(tableName)
                 && CATEGORY_REPORT_OUT.equals(attachment.getAttachmentCategory());
         if (!inReport && !outReport) {
             throw new BizException("复制报告附件失败：附件不是报告库文件，附件 ID：" + attachment.getId());
@@ -296,7 +296,7 @@ public class SysAttachmentService {
 
     /** 根据报告库来源和调库附件用途解析落库分类 */
     private String resolveAdjustLogReportCategory(SysAttachmentBo source, String attachmentPurpose) {
-        boolean inReport = "sirm_report_in".equals(source.getTableName());
+        boolean inReport = "rrs_report_in".equals(source.getTableName());
         if (AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose)) {
             return inReport ? AttachmentCategory.CREDIT_REPORT_IN.getCode() : AttachmentCategory.CREDIT_REPORT_OUT.getCode();
         }

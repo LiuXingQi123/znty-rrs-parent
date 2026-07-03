@@ -1,14 +1,14 @@
-﻿-- ============================================================
+-- ============================================================
 -- znty-sirm 规则管理库 - 建库建表脚本
 -- MySQL version: 8.0.33
 -- 说明：首次部署执行，创建数据库和全部业务表结构
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS znty_sirm
+CREATE DATABASE IF NOT EXISTS znty_rrs
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
-USE znty_sirm;
+USE znty_rrs;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

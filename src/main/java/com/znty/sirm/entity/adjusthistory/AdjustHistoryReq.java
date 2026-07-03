@@ -37,7 +37,7 @@ public class AdjustHistoryReq extends PageRequest {
     /** 调整人名称（模糊） */
     private String adjusterName;
 
-    /** 发行主体名称（模糊，联查 sirm_securityinfo） */
+    /** 发行主体名称（模糊，联查 rrs_securityinfo） */
     private String issuer;
 
     /** 调整方向：调入 / 调出 */

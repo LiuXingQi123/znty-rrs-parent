@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 内部报告库表实体，对应 sirm_report_in 表
+ * 内部报告库表实体，对应 rrs_report_in 表
  */
 @Data
 public class ReportInBo {

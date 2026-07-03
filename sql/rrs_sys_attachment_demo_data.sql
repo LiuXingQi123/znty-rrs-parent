@@ -1,23 +1,23 @@
-﻿-- ============================================================
+-- ============================================================
 -- znty-sirm 系统附件关联表 - 演示数据脚本
 -- MySQL version: 8.0.33
 -- 说明：首次部署执行，插入系统附件关联表测试数据
 -- ============================================================
 
-USE znty_sirm;
+USE znty_rrs;
 SET NAMES utf8mb4;
 
 -- ----------------------------------------------------------------------------
 -- 清空系统附件关联表
 -- ----------------------------------------------------------------------------
-TRUNCATE TABLE `sirm_report_out`;
-TRUNCATE TABLE `sirm_report_in`;
+TRUNCATE TABLE `rrs_report_out`;
+TRUNCATE TABLE `rrs_report_in`;
 TRUNCATE TABLE `sys_attachment`;
 
 -- ----------------------------------------------------------------------------
 -- 内部报告库插入测试数据
 -- ----------------------------------------------------------------------------
-INSERT INTO `sirm_report_in` (
+INSERT INTO `rrs_report_in` (
     `author_name`
     ,`report_title`
     ,`report_type`
@@ -41,7 +41,7 @@ INSERT INTO `sirm_report_in` (
 -- ----------------------------------------------------------------------------
 -- 外部报告库插入测试数据
 -- ----------------------------------------------------------------------------
-INSERT INTO `sirm_report_out` (
+INSERT INTO `rrs_report_out` (
     `author_name`
     ,`source_org_name`
     ,`report_title`
@@ -151,59 +151,59 @@ INSERT INTO `sys_attachment` (
     ,`crte_time`
     ,`updt_time`
 ) VALUES
-('sirm_report_in', 1, 'report_in', 'pdf', '万科企业股票入库分析报告.pdf',
+('rrs_report_in', 1, 'report_in', 'pdf', '万科企业股票入库分析报告.pdf',
  'report_file_in_20260508090000_1.pdf', 1536000, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260508/report_file_in_20260508090000_1.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_in', 2, 'report_in', 'pdf', '中国石油债券入库报告.pdf',
+('rrs_report_in', 2, 'report_in', 'pdf', '中国石油债券入库报告.pdf',
  'report_file_in_20260512142000_2.pdf', 2048000, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260512/report_file_in_20260512142000_2.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_in', 3, 'report_in', 'pdf', '深圳地铁集团债券出库报告.pdf',
+('rrs_report_in', 3, 'report_in', 'pdf', '深圳地铁集团债券出库报告.pdf',
  'report_file_in_20260515111500_3.pdf', 1843200, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260515/report_file_in_20260515111500_3.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_in', 4, 'report_in', 'pdf', '稳健收益基金入库报告.pdf',
+('rrs_report_in', 4, 'report_in', 'pdf', '稳健收益基金入库报告.pdf',
  'report_file_in_20260522151000_4.pdf', 1433600, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260522/report_file_in_20260522151000_4.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_in', 5, 'report_in', 'pdf', '地产主题基金出库报告.pdf',
+('rrs_report_in', 5, 'report_in', 'pdf', '地产主题基金出库报告.pdf',
  'report_file_in_20260525133500_5.pdf', 1320960, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260525/report_file_in_20260525133500_5.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_in', 6, 'report_in', 'pdf', '平安集团股票出库复核报告.pdf',
+('rrs_report_in', 6, 'report_in', 'pdf', '平安集团股票出库复核报告.pdf',
  'report_file_in_20260527100000_6.pdf', 1740800, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260527/report_file_in_20260527100000_6.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_in', 7, 'report_in', 'pdf', '主体信用风险专项报告.pdf',
+('rrs_report_in', 7, 'report_in', 'pdf', '主体信用风险专项报告.pdf',
  'report_file_in_20260529133000_7.pdf', 1126400, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260529/report_file_in_20260529133000_7.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_out', 1, 'report_out', 'pdf', '万科企业股票入库外部研究报告.pdf',
+('rrs_report_out', 1, 'report_out', 'pdf', '万科企业股票入库外部研究报告.pdf',
  'report_file_out_20260528100500_1.pdf', 1638400, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260528/report_file_out_20260528100500_1.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_out', 2, 'report_out', 'pdf', '中国石油债券跟踪入库报告.pdf',
+('rrs_report_out', 2, 'report_out', 'pdf', '中国石油债券跟踪入库报告.pdf',
  'report_file_out_20260601092500_2.pdf', 1945600, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260601/report_file_out_20260601092500_2.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_out', 3, 'report_out', 'pdf', '交通运输基础设施其他报告.pdf',
+('rrs_report_out', 3, 'report_out', 'pdf', '交通运输基础设施其他报告.pdf',
  'report_file_out_20260603140000_3.pdf', 1228800, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260603/report_file_out_20260603140000_3.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_out', 4, 'report_out', 'pdf', '三一重工债券出库信用报告.pdf',
+('rrs_report_out', 4, 'report_out', 'pdf', '三一重工债券出库信用报告.pdf',
  'report_file_out_20260605163000_4.pdf', 2150400, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260605/report_file_out_20260605163000_4.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_out', 5, 'report_out', 'pdf', '华夏幸福主体风险评估报告.pdf',
+('rrs_report_out', 5, 'report_out', 'pdf', '华夏幸福主体风险评估报告.pdf',
  'report_file_out_20260608112000_5.pdf', 1843200, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260608/report_file_out_20260608112000_5.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_out', 6, 'report_out', 'pdf', '比亚迪股票出库产业链研究报告.pdf',
+('rrs_report_out', 6, 'report_out', 'pdf', '比亚迪股票出库产业链研究报告.pdf',
  'report_file_out_20260610154500_6.pdf', 1761280, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260610/report_file_out_20260610154500_6.pdf',
  '1001', 0, NOW(), NOW()),
-('sirm_report_out', 7, 'report_out', 'pdf', '全球能源基金入库配置报告.pdf',
+('rrs_report_out', 7, 'report_out', 'pdf', '全球能源基金入库配置报告.pdf',
  'report_file_out_20260612105000_7.pdf', 1515520, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260612/report_file_out_20260612105000_7.pdf',
  '1001', 0, NOW(), NOW());

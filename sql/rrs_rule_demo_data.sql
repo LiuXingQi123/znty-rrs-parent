@@ -1,6 +1,6 @@
 -- ============================================================
 -- znty-sirm 规则管理库 - 演示数据初始化脚本
--- 前提：需先执行 sirm_rule_schema.sql 完成建表
+-- 前提：需先执行 rrs_rule_schema.sql 完成建表
 -- 说明：
 --   1. 所有脚本兼容 QLExpress 语法（无 StringBuilder/boolean/int/float 声明）
 --   2. 参数变量与脚本中使用到的变量一一对应
@@ -8,7 +8,7 @@
 --   4. 测试用例覆盖 pass / fail / pending 三种状态
 --   5. 10张表全覆盖：6分类 + 12预设集 + 10规则 + 40参数 + 110选项 + 18用例 + 62用例参数 + 16执行记录 + 16日志
 -- ============================================================
-USE znty_sirm;
+USE znty_rrs;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

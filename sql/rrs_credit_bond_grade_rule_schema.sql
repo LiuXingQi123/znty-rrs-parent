@@ -4,8 +4,8 @@
 -- 说明：创建信用债大库评级准入矩阵配置表
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS `znty_sirm` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `znty_sirm`;
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

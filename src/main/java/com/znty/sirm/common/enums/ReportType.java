@@ -1,6 +1,6 @@
 package com.znty.sirm.common.enums;
 
-/** 报告类型（对应 sirm_report_in.report_type） */
+/** 报告类型（对应 rrs_report_in.report_type） */
 public enum ReportType {
     /** 债券入库报告 */
     BOND_IN_REPORT("bond_in_report"),

@@ -3,20 +3,20 @@
 -- MySQL version: 8.0.28
 -- 说明：首次部署执行，插入测试用证券数据
 -- ============================================================
-USE znty_sirm;
+USE znty_rrs;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ============================================================================
 -- 清空所有业务表
 -- ============================================================================
-TRUNCATE TABLE `sirm_securityinfo`;
+TRUNCATE TABLE `rrs_securityinfo`;
 TRUNCATE TABLE `ip_adjust_log`;
 TRUNCATE TABLE `ip_pool_status`;
 TRUNCATE TABLE `ip_adjust_step`;
 
 -- 证券信息表插入测试数据
-INSERT INTO `sirm_securityinfo` (
+INSERT INTO `rrs_securityinfo` (
     `wind_code`, `full_name`, `issue_announcement`, `short_name`,
     `wind_code_sh`, `wind_code_sz`, `wind_code_nib`, `wind_code_bj`,
     `wind_code_nbc`, `security_type`, `term_year`, `term_day`,
@@ -271,7 +271,7 @@ VALUES
  'AAA', '项目收益与偿债资金专户管理', '项目收益证券，偿债资金来源为项目通行费收入，预测IRR为8.5%');
 
 -- 公司主体基础信息（与上述债券 issuer_code=C10001~C10010 一一对应）
-INSERT INTO `sirm_securityinfo` (
+INSERT INTO `rrs_securityinfo` (
     `wind_code`
     ,`full_name`
     ,`short_name`
@@ -297,7 +297,7 @@ INSERT INTO `sirm_securityinfo` (
 ,('C10010', '某基础设施建设投资集团有限公司', '某基建集团', 'company', '地方国企', '交通运输', '交通基建', 'AAA', '稳定', '中诚信国际', '1', NOW());
 
 -- CRMW凭证主数据（供 CRMW池调整主页面左侧凭证列表选择）
-INSERT INTO `sirm_securityinfo` (
+INSERT INTO `rrs_securityinfo` (
     `wind_code`
     ,`full_name`
     ,`issue_announcement`
@@ -1384,7 +1384,7 @@ INSERT INTO `ip_adjust_step` (
 -- ============================================================================
 -- 说明：
 -- 1. pool_id=18 对应 CRMW库根节点，pool_id=19/20/21 对应 CRMW子库，pool_type='crmw'。
--- 2. audit_status='20' 且调入的数据由 sirm_crmw_pool_status_demo_data.sql 写入 ip_pool_status_crmw，用于 CRMW池查询。
+-- 2. audit_status='20' 且调入的数据由 rrs_crmw_pool_status_demo_data.sql 写入 ip_pool_status_crmw，用于 CRMW池查询。
 -- 3. 进行中、审批驳回、调出记录仅保留在 ip_adjust_log，用于 CRMW池调整历史查询。
 -- ============================================================================
 

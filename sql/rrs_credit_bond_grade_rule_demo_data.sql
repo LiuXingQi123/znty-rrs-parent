@@ -4,7 +4,7 @@
 -- 说明：初始化信用债大库评级准入矩阵配置
 -- ============================================================
 
-USE `znty_sirm`;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

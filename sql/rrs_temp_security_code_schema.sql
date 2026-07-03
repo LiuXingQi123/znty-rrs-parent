@@ -4,13 +4,13 @@
 -- 说明：维护临时证券代码、正式证券代码更新及取消发行状态
 -- ============================================================
 
-USE `znty_sirm`;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS `sirm_temp_security_code`;
+DROP TABLE IF EXISTS `rrs_temp_security_code`;
 
-CREATE TABLE `sirm_temp_security_code`
+CREATE TABLE `rrs_temp_security_code`
 (
     `id`                         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `temp_security_name`         VARCHAR(200) DEFAULT NULL            COMMENT '临时证券名称',

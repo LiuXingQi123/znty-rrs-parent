@@ -3,7 +3,7 @@
 -- MySQL version: 8.0.28
 -- 说明：首次部署执行，插入投资池相关测试数据
 -- ============================================================
-USE `znty_sirm`;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -291,7 +291,7 @@ INSERT INTO `ip_pool_relation` (
 (20, 'in_soft_restrict',  16, '观察池',         1, '标的在观察池时提示后允许调入关注库',  0, NOW(), NOW()),
 (21, 'out_soft_restrict', 16, '观察池',         1, '调出退出观察库时提示关注观察池状态',  0, NOW(), NOW());
 
--- 自动调入调出规则，rule_id 对应 sirm_rule_demo_data.sql
+-- 自动调入调出规则，rule_id 对应 rrs_rule_demo_data.sql
 INSERT INTO `ip_pool_auto_rule` (
     `id`, `pool_id`, `rule_type`, `rule_id`, `rule_desc`, `is_deleted`, `crte_time`, `updt_time`
 ) VALUES

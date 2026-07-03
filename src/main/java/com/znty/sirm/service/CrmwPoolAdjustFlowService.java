@@ -478,7 +478,7 @@ public class CrmwPoolAdjustFlowService {
 
     /**
      * 审批通过结束后，逐条调库记录将手工上传的信评报告附件沉淀为内部报告库记录。
-     * 每条调库记录生成 1 条 sirm_report_in，其下所有手工上传信评报告附件复制为该报告的 report_in 附件。
+     * 每条调库记录生成 1 条 rrs_report_in，其下所有手工上传信评报告附件复制为该报告的 report_in 附件。
      * 无手工上传信评报告附件的调库记录跳过。
      *
      * @param logList 同批次调库记录列表

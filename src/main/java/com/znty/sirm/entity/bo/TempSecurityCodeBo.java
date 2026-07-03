@@ -4,7 +4,7 @@ import java.util.Date;
 import lombok.Data;
 
 /**
- * 临时代码业务对象，对应 sirm_temp_security_code 表
+ * 临时代码业务对象，对应 rrs_temp_security_code 表
  */
 @Data
 public class TempSecurityCodeBo {

@@ -63,7 +63,7 @@
                ,si.issuer
                ,si.rating_bond
                ,si.maturity_date
-        FROM sirm_securityinfo si
+        FROM rrs_securityinfo si
         <where>
             <if test="direction == 'in'">
                 NOT EXISTS (

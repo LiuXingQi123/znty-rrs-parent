@@ -4,7 +4,7 @@
 -- 说明：首次部署执行，插入CRMW投资池当前状态测试数据
 -- ============================================================
 
-USE znty_sirm;
+USE znty_rrs;
 SET NAMES utf8mb4;
 
 TRUNCATE TABLE `ip_pool_status_crmw`;

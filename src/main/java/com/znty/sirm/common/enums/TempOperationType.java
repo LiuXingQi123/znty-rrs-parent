@@ -1,6 +1,6 @@
 package com.znty.sirm.common.enums;
 
-/** 临时代码操作类型（对应 sirm_temp_security_code.operation_type） */
+/** 临时代码操作类型（对应 rrs_temp_security_code.operation_type） */
 public enum TempOperationType {
     /** 新增 */
     ADD("add"),

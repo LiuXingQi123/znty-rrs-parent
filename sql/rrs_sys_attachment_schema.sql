@@ -4,14 +4,14 @@
 -- 说明：首次部署执行，创建系统附件关联表结构
 -- ============================================================
 
-USE znty_sirm;
+USE znty_rrs;
 SET NAMES utf8mb4;
 
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
-DROP TABLE IF EXISTS `sirm_report_out`;
-DROP TABLE IF EXISTS `sirm_report_in`;
+DROP TABLE IF EXISTS `rrs_report_out`;
+DROP TABLE IF EXISTS `rrs_report_in`;
 DROP TABLE IF EXISTS `sys_attachment`;
 
 -- ----------------------------------------------------------------------------
@@ -43,7 +43,7 @@ CREATE TABLE `sys_attachment`
 -- ----------------------------------------------------------------------------
 -- 创建内部报告库表
 -- ----------------------------------------------------------------------------
-CREATE TABLE `sirm_report_in`
+CREATE TABLE `rrs_report_in`
 (
     `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `author_name`   VARCHAR(64)  DEFAULT NULL            COMMENT '作者姓名',
@@ -68,7 +68,7 @@ CREATE TABLE `sirm_report_in`
 -- ----------------------------------------------------------------------------
 -- 创建外部报告库表
 -- ----------------------------------------------------------------------------
-CREATE TABLE `sirm_report_out`
+CREATE TABLE `rrs_report_out`
 (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `author_name`     VARCHAR(64)  DEFAULT NULL            COMMENT '作者姓名',

@@ -24,7 +24,7 @@
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
                                        AND p.pool_type = 'forbidden'
-        LEFT JOIN sirm_securityinfo bi ON bi.wind_code = ips.security_code
+        LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         <where>
             ips.is_deleted = 0

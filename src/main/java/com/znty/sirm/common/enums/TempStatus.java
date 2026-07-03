@@ -1,6 +1,6 @@
 package com.znty.sirm.common.enums;
 
-/** 临时代码状态（对应 sirm_temp_security_code.status） */
+/** 临时代码状态（对应 rrs_temp_security_code.status） */
 public enum TempStatus {
     /** 临时 */
     TEMPORARY("temporary"),

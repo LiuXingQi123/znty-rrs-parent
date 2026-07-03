@@ -4,7 +4,7 @@
 -- 说明：首次部署执行，插入证券类型等字典配置基础数据
 -- ============================================================
 
-USE `znty_sirm`;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

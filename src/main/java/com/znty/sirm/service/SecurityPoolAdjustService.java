@@ -2710,7 +2710,7 @@ public class SecurityPoolAdjustService {
      */
     private static class SubmitSharedData {
 
-        /** 证券基础信息（来自 sirm_securityinfo） */
+        /** 证券基础信息（来自 rrs_securityinfo） */
         final SecurityInfoBo securityInfo;
 
         /** 全量投资池索引（ID → Bo），用于快速查找池详情和构建池路径名称 */

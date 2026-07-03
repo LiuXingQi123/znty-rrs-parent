@@ -24,7 +24,7 @@
                ,al.submit_time
         FROM ip_adjust_log al
         LEFT JOIN ip_investment_pool p  ON p.id  = al.target_pool_id AND p.is_deleted  = 0
-        LEFT JOIN sirm_securityinfo sb  ON sb.wind_code = al.security_code
+        LEFT JOIN rrs_securityinfo sb  ON sb.wind_code = al.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type AND dst.is_deleted = 0
         <where>
             al.is_deleted = 0

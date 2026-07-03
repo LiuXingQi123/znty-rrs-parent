@@ -4,13 +4,13 @@
 -- 说明：初始化临时代码管理演示数据
 -- ============================================================
 
-USE `znty_sirm`;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
-TRUNCATE TABLE `sirm_temp_security_code`;
+TRUNCATE TABLE `rrs_temp_security_code`;
 
-INSERT INTO `sirm_temp_security_code` (
+INSERT INTO `rrs_temp_security_code` (
     `id`
     ,`temp_security_name`
     ,`temp_security_code`

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.ReportMapper">
-    <!-- 报告库 mapper，对应表：sirm_report_in / sirm_report_out，提供内部 / 外部报告分页查询功能 -->
+    <!-- 报告库 mapper，对应表：rrs_report_in / rrs_report_out，提供内部 / 外部报告分页查询功能 -->
 
     <!-- 分页查询内部报告库列表 -->
     <select id="queryInReportPage" resultType="com.znty.sirm.entity.report.ReportDto">
@@ -14,7 +14,7 @@
                ,security_type
                ,data_source
                ,crte_time
-        FROM sirm_report_in
+        FROM rrs_report_in
         <where>
             is_deleted = 0
             <if test="reportTitle != null and reportTitle != ''">
@@ -49,7 +49,7 @@
                ,security_type
                ,data_source
                ,crte_time
-        FROM sirm_report_out
+        FROM rrs_report_out
         <where>
             is_deleted = 0
             <if test="reportTitle != null and reportTitle != ''">
@@ -83,7 +83,7 @@
                ,content_type
                ,full_url
         FROM sys_attachment
-        WHERE table_name = 'sirm_report_in'
+        WHERE table_name = 'rrs_report_in'
           AND attachment_category = 'report_in'
           AND is_deleted = 0
           AND main_id IN
@@ -105,7 +105,7 @@
                ,content_type
                ,full_url
         FROM sys_attachment
-        WHERE table_name = 'sirm_report_out'
+        WHERE table_name = 'rrs_report_out'
           AND attachment_category = 'report_out'
           AND is_deleted = 0
           AND main_id IN
@@ -118,7 +118,7 @@
 
     <!-- 新增内部报告记录 -->
     <insert id="addInReport" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO sirm_report_in (
+        INSERT INTO rrs_report_in (
             author_name
             ,report_title
             ,report_type

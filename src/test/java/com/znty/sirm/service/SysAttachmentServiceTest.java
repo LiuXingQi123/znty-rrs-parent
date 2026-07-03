@@ -90,7 +90,7 @@ public class SysAttachmentServiceTest {
     public void copyReportAttachments_InReportCreditPurpose_InsertsInCreditCategory() throws Exception {
         SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
         SysAttachmentService service = buildService(mapper);
-        SysAttachmentBo source = buildAttachment(7L, "sirm_report_in", 20L, "report_in");
+        SysAttachmentBo source = buildAttachment(7L, "rrs_report_in", 20L, "report_in");
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         service.copyReportAttachments(88L, Collections.singletonList(7L),
@@ -111,7 +111,7 @@ public class SysAttachmentServiceTest {
     public void copyReportAttachments_OutReportMaterialPurpose_InsertsOutMaterialCategory() throws Exception {
         SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
         SysAttachmentService service = buildService(mapper);
-        SysAttachmentBo source = buildAttachment(7L, "sirm_report_out", 20L, "report_out");
+        SysAttachmentBo source = buildAttachment(7L, "rrs_report_out", 20L, "report_out");
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         service.copyReportAttachments(88L, Collections.singletonList(7L),
@@ -127,7 +127,7 @@ public class SysAttachmentServiceTest {
     public void copyReportAttachments_InvalidReportCategory_ThrowsBizException() throws Exception {
         SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
         SysAttachmentService service = buildService(mapper);
-        SysAttachmentBo source = buildAttachment(7L, "sirm_report_in", 20L, "report_out");
+        SysAttachmentBo source = buildAttachment(7L, "rrs_report_in", 20L, "report_out");
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         assertThatThrownBy(() -> service.copyReportAttachments(88L, Collections.singletonList(7L),

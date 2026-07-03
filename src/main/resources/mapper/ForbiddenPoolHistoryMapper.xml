@@ -23,7 +23,7 @@
                                        AND p.pool_type = 'forbidden'
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type
                                         AND dst.is_deleted = 0
-        LEFT JOIN sirm_securityinfo bi ON bi.wind_code = al.security_code
+        LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
         <where>
             al.is_deleted = 0
             <if test="companyCode != null and companyCode != ''">

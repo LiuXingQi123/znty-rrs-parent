@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.sirm.mapper.TempSecurityCodeMapper">
-    <!-- 临时代码管理 mapper，对应表：sirm_temp_security_code，提供临时代码查询、新增、更新、取消发行和删除功能 -->
+    <!-- 临时代码管理 mapper，对应表：rrs_temp_security_code，提供临时代码查询、新增、更新、取消发行和删除功能 -->
 
     <!-- 分页查询临时代码列表 -->
     <select id="queryTempSecurityCodePage" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto">
@@ -27,7 +27,7 @@
                ,t.operation_type
                ,t.crte_time
                ,t.updt_time
-        FROM sirm_temp_security_code t
+        FROM rrs_temp_security_code t
         LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type
                                              AND dst_temp.is_deleted = 0
         LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type
@@ -66,7 +66,7 @@
                ,is_deleted
                ,crte_time
                ,updt_time
-        FROM sirm_temp_security_code
+        FROM rrs_temp_security_code
         WHERE id = #{id}
           AND is_deleted = 0
     </select>
@@ -94,7 +94,7 @@
                ,t.operation_type
                ,t.crte_time
                ,t.updt_time
-        FROM sirm_temp_security_code t
+        FROM rrs_temp_security_code t
         LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type
                                              AND dst_temp.is_deleted = 0
         LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type
@@ -106,7 +106,7 @@
     <!-- 查询临时代码未删除记录数量 -->
     <select id="queryTempSecurityCodeCount" resultType="int">
         SELECT COUNT(1)
-        FROM sirm_temp_security_code
+        FROM rrs_temp_security_code
         <where>
             is_deleted = 0
             AND temp_security_code = #{tempSecurityCode}
@@ -172,13 +172,13 @@
     <!-- 根据正式证券代码查询证券信息数量 -->
     <select id="querySecurityInfoCount" resultType="int">
         SELECT COUNT(1)
-        FROM sirm_securityinfo
+        FROM rrs_securityinfo
         WHERE wind_code = #{securityCode}
     </select>
 
     <!-- 新增证券信息 -->
     <insert id="addSecurityInfo">
-        INSERT INTO sirm_securityinfo (
+        INSERT INTO rrs_securityinfo (
             wind_code
             ,full_name
             ,short_name
@@ -211,7 +211,7 @@
 
     <!-- 更新证券信息 -->
     <update id="editSecurityInfo">
-        UPDATE sirm_securityinfo
+        UPDATE rrs_securityinfo
         SET full_name = #{securityName}
            ,short_name = #{securityName}
            ,wind_code_sh = CASE WHEN #{securityMarket} = 'SSE' THEN #{securityCode} ELSE NULL END
@@ -228,7 +228,7 @@
 
     <!-- 新增临时代码 -->
     <insert id="addTempSecurityCode" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO sirm_temp_security_code (
+        INSERT INTO rrs_temp_security_code (
             temp_security_name
             ,temp_security_code
             ,temp_security_market
@@ -263,7 +263,7 @@
 
     <!-- 更新临时代码为已更新 -->
     <update id="editTempSecurityCodeToUpdated">
-        UPDATE sirm_temp_security_code
+        UPDATE rrs_temp_security_code
         SET temp_security_name = #{tempSecurityName}
            ,temp_security_code = #{tempSecurityCode}
            ,temp_security_market = #{tempSecurityMarket}
@@ -287,7 +287,7 @@
 
     <!-- 取消发行临时代码 -->
     <update id="editTempSecurityCodeToCancelled">
-        UPDATE sirm_temp_security_code
+        UPDATE rrs_temp_security_code
         SET update_time = #{updateTime}
            ,status = #{status}
            ,operation_type = #{operationType}
@@ -298,7 +298,7 @@
 
     <!-- 删除临时代码 -->
     <update id="deleteTempSecurityCode">
-        UPDATE sirm_temp_security_code
+        UPDATE rrs_temp_security_code
         SET update_time = #{updateTime}
            ,status = #{status}
            ,operation_type = #{operationType}
