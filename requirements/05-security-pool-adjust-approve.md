@@ -521,7 +521,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
 ## 10. 关键源码索引
 
-- 前端：`znty-sirm-ui/security_pool_adjust_approve.html`、`znty-sirm-ui/security_pool_adjust_detail.html`、`znty-sirm-ui/my_matters.html`、`znty-sirm-ui/flow_definition.html`、`znty-sirm-ui/dict.js`
+- 前端：`znty-rrs-ui/security_pool_adjust_approve.html`、`znty-rrs-ui/security_pool_adjust_detail.html`、`znty-rrs-ui/my_matters.html`、`znty-rrs-ui/flow_definition.html`、`znty-rrs-ui/dict.js`
 - Controller：`SecurityPoolAdjustFlowController.java`、`MyMattersController.java`、`FlowController.java`
 - Service：`SecurityPoolAdjustFlowService.java`（核心流转，`submitAdjustAudit`/`resolveProcessingNodeAuditStatus`/`finishAdjustBatch`）、`SecurityPoolAdjustService.java`（提交与初始步骤）、`MyMattersService.java`、`FlowService.java`
 - Mapper：`SecurityPoolAdjustMapper.xml`、`MyMattersMapper.xml`

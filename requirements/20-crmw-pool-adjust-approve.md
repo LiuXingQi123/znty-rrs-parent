@@ -156,7 +156,7 @@
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/crmw_pool_adjust_approve.html`（`initStandaloneReviewPage`、`loadDetailData`、`currentPendingStep`、`isModifyAuditStage`、`submitAdjustAudit`、`buildAuditAttachmentChanges`）
+- 前端：`znty-rrs-ui/crmw_pool_adjust_approve.html`（`initStandaloneReviewPage`、`loadDetailData`、`currentPendingStep`、`isModifyAuditStage`、`submitAdjustAudit`、`buildAuditAttachmentChanges`）
 - Controller：`CrmwPoolAdjustFlowController.java`（`@RequestMapping("/api/v1/crmwPoolAdjustFlow")`，2 端点）
 - Service：`CrmwPoolAdjustFlowService.java`（`submitAdjustAudit`、`resolveProcessingNodeAuditStatus`、`finishAdjustBatch`、`applyAttachmentChangesForModifySubmit`、`advanceToNextAvailableStep`、`createTerminalEndStep`、`generateInternalReportsOnFinish`）
 - Mapper：复用 `mapper/CrmwPoolAdjustMapper.java` / `CrmwPoolAdjustMapper.xml`（**无独立 FlowMapper**）

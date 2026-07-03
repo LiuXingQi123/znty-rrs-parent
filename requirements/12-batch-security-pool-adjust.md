@@ -293,7 +293,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/batch_security_pool_adjust.html`（主页面）、`znty-sirm-ui/batch_security_pool_adjust_select.html`（独立选择页）、`znty-sirm-ui/dict.js`
+- 前端：`znty-rrs-ui/batch_security_pool_adjust.html`（主页面）、`znty-rrs-ui/batch_security_pool_adjust_select.html`（独立选择页）、`znty-rrs-ui/dict.js`
 - Controller：`BatchSecurityPoolAdjustController.java`
 - Service：`BatchSecurityPoolAdjustService.java`（编排层）、`SecurityPoolAdjustService.java`（被复用的单笔服务）、`SysAttachmentService.java`
 - Mapper：`BatchSecurityPoolAdjustMapper.java` / `BatchSecurityPoolAdjustMapper.xml`

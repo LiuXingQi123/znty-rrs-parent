@@ -115,7 +115,7 @@
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/credit_bond_grade_rule.html`、`css/credit_bond_grade_rule.css`、`js/api.js`
+- 前端：`znty-rrs-ui/credit_bond_grade_rule.html`、`css/credit_bond_grade_rule.css`、`js/api.js`
 - Controller：`controller/CreditBondGradeRuleController.java`
 - Service：`service/CreditBondGradeRuleService.java`（`queryGradeRuleMatrix`、`editGradeRuleMatrix`、`buildMatrixDto`、`buildRulesForSave`、`buildTermBucketMap`/`buildRatingGradeMap`/`buildPoolMap`）
 - Mapper：`mapper/CreditBondGradeRuleMapper.java` / `resources/mapper/CreditBondGradeRuleMapper.xml`

@@ -127,7 +127,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 
 ## 8. 关键源码索引
 
-- 前端：`znty-sirm-ui/crmw_pool_adjust_history.html`（`loadList`、`auditStatusLabel`/`auditStatusType`、`adjustTypeTagType`、`openCrmwAdjustDetail`、`refreshTableLayout`）
+- 前端：`znty-rrs-ui/crmw_pool_adjust_history.html`（`loadList`、`auditStatusLabel`/`auditStatusType`、`adjustTypeTagType`、`openCrmwAdjustDetail`、`refreshTableLayout`）
 - Controller：`CrmwPoolAdjustHistoryController.java`（`@RequestMapping("/api/v1/crmwPoolAdjustHistory")`）
 - Service：`CrmwPoolAdjustHistoryService.java`（`queryCrmwPoolAdjustHistoryPage`、`fillPoolFullName`）
 - Mapper：`CrmwPoolAdjustHistoryMapper.java` / `resources/mapper/CrmwPoolAdjustHistoryMapper.xml`

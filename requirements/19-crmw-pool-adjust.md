@@ -226,7 +226,7 @@
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/crmw_pool_adjust.html`（`loadCrmwList`、`loadList`、`handleCrmwSelect`、`loadDetailData`、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、流程弹窗、报告弹窗）
+- 前端：`znty-rrs-ui/crmw_pool_adjust.html`（`loadCrmwList`、`loadList`、`handleCrmwSelect`、`loadDetailData`、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、流程弹窗、报告弹窗）
 - Controller：`CrmwPoolAdjustController.java`（`@RequestMapping("/api/v1/crmwPoolAdjust")`）
 - Service：`CrmwPoolAdjustService.java`（`checkCrmwAdjust`、`addCrmwAdjustLog`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`、`resolveAdjustFlowOptions`）
 - Mapper：`CrmwPoolAdjustMapper.java` / `resources/mapper/CrmwPoolAdjustMapper.xml`

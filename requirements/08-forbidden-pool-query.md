@@ -152,7 +152,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 
 ## 7. 关键源码索引
 
-- 前端：`znty-sirm-ui/forbidden_pool_query.html`（`loadList`、`loadBondTypeOptions`、`getBondStatus`、`openSecurityAdjustDetail`）
+- 前端：`znty-rrs-ui/forbidden_pool_query.html`（`loadList`、`loadBondTypeOptions`、`getBondStatus`、`openSecurityAdjustDetail`）
 - Controller：`ForbiddenPoolQueryController.java`
 - Service：`ForbiddenPoolQueryService.java`（`queryForbiddenPoolPage`、`fillPoolFullName`、`querySecurityTypeList`）
 - Mapper：`ForbiddenPoolQueryMapper.xml`

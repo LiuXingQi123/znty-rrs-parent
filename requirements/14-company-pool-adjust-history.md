@@ -180,7 +180,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/company_pool_adjust_history.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`auditStatusLabel`/`auditStatusType`、`handlePoolTreeConfirm`）
+- 前端：`znty-rrs-ui/company_pool_adjust_history.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`auditStatusLabel`/`auditStatusType`、`handlePoolTreeConfirm`）
 - Controller：`CompanyPoolAdjustHistoryController.java`、`CommonController.java`
 - Service：`CompanyPoolAdjustHistoryService.java`（`queryCompanyPoolAdjustHistoryPage`、`fillPoolFullName`）、`InvestmentPoolService.java`
 - Mapper：`CompanyPoolAdjustHistoryMapper.xml`、`CommonMapper.xml`

@@ -176,7 +176,7 @@
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/temp_security_code.html`、`css/temp_security_code.css`、`js/api.js`
+- 前端：`znty-rrs-ui/temp_security_code.html`、`css/temp_security_code.css`、`js/api.js`
 - Controller：`controller/TempSecurityCodeController.java`
 - Service：`service/TempSecurityCodeService.java`（`queryTempSecurityCodePage`、`queryTempSecurityCodeOptions`、`addTempSecurityCode`、`editTempSecurityCodeToUpdated`、`editTempSecurityCodeToCancelled`、`deleteTempSecurityCode`、`validateAddReq`/`validateUpdateReq`/`validateIdReq`/`validateRequired`/`validateMarket`/`validateSecurityType`、`queryOperableTempSecurityCode`/`queryExistingTempSecurityCode`、`upsertSecurityInfo`、`resolveCompanyName`、`queryTempSecurityCodeDetail`）
 - Mapper：`mapper/TempSecurityCodeMapper.java` / `resources/mapper/TempSecurityCodeMapper.xml`

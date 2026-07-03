@@ -269,7 +269,7 @@
 
 ## 8. 关键源码索引
 
-- 前端：`znty-sirm-ui/investment_pool.html`（树 `loadPoolTree`/`buildPoolTree`、基础配置 `handleSaveBase`、关系配置 `handleSaveRelation`/`openPoolTreePicker`、权限 `handleSavePermission`/`handleConfirmPermissionDialog`、删除 `handleDeletePool`）
+- 前端：`znty-rrs-ui/investment_pool.html`（树 `loadPoolTree`/`buildPoolTree`、基础配置 `handleSaveBase`、关系配置 `handleSaveRelation`/`openPoolTreePicker`、权限 `handleSavePermission`/`handleConfirmPermissionDialog`、删除 `handleDeletePool`）
 - dict.js：`DICT_POOL_TYPE`、`DICT_POOL_LEVEL`、`DICT_POOL_STATUS`、`DICT_POOL_RELATION_TYPE`、`DICT_POOL_PERMISSION_TYPE`、`DICT_PERMISSION_HANDLER_TYPE`、`DICT_AUTO_RULE_TYPE`、`DICT_REPORT_RESTRICTION`
 - Controller：`InvestmentPoolController.java`
 - Service：`InvestmentPoolService.java`（`queryPoolList/Detail`、`addRootPool`、`addChildPool`、`editPoolConfig`、`editPoolRelation`、`editPoolPermission`、`deletePoolNode`、`syncNormalized`、`fillRelationConfig`/`fillAutoRuleConfig`/`fillPermissionConfig`）

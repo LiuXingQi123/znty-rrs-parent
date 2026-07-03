@@ -118,7 +118,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 
 ## 8. 关键源码索引
 
-- 前端：`znty-sirm-ui/crmw_pool_query.html`（`loadList`、`openCrmwAdjustDetail`、`refreshTableLayout`）
+- 前端：`znty-rrs-ui/crmw_pool_query.html`（`loadList`、`openCrmwAdjustDetail`、`refreshTableLayout`）
 - Controller：`CrmwPoolQueryController.java`（`@RequestMapping("/api/v1/crmwPoolQuery")`）
 - Service：`CrmwPoolQueryService.java`（`queryCrmwPoolPage`、`fillPoolFullName`）
 - Mapper：`CrmwPoolQueryMapper.java` / `resources/mapper/CrmwPoolQueryMapper.xml`

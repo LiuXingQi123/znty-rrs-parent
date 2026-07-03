@@ -101,7 +101,7 @@ view 模式纯读：`ip_pool_status_crmw`（查询当前池）、`ip_adjust_log`
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/crmw_pool_adjust_detail.html`（`initStandaloneDetailPage`、`loadDetailData`、`entryMode` 归一化、`loadFlowSteps`、`uniqueAdjustLogsByFlow`、`flowStepSpanMethod`、首次提交 `submitAdjustLog`）
+- 前端：`znty-rrs-ui/crmw_pool_adjust_detail.html`（`initStandaloneDetailPage`、`loadDetailData`、`entryMode` 归一化、`loadFlowSteps`、`uniqueAdjustLogsByFlow`、`flowStepSpanMethod`、首次提交 `submitAdjustLog`）
 - Controller：复用 `CrmwPoolAdjustController.java`
 - Service：复用 `CrmwPoolAdjustService.java`
 - Mapper：复用 `mapper/CrmwPoolAdjustMapper.xml`

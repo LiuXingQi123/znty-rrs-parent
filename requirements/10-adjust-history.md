@@ -156,7 +156,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 
 ## 10. 关键源码索引
 
-- 前端：`znty-sirm-ui/security_pool_adjust_history.html`、`znty-sirm-ui/dict.js`
+- 前端：`znty-rrs-ui/security_pool_adjust_history.html`、`znty-rrs-ui/dict.js`
 - Controller：`AdjustHistoryController.java`、`CommonController.java`
 - Service：`AdjustHistoryService.java`、`InvestmentPoolService.java`
 - Mapper：`AdjustHistoryMapper.xml`、`CommonMapper.xml`

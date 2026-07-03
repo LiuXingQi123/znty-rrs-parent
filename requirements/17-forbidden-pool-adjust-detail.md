@@ -126,7 +126,7 @@ view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/forbidden_pool_adjust_detail.html`（`initStandaloneDetailPage`、`entryMode` 归一化、`isViewMode`/`isAdjustMode`/`isSecurityInfoReadonly`/`showAdjustLogSection`/`showFlowStatusSection`/`showAdjustOpSection`/`showLogUploadActions` 计算属性、并发加载、`loadFlowSteps`/`uniqueAdjustLogsByFlow`、`flowStepSpanMethod`/`getFlowStepRowClass`、adjust 模式 `submitAdjustLog`）、`css/forbidden_pool_adjust_detail.css`
+- 前端：`znty-rrs-ui/forbidden_pool_adjust_detail.html`（`initStandaloneDetailPage`、`entryMode` 归一化、`isViewMode`/`isAdjustMode`/`isSecurityInfoReadonly`/`showAdjustLogSection`/`showFlowStatusSection`/`showAdjustOpSection`/`showLogUploadActions` 计算属性、并发加载、`loadFlowSteps`/`uniqueAdjustLogsByFlow`、`flowStepSpanMethod`/`getFlowStepRowClass`、adjust 模式 `submitAdjustLog`）、`css/forbidden_pool_adjust_detail.css`
 - Controller：`ForbiddenPoolAdjustController.java`（详情用 `queryCompanyDetail`/`queryCompanyPoolStatus`/`queryCompanyBondList`/`queryAdjustLogList`/`queryAdjustStepList`，adjust 模式用 `checkAdjust`/`addAdjustLogWithFiles`）
 - Service：`ForbiddenPoolAdjustService.java`（详情查询方法 + adjust 模式 `checkCompanyAdjust`/`addCompanyAdjustLog`/`addAdjustLog`/`createInitialSteps`/`syncCompanyBondsOnDirect`）
 - Mapper：`ForbiddenPoolAdjustMapper.java` / `ForbiddenPoolAdjustMapper.xml`

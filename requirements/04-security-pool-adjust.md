@@ -388,7 +388,7 @@
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/security_pool_adjust.html`（列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`）
+- 前端：`znty-rrs-ui/security_pool_adjust.html`（列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`）
 - dict.js：`DICT_AUDIT_STATUS`、`DICT_POOL_RELATION_TYPE`、`DICT_POOL_TYPE`
 - Controller：`SecurityPoolAdjustController.java`
 - Service：`SecurityPoolAdjustService.java`（`checkAdjust`、`addAdjustLog`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`）

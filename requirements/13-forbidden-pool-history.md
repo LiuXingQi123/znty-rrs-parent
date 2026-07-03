@@ -177,7 +177,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/forbidden_pool_history.html`（`loadList`、`auditStatusLabel`/`auditStatusType`、`formatDate`）
+- 前端：`znty-rrs-ui/forbidden_pool_history.html`（`loadList`、`auditStatusLabel`/`auditStatusType`、`formatDate`）
 - Controller：`ForbiddenPoolHistoryController.java`
 - Service：`ForbiddenPoolHistoryService.java`（`queryForbiddenPoolHistoryPage`、`fillPoolFullName`）
 - Mapper：`ForbiddenPoolHistoryMapper.xml`

@@ -299,7 +299,7 @@
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/flow_definition.html`（列表 `loadList`、设计器画布、`saveDraft`/`confirmPublish`/`syncNormalized` 调用、版本历史）
+- 前端：`znty-rrs-ui/flow_definition.html`（列表 `loadList`、设计器画布、`saveDraft`/`confirmPublish`/`syncNormalized` 调用、版本历史）
 - dict.js：`DICT_APPROVAL_STRATEGY`、`DICT_AUTO_TASK_CODE`、`DICT_FLOW_COND_FIELD`
 - Controller：`FlowController.java`
 - Service：`FlowService.java`（`queryFlowPage`、`addFlow`、`editFlowDraft`、`editFlowToPublished`、`validateBeforePublish`、`syncNormalized`、`editFlowStatus`、`queryFlowVersionList/Detail`）

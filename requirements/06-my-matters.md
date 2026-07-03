@@ -168,7 +168,7 @@ window.location.href = page + '?' + params.toString();
 
 ## 10. 关键源码索引
 
-- 前端：`znty-sirm-ui/my_matters.html`、`znty-sirm-ui/dict.js`
+- 前端：`znty-rrs-ui/my_matters.html`、`znty-rrs-ui/dict.js`
 - Controller：`MyMattersController.java`
 - Service：`MyMattersService.java`、`InvestmentPoolService.java`
 - Mapper：`MyMattersMapper.xml`

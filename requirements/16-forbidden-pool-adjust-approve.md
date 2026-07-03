@@ -222,8 +222,8 @@ finishAdjustBatch(step):
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/forbidden_pool_adjust_approve.html`（`initStandaloneReviewPage`、`restoreStandaloneAdjustDraft`、`currentPendingStep`、`isModifyAuditStage`、`submitAdjustAudit`、`submitAdjustAuditMultipart`、`buildAuditAttachmentChanges`、`flowStepSpanMethod`/`getFlowStepRowClass`）、`css/forbidden_pool_adjust_approve.css`
-- 前端待办入口：`znty-sirm-ui/my_matters.html`（`openMatterPage` 拼 `companyCode/targetPoolId/adjustLogId/adjustBatchNo/entryMode`，pending→`process`→approve.html，completed→`view`→detail.html）
+- 前端：`znty-rrs-ui/forbidden_pool_adjust_approve.html`（`initStandaloneReviewPage`、`restoreStandaloneAdjustDraft`、`currentPendingStep`、`isModifyAuditStage`、`submitAdjustAudit`、`submitAdjustAuditMultipart`、`buildAuditAttachmentChanges`、`flowStepSpanMethod`/`getFlowStepRowClass`）、`css/forbidden_pool_adjust_approve.css`
+- 前端待办入口：`znty-rrs-ui/my_matters.html`（`openMatterPage` 拼 `companyCode/targetPoolId/adjustLogId/adjustBatchNo/entryMode`，pending→`process`→approve.html，completed→`view`→detail.html）
 - Controller：`ForbiddenPoolAdjustFlowController.java`（`@RequestMapping("/api/v1/forbiddenPoolAdjustFlow")`，2 端点）
 - Service：`ForbiddenPoolAdjustFlowService.java`（`submitAdjustAudit`/`validateAuditReq`/`resolveActualProcessStep`/`validatePendingStep`/`validateSubmitterCannotProcess`/`applyAttachmentChangesForModifySubmit`/`processAdjustAudit`/`resolveProcessingNodeAuditStatus`/`advanceToNextAvailableStep`/`createTerminalEndStep`/`finishAdjustBatch`/`syncCompanyBonds`/`buildCompanyBondAutoLog`/`generateInternalReportsOnFinish`/`resolveReportType`/`buildFlowSnapshot`，`ADMIN_USER_ID='1001'`）
 - Mapper：复用 `ForbiddenPoolAdjustMapper.java` / `.xml`（审批用 `queryAdjustStepById`/`editAdjustStepProcess`/`editOtherPendingStepSkipped`/`queryPendingStepCountByNode`/`queryAdjustLogListForAudit`/`editAdjustLogAuditStatus`/`addAdjustStep`/`addPoolStatus`/`deletePoolStatusSoft`/`queryCompanyBondForAutoList`/`querySecurityCurrentPoolIdList`/`querySecurityBoByCode`/`queryCategoryTypeBySecurityType`）

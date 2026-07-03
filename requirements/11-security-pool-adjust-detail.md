@@ -211,7 +211,7 @@
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/security_pool_adjust_detail.html`（entryMode 归一化、模式计算属性、并发加载、流程步骤定位/去重/合并、首次提交 `submitAdjustLog`）
+- 前端：`znty-rrs-ui/security_pool_adjust_detail.html`（entryMode 归一化、模式计算属性、并发加载、流程步骤定位/去重/合并、首次提交 `submitAdjustLog`）
 - dict.js：`DICT_AUDIT_STATUS`、`DICT_ADJUST_MODE`、`DICT_ADJUST_TYPE`、`DICT_POOL_TYPE`
 - Controller：`SecurityPoolAdjustController.java`、`SecurityPoolAdjustFlowController.java`
 - Service：`SecurityPoolAdjustService.java`（查询/校验/提交/`createInitialSteps`）、`SecurityPoolAdjustFlowService.java`（修改节点重新提交/`resolveProcessingNodeAuditStatus`/`applyAttachmentChangesForModifySubmit`）

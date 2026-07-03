@@ -277,8 +277,8 @@ syncCompanyBondsOnDirect(companyLog):
 
 ## 9. 关键源码索引
 
-- 前端：`znty-sirm-ui/forbidden_pool_adjust.html`（列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、`openCompanyBondDialog`）
-- 前端公共：`znty-sirm-ui/js/api.js`、`css/forbidden_pool_adjust.css`
+- 前端：`znty-rrs-ui/forbidden_pool_adjust.html`（列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、`openCompanyBondDialog`）
+- 前端公共：`znty-rrs-ui/js/api.js`、`css/forbidden_pool_adjust.css`
 - dict.js / 内联字典：`poolTypeLabel`（forbidden:'禁投池', observe:'观察池', blacklist:'黑名单'）、`auditStatusLabel`/`auditStatusTagType`
 - Controller：`ForbiddenPoolAdjustController.java`（`@RequestMapping("/api/v1/forbiddenPoolAdjust")`，11 端点）
 - Service：`ForbiddenPoolAdjustService.java`（`queryCompanyPage`/`queryCompanyDetail`/`queryCompanyPoolStatus`/`queryCompanyBondList`/`checkCompanyAdjust`/`addCompanyAdjustLog`/`checkAdjust`/`addAdjustLog`/`checkIn/OutConditions`/`isDirectFlow`/`createInitialSteps`/`buildAdjustBatchNo`/`syncCompanyBondsOnDirect`/`buildCompanyBondAutoLog`，`ALLOWED_MANUAL_POOL_IDS={15L,16L,17L}`）

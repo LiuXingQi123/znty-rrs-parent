@@ -205,7 +205,7 @@ this.loadList();                  // 列表数据
 
 ## 11. 关键源码索引
 
-- 前端：`znty-sirm-ui/security_pool_query.html`、`znty-sirm-ui/dict.js`
+- 前端：`znty-rrs-ui/security_pool_query.html`、`znty-rrs-ui/dict.js`
 - Controller：`SecurityPoolQueryController.java`、`CommonController.java`
 - Service：`SecurityPoolQueryService.java`、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
 - Mapper：`SecurityPoolQueryMapper.xml`、`CommonMapper.xml`、`MySecurityPoolMapper.xml`、`InvestmentPoolMapper.xml`

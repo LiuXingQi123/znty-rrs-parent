@@ -140,7 +140,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 
 ## 8. 关键源码索引
 
-- 前端：`znty-sirm-ui/company_pool_query.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`handlePoolTreeConfirm`）
+- 前端：`znty-rrs-ui/company_pool_query.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`handlePoolTreeConfirm`）
 - Controller：`CompanyPoolQueryController.java`、`CommonController.java`
 - Service：`CompanyPoolQueryService.java`（`queryCompanyPoolPage`、`fillPoolFullName`）、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
 - Mapper：`CompanyPoolQueryMapper.xml`、`CommonMapper.xml`
