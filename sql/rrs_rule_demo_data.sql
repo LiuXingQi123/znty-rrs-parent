@@ -1,5 +1,5 @@
 -- ============================================================
--- znty-sirm 规则管理库 - 演示数据初始化脚本
+-- znty-rrs 规则管理库 - 演示数据初始化脚本
 -- 前提：需先执行 rrs_rule_schema.sql 完成建表
 -- 说明：
 --   1. 所有脚本兼容 QLExpress 语法（无 StringBuilder/boolean/int/float 声明）

@@ -1,5 +1,5 @@
 -- ============================================================
--- znty-sirm 系统附件关联表 - 建库建表脚本
+-- znty-rrs 系统附件关联表 - 建库建表脚本
 -- MySQL version: 8.0.33
 -- 说明：首次部署执行，创建系统附件关联表结构
 -- ============================================================
@@ -57,9 +57,9 @@ CREATE TABLE `rrs_report_in`
     `crte_time`     DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`     DATETIME     DEFAULT NULL            COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    KEY `idx_sirm_report_in_type` (`report_type`),
-    KEY `idx_sirm_report_in_security_code` (`security_code`),
-    KEY `idx_sirm_report_in_company_code` (`company_code`)
+    KEY `idx_rrs_report_in_type` (`report_type`),
+    KEY `idx_rrs_report_in_security_code` (`security_code`),
+    KEY `idx_rrs_report_in_company_code` (`company_code`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
@@ -83,9 +83,9 @@ CREATE TABLE `rrs_report_out`
     `crte_time`       DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`       DATETIME     DEFAULT NULL            COMMENT '修改时间',
     PRIMARY KEY (`id`),
-    KEY `idx_sirm_report_out_type` (`report_type`),
-    KEY `idx_sirm_report_out_security_code` (`security_code`),
-    KEY `idx_sirm_report_out_company_code` (`company_code`)
+    KEY `idx_rrs_report_out_type` (`report_type`),
+    KEY `idx_rrs_report_out_security_code` (`security_code`),
+    KEY `idx_rrs_report_out_company_code` (`company_code`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci

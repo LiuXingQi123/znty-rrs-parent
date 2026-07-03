@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.CrmwPoolQueryMapper">
+<mapper namespace="com.znty.rrs.mapper.CrmwPoolQueryMapper">
     <!-- CRMW池查询 mapper，对应表：ip_pool_status_crmw（CRMW投资池当前状态表） -->
 
     <!-- 分页查询CRMW池列表 -->
-    <select id="queryCrmwPoolPage" resultType="com.znty.sirm.entity.crmwpoolquery.CrmwPoolQueryDto">
+    <select id="queryCrmwPoolPage" resultType="com.znty.rrs.entity.crmwpoolquery.CrmwPoolQueryDto">
         SELECT ips.id
                ,ips.adjust_log_id
                ,ips.adjust_batch_no

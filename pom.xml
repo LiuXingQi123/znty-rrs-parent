@@ -16,9 +16,9 @@
 
     <!-- 项目坐标 -->
     <groupId>com.znty</groupId>
-    <artifactId>znty-sirm-parent</artifactId>
+    <artifactId>znty-rrs-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>znty-sirm-parent</name>
+    <name>znty-rrs-parent</name>
     <description>智慧风控平台 — 统一后端服务（规则引擎 + 工作流 + 投资池）</description>
 
     <!-- 统一版本号管理 -->

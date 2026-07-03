@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.SecurityPoolQueryMapper">
+<mapper namespace="com.znty.rrs.mapper.SecurityPoolQueryMapper">
     <!-- 证券池查询 mapper，对应表：ip_pool_status（证券池状态），提供证券池分页查询及证券类型选项查询功能 -->
 
     <!-- 分页查询证券池中的证券列表 -->
-    <select id="querySecurityPoolPage" resultType="com.znty.sirm.entity.securitypoolquery.SecurityPoolQueryDto">
+    <select id="querySecurityPoolPage" resultType="com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryDto">
         SELECT ips.id
                ,ips.security_code
                ,ips.security_short_name
@@ -82,7 +82,7 @@
     </select>
 
     <!-- 查询证券池中出现的证券类型选项 -->
-    <select id="querySecurityTypeList" resultType="com.znty.sirm.entity.common.SecurityTypeOptionDto">
+    <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
                        ,dst.security_type_name
         FROM ip_pool_status ips

@@ -1,10 +1,10 @@
 # ============================================================
-# SIRM — 后端服务配置
+# RRS — 后端服务配置
 # ============================================================
 
 spring:
   application:
-    name: znty-sirm
+    name: znty-rrs
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/znty_rrs?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
@@ -33,9 +33,9 @@ mybatis:
 # 日志配置
 logging:
   level:
-    com.znty.sirm.mapper: DEBUG
+    com.znty.rrs.mapper: DEBUG
 
-# SIRM 业务配置：附件管理模块
-sirm:
+# RRS 业务配置：附件管理模块
+rrs:
   attachment:
-    storage-path: ${SIRM_ATTACHMENT_STORAGE_PATH:D:/data/uploads}
+    storage-path: ${RRS_ATTACHMENT_STORAGE_PATH:D:/data/uploads}

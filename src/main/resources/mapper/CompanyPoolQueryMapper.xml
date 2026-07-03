@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.CompanyPoolQueryMapper">
+<mapper namespace="com.znty.rrs.mapper.CompanyPoolQueryMapper">
     <!-- 主体池查询 mapper，对应表：ip_pool_status（证券池状态），联查 dict_security_type 过滤 category_type='company' 的主体类型，提供发行主体池分页查询功能 -->
 
     <!-- 分页查询主体池列表（通过 dict_security_type 过滤 category_type='company'） -->
-    <select id="queryCompanyPoolPage" resultType="com.znty.sirm.entity.companypool.CompanyPoolQueryDto">
+    <select id="queryCompanyPoolPage" resultType="com.znty.rrs.entity.companypool.CompanyPoolQueryDto">
         SELECT ips.id
                ,ips.security_code
                ,ips.security_short_name

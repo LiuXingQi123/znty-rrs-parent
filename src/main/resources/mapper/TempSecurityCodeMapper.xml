@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.TempSecurityCodeMapper">
+<mapper namespace="com.znty.rrs.mapper.TempSecurityCodeMapper">
     <!-- 临时代码管理 mapper，对应表：rrs_temp_security_code，提供临时代码查询、新增、更新、取消发行和删除功能 -->
 
     <!-- 分页查询临时代码列表 -->
-    <select id="queryTempSecurityCodePage" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto">
+    <select id="queryTempSecurityCodePage" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto">
         SELECT t.id
                ,t.temp_security_name
                ,t.temp_security_code
@@ -45,7 +45,7 @@
     </select>
 
     <!-- 根据 ID 查询临时代码 -->
-    <select id="queryTempSecurityCodeById" resultType="com.znty.sirm.entity.bo.TempSecurityCodeBo">
+    <select id="queryTempSecurityCodeById" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
         SELECT id
                ,temp_security_name
                ,temp_security_code
@@ -72,7 +72,7 @@
     </select>
 
     <!-- 根据 ID 查询临时代码详情 -->
-    <select id="queryTempSecurityCodeDetail" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto">
+    <select id="queryTempSecurityCodeDetail" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto">
         SELECT t.id
                ,t.temp_security_name
                ,t.temp_security_code
@@ -117,7 +117,7 @@
     </select>
 
     <!-- 查询发行主体选项 -->
-    <select id="queryCompanyOptionList" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
+    <select id="queryCompanyOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
         SELECT id AS companyId
                ,code AS companyCode
                ,full_name
@@ -137,7 +137,7 @@
     </select>
 
     <!-- 根据主体 ID 查询发行主体 -->
-    <select id="queryCompanyById" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
+    <select id="queryCompanyById" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
         SELECT id AS companyId
                ,code AS companyCode
                ,full_name
@@ -148,7 +148,7 @@
     </select>
 
     <!-- 查询证券类型选项 -->
-    <select id="querySecurityTypeList" resultType="com.znty.sirm.entity.tempsecuritycode.TempSecurityCodeDto$SecurityTypeOption">
+    <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$SecurityTypeOption">
         SELECT security_type
                ,security_type_name
                ,category_type

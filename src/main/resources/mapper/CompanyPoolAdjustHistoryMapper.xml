@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.CompanyPoolAdjustHistoryMapper">
+<mapper namespace="com.znty.rrs.mapper.CompanyPoolAdjustHistoryMapper">
     <!-- 主体池调整历史 mapper，对应表：ip_adjust_log（调库记录） -->
 
     <!-- 分页查询主体池调整历史 -->
-    <select id="queryCompanyPoolAdjustHistoryPage" resultType="com.znty.sirm.entity.companypool.CompanyPoolAdjustHistoryDto">
+    <select id="queryCompanyPoolAdjustHistoryPage" resultType="com.znty.rrs.entity.companypool.CompanyPoolAdjustHistoryDto">
         SELECT al.id
                ,al.adjuster_name
                ,al.submit_time

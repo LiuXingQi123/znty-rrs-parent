@@ -1,5 +1,5 @@
 -- ============================================================
--- znty-sirm 临时代码管理表 - 建表脚本
+-- znty-rrs 临时代码管理表 - 建表脚本
 -- MySQL version: 8.0.28
 -- 说明：维护临时证券代码、正式证券代码更新及取消发行状态
 -- ============================================================
@@ -33,10 +33,10 @@ CREATE TABLE `rrs_temp_security_code`
     `crte_time`                  DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`                  DATETIME     DEFAULT NULL            COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    KEY `idx_sirm_temp_security_code_temp_code` (`temp_security_code`),
-    KEY `idx_sirm_temp_security_code_security_code` (`security_code`),
-    KEY `idx_sirm_temp_security_code_company` (`temp_company_id`),
-    KEY `idx_sirm_temp_security_code_status` (`status`)
+    KEY `idx_rrs_temp_security_code_temp_code` (`temp_security_code`),
+    KEY `idx_rrs_temp_security_code_security_code` (`security_code`),
+    KEY `idx_rrs_temp_security_code_company` (`temp_company_id`),
+    KEY `idx_rrs_temp_security_code_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='临时代码表';
 
 SET FOREIGN_KEY_CHECKS = 1;

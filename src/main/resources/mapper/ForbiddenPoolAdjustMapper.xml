@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.znty.sirm.mapper.ForbiddenPoolAdjustMapper">
+<mapper namespace="com.znty.rrs.mapper.ForbiddenPoolAdjustMapper">
     <!-- 禁投池主体调整 mapper，提供主体查询、调库记录、池状态和审批流程数据访问 -->
 
     <!-- 分页查询公司主体 -->
-    <select id="queryCompanyPage" resultType="com.znty.sirm.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
+    <select id="queryCompanyPage" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
         SELECT si.id
                ,si.wind_code AS companyCode
                ,si.short_name AS companyShortName
@@ -51,7 +51,7 @@
     </select>
 
     <!-- 查询公司主体详情 -->
-    <select id="queryCompanyDetail" resultType="com.znty.sirm.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
+    <select id="queryCompanyDetail" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
         SELECT si.id
                ,si.wind_code AS companyCode
                ,si.short_name AS companyShortName
@@ -74,14 +74,14 @@
     </select>
 
     <!-- 根据代码查询证券信息实体，主体提交与自动债券调整共用 -->
-    <select id="querySecurityBoByCode" resultType="com.znty.sirm.entity.bo.SecurityInfoBo">
+    <select id="querySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT *
         FROM rrs_securityinfo
         WHERE wind_code = #{securityCode}
     </select>
 
     <!-- 批量查询主体旗下债券数量 -->
-    <select id="queryCompanyBondCountList" resultType="com.znty.sirm.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBondCount">
+    <select id="queryCompanyBondCountList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBondCount">
         SELECT bond.issuer_code AS companyCode
                ,COUNT(DISTINCT bond.wind_code) AS bondCount
         FROM rrs_securityinfo bond
@@ -96,7 +96,7 @@
     </select>
 
     <!-- 查询当前主体所在池 -->
-    <select id="queryCompanyPoolStatusList" resultType="com.znty.sirm.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$PoolStatus">
+    <select id="queryCompanyPoolStatusList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$PoolStatus">
         SELECT ips.target_pool_id
                ,p.pool_name
                ,ips.pool_type
@@ -117,7 +117,7 @@
     </select>
 
     <!-- 查询主体旗下债券所在池汇总 -->
-    <select id="queryCompanyBondPoolList" resultType="com.znty.sirm.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$PoolStatus">
+    <select id="queryCompanyBondPoolList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$PoolStatus">
         SELECT ips.target_pool_id
                ,p.pool_name
                ,ips.pool_type
@@ -145,7 +145,7 @@
     </select>
 
     <!-- 查询主体旗下债券明细 -->
-    <select id="queryCompanyBondList" resultType="com.znty.sirm.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBond">
+    <select id="queryCompanyBondList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBond">
         SELECT bond.wind_code
                ,bond.short_name
                ,bond.full_name
@@ -169,7 +169,7 @@
     </select>
 
     <!-- 查询主体旗下全部债券 -->
-    <select id="queryCompanyBondForAutoList" resultType="com.znty.sirm.entity.bo.SecurityInfoBo">
+    <select id="queryCompanyBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
@@ -234,7 +234,7 @@
     </insert>
 
     <!-- 查询当前证券所在池列表（仅叶子节点） -->
-    <select id="querySecurityPoolStatusList" resultType="com.znty.sirm.entity.securitypooladjust.PoolStatusDto">
+    <select id="querySecurityPoolStatusList" resultType="com.znty.rrs.entity.securitypooladjust.PoolStatusDto">
         SELECT ips.target_pool_id
                ,p.pool_name
                ,ips.pool_type
@@ -256,7 +256,7 @@
     </select>
 
     <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点） -->
-    <select id="queryIssuerPoolStatusList" resultType="com.znty.sirm.entity.securitypooladjust.PoolStatusDto">
+    <select id="queryIssuerPoolStatusList" resultType="com.znty.rrs.entity.securitypooladjust.PoolStatusDto">
         SELECT ips.target_pool_id
                ,p.pool_name
                ,ips.pool_type
@@ -285,7 +285,7 @@
     </select>
 
     <!-- 根据主体代码查询调库记录列表 -->
-    <select id="queryAdjustLogList" resultType="com.znty.sirm.entity.bo.IpAdjustLogBo">
+    <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
                ,al.security_code
                ,al.security_short_name
@@ -344,7 +344,7 @@
     </select>
 
     <!-- 查询各投资池当前有效证券数量 -->
-    <select id="queryPoolCurrentCountList" resultType="com.znty.sirm.entity.securitypooladjust.PoolDto">
+    <select id="queryPoolCurrentCountList" resultType="com.znty.rrs.entity.securitypooladjust.PoolDto">
         SELECT target_pool_id AS id
                ,COUNT(DISTINCT security_code) AS currentCount
         FROM ip_pool_status
@@ -681,7 +681,7 @@
     </insert>
 
     <!-- 查询指定调库记录的流程步骤列表 -->
-    <select id="queryAdjustStepList" resultType="com.znty.sirm.entity.bo.IpAdjustStepBo">
+    <select id="queryAdjustStepList" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -704,7 +704,7 @@
     </select>
 
     <!-- 查询指定批次或调库记录的流程步骤列表 -->
-    <select id="queryAdjustStepByBatchList" resultType="com.znty.sirm.entity.bo.IpAdjustStepBo">
+    <select id="queryAdjustStepByBatchList" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -736,7 +736,7 @@
     </select>
 
     <!-- 根据 ID 查询流程步骤 -->
-    <select id="queryAdjustStepById" resultType="com.znty.sirm.entity.bo.IpAdjustStepBo">
+    <select id="queryAdjustStepById" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -758,7 +758,7 @@
     </select>
 
     <!-- 按处理人查询同批次同节点待处理步骤 -->
-    <select id="queryPendingStepByHandler" resultType="com.znty.sirm.entity.bo.IpAdjustStepBo">
+    <select id="queryPendingStepByHandler" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
                ,adjust_batch_no
@@ -841,7 +841,7 @@
     </select>
 
     <!-- 查询指定批次或调库记录的调库日志列表 -->
-    <select id="queryAdjustLogListForAudit" resultType="com.znty.sirm.entity.bo.IpAdjustLogBo">
+    <select id="queryAdjustLogListForAudit" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT id
                ,security_code
                ,security_short_name
@@ -896,7 +896,7 @@
     </update>
 
     <!-- 查询全量投资池关系配置（不限关系类型） -->
-    <select id="queryAllPoolRelationList" resultType="com.znty.sirm.entity.bo.PoolRelationBo">
+    <select id="queryAllPoolRelationList" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
         SELECT pool_id
                ,relation_type
                ,relation_pool_id
