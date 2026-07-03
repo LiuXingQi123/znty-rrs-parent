@@ -6,7 +6,7 @@ import java.util.Date;
 import lombok.Data;
 
 /**
- * 人员业务对象
+ * 用户业务对象
  */
 @Data
 public class UserBo {
@@ -14,7 +14,7 @@ public class UserBo {
     /** 主键 ID */
     private Long id;
 
-    /** 人员姓名 */
+    /** 用户姓名 */
     private String name;
 
     /** 登录用户名/拼音 */

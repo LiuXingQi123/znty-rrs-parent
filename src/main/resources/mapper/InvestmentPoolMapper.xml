@@ -894,33 +894,32 @@
         SELECT id
                ,name
                ,parent_id
-               ,sort_order
+               ,NULL AS sort_order
                ,enable
-               ,crte_time
-               ,updt_time
+               ,ts AS crte_time
+               ,ts AS updt_time
         FROM ais_inv_analysis.t_sys_role
         WHERE enable = 1
-        ORDER BY sort_order ASC
-                 ,id ASC
+        ORDER BY id ASC
     </select>
 
-    <!-- 查询人员列表 -->
+    <!-- 查询用户列表 -->
     <select id="queryUserList" resultType="com.znty.rrs.entity.bo.UserBo">
         SELECT u.id
                ,u.name
                ,u.user_name
                ,u.dr
-               ,u.crte_time
-               ,u.updt_time
-               ,GROUP_CONCAT(DISTINCT r.name ORDER BY r.sort_order ASC SEPARATOR '、') AS roleName
+               ,u.ts AS crte_time
+               ,u.ts AS updt_time
+               ,GROUP_CONCAT(DISTINCT r.name ORDER BY r.id ASC SEPARATOR '、') AS roleName
         FROM ais_inv_analysis.t_sys_user u
-        LEFT JOIN ais_inv_analysis.t_sys_user_role ur ON ur.user_id = u.id AND ur.dr = 0
+        LEFT JOIN ais_inv_analysis.t_sys_user_role ur ON ur.user_id = u.id
         LEFT JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
         WHERE u.dr = 0
         <if test="roleIds != null and roleIds.size() > 0">
             AND EXISTS (
                 SELECT 1 FROM ais_inv_analysis.t_sys_user_role ur2
-                WHERE ur2.user_id = u.id AND ur2.dr = 0
+                WHERE ur2.user_id = u.id
                   AND ur2.role_id IN
                 <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
                     #{roleId}
@@ -934,8 +933,7 @@
                  ,u.name
                  ,u.user_name
                  ,u.dr
-                 ,u.crte_time
-                 ,u.updt_time
+                 ,u.ts
         ORDER BY u.id ASC
     </select>
 
@@ -983,7 +981,6 @@
         FROM ais_inv_analysis.t_sys_user_role ur
         INNER JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
         WHERE ur.user_id = #{userId}
-          AND ur.dr = 0
     </select>
 
     <!-- 新增投资池权限 -->

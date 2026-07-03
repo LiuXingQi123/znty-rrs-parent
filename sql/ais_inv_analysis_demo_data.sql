@@ -1,7 +1,7 @@
 -- ============================================================
 -- AIS 投资分析库 - 演示数据初始化脚本
 -- 前提：需先执行 ais_inv_analysis_schema.sql 完成建表
--- 说明：初始化主体评级、角色、人员及人员角色关联样例数据
+-- 说明：初始化主体评级、角色、用户及用户角色关联样例数据
 -- ============================================================
 
 USE `ais_inv_analysis`;
@@ -11,9 +11,6 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- ----------------------------------------------------------------------------
 -- 清空业务表
 -- ----------------------------------------------------------------------------
-TRUNCATE TABLE `t_sys_user_role_evt`;
-TRUNCATE TABLE `t_sys_user_evt`;
-TRUNCATE TABLE `t_sys_role_evt`;
 TRUNCATE TABLE `t_inv_grade_result`;
 TRUNCATE TABLE `t_sys_user_role`;
 TRUNCATE TABLE `t_inv_company`;
@@ -101,61 +98,89 @@ INSERT INTO `t_inv_grade_result` (
  1003, '2026-06-03 15:30:00', '地产销售回款承压，纳入重点观察。', 2, 64.20, 'focus');
 
 -- ----------------------------------------------------------------------------
--- 角色和人员样例
+-- 角色和用户样例
 -- ----------------------------------------------------------------------------
 -- 角色树：研究部 > 信用研究组 > 利率研究组
-INSERT INTO `t_sys_role` (`id`, `name`, `parent_id`, `sort_order`, `enable`, `crte_time`, `updt_time`) VALUES
-(1, '研究部',       NULL, 1, 1, NOW(), NOW()),
-(2, '信用研究组',   1,    2, 1, NOW(), NOW()),
-(3, '利率研究组',   2,    3, 1, NOW(), NOW()),
-(4, '固收部',       NULL, 4, 1, NOW(), NOW()),
-(5, '利率组',       4,    5, 1, NOW(), NOW()),
-(6, '信用组',       4,    6, 1, NOW(), NOW()),
-(7, '权益部',       NULL, 7, 1, NOW(), NOW()),
-(8, '行业研究组',   7,    8, 1, NOW(), NOW()),
-(9, '量化部',       NULL, 9, 1, NOW(), NOW()),
-(10, '风险管理部',  NULL, 10, 1, NOW(), NOW());
+INSERT INTO `t_sys_role` (
+    `id`
+    ,`name`
+    ,`enable`
+    ,`ts`
+    ,`code`
+    ,`memo`
+    ,`parent_id`
+    ,`inherit_role_ids`
+) VALUES
+(1, '研究部',      1, NOW(), 'ROLE_RESEARCH',       '研究部门',       NULL, NULL),
+(2, '信用研究组',  1, NOW(), 'ROLE_CREDIT_RESEARCH','信用研究小组',   1,    NULL),
+(3, '利率研究组',  1, NOW(), 'ROLE_RATE_RESEARCH',  '利率研究小组',   2,    NULL),
+(4, '固收部',      1, NOW(), 'ROLE_FIXED_INCOME',   '固定收益部门',   NULL, NULL),
+(5, '利率组',      1, NOW(), 'ROLE_RATE',           '利率小组',       4,    NULL),
+(6, '信用组',      1, NOW(), 'ROLE_CREDIT',         '信用小组',       4,    NULL),
+(7, '权益部',      1, NOW(), 'ROLE_EQUITY',         '权益部门',       NULL, NULL),
+(8, '行业研究组',  1, NOW(), 'ROLE_INDUSTRY',       '行业研究小组',   7,    NULL),
+(9, '量化部',      1, NOW(), 'ROLE_QUANT',          '量化部门',       NULL, NULL),
+(10, '风险管理部', 1, NOW(), 'ROLE_RISK',           '风险管理部门',   NULL, NULL);
 
--- 人员
-INSERT INTO `t_sys_user` (`id`, `name`, `user_name`, `dr`, `crte_time`, `updt_time`) VALUES
-(1,  '研究员1', 'yanjiuyuan1', 0, NOW(), NOW()),
-(2,  '研究员2', 'yanjiuyuan2', 0, NOW(), NOW()),
-(3,  '研究员3', 'yanjiuyuan3', 0, NOW(), NOW()),
-(4,  '研究员4', 'yanjiuyuan4', 0, NOW(), NOW()),
-(5,  '研究员5', 'yanjiuyuan5', 0, NOW(), NOW()),
-(6,  '固收1', 'gushou1', 0, NOW(), NOW()),
-(7,  '固收2', 'gushou2', 0, NOW(), NOW()),
-(8,  '固收3', 'gushou3', 0, NOW(), NOW()),
-(9,  '固收4', 'gushou4', 0, NOW(), NOW()),
-(10,  '权益1', 'quanyi1', 0, NOW(), NOW()),
-(11,  '权益2', 'quanyi2', 0, NOW(), NOW()),
-(12,  '权益3', 'quanyi3', 0, NOW(), NOW()),
-(13,  '量化1', 'lianghua1', 0, NOW(), NOW()),
-(14,  '量化2', 'lianghua2', 0, NOW(), NOW()),
-(15,  '风控经理', 'fengkongjingli', 0, NOW(), NOW()),
-(1001,  '管理员', 'admin', 0, NOW(), NOW());
+-- 用户
+INSERT INTO `t_sys_user` (
+    `id`
+    ,`user_id`
+    ,`name`
+    ,`user_name`
+    ,`user_eng_name`
+    ,`ts`
+    ,`dr`
+    ,`pwd`
+    ,`oapwd`
+    ,`ORGID`
+    ,`TEL`
+    ,`MOBILE`
+    ,`EMAIL`
+) VALUES
+(1,    1,    '研究员1', 'yanjiuyuan1',      'researcher1',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan1@example.com'),
+(2,    2,    '研究员2', 'yanjiuyuan2',      'researcher2',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan2@example.com'),
+(3,    3,    '研究员3', 'yanjiuyuan3',      'researcher3',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan3@example.com'),
+(4,    4,    '研究员4', 'yanjiuyuan4',      'researcher4',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan4@example.com'),
+(5,    5,    '研究员5', 'yanjiuyuan5',      'researcher5',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan5@example.com'),
+(6,    6,    '固收1',   'gushou1',          'fixed_income1',        NOW(), 0, NULL, NULL, 'ORG_FIXED',    NULL, NULL, 'gushou1@example.com'),
+(7,    7,    '固收2',   'gushou2',          'fixed_income2',        NOW(), 0, NULL, NULL, 'ORG_FIXED',    NULL, NULL, 'gushou2@example.com'),
+(8,    8,    '固收3',   'gushou3',          'fixed_income3',        NOW(), 0, NULL, NULL, 'ORG_FIXED',    NULL, NULL, 'gushou3@example.com'),
+(9,    9,    '固收4',   'gushou4',          'fixed_income4',        NOW(), 0, NULL, NULL, 'ORG_FIXED',    NULL, NULL, 'gushou4@example.com'),
+(10,   10,   '权益1',   'quanyi1',          'equity1',              NOW(), 0, NULL, NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi1@example.com'),
+(11,   11,   '权益2',   'quanyi2',          'equity2',              NOW(), 0, NULL, NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi2@example.com'),
+(12,   12,   '权益3',   'quanyi3',          'equity3',              NOW(), 0, NULL, NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi3@example.com'),
+(13,   13,   '量化1',   'lianghua1',        'quant1',               NOW(), 0, NULL, NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua1@example.com'),
+(14,   14,   '量化2',   'lianghua2',        'quant2',               NOW(), 0, NULL, NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua2@example.com'),
+(15,   15,   '风控经理', 'fengkongjingli',   'risk_manager',         NOW(), 0, NULL, NULL, 'ORG_RISK',     NULL, NULL, 'fengkongjingli@example.com'),
+(1001, 1001, '管理员',   'admin',            'admin',                NOW(), 0, NULL, NULL, 'ORG_ADMIN',    NULL, NULL, 'admin@example.com');
 
-INSERT INTO `t_sys_user_role` (`id`, `user_id`, `role_id`, `dr`, `crte_time`, `updt_time`) VALUES
-(1,  1,  1, 0, NOW(), NOW()),  -- 研究员1: 研究部
-(2,  1,  2, 0, NOW(), NOW()),  -- 研究员1: 信用研究组
-(3,  2,  2, 0, NOW(), NOW()),  -- 研究员2: 信用研究组
-(4,  2,  3, 0, NOW(), NOW()),  -- 研究员2: 利率研究组
-(5,  3,  1, 0, NOW(), NOW()),  -- 研究员3: 研究部
-(6,  3,  3, 0, NOW(), NOW()),  -- 研究员3: 利率研究组
-(7,  4,  2, 0, NOW(), NOW()),  -- 研究员4: 信用研究组
-(8,  5,  3, 0, NOW(), NOW()),  -- 研究员5: 利率研究组
-(9,  6,  4, 0, NOW(), NOW()),  -- 固收1: 固收部
-(10, 6,  5, 0, NOW(), NOW()),  -- 固收1: 利率组
-(11, 7,  4, 0, NOW(), NOW()),  -- 固收2: 固收部
-(12, 7,  6, 0, NOW(), NOW()),  -- 固收2: 信用组
-(13, 8,  5, 0, NOW(), NOW()),  -- 固收3: 利率组
-(14, 9,  6, 0, NOW(), NOW()),  -- 固收4: 信用组
-(15, 10, 7, 0, NOW(), NOW()),  -- 权益1: 权益部
-(16, 10, 8, 0, NOW(), NOW()),  -- 权益1: 行业研究组
-(17, 11, 7, 0, NOW(), NOW()),  -- 权益2: 权益部
-(18, 12, 8, 0, NOW(), NOW()),  -- 权益3: 行业研究组
-(19, 13, 9, 0, NOW(), NOW()),  -- 量化1: 量化部
-(20, 14, 9, 0, NOW(), NOW()),  -- 量化2: 量化部
-(21, 15, 10, 0, NOW(), NOW()); -- 风控经理: 风险管理部
+INSERT INTO `t_sys_user_role` (
+    `id`
+    ,`role_id`
+    ,`user_id`
+    ,`ts`
+) VALUES
+(1,  1,  1,  NOW()),  -- 研究员1: 研究部
+(2,  2,  1,  NOW()),  -- 研究员1: 信用研究组
+(3,  2,  2,  NOW()),  -- 研究员2: 信用研究组
+(4,  3,  2,  NOW()),  -- 研究员2: 利率研究组
+(5,  1,  3,  NOW()),  -- 研究员3: 研究部
+(6,  3,  3,  NOW()),  -- 研究员3: 利率研究组
+(7,  2,  4,  NOW()),  -- 研究员4: 信用研究组
+(8,  3,  5,  NOW()),  -- 研究员5: 利率研究组
+(9,  4,  6,  NOW()),  -- 固收1: 固收部
+(10, 5,  6,  NOW()),  -- 固收1: 利率组
+(11, 4,  7,  NOW()),  -- 固收2: 固收部
+(12, 6,  7,  NOW()),  -- 固收2: 信用组
+(13, 5,  8,  NOW()),  -- 固收3: 利率组
+(14, 6,  9,  NOW()),  -- 固收4: 信用组
+(15, 7,  10, NOW()),  -- 权益1: 权益部
+(16, 8,  10, NOW()),  -- 权益1: 行业研究组
+(17, 7,  11, NOW()),  -- 权益2: 权益部
+(18, 8,  12, NOW()),  -- 权益3: 行业研究组
+(19, 9,  13, NOW()),  -- 量化1: 量化部
+(20, 9,  14, NOW()),  -- 量化2: 量化部
+(21, 10, 15, NOW()); -- 风控经理: 风险管理部
 
 SET FOREIGN_KEY_CHECKS = 1;
