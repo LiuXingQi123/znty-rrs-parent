@@ -948,6 +948,10 @@ public class SecurityPoolAdjustService {
         current.setFundUse(changedField.getFundUse());
         current.setPromptReason(changedField.getPromptReason());
         current.setAnalysis(changedField.getAnalysis());
+        current.setDateRepurchaseExists(changedField.getDateRepurchaseExists());
+        current.setGuarantFlag(changedField.getGuarantFlag());
+        current.setGuarantType(changedField.getGuarantType());
+        current.setAbsFlag(changedField.getAbsFlag());
     }
 
     // ═══════════════════════════════════════════════════════════

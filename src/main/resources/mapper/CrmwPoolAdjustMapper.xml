@@ -483,6 +483,10 @@
            ,inner_guarantor_rating = #{securityInfo.innerGuarantorRating}
            ,prompt_reason = #{securityInfo.promptReason}
            ,analysis = #{securityInfo.analysis}
+           ,date_repurchase_exists = #{securityInfo.dateRepurchaseExists}
+           ,guarant_flag = #{securityInfo.guarantFlag}
+           ,guarant_type = #{securityInfo.guarantType}
+           ,abs_flag = #{securityInfo.absFlag}
         WHERE wind_code = #{securityCode}
     </update>
 

@@ -136,6 +136,10 @@ CREATE TABLE `rrs_securityinfo`
     `inner_guarantor_rating`     varchar(50)     DEFAULT NULL COMMENT '担保人主体内评分',
     `prompt_reason`              longtext        COMMENT '提示原因',
     `analysis`                   longtext        COMMENT '证券分析',
+    `date_repurchase_exists`     varchar(10)     DEFAULT NULL COMMENT '回购剩余期限-最新',
+    `guarant_flag`               int             DEFAULT NULL COMMENT '是否担保',
+    `guarant_type`               varchar(100)    DEFAULT NULL COMMENT '担保类型',
+    `abs_flag`                   int             DEFAULT NULL COMMENT '是否 ABS',
 
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB

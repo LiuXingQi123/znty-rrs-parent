@@ -177,4 +177,12 @@ public class SecurityInfoBo {
     private String promptReason;
     /** 证券分析 */
     private String analysis;
+    /** 回购剩余期限-最新 */
+    private String dateRepurchaseExists;
+    /** 是否担保 */
+    private Integer guarantFlag;
+    /** 担保类型 */
+    private String guarantType;
+    /** 是否 ABS */
+    private Integer absFlag;
 }
