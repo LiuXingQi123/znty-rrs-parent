@@ -115,25 +115,6 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
-                    <!-- JDK 17 运行 Spring 4.x CGLIB 需开放 java.base 反射 -->
-                    <jvmArguments>
-                        --add-opens=java.base/java.lang=ALL-UNNAMED
-                        --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                        --add-opens=java.base/java.util=ALL-UNNAMED
-                    </jvmArguments>
-                </configuration>
-            </plugin>
-
-            <!-- 测试插件：JDK 17 运行 Spring 4.x CGLIB 需开放 java.base 反射 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>
-                        --add-opens=java.base/java.lang=ALL-UNNAMED
-                        --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                        --add-opens=java.base/java.util=ALL-UNNAMED
-                    </argLine>
                 </configuration>
             </plugin>
         </plugins>
