@@ -4,13 +4,9 @@
 -- 说明：首次部署执行，创建数据库和全部业务表结构
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS znty_rrs
-  DEFAULT CHARACTER SET utf8mb4
-  DEFAULT COLLATE utf8mb4_unicode_ci;
-
-USE znty_rrs;
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
@@ -40,7 +36,7 @@ CREATE TABLE `rule_category` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '规则分类表';
 
 -- ----------------------------------------------------------------------------
@@ -59,7 +55,7 @@ CREATE TABLE `rule_definition` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '规则定义表';
 
 -- ----------------------------------------------------------------------------
@@ -78,7 +74,7 @@ CREATE TABLE `rule_param` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '规则参数表';
 
 -- ----------------------------------------------------------------------------
@@ -95,7 +91,7 @@ CREATE TABLE `rule_param_option` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '规则参数选项表';
 
 -- ----------------------------------------------------------------------------
@@ -111,7 +107,7 @@ CREATE TABLE `rule_preset_option_set` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '参数预设选项集表';
 
 -- ----------------------------------------------------------------------------
@@ -128,7 +124,7 @@ CREATE TABLE `rule_preset_option_item` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '参数预设选项明细表';
 
 -- ----------------------------------------------------------------------------
@@ -147,7 +143,7 @@ CREATE TABLE `rule_test_case` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '规则测试用例表';
 
 -- ----------------------------------------------------------------------------
@@ -165,7 +161,7 @@ CREATE TABLE `rule_test_case_param` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '测试用例参数值表';
 
 -- ----------------------------------------------------------------------------
@@ -185,7 +181,7 @@ CREATE TABLE `rule_test_run` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '测试执行记录表';
 
 -- ----------------------------------------------------------------------------
@@ -202,5 +198,5 @@ CREATE TABLE `rule_test_run_log` (
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '测试执行日志表';

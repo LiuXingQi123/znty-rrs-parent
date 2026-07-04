@@ -4,10 +4,9 @@
 -- 说明：创建主体评级、角色、用户及用户角色关联表
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS `ais_inv_analysis` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS `ais_inv_analysis` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE `ais_inv_analysis`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
@@ -133,5 +132,3 @@ CREATE TABLE `t_sys_user_role` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '用户角色关联表';
-
-SET FOREIGN_KEY_CHECKS = 1;

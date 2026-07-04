@@ -4,9 +4,9 @@
 -- 说明：维护临时证券代码、正式证券代码更新及取消发行状态
 -- ============================================================
 
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `rrs_temp_security_code`;
 
@@ -37,6 +37,4 @@ CREATE TABLE `rrs_temp_security_code`
     KEY `idx_rrs_temp_security_code_security_code` (`security_code`),
     KEY `idx_rrs_temp_security_code_company` (`temp_company_id`),
     KEY `idx_rrs_temp_security_code_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='临时代码表';
-
-SET FOREIGN_KEY_CHECKS = 1;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='临时代码表';

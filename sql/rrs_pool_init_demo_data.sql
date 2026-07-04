@@ -3,9 +3,10 @@
 -- MySQL version: 8.0.28
 -- 说明：首次部署执行，插入投资池相关测试数据
 -- ============================================================
+
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 清空所有业务表

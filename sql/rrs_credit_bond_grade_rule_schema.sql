@@ -4,10 +4,9 @@
 -- 说明：创建信用债大库评级准入矩阵配置表
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 1. 删除旧表（若存在）
@@ -36,7 +35,7 @@ CREATE TABLE `credit_bond_term_bucket` (
     UNIQUE KEY `uk_credit_bond_term_bucket_code` (`bucket_code`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '信用债期限分组配置表';
 
 CREATE TABLE `credit_bond_inner_rating_grade` (
@@ -51,7 +50,7 @@ CREATE TABLE `credit_bond_inner_rating_grade` (
     UNIQUE KEY `uk_credit_bond_inner_rating_grade_code` (`grade_code`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '信用债主体内评分档字典表';
 
 CREATE TABLE `credit_bond_pool_grade_rule` (
@@ -71,7 +70,5 @@ CREATE TABLE `credit_bond_pool_grade_rule` (
     KEY `idx_credit_bond_pool_grade_rule_term_grade` (`term_bucket_id`, `inner_rating_grade_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '信用债期限主体内评分档投资池关系表';
-
-SET FOREIGN_KEY_CHECKS = 1;

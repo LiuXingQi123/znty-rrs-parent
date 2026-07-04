@@ -9,10 +9,9 @@
 --   4. 每张业务表附带同结构事件表（_evt），用于操作审计
 -- ============================================================================
 
-USE znty_rrs;
-
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
@@ -62,7 +61,7 @@ CREATE TABLE `wf_flow_definition` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程定义主表';
 
 CREATE TABLE `wf_flow_definition_evt` (
@@ -86,7 +85,7 @@ CREATE TABLE `wf_flow_definition_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程定义事件表（操作审计）';
 
 
@@ -115,7 +114,7 @@ CREATE TABLE `wf_flow_version` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程版本表，每次发布生成一条记录，含画布快照';
 
 CREATE TABLE `wf_flow_version_evt` (
@@ -143,7 +142,7 @@ CREATE TABLE `wf_flow_version_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程版本事件表（操作审计）';
 
 
@@ -170,7 +169,7 @@ CREATE TABLE `wf_flow_node` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程节点表，对应画布中每个节点（通用字段）';
 
 CREATE TABLE `wf_flow_node_evt` (
@@ -195,7 +194,7 @@ CREATE TABLE `wf_flow_node_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程节点事件表（操作审计）';
 
 
@@ -213,7 +212,7 @@ CREATE TABLE `wf_node_approval_config` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '审批节点专属配置表（approval 类型）';
 
 CREATE TABLE `wf_node_approval_config_evt` (
@@ -231,7 +230,7 @@ CREATE TABLE `wf_node_approval_config_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '审批节点配置事件表（操作审计）';
 
 CREATE TABLE `wf_node_approval_handler` (
@@ -247,7 +246,7 @@ CREATE TABLE `wf_node_approval_handler` (
     KEY `idx_approval_handler_config` (`approval_config_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '审批节点处理人明细表，支持角色和人员混选';
 
 CREATE TABLE `wf_node_approval_handler_evt` (
@@ -267,7 +266,7 @@ CREATE TABLE `wf_node_approval_handler_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '审批节点处理人明细事件表（操作审计）';
 
 
@@ -289,7 +288,7 @@ CREATE TABLE `wf_node_auto_config` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '自动执行节点任务配置表（auto 类型，一节点多任务）';
 
 CREATE TABLE `wf_node_auto_config_evt` (
@@ -308,7 +307,7 @@ CREATE TABLE `wf_node_auto_config_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '自动执行节点配置事件表（操作审计）';
 
 
@@ -330,7 +329,7 @@ CREATE TABLE `wf_node_notify_config` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '消息通知节点专属配置表（notify 类型）';
 
 CREATE TABLE `wf_node_notify_config_evt` (
@@ -351,7 +350,7 @@ CREATE TABLE `wf_node_notify_config_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '消息通知节点配置事件表（操作审计）';
 
 
@@ -371,7 +370,7 @@ CREATE TABLE `wf_node_condition_config` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '条件节点专属配置表（condition 类型）';
 
 CREATE TABLE `wf_node_condition_config_evt` (
@@ -388,7 +387,7 @@ CREATE TABLE `wf_node_condition_config_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '条件节点配置事件表（操作审计）';
 
 
@@ -414,7 +413,7 @@ CREATE TABLE `wf_flow_edge` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程连线表，记录节点间的有向边';
 
 CREATE TABLE `wf_flow_edge_evt` (
@@ -438,7 +437,7 @@ CREATE TABLE `wf_flow_edge_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程连线事件表（操作审计）';
 
 
@@ -463,7 +462,7 @@ CREATE TABLE `wf_edge_cond_rule` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '连线条件规则表，一条连线可配置多条规则，规则间逻辑以 wf_flow_edge.cond_logic 连接';
 
 CREATE TABLE `wf_edge_cond_rule_evt` (
@@ -483,7 +482,7 @@ CREATE TABLE `wf_edge_cond_rule_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '连线条件规则事件表（操作审计）';
 
 
@@ -504,7 +503,7 @@ CREATE TABLE `wf_role_dict` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '业务角色字典表，维护审批人/通知人的角色选项';
 
 CREATE TABLE `wf_role_dict_evt` (
@@ -523,7 +522,7 @@ CREATE TABLE `wf_role_dict_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '业务角色字典事件表（操作审计）';
 
 
@@ -539,7 +538,6 @@ INSERT INTO `wf_role_dict` (`role_code`, `role_name`, `sort_order`, `is_active`,
     ('admin',           '系统管理员', 6, 1, NOW(), NOW());
 
 
-SET FOREIGN_KEY_CHECKS = 1;
 
 
 -- ============================================================================

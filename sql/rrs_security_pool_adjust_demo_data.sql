@@ -3,9 +3,10 @@
 -- MySQL version: 8.0.28
 -- 说明：首次部署执行，插入测试用证券数据
 -- ============================================================
-USE znty_rrs;
+
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ============================================================================
 -- 清空所有业务表

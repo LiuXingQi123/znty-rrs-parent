@@ -4,9 +4,9 @@
 -- 说明：初始化信用债大库评级准入矩阵配置
 -- ============================================================
 
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 TRUNCATE TABLE `credit_bond_pool_grade_rule`;
 TRUNCATE TABLE `credit_bond_inner_rating_grade`;
@@ -116,5 +116,3 @@ INSERT INTO `credit_bond_pool_grade_rule` (
 (36, 2, 8, 6, 'credit_bond_level_5', '五级库', 1, 1, NOW(), NOW()),
 (37, 3, 8, 6, 'credit_bond_level_5', '五级库', 1, 1, NOW(), NOW()),
 (38, 4, 8, 6, 'credit_bond_level_5', '五级库', 1, 1, NOW(), NOW());
-
-SET FOREIGN_KEY_CHECKS = 1;

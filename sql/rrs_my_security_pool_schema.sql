@@ -4,11 +4,9 @@
 -- 说明：用户可将关注的证券（证券/股票/基金/公司等）添加到个人收藏池
 -- ============================================================
 
-USE
-znty_rrs;
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET
-FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
@@ -32,5 +30,5 @@ CREATE TABLE `my_security_pool`
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
     COMMENT = '我的证券池';

@@ -4,7 +4,8 @@
 -- 说明：首次部署执行，创建系统附件关联表结构
 -- ============================================================
 
-USE znty_rrs;
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 
 -- ----------------------------------------------------------------------------
@@ -37,7 +38,7 @@ CREATE TABLE `sys_attachment`
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '系统附件关联表';
 
 -- ----------------------------------------------------------------------------
@@ -62,7 +63,7 @@ CREATE TABLE `rrs_report_in`
     KEY `idx_rrs_report_in_company_code` (`company_code`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '内部报告库表';
 
 -- ----------------------------------------------------------------------------
@@ -88,5 +89,5 @@ CREATE TABLE `rrs_report_out`
     KEY `idx_rrs_report_out_company_code` (`company_code`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '外部报告库表';

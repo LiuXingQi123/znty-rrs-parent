@@ -4,9 +4,9 @@
 -- 说明：初始化主体评级、角色、用户及用户角色关联样例数据
 -- ============================================================
 
+CREATE DATABASE IF NOT EXISTS `ais_inv_analysis` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE `ais_inv_analysis`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 清空业务表
@@ -182,5 +182,3 @@ INSERT INTO `t_sys_user_role` (
 (19, 9,  13, NOW()),  -- 量化1: 量化部
 (20, 9,  14, NOW()),  -- 量化2: 量化部
 (21, 10, 15, NOW()); -- 风控经理: 风险管理部
-
-SET FOREIGN_KEY_CHECKS = 1;

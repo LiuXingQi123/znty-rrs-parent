@@ -4,7 +4,8 @@
 -- 说明：首次部署执行，插入系统附件关联表测试数据
 -- ============================================================
 
-USE znty_rrs;
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 
 -- ----------------------------------------------------------------------------
@@ -207,4 +208,3 @@ INSERT INTO `sys_attachment` (
  'report_file_out_20260612105000_7.pdf', 1515520, 'application/pdf',
  '/api/v1/attachments/downloadAttachment', '20260612/report_file_out_20260612105000_7.pdf',
  '1001', 0, NOW(), NOW());
-

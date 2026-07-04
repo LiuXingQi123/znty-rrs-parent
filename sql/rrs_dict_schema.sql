@@ -4,9 +4,9 @@
 -- 说明：首次部署执行，创建证券类型等字典配置表结构
 -- ============================================================
 
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
@@ -29,5 +29,5 @@ CREATE TABLE `dict_security_type` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '证券类型字典表';

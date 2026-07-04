@@ -5,10 +5,10 @@
 -- ============================================================
 
 -- 1. 环境初始化
-CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- 2. 删除旧表（若存在）
@@ -66,7 +66,7 @@ CREATE TABLE `ip_investment_pool` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池主表';
 
 CREATE TABLE `ip_pool_relation` (
@@ -83,7 +83,7 @@ CREATE TABLE `ip_pool_relation` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池关系配置表';
 
 CREATE TABLE `ip_pool_auto_rule` (
@@ -98,7 +98,7 @@ CREATE TABLE `ip_pool_auto_rule` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池自动调入调出规则备注表';
 
 CREATE TABLE `ip_pool_permission` (
@@ -114,7 +114,7 @@ CREATE TABLE `ip_pool_permission` (
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池权限配置表';
 
 -- ----------------------------------------------------------------------------
@@ -165,7 +165,7 @@ CREATE TABLE `ip_investment_pool_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池主表（操作审计）';
 
 CREATE TABLE `ip_pool_relation_evt` (
@@ -186,7 +186,7 @@ CREATE TABLE `ip_pool_relation_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池关系配置表（操作审计）';
 
 CREATE TABLE `ip_pool_auto_rule_evt` (
@@ -205,7 +205,7 @@ CREATE TABLE `ip_pool_auto_rule_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池自动调入调出规则备注表（操作审计）';
 
 CREATE TABLE `ip_pool_permission_evt` (
@@ -225,5 +225,5 @@ CREATE TABLE `ip_pool_permission_evt` (
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池权限配置表（操作审计）';

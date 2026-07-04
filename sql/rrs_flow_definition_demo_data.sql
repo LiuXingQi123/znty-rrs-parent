@@ -19,14 +19,13 @@
 --     o32-auto        → admin（o32自动审批）
 -- ============================================================================
 
-USE znty_rrs;
-
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ============================================================================
 -- 清空所有业务表（TRUNCATE：重置自增 ID + 释放索引空间，比 DELETE 快）
--- 按依赖倒序：先叶子后主干，虽有关闭 FK 校验兜底但仍保持良好习惯
+-- 按逻辑依赖倒序：先叶子后主干，避免清理数据时出现引用残留
 -- ============================================================================
 TRUNCATE TABLE `wf_edge_cond_rule`;
 TRUNCATE TABLE `wf_edge_cond_rule_evt`;
@@ -722,7 +721,6 @@ VALUES
 (120051, 12005, 'role', 9, '量化部', 1, '2026-05-20 09:00:00', '2026-05-20 09:00:00'),
 (120052, 12005, 'user', 1001, '管理员', 2, '2026-05-20 09:00:00', '2026-05-20 09:00:00');
 
-SET FOREIGN_KEY_CHECKS = 1;
 
 -- 初始化结果校验：仅保留 flow 101-120，共 20 条流程
 SELECT SUM(CASE WHEN is_deleted = 0 THEN 1 ELSE 0 END) AS active_definition_count

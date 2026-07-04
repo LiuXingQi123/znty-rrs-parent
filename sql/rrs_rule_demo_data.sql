@@ -8,9 +8,10 @@
 --   4. 测试用例覆盖 pass / fail / pending 三种状态
 --   5. 10张表全覆盖：6分类 + 12预设集 + 10规则 + 40参数 + 110选项 + 18用例 + 62用例参数 + 16执行记录 + 16日志
 -- ============================================================
-USE znty_rrs;
+
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
 
 -- ============================================================================
 -- 清空所有业务表（TRUNCATE：重置自增 ID + 释放索引空间，比 DELETE 快）

@@ -4,7 +4,8 @@
 -- 说明：首次部署执行，创建CRMW投资池当前状态表
 -- ============================================================
 
-USE znty_rrs;
+CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `znty_rrs`;
 SET NAMES utf8mb4;
 
 -- ----------------------------------------------------------------------------
@@ -49,5 +50,5 @@ CREATE TABLE `ip_pool_status_crmw`
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
+  COLLATE = utf8mb4_0900_ai_ci
   COMMENT = 'CRMW投资池当前状态表';
