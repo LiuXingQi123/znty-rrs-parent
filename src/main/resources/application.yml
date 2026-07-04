@@ -39,3 +39,5 @@ logging:
 rrs:
   attachment:
     storage-path: ${RRS_ATTACHMENT_STORAGE_PATH:D:/data/uploads}
+  script:
+    sql-path: ${RRS_SCRIPT_SQL_PATH:sql}
