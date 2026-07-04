@@ -138,22 +138,22 @@ INSERT INTO `t_sys_user` (
     ,`MOBILE`
     ,`EMAIL`
 ) VALUES
-(1,    1,    '研究员1', 'yanjiuyuan1',      'researcher1',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan1@example.com'),
-(2,    2,    '研究员2', 'yanjiuyuan2',      'researcher2',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan2@example.com'),
-(3,    3,    '研究员3', 'yanjiuyuan3',      'researcher3',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan3@example.com'),
-(4,    4,    '研究员4', 'yanjiuyuan4',      'researcher4',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan4@example.com'),
-(5,    5,    '研究员5', 'yanjiuyuan5',      'researcher5',          NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan5@example.com'),
-(6,    6,    '固收1',   'gushou1',          'fixed_income1',        NOW(), 0, NULL, NULL, 'ORG_FIXED',    NULL, NULL, 'gushou1@example.com'),
-(7,    7,    '固收2',   'gushou2',          'fixed_income2',        NOW(), 0, NULL, NULL, 'ORG_FIXED',    NULL, NULL, 'gushou2@example.com'),
-(8,    8,    '固收3',   'gushou3',          'fixed_income3',        NOW(), 0, NULL, NULL, 'ORG_FIXED',    NULL, NULL, 'gushou3@example.com'),
-(9,    9,    '固收4',   'gushou4',          'fixed_income4',        NOW(), 0, NULL, NULL, 'ORG_FIXED',    NULL, NULL, 'gushou4@example.com'),
-(10,   10,   '权益1',   'quanyi1',          'equity1',              NOW(), 0, NULL, NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi1@example.com'),
-(11,   11,   '权益2',   'quanyi2',          'equity2',              NOW(), 0, NULL, NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi2@example.com'),
-(12,   12,   '权益3',   'quanyi3',          'equity3',              NOW(), 0, NULL, NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi3@example.com'),
-(13,   13,   '量化1',   'lianghua1',        'quant1',               NOW(), 0, NULL, NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua1@example.com'),
-(14,   14,   '量化2',   'lianghua2',        'quant2',               NOW(), 0, NULL, NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua2@example.com'),
-(15,   15,   '风控经理', 'fengkongjingli',   'risk_manager',         NOW(), 0, NULL, NULL, 'ORG_RISK',     NULL, NULL, 'fengkongjingli@example.com'),
-(1001, 1001, '管理员',   'admin',            'admin',                NOW(), 0, NULL, NULL, 'ORG_ADMIN',    NULL, NULL, 'admin@example.com');
+(1,    1,    '研究员1', 'yanjiuyuan1',      'researcher1',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan1@example.com'),
+(2,    2,    '研究员2', 'yanjiuyuan2',      'researcher2',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan2@example.com'),
+(3,    3,    '研究员3', 'yanjiuyuan3',      'researcher3',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan3@example.com'),
+(4,    4,    '研究员4', 'yanjiuyuan4',      'researcher4',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan4@example.com'),
+(5,    5,    '研究员5', 'yanjiuyuan5',      'researcher5',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan5@example.com'),
+(6,    6,    '固收1',   'gushou1',          'fixed_income1',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou1@example.com'),
+(7,    7,    '固收2',   'gushou2',          'fixed_income2',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou2@example.com'),
+(8,    8,    '固收3',   'gushou3',          'fixed_income3',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou3@example.com'),
+(9,    9,    '固收4',   'gushou4',          'fixed_income4',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou4@example.com'),
+(10,   10,   '权益1',   'quanyi1',          'equity1',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi1@example.com'),
+(11,   11,   '权益2',   'quanyi2',          'equity2',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi2@example.com'),
+(12,   12,   '权益3',   'quanyi3',          'equity3',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi3@example.com'),
+(13,   13,   '量化1',   'lianghua1',        'quant1',               NOW(), 0, '123456', NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua1@example.com'),
+(14,   14,   '量化2',   'lianghua2',        'quant2',               NOW(), 0, '123456', NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua2@example.com'),
+(15,   15,   '风控经理', 'fengkongjingli',   'risk_manager',         NOW(), 0, '123456', NULL, 'ORG_RISK',     NULL, NULL, 'fengkongjingli@example.com'),
+(1001, 1001, '管理员',   'admin',            'admin',                NOW(), 0, '123456', NULL, 'ORG_ADMIN',    NULL, NULL, 'admin@example.com');
 
 INSERT INTO `t_sys_user_role` (
     `id`
