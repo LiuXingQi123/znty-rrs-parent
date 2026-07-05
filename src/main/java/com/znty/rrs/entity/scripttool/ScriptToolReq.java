@@ -13,6 +13,12 @@ public class ScriptToolReq {
     /** 脚本任务编码 */
     private String taskCode;
 
+    /** 模块编码 */
+    private String moduleCode;
+
+    /** Demo 场景编码 */
+    private String sceneCode;
+
     /** 二次确认文本 */
     private String confirmText;
 

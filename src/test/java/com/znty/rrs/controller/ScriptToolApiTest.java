@@ -1,6 +1,10 @@
 package com.znty.rrs.controller;
 
 import com.znty.rrs.entity.scripttool.ScriptExecuteResultDto;
+import com.znty.rrs.entity.scripttool.ScriptDemoSceneDto;
+import com.znty.rrs.entity.scripttool.ScriptHealthCheckDto;
+import com.znty.rrs.entity.scripttool.ScriptModuleTaskDto;
+import com.znty.rrs.entity.scripttool.ScriptOverviewDto;
 import com.znty.rrs.entity.scripttool.ScriptTableGroupDto;
 import com.znty.rrs.entity.scripttool.ScriptTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptToolReq;
@@ -75,6 +79,27 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryClearTableGroupList", "{}");
     }
 
+    /** 验证脚本总览查询接口。 */
+    @Test
+    public void shouldQueryScriptOverview() throws Exception {
+        ScriptOverviewDto overview = new ScriptOverviewDto();
+        overview.setSchemaFileCount(1);
+        overview.setDemoFileCount(1);
+        when(scriptToolService.queryScriptOverview(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(overview);
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryScriptOverview", "{}");
+    }
+
+    /** 验证环境健康检查接口。 */
+    @Test
+    public void shouldQueryHealthCheck() throws Exception {
+        ScriptHealthCheckDto check = new ScriptHealthCheckDto();
+        check.setStatus("success");
+        when(scriptToolService.queryHealthCheck(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(check);
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryHealthCheck", "{}");
+    }
+
     /** 验证清空选中表接口。 */
     @Test
     public void shouldExecuteClearSelectedTables() throws Exception {
@@ -97,6 +122,54 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         when(scriptToolService.executeResetSelectedTables(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(result);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/executeResetSelectedTables", "{\"confirmText\":\"RESET_SELECTED_TABLES\",\"tableKeys\":[\"znty_rrs.ip_adjust_log\"]}");
+    }
+
+    /** 验证模块级重置任务列表接口。 */
+    @Test
+    public void shouldQueryModuleResetTaskList() throws Exception {
+        ScriptModuleTaskDto task = new ScriptModuleTaskDto();
+        task.setModuleCode("dict");
+        task.setModuleName("字典数据");
+        when(scriptToolService.queryModuleResetTaskList(org.mockito.Matchers.any(ScriptToolReq.class)))
+                .thenReturn(Collections.singletonList(task));
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryModuleResetTaskList", "{}");
+    }
+
+    /** 验证模块级重置执行接口。 */
+    @Test
+    public void shouldExecuteModuleResetTask() throws Exception {
+        ScriptExecuteResultDto result = new ScriptExecuteResultDto();
+        result.setTaskCode("dict");
+        result.setTaskName("字典数据");
+        result.setStatus("success");
+        when(scriptToolService.executeModuleResetTask(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(result);
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/executeModuleResetTask", "{\"moduleCode\":\"dict\",\"confirmText\":\"RESET_MODULE\"}");
+    }
+
+    /** 验证 Demo 场景列表接口。 */
+    @Test
+    public void shouldQueryDemoSceneList() throws Exception {
+        ScriptDemoSceneDto scene = new ScriptDemoSceneDto();
+        scene.setSceneCode("security-pending-review");
+        scene.setSceneName("证券池待复核调库单");
+        when(scriptToolService.queryDemoSceneList(org.mockito.Matchers.any(ScriptToolReq.class)))
+                .thenReturn(Collections.singletonList(scene));
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryDemoSceneList", "{}");
+    }
+
+    /** 验证 Demo 场景生成接口。 */
+    @Test
+    public void shouldExecuteDemoScene() throws Exception {
+        ScriptExecuteResultDto result = new ScriptExecuteResultDto();
+        result.setTaskCode("security-pending-review");
+        result.setTaskName("证券池待复核调库单");
+        result.setStatus("success");
+        when(scriptToolService.executeDemoScene(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(result);
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/executeDemoScene", "{\"sceneCode\":\"security-pending-review\",\"confirmText\":\"GENERATE_DEMO_SCENE\"}");
     }
 
     /** 验证确认文本错误时不会继续执行脚本。 */
@@ -154,6 +227,66 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         try {
             service.executeResetSelectedTables(req);
             fail("重置确认文本错误时应抛出业务异常");
+        } catch (BizException e) {
+            org.junit.Assert.assertTrue(e.getMessage().contains("确认文本不正确"));
+        }
+    }
+
+    /** 验证未知模块重置任务不会继续执行脚本。 */
+    @Test
+    public void shouldRejectUnknownModuleResetTask() {
+        ScriptToolService service = new ScriptToolService();
+        ScriptToolReq req = new ScriptToolReq();
+        req.setModuleCode("unknown-module");
+        req.setConfirmText("RESET_MODULE");
+        try {
+            service.executeModuleResetTask(req);
+            fail("未知模块编码应抛出业务异常");
+        } catch (BizException e) {
+            org.junit.Assert.assertTrue(e.getMessage().contains("不支持的模块重置任务"));
+        }
+    }
+
+    /** 验证模块重置会校验确认文本。 */
+    @Test
+    public void shouldRejectWrongModuleResetConfirmText() {
+        ScriptToolService service = new ScriptToolService();
+        ScriptToolReq req = new ScriptToolReq();
+        req.setModuleCode("dict");
+        req.setConfirmText("WRONG");
+        try {
+            service.executeModuleResetTask(req);
+            fail("模块重置确认文本错误时应抛出业务异常");
+        } catch (BizException e) {
+            org.junit.Assert.assertTrue(e.getMessage().contains("确认文本不正确"));
+        }
+    }
+
+    /** 验证未知 Demo 场景不会继续执行脚本。 */
+    @Test
+    public void shouldRejectUnknownDemoScene() {
+        ScriptToolService service = new ScriptToolService();
+        ScriptToolReq req = new ScriptToolReq();
+        req.setSceneCode("unknown-scene");
+        req.setConfirmText("GENERATE_DEMO_SCENE");
+        try {
+            service.executeDemoScene(req);
+            fail("未知 Demo 场景应抛出业务异常");
+        } catch (BizException e) {
+            org.junit.Assert.assertTrue(e.getMessage().contains("不支持的 Demo 场景"));
+        }
+    }
+
+    /** 验证 Demo 场景生成会校验确认文本。 */
+    @Test
+    public void shouldRejectWrongDemoSceneConfirmText() {
+        ScriptToolService service = new ScriptToolService();
+        ScriptToolReq req = new ScriptToolReq();
+        req.setSceneCode("security-pending-review");
+        req.setConfirmText("WRONG");
+        try {
+            service.executeDemoScene(req);
+            fail("Demo 场景确认文本错误时应抛出业务异常");
         } catch (BizException e) {
             org.junit.Assert.assertTrue(e.getMessage().contains("确认文本不正确"));
         }
