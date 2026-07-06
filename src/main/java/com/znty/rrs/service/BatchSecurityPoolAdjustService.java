@@ -88,7 +88,7 @@ import java.util.stream.Collectors;
 public class BatchSecurityPoolAdjustService {
 
     /** 管理员用户 ID */
-    private static final String ADMIN_USER_ID = "1001";
+    private static final String ADMIN_USER_ID = "1";
 
     /** 白名单调入流程 Key */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";

@@ -46,7 +46,7 @@
 
 查询接口：`POST /api/v1/batchSecurityPoolAdjust/querySecurityPage`（`loadSecurityList`），请求体：
 ```json
-{ "currentUserId": "1001", "poolId": <Long>, "direction": "in|out",
+{ "currentUserId": "1", "poolId": <Long>, "direction": "in|out",
   "securityCode": null, "securityShortName": null, "marketCodes": null,
   "pageIndex": 1, "pageSize": 20 }
 ```
@@ -97,7 +97,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 **后端处理**（`BatchSecurityPoolAdjustService.checkAdjust`）：
 1. `validateAdjustCheckReq`：poolId 非空、direction ∈ {in,out}、securities 非空、每只证券 securityCode 非空、目标池为启用叶子池（`queryEnabledLeafPoolCount`）。
-2. `validateAdjustPoolPermission`：管理员(1001)放行；否则校验当前用户对 poolId 拥有 adjustable 权限。
+2. `validateAdjustPoolPermission`：管理员(1)放行；否则校验当前用户对 poolId 拥有 adjustable 权限。
 3. `resolveAdjustMode`：`in→调入`、`out→调出`。
 4. **逐只证券循环**：对每个 `SecurityItem` 构造单证券校验请求 `buildSingleCheckReq`（目标池=当前 poolId，方向=中文），调用**单笔调库服务** `securityPoolAdjustService.checkAdjust(singleReq)`。
 5. 单笔校验返回 `AdjustCheckDto.items`（可能含手工项 + 联动/互斥自动项），**过滤出 adjustMode 等于本次方向的项**，用 `buildBatchCheckResult` 转成批量结果项：

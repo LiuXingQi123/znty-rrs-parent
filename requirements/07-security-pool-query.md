@@ -37,7 +37,7 @@ this.loadList();                  // 列表数据
 | `adjusterName` | `''` | 文本输入 | 调整人 |
 | `issuer` | `''` | 文本输入 | 发行主体名称 |
 | `mySecurities` | `false` | 复选框 | 仅看我的证券，change 即触发查询 |
-| `currentUserId` | `'1001'` | — | TODO：对接实际登录用户 |
+| `currentUserId` | `'1'` | — | TODO：对接实际登录用户 |
 
 ### 2.2 初始化接口 1 — 投资池树
 
@@ -70,7 +70,7 @@ this.loadList();                  // 列表数据
 | `entryTimeStart` | `entryTimeRange[0]` + ` 00:00:00` | 无则 `null` |
 | `entryTimeEnd` | `entryTimeRange[1]` + ` 23:59:59` | 无则 `null` |
 | `mySecurities` | 复选框 | `false` 转 `null` |
-| `currentUserId` | 固定 `'1001'` | 必传 |
+| `currentUserId` | 固定 `'1'` | 必传 |
 | `pageIndex` / `pageSize` | 分页 | — |
 
 返回 `PageResult<SecurityPoolQueryDto>`（`{records, total, pageIndex, pageSize}`）。前端取 `data.records` 填表、`data.total` 填分页。

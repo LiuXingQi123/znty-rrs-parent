@@ -149,7 +149,7 @@
 | adjustReason | String | 调整原因 |
 | adjustAdvice | String | 调整建议 |
 | securityInfo | SecurityInfoBo | 详情页可编辑的证券字段全量（约 28 字段） |
-| adjusterId | String | 调整人 ID（前端默认 `'1001'`） |
+| adjusterId | String | 调整人 ID（前端默认 `'1'`） |
 | adjusterName | String | 调整人名称（默认 `'管理员'`） |
 | items | List&lt;AdjustItem&gt; | 调库明细 |
 

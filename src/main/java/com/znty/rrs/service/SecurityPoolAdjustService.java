@@ -110,7 +110,7 @@ import java.util.stream.Collectors;
 public class SecurityPoolAdjustService {
 
     /** 管理员用户 ID */
-    private static final String ADMIN_USER_ID = "1001";
+    private static final String ADMIN_USER_ID = "1";
     /** 证券池调库数据访问组件 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;

@@ -89,13 +89,13 @@ INSERT INTO `t_inv_grade_result` (
 ) VALUES
 (1, 1, 320000, 101, 1001, '2026-06-01 10:00:00', 88.50, 90.00,
  '{"external_rating":"AAA","finance_score":89.2,"industry_score":86.5}', '初评映射', 3, '一级复核',
- 1001, '2026-06-01 10:05:00', '省属平台资质较强，维持高等级观察。', 1, 89.10, 'normal'),
+ 2, '2026-06-01 10:05:00', '省属平台资质较强，维持高等级观察。', 1, 89.10, 'normal'),
 (2, 2, 330000, 101, 1001, '2026-06-02 11:00:00', 82.10, 84.00,
  '{"external_rating":"AA+","finance_score":80.6,"industry_score":83.1}', '区域映射', 4, '二级复核',
- 1002, '2026-06-02 11:15:00', '区域财政实力较好，关注有息债务增长。', 1, 82.80, 'watch'),
+ 3, '2026-06-02 11:15:00', '区域财政实力较好，关注有息债务增长。', 1, 82.80, 'watch'),
 (3, 3, 440000, 102, 2001, '2026-06-03 15:00:00', 63.80, 66.00,
  '{"external_rating":"AA","finance_score":61.4,"industry_score":58.2}', '压力映射', 5, '风险复核',
- 1003, '2026-06-03 15:30:00', '地产销售回款承压，纳入重点观察。', 2, 64.20, 'focus');
+ 4, '2026-06-03 15:30:00', '地产销售回款承压，纳入重点观察。', 2, 64.20, 'focus');
 
 -- ----------------------------------------------------------------------------
 -- 角色和用户样例
@@ -138,22 +138,22 @@ INSERT INTO `t_sys_user` (
     ,`MOBILE`
     ,`EMAIL`
 ) VALUES
-(1,    1,    '研究员1', 'yanjiuyuan1',      'researcher1',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan1@example.com'),
-(2,    2,    '研究员2', 'yanjiuyuan2',      'researcher2',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan2@example.com'),
-(3,    3,    '研究员3', 'yanjiuyuan3',      'researcher3',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan3@example.com'),
-(4,    4,    '研究员4', 'yanjiuyuan4',      'researcher4',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan4@example.com'),
-(5,    5,    '研究员5', 'yanjiuyuan5',      'researcher5',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan5@example.com'),
-(6,    6,    '固收1',   'gushou1',          'fixed_income1',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou1@example.com'),
-(7,    7,    '固收2',   'gushou2',          'fixed_income2',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou2@example.com'),
-(8,    8,    '固收3',   'gushou3',          'fixed_income3',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou3@example.com'),
-(9,    9,    '固收4',   'gushou4',          'fixed_income4',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou4@example.com'),
-(10,   10,   '权益1',   'quanyi1',          'equity1',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi1@example.com'),
-(11,   11,   '权益2',   'quanyi2',          'equity2',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi2@example.com'),
-(12,   12,   '权益3',   'quanyi3',          'equity3',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi3@example.com'),
-(13,   13,   '量化1',   'lianghua1',        'quant1',               NOW(), 0, '123456', NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua1@example.com'),
-(14,   14,   '量化2',   'lianghua2',        'quant2',               NOW(), 0, '123456', NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua2@example.com'),
-(15,   15,   '风控经理', 'fengkongjingli',   'risk_manager',         NOW(), 0, '123456', NULL, 'ORG_RISK',     NULL, NULL, 'fengkongjingli@example.com'),
-(1001, 1001, '管理员',   'admin',            'admin',                NOW(), 0, '123456', NULL, 'ORG_ADMIN',    NULL, NULL, 'admin@example.com');
+(1,    1,    '管理员',   'admin',            'admin',                NOW(), 0, '123456', NULL, 'ORG_ADMIN',    NULL, NULL, 'admin@example.com'),
+(2,    2,    '研究员1', 'yanjiuyuan1',      'researcher1',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan1@example.com'),
+(3,    3,    '研究员2', 'yanjiuyuan2',      'researcher2',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan2@example.com'),
+(4,    4,    '研究员3', 'yanjiuyuan3',      'researcher3',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan3@example.com'),
+(5,    5,    '研究员4', 'yanjiuyuan4',      'researcher4',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan4@example.com'),
+(6,    6,    '研究员5', 'yanjiuyuan5',      'researcher5',          NOW(), 0, '123456', NULL, 'ORG_RESEARCH', NULL, NULL, 'yanjiuyuan5@example.com'),
+(7,    7,    '固收1',   'gushou1',          'fixed_income1',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou1@example.com'),
+(8,    8,    '固收2',   'gushou2',          'fixed_income2',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou2@example.com'),
+(9,    9,    '固收3',   'gushou3',          'fixed_income3',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou3@example.com'),
+(10,   10,   '固收4',   'gushou4',          'fixed_income4',        NOW(), 0, '123456', NULL, 'ORG_FIXED',    NULL, NULL, 'gushou4@example.com'),
+(11,   11,   '权益1',   'quanyi1',          'equity1',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi1@example.com'),
+(12,   12,   '权益2',   'quanyi2',          'equity2',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi2@example.com'),
+(13,   13,   '权益3',   'quanyi3',          'equity3',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi3@example.com'),
+(14,   14,   '量化1',   'lianghua1',        'quant1',               NOW(), 0, '123456', NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua1@example.com'),
+(15,   15,   '量化2',   'lianghua2',        'quant2',               NOW(), 0, '123456', NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua2@example.com'),
+(16,   16,   '风控经理', 'fengkongjingli',   'risk_manager',         NOW(), 0, '123456', NULL, 'ORG_RISK',     NULL, NULL, 'fengkongjingli@example.com');
 
 INSERT INTO `t_sys_user_role` (
     `id`
@@ -161,24 +161,24 @@ INSERT INTO `t_sys_user_role` (
     ,`user_id`
     ,`ts`
 ) VALUES
-(1,  1,  1,  NOW()),  -- 研究员1: 研究部
-(2,  2,  1,  NOW()),  -- 研究员1: 信用研究组
-(3,  2,  2,  NOW()),  -- 研究员2: 信用研究组
-(4,  3,  2,  NOW()),  -- 研究员2: 利率研究组
-(5,  1,  3,  NOW()),  -- 研究员3: 研究部
-(6,  3,  3,  NOW()),  -- 研究员3: 利率研究组
-(7,  2,  4,  NOW()),  -- 研究员4: 信用研究组
-(8,  3,  5,  NOW()),  -- 研究员5: 利率研究组
-(9,  4,  6,  NOW()),  -- 固收1: 固收部
-(10, 5,  6,  NOW()),  -- 固收1: 利率组
-(11, 4,  7,  NOW()),  -- 固收2: 固收部
-(12, 6,  7,  NOW()),  -- 固收2: 信用组
-(13, 5,  8,  NOW()),  -- 固收3: 利率组
-(14, 6,  9,  NOW()),  -- 固收4: 信用组
-(15, 7,  10, NOW()),  -- 权益1: 权益部
-(16, 8,  10, NOW()),  -- 权益1: 行业研究组
-(17, 7,  11, NOW()),  -- 权益2: 权益部
-(18, 8,  12, NOW()),  -- 权益3: 行业研究组
-(19, 9,  13, NOW()),  -- 量化1: 量化部
-(20, 9,  14, NOW()),  -- 量化2: 量化部
-(21, 10, 15, NOW()); -- 风控经理: 风险管理部
+(1,  1,  2,  NOW()),  -- 研究员1: 研究部
+(2,  2,  2,  NOW()),  -- 研究员1: 信用研究组
+(3,  2,  3,  NOW()),  -- 研究员2: 信用研究组
+(4,  3,  3,  NOW()),  -- 研究员2: 利率研究组
+(5,  1,  4,  NOW()),  -- 研究员3: 研究部
+(6,  3,  4,  NOW()),  -- 研究员3: 利率研究组
+(7,  2,  5,  NOW()),  -- 研究员4: 信用研究组
+(8,  3,  6,  NOW()),  -- 研究员5: 利率研究组
+(9,  4,  7,  NOW()),  -- 固收1: 固收部
+(10, 5,  7,  NOW()),  -- 固收1: 利率组
+(11, 4,  8,  NOW()),  -- 固收2: 固收部
+(12, 6,  8,  NOW()),  -- 固收2: 信用组
+(13, 5,  9,  NOW()),  -- 固收3: 利率组
+(14, 6,  10, NOW()),  -- 固收4: 信用组
+(15, 7,  11, NOW()),  -- 权益1: 权益部
+(16, 8,  11, NOW()),  -- 权益1: 行业研究组
+(17, 7,  12, NOW()),  -- 权益2: 权益部
+(18, 8,  13, NOW()),  -- 权益3: 行业研究组
+(19, 9,  14, NOW()),  -- 量化1: 量化部
+(20, 9,  15, NOW()),  -- 量化2: 量化部
+(21, 10, 16, NOW()); -- 风控经理: 风险管理部

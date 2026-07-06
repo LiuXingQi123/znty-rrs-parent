@@ -117,7 +117,7 @@ import java.util.stream.Collectors;
 public class ForbiddenPoolAdjustService {
 
     /** 管理员用户 ID */
-    private static final String ADMIN_USER_ID = "1001";
+    private static final String ADMIN_USER_ID = "1";
     /** 禁投池、观察池和黑名单质押库 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
 

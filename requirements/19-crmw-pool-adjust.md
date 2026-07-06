@@ -13,7 +13,7 @@
 - **list 页**：CRMW 凭证 section（单选 radio + 分页表格）+ 可绑定证券搜索区 + 可绑定证券分页表格。
 - **detail 页**：返回按钮 + 证券基本信息 + CRMW 基本信息（只读）+ 当前所在池 + 调库操作卡（步骤 1 选池 / 步骤 2 校验确认）+ 流程选择弹窗 + 信评报告选择弹窗。
 
-**初始化**（`created`）：`this.loadCrmwList()` + `this.loadList()`（并发加载 CRMW 凭证列表与可绑定证券列表）。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。默认用户 `currentLoginUserId='1001'`、`currentLoginUserName='管理员'`。
+**初始化**（`created`）：`this.loadCrmwList()` + `this.loadList()`（并发加载 CRMW 凭证列表与可绑定证券列表）。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。默认用户 `currentLoginUserId='1'`、`currentLoginUserName='管理员'`。
 
 ---
 

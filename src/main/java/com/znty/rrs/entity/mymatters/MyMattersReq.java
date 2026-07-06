@@ -40,6 +40,6 @@ public class MyMattersReq extends PageRequest {
     /** 发起人姓名关键词 */
     private String initiatorName;
 
-    /** 当前用户 ID，1001 视为管理员 */
+    /** 当前用户 ID，1 视为管理员 */
     private String currentUserId;
 }

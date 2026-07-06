@@ -14,7 +14,7 @@
 
 **详情页区块**（CSS order）：主体基本信息（只读）→ 当前所在池（主体所在池 + 旗下债券所在池）→ 调库记录表 → 调库校验结果（仅 `isNextMode`）→ 原因和建议 → 当前流程状态（仅 `isProcessMode`）→ 审核审批区（仅 `isProcessMode`）→ 调库操作区（恒 false，隐藏）。
 
-**初始化**（`created`）：`this.initStandaloneReviewPage()`。读 URL `companyCode`（缺则提示「缺少主体信息，请从业务页面进入」）、`targetPoolId`/`adjustLogId`/`adjustBatchNo`、`entryMode`，`adjustStep=2`，`loadDetailData(companyCode)` + `restoreStandaloneAdjustDraft()`（从 sessionStorage 按 `adjustDraftKey` 恢复 next 模式草稿）。默认 `currentLoginUserId='1001'`。
+**初始化**（`created`）：`this.initStandaloneReviewPage()`。读 URL `companyCode`（缺则提示「缺少主体信息，请从业务页面进入」）、`targetPoolId`/`adjustLogId`/`adjustBatchNo`、`entryMode`，`adjustStep=2`，`loadDetailData(companyCode)` + `restoreStandaloneAdjustDraft()`（从 sessionStorage 按 `adjustDraftKey` 恢复 next 模式草稿）。默认 `currentLoginUserId='1'`。
 
 ---
 
@@ -40,7 +40,7 @@
 
 1. `flowStepList.filter(stepStatus==='pending')`。
 2. 优先返回 `handlerId === currentLoginUserId` 的步骤。
-3. 否则若 `isAdminUser()`（ID==='1001'）返回第一条 pending。
+3. 否则若 `isAdminUser()`（ID==='1'）返回第一条 pending。
 4. 否则 null（页面显示「暂无需要当前用户处理的流程步骤」）。
 
 ### 3.2 驳回待修改阶段识别（`isModifyAuditStage`）
@@ -71,7 +71,7 @@
 **阶段 1：参数与步骤校验**
 - `validateAuditReq`：`stepId` 非空；`processAction` ∈ {approve, reject}；reject 时 `processComment` 必填。
 - `queryAdjustStepById(stepId)`。
-- `resolveActualProcessStep`：管理员（`handlerId==='1001'`）且 step 不属自己时，`queryPendingStepByHandler` 定位管理员自己的 pending 步骤。
+- `resolveActualProcessStep`：管理员（`handlerId==='1'`）且 step 不属自己时，`queryPendingStepByHandler` 定位管理员自己的 pending 步骤。
 - `validatePendingStep`：step null 抛「流程步骤不存在」；`stepStatus` 必须 `pending` 否则「当前流程步骤已处理，请刷新后重试」；`handlerId` 有值且不等 req.handlerId 且非管理员抛「当前用户不是该步骤处理人」；反查回填 `adjustBatchNo`/`adjustLogId`。
 - `validateSubmitterCannotProcess`：管理员/发起-修改语义节点跳过；否则查同批次所有记录（`queryAdjustLogListForAudit`），若当前处理人 ID 等于任一记录 `adjusterId` 抛「发起人不能参与后续流程操作」。
 
@@ -207,7 +207,7 @@ finishAdjustBatch(step):
 | 详情加载接口 | `querySecurityDetail`/`querySecurityPoolStatus`/`queryAdjustLogList` | `queryCompanyDetail`/`queryCompanyPoolStatus`/`queryAdjustLogList`（companyCode 维度） |
 | `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `generateInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后**额外调 `syncCompanyBonds(log)`**：按 `issuer_code=companyCode` 查全部旗下债券，逐条写 `adjust_type='自动调整'` 的 `ip_adjust_log` + `ip_pool_status` |
 | 前端入口参数 | `securityCode` | `companyCode` |
-| 审批策略/节点语义识别/管理员代办 | — | **完全相同**（关键字、`ADMIN_USER_ID='1001'` 一致） |
+| 审批策略/节点语义识别/管理员代办 | — | **完全相同**（关键字、`ADMIN_USER_ID='1'` 一致） |
 
 ---
 
@@ -225,7 +225,7 @@ finishAdjustBatch(step):
 - 前端：`znty-rrs-ui/forbidden_pool_adjust_approve.html`（`initStandaloneReviewPage`、`restoreStandaloneAdjustDraft`、`currentPendingStep`、`isModifyAuditStage`、`submitAdjustAudit`、`submitAdjustAuditMultipart`、`buildAuditAttachmentChanges`、`flowStepSpanMethod`/`getFlowStepRowClass`）、`css/forbidden_pool_adjust_approve.css`
 - 前端待办入口：`znty-rrs-ui/my_matters.html`（`openMatterPage` 拼 `companyCode/targetPoolId/adjustLogId/adjustBatchNo/entryMode`，pending→`process`→approve.html，completed→`view`→detail.html）
 - Controller：`ForbiddenPoolAdjustFlowController.java`（`@RequestMapping("/api/v1/forbiddenPoolAdjustFlow")`，2 端点）
-- Service：`ForbiddenPoolAdjustFlowService.java`（`submitAdjustAudit`/`validateAuditReq`/`resolveActualProcessStep`/`validatePendingStep`/`validateSubmitterCannotProcess`/`applyAttachmentChangesForModifySubmit`/`processAdjustAudit`/`resolveProcessingNodeAuditStatus`/`advanceToNextAvailableStep`/`createTerminalEndStep`/`finishAdjustBatch`/`syncCompanyBonds`/`buildCompanyBondAutoLog`/`generateInternalReportsOnFinish`/`resolveReportType`/`buildFlowSnapshot`，`ADMIN_USER_ID='1001'`）
+- Service：`ForbiddenPoolAdjustFlowService.java`（`submitAdjustAudit`/`validateAuditReq`/`resolveActualProcessStep`/`validatePendingStep`/`validateSubmitterCannotProcess`/`applyAttachmentChangesForModifySubmit`/`processAdjustAudit`/`resolveProcessingNodeAuditStatus`/`advanceToNextAvailableStep`/`createTerminalEndStep`/`finishAdjustBatch`/`syncCompanyBonds`/`buildCompanyBondAutoLog`/`generateInternalReportsOnFinish`/`resolveReportType`/`buildFlowSnapshot`，`ADMIN_USER_ID='1'`）
 - Mapper：复用 `ForbiddenPoolAdjustMapper.java` / `.xml`（审批用 `queryAdjustStepById`/`editAdjustStepProcess`/`editOtherPendingStepSkipped`/`queryPendingStepCountByNode`/`queryAdjustLogListForAudit`/`editAdjustLogAuditStatus`/`addAdjustStep`/`addPoolStatus`/`deletePoolStatusSoft`/`queryCompanyBondForAutoList`/`querySecurityCurrentPoolIdList`/`querySecurityBoByCode`/`queryCategoryTypeBySecurityType`）
 - 复用实体：`entity/securitypooladjustflow/SecurityPoolAdjustAuditReq/Dto`、`entity/bo/`（`IpAdjustStepBo`/`IpAdjustLogBo`/`FlowSnapshot`/`FlowNodeBo`/`FlowEdgeBo`/`NodeApprovalConfigBo`/`NodeApprovalHandlerBo`/`SysAttachmentBo`/`ReportInBo`/`SecurityInfoBo`）
 - SQL：同 [15]（`rrs_security_pool_adjust_schema.sql` + `rrs_flow_definition_schema.sql`）

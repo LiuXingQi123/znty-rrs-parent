@@ -37,7 +37,7 @@ public class MyMattersApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldSupportMatterQueryAndFiltering() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/myMatters/queryMyMattersPage",
-                "{\"currentUserId\":\"1001\",\"securityCode\":\"CRMW22001.IB\",\"securityShortName\":\"某电力\"}");
+                "{\"currentUserId\":\"1\",\"securityCode\":\"CRMW22001.IB\",\"securityShortName\":\"某电力\"}");
 
         ArgumentCaptor<MyMattersReq> captor = ArgumentCaptor.forClass(MyMattersReq.class);
         verify(myMattersService).queryMyMattersPage(captor.capture());
@@ -45,6 +45,6 @@ public class MyMattersApiTest extends ControllerApiTestSupport {
         assertThat(req.getSecurityCode()).isEqualTo("CRMW22001.IB");
         assertThat(req.getSecurityShortName()).isEqualTo("某电力");
 
-        assertPostSuccess(mockMvc, "/api/v1/myMatters/queryFlowOptionList", "{\"currentUserId\":\"1001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/myMatters/queryFlowOptionList", "{\"currentUserId\":\"1\"}");
     }
 }

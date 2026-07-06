@@ -100,7 +100,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
         req.setAdjustReason("原因");
         req.setAdjustAdvice("建议");
-        req.setAdjusterId("1001");
+        req.setAdjusterId("1");
         req.setAdjusterName("管理员");
 
         BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
@@ -150,7 +150,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(mapper.queryEnabledLeafPoolCount(11L)).thenReturn(1);
         SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
         when(attachmentService.createSubmissionFiles(
-                org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1001")))
+                org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1")))
                 .thenReturn(submissionFiles);
         when(adjustMapper.querySecurityBoByCode(org.mockito.Matchers.anyString()))
                 .thenReturn(new SecurityInfoBo());
@@ -165,9 +165,9 @@ public class BatchSecurityPoolAdjustServiceTest {
         }).when(adjustMapper).addAdjustLog(any(IpAdjustLogBo.class));
 
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
-        req.setCurrentUserId("1001");
+        req.setCurrentUserId("1");
         req.setDirection("in");
-        req.setAdjusterId("1001");
+        req.setAdjusterId("1");
         req.setAdjusterName("管理员");
         req.setPoolId(11L);
         req.setItems(Arrays.asList(
@@ -201,7 +201,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
         SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
         when(attachmentService.createSubmissionFiles(
-                org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1001")))
+                org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1")))
                 .thenReturn(submissionFiles);
         when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(new SecurityInfoBo());
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(
@@ -219,9 +219,9 @@ public class BatchSecurityPoolAdjustServiceTest {
 
         String groupKey = "106006789_manual_3_调入";
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
-        req.setCurrentUserId("1001");
+        req.setCurrentUserId("1");
         req.setDirection("in");
-        req.setAdjusterId("1001");
+        req.setAdjusterId("1");
         req.setAdjusterName("管理员");
         req.setPoolId(3L);
         req.setItems(Arrays.asList(
@@ -266,7 +266,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(adjustMapper.queryPoolCurrentCount(org.mockito.Matchers.anyLong())).thenReturn(0);
 
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
-        req.setCurrentUserId("1001");
+        req.setCurrentUserId("1");
         req.setDirection("in");
         req.setPoolId(3L);
         req.setPoolName("二级库");

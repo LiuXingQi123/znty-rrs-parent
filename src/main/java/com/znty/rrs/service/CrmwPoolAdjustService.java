@@ -110,7 +110,7 @@ import java.util.stream.Collectors;
 public class CrmwPoolAdjustService {
 
     /** 管理员用户 ID */
-    private static final String ADMIN_USER_ID = "1001";
+    private static final String ADMIN_USER_ID = "1";
     /** CRMW 证券类型编码 */
     private static final String CRMW_SECURITY_TYPE = "crmw";
     /** CRMW池调整数据访问组件 */

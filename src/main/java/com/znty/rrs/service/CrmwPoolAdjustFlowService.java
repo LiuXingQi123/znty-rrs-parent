@@ -59,7 +59,7 @@ import java.util.Set;
 public class CrmwPoolAdjustFlowService {
 
     /** 管理员用户 ID */
-    private static final String ADMIN_USER_ID = "1001";
+    private static final String ADMIN_USER_ID = "1";
 
     /** CRMW池调整数据库操作 */
     @Resource

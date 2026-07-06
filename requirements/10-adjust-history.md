@@ -26,7 +26,7 @@
 | `adjustMode` | `''` | 下拉 | 调入/调出 |
 | `auditStatus` | `''` | 下拉 | 8 种审核状态 |
 | `myBonds` | `false` | 复选框 | 我的调整，change 即查询 |
-| `currentUserId` | `'1001'` | — | TODO |
+| `currentUserId` | `'1'` | — | TODO |
 
 `adjustModeOptions`：`[{调入}, {调出}]`。
 
@@ -51,7 +51,7 @@
 | `adjusterName` / `issuer` | 表单 | 空串转 null |
 | `adjustMode` / `auditStatus` | 下拉 | 空串转 null |
 | `myBonds` | 复选框 | false 转 null |
-| `currentUserId` | 固定 `'1001'` | 必传 |
+| `currentUserId` | 固定 `'1'` | 必传 |
 | `pageIndex` / `pageSize` | 分页 | — |
 
 返回 `PageResult<AdjustHistoryDto>`，取 `records` / `total`。

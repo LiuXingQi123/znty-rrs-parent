@@ -116,7 +116,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(adjustMapper.queryPoolCurrentCountList()).thenReturn(Collections.singletonList(poolCount));
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setCurrentUserId("1001");
+        req.setCurrentUserId("1");
 
         List<PoolDto> result = service.queryAdjustPoolList(req);
 
@@ -182,7 +182,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 // 构建审批处理人映射测试数据
                 buildHandlerMap(config.getId(), 5));
 
-        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1", "admin");
 
         ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
         verify(mapper, times(6)).addAdjustStep(captor.capture());
@@ -225,7 +225,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 // 构建审批处理人映射测试数据
                 buildHandlerMap(approvalConfig.getId(), 2));
 
-        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1", "admin");
 
         ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
         verify(mapper, times(4)).addAdjustStep(captor.capture());
@@ -234,7 +234,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(steps.get(1).getFlowNodeId()).isEqualTo(initiator.getId());
         assertThat(steps.get(1).getApprovalStrategy()).isEqualTo("initiator");
         assertThat(steps.get(1).getStepStatus()).isEqualTo("submit");
-        assertThat(steps.get(1).getHandlerId()).isEqualTo("1001");
+        assertThat(steps.get(1).getHandlerId()).isEqualTo("1");
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getStepStatus)
                 .containsOnly("pending");
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getHandlerId)
@@ -270,7 +270,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 // 构建审批处理人映射测试数据
                 buildHandlerMap(reviewerConfig.getId(), 2));
 
-        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1", "admin");
 
         ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
         verify(mapper, times(4)).addAdjustStep(captor.capture());
@@ -280,7 +280,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(steps.get(0).getHandlerId()).isNull();
         assertThat(steps.get(1).getFlowNodeId()).isEqualTo(submitter.getId());
         assertThat(steps.get(1).getStepStatus()).isEqualTo("submit");
-        assertThat(steps.get(1).getHandlerId()).isEqualTo("1001");
+        assertThat(steps.get(1).getHandlerId()).isEqualTo("1");
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getFlowNodeId)
                 .containsOnly(reviewer.getId());
         assertThat(steps.subList(2, 4)).extracting(IpAdjustStepBo::getStepStatus)
@@ -319,7 +319,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 buildHandlerMap(reviewerConfig.getId(), 2));
 
         try {
-            ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1001", "admin");
+            ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1", "admin");
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("缺少下一步连线");
@@ -346,7 +346,7 @@ public class SecurityPoolAdjustServiceStepTest {
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
-        req.setAdjusterId("1001");
+        req.setAdjusterId("1");
         req.setAdjusterName("admin");
 
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
@@ -392,7 +392,7 @@ public class SecurityPoolAdjustServiceStepTest {
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
-        req.setAdjusterId("1001");
+        req.setAdjusterId("1");
         req.setAdjusterName("admin");
 
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
@@ -461,16 +461,16 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setCreditReportSourceAttachmentIds(Collections.singletonList(7L));
         item.setMaterialSourceAttachmentIds(Collections.singletonList(8L));
 
-        ReflectionTestUtils.invokeMethod(service, "bindSubmitAttachments", 88L, item, null, "1001");
+        ReflectionTestUtils.invokeMethod(service, "bindSubmitAttachments", 88L, item, null, "1");
 
         verify(attachmentService).bindAttachments(88L, Collections.singletonList(0),
                 AttachmentCategory.CREDIT_REPORT_HAND.getCode(), null);
         verify(attachmentService).bindAttachments(88L, Collections.singletonList(1),
                 AttachmentCategory.MATERIAL_HAND.getCode(), null);
         verify(attachmentService).copyReportAttachments(88L, Collections.singletonList(7L),
-                AttachmentPurpose.CREDIT_REPORT.getCode(), "1001");
+                AttachmentPurpose.CREDIT_REPORT.getCode(), "1");
         verify(attachmentService).copyReportAttachments(88L, Collections.singletonList(8L),
-                AttachmentPurpose.MATERIAL.getCode(), "1001");
+                AttachmentPurpose.MATERIAL.getCode(), "1");
     }
 
     /** 验证白名单直通流程应记录调入批次号及流程步骤。 */
@@ -504,7 +504,7 @@ public class SecurityPoolAdjustServiceStepTest {
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
-        req.setAdjusterId("1001");
+        req.setAdjusterId("1");
         req.setAdjusterName("admin");
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         item.setAdjustMode("调入");
@@ -527,7 +527,7 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(mapper).addAdjustLog(logCaptor.capture());
         verify(mapper, times(3)).addAdjustStep(stepCaptor.capture());
         String batchNo = logCaptor.getValue().getAdjustBatchNo();
-        assertThat(batchNo).endsWith("1001");
+        assertThat(batchNo).endsWith("1");
         assertThat(stepCaptor.getAllValues()).extracting(IpAdjustStepBo::getAdjustBatchNo)
                 .containsOnly(batchNo);
     }
@@ -713,7 +713,7 @@ public class SecurityPoolAdjustServiceStepTest {
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
-        req.setAdjusterId("1001");
+        req.setAdjusterId("1");
         req.setAdjusterName("admin");
 
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();

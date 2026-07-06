@@ -40,7 +40,7 @@ public class SysAttachmentServiceTest {
                 "files", "信评报告.pdf", "application/pdf",
                 "report".getBytes(StandardCharsets.UTF_8));
         SysAttachmentService.SubmissionFiles submissionFiles =
-                service.createSubmissionFiles(Collections.singletonList(file), "1001");
+                service.createSubmissionFiles(Collections.singletonList(file), "1");
 
         service.bindAttachments(88L, Collections.singletonList(0),
                 AttachmentCategory.CREDIT_REPORT_HAND.getCode(), submissionFiles);
@@ -62,7 +62,7 @@ public class SysAttachmentServiceTest {
                 "files", "信评报告.pdf", "application/pdf",
                 "report".getBytes(StandardCharsets.UTF_8));
         SysAttachmentService.SubmissionFiles submissionFiles =
-                service.createSubmissionFiles(Collections.singletonList(file), "1001");
+                service.createSubmissionFiles(Collections.singletonList(file), "1");
 
         assertThatThrownBy(() -> service.bindAttachments(
                 88L, Collections.singletonList(1),
@@ -80,7 +80,7 @@ public class SysAttachmentServiceTest {
                 "binary".getBytes(StandardCharsets.UTF_8));
 
         assertThatThrownBy(() -> service.createSubmissionFiles(
-                Collections.singletonList(file), "1001"))
+                Collections.singletonList(file), "1"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("不支持的附件类型");
     }
@@ -94,7 +94,7 @@ public class SysAttachmentServiceTest {
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         service.copyReportAttachments(88L, Collections.singletonList(7L),
-                AttachmentPurpose.CREDIT_REPORT.getCode(), "1001");
+                AttachmentPurpose.CREDIT_REPORT.getCode(), "1");
 
         ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
         verify(mapper).addAttachment(captor.capture());
@@ -115,7 +115,7 @@ public class SysAttachmentServiceTest {
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         service.copyReportAttachments(88L, Collections.singletonList(7L),
-                AttachmentPurpose.MATERIAL.getCode(), "1001");
+                AttachmentPurpose.MATERIAL.getCode(), "1");
 
         ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
         verify(mapper).addAttachment(captor.capture());
@@ -131,7 +131,7 @@ public class SysAttachmentServiceTest {
         when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
 
         assertThatThrownBy(() -> service.copyReportAttachments(88L, Collections.singletonList(7L),
-                AttachmentPurpose.CREDIT_REPORT.getCode(), "1001"))
+                AttachmentPurpose.CREDIT_REPORT.getCode(), "1"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("附件不是报告库文件");
     }
@@ -188,7 +188,7 @@ public class SysAttachmentServiceTest {
         attachment.setContentType("application/pdf");
         attachment.setFullUrl("/api/v1/attachments/downloadAttachment");
         attachment.setFileName("20260601/report.pdf");
-        attachment.setUploaderId("1001");
+        attachment.setUploaderId("1");
         return attachment;
     }
 }

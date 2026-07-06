@@ -36,8 +36,8 @@ public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
     /** 验证 shouldSupportMyPoolFavorites 测试场景。 */
     @Test
     public void shouldSupportMyPoolFavorites() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/addSecurityToMyPool", "{\"userId\":\"1001\",\"securityCode\":\"100001\"}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/deleteSecurityFromMyPool", "{\"userId\":\"1001\",\"securityCode\":\"100001\"}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/queryFavoritedCodeList", "{\"userId\":\"1001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/addSecurityToMyPool", "{\"userId\":\"1\",\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/deleteSecurityFromMyPool", "{\"userId\":\"1\",\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/queryFavoritedCodeList", "{\"userId\":\"1\"}");
     }
 }

@@ -17,7 +17,7 @@
 
 **初始化**（`created`）：调用 `loadList()` 加载主体列表。`baseURL` 由 `js/api.js` 统一注入（`http://localhost:18090`），`apiPost` 返回 `{ success, data, message }`，`!json.success` 弹错并抛异常，支持 `responseType:'blob'` 附件下载。
 
-默认登录用户 `currentLoginUserId='1001'`（管理员）、`currentLoginUserName='管理员'`。URL 入口参数 `targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`。
+默认登录用户 `currentLoginUserId='1'`（管理员）、`currentLoginUserName='管理员'`。URL 入口参数 `targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`。
 
 ---
 

@@ -79,7 +79,7 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         log.setTargetPoolId(15L);
         log.setTargetPoolName("禁投池");
         log.setPoolType("forbidden");
-        log.setAdjusterId("1001");
+        log.setAdjusterId("1");
         log.setAdjusterName("管理员");
         return log;
     }

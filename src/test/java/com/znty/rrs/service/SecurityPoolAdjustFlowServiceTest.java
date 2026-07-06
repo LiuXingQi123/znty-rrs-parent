@@ -31,13 +31,13 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = buildService(mapper);
         // 构建待处理流程步骤测试数据
-        IpAdjustStepBo otherStep = buildPendingStep(10L, "2", "研究员2");
+        IpAdjustStepBo otherStep = buildPendingStep(10L, "3", "研究员2");
         // 构建待处理流程步骤测试数据
-        IpAdjustStepBo adminStep = buildPendingStep(11L, "1001", "管理员");
+        IpAdjustStepBo adminStep = buildPendingStep(11L, "1", "管理员");
         // 构建审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1001", "管理员", "同意");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "管理员", "同意");
         when(mapper.queryAdjustStepById(10L)).thenReturn(otherStep);
-        when(mapper.queryPendingStepByHandler(1L, "BATCH001", 10103L, "1001")).thenReturn(adminStep);
+        when(mapper.queryPendingStepByHandler(1L, "BATCH001", 10103L, "1")).thenReturn(adminStep);
         when(mapper.editAdjustStepProcess(11L, "approve", "approve", "同意")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         // 构建调库日志测试数据
@@ -56,11 +56,11 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = buildService(mapper);
         // 构建待处理流程步骤测试数据
-        IpAdjustStepBo otherStep = buildPendingStep(10L, "2", "研究员2");
+        IpAdjustStepBo otherStep = buildPendingStep(10L, "3", "研究员2");
         // 构建审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1001", "管理员", "同意");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "管理员", "同意");
         when(mapper.queryAdjustStepById(10L)).thenReturn(otherStep);
-        when(mapper.queryPendingStepByHandler(1L, "BATCH001", 10103L, "1001")).thenReturn(null);
+        when(mapper.queryPendingStepByHandler(1L, "BATCH001", 10103L, "1")).thenReturn(null);
         when(mapper.editAdjustStepProcess(10L, "approve", "approve", "同意（由管理员操作）")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         // 构建调库日志测试数据
@@ -78,9 +78,9 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = buildService(mapper);
         // 构建待处理流程步骤测试数据
-        IpAdjustStepBo otherStep = buildPendingStep(10L, "2", "研究员2");
+        IpAdjustStepBo otherStep = buildPendingStep(10L, "3", "研究员2");
         // 构建审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "研究员1", "同意");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "同意");
         when(mapper.queryAdjustStepById(10L)).thenReturn(otherStep);
 
         try {
@@ -101,9 +101,9 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = buildService(mapper);
         // 构建待处理流程步骤测试数据
-        IpAdjustStepBo otherStep = buildPendingStep(10L, "2", "研究员2");
-        // 构建名称为管理员但 ID 非 1001 的审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "管理员", "同意");
+        IpAdjustStepBo otherStep = buildPendingStep(10L, "3", "研究员2");
+        // 构建名称为管理员但 ID 非 1 的审批请求测试数据
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "2", "管理员", "同意");
         when(mapper.queryAdjustStepById(10L)).thenReturn(otherStep);
 
         try {
@@ -114,7 +114,7 @@ public class SecurityPoolAdjustFlowServiceTest {
             verify(mapper, never()).editAdjustStepProcess(eq(10L), eq("approve"), eq("approve"), eq("同意"));
             return;
         }
-        throw new AssertionError("非 1001 用户仅名称为管理员时应抛出业务异常");
+        throw new AssertionError("非 1 用户仅名称为管理员时应抛出业务异常");
     }
 
     /** 验证 submitAdjustAuditShouldRejectSubmitterProcessLaterStep 测试场景。 */
@@ -124,11 +124,11 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = buildService(mapper);
         // 构建发起人后续待处理步骤测试数据
-        IpAdjustStepBo step = buildPendingStep(10L, "1", "研究员1");
+        IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         // 构建发起人审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "研究员1", "同意");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "同意");
         when(mapper.queryAdjustStepById(10L)).thenReturn(step);
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00", "1")));
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00", "2")));
 
         try {
             service.submitAdjustAudit(req);
@@ -148,13 +148,13 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = buildService(mapper);
         // 构建管理员待处理步骤测试数据
-        IpAdjustStepBo step = buildPendingStep(10L, "1001", "管理员");
+        IpAdjustStepBo step = buildPendingStep(10L, "1", "管理员");
         // 构建管理员审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1001", "管理员", "同意");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "管理员", "同意");
         when(mapper.queryAdjustStepById(10L)).thenReturn(step);
         when(mapper.editAdjustStepProcess(10L, "approve", "approve", "同意")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00", "1001")));
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00", "1")));
 
         service.submitAdjustAudit(req);
 
@@ -168,14 +168,14 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = buildService(mapper);
         // 构建发起人修改节点待处理步骤测试数据
-        IpAdjustStepBo step = buildPendingStep(10L, "1", "研究员1");
+        IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         step.setNodeLabel("流程发起人修改");
         // 构建发起人审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "研究员1", "已修改");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "已修改");
         when(mapper.queryAdjustStepById(10L)).thenReturn(step);
         when(mapper.editAdjustStepProcess(10L, "submit", "submit", "已修改")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("11", "1")));
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("11", "2")));
 
         service.submitAdjustAudit(req);
 
@@ -190,10 +190,10 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = buildService(mapper, attachmentService);
         // 构建发起人修改节点待处理步骤测试数据
-        IpAdjustStepBo step = buildPendingStep(10L, "1", "研究员1");
+        IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         step.setNodeLabel("流程发起人修改");
         // 构建发起人审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "研究员1", "已修改");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "已修改");
         SecurityPoolAdjustAuditReq.AttachmentChange change = new SecurityPoolAdjustAuditReq.AttachmentChange();
         change.setAdjustLogId(1L);
         change.setCreditReportFileIndexes(Collections.singletonList(0));
@@ -205,7 +205,7 @@ public class SecurityPoolAdjustFlowServiceTest {
         when(mapper.queryAdjustStepById(10L)).thenReturn(step);
         when(mapper.editAdjustStepProcess(10L, "submit", "submit", "已修改")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog(1L, "11", "1")));
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog(1L, "11", "2")));
 
         service.submitAdjustAudit(req, Collections.emptyList());
 
@@ -215,9 +215,9 @@ public class SecurityPoolAdjustFlowServiceTest {
         verify(attachmentService).bindAttachments(1L, Collections.singletonList(1),
                 AttachmentCategory.MATERIAL_HAND.getCode(), null);
         verify(attachmentService).copyReportAttachments(1L, Collections.singletonList(7L),
-                AttachmentPurpose.CREDIT_REPORT.getCode(), "1");
+                AttachmentPurpose.CREDIT_REPORT.getCode(), "2");
         verify(attachmentService).copyReportAttachments(1L, Collections.singletonList(8L),
-                AttachmentPurpose.MATERIAL.getCode(), "1");
+                AttachmentPurpose.MATERIAL.getCode(), "2");
         verify(mapper).editAdjustStepProcess(10L, "submit", "submit", "已修改");
     }
 

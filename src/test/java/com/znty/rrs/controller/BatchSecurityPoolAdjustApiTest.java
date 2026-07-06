@@ -34,7 +34,7 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchSecurityPoolAdjust/queryPoolPage",
-                "{\"currentUserId\":\"1001\",\"pageIndex\":1,\"pageSize\":10}");
+                "{\"currentUserId\":\"1\",\"pageIndex\":1,\"pageSize\":10}");
     }
 
     /** 验证批量调整候选证券分页接口 */
@@ -52,7 +52,7 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchSecurityPoolAdjust/checkAdjust",
-                "{\"currentUserId\":\"1001\",\"direction\":\"in\",\"poolId\":2,\"securities\":[{\"securityCode\":\"100001\"}]}");
+                "{\"currentUserId\":\"1\",\"direction\":\"in\",\"poolId\":2,\"securities\":[{\"securityCode\":\"100001\"}]}");
     }
 
     /** 验证批量调库下一步校验接口支持调出 */
@@ -61,7 +61,7 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchSecurityPoolAdjust/checkAdjust",
-                "{\"currentUserId\":\"1001\",\"direction\":\"out\",\"poolId\":2,\"securities\":[{\"securityCode\":\"100001\"}]}");
+                "{\"currentUserId\":\"1\",\"direction\":\"out\",\"poolId\":2,\"securities\":[{\"securityCode\":\"100001\"}]}");
     }
 
     /** 验证批量调库提交接口支持调入 */
@@ -70,7 +70,7 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchSecurityPoolAdjust/addAdjustLog",
-                "{\"currentUserId\":\"1001\",\"direction\":\"in\",\"adjusterId\":\"1001\",\"adjusterName\":\"管理员\",\"poolId\":2,\"items\":[{\"securityCode\":\"100001\",\"targetPoolId\":2,\"adjustMode\":\"调入\",\"flowId\":1}]}");
+                "{\"currentUserId\":\"1\",\"direction\":\"in\",\"adjusterId\":\"1\",\"adjusterName\":\"管理员\",\"poolId\":2,\"items\":[{\"securityCode\":\"100001\",\"targetPoolId\":2,\"adjustMode\":\"调入\",\"flowId\":1}]}");
     }
 
     /** 验证批量调库提交接口支持调出 */
@@ -79,6 +79,6 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchSecurityPoolAdjust/addAdjustLog",
-                "{\"currentUserId\":\"1001\",\"direction\":\"out\",\"adjusterId\":\"1001\",\"adjusterName\":\"管理员\",\"poolId\":2,\"items\":[{\"securityCode\":\"100001\",\"targetPoolId\":2,\"adjustMode\":\"调出\",\"flowId\":1}]}");
+                "{\"currentUserId\":\"1\",\"direction\":\"out\",\"adjusterId\":\"1\",\"adjusterName\":\"管理员\",\"poolId\":2,\"items\":[{\"securityCode\":\"100001\",\"targetPoolId\":2,\"adjustMode\":\"调出\",\"flowId\":1}]}");
     }
 }

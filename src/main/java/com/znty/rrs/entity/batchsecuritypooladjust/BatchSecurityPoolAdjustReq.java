@@ -13,7 +13,7 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 public class BatchSecurityPoolAdjustReq extends PageRequest {
 
-    /** 当前用户 ID，1001 视为管理员 */
+    /** 当前用户 ID，1 视为管理员 */
     private String currentUserId;
 
     /** 投资池 ID 筛选列表 */

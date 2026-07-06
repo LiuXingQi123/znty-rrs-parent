@@ -10,7 +10,7 @@ import java.util.List;
 @Data
 public class BatchSecurityInboundAdjustReq {
 
-    /** 当前用户 ID，1001 视为管理员 */
+    /** 当前用户 ID，1 视为管理员 */
     private String currentUserId;
 
     /** 调整人 ID */

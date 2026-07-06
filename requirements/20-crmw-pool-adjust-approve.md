@@ -12,7 +12,7 @@
 
 **入口模式 `entryMode`**：`process`（我的事宜处理，默认）/ `next`（下一步校验确认）。
 
-**初始化**（`created`）：`this.initStandaloneReviewPage()`。从 URL 取 `securityCode`/`windCode`、`crmwScode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`（`'next'` 或默认 `'process'`）；`adjustStep=2`；`loadDetailData(securityCode)` + `restoreStandaloneAdjustDraft`（从 sessionStorage 恢复草稿）。默认 `currentLoginUserId='1001'`。
+**初始化**（`created`）：`this.initStandaloneReviewPage()`。从 URL 取 `securityCode`/`windCode`、`crmwScode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`（`'next'` 或默认 `'process'`）；`adjustStep=2`；`loadDetailData(securityCode)` + `restoreStandaloneAdjustDraft`（从 sessionStorage 恢复草稿）。默认 `currentLoginUserId='1'`。
 
 > 审批页 URL 必带 `crmwScode`：`initStandaloneReviewPage` 校验 `securityCode && crmwScode`，否则提示「缺少证券或CRMW信息」。
 
@@ -44,7 +44,7 @@
 **阶段1 参数与步骤校验**
 1. `validateAuditReq`：`stepId` 非空；`processAction` 必须是 `ProcessAction.APPROVE`/`REJECT`；`reject` 时 `processComment` 必填。
 2. `queryAdjustStepById(stepId)` 查当前 step。
-3. `resolveActualProcessStep`：管理员（`handlerId==='1001'`）且 step 不属于自己时，用 `queryPendingStepByHandler` 找管理员自己的 pending 步骤优先处理。
+3. `resolveActualProcessStep`：管理员（`handlerId==='1'`）且 step 不属于自己时，用 `queryPendingStepByHandler` 找管理员自己的 pending 步骤优先处理。
 4. `validatePendingStep`：step 不存在→`"流程步骤不存在"`；`stepStatus` 必须 `pending`→否则`"当前流程步骤已处理，请刷新后重试"`；`handlerId` 有值且不等于 req 且非管理员→`"当前用户不是该步骤处理人"`；反查回填 `adjustBatchNo`/`adjustLogId`。
 5. `validateSubmitterCannotProcess`：管理员、发起/修改语义节点跳过；否则查同批次所有调库记录，若 `handlerId` 等于任一记录 `adjusterId`→`"发起人不能参与后续流程操作"`。
 

@@ -43,7 +43,7 @@ public class SecurityPoolAdjustMultipartApiTest {
     public void addAdjustLog_MultipartRequest_ReturnsSuccess() throws Exception {
         MockMultipartFile request = new MockMultipartFile(
                 "request", "", "application/json",
-                ("{\"securityCode\":\"S001\",\"adjusterId\":\"1001\",\"items\":[]}")
+                ("{\"securityCode\":\"S001\",\"adjusterId\":\"1\",\"items\":[]}")
                         .getBytes(StandardCharsets.UTF_8));
         MockMultipartFile file = new MockMultipartFile(
                 "files", "信评报告.pdf", "application/pdf",

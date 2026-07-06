@@ -84,7 +84,7 @@ public class ForbiddenPoolAdjustServiceTest {
         when(poolMapper.queryMutexRelationList()).thenReturn(Collections.emptyList());
         when(mapper.queryPoolCurrentCountList()).thenReturn(Collections.<PoolDto>emptyList());
         ForbiddenPoolAdjustReq req = new ForbiddenPoolAdjustReq();
-        req.setCurrentUserId("1001");
+        req.setCurrentUserId("1");
 
         List<PoolDto> result = service.queryCompanyAdjustPoolList(req);
 
@@ -117,7 +117,7 @@ public class ForbiddenPoolAdjustServiceTest {
         companyLog.setTargetPoolId(15L);
         companyLog.setTargetPoolName("禁投池");
         companyLog.setPoolType("forbidden");
-        companyLog.setAdjusterId("1001");
+        companyLog.setAdjusterId("1");
         companyLog.setAdjusterName("管理员");
 
         ReflectionTestUtils.invokeMethod(service, "syncCompanyBondsOnDirect", companyLog);
