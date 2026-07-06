@@ -116,7 +116,7 @@
 ### 3.5 附件展示与下载
 
 - 调库记录附件：`loadLogAttachments` 对每条 log 调 `/api/v1/attachments/queryAttachmentList { adjustLogId }`，按 `attachmentCategory` 拆为信评报告（`credit_report_hand/in/out`）与其他材料（`material_hand/in/out`）。
-- 下载：`downloadAttachment` `POST /api/v1/attachments/downloadAttachment { id }` `responseType:'blob'`，前端 `URL.createObjectURL` + `<a download>`。本地待提交文件用 `downloadLocalFile`。
+- 下载：`downloadAttachment` `POST /api/v1/attachments/downloadAttachment { id }` 返回 `ApiResponse<String>`（Base64），前端解码为 Blob 后 `URL.createObjectURL` + `<a download>`。本地待提交文件用 `downloadLocalFile`。
 - 信评报告选择弹窗：内/外报告 Tab，分页查询 `/api/v1/reports/queryInReportPage`、`/api/v1/reports/queryOutReportPage`，支持标题/证券编码/类型/撰写日期筛选，选中后回填到 `creditReportSelections`/`otherMaterialSelections`。
 
 ---
@@ -161,7 +161,7 @@
 | `securityPoolAdjustFlow/submitAdjustAudit`（application/json） | adjustLogId, adjustBatchNo, stepId, processAction(approve/reject), processComment, handlerId, handlerName, attachmentChanges? | `SecurityPoolAdjustAuditDto` | 审批/修改节点重新提交（无附件变更） |
 | `securityPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `SecurityPoolAdjustAuditDto` | 审批/修改节点重新提交（带附件变更，approve.html 用） |
 | `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
-| `attachments/downloadAttachment` | id | blob | 下载附件 |
+| `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` / `queryOutReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 信评报告弹窗内/外报告查询 |
 
 > 路径均带前缀 `/api/v1/`。

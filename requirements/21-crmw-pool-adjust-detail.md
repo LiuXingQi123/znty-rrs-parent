@@ -64,7 +64,7 @@
 | `crmwPoolAdjust/checkCrmwAdjust` | `AdjustCheckReq` | `AdjustCheckDto` | adjust 模式校验确认 |
 | `crmwPoolAdjust/addCrmwAdjustLog`（JSON）/ `addCrmwAdjustLogWithFiles`（multipart） | `CrmwPoolAdjustSubmitReq` | `AdjustSubmitDto` | adjust 模式首次提交 |
 | `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
-| `attachments/downloadAttachment` | id | blob | 下载附件 |
+| `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` / `queryOutReportPage` | 分页+筛选 | PageResult | 信评报告弹窗 |
 
 > 路径均带前缀 `/api/v1/`。

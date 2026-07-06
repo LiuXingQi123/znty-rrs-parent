@@ -218,7 +218,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 | `batchSecurityPoolAdjust/addAdjustLogWithFiles`（multipart） | `request`=JSON Blob + `files`=MultipartFile[] | 同上 | 批量提交调库申请及附件（前端实际用此入口；JSON 无附件入口为 `addAdjustLog`） |
 | `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 报告弹窗内部报告查询 |
 | `reports/queryOutReportPage` | 同上 | 同上 | 报告弹窗外部报告查询 |
-| `attachments/downloadAttachment` | `{id}` (responseType=blob) | blob | 下载报告库附件 |
+| `attachments/downloadAttachment` | `{id}` | `ApiResponse<String>`（Base64） | 下载报告库附件 |
 
 > 路径均带前缀 `/api/v1/`。
 

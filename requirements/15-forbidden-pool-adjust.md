@@ -15,7 +15,7 @@
 
 详情页内部通过 `adjustStep`（1=选池，2=校验确认）控制步骤切换。
 
-**初始化**（`created`）：调用 `loadList()` 加载主体列表。`baseURL` 由 `js/api.js` 统一注入（`http://localhost:18090`），`apiPost` 返回 `{ success, data, message }`，`!json.success` 弹错并抛异常，支持 `responseType:'blob'` 附件下载。
+**初始化**（`created`）：调用 `loadList()` 加载主体列表。`baseURL` 由 `js/api.js` 统一注入（`http://localhost:18090`），`apiPost` 返回 `{ success, data, message }`，`!json.success` 弹错并抛异常，附件下载接口返回 Base64 字符串后由前端还原为 Blob。
 
 默认登录用户 `currentLoginUserId='1'`（管理员）、`currentLoginUserName='管理员'`。URL 入口参数 `targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`。
 
@@ -195,7 +195,7 @@ syncCompanyBondsOnDirect(companyLog):
 | `queryAdjustLogList` | companyCode, adjustBatchNo | `List<AdjustLogDto>` | 主体调库记录（无批次排除终态） |
 | `queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表（批次号优先） |
 | `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
-| `attachments/downloadAttachment` | id | blob | 下载附件 |
+| `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 内部报告分页 |
 | `reports/queryOutReportPage` | 同上 | PageResult | 外部报告分页 |
 

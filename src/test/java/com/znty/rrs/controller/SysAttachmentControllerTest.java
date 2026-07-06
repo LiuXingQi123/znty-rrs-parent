@@ -13,9 +13,7 @@ import java.nio.charset.StandardCharsets;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -38,20 +36,18 @@ public class SysAttachmentControllerTest extends ControllerApiTestSupport {
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
-    /** 验证下载附件返回二进制文件响应 */
+    /** 验证下载附件返回 Base64 统一响应 */
     @Test
-    public void downloadAttachment_ExistingFile_ReturnsBinaryResponse() throws Exception {
+    public void downloadAttachment_ExistingFile_ReturnsBase64ApiResponse() throws Exception {
         byte[] content = "hello".getBytes(StandardCharsets.UTF_8);
         when(sysAttachmentService.downloadAttachment(any(SysAttachmentReq.class)))
                 .thenReturn(new SysAttachmentService.DownloadFile("报告附件.pdf", "application/pdf", 5L, content));
 
         postJson(mockMvc, "/api/v1/attachments/downloadAttachment", "{\"id\":1}")
                 .andExpect(status().isOk())
-                .andExpect(header().string("Content-Disposition",
-                        "attachment; filename*=UTF-8''%E6%8A%A5%E5%91%8A%E9%99%84%E4%BB%B6.pdf"))
-                .andExpect(header().longValue("Content-Length", 5L))
-                .andExpect(content().contentType("application/pdf"))
-                .andExpect(content().bytes(content));
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("success"))
+                .andExpect(jsonPath("$.data").value("aGVsbG8="));
     }
 
     /** 验证查询附件列表仍返回统一响应 */

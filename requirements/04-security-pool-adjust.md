@@ -17,7 +17,7 @@
 
 **初始化**（`created`）：设置 `axios.defaults.baseURL = 'http://localhost:18090'`，调用 `loadList()` 加载证券列表。
 
-**apiPost 封装**：页面内置方法，返回 `{ success, data, message }`，`!json.success` 弹错并抛异常；支持 `responseType === 'blob'` 用于附件下载。
+**apiPost 封装**：页面内置方法，返回 `{ success, data, message }`，`!json.success` 弹错并抛异常；附件下载接口返回 Base64 字符串后由前端还原为 Blob。
 
 ---
 
@@ -278,7 +278,7 @@
 | `queryAdjustLogList` | securityCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录 |
 | `queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表 |
 | `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
-| `attachments/downloadAttachment` | id | blob | 下载附件 |
+| `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 内部报告分页 |
 | `reports/queryOutReportPage` | 同上 | PageResult | 外部报告分页 |
 
