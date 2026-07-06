@@ -19,6 +19,24 @@ public class ScriptHealthCheckDto {
     /** 数据库连接信息 */
     private String connectionInfo;
 
+    /** 期望数据库数量 */
+    private Integer expectedDatabaseCount;
+
+    /** 期望表数量 */
+    private Integer expectedTableCount;
+
+    /** 已存在表数量 */
+    private Integer existingTableCount;
+
+    /** 缺失表数量 */
+    private Integer missingTableCount;
+
+    /** 空表数量 */
+    private Integer emptyTableCount;
+
+    /** 有数据表数量 */
+    private Integer nonEmptyTableCount;
+
     /** 检查项列表 */
     private List<ScriptHealthItemDto> items;
 }

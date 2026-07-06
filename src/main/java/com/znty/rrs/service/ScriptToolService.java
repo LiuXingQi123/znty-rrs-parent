@@ -5,6 +5,8 @@ import com.znty.rrs.entity.scripttool.ScriptDemoSceneDto;
 import com.znty.rrs.entity.scripttool.ScriptFileDto;
 import com.znty.rrs.entity.scripttool.ScriptHealthCheckDto;
 import com.znty.rrs.entity.scripttool.ScriptHealthItemDto;
+import com.znty.rrs.entity.scripttool.ScriptInspectionDto;
+import com.znty.rrs.entity.scripttool.ScriptInspectionItemDto;
 import com.znty.rrs.entity.scripttool.ScriptModuleTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptOverviewDto;
 import com.znty.rrs.entity.scripttool.ScriptTableDto;
@@ -82,6 +84,14 @@ public class ScriptToolService {
     private static final Pattern TRUNCATE_TABLE_PATTERN = Pattern.compile("(?is)^TRUNCATE\\s+TABLE\\s+`?([A-Za-z0-9_]+)`?.*");
     /** 插入语句目标表匹配规则 */
     private static final Pattern INSERT_TABLE_PATTERN = Pattern.compile("(?is)^INSERT\\s+(?:IGNORE\\s+)?INTO\\s+`?([A-Za-z0-9_]+)`?.*");
+    /** 建表语句结构匹配规则 */
+    private static final Pattern CREATE_TABLE_DETAIL_PATTERN = Pattern.compile("(?is)^CREATE\\s+TABLE\\s+`?([A-Za-z0-9_]+)`?\\s*\\((.*)\\)\\s*ENGINE\\s*=\\s*([A-Za-z0-9_]+)(.*)$");
+    /** 字段定义匹配规则 */
+    private static final Pattern COLUMN_DEFINITION_PATTERN = Pattern.compile("(?is)^`([^`]+)`\\s+([A-Za-z]+(?:\\s*\\([^)]*\\))?(?:\\s+UNSIGNED)?)\\s*(.*)$");
+    /** 索引定义匹配规则 */
+    private static final Pattern INDEX_DEFINITION_PATTERN = Pattern.compile("(?is)^(PRIMARY\\s+KEY|UNIQUE\\s+KEY\\s+`?([A-Za-z0-9_]+)`?|KEY\\s+`?([A-Za-z0-9_]+)`?)\\s*\\(([^)]+)\\).*$");
+    /** 表排序规则匹配规则 */
+    private static final Pattern COLLATION_PATTERN = Pattern.compile("(?is).*COLLATE\\s*=?\\s*([A-Za-z0-9_]+).*");
 
     /** 数据库连接池 */
     @Resource
@@ -150,6 +160,12 @@ public class ScriptToolService {
     public ScriptHealthCheckDto queryHealthCheck(ScriptToolReq req) {
         ScriptHealthCheckDto check = new ScriptHealthCheckDto();
         check.setItems(new ArrayList<ScriptHealthItemDto>());
+        check.setExpectedDatabaseCount(2);
+        check.setExpectedTableCount(queryClearTableMap().size());
+        check.setExistingTableCount(0);
+        check.setMissingTableCount(check.getExpectedTableCount());
+        check.setEmptyTableCount(0);
+        check.setNonEmptyTableCount(0);
         try {
             // 解析 SQL 文件目录
             File sqlDir = resolveSqlDir();
@@ -164,14 +180,54 @@ public class ScriptToolService {
             DatabaseMetaData metaData = conn.getMetaData();
             check.setConnectionInfo(metaData.getURL());
             check.getItems().add(buildHealthItem("database-connection", "数据库连接", STATUS_SUCCESS, metaData.getURL(), "可连接", "数据库连接正常"));
-            // 检查数据库和表状态
-            appendDatabaseHealthItems(conn, check.getItems());
+            // 检查全部数据库和表状态
+            appendDatabaseHealthItems(conn, check);
         } catch (Exception e) {
             check.setConnectionInfo("");
             check.getItems().add(buildHealthItem("database-connection", "数据库连接", STATUS_FAILED, "", "可连接", e.getMessage()));
         }
         check.setStatus(resolveHealthStatus(check.getItems()));
         return check;
+    }
+
+    /**
+     * 查询数据库结构差异检查结果。
+     */
+    public ScriptInspectionDto querySchemaDiff(ScriptToolReq req) {
+        ScriptInspectionDto inspection = buildInspectionResult("对比建表脚本与实际数据库的表、字段、索引、引擎和排序规则");
+        try {
+            // 解析建表脚本中的期望结构
+            Map<String, ExpectedSchemaTable> expectedTables = queryExpectedSchemaTables();
+            try (Connection conn = dataSource.getConnection()) {
+                // 查询并比较实际数据库结构
+                appendSchemaDiffItems(conn, expectedTables, inspection.getItems());
+            }
+        } catch (Exception e) {
+            inspection.getItems().add(buildInspectionItem("schema-check", "结构", "全部数据库", "结构差异检查",
+                    STATUS_FAILED, "检查失败", "可完成检查", 1L, e.getMessage(), "确认 SQL 目录和数据库连接均可用"));
+        }
+        // 汇总结构差异检查结果
+        fillInspectionSummary(inspection);
+        return inspection;
+    }
+
+    /**
+     * 查询业务数据完整性检查结果。
+     */
+    public ScriptInspectionDto queryDataIntegrity(ScriptToolReq req) {
+        ScriptInspectionDto inspection = buildInspectionResult("检查调库、流程、投资池、规则和用户数据的关键业务关联");
+        try (Connection conn = dataSource.getConnection()) {
+            // 执行业务完整性规则
+            for (IntegrityRule rule : queryIntegrityRules()) {
+                inspection.getItems().add(executeIntegrityRule(conn, rule));
+            }
+        } catch (Exception e) {
+            inspection.getItems().add(buildInspectionItem("integrity-check", "完整性", "全部业务数据", "业务完整性检查",
+                    STATUS_FAILED, "检查失败", "可完成检查", 1L, e.getMessage(), "确认数据库连接和业务表结构均可用"));
+        }
+        // 汇总业务完整性检查结果
+        fillInspectionSummary(inspection);
+        return inspection;
     }
 
     /**
@@ -785,17 +841,31 @@ public class ScriptToolService {
     /**
      * 追加数据库健康检查项。
      */
-    private void appendDatabaseHealthItems(Connection conn, List<ScriptHealthItemDto> items) {
-        // 检查核心数据库
-        appendDatabaseItem(conn, items, "znty_rrs");
-        appendDatabaseItem(conn, items, "ais_inv_analysis");
-        // 检查核心表
-        appendTableItem(conn, items, "znty_rrs", "rrs_securityinfo");
-        appendTableItem(conn, items, "znty_rrs", "ip_investment_pool");
-        appendTableItem(conn, items, "znty_rrs", "wf_flow_version");
-        appendTableItem(conn, items, "znty_rrs", "ip_adjust_log");
-        appendTableItem(conn, items, "znty_rrs", "ip_adjust_step");
-        appendTableItem(conn, items, "ais_inv_analysis", "t_sys_user");
+    private void appendDatabaseHealthItems(Connection conn, ScriptHealthCheckDto check) {
+        // 检查项目使用的两个数据库
+        appendDatabaseItem(conn, check.getItems(), "znty_rrs");
+        appendDatabaseItem(conn, check.getItems(), "ais_inv_analysis");
+
+        int existingCount = 0;
+        int emptyCount = 0;
+        int nonEmptyCount = 0;
+        // 复用可清空表白名单检查全部项目表
+        for (ScriptTableDto table : queryClearTableMap().values()) {
+            int tableState = appendTableItem(conn, check.getItems(), table.getDatabaseName(), table.getTableName());
+            if (tableState >= 0) {
+                existingCount++;
+            }
+            if (tableState == 0) {
+                emptyCount++;
+            }
+            if (tableState > 0) {
+                nonEmptyCount++;
+            }
+        }
+        check.setExistingTableCount(existingCount);
+        check.setMissingTableCount(check.getExpectedTableCount() - existingCount);
+        check.setEmptyTableCount(emptyCount);
+        check.setNonEmptyTableCount(nonEmptyCount);
     }
 
     /**
@@ -823,30 +893,32 @@ public class ScriptToolService {
     /**
      * 追加表存在性和数据量检查项。
      */
-    private void appendTableItem(Connection conn, List<ScriptHealthItemDto> items, String databaseName, String tableName) {
+    private int appendTableItem(Connection conn, List<ScriptHealthItemDto> items, String databaseName, String tableName) {
         String tableKey = databaseName + "." + tableName;
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '" + databaseName + "' AND TABLE_NAME = '" + tableName + "'")) {
             if (!rs.next() || rs.getLong(1) == 0L) {
-                items.add(buildHealthItem("table-" + tableKey, "核心表 " + tableKey, STATUS_FAILED,
-                        "不存在", "存在", "核心表不存在"));
-                return;
+                items.add(buildHealthItem("table-" + tableKey, "项目表 " + tableKey, STATUS_FAILED,
+                        "不存在", "存在", "项目表不存在"));
+                return -1;
             }
         } catch (Exception e) {
-            items.add(buildHealthItem("table-" + tableKey, "核心表 " + tableKey, STATUS_FAILED,
+            items.add(buildHealthItem("table-" + tableKey, "项目表 " + tableKey, STATUS_FAILED,
                     "", "可查询", e.getMessage()));
-            return;
+            return -1;
         }
 
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM `" + databaseName + "`.`" + tableName + "`")) {
             long count = rs.next() ? rs.getLong(1) : 0L;
             String status = count > 0L ? STATUS_SUCCESS : STATUS_WARNING;
-            items.add(buildHealthItem("table-" + tableKey, "核心表 " + tableKey, status,
+            items.add(buildHealthItem("table-" + tableKey, "项目表 " + tableKey, status,
                     String.valueOf(count), "大于等于 0", count > 0L ? "表存在且有数据" : "表存在但暂无数据"));
+            return count > 0L ? 1 : 0;
         } catch (Exception e) {
-            items.add(buildHealthItem("table-" + tableKey, "核心表 " + tableKey, STATUS_FAILED,
+            items.add(buildHealthItem("table-" + tableKey, "项目表 " + tableKey, STATUS_FAILED,
                     "", "可统计", e.getMessage()));
+            return -1;
         }
     }
 
@@ -879,6 +951,490 @@ public class ScriptToolService {
             }
         }
         return hasWarning ? STATUS_WARNING : STATUS_SUCCESS;
+    }
+
+    /**
+     * 解析全部建表脚本中的期望表结构。
+     */
+    private Map<String, ExpectedSchemaTable> queryExpectedSchemaTables() throws Exception {
+        Map<String, ExpectedSchemaTable> tables = new LinkedHashMap<>();
+        File sqlDir = resolveSqlDir();
+        for (String fileName : querySchemaFiles()) {
+            File sqlFile = new File(sqlDir, fileName);
+            if (!sqlFile.exists()) {
+                throw new BizException("建表脚本不存在：" + fileName);
+            }
+            String databaseName = fileName.startsWith("ais_inv_analysis") ? "ais_inv_analysis" : "znty_rrs";
+            String sqlText = new String(Files.readAllBytes(sqlFile.toPath()), StandardCharsets.UTF_8);
+            for (String statement : splitSqlStatements(sqlText)) {
+                String sql = normalizeExecutableSql(statement);
+                Matcher matcher = CREATE_TABLE_DETAIL_PATTERN.matcher(sql);
+                if (matcher.matches()) {
+                    // 解析单张表的字段、索引和表属性
+                    ExpectedSchemaTable table = parseExpectedSchemaTable(databaseName, matcher);
+                    tables.put(table.tableKey, table);
+                }
+            }
+        }
+        return tables;
+    }
+
+    /**
+     * 解析单张期望表结构。
+     */
+    private ExpectedSchemaTable parseExpectedSchemaTable(String databaseName, Matcher matcher) {
+        ExpectedSchemaTable table = new ExpectedSchemaTable();
+        table.databaseName = databaseName;
+        table.tableName = matcher.group(1);
+        table.tableKey = databaseName + "." + table.tableName;
+        table.engine = matcher.group(3).toLowerCase();
+        table.columns = new LinkedHashMap<>();
+        table.indexes = new LinkedHashMap<>();
+        Matcher collationMatcher = COLLATION_PATTERN.matcher(matcher.group(4));
+        table.collation = collationMatcher.matches() ? collationMatcher.group(1).toLowerCase() : "";
+
+        // 按顶层逗号拆分字段和索引定义
+        for (String definition : splitTopLevelDefinitions(matcher.group(2))) {
+            String normalized = normalizeExecutableSql(definition).trim();
+            Matcher columnMatcher = COLUMN_DEFINITION_PATTERN.matcher(normalized);
+            if (columnMatcher.matches()) {
+                String type = normalizeColumnType(columnMatcher.group(2));
+                String attributes = columnMatcher.group(3).toUpperCase();
+                String signature = type + "|" + (!attributes.contains("NOT NULL") ? "YES" : "NO")
+                        + "|" + (attributes.contains("AUTO_INCREMENT") ? "auto_increment" : "");
+                table.columns.put(columnMatcher.group(1).toLowerCase(), signature);
+                continue;
+            }
+            Matcher indexMatcher = INDEX_DEFINITION_PATTERN.matcher(normalized);
+            if (indexMatcher.matches()) {
+                String prefix = indexMatcher.group(1).toUpperCase();
+                String indexName = prefix.startsWith("PRIMARY") ? "PRIMARY"
+                        : (StringUtils.hasText(indexMatcher.group(2)) ? indexMatcher.group(2) : indexMatcher.group(3));
+                String indexType = prefix.startsWith("PRIMARY") ? "PRIMARY" : (prefix.startsWith("UNIQUE") ? "UNIQUE" : "INDEX");
+                table.indexes.put(indexName, indexType + ":" + normalizeIndexColumns(indexMatcher.group(4)));
+            }
+        }
+        return table;
+    }
+
+    /**
+     * 拆分 CREATE TABLE 内的顶层定义。
+     */
+    private List<String> splitTopLevelDefinitions(String body) {
+        List<String> definitions = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int parenthesesDepth = 0;
+        boolean inSingleQuote = false;
+        for (int i = 0; i < body.length(); i++) {
+            char ch = body.charAt(i);
+            if (ch == '\'' && (i == 0 || body.charAt(i - 1) != '\\')) {
+                inSingleQuote = !inSingleQuote;
+            }
+            if (!inSingleQuote) {
+                if (ch == '(') parenthesesDepth++;
+                if (ch == ')') parenthesesDepth--;
+                if (ch == ',' && parenthesesDepth == 0) {
+                    definitions.add(current.toString());
+                    current.setLength(0);
+                    continue;
+                }
+            }
+            current.append(ch);
+        }
+        if (StringUtils.hasText(current.toString())) {
+            definitions.add(current.toString());
+        }
+        return definitions;
+    }
+
+    /**
+     * 比较期望结构与实际数据库结构。
+     */
+    private void appendSchemaDiffItems(Connection conn, Map<String, ExpectedSchemaTable> expectedTables,
+                                       List<ScriptInspectionItemDto> items) throws Exception {
+        for (ExpectedSchemaTable expected : expectedTables.values()) {
+            if (!queryTableExists(conn, expected.databaseName, expected.tableName)) {
+                items.add(buildInspectionItem("schema-" + expected.tableKey, "表结构", expected.tableKey, "数据库结构一致性",
+                        STATUS_FAILED, "表不存在", buildExpectedTableSummary(expected), 1L,
+                        "建表脚本中存在该表，但实际数据库缺失", "执行对应 schema 脚本或补建该表"));
+                continue;
+            }
+            // 查询实际字段、索引和表属性
+            Map<String, String> actualColumns = queryActualColumns(conn, expected.databaseName, expected.tableName);
+            Map<String, String> actualIndexes = queryActualIndexes(conn, expected.databaseName, expected.tableName);
+            Map<String, String> actualOptions = queryActualTableOptions(conn, expected.databaseName, expected.tableName);
+            items.add(compareSchemaTable(expected, actualColumns, actualIndexes, actualOptions));
+        }
+    }
+
+    /**
+     * 比较单张表结构。
+     */
+    private ScriptInspectionItemDto compareSchemaTable(ExpectedSchemaTable expected, Map<String, String> actualColumns,
+                                                        Map<String, String> actualIndexes, Map<String, String> actualOptions) {
+        List<String> seriousDiffs = new ArrayList<>();
+        List<String> warningDiffs = new ArrayList<>();
+        for (Map.Entry<String, String> column : expected.columns.entrySet()) {
+            if (!actualColumns.containsKey(column.getKey())) {
+                seriousDiffs.add("缺失字段 " + column.getKey());
+            } else if (!column.getValue().equalsIgnoreCase(actualColumns.get(column.getKey()))) {
+                seriousDiffs.add("字段定义不一致 " + column.getKey() + "（实际 " + actualColumns.get(column.getKey()) + "，脚本 " + column.getValue() + "）");
+            }
+        }
+        for (String columnName : actualColumns.keySet()) {
+            if (!expected.columns.containsKey(columnName)) {
+                warningDiffs.add("脚本外字段 " + columnName);
+            }
+        }
+        for (Map.Entry<String, String> index : expected.indexes.entrySet()) {
+            if (!actualIndexes.containsKey(index.getKey())) {
+                seriousDiffs.add("缺失索引 " + index.getKey());
+            } else if (!index.getValue().equalsIgnoreCase(actualIndexes.get(index.getKey()))) {
+                seriousDiffs.add("索引定义不一致 " + index.getKey());
+            }
+        }
+        for (String indexName : actualIndexes.keySet()) {
+            if (!expected.indexes.containsKey(indexName)) {
+                warningDiffs.add("脚本外索引 " + indexName);
+            }
+        }
+        if (!expected.engine.equalsIgnoreCase(actualOptions.get("engine"))) {
+            seriousDiffs.add("存储引擎不一致");
+        }
+        if (StringUtils.hasText(expected.collation) && !expected.collation.equalsIgnoreCase(actualOptions.get("collation"))) {
+            warningDiffs.add("排序规则不一致（实际 " + actualOptions.get("collation") + "，脚本 " + expected.collation + "）");
+        }
+
+        String status = !seriousDiffs.isEmpty() ? STATUS_FAILED : (!warningDiffs.isEmpty() ? STATUS_WARNING : STATUS_SUCCESS);
+        List<String> allDiffs = new ArrayList<>(seriousDiffs);
+        allDiffs.addAll(warningDiffs);
+        String message = allDiffs.isEmpty() ? "表结构与建表脚本一致" : joinLimited(allDiffs, 8);
+        return buildInspectionItem("schema-" + expected.tableKey, "表结构", expected.tableKey, "数据库结构一致性",
+                status, buildActualTableSummary(actualColumns, actualIndexes, actualOptions), buildExpectedTableSummary(expected),
+                (long) allDiffs.size(), message, allDiffs.isEmpty() ? "" : "核对差异后执行迁移脚本或人工修正结构");
+    }
+
+    /**
+     * 查询实际字段结构。
+     */
+    private Map<String, String> queryActualColumns(Connection conn, String databaseName, String tableName) throws Exception {
+        Map<String, String> columns = new LinkedHashMap<>();
+        String sql = "SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, EXTRA FROM information_schema.COLUMNS"
+                + " WHERE TABLE_SCHEMA = '" + databaseName + "' AND TABLE_NAME = '" + tableName + "' ORDER BY ORDINAL_POSITION";
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                String signature = normalizeColumnType(rs.getString(2)) + "|" + rs.getString(3).toUpperCase()
+                        + "|" + (rs.getString(4) != null && rs.getString(4).toLowerCase().contains("auto_increment") ? "auto_increment" : "");
+                columns.put(rs.getString(1).toLowerCase(), signature);
+            }
+        }
+        return columns;
+    }
+
+    /**
+     * 查询实际索引结构。
+     */
+    private Map<String, String> queryActualIndexes(Connection conn, String databaseName, String tableName) throws Exception {
+        Map<String, List<String>> indexColumns = new LinkedHashMap<>();
+        Map<String, String> indexTypes = new LinkedHashMap<>();
+        String sql = "SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME FROM information_schema.STATISTICS"
+                + " WHERE TABLE_SCHEMA = '" + databaseName + "' AND TABLE_NAME = '" + tableName + "' ORDER BY INDEX_NAME, SEQ_IN_INDEX";
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                String indexName = rs.getString(1);
+                if (!indexColumns.containsKey(indexName)) {
+                    indexColumns.put(indexName, new ArrayList<String>());
+                    indexTypes.put(indexName, "PRIMARY".equals(indexName) ? "PRIMARY" : (rs.getInt(2) == 0 ? "UNIQUE" : "INDEX"));
+                }
+                indexColumns.get(indexName).add(rs.getString(3).toLowerCase());
+            }
+        }
+        Map<String, String> indexes = new LinkedHashMap<>();
+        for (String indexName : indexColumns.keySet()) {
+            indexes.put(indexName, indexTypes.get(indexName) + ":" + joinStrings(indexColumns.get(indexName), ","));
+        }
+        return indexes;
+    }
+
+    /**
+     * 查询实际表属性。
+     */
+    private Map<String, String> queryActualTableOptions(Connection conn, String databaseName, String tableName) throws Exception {
+        Map<String, String> options = new LinkedHashMap<>();
+        String sql = "SELECT ENGINE, TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA = '"
+                + databaseName + "' AND TABLE_NAME = '" + tableName + "'";
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) {
+                options.put("engine", rs.getString(1) == null ? "" : rs.getString(1).toLowerCase());
+                options.put("collation", rs.getString(2) == null ? "" : rs.getString(2).toLowerCase());
+            }
+        }
+        return options;
+    }
+
+    /**
+     * 判断表是否存在。
+     */
+    private boolean queryTableExists(Connection conn, String databaseName, String tableName) throws Exception {
+        String sql = "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '" + databaseName
+                + "' AND TABLE_NAME = '" + tableName + "'";
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            return rs.next() && rs.getLong(1) > 0L;
+        }
+    }
+
+    /**
+     * 执行单条业务完整性规则。
+     */
+    private ScriptInspectionItemDto executeIntegrityRule(Connection conn, IntegrityRule rule) {
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(rule.sql)) {
+            long count = rs.next() ? rs.getLong(1) : 0L;
+            String status = count == 0L ? STATUS_SUCCESS : rule.issueStatus;
+            return buildInspectionItem(rule.code, rule.category, rule.objectName, rule.name, status,
+                    String.valueOf(count), "0", count, count == 0L ? "未发现异常数据" : rule.message,
+                    count == 0L ? "" : rule.suggestion);
+        } catch (Exception e) {
+            return buildInspectionItem(rule.code, rule.category, rule.objectName, rule.name, STATUS_FAILED,
+                    "检查失败", "0", 1L, e.getMessage(), "先在环境检查和结构差异检查中确认相关表字段存在");
+        }
+    }
+
+    /**
+     * 查询业务数据完整性规则。
+     */
+    private List<IntegrityRule> queryIntegrityRules() {
+        List<IntegrityRule> rules = new ArrayList<>();
+        rules.add(buildIntegrityRule("adjust-step-log", "调库流程", "ip_adjust_step → ip_adjust_log", "审批步骤关联申请",
+                "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE s.adjust_log_id IS NOT NULL AND l.id IS NULL",
+                STATUS_FAILED, "存在找不到调库申请的审批步骤", "清理孤儿步骤或补回对应调库申请"));
+        rules.add(buildIntegrityRule("adjust-step-batch", "调库流程", "ip_adjust_step.adjust_batch_no", "步骤批次号一致性",
+                "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE COALESCE(s.adjust_batch_no, '') <> COALESCE(l.adjust_batch_no, '')",
+                STATUS_FAILED, "步骤批次号与申请批次号不一致", "按调库申请批次号修正步骤记录"));
+        rules.add(buildIntegrityRule("pool-status-log", "调库流程", "ip_pool_status → ip_adjust_log", "证券池状态来源申请",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE p.adjust_log_id IS NOT NULL AND l.id IS NULL",
+                STATUS_FAILED, "存在找不到来源申请的证券池状态", "清理孤儿池状态或补回来源申请"));
+        rules.add(buildIntegrityRule("crmw-status-log", "调库流程", "ip_pool_status_crmw → ip_adjust_log", "CRMW 状态来源申请",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE p.adjust_log_id IS NOT NULL AND l.id IS NULL",
+                STATUS_FAILED, "存在找不到来源申请的 CRMW 池状态", "清理孤儿池状态或补回来源申请"));
+        rules.add(buildIntegrityRule("pool-status-audit", "调库流程", "ip_pool_status.audit_status", "证券池落地状态合法性",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status WHERE COALESCE(is_deleted, 0) = 0 AND audit_status <> '20'",
+                STATUS_FAILED, "当前池状态中存在非审批通过数据", "核对落池逻辑，仅保留 audit_status=20 的有效状态"));
+        rules.add(buildIntegrityRule("crmw-status-audit", "调库流程", "ip_pool_status_crmw.audit_status", "CRMW 落地状态合法性",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw WHERE COALESCE(is_deleted, 0) = 0 AND audit_status <> '20'",
+                STATUS_FAILED, "CRMW 当前池状态中存在非审批通过数据", "核对落池逻辑，仅保留 audit_status=20 的有效状态"));
+        rules.add(buildIntegrityRule("pool-status-duplicate", "调库流程", "ip_pool_status", "证券池有效状态重复",
+                "SELECT COALESCE(SUM(t.cnt - 1), 0) FROM (SELECT COUNT(*) cnt FROM znty_rrs.ip_pool_status WHERE COALESCE(is_deleted, 0) = 0 GROUP BY security_code, target_pool_id HAVING COUNT(*) > 1) t",
+                STATUS_FAILED, "同一证券在同一投资池存在多条有效状态", "合并重复状态并补充业务唯一性校验"));
+        rules.add(buildIntegrityRule("pool-status-pool", "投资池", "ip_pool_status → ip_investment_pool", "证券池目标投资池",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status p LEFT JOIN znty_rrs.ip_investment_pool i ON i.id = p.target_pool_id WHERE p.target_pool_id IS NOT NULL AND i.id IS NULL",
+                STATUS_FAILED, "证券池状态引用了不存在的投资池", "修正目标池 ID 或补回投资池配置"));
+        rules.add(buildIntegrityRule("crmw-status-pool", "投资池", "ip_pool_status_crmw → ip_investment_pool", "CRMW 目标投资池",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw p LEFT JOIN znty_rrs.ip_investment_pool i ON i.id = p.target_pool_id WHERE p.target_pool_id IS NOT NULL AND i.id IS NULL",
+                STATUS_FAILED, "CRMW 状态引用了不存在的投资池", "修正目标池 ID 或补回投资池配置"));
+        rules.add(buildIntegrityRule("pool-parent", "投资池", "ip_investment_pool.parent_id", "投资池父子关系",
+                "SELECT COUNT(*) FROM znty_rrs.ip_investment_pool c LEFT JOIN znty_rrs.ip_investment_pool p ON p.id = c.parent_id WHERE c.parent_id IS NOT NULL AND p.id IS NULL",
+                STATUS_FAILED, "存在找不到父级的投资池", "修正 parent_id 或补回父级投资池"));
+        rules.add(buildIntegrityRule("pool-relation", "投资池", "ip_pool_relation", "投资池关系两端",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_relation r LEFT JOIN znty_rrs.ip_investment_pool p1 ON p1.id = r.pool_id LEFT JOIN znty_rrs.ip_investment_pool p2 ON p2.id = r.relation_pool_id WHERE p1.id IS NULL OR p2.id IS NULL",
+                STATUS_FAILED, "投资池关系存在无效端点", "修正关系两端的投资池 ID"));
+        rules.add(buildIntegrityRule("pool-permission", "投资池", "ip_pool_permission → ip_investment_pool", "投资池权限归属",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_permission p LEFT JOIN znty_rrs.ip_investment_pool i ON i.id = p.pool_id WHERE p.pool_id IS NOT NULL AND i.id IS NULL",
+                STATUS_FAILED, "权限配置引用了不存在的投资池", "清理孤儿权限或补回投资池配置"));
+        rules.add(buildIntegrityRule("pool-permission-handler", "用户权限", "ip_pool_permission.handler_id", "投资池权限处理人",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_permission p LEFT JOIN ais_inv_analysis.t_sys_user u ON p.handler_type = 'user' AND u.id = p.handler_id LEFT JOIN ais_inv_analysis.t_sys_role r ON p.handler_type = 'role' AND r.id = p.handler_id WHERE (p.handler_type = 'user' AND u.id IS NULL) OR (p.handler_type = 'role' AND r.id IS NULL)",
+                STATUS_FAILED, "投资池权限引用了不存在的用户或角色", "修正 handler_type/handler_id 或补回用户角色数据"));
+        rules.add(buildIntegrityRule("pool-auto-rule", "投资池", "ip_pool_auto_rule", "投资池自动规则关联",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_auto_rule a LEFT JOIN znty_rrs.ip_investment_pool p ON p.id = a.pool_id LEFT JOIN znty_rrs.rule_definition r ON r.id = a.rule_id WHERE p.id IS NULL OR (a.rule_id IS NOT NULL AND r.id IS NULL)",
+                STATUS_FAILED, "自动规则引用了不存在的投资池或规则", "修正 pool_id/rule_id 或清理孤儿配置"));
+        rules.add(buildIntegrityRule("flow-version", "流程配置", "wf_flow_version → wf_flow_definition", "流程版本归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_flow_version v LEFT JOIN znty_rrs.wf_flow_definition f ON f.id = v.flow_id WHERE v.flow_id IS NOT NULL AND f.id IS NULL",
+                STATUS_FAILED, "流程版本找不到流程定义", "修正 flow_id 或补回流程定义"));
+        rules.add(buildIntegrityRule("flow-node", "流程配置", "wf_flow_node → wf_flow_version", "流程节点归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_flow_node n LEFT JOIN znty_rrs.wf_flow_version v ON v.id = n.version_id WHERE n.version_id IS NOT NULL AND v.id IS NULL",
+                STATUS_FAILED, "流程节点找不到流程版本", "清理孤儿节点或补回流程版本"));
+        rules.add(buildIntegrityRule("approval-config", "流程配置", "wf_node_approval_config → wf_flow_node", "审批节点配置归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_node_approval_config c LEFT JOIN znty_rrs.wf_flow_node n ON n.id = c.node_id WHERE c.node_id IS NOT NULL AND n.id IS NULL",
+                STATUS_FAILED, "审批配置找不到流程节点", "清理孤儿配置或补回流程节点"));
+        rules.add(buildIntegrityRule("approval-handler", "流程配置", "wf_node_approval_handler → wf_node_approval_config", "审批处理人配置归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_node_approval_handler h LEFT JOIN znty_rrs.wf_node_approval_config c ON c.id = h.approval_config_id WHERE h.approval_config_id IS NOT NULL AND c.id IS NULL",
+                STATUS_FAILED, "审批处理人找不到审批节点配置", "清理孤儿处理人或补回审批配置"));
+        rules.add(buildIntegrityRule("approval-handler-identity", "用户权限", "wf_node_approval_handler.handler_id", "审批处理人身份",
+                "SELECT COUNT(*) FROM znty_rrs.wf_node_approval_handler h LEFT JOIN ais_inv_analysis.t_sys_user u ON h.handler_type = 'user' AND u.id = h.handler_id LEFT JOIN ais_inv_analysis.t_sys_role r ON h.handler_type = 'role' AND r.id = h.handler_id WHERE (h.handler_type = 'user' AND u.id IS NULL) OR (h.handler_type = 'role' AND r.id IS NULL)",
+                STATUS_FAILED, "审批配置引用了不存在的用户或角色", "修正 handler_type/handler_id 或补回用户角色数据"));
+        rules.add(buildIntegrityRule("auto-config", "流程配置", "wf_node_auto_config → wf_flow_node", "自动节点配置归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_node_auto_config c LEFT JOIN znty_rrs.wf_flow_node n ON n.id = c.node_id WHERE c.node_id IS NOT NULL AND n.id IS NULL",
+                STATUS_FAILED, "自动节点配置找不到流程节点", "清理孤儿配置或补回流程节点"));
+        rules.add(buildIntegrityRule("notify-config", "流程配置", "wf_node_notify_config → wf_flow_node", "通知节点配置归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_node_notify_config c LEFT JOIN znty_rrs.wf_flow_node n ON n.id = c.node_id WHERE c.node_id IS NOT NULL AND n.id IS NULL",
+                STATUS_FAILED, "通知节点配置找不到流程节点", "清理孤儿配置或补回流程节点"));
+        rules.add(buildIntegrityRule("condition-config", "流程配置", "wf_node_condition_config → wf_flow_node", "条件节点配置归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_node_condition_config c LEFT JOIN znty_rrs.wf_flow_node n ON n.id = c.node_id WHERE c.node_id IS NOT NULL AND n.id IS NULL",
+                STATUS_FAILED, "条件节点配置找不到流程节点", "清理孤儿配置或补回流程节点"));
+        rules.add(buildIntegrityRule("flow-edge", "流程配置", "wf_flow_edge → wf_flow_version", "流程连线归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_flow_edge e LEFT JOIN znty_rrs.wf_flow_version v ON v.id = e.version_id WHERE e.version_id IS NOT NULL AND v.id IS NULL",
+                STATUS_FAILED, "流程连线找不到流程版本", "清理孤儿连线或补回流程版本"));
+        rules.add(buildIntegrityRule("flow-edge-node", "流程配置", "wf_flow_edge → wf_flow_node", "流程连线两端节点",
+                "SELECT COUNT(*) FROM znty_rrs.wf_flow_edge e LEFT JOIN znty_rrs.wf_flow_node n1 ON n1.id = e.from_node_id LEFT JOIN znty_rrs.wf_flow_node n2 ON n2.id = e.to_node_id WHERE n1.id IS NULL OR n2.id IS NULL",
+                STATUS_FAILED, "流程连线存在无效起始节点或目标节点", "修正连线两端节点 ID 或清理无效连线"));
+        rules.add(buildIntegrityRule("edge-rule", "流程配置", "wf_edge_cond_rule → wf_flow_edge", "条件规则归属",
+                "SELECT COUNT(*) FROM znty_rrs.wf_edge_cond_rule r LEFT JOIN znty_rrs.wf_flow_edge e ON e.id = r.edge_id WHERE r.edge_id IS NOT NULL AND e.id IS NULL",
+                STATUS_FAILED, "条件规则找不到流程连线", "清理孤儿条件规则或补回流程连线"));
+        rules.add(buildIntegrityRule("rule-param", "规则配置", "rule_param → rule_definition", "规则参数归属",
+                "SELECT COUNT(*) FROM znty_rrs.rule_param p LEFT JOIN znty_rrs.rule_definition r ON r.id = p.rule_id WHERE p.rule_id IS NOT NULL AND r.id IS NULL",
+                STATUS_FAILED, "规则参数找不到规则定义", "清理孤儿参数或补回规则定义"));
+        rules.add(buildIntegrityRule("rule-option", "规则配置", "rule_param_option → rule_param", "规则参数选项归属",
+                "SELECT COUNT(*) FROM znty_rrs.rule_param_option o LEFT JOIN znty_rrs.rule_param p ON p.id = o.param_id WHERE o.param_id IS NOT NULL AND p.id IS NULL",
+                STATUS_FAILED, "参数选项找不到规则参数", "清理孤儿选项或补回规则参数"));
+        rules.add(buildIntegrityRule("preset-option", "规则配置", "rule_preset_option_item → rule_preset_option_set", "预设选项归属",
+                "SELECT COUNT(*) FROM znty_rrs.rule_preset_option_item i LEFT JOIN znty_rrs.rule_preset_option_set s ON s.id = i.set_id WHERE i.set_id IS NOT NULL AND s.id IS NULL",
+                STATUS_FAILED, "预设选项找不到选项集", "清理孤儿选项或补回预设选项集"));
+        rules.add(buildIntegrityRule("rule-case", "规则配置", "rule_test_case → rule_definition", "规则测试用例归属",
+                "SELECT COUNT(*) FROM znty_rrs.rule_test_case c LEFT JOIN znty_rrs.rule_definition r ON r.id = c.rule_id WHERE c.rule_id IS NOT NULL AND r.id IS NULL",
+                STATUS_FAILED, "测试用例找不到规则定义", "清理孤儿用例或补回规则定义"));
+        rules.add(buildIntegrityRule("rule-case-param", "规则配置", "rule_test_case_param → rule_test_case", "测试用例参数归属",
+                "SELECT COUNT(*) FROM znty_rrs.rule_test_case_param p LEFT JOIN znty_rrs.rule_test_case c ON c.id = p.case_id WHERE p.case_id IS NOT NULL AND c.id IS NULL",
+                STATUS_FAILED, "测试用例参数找不到测试用例", "清理孤儿参数或补回测试用例"));
+        rules.add(buildIntegrityRule("rule-run", "规则配置", "rule_test_run", "规则运行记录关联",
+                "SELECT COUNT(*) FROM znty_rrs.rule_test_run x LEFT JOIN znty_rrs.rule_test_case c ON c.id = x.case_id LEFT JOIN znty_rrs.rule_definition r ON r.id = x.rule_id WHERE (x.case_id IS NOT NULL AND c.id IS NULL) OR (x.rule_id IS NOT NULL AND r.id IS NULL)",
+                STATUS_FAILED, "运行记录找不到测试用例或规则定义", "修正 case_id/rule_id 或清理孤儿运行记录"));
+        rules.add(buildIntegrityRule("rule-run-log", "规则配置", "rule_test_run_log → rule_test_run", "规则运行日志归属",
+                "SELECT COUNT(*) FROM znty_rrs.rule_test_run_log l LEFT JOIN znty_rrs.rule_test_run r ON r.id = l.run_id WHERE l.run_id IS NOT NULL AND r.id IS NULL",
+                STATUS_FAILED, "运行日志找不到运行记录", "清理孤儿日志或补回运行记录"));
+        rules.add(buildIntegrityRule("grade-rule", "评级规则", "credit_bond_pool_grade_rule", "评级准入规则关联",
+                "SELECT COUNT(*) FROM znty_rrs.credit_bond_pool_grade_rule r LEFT JOIN znty_rrs.credit_bond_term_bucket t ON t.id = r.term_bucket_id LEFT JOIN znty_rrs.credit_bond_inner_rating_grade g ON g.id = r.inner_rating_grade_id LEFT JOIN znty_rrs.ip_investment_pool p ON p.id = r.pool_id WHERE t.id IS NULL OR g.id IS NULL OR p.id IS NULL",
+                STATUS_FAILED, "评级准入规则存在无效期限、评分档或投资池", "修正规则关联 ID 或补回基础配置"));
+        rules.add(buildIntegrityRule("user-role", "用户权限", "t_sys_user_role", "用户角色关联",
+                "SELECT COUNT(*) FROM ais_inv_analysis.t_sys_user_role ur LEFT JOIN ais_inv_analysis.t_sys_user u ON u.id = ur.user_id LEFT JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id WHERE u.id IS NULL OR r.id IS NULL",
+                STATUS_FAILED, "用户角色关系存在无效用户或角色", "修正 user_id/role_id 或清理孤儿关系"));
+        rules.add(buildIntegrityRule("company-grade", "主体评级", "t_inv_grade_result → t_inv_company", "主体评级归属",
+                "SELECT COUNT(*) FROM ais_inv_analysis.t_inv_grade_result g LEFT JOIN ais_inv_analysis.t_inv_company c ON c.id = g.company_id WHERE g.company_id IS NOT NULL AND c.id IS NULL",
+                STATUS_FAILED, "评级结果找不到主体", "修正 company_id 或补回主体数据"));
+        rules.add(buildIntegrityRule("my-security", "个人数据", "my_security_pool → rrs_securityinfo", "我的证券池主数据关联",
+                "SELECT COUNT(*) FROM znty_rrs.my_security_pool m LEFT JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = m.security_code WHERE m.security_code IS NOT NULL AND s.id IS NULL",
+                STATUS_WARNING, "我的证券池中存在找不到主数据的证券", "核对证券代码或同步证券主数据"));
+        rules.add(buildIntegrityRule("my-security-user", "用户权限", "my_security_pool.user_id", "我的证券池用户归属",
+                "SELECT COUNT(*) FROM znty_rrs.my_security_pool m LEFT JOIN ais_inv_analysis.t_sys_user u ON u.id = m.user_id WHERE m.user_id IS NOT NULL AND u.id IS NULL",
+                STATUS_WARNING, "我的证券池中存在找不到用户的数据", "核对 user_id 或同步用户数据"));
+        return rules;
+    }
+
+    /**
+     * 构建业务完整性规则。
+     */
+    private IntegrityRule buildIntegrityRule(String code, String category, String objectName, String name,
+                                             String sql, String issueStatus, String message, String suggestion) {
+        IntegrityRule rule = new IntegrityRule();
+        rule.code = code;
+        rule.category = category;
+        rule.objectName = objectName;
+        rule.name = name;
+        rule.sql = sql;
+        rule.issueStatus = issueStatus;
+        rule.message = message;
+        rule.suggestion = suggestion;
+        return rule;
+    }
+
+    /**
+     * 构建只读检查结果。
+     */
+    private ScriptInspectionDto buildInspectionResult(String summary) {
+        ScriptInspectionDto inspection = new ScriptInspectionDto();
+        inspection.setSummary(summary);
+        inspection.setItems(new ArrayList<ScriptInspectionItemDto>());
+        return inspection;
+    }
+
+    /**
+     * 构建只读检查项。
+     */
+    private ScriptInspectionItemDto buildInspectionItem(String itemCode, String category, String objectName,
+                                                         String itemName, String status, String currentValue,
+                                                         String expectedValue, Long issueCount, String message,
+                                                         String suggestion) {
+        ScriptInspectionItemDto item = new ScriptInspectionItemDto();
+        item.setItemCode(itemCode);
+        item.setCategory(category);
+        item.setObjectName(objectName);
+        item.setItemName(itemName);
+        item.setStatus(status);
+        item.setCurrentValue(currentValue);
+        item.setExpectedValue(expectedValue);
+        item.setIssueCount(issueCount);
+        item.setMessage(message);
+        item.setSuggestion(suggestion);
+        return item;
+    }
+
+    /**
+     * 汇总只读检查结果。
+     */
+    private void fillInspectionSummary(ScriptInspectionDto inspection) {
+        int successCount = 0;
+        int warningCount = 0;
+        int failedCount = 0;
+        long issueCount = 0L;
+        for (ScriptInspectionItemDto item : inspection.getItems()) {
+            if (STATUS_SUCCESS.equals(item.getStatus())) successCount++;
+            if (STATUS_WARNING.equals(item.getStatus())) warningCount++;
+            if (STATUS_FAILED.equals(item.getStatus())) failedCount++;
+            issueCount += item.getIssueCount() == null ? 0L : item.getIssueCount();
+        }
+        inspection.setTotalCount(inspection.getItems().size());
+        inspection.setSuccessCount(successCount);
+        inspection.setWarningCount(warningCount);
+        inspection.setFailedCount(failedCount);
+        inspection.setIssueCount(issueCount);
+        inspection.setStatus(failedCount > 0 ? STATUS_FAILED : (warningCount > 0 ? STATUS_WARNING : STATUS_SUCCESS));
+    }
+
+    /**
+     * 构建期望表结构摘要。
+     */
+    private String buildExpectedTableSummary(ExpectedSchemaTable table) {
+        return table.columns.size() + " 字段 / " + table.indexes.size() + " 索引 / " + table.engine + " / " + table.collation;
+    }
+
+    /**
+     * 构建实际表结构摘要。
+     */
+    private String buildActualTableSummary(Map<String, String> columns, Map<String, String> indexes, Map<String, String> options) {
+        return columns.size() + " 字段 / " + indexes.size() + " 索引 / " + options.get("engine") + " / " + options.get("collation");
+    }
+
+    /**
+     * 标准化字段类型。
+     */
+    private String normalizeColumnType(String columnType) {
+        return columnType == null ? "" : columnType.toLowerCase().replaceAll("\\s+", "");
+    }
+
+    /**
+     * 标准化索引字段。
+     */
+    private String normalizeIndexColumns(String columns) {
+        return columns.replace("`", "").replaceAll("\\s+", "").toLowerCase();
+    }
+
+    /**
+     * 限制差异说明长度。
+     */
+    private String joinLimited(List<String> values, int limit) {
+        List<String> visible = values.size() > limit ? values.subList(0, limit) : values;
+        String text = joinStrings(visible, "；");
+        return values.size() > limit ? text + "；另有 " + (values.size() - limit) + " 项" : text;
+    }
+
+    /**
+     * 拼接字符串列表。
+     */
+    private String joinStrings(List<String> values, String separator) {
+        StringBuilder builder = new StringBuilder();
+        for (String value : values) {
+            if (builder.length() > 0) builder.append(separator);
+            builder.append(value);
+        }
+        return builder.toString();
     }
 
     /**
@@ -1377,5 +1933,43 @@ public class ScriptToolService {
         result.addAll(first);
         result.addAll(second);
         return result;
+    }
+
+    /** 建表脚本中的期望表结构 */
+    private static class ExpectedSchemaTable {
+        /** 数据库名称 */
+        private String databaseName;
+        /** 表名称 */
+        private String tableName;
+        /** 数据库与表联合标识 */
+        private String tableKey;
+        /** 存储引擎 */
+        private String engine;
+        /** 排序规则 */
+        private String collation;
+        /** 字段定义 */
+        private Map<String, String> columns;
+        /** 索引定义 */
+        private Map<String, String> indexes;
+    }
+
+    /** 业务数据完整性规则 */
+    private static class IntegrityRule {
+        /** 规则编码 */
+        private String code;
+        /** 检查分类 */
+        private String category;
+        /** 检查对象 */
+        private String objectName;
+        /** 规则名称 */
+        private String name;
+        /** 只读统计 SQL */
+        private String sql;
+        /** 发现问题时的状态 */
+        private String issueStatus;
+        /** 问题说明 */
+        private String message;
+        /** 处理建议 */
+        private String suggestion;
     }
 }

@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -21,6 +22,21 @@ import static org.mockito.Mockito.verify;
  * 脚本工具服务测试。
  */
 public class ScriptToolServiceTest {
+
+    /** 验证结构差异检查能够解析全部 59 张项目表。 */
+    @Test
+    public void shouldParseAllSchemaTables() {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+
+        // 解析全部建表脚本中的期望结构
+        Map<?, ?> tables = ReflectionTestUtils.invokeMethod(service, "queryExpectedSchemaTables");
+        // 查询环境检查复用的项目表白名单
+        Map<?, ?> healthTables = ReflectionTestUtils.invokeMethod(service, "queryClearTableMap");
+
+        assertEquals(59, tables.size());
+        assertEquals(tables.keySet(), healthTables.keySet());
+    }
 
     /** 验证重置选中表时会执行带前置注释的 Demo 插入语句。 */
     @Test

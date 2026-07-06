@@ -3,6 +3,7 @@ package com.znty.rrs.controller;
 import com.znty.rrs.entity.scripttool.ScriptExecuteResultDto;
 import com.znty.rrs.entity.scripttool.ScriptDemoSceneDto;
 import com.znty.rrs.entity.scripttool.ScriptHealthCheckDto;
+import com.znty.rrs.entity.scripttool.ScriptInspectionDto;
 import com.znty.rrs.entity.scripttool.ScriptModuleTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptOverviewDto;
 import com.znty.rrs.entity.scripttool.ScriptTableGroupDto;
@@ -98,6 +99,26 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         when(scriptToolService.queryHealthCheck(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(check);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryHealthCheck", "{}");
+    }
+
+    /** 验证数据库结构差异检查接口。 */
+    @Test
+    public void shouldQuerySchemaDiff() throws Exception {
+        ScriptInspectionDto inspection = new ScriptInspectionDto();
+        inspection.setStatus("success");
+        when(scriptToolService.querySchemaDiff(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(inspection);
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/querySchemaDiff", "{}");
+    }
+
+    /** 验证业务数据完整性检查接口。 */
+    @Test
+    public void shouldQueryDataIntegrity() throws Exception {
+        ScriptInspectionDto inspection = new ScriptInspectionDto();
+        inspection.setStatus("success");
+        when(scriptToolService.queryDataIntegrity(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(inspection);
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryDataIntegrity", "{}");
     }
 
     /** 验证清空选中表接口。 */

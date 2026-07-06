@@ -4,6 +4,7 @@ import com.znty.rrs.common.ApiResponse;
 import com.znty.rrs.entity.scripttool.ScriptDemoSceneDto;
 import com.znty.rrs.entity.scripttool.ScriptExecuteResultDto;
 import com.znty.rrs.entity.scripttool.ScriptHealthCheckDto;
+import com.znty.rrs.entity.scripttool.ScriptInspectionDto;
 import com.znty.rrs.entity.scripttool.ScriptModuleTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptOverviewDto;
 import com.znty.rrs.entity.scripttool.ScriptTableGroupDto;
@@ -52,6 +53,22 @@ public class ScriptToolController {
     @PostMapping("/queryHealthCheck")
     public ApiResponse<ScriptHealthCheckDto> queryHealthCheck(@RequestBody ScriptToolReq req) {
         return ApiResponse.success(scriptToolService.queryHealthCheck(req));
+    }
+
+    /**
+     * 查询数据库结构差异检查结果。
+     */
+    @PostMapping("/querySchemaDiff")
+    public ApiResponse<ScriptInspectionDto> querySchemaDiff(@RequestBody ScriptToolReq req) {
+        return ApiResponse.success(scriptToolService.querySchemaDiff(req));
+    }
+
+    /**
+     * 查询业务数据完整性检查结果。
+     */
+    @PostMapping("/queryDataIntegrity")
+    public ApiResponse<ScriptInspectionDto> queryDataIntegrity(@RequestBody ScriptToolReq req) {
+        return ApiResponse.success(scriptToolService.queryDataIntegrity(req));
     }
 
     /**
