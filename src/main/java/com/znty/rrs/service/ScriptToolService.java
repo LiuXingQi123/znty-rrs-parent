@@ -582,21 +582,23 @@ public class ScriptToolService {
         String currentDatabase = "znty_rrs";
         Set<String> executedTableSet = new HashSet<>();
         for (String sql : statements) {
-            if (!isExecutableStatement(sql)) {
+            // 清理语句前置注释，确保能够识别 USE 和目标表
+            String executableSql = normalizeExecutableSql(sql);
+            if (!StringUtils.hasText(executableSql)) {
                 continue;
             }
             // 识别当前 SQL 文件的默认数据库
-            String useDatabase = extractUseDatabase(sql);
+            String useDatabase = extractUseDatabase(executableSql);
             if (StringUtils.hasText(useDatabase)) {
                 currentDatabase = useDatabase;
                 stmt.execute("USE `" + currentDatabase + "`");
                 continue;
             }
             // 识别当前语句目标表
-            String tableKey = extractStatementTableKey(sql, currentDatabase);
+            String tableKey = extractStatementTableKey(executableSql, currentDatabase);
             if (selectedKeySet.contains(tableKey)) {
                 stmt.execute("USE `" + currentDatabase + "`");
-                stmt.execute(sql);
+                stmt.execute(executableSql);
                 if (!executedTableSet.contains(tableKey)) {
                     executedItems.add(fileName + " -> " + tableKey);
                     executedTableSet.add(tableKey);
