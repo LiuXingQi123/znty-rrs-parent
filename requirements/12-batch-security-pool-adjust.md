@@ -51,6 +51,7 @@
   "pageIndex": 1, "pageSize": 20 }
 ```
 返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（securityCode/securityShortName/securityType/marketCodes/issuer/ratingBond/maturityDate）。
+候选证券固定排除 `security_type IN ('crmw','company')` 的 CRMW 凭证和公司主体，避免混入证券池批量调整。
 
 > 选择页 `batch_security_pool_adjust_select.html` 的筛选条件与查询接口一致（路径同为 `querySecurityPage`），区别仅在独立屏布局与 mock 报告数据。
 

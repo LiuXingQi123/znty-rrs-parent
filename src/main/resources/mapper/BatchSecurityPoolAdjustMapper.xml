@@ -65,6 +65,7 @@
                ,si.maturity_date
         FROM rrs_securityinfo si
         <where>
+            AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))
             <if test="direction == 'in'">
                 NOT EXISTS (
                     SELECT 1
