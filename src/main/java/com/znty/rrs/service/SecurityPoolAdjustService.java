@@ -828,6 +828,9 @@ public class SecurityPoolAdjustService {
             if (!AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
                 continue;
             }
+            // 报告必填校验（按池 out_report_restriction，提交阶段校验）
+            InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID

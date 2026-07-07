@@ -284,6 +284,22 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(dto.getItems().get(1).getAdjustMode()).isEqualTo("调出");
     }
 
+    /** 批量调库链路报告必填校验：限制为 any 且无报告时应抛出异常。 */
+    @Test
+    public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        InvestmentPoolBo pool = buildPool(10L, null, "报告池", "credit_bond");
+        try {
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains("要求研究报告");
+            return;
+        }
+        throw new AssertionError("any 限制且无报告时应抛出异常");
+    }
+
     /** 构建批量提交明细。 */
     private BatchSecurityInboundAdjustReq.AdjustItem buildBatchSubmitItem(String securityCode) {
         BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();

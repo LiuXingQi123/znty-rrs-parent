@@ -7,6 +7,7 @@ import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
+import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.ForbiddenPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -130,6 +131,22 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(autoLog.getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
         verify(mapper).addPoolStatus(autoLog);
         verify(mapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
+    }
+
+    /** 禁投池链路报告必填校验：限制为 any 且无报告时应抛出异常。 */
+    @Test
+    public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
+        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        InvestmentPoolBo pool = buildPool(10L, "禁投池", "forbidden");
+        try {
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains("要求研究报告");
+            return;
+        }
+        throw new AssertionError("any 限制且无报告时应抛出异常");
     }
 
     /** 构建服务并注入公共依赖。 */

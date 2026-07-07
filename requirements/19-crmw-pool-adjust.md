@@ -92,22 +92,9 @@
    - `querySecurityCurrentPoolIdList`（`ip_pool_status_crmw` 中 `audit_status='20' AND pool_type='crmw'`）→ `currentPoolIds`。
    - `queryAllPoolRelationList`（`ip_pool_relation`）→ 三层嵌套 `poolRelationMap`。
    - 证券级标志：`querySecurityHasPendingProcess`、`querySecurityPendingProcessNodeLabel`、`querySecurityInObservePool`、`queryIssuerInObservePool`。
-3. **调入校验** `executeInAdjustCheck`，每项跑 `checkInConditions`（8 条规则按序）：
+3. **调入校验** `executeInAdjustCheck`，每项跑 `checkInConditions`：先 `checkCommonIn`（12 条通用：池锁定/品种/市场/pending/重复入池/容量/来源/限制/互斥/弹性/禁止池/评级指定），再按 `categoryType` 路由类型特有校验（债券 `inCheckBondMaturity`/股票 `inCheckStockDelist`，P1 已将原 `preCheckSecurityExpired` 拆分到此；基金/主体暂无）。规则明细与 [04](04-security-pool-adjust.md) 3.6 节③同构。自动追加 `in_linked` 联动调入项（`itemTag='linkage'`）、`in_mutex` 配套调出项（`itemTag='mutex'`），`inheritManualItemFailure` 手工项失败则阻断自动项。
 
-| # | 方法 | 失败原因 |
-|---|---|---|
-| 1 | `preCheckSecurityExpired` | 证券已到期 |
-| 2 | `preCheckPendingProcess` | 证券存在进行中的调库流程 |
-| 3 | `inCheckSecurityAlreadyInPool` | 证券已在目标池 |
-| 4 | `inCheckPoolCapacity` | 目标池已达持仓上限 |
-| 5 | `inCheckSourcePool` | 目标池配置了来源池限制（`source`） |
-| 6 | `inCheckRestrictPool` | 证券在调入限制池中（`in_restrict`） |
-| 7 | `inCheckMutexConflict` | 与互斥池不可同时调入（`in_mutex`） |
-| 8 | `inCheckElasticPool` | 证券在调入弹性禁投池中（`in_soft_restrict`） |
-
-   自动追加 `in_linked` 联动调入项（`itemTag='linkage'`）、`in_mutex` 配套调出项（`itemTag='mutex'`），`inheritManualItemFailure` 手工项失败则阻断自动项。
-
-4. **调出校验** `executeOutAdjustCheck`，7 规则（`preCheckSecurityExpired`/`preCheckPendingProcess`/`outCheckSecurityNotInPool`/`outCheckRestrictPool`/`outCheckMutexPool`/`outCheckMutexConflict`/`outCheckElasticPool`）+ `out_linked` 联动调出项。
+4. **调出校验** `executeOutAdjustCheck`，每项跑 `checkOutConditions`：`checkCommonOut`（8 条通用：池锁定/pending/不在池/冻结期/限制/互斥/弹性）+ 类型特有（债券 `outCheckBondMaturity`/股票 `outCheckStockDelist`）。规则明细与 [04](04-security-pool-adjust.md) 3.6 节④同构。自动追加 `out_linked` 联动调出项。
 5. **流程类型判断** `resolveAdjustFlowOptions`（仅 `canAdjust && itemTag='manual'`）：
    - 调出：`normalOutbound`，用目标池 `outFlowId/outFlowKey`。
    - 调入·非信用债大库（`poolType != 'credit_bond'`）：`normalInbound`。
@@ -121,10 +108,11 @@
 1. **前置校验** `validateSubmitReq`：`securityCode/crmwScode/crmwName` 非空、`crmwStype` 必须 `'crmw'`（否则 `"CRMW证券类型必须为 crmw"`）、`items` 非空、每项 `adjustMode/targetPoolId` 非空、`poolType` 必须 CRMW（否则 `"CRMW池调整仅支持选择 CRMW库"`）。
 2. **参数初始化** `loadSubmitSharedData`：取证券（null→"证券不存在"；`securityType=='crmw'`→"调库对象不能是 CRMW 凭证"）、全量池 Map、`validateSubmitTargetPools` 校验目标池均为 CRMW、`currentPoolIds`（`ip_pool_status_crmw` `audit_status='20'`）、`poolRelationMap`、证券级标志；为每个唯一 flowId `buildFlowSnapshot`；`BatchNoContext`。
 3. **调入处理** `executeInboundSubmit`，对每个调入项：
+   - **报告必填校验** `checkReportRequired`（按 `in_report_restriction` none/any/internal）+ **CRMW组合校验** `checkCrmwInboundCombination`：凭证已在池（`queryCrmwAlreadyInPool` 查 `ip_pool_status_crmw` 同凭证+目标池 `audit_status='20'`）/ 凭证审批中（`queryCrmwPendingWorkflow` 查 `ip_adjust_log`+`ip_adjust_step` 同凭证 pending 步骤），不通过抛 `BizException` 中断。对应老项目 `checkBasisAndProductInPool` 的 `checkCrmwInPool`+`checkPoolCrmwWorkflow`；「池必填凭证」已在 `validateSubmitReq` 强制（CRMW 提交必带 `crmwScode`）。
    - `resolveManualSubmitItem` 取同组手工项；`isDirect = noFlow || isDirectFlow(snapshot)`。
    - **直通**：`buildAdjustLog` → `auditStatus=APPROVED('20')` → `addAdjustLog`（写 `ip_adjust_log`）→ `bindSubmitAttachments` → 手工项 `createInitialSteps` → `addPoolStatus`（写 `ip_pool_status_crmw`，`audit_status='20'` 即时生效）。
    - **非直通**：`auditStatus=SUBMITTED('00')` → `addAdjustLog` → `bindSubmitAttachments` → `createInitialSteps`（返回 true 即流程已到 end，升 `'20'` + `addPoolStatus`）。
-4. **调出处理** `executeOutboundSubmit`：对称，生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE security_code AND target_pool_id AND audit_status='20' AND pool_type='crmw'`）。
+4. **调出处理** `executeOutboundSubmit`：对称，先跑报告必填校验（`out_report_restriction`）+ **CRMW组合校验** `checkCrmwOutboundCombination`（组合在池：`queryCrmwComboInPool` 查 `ip_pool_status_crmw` 同凭证+标的证券+目标池 `audit_status='20'`，组合不在池则抛 `BizException`，对应老项目 `checkOutPool` 的 `checkCrmwInPool` 组合维度），生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE security_code AND target_pool_id AND audit_status='20' AND pool_type='crmw'`）。
 5. **后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` → `editSecurityInfoForAdjust`（全量更新 `rrs_securityinfo` 约 80 字段）。
 
 **批次号规则** `buildAdjustBatchNo`：

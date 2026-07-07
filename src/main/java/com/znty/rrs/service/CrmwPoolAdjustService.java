@@ -792,6 +792,67 @@ public class CrmwPoolAdjustService {
     }
 
     /**
+     * 规则：报告必填（in_report_restriction / out_report_restriction）
+     *
+     * <p>目标池配置了报告限制时，提交时校验报告附件：
+     * none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告。
+     * 对应老项目 rschDocMode/rschDocOutMode 报告校验。在提交阶段校验（checkAdjust 阶段无报告信息）。
+     */
+    private void checkReportRequired(CrmwPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction) {
+        if (pool == null || reportRestriction == null || reportRestriction.isEmpty() || "none".equals(reportRestriction)) {
+            return;
+        }
+        boolean hasReport = (item.getCreditReportFileIndexes() != null && !item.getCreditReportFileIndexes().isEmpty())
+                || (item.getCreditReportSourceAttachmentIds() != null && !item.getCreditReportSourceAttachmentIds().isEmpty());
+        if (!hasReport) {
+            throw new BizException("目标池[" + pool.getPoolName() + "]要求研究报告，请上传或选择报告");
+        }
+        // internal 要求内部研究报告（简化：要求 creditReportSourceAttachmentIds 非空，后续完善内部/外部区分）
+        if ("internal".equals(reportRestriction)
+                && (item.getCreditReportSourceAttachmentIds() == null || item.getCreditReportSourceAttachmentIds().isEmpty())) {
+            throw new BizException("目标池[" + pool.getPoolName() + "]要求内部研究报告，请从内部报告库选择");
+        }
+    }
+
+    /**
+     * 规则：CRMW组合校验（调入侧，提交阶段）
+     *
+     * <p>调入 CRMW 池时校验凭证状态：
+     * <ul>
+     *   <li>凭证已在池：该 CRMW 凭证已在目标池（audit_status=20）则禁止重复调入</li>
+     *   <li>凭证审批中：该 CRMW 凭证存在进行中的调库流程（pending 步骤）则禁止并发调入</li>
+     * </ul>
+     * 对应老项目 checkBasisAndProductInPool 的 checkCrmwInPool / checkPoolCrmwWorkflow。
+     * 「池必填凭证」已在 validateSubmitReq 强制（CRMW 提交必带 crmwScode）。
+     */
+    private void checkCrmwInboundCombination(CrmwPoolAdjustSubmitReq req, CrmwPoolAdjustSubmitReq.AdjustItem item) {
+        String crmwScode = req.getCrmwScode();
+        // 凭证已在池：同一 CRMW 凭证已在目标池，不可重复调入
+        if (crmwPoolAdjustMapper.queryCrmwAlreadyInPool(crmwScode, req.getCrmwMktcode(), req.getCrmwStype(), item.getTargetPoolId())) {
+            throw new BizException("信用缓释凭证代码（" + crmwScode + "）已经在池！");
+        }
+        // 凭证审批中：该 CRMW 凭证有进行中的调库流程，不可并发调入
+        if (crmwPoolAdjustMapper.queryCrmwPendingWorkflow(crmwScode, req.getCrmwMktcode(), req.getCrmwStype())) {
+            throw new BizException("该信用缓释凭证代码（" + crmwScode + "）正在审批中！");
+        }
+    }
+
+    /**
+     * 规则：CRMW组合校验（调出侧，提交阶段）
+     *
+     * <p>调出 CRMW 池时校验组合在池：CRMW 凭证与标的证券的组合必须在目标池中（audit_status=20），
+     * 否则无法调出。对应老项目 checkOutPool 的 checkCrmwInPool（组合维度）。
+     */
+    private void checkCrmwOutboundCombination(CrmwPoolAdjustSubmitReq req, CrmwPoolAdjustSubmitReq.AdjustItem item) {
+        String crmwScode = req.getCrmwScode();
+        // 组合在池：CRMW 凭证 + 标的证券组合须在目标池，否则不可调出
+        if (!crmwPoolAdjustMapper.queryCrmwComboInPool(crmwScode, req.getCrmwMktcode(), req.getCrmwStype(),
+                req.getSecurityCode(), item.getTargetPoolId())) {
+            throw new BizException("信用缓释凭证代码（" + crmwScode + "）和债券代码（" + req.getSecurityCode() + "）组合不在池！");
+        }
+    }
+
+    /**
      * 第三阶段：调入处理
      *
      * <p>遍历请求中全部调入方向的调库项，逐项判断流程是否为直通（start→end），
@@ -819,6 +880,11 @@ public class CrmwPoolAdjustService {
             if (!AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
                 continue;
             }
+            // 报告必填校验（按池 in_report_restriction，提交阶段校验）
+            InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null);
+            // CRMW组合校验（凭证已在池 / 凭证审批中，提交阶段校验）
+            checkCrmwInboundCombination(req, item);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             CrmwPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -903,6 +969,11 @@ public class CrmwPoolAdjustService {
             if (!AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
                 continue;
             }
+            // 报告必填校验（按池 out_report_restriction，提交阶段校验）
+            InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null);
+            // CRMW组合校验（组合在池，提交阶段校验）
+            checkCrmwOutboundCombination(req, item);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             CrmwPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID

@@ -745,6 +745,29 @@ public class BatchSecurityPoolAdjustService {
     }
 
     /**
+     * 规则：报告必填（in_report_restriction / out_report_restriction）
+     *
+     * <p>目标池配置了报告限制时，提交时校验报告附件：
+     * none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告。
+     * 对应老项目 rschDocMode/rschDocOutMode 报告校验。在提交阶段校验（checkAdjust 阶段无报告信息）。
+     */
+    private void checkReportRequired(SecurityPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction) {
+        if (pool == null || reportRestriction == null || reportRestriction.isEmpty() || "none".equals(reportRestriction)) {
+            return;
+        }
+        boolean hasReport = (item.getCreditReportFileIndexes() != null && !item.getCreditReportFileIndexes().isEmpty())
+                || (item.getCreditReportSourceAttachmentIds() != null && !item.getCreditReportSourceAttachmentIds().isEmpty());
+        if (!hasReport) {
+            throw new BizException("目标池[" + pool.getPoolName() + "]要求研究报告，请上传或选择报告");
+        }
+        // internal 要求内部研究报告（简化：要求 creditReportSourceAttachmentIds 非空，后续完善内部/外部区分）
+        if ("internal".equals(reportRestriction)
+                && (item.getCreditReportSourceAttachmentIds() == null || item.getCreditReportSourceAttachmentIds().isEmpty())) {
+            throw new BizException("目标池[" + pool.getPoolName() + "]要求内部研究报告，请从内部报告库选择");
+        }
+    }
+
+    /**
      * 第三阶段：调入处理
      *
      * <p>遍历请求中全部调入方向的调库项，逐项判断流程是否为直通（start→end），
@@ -772,6 +795,9 @@ public class BatchSecurityPoolAdjustService {
             if (!AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
                 continue;
             }
+            // 报告必填校验（按池 in_report_restriction，提交阶段校验）
+            InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -856,6 +882,9 @@ public class BatchSecurityPoolAdjustService {
             if (!AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
                 continue;
             }
+            // 报告必填校验（按池 out_report_restriction，提交阶段校验）
+            InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID

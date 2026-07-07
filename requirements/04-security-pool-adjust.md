@@ -183,38 +183,62 @@
 - 拆分请求中调入/调出目标池集合。
 - 查证券级标志：`querySecurityHasPendingProcess`（是否有 pending 步骤）、`querySecurityPendingProcessNodeLabel`（进行中节点名）、`querySecurityInObservePool`、`queryIssuerInObservePool`。
 
-**③ 调入校验** `executeInAdjustCheck`，对每个 `adjustMode==='调入'` 项执行 `checkInConditions`，11 条规则按序，任一返回非 null 即加入 `failures`：
+**③ 调入校验** `executeInAdjustCheck`，对每个 `adjustMode==='调入'` 项执行 `checkInConditions`：先跑通用 `checkCommonIn`，再按证券 `categoryType` 路由类型特有校验（`checkBondIn`/`checkStockIn`/`checkFundIn`/`checkCompanyIn`），任一返回非 null 即加入 `failures`。
+
+**通用调入校验** `checkCommonIn`（12 条，所有类型都走）：
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
 | 1 | `inCheckPoolLocked` | 该池已经锁定，不能调入（`lock_flag=1`，最硬拦截优先执行） |
 | 2 | `inCheckVariety` | 该证券不在[xxx]所设定的投资品种内（`variety_codes` 不含证券 categoryType） |
 | 3 | `inCheckMarket` | 该证券不在[xxx]所设定的投资市场内（`market_codes` 不含证券所在市场） |
-| 4 | `preCheckSecurityExpired` | 证券已到期，不支持调库（`maturity_date` 早于今日） |
-| 5 | `preCheckPendingProcess` | 证券存在进行中的调库流程（当前节点：xxx），请等待流程结束 |
-| 6 | `inCheckSecurityAlreadyInPool` | 证券已在目标投资池中，无需重复调入 |
-| 7 | `inCheckPoolCapacity` | 目标投资池已达持仓上限（N），无法调入（`maxCapacity>0` 且 `currentCount>=maxCapacity`） |
-| 8 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系） |
-| 9 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
-| 10 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
-| 11 | `inCheckElasticPool` | 证券在调入弹性禁投池中，无法操作：xxx（`in_soft_restrict`） |
+| 4 | `preCheckPendingProcess` | 证券存在进行中的调库流程（当前节点：xxx），请等待流程结束 |
+| 5 | `inCheckSecurityAlreadyInPool` | 证券已在目标投资池中，无需重复调入 |
+| 6 | `inCheckPoolCapacity` | 目标投资池已达持仓上限（N），无法调入（`maxCapacity>0` 且 `currentCount>=maxCapacity`） |
+| 7 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系） |
+| 8 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
+| 9 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
+| 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，无法操作：xxx（`in_soft_restrict`） |
+| 11 | `inCheckForbiddenPool` | 证券在全局禁止池中，不能调入：xxx（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
+| 12 | `inCheckGradeAstrict` | 证券评级A不符合当前池的评级规则（池 `grade_astrict` 配置允许评级列表逗号分隔，如 `AAA,AA+`，证券 `ratingBond` 须在列表内） |
+
+**类型特有调入校验**（按 `categoryType` 路由，证券到期/退市从原 `preCheckSecurityExpired` 拆分到此）：
+
+| 类型 | 规则方法 | 失败原因 |
+|---|---|---|
+| 债券 bond | `inCheckBondMaturity` | 该债券已经到期，无法调入（`maturity_date` 早于今日） |
+| 股票 stock | `inCheckStockDelist` | 该股票已退市，无法调入（`delist_date` 早于今日） |
+| 基金 fund | —（暂无，后续 P2 加基金评分） | |
+| 主体 company | —（主体不校验到期，暂无） | |
 
 - **自动追加联动调入项**：取目标池 `in_linked` 关系，对每个联动池若未覆盖则 `buildAutoResultItem(linkedId,'调入','linkage')`，并 `inheritManualItemFailure`（手工项失败则阻断联动项）。
 - **自动追加互斥配套调出项**：取目标池 `in_mutex` 关系，若证券当前在互斥池中则 `buildAutoResultItem(mutexId,'调出','mutex')`。
 
-**④ 调出校验** `executeOutAdjustCheck`，对每个 `adjustMode==='调出'` 项执行 `checkOutConditions`，9 条规则：
+**④ 调出校验** `executeOutAdjustCheck`，对每个 `adjustMode==='调出'` 项执行 `checkOutConditions`：先跑通用 `checkCommonOut`，再按 `categoryType` 路由类型特有校验（`checkBondOut`/`checkStockOut`/`checkFundOut`/`checkCompanyOut`）。
+
+**通用调出校验** `checkCommonOut`（8 条，所有类型都走）：
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
 | 1 | `outCheckPoolLocked` | 该池已经锁定，不能调出（`lock_flag=1`，最硬拦截优先执行） |
-| 2 | `preCheckSecurityExpired` | 证券已到期 |
-| 3 | `preCheckPendingProcess` | 存在进行中的调库流程 |
-| 4 | `outCheckSecurityNotInPool` | 证券当前不在该投资池中，无法调出 |
-| 5 | `outCheckFrozenPeriod` | 该证券还在投资池冻结期（`frozen_period_in` 天内，入池时间+N天 > 当前时间） |
-| 6 | `outCheckRestrictPool` | 证券在调出限制池中（`out_restrict`） |
-| 7 | `outCheckMutexPool` | 证券在调出互斥池中（`out_mutex`） |
-| 8 | `outCheckMutexConflict` | 与以下互斥池不可同时调出 |
-| 9 | `outCheckElasticPool` | 证券在调出弹性禁投池中（`out_soft_restrict`） |
+| 2 | `preCheckPendingProcess` | 存在进行中的调库流程（当前节点：xxx） |
+| 3 | `outCheckSecurityNotInPool` | 证券当前不在该投资池中，无法调出 |
+| 4 | `outCheckFrozenPeriod` | 该证券还在投资池冻结期（`frozen_period_in` 天内，入池时间+N天 > 当前时间） |
+| 5 | `outCheckRestrictPool` | 证券在调出限制池中（`out_restrict`） |
+| 6 | `outCheckMutexPool` | 证券在调出互斥池中（`out_mutex`） |
+| 7 | `outCheckMutexConflict` | 与以下互斥池不可同时调出 |
+| 8 | `outCheckElasticPool` | 证券在调出弹性禁投池中（`out_soft_restrict`） |
+
+**类型特有调出校验**（按 `categoryType` 路由，证券到期/退市从原 `preCheckSecurityExpired` 拆分到此）：
+
+| 类型 | 规则方法 | 失败原因 |
+|---|---|---|
+| 债券 bond | `outCheckBondMaturity` | 该债券已经到期，无法调出（`maturity_date` 早于今日） |
+| 股票 stock | `outCheckStockDelist` | 该股票已退市，无法调出（`delist_date` 早于今日） |
+| 基金 fund | —（暂无） | |
+| 主体 company | —（主体不校验到期） | |
+
+> 说明：`checkInConditions`/`checkOutConditions` 在证券池/禁投池/CRMW/批量四条链路同构（禁投池固定 company、CRMW 固定 crmw）。`categoryType` 由 `queryCategoryTypeBySecurityType` 按证券 `securityType` 推导（bond/fund/stock/company）。
 
 调出方向自动追加 `out_linked` 联动调出项。
 
@@ -245,12 +269,13 @@
 **直通流程判断** `isDirectFlow`：从 start 出发，所有出边目标为 end，或为「发起人自动提交节点」（`approvalStrategy=='initiator'` 或紧邻 start 且 label 含「发起/提交」）且其后连到 end → 直通（无需人工审批即可生效）。
 
 **③ 调入处理** `executeInboundSubmit`，对每个调入项：
+- **报告必填校验** `checkReportRequired`（提交阶段，对应老项目 `rschDocMode`）：按目标池 `in_report_restriction` 校验报告附件——none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告，不通过抛 `BizException` 中断提交。报告附件取 `item.creditReportFileIndexes`（上传文件下标）与 `item.creditReportSourceAttachmentIds`（内部报告库附件 ID）；any 要求两者任一非空，internal 要求 `creditReportSourceAttachmentIds` 非空。
 - `resolveManualSubmitItem` 取同组手工项（联动/互斥项共用手工项的流程）。
 - `isDirect = noFlow || isDirectFlow(snapshot)`。
 - **直通**：`buildAdjustLog` → `auditStatus='20'` → `addAdjustLog`（写 `ip_adjust_log`）→ `bindSubmitAttachments`（绑定附件）→ 手工项且有快照则 `createInitialSteps`（写前 3 步）→ `addPoolStatus`（写 `ip_pool_status`，`audit_status='20'` 即时生效）。
 - **非直通**：`buildAdjustLog` → `auditStatus='00'` → `addAdjustLog` → `bindSubmitAttachments` → 手工项则 `createInitialSteps`（返回 true 表示流程已走完 end，则升 `'20'` 并 `addPoolStatus`）。
 
-**④ 调出处理** `executeOutboundSubmit`：逻辑对称，生效操作为 `deletePoolStatusSoft`（软删除 `ip_pool_status` 中该证券在目标池的 `audit_status='20'` 记录，`is_deleted=1`）。
+**④ 调出处理** `executeOutboundSubmit`：逻辑对称，先按目标池 `out_report_restriction` 跑 `checkReportRequired`（对应老项目 `rschDocOutMode`，语义同调入 none/any/internal），生效操作为 `deletePoolStatusSoft`（软删除 `ip_pool_status` 中该证券在目标池的 `audit_status='20'` 记录，`is_deleted=1`）。
 
 **⑤ 后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` 用 DB 当前快照 + 前端传入字段合并，`editSecurityInfoForAdjust` 全量更新 `rrs_securityinfo`（约 80 字段）。
 

@@ -626,6 +626,162 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).containsExactly(88L);
     }
 
+    /** 目标池为空时报告必填校验应跳过。 */
+    @Test
+    public void checkReportRequiredShouldSkipWhenPoolNull() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        // 池为空时直接跳过，不校验报告
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, null, "any");
+    }
+
+    /** 限制为 none 时报告必填校验应通过。 */
+    @Test
+    public void checkReportRequiredShouldPassWhenNone() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        InvestmentPoolBo pool = buildPool(10L, null, "报告池");
+        // none=不限制，无报告也应通过
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "none");
+    }
+
+    /** 限制为 any 且无报告时应抛出异常。 */
+    @Test
+    public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        InvestmentPoolBo pool = buildPool(10L, null, "报告池");
+        try {
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains("要求研究报告");
+            return;
+        }
+        throw new AssertionError("any 限制且无报告时应抛出异常");
+    }
+
+    /** 限制为 any 且已上传报告文件时应通过。 */
+    @Test
+    public void checkReportRequiredShouldPassWhenAnyAndHasFileReport() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setCreditReportFileIndexes(Collections.singletonList(0));
+        InvestmentPoolBo pool = buildPool(10L, null, "报告池");
+        // any 限制，已上传报告文件，应通过
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+    }
+
+    /** 限制为 internal 且仅有上传文件（非内部报告库）时应抛出异常。 */
+    @Test
+    public void checkReportRequiredShouldFailWhenInternalAndOnlyFile() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setCreditReportFileIndexes(Collections.singletonList(0));
+        InvestmentPoolBo pool = buildPool(10L, null, "报告池");
+        try {
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal");
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains("要求内部研究报告");
+            return;
+        }
+        throw new AssertionError("internal 限制且仅上传文件时应抛出异常");
+    }
+
+    /** 限制为 internal 且选择了内部报告库附件时应通过。 */
+    @Test
+    public void checkReportRequiredShouldPassWhenInternalAndHasSourceAttachment() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setCreditReportSourceAttachmentIds(Collections.singletonList(1L));
+        InvestmentPoolBo pool = buildPool(10L, null, "报告池");
+        // internal 限制，已从内部报告库选择附件，应通过
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal");
+    }
+
+    /** 调入提交应按目标池 in_report_restriction 校验报告。 */
+    @Test
+    public void executeInboundSubmitShouldCheckInReportRestriction() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
+
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("S001");
+        req.setSecurityShortName("test");
+        req.setSecurityType("bond");
+        req.setAdjustType("manual");
+        req.setAdjusterId("1");
+        req.setAdjusterName("admin");
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setAdjustMode("调入");
+        item.setTargetPoolId(10L);
+        item.setTargetPoolName("报告池");
+        item.setPoolType("credit_bond");
+        item.setItemTag("manual");
+        item.setAdjustGroupKey("manual_10_调入");
+        req.setItems(Collections.singletonList(item));
+
+        // 构建调库提交共享数据测试数据
+        Object shared = buildSubmitSharedData();
+        InvestmentPoolBo pool = buildPool(10L, null, "报告池");
+        // 仅配置 in_report_restriction=any，out_report_restriction 留空，区分调入/调出取值
+        pool.setInReportRestriction("any");
+        ReflectionTestUtils.setField(shared, "poolMap", Collections.singletonMap(10L, pool));
+
+        try {
+            ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains("要求研究报告");
+            return;
+        }
+        throw new AssertionError("调入目标池要求报告时应抛出异常");
+    }
+
+    /** 调出提交应按目标池 out_report_restriction 校验报告。 */
+    @Test
+    public void executeOutboundSubmitShouldCheckOutReportRestriction() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
+
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("S001");
+        req.setSecurityShortName("test");
+        req.setSecurityType("bond");
+        req.setAdjustType("manual");
+        req.setAdjusterId("1");
+        req.setAdjusterName("admin");
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setAdjustMode("调出");
+        item.setTargetPoolId(10L);
+        item.setTargetPoolName("报告池");
+        item.setPoolType("credit_bond");
+        item.setItemTag("manual");
+        item.setAdjustGroupKey("manual_10_调出");
+        req.setItems(Collections.singletonList(item));
+
+        // 构建调库提交共享数据测试数据
+        Object shared = buildSubmitSharedData();
+        InvestmentPoolBo pool = buildPool(10L, null, "报告池");
+        // 仅配置 out_report_restriction=any，in_report_restriction 留空，区分调入/调出取值
+        pool.setOutReportRestriction("any");
+        ReflectionTestUtils.setField(shared, "poolMap", Collections.singletonMap(10L, pool));
+
+        try {
+            ReflectionTestUtils.invokeMethod(service, "executeOutboundSubmit", req, shared);
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains("要求研究报告");
+            return;
+        }
+        throw new AssertionError("调出目标池要求报告时应抛出异常");
+    }
+
     /** 验证共享批次号上下文下连续提交应递增批次号。 */
     @Test
     public void executeInboundSubmitShouldIncreaseBatchNoWithSharedContext() throws Exception {
