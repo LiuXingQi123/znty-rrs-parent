@@ -61,6 +61,7 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.bo.UserBo;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -131,6 +132,17 @@ public class SecurityPoolAdjustService {
     /** 系统附件业务服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;    private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
+
+    /**
+     * 评级下调校验开关：默认关闭。
+     *
+     * <p>简易流程判定（isSimpleInboundFlowMatched）需基于评级历史判断主体/展望/担保人评级是否下调，
+     * 老项目用 sdc_sirm_bondcompanylevel(creditrank/expectrank/changedate) 比对历史评级。
+     * 当前项目暂无评级历史数据源，三标志暂按未下调处理（简易流程不拦截评级下调）。
+     * 接入评级历史表后置 true 并在 loadSharedData 补充下调查询以恢复拦截。
+     */
+    @Value("${rrs.adjust.rating-downgrade-check-enabled:false}")
+    private boolean ratingDowngradeCheckEnabled;
     /** 信用债标准上调流程 Key */
     private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
     /** 信用债标准下调流程 Key */
@@ -169,6 +181,8 @@ public class SecurityPoolAdjustService {
         if (dto == null) {
             throw new BizException(404, "证券不存在");
         }
+        // 回填证券品种大类（bond/fund/stock/company），供前端按类型差异化展示（如基金评分输入）
+        dto.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(dto.getSecurityType()));
         return dto;
     }
 
@@ -1169,13 +1183,27 @@ public class SecurityPoolAdjustService {
         shared.setPoolRelationMap(poolRelationMap);
         shared.setHasPendingProcess(securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()));
         shared.setPendingProcessNodeLabel(securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
+        // 观察池标志：老项目用于跳过债大库校验（ASTRICTPOOLS→openrule=1/isgcc=true），
+        // 当前项目主体债入库规则未落地（P2 阻塞），暂仅加载不使用，待主体债入库规则接入后启用
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        shared.setIssuerRatingDowngraded(false);
-        shared.setOutlookRatingDowngraded(false);
-        shared.setGuarantorRatingDowngraded(false);
+        // 评级下调三标志：需评级历史表（老项目 sdc_sirm_bondcompanylevel）比对历史评级判定，
+        // 当前项目无此数据源，暂按未下调处理。开关 ratingDowngradeCheckEnabled 默认 false；
+        // 接入评级历史后置 true 并在 if 分支补查询，恢复简易流程对评级下调的拦截。
+        if (ratingDowngradeCheckEnabled) {
+            // TODO 接入评级历史表后，查询主体/展望/担保人评级是否下调，替换以下 false
+            shared.setIssuerRatingDowngraded(false);
+            shared.setOutlookRatingDowngraded(false);
+            shared.setGuarantorRatingDowngraded(false);
+        } else {
+            shared.setIssuerRatingDowngraded(false);
+            shared.setOutlookRatingDowngraded(false);
+            shared.setGuarantorRatingDowngraded(false);
+        }
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
+        // 基金评分（基金证券调入校验用，透传请求级 fundRate）
+        shared.setFundRate(req.getFundRate());
         return shared;
     }
 
@@ -1888,6 +1916,10 @@ public class SecurityPoolAdjustService {
         addIfFailed(failures, inCheckForbiddenPool(ctx));
         // 入池检查：证券评级是否符合目标池评级限制
         addIfFailed(failures, inCheckGradeAstrict(ctx));
+        // 行业限制校验（按池 industry_code，调入）
+        addIfFailed(failures, inCheckIndustry(ctx));
+        // 开放日校验（按池 open_day_adjust，调入）
+        addIfFailed(failures, inCheckOpenDay(ctx));
         return failures;
     }
 
@@ -1916,8 +1948,80 @@ public class SecurityPoolAdjustService {
     }
 
     /** 基金类型特有调入校验（暂无，后续 P2 加基金评分） */
+    /**
+     * 基金类型特有调入校验
+     *
+     * <p>含基金评分校验（fund_rate_limit）：池配置评分限制表达式时，校验请求传入的 fundRate 是否满足。
+     * 对应老项目 checkInPool:1092-1120。
+     */
     private List<String> checkFundIn(AdjustCheckContext ctx) {
-        return new ArrayList<>();
+        List<String> failures = new ArrayList<>();
+        // 基金评分校验（fund_rate_limit 表达式）
+        addIfFailed(failures, inCheckFundRate(ctx));
+        return failures;
+    }
+
+    /**
+     * 规则：基金评分（fund_rate_limit）
+     *
+     * <p>池配置了基金评分限制表达式（如 3<=#rate<=8）时，调入校验请求传入的 fundRate 是否满足。
+     * #rate 为基金评分占位。表达式支持 <=#rate / <#rate（下限）、#rate<= / #rate<（上限）及组合，
+     * 各条件须同时满足。fundRate 为空或解析失败则校验失败。
+     * 对应老项目 checkInPool:1092-1120。仅调入校验（老代码 checkOutPool 无）。
+     */
+    private String inCheckFundRate(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool == null || pool.getFundRateLimit() == null || pool.getFundRateLimit().trim().isEmpty()) {
+            return null;
+        }
+        String rate = pool.getFundRateLimit().replaceAll(" ", "");
+        String fundRateStr = ctx.getFundRate();
+        // 未传基金评分或解析失败，校验失败
+        double fundRate;
+        if (fundRateStr == null || fundRateStr.trim().isEmpty()) {
+            return pool.getPoolName() + "的评分，必须在" + rate.replace("#rate", "基金评分");
+        }
+        try {
+            fundRate = Double.parseDouble(fundRateStr.trim());
+        } catch (NumberFormatException e) {
+            return pool.getPoolName() + "的评分，必须在" + rate.replace("#rate", "基金评分");
+        }
+        boolean ok = true;
+        // 下限：<=#rate（下限 <= fundRate）
+        if (rate.indexOf("<=#rate") > 0
+                && !(parseRateBound(rate.split("<=#rate")[0]) <= fundRate)) {
+            ok = false;
+        }
+        // 下限：<#rate（下限 < fundRate）
+        if (rate.indexOf("<#rate") > 0
+                && !(parseRateBound(rate.split("<#rate")[0]) < fundRate)) {
+            ok = false;
+        }
+        // 上限：#rate<=（fundRate <= 上限）优先于 #rate<（fundRate < 上限）
+        if (rate.indexOf("#rate<=") > 0) {
+            String[] parts = rate.split("#rate<=");
+            if (!(fundRate <= parseRateBound(parts[parts.length - 1]))) {
+                ok = false;
+            }
+        } else if (rate.indexOf("#rate<") > 0) {
+            String[] parts = rate.split("#rate<");
+            if (!(fundRate < parseRateBound(parts[parts.length - 1]))) {
+                ok = false;
+            }
+        }
+        if (!ok) {
+            return pool.getPoolName() + "的评分，必须在" + rate.replace("#rate", "基金评分");
+        }
+        return null;
+    }
+
+    /** 安全解析基金评分表达式边界值，解析失败返回 0.0（对齐老项目 NumberTool.safeToDouble 默认 0.0）。 */
+    private double parseRateBound(String s) {
+        try {
+            return Double.parseDouble(s.trim());
+        } catch (Exception e) {
+            return 0.0;
+        }
     }
 
     /** 主体类型特有调入校验（主体不校验到期，暂无） */
@@ -1976,6 +2080,8 @@ public class SecurityPoolAdjustService {
         addIfFailed(failures, outCheckMutexConflict(ctx));
         // 出池检查：是否满足弹性池条件
         addIfFailed(failures, outCheckElasticPool(ctx));
+        // 开放日校验（按池 open_day_adjust，调出）
+        addIfFailed(failures, outCheckOpenDay(ctx));
         return failures;
     }
 
@@ -2403,6 +2509,71 @@ public class SecurityPoolAdjustService {
     }
 
     /**
+     * 规则：行业限制（industry_code / industry_exponent）
+     *
+     * <p>目标池配置了行业限制时，调入校验证券行业是否匹配：
+     * 池 industry_code 非空且 industry_exponent=0（非行业指数模式）时，证券 industry_name 须等于池配置值。
+     * 对应老项目 checkInPool:485（industryPartition.industrycode 比对 pool.IndustryCode），
+     * 当前项目无行业编码主数据，暂用 SecurityInfoBo.industryName 名称精确匹配（老项目为编码前缀层级匹配）。
+     * 仅调入校验（老代码 checkOutPool 无）。
+     */
+    private String inCheckIndustry(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool == null || pool.getIndustryCode() == null || pool.getIndustryCode().isEmpty()) {
+            return null;
+        }
+        // 行业指数模式（industry_exponent != 0）跳过行业校验
+        Integer exponent = pool.getIndustryExponent();
+        if (exponent != null && exponent != 0) {
+            return null;
+        }
+        String securityIndustry = ctx.getSecurityInfo().getIndustryName();
+        if (securityIndustry == null || securityIndustry.isEmpty()) {
+            // 证券无行业信息，跳过（老逻辑同）
+            return null;
+        }
+        if (!securityIndustry.equals(pool.getIndustryCode())) {
+            return "请选择正确的行业;";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：开放日（open_day_adjust，调入侧）
+     *
+     * <p>目标池启用开放日校验（open_day_adjust=1）时，调入校验当日是否落在 ip_pool_open_day 的开放区间内。
+     * 对应老项目 checkInPool:479（isInPoolOpenDay）。
+     */
+    private String inCheckOpenDay(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool == null || pool.getOpenDayAdjust() == null || pool.getOpenDayAdjust() != 1) {
+            return null;
+        }
+        String today = java.time.LocalDate.now().toString();
+        if (!securityPoolAdjustMapper.queryPoolInOpenDay(pool.getId(), today)) {
+            return "不在开放日内，不能调入;";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：开放日（open_day_adjust，调出侧）
+     *
+     * <p>目标池启用开放日校验时，调出校验当日是否落在开放区间内。对应老项目 checkOutPool:139。
+     */
+    private String outCheckOpenDay(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool == null || pool.getOpenDayAdjust() == null || pool.getOpenDayAdjust() != 1) {
+            return null;
+        }
+        String today = java.time.LocalDate.now().toString();
+        if (!securityPoolAdjustMapper.queryPoolInOpenDay(pool.getId(), today)) {
+            return "不在开放日内，不能调出;";
+        }
+        return null;
+    }
+
+    /**
      * 规则：报告必填（in_report_restriction / out_report_restriction）
      *
      * <p>目标池配置了报告限制时，提交时校验报告附件：
@@ -2469,6 +2640,8 @@ public class SecurityPoolAdjustService {
         // 查证券品种大类，用于类型特有校验路由（bond/fund/stock/company）
         ctx.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(
                 shared.getSecurityInfo().getSecurityType()));
+        // 基金评分（基金证券调入校验用，透传请求级 fundRate）
+        ctx.setFundRate(shared.getFundRate());
         return ctx;
     }
 

@@ -828,4 +828,14 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 查询指定日期是否在目标池的开放区间内（open_day_adjust=1 的池用，调库开放日校验） -->
+    <select id="queryPoolInOpenDay" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_open_day
+        WHERE pool_id = #{poolId}
+          AND begin_date &lt;= #{today}
+          AND end_date &gt;= #{today}
+          AND is_deleted = 0
+    </select>
+
 </mapper>

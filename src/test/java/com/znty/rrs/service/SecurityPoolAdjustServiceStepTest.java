@@ -305,6 +305,156 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failures).contains("证券评级A不符合当前池的评级规则");
     }
 
+    /** 行业限制校验：证券行业与池配置不符时应返回失败原因。 */
+    @Test
+    public void inCheckIndustryShouldFailWhenMismatch() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setIndustryCode("制造业");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setIndustryName("金融业");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckIndustry", ctx);
+        assertThat(failure).isEqualTo("请选择正确的行业;");
+    }
+
+    /** 行业限制校验：证券行业匹配时应通过。 */
+    @Test
+    public void inCheckIndustryShouldPassWhenMatch() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setIndustryCode("制造业");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setIndustryName("制造业");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckIndustry", ctx);
+        assertThat(failure).isNull();
+    }
+
+    /** 行业限制校验：industry_exponent!=0（行业指数模式）时应跳过。 */
+    @Test
+    public void inCheckIndustryShouldSkipWhenExponentNonZero() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setIndustryCode("制造业");
+        pool.setIndustryExponent(1);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setIndustryName("金融业");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckIndustry", ctx);
+        assertThat(failure).isNull();
+    }
+
+    /** 基金评分校验：未传 fundRate 时应返回失败原因。 */
+    @Test
+    public void inCheckFundRateShouldFailWhenFundRateMissing() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setPoolName("基金池");
+        pool.setFundRateLimit("3<=#rate<=8");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        // 未传 fundRate
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckFundRate", ctx);
+        assertThat(failure).isEqualTo("基金池的评分，必须在3<=基金评分<=8");
+    }
+
+    /** 基金评分校验：fundRate 在范围内时应通过。 */
+    @Test
+    public void inCheckFundRateShouldPassWhenWithinRange() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setPoolName("基金池");
+        pool.setFundRateLimit("3<=#rate<=8");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setFundRate("5");
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckFundRate", ctx);
+        assertThat(failure).isNull();
+    }
+
+    /** 基金评分校验：fundRate 超过上限时应返回失败原因。 */
+    @Test
+    public void inCheckFundRateShouldFailWhenAboveUpper() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setPoolName("基金池");
+        pool.setFundRateLimit("3<=#rate<=8");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setFundRate("10");
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckFundRate", ctx);
+        assertThat(failure).isEqualTo("基金池的评分，必须在3<=基金评分<=8");
+    }
+
+    /** 基金评分校验：池未配置 fund_rate_limit 时应跳过。 */
+    @Test
+    public void inCheckFundRateShouldSkipWhenNoLimit() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setPoolName("基金池");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setFundRate("5");
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckFundRate", ctx);
+        assertThat(failure).isNull();
+    }
+
+    /** 开放日校验：启用开放日且当日不在开放区间时应返回失败原因。 */
+    @Test
+    public void inCheckOpenDayShouldFailWhenNotInOpenDay() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        pool.setOpenDayAdjust(1);
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        // 当日不在开放区间
+        when(mapper.queryPoolInOpenDay(any(Long.class), any(String.class))).thenReturn(false);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckOpenDay", ctx);
+        assertThat(failure).isEqualTo("不在开放日内，不能调入;");
+    }
+
+    /** 开放日校验：启用开放日且当日在开放区间时应通过。 */
+    @Test
+    public void inCheckOpenDayShouldPassWhenInOpenDay() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        pool.setOpenDayAdjust(1);
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        // 当日在开放区间
+        when(mapper.queryPoolInOpenDay(any(Long.class), any(String.class))).thenReturn(true);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckOpenDay", ctx);
+        assertThat(failure).isNull();
+    }
+
+    /** 开放日校验：未启用开放日（open_day_adjust 空/0）时应跳过，不查开放日表。 */
+    @Test
+    public void inCheckOpenDayShouldSkipWhenNotEnabled() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckOpenDay", ctx);
+        assertThat(failure).isNull();
+        verify(mapper, never()).queryPoolInOpenDay(any(Long.class), any(String.class));
+    }
+
     /** 验证 queryAdjustPoolListShouldSkipPermissionFilterForAdmin 测试场景。 */
     @Test
     public void queryAdjustPoolListShouldSkipPermissionFilterForAdmin() {

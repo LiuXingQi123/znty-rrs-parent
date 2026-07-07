@@ -19,6 +19,9 @@ public class AdjustCheckReq {
     /** 证券类型 */
     private String securityType;
 
+    /** 基金评分（基金证券调入校验用，前端传入；空则跳过基金评分校验） */
+    private String fundRate;
+
     /** 待校验的调库项列表 */
     private List<CheckItem> items;
 

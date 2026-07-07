@@ -72,6 +72,9 @@ public interface CrmwPoolAdjustMapper {
     /** 查询证券是否在全局禁止池（forbidden/blacklist，audit_status=20），用于调入禁止池校验 */
     boolean querySecurityInForbiddenPool(@Param("securityCode") String securityCode);
 
+    /** 查询指定日期是否在目标池的开放区间内（ip_pool_open_day，open_day_adjust=1 时用） */
+    boolean queryPoolInOpenDay(@Param("poolId") Long poolId, @Param("today") String today);
+
     /** 查询各投资池当前有效证券数量 */
     List<PoolDto> queryPoolCurrentCountList();
 

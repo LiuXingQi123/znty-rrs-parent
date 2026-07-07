@@ -34,7 +34,7 @@ public class ScriptToolServiceTest {
         // 查询环境检查复用的项目表白名单
         Map<?, ?> healthTables = ReflectionTestUtils.invokeMethod(service, "queryClearTableMap");
 
-        assertEquals(59, tables.size());
+        assertEquals(60, tables.size());
         assertEquals(tables.keySet(), healthTables.keySet());
     }
 

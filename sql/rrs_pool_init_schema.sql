@@ -59,6 +59,10 @@ CREATE TABLE `ip_investment_pool` (
     `lock_flag`             TINYINT      DEFAULT NULL            COMMENT '池锁定标志：0=未锁定 / 1=已锁定（锁定后不可调入/调出），空视为未锁定',
     `frozen_period_in`      INT          DEFAULT NULL            COMMENT '调入冻结期天数：入池后N天内不可调出，空表示不限制',
     `grade_astrict`         VARCHAR(256) DEFAULT NULL            COMMENT '评级限制：允许的证券评级列表（逗号分隔，如 AAA,AA+），空表示不限制',
+    `industry_code`         VARCHAR(100) DEFAULT NULL            COMMENT '行业限制：证券行业须匹配此值（当前与 rrs_securityinfo.industry_name 名称比对；老项目用 industrycode 编码前缀层级匹配，当前项目暂用名称精确匹配），空表示不限制',
+    `industry_exponent`     INT          DEFAULT NULL            COMMENT '行业指数模式：!=0 时跳过行业校验（行业指数池不强制匹配），空视为 0',
+    `fund_rate_limit`       VARCHAR(100) DEFAULT NULL            COMMENT '基金评分限制表达式（如 3<=#rate<=8），#rate 占位基金评分；调入校验基金证券评分须满足，空表示不限制',
+    `open_day_adjust`       TINYINT      DEFAULT NULL            COMMENT '开放日校验开关：1=启用（调库日期须在 ip_pool_open_day 开放区间内），空/0=不限制',
     `outer_sort`            INT          DEFAULT NULL            COMMENT '投资池外部排序，用于顶级投资池展示顺序',
     `inner_sort`            INT          DEFAULT NULL            COMMENT '投资池内部排序，用于子级池展示顺序',
     `description`           VARCHAR(512) DEFAULT NULL            COMMENT '投资池描述',
@@ -158,6 +162,10 @@ CREATE TABLE `ip_investment_pool_evt` (
     `lock_flag`             TINYINT      DEFAULT NULL            COMMENT '池锁定标志：0=未锁定 / 1=已锁定（锁定后不可调入/调出），空视为未锁定',
     `frozen_period_in`      INT          DEFAULT NULL            COMMENT '调入冻结期天数：入池后N天内不可调出，空表示不限制',
     `grade_astrict`         VARCHAR(256) DEFAULT NULL            COMMENT '评级限制：允许的证券评级列表（逗号分隔，如 AAA,AA+），空表示不限制',
+    `industry_code`         VARCHAR(100) DEFAULT NULL            COMMENT '行业限制：证券行业须匹配此值（当前与 rrs_securityinfo.industry_name 名称比对；老项目用 industrycode 编码前缀层级匹配，当前项目暂用名称精确匹配），空表示不限制',
+    `industry_exponent`     INT          DEFAULT NULL            COMMENT '行业指数模式：!=0 时跳过行业校验（行业指数池不强制匹配），空视为 0',
+    `fund_rate_limit`       VARCHAR(100) DEFAULT NULL            COMMENT '基金评分限制表达式（如 3<=#rate<=8），#rate 占位基金评分；调入校验基金证券评分须满足，空表示不限制',
+    `open_day_adjust`       TINYINT      DEFAULT NULL            COMMENT '开放日校验开关：1=启用（调库日期须在 ip_pool_open_day 开放区间内），空/0=不限制',
     `outer_sort`            INT          DEFAULT NULL            COMMENT '投资池外部排序，用于顶级投资池展示顺序',
     `inner_sort`            INT          DEFAULT NULL            COMMENT '投资池内部排序，用于子级池展示顺序',
     `description`           VARCHAR(512) DEFAULT NULL            COMMENT '投资池描述',
@@ -233,3 +241,21 @@ CREATE TABLE `ip_pool_permission_evt` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池权限配置表（操作审计）';
+
+-- 开放日配置表（open_day_adjust=1 的池按此表 begin_date~end_date 区间校验调库日期）
+DROP TABLE IF EXISTS `ip_pool_open_day`;
+CREATE TABLE `ip_pool_open_day`
+(
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `pool_id`     BIGINT       DEFAULT NULL            COMMENT '投资池 ID，关联 ip_investment_pool.id',
+    `begin_date`  DATE         DEFAULT NULL            COMMENT '开放区间起始日期',
+    `end_date`    DATE         DEFAULT NULL            COMMENT '开放区间结束日期',
+    `description` VARCHAR(200) DEFAULT NULL            COMMENT '描述',
+    `is_deleted`  TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
+    `crte_time`   DATETIME     DEFAULT NULL            COMMENT '创建时间',
+    `updt_time`   DATETIME     DEFAULT NULL            COMMENT '修改时间',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci
+  COMMENT = '投资池开放日配置表（open_day_adjust=1 的池按此表 begin_date~end_date 区间校验调库日期）';

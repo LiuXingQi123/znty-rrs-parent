@@ -109,6 +109,18 @@ public class InvestmentPoolBo {
     /** 评级限制：允许的证券评级列表（逗号分隔，如 AAA,AA+），空表示不限制 */
     private String gradeAstrict;
 
+    /** 行业限制：证券行业须匹配此值（与 SecurityInfoBo.industryName 名称比对，老项目用编码前缀匹配当前用名称精确匹配），空表示不限制 */
+    private String industryCode;
+
+    /** 行业指数模式：!=0 时跳过行业校验，空视为 0 */
+    private Integer industryExponent;
+
+    /** 基金评分限制表达式（如 3<=#rate<=8），#rate 占位基金评分；调入校验基金评分须满足，空表示不限制 */
+    private String fundRateLimit;
+
+    /** 开放日校验开关：1=启用（调库日期须在 ip_pool_open_day 开放区间内），空/0=不限制 */
+    private Integer openDayAdjust;
+
     /** 投资池外部排序 */
     private Integer outerSort;
 

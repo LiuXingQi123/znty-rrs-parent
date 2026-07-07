@@ -14,4 +14,7 @@ public class SecurityInfoDetailDto extends SecurityInfoBo {
 
     /** 证券类型名称 */
     private String securityTypeName;
+
+    /** 证券品种大类（bond/fund/stock/company，由 dict_security_type 推导，前端按类型差异化展示） */
+    private String categoryType;
 }

@@ -1778,7 +1778,8 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "ip_pool_permission", "投资池权限"),
                 buildTable("znty_rrs", "ip_pool_auto_rule", "投资池自动规则"),
                 buildTable("znty_rrs", "ip_pool_relation", "投资池关系"),
-                buildTable("znty_rrs", "ip_investment_pool", "投资池")
+                buildTable("znty_rrs", "ip_investment_pool", "投资池"),
+                buildTable("znty_rrs", "ip_pool_open_day", "投资池开放日配置")
         )));
         groups.add(buildTableGroup("flow-config", "流程定义", "znty_rrs", Arrays.asList(
                 buildTable("znty_rrs", "wf_edge_cond_rule_evt", "条件边规则事件"),

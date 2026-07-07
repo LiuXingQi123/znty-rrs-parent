@@ -185,7 +185,7 @@
 
 **③ 调入校验** `executeInAdjustCheck`，对每个 `adjustMode==='调入'` 项执行 `checkInConditions`：先跑通用 `checkCommonIn`，再按证券 `categoryType` 路由类型特有校验（`checkBondIn`/`checkStockIn`/`checkFundIn`/`checkCompanyIn`），任一返回非 null 即加入 `failures`。
 
-**通用调入校验** `checkCommonIn`（12 条，所有类型都走）：
+**通用调入校验** `checkCommonIn`（14 条，所有类型都走）：
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
@@ -201,6 +201,8 @@
 | 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，无法操作：xxx（`in_soft_restrict`） |
 | 11 | `inCheckForbiddenPool` | 证券在全局禁止池中，不能调入：xxx（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
 | 12 | `inCheckGradeAstrict` | 证券评级A不符合当前池的评级规则（池 `grade_astrict` 配置允许评级列表逗号分隔，如 `AAA,AA+`，证券 `ratingBond` 须在列表内） |
+| 13 | `inCheckIndustry` | 请选择正确的行业;（池 `industry_code` 非空且 `industry_exponent=0` 时，证券 `industry_name` 须等于池配置值；`industry_exponent!=0` 行业指数模式跳过。当前用名称精确匹配，老项目用编码前缀层级匹配） |
+| 14 | `inCheckOpenDay` | 不在开放日内，不能调入;（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
 
 **类型特有调入校验**（按 `categoryType` 路由，证券到期/退市从原 `preCheckSecurityExpired` 拆分到此）：
 
@@ -208,7 +210,7 @@
 |---|---|---|
 | 债券 bond | `inCheckBondMaturity` | 该债券已经到期，无法调入（`maturity_date` 早于今日） |
 | 股票 stock | `inCheckStockDelist` | 该股票已退市，无法调入（`delist_date` 早于今日） |
-| 基金 fund | —（暂无，后续 P2 加基金评分） | |
+| 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（池 `fund_rate_limit` 表达式 `<=#rate`/`<#rate`/`#rate<=`/`#rate<` 及组合，`#rate` 占位基金评分；请求 `fundRate` 须满足，空或不满足则失败） |
 | 主体 company | —（主体不校验到期，暂无） | |
 
 - **自动追加联动调入项**：取目标池 `in_linked` 关系，对每个联动池若未覆盖则 `buildAutoResultItem(linkedId,'调入','linkage')`，并 `inheritManualItemFailure`（手工项失败则阻断联动项）。
@@ -216,7 +218,7 @@
 
 **④ 调出校验** `executeOutAdjustCheck`，对每个 `adjustMode==='调出'` 项执行 `checkOutConditions`：先跑通用 `checkCommonOut`，再按 `categoryType` 路由类型特有校验（`checkBondOut`/`checkStockOut`/`checkFundOut`/`checkCompanyOut`）。
 
-**通用调出校验** `checkCommonOut`（8 条，所有类型都走）：
+**通用调出校验** `checkCommonOut`（9 条，所有类型都走）：
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
@@ -228,6 +230,7 @@
 | 6 | `outCheckMutexPool` | 证券在调出互斥池中（`out_mutex`） |
 | 7 | `outCheckMutexConflict` | 与以下互斥池不可同时调出 |
 | 8 | `outCheckElasticPool` | 证券在调出弹性禁投池中（`out_soft_restrict`） |
+| 9 | `outCheckOpenDay` | 不在开放日内，不能调出;（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
 
 **类型特有调出校验**（按 `categoryType` 路由，证券到期/退市从原 `preCheckSecurityExpired` 拆分到此）：
 

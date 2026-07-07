@@ -379,3 +379,8 @@ INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `handler_type`, 
 (7,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW()),
 (8,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW()),
 (9,  'viewable',        'role', 10, '风险管理部', 0, NOW(), NOW());
+
+-- 开放日配置演示数据（pool_id=1 设 2026 全年开放区间；需 ip_investment_pool.open_day_adjust=1 时才参与校验）
+TRUNCATE TABLE `ip_pool_open_day`;
+INSERT INTO `ip_pool_open_day` (`id`, `pool_id`, `begin_date`, `end_date`, `description`, `is_deleted`, `crte_time`, `updt_time`) VALUES
+(1, 1, '2026-01-01', '2026-12-31', '2026 年开放区间（演示）', 0, NOW(), NOW());

@@ -46,6 +46,10 @@
                ,lock_flag
                ,frozen_period_in
                ,grade_astrict
+               ,industry_code
+               ,industry_exponent
+               ,fund_rate_limit
+               ,open_day_adjust
                ,outer_sort
                ,inner_sort
                ,description
@@ -123,6 +127,10 @@
                ,lock_flag
                ,frozen_period_in
                ,grade_astrict
+               ,industry_code
+               ,industry_exponent
+               ,fund_rate_limit
+               ,open_day_adjust
                ,outer_sort
                ,inner_sort
                ,description
@@ -379,6 +387,10 @@
                ,lock_flag
                ,frozen_period_in
                ,grade_astrict
+               ,industry_code
+               ,industry_exponent
+               ,fund_rate_limit
+               ,open_day_adjust
                ,outer_sort
                ,inner_sort
                ,description
@@ -470,6 +482,10 @@
                ,lock_flag
                ,frozen_period_in
                ,grade_astrict
+               ,industry_code
+               ,industry_exponent
+               ,fund_rate_limit
+               ,open_day_adjust
                ,outer_sort
                ,inner_sort
                ,description

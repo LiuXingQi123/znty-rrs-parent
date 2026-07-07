@@ -58,4 +58,7 @@ public class AdjustSharedData {
 
     /** 本次请求中所有调出操作涉及的目标池 ID 集合，用于互斥池同时勾选校验 */
     private Set<Long> requestOutPoolIds;
+
+    /** 基金评分（基金证券调入校验用，来自请求；空则跳过基金评分校验） */
+    private String fundRate;
 }
