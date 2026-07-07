@@ -6,6 +6,7 @@ import com.znty.rrs.common.enums.AttachmentCategory;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.FlowMapper;
+import com.znty.rrs.mapper.CreditBondGradeRuleMapper;
 import com.znty.rrs.entity.securitypooladjust.AdjustLogDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckContext;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
@@ -15,6 +16,7 @@ import com.znty.rrs.entity.bo.FlowDefinitionBo;
 import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
@@ -453,6 +455,117 @@ public class SecurityPoolAdjustServiceStepTest {
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckOpenDay", ctx);
         assertThat(failure).isNull();
         verify(mapper, never()).queryPoolInOpenDay(any(Long.class), any(String.class));
+    }
+
+    /** 主体债入库规则：目标池在矩阵允许列表内时应通过。 */
+    @Test
+    public void inCheckMainGradeRuleShouldPassWhenTargetPoolAllowed() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(2L);
+        pool.setPoolType("credit_bond");
+        pool.setPoolName("一级库");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        sec.setTermYear(new java.math.BigDecimal("6"));
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(Collections.singletonMap(2L, pool));
+        // 期限档 GT_5：term_year > 5
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new java.math.BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
+                .thenReturn(Collections.singletonList(2L));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isNull();
+    }
+
+    /** 主体债入库规则：目标池不在矩阵允许列表时应返回失败原因。 */
+    @Test
+    public void inCheckMainGradeRuleShouldFailWhenTargetPoolNotAllowed() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo targetPool = new InvestmentPoolBo();
+        targetPool.setId(5L);
+        targetPool.setPoolType("credit_bond");
+        targetPool.setPoolName("五级库");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("4");
+        sec.setTermYear(new java.math.BigDecimal("6"));
+        // 池名映射（允许池 2/3 + 目标池 5）
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        InvestmentPoolBo p2 = new InvestmentPoolBo(); p2.setId(2L); p2.setPoolName("一级库"); poolMap.put(2L, p2);
+        InvestmentPoolBo p3 = new InvestmentPoolBo(); p3.setId(3L); p3.setPoolName("二级库"); poolMap.put(3L, p3);
+        poolMap.put(5L, targetPool);
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(targetPool);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(poolMap);
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new java.math.BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        // 矩阵允许一/二级库，不含五级库
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
+                .thenReturn(Arrays.asList(2L, 3L));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isEqualTo("该债券只能调入以下池：一级库、二级库");
+    }
+
+    /** 主体债入库规则：未配置主体内评分档时应返回失败原因。 */
+    @Test
+    public void inCheckMainGradeRuleShouldFailWhenNoGrade() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(2L);
+        pool.setPoolType("credit_bond");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        // 未配置主体内评分档
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isEqualTo("未配置主体内评分档，不符合入库条件");
+    }
+
+    /** 主体债入库规则：目标池非信用债大库时应跳过。 */
+    @Test
+    public void inCheckMainGradeRuleShouldSkipWhenNotCreditBondPool() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(2L);
+        pool.setPoolType("special_account");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setInnerIssuerRating("1");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isNull();
+        verify(gradeRuleMapper, never()).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
     }
 
     /** 验证 queryAdjustPoolListShouldSkipPermissionFilterForAdmin 测试场景。 */

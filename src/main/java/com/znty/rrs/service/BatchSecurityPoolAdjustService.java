@@ -33,6 +33,7 @@ import com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
+import com.znty.rrs.mapper.CreditBondGradeRuleMapper;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckContext;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
@@ -56,6 +57,8 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
+import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.bo.UserBo;
 import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
@@ -117,6 +120,10 @@ public class BatchSecurityPoolAdjustService {
     /** 流程定义数据访问组件 */
     @Resource
     private FlowMapper flowMapper;
+
+    /** 信用债评级矩阵数据访问组件（主体债入库规则校验用） */
+    @Resource
+    private CreditBondGradeRuleMapper creditBondGradeRuleMapper;
 
     /** 系统附件业务服务 */
     @Resource
@@ -1901,7 +1908,120 @@ public class BatchSecurityPoolAdjustService {
         List<String> failures = new ArrayList<>();
         // 债券到期校验
         addIfFailed(failures, inCheckBondMaturity(ctx));
+        // 主体债入库规则校验（信用债大库矩阵）
+        addIfFailed(failures, inCheckMainGradeRule(ctx));
         return failures;
+    }
+
+    /**
+     * 规则：主体债入库规则（credit_bond_pool_grade_rule 矩阵）
+     *
+     * <p>调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表，
+     * 目标池须在允许列表内。对应老项目 checkInPool:516-955（findMainGradeRuleList + sirmEnums sort 比对），
+     * 当前项目用 credit_bond_pool_grade_rule 矩阵（req[23]）替代老项目 IP_MainGradeRule，用
+     * SecurityInfoBo.innerIssuerRating 替代老项目 lon，用 termYear+credit_bond_term_bucket 替代 bondDurationId。
+     * 担保债取主体与担保人评级较低者（老项目 lon=min(主体,担保人)）。可转债不适用矩阵跳过。
+     * 仅调入校验（老代码 checkOutPool 无）。
+     */
+    private String inCheckMainGradeRule(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        // 前置门控：仅信用债大库池校验
+        if (!isCreditBondPool(pool)) {
+            return null;
+        }
+        SecurityInfoBo sec = ctx.getSecurityInfo();
+        if (sec == null) {
+            return null;
+        }
+        // 可转债不适用主体债入库矩阵
+        if ("convertible_bond".equals(sec.getSecurityType())) {
+            return null;
+        }
+        // 主体内评分档
+        String gradeCode = sec.getInnerIssuerRating();
+        if (gradeCode == null || gradeCode.isEmpty()) {
+            return "未配置主体内评分档，不符合入库条件";
+        }
+        // 担保债取严：主体与担保人评级较低者（sort_no 大者评级低）
+        if (sec.getGuarantFlag() != null && sec.getGuarantFlag() == 1
+                && sec.getInnerGuarantorRating() != null && !sec.getInnerGuarantorRating().isEmpty()) {
+            gradeCode = pickLowerRatingGrade(gradeCode, sec.getInnerGuarantorRating());
+        }
+        // 期限档：按 termYear 匹配 credit_bond_term_bucket
+        String bucketCode = matchTermBucket(sec.getTermYear());
+        if (bucketCode == null) {
+            // 无法判定期限档（termYear 缺失或不在任何区间），跳过
+            return null;
+        }
+        // 查矩阵允许的池列表
+        List<Long> allowedPoolIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
+        if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
+            return "不符合条件，无法入库";
+        }
+        // 校验目标池在允许列表内
+        if (!allowedPoolIds.contains(pool.getId())) {
+            StringBuilder names = new StringBuilder();
+            for (Long pid : allowedPoolIds) {
+                InvestmentPoolBo p = ctx.getPoolMap().get(pid);
+                String name = p != null ? p.getPoolName() : String.valueOf(pid);
+                if (names.length() > 0) {
+                    names.append("、");
+                }
+                names.append(name);
+            }
+            return "该债券只能调入以下池：" + names;
+        }
+        return null;
+    }
+
+    /**
+     * 按证券期限（年）匹配信用债期限分组编码。
+     *
+     * <p>遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
+     */
+    private String matchTermBucket(java.math.BigDecimal termYear) {
+        if (termYear == null) {
+            return null;
+        }
+        List<CreditBondTermBucketBo> buckets = creditBondGradeRuleMapper.queryEnabledTermBucketList();
+        for (CreditBondTermBucketBo b : buckets) {
+            boolean minOk = b.getMinTermYear() == null
+                    || (b.getMinInclusive() != null && b.getMinInclusive() == 1
+                        ? termYear.compareTo(b.getMinTermYear()) >= 0
+                        : termYear.compareTo(b.getMinTermYear()) > 0);
+            boolean maxOk = b.getMaxTermYear() == null
+                    || (b.getMaxInclusive() != null && b.getMaxInclusive() == 1
+                        ? termYear.compareTo(b.getMaxTermYear()) <= 0
+                        : termYear.compareTo(b.getMaxTermYear()) < 0);
+            if (minOk && maxOk) {
+                return b.getBucketCode();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 取两个主体内评分档中评级较低者（sort_no 较大者）。
+     *
+     * <p>对应老项目担保债 lon=min(主体,担保人)。评分档未命中字典时保持主体评级档不变。
+     */
+    private String pickLowerRatingGrade(String gradeCode1, String gradeCode2) {
+        List<CreditBondInnerRatingGradeBo> grades = creditBondGradeRuleMapper.queryEnabledRatingGradeList();
+        Integer sort1 = null;
+        Integer sort2 = null;
+        for (CreditBondInnerRatingGradeBo g : grades) {
+            if (g.getGradeCode().equals(gradeCode1)) {
+                sort1 = g.getSortNo();
+            }
+            if (g.getGradeCode().equals(gradeCode2)) {
+                sort2 = g.getSortNo();
+            }
+        }
+        // 取评级低者（sort_no 大者）；任一未命中保持主体评级档
+        if (sort1 != null && sort2 != null && sort2 > sort1) {
+            return gradeCode2;
+        }
+        return gradeCode1;
     }
 
     /**

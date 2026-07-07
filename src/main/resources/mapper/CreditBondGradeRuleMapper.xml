@@ -112,4 +112,18 @@
             )
         </foreach>
     </insert>
+
+    <!-- 按主体内评分档编码 + 期限分组编码查允许调入的池 ID 列表（主体债入库规则校验用） -->
+    <select id="queryAllowedPoolIdsByGradeAndBucket" resultType="java.lang.Long">
+        SELECT r.pool_id
+        FROM credit_bond_pool_grade_rule r
+        INNER JOIN credit_bond_inner_rating_grade g ON r.inner_rating_grade_id = g.id
+        INNER JOIN credit_bond_term_bucket b ON r.term_bucket_id = b.id
+        WHERE g.grade_code = #{gradeCode}
+          AND b.bucket_code = #{bucketCode}
+          AND r.enabled = 1
+          AND g.enabled = 1
+          AND b.enabled = 1
+    </select>
+
 </mapper>
