@@ -343,6 +343,17 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 查询证券在目标池的入池时间（audit_status=20），用于调出冻结期校验 -->
+    <select id="queryPoolEntryTime" resultType="java.util.Date">
+        SELECT entry_time
+        FROM ip_pool_status
+        WHERE security_code = #{securityCode}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
     <!-- 查询各投资池当前有效证券数量 -->
     <select id="queryPoolCurrentCountList" resultType="com.znty.rrs.entity.securitypooladjust.PoolDto">
         SELECT target_pool_id AS id
@@ -427,6 +438,18 @@
                                        AND p.is_deleted = 0
         WHERE ips.security_code = #{securityCode}
           AND p.pool_type = 'observe'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+    </select>
+
+    <!-- 查询证券是否在全局禁止池（forbidden/blacklist，audit_status=20），用于调入禁止池校验 -->
+    <select id="querySecurityInForbiddenPool" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        WHERE ips.security_code = #{securityCode}
+          AND p.pool_type IN ('forbidden', 'blacklist')
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
     </select>

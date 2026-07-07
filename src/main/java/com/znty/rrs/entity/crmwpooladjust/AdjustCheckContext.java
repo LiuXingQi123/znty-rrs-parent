@@ -56,4 +56,10 @@ public class AdjustCheckContext {
 
     /** 本次请求中所有调出操作涉及的目标池 ID 集合，用于互斥池同时勾选校验 */
     private Set<Long> requestOutPoolIds;
+
+    /** 证券在目标池的入池时间（ip_pool_status_crmw.entry_time，audit_status=20），用于调出冻结期校验，调入时为 null */
+    private java.util.Date targetPoolEntryTime;
+
+    /** 证券品种大类（bond/fund/stock/company，查 dict_security_type），用于类型特有校验路由 */
+    private String categoryType;
 }

@@ -14,6 +14,7 @@ import com.znty.rrs.common.enums.StepStatus;
 import com.znty.rrs.common.enums.AuditStatus;
 
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.common.enums.CategoryType;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
@@ -740,6 +741,9 @@ public class SecurityPoolAdjustService {
             if (!AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
                 continue;
             }
+            // 报告必填校验（按池 in_report_restriction，提交阶段校验）
+            InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -1823,17 +1827,46 @@ public class SecurityPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 调入校验：前置规则 + 调入方向规则
+     * 调入校验：通用校验 + 类型特有校验
      *
-     * <p>校验顺序：证券到期 → 流程进行中 → 重复入池 → 容量上限 → 来源池 → 调入限制池 → 互斥冲突 → 调入弹性禁投池
+     * <p>先执行 checkCommonIn（通用：池锁定/品种/市场/pending/重复入池/容量/来源/限制/互斥/弹性），
+     * 再按 categoryType 路由类型特有校验（债券到期 checkBondIn / 股票退市 checkStockIn 等）。
      *
      * @param ctx 调库校验上下文
      * @return 不通过的失败原因列表，通过则返回空列表
      */
     public List<String> checkInConditions(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        // 前置检查：证券是否已到期
-        addIfFailed(failures, preCheckSecurityExpired(ctx));
+        // 通用校验（所有类型都走）
+        failures.addAll(checkCommonIn(ctx));
+        // 类型特有校验（按 categoryType 路由）
+        String categoryType = ctx.getCategoryType();
+        if (CategoryType.BOND.getCode().equals(categoryType)) {
+            failures.addAll(checkBondIn(ctx));
+        } else if (CategoryType.STOCK.getCode().equals(categoryType)) {
+            failures.addAll(checkStockIn(ctx));
+        } else if (CategoryType.FUND.getCode().equals(categoryType)) {
+            failures.addAll(checkFundIn(ctx));
+        } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
+            failures.addAll(checkCompanyIn(ctx));
+        }
+        return failures;
+    }
+
+    /**
+     * 通用调入校验（所有类型都走）
+     *
+     * <p>含池锁定、品种、市场、pending流程、重复入池、容量、来源池、限制池、互斥、弹性禁投。
+     * 不含证券到期（已拆到类型特有：债券到期 checkBondIn / 股票退市 checkStockIn）。
+     */
+    private List<String> checkCommonIn(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        // 前置检查：目标池是否已锁定（最硬拦截，优先执行）
+        addIfFailed(failures, inCheckPoolLocked(ctx));
+        // 前置检查：证券品种是否符合目标池配置
+        addIfFailed(failures, inCheckVariety(ctx));
+        // 前置检查：证券市场是否符合目标池配置
+        addIfFailed(failures, inCheckMarket(ctx));
         // 前置检查：是否存在待处理流程
         addIfFailed(failures, preCheckPendingProcess(ctx));
         // 入池检查：证券是否已在目标池中
@@ -1848,25 +1881,90 @@ public class SecurityPoolAdjustService {
         addIfFailed(failures, inCheckMutexConflict(ctx));
         // 入池检查：是否满足弹性池条件
         addIfFailed(failures, inCheckElasticPool(ctx));
+        // 入池检查：证券是否在全局禁止池（forbidden/blacklist）
+        addIfFailed(failures, inCheckForbiddenPool(ctx));
+        // 入池检查：证券评级是否符合目标池评级限制
+        addIfFailed(failures, inCheckGradeAstrict(ctx));
         return failures;
     }
 
     /**
-     * 调出校验：前置规则 + 调出方向规则
+     * 债券类型特有调入校验
      *
-     * <p>校验顺序：证券到期 → 流程进行中 → 未入池 → 调出限制池 → 调出互斥池 → 互斥冲突 → 调出弹性禁投池
+     * <p>含债券到期校验（maturity_date 早于今日则禁止调入）。
+     */
+    private List<String> checkBondIn(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        // 债券到期校验
+        addIfFailed(failures, inCheckBondMaturity(ctx));
+        return failures;
+    }
+
+    /**
+     * 股票类型特有调入校验
+     *
+     * <p>含股票退市校验（delist_date 早于今日则禁止调入）。
+     */
+    private List<String> checkStockIn(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        // 股票退市校验
+        addIfFailed(failures, inCheckStockDelist(ctx));
+        return failures;
+    }
+
+    /** 基金类型特有调入校验（暂无，后续 P2 加基金评分） */
+    private List<String> checkFundIn(AdjustCheckContext ctx) {
+        return new ArrayList<>();
+    }
+
+    /** 主体类型特有调入校验（主体不校验到期，暂无） */
+    private List<String> checkCompanyIn(AdjustCheckContext ctx) {
+        return new ArrayList<>();
+    }
+
+    /**
+     * 调出校验：通用校验 + 类型特有校验
+     *
+     * <p>先执行 checkCommonOut（通用：池锁定/pending/不在池/冻结期/限制/互斥/弹性），
+     * 再按 categoryType 路由类型特有校验（债券到期 checkBondOut / 股票退市 checkStockOut 等）。
      *
      * @param ctx 调库校验上下文
      * @return 不通过的失败原因列表，通过则返回空列表
      */
     public List<String> checkOutConditions(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
-        // 前置检查：证券是否已到期
-        addIfFailed(failures, preCheckSecurityExpired(ctx));
+        // 通用校验（所有类型都走）
+        failures.addAll(checkCommonOut(ctx));
+        // 类型特有校验（按 categoryType 路由）
+        String categoryType = ctx.getCategoryType();
+        if (CategoryType.BOND.getCode().equals(categoryType)) {
+            failures.addAll(checkBondOut(ctx));
+        } else if (CategoryType.STOCK.getCode().equals(categoryType)) {
+            failures.addAll(checkStockOut(ctx));
+        } else if (CategoryType.FUND.getCode().equals(categoryType)) {
+            failures.addAll(checkFundOut(ctx));
+        } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
+            failures.addAll(checkCompanyOut(ctx));
+        }
+        return failures;
+    }
+
+    /**
+     * 通用调出校验（所有类型都走）
+     *
+     * <p>含池锁定、pending流程、不在池、冻结期、限制池、互斥、弹性禁投。
+     * 不含证券到期（已拆到类型特有：债券到期 checkBondOut / 股票退市 checkStockOut）。
+     */
+    private List<String> checkCommonOut(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        // 前置检查：目标池是否已锁定（最硬拦截，优先执行）
+        addIfFailed(failures, outCheckPoolLocked(ctx));
         // 前置检查：是否存在待处理流程
         addIfFailed(failures, preCheckPendingProcess(ctx));
         // 出池检查：证券是否不在来源池中
         addIfFailed(failures, outCheckSecurityNotInPool(ctx));
+        // 出池检查：是否在冻结期内（入池后N天不可调出，须在确认在池后校验）
+        addIfFailed(failures, outCheckFrozenPeriod(ctx));
         // 出池检查：是否触碰禁投池限制
         addIfFailed(failures, outCheckRestrictPool(ctx));
         // 出池检查：是否与互斥池冲突（证券当前在互斥池中）
@@ -1878,21 +1976,103 @@ public class SecurityPoolAdjustService {
         return failures;
     }
 
+    /**
+     * 债券类型特有调出校验
+     *
+     * <p>含债券到期校验（maturity_date 早于今日则禁止调出）。
+     */
+    private List<String> checkBondOut(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        // 债券到期校验
+        addIfFailed(failures, outCheckBondMaturity(ctx));
+        return failures;
+    }
+
+    /**
+     * 股票类型特有调出校验
+     *
+     * <p>含股票退市校验（delist_date 早于今日则禁止调出）。
+     */
+    private List<String> checkStockOut(AdjustCheckContext ctx) {
+        List<String> failures = new ArrayList<>();
+        // 股票退市校验
+        addIfFailed(failures, outCheckStockDelist(ctx));
+        return failures;
+    }
+
+    /** 基金类型特有调出校验（暂无，后续 P2 加基金评分） */
+    private List<String> checkFundOut(AdjustCheckContext ctx) {
+        return new ArrayList<>();
+    }
+
+    /** 主体类型特有调出校验（主体不校验到期，暂无） */
+    private List<String> checkCompanyOut(AdjustCheckContext ctx) {
+        return new ArrayList<>();
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  调库可行性校验 — 前置校验规则
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 规则：证券是否已到期
+     * 规则：债券到期（maturity_date）
      *
-     * <p>到期日（maturity_date）早于今日则视为已到期，禁止发起任何调库操作。
+     * <p>债券到期日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）。
      */
-    private String preCheckSecurityExpired(AdjustCheckContext ctx) {
+    private String inCheckBondMaturity(AdjustCheckContext ctx) {
         String maturityDate = ctx.getSecurityInfo().getMaturityDate();
         if (maturityDate != null && !maturityDate.isEmpty()) {
             String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {
-                return "证券已到期，不支持调库操作";
+                return "该债券已经到期，无法调入";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 规则：股票退市（delist_date）
+     *
+     * <p>股票摘牌日早于今日则禁止调入。对应老项目 checkInPool:956（ptype=2000 股票分支）。
+     */
+    private String inCheckStockDelist(AdjustCheckContext ctx) {
+        String delistDate = ctx.getSecurityInfo().getDelistDate();
+        if (delistDate != null && !delistDate.isEmpty()) {
+            String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            if (delistDate.compareTo(today) < 0) {
+                return "该股票已经退市，无法调入";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 规则：债券到期（maturity_date，调出）
+     *
+     * <p>债券到期日早于今日则禁止调出。对应老项目 checkOutPool 到期校验。
+     */
+    private String outCheckBondMaturity(AdjustCheckContext ctx) {
+        String maturityDate = ctx.getSecurityInfo().getMaturityDate();
+        if (maturityDate != null && !maturityDate.isEmpty()) {
+            String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            if (maturityDate.compareTo(today) < 0) {
+                return "该债券已经到期，无法调出";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 规则：股票退市（delist_date，调出）
+     *
+     * <p>股票摘牌日早于今日则禁止调出。对应老项目 checkOutPool 退市校验。
+     */
+    private String outCheckStockDelist(AdjustCheckContext ctx) {
+        String delistDate = ctx.getSecurityInfo().getDelistDate();
+        if (delistDate != null && !delistDate.isEmpty()) {
+            String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            if (delistDate.compareTo(today) < 0) {
+                return "该股票已经退市，无法调出";
             }
         }
         return null;
@@ -2080,6 +2260,168 @@ public class SecurityPoolAdjustService {
         return null;
     }
 
+    /**
+     * 规则：目标池已锁定（lock_flag=1）
+     *
+     * <p>池被锁定后不可调入，属于最硬的池级拦截，优先于其他调入校验执行。
+     */
+    private String inCheckPoolLocked(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool != null && pool.getLockFlag() != null && pool.getLockFlag() == 1) {
+            return "该池已经锁定，不能调入";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：目标池已锁定（lock_flag=1）
+     *
+     * <p>池被锁定后不可调出，属于最硬的池级拦截，优先于其他调出校验执行。
+     */
+    private String outCheckPoolLocked(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool != null && pool.getLockFlag() != null && pool.getLockFlag() == 1) {
+            return "该池已经锁定，不能调出";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：调出冻结期（frozen_period_in）
+     *
+     * <p>目标池配置了调入冻结期天数时，证券入池后 N 天内不可调出。
+     * 以 ip_pool_status.entry_time（audit_status=20）为入池时间基准，
+     * entry_time + frozenPeriodIn 天 > 当前时间则视为仍在冻结期。
+     */
+    private String outCheckFrozenPeriod(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool == null || pool.getFrozenPeriodIn() == null || pool.getFrozenPeriodIn() <= 0) {
+            return null;
+        }
+        // 取证券在目标池的入池时间
+        java.util.Date entryTime = ctx.getTargetPoolEntryTime();
+        if (entryTime == null) {
+            return null;
+        }
+        // 计算冻结期截止时间 = 入池时间 + N 天
+        long frozenMs = pool.getFrozenPeriodIn() * 24L * 60L * 60L * 1000L;
+        java.util.Date frozenDeadline = new java.util.Date(entryTime.getTime() + frozenMs);
+        if (new java.util.Date().before(frozenDeadline)) {
+            return "该证券还在投资池冻结期";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：投资品种（variety_codes）
+     *
+     * <p>目标池配置了投资品种时，证券品种（categoryType）须在配置内。
+     * categoryType 由 dict_security_type 表按 securityType 查询得到（bond/fund/stock）。
+     */
+    private String inCheckVariety(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool == null || pool.getVarietyCodes() == null || pool.getVarietyCodes().isEmpty()) {
+            return null;
+        }
+        // 查证券品种大类
+        String categoryType = securityPoolAdjustMapper.queryCategoryTypeBySecurityType(ctx.getSecurityInfo().getSecurityType());
+        // 池配置品种为 JSON 数组（如 ["bond"]），判断是否包含证券品种
+        if (categoryType == null || !pool.getVarietyCodes().contains("\"" + categoryType + "\"")) {
+            return "该证券不在[" + pool.getPoolName() + "]所设定的投资品种内";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：投资市场（market_codes）
+     *
+     * <p>目标池配置了投资市场时，证券所在市场须至少有一个在配置内。
+     * 证券市场从 windCodeSh/Sz/Nib 推导（Sh→SSE, Sz→SZSE, Nib→CIBM），
+     * 多市场证券任一市场在池配置内即可。
+     */
+    private String inCheckMarket(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool == null || pool.getMarketCodes() == null || pool.getMarketCodes().isEmpty()) {
+            return null;
+        }
+        String marketCodes = pool.getMarketCodes();
+        SecurityInfoBo sec = ctx.getSecurityInfo();
+        // 推导证券所在市场，任一在池配置内即可
+        boolean anyMatch = (sec.getWindCodeSh() != null && !sec.getWindCodeSh().isEmpty() && marketCodes.contains("\"SSE\""))
+                || (sec.getWindCodeSz() != null && !sec.getWindCodeSz().isEmpty() && marketCodes.contains("\"SZSE\""))
+                || (sec.getWindCodeNib() != null && !sec.getWindCodeNib().isEmpty() && marketCodes.contains("\"CIBM\""));
+        if (!anyMatch) {
+            return "该证券不在[" + pool.getPoolName() + "]所设定的投资市场内";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：全局禁止池（forbidden/blacklist）
+     *
+     * <p>证券当前在禁投池或黑名单中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
+     * 对应老项目 Forbiddenlastpoolid 配置。
+     */
+    private String inCheckForbiddenPool(AdjustCheckContext ctx) {
+        if (securityPoolAdjustMapper.querySecurityInForbiddenPool(ctx.getSecurityInfo().getWindCode())) {
+            return "该证券在禁止池中，不能调入";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：评级限制（grade_astrict）
+     *
+     * <p>目标池配置了评级限制时，证券评级（ratingBond）须在允许列表内。
+     * 对应老项目 checkBasisAndProductInPool:461 gradeAstrict 校验。
+     */
+    private String inCheckGradeAstrict(AdjustCheckContext ctx) {
+        InvestmentPoolBo pool = ctx.getTargetPool();
+        if (pool == null || pool.getGradeAstrict() == null || pool.getGradeAstrict().isEmpty()) {
+            return null;
+        }
+        String rating = ctx.getSecurityInfo().getRatingBond();
+        if (rating == null || rating.isEmpty()) {
+            return "该证券未设置评级，不符合目标池评级要求";
+        }
+        // 池配置允许的评级列表（逗号分隔）
+        String[] allowed = pool.getGradeAstrict().split(",");
+        boolean match = false;
+        for (String a : allowed) {
+            if (a.trim().equals(rating)) {
+                match = true;
+                break;
+            }
+        }
+        if (!match) {
+            return "证券评级" + rating + "不符合当前池的评级规则";
+        }
+        return null;
+    }
+
+    /**
+     * 规则：报告必填（in_report_restriction / out_report_restriction）
+     *
+     * <p>目标池配置了报告限制时，提交时校验报告附件：
+     * none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告。
+     * 对应老项目 rschDocMode 报告校验。在 addAdjustLog 提交阶段校验（checkAdjust 阶段无报告信息）。
+     */
+    private void checkReportRequired(SecurityPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction) {
+        if (pool == null || reportRestriction == null || reportRestriction.isEmpty() || "none".equals(reportRestriction)) {
+            return;
+        }
+        boolean hasReport = (item.getCreditReportFileIndexes() != null && !item.getCreditReportFileIndexes().isEmpty())
+                || (item.getCreditReportSourceAttachmentIds() != null && !item.getCreditReportSourceAttachmentIds().isEmpty());
+        if (!hasReport) {
+            throw new BizException("目标池[" + pool.getPoolName() + "]要求研究报告，请上传或选择报告");
+        }
+        // internal 要求内部研究报告（简化：要求 creditReportSourceAttachmentIds 非空，后续完善内部/外部区分）
+        if ("internal".equals(reportRestriction)
+                && (item.getCreditReportSourceAttachmentIds() == null || item.getCreditReportSourceAttachmentIds().isEmpty())) {
+            throw new BizException("目标池[" + pool.getPoolName() + "]要求内部研究报告，请从内部报告库选择");
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  调库可行性校验 — 私有工具方法
     // ═══════════════════════════════════════════════════════════
@@ -2116,6 +2458,14 @@ public class SecurityPoolAdjustService {
         ctx.setIssuerInObservePool(shared.isIssuerInObservePool());
         ctx.setRequestInPoolIds(shared.getRequestInPoolIds());
         ctx.setRequestOutPoolIds(shared.getRequestOutPoolIds());
+        // 调出时查询证券在目标池的入池时间，用于冻结期校验（调入时不需要）
+        if (AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
+            ctx.setTargetPoolEntryTime(securityPoolAdjustMapper.queryPoolEntryTime(
+                    shared.getSecurityInfo().getWindCode(), item.getTargetPoolId()));
+        }
+        // 查证券品种大类，用于类型特有校验路由（bond/fund/stock/company）
+        ctx.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(
+                shared.getSecurityInfo().getSecurityType()));
         return ctx;
     }
 

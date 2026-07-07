@@ -97,6 +97,13 @@ public interface ForbiddenPoolAdjustMapper {
     /** 查询目标投资池当前有效证券数量 */
     int queryPoolCurrentCount(@Param("poolId") Long poolId);
 
+    /** 查询证券在目标池的入池时间（audit_status=20），用于调出冻结期校验 */
+    java.util.Date queryPoolEntryTime(@Param("securityCode") String securityCode,
+                                      @Param("targetPoolId") Long targetPoolId);
+
+    /** 查询证券是否在全局禁止池（forbidden/blacklist，audit_status=20），用于调入禁止池校验 */
+    boolean querySecurityInForbiddenPool(@Param("securityCode") String securityCode);
+
     /** 查询各投资池当前有效证券数量 */
     List<PoolDto> queryPoolCurrentCountList();
 

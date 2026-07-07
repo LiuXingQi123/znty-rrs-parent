@@ -183,33 +183,38 @@
 - 拆分请求中调入/调出目标池集合。
 - 查证券级标志：`querySecurityHasPendingProcess`（是否有 pending 步骤）、`querySecurityPendingProcessNodeLabel`（进行中节点名）、`querySecurityInObservePool`、`queryIssuerInObservePool`。
 
-**③ 调入校验** `executeInAdjustCheck`，对每个 `adjustMode==='调入'` 项执行 `checkInConditions`，8 条规则按序，任一返回非 null 即加入 `failures`：
+**③ 调入校验** `executeInAdjustCheck`，对每个 `adjustMode==='调入'` 项执行 `checkInConditions`，11 条规则按序，任一返回非 null 即加入 `failures`：
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
-| 1 | `preCheckSecurityExpired` | 证券已到期，不支持调库（`maturity_date` 早于今日） |
-| 2 | `preCheckPendingProcess` | 证券存在进行中的调库流程（当前节点：xxx），请等待流程结束 |
-| 3 | `inCheckSecurityAlreadyInPool` | 证券已在目标投资池中，无需重复调入 |
-| 4 | `inCheckPoolCapacity` | 目标投资池已达持仓上限（N），无法调入（`maxCapacity>0` 且 `currentCount>=maxCapacity`） |
-| 5 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系） |
-| 6 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
-| 7 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
-| 8 | `inCheckElasticPool` | 证券在调入弹性禁投池中，无法操作：xxx（`in_soft_restrict`） |
+| 1 | `inCheckPoolLocked` | 该池已经锁定，不能调入（`lock_flag=1`，最硬拦截优先执行） |
+| 2 | `inCheckVariety` | 该证券不在[xxx]所设定的投资品种内（`variety_codes` 不含证券 categoryType） |
+| 3 | `inCheckMarket` | 该证券不在[xxx]所设定的投资市场内（`market_codes` 不含证券所在市场） |
+| 4 | `preCheckSecurityExpired` | 证券已到期，不支持调库（`maturity_date` 早于今日） |
+| 5 | `preCheckPendingProcess` | 证券存在进行中的调库流程（当前节点：xxx），请等待流程结束 |
+| 6 | `inCheckSecurityAlreadyInPool` | 证券已在目标投资池中，无需重复调入 |
+| 7 | `inCheckPoolCapacity` | 目标投资池已达持仓上限（N），无法调入（`maxCapacity>0` 且 `currentCount>=maxCapacity`） |
+| 8 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系） |
+| 9 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
+| 10 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
+| 11 | `inCheckElasticPool` | 证券在调入弹性禁投池中，无法操作：xxx（`in_soft_restrict`） |
 
 - **自动追加联动调入项**：取目标池 `in_linked` 关系，对每个联动池若未覆盖则 `buildAutoResultItem(linkedId,'调入','linkage')`，并 `inheritManualItemFailure`（手工项失败则阻断联动项）。
 - **自动追加互斥配套调出项**：取目标池 `in_mutex` 关系，若证券当前在互斥池中则 `buildAutoResultItem(mutexId,'调出','mutex')`。
 
-**④ 调出校验** `executeOutAdjustCheck`，对每个 `adjustMode==='调出'` 项执行 `checkOutConditions`，7 条规则：
+**④ 调出校验** `executeOutAdjustCheck`，对每个 `adjustMode==='调出'` 项执行 `checkOutConditions`，9 条规则：
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
-| 1 | `preCheckSecurityExpired` | 证券已到期 |
-| 2 | `preCheckPendingProcess` | 存在进行中的调库流程 |
-| 3 | `outCheckSecurityNotInPool` | 证券当前不在该投资池中，无法调出 |
-| 4 | `outCheckRestrictPool` | 证券在调出限制池中（`out_restrict`） |
-| 5 | `outCheckMutexPool` | 证券在调出互斥池中（`out_mutex`） |
-| 6 | `outCheckMutexConflict` | 与以下互斥池不可同时调出 |
-| 7 | `outCheckElasticPool` | 证券在调出弹性禁投池中（`out_soft_restrict`） |
+| 1 | `outCheckPoolLocked` | 该池已经锁定，不能调出（`lock_flag=1`，最硬拦截优先执行） |
+| 2 | `preCheckSecurityExpired` | 证券已到期 |
+| 3 | `preCheckPendingProcess` | 存在进行中的调库流程 |
+| 4 | `outCheckSecurityNotInPool` | 证券当前不在该投资池中，无法调出 |
+| 5 | `outCheckFrozenPeriod` | 该证券还在投资池冻结期（`frozen_period_in` 天内，入池时间+N天 > 当前时间） |
+| 6 | `outCheckRestrictPool` | 证券在调出限制池中（`out_restrict`） |
+| 7 | `outCheckMutexPool` | 证券在调出互斥池中（`out_mutex`） |
+| 8 | `outCheckMutexConflict` | 与以下互斥池不可同时调出 |
+| 9 | `outCheckElasticPool` | 证券在调出弹性禁投池中（`out_soft_restrict`） |
 
 调出方向自动追加 `out_linked` 联动调出项。
 

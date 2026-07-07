@@ -100,6 +100,15 @@ public class InvestmentPoolBo {
     /** 最大上限数量 */
     private Long maxCapacity;
 
+    /** 池锁定标志：0=未锁定 / 1=已锁定（锁定后不可调入/调出），空视为未锁定 */
+    private Integer lockFlag;
+
+    /** 调入冻结期天数：入池后N天内不可调出，空表示不限制 */
+    private Integer frozenPeriodIn;
+
+    /** 评级限制：允许的证券评级列表（逗号分隔，如 AAA,AA+），空表示不限制 */
+    private String gradeAstrict;
+
     /** 投资池外部排序 */
     private Integer outerSort;
 

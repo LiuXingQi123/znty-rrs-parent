@@ -82,6 +82,8 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void checkInConditionsShouldShowPendingProcessNodeLabel() {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(new SecurityInfoBo());
         ctx.setHasPendingProcess(true);
@@ -94,6 +96,213 @@ public class SecurityPoolAdjustServiceStepTest {
         List<String> failures = service.checkInConditions(ctx);
 
         assertThat(failures).contains("证券存在进行中的调库流程（当前节点：研究员B复核），请等待流程结束后再发起调库");
+    }
+
+    /** 验证目标池已锁定时调入校验应失败。 */
+    @Test
+    public void checkInConditionsShouldFailWhenPoolLocked() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        // 构建已锁定目标池
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        pool.setLockFlag(1);
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(new SecurityInfoBo());
+        ctx.setTargetPool(pool);
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("该池已经锁定，不能调入");
+    }
+
+    /** 验证目标池配置冻结期且证券仍在冻结期内时调出校验应失败。 */
+    @Test
+    public void checkOutConditionsShouldFailWhenFrozen() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        // 构建配置30天冻结期的目标池
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        pool.setFrozenPeriodIn(30);
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(new SecurityInfoBo());
+        ctx.setTargetPool(pool);
+        // 证券当前在目标池中（调出前置）
+        Set<Long> currentPoolIds = new HashSet<>();
+        currentPoolIds.add(1L);
+        ctx.setCurrentPoolIds(currentPoolIds);
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+        // 入池时间为当前时间，仍在30天冻结期内
+        ctx.setTargetPoolEntryTime(new java.util.Date());
+
+        List<String> failures = service.checkOutConditions(ctx);
+
+        assertThat(failures).contains("该证券还在投资池冻结期");
+    }
+
+    /** 验证证券品种不在目标池配置的投资品种内时调入校验应失败。 */
+    @Test
+    public void checkInConditionsShouldFailWhenVarietyMismatch() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        // 目标池仅允许 bond，证券品种为 fund
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        pool.setPoolName("信用债大库");
+        pool.setVarietyCodes("[\"bond\"]");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("fund_type");
+        when(mapper.queryCategoryTypeBySecurityType("fund_type")).thenReturn("fund");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(pool);
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("该证券不在[信用债大库]所设定的投资品种内");
+    }
+
+    /** 验证证券市场不在目标池配置的投资市场内时调入校验应失败。 */
+    @Test
+    public void checkInConditionsShouldFailWhenMarketMismatch() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        // 目标池仅允许 SSE（沪市），证券仅在深市
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        pool.setPoolName("沪市池");
+        pool.setMarketCodes("[\"SSE\"]");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCodeSz("123.SZ");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(pool);
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("该证券不在[沪市池]所设定的投资市场内");
+    }
+
+    /** 验证债券已到期时调入校验应失败（类型特有 checkBondIn）。 */
+    @Test
+    public void checkInConditionsShouldFailWhenBondMaturity() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setMaturityDate("2020-01-01");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(pool);
+        ctx.setCategoryType("bond");
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("该债券已经到期，无法调入");
+    }
+
+    /** 验证股票已退市时调入校验应失败（类型特有 checkStockIn）。 */
+    @Test
+    public void checkInConditionsShouldFailWhenStockDelist() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setDelistDate("2020-01-01");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(pool);
+        ctx.setCategoryType("stock");
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("该股票已经退市，无法调入");
+    }
+
+    /** 验证证券在全局禁止池时调入校验应失败。 */
+    @Test
+    public void checkInConditionsShouldFailWhenInForbiddenPool() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("110010123");
+        when(mapper.querySecurityInForbiddenPool("110010123")).thenReturn(true);
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(pool);
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("该证券在禁止池中，不能调入");
+    }
+
+    /** 验证证券评级不符合目标池评级限制时调入校验应失败。 */
+    @Test
+    public void checkInConditionsShouldFailWhenGradeMismatch() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        // 目标池仅允许 AAA/AA+，证券评级为 A
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        pool.setGradeAstrict("AAA,AA+");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setRatingBond("A");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(pool);
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("证券评级A不符合当前池的评级规则");
     }
 
     /** 验证 queryAdjustPoolListShouldSkipPermissionFilterForAdmin 测试场景。 */
