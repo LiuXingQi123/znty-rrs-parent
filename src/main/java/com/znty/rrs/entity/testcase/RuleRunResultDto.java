@@ -29,10 +29,10 @@ public class RuleRunResultDto {
     /** 错误信息（执行失败时填充） */
     private String errorMessage;
     /** 开始时间（yyyy-MM-dd HH:mm:ss 格式，历史查询时有值） */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date startTime;
     /** 结束时间（yyyy-MM-dd HH:mm:ss 格式，历史查询时有值） */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date finishTime;
     /** 步骤日志列表，每项含 time/type/msg 键 */
     private List<Map<String, Object>> logs = new ArrayList<>();

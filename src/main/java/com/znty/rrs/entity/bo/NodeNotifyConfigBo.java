@@ -24,10 +24,10 @@ public class NodeNotifyConfigBo {
     private String notifyTpl;
     /** 通知备注 */
     private String notifyRemark;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     /** 创建时间 */
     private Date crteTime;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     /** 更新时间 */
     private Date updtTime;
 }

@@ -27,6 +27,6 @@ public class TestCaseDto {
     /** 最近一次执行输出 */
     private String lastOutput;
     /** 最近一次执行时间（格式化） */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date lastRunTime;
 }

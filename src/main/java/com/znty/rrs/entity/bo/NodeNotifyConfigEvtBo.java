@@ -26,15 +26,15 @@ public class NodeNotifyConfigEvtBo {
     private String notifyTpl;
     /** 通知备注 */
     private String notifyRemark;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     /** 创建时间 */
     private Date crteTime;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     /** 更新时间 */
     private Date updtTime;
     /** 操作人 ID */
     private String opterId;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     /** 操作时间 */
     private Date optTime;
     /** 操作类型 */

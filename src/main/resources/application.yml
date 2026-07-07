@@ -19,6 +19,11 @@ spring:
       # 单次请求总大小最大 200MB（含多文件）
       max-request-size: 200MB
 
+  # JSON 日期时间序列化配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
 server:
   port: 18090
 

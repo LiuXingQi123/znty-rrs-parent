@@ -34,10 +34,10 @@ public class FlowDto {
     /** 创建人 ID */
     private Long createdBy;
     /** 创建时间 */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date crteTime;
     /** 更新时间 */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date updtTime;
 
     // ===== 保存/发布结果 =====
@@ -48,7 +48,7 @@ public class FlowDto {
     /** 版本序号 */
     private Integer verNum;
     /** 发布时间 */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date publishedTime;
 
     // ===== 详情 —— 草稿/画布数据 =====

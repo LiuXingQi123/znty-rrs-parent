@@ -22,10 +22,10 @@ public class VersionDto {
     private String publishNote;
     /** 发布人 */
     private Long publishedBy;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     /** 发布时间 */
     private Date publishedTime;
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     /** 创建时间 */
     private Date crteTime;
 
