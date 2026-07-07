@@ -32,6 +32,6 @@ public class CommonController {
     @PostMapping("/queryPoolTreeList")
     public ApiResponse<List<PoolTreeDto>> queryPoolTreeList(
             @RequestBody CommonReq req) {
-        return ApiResponse.success(commonService.queryPoolTreeList());
+        return ApiResponse.success(commonService.queryPoolTreeList(req));
     }
 }

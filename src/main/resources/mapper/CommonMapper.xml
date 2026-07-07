@@ -10,25 +10,52 @@
             SELECT id
                    ,parent_id
                    ,pool_name
+                   ,pool_type
                    ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
                    ,CAST(LPAD(COALESCE(outer_sort, 0), 10, '0') AS CHAR(2000)) AS sort_path
             FROM ip_investment_pool
             WHERE is_deleted = 0
               AND parent_id IS NULL
+            <if test="includePoolTypes != null and includePoolTypes.size() > 0">
+              AND pool_type IN
+                <foreach collection="includePoolTypes" item="poolType" open="(" separator="," close=")">
+                    #{poolType}
+                </foreach>
+            </if>
+            <if test="excludePoolTypes != null and excludePoolTypes.size() > 0">
+              AND pool_type NOT IN
+                <foreach collection="excludePoolTypes" item="poolType" open="(" separator="," close=")">
+                    #{poolType}
+                </foreach>
+            </if>
             UNION ALL
             SELECT child.id
                    ,child.parent_id
                    ,child.pool_name
+                   ,child.pool_type
                    ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
                    ,CONCAT(parent.sort_path, '/', LPAD(COALESCE(child.inner_sort, 0), 10, '0')) AS sort_path
             FROM ip_investment_pool child
             INNER JOIN pool_tree parent ON parent.id = child.parent_id
             WHERE child.is_deleted = 0
+            <if test="includePoolTypes != null and includePoolTypes.size() > 0">
+              AND child.pool_type IN
+                <foreach collection="includePoolTypes" item="poolType" open="(" separator="," close=")">
+                    #{poolType}
+                </foreach>
+            </if>
+            <if test="excludePoolTypes != null and excludePoolTypes.size() > 0">
+              AND child.pool_type NOT IN
+                <foreach collection="excludePoolTypes" item="poolType" open="(" separator="," close=")">
+                    #{poolType}
+                </foreach>
+            </if>
         )
         SELECT id
                ,parent_id
                ,pool_name
                ,pool_full_name
+               ,pool_type
         FROM pool_tree
         ORDER BY sort_path ASC
                  ,id ASC

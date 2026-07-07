@@ -16,6 +16,7 @@
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
+          AND (p.pool_type IS NULL OR p.pool_type NOT IN ('crmw', 'forbidden'))
         <if test="poolIds != null and poolIds.size() > 0">
           AND p.id IN
             <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">

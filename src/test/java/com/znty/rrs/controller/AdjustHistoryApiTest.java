@@ -29,6 +29,10 @@ public class AdjustHistoryApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldSupportAdjustHistoryQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/adjustHistory/queryAdjustHistoryPage", "{}");
+        assertPostSuccess(
+                mockMvc,
+                "/api/v1/adjustHistory/queryAdjustHistoryPage",
+                "{\"poolIds\":[2,3],\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/adjustHistory/querySecurityTypeList", "{}");
     }
 }

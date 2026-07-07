@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.entity.common.CommonReq;
 import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.entity.common.PoolTreeDto;
 import org.springframework.stereotype.Service;
@@ -20,9 +21,10 @@ public class CommonService {
     /**
      * 查询投资池树节点列表
      *
+     * @param req 公共查询请求
      * @return 投资池树节点列表，poolName 为节点名称，poolFullName 为全路径名称
      */
-    public List<PoolTreeDto> queryPoolTreeList() {
-        return commonMapper.queryPoolTreeList();
+    public List<PoolTreeDto> queryPoolTreeList(CommonReq req) {
+        return commonMapper.queryPoolTreeList(req);
     }
 }

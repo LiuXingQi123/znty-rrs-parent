@@ -40,6 +40,7 @@
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
+            AND (p.pool_type IS NULL OR p.pool_type NOT IN ('crmw', 'forbidden'))
             <if test="securityStatus == 'active'">
                 AND bi.maturity_date &gt;= CURDATE()
             </if>

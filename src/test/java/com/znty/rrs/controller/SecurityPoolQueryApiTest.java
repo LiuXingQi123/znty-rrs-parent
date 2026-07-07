@@ -29,6 +29,10 @@ public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldSupportSecurityPoolQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityPoolPage", "{}");
+        assertPostSuccess(
+                mockMvc,
+                "/api/v1/securityPoolQuery/querySecurityPoolPage",
+                "{\"poolIds\":[2,3],\"securityStatus\":\"active\",\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityTypeList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityStatusList", "{}");
     }

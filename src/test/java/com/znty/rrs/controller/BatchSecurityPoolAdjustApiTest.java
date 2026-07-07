@@ -34,7 +34,7 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchSecurityPoolAdjust/queryPoolPage",
-                "{\"currentUserId\":\"1\",\"pageIndex\":1,\"pageSize\":10}");
+                "{\"currentUserId\":\"1\",\"poolIds\":[2,3],\"pageIndex\":1,\"pageSize\":10}");
     }
 
     /** 验证批量调整候选证券分页接口 */

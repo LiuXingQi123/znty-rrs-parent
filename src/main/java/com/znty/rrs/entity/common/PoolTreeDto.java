@@ -19,4 +19,7 @@ public class PoolTreeDto {
 
     /** 投资池全路径名称 */
     private String poolFullName;
+
+    /** 投资池类型 */
+    private String poolType;
 }

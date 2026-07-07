@@ -29,5 +29,9 @@ public class CommonApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldQueryCommonPoolTreeList() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/common/queryPoolTreeList", "{}");
+        assertPostSuccess(
+                mockMvc,
+                "/api/v1/common/queryPoolTreeList",
+                "{\"excludePoolTypes\":[\"crmw\",\"forbidden\"]}");
     }
 }

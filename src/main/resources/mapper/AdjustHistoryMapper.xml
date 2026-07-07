@@ -28,6 +28,7 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type AND dst.is_deleted = 0
         <where>
             al.is_deleted = 0
+            AND (al.pool_type IS NULL OR al.pool_type NOT IN ('crmw', 'forbidden'))
             <if test="poolIds != null and poolIds.size() > 0">
                 AND al.target_pool_id IN
                 <foreach collection="poolIds" item="id" open="(" separator="," close=")">
