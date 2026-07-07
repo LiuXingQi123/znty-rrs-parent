@@ -233,7 +233,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 - `adjust_type`：手工调整/联动调整/互斥调整/关联调整/Excel导入/手动批量调整。
 - `adjust_mode`：调入/调出。
 - `adjust_batch_no`：同组调库记录共用。
-- `audit_status`：`-1`无效调整 / `00`已提交待审核 / `10`审核通过待审批 / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。
+- `audit_status`：`-1`无效调整 / `00`流程中（待审批/审批中） / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。
 - `flow_id/flow_key/flow_type`：流程快照。
 
 ### 5.3 `ip_pool_status`（投资池当前状态表）

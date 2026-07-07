@@ -13,7 +13,6 @@
 | 07 | 证券池查询 | `security_pool_query.html` | [07-security-pool-query.md](07-security-pool-query.md) | `SecurityPoolQueryApiTest` |
 | 08 | 禁投池查询 | `forbidden_pool_query.html` | [08-forbidden-pool-query.md](08-forbidden-pool-query.md) | `ForbiddenPoolQueryApiTest` |
 | 09 | 主体池查询 | `company_pool_query.html` | [09-company-pool-query.md](09-company-pool-query.md) | `CompanyPoolQueryApiTest` |
-| 10 | 证券池调整历史 | `security_pool_adjust_history.html` | [10-adjust-history.md](10-adjust-history.md) | `AdjustHistoryApiTest` |
 | 11 | 证券池调库详情 | `security_pool_adjust_detail.html` | [11-security-pool-adjust-detail.md](11-security-pool-adjust-detail.md) | `SecurityPoolAdjustDetailApiTest` |
 | 12 | 证券池批量调整（批量调入/调出） | `batch_security_pool_adjust.html` | [12-batch-security-pool-adjust.md](12-batch-security-pool-adjust.md) | `BatchSecurityPoolAdjustApiTest` |
 | 13 | 禁投池历史 | `forbidden_pool_history.html` | [13-forbidden-pool-history.md](13-forbidden-pool-history.md) | `ForbiddenPoolHistoryApiTest` |
@@ -46,7 +45,7 @@
 
 > **三类调库同构说明**：证券池调库（[04]/[05]/[11]）、禁投池调整（[15]/[16]/[17]，主体级）、CRMW 池调库（[19]/[20]/[21]，凭证级）在校验规则、流程快照、审批流转、`audit_status` 状态枚举上完全同构。差异：①操作对象分别为证券 / 主体 / CRMW 凭证+标的证券；②落地表分别为 `ip_pool_status`（`pool_type` 区分）/ `ip_pool_status`（主体级 + `syncCompanyBonds` 同步债券）/ `ip_pool_status_crmw`（独立表，`pool_type='crmw'`）；③批次号前缀 `BOND` / `BOND` / `CRMW`。
 
-核心状态枚举（`ip_adjust_log.audit_status`，三类调库通用）：`-1`无效 / `00`待审核 / `10`审核通过待审批 / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。仅 `20` 落地池状态。
+核心状态枚举（`ip_adjust_log.audit_status`，三类调库通用）：`-1`无效 / `00`流程中（待审批/审批中） / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。仅 `20` 落地池状态。
 
 ## 通用业务约束
 

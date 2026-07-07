@@ -36,7 +36,7 @@ public interface CrmwPoolAdjustMapper {
     /** 根据证券代码查询证券基础信息实体 */
     SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
 
-    /** 新增调库记录（非直通流程，audit_status='00' 已提交待审核） */
+    /** 新增调库记录（非直通流程，audit_status='00' 流程中） */
     int addAdjustLog(IpAdjustLogBo bo);
 
     /** 新增入池状态记录（直通流程，audit_status='20' 即时生效） */

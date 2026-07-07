@@ -43,7 +43,7 @@ public class AdjustHistoryReq extends PageRequest {
     /** 调整方向：调入 / 调出 */
     private String adjustMode;
 
-    /** 审核状态：-1/00/10/11/20/21/32/99 */
+    /** 审核状态：-1/00/11/20/21/32/99 */
     private String auditStatus;
 
     /** 仅查当前用户的调整记录 */

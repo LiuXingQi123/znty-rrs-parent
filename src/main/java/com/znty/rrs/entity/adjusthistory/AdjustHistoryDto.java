@@ -47,7 +47,7 @@ public class AdjustHistoryDto {
     /** 投资池类型 */
     private String poolType;
 
-    /** 审核状态码（-1/00/10/11/20/21/32/99） */
+    /** 审核状态码（-1/00/11/20/21/32/99） */
     private String auditStatus;
 
     /** 调整人名称 */

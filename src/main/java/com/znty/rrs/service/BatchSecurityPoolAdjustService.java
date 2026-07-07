@@ -828,7 +828,7 @@ public class BatchSecurityPoolAdjustService {
                 logBo.setAdjustLogId(logBo.getId());
                 securityPoolAdjustMapper.addPoolStatus(logBo);
             } else {
-                // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
+                // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
                 bo.setAdjustBatchNo(adjustBatchNo);
@@ -915,7 +915,7 @@ public class BatchSecurityPoolAdjustService {
                 securityPoolAdjustMapper.deletePoolStatusSoft(
                         req.getSecurityCode(), item.getTargetPoolId());
             } else {
-                // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
+                // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
                 bo.setAdjustBatchNo(adjustBatchNo);
@@ -3028,7 +3028,7 @@ public class BatchSecurityPoolAdjustService {
         bo.setFlowId(flowSource != null ? flowSource.getFlowId() : item.getFlowId());
         bo.setFlowKey(flowSource != null ? flowSource.getFlowKey() : item.getFlowKey());
         bo.setFlowType(flowSource != null ? flowSource.getFlowType() : item.getFlowType());
-        bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());  // 初始状态：已提交待审核
+        bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());  // 初始状态：流程中
         bo.setAdjusterId(req.getAdjusterId());
         bo.setAdjusterName(req.getAdjusterName());
         bo.setAdjustReason(req.getAdjustReason());

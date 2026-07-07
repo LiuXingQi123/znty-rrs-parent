@@ -4,10 +4,8 @@ package com.znty.rrs.common.enums;
 public enum AuditStatus {
     /** 无效调整 */
     INVALID("-1"),
-    /** 已提交待审核 */
+    /** 流程中（别名：待审批 / 审批中） */
     SUBMITTED("00"),
-    /** 审核通过待审批 */
-    REVIEWED("10"),
     /** 驳回待修改 */
     REJECT_MODIFY("11"),
     /** 审批通过 */

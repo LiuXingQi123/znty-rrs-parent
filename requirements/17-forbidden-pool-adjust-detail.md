@@ -97,7 +97,7 @@ view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip
 
 详情页本身不驱动状态流转。view 模式展示的 `audit_status`/`step_status` 由 [15] 申请与 [16] 审批写入。详情页 adjust 模式提交后，新记录初始为 `00`（非直通）或 `20`（直通，含 `syncCompanyBondsOnDirect`）。
 
-`audit_status` 枚举与 [15]/[16] 完全一致（-1/00/10/11/20/21/32/99）。`queryAdjustLogList` 无批次参数时排除终态 `-1/20/21/99`，仅展示进行中（`00/10/11/32`）记录。
+`audit_status` 枚举与 [15]/[16] 完全一致（-1/00/11/20/21/32/99）。`queryAdjustLogList` 无批次参数时排除终态 `-1/20/21/99`，仅展示进行中（`00/11/32`）记录。
 
 ---
 

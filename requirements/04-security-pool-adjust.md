@@ -198,7 +198,6 @@
 | 7 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系） |
 | 8 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
 | 9 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
-| 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，无法操作：xxx（`in_soft_restrict`） |
 | 11 | `inCheckForbiddenPool` | 证券在全局禁止池中，不能调入：xxx（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
 | 12 | `inCheckGradeAstrict` | 证券评级A不符合当前池的评级规则（池 `grade_astrict` 配置允许评级列表逗号分隔，如 `AAA,AA+`，证券 `ratingBond` 须在列表内） |
 | 13 | `inCheckIndustry` | 请选择正确的行业;（池 `industry_code` 非空且 `industry_exponent=0` 时，证券 `industry_name` 须等于池配置值；`industry_exponent!=0` 行业指数模式跳过。当前用名称精确匹配，老项目用编码前缀层级匹配） |
@@ -383,8 +382,7 @@
 | code | 名称 | 含义 |
 |---|---|---|
 | -1 | 无效调整 | 批量校验不通过，操作中止，流程未正式发起 |
-| 00 | 已提交待审核 | 已提交，等待审核人处理 |
-| 10 | 审核通过待审批 | 审核通过，等待审批人处理 |
+| 00 | 流程中 | 待审批 / 审批中，等待后续流程节点处理 |
 | 11 | 驳回待修改 | 一级审核驳回，发起人可修改后重新提交 |
 | 20 | 审批通过 | 二级审批通过，证券已入池/已生效（`ip_pool_status` 即时落地） |
 | 21 | 审批驳回 | 二级审批驳回，流程终止 |
@@ -416,7 +414,7 @@
 ## 8. 验收标准
 
 - 提交成功后主记录、从属记录、批次号和初始步骤一致。
-- 直通流程即时入池；非直通流程进入待审核。
+- 直通流程即时入池；非直通流程进入流程中。
 - `SecurityPoolAdjustApiTest` 覆盖查询、校验、提交和追踪业务线。
 
 ## 9. 关键源码索引

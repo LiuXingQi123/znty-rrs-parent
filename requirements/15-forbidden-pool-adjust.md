@@ -234,8 +234,7 @@ syncCompanyBondsOnDirect(companyLog):
 | code | 名称 | 含义 |
 |---|---|---|
 | -1 | 无效调整 | 批量校验不通过 |
-| 00 | 已提交待审核 | 非直通流程提交 |
-| 10 | 审核通过待审批 | 复核节点 approve |
+| 00 | 流程中 | 非直通流程提交 |
 | 11 | 驳回待修改 | 复核节点 reject |
 | 20 | 审批通过 | 直通 / 审批通过，`ip_pool_status` 即时落地 |
 | 21 | 审批驳回 | 审批节点 reject |
@@ -270,7 +269,7 @@ syncCompanyBondsOnDirect(companyLog):
 ## 8. 验收标准
 
 - 提交成功后主记录、从属记录、批次号和初始步骤一致。
-- 直通流程即时入池并同步旗下债券；非直通流程进入待审核。
+- 直通流程即时入池并同步旗下债券；非直通流程进入流程中。
 - 手工项目标池必须为 15/16/17，否则校验拦截。
 - 仅 `audit_status='20'` 落地 `ip_pool_status` 并触发债券同步。
 - `ForbiddenPoolAdjustApiTest` 覆盖查询、校验、提交和债券同步业务线。

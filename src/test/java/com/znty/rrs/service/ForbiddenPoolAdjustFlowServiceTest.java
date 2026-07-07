@@ -1,13 +1,19 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.entity.bo.FlowEdgeBo;
+import com.znty.rrs.entity.bo.FlowNodeBo;
+import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.securitypooladjustflow.SecurityPoolAdjustAuditReq;
+import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.ForbiddenPoolAdjustMapper;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -65,6 +71,113 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         assertThat(autoLogCaptor.getValue().getAdjustType()).isEqualTo("自动调整");
         assertThat(autoLogCaptor.getValue().getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
         verify(mapper, never()).addAdjustStep(any(IpAdjustStepBo.class));
+    }
+
+    /** 验证中间审核节点通过后仍保持流程中状态。 */
+    @Test
+    public void submitAdjustAuditShouldKeepProcessingStatusForMiddleApprovalNode() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        // 构建流程审批服务实例测试数据
+        ForbiddenPoolAdjustFlowService service = buildService(mapper, flowMapper);
+        // 构建部门负责人审核节点测试数据
+        IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
+        step.setApprovalStrategy("preempt");
+        step.setNodeLabel("部门负责人审核");
+        // 构建审批请求测试数据
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "3", "研究员2", "同意");
+        when(mapper.queryAdjustStepById(10L)).thenReturn(step);
+        when(mapper.editAdjustStepProcess(10L, "approve", "approve", "同意")).thenReturn(1);
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00", "2")));
+        // 构建当前审核节点测试数据
+        FlowNodeBo currentNode = buildFlowNode(10103L, "n3", "approval", "部门负责人审核");
+        // 构建后续审核节点测试数据
+        FlowNodeBo nextNode = buildFlowNode(10104L, "n4", "approval", "风控负责人审核");
+        // 构建通过流转连线测试数据
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "approve");
+        FlowVersionBo version = new FlowVersionBo();
+        version.setId(1L);
+        when(flowMapper.queryFlowNodeById(10103L)).thenReturn(currentNode);
+        when(flowMapper.queryFlowVersionById(1L)).thenReturn(version);
+        when(flowMapper.queryFlowNodeListByVersionId(1L)).thenReturn(Arrays.asList(currentNode, nextNode));
+        when(flowMapper.queryFlowEdgeListByVersionId(1L)).thenReturn(Collections.singletonList(edge));
+        when(flowMapper.queryCondRuleListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalConfigListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(Collections.emptyList());
+
+        service.submitAdjustAudit(req);
+
+        verify(mapper).editAdjustLogAuditStatus(1L, "BATCH001", "00");
+        verify(mapper, never()).editAdjustLogAuditStatus(1L, "BATCH001", "20");
+    }
+
+    /** 构建流程审批服务实例测试数据。 */
+    private ForbiddenPoolAdjustFlowService buildService(ForbiddenPoolAdjustMapper mapper, FlowMapper flowMapper) {
+        ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
+        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
+        return service;
+    }
+
+    /** 构建审批请求测试数据。 */
+    private SecurityPoolAdjustAuditReq buildReq(Long stepId, String handlerId, String handlerName, String comment) {
+        SecurityPoolAdjustAuditReq req = new SecurityPoolAdjustAuditReq();
+        req.setStepId(stepId);
+        req.setAdjustLogId(1L);
+        req.setAdjustBatchNo("BATCH001");
+        req.setProcessAction("approve");
+        req.setProcessComment(comment);
+        req.setHandlerId(handlerId);
+        req.setHandlerName(handlerName);
+        return req;
+    }
+
+    /** 构建待处理流程步骤测试数据。 */
+    private IpAdjustStepBo buildPendingStep(Long id, String handlerId, String handlerName) {
+        IpAdjustStepBo step = new IpAdjustStepBo();
+        step.setId(id);
+        step.setAdjustLogId(1L);
+        step.setAdjustBatchNo("BATCH001");
+        step.setFlowNodeId(10103L);
+        step.setNodeLabel("研究员B复核");
+        step.setNodeType("approval");
+        step.setApprovalStrategy("all");
+        step.setStepStatus("pending");
+        step.setHandlerId(handlerId);
+        step.setHandlerName(handlerName);
+        return step;
+    }
+
+    /** 构建流程节点测试数据。 */
+    private FlowNodeBo buildFlowNode(Long id, String nodeId, String nodeType, String label) {
+        FlowNodeBo node = new FlowNodeBo();
+        node.setId(id);
+        node.setVersionId(1L);
+        node.setFlowId(101L);
+        node.setNodeId(nodeId);
+        node.setNodeType(nodeType);
+        node.setLabel(label);
+        node.setSortOrder(1);
+        return node;
+    }
+
+    /** 构建流程连线测试数据。 */
+    private FlowEdgeBo buildFlowEdge(Long fromNodeId, Long toNodeId, String routeAction) {
+        FlowEdgeBo edge = new FlowEdgeBo();
+        edge.setFromNodeId(fromNodeId);
+        edge.setToNodeId(toNodeId);
+        edge.setRouteAction(routeAction);
+        return edge;
+    }
+
+    /** 构建调库日志测试数据。 */
+    private IpAdjustLogBo buildLog(String auditStatus, String adjusterId) {
+        IpAdjustLogBo log = new IpAdjustLogBo();
+        log.setAuditStatus(auditStatus);
+        log.setAdjusterId(adjusterId);
+        return log;
     }
 
     /** 构建主体调入日志。 */

@@ -271,23 +271,23 @@ public class CrmwPoolAdjustFlowService {
             return buildAuditDto(step, currentAuditStatus, false, false, "当前会签节点仍有待处理人员");
         }
 
+        // 查询当前调库记录审核状态
+        String currentAuditStatus = queryCurrentAuditStatus(step);
         // 构建当前流程版本快照
         FlowSnapshot snapshot = buildFlowSnapshot(step.getFlowNodeId());
         FlowNodeBo processingNode = snapshot != null ? snapshot.getNodeMap().get(step.getFlowNodeId()) : null;
-        // 根据本次处理的流程节点和审批动作解析调库记录状态，不能使用下一步新创建节点
-        String auditStatus = resolveProcessingNodeAuditStatus(processingNode, req.getProcessAction());
-        crmwPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), auditStatus);
-
-        // 判断当前节点是否已经终止流程
-        if (isTerminalByCurrentNode(processingNode, req.getProcessAction())) {
-            // 终止流程时按流程定义继续记录结束节点
-            boolean endStepCreated = createTerminalEndStep(step, snapshot, processingNode, req.getProcessAction());
-            // 构建审批处理返回对象
-            return buildAuditDto(step, auditStatus, true, endStepCreated, "审批流程已结束");
-        }
 
         // 推进到下一可处理节点
         FlowAdvanceResult advanceResult = advanceToNextAvailableStep(step, snapshot, processingNode, req.getProcessAction());
+        if (ProcessAction.REJECT.getCode().equals(req.getProcessAction())) {
+            // 根据终止前状态解析驳回终态
+            String auditStatus = advanceResult.finished ? resolveTerminalRejectAuditStatus(currentAuditStatus)
+                    : AuditStatus.REJECT_MODIFY.getCode();
+            crmwPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), auditStatus);
+            // 构建驳回处理返回对象
+            return buildAuditDto(step, auditStatus, advanceResult.finished, advanceResult.nextStepCreated,
+                    advanceResult.finished ? "审批流程已结束" : "审批已驳回，已流转到修改步骤");
+        }
 
         if (advanceResult.finished) {
             // 落地同批次调库结果
@@ -296,8 +296,9 @@ public class CrmwPoolAdjustFlowService {
             return buildAuditDto(step, AuditStatus.APPROVED.getCode(), true, advanceResult.nextStepCreated, "审批已通过，调库结果已生效");
         }
 
+        crmwPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.SUBMITTED.getCode());
         // 构建审批处理返回对象
-        return buildAuditDto(step, auditStatus, false, advanceResult.nextStepCreated, "审批已处理，已流转到下一步骤");
+        return buildAuditDto(step, AuditStatus.SUBMITTED.getCode(), false, advanceResult.nextStepCreated, "审批已处理，已流转到下一步骤");
     }
 
     /**
@@ -378,7 +379,7 @@ public class CrmwPoolAdjustFlowService {
             NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(nextNode.getId());
             int sortOrder = nextNode.getSortOrder() != null ? nextNode.getSortOrder() : 1;
 
-            // 判断是否为自动审批节点
+            // 判断是否为自动处理节点
             if (isAutoApprovalNode(nextNode)) {
                 // O32 自动审批节点直接记录为自动完成，并继续流转到结束节点
                 insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
@@ -415,40 +416,6 @@ public class CrmwPoolAdjustFlowService {
 
         result.finished = true;
         return result;
-    }
-
-    /**
-     * 终止流程时创建流程定义中的结束节点步骤。
-     */
-    private boolean createTerminalEndStep(IpAdjustStepBo step, FlowSnapshot snapshot,
-                                          FlowNodeBo currentNode, String processAction) {
-        // 判断当前节点是否为修改节点
-        boolean modifyNode = isModifyNode(currentNode);
-        // 判断当前节点是否为审批节点
-        boolean approveNode = isApproveNode(currentNode);
-        if (snapshot == null || currentNode == null || !ProcessAction.REJECT.getCode().equals(processAction)
-                || (!modifyNode && !approveNode)) {
-            return false;
-        }
-        Date now = new Date();
-        // 按当前审批动作查找下一节点
-        FlowNodeBo nextNode = findNextNode(snapshot, currentNode, null, processAction);
-        while (nextNode != null) {
-            NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(nextNode.getId());
-            int sortOrder = nextNode.getSortOrder() != null ? nextNode.getSortOrder() : 1;
-            // 插入自动完成节点步骤
-            insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                    ProcessAction.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
-            if (NodeType.END.getCode().equals(nextNode.getNodeType())) {
-                return true;
-            }
-            if (NodeType.APPROVAL.getCode().equals(nextNode.getNodeType())) {
-                return false;
-            }
-            // 继续沿终止分支查找结束节点
-            nextNode = findNextNode(snapshot, nextNode, currentNode, processAction);
-        }
-        return false;
     }
 
     /**
@@ -817,55 +784,22 @@ public class CrmwPoolAdjustFlowService {
     }
 
     /**
-     * 根据本次处理的流程节点和审批动作解析调库记录审核状态。
-     *
-     * @param node          本次处理的流程节点，不是下一步新创建节点
-     * @param processAction 本次审批动作
-     * @return 调库记录审核状态
+     * 根据终止前状态解析驳回终态。
      */
-    private String resolveProcessingNodeAuditStatus(FlowNodeBo node, String processAction) {
-        if (ProcessAction.REJECT.getCode().equals(processAction)) {
-            // 复核驳回后进入待修改状态
-            if (isReviewNode(node)) {
-                return AuditStatus.REJECT_MODIFY.getCode();
-            }
-            // 修改节点驳回后按撤回处理
-            if (isModifyNode(node)) {
-                return AuditStatus.REVOKED.getCode();
-            }
-            // 审批节点驳回后终止审批
-            if (isApproveNode(node)) {
-                return AuditStatus.REJECTED.getCode();
-            }
-            return AuditStatus.REJECTED.getCode();
+    private String resolveTerminalRejectAuditStatus(String currentAuditStatus) {
+        if (AuditStatus.REJECT_MODIFY.getCode().equals(currentAuditStatus)) {
+            return AuditStatus.REVOKED.getCode();
         }
-        // 发起或修改通过后回到已提交待审核状态
-        if (isInitiatorNode(node) || isModifyNode(node)) {
-            return AuditStatus.SUBMITTED.getCode();
-        }
-        // 复核通过后进入审核通过、待后续审批状态
-        if (isReviewNode(node)) {
-            return AuditStatus.REVIEWED.getCode();
-        }
-        // 审批、自动审批通过记录最终审批通过状态
-        if (isApproveNode(node) || isAutoApprovalNode(node)) {
-            return AuditStatus.APPROVED.getCode();
-        }
-        return AuditStatus.APPROVED.getCode();
-    }
-
-    /**
-     * 判断当前节点动作是否直接结束流程。
-     */
-    private boolean isTerminalByCurrentNode(FlowNodeBo node, String processAction) {
-        // 修改驳回或审批驳回时流程直接结束
-        return ProcessAction.REJECT.getCode().equals(processAction) && (isModifyNode(node) || isApproveNode(node));
+        return AuditStatus.REJECTED.getCode();
     }
 
     /**
      * 判断是否为自动审批节点。
      */
     private boolean isAutoApprovalNode(FlowNodeBo node) {
+        if (node != null && NodeType.AUTO.getCode().equals(node.getNodeType())) {
+            return true;
+        }
         // 拼接节点关键字用于识别自动审批节点
         String text = buildNodeText(node);
         return text.contains("自动审批") || text.toLowerCase().contains("o32");
@@ -881,31 +815,12 @@ public class CrmwPoolAdjustFlowService {
     }
 
     /**
-     * 判断是否为复核节点。
-     */
-    private boolean isReviewNode(FlowNodeBo node) {
-        // 拼接节点关键字用于识别复核节点
-        String text = buildNodeText(node);
-        return text.contains("复核") || text.contains("复合");
-    }
-
-    /**
      * 判断是否为修改节点。
      */
     private boolean isModifyNode(FlowNodeBo node) {
         // 拼接节点关键字用于识别修改节点
         String text = buildNodeText(node);
         return text.contains("修改");
-    }
-
-    /**
-     * 判断是否为审批节点。
-     */
-    private boolean isApproveNode(FlowNodeBo node) {
-        // 拼接节点关键字用于识别审批节点
-        String text = buildNodeText(node);
-        // 排除 O32 自动审批节点
-        return text.contains("审批") && !isAutoApprovalNode(node);
     }
 
     /**

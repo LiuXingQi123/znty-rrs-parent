@@ -80,7 +80,7 @@
 
 - 识别条件（`approve.html` `isModifyAuditStage`）：`activeLog.auditStatus === '11'` **或** 当前待处理步骤 `nodeLabel` 含「修改」。
 - 提交（`approve.html` `submitAdjustAudit`）：`processAction='approve'`（修改节点语义为「提交」）；`reject` 语义为「终止流程」。当 `shouldSubmitAuditAttachments()` 为真（process 模式 + 修改阶段 + approve + 有待处理步骤）时，以 multipart 提交，`payload.attachmentChanges = buildAuditAttachmentChanges(submitFiles)`。调 `/api/v1/securityPoolAdjustFlow/submitAdjustAudit`。
-- 后端：`validateAuditReq` → `queryAdjustStepById` → `resolveActualProcessStep`（管理员代办）→ `validatePendingStep`（必须 pending）→ `validateSubmitterCannotProcess`（发起人不可处理后续节点，修改/发起节点除外）；`applyAttachmentChangesForModifySubmit`（仅 approve + isModifyStep 时允许附件变更）；`processAdjustAudit`（修改节点+approve → `stepStatus='submit'`）→ 推进流程；`resolveProcessingNodeAuditStatus`（修改节点+approve → `audit_status='00'`，回到已提交待审核）。
+- 后端：`validateAuditReq` → `queryAdjustStepById` → `resolveActualProcessStep`（管理员代办）→ `validatePendingStep`（必须 pending）→ `validateSubmitterCannotProcess`（发起人不可处理后续节点，修改/发起节点除外）；`applyAttachmentChangesForModifySubmit`（仅 approve + isModifyStep 时允许附件变更）；`processAdjustAudit`（修改节点+approve → `stepStatus='submit'`）→ 推进流程；`resolveProcessingNodeAuditStatus`（修改节点+approve → `audit_status='00'`，回到流程中）。
 
 **与「checkAdjust + addAdjustLog」的差异**：修改节点重新提交**不重新校验、不新建记录**，而是更新现有 `ip_adjust_step` 并把同批次 `ip_adjust_log` 状态从 `11` 改回 `00`，附件变更走 `attachmentChanges`。
 

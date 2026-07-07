@@ -27,7 +27,7 @@
 | `initiatorName` | `''` | 文本输入 | 发起人 |
 | `currentUserId` | `'1'` | — | TODO，1 视为管理员 |
 
-`auditStatusOptions`：8 码（`-1/00/10/11/20/21/32/99`），同 dict.js `DICT_AUDIT_STATUS`。无投资池树、无证券类型筛选。
+`auditStatusOptions`：7 码（`-1/00/11/20/21/32/99`），同 dict.js `DICT_AUDIT_STATUS`。无投资池树、无证券类型筛选。
 
 ---
 

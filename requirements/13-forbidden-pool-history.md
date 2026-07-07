@@ -42,12 +42,12 @@
 | 日期范围 | `adjustTimeRange` | 范围 | 调整开始/结束，`value-format="yyyy-MM-dd"` |
 | 文本输入 | `adjusterName` | 模糊 | 调整人，回车查询 |
 | 下拉 | `adjustMode` | 精确 | 调整方向：调入/调出 |
-| 下拉 | `auditStatus` | 精确 | 调整状态（8 项内联字典，含 `'32'` O32自动审批） |
+| 下拉 | `auditStatus` | 精确 | 调整状态（7 项内联字典，含 `'32'` O32自动审批） |
 | 查询 / 重置 | — | — | 查询重置页码为 1；重置清空全部条件 |
 
 **内联字典**：
 - `adjustModeOptions`：`[{调入},{调出}]`
-- `auditStatusOptions`（8 项）：`-1/00/10/11/20/21/32/99`
+- `auditStatusOptions`（7 项）：`-1/00/11/20/21/32/99`
 
 ### 2.2 查询接口
 
@@ -78,7 +78,7 @@
 | 审批状态 | `auditStatusLabel(row.auditStatus)` + `auditStatusType(...)` | `el-tag` 渲染 |
 
 **审批状态映射**（页面内联）：
-- `auditStatusLabel`：`-1`无效调整 / `00`已提交待审核 / `10`审核通过待审批 / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。
+- `auditStatusLabel`：`-1`无效调整 / `00`流程中（待审批/审批中） / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。
 - `auditStatusType`（el-tag type）：`20/10/32`→success；`21/-1`→danger；`00/11`→warning；`99`→info。
 
 ### 2.4 分页

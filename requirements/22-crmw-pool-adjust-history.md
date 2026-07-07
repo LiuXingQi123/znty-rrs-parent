@@ -25,11 +25,11 @@
 | `adjustTimeRange` | el-date-picker daterange | 范围（`value-format="yyyy-MM-dd"`） |
 | `adjusterName` | el-input | 模糊 |
 | `adjustMode` | el-select | 精确（`[{调入},{调出}]`） |
-| `auditStatus` | el-select | 精确（8 项内联字典） |
+| `auditStatus` | el-select | 精确（7 项内联字典） |
 
 **内联字典**：
 - `adjustModeOptions`：`[{value:'调入',label:'调入'},{value:'调出',label:'调出'}]`
-- `auditStatusOptions`（8 项）：`-1/00/10/11/20/21/32/99`
+- `auditStatusOptions`（7 项）：`-1/00/11/20/21/32/99`
 
 ### 2.2 loadList → 接口
 
@@ -104,7 +104,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 
 ## 5. 状态流转
 
-历史页展示全部 `audit_status`（`-1/00/10/11/20/21/32/99`），不涉及状态变迁。8 项内联字典与全站一致（含 `'32'`）。
+历史页展示全部 `audit_status`（`-1/00/11/20/21/32/99`），不涉及状态变迁。7 项内联字典与全站一致（含 `'32'`）。
 
 ---
 

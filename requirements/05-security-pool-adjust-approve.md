@@ -262,8 +262,8 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
    | 节点语义 | approve | reject |
    |---|---|---|
-   | 复核节点 | `10`（审核通过待审批） | `11`（驳回待修改） |
-   | 修改节点 | `00`（已提交待审核） | `99`（发起人已撤回） |
+   | 任意中间节点 | `00`（流程中） | `11`（驳回待修改） |
+   | 修改节点 | `00`（流程中） | `99`（发起人已撤回） |
    | 审批节点 | `20`（审批通过） | `21`（审批驳回） |
    | 自动审批节点 | `20` | — |
 
@@ -419,8 +419,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 | code | 含义 | 触发场景 |
 |---|---|---|
 | `-1` | 无效调整 | 批量校验不通过，操作中止 |
-| `00` | 已提交待审核 | 提交调库 / 修改节点重新提交（`isInitiatorNode||isModifyNode + approve`） |
-| `10` | 审核通过待审批 | 复核节点通过（`isReviewNode + approve`） |
+| `00` | 流程中 | 提交调库 / 修改节点重新提交（`isInitiatorNode||isModifyNode + approve`） |
 | `11` | 驳回待修改 | 复核节点驳回（`isReviewNode + reject`） |
 | `20` | 审批通过 | 审批/自动审批节点通过，或直通流程，或 `finishAdjustBatch` |
 | `21` | 审批驳回 | 审批节点驳回（`isApproveNode + reject`） |
@@ -456,13 +455,13 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
    │     ↓ 20（审批通过，立即入池/调出 ip_pool_status）
    │
    └─ 非直通流程
-         ↓ 00（已提交待审核，start 节点 auto_process + initiator 节点 submit + 下一审批节点 pending）
+         ↓ 00（流程中，start 节点 auto_process + initiator 节点 submit + 下一审批节点 pending）
          │
-         ↓ 复核节点 approve → 10（审核通过待审批）
+         ↓ 中间节点 approve → 00（流程中，继续流转）
          │
          ├─ 复核节点 reject → 11（驳回待修改，发起人在修改节点 pending）
          │     │
-         │     ├─ 修改节点 approve（前端「提交」）→ 00（重新进入已提交待审核，路由回复核节点）
+         │     ├─ 修改节点 approve（前端「提交」）→ 00（重新进入流程中，路由回复核节点）
          │     └─ 修改节点 reject（前端「终止流程」）→ 99（发起人已撤回，createTerminalEndStep 写结束节点）
          │
          ├─ 审批节点 approve（all 策略需全部处理；preempt 任一即可）→ 20（审批通过，finishAdjustBatch 落地 ip_pool_status）

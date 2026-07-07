@@ -89,7 +89,7 @@ import java.util.stream.Collectors;
  * <p>核心功能：
  * <ul>
  *   <li>证券/投资池查询：证券列表分页、证券详情、可调投资池列表、当前入池状态</li>
- *   <li>调库申请提交：写入调库记录，初始状态为"已提交待审核"</li>
+ *   <li>调库申请提交：写入调库记录，初始状态为"流程中"</li>
  *   <li>调库可行性校验（checkAdjust）：对用户选择的每个调库项执行三层校验，
  *       并根据投资池关系配置自动生成联动/互斥项追加校验</li>
  * </ul>
@@ -927,7 +927,7 @@ public class CrmwPoolAdjustService {
                 logBo.setAdjustLogId(logBo.getId());
                 crmwPoolAdjustMapper.addPoolStatus(logBo);
             } else {
-                // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
+                // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
                 bo.setAdjustBatchNo(adjustBatchNo);
@@ -1016,7 +1016,7 @@ public class CrmwPoolAdjustService {
                 crmwPoolAdjustMapper.deletePoolStatusSoft(
                         req.getSecurityCode(), item.getTargetPoolId());
             } else {
-                // 非直通流程：写入 ip_adjust_log（audit_status='00'，已提交待审核）
+                // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
                 IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
                 bo.setAdjustBatchNo(adjustBatchNo);
@@ -3182,7 +3182,7 @@ public class CrmwPoolAdjustService {
         bo.setFlowId(flowSource != null ? flowSource.getFlowId() : item.getFlowId());
         bo.setFlowKey(flowSource != null ? flowSource.getFlowKey() : item.getFlowKey());
         bo.setFlowType(flowSource != null ? flowSource.getFlowType() : item.getFlowType());
-        bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());  // 初始状态：已提交待审核
+        bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());  // 初始状态：流程中
         bo.setAdjusterId(req.getAdjusterId());
         bo.setAdjusterName(req.getAdjusterName());
         bo.setAdjustReason(req.getAdjustReason());

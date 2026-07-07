@@ -97,7 +97,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 
 ## 5. 状态流转
 
-查询页固定 `audit_status='20'`（审批通过，已生效），不涉及状态变迁。状态枚举与全站一致（`-1/00/10/11/20/21/32/99`），见 [19-crmw-pool-adjust.md](19-crmw-pool-adjust.md)。
+查询页固定 `audit_status='20'`（审批通过，已生效），不涉及状态变迁。状态枚举与全站一致（`-1/00/11/20/21/32/99`），见 [19-crmw-pool-adjust.md](19-crmw-pool-adjust.md)。
 
 ---
 
