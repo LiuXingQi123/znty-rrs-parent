@@ -92,6 +92,12 @@ import java.util.stream.Collectors;
 public class BatchSecurityPoolAdjustService {
 
     /** 管理员用户 ID */
+    /** 主体评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean ISSUER_RATING_DOWNGRADED = false;
+    /** 展望评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean OUTLOOK_RATING_DOWNGRADED = false;
+    /** 担保人评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean GUARANTOR_RATING_DOWNGRADED = false;
     private static final String ADMIN_USER_ID = "1";
 
     /** 白名单调入流程 Key */
@@ -1173,9 +1179,10 @@ public class BatchSecurityPoolAdjustService {
         shared.setPendingProcessNodeLabel(securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        shared.setIssuerRatingDowngraded(false);
-        shared.setOutlookRatingDowngraded(false);
-        shared.setGuarantorRatingDowngraded(false);
+        // 评级下调三标志：当前写死未下调，后续接入评级历史表（老项目 sdc_sirm_bondcompanylevel）后替换为真实查询
+        shared.setIssuerRatingDowngraded(ISSUER_RATING_DOWNGRADED);
+        shared.setOutlookRatingDowngraded(OUTLOOK_RATING_DOWNGRADED);
+        shared.setGuarantorRatingDowngraded(GUARANTOR_RATING_DOWNGRADED);
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         // 基金评分（基金证券调入校验用，透传请求级 fundRate）

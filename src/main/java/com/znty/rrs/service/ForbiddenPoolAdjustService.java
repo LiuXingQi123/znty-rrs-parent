@@ -118,6 +118,12 @@ import java.util.stream.Collectors;
 public class ForbiddenPoolAdjustService {
 
     /** 管理员用户 ID */
+    /** 主体评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean ISSUER_RATING_DOWNGRADED = false;
+    /** 展望评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean OUTLOOK_RATING_DOWNGRADED = false;
+    /** 担保人评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean GUARANTOR_RATING_DOWNGRADED = false;
     private static final String ADMIN_USER_ID = "1";
     /** 禁投池、观察池和黑名单质押库 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
@@ -1547,9 +1553,10 @@ public class ForbiddenPoolAdjustService {
         shared.setPendingProcessNodeLabel(forbiddenPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
         shared.setSecurityInObservePool(forbiddenPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(forbiddenPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        shared.setIssuerRatingDowngraded(false);
-        shared.setOutlookRatingDowngraded(false);
-        shared.setGuarantorRatingDowngraded(false);
+        // 评级下调三标志：当前写死未下调，后续接入评级历史表（老项目 sdc_sirm_bondcompanylevel）后替换为真实查询
+        shared.setIssuerRatingDowngraded(ISSUER_RATING_DOWNGRADED);
+        shared.setOutlookRatingDowngraded(OUTLOOK_RATING_DOWNGRADED);
+        shared.setGuarantorRatingDowngraded(GUARANTOR_RATING_DOWNGRADED);
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         return shared;

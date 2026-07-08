@@ -61,7 +61,6 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.bo.UserBo;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -135,16 +134,12 @@ public class CrmwPoolAdjustService {
     @Resource
     private SysAttachmentService sysAttachmentService;    private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
 
-    /**
-     * 评级下调校验开关：默认关闭。
-     *
-     * <p>简易流程判定（isSimpleInboundFlowMatched）需基于评级历史判断主体/展望/担保人评级是否下调，
-     * 老项目用 sdc_sirm_bondcompanylevel(creditrank/expectrank/changedate) 比对历史评级。
-     * 当前项目暂无评级历史数据源，三标志暂按未下调处理（简易流程不拦截评级下调）。
-     * 接入评级历史表后置 true 并在 loadSharedData 补充下调查询以恢复拦截。
-     */
-    @Value("${rrs.adjust.rating-downgrade-check-enabled:false}")
-    private boolean ratingDowngradeCheckEnabled;
+    /** 主体评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean ISSUER_RATING_DOWNGRADED = false;
+    /** 展望评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean OUTLOOK_RATING_DOWNGRADED = false;
+    /** 担保人评级是否下调（当前写死，后续接评级历史查询替换） */
+    private static final boolean GUARANTOR_RATING_DOWNGRADED = false;
     /** 信用债标准上调流程 Key */
     private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
     /** 信用债标准下调流程 Key */
@@ -1341,19 +1336,10 @@ public class CrmwPoolAdjustService {
         // 当前项目主体债入库规则未落地（P2 阻塞），暂仅加载不使用，待主体债入库规则接入后启用
         shared.setSecurityInObservePool(crmwPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(crmwPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        // 评级下调三标志：需评级历史表（老项目 sdc_sirm_bondcompanylevel）比对历史评级判定，
-        // 当前项目无此数据源，暂按未下调处理。开关 ratingDowngradeCheckEnabled 默认 false；
-        // 接入评级历史后置 true 并在 if 分支补查询，恢复简易流程对评级下调的拦截。
-        if (ratingDowngradeCheckEnabled) {
-            // TODO 接入评级历史表后，查询主体/展望/担保人评级是否下调，替换以下 false
-            shared.setIssuerRatingDowngraded(false);
-            shared.setOutlookRatingDowngraded(false);
-            shared.setGuarantorRatingDowngraded(false);
-        } else {
-            shared.setIssuerRatingDowngraded(false);
-            shared.setOutlookRatingDowngraded(false);
-            shared.setGuarantorRatingDowngraded(false);
-        }
+        // 评级下调三标志：当前写死未下调，后续接入评级历史表（老项目 sdc_sirm_bondcompanylevel）后替换为真实查询
+        shared.setIssuerRatingDowngraded(ISSUER_RATING_DOWNGRADED);
+        shared.setOutlookRatingDowngraded(OUTLOOK_RATING_DOWNGRADED);
+        shared.setGuarantorRatingDowngraded(GUARANTOR_RATING_DOWNGRADED);
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         return shared;
