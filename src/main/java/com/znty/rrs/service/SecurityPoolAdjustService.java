@@ -2056,6 +2056,86 @@ public class SecurityPoolAdjustService {
     }
 
     /**
+     * 校验改判目标池是否符合主体债入库矩阵（评级联动，调入审批改判用）。
+     *
+     * <p>按债券的主体内评分档 × 期限档查 credit_bond_pool_grade_rule 矩阵得允许池列表，
+     * 改判池须在列表内。复用 inCheckMainGradeRule 的矩阵查询逻辑。
+     *
+     * @param securityCode    证券代码
+     * @param redirectPoolId  改判目标池 ID
+     * @throws BizException 改判池不在矩阵允许列表内或证券无评级/期限档
+     */
+    public void validateRedirectPool(String securityCode, Long redirectPoolId) {
+        if (securityCode == null || securityCode.isEmpty() || redirectPoolId == null) {
+            return;
+        }
+        SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
+        if (sec == null) {
+            throw new BizException("证券不存在，无法校验改判池");
+        }
+        List<Long> allowedPoolIds = queryAllowedPoolIdsForSecurity(sec);
+        if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
+            throw new BizException("该证券不符合主体债入库矩阵，无法改判");
+        }
+        if (!allowedPoolIds.contains(redirectPoolId)) {
+            throw new BizException("改判池不在主体债入库矩阵允许列表内");
+        }
+    }
+
+    /**
+     * 查询证券的主体债入库矩阵允许池列表（评级联动改判池候选项）。
+     *
+     * @param securityCode 证券代码
+     * @return 允许调入的池列表（含池名），空列表表示无匹配矩阵
+     */
+    public List<InvestmentPoolBo> queryRedirectPoolOptions(String securityCode) {
+        if (securityCode == null || securityCode.isEmpty()) {
+            return new ArrayList<>();
+        }
+        SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
+        if (sec == null) {
+            return new ArrayList<>();
+        }
+        List<Long> allowedPoolIds = queryAllowedPoolIdsForSecurity(sec);
+        if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 全量池 Map 取池详情
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        for (InvestmentPoolBo p : investmentPoolMapper.queryPoolList()) {
+            poolMap.put(p.getId(), p);
+        }
+        List<InvestmentPoolBo> result = new ArrayList<>();
+        for (Long pid : allowedPoolIds) {
+            InvestmentPoolBo p = poolMap.get(pid);
+            if (p != null) {
+                result.add(p);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 查证券的主体债入库矩阵允许池 ID 列表（复用 inCheckMainGradeRule 的评级/期限档逻辑）。
+     */
+    private List<Long> queryAllowedPoolIdsForSecurity(SecurityInfoBo sec) {
+        String gradeCode = sec.getInnerIssuerRating();
+        if (gradeCode == null || gradeCode.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 担保债取严
+        if (sec.getGuarantFlag() != null && sec.getGuarantFlag() == 1
+                && sec.getInnerGuarantorRating() != null && !sec.getInnerGuarantorRating().isEmpty()) {
+            gradeCode = pickLowerRatingGrade(gradeCode, sec.getInnerGuarantorRating());
+        }
+        String bucketCode = matchTermBucket(sec.getTermYear());
+        if (bucketCode == null) {
+            return new ArrayList<>();
+        }
+        return creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
+    }
+
+    /**
      * 股票类型特有调入校验
      *
      * <p>含股票退市校验（delist_date 早于今日则禁止调入）。

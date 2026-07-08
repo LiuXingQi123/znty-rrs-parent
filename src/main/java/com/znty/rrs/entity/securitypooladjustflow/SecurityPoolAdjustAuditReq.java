@@ -31,6 +31,14 @@ public class SecurityPoolAdjustAuditReq {
     /** 当前处理人名称 */
     private String handlerName;
 
+    /**
+     * 调入改判目标池 ID（评级联动，可选）。
+     *
+     * <p>仅信用债大库调入审批通过时有意义：审核人按主体评级×期限档矩阵改判到不同层级池（上调/降库）。
+     * 为空时按原提交目标池落地；非空时校验须在矩阵允许池列表内，并改判落地到该池。
+     */
+    private Long redirectPoolId;
+
     /** 调库记录附件变更列表，仅驳回待修改提交时使用 */
     private List<AttachmentChange> attachmentChanges;
 

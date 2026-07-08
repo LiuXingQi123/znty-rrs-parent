@@ -28,6 +28,7 @@ import com.znty.rrs.entity.flow.FlowSnapshot;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
+import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.bo.ReportInBo;
@@ -45,6 +46,7 @@ import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -80,6 +82,10 @@ public class SecurityPoolAdjustFlowService {
     /** 报告库服务，用于审批通过后写入内部报告 */
     @Resource
     private ReportService reportService;
+
+    /** 证券池调库服务，用于评级联动改判池矩阵校验与查询 */
+    @Resource
+    private SecurityPoolAdjustService securityPoolAdjustService;
 
     /**
      * 提交调库审批处理意见，更新当前步骤并按审批流程推进。
@@ -290,8 +296,8 @@ public class SecurityPoolAdjustFlowService {
         }
 
         if (advanceResult.finished) {
-            // 落地同批次调库结果
-            finishAdjustBatch(step);
+            // 落地同批次调库结果（评级联动：调入可带改判目标池 redirectPoolId）
+            finishAdjustBatch(step, req.getRedirectPoolId());
             // 构建审批处理返回对象
             return buildAuditDto(step, AuditStatus.APPROVED.getCode(), true, advanceResult.nextStepCreated, "审批已通过，调库结果已生效");
         }
@@ -421,12 +427,38 @@ public class SecurityPoolAdjustFlowService {
     /**
      * 流程最终通过后，更新同批调库日志并落地当前池状态。
      */
-    private void finishAdjustBatch(IpAdjustStepBo step) {
+    private void finishAdjustBatch(IpAdjustStepBo step, Long redirectPoolId) {
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
         if (logList.isEmpty()) {
             securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
             return;
+        }
+
+        // 评级联动改判：调入审批通过时，审核人可改判到主体债入库矩阵允许的其它层级池（上调/降库）
+        if (redirectPoolId != null) {
+            String securityCode = logList.get(0).getSecurityCode();
+            // 查矩阵允许池列表（含校验：改判池须在列表内）
+            List<InvestmentPoolBo> allowedPools = securityPoolAdjustService.queryRedirectPoolOptions(securityCode);
+            InvestmentPoolBo redirectPool = null;
+            for (InvestmentPoolBo p : allowedPools) {
+                if (redirectPoolId.equals(p.getId())) {
+                    redirectPool = p;
+                    break;
+                }
+            }
+            if (redirectPool == null) {
+                throw new BizException("改判池不在主体债入库矩阵允许列表内");
+            }
+            // 持久化改判：更新批次调入日志的目标池
+            securityPoolAdjustMapper.editAdjustLogTargetPool(step.getAdjustBatchNo(), redirectPoolId, redirectPool.getPoolName());
+            // 内存同步：调入日志的目标池改为改判池
+            for (IpAdjustLogBo log : logList) {
+                if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
+                    log.setTargetPoolId(redirectPoolId);
+                    log.setTargetPoolName(redirectPool.getPoolName());
+                }
+            }
         }
 
         securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());

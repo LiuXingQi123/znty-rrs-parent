@@ -142,6 +142,11 @@ public interface SecurityPoolAdjustMapper {
                                  @Param("adjustBatchNo") String adjustBatchNo,
                                  @Param("auditStatus") String auditStatus);
 
+    /** 更新指定批次调入调库记录的目标池（评级联动改判用，仅更新 adjust_mode=调入 的记录） */
+    int editAdjustLogTargetPool(@Param("adjustBatchNo") String adjustBatchNo,
+                                @Param("targetPoolId") Long targetPoolId,
+                                @Param("targetPoolName") String targetPoolName);
+
     /** 根据证券类型编码查询所属大类（dict_security_type.category_type） */
     String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);
 }

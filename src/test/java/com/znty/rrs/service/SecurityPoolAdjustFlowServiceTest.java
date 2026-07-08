@@ -11,8 +11,10 @@ import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
+import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.securitypooladjustflow.SecurityPoolAdjustAuditReq;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
@@ -356,5 +358,66 @@ public class SecurityPoolAdjustFlowServiceTest {
         IpAdjustLogBo log = buildLog(auditStatus, adjusterId);
         log.setId(id);
         return log;
+    }
+
+    /** 评级联动改判：改判池在矩阵允许列表内时，应更新日志目标池并落地到改判池。 */
+    @Test
+    public void finishAdjustBatchShouldRedirectToApprovedPool() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        SecurityPoolAdjustFlowService service = buildService(mapper, attachmentService);
+        SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
+        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
+
+        IpAdjustStepBo step = buildPendingStep(10L, "1", "管理员");
+        IpAdjustLogBo log = buildLog(1L, "00", "1");
+        log.setSecurityCode("S001");
+        log.setAdjustMode("调入");
+        log.setTargetPoolId(10L);
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
+        // 改判池在矩阵允许列表内
+        InvestmentPoolBo redirectPool = new InvestmentPoolBo();
+        redirectPool.setId(20L);
+        redirectPool.setPoolName("一级库");
+        when(securityPoolAdjustService.queryRedirectPoolOptions("S001")).thenReturn(Collections.singletonList(redirectPool));
+        // 无手工信评报告附件，跳过 generateInternalReportsOnFinish
+        when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
+
+        ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step, 20L);
+
+        // 验证更新日志目标池为改判池
+        verify(mapper).editAdjustLogTargetPool("BATCH001", 20L, "一级库");
+        // 验证落地到改判池
+        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(mapper).addPoolStatus(captor.capture());
+        assertThat(captor.getValue().getTargetPoolId()).isEqualTo(20L);
+    }
+
+    /** 评级联动改判：改判池不在矩阵允许列表内时应抛出异常。 */
+    @Test
+    public void finishAdjustBatchShouldRejectRedirectPoolNotInMatrix() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        SecurityPoolAdjustFlowService service = buildService(mapper, attachmentService);
+        SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
+
+        IpAdjustStepBo step = buildPendingStep(10L, "1", "管理员");
+        IpAdjustLogBo log = buildLog(1L, "00", "1");
+        log.setSecurityCode("S001");
+        log.setAdjustMode("调入");
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
+        // 改判池不在矩阵允许列表内
+        when(securityPoolAdjustService.queryRedirectPoolOptions("S001")).thenReturn(Collections.<InvestmentPoolBo>emptyList());
+
+        try {
+            ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step, 99L);
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains("改判池不在主体债入库矩阵允许列表内");
+            return;
+        }
+        throw new AssertionError("改判池不在矩阵内时应抛出异常");
     }
 }

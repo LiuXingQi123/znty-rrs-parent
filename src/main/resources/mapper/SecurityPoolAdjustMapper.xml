@@ -738,6 +738,17 @@
           </choose>
     </update>
 
+    <!-- 更新指定批次调入调库记录的目标池（评级联动改判用，仅更新调入记录） -->
+    <update id="editAdjustLogTargetPool">
+        UPDATE ip_adjust_log
+        SET target_pool_id = #{targetPoolId}
+           ,target_pool_name = #{targetPoolName}
+           ,updt_time = NOW()
+        WHERE is_deleted = 0
+          AND adjust_batch_no = #{adjustBatchNo}
+          AND adjust_mode = '调入'
+    </update>
+
     <!-- 查询全量投资池关系配置（不限关系类型） -->
     <select id="queryAllPoolRelationList" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
         SELECT pool_id

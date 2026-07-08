@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.AutoAdjustMapper">
+
+    <!-- 查询配置了自动调出规则（rule_type=auto_out）的启用投资池 ID 列表 -->
+    <select id="queryAutoOutPoolIds" resultType="java.lang.Long">
+        SELECT DISTINCT pool_id
+        FROM ip_pool_auto_rule
+        WHERE rule_type = 'auto_out'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询指定池中已生效且已到期的在池证券（仅回填 securityCode/securityShortName/securityType） -->
+    <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT ips.security_code
+               ,ips.security_short_name
+               ,ips.security_type
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        WHERE ips.target_pool_id = #{poolId}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND si.maturity_date IS NOT NULL
+          AND si.maturity_date &lt;&gt; ''
+          AND si.maturity_date &lt; DATE_FORMAT(CURDATE(), '%Y-%m-%d')
+    </select>
+
+</mapper>

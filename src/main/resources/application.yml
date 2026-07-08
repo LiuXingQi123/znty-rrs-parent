@@ -50,3 +50,7 @@ rrs:
     # 评级下调校验开关：简易流程判定需评级历史表（老项目 sdc_sirm_bondcompanylevel），
     # 当前项目暂无此数据源，默认 false（三标志按未下调处理）；接入评级历史后置 true
     rating-downgrade-check-enabled: ${RRS_ADJUST_RATING_DOWNGRADE_CHECK_ENABLED:false}
+  # 自动调库定时任务（到期出池等规则）：默认关闭，置 true 启用；cron 默认每天凌晨 2 点
+  auto-adjust:
+    enabled: ${RRS_AUTO_ADJUST_ENABLED:false}
+    cron: ${RRS_AUTO_ADJUST_CRON:0 0 2 * * ?}
