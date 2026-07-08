@@ -9,6 +9,7 @@ USE `znty_rrs`;
 SET NAMES utf8mb4;
 
 DROP TABLE IF EXISTS `rrs_temp_security_code`;
+DROP TABLE IF EXISTS `rrs_temp_security_code_update_log`;
 
 CREATE TABLE `rrs_temp_security_code`
 (
@@ -38,3 +39,25 @@ CREATE TABLE `rrs_temp_security_code`
     KEY `idx_rrs_temp_security_code_company` (`temp_company_id`),
     KEY `idx_rrs_temp_security_code_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='临时代码表';
+
+CREATE TABLE `rrs_temp_security_code_update_log`
+(
+    `id`                 BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `temp_security_name` VARCHAR(200) DEFAULT NULL            COMMENT '临时证券名称',
+    `temp_security_code` VARCHAR(100) DEFAULT NULL            COMMENT '临时证券代码',
+    `temp_security_market` VARCHAR(32) DEFAULT NULL           COMMENT '临时证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / OTC=场外市场 / UNKNOWN=未知市场 / JWCW=JWCW市场',
+    `temp_security_type` VARCHAR(64)  DEFAULT NULL            COMMENT '临时证券类型编码，关联 dict_security_type.security_type',
+    `security_name`     VARCHAR(200) DEFAULT NULL            COMMENT '正式证券名称',
+    `security_code`     VARCHAR(100) DEFAULT NULL            COMMENT '正式证券代码',
+    `security_market`   VARCHAR(32)  DEFAULT NULL            COMMENT '正式证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / OTC=场外市场 / UNKNOWN=未知市场 / JWCW=JWCW市场',
+    `security_type`     VARCHAR(64)  DEFAULT NULL            COMMENT '正式证券类型编码，关联 dict_security_type.security_type',
+    `replace_table_name` VARCHAR(100) DEFAULT NULL            COMMENT '被替换表名',
+    `replace_record_id` BIGINT       DEFAULT NULL            COMMENT '被替换记录 ID',
+    `replace_status`    VARCHAR(32)  DEFAULT NULL            COMMENT '替换状态：success=成功',
+    `replace_time`      DATETIME     DEFAULT NULL            COMMENT '替换时间',
+    `crte_time`         DATETIME     DEFAULT NULL            COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_rrs_temp_security_code_update_log_temp_code` (`temp_security_code`),
+    KEY `idx_rrs_temp_security_code_update_log_security_code` (`security_code`),
+    KEY `idx_rrs_temp_security_code_update_log_table_record` (`replace_table_name`, `replace_record_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='临时代码替换日志表';

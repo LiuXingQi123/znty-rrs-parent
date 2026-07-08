@@ -37,6 +37,8 @@ public class TempSecurityCodeBo {
     private String securityMarket;
     /** 正式证券类型 */
     private String securityType;
+    /** 证券来源 */
+    private String securitySource;
     /** 业务更新时间 */
     private Date updateTime;
     /** 状态 */
@@ -49,4 +51,12 @@ public class TempSecurityCodeBo {
     private Date crteTime;
     /** 更新时间 */
     private Date updtTime;
+    /** 替换日志表名 */
+    private String replaceTableName;
+    /** 替换日志记录 ID */
+    private Long replaceRecordId;
+    /** 替换状态 */
+    private String replaceStatus;
+    /** 取消发行日期 */
+    private String cancelDate;
 }

@@ -67,8 +67,9 @@
         FROM rrs_securityinfo si
         <where>
             AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))
+            AND (si.security_status IS NULL OR si.security_status != 'D')
             <if test="direction == 'in'">
-                NOT EXISTS (
+                AND NOT EXISTS (
                     SELECT 1
                     FROM ip_pool_status ips
                     WHERE ips.security_code = si.wind_code
@@ -78,7 +79,7 @@
                 )
             </if>
             <if test="direction == 'out'">
-                EXISTS (
+                AND EXISTS (
                     SELECT 1
                     FROM ip_pool_status ips
                     WHERE ips.security_code = si.wind_code

@@ -190,6 +190,7 @@
             ,issuer
             ,firstissue_date
             ,maturity_date
+            ,security_source
             ,create_time
             ,ts
         ) VALUES (
@@ -204,6 +205,7 @@
             ,#{tempCompanyNameSnapshot}
             ,DATE_FORMAT(#{tempIssueDate}, '%Y-%m-%d')
             ,DATE_FORMAT(#{tempMaturityDate}, '%Y-%m-%d')
+            ,#{securitySource}
             ,#{updateTime}
             ,#{updateTime}
         )
@@ -224,6 +226,25 @@
            ,maturity_date = DATE_FORMAT(#{tempMaturityDate}, '%Y-%m-%d')
            ,ts = #{updateTime}
         WHERE wind_code = #{securityCode}
+    </update>
+
+    <!-- 取消发行时更新临时证券主数据 -->
+    <update id="editSecurityInfoToCancelled">
+        UPDATE rrs_securityinfo
+        SET maturity_date = #{cancelDate}
+           ,end_date = #{cancelDate}
+           ,security_status = 'D'
+           ,ts = #{updateTime}
+        WHERE wind_code = #{tempSecurityCode}
+    </update>
+
+    <!-- 转正式时禁用临时证券主数据 -->
+    <update id="editTempSecurityInfoToDisabled">
+        UPDATE rrs_securityinfo
+        SET security_status = 'D'
+           ,ts = #{updateTime}
+        WHERE wind_code = #{tempSecurityCode}
+          AND security_source = 'temporary'
     </update>
 
     <!-- 新增临时代码 -->
@@ -307,4 +328,217 @@
         WHERE id = #{id}
           AND is_deleted = 0
     </update>
+
+    <!-- 查询核心业务表引用数量 -->
+    <select id="queryCoreReferenceCount" resultType="int">
+        SELECT SUM(ref_count) AS refCount
+        FROM (
+            SELECT COUNT(1) AS ref_count
+            FROM ip_adjust_log
+            WHERE (is_deleted IS NULL OR is_deleted = 0)
+              AND security_code = #{tempSecurityCode}
+              AND security_type = #{tempSecurityType}
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_pool_status
+            WHERE (is_deleted IS NULL OR is_deleted = 0)
+              AND security_code = #{tempSecurityCode}
+              AND security_type = #{tempSecurityType}
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_adjust_log
+            WHERE (is_deleted IS NULL OR is_deleted = 0)
+              AND crmw_scode = #{tempSecurityCode}
+              AND crmw_stype = #{tempSecurityType}
+              AND crmw_mktcode = #{tempSecurityMarket}
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_pool_status
+            WHERE (is_deleted IS NULL OR is_deleted = 0)
+              AND crmw_scode = #{tempSecurityCode}
+              AND crmw_stype = #{tempSecurityType}
+              AND crmw_mktcode = #{tempSecurityMarket}
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_pool_status_crmw
+            WHERE (is_deleted IS NULL OR is_deleted = 0)
+              AND security_code = #{tempSecurityCode}
+              AND security_type = #{tempSecurityType}
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_pool_status_crmw
+            WHERE (is_deleted IS NULL OR is_deleted = 0)
+              AND crmw_scode = #{tempSecurityCode}
+              AND crmw_stype = #{tempSecurityType}
+              AND crmw_mktcode = #{tempSecurityMarket}
+        ) refs
+    </select>
+
+    <!-- 查询调库日志证券引用 ID 列表 -->
+    <select id="queryAdjustLogSecurityReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_log
+        WHERE (is_deleted IS NULL OR is_deleted = 0)
+          AND security_code = #{tempSecurityCode}
+          AND security_type = #{tempSecurityType}
+    </select>
+
+    <!-- 查询当前池状态证券引用 ID 列表 -->
+    <select id="queryPoolStatusSecurityReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_pool_status
+        WHERE (is_deleted IS NULL OR is_deleted = 0)
+          AND security_code = #{tempSecurityCode}
+          AND security_type = #{tempSecurityType}
+    </select>
+
+    <!-- 查询调库日志 CRMW 引用 ID 列表 -->
+    <select id="queryAdjustLogCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_log
+        WHERE (is_deleted IS NULL OR is_deleted = 0)
+          AND crmw_scode = #{tempSecurityCode}
+          AND crmw_stype = #{tempSecurityType}
+          AND crmw_mktcode = #{tempSecurityMarket}
+    </select>
+
+    <!-- 查询当前池状态 CRMW 引用 ID 列表 -->
+    <select id="queryPoolStatusCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_pool_status
+        WHERE (is_deleted IS NULL OR is_deleted = 0)
+          AND crmw_scode = #{tempSecurityCode}
+          AND crmw_stype = #{tempSecurityType}
+          AND crmw_mktcode = #{tempSecurityMarket}
+    </select>
+
+    <!-- 查询 CRMW 池状态证券引用 ID 列表 -->
+    <select id="queryCrmwPoolStatusSecurityReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_pool_status_crmw
+        WHERE (is_deleted IS NULL OR is_deleted = 0)
+          AND security_code = #{tempSecurityCode}
+          AND security_type = #{tempSecurityType}
+    </select>
+
+    <!-- 查询 CRMW 池状态 CRMW 引用 ID 列表 -->
+    <select id="queryCrmwPoolStatusCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_pool_status_crmw
+        WHERE (is_deleted IS NULL OR is_deleted = 0)
+          AND crmw_scode = #{tempSecurityCode}
+          AND crmw_stype = #{tempSecurityType}
+          AND crmw_mktcode = #{tempSecurityMarket}
+    </select>
+
+    <!-- 批量替换调库日志证券引用 -->
+    <update id="editAdjustLogSecurityReference">
+        UPDATE ip_adjust_log
+        SET security_code = #{bo.securityCode}
+           ,security_short_name = #{bo.securityName}
+           ,security_type = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 批量替换当前池状态证券引用 -->
+    <update id="editPoolStatusSecurityReference">
+        UPDATE ip_pool_status
+        SET security_code = #{bo.securityCode}
+           ,security_short_name = #{bo.securityName}
+           ,security_type = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 批量替换调库日志 CRMW 引用 -->
+    <update id="editAdjustLogCrmwReference">
+        UPDATE ip_adjust_log
+        SET crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 批量替换当前池状态 CRMW 引用 -->
+    <update id="editPoolStatusCrmwReference">
+        UPDATE ip_pool_status
+        SET crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 批量替换 CRMW 池状态证券引用 -->
+    <update id="editCrmwPoolStatusSecurityReference">
+        UPDATE ip_pool_status_crmw
+        SET security_code = #{bo.securityCode}
+           ,security_short_name = #{bo.securityName}
+           ,security_type = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 批量替换 CRMW 池状态 CRMW 引用 -->
+    <update id="editCrmwPoolStatusCrmwReference">
+        UPDATE ip_pool_status_crmw
+        SET crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 新增临时代码替换日志 -->
+    <insert id="addTempSecurityCodeUpdateLog">
+        INSERT INTO rrs_temp_security_code_update_log (
+            temp_security_name
+            ,temp_security_code
+            ,temp_security_market
+            ,temp_security_type
+            ,security_name
+            ,security_code
+            ,security_market
+            ,security_type
+            ,replace_table_name
+            ,replace_record_id
+            ,replace_status
+            ,replace_time
+            ,crte_time
+        ) VALUES (
+            #{tempSecurityName}
+            ,#{tempSecurityCode}
+            ,#{tempSecurityMarket}
+            ,#{tempSecurityType}
+            ,#{securityName}
+            ,#{securityCode}
+            ,#{securityMarket}
+            ,#{securityType}
+            ,#{replaceTableName}
+            ,#{replaceRecordId}
+            ,#{replaceStatus}
+            ,#{updateTime}
+            ,#{updateTime}
+        )
+    </insert>
 </mapper>

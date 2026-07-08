@@ -9,6 +9,7 @@ USE `znty_rrs`;
 SET NAMES utf8mb4;
 
 TRUNCATE TABLE `rrs_temp_security_code`;
+TRUNCATE TABLE `rrs_temp_security_code_update_log`;
 
 INSERT INTO `rrs_temp_security_code` (
     `id`

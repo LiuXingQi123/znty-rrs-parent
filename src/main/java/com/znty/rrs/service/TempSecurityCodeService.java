@@ -12,7 +12,10 @@ import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import javax.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,6 +89,8 @@ public class TempSecurityCodeService {
         bo.setCrteTime(now);
         bo.setUpdtTime(now);
         tempSecurityCodeMapper.addTempSecurityCode(bo);
+        // 同步临时代码证券主数据
+        addTempSecurityInfo(bo);
         // 查询新增后的临时代码详情
         return queryTempSecurityCodeDetail(bo.getId());
     }
@@ -133,6 +138,10 @@ public class TempSecurityCodeService {
         bo.setUpdtTime(now);
         // 同步正式证券基础信息
         upsertSecurityInfo(bo);
+        // 替换临时代码核心业务引用
+        replaceTempSecurityReferences(oldBo, bo);
+        // 禁用原临时代码占位证券主数据
+        disableTempSecurityInfo(oldBo, now);
         tempSecurityCodeMapper.editTempSecurityCodeToUpdated(bo);
         // 查询更新后的临时代码详情
         return queryTempSecurityCodeDetail(bo.getId());
@@ -154,6 +163,10 @@ public class TempSecurityCodeService {
         bo.setStatus(TempStatus.CANCELLED.getCode());
         bo.setOperationType(TempOperationType.CANCEL_ISSUE.getCode());
         bo.setUpdtTime(now);
+        bo.setTempSecurityCode(oldBo.getTempSecurityCode());
+        // 计算取消发行日期
+        bo.setCancelDate(queryCancelIssueDate());
+        tempSecurityCodeMapper.editSecurityInfoToCancelled(bo);
         tempSecurityCodeMapper.editTempSecurityCodeToCancelled(bo);
         // 查询取消后的临时代码详情
         return queryTempSecurityCodeDetail(bo.getId());
@@ -168,6 +181,8 @@ public class TempSecurityCodeService {
         validateIdReq(req);
         // 查询并校验临时代码存在
         TempSecurityCodeBo oldBo = queryExistingTempSecurityCode(req.getId());
+        // 校验临时代码未被核心调库业务引用
+        validateNoCoreReference(oldBo);
         Date now = new Date();
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setId(oldBo.getId());
@@ -339,8 +354,138 @@ public class TempSecurityCodeService {
         if (count > 0) {
             tempSecurityCodeMapper.editSecurityInfo(bo);
         } else {
+            bo.setSecuritySource("temp_converted");
             tempSecurityCodeMapper.addSecurityInfo(bo);
         }
+    }
+
+    /**
+     * 同步新增临时代码证券主数据
+     */
+    private void addTempSecurityInfo(TempSecurityCodeBo sourceBo) {
+        int count = tempSecurityCodeMapper.querySecurityInfoCount(sourceBo.getTempSecurityCode());
+        if (count > 0) {
+            throw new BizException("临时证券代码已存在于证券主数据，tempSecurityCode=" + sourceBo.getTempSecurityCode());
+        }
+        TempSecurityCodeBo bo = new TempSecurityCodeBo();
+        bo.setSecurityName(sourceBo.getTempSecurityName());
+        bo.setSecurityCode(sourceBo.getTempSecurityCode());
+        bo.setSecurityMarket(sourceBo.getTempSecurityMarket());
+        bo.setSecurityType(sourceBo.getTempSecurityType());
+        bo.setTempCompanyNameSnapshot(sourceBo.getTempCompanyNameSnapshot());
+        bo.setTempIssueDate(sourceBo.getTempIssueDate());
+        bo.setTempMaturityDate(sourceBo.getTempMaturityDate());
+        bo.setUpdateTime(sourceBo.getCrteTime());
+        bo.setSecuritySource("temporary");
+        tempSecurityCodeMapper.addSecurityInfo(bo);
+    }
+
+    /**
+     * 禁用临时代码占位证券主数据
+     */
+    private void disableTempSecurityInfo(TempSecurityCodeBo oldBo, Date updateTime) {
+        TempSecurityCodeBo bo = new TempSecurityCodeBo();
+        bo.setTempSecurityCode(oldBo.getTempSecurityCode());
+        bo.setUpdateTime(updateTime);
+        tempSecurityCodeMapper.editTempSecurityInfoToDisabled(bo);
+    }
+
+    /**
+     * 替换临时代码在核心业务表中的引用
+     */
+    private void replaceTempSecurityReferences(TempSecurityCodeBo oldBo, TempSecurityCodeBo newBo) {
+        // 构建临时代码替换参数
+        TempSecurityCodeBo replaceBo = buildReplaceBo(oldBo, newBo);
+
+        List<Long> adjustLogSecurityIds = tempSecurityCodeMapper.queryAdjustLogSecurityReferenceIdList(replaceBo);
+        if (!adjustLogSecurityIds.isEmpty()) {
+            tempSecurityCodeMapper.editAdjustLogSecurityReference(replaceBo, adjustLogSecurityIds);
+            // 记录调库日志证券引用替换结果
+            addReplaceLogList(replaceBo, "ip_adjust_log", adjustLogSecurityIds);
+        }
+
+        List<Long> poolStatusSecurityIds = tempSecurityCodeMapper.queryPoolStatusSecurityReferenceIdList(replaceBo);
+        if (!poolStatusSecurityIds.isEmpty()) {
+            tempSecurityCodeMapper.editPoolStatusSecurityReference(replaceBo, poolStatusSecurityIds);
+            // 记录当前池状态证券引用替换结果
+            addReplaceLogList(replaceBo, "ip_pool_status", poolStatusSecurityIds);
+        }
+
+        List<Long> adjustLogCrmwIds = tempSecurityCodeMapper.queryAdjustLogCrmwReferenceIdList(replaceBo);
+        if (!adjustLogCrmwIds.isEmpty()) {
+            tempSecurityCodeMapper.editAdjustLogCrmwReference(replaceBo, adjustLogCrmwIds);
+            // 记录调库日志 CRMW 引用替换结果
+            addReplaceLogList(replaceBo, "ip_adjust_log.crmw", adjustLogCrmwIds);
+        }
+
+        List<Long> poolStatusCrmwIds = tempSecurityCodeMapper.queryPoolStatusCrmwReferenceIdList(replaceBo);
+        if (!poolStatusCrmwIds.isEmpty()) {
+            tempSecurityCodeMapper.editPoolStatusCrmwReference(replaceBo, poolStatusCrmwIds);
+            // 记录当前池状态 CRMW 引用替换结果
+            addReplaceLogList(replaceBo, "ip_pool_status.crmw", poolStatusCrmwIds);
+        }
+
+        List<Long> crmwPoolStatusSecurityIds = tempSecurityCodeMapper.queryCrmwPoolStatusSecurityReferenceIdList(replaceBo);
+        if (!crmwPoolStatusSecurityIds.isEmpty()) {
+            tempSecurityCodeMapper.editCrmwPoolStatusSecurityReference(replaceBo, crmwPoolStatusSecurityIds);
+            // 记录 CRMW 池状态证券引用替换结果
+            addReplaceLogList(replaceBo, "ip_pool_status_crmw", crmwPoolStatusSecurityIds);
+        }
+
+        List<Long> crmwPoolStatusCrmwIds = tempSecurityCodeMapper.queryCrmwPoolStatusCrmwReferenceIdList(replaceBo);
+        if (!crmwPoolStatusCrmwIds.isEmpty()) {
+            tempSecurityCodeMapper.editCrmwPoolStatusCrmwReference(replaceBo, crmwPoolStatusCrmwIds);
+            // 记录 CRMW 池状态 CRMW 引用替换结果
+            addReplaceLogList(replaceBo, "ip_pool_status_crmw.crmw", crmwPoolStatusCrmwIds);
+        }
+    }
+
+    /**
+     * 构建临时代码替换参数
+     */
+    private TempSecurityCodeBo buildReplaceBo(TempSecurityCodeBo oldBo, TempSecurityCodeBo newBo) {
+        TempSecurityCodeBo bo = new TempSecurityCodeBo();
+        bo.setTempSecurityName(oldBo.getTempSecurityName());
+        bo.setTempSecurityCode(oldBo.getTempSecurityCode());
+        bo.setTempSecurityMarket(oldBo.getTempSecurityMarket());
+        bo.setTempSecurityType(oldBo.getTempSecurityType());
+        bo.setSecurityName(newBo.getSecurityName());
+        bo.setSecurityCode(newBo.getSecurityCode());
+        bo.setSecurityMarket(newBo.getSecurityMarket());
+        bo.setSecurityType(newBo.getSecurityType());
+        bo.setUpdateTime(newBo.getUpdateTime());
+        bo.setReplaceStatus("success");
+        return bo;
+    }
+
+    /**
+     * 批量写入替换日志
+     */
+    private void addReplaceLogList(TempSecurityCodeBo replaceBo, String tableName, List<Long> recordIds) {
+        for (Long recordId : recordIds) {
+            replaceBo.setReplaceTableName(tableName);
+            replaceBo.setReplaceRecordId(recordId);
+            tempSecurityCodeMapper.addTempSecurityCodeUpdateLog(replaceBo);
+        }
+    }
+
+    /**
+     * 校验临时代码未被核心调库业务引用
+     */
+    private void validateNoCoreReference(TempSecurityCodeBo bo) {
+        int count = tempSecurityCodeMapper.queryCoreReferenceCount(bo);
+        if (count > 0) {
+            throw new BizException("该临时代码已被调库业务使用，无法删除");
+        }
+    }
+
+    /**
+     * 查询取消发行日期
+     */
+    private String queryCancelIssueDate() {
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.DATE, -1);
+        return new SimpleDateFormat("yyyy-MM-dd").format(calendar.getTime());
     }
 
     /**

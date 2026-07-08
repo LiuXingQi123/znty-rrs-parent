@@ -1768,7 +1768,8 @@ public class ScriptToolService {
         )));
         groups.add(buildTableGroup("security-master", "证券与临时代码", "znty_rrs", Arrays.asList(
                 buildTable("znty_rrs", "rrs_securityinfo", "证券主数据"),
-                buildTable("znty_rrs", "rrs_temp_security_code", "临时代码")
+                buildTable("znty_rrs", "rrs_temp_security_code", "临时代码"),
+                buildTable("znty_rrs", "rrs_temp_security_code_update_log", "临时代码替换日志")
         )));
         groups.add(buildTableGroup("pool-config", "投资池配置", "znty_rrs", Arrays.asList(
                 buildTable("znty_rrs", "ip_pool_permission_evt", "投资池权限事件"),

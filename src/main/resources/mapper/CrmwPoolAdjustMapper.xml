@@ -11,6 +11,7 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         <where>
             AND si.security_type = 'crmw'
+            AND (si.security_status IS NULL OR si.security_status != 'D')
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
@@ -32,6 +33,7 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         <where>
             AND (si.security_type IS NULL OR si.security_type != 'crmw')
+            AND (si.security_status IS NULL OR si.security_status != 'D')
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>

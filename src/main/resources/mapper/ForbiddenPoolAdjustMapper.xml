@@ -24,6 +24,7 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'company'
         <where>
+            AND (si.security_status IS NULL OR si.security_status != 'D')
             <if test="companyCode != null and companyCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{companyCode}, '%')
             </if>

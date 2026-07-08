@@ -161,6 +161,8 @@ public class SecurityInfoBo {
     private String agencyNameid;
     /** 证券状态 */
     private String securityStatus;
+    /** 证券来源 */
+    private String securitySource;
     /** 下一个行权日 */
     private String dateNext;
     /** 资金募集用途 */
