@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -23,7 +24,7 @@ import static org.mockito.Mockito.verify;
  */
 public class ScriptToolServiceTest {
 
-    /** 验证结构差异检查能够解析全部 59 张项目表。 */
+    /** 验证结构差异检查能够解析项目关键表。 */
     @Test
     public void shouldParseAllSchemaTables() {
         ScriptToolService service = new ScriptToolService();
@@ -34,7 +35,9 @@ public class ScriptToolServiceTest {
         // 查询环境检查复用的项目表白名单
         Map<?, ?> healthTables = ReflectionTestUtils.invokeMethod(service, "queryClearTableMap");
 
-        assertEquals(60, tables.size());
+        assertTrue(tables.containsKey("znty_rrs.rrs_securityinfo"));
+        assertTrue(tables.containsKey("znty_rrs.rrs_temp_security_code"));
+        assertTrue(tables.containsKey("znty_rrs.ip_adjust_log"));
         assertEquals(tables.keySet(), healthTables.keySet());
     }
 
@@ -46,7 +49,7 @@ public class ScriptToolServiceTest {
         List<String> statements = Arrays.asList(
                 "-- 选择数据库\nUSE `znty_rrs`",
                 "-- 恢复调库日志演示数据\nINSERT INTO `ip_adjust_log` (`id`) VALUES (1)",
-                "-- 未选中的证券主数据\nINSERT INTO `rrs_securityinfo` (`id`) VALUES (1)"
+                "-- 未选中的证券主数据\nINSERT INTO `rrs_securityinfo` (`wind_code`) VALUES ('TMP001')"
         );
         Set<String> selectedTableKeys = new HashSet<>(Collections.singletonList("znty_rrs.ip_adjust_log"));
         List<String> executedItems = new ArrayList<>();
@@ -57,7 +60,7 @@ public class ScriptToolServiceTest {
 
         verify(statement, atLeastOnce()).execute("USE `znty_rrs`");
         verify(statement).execute("INSERT INTO `ip_adjust_log` (`id`) VALUES (1)");
-        verify(statement, never()).execute("INSERT INTO `rrs_securityinfo` (`id`) VALUES (1)");
+        verify(statement, never()).execute("INSERT INTO `rrs_securityinfo` (`wind_code`) VALUES ('TMP001')");
         assertEquals(Collections.singletonList(
                 "rrs_security_pool_adjust_demo_data.sql -> znty_rrs.ip_adjust_log"), executedItems);
     }

@@ -22,7 +22,8 @@
                 AND si.issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
         </where>
-        ORDER BY si.id DESC
+        ORDER BY si.ts DESC
+                 ,si.wind_code DESC
     </select>
 
     <!-- 查询证券详情 -->

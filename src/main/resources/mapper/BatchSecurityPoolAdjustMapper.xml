@@ -109,7 +109,8 @@
                 )
             </if>
         </where>
-        ORDER BY si.id DESC
+        ORDER BY si.ts DESC
+                 ,si.wind_code DESC
     </select>
 
     <!-- 查询指定投资池是否为启用叶子池 -->

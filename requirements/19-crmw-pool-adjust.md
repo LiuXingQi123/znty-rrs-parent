@@ -28,7 +28,7 @@
 | `issuer` | el-input | 模糊 |
 
 - 接口：`POST /api/v1/crmwPoolAdjust/queryCrmwPage`，请求体 `{ securityCode, securityShortName, issuer, pageIndex, pageSize }`，返回 `PageResult<SecurityInfoDto>`。
-- SQL（`queryCrmwPage`）：`FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type='crmw'`，按 `wind_code`/`short_name`/`issuer` 模糊，`ORDER BY si.id DESC`。
+- SQL（`queryCrmwPage`）：`FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type='crmw'`，按 `wind_code`/`short_name`/`issuer` 模糊，`ORDER BY si.ts DESC, si.wind_code DESC`。
 - 分页：`crmwPagination: {pageIndex:1, pageSize:5, total:0}`，`page-sizes=[5,10,20,50]`。
 
 ### 2.2 可绑定证券列表（`searchForm`）

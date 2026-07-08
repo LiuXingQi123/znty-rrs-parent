@@ -18,12 +18,10 @@ DROP TABLE IF EXISTS `rrs_securityinfo`;
 -- ----------------------------------------------------------------------------
 CREATE TABLE `rrs_securityinfo`
 (
-    `id`                         BIGINT          NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-
     -- ==========================================
     -- 基础及标识信息
     -- ==========================================
-    `wind_code`                  varchar(100)    DEFAULT NULL COMMENT '关联代码',
+    `wind_code`                  varchar(100)    NOT NULL COMMENT '关联代码',
     `full_name`                  varchar(300)    DEFAULT NULL COMMENT '证券全称',
     `issue_announcement`         varchar(10)     DEFAULT NULL COMMENT '公告日期',
     `short_name`                 varchar(100)    DEFAULT NULL COMMENT '证券简称',
@@ -140,7 +138,7 @@ CREATE TABLE `rrs_securityinfo`
     `guarant_type`               varchar(100)    DEFAULT NULL COMMENT '担保类型',
     `abs_flag`                   int             DEFAULT NULL COMMENT '是否 ABS',
 
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`wind_code`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci

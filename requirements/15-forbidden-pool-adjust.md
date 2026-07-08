@@ -42,7 +42,7 @@
 
 - 路径：`POST /api/v1/forbiddenPoolAdjust/queryCompanyPage`
 - 请求体：`{ companyCode, companyShortName, companyFullName, compType, industryName, companyRating, companyInnerRating, pageIndex, pageSize }`
-- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL `INNER JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.category_type = 'company'`，即只查主体类型证券；`industryName` 同时匹配 `industry_name` 与 `industry_name2`；`ORDER BY si.id DESC`。SELECT 把 `wind_code AS companyCode`、`short_name AS companyShortName`、`rating_bondissuer AS companyRating`、`inner_issuer_rating AS companyInnerRating` 等。
+- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL `INNER JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.category_type = 'company'`，即只查主体类型证券；`industryName` 同时匹配 `industry_name` 与 `industry_name2`；`ORDER BY si.ts DESC, si.wind_code DESC`。SELECT 把 `wind_code AS companyCode`、`short_name AS companyShortName`、`rating_bondissuer AS companyRating`、`inner_issuer_rating AS companyInnerRating` 等。
 - `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...) GROUP BY issuer_code`）批量回填 `companyBondCount`。
 - 返回 `PageResult<ForbiddenPoolAdjustDto>`，前端取 `data.records` 与 `data.total`。
 

@@ -5,8 +5,7 @@
 
     <!-- 分页查询公司主体 -->
     <select id="queryCompanyPage" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
-        SELECT si.id
-               ,si.wind_code AS companyCode
+        SELECT si.wind_code AS companyCode
                ,si.short_name AS companyShortName
                ,si.full_name AS companyFullName
                ,si.security_type
@@ -48,13 +47,13 @@
                 AND si.inner_issuer_rating = #{companyInnerRating}
             </if>
         </where>
-        ORDER BY si.id DESC
+        ORDER BY si.ts DESC
+                 ,si.wind_code DESC
     </select>
 
     <!-- 查询公司主体详情 -->
     <select id="queryCompanyDetail" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
-        SELECT si.id
-               ,si.wind_code AS companyCode
+        SELECT si.wind_code AS companyCode
                ,si.short_name AS companyShortName
                ,si.full_name AS companyFullName
                ,si.security_type

@@ -38,7 +38,7 @@
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
 - 请求体：`{ securityCode, securityShortName, issuer, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 排除 `security_type IN ('crmw','company')` 的 CRMW 凭证和公司主体，按 `wind_code` / `short_name` / `issuer` 模糊匹配，`ORDER BY si.id DESC`，LEFT JOIN `dict_security_type` 取 `security_type_name`。
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 排除 `security_type IN ('crmw','company')` 的 CRMW 凭证和公司主体，按 `wind_code` / `short_name` / `issuer` 模糊匹配，`ORDER BY si.ts DESC, si.wind_code DESC`，LEFT JOIN `dict_security_type` 取 `security_type_name`。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.3 表格列（列表页）

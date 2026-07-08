@@ -1310,7 +1310,7 @@ public class ScriptToolService {
                 "SELECT COUNT(*) FROM ais_inv_analysis.t_inv_grade_result g LEFT JOIN ais_inv_analysis.t_inv_company c ON c.id = g.company_id WHERE g.company_id IS NOT NULL AND c.id IS NULL",
                 STATUS_FAILED, "评级结果找不到主体", "修正 company_id 或补回主体数据"));
         rules.add(buildIntegrityRule("my-security", "个人数据", "my_security_pool → rrs_securityinfo", "我的证券池主数据关联",
-                "SELECT COUNT(*) FROM znty_rrs.my_security_pool m LEFT JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = m.security_code WHERE m.security_code IS NOT NULL AND s.id IS NULL",
+                "SELECT COUNT(*) FROM znty_rrs.my_security_pool m LEFT JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = m.security_code WHERE m.security_code IS NOT NULL AND s.wind_code IS NULL",
                 STATUS_WARNING, "我的证券池中存在找不到主数据的证券", "核对证券代码或同步证券主数据"));
         rules.add(buildIntegrityRule("my-security-user", "用户权限", "my_security_pool.user_id", "我的证券池用户归属",
                 "SELECT COUNT(*) FROM znty_rrs.my_security_pool m LEFT JOIN ais_inv_analysis.t_sys_user u ON u.id = m.user_id WHERE m.user_id IS NOT NULL AND u.id IS NULL",

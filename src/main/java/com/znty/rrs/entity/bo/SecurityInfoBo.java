@@ -9,8 +9,6 @@ import java.util.Date;
  */
 @Data
 public class SecurityInfoBo {
-    /** 主键 ID */
-    private Long id;
     /** 关联代码 */
     private String windCode;
     /** 证券全称 */
