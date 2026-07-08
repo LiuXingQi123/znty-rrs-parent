@@ -145,6 +145,8 @@ public class SecurityPoolAdjustService {
     private static final boolean OUTLOOK_RATING_DOWNGRADED = false;
     /** 担保人评级是否下调（当前写死，后续接评级历史查询替换） */
     private static final boolean GUARANTOR_RATING_DOWNGRADED = false;
+    /** 白名单池 ID 集合：主体在这些池中时符合白名单条件；当前写死空集，后续配置后补 queryIssuerInWhitelistPools 查询 */
+    private static final Set<Long> WHITELIST_POOL_IDS = Collections.emptySet();
     /** 信用债标准上调流程 Key */
     private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
     /** 信用债标准下调流程 Key */
@@ -1564,9 +1566,60 @@ public class SecurityPoolAdjustService {
      */
     private boolean isWhitelistFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
+        SecurityInfoBo sec = shared.getSecurityInfo();
 
-        unmatchReasons.add("白名单流程当前默认关闭，暂不作为可选流程");
-        return false;
+        // 条件1：剩余期限 ≤ 3 年
+        Integer remainDays = parseRemainDays(sec.getDateNext());
+        if (remainDays == null) {
+            unmatchReasons.add("剩余期限无法解析，dateNext 需为 yyyyMMdd 格式");
+        } else if (remainDays < 0) {
+            unmatchReasons.add("剩余期限已小于 0 天");
+        } else if (remainDays <= 365 * 3) {
+            matchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，未超过 3 年");
+        } else {
+            unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，超过 3 年");
+        }
+
+        // 条件2：排除永续债、私募债、ABS 债
+        boolean isPerpetual = sec.getYxFlag() != null && sec.getYxFlag() == 1;
+        boolean isAbs = sec.getAbsFlag() != null && sec.getAbsFlag() == 1;
+        boolean isPrivatePlacement = (sec.getIssueType() != null && sec.getIssueType().contains("私募"))
+                || (sec.getInnerClass() != null && sec.getInnerClass().contains("私募"));
+        if (isPerpetual) {
+            unmatchReasons.add("债券为永续债，不符合白名单条件");
+        } else if (isAbs) {
+            unmatchReasons.add("债券为 ABS 债，不符合白名单条件");
+        } else if (isPrivatePlacement) {
+            unmatchReasons.add("债券为私募债，不符合白名单条件");
+        } else {
+            matchReasons.add("债券非永续债、私募债、ABS 债");
+        }
+
+        // 条件3：债券类型属于债券类
+        String categoryType = securityPoolAdjustMapper.queryCategoryTypeBySecurityType(sec.getSecurityType());
+        if (CategoryType.BOND.getCode().equals(categoryType)) {
+            matchReasons.add("债券类型属于债券类");
+        } else {
+            unmatchReasons.add("债券类型不属于债券类");
+        }
+
+        // 条件4：债券主体在白名单配置池中（当前 WHITELIST_POOL_IDS 空集，暂不查库）
+        if (!WHITELIST_POOL_IDS.isEmpty()) {
+            // TODO 后续接入 queryIssuerInWhitelistPools 查询主体在白名单池
+            matchReasons.add("主体在白名单池中");
+        } else {
+            unmatchReasons.add("白名单池未配置，主体在白名单池条件不成立");
+        }
+
+        // 条件5：债券不是担保债
+        boolean isGuaranteed = sec.getGuarantFlag() != null && sec.getGuarantFlag() == 1;
+        if (!isGuaranteed) {
+            matchReasons.add("债券非担保债");
+        } else {
+            unmatchReasons.add("债券为担保债，不符合白名单条件");
+        }
+
+        return unmatchReasons.isEmpty();
     }
 
     /**
