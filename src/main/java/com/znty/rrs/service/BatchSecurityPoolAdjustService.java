@@ -1236,6 +1236,7 @@ public class BatchSecurityPoolAdjustService {
             resultItem.setAdjustGroupKey(adjustGroupKey);
             resultItem.setCanAdjust(failures.isEmpty());
             resultItem.setFailReasons(failures);
+            resultItem.setWarnings(ctx.getWarnings());
             results.add(resultItem);
 
             // 取出目标池的关系配置，用于生成自动项
@@ -1328,6 +1329,7 @@ public class BatchSecurityPoolAdjustService {
             resultItem.setAdjustGroupKey(adjustGroupKey);
             resultItem.setCanAdjust(failures.isEmpty());
             resultItem.setFailReasons(failures);
+            resultItem.setWarnings(ctx.getWarnings());
             results.add(resultItem);
 
             // 联动调出：目标池调出时，其联动池（out_linked）需同步调出
@@ -1947,7 +1949,7 @@ public class BatchSecurityPoolAdjustService {
         // 入池检查：本次请求中是否同时勾选了互斥池（不可同时调入）
         addIfFailed(failures, inCheckMutexConflict(ctx));
         // 入池检查：是否满足弹性池条件
-        addIfFailed(failures, inCheckElasticPool(ctx));
+        addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
         // 入池检查：证券是否在全局禁止池（forbidden/blacklist）
         addIfFailed(failures, inCheckForbiddenPool(ctx));
         // 入池检查：证券评级是否符合目标池评级限制
@@ -2228,7 +2230,7 @@ public class BatchSecurityPoolAdjustService {
         // 出池检查：本次请求中是否同时勾选了互斥池（不可同时调出）
         addIfFailed(failures, outCheckMutexConflict(ctx));
         // 出池检查：是否满足弹性池条件
-        addIfFailed(failures, outCheckElasticPool(ctx));
+        addIfWarning(ctx.getWarnings(), outCheckElasticPool(ctx));
         // 开放日校验（按池 open_day_adjust，调出）
         addIfFailed(failures, outCheckOpenDay(ctx));
         return failures;
@@ -2903,6 +2905,13 @@ public class BatchSecurityPoolAdjustService {
     private void addIfFailed(List<String> failures, String reason) {
         if (reason != null) {
             failures.add(reason);
+        }
+    }
+
+    /** 单条校验返回的警告原因非空时加入警告列表（不阻断调库，如弹性禁投池）。 */
+    private void addIfWarning(List<String> warnings, String reason) {
+        if (reason != null) {
+            warnings.add(reason);
         }
     }
 

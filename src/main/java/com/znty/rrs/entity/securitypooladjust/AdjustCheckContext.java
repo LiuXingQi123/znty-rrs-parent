@@ -65,4 +65,7 @@ public class AdjustCheckContext {
 
     /** 基金评分（基金证券调入校验用，来自请求；空则跳过基金评分校验） */
     private String fundRate;
+
+    /** 校验警告列表（弹性禁投池等柔性限制命中时填充，不阻断调库） */
+    private java.util.List<String> warnings = new java.util.ArrayList<>();
 }

@@ -62,4 +62,7 @@ public class AdjustCheckContext {
 
     /** 证券品种大类（bond/fund/stock/company，查 dict_security_type），用于类型特有校验路由 */
     private String categoryType;
+
+    /** 校验警告列表（弹性禁投池等柔性限制命中时填充，不阻断调库） */
+    private java.util.List<String> warnings = new java.util.ArrayList<>();
 }

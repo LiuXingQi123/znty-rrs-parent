@@ -55,6 +55,9 @@ public class AdjustCheckDto {
         /** 不可调整原因列表（可调整时为空列表） */
         private List<String> failReasons;
 
+        /** 警告原因列表（可调整但有警告时非空，如弹性禁投池命中，不阻断调库） */
+        private List<String> warnings;
+
         /** 当前调库项可选流程列表 */
         private List<FlowOption> flowOptions;
     }
