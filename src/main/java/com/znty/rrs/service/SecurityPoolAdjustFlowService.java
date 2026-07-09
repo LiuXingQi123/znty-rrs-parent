@@ -887,26 +887,6 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 拼接节点关键字识别文本。
-     */
-    private String buildNodeText(FlowNodeBo node) {
-        if (node == null) {
-            return "";
-        }
-        StringBuilder builder = new StringBuilder();
-        if (node.getLabel() != null) {
-            builder.append(node.getLabel());
-        }
-        if (node.getNodeId() != null) {
-            builder.append(' ').append(node.getNodeId());
-        }
-        if (node.getNodeType() != null) {
-            builder.append(' ').append(node.getNodeType());
-        }
-        return builder.toString();
-    }
-
-    /**
      * 查询同批次第一条调库记录。
      */
     private IpAdjustLogBo queryFirstAdjustLog(IpAdjustStepBo step) {
