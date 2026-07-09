@@ -1079,7 +1079,7 @@ public class ForbiddenPoolAdjustService {
             return;
         }
         // 6个月内入池报告标记（对齐老系统 bondfileflag，6个月）：同主体半年内有审批通过调入记录则跳过报告校验
-        if (securityCode != null && forbiddenPoolAdjustMapper.queryHasRecentInboundWithReport(securityCode)) {
+        if (securityCode != null && !securityCode.isEmpty() && forbiddenPoolAdjustMapper.queryHasRecentInboundWithReport(securityCode)) {
             return;
         }
         boolean hasReport = (item.getCreditReportFileIndexes() != null && !item.getCreditReportFileIndexes().isEmpty())
