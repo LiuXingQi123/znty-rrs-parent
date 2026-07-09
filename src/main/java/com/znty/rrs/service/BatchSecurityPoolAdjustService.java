@@ -1999,6 +1999,10 @@ public class BatchSecurityPoolAdjustService {
         if ("convertible_bond".equals(sec.getSecurityType())) {
             return null;
         }
+        // 观察池命中时跳过主体债入库规则（对齐老系统 ASTRICTPOOLS->openrule=1）
+        if (ctx.isSecurityInObservePool() || ctx.isIssuerInObservePool()) {
+            return null;
+        }
         // 主体内评分档
         String gradeCode = sec.getInnerIssuerRating();
         if (gradeCode == null || gradeCode.isEmpty()) {
