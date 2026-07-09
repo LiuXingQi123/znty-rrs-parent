@@ -42,6 +42,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -715,7 +716,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 验证 createInitialStepsShouldSkipSubmitterNodeEvenWhenOldConfigIsPreempt 测试场景。 */
     @Test
-    public void createInitialStepsShouldSkipSubmitterNodeEvenWhenOldConfigIsPreempt() throws Exception {
+    public void createInitialStepsShouldSkipSubmitterNodeWhenInitiatorStrategy() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
@@ -730,7 +731,7 @@ public class SecurityPoolAdjustServiceStepTest {
         FlowNodeBo reviewer = buildNode(3L, "n3", "approval", 3);
         reviewer.setLabel("研究员B复核");
         // 构建审批配置测试数据
-        NodeApprovalConfigBo submitterConfig = buildConfig(20L, submitter.getId(), "preempt");
+        NodeApprovalConfigBo submitterConfig = buildConfig(20L, submitter.getId(), "initiator");
         // 构建审批配置测试数据
         NodeApprovalConfigBo reviewerConfig = buildConfig(30L, reviewer.getId(), "preempt");
         // 构建流程快照测试数据
@@ -1416,5 +1417,175 @@ public class SecurityPoolAdjustServiceStepTest {
         }
         map.put(configId, handlers);
         return map;
+    }
+
+    // ===== 白名单流程 5 条件判断测试（isWhitelistFlowMatched）=====
+
+    /** 验证白名单条件1：剩余期限超过3年时不命中。 */
+    @Test
+    public void isWhitelistFlowMatchedShouldFailWhenRemainDaysOver3Years() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
+        AdjustSharedData shared = buildWhitelistShared("20990101", 0, 0, "公募", "bond", 0);
+        List<String> matchReasons = new ArrayList<>();
+        List<String> unmatchReasons = new ArrayList<>();
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
+                new AdjustCheckReq(), shared, matchReasons, unmatchReasons);
+        assertThat(result).isFalse();
+        assertTrue(unmatchReasons.stream().anyMatch(s -> s.contains("超过 3 年")));
+    }
+
+    /** 验证白名单条件2：永续债时不命中。 */
+    @Test
+    public void isWhitelistFlowMatchedShouldFailWhenPerpetual() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
+        AdjustSharedData shared = buildWhitelistShared("20270101", 1, 0, "公募", "bond", 0);
+        List<String> matchReasons = new ArrayList<>();
+        List<String> unmatchReasons = new ArrayList<>();
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
+                new AdjustCheckReq(), shared, matchReasons, unmatchReasons);
+        assertThat(result).isFalse();
+        assertTrue(unmatchReasons.stream().anyMatch(s -> s.contains("永续债")));
+    }
+
+    /** 验证白名单条件2：ABS债时不命中。 */
+    @Test
+    public void isWhitelistFlowMatchedShouldFailWhenAbs() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
+        AdjustSharedData shared = buildWhitelistShared("20270101", 0, 1, "公募", "bond", 0);
+        List<String> matchReasons = new ArrayList<>();
+        List<String> unmatchReasons = new ArrayList<>();
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
+                new AdjustCheckReq(), shared, matchReasons, unmatchReasons);
+        assertThat(result).isFalse();
+        assertTrue(unmatchReasons.stream().anyMatch(s -> s.contains("ABS")));
+    }
+
+    /** 验证白名单条件3：非债券类时不命中。 */
+    @Test
+    public void isWhitelistFlowMatchedShouldFailWhenNotBondCategory() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryCategoryTypeBySecurityType("stock")).thenReturn("stock");
+        AdjustSharedData shared = buildWhitelistShared("20270101", 0, 0, "公募", "stock", 0);
+        List<String> matchReasons = new ArrayList<>();
+        List<String> unmatchReasons = new ArrayList<>();
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
+                new AdjustCheckReq(), shared, matchReasons, unmatchReasons);
+        assertThat(result).isFalse();
+        assertTrue(unmatchReasons.stream().anyMatch(s -> s.contains("不属于债券类")));
+    }
+
+    /** 验证白名单条件5：担保债时不命中。 */
+    @Test
+    public void isWhitelistFlowMatchedShouldFailWhenGuaranteed() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
+        AdjustSharedData shared = buildWhitelistShared("20270101", 0, 0, "公募", "bond", 1);
+        List<String> matchReasons = new ArrayList<>();
+        List<String> unmatchReasons = new ArrayList<>();
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
+                new AdjustCheckReq(), shared, matchReasons, unmatchReasons);
+        assertThat(result).isFalse();
+        assertTrue(unmatchReasons.stream().anyMatch(s -> s.contains("担保债")));
+    }
+
+    /** 验证白名单其它条件满足时仅条件4（白名单池未配置）不命中。 */
+    @Test
+    public void isWhitelistFlowMatchedShouldOnlyFailOnWhitelistPoolWhenOthersMatch() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
+        AdjustSharedData shared = buildWhitelistShared("20270101", 0, 0, "公募", "bond", 0);
+        List<String> matchReasons = new ArrayList<>();
+        List<String> unmatchReasons = new ArrayList<>();
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
+                new AdjustCheckReq(), shared, matchReasons, unmatchReasons);
+        // WHITELIST_POOL_IDS 常量空集，条件4恒 false，整体不命中
+        assertThat(result).isFalse();
+        assertTrue(unmatchReasons.stream().anyMatch(s -> s.contains("白名单池未配置")));
+        assertTrue(matchReasons.stream().anyMatch(s -> s.contains("非永续债")));
+    }
+
+    /** 验证简易流程第⑤条件：三标志常量 false 时走"未下调"分支。 */
+    @Test
+    public void isSimpleInboundFlowMatchedShouldPassRatingCheckWhenFlagsFalse() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        InvestmentPoolBo targetPool = buildPool(2L, 1L, "一级库");
+        targetPool.setPoolType("credit_bond");
+        targetPool.setInnerSort(1);
+        AdjustSharedData shared = new AdjustSharedData();
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setDateNext("20270101");
+        shared.setSecurityInfo(sec);
+        when(mapper.queryIssuerTargetPoolMaxRemainDays(any(String.class), any(Long.class))).thenReturn(null);
+        when(mapper.queryIssuerRecentSimpleInboundExists(any(String.class), any(Long.class))).thenReturn(false);
+        AdjustCheckReq req = new AdjustCheckReq();
+        req.setSecurityCode("110010123");
+        List<String> matchReasons = new ArrayList<>();
+        List<String> unmatchReasons = new ArrayList<>();
+        ReflectionTestUtils.invokeMethod(service, "isSimpleInboundFlowMatched",
+                req, shared, targetPool, matchReasons, unmatchReasons);
+        // 三标志常量 false，第⑤条件走"未下调"分支
+        assertTrue(matchReasons.stream().anyMatch(s -> s.contains("主体评级和展望评级未下调")));
+    }
+
+    // ===== 节点语义 approval_strategy 判断测试（isInitiatorStep）=====
+
+    /** 验证发起人节点 approval_strategy=initiator 时 isInitiatorStep 返回 true。 */
+    @Test
+    public void isInitiatorStepShouldReturnTrueWhenInitiatorStrategy() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        FlowNodeBo node = new FlowNodeBo();
+        node.setId(1L);
+        node.setNodeType("approval");
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setApprovalStrategy("initiator");
+        Boolean result = ReflectionTestUtils.invokeMethod(
+                service, "isInitiatorStep", node, config, null, null);
+        assertThat(result).isTrue();
+    }
+
+    /** 验证 approval_strategy=preempt 时 isInitiatorStep 返回 false。 */
+    @Test
+    public void isInitiatorStepShouldReturnFalseWhenNotInitiator() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        FlowNodeBo node = new FlowNodeBo();
+        node.setId(1L);
+        node.setNodeType("approval");
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setApprovalStrategy("preempt");
+        Boolean result = ReflectionTestUtils.invokeMethod(
+                service, "isInitiatorStep", node, config, null, null);
+        assertThat(result).isFalse();
+    }
+
+    /** 构建白名单测试共享数据。 */
+    private AdjustSharedData buildWhitelistShared(String dateNext, int yxFlag, int absFlag,
+                                                  String issueType, String securityType, int guarantFlag) {
+        AdjustSharedData shared = new AdjustSharedData();
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setDateNext(dateNext);
+        sec.setYxFlag(yxFlag);
+        sec.setAbsFlag(absFlag);
+        sec.setIssueType(issueType);
+        sec.setSecurityType(securityType);
+        sec.setGuarantFlag(guarantFlag);
+        shared.setSecurityInfo(sec);
+        return shared;
     }
 }

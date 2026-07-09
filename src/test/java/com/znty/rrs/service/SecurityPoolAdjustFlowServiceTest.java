@@ -6,7 +6,9 @@ import com.znty.rrs.common.enums.AttachmentCategory;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
+import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import com.znty.rrs.entity.bo.FlowEdgeBo;
+import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
@@ -47,7 +49,9 @@ public class SecurityPoolAdjustFlowServiceTest {
         when(mapper.editAdjustStepProcess(11L, "approve", "approve", "同意")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         // 构建调库日志测试数据
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00")));
+        IpAdjustLogBo tempLog = buildLog("00");
+        tempLog.setSecurityCode("S001");
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(tempLog));
 
         service.submitAdjustAudit(req);
 
@@ -70,7 +74,9 @@ public class SecurityPoolAdjustFlowServiceTest {
         when(mapper.editAdjustStepProcess(10L, "approve", "approve", "同意（由管理员操作）")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         // 构建调库日志测试数据
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00")));
+        IpAdjustLogBo tempLog = buildLog("00");
+        tempLog.setSecurityCode("S001");
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(tempLog));
 
         service.submitAdjustAudit(req);
 
@@ -209,17 +215,31 @@ public class SecurityPoolAdjustFlowServiceTest {
     @Test
     public void submitAdjustAuditShouldAllowSubmitterModifyRejectedProcess() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
         // 构建流程审批服务实例测试数据
-        SecurityPoolAdjustFlowService service = buildService(mapper);
+        SecurityPoolAdjustFlowService service = buildService(mapper, flowMapper);
         // 构建发起人修改节点待处理步骤测试数据
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         step.setNodeLabel("流程发起人修改");
+        step.setApprovalStrategy("initiator");
         // 构建发起人审批请求测试数据
         SecurityPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "已修改");
         when(mapper.queryAdjustStepById(10L)).thenReturn(step);
         when(mapper.editAdjustStepProcess(10L, "submit", "submit", "已修改")).thenReturn(1);
-        when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("11", "2")));
+        // 构建流程快照：修改节点 -> 复核节点（避免流程直接结束触发落地）
+        FlowNodeBo modifyNode = buildFlowNode(10103L, "n4", "approval", "流程发起人修改");
+        FlowNodeBo reviewerNode = buildFlowNode(10104L, "n3", "approval", "研究员B复核");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "approve");
+        FlowVersionBo version = new FlowVersionBo();
+        version.setId(1L);
+        when(flowMapper.queryFlowNodeById(10103L)).thenReturn(modifyNode);
+        when(flowMapper.queryFlowVersionById(1L)).thenReturn(version);
+        when(flowMapper.queryFlowNodeListByVersionId(1L)).thenReturn(Arrays.asList(modifyNode, reviewerNode));
+        when(flowMapper.queryFlowEdgeListByVersionId(1L)).thenReturn(Collections.singletonList(edge));
+        when(flowMapper.queryCondRuleListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalConfigListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(Collections.emptyList());
 
         service.submitAdjustAudit(req);
 
@@ -231,11 +251,16 @@ public class SecurityPoolAdjustFlowServiceTest {
     public void submitAdjustAuditShouldSaveAttachmentChangesWhenModifySubmit() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
         // 构建流程审批服务实例测试数据
-        SecurityPoolAdjustFlowService service = buildService(mapper, attachmentService);
+        SecurityPoolAdjustFlowService service = new SecurityPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
         // 构建发起人修改节点待处理步骤测试数据
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         step.setNodeLabel("流程发起人修改");
+        step.setApprovalStrategy("initiator");
         // 构建发起人审批请求测试数据
         SecurityPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "已修改");
         SecurityPoolAdjustAuditReq.AttachmentChange change = new SecurityPoolAdjustAuditReq.AttachmentChange();
@@ -248,8 +273,20 @@ public class SecurityPoolAdjustFlowServiceTest {
         req.setAttachmentChanges(Collections.singletonList(change));
         when(mapper.queryAdjustStepById(10L)).thenReturn(step);
         when(mapper.editAdjustStepProcess(10L, "submit", "submit", "已修改")).thenReturn(1);
-        when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog(1L, "11", "2")));
+        // 构建流程快照：修改节点 -> 复核节点（避免流程直接结束触发落地）
+        FlowNodeBo modifyNode = buildFlowNode(10103L, "n4", "approval", "流程发起人修改");
+        FlowNodeBo reviewerNode = buildFlowNode(10104L, "n3", "approval", "研究员B复核");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "approve");
+        FlowVersionBo version = new FlowVersionBo();
+        version.setId(1L);
+        when(flowMapper.queryFlowNodeById(10103L)).thenReturn(modifyNode);
+        when(flowMapper.queryFlowVersionById(1L)).thenReturn(version);
+        when(flowMapper.queryFlowNodeListByVersionId(1L)).thenReturn(Arrays.asList(modifyNode, reviewerNode));
+        when(flowMapper.queryFlowEdgeListByVersionId(1L)).thenReturn(Collections.singletonList(edge));
+        when(flowMapper.queryCondRuleListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalConfigListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(Collections.emptyList());
 
         service.submitAdjustAudit(req, Collections.emptyList());
 
@@ -419,5 +456,85 @@ public class SecurityPoolAdjustFlowServiceTest {
             return;
         }
         throw new AssertionError("改判池不在矩阵内时应抛出异常");
+    }
+
+    // ===== 节点语义 approval_strategy 判断测试 =====
+
+    /** 验证 O32 节点 approval_strategy=o32 时 isAutoApprovalNode 返回 true。 */
+    @Test
+    public void isAutoApprovalNodeShouldReturnTrueWhenO32Strategy() {
+        SecurityPoolAdjustFlowService service = buildService(mock(SecurityPoolAdjustMapper.class));
+        FlowNodeBo node = buildFlowNode(1L, "n6", "approval", "O32自动审批");
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setApprovalStrategy("o32");
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isAutoApprovalNode", node, config);
+        assertThat(result).isTrue();
+    }
+
+    /** 验证 approval_strategy=preempt 时 isAutoApprovalNode 返回 false。 */
+    @Test
+    public void isAutoApprovalNodeShouldReturnFalseWhenNotO32() {
+        SecurityPoolAdjustFlowService service = buildService(mock(SecurityPoolAdjustMapper.class));
+        FlowNodeBo node = buildFlowNode(1L, "n6", "approval", "O32自动审批");
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setApprovalStrategy("preempt");
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isAutoApprovalNode", node, config);
+        assertThat(result).isFalse();
+    }
+
+    /** 验证发起人节点 approval_strategy=initiator 时 isInitiatorNode 返回 true。 */
+    @Test
+    public void isInitiatorNodeShouldReturnTrueWhenInitiatorStrategy() {
+        SecurityPoolAdjustFlowService service = buildService(mock(SecurityPoolAdjustMapper.class));
+        FlowNodeBo node = buildFlowNode(1L, "n2", "approval", "研究员A发起");
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setApprovalStrategy("initiator");
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isInitiatorNode", node, config);
+        assertThat(result).isTrue();
+    }
+
+    /** 验证修改节点 approval_strategy=initiator 时 isModifyNode 返回 true。 */
+    @Test
+    public void isModifyNodeShouldReturnTrueWhenInitiatorStrategy() {
+        SecurityPoolAdjustFlowService service = buildService(mock(SecurityPoolAdjustMapper.class));
+        FlowNodeBo node = buildFlowNode(1L, "n4", "approval", "研究员A修改");
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setApprovalStrategy("initiator");
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isModifyNode", node, config);
+        assertThat(result).isTrue();
+    }
+
+    // ===== O32 临时代码判断测试（isTemporaryCode）=====
+
+    /** 验证证券代码在临时代码表中时 isTemporaryCode 返回 true。 */
+    @Test
+    public void isTemporaryCodeShouldReturnTrueWhenSecurityCodeInTempTable() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        TempSecurityCodeMapper tempMapper = mock(TempSecurityCodeMapper.class);
+        SecurityPoolAdjustFlowService service = buildService(mapper);
+        ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", tempMapper);
+        IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
+        IpAdjustLogBo tempLog = buildLog("00");
+        tempLog.setSecurityCode("S001");
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(tempLog));
+        when(tempMapper.queryTemporaryCodeCountBySecurityCode("S001")).thenReturn(1);
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isTemporaryCode", step);
+        assertThat(result).isTrue();
+    }
+
+    /** 验证证券代码不在临时代码表中时 isTemporaryCode 返回 false。 */
+    @Test
+    public void isTemporaryCodeShouldReturnFalseWhenSecurityCodeNotInTempTable() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        TempSecurityCodeMapper tempMapper = mock(TempSecurityCodeMapper.class);
+        SecurityPoolAdjustFlowService service = buildService(mapper);
+        ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", tempMapper);
+        IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
+        IpAdjustLogBo tempLog = buildLog("00");
+        tempLog.setSecurityCode("S001");
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(tempLog));
+        when(tempMapper.queryTemporaryCodeCountBySecurityCode("S001")).thenReturn(0);
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isTemporaryCode", step);
+        assertThat(result).isFalse();
     }
 }
