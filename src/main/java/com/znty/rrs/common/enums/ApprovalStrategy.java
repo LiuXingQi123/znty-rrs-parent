@@ -7,7 +7,9 @@ public enum ApprovalStrategy {
     /** 全部处理（会签） */
     ALL("all"),
     /** 流程发起人处理 */
-    INITIATOR("initiator");
+    INITIATOR("initiator"),
+    /** O32 系统自动审批（非临时代码系统代审，临时代码转人工抢占） */
+    O32("o32");
 
     /** 枚举 code 值 */
     private final String code;

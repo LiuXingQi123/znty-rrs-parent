@@ -116,6 +116,15 @@
         </where>
     </select>
 
+    <!-- 查询正式证券代码是否为临时代码（未删除且未取消发行的有效记录） -->
+    <select id="queryTemporaryCodeCountBySecurityCode" resultType="int">
+        SELECT COUNT(1)
+        FROM rrs_temp_security_code
+        WHERE is_deleted = 0
+          AND status IN ('temporary', 'updated')
+          AND security_code = #{securityCode}
+    </select>
+
     <!-- 查询发行主体选项 -->
     <select id="queryCompanyOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
         SELECT id AS companyId

@@ -20,6 +20,7 @@ import com.znty.rrs.common.enums.AttachmentCategory;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.ForbiddenPoolAdjustMapper;
+import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import com.znty.rrs.entity.bo.FlowDefinitionBo;
 import com.znty.rrs.entity.bo.EdgeCondRuleBo;
 import com.znty.rrs.entity.bo.FlowEdgeBo;
@@ -72,6 +73,10 @@ public class ForbiddenPoolAdjustFlowService {
     /** 系统附件服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+
+    /** 临时代码数据访问组件（O32 自动审批节点判断临时代码用） */
+    @Resource
+    private TempSecurityCodeMapper tempSecurityCodeMapper;
 
     /** 投资池服务，用于查询投资池全路径名称 */
     @Resource
@@ -380,10 +385,17 @@ public class ForbiddenPoolAdjustFlowService {
             int sortOrder = nextNode.getSortOrder() != null ? nextNode.getSortOrder() : 1;
 
             // 判断是否为自动处理节点
-            if (isAutoApprovalNode(nextNode)) {
-                // O32 自动审批节点直接记录为自动完成，并继续流转到结束节点
-                insertStepRecord(step.getAdjustLogId(), step.getAdjustBatchNo(), nextNode, config, sortOrder,
-                        StepStatus.AUTO_PROCESS.getCode(), null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
+            if (isAutoApprovalNode(nextNode, config)) {
+                // O32 自动审批节点：临时代码转人工，非临时代码系统代审
+                if (isTemporaryCode(step)) {
+                    // 临时代码：完全当作审批节点，为每个处理人建 PENDING 步骤等人工点击
+                    createPendingSteps(step, nextNode, snapshot, now);
+                    result.nextStepCreated = true;
+                    result.finished = false;
+                    return result;
+                }
+                // 非临时代码：和审批节点一样为每个处理人建步骤，但系统自动处理（AUTO_PROCESS）
+                createAutoProcessSteps(step, nextNode, snapshot, now);
                 // 查找审批通过主路径上的下一节点
                 FlowNodeBo afterNode = findNextNode(snapshot, nextNode, prevNode, processAction);
                 prevNode = nextNode;
@@ -852,13 +864,40 @@ public class ForbiddenPoolAdjustFlowService {
     /**
      * 判断是否为自动审批节点。
      */
-    private boolean isAutoApprovalNode(FlowNodeBo node) {
-        if (node != null && NodeType.AUTO.getCode().equals(node.getNodeType())) {
-            return true;
+    private boolean isAutoApprovalNode(FlowNodeBo node, NodeApprovalConfigBo config) {
+        // O32 节点通过审批策略 approval_strategy=o32 标记（节点类型为 approval）
+        return config != null && ApprovalStrategy.O32.getCode().equals(config.getApprovalStrategy());
+    }
+
+    /**
+     * 为 O32 节点的每个处理人建自动处理步骤（非临时代码系统代审，每个处理人都有步骤记录可追溯）。
+     */
+    private void createAutoProcessSteps(IpAdjustStepBo currentStep, FlowNodeBo node, FlowSnapshot snapshot, Date now) {
+        NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(node.getId());
+        List<HandlerTarget> handlers = resolveApprovalHandlers(config, snapshot);
+        int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
+        if (handlers.isEmpty()) {
+            insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
+                    StepStatus.AUTO_PROCESS.getCode(), null, null,
+                    ProcessAction.AUTO_PROCESS.getCode(), "系统自动审批通过", now);
+            return;
         }
-        // 拼接节点关键字用于识别自动审批节点
-        String text = buildNodeText(node);
-        return text.contains("自动审批") || text.toLowerCase().contains("o32");
+        for (HandlerTarget handler : handlers) {
+            insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
+                    StepStatus.AUTO_PROCESS.getCode(), handler.handlerId, handler.handlerName,
+                    ProcessAction.AUTO_PROCESS.getCode(), "系统自动审批通过", now);
+        }
+    }
+
+    /**
+     * 判断当前调库的证券是否临时代码。
+     */
+    private boolean isTemporaryCode(IpAdjustStepBo step) {
+        IpAdjustLogBo log = queryFirstAdjustLog(step);
+        if (log == null || log.getSecurityCode() == null) {
+            return false;
+        }
+        return tempSecurityCodeMapper.queryTemporaryCodeCountBySecurityCode(log.getSecurityCode()) > 0;
     }
 
     /**

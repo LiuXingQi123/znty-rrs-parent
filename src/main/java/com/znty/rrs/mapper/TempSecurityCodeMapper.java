@@ -25,6 +25,9 @@ public interface TempSecurityCodeMapper {
     /** 查询临时代码未删除记录数量 */
     int queryTempSecurityCodeCount(@Param("tempSecurityCode") String tempSecurityCode, @Param("excludeId") Long excludeId);
 
+    /** 查询正式证券代码是否为临时代码（未删除且未取消发行的有效记录数量） */
+    int queryTemporaryCodeCountBySecurityCode(@Param("securityCode") String securityCode);
+
     /** 查询发行主体选项 */
     List<TempSecurityCodeDto.CompanyOption> queryCompanyOptionList(TempSecurityCodeReq req);
 
