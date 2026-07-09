@@ -1631,7 +1631,7 @@ public class SecurityPoolAdjustService {
      * 1. 目标池须为信用债大库一/二/三级库；
      * 2. 剩余期限合理（≤3 年且 ≥0）；
      * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限；
-     * 4. 该主体近一年未在目标池走过简易调入流程；
+     * 4. 该主体180天内以一般流程入过目标池；
      * 5. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
      *
      * <p>评级下调标识当前由共享上下文初始化，后续可替换为真实评级历史查询。</p>
@@ -1671,15 +1671,7 @@ public class SecurityPoolAdjustService {
             }
         }
 
-        boolean recentSimpleInbound = securityPoolAdjustMapper.queryIssuerRecentSimpleInboundExists(
-                req.getSecurityCode(), targetPool.getId());
-        if (recentSimpleInbound) {
-            unmatchReasons.add("该主体在目标池中近一年已走过简易流程，需满一年后再次适用");
-        } else {
-            matchReasons.add("该主体在目标池中近一年未走过简易流程");
-        }
-
-        // 条件6：180天内该主体+目标池有非简易入库记录（简易流程前提条件，新需求180天）
+        // 条件4：180天内该主体+目标池有非简易入库记录（简易流程前提条件，新需求180天）
         boolean hasNonSimpleInbound = securityPoolAdjustMapper.queryIssuerHasNonSimpleInboundWithinDays(
                 req.getSecurityCode(), targetPool.getId(), 180);
         if (hasNonSimpleInbound) {

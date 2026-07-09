@@ -1997,8 +1997,7 @@ public class ForbiddenPoolAdjustService {
      * 1. 目标池须为信用债大库一/二/三级库；
      * 2. 剩余期限合理（≤3 年且 ≥0）；
      * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限；
-     * 4. 该主体近一年未在目标池走过简易调入流程；
-     * 5. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
+     * 4. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
      *
      * <p>评级下调标识当前由共享上下文初始化，后续可替换为真实评级历史查询。</p>
      */
@@ -2035,14 +2034,6 @@ public class ForbiddenPoolAdjustService {
                 unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays)
                         + "，超过同主体在池最大期限 " + formatRemainDays(issuerPoolMaxRemainDays));
             }
-        }
-
-        boolean recentSimpleInbound = forbiddenPoolAdjustMapper.queryIssuerRecentSimpleInboundExists(
-                req.getSecurityCode(), targetPool.getId());
-        if (recentSimpleInbound) {
-            unmatchReasons.add("该主体在目标池中近一年已走过简易流程，需满一年后再次适用");
-        } else {
-            matchReasons.add("该主体在目标池中近一年未走过简易流程");
         }
 
         boolean issuerOrOutlookDowngraded = shared.isIssuerRatingDowngraded() || shared.isOutlookRatingDowngraded();

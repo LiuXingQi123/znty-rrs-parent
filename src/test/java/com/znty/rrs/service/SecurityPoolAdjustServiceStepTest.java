@@ -1631,7 +1631,6 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setDateNext("20270101");
         shared.setSecurityInfo(sec);
         when(mapper.queryIssuerTargetPoolMaxRemainDays(any(String.class), any(Long.class))).thenReturn(null);
-        when(mapper.queryIssuerRecentSimpleInboundExists(any(String.class), any(Long.class))).thenReturn(false);
         AdjustCheckReq req = new AdjustCheckReq();
         req.setSecurityCode("110010123");
         List<String> matchReasons = new ArrayList<>();

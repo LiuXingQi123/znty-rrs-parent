@@ -92,10 +92,6 @@ public interface SecurityPoolAdjustMapper {
     Integer queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
                                                @Param("targetPoolId") Long targetPoolId);
 
-    /** 查询同主体在目标池近一年是否走过简易调入流程 */
-    boolean queryIssuerRecentSimpleInboundExists(@Param("securityCode") String securityCode,
-                                                 @Param("targetPoolId") Long targetPoolId);
-
     /** 查询6个月内同主体有审批通过调入记录（对齐老系统 bondfileflag，6个月） */
     boolean queryHasRecentInboundWithReport(@Param("securityCode") String securityCode);
 

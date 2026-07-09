@@ -249,7 +249,7 @@
 - **调入·非信用债大库**（`poolType != 'credit_bond'`）：默认调入流程（`inFlowId/inFlowKey`），`normalInbound`。
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单（当前默认关闭）、简易（`isSimpleInboundFlowMatched`）、默认调入，推荐优先级 白名单 > 简易 > 默认。
-  - 简易命中条件：目标池为信用债一/二/三级库（`innerSort 1~3`）；剩余期限 ≤3 年且 ≥0；剩余期限 ≤ 同主体在目标池已有债券最大剩余期限；该主体近一年未在目标池走过简易调入；主体/展望评级未下调，或下调但担保人评级未下调。
+  - 简易命中条件：目标池为信用债一/二/三级库（`innerSort 1~3`）；剩余期限 ≤3 年且 ≥0；剩余期限 ≤ 同主体在目标池已有债券最大剩余期限；该主体 180 天内以非简易流程入过目标池；主体/展望评级未下调，或下调但担保人评级未下调。
 
 ### 3.7 后端 addAdjustLog 完整逻辑
 

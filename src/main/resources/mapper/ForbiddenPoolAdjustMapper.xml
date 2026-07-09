@@ -489,24 +489,6 @@
           AND si.date_next REGEXP '^[0-9]{8}$'
     </select>
 
-    <!-- 查询同主体在目标池近一年是否走过简易调入流程 -->
-    <select id="queryIssuerRecentSimpleInboundExists" resultType="boolean">
-        SELECT COUNT(1) > 0
-        FROM ip_pool_status ips
-        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
-        WHERE si.issuer = (
-            SELECT issuer
-            FROM rrs_securityinfo
-            WHERE wind_code = #{securityCode}
-            LIMIT 1
-        )
-          AND ips.target_pool_id = #{targetPoolId}
-          AND ips.flow_type = 'simpleInbound'
-          AND ips.audit_status = '20'
-          AND ips.is_deleted = 0
-          AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL 1 YEAR)
-    </select>
-
     <!-- 查询6个月内同主体有审批通过调入记录（对齐老系统 bondfileflag，6个月） -->
     <select id="queryHasRecentInboundWithReport" resultType="boolean">
         SELECT COUNT(1) > 0
