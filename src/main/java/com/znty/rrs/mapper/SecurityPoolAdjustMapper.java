@@ -96,6 +96,14 @@ public interface SecurityPoolAdjustMapper {
     boolean queryIssuerRecentSimpleInboundExists(@Param("securityCode") String securityCode,
                                                  @Param("targetPoolId") Long targetPoolId);
 
+    /** 查询6个月内同主体有审批通过调入记录（对齐老系统 bondfileflag，6个月） */
+    boolean queryHasRecentInboundWithReport(@Param("securityCode") String securityCode);
+
+    /** 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） */
+    boolean queryIssuerHasNonSimpleInboundWithinDays(@Param("securityCode") String securityCode,
+                                                      @Param("targetPoolId") Long targetPoolId,
+                                                      @Param("days") int days);
+
     /** 新增流程步骤记录 */
     int addAdjustStep(IpAdjustStepBo bo);
 

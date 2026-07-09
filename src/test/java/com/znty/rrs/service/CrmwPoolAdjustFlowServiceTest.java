@@ -212,6 +212,7 @@ public class CrmwPoolAdjustFlowServiceTest {
         // 构建发起人修改节点待处理步骤测试数据
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         step.setNodeLabel("流程发起人修改");
+        step.setApprovalStrategy("initiator");
         // 构建发起人审批请求测试数据
         CrmwPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "已修改");
         when(mapper.queryAdjustStepById(10L)).thenReturn(step);
@@ -234,6 +235,7 @@ public class CrmwPoolAdjustFlowServiceTest {
         // 构建发起人修改节点待处理步骤测试数据
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         step.setNodeLabel("流程发起人修改");
+        step.setApprovalStrategy("initiator");
         // 构建发起人审批请求测试数据
         CrmwPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "已修改");
         CrmwPoolAdjustAuditReq.AttachmentChange change = new CrmwPoolAdjustAuditReq.AttachmentChange();
@@ -317,6 +319,8 @@ public class CrmwPoolAdjustFlowServiceTest {
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "flowMapper", mock(FlowMapper.class));
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
+        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         return service;
     }
 
@@ -326,6 +330,8 @@ public class CrmwPoolAdjustFlowServiceTest {
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
+        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         return service;
     }
 

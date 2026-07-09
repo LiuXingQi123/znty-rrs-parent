@@ -140,7 +140,7 @@ public class ForbiddenPoolAdjustServiceTest {
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, "禁投池", "forbidden");
         try {
-            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any", null);
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("要求研究报告");

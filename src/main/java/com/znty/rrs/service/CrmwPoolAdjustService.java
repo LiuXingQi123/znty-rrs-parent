@@ -807,8 +807,12 @@ public class CrmwPoolAdjustService {
      * none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告。
      * 对应老项目 rschDocMode/rschDocOutMode 报告校验。在提交阶段校验（checkAdjust 阶段无报告信息）。
      */
-    private void checkReportRequired(CrmwPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction) {
+    private void checkReportRequired(CrmwPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction, String securityCode) {
         if (pool == null || reportRestriction == null || reportRestriction.isEmpty() || "none".equals(reportRestriction)) {
+            return;
+        }
+        // 6个月内入池报告标记（对齐老系统 bondfileflag，6个月）：同主体半年内有审批通过调入记录则跳过报告校验
+        if (securityCode != null && crmwPoolAdjustMapper.queryHasRecentInboundWithReport(securityCode)) {
             return;
         }
         boolean hasReport = (item.getCreditReportFileIndexes() != null && !item.getCreditReportFileIndexes().isEmpty())
@@ -891,7 +895,7 @@ public class CrmwPoolAdjustService {
             }
             // 报告必填校验（按池 in_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null);
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null, req.getSecurityCode());
             // CRMW组合校验（凭证已在池 / 凭证审批中，提交阶段校验）
             checkCrmwInboundCombination(req, item);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
@@ -980,7 +984,7 @@ public class CrmwPoolAdjustService {
             }
             // 报告必填校验（按池 out_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null);
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null, req.getSecurityCode());
             // CRMW组合校验（组合在池，提交阶段校验）
             checkCrmwOutboundCombination(req, item);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号

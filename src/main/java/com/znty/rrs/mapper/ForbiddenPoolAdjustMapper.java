@@ -133,6 +133,9 @@ public interface ForbiddenPoolAdjustMapper {
     boolean queryIssuerRecentSimpleInboundExists(@Param("securityCode") String securityCode,
                                                  @Param("targetPoolId") Long targetPoolId);
 
+    /** 查询6个月内同主体有审批通过调入记录（对齐老系统 bondfileflag，6个月） */
+    boolean queryHasRecentInboundWithReport(@Param("securityCode") String securityCode);
+
     /** 新增流程步骤记录 */
     int addAdjustStep(IpAdjustStepBo bo);
 

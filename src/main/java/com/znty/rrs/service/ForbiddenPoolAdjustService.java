@@ -1074,8 +1074,12 @@ public class ForbiddenPoolAdjustService {
      * none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告。
      * 对应老项目 rschDocMode/rschDocOutMode 报告校验。在提交阶段校验（checkAdjust 阶段无报告信息）。
      */
-    private void checkReportRequired(SecurityPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction) {
+    private void checkReportRequired(SecurityPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction, String securityCode) {
         if (pool == null || reportRestriction == null || reportRestriction.isEmpty() || "none".equals(reportRestriction)) {
+            return;
+        }
+        // 6个月内入池报告标记（对齐老系统 bondfileflag，6个月）：同主体半年内有审批通过调入记录则跳过报告校验
+        if (securityCode != null && forbiddenPoolAdjustMapper.queryHasRecentInboundWithReport(securityCode)) {
             return;
         }
         boolean hasReport = (item.getCreditReportFileIndexes() != null && !item.getCreditReportFileIndexes().isEmpty())
@@ -1119,7 +1123,7 @@ public class ForbiddenPoolAdjustService {
             }
             // 报告必填校验（按池 in_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null);
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null, req.getSecurityCode());
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -1209,7 +1213,7 @@ public class ForbiddenPoolAdjustService {
             }
             // 报告必填校验（按池 out_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null);
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null, req.getSecurityCode());
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID

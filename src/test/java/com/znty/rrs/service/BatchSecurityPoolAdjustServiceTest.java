@@ -291,7 +291,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, null, "报告池", "credit_bond");
         try {
-            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any", null);
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("要求研究报告");

@@ -766,8 +766,12 @@ public class BatchSecurityPoolAdjustService {
      * none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告。
      * 对应老项目 rschDocMode/rschDocOutMode 报告校验。在提交阶段校验（checkAdjust 阶段无报告信息）。
      */
-    private void checkReportRequired(SecurityPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction) {
+    private void checkReportRequired(SecurityPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction, String securityCode) {
         if (pool == null || reportRestriction == null || reportRestriction.isEmpty() || "none".equals(reportRestriction)) {
+            return;
+        }
+        // 6个月内入池报告标记（对齐老系统 bondfileflag，6个月）：同主体半年内有审批通过调入记录则跳过报告校验
+        if (securityCode != null && securityPoolAdjustMapper.queryHasRecentInboundWithReport(securityCode)) {
             return;
         }
         boolean hasReport = (item.getCreditReportFileIndexes() != null && !item.getCreditReportFileIndexes().isEmpty())
@@ -812,7 +816,7 @@ public class BatchSecurityPoolAdjustService {
             }
             // 报告必填校验（按池 in_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null);
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null, req.getSecurityCode());
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -899,7 +903,7 @@ public class BatchSecurityPoolAdjustService {
             }
             // 报告必填校验（按池 out_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null);
+            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null, req.getSecurityCode());
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -1667,6 +1671,15 @@ public class BatchSecurityPoolAdjustService {
             unmatchReasons.add("该主体在目标池中近一年已走过简易流程，需满一年后再次适用");
         } else {
             matchReasons.add("该主体在目标池中近一年未走过简易流程");
+        }
+
+        // 条件6：180天内该主体+目标池有非简易入库记录（简易流程前提条件，新需求180天）
+        boolean hasNonSimpleInbound = securityPoolAdjustMapper.queryIssuerHasNonSimpleInboundWithinDays(
+                req.getSecurityCode(), targetPool.getId(), 180);
+        if (hasNonSimpleInbound) {
+            matchReasons.add("该主体180天内以一般流程入过目标池，满足简易流程前提条件");
+        } else {
+            unmatchReasons.add("该主体180天内未以一般流程入过目标池，不满足简易流程前提条件");
         }
 
         boolean issuerOrOutlookDowngraded = shared.isIssuerRatingDowngraded() || shared.isOutlookRatingDowngraded();

@@ -896,7 +896,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         // 池为空时直接跳过，不校验报告
-        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, null, "any");
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, null, "any", null);
     }
 
     /** 限制为 none 时报告必填校验应通过。 */
@@ -906,7 +906,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
         // none=不限制，无报告也应通过
-        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "none");
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "none", null);
     }
 
     /** 限制为 any 且无报告时应抛出异常。 */
@@ -916,7 +916,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
         try {
-            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any", null);
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("要求研究报告");
@@ -933,7 +933,7 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setCreditReportFileIndexes(Collections.singletonList(0));
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
         // any 限制，已上传报告文件，应通过
-        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any", null);
     }
 
     /** 限制为 internal 且仅有上传文件（非内部报告库）时应抛出异常。 */
@@ -944,7 +944,7 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setCreditReportFileIndexes(Collections.singletonList(0));
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
         try {
-            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal");
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal", null);
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("要求内部研究报告");
@@ -961,7 +961,7 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setCreditReportSourceAttachmentIds(Collections.singletonList(1L));
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
         // internal 限制，已从内部报告库选择附件，应通过
-        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal");
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal", null);
     }
 
     /** 调入提交应按目标池 in_report_restriction 校验报告。 */

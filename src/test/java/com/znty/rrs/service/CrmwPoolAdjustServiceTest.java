@@ -31,7 +31,7 @@ public class CrmwPoolAdjustServiceTest {
         pool.setId(10L);
         pool.setPoolName("CRMW报告池");
         try {
-            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any");
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any", null);
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("要求研究报告");
@@ -50,7 +50,7 @@ public class CrmwPoolAdjustServiceTest {
         pool.setId(10L);
         pool.setPoolName("CRMW报告池");
         // internal 限制，已从内部报告库选择附件，应通过
-        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal");
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal", null);
     }
 
     /** CRMW组合校验（调入）：凭证已在目标池时应抛出异常。 */
