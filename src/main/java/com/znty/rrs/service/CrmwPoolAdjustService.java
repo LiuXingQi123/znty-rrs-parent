@@ -3004,18 +3004,8 @@ public class CrmwPoolAdjustService {
         if (node == null || !NodeType.APPROVAL.getCode().equals(node.getNodeType())) {
             return false;
         }
-        if (config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())) {
-            return true;
-        }
-        boolean firstAfterStart = prevNode != null && startNode != null
-                && prevNode.getId() != null && prevNode.getId().equals(startNode.getId());
-        if (!firstAfterStart) {
-            return false;
-        }
-        String label = node.getLabel();
-        String subLabel = node.getSubLabel();
-        return (label != null && (label.contains("发起") || label.contains("提交")))
-                || (subLabel != null && ("researcher-a".equals(subLabel) || "initiator".equals(subLabel)));
+        // 发起人节点通过 approval_strategy=initiator 标记，不再依赖 label/subLabel
+        return config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy());
     }
 
     /**

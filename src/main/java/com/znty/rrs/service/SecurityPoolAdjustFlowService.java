@@ -353,22 +353,16 @@ public class SecurityPoolAdjustFlowService {
      * 判断当前步骤是否是提交语义节点。
      */
     private boolean isSubmitSemanticStep(IpAdjustStepBo step) {
-        if (step == null) {
-            return false;
-        }
-        String text = String.valueOf(step.getNodeLabel()) + " " + String.valueOf(step.getNodeCode()) + " " + String.valueOf(step.getNodeType());
-        return text.contains("发起") || text.contains("修改") || text.contains("提交");
+        // 提交语义步骤通过 approval_strategy=initiator 标记，不再依赖中文 label
+        return step != null && ApprovalStrategy.INITIATOR.getCode().equals(step.getApprovalStrategy());
     }
 
     /**
      * 判断当前步骤是否为驳回修改节点。
      */
     private boolean isModifyStep(IpAdjustStepBo step) {
-        if (step == null) {
-            return false;
-        }
-        String text = String.valueOf(step.getNodeLabel()) + " " + String.valueOf(step.getNodeCode()) + " " + String.valueOf(step.getNodeType());
-        return text.contains("修改");
+        // 修改节点同为 initiator 策略，首次 SUBMIT 不会走 APPROVE 分支，合并判断无副作用
+        return step != null && ApprovalStrategy.INITIATOR.getCode().equals(step.getApprovalStrategy());
     }
 
     /**
@@ -636,7 +630,7 @@ public class SecurityPoolAdjustFlowService {
     private void createPendingSteps(IpAdjustStepBo currentStep, FlowNodeBo node, FlowSnapshot snapshot, Date now) {
         NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(node.getId());
         // 判断是否需要回到发起人处理
-        if (isModifyNode(node) || isInitiatorNode(node)) {
+        if (isModifyNode(node, config) || isInitiatorNode(node, config)) {
             // 创建发起人处理步骤
             createInitiatorPendingStep(currentStep, node, config, now);
             return;
@@ -879,19 +873,17 @@ public class SecurityPoolAdjustFlowService {
     /**
      * 判断是否为发起节点。
      */
-    private boolean isInitiatorNode(FlowNodeBo node) {
-        // 拼接节点关键字用于识别发起节点
-        String text = buildNodeText(node);
-        return text.contains("发起");
+    private boolean isInitiatorNode(FlowNodeBo node, NodeApprovalConfigBo config) {
+        // 发起人节点通过 approval_strategy=initiator 标记，不再依赖中文 label
+        return config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy());
     }
 
     /**
      * 判断是否为修改节点。
      */
-    private boolean isModifyNode(FlowNodeBo node) {
-        // 拼接节点关键字用于识别修改节点
-        String text = buildNodeText(node);
-        return text.contains("修改");
+    private boolean isModifyNode(FlowNodeBo node, NodeApprovalConfigBo config) {
+        // 修改节点同为 initiator 策略，与发起人节点合并判断（createPendingSteps 中 || 使用）
+        return config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy());
     }
 
     /**
