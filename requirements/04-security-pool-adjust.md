@@ -411,13 +411,71 @@
 - 未最终通过的申请不得生成有效池状态（仅 `audit_status='20'` 落地 `ip_pool_status`）。
 - 校验失败时不生成调整日志和流程步骤。
 
-## 8. 验收标准
+## 8. 新老系统校验差异与业务问题
+
+> 本节记录对老系统 `investpool` 调入/调出校验逻辑的对比结论，作为后续补齐调库校验的业务问题清单。当前新系统总体方向是按证券大类拆分校验，避免老系统所有类型混在一处导致误拦截；后续补齐应优先补真实业务缺口，而不是原样搬运老系统所有 `if` 分支。
+
+### 8.1 调入校验差异
+
+| 校验项 | 老系统口径 | 新系统现状 | 差异/风险 |
+|---|---|---|---|
+| 池锁定 | `LockFlag=1` 禁止调入 | 已有 `inCheckPoolLocked` | 基本一致 |
+| 投资品种 | 池配置 numeric `ptype`，证券类型映射后校验 | 已有 `variety_codes` JSON + `categoryType` | 迁移时需确保 numeric `ptype` 和新 code 映射准确 |
+| 投资市场 | 池配置 numeric `mktcode` | 已有 `market_codes` JSON，按 `wind_code_sh/sz/nib` 推导 | 多市场证券可能比老系统更宽松，需确认是否接受 |
+| 正在审批中 | 按证券 + 市场 + 类型 + `poolGroupId` 判断，部分批量场景可用批次排除 | 按 `security_code` + pending step 判断 | 新系统可能更严格，同一证券任意池有 pending 都会拦截 |
+| 已在目标池 | 已在池则不可重复调入 | 已有 | 基本一致 |
+| 来源池限制 | 当前已在来源池，或本次同批勾选调入来源池 | 已补齐：当前已在来源池或 `requestInPoolIds` 包含来源池均通过 | 已对齐老系统选择阶段口径 |
+| 最大容量 | `MaxCount != -1` 且当前数 >= 上限则拦 | `maxCapacity > 0` 且当前数 >= 上限则拦 | 迁移时需统一 `-1/null/0` 的不限制含义 |
+| 调入限制池 | `LimitedPoolId` 命中则拦 | 已有 `in_restrict` | 基本一致 |
+| 弹性限制池 | 命中后返回 code=2，偏提示/警告 | 新系统作为 warning，不阻断 | 基本一致，需确认前端是否醒目展示 warning |
+| 全局禁止池 | 通过配置 `Forbiddenlastpoolid` 指定池 ID | 通过池 `pool_type in ('forbidden','blacklist')` 判断 | 配置口径不同，迁移时必须把老配置池正确标成 forbidden/blacklist |
+| 开放日 | `open_day_adjust=1` 时查开放日 | 已有 `ip_pool_open_day` | 基本一致 |
+| 行业限制 | 查 `IndustryPartition.industrycode` 与池 `IndustryCode` 比对 | 用 `rrs_securityinfo.industry_name == pool.industry_code` | 可能有问题，老系统是行业编码，新系统当前像名称对配置值精确匹配 |
+| 股票分管人限制 | `IsManage=1` 且当前用户不是分管股票则拦 | 未实现 | 缺少；如果股票池仍要求分管人权限，需要补 |
+| 股票入池评级限制 | `grade_astrict` + `StockResearch.investrank` | 入口保留，但当前无股票评级来源，先跳过 | 当前是有意放宽；后续接股票研究评级后再补强 |
+| 股票退市 | 股票 `EndDate` 有值就拦 | `delist_date < today` 才拦 | 口径不同，老系统更严格 |
+| 债券到期 | 到期日早于当前日则拦 | 已有 | 基本一致 |
+| 债券大库/主体评级矩阵 | 观察池跳过、可转债跳过、担保人取低、期限档、私募/ABS/担保等分支 | 已有信用债矩阵、观察池、担保人、期限档、可转债跳过 | 部分对齐；私募债、ABS、担保人等细分分支仍需单独核 |
+| 基金评分 | 池配置 `FundRateLimit`，且传了 `fundRate` 才校验 | 池配置后，未传 `fundRate` 也失败 | 新系统更严格，需确认前端是否总能提供基金评分 |
+| 研报限制 | check/提交阶段均有逻辑，且支持 `RschDocMode > 100` 自定义规则类 | 提交阶段支持 none/any/internal | 缺少自定义研报规则；批量跳过报告配置也未复刻 |
+| CRMW 必填/重复 | 通过 `CRMWPOOLID_XYJJ` 判断 CRMW 池，调入必须有 CRMW 代码，并校验 CRMW 是否已在池/审批中 | CRMW 已拆独立链路 | 普通证券池不再混入；CRMW 链路需单独确认是否完全覆盖 |
+
+### 8.2 调出校验差异
+
+| 校验项 | 老系统口径 | 新系统现状 | 差异/风险 |
+|---|---|---|---|
+| 池锁定 | `LockFlag=1` 禁止调出 | 已有 `outCheckPoolLocked` | 基本一致 |
+| 正在审批中 | 按证券 + 市场 + 类型 + 池组/批次判断 | 按证券 pending step 判断 | 同调入，新系统可能更严格 |
+| 不在目标池 | 不在池不可调出 | 已有 | 基本一致 |
+| 调出冻结期 | 用池 `Frozenperiodin` + 老状态 `submitTime` 计算 | 用 `ip_pool_status.entry_time` 计算 | 基准字段不同；新系统更贴近实际入池时间，但不完全等同老系统 |
+| 调出限制池 | `LimitedOutPoolId` 命中则拦 | 已有 `out_restrict` | 基本一致 |
+| 调出互斥池 | 老系统有调出互斥/限制关系 | 已有 `out_mutex` + 同批互斥冲突 | 基本覆盖 |
+| 调出弹性限制池 | 命中返回提示 code=2 | 新系统 warning | 基本一致 |
+| 开放日 | `open_day_adjust=1` 时调出也校验 | 已有 | 基本一致 |
+| 股票分管人限制 | 调出也校验 `IsManage` | 未实现 | 缺少 |
+| 股票退市/债券到期 | 调出也会校验 | 已有 | 股票退市仍存在“有退市日即拦 vs 早于今日才拦”的差异 |
+| 调出研报限制 | `RschDocOutMode`，支持 any/internal/custom | 提交阶段支持基础 none/any/internal | 缺少自定义规则、批量跳过配置 |
+| CRMW 组合调出 | CRMW 池调出必须传 CRMW 代码，并校验证券+凭证组合在池 | CRMW 独立链路中有组合校验 | 需单独确认“凭证+标的组合”覆盖所有老场景 |
+
+### 8.3 优先关注的业务问题
+
+| 优先级 | 问题 | 建议 |
+|---|---|---|
+| 高 | pending 审批判断可能过严 | 确认是否应按池组/链路隔离；否则同一证券在任意池审批中都会阻断全部调库 |
+| 高 | 行业限制现在用 `industry_name == industry_code` | 要么配置存行业名称，要么补行业编码字段，避免编码名称错配 |
+| 中 | 股票分管人限制缺失 | 如果股票池还需要“只允许分管人调库”，需补 `is_manage` 和股票分管关系 |
+| 中 | 股票退市口径不同 | 确认业务想按“退市日存在即拦”还是“退市日已到才拦” |
+| 中 | 研报自定义规则缺失 | 如果老系统 `RschDocMode > 100` 有实际使用，需要设计新规则扩展点 |
+| 中 | 基金评分新系统比老系统更严格 | 若前端不传 `fundRate`，配置了基金评分限制的池会无法调入 |
+| 低 | CRMW 设置型校验迁移口径不同 | 新系统独立 CRMW 链路更清晰，但要单独确认“CRMW 池必填凭证”和“凭证+标的组合”都覆盖 |
+
+## 9. 验收标准
 
 - 提交成功后主记录、从属记录、批次号和初始步骤一致。
 - 直通流程即时入池；非直通流程进入流程中。
 - `SecurityPoolAdjustApiTest` 覆盖查询、校验、提交和追踪业务线。
 
-## 9. 关键源码索引
+## 10. 关键源码索引
 
 - 前端：`znty-rrs-ui/security_pool_adjust.html`（列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`）
 - dict.js：`DICT_AUDIT_STATUS`、`DICT_POOL_RELATION_TYPE`、`DICT_POOL_TYPE`
