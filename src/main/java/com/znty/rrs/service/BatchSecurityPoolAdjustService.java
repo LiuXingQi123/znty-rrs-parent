@@ -2408,14 +2408,19 @@ public class BatchSecurityPoolAdjustService {
      * 规则：来源池限制
      *
      * <p>若目标池配置了来源池（source），则证券必须当前已在其中至少一个来源池中，
-     * 满足"从低级库向高级库晋升"等分层调库规则。未配置来源池时不做限制。
+     * 或本次请求同时调入至少一个来源池，满足"从低级库向高级库晋升"等分层调库规则。
+     * 未配置来源池时不做限制。
      */
     private String inCheckSourcePool(AdjustCheckContext ctx) {
         List<Long> sourcePools = ctx.getTargetPoolRelations().get(RelationType.SOURCE.getCode());
         if (sourcePools == null || sourcePools.isEmpty()) {
             return null;
         }
-        boolean inAny = sourcePools.stream().anyMatch(ctx.getCurrentPoolIds()::contains);
+        boolean inCurrentPool = ctx.getCurrentPoolIds() != null
+                && sourcePools.stream().anyMatch(ctx.getCurrentPoolIds()::contains);
+        boolean inRequestPool = ctx.getRequestInPoolIds() != null
+                && sourcePools.stream().anyMatch(ctx.getRequestInPoolIds()::contains);
+        boolean inAny = inCurrentPool || inRequestPool;
         if (!inAny) {
             // 构建关联池路径名称
             return "目标池配置了来源池限制，证券须先在以下池中：" + poolNames(sourcePools, ctx);

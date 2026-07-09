@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
+import com.znty.rrs.common.enums.RelationType;
 
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -205,6 +206,76 @@ public class SecurityPoolAdjustServiceStepTest {
         List<String> failures = service.checkInConditions(ctx);
 
         assertThat(failures).contains("该证券不在[沪市池]所设定的投资市场内");
+    }
+
+    /** 验证目标池来源池限制可由本次同批调入来源池满足。 */
+    @Test
+    public void checkInConditionsShouldPassWhenSourcePoolIncludedInRequest() {
+        SecurityPoolAdjustService service = buildServiceWithMapper();
+        AdjustCheckContext ctx = buildSourcePoolContext();
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(new HashSet<Long>(Collections.singletonList(2L)));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).isEmpty();
+    }
+
+    /** 验证目标池来源池限制未被当前池或本次请求满足时应失败。 */
+    @Test
+    public void checkInConditionsShouldFailWhenSourcePoolNotSatisfied() {
+        SecurityPoolAdjustService service = buildServiceWithMapper();
+        AdjustCheckContext ctx = buildSourcePoolContext();
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("目标池配置了来源池限制，证券须先在以下池中：信用债大库/一级库");
+    }
+
+    /** 验证证券当前已在来源池时来源池限制仍按原逻辑通过。 */
+    @Test
+    public void checkInConditionsShouldPassWhenSecurityAlreadyInSourcePool() {
+        SecurityPoolAdjustService service = buildServiceWithMapper();
+        AdjustCheckContext ctx = buildSourcePoolContext();
+        ctx.setCurrentPoolIds(new HashSet<Long>(Collections.singletonList(2L)));
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).isEmpty();
+    }
+
+    /** 构建仅用于来源池限制校验的服务实例。 */
+    private SecurityPoolAdjustService buildServiceWithMapper() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
+        return service;
+    }
+
+    /** 构建配置来源池限制的调库校验上下文。 */
+    private AdjustCheckContext buildSourcePoolContext() {
+        InvestmentPoolBo targetPool = new InvestmentPoolBo();
+        targetPool.setId(1L);
+        targetPool.setPoolName("信用债大库/二级库");
+        InvestmentPoolBo sourcePool = new InvestmentPoolBo();
+        sourcePool.setId(2L);
+        sourcePool.setPoolName("信用债大库/一级库");
+        Map<String, List<Long>> relations = new HashMap<>();
+        relations.put(RelationType.SOURCE.getCode(), Collections.singletonList(2L));
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(1L, targetPool);
+        poolMap.put(2L, sourcePool);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("110010123");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(targetPool);
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(relations);
+        ctx.setPoolMap(poolMap);
+        return ctx;
     }
 
     /** 验证债券已到期时调入校验应失败（类型特有 checkBondIn）。 */

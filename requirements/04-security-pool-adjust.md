@@ -195,7 +195,7 @@
 | 4 | `preCheckPendingProcess` | 证券存在进行中的调库流程（当前节点：xxx），请等待流程结束 |
 | 5 | `inCheckSecurityAlreadyInPool` | 证券已在目标投资池中，无需重复调入 |
 | 6 | `inCheckPoolCapacity` | 目标投资池已达持仓上限（N），无法调入（`maxCapacity>0` 且 `currentCount>=maxCapacity`） |
-| 7 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系） |
+| 7 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系；当前已在来源池或本次同批调入来源池均视为满足） |
 | 8 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
 | 9 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
 | 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，作为警告返回（`in_soft_restrict`，不直接阻断） |
