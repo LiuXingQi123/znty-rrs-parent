@@ -1965,8 +1965,6 @@ public class BatchSecurityPoolAdjustService {
         addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
         // 入池检查：证券是否在全局禁止池（forbidden/blacklist）
         addIfFailed(failures, inCheckForbiddenPool(ctx));
-        // 入池检查：证券评级是否符合目标池评级限制
-        addIfFailed(failures, inCheckGradeAstrict(ctx));
         // 行业限制校验（按池 industry_code，调入）
         addIfFailed(failures, inCheckIndustry(ctx));
         // 开放日校验（按池 open_day_adjust，调入）
@@ -2112,6 +2110,8 @@ public class BatchSecurityPoolAdjustService {
         List<String> failures = new ArrayList<>();
         // 股票退市校验
         addIfFailed(failures, inCheckStockDelist(ctx));
+        // 股票入池评级限制（老系统 StockResearch/investrank），当前未接入股票评级来源时跳过
+        addIfFailed(failures, inCheckGradeAstrict(ctx));
         return failures;
     }
 
@@ -2647,32 +2647,18 @@ public class BatchSecurityPoolAdjustService {
     }
 
     /**
-     * 规则：评级限制（grade_astrict）
+     * 规则：股票入池评级限制（grade_astrict）
      *
-     * <p>目标池配置了评级限制时，证券评级（ratingBond）须在允许列表内。
-     * 对应老项目 checkBasisAndProductInPool:461 gradeAstrict 校验。
+     * <p>老系统该字段对应“股票入池评级限制”，评级来源为 StockResearch/investrank
+     * （买入、增持、中性、卖出等），不是债券 ratingBond。当前项目尚未接入股票研究评级来源，
+     * 因此仅保留股票分支入口，配置了 grade_astrict 时先跳过，不对债券评级做误拦截。
      */
     private String inCheckGradeAstrict(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
-        if (pool == null || pool.getGradeAstrict() == null || pool.getGradeAstrict().isEmpty()) {
+        if (pool == null || pool.getGradeAstrict() == null || pool.getGradeAstrict().trim().isEmpty()) {
             return null;
         }
-        String rating = ctx.getSecurityInfo().getRatingBond();
-        if (rating == null || rating.isEmpty()) {
-            return "该证券未设置评级，不符合目标池评级要求";
-        }
-        // 池配置允许的评级列表（逗号分隔）
-        String[] allowed = pool.getGradeAstrict().split(",");
-        boolean match = false;
-        for (String a : allowed) {
-            if (a.trim().equals(rating)) {
-                match = true;
-                break;
-            }
-        }
-        if (!match) {
-            return "证券评级" + rating + "不符合当前池的评级规则";
-        }
+        // 后续接入股票研究评级来源后，按 pool.gradeAstrict 校验买入/增持/中性/卖出等评级 code。
         return null;
     }
 

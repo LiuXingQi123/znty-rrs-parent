@@ -185,7 +185,7 @@
 
 **③ 调入校验** `executeInAdjustCheck`，对每个 `adjustMode==='调入'` 项执行 `checkInConditions`：先跑通用 `checkCommonIn`，再按证券 `categoryType` 路由类型特有校验（`checkBondIn`/`checkStockIn`/`checkFundIn`/`checkCompanyIn`），任一返回非 null 即加入 `failures`。
 
-**通用调入校验** `checkCommonIn`（14 条，所有类型都走）：
+**通用调入校验** `checkCommonIn`（13 条，所有类型都走）：
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
@@ -198,17 +198,17 @@
 | 7 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系） |
 | 8 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
 | 9 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
+| 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，作为警告返回（`in_soft_restrict`，不直接阻断） |
 | 11 | `inCheckForbiddenPool` | 证券在全局禁止池中，不能调入：xxx（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
-| 12 | `inCheckGradeAstrict` | 证券评级A不符合当前池的评级规则（池 `grade_astrict` 配置允许评级列表逗号分隔，如 `AAA,AA+`，证券 `ratingBond` 须在列表内） |
-| 13 | `inCheckIndustry` | 请选择正确的行业;（池 `industry_code` 非空且 `industry_exponent=0` 时，证券 `industry_name` 须等于池配置值；`industry_exponent!=0` 行业指数模式跳过。当前用名称精确匹配，老项目用编码前缀层级匹配） |
-| 14 | `inCheckOpenDay` | 不在开放日内，不能调入;（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
+| 12 | `inCheckIndustry` | 请选择正确的行业;（池 `industry_code` 非空且 `industry_exponent=0` 时，证券 `industry_name` 须等于池配置值；`industry_exponent!=0` 行业指数模式跳过。当前用名称精确匹配，老项目用编码前缀层级匹配） |
+| 13 | `inCheckOpenDay` | 不在开放日内，不能调入;（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
 
 **类型特有调入校验**（按 `categoryType` 路由，证券到期/退市从原 `preCheckSecurityExpired` 拆分到此）：
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
 | 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 该债券已经到期，无法调入（`maturity_date` 早于今日）；/ 不符合条件，无法入库 / 该债券只能调入以下池：xxx / 未配置主体内评分档，不符合入库条件（信用债大库池按 `主体内评分档 × 期限档` 查 `credit_bond_pool_grade_rule` 矩阵得允许池列表，目标池须在列表内；担保债取主体与担保人评级较低者；可转债跳过） |
-| 股票 stock | `inCheckStockDelist` | 该股票已退市，无法调入（`delist_date` 早于今日） |
+| 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 该股票已退市，无法调入（`delist_date` 早于今日）；`grade_astrict` 对应老系统“股票入池评级限制”（StockResearch/investrank：买入/增持/中性/卖出等），当前项目尚未接入股票研究评级来源时跳过，不用债券 `ratingBond` 误拦截 |
 | 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（池 `fund_rate_limit` 表达式 `<=#rate`/`<#rate`/`#rate<=`/`#rate<` 及组合，`#rate` 占位基金评分；请求 `fundRate` 须满足，空或不满足则失败） |
 | 主体 company | —（主体不校验到期，暂无） | |
 

@@ -92,7 +92,7 @@
    - `querySecurityCurrentPoolIdList`（`ip_pool_status_crmw` 中 `audit_status='20' AND pool_type='crmw'`）→ `currentPoolIds`。
    - `queryAllPoolRelationList`（`ip_pool_relation`）→ 三层嵌套 `poolRelationMap`。
    - 证券级标志：`querySecurityHasPendingProcess`、`querySecurityPendingProcessNodeLabel`、`querySecurityInObservePool`、`queryIssuerInObservePool`。
-3. **调入校验** `executeInAdjustCheck`，每项跑 `checkInConditions`：先 `checkCommonIn`（12 条通用：池锁定/品种/市场/pending/重复入池/容量/来源/限制/互斥/弹性/禁止池/评级指定），再按 `categoryType` 路由类型特有校验（债券 `inCheckBondMaturity`/股票 `inCheckStockDelist`，P1 已将原 `preCheckSecurityExpired` 拆分到此；基金/主体暂无）。规则明细与 [04](04-security-pool-adjust.md) 3.6 节③同构。自动追加 `in_linked` 联动调入项（`itemTag='linkage'`）、`in_mutex` 配套调出项（`itemTag='mutex'`），`inheritManualItemFailure` 手工项失败则阻断自动项。
+3. **调入校验** `executeInAdjustCheck`，每项跑 `checkInConditions`：先 `checkCommonIn`（通用：池锁定/品种/市场/pending/重复入池/容量/来源/限制/互斥/弹性/禁止池/行业/开放日），再按 `categoryType` 路由类型特有校验（债券 `inCheckBondMaturity`，股票 `inCheckStockDelist`/股票入池评级限制，基金 `inCheckFundRate`）。规则明细与 [04](04-security-pool-adjust.md) 3.6 节③同构。自动追加 `in_linked` 联动调入项（`itemTag='linkage'`）、`in_mutex` 配套调出项（`itemTag='mutex'`），`inheritManualItemFailure` 手工项失败则阻断自动项。
 
 4. **调出校验** `executeOutAdjustCheck`，每项跑 `checkOutConditions`：`checkCommonOut`（8 条通用：池锁定/pending/不在池/冻结期/限制/互斥/弹性）+ 类型特有（债券 `outCheckBondMaturity`/股票 `outCheckStockDelist`）。规则明细与 [04](04-security-pool-adjust.md) 3.6 节④同构。自动追加 `out_linked` 联动调出项。
 5. **流程类型判断** `resolveAdjustFlowOptions`（仅 `canAdjust && itemTag='manual'`）：

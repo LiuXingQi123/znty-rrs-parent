@@ -106,7 +106,7 @@ public class InvestmentPoolBo {
     /** 调入冻结期天数：入池后N天内不可调出，空表示不限制 */
     private Integer frozenPeriodIn;
 
-    /** 评级限制：允许的证券评级列表（逗号分隔，如 AAA,AA+），空表示不限制 */
+    /** 股票入池评级限制：允许的股票研究评级 code 列表（逗号分隔），空表示不限制 */
     private String gradeAstrict;
 
     /** 行业限制：证券行业须匹配此值（与 SecurityInfoBo.industryName 名称比对，老项目用编码前缀匹配当前用名称精确匹配），空表示不限制 */

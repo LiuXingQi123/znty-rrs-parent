@@ -282,21 +282,22 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failures).contains("该证券在禁止池中，不能调入");
     }
 
-    /** 验证证券评级不符合目标池评级限制时调入校验应失败。 */
+    /** 验证债券不应被股票入池评级限制误拦截。 */
     @Test
-    public void checkInConditionsShouldFailWhenGradeMismatch() {
+    public void checkInConditionsShouldNotFailBondWhenGradeAstrictConfigured() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
-        // 目标池仅允许 AAA/AA+，证券评级为 A
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
-        pool.setGradeAstrict("AAA,AA+");
+        pool.setGradeAstrict("1,2");
         SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("110010123");
         sec.setRatingBond("A");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
         ctx.setTargetPool(pool);
+        ctx.setCategoryType("bond");
         ctx.setCurrentPoolIds(Collections.<Long>emptySet());
         ctx.setRequestInPoolIds(Collections.<Long>emptySet());
         ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
@@ -305,7 +306,33 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("证券评级A不符合当前池的评级规则");
+        assertThat(failures).isEmpty();
+    }
+
+    /** 验证股票评级来源未接入时，股票入池评级限制暂不强拦。 */
+    @Test
+    public void checkInConditionsShouldSkipStockGradeAstrictWhenRatingSourceMissing() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(1L);
+        pool.setGradeAstrict("1,2");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("600000.SH");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(pool);
+        ctx.setCategoryType("stock");
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).isEmpty();
     }
 
     /** 行业限制校验：证券行业与池配置不符时应返回失败原因。 */
