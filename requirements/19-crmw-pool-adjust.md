@@ -97,6 +97,7 @@
 4. **调出校验** `executeOutAdjustCheck`，每项跑 `checkOutConditions`：`checkCommonOut`（8 条通用：池锁定/pending/不在池/冻结期/限制/互斥/弹性）+ 类型特有（债券 `outCheckBondMaturity`/股票 `outCheckStockDelist`）。规则明细与 [04](04-security-pool-adjust.md) 3.6 节④同构。自动追加 `out_linked` 联动调出项。
 5. **流程类型判断** `resolveAdjustFlowOptions`（仅 `canAdjust && itemTag='manual'`）：
    - 调出：`normalOutbound`，用目标池 `outFlowId/outFlowKey`。
+   - 调入·命中特殊审批：若标的证券当前已在目标池 `in_mutex` 互斥池中，优先走 `specialInbound`（`bond:special-inbound`）。
    - 调入·非信用债大库（`poolType != 'credit_bond'`）：`normalInbound`。
    - 调入·已在信用债大库：`resolveCreditBondAdjustFlowType` 按 `innerSort` 判断上调（`upgradeInbound`）/下调（`downgradeInbound`）。
    - 调入·不在信用债大库：白名单（默认关闭）→ 简易（`simpleInbound`）→ 默认调入，推荐优先级 白名单 > 简易 > 默认。

@@ -68,7 +68,7 @@ public class AdjustCheckDto {
     @Data
     public static class FlowOption {
 
-        /** 流程类型：whitelistInbound / simpleInbound / normalInbound / upgradeInbound / downgradeInbound / normalOutbound */
+        /** 流程类型：whitelistInbound / simpleInbound / normalInbound / specialInbound / upgradeInbound / downgradeInbound / normalOutbound */
         private String flowType;
 
         /** 流程名称 */

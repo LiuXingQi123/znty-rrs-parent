@@ -8,6 +8,8 @@ public enum FlowType {
     SIMPLE_INBOUND("simpleInbound"),
     /** 默认调入 */
     NORMAL_INBOUND("normalInbound"),
+    /** 特殊审批 */
+    SPECIAL_INBOUND("specialInbound"),
     /** 上调 */
     UPGRADE_INBOUND("upgradeInbound"),
     /** 下调 */

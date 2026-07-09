@@ -1283,6 +1283,114 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(downgradeOption.getFlowKey()).isEqualTo("bond:standard-downgrade");
     }
 
+    /** 验证当前已在目标池调入互斥池时应优先返回特殊审批流程。 */
+    @Test
+    public void resolveAdjustFlowOptionsShouldPreferSpecialInboundWhenCurrentPoolInMutex() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        FlowDefinitionBo specialFlow = buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程");
+        when(flowMapper.queryActiveFlowByKey("bond:special-inbound")).thenReturn(specialFlow);
+
+        AdjustSharedData shared = buildSpecialInboundShared(2L, 3L, "信用债大库/一级库", "专户产品/二级库");
+        InvestmentPoolBo targetPool = shared.getPoolMap().get(2L);
+        targetPool.setPoolType("credit_bond");
+        targetPool.setInnerSort(1);
+        InvestmentPoolBo currentPool = shared.getPoolMap().get(3L);
+        currentPool.setPoolType("credit_bond");
+        currentPool.setInnerSort(3);
+
+        AdjustCheckDto.CheckResultItem item = buildManualInboundItem(2L);
+        List<AdjustCheckDto.FlowOption> options = ReflectionTestUtils.invokeMethod(
+                service, "resolveAdjustFlowOptionsForItem", new AdjustCheckReq(), shared, item);
+
+        assertThat(options).hasSize(1);
+        AdjustCheckDto.FlowOption option = options.get(0);
+        assertThat(option.getFlowType()).isEqualTo("specialInbound");
+        assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
+        assertThat(option.getFlowId()).isEqualTo(108L);
+        assertThat(option.isRecommended()).isTrue();
+        assertThat(option.getMatchReasons().get(0)).contains("专户产品/二级库");
+    }
+
+    /** 验证特殊审批流程未启用时应回退原有流程选择。 */
+    @Test
+    public void resolveAdjustFlowOptionsShouldFallbackWhenSpecialInboundFlowMissing() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        when(flowMapper.queryActiveFlowByKey("bond:special-inbound")).thenReturn(null);
+
+        AdjustSharedData shared = buildSpecialInboundShared(2L, 3L, "境外债库", "专户产品/二级库");
+        InvestmentPoolBo targetPool = shared.getPoolMap().get(2L);
+        targetPool.setPoolType("offshore_bond");
+        targetPool.setInFlowId(105L);
+        targetPool.setInFlowKey("bond:fast-inbound");
+        targetPool.setInFlowName("债券快速入库流程");
+
+        List<AdjustCheckDto.FlowOption> options = ReflectionTestUtils.invokeMethod(
+                service, "resolveAdjustFlowOptionsForItem", new AdjustCheckReq(), shared, buildManualInboundItem(2L));
+
+        assertThat(options).hasSize(1);
+        assertThat(options.get(0).getFlowType()).isEqualTo("normalInbound");
+        assertThat(options.get(0).getFlowKey()).isEqualTo("bond:fast-inbound");
+    }
+
+    /** 验证批量调库链路命中特殊审批流程。 */
+    @Test
+    public void batchAdjustShouldResolveSpecialInboundFlow() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
+                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+
+        AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(
+                service, "resolveSpecialInboundFlowOption",
+                buildPool(2L, 1L, "一级库"),
+                buildSpecialInboundShared(2L, 3L, "一级库", "二级库"));
+
+        assertThat(option.getFlowType()).isEqualTo("specialInbound");
+        assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
+    }
+
+    /** 验证禁投池调整链路命中特殊审批流程。 */
+    @Test
+    public void forbiddenAdjustShouldResolveSpecialInboundFlow() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
+                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+
+        AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(
+                service, "resolveSpecialInboundFlowOption",
+                buildPool(15L, null, "禁投池"),
+                buildSpecialInboundShared(15L, 16L, "禁投池", "观察池"));
+
+        assertThat(option.getFlowType()).isEqualTo("specialInbound");
+        assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
+    }
+
+    /** 验证 CRMW 调库链路命中特殊审批流程。 */
+    @Test
+    public void crmwAdjustShouldResolveSpecialInboundFlow() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
+                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+
+        com.znty.rrs.entity.crmwpooladjust.AdjustSharedData shared = buildCrmwSpecialInboundShared(
+                19L, 20L, "CRMW核心库", "CRMW关注库");
+        com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(
+                service, "resolveSpecialInboundFlowOption",
+                buildPool(19L, null, "CRMW核心库"), shared);
+
+        assertThat(option.getFlowType()).isEqualTo("specialInbound");
+        assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
+    }
+
     /** 验证手工调入失败时应同步阻断派生的互斥调出项。 */
     @Test
     public void executeInAdjustCheckShouldBlockMutexOutboundWhenManualInboundFails() {
@@ -1364,6 +1472,59 @@ public class SecurityPoolAdjustServiceStepTest {
         List<AdjustCheckDto.FlowOption> options = ReflectionTestUtils.invokeMethod(
                 service, "resolveAdjustFlowOptionsForItem", new AdjustCheckReq(), shared, item);
         return options.get(0);
+    }
+
+    /** 构造手工调入流程候选项测试行。 */
+    private AdjustCheckDto.CheckResultItem buildManualInboundItem(Long targetPoolId) {
+        AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+        item.setTargetPoolId(targetPoolId);
+        item.setAdjustMode("调入");
+        item.setItemTag("manual");
+        item.setCanAdjust(true);
+        return item;
+    }
+
+    /** 构造特殊审批命中共享数据。 */
+    private AdjustSharedData buildSpecialInboundShared(Long targetPoolId, Long currentPoolId,
+                                                       String targetPoolName, String currentPoolName) {
+        InvestmentPoolBo targetPool = buildPool(targetPoolId, null, targetPoolName);
+        InvestmentPoolBo currentPool = buildPool(currentPoolId, null, currentPoolName);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(targetPoolId, targetPool);
+        poolMap.put(currentPoolId, currentPool);
+
+        Map<String, List<Long>> targetRelations = new HashMap<>();
+        targetRelations.put(RelationType.IN_MUTEX.getCode(), Collections.singletonList(currentPoolId));
+        Map<Long, Map<String, List<Long>>> relationMap = new HashMap<>();
+        relationMap.put(targetPoolId, targetRelations);
+
+        AdjustSharedData shared = new AdjustSharedData();
+        shared.setPoolMap(poolMap);
+        shared.setCurrentPoolIds(Collections.singleton(currentPoolId));
+        shared.setPoolRelationMap(relationMap);
+        return shared;
+    }
+
+    /** 构造 CRMW 特殊审批命中共享数据。 */
+    private com.znty.rrs.entity.crmwpooladjust.AdjustSharedData buildCrmwSpecialInboundShared(
+            Long targetPoolId, Long currentPoolId, String targetPoolName, String currentPoolName) {
+        InvestmentPoolBo targetPool = buildPool(targetPoolId, null, targetPoolName);
+        InvestmentPoolBo currentPool = buildPool(currentPoolId, null, currentPoolName);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(targetPoolId, targetPool);
+        poolMap.put(currentPoolId, currentPool);
+
+        Map<String, List<Long>> targetRelations = new HashMap<>();
+        targetRelations.put(RelationType.IN_MUTEX.getCode(), Collections.singletonList(currentPoolId));
+        Map<Long, Map<String, List<Long>>> relationMap = new HashMap<>();
+        relationMap.put(targetPoolId, targetRelations);
+
+        com.znty.rrs.entity.crmwpooladjust.AdjustSharedData shared =
+                new com.znty.rrs.entity.crmwpooladjust.AdjustSharedData();
+        shared.setPoolMap(poolMap);
+        shared.setCurrentPoolIds(Collections.singleton(currentPoolId));
+        shared.setPoolRelationMap(relationMap);
+        return shared;
     }
 
     /** 构建流程定义测试数据。 */

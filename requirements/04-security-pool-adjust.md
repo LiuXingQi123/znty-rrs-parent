@@ -163,7 +163,7 @@
 - `flowOptions`：全局去重的流程候选项。
 - `recommendedFlowId/Key/Type`。
 
-`FlowOption`：`flowType`（whitelistInbound/simpleInbound/normalInbound/upgradeInbound/downgradeInbound/normalOutbound）、`flowName`、`flowId`、`flowKey`、`recommended`、`matched`、`selectable`、`matchReasons`、`unmatchReasons`。
+`FlowOption`：`flowType`（whitelistInbound/simpleInbound/normalInbound/specialInbound/upgradeInbound/downgradeInbound/normalOutbound）、`flowName`、`flowId`、`flowKey`、`recommended`、`matched`、`selectable`、`matchReasons`、`unmatchReasons`。
 
 ### 3.5 前端校验结果展示
 
@@ -246,6 +246,7 @@
 
 **⑤ 流程类型判断** `resolveAdjustFlowOptions`（仅对 `canAdjust && itemTag==='manual'` 的项生成候选）：
 - **调出**：目标池标准调出流程（`outFlowId/outFlowKey`），`flowType=normalOutbound`，标记 recommended。
+- **调入·命中特殊审批**：若证券当前已在目标池配置的 `in_mutex` 互斥池中，优先返回 `specialInbound`，固定使用 `bond:special-inbound`，覆盖默认/简易/升降级流程；若该流程未启用则回退原流程选择。
 - **调入·非信用债大库**（`poolType != 'credit_bond'`）：默认调入流程（`inFlowId/inFlowKey`），`normalInbound`。
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单（当前默认关闭）、简易（`isSimpleInboundFlowMatched`）、默认调入，推荐优先级 白名单 > 简易 > 默认。
@@ -438,6 +439,7 @@
 | 债券大库/主体评级矩阵 | 观察池跳过、可转债跳过、担保人取低、期限档、私募/ABS/担保等分支 | 已有信用债矩阵、观察池、担保人、期限档、可转债跳过 | 部分对齐；私募债、ABS、担保人等细分分支仍需单独核 |
 | 基金评分 | 池配置 `FundRateLimit`，且传了 `fundRate` 才校验 | 池配置后，未传 `fundRate` 也失败 | 新系统更严格，需确认前端是否总能提供基金评分 |
 | 研报限制 | check/提交阶段均有逻辑，且支持 `RschDocMode > 100` 自定义规则类 | 提交阶段支持 none/any/internal | 缺少自定义研报规则；批量跳过报告配置也未复刻 |
+| 互斥池特殊审批模板 | 调入目标池时，若证券当前在该目标池的调入互斥池中，可按 `目标池+调入互斥池` 配置覆盖审批模板 | 已补齐第一期：命中任意 `in_mutex` 当前所在池时，固定走 `bond:special-inbound` | 第一阶段用代码常量覆盖，后续可扩展为配置表精确到目标池+来源池 |
 | CRMW 必填/重复 | 通过 `CRMWPOOLID_XYJJ` 判断 CRMW 池，调入必须有 CRMW 代码，并校验 CRMW 是否已在池/审批中 | CRMW 已拆独立链路 | 普通证券池不再混入；CRMW 链路需单独确认是否完全覆盖 |
 
 ### 8.2 调出校验差异
@@ -467,6 +469,7 @@
 | 中 | 股票退市口径不同 | 确认业务想按“退市日存在即拦”还是“退市日已到才拦” |
 | 中 | 研报自定义规则缺失 | 如果老系统 `RschDocMode > 100` 有实际使用，需要设计新规则扩展点 |
 | 中 | 基金评分新系统比老系统更严格 | 若前端不传 `fundRate`，配置了基金评分限制的池会无法调入 |
+| 低 | 互斥池特殊审批模板配置化 | 已补齐第一期：常量特殊流程；如需完全复刻老系统，可新增 `目标池+调入互斥池+流程` 配置表和维护页面 |
 | 低 | CRMW 设置型校验迁移口径不同 | 新系统独立 CRMW 链路更清晰，但要单独确认“CRMW 池必填凭证”和“凭证+标的组合”都覆盖 |
 
 ## 9. 验收标准

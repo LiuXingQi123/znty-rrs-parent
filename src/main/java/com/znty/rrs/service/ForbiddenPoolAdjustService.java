@@ -162,6 +162,8 @@ public class ForbiddenPoolAdjustService {
     private static final String FLOW_KEY_STANDARD_UPGRADE = "bond:standard-upgrade";
     /** 信用债标准下调流程 Key */
     private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";
+    /** 调入互斥池特殊审批流程 Key */
+    private static final String FLOW_KEY_SPECIAL_INBOUND = "bond:special-inbound";
 
     /** 日期字段格式：yyyyMMdd */
     private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
@@ -1799,6 +1801,12 @@ public class ForbiddenPoolAdjustService {
             return Collections.singletonList(buildPoolFlowOption(p));
         }
 
+        // 手工调入：当前已在目标池调入互斥池时，优先走特殊审批流程
+        AdjustCheckDto.FlowOption specialOption = resolveSpecialInboundFlowOption(targetPool, shared);
+        if (specialOption != null) {
+            return Collections.singletonList(specialOption);
+        }
+
         // ── 目标池非信用债大库：仅返回默认调入流程 ──
         if (!isCreditBondPool(targetPool)) {
             // 解析流程名称：优先使用配置名称
@@ -1905,6 +1913,63 @@ public class ForbiddenPoolAdjustService {
         // 构建默认调入流程候选项
         options.add(buildPoolFlowOption(normalP));
         return options;
+    }
+
+    /**
+     * 命中调入互斥池特殊审批时构建特殊流程候选项。
+     */
+    private AdjustCheckDto.FlowOption resolveSpecialInboundFlowOption(InvestmentPoolBo targetPool,
+                                                                      AdjustSharedData shared) {
+        if (targetPool == null || shared == null
+                || shared.getPoolRelationMap() == null || shared.getCurrentPoolIds() == null) {
+            return null;
+        }
+        Map<String, List<Long>> targetRelations = shared.getPoolRelationMap().get(targetPool.getId());
+        if (targetRelations == null) {
+            return null;
+        }
+        List<Long> mutexPoolIds = targetRelations.get(RelationType.IN_MUTEX.getCode());
+        if (mutexPoolIds == null || mutexPoolIds.isEmpty()) {
+            return null;
+        }
+        List<Long> matchedPoolIds = mutexPoolIds.stream()
+                .filter(shared.getCurrentPoolIds()::contains)
+                .collect(Collectors.toList());
+        if (matchedPoolIds.isEmpty()) {
+            return null;
+        }
+        FlowDefinitionBo flow = flowMapper.queryActiveFlowByKey(FLOW_KEY_SPECIAL_INBOUND);
+        if (flow == null) {
+            return null;
+        }
+        FlowOptionParam p = new FlowOptionParam();
+        p.setFlowType(FlowType.SPECIAL_INBOUND.getCode());
+        p.setFlowName(resolveFlowName(flow.getName(), "特殊审批流程"));
+        p.setFlowId(flow.getId());
+        p.setFlowKey(FLOW_KEY_SPECIAL_INBOUND);
+        p.setRecommended(true);
+        p.setMatched(true);
+        p.setSelectable(true);
+        p.setMatchReasons(Collections.singletonList("证券当前在目标池调入互斥池中，按特殊审批流程处理："
+                + poolNames(matchedPoolIds, shared.getPoolMap())));
+        p.setUnmatchReasons(new ArrayList<>());
+        // 构建特殊审批流程候选项
+        return buildPoolFlowOption(p);
+    }
+
+    /**
+     * 根据投资池 ID 列表转换投资池名称。
+     */
+    private String poolNames(List<Long> poolIds, Map<Long, InvestmentPoolBo> poolMap) {
+        if (poolIds == null || poolIds.isEmpty()) {
+            return "";
+        }
+        return poolIds.stream()
+                .map(id -> {
+                    InvestmentPoolBo pool = poolMap != null ? poolMap.get(id) : null;
+                    return pool != null && pool.getPoolName() != null ? pool.getPoolName() : String.valueOf(id);
+                })
+                .collect(Collectors.joining("、"));
     }
 
     /**
