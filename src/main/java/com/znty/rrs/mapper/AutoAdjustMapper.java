@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 自动调库数据访问组件。
  *
- * <p>支持定时任务扫描到期证券、禁止池联动等自动调库规则，
+ * <p>支持定时任务扫描到期证券、禁投池联动等自动调库规则，
  * 复用 {@link SecurityPoolAdjustMapper#addAdjustLog} / {@link SecurityPoolAdjustMapper#deletePoolStatusSoft} 落地。
  */
 @Mapper

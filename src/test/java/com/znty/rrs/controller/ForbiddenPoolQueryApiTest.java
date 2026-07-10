@@ -28,7 +28,8 @@ public class ForbiddenPoolQueryApiTest extends ControllerApiTestSupport {
     /** 验证 shouldSupportForbiddenPoolQuery 测试场景。 */
     @Test
     public void shouldSupportForbiddenPoolQuery() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolQuery/queryForbiddenPoolPage", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolQuery/queryForbiddenPoolPage",
+                "{\"securityStatus\":\"active\",\"entryTimeStart\":\"2026-07-01\",\"entryTimeEnd\":\"2026-07-10\"}");
         assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolQuery/querySecurityTypeList", "{}");
     }
 }

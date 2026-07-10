@@ -260,7 +260,7 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- 查询证券是否在全局禁止池（forbidden/blacklist，audit_status=20），用于调入禁止池校验 -->
+    <!-- 查询证券是否在全局禁投池（forbidden/blacklist，audit_status=20），用于调入禁投池校验 -->
     <select id="querySecurityInForbiddenPool" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips

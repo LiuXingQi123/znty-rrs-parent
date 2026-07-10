@@ -8,6 +8,7 @@ import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
+import com.znty.rrs.entity.securitypooladjust.AdjustCheckContext;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.ForbiddenPoolAdjustMapper;
@@ -165,6 +166,33 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(autoLog.getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
         verify(mapper).addPoolStatus(autoLog);
         verify(mapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
+    }
+
+    /** 验证主体调入不受证券品种和市场配置拦截。 */
+    @Test
+    public void checkInConditionsShouldSkipVarietyAndMarketForCompany() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        InvestmentPoolBo pool = buildPool(15L, "禁投池", "forbidden");
+        pool.setVarietyCodes("[\"bond\"]");
+        pool.setMarketCodes("[\"SSE\"]");
+        SecurityInfoBo company = new SecurityInfoBo();
+        company.setWindCode("C10001");
+        company.setSecurityType("company");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(company);
+        ctx.setTargetPool(pool);
+        ctx.setCategoryType("company");
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        when(mapper.querySecurityInForbiddenPool("C10001")).thenReturn(false);
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).isEmpty();
+        verify(mapper, never()).queryCategoryTypeBySecurityType("company");
     }
 
     /** 禁投池链路报告必填校验：限制为 any 且无报告时应抛出异常。 */

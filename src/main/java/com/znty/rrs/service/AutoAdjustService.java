@@ -47,7 +47,7 @@ public class AutoAdjustService {
     /**
      * 自动调库定时入口（默认每天凌晨 2 点，cron 可配）。
      *
-     * <p>依次执行各自动调库规则。当前实现到期出池，后续可按同模式扩展退市/禁止池/行业等规则。
+     * <p>依次执行各自动调库规则。当前实现到期出池，后续可按同模式扩展退市/禁投池/行业等规则。
      */
     @Scheduled(cron = "${rrs.auto-adjust.cron:0 0 2 * * ?}")
     public void executeAutoAdjust() {

@@ -2,7 +2,7 @@
 
 > 前端页面：`forbidden_pool_adjust.html`（列表 + 详情两视图）
 > 后端前缀：`/api/v1/forbiddenPoolAdjust`
-> 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库的调入或调出申请，主体生效后自动同步旗下全部债券。主体基础信息只读自 `ais_inv_analysis.t_inv_company`，不关联 `rrs_securityinfo` 的主体记录。
+> 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库的调入或调出申请，主体生效后自动同步旗下全部债券。主体基础信息只读自 `ais_inv_ods.wind_cbondissuer` 的有效记录（`used=1`），以 `s_info_compcode` 作为主体代码；不关联 `rrs_securityinfo` 的主体记录。
 
 ---
 
@@ -10,7 +10,7 @@
 
 单 Vue 实例（`el: '#forbidden_pool_adjust'`），通过 `currentPage` 在两个视图间切换：
 
-- **列表页**（`currentPage === 'list'`）：Topbar + 搜索面板（4 字段）+ 数据表格卡片（含分页）。
+- **列表页**（`currentPage === 'list'`）：Topbar + 搜索面板（主体代码、主体名称、所属行业）+ 数据表格卡片（含分页）。
 - **详情/调库操作页**（`currentPage === 'detail'`）：返回按钮 + 主体基本信息（`el-descriptions` 3 列，全部 `disabled` 只读）+ 当前所在池（当前主体所在池 / 当前主体旗下债券所在池两个子块）+ 调库操作卡（步骤 1 选池 / 步骤 2 校验确认）+ 流程选择弹窗 + 旗下债券明细弹窗 + 信评报告选择弹窗。
 
 详情页内部通过 `adjustStep`（1=选池，2=校验确认）控制步骤切换。
@@ -28,7 +28,6 @@
 | 控件 | 绑定字段 | 说明 |
 |---|---|---|
 | 文本输入 | `companyCode` | 主体代码 |
-| 文本输入 | `companyShortName` | 主体简称 |
 | 文本输入 | `companyFullName` | 主体全称 |
 | 文本输入 | `industryName` | 所属行业 |
 
@@ -38,8 +37,8 @@
 ### 2.2 loadList → 接口
 
 - 路径：`POST /api/v1/forbiddenPoolAdjust/queryCompanyPage`
-- 请求体：`{ companyCode, companyShortName, companyFullName, industryName, pageIndex, pageSize }`
-- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_analysis.t_inv_company`；`code AS companyCode`，按代码、简称、全称、所属行业筛选，`ORDER BY ts DESC, code DESC`。列表仅返回主体代码、简称、全称、所属行业和旗下债券数量。
+- 请求体：`{ companyCode, companyFullName, industryName, pageIndex, pageSize }`
+- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_cbondissuer` 的 `used=1` 记录；`s_info_compcode AS companyCode`、`s_info_compname` 作为展示名称，行业关键字匹配一级或二级行业。列表返回主体代码、主体名称、一级/二级行业和旗下债券数量。
 - `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...) GROUP BY issuer_code`）批量回填 `companyBondCount`。
 - 返回 `PageResult<ForbiddenPoolAdjustDto>`，前端取 `data.records` 与 `data.total`。
 
@@ -105,7 +104,7 @@
 2. `validateManualCheckPoolIds`：每个手工项 `targetPoolId` 必须 ∈ `{15,16,17}`，否则抛「禁投池调整手工目标池仅允许 15、16、17」。主体调库类型由后端固定为 `company`，不依赖前端传入。
 3. 将 `ForbiddenPoolAdjustCheckReq` 转为 `AdjustCheckReq`（`securityCode=companyCode`），调本类内部 `checkAdjust(checkReq)`。
 
-`checkAdjust` 五阶段（与证券池调库同源，操作 `forbiddenPoolAdjustMapper`）：主体基础信息读 `t_inv_company` 并映射为调库所需最小字段；主体不执行到期校验，保留进行中、重复入/未入池、容量、来源池、限制池、互斥、弹性禁投池等可用规则。
+`checkAdjust` 五阶段（与证券池调库同源，操作 `forbiddenPoolAdjustMapper`）：主体基础信息读 `wind_cbondissuer` 并映射为调库所需最小字段；主体不执行到期、品种、市场校验，保留进行中、重复入/未入池、容量、来源池、限制池、互斥、弹性禁投池等可用规则。
 
 - **① 前置校验** `validateCheckAdjustReq`：`securityCode` 非空、`items` 非空。
 - **② 参数初始化** `loadSharedData`：`querySecurityBoByCode(companyCode)`（null 抛「证券不存在」）、全量池 Map、`querySecurityCurrentPoolIdList`（`audit_status='20'`）、`queryAllPoolRelationList` → 三层嵌套 `poolRelationMap`、证券级标志（`querySecurityHasPendingProcess`/`querySecurityPendingProcessNodeLabel`/`querySecurityInObservePool`/`queryIssuerInObservePool`）。
@@ -170,7 +169,7 @@ syncCompanyBondsOnDirect(companyLog):
 | `ip_adjust_log` | INSERT（主体记录 + 旗下债券自动调整记录） | security_code(=companyCode 或 bond.windCode), adjust_type(手工调整/联动调整/互斥调整/**自动调整**), adjust_mode, adjust_batch_no, target_pool_id, pool_type(forbidden/observe/blacklist), flow_id/key/type, **audit_status**(00 或 20), adjuster_id/name, submit_time |
 | `ip_pool_status` | INSERT（调入生效）/ UPDATE 软删（调出生效） | security_code, adjust_log_id, target_pool_id, pool_type, **audit_status='20'**, entry_time, is_deleted |
 | `ip_adjust_step` | INSERT（初始 3 步 + 审批时按需创建） | adjust_log_id, adjust_batch_no, flow_node_id, node_type, approval_strategy, **step_status**(pending/auto_process/submit), handler_id/name |
-| `ais_inv_analysis.t_inv_company` | 跨库只读主体基础信息 | code, short_name, full_name, industry, wind_code, business_scope, reg_address, reg_capital, legaler, ts |
+| `ais_inv_ods.wind_cbondissuer` | 跨库只读有效主体基础信息 | s_info_compcode, s_info_compname, s_info_compind_name1~4, s_info_comptype, s_info_compregaddress, is_fin_inst, used |
 | `rrs_securityinfo` | 仅读取旗下债券，按 `issuer_code=companyCode` 关联 | wind_code, short_name, full_name, security_type, issuer_code |
 | `sys_attachment` | 绑定/复制附件 | adjustLogId, attachment_category(credit_report_hand/material_hand) |
 | `wf_flow_*` | 只读（构建流程快照） | — |
@@ -181,8 +180,8 @@ syncCompanyBondsOnDirect(companyLog):
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `queryCompanyPage` | companyCode, companyShortName, companyFullName, industryName, pageIndex, pageSize | `PageResult<ForbiddenPoolAdjustDto>` | 分页查询主体（读 `t_inv_company`，回填旗下债券数） |
-| `queryCompanyDetail` | companyCode | `ForbiddenPoolAdjustDto` | 主体详情（读 `t_inv_company`；返回 Wind 代码、经营范围、注册地址、注册资本、法定代表人等） |
+| `queryCompanyPage` | companyCode, companyFullName, industryName, pageIndex, pageSize | `PageResult<ForbiddenPoolAdjustDto>` | 分页查询有效 Wind 主体，回填旗下债券数 |
+| `queryCompanyDetail` | companyCode | `ForbiddenPoolAdjustDto` | 主体详情（读有效 Wind 主体；返回四级行业、主体类型、注册地址、金融机构标识等） |
 | `queryCompanyPoolStatus` | companyCode | `ForbiddenPoolAdjustDto.PoolStatusBundle` | 当前主体所在池 + 旗下债券所在池 |
 | `queryCompanyBondList` | companyCode, targetPoolId | `List<ForbiddenPoolAdjustDto.CompanyBond>` | 主体旗下指定池中的债券明细 |
 | `queryAdjustPoolList` | companyCode, adjustDirection(in/out), currentUserId | `List<PoolDto>` | 可调入/调出池（仅 15/16/17，含互斥关系与 currentCount） |
@@ -214,9 +213,9 @@ syncCompanyBondsOnDirect(companyLog):
 
 `approval_strategy`：preempt=抢占 / all=会签 / initiator=发起人；`step_status`：pending/approve/reject/submit/auto_process/canceled；`process_action`：submit/approve/reject/auto_process/skipped。
 
-### 5.4 `t_inv_company` + `rrs_securityinfo`
+### 5.4 `wind_cbondissuer` + `rrs_securityinfo`
 
-主体信息读取 `ais_inv_analysis.t_inv_company`，以 `code` 作为主体代码；该表不修改、不与 `rrs_securityinfo` 主体记录关联。旗下债券仍由 `rrs_securityinfo` 的债券行读取，以 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type='company'`。
+主体信息读取 `ais_inv_ods.wind_cbondissuer`，以有效记录的 `s_info_compcode` 作为主体代码；该表不修改、不与 `rrs_securityinfo` 主体记录关联。旗下债券仍由 `rrs_securityinfo` 的债券行读取，以 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type='company'`。
 
 ### 5.5 `ip_investment_pool` / `ip_pool_relation`
 
@@ -251,15 +250,15 @@ syncCompanyBondsOnDirect(companyLog):
 
 | 维度 | 证券池调库（security-level） | 禁投池调整（company-level） |
 |---|---|---|
-| 操作对象 | 单只证券 `securityCode` | 主体（发行人）`companyCode`（`t_inv_company.code`） |
-| 列表查询 | `querySecurityPage` | `queryCompanyPage`（4 个筛选字段，读 `t_inv_company`） |
+| 操作对象 | 单只证券 `securityCode` | 主体（发行人）`companyCode`（`wind_cbondissuer.s_info_compcode`） |
+| 列表查询 | `querySecurityPage` | `queryCompanyPage`（4 个筛选字段，读 `ais_inv_ods.wind_cbondissuer`） |
 | 当前池展示 | 当前证券所在池 + 证券主体所在池 | **当前主体所在池 + 旗下债券所在池**（含债券数、查看明细） |
 | 可调池范围 | 全量启用投资池（按权限） | **硬编码 15/16/17**，`ALLOWED_MANUAL_POOL_IDS` |
 | `pool_type` | credit_bond 等 | forbidden/observe/blacklist |
 | 主体信息 | 详情页约 28 字段可编辑 | **全部 disabled 只读**，`postSubmitProcess` 跳过 |
 | 流程候选 | 信用债大库走白名单/简易/升降级 | **只走默认调入/调出流程** |
 | 生效联动 | 仅落地单只证券 | **主体生效后自动同步旗下全部债券**（`syncCompanyBondsOnDirect`） |
-| Service | `SecurityPoolAdjustService` 独立 | `ForbiddenPoolAdjustService` **完整复制** security-pool 逻辑，操作 `forbiddenPoolAdjustMapper`，在生效点插入 `syncCompanyBondsOnDirect` |
+| Service | `SecurityPoolAdjustService` 独立 | `ForbiddenPoolAdjustService` 在 security-pool 逻辑基础上做主体/证券调库分流（`companyAdjust` 分支按 `securityType` 路由），操作 `forbiddenPoolAdjustMapper`，主体生效点插入 `syncCompanyBondsOnDirect` |
 
 ---
 

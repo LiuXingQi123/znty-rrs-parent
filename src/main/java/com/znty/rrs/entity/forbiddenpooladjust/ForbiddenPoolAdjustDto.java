@@ -1,10 +1,8 @@
 package com.znty.rrs.entity.forbiddenpooladjust;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -23,21 +21,20 @@ public class ForbiddenPoolAdjustDto {
     private String companyFullName;
     /** 所属行业 */
     private String industryName;
-    /** Wind 主体代码 */
-    private String windCode;
-    /** 经营范围 */
-    private String businessScope;
+    /** 二级行业 */
+    private String industryName2;
+    /** 三级行业 */
+    private String industryName3;
+    /** 四级行业 */
+    private String industryName4;
+    /** 主体类型 */
+    private String compType;
     /** 注册地址 */
     private String regAddress;
-    /** 注册资本 */
-    private String regCapital;
-    /** 法定代表人 */
-    private String legaler;
+    /** 是否金融机构 */
+    private Integer isFinInst;
     /** 旗下债券数量 */
     private Integer companyBondCount;
-    /** 数据更新时间 */
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
-    private Date ts;
 
     /**
      * 主体债券数量汇总。

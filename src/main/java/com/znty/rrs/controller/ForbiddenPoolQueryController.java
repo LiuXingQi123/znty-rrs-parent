@@ -15,9 +15,9 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
- * 禁止交易池查询控制器
+ * 禁投池查询控制器
  * <p>
- * 负责禁止交易池（禁投池）的证券数据查询，风控合规要求禁止交易的证券
+ * 负责禁投池的证券数据查询，风控合规要求禁止交易的证券
  * 将被纳入禁投池，本控制器提供分页检索及筛选条件数据接口。
  * </p>
  */
@@ -25,12 +25,12 @@ import java.util.List;
 @RequestMapping("/api/v1/forbiddenPoolQuery")
 public class ForbiddenPoolQueryController {
 
-    /** 禁止池查询服务 */
+    /** 禁投池查询服务 */
     @Resource
     private ForbiddenPoolQueryService forbiddenPoolQueryService;
 
     /**
-     * 分页查询禁止交易池中的证券列表，支持按证券代码、名称、类型等条件筛选
+     * 分页查询禁投池中的证券列表，支持按证券代码、名称、类型等条件筛选
      */
     @PostMapping("/queryForbiddenPoolPage")
     public ApiResponse<PageResult<ForbiddenPoolQueryDto>> queryForbiddenPoolPage(@RequestBody ForbiddenPoolQueryReq req) {

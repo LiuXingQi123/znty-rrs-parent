@@ -23,10 +23,10 @@ public class ForbiddenPoolHistoryReq extends PageRequest {
     /** 证券名称（模糊搜索） */
     private String securityShortName;
 
-    /** 调整日期起（yyyy-MM-dd） */
+    /** 提交日期起（yyyy-MM-dd） */
     private String adjustTimeStart;
 
-    /** 调整日期止（yyyy-MM-dd） */
+    /** 提交日期止（yyyy-MM-dd） */
     private String adjustTimeEnd;
 
     /** 调整人（模糊搜索） */

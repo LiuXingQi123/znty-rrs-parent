@@ -5,46 +5,45 @@
 
     <!-- 分页查询公司主体 -->
     <select id="queryCompanyPage" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
-        SELECT c.id
-               ,c.code AS companyCode
-               ,c.short_name AS companyShortName
-               ,c.full_name AS companyFullName
-               ,c.industry AS industryName
-               ,c.ts
-        FROM ais_inv_analysis.t_inv_company c
+        SELECT c.s_info_compcode AS companyCode
+               ,c.s_info_compname AS companyShortName
+               ,c.s_info_compname AS companyFullName
+               ,c.s_info_compind_name1 AS industryName
+               ,c.s_info_compind_name2 AS industryName2
+        FROM ais_inv_ods.wind_cbondissuer c
         <where>
+            AND c.used = 1
             <if test="companyCode != null and companyCode != ''">
-                AND c.code LIKE CONCAT('%', #{companyCode}, '%')
-            </if>
-            <if test="companyShortName != null and companyShortName != ''">
-                AND c.short_name LIKE CONCAT('%', #{companyShortName}, '%')
+                AND c.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%')
             </if>
             <if test="companyFullName != null and companyFullName != ''">
-                AND c.full_name LIKE CONCAT('%', #{companyFullName}, '%')
+                AND c.s_info_compname LIKE CONCAT('%', #{companyFullName}, '%')
             </if>
             <if test="industryName != null and industryName != ''">
-                AND c.industry LIKE CONCAT('%', #{industryName}, '%')
+                AND (c.s_info_compind_name1 LIKE CONCAT('%', #{industryName}, '%')
+                     OR c.s_info_compind_name2 LIKE CONCAT('%', #{industryName}, '%'))
             </if>
         </where>
-        ORDER BY c.ts DESC
-                 ,c.code DESC
+        ORDER BY c.opdate DESC
+                 ,c.s_info_effective_dt DESC
+                 ,c.object_id DESC
     </select>
 
     <!-- 查询公司主体详情 -->
     <select id="queryCompanyDetail" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
-        SELECT c.id
-               ,c.code AS companyCode
-               ,c.short_name AS companyShortName
-               ,c.full_name AS companyFullName
-               ,c.industry AS industryName
-               ,c.wind_code AS windCode
-               ,c.business_scope AS businessScope
-               ,c.reg_address AS regAddress
-               ,c.reg_capital AS regCapital
-               ,c.legaler
-               ,c.ts
-        FROM ais_inv_analysis.t_inv_company c
-        WHERE c.code = #{companyCode}
+        SELECT c.s_info_compcode AS companyCode
+               ,c.s_info_compname AS companyShortName
+               ,c.s_info_compname AS companyFullName
+               ,c.s_info_compind_name1 AS industryName
+               ,c.s_info_compind_name2 AS industryName2
+               ,c.s_info_compind_name3 AS industryName3
+               ,c.s_info_compind_name4 AS industryName4
+               ,c.s_info_comptype AS compType
+               ,c.s_info_compregaddress AS regAddress
+               ,c.is_fin_inst AS isFinInst
+        FROM ais_inv_ods.wind_cbondissuer c
+        WHERE c.s_info_compcode = #{companyCode}
+          AND c.used = 1
     </select>
 
     <!-- 根据代码查询证券信息实体，主体提交与自动债券调整共用 -->
@@ -56,14 +55,14 @@
 
     <!-- 根据主体代码查询禁投池调整所需的主体基础信息 -->
     <select id="queryCompanySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
-        SELECT c.code AS windCode
-               ,c.full_name
-               ,c.short_name
+        SELECT c.s_info_compcode AS windCode
+               ,c.s_info_compname AS fullName
+               ,c.s_info_compname AS shortName
                ,'company' AS securityType
-               ,c.industry AS industryName
-               ,c.ts
-        FROM ais_inv_analysis.t_inv_company c
-        WHERE c.code = #{companyCode}
+               ,c.s_info_compind_name1 AS industryName
+        FROM ais_inv_ods.wind_cbondissuer c
+        WHERE c.s_info_compcode = #{companyCode}
+          AND c.used = 1
     </select>
 
     <!-- 批量查询主体旗下债券数量 -->
@@ -428,7 +427,7 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- 查询证券是否在全局禁止池（forbidden/blacklist，audit_status=20），用于调入禁止池校验 -->
+    <!-- 查询证券是否在全局禁投池（forbidden/blacklist，audit_status=20），用于调入禁投池校验 -->
     <select id="querySecurityInForbiddenPool" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips

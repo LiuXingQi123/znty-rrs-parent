@@ -2082,11 +2082,11 @@ public class ForbiddenPoolAdjustService {
      *
      * <p>伪代码口径：
      * 1. 目标池须为信用债大库一/二/三级库；
-     * 2. 剩余期限合理（≤3 年且 ≥0）；
+     * 2. 剩余期限可解析（dateNext 需为 yyyyMMdd 格式）；
      * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限；
      * 4. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
      *
-     * <p>评级下调标识当前由共享上下文初始化，后续可替换为真实评级历史查询。</p>
+     * <p>评级下调标识由 RatingDowngradeChecker 查 wind_cbondissuerrating 真实判定：主体评级比较 b_info_creditrating 与 b_info_precreditrating，展望读 rrs_securityinfo.rating_outlook 是否负面，担保人按前端选中代码查 wind（禁投池主体调整时三标志强制 false）。</p>
      */
     private boolean isSimpleInboundFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,
@@ -2373,17 +2373,20 @@ public class ForbiddenPoolAdjustService {
     /**
      * 通用调入校验（所有类型都走）
      *
-     * <p>含池锁定、品种、市场、pending流程、重复入池、容量、来源池、限制池、互斥、弹性禁投。
+     * <p>含池锁定、pending流程、重复入池、容量、来源池、限制池、互斥、弹性禁投。
+     * 主体调整不具备证券品种和市场属性，跳过对应校验。
      * 不含证券到期（已拆到类型特有：债券到期 checkBondIn / 股票退市 checkStockIn）。
      */
     private List<String> checkCommonIn(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
         // 前置检查：目标池是否已锁定（最硬拦截，优先执行）
         addIfFailed(failures, inCheckPoolLocked(ctx));
-        // 前置检查：证券品种是否符合目标池配置
-        addIfFailed(failures, inCheckVariety(ctx));
-        // 前置检查：证券市场是否符合目标池配置
-        addIfFailed(failures, inCheckMarket(ctx));
+        if (!CategoryType.COMPANY.getCode().equals(ctx.getCategoryType())) {
+            // 前置检查：证券品种是否符合目标池配置
+            addIfFailed(failures, inCheckVariety(ctx));
+            // 前置检查：证券市场是否符合目标池配置
+            addIfFailed(failures, inCheckMarket(ctx));
+        }
         // 前置检查：是否存在待处理流程
         addIfFailed(failures, preCheckPendingProcess(ctx));
         // 入池检查：证券是否已在目标池中

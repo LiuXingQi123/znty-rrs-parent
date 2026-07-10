@@ -44,13 +44,13 @@ public class AdjustSharedData {
     /** 证券主体公司（发行人）旗下是否有证券在观察池中 */
     private boolean issuerInObservePool;
 
-    /** 主体评级是否下调（当前版本写死，后续替换为真实评级历史查询） */
+    /** 主体评级是否下调（由 RatingDowngradeChecker 查 wind_cbondissuerrating 比较当前与前次评级判定） */
     private boolean issuerRatingDowngraded;
 
-    /** 展望评级是否下调（当前版本写死，后续替换为真实评级历史查询） */
+    /** 展望评级是否下调（由 RatingDowngradeChecker 读 rrs_securityinfo.rating_outlook 是否为负面判定） */
     private boolean outlookRatingDowngraded;
 
-    /** 担保人评级是否下调（当前版本写死，后续替换为真实评级历史查询） */
+    /** 担保人评级是否下调（由 RatingDowngradeChecker 按前端选中担保人代码查 wind 比较当前与前次评级判定） */
     private boolean guarantorRatingDowngraded;
 
     /** 本次请求中所有调入操作涉及的目标池 ID 集合，用于互斥池同时勾选校验 */

@@ -328,7 +328,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failures).contains("该股票已经退市，无法调入");
     }
 
-    /** 验证证券在全局禁止池时调入校验应失败。 */
+    /** 验证证券在全局禁投池时调入校验应失败。 */
     @Test
     public void checkInConditionsShouldFailWhenInForbiddenPool() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);

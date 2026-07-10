@@ -199,7 +199,7 @@
 | 8 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
 | 9 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
 | 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，作为警告返回（`in_soft_restrict`，不直接阻断） |
-| 11 | `inCheckForbiddenPool` | 证券在全局禁止池中，不能调入：xxx（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
+| 11 | `inCheckForbiddenPool` | 证券在全局禁投池中，不能调入：xxx（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
 | 12 | `inCheckIndustry` | 请选择正确的行业;（池 `industry_code` 非空且 `industry_exponent=0` 时，证券 `industry_name` 须等于池配置值；`industry_exponent!=0` 行业指数模式跳过。当前用名称精确匹配，老项目用编码前缀层级匹配） |
 | 13 | `inCheckOpenDay` | 不在开放日内，不能调入;（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
 
@@ -250,7 +250,7 @@
 - **调入·非信用债大库**（`poolType != 'credit_bond'`）：默认调入流程（`inFlowId/inFlowKey`），`normalInbound`。
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单（当前默认关闭）、简易（`isSimpleInboundFlowMatched`）、默认调入，推荐优先级 白名单 > 简易 > 默认。
-  - 简易命中条件：目标池为信用债一/二/三级库（`innerSort 1~3`）；剩余期限 ≤3 年且 ≥0；剩余期限 ≤ 同主体在目标池已有债券最大剩余期限；该主体 180 天内以非简易流程入过目标池；主体/展望评级未下调，或下调但担保人评级未下调。
+  - 简易命中条件：目标池为信用债一/二/三级库（`innerSort 1~3`）；剩余期限可解析（dateNext yyyyMMdd 格式）；剩余期限 ≤ 同主体在目标池已有债券最大剩余期限；该主体 180 天内以非简易流程入过目标池；主体/展望评级未下调，或下调但担保人评级未下调。
 
 ### 3.7 后端 addAdjustLog 完整逻辑
 
@@ -429,7 +429,7 @@
 | 最大容量 | `MaxCount != -1` 且当前数 >= 上限则拦 | `maxCapacity > 0` 且当前数 >= 上限则拦 | 迁移时需统一 `-1/null/0` 的不限制含义 |
 | 调入限制池 | `LimitedPoolId` 命中则拦 | 已有 `in_restrict` | 基本一致 |
 | 弹性限制池 | 命中后返回 code=2，偏提示/警告 | 新系统作为 warning，不阻断 | 基本一致，需确认前端是否醒目展示 warning |
-| 全局禁止池 | 通过配置 `Forbiddenlastpoolid` 指定池 ID | 通过池 `pool_type in ('forbidden','blacklist')` 判断 | 配置口径不同，迁移时必须把老配置池正确标成 forbidden/blacklist |
+| 全局禁投池 | 通过配置 `Forbiddenlastpoolid` 指定池 ID | 通过池 `pool_type in ('forbidden','blacklist')` 判断 | 配置口径不同，迁移时必须把老配置池正确标成 forbidden/blacklist |
 | 开放日 | `open_day_adjust=1` 时查开放日 | 已有 `ip_pool_open_day` | 基本一致 |
 | 行业限制 | 查 `IndustryPartition.industrycode` 与池 `IndustryCode` 比对 | 用 `rrs_securityinfo.industry_name == pool.industry_code` | 可能有问题，老系统是行业编码，新系统当前像名称对配置值精确匹配 |
 | 股票分管人限制 | `IsManage=1` 且当前用户不是分管股票则拦 | 未实现 | 缺少；如果股票池仍要求分管人权限，需要补 |

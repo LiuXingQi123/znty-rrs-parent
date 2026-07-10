@@ -14,13 +14,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 禁止池查询服务。
- * <p>负责禁止交易池（禁投池）证券的分页查询，以及筛选条件所需的证券类型下拉选项查询。</p>
+ * 禁投池查询服务。
+ * <p>负责禁投池证券的分页查询，以及筛选条件所需的证券类型下拉选项查询。</p>
  */
 @Service
 public class ForbiddenPoolQueryService {
 
-    /** 禁止池查询数据访问组件 */
+    /** 禁投池查询数据访问组件 */
     @Resource
     private ForbiddenPoolQueryMapper forbiddenPoolQueryMapper;
 

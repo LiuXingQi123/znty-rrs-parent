@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolQueryMapper">
-    <!-- 禁投池查询 mapper，对应表：ip_pool_status（证券池状态），过滤 pool_type='forbidden' 提供禁投池分页查询及证券类型选项查询功能 -->
+    <!-- 风险池查询 mapper，对应表：ip_pool_status（证券池状态），覆盖禁投池、观察池和黑名单质押库 -->
 
     <!-- 分页查询禁投池证券列表 -->
     <select id="queryForbiddenPoolPage" resultType="com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryDto">
@@ -16,18 +16,22 @@
                ,ips.security_type
                ,dst.security_type_name
                ,dst.category_type
-               ,bi.issuer
+               ,COALESCE(wci.s_info_compname, bi.issuer, ips.security_short_name) AS issuer
                ,bi.maturity_date
                ,bi.delist_date
                ,bi.repurchase_date
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-                                       AND p.pool_type = 'forbidden'
+                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
+        LEFT JOIN ais_inv_ods.wind_cbondissuer wci ON wci.s_info_compcode = ips.security_code
+                                                   AND wci.used = 1
+                                                   AND ips.security_type = 'company'
         <where>
             ips.is_deleted = 0
+            AND ips.audit_status = '20'
             <if test="securityCode != null and securityCode != ''">
                 AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
@@ -37,43 +41,40 @@
             <if test="securityType != null and securityType != ''">
                 AND ips.security_type = #{securityType}
             </if>
-            <if test="securityStatus == '存续'">
-                AND (bi.maturity_date IS NULL OR bi.maturity_date &gt;= CURDATE())
+            <if test="securityStatus == 'active'">
+                AND bi.maturity_date &gt;= CURDATE()
             </if>
-            <if test="securityStatus == '到期'">
-                AND bi.maturity_date IS NOT NULL
+            <if test="securityStatus == 'matured'">
                 AND bi.maturity_date &lt; CURDATE()
             </if>
-            <if test="adjustTimeStart != null and adjustTimeStart != ''">
-                AND ips.submit_time &gt;= #{adjustTimeStart}
+            <if test="entryTimeStart != null and entryTimeStart != ''">
+                AND ips.entry_time &gt;= #{entryTimeStart}
             </if>
-            <if test="adjustTimeEnd != null and adjustTimeEnd != ''">
-                AND ips.submit_time &lt;= CONCAT(#{adjustTimeEnd}, ' 23:59:59')
+            <if test="entryTimeEnd != null and entryTimeEnd != ''">
+                AND ips.entry_time &lt;= CONCAT(#{entryTimeEnd}, ' 23:59:59')
             </if>
             <if test="adjusterName != null and adjusterName != ''">
                 AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
-                AND bi.issuer LIKE CONCAT('%', #{issuer}, '%')
-            </if>
-            <if test="auditStatus != null and auditStatus != ''">
-                AND ips.audit_status = #{auditStatus}
+                AND COALESCE(wci.s_info_compname, bi.issuer, ips.security_short_name) LIKE CONCAT('%', #{issuer}, '%')
             </if>
         </where>
         ORDER BY ips.entry_time DESC
                  ,ips.id DESC
     </select>
 
-    <!-- 查询禁投池中出现的证券类型选项 -->
+    <!-- 查询风险池中出现的证券类型选项 -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
                        ,dst.security_type_name
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-                                       AND p.pool_type = 'forbidden'
+                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         WHERE ips.is_deleted = 0
+          AND ips.audit_status = '20'
           AND ips.security_type IS NOT NULL
         ORDER BY dst.sort_order ASC
                  ,ips.security_type ASC

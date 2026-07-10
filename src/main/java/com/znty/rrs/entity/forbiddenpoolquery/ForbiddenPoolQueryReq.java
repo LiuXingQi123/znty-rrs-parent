@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 /**
- * 禁止交易池分页查询请求对象，支持按证券代码、证券简称、类型、调整人、日期等多条件过滤
+ * 禁投池分页查询请求对象，支持按证券代码、证券简称、类型、状态、调整人、入池日期等多条件过滤
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -20,14 +20,14 @@ public class ForbiddenPoolQueryReq extends PageRequest {
     /** 证券类型（精确匹配） */
     private String securityType;
 
-    /** 证券状态：存续 / 到期 */
+    /** 证券状态：active=存续 / matured=到期 */
     private String securityStatus;
 
-    /** 调整日期起（yyyy-MM-dd） */
-    private String adjustTimeStart;
+    /** 入池日期起（yyyy-MM-dd） */
+    private String entryTimeStart;
 
-    /** 调整日期止（yyyy-MM-dd） */
-    private String adjustTimeEnd;
+    /** 入池日期止（yyyy-MM-dd） */
+    private String entryTimeEnd;
 
     /** 调整人名称（模糊搜索） */
     private String adjusterName;
@@ -35,6 +35,4 @@ public class ForbiddenPoolQueryReq extends PageRequest {
     /** 发行主体名称（模糊搜索） */
     private String issuer;
 
-    /** 审核状态（调整状态）：-1=无效调整 / 00=流程中（待审批/审批中） / 11=驳回待修改 / 20=审批通过 / 21=审批驳回 / 99=发起人已撤回 */
-    private String auditStatus;
 }

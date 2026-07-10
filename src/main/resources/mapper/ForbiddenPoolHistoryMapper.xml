@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolHistoryMapper">
-    <!-- 禁投池历史查询 mapper，对应表：ip_adjust_log（调库记录） -->
+    <!-- 风险池历史查询 mapper，对应表：ip_adjust_log（调库记录），覆盖禁投池、观察池和黑名单质押库 -->
 
     <!-- 分页查询禁投池调整历史 -->
     <select id="queryForbiddenPoolHistoryPage" resultType="com.znty.rrs.entity.forbiddenpoolhistory.ForbiddenPoolHistoryDto">
@@ -10,8 +10,9 @@
                ,al.submit_time
                ,al.security_short_name
                ,al.security_code
+               ,al.adjust_batch_no
                ,dst.category_type
-               ,bi.issuer
+               ,COALESCE(wci.s_info_compname, bi.issuer, al.security_short_name) AS issuer
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
@@ -19,18 +20,21 @@
                ,al.audit_status
         FROM ip_adjust_log al
         INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
-                                       AND p.is_deleted = 0
-                                       AND p.pool_type = 'forbidden'
+                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type
                                         AND dst.is_deleted = 0
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
+        LEFT JOIN ais_inv_ods.wind_cbondissuer wci ON wci.s_info_compcode = al.security_code
+                                                   AND wci.used = 1
+                                                   AND al.security_type = 'company'
         <where>
             al.is_deleted = 0
             <if test="companyCode != null and companyCode != ''">
-                AND bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%')
+                AND (wci.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%')
+                     OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%'))
             </if>
             <if test="companyName != null and companyName != ''">
-                AND bi.issuer LIKE CONCAT('%', #{companyName}, '%')
+                AND COALESCE(wci.s_info_compname, bi.issuer) LIKE CONCAT('%', #{companyName}, '%')
             </if>
             <if test="securityCode != null and securityCode != ''">
                 AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')

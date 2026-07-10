@@ -1859,11 +1859,11 @@ public class CrmwPoolAdjustService {
      *
      * <p>伪代码口径：
      * 1. 目标池须为信用债大库一/二/三级库；
-     * 2. 剩余期限合理（≤3 年且 ≥0）；
+     * 2. 剩余期限可解析（dateNext 需为 yyyyMMdd 格式）；
      * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限；
      * 4. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
      *
-     * <p>评级下调标识当前由共享上下文初始化，后续可替换为真实评级历史查询。</p>
+     * <p>评级下调标识由 RatingDowngradeChecker 查 wind_cbondissuerrating 真实判定：主体评级比较 b_info_creditrating 与 b_info_precreditrating，展望读 rrs_securityinfo.rating_outlook 是否负面，担保人按前端选中代码查 wind。</p>
      */
     private boolean isSimpleInboundFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,

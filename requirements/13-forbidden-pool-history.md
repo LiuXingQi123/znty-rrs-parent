@@ -2,13 +2,13 @@
 
 > 前端页面：`forbidden_pool_history.html`
 > 后端前缀：`/api/v1/forbiddenPoolHistory`
-> 角色定位：风控、合规和审计人员查询针对禁投池的全部调库流水（含调入/调出/驳回/撤回），追溯禁投池调整历史。
+> 角色定位：风控、合规和审计人员查询针对禁投池、观察池和黑名单质押库的全部调库流水（含调入/调出/驳回/撤回），追溯主体风险池调整历史。
 
 ---
 
 ## 0. 关键现状（数据来源）
 
-**禁投池历史不是独立表**，而是复用 `ip_adjust_log`（证券池调库记录表），通过 `INNER JOIN ip_investment_pool p ON p.pool_type='forbidden'` 过滤出针对禁投池的调库流水。禁投池本身是 `ip_investment_pool` 中 `pool_type='forbidden'` 的记录（演示数据 `id=15`）。
+**风险池历史不是独立表**，而是复用 `ip_adjust_log`（证券池调库记录表），通过 `INNER JOIN ip_investment_pool p ON p.pool_type IN ('forbidden','observe','blacklist')` 过滤出三类风险池的调库流水。
 
 - 禁投池查询（[08](08-forbidden-pool-query.md)）→ 读 `ip_pool_status`（当前在禁投池中的证券快照）
 - 禁投池历史（本文）→ 读 `ip_adjust_log`（针对禁投池的全部调库流水，含所有状态）
@@ -89,9 +89,7 @@
 
 ## 3. 跳转详情
 
-**禁投池历史页无详情跳转。** 表格中「证券名称」「证券代码」两列虽套用 `.desc-link` 蓝色可点击外观，但模板内**未绑定任何 `@click` 事件**，仅为视觉样式。整个 `methods` 中没有跳转方法。
-
-作为对比，**禁投池查询页**（[08](08-forbidden-pool-query.md)）有跳转：`openSecurityAdjustDetail(row)` 拼参数 `securityCode/targetPoolId/adjustBatchNo/entryMode=view` 跳转 `security_pool_adjust_detail.html`。
+表格中「证券名称」「证券代码」可跳转详情。`openPoolAdjustDetail(row)` 根据 `categoryType` 跳转主体详情或证券详情，并携带 `companyCode`/`securityCode`、`targetPoolId`、`adjustBatchNo`、`entryMode=view`；批次号用于加载同批次流程步骤。
 
 ---
 
@@ -116,17 +114,20 @@
 **主查询 SQL**（`ForbiddenPoolHistoryMapper.xml`）：
 ```sql
 SELECT al.id, al.adjuster_name, al.submit_time, al.security_short_name,
-       al.security_code, bi.issuer, al.adjust_type, al.adjust_mode,
+       al.security_code, al.adjust_batch_no,
+       COALESCE(wci.s_info_compname, bi.issuer, al.security_short_name) AS issuer, al.adjust_type, al.adjust_mode,
        al.target_pool_id, p.pool_name AS target_pool_name, al.audit_status
 FROM ip_adjust_log al
 INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
-                                 AND p.is_deleted = 0
-                                 AND p.pool_type = 'forbidden'
+                                 AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
 LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
+LEFT JOIN ais_inv_ods.wind_cbondissuer wci ON wci.s_info_compcode = al.security_code
+                                           AND wci.used = 1
+                                           AND al.security_type = 'company'
 <where>
     al.is_deleted = 0
-    <if companyCode>   AND bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%') </if>
-    <if companyName>   AND bi.issuer LIKE CONCAT('%', #{companyName}, '%') </if>
+    <if companyCode>   AND (wci.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%') OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%')) </if>
+    <if companyName>   AND COALESCE(wci.s_info_compname, bi.issuer) LIKE CONCAT('%', #{companyName}, '%') </if>
     <if securityCode>  AND al.security_code LIKE CONCAT('%', #{securityCode}, '%') </if>
     <if securityShortName> AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%') </if>
     <if adjustTimeStart> AND al.submit_time >= #{adjustTimeStart} </if>
@@ -139,7 +140,10 @@ ORDER BY al.submit_time DESC, al.id DESC
 ```
 
 特点：
-- 主体代码/名称通过 `rrs_securityinfo` 的 `issuer_code`/`issuer` 模糊匹配，即按发行主体反查该主体下所有证券的禁投池调整记录。
+- 主体级流水通过 Wind 的 `s_info_compcode`/`s_info_compname` 匹配；债券流水继续通过 `rrs_securityinfo` 的 `issuer_code`/`issuer` 反查。
+- 返回 `adjustBatchNo`，历史页跳转详情时携带该批次号以加载同批次流程步骤。
+- 历史筛选日期语义为提交日期（`al.submit_time`）；页面显示“提交开始/提交结束”。
+- 投资池已删除时仍保留对应历史流水。
 - 排序按 `submit_time DESC, id DESC`。
 - `target_pool_name` 同样被 Service 覆盖为全路径名。
 - **无可见数据范围/权限校验**。
@@ -152,10 +156,10 @@ ORDER BY al.submit_time DESC, al.id DESC
 |---|---|---|
 | 主表 | `ip_pool_status`（当前状态表，快照） | `ip_adjust_log`（调库流水表） |
 | 含义 | 此刻仍在禁投池中的证券 | 所有针对禁投池的调整动作（含已调出/驳回/撤回） |
-| 禁投池过滤 | `INNER JOIN ip_investment_pool p ON p.pool_type='forbidden'` | 同左 |
+| 风险池过滤 | `INNER JOIN ip_investment_pool p ON p.pool_type IN ('forbidden','observe','blacklist')` | 同左 |
 | 筛选项 | 证券代码/简称/类型/状态/调整日期/调整人/发行主体/调整状态 | 主体代码/主体名称/证券代码/证券名称/调整日期/调整人/调整方向/调整状态 |
 | 表格列 | 含证券类型/证券状态/退市日期/行权日期 | 含调整类型/调整方向/审批状态 |
-| 证券名称/代码 | 可点击跳详情 | **仅样式，不可点击** |
+| 证券名称/代码 | 可点击跳详情 | 可点击跳详情，主体记录跳主体详情 |
 | 接口数 | 2（分页 + 类型下拉） | 1（仅分页） |
 
 两页**共享** `ip_investment_pool`（用 `pool_type='forbidden'` 过滤）与 `rrs_securityinfo`，但主数据表不同：查询页看「当前状态」，历史页看「调整流水」。

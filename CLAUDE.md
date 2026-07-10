@@ -36,7 +36,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### 数据库与 SQL 脚本
 
-- 主库 `znty_rrs`，另有独立库 `ais_inv_analysis`（AIS 投资分析：用户 / 角色 / 主体评级），ScriptTool 同时管理两库
+- 主库 `znty_rrs`，另有独立库 `ais_inv_analysis`（AIS 投资分析：用户 / 角色 / 主体评级，ScriptTool 同时管理）与 `ais_inv_ods`（Wind 外部源只读：发行人 `wind_cbondissuer` / 主体评级 `wind_cbondissuerrating`，评级下调校验跨库查询）
 - `sql/` 下按模块成对存放 `rrs_<模块>_schema.sql`（建表）+ `rrs_<模块>_demo_data.sql`（演示数据）；AIS 库用 `ais_inv_analysis_*` 前缀
 - 建表 / 写 SQL 前先查 `../CLAUDE_mysql.md`（数据库表设计规范）
 
