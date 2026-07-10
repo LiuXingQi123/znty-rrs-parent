@@ -3,6 +3,8 @@ package com.znty.rrs.service;
 import com.znty.rrs.common.enums.FlowStatus;
 import com.znty.rrs.common.enums.NodeType;
 import com.znty.rrs.common.enums.EventType;
+import com.znty.rrs.common.enums.ApprovalStrategy;
+import com.znty.rrs.common.enums.ProcessAction;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -718,6 +720,90 @@ public class FlowService {
                 }
             }
         }
+
+        // 校验发起/修改节点语义，避免运行时依赖节点显示名称。
+        validateInitiatorRouteAction(nodes, edges);
+        // 校验每条连线均配置动作，避免运行时主路径选择不确定。
+        validateRouteActionRequired(edges);
+    }
+
+    /** 校验发起人节点的 routeAction 配置。 */
+    private void validateInitiatorRouteAction(List<CanvasNodeDto> nodes, List<CanvasEdgeDto> edges) {
+        Map<String, CanvasNodeDto> nodeMap = nodes.stream()
+                .collect(Collectors.toMap(CanvasNodeDto::getId, n -> n, (a, b) -> a, LinkedHashMap::new));
+        Map<String, List<CanvasEdgeDto>> outEdgeMap = new LinkedHashMap<>();
+        if (edges != null) {
+            for (CanvasEdgeDto edge : edges) {
+                CanvasNodeDto fromNode = nodeMap.get(edge.getFrom());
+                if (isRouteAction(edge, ProcessAction.SUBMIT.getCode()) && !isInitiatorApprovalNode(fromNode)) {
+                    throw new BizException("连线 [" + edgeLabel(edge) + "] 的提交动作只能配置在发起人节点");
+                }
+                if (isRouteAction(edge, ProcessAction.RESUBMIT.getCode()) && !isInitiatorApprovalNode(fromNode)) {
+                    throw new BizException("连线 [" + edgeLabel(edge) + "] 的重新提交动作只能配置在发起人节点");
+                }
+                if (isRouteAction(edge, ProcessAction.APPROVE.getCode()) && isInitiatorApprovalNode(fromNode)) {
+                    throw new BizException("发起人节点 [" + fromNode.getLabel() + "] 不能配置通过出边，请使用提交或重新提交");
+                }
+                outEdgeMap.computeIfAbsent(edge.getFrom(), k -> new ArrayList<>()).add(edge);
+            }
+        }
+
+        for (CanvasNodeDto node : nodes) {
+            if (!isInitiatorApprovalNode(node)) {
+                continue;
+            }
+            List<CanvasEdgeDto> outEdges = outEdgeMap.getOrDefault(node.getId(), Collections.emptyList());
+            long submitCount = outEdges.stream()
+                    .filter(edge -> isRouteAction(edge, ProcessAction.SUBMIT.getCode()))
+                    .count();
+            long resubmitCount = outEdges.stream()
+                    .filter(edge -> isRouteAction(edge, ProcessAction.RESUBMIT.getCode()))
+                    .count();
+            if (submitCount > 0 && resubmitCount > 0) {
+                throw new BizException("发起人节点 [" + node.getLabel() + "] 不能同时配置提交和重新提交出边");
+            }
+            if (submitCount + resubmitCount == 0) {
+                throw new BizException("发起人节点 [" + node.getLabel() + "] 必须配置提交或重新提交出边");
+            }
+            if (submitCount > 1 || resubmitCount > 1) {
+                throw new BizException("发起人节点 [" + node.getLabel() + "] 只能配置一条提交或重新提交出边");
+            }
+        }
+    }
+
+    /** 校验每条连线均显式配置 routeAction。 */
+    private void validateRouteActionRequired(List<CanvasEdgeDto> edges) {
+        if (edges == null || edges.isEmpty()) {
+            return;
+        }
+        for (CanvasEdgeDto edge : edges) {
+            if (edge.getRouteAction() == null || edge.getRouteAction().trim().length() == 0) {
+                throw new BizException("连线 [" + edgeLabel(edge) + "] 必须配置流转动作");
+            }
+        }
+    }
+
+    /** 判断节点是否为发起人审批节点。 */
+    private boolean isInitiatorApprovalNode(CanvasNodeDto node) {
+        return node != null
+                && NodeType.APPROVAL.getCode().equals(node.getType())
+                && ApprovalStrategy.INITIATOR.getCode().equals(node.getApprovalStrategy());
+    }
+
+    /** 判断连线动作。 */
+    private boolean isRouteAction(CanvasEdgeDto edge, String routeAction) {
+        return edge != null && routeAction != null && routeAction.equals(edge.getRouteAction());
+    }
+
+    /** 获取连线显示名称。 */
+    private String edgeLabel(CanvasEdgeDto edge) {
+        if (edge == null) {
+            return "";
+        }
+        if (edge.getLabel() != null && edge.getLabel().trim().length() > 0) {
+            return edge.getLabel();
+        }
+        return edge.getFrom() + "->" + edge.getTo();
     }
 
     /** 解析画布 JSON，写入归一化表（全量替换模式）。 */

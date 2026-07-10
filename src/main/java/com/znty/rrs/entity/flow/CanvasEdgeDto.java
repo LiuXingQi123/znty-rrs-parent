@@ -20,7 +20,7 @@ public class CanvasEdgeDto {
     private String to;
     /** 连线标签 */
     private String label;
-    /** 流转动作：approve=通过 / reject=驳回 / auto=自动 / submit=提交 */
+    /** 流转动作：approve=通过 / reject=驳回 / submit=提交 / resubmit=重新提交 / auto=自动 */
     private String routeAction;
     /** 连线备注 */
     private String remark;

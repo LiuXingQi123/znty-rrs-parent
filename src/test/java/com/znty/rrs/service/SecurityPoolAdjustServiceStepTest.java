@@ -791,7 +791,8 @@ public class SecurityPoolAdjustServiceStepTest {
         Object snapshot = buildSnapshot(
                 Arrays.asList(start, initiator, approval),
                 // 构建流程连线测试数据
-                Arrays.asList(buildEdge(start.getId(), initiator.getId()), buildEdge(initiator.getId(), approval.getId())),
+                Arrays.asList(buildEdge(start.getId(), initiator.getId()),
+                        buildEdge(initiator.getId(), approval.getId(), "submit")),
                 Arrays.asList(initiatorConfig, approvalConfig),
                 // 构建审批处理人映射测试数据
                 buildHandlerMap(approvalConfig.getId(), 2));
@@ -836,7 +837,8 @@ public class SecurityPoolAdjustServiceStepTest {
         Object snapshot = buildSnapshot(
                 Arrays.asList(start, submitter, reviewer),
                 // 构建流程连线测试数据
-                Arrays.asList(buildEdge(start.getId(), submitter.getId()), buildEdge(submitter.getId(), reviewer.getId())),
+                Arrays.asList(buildEdge(start.getId(), submitter.getId()),
+                        buildEdge(submitter.getId(), reviewer.getId(), "submit")),
                 Arrays.asList(submitterConfig, reviewerConfig),
                 // 构建审批处理人映射测试数据
                 buildHandlerMap(reviewerConfig.getId(), 2));
@@ -860,9 +862,9 @@ public class SecurityPoolAdjustServiceStepTest {
                 .containsExactly("1", "2");
     }
 
-    /** 验证 createInitialStepsShouldThrowWhenEdgeAfterSubmitterIsMissing 测试场景。 */
+    /** 验证 initiator 节点缺少 submit 出边时不作为发起节点自动处理。 */
     @Test
-    public void createInitialStepsShouldThrowWhenEdgeAfterSubmitterIsMissing() throws Exception {
+    public void createInitialStepsShouldCreatePendingWhenInitiatorHasNoSubmitRoute() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
@@ -889,14 +891,14 @@ public class SecurityPoolAdjustServiceStepTest {
                 // 构建审批处理人映射测试数据
                 buildHandlerMap(reviewerConfig.getId(), 2));
 
-        try {
-            ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1", "admin");
-        } catch (Exception e) {
-            assertThat(e).isInstanceOf(BizException.class);
-            assertThat(e.getMessage()).contains("缺少下一步连线");
-            return;
-        }
-        throw new AssertionError("缺少下一步连线时应抛出流程配置异常");
+        ReflectionTestUtils.invokeMethod(service, "createInitialSteps", 100L, null, snapshot, "1", "admin");
+
+        ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
+        verify(mapper, times(2)).addAdjustStep(captor.capture());
+        List<IpAdjustStepBo> steps = captor.getAllValues();
+        assertThat(steps.get(0).getNodeType()).isEqualTo("start");
+        assertThat(steps.get(1).getFlowNodeId()).isEqualTo(submitter.getId());
+        assertThat(steps.get(1).getStepStatus()).isEqualTo("pending");
     }
 
     /** 验证 executeInboundSubmitShouldTreatMissingFlowAsDirect 测试场景。 */
@@ -1220,7 +1222,8 @@ public class SecurityPoolAdjustServiceStepTest {
         NodeApprovalConfigBo submitterConfig = buildConfig(106L, submitter.getId(), "initiator");
         Object snapshot = buildSnapshot(
                 Arrays.asList(start, submitter, end),
-                Arrays.asList(buildEdge(start.getId(), submitter.getId()), buildEdge(submitter.getId(), end.getId())),
+                Arrays.asList(buildEdge(start.getId(), submitter.getId()),
+                        buildEdge(submitter.getId(), end.getId(), "submit")),
                 Collections.singletonList(submitterConfig),
                 Collections.<Long, List<NodeApprovalHandlerBo>>emptyMap());
         Map<Long, Object> snapshotMap = new HashMap<>();
@@ -1628,9 +1631,15 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 构建流程连线测试数据。 */
     private FlowEdgeBo buildEdge(Long fromNodeId, Long toNodeId) {
+        return buildEdge(fromNodeId, toNodeId, null);
+    }
+
+    /** 构建流程连线测试数据。 */
+    private FlowEdgeBo buildEdge(Long fromNodeId, Long toNodeId, String routeAction) {
         FlowEdgeBo edge = new FlowEdgeBo();
         edge.setFromNodeId(fromNodeId);
         edge.setToNodeId(toNodeId);
+        edge.setRouteAction(routeAction);
         return edge;
     }
 
@@ -1806,29 +1815,39 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 验证发起人节点 approval_strategy=initiator 时 isInitiatorStep 返回 true。 */
     @Test
-    public void isInitiatorStepShouldReturnTrueWhenInitiatorStrategy() {
+    public void isInitiatorStepShouldReturnTrueWhenInitiatorStrategy() throws Exception {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         FlowNodeBo node = new FlowNodeBo();
         node.setId(1L);
         node.setNodeType("approval");
         NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setNodeId(node.getId());
         config.setApprovalStrategy("initiator");
+        Object snapshot = buildSnapshot(Collections.singletonList(node),
+                Collections.singletonList(buildEdge(node.getId(), 2L, "submit")),
+                Collections.singletonList(config),
+                Collections.<Long, List<NodeApprovalHandlerBo>>emptyMap());
         Boolean result = ReflectionTestUtils.invokeMethod(
-                service, "isInitiatorStep", node, config, null, null);
+                service, "isInitiatorStep", snapshot, node, config, null, null);
         assertThat(result).isTrue();
     }
 
     /** 验证 approval_strategy=preempt 时 isInitiatorStep 返回 false。 */
     @Test
-    public void isInitiatorStepShouldReturnFalseWhenNotInitiator() {
+    public void isInitiatorStepShouldReturnFalseWhenNotInitiator() throws Exception {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         FlowNodeBo node = new FlowNodeBo();
         node.setId(1L);
         node.setNodeType("approval");
         NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setNodeId(node.getId());
         config.setApprovalStrategy("preempt");
+        Object snapshot = buildSnapshot(Collections.singletonList(node),
+                Collections.singletonList(buildEdge(node.getId(), 2L, "submit")),
+                Collections.singletonList(config),
+                Collections.<Long, List<NodeApprovalHandlerBo>>emptyMap());
         Boolean result = ReflectionTestUtils.invokeMethod(
-                service, "isInitiatorStep", node, config, null, null);
+                service, "isInitiatorStep", snapshot, node, config, null, null);
         assertThat(result).isFalse();
     }
 

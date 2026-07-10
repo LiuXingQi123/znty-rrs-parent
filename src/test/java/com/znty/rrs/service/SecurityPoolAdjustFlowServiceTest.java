@@ -230,7 +230,7 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程快照：修改节点 -> 复核节点（避免流程直接结束触发落地）
         FlowNodeBo modifyNode = buildFlowNode(10103L, "n4", "approval", "流程发起人修改");
         FlowNodeBo reviewerNode = buildFlowNode(10104L, "n3", "approval", "研究员B复核");
-        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "approve");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "resubmit");
         FlowVersionBo version = new FlowVersionBo();
         version.setId(1L);
         when(flowMapper.queryFlowNodeById(10103L)).thenReturn(modifyNode);
@@ -277,7 +277,7 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建流程快照：修改节点 -> 复核节点（避免流程直接结束触发落地）
         FlowNodeBo modifyNode = buildFlowNode(10103L, "n4", "approval", "流程发起人修改");
         FlowNodeBo reviewerNode = buildFlowNode(10104L, "n3", "approval", "研究员B复核");
-        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "approve");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "resubmit");
         FlowVersionBo version = new FlowVersionBo();
         version.setId(1L);
         when(flowMapper.queryFlowNodeById(10103L)).thenReturn(modifyNode);
@@ -374,6 +374,19 @@ public class SecurityPoolAdjustFlowServiceTest {
         edge.setToNodeId(toNodeId);
         edge.setRouteAction(routeAction);
         return edge;
+    }
+
+    /** 模拟流程快照查询。 */
+    private void mockFlowSnapshot(FlowMapper flowMapper, FlowNodeBo node, FlowEdgeBo edge) {
+        FlowVersionBo version = new FlowVersionBo();
+        version.setId(1L);
+        when(flowMapper.queryFlowNodeById(node.getId())).thenReturn(node);
+        when(flowMapper.queryFlowVersionById(1L)).thenReturn(version);
+        when(flowMapper.queryFlowNodeListByVersionId(1L)).thenReturn(Collections.singletonList(node));
+        when(flowMapper.queryFlowEdgeListByVersionId(1L)).thenReturn(Collections.singletonList(edge));
+        when(flowMapper.queryCondRuleListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalConfigListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(Collections.emptyList());
     }
 
     /** 构建调库日志测试数据。 */
@@ -482,25 +495,31 @@ public class SecurityPoolAdjustFlowServiceTest {
         assertThat(result).isFalse();
     }
 
-    /** 验证发起人节点 approval_strategy=initiator 时 isInitiatorNode 返回 true。 */
+    /** 验证 initiator + submit 出边时识别为发起提交节点。 */
     @Test
-    public void isInitiatorNodeShouldReturnTrueWhenInitiatorStrategy() {
-        SecurityPoolAdjustFlowService service = buildService(mock(SecurityPoolAdjustMapper.class));
+    public void isSubmitSemanticStepShouldReturnTrueWhenInitiatorHasSubmitRoute() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustFlowService service = buildService(mock(SecurityPoolAdjustMapper.class), flowMapper);
         FlowNodeBo node = buildFlowNode(1L, "n2", "approval", "研究员A发起");
-        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
-        config.setApprovalStrategy("initiator");
-        Boolean result = ReflectionTestUtils.invokeMethod(service, "isInitiatorNode", node, config);
+        IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
+        step.setFlowNodeId(node.getId());
+        step.setApprovalStrategy("initiator");
+        mockFlowSnapshot(flowMapper, node, buildFlowEdge(node.getId(), 2L, "submit"));
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isSubmitSemanticStep", step);
         assertThat(result).isTrue();
     }
 
-    /** 验证修改节点 approval_strategy=initiator 时 isModifyNode 返回 true。 */
+    /** 验证 initiator + resubmit 出边时识别为驳回修改节点。 */
     @Test
-    public void isModifyNodeShouldReturnTrueWhenInitiatorStrategy() {
-        SecurityPoolAdjustFlowService service = buildService(mock(SecurityPoolAdjustMapper.class));
+    public void isModifyStepShouldReturnTrueWhenInitiatorHasResubmitRoute() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustFlowService service = buildService(mock(SecurityPoolAdjustMapper.class), flowMapper);
         FlowNodeBo node = buildFlowNode(1L, "n4", "approval", "研究员A修改");
-        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
-        config.setApprovalStrategy("initiator");
-        Boolean result = ReflectionTestUtils.invokeMethod(service, "isModifyNode", node, config);
+        IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
+        step.setFlowNodeId(node.getId());
+        step.setApprovalStrategy("initiator");
+        mockFlowSnapshot(flowMapper, node, buildFlowEdge(node.getId(), 2L, "resubmit"));
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isModifyStep", step);
         assertThat(result).isTrue();
     }
 

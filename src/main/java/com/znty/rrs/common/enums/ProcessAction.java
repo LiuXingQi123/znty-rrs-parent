@@ -4,6 +4,8 @@ package com.znty.rrs.common.enums;
 public enum ProcessAction {
     /** 提交 */
     SUBMIT("submit"),
+    /** 重新提交 */
+    RESUBMIT("resubmit"),
     /** 通过 */
     APPROVE("approve"),
     /** 驳回 */

@@ -99,7 +99,9 @@
 - **auto**：执行任务列表（每条 `el-select` 绑定 `task`，选项来自 `autoTaskOptions`）+「添加任务」；备注。
 - **notify**：通知方式多选（system/email/sms/wecom）、通知对象（initiator/person）、person 时指定人员多选、消息模板（支持 `#{procName}` 占位符）、备注。
 
-**连线配置面板**：连线标签、流转动作 `routeAction` 下拉（approve/reject/auto/submit）、触发条件区（**当前 `v-show="false"` 隐藏**，但数据通路完整：condLogic AND/OR、condRules 卡片）、备注、删除连线。
+**连线配置面板**：连线标签、流转动作 `routeAction` 下拉（approve/reject/submit/resubmit/auto）、触发条件区（**当前 `v-show="false"` 隐藏**，但数据通路完整：condLogic AND/OR、condRules 卡片）、备注、删除连线。
+
+> `approval_strategy='initiator'` 的节点通过出边 `routeAction` 区分业务语义：`submit` 表示首次发起提交节点，`resubmit` 表示驳回后的修改重提节点。节点名称只负责展示，可自由命名。
 
 ### 3.4 候选处理人/角色/自动任务/条件字段的下拉数据接口
 
@@ -239,7 +241,7 @@
 | `wf_node_auto_config` | 自动任务配置（1:N） | `node_id, task_seq, task_code(createAccount/updatePosition/syncSettlement/riskCheck/sendNotify/archiveRecord), auto_remark` |
 | `wf_node_notify_config` | 通知节点配置（1:1） | `node_id, notify_channels(JSON), notify_target(initiator/person), notify_persons(JSON), notify_tpl, notify_remark` |
 | `wf_node_condition_config` | 条件节点配置（1:1） | `node_id, condition_remark`（分支逻辑在出线维护） |
-| `wf_flow_edge` | 连线表 | `version_id, edge_id, from_node_id/to_node_id(BIGINT 代理键), label, route_action(approve/reject/auto/submit), cond_logic(AND/OR)` |
+| `wf_flow_edge` | 连线表 | `version_id, edge_id, from_node_id/to_node_id(BIGINT 代理键), label, route_action(approve/reject/submit/resubmit/auto), cond_logic(AND/OR)` |
 | `wf_edge_cond_rule` | 连线条件规则（1:N） | `edge_id, seq, field_code, operator(eq/neq/gt/lt/gte/lte), field_val` |
 | `wf_role_dict` | 业务角色字典 | `role_code, role_name, sort_order, is_active`（注：实际审批角色查 `t_sys_role`，本表仅 schema+demo，Service 未直接读取） |
 
@@ -251,6 +253,10 @@
 
 - 节点非空；开始节点有且仅有一个；至少一个结束节点；不存在孤立节点（任一节点必须出现在某条边的 from/to）；无边但多节点拒绝。
 - 条件节点出线带条件仅警告，不阻止发布。
+- `submit` 流转动作只能从 `approval_strategy='initiator'` 的审批节点发出。
+- `resubmit` 流转动作只能从 `approval_strategy='initiator'` 的审批节点发出。
+- 所有连线均必须显式配置 `routeAction`。开始节点、自动节点等固定路径选择 `auto`；发起节点选择 `submit`；修改节点选择 `resubmit`；普通审批节点选择 `approve` 或 `reject`。
+- `initiator` 节点不能配置 `approve` 出边；必须在正向流转中选择一种语义：`submit` 表示首次发起，`resubmit` 表示修改重提；两者不能同时配置，也不能都缺少。`reject` 不属于正向语义，修改节点仍可配置 `reject` 表示终止/撤回。
 
 ### 7.2 flowKey 唯一性与可改性
 

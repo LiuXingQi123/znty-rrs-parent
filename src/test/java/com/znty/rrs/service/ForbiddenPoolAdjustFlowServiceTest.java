@@ -111,6 +111,42 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         verify(mapper, never()).editAdjustLogAuditStatus(1L, "BATCH001", "20");
     }
 
+    /** 验证修改节点提交时按 resubmit 连线重新进入流程。 */
+    @Test
+    public void submitAdjustAuditShouldRouteModifySubmitByResubmitAction() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        // 构建流程审批服务实例测试数据
+        ForbiddenPoolAdjustFlowService service = buildService(mapper, flowMapper);
+        // 构建发起人修改节点待处理步骤测试数据
+        IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
+        step.setNodeLabel("流程发起人修改");
+        step.setApprovalStrategy("initiator");
+        // 构建发起人审批请求测试数据
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "已修改");
+        when(mapper.queryAdjustStepById(10L)).thenReturn(step);
+        when(mapper.editAdjustStepProcess(10L, "submit", "submit", "已修改")).thenReturn(1);
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("11", "2")));
+        // 构建流程快照：修改节点 -> 复核节点（避免流程直接结束触发落地）
+        FlowNodeBo modifyNode = buildFlowNode(10103L, "n4", "approval", "流程发起人修改");
+        FlowNodeBo reviewerNode = buildFlowNode(10104L, "n3", "approval", "研究员B复核");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "resubmit");
+        FlowVersionBo version = new FlowVersionBo();
+        version.setId(1L);
+        when(flowMapper.queryFlowNodeById(10103L)).thenReturn(modifyNode);
+        when(flowMapper.queryFlowVersionById(1L)).thenReturn(version);
+        when(flowMapper.queryFlowNodeListByVersionId(1L)).thenReturn(Arrays.asList(modifyNode, reviewerNode));
+        when(flowMapper.queryFlowEdgeListByVersionId(1L)).thenReturn(Collections.singletonList(edge));
+        when(flowMapper.queryCondRuleListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalConfigListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(Collections.emptyList());
+
+        service.submitAdjustAudit(req);
+
+        verify(mapper).editAdjustStepProcess(10L, "submit", "submit", "已修改");
+        verify(mapper).editAdjustLogAuditStatus(1L, "BATCH001", "00");
+    }
+
     /** 构建流程审批服务实例测试数据。 */
     private ForbiddenPoolAdjustFlowService buildService(ForbiddenPoolAdjustMapper mapper, FlowMapper flowMapper) {
         ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();

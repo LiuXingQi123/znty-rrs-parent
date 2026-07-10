@@ -194,7 +194,7 @@ public class SecurityPoolAdjustFlowService {
         if (isAdminOperator(req) || step == null || !hasText(req.getHandlerId())) {
             return;
         }
-        if (isSubmitSemanticStep(step)) {
+        if (isInitiatorSemanticStep(step)) {
             return;
         }
         // 查询当前批次调库记录，识别原始发起人
@@ -267,6 +267,8 @@ public class SecurityPoolAdjustFlowService {
         String stepStatus = resolveStepStatusForProcess(step, req.getProcessAction());
         // 根据本次处理节点语义解析个人处理动作
         String processAction = resolveProcessActionForStore(req.getProcessAction(), stepStatus);
+        // 根据本次处理节点语义解析流程路由动作
+        String routeAction = resolveRouteActionForProcess(step, req.getProcessAction());
         int updated = securityPoolAdjustMapper.editAdjustStepProcess(
                 step.getId(), stepStatus, processAction, processComment);
         if (updated == 0) {
@@ -289,7 +291,7 @@ public class SecurityPoolAdjustFlowService {
         FlowNodeBo processingNode = snapshot != null ? snapshot.getNodeMap().get(step.getFlowNodeId()) : null;
 
         // 推进到下一可处理节点
-        FlowAdvanceResult advanceResult = advanceToNextAvailableStep(step, snapshot, processingNode, req.getProcessAction());
+        FlowAdvanceResult advanceResult = advanceToNextAvailableStep(step, snapshot, processingNode, routeAction);
         if (ProcessAction.REJECT.getCode().equals(req.getProcessAction())) {
             // 根据终止前状态解析驳回终态
             String auditStatus = advanceResult.finished ? resolveTerminalRejectAuditStatus(currentAuditStatus)
@@ -333,7 +335,7 @@ public class SecurityPoolAdjustFlowService {
      */
     private String resolveStepStatusForProcess(IpAdjustStepBo step, String processAction) {
         // 判断当前步骤是否是提交语义节点
-        if (ProcessAction.APPROVE.getCode().equals(processAction) && isSubmitSemanticStep(step)) {
+        if (ProcessAction.APPROVE.getCode().equals(processAction) && isInitiatorSemanticStep(step)) {
             return ProcessAction.SUBMIT.getCode();
         }
         return processAction;
@@ -350,19 +352,50 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
+     * 根据处理节点语义解析流程路由动作。
+     */
+    private String resolveRouteActionForProcess(IpAdjustStepBo step, String processAction) {
+        if (ProcessAction.APPROVE.getCode().equals(processAction) && isModifyStep(step)) {
+            return ProcessAction.RESUBMIT.getCode();
+        }
+        return processAction;
+    }
+
+    /**
      * 判断当前步骤是否是提交语义节点。
      */
     private boolean isSubmitSemanticStep(IpAdjustStepBo step) {
-        // 提交语义步骤通过 approval_strategy=initiator 标记，不再依赖中文 label
-        return step != null && ApprovalStrategy.INITIATOR.getCode().equals(step.getApprovalStrategy());
+        // 发起提交节点通过 initiator + 出边 route_action=submit 标记
+        return isStepWithRouteAction(step, ProcessAction.SUBMIT.getCode());
     }
 
     /**
      * 判断当前步骤是否为驳回修改节点。
      */
     private boolean isModifyStep(IpAdjustStepBo step) {
-        // 修改节点同为 initiator 策略，首次 SUBMIT 不会走 APPROVE 分支，合并判断无副作用
-        return step != null && ApprovalStrategy.INITIATOR.getCode().equals(step.getApprovalStrategy());
+        // 驳回修改节点通过 initiator + 出边 route_action=resubmit 标记
+        return isStepWithRouteAction(step, ProcessAction.RESUBMIT.getCode());
+    }
+
+    /**
+     * 判断当前步骤是否为发起人语义节点（发起提交或驳回修改）。
+     */
+    private boolean isInitiatorSemanticStep(IpAdjustStepBo step) {
+        return isSubmitSemanticStep(step) || isModifyStep(step);
+    }
+
+    /**
+     * 判断当前步骤所属节点是否存在指定流转动作出边。
+     */
+    private boolean isStepWithRouteAction(IpAdjustStepBo step, String routeAction) {
+        if (step == null || !ApprovalStrategy.INITIATOR.getCode().equals(step.getApprovalStrategy())) {
+            return false;
+        }
+        FlowSnapshot snapshot = buildFlowSnapshot(step.getFlowNodeId());
+        FlowNodeBo node = snapshot != null ? snapshot.getNodeMap().get(step.getFlowNodeId()) : null;
+        return node != null
+                && NodeType.APPROVAL.getCode().equals(node.getNodeType())
+                && hasOutgoingRouteAction(snapshot, node, routeAction);
     }
 
     /**
@@ -630,7 +663,7 @@ public class SecurityPoolAdjustFlowService {
     private void createPendingSteps(IpAdjustStepBo currentStep, FlowNodeBo node, FlowSnapshot snapshot, Date now) {
         NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(node.getId());
         // 判断是否需要回到发起人处理
-        if (isModifyNode(node, config) || isInitiatorNode(node, config)) {
+        if (isModifyNode(snapshot, node, config) || isInitiatorNode(snapshot, node, config)) {
             // 创建发起人处理步骤
             createInitiatorPendingStep(currentStep, node, config, now);
             return;
@@ -873,17 +906,47 @@ public class SecurityPoolAdjustFlowService {
     /**
      * 判断是否为发起节点。
      */
-    private boolean isInitiatorNode(FlowNodeBo node, NodeApprovalConfigBo config) {
-        // 发起人节点通过 approval_strategy=initiator 标记，不再依赖中文 label
-        return config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy());
+    private boolean isInitiatorNode(FlowSnapshot snapshot, FlowNodeBo node, NodeApprovalConfigBo config) {
+        // 发起节点通过 approval_strategy=initiator + 出边 route_action=submit 标记
+        return isInitiatorNodeWithRoute(snapshot, node, config, ProcessAction.SUBMIT.getCode());
     }
 
     /**
      * 判断是否为修改节点。
      */
-    private boolean isModifyNode(FlowNodeBo node, NodeApprovalConfigBo config) {
-        // 修改节点同为 initiator 策略，与发起人节点合并判断（createPendingSteps 中 || 使用）
-        return config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy());
+    private boolean isModifyNode(FlowSnapshot snapshot, FlowNodeBo node, NodeApprovalConfigBo config) {
+        // 修改节点通过 approval_strategy=initiator + 出边 route_action=resubmit 标记
+        return isInitiatorNodeWithRoute(snapshot, node, config, ProcessAction.RESUBMIT.getCode());
+    }
+
+    /**
+     * 判断发起人节点是否存在指定流转动作出边。
+     */
+    private boolean isInitiatorNodeWithRoute(FlowSnapshot snapshot, FlowNodeBo node,
+                                             NodeApprovalConfigBo config, String routeAction) {
+        if (snapshot == null || node == null || config == null || routeAction == null) {
+            return false;
+        }
+        if (!NodeType.APPROVAL.getCode().equals(node.getNodeType())
+                || !ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())) {
+            return false;
+        }
+        return hasOutgoingRouteAction(snapshot, node, routeAction);
+    }
+
+    /**
+     * 判断节点是否存在指定流转动作出边。
+     */
+    private boolean hasOutgoingRouteAction(FlowSnapshot snapshot, FlowNodeBo node, String routeAction) {
+        if (snapshot == null || node == null || routeAction == null) {
+            return false;
+        }
+        for (FlowEdgeBo edge : snapshot.getEdges()) {
+            if (node.getId().equals(edge.getFromNodeId()) && routeAction.equals(edge.getRouteAction())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

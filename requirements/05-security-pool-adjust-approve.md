@@ -39,14 +39,13 @@
 | `auto` | 自动执行节点 | 后端识别为 O32 自动审批时直接插入 `auto_process` 步骤并继续流转 |
 | `notify` | 消息通知节点 | 当前与 auto 同等处理（自动完成记录后继续） |
 
-**节点语义靠文本匹配**：后端拼接 `label + nodeId + nodeType` 后做 `contains` 匹配（`buildNodeText` + `isAutoApprovalNode`/`isInitiatorNode`/`isReviewNode`/`isModifyNode`/`isApproveNode`）：
-- 自动审批节点：文本含「自动审批」或「o32」
-- 发起节点：文本含「发起」
-- 复核节点：文本含「复核」或「复合」
-- 修改节点：文本含「修改」
-- 审批节点：文本含「审批」且非自动审批
+**节点业务语义**：后端不再依赖节点 `label` 中文名称判断发起/修改，显示名称只负责展示。
+- O32 节点：`approval_strategy='o32'`
+- 发起提交节点：`approval_strategy='initiator'` 且当前节点存在 `route_action='submit'` 出边
+- 驳回修改节点：`approval_strategy='initiator'` 且当前节点存在 `route_action='resubmit'` 出边
+- 普通审批节点：`node_type='approval'` 且非发起/修改/O32
 
-> ⚠️ 流程定义中的节点 label 命名必须包含约定关键字，否则会被识别为普通审批节点。
+> 流程发布时会校验：`submit` / `resubmit` 只能配置在发起人节点；发起人节点必须在 `submit` / `resubmit` 中选择一种正向语义出边，且不能配置 `approve` 出边。`reject` 不属于正向语义，修改节点仍可配置 `reject` 表示终止/撤回。
 
 ### 1.3 边与条件路由
 
@@ -57,7 +56,8 @@
 | `approve` | 通过 | 审批通过时按此边推进 |
 | `reject` | 驳回 | 审批驳回时按此边推进 |
 | `auto` | 自动 | 自动节点出边 |
-| `submit` | 提交 | 发起/修改节点提交时按此边推进（边缺省时也按动作匹配） |
+| `submit` | 提交 | 发起提交节点首次提交时按此边推进 |
+| `resubmit` | 重新提交 | 修改节点重新提交时按此边推进 |
 
 后端路由查找 `findNextNodeOnMainPath`：
 1. 收集当前节点所有出边
@@ -95,7 +95,7 @@
 
 来自 `rrs_flow_definition_demo_data.sql`，节点 `n1=开始 → n2=研究员A发起(initiator) → n3=研究员B复核(preempt) → n5=研究总监审批(all) → n6=O32自动审批(auto) → n7=结束`，n3/n5/n4 都有「驳回/不通过」分支分别路由到 n4（修改）或 n7（结束）：
 - e3: n3→n4 `routeAction=reject`（复核驳回 → 修改）
-- e4: n4→n3 `routeAction=approve`（修改后重新提交 → 回复核）
+- e4: n4→n3 `routeAction=resubmit`（修改后重新提交 → 回复核）
 - e5: n3→n5 `routeAction=approve`（复核通过 → 审批）
 - e6: n5→n7 `routeAction=reject`（审批不通过 → 结束）
 - e7: n5→n6 `routeAction=approve`（审批通过 → O32 自动审批）
@@ -248,7 +248,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 #### 阶段 3：处理当前步骤并推进（processAdjustAudit）
 
 1. `buildProcessComment`：若管理员代办他人步骤，意见末尾追加「（由管理员操作）」。
-2. `resolveStepStatusForProcess`：发起/修改节点上 `approve` 写入 `stepStatus='submit'`；其他情况 `stepStatus = processAction`。
+2. `resolveStepStatusForProcess`：发起/修改语义节点上 `approve` 写入 `stepStatus='submit'`；其他情况 `stepStatus = processAction`。
 3. `resolveProcessActionForStore`：`submit` 状态下 `processAction` 也存为 `submit`。
 4. `editAdjustStepProcess` 乐观更新当前步骤：SQL 带 `WHERE id=? AND step_status='pending'`，影响行数为 0 时抛「当前流程步骤已处理，请刷新后重试」（防并发）。
 5. `completeCurrentApprovalNodeIfNeeded` 判断当前节点是否已完成：
@@ -278,12 +278,12 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 #### 阶段 6：推进下一可处理节点
 
 12. `advanceToNextAvailableStep` 从当前节点出发循环查找：
-    - 自动审批节点（`isAutoApprovalNode`）：直接插入 `auto_process` 步骤，继续找下一节点。
+    - 自动审批节点（`approval_strategy='o32'`）：直接插入 `auto_process` 步骤，继续找下一节点。
     - `approval` 节点：调 `createPendingSteps` 创建待处理步骤并返回，`nextStepCreated=true, finished=false`。
     - `end` 节点：插入 `auto_process` 步骤，`finished=true`。
     - 其他节点：插入 `auto_process` 步骤并继续。
 13. `createPendingSteps`：
-    - 修改节点或发起节点 → `createInitiatorPendingStep`：查同批次首条调库记录的 `adjusterId/adjusterName` 作为处理人。
+    - 修改语义节点或发起语义节点 → `createInitiatorPendingStep`：查同批次首条调库记录的 `adjusterId/adjusterName` 作为处理人。
     - 其他审批节点 → `resolveApprovalHandlers` 展开角色/人员，按每个处理人插入一条 `pending` 步骤。
     - 无处理人配置时插入一条 `handlerId=null` 的 pending 步骤。
 14. 若 `advanceResult.finished=true`，调 `finishAdjustBatch(step)` 落地同批次调库结果，返回 `auditStatus='20'`，message="审批已通过，调库结果已生效"。
@@ -433,7 +433,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 | `pending` | 待处理 | 审批节点创建待处理步骤时初始状态 |
 | `approve` | 通过 | 审批节点处理人 approve |
 | `reject` | 驳回 | 审批节点处理人 reject |
-| `submit` | 提交 | 发起/修改节点 approve 时（`resolveStepStatusForProcess`） |
+| `submit` | 提交 | 发起/修改语义节点 approve 时（`resolveStepStatusForProcess`） |
 | `auto_process` | 自动处理 | start/end/auto/notify 节点自动完成时 |
 | `canceled` | 已撤回 | （字典保留） |
 | `skipped` | 被跳过 | 抢占节点中其他 pending 步骤在首位处理后（仅写入 `process_action='skipped'`，`step_status` 写为首位步骤的 stepStatus） |
@@ -461,7 +461,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
          │
          ├─ 复核节点 reject → 11（驳回待修改，发起人在修改节点 pending）
          │     │
-         │     ├─ 修改节点 approve（前端「提交」）→ 00（重新进入流程中，路由回复核节点）
+         │     ├─ 修改节点前端「提交」（接口 `processAction=approve`，流程连线 `routeAction=resubmit`）→ 00（重新进入流程中，路由回复核节点）
          │     └─ 修改节点 reject（前端「终止流程」）→ 99（发起人已撤回，createTerminalEndStep 写结束节点）
          │
          ├─ 审批节点 approve（all 策略需全部处理；preempt 任一即可）→ 20（审批通过，finishAdjustBatch 落地 ip_pool_status）
@@ -515,7 +515,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
 - 抢占、会签、驳回修改、结束等路径均产生完整步骤状态。
 - 审批结果与调整日志审核状态一致；仅审批通过落地 ip_pool_status。
-- 修改节点 approve 允许附件变更，其他场景拒绝。
+- 修改节点前端「提交」（接口 `processAction=approve`，流程连线 `routeAction=resubmit`）允许附件变更，其他场景拒绝。
 - `SecurityPoolAdjustApproveApiTest` 覆盖上下文加载和审批提交。
 
 ## 10. 关键源码索引

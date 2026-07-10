@@ -711,7 +711,7 @@ public class SecurityPoolAdjustService {
 
             NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(targetNode.getId());
             // 判断当前审批节点是否应由流程发起人自动完成
-            if (!isInitiatorStep(targetNode, config, startNode, startNode)) {
+            if (!isInitiatorStep(snapshot, targetNode, config, startNode, startNode)) {
                 return false;
             }
 
@@ -3167,7 +3167,7 @@ public class SecurityPoolAdjustService {
             NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(currentNode.getId());
             if (NodeType.APPROVAL.getCode().equals(currentNode.getNodeType())
                     // 判断当前审批节点是否应由流程发起人自动完成
-                    && isInitiatorStep(currentNode, config, prevNode, startNode)) {
+                    && isInitiatorStep(snapshot, currentNode, config, prevNode, startNode)) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
                 // 插入单条步骤记录到 ip_adjust_step
                 insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, ProcessAction.SUBMIT.getCode(),
@@ -3204,13 +3204,30 @@ public class SecurityPoolAdjustService {
     /**
      * 判断当前审批节点是否应由流程发起人自动完成。
      */
-    private boolean isInitiatorStep(FlowNodeBo node, NodeApprovalConfigBo config,
+    private boolean isInitiatorStep(FlowSnapshot snapshot, FlowNodeBo node, NodeApprovalConfigBo config,
                                     FlowNodeBo prevNode, FlowNodeBo startNode) {
         if (node == null || !NodeType.APPROVAL.getCode().equals(node.getNodeType())) {
             return false;
         }
-        // 发起人节点通过 approval_strategy=initiator 标记，不再依赖 label/subLabel
-        return config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy());
+        // 发起节点通过 approval_strategy=initiator + 出边 route_action=submit 标记
+        return config != null
+                && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())
+                && hasOutgoingRouteAction(snapshot, node, ProcessAction.SUBMIT.getCode());
+    }
+
+    /**
+     * 判断节点是否存在指定流转动作出边。
+     */
+    private boolean hasOutgoingRouteAction(FlowSnapshot snapshot, FlowNodeBo node, String routeAction) {
+        if (snapshot == null || node == null || routeAction == null) {
+            return false;
+        }
+        for (FlowEdgeBo edge : snapshot.edges) {
+            if (node.getId().equals(edge.getFromNodeId()) && routeAction.equals(edge.getRouteAction())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -3278,7 +3295,7 @@ public class SecurityPoolAdjustService {
      * 沿流程主路径查找下一节点
      *
      * <p>从当前节点出发，遍历所有出边（连线），排除指向已访问节点的边，
-     * 优先选择无负面标签的边（排除含"驳回"/"不通过"的边），
+     * 优先选择非 reject 的主路径连线，
      * 返回目标节点。
      *
      * @param snapshot   流程快照
@@ -3312,10 +3329,9 @@ public class SecurityPoolAdjustService {
             }
         }
 
-        // 优先选择非驳回/不通过标签的出边
+        // 优先选择非 reject 的主路径出边
         for (FlowEdgeBo edge : outEdges) {
-            String label = edge.getLabel();
-            if (label == null || (!label.contains("驳回") && !label.contains("不通过"))) {
+            if (!ProcessAction.REJECT.getCode().equals(edge.getRouteAction())) {
                 return snapshot.nodeMap.get(edge.getToNodeId());
             }
         }
