@@ -2079,12 +2079,6 @@ public class ForbiddenPoolAdjustService {
         Integer remainDays = parseRemainDays(shared.getSecurityInfo().getDateNext());
         if (remainDays == null) {
             unmatchReasons.add("剩余期限无法解析，dateNext 需为 yyyyMMdd 格式");
-        } else if (remainDays < 0) {
-            unmatchReasons.add("剩余期限已小于 0 天");
-        } else if (remainDays <= 365 * 3) {
-            matchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，未超过 3 年");
-        } else {
-            unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，超过 3 年");
         }
 
         if (remainDays != null && remainDays >= 0) {
