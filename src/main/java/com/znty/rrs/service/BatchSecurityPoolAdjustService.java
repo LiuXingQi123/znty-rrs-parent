@@ -91,12 +91,6 @@ import java.util.stream.Collectors;
 @Service
 public class BatchSecurityPoolAdjustService {
 
-    /** 主体评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean ISSUER_RATING_DOWNGRADED = false;
-    /** 展望评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean OUTLOOK_RATING_DOWNGRADED = false;
-    /** 担保人评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean GUARANTOR_RATING_DOWNGRADED = false;
     /** 白名单池 ID 集合：主体在这些池中时符合白名单条件；当前写死空集，后续配置后补 queryIssuerInWhitelistPools 查询 */
     private static final Set<Long> WHITELIST_POOL_IDS = Collections.emptySet();
     /** 管理员用户 ID */
@@ -134,6 +128,10 @@ public class BatchSecurityPoolAdjustService {
     /** 信用债评级矩阵数据访问组件（主体债入库规则校验用） */
     @Resource
     private CreditBondGradeRuleMapper creditBondGradeRuleMapper;
+
+    /** 评级下调判定组件（主体/展望/担保人评级下调判断，查 wind_cbondissuerrating） */
+    @Resource
+    private RatingDowngradeChecker ratingDowngradeChecker;
 
     /** 系统附件业务服务 */
     @Resource
@@ -387,6 +385,8 @@ public class BatchSecurityPoolAdjustService {
         checkReq.setSecurityCode(security.getSecurityCode());
         checkReq.setSecurityShortName(security.getSecurityShortName());
         checkReq.setSecurityType(security.getSecurityType());
+        // 透传前端选中的担保人代码（简易流程第⑤条件担保人评级下调判断用）
+        checkReq.setGuarantorCode(security.getGuarantorCode());
         checkReq.setItems(Collections.singletonList(item));
         return checkReq;
     }
@@ -1187,10 +1187,10 @@ public class BatchSecurityPoolAdjustService {
         shared.setPendingProcessNodeLabel(securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        // 评级下调三标志：当前写死未下调，后续接入评级历史表（老项目 sdc_sirm_bondcompanylevel）后替换为真实查询
-        shared.setIssuerRatingDowngraded(ISSUER_RATING_DOWNGRADED);
-        shared.setOutlookRatingDowngraded(OUTLOOK_RATING_DOWNGRADED);
-        shared.setGuarantorRatingDowngraded(GUARANTOR_RATING_DOWNGRADED);
+        // 评级下调三标志：主体/展望按发行人评级判定，担保人按前端选中代码判定（查 wind_cbondissuerrating）
+        shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
+        shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
+        shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(req.getGuarantorCode()));
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         // 基金评分（基金证券调入校验用，透传请求级 fundRate）

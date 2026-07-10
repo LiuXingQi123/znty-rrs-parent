@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.WindRatingMapper">
+    <!-- Wind 发行人评级跨库查询，对应表：ais_inv_ods.wind_cbondissuerrating（Wind 同步的外部评级数据，调库入库只读不写） -->
+
+    <!-- 按公司代码查询最新一条发行人主体评级记录（评级日期最新的一条） -->
+    <select id="queryLatestRating" resultType="com.znty.rrs.entity.bo.WindIssuerRatingBo">
+        SELECT b_info_creditrating AS creditRating
+               ,b_info_precreditrating AS preCreditRating
+               ,b_creditratingchange AS creditRatingChange
+        FROM ais_inv_ods.wind_cbondissuerrating
+        WHERE s_info_compcode = #{compCode}
+        ORDER BY ann_dt2 DESC
+                 ,ann_dt DESC
+        LIMIT 1
+    </select>
+</mapper>

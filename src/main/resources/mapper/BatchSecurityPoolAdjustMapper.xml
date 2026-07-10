@@ -64,6 +64,8 @@
                ,si.issuer
                ,si.rating_bond
                ,si.maturity_date
+               ,si.guarantor
+               ,si.guarantor_id
         FROM rrs_securityinfo si
         <where>
             AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))

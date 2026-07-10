@@ -21,24 +21,18 @@ public class ForbiddenPoolAdjustDto {
     private String companyShortName;
     /** 主体全称 */
     private String companyFullName;
-    /** 主体类型编码 */
-    private String securityType;
-    /** 主体类型名称 */
-    private String securityTypeName;
-    /** 发行人类型 */
-    private String compType;
-    /** 一级行业 */
+    /** 所属行业 */
     private String industryName;
-    /** 二级行业 */
-    private String industryName2;
-    /** 主体评级 */
-    private String companyRating;
-    /** 评级展望 */
-    private String ratingOutlook;
-    /** 主体评级机构 */
-    private String ratingBondissuerAgency;
-    /** 主体内评分档 */
-    private String companyInnerRating;
+    /** Wind 主体代码 */
+    private String windCode;
+    /** 经营范围 */
+    private String businessScope;
+    /** 注册地址 */
+    private String regAddress;
+    /** 注册资本 */
+    private String regCapital;
+    /** 法定代表人 */
+    private String legaler;
     /** 旗下债券数量 */
     private Integer companyBondCount;
     /** 数据更新时间 */

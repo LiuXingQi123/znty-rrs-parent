@@ -5,72 +5,46 @@
 
     <!-- 分页查询公司主体 -->
     <select id="queryCompanyPage" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
-        SELECT si.wind_code AS companyCode
-               ,si.short_name AS companyShortName
-               ,si.full_name AS companyFullName
-               ,si.security_type
-               ,dst.security_type_name
-               ,si.comp_type
-               ,si.industry_name
-               ,si.industry_name2
-               ,si.rating_bondissuer AS companyRating
-               ,si.rating_outlook
-               ,si.rating_bondissuer_agency
-               ,si.inner_issuer_rating AS companyInnerRating
-               ,si.ts
-        FROM rrs_securityinfo si
-        INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
-                                         AND dst.is_deleted = 0
-                                         AND dst.category_type = 'company'
+        SELECT c.id
+               ,c.code AS companyCode
+               ,c.short_name AS companyShortName
+               ,c.full_name AS companyFullName
+               ,c.industry AS industryName
+               ,c.ts
+        FROM ais_inv_analysis.t_inv_company c
         <where>
-            AND (si.security_status IS NULL OR si.security_status != 'D')
             <if test="companyCode != null and companyCode != ''">
-                AND si.wind_code LIKE CONCAT('%', #{companyCode}, '%')
+                AND c.code LIKE CONCAT('%', #{companyCode}, '%')
             </if>
             <if test="companyShortName != null and companyShortName != ''">
-                AND si.short_name LIKE CONCAT('%', #{companyShortName}, '%')
+                AND c.short_name LIKE CONCAT('%', #{companyShortName}, '%')
             </if>
             <if test="companyFullName != null and companyFullName != ''">
-                AND si.full_name LIKE CONCAT('%', #{companyFullName}, '%')
-            </if>
-            <if test="compType != null and compType != ''">
-                AND si.comp_type LIKE CONCAT('%', #{compType}, '%')
+                AND c.full_name LIKE CONCAT('%', #{companyFullName}, '%')
             </if>
             <if test="industryName != null and industryName != ''">
-                AND (si.industry_name LIKE CONCAT('%', #{industryName}, '%')
-                     OR si.industry_name2 LIKE CONCAT('%', #{industryName}, '%'))
-            </if>
-            <if test="companyRating != null and companyRating != ''">
-                AND si.rating_bondissuer = #{companyRating}
-            </if>
-            <if test="companyInnerRating != null and companyInnerRating != ''">
-                AND si.inner_issuer_rating = #{companyInnerRating}
+                AND c.industry LIKE CONCAT('%', #{industryName}, '%')
             </if>
         </where>
-        ORDER BY si.ts DESC
-                 ,si.wind_code DESC
+        ORDER BY c.ts DESC
+                 ,c.code DESC
     </select>
 
     <!-- 查询公司主体详情 -->
     <select id="queryCompanyDetail" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
-        SELECT si.wind_code AS companyCode
-               ,si.short_name AS companyShortName
-               ,si.full_name AS companyFullName
-               ,si.security_type
-               ,dst.security_type_name
-               ,si.comp_type
-               ,si.industry_name
-               ,si.industry_name2
-               ,si.rating_bondissuer AS companyRating
-               ,si.rating_outlook
-               ,si.rating_bondissuer_agency
-               ,si.inner_issuer_rating AS companyInnerRating
-               ,si.ts
-        FROM rrs_securityinfo si
-        INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
-                                         AND dst.is_deleted = 0
-                                         AND dst.category_type = 'company'
-        WHERE si.wind_code = #{companyCode}
+        SELECT c.id
+               ,c.code AS companyCode
+               ,c.short_name AS companyShortName
+               ,c.full_name AS companyFullName
+               ,c.industry AS industryName
+               ,c.wind_code AS windCode
+               ,c.business_scope AS businessScope
+               ,c.reg_address AS regAddress
+               ,c.reg_capital AS regCapital
+               ,c.legaler
+               ,c.ts
+        FROM ais_inv_analysis.t_inv_company c
+        WHERE c.code = #{companyCode}
     </select>
 
     <!-- 根据代码查询证券信息实体，主体提交与自动债券调整共用 -->
@@ -78,6 +52,18 @@
         SELECT *
         FROM rrs_securityinfo
         WHERE wind_code = #{securityCode}
+    </select>
+
+    <!-- 根据主体代码查询禁投池调整所需的主体基础信息 -->
+    <select id="queryCompanySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT c.code AS windCode
+               ,c.full_name
+               ,c.short_name
+               ,'company' AS securityType
+               ,c.industry AS industryName
+               ,c.ts
+        FROM ais_inv_analysis.t_inv_company c
+        WHERE c.code = #{companyCode}
     </select>
 
     <!-- 批量查询主体旗下债券数量 -->

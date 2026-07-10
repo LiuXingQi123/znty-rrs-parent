@@ -6,6 +6,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustReq;
+import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
@@ -50,6 +51,39 @@ public class ForbiddenPoolAdjustServiceTest {
 
         assertThat(result.getCompanyBondCount()).isEqualTo(3);
         verify(mapper).queryCompanyBondCountList(Collections.singletonList("C10001"));
+    }
+
+    /** 验证主体调库基础信息从主体表读取，不再查询主体证券记录。 */
+    @Test
+    public void queryAdjustSecurityInfoShouldReadCompanyFromCompanyTable() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        SecurityInfoBo company = new SecurityInfoBo();
+        company.setWindCode("C10001");
+        company.setSecurityType("company");
+        when(mapper.queryCompanySecurityBoByCode("C10001")).thenReturn(company);
+
+        SecurityInfoBo result = ReflectionTestUtils.invokeMethod(service, "queryAdjustSecurityInfo", "C10001", "company");
+
+        assertThat(result).isSameAs(company);
+        verify(mapper).queryCompanySecurityBoByCode("C10001");
+        verify(mapper, never()).querySecurityBoByCode("C10001");
+    }
+
+    /** 验证主体提交时固定写入 company 类型，不依赖前端传入类型。 */
+    @Test
+    public void convertCompanySubmitReqShouldUseFixedCompanySecurityType() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        ForbiddenPoolAdjustSubmitReq req = new ForbiddenPoolAdjustSubmitReq();
+        req.setItems(Collections.<ForbiddenPoolAdjustSubmitReq.AdjustItem>emptyList());
+        ForbiddenPoolAdjustDto company = buildCompany("C10001");
+
+        SecurityPoolAdjustSubmitReq result = ReflectionTestUtils.invokeMethod(
+                service, "convertCompanySubmitReq", req, company);
+
+        assertThat(result.getSecurityType()).isEqualTo("company");
+        assertThat(result.getSecurityCode()).isEqualTo("C10001");
     }
 
     /** 验证手工调库目标池超出 15、16、17 时直接拒绝。 */
@@ -163,7 +197,6 @@ public class ForbiddenPoolAdjustServiceTest {
         ForbiddenPoolAdjustDto company = new ForbiddenPoolAdjustDto();
         company.setCompanyCode(companyCode);
         company.setCompanyShortName("某公司");
-        company.setSecurityType("company");
         return company;
     }
 

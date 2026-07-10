@@ -62,6 +62,12 @@ INSERT INTO `rrs_securityinfo` (
 -- ===== CRMW-触发校验 =====
 ('CRMW005.IB', '某CRMW凭证E', 'CRMW-E', NULL, NULL, 'CRMW005', 'crmw', 2, 730, '2028-06-15', '2028-06-15', 'L', NULL, NULL, 'AA', 'AA', '稳定', NULL, NULL, 0, NULL, NULL, '某地产公司', 'C10005', '2026-05-15', '2026-05-12', '2026-05-15', '2028-06-15', NULL, NULL, NULL, NULL, NULL, 'CNY', 5, 100, 0, NULL, 'CRMW', '金融机构', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 'CRMW', 0, 0, 0, 0, '中诚信', '中诚信', 'official', NOW(), NOW());
 
+-- 补充担保人ID（多担保人逗号分隔，与 guarantor 名称按位置配对）：112008888.IB 为多担保人担保债
+-- 配套 wind_cbondissuerrating：发行人 C90005 主体评级下调(AA->AA-)；担保人 C90011 未下调 / C90012 下调(AA+->AA)
+UPDATE `rrs_securityinfo`
+SET `guarantor` = '某担保集团,某增信担保', `guarantor_id` = 'C90011,C90012'
+WHERE `wind_code` = '112008888.IB';
+
 INSERT INTO `ip_pool_status` (
     `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
     `adjust_batch_no`, `adjust_log_id`, `target_pool_id`, `target_pool_name`, `pool_type`,

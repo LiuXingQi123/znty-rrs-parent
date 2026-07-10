@@ -252,6 +252,10 @@ public class BatchSecurityPoolAdjustServiceTest {
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        // 流程定义数据访问组件：互斥特殊流程 resolveSpecialInboundFlowOption 需查 flowMapper
+        ReflectionTestUtils.setField(service, "flowMapper", mock(FlowMapper.class));
+        // 评级下调判定组件：mock 默认返回 false（未下调），不影响互斥项保留逻辑断言
+        ReflectionTestUtils.setField(service, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
 
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
         when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(new SecurityInfoBo());

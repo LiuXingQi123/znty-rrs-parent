@@ -17,14 +17,8 @@ public class ForbiddenPoolAdjustReq extends PageRequest {
     private String companyShortName;
     /** 主体全称 */
     private String companyFullName;
-    /** 发行人类型 */
-    private String compType;
     /** 所属行业 */
     private String industryName;
-    /** 主体评级 */
-    private String companyRating;
-    /** 主体内评分档 */
-    private String companyInnerRating;
     /** 调整方向：in=调入 / out=调出 */
     private String adjustDirection;
     /** 当前用户 ID */

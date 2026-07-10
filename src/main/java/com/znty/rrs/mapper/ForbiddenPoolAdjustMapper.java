@@ -68,6 +68,9 @@ public interface ForbiddenPoolAdjustMapper {
     /** 根据证券代码查询证券基础信息实体 */
     SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
 
+    /** 根据主体代码查询禁投池调整所需的主体基础信息 */
+    SecurityInfoBo queryCompanySecurityBoByCode(@Param("companyCode") String companyCode);
+
     /** 新增调库记录（非直通流程，audit_status='00' 流程中） */
     int addAdjustLog(IpAdjustLogBo bo);
 

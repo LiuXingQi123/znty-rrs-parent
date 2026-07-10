@@ -139,12 +139,9 @@ public class SecurityPoolAdjustService {
     @Resource
     private SysAttachmentService sysAttachmentService;    private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
 
-    /** 主体评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean ISSUER_RATING_DOWNGRADED = false;
-    /** 展望评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean OUTLOOK_RATING_DOWNGRADED = false;
-    /** 担保人评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean GUARANTOR_RATING_DOWNGRADED = false;
+    /** 评级下调判定组件（主体/展望/担保人评级下调判断，查 wind_cbondissuerrating） */
+    @Resource
+    private RatingDowngradeChecker ratingDowngradeChecker;
     /** 白名单池 ID 集合：主体在这些池中时符合白名单条件；当前写死空集，后续配置后补 queryIssuerInWhitelistPools 查询 */
     private static final Set<Long> WHITELIST_POOL_IDS = Collections.emptySet();
     /** 信用债标准上调流程 Key */
@@ -1194,10 +1191,10 @@ public class SecurityPoolAdjustService {
         // 当前项目主体债入库规则未落地（P2 阻塞），暂仅加载不使用，待主体债入库规则接入后启用
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        // 评级下调三标志：当前写死未下调，后续接入评级历史表（老项目 sdc_sirm_bondcompanylevel）后替换为真实查询
-        shared.setIssuerRatingDowngraded(ISSUER_RATING_DOWNGRADED);
-        shared.setOutlookRatingDowngraded(OUTLOOK_RATING_DOWNGRADED);
-        shared.setGuarantorRatingDowngraded(GUARANTOR_RATING_DOWNGRADED);
+        // 评级下调三标志：主体/展望按发行人评级判定，担保人按前端选中代码判定（查 wind_cbondissuerrating）
+        shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
+        shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
+        shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(req.getGuarantorCode()));
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         // 基金评分（基金证券调入校验用，透传请求级 fundRate）

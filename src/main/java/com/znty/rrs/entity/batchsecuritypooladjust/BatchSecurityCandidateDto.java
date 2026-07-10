@@ -34,6 +34,12 @@ public class BatchSecurityCandidateDto {
     /** 证券评级 */
     private String ratingBond;
 
+    /** 担保人（名称，多担保人逗号分隔） */
+    private String guarantor;
+
+    /** 担保人ID（代码，多担保人逗号分隔，与 guarantor 按位置配对） */
+    private String guarantorId;
+
     /** 到期日期 */
     private String maturityDate;
 }

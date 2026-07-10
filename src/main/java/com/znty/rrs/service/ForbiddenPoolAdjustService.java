@@ -118,15 +118,11 @@ import java.util.stream.Collectors;
 public class ForbiddenPoolAdjustService {
 
     /** 管理员用户 ID */
-    /** 主体评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean ISSUER_RATING_DOWNGRADED = false;
-    /** 展望评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean OUTLOOK_RATING_DOWNGRADED = false;
-    /** 担保人评级是否下调（当前写死，后续接评级历史查询替换） */
-    private static final boolean GUARANTOR_RATING_DOWNGRADED = false;
     /** 白名单池 ID 集合：主体在这些池中时符合白名单条件；当前写死空集，后续配置后补 queryIssuerInWhitelistPools 查询 */
     private static final Set<Long> WHITELIST_POOL_IDS = Collections.emptySet();
     private static final String ADMIN_USER_ID = "1";
+    /** 禁投池主体调库记录固定证券类型 */
+    private static final String COMPANY_SECURITY_TYPE = CategoryType.COMPANY.getCode();
     /** 禁投池、观察池和黑名单质押库 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
 
@@ -155,6 +151,10 @@ public class ForbiddenPoolAdjustService {
     /** 系统附件业务服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+
+    /** 评级下调判定组件（主体/展望/担保人评级下调判断，查 wind_cbondissuerrating） */
+    @Resource
+    private RatingDowngradeChecker ratingDowngradeChecker;
 
     /** 信用债白名单调入流程 Key */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
@@ -193,7 +193,7 @@ public class ForbiddenPoolAdjustService {
         validateCompanyCode(req.getCompanyCode());
         ForbiddenPoolAdjustDto dto = forbiddenPoolAdjustMapper.queryCompanyDetail(req.getCompanyCode());
         if (dto == null) {
-            throw new BizException(404, "公司主体不存在或证券类型不属于 company，companyCode=" + req.getCompanyCode());
+            throw new BizException(404, "公司主体不存在，companyCode=" + req.getCompanyCode());
         }
         // 查询主体旗下债券数量
         fillCompanyBondCount(Collections.singletonList(dto));
@@ -307,7 +307,7 @@ public class ForbiddenPoolAdjustService {
         AdjustCheckReq checkReq = new AdjustCheckReq();
         checkReq.setSecurityCode(company.getCompanyCode());
         checkReq.setSecurityShortName(company.getCompanyShortName());
-        checkReq.setSecurityType(company.getSecurityType());
+        checkReq.setSecurityType(COMPANY_SECURITY_TYPE);
         List<AdjustCheckReq.CheckItem> items = new ArrayList<>();
         for (ForbiddenPoolAdjustCheckReq.CheckItem source : req.getItems()) {
             AdjustCheckReq.CheckItem item = new AdjustCheckReq.CheckItem();
@@ -435,9 +435,6 @@ public class ForbiddenPoolAdjustService {
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("调库项不能为空");
         }
-        if (req.getSecurityType() != null && !req.getSecurityType().equals(company.getSecurityType())) {
-            throw new BizException("主体类型与数据库记录不一致，companyCode=" + req.getCompanyCode());
-        }
         for (ForbiddenPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             boolean manual = item.getItemTag() == null || item.getItemTag().isEmpty()
                     || ItemType.MANUAL.getCode().equals(item.getItemTag());
@@ -457,7 +454,7 @@ public class ForbiddenPoolAdjustService {
         SecurityPoolAdjustSubmitReq target = new SecurityPoolAdjustSubmitReq();
         target.setSecurityCode(company.getCompanyCode());
         target.setSecurityShortName(company.getCompanyShortName());
-        target.setSecurityType(company.getSecurityType());
+        target.setSecurityType(COMPANY_SECURITY_TYPE);
         target.setAdjustType(req.getAdjustType());
         target.setAdjustReason(req.getAdjustReason());
         target.setAdjustAdvice(req.getAdjustAdvice());
@@ -802,10 +799,11 @@ public class ForbiddenPoolAdjustService {
      * 第二阶段：参数初始化，使用指定批次号上下文。
      */
     private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req, BatchNoContext batchNoContext) {
-        // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = forbiddenPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        // 按调整对象读取基础信息并校验存在
+        SecurityInfoBo securityInfo = queryAdjustSecurityInfo(req.getSecurityCode(), req.getSecurityType());
         if (securityInfo == null) {
-            throw new BizException("证券不存在");
+            throw new BizException(COMPANY_SECURITY_TYPE.equals(req.getSecurityType())
+                    ? "公司主体不存在" : "证券不存在");
         }
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
@@ -843,6 +841,7 @@ public class ForbiddenPoolAdjustService {
             }
         }
 
+        boolean companyAdjust = COMPANY_SECURITY_TYPE.equals(req.getSecurityType());
         return new SubmitSharedData(
                 securityInfo,
                 poolMap,
@@ -850,7 +849,7 @@ public class ForbiddenPoolAdjustService {
                 poolRelationMap,
                 forbiddenPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
                 forbiddenPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
-                forbiddenPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
+                companyAdjust ? false : forbiddenPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
                 flowSnapshotMap,
                 batchNoContext
         );
@@ -1519,10 +1518,11 @@ public class ForbiddenPoolAdjustService {
      * @return 封装了本次校验全量共享数据的 AdjustSharedData
      */
     private AdjustSharedData loadSharedData(AdjustCheckReq req) {
-        // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = forbiddenPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        // 按调整对象读取基础信息并校验存在
+        SecurityInfoBo securityInfo = queryAdjustSecurityInfo(req.getSecurityCode(), req.getSecurityType());
         if (securityInfo == null) {
-            throw new BizException("证券不存在");
+            throw new BizException(COMPANY_SECURITY_TYPE.equals(req.getSecurityType())
+                    ? "公司主体不存在" : "证券不存在");
         }
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
@@ -1560,14 +1560,36 @@ public class ForbiddenPoolAdjustService {
         shared.setHasPendingProcess(forbiddenPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()));
         shared.setPendingProcessNodeLabel(forbiddenPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
         shared.setSecurityInObservePool(forbiddenPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
-        shared.setIssuerInObservePool(forbiddenPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        // 评级下调三标志：当前写死未下调，后续接入评级历史表（老项目 sdc_sirm_bondcompanylevel）后替换为真实查询
-        shared.setIssuerRatingDowngraded(ISSUER_RATING_DOWNGRADED);
-        shared.setOutlookRatingDowngraded(OUTLOOK_RATING_DOWNGRADED);
-        shared.setGuarantorRatingDowngraded(GUARANTOR_RATING_DOWNGRADED);
+        boolean companyAdjust = COMPANY_SECURITY_TYPE.equals(req.getSecurityType());
+        shared.setIssuerInObservePool(companyAdjust
+                ? false : forbiddenPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
+        if (companyAdjust) {
+            shared.setIssuerRatingDowngraded(false);
+            shared.setOutlookRatingDowngraded(false);
+            shared.setGuarantorRatingDowngraded(false);
+        } else {
+            // 评级下调三标志：主体/展望按发行人评级判定，担保人按前端选中代码判定
+            shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
+            shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
+            shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(req.getGuarantorCode()));
+        }
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         return shared;
+    }
+
+    /**
+     * 按调整对象查询调库框架所需的基础信息。
+     *
+     * @param securityCode 调整对象代码
+     * @param securityType 调整对象类型
+     * @return 基础信息
+     */
+    private SecurityInfoBo queryAdjustSecurityInfo(String securityCode, String securityType) {
+        if (COMPANY_SECURITY_TYPE.equals(securityType)) {
+            return forbiddenPoolAdjustMapper.queryCompanySecurityBoByCode(securityCode);
+        }
+        return forbiddenPoolAdjustMapper.querySecurityBoByCode(securityCode);
     }
 
     /**
