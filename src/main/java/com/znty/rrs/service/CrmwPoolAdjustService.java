@@ -2173,7 +2173,7 @@ public class CrmwPoolAdjustService {
         addIfFailed(failures, inCheckRestrictPool(ctx));
         // 入池检查：本次请求中是否同时勾选了互斥池（不可同时调入）
         addIfFailed(failures, inCheckMutexConflict(ctx));
-        // 入池检查：是否满足弹性池条件
+        // 入池检查：证券当前在弹性禁投池中（in_soft_restrict，警告不阻断）
         addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
         // 入池检查：证券是否在全局禁止池（forbidden/blacklist）
         addIfFailed(failures, inCheckForbiddenPool(ctx));
@@ -2269,7 +2269,7 @@ public class CrmwPoolAdjustService {
         addIfFailed(failures, outCheckMutexPool(ctx));
         // 出池检查：本次请求中是否同时勾选了互斥池（不可同时调出）
         addIfFailed(failures, outCheckMutexConflict(ctx));
-        // 出池检查：是否满足弹性池条件
+        // 出池检查：证券当前在弹性禁投池中（out_soft_restrict，警告不阻断）
         addIfWarning(ctx.getWarnings(), outCheckElasticPool(ctx));
         // 开放日校验（按池 open_day_adjust，调出）
         addIfFailed(failures, outCheckOpenDay(ctx));
