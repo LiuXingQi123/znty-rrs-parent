@@ -2175,7 +2175,7 @@ public class CrmwPoolAdjustService {
         addIfFailed(failures, inCheckMutexConflict(ctx));
         // 入池检查：证券当前在弹性禁投池中（in_soft_restrict，警告不阻断）
         addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
-        // 入池检查：证券是否在全局禁止池（禁投池/黑名单）
+        // 入池检查：证券是否在全局禁止池（forbidden 禁投池/blacklist 黑名单）
         addIfFailed(failures, inCheckForbiddenPool(ctx));
         // 行业限制校验（按池 industry_code，调入）
         addIfFailed(failures, inCheckIndustry(ctx));
@@ -2662,7 +2662,7 @@ public class CrmwPoolAdjustService {
     }
 
     /**
-     * 规则：全局禁止池（禁投池/黑名单）
+     * 规则：全局禁止池（forbidden 禁投池/blacklist 黑名单）
      *
      * <p>证券当前在禁投池或黑名单中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
      * 对应老项目 Forbiddenlastpoolid 配置。
