@@ -408,12 +408,15 @@
                ,NOW())
     </insert>
 
-    <!-- 软删除入池状态（直通调出：将该证券在目标池中的生效记录标记为删除） -->
+    <!-- 软删除入池状态（直通调出：仅删除指定凭证与标的证券组合在目标池中的生效记录） -->
     <update id="deletePoolStatusSoft">
         UPDATE ip_pool_status_crmw
         SET is_deleted = 1
            ,updt_time = NOW()
         WHERE security_code = #{securityCode}
+          AND crmw_scode = #{crmwScode}
+          AND crmw_mktcode = #{crmwMktcode}
+          AND crmw_stype = #{crmwStype}
           AND target_pool_id = #{targetPoolId}
           AND audit_status = '20'
           AND pool_type = 'crmw'

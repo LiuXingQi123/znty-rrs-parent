@@ -475,7 +475,9 @@ public class CrmwPoolAdjustFlowService {
                 log.setAdjustLogId(log.getId());
                 crmwPoolAdjustMapper.addPoolStatus(log);
             } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
-                crmwPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
+                // 审批完成后仅软删除当前调库记录对应的凭证与标的证券组合
+                crmwPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getCrmwScode(),
+                        log.getCrmwMktcode(), log.getCrmwStype(), log.getTargetPoolId());
             }
         }
         // 审批通过结束后，将手工上传的信评报告沉淀为内部报告

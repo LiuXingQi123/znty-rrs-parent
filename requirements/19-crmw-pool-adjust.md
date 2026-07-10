@@ -113,7 +113,7 @@
    - `resolveManualSubmitItem` 取同组手工项；`isDirect = noFlow || isDirectFlow(snapshot)`。
    - **直通**：`buildAdjustLog` → `auditStatus=APPROVED('20')` → `addAdjustLog`（写 `ip_adjust_log`）→ `bindSubmitAttachments` → 手工项 `createInitialSteps` → `addPoolStatus`（写 `ip_pool_status_crmw`，`audit_status='20'` 即时生效）。
    - **非直通**：`auditStatus=SUBMITTED('00')` → `addAdjustLog` → `bindSubmitAttachments` → `createInitialSteps`（返回 true 即流程已到 end，升 `'20'` + `addPoolStatus`）。
-4. **调出处理** `executeOutboundSubmit`：对称，先跑报告必填校验（`out_report_restriction`）+ **CRMW组合校验** `checkCrmwOutboundCombination`（组合在池：`queryCrmwComboInPool` 查 `ip_pool_status_crmw` 同凭证+标的证券+目标池 `audit_status='20'`，组合不在池则抛 `BizException`，对应老项目 `checkOutPool` 的 `checkCrmwInPool` 组合维度），生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE security_code AND target_pool_id AND audit_status='20' AND pool_type='crmw'`）。
+4. **调出处理** `executeOutboundSubmit`：对称，先跑报告必填校验（`out_report_restriction`）+ **CRMW组合校验** `checkCrmwOutboundCombination`（组合在池：`queryCrmwComboInPool` 查 `ip_pool_status_crmw` 同凭证+标的证券+目标池 `audit_status='20'`，组合不在池则抛 `BizException`，对应老项目 `checkOutPool` 的 `checkCrmwInPool` 组合维度），生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE security_code AND crmw_scode AND crmw_mktcode AND crmw_stype AND target_pool_id AND audit_status='20' AND pool_type='crmw'`），避免误删同一标的证券在同一池的其他 CRMW 凭证记录。
 5. **后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` → `editSecurityInfoForAdjust`（全量更新 `rrs_securityinfo` 约 80 字段）。
 
 **批次号规则** `buildAdjustBatchNo`：

@@ -42,8 +42,11 @@ public interface CrmwPoolAdjustMapper {
     /** 新增入池状态记录（直通流程，audit_status='20' 即时生效） */
     int addPoolStatus(IpAdjustLogBo bo);
 
-    /** 软删除入池状态（直通调出流程，将目标池中有效记录标记为已删除） */
+    /** 软删除指定凭证与标的证券组合的入池状态（直通调出流程） */
     int deletePoolStatusSoft(@Param("securityCode") String securityCode,
+                             @Param("crmwScode") String crmwScode,
+                             @Param("crmwMktcode") String crmwMktcode,
+                             @Param("crmwStype") String crmwStype,
                              @Param("targetPoolId") Long targetPoolId);
 
     /** 更新调库详情页传入的证券基础信息字段 */

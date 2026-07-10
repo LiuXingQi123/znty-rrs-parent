@@ -314,7 +314,7 @@ public class CrmwPoolAdjustFlowServiceTest {
         assertThat(log.getCrmwScode()).isEqualTo("CRMW24001.IB");
     }
 
-    /** 验证最终通过时CRMW调出结果只软删除独立状态记录。 */
+    /** 验证最终通过时CRMW调出仅软删除当前凭证与标的证券组合。 */
     @Test
     public void finishAdjustBatchShouldDeleteCrmwPoolStatusForOutbound() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
@@ -326,13 +326,16 @@ public class CrmwPoolAdjustFlowServiceTest {
         IpAdjustLogBo log = buildLog(1L, "00", "16");
         log.setAdjustMode("调出");
         log.setSecurityCode("100001");
+        log.setCrmwScode("CRMW24002.IB");
+        log.setCrmwMktcode("IB");
+        log.setCrmwStype("crmw");
         log.setTargetPoolId(22L);
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
         when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
 
-        verify(mapper).deletePoolStatusSoft("100001", 22L);
+        verify(mapper).deletePoolStatusSoft("100001", "CRMW24002.IB", "IB", "crmw", 22L);
         verify(mapper, never()).addPoolStatus(log);
     }
 

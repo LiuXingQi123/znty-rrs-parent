@@ -1016,9 +1016,10 @@ public class CrmwPoolAdjustService {
                     createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
-                // 直通流程：再软删除 ip_pool_status_crmw 中该证券在目标池的有效记录
+                // 直通流程：仅软删除指定凭证与标的证券组合在目标池的有效记录
                 crmwPoolAdjustMapper.deletePoolStatusSoft(
-                        req.getSecurityCode(), item.getTargetPoolId());
+                        req.getSecurityCode(), req.getCrmwScode(), req.getCrmwMktcode(),
+                        req.getCrmwStype(), item.getTargetPoolId());
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
@@ -1035,8 +1036,10 @@ public class CrmwPoolAdjustService {
                     boolean flowFinished = createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                     if (flowFinished) {
                         crmwPoolAdjustMapper.editAdjustLogAuditStatus(bo.getId(), adjustBatchNo, AuditStatus.APPROVED.getCode());
+                        // 初始流程结束后仅软删除指定凭证与标的证券组合的在池记录
                         crmwPoolAdjustMapper.deletePoolStatusSoft(
-                                req.getSecurityCode(), item.getTargetPoolId());
+                                req.getSecurityCode(), req.getCrmwScode(), req.getCrmwMktcode(),
+                                req.getCrmwStype(), item.getTargetPoolId());
                     }
                 }
             }
