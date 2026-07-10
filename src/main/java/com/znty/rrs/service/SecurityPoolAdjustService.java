@@ -2015,7 +2015,7 @@ public class SecurityPoolAdjustService {
         addIfFailed(failures, inCheckPoolCapacity(ctx));
         // 入池检查：来源池是否满足要求
         addIfFailed(failures, inCheckSourcePool(ctx));
-        // 入池检查：是否触碰禁投池限制
+        // 入池检查：证券当前在调入限制池中（in_restrict）
         addIfFailed(failures, inCheckRestrictPool(ctx));
         // 入池检查：本次请求中是否同时勾选了互斥池（不可同时调入）
         addIfFailed(failures, inCheckMutexConflict(ctx));
@@ -2378,7 +2378,7 @@ public class SecurityPoolAdjustService {
         addIfFailed(failures, outCheckSecurityNotInPool(ctx));
         // 出池检查：是否在冻结期内（入池后N天不可调出，须在确认在池后校验）
         addIfFailed(failures, outCheckFrozenPeriod(ctx));
-        // 出池检查：是否触碰禁投池限制
+        // 出池检查：证券当前在调出限制池中（out_restrict）
         addIfFailed(failures, outCheckRestrictPool(ctx));
         // 出池检查：是否与互斥池冲突（证券当前在互斥池中）
         addIfFailed(failures, outCheckMutexPool(ctx));
