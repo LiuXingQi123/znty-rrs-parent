@@ -56,6 +56,17 @@ public interface CrmwPoolAdjustMapper {
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
                                            @Param("adjustBatchNo") String adjustBatchNo);
 
+    /** 查询操作人近期有效的手工 CRMW 调库记录 */
+    List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("securityCode") String securityCode,
+                                                       @Param("crmwScode") String crmwScode,
+                                                       @Param("adjusterId") String adjusterId,
+                                                       @Param("seconds") int seconds);
+
+    /** 查询 CRMW 组合活动流程涉及的手工调库目标池 ID */
+    List<Long> queryPendingManualTargetPoolIdList(@Param("securityCode") String securityCode,
+                                                  @Param("crmwScode") String crmwScode,
+                                                  @Param("excludeBatchNo") String excludeBatchNo);
+
     /** 查询当前证券所在池列表 */
     List<PoolStatusDto> querySecurityPoolStatusList(@Param("securityCode") String securityCode);
 
@@ -71,6 +82,13 @@ public interface CrmwPoolAdjustMapper {
     /** 查询证券在目标池的入池时间（audit_status=20），用于调出冻结期校验 */
     java.util.Date queryPoolEntryTime(@Param("securityCode") String securityCode,
                                       @Param("targetPoolId") Long targetPoolId);
+
+    /** 查询 CRMW 凭证与标的组合的实际入池时间。 */
+    java.util.Date queryCrmwPoolEntryTime(@Param("securityCode") String securityCode,
+                                          @Param("crmwScode") String crmwScode,
+                                          @Param("crmwMktcode") String crmwMktcode,
+                                          @Param("crmwStype") String crmwStype,
+                                          @Param("targetPoolId") Long targetPoolId);
 
     /** 查询证券是否在全局禁投池（forbidden/blacklist，audit_status=20），用于调入禁投池校验 */
     boolean querySecurityInForbiddenPool(@Param("securityCode") String securityCode);
@@ -148,6 +166,11 @@ public interface CrmwPoolAdjustMapper {
     int editAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
                                  @Param("adjustBatchNo") String adjustBatchNo,
                                  @Param("auditStatus") String auditStatus);
+
+    /** 将活动调库记录更新为最终状态 */
+    int editActiveAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
+                                       @Param("adjustBatchNo") String adjustBatchNo,
+                                       @Param("auditStatus") String auditStatus);
 
     /** 根据证券类型编码查询所属大类（dict_security_type.category_type） */
     String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);

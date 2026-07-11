@@ -161,6 +161,18 @@
         </foreach>
     </select>
 
+    <!-- 按 ID 升序锁定投资池记录 -->
+    <select id="lockPoolByIdsList" resultType="java.lang.Long">
+        SELECT id
+        FROM ip_investment_pool
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
     <!-- 新增投资池 -->
     <insert id="addPool" parameterType="com.znty.rrs.entity.bo.InvestmentPoolBo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_investment_pool (

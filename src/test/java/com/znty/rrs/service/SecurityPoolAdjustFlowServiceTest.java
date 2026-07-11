@@ -21,6 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.eq;
@@ -431,6 +432,7 @@ public class SecurityPoolAdjustFlowServiceTest {
         redirectPool.setId(20L);
         redirectPool.setPoolName("一级库");
         when(securityPoolAdjustService.queryRedirectPoolOptions("S001")).thenReturn(Collections.singletonList(redirectPool));
+        when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
         // 无手工信评报告附件，跳过 generateInternalReportsOnFinish
         when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
 
@@ -438,10 +440,11 @@ public class SecurityPoolAdjustFlowServiceTest {
 
         // 验证更新日志目标池为改判池
         verify(mapper).editAdjustLogTargetPool("BATCH001", 20L, "一级库");
-        // 验证落地到改判池
-        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(mapper).addPoolStatus(captor.capture());
-        assertThat(captor.getValue().getTargetPoolId()).isEqualTo(20L);
+        // 验证复用统一落池方法并使用改判池
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<IpAdjustLogBo>> captor = ArgumentCaptor.forClass((Class) List.class);
+        verify(securityPoolAdjustService).applyPoolStatusChanges(captor.capture());
+        assertThat(captor.getValue().get(0).getTargetPoolId()).isEqualTo(20L);
     }
 
     /** 评级联动改判：改判池不在矩阵允许列表内时应抛出异常。 */

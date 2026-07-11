@@ -13,6 +13,12 @@
                ,p.variety_codes
                ,p.description
                ,p.max_capacity
+               ,p.batch_in_flow_id
+               ,p.batch_in_flow_key
+               ,p.batch_in_flow_name
+               ,p.batch_out_flow_id
+               ,p.batch_out_flow_key
+               ,p.batch_out_flow_name
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0

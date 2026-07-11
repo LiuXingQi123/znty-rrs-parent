@@ -34,4 +34,22 @@ public class BatchSecurityPoolDto {
 
     /** 当前有效证券数量 */
     private Integer currentCount;
+
+    /** 批量调入流程 ID */
+    private Long batchInFlowId;
+
+    /** 批量调入流程 Key */
+    private String batchInFlowKey;
+
+    /** 批量调入流程名称 */
+    private String batchInFlowName;
+
+    /** 批量调出流程 ID */
+    private Long batchOutFlowId;
+
+    /** 批量调出流程 Key */
+    private String batchOutFlowKey;
+
+    /** 批量调出流程名称 */
+    private String batchOutFlowName;
 }

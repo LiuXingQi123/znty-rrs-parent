@@ -66,6 +66,10 @@ public class ForbiddenPoolAdjustFlowService {
     @Resource
     private ForbiddenPoolAdjustMapper forbiddenPoolAdjustMapper;
 
+    /** 禁投池主体调整服务 */
+    @Resource
+    private ForbiddenPoolAdjustService forbiddenPoolAdjustService;
+
     /** 流程定义数据库操作 */
     @Resource
     private FlowMapper flowMapper;
@@ -464,18 +468,32 @@ public class ForbiddenPoolAdjustFlowService {
         List<IpAdjustLogBo> logList = forbiddenPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
         if (logList.isEmpty()) {
-            forbiddenPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
+            int updated = forbiddenPoolAdjustMapper.editActiveAdjustLogAuditStatus(
+                    step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
+            if (updated == 0) {
+                throw new BizException("审批任务已被处理");
+            }
             return;
         }
 
-        forbiddenPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
+        // 最终审批通过前复核当前业务状态
+        forbiddenPoolAdjustService.recheckBeforeFinalApproval(logList);
+        int updated = forbiddenPoolAdjustMapper.editActiveAdjustLogAuditStatus(
+                step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
+        if (updated != logList.size()) {
+            throw new BizException("审批任务状态已发生变化，请刷新后重试");
+        }
         for (IpAdjustLogBo log : logList) {
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 log.setAuditStatus(AuditStatus.APPROVED.getCode());
                 log.setAdjustLogId(log.getId());
                 forbiddenPoolAdjustMapper.addPoolStatus(log);
             } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
-                forbiddenPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
+                int deleted = forbiddenPoolAdjustMapper.deletePoolStatusSoft(
+                        log.getSecurityCode(), log.getTargetPoolId());
+                if (deleted == 0) {
+                    throw new BizException("主体当前池状态已发生变化，请刷新后重试");
+                }
             }
             // 主体调整生效后同步调整旗下全部债券
             syncCompanyBonds(log);

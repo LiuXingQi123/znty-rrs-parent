@@ -48,6 +48,19 @@ public interface SecurityPoolAdjustMapper {
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
                                            @Param("adjustBatchNo") String adjustBatchNo);
 
+    /** 查询操作人近期有效的手工调库记录，用于防止短时间重复提交 */
+    List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("securityCode") String securityCode,
+                                                       @Param("adjusterId") String adjusterId,
+                                                       @Param("seconds") int seconds);
+
+    /** 查询操作人最近一次批量提交的全部手工调库记录 */
+    List<IpAdjustLogBo> queryRecentBatchManualAdjustLogList(@Param("adjusterId") String adjusterId,
+                                                            @Param("seconds") int seconds);
+
+    /** 查询证券活动流程涉及的手工调库目标池 ID */
+    List<Long> queryPendingManualTargetPoolIdList(@Param("securityCode") String securityCode,
+                                                  @Param("excludeBatchNo") String excludeBatchNo);
+
     /** 查询当前证券所在池列表 */
     List<PoolStatusDto> querySecurityPoolStatusList(@Param("securityCode") String securityCode);
 
@@ -92,7 +105,7 @@ public interface SecurityPoolAdjustMapper {
     Integer queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
                                                @Param("targetPoolId") Long targetPoolId);
 
-    /** 查询6个月内同主体有审批通过调入记录（对齐老系统 bondfileflag，6个月） */
+    /** 查询6个月内同主体有审批通过调入记录且真实关联有效信评报告 */
     boolean queryHasRecentInboundWithReport(@Param("securityCode") String securityCode);
 
     /** 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） */
@@ -145,6 +158,11 @@ public interface SecurityPoolAdjustMapper {
     int editAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
                                  @Param("adjustBatchNo") String adjustBatchNo,
                                  @Param("auditStatus") String auditStatus);
+
+    /** 将流程中或驳回待修改的调库记录更新为最终状态 */
+    int editActiveAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
+                                       @Param("adjustBatchNo") String adjustBatchNo,
+                                       @Param("auditStatus") String auditStatus);
 
     /** 更新指定批次调入调库记录的目标池（评级联动改判用，仅更新 adjust_mode=调入 的记录） */
     int editAdjustLogTargetPool(@Param("adjustBatchNo") String adjustBatchNo,

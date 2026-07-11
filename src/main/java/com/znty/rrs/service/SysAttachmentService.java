@@ -163,6 +163,32 @@ public class SysAttachmentService {
         }
     }
 
+    /**
+     * 校验信评报告来源附件真实存在且与报告限制匹配。
+     *
+     * @param sourceAttachmentIds 报告库附件 ID 列表
+     * @param internalRequired    是否必须来自内部报告库
+     */
+    public void validateCreditReportSources(List<Long> sourceAttachmentIds, boolean internalRequired) {
+        if (sourceAttachmentIds == null || sourceAttachmentIds.isEmpty()) {
+            return;
+        }
+        List<Long> distinctIds = new ArrayList<>(new LinkedHashSet<>(sourceAttachmentIds));
+        List<SysAttachmentBo> attachments = sysAttachmentMapper.queryAttachmentListByIds(distinctIds);
+        attachments = attachments == null ? new ArrayList<SysAttachmentBo>() : attachments;
+        if (attachments.size() != distinctIds.size()) {
+            throw new BizException("报告校验失败：存在无效或已删除的报告附件 ID");
+        }
+        for (SysAttachmentBo attachment : attachments) {
+            // 校验附件必须来自合法报告库及对应报告分类
+            validateReportSourceAttachment(attachment);
+            if (internalRequired && !("rrs_report_in".equals(attachment.getTableName())
+                    && CATEGORY_REPORT_IN.equals(attachment.getAttachmentCategory()))) {
+                throw new BizException("报告校验失败：投资池要求使用有效的内部研究报告");
+            }
+        }
+    }
+
     /** 逻辑删除指定调库日志下的附件 */
     public void deleteAdjustLogAttachments(Long adjustLogId, List<Long> attachmentIds) {
         if (attachmentIds == null || attachmentIds.isEmpty()) {

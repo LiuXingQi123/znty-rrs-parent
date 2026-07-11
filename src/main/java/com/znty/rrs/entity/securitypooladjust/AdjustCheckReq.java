@@ -25,6 +25,9 @@ public class AdjustCheckReq {
     /** 前端选中的担保人代码（多担保人时下拉二选一；用于简易流程第⑤条件担保人评级下调判断，空表示无担保人/未选中） */
     private String guarantorCode;
 
+    /** 是否放开主体债入库矩阵规则 */
+    private boolean releaseRules;
+
     /** 待校验的调库项列表 */
     private List<CheckItem> items;
 

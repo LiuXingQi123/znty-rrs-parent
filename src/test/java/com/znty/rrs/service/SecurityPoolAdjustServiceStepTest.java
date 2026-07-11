@@ -43,6 +43,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -934,16 +935,15 @@ public class SecurityPoolAdjustServiceStepTest {
         // 构建调库提交共享数据测试数据
         Object shared = buildSubmitSharedData();
 
-        List<Long> result = ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
+        List<IpAdjustLogBo> directApplyLogs = new ArrayList<>();
+        List<Long> result = ReflectionTestUtils.invokeMethod(
+                service, "executeInboundSubmit", req, shared, null, directApplyLogs);
 
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        ArgumentCaptor<IpAdjustLogBo> statusCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(mapper).addAdjustLog(logCaptor.capture());
-        verify(mapper).addPoolStatus(statusCaptor.capture());
         assertThat(logCaptor.getValue().getAuditStatus()).isEqualTo("20");
         assertThat(logCaptor.getValue().getAdjustBatchNo()).endsWith("3001");
-        assertThat(statusCaptor.getValue().getAuditStatus()).isEqualTo("20");
-        assertThat(statusCaptor.getValue().getAdjustBatchNo()).isEqualTo(logCaptor.getValue().getAdjustBatchNo());
+        assertThat(directApplyLogs).containsExactly(logCaptor.getValue());
         assertThat(result).containsExactly(99L);
     }
 
@@ -980,13 +980,15 @@ public class SecurityPoolAdjustServiceStepTest {
         // 构建调库提交共享数据测试数据
         Object shared = buildSubmitSharedData();
 
-        List<Long> result = ReflectionTestUtils.invokeMethod(service, "executeOutboundSubmit", req, shared);
+        List<IpAdjustLogBo> directApplyLogs = new ArrayList<>();
+        List<Long> result = ReflectionTestUtils.invokeMethod(
+                service, "executeOutboundSubmit", req, shared, null, directApplyLogs);
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(mapper).addAdjustLog(captor.capture());
-        verify(mapper).deletePoolStatusSoft("S001", 10L);
         assertThat(captor.getValue().getAuditStatus()).isEqualTo("20");
         assertThat(captor.getValue().getAdjustBatchNo()).endsWith("3001");
+        assertThat(directApplyLogs).containsExactly(captor.getValue());
         assertThat(result).containsExactly(88L);
     }
 
@@ -1057,11 +1059,14 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void checkReportRequiredShouldPassWhenInternalAndHasSourceAttachment() {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         item.setCreditReportSourceAttachmentIds(Collections.singletonList(1L));
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
         // internal 限制，已从内部报告库选择附件，应通过
         ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal", "");
+        verify(attachmentService).validateCreditReportSources(Collections.singletonList(1L), true);
     }
 
     /** 调入提交应按目标池 in_report_restriction 校验报告。 */
@@ -1096,7 +1101,8 @@ public class SecurityPoolAdjustServiceStepTest {
         ReflectionTestUtils.setField(shared, "poolMap", Collections.singletonMap(10L, pool));
 
         try {
-            ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
+            ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared, null,
+                    new ArrayList<IpAdjustLogBo>());
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("要求研究报告");
@@ -1137,7 +1143,8 @@ public class SecurityPoolAdjustServiceStepTest {
         ReflectionTestUtils.setField(shared, "poolMap", Collections.singletonMap(10L, pool));
 
         try {
-            ReflectionTestUtils.invokeMethod(service, "executeOutboundSubmit", req, shared);
+            ReflectionTestUtils.invokeMethod(service, "executeOutboundSubmit", req, shared, null,
+                    new ArrayList<IpAdjustLogBo>());
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("要求研究报告");
@@ -1166,8 +1173,10 @@ public class SecurityPoolAdjustServiceStepTest {
         Object firstShared = buildSubmitSharedData(batchNoContext);
         Object secondShared = buildSubmitSharedData(batchNoContext);
 
-        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", firstReq, firstShared);
-        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", secondReq, secondShared);
+        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", firstReq, firstShared, null,
+                new ArrayList<IpAdjustLogBo>());
+        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", secondReq, secondShared, null,
+                new ArrayList<IpAdjustLogBo>());
 
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(mapper, times(2)).addAdjustLog(logCaptor.capture());
@@ -1250,7 +1259,8 @@ public class SecurityPoolAdjustServiceStepTest {
 
         // 构建包含白名单流程快照的提交共享数据
         Object shared = buildSubmitSharedData(snapshotMap);
-        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared);
+        ReflectionTestUtils.invokeMethod(service, "executeInboundSubmit", req, shared, null,
+                new ArrayList<IpAdjustLogBo>());
 
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         ArgumentCaptor<IpAdjustStepBo> stepCaptor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
@@ -1809,6 +1819,46 @@ public class SecurityPoolAdjustServiceStepTest {
                 req, shared, targetPool, matchReasons, unmatchReasons);
         // 三标志常量 false，第⑤条件走"未下调"分支
         assertTrue(matchReasons.stream().anyMatch(s -> s.contains("主体评级和展望评级未下调")));
+    }
+
+    /** 验证证券信息合并不会清空页面不可编辑字段。 */
+    @Test
+    public void mergeSecurityInfoShouldKeepNonEditableFields() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityInfoBo current = new SecurityInfoBo();
+        current.setShortName("原简称");
+        current.setDateRepurchaseExists("20280101");
+        current.setGuarantFlag(1);
+        current.setGuarantType("连带责任担保");
+        current.setAbsFlag(1);
+        SecurityInfoBo changed = new SecurityInfoBo();
+        changed.setShortName("新简称");
+
+        ReflectionTestUtils.invokeMethod(service, "mergeSecurityInfo", current, changed);
+
+        assertThat(current.getShortName()).isEqualTo("新简称");
+        assertThat(current.getDateRepurchaseExists()).isEqualTo("20280101");
+        assertThat(current.getGuarantFlag()).isEqualTo(1);
+        assertThat(current.getGuarantType()).isEqualTo("连带责任担保");
+        assertThat(current.getAbsFlag()).isEqualTo(1);
+    }
+
+    /** 验证最终落池时调入写入结果异常会阻断事务。 */
+    @Test
+    public void applyPoolStatusChangesShouldFailWhenInboundInsertCountUnexpected() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        IpAdjustLogBo log = new IpAdjustLogBo();
+        log.setId(1L);
+        log.setSecurityCode("S001");
+        log.setAdjustMode("调入");
+        log.setTargetPoolName("一级库");
+        when(mapper.addPoolStatus(log)).thenReturn(0);
+
+        assertThatThrownBy(() -> service.applyPoolStatusChanges(Collections.singletonList(log)))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("入池状态写入异常");
     }
 
     // ===== 节点语义 approval_strategy 判断测试（isInitiatorStep）=====

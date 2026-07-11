@@ -88,6 +88,15 @@ public interface ForbiddenPoolAdjustMapper {
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
                                            @Param("adjustBatchNo") String adjustBatchNo);
 
+    /** 查询操作人近期有效的手工主体调库记录 */
+    List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("companyCode") String companyCode,
+                                                       @Param("adjusterId") String adjusterId,
+                                                       @Param("seconds") int seconds);
+
+    /** 查询主体活动流程涉及的手工调库目标池 ID */
+    List<Long> queryPendingManualTargetPoolIdList(@Param("companyCode") String companyCode,
+                                                  @Param("excludeBatchNo") String excludeBatchNo);
+
     /** 查询当前证券所在池列表 */
     List<PoolStatusDto> querySecurityPoolStatusList(@Param("securityCode") String securityCode);
 
@@ -180,6 +189,11 @@ public interface ForbiddenPoolAdjustMapper {
     int editAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
                                  @Param("adjustBatchNo") String adjustBatchNo,
                                  @Param("auditStatus") String auditStatus);
+
+    /** 将活动调库记录更新为最终状态 */
+    int editActiveAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
+                                       @Param("adjustBatchNo") String adjustBatchNo,
+                                       @Param("auditStatus") String auditStatus);
 
     /** 根据证券类型编码查询所属大类（dict_security_type.category_type） */
     String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);

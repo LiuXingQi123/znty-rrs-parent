@@ -63,6 +63,9 @@ public class AdjustCheckContext {
     /** 证券品种大类（bond/fund/stock/company，查 dict_security_type），用于类型特有校验路由 */
     private String categoryType;
 
+    /** 是否放开主体债入库矩阵规则 */
+    private boolean releaseRules;
+
     /** 基金评分（基金证券调入校验用，来自请求；空则跳过基金评分校验） */
     private String fundRate;
 

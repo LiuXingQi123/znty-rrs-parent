@@ -43,6 +43,9 @@ public interface InvestmentPoolMapper {
      */
     List<InvestmentPoolBo> queryPoolByIdsList(@Param("ids") List<Long> ids);
 
+    /** 按 ID 升序锁定投资池记录，用于最终审批容量复核 */
+    List<Long> lockPoolByIdsList(@Param("ids") List<Long> ids);
+
     /**
      * 新增投资池
      */

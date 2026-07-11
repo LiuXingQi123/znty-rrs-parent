@@ -35,6 +35,9 @@ public class AdjustSharedData {
     /** 证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
     private boolean hasPendingProcess;
 
+    /** 当前证券活动流程涉及的顶级投资池组 ID 集合 */
+    private Set<Long> pendingPoolGroupIds;
+
     /** 证券当前进行中流程所在步骤名称 */
     private String pendingProcessNodeLabel;
 
@@ -61,4 +64,7 @@ public class AdjustSharedData {
 
     /** 基金评分（基金证券调入校验用，来自请求；空则跳过基金评分校验） */
     private String fundRate;
+
+    /** 是否放开主体债入库矩阵规则 */
+    private boolean releaseRules;
 }

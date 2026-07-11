@@ -220,6 +220,39 @@
           AND pool_type = 'crmw'
     </select>
 
+    <!-- 查询操作人近期有效的手工 CRMW 调库记录 -->
+    <select id="queryRecentManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT id, security_code, crmw_scode, adjust_type, adjust_mode, adjust_batch_no, target_pool_id,
+               flow_id, flow_key, audit_status, adjuster_id, adjust_reason, adjust_advice, submit_time
+        FROM ip_adjust_log
+        WHERE security_code = #{securityCode}
+          AND crmw_scode = #{crmwScode}
+          AND adjuster_id = #{adjusterId}
+          AND adjust_type = '手工调整'
+          AND audit_status NOT IN ('-1', '99')
+          AND is_deleted = 0
+          AND submit_time &gt;= DATE_SUB(NOW(), INTERVAL #{seconds} SECOND)
+        ORDER BY submit_time DESC, id DESC
+    </select>
+
+    <!-- 查询 CRMW 组合活动流程涉及的手工调库目标池 ID -->
+    <select id="queryPendingManualTargetPoolIdList" resultType="java.lang.Long">
+        SELECT DISTINCT al.target_pool_id
+        FROM ip_adjust_log al
+        INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
+        WHERE al.security_code = #{securityCode}
+          <if test="crmwScode != null and crmwScode != ''">
+              AND al.crmw_scode = #{crmwScode}
+          </if>
+          AND al.adjust_type = '手工调整'
+          AND al.audit_status IN ('00', '11')
+          AND al.is_deleted = 0
+          AND s.step_status = 'pending'
+          <if test="excludeBatchNo != null and excludeBatchNo != ''">
+              AND al.adjust_batch_no != #{excludeBatchNo}
+          </if>
+    </select>
+
     <!-- 查询目标投资池当前有效证券数量 -->
     <select id="queryPoolCurrentCount" resultType="int">
         SELECT COUNT(DISTINCT security_code)
@@ -231,12 +264,27 @@
 
     <!-- 查询证券在目标池的入池时间（audit_status=20），用于调出冻结期校验 -->
     <select id="queryPoolEntryTime" resultType="java.util.Date">
-        SELECT entry_time
-        FROM ip_pool_status_crmw
-        WHERE security_code = #{securityCode}
-          AND target_pool_id = #{targetPoolId}
-          AND audit_status = '20'
-          AND is_deleted = 0
+        SELECT COALESCE(ips.entry_time, al.audit_time, ips.crte_time)
+        FROM ip_pool_status_crmw ips
+        LEFT JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
+        WHERE ips.security_code = #{securityCode}
+          AND ips.target_pool_id = #{targetPoolId}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="queryCrmwPoolEntryTime" resultType="java.util.Date">
+        SELECT COALESCE(ips.entry_time, al.audit_time, ips.crte_time)
+        FROM ip_pool_status_crmw ips
+        LEFT JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
+        WHERE ips.security_code = #{securityCode}
+          AND ips.crmw_scode = #{crmwScode}
+          AND ips.crmw_mktcode = #{crmwMktcode}
+          AND ips.crmw_stype = #{crmwStype}
+          AND ips.target_pool_id = #{targetPoolId}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
         LIMIT 1
     </select>
 
@@ -772,6 +820,19 @@
               <otherwise>
                   AND id = #{adjustLogId}
               </otherwise>
+          </choose>
+    </update>
+
+    <!-- 将活动调库记录更新为最终状态 -->
+    <update id="editActiveAdjustLogAuditStatus">
+        UPDATE ip_adjust_log
+        SET audit_status = #{auditStatus}, audit_time = NOW(), updt_time = NOW()
+        WHERE audit_status IN ('00', '11')
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>AND id = #{adjustLogId}</otherwise>
           </choose>
     </update>
 

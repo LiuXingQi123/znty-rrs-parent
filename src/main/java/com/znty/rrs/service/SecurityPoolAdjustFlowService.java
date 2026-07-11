@@ -470,16 +470,20 @@ public class SecurityPoolAdjustFlowService {
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
         if (logList.isEmpty()) {
-            securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
+            int updated = securityPoolAdjustMapper.editActiveAdjustLogAuditStatus(
+                    step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
+            if (updated == 0) {
+                throw new BizException("调库申请状态已发生变化，请刷新后重试");
+            }
             return;
         }
 
         // 评级联动改判：调入审批通过时，审核人可改判到主体债入库矩阵允许的其它层级池（上调/降库）
+        InvestmentPoolBo redirectPool = null;
         if (redirectPoolId != null) {
             String securityCode = logList.get(0).getSecurityCode();
             // 查矩阵允许池列表（含校验：改判池须在列表内）
             List<InvestmentPoolBo> allowedPools = securityPoolAdjustService.queryRedirectPoolOptions(securityCode);
-            InvestmentPoolBo redirectPool = null;
             for (InvestmentPoolBo p : allowedPools) {
                 if (redirectPoolId.equals(p.getId())) {
                     redirectPool = p;
@@ -489,8 +493,6 @@ public class SecurityPoolAdjustFlowService {
             if (redirectPool == null) {
                 throw new BizException("改判池不在主体债入库矩阵允许列表内");
             }
-            // 持久化改判：更新批次调入日志的目标池
-            securityPoolAdjustMapper.editAdjustLogTargetPool(step.getAdjustBatchNo(), redirectPoolId, redirectPool.getPoolName());
             // 内存同步：调入日志的目标池改为改判池
             for (IpAdjustLogBo log : logList) {
                 if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
@@ -500,16 +502,20 @@ public class SecurityPoolAdjustFlowService {
             }
         }
 
-        securityPoolAdjustMapper.editAdjustLogAuditStatus(step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
-        for (IpAdjustLogBo log : logList) {
-            if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
-                log.setAuditStatus(AuditStatus.APPROVED.getCode());
-                log.setAdjustLogId(log.getId());
-                securityPoolAdjustMapper.addPoolStatus(log);
-            } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
-                securityPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
-            }
+        // 最终落池前复核锁池、容量、来源池、限制池、当前池状态和冻结期
+        securityPoolAdjustService.recheckBeforeFinalApproval(logList);
+        if (redirectPool != null) {
+            // 持久化评级联动改判目标池
+            securityPoolAdjustMapper.editAdjustLogTargetPool(
+                    step.getAdjustBatchNo(), redirectPool.getId(), redirectPool.getPoolName());
         }
+        int updated = securityPoolAdjustMapper.editActiveAdjustLogAuditStatus(
+                step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
+        if (updated != logList.size()) {
+            throw new BizException("调库申请状态已发生变化，请刷新后重试");
+        }
+        // 将复核通过的整批调库日志统一应用到当前池状态
+        securityPoolAdjustService.applyPoolStatusChanges(logList);
         // 审批通过结束后，将手工上传的信评报告沉淀为内部报告
         generateInternalReportsOnFinish(logList);
     }

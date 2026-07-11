@@ -86,6 +86,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -116,6 +117,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ForbiddenPoolAdjustService {
+
+    /** 短时间重复提交判定窗口（秒） */
+    private static final int DUPLICATE_SUBMIT_WINDOW_SECONDS = 30;
 
     /** 管理员用户 ID */
     /** 白名单池 ID 集合：主体在这些池中时符合白名单条件；当前写死空集，后续配置后补 queryIssuerInWhitelistPools 查询 */
@@ -728,9 +732,13 @@ public class ForbiddenPoolAdjustService {
                                             BatchNoContext batchNoContext) {
         // ══ 第一阶段：前置校验 ══
         validateSubmitReq(req);
+        // 检查短时间内是否已提交相同申请
+        checkRecentDuplicateSubmit(req);
 
         // ══ 第二阶段：参数初始化 ══
         SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
+        // 检查本次涉及的顶级池组是否已有活动流程
+        checkSubmitPendingPoolGroups(req, shared.poolMap);
 
         // ══ 第三阶段：调入处理 ══
         List<Long> inboundIds = executeInboundSubmit(req, shared, submissionFiles);
@@ -778,6 +786,68 @@ public class ForbiddenPoolAdjustService {
                 throw new BizException("调库项的目标投资池 ID 不能为空");
             }
         }
+    }
+
+    /** 检查操作人短时间内是否已提交相同主体手工申请。 */
+    private void checkRecentDuplicateSubmit(SecurityPoolAdjustSubmitReq req) {
+        List<SecurityPoolAdjustSubmitReq.AdjustItem> manualItems = req.getItems().stream()
+                .filter(this::isManualSubmitItem).collect(Collectors.toList());
+        List<IpAdjustLogBo> recentLogs = forbiddenPoolAdjustMapper.queryRecentManualAdjustLogList(
+                req.getSecurityCode(), req.getAdjusterId(), DUPLICATE_SUBMIT_WINDOW_SECONDS);
+        if (manualItems.isEmpty() || recentLogs == null || recentLogs.isEmpty()) return;
+        List<String> requestKeys = manualItems.stream().map(item -> item.getTargetPoolId() + "|"
+                + item.getAdjustMode() + "|" + item.getFlowId() + "|" + normalizeText(item.getFlowKey()))
+                .sorted().collect(Collectors.toList());
+        List<String> historyKeys = recentLogs.stream().map(log -> log.getTargetPoolId() + "|"
+                + log.getAdjustMode() + "|" + log.getFlowId() + "|" + normalizeText(log.getFlowKey()))
+                .sorted().collect(Collectors.toList());
+        boolean sameText = recentLogs.stream().allMatch(log ->
+                Objects.equals(normalizeText(req.getAdjustReason()), normalizeText(log.getAdjustReason()))
+                        && Objects.equals(normalizeText(req.getAdjustAdvice()), normalizeText(log.getAdjustAdvice())));
+        if (requestKeys.equals(historyKeys) && sameText) {
+            throw new BizException("调库申请已提交，请勿重复操作");
+        }
+    }
+
+    /** 检查正式提交涉及的顶级池组是否已有活动流程。 */
+    private void checkSubmitPendingPoolGroups(SecurityPoolAdjustSubmitReq req, Map<Long, InvestmentPoolBo> poolMap) {
+        Set<Long> pendingGroups = resolvePoolGroupIds(
+                forbiddenPoolAdjustMapper.queryPendingManualTargetPoolIdList(req.getSecurityCode(), null), poolMap);
+        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            Long groupId = resolveRootPoolId(item.getTargetPoolId(), poolMap);
+            if (groupId != null && pendingGroups.contains(groupId)) {
+                throw new BizException("主体在目标投资池组存在进行中的调库流程，请等待流程结束后再发起调库");
+            }
+        }
+    }
+
+    /** 将目标池列表转换为顶级投资池组 ID 集合。 */
+    private Set<Long> resolvePoolGroupIds(List<Long> poolIds, Map<Long, InvestmentPoolBo> poolMap) {
+        Set<Long> result = new HashSet<>();
+        if (poolIds != null) {
+            for (Long poolId : poolIds) {
+                Long rootId = resolveRootPoolId(poolId, poolMap);
+                if (rootId != null) result.add(rootId);
+            }
+        }
+        return result;
+    }
+
+    /** 查找目标池所属顶级投资池。 */
+    private Long resolveRootPoolId(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
+        Long currentId = poolId;
+        Set<Long> visited = new HashSet<>();
+        while (currentId != null && visited.add(currentId)) {
+            InvestmentPoolBo pool = poolMap.get(currentId);
+            if (pool == null || pool.getParentId() == null) return currentId;
+            currentId = pool.getParentId();
+        }
+        return currentId;
+    }
+
+    /** 归一化可空文本。 */
+    private String normalizeText(String value) {
+        return value == null || value.trim().isEmpty() ? null : value;
     }
 
     /**
@@ -1559,6 +1629,8 @@ public class ForbiddenPoolAdjustService {
         shared.setPoolRelationMap(poolRelationMap);
         shared.setHasPendingProcess(forbiddenPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()));
         shared.setPendingProcessNodeLabel(forbiddenPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
+        shared.setPendingPoolGroupIds(resolvePoolGroupIds(
+                forbiddenPoolAdjustMapper.queryPendingManualTargetPoolIdList(req.getSecurityCode(), null), poolMap));
         shared.setSecurityInObservePool(forbiddenPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         boolean companyAdjust = COMPANY_SECURITY_TYPE.equals(req.getSecurityType());
         shared.setIssuerInObservePool(companyAdjust
@@ -2339,6 +2411,68 @@ public class ForbiddenPoolAdjustService {
         return option;
     }
 
+    /** 最终审批通过前按当前业务状态复核主体调库项。 */
+    public void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList) {
+        if (logList == null || logList.isEmpty()) return;
+        Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
+                .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p));
+        List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
+                .filter(Objects::nonNull).distinct().sorted().collect(Collectors.toList());
+        if (!poolIds.isEmpty()) {
+            // 按 ID 顺序锁定目标池，串行完成容量和池状态复核
+            investmentPoolMapper.lockPoolByIdsList(poolIds);
+        }
+        Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
+                forbiddenPoolAdjustMapper.queryAllPoolRelationList());
+        Map<Long, Integer> inboundIncrements = new HashMap<>();
+        for (IpAdjustLogBo log : logList) {
+            InvestmentPoolBo pool = poolMap.get(log.getTargetPoolId());
+            if (pool == null || !"enabled".equals(pool.getStatus())
+                    || Integer.valueOf(1).equals(pool.getIsDeleted())) {
+                throwFinalRecheckFailure(log, "目标投资池不存在或已停用");
+            }
+            SecurityInfoBo company = queryAdjustSecurityInfo(log.getSecurityCode(), COMPANY_SECURITY_TYPE);
+            if (company == null) throwFinalRecheckFailure(log, "公司主体不存在");
+            AdjustCheckContext ctx = new AdjustCheckContext();
+            ctx.setSecurityInfo(company);
+            ctx.setTargetPool(pool);
+            ctx.setPoolMap(poolMap);
+            ctx.setCurrentPoolIds(new HashSet<>(forbiddenPoolAdjustMapper
+                    .querySecurityCurrentPoolIdList(log.getSecurityCode())));
+            ctx.setTargetPoolRelations(relationMap.getOrDefault(pool.getId(), Collections.emptyMap()));
+            ctx.setCategoryType(CategoryType.COMPANY.getCode());
+            ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+            String failure;
+            if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
+                failure = firstFinalFailure(inCheckPoolLocked(ctx), inCheckSecurityAlreadyInPool(ctx),
+                        inCheckSourcePool(ctx), inCheckRestrictPool(ctx), inCheckForbiddenPool(ctx));
+                int increment = inboundIncrements.getOrDefault(pool.getId(), 0);
+                int currentCount = forbiddenPoolAdjustMapper.queryPoolCurrentCount(pool.getId());
+                if (failure == null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
+                        && currentCount + increment >= pool.getMaxCapacity()) failure = "目标投资池容量已满";
+                inboundIncrements.put(pool.getId(), increment + 1);
+            } else {
+                ctx.setTargetPoolEntryTime(forbiddenPoolAdjustMapper.queryPoolEntryTime(
+                        log.getSecurityCode(), pool.getId()));
+                failure = firstFinalFailure(outCheckPoolLocked(ctx), outCheckSecurityNotInPool(ctx),
+                        outCheckRestrictPool(ctx), outCheckFrozenPeriod(ctx));
+            }
+            if (failure != null) throwFinalRecheckFailure(log, failure);
+        }
+    }
+
+    /** 返回第一个最终审批复核失败原因。 */
+    private String firstFinalFailure(String... failures) {
+        for (String failure : failures) if (failure != null && !failure.isEmpty()) return failure;
+        return null;
+    }
+
+    /** 抛出包含主体调库项上下文的复核异常。 */
+    private void throwFinalRecheckFailure(IpAdjustLogBo log, String reason) {
+        throw new BizException("主体[" + log.getSecurityCode() + "]" + log.getAdjustMode()
+                + "投资池[" + log.getTargetPoolName() + "]失败：" + reason);
+    }
+
     // ═══════════════════════════════════════════════════════════
     //  调库可行性校验 — 方向校验入口（含前置规则）
     // ═══════════════════════════════════════════════════════════
@@ -3011,7 +3145,8 @@ public class ForbiddenPoolAdjustService {
         // 取出目标池自身的所有关系配置（来源池、限制池、联动池等），供关系型校验规则直接使用
         ctx.setTargetPoolRelations(shared.getPoolRelationMap().getOrDefault(item.getTargetPoolId(), Collections.emptyMap()));
         ctx.setPoolMap(shared.getPoolMap());
-        ctx.setHasPendingProcess(shared.isHasPendingProcess());
+        ctx.setHasPendingProcess(shared.getPendingPoolGroupIds() != null
+                && shared.getPendingPoolGroupIds().contains(resolveRootPoolId(item.getTargetPoolId(), shared.getPoolMap())));
         ctx.setPendingProcessNodeLabel(shared.getPendingProcessNodeLabel());
         ctx.setSecurityInObservePool(shared.isSecurityInObservePool());
         ctx.setIssuerInObservePool(shared.isIssuerInObservePool());

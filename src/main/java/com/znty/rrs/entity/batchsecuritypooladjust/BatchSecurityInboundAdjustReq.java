@@ -37,6 +37,9 @@ public class BatchSecurityInboundAdjustReq {
     /** 调整建议 */
     private String adjustAdvice;
 
+    /** 是否放开主体债入库矩阵规则：yes=放开 / no=不放开 */
+    private String releaseRules;
+
     /** 整批信评报告附件在 multipart 文件数组中的下标 */
     private List<Integer> creditReportFileIndexes;
 

@@ -306,6 +306,7 @@ public class CrmwPoolAdjustFlowServiceTest {
         log.setAdjustMode("调入");
         log.setCrmwScode("CRMW24001.IB");
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
+        when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
         when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
@@ -331,6 +332,8 @@ public class CrmwPoolAdjustFlowServiceTest {
         log.setCrmwStype("crmw");
         log.setTargetPoolId(22L);
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
+        when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
+        when(mapper.deletePoolStatusSoft("100001", "CRMW24002.IB", "IB", "crmw", 22L)).thenReturn(1);
         when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
@@ -354,6 +357,7 @@ public class CrmwPoolAdjustFlowServiceTest {
                                                    FlowMapper flowMapper) {
         CrmwPoolAdjustFlowService service = new CrmwPoolAdjustFlowService();
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "crmwPoolAdjustService", mock(CrmwPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
@@ -365,6 +369,7 @@ public class CrmwPoolAdjustFlowServiceTest {
     private CrmwPoolAdjustFlowService buildService(CrmwPoolAdjustMapper mapper, FlowMapper flowMapper) {
         CrmwPoolAdjustFlowService service = new CrmwPoolAdjustFlowService();
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "crmwPoolAdjustService", mock(CrmwPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));

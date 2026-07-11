@@ -35,6 +35,9 @@ public class AdjustSharedData {
     /** 证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
     private boolean hasPendingProcess;
 
+    /** 当前 CRMW 组合活动流程涉及的顶级投资池组 ID 集合 */
+    private Set<Long> pendingPoolGroupIds;
+
     /** 证券当前进行中流程所在步骤名称 */
     private String pendingProcessNodeLabel;
 

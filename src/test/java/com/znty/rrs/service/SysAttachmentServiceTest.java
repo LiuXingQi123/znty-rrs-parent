@@ -136,6 +136,46 @@ public class SysAttachmentServiceTest {
                 .hasMessageContaining("附件不是报告库文件");
     }
 
+    /** 验证内部报告限制接受有效内部报告库附件 */
+    @Test
+    public void validateCreditReportSources_InternalReport_Passes() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        SysAttachmentBo source = buildAttachment(7L, "rrs_report_in", 20L, "report_in");
+        when(mapper.queryAttachmentListByIds(Collections.singletonList(7L)))
+                .thenReturn(Collections.singletonList(source));
+
+        service.validateCreditReportSources(Collections.singletonList(7L), true);
+
+        verify(mapper).queryAttachmentListByIds(Collections.singletonList(7L));
+    }
+
+    /** 验证外部报告不能满足内部报告限制 */
+    @Test
+    public void validateCreditReportSources_ExternalReportForInternal_ThrowsBizException() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        SysAttachmentBo source = buildAttachment(7L, "rrs_report_out", 20L, "report_out");
+        when(mapper.queryAttachmentListByIds(Collections.singletonList(7L)))
+                .thenReturn(Collections.singletonList(source));
+
+        assertThatThrownBy(() -> service.validateCreditReportSources(Collections.singletonList(7L), true))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("内部研究报告");
+    }
+
+    /** 验证无效或已删除的报告附件 ID 被拒绝 */
+    @Test
+    public void validateCreditReportSources_MissingAttachment_ThrowsBizException() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.emptyList());
+
+        assertThatThrownBy(() -> service.validateCreditReportSources(Collections.singletonList(7L), false))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("无效或已删除");
+    }
+
     /** 验证指定调库日志下的附件可以逻辑删除 */
     @Test
     public void deleteAdjustLogAttachments_ValidAttachment_DeletesByLogId() throws Exception {

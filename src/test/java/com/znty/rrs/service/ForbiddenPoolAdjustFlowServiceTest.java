@@ -36,6 +36,7 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         InvestmentPoolService poolService = mock(InvestmentPoolService.class);
         ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService", mock(ForbiddenPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
         ReflectionTestUtils.setField(service, "investmentPoolService", poolService);
         IpAdjustLogBo companyLog = buildCompanyLog();
@@ -46,6 +47,7 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         when(mapper.queryAdjustLogListForAudit(10L, "COMPANY202606281001"))
                 .thenReturn(Collections.singletonList(companyLog));
         when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
+        when(mapper.editActiveAdjustLogAuditStatus(10L, "COMPANY202606281001", "20")).thenReturn(1);
         when(mapper.queryCompanyBondForAutoList("C10001")).thenReturn(Collections.singletonList(bond));
         when(mapper.querySecurityCurrentPoolIdList("B001")).thenReturn(Collections.<Long>emptyList());
         when(poolService.queryPoolFullNameMap()).thenReturn(Collections.<Long, String>emptyMap());
@@ -151,6 +153,7 @@ public class ForbiddenPoolAdjustFlowServiceTest {
     private ForbiddenPoolAdjustFlowService buildService(ForbiddenPoolAdjustMapper mapper, FlowMapper flowMapper) {
         ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService", mock(ForbiddenPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));

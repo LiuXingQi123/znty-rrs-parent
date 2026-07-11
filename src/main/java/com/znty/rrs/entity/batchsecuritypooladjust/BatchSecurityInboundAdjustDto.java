@@ -66,5 +66,11 @@ public class BatchSecurityInboundAdjustDto {
 
         /** 当前行可选流程列表 */
         private List<AdjustCheckDto.FlowOption> flowOptions = new ArrayList<>();
+
+        /** 批量流程展示名称 */
+        private String batchFlowName;
+
+        /** 是否无需审批直接生效 */
+        private boolean directFlow;
     }
 }
