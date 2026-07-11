@@ -13,7 +13,7 @@
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
-               ,p.pool_name AS target_pool_name
+               ,COALESCE(al.target_pool_name, p.pool_name) AS target_pool_name
                ,al.audit_status
         FROM ip_adjust_log al
         INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
@@ -23,7 +23,16 @@
                                       AND p.is_deleted = 0
         <where>
             al.is_deleted = 0
-            <if test="poolIds != null and poolIds.size() > 0">
+            <if test="viewablePoolIds != null and viewablePoolIds.size() == 0">
+                AND 1 = 0
+            </if>
+            <if test="viewablePoolIds != null and viewablePoolIds.size() > 0">
+                AND al.target_pool_id IN
+                <foreach collection="viewablePoolIds" item="id" open="(" separator="," close=")">
+                    #{id}
+                </foreach>
+            </if>
+            <if test="viewablePoolIds == null and poolIds != null and poolIds.size() > 0">
                 AND al.target_pool_id IN
                 <foreach collection="poolIds" item="id" open="(" separator="," close=")">
                     #{id}

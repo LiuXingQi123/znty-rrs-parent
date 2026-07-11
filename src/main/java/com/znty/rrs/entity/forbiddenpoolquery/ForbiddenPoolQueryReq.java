@@ -1,5 +1,6 @@
 package com.znty.rrs.entity.forbiddenpoolquery;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.znty.rrs.common.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -10,6 +11,13 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class ForbiddenPoolQueryReq extends PageRequest {
+
+    /** 当前用户 ID */
+    private String currentUserId;
+
+    /** 服务端解析的可查看投资池 ID */
+    @JsonIgnore
+    private java.util.List<Long> viewablePoolIds;
 
     /** 证券代码（模糊搜索） */
     private String securityCode;

@@ -32,6 +32,15 @@
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
+            <if test="viewablePoolIds != null and viewablePoolIds.size() == 0">
+                AND 1 = 0
+            </if>
+            <if test="viewablePoolIds != null and viewablePoolIds.size() > 0">
+                AND ips.target_pool_id IN
+                <foreach collection="viewablePoolIds" item="poolId" open="(" separator="," close=")">
+                    #{poolId}
+                </foreach>
+            </if>
             <if test="securityCode != null and securityCode != ''">
                 AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
@@ -42,9 +51,11 @@
                 AND ips.security_type = #{securityType}
             </if>
             <if test="securityStatus == 'active'">
+                AND dst.category_type = 'bond'
                 AND bi.maturity_date &gt;= CURDATE()
             </if>
             <if test="securityStatus == 'matured'">
+                AND dst.category_type = 'bond'
                 AND bi.maturity_date &lt; CURDATE()
             </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
@@ -76,6 +87,15 @@
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'
           AND ips.security_type IS NOT NULL
+          <if test="viewablePoolIds != null and viewablePoolIds.size() == 0">
+              AND 1 = 0
+          </if>
+          <if test="viewablePoolIds != null and viewablePoolIds.size() > 0">
+              AND ips.target_pool_id IN
+              <foreach collection="viewablePoolIds" item="poolId" open="(" separator="," close=")">
+                  #{poolId}
+              </foreach>
+          </if>
         ORDER BY dst.sort_order ASC
                  ,ips.security_type ASC
     </select>

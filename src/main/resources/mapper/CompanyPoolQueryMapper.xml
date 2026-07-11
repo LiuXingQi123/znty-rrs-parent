@@ -13,13 +13,24 @@
                ,ips.target_pool_id
                ,p.pool_name AS target_pool_name
         FROM ip_pool_status ips
-        JOIN dict_security_type dst ON ips.security_type = dst.security_type
-        LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
+        INNER JOIN dict_security_type dst ON ips.security_type = dst.security_type
+                                             AND dst.is_deleted = 0
+        INNER JOIN ip_investment_pool p ON ips.target_pool_id = p.id
+                                        AND p.is_deleted = 0
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
             AND dst.category_type = 'company'
-            <if test="poolIds != null and poolIds.size() > 0">
+            <if test="viewablePoolIds != null and viewablePoolIds.size() == 0">
+                AND 1 = 0
+            </if>
+            <if test="viewablePoolIds != null and viewablePoolIds.size() > 0">
+                AND ips.target_pool_id IN
+                <foreach collection="viewablePoolIds" item="pid" open="(" separator="," close=")">
+                    #{pid}
+                </foreach>
+            </if>
+            <if test="viewablePoolIds == null and poolIds != null and poolIds.size() > 0">
                 AND ips.target_pool_id IN
                 <foreach collection="poolIds" item="pid" open="(" separator="," close=")">
                     #{pid}

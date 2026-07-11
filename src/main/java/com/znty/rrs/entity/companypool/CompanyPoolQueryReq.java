@@ -1,6 +1,7 @@
 package com.znty.rrs.entity.companypool;
 
 import com.znty.rrs.common.PageRequest;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -12,6 +13,13 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class CompanyPoolQueryReq extends PageRequest {
+
+    /** 当前用户 ID */
+    private String currentUserId;
+
+    /** 服务端解析的可查看投资池 ID */
+    @JsonIgnore
+    private List<Long> viewablePoolIds;
 
     /** 投资池 ID 列表（树多选） */
     private List<Long> poolIds;

@@ -16,7 +16,7 @@
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
-               ,p.pool_name AS target_pool_name
+               ,COALESCE(al.target_pool_name, p.pool_name) AS target_pool_name
                ,al.audit_status
         FROM ip_adjust_log al
         INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
@@ -29,6 +29,15 @@
                                                    AND al.security_type = 'company'
         <where>
             al.is_deleted = 0
+            <if test="viewablePoolIds != null and viewablePoolIds.size() == 0">
+                AND 1 = 0
+            </if>
+            <if test="viewablePoolIds != null and viewablePoolIds.size() > 0">
+                AND al.target_pool_id IN
+                <foreach collection="viewablePoolIds" item="poolId" open="(" separator="," close=")">
+                    #{poolId}
+                </foreach>
+            </if>
             <if test="companyCode != null and companyCode != ''">
                 AND (wci.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%')
                      OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%'))

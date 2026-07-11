@@ -14,4 +14,10 @@ public class CommonReq {
 
     /** 排除的投资池类型列表 */
     private List<String> excludePoolTypes;
+
+    /** 当前用户 ID */
+    private String currentUserId;
+
+    /** 权限类型，不传时不按权限过滤 */
+    private String permissionType;
 }

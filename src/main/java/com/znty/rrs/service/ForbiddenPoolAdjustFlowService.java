@@ -29,6 +29,7 @@ import com.znty.rrs.entity.flow.FlowSnapshot;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
+import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.bo.ReportInBo;
@@ -222,10 +223,16 @@ public class ForbiddenPoolAdjustFlowService {
         List<IpAdjustLogBo> logList = forbiddenPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
         Set<Long> allowedLogIds = new HashSet<>();
+        Map<Long, IpAdjustLogBo> logMap = new HashMap<>();
         for (IpAdjustLogBo log : logList) {
             if (log != null && log.getId() != null) {
                 allowedLogIds.add(log.getId());
+                logMap.put(log.getId(), log);
             }
+        }
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        for (InvestmentPoolBo pool : investmentPoolService.queryPoolBoList()) {
+            poolMap.put(pool.getId(), pool);
         }
         SysAttachmentService.SubmissionFiles submissionFiles =
                 sysAttachmentService.createSubmissionFiles(files, req.getHandlerId());
@@ -236,6 +243,15 @@ public class ForbiddenPoolAdjustFlowService {
             if (!allowedLogIds.contains(change.getAdjustLogId())) {
                 throw new BizException("附件变更不属于当前调库批次，调库记录 ID：" + change.getAdjustLogId());
             }
+            IpAdjustLogBo adjustLog = logMap.get(change.getAdjustLogId());
+            InvestmentPoolBo targetPool = adjustLog == null ? null : poolMap.get(adjustLog.getTargetPoolId());
+            String reportRestriction = targetPool == null ? null
+                    : (AdjustMode.IN.getCode().equals(adjustLog.getAdjustMode())
+                    ? targetPool.getInReportRestriction() : targetPool.getOutReportRestriction());
+            boolean internalRequired = "internal".equals(reportRestriction);
+            // 校验重新提交选择的报告库附件真实来源、分类和有效状态
+            sysAttachmentService.validateCreditReportSources(
+                    change.getCreditReportSourceAttachmentIds(), internalRequired);
             // 删除已移除的调库记录附件
             sysAttachmentService.deleteAdjustLogAttachments(change.getAdjustLogId(), change.getDeleteAttachmentIds());
             // 绑定本地上传的信评报告附件
@@ -483,76 +499,10 @@ public class ForbiddenPoolAdjustFlowService {
         if (updated != logList.size()) {
             throw new BizException("审批任务状态已发生变化，请刷新后重试");
         }
-        for (IpAdjustLogBo log : logList) {
-            if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
-                log.setAuditStatus(AuditStatus.APPROVED.getCode());
-                log.setAdjustLogId(log.getId());
-                forbiddenPoolAdjustMapper.addPoolStatus(log);
-            } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
-                int deleted = forbiddenPoolAdjustMapper.deletePoolStatusSoft(
-                        log.getSecurityCode(), log.getTargetPoolId());
-                if (deleted == 0) {
-                    throw new BizException("主体当前池状态已发生变化，请刷新后重试");
-                }
-            }
-            // 主体调整生效后同步调整旗下全部债券
-            syncCompanyBonds(log);
-        }
+        // 使用主体调库统一落池与旗下债券同步保护
+        forbiddenPoolAdjustService.applyPoolStatusChanges(logList);
         // 审批通过结束后，将手工上传的信评报告沉淀为内部报告
         generateInternalReportsOnFinish(logList);
-    }
-
-    /**
-     * 主体调整生效后，同步调整旗下全部债券并记录自动调整日志。
-     */
-    private void syncCompanyBonds(IpAdjustLogBo companyLog) {
-        String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(companyLog.getSecurityType());
-        if (!CategoryType.COMPANY.getCode().equals(categoryType)) {
-            return;
-        }
-        // 查询主体旗下全部债券
-        List<SecurityInfoBo> bonds = forbiddenPoolAdjustMapper.queryCompanyBondForAutoList(
-                companyLog.getSecurityCode());
-        for (SecurityInfoBo bond : bonds) {
-            List<Long> currentPoolIds = forbiddenPoolAdjustMapper.querySecurityCurrentPoolIdList(bond.getWindCode());
-            boolean currentlyInPool = currentPoolIds.contains(companyLog.getTargetPoolId());
-            boolean inbound = AdjustMode.IN.getCode().equals(companyLog.getAdjustMode());
-            if ((inbound && currentlyInPool) || (!inbound && !currentlyInPool)) {
-                continue;
-            }
-            // 构建旗下债券自动调整日志
-            IpAdjustLogBo autoLog = buildCompanyBondAutoLog(companyLog, bond);
-            forbiddenPoolAdjustMapper.addAdjustLog(autoLog);
-            if (inbound) {
-                autoLog.setAdjustLogId(autoLog.getId());
-                forbiddenPoolAdjustMapper.addPoolStatus(autoLog);
-            } else {
-                forbiddenPoolAdjustMapper.deletePoolStatusSoft(bond.getWindCode(), companyLog.getTargetPoolId());
-            }
-        }
-    }
-
-    /**
-     * 构建主体旗下债券自动调整日志。
-     */
-    private IpAdjustLogBo buildCompanyBondAutoLog(IpAdjustLogBo companyLog, SecurityInfoBo bond) {
-        IpAdjustLogBo autoLog = new IpAdjustLogBo();
-        autoLog.setSecurityCode(bond.getWindCode());
-        autoLog.setSecurityShortName(bond.getShortName());
-        autoLog.setSecurityType(bond.getSecurityType());
-        autoLog.setAdjustType("自动调整");
-        autoLog.setAdjustMode(companyLog.getAdjustMode());
-        autoLog.setAdjustBatchNo(companyLog.getAdjustBatchNo());
-        autoLog.setTargetPoolId(companyLog.getTargetPoolId());
-        autoLog.setTargetPoolName(companyLog.getTargetPoolName());
-        autoLog.setPoolType(companyLog.getPoolType());
-        autoLog.setAuditStatus(AuditStatus.APPROVED.getCode());
-        autoLog.setAdjusterId(companyLog.getAdjusterId());
-        autoLog.setAdjusterName(companyLog.getAdjusterName());
-        autoLog.setAdjustReason("主体“" + companyLog.getSecurityShortName() + "”"
-                + companyLog.getAdjustMode() + "，旗下债券自动同步调整");
-        autoLog.setAdjustAdvice(companyLog.getAdjustAdvice());
-        return autoLog;
     }
 
     /**

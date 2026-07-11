@@ -150,18 +150,44 @@
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
         WHERE bond.issuer_code = #{companyCode}
-        ORDER BY bond.id ASC
+        ORDER BY bond.wind_code ASC
     </select>
 
-    <!-- 查询主体旗下全部债券 -->
-    <select id="queryCompanyBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+    <!-- 查询主体调入时需要同步的未到期非 ABS 债券 -->
+    <select id="queryCompanyInboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE bond.issuer_code = #{companyCode}
-        ORDER BY bond.id ASC
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND COALESCE(bond.abs_flag, 0) != 1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status ips
+              WHERE ips.security_code = bond.wind_code
+                AND ips.target_pool_id = #{targetPoolId}
+                AND ips.audit_status = '20'
+                AND ips.is_deleted = 0
+          )
+        ORDER BY bond.wind_code ASC
+    </select>
+
+    <!-- 查询主体调出时需要同步的当前在池非 ABS 债券 -->
+    <select id="queryCompanyOutboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT bond.*
+        FROM rrs_securityinfo bond
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        INNER JOIN ip_pool_status ips ON ips.security_code = bond.wind_code
+                                     AND ips.target_pool_id = #{targetPoolId}
+                                     AND ips.audit_status = '20'
+                                     AND ips.is_deleted = 0
+        WHERE bond.issuer_code = #{companyCode}
+          AND COALESCE(bond.abs_flag, 0) != 1
+        ORDER BY bond.wind_code ASC
     </select>
 
     <!-- 新增调库记录 -->
@@ -296,13 +322,13 @@
         FROM ip_adjust_log al
         LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
         <where>
-            AND al.is_deleted = 0
+            al.is_deleted = 0
+            AND al.security_code = #{securityCode}
             <choose>
                 <when test="adjustBatchNo != null and adjustBatchNo != ''">
                     AND al.adjust_batch_no = #{adjustBatchNo}
                 </when>
                 <otherwise>
-                    AND al.security_code = #{securityCode}
                     AND (al.audit_status IS NULL OR al.audit_status NOT IN ('-1', '20', '21', '99'))
                 </otherwise>
             </choose>
@@ -333,18 +359,21 @@
         ORDER BY submit_time DESC, id DESC
     </select>
 
-    <!-- 查询主体活动流程涉及的手工调库目标池 ID -->
+    <!-- 查询主体活动流程同批全部调库项占用的目标池 ID -->
     <select id="queryPendingManualTargetPoolIdList" resultType="java.lang.Long">
-        SELECT DISTINCT al.target_pool_id
-        FROM ip_adjust_log al
-        INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
-        WHERE al.security_code = #{companyCode}
-          AND al.adjust_type = '手工调整'
-          AND al.audit_status IN ('00', '11')
-          AND al.is_deleted = 0
-          AND s.step_status = 'pending'
+        SELECT DISTINCT occupied.target_pool_id
+        FROM ip_adjust_log manual
+        INNER JOIN ip_adjust_step pending_step ON pending_step.adjust_batch_no = manual.adjust_batch_no
+                                                AND pending_step.step_status = 'pending'
+        INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual.adjust_batch_no
+                                         AND occupied.audit_status IN ('00', '11')
+                                         AND occupied.is_deleted = 0
+        WHERE manual.security_code = #{companyCode}
+          AND manual.adjust_type = '手工调整'
+          AND manual.audit_status IN ('00', '11')
+          AND manual.is_deleted = 0
           <if test="excludeBatchNo != null and excludeBatchNo != ''">
-              AND al.adjust_batch_no != #{excludeBatchNo}
+              AND manual.adjust_batch_no != #{excludeBatchNo}
           </if>
     </select>
 
@@ -386,6 +415,7 @@
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{securityCode}
           AND al.is_deleted = 0
+          AND al.audit_status IN ('00', '11')
           AND s.step_status = 'pending'
     </select>
 
@@ -396,6 +426,7 @@
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{securityCode}
           AND al.is_deleted = 0
+          AND al.audit_status IN ('00', '11')
           AND s.step_status = 'pending'
         ORDER BY s.sort_order ASC
                  ,s.id ASC
@@ -426,6 +457,7 @@
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{companyCode}
           AND al.is_deleted = 0
+          AND al.audit_status IN ('00', '11')
           AND s.step_status = 'pending'
     </select>
 
@@ -439,6 +471,7 @@
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{companyCode}
           AND al.is_deleted = 0
+          AND al.audit_status IN ('00', '11')
           AND s.step_status = 'pending'
         ORDER BY s.sort_order ASC
                  ,s.id ASC
@@ -504,7 +537,7 @@
           AND si.date_next REGEXP '^[0-9]{8}$'
     </select>
 
-    <!-- 查询6个月内同主体有审批通过调入记录（对齐老系统 bondfileflag，6个月） -->
+    <!-- 查询6个月内同主体存在真实有效报告的审批通过调入记录 -->
     <select id="queryHasRecentInboundWithReport" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_adjust_log l
@@ -512,9 +545,15 @@
           AND l.adjust_mode = '调入'
           AND l.is_deleted = 0
           AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-          AND l.security_code IN (
-              SELECT si.wind_code FROM rrs_securityinfo si
-              WHERE si.issuer = (SELECT issuer FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1)
+          AND l.security_code = #{securityCode}
+          AND l.security_type = 'company'
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = 'ip_adjust_log'
+                AND a.main_id = l.id
+                AND a.is_deleted = 0
+                AND a.attachment_category IN ('credit_report_hand', 'credit_report_in', 'credit_report_out')
           )
     </select>
 

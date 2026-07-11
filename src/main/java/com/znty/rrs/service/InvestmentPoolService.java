@@ -7,6 +7,7 @@ import com.znty.rrs.common.enums.EventType;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.common.enums.PoolStatus;
+import com.znty.rrs.common.enums.HandlerType;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,9 +28,11 @@ import java.util.Date;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +58,44 @@ public class InvestmentPoolService {
     /** JSON 序列化组件 */
     @Resource
     private ObjectMapper objectMapper;
+
+    /** 管理员用户 ID */
+    private static final String ADMIN_USER_ID = "1";
+
+    /**
+     * 查询当前用户通过本人或角色拥有指定类型权限的投资池。
+     *
+     * @return 管理员返回 null 表示不限制，普通用户返回权限池集合
+     */
+    public Set<Long> queryPermittedPoolIdsByUser(String currentUserId, String permissionType) {
+        if (ADMIN_USER_ID.equals(currentUserId)) {
+            return null;
+        }
+        if (currentUserId == null || currentUserId.trim().isEmpty()) {
+            throw new BizException("当前用户 ID 不能为空");
+        }
+        Long userId;
+        try {
+            userId = Long.valueOf(currentUserId.trim());
+        } catch (NumberFormatException e) {
+            throw new BizException("当前用户 ID 不合法");
+        }
+        Set<Long> roleIds = new HashSet<>(investmentPoolMapper.queryUserRoleIdList(userId));
+        Set<Long> poolIds = new HashSet<>();
+        for (PoolPermissionBo permission : investmentPoolMapper.queryPermissionListByType(permissionType)) {
+            if (permission.getPoolId() == null || permission.getHandlerId() == null) {
+                continue;
+            }
+            if (HandlerType.USER.getCode().equals(permission.getHandlerType())
+                    && userId.equals(permission.getHandlerId())) {
+                poolIds.add(permission.getPoolId());
+            } else if (HandlerType.ROLE.getCode().equals(permission.getHandlerType())
+                    && roleIds.contains(permission.getHandlerId())) {
+                poolIds.add(permission.getPoolId());
+            }
+        }
+        return poolIds;
+    }
 
     /**
      * 查询投资池列表（树结构由前端组装）

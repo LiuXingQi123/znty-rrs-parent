@@ -5,6 +5,7 @@ import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
+import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjustflow.SecurityPoolAdjustAuditReq;
 import com.znty.rrs.mapper.FlowMapper;
@@ -36,42 +37,24 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         InvestmentPoolService poolService = mock(InvestmentPoolService.class);
         ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
-        ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService", mock(ForbiddenPoolAdjustService.class));
+        ForbiddenPoolAdjustService adjustService = mock(ForbiddenPoolAdjustService.class);
+        ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService", adjustService);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
         ReflectionTestUtils.setField(service, "investmentPoolService", poolService);
         IpAdjustLogBo companyLog = buildCompanyLog();
-        SecurityInfoBo bond = new SecurityInfoBo();
-        bond.setWindCode("B001");
-        bond.setShortName("测试债券");
-        bond.setSecurityType("company_bond");
         when(mapper.queryAdjustLogListForAudit(10L, "COMPANY202606281001"))
                 .thenReturn(Collections.singletonList(companyLog));
-        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
         when(mapper.editActiveAdjustLogAuditStatus(10L, "COMPANY202606281001", "20")).thenReturn(1);
-        when(mapper.queryCompanyBondForAutoList("C10001")).thenReturn(Collections.singletonList(bond));
-        when(mapper.querySecurityCurrentPoolIdList("B001")).thenReturn(Collections.<Long>emptyList());
         when(poolService.queryPoolFullNameMap()).thenReturn(Collections.<Long, String>emptyMap());
         when(attachmentService.queryHandCreditReportAttachments(10L)).thenReturn(Collections.emptyList());
-        doAnswer(invocation -> {
-            IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
-            log.setId(11L);
-            return 1;
-        }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
         IpAdjustStepBo step = new IpAdjustStepBo();
         step.setAdjustLogId(10L);
         step.setAdjustBatchNo("COMPANY202606281001");
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
 
-        ArgumentCaptor<IpAdjustLogBo> statusCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(mapper, org.mockito.Mockito.times(2)).addPoolStatus(statusCaptor.capture());
-        List<IpAdjustLogBo> statusLogs = statusCaptor.getAllValues();
-        assertThat(statusLogs).extracting(IpAdjustLogBo::getSecurityCode)
-                .containsExactly("C10001", "B001");
-        ArgumentCaptor<IpAdjustLogBo> autoLogCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(mapper).addAdjustLog(autoLogCaptor.capture());
-        assertThat(autoLogCaptor.getValue().getAdjustType()).isEqualTo("自动调整");
-        assertThat(autoLogCaptor.getValue().getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
+        verify(adjustService).recheckBeforeFinalApproval(Collections.singletonList(companyLog));
+        verify(adjustService).applyPoolStatusChanges(Collections.singletonList(companyLog));
         verify(mapper, never()).addAdjustStep(any(IpAdjustStepBo.class));
     }
 
@@ -147,6 +130,58 @@ public class ForbiddenPoolAdjustFlowServiceTest {
 
         verify(mapper).editAdjustStepProcess(10L, "submit", "submit", "已修改");
         verify(mapper).editAdjustLogAuditStatus(1L, "BATCH001", "00");
+    }
+
+    /** 验证驳回修改重新提交时按目标池要求校验内部报告来源。 */
+    @Test
+    public void modifySubmitShouldValidateInternalReportSources() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        InvestmentPoolService poolService = mock(InvestmentPoolService.class);
+        ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
+        ReflectionTestUtils.setField(service, "investmentPoolService", poolService);
+        IpAdjustLogBo log = buildCompanyLog();
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(15L);
+        pool.setInReportRestriction("internal");
+        when(mapper.queryAdjustLogListForAudit(10L, "COMPANY202606281001"))
+                .thenReturn(Collections.singletonList(log));
+        when(poolService.queryPoolBoList()).thenReturn(Collections.singletonList(pool));
+        IpAdjustStepBo step = new IpAdjustStepBo();
+        step.setAdjustLogId(10L);
+        step.setAdjustBatchNo("COMPANY202606281001");
+        step.setNodeLabel("流程发起人修改");
+        step.setApprovalStrategy("initiator");
+        step.setFlowNodeId(10103L);
+        FlowNodeBo modifyNode = buildFlowNode(10103L, "n4", "approval", "流程发起人修改");
+        FlowNodeBo reviewerNode = buildFlowNode(10104L, "n3", "approval", "研究员复核");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "resubmit");
+        FlowVersionBo version = new FlowVersionBo();
+        version.setId(1L);
+        when(flowMapper.queryFlowNodeById(10103L)).thenReturn(modifyNode);
+        when(flowMapper.queryFlowVersionById(1L)).thenReturn(version);
+        when(flowMapper.queryFlowNodeListByVersionId(1L)).thenReturn(Arrays.asList(modifyNode, reviewerNode));
+        when(flowMapper.queryFlowEdgeListByVersionId(1L)).thenReturn(Collections.singletonList(edge));
+        when(flowMapper.queryCondRuleListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalConfigListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(Collections.emptyList());
+        SecurityPoolAdjustAuditReq req = new SecurityPoolAdjustAuditReq();
+        req.setProcessAction("approve");
+        req.setHandlerId("2");
+        SecurityPoolAdjustAuditReq.AttachmentChange change =
+                new SecurityPoolAdjustAuditReq.AttachmentChange();
+        change.setAdjustLogId(10L);
+        change.setCreditReportSourceAttachmentIds(Collections.singletonList(100L));
+        req.setAttachmentChanges(Collections.singletonList(change));
+
+        ReflectionTestUtils.invokeMethod(service, "applyAttachmentChangesForModifySubmit",
+                req, step, Collections.emptyList());
+
+        verify(attachmentService).validateCreditReportSources(Collections.singletonList(100L), true);
     }
 
     /** 构建流程审批服务实例测试数据。 */

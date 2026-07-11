@@ -3,6 +3,7 @@ package com.znty.rrs.service;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.mapper.ForbiddenPoolQueryMapper;
 import com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryDto;
 import com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryReq;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Set;
 
 /**
  * 禁投池查询服务。
@@ -30,6 +33,10 @@ public class ForbiddenPoolQueryService {
 
     /** 分页查询禁投池证券列表 */
     public PageResult<ForbiddenPoolQueryDto> queryForbiddenPoolPage(ForbiddenPoolQueryReq req) {
+        // 解析当前用户可查看的投资池范围
+        Set<Long> permittedIds = investmentPoolService.queryPermittedPoolIdsByUser(
+                req.getCurrentUserId(), PermissionType.VIEWABLE.getCode());
+        req.setViewablePoolIds(permittedIds == null ? null : new ArrayList<>(permittedIds));
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<ForbiddenPoolQueryDto> list = forbiddenPoolQueryMapper.queryForbiddenPoolPage(req);
         // 填充投资池全路径名称
@@ -54,7 +61,11 @@ public class ForbiddenPoolQueryService {
     }
 
     /** 查询禁投池中出现的证券类型下拉选项（code + name） */
-    public List<SecurityTypeOptionDto> querySecurityTypeList() {
-        return forbiddenPoolQueryMapper.querySecurityTypeList();
+    public List<SecurityTypeOptionDto> querySecurityTypeList(ForbiddenPoolQueryReq req) {
+        // 解析当前用户可查看的投资池范围
+        Set<Long> permittedIds = investmentPoolService.queryPermittedPoolIdsByUser(
+                req.getCurrentUserId(), PermissionType.VIEWABLE.getCode());
+        req.setViewablePoolIds(permittedIds == null ? null : new ArrayList<>(permittedIds));
+        return forbiddenPoolQueryMapper.querySecurityTypeList(req);
     }
 }

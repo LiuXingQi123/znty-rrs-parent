@@ -697,10 +697,10 @@ public class ForbiddenPoolAdjustService {
      *   <li><b>参数初始化</b>：集中执行所有 DB 查询，构建 {@link SubmitSharedData}，
      *       包含证券信息、投资池索引、池关系映射、各流程的快照数据</li>
      *   <li><b>调入处理</b>：遍历全部调入方向的调库项，逐项判断是否直通流程，
-     *       直通则写入 ip_adjust_log（audit_status='20'）并直接写入 ip_pool_status；
+     *       直通则先写入 ip_adjust_log（audit_status='20'），全部日志生成后统一复核并落池；
      *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
      *       则升级为 audit_status='20' 并写入 ip_pool_status</li>
-     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'）并软删除 ip_pool_status 记录；
+     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通日志生成后统一复核并软删除 ip_pool_status 记录；
      *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
      *       则升级为 audit_status='20' 并软删除 ip_pool_status</li>
      *   <li><b>后续处理</b>：合并并同步更新调库详情页传入的证券基础信息字段（editSecurityInfoForAdjust）</li>
@@ -740,11 +740,15 @@ public class ForbiddenPoolAdjustService {
         // 检查本次涉及的顶级池组是否已有活动流程
         checkSubmitPendingPoolGroups(req, shared.poolMap);
 
+        List<IpAdjustLogBo> directApplyLogs = new ArrayList<>();
         // ══ 第三阶段：调入处理 ══
-        List<Long> inboundIds = executeInboundSubmit(req, shared, submissionFiles);
+        List<Long> inboundIds = executeInboundSubmit(req, shared, submissionFiles, directApplyLogs);
 
         // ══ 第四阶段：调出处理 ══
-        List<Long> outboundIds = executeOutboundSubmit(req, shared, submissionFiles);
+        List<Long> outboundIds = executeOutboundSubmit(req, shared, submissionFiles, directApplyLogs);
+
+        // 对本次全部直通项统一锁池、复核并落地
+        recheckAndApplyDirectLogs(directApplyLogs);
 
         // ══ 第五阶段：后续处理 ══
         postSubmitProcess(req, shared);
@@ -1149,7 +1153,7 @@ public class ForbiddenPoolAdjustService {
         if (pool == null || reportRestriction == null || reportRestriction.isEmpty() || "none".equals(reportRestriction)) {
             return;
         }
-        // 6个月内入池报告标记（对齐老系统 bondfileflag，6个月）：同主体半年内有审批通过调入记录则跳过报告校验
+        // 同主体半年内存在真实有效调入报告时允许豁免
         if (securityCode != null && !securityCode.isEmpty() && forbiddenPoolAdjustMapper.queryHasRecentInboundWithReport(securityCode)) {
             return;
         }
@@ -1158,18 +1162,21 @@ public class ForbiddenPoolAdjustService {
         if (!hasReport) {
             throw new BizException("目标池[" + pool.getPoolName() + "]要求研究报告，请上传或选择报告");
         }
-        // internal 要求内部研究报告（简化：要求 creditReportSourceAttachmentIds 非空，后续完善内部/外部区分）
-        if ("internal".equals(reportRestriction)
-                && (item.getCreditReportSourceAttachmentIds() == null || item.getCreditReportSourceAttachmentIds().isEmpty())) {
+        boolean internalRequired = "internal".equals(reportRestriction);
+        if (internalRequired && (item.getCreditReportSourceAttachmentIds() == null
+                || item.getCreditReportSourceAttachmentIds().isEmpty())) {
             throw new BizException("目标池[" + pool.getPoolName() + "]要求内部研究报告，请从内部报告库选择");
         }
+        // 校验报告库附件真实来源、分类和有效状态
+        sysAttachmentService.validateCreditReportSources(
+                item.getCreditReportSourceAttachmentIds(), internalRequired);
     }
 
     /**
      * 第三阶段：调入处理
      *
      * <p>遍历请求中全部调入方向的调库项，逐项判断流程是否为直通（start→end），
-     * 决定写入已生效调库记录并直接更新 ip_pool_status，还是写入待审批调库记录。
+     * 决定收集待统一复核落池的已生效调库记录，还是写入待审批调库记录。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
@@ -1177,14 +1184,16 @@ public class ForbiddenPoolAdjustService {
      */
     private List<Long> executeInboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
         return executeInboundSubmit(req, shared,
-                sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
+                sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()),
+                new ArrayList<IpAdjustLogBo>());
     }
 
     /**
      * 执行调入提交并绑定本次 multipart 文件。
      */
     private List<Long> executeInboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
-                                            SysAttachmentService.SubmissionFiles submissionFiles) {
+                                            SysAttachmentService.SubmissionFiles submissionFiles,
+                                            List<IpAdjustLogBo> directApplyLogs) {
 
         List<Long> generatedIds = new ArrayList<>();
 
@@ -1221,11 +1230,9 @@ public class ForbiddenPoolAdjustService {
                     createInitialSteps(logBo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
-                // 直通流程：再直接写入 ip_pool_status（audit_status='20'，即时生效）
+                // 收集直通日志，待全部调库项生成后统一复核并落池
                 logBo.setAdjustLogId(logBo.getId());
-                forbiddenPoolAdjustMapper.addPoolStatus(logBo);
-                // 直通生效后同步调整主体旗下债券
-                syncCompanyBondsOnDirect(logBo);
+                directApplyLogs.add(logBo);
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
@@ -1244,9 +1251,7 @@ public class ForbiddenPoolAdjustService {
                         bo.setAuditStatus(AuditStatus.APPROVED.getCode());
                         forbiddenPoolAdjustMapper.editAdjustLogAuditStatus(bo.getId(), adjustBatchNo, AuditStatus.APPROVED.getCode());
                         bo.setAdjustLogId(bo.getId());
-                        forbiddenPoolAdjustMapper.addPoolStatus(bo);
-                        // 流程初始化即结束时同步调整主体旗下债券
-                        syncCompanyBondsOnDirect(bo);
+                        directApplyLogs.add(bo);
                     }
                 }
             }
@@ -1267,14 +1272,16 @@ public class ForbiddenPoolAdjustService {
      */
     private List<Long> executeOutboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
         return executeOutboundSubmit(req, shared,
-                sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
+                sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()),
+                new ArrayList<IpAdjustLogBo>());
     }
 
     /**
      * 执行调出提交并绑定本次 multipart 文件。
      */
     private List<Long> executeOutboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
-                                             SysAttachmentService.SubmissionFiles submissionFiles) {
+                                             SysAttachmentService.SubmissionFiles submissionFiles,
+                                             List<IpAdjustLogBo> directApplyLogs) {
 
         List<Long> generatedIds = new ArrayList<>();
 
@@ -1311,11 +1318,8 @@ public class ForbiddenPoolAdjustService {
                     createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                 }
 
-                // 直通流程：再软删除 ip_pool_status 中该证券在目标池的有效记录
-                forbiddenPoolAdjustMapper.deletePoolStatusSoft(
-                        req.getSecurityCode(), item.getTargetPoolId());
-                // 直通生效后同步调整主体旗下债券
-                syncCompanyBondsOnDirect(bo);
+                // 收集直通日志，待全部调库项生成后统一复核并落池
+                directApplyLogs.add(bo);
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
@@ -1332,11 +1336,8 @@ public class ForbiddenPoolAdjustService {
                     boolean flowFinished = createInitialSteps(bo.getId(), adjustBatchNo, snapshot, req.getAdjusterId(), req.getAdjusterName());
                     if (flowFinished) {
                         forbiddenPoolAdjustMapper.editAdjustLogAuditStatus(bo.getId(), adjustBatchNo, AuditStatus.APPROVED.getCode());
-                        forbiddenPoolAdjustMapper.deletePoolStatusSoft(
-                                req.getSecurityCode(), item.getTargetPoolId());
                         bo.setAuditStatus(AuditStatus.APPROVED.getCode());
-                        // 流程初始化即结束时同步调整主体旗下债券
-                        syncCompanyBondsOnDirect(bo);
+                        directApplyLogs.add(bo);
                     }
                 }
             }
@@ -2448,9 +2449,14 @@ public class ForbiddenPoolAdjustService {
                         inCheckSourcePool(ctx), inCheckRestrictPool(ctx), inCheckForbiddenPool(ctx));
                 int increment = inboundIncrements.getOrDefault(pool.getId(), 0);
                 int currentCount = forbiddenPoolAdjustMapper.queryPoolCurrentCount(pool.getId());
+                int syncBondCount = forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
+                        log.getSecurityCode(), pool.getId()).size();
+                int totalIncrement = 1 + syncBondCount;
                 if (failure == null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
-                        && currentCount + increment >= pool.getMaxCapacity()) failure = "目标投资池容量已满";
-                inboundIncrements.put(pool.getId(), increment + 1);
+                        && currentCount + increment + totalIncrement > pool.getMaxCapacity()) {
+                    failure = "目标投资池容量不足，无法容纳主体及同步债券";
+                }
+                inboundIncrements.put(pool.getId(), increment + totalIncrement);
             } else {
                 ctx.setTargetPoolEntryTime(forbiddenPoolAdjustMapper.queryPoolEntryTime(
                         log.getSecurityCode(), pool.getId()));
@@ -2458,6 +2464,72 @@ public class ForbiddenPoolAdjustService {
                         outCheckRestrictPool(ctx), outCheckFrozenPeriod(ctx));
             }
             if (failure != null) throwFinalRecheckFailure(log, failure);
+        }
+    }
+
+    /** 对直通主体调库日志执行最终复核并统一落池。 */
+    private void recheckAndApplyDirectLogs(List<IpAdjustLogBo> directApplyLogs) {
+        if (directApplyLogs == null || directApplyLogs.isEmpty()) {
+            return;
+        }
+        // 复核当前数据库业务状态并锁定目标池
+        recheckBeforeFinalApproval(directApplyLogs);
+        // 将主体和符合条件的旗下债券统一应用到当前池状态
+        applyPoolStatusChanges(directApplyLogs);
+    }
+
+    /** 统一应用主体池状态并按老系统口径同步旗下债券。 */
+    public void applyPoolStatusChanges(List<IpAdjustLogBo> logList) {
+        if (logList == null || logList.isEmpty()) {
+            return;
+        }
+        for (IpAdjustLogBo log : logList) {
+            if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
+                log.setAuditStatus(AuditStatus.APPROVED.getCode());
+                log.setAdjustLogId(log.getId());
+                if (forbiddenPoolAdjustMapper.addPoolStatus(log) != 1) {
+                    throw new BizException("主体调入池状态写入失败，请刷新后重试");
+                }
+            } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
+                int deleted = forbiddenPoolAdjustMapper.deletePoolStatusSoft(
+                        log.getSecurityCode(), log.getTargetPoolId());
+                if (deleted == 0) {
+                    throw new BizException("主体当前池状态已发生变化，请刷新后重试");
+                }
+            }
+            // 主体生效后同步符合老系统条件的旗下债券
+            syncCompanyBonds(log);
+        }
+    }
+
+    /** 同步主体旗下符合老系统条件的债券并检查写入结果。 */
+    private void syncCompanyBonds(IpAdjustLogBo companyLog) {
+        String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(companyLog.getSecurityType());
+        if (!CategoryType.COMPANY.getCode().equals(categoryType)) {
+            return;
+        }
+        boolean inbound = AdjustMode.IN.getCode().equals(companyLog.getAdjustMode());
+        List<SecurityInfoBo> bonds = inbound
+                ? forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
+                        companyLog.getSecurityCode(), companyLog.getTargetPoolId())
+                : forbiddenPoolAdjustMapper.queryCompanyOutboundBondForAutoList(
+                        companyLog.getSecurityCode(), companyLog.getTargetPoolId());
+        for (SecurityInfoBo bond : bonds) {
+            // 构建旗下债券自动调整日志
+            IpAdjustLogBo autoLog = buildCompanyBondAutoLog(companyLog, bond);
+            forbiddenPoolAdjustMapper.addAdjustLog(autoLog);
+            if (inbound) {
+                autoLog.setAdjustLogId(autoLog.getId());
+                if (forbiddenPoolAdjustMapper.addPoolStatus(autoLog) != 1) {
+                    throw new BizException("旗下债券[" + bond.getWindCode() + "]调入失败，请刷新后重试");
+                }
+            } else {
+                int deleted = forbiddenPoolAdjustMapper.deletePoolStatusSoft(
+                        bond.getWindCode(), companyLog.getTargetPoolId());
+                if (deleted == 0) {
+                    throw new BizException("旗下债券[" + bond.getWindCode() + "]调出失败，请刷新后重试");
+                }
+            }
         }
     }
 
@@ -3655,30 +3727,8 @@ public class ForbiddenPoolAdjustService {
      * 无需人工审批的主体调整生效后，同步调整旗下债券。
      */
     private void syncCompanyBondsOnDirect(IpAdjustLogBo companyLog) {
-        String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(companyLog.getSecurityType());
-        if (!"company".equals(categoryType)) {
-            return;
-        }
-        // 查询主体旗下全部债券
-        List<SecurityInfoBo> bonds = forbiddenPoolAdjustMapper.queryCompanyBondForAutoList(
-                companyLog.getSecurityCode());
-        for (SecurityInfoBo bond : bonds) {
-            List<Long> currentPoolIds = forbiddenPoolAdjustMapper.querySecurityCurrentPoolIdList(bond.getWindCode());
-            boolean currentlyInPool = currentPoolIds.contains(companyLog.getTargetPoolId());
-            boolean inbound = AdjustMode.IN.getCode().equals(companyLog.getAdjustMode());
-            if ((inbound && currentlyInPool) || (!inbound && !currentlyInPool)) {
-                continue;
-            }
-            // 构建旗下债券自动调整日志
-            IpAdjustLogBo autoLog = buildCompanyBondAutoLog(companyLog, bond);
-            forbiddenPoolAdjustMapper.addAdjustLog(autoLog);
-            if (inbound) {
-                autoLog.setAdjustLogId(autoLog.getId());
-                forbiddenPoolAdjustMapper.addPoolStatus(autoLog);
-            } else {
-                forbiddenPoolAdjustMapper.deletePoolStatusSoft(bond.getWindCode(), companyLog.getTargetPoolId());
-            }
-        }
+        // 使用统一债券同步与结果检查逻辑
+        syncCompanyBonds(companyLog);
     }
 
     /**

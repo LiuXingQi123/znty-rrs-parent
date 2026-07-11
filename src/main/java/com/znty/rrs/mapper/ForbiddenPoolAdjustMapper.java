@@ -45,8 +45,13 @@ public interface ForbiddenPoolAdjustMapper {
             @Param("companyCode") String companyCode,
             @Param("targetPoolId") Long targetPoolId);
 
-    /** 查询主体旗下全部债券 */
-    List<SecurityInfoBo> queryCompanyBondForAutoList(@Param("companyCode") String companyCode);
+    /** 查询主体调入时需要同步的未到期非 ABS 债券 */
+    List<SecurityInfoBo> queryCompanyInboundBondForAutoList(@Param("companyCode") String companyCode,
+                                                            @Param("targetPoolId") Long targetPoolId);
+
+    /** 查询主体调出时需要同步的当前在池非 ABS 债券 */
+    List<SecurityInfoBo> queryCompanyOutboundBondForAutoList(@Param("companyCode") String companyCode,
+                                                             @Param("targetPoolId") Long targetPoolId);
 
     /** 查询主体当前有效所在池 ID */
     List<Long> queryCompanyCurrentPoolIdList(@Param("companyCode") String companyCode);

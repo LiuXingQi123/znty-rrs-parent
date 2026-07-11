@@ -127,18 +127,16 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(result).extracting(PoolDto::getId).containsOnly(15L, 16L, 17L);
     }
 
-    /** 验证主体直通调入仅同步尚未在目标池的旗下债券。 */
+    /** 验证主体调入仅同步 SQL 已筛选出的未到期非 ABS 债券。 */
     @Test
     public void syncCompanyBondsOnDirectShouldInsertOnlyActualBondChange() {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
         ForbiddenPoolAdjustService service = buildService(mapper);
-        SecurityInfoBo existingBond = buildBond("B001");
         SecurityInfoBo newBond = buildBond("B002");
         when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-        when(mapper.queryCompanyBondForAutoList("C10001"))
-                .thenReturn(Arrays.asList(existingBond, newBond));
-        when(mapper.querySecurityCurrentPoolIdList("B001")).thenReturn(Collections.singletonList(15L));
-        when(mapper.querySecurityCurrentPoolIdList("B002")).thenReturn(Collections.<Long>emptyList());
+        when(mapper.queryCompanyInboundBondForAutoList("C10001", 15L))
+                .thenReturn(Collections.singletonList(newBond));
+        when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
         doAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(99L);
@@ -166,6 +164,24 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(autoLog.getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
         verify(mapper).addPoolStatus(autoLog);
         verify(mapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
+    }
+
+    /** 验证同步债券调入写入数量异常时阻断整批事务。 */
+    @Test(expected = BizException.class)
+    public void syncCompanyBondsShouldFailWhenInboundInsertCountIsInvalid() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
+        when(mapper.queryCompanyInboundBondForAutoList("C10001", 15L))
+                .thenReturn(Collections.singletonList(buildBond("B002")));
+        doAnswer(invocation -> {
+            ((IpAdjustLogBo) invocation.getArguments()[0]).setId(99L);
+            return 1;
+        }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
+        when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(0);
+
+        IpAdjustLogBo companyLog = buildCompanyLog();
+        ReflectionTestUtils.invokeMethod(service, "syncCompanyBondsOnDirect", companyLog);
     }
 
     /** 验证主体调入不受证券品种和市场配置拦截。 */
@@ -211,6 +227,22 @@ public class ForbiddenPoolAdjustServiceTest {
         throw new AssertionError("any 限制且无报告时应抛出异常");
     }
 
+    /** 验证内部报告限制会调用统一附件来源校验。 */
+    @Test
+    public void checkReportRequiredShouldValidateInternalReportSources() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setCreditReportSourceAttachmentIds(Collections.singletonList(100L));
+        InvestmentPoolBo pool = buildPool(15L, "禁投池", "forbidden");
+
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal", "C10001");
+
+        verify(attachmentService).validateCreditReportSources(Collections.singletonList(100L), true);
+    }
+
     /** 构建服务并注入公共依赖。 */
     private ForbiddenPoolAdjustService buildService(ForbiddenPoolAdjustMapper mapper) {
         ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
@@ -246,5 +278,21 @@ public class ForbiddenPoolAdjustServiceTest {
         bond.setShortName(windCode + "简称");
         bond.setSecurityType("company_bond");
         return bond;
+    }
+
+    /** 构建已审批通过的主体调入日志。 */
+    private IpAdjustLogBo buildCompanyLog() {
+        IpAdjustLogBo companyLog = new IpAdjustLogBo();
+        companyLog.setSecurityCode("C10001");
+        companyLog.setSecurityShortName("某公司");
+        companyLog.setSecurityType("company");
+        companyLog.setAdjustMode("调入");
+        companyLog.setAdjustBatchNo("COMPANY202606281001");
+        companyLog.setTargetPoolId(15L);
+        companyLog.setTargetPoolName("禁投池");
+        companyLog.setPoolType("forbidden");
+        companyLog.setAdjusterId("1");
+        companyLog.setAdjusterName("管理员");
+        return companyLog;
     }
 }

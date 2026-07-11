@@ -21,5 +21,5 @@ public interface ForbiddenPoolQueryMapper {
     /**
      * 查询禁投池中出现的证券类型下拉选项（code + name）
      */
-    List<SecurityTypeOptionDto> querySecurityTypeList();
+    List<SecurityTypeOptionDto> querySecurityTypeList(ForbiddenPoolQueryReq req);
 }

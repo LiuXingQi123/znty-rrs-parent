@@ -3,6 +3,7 @@ package com.znty.rrs.service;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.mapper.CompanyPoolQueryMapper;
 import com.znty.rrs.entity.companypool.CompanyPoolQueryDto;
 import com.znty.rrs.entity.companypool.CompanyPoolQueryReq;
@@ -11,6 +12,9 @@ import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * 主体池查询服务。
@@ -29,6 +33,15 @@ public class CompanyPoolQueryService {
 
     /** 分页查询主体池列表 */
     public PageResult<CompanyPoolQueryDto> queryCompanyPoolPage(CompanyPoolQueryReq req) {
+        // 解析当前用户可查看的投资池范围并与页面选择求交集
+        Set<Long> permittedIds = investmentPoolService.queryPermittedPoolIdsByUser(
+                req.getCurrentUserId(), PermissionType.VIEWABLE.getCode());
+        if (permittedIds != null) {
+            if (req.getPoolIds() != null && !req.getPoolIds().isEmpty()) {
+                permittedIds.retainAll(new HashSet<>(req.getPoolIds()));
+            }
+            req.setViewablePoolIds(new ArrayList<>(permittedIds));
+        }
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<CompanyPoolQueryDto> list = companyPoolQueryMapper.queryCompanyPoolPage(req);
         // 填充投资池全路径名称
