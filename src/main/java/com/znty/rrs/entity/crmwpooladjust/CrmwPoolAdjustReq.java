@@ -16,6 +16,12 @@ public class CrmwPoolAdjustReq extends PageRequest {
     private String securityShortName;
     /** 发行人（模糊搜索） */
     private String issuer;
+    /** CRMW 凭证代码 */
+    private String crmwScode;
+    /** CRMW 市场代码 */
+    private String crmwMktcode;
+    /** CRMW 证券类型 */
+    private String crmwStype;
     /** 调库方向：in=可调入库 / out=可调出库 */
     private String adjustDirection;
     /** 当前用户 ID，1 视为管理员 */

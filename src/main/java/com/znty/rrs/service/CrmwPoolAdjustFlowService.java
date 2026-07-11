@@ -483,20 +483,8 @@ public class CrmwPoolAdjustFlowService {
         if (updated != logList.size()) {
             throw new BizException("审批任务状态已发生变化，请刷新后重试");
         }
-        for (IpAdjustLogBo log : logList) {
-            if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
-                log.setAuditStatus(AuditStatus.APPROVED.getCode());
-                log.setAdjustLogId(log.getId());
-                crmwPoolAdjustMapper.addPoolStatus(log);
-            } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
-                // 审批完成后仅软删除当前调库记录对应的凭证与标的证券组合
-                int deleted = crmwPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getCrmwScode(),
-                        log.getCrmwMktcode(), log.getCrmwStype(), log.getTargetPoolId());
-                if (deleted == 0) {
-                    throw new BizException("CRMW 当前池状态已发生变化，请刷新后重试");
-                }
-            }
-        }
+        // 将复核通过的整批 CRMW 日志统一应用到当前池状态
+        crmwPoolAdjustService.applyPoolStatusChanges(logList);
         // 审批通过结束后，将手工上传的信评报告沉淀为内部报告
         generateInternalReportsOnFinish(logList);
     }

@@ -299,6 +299,8 @@ public class CrmwPoolAdjustFlowServiceTest {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
         CrmwPoolAdjustFlowService service = buildService(mapper, attachmentService);
+        CrmwPoolAdjustService adjustService = (CrmwPoolAdjustService) ReflectionTestUtils.getField(
+                service, "crmwPoolAdjustService");
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
@@ -311,7 +313,7 @@ public class CrmwPoolAdjustFlowServiceTest {
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
 
-        verify(mapper).addPoolStatus(log);
+        verify(adjustService).applyPoolStatusChanges(Collections.singletonList(log));
         assertThat(log.getCrmwScode()).isEqualTo("CRMW24001.IB");
     }
 
@@ -321,6 +323,8 @@ public class CrmwPoolAdjustFlowServiceTest {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
         CrmwPoolAdjustFlowService service = buildService(mapper, attachmentService);
+        CrmwPoolAdjustService adjustService = (CrmwPoolAdjustService) ReflectionTestUtils.getField(
+                service, "crmwPoolAdjustService");
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
@@ -338,8 +342,7 @@ public class CrmwPoolAdjustFlowServiceTest {
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
 
-        verify(mapper).deletePoolStatusSoft("100001", "CRMW24002.IB", "IB", "crmw", 22L);
-        verify(mapper, never()).addPoolStatus(log);
+        verify(adjustService).applyPoolStatusChanges(Collections.singletonList(log));
     }
 
     /** 构建流程审批服务实例测试数据。 */

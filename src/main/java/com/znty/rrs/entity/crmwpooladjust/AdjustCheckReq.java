@@ -19,6 +19,15 @@ public class AdjustCheckReq {
     /** 证券类型 */
     private String securityType;
 
+    /** CRMW 凭证代码 */
+    private String crmwScode;
+
+    /** CRMW 市场代码 */
+    private String crmwMktcode;
+
+    /** CRMW 证券类型 */
+    private String crmwStype;
+
     /** 待校验的调库项列表 */
     private List<CheckItem> items;
 

@@ -22,6 +22,12 @@ public class AdjustSharedData {
 
     /** 证券基础信息（来自 rrs_securityinfo） */
     private SecurityInfoBo securityInfo;
+    /** CRMW 凭证代码 */
+    private String crmwScode;
+    /** CRMW 市场代码 */
+    private String crmwMktcode;
+    /** CRMW 证券类型 */
+    private String crmwStype;
 
     /** 全量投资池索引（ID → Bo），用于快速查找池详情和构建池路径名称 */
     private Map<Long, InvestmentPoolBo> poolMap;

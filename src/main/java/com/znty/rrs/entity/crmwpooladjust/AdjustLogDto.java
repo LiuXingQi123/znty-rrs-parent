@@ -17,6 +17,12 @@ public class AdjustLogDto {
     /** 调库批次号 */
     private String adjustBatchNo;
 
+    /** CRMW 凭证代码 */
+    private String crmwScode;
+
+    /** CRMW 凭证名称 */
+    private String crmwName;
+
     /** 投资池路径（父级名称/名称） */
     private String poolPath;
 
