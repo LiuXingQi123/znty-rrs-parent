@@ -3668,7 +3668,7 @@ public class BatchSecurityPoolAdjustService {
     static class BatchNoContext {
 
         /** 本次提交批次号时间片 */
-        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date());
 
         /** 调入方向批次序号 */
         int inboundBatchSeq = 0;

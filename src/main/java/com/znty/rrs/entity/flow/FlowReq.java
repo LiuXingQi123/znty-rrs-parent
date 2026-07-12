@@ -45,4 +45,7 @@ public class FlowReq extends PageRequest {
 
     /** 人员搜索关键词 */
     private String userKeyword;
+
+    /** 当前操作人用户 ID */
+    private Long operatorId;
 }

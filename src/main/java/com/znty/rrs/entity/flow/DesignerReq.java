@@ -30,4 +30,6 @@ public class DesignerReq {
     private Double panY;
     /** 画布缩放 */
     private Double zoom;
+    /** 当前操作人用户 ID */
+    private Long operatorId;
 }

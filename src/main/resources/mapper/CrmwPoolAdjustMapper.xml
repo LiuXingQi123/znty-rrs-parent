@@ -253,21 +253,21 @@
     <!-- 查询 CRMW 组合活动流程同批全部手工、联动和互斥项涉及的目标池 ID -->
     <select id="queryPendingManualTargetPoolIdList" resultType="java.lang.Long">
         SELECT DISTINCT occupied.target_pool_id
-        FROM ip_adjust_log manual
-        INNER JOIN ip_adjust_step s ON s.adjust_batch_no = manual.adjust_batch_no
-        INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual.adjust_batch_no
-        WHERE manual.security_code = #{securityCode}
-          AND manual.crmw_scode = #{crmwScode}
-          AND manual.crmw_mktcode = #{crmwMktcode}
-          AND manual.crmw_stype = #{crmwStype}
-          AND manual.adjust_type = '手工调整'
-          AND manual.audit_status IN ('00', '11')
-          AND manual.is_deleted = 0
+        FROM ip_adjust_log manual_log
+        INNER JOIN ip_adjust_step s ON s.adjust_batch_no = manual_log.adjust_batch_no
+        INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual_log.adjust_batch_no
+        WHERE manual_log.security_code = #{securityCode}
+          AND manual_log.crmw_scode = #{crmwScode}
+          AND manual_log.crmw_mktcode = #{crmwMktcode}
+          AND manual_log.crmw_stype = #{crmwStype}
+          AND manual_log.adjust_type = '手工调整'
+          AND manual_log.audit_status IN ('00', '11')
+          AND manual_log.is_deleted = 0
           AND s.step_status = 'pending'
           AND occupied.audit_status IN ('00', '11')
           AND occupied.is_deleted = 0
           <if test="excludeBatchNo != null and excludeBatchNo != ''">
-              AND manual.adjust_batch_no != #{excludeBatchNo}
+              AND manual_log.adjust_batch_no != #{excludeBatchNo}
           </if>
     </select>
 

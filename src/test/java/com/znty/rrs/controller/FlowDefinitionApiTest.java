@@ -30,18 +30,18 @@ public class FlowDefinitionApiTest extends ControllerApiTestSupport {
     public void shouldSupportFlowDefinitionCrud() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/flows/queryFlowPage", "{}");
         assertPostSuccess(mockMvc, "/api/v1/flows/queryFlowList", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/flows/addFlow", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/flows/addFlow", "{\"operatorId\":8}");
         assertPostSuccess(mockMvc, "/api/v1/flows/queryFlowDetail", "{\"id\":1}");
-        assertPostSuccess(mockMvc, "/api/v1/flows/editFlow", "{\"id\":1}");
-        assertPostSuccess(mockMvc, "/api/v1/flows/deleteFlow", "{\"id\":1}");
-        assertPostSuccess(mockMvc, "/api/v1/flows/editFlowStatus", "{\"id\":1}");
+        assertPostSuccess(mockMvc, "/api/v1/flows/editFlow", "{\"id\":1,\"operatorId\":8}");
+        assertPostSuccess(mockMvc, "/api/v1/flows/deleteFlow", "{\"id\":1,\"operatorId\":8}");
+        assertPostSuccess(mockMvc, "/api/v1/flows/editFlowStatus", "{\"id\":1,\"operatorId\":8}");
     }
 
     /** 验证 shouldSupportDesignerDraftAndPublish 测试场景。 */
     @Test
     public void shouldSupportDesignerDraftAndPublish() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/flows/editFlowDraft", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/flows/editFlowToPublished", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/flows/editFlowDraft", "{\"operatorId\":12}");
+        assertPostSuccess(mockMvc, "/api/v1/flows/editFlowToPublished", "{\"operatorId\":15}");
     }
 
     /** 验证 shouldSupportVersionHistory 测试场景。 */

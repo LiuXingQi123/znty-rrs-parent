@@ -79,7 +79,7 @@ public class AutoAdjustService {
             poolMap.put(pool.getId(), pool);
         }
         // 本轮统一批次号
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date()) + "3001";
         int total = 0;
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);

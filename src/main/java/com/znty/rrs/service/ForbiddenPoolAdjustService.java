@@ -968,7 +968,7 @@ public class ForbiddenPoolAdjustService {
         } else {
             serial = 2000 + ++shared.batchNoContext.outboundBatchSeq;
         }
-        return "BOND" + shared.batchNoContext.batchTimeText + String.format("%04d", serial);
+        return "COMP" + shared.batchNoContext.batchTimeText + String.format("%04d", serial);
     }
 
     /**
@@ -3931,7 +3931,7 @@ public class ForbiddenPoolAdjustService {
     static class BatchNoContext {
 
         /** 本次提交批次号时间片 */
-        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date());
 
         /** 调入方向批次序号 */
         int inboundBatchSeq = 0;

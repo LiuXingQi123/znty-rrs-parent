@@ -130,6 +130,7 @@
     <!-- 逻辑删除流程定义。 -->
     <update id="deleteFlowLogical">
         UPDATE wf_flow_definition SET is_deleted = 1
+                                        ,updated_by = #{updatedBy}
                                         ,updt_time = #{updtTime}
         WHERE id = #{id}
     </update>
@@ -137,6 +138,7 @@
     <!-- 停用流程定义。 -->
     <update id="editFlowDefinitionStatus">
         UPDATE wf_flow_definition SET status = 'disabled'
+                                        ,updated_by = #{updatedBy}
                                         ,updt_time = #{updtTime}
         WHERE id = #{id}
     </update>

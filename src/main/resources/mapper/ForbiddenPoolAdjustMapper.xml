@@ -362,18 +362,18 @@
     <!-- 查询主体活动流程同批全部调库项占用的目标池 ID -->
     <select id="queryPendingManualTargetPoolIdList" resultType="java.lang.Long">
         SELECT DISTINCT occupied.target_pool_id
-        FROM ip_adjust_log manual
-        INNER JOIN ip_adjust_step pending_step ON pending_step.adjust_batch_no = manual.adjust_batch_no
+        FROM ip_adjust_log manual_log
+        INNER JOIN ip_adjust_step pending_step ON pending_step.adjust_batch_no = manual_log.adjust_batch_no
                                                 AND pending_step.step_status = 'pending'
-        INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual.adjust_batch_no
+        INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual_log.adjust_batch_no
                                          AND occupied.audit_status IN ('00', '11')
                                          AND occupied.is_deleted = 0
-        WHERE manual.security_code = #{companyCode}
-          AND manual.adjust_type = '手工调整'
-          AND manual.audit_status IN ('00', '11')
-          AND manual.is_deleted = 0
+        WHERE manual_log.security_code = #{companyCode}
+          AND manual_log.adjust_type = '手工调整'
+          AND manual_log.audit_status IN ('00', '11')
+          AND manual_log.is_deleted = 0
           <if test="excludeBatchNo != null and excludeBatchNo != ''">
-              AND manual.adjust_batch_no != #{excludeBatchNo}
+              AND manual_log.adjust_batch_no != #{excludeBatchNo}
           </if>
     </select>
 

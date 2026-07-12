@@ -942,6 +942,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(mapper).addAdjustLog(logCaptor.capture());
         assertThat(logCaptor.getValue().getAuditStatus()).isEqualTo("20");
+        assertThat(logCaptor.getValue().getAdjustBatchNo()).matches("BOND\\d{17}3001");
         assertThat(logCaptor.getValue().getAdjustBatchNo()).endsWith("3001");
         assertThat(directApplyLogs).containsExactly(logCaptor.getValue());
         assertThat(result).containsExactly(99L);
@@ -1182,6 +1183,8 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(mapper, times(2)).addAdjustLog(logCaptor.capture());
         assertThat(logCaptor.getAllValues()).extracting(IpAdjustLogBo::getAdjustBatchNo)
                 .doesNotHaveDuplicates();
+        assertThat(logCaptor.getAllValues().get(0).getAdjustBatchNo()).matches("BOND\\d{17}3001");
+        assertThat(logCaptor.getAllValues().get(1).getAdjustBatchNo()).matches("BOND\\d{17}3002");
         assertThat(logCaptor.getAllValues().get(0).getAdjustBatchNo()).endsWith("3001");
         assertThat(logCaptor.getAllValues().get(1).getAdjustBatchNo()).endsWith("3002");
     }

@@ -67,7 +67,7 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAdjusterName()).isEqualTo("系统");
         assertThat(log.getAdjustReason()).isEqualTo("证券到期自动调出");
         assertThat(log.getTargetPoolId()).isEqualTo(10L);
-        assertThat(log.getAdjustBatchNo()).startsWith("AUTO");
+        assertThat(log.getAdjustBatchNo()).matches("AUTO\\d{17}3001");
     }
 
     /** 到期出池：无配置 auto_out 规则的池时应跳过，不写日志不删池状态。 */

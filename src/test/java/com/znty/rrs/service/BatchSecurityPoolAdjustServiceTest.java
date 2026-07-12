@@ -184,6 +184,8 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(captor.getAllValues())
                 .extracting(IpAdjustLogBo::getAdjustBatchNo)
                 .doesNotHaveDuplicates();
+        assertThat(captor.getAllValues().get(0).getAdjustBatchNo()).matches("BOND\\d{17}3001");
+        assertThat(captor.getAllValues().get(1).getAdjustBatchNo()).matches("BOND\\d{17}3002");
     }
 
     /** 验证批量提交同一证券的手工调入和互斥调出时写入两条调库记录。 */

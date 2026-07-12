@@ -67,10 +67,12 @@ public interface FlowMapper {
     int editFlowDefinition(FlowDefinitionBo def);
 
     /** 逻辑删除流程定义。 */
-    int deleteFlowLogical(@Param("id") Long id, @Param("updtTime") Date now);
+    int deleteFlowLogical(@Param("id") Long id, @Param("updatedBy") Long updatedBy,
+                          @Param("updtTime") Date now);
 
     /** 停用流程定义。 */
-    int editFlowDefinitionStatus(@Param("id") Long id, @Param("updtTime") Date now);
+    int editFlowDefinitionStatus(@Param("id") Long id, @Param("updatedBy") Long updatedBy,
+                                 @Param("updtTime") Date now);
 
     // ==================== 流程版本 ====================
 
