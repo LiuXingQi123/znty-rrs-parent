@@ -361,6 +361,13 @@
             ,in_report_restriction
             ,out_report_restriction
             ,max_capacity
+            ,lock_flag
+            ,frozen_period_in
+            ,grade_astrict
+            ,industry_code
+            ,industry_exponent
+            ,fund_rate_limit
+            ,open_day_adjust
             ,outer_sort
             ,inner_sort
             ,description
@@ -456,6 +463,13 @@
             ,in_report_restriction
             ,out_report_restriction
             ,max_capacity
+            ,lock_flag
+            ,frozen_period_in
+            ,grade_astrict
+            ,industry_code
+            ,industry_exponent
+            ,fund_rate_limit
+            ,open_day_adjust
             ,outer_sort
             ,inner_sort
             ,description
