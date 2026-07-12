@@ -61,6 +61,12 @@ public class InvestmentPoolReq {
     /** 最大上限数量 */
     private Long maxCapacity;
 
+    /** 池锁定标志：0=未锁定 / 1=已锁定 */
+    private Integer lockFlag;
+
+    /** 调入冻结期天数：空或 0 表示不限制 */
+    private Integer frozenPeriodIn;
+
     /** 投资池外部排序 */
     private Integer outerSort;
 

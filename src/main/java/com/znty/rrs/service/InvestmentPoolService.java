@@ -472,6 +472,7 @@ public class InvestmentPoolService {
         pool.setPoolLevel(poolLevel);
         pool.setMarketCodes("[]");
         pool.setVarietyCodes("[\"bond\"]");
+        pool.setLockFlag(0);
         pool.setOuterSort(outerSort);
         pool.setInnerSort(innerSort);
         pool.setStatus(PoolStatus.ENABLED.getCode());
@@ -508,6 +509,7 @@ public class InvestmentPoolService {
             rootPool.setMarketCodes("[]");
             rootPool.setVarietyCodes("[\"bond\"]");
         }
+        rootPool.setLockFlag(rootPool.getLockFlag() == null ? 0 : rootPool.getLockFlag());
         rootPool.setStatus(PoolStatus.ENABLED.getCode());
         rootPool.setIsDeleted(0);
         Date now = new Date();
@@ -540,6 +542,7 @@ public class InvestmentPoolService {
             childPool.setMarketCodes("[]");
             childPool.setVarietyCodes("[\"bond\"]");
         }
+        childPool.setLockFlag(childPool.getLockFlag() == null ? 0 : childPool.getLockFlag());
         childPool.setStatus(PoolStatus.ENABLED.getCode());
         childPool.setIsDeleted(0);
         Date now = new Date();
@@ -576,6 +579,8 @@ public class InvestmentPoolService {
         childPool.setInReportRestriction(parentPool.getInReportRestriction());
         childPool.setOutReportRestriction(parentPool.getOutReportRestriction());
         childPool.setMaxCapacity(parentPool.getMaxCapacity());
+        childPool.setLockFlag(parentPool.getLockFlag() == null ? 0 : parentPool.getLockFlag());
+        childPool.setFrozenPeriodIn(parentPool.getFrozenPeriodIn());
         childPool.setDescription(parentPool.getDescription());
     }
 
@@ -628,6 +633,12 @@ public class InvestmentPoolService {
      * 构建投资池修改对象
      */
     private InvestmentPoolBo buildPoolForEdit(InvestmentPoolReq req, InvestmentPoolBo oldPool) {
+        if (req.getLockFlag() != null && req.getLockFlag() != 0 && req.getLockFlag() != 1) {
+            throw new BizException("锁池标志只能为 0 或 1");
+        }
+        if (req.getFrozenPeriodIn() != null && req.getFrozenPeriodIn() < 0) {
+            throw new BizException("调入冻结期不能小于 0 天");
+        }
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(oldPool.getId());
         pool.setPoolName(req.getPoolName());
@@ -641,6 +652,8 @@ public class InvestmentPoolService {
         pool.setInReportRestriction(req.getInReportRestriction());
         pool.setOutReportRestriction(req.getOutReportRestriction());
         pool.setMaxCapacity(req.getMaxCapacity());
+        pool.setLockFlag(req.getLockFlag() == null ? 0 : req.getLockFlag());
+        pool.setFrozenPeriodIn(req.getFrozenPeriodIn());
         pool.setOuterSort(req.getOuterSort());
         pool.setInnerSort(req.getInnerSort());
         pool.setDescription(req.getDescription());
@@ -871,6 +884,8 @@ public class InvestmentPoolService {
         dto.setInReportRestriction(pool.getInReportRestriction());
         dto.setOutReportRestriction(pool.getOutReportRestriction());
         dto.setMaxCapacity(pool.getMaxCapacity());
+        dto.setLockFlag(pool.getLockFlag() == null ? 0 : pool.getLockFlag());
+        dto.setFrozenPeriodIn(pool.getFrozenPeriodIn());
         dto.setOuterSort(pool.getOuterSort());
         dto.setInnerSort(pool.getInnerSort());
         dto.setDescription(pool.getDescription());

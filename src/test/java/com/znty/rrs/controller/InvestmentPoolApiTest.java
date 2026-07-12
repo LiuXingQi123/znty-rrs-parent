@@ -45,7 +45,8 @@ public class InvestmentPoolApiTest extends ControllerApiTestSupport {
     /** 验证 shouldSupportPoolConfiguration 测试场景。 */
     @Test
     public void shouldSupportPoolConfiguration() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/investmentPool/editPoolConfig", "{\"id\":1}");
+        assertPostSuccess(mockMvc, "/api/v1/investmentPool/editPoolConfig",
+                "{\"id\":1,\"lockFlag\":1,\"frozenPeriodIn\":30}");
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/editPoolRelation", "{\"id\":1}");
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/editPoolPermission", "{\"id\":1}");
     }

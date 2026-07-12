@@ -205,6 +205,8 @@
             ,in_report_restriction
             ,out_report_restriction
             ,max_capacity
+            ,lock_flag
+            ,frozen_period_in
             ,outer_sort
             ,inner_sort
             ,description
@@ -242,6 +244,8 @@
             ,#{inReportRestriction}
             ,#{outReportRestriction}
             ,#{maxCapacity}
+            ,#{lockFlag}
+            ,#{frozenPeriodIn}
             ,#{outerSort}
             ,#{innerSort}
             ,#{description}
@@ -314,6 +318,8 @@
             ,in_report_restriction = #{inReportRestriction}
             ,out_report_restriction = #{outReportRestriction}
             ,max_capacity = #{maxCapacity}
+            ,lock_flag = #{lockFlag}
+            ,frozen_period_in = #{frozenPeriodIn}
             ,outer_sort = #{outerSort}
             ,inner_sort = #{innerSort}
             ,description = #{description}

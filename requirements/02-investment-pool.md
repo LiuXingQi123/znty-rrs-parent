@@ -13,7 +13,7 @@
 - **主体区**左右两栏：
   - **左侧侧边栏**：标题「投资池树」+「新增顶级」按钮 + 刷新按钮 + 树搜索框 + `el-tree`（`node-key="id"`，`default-expand-all`，自定义节点模板：父节点 folder 图标、叶子 document 图标，hover 显示「+添加子节点」「删除节点」）。
   - **右侧内容区**：`pool-header`（池名 + 启用徽章）+ `el-tabs` 三个标签页：
-    - **基础配置**：基础信息表单（名称/恒生池名/投资市场复选/投资品种复选/最大上限/外部排序/内部排序/调入研报限制/调出研报限制/描述）+ 审批流程表单（6 个流程下拉）+ 刷新/保存按钮。
+    - **基础配置**：基础信息表单（名称/恒生池名/投资市场复选/投资品种复选/最大上限/锁池/调入冻结期/外部排序/内部排序/调入研报限制/调出研报限制/描述）+ 审批流程表单（6 个流程下拉）+ 刷新/保存按钮。
     - **关系配置**：9 种关系类型卡片网格 + 自动调入/调出规则两张卡片 + 刷新/保存按钮。
     - **权限配置**：可查看人员/可调整人员/可 Excel 导入人员三类分区，每区 `el-tag` 列表 +「添加人员」+ 刷新/保存按钮。
 
@@ -48,7 +48,7 @@
 ### 2.3 详情区渲染
 
 详情区用表单 + 卡片网格（非 el-table）：
-- **基础配置**字段：`poolName`（必填）、`hsPoolName`、`marketCodes`（4 项：UNKNOWN/SSE/SZSE/CIBM）、`varietyCodes`（7 项：bond/warrant/trust/index/stock/issuer/fund，默认 `['bond']`）、`maxCapacity`、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
+- **基础配置**字段：`poolName`（必填）、`hsPoolName`、`marketCodes`（4 项：UNKNOWN/SSE/SZSE/CIBM）、`varietyCodes`（7 项：bond/warrant/trust/index/stock/issuer/fund，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
 - **审批流程**：6 项（inFlowId/outFlowId/simpleInFlowId/simpleOutFlowId/batchInFlowId/batchOutFlowId），下拉来自 `flowOptions`（含「不需要审批」占位），绑定值为 `String(flowId)`。
 - **关系配置**：9 张卡片，每张右上角显示已选数量，下方 chip 列表显示「父路径 › 池名」面包屑。
 - **状态**：详情页 `pool-header` 只硬编码显示「启用」徽章（无 disabled 差异化展示）。
@@ -63,7 +63,7 @@
 
 - 路径：`POST /api/v1/investmentPool/addRootPool`
 - 请求体：`{poolName, poolType, outerSort?, templatePoolId?, operatorId?}`
-- 后端 `addRootPool`：校验 poolName/poolType 非空；模板存在性校验；`buildRootPool`（`parentId=null`，`poolCode=poolType+"_root_"+时间戳`，`poolLevel=1`，`outerSort` 未传取最大+1，`innerSort=1`，有模板则 `copyBaseConfig` 复制市场/品种/恒生池名/6 流程/研报限制/容量/描述，否则默认 `marketCodes="[]"`、`varietyCodes='["bond"]'`，`status='enabled'`）；`addPool` 插入回填 id；`addPoolEvent("新增")` 审计；有模板则复制关系/规则/权限。
+- 后端 `addRootPool`：校验 poolName/poolType 非空；模板存在性校验；`buildRootPool`（`parentId=null`，`poolCode=poolType+"_root_"+时间戳`，`poolLevel=1`，`outerSort` 未传取最大+1，`innerSort=1`，有模板则 `copyBaseConfig` 复制市场/品种/恒生池名/6 流程/研报限制/容量/锁池/冻结期/描述，否则默认 `marketCodes="[]"`、`varietyCodes='["bond"]'`、`lockFlag=0`，`status='enabled'`）；`addPool` 插入回填 id；`addPoolEvent("新增")` 审计；有模板则复制关系/规则/权限。
 
 ### 3.2 新增子投资池
 
@@ -161,7 +161,7 @@
 |---|---|---|---|
 | `queryPoolList` | `{}`（req 被忽略） | `List<InvestmentPoolDto>` | 查全量投资池平铺列表，前端组装树 |
 | `queryPoolDetail` | `{id}` | `InvestmentPoolDto`（含 relationPoolIds/autoIn(out)RuleIds/Descs/permissions） | 查单池详情 |
-| `editPoolConfig` | id, poolName, marketCodes, varietyCodes, hsPoolName, inFlow, outFlow, simpleInFlow, simpleOutFlow, batchInFlow, batchOutFlow, inReportRestriction, outReportRestriction, maxCapacity, outerSort, innerSort, description, operatorId | `InvestmentPoolDto` | 保存基础配置 |
+| `editPoolConfig` | id, poolName, marketCodes, varietyCodes, hsPoolName, inFlow, outFlow, simpleInFlow, simpleOutFlow, batchInFlow, batchOutFlow, inReportRestriction, outReportRestriction, maxCapacity, lockFlag, frozenPeriodIn, outerSort, innerSort, description, operatorId | `InvestmentPoolDto` | 保存基础配置 |
 | `editPoolRelation` | id, relationPoolIds(Map), autoInRuleIds, autoInRuleDescs, autoOutRuleIds, autoOutRuleDescs, operatorId | `InvestmentPoolDto` | 全量替换关系配置（9 关系 + 自动规则） |
 | `addRootPool` | poolName, poolType, outerSort?, templatePoolId?, operatorId? | `InvestmentPoolDto` | 新增顶级池 |
 | `addChildPool` | parentId, poolName, innerSort?, templatePoolId?, inheritParentConfig?, operatorId? | `InvestmentPoolDto` | 新增子池 |
@@ -182,7 +182,7 @@
 
 ### 5.1 `ip_investment_pool`（投资池主表）
 
-关键字段：`id, parent_id, pool_code, pool_name, pool_type, pool_level, market_codes(JSON), variety_codes(JSON), hs_pool_name, 6×3 流程快照列, in/out_report_restriction(none/any/internal), max_capacity, outer_sort, inner_sort, description, status(enabled/disabled), is_deleted, crte_time/updt_time`。
+关键字段：`id, parent_id, pool_code, pool_name, pool_type, pool_level, market_codes(JSON), variety_codes(JSON), hs_pool_name, 6×3 流程快照列, in/out_report_restriction(none/any/internal), max_capacity, lock_flag, frozen_period_in, outer_sort, inner_sort, description, status(enabled/disabled), is_deleted, crte_time/updt_time`。
 
 `pool_type` 枚举（dict.js `DICT_POOL_TYPE`）：research/fund/restricted/other/industry/whitelist/blacklist/private_placement/credit_bond/offshore_bond/convertible_bond/special_account。
 `status` 枚举：enabled=启用 / disabled=停用。
