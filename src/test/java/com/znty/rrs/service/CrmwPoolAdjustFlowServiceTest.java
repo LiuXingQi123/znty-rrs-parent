@@ -337,7 +337,7 @@ public class CrmwPoolAdjustFlowServiceTest {
         log.setTargetPoolId(22L);
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
         when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
-        when(mapper.deletePoolStatusSoft("100001", "CRMW24002.IB", "IB", "crmw", 22L)).thenReturn(1);
+        when(mapper.deletePoolStatusSoft("100001", "CRMW24002.IB", "crmw", 22L)).thenReturn(1);
         when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);

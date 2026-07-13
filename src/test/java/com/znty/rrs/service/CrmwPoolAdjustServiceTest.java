@@ -37,15 +37,14 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustReq req = new CrmwPoolAdjustReq();
         req.setSecurityCode("BOND001");
         req.setCrmwScode("CRMW001");
-        req.setCrmwMktcode("IB");
         req.setCrmwStype("crmw");
-        when(mapper.querySecurityPoolStatusList("BOND001", "CRMW001", "IB", "crmw"))
+        when(mapper.querySecurityPoolStatusList("BOND001", "CRMW001", "crmw"))
                 .thenReturn(java.util.Collections.emptyList());
         when(mapper.queryIssuerPoolStatusList("BOND001")).thenReturn(java.util.Collections.emptyList());
 
         service.queryCrmwPoolStatus(req);
 
-        verify(mapper).querySecurityPoolStatusList("BOND001", "CRMW001", "IB", "crmw");
+        verify(mapper).querySecurityPoolStatusList("BOND001", "CRMW001", "crmw");
     }
 
     /** CRMW 链路报告必填校验：限制为 any 且无报告时应抛出异常。 */
@@ -87,7 +86,7 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 凭证已在池
-        when(mapper.queryCrmwAlreadyInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(true);
+        when(mapper.queryCrmwAlreadyInPool(anyString(), anyString(), anyLong())).thenReturn(true);
         try {
             ReflectionTestUtils.invokeMethod(service, "checkCrmwInboundCombination", buildCrmwReq(), buildItem());
         } catch (Exception e) {
@@ -105,7 +104,7 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 凭证不在池，应通过
-        when(mapper.queryCrmwAlreadyInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(false);
+        when(mapper.queryCrmwAlreadyInPool(anyString(), anyString(), anyLong())).thenReturn(false);
         ReflectionTestUtils.invokeMethod(service, "checkCrmwInboundCombination", buildCrmwReq(), buildItem());
     }
 
@@ -116,7 +115,7 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 组合不在池
-        when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyString(), anyLong())).thenReturn(false);
+        when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(false);
         try {
             ReflectionTestUtils.invokeMethod(service, "checkCrmwOutboundCombination", buildCrmwReq(), buildItem());
         } catch (Exception e) {
@@ -174,7 +173,7 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 组合在池，应通过
-        when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyString(), anyLong())).thenReturn(true);
+        when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(true);
         ReflectionTestUtils.invokeMethod(service, "checkCrmwOutboundCombination", buildCrmwReq(), buildItem());
     }
 
@@ -183,7 +182,6 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustSubmitReq req = new CrmwPoolAdjustSubmitReq();
         req.setSecurityCode("220205");
         req.setCrmwScode("012345");
-        req.setCrmwMktcode("IB");
         req.setCrmwStype("crmw");
         return req;
     }

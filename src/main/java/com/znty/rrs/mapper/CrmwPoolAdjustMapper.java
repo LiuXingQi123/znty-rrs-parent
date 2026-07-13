@@ -45,7 +45,6 @@ public interface CrmwPoolAdjustMapper {
     /** 软删除指定凭证与标的证券组合的入池状态（直通调出流程） */
     int deletePoolStatusSoft(@Param("securityCode") String securityCode,
                              @Param("crmwScode") String crmwScode,
-                             @Param("crmwMktcode") String crmwMktcode,
                              @Param("crmwStype") String crmwStype,
                              @Param("targetPoolId") Long targetPoolId);
 
@@ -55,14 +54,12 @@ public interface CrmwPoolAdjustMapper {
     /** 根据证券代码和可选目标池查询调库记录列表 */
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
                                            @Param("crmwScode") String crmwScode,
-                                           @Param("crmwMktcode") String crmwMktcode,
                                            @Param("crmwStype") String crmwStype,
                                            @Param("adjustBatchNo") String adjustBatchNo);
 
     /** 查询操作人近期有效的手工 CRMW 调库记录 */
     List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("securityCode") String securityCode,
                                                        @Param("crmwScode") String crmwScode,
-                                                       @Param("crmwMktcode") String crmwMktcode,
                                                        @Param("crmwStype") String crmwStype,
                                                        @Param("adjusterId") String adjusterId,
                                                        @Param("seconds") int seconds);
@@ -70,14 +67,12 @@ public interface CrmwPoolAdjustMapper {
     /** 查询 CRMW 组合活动流程涉及的手工调库目标池 ID */
     List<Long> queryPendingManualTargetPoolIdList(@Param("securityCode") String securityCode,
                                                   @Param("crmwScode") String crmwScode,
-                                                  @Param("crmwMktcode") String crmwMktcode,
                                                   @Param("crmwStype") String crmwStype,
                                                   @Param("excludeBatchNo") String excludeBatchNo);
 
     /** 查询当前证券所在池列表 */
     List<PoolStatusDto> querySecurityPoolStatusList(@Param("securityCode") String securityCode,
                                                      @Param("crmwScode") String crmwScode,
-                                                     @Param("crmwMktcode") String crmwMktcode,
                                                      @Param("crmwStype") String crmwStype);
 
     /** 查询当前证券主体（发行人）所在池列表 */
@@ -86,7 +81,6 @@ public interface CrmwPoolAdjustMapper {
     /** 查询证券当前有效所在池 ID 列表（audit_status=20） */
     List<Long> querySecurityCurrentPoolIdList(@Param("securityCode") String securityCode,
                                               @Param("crmwScode") String crmwScode,
-                                              @Param("crmwMktcode") String crmwMktcode,
                                               @Param("crmwStype") String crmwStype);
 
     /** 查询目标投资池当前有效证券数量 */
@@ -95,7 +89,6 @@ public interface CrmwPoolAdjustMapper {
     /** 查询 CRMW 凭证与标的组合的实际入池时间。 */
     java.util.Date queryCrmwPoolEntryTime(@Param("securityCode") String securityCode,
                                           @Param("crmwScode") String crmwScode,
-                                          @Param("crmwMktcode") String crmwMktcode,
                                           @Param("crmwStype") String crmwStype,
                                           @Param("targetPoolId") Long targetPoolId);
 
@@ -186,13 +179,11 @@ public interface CrmwPoolAdjustMapper {
 
     /** 查询 CRMW 凭证是否已在目标池（audit_status=20），用于调入「凭证已在池」校验 */
     boolean queryCrmwAlreadyInPool(@Param("crmwScode") String crmwScode,
-                                   @Param("crmwMktcode") String crmwMktcode,
                                    @Param("crmwStype") String crmwStype,
                                    @Param("targetPoolId") Long targetPoolId);
 
     /** 查询 CRMW 凭证与标的证券组合是否在目标池（audit_status=20），用于调出「组合在池」校验 */
     boolean queryCrmwComboInPool(@Param("crmwScode") String crmwScode,
-                                 @Param("crmwMktcode") String crmwMktcode,
                                  @Param("crmwStype") String crmwStype,
                                  @Param("securityCode") String securityCode,
                                  @Param("targetPoolId") Long targetPoolId);

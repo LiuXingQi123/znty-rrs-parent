@@ -85,7 +85,7 @@ view 模式纯读：`ip_pool_status_crmw`（查询当前池）、`ip_adjust_log`
 
 ## 7. 与其他池模块的差异
 
-- **CRMW基本信息 section**：详情页多一个只读 CRMW 信息区块（CRMW全称/名称/代码/市场代码/证券类型/发行人）。
+- **CRMW基本信息 section**：详情页多一个只读 CRMW 信息区块（CRMW全称/名称/代码/证券类型/发行人）。
 - **URL 必带 `crmwScode`**：`initStandaloneDetailPage` 校验 `securityCode && crmwScode`。
 - **6 接口并发**（比证券池详情多 `queryCrmwDetail`）。
 - 其余模式逻辑（view/adjust 归一化、流程步骤定位/去重/合并、附件展示下载）与证券池详情页一致。

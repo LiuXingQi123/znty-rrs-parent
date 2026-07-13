@@ -113,7 +113,7 @@
    - `resolveManualSubmitItem` 取同组手工项；`isDirect = noFlow || isDirectFlow(snapshot)`。
    - **直通**：`buildAdjustLog` → `auditStatus=APPROVED('20')` → `addAdjustLog`（写 `ip_adjust_log`）→ `bindSubmitAttachments` → 手工项 `createInitialSteps` → `addPoolStatus`（写 `ip_pool_status_crmw`，`audit_status='20'` 即时生效）。
    - **非直通**：`auditStatus=SUBMITTED('00')` → `addAdjustLog` → `bindSubmitAttachments` → `createInitialSteps`（返回 true 即流程已到 end，升 `'20'` + `addPoolStatus`）。
-4. **调出处理** `executeOutboundSubmit`：对称，先跑报告必填校验（`out_report_restriction`）+ **CRMW组合校验** `checkCrmwOutboundCombination`（组合在池：`queryCrmwComboInPool` 查 `ip_pool_status_crmw` 同凭证+标的证券+目标池 `audit_status='20'`，组合不在池则抛 `BizException`，对应老项目 `checkOutPool` 的 `checkCrmwInPool` 组合维度），生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE security_code AND crmw_scode AND crmw_mktcode AND crmw_stype AND target_pool_id AND audit_status='20' AND pool_type='crmw'`），避免误删同一标的证券在同一池的其他 CRMW 凭证记录。
+4. **调出处理** `executeOutboundSubmit`：对称，先跑报告必填校验（`out_report_restriction`）+ **CRMW组合校验** `checkCrmwOutboundCombination`（组合在池：`queryCrmwComboInPool` 查 `ip_pool_status_crmw` 同凭证+标的证券+目标池 `audit_status='20'`，组合不在池则抛 `BizException`，对应老项目 `checkOutPool` 的 `checkCrmwInPool` 组合维度），生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE security_code AND crmw_scode AND crmw_stype AND target_pool_id AND audit_status='20' AND pool_type='crmw'`），避免误删同一标的证券在同一池的其他 CRMW 凭证记录。新系统 `crmwScode` 使用完整 Wind 代码且全局唯一，市场代码不参与业务键。
 5. **后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` → `editSecurityInfoForAdjust`（全量更新 `rrs_securityinfo` 约 80 字段）。
 
 **批次号规则** `buildAdjustBatchNo`：
@@ -145,7 +145,7 @@
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` / `queryOutReportPage` | 分页+筛选 | PageResult | 信评报告弹窗内/外报告查询 |
 
-> 路径均带前缀 `/api/v1/`；`attachments`、`reports` 前缀独立。`CrmwPoolAdjustSubmitReq` 多 `crmwName/crmwScode/crmwMktcode/crmwStype` 字段，`crmwStype` 必须为 `'crmw'`。
+> 路径均带前缀 `/api/v1/`；`attachments`、`reports` 前缀独立。`CrmwPoolAdjustSubmitReq` 多 `crmwName/crmwScode/crmwStype` 字段，`crmwStype` 必须为 `'crmw'`。
 
 ---
 
@@ -153,11 +153,11 @@
 
 ### 5.1 `ip_pool_status_crmw`（CRMW 当前状态表，独立）
 
-直通/审批通过时 INSERT（调入）或 UPDATE 软删（调出）。含 `crmw_name/crmw_scode/crmw_mktcode/crmw_stype` 字段；`audit_status='20'` 表示已生效；调出生效 = `is_deleted=1`。
+直通/审批通过时 INSERT（调入）或 UPDATE 软删（调出）。表结构保留 `crmw_mktcode` 兼容历史数据，新调库不再写入或按该字段查询；`audit_status='20'` 表示已生效；调出生效 = `is_deleted=1`。
 
 ### 5.2 `ip_adjust_log`（共享调库记录表）
 
-写入时 `pool_type='crmw'`，含 `crmw_name/crmw_scode/crmw_mktcode/crmw_stype` 字段；`adjust_batch_no` 以 `CRMW` 前缀。`audit_status` 枚举见第 6 节。
+写入时 `pool_type='crmw'`，写入 `crmw_name/crmw_scode/crmw_stype`；物理字段 `crmw_mktcode` 仅为历史兼容保留。`adjust_batch_no` 以 `CRMW` 前缀，`audit_status` 枚举见第 6 节。
 
 ### 5.3 `ip_adjust_step`（共享流程步骤表）
 
@@ -195,11 +195,11 @@
 ## 7. 与其他池模块的差异
 
 - **两步选择**：列表页先选 CRMW 凭证（radio），再选可绑定标的证券；标的证券不能是 CRMW 凭证（`queryBindableSecurityPage` 排除 `security_type='crmw'`）。
-- **独立状态表**：`ip_pool_status_crmw` 含 `crmw_name/crmw_scode/crmw_mktcode/crmw_stype` 字段；证券池调库用 `ip_pool_status`。
+- **独立状态表**：`ip_pool_status_crmw` 使用 `crmw_scode + security_code` 标识凭证与标的组合；`crmw_mktcode` 字段仅兼容历史数据；证券池调库用 `ip_pool_status`。
 - **批次号前缀**：`CRMW`（证券池用 `BOND`）。
 - **校验强制 poolType**：`validateCheckAdjustReq`/`validateSubmitReq`/`validateSubmitTargetPools` 均强制 `PoolType.CRMW.getCode()='crmw'`。
 - **提交参数**：`CrmwPoolAdjustSubmitReq` 多 CRMW 元数据字段，`crmwStype` 必须为 `'crmw'`。
-- **详情页多 CRMW基本信息 section**（只读展示 CRMW 全称/名称/代码/市场代码/证券类型/发行人）。
+- **详情页多 CRMW基本信息 section**（只读展示 CRMW 全称/名称/代码/证券类型/发行人）。
 - 审批流转、校验规则、流程快照、状态枚举与证券池调库**完全同构**。
 
 ---

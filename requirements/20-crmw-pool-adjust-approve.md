@@ -81,7 +81,7 @@
 9. 自动审批节点→直接 auto_process 继续；approval 节点→`createPendingSteps` 创建 pending；end→auto_process + `finished=true`。
 10. `finished=true` 时调 `finishAdjustBatch(step)`：
     - `editAdjustLogAuditStatus(..., '20')` 整批置审批通过。
-    - 逐条：调入→`addPoolStatus`（写 `ip_pool_status_crmw`）；调出→`deletePoolStatusSoft`，按标的证券、CRMW 三元组及目标池精确软删除。
+    - 逐条：调入→`addPoolStatus`（写 `ip_pool_status_crmw`）；调出→`deletePoolStatusSoft`，按 CRMW 凭证代码、标的证券及目标池精确软删除，市场代码不参与业务键。
     - `generateInternalReportsOnFinish`：手工信评报告附件沉淀为 `rrs_report_in` 内部报告。
 
 ### 3.2 前端提交逻辑
