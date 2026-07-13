@@ -55,6 +55,8 @@ public class ScriptToolService {
     private static final String TASK_RESET_ALL = "RESET_ALL";
     /** 清空调库运行态数据任务编码 */
     private static final String TASK_CLEAR_ADJUST_FLOW = "CLEAR_ADJUST_FLOW";
+    /** 初始化 AIS 库任务编码 */
+    private static final String TASK_INIT_AIS = "INIT_AIS";
     /** 清空选中表数据任务编码 */
     private static final String TASK_CLEAR_SELECTED_TABLES = "CLEAR_SELECTED_TABLES";
     /** 清空选中表确认文本 */
@@ -79,13 +81,13 @@ public class ScriptToolService {
     /** 数据操作语句目标表匹配规则 */
     private static final Pattern TABLE_STATEMENT_PATTERN = Pattern.compile("(?is)^(?:INSERT\\s+(?:IGNORE\\s+)?INTO|REPLACE\\s+INTO|TRUNCATE\\s+TABLE|DELETE\\s+FROM|UPDATE)\\s+(?:`?([A-Za-z0-9_]+)`?\\.)?`?([A-Za-z0-9_]+)`?.*");
     /** 建表语句目标表匹配规则 */
-    private static final Pattern CREATE_TABLE_PATTERN = Pattern.compile("(?is)^CREATE\\s+TABLE\\s+`?([A-Za-z0-9_]+)`?.*");
+    private static final Pattern CREATE_TABLE_PATTERN = Pattern.compile("(?is)^CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`?([A-Za-z0-9_]+)`?.*");
     /** 清表语句目标表匹配规则 */
     private static final Pattern TRUNCATE_TABLE_PATTERN = Pattern.compile("(?is)^TRUNCATE\\s+TABLE\\s+`?([A-Za-z0-9_]+)`?.*");
     /** 插入语句目标表匹配规则 */
     private static final Pattern INSERT_TABLE_PATTERN = Pattern.compile("(?is)^INSERT\\s+(?:IGNORE\\s+)?INTO\\s+`?([A-Za-z0-9_]+)`?.*");
     /** 建表语句结构匹配规则 */
-    private static final Pattern CREATE_TABLE_DETAIL_PATTERN = Pattern.compile("(?is)^CREATE\\s+TABLE\\s+`?([A-Za-z0-9_]+)`?\\s*\\((.*)\\)\\s*ENGINE\\s*=\\s*([A-Za-z0-9_]+)(.*)$");
+    private static final Pattern CREATE_TABLE_DETAIL_PATTERN = Pattern.compile("(?is)^CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`?([A-Za-z0-9_]+)`?\\s*\\((.*)\\)\\s*ENGINE\\s*=\\s*([A-Za-z0-9_]+)(.*)$");
     /** 字段定义匹配规则 */
     private static final Pattern COLUMN_DEFINITION_PATTERN = Pattern.compile("(?is)^`([^`]+)`\\s+([A-Za-z]+(?:\\s*\\([^)]*\\))?(?:\\s+UNSIGNED)?)\\s*(.*)$");
     /** 索引定义匹配规则 */
@@ -516,20 +518,27 @@ public class ScriptToolService {
      */
     private void executeTask(String taskCode, List<String> executedItems) throws Exception {
         if (TASK_INIT_SCHEMA.equals(taskCode)) {
-            // 执行全部建表脚本
-            executeSqlFiles(querySchemaFiles(), executedItems);
+            // 执行主库建表脚本（排除 AIS 库）
+            executeSqlFiles(queryRrsSchemaFiles(), executedItems);
             return;
         }
         if (TASK_INIT_DEMO.equals(taskCode)) {
-            // 执行全部 Demo 数据脚本
-            executeSqlFiles(queryDemoFiles(), executedItems);
+            // 执行主库 Demo 数据脚本（排除 AIS 库）
+            executeSqlFiles(queryRrsDemoFiles(), executedItems);
+            return;
+        }
+        if (TASK_INIT_AIS.equals(taskCode)) {
+            // 执行 AIS 库建表脚本
+            executeSqlFiles(queryAisSchemaFiles(), executedItems);
+            // 再执行 AIS 库 Demo 数据脚本
+            executeSqlFiles(queryAisDemoFiles(), executedItems);
             return;
         }
         if (TASK_RESET_ALL.equals(taskCode)) {
-            // 先执行建表脚本
-            executeSqlFiles(querySchemaFiles(), executedItems);
-            // 再执行 Demo 数据脚本
-            executeSqlFiles(queryDemoFiles(), executedItems);
+            // 先执行主库建表脚本（排除 AIS 库）
+            executeSqlFiles(queryRrsSchemaFiles(), executedItems);
+            // 再执行主库 Demo 数据脚本（排除 AIS 库）
+            executeSqlFiles(queryRrsDemoFiles(), executedItems);
             return;
         }
         if (TASK_CLEAR_ADJUST_FLOW.equals(taskCode)) {
@@ -964,7 +973,8 @@ public class ScriptToolService {
             if (!sqlFile.exists()) {
                 throw new BizException("建表脚本不存在：" + fileName);
             }
-            String databaseName = fileName.startsWith("ais_inv_analysis") ? "ais_inv_analysis" : "znty_rrs";
+            String databaseName = fileName.startsWith("ais_inv_analysis") ? "ais_inv_analysis"
+                    : fileName.startsWith("ais_inv_ods") ? "ais_inv_ods" : "znty_rrs";
             String sqlText = new String(Files.readAllBytes(sqlFile.toPath()), StandardCharsets.UTF_8);
             for (String statement : splitSqlStatements(sqlText)) {
                 String sql = normalizeExecutableSql(statement);
@@ -1490,6 +1500,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "credit-bond-grade", "信用债评级规则", "重置信用债主体内评分档和评级准入规则。", "medium", "rrs_credit_bond_grade_rule_demo_data.sql");
         addModuleTask(taskMap, "temp-security-code", "临时代码", "重置临时代码管理演示数据。", "medium", "rrs_temp_security_code_demo_data.sql");
         addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体评级、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
+        addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 债券发行人主体与评级表演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;
     }
 
@@ -1691,6 +1702,7 @@ public class ScriptToolService {
     private List<String> querySchemaFiles() {
         return Arrays.asList(
                 "ais_inv_analysis_schema.sql",
+                "ais_inv_ods_schema.sql",
                 "rrs_dict_schema.sql",
                 "rrs_security_pool_adjust_schema.sql",
                 "rrs_flow_definition_schema.sql",
@@ -1710,6 +1722,7 @@ public class ScriptToolService {
     private List<String> queryDemoFiles() {
         return Arrays.asList(
                 "ais_inv_analysis_demo_data.sql",
+                "ais_inv_ods_demo_data.sql",
                 "rrs_dict_demo_data.sql",
                 "rrs_security_pool_adjust_demo_data.sql",
                 "rrs_flow_definition_demo_data.sql",
@@ -1721,6 +1734,44 @@ public class ScriptToolService {
                 "rrs_credit_bond_grade_rule_demo_data.sql",
                 "rrs_temp_security_code_demo_data.sql"
         );
+    }
+
+    /**
+     * 查询 AIS 库建表脚本（ais_inv_analysis + ais_inv_ods）。
+     */
+    private List<String> queryAisSchemaFiles() {
+        return Arrays.asList(
+                "ais_inv_analysis_schema.sql",
+                "ais_inv_ods_schema.sql"
+        );
+    }
+
+    /**
+     * 查询 AIS 库 Demo 数据脚本（ais_inv_analysis + ais_inv_ods）。
+     */
+    private List<String> queryAisDemoFiles() {
+        return Arrays.asList(
+                "ais_inv_analysis_demo_data.sql",
+                "ais_inv_ods_demo_data.sql"
+        );
+    }
+
+    /**
+     * 查询主库建表脚本，排除 AIS 库。
+     */
+    private List<String> queryRrsSchemaFiles() {
+        List<String> files = new ArrayList<>(querySchemaFiles());
+        files.removeAll(queryAisSchemaFiles());
+        return files;
+    }
+
+    /**
+     * 查询主库 Demo 数据脚本，排除 AIS 库。
+     */
+    private List<String> queryRrsDemoFiles() {
+        List<String> files = new ArrayList<>(queryDemoFiles());
+        files.removeAll(queryAisDemoFiles());
+        return files;
     }
 
     /**
@@ -1832,6 +1883,10 @@ public class ScriptToolService {
                 buildTable("ais_inv_analysis", "t_sys_user", "用户"),
                 buildTable("ais_inv_analysis", "t_sys_role", "角色")
         )));
+        groups.add(buildTableGroup("ais-ods", "AIS 投资 ODS 库", "ais_inv_ods", Arrays.asList(
+                buildTable("ais_inv_ods", "wind_cbondissuer", "Wind 中国债券发行主体信息表"),
+                buildTable("ais_inv_ods", "wind_cbondissuerrating", "Wind 中国债券发行主体信用评级表")
+        )));
         return groups;
     }
 
@@ -1871,8 +1926,11 @@ public class ScriptToolService {
         addTask(taskMap, TASK_INIT_DEMO, "初始化 Demo 数据", "按固定顺序执行 sql 目录下全部 demo 数据脚本。", "medium", "INIT_DEMO",
                 "会按脚本内 TRUNCATE 逻辑重置演示数据。", buildDemoTaskItems());
         // 加入完整重建任务
-        addTask(taskMap, TASK_RESET_ALL, "重建完整演示环境", "先执行全部 schema 脚本，再执行全部 demo 数据脚本。", "danger", "RESET_ALL",
-                "会重建表结构并重置全部演示数据。", buildResetAllTaskItems());
+        addTask(taskMap, TASK_RESET_ALL, "重建完整演示环境", "先执行主库 schema 脚本，再执行主库 demo 数据脚本（不含 AIS 库）。", "danger", "RESET_ALL",
+                "会重建主库表结构并重置全部演示数据。", buildResetAllTaskItems());
+        // 加入 AIS 库初始化任务
+        addTask(taskMap, TASK_INIT_AIS, "初始化 AIS 库", "执行 ais_inv_analysis 与 ais_inv_ods 两个 AIS 库的建表与演示数据脚本。", "high", "INIT_AIS",
+                "会重建 AIS 投资分析与 ODS 库表结构并重置演示数据。", buildAisTaskItems());
         // 加入调库运行态清空任务
         addTask(taskMap, TASK_CLEAR_ADJUST_FLOW, "清空调库流程数据", "只清空调库申请、步骤、当前池状态、附件和报告等运行态数据。", "danger", "CLEAR_ADJUST_FLOW",
                 "不清空证券主数据、投资池、流程定义、规则和字典配置。", buildAdjustFlowRuntimeTaskItems());
@@ -1883,24 +1941,32 @@ public class ScriptToolService {
      * 构建建表任务展示项。
      */
     private List<String> buildSchemaTaskItems() {
-        // 查询建表脚本执行顺序
-        return querySchemaFiles();
+        // 查询主库建表脚本执行顺序（排除 AIS 库）
+        return queryRrsSchemaFiles();
     }
 
     /**
      * 构建 Demo 数据任务展示项。
      */
     private List<String> buildDemoTaskItems() {
-        // 查询 Demo 数据脚本执行顺序
-        return queryDemoFiles();
+        // 查询主库 Demo 数据脚本执行顺序（排除 AIS 库）
+        return queryRrsDemoFiles();
+    }
+
+    /**
+     * 构建 AIS 库初始化任务展示项。
+     */
+    private List<String> buildAisTaskItems() {
+        // 合并 AIS 库建表脚本和 Demo 数据脚本
+        return mergeList(queryAisSchemaFiles(), queryAisDemoFiles());
     }
 
     /**
      * 构建完整重建任务展示项。
      */
     private List<String> buildResetAllTaskItems() {
-        // 合并建表脚本和 Demo 数据脚本
-        return mergeList(querySchemaFiles(), queryDemoFiles());
+        // 合并主库建表脚本和 Demo 数据脚本（排除 AIS 库）
+        return mergeList(queryRrsSchemaFiles(), queryRrsDemoFiles());
     }
 
     /**
