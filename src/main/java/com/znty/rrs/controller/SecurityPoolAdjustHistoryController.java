@@ -2,10 +2,10 @@ package com.znty.rrs.controller;
 
 import com.znty.rrs.common.ApiResponse;
 import com.znty.rrs.common.PageResult;
-import com.znty.rrs.entity.adjusthistory.AdjustHistoryDto;
-import com.znty.rrs.entity.adjusthistory.AdjustHistoryReq;
+import com.znty.rrs.entity.securitypooladjusthistory.SecurityPoolAdjustHistoryDto;
+import com.znty.rrs.entity.securitypooladjusthistory.SecurityPoolAdjustHistoryReq;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
-import com.znty.rrs.service.AdjustHistoryService;
+import com.znty.rrs.service.SecurityPoolAdjustHistoryService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,20 +22,21 @@ import java.util.List;
  * </p>
  */
 @RestController
-@RequestMapping("/api/v1/adjustHistory")
-public class AdjustHistoryController {
+@RequestMapping("/api/v1/securityPoolAdjustHistory")
+public class SecurityPoolAdjustHistoryController {
 
-    /** 调库历史服务 */
+    /** 证券池调库历史服务 */
     @Resource
-    private AdjustHistoryService adjustHistoryService;
+    private SecurityPoolAdjustHistoryService securityPoolAdjustHistoryService;
 
     /**
      * 分页查询证券池调整历史记录
      * <p>支持按证券代码、调整类型、操作时间区间等条件筛选，结果按操作时间倒序排列。</p>
      */
-    @PostMapping("/queryAdjustHistoryPage")
-    public ApiResponse<PageResult<AdjustHistoryDto>> queryAdjustHistoryPage(@RequestBody AdjustHistoryReq req) {
-        return ApiResponse.success(adjustHistoryService.queryAdjustHistoryPage(req));
+    @PostMapping("/querySecurityPoolAdjustHistoryPage")
+    public ApiResponse<PageResult<SecurityPoolAdjustHistoryDto>> querySecurityPoolAdjustHistoryPage(
+            @RequestBody SecurityPoolAdjustHistoryReq req) {
+        return ApiResponse.success(securityPoolAdjustHistoryService.querySecurityPoolAdjustHistoryPage(req));
     }
 
     /**
@@ -44,8 +45,8 @@ public class AdjustHistoryController {
      */
     @PostMapping("/querySecurityTypeList")
     public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList(
-            @RequestBody AdjustHistoryReq req) {
-        return ApiResponse.success(adjustHistoryService.querySecurityTypeList());
+            @RequestBody SecurityPoolAdjustHistoryReq req) {
+        return ApiResponse.success(securityPoolAdjustHistoryService.querySecurityTypeList());
     }
 
 }

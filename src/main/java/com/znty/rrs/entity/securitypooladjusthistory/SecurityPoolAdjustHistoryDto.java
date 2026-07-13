@@ -1,4 +1,4 @@
-package com.znty.rrs.entity.adjusthistory;
+package com.znty.rrs.entity.securitypooladjusthistory;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
@@ -9,7 +9,7 @@ import java.util.Date;
  * 证券池调整历史列表 DTO，用于调整历史查询页面展示调整记录的关键信息
  */
 @Data
-public class AdjustHistoryDto {
+public class SecurityPoolAdjustHistoryDto {
 
     /** 记录 ID */
     private Long id;

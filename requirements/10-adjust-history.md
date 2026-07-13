@@ -1,7 +1,7 @@
 # 证券池调整历史需求说明
 
 > 前端页面：`security_pool_adjust_history.html`
-> 后端前缀：`/api/v1/adjustHistory`、`/api/v1/common`
+> 后端前缀：`/api/v1/securityPoolAdjustHistory`、`/api/v1/common`
 > 角色定位：风控、合规和审计人员查询证券调入、调出及审批结果，按时间和业务维度追溯历史操作。
 
 ---
@@ -35,13 +35,13 @@
 
 **初始化接口**：
 - 投资池树：`POST /api/v1/common/queryPoolTreeList`（同前）
-- 证券类型：`POST /api/v1/adjustHistory/querySecurityTypeList`（注意路径前缀是 `adjustHistory`），后端 SQL：`SELECT DISTINCT al.security_type, dst.security_type_name FROM ip_adjust_log al ... WHERE al.is_deleted=0 AND al.security_type IS NOT NULL ORDER BY dst.sort_order ASC, al.security_type ASC`（**不限定 audit_status**，包含所有历史记录的证券类型）
+- 证券类型：`POST /api/v1/securityPoolAdjustHistory/querySecurityTypeList`（注意路径前缀是 `securityPoolAdjustHistory`），后端 SQL：`SELECT DISTINCT al.security_type, dst.security_type_name FROM ip_adjust_log al ... WHERE al.is_deleted=0 AND al.security_type IS NOT NULL ORDER BY dst.sort_order ASC, al.security_type ASC`（**不限定 audit_status**，包含所有历史记录的证券类型）
 
 ---
 
 ## 3. 查询接口
 
-`loadList` → `apiPost('/api/v1/adjustHistory/queryAdjustHistoryPage', params)`，请求体字段：
+`loadList` → `apiPost('/api/v1/securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage', params)`，请求体字段：
 
 | 字段 | 来源 | 空值处理 |
 |---|---|---|
@@ -54,7 +54,7 @@
 | `currentUserId` | 固定 `'1'` | 必传 |
 | `pageIndex` / `pageSize` | 分页 | — |
 
-返回 `PageResult<AdjustHistoryDto>`，取 `records` / `total`。
+返回 `PageResult<SecurityPoolAdjustHistoryDto>`，取 `records` / `total`。
 
 ---
 
@@ -103,8 +103,8 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树 |
-| `adjustHistory/queryAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<AdjustHistoryDto>`（含 targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态记录） |
-| `adjustHistory/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（不限 audit_status） |
+| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态记录） |
+| `securityPoolAdjustHistory/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（不限 audit_status） |
 
 > 路径均带前缀 `/api/v1/`。
 
@@ -125,7 +125,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 
 - **调库历史**：仅 `al.is_deleted=0`，**包含所有审核状态**（含 -1/00/11/21/99 等未通过/驳回/撤回）的历史记录，用于审计追溯。这是与证券池查询（仅 audit_status='20'）的本质区别。
 
-### 7.3 后端查询逻辑要点（`AdjustHistoryMapper.xml`）
+### 7.3 后端查询逻辑要点（`SecurityPoolAdjustHistoryMapper.xml`）
 
 - **主表**：`ip_adjust_log al`
 - **JOIN**：
@@ -152,13 +152,13 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 
 - 组合筛选、分页和倒序排序正确。
 - 可通过批次和日志 ID 定位完整流程步骤。
-- `AdjustHistoryApiTest` 覆盖页面全部接口。
+- `SecurityPoolAdjustHistoryApiTest` 覆盖页面全部接口。
 
 ## 10. 关键源码索引
 
 - 前端：`znty-rrs-ui/security_pool_adjust_history.html`、`znty-rrs-ui/dict.js`
-- Controller：`AdjustHistoryController.java`、`CommonController.java`
-- Service：`AdjustHistoryService.java`、`InvestmentPoolService.java`
-- Mapper：`AdjustHistoryMapper.xml`、`CommonMapper.xml`
-- 实体：`AdjustHistoryDto`、`AdjustHistoryReq`
+- Controller：`SecurityPoolAdjustHistoryController.java`、`CommonController.java`
+- Service：`SecurityPoolAdjustHistoryService.java`、`InvestmentPoolService.java`
+- Mapper：`SecurityPoolAdjustHistoryMapper.xml`、`CommonMapper.xml`
+- 实体：`SecurityPoolAdjustHistoryDto`、`SecurityPoolAdjustHistoryReq`
 - SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log）

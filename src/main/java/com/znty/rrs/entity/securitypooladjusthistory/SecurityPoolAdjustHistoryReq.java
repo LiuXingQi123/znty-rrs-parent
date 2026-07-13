@@ -1,4 +1,4 @@
-package com.znty.rrs.entity.adjusthistory;
+package com.znty.rrs.entity.securitypooladjusthistory;
 
 import com.znty.rrs.common.PageRequest;
 import lombok.Data;
@@ -11,7 +11,7 @@ import java.util.List;
  */
 @Data
 @EqualsAndHashCode(callSuper = false)
-public class AdjustHistoryReq extends PageRequest {
+public class SecurityPoolAdjustHistoryReq extends PageRequest {
 
     /** 投资池 ID 列表（树多选） */
     private List<Long> poolIds;
