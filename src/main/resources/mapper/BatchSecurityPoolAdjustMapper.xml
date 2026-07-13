@@ -22,7 +22,8 @@
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
-          AND (p.pool_type IS NULL OR p.pool_type NOT IN ('crmw', 'forbidden'))
+          <!-- 证券池批量主页仅排除 CRMW 池；禁投/观察等主体相关池保留，支持单券入池 -->
+          AND (p.pool_type IS NULL OR p.pool_type != 'crmw')
         <if test="poolIds != null and poolIds.size() > 0">
           AND p.id IN
             <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
@@ -121,13 +122,14 @@
                  ,si.wind_code DESC
     </select>
 
-    <!-- 查询指定投资池是否为启用叶子池 -->
+    <!-- 查询指定投资池是否为启用叶子池（排除 CRMW 池） -->
     <select id="queryEnabledLeafPoolCount" resultType="int">
         SELECT COUNT(1)
         FROM ip_investment_pool p
         WHERE p.id = #{poolId}
           AND p.status = 'enabled'
           AND p.is_deleted = 0
+          AND (p.pool_type IS NULL OR p.pool_type != 'crmw')
           AND NOT EXISTS (
               SELECT 1
               FROM ip_investment_pool child

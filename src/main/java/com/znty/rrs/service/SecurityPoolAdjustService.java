@@ -202,7 +202,8 @@ public class SecurityPoolAdjustService {
     /**
      * 查询可调入/可调出的投资池列表（含互斥关系，树结构由前端自行组装）
      *
-     * @param req 当前用户为管理员时返回全量启用池，普通用户仅返回有可调整权限的池及其祖先节点
+     * @param req 当前用户为管理员时返回全量启用池，普通用户仅返回有可调整权限的池及其祖先节点；
+     *            调入方向（adjustDirection=in）额外排除 CRMW 池，主体相关池（禁投/观察等）保留以支持单券入池
      */
     public List<PoolDto> queryAdjustPoolList(SecurityPoolAdjustReq req) {
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
@@ -216,6 +217,15 @@ public class SecurityPoolAdjustService {
         if (!isAdminUser(req.getCurrentUserId())) {
             // 按投资池“可调整人员”配置过滤可操作池
             allPools = filterAdjustablePoolsByUser(allPools, currentUserId);
+            if (allPools.isEmpty()) {
+                return new ArrayList<>();
+            }
+        }
+
+        // 可调入列表排除 CRMW 池（CRMW 走独立调库链路）；主体禁投/观察等池不排除
+        if ("in".equalsIgnoreCase(req.getAdjustDirection())) {
+            // 过滤掉 CRMW 类型投资池
+            allPools = filterOutCrmwPools(allPools);
             if (allPools.isEmpty()) {
                 return new ArrayList<>();
             }
@@ -239,6 +249,26 @@ public class SecurityPoolAdjustService {
         return allPools.stream()
                 .map(p -> toPoolDto(p, inMutexMap, outMutexMap, currentCountMap))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 从投资池列表中排除 CRMW 类型池（pool_type=crmw）。
+     */
+    private List<InvestmentPoolBo> filterOutCrmwPools(List<InvestmentPoolBo> pools) {
+        if (pools == null || pools.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<InvestmentPoolBo> result = new ArrayList<>();
+        for (InvestmentPoolBo pool : pools) {
+            if (pool == null) {
+                continue;
+            }
+            if (PoolType.CRMW.getCode().equals(pool.getPoolType())) {
+                continue;
+            }
+            result.add(pool);
+        }
+        return result;
     }
 
     /**
