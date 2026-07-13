@@ -75,6 +75,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -488,16 +489,24 @@ public class SecurityPoolAdjustService {
         }
     }
 
-    /** 检查正式提交涉及的池组是否已有活动流程。 */
+    /** 检查正式提交涉及的池组是否已有活动流程（按每条调库项的证券代码独立判断）。 */
     private void checkSubmitPendingPoolGroups(SecurityPoolAdjustSubmitReq req,
                                               Map<Long, InvestmentPoolBo> poolMap) {
-        Set<Long> pendingGroups = resolvePoolGroupIds(
-                securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(req.getSecurityCode(), null), poolMap);
+        // 按证券代码缓存 pending 池组，避免同码多行重复查库
+        Map<String, Set<Long>> pendingGroupsBySecurity = new HashMap<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            String securityCode = resolveItemSecurityCode(req, item);
+            Set<Long> pendingGroups = pendingGroupsBySecurity.get(securityCode);
+            if (pendingGroups == null) {
+                pendingGroups = resolvePoolGroupIds(
+                        securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(securityCode, null), poolMap);
+                pendingGroupsBySecurity.put(securityCode, pendingGroups);
+            }
             Long groupId = resolveRootPoolId(item.getTargetPoolId(), poolMap);
             if (groupId != null && pendingGroups.contains(groupId)) {
                 InvestmentPoolBo group = poolMap.get(groupId);
-                throw new BizException("证券在投资池组[" + (group != null ? group.getPoolName() : groupId)
+                throw new BizException("证券[" + securityCode + "]在投资池组["
+                        + (group != null ? group.getPoolName() : groupId)
                         + "]存在进行中的调库流程，请等待流程结束后再发起调库");
             }
         }
@@ -846,10 +855,13 @@ public class SecurityPoolAdjustService {
             if (!AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
                 continue;
             }
-            // 报告必填校验（按池 in_report_restriction，提交阶段校验）
+            // 报告必填校验（按池 in_report_restriction；关联码项由同组手工项承担报告，跳过）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null, req.getSecurityCode());
-            // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
+            if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
+                checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null,
+                        resolveItemSecurityCode(req, item));
+            }
+            // 获取同组手工调库项，联动/互斥/关联项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
             Long flowId = resolveFlowIdFromItem(manualItem);
@@ -928,10 +940,13 @@ public class SecurityPoolAdjustService {
             if (!AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
                 continue;
             }
-            // 报告必填校验（按池 out_report_restriction，提交阶段校验）
+            // 报告必填校验（按池 out_report_restriction；关联码项由同组手工项承担报告，跳过）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null, req.getSecurityCode());
-            // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
+            if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
+                checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null,
+                        resolveItemSecurityCode(req, item));
+            }
+            // 获取同组手工调库项，联动/互斥/关联项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
             Long flowId = resolveFlowIdFromItem(manualItem);
@@ -1061,12 +1076,16 @@ public class SecurityPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 查询证券的历史调库记录列表（全量，不分页）
+     * 查询调库记录列表（全量，不分页）。
      *
-     * @param req 需携带 securityCode
+     * <p>有批次号时按批次返回同批全部记录（含关联码不同 security_code 的关联调整）；
+     * 无批次号时按证券代码返回未终结流程（申请页在途展示）。
+     *
+     * @param req 有批次时 adjustBatchNo 必填即可；无批次时需 securityCode
      */
     public List<AdjustLogDto> queryAdjustLogList(SecurityPoolAdjustReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        boolean hasBatch = req.getAdjustBatchNo() != null && !req.getAdjustBatchNo().isEmpty();
+        if (!hasBatch && (req.getSecurityCode() == null || req.getSecurityCode().isEmpty())) {
             throw new BizException("证券代码不能为空");
         }
         List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(
@@ -1082,10 +1101,15 @@ public class SecurityPoolAdjustService {
         for (IpAdjustLogBo log : logs) {
             AdjustLogDto dto = new AdjustLogDto();
             dto.setId(log.getId());
+            // 回填证券代码，便于前端展示关联调整行
+            dto.setSecurityCode(log.getSecurityCode());
+            dto.setSecurityShortName(log.getSecurityShortName());
+            dto.setSecurityType(log.getSecurityType());
             dto.setAdjustBatchNo(log.getAdjustBatchNo());
             dto.setPoolPath(poolFullNameMap.get(log.getTargetPoolId()));
             dto.setAdjustType(log.getAdjustType());
             dto.setAdjustMode(log.getAdjustMode());
+            dto.setFlowType(log.getFlowType());
             dto.setFlowName(log.getFlowName());
             dto.setAuditStatus(log.getAuditStatus());
             dto.setAdjustReason(log.getAdjustReason());
@@ -1174,6 +1198,10 @@ public class SecurityPoolAdjustService {
 
         // ══ 第四阶段：调出校验 ══
         resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys));
+
+        // ══ 第四点五阶段：多市场关联码扩批（itemTag=related） ══
+        // 回填主券证券信息，并按 wind_code_sh/sz/nib/bj/nbc 展开同池同向关联项
+        expandRelatedMarketCodeItems(req, shared, resultItems);
 
         // ══ 第五阶段：流程类型判断 ══
         List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
@@ -3615,9 +3643,29 @@ public class SecurityPoolAdjustService {
                                          SecurityPoolAdjustSubmitReq.AdjustItem item,
                                          SecurityPoolAdjustSubmitReq.AdjustItem flowSource) {
         IpAdjustLogBo bo = new IpAdjustLogBo();
-        bo.setSecurityCode(req.getSecurityCode());
-        bo.setSecurityShortName(req.getSecurityShortName());
-        bo.setSecurityType(req.getSecurityType());
+        // 关联码项使用 item 级证券代码，保证独立落 log / 池状态
+        String securityCode = resolveItemSecurityCode(req, item);
+        String securityShortName = item.getSecurityShortName() != null && !item.getSecurityShortName().isEmpty()
+                ? item.getSecurityShortName() : req.getSecurityShortName();
+        String securityType = item.getSecurityType() != null && !item.getSecurityType().isEmpty()
+                ? item.getSecurityType() : req.getSecurityType();
+        // 兜底：关联项未带简称/类型时按代码回查主数据
+        if ((securityShortName == null || securityShortName.isEmpty()
+                || securityType == null || securityType.isEmpty())
+                && securityCode != null && !securityCode.isEmpty()) {
+            SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
+            if (securityInfo != null) {
+                if (securityShortName == null || securityShortName.isEmpty()) {
+                    securityShortName = securityInfo.getShortName();
+                }
+                if (securityType == null || securityType.isEmpty()) {
+                    securityType = securityInfo.getSecurityType();
+                }
+            }
+        }
+        bo.setSecurityCode(securityCode);
+        bo.setSecurityShortName(securityShortName);
+        bo.setSecurityType(securityType);
         bo.setCrmwName(req.getCrmwName());
         bo.setCrmwScode(req.getCrmwScode());
         bo.setCrmwMktcode(req.getCrmwMktcode());
@@ -3668,7 +3716,194 @@ public class SecurityPoolAdjustService {
         if (ItemType.LINKAGE.getCode().equals(item.getItemTag())) {
             return "联动调整";
         }
+        if (ItemType.RELATED.getCode().equals(item.getItemTag())) {
+            return "关联调整";
+        }
         return req.getAdjustType();
+    }
+
+    /**
+     * 解析调库项实际证券代码：item 级优先，否则回退请求级主券代码。
+     */
+    private String resolveItemSecurityCode(SecurityPoolAdjustSubmitReq req,
+                                           SecurityPoolAdjustSubmitReq.AdjustItem item) {
+        if (item != null && item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()) {
+            return item.getSecurityCode();
+        }
+        return req.getSecurityCode();
+    }
+
+    /**
+     * 从主券 market 代码字段解析关联证券代码列表（已带后缀、去自身、去重，不递归）。
+     */
+    private List<String> resolveRelatedSecurityCodes(SecurityInfoBo main) {
+        List<String> codes = new ArrayList<>();
+        if (main == null) {
+            return codes;
+        }
+        String mainCode = main.getWindCode() == null ? "" : main.getWindCode().trim();
+        Set<String> seen = new HashSet<>();
+        for (String raw : Arrays.asList(
+                main.getWindCodeSh(), main.getWindCodeSz(), main.getWindCodeNib(),
+                main.getWindCodeBj(), main.getWindCodeNbc())) {
+            if (raw == null) {
+                continue;
+            }
+            String code = raw.trim();
+            if (code.isEmpty() || code.equals(mainCode) || !seen.add(code)) {
+                continue;
+            }
+            codes.add(code);
+        }
+        return codes;
+    }
+
+    /**
+     * 按关联证券代码加载校验共享数据（复用主请求的池关系/请求池集合）。
+     */
+    private AdjustSharedData loadSharedDataForSecurity(String securityCode, SecurityInfoBo securityInfo,
+                                                       AdjustSharedData mainShared, AdjustCheckReq mainReq) {
+        AdjustSharedData shared = new AdjustSharedData();
+        shared.setSecurityInfo(securityInfo);
+        shared.setPoolMap(mainShared.getPoolMap());
+        shared.setCurrentPoolIds(new HashSet<>(
+                securityPoolAdjustMapper.querySecurityCurrentPoolIdList(securityCode)));
+        shared.setPoolRelationMap(mainShared.getPoolRelationMap());
+        shared.setHasPendingProcess(securityPoolAdjustMapper.querySecurityHasPendingProcess(securityCode));
+        shared.setPendingProcessNodeLabel(
+                securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(securityCode));
+        shared.setPendingPoolGroupIds(resolvePoolGroupIds(
+                securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(securityCode, null),
+                mainShared.getPoolMap()));
+        shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(securityCode));
+        shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(securityCode));
+        // 评级下调标志按关联券自身主体信息判定
+        shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
+        shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
+        shared.setGuarantorRatingDowngraded(
+                ratingDowngradeChecker.isGuarantorDowngraded(mainReq.getGuarantorCode()));
+        shared.setRequestInPoolIds(mainShared.getRequestInPoolIds());
+        shared.setRequestOutPoolIds(mainShared.getRequestOutPoolIds());
+        shared.setFundRate(mainReq.getFundRate());
+        return shared;
+    }
+
+    /**
+     * 多市场关联码扩批：对主结果中的 manual/linkage/mutex 项，按主券市场代码字段展开 related 项。
+     *
+     * <p>关联码独立校验已在池/不在池/pending/容量等；同池同批调入累计 projected 占用容量。
+     */
+    private void expandRelatedMarketCodeItems(AdjustCheckReq req, AdjustSharedData mainShared,
+                                              List<AdjustCheckDto.CheckResultItem> resultItems) {
+        SecurityInfoBo mainSec = mainShared.getSecurityInfo();
+        if (mainSec == null || resultItems == null || resultItems.isEmpty()) {
+            return;
+        }
+        // 回填主券证券信息到已有结果项
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
+                item.setSecurityCode(mainSec.getWindCode());
+                item.setSecurityShortName(mainSec.getShortName());
+                item.setSecurityType(mainSec.getSecurityType());
+                item.setSourceSecurityCode(mainSec.getWindCode());
+            }
+        }
+
+        List<String> relatedCodes = resolveRelatedSecurityCodes(mainSec);
+        if (relatedCodes.isEmpty()) {
+            return;
+        }
+
+        // 仅对主券母项扩批（manual/linkage/mutex）
+        List<AdjustCheckDto.CheckResultItem> motherItems = new ArrayList<>();
+        Map<String, AdjustCheckDto.CheckResultItem> manualByGroup = new HashMap<>();
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            String tag = item.getItemTag();
+            if (ItemType.MANUAL.getCode().equals(tag)
+                    || ItemType.LINKAGE.getCode().equals(tag)
+                    || ItemType.MUTEX.getCode().equals(tag)) {
+                motherItems.add(item);
+            }
+            if (ItemType.MANUAL.getCode().equals(tag)) {
+                manualByGroup.put(item.getAdjustGroupKey(), item);
+            }
+        }
+        if (motherItems.isEmpty()) {
+            return;
+        }
+
+        // 已通过的调入项占用 projected 容量，避免主+关联同池全部通过却超容
+        Map<Long, Integer> projectedInbound = new HashMap<>();
+        Set<String> coveredKeys = new HashSet<>();
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            if (item.getSecurityCode() != null) {
+                coveredKeys.add(item.getSecurityCode() + "_" + item.getTargetPoolId() + "_" + item.getAdjustMode());
+            }
+            if (item.isCanAdjust() && AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
+                projectedInbound.merge(item.getTargetPoolId(), 1, Integer::sum);
+            }
+        }
+
+        List<AdjustCheckDto.CheckResultItem> relatedResults = new ArrayList<>();
+        for (String relatedCode : relatedCodes) {
+            SecurityInfoBo relatedSec = securityPoolAdjustMapper.querySecurityBoByCode(relatedCode);
+            AdjustSharedData relatedShared = relatedSec == null ? null
+                    : loadSharedDataForSecurity(relatedCode, relatedSec, mainShared, req);
+
+            for (AdjustCheckDto.CheckResultItem mother : motherItems) {
+                String dedupeKey = relatedCode + "_" + mother.getTargetPoolId() + "_" + mother.getAdjustMode();
+                if (!coveredKeys.add(dedupeKey)) {
+                    continue;
+                }
+
+                AdjustCheckDto.CheckResultItem relatedItem = new AdjustCheckDto.CheckResultItem();
+                relatedItem.setTargetPoolId(mother.getTargetPoolId());
+                relatedItem.setPoolName(mother.getPoolName());
+                relatedItem.setPoolType(mother.getPoolType());
+                relatedItem.setAdjustMode(mother.getAdjustMode());
+                relatedItem.setItemTag(ItemType.RELATED.getCode());
+                relatedItem.setAdjustGroupKey(mother.getAdjustGroupKey());
+                relatedItem.setSecurityCode(relatedCode);
+                relatedItem.setSourceSecurityCode(mainSec.getWindCode());
+
+                if (relatedSec == null || relatedShared == null) {
+                    relatedItem.setCanAdjust(false);
+                    relatedItem.setFailReasons(Collections.singletonList(
+                            "关联证券代码" + relatedCode + "在系统中不存在"));
+                } else {
+                    relatedItem.setSecurityShortName(relatedSec.getShortName());
+                    relatedItem.setSecurityType(relatedSec.getSecurityType());
+                    int baseCount = securityPoolAdjustMapper.queryPoolCurrentCount(mother.getTargetPoolId());
+                    // 调入时把本批已通过项计入有效持仓，再跑容量校验
+                    int effectiveCount = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
+                            ? baseCount + projectedInbound.getOrDefault(mother.getTargetPoolId(), 0)
+                            : baseCount;
+
+                    AdjustCheckReq.CheckItem fakeItem = new AdjustCheckReq.CheckItem();
+                    fakeItem.setTargetPoolId(mother.getTargetPoolId());
+                    fakeItem.setAdjustMode(mother.getAdjustMode());
+                    fakeItem.setPoolType(mother.getPoolType());
+                    // 构建关联券校验上下文
+                    AdjustCheckContext ctx = buildCheckContext(fakeItem, effectiveCount, relatedShared);
+                    List<String> failures = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
+                            ? checkInConditions(ctx) : checkOutConditions(ctx);
+                    relatedItem.setCanAdjust(failures.isEmpty());
+                    relatedItem.setFailReasons(failures);
+                    relatedItem.setWarnings(ctx.getWarnings());
+                    if (relatedItem.isCanAdjust() && AdjustMode.IN.getCode().equals(mother.getAdjustMode())) {
+                        projectedInbound.merge(mother.getTargetPoolId(), 1, Integer::sum);
+                    }
+                }
+
+                AdjustCheckDto.CheckResultItem manualItem = manualByGroup.get(mother.getAdjustGroupKey());
+                if (manualItem != null) {
+                    // 同组手工项失败时阻断关联项
+                    inheritManualItemFailure(relatedItem, manualItem);
+                }
+                relatedResults.add(relatedItem);
+            }
+        }
+        resultItems.addAll(relatedResults);
     }
 
     /** 构建投资池全路径名称 */

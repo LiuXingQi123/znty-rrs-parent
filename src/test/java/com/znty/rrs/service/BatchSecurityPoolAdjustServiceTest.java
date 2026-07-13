@@ -258,16 +258,25 @@ public class BatchSecurityPoolAdjustServiceTest {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        // 批量校验已委托单笔 SecurityPoolAdjustService，需同步注入相同 mock
+        SecurityPoolAdjustService securityPoolAdjustService = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
-        // 流程定义数据访问组件：互斥特殊流程 resolveSpecialInboundFlowOption 需查 flowMapper
         ReflectionTestUtils.setField(service, "flowMapper", mock(FlowMapper.class));
-        // 评级下调判定组件：mock 默认返回 false（未下调），不影响互斥项保留逻辑断言
         ReflectionTestUtils.setField(service, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
+        ReflectionTestUtils.setField(securityPoolAdjustService, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
+        ReflectionTestUtils.setField(securityPoolAdjustService, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
 
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
-        when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(new SecurityInfoBo());
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("106006789");
+        securityInfo.setShortName("测试债");
+        securityInfo.setSecurityType("mtn");
+        when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(securityInfo);
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(
                 buildPool(1L, null, "信用债大库", "credit_bond"),
                 buildPool(2L, 1L, "一级库", "credit_bond"),
@@ -278,6 +287,14 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(adjustMapper.queryAllPoolRelationList())
                 .thenReturn(Collections.singletonList(buildRelation(3L, "in_mutex", 2L, "一级库")));
         when(adjustMapper.queryPoolCurrentCount(org.mockito.Matchers.anyLong())).thenReturn(0);
+        when(adjustMapper.querySecurityHasPendingProcess("106006789")).thenReturn(false);
+        when(adjustMapper.querySecurityPendingProcessNodeLabel("106006789")).thenReturn(null);
+        when(adjustMapper.queryPendingManualTargetPoolIdList("106006789", null))
+                .thenReturn(Collections.emptyList());
+        when(adjustMapper.querySecurityInObservePool("106006789")).thenReturn(false);
+        when(adjustMapper.queryIssuerInObservePool("106006789")).thenReturn(false);
+        when(adjustMapper.querySecurityInForbiddenPool("106006789")).thenReturn(false);
+        when(adjustMapper.queryCategoryTypeBySecurityType(any(String.class))).thenReturn("bond");
 
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
         req.setCurrentUserId("1");

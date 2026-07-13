@@ -31,6 +31,18 @@ public class AdjustCheckDto {
     @Data
     public static class CheckResultItem {
 
+        /** 证券代码（主券或关联码） */
+        private String securityCode;
+
+        /** 证券简称 */
+        private String securityShortName;
+
+        /** 证券类型 */
+        private String securityType;
+
+        /** 触发扩批的主证券代码（关联项=主券；主/联动/互斥=自身） */
+        private String sourceSecurityCode;
+
         /** 目标投资池 ID */
         private Long targetPoolId;
 
@@ -43,10 +55,10 @@ public class AdjustCheckDto {
         /** 调整方向：调入 / 调出 */
         private String adjustMode;
 
-        /** 调整项来源：manual=用户主动选择, linkage=联动调整, mutex=互斥调整 */
+        /** 调整项来源：manual=用户主动选择, linkage=联动调整, mutex=互斥调整, related=多市场关联码 */
         private String itemTag;
 
-        /** 调库分组 Key：手工项及其触发的联动/互斥项共用 */
+        /** 调库分组 Key：手工项及其触发的联动/互斥/关联项共用 */
         private String adjustGroupKey;
 
         /** 是否可调整 */

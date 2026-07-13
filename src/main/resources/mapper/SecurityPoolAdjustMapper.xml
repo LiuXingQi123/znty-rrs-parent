@@ -235,6 +235,11 @@
     </select>
 
     <!-- 根据证券代码查询调库记录列表 -->
+    <!--
+      调库记录列表：
+      - 有批次号：仅按批次查（同批手工/联动/互斥/关联调整全部返回，含不同 security_code）
+      - 无批次号：按证券代码查未终结流程（申请页进入时展示该券在途记录）
+    -->
     <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
                ,al.security_code
@@ -260,14 +265,16 @@
                ,al.entry_time
         FROM ip_adjust_log al
         LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
-        WHERE al.security_code = #{securityCode}
-          AND al.is_deleted = 0
-          <if test="adjustBatchNo != null and adjustBatchNo != ''">
-              AND al.adjust_batch_no = #{adjustBatchNo}
-          </if>
-          <if test="adjustBatchNo == null or adjustBatchNo == ''">
-              AND (al.audit_status IS NULL OR al.audit_status NOT IN ('-1', '20', '21', '99'))
-          </if>
+        WHERE al.is_deleted = 0
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND al.adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>
+                  AND al.security_code = #{securityCode}
+                  AND (al.audit_status IS NULL OR al.audit_status NOT IN ('-1', '20', '21', '99'))
+              </otherwise>
+          </choose>
         ORDER BY al.crte_time DESC
     </select>
 

@@ -68,8 +68,11 @@ public class SecurityPoolAdjustServiceStepTest {
 
         IpAdjustLogBo log = new IpAdjustLogBo();
         log.setId(10L);
+        log.setSecurityCode("110010123");
+        log.setSecurityShortName("测试债");
         log.setTargetPoolId(3L);
         log.setFlowName("信用债入库审批流程");
+        log.setFlowType("normalInbound");
         when(mapper.queryAdjustLogList("110010123", "BATCH001")).thenReturn(Collections.singletonList(log));
         when(investmentPoolService.queryPoolFullNameMap()).thenReturn(Collections.singletonMap(3L, "信用债大库/二级库"));
 
@@ -81,6 +84,44 @@ public class SecurityPoolAdjustServiceStepTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getFlowName()).isEqualTo("信用债入库审批流程");
+        assertThat(result.get(0).getSecurityCode()).isEqualTo("110010123");
+        assertThat(result.get(0).getFlowType()).isEqualTo("normalInbound");
+    }
+
+    /** 有批次号时同批应包含主券与关联调整不同 securityCode 的记录。 */
+    @Test
+    public void queryAdjustLogListShouldReturnRelatedRowsInSameBatch() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
+
+        IpAdjustLogBo manual = new IpAdjustLogBo();
+        manual.setId(1L);
+        manual.setSecurityCode("101.IB");
+        manual.setAdjustType("手工调整");
+        manual.setAdjustBatchNo("BATCH_REL");
+        manual.setTargetPoolId(2L);
+        IpAdjustLogBo related = new IpAdjustLogBo();
+        related.setId(2L);
+        related.setSecurityCode("101.SH");
+        related.setAdjustType("关联调整");
+        related.setAdjustBatchNo("BATCH_REL");
+        related.setTargetPoolId(2L);
+        when(mapper.queryAdjustLogList("101.IB", "BATCH_REL"))
+                .thenReturn(Arrays.asList(manual, related));
+        when(investmentPoolService.queryPoolFullNameMap())
+                .thenReturn(Collections.singletonMap(2L, "信用债大库/一级库"));
+
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityCode("101.IB");
+        req.setAdjustBatchNo("BATCH_REL");
+        List<AdjustLogDto> result = service.queryAdjustLogList(req);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(AdjustLogDto::getSecurityCode).containsExactly("101.IB", "101.SH");
+        assertThat(result).extracting(AdjustLogDto::getAdjustType).contains("关联调整");
     }
 
     /** 验证 checkInConditionsShouldShowPendingProcessNodeLabel 测试场景。 */
@@ -1917,5 +1958,112 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setGuarantFlag(guarantFlag);
         shared.setSecurityInfo(sec);
         return shared;
+    }
+
+    // ===== 多市场关联码（itemTag=related）=====
+
+    /** 关联码解析：带后缀、去自身、去重。 */
+    @Test
+    public void resolveRelatedSecurityCodesShouldSkipSelfAndEmpty() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityInfoBo main = new SecurityInfoBo();
+        main.setWindCode("101.IB");
+        main.setWindCodeSh("101.SH");
+        main.setWindCodeSz("101.SZ");
+        main.setWindCodeNib("101.IB"); // 与主码相同，应跳过
+        main.setWindCodeBj("");
+        main.setWindCodeNbc(null);
+
+        @SuppressWarnings("unchecked")
+        List<String> codes = ReflectionTestUtils.invokeMethod(service, "resolveRelatedSecurityCodes", main);
+        assertThat(codes).containsExactly("101.SH", "101.SZ");
+    }
+
+    /** 校验扩批：主券调入后为关联码生成 related 项；不存在主数据的关联码标记失败。 */
+    @Test
+    public void expandRelatedMarketCodeItemsShouldAddRelatedRows() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
+
+        SecurityInfoBo main = new SecurityInfoBo();
+        main.setWindCode("101.IB");
+        main.setShortName("主券");
+        main.setSecurityType("mtn");
+        main.setWindCodeSh("101.SH");
+        main.setWindCodeSz("MISSING.SZ");
+
+        SecurityInfoBo relatedSh = new SecurityInfoBo();
+        relatedSh.setWindCode("101.SH");
+        relatedSh.setShortName("沪市券");
+        relatedSh.setSecurityType("mtn");
+
+        when(mapper.querySecurityBoByCode("101.SH")).thenReturn(relatedSh);
+        when(mapper.querySecurityBoByCode("MISSING.SZ")).thenReturn(null);
+        when(mapper.querySecurityCurrentPoolIdList("101.SH")).thenReturn(Collections.emptyList());
+        when(mapper.querySecurityHasPendingProcess("101.SH")).thenReturn(false);
+        when(mapper.querySecurityPendingProcessNodeLabel("101.SH")).thenReturn(null);
+        when(mapper.queryPendingManualTargetPoolIdList("101.SH", null)).thenReturn(Collections.emptyList());
+        when(mapper.querySecurityInObservePool("101.SH")).thenReturn(false);
+        when(mapper.queryIssuerInObservePool("101.SH")).thenReturn(false);
+        when(mapper.querySecurityInForbiddenPool("101.SH")).thenReturn(false);
+        when(mapper.queryPoolCurrentCount(2L)).thenReturn(0);
+        when(mapper.queryCategoryTypeBySecurityType("mtn")).thenReturn("bond");
+
+        InvestmentPoolBo pool = buildPool(2L, 1L, "一级库");
+        pool.setPoolType("credit_bond");
+        pool.setVarietyCodes("[\"bond\"]");
+        pool.setMaxCapacity(null);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(1L, buildPool(1L, null, "信用债大库"));
+        poolMap.put(2L, pool);
+
+        AdjustSharedData shared = new AdjustSharedData();
+        shared.setSecurityInfo(main);
+        shared.setPoolMap(poolMap);
+        shared.setCurrentPoolIds(Collections.emptySet());
+        shared.setPoolRelationMap(Collections.emptyMap());
+        shared.setPendingPoolGroupIds(Collections.emptySet());
+        shared.setRequestInPoolIds(Collections.singleton(2L));
+        shared.setRequestOutPoolIds(Collections.emptySet());
+
+        AdjustCheckDto.CheckResultItem manual = new AdjustCheckDto.CheckResultItem();
+        manual.setTargetPoolId(2L);
+        manual.setPoolName("信用债大库/一级库");
+        manual.setPoolType("credit_bond");
+        manual.setAdjustMode("调入");
+        manual.setItemTag("manual");
+        manual.setAdjustGroupKey("manual_2_调入");
+        manual.setCanAdjust(true);
+        manual.setFailReasons(new ArrayList<>());
+        List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>();
+        resultItems.add(manual);
+
+        AdjustCheckReq req = new AdjustCheckReq();
+        req.setSecurityCode("101.IB");
+        req.setItems(Collections.singletonList(new AdjustCheckReq.CheckItem()));
+
+        ReflectionTestUtils.invokeMethod(service, "expandRelatedMarketCodeItems", req, shared, resultItems);
+
+        assertThat(resultItems).hasSize(3);
+        assertThat(resultItems.get(0).getSecurityCode()).isEqualTo("101.IB");
+        assertThat(resultItems.get(0).getItemTag()).isEqualTo("manual");
+
+        AdjustCheckDto.CheckResultItem relatedOk = resultItems.get(1);
+        assertThat(relatedOk.getItemTag()).isEqualTo("related");
+        assertThat(relatedOk.getSecurityCode()).isEqualTo("101.SH");
+        assertThat(relatedOk.getSecurityShortName()).isEqualTo("沪市券");
+        assertThat(relatedOk.getSourceSecurityCode()).isEqualTo("101.IB");
+        assertThat(relatedOk.getAdjustGroupKey()).isEqualTo("manual_2_调入");
+        assertThat(relatedOk.getTargetPoolId()).isEqualTo(2L);
+        assertThat(relatedOk.getAdjustMode()).isEqualTo("调入");
+        // 存在主数据的关联码会走完整校验；此处只断言已生成独立 related 项
+        assertThat(relatedOk.getFailReasons()).isNotNull();
+
+        AdjustCheckDto.CheckResultItem relatedMissing = resultItems.get(2);
+        assertThat(relatedMissing.getSecurityCode()).isEqualTo("MISSING.SZ");
+        assertThat(relatedMissing.isCanAdjust()).isFalse();
+        assertThat(relatedMissing.getFailReasons().get(0)).contains("在系统中不存在");
     }
 }

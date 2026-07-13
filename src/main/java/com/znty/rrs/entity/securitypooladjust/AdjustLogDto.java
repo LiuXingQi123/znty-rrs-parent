@@ -14,6 +14,15 @@ public class AdjustLogDto {
     /** 记录 ID */
     private Long id;
 
+    /** 证券代码（主券或关联码） */
+    private String securityCode;
+
+    /** 证券简称 */
+    private String securityShortName;
+
+    /** 证券类型 */
+    private String securityType;
+
     /** 调库批次号 */
     private String adjustBatchNo;
 
@@ -25,6 +34,9 @@ public class AdjustLogDto {
 
     /** 调整方向 */
     private String adjustMode;
+
+    /** 流程类型 */
+    private String flowType;
 
     /** 流程名称 */
     private String flowName;

@@ -58,6 +58,9 @@ public class BatchSecurityInboundAdjustDto {
         /** 调库分组 Key */
         private String adjustGroupKey;
 
+        /** 触发扩批的主证券代码 */
+        private String sourceSecurityCode;
+
         /** 是否可调整 */
         private boolean canAdjust;
 

@@ -110,11 +110,14 @@ public class BatchSecurityInboundAdjustReq {
         /** 调整方向：调入 / 调出 */
         private String adjustMode;
 
-        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 */
+        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 / related=多市场关联码 */
         private String itemTag;
 
         /** 调库分组 Key */
         private String adjustGroupKey;
+
+        /** 触发扩批的主证券代码（related 项=选中主券；其余默认自身） */
+        private String sourceSecurityCode;
 
         /** 审批流程 ID */
         private Long flowId;

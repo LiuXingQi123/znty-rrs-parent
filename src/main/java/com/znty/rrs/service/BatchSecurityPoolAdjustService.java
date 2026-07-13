@@ -328,12 +328,14 @@ public class BatchSecurityPoolAdjustService {
             securityPoolAdjustService.recheckBeforeFinalApproval(buildDirectRecheckLogList(req));
         }
 
-        Map<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> itemMap = new HashMap<>();
+        // 按触发主券分组，确保 related 与主券同次提交、共享批次与流程步骤
+        Map<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> itemMap = new LinkedHashMap<>();
         for (BatchSecurityInboundAdjustReq.AdjustItem item : req.getItems()) {
-            List<BatchSecurityInboundAdjustReq.AdjustItem> list = itemMap.get(item.getSecurityCode());
+            String groupKey = resolveBatchSubmitGroupKey(item);
+            List<BatchSecurityInboundAdjustReq.AdjustItem> list = itemMap.get(groupKey);
             if (list == null) {
                 list = new ArrayList<>();
-                itemMap.put(item.getSecurityCode(), list);
+                itemMap.put(groupKey, list);
             }
             list.add(item);
         }
@@ -346,7 +348,7 @@ public class BatchSecurityPoolAdjustService {
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
         BatchNoContext batchNoContext = new BatchNoContext();
         for (Map.Entry<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> entry : itemMap.entrySet()) {
-            // 构建单证券调库提交请求
+            // 构建单证券调库提交请求（主券 + 同组关联码）
             AdjustSubmitDto submitDto = addSingleAdjustLog(
                     buildSingleSubmitReq(req, entry.getValue()), submissionFiles, batchNoContext);
             if (submitDto == null) {
@@ -502,15 +504,26 @@ public class BatchSecurityPoolAdjustService {
             BatchSecurityInboundAdjustReq.SecurityItem security,
             AdjustCheckDto.CheckResultItem item, InvestmentPoolBo batchPool, String direction) {
         BatchSecurityInboundAdjustDto.CheckResultItem result = new BatchSecurityInboundAdjustDto.CheckResultItem();
-        result.setSecurityCode(security.getSecurityCode());
-        result.setSecurityShortName(security.getSecurityShortName());
-        result.setSecurityType(security.getSecurityType());
+        // 关联码项使用校验结果中的证券代码，主券项回退选中券
+        String securityCode = item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()
+                ? item.getSecurityCode() : security.getSecurityCode();
+        String securityShortName = item.getSecurityShortName() != null && !item.getSecurityShortName().isEmpty()
+                ? item.getSecurityShortName() : security.getSecurityShortName();
+        String securityType = item.getSecurityType() != null && !item.getSecurityType().isEmpty()
+                ? item.getSecurityType() : security.getSecurityType();
+        String sourceSecurityCode = item.getSourceSecurityCode() != null && !item.getSourceSecurityCode().isEmpty()
+                ? item.getSourceSecurityCode() : security.getSecurityCode();
+        result.setSecurityCode(securityCode);
+        result.setSecurityShortName(securityShortName);
+        result.setSecurityType(securityType);
+        result.setSourceSecurityCode(sourceSecurityCode);
         result.setTargetPoolId(item.getTargetPoolId());
         result.setPoolName(item.getPoolName());
         result.setPoolType(item.getPoolType());
         result.setAdjustMode(item.getAdjustMode());
         result.setItemTag(item.getItemTag());
-        result.setAdjustGroupKey(security.getSecurityCode() + "_" + item.getAdjustGroupKey());
+        // 分组 Key 以触发主券为前缀，便于 related 与主券同批
+        result.setAdjustGroupKey(sourceSecurityCode + "_" + item.getAdjustGroupKey());
         result.setCanAdjust(item.isCanAdjust());
         result.setFailReasons(item.getFailReasons() == null ? new ArrayList<>() : item.getFailReasons());
         result.setFlowOptions(item.getFlowOptions() == null ? new ArrayList<>() : item.getFlowOptions());
@@ -531,15 +544,24 @@ public class BatchSecurityPoolAdjustService {
     private SecurityPoolAdjustSubmitReq buildSingleSubmitReq(
             BatchSecurityInboundAdjustReq req,
             List<BatchSecurityInboundAdjustReq.AdjustItem> items) {
-        BatchSecurityInboundAdjustReq.AdjustItem first = items.get(0);
+        // 请求级证券取触发主券（manual 项优先，否则 sourceSecurityCode / 首条）
+        BatchSecurityInboundAdjustReq.AdjustItem primary = resolveBatchPrimaryItem(items);
         SecurityPoolAdjustSubmitReq submitReq = new SecurityPoolAdjustSubmitReq();
-        submitReq.setSecurityCode(first.getSecurityCode());
-        submitReq.setSecurityShortName(first.getSecurityShortName());
-        submitReq.setSecurityType(first.getSecurityType());
-        submitReq.setCrmwName(first.getCrmwName());
-        submitReq.setCrmwScode(first.getCrmwScode());
-        submitReq.setCrmwMktcode(first.getCrmwMktcode());
-        submitReq.setCrmwStype(first.getCrmwStype());
+        submitReq.setSecurityCode(resolveBatchSubmitGroupKey(primary));
+        submitReq.setSecurityShortName(primary.getSecurityShortName());
+        submitReq.setSecurityType(primary.getSecurityType());
+        // 若 primary 是 related，主券简称可能不对，回查主券主数据
+        if (ItemType.RELATED.getCode().equals(primary.getItemTag())) {
+            SecurityInfoBo primarySec = securityPoolAdjustMapper.querySecurityBoByCode(submitReq.getSecurityCode());
+            if (primarySec != null) {
+                submitReq.setSecurityShortName(primarySec.getShortName());
+                submitReq.setSecurityType(primarySec.getSecurityType());
+            }
+        }
+        submitReq.setCrmwName(primary.getCrmwName());
+        submitReq.setCrmwScode(primary.getCrmwScode());
+        submitReq.setCrmwMktcode(primary.getCrmwMktcode());
+        submitReq.setCrmwStype(primary.getCrmwStype());
         submitReq.setAdjustType("手动批量调整");
         submitReq.setAdjustReason(req.getAdjustReason());
         submitReq.setAdjustAdvice(buildBatchAdjustAdvice(req));
@@ -549,6 +571,10 @@ public class BatchSecurityPoolAdjustService {
         List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
         for (BatchSecurityInboundAdjustReq.AdjustItem item : items) {
             SecurityPoolAdjustSubmitReq.AdjustItem submitItem = new SecurityPoolAdjustSubmitReq.AdjustItem();
+            // 每条明细带真实证券代码（关联码独立落 log）
+            submitItem.setSecurityCode(item.getSecurityCode());
+            submitItem.setSecurityShortName(item.getSecurityShortName());
+            submitItem.setSecurityType(item.getSecurityType());
             submitItem.setTargetPoolId(item.getTargetPoolId());
             submitItem.setTargetPoolName(item.getTargetPoolName());
             submitItem.setPoolType(item.getPoolType());
@@ -935,7 +961,13 @@ public class BatchSecurityPoolAdjustService {
             }
             // 报告必填校验（按池 in_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null, req.getSecurityCode());
+            // 关联码项由同组手工项承担报告要求
+            if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
+                String itemSecurityCode = item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()
+                        ? item.getSecurityCode() : req.getSecurityCode();
+                checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null,
+                        itemSecurityCode);
+            }
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -1028,7 +1060,13 @@ public class BatchSecurityPoolAdjustService {
             }
             // 报告必填校验（按池 out_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null, req.getSecurityCode());
+            // 关联码项由同组手工项承担报告要求
+            if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
+                String itemSecurityCode = item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()
+                        ? item.getSecurityCode() : req.getSecurityCode();
+                checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null,
+                        itemSecurityCode);
+            }
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -1203,18 +1241,23 @@ public class BatchSecurityPoolAdjustService {
         return dto;
     }
 
-    /** 提交时按顶级投资池组检查活动流程冲突。 */
+    /** 提交时按顶级投资池组检查活动流程冲突（主券与关联码分别判断）。 */
     private void checkSubmitPendingPoolGroups(SecurityPoolAdjustSubmitReq req,
                                                Map<Long, InvestmentPoolBo> poolMap) {
-        Set<Long> requestGroups = resolvePoolGroupIds(req.getItems().stream()
-                .map(SecurityPoolAdjustSubmitReq.AdjustItem::getTargetPoolId)
-                .collect(Collectors.toList()), poolMap);
-        Set<Long> pendingGroups = resolvePoolGroupIds(
-                securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(
-                        req.getSecurityCode(), null), poolMap);
-        requestGroups.retainAll(pendingGroups);
-        if (!requestGroups.isEmpty()) {
-            throw new BizException("该证券在本次涉及的投资池组中存在待处理流程");
+        Map<String, Set<Long>> pendingGroupsBySecurity = new HashMap<>();
+        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            String securityCode = item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()
+                    ? item.getSecurityCode() : req.getSecurityCode();
+            Set<Long> pendingGroups = pendingGroupsBySecurity.get(securityCode);
+            if (pendingGroups == null) {
+                pendingGroups = resolvePoolGroupIds(
+                        securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(securityCode, null), poolMap);
+                pendingGroupsBySecurity.put(securityCode, pendingGroups);
+            }
+            Long groupId = resolveRootPoolId(item.getTargetPoolId(), poolMap);
+            if (groupId != null && pendingGroups.contains(groupId)) {
+                throw new BizException("证券[" + securityCode + "]在本次涉及的投资池组中存在待处理流程");
+            }
         }
     }
 
@@ -1264,45 +1307,38 @@ public class BatchSecurityPoolAdjustService {
                 : advice + "；放开主体债入库矩阵规则";
     }
 
-    /** 执行单证券调库校验 */
+    /**
+     * 执行单证券调库校验（委托单笔服务，复用联动/互斥/多市场关联码扩批）。
+     */
     private AdjustCheckDto checkSingleAdjust(AdjustCheckReq req) {
+        return securityPoolAdjustService.checkAdjust(req);
+    }
 
-        // ══ 第一阶段：前置校验 ══
-        validateCheckAdjustReq(req);
-
-        // ══ 第二阶段：参数初始化 ══
-        AdjustSharedData shared = loadSharedData(req);
-
-        // 预先将全部手动选择项注册到"已覆盖"集合，确保第三、四阶段生成的自动项
-        // 不会与用户手动选择的项产生重复结果（手动项优先，自动项跳过已覆盖的 key）
-        Set<String> coveredKeys = new HashSet<>();
-        for (AdjustCheckReq.CheckItem item : req.getItems()) {
-            coveredKeys.add(item.getTargetPoolId() + "_" + item.getAdjustMode());
+    /**
+     * 批量提交分组键：related 归到触发主券，保证同批同流程。
+     */
+    private String resolveBatchSubmitGroupKey(BatchSecurityInboundAdjustReq.AdjustItem item) {
+        if (item == null) {
+            return null;
         }
+        if (item.getSourceSecurityCode() != null && !item.getSourceSecurityCode().isEmpty()) {
+            return item.getSourceSecurityCode();
+        }
+        return item.getSecurityCode();
+    }
 
-        // ══ 第三阶段：调入校验 ══
-        List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>(
-                // 执行调入校验并补充联动、互斥调库项
-                executeInAdjustCheck(req, shared, coveredKeys));
-
-        // ══ 第四阶段：调出校验 ══
-        resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys));
-
-        // ══ 第五阶段：流程类型判断 ══
-        List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
-
-        AdjustCheckDto dto = new AdjustCheckDto();
-        dto.setItems(resultItems);
-        dto.setFlowOptions(flowOptions);
-        for (AdjustCheckDto.FlowOption option : flowOptions) {
-            if (option.isRecommended()) {
-                dto.setRecommendedFlowId(option.getFlowId());
-                dto.setRecommendedFlowKey(option.getFlowKey());
-                dto.setRecommendedFlowType(option.getFlowType());
-                break;
+    /**
+     * 在同组提交项中优先取 manual 作为主券代表。
+     */
+    private BatchSecurityInboundAdjustReq.AdjustItem resolveBatchPrimaryItem(
+            List<BatchSecurityInboundAdjustReq.AdjustItem> items) {
+        for (BatchSecurityInboundAdjustReq.AdjustItem item : items) {
+            if (item.getItemTag() == null || item.getItemTag().isEmpty()
+                    || ItemType.MANUAL.getCode().equals(item.getItemTag())) {
+                return item;
             }
         }
-        return dto;
+        return items.get(0);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -3467,9 +3503,29 @@ public class BatchSecurityPoolAdjustService {
                                          SecurityPoolAdjustSubmitReq.AdjustItem item,
                                          SecurityPoolAdjustSubmitReq.AdjustItem flowSource) {
         IpAdjustLogBo bo = new IpAdjustLogBo();
-        bo.setSecurityCode(req.getSecurityCode());
-        bo.setSecurityShortName(req.getSecurityShortName());
-        bo.setSecurityType(req.getSecurityType());
+        // 关联码项使用 item 级证券代码，保证独立落 log / 池状态
+        String securityCode = item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()
+                ? item.getSecurityCode() : req.getSecurityCode();
+        String securityShortName = item.getSecurityShortName() != null && !item.getSecurityShortName().isEmpty()
+                ? item.getSecurityShortName() : req.getSecurityShortName();
+        String securityType = item.getSecurityType() != null && !item.getSecurityType().isEmpty()
+                ? item.getSecurityType() : req.getSecurityType();
+        if ((securityShortName == null || securityShortName.isEmpty()
+                || securityType == null || securityType.isEmpty())
+                && securityCode != null && !securityCode.isEmpty()) {
+            SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
+            if (securityInfo != null) {
+                if (securityShortName == null || securityShortName.isEmpty()) {
+                    securityShortName = securityInfo.getShortName();
+                }
+                if (securityType == null || securityType.isEmpty()) {
+                    securityType = securityInfo.getSecurityType();
+                }
+            }
+        }
+        bo.setSecurityCode(securityCode);
+        bo.setSecurityShortName(securityShortName);
+        bo.setSecurityType(securityType);
         bo.setCrmwName(req.getCrmwName());
         bo.setCrmwScode(req.getCrmwScode());
         bo.setCrmwMktcode(req.getCrmwMktcode());
@@ -3519,6 +3575,9 @@ public class BatchSecurityPoolAdjustService {
         }
         if (ItemType.LINKAGE.getCode().equals(item.getItemTag())) {
             return "联动调整";
+        }
+        if (ItemType.RELATED.getCode().equals(item.getItemTag())) {
+            return "关联调整";
         }
         return req.getAdjustType();
     }

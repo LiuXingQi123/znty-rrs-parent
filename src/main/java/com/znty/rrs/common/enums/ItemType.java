@@ -7,7 +7,9 @@ public enum ItemType {
     /** 联动项 */
     LINKAGE("linkage"),
     /** 互斥项 */
-    MUTEX("mutex");
+    MUTEX("mutex"),
+    /** 多市场关联码项 */
+    RELATED("related");
 
     /** 枚举 code 值 */
     private final String code;
