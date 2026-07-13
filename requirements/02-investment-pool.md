@@ -48,7 +48,7 @@
 ### 2.3 详情区渲染
 
 详情区用表单 + 卡片网格（非 el-table）：
-- **基础配置**字段：`poolName`（必填）、`hsPoolName`、`marketCodes`（4 项：UNKNOWN/SSE/SZSE/CIBM）、`varietyCodes`（7 项：bond/warrant/trust/index/stock/issuer/fund，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
+- **基础配置**字段：`poolName`（必填）、`hsPoolName`、`marketCodes`（8 项：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他）、`varietyCodes`（7 项：bond/warrant/trust/index/stock/issuer/fund，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
 - **审批流程**：6 项（inFlowId/outFlowId/simpleInFlowId/simpleOutFlowId/batchInFlowId/batchOutFlowId），下拉来自 `flowOptions`（含「不需要审批」占位），绑定值为 `String(flowId)`。
 - **关系配置**：9 张卡片，每张右上角显示已选数量，下方 chip 列表显示「父路径 › 池名」面包屑。
 - **状态**：详情页 `pool-header` 只硬编码显示「启用」徽章（无 disabled 差异化展示）。

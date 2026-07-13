@@ -42,7 +42,7 @@
 |---|---|---|
 | 文本输入 | `securityCode` | 证券代码 |
 | 文本输入 | `securityShortName` | 证券简称 |
-| 多选 | `marketCodes` | 市场（SH/SZ/IB/BJ/NBC） |
+| 多选 | `marketCodes` | 市场（SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他） |
 
 查询接口：`POST /api/v1/batchSecurityPoolAdjust/querySecurityPage`（`loadSecurityList`），请求体：
 ```json

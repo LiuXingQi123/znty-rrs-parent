@@ -73,7 +73,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         BatchSecurityPoolAdjustReq req = new BatchSecurityPoolAdjustReq();
         req.setPoolId(11L);
         req.setDirection("in");
-        req.setMarketCodes(Collections.singletonList("UNKNOWN"));
+        req.setMarketCodes(Collections.singletonList("OTHER"));
 
         ReflectionTestUtils.invokeMethod(service, "validateSecurityPageReq", req);
 

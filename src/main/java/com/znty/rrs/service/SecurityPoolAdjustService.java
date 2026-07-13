@@ -24,6 +24,7 @@ import com.znty.rrs.common.enums.FlowType;
 import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
+import com.znty.rrs.common.util.MarketCodeMatchUtil;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -3012,21 +3013,16 @@ public class SecurityPoolAdjustService {
      * 规则：投资市场（market_codes）
      *
      * <p>目标池配置了投资市场时，证券所在市场须至少有一个在配置内。
-     * 证券市场从 windCodeSh/Sz/Nib 推导（Sh→SSE, Sz→SZSE, Nib→CIBM），
-     * 多市场证券任一市场在池配置内即可。
+     * 市场 code 统一见 {@link com.znty.rrs.common.enums.MarketCode}，
+     * 推导规则见 {@link com.znty.rrs.common.util.MarketCodeMatchUtil}。
      */
     private String inCheckMarket(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool == null || pool.getMarketCodes() == null || pool.getMarketCodes().isEmpty()) {
             return null;
         }
-        String marketCodes = pool.getMarketCodes();
-        SecurityInfoBo sec = ctx.getSecurityInfo();
-        // 推导证券所在市场，任一在池配置内即可
-        boolean anyMatch = (sec.getWindCodeSh() != null && !sec.getWindCodeSh().isEmpty() && marketCodes.contains("\"SSE\""))
-                || (sec.getWindCodeSz() != null && !sec.getWindCodeSz().isEmpty() && marketCodes.contains("\"SZSE\""))
-                || (sec.getWindCodeNib() != null && !sec.getWindCodeNib().isEmpty() && marketCodes.contains("\"CIBM\""));
-        if (!anyMatch) {
+        // 证券任一可推导市场落在池配置内即可
+        if (!MarketCodeMatchUtil.matchesPoolMarkets(pool.getMarketCodes(), ctx.getSecurityInfo())) {
             return "该证券不在[" + pool.getPoolName() + "]所设定的投资市场内";
         }
         return null;

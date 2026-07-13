@@ -38,7 +38,11 @@ public class InvestmentPoolDto {
     /** 投资池层级 */
     private Integer poolLevel;
 
-    /** 投资市场编码 */
+    /**
+     * 投资市场编码列表：
+     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 /
+     * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他
+     */
     private List<String> marketCodes = new ArrayList<>();
 
     /** 投资品种编码 */

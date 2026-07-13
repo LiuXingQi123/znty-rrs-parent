@@ -194,6 +194,7 @@
             ,wind_code_sh
             ,wind_code_sz
             ,wind_code_nib
+            ,wind_code_bj
             ,wind_code_nbc
             ,security_type
             ,issuer
@@ -209,7 +210,8 @@
             ,CASE WHEN #{securityMarket} = 'SSE' THEN #{securityCode} ELSE NULL END
             ,CASE WHEN #{securityMarket} = 'SZSE' THEN #{securityCode} ELSE NULL END
             ,CASE WHEN #{securityMarket} = 'CIBM' THEN #{securityCode} ELSE NULL END
-            ,CASE WHEN #{securityMarket} IN ('OTC', 'UNKNOWN', 'JWCW') THEN #{securityCode} ELSE NULL END
+            ,CASE WHEN #{securityMarket} = 'BSE' THEN #{securityCode} ELSE NULL END
+            ,CASE WHEN #{securityMarket} IN ('OTC', 'QDII', 'OTHER', 'COMPANY') THEN #{securityCode} ELSE NULL END
             ,#{securityType}
             ,#{tempCompanyNameSnapshot}
             ,DATE_FORMAT(#{tempIssueDate}, '%Y-%m-%d')
@@ -228,7 +230,8 @@
            ,wind_code_sh = CASE WHEN #{securityMarket} = 'SSE' THEN #{securityCode} ELSE NULL END
            ,wind_code_sz = CASE WHEN #{securityMarket} = 'SZSE' THEN #{securityCode} ELSE NULL END
            ,wind_code_nib = CASE WHEN #{securityMarket} = 'CIBM' THEN #{securityCode} ELSE NULL END
-           ,wind_code_nbc = CASE WHEN #{securityMarket} IN ('OTC', 'UNKNOWN', 'JWCW') THEN #{securityCode} ELSE NULL END
+           ,wind_code_bj = CASE WHEN #{securityMarket} = 'BSE' THEN #{securityCode} ELSE NULL END
+           ,wind_code_nbc = CASE WHEN #{securityMarket} IN ('OTC', 'QDII', 'OTHER', 'COMPANY') THEN #{securityCode} ELSE NULL END
            ,security_type = #{securityType}
            ,issuer = #{tempCompanyNameSnapshot}
            ,firstissue_date = DATE_FORMAT(#{tempIssueDate}, '%Y-%m-%d')

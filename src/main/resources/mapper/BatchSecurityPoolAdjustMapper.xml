@@ -62,11 +62,11 @@
                ,si.short_name AS securityShortName
                ,si.security_type
                ,CONCAT_WS(','
-                   ,IF(si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '', 'SH', NULL)
-                   ,IF(si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '', 'SZ', NULL)
-                   ,IF(si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '', 'IB', NULL)
-                   ,IF(si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '', 'BJ', NULL)
-                   ,IF(si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '', 'NBC', NULL)
+                   ,IF(si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '', 'SSE', NULL)
+                   ,IF(si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '', 'SZSE', NULL)
+                   ,IF(si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '', 'CIBM', NULL)
+                   ,IF(si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '', 'BSE', NULL)
+                   ,IF(si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '', 'OTHER', NULL)
                 ) AS marketCodeText
                ,si.issuer
                ,si.rating_bond
@@ -107,11 +107,12 @@
                 AND (
                     <foreach collection="marketCodes" item="marketCode" separator=" OR ">
                         <choose>
-                            <when test="marketCode == 'SH'">si.wind_code_sh IS NOT NULL AND si.wind_code_sh != ''</when>
-                            <when test="marketCode == 'SZ'">si.wind_code_sz IS NOT NULL AND si.wind_code_sz != ''</when>
-                            <when test="marketCode == 'IB'">si.wind_code_nib IS NOT NULL AND si.wind_code_nib != ''</when>
-                            <when test="marketCode == 'BJ'">si.wind_code_bj IS NOT NULL AND si.wind_code_bj != ''</when>
-                            <when test="marketCode == 'NBC'">si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != ''</when>
+                            <when test="marketCode == 'SSE'">si.wind_code_sh IS NOT NULL AND si.wind_code_sh != ''</when>
+                            <when test="marketCode == 'SZSE'">si.wind_code_sz IS NOT NULL AND si.wind_code_sz != ''</when>
+                            <when test="marketCode == 'CIBM'">si.wind_code_nib IS NOT NULL AND si.wind_code_nib != ''</when>
+                            <when test="marketCode == 'BSE'">si.wind_code_bj IS NOT NULL AND si.wind_code_bj != ''</when>
+                            <when test="marketCode == 'OTHER'">si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != ''</when>
+                            <when test="marketCode == 'COMPANY'">si.security_type = 'company'</when>
                             <otherwise>1 = 0</otherwise>
                         </choose>
                     </foreach>

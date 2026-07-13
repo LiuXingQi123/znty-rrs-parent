@@ -300,15 +300,10 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 校验证券市场
+     * 校验证券市场（仅允许 MarketCode 标准 8 码）
      */
     private void validateMarket(String market, String message) {
-        if (!MarketCode.SSE.getCode().equals(market)
-                && !MarketCode.SZSE.getCode().equals(market)
-                && !MarketCode.CIBM.getCode().equals(market)
-                && !MarketCode.OTC.getCode().equals(market)
-                && !"UNKNOWN".equals(market)
-                && !MarketCode.JWCW.getCode().equals(market)) {
+        if (!MarketCode.isValid(market)) {
             throw new BizException(message + "，market=" + market);
         }
     }
