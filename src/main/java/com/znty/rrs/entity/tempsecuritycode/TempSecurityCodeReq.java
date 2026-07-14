@@ -3,6 +3,7 @@ package com.znty.rrs.entity.tempsecuritycode;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.znty.rrs.common.PageRequest;
 import java.util.Date;
+import java.util.List;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -19,6 +20,8 @@ public class TempSecurityCodeReq extends PageRequest {
     private String tempSecurityName;
     /** 临时证券代码 */
     private String tempSecurityCode;
+    /** 状态列表（多选：temporary/updated/cancelled/deleted） */
+    private List<String> statusList;
     /** 临时证券市场 */
     private String tempSecurityMarket;
     /** 临时证券类型 */
@@ -29,6 +32,8 @@ public class TempSecurityCodeReq extends PageRequest {
     private String tempCompanyCode;
     /** 发行主体远程搜索关键字（名称/代码模糊，最多返回 50 条） */
     private String companyKeyword;
+    /** 正式证券远程搜索关键字（代码/名称模糊，最多返回 50 条） */
+    private String securityKeyword;
     /** 临时发行日期 */
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private Date tempIssueDate;

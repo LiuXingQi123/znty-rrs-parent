@@ -91,6 +91,24 @@ public class TempSecurityCodeDto {
     }
 
     /**
+     * 正式证券远程搜索选项（转正时选择，代码/名称可搜）
+     */
+    @Data
+    public static class FormalSecurityOption {
+
+        /** 证券代码（wind_code） */
+        private String securityCode;
+        /** 证券名称（优先简称） */
+        private String securityName;
+        /** 证券市场（SSE/SZSE/CIBM/BSE/OTHER 等） */
+        private String securityMarket;
+        /** 证券类型编码 */
+        private String securityType;
+        /** 证券类型名称 */
+        private String securityTypeName;
+    }
+
+    /**
      * 下拉选项聚合对象
      */
     @Data

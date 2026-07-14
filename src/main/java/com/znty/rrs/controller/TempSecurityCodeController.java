@@ -5,6 +5,7 @@ import com.znty.rrs.common.PageResult;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
 import com.znty.rrs.service.TempSecurityCodeService;
+import java.util.List;
 import javax.annotation.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,6 +37,15 @@ public class TempSecurityCodeController {
     @PostMapping("/queryTempSecurityCodeOptions")
     public ApiResponse<TempSecurityCodeDto.OptionBundle> queryTempSecurityCodeOptions(@RequestBody TempSecurityCodeReq req) {
         return ApiResponse.success(tempSecurityCodeService.queryTempSecurityCodeOptions(req));
+    }
+
+    /**
+     * 远程查询正式证券选项（转正选券，代码/名称模糊，最多 50 条）
+     */
+    @PostMapping("/queryFormalSecurityOptionList")
+    public ApiResponse<List<TempSecurityCodeDto.FormalSecurityOption>> queryFormalSecurityOptionList(
+            @RequestBody TempSecurityCodeReq req) {
+        return ApiResponse.success(tempSecurityCodeService.queryFormalSecurityOptionList(req));
     }
 
     /**

@@ -96,7 +96,19 @@ public class TempSecurityCodeService {
     }
 
     /**
+     * 远程查询正式证券选项（转正选券，代码/名称模糊，最多 50 条）
+     */
+    public List<TempSecurityCodeDto.FormalSecurityOption> queryFormalSecurityOptionList(TempSecurityCodeReq req) {
+        if (req == null) {
+            req = new TempSecurityCodeReq();
+        }
+        // 查询正式证券远程选项
+        return tempSecurityCodeMapper.queryFormalSecurityOptionList(req);
+    }
+
+    /**
      * 更新临时代码为正式证券
+     * <p>临时证券信息只读（以库内原记录为准）；正式证券必须从主数据远程选择，代码/市场/类型由主数据带出。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public TempSecurityCodeDto editTempSecurityCodeToUpdated(TempSecurityCodeReq req) {
@@ -104,40 +116,34 @@ public class TempSecurityCodeService {
         validateUpdateReq(req);
         // 查询并校验临时代码当前状态
         TempSecurityCodeBo oldBo = queryOperableTempSecurityCode(req.getId());
+        // 校验正式证券存在且非临时代码占位
+        TempSecurityCodeDto.FormalSecurityOption formalSecurity = queryRequiredFormalSecurity(req.getSecurityCode());
+        if (formalSecurity.getSecurityCode().equals(oldBo.getTempSecurityCode())) {
+            throw new BizException("正式证券代码不能与临时代码相同");
+        }
         Date now = new Date();
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setId(oldBo.getId());
-        // 临时证券字段：允许在更新时编辑，从请求取值
-        bo.setTempSecurityName(req.getTempSecurityName());
-        bo.setTempSecurityCode(req.getTempSecurityCode());
-        bo.setTempSecurityMarket(req.getTempSecurityMarket());
-        bo.setTempSecurityType(req.getTempSecurityType());
-        bo.setTempMitigationCode(req.getTempMitigationCode());
-        bo.setTempCompanyCode(req.getTempCompanyCode());
-        // 主体变更时重新生成主体名称快照，未变更则保留原快照
-        if (req.getTempCompanyCode() != null && !req.getTempCompanyCode().equals(oldBo.getTempCompanyCode())) {
-            TempSecurityCodeDto.CompanyOption company = tempSecurityCodeMapper.queryCompanyByCode(req.getTempCompanyCode());
-            if (company == null) {
-                throw new BizException("发行主体不存在，tempCompanyCode=" + req.getTempCompanyCode());
-            }
-            // 解析主体展示名称
-            bo.setTempCompanyNameSnapshot(resolveCompanyName(company));
-        } else {
-            bo.setTempCompanyNameSnapshot(oldBo.getTempCompanyNameSnapshot());
-        }
-        bo.setTempIssueDate(req.getTempIssueDate());
-        bo.setTempMaturityDate(req.getTempMaturityDate());
-        // 正式证券字段
-        bo.setSecurityName(req.getSecurityName());
-        bo.setSecurityCode(req.getSecurityCode());
-        bo.setSecurityMarket(req.getSecurityMarket());
-        bo.setSecurityType(req.getSecurityType());
+        // 临时证券字段：转正时不可改，一律使用库内原值
+        bo.setTempSecurityName(oldBo.getTempSecurityName());
+        bo.setTempSecurityCode(oldBo.getTempSecurityCode());
+        bo.setTempSecurityMarket(oldBo.getTempSecurityMarket());
+        bo.setTempSecurityType(oldBo.getTempSecurityType());
+        bo.setTempMitigationCode(oldBo.getTempMitigationCode());
+        bo.setTempCompanyCode(oldBo.getTempCompanyCode());
+        bo.setTempCompanyNameSnapshot(oldBo.getTempCompanyNameSnapshot());
+        bo.setTempIssueDate(oldBo.getTempIssueDate());
+        bo.setTempMaturityDate(oldBo.getTempMaturityDate());
+        // 正式证券字段：以主数据查询结果为准（名称/代码/市场/类型）
+        bo.setSecurityName(formalSecurity.getSecurityName());
+        bo.setSecurityCode(formalSecurity.getSecurityCode());
+        bo.setSecurityMarket(formalSecurity.getSecurityMarket());
+        bo.setSecurityType(formalSecurity.getSecurityType());
         bo.setUpdateTime(now);
         bo.setStatus(TempStatus.UPDATED.getCode());
         bo.setOperationType(TempOperationType.UPDATE.getCode());
         bo.setUpdtTime(now);
-        // 同步正式证券基础信息
-        upsertSecurityInfo(bo);
+        // 正式证券主数据已存在，无需 upsert；仅替换业务引用并禁用临时占位
         // 替换临时代码核心业务引用
         replaceTempSecurityReferences(oldBo, bo);
         // 禁用原临时代码占位证券主数据
@@ -181,6 +187,10 @@ public class TempSecurityCodeService {
         validateIdReq(req);
         // 查询并校验临时代码存在
         TempSecurityCodeBo oldBo = queryExistingTempSecurityCode(req.getId());
+        // 对齐老系统：仅临时状态允许删除
+        if (!TempStatus.TEMPORARY.getCode().equals(oldBo.getStatus())) {
+            throw new BizException("只有临时状态可以删除，id=" + req.getId() + "，status=" + oldBo.getStatus());
+        }
         // 校验临时代码未被核心调库业务引用
         validateNoCoreReference(oldBo);
         Date now = new Date();
@@ -233,52 +243,28 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 更新参数校验
+     * 更新参数校验（临时信息只读不校验入参；正式证券必须选定主数据中的代码）
      */
     private void validateUpdateReq(TempSecurityCodeReq req) {
         // 校验主键 ID
         validateIdReq(req);
-        // 临时证券字段校验（与新增一致，允许在更新时编辑临时证券信息）
-        validateRequired(req.getTempSecurityName(), "临时证券名称不能为空");
-        // 校验临时证券代码必填
-        validateRequired(req.getTempSecurityCode(), "临时证券代码不能为空");
-        // 校验临时证券市场必填
-        validateRequired(req.getTempSecurityMarket(), "临时证券市场不能为空");
-        // 校验临时证券类型必填
-        validateRequired(req.getTempSecurityType(), "临时证券类型不能为空");
-        if (req.getTempCompanyCode() == null || req.getTempCompanyCode().trim().isEmpty()) {
-            throw new BizException("发行主体不能为空");
+        // 校验正式证券代码必填（名称/市场/类型由主数据带出）
+        validateRequired(req.getSecurityCode(), "请选择正式证券");
+    }
+
+    /**
+     * 查询并校验正式证券主数据
+     */
+    private TempSecurityCodeDto.FormalSecurityOption queryRequiredFormalSecurity(String securityCode) {
+        TempSecurityCodeDto.FormalSecurityOption formalSecurity =
+                tempSecurityCodeMapper.queryFormalSecurityByCode(securityCode);
+        if (formalSecurity == null) {
+            throw new BizException("正式证券不存在或不可用，securityCode=" + securityCode);
         }
-        if (req.getTempIssueDate() == null) {
-            throw new BizException("发行日期不能为空");
+        if (formalSecurity.getSecurityType() == null || formalSecurity.getSecurityType().trim().isEmpty()) {
+            throw new BizException("正式证券缺少证券类型，securityCode=" + securityCode);
         }
-        if (req.getTempMaturityDate() == null) {
-            throw new BizException("到期日期不能为空");
-        }
-        if (!req.getTempMaturityDate().after(req.getTempIssueDate())) {
-            throw new BizException("到期日期必须晚于发行日期");
-        }
-        // 校验临时证券市场合法性
-        validateMarket(req.getTempSecurityMarket(), "临时证券市场不合法");
-        // 校验临时证券类型合法性
-        validateSecurityType(req.getTempSecurityType());
-        // 临时证券代码唯一性校验（排除自身）
-        int count = tempSecurityCodeMapper.queryTempSecurityCodeCount(req.getTempSecurityCode(), req.getId());
-        if (count > 0) {
-            throw new BizException("临时证券代码已存在，tempSecurityCode=" + req.getTempSecurityCode());
-        }
-        // 正式证券字段校验
-        validateRequired(req.getSecurityName(), "证券名称不能为空");
-        // 校验正式证券代码必填
-        validateRequired(req.getSecurityCode(), "证券代码不能为空");
-        // 校验正式证券市场必填
-        validateRequired(req.getSecurityMarket(), "证券市场不能为空");
-        // 校验正式证券类型必填
-        validateRequired(req.getSecurityType(), "证券类型不能为空");
-        // 校验正式证券市场合法性
-        validateMarket(req.getSecurityMarket(), "证券市场不合法");
-        // 校验正式证券类型合法性
-        validateSecurityType(req.getSecurityType());
+        return formalSecurity;
     }
 
     /**

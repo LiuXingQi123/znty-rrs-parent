@@ -39,8 +39,23 @@
             <if test="tempSecurityName != null and tempSecurityName != ''">
                 AND t.temp_security_name LIKE CONCAT('%', #{tempSecurityName}, '%')
             </if>
+            <if test="statusList != null and statusList.size() > 0">
+                AND t.status IN
+                <foreach collection="statusList" item="status" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+            </if>
         </where>
-        ORDER BY t.crte_time DESC
+        <!-- 对齐老系统：status ASC, updatetime DESC, createtimestamp DESC（字符串状态用 CASE 映射 1临时/2已更新/3取消发行/4已删除） -->
+        ORDER BY CASE t.status
+                     WHEN 'temporary' THEN 1
+                     WHEN 'updated' THEN 2
+                     WHEN 'cancelled' THEN 3
+                     WHEN 'deleted' THEN 4
+                     ELSE 5
+                 END ASC
+                 ,t.update_time DESC
+                 ,t.crte_time DESC
                  ,t.id DESC
     </select>
 
@@ -158,6 +173,65 @@
         ORDER BY c.opdate DESC
                  ,c.s_info_effective_dt DESC
                  ,c.object_id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 按关键字远程查询正式证券（对齐老系统债券选券：代码/名称模糊，排除临时代码占位与退市，最多 50 条） -->
+    <select id="queryFormalSecurityOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
+        SELECT si.wind_code AS securityCode
+               ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
+               ,CASE
+                    WHEN si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '' THEN 'SSE'
+                    WHEN si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '' THEN 'SZSE'
+                    WHEN si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '' THEN 'CIBM'
+                    WHEN si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '' THEN 'BSE'
+                    WHEN si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '' THEN 'OTHER'
+                    ELSE NULL
+                END AS securityMarket
+               ,si.security_type
+               ,dst.security_type_name
+        FROM rrs_securityinfo si
+        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
+                                        AND dst.is_deleted = 0
+        <where>
+            AND (si.security_status IS NULL OR si.security_status != 'D')
+            AND (si.security_source IS NULL OR si.security_source != 'temporary')
+            AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))
+            <if test="securityKeyword != null and securityKeyword != ''">
+                AND (si.wind_code LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.short_name LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.full_name LIKE CONCAT('%', #{securityKeyword}, '%'))
+            </if>
+            <if test="securityCode != null and securityCode != ''">
+                AND si.wind_code = #{securityCode}
+            </if>
+        </where>
+        ORDER BY si.ts DESC
+                 ,si.wind_code DESC
+        LIMIT 50
+    </select>
+
+    <!-- 根据正式证券代码查询正式证券（转正校验用） -->
+    <select id="queryFormalSecurityByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
+        SELECT si.wind_code AS securityCode
+               ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
+               ,CASE
+                    WHEN si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '' THEN 'SSE'
+                    WHEN si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '' THEN 'SZSE'
+                    WHEN si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '' THEN 'CIBM'
+                    WHEN si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '' THEN 'BSE'
+                    WHEN si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '' THEN 'OTHER'
+                    ELSE NULL
+                END AS securityMarket
+               ,si.security_type
+               ,dst.security_type_name
+        FROM rrs_securityinfo si
+        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
+                                        AND dst.is_deleted = 0
+        WHERE si.wind_code = #{securityCode}
+          AND (si.security_status IS NULL OR si.security_status != 'D')
+          AND (si.security_source IS NULL OR si.security_source != 'temporary')
+          AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))
         LIMIT 1
     </select>
 

@@ -34,6 +34,12 @@ public interface TempSecurityCodeMapper {
     /** 根据主体代码查询发行主体 */
     TempSecurityCodeDto.CompanyOption queryCompanyByCode(@Param("companyCode") String companyCode);
 
+    /** 按关键字远程查询正式证券（rrs_securityinfo，最多 50 条） */
+    List<TempSecurityCodeDto.FormalSecurityOption> queryFormalSecurityOptionList(TempSecurityCodeReq req);
+
+    /** 根据正式证券代码查询正式证券选项 */
+    TempSecurityCodeDto.FormalSecurityOption queryFormalSecurityByCode(@Param("securityCode") String securityCode);
+
     /** 查询证券类型选项 */
     List<TempSecurityCodeDto.SecurityTypeOption> querySecurityTypeList();
 
