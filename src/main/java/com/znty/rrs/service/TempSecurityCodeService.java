@@ -68,9 +68,9 @@ public class TempSecurityCodeService {
         validateAddReq(req);
         Date now = new Date();
         // 查询发行主体并生成快照
-        TempSecurityCodeDto.CompanyOption company = tempSecurityCodeMapper.queryCompanyById(req.getTempCompanyId());
+        TempSecurityCodeDto.CompanyOption company = tempSecurityCodeMapper.queryCompanyByCode(req.getTempCompanyCode());
         if (company == null) {
-            throw new BizException("发行主体不存在，tempCompanyId=" + req.getTempCompanyId());
+            throw new BizException("发行主体不存在，tempCompanyCode=" + req.getTempCompanyCode());
         }
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setTempSecurityName(req.getTempSecurityName());
@@ -78,7 +78,7 @@ public class TempSecurityCodeService {
         bo.setTempSecurityMarket(req.getTempSecurityMarket());
         bo.setTempSecurityType(req.getTempSecurityType());
         bo.setTempMitigationCode(req.getTempMitigationCode());
-        bo.setTempCompanyId(req.getTempCompanyId());
+        bo.setTempCompanyCode(req.getTempCompanyCode());
         // 解析主体展示名称
         bo.setTempCompanyNameSnapshot(resolveCompanyName(company));
         bo.setTempIssueDate(req.getTempIssueDate());
@@ -113,12 +113,12 @@ public class TempSecurityCodeService {
         bo.setTempSecurityMarket(req.getTempSecurityMarket());
         bo.setTempSecurityType(req.getTempSecurityType());
         bo.setTempMitigationCode(req.getTempMitigationCode());
-        bo.setTempCompanyId(req.getTempCompanyId());
+        bo.setTempCompanyCode(req.getTempCompanyCode());
         // 主体变更时重新生成主体名称快照，未变更则保留原快照
-        if (req.getTempCompanyId() != null && !req.getTempCompanyId().equals(oldBo.getTempCompanyId())) {
-            TempSecurityCodeDto.CompanyOption company = tempSecurityCodeMapper.queryCompanyById(req.getTempCompanyId());
+        if (req.getTempCompanyCode() != null && !req.getTempCompanyCode().equals(oldBo.getTempCompanyCode())) {
+            TempSecurityCodeDto.CompanyOption company = tempSecurityCodeMapper.queryCompanyByCode(req.getTempCompanyCode());
             if (company == null) {
-                throw new BizException("发行主体不存在，tempCompanyId=" + req.getTempCompanyId());
+                throw new BizException("发行主体不存在，tempCompanyCode=" + req.getTempCompanyCode());
             }
             // 解析主体展示名称
             bo.setTempCompanyNameSnapshot(resolveCompanyName(company));
@@ -210,7 +210,7 @@ public class TempSecurityCodeService {
         validateRequired(req.getTempSecurityMarket(), "临时证券市场不能为空");
         // 校验临时证券类型必填
         validateRequired(req.getTempSecurityType(), "临时证券类型不能为空");
-        if (req.getTempCompanyId() == null) {
+        if (req.getTempCompanyCode() == null || req.getTempCompanyCode().trim().isEmpty()) {
             throw new BizException("发行主体不能为空");
         }
         if (req.getTempIssueDate() == null) {
@@ -246,7 +246,7 @@ public class TempSecurityCodeService {
         validateRequired(req.getTempSecurityMarket(), "临时证券市场不能为空");
         // 校验临时证券类型必填
         validateRequired(req.getTempSecurityType(), "临时证券类型不能为空");
-        if (req.getTempCompanyId() == null) {
+        if (req.getTempCompanyCode() == null || req.getTempCompanyCode().trim().isEmpty()) {
             throw new BizException("发行主体不能为空");
         }
         if (req.getTempIssueDate() == null) {
@@ -500,6 +500,6 @@ public class TempSecurityCodeService {
         if (company.getShortName() != null && company.getShortName().trim().length() > 0) {
             return company.getShortName();
         }
-        throw new BizException("发行主体缺少名称，companyId=" + company.getCompanyId());
+        throw new BizException("发行主体缺少名称，companyCode=" + company.getCompanyCode());
     }
 }

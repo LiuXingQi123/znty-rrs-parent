@@ -28,11 +28,11 @@ public interface TempSecurityCodeMapper {
     /** 查询正式证券代码是否为临时代码（未删除且未取消发行的有效记录数量） */
     int queryTemporaryCodeCountBySecurityCode(@Param("securityCode") String securityCode);
 
-    /** 查询发行主体选项 */
+    /** 按关键字查询发行主体选项（wind_cbondissuer，最多 50 条） */
     List<TempSecurityCodeDto.CompanyOption> queryCompanyOptionList(TempSecurityCodeReq req);
 
-    /** 根据主体 ID 查询发行主体 */
-    TempSecurityCodeDto.CompanyOption queryCompanyById(@Param("companyId") Long companyId);
+    /** 根据主体代码查询发行主体 */
+    TempSecurityCodeDto.CompanyOption queryCompanyByCode(@Param("companyCode") String companyCode);
 
     /** 查询证券类型选项 */
     List<TempSecurityCodeDto.SecurityTypeOption> querySecurityTypeList();

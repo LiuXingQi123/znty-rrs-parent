@@ -33,9 +33,9 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeService service = buildService(mapper);
         TempSecurityCodeReq req = buildAddReq();
         TempSecurityCodeDto.CompanyOption company = new TempSecurityCodeDto.CompanyOption();
-        company.setCompanyId(1L);
-        company.setFullName("某基础设施建设投资集团有限公司");
-        when(mapper.queryCompanyById(1L)).thenReturn(company);
+        company.setCompanyCode("C10001");
+        company.setFullName("某交投集团");
+        when(mapper.queryCompanyByCode("C10001")).thenReturn(company);
         when(mapper.querySecurityTypeCount("mtn")).thenReturn(1);
         when(mapper.queryTempSecurityCodeCount("TMP001", null)).thenReturn(0);
         when(mapper.querySecurityInfoCount("TMP001")).thenReturn(0);
@@ -153,7 +153,7 @@ public class TempSecurityCodeServiceTest {
         req.setTempSecurityCode("TMP001");
         req.setTempSecurityMarket(MarketCode.CIBM.getCode());
         req.setTempSecurityType("mtn");
-        req.setTempCompanyId(1L);
+        req.setTempCompanyCode("C10001");
         req.setTempIssueDate(parseDate("2026-07-01"));
         req.setTempMaturityDate(parseDate("2031-07-01"));
         return req;
@@ -178,7 +178,7 @@ public class TempSecurityCodeServiceTest {
         bo.setTempSecurityCode("TMP001");
         bo.setTempSecurityMarket(MarketCode.CIBM.getCode());
         bo.setTempSecurityType("mtn");
-        bo.setTempCompanyId(1L);
+        bo.setTempCompanyCode("C10001");
         bo.setTempCompanyNameSnapshot("某基础设施建设投资集团有限公司");
         bo.setStatus(TempStatus.TEMPORARY.getCode());
         return bo;

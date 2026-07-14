@@ -21,8 +21,8 @@ public class TempSecurityCodeBo {
     private String tempSecurityType;
     /** 临时缓释凭证代码 */
     private String tempMitigationCode;
-    /** 临时关联主体 ID */
-    private Long tempCompanyId;
+    /** 临时关联主体代码（wind_cbondissuer.s_info_compcode） */
+    private String tempCompanyCode;
     /** 临时关联主体名称快照 */
     private String tempCompanyNameSnapshot;
     /** 临时发行日期 */

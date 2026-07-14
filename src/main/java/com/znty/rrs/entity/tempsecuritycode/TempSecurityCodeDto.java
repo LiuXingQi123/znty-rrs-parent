@@ -26,8 +26,8 @@ public class TempSecurityCodeDto {
     private String tempSecurityTypeName;
     /** 临时缓释凭证代码 */
     private String tempMitigationCode;
-    /** 临时关联主体 ID */
-    private Long tempCompanyId;
+    /** 临时关联主体代码 */
+    private String tempCompanyCode;
     /** 临时关联主体名称快照 */
     private String tempCompanyNameSnapshot;
     /** 临时发行日期 */
@@ -66,9 +66,7 @@ public class TempSecurityCodeDto {
     @Data
     public static class CompanyOption {
 
-        /** 主体 ID */
-        private Long companyId;
-        /** 主体编码 */
+        /** 主体编码（s_info_compcode） */
         private String companyCode;
         /** 主体全称 */
         private String fullName;

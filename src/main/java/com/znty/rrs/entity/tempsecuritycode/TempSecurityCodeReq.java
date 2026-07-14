@@ -25,8 +25,10 @@ public class TempSecurityCodeReq extends PageRequest {
     private String tempSecurityType;
     /** 临时缓释凭证代码 */
     private String tempMitigationCode;
-    /** 临时关联主体 ID */
-    private Long tempCompanyId;
+    /** 临时关联主体代码（wind_cbondissuer.s_info_compcode） */
+    private String tempCompanyCode;
+    /** 发行主体远程搜索关键字（名称/代码模糊，最多返回 50 条） */
+    private String companyKeyword;
     /** 临时发行日期 */
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
     private Date tempIssueDate;

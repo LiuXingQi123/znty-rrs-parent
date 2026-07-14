@@ -19,7 +19,7 @@ CREATE TABLE `rrs_temp_security_code`
     `temp_security_market`       VARCHAR(32)  DEFAULT NULL            COMMENT '临时证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他',
     `temp_security_type`         VARCHAR(64)  DEFAULT NULL            COMMENT '临时证券类型编码，关联 dict_security_type.security_type',
     `temp_mitigation_code`       VARCHAR(100) DEFAULT NULL            COMMENT '临时缓释凭证代码',
-    `temp_company_id`            BIGINT       DEFAULT NULL            COMMENT '临时关联主体 ID，关联 t_inv_company.id',
+    `temp_company_code`          VARCHAR(32)  DEFAULT NULL            COMMENT '临时关联主体代码，关联 ais_inv_ods.wind_cbondissuer.s_info_compcode',
     `temp_company_name_snapshot` VARCHAR(200) DEFAULT NULL            COMMENT '临时关联主体名称快照',
     `temp_issue_date`            DATE         DEFAULT NULL            COMMENT '临时发行日期',
     `temp_maturity_date`         DATE         DEFAULT NULL            COMMENT '临时到期日期',
@@ -36,7 +36,7 @@ CREATE TABLE `rrs_temp_security_code`
     PRIMARY KEY (`id`),
     KEY `idx_rrs_temp_security_code_temp_code` (`temp_security_code`),
     KEY `idx_rrs_temp_security_code_security_code` (`security_code`),
-    KEY `idx_rrs_temp_security_code_company` (`temp_company_id`),
+    KEY `idx_rrs_temp_security_code_company` (`temp_company_code`),
     KEY `idx_rrs_temp_security_code_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='临时代码表';
 

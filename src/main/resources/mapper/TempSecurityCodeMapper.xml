@@ -13,7 +13,7 @@
                ,t.temp_security_type
                ,dst_temp.security_type_name AS tempSecurityTypeName
                ,t.temp_mitigation_code
-               ,t.temp_company_id
+               ,t.temp_company_code
                ,t.temp_company_name_snapshot
                ,t.temp_issue_date
                ,t.temp_maturity_date
@@ -52,7 +52,7 @@
                ,temp_security_market
                ,temp_security_type
                ,temp_mitigation_code
-               ,temp_company_id
+               ,temp_company_code
                ,temp_company_name_snapshot
                ,temp_issue_date
                ,temp_maturity_date
@@ -80,7 +80,7 @@
                ,t.temp_security_type
                ,dst_temp.security_type_name AS tempSecurityTypeName
                ,t.temp_mitigation_code
-               ,t.temp_company_id
+               ,t.temp_company_code
                ,t.temp_company_name_snapshot
                ,t.temp_issue_date
                ,t.temp_maturity_date
@@ -125,34 +125,39 @@
           AND security_code = #{securityCode}
     </select>
 
-    <!-- 查询发行主体选项 -->
+    <!-- 按关键字远程查询发行主体（ais_inv_ods.wind_cbondissuer，最多 50 条） -->
     <select id="queryCompanyOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
-        SELECT id AS companyId
-               ,code AS companyCode
-               ,full_name
-               ,short_name
-        FROM ais_inv_analysis.t_inv_company
+        SELECT c.s_info_compcode AS companyCode
+               ,c.s_info_compname AS fullName
+               ,c.s_info_compname AS shortName
+        FROM ais_inv_ods.wind_cbondissuer c
         <where>
-            <if test="tempCompanyId != null">
-                AND id = #{tempCompanyId}
+            AND c.used = 1
+            <if test="companyKeyword != null and companyKeyword != ''">
+                AND (c.s_info_compname LIKE CONCAT('%', #{companyKeyword}, '%')
+                     OR c.s_info_compcode LIKE CONCAT('%', #{companyKeyword}, '%'))
             </if>
-            <if test="tempSecurityName != null and tempSecurityName != ''">
-                AND (full_name LIKE CONCAT('%', #{tempSecurityName}, '%')
-                     OR short_name LIKE CONCAT('%', #{tempSecurityName}, '%'))
+            <if test="tempCompanyCode != null and tempCompanyCode != ''">
+                AND c.s_info_compcode = #{tempCompanyCode}
             </if>
         </where>
-        ORDER BY id ASC
-        LIMIT 100
+        ORDER BY c.opdate DESC
+                 ,c.s_info_effective_dt DESC
+                 ,c.object_id DESC
+        LIMIT 50
     </select>
 
-    <!-- 根据主体 ID 查询发行主体 -->
-    <select id="queryCompanyById" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
-        SELECT id AS companyId
-               ,code AS companyCode
-               ,full_name
-               ,short_name
-        FROM ais_inv_analysis.t_inv_company
-        WHERE id = #{companyId}
+    <!-- 根据主体代码查询发行主体 -->
+    <select id="queryCompanyByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
+        SELECT c.s_info_compcode AS companyCode
+               ,c.s_info_compname AS fullName
+               ,c.s_info_compname AS shortName
+        FROM ais_inv_ods.wind_cbondissuer c
+        WHERE c.s_info_compcode = #{companyCode}
+          AND c.used = 1
+        ORDER BY c.opdate DESC
+                 ,c.s_info_effective_dt DESC
+                 ,c.object_id DESC
         LIMIT 1
     </select>
 
@@ -267,7 +272,7 @@
             ,temp_security_market
             ,temp_security_type
             ,temp_mitigation_code
-            ,temp_company_id
+            ,temp_company_code
             ,temp_company_name_snapshot
             ,temp_issue_date
             ,temp_maturity_date
@@ -282,7 +287,7 @@
             ,#{tempSecurityMarket}
             ,#{tempSecurityType}
             ,#{tempMitigationCode}
-            ,#{tempCompanyId}
+            ,#{tempCompanyCode}
             ,#{tempCompanyNameSnapshot}
             ,#{tempIssueDate}
             ,#{tempMaturityDate}
@@ -302,7 +307,7 @@
            ,temp_security_market = #{tempSecurityMarket}
            ,temp_security_type = #{tempSecurityType}
            ,temp_mitigation_code = #{tempMitigationCode}
-           ,temp_company_id = #{tempCompanyId}
+           ,temp_company_code = #{tempCompanyCode}
            ,temp_company_name_snapshot = #{tempCompanyNameSnapshot}
            ,temp_issue_date = #{tempIssueDate}
            ,temp_maturity_date = #{tempMaturityDate}
