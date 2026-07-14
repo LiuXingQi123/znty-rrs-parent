@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.PoolOpenDayMapper">
+    <!-- 投资池开放日 mapper，对应表：ip_pool_open_day -->
+
+    <!-- 分页查询开放日配置列表（投资池全称由递归 CTE 拼路径） -->
+    <select id="queryPoolOpenDayPage" resultType="com.znty.rrs.entity.poolopenday.PoolOpenDayDto">
+        WITH RECURSIVE pool_tree AS (
+            SELECT id
+                   ,parent_id
+                   ,pool_name
+                   ,open_day_adjust
+                   ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
+            FROM ip_investment_pool
+            WHERE (is_deleted IS NULL OR is_deleted = 0)
+              AND parent_id IS NULL
+            UNION ALL
+            SELECT child.id
+                   ,child.parent_id
+                   ,child.pool_name
+                   ,child.open_day_adjust
+                   ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
+            FROM ip_investment_pool child
+            INNER JOIN pool_tree parent ON parent.id = child.parent_id
+            WHERE (child.is_deleted IS NULL OR child.is_deleted = 0)
+        )
+        SELECT d.id
+               ,d.pool_id
+               ,p.pool_name
+               ,p.pool_full_name
+               ,p.open_day_adjust
+               ,d.begin_date
+               ,d.end_date
+               ,d.description
+               ,d.crte_time
+               ,d.updt_time
+        FROM ip_pool_open_day d
+        LEFT JOIN pool_tree p ON p.id = d.pool_id
+        <where>
+            AND (d.is_deleted IS NULL OR d.is_deleted = 0)
+            <if test="poolId != null">
+                AND d.pool_id = #{poolId}
+            </if>
+            <if test="beginDateFrom != null">
+                AND d.begin_date &gt;= #{beginDateFrom}
+            </if>
+            <if test="endDateTo != null">
+                AND d.end_date &lt;= #{endDateTo}
+            </if>
+            <if test="description != null and description != ''">
+                AND d.description LIKE CONCAT('%', #{description}, '%')
+            </if>
+        </where>
+        ORDER BY d.begin_date DESC
+                 ,d.id DESC
+    </select>
+
+    <!-- 按主键查询开放日配置 -->
+    <select id="queryPoolOpenDayById" resultType="com.znty.rrs.entity.bo.IpPoolOpenDayBo">
+        SELECT id
+               ,pool_id
+               ,begin_date
+               ,end_date
+               ,description
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM ip_pool_open_day
+        WHERE id = #{id}
+          AND (is_deleted IS NULL OR is_deleted = 0)
+    </select>
+
+    <!-- 按主键查询开放日详情（含投资池全称） -->
+    <select id="queryPoolOpenDayDetail" resultType="com.znty.rrs.entity.poolopenday.PoolOpenDayDto">
+        WITH RECURSIVE pool_tree AS (
+            SELECT id
+                   ,parent_id
+                   ,pool_name
+                   ,open_day_adjust
+                   ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
+            FROM ip_investment_pool
+            WHERE (is_deleted IS NULL OR is_deleted = 0)
+              AND parent_id IS NULL
+            UNION ALL
+            SELECT child.id
+                   ,child.parent_id
+                   ,child.pool_name
+                   ,child.open_day_adjust
+                   ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
+            FROM ip_investment_pool child
+            INNER JOIN pool_tree parent ON parent.id = child.parent_id
+            WHERE (child.is_deleted IS NULL OR child.is_deleted = 0)
+        )
+        SELECT d.id
+               ,d.pool_id
+               ,p.pool_name
+               ,p.pool_full_name
+               ,p.open_day_adjust
+               ,d.begin_date
+               ,d.end_date
+               ,d.description
+               ,d.crte_time
+               ,d.updt_time
+        FROM ip_pool_open_day d
+        LEFT JOIN pool_tree p ON p.id = d.pool_id
+        WHERE d.id = #{id}
+          AND (d.is_deleted IS NULL OR d.is_deleted = 0)
+    </select>
+
+    <!-- 校验投资池是否存在 -->
+    <select id="queryPoolById" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
+        SELECT id
+               ,parent_id
+               ,pool_code
+               ,pool_name
+               ,open_day_adjust
+        FROM ip_investment_pool
+        WHERE id = #{poolId}
+          AND (is_deleted IS NULL OR is_deleted = 0)
+    </select>
+
+    <!-- 统计子池数量（有子节点的目录节点不可配置开放日） -->
+    <select id="countChildPool" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_investment_pool
+        WHERE parent_id = #{poolId}
+          AND (is_deleted IS NULL OR is_deleted = 0)
+    </select>
+
+    <!-- 新增开放日配置 -->
+    <insert id="addPoolOpenDay" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_pool_open_day (
+            pool_id
+            ,begin_date
+            ,end_date
+            ,description
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        ) VALUES (
+            #{poolId}
+            ,#{beginDate}
+            ,#{endDate}
+            ,#{description}
+            ,#{isDeleted}
+            ,#{crteTime}
+            ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 修改开放日配置 -->
+    <update id="editPoolOpenDay">
+        UPDATE ip_pool_open_day
+        SET pool_id = #{poolId}
+           ,begin_date = #{beginDate}
+           ,end_date = #{endDate}
+           ,description = #{description}
+           ,updt_time = #{updtTime}
+        WHERE id = #{id}
+          AND (is_deleted IS NULL OR is_deleted = 0)
+    </update>
+
+    <!-- 逻辑删除开放日配置 -->
+    <update id="deletePoolOpenDay">
+        UPDATE ip_pool_open_day
+        SET is_deleted = #{isDeleted}
+           ,updt_time = #{updtTime}
+        WHERE id = #{id}
+          AND (is_deleted IS NULL OR is_deleted = 0)
+    </update>
+
+</mapper>
