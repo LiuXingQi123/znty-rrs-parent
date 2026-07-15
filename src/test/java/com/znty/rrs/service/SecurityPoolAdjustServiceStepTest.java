@@ -1340,7 +1340,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(downgradeOption.getFlowKey()).isEqualTo("bond:standard-downgrade");
     }
 
-    /** 验证当前已在目标池调入互斥池时应优先返回特殊审批流程。 */
+    /** 验证非信用债目标池、当前已在调入互斥池时应优先返回特殊审批流程。 */
     @Test
     public void resolveAdjustFlowOptionsShouldPreferSpecialInboundWhenCurrentPoolInMutex() {
         FlowMapper flowMapper = mock(FlowMapper.class);
@@ -1349,13 +1349,13 @@ public class SecurityPoolAdjustServiceStepTest {
         FlowDefinitionBo specialFlow = buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程");
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound")).thenReturn(specialFlow);
 
-        AdjustSharedData shared = buildSpecialInboundShared(2L, 3L, "信用债大库/一级库", "专户产品/二级库");
+        AdjustSharedData shared = buildSpecialInboundShared(2L, 3L, "专户产品/一级库", "专户产品/二级库");
         InvestmentPoolBo targetPool = shared.getPoolMap().get(2L);
-        targetPool.setPoolType("credit_bond");
-        targetPool.setInnerSort(1);
+        targetPool.setPoolType("special_account");
+        targetPool.setInFlowId(105L);
+        targetPool.setInFlowKey("bond:fast-inbound");
         InvestmentPoolBo currentPool = shared.getPoolMap().get(3L);
-        currentPool.setPoolType("credit_bond");
-        currentPool.setInnerSort(3);
+        currentPool.setPoolType("special_account");
 
         AdjustCheckDto.CheckResultItem item = buildManualInboundItem(2L);
         List<AdjustCheckDto.FlowOption> options = ReflectionTestUtils.invokeMethod(
@@ -1368,6 +1368,36 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(option.getFlowId()).isEqualTo(108L);
         assertThat(option.isRecommended()).isTrue();
         assertThat(option.getMatchReasons().get(0)).contains("专户产品/二级库");
+    }
+
+    /** 验证信用债大库默认排除互斥特殊审批，即使当前在调入互斥池仍走升降级/默认等流程。 */
+    @Test
+    public void resolveAdjustFlowOptionsShouldSkipSpecialInboundForCreditBondPool() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
+                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+        when(flowMapper.queryActiveFlowByKey("bond:standard-upgrade"))
+                .thenReturn(buildFlowDefinition(101L, "bond:standard-upgrade", "债券标准升库流程"));
+
+        AdjustSharedData shared = buildSpecialInboundShared(2L, 3L, "信用债大库/一级库", "信用债大库/三级库");
+        InvestmentPoolBo targetPool = shared.getPoolMap().get(2L);
+        targetPool.setPoolType("credit_bond");
+        targetPool.setParentId(1L);
+        targetPool.setInnerSort(1);
+        InvestmentPoolBo currentPool = shared.getPoolMap().get(3L);
+        currentPool.setPoolType("credit_bond");
+        currentPool.setParentId(1L);
+        currentPool.setInnerSort(3);
+        shared.getPoolMap().put(1L, buildPool(1L, null, "信用债大库"));
+
+        List<AdjustCheckDto.FlowOption> options = ReflectionTestUtils.invokeMethod(
+                service, "resolveAdjustFlowOptionsForItem", new AdjustCheckReq(), shared, buildManualInboundItem(2L));
+
+        assertThat(options).isNotEmpty();
+        assertThat(options.get(0).getFlowType()).isNotEqualTo("specialInbound");
+        assertThat(options.get(0).getFlowType()).isEqualTo("upgradeInbound");
     }
 
     /** 验证特殊审批流程未启用时应回退原有流程选择。 */
@@ -1393,7 +1423,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(options.get(0).getFlowKey()).isEqualTo("bond:fast-inbound");
     }
 
-    /** 验证批量调库链路命中特殊审批流程。 */
+    /** 验证批量调库链路命中特殊审批流程（非信用债目标池）。 */
     @Test
     public void batchAdjustShouldResolveSpecialInboundFlow() {
         FlowMapper flowMapper = mock(FlowMapper.class);
@@ -1402,13 +1432,34 @@ public class SecurityPoolAdjustServiceStepTest {
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
 
+        InvestmentPoolBo targetPool = buildPool(2L, 1L, "专户一级库");
+        targetPool.setPoolType("special_account");
         AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(
                 service, "resolveSpecialInboundFlowOption",
-                buildPool(2L, 1L, "一级库"),
-                buildSpecialInboundShared(2L, 3L, "一级库", "二级库"));
+                targetPool,
+                buildSpecialInboundShared(2L, 3L, "专户一级库", "专户二级库"));
 
         assertThat(option.getFlowType()).isEqualTo("specialInbound");
         assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
+    }
+
+    /** 验证批量调库：信用债大库目标池不命中互斥特殊审批。 */
+    @Test
+    public void batchAdjustShouldSkipSpecialInboundForCreditBondPool() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
+                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+
+        InvestmentPoolBo targetPool = buildPool(2L, 1L, "一级库");
+        targetPool.setPoolType("credit_bond");
+        AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(
+                service, "resolveSpecialInboundFlowOption",
+                targetPool,
+                buildSpecialInboundShared(2L, 3L, "一级库", "二级库"));
+
+        assertThat(option).isNull();
     }
 
     /** 验证禁投池调整链路命中特殊审批流程。 */

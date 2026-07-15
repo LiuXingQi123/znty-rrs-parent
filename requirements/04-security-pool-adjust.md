@@ -246,7 +246,7 @@
 
 **⑤ 流程类型判断** `resolveAdjustFlowOptions`（仅对 `canAdjust && itemTag==='manual'` 的项生成候选）：
 - **调出**：目标池标准调出流程（`outFlowId/outFlowKey`），`flowType=normalOutbound`，标记 recommended。
-- **调入·命中特殊审批**：若证券当前已在目标池配置的 `in_mutex` 互斥池中，优先返回 `specialInbound`，固定使用 `bond:special-inbound`，覆盖默认/简易/升降级流程；若该流程未启用则回退原流程选择。
+- **调入·命中特殊审批**：若证券当前已在目标池配置的 `in_mutex` 互斥池中，优先返回 `specialInbound`，固定使用 `bond:special-inbound`，覆盖默认/简易流程；**信用债大库（`pool_type=credit_bond`）默认排除**，仍走白名单/简易/升降级/默认调入；若特殊流程未启用则回退原流程选择。
 - **调入·非信用债大库**（`poolType != 'credit_bond'`）：默认调入流程（`inFlowId/inFlowKey`），`normalInbound`。
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单（当前默认关闭）、简易（`isSimpleInboundFlowMatched`）、默认调入，推荐优先级 白名单 > 简易 > 默认。
@@ -439,7 +439,7 @@
 | 债券大库/主体评级矩阵 | 观察池跳过、可转债跳过、担保人取低、期限档、私募/ABS/担保等分支 | 已有信用债矩阵、观察池、担保人、期限档、可转债跳过 | 部分对齐；私募债、ABS、担保人等细分分支仍需单独核 |
 | 基金评分 | 池配置 `FundRateLimit`，且传了 `fundRate` 才校验 | 池配置后，未传 `fundRate` 也失败 | 新系统更严格，需确认前端是否总能提供基金评分 |
 | 研报限制 | check/提交阶段均有逻辑，且支持 `RschDocMode > 100` 自定义规则类 | 提交阶段支持 none/any/internal | 缺少自定义研报规则；批量跳过报告配置也未复刻 |
-| 互斥池特殊审批模板 | 调入目标池时，若证券当前在该目标池的调入互斥池中，可按 `目标池+调入互斥池` 配置覆盖审批模板 | 已补齐第一期：命中任意 `in_mutex` 当前所在池时，固定走 `bond:special-inbound` | 第一阶段用代码常量覆盖，后续可扩展为配置表精确到目标池+来源池 |
+| 互斥池特殊审批模板 | 调入目标池时，若证券当前在该目标池的调入互斥池中，可按 `目标池+调入互斥池` 配置覆盖审批模板 | 命中任意 `in_mutex` 当前所在池时固定走 `bond:special-inbound`；**信用债大库默认排除** | 第一阶段用代码常量覆盖；信用债互斥走升降级/默认流；后续可扩展配置表 |
 | CRMW 必填/重复 | 通过 `CRMWPOOLID_XYJJ` 判断 CRMW 池，调入必须有 CRMW 代码，并校验 CRMW 是否已在池/审批中 | CRMW 已拆独立链路 | 普通证券池不再混入；CRMW 链路需单独确认是否完全覆盖 |
 
 ### 8.2 调出校验差异

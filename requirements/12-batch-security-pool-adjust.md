@@ -161,7 +161,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 2. **参数初始化**（`loadSharedData`）：一次性查证券基础信息（兼存在性校验）、全量投资池 Map、证券当前有效入池 ID 集（audit_status='20'）、全量池关系三层 Map、证券级标志（是否有进行中流程 + 当前节点名、证券/主体是否在观察池）、本次请求调入/调出目标池 ID 集。
 3. **调入校验**（`executeInAdjustCheck`）：对每个手工调入项执行 `checkInConditions`，并按池关系自动追加联动调入项（`in_linked`/linkage）、互斥配套调出项（`in_mutex`/mutex）；自动项与手工项失败状态联动。
 4. **调出校验**（`executeOutAdjustCheck`）：对每个手工调出项执行 `checkOutConditions`，追加联动调出项（`out_linked`）。
-5. **流程类型判断**（`resolveAdjustFlowOptions`）：为每个可调整手工项生成 FlowOption 列表（同单笔规则，见 [04-security-pool-adjust.md](04-security-pool-adjust.md) §3.6 ⑤），命中当前已在目标池 `in_mutex` 互斥池时优先走 `specialInbound`（`bond:special-inbound`）。
+5. **流程类型判断**（`resolveAdjustFlowOptions`）：为每个可调整手工项生成 FlowOption 列表（同单笔规则，见 [04-security-pool-adjust.md](04-security-pool-adjust.md) §3.6 ⑤），命中当前已在目标池 `in_mutex` 互斥池时优先走 `specialInbound`（`bond:special-inbound`）；**信用债大库目标池默认排除**互斥特殊审批。
 
 **调入校验规则顺序**（`checkInConditions`）：证券到期 → 进行中流程 → 重复入池 → 容量上限 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突(in_mutex) → 调入弹性禁投池(in_soft_restrict)。
 

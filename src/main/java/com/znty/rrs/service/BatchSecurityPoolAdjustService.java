@@ -1660,7 +1660,7 @@ public class BatchSecurityPoolAdjustService {
             return Collections.singletonList(buildPoolFlowOption(p));
         }
 
-        // 手工调入：当前已在目标池调入互斥池时，优先走特殊审批流程
+        // 手工调入：当前已在目标池调入互斥池时优先特殊审批（信用债大库默认排除）
         AdjustCheckDto.FlowOption specialOption = resolveSpecialInboundFlowOption(targetPool, shared);
         if (specialOption != null) {
             return Collections.singletonList(specialOption);
@@ -1776,11 +1776,18 @@ public class BatchSecurityPoolAdjustService {
 
     /**
      * 命中调入互斥池特殊审批时构建特殊流程候选项。
+     *
+     * <p>信用债大库（pool_type=credit_bond）默认排除：互斥场景仍走白名单/简易/升降级/默认调入，
+     * 不强制覆盖为 bond:special-inbound。
      */
     private AdjustCheckDto.FlowOption resolveSpecialInboundFlowOption(InvestmentPoolBo targetPool,
                                                                       AdjustSharedData shared) {
         if (targetPool == null || shared == null
                 || shared.getPoolRelationMap() == null || shared.getCurrentPoolIds() == null) {
+            return null;
+        }
+        // 信用债大库默认不走互斥特殊审批
+        if (isCreditBondPool(targetPool)) {
             return null;
         }
         Map<String, List<Long>> targetRelations = shared.getPoolRelationMap().get(targetPool.getId());

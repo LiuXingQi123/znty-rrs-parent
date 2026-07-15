@@ -123,7 +123,7 @@
   自动追加 `in_linked` 联动调入项（`itemTag='linkage'`）、`in_mutex` 配套调出项（`itemTag='mutex'`），`inheritManualItemFailure` 手工项失败则阻断自动项。
 
 - **④ 调出校验** `executeOutAdjustCheck`：主体不校验到期，保留进行中 → `outCheckSecurityNotInPool` → `outCheckRestrictPool`（`out_restrict`）→ `outCheckMutexPool`（`out_mutex`）→ `outCheckMutexConflict` → `outCheckElasticPool`（`out_soft_restrict`）。自动追加 `out_linked` 联动调出项。
-- **⑤ 流程类型判断** `resolveAdjustFlowOptions`（仅 `canAdjust && itemTag==='manual'`）：禁投池目标池（15/16/17）`pool_type` 为 `forbidden`/`observe`/`blacklist`，均非 `credit_bond`，通常走默认调入/调出流程（`normalInbound`/`normalOutbound`），使用目标池 `inFlowId/inFlowKey`、`outFlowId/outFlowKey`；若主体当前已在目标池 `in_mutex` 互斥池中，则优先走 `specialInbound`（`bond:special-inbound`）；简易/白名单/升降级流程对禁投池不生效。
+- **⑤ 流程类型判断** `resolveAdjustFlowOptions`（仅 `canAdjust && itemTag==='manual'`）：禁投池目标池（15/16/17）`pool_type` 为 `forbidden`/`observe`/`blacklist`，均非 `credit_bond`，通常走默认调入/调出流程（`normalInbound`/`normalOutbound`），使用目标池 `inFlowId/inFlowKey`、`outFlowId/outFlowKey`；若主体当前已在目标池 `in_mutex` 互斥池中，则优先走 `specialInbound`（`bond:special-inbound`，与证券池一致；**信用债大库目标池默认排除**本规则）；简易/白名单/升降级流程对禁投池不生效。
 
 ### 3.4 后端 addCompanyAdjustLog → addAdjustLog 完整逻辑
 
