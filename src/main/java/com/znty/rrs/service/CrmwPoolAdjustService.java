@@ -444,6 +444,8 @@ public class CrmwPoolAdjustService {
         SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
         // 检查本次涉及的顶级池组是否已有活动流程
         checkSubmitPendingPoolGroups(req, shared.poolMap);
+        // 调入须同步调出互斥池：缺失或调出不可行则整单拒绝，防止双池
+        validateRequiredMutexOutboundOnSubmit(req, shared);
 
         // ══ 第三阶段：调入处理 ══
         List<IpAdjustLogBo> directApplyLogs = new ArrayList<>();
@@ -522,6 +524,64 @@ public class CrmwPoolAdjustService {
     }
 
     /** 检查操作人短时间内是否已提交相同 CRMW 手工申请。 */
+    /**
+     * 提交时校验：调入目标池若要求配套互斥调出，请求中必须包含对应调出项且调出校验通过。
+     */
+    private void validateRequiredMutexOutboundOnSubmit(CrmwPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        Set<Long> requestOutPoolIds = new HashSet<>();
+        for (CrmwPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if (item != null && AdjustMode.OUT.getCode().equals(item.getAdjustMode())
+                    && item.getTargetPoolId() != null) {
+                requestOutPoolIds.add(item.getTargetPoolId());
+            }
+        }
+        for (CrmwPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if (item == null || !AdjustMode.IN.getCode().equals(item.getAdjustMode())
+                    || !isManualSubmitItem(item) || item.getTargetPoolId() == null) {
+                continue;
+            }
+            Map<String, List<Long>> relations = shared.poolRelationMap.get(item.getTargetPoolId());
+            if (relations == null) {
+                continue;
+            }
+            List<Long> inMutex = relations.get(RelationType.IN_MUTEX.getCode());
+            if (inMutex == null || inMutex.isEmpty()) {
+                continue;
+            }
+            for (Long mutexId : inMutex) {
+                if (mutexId == null || !shared.currentPoolIds.contains(mutexId)) {
+                    continue;
+                }
+                String mutexPoolName = buildPoolPath(mutexId, shared.poolMap);
+                if (!requestOutPoolIds.contains(mutexId)) {
+                    throw new BizException("调入须同步调出互斥池，请完整提交：" + mutexPoolName);
+                }
+                AdjustCheckReq.CheckItem fakeOut = new AdjustCheckReq.CheckItem();
+                fakeOut.setTargetPoolId(mutexId);
+                fakeOut.setAdjustMode(AdjustMode.OUT.getCode());
+                InvestmentPoolBo mutexPool = shared.poolMap.get(mutexId);
+                fakeOut.setPoolType(mutexPool != null ? mutexPool.getPoolType() : null);
+                AdjustSharedData checkShared = new AdjustSharedData();
+                checkShared.setSecurityInfo(shared.securityInfo);
+                checkShared.setPoolMap(shared.poolMap);
+                checkShared.setCurrentPoolIds(shared.currentPoolIds);
+                checkShared.setPoolRelationMap(shared.poolRelationMap);
+                checkShared.setHasPendingProcess(shared.hasPendingProcess);
+                checkShared.setSecurityInObservePool(shared.securityInObservePool);
+                checkShared.setIssuerInObservePool(shared.issuerInObservePool);
+                checkShared.setRequestInPoolIds(Collections.<Long>emptySet());
+                checkShared.setRequestOutPoolIds(requestOutPoolIds);
+                int poolCurrentCount = crmwPoolAdjustMapper.queryPoolCurrentCount(mutexId);
+                AdjustCheckContext ctx = buildCheckContext(fakeOut, poolCurrentCount, checkShared);
+                List<String> outFailures = checkOutConditions(ctx);
+                if (outFailures != null && !outFailures.isEmpty()) {
+                    throw new BizException("配套互斥调出失败，无法完成调入（" + mutexPoolName + "）："
+                            + String.join("；", outFailures));
+                }
+            }
+        }
+    }
+
     private void checkRecentDuplicateSubmit(CrmwPoolAdjustSubmitReq req) {
         List<CrmwPoolAdjustSubmitReq.AdjustItem> manualItems = req.getItems().stream()
                 .filter(this::isManualSubmitItem).collect(Collectors.toList());
@@ -1545,6 +1605,7 @@ public class CrmwPoolAdjustService {
 
             // 互斥配套调出：目标池调入时，若证券已在其互斥池（in_mutex）中，
             // 则需同步调出该互斥池，由系统自动追加调出校验项
+            List<AdjustCheckDto.CheckResultItem> groupMutexItems = new ArrayList<>();
             List<Long> inMutex = relations.get(RelationType.IN_MUTEX.getCode());
             if (inMutex != null) {
                 for (Long mutexId : inMutex) {
@@ -1558,10 +1619,13 @@ public class CrmwPoolAdjustService {
                                 buildAutoResultItem(mutexId, AdjustMode.OUT.getCode(), ItemType.MUTEX.getCode(), adjustGroupKey, shared);
                         // 关联手工项失败时阻断自动互斥项
                         inheritManualItemFailure(autoItem, resultItem);
+                        groupMutexItems.add(autoItem);
                         results.add(autoItem);
                     }
                 }
             }
+            // 互斥调出失败时反阻断同组手工调入，避免只入目标池导致双池
+            propagateMutexFailureToManual(resultItem, groupMutexItems);
         }
 
         return results;
@@ -3089,6 +3153,40 @@ public class CrmwPoolAdjustService {
         failures.addAll(autoItem.getFailReasons());
         autoItem.setCanAdjust(false);
         autoItem.setFailReasons(failures);
+    }
+
+    /**
+     * 互斥配套调出失败时，反阻断同组手工调入，避免只入目标池导致双池。
+     */
+    private void propagateMutexFailureToManual(AdjustCheckDto.CheckResultItem manualItem,
+                                               List<AdjustCheckDto.CheckResultItem> groupMutexItems) {
+        if (manualItem == null || !manualItem.isCanAdjust()
+                || groupMutexItems == null || groupMutexItems.isEmpty()) {
+            return;
+        }
+        List<String> mutexFailures = new ArrayList<>();
+        for (AdjustCheckDto.CheckResultItem mutexItem : groupMutexItems) {
+            if (mutexItem == null || mutexItem.isCanAdjust()) {
+                continue;
+            }
+            String poolName = mutexItem.getPoolName() != null
+                    ? mutexItem.getPoolName()
+                    : String.valueOf(mutexItem.getTargetPoolId());
+            String detail = "";
+            if (mutexItem.getFailReasons() != null && !mutexItem.getFailReasons().isEmpty()) {
+                detail = "：" + String.join("；", mutexItem.getFailReasons());
+            }
+            mutexFailures.add("配套互斥调出失败，无法完成调入（" + poolName + "）" + detail);
+        }
+        if (mutexFailures.isEmpty()) {
+            return;
+        }
+        List<String> failures = new ArrayList<>(mutexFailures);
+        if (manualItem.getFailReasons() != null) {
+            failures.addAll(manualItem.getFailReasons());
+        }
+        manualItem.setCanAdjust(false);
+        manualItem.setFailReasons(failures);
     }
 
     /**

@@ -214,6 +214,7 @@
 
 - **自动追加联动调入项**：取目标池 `in_linked` 关系，对每个联动池若未覆盖则 `buildAutoResultItem(linkedId,'调入','linkage')`，并 `inheritManualItemFailure`（手工项失败则阻断联动项）。
 - **自动追加互斥配套调出项**：取目标池 `in_mutex` 关系，若证券当前在互斥池中则 `buildAutoResultItem(mutexId,'调出','mutex')`。
+- **互斥失败反阻断手工项**：同组任一条互斥调出 `canAdjust=false` 时，手工调入亦置失败（防止只提交调入导致双池）；提交接口同样校验须带齐互斥调出且可调出。
 
 **④ 调出校验** `executeOutAdjustCheck`，对每个 `adjustMode==='调出'` 项执行 `checkOutConditions`：先跑通用 `checkCommonOut`，再按 `categoryType` 路由类型特有校验（`checkBondOut`/`checkStockOut`/`checkFundOut`/`checkCompanyOut`）。
 

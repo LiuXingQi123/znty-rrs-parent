@@ -1499,6 +1499,57 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
     }
 
+    /** 验证互斥调出失败时应反阻断同组手工调入，避免双池。 */
+    @Test
+    public void executeInAdjustCheckShouldBlockManualWhenMutexOutboundFails() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryPoolCurrentCount(any(Long.class))).thenReturn(1);
+
+        InvestmentPoolBo targetPool = buildPool(2L, 1L, "一级库");
+        targetPool.setPoolType("credit_bond");
+        InvestmentPoolBo mutexPool = buildPool(5L, 1L, "四级库");
+        mutexPool.setPoolType("credit_bond");
+        mutexPool.setLockFlag(1);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(targetPool.getId(), targetPool);
+        poolMap.put(mutexPool.getId(), mutexPool);
+
+        Map<String, List<Long>> targetRelations = new HashMap<>();
+        targetRelations.put("in_mutex", Collections.singletonList(mutexPool.getId()));
+        Map<Long, Map<String, List<Long>>> relationMap = new HashMap<>();
+        relationMap.put(targetPool.getId(), targetRelations);
+
+        AdjustSharedData shared = new AdjustSharedData();
+        shared.setSecurityInfo(new SecurityInfoBo());
+        shared.setPoolMap(poolMap);
+        shared.setCurrentPoolIds(new HashSet<>(Collections.singletonList(mutexPool.getId())));
+        shared.setPoolRelationMap(relationMap);
+        shared.setRequestInPoolIds(Collections.singleton(targetPool.getId()));
+        shared.setRequestOutPoolIds(Collections.<Long>emptySet());
+
+        AdjustCheckReq.CheckItem item = new AdjustCheckReq.CheckItem();
+        item.setTargetPoolId(targetPool.getId());
+        item.setPoolType("credit_bond");
+        item.setAdjustMode("调入");
+        AdjustCheckReq req = new AdjustCheckReq();
+        req.setItems(Collections.singletonList(item));
+        Set<String> coveredKeys = new HashSet<>();
+        coveredKeys.add(targetPool.getId() + "_调入");
+
+        List<AdjustCheckDto.CheckResultItem> results = ReflectionTestUtils.invokeMethod(
+                service, "executeInAdjustCheck", req, shared, coveredKeys);
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(1).getItemTag()).isEqualTo("mutex");
+        assertThat(results.get(1).isCanAdjust()).isFalse();
+        assertThat(results.get(1).getFailReasons().get(0)).contains("锁定");
+        assertThat(results.get(0).getItemTag()).isEqualTo("manual");
+        assertThat(results.get(0).isCanAdjust()).isFalse();
+        assertThat(results.get(0).getFailReasons().get(0)).contains("配套互斥调出失败");
+    }
+
     /** 验证手工调入失败时应同步阻断派生的互斥调出项。 */
     @Test
     public void executeInAdjustCheckShouldBlockMutexOutboundWhenManualInboundFails() {
