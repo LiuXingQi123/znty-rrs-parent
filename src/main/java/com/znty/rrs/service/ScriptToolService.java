@@ -2020,7 +2020,8 @@ public class ScriptToolService {
     }
 
     /**
-     * 统计脚本文件影响的表数量。
+     * 统计脚本实际受影响表数量（去重）。
+     * <p>schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数。</p>
      */
     private int countTablesInFiles(List<String> fileNames, String scriptType) {
         File sqlDir;
@@ -2033,11 +2034,39 @@ public class ScriptToolService {
         Set<String> tableSet = new LinkedHashSet<>();
         int sortOrder = 1;
         for (String fileName : fileNames) {
-            // 解析脚本内影响表
-            ScriptFileDto file = buildScriptFile(sqlDir, fileName, scriptType, sortOrder++);
-            if (file.getAffectedTables() != null) {
-                tableSet.addAll(file.getAffectedTables());
+            File sqlFile = new File(sqlDir, fileName);
+            if (!sqlFile.exists()) {
+                continue;
             }
+            try {
+                String sqlText = new String(Files.readAllBytes(sqlFile.toPath()), StandardCharsets.UTF_8);
+                // 按语句解析受影响表
+                for (String sql : splitSqlStatements(sqlText)) {
+                    if (!isExecutableStatement(sql)) {
+                        continue;
+                    }
+                    String matchSql = normalizeExecutableSql(sql);
+                    if ("schema".equals(scriptType)) {
+                        Matcher createMatcher = CREATE_TABLE_PATTERN.matcher(matchSql);
+                        if (createMatcher.matches()) {
+                            tableSet.add(createMatcher.group(1));
+                        }
+                        continue;
+                    }
+                    // demo / 其他：统计清空与写入目标表
+                    Matcher truncateMatcher = TRUNCATE_TABLE_PATTERN.matcher(matchSql);
+                    if (truncateMatcher.matches()) {
+                        tableSet.add(truncateMatcher.group(1));
+                    }
+                    Matcher insertMatcher = INSERT_TABLE_PATTERN.matcher(matchSql);
+                    if (insertMatcher.matches()) {
+                        tableSet.add(insertMatcher.group(1));
+                    }
+                }
+            } catch (Exception e) {
+                // 单文件解析失败时跳过，避免拖垮任务列表
+            }
+            sortOrder++;
         }
         return tableSet.size();
     }

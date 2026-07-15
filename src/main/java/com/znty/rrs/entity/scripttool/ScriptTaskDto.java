@@ -31,7 +31,10 @@ public class ScriptTaskDto {
     /** 包含的脚本或表 */
     private List<String> items;
 
-    /** 任务涉及表数量 */
+    /**
+     * 受影响表数量。
+     * <p>按任务脚本内实际 CREATE TABLE / TRUNCATE / INSERT 目标表去重统计，不是脚本文件个数。</p>
+     */
     private Integer tableCount;
 
     /** 已排除的表（主任务不执行，需单独初始化） */

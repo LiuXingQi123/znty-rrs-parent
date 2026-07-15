@@ -91,9 +91,12 @@ public class ScriptToolServiceTest {
         assertTrue(!resetItems.contains("rrs_external_import_demo_data.sql"));
         assertTrue(externalSchemaItems.contains("rrs_external_import_schema.sql"));
         assertTrue(excluded.contains("rrs_securityinfo"));
+        // 主库 schema 受影响表 = CREATE TABLE 去重（含流程/池事件表等），不是脚本文件数 10
         assertTrue(schemaTableCount != null && schemaTableCount > 0);
+        assertEquals(Integer.valueOf(55), schemaTableCount);
         assertEquals(Integer.valueOf(1), externalImportTableCount);
         assertEquals(Integer.valueOf(7), clearTableCount);
+        assertEquals(10, schemaItems.size());
     }
 
     /** 验证重置选中表时会执行带前置注释的 Demo 插入语句。 */
