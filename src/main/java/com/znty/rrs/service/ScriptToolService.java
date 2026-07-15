@@ -55,8 +55,16 @@ public class ScriptToolService {
     private static final String TASK_RESET_ALL = "RESET_ALL";
     /** 清空调库运行态数据任务编码 */
     private static final String TASK_CLEAR_ADJUST_FLOW = "CLEAR_ADJUST_FLOW";
-    /** 初始化 AIS 库任务编码 */
-    private static final String TASK_INIT_AIS = "INIT_AIS";
+    /** 初始化 AIS 库建表任务编码 */
+    private static final String TASK_INIT_AIS_SCHEMA = "INIT_AIS_SCHEMA";
+    /** 初始化 AIS 库 Demo 数据任务编码 */
+    private static final String TASK_INIT_AIS_DEMO = "INIT_AIS_DEMO";
+    /** 初始化外部导入表建表任务编码 */
+    private static final String TASK_INIT_EXTERNAL_IMPORT_SCHEMA = "INIT_EXTERNAL_IMPORT_SCHEMA";
+    /** 初始化外部导入表 Demo 数据任务编码 */
+    private static final String TASK_INIT_EXTERNAL_IMPORT_DEMO = "INIT_EXTERNAL_IMPORT_DEMO";
+    /** 已从主库批量任务排除的外部导入表示例（当前为证券主数据表） */
+    private static final String EXCLUDED_EXTERNAL_IMPORT_TABLE = "rrs_securityinfo";
     /** 清空选中表数据任务编码 */
     private static final String TASK_CLEAR_SELECTED_TABLES = "CLEAR_SELECTED_TABLES";
     /** 清空选中表确认文本 */
@@ -518,26 +526,39 @@ public class ScriptToolService {
      */
     private void executeTask(String taskCode, List<String> executedItems) throws Exception {
         if (TASK_INIT_SCHEMA.equals(taskCode)) {
-            // 执行主库建表脚本（排除 AIS 库）
+            // 执行主库建表脚本（排除 AIS 库与外部导入表）
             executeSqlFiles(queryRrsSchemaFiles(), executedItems);
             return;
         }
         if (TASK_INIT_DEMO.equals(taskCode)) {
-            // 执行主库 Demo 数据脚本（排除 AIS 库）
+            // 执行主库 Demo 数据脚本（排除 AIS 库与外部导入表）
             executeSqlFiles(queryRrsDemoFiles(), executedItems);
             return;
         }
-        if (TASK_INIT_AIS.equals(taskCode)) {
+        if (TASK_INIT_EXTERNAL_IMPORT_SCHEMA.equals(taskCode)) {
+            // 单独执行外部导入表建表脚本
+            executeSqlFiles(queryExternalImportSchemaFiles(), executedItems);
+            return;
+        }
+        if (TASK_INIT_EXTERNAL_IMPORT_DEMO.equals(taskCode)) {
+            // 单独执行外部导入表 Demo 脚本
+            executeSqlFiles(queryExternalImportDemoFiles(), executedItems);
+            return;
+        }
+        if (TASK_INIT_AIS_SCHEMA.equals(taskCode)) {
             // 执行 AIS 库建表脚本
             executeSqlFiles(queryAisSchemaFiles(), executedItems);
-            // 再执行 AIS 库 Demo 数据脚本
+            return;
+        }
+        if (TASK_INIT_AIS_DEMO.equals(taskCode)) {
+            // 执行 AIS 库 Demo 数据脚本
             executeSqlFiles(queryAisDemoFiles(), executedItems);
             return;
         }
         if (TASK_RESET_ALL.equals(taskCode)) {
-            // 先执行主库建表脚本（排除 AIS 库）
+            // 先执行主库建表脚本（排除 AIS 库与外部导入表）
             executeSqlFiles(queryRrsSchemaFiles(), executedItems);
-            // 再执行主库 Demo 数据脚本（排除 AIS 库）
+            // 再执行主库 Demo 数据脚本（排除 AIS 库与外部导入表）
             executeSqlFiles(queryRrsDemoFiles(), executedItems);
             return;
         }
@@ -1452,7 +1473,9 @@ public class ScriptToolService {
      */
     private String resolveModuleCode(String fileName) {
         if (fileName.startsWith("ais_inv_analysis")) return "ais-analysis";
+        if (fileName.startsWith("ais_inv_ods")) return "ais-ods";
         if (fileName.startsWith("rrs_dict")) return "dict";
+        if (fileName.startsWith("rrs_external_import")) return "external-import";
         if (fileName.startsWith("rrs_security_pool_adjust")) return "security-adjust";
         if (fileName.startsWith("rrs_flow_definition")) return "flow-definition";
         if (fileName.startsWith("rrs_rule")) return "rule-config";
@@ -1471,7 +1494,9 @@ public class ScriptToolService {
     private String resolveModuleName(String fileName) {
         String moduleCode = resolveModuleCode(fileName);
         if ("ais-analysis".equals(moduleCode)) return "AIS 投资分析库";
+        if ("ais-ods".equals(moduleCode)) return "AIS 投资 ODS 库";
         if ("dict".equals(moduleCode)) return "字典数据";
+        if ("external-import".equals(moduleCode)) return "外部导入表";
         if ("security-adjust".equals(moduleCode)) return "证券调库演示数据";
         if ("flow-definition".equals(moduleCode)) return "流程定义";
         if ("rule-config".equals(moduleCode)) return "规则配置";
@@ -1490,7 +1515,8 @@ public class ScriptToolService {
     private Map<String, ScriptModuleTaskDto> queryModuleTaskMap() {
         Map<String, ScriptModuleTaskDto> taskMap = new LinkedHashMap<>();
         addModuleTask(taskMap, "dict", "字典数据", "重置证券类型等基础字典数据。", "medium", "rrs_dict_demo_data.sql");
-        addModuleTask(taskMap, "security-adjust", "证券调库演示数据", "重置证券主数据、调库日志、池状态和流程步骤演示数据。", "danger", "rrs_security_pool_adjust_demo_data.sql");
+        addModuleTask(taskMap, "external-import", "外部导入表", "重置外部导入表演示数据（当前含 rrs_securityinfo）。", "danger", "rrs_external_import_demo_data.sql");
+        addModuleTask(taskMap, "security-adjust", "证券调库演示数据", "重置调库日志、池状态和流程步骤演示数据（不含外部导入表）。", "danger", "rrs_security_pool_adjust_demo_data.sql");
         addModuleTask(taskMap, "flow-definition", "流程定义", "重置流程定义、版本、节点、连线和审批处理人配置。", "danger", "rrs_flow_definition_demo_data.sql");
         addModuleTask(taskMap, "rule-config", "规则配置", "重置规则分类、规则定义、参数、测试用例和测试运行日志。", "danger", "rrs_rule_demo_data.sql");
         addModuleTask(taskMap, "pool-config", "投资池配置", "重置投资池、投资池关系、自动规则和权限配置。", "danger", "rrs_pool_init_demo_data.sql");
@@ -1704,6 +1730,7 @@ public class ScriptToolService {
                 "ais_inv_analysis_schema.sql",
                 "ais_inv_ods_schema.sql",
                 "rrs_dict_schema.sql",
+                "rrs_external_import_schema.sql",
                 "rrs_security_pool_adjust_schema.sql",
                 "rrs_flow_definition_schema.sql",
                 "rrs_pool_init_schema.sql",
@@ -1724,6 +1751,7 @@ public class ScriptToolService {
                 "ais_inv_analysis_demo_data.sql",
                 "ais_inv_ods_demo_data.sql",
                 "rrs_dict_demo_data.sql",
+                "rrs_external_import_demo_data.sql",
                 "rrs_security_pool_adjust_demo_data.sql",
                 "rrs_flow_definition_demo_data.sql",
                 "rrs_rule_demo_data.sql",
@@ -1757,20 +1785,36 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询主库建表脚本，排除 AIS 库。
+     * 查询外部导入表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）。
+     */
+    private List<String> queryExternalImportSchemaFiles() {
+        return Arrays.asList("rrs_external_import_schema.sql");
+    }
+
+    /**
+     * 查询外部导入表 Demo 脚本（当前含 rrs_securityinfo，后续可追加同类表）。
+     */
+    private List<String> queryExternalImportDemoFiles() {
+        return Arrays.asList("rrs_external_import_demo_data.sql");
+    }
+
+    /**
+     * 查询主库建表脚本，排除 AIS 库与外部导入表。
      */
     private List<String> queryRrsSchemaFiles() {
         List<String> files = new ArrayList<>(querySchemaFiles());
         files.removeAll(queryAisSchemaFiles());
+        files.removeAll(queryExternalImportSchemaFiles());
         return files;
     }
 
     /**
-     * 查询主库 Demo 数据脚本，排除 AIS 库。
+     * 查询主库 Demo 数据脚本，排除 AIS 库与外部导入表。
      */
     private List<String> queryRrsDemoFiles() {
         List<String> files = new ArrayList<>(queryDemoFiles());
         files.removeAll(queryAisDemoFiles());
+        files.removeAll(queryExternalImportDemoFiles());
         return files;
     }
 
@@ -1919,69 +1963,91 @@ public class ScriptToolService {
      */
     private Map<String, ScriptTaskDto> queryTaskMap() {
         Map<String, ScriptTaskDto> taskMap = new LinkedHashMap<>();
-        // 加入建表初始化任务
-        addTask(taskMap, TASK_INIT_SCHEMA, "初始化建表脚本", "按固定顺序执行 sql 目录下全部 schema 脚本，重建表结构。", "high", "INIT_SCHEMA",
-                "会 DROP 并重新 CREATE 相关表结构，原表数据会被清空。", buildSchemaTaskItems());
-        // 加入 Demo 数据初始化任务
-        addTask(taskMap, TASK_INIT_DEMO, "初始化 Demo 数据", "按固定顺序执行 sql 目录下全部 demo 数据脚本。", "medium", "INIT_DEMO",
-                "会按脚本内 TRUNCATE 逻辑重置演示数据。", buildDemoTaskItems());
-        // 加入完整重建任务
-        addTask(taskMap, TASK_RESET_ALL, "重建完整演示环境", "先执行主库 schema 脚本，再执行主库 demo 数据脚本（不含 AIS 库）。", "danger", "RESET_ALL",
-                "会重建主库表结构并重置全部演示数据。", buildResetAllTaskItems());
-        // 加入 AIS 库初始化任务
-        addTask(taskMap, TASK_INIT_AIS, "初始化 AIS 库", "执行 ais_inv_analysis 与 ais_inv_ods 两个 AIS 库的建表与演示数据脚本。", "high", "INIT_AIS",
-                "会重建 AIS 投资分析与 ODS 库表结构并重置演示数据。", buildAisTaskItems());
+        List<String> excludedExternalImport = Arrays.asList(EXCLUDED_EXTERNAL_IMPORT_TABLE);
+        // 完整重建置首：前端通栏展示
+        addTask(taskMap, TASK_RESET_ALL, "重建完整演示环境",
+                "先执行主库 schema 再执行 demo（已排除外部导入表与 AIS 库）。",
+                "danger", "RESET_ALL",
+                "会重建主库表结构并重置演示数据，不含外部导入表与 AIS 库。",
+                mergeList(queryRrsSchemaFiles(), queryRrsDemoFiles()),
+                countTablesInFiles(queryRrsSchemaFiles(), "schema"), excludedExternalImport);
+        // 加入建表初始化任务（排除 AIS 与外部导入表）
+        addTask(taskMap, TASK_INIT_SCHEMA, "初始化建表脚本",
+                "按固定顺序执行主库 schema 脚本重建表结构（已排除外部导入表与 AIS 库）。",
+                "high", "INIT_SCHEMA",
+                "会 DROP 并重新 CREATE 相关表结构，原表数据会被清空。外部导入表需单独执行。",
+                queryRrsSchemaFiles(), countTablesInFiles(queryRrsSchemaFiles(), "schema"), excludedExternalImport);
+        // 加入 Demo 数据初始化任务（排除 AIS 与外部导入表）
+        addTask(taskMap, TASK_INIT_DEMO, "初始化 Demo 数据",
+                "按固定顺序执行主库 demo 数据脚本（已排除外部导入表与 AIS 库）。",
+                "medium", "INIT_DEMO",
+                "会按脚本内 TRUNCATE 逻辑重置演示数据。外部导入表需单独执行。",
+                queryRrsDemoFiles(), countTablesInFiles(queryRrsDemoFiles(), "demo"), excludedExternalImport);
+        // 加入外部导入表建表任务
+        addTask(taskMap, TASK_INIT_EXTERNAL_IMPORT_SCHEMA, "初始化外部导入表建表",
+                "执行外部导入类表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）。",
+                "high", "INIT_EXTERNAL_IMPORT_SCHEMA",
+                "会 DROP 并重新 CREATE 外部导入表，原数据会被清空。",
+                queryExternalImportSchemaFiles(),
+                countTablesInFiles(queryExternalImportSchemaFiles(), "schema"), null);
+        // 加入外部导入表 Demo 任务
+        addTask(taskMap, TASK_INIT_EXTERNAL_IMPORT_DEMO, "初始化外部导入表 Demo",
+                "执行外部导入类表演示数据脚本（当前含 rrs_securityinfo，后续可追加同类表）。",
+                "medium", "INIT_EXTERNAL_IMPORT_DEMO",
+                "会 TRUNCATE 后重新写入外部导入表演示数据。",
+                queryExternalImportDemoFiles(),
+                countTablesInFiles(queryExternalImportDemoFiles(), "demo"), null);
+        // 加入 AIS 库建表任务
+        addTask(taskMap, TASK_INIT_AIS_SCHEMA, "初始化 AIS 建表脚本",
+                "执行 ais_inv_analysis 与 ais_inv_ods 两个 AIS 库的建表脚本。",
+                "high", "INIT_AIS_SCHEMA",
+                "会重建 AIS 投资分析与 ODS 库表结构。",
+                queryAisSchemaFiles(), countTablesInFiles(queryAisSchemaFiles(), "schema"), null);
+        // 加入 AIS 库 Demo 任务
+        addTask(taskMap, TASK_INIT_AIS_DEMO, "初始化 AIS Demo 数据",
+                "执行 ais_inv_analysis 与 ais_inv_ods 两个 AIS 库的演示数据脚本。",
+                "high", "INIT_AIS_DEMO",
+                "会重置 AIS 投资分析与 ODS 库演示数据。",
+                queryAisDemoFiles(), countTablesInFiles(queryAisDemoFiles(), "demo"), null);
         // 加入调库运行态清空任务
-        addTask(taskMap, TASK_CLEAR_ADJUST_FLOW, "清空调库流程数据", "只清空调库申请、步骤、当前池状态、附件和报告等运行态数据。", "danger", "CLEAR_ADJUST_FLOW",
-                "不清空证券主数据、投资池、流程定义、规则和字典配置。", buildAdjustFlowRuntimeTaskItems());
+        List<String> clearTables = queryAdjustFlowRuntimeTables();
+        addTask(taskMap, TASK_CLEAR_ADJUST_FLOW, "清空调库流程数据",
+                "只清空调库申请、步骤、当前池状态、附件和报告等运行态数据。",
+                "danger", "CLEAR_ADJUST_FLOW",
+                "不清空证券主数据、投资池、流程定义、规则和字典配置。",
+                clearTables, clearTables.size(), null);
         return taskMap;
     }
 
     /**
-     * 构建建表任务展示项。
+     * 统计脚本文件影响的表数量。
      */
-    private List<String> buildSchemaTaskItems() {
-        // 查询主库建表脚本执行顺序（排除 AIS 库）
-        return queryRrsSchemaFiles();
-    }
-
-    /**
-     * 构建 Demo 数据任务展示项。
-     */
-    private List<String> buildDemoTaskItems() {
-        // 查询主库 Demo 数据脚本执行顺序（排除 AIS 库）
-        return queryRrsDemoFiles();
-    }
-
-    /**
-     * 构建 AIS 库初始化任务展示项。
-     */
-    private List<String> buildAisTaskItems() {
-        // 合并 AIS 库建表脚本和 Demo 数据脚本
-        return mergeList(queryAisSchemaFiles(), queryAisDemoFiles());
-    }
-
-    /**
-     * 构建完整重建任务展示项。
-     */
-    private List<String> buildResetAllTaskItems() {
-        // 合并主库建表脚本和 Demo 数据脚本（排除 AIS 库）
-        return mergeList(queryRrsSchemaFiles(), queryRrsDemoFiles());
-    }
-
-    /**
-     * 构建调库运行态清空任务展示项。
-     */
-    private List<String> buildAdjustFlowRuntimeTaskItems() {
-        // 查询调库运行态清空表
-        return queryAdjustFlowRuntimeTables();
+    private int countTablesInFiles(List<String> fileNames, String scriptType) {
+        File sqlDir;
+        try {
+            // 解析 SQL 文件目录
+            sqlDir = resolveSqlDir();
+        } catch (Exception e) {
+            return 0;
+        }
+        Set<String> tableSet = new LinkedHashSet<>();
+        int sortOrder = 1;
+        for (String fileName : fileNames) {
+            // 解析脚本内影响表
+            ScriptFileDto file = buildScriptFile(sqlDir, fileName, scriptType, sortOrder++);
+            if (file.getAffectedTables() != null) {
+                tableSet.addAll(file.getAffectedTables());
+            }
+        }
+        return tableSet.size();
     }
 
     /**
      * 加入任务配置。
      */
     private void addTask(Map<String, ScriptTaskDto> taskMap, String taskCode, String taskName, String description,
-                         String riskLevel, String confirmText, String affectScope, List<String> items) {
+                         String riskLevel, String confirmText, String affectScope, List<String> items,
+                         Integer tableCount, List<String> excludedItems) {
         ScriptTaskDto dto = new ScriptTaskDto();
         dto.setTaskCode(taskCode);
         dto.setTaskName(taskName);
@@ -1990,6 +2056,8 @@ public class ScriptToolService {
         dto.setConfirmText(confirmText);
         dto.setAffectScope(affectScope);
         dto.setItems(new ArrayList<>(items));
+        dto.setTableCount(tableCount == null ? 0 : tableCount);
+        dto.setExcludedItems(excludedItems == null ? new ArrayList<String>() : new ArrayList<>(excludedItems));
         taskMap.put(taskCode, dto);
     }
 

@@ -41,6 +41,61 @@ public class ScriptToolServiceTest {
         assertEquals(tables.keySet(), healthTables.keySet());
     }
 
+    /** 验证主库批量任务排除外部导入表，且 AIS/外部导入拆为独立任务。 */
+    @Test
+    public void shouldExcludeExternalImportAndSplitAisTasks() {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+
+        // 构建数据初始化任务白名单
+        Map<?, ?> taskMap = ReflectionTestUtils.invokeMethod(service, "queryTaskMap");
+        Object initSchema = taskMap.get("INIT_SCHEMA");
+        Object initDemo = taskMap.get("INIT_DEMO");
+        Object resetAll = taskMap.get("RESET_ALL");
+        Object externalImportSchema = taskMap.get("INIT_EXTERNAL_IMPORT_SCHEMA");
+        Object externalImportDemo = taskMap.get("INIT_EXTERNAL_IMPORT_DEMO");
+        Object aisSchema = taskMap.get("INIT_AIS_SCHEMA");
+        Object aisDemo = taskMap.get("INIT_AIS_DEMO");
+        Object clearFlow = taskMap.get("CLEAR_ADJUST_FLOW");
+
+        assertTrue(initSchema != null);
+        assertTrue(initDemo != null);
+        assertTrue(resetAll != null);
+        assertTrue(externalImportSchema != null);
+        assertTrue(externalImportDemo != null);
+        assertTrue(aisSchema != null);
+        assertTrue(aisDemo != null);
+        assertTrue(clearFlow != null);
+        assertTrue(taskMap.get("INIT_AIS") == null);
+        assertTrue(taskMap.get("INIT_SECURITYINFO_SCHEMA") == null);
+        // 完整重建任务排在列表首位，便于前端通栏展示
+        assertEquals("RESET_ALL", taskMap.keySet().iterator().next());
+
+        @SuppressWarnings("unchecked")
+        List<String> schemaItems = (List<String>) ReflectionTestUtils.getField(initSchema, "items");
+        @SuppressWarnings("unchecked")
+        List<String> demoItems = (List<String>) ReflectionTestUtils.getField(initDemo, "items");
+        @SuppressWarnings("unchecked")
+        List<String> resetItems = (List<String>) ReflectionTestUtils.getField(resetAll, "items");
+        @SuppressWarnings("unchecked")
+        List<String> excluded = (List<String>) ReflectionTestUtils.getField(initSchema, "excludedItems");
+        @SuppressWarnings("unchecked")
+        List<String> externalSchemaItems = (List<String>) ReflectionTestUtils.getField(externalImportSchema, "items");
+        Integer schemaTableCount = (Integer) ReflectionTestUtils.getField(initSchema, "tableCount");
+        Integer clearTableCount = (Integer) ReflectionTestUtils.getField(clearFlow, "tableCount");
+        Integer externalImportTableCount = (Integer) ReflectionTestUtils.getField(externalImportSchema, "tableCount");
+
+        assertTrue(!schemaItems.contains("rrs_external_import_schema.sql"));
+        assertTrue(!demoItems.contains("rrs_external_import_demo_data.sql"));
+        assertTrue(!resetItems.contains("rrs_external_import_schema.sql"));
+        assertTrue(!resetItems.contains("rrs_external_import_demo_data.sql"));
+        assertTrue(externalSchemaItems.contains("rrs_external_import_schema.sql"));
+        assertTrue(excluded.contains("rrs_securityinfo"));
+        assertTrue(schemaTableCount != null && schemaTableCount > 0);
+        assertEquals(Integer.valueOf(1), externalImportTableCount);
+        assertEquals(Integer.valueOf(7), clearTableCount);
+    }
+
     /** 验证重置选中表时会执行带前置注释的 Demo 插入语句。 */
     @Test
     public void shouldExecuteCommentedDemoInsertForSelectedTable() throws Exception {

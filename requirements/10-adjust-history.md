@@ -161,4 +161,4 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 - Service：`SecurityPoolAdjustHistoryService.java`、`InvestmentPoolService.java`
 - Mapper：`SecurityPoolAdjustHistoryMapper.xml`、`CommonMapper.xml`
 - 实体：`SecurityPoolAdjustHistoryDto`、`SecurityPoolAdjustHistoryReq`
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log）
+- SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log）

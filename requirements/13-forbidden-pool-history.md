@@ -186,4 +186,4 @@ ORDER BY al.submit_time DESC, al.id DESC
 - Service：`ForbiddenPoolHistoryService.java`（`queryForbiddenPoolHistoryPage`、`fillPoolFullName`）
 - Mapper：`ForbiddenPoolHistoryMapper.xml`
 - 实体：`ForbiddenPoolHistoryReq`、`ForbiddenPoolHistoryDto`
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log）、`sql/rrs_pool_init_schema.sql`
+- SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log）、`sql/rrs_pool_init_schema.sql`

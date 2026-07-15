@@ -210,4 +210,4 @@ this.loadList();                  // 列表数据
 - Service：`SecurityPoolQueryService.java`、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
 - Mapper：`SecurityPoolQueryMapper.xml`、`CommonMapper.xml`、`MySecurityPoolMapper.xml`、`InvestmentPoolMapper.xml`
 - 实体：`SecurityPoolQueryDto`、`SecurityPoolQueryReq`、`SecurityTypeOptionDto`、`PoolTreeDto`、`MySecurityPoolBo`
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/rrs_my_security_pool_schema.sql`、`sql/rrs_dict_schema.sql`
+- SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/rrs_my_security_pool_schema.sql`、`sql/rrs_dict_schema.sql`

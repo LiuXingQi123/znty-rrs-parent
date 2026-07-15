@@ -369,6 +369,8 @@
 
 ### 5.5 `rrs_securityinfo`（证券信息表）
 
+> 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
+
 详情页可编辑字段约 28 个。关键只读字段：`maturity_date`（到期校验）、`date_next`（剩余期限，yyyyMMdd）、`guarantor`/`guarantor_id`（担保人判断）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
@@ -487,4 +489,4 @@
 - Service：`SecurityPoolAdjustService.java`（`checkAdjust`、`addAdjustLog`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`）
 - Mapper：`SecurityPoolAdjustMapper.java` / `SecurityPoolAdjustMapper.xml`
 - 实体：`SecurityPoolAdjustSubmitReq`、`AdjustCheckReq`、`AdjustCheckDto`、`IpAdjustLogBo`、`IpAdjustStepBo`、`PoolDto`
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）
+- SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（`ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`）、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）

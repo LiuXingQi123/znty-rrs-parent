@@ -219,5 +219,5 @@
 - Service：`CrmwPoolAdjustService.java`（`checkCrmwAdjust`、`addCrmwAdjustLog`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`、`resolveAdjustFlowOptions`）
 - Mapper：`CrmwPoolAdjustMapper.java` / `resources/mapper/CrmwPoolAdjustMapper.xml`
 - 实体：`entity/crmwpooladjust/`（`CrmwPoolAdjustReq`、`CrmwPoolAdjustSubmitReq`、`AdjustCheckReq`、`AdjustCheckDto`、`AdjustSubmitDto`、`AdjustLogDto`、`PoolDto`、`SecurityInfoDto`、`SecurityInfoDetailDto`、`SecurityPoolStatusDto`、`IpAdjustStepDto` 等）
-- SQL：`sql/rrs_crmw_pool_status_schema.sql`、`sql/rrs_security_pool_adjust_schema.sql`（`ip_adjust_log`）、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）
+- SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_crmw_pool_status_schema.sql`、`sql/rrs_security_pool_adjust_schema.sql`（`ip_adjust_log`）、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）
 - 测试：`CrmwPoolAdjustApiTest.java`

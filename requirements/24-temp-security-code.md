@@ -183,4 +183,4 @@
 - Mapper：`mapper/TempSecurityCodeMapper.java` / `resources/mapper/TempSecurityCodeMapper.xml`
 - 实体：`entity/tempsecuritycode/TempSecurityCodeDto.java`（含 `CompanyOption`/`SecurityTypeOption`/`OptionBundle`）、`entity/tempsecuritycode/TempSecurityCodeReq.java`；`entity/bo/TempSecurityCodeBo.java`
 - 枚举：`common/enums/TempStatus.java`、`common/enums/TempOperationType.java`、`common/enums/MarketCode.java`
-- SQL：`sql/rrs_temp_security_code_schema.sql`、`sql/rrs_temp_security_code_demo_data.sql`；关联 `sql/rrs_dict_schema.sql`（`dict_security_type`）
+- SQL：`sql/rrs_temp_security_code_schema.sql`、`sql/rrs_temp_security_code_demo_data.sql`；关联 `sql/rrs_external_import_schema.sql`（`rrs_securityinfo` upsert）、`sql/rrs_dict_schema.sql`（`dict_security_type`）

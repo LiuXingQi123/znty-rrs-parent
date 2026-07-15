@@ -73,7 +73,7 @@
 
 ## 5. 关键数据库表
 
-view 模式纯读：`ip_pool_status_crmw`（查询当前池）、`ip_adjust_log`（调库记录）、`ip_adjust_step`（流程步骤）、`ip_investment_pool`、`rrs_securityinfo`、`wf_flow_definition`。adjust 模式提交时写 `ip_adjust_log`/`ip_pool_status_crmw`/`ip_adjust_step`/`sys_attachment`，与 [19] 完全一致。
+view 模式纯读：`ip_pool_status_crmw`（查询当前池）、`ip_adjust_log`（调库记录）、`ip_adjust_step`（流程步骤）、`ip_investment_pool`、`rrs_securityinfo`（表结构见 `rrs_external_import_schema.sql`）、`wf_flow_definition`。adjust 模式提交时写 `ip_adjust_log`/`ip_pool_status_crmw`/`ip_adjust_step`/`sys_attachment`，与 [19] 完全一致。
 
 ---
 

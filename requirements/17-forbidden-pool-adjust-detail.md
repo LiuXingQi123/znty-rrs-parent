@@ -131,5 +131,5 @@ view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip
 - Service：`ForbiddenPoolAdjustService.java`（详情查询方法 + adjust 模式 `checkCompanyAdjust`/`addCompanyAdjustLog`/`addAdjustLog`/`createInitialSteps`/`syncCompanyBondsOnDirect`）
 - Mapper：`ForbiddenPoolAdjustMapper.java` / `ForbiddenPoolAdjustMapper.xml`
 - 实体：同 [15]（`ForbiddenPoolAdjustReq/Dto/CheckReq/SubmitReq/SubmitDto` + 复用 `AdjustLogDto/IpAdjustStepDto/PoolDto`）
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`（共享表结构）
+- SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（调库运行态表）
 - 测试：`ForbiddenPoolAdjustApiTest.java`

@@ -525,4 +525,4 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 - Service：`SecurityPoolAdjustFlowService.java`（核心流转，`submitAdjustAudit`/`resolveProcessingNodeAuditStatus`/`finishAdjustBatch`）、`SecurityPoolAdjustService.java`（提交与初始步骤）、`MyMattersService.java`、`FlowService.java`
 - Mapper：`SecurityPoolAdjustMapper.xml`、`MyMattersMapper.xml`
 - 实体：`SecurityPoolAdjustAuditReq`、`SecurityPoolAdjustAuditDto`、`IpAdjustStepBo`、`IpAdjustLogBo`、`FlowSnapshot`、`FlowNodeBo`、`FlowEdgeBo`、`NodeApprovalConfigBo`、`NodeApprovalHandlerBo`
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_flow_definition_schema.sql`、`sql/rrs_flow_definition_demo_data.sql`
+- SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_flow_definition_schema.sql`、`sql/rrs_flow_definition_demo_data.sql`

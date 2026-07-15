@@ -32,12 +32,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 用 `AtomicBoolean running` 做互斥，禁止并发执行
 - 危险操作需前端回传与 `taskCode` 一致的 `confirmText` 二次确认
 - SQL 文件有固定执行顺序（schema 先于 demo），改 `sql/` 目录文件名时**必须同步** `ScriptToolService` 内的白名单
+- 数据初始化任务：`INIT_SCHEMA` / `INIT_DEMO` / `RESET_ALL` 仅主库业务脚本（排除 AIS 与外部导入表）；外部导入表走 `INIT_EXTERNAL_IMPORT_SCHEMA` / `INIT_EXTERNAL_IMPORT_DEMO`；AIS 走 `INIT_AIS_SCHEMA` / `INIT_AIS_DEMO`
 - 配置项：`rrs.script.sql-path`（默认 `sql`，相对 `user.dir`）
 
 ### 数据库与 SQL 脚本
 
 - 主库 `znty_rrs`，另有独立库 `ais_inv_analysis`（AIS 投资分析：用户 / 角色 / 主体评级，ScriptTool 同时管理）与 `ais_inv_ods`（Wind 外部源只读：发行人 `wind_cbondissuer` / 主体评级 `wind_cbondissuerrating`，评级下调校验跨库查询）
-- `sql/` 下按模块成对存放 `rrs_<模块>_schema.sql`（建表）+ `rrs_<模块>_demo_data.sql`（演示数据）；AIS 库用 `ais_inv_analysis_*` 前缀
+- `sql/` 下按模块成对存放 `rrs_<模块>_schema.sql`（建表）+ `rrs_<模块>_demo_data.sql`（演示数据）
+- **外部导入表**（当前含 `rrs_securityinfo`）：`rrs_external_import_schema.sql` / `rrs_external_import_demo_data.sql`，与调库运行态脚本解耦，不随主库批量初始化执行
+- AIS 库：`ais_inv_analysis_*`、`ais_inv_ods_*` 前缀
 - 建表 / 写 SQL 前先查 `../CLAUDE_mysql.md`（数据库表设计规范）
 
 ---

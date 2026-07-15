@@ -155,4 +155,4 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 - Service：`ForbiddenPoolQueryService.java`（`queryForbiddenPoolPage`、`fillPoolFullName`、`querySecurityTypeList`）
 - Mapper：`ForbiddenPoolQueryMapper.xml`
 - 实体：`ForbiddenPoolQueryReq`、`ForbiddenPoolQueryDto`、`SecurityTypeOptionDto`
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/rrs_pool_init_schema.sql`
+- SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（ip_pool_status）、`sql/rrs_pool_init_schema.sql`
