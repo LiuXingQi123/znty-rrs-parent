@@ -59,7 +59,23 @@
 
 ### 3.2 更新为正式证券 `editTempSecurityCodeToUpdated`（`@Transactional`）
 
-`validateUpdateReq` → `queryOperableTempSecurityCode(id)`（必须 `temporary` 状态）→ 允许编辑临时证券字段；若 `tempCompanyCode` 变更则重新 `queryCompanyByCode`+`resolveCompanyName` 生成快照，否则保留原 `tempCompanyNameSnapshot` → 写入正式证券字段 → `status=UPDATED`(`updated`)、`operationType=UPDATE`(`update`)、`updateTime=now`、`updtTime=now` → **`upsertSecurityInfo(bo)`**：`querySecurityInfoCount(securityCode)` > 0 走 `editSecurityInfo` UPDATE 且不覆盖既有 `security_source`，否则 `addSecurityInfo` INSERT 并写 `security_source='temp_converted'` → 替换 `ip_adjust_log`、`ip_pool_status`、`ip_pool_status_crmw` 中临时代码证券引用及 CRMW 引用，并写入 `rrs_temp_security_code_update_log` → 将原临时代码占位证券置 `security_status='D'`，避免继续作为候选证券 → `editTempSecurityCodeToUpdated` UPDATE 主表 → 返回详情。
+对齐老系统 `TempSecurityInfoTableAction#refreshTempSecurity`，**流程中 vs 已在池分叉处理**（逻辑不同）：
+
+1. `validateUpdateReq`（仅 id + 正式证券代码必填）→ `queryOperableTempSecurityCode`（必须 `temporary`）
+2. 正式证券从主数据选券校验（`queryFormalSecurityByCode`，排除 temporary 占位）；正式码不能等于临时码
+3. 临时字段只读（用库内原值）；正式字段以主数据结果为准
+4. **业务分叉**（`convertTempSecurityBusinessData`）：
+   - **在途调库日志**（`ip_adjust_log.audit_status in ('00','11')`，对齐老 `approvestatus=10`）：仅 UPDATE 证券/CRMW 代码字段 → 正式码；写 `rrs_temp_security_code_update_log`；**不**生成出/入库业务单
+   - **已在池**（`ip_pool_status` / `ip_pool_status_crmw` 且 `audit_status=20`）：每个池
+     1. 写「债券临时代码调出」`ip_adjust_log`（`adjust_mode=调出`，`audit_status=20`，系统操作人）
+     2. 软删临时在池记录
+     3. 若正式码**已在同池** → 不再入库
+     4. 否则写正式调入日志（继承原原因/调整人）+ 新建正式在池状态
+   - **池/日志 CRMW 字段**指向临时码：仅字段替换（对齐老 `findInvestPoolStatusLC`）
+5. 临时占位 `rrs_securityinfo` 置 `security_status='D'`
+6. 主表 `status=updated`，返回详情
+
+> 正式证券主数据已存在时**不再 upsert**；历史已终态的调库日志（如 `20`）不改码，保留审计轨迹。
 
 ### 3.3 取消发行 `editTempSecurityCodeToCancelled`（`@Transactional`）
 

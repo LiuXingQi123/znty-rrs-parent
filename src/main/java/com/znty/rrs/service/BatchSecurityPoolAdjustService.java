@@ -2091,6 +2091,13 @@ public class BatchSecurityPoolAdjustService {
     }
 
     /**
+     * 判断是否为临时代码占位证券（security_source=temporary）。
+     */
+    private boolean isTemporarySecurity(SecurityInfoBo sec) {
+        return sec != null && "temporary".equals(sec.getSecuritySource());
+    }
+
+    /**
      * 判断证券当前是否已在信用债大库中。
      */
     private boolean isSecurityInCreditBondPool(AdjustSharedData shared) {
@@ -2373,7 +2380,12 @@ public class BatchSecurityPoolAdjustService {
         // 主体内评分档
         String gradeCode = sec.getInnerIssuerRating();
         if (gradeCode == null || gradeCode.isEmpty()) {
-            return "未配置主体内评分档，不符合入库条件";
+            // 临时代码占位证券常无内评：对齐老系统 lon 默认 8.0（对应本矩阵最低档 grade_code=4）
+            if (isTemporarySecurity(sec)) {
+                gradeCode = "4";
+            } else {
+                return "未配置主体内评分档，不符合入库条件";
+            }
         }
         // 担保债取严：主体与担保人评级较低者（sort_no 大者评级低）
         if (sec.getGuarantFlag() != null && sec.getGuarantFlag() == 1

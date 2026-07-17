@@ -1,8 +1,10 @@
 package com.znty.rrs.mapper;
 
+import com.znty.rrs.entity.bo.IpPoolStatusBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
+import java.util.Date;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -25,7 +27,10 @@ public interface TempSecurityCodeMapper {
     /** 查询临时代码未删除记录数量 */
     int queryTempSecurityCodeCount(@Param("tempSecurityCode") String tempSecurityCode, @Param("excludeId") Long excludeId);
 
-    /** 查询正式证券代码是否为临时代码（未删除且未取消发行的有效记录数量） */
+    /**
+     * 判断证券代码是否为有效临时代码（status=temporary，按 temp_security_code 匹配）。
+     * <p>对齐老系统 sdc_sirm_tempsecurity.lscode 识别方式。
+     */
     int queryTemporaryCodeCountBySecurityCode(@Param("securityCode") String securityCode);
 
     /** 按关键字查询发行主体选项（wind_cbondissuer，最多 50 条） */
@@ -76,41 +81,54 @@ public interface TempSecurityCodeMapper {
     /** 查询核心业务表引用数量 */
     int queryCoreReferenceCount(TempSecurityCodeBo bo);
 
-    /** 查询调库日志证券引用 ID 列表 */
-    List<Long> queryAdjustLogSecurityReferenceIdList(TempSecurityCodeBo bo);
+    /** 查询在途调库日志证券引用 ID（audit_status in 00/11） */
+    List<Long> queryPendingAdjustLogSecurityReferenceIdList(TempSecurityCodeBo bo);
 
-    /** 查询当前池状态证券引用 ID 列表 */
-    List<Long> queryPoolStatusSecurityReferenceIdList(TempSecurityCodeBo bo);
+    /** 查询有效在池状态列表（临时证券） */
+    List<IpPoolStatusBo> queryActivePoolStatusList(TempSecurityCodeBo bo);
 
-    /** 查询调库日志 CRMW 引用 ID 列表 */
-    List<Long> queryAdjustLogCrmwReferenceIdList(TempSecurityCodeBo bo);
+    /** 查询正式证券是否已在指定池 */
+    int queryActivePoolStatusCount(@Param("securityCode") String securityCode,
+                                   @Param("securityType") String securityType,
+                                   @Param("targetPoolId") Long targetPoolId);
+
+    /** 按主键软删除池状态 */
+    void deletePoolStatusSoftById(@Param("id") Long id, @Param("updateTime") Date updateTime);
+
+    /** 查询在途调库日志 CRMW 引用 ID 列表 */
+    List<Long> queryPendingAdjustLogCrmwReferenceIdList(TempSecurityCodeBo bo);
 
     /** 查询当前池状态 CRMW 引用 ID 列表 */
     List<Long> queryPoolStatusCrmwReferenceIdList(TempSecurityCodeBo bo);
 
-    /** 查询 CRMW 池状态证券引用 ID 列表 */
-    List<Long> queryCrmwPoolStatusSecurityReferenceIdList(TempSecurityCodeBo bo);
+    /** 查询 CRMW 池有效在池状态（security 为临时码） */
+    List<IpPoolStatusBo> queryActiveCrmwPoolStatusList(TempSecurityCodeBo bo);
+
+    /** 查询正式证券是否已在 CRMW 池 */
+    int queryActiveCrmwPoolStatusCount(@Param("securityCode") String securityCode,
+                                       @Param("securityType") String securityType,
+                                       @Param("targetPoolId") Long targetPoolId);
+
+    /** 按主键软删除 CRMW 池状态 */
+    void deleteCrmwPoolStatusSoftById(@Param("id") Long id, @Param("updateTime") Date updateTime);
 
     /** 查询 CRMW 池状态 CRMW 引用 ID 列表 */
     List<Long> queryCrmwPoolStatusCrmwReferenceIdList(TempSecurityCodeBo bo);
 
-    /** 批量替换调库日志证券引用 */
+    /** 批量替换在途调库日志证券引用 */
     void editAdjustLogSecurityReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
 
-    /** 批量替换当前池状态证券引用 */
-    void editPoolStatusSecurityReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
-
-    /** 批量替换调库日志 CRMW 引用 */
+    /** 批量替换在途调库日志 CRMW 引用 */
     void editAdjustLogCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
 
     /** 批量替换当前池状态 CRMW 引用 */
     void editPoolStatusCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
 
-    /** 批量替换 CRMW 池状态证券引用 */
-    void editCrmwPoolStatusSecurityReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
-
     /** 批量替换 CRMW 池状态 CRMW 引用 */
     void editCrmwPoolStatusCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
+
+    /** 新增 CRMW 池状态 */
+    void addCrmwPoolStatus(IpPoolStatusBo bo);
 
     /** 新增临时代码替换日志 */
     void addTempSecurityCodeUpdateLog(TempSecurityCodeBo bo);
