@@ -15,7 +15,7 @@
 2. 主体与证券的区分靠 `dict_security_type.category_type='company'`（与主体池查询 [09](09-company-pool-query.md) 一致）。
 3. **字段重命名映射**：`al.security_short_name AS companyName`、`al.security_code AS companyCode`。即调库记录里 `security_*` 字段存的就是主体代码/主体名称（主体作为伪证券入调库流水）。
 4. **展示全部状态**：WHERE 只限定 `al.is_deleted=0`，**不限定 `audit_status`**。一条主体从「流程中(00)→审批通过(20)」会形成多条 `ip_adjust_log`（不同批次号），每条都列出。
-5. **不按主体聚合、不按批次号聚合**：无 GROUP BY、无 DISTINCT、无 `adjust_batch_no` 排序。同一主体的多次调库各自成行，仅按 `submit_time` 倒序——这与证券级 `SecurityPoolAdjustHistoryMapper`（按 `adjust_batch_no DESC` 聚拢）不同。
+5. **不按主体聚合行**：无 GROUP BY、无 DISTINCT，同一主体的多次调库各自成行。排序与证券池历史一致：`submit_time DESC, adjust_batch_no DESC, id DESC`（时间优先；同秒内按批次号聚拢同组）。
 
 ---
 
@@ -71,13 +71,13 @@
 
 ### 2.3 分页
 
-与主体池查询页一致（默认 20、可选 10/20/50/100、后端封顶 100）。排序 `submit_time DESC, id DESC`。
+与主体池查询页一致（默认 20、可选 10/20/50/100、后端封顶 100）。排序 `submit_time DESC, adjust_batch_no DESC, id DESC`。
 
 ---
 
 ## 3. 按主体聚合调库记录的逻辑
 
-**实际上没有「按主体聚合」**——与主体池查询一样，是**逐条明细展示**。核心 SQL 见第 5 节。无 GROUP BY、无聚合函数、无批次号排序，每条 `ip_adjust_log` 一行。
+**实际上没有「按主体聚合」**——与主体池查询一样，是**逐条明细展示**。核心 SQL 见第 5 节。无 GROUP BY、无聚合函数，每条 `ip_adjust_log` 一行；排序含批次号次级键以便同组相邻。
 
 ---
 
@@ -120,14 +120,14 @@ INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
 LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id AND p.is_deleted = 0
 WHERE al.is_deleted = 0
   ...动态条件
-ORDER BY al.submit_time DESC, al.id DESC
+ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 ```
 
 要点：
 - `INNER JOIN dict_security_type dst` 且 ON 上带 `dst.is_deleted=0 AND dst.category_type='company'`（category_type 放在 ON 而非 WHERE，语义等价但写法与主体池查询不同）。
 - `LEFT JOIN ip_investment_pool p ON p.id=al.target_pool_id AND p.is_deleted=0`（**带了** `p.is_deleted=0`，与主体池查询 XML 的 LEFT JOIN 不同）。
 - WHERE 固定 `al.is_deleted=0`；动态 `<if>`：`poolIds`(IN)、`companyCode`(LIKE)、`companyName`(LIKE security_short_name)、`adjustTimeStart/End`(submit_time 范围，end 拼 23:59:59)、`adjusterName`(LIKE)、`adjustMode`(=)、`auditStatus`(=)。
-- 排序 `submit_time DESC, id DESC`。
+- 排序 `submit_time DESC, adjust_batch_no DESC, id DESC`。
 - Service 层 `fillPoolFullName` 用 `queryPoolFullNameMap()` 覆盖为全路径。
 
 ---
@@ -146,7 +146,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 | 时间补秒方 | 前端补 `00:00:00`/`23:59:59` | 后端对 end 拼 ` 23:59:59` |
 | 额外筛选 | 无 | 多 `companyName`、`adjustMode`、`auditStatus` 三个 |
 | 表格列 | 5 列（无状态/方向/类型） | 8 列（多调整类型、调整方向、审批状态） |
-| 排序 | `entry_time DESC, id DESC` | `submit_time DESC, id DESC` |
+| 排序 | `entry_time DESC, id DESC` | `submit_time DESC, adjust_batch_no DESC, id DESC` |
 | 总数文案 | 「共 X 个主体」 | 「共 X 条记录」 |
 | 详情跳转 | 无 | 无 |
 | 投资池树确认 | 合并 checked + halfChecked | 仅 checked |
@@ -164,10 +164,10 @@ ORDER BY al.submit_time DESC, al.id DESC
 | 发行主体筛选 | 无（用「主体名称」替代） | 有（issuer LIKE） |
 | 证券类型筛选 | 无 | 有（securityType 精确 + 下拉接口） |
 | 「我的」过滤 | 无 | 有（myBonds + currentUserId，按 adjuster_id） |
-| 排序 | `submit_time DESC, id DESC` | `adjust_batch_no DESC, submit_time DESC, id DESC`（按批次号聚拢） |
+| 排序 | `submit_time DESC, adjust_batch_no DESC, id DESC` | `submit_time DESC, adjust_batch_no DESC, id DESC`（四类历史统一） |
 | DTO 投资池字段名 | `targetPoolName` | `targetPoolPath`（命名不同） |
 
-核心区别：主体池历史 = 证券池历史的「主体子集」视图，共用 `ip_adjust_log`，区别在 SQL 是否 JOIN `dict_security_type` 并限定 `category_type='company'`。主体池历史**不按批次号聚拢**，仅按提交时间倒序；证券池历史按 `adjust_batch_no DESC` 排序便于同批次记录排在一起。
+核心区别：主体池历史 = 证券池历史的「主体子集」视图，共用 `ip_adjust_log`，区别在 SQL 是否 JOIN `dict_security_type` 并限定 `category_type='company'`。四类调整历史排序统一为 `submit_time DESC, adjust_batch_no DESC, id DESC`。
 
 ---
 

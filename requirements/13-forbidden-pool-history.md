@@ -136,7 +136,7 @@ LEFT JOIN ais_inv_ods.wind_cbondissuer wci ON wci.s_info_compcode = al.security_
     <if adjustMode>    AND al.adjust_mode = #{adjustMode} </if>
     <if auditStatus>   AND al.audit_status = #{auditStatus} </if>
 </where>
-ORDER BY al.submit_time DESC, al.id DESC
+ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 ```
 
 特点：
@@ -144,7 +144,7 @@ ORDER BY al.submit_time DESC, al.id DESC
 - 返回 `adjustBatchNo`，历史页跳转详情时携带该批次号以加载同批次流程步骤。
 - 历史筛选日期语义为提交日期（`al.submit_time`）；页面显示“提交开始/提交结束”。
 - 投资池已删除时仍保留对应历史流水。
-- 排序按 `submit_time DESC, id DESC`。
+- 排序按 `submit_time DESC, adjust_batch_no DESC, id DESC`（时间优先最新在前；同秒内按批次号聚拢同组手工/联动/互斥）。
 - `target_pool_name` 同样被 Service 覆盖为全路径名。
 - **无可见数据范围/权限校验**。
 

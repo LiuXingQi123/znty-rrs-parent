@@ -78,8 +78,9 @@ public class AutoAdjustService {
         for (InvestmentPoolBo pool : investmentPoolMapper.queryPoolList()) {
             poolMap.put(pool.getId(), pool);
         }
-        // 本轮统一批次号
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date()) + "3001";
+        // 本轮统一批次号与提交时间（大批量逐条落库共用，保证历史排序同批相邻）
+        Date submitTime = new Date();
+        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + "3001";
         int total = 0;
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
@@ -102,6 +103,7 @@ public class AutoAdjustService {
                 sec.setAdjusterName(AUTO_ADJUSTER_NAME);
                 sec.setAdjustReason(REASON_EXPIRED_OUT);
                 sec.setAdjustBatchNo(batchNo);
+                sec.setSubmitTime(submitTime);
                 securityPoolAdjustMapper.addAdjustLog(sec);
                 // 软删除池状态
                 securityPoolAdjustMapper.deletePoolStatusSoft(sec.getSecurityCode(), poolId);

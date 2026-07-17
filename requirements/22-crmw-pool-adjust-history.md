@@ -55,7 +55,7 @@ LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id AND p.is_deleted = 0
     <if adjustMode>  AND al.adjust_mode = #{adjustMode} </if>
     <if auditStatus> AND al.audit_status = #{auditStatus} </if>
 </where>
-ORDER BY al.submit_time DESC, al.id DESC
+ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 ```
 
 - **固定过滤**：`is_deleted=0 AND pool_type='crmw'` — 读共享 `ip_adjust_log` 表，按 CRMW 过滤。

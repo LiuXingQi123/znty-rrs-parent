@@ -46,7 +46,9 @@
                 AND al.audit_status = #{auditStatus}
             </if>
         </where>
+        <!-- 提交时间优先（最新在前）；同秒内按批次号聚拢同组手工/联动/互斥；id 稳定次序 -->
         ORDER BY al.submit_time DESC
+                 ,al.adjust_batch_no DESC
                  ,al.id DESC
     </select>
 </mapper>

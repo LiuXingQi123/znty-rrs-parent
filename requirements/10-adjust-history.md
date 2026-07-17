@@ -77,7 +77,11 @@
 
 `auditStatusLabel` 与 `auditStatusType` 为前端内联字典，与 dict.js `DICT_AUDIT_STATUS` / `DICT_AUDIT_STATUS_TAG_TYPE` 一致（本页未引入 dict.js，内联实现）。Tag 类型映射：`20/10/32`→success，`-1/21`→danger，`11/00`→warning，`99`→info。
 
-**主从记录/批次号**：后端按 `adjust_batch_no DESC, submit_time DESC, id DESC` 排序，同一批次号的多条调入/调出记录会聚拢展示，但前端表格不显式合并或展示批次号列（批次号仅通过 `openSecurityAdjustDetail` 跳转参数传递）。
+**主从记录/批次号**：后端按 `submit_time DESC, adjust_batch_no DESC, id DESC` 排序——**提交时间优先**保证最新记录在前；同秒内再按批次号倒序，使同一批次的手工/联动/互斥行聚拢。前端表格不显式合并或展示批次号列（批次号仅通过 `openSecurityAdjustDetail` 跳转参数传递）。
+
+> **提交时间必须同批一致**：`addAdjustLog` 写入 `submit_time` 时使用本次请求共享的 `BatchNoContext.submitTime`（一次 `new Date()`），禁止对每条记录单独 `NOW()`。否则 1000+ 条逐条插入会差毫秒/秒，仅靠批次号第二键仍无法保证同组在「时间第一键」下相邻。
+
+> 历史曾用 `adjust_batch_no` 作第一排序键。批次号为 `BOND`/`AUTO` + 时间戳 + 序号的字符串，前缀字典序会让 `BOND…` 整体排在 `AUTO…` 之前，较新的自动调库可能排在较旧的手工调库后面。现已改为时间优先，与禁投/主体/CRMW 历史口径一致。
 
 ---
 
@@ -136,7 +140,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
   - `adjustTimeEnd` 后端补 `CONCAT(#{adjustTimeEnd}, ' 23:59:59')`，start 直接用日期串
   - `myBonds==true` → `al.adjuster_id = #{currentUserId}`
 - **SELECT**：`p.pool_name AS target_pool_path`（先取叶子名）
-- **排序**：`adjust_batch_no DESC, submit_time DESC, id DESC`（批次号优先聚拢）
+- **排序**：`submit_time DESC, adjust_batch_no DESC, id DESC`（时间优先最新在前，批次号次之用于同组聚拢）
 - **Service 后处理**：`fillPoolFullName` 用全路径映射覆盖 `targetPoolPath`
 
 ---

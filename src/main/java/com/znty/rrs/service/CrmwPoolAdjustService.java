@@ -1064,7 +1064,7 @@ public class CrmwPoolAdjustService {
 
             if (isDirect) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
-                IpAdjustLogBo logBo = buildAdjustLog(req, item, manualItem);
+                IpAdjustLogBo logBo = buildAdjustLog(req, item, manualItem, shared);
                 logBo.setAdjustBatchNo(adjustBatchNo);
                 logBo.setAuditStatus(AuditStatus.APPROVED.getCode());
                 crmwPoolAdjustMapper.addAdjustLog(logBo);
@@ -1083,7 +1083,7 @@ public class CrmwPoolAdjustService {
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
-                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
+                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());
                 crmwPoolAdjustMapper.addAdjustLog(bo);
@@ -1155,7 +1155,7 @@ public class CrmwPoolAdjustService {
 
             if (isDirect) {
                 // 直通流程：先写入已生效调库记录，保留操作日志
-                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
+                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.APPROVED.getCode());
                 crmwPoolAdjustMapper.addAdjustLog(bo);
@@ -1173,7 +1173,7 @@ public class CrmwPoolAdjustService {
             } else {
                 // 非直通流程：写入 ip_adjust_log（audit_status='00'，流程中）
                 // 构建调库日志实体
-                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem);
+                IpAdjustLogBo bo = buildAdjustLog(req, item, manualItem, shared);
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());
                 crmwPoolAdjustMapper.addAdjustLog(bo);
@@ -3590,7 +3590,8 @@ public class CrmwPoolAdjustService {
      */
     private IpAdjustLogBo buildAdjustLog(CrmwPoolAdjustSubmitReq req,
                                          CrmwPoolAdjustSubmitReq.AdjustItem item,
-                                         CrmwPoolAdjustSubmitReq.AdjustItem flowSource) {
+                                         CrmwPoolAdjustSubmitReq.AdjustItem flowSource,
+                                         SubmitSharedData shared) {
         IpAdjustLogBo bo = new IpAdjustLogBo();
         bo.setSecurityCode(req.getSecurityCode());
         bo.setSecurityShortName(req.getSecurityShortName());
@@ -3612,6 +3613,10 @@ public class CrmwPoolAdjustService {
         bo.setAdjusterName(req.getAdjusterName());
         bo.setAdjustReason(req.getAdjustReason());
         bo.setAdjustAdvice(req.getAdjustAdvice());
+        // 同一次提交共用统一提交时间，避免大批量逐条 NOW() 导致历史排序同组打散
+        if (shared != null && shared.batchNoContext != null) {
+            bo.setSubmitTime(shared.batchNoContext.submitTime);
+        }
         return bo;
     }
 
@@ -3791,8 +3796,11 @@ public class CrmwPoolAdjustService {
      */
     static class BatchNoContext {
 
-        /** 本次提交批次号时间片 */
-        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date());
+        /** 本次提交统一提交时间（写入 ip_adjust_log.submit_time） */
+        final Date submitTime = new Date();
+
+        /** 本次提交批次号时间片（与 submitTime 同源，避免再 new Date 漂移） */
+        final String batchTimeText = new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime);
 
         /** 调入方向批次序号 */
         int inboundBatchSeq = 0;

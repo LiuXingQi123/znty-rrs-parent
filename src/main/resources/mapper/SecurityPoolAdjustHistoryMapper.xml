@@ -74,8 +74,9 @@
                 AND al.adjuster_id = #{currentUserId}
             </if>
         </where>
-        ORDER BY al.adjust_batch_no DESC
-                 ,al.submit_time DESC
+        <!-- 与禁投/主体/CRMW 历史统一：时间优先；同秒内批次号聚拢同组；id 稳定次序 -->
+        ORDER BY al.submit_time DESC
+                 ,al.adjust_batch_no DESC
                  ,al.id DESC
     </select>
 

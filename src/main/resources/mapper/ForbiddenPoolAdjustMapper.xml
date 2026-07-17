@@ -238,7 +238,7 @@
                ,#{adjusterName}
                ,#{adjustReason}
                ,#{adjustAdvice}
-               ,NOW()
+               ,COALESCE(#{submitTime}, NOW())
                ,0
                ,NOW()
                ,NOW())
