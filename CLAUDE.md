@@ -1,9 +1,9 @@
 # 后端开发规范（CLAUDE.md）
 
 > 适用项目：Spring Boot 1.x 后端项目（`znty-rrs-parent`）  
-> 说明：本目录 `AGENTS.md` 与 `CLAUDE.md` 内容同步（仅文件名不同），修改时须两边同时更新。
+> 说明：本目录 `CLAUDE.md` 与 `AGENTS.md` 内容同步（仅文件名不同），修改时须两边同时更新。
 
-> 仓库级总览（业务模块表、调库三链路、`audit_status` 状态机、常用命令、前端页面 ↔ 需求 ↔ 测试对照表）见上级 `../CLAUDE.md` / `../AGENTS.md`；数据库表设计与 SQL 生成规范见 `../CLAUDE_mysql.md` / `../AGENTS_mysql.md`。本文件聚焦后端编码约定与本工程内需跨多文件才能厘清的架构要点，不重复上级文档已有内容。
+> 仓库级总览（业务模块表、调库三链路、`audit_status` 状态机、常用命令、前端页面 ↔ 需求 ↔ 测试对照表）见上级 `../CLAUDE.md` / `../AGENTS.md`；数据库表设计与 SQL 生成规范见本目录 `CLAUDE_mysql.md` / `AGENTS_mysql.md`（与根目录同名文件应保持同步）。本文件聚焦后端编码约定与本工程内需跨多文件才能厘清的架构要点，不重复上级文档已有内容。
 
 ---
 
@@ -42,7 +42,7 @@
 - `sql/` 下按模块成对存放 `rrs_<模块>_schema.sql`（建表）+ `rrs_<模块>_demo_data.sql`（演示数据）
 - **外部导入表**（当前含 `rrs_securityinfo`）：`rrs_external_import_schema.sql` / `rrs_external_import_demo_data.sql`，与调库运行态脚本解耦，不随主库批量初始化执行
 - AIS 库：`ais_inv_analysis_*`、`ais_inv_ods_*` 前缀
-- 建表 / 写 SQL 前先查 `../CLAUDE_mysql.md` / `../AGENTS_mysql.md`（数据库表设计规范，二者同步）
+- 建表 / 写 SQL 前先查本目录 `CLAUDE_mysql.md` / `AGENTS_mysql.md`（数据库表设计规范，二者同步；与根目录同名文件应一并更新）
 
 ---
 
