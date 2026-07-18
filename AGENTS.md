@@ -1,6 +1,48 @@
-# 后端开发规范（CLAUDE.md）
+# 后端开发规范（AGENTS.md）
 
-> 适用项目：Spring Boot 1.x 后端项目
+> 适用项目：Spring Boot 1.x 后端项目（`znty-rrs-parent`）  
+> 说明：本目录 `CLAUDE.md` 与 `AGENTS.md` 内容同步（仅文件名不同），修改时须两边同时更新。
+
+> 仓库级总览（业务模块表、调库三链路、`audit_status` 状态机、常用命令、前端页面 ↔ 需求 ↔ 测试对照表）见上级 `../CLAUDE.md` / `../AGENTS.md`；数据库表设计与 SQL 生成规范见 `../CLAUDE_mysql.md` / `../AGENTS_mysql.md`。本文件聚焦后端编码约定与本工程内需跨多文件才能厘清的架构要点，不重复上级文档已有内容。
+
+---
+
+## 后端架构要点
+
+### 包结构
+
+- 根包 `com.znty.rrs`，子包：`controller` / `service` / `mapper` / `entity` / `common` / `exception`
+- `entity/bo`：所有与表一一对应的 `Bo` **集中存放**（不按模块拆分）
+- `entity/<模块>/`：`Dto` / `Req` 按业务模块分子包（如 `entity.flow`、`entity.scripttool`、`entity.securitypooladjust`）
+- `common`：`ApiResponse` / `PageRequest` / `PageResult` + `enums/`（纯 code 风格 `getCode()`，不放中文 label；业务代码用 `枚举.XXX.getCode()` 替代字面量）
+- Mapper XML 集中在 `src/main/resources/mapper/*.xml`（**扁平命名**，不按包拆分），由 `mybatis.mapper-locations: classpath*:mapper/**/*.xml` 扫描
+
+### 异常 → 响应契约
+
+- 业务错误一律抛 `BizException(message)`（`exception.BizException`，默认 code=400）
+- `exception.ExceptionConfig`（`@RestControllerAdvice`）捕获后转 `ApiResponse.fail(message)`；`code` **仅写日志，不进入响应体**
+- 系统异常统一返回 `系统繁忙，请稍后重试`
+- 因此 Controller **无需 try/catch**，业务失败由 Service 抛 `BizException` 即可，前端按 `success=false` + `message` 处理
+
+### ScriptTool 模块（开发演示环境工具，刻意例外）
+
+`ScriptToolController` / `ScriptToolService`（`/api/v1/scriptTool/*`）用于在线执行建表 / Demo / 清空脚本，**故意不遵循「每模块三类 + 走 Mapper」约定**，改动时须意识到这是设计上的例外：
+
+- Service 直接注入 `javax.sql.DataSource` 执行白名单 SQL 文件，**无 Mapper / 无 XML** —— 不要以「补齐分层」为由改造
+- 仅执行 `sql/` 目录下固定文件名白名单（`querySchemaFiles()` / `queryDemoFiles()`）和固定 `TRUNCATE` 语句，**绝不**接收前端传入的任意 SQL
+- 用 `AtomicBoolean running` 做互斥，禁止并发执行
+- 危险操作需前端回传与 `taskCode` 一致的 `confirmText` 二次确认
+- SQL 文件有固定执行顺序（schema 先于 demo），改 `sql/` 目录文件名时**必须同步** `ScriptToolService` 内的白名单
+- 数据初始化任务：`INIT_SCHEMA` / `INIT_DEMO` / `RESET_ALL` 仅主库业务脚本（排除 AIS 与外部导入表）；外部导入表走 `INIT_EXTERNAL_IMPORT_SCHEMA` / `INIT_EXTERNAL_IMPORT_DEMO`；AIS 走 `INIT_AIS_SCHEMA` / `INIT_AIS_DEMO`
+- 配置项：`rrs.script.sql-path`（默认 `sql`，相对 `user.dir`）
+
+### 数据库与 SQL 脚本
+
+- 主库 `znty_rrs`，另有独立库 `ais_inv_analysis`（AIS 投资分析：用户 / 角色 / 主体评级，ScriptTool 同时管理）与 `ais_inv_ods`（Wind 外部源只读：发行人 `wind_cbondissuer` / 主体评级 `wind_cbondissuerrating`，评级下调校验跨库查询）
+- `sql/` 下按模块成对存放 `rrs_<模块>_schema.sql`（建表）+ `rrs_<模块>_demo_data.sql`（演示数据）
+- **外部导入表**（当前含 `rrs_securityinfo`）：`rrs_external_import_schema.sql` / `rrs_external_import_demo_data.sql`，与调库运行态脚本解耦，不随主库批量初始化执行
+- AIS 库：`ais_inv_analysis_*`、`ais_inv_ods_*` 前缀
+- 建表 / 写 SQL 前先查 `../CLAUDE_mysql.md` / `../AGENTS_mysql.md`（数据库表设计规范，二者同步）
 
 ---
 
@@ -76,9 +118,9 @@ Mapper       ── 数据库操作接口，对应 XML
 ## 注释规范
 
 - **类**：Javadoc，说明职责
-- **字段**：`/** 字段说明 */`，**必须保留**（如 `/** 证券池批量调整数据访问组件 */` 紧邻 `private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;`），禁止以"字面翻译型注释"为由删除；判断特征：注释描述的是该字段的用途/类型/职责，与下一行字段声明直接对应
+- **字段**：`/** 字段说明 */`，**必须保留**（如 `/** 证券池批量调整数据访问组件 */` 紧邻 `private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;`），禁止以“字面翻译型注释”为由删除；判断特征：注释描述的是该字段的用途/类型/职责，与下一行字段声明直接对应
 - **方法**：Javadoc，说明用途，关键参数加 `@param`
-- **方法内部**：关键步骤添加简洁单行注释；**调用其他私有方法时，必须在调用行上方添加 `//` 注释说明调用目的**（如 `// 构建白名单流程候选项`），禁止省略；该注释属于"调用目的说明"，不得当作"字面翻译型注释"误删
+- **方法内部**：关键步骤添加简洁单行注释；**调用其他私有方法时，必须在调用行上方添加 `//` 注释说明调用目的**（如 `// 构建白名单流程候选项`），禁止省略；该注释属于“调用目的说明”，不得当作“字面翻译型注释”误删
 - **XML**：每个 `<select>` / `<insert>` / `<update>` / `<delete>` 上方添加注释
 
 ---

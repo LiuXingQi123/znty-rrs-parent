@@ -1,8 +1,9 @@
-# CLAUDE.md
+# 后端开发规范（CLAUDE.md）
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> 适用项目：Spring Boot 1.x 后端项目（`znty-rrs-parent`）  
+> 说明：本目录 `AGENTS.md` 与 `CLAUDE.md` 内容同步（仅文件名不同），修改时须两边同时更新。
 
-> 后端服务 `znty-rrs-parent` 编码规范。仓库级总览（业务模块表、调库三链路、`audit_status` 状态机、常用命令、前端页面 ↔ 需求 ↔ 测试对照表）见上级 `../CLAUDE.md`；数据库表设计与 SQL 生成规范见 `../CLAUDE_mysql.md`。本文件聚焦后端编码约定与本工程内需跨多文件才能厘清的架构要点，不重复上级文档已有内容。
+> 仓库级总览（业务模块表、调库三链路、`audit_status` 状态机、常用命令、前端页面 ↔ 需求 ↔ 测试对照表）见上级 `../CLAUDE.md` / `../AGENTS.md`；数据库表设计与 SQL 生成规范见 `../CLAUDE_mysql.md` / `../AGENTS_mysql.md`。本文件聚焦后端编码约定与本工程内需跨多文件才能厘清的架构要点，不重复上级文档已有内容。
 
 ---
 
@@ -25,9 +26,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### ScriptTool 模块（开发演示环境工具，刻意例外）
 
-`ScriptToolController` / `ScriptToolService`（`/api/v1/scriptTool/*`）用于在线执行建表 / Demo / 清空脚本，**故意不遵循"每模块三类 + 走 Mapper"约定**，改动时须意识到这是设计上的例外：
+`ScriptToolController` / `ScriptToolService`（`/api/v1/scriptTool/*`）用于在线执行建表 / Demo / 清空脚本，**故意不遵循「每模块三类 + 走 Mapper」约定**，改动时须意识到这是设计上的例外：
 
-- Service 直接注入 `javax.sql.DataSource` 执行白名单 SQL 文件，**无 Mapper / 无 XML** —— 不要以"补齐分层"为由改造
+- Service 直接注入 `javax.sql.DataSource` 执行白名单 SQL 文件，**无 Mapper / 无 XML** —— 不要以「补齐分层」为由改造
 - 仅执行 `sql/` 目录下固定文件名白名单（`querySchemaFiles()` / `queryDemoFiles()`）和固定 `TRUNCATE` 语句，**绝不**接收前端传入的任意 SQL
 - 用 `AtomicBoolean running` 做互斥，禁止并发执行
 - 危险操作需前端回传与 `taskCode` 一致的 `confirmText` 二次确认
@@ -41,7 +42,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `sql/` 下按模块成对存放 `rrs_<模块>_schema.sql`（建表）+ `rrs_<模块>_demo_data.sql`（演示数据）
 - **外部导入表**（当前含 `rrs_securityinfo`）：`rrs_external_import_schema.sql` / `rrs_external_import_demo_data.sql`，与调库运行态脚本解耦，不随主库批量初始化执行
 - AIS 库：`ais_inv_analysis_*`、`ais_inv_ods_*` 前缀
-- 建表 / 写 SQL 前先查 `../CLAUDE_mysql.md`（数据库表设计规范）
+- 建表 / 写 SQL 前先查 `../CLAUDE_mysql.md` / `../AGENTS_mysql.md`（数据库表设计规范，二者同步）
 
 ---
 
@@ -117,9 +118,9 @@ Mapper       ── 数据库操作接口，对应 XML
 ## 注释规范
 
 - **类**：Javadoc，说明职责
-- **字段**：`/** 字段说明 */`，**必须保留**（如 `/** 证券池批量调整数据访问组件 */` 紧邻 `private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;`），禁止以"字面翻译型注释"为由删除；判断特征：注释描述的是该字段的用途/类型/职责，与下一行字段声明直接对应
+- **字段**：`/** 字段说明 */`，**必须保留**（如 `/** 证券池批量调整数据访问组件 */` 紧邻 `private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;`），禁止以“字面翻译型注释”为由删除；判断特征：注释描述的是该字段的用途/类型/职责，与下一行字段声明直接对应
 - **方法**：Javadoc，说明用途，关键参数加 `@param`
-- **方法内部**：关键步骤添加简洁单行注释；**调用其他私有方法时，必须在调用行上方添加 `//` 注释说明调用目的**（如 `// 构建白名单流程候选项`），禁止省略；该注释属于"调用目的说明"，不得当作"字面翻译型注释"误删
+- **方法内部**：关键步骤添加简洁单行注释；**调用其他私有方法时，必须在调用行上方添加 `//` 注释说明调用目的**（如 `// 构建白名单流程候选项`），禁止省略；该注释属于“调用目的说明”，不得当作“字面翻译型注释”误删
 - **XML**：每个 `<select>` / `<insert>` / `<update>` / `<delete>` 上方添加注释
 
 ---
@@ -194,6 +195,7 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
   - 第一项行不加逗号，后续每行以逗号打头
 - **禁止冗余 AS 别名**：已配置 `map-underscore-to-camel-case: true`，`column_name` 会自动映射为 `columnName`，无需 `AS columnName`
   - 仅以下情况保留 AS：① 计算表达式（COALESCE、COUNT、GROUP_CONCAT 等）② 字面量（如 `'在池' AS status`）③ 返回字段名与数据库列名不一致（如 `id AS flowId`、`b_info_issuer AS issuer`）
+- 演示/初始化 SQL 中新增测试数据字段时，应优先在原始 `INSERT INTO` 数据中补全；不要用后置 `UPDATE` 修补初始化数据，除非是明确的数据迁移脚本或用户特别要求。
 
 ```xml
 <!-- 分页查询流程列表 -->
@@ -239,6 +241,15 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 ## 前端显示约定
 
 - 接口返回空值时保持 `null` 或空字符串，不要为了前端展示额外返回 `-`；前端字段、表格单元格、详情项为空时直接显示空白，不使用 `-`、`--` 等占位符。
+
+---
+
+## 错误数据处理
+
+- 禁止为错误、残缺或不一致的数据增加推断、回退查询、默认值填充或静默兜底
+- 数据不满足当前业务约束时，应直接抛出包含明确原因和定位信息的异常
+- 发现历史错误数据时，应修复数据源或通过专项数据脚本治理，不得在业务代码中长期兼容
+- 如确需兼容历史数据，必须由用户明确提出并确认兼容范围
 
 ---
 
