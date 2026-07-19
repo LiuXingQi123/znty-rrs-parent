@@ -87,10 +87,24 @@ public class ScriptToolServiceTest {
 
         assertTrue(!schemaItems.contains("rrs_external_import_schema.sql"));
         assertTrue(!demoItems.contains("rrs_external_import_demo_data.sql"));
+        assertTrue(!demoItems.contains("ais_inv_analysis_demo_data.sql"));
+        assertTrue(!demoItems.contains("ais_inv_ods_demo_data.sql"));
         assertTrue(!resetItems.contains("rrs_external_import_schema.sql"));
         assertTrue(!resetItems.contains("rrs_external_import_demo_data.sql"));
+        assertTrue(!resetItems.contains("ais_inv_analysis_demo_data.sql"));
+        assertTrue(!resetItems.contains("ais_inv_ods_demo_data.sql"));
         assertTrue(externalSchemaItems.contains("rrs_external_import_schema.sql"));
-        assertTrue(excluded.contains("rrs_securityinfo"));
+        // 主库批量任务「已排除」须标出 AIS 与外部导入脚本，便于页面展示
+        assertTrue(excluded.contains("ais_inv_analysis_demo_data.sql"));
+        assertTrue(excluded.contains("ais_inv_ods_demo_data.sql"));
+        assertTrue(excluded.contains("ais_inv_analysis_schema.sql"));
+        assertTrue(excluded.contains("ais_inv_ods_schema.sql"));
+        assertTrue(excluded.contains("rrs_external_import_schema.sql"));
+        assertTrue(excluded.contains("rrs_external_import_demo_data.sql"));
+        @SuppressWarnings("unchecked")
+        List<String> resetExcluded = (List<String>) ReflectionTestUtils.getField(resetAll, "excludedItems");
+        assertTrue(resetExcluded.contains("ais_inv_analysis_demo_data.sql"));
+        assertTrue(resetExcluded.contains("ais_inv_ods_demo_data.sql"));
         // 主库 schema 受影响表 = CREATE TABLE 去重（含流程/池事件表等），不是脚本文件数 10
         assertTrue(schemaTableCount != null && schemaTableCount > 0);
         assertEquals(Integer.valueOf(55), schemaTableCount);

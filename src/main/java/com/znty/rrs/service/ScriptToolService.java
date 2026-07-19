@@ -64,7 +64,6 @@ public class ScriptToolService {
     /** 初始化外部导入表 Demo 数据任务编码 */
     private static final String TASK_INIT_EXTERNAL_IMPORT_DEMO = "INIT_EXTERNAL_IMPORT_DEMO";
     /** 已从主库批量任务排除的外部导入表示例（当前为证券主数据表） */
-    private static final String EXCLUDED_EXTERNAL_IMPORT_TABLE = "rrs_securityinfo";
     /** 清空选中表数据任务编码 */
     private static final String TASK_CLEAR_SELECTED_TABLES = "CLEAR_SELECTED_TABLES";
     /** 清空选中表确认文本 */
@@ -170,7 +169,8 @@ public class ScriptToolService {
     public ScriptHealthCheckDto queryHealthCheck(ScriptToolReq req) {
         ScriptHealthCheckDto check = new ScriptHealthCheckDto();
         check.setItems(new ArrayList<ScriptHealthItemDto>());
-        check.setExpectedDatabaseCount(2);
+        // 主库 znty_rrs + AIS 分析库 + AIS ODS（Wind）共 3 个库
+        check.setExpectedDatabaseCount(3);
         check.setExpectedTableCount(queryClearTableMap().size());
         check.setExistingTableCount(0);
         check.setMissingTableCount(check.getExpectedTableCount());
@@ -872,9 +872,10 @@ public class ScriptToolService {
      * 追加数据库健康检查项。
      */
     private void appendDatabaseHealthItems(Connection conn, ScriptHealthCheckDto check) {
-        // 检查项目使用的两个数据库
+        // 检查项目使用的三个数据库：主库、AIS 分析库、AIS ODS
         appendDatabaseItem(conn, check.getItems(), "znty_rrs");
         appendDatabaseItem(conn, check.getItems(), "ais_inv_analysis");
+        appendDatabaseItem(conn, check.getItems(), "ais_inv_ods");
 
         int existingCount = 0;
         int emptyCount = 0;
@@ -1519,7 +1520,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "security-adjust", "证券调库演示数据", "重置调库日志、池状态和流程步骤演示数据（不含外部导入表）。", "danger", "rrs_security_pool_adjust_demo_data.sql");
         addModuleTask(taskMap, "flow-definition", "流程定义", "重置流程定义、版本、节点、连线和审批处理人配置。", "danger", "rrs_flow_definition_demo_data.sql");
         addModuleTask(taskMap, "rule-config", "规则配置", "重置规则分类、规则定义、参数、测试用例和测试运行日志。", "danger", "rrs_rule_demo_data.sql");
-        addModuleTask(taskMap, "pool-config", "投资池配置", "重置投资池、投资池关系、自动规则和权限配置。", "danger", "rrs_pool_init_demo_data.sql");
+        addModuleTask(taskMap, "pool-config", "投资池配置", "重置投资池、池关系、自动规则、权限及开放日等配置演示数据。", "danger", "rrs_pool_init_demo_data.sql");
         addModuleTask(taskMap, "crmw-status", "CRMW 当前池", "重置 CRMW 当前池状态演示数据。", "medium", "rrs_crmw_pool_status_demo_data.sql");
         addModuleTask(taskMap, "attachment-report", "附件与报告", "重置系统附件、入池报告和出池报告演示数据。", "medium", "rrs_sys_attachment_demo_data.sql");
         addModuleTask(taskMap, "my-security-pool", "我的证券池", "重置我的证券池演示数据。", "medium", "rrs_my_security_pool_demo_data.sql");
@@ -1819,6 +1820,21 @@ public class ScriptToolService {
     }
 
     /**
+     * 主库批量任务（INIT_SCHEMA / INIT_DEMO / RESET_ALL）不执行的脚本清单，供前端「已排除」展示。
+     * <p>含 AIS 分析库/ODS 的 schema 与 demo，以及外部导入表脚本；须用独立任务入口执行。</p>
+     */
+    private List<String> queryRrsBatchExcludedItems() {
+        List<String> excluded = new ArrayList<>();
+        // AIS 库建表与演示数据（含用户角色库与 Wind ODS）
+        excluded.addAll(queryAisSchemaFiles());
+        excluded.addAll(queryAisDemoFiles());
+        // 外部导入表（当前含 rrs_securityinfo）
+        excluded.addAll(queryExternalImportSchemaFiles());
+        excluded.addAll(queryExternalImportDemoFiles());
+        return excluded;
+    }
+
+    /**
      * 查询调库运行态清空表。
      */
     private List<String> queryAdjustFlowRuntimeTables() {
@@ -1963,26 +1979,37 @@ public class ScriptToolService {
      */
     private Map<String, ScriptTaskDto> queryTaskMap() {
         Map<String, ScriptTaskDto> taskMap = new LinkedHashMap<>();
-        List<String> excludedExternalImport = Arrays.asList(EXCLUDED_EXTERNAL_IMPORT_TABLE);
+        // 主库批量任务统一展示已排除脚本（AIS + 外部导入），前端「已排除」芯片与说明对应
+        List<String> rrsBatchExcludedItems = queryRrsBatchExcludedItems();
         // 完整重建置首：前端通栏展示
         addTask(taskMap, TASK_RESET_ALL, "重建完整演示环境",
-                "先执行主库 schema 再执行 demo（已排除外部导入表与 AIS 库）。",
+                "先执行主库 schema 再执行 demo，仅 znty_rrs 业务库。"
+                        + "不执行 AIS：ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql（及对应 schema）；"
+                        + "不执行外部导入：rrs_external_import_*。请改用「初始化 AIS」「初始化外部导入表」任务。",
                 "danger", "RESET_ALL",
-                "会重建主库表结构并重置演示数据，不含外部导入表与 AIS 库。",
+                "重建主库表结构并重置演示数据。"
+                        + "不含 AIS 库（ais_inv_analysis / ais_inv_ods 的 schema 与 demo，含用户角色与 Wind 主体/评级）"
+                        + "与外部导入表（rrs_securityinfo 等）。",
                 mergeList(queryRrsSchemaFiles(), queryRrsDemoFiles()),
-                countTablesInFiles(queryRrsSchemaFiles(), "schema"), excludedExternalImport);
+                countTablesInFiles(queryRrsSchemaFiles(), "schema"), rrsBatchExcludedItems);
         // 加入建表初始化任务（排除 AIS 与外部导入表）
         addTask(taskMap, TASK_INIT_SCHEMA, "初始化建表脚本",
-                "按固定顺序执行主库 schema 脚本重建表结构（已排除外部导入表与 AIS 库）。",
+                "按固定顺序执行主库 schema 重建表结构。"
+                        + "已排除 AIS 建表（ais_inv_analysis_schema.sql、ais_inv_ods_schema.sql）"
+                        + "与外部导入建表（rrs_external_import_schema.sql），请用独立任务执行。",
                 "high", "INIT_SCHEMA",
-                "会 DROP 并重新 CREATE 相关表结构，原表数据会被清空。外部导入表需单独执行。",
-                queryRrsSchemaFiles(), countTablesInFiles(queryRrsSchemaFiles(), "schema"), excludedExternalImport);
+                "会 DROP 并重新 CREATE 主库相关表，原表数据清空。"
+                        + "不含 AIS 库表结构与外部导入表，需单独初始化。",
+                queryRrsSchemaFiles(), countTablesInFiles(queryRrsSchemaFiles(), "schema"), rrsBatchExcludedItems);
         // 加入 Demo 数据初始化任务（排除 AIS 与外部导入表）
         addTask(taskMap, TASK_INIT_DEMO, "初始化 Demo 数据",
-                "按固定顺序执行主库 demo 数据脚本（已排除外部导入表与 AIS 库）。",
+                "按固定顺序执行主库 demo。"
+                        + "已排除 AIS 演示数据（ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql）"
+                        + "与外部导入 demo（rrs_external_import_demo_data.sql），请用独立任务执行。",
                 "medium", "INIT_DEMO",
-                "会按脚本内 TRUNCATE 逻辑重置演示数据。外部导入表需单独执行。",
-                queryRrsDemoFiles(), countTablesInFiles(queryRrsDemoFiles(), "demo"), excludedExternalImport);
+                "按脚本 TRUNCATE 逻辑重置主库演示数据。"
+                        + "不含 AIS 库 demo（用户/角色、Wind ODS）与外部导入表演示数据。",
+                queryRrsDemoFiles(), countTablesInFiles(queryRrsDemoFiles(), "demo"), rrsBatchExcludedItems);
         // 加入外部导入表建表任务
         addTask(taskMap, TASK_INIT_EXTERNAL_IMPORT_SCHEMA, "初始化外部导入表建表",
                 "执行外部导入类表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）。",
