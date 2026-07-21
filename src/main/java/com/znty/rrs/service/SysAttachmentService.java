@@ -67,7 +67,7 @@ public class SysAttachmentService {
     private SysAttachmentMapper sysAttachmentMapper;
 
     /** 附件存储根目录 */
-    @Value("${rrs.attachment.storage-path:D:/data/uploads}")
+    @Value("${rrs.attachment.storage-path:uploads}")
     private String storagePath;
 
     /** 初始化附件存储目录 */
