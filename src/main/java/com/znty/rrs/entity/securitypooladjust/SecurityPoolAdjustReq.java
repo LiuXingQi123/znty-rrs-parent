@@ -26,4 +26,6 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private Long adjustLogId;
     /** 调库批次号（查询同批次共用流程步骤时使用） */
     private String adjustBatchNo;
+    /** 是否放开规则（false=信用债大库池需满足主体债入库矩阵才显示可调；true=不卡矩阵） */
+    private boolean releaseRules;
 }

@@ -230,6 +230,11 @@ public class SecurityPoolAdjustService {
             if (allPools.isEmpty()) {
                 return new ArrayList<>();
             }
+            // 是否放开规则：releaseRules=false 时，信用债大库池需满足主体债入库矩阵才显示可调
+            allPools = filterInboundByGradeRule(allPools, req);
+            if (allPools.isEmpty()) {
+                return new ArrayList<>();
+            }
         }
 
         // 查询所有互斥关系，按池 ID 分组后挂载到对应 PoolDto，供前端渲染调库约束提示
@@ -250,6 +255,100 @@ public class SecurityPoolAdjustService {
         return allPools.stream()
                 .map(p -> toPoolDto(p, inMutexMap, outMutexMap, currentCountMap))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 是否放开规则过滤：releaseRules=false 时，信用债大库池需满足主体债入库矩阵才保留。
+     *
+     * <p>对齐老系统 openrule 在选池阶段过滤可调入池列表（InvestPoolAdjustManageAction:855-859：
+     * 遍历可调入池，信用债大库 ptype=4000 未放开规则时查 findMainGradeRuleList，矩阵不满足的池移除）。
+     * releaseRules=true / 可转债 / 评级或期限档无法判定时不卡矩阵（对齐 inCheckMainGradeRule 跳过逻辑）。
+     */
+    private List<InvestmentPoolBo> filterInboundByGradeRule(List<InvestmentPoolBo> pools, SecurityPoolAdjustReq req) {
+        if (pools == null || pools.isEmpty()) {
+            return pools;
+        }
+        // releaseRules=true 或无证券代码：不卡矩阵
+        if (req.isReleaseRules() || req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+            return pools;
+        }
+        // 无信用债大库池：无需过滤
+        boolean hasCreditBondPool = false;
+        for (InvestmentPoolBo p : pools) {
+            if (isCreditBondPool(p)) {
+                hasCreditBondPool = true;
+                break;
+            }
+        }
+        if (!hasCreditBondPool) {
+            return pools;
+        }
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        if (securityInfo == null) {
+            return pools;
+        }
+        // 可转债不适用主体债入库矩阵
+        if ("convertible_bond".equals(securityInfo.getSecurityType())) {
+            return pools;
+        }
+        // 观察池命中时跳过矩阵过滤（对齐 inCheckMainGradeRule 和老系统 ASTRICTPOOLS->openrule=1）
+        if (securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
+                || securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode())) {
+            return pools;
+        }
+        // 主体内评分档（临时代码占位无内评默认最低档 4；担保债取主体与担保人较低者）
+        String gradeCode = securityInfo.getInnerIssuerRating();
+        if (gradeCode == null && "temporary".equals(securityInfo.getSecuritySource())) {
+            gradeCode = "4";
+        }
+        if (securityInfo.getGuarantFlag() != null && securityInfo.getGuarantFlag() == 1
+                && securityInfo.getInnerGuarantorRating() != null && !securityInfo.getInnerGuarantorRating().isEmpty()) {
+            gradeCode = pickLowerRatingGrade(gradeCode, securityInfo.getInnerGuarantorRating());
+        }
+        // 期限档
+        String bucketCode = matchTermBucket(securityInfo.getTermYear());
+        // 评级/期限档无法判定：不卡矩阵（对齐 inCheckMainGradeRule return null）
+        if (gradeCode == null || bucketCode == null) {
+            return pools;
+        }
+        List<Long> allowedPoolIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
+        // 保留叶子：非信用债大库叶子，或信用债大库叶子在矩阵允许列表；父级按子级递归保留（避免丢失父级树结构）
+        List<Long> retained = new ArrayList<>();
+        for (InvestmentPoolBo p : pools) {
+            boolean isLeaf = true;
+            for (InvestmentPoolBo c : pools) {
+                if (p.getId() != null && p.getId().equals(c.getParentId())) {
+                    isLeaf = false;
+                    break;
+                }
+            }
+            if (!isLeaf) {
+                continue;
+            }
+            if (!isCreditBondPool(p)) {
+                retained.add(p.getId());
+            } else if (allowedPoolIds != null && allowedPoolIds.contains(p.getId())) {
+                retained.add(p.getId());
+            }
+        }
+        // 向上传播：父级若至少一个子级保留则保留（含多层父级）
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (InvestmentPoolBo p : pools) {
+                if (retained.contains(p.getId())) {
+                    continue;
+                }
+                for (InvestmentPoolBo c : pools) {
+                    if (p.getId() != null && p.getId().equals(c.getParentId()) && retained.contains(c.getId())) {
+                        retained.add(p.getId());
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return pools.stream().filter(p -> retained.contains(p.getId())).collect(Collectors.toList());
     }
 
     /**
@@ -1398,6 +1497,8 @@ public class SecurityPoolAdjustService {
         shared.setRequestOutPoolIds(requestOutPoolIds);
         // 基金评分（基金证券调入校验用，透传请求级 fundRate）
         shared.setFundRate(req.getFundRate());
+        // 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
+        shared.setReleaseRules(req.isReleaseRules());
         return shared;
     }
 
@@ -2274,6 +2375,10 @@ public class SecurityPoolAdjustService {
      * 仅调入校验（老代码 checkOutPool 无）。
      */
     private String inCheckMainGradeRule(AdjustCheckContext ctx) {
+        // 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
+        if (ctx.isReleaseRules()) {
+            return null;
+        }
         InvestmentPoolBo pool = ctx.getTargetPool();
         // 前置门控：仅信用债大库池校验
         if (!isCreditBondPool(pool)) {
@@ -3289,6 +3394,8 @@ public class SecurityPoolAdjustService {
                 shared.getSecurityInfo().getSecurityType()));
         // 基金评分（基金证券调入校验用，透传请求级 fundRate）
         ctx.setFundRate(shared.getFundRate());
+        // 是否放开规则（透传 shared，主体债入库矩阵校验用）
+        ctx.setReleaseRules(shared.isReleaseRules());
         return ctx;
     }
 
