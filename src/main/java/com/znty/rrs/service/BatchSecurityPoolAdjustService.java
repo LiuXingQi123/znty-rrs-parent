@@ -2033,6 +2033,8 @@ public class BatchSecurityPoolAdjustService {
             unmatchReasons.add("该主体180天内未以一般流程入过目标池，不满足简易流程前提条件");
         }
 
+        // 条件5：主体评级和展望评级未下调，或下调时担保人评级未下调（暂时注释，不需要此校验；评级取值仍在 shared 中计算保留）
+        /*
         boolean issuerOrOutlookDowngraded = shared.isIssuerRatingDowngraded() || shared.isOutlookRatingDowngraded();
         if (!issuerOrOutlookDowngraded) {
             matchReasons.add("主体评级和展望评级未下调");
@@ -2045,6 +2047,7 @@ public class BatchSecurityPoolAdjustService {
                 matchReasons.add("主体评级或展望评级已下调，但担保人评级未下调");
             }
         }
+        */
 
         return unmatchReasons.isEmpty();
     }
