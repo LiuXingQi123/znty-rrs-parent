@@ -121,8 +121,6 @@ public class SecurityInfoBo {
     private Integer yxFlag;
     /** 是否递延 */
     private Integer dyFlag;
-    /** 回售剩余期限-最新 */
-    private String dateRedemtionExists;
     /** 赎回剩余期限-最新 */
     private String dateCallExists;
     /** 证券期限-最新 */
@@ -147,8 +145,6 @@ public class SecurityInfoBo {
     private String dateInrightNext;
     /** 发行总额-亿 */
     private BigDecimal issueAmountact;
-    /** 担保方式 */
-    private String agencyGrnttype;
     /** 担保人 */
     private String guarantor;
     /** 担保人ID */
@@ -185,4 +181,14 @@ public class SecurityInfoBo {
     private String guarantType;
     /** 是否 ABS */
     private Integer absFlag;
+    /** 沪市证券id */
+    private String secIdSh;
+    /** 深市证券id */
+    private String secIdSz;
+    /** 银行间证券id */
+    private String secIdNib;
+    /** 其他证券id */
+    private String secIdNbc;
+    /** 北交所证券id */
+    private String secIdBj;
 }

@@ -70,7 +70,6 @@ CREATE TABLE `rrs_securityinfo`
     `callbkorputbk_date`         varchar(10)     DEFAULT NULL COMMENT '赎回行权日',
     `redemption_content`         longtext        COMMENT '赎回条款',
     `repurchase_flag`            int             DEFAULT NULL COMMENT '可回售性',
-    `date_redemtion_exists`      varchar(10)     DEFAULT NULL COMMENT '回售剩余期限-最新',
     `repurchase_date`            varchar(10)     DEFAULT NULL COMMENT '回售日期',
     `repurchase_price`           decimal(10, 4)  DEFAULT NULL COMMENT '回售价格',
     `repurchase_content`         longtext        COMMENT '回售条款',
@@ -116,7 +115,6 @@ CREATE TABLE `rrs_securityinfo`
     -- 发行额、担保与承销相关字段
     -- ==========================================
     `issue_amountact`            decimal(30, 10) DEFAULT NULL COMMENT '发行总额-亿',
-    `agency_grnttype`            varchar(400)    DEFAULT NULL COMMENT '担保方式',
     `guarantor`                  varchar(400)    DEFAULT NULL COMMENT '担保人',
     `guarantor_id`               varchar(1000)   DEFAULT NULL COMMENT '担保人ID',
     `agency_name`                varchar(1000)   DEFAULT NULL COMMENT '主承销商',
@@ -141,6 +139,11 @@ CREATE TABLE `rrs_securityinfo`
     `guarant_flag`               int             DEFAULT NULL COMMENT '是否担保',
     `guarant_type`               varchar(100)    DEFAULT NULL COMMENT '担保类型',
     `abs_flag`                   int             DEFAULT NULL COMMENT '是否 ABS',
+    `sec_id_sh`                  varchar(100)    DEFAULT NULL COMMENT '沪市证券id',
+    `sec_id_sz`                  varchar(100)    DEFAULT NULL COMMENT '深市证券id',
+    `sec_id_nib`                 varchar(100)    DEFAULT NULL COMMENT '银行间证券id',
+    `sec_id_nbc`                 varchar(100)    DEFAULT NULL COMMENT '其他证券id',
+    `sec_id_bj`                  varchar(100)    DEFAULT NULL COMMENT '北交所证券id',
 
     PRIMARY KEY (`wind_code`)
 ) ENGINE = InnoDB

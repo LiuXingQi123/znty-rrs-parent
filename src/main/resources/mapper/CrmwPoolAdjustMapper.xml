@@ -517,7 +517,6 @@
            ,callbkorputbk_date = #{securityInfo.callbkorputbkDate}
            ,redemption_content = #{securityInfo.redemptionContent}
            ,repurchase_flag = #{securityInfo.repurchaseFlag}
-           ,date_redemtion_exists = #{securityInfo.dateRedemtionExists}
            ,repurchase_date = #{securityInfo.repurchaseDate}
            ,repurchase_price = #{securityInfo.repurchasePrice}
            ,repurchase_content = #{securityInfo.repurchaseContent}
@@ -547,7 +546,6 @@
            ,date_inright_exists = #{securityInfo.dateInrightExists}
            ,date_inright_next = #{securityInfo.dateInrightNext}
            ,issue_amountact = #{securityInfo.issueAmountact}
-           ,agency_grnttype = #{securityInfo.agencyGrnttype}
            ,guarantor = #{securityInfo.guarantor}
            ,guarantor_id = #{securityInfo.guarantorId}
            ,agency_name = #{securityInfo.agencyName}
@@ -567,6 +565,11 @@
            ,guarant_flag = #{securityInfo.guarantFlag}
            ,guarant_type = #{securityInfo.guarantType}
            ,abs_flag = #{securityInfo.absFlag}
+           ,sec_id_sh = #{securityInfo.secIdSh}
+           ,sec_id_sz = #{securityInfo.secIdSz}
+           ,sec_id_nib = #{securityInfo.secIdNib}
+           ,sec_id_nbc = #{securityInfo.secIdNbc}
+           ,sec_id_bj = #{securityInfo.secIdBj}
         WHERE wind_code = #{securityCode}
     </update>
 
