@@ -23,7 +23,7 @@
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
           <!-- 证券池批量主页仅排除 CRMW 池；禁投/观察等主体相关池保留，支持单券入池 -->
-          AND (p.pool_type IS NULL OR p.pool_type != 'crmw')
+          AND p.pool_type != 'crmw'
         <if test="poolIds != null and poolIds.size() > 0">
           AND p.id IN
             <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
@@ -75,8 +75,8 @@
                ,si.guarantor_id
         FROM rrs_securityinfo si
         <where>
-            AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))
-            AND (si.security_status IS NULL OR si.security_status != 'D')
+            AND si.security_type NOT IN ('crmw', 'company')
+            AND si.security_status != 'D'
             <if test="direction == 'in'">
                 AND NOT EXISTS (
                     SELECT 1
@@ -130,7 +130,7 @@
         WHERE p.id = #{poolId}
           AND p.status = 'enabled'
           AND p.is_deleted = 0
-          AND (p.pool_type IS NULL OR p.pool_type != 'crmw')
+          AND p.pool_type != 'crmw'
           AND NOT EXISTS (
               SELECT 1
               FROM ip_investment_pool child

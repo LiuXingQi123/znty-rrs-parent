@@ -11,7 +11,7 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         <where>
             AND si.security_type = 'crmw'
-            AND (si.security_status IS NULL OR si.security_status != 'D')
+            AND si.security_status != 'D'
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
@@ -33,8 +33,8 @@
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         <where>
-            AND (si.security_type IS NULL OR si.security_type != 'crmw')
-            AND (si.security_status IS NULL OR si.security_status != 'D')
+            AND si.security_type != 'crmw'
+            AND si.security_status != 'D'
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
@@ -211,7 +211,7 @@
               AND al.adjust_batch_no = #{adjustBatchNo}
           </if>
           <if test="adjustBatchNo == null or adjustBatchNo == ''">
-              AND (al.audit_status IS NULL OR al.audit_status NOT IN ('-1', '20', '21', '99'))
+              AND al.audit_status NOT IN ('-1', '20', '21', '99')
           </if>
         ORDER BY al.crte_time DESC
     </select>

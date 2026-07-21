@@ -196,7 +196,7 @@
         <where>
             AND (si.security_status IS NULL OR si.security_status != 'D')
             AND (si.security_source IS NULL OR si.security_source != 'temporary')
-            AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))
+            AND si.security_type NOT IN ('crmw', 'company')
             <if test="securityKeyword != null and securityKeyword != ''">
                 AND (si.wind_code LIKE CONCAT('%', #{securityKeyword}, '%')
                      OR si.short_name LIKE CONCAT('%', #{securityKeyword}, '%')
@@ -231,7 +231,7 @@
         WHERE si.wind_code = #{securityCode}
           AND (si.security_status IS NULL OR si.security_status != 'D')
           AND (si.security_source IS NULL OR si.security_source != 'temporary')
-          AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))
+          AND si.security_type NOT IN ('crmw', 'company')
         LIMIT 1
     </select>
 
@@ -426,39 +426,39 @@
         FROM (
             SELECT COUNT(1) AS ref_count
             FROM ip_adjust_log
-            WHERE (is_deleted IS NULL OR is_deleted = 0)
+            WHERE is_deleted = 0
               AND security_code = #{tempSecurityCode}
               AND security_type = #{tempSecurityType}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status
-            WHERE (is_deleted IS NULL OR is_deleted = 0)
+            WHERE is_deleted = 0
               AND security_code = #{tempSecurityCode}
               AND security_type = #{tempSecurityType}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_adjust_log
-            WHERE (is_deleted IS NULL OR is_deleted = 0)
+            WHERE is_deleted = 0
               AND crmw_scode = #{tempSecurityCode}
               AND crmw_stype = #{tempSecurityType}
               AND crmw_mktcode = #{tempSecurityMarket}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status
-            WHERE (is_deleted IS NULL OR is_deleted = 0)
+            WHERE is_deleted = 0
               AND crmw_scode = #{tempSecurityCode}
               AND crmw_stype = #{tempSecurityType}
               AND crmw_mktcode = #{tempSecurityMarket}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status_crmw
-            WHERE (is_deleted IS NULL OR is_deleted = 0)
+            WHERE is_deleted = 0
               AND security_code = #{tempSecurityCode}
               AND security_type = #{tempSecurityType}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status_crmw
-            WHERE (is_deleted IS NULL OR is_deleted = 0)
+            WHERE is_deleted = 0
               AND crmw_scode = #{tempSecurityCode}
               AND crmw_stype = #{tempSecurityType}
               AND crmw_mktcode = #{tempSecurityMarket}
@@ -469,7 +469,7 @@
     <select id="queryPendingAdjustLogSecurityReferenceIdList" resultType="long">
         SELECT id
         FROM ip_adjust_log
-        WHERE (is_deleted IS NULL OR is_deleted = 0)
+        WHERE is_deleted = 0
           AND security_code = #{tempSecurityCode}
           AND security_type = #{tempSecurityType}
           AND audit_status IN ('00', '11')
@@ -504,7 +504,7 @@
                ,crte_time
                ,updt_time
         FROM ip_pool_status
-        WHERE (is_deleted IS NULL OR is_deleted = 0)
+        WHERE is_deleted = 0
           AND security_code = #{tempSecurityCode}
           AND security_type = #{tempSecurityType}
           AND audit_status = '20'
@@ -514,7 +514,7 @@
     <select id="queryActivePoolStatusCount" resultType="int">
         SELECT COUNT(1)
         FROM ip_pool_status
-        WHERE (is_deleted IS NULL OR is_deleted = 0)
+        WHERE is_deleted = 0
           AND security_code = #{securityCode}
           AND security_type = #{securityType}
           AND target_pool_id = #{targetPoolId}
@@ -527,14 +527,14 @@
         SET is_deleted = 1
            ,updt_time = #{updateTime}
         WHERE id = #{id}
-          AND (is_deleted IS NULL OR is_deleted = 0)
+          AND is_deleted = 0
     </update>
 
     <!-- 查询在途调库日志 CRMW 引用 ID 列表 -->
     <select id="queryPendingAdjustLogCrmwReferenceIdList" resultType="long">
         SELECT id
         FROM ip_adjust_log
-        WHERE (is_deleted IS NULL OR is_deleted = 0)
+        WHERE is_deleted = 0
           AND crmw_scode = #{tempSecurityCode}
           AND crmw_stype = #{tempSecurityType}
           AND crmw_mktcode = #{tempSecurityMarket}
@@ -545,7 +545,7 @@
     <select id="queryPoolStatusCrmwReferenceIdList" resultType="long">
         SELECT id
         FROM ip_pool_status
-        WHERE (is_deleted IS NULL OR is_deleted = 0)
+        WHERE is_deleted = 0
           AND crmw_scode = #{tempSecurityCode}
           AND crmw_stype = #{tempSecurityType}
           AND crmw_mktcode = #{tempSecurityMarket}
@@ -580,7 +580,7 @@
                ,crte_time
                ,updt_time
         FROM ip_pool_status_crmw
-        WHERE (is_deleted IS NULL OR is_deleted = 0)
+        WHERE is_deleted = 0
           AND security_code = #{tempSecurityCode}
           AND security_type = #{tempSecurityType}
           AND audit_status = '20'
@@ -590,7 +590,7 @@
     <select id="queryActiveCrmwPoolStatusCount" resultType="int">
         SELECT COUNT(1)
         FROM ip_pool_status_crmw
-        WHERE (is_deleted IS NULL OR is_deleted = 0)
+        WHERE is_deleted = 0
           AND security_code = #{securityCode}
           AND security_type = #{securityType}
           AND target_pool_id = #{targetPoolId}
@@ -603,14 +603,14 @@
         SET is_deleted = 1
            ,updt_time = #{updateTime}
         WHERE id = #{id}
-          AND (is_deleted IS NULL OR is_deleted = 0)
+          AND is_deleted = 0
     </update>
 
     <!-- 查询 CRMW 池状态上 CRMW 字段引用（仅字段替换） -->
     <select id="queryCrmwPoolStatusCrmwReferenceIdList" resultType="long">
         SELECT id
         FROM ip_pool_status_crmw
-        WHERE (is_deleted IS NULL OR is_deleted = 0)
+        WHERE is_deleted = 0
           AND crmw_scode = #{tempSecurityCode}
           AND crmw_stype = #{tempSecurityType}
           AND crmw_mktcode = #{tempSecurityMarket}

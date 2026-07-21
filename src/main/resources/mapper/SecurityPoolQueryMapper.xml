@@ -31,7 +31,7 @@
                ,bi.repurchase_date
         FROM ip_pool_status ips
         LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
-                                      AND (p.is_deleted IS NULL OR p.is_deleted = 0)
+                                      AND p.is_deleted = 0
         LEFT JOIN rrs_securityinfo bi ON ips.security_code = bi.wind_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         LEFT JOIN my_security_pool mbp
@@ -41,7 +41,7 @@
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
-            AND (p.pool_type IS NULL OR p.pool_type NOT IN ('crmw', 'forbidden'))
+            AND p.pool_type NOT IN ('crmw', 'forbidden')
             <if test="securityStatus == 'active'">
                 AND bi.maturity_date &gt;= CURDATE()
             </if>

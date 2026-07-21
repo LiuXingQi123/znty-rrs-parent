@@ -10,8 +10,8 @@
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
         <where>
-            AND (si.security_type IS NULL OR si.security_type NOT IN ('crmw', 'company'))
-            AND (si.security_status IS NULL OR si.security_status != 'D')
+            AND si.security_type NOT IN ('crmw', 'company')
+            AND si.security_status != 'D'
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
@@ -272,7 +272,7 @@
               </when>
               <otherwise>
                   AND al.security_code = #{securityCode}
-                  AND (al.audit_status IS NULL OR al.audit_status NOT IN ('-1', '20', '21', '99'))
+                  AND al.audit_status NOT IN ('-1', '20', '21', '99')
               </otherwise>
           </choose>
         ORDER BY al.crte_time DESC
@@ -436,7 +436,7 @@
             LIMIT 1
         )
           AND ips.target_pool_id = #{targetPoolId}
-          AND (ips.flow_type IS NULL OR ips.flow_type != 'simpleInbound')
+          AND ips.flow_type != 'simpleInbound'
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
           AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)

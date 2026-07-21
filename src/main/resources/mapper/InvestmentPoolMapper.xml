@@ -945,7 +945,7 @@
                ,name AS flowName
         FROM wf_flow_definition
         WHERE status = 'active'
-          AND (is_deleted IS NULL OR is_deleted = 0)
+          AND is_deleted = 0
         ORDER BY id DESC
     </select>
 

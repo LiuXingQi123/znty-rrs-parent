@@ -13,7 +13,7 @@
                    ,open_day_adjust
                    ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
             FROM ip_investment_pool
-            WHERE (is_deleted IS NULL OR is_deleted = 0)
+            WHERE is_deleted = 0
               AND parent_id IS NULL
             UNION ALL
             SELECT child.id
@@ -23,7 +23,7 @@
                    ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
             FROM ip_investment_pool child
             INNER JOIN pool_tree parent ON parent.id = child.parent_id
-            WHERE (child.is_deleted IS NULL OR child.is_deleted = 0)
+            WHERE child.is_deleted = 0
         )
         SELECT d.id
                ,d.pool_id
@@ -38,7 +38,7 @@
         FROM ip_pool_open_day d
         LEFT JOIN pool_tree p ON p.id = d.pool_id
         <where>
-            AND (d.is_deleted IS NULL OR d.is_deleted = 0)
+            AND d.is_deleted = 0
             <if test="poolId != null">
                 AND d.pool_id = #{poolId}
             </if>
@@ -68,7 +68,7 @@
                ,updt_time
         FROM ip_pool_open_day
         WHERE id = #{id}
-          AND (is_deleted IS NULL OR is_deleted = 0)
+          AND is_deleted = 0
     </select>
 
     <!-- 按主键查询开放日详情（含投资池全称） -->
@@ -80,7 +80,7 @@
                    ,open_day_adjust
                    ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
             FROM ip_investment_pool
-            WHERE (is_deleted IS NULL OR is_deleted = 0)
+            WHERE is_deleted = 0
               AND parent_id IS NULL
             UNION ALL
             SELECT child.id
@@ -90,7 +90,7 @@
                    ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
             FROM ip_investment_pool child
             INNER JOIN pool_tree parent ON parent.id = child.parent_id
-            WHERE (child.is_deleted IS NULL OR child.is_deleted = 0)
+            WHERE child.is_deleted = 0
         )
         SELECT d.id
                ,d.pool_id
@@ -105,7 +105,7 @@
         FROM ip_pool_open_day d
         LEFT JOIN pool_tree p ON p.id = d.pool_id
         WHERE d.id = #{id}
-          AND (d.is_deleted IS NULL OR d.is_deleted = 0)
+          AND d.is_deleted = 0
     </select>
 
     <!-- 校验投资池是否存在 -->
@@ -117,7 +117,7 @@
                ,open_day_adjust
         FROM ip_investment_pool
         WHERE id = #{poolId}
-          AND (is_deleted IS NULL OR is_deleted = 0)
+          AND is_deleted = 0
     </select>
 
     <!-- 统计子池数量（有子节点的目录节点不可配置开放日） -->
@@ -125,7 +125,7 @@
         SELECT COUNT(1)
         FROM ip_investment_pool
         WHERE parent_id = #{poolId}
-          AND (is_deleted IS NULL OR is_deleted = 0)
+          AND is_deleted = 0
     </select>
 
     <!-- 新增开放日配置 -->
@@ -158,7 +158,7 @@
            ,description = #{description}
            ,updt_time = #{updtTime}
         WHERE id = #{id}
-          AND (is_deleted IS NULL OR is_deleted = 0)
+          AND is_deleted = 0
     </update>
 
     <!-- 逻辑删除开放日配置 -->
@@ -167,7 +167,7 @@
         SET is_deleted = #{isDeleted}
            ,updt_time = #{updtTime}
         WHERE id = #{id}
-          AND (is_deleted IS NULL OR is_deleted = 0)
+          AND is_deleted = 0
     </update>
 
 </mapper>
