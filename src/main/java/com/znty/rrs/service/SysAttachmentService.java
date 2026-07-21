@@ -67,12 +67,17 @@ public class SysAttachmentService {
     private SysAttachmentMapper sysAttachmentMapper;
 
     /** 附件存储根目录 */
-    @Value("${rrs.attachment.storage-path:uploads}")
+    @Value("${rrs.attachment.storage-path:D:/uploads/znty_rrs}")
     private String storagePath;
 
     /** 初始化附件存储目录 */
     @PostConstruct
     public void initializeStorage() {
+        // 默认 Windows 路径在 Linux 上运行时自动切换为 Linux 路径（环境变量覆盖时不切换）
+        if ("D:/uploads/znty_rrs".equals(storagePath)
+                && !System.getProperty("os.name", "").toLowerCase().contains("win")) {
+            storagePath = "/opt/uploads/znty_rrs";
+        }
         try {
             // 获取正式文件目录
             Files.createDirectories(resolveFileRoot());

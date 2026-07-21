@@ -43,7 +43,7 @@ logging:
 # RRS 业务配置：附件管理模块
 rrs:
   attachment:
-    storage-path: ${RRS_ATTACHMENT_STORAGE_PATH:uploads}
+    storage-path: ${RRS_ATTACHMENT_STORAGE_PATH:D:/uploads/znty_rrs}
   script:
     sql-path: ${RRS_SCRIPT_SQL_PATH:sql}
   # 自动调库定时任务（到期出池等规则）：默认关闭，置 true 启用；cron 默认每天凌晨 2 点
