@@ -1245,10 +1245,8 @@ public class BatchSecurityPoolAdjustService {
         current.setRatingBond(changedField.getRatingBond());
         current.setRatingBondissuer(changedField.getRatingBondissuer());
         current.setRatingOutlook(changedField.getRatingOutlook());
-        current.setAgencyGrnttype(changedField.getAgencyGrnttype());
         current.setAgencyName(changedField.getAgencyName());
         current.setInnerIssuerRating(changedField.getInnerIssuerRating());
-        current.setDateRedemtionExists(changedField.getDateRedemtionExists());
         current.setDateCallExists(changedField.getDateCallExists());
         current.setInnerGuarantorRating(changedField.getInnerGuarantorRating());
         current.setDateExists(changedField.getDateExists());
