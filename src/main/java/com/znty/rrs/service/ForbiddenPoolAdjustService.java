@@ -2661,8 +2661,8 @@ public class ForbiddenPoolAdjustService {
         addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
         // 入池检查：证券是否在全局禁止池（forbidden 禁投池/blacklist 黑名单）
         addIfFailed(failures, inCheckForbiddenPool(ctx));
-        // 行业限制校验（按池 industry_code，调入）
-        addIfFailed(failures, inCheckIndustry(ctx));
+        // 行业限制校验（按池 industry_code，调入）——暂时不需要，先注释
+        // addIfFailed(failures, inCheckIndustry(ctx));
         // 开放日校验（按池 open_day_adjust，调入）
         addIfFailed(failures, inCheckOpenDay(ctx));
         return failures;
