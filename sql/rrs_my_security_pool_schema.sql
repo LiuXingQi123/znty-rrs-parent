@@ -24,7 +24,7 @@ CREATE TABLE `my_security_pool`
     `market`        VARCHAR(32)  DEFAULT NULL COMMENT '证券市场：上交所/深交所/银行间/北交所...',
     `user_id`       VARCHAR(32)  DEFAULT NULL COMMENT '用户 ID',
     `status`        VARCHAR(4)   DEFAULT 'use' COMMENT '状态：use=使用 / del=删除',
-    `remark`        VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `remark`        VARCHAR(1000) DEFAULT NULL COMMENT '备注',
     `create_time`   DATETIME     DEFAULT NULL COMMENT '创建时间',
     `update_time`   DATETIME     DEFAULT NULL COMMENT '修改时间',
     PRIMARY KEY (`id`)

@@ -45,7 +45,7 @@ CREATE TABLE `rule_category` (
 CREATE TABLE `rule_definition` (
   `id`            BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
   `rule_name`     VARCHAR(50)  DEFAULT NULL             COMMENT '规则名称',
-  `description`   VARCHAR(500) DEFAULT NULL             COMMENT '规则描述',
+  `description`   VARCHAR(1000) DEFAULT NULL            COMMENT '规则描述',
   `category_code` VARCHAR(32)  DEFAULT NULL             COMMENT '规则分类编码',
   `script`        MEDIUMTEXT   DEFAULT NULL             COMMENT 'QLExpress 规则脚本',
   `status`        VARCHAR(20)  DEFAULT NULL             COMMENT '规则状态：active=启用 / disabled=禁用',
