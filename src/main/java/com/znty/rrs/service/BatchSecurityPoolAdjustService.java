@@ -2668,7 +2668,7 @@ public class BatchSecurityPoolAdjustService {
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
         String maturityDate = ctx.getSecurityInfo().getMaturityDate();
         if (maturityDate != null && !maturityDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {
                 return "该债券已经到期，无法调入";
             }
@@ -2684,7 +2684,7 @@ public class BatchSecurityPoolAdjustService {
     private String inCheckStockDelist(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
         if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
             if (delistDate.compareTo(today) < 0) {
                 return "该股票已经退市，无法调入";
             }
@@ -2700,7 +2700,7 @@ public class BatchSecurityPoolAdjustService {
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
         String maturityDate = ctx.getSecurityInfo().getMaturityDate();
         if (maturityDate != null && !maturityDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {
                 return "该债券已经到期，无法调出";
             }
@@ -2716,7 +2716,7 @@ public class BatchSecurityPoolAdjustService {
     private String outCheckStockDelist(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
         if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
             if (delistDate.compareTo(today) < 0) {
                 return "该股票已经退市，无法调出";
             }
