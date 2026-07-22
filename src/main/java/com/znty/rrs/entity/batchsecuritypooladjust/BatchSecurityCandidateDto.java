@@ -38,6 +38,12 @@ public class BatchSecurityCandidateDto {
     /** 证券评级 */
     private String ratingBond;
 
+    /** 主体评级 */
+    private String ratingBondissuer;
+
+    /** 主体内评分档 */
+    private String innerIssuerRating;
+
     /** 担保人（名称，多担保人逗号分隔） */
     private String guarantor;
 
