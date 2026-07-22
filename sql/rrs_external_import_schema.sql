@@ -92,7 +92,7 @@ CREATE TABLE `rrs_securityinfo`
     `cj_flag`                    int             DEFAULT NULL COMMENT '是否次级',
     `yx_flag`                    int             DEFAULT NULL COMMENT '是否永续',
     `dy_flag`                    int             DEFAULT NULL COMMENT '是否递延',
-    `date_exists`                varchar(10)     DEFAULT NULL COMMENT '证券期限-最新',
+    `date_exists`                int             DEFAULT NULL COMMENT '剩余期限-最新（天）',
 
     -- ==========================================
     -- 评级相关字段

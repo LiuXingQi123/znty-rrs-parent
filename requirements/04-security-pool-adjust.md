@@ -55,7 +55,7 @@
 | 当期利率(%) | `couponRate` | 等宽字体 + 琥珀色 |
 | 起息日期 | `carryDate` | 居中 |
 | 到期日 | `maturityDate` | 居中 |
-| 证券期限 | `dateExists` | — |
+| 剩余期限 | `dateExists` | 库字段 `date_exists`（INT，天）；列表表格前端 ÷365 展示为年（两位小数）；证券基础信息区展示天数与库一致；矩阵后端 ÷365 匹配期限档 |
 | 证券评级 | `ratingBond` | `el-tag type=success`，有值才显示 |
 | 主体评级 | `ratingBondissuer` | 空值空白 |
 | 操作 | — | 「调库」按钮 → `handleAdjust(row)` |
@@ -207,7 +207,7 @@
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 该债券已经到期，无法调入（`maturity_date` 早于今日）；/ 不符合条件，无法入库 / 该债券只能调入以下池：xxx / 未配置主体内评分档，不符合入库条件（信用债大库池按 `主体内评分档 × 期限档` 查 `credit_bond_pool_grade_rule` 矩阵得允许池列表，目标池须在列表内；担保债取主体与担保人评级较低者；可转债跳过） |
+| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 该债券已经到期，无法调入（`maturity_date` 早于今日）；/ 不符合条件，无法入库 / 该债券只能调入以下池：xxx / 未配置主体内评分档，不符合入库条件（信用债大库池按 `主体内评分档 × 剩余期限档` 查矩阵；剩余期限取 `date_exists` 天数 ÷365 匹配期限档，非 termYear；担保债取主体与担保人评级较低者；可转债跳过） |
 | 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 该股票已退市，无法调入（`delist_date` 早于今日）；`grade_astrict` 对应老系统“股票入池评级限制”（StockResearch/investrank：买入/增持/中性/卖出等），当前项目尚未接入股票研究评级来源时跳过，不用债券 `ratingBond` 误拦截 |
 | 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（池 `fund_rate_limit` 表达式 `<=#rate`/`<#rate`/`#rate<=`/`#rate<` 及组合，`#rate` 占位基金评分；请求 `fundRate` 须满足，空或不满足则失败） |
 | 主体 company | —（主体不校验到期，暂无） | |

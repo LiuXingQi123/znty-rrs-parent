@@ -73,6 +73,7 @@
                ,si.rating_bondissuer
                ,si.inner_issuer_rating
                ,si.maturity_date
+               ,si.date_exists
                ,si.guarantor
                ,si.guarantor_id
         FROM rrs_securityinfo si

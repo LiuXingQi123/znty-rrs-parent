@@ -613,12 +613,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
-        sec.setTermYear(new java.math.BigDecimal("6"));
+        // date_exists 天数 > 5*365 → GT_5
+        sec.setDateExists(1826);
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
         ctx.setPoolMap(Collections.singletonMap(2L, pool));
-        // 期限档 GT_5：term_year > 5
+        // 期限档 GT_5：剩余期限年 > 5
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
         gt5.setMinTermYear(new java.math.BigDecimal("5"));
@@ -645,7 +646,8 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("4");
-        sec.setTermYear(new java.math.BigDecimal("6"));
+        // date_exists 天数 > 5 年，与 GT_5 档匹配
+        sec.setDateExists(1826);
         // 池名映射（允许池 2/3 + 目标池 5）
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         InvestmentPoolBo p2 = new InvestmentPoolBo(); p2.setId(2L); p2.setPoolName("一级库"); poolMap.put(2L, p2);
@@ -1852,7 +1854,8 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared("20990101", 0, 0, "公募", "bond", 0);
+        // 1096 天 > 3 年
+        AdjustSharedData shared = buildWhitelistShared(1096, 0, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -1868,7 +1871,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared("20270101", 1, 0, "公募", "bond", 0);
+        AdjustSharedData shared = buildWhitelistShared(500, 1, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -1884,7 +1887,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared("20270101", 0, 1, "公募", "bond", 0);
+        AdjustSharedData shared = buildWhitelistShared(500, 0, 1, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -1900,7 +1903,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("stock")).thenReturn("stock");
-        AdjustSharedData shared = buildWhitelistShared("20270101", 0, 0, "公募", "stock", 0);
+        AdjustSharedData shared = buildWhitelistShared(500, 0, 0, "公募", "stock", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -1916,7 +1919,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared("20270101", 0, 0, "公募", "bond", 1);
+        AdjustSharedData shared = buildWhitelistShared(500, 0, 0, "公募", "bond", 1);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -1932,7 +1935,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared("20270101", 0, 0, "公募", "bond", 0);
+        AdjustSharedData shared = buildWhitelistShared(500, 0, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -1943,9 +1946,9 @@ public class SecurityPoolAdjustServiceStepTest {
         assertTrue(matchReasons.stream().anyMatch(s -> s.contains("非永续债")));
     }
 
-    /** 验证简易流程第⑤条件：三标志常量 false 时走"未下调"分支。 */
+    /** 验证简易流程：date_exists 可解析且无同主体最大期限时，期限条件命中（第⑤评级条件当前代码已注释不参与判定）。 */
     @Test
-    public void isSimpleInboundFlowMatchedShouldPassRatingCheckWhenFlagsFalse() {
+    public void isSimpleInboundFlowMatchedShouldPassWhenDateExistsAndNoMaxRemain() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
@@ -1954,17 +1957,20 @@ public class SecurityPoolAdjustServiceStepTest {
         targetPool.setInnerSort(1);
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setDateNext("20270101");
+        sec.setDateExists(500);
         shared.setSecurityInfo(sec);
         when(mapper.queryIssuerTargetPoolMaxRemainDays(any(String.class), any(Long.class))).thenReturn(null);
+        when(mapper.queryIssuerHasNonSimpleInboundWithinDays(any(String.class), any(Long.class), any(Integer.class)))
+                .thenReturn(true);
         AdjustCheckReq req = new AdjustCheckReq();
         req.setSecurityCode("110010123");
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
-        ReflectionTestUtils.invokeMethod(service, "isSimpleInboundFlowMatched",
+        Boolean result = ReflectionTestUtils.invokeMethod(service, "isSimpleInboundFlowMatched",
                 req, shared, targetPool, matchReasons, unmatchReasons);
-        // 三标志常量 false，第⑤条件走"未下调"分支
-        assertTrue(matchReasons.stream().anyMatch(s -> s.contains("主体评级和展望评级未下调")));
+        assertThat(result).isTrue();
+        assertTrue(matchReasons.stream().anyMatch(s -> s.contains("不受在池最大期限限制")));
+        assertTrue(unmatchReasons.isEmpty());
     }
 
     /** 验证证券信息合并不会清空页面不可编辑字段。 */
@@ -2047,12 +2053,12 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).isFalse();
     }
 
-    /** 构建白名单测试共享数据。 */
-    private AdjustSharedData buildWhitelistShared(String dateNext, int yxFlag, int absFlag,
+    /** 构建白名单测试共享数据（remainDays 对应 date_exists 天数）。 */
+    private AdjustSharedData buildWhitelistShared(Integer remainDays, int yxFlag, int absFlag,
                                                   String issueType, String securityType, int guarantFlag) {
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setDateNext(dateNext);
+        sec.setDateExists(remainDays);
         sec.setYxFlag(yxFlag);
         sec.setAbsFlag(absFlag);
         sec.setIssueType(issueType);

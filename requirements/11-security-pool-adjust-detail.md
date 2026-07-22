@@ -90,7 +90,7 @@
 
 ### 3.1 证券基本信息（section-bond-info）
 
-`el-descriptions :column="3" border`，字段全部 `el-input`/`el-date-picker`，`:disabled="isSecurityInfoReadonly"`。共 29 项：证券全称/简称/代码、发行人、银行间/沪/深/北交所代码、发行总额、当期利率、行权剩余期限、起息/到期日、质押比率、评级机构/证券评级/主体评级/展望评级、担保情况、主承销商、主体内评分档、证券类型、回售/赎回/含权债剩余期限、担保人主体内评分、证券期限、募集资金用途/提示原因/证券分析（3 个 textarea，span=3）。数据来自 `querySecurityDetail` → `bondDetail`。
+`el-descriptions :column="3" border`，字段全部 `el-input`/`el-date-picker`，`:disabled="isSecurityInfoReadonly"`。共 29 项：证券全称/简称/代码、发行人、银行间/沪/深/北交所代码、发行总额、当期利率、行权剩余期限、起息/到期日、质押比率、评级机构/证券评级/主体评级/展望评级、担保情况、主承销商、主体内评分档、证券类型、回售/赎回/含权债剩余期限、担保人主体内评分、**剩余期限(天)**（`dateExists`，与库 `date_exists` 一致；列表表格才用 `formatRemainTermYears` ÷365 展示为年）、募集资金用途/提示原因/证券分析（3 个 textarea，span=3）。数据来自 `querySecurityDetail` → `bondDetail`。
 
 ### 3.2 当前所在池（section-current-pools）
 

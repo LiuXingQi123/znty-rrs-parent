@@ -22,6 +22,7 @@
                ,bi.firstissue_date AS issueDate
                ,bi.carry_date
                ,bi.maturity_date
+               ,bi.date_exists
                ,CASE
                     WHEN bi.maturity_date IS NULL OR bi.maturity_date = '' THEN NULL
                     WHEN bi.maturity_date &gt;= CURDATE() THEN 'active'

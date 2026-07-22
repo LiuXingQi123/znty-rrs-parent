@@ -64,3 +64,9 @@ INSERT INTO `rrs_securityinfo` (
 ('CRMW004.IB', '某CRMW凭证D', 'CRMW-D', NULL, NULL, 'CRMW004.IB', 'crmw', 1.5, 548, '20271215', '20271215', 'L', NULL, NULL, 'AA+', 'AA+', '稳定', NULL, NULL, 0, NULL, NULL, NULL, '某电力公司', 'C10004', '20260415', '20260412', '20260415', '20271215', NULL, NULL, NULL, NULL, NULL, 'CNY', 5, 100, 0, NULL, 'CRMW', '金融机构', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 'CRMW', 0, 0, 0, 0, '联合资信', '联合资信', 'official', NOW(), NOW(), NULL, NULL, NULL, NULL, NULL),
 -- ===== CRMW-触发校验 =====
 ('CRMW005.IB', '某CRMW凭证E', 'CRMW-E', NULL, NULL, 'CRMW005.IB', 'crmw', 2, 730, '20280615', '20280615', 'L', NULL, NULL, 'AA', 'AA', '稳定', NULL, NULL, 0, NULL, NULL, NULL, '某地产公司', 'C10005', '20260515', '20260512', '20260515', '20280615', NULL, NULL, NULL, NULL, NULL, 'CNY', 5, 100, 0, NULL, 'CRMW', '金融机构', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 'CRMW', 0, 0, 0, 0, '中诚信', '中诚信', 'official', NOW(), NOW(), NULL, NULL, NULL, NULL, NULL);
+
+-- 剩余期限（天）：演示数据用 term_day 近似填入 date_exists（正式环境由外部源预计算写入）
+UPDATE `rrs_securityinfo`
+SET `date_exists` = `term_day`
+WHERE `term_day` IS NOT NULL;
+

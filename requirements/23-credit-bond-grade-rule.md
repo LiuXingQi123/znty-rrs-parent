@@ -40,10 +40,12 @@
 **核心定位**：维护信用债期限分组、主体内评分档与投资池的准入关系矩阵。**这不是「主体评级 × 债项评级 → 内部评级」矩阵**，而是**信用债评级准入矩阵**：
 
 - **行 = 主体内评分档**（`credit_bond_inner_rating_grade`，`gradeCode` 如 `1`、`2+`、`2`、`2-`、`3+`、`3`、`3-`、`4`，共 8 档）
-- **列 = 债券期限分组**（`credit_bond_term_bucket`，`bucketCode` 如 `GT_5`(期限>5)、`GT_3_LE_5`(5≥期限>3)、`GT_1_LE_3`(3≥期限>1)、`LE_1`(1≥期限)，共 4 档；含 `expression_text`）
+- **列 = 债券剩余期限分组**（`credit_bond_term_bucket`，`bucketCode` 如 `GT_5`(剩余期限>5)、`GT_3_LE_5`(5≥剩余期限>3)、`GT_1_LE_3`(3≥剩余期限>1)、`LE_1`(1≥剩余期限)，共 4 档；含 `expression_text`）
 - **单元格 = 可准入的信用债投资池列表**（多选，限信用债大库一级库至五级库，即 `ip_investment_pool` 中 `parent_id=1, pool_type='credit_bond', pool_level=2, inner_sort 1..5` 的 5 个池）
 
-业务含义：给定一只信用债的「期限分组 × 主体内评分档」，决定它可准入到信用债大库的哪几个级别库（一~五级库）。
+业务含义：给定一只信用债的「剩余期限分组 × 主体内评分档」，决定它可准入到信用债大库的哪几个级别库（一~五级库）。
+
+> **期限口径**：调库校验消费矩阵时，期限档按**剩余期限**匹配，取自 `rrs_securityinfo.date_exists`（天，INT），经 `CreditBondRemainTermUtil` 按 **天数 ÷ 365** 换算为年后再匹配 `credit_bond_term_bucket`；不是证券主数据 `term_year`（发行总期限）。`date_exists` 为空时跳过期限档（不卡矩阵）。
 
 **CRUD 操作**（仅 2 个接口，无单条增删改、无启用/停用单条规则）：
 - 查询矩阵：`queryGradeRuleMatrix`（只读）

@@ -123,8 +123,8 @@ public class SecurityInfoBo {
     private Integer dyFlag;
     /** 赎回剩余期限-最新 */
     private String dateCallExists;
-    /** 证券期限-最新 */
-    private String dateExists;
+    /** 剩余期限-最新（天），对应 rrs_securityinfo.date_exists */
+    private Integer dateExists;
     /** 含权证券剩余期限-最新 */
     private String dateInrightExists;
     /** 证券评级 */

@@ -368,9 +368,9 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- 查询同主体在目标池中已有债券的最大剩余期限天数 -->
+    <!-- 查询同主体在目标池中已有债券的最大剩余期限天数（date_exists，天） -->
     <select id="queryIssuerTargetPoolMaxRemainDays" resultType="java.lang.Integer">
-        SELECT MAX(DATEDIFF(STR_TO_DATE(si.date_next, '%Y%m%d'), CURDATE()))
+        SELECT MAX(si.date_exists)
         FROM ip_pool_status_crmw ips
         INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         WHERE si.issuer = (
@@ -382,7 +382,7 @@
           AND ips.target_pool_id = #{targetPoolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND si.date_next REGEXP '^[0-9]{8}$'
+          AND si.date_exists IS NOT NULL
     </select>
 
     <!-- 查询6个月内同主体有审批通过调入记录且真实关联有效信评报告 -->

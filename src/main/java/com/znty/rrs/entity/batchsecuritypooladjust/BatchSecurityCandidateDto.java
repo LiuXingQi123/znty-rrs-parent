@@ -52,4 +52,7 @@ public class BatchSecurityCandidateDto {
 
     /** 到期日期 */
     private String maturityDate;
+
+    /** 剩余期限（天），对应 rrs_securityinfo.date_exists；列表前端 ÷365 展示为年 */
+    private Integer dateExists;
 }

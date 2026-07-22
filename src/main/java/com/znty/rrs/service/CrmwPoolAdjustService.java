@@ -68,9 +68,6 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -149,10 +146,6 @@ public class CrmwPoolAdjustService {
     private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";
     /** 调入互斥池特殊审批流程 Key */
     private static final String FLOW_KEY_SPECIAL_INBOUND = "bond:special-inbound";
-    /** 日期字段格式：yyyyMMdd */
-    private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
-
-
     // ═══════════════════════════════════════════════════════════
     //  查询类接口
     // ═══════════════════════════════════════════════════════════
@@ -1980,10 +1973,10 @@ public class CrmwPoolAdjustService {
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
         SecurityInfoBo sec = shared.getSecurityInfo();
 
-        // 条件1：剩余期限 ≤ 3 年
-        Integer remainDays = parseRemainDays(sec.getDateNext());
+        // 条件1：剩余期限 ≤ 3 年（date_exists 天）
+        Integer remainDays = sec.getDateExists();
         if (remainDays == null) {
-            unmatchReasons.add("剩余期限无法解析，dateNext 需为 yyyyMMdd 格式");
+            unmatchReasons.add("剩余期限无法解析，date_exists 为空");
         } else if (remainDays < 0) {
             unmatchReasons.add("剩余期限已小于 0 天");
         } else if (remainDays <= 365 * 3) {
@@ -2039,8 +2032,8 @@ public class CrmwPoolAdjustService {
      *
      * <p>伪代码口径：
      * 1. 目标池须为信用债大库一/二/三级库；
-     * 2. 剩余期限可解析（dateNext 需为 yyyyMMdd 格式）；
-     * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限；
+     * 2. 剩余期限可解析（date_exists 天数）；
+     * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限（MAX date_exists）；
      * 4. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
      *
      * <p>评级下调标识由 RatingDowngradeChecker 查 wind_cbondissuerrating 真实判定：主体评级比较 b_info_creditrating 与 b_info_precreditrating，展望读 rrs_securityinfo.rating_outlook 是否负面，担保人按前端选中代码查 wind。</p>
@@ -2055,9 +2048,9 @@ public class CrmwPoolAdjustService {
             unmatchReasons.add("目标池不是信用债大库一、二、三级库");
         }
 
-        Integer remainDays = parseRemainDays(shared.getSecurityInfo().getDateNext());
+        Integer remainDays = shared.getSecurityInfo().getDateExists();
         if (remainDays == null) {
-            unmatchReasons.add("剩余期限无法解析，dateNext 需为 yyyyMMdd 格式");
+            unmatchReasons.add("剩余期限无法解析，date_exists 为空");
         }
 
         if (remainDays != null && remainDays >= 0) {
@@ -2158,22 +2151,7 @@ public class CrmwPoolAdjustService {
     }
 
     /**
-     * 解析 dateNext 到当前日期的剩余天数。
-     */
-    private Integer parseRemainDays(String dateNext) {
-        if (dateNext == null || !dateNext.matches("\\d{8}")) {
-            return null;
-        }
-        try {
-            LocalDate nextDate = LocalDate.parse(dateNext, BASIC_DATE_FORMATTER);
-            return (int) ChronoUnit.DAYS.between(LocalDate.now(), nextDate);
-        } catch (DateTimeParseException e) {
-            return null;
-        }
-    }
-
-    /**
-     * 格式化剩余期限展示文本。
+     * 格式化剩余期限展示文本（date_exists 天数）。
      */
     private String formatRemainDays(Integer remainDays) {
         if (remainDays == null) {

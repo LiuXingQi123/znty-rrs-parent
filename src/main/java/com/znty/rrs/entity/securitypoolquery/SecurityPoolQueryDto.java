@@ -47,6 +47,8 @@ public class SecurityPoolQueryDto {
     private String carryDate;
     /** 到期日 */
     private String maturityDate;
+    /** 剩余期限（天），对应 rrs_securityinfo.date_exists；列表前端 ÷365 展示为年 */
+    private Integer dateExists;
     /** 证券状态：active=存续 / matured=到期 */
     private String securityStatus;
     /** 退市日期 */

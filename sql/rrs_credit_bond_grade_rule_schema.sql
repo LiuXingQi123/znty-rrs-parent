@@ -20,13 +20,13 @@ DROP TABLE IF EXISTS `credit_bond_term_bucket`;
 -- ----------------------------------------------------------------------------
 CREATE TABLE `credit_bond_term_bucket` (
     `id`               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `bucket_code`      VARCHAR(32)   DEFAULT NULL            COMMENT '期限分组编码：GT_5=期限大于5年 / GT_3_LE_5=期限大于3年且小于等于5年 / GT_1_LE_3=期限大于1年且小于等于3年 / LE_1=期限小于等于1年',
+    `bucket_code`      VARCHAR(32)   DEFAULT NULL            COMMENT '期限分组编码（按剩余期限）：GT_5=剩余期限大于5年 / GT_3_LE_5=大于3且≤5年 / GT_1_LE_3=大于1且≤3年 / LE_1=≤1年',
     `bucket_name`      VARCHAR(64)   DEFAULT NULL            COMMENT '期限分组名称',
-    `min_term_year`    DECIMAL(20,4) DEFAULT NULL            COMMENT '期限下限年数，空表示无下限',
+    `min_term_year`    DECIMAL(20,4) DEFAULT NULL            COMMENT '剩余期限下限年数，空表示无下限',
     `min_inclusive`    TINYINT(1)    DEFAULT NULL            COMMENT '是否包含期限下限：1=包含 / 0=不包含',
-    `max_term_year`    DECIMAL(20,4) DEFAULT NULL            COMMENT '期限上限年数，空表示无上限',
+    `max_term_year`    DECIMAL(20,4) DEFAULT NULL            COMMENT '剩余期限上限年数，空表示无上限',
     `max_inclusive`    TINYINT(1)    DEFAULT NULL            COMMENT '是否包含期限上限：1=包含 / 0=不包含',
-    `expression_text`  VARCHAR(128)  DEFAULT NULL            COMMENT '期限分组表达式，用于页面展示',
+    `expression_text`  VARCHAR(128)  DEFAULT NULL            COMMENT '期限分组表达式（remain_term_year），用于页面展示',
     `sort_no`          INT           DEFAULT NULL            COMMENT '排序序号',
     `enabled`          TINYINT(1)    DEFAULT NULL            COMMENT '是否启用：1=启用 / 0=停用',
     `crte_time`        DATETIME      DEFAULT NULL            COMMENT '创建时间',

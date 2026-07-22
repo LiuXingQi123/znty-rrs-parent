@@ -24,6 +24,7 @@ import com.znty.rrs.common.enums.FlowType;
 import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
+import com.znty.rrs.common.util.CreditBondRemainTermUtil;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -69,9 +70,6 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -110,9 +108,6 @@ public class BatchSecurityPoolAdjustService {
     private static final String FLOW_KEY_STANDARD_DOWNGRADE = "bond:standard-downgrade";
     /** 调入互斥池特殊审批流程 Key */
     private static final String FLOW_KEY_SPECIAL_INBOUND = "bond:special-inbound";
-    /** 日期字段格式：yyyyMMdd */
-    private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
-
     /** 证券池批量调整数据访问组件 */
     @Resource
     private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;
@@ -1929,10 +1924,10 @@ public class BatchSecurityPoolAdjustService {
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
         SecurityInfoBo sec = shared.getSecurityInfo();
 
-        // 条件1：剩余期限 ≤ 3 年
-        Integer remainDays = parseRemainDays(sec.getDateNext());
+        // 条件1：剩余期限 ≤ 3 年（date_exists 天）
+        Integer remainDays = sec.getDateExists();
         if (remainDays == null) {
-            unmatchReasons.add("剩余期限无法解析，dateNext 需为 yyyyMMdd 格式");
+            unmatchReasons.add("剩余期限无法解析，date_exists 为空");
         } else if (remainDays < 0) {
             unmatchReasons.add("剩余期限已小于 0 天");
         } else if (remainDays <= 365 * 3) {
@@ -1988,8 +1983,8 @@ public class BatchSecurityPoolAdjustService {
      *
      * <p>伪代码口径：
      * 1. 目标池须为信用债大库一/二/三级库；
-     * 2. 剩余期限可解析（dateNext 需为 yyyyMMdd 格式）；
-     * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限；
+     * 2. 剩余期限可解析（date_exists 天数）；
+     * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限（MAX date_exists）；
      * 4. 该主体180天内以一般流程入过目标池；
      * 5. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
      *
@@ -2005,9 +2000,9 @@ public class BatchSecurityPoolAdjustService {
             unmatchReasons.add("目标池不是信用债大库一、二、三级库");
         }
 
-        Integer remainDays = parseRemainDays(shared.getSecurityInfo().getDateNext());
+        Integer remainDays = shared.getSecurityInfo().getDateExists();
         if (remainDays == null) {
-            unmatchReasons.add("剩余期限无法解析，dateNext 需为 yyyyMMdd 格式");
+            unmatchReasons.add("剩余期限无法解析，date_exists 为空");
         }
 
         if (remainDays != null && remainDays >= 0) {
@@ -2124,22 +2119,7 @@ public class BatchSecurityPoolAdjustService {
     }
 
     /**
-     * 解析 dateNext 到当前日期的剩余天数。
-     */
-    private Integer parseRemainDays(String dateNext) {
-        if (dateNext == null || !dateNext.matches("\\d{8}")) {
-            return null;
-        }
-        try {
-            LocalDate nextDate = LocalDate.parse(dateNext, BASIC_DATE_FORMATTER);
-            return (int) ChronoUnit.DAYS.between(LocalDate.now(), nextDate);
-        } catch (DateTimeParseException e) {
-            return null;
-        }
-    }
-
-    /**
-     * 格式化剩余期限展示文本。
+     * 格式化剩余期限展示文本（date_exists 天数）。
      */
     private String formatRemainDays(Integer remainDays) {
         if (remainDays == null) {
@@ -2353,8 +2333,8 @@ public class BatchSecurityPoolAdjustService {
      * <p>调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表，
      * 目标池须在允许列表内。对应老项目 checkInPool:516-955（findMainGradeRuleList + sirmEnums sort 比对），
      * 当前项目用 credit_bond_pool_grade_rule 矩阵（req[23]）替代老项目 IP_MainGradeRule，用
-     * SecurityInfoBo.innerIssuerRating 替代老项目 lon，用 termYear+credit_bond_term_bucket 替代 bondDurationId。
-     * 担保债取主体与担保人评级较低者（老项目 lon=min(主体,担保人)）。可转债不适用矩阵跳过。
+     * SecurityInfoBo.innerIssuerRating 替代老项目 lon，用 date_exists（剩余期限天）÷365 + credit_bond_term_bucket
+     * 替代 bondDurationId。担保债取主体与担保人评级较低者（老项目 lon=min(主体,担保人)）。可转债不适用矩阵跳过。
      * 仅调入校验（老代码 checkOutPool 无）。
      */
     private String inCheckMainGradeRule(AdjustCheckContext ctx) {
@@ -2393,10 +2373,10 @@ public class BatchSecurityPoolAdjustService {
                 && sec.getInnerGuarantorRating() != null && !sec.getInnerGuarantorRating().isEmpty()) {
             gradeCode = pickLowerRatingGrade(gradeCode, sec.getInnerGuarantorRating());
         }
-        // 期限档：按 termYear 匹配 credit_bond_term_bucket
-        String bucketCode = matchTermBucket(sec.getTermYear());
+        // 期限档：date_exists（天）÷365 匹配 credit_bond_term_bucket
+        String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
         if (bucketCode == null) {
-            // 无法判定期限档（termYear 缺失或不在任何区间），跳过
+            // 无法判定期限档（date_exists 为空或不在任何区间），跳过
             return null;
         }
         // 查矩阵允许的池列表
@@ -2421,24 +2401,25 @@ public class BatchSecurityPoolAdjustService {
     }
 
     /**
-     * 按证券期限（年）匹配信用债期限分组编码。
+     * 按剩余期限（年）匹配信用债期限分组编码。
      *
      * <p>遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
+     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（date_exists 天 ÷365）。
      */
-    private String matchTermBucket(java.math.BigDecimal termYear) {
-        if (termYear == null) {
+    private String matchTermBucket(java.math.BigDecimal remainTermYears) {
+        if (remainTermYears == null) {
             return null;
         }
         List<CreditBondTermBucketBo> buckets = creditBondGradeRuleMapper.queryEnabledTermBucketList();
         for (CreditBondTermBucketBo b : buckets) {
             boolean minOk = b.getMinTermYear() == null
                     || (b.getMinInclusive() != null && b.getMinInclusive() == 1
-                        ? termYear.compareTo(b.getMinTermYear()) >= 0
-                        : termYear.compareTo(b.getMinTermYear()) > 0);
+                        ? remainTermYears.compareTo(b.getMinTermYear()) >= 0
+                        : remainTermYears.compareTo(b.getMinTermYear()) > 0);
             boolean maxOk = b.getMaxTermYear() == null
                     || (b.getMaxInclusive() != null && b.getMaxInclusive() == 1
-                        ? termYear.compareTo(b.getMaxTermYear()) <= 0
-                        : termYear.compareTo(b.getMaxTermYear()) < 0);
+                        ? remainTermYears.compareTo(b.getMaxTermYear()) <= 0
+                        : remainTermYears.compareTo(b.getMaxTermYear()) < 0);
             if (minOk && maxOk) {
                 return b.getBucketCode();
             }
