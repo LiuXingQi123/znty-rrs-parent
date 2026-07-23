@@ -112,6 +112,7 @@ Mapper       ── 数据库操作接口，对应 XML
 - 时间字段统一使用 `Date` + `@JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")`
 - 类名使用 PascalCase + 后缀（`FlowBo`、`FlowDto`、`FlowReq`）
 - 方法名、字段名使用 camelCase
+- **禁止正文写全限定类名**：类型引用统一文件顶部 `import` + 简单类名（如 `BigDecimal`、`AdjustSharedData`），禁止在方法体/签名中写 `java.math.BigDecimal`、`com.znty.rrs.entity.xxx.Foo` 等。同名类冲突时优先拆到不同类/测试文件各自 import；确需同文件并存时才允许其中一方保留全限定名。反射用字符串类名、`package`/`import` 语句、JavaDoc `{@link}` 除外
 
 ---
 
@@ -275,6 +276,7 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 | 16 | `@RequestMapping` 类级别只写 `/api/v1`（应写完整路径） |
 | 17 | URL 路径使用 kebab-case（统一 camelCase） |
 | 18 | 方法内部调用私有方法时，调用行上方缺少 `//` 注释说明调用目的 |
+| 19 | 在 Java 正文中写全限定类名（应 `import` 后用简单类名；同名冲突优先拆文件） |
 
 ---
 

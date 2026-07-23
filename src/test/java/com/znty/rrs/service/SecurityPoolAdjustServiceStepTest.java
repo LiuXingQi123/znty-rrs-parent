@@ -1547,25 +1547,6 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
     }
 
-    /** 验证 CRMW 调库链路命中特殊审批流程。 */
-    @Test
-    public void crmwAdjustShouldResolveSpecialInboundFlow() {
-        FlowMapper flowMapper = mock(FlowMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
-        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
-        when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
-                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
-
-        com.znty.rrs.entity.crmwpooladjust.AdjustSharedData shared = buildCrmwSpecialInboundShared(
-                19L, 20L, "CRMW核心库", "CRMW关注库");
-        com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(
-                service, "resolveSpecialInboundFlowOption",
-                buildPool(19L, null, "CRMW核心库"), shared);
-
-        assertThat(option.getFlowType()).isEqualTo("specialInbound");
-        assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
-    }
-
     /** 验证互斥调出失败时应反阻断同组手工调入，避免双池。 */
     @Test
     public void executeInAdjustCheckShouldBlockManualWhenMutexOutboundFails() {
@@ -1734,28 +1715,6 @@ public class SecurityPoolAdjustServiceStepTest {
         relationMap.put(targetPoolId, targetRelations);
 
         AdjustSharedData shared = new AdjustSharedData();
-        shared.setPoolMap(poolMap);
-        shared.setCurrentPoolIds(Collections.singleton(currentPoolId));
-        shared.setPoolRelationMap(relationMap);
-        return shared;
-    }
-
-    /** 构造 CRMW 特殊审批命中共享数据。 */
-    private com.znty.rrs.entity.crmwpooladjust.AdjustSharedData buildCrmwSpecialInboundShared(
-            Long targetPoolId, Long currentPoolId, String targetPoolName, String currentPoolName) {
-        InvestmentPoolBo targetPool = buildPool(targetPoolId, null, targetPoolName);
-        InvestmentPoolBo currentPool = buildPool(currentPoolId, null, currentPoolName);
-        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
-        poolMap.put(targetPoolId, targetPool);
-        poolMap.put(currentPoolId, currentPool);
-
-        Map<String, List<Long>> targetRelations = new HashMap<>();
-        targetRelations.put(RelationType.IN_MUTEX.getCode(), Collections.singletonList(currentPoolId));
-        Map<Long, Map<String, List<Long>>> relationMap = new HashMap<>();
-        relationMap.put(targetPoolId, targetRelations);
-
-        com.znty.rrs.entity.crmwpooladjust.AdjustSharedData shared =
-                new com.znty.rrs.entity.crmwpooladjust.AdjustSharedData();
         shared.setPoolMap(poolMap);
         shared.setCurrentPoolIds(Collections.singleton(currentPoolId));
         shared.setPoolRelationMap(relationMap);

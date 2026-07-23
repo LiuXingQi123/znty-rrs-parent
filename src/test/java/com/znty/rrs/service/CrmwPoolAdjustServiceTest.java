@@ -1,17 +1,25 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.enums.RelationType;
+import com.znty.rrs.entity.bo.FlowDefinitionBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
-import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustSubmitReq;
+import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
+import com.znty.rrs.entity.crmwpooladjust.AdjustSharedData;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustReq;
+import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
+import com.znty.rrs.mapper.FlowMapper;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -180,6 +188,24 @@ public class CrmwPoolAdjustServiceTest {
         ReflectionTestUtils.invokeMethod(service, "checkCrmwOutboundCombination", buildCrmwReq(), buildItem());
     }
 
+    /** 验证 CRMW 调库链路命中特殊审批流程。 */
+    @Test
+    public void crmwAdjustShouldResolveSpecialInboundFlow() {
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+        when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
+                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+
+        AdjustSharedData shared = buildSpecialInboundShared(19L, 20L, "CRMW核心库", "CRMW关注库");
+        AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(
+                service, "resolveSpecialInboundFlowOption",
+                buildPool(19L, "CRMW核心库"), shared);
+
+        assertThat(option.getFlowType()).isEqualTo("specialInbound");
+        assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
+    }
+
     /** 构建 CRMW 调库提交请求（含凭证与标的证券）。 */
     private CrmwPoolAdjustSubmitReq buildCrmwReq() {
         CrmwPoolAdjustSubmitReq req = new CrmwPoolAdjustSubmitReq();
@@ -194,5 +220,41 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustSubmitReq.AdjustItem item = new CrmwPoolAdjustSubmitReq.AdjustItem();
         item.setTargetPoolId(10L);
         return item;
+    }
+
+    /** 构造特殊审批命中共享数据。 */
+    private AdjustSharedData buildSpecialInboundShared(Long targetPoolId, Long currentPoolId,
+                                                       String targetPoolName, String currentPoolName) {
+        InvestmentPoolBo targetPool = buildPool(targetPoolId, targetPoolName);
+        InvestmentPoolBo currentPool = buildPool(currentPoolId, currentPoolName);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(targetPoolId, targetPool);
+        poolMap.put(currentPoolId, currentPool);
+
+        Map<String, List<Long>> targetRelations = new HashMap<>();
+        targetRelations.put(RelationType.IN_MUTEX.getCode(), Collections.singletonList(currentPoolId));
+        Map<Long, Map<String, List<Long>>> relationMap = new HashMap<>();
+        relationMap.put(targetPoolId, targetRelations);
+
+        AdjustSharedData shared = new AdjustSharedData();
+        shared.setPoolMap(poolMap);
+        shared.setCurrentPoolIds(Collections.singleton(currentPoolId));
+        shared.setPoolRelationMap(relationMap);
+        return shared;
+    }
+
+    private InvestmentPoolBo buildPool(Long id, String poolName) {
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(id);
+        pool.setPoolName(poolName);
+        return pool;
+    }
+
+    private FlowDefinitionBo buildFlowDefinition(Long id, String flowKey, String name) {
+        FlowDefinitionBo flow = new FlowDefinitionBo();
+        flow.setId(id);
+        flow.setFlowKey(flowKey);
+        flow.setName(name);
+        return flow;
     }
 }
