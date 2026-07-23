@@ -51,7 +51,7 @@ this.loadList();                  // 列表数据
 
 - 路径：`POST /api/v1/securityPoolQuery/querySecurityTypeList`，请求体 `{}`
 - 返回 `List<SecurityTypeOptionDto>`（`{securityType, securityTypeName}`）
-- 后端 SQL：`SELECT DISTINCT ips.security_type, dst.security_type_name FROM ip_pool_status ips LEFT JOIN dict_security_type dst ... WHERE ips.is_deleted=0 AND ips.audit_status='20' AND ips.security_type IS NOT NULL ORDER BY dst.sort_order ASC, ips.security_type ASC`
+- 后端 SQL：`SELECT DISTINCT ips.security_type, dst.security_type_name FROM ip_pool_status ips LEFT JOIN dict_security_type dst ... WHERE ips.is_deleted=0 AND ips.audit_status='20' ORDER BY dst.sort_order ASC, ips.security_type ASC`（`security_type` 落池时必有值，不再写 `IS NOT NULL`）
 
 ### 2.4 证券状态下拉
 

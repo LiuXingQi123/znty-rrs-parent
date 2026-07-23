@@ -300,7 +300,7 @@
     <select id="queryPoolEntryTime" resultType="java.util.Date">
         SELECT COALESCE(ips.entry_time, al.audit_time, ips.crte_time)
         FROM ip_pool_status ips
-        LEFT JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
+        INNER JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
         WHERE ips.security_code = #{securityCode}
           AND ips.target_pool_id = #{targetPoolId}
           AND ips.audit_status = '20'

@@ -278,7 +278,7 @@
     <select id="queryCrmwPoolEntryTime" resultType="java.util.Date">
         SELECT COALESCE(ips.entry_time, al.audit_time, ips.crte_time)
         FROM ip_pool_status_crmw ips
-        LEFT JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
+        INNER JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
         WHERE ips.security_code = #{securityCode}
           AND ips.crmw_scode = #{crmwScode}
           AND ips.crmw_stype = #{crmwStype}

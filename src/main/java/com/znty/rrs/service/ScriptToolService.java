@@ -1237,16 +1237,16 @@ public class ScriptToolService {
     private List<IntegrityRule> queryIntegrityRules() {
         List<IntegrityRule> rules = new ArrayList<>();
         rules.add(buildIntegrityRule("adjust-step-log", "调库流程", "ip_adjust_step → ip_adjust_log", "审批步骤关联申请",
-                "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE s.adjust_log_id IS NOT NULL AND l.id IS NULL",
+                "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE l.id IS NULL",
                 STATUS_FAILED, "存在找不到调库申请的审批步骤", "清理孤儿步骤或补回对应调库申请"));
         rules.add(buildIntegrityRule("adjust-step-batch", "调库流程", "ip_adjust_step.adjust_batch_no", "步骤批次号一致性",
                 "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE COALESCE(s.adjust_batch_no, '') <> COALESCE(l.adjust_batch_no, '')",
                 STATUS_FAILED, "步骤批次号与申请批次号不一致", "按调库申请批次号修正步骤记录"));
         rules.add(buildIntegrityRule("pool-status-log", "调库流程", "ip_pool_status → ip_adjust_log", "证券池状态来源申请",
-                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE p.adjust_log_id IS NOT NULL AND l.id IS NULL",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE l.id IS NULL",
                 STATUS_FAILED, "存在找不到来源申请的证券池状态", "清理孤儿池状态或补回来源申请"));
         rules.add(buildIntegrityRule("crmw-status-log", "调库流程", "ip_pool_status_crmw → ip_adjust_log", "CRMW 状态来源申请",
-                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE p.adjust_log_id IS NOT NULL AND l.id IS NULL",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE l.id IS NULL",
                 STATUS_FAILED, "存在找不到来源申请的 CRMW 池状态", "清理孤儿池状态或补回来源申请"));
         rules.add(buildIntegrityRule("pool-status-audit", "调库流程", "ip_pool_status.audit_status", "证券池落地状态合法性",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_status WHERE COALESCE(is_deleted, 0) = 0 AND audit_status <> '20'",
