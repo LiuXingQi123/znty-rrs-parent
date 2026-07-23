@@ -29,9 +29,11 @@ import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import java.lang.reflect.Constructor;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -46,6 +48,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -188,7 +192,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
         ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(1L, pool));
         // 入池时间为当前时间，仍在30天冻结期内
-        ctx.setTargetPoolEntryTime(new java.util.Date());
+        ctx.setTargetPoolEntryTime(new Date());
 
         List<String> failures = service.checkOutConditions(ctx);
 
@@ -614,7 +618,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
         // date_exists 天数 > 5*365 → GT_5
-        sec.setDateExists(new java.math.BigDecimal("1826"));
+        sec.setDateExists(new BigDecimal("1826"));
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
@@ -622,7 +626,7 @@ public class SecurityPoolAdjustServiceStepTest {
         // 期限档 GT_5：剩余期限年 > 5
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
-        gt5.setMinTermYear(new java.math.BigDecimal("5"));
+        gt5.setMinTermYear(new BigDecimal("5"));
         gt5.setMinInclusive(0);
         when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
@@ -647,7 +651,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("4");
         // date_exists 天数 > 5 年，与 GT_5 档匹配
-        sec.setDateExists(new java.math.BigDecimal("1826"));
+        sec.setDateExists(new BigDecimal("1826"));
         // 池名映射（允许池 2/3 + 目标池 5）
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         InvestmentPoolBo p2 = new InvestmentPoolBo(); p2.setId(2L); p2.setPoolName("一级库"); poolMap.put(2L, p2);
@@ -659,7 +663,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ctx.setPoolMap(poolMap);
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
-        gt5.setMinTermYear(new java.math.BigDecimal("5"));
+        gt5.setMinTermYear(new BigDecimal("5"));
         gt5.setMinInclusive(0);
         when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
         // 矩阵允许一/二级库，不含五级库
@@ -684,14 +688,14 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
-        sec.setDateExists(new java.math.BigDecimal("1826"));
+        sec.setDateExists(new BigDecimal("1826"));
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
         ctx.setPoolMap(Collections.singletonMap(2L, pool));
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
-        gt5.setMinTermYear(new java.math.BigDecimal("5"));
+        gt5.setMinTermYear(new BigDecimal("5"));
         gt5.setMinInclusive(0);
         when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
@@ -798,8 +802,8 @@ public class SecurityPoolAdjustServiceStepTest {
 
         assertThat(result).extracting(PoolDto::getId).containsExactly(1L, 2L);
         assertThat(result).extracting(PoolDto::getCurrentCount).containsExactly(0, 3);
-        verify(mapper, never()).queryPermissionListByType(org.mockito.Matchers.anyString());
-        verify(mapper, never()).queryUserRoleIdList(org.mockito.Matchers.anyLong());
+        verify(mapper, never()).queryPermissionListByType(anyString());
+        verify(mapper, never()).queryUserRoleIdList(anyLong());
     }
 
     /** 验证 filterAdjustablePoolsByUserShouldKeepAncestors 测试场景。 */
@@ -1815,7 +1819,7 @@ public class SecurityPoolAdjustServiceStepTest {
         constructor.setAccessible(true);
         return constructor.newInstance(
                 new SecurityInfoBo(),
-                new HashMap<Long, com.znty.rrs.entity.bo.InvestmentPoolBo>(),
+                new HashMap<Long, InvestmentPoolBo>(),
                 Collections.<Long>emptySet(),
                 new HashMap<Long, Map<String, List<Long>>>(),
                 false,
@@ -2027,7 +2031,7 @@ public class SecurityPoolAdjustServiceStepTest {
         targetPool.setInnerSort(1);
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setDateExists(new java.math.BigDecimal("500"));
+        sec.setDateExists(new BigDecimal("500"));
         shared.setSecurityInfo(sec);
         when(mapper.queryIssuerTargetPoolMaxRemainDays(any(String.class), any(Long.class))).thenReturn(null);
         when(mapper.queryIssuerHasNonSimpleInboundWithinDays(any(String.class), any(Long.class), any(Integer.class)))
@@ -2049,7 +2053,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityInfoBo current = new SecurityInfoBo();
         current.setShortName("原简称");
-        current.setDateRepurchaseExists(new java.math.BigDecimal("365.0000"));
+        current.setDateRepurchaseExists(new BigDecimal("365.0000"));
         current.setGuarantFlag(1);
         current.setGuarantType("连带责任担保");
         current.setAbsFlag(1);
@@ -2129,7 +2133,7 @@ public class SecurityPoolAdjustServiceStepTest {
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
         if (remainDays != null) {
-            sec.setDateExists(java.math.BigDecimal.valueOf(remainDays.longValue()));
+            sec.setDateExists(BigDecimal.valueOf(remainDays.longValue()));
         }
         sec.setYxFlag(yxFlag);
         sec.setAbsFlag(absFlag);

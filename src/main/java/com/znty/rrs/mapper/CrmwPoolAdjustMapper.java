@@ -12,6 +12,8 @@ import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustSubmitReq;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -87,7 +89,7 @@ public interface CrmwPoolAdjustMapper {
     int queryPoolCurrentCount(@Param("poolId") Long poolId);
 
     /** 查询 CRMW 凭证与标的组合的实际入池时间。 */
-    java.util.Date queryCrmwPoolEntryTime(@Param("securityCode") String securityCode,
+    Date queryCrmwPoolEntryTime(@Param("securityCode") String securityCode,
                                           @Param("crmwScode") String crmwScode,
                                           @Param("crmwStype") String crmwStype,
                                           @Param("targetPoolId") Long targetPoolId);
@@ -117,7 +119,7 @@ public interface CrmwPoolAdjustMapper {
     boolean queryIssuerInObservePool(@Param("securityCode") String securityCode);
 
     /** 查询同主体在目标池中已有债券的最大剩余期限天数（date_exists） */
-    java.math.BigDecimal queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
+    BigDecimal queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
                                                @Param("targetPoolId") Long targetPoolId);
 
     /** 查询6个月内同主体有审批通过调入记录（对齐老系统 bondfileflag，6个月） */

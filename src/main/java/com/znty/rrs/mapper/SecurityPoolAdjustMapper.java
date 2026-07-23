@@ -12,6 +12,8 @@ import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -74,7 +76,7 @@ public interface SecurityPoolAdjustMapper {
     int queryPoolCurrentCount(@Param("poolId") Long poolId);
 
     /** 查询证券在目标池的入池时间（audit_status=20），用于调出冻结期校验 */
-    java.util.Date queryPoolEntryTime(@Param("securityCode") String securityCode,
+    Date queryPoolEntryTime(@Param("securityCode") String securityCode,
                                       @Param("targetPoolId") Long targetPoolId);
 
     /** 查询证券是否在全局禁投池（forbidden/blacklist，audit_status=20），用于调入禁投池校验 */
@@ -102,7 +104,7 @@ public interface SecurityPoolAdjustMapper {
     boolean queryIssuerInObservePool(@Param("securityCode") String securityCode);
 
     /** 查询同主体在目标池中已有债券的最大剩余期限天数（date_exists） */
-    java.math.BigDecimal queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
+    BigDecimal queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
                                                @Param("targetPoolId") Long targetPoolId);
 
     /** 查询6个月内同主体有审批通过调入记录且真实关联有效信评报告 */

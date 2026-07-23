@@ -13,6 +13,7 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.securitypooladjust.AdjustCheckContext;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -25,6 +26,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyListOf;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doAnswer;
 import org.mockito.ArgumentCaptor;
 import static org.mockito.Mockito.mock;
@@ -52,7 +58,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         BatchSecurityPoolDto firstPoolCount = new BatchSecurityPoolDto();
         firstPoolCount.setId(11L);
         firstPoolCount.setCurrentCount(3);
-        when(mapper.queryPoolCurrentCountList(org.mockito.Matchers.anyListOf(Long.class)))
+        when(mapper.queryPoolCurrentCountList(anyListOf(Long.class)))
                 .thenReturn(Collections.singletonList(firstPoolCount));
 
         ReflectionTestUtils.invokeMethod(service, "fillPoolCurrentCount", poolList);
@@ -151,13 +157,13 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(mapper.queryEnabledLeafPoolCount(11L)).thenReturn(1);
         SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
         when(attachmentService.createSubmissionFiles(
-                org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1")))
+                anyListOf(MultipartFile.class), eq("1")))
                 .thenReturn(submissionFiles);
-        when(adjustMapper.querySecurityBoByCode(org.mockito.Matchers.anyString()))
+        when(adjustMapper.querySecurityBoByCode(anyString()))
                 .thenReturn(new SecurityInfoBo());
         when(investmentPoolMapper.queryPoolList()).thenReturn(new ArrayList<>());
         when(investmentPoolMapper.queryPoolById(11L)).thenReturn(buildPool(11L, null, "测试池", "credit_bond"));
-        when(adjustMapper.querySecurityCurrentPoolIdList(org.mockito.Matchers.anyString()))
+        when(adjustMapper.querySecurityCurrentPoolIdList(anyString()))
                 .thenReturn(Collections.<Long>emptyList());
         when(adjustMapper.queryAllPoolRelationList()).thenReturn(Collections.emptyList());
         doAnswer(invocation -> {
@@ -180,7 +186,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         service.addAdjustLog(req, Collections.<MultipartFile>emptyList());
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(adjustMapper, org.mockito.Mockito.times(2)).addAdjustLog(captor.capture());
+        verify(adjustMapper, times(2)).addAdjustLog(captor.capture());
         assertThat(captor.getAllValues())
                 .extracting(IpAdjustLogBo::getAdjustBatchNo)
                 .doesNotHaveDuplicates();
@@ -207,7 +213,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
         SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
         when(attachmentService.createSubmissionFiles(
-                org.mockito.Matchers.anyListOf(MultipartFile.class), org.mockito.Matchers.eq("1")))
+                anyListOf(MultipartFile.class), eq("1")))
                 .thenReturn(submissionFiles);
         when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(new SecurityInfoBo());
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(
@@ -240,7 +246,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         service.addAdjustLog(req, Collections.<MultipartFile>emptyList());
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(adjustMapper, org.mockito.Mockito.times(2)).addAdjustLog(captor.capture());
+        verify(adjustMapper, times(2)).addAdjustLog(captor.capture());
         assertThat(captor.getAllValues()).extracting(IpAdjustLogBo::getTargetPoolId)
                 .containsExactly(3L, 2L);
         assertThat(captor.getAllValues()).extracting(IpAdjustLogBo::getAdjustMode)
@@ -286,7 +292,7 @@ public class BatchSecurityPoolAdjustServiceTest {
                 .thenReturn(Collections.singletonList(2L));
         when(adjustMapper.queryAllPoolRelationList())
                 .thenReturn(Collections.singletonList(buildRelation(3L, "in_mutex", 2L, "一级库")));
-        when(adjustMapper.queryPoolCurrentCount(org.mockito.Matchers.anyLong())).thenReturn(0);
+        when(adjustMapper.queryPoolCurrentCount(anyLong())).thenReturn(0);
         when(adjustMapper.querySecurityHasPendingProcess("106006789")).thenReturn(false);
         when(adjustMapper.querySecurityPendingProcessNodeLabel("106006789")).thenReturn(null);
         when(adjustMapper.queryPendingManualTargetPoolIdList("106006789", null))
@@ -400,8 +406,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     @Test
     public void inCheckMainGradeRuleShouldSkipWhenReleased() {
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
-        com.znty.rrs.entity.securitypooladjust.AdjustCheckContext ctx =
-                new com.znty.rrs.entity.securitypooladjust.AdjustCheckContext();
+        AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setReleaseRules(true);
 
         String result = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);

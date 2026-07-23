@@ -5,6 +5,8 @@ import com.znty.rrs.common.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 /**
  * 禁投池分页查询请求对象，支持按证券代码、证券简称、类型、状态、调整人、入池日期等多条件过滤
  */
@@ -17,7 +19,7 @@ public class ForbiddenPoolQueryReq extends PageRequest {
 
     /** 服务端解析的可查看投资池 ID */
     @JsonIgnore
-    private java.util.List<Long> viewablePoolIds;
+    private List<Long> viewablePoolIds;
 
     /** 证券代码（模糊搜索） */
     private String securityCode;

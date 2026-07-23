@@ -5,6 +5,8 @@ import com.znty.rrs.common.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 /**
  * 禁投池历史查询请求对象
  */
@@ -17,7 +19,7 @@ public class ForbiddenPoolHistoryReq extends PageRequest {
 
     /** 服务端解析的可查看投资池 ID */
     @JsonIgnore
-    private java.util.List<Long> viewablePoolIds;
+    private List<Long> viewablePoolIds;
 
     /** 主体代码（模糊搜索） */
     private String companyCode;

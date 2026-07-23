@@ -10,6 +10,9 @@ import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
+import java.util.Collections;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Matchers.any;
@@ -39,8 +42,8 @@ public class CrmwPoolAdjustServiceTest {
         req.setCrmwScode("CRMW001");
         req.setCrmwStype("crmw");
         when(mapper.querySecurityPoolStatusList("BOND001", "CRMW001", "crmw"))
-                .thenReturn(java.util.Collections.emptyList());
-        when(mapper.queryIssuerPoolStatusList("BOND001")).thenReturn(java.util.Collections.emptyList());
+                .thenReturn(Collections.emptyList());
+        when(mapper.queryIssuerPoolStatusList("BOND001")).thenReturn(Collections.emptyList());
 
         service.queryCrmwPoolStatus(req);
 
@@ -71,7 +74,7 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         CrmwPoolAdjustSubmitReq.AdjustItem item = new CrmwPoolAdjustSubmitReq.AdjustItem();
-        item.setCreditReportSourceAttachmentIds(java.util.Collections.singletonList(1L));
+        item.setCreditReportSourceAttachmentIds(Collections.singletonList(1L));
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(10L);
         pool.setPoolName("CRMW报告池");
@@ -132,7 +135,7 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         SecurityInfoBo current = new SecurityInfoBo();
         current.setShortName("原简称");
-        current.setDateRepurchaseExists(new java.math.BigDecimal("365.0000"));
+        current.setDateRepurchaseExists(new BigDecimal("365.0000"));
         current.setGuarantFlag(1);
         current.setGuarantType("连带责任担保");
         current.setAbsFlag(1);
@@ -161,7 +164,7 @@ public class CrmwPoolAdjustServiceTest {
         log.setTargetPoolName("CRMW池");
         when(mapper.addPoolStatus(log)).thenReturn(0);
 
-        assertThatThrownBy(() -> service.applyPoolStatusChanges(java.util.Collections.singletonList(log)))
+        assertThatThrownBy(() -> service.applyPoolStatusChanges(Collections.singletonList(log)))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("入池状态写入异常");
     }

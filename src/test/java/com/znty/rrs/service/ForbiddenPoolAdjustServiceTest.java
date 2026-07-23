@@ -23,6 +23,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyListOf;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -112,7 +113,7 @@ public class ForbiddenPoolAdjustServiceTest {
         InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
         ForbiddenPoolAdjustService service = buildService(mapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
-        when(poolMapper.queryPoolByIdsList(org.mockito.Matchers.anyListOf(Long.class)))
+        when(poolMapper.queryPoolByIdsList(anyListOf(Long.class)))
                 .thenReturn(Arrays.asList(
                         buildPool(15L, "禁投池", "forbidden"),
                         buildPool(16L, "观察池", "observe"),

@@ -5,6 +5,8 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,11 +60,11 @@ public class AdjustCheckContext {
     private Set<Long> requestOutPoolIds;
 
     /** 证券在目标池的入池时间（ip_pool_status_crmw.entry_time，audit_status=20），用于调出冻结期校验，调入时为 null */
-    private java.util.Date targetPoolEntryTime;
+    private Date targetPoolEntryTime;
 
     /** 证券品种大类（bond/fund/stock/company，查 dict_security_type），用于类型特有校验路由 */
     private String categoryType;
 
     /** 校验警告列表（弹性禁投池等柔性限制命中时填充，不阻断调库） */
-    private java.util.List<String> warnings = new java.util.ArrayList<>();
+    private List<String> warnings = new ArrayList<>();
 }

@@ -25,6 +25,7 @@ import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.PoolStatus;
 import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
+import com.znty.rrs.common.util.MarketCodeMatchUtil;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -72,6 +73,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -2158,12 +2160,12 @@ public class ForbiddenPoolAdjustService {
         SecurityInfoBo sec = shared.getSecurityInfo();
 
         // 条件1：剩余期限 ≤ 3 年（date_exists 天）
-        java.math.BigDecimal remainDays = sec.getDateExists();
+        BigDecimal remainDays = sec.getDateExists();
         if (remainDays == null) {
             unmatchReasons.add("剩余期限无法解析，date_exists 为空");
-        } else if (remainDays.compareTo(java.math.BigDecimal.ZERO) < 0) {
+        } else if (remainDays.compareTo(BigDecimal.ZERO) < 0) {
             unmatchReasons.add("剩余期限已小于 0 天");
-        } else if (remainDays.compareTo(new java.math.BigDecimal("1095")) <= 0) {
+        } else if (remainDays.compareTo(new BigDecimal("1095")) <= 0) {
             matchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，未超过 3 年");
         } else {
             unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，超过 3 年");
@@ -2232,13 +2234,13 @@ public class ForbiddenPoolAdjustService {
             unmatchReasons.add("目标池不是信用债大库一、二、三级库");
         }
 
-        java.math.BigDecimal remainDays = shared.getSecurityInfo().getDateExists();
+        BigDecimal remainDays = shared.getSecurityInfo().getDateExists();
         if (remainDays == null) {
             unmatchReasons.add("剩余期限无法解析，date_exists 为空");
         }
 
-        if (remainDays != null && remainDays.compareTo(java.math.BigDecimal.ZERO) >= 0) {
-            java.math.BigDecimal issuerPoolMaxRemainDays = forbiddenPoolAdjustMapper.queryIssuerTargetPoolMaxRemainDays(
+        if (remainDays != null && remainDays.compareTo(BigDecimal.ZERO) >= 0) {
+            BigDecimal issuerPoolMaxRemainDays = forbiddenPoolAdjustMapper.queryIssuerTargetPoolMaxRemainDays(
                     req.getSecurityCode(), targetPool.getId());
             if (issuerPoolMaxRemainDays == null) {
                 matchReasons.add("目标池暂无同主体有效债券，不受在池最大期限限制");
@@ -2337,7 +2339,7 @@ public class ForbiddenPoolAdjustService {
     /**
      * 格式化剩余期限展示文本（date_exists 天数）。
      */
-    private String formatRemainDays(java.math.BigDecimal remainDays) {
+    private String formatRemainDays(BigDecimal remainDays) {
         if (remainDays == null) {
             return "";
         }
@@ -2806,7 +2808,7 @@ public class ForbiddenPoolAdjustService {
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
         String maturityDate = ctx.getSecurityInfo().getMaturityDate();
         if (maturityDate != null && !maturityDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
+            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {
                 return "债券已到期";
             }
@@ -2822,7 +2824,7 @@ public class ForbiddenPoolAdjustService {
     private String inCheckStockDelist(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
         if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
+            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
             if (delistDate.compareTo(today) < 0) {
                 return "股票已退市";
             }
@@ -2838,7 +2840,7 @@ public class ForbiddenPoolAdjustService {
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
         String maturityDate = ctx.getSecurityInfo().getMaturityDate();
         if (maturityDate != null && !maturityDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
+            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {
                 return "债券已到期";
             }
@@ -2854,7 +2856,7 @@ public class ForbiddenPoolAdjustService {
     private String outCheckStockDelist(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
         if (delistDate != null && !delistDate.isEmpty()) {
-            String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
+            String today = new SimpleDateFormat("yyyyMMdd").format(new Date());
             if (delistDate.compareTo(today) < 0) {
                 return "股票已退市";
             }
@@ -3088,14 +3090,14 @@ public class ForbiddenPoolAdjustService {
             return null;
         }
         // 取证券在目标池的入池时间
-        java.util.Date entryTime = ctx.getTargetPoolEntryTime();
+        Date entryTime = ctx.getTargetPoolEntryTime();
         if (entryTime == null) {
             return "证券入池生效时间缺失";
         }
         // 计算冻结期截止时间 = 入池时间 + N 天
         long frozenMs = pool.getFrozenPeriodIn() * 24L * 60L * 60L * 1000L;
-        java.util.Date frozenDeadline = new java.util.Date(entryTime.getTime() + frozenMs);
-        if (new java.util.Date().before(frozenDeadline)) {
+        Date frozenDeadline = new Date(entryTime.getTime() + frozenMs);
+        if (new Date().before(frozenDeadline)) {
             return "证券仍在目标投资池冻结期内";
         }
         return null;
@@ -3133,7 +3135,7 @@ public class ForbiddenPoolAdjustService {
             return null;
         }
         // 证券任一可推导市场落在池配置内即可
-        if (!com.znty.rrs.common.util.MarketCodeMatchUtil.matchesPoolMarkets(
+        if (!MarketCodeMatchUtil.matchesPoolMarkets(
                 pool.getMarketCodes(), ctx.getSecurityInfo())) {
             return "证券不在本池投资市场范围内";
         }
@@ -3210,7 +3212,7 @@ public class ForbiddenPoolAdjustService {
         if (pool == null || pool.getOpenDayAdjust() == null || pool.getOpenDayAdjust() != 1) {
             return null;
         }
-        String today = java.time.LocalDate.now().toString();
+        String today = LocalDate.now().toString();
         if (!forbiddenPoolAdjustMapper.queryPoolInOpenDay(pool.getId(), today)) {
             return "当前不在本池开放日内";
         }
@@ -3227,7 +3229,7 @@ public class ForbiddenPoolAdjustService {
         if (pool == null || pool.getOpenDayAdjust() == null || pool.getOpenDayAdjust() != 1) {
             return null;
         }
-        String today = java.time.LocalDate.now().toString();
+        String today = LocalDate.now().toString();
         if (!forbiddenPoolAdjustMapper.queryPoolInOpenDay(pool.getId(), today)) {
             return "当前不在本池开放日内";
         }

@@ -19,7 +19,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.Collections;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -50,7 +52,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         task.setTaskCode("INIT_SCHEMA");
         task.setTaskName("初始化建表脚本");
         task.setConfirmText("INIT_SCHEMA");
-        when(scriptToolService.queryScriptTaskList(org.mockito.Matchers.any(ScriptToolReq.class)))
+        when(scriptToolService.queryScriptTaskList(any(ScriptToolReq.class)))
                 .thenReturn(Collections.singletonList(task));
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryScriptTaskList", "{}");
@@ -63,7 +65,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         result.setTaskCode("INIT_DEMO");
         result.setTaskName("初始化 Demo 数据");
         result.setStatus("success");
-        when(scriptToolService.executeScriptTask(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(result);
+        when(scriptToolService.executeScriptTask(any(ScriptToolReq.class))).thenReturn(result);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/executeScriptTask", "{\"taskCode\":\"INIT_DEMO\",\"confirmText\":\"INIT_DEMO\"}");
     }
@@ -74,7 +76,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         ScriptTableGroupDto group = new ScriptTableGroupDto();
         group.setGroupCode("security-adjust");
         group.setGroupName("证券池调库运行表");
-        when(scriptToolService.queryClearTableGroupList(org.mockito.Matchers.any(ScriptToolReq.class)))
+        when(scriptToolService.queryClearTableGroupList(any(ScriptToolReq.class)))
                 .thenReturn(Collections.singletonList(group));
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryClearTableGroupList", "{}");
@@ -86,7 +88,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         ScriptOverviewDto overview = new ScriptOverviewDto();
         overview.setSchemaFileCount(1);
         overview.setDemoFileCount(1);
-        when(scriptToolService.queryScriptOverview(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(overview);
+        when(scriptToolService.queryScriptOverview(any(ScriptToolReq.class))).thenReturn(overview);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryScriptOverview", "{}");
     }
@@ -96,7 +98,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
     public void shouldQueryHealthCheck() throws Exception {
         ScriptHealthCheckDto check = new ScriptHealthCheckDto();
         check.setStatus("success");
-        when(scriptToolService.queryHealthCheck(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(check);
+        when(scriptToolService.queryHealthCheck(any(ScriptToolReq.class))).thenReturn(check);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryHealthCheck", "{}");
     }
@@ -106,7 +108,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
     public void shouldQuerySchemaDiff() throws Exception {
         ScriptInspectionDto inspection = new ScriptInspectionDto();
         inspection.setStatus("success");
-        when(scriptToolService.querySchemaDiff(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(inspection);
+        when(scriptToolService.querySchemaDiff(any(ScriptToolReq.class))).thenReturn(inspection);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/querySchemaDiff", "{}");
     }
@@ -116,7 +118,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
     public void shouldQueryDataIntegrity() throws Exception {
         ScriptInspectionDto inspection = new ScriptInspectionDto();
         inspection.setStatus("success");
-        when(scriptToolService.queryDataIntegrity(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(inspection);
+        when(scriptToolService.queryDataIntegrity(any(ScriptToolReq.class))).thenReturn(inspection);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryDataIntegrity", "{}");
     }
@@ -128,7 +130,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         result.setTaskCode("CLEAR_SELECTED_TABLES");
         result.setTaskName("自定义清空表数据");
         result.setStatus("success");
-        when(scriptToolService.executeClearSelectedTables(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(result);
+        when(scriptToolService.executeClearSelectedTables(any(ScriptToolReq.class))).thenReturn(result);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/executeClearSelectedTables", "{\"confirmText\":\"CLEAR_SELECTED_TABLES\",\"tableKeys\":[\"znty_rrs.ip_adjust_log\"]}");
     }
@@ -140,7 +142,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         result.setTaskCode("RESET_SELECTED_TABLES");
         result.setTaskName("重置选中表数据");
         result.setStatus("success");
-        when(scriptToolService.executeResetSelectedTables(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(result);
+        when(scriptToolService.executeResetSelectedTables(any(ScriptToolReq.class))).thenReturn(result);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/executeResetSelectedTables", "{\"confirmText\":\"RESET_SELECTED_TABLES\",\"tableKeys\":[\"znty_rrs.ip_adjust_log\"]}");
     }
@@ -151,7 +153,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         ScriptModuleTaskDto task = new ScriptModuleTaskDto();
         task.setModuleCode("dict");
         task.setModuleName("字典数据");
-        when(scriptToolService.queryModuleResetTaskList(org.mockito.Matchers.any(ScriptToolReq.class)))
+        when(scriptToolService.queryModuleResetTaskList(any(ScriptToolReq.class)))
                 .thenReturn(Collections.singletonList(task));
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryModuleResetTaskList", "{}");
@@ -164,7 +166,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         result.setTaskCode("dict");
         result.setTaskName("字典数据");
         result.setStatus("success");
-        when(scriptToolService.executeModuleResetTask(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(result);
+        when(scriptToolService.executeModuleResetTask(any(ScriptToolReq.class))).thenReturn(result);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/executeModuleResetTask", "{\"moduleCode\":\"dict\",\"confirmText\":\"RESET_MODULE\"}");
     }
@@ -175,7 +177,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         ScriptDemoSceneDto scene = new ScriptDemoSceneDto();
         scene.setSceneCode("security-pending-review");
         scene.setSceneName("证券池待复核调库单");
-        when(scriptToolService.queryDemoSceneList(org.mockito.Matchers.any(ScriptToolReq.class)))
+        when(scriptToolService.queryDemoSceneList(any(ScriptToolReq.class)))
                 .thenReturn(Collections.singletonList(scene));
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryDemoSceneList", "{}");
@@ -188,7 +190,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         result.setTaskCode("security-pending-review");
         result.setTaskName("证券池待复核调库单");
         result.setStatus("success");
-        when(scriptToolService.executeDemoScene(org.mockito.Matchers.any(ScriptToolReq.class))).thenReturn(result);
+        when(scriptToolService.executeDemoScene(any(ScriptToolReq.class))).thenReturn(result);
 
         assertPostSuccess(mockMvc, "/api/v1/scriptTool/executeDemoScene", "{\"sceneCode\":\"security-pending-review\",\"confirmText\":\"GENERATE_DEMO_SCENE\"}");
     }
@@ -204,7 +206,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
             service.executeScriptTask(req);
             fail("确认文本错误时应抛出业务异常");
         } catch (BizException e) {
-            org.junit.Assert.assertTrue(e.getMessage().contains("确认文本不正确"));
+            assertTrue(e.getMessage().contains("确认文本不正确"));
         }
     }
 
@@ -219,7 +221,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
             service.executeScriptTask(req);
             fail("未知任务编码应抛出业务异常");
         } catch (BizException e) {
-            org.junit.Assert.assertTrue(e.getMessage().contains("不支持的脚本任务"));
+            assertTrue(e.getMessage().contains("不支持的脚本任务"));
         }
     }
 
@@ -234,7 +236,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
             service.executeClearSelectedTables(req);
             fail("未知表应抛出业务异常");
         } catch (BizException e) {
-            org.junit.Assert.assertTrue(e.getMessage().contains("不支持清空的表"));
+            assertTrue(e.getMessage().contains("不支持清空的表"));
         }
     }
 
@@ -249,7 +251,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
             service.executeResetSelectedTables(req);
             fail("重置确认文本错误时应抛出业务异常");
         } catch (BizException e) {
-            org.junit.Assert.assertTrue(e.getMessage().contains("确认文本不正确"));
+            assertTrue(e.getMessage().contains("确认文本不正确"));
         }
     }
 
@@ -264,7 +266,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
             service.executeModuleResetTask(req);
             fail("未知模块编码应抛出业务异常");
         } catch (BizException e) {
-            org.junit.Assert.assertTrue(e.getMessage().contains("不支持的模块重置任务"));
+            assertTrue(e.getMessage().contains("不支持的模块重置任务"));
         }
     }
 
@@ -279,7 +281,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
             service.executeModuleResetTask(req);
             fail("模块重置确认文本错误时应抛出业务异常");
         } catch (BizException e) {
-            org.junit.Assert.assertTrue(e.getMessage().contains("确认文本不正确"));
+            assertTrue(e.getMessage().contains("确认文本不正确"));
         }
     }
 
@@ -294,7 +296,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
             service.executeDemoScene(req);
             fail("未知 Demo 场景应抛出业务异常");
         } catch (BizException e) {
-            org.junit.Assert.assertTrue(e.getMessage().contains("不支持的 Demo 场景"));
+            assertTrue(e.getMessage().contains("不支持的 Demo 场景"));
         }
     }
 
@@ -309,7 +311,7 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
             service.executeDemoScene(req);
             fail("Demo 场景确认文本错误时应抛出业务异常");
         } catch (BizException e) {
-            org.junit.Assert.assertTrue(e.getMessage().contains("确认文本不正确"));
+            assertTrue(e.getMessage().contains("确认文本不正确"));
         }
     }
 }

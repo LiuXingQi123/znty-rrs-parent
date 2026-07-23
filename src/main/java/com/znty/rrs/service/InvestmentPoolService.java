@@ -24,6 +24,7 @@ import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.common.RoleDto;
 import com.znty.rrs.entity.bo.UserBo;
 import com.znty.rrs.entity.common.UserDto;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -722,7 +723,7 @@ public class InvestmentPoolService {
                 : investmentPoolMapper.queryPoolByIdsList(allIds).stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, InvestmentPoolBo::getPoolName, (a, b) -> a));
         // 按固定类型顺序处理，保证写入顺序的一致性
-        for (String relationType : java.util.Arrays.stream(RelationType.values()).map(RelationType::getCode).collect(java.util.stream.Collectors.toList())) {
+        for (String relationType : Arrays.stream(RelationType.values()).map(RelationType::getCode).collect(Collectors.toList())) {
             List<Long> ids = relationPoolIds.getOrDefault(relationType, Collections.emptyList());
             int sortOrder = 1;
             for (Long relationPoolId : ids) {
@@ -772,7 +773,7 @@ public class InvestmentPoolService {
      */
     private void fillRelationConfig(InvestmentPoolDto dto) {
         Map<String, List<Long>> relationPoolIds = new HashMap<>();
-        for (String relationType : java.util.Arrays.stream(RelationType.values()).map(RelationType::getCode).collect(java.util.stream.Collectors.toList())) {
+        for (String relationType : Arrays.stream(RelationType.values()).map(RelationType::getCode).collect(Collectors.toList())) {
             relationPoolIds.put(relationType, new ArrayList<>());
         }
         List<PoolRelationBo> relations = investmentPoolMapper.queryRelationList(dto.getId());

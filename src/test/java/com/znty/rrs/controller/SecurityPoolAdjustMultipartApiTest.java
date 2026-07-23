@@ -1,6 +1,7 @@
 package com.znty.rrs.controller;
 
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
+import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.service.SecurityPoolAdjustService;
 import org.junit.Before;
 import org.junit.Test;
@@ -10,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
@@ -32,7 +34,7 @@ public class SecurityPoolAdjustMultipartApiTest {
         SecurityPoolAdjustController controller = new SecurityPoolAdjustController();
         SecurityPoolAdjustService service = mock(SecurityPoolAdjustService.class);
         when(service.addAdjustLog(
-                any(com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq.class), any(java.util.List.class)))
+                any(SecurityPoolAdjustSubmitReq.class), any(List.class)))
                 .thenReturn(new AdjustSubmitDto());
         ReflectionTestUtils.setField(controller, "securityPoolAdjustService", service);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();

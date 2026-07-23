@@ -19,6 +19,7 @@ import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -58,7 +59,7 @@ public class TempSecurityCodeService {
         }
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         // 查询临时代码分页列表
-        java.util.List<TempSecurityCodeDto> list = tempSecurityCodeMapper.queryTempSecurityCodePage(req);
+        List<TempSecurityCodeDto> list = tempSecurityCodeMapper.queryTempSecurityCodePage(req);
         PageInfo<TempSecurityCodeDto> pageInfo = new PageInfo<>(list);
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
@@ -460,7 +461,7 @@ public class TempSecurityCodeService {
         }
         // 记录池状态替换日志
         addReplaceLogList(replaceBo, crmwPool ? "ip_pool_status_crmw" : "ip_pool_status",
-                java.util.Collections.singletonList(poolStatus.getId()));
+                Collections.singletonList(poolStatus.getId()));
 
         // ③ 正式码已在该池则不再入库
         int formalCount = crmwPool

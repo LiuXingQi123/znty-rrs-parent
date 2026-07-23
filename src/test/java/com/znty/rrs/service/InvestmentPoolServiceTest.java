@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,7 +48,7 @@ public class InvestmentPoolServiceTest {
         req.setLockFlag(null);
         req.setFrozenPeriodIn(0);
         service.editPoolConfig(req);
-        verify(mapper, org.mockito.Mockito.times(2)).editPoolConfig(captor.capture());
+        verify(mapper, times(2)).editPoolConfig(captor.capture());
         assertThat(captor.getAllValues().get(2).getLockFlag()).isEqualTo(0);
         assertThat(captor.getAllValues().get(2).getFrozenPeriodIn()).isEqualTo(0);
     }

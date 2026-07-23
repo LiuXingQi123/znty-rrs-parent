@@ -3,6 +3,7 @@ package com.znty.rrs.entity.securitypoolquery;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.Date;
 
 /**
@@ -48,7 +49,7 @@ public class SecurityPoolQueryDto {
     /** 到期日 */
     private String maturityDate;
     /** 剩余期限（天），对应 rrs_securityinfo.date_exists；列表前端 ÷365 展示为年 */
-    private java.math.BigDecimal dateExists;
+    private BigDecimal dateExists;
     /** 证券状态：active=存续 / matured=到期 */
     private String securityStatus;
     /** 退市日期 */
