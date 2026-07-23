@@ -3,7 +3,10 @@
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolQueryMapper">
     <!-- 风险池查询 mapper，对应表：ip_pool_status（证券池状态），覆盖禁投池、观察池和黑名单质押库 -->
 
-    <!-- 分页查询禁投池证券列表 -->
+    <!--
+      分页查询禁投池证券列表。
+      wind_cbondissuer 为债券+主体粒度，JOIN 前先按 s_info_compcode 去重，避免同主体多债行膨胀。
+    -->
     <select id="queryForbiddenPoolPage" resultType="com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryDto">
         SELECT ips.id
                ,ips.security_code
@@ -26,9 +29,14 @@
                                        AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
-        LEFT JOIN ais_inv_ods.wind_cbondissuer wci ON wci.s_info_compcode = ips.security_code
-                                                   AND wci.used = 1
-                                                   AND ips.security_type = 'company'
+        LEFT JOIN (
+            SELECT s_info_compcode
+                   ,MAX(s_info_compname) AS s_info_compname
+            FROM ais_inv_ods.wind_cbondissuer
+            WHERE used = 1
+            GROUP BY s_info_compcode
+        ) wci ON wci.s_info_compcode = ips.security_code
+             AND ips.security_type = 'company'
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'

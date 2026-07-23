@@ -3,16 +3,22 @@
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolAdjustMapper">
     <!-- 禁投池主体调整 mapper，提供主体查询、调库记录、池状态和审批流程数据访问 -->
 
-    <!-- 分页查询公司主体 -->
+    <!--
+      分页查询公司主体。
+      wind_cbondissuer 约 70 万行、约 4 万主体（债券+主体粒度），外部 ODS 一般不建二级索引。
+      主体列表仅 GROUP BY s_info_compcode 去重 + MAX 取展示字段，不排序（同主体名称/行业通常一致）。
+    -->
     <select id="queryCompanyPage" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
         SELECT c.s_info_compcode AS companyCode
-               ,c.s_info_compname AS companyShortName
-               ,c.s_info_compname AS companyFullName
-               ,c.s_info_compind_name1 AS industryName
-               ,c.s_info_compind_name2 AS industryName2
+               ,MAX(c.s_info_compname) AS companyShortName
+               ,MAX(c.s_info_compname) AS companyFullName
+               ,MAX(c.s_info_compind_name1) AS industryName
+               ,MAX(c.s_info_compind_name2) AS industryName2
         FROM ais_inv_ods.wind_cbondissuer c
         <where>
             AND c.used = 1
+            AND c.s_info_compcode IS NOT NULL
+            AND c.s_info_compcode != ''
             <if test="companyCode != null and companyCode != ''">
                 AND c.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%')
             </if>
@@ -24,12 +30,10 @@
                      OR c.s_info_compind_name2 LIKE CONCAT('%', #{industryName}, '%'))
             </if>
         </where>
-        ORDER BY c.opdate DESC
-                 ,c.s_info_effective_dt DESC
-                 ,c.object_id DESC
+        GROUP BY c.s_info_compcode
     </select>
 
-    <!-- 查询公司主体详情 -->
+    <!-- 查询公司主体详情：同主体多行，任取一条即可（名称/行业一致，无排序） -->
     <select id="queryCompanyDetail" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
         SELECT c.s_info_compcode AS companyCode
                ,c.s_info_compname AS companyShortName
@@ -44,6 +48,7 @@
         FROM ais_inv_ods.wind_cbondissuer c
         WHERE c.s_info_compcode = #{companyCode}
           AND c.used = 1
+        LIMIT 1
     </select>
 
     <!-- 根据代码查询证券信息实体，主体提交与自动债券调整共用 -->
@@ -53,7 +58,7 @@
         WHERE wind_code = #{securityCode}
     </select>
 
-    <!-- 根据主体代码查询禁投池调整所需的主体基础信息 -->
+    <!-- 根据主体代码查询禁投池调整所需的主体基础信息（同主体多行，任取一条） -->
     <select id="queryCompanySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT c.s_info_compcode AS windCode
                ,c.s_info_compname AS fullName
@@ -63,6 +68,7 @@
         FROM ais_inv_ods.wind_cbondissuer c
         WHERE c.s_info_compcode = #{companyCode}
           AND c.used = 1
+        LIMIT 1
     </select>
 
     <!-- 批量查询主体旗下债券数量 -->

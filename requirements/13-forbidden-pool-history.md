@@ -121,9 +121,13 @@ FROM ip_adjust_log al
 INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
                                  AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
 LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
-LEFT JOIN ais_inv_ods.wind_cbondissuer wci ON wci.s_info_compcode = al.security_code
-                                           AND wci.used = 1
-                                           AND al.security_type = 'company'
+-- wind_cbondissuer 为债券+主体粒度，先按主体代码去重再 JOIN，避免同主体多债行膨胀
+LEFT JOIN (
+    SELECT s_info_compcode, MAX(s_info_compname) AS s_info_compname
+    FROM ais_inv_ods.wind_cbondissuer
+    WHERE used = 1
+    GROUP BY s_info_compcode
+) wci ON wci.s_info_compcode = al.security_code AND al.security_type = 'company'
 <where>
     al.is_deleted = 0
     <if companyCode>   AND (wci.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%') OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%')) </if>
@@ -140,7 +144,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 ```
 
 特点：
-- 主体级流水通过 Wind 的 `s_info_compcode`/`s_info_compname` 匹配；债券流水继续通过 `rrs_securityinfo` 的 `issuer_code`/`issuer` 反查。
+- 主体级流水通过去重后的 Wind 主体表（`s_info_compcode`/`s_info_compname`）匹配；债券流水继续通过 `rrs_securityinfo` 的 `issuer_code`/`issuer` 反查。
 - 返回 `adjustBatchNo`，历史页跳转详情时携带该批次号以加载同批次流程步骤。
 - 历史筛选日期语义为提交日期（`al.submit_time`）；页面显示“提交开始/提交结束”。
 - 投资池已删除时仍保留对应历史流水。

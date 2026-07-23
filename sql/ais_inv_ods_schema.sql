@@ -10,12 +10,14 @@ SET NAMES utf8mb4;
 
 -- ----------------------------------------------------------------------------
 -- 创建 Wind 债券发行人主体表
+-- 粒度说明：本表为「债券 + 主体」维度（s_info_windcode + s_info_compcode），
+-- 同一 s_info_compcode 可对应多只债券多行，业务按主体查询时必须对 s_info_compcode 去重。
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `wind_cbondissuer` (
     `object_id`                    VARCHAR(100)  NOT NULL     COMMENT '对象 ID',
-    `s_info_windcode`              VARCHAR(40)   DEFAULT NULL COMMENT 'Wind 证券代码',
+    `s_info_windcode`              VARCHAR(40)   DEFAULT NULL COMMENT 'Wind 证券代码（与主体组合构成本表业务粒度）',
     `s_info_compname`              VARCHAR(100)  DEFAULT NULL COMMENT '发行主体名称',
-    `s_info_compcode`              VARCHAR(10)   DEFAULT NULL COMMENT '发行主体代码',
+    `s_info_compcode`              VARCHAR(10)   DEFAULT NULL COMMENT '发行主体代码（同一主体可对应多行债券）',
     `used`                         INT           DEFAULT NULL COMMENT '使用标识：1=有效 / 0=无效',
     `s_info_compind_code1`         VARCHAR(50)   DEFAULT NULL COMMENT '一级行业代码',
     `s_info_compind_name1`         VARCHAR(100)  DEFAULT NULL COMMENT '一级行业名称',
@@ -39,7 +41,7 @@ CREATE TABLE IF NOT EXISTS `wind_cbondissuer` (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
-  COMMENT = 'Wind 中国债券发行主体信息表';
+  COMMENT = 'Wind 中国债券发行主体信息表（债券+主体粒度，同主体可多行；外部 ODS 表一般不自建二级索引）';
 
 -- ----------------------------------------------------------------------------
 -- 创建 Wind 债券发行人评级表

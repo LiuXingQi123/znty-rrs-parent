@@ -140,14 +140,19 @@
           AND temp_security_code = #{securityCode}
     </select>
 
-    <!-- 按关键字远程查询发行主体（ais_inv_ods.wind_cbondissuer，最多 50 条） -->
+    <!--
+      按关键字远程查询发行主体（最多 50 条）。
+      约 70 万债行 / 4 万主体，GROUP BY s_info_compcode 去重；不排序（下拉只需候选集）。
+    -->
     <select id="queryCompanyOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
         SELECT c.s_info_compcode AS companyCode
-               ,c.s_info_compname AS fullName
-               ,c.s_info_compname AS shortName
+               ,MAX(c.s_info_compname) AS fullName
+               ,MAX(c.s_info_compname) AS shortName
         FROM ais_inv_ods.wind_cbondissuer c
         <where>
             AND c.used = 1
+            AND c.s_info_compcode IS NOT NULL
+            AND c.s_info_compcode != ''
             <if test="companyKeyword != null and companyKeyword != ''">
                 AND (c.s_info_compname LIKE CONCAT('%', #{companyKeyword}, '%')
                      OR c.s_info_compcode LIKE CONCAT('%', #{companyKeyword}, '%'))
@@ -156,13 +161,11 @@
                 AND c.s_info_compcode = #{tempCompanyCode}
             </if>
         </where>
-        ORDER BY c.opdate DESC
-                 ,c.s_info_effective_dt DESC
-                 ,c.object_id DESC
+        GROUP BY c.s_info_compcode
         LIMIT 50
     </select>
 
-    <!-- 根据主体代码查询发行主体 -->
+    <!-- 根据主体代码查询发行主体（同主体多行，任取一条） -->
     <select id="queryCompanyByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
         SELECT c.s_info_compcode AS companyCode
                ,c.s_info_compname AS fullName
@@ -170,9 +173,6 @@
         FROM ais_inv_ods.wind_cbondissuer c
         WHERE c.s_info_compcode = #{companyCode}
           AND c.used = 1
-        ORDER BY c.opdate DESC
-                 ,c.s_info_effective_dt DESC
-                 ,c.object_id DESC
         LIMIT 1
     </select>
 

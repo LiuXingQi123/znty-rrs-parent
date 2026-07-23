@@ -44,7 +44,7 @@
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodeOptions`
 - 请求体：`{}`（`TempSecurityCodeReq`）
 - 后端 `queryTempSecurityCodeOptions`：`OptionBundle` 装载 `queryCompanyOptionList(req)` + `querySecurityTypeList()`。
-  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_cbondissuer`（**跨库**，`used=1`），可选按 `companyKeyword` 模糊匹配名称/代码、`tempCompanyCode` 精确，`ORDER BY opdate DESC LIMIT 50`，返回 `companyCode/fullName/shortName`。
+  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_cbondissuer`（**跨库**，`used=1`；债券+主体粒度，**`GROUP BY s_info_compcode` 去重**），可选按 `companyKeyword` 模糊匹配名称/代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。
   - `querySecurityTypeList`：`FROM dict_security_type WHERE is_deleted = 0 AND category_type != 'company' ORDER BY category_type ASC, sort_order ASC, id ASC`，返回 `securityType/securityTypeName/categoryType/categoryTypeName`。
 
 ---

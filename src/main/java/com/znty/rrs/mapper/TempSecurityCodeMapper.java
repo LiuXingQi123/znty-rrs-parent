@@ -33,7 +33,7 @@ public interface TempSecurityCodeMapper {
      */
     int queryTemporaryCodeCountBySecurityCode(@Param("securityCode") String securityCode);
 
-    /** 按关键字查询发行主体选项（wind_cbondissuer，最多 50 条） */
+    /** 按关键字查询发行主体选项（wind_cbondissuer 按 s_info_compcode 去重，最多 50 条） */
     List<TempSecurityCodeDto.CompanyOption> queryCompanyOptionList(TempSecurityCodeReq req);
 
     /** 根据主体代码查询发行主体 */

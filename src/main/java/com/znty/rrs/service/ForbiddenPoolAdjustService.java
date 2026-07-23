@@ -173,7 +173,8 @@ public class ForbiddenPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 分页查询公司主体并批量回填旗下债券数量。
+     * 分页查询可调整的发行主体，并批量回填旗下债券数量。
+     * <p>数据源 {@code wind_cbondissuer} 为债券+主体粒度，Mapper 内已按 {@code s_info_compcode} 去重。
      */
     public PageResult<ForbiddenPoolAdjustDto> queryCompanyPage(ForbiddenPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());

@@ -3,7 +3,10 @@
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolHistoryMapper">
     <!-- 风险池历史查询 mapper，对应表：ip_adjust_log（调库记录），覆盖禁投池、观察池和黑名单质押库 -->
 
-    <!-- 分页查询禁投池调整历史 -->
+    <!--
+      分页查询禁投池调整历史。
+      wind_cbondissuer 为债券+主体粒度，JOIN 前先按 s_info_compcode 去重，避免同主体多债行膨胀。
+    -->
     <select id="queryForbiddenPoolHistoryPage" resultType="com.znty.rrs.entity.forbiddenpoolhistory.ForbiddenPoolHistoryDto">
         SELECT al.id
                ,al.adjuster_name
@@ -24,9 +27,14 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type
                                         AND dst.is_deleted = 0
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
-        LEFT JOIN ais_inv_ods.wind_cbondissuer wci ON wci.s_info_compcode = al.security_code
-                                                   AND wci.used = 1
-                                                   AND al.security_type = 'company'
+        LEFT JOIN (
+            SELECT s_info_compcode
+                   ,MAX(s_info_compname) AS s_info_compname
+            FROM ais_inv_ods.wind_cbondissuer
+            WHERE used = 1
+            GROUP BY s_info_compcode
+        ) wci ON wci.s_info_compcode = al.security_code
+             AND al.security_type = 'company'
         <where>
             al.is_deleted = 0
             <if test="viewablePoolIds != null and viewablePoolIds.size() == 0">

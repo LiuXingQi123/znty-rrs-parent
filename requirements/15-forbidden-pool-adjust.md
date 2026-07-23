@@ -38,7 +38,7 @@
 
 - 路径：`POST /api/v1/forbiddenPoolAdjust/queryCompanyPage`
 - 请求体：`{ companyCode, companyFullName, industryName, pageIndex, pageSize }`
-- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_cbondissuer` 的 `used=1` 记录；`s_info_compcode AS companyCode`、`s_info_compname` 作为展示名称，行业关键字匹配一级或二级行业。列表返回主体代码、主体名称、一级/二级行业和旗下债券数量。
+- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_cbondissuer` 的 `used=1` 记录。**注意：该表约 70 万债行 / 约 4 万主体（债券+主体粒度），外部 ODS 不自建二级索引；列表用 `GROUP BY s_info_compcode` 去重 + `MAX` 取展示字段，不做无业务含义的排序**；行业关键字匹配一级或二级行业。列表返回主体代码、主体名称、一级/二级行业和旗下债券数量。
 - `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...) GROUP BY issuer_code`）批量回填 `companyBondCount`。
 - 返回 `PageResult<ForbiddenPoolAdjustDto>`，前端取 `data.records` 与 `data.total`。
 
@@ -215,7 +215,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 ### 5.4 `wind_cbondissuer` + `rrs_securityinfo`
 
-主体信息读取 `ais_inv_ods.wind_cbondissuer`，以有效记录的 `s_info_compcode` 作为主体代码；该表不修改、不与 `rrs_securityinfo` 主体记录关联。旗下债券仍由 `rrs_securityinfo` 的债券行读取，以 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type='company'`。
+主体信息读取 `ais_inv_ods.wind_cbondissuer`，以有效记录的 `s_info_compcode` 作为主体代码。**该表不是主体唯一：业务粒度是债券 Wind 代码 + 主体代码**，查询主体列表/详情/JOIN 补名称时必须对 `s_info_compcode` 去重；该表不修改、不与 `rrs_securityinfo` 主体记录关联。旗下债券仍由 `rrs_securityinfo` 的债券行读取，以 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type='company'`。
 
 ### 5.5 `ip_investment_pool` / `ip_pool_relation`
 
