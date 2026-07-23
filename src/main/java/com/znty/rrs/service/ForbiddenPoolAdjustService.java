@@ -2159,12 +2159,12 @@ public class ForbiddenPoolAdjustService {
         SecurityInfoBo sec = shared.getSecurityInfo();
 
         // 条件1：剩余期限 ≤ 3 年（date_exists 天）
-        Integer remainDays = sec.getDateExists();
+        java.math.BigDecimal remainDays = sec.getDateExists();
         if (remainDays == null) {
             unmatchReasons.add("剩余期限无法解析，date_exists 为空");
-        } else if (remainDays < 0) {
+        } else if (remainDays.compareTo(java.math.BigDecimal.ZERO) < 0) {
             unmatchReasons.add("剩余期限已小于 0 天");
-        } else if (remainDays <= 365 * 3) {
+        } else if (remainDays.compareTo(new java.math.BigDecimal("1095")) <= 0) {
             matchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，未超过 3 年");
         } else {
             unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，超过 3 年");
@@ -2233,17 +2233,17 @@ public class ForbiddenPoolAdjustService {
             unmatchReasons.add("目标池不是信用债大库一、二、三级库");
         }
 
-        Integer remainDays = shared.getSecurityInfo().getDateExists();
+        java.math.BigDecimal remainDays = shared.getSecurityInfo().getDateExists();
         if (remainDays == null) {
             unmatchReasons.add("剩余期限无法解析，date_exists 为空");
         }
 
-        if (remainDays != null && remainDays >= 0) {
-            Integer issuerPoolMaxRemainDays = forbiddenPoolAdjustMapper.queryIssuerTargetPoolMaxRemainDays(
+        if (remainDays != null && remainDays.compareTo(java.math.BigDecimal.ZERO) >= 0) {
+            java.math.BigDecimal issuerPoolMaxRemainDays = forbiddenPoolAdjustMapper.queryIssuerTargetPoolMaxRemainDays(
                     req.getSecurityCode(), targetPool.getId());
             if (issuerPoolMaxRemainDays == null) {
                 matchReasons.add("目标池暂无同主体有效债券，不受在池最大期限限制");
-            } else if (remainDays <= issuerPoolMaxRemainDays) {
+            } else if (remainDays.compareTo(issuerPoolMaxRemainDays) <= 0) {
                 matchReasons.add("剩余期限为 " + formatRemainDays(remainDays)
                         + "，未超过同主体在池最大期限 " + formatRemainDays(issuerPoolMaxRemainDays));
             } else {
@@ -2338,11 +2338,12 @@ public class ForbiddenPoolAdjustService {
     /**
      * 格式化剩余期限展示文本（date_exists 天数）。
      */
-    private String formatRemainDays(Integer remainDays) {
+    private String formatRemainDays(java.math.BigDecimal remainDays) {
         if (remainDays == null) {
             return "";
         }
-        return remainDays + " 天（约 " + String.format("%.2f", remainDays / 365.0D) + " 年）";
+        return remainDays.stripTrailingZeros().toPlainString()
+                + " 天（约 " + String.format("%.2f", remainDays.doubleValue() / 365.0D) + " 年）";
     }
 
     /**

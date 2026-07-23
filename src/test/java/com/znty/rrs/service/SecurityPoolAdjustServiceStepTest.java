@@ -614,7 +614,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
         // date_exists 天数 > 5*365 → GT_5
-        sec.setDateExists(1826);
+        sec.setDateExists(new java.math.BigDecimal("1826"));
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
@@ -647,7 +647,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("4");
         // date_exists 天数 > 5 年，与 GT_5 档匹配
-        sec.setDateExists(1826);
+        sec.setDateExists(new java.math.BigDecimal("1826"));
         // 池名映射（允许池 2/3 + 目标池 5）
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         InvestmentPoolBo p2 = new InvestmentPoolBo(); p2.setId(2L); p2.setPoolName("一级库"); poolMap.put(2L, p2);
@@ -1957,7 +1957,7 @@ public class SecurityPoolAdjustServiceStepTest {
         targetPool.setInnerSort(1);
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setDateExists(500);
+        sec.setDateExists(new java.math.BigDecimal("500"));
         shared.setSecurityInfo(sec);
         when(mapper.queryIssuerTargetPoolMaxRemainDays(any(String.class), any(Long.class))).thenReturn(null);
         when(mapper.queryIssuerHasNonSimpleInboundWithinDays(any(String.class), any(Long.class), any(Integer.class)))
@@ -1979,7 +1979,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityInfoBo current = new SecurityInfoBo();
         current.setShortName("原简称");
-        current.setDateRepurchaseExists("20280101");
+        current.setDateRepurchaseExists(new java.math.BigDecimal("365.0000"));
         current.setGuarantFlag(1);
         current.setGuarantType("连带责任担保");
         current.setAbsFlag(1);
@@ -1989,7 +1989,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ReflectionTestUtils.invokeMethod(service, "mergeSecurityInfo", current, changed);
 
         assertThat(current.getShortName()).isEqualTo("新简称");
-        assertThat(current.getDateRepurchaseExists()).isEqualTo("20280101");
+        assertThat(current.getDateRepurchaseExists()).isEqualByComparingTo("365");
         assertThat(current.getGuarantFlag()).isEqualTo(1);
         assertThat(current.getGuarantType()).isEqualTo("连带责任担保");
         assertThat(current.getAbsFlag()).isEqualTo(1);
@@ -2058,7 +2058,9 @@ public class SecurityPoolAdjustServiceStepTest {
                                                   String issueType, String securityType, int guarantFlag) {
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setDateExists(remainDays);
+        if (remainDays != null) {
+            sec.setDateExists(java.math.BigDecimal.valueOf(remainDays.longValue()));
+        }
         sec.setYxFlag(yxFlag);
         sec.setAbsFlag(absFlag);
         sec.setIssueType(issueType);

@@ -369,7 +369,7 @@
     </select>
 
     <!-- 查询同主体在目标池中已有债券的最大剩余期限天数（date_exists，天） -->
-    <select id="queryIssuerTargetPoolMaxRemainDays" resultType="java.lang.Integer">
+    <select id="queryIssuerTargetPoolMaxRemainDays" resultType="java.math.BigDecimal">
         SELECT MAX(si.date_exists)
         FROM ip_pool_status_crmw ips
         INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code

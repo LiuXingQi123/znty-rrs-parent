@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * 信用债剩余期限：读取 {@code rrs_securityinfo.date_exists}（天）并换算为年。
+ * 信用债剩余期限：读取 {@code rrs_securityinfo.date_exists}（天，DECIMAL）并换算为年。
  *
  * <p>剩余期限由外部数据预计算写入 {@code date_exists}，本工具不做起止日推算。
  * 矩阵期限档 {@code credit_bond_term_bucket} 按「年」配置，匹配时用天数 / 365 换算。
@@ -38,11 +38,21 @@ public final class CreditBondRemainTermUtil {
      * @param remainDays 剩余期限天数（可为 0；负值按 0 处理）
      * @return 年数；入参 null 时返回 null
      */
+    public static BigDecimal daysToYears(BigDecimal remainDays) {
+        if (remainDays == null) {
+            return null;
+        }
+        BigDecimal days = remainDays.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : remainDays;
+        return days.divide(DAYS_PER_YEAR, 6, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 兼容 Integer 入参（测试或过渡调用）。
+     */
     public static BigDecimal daysToYears(Integer remainDays) {
         if (remainDays == null) {
             return null;
         }
-        int days = remainDays < 0 ? 0 : remainDays;
-        return BigDecimal.valueOf(days).divide(DAYS_PER_YEAR, 6, RoundingMode.HALF_UP);
+        return daysToYears(BigDecimal.valueOf(remainDays.longValue()));
     }
 }

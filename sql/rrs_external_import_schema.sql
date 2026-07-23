@@ -35,8 +35,8 @@ CREATE TABLE `rrs_securityinfo`
     `wind_code_bj`              varchar(100)    DEFAULT NULL COMMENT '北交所代码',
     `wind_code_nbc`             varchar(100)    DEFAULT NULL COMMENT '其他',
     `security_type`              varchar(32)     DEFAULT NULL COMMENT '证券类型编码，关联 dict_security_type.security_type',
-    `term_year`                  decimal(20, 4)  DEFAULT NULL COMMENT '证券期限(年)',
-    `term_day`                   decimal(20, 4)  DEFAULT NULL COMMENT '证券期限(天)',
+    `term_year`                  decimal(10, 4)  DEFAULT NULL COMMENT '证券期限(年)',
+    `term_day`                   decimal(10, 4)  DEFAULT NULL COMMENT '证券期限(天)',
     `maturityembedded_desc`      varchar(255)    DEFAULT NULL COMMENT '含权期限说明',
     `form_desc`                  varchar(20)     DEFAULT NULL COMMENT '证券形式',
     `sec_typename`               varchar(300)    DEFAULT NULL COMMENT '品种类别',
@@ -66,7 +66,7 @@ CREATE TABLE `rrs_securityinfo`
     `redemption_flag`            int             DEFAULT NULL COMMENT '是否可赎回',
     `redemption_date`            varchar(10)     DEFAULT NULL COMMENT '赎回日期',
     `redemption_price`           decimal(10, 4)  DEFAULT NULL COMMENT '赎回价格',
-    `date_call_exists`           varchar(10)     DEFAULT NULL COMMENT '赎回剩余期限-最新',
+    `date_call_exists`           decimal(10, 4)  DEFAULT NULL COMMENT '赎回剩余期限-最新',
     `callbkorputbk_date`         varchar(10)     DEFAULT NULL COMMENT '赎回行权日',
     `redemption_content`         longtext        COMMENT '赎回条款',
     `repurchase_flag`            int             DEFAULT NULL COMMENT '可回售性',
@@ -92,7 +92,7 @@ CREATE TABLE `rrs_securityinfo`
     `cj_flag`                    int             DEFAULT NULL COMMENT '是否次级',
     `yx_flag`                    int             DEFAULT NULL COMMENT '是否永续',
     `dy_flag`                    int             DEFAULT NULL COMMENT '是否递延',
-    `date_exists`                int             DEFAULT NULL COMMENT '剩余期限-最新（天）',
+    `date_exists`                decimal(10, 4)  DEFAULT NULL COMMENT '剩余期限-最新（天）',
 
     -- ==========================================
     -- 评级相关字段
@@ -108,7 +108,7 @@ CREATE TABLE `rrs_securityinfo`
     -- 含权债相关字段
     -- ==========================================
     `inright_flag`               int             DEFAULT NULL COMMENT '是否含权债',
-    `date_inright_exists`        varchar(10)     DEFAULT NULL COMMENT '含权债剩余期限-最新',
+    `date_inright_exists`        decimal(10, 4)  DEFAULT NULL COMMENT '含权债剩余期限-最新',
     `date_inright_next`          varchar(10)     DEFAULT NULL COMMENT '含权债下一个行权日',
 
     -- ==========================================
@@ -135,7 +135,7 @@ CREATE TABLE `rrs_securityinfo`
     `inner_guarantor_rating`     varchar(50)     DEFAULT NULL COMMENT '担保人主体内评分',
     `prompt_reason`              longtext        COMMENT '提示原因',
     `analysis`                   longtext        COMMENT '证券分析',
-    `date_repurchase_exists`     varchar(10)     DEFAULT NULL COMMENT '回购剩余期限-最新',
+    `date_repurchase_exists`     decimal(10, 4)  DEFAULT NULL COMMENT '回购剩余期限-最新',
     `guarant_flag`               int             DEFAULT NULL COMMENT '是否担保',
     `guarant_type`               varchar(100)    DEFAULT NULL COMMENT '担保类型',
     `abs_flag`                   int             DEFAULT NULL COMMENT '是否 ABS',
