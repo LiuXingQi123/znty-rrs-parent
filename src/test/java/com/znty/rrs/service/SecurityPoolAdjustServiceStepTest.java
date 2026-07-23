@@ -141,7 +141,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("证券存在进行中的调库流程（当前节点：研究员B复核），请等待流程结束后再发起调库");
+        assertThat(failures).contains("证券存在进行中的调库流程（当前节点：研究员B复核）");
     }
 
     /** 验证目标池已锁定时调入校验应失败。 */
@@ -165,7 +165,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("该池已经锁定，不能调入");
+        assertThat(failures).contains("目标投资池已锁定");
     }
 
     /** 验证目标池配置冻结期且证券仍在冻结期内时调出校验应失败。 */
@@ -192,7 +192,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkOutConditions(ctx);
 
-        assertThat(failures).contains("该证券还在投资池冻结期");
+        assertThat(failures).contains("证券仍在目标投资池冻结期内");
     }
 
     /** 验证证券品种不在目标池配置的投资品种内时调入校验应失败。 */
@@ -220,7 +220,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("该证券不在[信用债大库]所设定的投资品种内");
+        assertThat(failures).contains("证券不在本池投资品种范围内");
     }
 
     /** 验证证券市场不在目标池配置的投资市场内时调入校验应失败。 */
@@ -247,7 +247,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("该证券不在[沪市池]所设定的投资市场内");
+        assertThat(failures).contains("证券不在本池投资市场范围内");
     }
 
     /** 验证目标池来源池限制可由本次同批调入来源池满足。 */
@@ -342,7 +342,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("该债券已经到期，无法调入");
+        assertThat(failures).contains("债券已到期");
     }
 
     /** 验证股票已退市时调入校验应失败（类型特有 checkStockIn）。 */
@@ -367,7 +367,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("该股票已经退市，无法调入");
+        assertThat(failures).contains("股票已退市");
     }
 
     /** 验证证券在全局禁投池时调入校验应失败。 */
@@ -392,7 +392,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("该证券在禁止池中，不能调入");
+        assertThat(failures).contains("证券当前在禁止池中");
     }
 
     /** 验证债券不应被股票入池评级限制误拦截。 */
@@ -460,7 +460,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckIndustry", ctx);
-        assertThat(failure).isEqualTo("请选择正确的行业;");
+        assertThat(failure).isEqualTo("证券行业与目标池行业配置不一致");
     }
 
     /** 行业限制校验：证券行业匹配时应通过。 */
@@ -563,7 +563,7 @@ public class SecurityPoolAdjustServiceStepTest {
         // 当日不在开放区间
         when(mapper.queryPoolInOpenDay(any(Long.class), any(String.class))).thenReturn(false);
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckOpenDay", ctx);
-        assertThat(failure).isEqualTo("不在开放日内，不能调入;");
+        assertThat(failure).isEqualTo("当前不在本池开放日内");
     }
 
     /** 开放日校验：启用开放日且当日在开放区间时应通过。 */
@@ -666,7 +666,68 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
                 .thenReturn(Arrays.asList(2L, 3L));
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
-        assertThat(failure).isEqualTo("该债券只能调入以下池：一级库、二级库");
+        assertThat(failure).isEqualTo("目标池「五级库」不在入库矩阵允许范围内（允许：一级库、二级库）");
+    }
+
+    /** 主体债入库规则：矩阵允许池列表为空时应返回失败原因。 */
+    @Test
+    public void inCheckMainGradeRuleShouldFailWhenAllowedPoolsEmpty() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(2L);
+        pool.setPoolType("credit_bond");
+        pool.setPoolName("一级库");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        sec.setDateExists(new java.math.BigDecimal("1826"));
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(Collections.singletonMap(2L, pool));
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new java.math.BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
+                .thenReturn(Collections.<Long>emptyList());
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isEqualTo("主体债入库矩阵未配置允许池");
+    }
+
+    /** 调入校验可同时收集多条失败原因（到期 + 池锁定），供前端分条展示。 */
+    @Test
+    public void checkInConditionsShouldCollectMultipleFailReasons() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityInForbiddenPool(any(String.class))).thenReturn(false);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(2L);
+        pool.setPoolName("一级库");
+        pool.setLockFlag(1);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("101.IB");
+        sec.setSecurityType("corporate_bond");
+        // 到期日早于今日
+        sec.setMaturityDate("20200101");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        ctx.setCategoryType("bond");
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.<Long, InvestmentPoolBo>singletonMap(2L, pool));
+        List<String> failures = service.checkInConditions(ctx);
+        assertThat(failures).contains("目标投资池已锁定", "债券已到期");
+        assertThat(failures.size()).isGreaterThanOrEqualTo(2);
     }
 
     /** 主体债入库规则：未配置主体内评分档时应返回失败原因。 */
@@ -687,7 +748,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
-        assertThat(failure).isEqualTo("未配置主体内评分档，不符合入库条件");
+        assertThat(failure).isEqualTo("未配置主体内评分档");
     }
 
     /** 主体债入库规则：目标池非信用债大库时应跳过。 */
@@ -1549,7 +1610,16 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(results.get(1).getFailReasons().get(0)).contains("锁定");
         assertThat(results.get(0).getItemTag()).isEqualTo("manual");
         assertThat(results.get(0).isCanAdjust()).isFalse();
-        assertThat(results.get(0).getFailReasons().get(0)).contains("配套互斥调出失败");
+        assertThat(results.get(0).getFailReasons().get(0)).contains("配套互斥调出未通过");
+        // 互斥子原因拆成独立列表项（锁定原因单独一条）
+        boolean hasLockReason = false;
+        for (String r : results.get(0).getFailReasons()) {
+            if (r != null && r.contains("锁定")) {
+                hasLockReason = true;
+                break;
+            }
+        }
+        assertThat(hasLockReason).isTrue();
     }
 
     /** 验证手工调入失败时应同步阻断派生的互斥调出项。 */
@@ -1600,7 +1670,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(results).hasSize(2);
         assertThat(results.get(0).isCanAdjust()).isFalse();
         assertThat(results.get(0).getFailReasons()).contains(
-                "证券在调入限制池中，无法操作：禁投池");
+                "证券当前在调入限制池中：禁投池");
         assertThat(results.get(1).getItemTag()).isEqualTo("mutex");
         assertThat(results.get(1).isCanAdjust()).isFalse();
         assertThat(results.get(1).getFailReasons().get(0))

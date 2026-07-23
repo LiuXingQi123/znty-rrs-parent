@@ -568,8 +568,7 @@ public class CrmwPoolAdjustService {
                 AdjustCheckContext ctx = buildCheckContext(fakeOut, poolCurrentCount, checkShared);
                 List<String> outFailures = checkOutConditions(ctx);
                 if (outFailures != null && !outFailures.isEmpty()) {
-                    throw new BizException("配套互斥调出失败，无法完成调入（" + mutexPoolName + "）："
-                            + String.join("；", outFailures));
+                    throw new BizException(buildMutexOutboundFailureMessage(mutexPoolName, outFailures));
                 }
             }
         }
@@ -2589,7 +2588,7 @@ public class CrmwPoolAdjustService {
         if (maturityDate != null && !maturityDate.isEmpty()) {
             String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {
-                return "该债券已经到期，无法调入";
+                return "债券已到期";
             }
         }
         return null;
@@ -2605,7 +2604,7 @@ public class CrmwPoolAdjustService {
         if (delistDate != null && !delistDate.isEmpty()) {
             String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
             if (delistDate.compareTo(today) < 0) {
-                return "该股票已经退市，无法调入";
+                return "股票已退市";
             }
         }
         return null;
@@ -2621,7 +2620,7 @@ public class CrmwPoolAdjustService {
         if (maturityDate != null && !maturityDate.isEmpty()) {
             String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
             if (maturityDate.compareTo(today) < 0) {
-                return "该债券已经到期，无法调出";
+                return "债券已到期";
             }
         }
         return null;
@@ -2637,7 +2636,7 @@ public class CrmwPoolAdjustService {
         if (delistDate != null && !delistDate.isEmpty()) {
             String today = new java.text.SimpleDateFormat("yyyyMMdd").format(new Date());
             if (delistDate.compareTo(today) < 0) {
-                return "该股票已经退市，无法调出";
+                return "股票已退市";
             }
         }
         return null;
@@ -2653,9 +2652,9 @@ public class CrmwPoolAdjustService {
         if (ctx.isHasPendingProcess()) {
             String nodeLabel = ctx.getPendingProcessNodeLabel();
             if (nodeLabel != null && !nodeLabel.trim().isEmpty()) {
-                return "证券存在进行中的调库流程（当前节点：" + nodeLabel.trim() + "），请等待流程结束后再发起调库";
+                return "证券存在进行中的调库流程（当前节点：" + nodeLabel.trim() + "）";
             }
-            return "证券存在进行中的调库流程，请等待流程结束后再发起调库";
+            return "证券存在进行中的调库流程";
         }
         return null;
     }
@@ -2672,7 +2671,7 @@ public class CrmwPoolAdjustService {
     private String inCheckSecurityAlreadyInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
         if (poolId != null && ctx.getCurrentPoolIds().contains(poolId)) {
-            return "证券已在目标投资池中，无需重复调入";
+            return "证券已在目标投资池中";
         }
         return null;
     }
@@ -2687,7 +2686,7 @@ public class CrmwPoolAdjustService {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool != null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
                 && ctx.getPoolCurrentCount() >= pool.getMaxCapacity()) {
-            return "目标投资池已达持仓上限（" + pool.getMaxCapacity() + "），无法调入";
+            return "目标投资池已达持仓上限（" + pool.getMaxCapacity() + "）";
         }
         return null;
     }
@@ -2771,7 +2770,7 @@ public class CrmwPoolAdjustService {
     private String outCheckSecurityNotInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
         if (poolId == null || !ctx.getCurrentPoolIds().contains(poolId)) {
-            return "证券当前不在该投资池中，无法调出";
+            return "证券当前不在目标投资池中";
         }
         return null;
     }
@@ -2838,7 +2837,7 @@ public class CrmwPoolAdjustService {
     private String inCheckPoolLocked(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool != null && pool.getLockFlag() != null && pool.getLockFlag() == 1) {
-            return "该池已经锁定，不能调入";
+            return "目标投资池已锁定";
         }
         return null;
     }
@@ -2851,7 +2850,7 @@ public class CrmwPoolAdjustService {
     private String outCheckPoolLocked(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool != null && pool.getLockFlag() != null && pool.getLockFlag() == 1) {
-            return "该池已经锁定，不能调出";
+            return "目标投资池已锁定";
         }
         return null;
     }
@@ -2871,13 +2870,13 @@ public class CrmwPoolAdjustService {
         // 取证券在目标池的入池时间
         java.util.Date entryTime = ctx.getTargetPoolEntryTime();
         if (entryTime == null) {
-            return null;
+            return "证券入池生效时间缺失";
         }
         // 计算冻结期截止时间 = 入池时间 + N 天
         long frozenMs = pool.getFrozenPeriodIn() * 24L * 60L * 60L * 1000L;
         java.util.Date frozenDeadline = new java.util.Date(entryTime.getTime() + frozenMs);
         if (new java.util.Date().before(frozenDeadline)) {
-            return "该证券还在投资池冻结期";
+            return "证券仍在目标投资池冻结期内";
         }
         return null;
     }
@@ -2897,7 +2896,7 @@ public class CrmwPoolAdjustService {
         String categoryType = crmwPoolAdjustMapper.queryCategoryTypeBySecurityType(ctx.getSecurityInfo().getSecurityType());
         // 池配置品种为 JSON 数组（如 ["bond"]），判断是否包含证券品种
         if (categoryType == null || !pool.getVarietyCodes().contains("\"" + categoryType + "\"")) {
-            return "该证券不在[" + pool.getPoolName() + "]所设定的投资品种内";
+            return "证券不在本池投资品种范围内";
         }
         return null;
     }
@@ -2916,7 +2915,7 @@ public class CrmwPoolAdjustService {
         // 证券任一可推导市场落在池配置内即可
         if (!com.znty.rrs.common.util.MarketCodeMatchUtil.matchesPoolMarkets(
                 pool.getMarketCodes(), ctx.getSecurityInfo())) {
-            return "该证券不在[" + pool.getPoolName() + "]所设定的投资市场内";
+            return "证券不在本池投资市场范围内";
         }
         return null;
     }
@@ -2929,7 +2928,7 @@ public class CrmwPoolAdjustService {
      */
     private String inCheckForbiddenPool(AdjustCheckContext ctx) {
         if (crmwPoolAdjustMapper.querySecurityInForbiddenPool(ctx.getSecurityInfo().getWindCode())) {
-            return "该证券在禁止池中，不能调入";
+            return "证券当前在禁止池中";
         }
         return null;
     }
@@ -2975,7 +2974,7 @@ public class CrmwPoolAdjustService {
             return null;
         }
         if (!securityIndustry.equals(pool.getIndustryCode())) {
-            return "请选择正确的行业;";
+            return "证券行业与目标池行业配置不一致";
         }
         return null;
     }
@@ -2993,7 +2992,7 @@ public class CrmwPoolAdjustService {
         }
         String today = java.time.LocalDate.now().toString();
         if (!crmwPoolAdjustMapper.queryPoolInOpenDay(pool.getId(), today)) {
-            return "不在开放日内，不能调入;";
+            return "当前不在本池开放日内";
         }
         return null;
     }
@@ -3010,7 +3009,7 @@ public class CrmwPoolAdjustService {
         }
         String today = java.time.LocalDate.now().toString();
         if (!crmwPoolAdjustMapper.queryPoolInOpenDay(pool.getId(), today)) {
-            return "不在开放日内，不能调出;";
+            return "当前不在本池开放日内";
         }
         return null;
     }
@@ -3144,6 +3143,7 @@ public class CrmwPoolAdjustService {
                 || groupMutexItems == null || groupMutexItems.isEmpty()) {
             return;
         }
+        // 互斥子原因拆成独立 failReasons，避免「；」嵌套成一句矛盾长文
         List<String> mutexFailures = new ArrayList<>();
         for (AdjustCheckDto.CheckResultItem mutexItem : groupMutexItems) {
             if (mutexItem == null || mutexItem.isCanAdjust()) {
@@ -3152,11 +3152,14 @@ public class CrmwPoolAdjustService {
             String poolName = mutexItem.getPoolName() != null
                     ? mutexItem.getPoolName()
                     : String.valueOf(mutexItem.getTargetPoolId());
-            String detail = "";
-            if (mutexItem.getFailReasons() != null && !mutexItem.getFailReasons().isEmpty()) {
-                detail = "：" + String.join("；", mutexItem.getFailReasons());
+            mutexFailures.add("配套互斥调出未通过（" + poolName + "）");
+            if (mutexItem.getFailReasons() != null) {
+                for (String reason : mutexItem.getFailReasons()) {
+                    if (reason != null && !reason.isEmpty()) {
+                        mutexFailures.add(reason);
+                    }
+                }
             }
-            mutexFailures.add("配套互斥调出失败，无法完成调入（" + poolName + "）" + detail);
         }
         if (mutexFailures.isEmpty()) {
             return;
@@ -3167,6 +3170,24 @@ public class CrmwPoolAdjustService {
         }
         manualItem.setCanAdjust(false);
         manualItem.setFailReasons(failures);
+    }
+
+    /**
+     * 组装提交阶段配套互斥调出失败的异常文案（总述 + 编号原因）。
+     */
+    private String buildMutexOutboundFailureMessage(String mutexPoolName, List<String> outFailures) {
+        StringBuilder msg = new StringBuilder("配套互斥调出未通过（" + mutexPoolName + "）");
+        if (outFailures == null || outFailures.isEmpty()) {
+            return msg.toString();
+        }
+        msg.append("：");
+        for (int i = 0; i < outFailures.size(); i++) {
+            if (i > 0) {
+                msg.append(" ");
+            }
+            msg.append(i + 1).append(". ").append(outFailures.get(i));
+        }
+        return msg.toString();
     }
 
     /**
@@ -3193,7 +3214,7 @@ public class CrmwPoolAdjustService {
                 .collect(Collectors.toList());
         if (!blocked.isEmpty()) {
             // 构建关联池路径名称
-            return "证券在" + label + "中，无法操作：" + poolNames(blocked, ctx);
+            return "证券当前在" + label + "中：" + poolNames(blocked, ctx);
         }
         return null;
     }

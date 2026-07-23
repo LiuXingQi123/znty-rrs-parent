@@ -189,32 +189,33 @@
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
-| 1 | `inCheckPoolLocked` | 该池已经锁定，不能调入（`lock_flag=1`，最硬拦截优先执行） |
-| 2 | `inCheckVariety` | 该证券不在[xxx]所设定的投资品种内（`variety_codes` 不含证券 categoryType） |
-| 3 | `inCheckMarket` | 该证券不在[xxx]所设定的投资市场内（`market_codes` 不含证券所在市场） |
-| 4 | `preCheckPendingProcess` | 证券存在进行中的调库流程（当前节点：xxx），请等待流程结束 |
-| 5 | `inCheckSecurityAlreadyInPool` | 证券已在目标投资池中，无需重复调入 |
-| 6 | `inCheckPoolCapacity` | 目标投资池已达持仓上限（N），无法调入（`maxCapacity>0` 且 `currentCount>=maxCapacity`） |
+| 1 | `inCheckPoolLocked` | 目标投资池已锁定（`lock_flag=1`，最硬拦截优先执行） |
+| 2 | `inCheckVariety` | 证券不在本池投资品种范围内（`variety_codes` 不含证券 categoryType） |
+| 3 | `inCheckMarket` | 证券不在本池投资市场范围内（`market_codes` 不含证券所在市场） |
+| 4 | `preCheckPendingProcess` | 证券存在进行中的调库流程（当前节点：xxx） |
+| 5 | `inCheckSecurityAlreadyInPool` | 证券已在目标投资池中 |
+| 6 | `inCheckPoolCapacity` | 目标投资池已达持仓上限（N）（`maxCapacity>0` 且 `currentCount>=maxCapacity`） |
 | 7 | `inCheckSourcePool` | 目标池配置了来源池限制，证券须先在以下池中：xxx（`source` 关系；当前已在来源池或本次同批调入来源池均视为满足） |
-| 8 | `inCheckRestrictPool` | 证券在调入限制池中，无法操作：xxx（`in_restrict`） |
+| 8 | `inCheckRestrictPool` | 证券当前在调入限制池中：xxx（`in_restrict`） |
 | 9 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
 | 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，作为警告返回（`in_soft_restrict`，不直接阻断） |
-| 11 | `inCheckForbiddenPool` | 证券在全局禁投池中，不能调入：xxx（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
-| 12 | `inCheckIndustry` | 请选择正确的行业;（池 `industry_code` 非空且 `industry_exponent=0` 时，证券 `industry_name` 须等于池配置值；`industry_exponent!=0` 行业指数模式跳过。当前用名称精确匹配，老项目用编码前缀层级匹配） |
-| 13 | `inCheckOpenDay` | 不在开放日内，不能调入;（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
+| 11 | `inCheckForbiddenPool` | 证券当前在禁止池中（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
+| 12 | `inCheckIndustry` | 证券行业与目标池行业配置不一致（当前调用已注释；池 `industry_code` 非空且 `industry_exponent=0` 时，证券 `industry_name` 须等于池配置值） |
+| 13 | `inCheckOpenDay` | 当前不在本池开放日内（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
 
 **类型特有调入校验**（按 `categoryType` 路由，证券到期/退市从原 `preCheckSecurityExpired` 拆分到此）：
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 该债券已经到期，无法调入（`maturity_date` 早于今日）；/ 不符合条件，无法入库 / 该债券只能调入以下池：xxx / 未配置主体内评分档，不符合入库条件（信用债大库池按 `主体内评分档 × 剩余期限档` 查矩阵；剩余期限取 `date_exists` 天数 ÷365 匹配期限档，非 termYear；担保债取主体与担保人评级较低者；可转债跳过） |
-| 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 该股票已退市，无法调入（`delist_date` 早于今日）；`grade_astrict` 对应老系统“股票入池评级限制”（StockResearch/investrank：买入/增持/中性/卖出等），当前项目尚未接入股票研究评级来源时跳过，不用债券 `ratingBond` 误拦截 |
+| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池「xx」不在入库矩阵允许范围内（允许：…）；未配置主体内评分档（矩阵：主体内评分档×剩余期限档，`date_exists`÷365；担保债取低；可转债跳过）。前端「调整说明」分条展示「未通过（共 N 项）」 |
+| 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（`delist_date` 早于今日）；`grade_astrict` 对应老系统“股票入池评级限制”，当前未接入股票研究评级来源时跳过 |
 | 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（池 `fund_rate_limit` 表达式 `<=#rate`/`<#rate`/`#rate<=`/`#rate<` 及组合，`#rate` 占位基金评分；请求 `fundRate` 须满足，空或不满足则失败） |
 | 主体 company | —（主体不校验到期，暂无） | |
 
 - **自动追加联动调入项**：取目标池 `in_linked` 关系，对每个联动池若未覆盖则 `buildAutoResultItem(linkedId,'调入','linkage')`，并 `inheritManualItemFailure`（手工项失败则阻断联动项）。
 - **自动追加互斥配套调出项**：取目标池 `in_mutex` 关系，若证券当前在互斥池中则 `buildAutoResultItem(mutexId,'调出','mutex')`。
-- **互斥失败反阻断手工项**：同组任一条互斥调出 `canAdjust=false` 时，手工调入亦置失败（防止只提交调入导致双池）；提交接口同样校验须带齐互斥调出且可调出。
+- **互斥失败反阻断手工项**：同组任一条互斥调出 `canAdjust=false` 时，手工调入亦置失败；失败原因拆成多条（先「配套互斥调出未通过（池名）」，再展开互斥项各检查原因，避免 `；` 嵌套）；提交接口同样校验须带齐互斥调出且可调出。
+- **前端「调整说明」**：失败时分条展示「未通过（共 N 项）」+ 编号列表（`failReasons` 数组）；通过时展示类型+方向（及警告）。
 
 **④ 调出校验** `executeOutAdjustCheck`，对每个 `adjustMode==='调出'` 项执行 `checkOutConditions`：先跑通用 `checkCommonOut`，再按 `categoryType` 路由类型特有校验（`checkBondOut`/`checkStockOut`/`checkFundOut`/`checkCompanyOut`）。
 
@@ -222,22 +223,22 @@
 
 | # | 规则方法 | 失败原因 |
 |---|---|---|
-| 1 | `outCheckPoolLocked` | 该池已经锁定，不能调出（`lock_flag=1`，最硬拦截优先执行） |
-| 2 | `preCheckPendingProcess` | 存在进行中的调库流程（当前节点：xxx） |
-| 3 | `outCheckSecurityNotInPool` | 证券当前不在该投资池中，无法调出 |
-| 4 | `outCheckFrozenPeriod` | 该证券还在投资池冻结期（`frozen_period_in` 天内，入池时间+N天 > 当前时间） |
-| 5 | `outCheckRestrictPool` | 证券在调出限制池中（`out_restrict`） |
-| 6 | `outCheckMutexPool` | 证券在调出互斥池中（`out_mutex`） |
+| 1 | `outCheckPoolLocked` | 目标投资池已锁定（`lock_flag=1`，最硬拦截优先执行） |
+| 2 | `preCheckPendingProcess` | 证券存在进行中的调库流程（当前节点：xxx） |
+| 3 | `outCheckSecurityNotInPool` | 证券当前不在目标投资池中 |
+| 4 | `outCheckFrozenPeriod` | 证券仍在目标投资池冻结期内（`frozen_period_in`）；入池生效时间缺失时返回「证券入池生效时间缺失」 |
+| 5 | `outCheckRestrictPool` | 证券当前在调出限制池中：xxx（`out_restrict`） |
+| 6 | `outCheckMutexPool` | 证券当前在调出互斥池中：xxx（`out_mutex`） |
 | 7 | `outCheckMutexConflict` | 与以下互斥池不可同时调出 |
-| 8 | `outCheckElasticPool` | 证券在调出弹性禁投池中（`out_soft_restrict`） |
-| 9 | `outCheckOpenDay` | 不在开放日内，不能调出;（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
+| 8 | `outCheckElasticPool` | 证券在调出弹性禁投池中（`out_soft_restrict`，警告） |
+| 9 | `outCheckOpenDay` | 当前不在本池开放日内（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
 
 **类型特有调出校验**（按 `categoryType` 路由，证券到期/退市从原 `preCheckSecurityExpired` 拆分到此）：
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `outCheckBondMaturity` | 该债券已经到期，无法调出（`maturity_date` 早于今日） |
-| 股票 stock | `outCheckStockDelist` | 该股票已退市，无法调出（`delist_date` 早于今日） |
+| 债券 bond | `outCheckBondMaturity` | 债券已到期（`maturity_date` 早于今日） |
+| 股票 stock | `outCheckStockDelist` | 股票已退市（`delist_date` 早于今日） |
 | 基金 fund | —（暂无） | |
 | 主体 company | —（主体不校验到期） | |
 
