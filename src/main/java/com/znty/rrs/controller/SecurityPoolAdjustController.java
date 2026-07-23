@@ -7,6 +7,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustLogDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
+import com.znty.rrs.entity.securitypooladjust.LastCreditReportDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
@@ -66,6 +67,14 @@ public class SecurityPoolAdjustController {
     @PostMapping("/queryAdjustPoolList")
     public ApiResponse<List<PoolDto>> queryAdjustPoolList(@RequestBody SecurityPoolAdjustReq req) {
         return ApiResponse.success(securityPoolAdjustService.queryAdjustPoolList(req));
+    }
+
+    /**
+     * 查询近 6 个月最近一条可回填信评报告（当前券优先，否则同主体；对齐老 getLastReprotDocs）
+     */
+    @PostMapping("/queryLastCreditReport")
+    public ApiResponse<LastCreditReportDto> queryLastCreditReport(@RequestBody SecurityPoolAdjustReq req) {
+        return ApiResponse.success(securityPoolAdjustService.queryLastCreditReport(req));
     }
 
     /**

@@ -424,6 +424,153 @@
           )
     </select>
 
+    <!-- 近6个月当前券最近一条有信评报告的审批通过调入日志（对齐老 getLastReprotDocs 券优先） -->
+    <select id="queryLastInboundLogIdWithCreditReportBySecurity" resultType="java.lang.Long">
+        SELECT l.id
+        FROM ip_adjust_log l
+        WHERE l.audit_status = '20'
+          AND l.adjust_mode = '调入'
+          AND l.is_deleted = 0
+          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.security_code = #{securityCode}
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = 'ip_adjust_log'
+                AND a.main_id = l.id
+                AND a.is_deleted = 0
+                AND a.attachment_category IN ('credit_report_in', 'credit_report_out')
+          )
+        ORDER BY l.crte_time DESC
+                 ,l.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 近6个月同主体最近一条有信评报告的审批通过调入日志（券查不到时兜底） -->
+    <select id="queryLastInboundLogIdWithCreditReportByIssuer" resultType="java.lang.Long">
+        SELECT l.id
+        FROM ip_adjust_log l
+        WHERE l.audit_status = '20'
+          AND l.adjust_mode = '调入'
+          AND l.is_deleted = 0
+          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.security_code IN (
+              SELECT si.wind_code
+              FROM rrs_securityinfo si
+              WHERE si.issuer = (
+                  SELECT issuer
+                  FROM rrs_securityinfo
+                  WHERE wind_code = #{securityCode}
+                  LIMIT 1
+              )
+                AND si.issuer IS NOT NULL
+                AND si.issuer != ''
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = 'ip_adjust_log'
+                AND a.main_id = l.id
+                AND a.is_deleted = 0
+                AND a.attachment_category IN ('credit_report_in', 'credit_report_out')
+          )
+        ORDER BY l.crte_time DESC
+                 ,l.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 调库日志下首个信评报告附件（内部优先、其次外部，对齐老 relaDocs.get(0) 且仅 docType 1/2） -->
+    <select id="queryFirstCreditReportAttachment" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
+        SELECT id
+               ,table_name
+               ,main_id
+               ,attachment_category
+               ,file_type
+               ,original_file_name
+               ,new_file_name
+               ,file_size
+               ,content_type
+               ,full_url
+               ,file_name
+               ,uploader_id
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_attachment
+        WHERE table_name = 'ip_adjust_log'
+          AND main_id = #{adjustLogId}
+          AND is_deleted = 0
+          AND attachment_category IN ('credit_report_in', 'credit_report_out')
+        ORDER BY CASE attachment_category
+                     WHEN 'credit_report_in' THEN 1
+                     WHEN 'credit_report_out' THEN 2
+                     ELSE 9
+                 END ASC
+                 ,id ASC
+        LIMIT 1
+    </select>
+
+    <!-- 按物理路径反查报告库附件（copyReportAttachments 复用 file_name） -->
+    <select id="queryReportLibraryAttachmentByFileName" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
+        SELECT id
+               ,table_name
+               ,main_id
+               ,attachment_category
+               ,file_type
+               ,original_file_name
+               ,new_file_name
+               ,file_size
+               ,content_type
+               ,full_url
+               ,file_name
+               ,uploader_id
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_attachment
+        WHERE is_deleted = 0
+          AND table_name = #{tableName}
+          AND attachment_category = #{attachmentCategory}
+          AND file_name = #{fileName}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 内部报告简要 -->
+    <select id="queryInReportById" resultType="com.znty.rrs.entity.report.ReportDto">
+        SELECT id
+               ,author_name
+               ,report_title
+               ,report_type
+               ,security_code
+               ,company_code
+               ,security_type
+               ,data_source
+               ,crte_time
+        FROM rrs_report_in
+        WHERE id = #{id}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 外部报告简要 -->
+    <select id="queryOutReportById" resultType="com.znty.rrs.entity.report.ReportDto">
+        SELECT id
+               ,author_name
+               ,source_org_name
+               ,report_title
+               ,report_type
+               ,security_code
+               ,company_code
+               ,security_type
+               ,data_source
+               ,crte_time
+        FROM rrs_report_out
+        WHERE id = #{id}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
     <!-- 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） -->
     <select id="queryIssuerHasNonSimpleInboundWithinDays" resultType="boolean">
         SELECT COUNT(1) > 0

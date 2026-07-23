@@ -24,6 +24,7 @@ import com.znty.rrs.common.enums.FlowType;
 import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
+import com.znty.rrs.common.constants.CreditBondPoolCodes;
 import com.znty.rrs.common.util.CreditBondRemainTermUtil;
 import com.znty.rrs.common.util.MarketCodeMatchUtil;
 
@@ -61,7 +62,11 @@ import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.securitypooladjust.IpAdjustStepDto;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
+import com.znty.rrs.entity.securitypooladjust.LastCreditReportDto;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
+import com.znty.rrs.entity.bo.SysAttachmentBo;
+import com.znty.rrs.entity.report.ReportDto;
+import com.znty.rrs.entity.sysattachment.SysAttachmentDto;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.RoleBo;
@@ -192,6 +197,68 @@ public class SecurityPoolAdjustService {
         }
         // 回填证券品种大类（bond/fund/stock/company），供前端按类型差异化展示（如基金评分输入）
         dto.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(dto.getSecurityType()));
+        return dto;
+    }
+
+    /**
+     * 查询近 6 个月最近一条可回填的信评报告（对齐老系统 getLastReprotDocs）。
+     *
+     * <p>查询顺序：当前券 → 同主体；仅审批通过调入且日志挂有内部/外部库信评附件；
+     * 反查报告库附件后供前端预填。前端门禁仅对 {@link CreditBondPoolCodes} 中 1～5 级库回填
+     * （对齐老 COMMON.polidEnum 白名单；禁止库等不在名单内不回填）。
+     *
+     * @param req 需携带 securityCode
+     * @return 无可回填报告时返回 null
+     */
+    public LastCreditReportDto queryLastCreditReport(SecurityPoolAdjustReq req) {
+        if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
+            throw new BizException("证券代码不能为空");
+        }
+        String securityCode = req.getSecurityCode().trim();
+        // 先按当前券查近 6 个月最近一条有信评报告的审批通过调入日志
+        Long adjustLogId = securityPoolAdjustMapper.queryLastInboundLogIdWithCreditReportBySecurity(securityCode);
+        // 券维度无记录时，按同主体兜底（对齐老 findInvestPoolAdjustHistoryByScodeOrCompancode 主体分支）
+        if (adjustLogId == null) {
+            adjustLogId = securityPoolAdjustMapper.queryLastInboundLogIdWithCreditReportByIssuer(securityCode);
+        }
+        if (adjustLogId == null) {
+            return null;
+        }
+        // 取该日志下首个内部/外部信评附件（不回填手工上传，对齐老 docType 仅 1/2）
+        SysAttachmentBo logAttachment = securityPoolAdjustMapper.queryFirstCreditReportAttachment(adjustLogId);
+        if (logAttachment == null || logAttachment.getFileName() == null || logAttachment.getFileName().isEmpty()) {
+            return null;
+        }
+        boolean internal = "credit_report_in".equals(logAttachment.getAttachmentCategory());
+        String tableName = internal ? "rrs_report_in" : "rrs_report_out";
+        String category = internal ? "report_in" : "report_out";
+        // 复制绑定时复用 file_name，可反查报告库原附件供提交校验
+        SysAttachmentBo libraryAttachment = securityPoolAdjustMapper.queryReportLibraryAttachmentByFileName(
+                logAttachment.getFileName(), tableName, category);
+        if (libraryAttachment == null || libraryAttachment.getMainId() == null) {
+            return null;
+        }
+        ReportDto report = internal
+                ? securityPoolAdjustMapper.queryInReportById(libraryAttachment.getMainId())
+                : securityPoolAdjustMapper.queryOutReportById(libraryAttachment.getMainId());
+        if (report == null || report.getId() == null) {
+            return null;
+        }
+        LastCreditReportDto dto = new LastCreditReportDto();
+        dto.setId(report.getId());
+        dto.setTitle(report.getReportTitle());
+        dto.setReportType(report.getReportType());
+        dto.setSource(internal ? "internal" : "external");
+        SysAttachmentDto attachmentDto = new SysAttachmentDto();
+        attachmentDto.setId(libraryAttachment.getId());
+        attachmentDto.setMainId(libraryAttachment.getMainId());
+        attachmentDto.setAttachmentCategory(libraryAttachment.getAttachmentCategory());
+        attachmentDto.setOriginalFileName(libraryAttachment.getOriginalFileName());
+        attachmentDto.setFileType(libraryAttachment.getFileType());
+        attachmentDto.setFileSize(libraryAttachment.getFileSize());
+        attachmentDto.setContentType(libraryAttachment.getContentType());
+        attachmentDto.setFullUrl(libraryAttachment.getFullUrl());
+        dto.setAttachments(Collections.singletonList(attachmentDto));
         return dto;
     }
 

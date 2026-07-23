@@ -2,6 +2,7 @@ package com.znty.rrs.mapper;
 
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.bo.SysAttachmentBo;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
@@ -9,6 +10,7 @@ import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.securitypooladjust.PoolStatusDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
+import com.znty.rrs.entity.report.ReportDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -109,6 +111,37 @@ public interface SecurityPoolAdjustMapper {
 
     /** 查询6个月内同主体有审批通过调入记录且真实关联有效信评报告 */
     boolean queryHasRecentInboundWithReport(@Param("securityCode") String securityCode);
+
+    /**
+     * 查询近6个月当前券最近一条「审批通过+调入+挂有信评报告」的调库日志 ID
+     * （对齐老系统 findInvestPoolAdjustHistoryByScodeOrCompancode 券维度）
+     */
+    Long queryLastInboundLogIdWithCreditReportBySecurity(@Param("securityCode") String securityCode);
+
+    /**
+     * 查询近6个月同主体最近一条「审批通过+调入+挂有信评报告」的调库日志 ID
+     * （对齐老系统主体兜底；不含当前券时的其他主体债）
+     */
+    Long queryLastInboundLogIdWithCreditReportByIssuer(@Param("securityCode") String securityCode);
+
+    /**
+     * 查询调库日志下首个信评报告附件（优先内部/外部库复制件，再手工上传）
+     */
+    SysAttachmentBo queryFirstCreditReportAttachment(@Param("adjustLogId") Long adjustLogId);
+
+    /**
+     * 按物理文件路径反查报告库附件（复制到调库日志时复用 file_name）
+     */
+    SysAttachmentBo queryReportLibraryAttachmentByFileName(
+            @Param("fileName") String fileName,
+            @Param("tableName") String tableName,
+            @Param("attachmentCategory") String attachmentCategory);
+
+    /** 按主键查询内部报告简要信息 */
+    ReportDto queryInReportById(@Param("id") Long id);
+
+    /** 按主键查询外部报告简要信息 */
+    ReportDto queryOutReportById(@Param("id") Long id);
 
     /** 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） */
     boolean queryIssuerHasNonSimpleInboundWithinDays(@Param("securityCode") String securityCode,
