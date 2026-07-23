@@ -117,7 +117,7 @@
 
 - 调库记录附件：`loadLogAttachments` 对每条 log 调 `/api/v1/attachments/queryAttachmentList { adjustLogId }`，按 `attachmentCategory` 拆为信评报告（`credit_report_hand/in/out`）与其他材料（`material_hand/in/out`）。
 - 下载：`downloadAttachment` `POST /api/v1/attachments/downloadAttachment { id }` 返回 `ApiResponse<String>`（Base64），前端解码为 Blob 后 `URL.createObjectURL` + `<a download>`。本地待提交文件用 `downloadLocalFile`。
-- 信评报告选择弹窗：内/外报告 Tab，分页查询 `/api/v1/reports/queryInReportPage`、`/api/v1/reports/queryOutReportPage`，支持标题/证券编码/类型/撰写日期筛选，选中后回填到 `creditReportSelections`/`otherMaterialSelections`。
+- 信评报告选择弹窗：内/外报告 Tab，分页查询 `/api/v1/reports/queryInReportPage`、`/api/v1/reports/queryOutReportPage`，支持标题/证券编码/类型/撰写日期筛选，选中后回填到 `creditReportSelections`/`otherMaterialSelections`。打开弹窗时默认带上当前证券编码（`bondDetail.windCode`）作为 `securityCode` 查询条件。
 
 ---
 

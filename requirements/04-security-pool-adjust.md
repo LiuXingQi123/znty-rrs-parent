@@ -107,6 +107,7 @@
 **信评报告 / 其他材料选择**：
 - `openReportDialog(poolId, column)` 打开报告弹窗（column=`'credit'`/`'material'`）。
 - 弹窗含「内部报告」（`/api/v1/reports/queryInReportPage`）与「外部报告」（`/api/v1/reports/queryOutReportPage`）两个 Tab，支持按标题/证券编码/报告类型/撰写日期范围筛选 + 分页。
+- **打开弹窗时默认将当前证券编码（`bondDetail.windCode`）写入内/外报告筛选条件 `securityCode` 并自动查询**；用户仍可清空或改写后重新查询。
 - `el-upload` `auto-upload=false` 仅在前端暂存 File 对象到 `attachmentFiles[poolId]` / `materialFiles[poolId]`。
 - `handleConfirmReportDialog` 把选中报告写入 `creditReportSelections[poolId]` / `otherMaterialSelections[poolId]`，并同步到 `adjustReviewList`。
 

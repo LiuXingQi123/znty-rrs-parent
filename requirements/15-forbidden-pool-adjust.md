@@ -86,7 +86,7 @@
 
 **前端互斥校验**：`handleInPoolSelect`/`handleOutPoolSelect` 检查 `inMutexMap`/`outMutexMap`，同面板 + 跨面板冲突弹 warning 并 `toggleRowSelection(row,false)`。
 
-**信评报告 / 其他材料**：`openReportDialog(poolId,'credit'|'material')` 打开弹窗，含内部报告 Tab（`/api/v1/reports/queryInReportPage`）与外部报告 Tab（`/api/v1/reports/queryOutReportPage`），支持标题/证券编码/类型/撰写日期筛选 + 分页；`el-upload auto-upload=false` 暂存 File。`handleConfirmReportDialog` 回填 `creditReportSelections`/`otherMaterialSelections`。
+**信评报告 / 其他材料**：`openReportDialog(poolId,'credit'|'material')` 打开弹窗，含内部报告 Tab（`/api/v1/reports/queryInReportPage`）与外部报告 Tab（`/api/v1/reports/queryOutReportPage`），支持标题/证券编码/类型/撰写日期筛选 + 分页；`el-upload auto-upload=false` 暂存 File。`handleConfirmReportDialog` 回填 `creditReportSelections`/`otherMaterialSelections`。**打开弹窗时默认将当前主体代码（`companyDetail.companyCode`）写入筛选条件 `securityCode` 并自动查询**。
 
 **步骤 2（校验确认，`adjustStep===2`）**：显示「调库校验结果」表格（`adjustReviewList`）与「原因和建议」区（`adjustReason`/`adjustAdvice` 文本域）。
 

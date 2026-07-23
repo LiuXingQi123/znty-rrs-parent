@@ -69,7 +69,7 @@
 
 **前端互斥校验**：`handleInPoolSelect`/`handleOutPoolSelect` 检查 `inMutexMap`/`outMutexMap`，冲突弹 warning 并取消勾选。
 
-**信评报告 / 其他材料**：`openReportDialog(poolId,'credit'|'material')` 打开弹窗，含内部报告 Tab（`/api/v1/reports/queryInReportPage`）与外部报告 Tab（`/api/v1/reports/queryOutReportPage`），支持筛选 + 分页；`el-upload auto-upload=false` 暂存 File。
+**信评报告 / 其他材料**：`openReportDialog(poolId,'credit'|'material')` 打开弹窗，含内部报告 Tab（`/api/v1/reports/queryInReportPage`）与外部报告 Tab（`/api/v1/reports/queryOutReportPage`），支持筛选 + 分页；`el-upload auto-upload=false` 暂存 File。**打开弹窗时默认将当前标的证券编码（`bondDetail.windCode`）写入筛选条件 `securityCode` 并自动查询**。
 
 **步骤 2（校验确认）**：显示「调库校验结果」表格（`adjustReviewList`）与「原因和建议」区。
 
