@@ -55,7 +55,7 @@
 | 当期利率(%) | `couponRate` | 等宽字体 + 琥珀色 |
 | 起息日期 | `carryDate` | 居中 |
 | 到期日 | `maturityDate` | 居中 |
-| 剩余期限 | `dateExists` | 库字段 `date_exists`（DECIMAL(10,4)，天）；列表表格前端 ÷365 展示为年（两位小数）；证券基础信息区展示天数与库一致；矩阵后端 ÷365 匹配期限档 |
+| 剩余期限 | `dateExists` | 库字段 `date_exists`（DECIMAL(10,4)，天）；列表表格前端 ÷365 展示为年（两位小数）；证券基本信息区输入天数，旁同步展示「xx.xx年」（`formatRemainTermYears`）；矩阵后端 ÷365 匹配期限档 |
 | 证券评级 | `ratingBond` | `el-tag type=success`，有值才显示 |
 | 主体评级 | `ratingBondissuer` | 空值空白 |
 | 操作 | — | 「调库」按钮 → `handleAdjust(row)` |
