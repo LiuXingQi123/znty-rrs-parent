@@ -30,9 +30,9 @@ INSERT INTO `credit_bond_term_bucket` (
     ,`updt_time`
 ) VALUES
 (1, 'GT_5',      '期限>5',       5.0000, 0, NULL,   NULL, 'remain_term_year > 5',                              1, 1, NOW(), NOW()),
-(2, 'GT_3_LE_5', '5>=期限>3',    3.0000, 0, 5.0000, 1,    'remain_term_year > 3 AND remain_term_year <= 5', 2, 1, NOW(), NOW()),
-(3, 'GT_1_LE_3', '3>=期限>1',    1.0000, 0, 3.0000, 1,    'remain_term_year > 1 AND remain_term_year <= 3', 3, 1, NOW(), NOW()),
-(4, 'LE_1',      '1>=期限',      NULL,   NULL, 1.0000, 1, 'remain_term_year <= 1',                             4, 1, NOW(), NOW());
+(2, 'GT_3_LE_5', '5≥期限>3',    3.0000, 0, 5.0000, 1,    'remain_term_year > 3 AND remain_term_year ≤ 5', 2, 1, NOW(), NOW()),
+(3, 'GT_1_LE_3', '3≥期限>1',    1.0000, 0, 3.0000, 1,    'remain_term_year > 1 AND remain_term_year ≤ 3', 3, 1, NOW(), NOW()),
+(4, 'LE_1',      '1≥期限',      NULL,   NULL, 1.0000, 1, 'remain_term_year ≤ 1',                             4, 1, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
 -- 2. 主体内评分档
