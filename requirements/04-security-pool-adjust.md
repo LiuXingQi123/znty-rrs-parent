@@ -209,7 +209,7 @@
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池「xx」不在入库矩阵允许范围内（允许：…）；未配置主体内评分档（矩阵：主体内评分档×剩余期限档，`date_exists`÷365；担保债取低；可转债跳过）。前端「调整说明」分条展示「未通过（共 N 项）」 |
+| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池「xx」不在入库矩阵允许范围内（允许：…）；**未配置主体内评分档**（**正式证券**无内评**禁止**入信用债大库 1～5 级；**临时代码**无内评默认最低档 `grade_code=4` 再走矩阵；矩阵：主体内评分档×剩余期限档，`date_exists`÷365；担保债取低；可转债跳过）。前端「调整说明」分条展示「未通过（共 N 项）」 |
 | 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（`delist_date` 早于今日）；`grade_astrict` 对应老系统“股票入池评级限制”，当前未接入股票研究评级来源时跳过 |
 | 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（池 `fund_rate_limit` 表达式 `<=#rate`/`<#rate`/`#rate<=`/`#rate<` 及组合，`#rate` 占位基金评分；请求 `fundRate` 须满足，空或不满足则失败） |
 | 主体 company | —（主体不校验到期，暂无） | |
@@ -307,7 +307,7 @@
 |---|---|---|---|
 | `querySecurityPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
 | `querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 证券详情 |
-| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表 |
+| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 按主体内评×期限矩阵过滤信用债大库；**正式证券无主体内评分档时直接去掉全部 credit_bond 池（含 1～5 级）**；临时代码无内评默认 `grade_code=4` 再走矩阵 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |

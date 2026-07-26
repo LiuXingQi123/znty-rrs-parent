@@ -324,7 +324,10 @@ public class SecurityPoolAdjustService {
      *
      * <p>对齐老系统 openrule 在选池阶段过滤可调入池列表（InvestPoolAdjustManageAction:855-859：
      * 遍历可调入池，信用债大库 ptype=4000 未放开规则时查 findMainGradeRuleList，矩阵不满足的池移除）。
-     * releaseRules=true / 可转债 / 评级或期限档无法判定时不卡矩阵（对齐 inCheckMainGradeRule 跳过逻辑）。
+     * releaseRules=true / 可转债 / 观察池命中时不卡矩阵。
+     * <b>正式证券无主体内评分档时直接去掉全部信用债大库池（含 1～5 级）</b>；
+     * 临时代码无内评仍默认最低档 grade_code=4 再走矩阵（与 inCheckMainGradeRule 一致）；
+     * 有内评但期限档无法判定时不卡矩阵（对齐校验侧 bucket 无法匹配时跳过）。
      */
     private List<InvestmentPoolBo> filterInboundByGradeRule(List<InvestmentPoolBo> pools, SecurityPoolAdjustReq req) {
         if (pools == null || pools.isEmpty()) {
@@ -358,19 +361,26 @@ public class SecurityPoolAdjustService {
                 || securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode())) {
             return pools;
         }
-        // 主体内评分档（临时代码占位无内评默认最低档 4；担保债取主体与担保人较低者）
-        String gradeCode = securityInfo.getInnerIssuerRating();
-        if (gradeCode == null && "temporary".equals(securityInfo.getSecuritySource())) {
+        // 主体内评分档（空串视为无内评；临时代码占位无内评默认最低档 4；担保债取主体与担保人较低者）
+        String gradeCode = normalizeGradeCode(securityInfo.getInnerIssuerRating());
+        if (gradeCode == null && isTemporarySecurity(securityInfo)) {
+            // 临时代码占位常无内评：对齐校验侧默认 grade_code=4
             gradeCode = "4";
         }
-        if (securityInfo.getGuarantFlag() != null && securityInfo.getGuarantFlag() == 1
+        if (gradeCode != null
+                && securityInfo.getGuarantFlag() != null && securityInfo.getGuarantFlag() == 1
                 && securityInfo.getInnerGuarantorRating() != null && !securityInfo.getInnerGuarantorRating().isEmpty()) {
             gradeCode = pickLowerRatingGrade(gradeCode, securityInfo.getInnerGuarantorRating());
         }
+        // 正式证券无主体内评分档：可选池直接去掉信用债大库（含 1～5 级），禁止入库
+        if (gradeCode == null) {
+            // 过滤掉全部 pool_type=credit_bond 的池节点
+            return excludeCreditBondPools(pools);
+        }
         // 期限档：date_exists（天）÷365 → 年，匹配 credit_bond_term_bucket
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(securityInfo));
-        // 评级/期限档无法判定：不卡矩阵（对齐 inCheckMainGradeRule return null）
-        if (gradeCode == null || bucketCode == null) {
+        // 有内评但期限档无法判定：不卡矩阵（对齐 inCheckMainGradeRule bucket 无法匹配时 return null）
+        if (bucketCode == null) {
             return pools;
         }
         List<Long> allowedPoolIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
@@ -411,6 +421,33 @@ public class SecurityPoolAdjustService {
             }
         }
         return pools.stream().filter(p -> retained.contains(p.getId())).collect(Collectors.toList());
+    }
+
+    /**
+     * 规范化主体内评分档编码：null / 空白视为无内评。
+     */
+    private String normalizeGradeCode(String gradeCode) {
+        if (gradeCode == null) {
+            return null;
+        }
+        String trimmed = gradeCode.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * 从池列表中排除全部信用债大库池（pool_type=credit_bond，含根节点与 1～5 级）。
+     */
+    private List<InvestmentPoolBo> excludeCreditBondPools(List<InvestmentPoolBo> pools) {
+        if (pools == null || pools.isEmpty()) {
+            return pools;
+        }
+        List<InvestmentPoolBo> result = new ArrayList<>();
+        for (InvestmentPoolBo p : pools) {
+            if (!isCreditBondPool(p)) {
+                result.add(p);
+            }
+        }
+        return result;
     }
 
     /**
@@ -2420,6 +2457,8 @@ public class SecurityPoolAdjustService {
      * 当前项目用 credit_bond_pool_grade_rule 矩阵（req[23]）替代老项目 IP_MainGradeRule，用
      * SecurityInfoBo.innerIssuerRating 替代老项目 lon，用 date_exists（剩余期限天）÷365 + credit_bond_term_bucket
      * 替代 bondDurationId。担保债取主体与担保人评级较低者（老项目 lon=min(主体,担保人)）。可转债不适用矩阵跳过。
+     * <b>正式证券无主体内评分档禁止入信用债大库 1～5 级</b>；
+     * 临时代码无内评默认最低档 grade_code=4 再走矩阵（对齐老系统 lon 默认 8.0）。
      * 仅调入校验（老代码 checkOutPool 无）。
      */
     private String inCheckMainGradeRule(AdjustCheckContext ctx) {
@@ -2444,9 +2483,9 @@ public class SecurityPoolAdjustService {
         if (ctx.isSecurityInObservePool() || ctx.isIssuerInObservePool()) {
             return null;
         }
-        // 主体内评分档
-        String gradeCode = sec.getInnerIssuerRating();
-        if (gradeCode == null || gradeCode.isEmpty()) {
+        // 主体内评分档：正式证券无内评禁止入库；临时代码默认最低档 4
+        String gradeCode = normalizeGradeCode(sec.getInnerIssuerRating());
+        if (gradeCode == null) {
             // 临时代码占位证券常无内评：对齐老系统 lon 默认 8.0（对应本矩阵最低档 grade_code=4）
             if (isTemporarySecurity(sec)) {
                 gradeCode = "4";
@@ -2722,8 +2761,8 @@ public class SecurityPoolAdjustService {
      * 查证券的主体债入库矩阵允许池 ID 列表（复用 inCheckMainGradeRule 的评级/期限档逻辑）。
      */
     private List<Long> queryAllowedPoolIdsForSecurity(SecurityInfoBo sec) {
-        String gradeCode = sec.getInnerIssuerRating();
-        if (gradeCode == null || gradeCode.isEmpty()) {
+        String gradeCode = normalizeGradeCode(sec.getInnerIssuerRating());
+        if (gradeCode == null) {
             return new ArrayList<>();
         }
         // 担保债取严

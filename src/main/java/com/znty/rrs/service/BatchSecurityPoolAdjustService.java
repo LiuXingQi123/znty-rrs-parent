@@ -2337,6 +2337,8 @@ public class BatchSecurityPoolAdjustService {
      * 当前项目用 credit_bond_pool_grade_rule 矩阵（req[23]）替代老项目 IP_MainGradeRule，用
      * SecurityInfoBo.innerIssuerRating 替代老项目 lon，用 date_exists（剩余期限天）÷365 + credit_bond_term_bucket
      * 替代 bondDurationId。担保债取主体与担保人评级较低者（老项目 lon=min(主体,担保人)）。可转债不适用矩阵跳过。
+     * <b>正式证券无主体内评分档禁止入信用债大库 1～5 级</b>；
+     * 临时代码无内评默认最低档 grade_code=4 再走矩阵（对齐老系统 lon 默认 8.0）。
      * 仅调入校验（老代码 checkOutPool 无）。
      */
     private String inCheckMainGradeRule(AdjustCheckContext ctx) {
@@ -2360,9 +2362,15 @@ public class BatchSecurityPoolAdjustService {
         if (ctx.isSecurityInObservePool() || ctx.isIssuerInObservePool()) {
             return null;
         }
-        // 主体内评分档
+        // 主体内评分档：正式证券无内评禁止入库；临时代码默认最低档 4
         String gradeCode = sec.getInnerIssuerRating();
-        if (gradeCode == null || gradeCode.isEmpty()) {
+        if (gradeCode != null) {
+            gradeCode = gradeCode.trim();
+            if (gradeCode.isEmpty()) {
+                gradeCode = null;
+            }
+        }
+        if (gradeCode == null) {
             // 临时代码占位证券常无内评：对齐老系统 lon 默认 8.0（对应本矩阵最低档 grade_code=4）
             if (isTemporarySecurity(sec)) {
                 gradeCode = "4";

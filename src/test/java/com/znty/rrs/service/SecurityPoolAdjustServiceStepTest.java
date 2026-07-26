@@ -755,6 +755,78 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failure).isEqualTo("未配置主体内评分档");
     }
 
+    /** 主体债入库规则：临时代码无内评默认最低档 4 再走矩阵。 */
+    @Test
+    public void inCheckMainGradeRuleShouldDefaultGrade4WhenTemporaryNoGrade() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(2L);
+        pool.setPoolType("credit_bond");
+        pool.setPoolName("一级库");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setSecuritySource("temporary");
+        // date_exists 天数 > 5 年，与 GT_5 档匹配
+        sec.setDateExists(new BigDecimal("1826"));
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(Collections.singletonMap(2L, pool));
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("4", "GT_5"))
+                .thenReturn(Collections.singletonList(2L));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isNull();
+        verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket("4", "GT_5");
+    }
+
+    /** 可调入库：无内评时直接去掉信用债大库（含 1～5 级），保留其他类型池。 */
+    @Test
+    public void filterInboundByGradeRuleShouldExcludeCreditBondWhenNoGrade() {
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+
+        InvestmentPoolBo creditRoot = buildPool(10L, null, "信用债大库");
+        creditRoot.setPoolType("credit_bond");
+        InvestmentPoolBo level1 = buildPool(11L, 10L, "一级库");
+        level1.setPoolType("credit_bond");
+        InvestmentPoolBo level5 = buildPool(15L, 10L, "五级库");
+        level5.setPoolType("credit_bond");
+        InvestmentPoolBo specialRoot = buildPool(20L, null, "专户产品");
+        specialRoot.setPoolType("special_account");
+        InvestmentPoolBo specialLeaf = buildPool(21L, 20L, "专户一级");
+        specialLeaf.setPoolType("special_account");
+        List<InvestmentPoolBo> pools = Arrays.asList(creditRoot, level1, level5, specialRoot, specialLeaf);
+
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        // 无主体内评分档
+        when(adjustMapper.querySecurityBoByCode("NO_GRADE.IB")).thenReturn(sec);
+        when(adjustMapper.querySecurityInObservePool("NO_GRADE.IB")).thenReturn(false);
+        when(adjustMapper.queryIssuerInObservePool("NO_GRADE.IB")).thenReturn(false);
+
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityCode("NO_GRADE.IB");
+        req.setReleaseRules(false);
+
+        List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
+                service, "filterInboundByGradeRule", pools, req);
+
+        assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(20L, 21L);
+        verify(gradeRuleMapper, never()).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
+    }
+
     /** 主体债入库规则：目标池非信用债大库时应跳过。 */
     @Test
     public void inCheckMainGradeRuleShouldSkipWhenNotCreditBondPool() {
