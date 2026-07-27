@@ -22,6 +22,12 @@ public class InvestmentPoolReq {
     /** 投资池名称 */
     private String poolName;
 
+    /**
+     * 投资池编码（系统内部识别，如 credit_bond_root、credit_bond_level_1）。
+     * 新增顶级/子池时必填；编辑基础配置时可修改。
+     */
+    private String poolCode;
+
     /** 投资池类型 */
     private String poolType;
 

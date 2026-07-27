@@ -219,6 +219,8 @@ public class InvestmentPoolService {
         if (req.getPoolType() == null || req.getPoolType().trim().isEmpty()) {
             throw new BizException("投资池类型不能为空");
         }
+        // 校验投资池编码（必填且未删除范围内唯一）
+        resolveAndValidatePoolCode(req.getPoolCode(), null);
         // 解析经办人 ID
         String operatorId = getOperatorId(req);
         InvestmentPoolBo templatePool = null;
@@ -258,6 +260,8 @@ public class InvestmentPoolService {
         if (req.getPoolName() == null || req.getPoolName().trim().isEmpty()) {
             throw new BizException("投资池名称不能为空");
         }
+        // 校验投资池编码（必填且未删除范围内唯一）
+        resolveAndValidatePoolCode(req.getPoolCode(), null);
         InvestmentPoolBo parentPool = investmentPoolMapper.queryPoolById(req.getParentId());
         if (parentPool == null) {
             throw new BizException("父级投资池不存在");
@@ -487,12 +491,35 @@ public class InvestmentPoolService {
     }
 
     /**
+     * 解析并校验投资池编码：去空、长度限制，且在未删除记录中唯一（编辑时排除自身）。
+     *
+     * @param poolCode     请求中的投资池编码
+     * @param excludePoolId 编辑时排除的当前池 ID；新增传 null
+     * @return 规范化后的编码
+     */
+    private String resolveAndValidatePoolCode(String poolCode, Long excludePoolId) {
+        if (poolCode == null || poolCode.trim().isEmpty()) {
+            throw new BizException("投资池编码不能为空");
+        }
+        String code = poolCode.trim();
+        if (code.length() > 64) {
+            throw new BizException("投资池编码长度不能超过 64");
+        }
+        InvestmentPoolBo exists = investmentPoolMapper.queryPoolByCode(code);
+        if (exists != null && (excludePoolId == null || !excludePoolId.equals(exists.getId()))) {
+            throw new BizException("投资池编码已存在：" + code);
+        }
+        return code;
+    }
+
+    /**
      * 构建顶级投资池
      */
     private InvestmentPoolBo buildRootPool(InvestmentPoolReq req, InvestmentPoolBo templatePool) {
         InvestmentPoolBo rootPool = new InvestmentPoolBo();
         rootPool.setParentId(null);
-        rootPool.setPoolCode(req.getPoolType().trim() + "_root_" + System.currentTimeMillis());
+        // 使用前端传入的 poolCode（已在入口完成唯一性校验）
+        rootPool.setPoolCode(req.getPoolCode().trim());
         rootPool.setPoolName(req.getPoolName().trim());
         rootPool.setPoolType(req.getPoolType().trim());
         rootPool.setPoolLevel(1);
@@ -525,7 +552,8 @@ public class InvestmentPoolService {
     private InvestmentPoolBo buildChildPool(InvestmentPoolReq req, InvestmentPoolBo parentPool, InvestmentPoolBo templatePool) {
         InvestmentPoolBo childPool = new InvestmentPoolBo();
         childPool.setParentId(parentPool.getId());
-        childPool.setPoolCode(parentPool.getPoolCode() + "_child_" + System.currentTimeMillis());
+        // 使用前端传入的 poolCode（已在入口完成唯一性校验）
+        childPool.setPoolCode(req.getPoolCode().trim());
         childPool.setPoolName(req.getPoolName().trim());
         childPool.setPoolType(parentPool.getPoolType());
         childPool.setPoolLevel(parentPool.getPoolLevel() == null ? 1 : parentPool.getPoolLevel() + 1);
@@ -643,6 +671,8 @@ public class InvestmentPoolService {
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(oldPool.getId());
         pool.setPoolName(req.getPoolName());
+        // 校验并写入投资池编码（编辑时排除自身）
+        pool.setPoolCode(resolveAndValidatePoolCode(req.getPoolCode(), oldPool.getId()));
         // 序列化业务数据为 JSON
         pool.setMarketCodes(toJson(req.getMarketCodes()));
         // 序列化业务数据为 JSON

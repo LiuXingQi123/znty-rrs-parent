@@ -39,6 +39,14 @@ public interface InvestmentPoolMapper {
     InvestmentPoolBo queryPoolById(@Param("id") Long id);
 
     /**
+     * 按投资池编码查询未删除记录（用于编码唯一性校验）。
+     *
+     * @param poolCode 投资池编码
+     * @return 匹配的投资池，不存在时返回 null
+     */
+    InvestmentPoolBo queryPoolByCode(@Param("poolCode") String poolCode);
+
+    /**
      * 查询指定 ID 的投资池列表
      */
     List<InvestmentPoolBo> queryPoolByIdsList(@Param("ids") List<Long> ids);

@@ -12,8 +12,8 @@
 - **顶部导航栏**：Logo + 「投资池维护」标题 + 面包屑 + 当天日期。
 - **主体区**左右两栏：
   - **左侧侧边栏**：标题「投资池树」+「新增顶级」按钮 + 刷新按钮 + 树搜索框 + `el-tree`（`node-key="id"`，`default-expand-all`，自定义节点模板：父节点 folder 图标、叶子 document 图标，hover 显示「+添加子节点」「删除节点」）。
-  - **右侧内容区**：`pool-header`（池名 + 启用徽章）+ `el-tabs` 三个标签页：
-    - **基础配置**：基础信息表单（名称/恒生池名/投资市场复选/投资品种复选/最大上限/锁池/调入冻结期/外部排序/内部排序/调入研报限制/调出研报限制/描述）+ 审批流程表单（6 个流程下拉）+ 刷新/保存按钮。
+  - **右侧内容区**：`pool-header`（池名 + 编码 + 启用徽章）+ `el-tabs` 三个标签页：
+    - **基础配置**：基础信息表单（名称/`poolCode` 可创建下拉/恒生池名/投资市场复选/投资品种复选/最大上限/锁池/调入冻结期/外部排序/内部排序/调入研报限制/调出研报限制/描述）+ 审批流程表单（6 个流程下拉）+ 刷新/保存按钮。
     - **关系配置**：9 种关系类型卡片网格 + 自动调入/调出规则两张卡片 + 刷新/保存按钮。
     - **权限配置**：可查看人员/可调整人员/可 Excel 导入人员三类分区，每区 `el-tag` 列表 +「添加人员」+ 刷新/保存按钮。
 
@@ -48,7 +48,7 @@
 ### 2.3 详情区渲染
 
 详情区用表单 + 卡片网格（非 el-table）：
-- **基础配置**字段：`poolName`（必填）、`hsPoolName`、`marketCodes`（8 项：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他）、`varietyCodes`（7 项：bond/warrant/trust/index/stock/issuer/fund，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
+- **基础配置**字段：`poolName`（必填）、`poolCode`（必填，`el-select` filterable + allow-create；**选项前端写死**为 Demo 标准编码列表，下拉展示「左侧 code / 右侧中文名」，也可手输新编码）、`hsPoolName`、`marketCodes`（8 项：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他）、`varietyCodes`（7 项：bond/warrant/trust/index/stock/issuer/fund，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
 - **审批流程**：6 项（inFlowId/outFlowId/simpleInFlowId/simpleOutFlowId/batchInFlowId/batchOutFlowId），下拉来自 `flowOptions`（含「不需要审批」占位），绑定值为 `String(flowId)`。
 - **关系配置**：9 张卡片，每张右上角显示已选数量，下方 chip 列表显示「父路径 › 池名」面包屑。
 - **状态**：详情页 `pool-header` 只硬编码显示「启用」徽章（无 disabled 差异化展示）。
@@ -62,21 +62,22 @@
 ### 3.1 新增顶级投资池
 
 - 路径：`POST /api/v1/investmentPool/addRootPool`
-- 请求体：`{poolName, poolType, outerSort?, templatePoolId?, operatorId?}`
-- 后端 `addRootPool`：校验 poolName/poolType 非空；模板存在性校验；`buildRootPool`（`parentId=null`，`poolCode=poolType+"_root_"+时间戳`，`poolLevel=1`，`outerSort` 未传取最大+1，`innerSort=1`，有模板则 `copyBaseConfig` 复制市场/品种/恒生池名/6 流程/研报限制/容量/锁池/冻结期/描述，否则默认 `marketCodes="[]"`、`varietyCodes='["bond"]'`、`lockFlag=0`，`status='enabled'`）；`addPool` 插入回填 id；`addPoolEvent("新增")` 审计；有模板则复制关系/规则/权限。
+- 请求体：`{poolName, poolCode, poolType, outerSort?, templatePoolId?, operatorId?}`
+- 后端 `addRootPool`：校验 poolName/poolType/poolCode 非空；`resolveAndValidatePoolCode` 校验编码长度≤64 且未删除记录中唯一；模板存在性校验；`buildRootPool`（`parentId=null`，**`poolCode` 取请求值**，`poolLevel=1`，`outerSort` 未传取最大+1，`innerSort=1`，有模板则 `copyBaseConfig` 复制市场/品种/恒生池名/6 流程/研报限制/容量/锁池/冻结期/描述，否则默认 `marketCodes="[]"`、`varietyCodes='["bond"]'`、`lockFlag=0`，`status='enabled'`）；`addPool` 插入回填 id；`addPoolEvent("新增")` 审计；有模板则复制关系/规则/权限。
+- 前端「投资池编码」为可创建下拉，选项**前端写死**（与 Demo 标准编码一致，如 `credit_bond_root`、`crmw_core_pool`），下拉项左侧编码、右侧名称。
 
 ### 3.2 新增子投资池
 
 - 路径：`POST /api/v1/investmentPool/addChildPool`
-- 请求体：`{parentId, poolName, innerSort?, templatePoolId?, inheritParentConfig?, operatorId?}`
-- 后端 `addChildPool`：校验 parentId/poolName 非空、父池存在；模板选择（显式传 templatePoolId 优先，否则 inheritParentConfig 用父池当模板）；`buildChildPool`（**`poolType` 强制继承父池**不读 req，`poolLevel=父.level+1`，`outerSort=父.outerSort`，`innerSort` 未传取父下最大+1，`poolCode=父.poolCode+"_child_"+时间戳`）；插入+事件+模板复制。
-- 前端打开弹窗时默认把 `templatePoolId` 设为父节点 id（「以父节点为模板」）。
+- 请求体：`{parentId, poolName, poolCode, innerSort?, templatePoolId?, inheritParentConfig?, operatorId?}`
+- 后端 `addChildPool`：校验 parentId/poolName/poolCode 非空、父池存在、编码唯一；模板选择（显式传 templatePoolId 优先，否则 inheritParentConfig 用父池当模板）；`buildChildPool`（**`poolType` 强制继承父池**不读 req，`poolLevel=父.level+1`，`outerSort=父.outerSort`，`innerSort` 未传取父下最大+1，**`poolCode` 取请求值**）；插入+事件+模板复制。
+- 前端打开弹窗时默认把 `templatePoolId` 设为父节点 id（「以父节点为模板」）；编码同样为可创建下拉。
 
 ### 3.3 编辑基础配置
 
 - 路径：`POST /api/v1/investmentPool/editPoolConfig`
-- 请求体：`{id, poolName, marketCodes, varietyCodes, hsPoolName, inFlow, outFlow, simpleInFlow, simpleOutFlow, batchInFlow, batchOutFlow, inReportRestriction, outReportRestriction, maxCapacity, outerSort, innerSort, description, operatorId}`（流程字段为完整 `FlowOptionDto`）
-- 后端 `editPoolConfig`（`@Transactional`）：校验 id、池存在；`buildPoolForEdit` 仅 set 指定字段（**不更新 status、poolType、poolLevel、parentId、poolCode**）；`applyFlow` 对 6 流程逐个 `normalizeFlow`（flowId 为 null 时清空）；`editPoolConfig` UPDATE；`addPoolEvent("修改")`。
+- 请求体：`{id, poolName, poolCode, marketCodes, varietyCodes, hsPoolName, inFlow, outFlow, simpleInFlow, simpleOutFlow, batchInFlow, batchOutFlow, inReportRestriction, outReportRestriction, maxCapacity, outerSort, innerSort, description, operatorId}`（流程字段为完整 `FlowOptionDto`）
+- 后端 `editPoolConfig`（`@Transactional`）：校验 id、池存在；`buildPoolForEdit` set 指定字段（含 **`poolCode`**，唯一性校验排除自身；**不更新 status、poolType、poolLevel、parentId**）；`applyFlow` 对 6 流程逐个 `normalizeFlow`（flowId 为 null 时清空）；`editPoolConfig` UPDATE；`addPoolEvent("修改")`。
 - 流程字段存储为快照（flowId/flowKey/flowName 三列），避免流程改名后历史池配置失真。
 
 ### 3.4 删除投资池节点

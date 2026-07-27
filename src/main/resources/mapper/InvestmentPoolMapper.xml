@@ -143,6 +143,27 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 按投资池编码查询未删除记录 -->
+    <select id="queryPoolByCode" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
+        SELECT id
+               ,parent_id
+               ,pool_code
+               ,pool_name
+               ,pool_type
+               ,pool_level
+               ,market_codes
+               ,variety_codes
+               ,hs_pool_name
+               ,status
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM ip_investment_pool
+        WHERE is_deleted = 0
+          AND pool_code = #{poolCode}
+        LIMIT 1
+    </select>
+
     <!-- 查询指定 ID 的投资池列表 -->
     <select id="queryPoolByIdsList" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT id
@@ -294,6 +315,7 @@
     <update id="editPoolConfig" parameterType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         UPDATE ip_investment_pool
         SET pool_name = #{poolName}
+            ,pool_code = #{poolCode}
             ,market_codes = #{marketCodes}
             ,variety_codes = #{varietyCodes}
             ,hs_pool_name = #{hsPoolName}
