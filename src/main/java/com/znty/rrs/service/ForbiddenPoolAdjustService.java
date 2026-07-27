@@ -368,7 +368,10 @@ public class ForbiddenPoolAdjustService {
     }
 
     /**
-     * 批量回填主体旗下债券数量。
+     * 批量回填主体旗下债券数量（主数据口径）。
+     * <p>统计 {@code rrs_securityinfo} 中 {@code issuer_code} 匹配且 {@code category_type=bond}
+     * 的证券总数（含 crmw，展示不排除）。在池汇总见 {@code queryCompanyBondPoolList}（普通池 + CRMW 池）。
+     * 主体生效后同步入/出池仍单独排除 crmw。
      */
     private void fillCompanyBondCount(List<ForbiddenPoolAdjustDto> companies) {
         if (companies == null || companies.isEmpty()) {

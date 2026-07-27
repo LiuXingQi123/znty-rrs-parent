@@ -71,7 +71,10 @@
         LIMIT 1
     </select>
 
-    <!-- 批量查询主体旗下债券数量 -->
+    <!--
+      批量查询主体旗下债券数量（主数据口径）。
+      category_type=bond（含字典归 bond 的类型，不单独排除 crmw，与展示口径一致）。
+    -->
     <select id="queryCompanyBondCountList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBondCount">
         SELECT bond.issuer_code AS companyCode
                ,COUNT(DISTINCT bond.wind_code) AS bondCount
@@ -107,59 +110,122 @@
                  ,ips.id DESC
     </select>
 
-    <!-- 查询主体旗下债券所在池汇总 -->
+    <!--
+      查询主体旗下债券所在池汇总（在池口径，不排除 crmw）。
+      普通池：ip_pool_status.security_code = wind_code；
+      CRMW 池：ip_pool_status_crmw.crmw_scode = wind_code（凭证本身在主数据中也有 issuer_code）。
+    -->
     <select id="queryCompanyBondPoolList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$PoolStatus">
-        SELECT ips.target_pool_id
-               ,p.pool_name
-               ,ips.pool_type
-               ,COUNT(DISTINCT bond.wind_code) AS bondCount
-               ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
-        FROM rrs_securityinfo bond
-        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
-                                         AND dst.is_deleted = 0
-                                         AND dst.category_type = 'bond'
-        INNER JOIN ip_pool_status ips ON ips.security_code = bond.wind_code
-                                     AND ips.audit_status = '20'
-                                     AND ips.is_deleted = 0
-        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
-                                       AND p.is_deleted = 0
-        WHERE bond.issuer_code = #{companyCode}
-        GROUP BY ips.target_pool_id
-                 ,p.pool_name
-                 ,ips.pool_type
-                 ,p.outer_sort
-                 ,p.inner_sort
-                 ,p.id
-        ORDER BY p.outer_sort
-                 ,p.inner_sort
-                 ,p.id
+        SELECT t.target_pool_id
+               ,t.pool_name
+               ,t.pool_type
+               ,COUNT(DISTINCT t.wind_code) AS bondCount
+               ,DATE_FORMAT(MIN(t.entry_time), '%Y-%m-%d') AS entryDate
+        FROM (
+            SELECT ips.target_pool_id
+                   ,p.pool_name
+                   ,ips.pool_type
+                   ,bond.wind_code
+                   ,ips.entry_time
+                   ,p.outer_sort
+                   ,p.inner_sort
+                   ,p.id AS pool_pk
+            FROM rrs_securityinfo bond
+            INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                             AND dst.is_deleted = 0
+                                             AND dst.category_type = 'bond'
+            INNER JOIN ip_pool_status ips ON ips.security_code = bond.wind_code
+                                         AND ips.audit_status = '20'
+                                         AND ips.is_deleted = 0
+            INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                           AND p.is_deleted = 0
+            WHERE bond.issuer_code = #{companyCode}
+            UNION ALL
+            SELECT ips.target_pool_id
+                   ,p.pool_name
+                   ,ips.pool_type
+                   ,bond.wind_code
+                   ,ips.entry_time
+                   ,p.outer_sort
+                   ,p.inner_sort
+                   ,p.id AS pool_pk
+            FROM rrs_securityinfo bond
+            INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                             AND dst.is_deleted = 0
+                                             AND dst.category_type = 'bond'
+            INNER JOIN ip_pool_status_crmw ips ON ips.crmw_scode = bond.wind_code
+                                              AND ips.audit_status = '20'
+                                              AND ips.is_deleted = 0
+            INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                           AND p.is_deleted = 0
+            WHERE bond.issuer_code = #{companyCode}
+        ) t
+        GROUP BY t.target_pool_id
+                 ,t.pool_name
+                 ,t.pool_type
+                 ,t.outer_sort
+                 ,t.inner_sort
+                 ,t.pool_pk
+        ORDER BY t.outer_sort
+                 ,t.inner_sort
+                 ,t.pool_pk
     </select>
 
-    <!-- 查询主体旗下债券明细 -->
+    <!-- 查询主体旗下债券明细（指定池；含普通池 + CRMW 池，与汇总 bondCount 一致） -->
     <select id="queryCompanyBondList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBond">
-        SELECT bond.wind_code
-               ,bond.short_name
-               ,bond.full_name
-               ,bond.security_type
-               ,dst.security_type_name
-               ,ips.target_pool_id
-               ,p.pool_name
-               ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
-        FROM rrs_securityinfo bond
-        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
-                                         AND dst.is_deleted = 0
-                                         AND dst.category_type = 'bond'
-        INNER JOIN ip_pool_status ips ON ips.security_code = bond.wind_code
-                                     AND ips.audit_status = '20'
-                                     AND ips.is_deleted = 0
-                                     AND ips.target_pool_id = #{targetPoolId}
-        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
-                                       AND p.is_deleted = 0
-        WHERE bond.issuer_code = #{companyCode}
-        ORDER BY bond.wind_code ASC
+        SELECT t.wind_code
+               ,t.short_name
+               ,t.full_name
+               ,t.security_type
+               ,t.security_type_name
+               ,t.target_pool_id
+               ,t.pool_name
+               ,DATE_FORMAT(t.entry_time, '%Y-%m-%d') AS entryDate
+        FROM (
+            SELECT bond.wind_code
+                   ,bond.short_name
+                   ,bond.full_name
+                   ,bond.security_type
+                   ,dst.security_type_name
+                   ,ips.target_pool_id
+                   ,p.pool_name
+                   ,ips.entry_time
+            FROM rrs_securityinfo bond
+            INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                             AND dst.is_deleted = 0
+                                             AND dst.category_type = 'bond'
+            INNER JOIN ip_pool_status ips ON ips.security_code = bond.wind_code
+                                         AND ips.audit_status = '20'
+                                         AND ips.is_deleted = 0
+                                         AND ips.target_pool_id = #{targetPoolId}
+            INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                           AND p.is_deleted = 0
+            WHERE bond.issuer_code = #{companyCode}
+            UNION ALL
+            SELECT bond.wind_code
+                   ,bond.short_name
+                   ,bond.full_name
+                   ,bond.security_type
+                   ,dst.security_type_name
+                   ,ips.target_pool_id
+                   ,p.pool_name
+                   ,ips.entry_time
+            FROM rrs_securityinfo bond
+            INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                             AND dst.is_deleted = 0
+                                             AND dst.category_type = 'bond'
+            INNER JOIN ip_pool_status_crmw ips ON ips.crmw_scode = bond.wind_code
+                                              AND ips.audit_status = '20'
+                                              AND ips.is_deleted = 0
+                                              AND ips.target_pool_id = #{targetPoolId}
+            INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                           AND p.is_deleted = 0
+            WHERE bond.issuer_code = #{companyCode}
+        ) t
+        ORDER BY t.wind_code ASC
     </select>
 
-    <!-- 查询主体调入时需要同步的未到期非 ABS 债券 -->
+    <!-- 查询主体调入时需要同步的未到期非 ABS 债券（排除 crmw） -->
     <select id="queryCompanyInboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
@@ -167,6 +233,7 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE bond.issuer_code = #{companyCode}
+          AND bond.security_type != 'crmw'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
           AND COALESCE(bond.abs_flag, 0) != 1
           AND NOT EXISTS (
@@ -180,7 +247,7 @@
         ORDER BY bond.wind_code ASC
     </select>
 
-    <!-- 查询主体调出时需要同步的当前在池非 ABS 债券 -->
+    <!-- 查询主体调出时需要同步的当前在池非 ABS 债券（排除 crmw） -->
     <select id="queryCompanyOutboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
@@ -192,6 +259,7 @@
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
         WHERE bond.issuer_code = #{companyCode}
+          AND bond.security_type != 'crmw'
           AND COALESCE(bond.abs_flag, 0) != 1
         ORDER BY bond.wind_code ASC
     </select>

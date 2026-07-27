@@ -39,7 +39,7 @@
 - 路径：`POST /api/v1/forbiddenPoolAdjust/queryCompanyPage`
 - 请求体：`{ companyCode, companyFullName, industryName, pageIndex, pageSize }`
 - 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_cbondissuer` 的 `used=1` 记录。**注意：该表约 70 万债行 / 约 4 万主体（债券+主体粒度），外部 ODS 不自建二级索引；列表用 `GROUP BY s_info_compcode` 去重 + `MAX` 取展示字段，不做无业务含义的排序**；行业关键字匹配一级或二级行业。列表返回主体代码、主体名称、一级/二级行业和旗下债券数量。
-- `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...) GROUP BY issuer_code`）批量回填 `companyBondCount`。
+- `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...)` 且 `category_type='bond'`，`GROUP BY issuer_code`）批量回填 `companyBondCount`。该数为 **主数据旗下债券总数**（展示口径不单独排除 crmw），不等于「各池在池债券数」之和（未入池债仍计入总数；同一债在多池会出现分池合计大于总数的情况）。
 - 返回 `PageResult<ForbiddenPoolAdjustDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.3 表格列（列表页）
@@ -71,7 +71,7 @@
 ### 2.7 当前所在池两个子块
 
 - **当前主体所在池**（`companyCurrentPools`）：SQL `ip_pool_status ips INNER JOIN dict_security_type ... category_type='company' INNER JOIN ip_investment_pool p`，`WHERE ips.security_code=#{companyCode} AND ips.audit_status='20' AND ips.is_deleted=0`，`ORDER BY entry_time DESC, id DESC`。
-- **当前主体旗下债券所在池**（`companyBondCurrentPools`）：`rrs_securityinfo bond INNER JOIN dict_security_type ... category_type='bond' INNER JOIN ip_pool_status ips ON ips.security_code=bond.wind_code AND ips.audit_status='20'`，`WHERE bond.issuer_code=#{companyCode}`，`GROUP BY target_pool_id`，含 `COUNT(DISTINCT bond.wind_code) AS bondCount`、`MIN(entry_time)` 最早入池日期。每行「查看债券」按钮 → `openCompanyBondDialog` 调 `queryCompanyBondList`。
+- **当前主体旗下债券所在池**（`companyBondCurrentPools`）：主数据 `category_type='bond'`（**含 crmw，不排除**）中已在池记录：普通池读 `ip_pool_status.security_code=wind_code`，CRMW 池读 `ip_pool_status_crmw.crmw_scode=wind_code`；`GROUP BY target_pool_id`，`bondCount` 为该池在池数。点「查看债券」→ `queryCompanyBondList`（同一两表口径 + 指定 `targetPoolId`），明细条数等于该行 `bondCount`。
 - 池名通过 `investmentPoolService.queryPoolFullNameMap()` 填全路径。
 
 ---
