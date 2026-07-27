@@ -163,11 +163,17 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 4. **调出校验**（`executeOutAdjustCheck`）：对每个手工调出项执行 `checkOutConditions`，追加联动调出项（`out_linked`）。
 5. **流程类型判断**（`resolveAdjustFlowOptions`）：为每个可调整手工项生成 FlowOption 列表（同单笔规则，见 [04-security-pool-adjust.md](04-security-pool-adjust.md) §3.6 ⑤），命中当前已在目标池 `in_mutex` 互斥池时优先走 `specialInbound`（`bond:special-inbound`）；**信用债大库目标池默认排除**互斥特殊审批。
 
-**调入校验规则顺序**（`checkInConditions`）：证券到期 → 进行中流程 → 重复入池 → 容量上限 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突(in_mutex) → 调入弹性禁投池(in_soft_restrict)。
+**调入校验规则顺序**（与单笔 `checkCommonIn` + 类型特有一致）：
 
-**调出校验规则顺序**（`checkOutConditions`）：证券到期 → 进行中流程 → 未入池 → 调出限制池(out_restrict) → 调出互斥池(out_mutex) → 同请求互斥冲突 → 调出弹性禁投池(out_soft_restrict)。
+池锁定 → 品种 → 市场 → pending → 已在目标池 → 容量 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突 → 弹性禁投(in_soft_restrict，警告) → 全局禁止池 → **行业限制（已注释）** → 开放日 →（债券）到期 → 主体内评矩阵 /（股票）退市 → 评级限制（空实现）/（基金）评分（仅 check）。
 
-**与单笔的异同**：批量校验**没有新增任何校验规则**，区别仅在外层：①逐只证券循环调用单笔校验；②`adjustGroupKey` 加 `securityCode_` 前缀避免跨证券冲突；③只保留方向匹配的结果项。单笔校验内部的「同请求互斥冲突」规则在批量场景下**仅对单只证券内部的多目标池生效**，不跨证券判断。
+**调出校验规则顺序**（与单笔 `checkCommonOut` + 类型特有一致）：
+
+池锁定 → pending → 未入池 → 冻结期（入池时间缺失报「证券入池生效时间缺失」，与单券相同）→ 调出限制池(out_restrict) → 调出互斥池(out_mutex) → 同请求互斥冲突 → 弹性禁投(out_soft_restrict，警告) → 开放日 →（债券/股票）到期或退市。
+
+**流程展示与提交**：校验阶段内部仍走单笔 `resolveAdjustFlowOptions`（白名单/简易等判断，`WHITELIST_POOL_IDS` 空、简易评级条件已注释等与单笔相同），但结果行用目标池 **batchIn/batchOut** 覆盖展示名/是否直通；**提交**时 `applyBatchFlow` 强制写入 batchIn/batchOut 的 flowId/flowKey（非单笔 in/out 流程）。
+
+**与单笔的异同**：校验规则集合与单笔一致（无额外批量专属规则）；区别在外层：①逐证券循环；②`adjustGroupKey` 加 `securityCode_` 前缀；③互斥冲突仅单券内多目标池；④提交流程强制批量专用流程。
 
 ### 3.5 后端批量提交逻辑
 

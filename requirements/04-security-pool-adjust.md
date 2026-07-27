@@ -202,16 +202,18 @@
 | 9 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
 | 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，作为警告返回（`in_soft_restrict`，不直接阻断） |
 | 11 | `inCheckForbiddenPool` | 证券当前在禁止池中（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
-| 12 | `inCheckIndustry` | 证券行业与目标池行业配置不一致（当前调用已注释；池 `industry_code` 非空且 `industry_exponent=0` 时，证券 `industry_name` 须等于池配置值） |
+| 12 | `inCheckIndustry` | 证券行业与目标池行业配置不一致（**调用已注释**，不执行；方法体仍保留） |
 | 13 | `inCheckOpenDay` | 当前不在本池开放日内（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
+
+> 通用顺序（与代码一致）：池锁定 → 品种 → 市场 → pending → 已在目标池 → 容量 → 来源池 → 调入限制池 → 同请求互斥 → 弹性禁投（警告）→ 全局禁止池 → **行业限制（已注释）** → 开放日。
 
 **类型特有调入校验**（按 `categoryType` 路由，证券到期/退市从原 `preCheckSecurityExpired` 拆分到此）：
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池「xx」不在入库矩阵允许范围内（允许：…）；**未配置主体内评分档**（**正式证券**无内评**禁止**入信用债大库 1～5 级；**临时代码**无内评默认最低档 `grade_code=4` 再走矩阵；矩阵：主体内评分档×剩余期限档，`date_exists`÷365；担保债取低；可转债跳过）。前端「调整说明」分条展示「未通过（共 N 项）」 |
-| 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（`delist_date` 早于今日）；`grade_astrict` 对应老系统“股票入池评级限制”，当前未接入股票研究评级来源时跳过 |
-| 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（池 `fund_rate_limit` 表达式 `<=#rate`/`<#rate`/`#rate<=`/`#rate<` 及组合，`#rate` 占位基金评分；请求 `fundRate` 须满足，空或不满足则失败） |
+| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池「xx」不在入库矩阵允许范围内（允许：…）；**未配置主体内评分档**（**正式证券**无内评**禁止**入信用债大库 1～5 级；**临时代码**无内评默认最低档 `grade_code=4` 再走矩阵；矩阵：主体内评分档×剩余期限档，`date_exists`÷365；担保债取低；可转债跳过；观察池/releaseRules 可跳过；期限档无法匹配时跳过矩阵）。前端「调整说明」分条展示「未通过（共 N 项）」 |
+| 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（`delist_date` 早于今日）；`grade_astrict` 入口仍调用但**方法恒 return null**（未接 StockResearch/investrank，空实现不拦截） |
+| 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（仅 **checkAdjust** 按请求 `fundRate` 校验；**正式提交不携带 fundRate、不再次校验**） |
 | 主体 company | —（主体不校验到期，暂无） | |
 
 - **自动追加联动调入项**：取目标池 `in_linked` 关系，对每个联动池若未覆盖则 `buildAutoResultItem(linkedId,'调入','linkage')`，并 `inheritManualItemFailure`（手工项失败则阻断联动项）。
@@ -253,8 +255,9 @@
 - **调入·命中特殊审批**：若证券当前已在目标池配置的 `in_mutex` 互斥池中，优先返回 `specialInbound`，固定使用 `bond:special-inbound`，覆盖默认/简易流程；**信用债大库（`pool_type=credit_bond`）默认排除**，仍走白名单/简易/升降级/默认调入；若特殊流程未启用则回退原流程选择。
 - **调入·非信用债大库**（`poolType != 'credit_bond'`）：默认调入流程（`inFlowId/inFlowKey`），`normalInbound`。
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
-- **调入·不在信用债大库**：依次评估白名单（当前默认关闭）、简易（`isSimpleInboundFlowMatched`）、默认调入，推荐优先级 白名单 > 简易 > 默认。
-  - 简易命中条件：目标池为信用债一/二/三级库（`innerSort 1~3`）；剩余期限可解析（dateNext yyyyMMdd 格式）；剩余期限 ≤ 同主体在目标池已有债券最大剩余期限；该主体 180 天内以非简易流程入过目标池；主体/展望评级未下调，或下调但担保人评级未下调。
+- **调入·不在信用债大库**：依次评估白名单、简易、默认调入，推荐优先级 白名单 > 简易 > 默认。
+  - 白名单条件顺序：剩余期限≤3 年（`date_exists` 天）→ 非永续/私募/ABS → 债券类 → 主体在白名单池（**`WHITELIST_POOL_IDS` 当前 emptySet，本条件固定不成立**）→ 非担保债。
+  - 简易条件顺序：目标池为信用债一/二/三级库（`innerSort 1~3`）→ 剩余期限可解析（`date_exists`）→ 剩余期限 ≤ 同主体在目标池最大剩余期限 → 该主体 180 天内以非简易流程入过目标池 → 主体/展望未下调或下调时担保人未下调（**已注释**，RatingDowngradeChecker 仍计算保留）。
 
 ### 3.7 后端 addAdjustLog 完整逻辑
 
