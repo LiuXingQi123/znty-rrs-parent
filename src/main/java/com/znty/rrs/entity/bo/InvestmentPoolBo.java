@@ -35,7 +35,7 @@ public class InvestmentPoolBo {
      */
     private String marketCodes;
 
-    /** 投资品种编码 JSON */
+    /** 投资品种编码 JSON 数组，元素为 dict_security_type.category_type（bond/stock/fund/company/index/warrant/trust/private_wealth/unknown） */
     private String varietyCodes;
 
     /** 恒生池名称 */

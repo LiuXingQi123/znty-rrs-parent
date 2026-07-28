@@ -2887,7 +2887,7 @@ public class CrmwPoolAdjustService {
      * 规则：投资品种（variety_codes）
      *
      * <p>目标池配置了投资品种时，证券品种（categoryType）须在配置内。
-     * categoryType 由 dict_security_type 表按 securityType 查询得到（bond/fund/stock）。
+     * categoryType 由 dict_security_type 表按 securityType 查询得到（大类见 CategoryType / 演示数据）。
      */
     private String inCheckVariety(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -3059,7 +3059,7 @@ public class CrmwPoolAdjustService {
                     shared.getSecurityInfo().getWindCode(), shared.getCrmwScode(),
                     shared.getCrmwStype(), item.getTargetPoolId()));
         }
-        // 查证券品种大类，用于类型特有校验路由（bond/fund/stock/company）
+        // 查证券品种大类，用于类型特有校验路由（dict_security_type.category_type）
         ctx.setCategoryType(crmwPoolAdjustMapper.queryCategoryTypeBySecurityType(
                 shared.getSecurityInfo().getSecurityType()));
         return ctx;

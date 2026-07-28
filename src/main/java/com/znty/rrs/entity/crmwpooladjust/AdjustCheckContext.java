@@ -62,7 +62,7 @@ public class AdjustCheckContext {
     /** 证券在目标池的入池时间（ip_pool_status_crmw.entry_time，audit_status=20），用于调出冻结期校验，调入时为 null */
     private Date targetPoolEntryTime;
 
-    /** 证券品种大类（bond/fund/stock/company，查 dict_security_type），用于类型特有校验路由 */
+    /** 证券品种大类（dict_security_type.category_type：bond/stock/fund/company/index/warrant/trust/private_wealth/unknown），用于类型特有校验路由 */
     private String categoryType;
 
     /** 校验警告列表（弹性禁投池等柔性限制命中时填充，不阻断调库） */

@@ -539,7 +539,7 @@ public class CrmwPoolAdjustFlowService {
     /**
      * 根据证券大类与调入/调出方向映射内部报告类型。
      *
-     * @param categoryType 证券大类（bond/fund/stock/company 等）
+     * @param categoryType 证券大类（dict_security_type.category_type）
      * @param adjustMode   调整方向（调入/调出）
      */
     private String resolveReportType(String categoryType, String adjustMode) {
@@ -559,7 +559,7 @@ public class CrmwPoolAdjustFlowService {
     /**
      * 根据证券大类映射内部报告证券类型，未匹配归为其他。
      *
-     * @param categoryType 证券大类（bond/fund/stock/company 等）
+     * @param categoryType 证券大类（dict_security_type.category_type）
      */
     private String resolveReportSecurityType(String categoryType) {
         if (CategoryType.BOND.getCode().equals(categoryType) || CategoryType.FUND.getCode().equals(categoryType)

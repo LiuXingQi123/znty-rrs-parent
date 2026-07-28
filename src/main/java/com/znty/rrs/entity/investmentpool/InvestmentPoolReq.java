@@ -38,7 +38,7 @@ public class InvestmentPoolReq {
      */
     private List<String> marketCodes;
 
-    /** 投资品种编码 */
+    /** 投资品种编码列表，元素为 dict_security_type.category_type（bond/stock/fund/company/index/warrant/trust/private_wealth/unknown） */
     private List<String> varietyCodes;
 
     /** 恒生池名称 */

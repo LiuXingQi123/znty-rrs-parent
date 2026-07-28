@@ -246,7 +246,7 @@
 | 基金 fund | —（暂无） | |
 | 主体 company | —（主体不校验到期） | |
 
-> 说明：`checkInConditions`/`checkOutConditions` 在证券池/禁投池/CRMW/批量四条链路同构（禁投池固定 company、CRMW 固定 crmw）。`categoryType` 由 `queryCategoryTypeBySecurityType` 按证券 `securityType` 推导（bond/fund/stock/company）。
+> 说明：`checkInConditions`/`checkOutConditions` 在证券池/禁投池/CRMW/批量四条链路同构（禁投池固定 company、CRMW 固定 crmw）。`categoryType` 由 `queryCategoryTypeBySecurityType` 按证券 `securityType` 推导（`dict_security_type.category_type`，演示数据大类：bond/stock/fund/company/index/warrant/trust/private_wealth/unknown）。
 
 调出方向自动追加 `out_linked` 联动调出项。
 

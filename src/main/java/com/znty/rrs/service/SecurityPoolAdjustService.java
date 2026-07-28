@@ -195,7 +195,7 @@ public class SecurityPoolAdjustService {
         if (dto == null) {
             throw new BizException(404, "证券不存在");
         }
-        // 回填证券品种大类（bond/fund/stock/company），供前端按类型差异化展示（如基金评分输入）
+        // 回填证券品种大类（dict_security_type.category_type），供前端按类型差异化展示（如基金评分输入）
         dto.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(dto.getSecurityType()));
         return dto;
     }
@@ -3275,7 +3275,7 @@ public class SecurityPoolAdjustService {
      * 规则：投资品种（variety_codes）
      *
      * <p>目标池配置了投资品种时，证券品种（categoryType）须在配置内。
-     * categoryType 由 dict_security_type 表按 securityType 查询得到（bond/fund/stock）。
+     * categoryType 由 dict_security_type 表按 securityType 查询得到（大类见 CategoryType / 演示数据）。
      */
     private String inCheckVariety(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -3479,7 +3479,7 @@ public class SecurityPoolAdjustService {
             ctx.setTargetPoolEntryTime(securityPoolAdjustMapper.queryPoolEntryTime(
                     shared.getSecurityInfo().getWindCode(), item.getTargetPoolId()));
         }
-        // 查证券品种大类，用于类型特有校验路由（bond/fund/stock/company）
+        // 查证券品种大类，用于类型特有校验路由（dict_security_type.category_type）
         ctx.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(
                 shared.getSecurityInfo().getSecurityType()));
         // 基金评分（基金证券调入校验用，透传请求级 fundRate）

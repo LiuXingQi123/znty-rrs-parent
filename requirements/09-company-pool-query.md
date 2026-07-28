@@ -12,7 +12,7 @@
 
 核心机制：
 1. `ip_pool_status` 是证券池与主体池**共用**的「当前在池状态表」，字段同时承载债券证券和公司主体两类记录。
-2. 主体与证券的区分靠 `dict_security_type.category_type`（bond/stock/fund/company）。`category_type='company'` 的记录即「公司主体」类型。
+2. 主体与证券的区分靠 `dict_security_type.category_type`。演示数据去重大类：bond=债券 / stock=股票 / fund=基金 / company=公司主体 / index=指数 / warrant=权证 / trust=信托 / private_wealth=私募理财 / unknown=未知；`category_type='company'` 的记录即「公司主体」类型。
 3. **「主体」被当作一种伪证券登记入池**：`ip_pool_status` 中主体记录的 `security_code` 存主体代码（如 `C10001`）、`security_short_name` 存主体名称。DTO 把 `security_short_name` 映射为「主体名称」、`security_code` 映射为「主体代码」。
 4. **仅展示已生效状态**：`ips.audit_status='20'`（审批通过），即只看「当前在池」的主体。
 5. **没有 GROUP BY、没有 issuer 聚合**：一个主体进入多个池会产生多条 `ip_pool_status` 记录，每条独立展示。
@@ -92,7 +92,7 @@
 
 涉及表：
 - `ip_pool_status`（投资池当前状态表）：主体池与证券池共用。
-- `dict_security_type`（证券类型字典）：`security_type` + `category_type`（bond/stock/fund/company）。主体池查询靠 `category_type='company'` 切分主体记录。
+- `dict_security_type`（证券类型字典）：`security_type` + `category_type`（完整大类见上；演示数据口径）。主体池查询靠 `category_type='company'` 切分主体记录。
 - `ip_investment_pool`（投资池主表）：提供 `pool_name`，并通过递归 CTE 生成 `pool_full_name`。
 
 **核心 SQL**（`CompanyPoolQueryMapper.xml`）：
