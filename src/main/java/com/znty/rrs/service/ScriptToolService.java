@@ -1582,7 +1582,7 @@ public class ScriptToolService {
                 "生成 C10004（电力公司）进入禁投池、等待研究员B复核的主体调整申请（与基础 Demo 中已入禁投的 C10005 区分）。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "crmw-pending-review", "CRMW 待复核调库单",
-                "生成 CRMW003.IB + 标的 103003456.SH 调入 CRMW关注库、停留在研究员B复核的申请（flow 105 / bond:fast-inbound）。",
+                "生成 CRMW003.IB + 标的 103003456.SH 调入 CRMW库、停留在研究员B复核的申请（flow 105 / bond:fast-inbound）。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         return sceneMap;
     }
@@ -1713,12 +1713,12 @@ public class ScriptToolService {
 
     /**
      * 构建 CRMW 待复核场景。
-     * <p>样本：凭证 CRMW003.IB + 标的 103003456.SH，调入 CRMW关注库；不写 crmw_mktcode（新调库不再使用）。
+     * <p>样本：凭证 CRMW003.IB + 标的 103003456.SH，调入 CRMW库；不写 crmw_mktcode（新调库不再使用）。
      */
     private List<String> buildCrmwPendingReviewScene() {
         String batchNo = "SCENE_CRMW_PENDING_REVIEW";
         List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `crmw_name`, `crmw_scode`, `crmw_stype`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900005, '103003456.SH', '24能E1', 'company_bond', '某CRMW凭证C', 'CRMW003.IB', 'crmw', '手工调整', '调入', '" + batchNo + "', 20, 'CRMW关注库', 'crmw', 105, 'bond:fast-inbound', 'normalInbound', '00', '5', '研究员4', '脚本工具生成：CRMW 待复核调库单', NULL, NOW(), NULL, NULL, 0, NOW(), NOW())");
+        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `crmw_name`, `crmw_scode`, `crmw_stype`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900005, '103003456.SH', '24能E1', 'company_bond', '某CRMW凭证C', 'CRMW003.IB', 'crmw', '手工调整', '调入', '" + batchNo + "', 18, 'CRMW库', 'crmw', 105, 'bond:fast-inbound', 'normalInbound', '00', '5', '研究员4', '脚本工具生成：CRMW 待复核调库单', NULL, NOW(), NULL, NULL, 0, NOW(), NOW())");
         statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900005, '" + batchNo + "', 10501, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW()), (900005, '" + batchNo + "', 10502, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '5', '研究员4', 'submit', '提交 CRMW 调库申请', NOW(), NOW(), NOW(), NOW()), (900005, '" + batchNo + "', 10503, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'pending', '3', '研究员2', NULL, NULL, NOW(), NULL, NOW(), NOW())");
         return statements;
     }

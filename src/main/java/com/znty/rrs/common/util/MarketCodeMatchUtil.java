@@ -47,6 +47,11 @@ public final class MarketCodeMatchUtil {
         if (hasText(sec.getWindCodeNbc()) && containsCode(marketCodesJson, MarketCode.OTHER)) {
             return true;
         }
+        // JWCW市场（境外债等）：主数据 wind_code_nib / wind_code_nbc 可推导
+        if (containsCode(marketCodesJson, MarketCode.JWCW)
+                && (hasText(sec.getWindCodeNib()) || hasText(sec.getWindCodeNbc()))) {
+            return true;
+        }
         // 主体
         if (isCompanySecurity(sec) && containsCode(marketCodesJson, MarketCode.COMPANY)) {
             return true;

@@ -3,7 +3,8 @@ package com.znty.rrs.common.enums;
 /**
  * 证券市场 / 投资市场编码（唯一权威集合）。
  * <p>池字段 {@code market_codes}、临时代码市场、批量筛选与调库校验均只使用下列 code。
- * 名称由前端字典维护，后端枚举不放中文 label。</p>
+ * 名称由前端字典维护，后端枚举不放中文 label。
+ * 含：SSE / SZSE / CIBM / BSE / COMPANY / OTC / QDII / JWCW / UNKNOWN / OTHER。</p>
  */
 public enum MarketCode {
     /** 上海证券交易所 */
@@ -20,6 +21,10 @@ public enum MarketCode {
     OTC("OTC"),
     /** 其他QDII市场 */
     QDII("QDII"),
+    /** JWCW市场（境外债等） */
+    JWCW("JWCW"),
+    /** 未知 */
+    UNKNOWN("UNKNOWN"),
     /** 其他 */
     OTHER("OTHER");
 
