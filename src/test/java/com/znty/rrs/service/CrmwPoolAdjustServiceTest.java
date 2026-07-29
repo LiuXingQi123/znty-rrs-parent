@@ -195,7 +195,7 @@ public class CrmwPoolAdjustServiceTest {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
-                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+                .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
 
         AdjustSharedData shared = buildSpecialInboundShared(19L, 20L, "CRMW核心库", "CRMW关注库");
         AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(

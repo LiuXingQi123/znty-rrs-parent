@@ -205,7 +205,7 @@ CREATE TABLE `wf_flow_node_evt` (
 CREATE TABLE `wf_node_approval_config` (
     `id`                BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `node_id`           BIGINT       DEFAULT NULL             COMMENT '关联节点 ID（wf_flow_node.id）',
-    `approval_strategy` VARCHAR(32)  DEFAULT NULL             COMMENT '处理策略：preempt=抢占审批（任一人） / all=全部处理 / initiator=流程发起人',
+    `approval_strategy` VARCHAR(32)  DEFAULT NULL             COMMENT '处理策略：preempt=抢占审批（任一人） / all=全部处理 / initiator=流程发起人 / o32=O32自动审批 / auto=自动审批',
     `approval_remark`   VARCHAR(1000) DEFAULT NULL             COMMENT '审批节点备注说明',
     `crte_time`         DATETIME     DEFAULT NULL             COMMENT '创建时间',
     `updt_time`         DATETIME     DEFAULT NULL             COMMENT '修改时间',
@@ -219,7 +219,7 @@ CREATE TABLE `wf_node_approval_config_evt` (
     `evt_id`            BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`                BIGINT       DEFAULT NULL             COMMENT '主键 ID',
     `node_id`           BIGINT       DEFAULT NULL             COMMENT '关联节点 ID（wf_flow_node.id）',
-    `approval_strategy` VARCHAR(32)  DEFAULT NULL             COMMENT '处理策略：preempt=抢占审批（任一人） / all=全部处理 / initiator=流程发起人',
+    `approval_strategy` VARCHAR(32)  DEFAULT NULL             COMMENT '处理策略：preempt=抢占审批（任一人） / all=全部处理 / initiator=流程发起人 / o32=O32自动审批 / auto=自动审批',
     `approval_remark`   VARCHAR(1000) DEFAULT NULL             COMMENT '审批节点备注说明',
     `crte_time`         DATETIME     DEFAULT NULL             COMMENT '创建时间',
     `updt_time`         DATETIME     DEFAULT NULL             COMMENT '修改时间',

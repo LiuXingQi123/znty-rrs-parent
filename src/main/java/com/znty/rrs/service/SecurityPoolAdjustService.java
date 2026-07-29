@@ -3774,6 +3774,19 @@ public class SecurityPoolAdjustService {
                 continue;
             }
 
+            // 审批策略 auto：系统自动审批节点，提交时直接记 auto_process 并继续流转
+            if (NodeType.APPROVAL.getCode().equals(currentNode.getNodeType())
+                    && config != null
+                    && ApprovalStrategy.AUTO.getCode().equals(config.getApprovalStrategy())) {
+                sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
+                insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, ProcessAction.AUTO_PROCESS.getCode(),
+                                 null, null, ProcessAction.AUTO_PROCESS.getCode(), "系统自动审批通过", now);
+                FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
+                prevNode = currentNode;
+                currentNode = nextNode;
+                continue;
+            }
+
             if (NodeType.APPROVAL.getCode().equals(currentNode.getNodeType())) {
                 // 为审批节点创建待处理步骤记录（按处理人明细展开为具体人员）
                 createPendingSteps(adjustLogId, adjustBatchNo, currentNode, snapshot, now);
@@ -3786,6 +3799,13 @@ public class SecurityPoolAdjustService {
                 insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, ProcessAction.AUTO_PROCESS.getCode(),
                                  null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
                 return true;
+            }
+
+            // 自动节点（node_type=auto）写入 auto_process 步骤后继续向下流转
+            if (NodeType.AUTO.getCode().equals(currentNode.getNodeType())) {
+                sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
+                insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, ProcessAction.AUTO_PROCESS.getCode(),
+                                 null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
             }
 
             // 查找初始步骤的下一个节点

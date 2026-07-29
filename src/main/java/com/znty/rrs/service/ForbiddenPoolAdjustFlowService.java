@@ -433,15 +433,15 @@ public class ForbiddenPoolAdjustFlowService {
 
             // 判断是否为自动处理节点
             if (isAutoApprovalNode(nextNode, config)) {
-                // O32 自动审批节点：临时代码转人工，非临时代码系统代审
-                if (isTemporaryCode(step)) {
+                // O32：临时代码转人工；auto：始终系统自动通过
+                if (isO32ApprovalStrategy(config) && isTemporaryCode(step)) {
                     // 临时代码：完全当作审批节点，为每个处理人建 PENDING 步骤等人工点击
                     createPendingSteps(step, nextNode, snapshot, now);
                     result.nextStepCreated = true;
                     result.finished = false;
                     return result;
                 }
-                // 非临时代码：和审批节点一样为每个处理人建步骤，但系统自动处理（AUTO_PROCESS）
+                // 系统代审：为每个处理人建步骤并标记 AUTO_PROCESS
                 createAutoProcessSteps(step, nextNode, snapshot, now);
                 // 查找审批通过主路径上的下一节点
                 FlowNodeBo afterNode = findNextNode(snapshot, nextNode, prevNode, processAction);
@@ -857,11 +857,20 @@ public class ForbiddenPoolAdjustFlowService {
     }
 
     /**
-     * 判断是否为自动审批节点。
+     * 判断是否为自动审批节点（approval_strategy=o32 或 auto）。
      */
     private boolean isAutoApprovalNode(FlowNodeBo node, NodeApprovalConfigBo config) {
-        // O32 节点通过审批策略 approval_strategy=o32 标记（节点类型为 approval）
+        return isO32ApprovalStrategy(config) || isSystemAutoApprovalStrategy(config);
+    }
+
+    /** O32 自动审批策略（临时代码可转人工） */
+    private boolean isO32ApprovalStrategy(NodeApprovalConfigBo config) {
         return config != null && ApprovalStrategy.O32.getCode().equals(config.getApprovalStrategy());
+    }
+
+    /** 系统自动审批策略（始终自动通过） */
+    private boolean isSystemAutoApprovalStrategy(NodeApprovalConfigBo config) {
+        return config != null && ApprovalStrategy.AUTO.getCode().equals(config.getApprovalStrategy());
     }
 
     /**

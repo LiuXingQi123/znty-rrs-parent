@@ -12,7 +12,7 @@ public enum PoolType {
     SPECIAL_ACCOUNT("special_account"),
     /** CRMW库 */
     CRMW("crmw"),
-    /** 禁投池 */
+    /** 禁止库 */
     FORBIDDEN("forbidden"),
     /** 观察池 */
     OBSERVE("observe"),
@@ -20,7 +20,7 @@ public enum PoolType {
     RESEARCH("research"),
     /** 基金池 */
     FUND("fund"),
-    /** 限制池 */
+    /** 限制池（含重点观察名单等） */
     RESTRICTED("restricted"),
     /** 行业池 */
     INDUSTRY("industry"),

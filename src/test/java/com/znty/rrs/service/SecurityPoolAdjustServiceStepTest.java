@@ -1403,7 +1403,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
-            bo.setId(106L);
+            bo.setId(111L);
             return 1;
         }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
 
@@ -1411,7 +1411,7 @@ public class SecurityPoolAdjustServiceStepTest {
         FlowNodeBo submitter = buildNode(10602L, "n2", "approval", 2);
         submitter.setLabel("研究员A发起");
         FlowNodeBo end = buildNode(10603L, "n3", "end", 3);
-        NodeApprovalConfigBo submitterConfig = buildConfig(106L, submitter.getId(), "initiator");
+        NodeApprovalConfigBo submitterConfig = buildConfig(111L, submitter.getId(), "initiator");
         Object snapshot = buildSnapshot(
                 Arrays.asList(start, submitter, end),
                 Arrays.asList(buildEdge(start.getId(), submitter.getId()),
@@ -1419,7 +1419,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 Collections.singletonList(submitterConfig),
                 Collections.<Long, List<NodeApprovalHandlerBo>>emptyMap());
         Map<Long, Object> snapshotMap = new HashMap<>();
-        snapshotMap.put(106L, snapshot);
+        snapshotMap.put(111L, snapshot);
 
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
         req.setSecurityCode("S001");
@@ -1435,7 +1435,7 @@ public class SecurityPoolAdjustServiceStepTest {
         item.setPoolType("credit_bond");
         item.setItemTag("manual");
         item.setAdjustGroupKey("manual_10_调入");
-        item.setFlowId(106L);
+        item.setFlowId(111L);
         item.setFlowKey("bond:whitelist-inbound");
         item.setFlowType("whitelistInbound");
         req.setItems(Collections.singletonList(item));
@@ -1485,7 +1485,7 @@ public class SecurityPoolAdjustServiceStepTest {
         FlowMapper flowMapper = mock(FlowMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
-        FlowDefinitionBo specialFlow = buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程");
+        FlowDefinitionBo specialFlow = buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程");
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound")).thenReturn(specialFlow);
 
         AdjustSharedData shared = buildSpecialInboundShared(2L, 3L, "专户产品/一级库", "专户产品/二级库");
@@ -1504,7 +1504,7 @@ public class SecurityPoolAdjustServiceStepTest {
         AdjustCheckDto.FlowOption option = options.get(0);
         assertThat(option.getFlowType()).isEqualTo("specialInbound");
         assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
-        assertThat(option.getFlowId()).isEqualTo(108L);
+        assertThat(option.getFlowId()).isEqualTo(109L);
         assertThat(option.isRecommended()).isTrue();
         assertThat(option.getMatchReasons().get(0)).contains("专户产品/二级库");
     }
@@ -1516,7 +1516,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
-                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+                .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
         when(flowMapper.queryActiveFlowByKey("bond:standard-upgrade"))
                 .thenReturn(buildFlowDefinition(101L, "bond:standard-upgrade", "债券标准升库流程"));
 
@@ -1569,7 +1569,7 @@ public class SecurityPoolAdjustServiceStepTest {
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
-                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+                .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
 
         InvestmentPoolBo targetPool = buildPool(2L, 1L, "专户一级库");
         targetPool.setPoolType("special_account");
@@ -1589,7 +1589,7 @@ public class SecurityPoolAdjustServiceStepTest {
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
-                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+                .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
 
         InvestmentPoolBo targetPool = buildPool(2L, 1L, "一级库");
         targetPool.setPoolType("credit_bond");
@@ -1608,7 +1608,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
-                .thenReturn(buildFlowDefinition(108L, "bond:special-inbound", "债券特殊策略入库流程"));
+                .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
 
         AdjustCheckDto.FlowOption option = ReflectionTestUtils.invokeMethod(
                 service, "resolveSpecialInboundFlowOption",
