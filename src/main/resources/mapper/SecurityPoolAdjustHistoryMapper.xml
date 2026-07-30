@@ -28,7 +28,8 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type AND dst.is_deleted = 0
         <where>
             al.is_deleted = 0
-            AND al.pool_type NOT IN ('crmw', 'forbidden')
+            <!-- 仅排除 CRMW 凭证；目标池为禁止/观察/黑名单的普通债券调库记录仍展示 -->
+            AND al.security_type != 'crmw'
             <if test="poolIds != null and poolIds.size() > 0">
                 AND al.target_pool_id IN
                 <foreach collection="poolIds" item="id" open="(" separator="," close=")">
@@ -88,6 +89,7 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type AND dst.is_deleted = 0
         WHERE al.is_deleted = 0
           AND al.security_type IS NOT NULL
+          AND al.security_type != 'crmw'
         ORDER BY dst.sort_order ASC
                  ,al.security_type ASC
     </select>

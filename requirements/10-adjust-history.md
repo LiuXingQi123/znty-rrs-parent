@@ -35,7 +35,7 @@
 
 **初始化接口**：
 - 投资池树：`POST /api/v1/common/queryPoolTreeList`（同前）
-- 证券类型：`POST /api/v1/securityPoolAdjustHistory/querySecurityTypeList`（注意路径前缀是 `securityPoolAdjustHistory`），后端 SQL：`SELECT DISTINCT al.security_type, dst.security_type_name FROM ip_adjust_log al ... WHERE al.is_deleted=0 AND al.security_type IS NOT NULL ORDER BY dst.sort_order ASC, al.security_type ASC`（**不限定 audit_status**，包含所有历史记录的证券类型）
+- 证券类型：`POST /api/v1/securityPoolAdjustHistory/querySecurityTypeList`（注意路径前缀是 `securityPoolAdjustHistory`），后端 SQL：`SELECT DISTINCT al.security_type ... WHERE al.is_deleted=0 AND al.security_type IS NOT NULL AND al.security_type != 'crmw'`（**不限定 audit_status**；排除 CRMW 凭证类型）
 
 ---
 
@@ -107,7 +107,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树 |
-| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态记录） |
+| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态；`security_type != 'crmw'`，不按 pool_type 排除禁投） |
 | `securityPoolAdjustHistory/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（不限 audit_status） |
 
 > 路径均带前缀 `/api/v1/`。
@@ -136,7 +136,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
   - `LEFT JOIN ip_investment_pool p ON p.id=al.target_pool_id AND p.is_deleted=0`（带删除过滤，与证券池查询不同）
   - `LEFT JOIN rrs_securityinfo sb ON sb.wind_code=al.security_code`
   - `LEFT JOIN dict_security_type dst ON dst.security_type=al.security_type AND dst.is_deleted=0`
-- **WHERE**：仅 `al.is_deleted=0`（不限 audit_status，含全量历史）；本接口不按证券状态筛选（无 securityStatus 参数）
+- **WHERE**：`al.is_deleted=0` 且 `al.security_type != 'crmw'`（不限 audit_status，含全量历史；禁投/观察/黑名单目标池的普通债记录可查；**不再** `pool_type NOT IN ('crmw','forbidden')`）；本接口不按证券状态筛选（无 securityStatus 参数）
   - `adjustTimeEnd` 后端补 `CONCAT(#{adjustTimeEnd}, ' 23:59:59')`，start 直接用日期串
   - `myBonds==true` → `al.adjuster_id = #{currentUserId}`
 - **SELECT**：`p.pool_name AS target_pool_path`（先取叶子名）
