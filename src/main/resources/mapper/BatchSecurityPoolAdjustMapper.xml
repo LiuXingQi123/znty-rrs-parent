@@ -22,7 +22,7 @@
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
-          <!-- 证券池批量主页仅排除 CRMW 池；禁投/观察等主体相关池保留，支持单券入池 -->
+          <!-- 证券池批量主页排除 CRMW 池（CRMW 须匹配凭证，走独立调库链路）；候选证券另按 security_type 排除 crmw/company -->
           AND p.pool_type != 'crmw'
         <if test="poolIds != null and poolIds.size() > 0">
           AND p.id IN

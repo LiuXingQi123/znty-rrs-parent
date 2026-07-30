@@ -29,8 +29,8 @@
 
 **初始化**（`mounted → initPage`）：
 1. `axios.defaults.baseURL = 'http://localhost:18090'`
-2. `apiPost('/api/v1/common/queryPoolTreeList', {})` → 构建投资池筛选树 `poolTreeData`（`buildPoolTree`）。
-3. `loadPoolPage()` → `apiPost('/api/v1/batchSecurityPoolAdjust/queryPoolPage', {...})`。
+2. `apiPost('/api/v1/common/queryPoolTreeList', { excludePoolTypes: ['crmw'] })` → 构建投资池筛选树（排除 CRMW 池；CRMW 须匹配凭证、走独立链路）。
+3. `loadPoolPage()` → `apiPost('/api/v1/batchSecurityPoolAdjust/queryPoolPage', {...})`（启用叶子池，SQL `pool_type != 'crmw'`）。
 
 ---
 
@@ -217,7 +217,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<PoolTreeDto>` | 主页面初始化投资池筛选树 |
-| `batchSecurityPoolAdjust/queryPoolPage` | currentUserId, poolIds, pageIndex, pageSize | `PageResult<BatchSecurityPoolDto>`（records:[id/poolName/poolFullName/poolType/marketCodes/varietyCodes/description/maxCapacity/currentCount], total） | 分页查询当前用户可调整的启用叶子投资池 |
+| `batchSecurityPoolAdjust/queryPoolPage` | currentUserId, poolIds, pageIndex, pageSize | `PageResult<BatchSecurityPoolDto>`（records:[id/poolName/poolFullName/poolType/marketCodes/varietyCodes/description/maxCapacity/currentCount], total） | 分页查询当前用户可调整的启用叶子投资池；**按 `pool_type != 'crmw'` 排除 CRMW 池**（凭证匹配走 CRMW 链路）；候选证券另按 `security_type NOT IN ('crmw','company')` |
 | `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), securityCode, securityShortName, marketCodes, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券 |
 | `batchSecurityPoolAdjust/checkAdjust` | `BatchSecurityInboundAdjustReq`: currentUserId, direction, poolId, poolName, poolType, securities:[{securityCode,securityShortName,securityType}] | `BatchSecurityInboundAdjustDto`（items:[{...,canAdjust,failReasons,flowOptions}]） | 批量调库下一步校验 |
 | `batchSecurityPoolAdjust/addAdjustLog`（JSON） | `BatchSecurityInboundAdjustReq`（含 items:[{...,flowId/flowKey/flowType,creditReportFileIndexes,...}]） | `BatchSecurityInboundAdjustDto`（securityCount, submitCount, logIds） | 批量提交调库申请（无附件） |

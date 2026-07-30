@@ -4,6 +4,13 @@
 > 后端前缀：`/api/v1/securityPoolAdjust`
 > 角色定位：研究员 / 业务人员检索证券 → 查看池状态 → 在权限范围内发起调入或调出申请，提交前完成关系、权限与风控校验。
 
+### 排除逻辑两维度（勿混用）
+
+| 维度 | 字段 | 用在 | 本模块口径 |
+|------|------|------|------------|
+| **证券类型** | `security_type` | 候选证券/主体/凭证列表 | 主列表与批量候选：`NOT IN ('crmw','company')`，**不用** `pool_type` |
+| **投资池类型** | `pool_type` | 可选投资池、链路隔离、禁止/观察/信用债规则 | 选池：入/出均排除 `crmw`；禁投/观察不排；硬逻辑仍认 forbidden/observe/credit_bond |
+
 ---
 
 ## 1. 页面概览
@@ -38,7 +45,7 @@
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
 - 请求体：`{ securityCode, securityShortName, issuer, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 排除 `security_type IN ('crmw','company')` 的 CRMW 凭证和公司主体，按 `wind_code` / `short_name` / `issuer` 模糊匹配，`ORDER BY si.ts DESC, si.wind_code DESC`，LEFT JOIN `dict_security_type` 取 `security_type_name`。
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 按 **证券类型** 排除 `security_type IN ('crmw','company')`（CRMW 凭证与公司主体；**不用** `pool_type`），按 `wind_code` / `short_name` / `issuer` 模糊匹配（列表无固定 ORDER BY），LEFT JOIN `dict_security_type` 取 `security_type_name`。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.3 表格列（列表页）
@@ -310,7 +317,7 @@
 |---|---|---|---|
 | `querySecurityPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
 | `querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 证券详情 |
-| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 按主体内评×期限矩阵过滤信用债大库；**正式证券无主体内评分档时直接去掉全部 credit_bond 池（含 1～5 级）**；临时代码无内评默认 `grade_code=4` 再走矩阵 |
+| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投/观察等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 按主体内评×期限矩阵过滤信用债大库；**正式证券无主体内评分档时直接去掉全部 credit_bond 池（含 1～5 级）**；临时代码无内评默认 `grade_code=4` 再走矩阵 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |

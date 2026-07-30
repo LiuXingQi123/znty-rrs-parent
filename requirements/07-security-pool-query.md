@@ -101,7 +101,7 @@ this.loadList();                  // 列表数据
 | 行权日期（回售） | `repurchaseDate` | 居中 |
 | 操作 | — | `fixed="right"`，收藏按钮 |
 
-**当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。证券状态由后端 `CASE WHEN bi.maturity_date >= CURDATE() THEN 'active' ELSE 'matured'` 计算。
+**当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。**排除范围**：仅 `ips.security_type != 'crmw'`（不展示 CRMW 凭证；禁止/观察/黑名单中的普通债券仍可查，因债券可入禁投相关池）。**不再**按 `pool_type` 排除 `crmw`/`forbidden`。证券状态由后端 `CASE WHEN bi.maturity_date >= CURDATE() THEN 'active' ELSE 'matured'` 计算。
 
 ---
 
@@ -135,8 +135,8 @@ this.loadList();                  // 列表数据
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树（含全路径） |
-| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId 用于收藏态） | 证券池分页查询（仅 audit_status='20'） |
-| `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（限池内已审批） |
+| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId 用于收藏态） | 证券池分页查询（仅 audit_status='20'；`security_type != 'crmw'`） |
+| `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（限池内已审批，排除 crmw） |
 | `securityPoolQuery/querySecurityStatusList` | `{}` | `List<String>` = `['active','matured']` | 证券状态下拉（前端未调用，硬编码） |
 | `securityPoolQuery/addSecurityToMyPool` | `{securityCode, securityType, market, userId}` | `MySecurityPoolBo` | 添加收藏（幂等） |
 | `securityPoolQuery/deleteSecurityFromMyPool` | `{securityCode, userId}` | `MySecurityPoolBo`（不存在返回 null） | 取消收藏（软删除 status='del'） |
