@@ -122,8 +122,6 @@
                 )
             </if>
         </where>
-        ORDER BY si.ts DESC
-                 ,si.wind_code DESC
     </select>
 
     <!-- 查询指定投资池是否为启用叶子池（排除 CRMW 池） -->

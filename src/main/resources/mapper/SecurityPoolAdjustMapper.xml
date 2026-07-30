@@ -22,8 +22,6 @@
                 AND si.issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
         </where>
-        ORDER BY si.ts DESC
-                 ,si.wind_code DESC
     </select>
 
     <!-- 查询操作人最近一次批量提交的全部手工调库记录 -->
