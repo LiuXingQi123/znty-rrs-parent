@@ -22,7 +22,14 @@ public class InvestmentPoolBo {
     /** 投资池名称 */
     private String poolName;
 
-    /** 投资池类型 */
+    /**
+     * 投资池类型（业务域，可扩展）：
+     * 固收：credit_bond / offshore_bond / convertible_bond / bond_product / special_account；
+     * 权益：stock / stock_product；基金：fund；
+     * 风险：forbidden / observe / blacklist / restricted / whitelist；
+     * 独立/兜底：crmw / other。
+     * 硬逻辑类型见枚举 PoolType 注释。
+     */
     private String poolType;
 
     /** 投资池层级 */

@@ -48,12 +48,40 @@
 ### 2.3 详情区渲染
 
 详情区用表单 + 卡片网格（非 el-table）：
-- **基础配置**字段：`poolName`（必填）、`poolCode`（必填，`el-select` filterable + allow-create；**选项前端写死**为 Demo 标准编码列表，下拉展示「左侧 code / 右侧中文名」，也可手输新编码）、`hsPoolName`、`marketCodes`（8 项：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他）、`varietyCodes`（7 项：bond/warrant/trust/index/stock/issuer/fund，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
+- **基础配置**字段：`poolName`（必填）、`poolCode`（必填，`el-select` filterable + allow-create；**选项前端写死**为 Demo 标准编码列表，下拉展示「左侧 code / 右侧中文名」，也可手输新编码）、**`poolType`（只读展示，创建顶级池时选定，子池继承，详情不可改）**、`hsPoolName`、`marketCodes`（含 SSE/SZSE/CIBM/BSE/COMPANY/OTC/QDII/JWCW/UNKNOWN/OTHER）、`varietyCodes`（bond/stock/fund/company/index/warrant/trust 等，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
 - **审批流程**：6 项（inFlowId/outFlowId/simpleInFlowId/simpleOutFlowId/batchInFlowId/batchOutFlowId），下拉来自 `flowOptions`（含「不需要审批」占位），绑定值为 `String(flowId)`。
 - **关系配置**：9 张卡片，每张右上角显示已选数量，下方 chip 列表显示「父路径 › 池名」面包屑。
-- **状态**：详情页 `pool-header` 只硬编码显示「启用」徽章（无 disabled 差异化展示）。
+- **状态**：详情页 `pool-header` 显示启用徽章 + **类型 tag**（`getPoolTypeName(poolType)`）。
 
-> 注：前端 `poolTypeOptions` 只列 5 种类型（信用债/境外债/转债/专户产品/其他），而 `dict.js DICT_POOL_TYPE` 含 12 种（含禁投池、研究池等）——新建顶级池只能选 5 种，但字典覆盖更广（供其他查询页用）。
+### 2.4 投资池类型（pool_type）
+
+`pool_type` 表示**业务域类型**（可扩展），**不是**池名称、也不是老系统「研究池/基金池/限制池/其他」四类。  
+**同一类型下可挂多棵顶级树**（例：`credit_bond` 下可有「信用债大库」「兴业中高等级信用债」两个根节点）。
+
+| 分组 | code | 中文 | 对应示例树（可扩展） | 硬逻辑 |
+|------|------|------|----------------------|--------|
+| 固收 | `credit_bond` | 信用债 | 信用债大库、中高等级信用债 | 升降级/内评矩阵/互斥特殊审批排除 |
+| 固收 | `offshore_bond` | 境外债 | 境外债 | — |
+| 固收 | `convertible_bond` | 转债 | 转债库、转债产品库 | — |
+| 固收 | `bond_product` | 债券产品 | 债券产品库 | — |
+| 固收 | `special_account` | 专户 | 专户债券产品库 | — |
+| 权益 | `stock` | 股票 | 公司股票库、公司港股库 | —（预留） |
+| 权益 | `stock_product` | 股票产品 | 股票产品库(A股/H股) | —（预留） |
+| 基金 | `fund` | 基金 | 公司基金库、基金产品库 | —（预留评分等） |
+| 风险 | `forbidden` | 禁止库 | 债券禁止库、量化/指数禁止控制等 | 全局禁止 + 禁投查询 |
+| 风险 | `observe` | 观察池 | 观察池 | 内评可跳过 + 禁投相关 |
+| 风险 | `blacklist` | 黑名单 | 黑名单质押库等 | 全局禁止 + 禁投查询 |
+| 风险 | `restricted` | 限制名单 | 重点观察名单 | 无全局禁止 |
+| 风险 | `whitelist` | 白名单 | 白名单库 | 预留流程/规则 |
+| 独立 | `crmw` | CRMW库 | CRMW 核心/关注等 | CRMW 独立链路 |
+| 兜底 | `other` | 其他 | 临时命名根池等 | — |
+
+**扩展方式**：新增业务域时同步 `PoolType` + `dict.js DICT_POOL_TYPE` + 维护页 `poolTypeOptionGroups`；后端 `addRootPool` 仅校验类型非空，不拦未知 code（便于过渡）。硬逻辑 code 变更须同步 Mapper/Service 过滤条件。
+
+- **新建顶级**：分组选择上述类型。
+- **新建子池**：强制继承父池 `poolType`。
+- **编辑基础配置**：**不更新** `poolType`（只读展示）。
+- 品种/市场/关系/评分等**不**靠本字段，见 `variety_codes`、`market_codes`、`ip_pool_relation`、`fund_rate_limit` 等。
 
 ---
 
@@ -185,7 +213,7 @@
 
 关键字段：`id, parent_id, pool_code, pool_name, pool_type, pool_level, market_codes(JSON), variety_codes(JSON), hs_pool_name, 6×3 流程快照列, in/out_report_restriction(none/any/internal), max_capacity, lock_flag, frozen_period_in, outer_sort, inner_sort, description, status(enabled/disabled), is_deleted, crte_time/updt_time`。
 
-`pool_type` 枚举（dict.js `DICT_POOL_TYPE`）：research/fund/restricted/other/industry/whitelist/blacklist/private_placement/credit_bond/offshore_bond/convertible_bond/special_account。
+`pool_type` 枚举（dict.js `DICT_POOL_TYPE` / `PoolType`）：credit_bond / offshore_bond / convertible_bond / bond_product / special_account / stock / stock_product / fund / forbidden / observe / blacklist / restricted / whitelist / crmw / other（详见 §2.4）。
 `status` 枚举：enabled=启用 / disabled=停用。
 `variety_codes`：JSON 数组，元素取值 `dict_security_type.category_type`（演示数据去重大类）：bond=债券 / stock=股票 / fund=基金 / company=公司主体 / index=指数 / warrant=权证 / trust=信托 / private_wealth=私募理财 / unknown=未知；调库时与证券经字典映射后的 `categoryType` 比对。
 
@@ -260,7 +288,7 @@
 
 ### 6.7 种子数据初始化
 
-`addSeedPoolList` 幂等：`queryPoolTotalCount > 0` 直接返回现有列表。首次初始化创建信用债大库+一~五级库、境外债库、转债库、专户产品+一~五级库。该接口前端未调用（依赖 SQL 脚本预置数据），供首次部署/测试手动调用。
+`addSeedPoolList` 幂等：`queryPoolTotalCount > 0` 直接返回现有列表。首次初始化创建信用债大库+一~五级库、境外债库、转债库、CRMW 根池（不以专户种子为主路径）。该接口前端未调用（依赖 SQL 脚本预置数据），供首次部署/测试手动调用。
 
 ## 7. 验收标准
 

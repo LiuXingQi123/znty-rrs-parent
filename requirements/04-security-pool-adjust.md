@@ -381,7 +381,7 @@
 
 ### 5.6 `ip_investment_pool`（投资池表）
 
-`pool_type`（credit_bond/offshore_bond/convertible_bond/special_account/research/fund/restricted/industry/whitelist/blacklist/private_placement/other/observe）、`pool_level`、`max_capacity`、`inner_sort`（升降级判断）、`in_flow_id/key/name`、`out_flow_id/key/name`、`simple_in_flow_id/key/name`。
+`pool_type`（与 `PoolType`/`DICT_POOL_TYPE` 一致：credit_bond/offshore_bond/convertible_bond/bond_product/special_account/stock/stock_product/fund/forbidden/observe/blacklist/restricted/whitelist/crmw/other）、`pool_level`、`max_capacity`、`inner_sort`（升降级判断）、`in_flow_id/key/name`、`out_flow_id/key/name`、`simple_in_flow_id/key/name`。
 
 ---
 

@@ -32,7 +32,7 @@ CREATE TABLE `ip_pool_status_crmw`
     `adjust_log_id`       BIGINT       DEFAULT NULL COMMENT '来源调库日志 ID',
     `target_pool_id`      BIGINT       DEFAULT NULL COMMENT '目标投资池 ID，关联 ip_investment_pool.id',
     `target_pool_name`    VARCHAR(128) DEFAULT NULL COMMENT '目标投资池名称',
-    `pool_type`           VARCHAR(32)  DEFAULT NULL COMMENT '投资池类型：与 ip_investment_pool.pool_type 一致（credit_bond=信用债 / offshore_bond=境外债 / convertible_bond=转债 / special_account=专户产品 / crmw=CRMW库 / forbidden=禁投池 / observe=观察池 等）',
+    `pool_type`           VARCHAR(32)  DEFAULT NULL COMMENT '投资池类型：与 ip_investment_pool.pool_type / PoolType 一致（业务域可扩展，见 rrs_pool_init_schema）',
     `flow_id`             BIGINT       DEFAULT NULL COMMENT '流程定义 ID 快照',
     `flow_key`            VARCHAR(128) DEFAULT NULL COMMENT '流程 Key 快照',
     `flow_type`           VARCHAR(32)  DEFAULT NULL COMMENT '流程类型快照',
