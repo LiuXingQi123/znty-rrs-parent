@@ -669,6 +669,11 @@ public class InvestmentPoolService {
         pool.setPoolName(req.getPoolName());
         // 校验并写入投资池编码（编辑时排除自身）
         pool.setPoolCode(resolveAndValidatePoolCode(req.getPoolCode(), oldPool.getId()));
+        // 投资池类型可编辑（非空；仅更新当前节点，不级联子树）
+        if (req.getPoolType() == null || req.getPoolType().trim().isEmpty()) {
+            throw new BizException("投资池类型不能为空");
+        }
+        pool.setPoolType(req.getPoolType().trim());
         // 序列化业务数据为 JSON
         pool.setMarketCodes(toJson(req.getMarketCodes()));
         // 序列化业务数据为 JSON

@@ -316,6 +316,7 @@
         UPDATE ip_investment_pool
         SET pool_name = #{poolName}
             ,pool_code = #{poolCode}
+            ,pool_type = #{poolType}
             ,market_codes = #{marketCodes}
             ,variety_codes = #{varietyCodes}
             ,hs_pool_name = #{hsPoolName}
