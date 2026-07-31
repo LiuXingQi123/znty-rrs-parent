@@ -1,6 +1,6 @@
 # 智慧风控平台功能需求说明
 
-本目录按前端业务页面整理需求，当前覆盖 25 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
+本目录按前端业务页面整理需求，当前覆盖 26 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
 
 | 序号 | 功能 | 前端页面 | 需求文档 | 接口测试 |
 |---|---|---|---|---|
@@ -18,7 +18,7 @@
 | 12 | 证券池批量调整（批量调入/调出） | `batch_security_pool_adjust.html` | [12-batch-security-pool-adjust.md](12-batch-security-pool-adjust.md) | `BatchSecurityPoolAdjustApiTest` |
 | 13 | 禁投池历史 | `forbidden_pool_history.html` | [13-forbidden-pool-history.md](13-forbidden-pool-history.md) | `ForbiddenPoolHistoryApiTest` |
 | 14 | 主体池调整历史 | `company_pool_adjust_history.html` | [14-company-pool-adjust-history.md](14-company-pool-adjust-history.md) | `CompanyPoolAdjustHistoryApiTest` |
-| 15 | 禁投池调整申请（主体级 调入/调出） | `forbidden_pool_adjust.html` | [15-forbidden-pool-adjust.md](15-forbidden-pool-adjust.md) | `ForbiddenPoolAdjustApiTest` |
+| 15 | 禁投池调整申请（主体级 调入/调出） | `forbidden_pool_adjust.html`（Tab「主体」） | [15-forbidden-pool-adjust.md](15-forbidden-pool-adjust.md) | `ForbiddenPoolAdjustApiTest` |
 | 16 | 禁投池调整审核（审批流转） | `forbidden_pool_adjust_approve.html` | [16-forbidden-pool-adjust-approve.md](16-forbidden-pool-adjust-approve.md) | `ForbiddenPoolAdjustFlowServiceTest` |
 | 17 | 禁投池调整详情 | `forbidden_pool_adjust_detail.html` | [17-forbidden-pool-adjust-detail.md](17-forbidden-pool-adjust-detail.md) | `ForbiddenPoolAdjustApiTest` |
 | 18 | CRMW池查询 | `crmw_pool_query.html` | [18-crmw-pool-query.md](18-crmw-pool-query.md) | — |
@@ -29,6 +29,7 @@
 | 23 | 信用债评级准入规则（主体内评分档矩阵） | `credit_bond_grade_rule.html` | [23-credit-bond-grade-rule.md](23-credit-bond-grade-rule.md) | — |
 | 24 | 临时代码管理 | `temp_security_code.html` | [24-temp-security-code.md](24-temp-security-code.md) | — |
 | 25 | 投资池开放日维护 | `pool_open_day.html` | [25-pool-open-day.md](25-pool-open-day.md) | `PoolOpenDayApiTest` |
+| 26 | 禁投池调整 · ABS债申请（债级 调入/调出） | `forbidden_pool_adjust.html`（Tab「ABS债」） | [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md) | `ForbiddenAbsPoolAdjustApiTest` |
 
 ## 调库业务全链路索引
 
@@ -40,7 +41,8 @@
 - **查询入口**：[07](07-security-pool-query.md) 证券池当前状态查询、[10](10-adjust-history.md) 调库历史追溯、[06](06-my-matters.md) 我的待办/已办。
 - **详情查看**：[11](11-security-pool-adjust-detail.md) 单只证券及批次完整业务上下文（只读 / 首次调库提交；修改节点重新提交在 [05]）。
 - **禁投池查询视角**：[08](08-forbidden-pool-query.md) 当前在禁投池的证券、[13](13-forbidden-pool-history.md) 禁投池调库流水（`pool_type='forbidden'` 过滤）。
-- **禁投池调整链路（主体级，独立于证券级调库）**：[15](15-forbidden-pool-adjust.md) 主体检索 → 选目标池（仅 15/16/17）→ `checkAdjust` 校验 → `addAdjustLogWithFiles` 提交；[16](16-forbidden-pool-adjust-approve.md) `submitAdjustAudit` 审批流转，通过后落地 `ip_pool_status` 并 `syncCompanyBonds` 自动同步旗下全部债券；[17](17-forbidden-pool-adjust-detail.md) 主体调库只读 / 首次提交（修改节点重提在 [16]）。
+- **禁投池调整链路（主体级，独立于证券级调库）**：[15](15-forbidden-pool-adjust.md) 主体检索 → 选目标池（仅 15/16/17）→ `checkAdjust` 校验 → `addAdjustLogWithFiles` 提交；[16](16-forbidden-pool-adjust-approve.md) `submitAdjustAudit` 审批流转，通过后落地 `ip_pool_status` 并 `syncCompanyBonds` 自动同步旗下**非 ABS** 债券；[17](17-forbidden-pool-adjust-detail.md) 主体调库只读 / 首次提交（修改节点重提在 [16]）。
+- **禁投池调整 · ABS债（债级，独立接口）**：[26](26-forbidden-abs-pool-adjust.md) 与 [15] 同页 Tab「ABS债」→ 仅 `abs_flag=1` → 目标池仅 15/16/17 → `/api/v1/forbiddenAbsPoolAdjust/*` 校验提交；**不**同步主体下其他债；非直通审批复用证券池审核页（`securityAdjust`）。
 - **主体池视角**：[09](09-company-pool-query.md) 当前在池的主体、[14](14-company-pool-adjust-history.md) 主体调库流水（`category_type='company'` 过滤，主体作为伪证券入池/调库）。
 - **CRMW 池链路（凭证级，独立状态表 `ip_pool_status_crmw`）**：[18](18-crmw-pool-query.md) 当前在 CRMW 池的凭证（`audit_status='20'`）、[19](19-crmw-pool-adjust.md) 选 CRMW 凭证 + 标的证券 → 校验 → `addCrmwAdjustLogWithFiles` 提交（批次号 `CRMW` 前缀）、[20](20-crmw-pool-adjust-approve.md) `submitAdjustAudit` 审批流转落地 `ip_pool_status_crmw`、[21](21-crmw-pool-adjust-detail.md) 凭证调库只读 / 首次提交（修改节点重提在 [20]）、[22](22-crmw-pool-adjust-history.md) CRMW 调库流水（`pool_type='crmw'` 过滤，所有状态）。
 - **基础配置**：[01](01-flow-definition.md) 审批流程定义（设计器/节点/版本）、[02](02-investment-pool.md) 投资池树/关系/流程/权限维护、[03](03-rule-manager.md) QLExpress 风控规则与测试用例、[23](23-credit-bond-grade-rule.md) 信用债期限×主体内评分档→投资池准入矩阵、[24](24-temp-security-code.md) 临时代码录入/更新正式证券/取消发行、[25](25-pool-open-day.md) 投资池开放日区间维护（`ip_pool_open_day`，配合池级 `open_day_adjust`）。

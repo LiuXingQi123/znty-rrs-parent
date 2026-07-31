@@ -1,0 +1,1065 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.ForbiddenAbsPoolAdjustMapper">
+    <!-- 证券池调整 mapper，对应表：rrs_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status（证券池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
+
+    <!-- 分页查询证券列表 -->
+    <select id="querySecurityPage" resultType="com.znty.rrs.entity.securitypooladjust.SecurityInfoDto">
+        SELECT si.*
+               ,dst.security_type_name
+        FROM rrs_securityinfo si
+        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
+        <where>
+            AND COALESCE(si.abs_flag, 0) = 1
+            AND si.security_type NOT IN ('crmw', 'company')
+            AND si.security_status != 'D'
+            <if test="securityCode != null and securityCode != ''">
+                AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="securityShortName != null and securityShortName != ''">
+                AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')
+            </if>
+            <if test="issuer != null and issuer != ''">
+                AND si.issuer LIKE CONCAT('%', #{issuer}, '%')
+            </if>
+        </where>
+    </select>
+
+    <!-- 查询操作人最近一次批量提交的全部手工调库记录 -->
+    <select id="queryRecentBatchManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT al.id
+               ,al.security_code
+               ,al.adjust_type
+               ,al.adjust_mode
+               ,al.adjust_batch_no
+               ,al.target_pool_id
+               ,al.flow_id
+               ,al.flow_key
+               ,al.audit_status
+               ,al.adjuster_id
+               ,al.adjust_reason
+               ,al.adjust_advice
+               ,al.submit_time
+        FROM ip_adjust_log al
+        INNER JOIN (
+            SELECT CASE
+                       WHEN CHAR_LENGTH(adjust_batch_no) &gt;= 25 THEN LEFT(adjust_batch_no, 21)
+                       ELSE LEFT(adjust_batch_no, 18)
+                   END AS batch_prefix
+            FROM ip_adjust_log
+            WHERE adjuster_id = #{adjusterId}
+              AND adjust_type = '手动批量调整'
+              AND audit_status NOT IN ('-1', '99')
+              AND is_deleted = 0
+              AND submit_time &gt;= DATE_SUB(NOW(), INTERVAL #{seconds} SECOND)
+            ORDER BY submit_time DESC
+                     ,id DESC
+            LIMIT 1
+        ) latest ON CASE
+                        WHEN CHAR_LENGTH(al.adjust_batch_no) &gt;= 25 THEN LEFT(al.adjust_batch_no, 21)
+                        ELSE LEFT(al.adjust_batch_no, 18)
+                    END = latest.batch_prefix
+        WHERE al.adjuster_id = #{adjusterId}
+          AND al.adjust_type = '手动批量调整'
+          AND al.audit_status NOT IN ('-1', '99')
+          AND al.is_deleted = 0
+        ORDER BY al.security_code ASC
+                 ,al.target_pool_id ASC
+                 ,al.id ASC
+    </select>
+
+    <!-- 查询操作人近期有效的手工调库记录 -->
+    <select id="queryRecentManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT id
+               ,security_code
+               ,adjust_type
+               ,adjust_mode
+               ,adjust_batch_no
+               ,target_pool_id
+               ,flow_id
+               ,flow_key
+               ,audit_status
+               ,adjuster_id
+               ,adjust_reason
+               ,adjust_advice
+               ,submit_time
+        FROM ip_adjust_log
+        WHERE security_code = #{securityCode}
+          AND adjuster_id = #{adjusterId}
+          AND adjust_type = '手工调整'
+          AND audit_status NOT IN ('-1', '99')
+          AND is_deleted = 0
+          AND submit_time &gt;= DATE_SUB(NOW(), INTERVAL #{seconds} SECOND)
+        ORDER BY submit_time DESC
+                 ,id DESC
+    </select>
+
+    <!-- 查询证券活动流程同批全部手工、联动和互斥项涉及的目标池 ID -->
+    <select id="queryPendingManualTargetPoolIdList" resultType="java.lang.Long">
+        SELECT DISTINCT occupied.target_pool_id
+        FROM ip_adjust_log manual_log
+        INNER JOIN ip_adjust_step pending_step ON pending_step.adjust_batch_no = manual_log.adjust_batch_no
+                                                AND pending_step.step_status = 'pending'
+        INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual_log.adjust_batch_no
+                                         AND occupied.audit_status IN ('00', '11')
+                                         AND occupied.is_deleted = 0
+        WHERE manual_log.security_code = #{securityCode}
+          AND manual_log.adjust_type IN ('手工调整', '手动批量调整')
+          AND manual_log.audit_status IN ('00', '11')
+          AND manual_log.is_deleted = 0
+          <if test="excludeBatchNo != null and excludeBatchNo != ''">
+              AND manual_log.adjust_batch_no != #{excludeBatchNo}
+          </if>
+    </select>
+
+    <!-- 查询证券详情 -->
+    <select id="querySecurityDetail" resultType="com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto">
+        SELECT si.*
+               ,dst.security_type_name
+        FROM rrs_securityinfo si
+        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
+        WHERE si.wind_code = #{securityCode}
+    </select>
+
+    <!-- 根据证券代码查询证券基础信息实体 -->
+    <select id="querySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT *
+        FROM rrs_securityinfo
+        WHERE wind_code = #{securityCode}
+    </select>
+
+    <!-- 新增调库记录 -->
+    <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_log (security_code
+                                  ,security_short_name
+                                  ,security_type
+                                  ,crmw_name
+                                  ,crmw_scode
+                                  ,crmw_mktcode
+                                  ,crmw_stype
+                                  ,adjust_type
+                                  ,adjust_mode
+                                  ,adjust_batch_no
+                                  ,target_pool_id
+                                  ,target_pool_name
+                                  ,pool_type
+                                  ,flow_id
+                                  ,flow_key
+                                  ,flow_type
+                                  ,audit_status
+                                  ,adjuster_id
+                                  ,adjuster_name
+                                  ,adjust_reason
+                                  ,adjust_advice
+                                  ,submit_time
+                                  ,is_deleted
+                                  ,crte_time
+                                  ,updt_time)
+        VALUES (#{securityCode}
+               ,#{securityShortName}
+               ,#{securityType}
+               ,#{crmwName}
+               ,#{crmwScode}
+               ,#{crmwMktcode}
+               ,#{crmwStype}
+               ,#{adjustType}
+               ,#{adjustMode}
+               ,#{adjustBatchNo}
+               ,#{targetPoolId}
+               ,#{targetPoolName}
+               ,#{poolType}
+               ,#{flowId}
+               ,#{flowKey}
+               ,#{flowType}
+               ,#{auditStatus}
+               ,#{adjusterId}
+               ,#{adjusterName}
+               ,#{adjustReason}
+               ,#{adjustAdvice}
+               ,COALESCE(#{submitTime}, NOW())
+               ,0
+               ,NOW()
+               ,NOW())
+    </insert>
+
+    <!-- 查询当前证券所在池列表（仅叶子节点） -->
+    <select id="querySecurityPoolStatusList" resultType="com.znty.rrs.entity.securitypooladjust.PoolStatusDto">
+        SELECT ips.target_pool_id
+               ,p.pool_name
+               ,ips.pool_type
+               ,ips.adjust_batch_no
+               ,ips.adjust_log_id
+               ,DATE_FORMAT(ips.entry_time, '%Y-%m-%d') AS entryDate
+        FROM ip_pool_status ips
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        WHERE ips.security_code = #{securityCode}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_investment_pool child
+              WHERE child.parent_id = p.id
+                AND child.is_deleted = 0
+          )
+    </select>
+
+    <!-- 查询当前证券主体（发行人）所在池列表（仅叶子节点） -->
+    <select id="queryIssuerPoolStatusList" resultType="com.znty.rrs.entity.securitypooladjust.PoolStatusDto">
+        SELECT ips.target_pool_id
+               ,p.pool_name
+               ,ips.pool_type
+               ,MAX(ips.adjust_batch_no) AS adjustBatchNo
+               ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
+               ,COUNT(DISTINCT ips.security_code) AS bondCount
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo sb ON ips.security_code = sb.wind_code
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        WHERE sb.issuer = (
+            SELECT issuer FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1
+        )
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_investment_pool child
+              WHERE child.parent_id = p.id
+                AND child.is_deleted = 0
+          )
+        GROUP BY p.id
+                 ,ips.target_pool_id
+                 ,p.pool_name
+                 ,ips.pool_type
+    </select>
+
+    <!-- 根据证券代码查询调库记录列表 -->
+    <!--
+      调库记录列表：
+      - 有批次号：仅按批次查（同批手工/联动/互斥/关联调整全部返回，含不同 security_code）
+      - 无批次号：按证券代码查未终结流程（申请页进入时展示该券在途记录）
+    -->
+    <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT al.id
+               ,al.security_code
+               ,al.security_short_name
+               ,al.security_type
+               ,al.adjust_type
+               ,al.adjust_mode
+               ,al.adjust_batch_no
+               ,al.target_pool_id
+               ,al.target_pool_name
+               ,al.pool_type
+               ,al.flow_id
+               ,al.flow_key
+               ,al.flow_type
+               ,fd.name AS flowName
+               ,al.audit_status
+               ,al.adjuster_id
+               ,al.adjuster_name
+               ,al.adjust_reason
+               ,al.adjust_advice
+               ,al.submit_time
+               ,al.audit_time
+               ,al.entry_time
+        FROM ip_adjust_log al
+        LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
+        WHERE al.is_deleted = 0
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND al.adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>
+                  AND al.security_code = #{securityCode}
+                  AND al.audit_status NOT IN ('-1', '20', '21', '99')
+              </otherwise>
+          </choose>
+        ORDER BY al.crte_time DESC
+    </select>
+
+    <!-- 查询证券当前有效所在池 ID 列表 -->
+    <select id="querySecurityCurrentPoolIdList" resultType="java.lang.Long">
+        SELECT DISTINCT target_pool_id
+        FROM ip_pool_status
+        WHERE security_code = #{securityCode}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询目标投资池当前有效证券数量 -->
+    <select id="queryPoolCurrentCount" resultType="int">
+        SELECT COUNT(DISTINCT security_code)
+        FROM ip_pool_status
+        WHERE target_pool_id = #{poolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询证券在目标池的入池时间（audit_status=20），用于调出冻结期校验 -->
+    <select id="queryPoolEntryTime" resultType="java.util.Date">
+        SELECT COALESCE(ips.entry_time, al.audit_time, ips.crte_time)
+        FROM ip_pool_status ips
+        INNER JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
+        WHERE ips.security_code = #{securityCode}
+          AND ips.target_pool_id = #{targetPoolId}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 查询各投资池当前有效证券数量 -->
+    <select id="queryPoolCurrentCountList" resultType="com.znty.rrs.entity.securitypooladjust.PoolDto">
+        SELECT target_pool_id AS id
+               ,COUNT(DISTINCT security_code) AS currentCount
+        FROM ip_pool_status
+        WHERE audit_status = '20'
+          AND is_deleted = 0
+        GROUP BY target_pool_id
+    </select>
+
+    <!-- 查询证券是否存在进行中的调库流程（以是否存在待处理步骤为准） -->
+    <select id="querySecurityHasPendingProcess" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_adjust_log al
+        INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
+        WHERE al.security_code = #{securityCode}
+          AND al.is_deleted = 0
+          AND s.step_status = 'pending'
+    </select>
+
+    <!-- 查询证券当前进行中流程所在步骤名称 -->
+    <select id="querySecurityPendingProcessNodeLabel" resultType="string">
+        SELECT s.node_label
+        FROM ip_adjust_log al
+        INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
+        WHERE al.security_code = #{securityCode}
+          AND al.is_deleted = 0
+          AND s.step_status = 'pending'
+        ORDER BY s.sort_order ASC
+                 ,s.id ASC
+                 ,al.submit_time DESC
+                 ,al.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 查询当前证券是否在观察池 -->
+    <select id="querySecurityInObservePool" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        WHERE ips.security_code = #{securityCode}
+          AND p.pool_type = 'observe'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+    </select>
+
+    <!-- 查询证券是否在全局禁投池（forbidden/blacklist，audit_status=20），用于调入禁投池校验 -->
+    <select id="querySecurityInForbiddenPool" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        WHERE ips.security_code = #{securityCode}
+          AND p.pool_type IN ('forbidden', 'blacklist')
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+    </select>
+
+    <!-- 查询证券主体公司是否在观察池（同发行人的任意证券在观察池中） -->
+    <select id="queryIssuerInObservePool" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        WHERE si.issuer = (
+            SELECT issuer
+            FROM rrs_securityinfo
+            WHERE wind_code = #{securityCode}
+            LIMIT 1
+        )
+          AND p.pool_type = 'observe'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+    </select>
+
+    <!-- 查询同主体在目标池中已有债券的最大剩余期限天数（date_exists，天） -->
+    <select id="queryIssuerTargetPoolMaxRemainDays" resultType="java.math.BigDecimal">
+        SELECT MAX(si.date_exists)
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        WHERE si.issuer = (
+            SELECT issuer
+            FROM rrs_securityinfo
+            WHERE wind_code = #{securityCode}
+            LIMIT 1
+        )
+          AND ips.target_pool_id = #{targetPoolId}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND si.date_exists IS NOT NULL
+    </select>
+
+    <!-- 查询6个月内同主体有审批通过调入记录且调入日志真实关联有效信评报告 -->
+    <select id="queryHasRecentInboundWithReport" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_adjust_log l
+        WHERE l.audit_status = '20'
+          AND l.adjust_mode = '调入'
+          AND l.is_deleted = 0
+          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.security_code IN (
+              SELECT si.wind_code FROM rrs_securityinfo si
+              WHERE si.issuer = (SELECT issuer FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1)
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = 'ip_adjust_log'
+                AND a.main_id = l.id
+                AND a.is_deleted = 0
+                AND a.attachment_category IN ('credit_report_hand', 'credit_report_in', 'credit_report_out')
+          )
+    </select>
+
+    <!-- 近6个月当前券最近一条有信评报告的审批通过调入日志（对齐老 getLastReprotDocs 券优先） -->
+    <select id="queryLastInboundLogIdWithCreditReportBySecurity" resultType="java.lang.Long">
+        SELECT l.id
+        FROM ip_adjust_log l
+        WHERE l.audit_status = '20'
+          AND l.adjust_mode = '调入'
+          AND l.is_deleted = 0
+          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.security_code = #{securityCode}
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = 'ip_adjust_log'
+                AND a.main_id = l.id
+                AND a.is_deleted = 0
+                AND a.attachment_category IN ('credit_report_in', 'credit_report_out')
+          )
+        ORDER BY l.crte_time DESC
+                 ,l.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 近6个月同主体最近一条有信评报告的审批通过调入日志（券查不到时兜底） -->
+    <select id="queryLastInboundLogIdWithCreditReportByIssuer" resultType="java.lang.Long">
+        SELECT l.id
+        FROM ip_adjust_log l
+        WHERE l.audit_status = '20'
+          AND l.adjust_mode = '调入'
+          AND l.is_deleted = 0
+          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND l.security_code IN (
+              SELECT si.wind_code
+              FROM rrs_securityinfo si
+              WHERE si.issuer = (
+                  SELECT issuer
+                  FROM rrs_securityinfo
+                  WHERE wind_code = #{securityCode}
+                  LIMIT 1
+              )
+                AND si.issuer IS NOT NULL
+                AND si.issuer != ''
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = 'ip_adjust_log'
+                AND a.main_id = l.id
+                AND a.is_deleted = 0
+                AND a.attachment_category IN ('credit_report_in', 'credit_report_out')
+          )
+        ORDER BY l.crte_time DESC
+                 ,l.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 调库日志下首个信评报告附件（内部优先、其次外部，对齐老 relaDocs.get(0) 且仅 docType 1/2） -->
+    <select id="queryFirstCreditReportAttachment" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
+        SELECT id
+               ,table_name
+               ,main_id
+               ,attachment_category
+               ,file_type
+               ,original_file_name
+               ,new_file_name
+               ,file_size
+               ,content_type
+               ,full_url
+               ,file_name
+               ,uploader_id
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_attachment
+        WHERE table_name = 'ip_adjust_log'
+          AND main_id = #{adjustLogId}
+          AND is_deleted = 0
+          AND attachment_category IN ('credit_report_in', 'credit_report_out')
+        ORDER BY CASE attachment_category
+                     WHEN 'credit_report_in' THEN 1
+                     WHEN 'credit_report_out' THEN 2
+                     ELSE 9
+                 END ASC
+                 ,id ASC
+        LIMIT 1
+    </select>
+
+    <!-- 按物理路径反查报告库附件（copyReportAttachments 复用 file_name） -->
+    <select id="queryReportLibraryAttachmentByFileName" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
+        SELECT id
+               ,table_name
+               ,main_id
+               ,attachment_category
+               ,file_type
+               ,original_file_name
+               ,new_file_name
+               ,file_size
+               ,content_type
+               ,full_url
+               ,file_name
+               ,uploader_id
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_attachment
+        WHERE is_deleted = 0
+          AND table_name = #{tableName}
+          AND attachment_category = #{attachmentCategory}
+          AND file_name = #{fileName}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 内部报告简要 -->
+    <select id="queryInReportById" resultType="com.znty.rrs.entity.report.ReportDto">
+        SELECT id
+               ,author_name
+               ,report_title
+               ,report_type
+               ,security_code
+               ,company_code
+               ,security_type
+               ,data_source
+               ,crte_time
+        FROM rrs_report_in
+        WHERE id = #{id}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 外部报告简要 -->
+    <select id="queryOutReportById" resultType="com.znty.rrs.entity.report.ReportDto">
+        SELECT id
+               ,author_name
+               ,source_org_name
+               ,report_title
+               ,report_type
+               ,security_code
+               ,company_code
+               ,security_type
+               ,data_source
+               ,crte_time
+        FROM rrs_report_out
+        WHERE id = #{id}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） -->
+    <select id="queryIssuerHasNonSimpleInboundWithinDays" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        WHERE si.issuer = (
+            SELECT issuer
+            FROM rrs_securityinfo
+            WHERE wind_code = #{securityCode}
+            LIMIT 1
+        )
+          AND ips.target_pool_id = #{targetPoolId}
+          AND ips.flow_type != 'simpleInbound'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </select>
+
+    <!-- 新增入池状态记录（直通流程：start→end 跳过审批，直接写入已生效状态） -->
+    <insert id="addPoolStatus">
+        INSERT INTO ip_pool_status (security_code
+                                  ,security_short_name
+                                  ,security_type
+                                  ,crmw_name
+                                  ,crmw_scode
+                                  ,crmw_mktcode
+                                  ,crmw_stype
+                                  ,adjust_type
+                                  ,adjust_mode
+                                  ,adjust_batch_no
+                                  ,adjust_log_id
+                                  ,target_pool_id
+                                  ,target_pool_name
+                                  ,pool_type
+                                  ,flow_id
+                                  ,flow_key
+                                  ,flow_type
+                                  ,audit_status
+                                  ,adjuster_id
+                                  ,adjuster_name
+                                  ,adjust_reason
+                                  ,adjust_advice
+                                  ,submit_time
+                                  ,entry_time
+                                  ,is_deleted
+                                  ,crte_time
+                                  ,updt_time)
+        VALUES (#{securityCode}
+               ,#{securityShortName}
+               ,#{securityType}
+               ,#{crmwName}
+               ,#{crmwScode}
+               ,#{crmwMktcode}
+               ,#{crmwStype}
+               ,#{adjustType}
+               ,#{adjustMode}
+               ,#{adjustBatchNo}
+               ,#{adjustLogId}
+               ,#{targetPoolId}
+               ,#{targetPoolName}
+               ,#{poolType}
+               ,#{flowId}
+               ,#{flowKey}
+               ,#{flowType}
+               ,#{auditStatus}
+               ,#{adjusterId}
+               ,#{adjusterName}
+               ,#{adjustReason}
+               ,#{adjustAdvice}
+               ,NOW()
+               ,NOW()
+               ,0
+               ,NOW()
+               ,NOW())
+    </insert>
+
+    <!-- 软删除入池状态（直通调出：将该证券在目标池中的生效记录标记为删除） -->
+    <update id="deletePoolStatusSoft">
+        UPDATE ip_pool_status
+        SET is_deleted = 1
+           ,updt_time = NOW()
+        WHERE security_code = #{securityCode}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </update>
+
+    <!-- 更新调库详情页传入的证券基础信息字段 -->
+    <update id="editSecurityInfoForAdjust">
+        UPDATE rrs_securityinfo
+        SET wind_code = #{securityInfo.windCode}
+           ,full_name = #{securityInfo.fullName}
+           ,issue_announcement = #{securityInfo.issueAnnouncement}
+           ,short_name = #{securityInfo.shortName}
+           ,wind_code_sh = #{securityInfo.windCodeSh}
+           ,wind_code_sz = #{securityInfo.windCodeSz}
+           ,wind_code_nib = #{securityInfo.windCodeNib}
+           ,wind_code_bj = #{securityInfo.windCodeBj}
+           ,wind_code_nbc = #{securityInfo.windCodeNbc}
+           ,security_type = #{securityInfo.securityType}
+           ,term_year = #{securityInfo.termYear}
+           ,term_day = #{securityInfo.termDay}
+           ,maturityembedded_desc = #{securityInfo.maturityembeddedDesc}
+           ,form_desc = #{securityInfo.formDesc}
+           ,sec_typename = #{securityInfo.secTypename}
+           ,comp_type = #{securityInfo.compType}
+           ,issuer = #{securityInfo.issuer}
+           ,issuer_code = #{securityInfo.issuerCode}
+           ,crncy_code = #{securityInfo.crncyCode}
+           ,issue_amountplan = #{securityInfo.issueAmountplan}
+           ,list_date = #{securityInfo.listDate}
+           ,firstissue_date = #{securityInfo.firstissueDate}
+           ,maturity_date = #{securityInfo.maturityDate}
+           ,carry_date = #{securityInfo.carryDate}
+           ,end_date = #{securityInfo.endDate}
+           ,interest_type = #{securityInfo.interestType}
+           ,interest_frequency = #{securityInfo.interestFrequency}
+           ,interest_yearcount = #{securityInfo.interestYearcount}
+           ,coupon_rate = #{securityInfo.couponRate}
+           ,spread = #{securityInfo.spread}
+           ,redemption_flag = #{securityInfo.redemptionFlag}
+           ,redemption_date = #{securityInfo.redemptionDate}
+           ,redemption_price = #{securityInfo.redemptionPrice}
+           ,date_call_exists = #{securityInfo.dateCallExists}
+           ,callbkorputbk_date = #{securityInfo.callbkorputbkDate}
+           ,redemption_content = #{securityInfo.redemptionContent}
+           ,repurchase_flag = #{securityInfo.repurchaseFlag}
+           ,repurchase_date = #{securityInfo.repurchaseDate}
+           ,repurchase_price = #{securityInfo.repurchasePrice}
+           ,repurchase_content = #{securityInfo.repurchaseContent}
+           ,payment_date = #{securityInfo.paymentDate}
+           ,delist_date = #{securityInfo.delistDate}
+           ,securities_types_dq = #{securityInfo.securitiesTypesDq}
+           ,coupon_desc = #{securityInfo.couponDesc}
+           ,issue_type = #{securityInfo.issueType}
+           ,corporate_bond_flag = #{securityInfo.corporateBondFlag}
+           ,payadvanced_flag = #{securityInfo.payadvancedFlag}
+           ,chooseright_flag = #{securityInfo.chooserightFlag}
+           ,incbonds_flag = #{securityInfo.incbondsFlag}
+           ,industry_name = #{securityInfo.industryName}
+           ,industry_name2 = #{securityInfo.industryName2}
+           ,inner_class = #{securityInfo.innerClass}
+           ,cj_flag = #{securityInfo.cjFlag}
+           ,yx_flag = #{securityInfo.yxFlag}
+           ,dy_flag = #{securityInfo.dyFlag}
+           ,date_exists = #{securityInfo.dateExists}
+           ,rating_bond = #{securityInfo.ratingBond}
+           ,rating_bondissuer = #{securityInfo.ratingBondissuer}
+           ,rating_outlook = #{securityInfo.ratingOutlook}
+           ,rating_bond_agency = #{securityInfo.ratingBondAgency}
+           ,rating_bondissuer_agency = #{securityInfo.ratingBondissuerAgency}
+           ,rating_cnbd = #{securityInfo.ratingCnbd}
+           ,inright_flag = #{securityInfo.inrightFlag}
+           ,date_inright_exists = #{securityInfo.dateInrightExists}
+           ,date_inright_next = #{securityInfo.dateInrightNext}
+           ,issue_amountact = #{securityInfo.issueAmountact}
+           ,guarantor = #{securityInfo.guarantor}
+           ,guarantor_id = #{securityInfo.guarantorId}
+           ,agency_name = #{securityInfo.agencyName}
+           ,agency_nameid = #{securityInfo.agencyNameid}
+           ,create_time = #{securityInfo.createTime}
+           ,ts = NOW()
+           ,security_status = #{securityInfo.securityStatus}
+           ,date_next = #{securityInfo.dateNext}
+           ,fund_use = #{securityInfo.fundUse}
+           ,par = #{securityInfo.par}
+           ,info_pledge_ratio = #{securityInfo.infoPledgeRatio}
+           ,inner_issuer_rating = #{securityInfo.innerIssuerRating}
+           ,inner_guarantor_rating = #{securityInfo.innerGuarantorRating}
+           ,prompt_reason = #{securityInfo.promptReason}
+           ,analysis = #{securityInfo.analysis}
+           ,date_repurchase_exists = #{securityInfo.dateRepurchaseExists}
+           ,guarant_flag = #{securityInfo.guarantFlag}
+           ,guarant_type = #{securityInfo.guarantType}
+           ,abs_flag = #{securityInfo.absFlag}
+           ,sec_id_sh = #{securityInfo.secIdSh}
+           ,sec_id_sz = #{securityInfo.secIdSz}
+           ,sec_id_nib = #{securityInfo.secIdNib}
+           ,sec_id_nbc = #{securityInfo.secIdNbc}
+           ,sec_id_bj = #{securityInfo.secIdBj}
+        WHERE wind_code = #{securityCode}
+    </update>
+
+    <!-- 新增流程步骤记录 -->
+    <insert id="addAdjustStep" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_step (adjust_log_id
+                                   ,adjust_batch_no
+                                   ,flow_node_id
+                                   ,node_code
+                                   ,node_label
+                                   ,node_type
+                                   ,approval_strategy
+                                   ,sort_order
+                                   ,step_status
+                                   ,handler_id
+                                   ,handler_name
+                                   ,process_action
+                                   ,process_comment
+                                   ,start_time
+                                   ,process_time
+                                   ,crte_time
+                                   ,updt_time)
+        VALUES (#{adjustLogId}
+               ,#{adjustBatchNo}
+               ,#{flowNodeId}
+               ,#{nodeCode}
+               ,#{nodeLabel}
+               ,#{nodeType}
+               ,#{approvalStrategy}
+               ,#{sortOrder}
+               ,#{stepStatus}
+               ,#{handlerId}
+               ,#{handlerName}
+               ,#{processAction}
+               ,#{processComment}
+               ,#{startTime}
+               ,#{processTime}
+               ,NOW()
+               ,NOW())
+    </insert>
+
+    <!-- 查询指定调库记录的流程步骤列表 -->
+    <select id="queryAdjustStepList" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
+        SELECT id
+               ,adjust_log_id
+               ,adjust_batch_no
+               ,flow_node_id
+               ,node_code
+               ,node_label
+               ,node_type
+               ,approval_strategy
+               ,sort_order
+               ,step_status
+               ,handler_id
+               ,handler_name
+               ,process_action
+               ,process_comment
+               ,start_time
+               ,process_time
+        FROM ip_adjust_step
+        WHERE adjust_log_id = #{adjustLogId}
+        ORDER BY id ASC
+    </select>
+
+    <!-- 查询指定批次或调库记录的流程步骤列表 -->
+    <select id="queryAdjustStepByBatchList" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
+        SELECT id
+               ,adjust_log_id
+               ,adjust_batch_no
+               ,flow_node_id
+               ,node_code
+               ,node_label
+               ,node_type
+               ,approval_strategy
+               ,sort_order
+               ,step_status
+               ,handler_id
+               ,handler_name
+               ,process_action
+               ,process_comment
+               ,start_time
+               ,process_time
+        FROM ip_adjust_step
+        <where>
+            <choose>
+                <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                    adjust_batch_no = #{adjustBatchNo}
+                </when>
+                <otherwise>
+                    adjust_log_id = #{adjustLogId}
+                </otherwise>
+            </choose>
+        </where>
+        ORDER BY id ASC
+    </select>
+
+    <!-- 根据 ID 查询流程步骤 -->
+    <select id="queryAdjustStepById" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
+        SELECT id
+               ,adjust_log_id
+               ,adjust_batch_no
+               ,flow_node_id
+               ,node_code
+               ,node_label
+               ,node_type
+               ,approval_strategy
+               ,sort_order
+               ,step_status
+               ,handler_id
+               ,handler_name
+               ,process_action
+               ,process_comment
+               ,start_time
+               ,process_time
+        FROM ip_adjust_step
+        WHERE id = #{id}
+    </select>
+
+    <!-- 按处理人查询同批次同节点待处理步骤 -->
+    <select id="queryPendingStepByHandler" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
+        SELECT id
+               ,adjust_log_id
+               ,adjust_batch_no
+               ,flow_node_id
+               ,node_code
+               ,node_label
+               ,node_type
+               ,approval_strategy
+               ,sort_order
+               ,step_status
+               ,handler_id
+               ,handler_name
+               ,process_action
+               ,process_comment
+               ,start_time
+               ,process_time
+        FROM ip_adjust_step
+        WHERE flow_node_id = #{flowNodeId}
+          AND handler_id = #{handlerId}
+          AND step_status = 'pending'
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>
+                  AND adjust_log_id = #{adjustLogId}
+              </otherwise>
+          </choose>
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <!-- 更新当前待处理步骤的处理结果 -->
+    <update id="editAdjustStepProcess">
+        UPDATE ip_adjust_step
+        SET step_status = #{stepStatus}
+           ,process_action = #{processAction}
+           ,process_comment = #{processComment}
+           ,process_time = NOW()
+           ,updt_time = NOW()
+        WHERE id = #{id}
+          AND step_status = 'pending'
+    </update>
+
+    <!-- 跳过同批次同节点的其他待处理步骤 -->
+    <update id="editOtherPendingStepSkipped">
+        UPDATE ip_adjust_step
+        SET step_status = #{stepStatus}
+           ,process_action = 'skipped'
+           ,process_comment = NULL
+           ,process_time = NOW()
+           ,updt_time = NOW()
+        WHERE id != #{id}
+          AND flow_node_id = #{flowNodeId}
+          AND step_status = 'pending'
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>
+                  AND adjust_log_id = #{adjustLogId}
+              </otherwise>
+          </choose>
+    </update>
+
+    <!-- 查询同批次同节点剩余待处理步骤数量 -->
+    <select id="queryPendingStepCountByNode" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_adjust_step
+        WHERE flow_node_id = #{flowNodeId}
+          AND step_status = 'pending'
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>
+                  AND adjust_log_id = #{adjustLogId}
+              </otherwise>
+          </choose>
+    </select>
+
+    <!-- 查询指定批次或调库记录的调库日志列表 -->
+    <select id="queryAdjustLogListForAudit" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT id
+               ,security_code
+               ,security_short_name
+               ,security_type
+               ,adjust_type
+               ,adjust_mode
+               ,adjust_batch_no
+               ,target_pool_id
+               ,target_pool_name
+               ,pool_type
+               ,flow_id
+               ,flow_key
+               ,flow_type
+               ,audit_status
+               ,adjuster_id
+               ,adjuster_name
+               ,adjust_reason
+               ,adjust_advice
+               ,submit_time
+               ,audit_time
+               ,entry_time
+        FROM ip_adjust_log
+        <where>
+            is_deleted = 0
+            <choose>
+                <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                    AND adjust_batch_no = #{adjustBatchNo}
+                </when>
+                <otherwise>
+                    AND id = #{adjustLogId}
+                </otherwise>
+            </choose>
+        </where>
+        ORDER BY id ASC
+    </select>
+
+    <!-- 更新指定批次或调库记录的审核状态 -->
+    <update id="editAdjustLogAuditStatus">
+        UPDATE ip_adjust_log
+        SET audit_status = #{auditStatus}
+           ,audit_time = NOW()
+           ,updt_time = NOW()
+        WHERE is_deleted = 0
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>
+                  AND id = #{adjustLogId}
+              </otherwise>
+          </choose>
+    </update>
+
+    <!-- 将活动调库记录更新为最终状态 -->
+    <update id="editActiveAdjustLogAuditStatus">
+        UPDATE ip_adjust_log
+        SET audit_status = #{auditStatus}
+           ,audit_time = NOW()
+           ,updt_time = NOW()
+        WHERE audit_status IN ('00', '11')
+          <choose>
+              <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                  AND adjust_batch_no = #{adjustBatchNo}
+              </when>
+              <otherwise>
+                  AND id = #{adjustLogId}
+              </otherwise>
+          </choose>
+    </update>
+
+    <!-- 更新指定批次调入调库记录的目标池（评级联动改判用，仅更新调入记录） -->
+    <update id="editAdjustLogTargetPool">
+        UPDATE ip_adjust_log
+        SET target_pool_id = #{targetPoolId}
+           ,target_pool_name = #{targetPoolName}
+           ,updt_time = NOW()
+        WHERE is_deleted = 0
+          AND adjust_batch_no = #{adjustBatchNo}
+          AND adjust_mode = '调入'
+    </update>
+
+    <!-- 查询全量投资池关系配置（不限关系类型） -->
+    <select id="queryAllPoolRelationList" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
+        SELECT pool_id
+               ,relation_type
+               ,relation_pool_id
+        FROM ip_pool_relation
+        WHERE is_deleted = 0
+    </select>
+
+    <!-- 根据证券类型编码查询所属大类 -->
+    <select id="queryCategoryTypeBySecurityType" resultType="string">
+        SELECT category_type
+        FROM dict_security_type
+        WHERE security_type = #{securityType}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 查询指定日期是否在目标池的开放区间内（open_day_adjust=1 的池用，调库开放日校验） -->
+    <select id="queryPoolInOpenDay" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_open_day
+        WHERE pool_id = #{poolId}
+          AND begin_date &lt;= #{today}
+          AND end_date &gt;= #{today}
+          AND is_deleted = 0
+    </select>
+
+</mapper>

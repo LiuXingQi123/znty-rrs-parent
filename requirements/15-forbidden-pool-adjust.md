@@ -1,8 +1,8 @@
 # 禁投池调整申请（主体级 调入/调出）需求说明
 
-> 前端页面：`forbidden_pool_adjust.html`（列表 + 详情两视图）
-> 后端前缀：`/api/v1/forbiddenPoolAdjust`
-> 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库的调入或调出申请，主体生效后自动同步旗下全部债券。主体基础信息只读自 `ais_inv_ods.wind_cbondissuer` 的有效记录（`used=1`），以 `s_info_compcode` 作为主体代码；不关联 `rrs_securityinfo` 的主体记录。
+> 前端页面：`forbidden_pool_adjust.html`（列表 Tab「主体」+ 主体详情两视图；同页另有 Tab「ABS债」，见 [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md)）
+> 后端前缀：`/api/v1/forbiddenPoolAdjust`（主体；ABS 走独立前缀 `/api/v1/forbiddenAbsPoolAdjust`）
+> 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库的调入或调出申请，主体生效后自动同步旗下**非 ABS** 债券（`abs_flag!=1`）。主体基础信息只读自 `ais_inv_ods.wind_cbondissuer` 的有效记录（`used=1`），以 `s_info_compcode` 作为主体代码；不关联 `rrs_securityinfo` 的主体记录。
 
 ---
 
