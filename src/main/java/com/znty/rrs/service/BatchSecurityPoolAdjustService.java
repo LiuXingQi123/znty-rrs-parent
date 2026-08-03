@@ -1233,6 +1233,7 @@ public class BatchSecurityPoolAdjustService {
         current.setWindCodeBj(changedField.getWindCodeBj());
         current.setIssueAmountplan(changedField.getIssueAmountplan());
         current.setCouponRate(changedField.getCouponRate());
+        current.setMaturityembeddedDesc(changedField.getMaturityembeddedDesc());
         current.setDateInrightExists(changedField.getDateInrightExists());
         current.setCarryDate(changedField.getCarryDate());
         current.setMaturityDate(changedField.getMaturityDate());

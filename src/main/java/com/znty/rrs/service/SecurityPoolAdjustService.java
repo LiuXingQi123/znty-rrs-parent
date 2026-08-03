@@ -226,6 +226,7 @@ public class SecurityPoolAdjustService {
         }
         master.setIssueAmountplan(snapshot.getIssueAmountplan());
         master.setCouponRate(snapshot.getCouponRate());
+        master.setMaturityembeddedDesc(snapshot.getMaturityembeddedDesc());
         master.setDateInrightExists(snapshot.getDateInrightExists());
         master.setCarryDate(snapshot.getCarryDate());
         master.setMaturityDate(snapshot.getMaturityDate());
@@ -1427,6 +1428,7 @@ public class SecurityPoolAdjustService {
         current.setWindCodeBj(changedField.getWindCodeBj());
         current.setIssueAmountplan(changedField.getIssueAmountplan());
         current.setCouponRate(changedField.getCouponRate());
+        current.setMaturityembeddedDesc(changedField.getMaturityembeddedDesc());
         current.setDateInrightExists(changedField.getDateInrightExists());
         current.setCarryDate(changedField.getCarryDate());
         current.setMaturityDate(changedField.getMaturityDate());
