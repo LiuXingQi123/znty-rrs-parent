@@ -1,5 +1,6 @@
 package com.znty.rrs.mapper;
 
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto;
@@ -189,4 +190,13 @@ public interface CrmwPoolAdjustMapper {
                                  @Param("crmwStype") String crmwStype,
                                  @Param("securityCode") String securityCode,
                                  @Param("targetPoolId") Long targetPoolId);
+
+    /** 新增 CRMW 调库证券信息快照 */
+    int addAdjustSecuritySnapshotCrmw(AdjustSecuritySnapshotCrmwBo bo);
+
+    /** 按调库日志 ID 查询 CRMW 调库证券信息快照详情（含类型名称） */
+    SecurityInfoDetailDto querySecuritySnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId);
+
+    /** 按标的证券代码查询最新一条有效 CRMW 调库证券信息快照详情 */
+    SecurityInfoDetailDto queryLatestSecuritySnapshotDetailByWindCode(@Param("windCode") String windCode);
 }

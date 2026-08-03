@@ -114,7 +114,7 @@
    - **直通**：`buildAdjustLog` → `auditStatus=APPROVED('20')` → `addAdjustLog`（写 `ip_adjust_log`）→ `bindSubmitAttachments` → 手工项 `createInitialSteps` → `addPoolStatus`（写 `ip_pool_status_crmw`，`audit_status='20'` 即时生效）。
    - **非直通**：`auditStatus=SUBMITTED('00')` → `addAdjustLog` → `bindSubmitAttachments` → `createInitialSteps`（返回 true 即流程已到 end，升 `'20'` + `addPoolStatus`）。
 4. **调出处理** `executeOutboundSubmit`：对称，先跑报告必填校验（`out_report_restriction`）+ **CRMW组合校验** `checkCrmwOutboundCombination`（组合在池：`queryCrmwComboInPool` 查 `ip_pool_status_crmw` 同凭证+标的证券+目标池 `audit_status='20'`，组合不在池则抛 `BizException`，对应老项目 `checkOutPool` 的 `checkCrmwInPool` 组合维度），生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status_crmw SET is_deleted=1 WHERE security_code AND crmw_scode AND crmw_stype AND target_pool_id AND audit_status='20' AND pool_type='crmw'`），避免误删同一标的证券在同一池的其他 CRMW 凭证记录。新系统 `crmwScode` 使用完整 Wind 代码且全局唯一，市场代码不参与业务键。
-5. **后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` → `editSecurityInfoForAdjust`（全量更新 `rrs_securityinfo` 约 80 字段）。
+5. **后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` 后仅 `INSERT` `ip_adjust_security_snapshot_crmw`（**不** UPDATE `rrs_securityinfo`）。
 
 **批次号规则** `buildAdjustBatchNo`：
 - 无流程：`"CRMW" + batchTimeText + (3000 + ++noFlowBatchSeq)`
@@ -201,6 +201,7 @@
 - **提交参数**：`CrmwPoolAdjustSubmitReq` 多 CRMW 元数据字段，`crmwStype` 必须为 `'crmw'`。
 - **详情页多 CRMW基本信息 section**（只读展示 CRMW 全称/名称/代码/证券类型/发行人）。
 - 审批流转、校验规则、流程快照、状态枚举与证券池调库**完全同构**。
+- **证券信息快照**：提交成功后写入 `ip_adjust_security_snapshot_crmw`（标的证券字段 + `crmw_name/scode/stype`），**不修改**主档；`querySecurityDetail`：有 adjustLogId 用该笔快照整包；否则主档打底 + 最新快照覆盖可编辑字段（标识类跟主档）。
 
 ---
 

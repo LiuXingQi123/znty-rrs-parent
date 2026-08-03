@@ -44,7 +44,9 @@ import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.bo.FlowVersionBo;
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustReq;
@@ -208,7 +210,25 @@ public class CrmwPoolAdjustService {
         if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        SecurityInfoDetailDto dto = crmwPoolAdjustMapper.querySecurityDetail(req.getSecurityCode());
+        SecurityInfoDetailDto dto = null;
+        // ① 有调库日志：该笔 CRMW 调库提交快照整包回显
+        if (req.getAdjustLogId() != null) {
+            dto = crmwPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(req.getAdjustLogId());
+        }
+        // ② 无 log 或该 log 无快照：主档打底 + 最新 CRMW 调库快照覆盖可编辑字段
+        if (dto == null) {
+            SecurityInfoDetailDto master = crmwPoolAdjustMapper.querySecurityDetail(req.getSecurityCode());
+            if (master == null) {
+                throw new BizException(404, "证券不存在");
+            }
+            if (CRMW_SECURITY_TYPE.equals(master.getSecurityType())) {
+                throw new BizException("标的证券不能是 CRMW 凭证");
+            }
+            SecurityInfoDetailDto latestSnapshot =
+                    crmwPoolAdjustMapper.queryLatestSecuritySnapshotDetailByWindCode(req.getSecurityCode());
+            overlayEditableFieldsFromSnapshot(master, latestSnapshot);
+            dto = master;
+        }
         if (dto == null) {
             throw new BizException(404, "证券不存在");
         }
@@ -216,6 +236,34 @@ public class CrmwPoolAdjustService {
             throw new BizException("标的证券不能是 CRMW 凭证");
         }
         return dto;
+    }
+
+    /**
+     * 将快照中的「可编辑业务字段」覆盖到主档详情上；标识类字段保持主档不变。
+     */
+    private void overlayEditableFieldsFromSnapshot(SecurityInfoDetailDto master, SecurityInfoDetailDto snapshot) {
+        if (master == null || snapshot == null) {
+            return;
+        }
+        master.setIssueAmountplan(snapshot.getIssueAmountplan());
+        master.setCouponRate(snapshot.getCouponRate());
+        master.setDateInrightExists(snapshot.getDateInrightExists());
+        master.setCarryDate(snapshot.getCarryDate());
+        master.setMaturityDate(snapshot.getMaturityDate());
+        master.setInfoPledgeRatio(snapshot.getInfoPledgeRatio());
+        master.setRatingBondAgency(snapshot.getRatingBondAgency());
+        master.setRatingBond(snapshot.getRatingBond());
+        master.setRatingBondissuer(snapshot.getRatingBondissuer());
+        master.setRatingOutlook(snapshot.getRatingOutlook());
+        master.setGuarantor(snapshot.getGuarantor());
+        master.setGuarantorId(snapshot.getGuarantorId());
+        master.setAgencyName(snapshot.getAgencyName());
+        master.setDateCallExists(snapshot.getDateCallExists());
+        master.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
+        master.setDateExists(snapshot.getDateExists());
+        master.setFundUse(snapshot.getFundUse());
+        master.setPromptReason(snapshot.getPromptReason());
+        master.setAnalysis(snapshot.getAnalysis());
     }
 
     /**
@@ -402,7 +450,7 @@ public class CrmwPoolAdjustService {
      *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则先写入 ip_adjust_log（audit_status='20'），待统一复核后软删除 ip_pool_status_crmw 记录；
      *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
      *       则升级为 audit_status='20' 并软删除 ip_pool_status_crmw</li>
-     *   <li><b>后续处理</b>：合并并同步更新调库详情页传入的证券基础信息字段（editSecurityInfoForAdjust）</li>
+     *   <li><b>后续处理</b>：合并证券信息后按 log 写入 ip_adjust_security_snapshot_crmw（不修改 rrs_securityinfo）</li>
      * </ol>
      *
      * @param req 调库申请，包含证券信息及一个或多个调库项（手工项须携带 flowId 或 flowKey，无流程时走直通）
@@ -452,14 +500,16 @@ public class CrmwPoolAdjustService {
         // 对本次全部直通项统一锁池、复核并落地
         recheckAndApplyDirectLogs(directApplyLogs);
 
-        // ══ 第五阶段：后续处理 ══
-        postSubmitProcess(req, shared);
+        // 组装本次提交产生的全部调库日志 ID
+        List<Long> allIds = new ArrayList<>(inboundIds);
+        allIds.addAll(outboundIds);
+
+        // ══ 第五阶段：后续处理（按 log 写 CRMW 证券信息快照，不改主档） ══
+        postSubmitProcess(req, shared, allIds);
 
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
         dto.setSecurityCode(req.getSecurityCode());
-        List<Long> allIds = new ArrayList<>(inboundIds);
-        allIds.addAll(outboundIds);
         dto.setSubmitCount(allIds.size());
         dto.setLogIds(allIds);
         return dto;
@@ -1190,21 +1240,61 @@ public class CrmwPoolAdjustService {
     }
 
     /**
-     * 第五阶段：后续处理（预留扩展点）
+     * 第五阶段：后续处理
      *
-     * <p>当前用于同步更新调库详情页传入的证券基础信息字段。
+     * <p>合并主档与前端可编辑字段后，仅按本次提交的每个调库日志 ID 写入 CRMW 证券信息快照；
+     * <b>不修改</b>主档 {@code rrs_securityinfo}。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
+     * @param logIds 本次提交生成的调库日志 ID 列表
      */
-    private void postSubmitProcess(CrmwPoolAdjustSubmitReq req, SubmitSharedData shared) {
+    private void postSubmitProcess(CrmwPoolAdjustSubmitReq req, SubmitSharedData shared, List<Long> logIds) {
         if (req.getSecurityInfo() == null) {
             return;
         }
-        // 合并数据库当前完整快照与前端传入的变更字段
+        // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
         req.setSecurityInfo(buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo()));
-        // 同步更新证券基础信息表中本次传入的字段
-        crmwPoolAdjustMapper.editSecurityInfoForAdjust(req);
+        // 按调库日志落 CRMW 证券信息快照
+        saveAdjustSecuritySnapshotsCrmw(req, logIds);
+    }
+
+    /**
+     * 为本次提交的每个调库日志写入 CRMW 证券信息快照。
+     */
+    private void saveAdjustSecuritySnapshotsCrmw(CrmwPoolAdjustSubmitReq req, List<Long> logIds) {
+        if (logIds == null || logIds.isEmpty() || req.getSecurityInfo() == null) {
+            return;
+        }
+        Date now = new Date();
+        for (Long logId : logIds) {
+            if (logId == null) {
+                continue;
+            }
+            // 从合并后的标的证券信息拷贝同名字段，并补齐 CRMW 凭证四元组与快照关联字段
+            AdjustSecuritySnapshotCrmwBo snapshot = buildAdjustSecuritySnapshotCrmw(req, logId, now);
+            crmwPoolAdjustMapper.addAdjustSecuritySnapshotCrmw(snapshot);
+        }
+    }
+
+    /**
+     * 构建 CRMW 调库证券信息快照实体。
+     */
+    private AdjustSecuritySnapshotCrmwBo buildAdjustSecuritySnapshotCrmw(CrmwPoolAdjustSubmitReq req,
+                                                                         Long adjustLogId, Date submitTime) {
+        AdjustSecuritySnapshotCrmwBo snapshot = new AdjustSecuritySnapshotCrmwBo();
+        BeanUtils.copyProperties(req.getSecurityInfo(), snapshot);
+        snapshot.setAdjustLogId(adjustLogId);
+        snapshot.setSubmitterId(req.getAdjusterId());
+        snapshot.setSubmitTime(submitTime);
+        snapshot.setCrmwName(req.getCrmwName());
+        snapshot.setCrmwScode(req.getCrmwScode());
+        // 提交请求未带 mktcode，快照侧预留列允许为空
+        snapshot.setCrmwStype(req.getCrmwStype());
+        snapshot.setIsDeleted(0);
+        snapshot.setCrteTime(submitTime);
+        snapshot.setUpdtTime(submitTime);
+        return snapshot;
     }
 
     /**

@@ -47,7 +47,9 @@ import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.bo.FlowVersionBo;
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
@@ -191,13 +193,56 @@ public class SecurityPoolAdjustService {
         if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        SecurityInfoDetailDto dto = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityCode());
+        SecurityInfoDetailDto dto = null;
+        // ① 有调库日志：该笔提交快照整包回显（审批/详情精确留痕）
+        if (req.getAdjustLogId() != null) {
+            dto = securityPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(req.getAdjustLogId());
+        }
+        // ② 无 log 或该 log 无快照：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终跟主档）
         if (dto == null) {
-            throw new BizException(404, "证券不存在");
+            SecurityInfoDetailDto master = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityCode());
+            if (master == null) {
+                throw new BizException(404, "证券不存在");
+            }
+            SecurityInfoDetailDto latestSnapshot =
+                    securityPoolAdjustMapper.queryLatestSecuritySnapshotDetailByWindCode(req.getSecurityCode());
+            // 有历史快照时仅覆盖表单可编辑业务字段，避免只读标识与主档不一致
+            overlayEditableFieldsFromSnapshot(master, latestSnapshot);
+            dto = master;
         }
         // 回填证券品种大类（dict_security_type.category_type），供前端按类型差异化展示（如基金评分输入）
         dto.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(dto.getSecurityType()));
         return dto;
+    }
+
+    /**
+     * 将快照中的「可编辑业务字段」覆盖到主档详情上；标识类字段保持主档不变。
+     *
+     * <p>对齐：再次调库带出上次提交的利率/用途/分析等，同时全称/代码/发行人等只读字段始终跟主档。
+     */
+    private void overlayEditableFieldsFromSnapshot(SecurityInfoDetailDto master, SecurityInfoDetailDto snapshot) {
+        if (master == null || snapshot == null) {
+            return;
+        }
+        master.setIssueAmountplan(snapshot.getIssueAmountplan());
+        master.setCouponRate(snapshot.getCouponRate());
+        master.setDateInrightExists(snapshot.getDateInrightExists());
+        master.setCarryDate(snapshot.getCarryDate());
+        master.setMaturityDate(snapshot.getMaturityDate());
+        master.setInfoPledgeRatio(snapshot.getInfoPledgeRatio());
+        master.setRatingBondAgency(snapshot.getRatingBondAgency());
+        master.setRatingBond(snapshot.getRatingBond());
+        master.setRatingBondissuer(snapshot.getRatingBondissuer());
+        master.setRatingOutlook(snapshot.getRatingOutlook());
+        master.setGuarantor(snapshot.getGuarantor());
+        master.setGuarantorId(snapshot.getGuarantorId());
+        master.setAgencyName(snapshot.getAgencyName());
+        master.setDateCallExists(snapshot.getDateCallExists());
+        master.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
+        master.setDateExists(snapshot.getDateExists());
+        master.setFundUse(snapshot.getFundUse());
+        master.setPromptReason(snapshot.getPromptReason());
+        master.setAnalysis(snapshot.getAnalysis());
     }
 
     /**
@@ -602,7 +647,7 @@ public class SecurityPoolAdjustService {
      *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'），待统一复核后软删除 ip_pool_status；
      *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
      *       则升级为 audit_status='20' 并软删除 ip_pool_status</li>
-     *   <li><b>后续处理</b>：合并并同步更新调库详情页传入的证券基础信息字段（editSecurityInfoForAdjust）</li>
+     *   <li><b>后续处理</b>：合并证券信息后按 log 写入 ip_adjust_security_snapshot（不修改 rrs_securityinfo）</li>
      * </ol>
      *
      * @param req 调库申请，包含证券信息及一个或多个调库项（手工项须携带 flowId 或 flowKey，无流程时走直通）
@@ -652,14 +697,16 @@ public class SecurityPoolAdjustService {
         // 对本次全部直通项统一锁池、复核并落地，确保同池容量按整次申请累计
         recheckAndApplyDirectLogs(directApplyLogs);
 
-        // ══ 第五阶段：后续处理 ══
-        postSubmitProcess(req, shared);
+        // 组装本次提交产生的全部调库日志 ID
+        List<Long> allIds = new ArrayList<>(inboundIds);
+        allIds.addAll(outboundIds);
+
+        // ══ 第五阶段：后续处理（按 log 写证券信息快照，不改主档） ══
+        postSubmitProcess(req, shared, allIds);
 
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
         dto.setSecurityCode(req.getSecurityCode());
-        List<Long> allIds = new ArrayList<>(inboundIds);
-        allIds.addAll(outboundIds);
         dto.setSubmitCount(allIds.size());
         dto.setLogIds(allIds);
         return dto;
@@ -1293,21 +1340,58 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 第五阶段：后续处理（预留扩展点）
+     * 第五阶段：后续处理
      *
-     * <p>当前用于同步更新调库详情页传入的证券基础信息字段。
+     * <p>合并主档与前端可编辑字段后，仅按本次提交的每个调库日志 ID 写入证券信息快照；
+     * <b>不修改</b>主档 {@code rrs_securityinfo}（主档仍为全站真相源，调库页改动只作本笔留痕）。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
+     * @param logIds 本次提交生成的调库日志 ID 列表
      */
-    private void postSubmitProcess(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+    private void postSubmitProcess(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared, List<Long> logIds) {
         if (req.getSecurityInfo() == null) {
             return;
         }
-        // 合并数据库当前完整快照与前端传入的变更字段
+        // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
         req.setSecurityInfo(buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo()));
-        // 同步更新证券基础信息表中本次传入的字段
-        securityPoolAdjustMapper.editSecurityInfoForAdjust(req);
+        // 按调库日志落证券信息快照
+        saveAdjustSecuritySnapshots(req, logIds);
+    }
+
+    /**
+     * 为本次提交的每个调库日志写入证券信息快照。
+     */
+    private void saveAdjustSecuritySnapshots(SecurityPoolAdjustSubmitReq req, List<Long> logIds) {
+        if (logIds == null || logIds.isEmpty() || req.getSecurityInfo() == null) {
+            return;
+        }
+        Date now = new Date();
+        for (Long logId : logIds) {
+            if (logId == null) {
+                continue;
+            }
+            // 从合并后的证券信息拷贝同名字段，并补齐快照关联字段
+            AdjustSecuritySnapshotBo snapshot = buildAdjustSecuritySnapshot(req.getSecurityInfo(), logId,
+                    req.getAdjusterId(), now);
+            securityPoolAdjustMapper.addAdjustSecuritySnapshot(snapshot);
+        }
+    }
+
+    /**
+     * 构建调库证券信息快照实体。
+     */
+    private AdjustSecuritySnapshotBo buildAdjustSecuritySnapshot(SecurityInfoBo securityInfo, Long adjustLogId,
+                                                                 String submitterId, Date submitTime) {
+        AdjustSecuritySnapshotBo snapshot = new AdjustSecuritySnapshotBo();
+        BeanUtils.copyProperties(securityInfo, snapshot);
+        snapshot.setAdjustLogId(adjustLogId);
+        snapshot.setSubmitterId(submitterId);
+        snapshot.setSubmitTime(submitTime);
+        snapshot.setIsDeleted(0);
+        snapshot.setCrteTime(submitTime);
+        snapshot.setUpdtTime(submitTime);
+        return snapshot;
     }
 
     /**

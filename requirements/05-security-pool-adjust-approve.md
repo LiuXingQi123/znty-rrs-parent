@@ -116,7 +116,7 @@
 
 `loadDetailData` 用 `Promise.all` 并发 5 个接口：
 
-1. `POST /api/v1/securityPoolAdjust/querySecurityDetail` — 证券详情（顶部基础信息）
+1. `POST /api/v1/securityPoolAdjust/querySecurityDetail` — 证券详情（有 adjustLogId：该笔快照整包；无则主档 + 最新快照可编辑字段）
 2. `POST /api/v1/securityPoolAdjust/queryAdjustPoolList {adjustDirection:'in'}` — 可调入池树
 3. `POST /api/v1/securityPoolAdjust/queryAdjustPoolList {adjustDirection:'out'}` — 可调出池树
 4. `POST /api/v1/securityPoolAdjust/querySecurityPoolStatus` — 当前证券/主体所在池
@@ -372,7 +372,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 | `securityPoolAdjustFlow/submitAdjustAudit`（application/json） | `SecurityPoolAdjustAuditReq`：stepId/adjustLogId/adjustBatchNo/processAction(approve\|reject)/processComment/handlerId/handlerName | `SecurityPoolAdjustAuditDto` | 提交审批处理意见，纯文本场景 |
 | `securityPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | 同上 | 修改节点提交时同时上传附件变更（multipart 入口；JSON 入口为 `submitAdjustAudit`） |
 | `securityPoolAdjust/querySecurityPage` | securityCode/securityShortName/issuer + 分页 | `PageResult<SecurityInfoDto>` | 列表页证券检索 |
-| `securityPoolAdjust/querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 证券详情 |
+| `securityPoolAdjust/querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | 有 log：该笔快照；无 log：主档 + 最新快照可编辑字段 |
 | `securityPoolAdjust/queryAdjustPoolList` | securityCode/adjustDirection(in\|out)/currentUserId | `List<PoolDto>` | 可调入/调出投资池树（含互斥关系） |
 | `securityPoolAdjust/querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto` | 当前证券/主体所在池 |
 | `securityPoolAdjust/queryAdjustLogList` | securityCode/adjustBatchNo | `List<AdjustLogDto>` | 调库记录列表（按批次过滤；不传批次仅返回未终结流程） |

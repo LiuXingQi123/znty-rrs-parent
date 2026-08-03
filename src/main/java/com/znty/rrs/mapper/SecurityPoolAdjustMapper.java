@@ -1,5 +1,6 @@
 package com.znty.rrs.mapper;
 
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysAttachmentBo;
@@ -206,4 +207,13 @@ public interface SecurityPoolAdjustMapper {
 
     /** 根据证券类型编码查询所属大类（dict_security_type.category_type） */
     String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);
+
+    /** 新增调库证券信息快照 */
+    int addAdjustSecuritySnapshot(AdjustSecuritySnapshotBo bo);
+
+    /** 按调库日志 ID 查询证券信息快照详情（含类型名称） */
+    SecurityInfoDetailDto querySecuritySnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId);
+
+    /** 按证券代码查询最新一条有效证券信息快照详情（对齐老 getFinIndByScode） */
+    SecurityInfoDetailDto queryLatestSecuritySnapshotDetailByWindCode(@Param("windCode") String windCode);
 }

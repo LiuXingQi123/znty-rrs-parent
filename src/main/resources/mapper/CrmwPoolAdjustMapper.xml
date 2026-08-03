@@ -896,4 +896,250 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 新增 CRMW 调库证券信息快照 -->
+    <insert id="addAdjustSecuritySnapshotCrmw" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_security_snapshot_crmw (
+            adjust_log_id
+           ,submitter_id
+           ,submit_time
+           ,crmw_name
+           ,crmw_scode
+           ,crmw_mktcode
+           ,crmw_stype
+           ,wind_code
+           ,full_name
+           ,short_name
+           ,issuer
+           ,issuer_code
+           ,wind_code_nib
+           ,wind_code_sh
+           ,wind_code_sz
+           ,wind_code_bj
+           ,issue_amountplan
+           ,coupon_rate
+           ,date_inright_exists
+           ,carry_date
+           ,maturity_date
+           ,info_pledge_ratio
+           ,rating_bond_agency
+           ,rating_bond
+           ,rating_bondissuer
+           ,rating_outlook
+           ,guarantor
+           ,guarantor_id
+           ,agency_name
+           ,inner_issuer_rating
+           ,security_type
+           ,sec_typename
+           ,date_call_exists
+           ,inner_guarantor_rating
+           ,date_exists
+           ,fund_use
+           ,prompt_reason
+           ,analysis
+           ,wind_code_nbc
+           ,term_year
+           ,term_day
+           ,maturityembedded_desc
+           ,comp_type
+           ,issue_amountact
+           ,date_repurchase_exists
+           ,abs_flag
+           ,guarant_flag
+           ,guarant_type
+           ,rating_bondissuer_agency
+           ,agency_nameid
+           ,bond_biz_type
+           ,abs_originator_name
+           ,abs_share_ratio
+           ,expected_maturity_date
+           ,legal_maturity_date
+           ,abs_report_org
+           ,abs_custodian
+           ,company_selector
+           ,extra_ind_1
+           ,extra_ind_2
+           ,extra_ind_3
+           ,is_deleted
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{adjustLogId}
+           ,#{submitterId}
+           ,#{submitTime}
+           ,#{crmwName}
+           ,#{crmwScode}
+           ,#{crmwMktcode}
+           ,#{crmwStype}
+           ,#{windCode}
+           ,#{fullName}
+           ,#{shortName}
+           ,#{issuer}
+           ,#{issuerCode}
+           ,#{windCodeNib}
+           ,#{windCodeSh}
+           ,#{windCodeSz}
+           ,#{windCodeBj}
+           ,#{issueAmountplan}
+           ,#{couponRate}
+           ,#{dateInrightExists}
+           ,#{carryDate}
+           ,#{maturityDate}
+           ,#{infoPledgeRatio}
+           ,#{ratingBondAgency}
+           ,#{ratingBond}
+           ,#{ratingBondissuer}
+           ,#{ratingOutlook}
+           ,#{guarantor}
+           ,#{guarantorId}
+           ,#{agencyName}
+           ,#{innerIssuerRating}
+           ,#{securityType}
+           ,#{secTypename}
+           ,#{dateCallExists}
+           ,#{innerGuarantorRating}
+           ,#{dateExists}
+           ,#{fundUse}
+           ,#{promptReason}
+           ,#{analysis}
+           ,#{windCodeNbc}
+           ,#{termYear}
+           ,#{termDay}
+           ,#{maturityembeddedDesc}
+           ,#{compType}
+           ,#{issueAmountact}
+           ,#{dateRepurchaseExists}
+           ,#{absFlag}
+           ,#{guarantFlag}
+           ,#{guarantType}
+           ,#{ratingBondissuerAgency}
+           ,#{agencyNameid}
+           ,#{bondBizType}
+           ,#{absOriginatorName}
+           ,#{absShareRatio}
+           ,#{expectedMaturityDate}
+           ,#{legalMaturityDate}
+           ,#{absReportOrg}
+           ,#{absCustodian}
+           ,#{companySelector}
+           ,#{extraInd1}
+           ,#{extraInd2}
+           ,#{extraInd3}
+           ,#{isDeleted}
+           ,#{crteTime}
+           ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 按调库日志 ID 查询 CRMW 调库证券信息快照详情 -->
+    <select id="querySecuritySnapshotDetailByAdjustLogId"
+            resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto">
+        SELECT snap.wind_code
+               ,snap.full_name
+               ,snap.short_name
+               ,snap.issuer
+               ,snap.issuer_code
+               ,snap.wind_code_nib
+               ,snap.wind_code_sh
+               ,snap.wind_code_sz
+               ,snap.wind_code_bj
+               ,snap.issue_amountplan
+               ,snap.coupon_rate
+               ,snap.date_inright_exists
+               ,snap.carry_date
+               ,snap.maturity_date
+               ,snap.info_pledge_ratio
+               ,snap.rating_bond_agency
+               ,snap.rating_bond
+               ,snap.rating_bondissuer
+               ,snap.rating_outlook
+               ,snap.guarantor
+               ,snap.guarantor_id
+               ,snap.agency_name
+               ,snap.inner_issuer_rating
+               ,snap.security_type
+               ,snap.sec_typename
+               ,snap.date_call_exists
+               ,snap.inner_guarantor_rating
+               ,snap.date_exists
+               ,snap.fund_use
+               ,snap.prompt_reason
+               ,snap.analysis
+               ,snap.wind_code_nbc
+               ,snap.term_year
+               ,snap.term_day
+               ,snap.maturityembedded_desc
+               ,snap.comp_type
+               ,snap.issue_amountact
+               ,snap.date_repurchase_exists
+               ,snap.abs_flag
+               ,snap.guarant_flag
+               ,snap.guarant_type
+               ,snap.rating_bondissuer_agency
+               ,snap.agency_nameid
+               ,dst.security_type_name
+        FROM ip_adjust_security_snapshot_crmw snap
+        LEFT JOIN dict_security_type dst ON dst.security_type = snap.security_type AND dst.is_deleted = 0
+        WHERE snap.adjust_log_id = #{adjustLogId}
+          AND IFNULL(snap.is_deleted, 0) = 0
+        ORDER BY snap.id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 按标的证券代码查询最新一条有效 CRMW 调库证券信息快照详情 -->
+    <select id="queryLatestSecuritySnapshotDetailByWindCode"
+            resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto">
+        SELECT snap.wind_code
+               ,snap.full_name
+               ,snap.short_name
+               ,snap.issuer
+               ,snap.issuer_code
+               ,snap.wind_code_nib
+               ,snap.wind_code_sh
+               ,snap.wind_code_sz
+               ,snap.wind_code_bj
+               ,snap.issue_amountplan
+               ,snap.coupon_rate
+               ,snap.date_inright_exists
+               ,snap.carry_date
+               ,snap.maturity_date
+               ,snap.info_pledge_ratio
+               ,snap.rating_bond_agency
+               ,snap.rating_bond
+               ,snap.rating_bondissuer
+               ,snap.rating_outlook
+               ,snap.guarantor
+               ,snap.guarantor_id
+               ,snap.agency_name
+               ,snap.inner_issuer_rating
+               ,snap.security_type
+               ,snap.sec_typename
+               ,snap.date_call_exists
+               ,snap.inner_guarantor_rating
+               ,snap.date_exists
+               ,snap.fund_use
+               ,snap.prompt_reason
+               ,snap.analysis
+               ,snap.wind_code_nbc
+               ,snap.term_year
+               ,snap.term_day
+               ,snap.maturityembedded_desc
+               ,snap.comp_type
+               ,snap.issue_amountact
+               ,snap.date_repurchase_exists
+               ,snap.abs_flag
+               ,snap.guarant_flag
+               ,snap.guarant_type
+               ,snap.rating_bondissuer_agency
+               ,snap.agency_nameid
+               ,dst.security_type_name
+        FROM ip_adjust_security_snapshot_crmw snap
+        LEFT JOIN dict_security_type dst ON dst.security_type = snap.security_type AND dst.is_deleted = 0
+        WHERE snap.wind_code = #{windCode}
+          AND IFNULL(snap.is_deleted, 0) = 0
+        ORDER BY snap.submit_time DESC
+                 ,snap.id DESC
+        LIMIT 1
+    </select>
+
 </mapper>

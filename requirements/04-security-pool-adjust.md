@@ -294,7 +294,7 @@
 
 **④ 调出处理** `executeOutboundSubmit`：逻辑对称，先按目标池 `out_report_restriction` 跑 `checkReportRequired`（对应老项目 `rschDocOutMode`，语义同调入 none/any/internal），生效操作为 `deletePoolStatusSoft`（软删除 `ip_pool_status` 中该证券在目标池的 `audit_status='20'` 记录，`is_deleted=1`）。
 
-**⑤ 后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` 用 DB 当前快照 + 前端传入字段合并，`editSecurityInfoForAdjust` 全量更新 `rrs_securityinfo`（约 80 字段）。
+**⑤ 后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` 用主档 + 前端传入字段合并后，按本次提交产生的**每个** `logId` 各 `INSERT` 一行 `ip_adjust_security_snapshot`（本笔调库证券信息留痕）。**不**再 UPDATE `rrs_securityinfo`（主档仍为全站真相源）。
 
 **`createInitialSteps`**（懒创建）：start（auto_process）→ 若下一节点是发起人节点则自动 submit 并继续 → 若是审批节点则 `createPendingSteps`（按处理人展开为多条 pending 记录）返回 false → 若是 end 则 auto_process 并返回 true。
 
@@ -305,7 +305,8 @@
 | `ip_adjust_log` | INSERT | security_code, adjust_type, adjust_mode, **adjust_batch_no**, target_pool_id, flow_id/key/type, **audit_status**(00 或 20), adjuster_id/name, adjust_reason/advice, submit_time |
 | `ip_pool_status` | INSERT（调入生效）/ UPDATE 软删（调出生效） | security_code, adjust_log_id, target_pool_id, **audit_status='20'**, entry_time, is_deleted |
 | `ip_adjust_step` | INSERT（初始 3 步 + 审批时按需创建） | adjust_log_id, **adjust_batch_no**, flow_node_id, node_type, approval_strategy, **step_status**(pending/auto_process/submit), handler_id/name |
-| `rrs_securityinfo` | UPDATE | 详情页可编辑字段全量 |
+| `rrs_securityinfo` | 只读 | 提交不再改主档；列表/校验/矩阵仍读主档 |
+| `ip_adjust_security_snapshot` | INSERT | 按 `adjust_log_id` 固化提交时证券信息（审批/详情优先读） |
 | `sys_attachment` | 绑定/复制附件 | adjustLogId, attachment_category(credit_report_hand/material_hand) |
 | `wf_flow_*` | 只读（构建流程快照） | — |
 
@@ -316,7 +317,7 @@
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `querySecurityPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
-| `querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 证券详情 |
+| `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
 | `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投/观察等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 按主体内评×期限矩阵过滤信用债大库；**正式证券无主体内评分档时直接去掉全部 credit_bond 池（含 1～5 级）**；临时代码无内评默认 `grade_code=4` 再走矩阵 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
