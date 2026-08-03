@@ -569,7 +569,7 @@
         LIMIT 1
     </select>
 
-    <!-- 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） -->
+    <!-- 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天；按曾入过判定，出库软删后仍计，不限制 is_deleted=0） -->
     <select id="queryIssuerHasNonSimpleInboundWithinDays" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips
@@ -583,7 +583,6 @@
           AND ips.target_pool_id = #{targetPoolId}
           AND ips.flow_type != 'simpleInbound'
           AND ips.audit_status = '20'
-          AND ips.is_deleted = 0
           AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
     </select>
 

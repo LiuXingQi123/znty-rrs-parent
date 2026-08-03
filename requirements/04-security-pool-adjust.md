@@ -264,7 +264,7 @@
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单、简易、默认调入，推荐优先级 白名单 > 简易 > 默认。
   - 白名单条件顺序：剩余期限≤3 年（`date_exists` 天）→ 非永续/私募/ABS → 债券类 → 主体在白名单池（**`WHITELIST_POOL_IDS` 当前 emptySet，本条件固定不成立**）→ 非担保债。
-  - 简易条件顺序：目标池为信用债一/二/三级库（`innerSort 1~3`）→ 剩余期限可解析（`date_exists`）→ 剩余期限 ≤ 同主体在目标池最大剩余期限 → 该主体 180 天内以非简易流程入过目标池 → 主体/展望未下调或下调时担保人未下调（**已注释**，RatingDowngradeChecker 仍计算保留）。
+  - 简易条件顺序：目标池为信用债一/二/三级库（`innerSort 1~3`）→ 剩余期限可解析（`date_exists`）→ 剩余期限 ≤ 同主体在目标池最大剩余期限 → 该主体 180 天内以非简易流程入过目标池（`queryIssuerHasNonSimpleInboundWithinDays`：按 `ip_pool_status` 审批通过入库记录判定，**已出库软删仍计**，不要求 `is_deleted=0`）→ 主体/展望未下调或下调时担保人未下调（**已注释**，RatingDowngradeChecker 仍计算保留）。
 
 ### 3.7 后端 addAdjustLog 完整逻辑
 
