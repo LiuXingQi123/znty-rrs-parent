@@ -1101,21 +1101,19 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 判断流程是否为直通流程（开始后无需人工处理即可到结束节点）。
+     * 判断流程是否为直通流程（开始后无需人工待办即可到结束节点）。
      *
-     * <p>判定逻辑：
-     * <ol>
-     *   <li>在节点列表中查找 nodeType='start' 的节点</li>
-     *   <li>在连线列表中查找 fromNodeId 等于 start 节点 DB ID 的所有出边</li>
-     *   <li>逐一检查每个出边的目标节点是否为 end，或是否为发起人自动提交节点且继续指向 end</li>
-     *   <li>若所有路径都能无需人工处理到 end → 直通流程；若存在人工待办节点 → 非直通（需审批）</li>
-     * </ol>
+     * <p>与 createInitialSteps 自动完成范围对齐：start/end/auto 节点、initiator、approval_strategy=auto
+     * 可无人工到达 end；主路径存在 preempt/all 等人工审批则为非直通。
+     * 例：债券特殊策略入库（发起人→多层 auto→结束）应判为直通。
      *
      * @param snapshot 流程快照（含节点索引和连线列表）
      * @return true 表示直通流程（可直接生效），false 表示需要审批
      */
     private boolean isDirectFlow(FlowSnapshot snapshot) {
-        // 查找 start 节点
+        if (snapshot == null || snapshot.nodeMap == null || snapshot.edges == null) {
+            return false;
+        }
         FlowNodeBo startNode = null;
         for (FlowNodeBo node : snapshot.nodeMap.values()) {
             if (NodeType.START.getCode().equals(node.getNodeType())) {
@@ -1126,51 +1124,57 @@ public class SecurityPoolAdjustService {
         if (startNode == null) {
             return false;
         }
+        return canCompleteWithoutHumanApproval(snapshot, startNode, startNode, new HashSet<Long>());
+    }
 
-        // 收集所有从 start 节点出发的边
-        List<FlowEdgeBo> outEdges = new ArrayList<>();
-        for (FlowEdgeBo edge : snapshot.edges) {
-            if (edge.getFromNodeId().equals(startNode.getId())) {
-                outEdges.add(edge);
-            }
-        }
-        if (outEdges.isEmpty()) {
+    /**
+     * 从当前节点沿主路径（排除 reject 支路）是否仅经无需人工节点即可到达 end。
+     */
+    private boolean canCompleteWithoutHumanApproval(FlowSnapshot snapshot, FlowNodeBo current,
+                                                    FlowNodeBo startNode, Set<Long> visiting) {
+        if (current == null || current.getId() == null) {
             return false;
         }
-
-        // 检查所有出边是否都能直达结束节点
-        for (FlowEdgeBo edge : outEdges) {
-            FlowNodeBo targetNode = snapshot.nodeMap.get(edge.getToNodeId());
-            if (targetNode == null) {
-                return false;
+        if (NodeType.END.getCode().equals(current.getNodeType())) {
+            return true;
+        }
+        if (!visiting.add(current.getId())) {
+            return false;
+        }
+        try {
+            if (NodeType.APPROVAL.getCode().equals(current.getNodeType())) {
+                NodeApprovalConfigBo config = snapshot.approvalConfigMap != null
+                        ? snapshot.approvalConfigMap.get(current.getId()) : null;
+                boolean autoStrategy = config != null
+                        && ApprovalStrategy.AUTO.getCode().equals(config.getApprovalStrategy());
+                boolean initiator = isInitiatorStep(snapshot, current, config, current, startNode);
+                if (!autoStrategy && !initiator) {
+                    return false;
+                }
             }
-            if (NodeType.END.getCode().equals(targetNode.getNodeType())) {
-                continue;
-            }
-
-            NodeApprovalConfigBo config = snapshot.approvalConfigMap.get(targetNode.getId());
-            // 判断当前审批节点是否应由流程发起人自动完成
-            if (!isInitiatorStep(snapshot, targetNode, config, startNode, startNode)) {
-                return false;
-            }
-
-            boolean targetCanEnd = false;
-            for (FlowEdgeBo nextEdge : snapshot.edges) {
-                if (!nextEdge.getFromNodeId().equals(targetNode.getId())) {
+            List<FlowEdgeBo> outEdges = new ArrayList<>();
+            for (FlowEdgeBo edge : snapshot.edges) {
+                if (edge.getFromNodeId() == null || !edge.getFromNodeId().equals(current.getId())) {
                     continue;
                 }
-                FlowNodeBo nextNode = snapshot.nodeMap.get(nextEdge.getToNodeId());
-                if (nextNode != null && NodeType.END.getCode().equals(nextNode.getNodeType())) {
-                    targetCanEnd = true;
-                    break;
+                if (ProcessAction.REJECT.getCode().equals(edge.getRouteAction())) {
+                    continue;
                 }
+                outEdges.add(edge);
             }
-            if (!targetCanEnd) {
+            if (outEdges.isEmpty()) {
                 return false;
             }
+            for (FlowEdgeBo edge : outEdges) {
+                FlowNodeBo next = snapshot.nodeMap.get(edge.getToNodeId());
+                if (!canCompleteWithoutHumanApproval(snapshot, next, startNode, visiting)) {
+                    return false;
+                }
+            }
+            return true;
+        } finally {
+            visiting.remove(current.getId());
         }
-
-        return true;
     }
 
     /**

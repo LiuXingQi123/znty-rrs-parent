@@ -1,7 +1,13 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.entity.bo.FlowDefinitionBo;
+import com.znty.rrs.entity.bo.FlowEdgeBo;
+import com.znty.rrs.entity.bo.FlowNodeBo;
+import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
+import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
@@ -17,9 +23,12 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.lang.reflect.Constructor;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
@@ -259,6 +268,101 @@ public class ForbiddenPoolAdjustServiceTest {
         company.setCompanyCode(companyCode);
         company.setCompanyShortName("某公司");
         return company;
+    }
+
+    /**
+     * 验证债券特殊策略类流程（发起人→多层 auto→结束）判为直通。
+     * 旧逻辑只认「发起人后直接 end」，会误判为非直通导致联动漏落池。
+     */
+    @Test
+    public void isDirectFlowShouldAcceptInitiatorThenAutoChain() throws Exception {
+        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        FlowNodeBo start = buildFlowNode(1L, "start");
+        FlowNodeBo initiator = buildFlowNode(2L, "approval");
+        FlowNodeBo auto1 = buildFlowNode(3L, "approval");
+        FlowNodeBo auto2 = buildFlowNode(4L, "approval");
+        FlowNodeBo end = buildFlowNode(5L, "end");
+        Map<Long, FlowNodeBo> nodeMap = new HashMap<>();
+        nodeMap.put(1L, start);
+        nodeMap.put(2L, initiator);
+        nodeMap.put(3L, auto1);
+        nodeMap.put(4L, auto2);
+        nodeMap.put(5L, end);
+        Map<Long, NodeApprovalConfigBo> configMap = new HashMap<>();
+        configMap.put(2L, buildApprovalConfig(2L, "initiator"));
+        configMap.put(3L, buildApprovalConfig(3L, "auto"));
+        configMap.put(4L, buildApprovalConfig(4L, "auto"));
+        List<FlowEdgeBo> edges = Arrays.asList(
+                buildEdge(1L, 2L, "auto"),
+                buildEdge(2L, 3L, "submit"),
+                buildEdge(3L, 4L, "auto"),
+                buildEdge(4L, 5L, "auto"));
+        Object snapshot = buildInnerFlowSnapshot(nodeMap, edges, configMap);
+
+        Boolean direct = ReflectionTestUtils.invokeMethod(service, "isDirectFlow", snapshot);
+
+        assertThat(direct).isTrue();
+    }
+
+    /** 验证主路径存在人工 preempt 节点时仍为非直通。 */
+    @Test
+    public void isDirectFlowShouldRejectHumanPreemptNode() throws Exception {
+        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        FlowNodeBo start = buildFlowNode(1L, "start");
+        FlowNodeBo initiator = buildFlowNode(2L, "approval");
+        FlowNodeBo human = buildFlowNode(3L, "approval");
+        FlowNodeBo end = buildFlowNode(4L, "end");
+        Map<Long, FlowNodeBo> nodeMap = new HashMap<>();
+        nodeMap.put(1L, start);
+        nodeMap.put(2L, initiator);
+        nodeMap.put(3L, human);
+        nodeMap.put(4L, end);
+        Map<Long, NodeApprovalConfigBo> configMap = new HashMap<>();
+        configMap.put(2L, buildApprovalConfig(2L, "initiator"));
+        configMap.put(3L, buildApprovalConfig(3L, "preempt"));
+        List<FlowEdgeBo> edges = Arrays.asList(
+                buildEdge(1L, 2L, "auto"),
+                buildEdge(2L, 3L, "submit"),
+                buildEdge(3L, 4L, "approve"));
+        Object snapshot = buildInnerFlowSnapshot(nodeMap, edges, configMap);
+
+        Boolean direct = ReflectionTestUtils.invokeMethod(service, "isDirectFlow", snapshot);
+
+        assertThat(direct).isFalse();
+    }
+
+    /** 构造 Service 内部 FlowSnapshot（与 entity.flow.FlowSnapshot 不同）。 */
+    private Object buildInnerFlowSnapshot(Map<Long, FlowNodeBo> nodeMap, List<FlowEdgeBo> edges,
+                                          Map<Long, NodeApprovalConfigBo> configMap) throws Exception {
+        Class<?> snapshotClass = Class.forName(
+                "com.znty.rrs.service.ForbiddenPoolAdjustService$FlowSnapshot");
+        Constructor<?> ctor = snapshotClass.getDeclaredConstructor(
+                FlowDefinitionBo.class, FlowVersionBo.class, Map.class, List.class, Map.class, Map.class);
+        ctor.setAccessible(true);
+        return ctor.newInstance(null, null, nodeMap, edges, configMap,
+                Collections.<Long, List<NodeApprovalHandlerBo>>emptyMap());
+    }
+
+    private FlowNodeBo buildFlowNode(Long id, String nodeType) {
+        FlowNodeBo node = new FlowNodeBo();
+        node.setId(id);
+        node.setNodeType(nodeType);
+        return node;
+    }
+
+    private NodeApprovalConfigBo buildApprovalConfig(Long nodeId, String strategy) {
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setNodeId(nodeId);
+        config.setApprovalStrategy(strategy);
+        return config;
+    }
+
+    private FlowEdgeBo buildEdge(Long from, Long to, String routeAction) {
+        FlowEdgeBo edge = new FlowEdgeBo();
+        edge.setFromNodeId(from);
+        edge.setToNodeId(to);
+        edge.setRouteAction(routeAction);
+        return edge;
     }
 
     /** 构建投资池数据。 */
