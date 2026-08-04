@@ -208,7 +208,7 @@
 | 8 | `inCheckRestrictPool` | 证券当前在调入限制池中：xxx（`in_restrict`） |
 | 9 | `inCheckMutexConflict` | 与以下互斥池不可同时调入：xxx（同请求同时勾选 `in_mutex` 关系池） |
 | 10 | `inCheckElasticPool` | 证券在调入弹性禁投池中，作为警告返回（`in_soft_restrict`，不直接阻断） |
-| 11 | `inCheckForbiddenPool` | 证券当前在禁止池中（目标池或同证券在 `pool_type` 为 forbidden/blacklist 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
+| 11 | `inCheckForbiddenPool` | 证券当前在禁止池中（目标池或同证券在 `pool_type` 为 forbidden 且 `audit_status='20'` 的池中，区别于池间 `in_restrict`） |
 | 12 | `inCheckIndustry` | 证券行业与目标池行业配置不一致（**调用已注释**，不执行；方法体仍保留） |
 | 13 | `inCheckOpenDay` | 当前不在本池开放日内（池 `open_day_adjust=1` 时，当日须落在 `ip_pool_open_day` 的 `begin_date~end_date` 区间内） |
 
@@ -446,7 +446,7 @@
 | 最大容量 | `MaxCount != -1` 且当前数 >= 上限则拦 | `maxCapacity > 0` 且当前数 >= 上限则拦 | 迁移时需统一 `-1/null/0` 的不限制含义 |
 | 调入限制池 | `LimitedPoolId` 命中则拦 | 已有 `in_restrict` | 基本一致 |
 | 弹性限制池 | 命中后返回 code=2，偏提示/警告 | 新系统作为 warning，不阻断 | 基本一致，需确认前端是否醒目展示 warning |
-| 全局禁投池 | 通过配置 `Forbiddenlastpoolid` 指定池 ID | 通过池 `pool_type in ('forbidden','blacklist')` 判断 | 配置口径不同，迁移时必须把老配置池正确标成 forbidden/blacklist |
+| 全局禁投池 | 通过配置 `Forbiddenlastpoolid` 指定池 ID | 通过池 `pool_type in ('forbidden')` 判断 | 配置口径不同，迁移时必须把老配置池正确标成 forbidden |
 | 开放日 | `open_day_adjust=1` 时查开放日 | 已有 `ip_pool_open_day` | 基本一致 |
 | 行业限制 | 查 `IndustryPartition.industrycode` 与池 `IndustryCode` 比对 | 用 `rrs_securityinfo.industry_name == pool.industry_code` | 可能有问题，老系统是行业编码，新系统当前像名称对配置值精确匹配 |
 | 股票分管人限制 | `IsManage=1` 且当前用户不是分管股票则拦 | 未实现 | 缺少；如果股票池仍要求分管人权限，需要补 |

@@ -8,7 +8,7 @@
 
 ## 0. 关键现状（数据来源）
 
-**本页查询三类主体风险池**：禁投池（15 / `forbidden`）、观察池（16 / `observe`）和黑名单质押库（17 / `blacklist`）。复用 `ip_pool_status`（投资池当前状态表），通过 `pool_type IN ('forbidden','observe','blacklist')`、`ips.is_deleted=0`、`ips.audit_status='20'` 查询当前已生效数据。主体级状态按 `ips.security_code=ais_inv_ods.wind_cbondissuer.s_info_compcode` 关联有效 Wind 主体（**该表为债券+主体粒度，JOIN 前须按 `s_info_compcode` 去重**）；债券仍按 Wind 证券代码关联 `rrs_securityinfo`。
+**本页查询四类主体风险池**：禁投池（15 / `forbidden`）、观察池（16 / `observe`）、黑名单质押库（17 / `blacklist`）和重点观察名单（23 / `restricted`）。复用 `ip_pool_status`（投资池当前状态表），通过 `pool_type IN ('forbidden','observe','blacklist','restricted')`、`ips.is_deleted=0`、`ips.audit_status='20'` 查询当前已生效数据。主体级状态按 `ips.security_code=ais_inv_ods.wind_cbondissuer.s_info_compcode` 关联有效 Wind 主体（**该表为债券+主体粒度，JOIN 前须按 `s_info_compcode` 去重**）；债券仍按 Wind 证券代码关联 `rrs_securityinfo`。
 
 ---
 
@@ -79,13 +79,13 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 
 - 路径：`POST /api/v1/forbiddenPoolQuery/querySecurityTypeList`，请求体 `{}`
 - 返回 `List<SecurityTypeOptionDto>{securityType, securityTypeName}`
-- 后端 SQL：仅从三类风险池的已生效状态中提取证券类型，供当前查询筛选。
+- 后端 SQL：仅从四类风险池的已生效状态中提取证券类型，供当前查询筛选。
 
 ---
 
 ## 3. 关键校验
 
-- **只返回已生效风险池数据**：`INNER JOIN ip_investment_pool p ON p.id=ips.target_pool_id AND p.is_deleted=0 AND p.pool_type IN ('forbidden','observe','blacklist')`，并强制 `ips.is_deleted=0 AND ips.audit_status='20'`。
+- **只返回已生效风险池数据**：`INNER JOIN ip_investment_pool p ON p.id=ips.target_pool_id AND p.is_deleted=0 AND p.pool_type IN ('forbidden','observe','blacklist','restricted')`，并强制 `ips.is_deleted=0 AND ips.audit_status='20'`。
 - **逻辑删除过滤**：`ips.is_deleted=0`。
 - **分页硬上限**：`PageRequest.getPageSize()` 限制最大 100；`pageIndex` <1 兜底为 1。
 - **证券状态筛选 SQL**：`securityStatus == 'active'` → `bi.maturity_date >= CURDATE()`；`'matured'` → `bi.maturity_date < CURDATE()`，与证券池查询保持一致。
@@ -100,7 +100,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `forbiddenPoolQuery/queryForbiddenPoolPage` | securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, pageIndex, pageSize | `PageResult<ForbiddenPoolQueryDto>` | 已生效风险池分页查询 |
-| `forbiddenPoolQuery/querySecurityTypeList` | `{}` | `List<SecurityTypeOptionDto>` | 证券类型下拉（限三类风险池） |
+| `forbiddenPoolQuery/querySecurityTypeList` | `{}` | `List<SecurityTypeOptionDto>` | 证券类型下拉（限四类风险池） |
 
 > 路径均带前缀 `/api/v1/`。
 
@@ -125,7 +125,7 @@ SELECT ips.id, ips.security_code, ips.security_short_name, ips.adjuster_name,
 FROM ip_pool_status ips
 INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                  AND p.is_deleted = 0
-                                 AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
+                                 AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
 LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
 LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
 -- wind_cbondissuer 为债券+主体粒度，先按主体代码去重再 JOIN

@@ -122,13 +122,14 @@ public class ForbiddenAbsPoolAdjustService {
 
     /** 管理员用户 ID */
     private static final String ADMIN_USER_ID = "1";
-    /** 禁投池 / 观察池 / 黑名单质押库（ABS 债手工可调范围，与主体禁投一致） */
+    /** 禁投池 / 观察池 / 黑名单质押库 / 重点观察名单（ABS 债手工可调范围，与主体禁投一致） */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
 
     static {
         ALLOWED_MANUAL_POOL_IDS.add(15L);
         ALLOWED_MANUAL_POOL_IDS.add(16L);
         ALLOWED_MANUAL_POOL_IDS.add(17L);
+        ALLOWED_MANUAL_POOL_IDS.add(23L);
     }
     /** 短时间重复提交判定窗口（秒） */
     private static final int DUPLICATE_SUBMIT_WINDOW_SECONDS = 30;
@@ -284,7 +285,7 @@ public class ForbiddenAbsPoolAdjustService {
         List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolByIdsList(
                 new ArrayList<>(ALLOWED_MANUAL_POOL_IDS));
         if (allPools.size() != ALLOWED_MANUAL_POOL_IDS.size()) {
-            throw new BizException("ABS禁投池调整配置不完整，必须存在 poolId=15、16、17");
+            throw new BizException("ABS禁投池调整配置不完整，必须存在 poolId=15、16、17、23");
         }
         for (InvestmentPoolBo pool : allPools) {
             if (pool.getStatus() == null || !"enabled".equals(pool.getStatus())
@@ -2448,7 +2449,7 @@ public class ForbiddenAbsPoolAdjustService {
         addIfFailed(failures, inCheckMutexConflict(ctx));
         // 入池检查：证券当前在弹性禁投池中（in_soft_restrict，警告不阻断）
         addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
-        // 入池检查：证券是否在全局禁止池（forbidden 禁投池/blacklist 黑名单）
+        // 入池检查：证券是否在全局禁止池（forbidden 禁投池）
         addIfFailed(failures, inCheckForbiddenPool(ctx));
         // 行业限制校验（按池 industry_code，调入）——暂时不需要，先注释
         // addIfFailed(failures, inCheckIndustry(ctx));
@@ -3333,9 +3334,9 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 规则：全局禁止池（forbidden 禁投池/blacklist 黑名单）
+     * 规则：全局禁止池（forbidden 禁投池）
      *
-     * <p>证券当前在禁投池或黑名单中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
+     * <p>证券当前在禁投池中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
      * 对应老项目 Forbiddenlastpoolid 配置。
      */
     private String inCheckForbiddenPool(AdjustCheckContext ctx) {
@@ -4507,7 +4508,7 @@ public class ForbiddenAbsPoolAdjustService {
      */
     private void validateAllowedManualPoolId(Long targetPoolId) {
         if (targetPoolId == null || !ALLOWED_MANUAL_POOL_IDS.contains(targetPoolId)) {
-            throw new BizException("ABS禁投池调整手工目标池仅允许 15、16、17");
+            throw new BizException("ABS禁投池调整手工目标池仅允许 15、16、17、23");
         }
     }
 

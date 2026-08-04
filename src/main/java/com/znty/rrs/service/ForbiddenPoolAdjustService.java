@@ -126,13 +126,14 @@ public class ForbiddenPoolAdjustService {
     private static final String ADMIN_USER_ID = "1";
     /** 禁投池主体调库记录固定证券类型 */
     private static final String COMPANY_SECURITY_TYPE = CategoryType.COMPANY.getCode();
-    /** 禁投池、观察池和黑名单质押库 ID */
+    /** 禁投池、观察池、黑名单质押库和重点观察名单 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
 
     static {
         ALLOWED_MANUAL_POOL_IDS.add(15L);
         ALLOWED_MANUAL_POOL_IDS.add(16L);
         ALLOWED_MANUAL_POOL_IDS.add(17L);
+        ALLOWED_MANUAL_POOL_IDS.add(23L);
     }
 
     /** 禁投池主体调整数据访问组件 */
@@ -254,7 +255,7 @@ public class ForbiddenPoolAdjustService {
         List<InvestmentPoolBo> configuredPools = investmentPoolMapper.queryPoolByIdsList(
                 new ArrayList<>(ALLOWED_MANUAL_POOL_IDS));
         if (configuredPools.size() != ALLOWED_MANUAL_POOL_IDS.size()) {
-            throw new BizException("禁投池调整配置不完整，必须存在 poolId=15、16、17");
+            throw new BizException("禁投池调整配置不完整，必须存在 poolId=15、16、17、23");
         }
         configuredPools.sort(Comparator.comparing(InvestmentPoolBo::getId));
         for (InvestmentPoolBo pool : configuredPools) {
@@ -425,7 +426,7 @@ public class ForbiddenPoolAdjustService {
         }
         for (ForbiddenPoolAdjustCheckReq.CheckItem item : items) {
             if (item.getTargetPoolId() == null || !ALLOWED_MANUAL_POOL_IDS.contains(item.getTargetPoolId())) {
-                throw new BizException("禁投池调整手工目标池仅允许 15、16、17，targetPoolId="
+                throw new BizException("禁投池调整手工目标池仅允许 15、16、17、23，targetPoolId="
                         + item.getTargetPoolId());
             }
         }
@@ -443,7 +444,7 @@ public class ForbiddenPoolAdjustService {
                     || ItemType.MANUAL.getCode().equals(item.getItemTag());
             if (manual && (item.getTargetPoolId() == null
                     || !ALLOWED_MANUAL_POOL_IDS.contains(item.getTargetPoolId()))) {
-                throw new BizException("禁投池调整手工目标池仅允许 15、16、17，targetPoolId="
+                throw new BizException("禁投池调整手工目标池仅允许 15、16、17、23，targetPoolId="
                         + item.getTargetPoolId());
             }
         }
@@ -2678,7 +2679,7 @@ public class ForbiddenPoolAdjustService {
         addIfFailed(failures, inCheckMutexConflict(ctx));
         // 入池检查：证券当前在弹性禁投池中（in_soft_restrict，警告不阻断）
         addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
-        // 入池检查：证券是否在全局禁止池（forbidden 禁投池/blacklist 黑名单）
+        // 入池检查：证券是否在全局禁止池（forbidden 禁投池）
         addIfFailed(failures, inCheckForbiddenPool(ctx));
         // 行业限制校验（按池 industry_code，调入）——暂时不需要，先注释
         // addIfFailed(failures, inCheckIndustry(ctx));
@@ -3160,9 +3161,9 @@ public class ForbiddenPoolAdjustService {
     }
 
     /**
-     * 规则：全局禁止池（forbidden 禁投池/blacklist 黑名单）
+     * 规则：全局禁止池（forbidden 禁投池）
      *
-     * <p>证券当前在禁投池或黑名单中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
+     * <p>证券当前在禁投池中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
      * 对应老项目 Forbiddenlastpoolid 配置。
      */
     private String inCheckForbiddenPool(AdjustCheckContext ctx) {

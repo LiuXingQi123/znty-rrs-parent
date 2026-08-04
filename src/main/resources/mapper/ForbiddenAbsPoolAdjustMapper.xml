@@ -354,14 +354,14 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- 查询证券是否在全局禁投池（forbidden/blacklist，audit_status=20），用于调入禁投池校验 -->
+    <!-- 查询证券是否在全局禁投池（forbidden，audit_status=20），用于调入禁投池校验 -->
     <select id="querySecurityInForbiddenPool" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
         WHERE ips.security_code = #{securityCode}
-          AND p.pool_type IN ('forbidden', 'blacklist')
+          AND p.pool_type IN ('forbidden')
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
     </select>

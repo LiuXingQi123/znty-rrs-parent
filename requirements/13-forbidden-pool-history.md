@@ -8,7 +8,7 @@
 
 ## 0. 关键现状（数据来源）
 
-**风险池历史不是独立表**，而是复用 `ip_adjust_log`（证券池调库记录表），通过 `INNER JOIN ip_investment_pool p ON p.pool_type IN ('forbidden','observe','blacklist')` 过滤出三类风险池的调库流水。
+**风险池历史不是独立表**，而是复用 `ip_adjust_log`（证券池调库记录表），通过 `INNER JOIN ip_investment_pool p ON p.pool_type IN ('forbidden','observe','blacklist','restricted')` 过滤出四类风险池的调库流水。
 
 - 禁投池查询（[08](08-forbidden-pool-query.md)）→ 读 `ip_pool_status`（当前在禁投池中的证券快照）
 - 禁投池历史（本文）→ 读 `ip_adjust_log`（针对禁投池的全部调库流水，含所有状态）
@@ -119,7 +119,7 @@ SELECT al.id, al.adjuster_name, al.submit_time, al.security_short_name,
        al.target_pool_id, p.pool_name AS target_pool_name, al.audit_status
 FROM ip_adjust_log al
 INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
-                                 AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
+                                 AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
 LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
 -- wind_cbondissuer 为债券+主体粒度，先按主体代码去重再 JOIN，避免同主体多债行膨胀
 LEFT JOIN (
@@ -160,7 +160,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 |---|---|---|
 | 主表 | `ip_pool_status`（当前状态表，快照） | `ip_adjust_log`（调库流水表） |
 | 含义 | 此刻仍在禁投池中的证券 | 所有针对禁投池的调整动作（含已调出/驳回/撤回） |
-| 风险池过滤 | `INNER JOIN ip_investment_pool p ON p.pool_type IN ('forbidden','observe','blacklist')` | 同左 |
+| 风险池过滤 | `INNER JOIN ip_investment_pool p ON p.pool_type IN ('forbidden','observe','blacklist','restricted')` | 同左 |
 | 筛选项 | 证券代码/简称/类型/状态/调整日期/调整人/发行主体/调整状态 | 主体代码/主体名称/证券代码/证券名称/调整日期/调整人/调整方向/调整状态 |
 | 表格列 | 含证券类型/证券状态/退市日期/行权日期 | 含调整类型/调整方向/审批状态 |
 | 证券名称/代码 | 可点击跳详情 | 可点击跳详情，主体记录跳主体详情 |

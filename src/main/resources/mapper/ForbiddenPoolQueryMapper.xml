@@ -26,7 +26,7 @@
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
+                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         LEFT JOIN (
@@ -90,7 +90,7 @@
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
+                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'

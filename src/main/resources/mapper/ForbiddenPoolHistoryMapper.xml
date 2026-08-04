@@ -23,7 +23,7 @@
                ,al.audit_status
         FROM ip_adjust_log al
         INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
-                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist')
+                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type
                                         AND dst.is_deleted = 0
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code

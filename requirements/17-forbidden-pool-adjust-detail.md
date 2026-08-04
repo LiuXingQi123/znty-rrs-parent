@@ -113,7 +113,7 @@ view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip
 | 提交时 `securityInfo` | adjust 模式传全量可编辑字段，`editSecurityInfoForAdjust` 更新 | **不传**（主体信息只读），`postSubmitProcess` 跳过 |
 | 修改节点重新提交 | 不实现（在 approve.html） | **不实现**（在 forbidden_pool_adjust_approve.html） |
 | `pageTitle` | adjust→「证券池调库」，否则「证券详情」 | adjust→「禁投池调整」，否则「主体详情」 |
-| 池类型 | credit_bond 等 | forbidden/observe/blacklist |
+| 池类型 | credit_bond 等 | forbidden/observe/blacklist/restricted |
 
 ---
 

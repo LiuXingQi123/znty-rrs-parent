@@ -81,7 +81,7 @@ public interface ForbiddenAbsPoolAdjustMapper {
     Date queryPoolEntryTime(@Param("securityCode") String securityCode,
                                       @Param("targetPoolId") Long targetPoolId);
 
-    /** 查询证券是否在全局禁投池（forbidden/blacklist，audit_status=20），用于调入禁投池校验 */
+    /** 查询证券是否在全局禁投池（forbidden，audit_status=20），用于调入禁投池校验 */
     boolean querySecurityInForbiddenPool(@Param("securityCode") String securityCode);
 
     /** 查询指定日期是否在目标池的开放区间内（ip_pool_open_day，open_day_adjust=1 时用） */

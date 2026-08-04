@@ -8,7 +8,7 @@ package com.znty.rrs.common.enums;
  * 其余类型先作分类与选池过滤，后续按需挂规则。后端入库不强制枚举白名单（非空即可），便于过渡。
  * <p>
  * 硬逻辑（改 code 需同步改 Mapper/Service）：
- * credit_bond / crmw / forbidden / blacklist / observe
+ * credit_bond / crmw / forbidden / blacklist / observe / restricted
  */
 public enum PoolType {
 
@@ -43,9 +43,9 @@ public enum PoolType {
     FORBIDDEN("forbidden"),
     /** 观察池：主体内评矩阵可跳过；禁投相关目标（硬逻辑） */
     OBSERVE("observe"),
-    /** 黑名单：与 forbidden 一并参与全局禁止（硬逻辑） */
+    /** 黑名单：风险池查询用，不参与全局禁止（全局禁止仅 forbidden） */
     BLACKLIST("blacklist"),
-    /** 限制名单（重点观察等），无全局禁止硬逻辑 */
+    /** 限制名单（重点观察等），参与风险池查询，无全局禁止硬逻辑 */
     RESTRICTED("restricted"),
     /** 白名单库（流程/规则白名单池，预留） */
     WHITELIST("whitelist"),

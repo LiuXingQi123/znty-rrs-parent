@@ -97,7 +97,7 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(result.getSecurityCode()).isEqualTo("C10001");
     }
 
-    /** 验证手工调库目标池超出 15、16、17 时直接拒绝。 */
+    /** 验证手工调库目标池超出 15、16、17、23 时直接拒绝。 */
     @Test(expected = BizException.class)
     public void checkCompanyAdjustShouldRejectPoolOutsideAllowedRange() {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
@@ -115,7 +115,7 @@ public class ForbiddenPoolAdjustServiceTest {
         service.checkCompanyAdjust(req);
     }
 
-    /** 验证可调投资池仅返回禁投池、观察池和黑名单质押库。 */
+    /** 验证可调投资池仅返回禁投池、观察池、黑名单质押库和重点观察名单。 */
     @Test
     public void queryCompanyAdjustPoolListShouldOnlyReturnConfiguredRiskPools() {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
@@ -126,7 +126,8 @@ public class ForbiddenPoolAdjustServiceTest {
                 .thenReturn(Arrays.asList(
                         buildPool(15L, "禁投池", "forbidden"),
                         buildPool(16L, "观察池", "observe"),
-                        buildPool(17L, "黑名单质押库", "blacklist")));
+                        buildPool(17L, "黑名单质押库", "blacklist"),
+                        buildPool(23L, "重点观察名单", "restricted")));
         when(poolMapper.queryMutexRelationList()).thenReturn(Collections.emptyList());
         when(mapper.queryPoolCurrentCountList()).thenReturn(Collections.<PoolDto>emptyList());
         ForbiddenPoolAdjustReq req = new ForbiddenPoolAdjustReq();
@@ -134,7 +135,7 @@ public class ForbiddenPoolAdjustServiceTest {
 
         List<PoolDto> result = service.queryCompanyAdjustPoolList(req);
 
-        assertThat(result).extracting(PoolDto::getId).containsOnly(15L, 16L, 17L);
+        assertThat(result).extracting(PoolDto::getId).containsOnly(15L, 16L, 17L, 23L);
     }
 
     /** 验证主体调入仅同步 SQL 已筛选出的未到期非 ABS 债券。 */
