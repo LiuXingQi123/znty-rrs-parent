@@ -4,7 +4,7 @@
 <mapper namespace="com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper">
     <!-- 证券池批量调整 mapper，提供可调整投资池及候选证券查询 -->
 
-    <!-- 分页查询启用叶子投资池：仅信用债大库(new)、债券产品库下的子集（不含父级根池） -->
+    <!-- 分页查询启用叶子投资池 -->
     <select id="queryPoolPage" resultType="com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolDto">
         SELECT p.id
                ,p.pool_name
@@ -22,23 +22,8 @@
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
-          <!-- 仅允许批量根池下的子孙节点；根池本身有子节点会被叶子条件排除，此处再按血统限制范围 -->
-          AND p.id IN (
-              WITH RECURSIVE batch_allowed_pool AS (
-                  SELECT c.id
-                  FROM ip_investment_pool c
-                  INNER JOIN ip_investment_pool r ON c.parent_id = r.id
-                  WHERE r.pool_code IN ('credit_bond_root', 'bond_product_root')
-                    AND r.is_deleted = 0
-                    AND c.is_deleted = 0
-                  UNION ALL
-                  SELECT c2.id
-                  FROM ip_investment_pool c2
-                  INNER JOIN batch_allowed_pool ap ON c2.parent_id = ap.id
-                  WHERE c2.is_deleted = 0
-              )
-              SELECT id FROM batch_allowed_pool
-          )
+          <!-- 证券池批量主页排除 CRMW 池（CRMW 须匹配凭证，走独立调库链路）；候选证券另按 security_type 排除 crmw/company -->
+          AND p.pool_type != 'crmw'
         <if test="poolIds != null and poolIds.size() > 0">
           AND p.id IN
             <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
@@ -139,29 +124,14 @@
         </where>
     </select>
 
-    <!-- 查询指定投资池是否为批量调库允许的启用叶子池（信用债大库(new)/债券产品库子集） -->
+    <!-- 查询指定投资池是否为启用叶子池（排除 CRMW 池） -->
     <select id="queryEnabledLeafPoolCount" resultType="int">
         SELECT COUNT(1)
         FROM ip_investment_pool p
         WHERE p.id = #{poolId}
           AND p.status = 'enabled'
           AND p.is_deleted = 0
-          AND p.id IN (
-              WITH RECURSIVE batch_allowed_pool AS (
-                  SELECT c.id
-                  FROM ip_investment_pool c
-                  INNER JOIN ip_investment_pool r ON c.parent_id = r.id
-                  WHERE r.pool_code IN ('credit_bond_root', 'bond_product_root')
-                    AND r.is_deleted = 0
-                    AND c.is_deleted = 0
-                  UNION ALL
-                  SELECT c2.id
-                  FROM ip_investment_pool c2
-                  INNER JOIN batch_allowed_pool ap ON c2.parent_id = ap.id
-                  WHERE c2.is_deleted = 0
-              )
-              SELECT id FROM batch_allowed_pool
-          )
+          AND p.pool_type != 'crmw'
           AND NOT EXISTS (
               SELECT 1
               FROM ip_investment_pool child

@@ -15,30 +15,19 @@
                    ,CAST(LPAD(COALESCE(outer_sort, 0), 10, '0') AS CHAR(2000)) AS sort_path
             FROM ip_investment_pool
             WHERE is_deleted = 0
-            <choose>
-                <!-- 指定根池编码时仅从这些根起展开（含根节点，便于前端组树） -->
-                <when test="includeRootPoolCodes != null and includeRootPoolCodes.size() > 0">
-                    AND pool_code IN
-                    <foreach collection="includeRootPoolCodes" item="poolCode" open="(" separator="," close=")">
-                        #{poolCode}
-                    </foreach>
-                </when>
-                <otherwise>
-                    AND parent_id IS NULL
-                    <if test="includePoolTypes != null and includePoolTypes.size() > 0">
-                        AND pool_type IN
-                        <foreach collection="includePoolTypes" item="poolType" open="(" separator="," close=")">
-                            #{poolType}
-                        </foreach>
-                    </if>
-                    <if test="excludePoolTypes != null and excludePoolTypes.size() > 0">
-                        AND pool_type NOT IN
-                        <foreach collection="excludePoolTypes" item="poolType" open="(" separator="," close=")">
-                            #{poolType}
-                        </foreach>
-                    </if>
-                </otherwise>
-            </choose>
+              AND parent_id IS NULL
+            <if test="includePoolTypes != null and includePoolTypes.size() > 0">
+              AND pool_type IN
+                <foreach collection="includePoolTypes" item="poolType" open="(" separator="," close=")">
+                    #{poolType}
+                </foreach>
+            </if>
+            <if test="excludePoolTypes != null and excludePoolTypes.size() > 0">
+              AND pool_type NOT IN
+                <foreach collection="excludePoolTypes" item="poolType" open="(" separator="," close=")">
+                    #{poolType}
+                </foreach>
+            </if>
             UNION ALL
             SELECT child.id
                    ,child.parent_id
@@ -49,19 +38,17 @@
             FROM ip_investment_pool child
             INNER JOIN pool_tree parent ON parent.id = child.parent_id
             WHERE child.is_deleted = 0
-            <if test="includeRootPoolCodes == null or includeRootPoolCodes.size() == 0">
-                <if test="includePoolTypes != null and includePoolTypes.size() > 0">
-                    AND child.pool_type IN
-                    <foreach collection="includePoolTypes" item="poolType" open="(" separator="," close=")">
-                        #{poolType}
-                    </foreach>
-                </if>
-                <if test="excludePoolTypes != null and excludePoolTypes.size() > 0">
-                    AND child.pool_type NOT IN
-                    <foreach collection="excludePoolTypes" item="poolType" open="(" separator="," close=")">
-                        #{poolType}
-                    </foreach>
-                </if>
+            <if test="includePoolTypes != null and includePoolTypes.size() > 0">
+              AND child.pool_type IN
+                <foreach collection="includePoolTypes" item="poolType" open="(" separator="," close=")">
+                    #{poolType}
+                </foreach>
+            </if>
+            <if test="excludePoolTypes != null and excludePoolTypes.size() > 0">
+              AND child.pool_type NOT IN
+                <foreach collection="excludePoolTypes" item="poolType" open="(" separator="," close=")">
+                    #{poolType}
+                </foreach>
             </if>
         )
         SELECT id
