@@ -143,7 +143,9 @@ public class BatchSecurityPoolAdjustService {
     private SecurityPoolAdjustService securityPoolAdjustService;
 
     /**
-     * 分页查询当前用户可调整的启用叶子投资池
+     * 分页查询当前用户可调整的启用叶子投资池。
+     *
+     * <p>范围：仅「信用债大库(new)」「债券产品库」根下的子集叶子（父级不可选，其他业务树不出现）。
      */
     public PageResult<BatchSecurityPoolDto> queryPoolPage(BatchSecurityPoolAdjustReq req) {
         // 处理当前用户可调整投资池筛选条件
@@ -369,7 +371,7 @@ public class BatchSecurityPoolAdjustService {
         // 校验批量调库方向
         validateAdjustDirection(req.getDirection());
         if (batchSecurityPoolAdjustMapper.queryEnabledLeafPoolCount(req.getPoolId()) == 0) {
-            throw new BizException("目标投资池不存在、未启用或不是叶子池");
+            throw new BizException("目标投资池不存在、未启用、不是叶子池，或不在批量调库允许范围（信用债大库new/债券产品库子集）");
         }
     }
 
@@ -386,7 +388,7 @@ public class BatchSecurityPoolAdjustService {
             throw new BizException("已选证券不能为空");
         }
         if (batchSecurityPoolAdjustMapper.queryEnabledLeafPoolCount(req.getPoolId()) == 0) {
-            throw new BizException("目标投资池不存在、未启用或不是叶子池");
+            throw new BizException("目标投资池不存在、未启用、不是叶子池，或不在批量调库允许范围（信用债大库new/债券产品库子集）");
         }
         for (BatchSecurityInboundAdjustReq.SecurityItem security : req.getSecurities()) {
             if (security.getSecurityCode() == null || security.getSecurityCode().isEmpty()) {
@@ -414,7 +416,7 @@ public class BatchSecurityPoolAdjustService {
             throw new BizException("调整人名称不能为空");
         }
         if (batchSecurityPoolAdjustMapper.queryEnabledLeafPoolCount(req.getPoolId()) == 0) {
-            throw new BizException("目标投资池不存在、未启用或不是叶子池");
+            throw new BizException("目标投资池不存在、未启用、不是叶子池，或不在批量调库允许范围（信用债大库new/债券产品库子集）");
         }
         // 解析批量调库中文方向
         String adjustMode = resolveAdjustMode(req);
