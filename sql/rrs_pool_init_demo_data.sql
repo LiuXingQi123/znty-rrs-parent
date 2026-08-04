@@ -144,7 +144,7 @@ INSERT INTO `ip_investment_pool` (
 -- 转债库：调入限制=债券禁止库/重点观察名单；子库互斥
 -- 债券产品库：调入限制=债券禁止库
 -- 兴业中高等级信用债：调入限制=债券禁止库；子库互斥
--- 债券禁止库：调入互斥=信用债大库(new)/转债库/境外债/债券产品库；调入/调出联动=黑名单质押库
+-- 债券禁止库：调入互斥=信用债大库(new)/转债库/境外债/债券产品库 的子集（不含父级，父级不可选）；调入/调出联动=黑名单质押库
 -- 重点观察名单：调入/调出联动=黑名单质押库
 -- 信用债大库(old)：调入限制=债券禁止库；子库互斥
 INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, `relation_pool_name`, `sort_order`, `is_deleted`, `crte_time`, `updt_time`) VALUES
@@ -246,10 +246,49 @@ INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, 
 (63, 'in_mutex', 61, '三级库', 9, 0, NOW(), NOW()),
 (62, 'in_mutex', 63, '流通受限库', 10, 0, NOW(), NOW()),
 (63, 'in_mutex', 62, '四级库', 10, 0, NOW(), NOW()),
-(15, 'in_mutex', 1, '信用债大库(new)', 1, 0, NOW(), NOW()),
-(15, 'in_mutex', 8, '转债库', 2, 0, NOW(), NOW()),
-(15, 'in_mutex', 7, '境外债', 3, 0, NOW(), NOW()),
-(15, 'in_mutex', 32, '债券产品库', 4, 0, NOW(), NOW()),
+-- 债券禁止库(15) 调入互斥：仅配置各业务树可选子集（不含父级根池）
+-- 信用债大库(new) 子集
+(15, 'in_mutex', 2, '一级库', 1, 0, NOW(), NOW()),
+(15, 'in_mutex', 3, '二级库', 2, 0, NOW(), NOW()),
+(15, 'in_mutex', 4, '三级库', 3, 0, NOW(), NOW()),
+(15, 'in_mutex', 5, '四级库', 4, 0, NOW(), NOW()),
+(15, 'in_mutex', 6, '五级库', 5, 0, NOW(), NOW()),
+-- 转债库 子集
+(15, 'in_mutex', 29, '核心库', 6, 0, NOW(), NOW()),
+(15, 'in_mutex', 30, '重点库', 7, 0, NOW(), NOW()),
+(15, 'in_mutex', 31, '基础库', 8, 0, NOW(), NOW()),
+-- 境外债 子集
+(15, 'in_mutex', 24, '境外债一级库', 9, 0, NOW(), NOW()),
+(15, 'in_mutex', 25, '境外债二级库', 10, 0, NOW(), NOW()),
+(15, 'in_mutex', 26, '境外债三级库', 11, 0, NOW(), NOW()),
+(15, 'in_mutex', 27, '境外债四级库', 12, 0, NOW(), NOW()),
+(15, 'in_mutex', 28, '境外债五级库', 13, 0, NOW(), NOW()),
+-- 债券产品库 子集
+(15, 'in_mutex', 33, '稳富1号', 14, 0, NOW(), NOW()),
+(15, 'in_mutex', 34, '嘉兴银行1号', 15, 0, NOW(), NOW()),
+(15, 'in_mutex', 35, '稳富12号', 16, 0, NOW(), NOW()),
+(15, 'in_mutex', 36, '稳富13号', 17, 0, NOW(), NOW()),
+(15, 'in_mutex', 37, '稳富14号', 18, 0, NOW(), NOW()),
+(15, 'in_mutex', 38, '稳富20号', 19, 0, NOW(), NOW()),
+(15, 'in_mutex', 39, '稳富29号', 20, 0, NOW(), NOW()),
+(15, 'in_mutex', 40, '稳富58号', 21, 0, NOW(), NOW()),
+(15, 'in_mutex', 41, '兴金490号', 22, 0, NOW(), NOW()),
+(15, 'in_mutex', 42, '兴锐5号', 23, 0, NOW(), NOW()),
+(15, 'in_mutex', 43, '紫金1号1期', 24, 0, NOW(), NOW()),
+(15, 'in_mutex', 44, '兴业京通', 25, 0, NOW(), NOW()),
+(15, 'in_mutex', 45, '兴业太保大库', 26, 0, NOW(), NOW()),
+(15, 'in_mutex', 46, '紫金1号2期', 27, 0, NOW(), NOW()),
+(15, 'in_mutex', 47, '兴富101号', 28, 0, NOW(), NOW()),
+(15, 'in_mutex', 48, '兴业京华债券大库', 29, 0, NOW(), NOW()),
+(15, 'in_mutex', 49, '兴业稳盈', 30, 0, NOW(), NOW()),
+(15, 'in_mutex', 50, '紫金1号3期', 31, 0, NOW(), NOW()),
+(15, 'in_mutex', 51, '紫金1号4期', 32, 0, NOW(), NOW()),
+(15, 'in_mutex', 52, '昆仑1号', 33, 0, NOW(), NOW()),
+(15, 'in_mutex', 53, '兴业绿色信用债库', 34, 0, NOW(), NOW()),
+(15, 'in_mutex', 54, '增利产业债认定', 35, 0, NOW(), NOW()),
+(15, 'in_mutex', 55, '稳睿888号', 36, 0, NOW(), NOW()),
+(15, 'in_mutex', 56, '稳睿8881号', 37, 0, NOW(), NOW()),
+(15, 'in_mutex', 57, '兴富99号', 38, 0, NOW(), NOW()),
 (15, 'in_linked', 17, '黑名单质押库', 1, 0, NOW(), NOW()),
 (15, 'out_linked', 17, '黑名单质押库', 1, 0, NOW(), NOW()),
 (23, 'in_linked', 17, '黑名单质押库', 1, 0, NOW(), NOW()),
