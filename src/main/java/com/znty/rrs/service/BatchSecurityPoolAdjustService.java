@@ -206,35 +206,70 @@ public class BatchSecurityPoolAdjustService {
         return dto;
     }
 
-    /** 使用投资池当前方向的批量流程覆盖前端流程选择。 */
-    private void applyBatchFlow(BatchSecurityInboundAdjustReq req, InvestmentPoolBo pool) {
+    /**
+     * 提交侧流程字段兜底：仅给「完全未带流程」的明细补目标池批量流程。
+     *
+     * <p><b>会补</b>：item 的 flowId 为空，且 flowKey 也为空/空白时，按本次方向写入目标池
+     * batchIn（调入）或 batchOut（调出）的 id/key，并打上 batchInbound/batchOutbound。
+     * 池未配置批量流程时 id/key 仍为 null，语义上等同「无审批、直通」。
+     *
+     * <p><b>不会改</b>：只要 flowId 或 flowKey 任一已有值（页面默认选中的批量流程、操作员改选的
+     * 白名单/简易/升降级等单券候选、或只带了 key），一律保留，不做强制覆盖。
+     *
+     * <p><b>不是</b>校验阶段的流程推荐（推荐在 checkAdjust → injectBatchFlowOption）；
+     * 本方法只处理提交 payload 漏传流程的兜底，并保证后续防重复、直通预检看到的流程字段已定稿。
+     *
+     * @param req  批量提交请求（会就地改写 items 中缺流程的明细）
+     * @param pool 本次批量操作的目标投资池（取其 batch_in / batch_out 配置）
+     */
+    private void fillDefaultBatchFlowIfMissing(BatchSecurityInboundAdjustReq req, InvestmentPoolBo pool) {
         boolean outbound = "out".equals(req.getDirection());
         Long flowId = outbound ? pool.getBatchOutFlowId() : pool.getBatchInFlowId();
         String flowKey = outbound ? pool.getBatchOutFlowKey() : pool.getBatchInFlowKey();
+        String flowType = outbound ? FlowType.BATCH_OUTBOUND.getCode() : FlowType.BATCH_INBOUND.getCode();
         for (BatchSecurityInboundAdjustReq.AdjustItem item : req.getItems()) {
+            // 仅 flowId、flowKey 同时缺失时才补；任一已有则视为前端/调用方已选定
+            boolean missingId = item.getFlowId() == null;
+            boolean missingKey = item.getFlowKey() == null || item.getFlowKey().isEmpty();
+            if (!missingId || !missingKey) {
+                continue;
+            }
             item.setFlowId(flowId);
             item.setFlowKey(flowKey);
-            item.setFlowType(null);
+            item.setFlowType(flowType);
         }
     }
 
-    /** 判断投资池配置的批量流程是否会在提交事务中直接生效。 */
-    private boolean isDirectBatchFlow(BatchSecurityInboundAdjustReq req, InvestmentPoolBo pool) {
-        Long flowId = "out".equals(req.getDirection()) ? pool.getBatchOutFlowId() : pool.getBatchInFlowId();
-        String flowKey = "out".equals(req.getDirection()) ? pool.getBatchOutFlowKey() : pool.getBatchInFlowKey();
-        if (flowId == null && (flowKey == null || flowKey.isEmpty())) {
-            return true;
-        }
-        if (flowId == null) {
-            FlowDefinitionBo definition = flowMapper.queryActiveFlowByKey(flowKey);
-            flowId = definition != null ? definition.getId() : null;
-        }
-        if (flowId == null) {
+    /**
+     * 按提交明细实际选中的流程判断是否存在直通项；存在时落池前统一锁池复核整批状态。
+     */
+    private boolean needsWholeBatchDirectRecheck(BatchSecurityInboundAdjustReq req) {
+        if (req.getItems() == null) {
             return false;
         }
-        // 加载批量流程快照并判断是否无需人工审批
-        FlowSnapshot snapshot = buildFlowSnapshot(flowId);
-        return snapshot != null && isDirectFlow(snapshot);
+        for (BatchSecurityInboundAdjustReq.AdjustItem item : req.getItems()) {
+            if (!isManualBatchSubmitItem(item)) {
+                continue;
+            }
+            Long flowId = item.getFlowId();
+            String flowKey = item.getFlowKey();
+            if (flowId == null && (flowKey == null || flowKey.isEmpty())) {
+                return true;
+            }
+            if (flowId == null) {
+                FlowDefinitionBo definition = flowMapper.queryActiveFlowByKey(flowKey);
+                flowId = definition != null ? definition.getId() : null;
+            }
+            if (flowId == null) {
+                // 配置了 key 但解析不到定义时，按非直通走后续提交校验
+                continue;
+            }
+            FlowSnapshot snapshot = buildFlowSnapshot(flowId);
+            if (snapshot != null && isDirectFlow(snapshot)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 将批量请求转换为最终落池复核所需的日志快照。 */
@@ -316,12 +351,16 @@ public class BatchSecurityPoolAdjustService {
         // 校验批量调库目标池权限
         validateAdjustPoolPermission(req.getCurrentUserId(), req.getPoolId());
         InvestmentPoolBo batchPool = investmentPoolMapper.queryPoolById(req.getPoolId());
-        // 强制使用目标池配置的批量流程，忽略前端普通单券流程
-        applyBatchFlow(req, batchPool);
+        // 提交流程定稿（兜底，非强制）：
+        // 1) 正常路径：校验页已默认选中批量流程并写入 item.flowId/flowKey → 此处不改动；
+        // 2) 操作员改选了单券候选流程 → 同样不改动，尊重请求体；
+        // 3) 仅当某条明细 flowId、flowKey 都为空（漏传/异常调用）→ 才补目标池 batchIn/batchOut；
+        // 切勿理解成「整批强制改成批量流程」。补完后再做防重复与直通预检，保证比较/判断用的是定稿后的流程。
+        fillDefaultBatchFlowIfMissing(req, batchPool);
         // 按完整证券集合和手工项集合检查近期重复批量申请
         checkRecentBatchDuplicateSubmit(req);
-        // 无批量审批流程或配置为直通流程时，落池前统一锁池并复核整批状态
-        if (isDirectBatchFlow(req, batchPool)) {
+        // 存在直通落池项时，提交前统一锁池并复核整批状态
+        if (needsWholeBatchDirectRecheck(req)) {
             securityPoolAdjustService.recheckBeforeFinalApproval(buildDirectRecheckLogList(req));
         }
 
@@ -523,7 +562,8 @@ public class BatchSecurityPoolAdjustService {
         result.setAdjustGroupKey(sourceSecurityCode + "_" + item.getAdjustGroupKey());
         result.setCanAdjust(item.isCanAdjust());
         result.setFailReasons(item.getFailReasons() == null ? new ArrayList<>() : item.getFailReasons());
-        result.setFlowOptions(item.getFlowOptions() == null ? new ArrayList<>() : item.getFlowOptions());
+        List<AdjustCheckDto.FlowOption> flowOptions = item.getFlowOptions() == null
+                ? new ArrayList<>() : new ArrayList<>(item.getFlowOptions());
         String flowName = "out".equals(direction) ? batchPool.getBatchOutFlowName() : batchPool.getBatchInFlowName();
         Long flowId = "out".equals(direction) ? batchPool.getBatchOutFlowId() : batchPool.getBatchInFlowId();
         String flowKey = "out".equals(direction) ? batchPool.getBatchOutFlowKey() : batchPool.getBatchInFlowKey();
@@ -532,7 +572,66 @@ public class BatchSecurityPoolAdjustService {
         String displayName = flowName == null || flowName.isEmpty() ? flowKey : flowName;
         result.setBatchFlowName(direct ? "无需审批"
                 : (displayName == null || displayName.isEmpty() ? "批量审批流程" : displayName));
+        // 校验通过项：注入池上批量流程并默认推荐，单券候选仍可选（操作员可改）
+        if (item.isCanAdjust()) {
+            injectBatchFlowOption(flowOptions, batchPool, direction, result.getBatchFlowName(), direct);
+        }
+        result.setFlowOptions(flowOptions);
         return result;
+    }
+
+    /**
+     * 在校验通过的流程候选列表前插入目标池批量调入/调出流程，并设为唯一推荐项。
+     * 与同 flowId/flowKey 的单券候选去重，避免重复展示。
+     */
+    private void injectBatchFlowOption(List<AdjustCheckDto.FlowOption> flowOptions, InvestmentPoolBo batchPool,
+                                       String direction, String batchFlowDisplayName, boolean direct) {
+        boolean outbound = "out".equals(direction);
+        Long flowId = outbound ? batchPool.getBatchOutFlowId() : batchPool.getBatchInFlowId();
+        String flowKey = outbound ? batchPool.getBatchOutFlowKey() : batchPool.getBatchInFlowKey();
+        String flowType = outbound ? FlowType.BATCH_OUTBOUND.getCode() : FlowType.BATCH_INBOUND.getCode();
+
+        // 去掉与批量流程同一定义的其它候选，避免列表重复
+        if (flowOptions != null && !flowOptions.isEmpty()) {
+            List<AdjustCheckDto.FlowOption> deduped = new ArrayList<>();
+            for (AdjustCheckDto.FlowOption option : flowOptions) {
+                if (option == null) {
+                    continue;
+                }
+                boolean sameId = flowId != null && flowId.equals(option.getFlowId());
+                boolean sameKey = flowKey != null && !flowKey.isEmpty()
+                        && flowKey.equals(option.getFlowKey());
+                if (sameId || sameKey) {
+                    continue;
+                }
+                option.setRecommended(false);
+                deduped.add(option);
+            }
+            flowOptions.clear();
+            flowOptions.addAll(deduped);
+        }
+
+        AdjustCheckDto.FlowOption batchOption = new AdjustCheckDto.FlowOption();
+        batchOption.setFlowType(flowType);
+        batchOption.setFlowName(batchFlowDisplayName);
+        batchOption.setFlowId(flowId);
+        batchOption.setFlowKey(flowKey);
+        batchOption.setRecommended(true);
+        batchOption.setMatched(true);
+        batchOption.setSelectable(true);
+        List<String> reasons = new ArrayList<>();
+        if (direct) {
+            reasons.add("目标池未配置批量审批流程，按无需审批处理");
+        } else {
+            reasons.add(outbound ? "目标池配置的批量调出流程" : "目标池配置的批量调入流程");
+        }
+        batchOption.setMatchReasons(reasons);
+        batchOption.setUnmatchReasons(new ArrayList<>());
+
+        if (flowOptions == null) {
+            return;
+        }
+        flowOptions.add(0, batchOption);
     }
 
     /**

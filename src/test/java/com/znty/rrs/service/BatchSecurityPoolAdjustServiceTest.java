@@ -14,6 +14,7 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckContext;
+import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -190,8 +191,9 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(captor.getAllValues())
                 .extracting(IpAdjustLogBo::getAdjustBatchNo)
                 .doesNotHaveDuplicates();
-        assertThat(captor.getAllValues().get(0).getAdjustBatchNo()).matches("BOND\\d{17}3001");
-        assertThat(captor.getAllValues().get(1).getAdjustBatchNo()).matches("BOND\\d{17}3002");
+        // 明细带 flowId 时按调入序号 1000+；未强制覆盖为空流程故不再走 3000+ 无流程段
+        assertThat(captor.getAllValues().get(0).getAdjustBatchNo()).matches("BOND\\d{17}1001");
+        assertThat(captor.getAllValues().get(1).getAdjustBatchNo()).matches("BOND\\d{17}1002");
     }
 
     /** 验证批量提交同一证券的手工调入和互斥调出时写入两条调库记录。 */
@@ -337,9 +339,9 @@ public class BatchSecurityPoolAdjustServiceTest {
         throw new AssertionError("any 限制且无报告时应抛出异常");
     }
 
-    /** 验证批量流程配置覆盖前端伪造的普通流程。 */
+    /** 验证已选流程不被批量默认流程覆盖。 */
     @Test
-    public void applyBatchFlowShouldOverrideClientFlow() {
+    public void fillDefaultBatchFlowShouldKeepClientSelectedFlow() {
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         InvestmentPoolBo pool = buildPool(11L, null, "测试池", "credit_bond");
         pool.setBatchInFlowId(88L);
@@ -348,13 +350,64 @@ public class BatchSecurityPoolAdjustServiceTest {
         req.setDirection("in");
         BatchSecurityInboundAdjustReq.AdjustItem item = buildBatchSubmitItem("S001");
         item.setFlowId(99L);
-        item.setFlowKey("client:fake");
+        item.setFlowKey("client:chosen");
         req.setItems(Collections.singletonList(item));
 
-        ReflectionTestUtils.invokeMethod(service, "applyBatchFlow", req, pool);
+        ReflectionTestUtils.invokeMethod(service, "fillDefaultBatchFlowIfMissing", req, pool);
+
+        assertThat(item.getFlowId()).isEqualTo(99L);
+        assertThat(item.getFlowKey()).isEqualTo("client:chosen");
+    }
+
+    /** 验证未选流程时回填目标池批量流程。 */
+    @Test
+    public void fillDefaultBatchFlowShouldFillWhenMissing() {
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        InvestmentPoolBo pool = buildPool(11L, null, "测试池", "credit_bond");
+        pool.setBatchInFlowId(88L);
+        pool.setBatchInFlowKey("batch:in");
+        BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
+        req.setDirection("in");
+        BatchSecurityInboundAdjustReq.AdjustItem item = buildBatchSubmitItem("S001");
+        item.setFlowId(null);
+        item.setFlowKey(null);
+        req.setItems(Collections.singletonList(item));
+
+        ReflectionTestUtils.invokeMethod(service, "fillDefaultBatchFlowIfMissing", req, pool);
 
         assertThat(item.getFlowId()).isEqualTo(88L);
         assertThat(item.getFlowKey()).isEqualTo("batch:in");
+        assertThat(item.getFlowType()).isEqualTo("batchInbound");
+    }
+
+    /** 验证校验通过项注入批量流程并默认推荐。 */
+    @Test
+    public void injectBatchFlowOptionShouldPrependAndRecommend() {
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        InvestmentPoolBo pool = buildPool(11L, null, "测试池", "credit_bond");
+        pool.setBatchInFlowId(88L);
+        pool.setBatchInFlowKey("batch:in");
+        pool.setBatchInFlowName("批量调入审批");
+        List<AdjustCheckDto.FlowOption> options = new ArrayList<>();
+        AdjustCheckDto.FlowOption simple = new AdjustCheckDto.FlowOption();
+        simple.setFlowType("simpleInbound");
+        simple.setFlowName("简易流程");
+        simple.setFlowId(11L);
+        simple.setFlowKey("bond:simple");
+        simple.setRecommended(true);
+        simple.setMatched(true);
+        simple.setSelectable(true);
+        options.add(simple);
+
+        ReflectionTestUtils.invokeMethod(service, "injectBatchFlowOption",
+                options, pool, "in", "批量调入审批", false);
+
+        assertThat(options).hasSize(2);
+        assertThat(options.get(0).getFlowType()).isEqualTo("batchInbound");
+        assertThat(options.get(0).getFlowId()).isEqualTo(88L);
+        assertThat(options.get(0).isRecommended()).isTrue();
+        assertThat(options.get(1).getFlowType()).isEqualTo("simpleInbound");
+        assertThat(options.get(1).isRecommended()).isFalse();
     }
 
     /** 验证证券集合不同时不按重复批量申请拦截。 */

@@ -15,7 +15,11 @@ public enum FlowType {
     /** 下调 */
     DOWNGRADE_INBOUND("downgradeInbound"),
     /** 默认调出 */
-    NORMAL_OUTBOUND("normalOutbound");
+    NORMAL_OUTBOUND("normalOutbound"),
+    /** 批量调入（投资池 batch_in 配置） */
+    BATCH_INBOUND("batchInbound"),
+    /** 批量调出（投资池 batch_out 配置） */
+    BATCH_OUTBOUND("batchOutbound");
 
     /** 枚举 code 值 */
     private final String code;
