@@ -164,7 +164,7 @@
         LIMIT 1
     </select>
 
-    <!-- 查询指定 ID 的投资池列表 -->
+    <!-- 查询指定 ID 的投资池列表（含上限等选池展示字段，供禁投/ABS 等按 ID 列表加载可调池） -->
     <select id="queryPoolByIdsList" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT id
                ,parent_id
@@ -172,8 +172,44 @@
                ,pool_name
                ,pool_type
                ,pool_level
+               ,market_codes
+               ,variety_codes
+               ,hs_pool_name
+               ,in_flow_id
+               ,in_flow_key
+               ,in_flow_name
+               ,out_flow_id
+               ,out_flow_key
+               ,out_flow_name
+               ,simple_in_flow_id
+               ,simple_in_flow_key
+               ,simple_in_flow_name
+               ,simple_out_flow_id
+               ,simple_out_flow_key
+               ,simple_out_flow_name
+               ,batch_in_flow_id
+               ,batch_in_flow_key
+               ,batch_in_flow_name
+               ,batch_out_flow_id
+               ,batch_out_flow_key
+               ,batch_out_flow_name
+               ,in_report_restriction
+               ,out_report_restriction
+               ,max_capacity
+               ,lock_flag
+               ,frozen_period_in
+               ,grade_astrict
+               ,industry_code
+               ,industry_exponent
+               ,fund_rate_limit
+               ,open_day_adjust
+               ,outer_sort
+               ,inner_sort
+               ,description
                ,status
                ,is_deleted
+               ,crte_time
+               ,updt_time
         FROM ip_investment_pool
         WHERE is_deleted = 0
           AND id IN
