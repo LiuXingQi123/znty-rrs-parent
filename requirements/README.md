@@ -41,13 +41,13 @@
 - **查询入口**：[07](07-security-pool-query.md) 证券池当前状态查询、[10](10-adjust-history.md) 调库历史追溯、[06](06-my-matters.md) 我的待办/已办。
 - **详情查看**：[11](11-security-pool-adjust-detail.md) 单只证券及批次完整业务上下文（只读 / 首次调库提交；修改节点重新提交在 [05]）。
 - **禁投池查询视角**：[08](08-forbidden-pool-query.md) 当前在禁投池的证券、[13](13-forbidden-pool-history.md) 禁投池调库流水（`pool_type='forbidden'` 过滤）。
-- **禁投池调整链路（主体级，独立于证券级调库）**：[15](15-forbidden-pool-adjust.md) 主体检索 → 选目标池（仅 15/16/17/23）→ `checkAdjust` 校验 → `addAdjustLogWithFiles` 提交；[16](16-forbidden-pool-adjust-approve.md) `submitAdjustAudit` 审批流转，通过后落地 `ip_pool_status` 并 `syncCompanyBonds` 自动同步旗下**非 ABS** 债券；[17](17-forbidden-pool-adjust-detail.md) 主体调库只读 / 首次提交（修改节点重提在 [16]）。
+- **禁投池调整链路（主体级，独立于证券级调库）**：[15](15-forbidden-pool-adjust.md) 主体检索 → 选目标池（仅 15/16/17/23）→ `checkAdjust` 校验 → `addAdjustLogWithFiles` 提交；[16](16-forbidden-pool-adjust-approve.md) `submitAdjustAudit` 审批流转，通过后落地 `ip_pool_status`；**仅目标池为债券禁止库（15）时** `syncCompanyBonds` 同步旗下**未到期**债券（含 ABS/crmw）；[17](17-forbidden-pool-adjust-detail.md) 主体调库只读 / 首次提交（修改节点重提在 [16]）。
 - **禁投池调整 · ABS债（债级，独立接口）**：[26](26-forbidden-abs-pool-adjust.md) 与 [15] 同页 Tab「ABS债」→ 仅 `abs_flag=1` → 目标池仅 15/16/17/23 → `/api/v1/forbiddenAbsPoolAdjust/*` 校验提交；**不**同步主体下其他债；非直通审批复用证券池审核页（`securityAdjust`）。
 - **主体池视角**：[09](09-company-pool-query.md) 当前在池的主体、[14](14-company-pool-adjust-history.md) 主体调库流水（`category_type='company'` 过滤，主体作为伪证券入池/调库）。
 - **CRMW 池链路（凭证级，独立状态表 `ip_pool_status_crmw`）**：[18](18-crmw-pool-query.md) 当前在 CRMW 池的凭证（`audit_status='20'`）、[19](19-crmw-pool-adjust.md) 选 CRMW 凭证 + 标的证券 → 校验 → `addCrmwAdjustLogWithFiles` 提交（批次号 `CRMW` 前缀）、[20](20-crmw-pool-adjust-approve.md) `submitAdjustAudit` 审批流转落地 `ip_pool_status_crmw`、[21](21-crmw-pool-adjust-detail.md) 凭证调库只读 / 首次提交（修改节点重提在 [20]）、[22](22-crmw-pool-adjust-history.md) CRMW 调库流水（`pool_type='crmw'` 过滤，所有状态）。
 - **基础配置**：[01](01-flow-definition.md) 审批流程定义（设计器/节点/版本）、[02](02-investment-pool.md) 投资池树/关系/流程/权限维护、[03](03-rule-manager.md) QLExpress 风控规则与测试用例、[23](23-credit-bond-grade-rule.md) 信用债期限×主体内评分档→投资池准入矩阵、[24](24-temp-security-code.md) 临时代码录入/更新正式证券/取消发行、[25](25-pool-open-day.md) 投资池开放日区间维护（`ip_pool_open_day`，配合池级 `open_day_adjust`）。
 
-> **三类调库同构说明**：证券池调库（[04]/[05]/[11]）、禁投池调整（[15]/[16]/[17]，主体级）、CRMW 池调库（[19]/[20]/[21]，凭证级）在校验规则、流程快照、审批流转、`audit_status` 状态枚举上完全同构。差异：①操作对象分别为证券 / 主体 / CRMW 凭证+标的证券；②落地表分别为 `ip_pool_status`（`pool_type` 区分）/ `ip_pool_status`（主体级 + `syncCompanyBonds` 同步债券）/ `ip_pool_status_crmw`（独立表，`pool_type='crmw'`）；③批次号前缀 `BOND` / `BOND` / `CRMW`。
+> **三类调库同构说明**：证券池调库（[04]/[05]/[11]）、禁投池调整（[15]/[16]/[17]，主体级）、CRMW 池调库（[19]/[20]/[21]，凭证级）在校验规则、流程快照、审批流转、`audit_status` 状态枚举上完全同构。差异：①操作对象分别为证券 / 主体 / CRMW 凭证+标的证券；②落地表分别为 `ip_pool_status`（`pool_type` 区分）/ `ip_pool_status`（主体级；**仅债券禁止库** 另 `syncCompanyBonds` 同步未到期旗下债，含 ABS/crmw）/ `ip_pool_status_crmw`（独立表，`pool_type='crmw'`）；③批次号前缀 `BOND` / `BOND` / `CRMW`。
 
 核心状态枚举（`ip_adjust_log.audit_status`，三类调库通用）：`-1`无效 / `00`流程中（待审批/审批中） / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。仅 `20` 落地池状态。
 

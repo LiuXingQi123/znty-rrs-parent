@@ -2,7 +2,7 @@
 
 > 前端页面：`forbidden_pool_adjust_approve.html`
 > 后端前缀：`/api/v1/forbiddenPoolAdjustFlow`（审批处理）+ `/api/v1/forbiddenPoolAdjust`（详情/列表/校验，复用 [15] 接口）
-> 角色定位：审核 / 审批人对主体级禁投池调库申请进行复核、驳回、修改重提、审批通过或驳回，最终通过才落地 `ip_pool_status` 并同步旗下债券。
+> 角色定位：审核 / 审批人对主体级禁投池调库申请进行复核、驳回、修改重提、审批通过或驳回，最终通过才落地 `ip_pool_status`；**仅债券禁止库（id=15）** 时再 `syncCompanyBonds` 同步旗下未到期债券（含 ABS/crmw）。
 
 ---
 
@@ -109,11 +109,11 @@ finishAdjustBatch(step):
   for log in logList:
     if log.adjustMode == '调入': addPoolStatus(log)
     elif log.adjustMode == '调出': deletePoolStatusSoft(log.securityCode, log.targetPoolId)
-    syncCompanyBonds(log)                       // ★ 主体级特有：同步旗下全部债券
+    syncCompanyBonds(log)                       // ★ 仅债券禁止库：同步旗下未到期债券
   generateInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 rrs_report_in
 ```
 
-`syncCompanyBonds`（与 `syncCompanyBondsOnDirect` 同构）：仅 `categoryType==='company'` 触发；查 `queryCompanyBondForAutoList(companyLog.securityCode)` 全部旗下债券；逐条判断是否已在/不在目标池，跳过冗余；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。
+`syncCompanyBonds`（与 `syncCompanyBondsOnDirect` 同构，走 `applyPoolStatusChanges`）：**仅 `targetPoolId=15`（债券禁止库）** 且 `categoryType==='company'` 触发；调入用 `queryCompanyInboundBondForAutoList`（未到期 + 未在池 + bond 大类，含 ABS/crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期 + 当前在池）；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。观察池/黑名单质押库/重点观察名单只落主体。
 
 `generateInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `rrs_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
 
@@ -205,7 +205,7 @@ finishAdjustBatch(step):
 | Service | `SecurityPoolAdjustFlowService` | `ForbiddenPoolAdjustFlowService`（**完整复制** security-pool flow 逻辑，操作 `forbiddenPoolAdjustMapper`） |
 | 请求/返回实体 | `SecurityPoolAdjustAuditReq/Dto` | **直接复用** `SecurityPoolAdjustAuditReq/Dto`（无 forbidden 专属审批实体） |
 | 详情加载接口 | `querySecurityDetail`/`querySecurityPoolStatus`/`queryAdjustLogList` | `queryCompanyDetail`/`queryCompanyPoolStatus`/`queryAdjustLogList`（companyCode 维度） |
-| `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `generateInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后**额外调 `syncCompanyBonds(log)`**：按 `issuer_code=companyCode` 查全部旗下债券，逐条写 `adjust_type='自动调整'` 的 `ip_adjust_log` + `ip_pool_status` |
+| `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `generateInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后，**仅债券禁止库**再 `syncCompanyBonds(log)`：未到期旗下债（含 ABS/crmw）写 `adjust_type='自动调整'` 的 `ip_adjust_log` + `ip_pool_status` |
 | 前端入口参数 | `securityCode` | `companyCode` |
 | 审批策略/节点语义识别/管理员代办 | — | **完全相同**（关键字、`ADMIN_USER_ID='1'` 一致） |
 

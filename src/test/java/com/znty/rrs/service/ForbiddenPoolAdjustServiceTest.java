@@ -138,7 +138,7 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(result).extracting(PoolDto::getId).containsOnly(15L, 16L, 17L, 23L);
     }
 
-    /** 验证主体调入仅同步 SQL 已筛选出的未到期非 ABS 债券。 */
+    /** 验证主体调入债券禁止库时同步 SQL 已筛选出的未到期旗下债券。 */
     @Test
     public void syncCompanyBondsOnDirectShouldInsertOnlyActualBondChange() {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
@@ -160,7 +160,7 @@ public class ForbiddenPoolAdjustServiceTest {
         companyLog.setAdjustMode("调入");
         companyLog.setAdjustBatchNo("COMPANY202606281001");
         companyLog.setTargetPoolId(15L);
-        companyLog.setTargetPoolName("禁投池");
+        companyLog.setTargetPoolName("债券禁止库");
         companyLog.setPoolType("forbidden");
         companyLog.setAdjusterId("1");
         companyLog.setAdjusterName("管理员");
@@ -175,6 +175,28 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(autoLog.getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
         verify(mapper).addPoolStatus(autoLog);
         verify(mapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
+    }
+
+    /** 验证主体调入观察池等非债券禁止库时不同步旗下债券。 */
+    @Test
+    public void syncCompanyBondsShouldSkipWhenTargetIsNotBondForbiddenPool() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        IpAdjustLogBo companyLog = new IpAdjustLogBo();
+        companyLog.setSecurityCode("C10001");
+        companyLog.setSecurityType("company");
+        companyLog.setAdjustMode("调入");
+        companyLog.setTargetPoolId(16L);
+        companyLog.setTargetPoolName("观察池");
+        companyLog.setPoolType("observe");
+
+        ReflectionTestUtils.invokeMethod(service, "syncCompanyBondsOnDirect", companyLog);
+
+        verify(mapper, never()).queryCategoryTypeBySecurityType(any(String.class));
+        verify(mapper, never()).queryCompanyInboundBondForAutoList(any(String.class), any(Long.class));
+        verify(mapper, never()).queryCompanyOutboundBondForAutoList(any(String.class), any(Long.class));
+        verify(mapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
+        verify(mapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
     }
 
     /** 验证同步债券调入写入数量异常时阻断整批事务。 */

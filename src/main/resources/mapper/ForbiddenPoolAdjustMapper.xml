@@ -223,7 +223,7 @@
         ORDER BY t.wind_code ASC
     </select>
 
-    <!-- 查询主体调入时需要同步的未到期非 ABS 债券（排除 crmw） -->
+    <!-- 查询主体调入债券禁止库时需同步的未到期旗下债券（含 ABS/crmw，排除已在目标池） -->
     <select id="queryCompanyInboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
@@ -231,9 +231,7 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE bond.issuer_code = #{companyCode}
-          AND bond.security_type != 'crmw'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
-          AND COALESCE(bond.abs_flag, 0) != 1
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status ips
@@ -245,7 +243,7 @@
         ORDER BY bond.wind_code ASC
     </select>
 
-    <!-- 查询主体调出时需要同步的当前在池非 ABS 债券（排除 crmw） -->
+    <!-- 查询主体调出债券禁止库时需同步的未到期且当前在池旗下债券（含 ABS/crmw） -->
     <select id="queryCompanyOutboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
@@ -257,8 +255,7 @@
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
         WHERE bond.issuer_code = #{companyCode}
-          AND bond.security_type != 'crmw'
-          AND COALESCE(bond.abs_flag, 0) != 1
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
         ORDER BY bond.wind_code ASC
     </select>
 

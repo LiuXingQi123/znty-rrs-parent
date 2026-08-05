@@ -128,6 +128,11 @@ public class ForbiddenPoolAdjustService {
     private static final String COMPANY_SECURITY_TYPE = CategoryType.COMPANY.getCode();
     /** 禁投池、观察池、黑名单质押库和重点观察名单 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
+    /**
+     * 债券禁止库 ID（pool_code=forbidden_root）。
+     * 仅主体对该池调入/调出生效时，才自动同步旗下未到期债券。
+     */
+    private static final Long BOND_FORBIDDEN_POOL_ID = 15L;
 
     static {
         ALLOWED_MANUAL_POOL_IDS.add(15L);
@@ -2519,12 +2524,17 @@ public class ForbiddenPoolAdjustService {
                         inCheckSourcePool(ctx), inCheckRestrictPool(ctx), inCheckForbiddenPool(ctx));
                 int increment = inboundIncrements.getOrDefault(pool.getId(), 0);
                 int currentCount = forbiddenPoolAdjustMapper.queryPoolCurrentCount(pool.getId());
-                int syncBondCount = forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
-                        log.getSecurityCode(), pool.getId()).size();
+                // 仅债券禁止库会同步旗下未到期债券，容量按「主体 + 同步债」预占；其它池只计主体
+                int syncBondCount = BOND_FORBIDDEN_POOL_ID.equals(pool.getId())
+                        ? forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
+                                log.getSecurityCode(), pool.getId()).size()
+                        : 0;
                 int totalIncrement = 1 + syncBondCount;
                 if (failure == null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
                         && currentCount + increment + totalIncrement > pool.getMaxCapacity()) {
-                    failure = "目标投资池容量不足，无法容纳主体及同步债券";
+                    failure = syncBondCount > 0
+                            ? "目标投资池容量不足，无法容纳主体及同步债券"
+                            : "目标投资池容量不足";
                 }
                 inboundIncrements.put(pool.getId(), increment + totalIncrement);
             } else {
@@ -2548,7 +2558,7 @@ public class ForbiddenPoolAdjustService {
         applyPoolStatusChanges(directApplyLogs);
     }
 
-    /** 统一应用主体池状态并按老系统口径同步旗下债券。 */
+    /** 统一应用主体池状态；目标为债券禁止库时再同步旗下未到期债券。 */
     public void applyPoolStatusChanges(List<IpAdjustLogBo> logList) {
         if (logList == null || logList.isEmpty()) {
             return;
@@ -2567,13 +2577,21 @@ public class ForbiddenPoolAdjustService {
                     throw new BizException("主体当前池状态已发生变化，请刷新后重试");
                 }
             }
-            // 主体生效后同步符合老系统条件的旗下债券
+            // 仅债券禁止库：主体生效后同步旗下未到期债券
             syncCompanyBonds(log);
         }
     }
 
-    /** 同步主体旗下符合老系统条件的债券并检查写入结果。 */
+    /**
+     * 同步主体旗下未到期债券并检查写入结果。
+     *
+     * <p>仅当目标池为「债券禁止库」时执行；观察池 / 黑名单质押库 / 重点观察名单只落主体，不同步债。
+     * 同步范围：issuer 下全部 bond 大类（含 ABS、crmw），排除已过期；调入再排除已在目标池，调出仅处理当前在池。
+     */
     private void syncCompanyBonds(IpAdjustLogBo companyLog) {
+        if (companyLog == null || !BOND_FORBIDDEN_POOL_ID.equals(companyLog.getTargetPoolId())) {
+            return;
+        }
         String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(companyLog.getSecurityType());
         if (!CategoryType.COMPANY.getCode().equals(categoryType)) {
             return;
@@ -3872,7 +3890,7 @@ public class ForbiddenPoolAdjustService {
     }
 
     /**
-     * 无需人工审批的主体调整生效后，同步调整旗下债券。
+     * 无需人工审批的主体调整生效后，同步旗下债券（仅债券禁止库，逻辑见 {@link #syncCompanyBonds}）。
      */
     private void syncCompanyBondsOnDirect(IpAdjustLogBo companyLog) {
         // 使用统一债券同步与结果检查逻辑

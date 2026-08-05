@@ -2,7 +2,7 @@
 
 > 前端页面：`forbidden_pool_adjust.html`（列表 Tab「主体」+ 主体详情两视图；同页另有 Tab「ABS债」，见 [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md)）
 > 后端前缀：`/api/v1/forbiddenPoolAdjust`（主体；ABS 走独立前缀 `/api/v1/forbiddenAbsPoolAdjust`）
-> 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库 / 重点观察名单的调入或调出申请，主体生效后自动同步旗下**非 ABS** 债券（`abs_flag!=1`）。主体基础信息只读自 `ais_inv_ods.wind_cbondissuer` 的有效记录（`used=1`），以 `s_info_compcode` 作为主体代码；不关联 `rrs_securityinfo` 的主体记录。
+> 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库 / 重点观察名单的调入或调出申请。**仅当目标池为「债券禁止库」（id=15）且主体生效（`audit_status=20`）时**，才自动同步旗下**未到期**债券（bond 大类，**含 ABS / crmw**，不排除）。主体基础信息只读自 `ais_inv_ods.wind_cbondissuer` 的有效记录（`used=1`），以 `s_info_compcode` 作为主体代码；不关联 `rrs_securityinfo` 的主体记录。
 
 ---
 
@@ -144,23 +144,25 @@
    - **④ 调出处理** `executeOutboundSubmit`：对称，生效操作 `deletePoolStatusSoft`（`UPDATE ip_pool_status SET is_deleted=1 WHERE security_code=? AND target_pool_id=? AND audit_status='20' AND is_deleted=0`），同样调 `syncCompanyBondsOnDirect`。
    - **⑤ 后续处理** `postSubmitProcess`：`securityInfo` 为 null，跳过。
 
-### 3.5 主体级特有：syncCompanyBondsOnDirect（主体生效后自动同步旗下债券）
+### 3.5 主体级特有：syncCompanyBondsOnDirect（仅债券禁止库：主体生效后同步旗下未到期债券）
 
 ```
 syncCompanyBondsOnDirect(companyLog):
+  // 仅目标池 = 债券禁止库（id=15 / BOND_FORBIDDEN_POOL_ID）才同步；观察池/黑名单质押库/重点观察名单只落主体
+  if targetPoolId != 15: return
   categoryType = queryCategoryTypeBySecurityType(companyLog.securityType)
   if !"company".equals(categoryType): return
-  bonds = queryCompanyBondForAutoList(companyLog.securityCode)   // issuer_code=companyCode 的全部债券
+  inbound = (companyLog.adjustMode == '调入')
+  // 调入：queryCompanyInboundBondForAutoList — issuer 下 category_type=bond 且未到期、未在目标池（含 ABS/crmw）
+  // 调出：queryCompanyOutboundBondForAutoList — issuer 下 category_type=bond 且未到期、当前在目标池（含 ABS/crmw）
+  bonds = inbound ? queryCompanyInboundBondForAutoList(...) : queryCompanyOutboundBondForAutoList(...)
   for bond in bonds:
-    currentPoolIds = querySecurityCurrentPoolIdList(bond.windCode)
-    inbound = (companyLog.adjustMode == '调入')
-    if (inbound && currentPoolIds.contains(targetPoolId)) || (!inbound && !contains): continue
     autoLog = buildCompanyBondAutoLog(companyLog, bond)   // adjustType='自动调整', auditStatus='20'
     addAdjustLog(autoLog)
     if inbound: addPoolStatus(autoLog) else: deletePoolStatusSoft(bond.windCode, targetPoolId)
 ```
 
-主体直通入池/出池后，旗下**全部债券**自动同步入/出同一目标池，每条债券写一条 `ip_adjust_log`（`adjust_type='自动调整'`，`audit_status='20'`）+ `ip_pool_status`。
+主体对**债券禁止库**直通入池/出池后，旗下**未到期**债券（含 ABS、crmw，bond 大类）自动同步入/出同一目标池；每条写 `ip_adjust_log`（`adjust_type='自动调整'`，`audit_status='20'`）+ `ip_pool_status`。对其它手工风险池（16/17/23）**不同步**旗下债。
 
 ### 3.6 涉及的数据库表与写入
 
@@ -257,7 +259,7 @@ syncCompanyBondsOnDirect(companyLog):
 | `pool_type` | credit_bond 等 | forbidden/observe/blacklist/restricted |
 | 主体信息 | 详情页约 28 字段可编辑 | **全部 disabled 只读**，`postSubmitProcess` 跳过 |
 | 流程候选 | 信用债大库走白名单/简易/升降级 | **只走默认调入/调出流程** |
-| 生效联动 | 仅落地单只证券 | **主体生效后自动同步旗下全部债券**（`syncCompanyBondsOnDirect`） |
+| 生效联动 | 仅落地单只证券 | **仅债券禁止库**：主体生效后同步旗下未到期债券（含 ABS/crmw；`syncCompanyBondsOnDirect`） |
 | Service | `SecurityPoolAdjustService` 独立 | `ForbiddenPoolAdjustService` 在 security-pool 逻辑基础上做主体/证券调库分流（`companyAdjust` 分支按 `securityType` 路由），操作 `forbiddenPoolAdjustMapper`，主体生效点插入 `syncCompanyBondsOnDirect` |
 
 ---
@@ -265,7 +267,7 @@ syncCompanyBondsOnDirect(companyLog):
 ## 8. 验收标准
 
 - 提交成功后主记录、从属记录、批次号和初始步骤一致。
-- 直通流程即时入池并同步旗下债券；非直通流程进入流程中。
+- 直通流程即时入池；目标为债券禁止库时同步旗下未到期债；非直通流程进入流程中，最终通过后同样规则。
 - 手工项目标池必须为 15/16/17/23，否则校验拦截。
 - 仅 `audit_status='20'` 落地 `ip_pool_status` 并触发债券同步。
 - `ForbiddenPoolAdjustApiTest` 覆盖查询、校验、提交和债券同步业务线。
