@@ -1,0 +1,61 @@
+package com.znty.rrs.entity.stocksecuritybatchadjust;
+
+import com.znty.rrs.common.PageRequest;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+
+import java.util.List;
+
+/**
+ * 存量证券批量调整查询请求对象
+ */
+@Data
+@EqualsAndHashCode(callSuper = true)
+public class StockSecurityBatchAdjustReq extends PageRequest {
+
+    /** 当前用户 ID，1 视为管理员 */
+    private String currentUserId;
+
+    /** 投资池 ID 筛选列表 */
+    private List<Long> poolIds;
+
+    /** 目标投资池 ID */
+    private Long poolId;
+
+    /** 调整方向：in=调入 / out=调出 */
+    private String direction;
+
+    /** 证券代码（模糊） */
+    private String securityCode;
+
+    /** 证券简称（模糊） */
+    private String securityShortName;
+
+    /**
+     * 市场编码列表：
+     * SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 /
+     * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
+     */
+    private List<String> marketCodes;
+
+    /**
+     * 来源池 ID 列表（必选至少一个；须在白名单内）。
+     * 白名单 pool_code：crmw_root / credit_bond_level_1~3 / convertible_bond_core / convertible_bond_focus
+     */
+    private List<Long> sourcePoolIds;
+
+    /** 发行主体（模糊匹配 issuer / issuer_code） */
+    private String issuer;
+
+    /**
+     * 普通来源池 ID（Service 拆分后供 Mapper 使用，非前端入参）。
+     * 读 ip_pool_status。
+     */
+    private List<Long> normalSourcePoolIds;
+
+    /**
+     * CRMW 来源池 ID（Service 拆分后供 Mapper 使用，非前端入参）。
+     * 读 ip_pool_status_crmw。
+     */
+    private List<Long> crmwSourcePoolIds;
+}

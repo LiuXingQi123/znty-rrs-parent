@@ -1,6 +1,6 @@
 # 智慧风控平台功能需求说明
 
-本目录按前端业务页面整理需求，当前覆盖 26 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
+本目录按前端业务页面整理需求，当前覆盖 27 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
 
 | 序号 | 功能 | 前端页面 | 需求文档 | 接口测试 |
 |---|---|---|---|---|
@@ -30,6 +30,7 @@
 | 24 | 临时代码管理 | `temp_security_code.html` | [24-temp-security-code.md](24-temp-security-code.md) | — |
 | 25 | 投资池开放日维护 | `pool_open_day.html` | [25-pool-open-day.md](25-pool-open-day.md) | `PoolOpenDayApiTest` |
 | 26 | 禁投池调整 · ABS债申请（债级 调入/调出） | `forbidden_pool_adjust.html`（Tab「ABS债」） | [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md) | `ForbiddenAbsPoolAdjustApiTest` |
+| 27 | 存量证券批量调整（产品库 + 来源池） | `stock_security_batch_adjust.html` | [27-stock-security-batch-adjust.md](27-stock-security-batch-adjust.md) | `StockSecurityBatchAdjustServiceTest` |
 
 ## 调库业务全链路索引
 
@@ -37,6 +38,7 @@
 
 - **单笔调入/调出申请**：[04](04-security-pool-adjust.md) — 检索证券 → 选目标池 → `checkAdjust` 校验 → `addAdjustLog` 提交（含直通流程即时入池）。
 - **批量调入/调出申请**：[12](12-batch-security-pool-adjust.md) — 选目标池 → 批量勾选证券 → 逐只复用单笔校验/提交，整批共用批次号、附件、事务。
+- **存量证券批量调整**：[27](27-stock-security-batch-adjust.md) — 目标限债券产品库（`bond_product_root` 子树）→ 必选来源池（CRMW/信用债一~三级/转债核心·重点）→ 可选发行主体 → 校验/提交在 `StockSecurityBatchAdjustService` 本类实现（不调用单笔 Service）。
 - **审核/审批流转**：[05](05-security-pool-adjust-approve.md) — `submitAdjustAudit` 推进节点（抢占/会签/发起人），最终通过才落地 `ip_pool_status`。
 - **查询入口**：[07](07-security-pool-query.md) 证券池当前状态查询、[10](10-adjust-history.md) 调库历史追溯、[06](06-my-matters.md) 我的待办/已办。
 - **详情查看**：[11](11-security-pool-adjust-detail.md) 单只证券及批次完整业务上下文（只读 / 首次调库提交；修改节点重新提交在 [05]）。

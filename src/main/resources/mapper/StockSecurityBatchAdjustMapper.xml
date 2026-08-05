@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.StockSecurityBatchAdjustMapper">
+    <!-- 存量证券批量调整：目标池限债券产品库(bond_product_root)子树叶子；候选须在来源池 -->
+
+    <!--
+      分页查询债券产品库根树下的启用叶子投资池。
+      子树：以 pool_code=bond_product_root 为根的递归后代（不含其它 bond_product 根如债券产品库1）。
+    -->
+    <select id="queryPoolPage" resultType="com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchPoolDto">
+        WITH RECURSIVE product_tree AS (
+            SELECT id
+            FROM ip_investment_pool
+            WHERE pool_code = 'bond_product_root'
+              AND is_deleted = 0
+            UNION ALL
+            SELECT child.id
+            FROM ip_investment_pool child
+            INNER JOIN product_tree pt ON child.parent_id = pt.id
+            WHERE child.is_deleted = 0
+        )
+        SELECT p.id
+               ,p.pool_name
+               ,p.pool_type
+               ,p.market_codes
+               ,p.variety_codes
+               ,p.description
+               ,p.max_capacity
+               ,p.batch_in_flow_id
+               ,p.batch_in_flow_key
+               ,p.batch_in_flow_name
+               ,p.batch_out_flow_id
+               ,p.batch_out_flow_key
+               ,p.batch_out_flow_name
+        FROM ip_investment_pool p
+        INNER JOIN product_tree pt ON pt.id = p.id
+        WHERE p.status = 'enabled'
+          AND p.is_deleted = 0
+        <if test="poolIds != null and poolIds.size() > 0">
+          AND p.id IN
+            <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+                #{poolId}
+            </foreach>
+        </if>
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_investment_pool child
+              WHERE child.parent_id = p.id
+                AND child.status = 'enabled'
+                AND child.is_deleted = 0
+          )
+        ORDER BY p.outer_sort ASC
+                 ,p.inner_sort ASC
+                 ,p.id ASC
+    </select>
+
+    <!-- 按类型分项统计在池数量（与证券池批量展示口径一致） -->
+    <select id="queryPoolCurrentCountByTypeList"
+            resultType="com.znty.rrs.entity.stocksecuritybatchadjust.StockPoolTypeCountDto">
+        SELECT ips.target_pool_id AS poolId
+               ,CASE
+                    WHEN si.security_type = 'crmw' THEN 'crmw'
+                    WHEN si.security_type = 'company' THEN 'company'
+                    WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
+                    ELSE 'unknown'
+                END AS typeCode
+               ,COUNT(DISTINCT ips.security_code) AS count
+        FROM ip_pool_status ips
+        LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
+                                        AND dst.is_deleted = 0
+        WHERE ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND ips.target_pool_id IN
+            <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+                #{poolId}
+            </foreach>
+        GROUP BY ips.target_pool_id
+                 ,CASE
+                      WHEN si.security_type = 'crmw' THEN 'crmw'
+                      WHEN si.security_type = 'company' THEN 'company'
+                      WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
+                      ELSE 'unknown'
+                  END
+    </select>
+
+    <!--
+      分页查询候选证券：方向过滤 + 来源池（普通 ip_pool_status / CRMW ip_pool_status_crmw）+ 发行主体。
+      Service 须已拆分 normalSourcePoolIds / crmwSourcePoolIds，且至少一个来源。
+    -->
+    <select id="querySecurityPage" resultType="com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchCandidateDto">
+        SELECT si.wind_code AS securityCode
+               ,si.short_name AS securityShortName
+               ,si.security_type
+               ,CONCAT_WS(','
+                   ,IF(si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '', 'SSE', NULL)
+                   ,IF(si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '', 'SZSE', NULL)
+                   ,IF(si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '', 'CIBM', NULL)
+                   ,IF(si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '', 'BSE', NULL)
+                   ,IF(si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '', 'OTHER', NULL)
+                ) AS marketCodeText
+               ,si.issuer
+               ,si.rating_bond
+               ,si.rating_bondissuer
+               ,si.inner_issuer_rating
+               ,si.maturity_date
+               ,si.date_exists
+               ,si.guarantor
+               ,si.guarantor_id
+        FROM rrs_securityinfo si
+        <where>
+            AND si.security_type NOT IN ('crmw', 'company')
+            AND si.security_status != 'D'
+            <if test="direction == 'in'">
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM ip_pool_status ips
+                    WHERE ips.security_code = si.wind_code
+                      AND ips.target_pool_id = #{poolId}
+                      AND ips.audit_status = '20'
+                      AND ips.is_deleted = 0
+                )
+            </if>
+            <if test="direction == 'out'">
+                AND EXISTS (
+                    SELECT 1
+                    FROM ip_pool_status ips
+                    WHERE ips.security_code = si.wind_code
+                      AND ips.target_pool_id = #{poolId}
+                      AND ips.audit_status = '20'
+                      AND ips.is_deleted = 0
+                )
+            </if>
+            <!-- 来源池：任一已选来源有效在池（普通源 OR CRMW 源） -->
+            AND (
+            <trim prefixOverrides="OR">
+                <if test="normalSourcePoolIds != null and normalSourcePoolIds.size() > 0">
+                OR EXISTS (
+                    SELECT 1
+                    FROM ip_pool_status src
+                    WHERE src.security_code = si.wind_code
+                      AND src.audit_status = '20'
+                      AND src.is_deleted = 0
+                      AND src.target_pool_id IN
+                    <foreach collection="normalSourcePoolIds" item="srcPoolId" open="(" separator="," close=")">
+                        #{srcPoolId}
+                    </foreach>
+                )
+                </if>
+                <if test="crmwSourcePoolIds != null and crmwSourcePoolIds.size() > 0">
+                OR EXISTS (
+                    SELECT 1
+                    FROM ip_pool_status_crmw src
+                    WHERE src.audit_status = '20'
+                      AND src.is_deleted = 0
+                      AND (src.security_code = si.wind_code OR src.crmw_scode = si.wind_code)
+                      AND src.target_pool_id IN
+                    <foreach collection="crmwSourcePoolIds" item="srcPoolId" open="(" separator="," close=")">
+                        #{srcPoolId}
+                    </foreach>
+                )
+                </if>
+            </trim>
+            )
+            <if test="securityCode != null and securityCode != ''">
+                AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="securityShortName != null and securityShortName != ''">
+                AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')
+            </if>
+            <if test="issuer != null and issuer != ''">
+                AND (
+                    si.issuer LIKE CONCAT('%', #{issuer}, '%')
+                    OR si.issuer_code LIKE CONCAT('%', #{issuer}, '%')
+                )
+            </if>
+            <if test="marketCodes != null and marketCodes.size() > 0">
+                AND (
+                    <foreach collection="marketCodes" item="marketCode" separator=" OR ">
+                        <choose>
+                            <when test="marketCode == 'SSE'">si.wind_code_sh IS NOT NULL AND si.wind_code_sh != ''</when>
+                            <when test="marketCode == 'SZSE'">si.wind_code_sz IS NOT NULL AND si.wind_code_sz != ''</when>
+                            <when test="marketCode == 'CIBM'">si.wind_code_nib IS NOT NULL AND si.wind_code_nib != ''</when>
+                            <when test="marketCode == 'BSE'">si.wind_code_bj IS NOT NULL AND si.wind_code_bj != ''</when>
+                            <when test="marketCode == 'OTHER'">si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != ''</when>
+                            <when test="marketCode == 'COMPANY'">si.security_type = 'company'</when>
+                            <otherwise>1 = 0</otherwise>
+                        </choose>
+                    </foreach>
+                )
+            </if>
+        </where>
+    </select>
+
+    <!-- 目标池是否为债券产品库根树下启用叶子 -->
+    <select id="queryEnabledLeafPoolCount" resultType="int">
+        WITH RECURSIVE product_tree AS (
+            SELECT id
+            FROM ip_investment_pool
+            WHERE pool_code = 'bond_product_root'
+              AND is_deleted = 0
+            UNION ALL
+            SELECT child.id
+            FROM ip_investment_pool child
+            INNER JOIN product_tree pt ON child.parent_id = pt.id
+            WHERE child.is_deleted = 0
+        )
+        SELECT COUNT(1)
+        FROM ip_investment_pool p
+        INNER JOIN product_tree pt ON pt.id = p.id
+        WHERE p.id = #{poolId}
+          AND p.status = 'enabled'
+          AND p.is_deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_investment_pool child
+              WHERE child.parent_id = p.id
+                AND child.status = 'enabled'
+                AND child.is_deleted = 0
+          )
+    </select>
+</mapper>
