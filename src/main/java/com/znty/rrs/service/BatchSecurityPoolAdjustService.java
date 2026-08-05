@@ -41,6 +41,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustSharedData;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
+import com.znty.rrs.entity.batchsecuritypooladjust.BatchPoolTypeCountDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityCandidateDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
@@ -75,6 +76,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -4102,7 +4104,11 @@ public class BatchSecurityPoolAdjustService {
     }
 
     /**
-     * 填充当前页投资池现有证券数量
+     * 填充当前页投资池现有证券数量（按类型分项 + 合计）。
+     *
+     * <p>统计 ip_pool_status 全部有效在池代码，按 company / crmw / category_type 分项，
+     * 前端展示「主体：n只 / 债券：n只 …」；合计写入 currentCount。
+     * 容量校验仍走单券链路全量 count，不受展示分项影响。
      */
     private void fillPoolCurrentCount(List<BatchSecurityPoolDto> poolList) {
         if (poolList.isEmpty()) {
@@ -4111,14 +4117,77 @@ public class BatchSecurityPoolAdjustService {
         List<Long> poolIds = poolList.stream()
                 .map(BatchSecurityPoolDto::getId)
                 .collect(Collectors.toList());
-        List<BatchSecurityPoolDto> countList =
-                batchSecurityPoolAdjustMapper.queryPoolCurrentCountList(poolIds);
-        Map<Long, Integer> currentCountMap = countList.stream()
-                .collect(Collectors.toMap(
-                        BatchSecurityPoolDto::getId, BatchSecurityPoolDto::getCurrentCount));
-        for (BatchSecurityPoolDto pool : poolList) {
-            pool.setCurrentCount(currentCountMap.getOrDefault(pool.getId(), 0));
+        List<BatchPoolTypeCountDto> typeCountList =
+                batchSecurityPoolAdjustMapper.queryPoolCurrentCountByTypeList(poolIds);
+        Map<Long, List<BatchPoolTypeCountDto>> byPoolId = new HashMap<>();
+        if (typeCountList != null) {
+            for (BatchPoolTypeCountDto row : typeCountList) {
+                if (row == null || row.getPoolId() == null || row.getCount() == null || row.getCount() <= 0) {
+                    continue;
+                }
+                byPoolId.computeIfAbsent(row.getPoolId(), key -> new ArrayList<>()).add(row);
+            }
         }
+        for (BatchSecurityPoolDto pool : poolList) {
+            // 组装有序分项列表并汇总总数
+            List<BatchPoolTypeCountDto> ordered = orderPoolTypeCounts(
+                    byPoolId.getOrDefault(pool.getId(), Collections.emptyList()));
+            pool.setCountByType(ordered);
+            int total = 0;
+            for (BatchPoolTypeCountDto item : ordered) {
+                total += item.getCount() == null ? 0 : item.getCount();
+            }
+            pool.setCurrentCount(total);
+        }
+    }
+
+    /**
+     * 按业务固定顺序排列类型分项，并去掉嵌套中的 poolId（前端只关心 typeCode/count）。
+     */
+    private List<BatchPoolTypeCountDto> orderPoolTypeCounts(List<BatchPoolTypeCountDto> rawList) {
+        if (rawList == null || rawList.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 主体 / CRMW 优先，其余按 category_type 常见顺序，未知与其它垫后
+        final List<String> typeOrder = Arrays.asList(
+                CategoryType.COMPANY.getCode(),
+                "crmw",
+                CategoryType.BOND.getCode(),
+                CategoryType.STOCK.getCode(),
+                CategoryType.FUND.getCode(),
+                CategoryType.INDEX.getCode(),
+                CategoryType.WARRANT.getCode(),
+                CategoryType.TRUST.getCode(),
+                CategoryType.PRIVATE_WEALTH.getCode(),
+                CategoryType.UNKNOWN.getCode());
+        List<BatchPoolTypeCountDto> sorted = new ArrayList<>(rawList);
+        sorted.sort(new Comparator<BatchPoolTypeCountDto>() {
+            @Override
+            public int compare(BatchPoolTypeCountDto a, BatchPoolTypeCountDto b) {
+                int ia = typeOrder.indexOf(a.getTypeCode());
+                int ib = typeOrder.indexOf(b.getTypeCode());
+                if (ia < 0) {
+                    ia = typeOrder.size();
+                }
+                if (ib < 0) {
+                    ib = typeOrder.size();
+                }
+                if (ia != ib) {
+                    return Integer.compare(ia, ib);
+                }
+                String ca = a.getTypeCode() == null ? "" : a.getTypeCode();
+                String cb = b.getTypeCode() == null ? "" : b.getTypeCode();
+                return ca.compareTo(cb);
+            }
+        });
+        List<BatchPoolTypeCountDto> result = new ArrayList<>();
+        for (BatchPoolTypeCountDto row : sorted) {
+            BatchPoolTypeCountDto item = new BatchPoolTypeCountDto();
+            item.setTypeCode(row.getTypeCode());
+            item.setCount(row.getCount());
+            result.add(item);
+        }
+        return result;
     }
 
     /**

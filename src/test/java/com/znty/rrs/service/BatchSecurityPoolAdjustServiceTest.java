@@ -5,6 +5,7 @@ import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.exception.BizException;
+import com.znty.rrs.entity.batchsecuritypooladjust.BatchPoolTypeCountDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
@@ -43,7 +44,7 @@ import static org.mockito.Mockito.when;
  */
 public class BatchSecurityPoolAdjustServiceTest {
 
-    /** 验证分页查询只统计当前页投资池数量并回填零值 */
+    /** 验证分页查询按类型分项回填现有数量，无数据池合计为 0 */
     @Test
     public void fillPoolCurrentCountShouldQueryCurrentPagePoolIds() {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
@@ -56,17 +57,27 @@ public class BatchSecurityPoolAdjustServiceTest {
         secondPool.setId(12L);
         List<BatchSecurityPoolDto> poolList = Arrays.asList(firstPool, secondPool);
 
-        BatchSecurityPoolDto firstPoolCount = new BatchSecurityPoolDto();
-        firstPoolCount.setId(11L);
-        firstPoolCount.setCurrentCount(3);
-        when(mapper.queryPoolCurrentCountList(anyListOf(Long.class)))
-                .thenReturn(Collections.singletonList(firstPoolCount));
+        BatchPoolTypeCountDto companyRow = new BatchPoolTypeCountDto();
+        companyRow.setPoolId(11L);
+        companyRow.setTypeCode("company");
+        companyRow.setCount(1);
+        BatchPoolTypeCountDto bondRow = new BatchPoolTypeCountDto();
+        bondRow.setPoolId(11L);
+        bondRow.setTypeCode("bond");
+        bondRow.setCount(3);
+        when(mapper.queryPoolCurrentCountByTypeList(anyListOf(Long.class)))
+                .thenReturn(Arrays.asList(bondRow, companyRow));
 
         ReflectionTestUtils.invokeMethod(service, "fillPoolCurrentCount", poolList);
 
         assertThat(poolList).extracting(BatchSecurityPoolDto::getCurrentCount)
-                .containsExactly(3, 0);
-        verify(mapper).queryPoolCurrentCountList(Arrays.asList(11L, 12L));
+                .containsExactly(4, 0);
+        assertThat(firstPool.getCountByType()).extracting(BatchPoolTypeCountDto::getTypeCode)
+                .containsExactly("company", "bond");
+        assertThat(firstPool.getCountByType()).extracting(BatchPoolTypeCountDto::getCount)
+                .containsExactly(1, 3);
+        assertThat(secondPool.getCountByType()).isEmpty();
+        verify(mapper).queryPoolCurrentCountByTypeList(Arrays.asList(11L, 12L));
     }
 
     /** 验证未知市场编码交由查询条件处理 */

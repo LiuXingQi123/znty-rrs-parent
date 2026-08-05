@@ -2,6 +2,8 @@ package com.znty.rrs.entity.batchsecuritypooladjust;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 证券池批量调整投资池列表返回对象
  */
@@ -36,8 +38,16 @@ public class BatchSecurityPoolDto {
     /** 上限数量 */
     private Long maxCapacity;
 
-    /** 当前有效证券数量 */
+    /**
+     * 当前有效在池总数（各类型合计，含主体 / CRMW 等）。
+     */
     private Integer currentCount;
+
+    /**
+     * 按类型分项的在池数量（仅 count 大于 0 的项）。
+     * typeCode：company / crmw / bond / stock / fund 等，中文由前端展示。
+     */
+    private List<BatchPoolTypeCountDto> countByType;
 
     /** 批量调入流程 ID */
     private Long batchInFlowId;
