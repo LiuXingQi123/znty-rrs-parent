@@ -83,6 +83,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Apache POI：Excel 模板生成与导入解析（Java 8 兼容） -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+
         <!-- H2 内存数据库（仅测试） -->
         <dependency>
             <groupId>com.h2database</groupId>

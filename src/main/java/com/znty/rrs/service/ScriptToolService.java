@@ -1752,7 +1752,8 @@ public class ScriptToolService {
                 "rrs_crmw_pool_status_schema.sql",
                 "rrs_my_security_pool_schema.sql",
                 "rrs_credit_bond_grade_rule_schema.sql",
-                "rrs_temp_security_code_schema.sql"
+                "rrs_temp_security_code_schema.sql",
+                "rrs_import_temp_schema.sql"
         );
     }
 
@@ -1773,7 +1774,8 @@ public class ScriptToolService {
                 "rrs_sys_attachment_demo_data.sql",
                 "rrs_my_security_pool_demo_data.sql",
                 "rrs_credit_bond_grade_rule_demo_data.sql",
-                "rrs_temp_security_code_demo_data.sql"
+                "rrs_temp_security_code_demo_data.sql",
+                "rrs_import_temp_demo_data.sql"
         );
     }
 
@@ -1887,7 +1889,9 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "ip_pool_status_crmw", "CRMW 当前池状态"),
                 buildTable("znty_rrs", "sys_attachment", "系统附件"),
                 buildTable("znty_rrs", "rrs_report_in", "入池报告"),
-                buildTable("znty_rrs", "rrs_report_out", "出池报告")
+                buildTable("znty_rrs", "rrs_report_out", "出池报告"),
+                buildTable("znty_rrs", "sys_imp_tmp", "导入临时明细"),
+                buildTable("znty_rrs", "sys_imp_tmp_batch", "导入数据批次")
         )));
         groups.add(buildTableGroup("security-master", "证券与临时代码", "znty_rrs", Arrays.asList(
                 buildTable("znty_rrs", "rrs_securityinfo", "证券主数据"),

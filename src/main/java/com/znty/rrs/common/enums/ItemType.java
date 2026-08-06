@@ -9,7 +9,9 @@ public enum ItemType {
     /** 互斥项 */
     MUTEX("mutex"),
     /** 多市场关联码项 */
-    RELATED("related");
+    RELATED("related"),
+    /** Excel 导入「首先清空目标池」产生的出库项 */
+    CLEAR("clear");
 
     /** 枚举 code 值 */
     private final String code;
