@@ -43,10 +43,12 @@ public class TempSecurityCodeBo {
     private Date updateTime;
     /** 状态 */
     private String status;
-    /** 最近操作 */
-    private String operationType;
     /** 是否删除 */
     private Integer isDeleted;
+    /** 操作来源：manual=人工 / job=定时任务 / other=其他 */
+    private String oprtSource;
+    /** 备注 */
+    private String memo;
     /** 创建时间 */
     private Date crteTime;
     /** 更新时间 */

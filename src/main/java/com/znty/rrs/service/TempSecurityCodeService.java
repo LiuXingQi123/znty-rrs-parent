@@ -4,7 +4,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.MarketCode;
 import com.znty.rrs.common.enums.TempStatus;
-import com.znty.rrs.common.enums.TempOperationType;
+import com.znty.rrs.common.enums.TempOprtSource;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -104,7 +104,8 @@ public class TempSecurityCodeService {
         bo.setTempIssueDate(req.getTempIssueDate());
         bo.setTempMaturityDate(req.getTempMaturityDate());
         bo.setStatus(TempStatus.TEMPORARY.getCode());
-        bo.setOperationType(TempOperationType.ADD.getCode());
+        // 页面人工新增
+        bo.setOprtSource(TempOprtSource.MANUAL.getCode());
         bo.setIsDeleted(0);
         bo.setCrteTime(now);
         bo.setUpdtTime(now);
@@ -167,7 +168,8 @@ public class TempSecurityCodeService {
         bo.setSecurityType(formalSecurity.getSecurityType());
         bo.setUpdateTime(now);
         bo.setStatus(TempStatus.UPDATED.getCode());
-        bo.setOperationType(TempOperationType.UPDATE.getCode());
+        // 页面人工更新为正式
+        bo.setOprtSource(TempOprtSource.MANUAL.getCode());
         bo.setUpdtTime(now);
         // 按老系统分叉处理在途日志与已在池状态
         convertTempSecurityBusinessData(oldBo, bo);
@@ -192,7 +194,8 @@ public class TempSecurityCodeService {
         bo.setId(oldBo.getId());
         bo.setUpdateTime(now);
         bo.setStatus(TempStatus.CANCELLED.getCode());
-        bo.setOperationType(TempOperationType.CANCEL_ISSUE.getCode());
+        // 页面人工取消发行
+        bo.setOprtSource(TempOprtSource.MANUAL.getCode());
         bo.setUpdtTime(now);
         bo.setTempSecurityCode(oldBo.getTempSecurityCode());
         // 计算取消发行日期
@@ -223,7 +226,8 @@ public class TempSecurityCodeService {
         bo.setId(oldBo.getId());
         bo.setUpdateTime(now);
         bo.setStatus(TempStatus.DELETED.getCode());
-        bo.setOperationType(TempOperationType.DELETE.getCode());
+        // 页面人工删除
+        bo.setOprtSource(TempOprtSource.MANUAL.getCode());
         bo.setIsDeleted(1);
         bo.setUpdtTime(now);
         tempSecurityCodeMapper.deleteTempSecurityCode(bo);

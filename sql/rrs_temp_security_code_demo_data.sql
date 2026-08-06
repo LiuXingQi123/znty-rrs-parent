@@ -28,11 +28,12 @@ INSERT INTO `rrs_temp_security_code` (
     ,`security_type`
     ,`update_time`
     ,`status`
-    ,`operation_type`
     ,`is_deleted`
+    ,`oprt_source`
+    ,`memo`
     ,`crte_time`
     ,`updt_time`
 ) VALUES
-(1, '某基建集团临时中票', 'TMP20260626001', 'CIBM', 'mtn', 'CRMVTMP001', 'C10001', '某交投集团', '2026-07-01', '2031-07-01', NULL, NULL, NULL, NULL, NULL, 'temporary', 'add', 0, NOW(), NOW()),
-(2, '某国贸临时企业债', 'TMP20260626002', 'SSE', 'corporate_bond', NULL, 'C10009', '某国贸公司', '2026-07-15', '2033-07-15', '26某国贸债01', '126000001.SH', 'SSE', 'corporate_bond', '2026-06-26 10:30:00', 'updated', 'update', 0, NOW(), NOW()),
-(3, '某能源临时金融债', 'TMP20260626003', 'CIBM', 'financial_bond', NULL, 'C10003', '某能源集团', '2026-08-01', '2029-08-01', NULL, NULL, NULL, NULL, '2026-06-26 11:10:00', 'cancelled', 'cancel_issue', 0, NOW(), NOW());
+(1, '某基建集团临时中票', 'TMP20260626001', 'CIBM', 'mtn', 'CRMVTMP001', 'C10001', '某交投集团', '2026-07-01', '2031-07-01', NULL, NULL, NULL, NULL, NULL, 'temporary', 0, 'manual', NULL, NOW(), NOW()),
+(2, '某国贸临时企业债', 'TMP20260626002', 'SSE', 'corporate_bond', NULL, 'C10009', '某国贸公司', '2026-07-15', '2033-07-15', '26某国贸债01', '126000001.SH', 'SSE', 'corporate_bond', '2026-06-26 10:30:00', 'updated', 0, 'manual', NULL, NOW(), NOW()),
+(3, '某能源临时金融债', 'TMP20260626003', 'CIBM', 'financial_bond', NULL, 'C10003', '某能源集团', '2026-08-01', '2029-08-01', NULL, NULL, NULL, NULL, '2026-06-26 11:10:00', 'cancelled', 0, 'manual', NULL, NOW(), NOW());

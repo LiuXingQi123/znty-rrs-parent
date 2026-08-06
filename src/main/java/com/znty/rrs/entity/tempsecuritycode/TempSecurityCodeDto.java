@@ -51,8 +51,10 @@ public class TempSecurityCodeDto {
     private Date updateTime;
     /** 状态 */
     private String status;
-    /** 最近操作 */
-    private String operationType;
+    /** 操作来源：manual=人工 / job=定时任务 / other=其他 */
+    private String oprtSource;
+    /** 备注 */
+    private String memo;
     /** 创建时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date crteTime;
