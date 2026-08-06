@@ -11,6 +11,8 @@ import com.znty.rrs.entity.scripttool.ScriptModuleTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptOverviewDto;
 import com.znty.rrs.entity.scripttool.ScriptTableDto;
 import com.znty.rrs.entity.scripttool.ScriptTableGroupDto;
+import com.znty.rrs.entity.scripttool.ScriptTableRowCountDto;
+import com.znty.rrs.entity.scripttool.ScriptTableRowCountGroupDto;
 import com.znty.rrs.entity.scripttool.ScriptTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptToolReq;
 import com.znty.rrs.exception.BizException;
@@ -127,6 +129,102 @@ public class ScriptToolService {
     public List<ScriptTableGroupDto> queryClearTableGroupList(ScriptToolReq req) {
         // 构建可清空表白名单
         return queryClearTableGroups();
+    }
+
+    /**
+     * 查询各业务库表记录数。
+     * <p>znty_rrs 统计全部基础表；ais_inv_analysis / ais_inv_ods 仅统计本地已有表（显式清单）。
+     * 按记录数降序返回，与 tool_table_row_counts.sql 策略一致。</p>
+     */
+    public List<ScriptTableRowCountGroupDto> queryTableRowCounts(ScriptToolReq req) {
+        List<ScriptTableRowCountGroupDto> groups = new ArrayList<>();
+        // 主业务库：统计全部基础表
+        groups.add(buildRowCountGroup("znty_rrs", "主业务库", null));
+        // AIS 投资分析库：仅统计本地已有表（公司库表多，显式指定）
+        groups.add(buildRowCountGroup("ais_inv_analysis", "AIS 投资分析库", Arrays.asList(
+                "t_inv_company", "t_inv_grade_result",
+                "t_sys_role", "t_sys_role_evt",
+                "t_sys_user", "t_sys_user_evt",
+                "t_sys_user_role", "t_sys_user_role_evt")));
+        // AIS 投资 ODS 库：仅统计本地已有表
+        groups.add(buildRowCountGroup("ais_inv_ods", "AIS 投资 ODS 库", Arrays.asList(
+                "wind_cbondissuer", "wind_cbondissuerrating")));
+        return groups;
+    }
+
+    /**
+     * 构建单库表记录数统计结果。
+     */
+    private ScriptTableRowCountGroupDto buildRowCountGroup(String databaseName, String databaseDesc, List<String> tableNames) {
+        ScriptTableRowCountGroupDto group = new ScriptTableRowCountGroupDto();
+        group.setDatabaseName(databaseName);
+        group.setDatabaseDesc(databaseDesc);
+        group.setTables(queryDatabaseTableRowCounts(databaseName, tableNames));
+        return group;
+    }
+
+    /**
+     * 查询单库表记录数（按记录数降序）。
+     */
+    private List<ScriptTableRowCountDto> queryDatabaseTableRowCounts(String databaseName, List<String> tableNames) {
+        List<ScriptTableRowCountDto> result = new ArrayList<>();
+        // 复用可清空表白名单的表说明
+        Map<String, ScriptTableDto> clearTableMap = queryClearTableMap();
+        try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
+            // 查询库内表清单（tableNames 为空则查全部基础表）
+            List<String> tables = queryDatabaseTableNames(conn, databaseName, tableNames);
+            for (String table : tables) {
+                ScriptTableRowCountDto dto = new ScriptTableRowCountDto();
+                dto.setDatabaseName(databaseName);
+                dto.setTableName(table);
+                String tableKey = databaseName + "." + table;
+                ScriptTableDto clearTable = clearTableMap.get(tableKey);
+                dto.setTableDesc(clearTable != null ? clearTable.getTableDesc() : null);
+                dto.setRowCount(queryTableRowCount(stmt, databaseName, table));
+                result.add(dto);
+            }
+        } catch (Exception e) {
+            // 库不可访问时返回空列表
+        }
+        // 按记录数降序排序（null 视为 0）
+        result.sort((a, b) -> Long.compare(b.getRowCount() == null ? 0L : b.getRowCount(),
+                a.getRowCount() == null ? 0L : a.getRowCount()));
+        return result;
+    }
+
+    /**
+     * 查询库内表名清单。
+     */
+    private List<String> queryDatabaseTableNames(Connection conn, String databaseName, List<String> tableNames) throws Exception {
+        StringBuilder sql = new StringBuilder(
+                "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '" + databaseName + "' AND TABLE_TYPE = 'BASE TABLE'");
+        if (tableNames != null && !tableNames.isEmpty()) {
+            sql.append(" AND TABLE_NAME IN (");
+            for (int i = 0; i < tableNames.size(); i++) {
+                if (i > 0) sql.append(",");
+                sql.append("'").append(tableNames.get(i)).append("'");
+            }
+            sql.append(")");
+        }
+        sql.append(" ORDER BY TABLE_NAME");
+        List<String> tables = new ArrayList<>();
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql.toString())) {
+            while (rs.next()) {
+                tables.add(rs.getString(1));
+            }
+        }
+        return tables;
+    }
+
+    /**
+     * 查询单表记录数（不可访问返回 -1）。
+     */
+    private long queryTableRowCount(Statement stmt, String databaseName, String tableName) {
+        try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM `" + databaseName + "`.`" + tableName + "`")) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        } catch (Exception e) {
+            return -1L;
+        }
     }
 
     /**

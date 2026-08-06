@@ -8,6 +8,7 @@ import com.znty.rrs.entity.scripttool.ScriptInspectionDto;
 import com.znty.rrs.entity.scripttool.ScriptModuleTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptOverviewDto;
 import com.znty.rrs.entity.scripttool.ScriptTableGroupDto;
+import com.znty.rrs.entity.scripttool.ScriptTableRowCountGroupDto;
 import com.znty.rrs.entity.scripttool.ScriptTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptToolReq;
 import com.znty.rrs.service.ScriptToolService;
@@ -77,6 +78,14 @@ public class ScriptToolController {
     @PostMapping("/queryClearTableGroupList")
     public ApiResponse<List<ScriptTableGroupDto>> queryClearTableGroupList(@RequestBody ScriptToolReq req) {
         return ApiResponse.success(scriptToolService.queryClearTableGroupList(req));
+    }
+
+    /**
+     * 查询各业务库表记录数。
+     */
+    @PostMapping("/queryTableRowCounts")
+    public ApiResponse<List<ScriptTableRowCountGroupDto>> queryTableRowCounts(@RequestBody ScriptToolReq req) {
+        return ApiResponse.success(scriptToolService.queryTableRowCounts(req));
     }
 
     /**
