@@ -1859,7 +1859,9 @@ public class ScriptToolService {
                 "ip_pool_status_crmw",
                 "sys_attachment",
                 "rrs_report_in",
-                "rrs_report_out"
+                "rrs_report_out",
+                "sys_imp_tmp",
+                "sys_imp_tmp_batch"
         );
     }
 
@@ -2026,6 +2028,8 @@ public class ScriptToolService {
                 "按脚本 TRUNCATE 逻辑重置主库演示数据。"
                         + "不含 AIS 库 demo（用户/角色、Wind ODS）与外部导入表演示数据。",
                 queryRrsDemoFiles(), countTablesInFiles(queryRrsDemoFiles(), "demo"), rrsBatchExcludedItems);
+        // 标注仅建结构、未灌 demo 数据的表（导入临时表等运行态表），供前端「未灌数据」区域展示
+        taskMap.get(TASK_INIT_DEMO).setUnseededTables(queryUnseededDemoTables());
         // 加入外部导入表建表任务
         addTask(taskMap, TASK_INIT_EXTERNAL_IMPORT_SCHEMA, "初始化外部导入表建表",
                 "执行外部导入类表建表脚本（当前含 rrs_securityinfo，后续可追加同类表）。",
@@ -2055,7 +2059,7 @@ public class ScriptToolService {
         // 加入调库运行态清空任务
         List<String> clearTables = queryAdjustFlowRuntimeTables();
         addTask(taskMap, TASK_CLEAR_ADJUST_FLOW, "清空调库流程数据",
-                "只清空调库申请、步骤、当前池状态、附件和报告等运行态数据。",
+                "只清空调库申请、步骤、当前池状态、附件、报告和 Excel 导入临时表等运行态数据。",
                 "danger", "CLEAR_ADJUST_FLOW",
                 "不清空证券主数据、投资池、流程定义、规则和字典配置。",
                 clearTables, clearTables.size(), null);
@@ -2063,19 +2067,18 @@ public class ScriptToolService {
     }
 
     /**
-     * 统计脚本实际受影响表数量（去重）。
+     * 收集脚本实际受影响表（去重）。
      * <p>schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数。</p>
      */
-    private int countTablesInFiles(List<String> fileNames, String scriptType) {
+    private Set<String> collectTablesInFiles(List<String> fileNames, String scriptType) {
+        Set<String> tableSet = new LinkedHashSet<>();
         File sqlDir;
         try {
             // 解析 SQL 文件目录
             sqlDir = resolveSqlDir();
         } catch (Exception e) {
-            return 0;
+            return tableSet;
         }
-        Set<String> tableSet = new LinkedHashSet<>();
-        int sortOrder = 1;
         for (String fileName : fileNames) {
             File sqlFile = new File(sqlDir, fileName);
             if (!sqlFile.exists()) {
@@ -2109,9 +2112,29 @@ public class ScriptToolService {
             } catch (Exception e) {
                 // 单文件解析失败时跳过，避免拖垮任务列表
             }
-            sortOrder++;
         }
-        return tableSet.size();
+        return tableSet;
+    }
+
+    /**
+     * 统计脚本实际受影响表数量（去重）。
+     * <p>schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数。</p>
+     */
+    private int countTablesInFiles(List<String> fileNames, String scriptType) {
+        return collectTablesInFiles(fileNames, scriptType).size();
+    }
+
+    /**
+     * 主库 schema 建了结构但 demo 未灌数据的表。
+     * <p>导入临时表等运行态表只建结构、不预置 demo 数据，需在页面单独标注，避免与受影响表数量混淆。</p>
+     */
+    private List<String> queryUnseededDemoTables() {
+        // 收集主库 schema 建表表集与 demo 写入表集，取差集
+        Set<String> schemaTables = collectTablesInFiles(queryRrsSchemaFiles(), "schema");
+        Set<String> demoTables = collectTablesInFiles(queryRrsDemoFiles(), "demo");
+        Set<String> unseeded = new LinkedHashSet<>(schemaTables);
+        unseeded.removeAll(demoTables);
+        return new ArrayList<>(unseeded);
     }
 
     /**

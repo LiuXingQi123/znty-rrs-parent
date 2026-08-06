@@ -39,4 +39,7 @@ public class ScriptTaskDto {
 
     /** 已排除的表（主任务不执行，需单独初始化） */
     private List<String> excludedItems;
+
+    /** 仅建结构、未预置 demo 数据的表（schema 有 CREATE、demo 无 TRUNCATE/INSERT） */
+    private List<String> unseededTables;
 }

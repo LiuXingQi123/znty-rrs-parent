@@ -84,6 +84,8 @@ public class ScriptToolServiceTest {
         Integer schemaTableCount = (Integer) ReflectionTestUtils.getField(initSchema, "tableCount");
         Integer clearTableCount = (Integer) ReflectionTestUtils.getField(clearFlow, "tableCount");
         Integer externalImportTableCount = (Integer) ReflectionTestUtils.getField(externalImportSchema, "tableCount");
+        @SuppressWarnings("unchecked")
+        List<String> unseededTables = (List<String>) ReflectionTestUtils.getField(initDemo, "unseededTables");
 
         assertTrue(!schemaItems.contains("rrs_external_import_schema.sql"));
         assertTrue(!demoItems.contains("rrs_external_import_demo_data.sql"));
@@ -105,12 +107,16 @@ public class ScriptToolServiceTest {
         List<String> resetExcluded = (List<String>) ReflectionTestUtils.getField(resetAll, "excludedItems");
         assertTrue(resetExcluded.contains("ais_inv_analysis_demo_data.sql"));
         assertTrue(resetExcluded.contains("ais_inv_ods_demo_data.sql"));
-        // 主库 schema 受影响表 = CREATE TABLE 去重（含流程/池事件表等），不是脚本文件数 10
+        // 主库 schema 受影响表 = CREATE TABLE 去重（含流程/池事件表等），不是脚本文件数 11
         assertTrue(schemaTableCount != null && schemaTableCount > 0);
-        assertEquals(Integer.valueOf(55), schemaTableCount);
+        assertEquals(Integer.valueOf(57), schemaTableCount);
         assertEquals(Integer.valueOf(1), externalImportTableCount);
-        assertEquals(Integer.valueOf(7), clearTableCount);
-        assertEquals(10, schemaItems.size());
+        assertEquals(Integer.valueOf(9), clearTableCount);
+        assertEquals(11, schemaItems.size());
+        // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的导入临时表
+        assertTrue(unseededTables.contains("sys_imp_tmp"));
+        assertTrue(unseededTables.contains("sys_imp_tmp_batch"));
+        assertEquals(2, unseededTables.size());
     }
 
     /** 验证重置选中表时会执行带前置注释的 Demo 插入语句。 */
