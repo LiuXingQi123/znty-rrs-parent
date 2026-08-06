@@ -74,8 +74,7 @@ CREATE TABLE `t_inv_grade_result`
     `template_type`  BIGINT      DEFAULT NULL COMMENT '模板类型',
     `weighted_score` FLOAT       DEFAULT NULL COMMENT '加权分数',
     `observe_type`   VARCHAR(50) DEFAULT NULL COMMENT '观察类型',
-    PRIMARY KEY (`id`),
-    KEY `idx_t_inv_grade_result_company_id` (`company_id`)
+    PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='主体评级结果表';
 
 -- ----------------------------------------------------------------------------

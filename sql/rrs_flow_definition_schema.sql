@@ -242,8 +242,7 @@ CREATE TABLE `wf_node_approval_handler` (
     `sort_order`         INT          DEFAULT NULL             COMMENT '排序号',
     `crte_time`          DATETIME     DEFAULT NULL             COMMENT '创建时间',
     `updt_time`          DATETIME     DEFAULT NULL             COMMENT '修改时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_approval_handler_config` (`approval_config_id`)
+    PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci

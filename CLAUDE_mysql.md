@@ -1,4 +1,4 @@
-# 数据库表设计与 SQL 生成规范（CLAUDE_mysql.md）
+# 数据库表设计与 SQL 生成规范（AGENTS_mysql.md）
 
 > 适用项目：智慧风控平台（`znty-rrs`），MySQL 8.x  
 > 说明：本文件与 `CLAUDE_mysql.md` 内容同步（仅文件名不同），修改时须两边同时更新。
@@ -76,11 +76,12 @@ AIS 库将库名换成 `ais_inv_analysis` / `ais_inv_ods` 即可。
 - 除主键外，所有字段统一允许为 `NULL`（即 `DEFAULT NULL`）
 - **严禁**在除主键外的任何字段上设置 `NOT NULL`
 
-### 外键约束
+### 外键与索引约束
 
 - **禁止**使用物理外键
-- 除主键外，不在数据库层定义其他外键约束
-- 关联关系由业务代码维护
+- **禁止**唯一索引（`UNIQUE KEY`）及除主键外的任何二级索引（`KEY` / `INDEX`）
+- 表结构**仅保留** `PRIMARY KEY`（主表 `id` / 事件表 `evt_id`）
+- 关联关系与业务唯一性由业务代码维护，不依赖库层唯一/外键/额外索引
 
 ### 时间字段（主表强制）
 
@@ -272,7 +273,7 @@ CREATE TABLE `wf_flow_definition_evt` (
 - [ ] 表有 `COMMENT`；字段均有 `COMMENT`；枚举注释含全部取值含义
 - [ ] **主表**主键 `id`，**事件表**主键 `evt_id`，均为 `BIGINT NOT NULL AUTO_INCREMENT`
 - [ ] 除主键外均为 `DEFAULT NULL`，无额外 `NOT NULL`
-- [ ] 无物理外键
+- [ ] 无物理外键、无 `UNIQUE KEY`、无二级 `KEY`/`INDEX`（仅 `PRIMARY KEY`）
 - [ ] 主表含 `crte_time` / `updt_time`（事件表中为随主表复制的字段，不是独立审计语义）
 - [ ] 若需事件表：表名 `_evt`，末尾 `opter_id` / `opt_time` / `oprt_type`（`oprt_type` 存中文操作类型）
 

@@ -47,10 +47,7 @@ CREATE TABLE `sys_imp_tmp_batch`
     `is_deleted`    TINYINT(1)    DEFAULT NULL COMMENT '逻辑删除标志：0=正常 / 1=已删除',
     `crte_time`     DATETIME      DEFAULT NULL COMMENT '创建时间',
     `updt_time`     DATETIME      DEFAULT NULL COMMENT '修改时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_sys_imp_tmp_batch_imp_id` (`imp_id`),
-    KEY `idx_sys_imp_tmp_batch_biz_opter` (`biz_type`, `opter_id`, `imp_time`),
-    KEY `idx_sys_imp_tmp_batch_deleted` (`is_deleted`, `save_rslt`)
+    PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
@@ -105,11 +102,7 @@ CREATE TABLE `sys_imp_tmp`
     `is_deleted`  TINYINT(1)   DEFAULT NULL COMMENT '逻辑删除标志：0=正常 / 1=已删除',
     `crte_time`   DATETIME     DEFAULT NULL COMMENT '创建时间',
     `updt_time`   DATETIME     DEFAULT NULL COMMENT '修改时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_sys_imp_tmp_imp_id` (`imp_id`),
-    KEY `idx_sys_imp_tmp_fld001` (`fld001`),
-    KEY `idx_sys_imp_tmp_imp_chk` (`imp_id`, `chk_rslt`),
-    KEY `idx_sys_imp_tmp_imp_row` (`imp_id`, `row_no`)
+    PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci

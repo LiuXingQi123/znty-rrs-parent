@@ -57,10 +57,7 @@ CREATE TABLE `rrs_report_in`
     `is_deleted`    TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
     `crte_time`     DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`     DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_rrs_report_in_type` (`report_type`),
-    KEY `idx_rrs_report_in_security_code` (`security_code`),
-    KEY `idx_rrs_report_in_company_code` (`company_code`)
+    PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
@@ -83,10 +80,7 @@ CREATE TABLE `rrs_report_out`
     `is_deleted`      TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
     `crte_time`       DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`       DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_rrs_report_out_type` (`report_type`),
-    KEY `idx_rrs_report_out_security_code` (`security_code`),
-    KEY `idx_rrs_report_out_company_code` (`company_code`)
+    PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci

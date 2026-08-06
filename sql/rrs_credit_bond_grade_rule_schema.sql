@@ -31,8 +31,7 @@ CREATE TABLE `credit_bond_term_bucket` (
     `enabled`          TINYINT(1)    DEFAULT NULL            COMMENT '是否启用：1=启用 / 0=停用',
     `crte_time`        DATETIME      DEFAULT NULL            COMMENT '创建时间',
     `updt_time`        DATETIME      DEFAULT NULL            COMMENT '修改时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_credit_bond_term_bucket_code` (`bucket_code`)
+    PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
@@ -46,8 +45,7 @@ CREATE TABLE `credit_bond_inner_rating_grade` (
     `enabled`     TINYINT(1)  DEFAULT NULL            COMMENT '是否启用：1=启用 / 0=停用',
     `crte_time`   DATETIME    DEFAULT NULL            COMMENT '创建时间',
     `updt_time`   DATETIME    DEFAULT NULL            COMMENT '修改时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_credit_bond_inner_rating_grade_code` (`grade_code`)
+    PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
@@ -64,10 +62,7 @@ CREATE TABLE `credit_bond_pool_grade_rule` (
     `sort_no`               INT          DEFAULT NULL            COMMENT '排序序号',
     `crte_time`             DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`             DATETIME     DEFAULT NULL            COMMENT '修改时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_credit_bond_pool_grade_rule` (`term_bucket_id`, `inner_rating_grade_id`, `pool_id`),
-    KEY `idx_credit_bond_pool_grade_rule_pool_id` (`pool_id`),
-    KEY `idx_credit_bond_pool_grade_rule_term_grade` (`term_bucket_id`, `inner_rating_grade_id`)
+    PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci

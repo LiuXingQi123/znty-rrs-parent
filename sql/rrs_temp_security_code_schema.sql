@@ -34,11 +34,7 @@ CREATE TABLE `rrs_temp_security_code`
     `memo`                       VARCHAR(500) DEFAULT NULL            COMMENT '备注',
     `crte_time`                  DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`                  DATETIME     DEFAULT NULL            COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_rrs_temp_security_code_temp_code` (`temp_security_code`),
-    KEY `idx_rrs_temp_security_code_security_code` (`security_code`),
-    KEY `idx_rrs_temp_security_code_company` (`temp_company_code`),
-    KEY `idx_rrs_temp_security_code_status` (`status`)
+    PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='临时代码表';
 
 CREATE TABLE `rrs_temp_security_code_update_log`
@@ -57,8 +53,5 @@ CREATE TABLE `rrs_temp_security_code_update_log`
     `replace_status`    VARCHAR(32)  DEFAULT NULL            COMMENT '替换状态：success=成功',
     `replace_time`      DATETIME     DEFAULT NULL            COMMENT '替换时间',
     `crte_time`         DATETIME     DEFAULT NULL            COMMENT '创建时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_rrs_temp_security_code_update_log_temp_code` (`temp_security_code`),
-    KEY `idx_rrs_temp_security_code_update_log_security_code` (`security_code`),
-    KEY `idx_rrs_temp_security_code_update_log_table_record` (`replace_table_name`, `replace_record_id`)
+    PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='临时代码替换日志表';
