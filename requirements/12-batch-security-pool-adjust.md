@@ -171,9 +171,9 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 池锁定 → pending → 未入池 → 冻结期（入池时间缺失报「证券入池生效时间缺失」，与单券相同）→ 调出限制池(out_restrict) → 调出互斥池(out_mutex) → 同请求互斥冲突 → 弹性禁投(out_soft_restrict，警告) → 开放日 →（债券/股票）到期或退市。
 
-**流程展示与提交**：校验阶段内部仍走单笔 `resolveAdjustFlowOptions`（白名单/简易等），**校验通过**时再向 `flowOptions` **头部注入**目标池 **batchIn/batchOut**（`flowType=batchInbound/batchOutbound`），并设为**唯一 `recommended`**；单券候选仍保留可选。前端默认选中批量流程，操作员可按行改选其它流程。未配置批量流程时注入「无需审批」直通项。**提交**时 `fillDefaultBatchFlowIfMissing` 仅对未带 flowId/flowKey 的明细回填批量流程，**不再强制覆盖**前端已选流程。
+**流程展示与提交**：逐券委托单笔 `securityPoolAdjustService.checkAdjust`，流程候选与推荐规则**完全沿用单券**（白名单/简易/默认/特殊/升降级等 `resolveAdjustFlowOptions`），**不再注入**目标池 `batchIn/batchOut` 专用流程。前端默认选中 `recommended` 项，操作员可按行改选其它候选。提交时透传前端所选 `flowId/flowKey/flowType`，**不再**用批量流程回填。
 
-**与单笔的异同**：校验规则集合与单笔一致（无额外批量专属规则）；区别在外层：①逐证券循环；②`adjustGroupKey` 加 `securityCode_` 前缀；③互斥冲突仅单券内多目标池；④默认推荐批量专用流程，允许改选单券候选。
+**与单笔的异同**：校验规则与流程推荐与单笔一致（无额外批量专属流程）；区别在外层：①逐证券循环；②`adjustGroupKey` 加 `securityCode_` 前缀；③互斥冲突仅单券内多目标池；④整批事务与防重复按证券集合聚合。
 
 ### 3.5 后端批量提交逻辑
 

@@ -67,13 +67,19 @@ public class BatchSecurityInboundAdjustDto {
         /** 不可调整原因列表 */
         private List<String> failReasons = new ArrayList<>();
 
-        /** 当前行可选流程列表 */
+        /** 当前行可选流程列表（与单券 checkAdjust 一致，不再注入批量专用流程） */
         private List<AdjustCheckDto.FlowOption> flowOptions = new ArrayList<>();
 
-        /** 批量流程展示名称 */
+        /**
+         * 历史字段：曾表示目标池批量流程展示名。
+         * 现流程与单券一致，不再回填；保留字段兼容旧前端。
+         */
         private String batchFlowName;
 
-        /** 是否无需审批直接生效 */
+        /**
+         * 历史字段：曾表示批量流程未配置时的直通标识。
+         * 现直通由所选流程定义判断；保留字段兼容旧前端。
+         */
         private boolean directFlow;
     }
 }
