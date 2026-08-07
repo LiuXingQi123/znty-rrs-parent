@@ -104,7 +104,7 @@ public class CreditBondGradeRuleService {
             item.setPoolId(pool.getId());
             item.setPoolCode(pool.getPoolCode());
             item.setPoolName(pool.getPoolName());
-            item.setPoolFullName("信用债大库/" + pool.getPoolName());
+            item.setPoolFullName("信用债大库(new)/" + pool.getPoolName());
             item.setInnerSort(pool.getInnerSort());
             dto.getPoolOptions().add(item);
         }
