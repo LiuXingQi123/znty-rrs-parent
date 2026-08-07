@@ -1562,11 +1562,11 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(options.get(0).getFlowKey()).isEqualTo("bond:fast-inbound");
     }
 
-    /** 验证批量调库链路命中特殊审批流程（非信用债目标池）。 */
+    /** 验证单券调库链路命中特殊审批流程（非信用债目标池；批量校验已委托本服务）。 */
     @Test
     public void batchAdjustShouldResolveSpecialInboundFlow() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
@@ -1582,11 +1582,11 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(option.getFlowKey()).isEqualTo("bond:special-inbound");
     }
 
-    /** 验证批量调库：信用债大库目标池不命中互斥特殊审批。 */
+    /** 验证单券调库：信用债大库目标池不命中互斥特殊审批（批量校验已委托本服务）。 */
     @Test
     public void batchAdjustShouldSkipSpecialInboundForCreditBondPool() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));

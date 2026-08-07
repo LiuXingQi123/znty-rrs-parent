@@ -14,7 +14,6 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
-import com.znty.rrs.entity.securitypooladjust.AdjustCheckContext;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
@@ -283,7 +282,6 @@ public class BatchSecurityPoolAdjustServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "flowMapper", mock(FlowMapper.class));
-        ReflectionTestUtils.setField(service, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
         ReflectionTestUtils.setField(securityPoolAdjustService, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
@@ -435,18 +433,6 @@ public class BatchSecurityPoolAdjustServiceTest {
             return;
         }
         throw new AssertionError("内容相同且顺序不同时应阻止重复提交");
-    }
-
-    /** 验证放开规则仅使主体债矩阵校验直接通过。 */
-    @Test
-    public void inCheckMainGradeRuleShouldSkipWhenReleased() {
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
-        AdjustCheckContext ctx = new AdjustCheckContext();
-        ctx.setReleaseRules(true);
-
-        String result = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
-
-        assertThat(result).isNull();
     }
 
     /** 构建批量提交明细。 */
