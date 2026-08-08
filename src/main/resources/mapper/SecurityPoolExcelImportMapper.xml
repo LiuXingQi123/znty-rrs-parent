@@ -9,13 +9,13 @@
     <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO sys_imp_tmp_batch (
             imp_id, biz_type, template_code, file_name, file_size, file_path
-            , target_id, target_name, target_type, biz_mode, option_json, reason
+            , target_id, target_name, target_type, biz_mode, option_json, reason, advice
             , total_count, pass_count, fail_count, chk_rslt, chk_dscr
             , save_rslt, save_dscr, imp_time, opter_id, opter_name, result_json
             , is_deleted, crte_time, updt_time
         ) VALUES (
             #{impId}, #{bizType}, #{templateCode}, #{fileName}, #{fileSize}, #{filePath}
-            , #{targetId}, #{targetName}, #{targetType}, #{bizMode}, #{optionJson}, #{reason}
+            , #{targetId}, #{targetName}, #{targetType}, #{bizMode}, #{optionJson}, #{reason}, #{advice}
             , #{totalCount}, #{passCount}, #{failCount}, #{chkRslt}, #{chkDscr}
             , #{saveRslt}, #{saveDscr}, #{impTime}, #{opterId}, #{opterName}, #{resultJson}
             , #{isDeleted}, #{crteTime}, #{updtTime}
@@ -25,7 +25,7 @@
     <!-- 按业务批次号查询有效批次 -->
     <select id="queryByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpBatchBo">
         SELECT id, imp_id, biz_type, template_code, file_name, file_size, file_path
-             , target_id, target_name, target_type, biz_mode, option_json, reason
+             , target_id, target_name, target_type, biz_mode, option_json, reason, advice
              , total_count, pass_count, fail_count, chk_rslt, chk_dscr
              , save_rslt, save_dscr, imp_time, opter_id, opter_name, result_json
              , is_deleted, crte_time, updt_time

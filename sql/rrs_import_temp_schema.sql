@@ -33,6 +33,7 @@ CREATE TABLE `sys_imp_tmp_batch`
     `biz_mode`      VARCHAR(16)   DEFAULT NULL COMMENT '业务模式：in=调入 / out=调出',
     `option_json`   VARCHAR(2000) DEFAULT NULL COMMENT '选项 JSON：clearTarget/allowLinkMutex 等',
     `reason`        VARCHAR(1000) DEFAULT NULL COMMENT '调整原因',
+    `advice`        VARCHAR(1000) DEFAULT NULL COMMENT '调整意见',
     `total_count`   INT           DEFAULT NULL COMMENT '明细总行数',
     `pass_count`    INT           DEFAULT NULL COMMENT '校验通过数',
     `fail_count`    INT           DEFAULT NULL COMMENT '校验失败数',

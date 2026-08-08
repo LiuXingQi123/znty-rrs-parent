@@ -31,6 +31,8 @@ public class SecurityPoolExcelImportDto {
     private String optionJson;
     /** 调整原因 */
     private String reason;
+    /** 调整意见 */
+    private String advice;
     /** 总行数 */
     private Integer totalCount;
     /** 通过数 */

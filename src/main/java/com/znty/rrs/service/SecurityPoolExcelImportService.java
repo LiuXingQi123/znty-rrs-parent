@@ -138,8 +138,9 @@ public class SecurityPoolExcelImportService {
         // 规范化调整方向
         batch.setBizMode(normalizeDirection(req.getDirection()));
         batch.setOptionJson(optionJson);
-        // 空白调整原因规范为 null
+        // 空白调整原因/意见规范为 null
         batch.setReason(trimToNull(req.getAdjustReason()));
+        batch.setAdvice(trimToNull(req.getAdjustAdvice()));
         batch.setTotalCount(0);
         batch.setPassCount(0);
         batch.setFailCount(0);
@@ -664,8 +665,8 @@ public class SecurityPoolExcelImportService {
         if (req.getAdjustReason() != null && !req.getAdjustReason().trim().isEmpty()) {
             batch.setReason(req.getAdjustReason().trim());
         }
-        if (isBlank(batch.getReason())) {
-            throw new BizException("调整原因不能为空");
+        if (req.getAdjustAdvice() != null && !req.getAdjustAdvice().trim().isEmpty()) {
+            batch.setAdvice(req.getAdjustAdvice().trim());
         }
 
         // 解析导入类型（证券/主体）
@@ -776,6 +777,7 @@ public class SecurityPoolExcelImportService {
             submitReq.setSecurityType(primary.getSecurityType());
             submitReq.setAdjustType(ADJUST_TYPE_EXCEL);
             submitReq.setAdjustReason(batch.getReason());
+            submitReq.setAdjustAdvice(batch.getAdvice());
             submitReq.setAdjusterId(opterId);
             submitReq.setAdjusterName(opterName);
 
@@ -843,6 +845,7 @@ public class SecurityPoolExcelImportService {
             submitReq.setSecurityType("company");
             submitReq.setAdjustType(ADJUST_TYPE_EXCEL);
             submitReq.setAdjustReason(batch.getReason());
+            submitReq.setAdjustAdvice(batch.getAdvice());
             submitReq.setAdjusterId(opterId);
             submitReq.setAdjusterName(opterName);
 
@@ -1128,6 +1131,7 @@ public class SecurityPoolExcelImportService {
                 submitReq.setSecurityType("company");
                 submitReq.setAdjustType(ADJUST_TYPE_CLEAR);
                 submitReq.setAdjustReason(batch.getReason());
+                submitReq.setAdjustAdvice(batch.getAdvice());
                 submitReq.setAdjusterId(opterId);
                 submitReq.setAdjusterName(opterName);
                 List<ForbiddenPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
@@ -1164,6 +1168,7 @@ public class SecurityPoolExcelImportService {
                 submitReq.setSecurityType(primary.getSecurityType());
                 submitReq.setAdjustType(ADJUST_TYPE_CLEAR);
                 submitReq.setAdjustReason(batch.getReason());
+                submitReq.setAdjustAdvice(batch.getAdvice());
                 submitReq.setAdjusterId(opterId);
                 submitReq.setAdjusterName(opterName);
                 List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
@@ -1825,6 +1830,7 @@ public class SecurityPoolExcelImportService {
         dto.setBizMode(batch.getBizMode());
         dto.setOptionJson(batch.getOptionJson());
         dto.setReason(batch.getReason());
+        dto.setAdvice(batch.getAdvice());
         dto.setTotalCount(batch.getTotalCount());
         dto.setPassCount(batch.getPassCount() == null ? 0 : batch.getPassCount());
         dto.setFailCount(batch.getFailCount() == null ? 0 : batch.getFailCount());

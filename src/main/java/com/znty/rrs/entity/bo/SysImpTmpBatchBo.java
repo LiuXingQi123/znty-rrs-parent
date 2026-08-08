@@ -37,6 +37,8 @@ public class SysImpTmpBatchBo {
     private String optionJson;
     /** 调整原因 */
     private String reason;
+    /** 调整意见 */
+    private String advice;
     /** 明细总行数 */
     private Integer totalCount;
     /** 校验通过数 */
