@@ -17,8 +17,7 @@ public class AdjustBatchNoContextTest {
     public void batchNoContextsShouldUseMillisecondTimeText() throws Exception {
         // 校验证券单笔调库批次时间片
         assertBatchTimeText("com.znty.rrs.service.SecurityPoolAdjustService$BatchNoContext");
-        // 校验证券批量调库批次时间片
-        assertBatchTimeText("com.znty.rrs.service.BatchSecurityPoolAdjustService$BatchNoContext");
+        // 证券批量调库已复用 SecurityPoolAdjustService.BatchNoContext，不再单独维护
         // 校验主体调库批次时间片
         assertBatchTimeText("com.znty.rrs.service.ForbiddenPoolAdjustService$BatchNoContext");
         // 校验 CRMW 调库批次时间片

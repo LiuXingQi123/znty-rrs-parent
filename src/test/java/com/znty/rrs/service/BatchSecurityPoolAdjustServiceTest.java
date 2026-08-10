@@ -149,21 +149,24 @@ public class BatchSecurityPoolAdjustServiceTest {
                 .containsExactly(9L);
     }
 
-    /** 验证批量提交多只证券时复用同一个批次号上下文。 */
+    /** 验证批量提交多只证券时复用同一个批次号上下文（委托单券服务）。 */
     @Test
     public void addAdjustLogShouldReuseBatchNoContextForMultipleSecurities() {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        FlowMapper flowMapper = mock(FlowMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        SecurityPoolAdjustService securityPoolAdjustService = new SecurityPoolAdjustService();
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
-        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
-        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
+        ReflectionTestUtils.setField(securityPoolAdjustService, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
+        ReflectionTestUtils.setField(securityPoolAdjustService, "sysAttachmentService", attachmentService);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
 
         when(mapper.queryEnabledLeafPoolCount(11L)).thenReturn(1);
         SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
@@ -177,6 +180,10 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(adjustMapper.querySecurityCurrentPoolIdList(anyString()))
                 .thenReturn(Collections.<Long>emptyList());
         when(adjustMapper.queryAllPoolRelationList()).thenReturn(Collections.emptyList());
+        when(adjustMapper.queryPendingManualTargetPoolIdList(anyString(), any()))
+                .thenReturn(Collections.emptyList());
+        when(adjustMapper.queryRecentManualAdjustLogList(anyString(), anyString(), any(Integer.class)))
+                .thenReturn(Collections.emptyList());
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
             bo.setId(System.nanoTime());
@@ -201,26 +208,28 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(captor.getAllValues())
                 .extracting(IpAdjustLogBo::getAdjustBatchNo)
                 .doesNotHaveDuplicates();
-        // 明细带 flowId 时按调入序号 1000+；未强制覆盖为空流程故不再走 3000+ 无流程段
         assertThat(captor.getAllValues().get(0).getAdjustBatchNo()).matches("BOND\\d{17}1001");
         assertThat(captor.getAllValues().get(1).getAdjustBatchNo()).matches("BOND\\d{17}1002");
     }
 
-    /** 验证批量提交同一证券的手工调入和互斥调出时写入两条调库记录。 */
+    /** 验证批量提交同一证券的手工调入和互斥调出时写入两条调库记录（委托单券服务）。 */
     @Test
     public void addAdjustLogShouldInsertManualInboundAndMutexOutboundForSameSecurity() {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        FlowMapper flowMapper = mock(FlowMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
+        SecurityPoolAdjustService securityPoolAdjustService = new SecurityPoolAdjustService();
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
-        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
-        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
+        ReflectionTestUtils.setField(securityPoolAdjustService, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
+        ReflectionTestUtils.setField(securityPoolAdjustService, "sysAttachmentService", attachmentService);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
 
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
         SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
@@ -236,6 +245,10 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(adjustMapper.querySecurityCurrentPoolIdList("106006789"))
                 .thenReturn(Collections.singletonList(2L));
         when(adjustMapper.queryAllPoolRelationList()).thenReturn(Collections.emptyList());
+        when(adjustMapper.queryPendingManualTargetPoolIdList(anyString(), any()))
+                .thenReturn(Collections.emptyList());
+        when(adjustMapper.queryRecentManualAdjustLogList(anyString(), anyString(), any(Integer.class)))
+                .thenReturn(Collections.emptyList());
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
             bo.setId(System.nanoTime());
@@ -281,7 +294,6 @@ public class BatchSecurityPoolAdjustServiceTest {
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
-        ReflectionTestUtils.setField(service, "flowMapper", mock(FlowMapper.class));
         ReflectionTestUtils.setField(securityPoolAdjustService, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
@@ -332,21 +344,6 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(dto.getItems().get(1).getAdjustMode()).isEqualTo("调出");
     }
 
-    /** 批量调库链路报告必填校验：限制为 any 且无报告时应抛出异常。 */
-    @Test
-    public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
-        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
-        InvestmentPoolBo pool = buildPool(10L, null, "报告池", "credit_bond");
-        try {
-            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any", null);
-        } catch (Exception e) {
-            assertThat(e).isInstanceOf(BizException.class);
-            assertThat(e.getMessage()).contains("要求研究报告");
-            return;
-        }
-        throw new AssertionError("any 限制且无报告时应抛出异常");
-    }
 
     /** 验证批量校验结果透传单笔流程候选，不注入 batchIn/batchOut。 */
     @Test

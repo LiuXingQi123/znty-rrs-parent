@@ -667,7 +667,52 @@ public class SecurityPoolAdjustService {
         SysAttachmentService.SubmissionFiles submissionFiles =
                 // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
-        return submitAdjustLog(req, submissionFiles, new BatchNoContext());
+        return addAdjustLog(req, submissionFiles, new BatchNoContext());
+    }
+
+    /**
+     * 提交调库申请（共享附件上下文与批次号上下文）。
+     *
+     * <p>供证券池批量调整等场景按证券循环调用：整批共用同一 {@link BatchNoContext} 保证批次号连续，
+     * 共用同一 {@link SysAttachmentService.SubmissionFiles} 避免重复落盘。
+     *
+     * @param req              单证券调库提交请求
+     * @param submissionFiles  已创建的附件上下文（可为整批共享）
+     * @param batchNoContext   批次号上下文（可为整批共享）
+     * @return 提交结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req,
+                                        SysAttachmentService.SubmissionFiles submissionFiles,
+                                        BatchNoContext batchNoContext) {
+        return submitAdjustLog(req, submissionFiles, batchNoContext);
+    }
+
+    /**
+     * 判断指定流程是否为直通（无人工审批节点）。
+     *
+     * <p>flowId 与 flowKey 均为空时按「无审批直通」处理；仅 key 时解析活跃定义。
+     * 供批量提交前整批直通预检复用。
+     *
+     * @param flowId  流程定义 ID，可为 null
+     * @param flowKey 流程 Key，可为 null/空
+     * @return true=直通或无流程
+     */
+    public boolean isDirectAdjustFlow(Long flowId, String flowKey) {
+        if (flowId == null && (flowKey == null || flowKey.isEmpty())) {
+            return true;
+        }
+        Long resolvedId = flowId;
+        if (resolvedId == null) {
+            FlowDefinitionBo definition = flowMapper.queryActiveFlowByKey(flowKey);
+            resolvedId = definition != null ? definition.getId() : null;
+        }
+        if (resolvedId == null) {
+            // 配置了 key 但解析不到定义时，按非直通走后续提交校验
+            return false;
+        }
+        FlowSnapshot snapshot = buildFlowSnapshot(resolvedId);
+        return snapshot != null && isDirectFlow(snapshot);
     }
 
     /**
