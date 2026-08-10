@@ -1584,6 +1584,7 @@ public class ScriptToolService {
         if (fileName.startsWith("rrs_my_security_pool")) return "my-security-pool";
         if (fileName.startsWith("rrs_credit_bond_grade_rule")) return "credit-bond-grade";
         if (fileName.startsWith("rrs_temp_security_code")) return "temp-security-code";
+        if (fileName.startsWith("rrs_scheduled_task")) return "scheduled-task";
         return "unknown";
     }
 
@@ -1624,6 +1625,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "my-security-pool", "我的证券池", "重置我的证券池演示数据。", "medium", "rrs_my_security_pool_demo_data.sql");
         addModuleTask(taskMap, "credit-bond-grade", "信用债评级规则", "重置信用债主体内评分档和评级准入规则。", "medium", "rrs_credit_bond_grade_rule_demo_data.sql");
         addModuleTask(taskMap, "temp-security-code", "临时代码", "重置临时代码管理演示数据。", "medium", "rrs_temp_security_code_demo_data.sql");
+        addModuleTask(taskMap, "scheduled-task", "定时任务配置", "重置定时任务配置与执行历史演示数据。", "medium", "rrs_scheduled_task_demo_data.sql");
         addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体评级、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
         addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 债券发行人主体与评级表演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;
@@ -1851,7 +1853,8 @@ public class ScriptToolService {
                 "rrs_my_security_pool_schema.sql",
                 "rrs_credit_bond_grade_rule_schema.sql",
                 "rrs_temp_security_code_schema.sql",
-                "rrs_import_temp_schema.sql"
+                "rrs_import_temp_schema.sql",
+                "rrs_scheduled_task_schema.sql"
         );
     }
 
@@ -1873,7 +1876,8 @@ public class ScriptToolService {
                 "rrs_my_security_pool_demo_data.sql",
                 "rrs_credit_bond_grade_rule_demo_data.sql",
                 "rrs_temp_security_code_demo_data.sql",
-                "rrs_import_temp_demo_data.sql"
+                "rrs_import_temp_demo_data.sql",
+                "rrs_scheduled_task_demo_data.sql"
         );
     }
 
@@ -2051,6 +2055,11 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "credit_bond_inner_rating_grade", "主体内评分档"),
                 buildTable("znty_rrs", "credit_bond_term_bucket", "期限分组"),
                 buildTable("znty_rrs", "my_security_pool", "我的证券池")
+        )));
+        groups.add(buildTableGroup("scheduled-task", "定时任务", "znty_rrs", Arrays.asList(
+                buildTable("znty_rrs", "sys_scheduled_task_run_log", "定时任务执行历史"),
+                buildTable("znty_rrs", "sys_scheduled_task_evt", "定时任务配置事件"),
+                buildTable("znty_rrs", "sys_scheduled_task", "定时任务配置")
         )));
         groups.add(buildTableGroup("ais-analysis", "AIS 投资分析库", "ais_inv_analysis", Arrays.asList(
                 buildTable("ais_inv_analysis", "t_inv_grade_result", "主体评级结果"),

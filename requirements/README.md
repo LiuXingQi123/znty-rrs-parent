@@ -1,6 +1,6 @@
 # 智慧风控平台功能需求说明
 
-本目录按前端业务页面整理需求，当前覆盖 28 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
+本目录按前端业务页面整理需求，当前覆盖 29 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
 
 | 序号 | 功能 | 前端页面 | 需求文档 | 接口测试 |
 |---|---|---|---|---|
@@ -32,6 +32,7 @@
 | 26 | 禁投池调整 · ABS债申请（债级 调入/调出） | `forbidden_pool_adjust.html`（Tab「ABS债」） | [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md) | `ForbiddenAbsPoolAdjustApiTest` |
 | 27 | 存量证券批量调整（产品库 + 来源池） | `stock_security_batch_adjust.html` | [27-stock-security-batch-adjust.md](27-stock-security-batch-adjust.md) | `StockSecurityBatchAdjustServiceTest` |
 | 28 | 证券池 Excel 导入 | `security_pool_excel_import.html` | [28-security-pool-excel-import.md](28-security-pool-excel-import.md) | `SecurityPoolExcelImportServiceTest` / `CommonFileControllerTest` |
+| 29 | 定时任务管理（可视化启停/cron/执行） | `scheduled_task.html` | [29-scheduled-task.md](29-scheduled-task.md) | `ScheduledTaskServiceTest` / `CompanyNewBondAutoInServiceTest` / `AutoAdjustServiceTest` |
 
 ## 调库业务全链路索引
 
@@ -49,7 +50,7 @@
 - **禁投池调整 · ABS债（债级，独立接口）**：[26](26-forbidden-abs-pool-adjust.md) 与 [15] 同页 Tab「ABS债」→ 仅 `abs_flag=1` → 目标池仅 15/16/17/23 → `/api/v1/forbiddenAbsPoolAdjust/*` 校验提交；**不**同步主体下其他债；非直通审批复用证券池审核页（`securityAdjust`）。
 - **主体池视角**：[09](09-company-pool-query.md) 当前在池的主体、[14](14-company-pool-adjust-history.md) 主体调库流水（`category_type='company'` 过滤，主体作为伪证券入池/调库）。
 - **CRMW 池链路（凭证级，独立状态表 `ip_pool_status_crmw`）**：[18](18-crmw-pool-query.md) 当前在 CRMW 池的凭证（`audit_status='20'`）、[19](19-crmw-pool-adjust.md) 选 CRMW 凭证 + 标的证券 → 校验 → `addCrmwAdjustLogWithFiles` 提交（批次号 `CRMW` 前缀）、[20](20-crmw-pool-adjust-approve.md) `submitAdjustAudit` 审批流转落地 `ip_pool_status_crmw`、[21](21-crmw-pool-adjust-detail.md) 凭证调库只读 / 首次提交（修改节点重提在 [20]）、[22](22-crmw-pool-adjust-history.md) CRMW 调库流水（`pool_type='crmw'` 过滤，所有状态）。
-- **基础配置**：[01](01-flow-definition.md) 审批流程定义（设计器/节点/版本）、[02](02-investment-pool.md) 投资池树/关系/流程/权限维护、[03](03-rule-manager.md) QLExpress 风控规则与测试用例、[23](23-credit-bond-grade-rule.md) 信用债期限×主体内评分档→投资池准入矩阵、[24](24-temp-security-code.md) 临时代码录入/更新正式证券/取消发行、[25](25-pool-open-day.md) 投资池开放日区间维护（`ip_pool_open_day`，配合池级 `open_day_adjust`）。
+- **基础配置**：[01](01-flow-definition.md) 审批流程定义（设计器/节点/版本）、[02](02-investment-pool.md) 投资池树/关系/流程/权限维护、[03](03-rule-manager.md) QLExpress 风控规则与测试用例、[23](23-credit-bond-grade-rule.md) 信用债期限×主体内评分档→投资池准入矩阵、[24](24-temp-security-code.md) 临时代码录入/更新正式证券/取消发行、[25](25-pool-open-day.md) 投资池开放日区间维护（`ip_pool_open_day`，配合池级 `open_day_adjust`）、[29](29-scheduled-task.md) 定时任务可视化管理（`sys_scheduled_task` 启停/cron/手动执行/执行历史）。
 
 > **三类调库同构说明**：证券池调库（[04]/[05]/[11]）、禁投池调整（[15]/[16]/[17]，主体级）、CRMW 池调库（[19]/[20]/[21]，凭证级）在校验规则、流程快照、审批流转、`audit_status` 状态枚举上完全同构。差异：①操作对象分别为证券 / 主体 / CRMW 凭证+标的证券；②落地表分别为 `ip_pool_status`（`pool_type` 区分）/ `ip_pool_status`（主体级；**仅债券禁止库** 另 `syncCompanyBonds` 同步未到期旗下债，含 ABS/crmw）/ `ip_pool_status_crmw`（独立表，`pool_type='crmw'`）；③批次号前缀 `BOND` / `BOND` / `CRMW`。
 

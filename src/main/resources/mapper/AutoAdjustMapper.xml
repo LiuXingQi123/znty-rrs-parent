@@ -25,4 +25,52 @@
           AND si.maturity_date &lt; DATE_FORMAT(CURDATE(), '%Y-%m-%d')
     </select>
 
+    <!--
+      主体下新债自动入池候选：
+      1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池
+      2) 旗下 bond 大类未到期、尚未在 targetPoolId
+      3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
+    -->
+    <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT bond.wind_code AS security_code
+               ,bond.short_name AS security_short_name
+               ,bond.security_type
+        FROM rrs_securityinfo bond
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        WHERE bond.issuer_code IS NOT NULL
+          AND bond.issuer_code &lt;&gt; ''
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND EXISTS (
+              SELECT 1
+              FROM ip_pool_status cps
+              INNER JOIN dict_security_type cdst ON cdst.security_type = cps.security_type
+                                                AND cdst.is_deleted = 0
+                                                AND cdst.category_type = 'company'
+              WHERE cps.security_code = bond.issuer_code
+                AND cps.target_pool_id = #{companyPoolId}
+                AND cps.audit_status = '20'
+                AND cps.is_deleted = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status bps
+              WHERE bps.security_code = bond.wind_code
+                AND bps.target_pool_id = #{targetPoolId}
+                AND bps.audit_status = '20'
+                AND bps.is_deleted = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM rrs_temp_security_code ts
+              WHERE ts.temp_security_code = bond.wind_code
+                AND ts.security_code IS NOT NULL
+                AND ts.security_code &lt;&gt; ''
+                AND IFNULL(ts.is_deleted, 0) = 0
+                AND ts.status = 'updated'
+          )
+        ORDER BY bond.wind_code ASC
+    </select>
+
 </mapper>

@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.ScheduledTaskMapper">
+
+    <select id="queryTaskList" resultType="com.znty.rrs.entity.bo.SysScheduledTaskBo">
+        SELECT id
+               ,task_code
+               ,task_name
+               ,description
+               ,cron_expression
+               ,schedule_enabled
+               ,param_json
+               ,last_run_status
+               ,last_run_message
+               ,last_run_time
+               ,last_affected_count
+               ,last_duration_ms
+               ,last_trigger_type
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_scheduled_task
+        WHERE IFNULL(is_deleted, 0) = 0
+        ORDER BY id ASC
+    </select>
+
+    <select id="queryTaskByCode" resultType="com.znty.rrs.entity.bo.SysScheduledTaskBo">
+        SELECT id
+               ,task_code
+               ,task_name
+               ,description
+               ,cron_expression
+               ,schedule_enabled
+               ,param_json
+               ,last_run_status
+               ,last_run_message
+               ,last_run_time
+               ,last_affected_count
+               ,last_duration_ms
+               ,last_trigger_type
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_scheduled_task
+        WHERE task_code = #{taskCode}
+          AND IFNULL(is_deleted, 0) = 0
+        LIMIT 1
+    </select>
+
+    <insert id="addTask" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_scheduled_task (task_code
+                                       ,task_name
+                                       ,description
+                                       ,cron_expression
+                                       ,schedule_enabled
+                                       ,param_json
+                                       ,is_deleted
+                                       ,crte_time
+                                       ,updt_time)
+        VALUES (#{taskCode}
+               ,#{taskName}
+               ,#{description}
+               ,#{cronExpression}
+               ,#{scheduleEnabled}
+               ,#{paramJson}
+               ,0
+               ,NOW()
+               ,NOW())
+    </insert>
+
+    <update id="editTaskConfig">
+        UPDATE sys_scheduled_task
+        SET cron_expression = #{cronExpression}
+           ,schedule_enabled = #{scheduleEnabled}
+           ,param_json = #{paramJson}
+           ,task_name = #{taskName}
+           ,description = #{description}
+           ,updt_time = NOW()
+        WHERE task_code = #{taskCode}
+          AND IFNULL(is_deleted, 0) = 0
+    </update>
+
+    <update id="editTaskLastRun">
+        UPDATE sys_scheduled_task
+        SET last_run_status = #{lastRunStatus}
+           ,last_run_message = #{lastRunMessage}
+           ,last_run_time = #{lastRunTime}
+           ,last_affected_count = #{lastAffectedCount}
+           ,last_duration_ms = #{lastDurationMs}
+           ,last_trigger_type = #{lastTriggerType}
+           ,updt_time = NOW()
+        WHERE task_code = #{taskCode}
+          AND IFNULL(is_deleted, 0) = 0
+    </update>
+
+    <insert id="addTaskEvent">
+        INSERT INTO sys_scheduled_task_evt (id
+                                           ,task_code
+                                           ,task_name
+                                           ,description
+                                           ,cron_expression
+                                           ,schedule_enabled
+                                           ,param_json
+                                           ,last_run_status
+                                           ,last_run_message
+                                           ,last_run_time
+                                           ,last_affected_count
+                                           ,last_duration_ms
+                                           ,last_trigger_type
+                                           ,is_deleted
+                                           ,crte_time
+                                           ,updt_time
+                                           ,opter_id
+                                           ,opt_time
+                                           ,oprt_type)
+        VALUES (#{bo.id}
+               ,#{bo.taskCode}
+               ,#{bo.taskName}
+               ,#{bo.description}
+               ,#{bo.cronExpression}
+               ,#{bo.scheduleEnabled}
+               ,#{bo.paramJson}
+               ,#{bo.lastRunStatus}
+               ,#{bo.lastRunMessage}
+               ,#{bo.lastRunTime}
+               ,#{bo.lastAffectedCount}
+               ,#{bo.lastDurationMs}
+               ,#{bo.lastTriggerType}
+               ,#{bo.isDeleted}
+               ,#{bo.crteTime}
+               ,NOW()
+               ,#{opterId}
+               ,NOW()
+               ,#{oprtType})
+    </insert>
+
+    <insert id="addRunLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_scheduled_task_run_log (task_code
+                                               ,task_name
+                                               ,trigger_type
+                                               ,run_status
+                                               ,message
+                                               ,affected_count
+                                               ,duration_ms
+                                               ,start_time
+                                               ,end_time
+                                               ,operator_id
+                                               ,operator_name
+                                               ,is_deleted
+                                               ,crte_time
+                                               ,updt_time)
+        VALUES (#{taskCode}
+               ,#{taskName}
+               ,#{triggerType}
+               ,#{runStatus}
+               ,#{message}
+               ,#{affectedCount}
+               ,#{durationMs}
+               ,#{startTime}
+               ,#{endTime}
+               ,#{operatorId}
+               ,#{operatorName}
+               ,0
+               ,NOW()
+               ,NOW())
+    </insert>
+
+    <select id="queryRunLogList" resultType="com.znty.rrs.entity.bo.SysScheduledTaskRunLogBo">
+        SELECT id
+               ,task_code
+               ,task_name
+               ,trigger_type
+               ,run_status
+               ,message
+               ,affected_count
+               ,duration_ms
+               ,start_time
+               ,end_time
+               ,operator_id
+               ,operator_name
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_scheduled_task_run_log
+        <where>
+            IFNULL(is_deleted, 0) = 0
+            <if test="taskCode != null and taskCode != ''">
+                AND task_code = #{taskCode}
+            </if>
+        </where>
+        ORDER BY start_time DESC, id DESC
+    </select>
+
+</mapper>

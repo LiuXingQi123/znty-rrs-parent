@@ -7,9 +7,9 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
+import com.znty.rrs.schedule.RrsScheduledTask;
+import com.znty.rrs.schedule.ScheduledTaskResult;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -20,67 +20,108 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 自动调库定时任务服务。
+ * 到期出池自动调库任务。
  *
- * <p>参考老项目 AdjustPoolByRule 意图（定时扫描规则触发自动调库，adjustType=自动调整，直接落地不走审批），
- * 按新项目架构用 Spring @Scheduled + 直接 mapper 落地实现，不照搬老项目 Quartz+IAdjustRule 反射结构。
- * 通过配置 rrs.auto-adjust.enabled=true 启用，默认关闭（避免开发环境意外触发）。
+ * <p>参考老项目 AdjustRuleByExpired。调度启停与 cron 由 {@code sys_scheduled_task} 持久化，
+ * 经 {@link ScheduledTaskService} 动态挂载；本类只实现业务。
  */
 @Slf4j
 @Service
-@ConditionalOnProperty(name = "rrs.auto-adjust.enabled", havingValue = "true")
-public class AutoAdjustService {
+public class AutoAdjustService implements RrsScheduledTask {
 
-    /** 自动调库操作人（系统） */
+    /** 任务编码 */
+    public static final String TASK_CODE = "auto_out_expired";
+    /** 任务名称 */
+    public static final String TASK_NAME = "到期出池";
+
     private static final String AUTO_ADJUSTER_ID = "0";
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    /** 自动调出规则：到期出池 */
     private static final String REASON_EXPIRED_OUT = "证券到期自动调出";
+    private static final String BATCH_SUFFIX = "3001";
+    private static final String DEFAULT_CRON = "0 0 2 * * ?";
 
+    /** 自动调库查询 Mapper */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
+    /** 证券池调库落地 Mapper */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+    /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
 
-    /**
-     * 自动调库定时入口（默认每天凌晨 2 点，cron 可配）。
-     *
-     * <p>依次执行各自动调库规则。当前实现到期出池，后续可按同模式扩展退市/禁投池/行业等规则。
-     */
-    @Scheduled(cron = "${rrs.auto-adjust.cron:0 0 2 * * ?}")
-    public void executeAutoAdjust() {
-        log.info("自动调库定时任务开始");
-        try {
-            autoOutExpired();
-        } catch (Exception e) {
-            log.error("自动调库定时任务异常", e);
-        }
-        log.info("自动调库定时任务结束");
+    @Override
+    public String getTaskCode() {
+        return TASK_CODE;
+    }
+
+    @Override
+    public String getTaskName() {
+        return TASK_NAME;
+    }
+
+    @Override
+    public String getDescription() {
+        return "扫描配置了 auto_out 规则的启用池，将池内已到期证券自动调出";
+    }
+
+    @Override
+    public String getDefaultCronExpression() {
+        return DEFAULT_CRON;
+    }
+
+    @Override
+    public boolean isDefaultScheduleEnabled() {
+        return false;
+    }
+
+    @Override
+    public String getDefaultParamJson() {
+        return null;
     }
 
     /**
-     * 规则：到期出池。
-     *
-     * <p>扫描配置了 auto_out 规则的启用池，将池内已到期（maturity_date 早于今日）的证券自动调出，
-     * 写 ip_adjust_log（adjustType=自动调整，audit_status=20 直接生效）+ 软删除 ip_pool_status。
-     * 对应老项目 AdjustRuleByExpired。
+     * 兼容旧调用入口。
      */
-    private void autoOutExpired() {
+    public void executeAutoAdjust() {
+        execute();
+    }
+
+    @Override
+    public ScheduledTaskResult execute() {
+        Date startTime = new Date();
+        long begin = System.currentTimeMillis();
+        log.info("{} 开始", TASK_NAME);
+        try {
+            int total = doAutoOutExpired();
+            long duration = System.currentTimeMillis() - begin;
+            String message = "本轮共调出 " + total + " 条到期证券";
+            log.info("{} 结束，{}", TASK_NAME, message);
+            return ScheduledTaskResult.success(TASK_CODE, TASK_NAME, message, total, startTime, duration);
+        } catch (Exception e) {
+            long duration = System.currentTimeMillis() - begin;
+            log.error("{} 异常", TASK_NAME, e);
+            return ScheduledTaskResult.failure(TASK_CODE, TASK_NAME,
+                    "执行异常: " + e.getMessage(), startTime, duration);
+        }
+    }
+
+    /** 到期出池核心逻辑。 */
+    private int doAutoOutExpired() {
         List<Long> poolIds = autoAdjustMapper.queryAutoOutPoolIds();
         if (poolIds == null || poolIds.isEmpty()) {
             log.info("到期出池：无配置 auto_out 规则的池，跳过");
-            return;
+            return 0;
         }
-        // 全量池 Map，取池名/类型
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
-        for (InvestmentPoolBo pool : investmentPoolMapper.queryPoolList()) {
-            poolMap.put(pool.getId(), pool);
+        List<InvestmentPoolBo> poolList = investmentPoolMapper.queryPoolList();
+        if (poolList != null) {
+            for (InvestmentPoolBo pool : poolList) {
+                poolMap.put(pool.getId(), pool);
+            }
         }
-        // 本轮统一批次号与提交时间（大批量逐条落库共用，保证历史排序同批相邻）
         Date submitTime = new Date();
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + "3001";
+        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         int total = 0;
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
@@ -92,7 +133,6 @@ public class AutoAdjustService {
                 continue;
             }
             for (IpAdjustLogBo sec : expiredList) {
-                // 构建自动调出日志（直接生效，不走审批）
                 sec.setAdjustType("自动调整");
                 sec.setAdjustMode(AdjustMode.OUT.getCode());
                 sec.setTargetPoolId(poolId);
@@ -104,6 +144,7 @@ public class AutoAdjustService {
                 sec.setAdjustReason(REASON_EXPIRED_OUT);
                 sec.setAdjustBatchNo(batchNo);
                 sec.setSubmitTime(submitTime);
+                // 写自动调出日志
                 securityPoolAdjustMapper.addAdjustLog(sec);
                 // 软删除池状态
                 securityPoolAdjustMapper.deletePoolStatusSoft(sec.getSecurityCode(), poolId);
@@ -112,5 +153,6 @@ public class AutoAdjustService {
             log.info("到期出池：池[{}]({}) 调出 {} 条到期证券", pool.getPoolName(), poolId, expiredList.size());
         }
         log.info("到期出池：本轮共调出 {} 条到期证券，批次号 {}", total, batchNo);
+        return total;
     }
 }

@@ -46,7 +46,5 @@ rrs:
     storage-path: ${RRS_ATTACHMENT_STORAGE_PATH:D:/uploads/znty_rrs}
   script:
     sql-path: ${RRS_SCRIPT_SQL_PATH:sql}
-  # 自动调库定时任务（到期出池等规则）：默认关闭，置 true 启用；cron 默认每天凌晨 2 点
-  auto-adjust:
-    enabled: ${RRS_AUTO_ADJUST_ENABLED:false}
-    cron: ${RRS_AUTO_ADJUST_CRON:0 0 2 * * ?}
+  # 定时任务启停/cron/扩展参数已迁至库表 sys_scheduled_task，由「RRS配置 → 定时任务管理」可视化维护
+  # 历史环境变量（RRS_AUTO_ADJUST_* / RRS_COMPANY_NEW_BOND_*）不再读取；首次建表见 rrs_scheduled_task_schema.sql

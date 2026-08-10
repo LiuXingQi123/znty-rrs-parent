@@ -9,8 +9,10 @@ import java.util.List;
 /**
  * 自动调库数据访问组件。
  *
- * <p>支持定时任务扫描到期证券、禁投池联动等自动调库规则，
- * 复用 {@link SecurityPoolAdjustMapper#addAdjustLog} / {@link SecurityPoolAdjustMapper#deletePoolStatusSoft} 落地。
+ * <p>支持定时任务扫描到期证券、主体下新债自动入池等自动调库规则，
+ * 复用 {@link SecurityPoolAdjustMapper#addAdjustLog} /
+ * {@link SecurityPoolAdjustMapper#addPoolStatus} /
+ * {@link SecurityPoolAdjustMapper#deletePoolStatusSoft} 落地。
  */
 @Mapper
 public interface AutoAdjustMapper {
@@ -31,4 +33,19 @@ public interface AutoAdjustMapper {
      * @return 到期在池证券列表（每条对应一条待自动调出记录）
      */
     List<IpAdjustLogBo> queryPoolSecurityByExpired(@Param("poolId") Long poolId);
+
+    /**
+     * 查询「主体已在主体池、旗下未到期债券尚未在目标池」的待自动入池债券。
+     *
+     * <p>对应老系统 {@code AutoAdjustInNewBondToLimitPoolJob}：
+     * 主体在 companyPoolId（category_type=company）且 bond 大类未到期、未在 targetPoolId；
+     * 排除已更新为正式代码的临时代码。口径与主体调入债券禁止库时的
+     * {@code queryCompanyInboundBondForAutoList} 一致（含 ABS/crmw）。
+     *
+     * @param companyPoolId 主体所在池 ID（如债券禁止库 15）
+     * @param targetPoolId  债券自动入池目标池 ID（可与主体池相同）
+     * @return 待入池债券（仅回填 securityCode/securityShortName/securityType）
+     */
+    List<IpAdjustLogBo> queryCompanyNewBondForAutoIn(@Param("companyPoolId") Long companyPoolId,
+                                                     @Param("targetPoolId") Long targetPoolId);
 }
