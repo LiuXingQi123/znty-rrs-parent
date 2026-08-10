@@ -660,39 +660,25 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 提交调库申请及附件。
+     * 提交调库申请及附件（单券入口：本方法内创建附件上下文与新的批次号上下文）。
      */
     @Transactional(rollbackFor = Exception.class)
     public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req, List<MultipartFile> files) {
+        // 创建本次提交附件上下文
         SysAttachmentService.SubmissionFiles submissionFiles =
-                // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
-        return addAdjustLog(req, submissionFiles, new BatchNoContext());
-    }
-
-    /**
-     * 提交调库申请（共享附件上下文与批次号上下文）。
-     *
-     * <p>供证券池批量调整等场景按证券循环调用：整批共用同一 {@link BatchNoContext} 保证批次号连续，
-     * 共用同一 {@link SysAttachmentService.SubmissionFiles} 避免重复落盘。
-     *
-     * @param req              单证券调库提交请求
-     * @param submissionFiles  已创建的附件上下文（可为整批共享）
-     * @param batchNoContext   批次号上下文（可为整批共享）
-     * @return 提交结果
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req,
-                                        SysAttachmentService.SubmissionFiles submissionFiles,
-                                        BatchNoContext batchNoContext) {
-        return submitAdjustLog(req, submissionFiles, batchNoContext);
+        return submitAdjustLog(req, submissionFiles, new BatchNoContext());
     }
 
     /**
      * 判断指定流程是否为直通（无人工审批节点）。
      *
-     * <p>flowId 与 flowKey 均为空时按「无审批直通」处理；仅 key 时解析活跃定义。
-     * 供批量提交前整批直通预检复用。
+     * <p><b>说明</b>：单券提交路径内部直接使用 {@link #isDirectFlow(FlowSnapshot)}，
+     * 本方法不在本类其它业务步骤中调用；主要供「证券池批量调整」在整批提交前做直通预检
+     * （{@code needsWholeBatchDirectRecheck}），复用与单券一致的直通判定口径，避免批量侧再拷贝流程快照逻辑。
+     *
+     * <p>判定规则：flowId 与 flowKey 均为空时按「无审批直通」处理；仅有 key 时解析活跃流程定义再判断；
+     * 解析不到定义时返回 false（按非直通走后续提交校验）。
      *
      * @param flowId  流程定义 ID，可为 null
      * @param flowKey 流程 Key，可为 null/空
@@ -716,11 +702,21 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 提交调库申请内部实现。
+     * 提交调库申请核心实现。
+     *
+     * <p>与 {@link #addAdjustLog(SecurityPoolAdjustSubmitReq, List)} 的区别：
+     * 调用方自行提供 {@link SysAttachmentService.SubmissionFiles} 与 {@link BatchNoContext}，
+     * 供证券池批量调整按证券循环提交时整批共享附件与批次号序号。
+     *
+     * @param req              单证券调库提交请求
+     * @param submissionFiles  已创建的附件上下文（可为整批共享）
+     * @param batchNoContext   批次号上下文（可为整批共享）
+     * @return 提交结果
      */
-    private AdjustSubmitDto submitAdjustLog(SecurityPoolAdjustSubmitReq req,
-                                            SysAttachmentService.SubmissionFiles submissionFiles,
-                                            BatchNoContext batchNoContext) {
+    @Transactional(rollbackFor = Exception.class)
+    public AdjustSubmitDto submitAdjustLog(SecurityPoolAdjustSubmitReq req,
+                                           SysAttachmentService.SubmissionFiles submissionFiles,
+                                           BatchNoContext batchNoContext) {
         // ══ 第一阶段：前置校验 ══
         validateSubmitReq(req);
         // 检查短时间内是否已提交相同申请

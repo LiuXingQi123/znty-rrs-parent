@@ -402,8 +402,8 @@ public class StockSecurityBatchAdjustService {
         StockSecurityBatchAdjustDto dto = new StockSecurityBatchAdjustDto();
         dto.setSecurityCount(itemMap.size());
         dto.setSubmitCount(0);
+        // 创建批量提交附件上下文
         SysAttachmentService.SubmissionFiles submissionFiles =
-                // 创建批量提交附件上下文
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
         BatchNoContext batchNoContext = new BatchNoContext();
         for (Map.Entry<String, List<StockSecurityBatchAdjustSubmitReq.AdjustItem>> entry : itemMap.entrySet()) {
@@ -1128,8 +1128,8 @@ public class StockSecurityBatchAdjustService {
      * @return 本次调入处理生成的所有调库记录 ID
      */
     private List<Long> executeInboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        // 创建批量提交附件上下文
         return executeInboundSubmit(req, shared,
-                // 创建批量提交附件上下文
                 sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
     }
 
@@ -1227,8 +1227,8 @@ public class StockSecurityBatchAdjustService {
      * @return 本次调出处理生成的所有调库记录 ID
      */
     private List<Long> executeOutboundSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        // 创建批量提交附件上下文
         return executeOutboundSubmit(req, shared,
-                // 创建批量提交附件上下文
                 sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()));
     }
 

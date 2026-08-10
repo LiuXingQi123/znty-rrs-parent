@@ -467,8 +467,8 @@ public class CrmwPoolAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdjustSubmitDto addCrmwAdjustLog(CrmwPoolAdjustSubmitReq req, List<MultipartFile> files) {
+        // 创建本次提交附件上下文
         SysAttachmentService.SubmissionFiles submissionFiles =
-                // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
         return submitAdjustLog(req, submissionFiles, new BatchNoContext());
     }
@@ -1076,8 +1076,8 @@ public class CrmwPoolAdjustService {
      * @return 本次调入处理生成的所有调库记录 ID
      */
     private List<Long> executeInboundSubmit(CrmwPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        // 创建本次提交附件上下文
         return executeInboundSubmit(req, shared,
-                // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()),
                 new ArrayList<IpAdjustLogBo>());
     }
@@ -1167,8 +1167,8 @@ public class CrmwPoolAdjustService {
      * @return 本次调出处理生成的所有调库记录 ID
      */
     private List<Long> executeOutboundSubmit(CrmwPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        // 创建本次提交附件上下文
         return executeOutboundSubmit(req, shared,
-                // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(Collections.<MultipartFile>emptyList(), req.getAdjusterId()),
                 new ArrayList<IpAdjustLogBo>());
     }

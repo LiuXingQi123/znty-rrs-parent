@@ -624,8 +624,8 @@ public class ForbiddenAbsPoolAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ForbiddenAbsPoolAdjustSubmitDto addAdjustLog(ForbiddenAbsPoolAdjustSubmitReq req, List<MultipartFile> files) {
+        // 创建本次提交附件上下文
         SysAttachmentService.SubmissionFiles submissionFiles =
-                // 创建本次提交附件上下文
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
         return submitAdjustLog(req, submissionFiles, new BatchNoContext());
     }

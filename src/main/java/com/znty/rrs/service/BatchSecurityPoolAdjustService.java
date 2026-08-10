@@ -67,6 +67,7 @@ public class BatchSecurityPoolAdjustService {
     /** 证券池调库数据访问组件 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
     /** 系统附件业务服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
@@ -261,14 +262,14 @@ public class BatchSecurityPoolAdjustService {
         BatchSecurityInboundAdjustDto dto = new BatchSecurityInboundAdjustDto();
         dto.setSecurityCount(itemMap.size());
         dto.setSubmitCount(0);
+        // 创建批量提交附件上下文（整批共用，避免重复落盘）
         SysAttachmentService.SubmissionFiles submissionFiles =
-                // 创建批量提交附件上下文（整批共用，避免重复落盘）
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
         // 整批共用单券批次号上下文，保证多证券批次号序号连续
         SecurityPoolAdjustService.BatchNoContext batchNoContext = new SecurityPoolAdjustService.BatchNoContext();
         for (Map.Entry<String, List<BatchSecurityInboundAdjustReq.AdjustItem>> entry : itemMap.entrySet()) {
-            // 构建单证券调库提交请求后，委托单券服务落库（互斥校验/步骤/直通落池均在单券内）
-            AdjustSubmitDto submitDto = securityPoolAdjustService.addAdjustLog(
+            // 构建单证券调库提交请求后，委托单券 submitAdjustLog 落库（整批共享附件与批次号）
+            AdjustSubmitDto submitDto = securityPoolAdjustService.submitAdjustLog(
                     buildSingleSubmitReq(req, entry.getValue()), submissionFiles, batchNoContext);
             if (submitDto == null) {
                 continue;
