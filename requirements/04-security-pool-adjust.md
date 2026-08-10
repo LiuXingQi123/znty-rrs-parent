@@ -266,9 +266,18 @@
   - 白名单条件顺序：剩余期限≤3 年（`date_exists` 天）→ 非永续/私募/ABS → 债券类 → 主体在白名单池（**`WHITELIST_POOL_IDS` 当前 emptySet，本条件固定不成立**）→ 非担保债。
   - 简易条件顺序：目标池为信用债一/二/三级库（`innerSort 1~3`）→ 剩余期限可解析（`date_exists`）→ 剩余期限 ≤ 同主体在目标池最大剩余期限 → 该主体 180 天内以非简易流程入过目标池（`queryIssuerHasNonSimpleInboundWithinDays`：按 `ip_pool_status` 审批通过入库记录判定，**已出库软删仍计**，不要求 `is_deleted=0`）→ 主体/展望未下调或下调时担保人未下调（**已注释**，RatingDowngradeChecker 仍计算保留）。
 
-### 3.7 后端 addAdjustLog 完整逻辑
+### 3.7 后端 addAdjustLog / submitAdjustLog 完整逻辑
 
-入口 `addAdjustLog(req, files)`，`@Transactional(rollbackFor=Exception.class)`，分五阶段：
+**入口分层**（批量 / 存量复用后者）：
+
+| 方法 | 用途 |
+|------|------|
+| `addAdjustLog(req)` / `addAdjustLog(req, files)` | 单券页面与 Controller 入口：自建 `SubmissionFiles` 与 `new BatchNoContext()` 后转调 `submitAdjustLog` |
+| `submitAdjustLog(req, submissionFiles, batchNoContext)` | 实际五阶段落库；批量/存量整批共享附件与批次号时直接调用 |
+| `isDirectAdjustFlow(flowId, flowKey)` | 对外直通判断（解析流程后与内部 `isDirectFlow` 同口径），供批量整批预检 |
+| `recheckBeforeFinalApproval(logList)` | 直通/终审前锁池动态复核（容量、在池、限制等） |
+
+入口 `addAdjustLog(req, files)` → `submitAdjustLog`，`@Transactional(rollbackFor=Exception.class)`，分五阶段：
 
 **① 前置校验** `validateSubmitReq`：`securityCode` 非空、`items` 非空、每项 `adjustMode` 与 `targetPoolId` 非空。
 
@@ -500,7 +509,7 @@
 - 前端：`znty-rrs-ui/security_pool_adjust.html`（列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`）
 - dict.js：`DICT_AUDIT_STATUS`、`DICT_POOL_RELATION_TYPE`、`DICT_POOL_TYPE`
 - Controller：`SecurityPoolAdjustController.java`
-- Service：`SecurityPoolAdjustService.java`（`checkAdjust`、`addAdjustLog`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`）
+- Service：`SecurityPoolAdjustService.java`（`checkAdjust`、`addAdjustLog`、`submitAdjustLog`、`isDirectAdjustFlow`、`recheckBeforeFinalApproval`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`、`BatchNoContext`）
 - Mapper：`SecurityPoolAdjustMapper.java` / `SecurityPoolAdjustMapper.xml`
 - 实体：`SecurityPoolAdjustSubmitReq`、`AdjustCheckReq`、`AdjustCheckDto`、`IpAdjustLogBo`、`IpAdjustStepBo`、`PoolDto`
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（`ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`）、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）

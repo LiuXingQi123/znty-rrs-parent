@@ -38,7 +38,7 @@
 调库是本平台的核心业务，涉及申请、批量、审核、查询多条链路，文档间相互引用：
 
 - **单笔调入/调出申请**：[04](04-security-pool-adjust.md) — 检索证券 → 选目标池 → `checkAdjust` 校验 → `addAdjustLog` 提交（含直通流程即时入池）。
-- **批量调入/调出申请**：[12](12-batch-security-pool-adjust.md) — 选目标池 → 批量勾选证券 → 逐只复用单笔校验/提交，整批共用批次号、附件、事务。
+- **批量调入/调出申请**：[12](12-batch-security-pool-adjust.md) — 选目标池 → 批量勾选证券 → 编排层逐券 `checkAdjust` / 分组 `submitAdjustLog`（不注入 batch 流程；整批防重复与直通复核），共用批次号、附件、事务。
 - **存量证券批量调整**：[27](27-stock-security-batch-adjust.md) — 目标限债券产品库（`bond_product_root` 子树）→ 必选来源池（CRMW/信用债一~三级/转债核心·重点）→ 可选发行主体 → 校验/提交与证券池批量同构，委托 `SecurityPoolAdjustService`（不注入 batch 专用流程）。
 - **证券池 Excel 导入**：[28](28-security-pool-excel-import.md) — 下载模板 → 上传写 `sys_imp_tmp_batch`/`sys_imp_tmp` → 页面预览 → 校验 → 提交（`adjust_type=Excel导入`）；公共模板下载 `/api/v1/commonFile/downloadTemplate`。
 - **审核/审批流转**：[05](05-security-pool-adjust-approve.md) — `submitAdjustAudit` 推进节点（抢占/会签/发起人），最终通过才落地 `ip_pool_status`。

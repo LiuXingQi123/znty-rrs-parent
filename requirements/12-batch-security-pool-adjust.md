@@ -100,9 +100,9 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 2. `validateAdjustPoolPermission`：管理员(1)放行；否则校验当前用户对 poolId 拥有 adjustable 权限。
 3. `resolveAdjustMode`：`in→调入`、`out→调出`。
 4. **逐只证券循环**：对每个 `SecurityItem` 构造单证券校验请求 `buildSingleCheckReq`（目标池=当前 poolId，方向=中文），调用**单笔调库服务** `securityPoolAdjustService.checkAdjust(singleReq)`。
-5. 单笔校验返回 `AdjustCheckDto.items`（可能含手工项 + 联动/互斥自动项），**过滤出 adjustMode 等于本次方向的项**，用 `buildBatchCheckResult` 转成批量结果项：
-   - `adjustGroupKey` 被改写为 `securityCode + "_" + 原始groupKey`（保证不同证券的同名分组不冲突）。
-   - 透传 `canAdjust`、`failReasons`、`flowOptions`。
+5. 单笔校验返回 `AdjustCheckDto.items`（可能含手工项 + 联动/互斥/关联码自动项），用 `buildBatchCheckResult` 转成批量结果项：
+   - `adjustGroupKey` 改写为 `sourceSecurityCode + "_" + 原始groupKey`（触发主券前缀，related 与主券同批）。
+   - 透传 `canAdjust`、`failReasons`、`flowOptions`（**不注入** batchIn/Out）。
 
 **返回结构** `BatchSecurityInboundAdjustDto`：
 ```json
@@ -141,15 +141,17 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 4. `submitAdjustMultipart`：`FormData`，`request` 字段为 JSON Blob，`files` 字段为多文件；`POST /api/v1/batchSecurityPoolAdjust/addAdjustLogWithFiles`（multipart；JSON 无附件入口为 `addAdjustLog`）。
 5. 成功提示并返回投资池列表刷新。
 
-**后端 `addAdjustLog(req, files)`**：
+**后端 `addAdjustLog(req, files)`**（编排层；落库委托单券）：
 1. `@Transactional(rollbackFor = Exception.class)`——**整个批量提交是一个事务**。
-2. `validateAdjustSubmitReq`：poolId/direction/items/adjusterId/adjusterName 非空；目标池为启用叶子池；每条 item 的 securityCode 非空、`adjustMode` 必须等于本次方向、`targetPoolId` 非空、`flowId` 或 `flowKey` 至少有一个。
+2. `validateAdjustSubmitReq`：poolId/direction/items/adjusterId/adjusterName 非空；目标池为启用叶子池；每条 item 的 securityCode 非空、手工项 `adjustMode` 必须等于本次方向、`targetPoolId` 非空。**不强制**每条都带 `flowId`/`flowKey`（无流程或直通流程允许空，与单券一致；前端可提交行仍会尽量选 recommended）。
 3. `validateAdjustPoolPermission`：权限校验同校验阶段。
-4. **按 securityCode 分组**：`itemMap = {securityCode: [AdjustItem...]}`。
-5. `sysAttachmentService.createSubmissionFiles(files, adjusterId)`：把 multipart 文件包成 `SubmissionFiles`（含校验、缓存），**整批共用一份物理文件**。
-6. `securityPoolAdjustService.createBatchNoContext()`：创建**批次号上下文** `BatchNoContext`（含 `batchTimeText` yyyyMMddHHmmss 和三个序号：inboundBatchSeq/outboundBatchSeq/noFlowBatchSeq），**整批共用**，保证多只证券间批次号递增。
-7. **逐只证券循环**：对每个 `securityCode` 的 items 列表，`buildSingleSubmitReq`（强制 `adjustType="手工调整"`，把整批的 adjustReason/Advice、adjusterId/Name、附件下标/报告ID 透传到单证券提交请求）→ 调用**单笔调库服务** `securityPoolAdjustService.addAdjustLog(singleReq, submissionFiles, batchNoContext)`。
-8. 累加 `submitCount`、收集 `logIds` 到返回 dto。
+4. **整批防重复** `checkRecentBatchDuplicateSubmit`：约 30 秒窗口内，比较调整人最近一次「手动批量」手工项集合键（证券|目标池|方向|flowId|flowKey）与原因/意见文本，相同则拒绝。
+5. **直通预检** `needsWholeBatchDirectRecheck`：任一手工项经 `securityPoolAdjustService.isDirectAdjustFlow(flowId, flowKey)` 判定为直通时，提交前调用 `recheckBeforeFinalApproval`（锁池 + 容量/在池/限制等动态复核），整批共用一次。
+6. **按触发主券分组**：`resolveBatchSubmitGroupKey`（`sourceSecurityCode` 优先，否则 `securityCode`），保证 related 关联码与主券同组提交、共享批次与流程步骤。
+7. `sysAttachmentService.createSubmissionFiles(files, adjusterId)`：multipart 包成 `SubmissionFiles`，**整批共用一份物理文件**。
+8. `new SecurityPoolAdjustService.BatchNoContext()`：创建**批次号上下文**（`batchTimeText` yyyyMMddHHmmss + inbound/outbound/noFlow 序号），**整批共用**，多证券序号连续。
+9. **逐组循环**：`buildSingleSubmitReq`（请求级证券取组内 manual 主券；`adjustType="手动批量调整"`；透传整批 reason/advice/adjuster 与每条明细的 flow/附件下标）→ 调用**单笔落库入口** `securityPoolAdjustService.submitAdjustLog(singleReq, submissionFiles, batchNoContext)`（非页面用的 `addAdjustLog`：后者自建附件上下文，批量需共享已创建的 `SubmissionFiles`/`BatchNoContext`）。
+10. 累加 `submitCount`、收集 `logIds` 到返回 dto。
 
 **返回结构** `BatchSecurityInboundAdjustDto`：`{ items:[], securityCount, submitCount, logIds:[...] }`。
 
@@ -173,37 +175,29 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 **流程展示与提交**：逐券委托单笔 `securityPoolAdjustService.checkAdjust`，流程候选与推荐规则**完全沿用单券**（白名单/简易/默认/特殊/升降级等 `resolveAdjustFlowOptions`），**不再注入**目标池 `batchIn/batchOut` 专用流程。前端默认选中 `recommended` 项，操作员可按行改选其它候选。提交时透传前端所选 `flowId/flowKey/flowType`，**不再**用批量流程回填。
 
-**与单笔的异同**：校验规则与流程推荐与单笔一致（无额外批量专属流程）；区别在外层：①逐证券循环；②`adjustGroupKey` 加 `securityCode_` 前缀；③互斥冲突仅单券内多目标池；④整批事务与防重复按证券集合聚合。
+**与单笔的异同**：校验规则与流程推荐与单笔一致（无额外批量专属流程）；区别在外层：①逐证券循环；②`adjustGroupKey` 加主券 `sourceSecurityCode_` 前缀；③互斥冲突仅单券内多目标池；④整批事务、防重复、直通预检按整批聚合。
 
 ### 3.5 后端批量提交逻辑
 
-单笔 `addAdjustLog` 五阶段（批量外层逐证券调用）：
+批量 Service **不复制**单券落库代码：每组调用 `SecurityPoolAdjustService.submitAdjustLog`，内部仍为单券五阶段（详见 [04-security-pool-adjust.md](04-security-pool-adjust.md) §3.7）：
 
 1. **前置校验**（`validateSubmitReq`）。
-2. **参数初始化**（`loadSubmitSharedData`）：查证券信息、全量池 Map、当前入池集、池关系 Map、进行中流程标志、观察池标志、**为每个唯一 flowId 加载流程快照**（定义+活跃版本+节点+连线+审批配置+处理人，`buildFlowSnapshot`）。
-3. **调入处理**（`executeInboundSubmit`）：逐项判断直通流程（`isDirectFlow`：start→发起人自动→end 无人工节点）：
-   - 直通：写 `ip_adjust_log`(audit_status='20') + 绑定附件 + 手工项创建初始步骤 + 写 `ip_pool_status`(audit_status='20' 即时生效)。
-   - 非直通：写 `ip_adjust_log`(audit_status='00') + 绑定附件 + 手工项创建初始步骤；若初始步骤已走到 end（`createInitialSteps` 返回 true）则升为 '20' 并写 ip_pool_status。
-4. **调出处理**（`executeOutboundSubmit`）：同直通/非直通分支，直通/升完成时**软删除** `ip_pool_status` 中该证券在该池的有效记录（`deletePoolStatusSoft`）。
-5. **后续处理**（`postSubmitProcess`）：批量场景 `req.securityInfo` 为 null，跳过。
+2. **参数初始化**（`loadSubmitSharedData`，注入共享 `BatchNoContext`）。
+3. **调入处理**（`executeInboundSubmit`）：直通判断用流程快照 `isDirectFlow`（与对外 `isDirectAdjustFlow` 口径一致）；直通写 `audit_status='20'` 并落 `ip_pool_status`，非直通写 `'00'` 并建初始步骤。
+4. **调出处理**（`executeOutboundSubmit`）：对称；生效时 `deletePoolStatusSoft`。
+5. **后续处理**（`postSubmitProcess`）：批量场景一般无 `securityInfo`，跳过主档合并快照或按单券规则处理。
 
-**批次号规则**（`buildAdjustBatchNo`）：`BOND + batchTimeText(yyyyMMddHHmmss) + 4位序号`；序号段：调入 `1000+inboundBatchSeq`、调出 `2000+outboundBatchSeq`、无流程 `3000+noFlowBatchSeq`。同组（`adjustGroupKey`）手工项与其触发的联动/互斥项**共用一个批次号**。批量场景下 `BatchNoContext` 跨证券共享，序号持续递增。
+**批次号规则**（单券 `buildAdjustBatchNo`）：`BOND + batchTimeText + 4位序号`；调入 `1000+`、调出 `2000+`、无流程 `3000+`。同 `adjustGroupKey` 共用批次号。批量共享同一个 `BatchNoContext`，跨主券组序号递增。
 
-**流程步骤创建**（`createInitialSteps`）：懒创建前 3 步——开始节点(auto_process) → 发起人节点(submit，若为 initiator 策略自动完成) → 下一审批节点(pending，按处理人展开)；若沿途直达 end 则返回 true。步骤写 `ip_adjust_step`。
+**附件绑定**（单券 `bindSubmitAttachments`）：按下标从**共享** `SubmissionFiles` 绑定；报告库附件 `copyReportAttachments`。同一物理文件可挂到多条 log。
 
-**附件绑定**（`bindSubmitAttachments`）：对每条新建调库日志：
-- `bindAttachments(adjustLogId, creditReportFileIndexes, "credit_report_hand", submissionFiles)`：按下标从共享 `SubmissionFiles` 取物理文件保存并写 `sys_attachment`（mainId=日志ID，tableName=ip_adjust_log）。同一文件对同一日志+分类只存一次。
-- `bindAttachments(..., materialFileIndexes, "material_hand", ...)`。
-- `copyReportAttachments(adjustLogId, creditReportSourceAttachmentIds, "credit_report", uploaderId)`：复制报告库附件记录为信评报告分类（`credit_report_in/out`）。
-- `copyReportAttachments(..., materialSourceAttachmentIds, "material", ...)`。
-
-**事务范围与部分失败**：整个批量提交在**单一 `@Transactional`** 内。任一证券的任一步骤抛异常→**整体回滚**（包括已处理的证券、附件、步骤）。**不存在「部分成功」**：要么全部成功提交，要么全部回滚。
+**事务范围与部分失败**：整个批量提交在**单一 `@Transactional`** 内。任一证券任一步骤异常→**整体回滚**。**不存在「部分成功」**。
 
 ### 3.6 涉及的数据库表及字段写入
 
 | 表 | 写入动作 | 关键字段 |
 |---|---|---|
-| `ip_adjust_log` | `addAdjustLog` insert | security_code, security_short_name, security_type, adjust_type(手工/联动/互斥调整), adjust_mode(调入/调出), adjust_batch_no, target_pool_id, target_pool_name, pool_type, flow_id/key/type, audit_status('00'待审/'20'通过), adjuster_id/name, adjust_reason/advice, submit_time, crte_time/updt_time, is_deleted=0 |
+| `ip_adjust_log` | 单券 `submitAdjustLog` 内 insert | security_code, security_short_name, security_type, adjust_type(**手动批量调整**/联动/互斥/关联等), adjust_mode(调入/调出), adjust_batch_no, target_pool_id, target_pool_name, pool_type, flow_id/key/type, audit_status('00'待审/'20'通过), adjuster_id/name, adjust_reason/advice, submit_time, crte_time/updt_time, is_deleted=0 |
 | `ip_pool_status` | `addPoolStatus`(调入生效) / `deletePoolStatusSoft`(调出生效) | 同上调库字段 + adjust_log_id(回链), audit_status='20', is_deleted |
 | `ip_adjust_step` | `addAdjustStep`(每步一条，审批节点按处理人展开多条) | adjust_log_id, adjust_batch_no, flow_node_id, node_code/label/type, approval_strategy, sort_order, step_status(pending/submit/auto_process), handler_id/name, process_action, start_time/process_time |
 | `sys_attachment` | `bindAttachments` / `copyReportAttachments` | table_name='ip_adjust_log', main_id=日志ID, attachment_category(credit_report_hand/material_hand/credit_report_in/out/...), file_type, original/new_file_name, file_size, content_type, full_url |
@@ -269,20 +263,21 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 | 维度 | 单笔调库（`SecurityPoolAdjustService` + `security_pool_adjust.html`） | 批量调库（`BatchSecurityPoolAdjustService` + `batch_security_pool_adjust.html`） |
 |---|---|---|
 | **入口选择** | 选一只证券 → 查可调投资池树 → 勾选一个或多个目标池 | 选一个目标池 → 查候选证券 → 勾选多只证券 |
-| **校验接口** | `checkAdjust`（单证券多目标池） | 同名 `checkAdjust`，但外层**逐只证券循环**调用单笔校验，仅保留方向匹配项；`adjustGroupKey` 加 `securityCode_` 前缀 |
-| **校验规则** | 四阶段 + 调入/调出各 7~8 条规则 + 联动/互斥自动项 + 流程类型判断 | **完全复用**，无新增规则。「同请求互斥冲突」仅在单只证券内部生效，不跨证券 |
-| **提交接口** | `addAdjustLog`（单证券多调库项） | 同名 `addAdjustLog`，外层**按 securityCode 分组**逐只调用单笔提交；强制 `adjustType="手工调整"` |
-| **批次号** | `BatchNoContext` 单次提交内生成 | **整批共用一个 `BatchNoContext`**，跨证券序号递增 |
-| **附件** | 单次 `SubmissionFiles` | **整批共用一份 `SubmissionFiles`**（物理文件只存一次），每个 item 携带相同的文件下标和报告附件 ID |
-| **事务范围** | 单笔 `@Transactional` | 外层批量 `@Transactional` 包裹逐证券调用，**整批原子**：任一异常全回滚，无部分成功 |
-| **审批流程选择** | 校验返回 `dto.flowOptions`（整单一组）+ recommendedFlowId | 校验返回**每行** `flowOptions`，前端行内下拉逐行选择；提交时每行带各自 flowId/flowKey |
-| **调整原因/建议** | 单笔一份 | **整批一份**（`adjustReason/adjustAdvice` 在 payload 顶层，透传到每只证券） |
-| **候选证券查询** | 复用 `querySecurityPage`（按证券代码/简称/发行人模糊） | 新增 `BatchSecurityPoolAdjustMapper.querySecurityPage`，按目标池 + 方向(in 不在池/out 在池)+ 市场/代码/简称过滤 |
-| **投资池查询** | `queryAdjustPoolList`（树，含互斥关系） | 新增 `queryPoolPage`（分页，仅启用叶子池 + 当前用户可调权限过滤 + 现有数量填充 + 全路径名） |
-| **新增的 Service 逻辑** | — | ①权限/可调池过滤；②候选证券按方向过滤；③逐证券循环校验/提交；④批次号与附件上下文跨证券共享；⑤整批事务 |
-| **复用的单笔逻辑** | — | `checkAdjust`、`addAdjustLog`(五阶段)、`buildAdjustLog`、`createInitialSteps`、`bindSubmitAttachments`、`isDirectFlow`、流程快照构建、池关系三层 Map、调入/调出校验规则全套 |
+| **校验接口** | `checkAdjust`（单证券多目标池） | 同名 `checkAdjust`，外层**逐只证券**调 `SPA.checkAdjust`；`adjustGroupKey` 加 `sourceSecurityCode_` 前缀；透传 `flowOptions`，**不注入** batchIn/Out |
+| **校验规则** | 四阶段 + 调入/调出规则 + 联动/互斥 + 流程候选 | **完全复用**，无批量专属规则 |
+| **提交接口** | 页面/Controller：`addAdjustLog`（内部 `submitAdjustLog`） | 批量 Controller 仍 `addAdjustLog`/`addAdjustLogWithFiles`；Service 编排后调 **`SPA.submitAdjustLog`**；`adjustType="手动批量调整"` |
+| **分组** | 单次请求内多目标池 | 按 **`sourceSecurityCode`/主券** 分组，related 与主券同组 |
+| **批次号** | 单次 `new BatchNoContext()` | **整批共用一个 `BatchNoContext`**，跨组序号递增 |
+| **附件** | 单次 `SubmissionFiles` | **整批共用** `SubmissionFiles` |
+| **防重复 / 直通** | 单券窗口防重复；直通/终审 `recheckBeforeFinalApproval` | 整批防重复；存在直通项时提交前整批 `isDirectAdjustFlow` + `recheckBeforeFinalApproval` |
+| **事务范围** | 单笔 `@Transactional` | 外层批量 `@Transactional` 包裹各组 `submitAdjustLog`，**整批原子** |
+| **审批流程选择** | 弹窗选流程，`dto.flowOptions` | 行内 `flowOptions`；提交透传所选流程，**不回填** batch 流程 |
+| **调整原因/建议** | 单笔一份 | **整批一份**，透传到每组 |
+| **候选/池查询** | 证券检索 + 可调池树 | `queryPoolPage` + 按目标池方向的候选证券分页 |
+| **编排层自有逻辑** | — | 权限、候选方向过滤、防重复、直通预检、分组、共享附件/批次号、整批事务 |
+| **复用的单笔逻辑** | — | `checkAdjust`、`submitAdjustLog`（五阶段）、`isDirectAdjustFlow`、`recheckBeforeFinalApproval`、`BatchNoContext` 及单券内建步骤/落池/附件 |
 
-**一句话总结**：批量调库是一个「编排层」（`BatchSecurityPoolAdjustService`）——它负责按证券拆分、权限过滤、整批共享批次号/附件/事务，而真正的校验与落库逻辑全部复用单笔 `SecurityPoolAdjustService`，没有重复实现任何业务规则。
+**一句话总结**：批量是「编排层」——权限/候选/防重复/直通预检/分组/共享附件与批次号/整批事务；校验与落库全部委托 `SecurityPoolAdjustService`，不重复实现业务规则。与 [27 存量证券批量](27-stock-security-batch-adjust.md) **同构**（存量仅多产品库目标 + 来源池）。
 
 ---
 
@@ -302,7 +297,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 - 前端：`znty-rrs-ui/batch_security_pool_adjust.html`（主页面）、`znty-rrs-ui/batch_security_pool_adjust_select.html`（独立选择页）、`znty-rrs-ui/dict.js`
 - Controller：`BatchSecurityPoolAdjustController.java`
-- Service：`BatchSecurityPoolAdjustService.java`（编排层）、`SecurityPoolAdjustService.java`（被复用的单笔服务）、`SysAttachmentService.java`
+- Service：`BatchSecurityPoolAdjustService.java`（编排：`checkAdjust`→`SPA.checkAdjust`，`addAdjustLog`→防重复/直通预检/分组→`SPA.submitAdjustLog`）、`SecurityPoolAdjustService.java`（`checkAdjust`/`submitAdjustLog`/`isDirectAdjustFlow`/`recheckBeforeFinalApproval`/`BatchNoContext`）、`SysAttachmentService.java`
 - Mapper：`BatchSecurityPoolAdjustMapper.java` / `BatchSecurityPoolAdjustMapper.xml`
 - 实体：`BatchSecurityPoolAdjustReq`、`BatchSecurityInboundAdjustReq`、`BatchSecurityInboundAdjustDto`、`BatchSecurityPoolDto`、`BatchSecurityCandidateDto`
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_pool_init_schema.sql`、`sql/rrs_sys_attachment_schema.sql`
