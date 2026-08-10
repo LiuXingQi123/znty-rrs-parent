@@ -4,7 +4,7 @@
 > 后端前缀：`/api/v1/stockSecurityBatchAdjust`  
 > 角色定位：业务人员在**债券产品库**叶子池上，对已在指定**来源池**中的存量证券做批量调入/调出。
 
-与 [12-batch-security-pool-adjust.md](12-batch-security-pool-adjust.md) **同构**（校验/提交/批量流程注入/附件/现有数量分项），差异如下。
+与 [12-batch-security-pool-adjust.md](12-batch-security-pool-adjust.md) **同构**（校验/提交/附件/现有数量分项/整批防重复/直通复核），差异如下。
 
 ---
 
@@ -16,7 +16,7 @@
 | 可选证券筛选 | 代码 / 简称 / 市场 | 另加 **来源池（多选，必选≥1）**、**发行主体** |
 | 来源池 | 无 | 固定白名单 6 项，见 §2 |
 
-校验 / 提交逻辑在 `StockSecurityBatchAdjustService` **本类内实现**（自 `SecurityPoolAdjustService` 迁入副本，不注入、不调用对方 Service，便于后续细微差异独立演进）；不新建业务表。
+**校验 / 提交与证券池批量一致**：`checkAdjust` 逐券委托 `SecurityPoolAdjustService.checkAdjust`（透传流程候选，不注入 batchIn/batchOut）；`addAdjustLog` 分组后委托 `submitAdjustLog`（共享附件与 `BatchNoContext`），直通用 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`。本类只编排 + 产品库/来源池差异，不新建业务表。
 
 ---
 
