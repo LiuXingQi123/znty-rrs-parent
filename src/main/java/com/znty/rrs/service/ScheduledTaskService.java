@@ -3,6 +3,7 @@ package com.znty.rrs.service;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.common.enums.EventType;
 import com.znty.rrs.common.enums.ScheduleRunStatus;
 import com.znty.rrs.common.enums.ScheduleTriggerType;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
@@ -132,8 +133,8 @@ public class ScheduledTaskService {
         scheduledTaskMapper.addTask(bo);
         // 回查并挂载
         SysScheduledTaskBo latest = requireConfig(bo.getTaskCode());
-        // 写审计
-        writeEvent(latest, req, "新增");
+        // 审计 oprt_type 存英文：INSERT / UPDATE / DELETE（与流程等 _evt 一致）
+        writeEvent(latest, req, EventType.INSERT.getCode());
         // 有实现则挂载调度
         applySchedule(latest);
         return toInfoDto(latest);
@@ -150,8 +151,8 @@ public class ScheduledTaskService {
         SysScheduledTaskBo bo = buildSaveBo(req, existing);
         // 更新库表
         scheduledTaskMapper.editTask(bo);
-        // 写审计
-        writeEvent(bo, req, "修改");
+        // 审计 oprt_type：UPDATE
+        writeEvent(bo, req, EventType.UPDATE.getCode());
         // 按本次保存值重挂调度
         applySchedule(bo);
         // 回查展示
@@ -171,8 +172,8 @@ public class ScheduledTaskService {
         scheduledTaskMapper.deleteTaskSoft(existing.getTaskCode());
         existing.setIsDeleted(1);
         existing.setScheduleEnabled(0);
-        // 写审计
-        writeEvent(existing, req, "删除");
+        // 审计 oprt_type：DELETE
+        writeEvent(existing, req, EventType.DELETE.getCode());
         return toInfoDto(existing);
     }
 
@@ -378,7 +379,10 @@ public class ScheduledTaskService {
     }
 
     /**
-     * 写入配置变更审计事件（快照 + 操作人 + 操作类型）
+     * 写入配置变更审计事件
+     * <p>
+     * {@code oprtType} 统一存英文：{@link EventType#INSERT} / {@link EventType#UPDATE} / {@link EventType#DELETE}。
+     * </p>
      */
     private void writeEvent(SysScheduledTaskBo bo, ScheduledTaskReq req, String oprtType) {
         String opterId = (req != null && StringUtils.hasText(req.getOperatorId()))

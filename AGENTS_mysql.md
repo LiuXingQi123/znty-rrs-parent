@@ -123,7 +123,7 @@ AIS 库将库名换成 `ais_inv_analysis` / `ais_inv_ods` 即可。
 ```sql
 `opter_id`    VARCHAR(20)  DEFAULT NULL              COMMENT '经办人 ID',
 `opt_time`    DATETIME     DEFAULT NULL              COMMENT '经办时间',
-`oprt_type`   VARCHAR(20)  DEFAULT NULL              COMMENT '操作类型，存储中文，如：新增、删除、修改、审核',
+`oprt_type`   VARCHAR(20)  DEFAULT NULL              COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
 ```
 
 ### 表注释
@@ -251,7 +251,7 @@ CREATE TABLE `wf_flow_definition_evt` (
     -- 审计字段
     `opter_id`    VARCHAR(20)  DEFAULT NULL             COMMENT '经办人 ID',
     `opt_time`    DATETIME     DEFAULT NULL             COMMENT '经办时间',
-    `oprt_type`   VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储中文，如：新增、删除、修改、审核',
+    `oprt_type`   VARCHAR(20)  DEFAULT NULL             COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -275,7 +275,7 @@ CREATE TABLE `wf_flow_definition_evt` (
 - [ ] 除主键外均为 `DEFAULT NULL`，无额外 `NOT NULL`
 - [ ] 无物理外键、无 `UNIQUE KEY`、无二级 `KEY`/`INDEX`（仅 `PRIMARY KEY`）
 - [ ] 主表含 `crte_time` / `updt_time`（事件表中为随主表复制的字段，不是独立审计语义）
-- [ ] 若需事件表：表名 `_evt`，末尾 `opter_id` / `opt_time` / `oprt_type`（`oprt_type` 存中文操作类型）
+- [ ] 若需事件表：表名 `_evt`，末尾 `opter_id` / `opt_time` / `oprt_type`（`oprt_type` 统一存英文 INSERT/UPDATE/DELETE）
 
 ### 工程落地
 

@@ -31,10 +31,13 @@ public class InvestmentPoolServiceTest {
         InvestmentPoolService service = buildService(mapper);
         InvestmentPoolBo oldPool = pool(1L);
         when(mapper.queryPoolById(1L)).thenReturn(oldPool);
+        when(mapper.queryPoolByCode("credit_bond_level_1")).thenReturn(null);
         mockDetailLists(mapper, 1L);
         InvestmentPoolReq req = new InvestmentPoolReq();
         req.setId(1L);
         req.setPoolName("信用债一级库");
+        req.setPoolCode("credit_bond_level_1");
+        req.setPoolType("credit_bond");
         req.setLockFlag(1);
         req.setFrozenPeriodIn(30);
 
@@ -61,6 +64,8 @@ public class InvestmentPoolServiceTest {
         when(mapper.queryPoolById(1L)).thenReturn(pool(1L));
         InvestmentPoolReq req = new InvestmentPoolReq();
         req.setId(1L);
+        req.setPoolCode("credit_bond_level_1");
+        req.setPoolType("credit_bond");
         req.setLockFlag(2);
 
         assertThatThrownBy(() -> service.editPoolConfig(req))
@@ -96,9 +101,12 @@ public class InvestmentPoolServiceTest {
             return 1;
         }).when(mapper).addPool(any(InvestmentPoolBo.class));
         mockDetailLists(mapper, 2L);
+        when(mapper.queryPoolByCode("credit_bond_level_1")).thenReturn(null);
         InvestmentPoolReq req = new InvestmentPoolReq();
         req.setParentId(1L);
         req.setPoolName("信用债一级库");
+        req.setPoolCode("credit_bond_level_1");
+        req.setPoolType("credit_bond");
         req.setInheritParentConfig(true);
 
         service.addChildPool(req);
@@ -119,6 +127,8 @@ public class InvestmentPoolServiceTest {
     private InvestmentPoolBo pool(Long id) {
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(id);
+        pool.setPoolCode("credit_bond_level_1");
+        pool.setPoolType("credit_bond");
         pool.setMarketCodes("[]");
         pool.setVarietyCodes("[\"bond\"]");
         return pool;

@@ -56,7 +56,7 @@ CREATE TABLE `sys_scheduled_task_evt`
     `updt_time`            DATETIME     DEFAULT NULL            COMMENT '修改时间',
     `opter_id`             VARCHAR(20)  DEFAULT NULL            COMMENT '经办人 ID',
     `opt_time`             DATETIME     DEFAULT NULL            COMMENT '经办时间',
-    `oprt_type`            VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储中文，如：新增、删除、修改、审核',
+    `oprt_type`            VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='定时任务配置（操作审计）';
 

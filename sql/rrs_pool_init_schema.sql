@@ -175,7 +175,7 @@ CREATE TABLE `ip_investment_pool_evt` (
     `updt_time`             DATETIME     DEFAULT NULL            COMMENT '修改时间',
     `opter_id`              VARCHAR(20)  DEFAULT NULL            COMMENT '经办人 ID',
     `opt_time`              DATETIME     DEFAULT NULL            COMMENT '经办时间',
-    `oprt_type`             VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储中文：新增 / 修改 / 删除',
+    `oprt_type`             VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -196,7 +196,7 @@ CREATE TABLE `ip_pool_relation_evt` (
     `updt_time`          DATETIME     DEFAULT NULL            COMMENT '修改时间',
     `opter_id`           VARCHAR(20)  DEFAULT NULL            COMMENT '经办人 ID',
     `opt_time`           DATETIME     DEFAULT NULL            COMMENT '经办时间',
-    `oprt_type`          VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储中文：新增 / 修改 / 删除',
+    `oprt_type`          VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -215,7 +215,7 @@ CREATE TABLE `ip_pool_auto_rule_evt` (
     `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
     `opter_id`   VARCHAR(20)  DEFAULT NULL            COMMENT '经办人 ID',
     `opt_time`   DATETIME     DEFAULT NULL            COMMENT '经办时间',
-    `oprt_type`  VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储中文：新增 / 修改 / 删除',
+    `oprt_type`  VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
@@ -235,7 +235,7 @@ CREATE TABLE `ip_pool_permission_evt` (
     `updt_time`       DATETIME     DEFAULT NULL            COMMENT '修改时间',
     `opter_id`        VARCHAR(20)  DEFAULT NULL            COMMENT '经办人 ID',
     `opt_time`        DATETIME     DEFAULT NULL            COMMENT '经办时间',
-    `oprt_type`       VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储中文：新增 / 修改 / 删除',
+    `oprt_type`       VARCHAR(20)  DEFAULT NULL            COMMENT '操作类型，存储英文：INSERT=新增 / UPDATE=修改 / DELETE=删除',
     PRIMARY KEY (`evt_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4

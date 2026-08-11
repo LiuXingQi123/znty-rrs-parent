@@ -91,7 +91,7 @@
 
 - 路径：`POST /api/v1/investmentPool/addRootPool`
 - 请求体：`{poolName, poolCode, poolType, outerSort?, templatePoolId?, operatorId?}`
-- 后端 `addRootPool`：校验 poolName/poolType/poolCode 非空；`resolveAndValidatePoolCode` 校验编码长度≤64 且未删除记录中唯一；模板存在性校验；`buildRootPool`（`parentId=null`，**`poolCode` 取请求值**，`poolLevel=1`，`outerSort` 未传取最大+1，`innerSort=1`，有模板则 `copyBaseConfig` 复制市场/品种/恒生池名/6 流程/研报限制/容量/锁池/冻结期/描述，否则默认 `marketCodes="[]"`、`varietyCodes='["bond"]'`、`lockFlag=0`，`status='enabled'`）；`addPool` 插入回填 id；`addPoolEvent("新增")` 审计；有模板则复制关系/规则/权限。
+- 后端 `addRootPool`：校验 poolName/poolType/poolCode 非空；`resolveAndValidatePoolCode` 校验编码长度≤64 且未删除记录中唯一；模板存在性校验；`buildRootPool`（`parentId=null`，**`poolCode` 取请求值**，`poolLevel=1`，`outerSort` 未传取最大+1，`innerSort=1`，有模板则 `copyBaseConfig` 复制市场/品种/恒生池名/6 流程/研报限制/容量/锁池/冻结期/描述，否则默认 `marketCodes="[]"`、`varietyCodes='["bond"]'`、`lockFlag=0`，`status='enabled'`）；`addPool` 插入回填 id；`addPoolEvent(INSERT)` 审计；有模板则复制关系/规则/权限。
 - 前端「投资池编码」为可创建下拉，选项**前端写死**（与 Demo 标准编码一致，如 `credit_bond_root`、`crmw_core_pool`），下拉项左侧编码、右侧名称。
 
 ### 3.2 新增子投资池
@@ -105,7 +105,7 @@
 
 - 路径：`POST /api/v1/investmentPool/editPoolConfig`
 - 请求体：`{id, poolName, poolCode, marketCodes, varietyCodes, hsPoolName, inFlow, outFlow, simpleInFlow, simpleOutFlow, batchInFlow, batchOutFlow, inReportRestriction, outReportRestriction, maxCapacity, outerSort, innerSort, description, operatorId}`（流程字段为完整 `FlowOptionDto`）
-- 后端 `editPoolConfig`（`@Transactional`）：校验 id、池存在；`buildPoolForEdit` set 指定字段（含 **`poolCode`** 唯一性校验排除自身、**`poolType` 必填可改**；**不更新 status、poolLevel、parentId**）；`applyFlow` 对 6 流程逐个 `normalizeFlow`（flowId 为 null 时清空）；`editPoolConfig` UPDATE（含 `pool_type`）；`addPoolEvent("修改")`。
+- 后端 `editPoolConfig`（`@Transactional`）：校验 id、池存在；`buildPoolForEdit` set 指定字段（含 **`poolCode`** 唯一性校验排除自身、**`poolType` 必填可改**；**不更新 status、poolLevel、parentId**）；`applyFlow` 对 6 流程逐个 `normalizeFlow`（flowId 为 null 时清空）；`editPoolConfig` UPDATE（含 `pool_type`）；`addPoolEvent(UPDATE)`。
 - 流程字段存储为快照（flowId/flowKey/flowName 三列），避免流程改名后历史池配置失真。
 
 ### 3.4 删除投资池节点
@@ -207,7 +207,7 @@
 
 ## 5. 关键数据库表
 
-来源 `rrs_pool_init_schema.sql`。每业务表配同结构 `_evt` 审计表（增 `evt_id/opter_id/opt_time/oprt_type`，oprt_type 存中文：新增/删除/修改/审核）。逻辑删除 `is_deleted TINYINT(1)`。
+来源 `rrs_pool_init_schema.sql`。每业务表配同结构 `_evt` 审计表（增 `evt_id/opter_id/opt_time/oprt_type`，oprt_type 存英文：INSERT/UPDATE/DELETE）。逻辑删除 `is_deleted TINYINT(1)`。
 
 ### 5.1 `ip_investment_pool`（投资池主表）
 
@@ -248,7 +248,7 @@
 
 - **递归级联删除**：`collectDescendantPoolIds` 递归收集当前节点+全部后代，批量逻辑删除。
 - **关系双向清理**：既删 `pool_id IN (deleteIds)`（池作为主池），也删 `relation_pool_id IN (deleteIds)`（池被其他池引用），避免悬挂引用。自动规则、权限按 `pool_id IN (deleteIds)` 清理。
-- **删除前审计**：所有删除先 `addXxxEventByXxxIds("删除")` 写审计，再逻辑删除。
+- **删除前审计**：所有删除先 `addXxxEventByXxxIds(DELETE)` 写审计，再逻辑删除。
 - ⚠️ **删除不检查业务引用**：`deletePoolNode` **不检查**该池是否被进行中的调库申请（`ip_adjust_log`/`ip_pool_status`）引用。删除仅清理投资池自身关系/规则/权限，其他模块若持有 `pool_id` 引用，删除后可能产生数据不一致（潜在风险点）。
 - 逻辑删除 `is_deleted=1`，产品层面不可恢复，前端二次确认。
 

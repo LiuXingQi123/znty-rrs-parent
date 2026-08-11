@@ -159,7 +159,7 @@ public class InvestmentPoolService {
         InvestmentPoolBo pool = buildPoolForEdit(req, oldPool);
         investmentPoolMapper.editPoolConfig(pool);
         // 解析经办人 ID
-        investmentPoolMapper.addPoolEvent(poolId, getOperatorId(req), EventType.EDIT_CN.getCode());
+        investmentPoolMapper.addPoolEvent(poolId, getOperatorId(req), EventType.UPDATE.getCode());
         return queryPoolDetail(req);
     }
 
@@ -177,13 +177,13 @@ public class InvestmentPoolService {
         // 解析经办人 ID
         String operatorId = getOperatorId(req);
         // 先记录删除事件，再删除旧关系，最后写入新关系
-        investmentPoolMapper.addRelationEventByPoolId(poolId, operatorId, EventType.DELETE_CN.getCode());
+        investmentPoolMapper.addRelationEventByPoolId(poolId, operatorId, EventType.DELETE.getCode());
         investmentPoolMapper.deleteRelationByPoolId(poolId);
         // 新增投资池关系配置（按预定义类型顺序逐条写入
         addRelations(req, poolId, operatorId);
 
         // 全量替换自动规则：先删旧的调入/调出规则，再按请求顺序逐条插入
-        investmentPoolMapper.addAutoRuleEventByPoolId(poolId, operatorId, EventType.DELETE_CN.getCode());
+        investmentPoolMapper.addAutoRuleEventByPoolId(poolId, operatorId, EventType.DELETE.getCode());
         investmentPoolMapper.deleteAutoRuleByPoolId(poolId);
         if (req.getAutoInRuleIds() != null) {
             List<String> inDescs = req.getAutoInRuleDescs();
@@ -234,7 +234,7 @@ public class InvestmentPoolService {
         // 构建顶级投资池
         InvestmentPoolBo rootPool = buildRootPool(req, templatePool);
         investmentPoolMapper.addPool(rootPool);
-        investmentPoolMapper.addPoolEvent(rootPool.getId(), operatorId, EventType.ADD_CN.getCode());
+        investmentPoolMapper.addPoolEvent(rootPool.getId(), operatorId, EventType.INSERT.getCode());
         // 有模板池时，将模板的关系/自动规则/权限配置复制到新顶级池
         if (templatePool != null) {
             // 复制父级关系配置
@@ -282,7 +282,7 @@ public class InvestmentPoolService {
         // 构建子投资池
         InvestmentPoolBo childPool = buildChildPool(req, parentPool, templatePool);
         investmentPoolMapper.addPool(childPool);
-        investmentPoolMapper.addPoolEvent(childPool.getId(), operatorId, EventType.ADD_CN.getCode());
+        investmentPoolMapper.addPoolEvent(childPool.getId(), operatorId, EventType.INSERT.getCode());
         // 有模板池时，将模板的关系/自动规则/权限配置复制到新子池
         if (templatePool != null) {
             // 复制父级关系配置
@@ -317,16 +317,16 @@ public class InvestmentPoolService {
         // 递归收集节点及后代节点 ID
         collectDescendantPoolIds(poolId, deleteIds);
         // 删除这些池自身的关系记录（作为主池），并记录事件
-        investmentPoolMapper.addRelationEventByPoolIds(deleteIds, operatorId, EventType.DELETE_CN.getCode());
+        investmentPoolMapper.addRelationEventByPoolIds(deleteIds, operatorId, EventType.DELETE.getCode());
         investmentPoolMapper.deleteRelationByPoolIds(deleteIds);
         // 删除其他池引用这些池的关系记录（作为关联池），避免悬挂引用
-        investmentPoolMapper.addRelationEventByRelationPoolIds(deleteIds, operatorId, EventType.DELETE_CN.getCode());
+        investmentPoolMapper.addRelationEventByRelationPoolIds(deleteIds, operatorId, EventType.DELETE.getCode());
         investmentPoolMapper.deleteRelationByRelationPoolIds(deleteIds);
-        investmentPoolMapper.addAutoRuleEventByPoolIds(deleteIds, operatorId, EventType.DELETE_CN.getCode());
+        investmentPoolMapper.addAutoRuleEventByPoolIds(deleteIds, operatorId, EventType.DELETE.getCode());
         investmentPoolMapper.deleteAutoRuleByPoolIds(deleteIds);
-        investmentPoolMapper.addPermissionEventByPoolIds(deleteIds, operatorId, EventType.DELETE_CN.getCode());
+        investmentPoolMapper.addPermissionEventByPoolIds(deleteIds, operatorId, EventType.DELETE.getCode());
         investmentPoolMapper.deletePermissionByPoolIds(deleteIds);
-        investmentPoolMapper.addPoolEventByIds(deleteIds, operatorId, EventType.DELETE_CN.getCode());
+        investmentPoolMapper.addPoolEventByIds(deleteIds, operatorId, EventType.DELETE.getCode());
         investmentPoolMapper.deletePoolByIds(deleteIds);
         return deletedPool;
     }
@@ -437,7 +437,7 @@ public class InvestmentPoolService {
         }
         // 解析经办人 ID
         String operatorId = getOperatorId(req);
-        investmentPoolMapper.addPermissionEventByPoolId(poolId, operatorId, EventType.DELETE_CN.getCode());
+        investmentPoolMapper.addPermissionEventByPoolId(poolId, operatorId, EventType.DELETE.getCode());
         investmentPoolMapper.deletePermissionByPoolId(poolId);
         // 新增权限配置
         addPermissions(req, poolId, operatorId);
@@ -482,7 +482,7 @@ public class InvestmentPoolService {
         pool.setCrteTime(now);
         pool.setUpdtTime(now);
         investmentPoolMapper.addPool(pool);
-        investmentPoolMapper.addPoolEvent(pool.getId(), operatorId, EventType.ADD_CN.getCode());
+        investmentPoolMapper.addPoolEvent(pool.getId(), operatorId, EventType.INSERT.getCode());
         return pool;
     }
 
@@ -627,7 +627,7 @@ public class InvestmentPoolService {
             relation.setCrteTime(now);
             relation.setUpdtTime(now);
             investmentPoolMapper.addRelation(relation);
-            investmentPoolMapper.addRelationEvent(relation.getId(), operatorId, EventType.ADD_CN.getCode());
+            investmentPoolMapper.addRelationEvent(relation.getId(), operatorId, EventType.INSERT.getCode());
         }
     }
 
@@ -773,7 +773,7 @@ public class InvestmentPoolService {
                 relation.setCrteTime(now);
                 relation.setUpdtTime(now);
                 investmentPoolMapper.addRelation(relation);
-                investmentPoolMapper.addRelationEvent(relation.getId(), operatorId, EventType.ADD_CN.getCode());
+                investmentPoolMapper.addRelationEvent(relation.getId(), operatorId, EventType.INSERT.getCode());
             }
         }
     }
@@ -796,7 +796,7 @@ public class InvestmentPoolService {
         rule.setUpdtTime(now);
         // 新增自动规则备注
         investmentPoolMapper.addAutoRule(rule);
-        investmentPoolMapper.addAutoRuleEvent(rule.getId(), operatorId, EventType.ADD_CN.getCode());
+        investmentPoolMapper.addAutoRuleEvent(rule.getId(), operatorId, EventType.INSERT.getCode());
     }
 
     /**
@@ -857,7 +857,7 @@ public class InvestmentPoolService {
             permission.setCrteTime(now);
             permission.setUpdtTime(now);
             investmentPoolMapper.addPermission(permission);
-            investmentPoolMapper.addPermissionEvent(permission.getId(), operatorId, EventType.ADD_CN.getCode());
+            investmentPoolMapper.addPermissionEvent(permission.getId(), operatorId, EventType.INSERT.getCode());
         }
     }
 
@@ -881,7 +881,7 @@ public class InvestmentPoolService {
             permission.setCrteTime(now);
             permission.setUpdtTime(now);
             investmentPoolMapper.addPermission(permission);
-            investmentPoolMapper.addPermissionEvent(permission.getId(), operatorId, EventType.ADD_CN.getCode());
+            investmentPoolMapper.addPermissionEvent(permission.getId(), operatorId, EventType.INSERT.getCode());
         }
     }
 
