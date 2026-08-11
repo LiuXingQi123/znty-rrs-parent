@@ -4,8 +4,11 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.SysScheduledTaskBo;
+import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
+import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
 import org.junit.Test;
@@ -13,9 +16,10 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -32,12 +36,17 @@ public class AutoAdjustServiceTest {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
-        when(autoAdjustMapper.queryAutoOutPoolIds()).thenReturn(Arrays.asList(10L));
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskName("到期出池");
+        conf.setParamJson("{\"poolIds\":[10]}");
+        when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(10L);
         pool.setPoolName("信用债大库");
@@ -60,26 +69,66 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getTaskName()).isEqualTo("到期出池");
         assertThat(service.getTaskCode()).isEqualTo(AutoAdjustService.TASK_CODE);
-        assertThat(service.getDefaultCronExpression()).isEqualTo("0 0 2 * * ?");
+        verify(autoAdjustMapper, never()).queryAutoOutPoolIds();
     }
 
     @Test
-    public void autoOutExpiredShouldSkipWhenNoAutoOutPool() {
+    public void autoOutExpiredShouldFailWhenParamJsonEmpty() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
-        when(autoAdjustMapper.queryAutoOutPoolIds()).thenReturn(Collections.<Long>emptyList());
+        when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(null);
 
         ScheduledTaskResult result = service.execute();
 
         verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
-        assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getAffectedCount()).isEqualTo(0);
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("扩展参数未配置");
+    }
+
+    @Test
+    public void autoOutExpiredShouldFailWhenJsonInvalid() {
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        AutoAdjustService service = new AutoAdjustService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskName("到期出池");
+        conf.setParamJson("{\"poolIds\":'123'}");
+        when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
+
+        ScheduledTaskResult result = service.execute();
+
+        verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("JSON 解析失败");
+    }
+
+    @Test
+    public void parsePoolIdsShouldOnlyAcceptJson() {
+        AutoAdjustService service = new AutoAdjustService();
+        List<Long> ids = service.parsePoolIds("{\"poolIds\":[10,15,20]}");
+        assertThat(ids).containsExactly(10L, 15L, 20L);
+
+        assertThatThrownBy(() -> service.parsePoolIds("15-15")).isInstanceOf(BizException.class);
+        assertThatThrownBy(() -> service.parsePoolIds("{\"poolIds\":[]}")).isInstanceOf(BizException.class);
+        assertThatThrownBy(() -> service.parsePoolIds(null)).isInstanceOf(BizException.class);
+        assertThatThrownBy(() -> service.parsePoolIds("{\"poolIds\":'123'}")).isInstanceOf(BizException.class);
+        assertThat(service.getParamHelp()).contains("poolIds");
     }
 }

@@ -29,7 +29,9 @@ public class SysScheduledTaskBo {
     /** 是否启用定时调度：0=关闭 / 1=启用 */
     private Integer scheduleEnabled;
 
-    /** 任务扩展参数（按任务自定义） */
+    /**
+     * 任务扩展参数（通用文本，推荐 JSON；格式由各任务实现自行解析，无则空）
+     */
     private String paramJson;
 
     /** 最近执行状态：success / fail */

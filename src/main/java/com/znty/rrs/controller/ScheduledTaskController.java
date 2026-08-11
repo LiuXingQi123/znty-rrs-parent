@@ -16,23 +16,22 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
- * 定时任务管理接口。
- *
- * <p>提供任务清单、配置保存、手动执行与执行历史查询，路径前缀 {@code /api/v1/scheduledTask}。
+ * 定时任务管理控制器
+ * <p>
+ * 提供任务配置的查询、新增、修改、删除，以及手动触发执行与执行历史分页查询。
+ * 路径前缀 {@code /api/v1/scheduledTask}。
+ * </p>
  */
 @RestController
 @RequestMapping("/api/v1/scheduledTask")
 public class ScheduledTaskController {
 
-    /** 定时任务编排服务 */
+    /** 定时任务服务 */
     @Resource
     private ScheduledTaskService scheduledTaskService;
 
     /**
-     * 查询全部任务（含库表配置与最近执行）。
-     *
-     * @param req 请求体（可空）
-     * @return 任务列表
+     * 查询全部有效定时任务配置列表，含最近执行摘要与是否已注册业务实现/是否已挂载调度
      */
     @PostMapping("/queryTaskList")
     public ApiResponse<List<ScheduledTaskInfoDto>> queryTaskList(@RequestBody(required = false) ScheduledTaskReq req) {
@@ -40,10 +39,7 @@ public class ScheduledTaskController {
     }
 
     /**
-     * 按编码查询单个任务。
-     *
-     * @param req 含 taskCode
-     * @return 任务信息
+     * 按任务编码查询单条定时任务配置详情
      */
     @PostMapping("/queryTask")
     public ApiResponse<ScheduledTaskInfoDto> queryTask(@RequestBody ScheduledTaskReq req) {
@@ -51,21 +47,31 @@ public class ScheduledTaskController {
     }
 
     /**
-     * 保存任务配置（cron / 启停 / 扩展参数）并即时重挂载。
-     *
-     * @param req 配置请求
-     * @return 更新后的任务信息
+     * 新增定时任务配置（编码、名称、说明、cron、启停、扩展参数），有业务实现时同步挂载调度
      */
-    @PostMapping("/editTaskConfig")
-    public ApiResponse<ScheduledTaskInfoDto> editTaskConfig(@RequestBody ScheduledTaskReq req) {
-        return ApiResponse.success(scheduledTaskService.editTaskConfig(req));
+    @PostMapping("/addTask")
+    public ApiResponse<ScheduledTaskInfoDto> addTask(@RequestBody ScheduledTaskReq req) {
+        return ApiResponse.success(scheduledTaskService.addTask(req));
     }
 
     /**
-     * 手动执行单个任务。
-     *
-     * @param req 含 taskCode、操作人
-     * @return 执行结果
+     * 修改定时任务配置（名称、说明、cron、启停、扩展参数），保存后按最新配置重挂或取消调度
+     */
+    @PostMapping("/editTask")
+    public ApiResponse<ScheduledTaskInfoDto> editTask(@RequestBody ScheduledTaskReq req) {
+        return ApiResponse.success(scheduledTaskService.editTask(req));
+    }
+
+    /**
+     * 逻辑删除定时任务配置，并取消已挂载的调度
+     */
+    @PostMapping("/deleteTask")
+    public ApiResponse<ScheduledTaskInfoDto> deleteTask(@RequestBody ScheduledTaskReq req) {
+        return ApiResponse.success(scheduledTaskService.deleteTask(req));
+    }
+
+    /**
+     * 手动触发执行指定定时任务，写入最近执行摘要与执行历史
      */
     @PostMapping("/executeTask")
     public ApiResponse<ScheduledTaskResult> executeTask(@RequestBody ScheduledTaskReq req) {
@@ -73,21 +79,7 @@ public class ScheduledTaskController {
     }
 
     /**
-     * 按序手动执行多个任务。
-     *
-     * @param req 含 taskCodes
-     * @return 各任务执行结果
-     */
-    @PostMapping("/executeTasks")
-    public ApiResponse<List<ScheduledTaskResult>> executeTasks(@RequestBody ScheduledTaskReq req) {
-        return ApiResponse.success(scheduledTaskService.executeTasks(req));
-    }
-
-    /**
-     * 分页查询执行历史。
-     *
-     * @param req 含 taskCode、分页参数
-     * @return 分页历史
+     * 分页查询定时任务执行历史，可按任务编码筛选
      */
     @PostMapping("/queryRunLogPage")
     public ApiResponse<PageResult<ScheduledTaskRunLogDto>> queryRunLogPage(@RequestBody ScheduledTaskReq req) {

@@ -29,6 +29,9 @@ public class ScheduledTaskRunLogDto {
     /** 结果说明 */
     private String message;
 
+    /** 执行过程日志（多行文本，历史页可查看） */
+    private String detailLog;
+
     /** 影响条数 */
     private Integer affectedCount;
 

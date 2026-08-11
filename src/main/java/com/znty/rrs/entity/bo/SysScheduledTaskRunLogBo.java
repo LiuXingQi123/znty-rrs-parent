@@ -29,6 +29,9 @@ public class SysScheduledTaskRunLogBo {
     /** 执行结果说明 */
     private String message;
 
+    /** 执行过程日志（多行文本） */
+    private String detailLog;
+
     /** 影响条数 */
     private Integer affectedCount;
 

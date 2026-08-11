@@ -8,34 +8,55 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * 定时任务配置与执行历史数据访问。
+ * 定时任务配置与执行历史数据访问
  */
 @Mapper
 public interface ScheduledTaskMapper {
 
-    /** 查询全部有效任务配置 */
+    /**
+     * 查询全部未删除的定时任务配置列表，按主键升序
+     */
     List<SysScheduledTaskBo> queryTaskList();
 
-    /** 按编码查询任务配置 */
+    /**
+     * 按任务编码查询单条未删除的定时任务配置
+     */
     SysScheduledTaskBo queryTaskByCode(@Param("taskCode") String taskCode);
 
-    /** 新增任务配置 */
+    /**
+     * 新增定时任务配置（编码、名称、说明、cron、启停、扩展参数）
+     */
     int addTask(SysScheduledTaskBo bo);
 
-    /** 更新任务调度配置（cron / 启停 / 扩展参数） */
-    int editTaskConfig(SysScheduledTaskBo bo);
+    /**
+     * 按任务编码更新配置（名称、说明、cron、启停、扩展参数）
+     */
+    int editTask(SysScheduledTaskBo bo);
 
-    /** 更新最近执行摘要 */
+    /**
+     * 按任务编码逻辑删除配置，并关闭调度开关
+     */
+    int deleteTaskSoft(@Param("taskCode") String taskCode);
+
+    /**
+     * 更新主表最近一次执行摘要（状态、说明、时间、影响条数、耗时、触发方式）
+     */
     int editTaskLastRun(SysScheduledTaskBo bo);
 
-    /** 写配置变更审计 */
+    /**
+     * 写入定时任务配置变更审计事件（快照 + 操作人 + 操作类型）
+     */
     int addTaskEvent(@Param("bo") SysScheduledTaskBo bo,
                      @Param("opterId") String opterId,
                      @Param("oprtType") String oprtType);
 
-    /** 新增执行历史 */
+    /**
+     * 新增一条定时任务执行历史记录
+     */
     int addRunLog(SysScheduledTaskRunLogBo bo);
 
-    /** 分页查询执行历史（PageHelper 外层分页） */
+    /**
+     * 查询执行历史列表（可按任务编码筛选），由 PageHelper 做外层分页
+     */
     List<SysScheduledTaskRunLogBo> queryRunLogList(@Param("taskCode") String taskCode);
 }

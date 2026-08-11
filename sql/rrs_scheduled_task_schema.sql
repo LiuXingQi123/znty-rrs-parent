@@ -21,7 +21,7 @@ CREATE TABLE `sys_scheduled_task`
     `description`          VARCHAR(500) DEFAULT NULL            COMMENT '任务说明',
     `cron_expression`      VARCHAR(64)  DEFAULT NULL            COMMENT 'cron 表达式（6 位 Spring 风格：秒 分 时 日 月 周）',
     `schedule_enabled`     TINYINT(1)   DEFAULT NULL            COMMENT '是否启用定时调度：0=关闭 / 1=启用；关闭后仍可手动执行',
-    `param_json`           VARCHAR(1000) DEFAULT NULL           COMMENT '任务扩展参数（按任务自定义，如主体下新债的 pool-pairs=15-15）',
+    `param_json`           VARCHAR(1000) DEFAULT NULL           COMMENT '任务扩展参数（通用文本，推荐 JSON，格式由各任务实现自行解析；无则空）',
     `last_run_status`      VARCHAR(32)  DEFAULT NULL            COMMENT '最近执行状态：success=成功 / fail=失败',
     `last_run_message`     VARCHAR(1000) DEFAULT NULL           COMMENT '最近执行结果说明',
     `last_run_time`        DATETIME     DEFAULT NULL            COMMENT '最近执行开始时间',
@@ -44,7 +44,7 @@ CREATE TABLE `sys_scheduled_task_evt`
     `description`          VARCHAR(500) DEFAULT NULL            COMMENT '任务说明',
     `cron_expression`      VARCHAR(64)  DEFAULT NULL            COMMENT 'cron 表达式（6 位 Spring 风格：秒 分 时 日 月 周）',
     `schedule_enabled`     TINYINT(1)   DEFAULT NULL            COMMENT '是否启用定时调度：0=关闭 / 1=启用；关闭后仍可手动执行',
-    `param_json`           VARCHAR(1000) DEFAULT NULL           COMMENT '任务扩展参数（按任务自定义，如主体下新债的 pool-pairs=15-15）',
+    `param_json`           VARCHAR(1000) DEFAULT NULL           COMMENT '任务扩展参数（通用文本，推荐 JSON，格式由各任务实现自行解析；无则空）',
     `last_run_status`      VARCHAR(32)  DEFAULT NULL            COMMENT '最近执行状态：success=成功 / fail=失败',
     `last_run_message`     VARCHAR(1000) DEFAULT NULL           COMMENT '最近执行结果说明',
     `last_run_time`        DATETIME     DEFAULT NULL            COMMENT '最近执行开始时间',
@@ -69,6 +69,7 @@ CREATE TABLE `sys_scheduled_task_run_log`
     `trigger_type`    VARCHAR(32)  DEFAULT NULL            COMMENT '触发方式：manual=手动 / cron=定时',
     `run_status`      VARCHAR(32)  DEFAULT NULL            COMMENT '执行状态：success=成功 / fail=失败',
     `message`         VARCHAR(1000) DEFAULT NULL           COMMENT '执行结果说明',
+    `detail_log`      TEXT         DEFAULT NULL            COMMENT '执行过程日志（多行文本，供历史页查看）',
     `affected_count`  INT          DEFAULT NULL            COMMENT '影响条数',
     `duration_ms`     BIGINT       DEFAULT NULL            COMMENT '耗时毫秒',
     `start_time`      DATETIME     DEFAULT NULL            COMMENT '开始时间',
@@ -80,3 +81,6 @@ CREATE TABLE `sys_scheduled_task_run_log`
     `updt_time`       DATETIME     DEFAULT NULL            COMMENT '修改时间',
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='定时任务执行历史';
+
+-- 若库表已存在仅缺 detail_log，可手工执行：
+-- ALTER TABLE `sys_scheduled_task_run_log` ADD COLUMN `detail_log` TEXT DEFAULT NULL COMMENT '执行过程日志（多行文本，供历史页查看）' AFTER `message`;

@@ -1,16 +1,20 @@
 package com.znty.rrs.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
+import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.schedule.RrsScheduledTask;
 import com.znty.rrs.schedule.ScheduledTaskResult;
+import com.znty.rrs.schedule.TaskDetailLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -24,27 +28,40 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 主体下新债自动入池任务。
- *
- * <p>对应老系统 {@code AutoAdjustInNewBondToLimitPoolJob}。
- * 调度启停与 cron 由 {@code sys_scheduled_task} 管理；扩展参数 {@code param_json}
- * 存放池映射（如 {@code 15-15}，对应老配置 AUTOPOOLID_XYJJ）。
+ * 主体下新债自动入池任务实现
+ * <p>
+ * 对应老系统 AutoAdjustInNewBondToLimitPoolJob。
+ * 名称/cron/启停/扩展参数均由库表维护；扩展参数仅支持 JSON，见 {@link #getParamHelp()}。
+ * </p>
  */
 @Slf4j
 @Service
 public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
-    /** 任务编码 */
+    /** 任务编码（与库表 task_code 绑定，不可变） */
     public static final String TASK_CODE = "company_new_bond_auto_in";
-    /** 任务名称 */
-    public static final String TASK_NAME = "主体下新债自动入池";
 
+    /** 系统调库操作人 ID */
     private static final String AUTO_ADJUSTER_ID = "0";
+    /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
+    /** 自动入池原因（写入调库日志） */
     private static final String REASON_COMPANY_NEW_BOND_IN = "主体新发债券自动导入";
-    private static final String DEFAULT_POOL_PAIRS = "15-15";
-    private static final String DEFAULT_CRON = "0 0 3 * * ?";
+    /** 批次号规则后缀 */
     private static final String BATCH_SUFFIX = "3002";
+    /** 解析 param_json 用 */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    /**
+     * 本任务扩展参数说明（配置页按行拆成列表展示，勿写 1) 2) 序号）
+     */
+    private static final String PARAM_HELP =
+            "须填写 JSON 对象\n"
+                    + "主体与债同一池（可多个）示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
+                    + "主体所在池与债券写入池不同时用 mappings，示例 <code>{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}</code>\n"
+                    + "作用：扫描主体所在池内已在池主体，将其旗下未到期且尚未在写入池的债券自动入池\n"
+                    + "主场景（债券禁止库）一般写 <code>{\"poolIds\":[15]}</code>\n"
+                    + "未配置或格式错误则本轮失败";
 
     /** 自动调库查询 Mapper */
     @Resource
@@ -55,7 +72,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
-    /** 定时任务配置 Mapper（读取 param_json 池映射） */
+    /** 定时任务配置 Mapper（param_json / 名称） */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
 
@@ -64,81 +81,85 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         return TASK_CODE;
     }
 
+    /**
+     * 向配置页提供本任务扩展参数填写说明（仅 JSON）
+     */
     @Override
-    public String getTaskName() {
-        return TASK_NAME;
+    public String getParamHelp() {
+        return PARAM_HELP;
     }
 
-    @Override
-    public String getDescription() {
-        return "主体已在配置池内时，将其旗下未到期且尚未在目标池的债券自动入池（对应老系统主体新发债券自动入池）";
-    }
-
-    @Override
-    public String getDefaultCronExpression() {
-        return DEFAULT_CRON;
-    }
-
-    @Override
-    public boolean isDefaultScheduleEnabled() {
-        return false;
-    }
-
-    @Override
-    public String getDefaultParamJson() {
-        return DEFAULT_POOL_PAIRS;
-    }
-
+    /**
+     * 执行主体下新债自动入池：按库表 param_json 映射扫描待入池债券并落地在池状态
+     */
     @Override
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
-        log.info("{} 开始", TASK_NAME);
+        TaskDetailLog detail = new TaskDetailLog();
+        // 展示名读库
+        String taskName = resolveTaskName();
+        // 记录开始（控制台 + 过程日志）
+        infoDetail(detail, taskName + " 开始");
         try {
-            int total = doAutoInCompanyNewBond();
+            // 执行主体新债自动入池（扩展参数非法时抛 BizException → 记失败）
+            int total = doAutoInCompanyNewBond(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
             String message = "本轮共入池 " + total + " 条";
-            log.info("{} 结束，{}", TASK_NAME, message);
-            return ScheduledTaskResult.success(TASK_CODE, TASK_NAME, message, total, startTime, duration);
+            infoDetail(detail, taskName + " 结束，" + message);
+            return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
+                    detail.build());
+        } catch (BizException e) {
+            long duration = System.currentTimeMillis() - begin;
+            warnDetail(detail, taskName + " 失败: " + e.getMessage());
+            return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
+                    detail.build());
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - begin;
-            log.error("{} 异常", TASK_NAME, e);
-            return ScheduledTaskResult.failure(TASK_CODE, TASK_NAME,
-                    "执行异常: " + e.getMessage(), startTime, duration);
+            log.error("{} 异常", taskName, e);
+            detail.line("ERROR", taskName + " 异常: " + e.getMessage());
+            return ScheduledTaskResult.failure(TASK_CODE, taskName,
+                    "执行异常: " + e.getMessage(), startTime, duration, detail.build());
         }
     }
 
-    /** 核心业务：按库表扩展参数中的池映射扫描并自动入池。 */
-    private int doAutoInCompanyNewBond() {
-        String pairs = resolvePoolPairs();
-        List<long[]> pairList = parsePoolPairs(pairs);
-        if (pairList.isEmpty()) {
-            log.info("{}：未配置有效池映射，跳过", TASK_NAME);
-            return 0;
-        }
+    /**
+     * 按扩展参数中的「主体所在池 → 债券写入池」映射扫描待入池新债，写调入日志并落在池状态
+     */
+    private int doAutoInCompanyNewBond(String taskName, TaskDetailLog detail) {
+        // 读取扩展参数原文
+        String paramJson = resolveParamJson();
+        infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
+        // 解析为 [主体所在池ID, 债券写入池ID] 列表（非法则抛业务异常）
+        List<long[]> pairList = parseParamMappings(paramJson, taskName);
+        infoDetail(detail, "有效映射组数 " + pairList.size());
+        // 构建池 ID → 池信息映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
+        infoDetail(detail, "本轮批次号 " + batchNo);
         int total = 0;
         for (long[] pair : pairList) {
-            Long companyPoolId = pair[0];
-            Long targetPoolId = pair[1];
-            InvestmentPoolBo targetPool = poolMap.get(targetPoolId);
+            Long companyInPoolId = pair[0];
+            Long bondTargetPoolId = pair[1];
+            InvestmentPoolBo targetPool = poolMap.get(bondTargetPoolId);
             if (targetPool == null) {
-                log.warn("{}：目标池[{}]不存在，跳过映射 {}-{}", TASK_NAME, targetPoolId, companyPoolId, targetPoolId);
+                warnDetail(detail, "债券写入池[" + bondTargetPoolId + "]不存在，跳过映射 "
+                        + companyInPoolId + "→" + bondTargetPoolId);
                 continue;
             }
-            List<IpAdjustLogBo> bondList = autoAdjustMapper.queryCompanyNewBondForAutoIn(companyPoolId, targetPoolId);
+            List<IpAdjustLogBo> bondList = autoAdjustMapper.queryCompanyNewBondForAutoIn(
+                    companyInPoolId, bondTargetPoolId);
             if (bondList == null || bondList.isEmpty()) {
-                log.info("{}：主体池[{}]→目标池[{}]({}) 无待入池新债",
-                        TASK_NAME, companyPoolId, targetPool.getPoolName(), targetPoolId);
+                infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
+                        + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 无待入池新债");
                 continue;
             }
             int pairCount = 0;
             for (IpAdjustLogBo bond : bondList) {
                 bond.setAdjustType("自动调整");
                 bond.setAdjustMode(AdjustMode.IN.getCode());
-                bond.setTargetPoolId(targetPoolId);
+                bond.setTargetPoolId(bondTargetPoolId);
                 bond.setTargetPoolName(targetPool.getPoolName());
                 bond.setPoolType(targetPool.getPoolType());
                 bond.setAuditStatus(AuditStatus.APPROVED.getCode());
@@ -154,32 +175,68 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 // 写入在池状态
                 int inserted = securityPoolAdjustMapper.addPoolStatus(bond);
                 if (inserted != 1) {
-                    log.warn("{}：债券[{}]写入池状态失败（可能并发已入池），跳过", TASK_NAME, bond.getSecurityCode());
+                    warnDetail(detail, "债券[" + bond.getSecurityCode() + "]写入池状态失败（可能并发已入池），跳过");
                     continue;
                 }
                 pairCount++;
                 total++;
             }
-            log.info("{}：主体池[{}]→目标池[{}]({}) 入池 {} 条",
-                    TASK_NAME, companyPoolId, targetPool.getPoolName(), targetPoolId, pairCount);
+            infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
+                    + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 入池 " + pairCount + " 条");
         }
-        log.info("{}：批次号 {}，合计入池 {} 条", TASK_NAME, batchNo, total);
+        infoDetail(detail, "批次号 " + batchNo + "，合计入池 " + total + " 条");
         return total;
     }
 
-    /** 从库表读取扩展参数（池映射），失败则用默认值。 */
-    private String resolvePoolPairs() {
-        try {
-            SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
-            if (conf != null && StringUtils.hasText(conf.getParamJson())) {
-                return conf.getParamJson().trim();
-            }
-        } catch (Exception e) {
-            log.warn("{}：读取库表扩展参数失败，使用默认 {}", TASK_NAME, DEFAULT_POOL_PAIRS, e);
+    /**
+     * 写 INFO 级过程日志并同步控制台
+     */
+    private void infoDetail(TaskDetailLog detail, String line) {
+        log.info(line);
+        if (detail != null) {
+            detail.line("INFO", line);
         }
-        return DEFAULT_POOL_PAIRS;
     }
 
+    /**
+     * 写 WARN 级过程日志并同步控制台
+     */
+    private void warnDetail(TaskDetailLog detail, String line) {
+        log.warn(line);
+        if (detail != null) {
+            detail.line("WARN", line);
+        }
+    }
+
+    /**
+     * 从库表读取本任务扩展参数原文，未配置则返回 null
+     */
+    private String resolveParamJson() {
+        SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
+        if (conf != null && StringUtils.hasText(conf.getParamJson())) {
+            return conf.getParamJson().trim();
+        }
+        return null;
+    }
+
+    /**
+     * 从库表读取任务展示名称，缺失时回退为任务编码
+     */
+    private String resolveTaskName() {
+        try {
+            SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
+            if (conf != null && StringUtils.hasText(conf.getTaskName())) {
+                return conf.getTaskName();
+            }
+        } catch (Exception e) {
+            log.debug("读取任务名称失败: {}", TASK_CODE);
+        }
+        return TASK_CODE;
+    }
+
+    /**
+     * 构建投资池 ID 到池信息的映射，供校验债券写入池是否存在
+     */
     private Map<Long, InvestmentPoolBo> buildPoolMap() {
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         List<InvestmentPoolBo> poolList = investmentPoolMapper.queryPoolList();
@@ -192,32 +249,101 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 解析主体池-目标池映射。格式：{@code 15-15,16-100}。
+     * 解析扩展参数为池映射列表：每项 [companyInPoolId, bondTargetPoolId]（仅 JSON）
+     * <p>
+     * 支持：{@code poolIds} 数组（主体与债同一池，可多个）、{@code poolId} 单个、
+     * {@code mappings} 显式「主体所在池→债券写入池」。
+     * 缺失、非法 JSON、无有效映射均抛 {@link BizException}。
+     * </p>
      */
-    List<long[]> parsePoolPairs(String raw) {
-        List<long[]> result = new ArrayList<>();
+    List<long[]> parseParamMappings(String raw, String taskName) {
         if (!StringUtils.hasText(raw)) {
-            return result;
+            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
         }
-        String[] segments = raw.split(",");
-        for (String segment : segments) {
-            if (!StringUtils.hasText(segment)) {
-                continue;
+        String text = raw.trim();
+        if (!text.startsWith("{")) {
+            throw new BizException("扩展参数须为 JSON 对象，示例 {\"poolIds\":[15]}，当前: " + text);
+        }
+        JsonNode root;
+        try {
+            root = OBJECT_MAPPER.readTree(text);
+        } catch (Exception e) {
+            log.warn("{}：JSON 扩展参数解析失败: {}，原因: {}", taskName, text, e.getMessage());
+            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
+                    + "；请使用标准 JSON，示例 {\"poolIds\":[15]}");
+        }
+        List<long[]> result = new ArrayList<>();
+        // 同池多个：poolIds
+        JsonNode poolIdsNode = root.get("poolIds");
+        if (poolIdsNode != null && !poolIdsNode.isNull()) {
+            if (!poolIdsNode.isArray() || poolIdsNode.size() == 0) {
+                throw new BizException("poolIds 须为非空数字数组，示例 {\"poolIds\":[15,16]}");
             }
-            String trimmed = segment.trim();
-            String[] parts = trimmed.split("-");
-            if (parts.length != 2) {
-                log.warn("{}：池映射格式非法，跳过 [{}]", TASK_NAME, trimmed);
-                continue;
+            for (JsonNode item : poolIdsNode) {
+                Long id = readNumberNode(item);
+                if (id == null) {
+                    throw new BizException("poolIds 元素须为数字，非法值: " + item);
+                }
+                result.add(new long[]{id, id});
             }
-            try {
-                long companyPoolId = Long.parseLong(parts[0].trim());
-                long targetPoolId = Long.parseLong(parts[1].trim());
-                result.add(new long[]{companyPoolId, targetPoolId});
-            } catch (NumberFormatException ex) {
-                log.warn("{}：池映射 ID 非法，跳过 [{}]", TASK_NAME, trimmed);
+        }
+        // 同池单个：poolId（与 poolIds 可并存）
+        if (root.has("poolId") && !root.get("poolId").isNull()) {
+            Long id = readNumberNode(root.get("poolId"));
+            if (id == null) {
+                throw new BizException("poolId 须为数字，示例 {\"poolId\":15}");
             }
+            result.add(new long[]{id, id});
+        }
+        // 不同池映射
+        JsonNode mappings = root.get("mappings");
+        if (mappings != null && mappings.isArray()) {
+            for (JsonNode item : mappings) {
+                if (item == null || item.isNull()) {
+                    continue;
+                }
+                Long companyIn = readLong(item, "companyInPoolId");
+                Long bondTarget = readLong(item, "bondTargetPoolId");
+                if (companyIn == null || bondTarget == null) {
+                    throw new BizException(
+                            "mappings 项须含 companyInPoolId、bondTargetPoolId 数字，非法项: " + item);
+                }
+                result.add(new long[]{companyIn, bondTarget});
+            }
+        }
+        if (result.isEmpty()) {
+            throw new BizException(
+                    "扩展参数未解析到有效映射，示例 {\"poolIds\":[15]} 或 "
+                            + "{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}");
         }
         return result;
+    }
+
+    /**
+     * 读取 JSON 数字节点为 Long
+     */
+    private Long readNumberNode(JsonNode node) {
+        if (node == null || node.isNull() || !node.isNumber()) {
+            return null;
+        }
+        return node.asLong();
+    }
+
+    /**
+     * 单测入口：解析扩展参数
+     */
+    List<long[]> parseParamMappings(String raw) {
+        return parseParamMappings(raw, TASK_CODE);
+    }
+
+    /**
+     * 从 JSON 节点读取 Long 字段
+     */
+    private Long readLong(JsonNode node, String field) {
+        JsonNode v = node.get(field);
+        if (v == null || v.isNull() || !v.isNumber()) {
+            return null;
+        }
+        return v.asLong();
     }
 }

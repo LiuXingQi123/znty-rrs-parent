@@ -15,7 +15,6 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,7 +44,8 @@ public class CompanyNewBondAutoInServiceTest {
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setParamJson("15-15");
+        conf.setTaskName("主体下新债自动入池");
+        conf.setParamJson("{\"poolIds\":[15]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE)).thenReturn(conf);
 
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -75,14 +75,13 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(adjustLog.getAdjustType()).isEqualTo("自动调整");
         assertThat(adjustLog.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(adjustLog.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
-        assertThat(adjustLog.getAdjustReason()).isEqualTo("主体新发债券自动导入");
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
         verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L));
     }
 
     @Test
-    public void executeShouldUseDefaultPairsWhenDbEmpty() {
+    public void executeShouldFailWhenParamJsonEmpty() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
@@ -94,21 +93,49 @@ public class CompanyNewBondAutoInServiceTest {
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
         when(scheduledTaskMapper.queryTaskByCode(any(String.class))).thenReturn(null);
-        when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.<InvestmentPoolBo>emptyList());
 
         ScheduledTaskResult result = service.execute();
-        assertThat(result.isSuccess()).isTrue();
-        // 默认 15-15，但目标池不存在
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("扩展参数未配置");
         verify(autoAdjustMapper, never()).queryCompanyNewBondForAutoIn(any(Long.class), any(Long.class));
     }
 
     @Test
-    public void parsePoolPairsShouldIgnoreInvalidSegments() {
+    public void parseParamMappingsShouldOnlyAcceptJson() {
         CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
-        List<long[]> pairs = service.parsePoolPairs("15-15,abc,16-100,onlyone,");
-        assertThat(pairs).hasSize(2);
-        assertThat(pairs.get(0)[0]).isEqualTo(15L);
-        assertThat(pairs.get(1)[1]).isEqualTo(100L);
+        List<long[]> samePool = service.parseParamMappings("{\"poolIds\":[15]}");
+        assertThat(samePool).hasSize(1);
+        assertThat(samePool.get(0)[0]).isEqualTo(15L);
+        assertThat(samePool.get(0)[1]).isEqualTo(15L);
+
+        List<long[]> multiPool = service.parseParamMappings("{\"poolIds\":[15,16]}");
+        assertThat(multiPool).hasSize(2);
+        assertThat(multiPool.get(1)[0]).isEqualTo(16L);
+        assertThat(multiPool.get(1)[1]).isEqualTo(16L);
+
+        List<long[]> multi = service.parseParamMappings(
+                "{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":15},"
+                        + "{\"companyInPoolId\":16,\"bondTargetPoolId\":100}]}");
+        assertThat(multi).hasSize(2);
+        assertThat(multi.get(1)[0]).isEqualTo(16L);
+        assertThat(multi.get(1)[1]).isEqualTo(100L);
+
+        // 旧式文本 / 非法 JSON → 业务异常（执行结果记失败）
+        try {
+            service.parseParamMappings("15-15,16-100");
+            org.junit.Assert.fail("expected BizException");
+        } catch (com.znty.rrs.exception.BizException expected) {
+            assertThat(expected.getMessage()).contains("JSON");
+        }
+    }
+
+    @Test
+    public void getParamHelpShouldDescribeJsonContract() {
+        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        assertThat(service.getParamHelp()).contains("poolIds");
+        assertThat(service.getParamHelp()).contains("mappings");
+        assertThat(service.getParamHelp()).contains("须填写 JSON");
+        assertThat(service.getParamHelp()).doesNotContain("1)");
     }
 
     @Test
@@ -124,7 +151,8 @@ public class CompanyNewBondAutoInServiceTest {
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setParamJson("15-15");
+        conf.setTaskName("主体下新债");
+        conf.setParamJson("{\"poolIds\":[15]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE)).thenReturn(conf);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(15L);

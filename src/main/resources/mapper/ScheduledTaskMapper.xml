@@ -2,6 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ScheduledTaskMapper">
 
+    <!-- 查询全部未删除的定时任务配置列表，按主键升序 -->
     <select id="queryTaskList" resultType="com.znty.rrs.entity.bo.SysScheduledTaskBo">
         SELECT id
                ,task_code
@@ -24,6 +25,7 @@
         ORDER BY id ASC
     </select>
 
+    <!-- 按任务编码查询单条未删除的定时任务配置 -->
     <select id="queryTaskByCode" resultType="com.znty.rrs.entity.bo.SysScheduledTaskBo">
         SELECT id
                ,task_code
@@ -47,6 +49,7 @@
         LIMIT 1
     </select>
 
+    <!-- 新增定时任务配置（编码、名称、说明、cron、启停、扩展参数） -->
     <insert id="addTask" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO sys_scheduled_task (task_code
                                        ,task_name
@@ -68,7 +71,8 @@
                ,NOW())
     </insert>
 
-    <update id="editTaskConfig">
+    <!-- 按任务编码更新配置（名称、说明、cron、启停、扩展参数） -->
+    <update id="editTask">
         UPDATE sys_scheduled_task
         SET cron_expression = #{cronExpression}
            ,schedule_enabled = #{scheduleEnabled}
@@ -80,6 +84,17 @@
           AND IFNULL(is_deleted, 0) = 0
     </update>
 
+    <!-- 按任务编码逻辑删除配置，并关闭调度开关 -->
+    <update id="deleteTaskSoft">
+        UPDATE sys_scheduled_task
+        SET is_deleted = 1
+           ,schedule_enabled = 0
+           ,updt_time = NOW()
+        WHERE task_code = #{taskCode}
+          AND IFNULL(is_deleted, 0) = 0
+    </update>
+
+    <!-- 更新主表最近一次执行摘要（状态、说明、时间、影响条数、耗时、触发方式） -->
     <update id="editTaskLastRun">
         UPDATE sys_scheduled_task
         SET last_run_status = #{lastRunStatus}
@@ -93,6 +108,7 @@
           AND IFNULL(is_deleted, 0) = 0
     </update>
 
+    <!-- 写入定时任务配置变更审计事件（快照 + 操作人 + 操作类型） -->
     <insert id="addTaskEvent">
         INSERT INTO sys_scheduled_task_evt (id
                                            ,task_code
@@ -134,12 +150,14 @@
                ,#{oprtType})
     </insert>
 
+    <!-- 新增一条定时任务执行历史记录 -->
     <insert id="addRunLog" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO sys_scheduled_task_run_log (task_code
                                                ,task_name
                                                ,trigger_type
                                                ,run_status
                                                ,message
+                                               ,detail_log
                                                ,affected_count
                                                ,duration_ms
                                                ,start_time
@@ -154,6 +172,7 @@
                ,#{triggerType}
                ,#{runStatus}
                ,#{message}
+               ,#{detailLog}
                ,#{affectedCount}
                ,#{durationMs}
                ,#{startTime}
@@ -165,6 +184,7 @@
                ,NOW())
     </insert>
 
+    <!-- 查询执行历史列表（可按任务编码筛选），由 PageHelper 做外层分页 -->
     <select id="queryRunLogList" resultType="com.znty.rrs.entity.bo.SysScheduledTaskRunLogBo">
         SELECT id
                ,task_code
@@ -172,6 +192,7 @@
                ,trigger_type
                ,run_status
                ,message
+               ,detail_log
                ,affected_count
                ,duration_ms
                ,start_time
@@ -188,7 +209,8 @@
                 AND task_code = #{taskCode}
             </if>
         </where>
-        ORDER BY start_time DESC, id DESC
+        ORDER BY start_time DESC
+                 ,id DESC
     </select>
 
 </mapper>

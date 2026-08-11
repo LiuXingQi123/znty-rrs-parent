@@ -31,8 +31,19 @@ public class ScheduledTaskInfoDto {
     /** 是否启用定时调度 */
     private boolean scheduleEnabled;
 
-    /** 扩展参数（按任务自定义，如主体下新债的池映射 15-15） */
+    /**
+     * 扩展参数原文（库表 param_json）
+     * <p>
+     * 通用字段：各任务自行约定格式，推荐 JSON；无参数任务可为空。
+     * 具体填写方式见 {@link #paramHelp}（由已注册实现提供）。
+     * </p>
+     */
     private String paramJson;
+
+    /**
+     * 扩展参数填写说明（由已注册的 RrsScheduledTask#getParamHelp 提供；未注册实现时为空）
+     */
+    private String paramHelp;
 
     /** 代码是否已注册实现（false 表示库中有配置但代码未部署） */
     private boolean codeRegistered;

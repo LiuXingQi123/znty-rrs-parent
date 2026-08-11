@@ -11,7 +11,6 @@ import com.znty.rrs.schedule.ScheduledTaskResult;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -28,17 +27,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 定时任务编排服务单元测试。
+ * 定时任务服务单元测试。
  */
 public class ScheduledTaskServiceTest {
 
     @Test
-    public void queryTaskListShouldMergeCodeAndDb() {
-        RrsScheduledTask task = mockTask("a", "任务A");
+    public void queryTaskListShouldReturnDbRows() {
+        RrsScheduledTask task = mockTask("a");
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
         DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
         SysScheduledTaskBo bo = new SysScheduledTaskBo();
         bo.setTaskCode("a");
+        bo.setTaskName("任务A");
         bo.setCronExpression("0 0 2 * * ?");
         bo.setScheduleEnabled(1);
         when(mapper.queryTaskList()).thenReturn(Collections.singletonList(bo));
@@ -50,23 +50,100 @@ public class ScheduledTaskServiceTest {
 
         List<ScheduledTaskInfoDto> list = service.queryTaskList();
         assertThat(list).hasSize(1);
-        assertThat(list.get(0).isScheduleEnabled()).isTrue();
-        assertThat(list.get(0).isCurrentlyScheduled()).isTrue();
         assertThat(list.get(0).isCodeRegistered()).isTrue();
     }
 
     @Test
-    public void editTaskConfigShouldValidateCronAndReschedule() {
-        RrsScheduledTask task = mockTask("a", "任务A");
+    public void addTaskShouldPersist() {
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        when(scheduler.isValidCron(anyString())).thenReturn(true);
+        SysScheduledTaskBo saved = new SysScheduledTaskBo();
+        saved.setTaskCode("new_task");
+        saved.setTaskName("新任务");
+        saved.setCronExpression("0 0 1 * * ?");
+        saved.setScheduleEnabled(0);
+        when(mapper.queryTaskByCode("new_task")).thenReturn(null).thenReturn(saved);
+        when(mapper.addTask(any(SysScheduledTaskBo.class))).thenReturn(1);
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.<RrsScheduledTask>emptyList());
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+
+        ScheduledTaskReq req = new ScheduledTaskReq();
+        req.setTaskCode("new_task");
+        req.setTaskName("新任务");
+        req.setCronExpression("0 0 1 * * ?");
+        req.setOperatorId("1");
+        service.addTask(req);
+
+        verify(mapper).addTask(any(SysScheduledTaskBo.class));
+        // 无实现不挂载调度
+        verify(scheduler, never()).schedule(anyString(), anyString(), any(Runnable.class));
+    }
+
+    @Test
+    public void addTaskWithImplShouldScheduleWhenEnabled() {
+        RrsScheduledTask task = mockTask("job_a");
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        when(scheduler.isValidCron(anyString())).thenReturn(true);
+        SysScheduledTaskBo saved = new SysScheduledTaskBo();
+        saved.setTaskCode("job_a");
+        saved.setTaskName("任务");
+        saved.setCronExpression("0 0 2 * * ?");
+        saved.setScheduleEnabled(1);
+        when(mapper.queryTaskByCode("job_a")).thenReturn(null).thenReturn(saved);
+        when(mapper.addTask(any(SysScheduledTaskBo.class))).thenReturn(1);
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+
+        ScheduledTaskReq req = new ScheduledTaskReq();
+        req.setTaskCode("job_a");
+        req.setTaskName("任务");
+        req.setCronExpression("0 0 2 * * ?");
+        req.setScheduleEnabled(true);
+        service.addTask(req);
+
+        verify(scheduler).schedule(eq("job_a"), eq("0 0 2 * * ?"), any(Runnable.class));
+    }
+
+    @Test
+    public void deleteTaskShouldSoftDelete() {
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        SysScheduledTaskBo existing = new SysScheduledTaskBo();
+        existing.setTaskCode("a");
+        existing.setTaskName("A");
+        when(mapper.queryTaskByCode("a")).thenReturn(existing);
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.<RrsScheduledTask>emptyList());
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+
+        ScheduledTaskReq req = new ScheduledTaskReq();
+        req.setTaskCode("a");
+        req.setOperatorId("1");
+        service.deleteTask(req);
+
+        verify(scheduler).cancel("a");
+        verify(mapper).deleteTaskSoft("a");
+    }
+
+    @Test
+    public void editTaskShouldUpdate() {
+        RrsScheduledTask task = mockTask("a");
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
         DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
         when(scheduler.isValidCron(anyString())).thenReturn(true);
         SysScheduledTaskBo existing = new SysScheduledTaskBo();
         existing.setTaskCode("a");
+        existing.setTaskName("旧名");
         existing.setCronExpression("0 0 2 * * ?");
-        existing.setScheduleEnabled(0);
         when(mapper.queryTaskByCode("a")).thenReturn(existing);
-        when(mapper.editTaskConfig(any(SysScheduledTaskBo.class))).thenReturn(1);
+        when(mapper.editTask(any(SysScheduledTaskBo.class))).thenReturn(1);
 
         ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
@@ -74,46 +151,44 @@ public class ScheduledTaskServiceTest {
 
         ScheduledTaskReq req = new ScheduledTaskReq();
         req.setTaskCode("a");
-        req.setTaskName("任务A改名");
-        req.setDescription("说明可编辑");
+        req.setTaskName("新名");
         req.setCronExpression("0 0 3 * * ?");
         req.setScheduleEnabled(true);
-        req.setOperatorId("1");
+        service.editTask(req);
 
-        service.editTaskConfig(req);
-
-        verify(mapper).editTaskConfig(any(SysScheduledTaskBo.class));
-        verify(mapper).addTaskEvent(any(SysScheduledTaskBo.class), eq("1"), eq("修改"));
+        verify(mapper).editTask(any(SysScheduledTaskBo.class));
         verify(scheduler).schedule(eq("a"), eq("0 0 3 * * ?"), any(Runnable.class));
     }
 
     @Test
-    public void editTaskConfigShouldRejectInvalidCron() {
-        RrsScheduledTask task = mockTask("a", "任务A");
+    public void executeTaskShouldRequireImpl() {
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
         DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
-        when(scheduler.isValidCron(anyString())).thenReturn(false);
-        when(mapper.queryTaskByCode("a")).thenReturn(new SysScheduledTaskBo());
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskCode("a");
+        when(mapper.queryTaskByCode("a")).thenReturn(conf);
 
-        ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
+        ScheduledTaskService service = new ScheduledTaskService(Collections.<RrsScheduledTask>emptyList());
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
         ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
 
         ScheduledTaskReq req = new ScheduledTaskReq();
         req.setTaskCode("a");
-        req.setCronExpression("bad");
-        assertThatThrownBy(() -> service.editTaskConfig(req))
+        assertThatThrownBy(() -> service.executeTask(req))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("cron");
-        verify(scheduler, never()).schedule(anyString(), anyString(), any(Runnable.class));
+                .hasMessageContaining("业务实现");
     }
 
     @Test
-    public void executeTaskShouldPersistRunLog() {
-        RrsScheduledTask task = mockTask("a", "任务A");
-        when(task.execute()).thenReturn(ScheduledTaskResult.success("a", "任务A", "ok", 2, new Date(), 5L));
+    public void executeTaskShouldRunImpl() {
+        RrsScheduledTask task = mockTask("a");
+        when(task.execute()).thenReturn(ScheduledTaskResult.success("a", "A", "ok", 1, new Date(), 1L));
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
         DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskCode("a");
+        conf.setTaskName("A");
+        when(mapper.queryTaskByCode("a")).thenReturn(conf);
 
         ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
@@ -121,31 +196,15 @@ public class ScheduledTaskServiceTest {
 
         ScheduledTaskReq req = new ScheduledTaskReq();
         req.setTaskCode("a");
-        req.setOperatorId("u1");
-        req.setOperatorName("张三");
         ScheduledTaskResult result = service.executeTask(req);
-        assertThat(result.getAffectedCount()).isEqualTo(2);
-        verify(mapper).editTaskLastRun(any(SysScheduledTaskBo.class));
-        verify(mapper).addRunLog(any());
+        assertThat(result.isSuccess()).isTrue();
         verify(task, times(1)).execute();
+        verify(mapper).addRunLog(any());
     }
 
-    @Test
-    public void constructorShouldRejectDuplicateCodes() {
-        RrsScheduledTask task1 = mockTask("same", "A");
-        RrsScheduledTask task2 = mockTask("same", "B");
-        assertThatThrownBy(() -> new ScheduledTaskService(Arrays.asList(task1, task2)))
-                .isInstanceOf(IllegalStateException.class);
-    }
-
-    private RrsScheduledTask mockTask(String code, String name) {
+    private RrsScheduledTask mockTask(String code) {
         RrsScheduledTask task = mock(RrsScheduledTask.class);
         when(task.getTaskCode()).thenReturn(code);
-        when(task.getTaskName()).thenReturn(name);
-        when(task.getDescription()).thenReturn(name + "说明");
-        when(task.getDefaultCronExpression()).thenReturn("0 0 2 * * ?");
-        when(task.isDefaultScheduleEnabled()).thenReturn(false);
-        when(task.getDefaultParamJson()).thenReturn(null);
         return task;
     }
 }

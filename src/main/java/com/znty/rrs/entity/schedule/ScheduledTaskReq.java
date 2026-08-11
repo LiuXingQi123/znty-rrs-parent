@@ -31,7 +31,7 @@ public class ScheduledTaskReq extends PageRequest {
     /** 是否启用定时调度（保存配置） */
     private Boolean scheduleEnabled;
 
-    /** 扩展参数（保存配置） */
+    /** 扩展参数（保存配置；通用文本，推荐 JSON，格式由各任务约定） */
     private String paramJson;
 
     /** 操作人 ID（写审计/执行日志） */

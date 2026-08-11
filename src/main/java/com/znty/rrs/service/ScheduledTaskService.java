@@ -29,41 +29,40 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 /**
- * 定时任务注册、配置持久化、动态调度与手动触发编排。
- *
- * <p>代码侧 {@link RrsScheduledTask} 提供默认元信息与业务执行体；
- * 库表 {@code sys_scheduled_task} 持久化 cron / 启停 / 扩展参数；
- * 页面修改配置后即时经 {@link DynamicTaskScheduler} 重挂载。
+ * 定时任务配置与调度服务
+ * <p>
+ * 库表维护配置（名称/说明/cron/启停/扩展参数）；业务类实现 {@link RrsScheduledTask}
+ *（仅 taskCode + execute）。扩展新任务：① 页面新增配置 ② 新建实现类并部署。
+ * </p>
  */
 @Slf4j
 @Service
 public class ScheduledTaskService {
 
-    /** 系统操作人 ID（定时触发） */
+    /** 系统操作人 ID */
     private static final String SYSTEM_OPERATOR_ID = "0";
-    /** 系统操作人名称（定时触发） */
+    /** 系统操作人名称 */
     private static final String SYSTEM_OPERATOR_NAME = "系统";
-    /** 配置审计操作类型：修改 */
-    private static final String OPRT_TYPE_EDIT = "修改";
+    /** 任务编码：字母开头，字母数字下划线，2~64 位 */
+    private static final Pattern TASK_CODE_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9_]{1,63}$");
 
-    /** 按 taskCode 索引的任务实现 */
+    /** taskCode → 业务实现 */
     private final Map<String, RrsScheduledTask> taskMap;
-    /** 同任务串行执行锁 */
+    /** 同任务串行锁 */
     private final Map<String, Object> runLocks = new ConcurrentHashMap<>();
 
-    /** 定时任务配置与历史 Mapper */
+    /** 定时任务 Mapper */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
-    /** 动态 cron 调度器 */
+    /** 动态调度器 */
     @Resource
     private DynamicTaskScheduler dynamicTaskScheduler;
 
     /**
-     * 注入全部 {@link RrsScheduledTask} 实现并建立编码索引。
-     *
-     * @param taskList Spring 收集的任务实现列表
+     * 构造时收集全部 {@link RrsScheduledTask} 实现，按 taskCode 注册到内存映射（编码不可重复）
      */
     public ScheduledTaskService(List<RrsScheduledTask> taskList) {
         Map<String, RrsScheduledTask> map = new LinkedHashMap<>();
@@ -72,217 +71,127 @@ public class ScheduledTaskService {
                 if (task == null || !StringUtils.hasText(task.getTaskCode())) {
                     continue;
                 }
-                String code = task.getTaskCode();
-                if (map.containsKey(code)) {
-                    throw new IllegalStateException("定时任务编码重复: " + code);
+                if (map.containsKey(task.getTaskCode())) {
+                    throw new IllegalStateException("定时任务编码重复: " + task.getTaskCode());
                 }
-                map.put(code, task);
+                map.put(task.getTaskCode(), task);
             }
         }
         this.taskMap = Collections.unmodifiableMap(map);
-        log.info("定时任务代码注册完成，共 {} 个: {}", this.taskMap.size(), this.taskMap.keySet());
+        log.info("定时任务实现已注册: {}", this.taskMap.keySet());
     }
 
     /**
-     * 启动后：按代码实现种子补全库表配置，并挂载已启用任务。
+     * 应用启动后按库表配置挂载已启用且已有业务实现的定时任务
      */
     @PostConstruct
     public void initAfterStartup() {
         try {
-            // 补全代码已注册但库中缺失的任务配置
-            syncCodeTasksToDb();
-            // 按库表配置挂载启用中的调度
+            // 按库表重挂调度
             reloadAllSchedules();
         } catch (Exception e) {
-            log.warn("定时任务启动同步失败（表可能尚未初始化，可在脚本工具执行 rrs_scheduled_task_schema 后重启）: {}",
-                    e.getMessage());
+            log.warn("定时任务启动挂载失败（表可能未初始化）: {}", e.getMessage());
         }
     }
 
     /**
-     * 查询任务清单（代码注册 ∪ 库表配置）。
-     *
-     * @return 任务信息列表
+     * 查询全部有效定时任务配置列表（仅读库表），并补充是否已注册实现、是否已挂载调度
      */
     public List<ScheduledTaskInfoDto> queryTaskList() {
-        // 加载库表配置索引
-        Map<String, SysScheduledTaskBo> dbMap = loadDbTaskMap();
-        LinkedHashMap<String, ScheduledTaskInfoDto> result = new LinkedHashMap<>();
-        // 先按代码注册顺序输出
-        for (RrsScheduledTask task : taskMap.values()) {
-            // 合并代码元信息与库表配置
-            result.put(task.getTaskCode(), toInfoDto(task, dbMap.get(task.getTaskCode())));
+        List<SysScheduledTaskBo> list = scheduledTaskMapper.queryTaskList();
+        List<ScheduledTaskInfoDto> result = new ArrayList<>();
+        if (list == null) {
+            return result;
         }
-        // 库中有但代码未注册的配置也展示
-        for (SysScheduledTaskBo bo : dbMap.values()) {
-            if (!result.containsKey(bo.getTaskCode())) {
-                result.put(bo.getTaskCode(), toInfoDto(null, bo));
-            }
+        for (SysScheduledTaskBo bo : list) {
+            // 转展示 DTO
+            result.add(toInfoDto(bo));
         }
-        return new ArrayList<>(result.values());
+        return result;
     }
 
     /**
-     * 按编码查询任务。
-     *
-     * @param taskCode 任务编码
-     * @return 任务信息
+     * 按任务编码查询单条定时任务配置详情，不存在则抛业务异常
      */
     public ScheduledTaskInfoDto queryTask(String taskCode) {
-        // 规范化编码
-        String code = trimCode(taskCode);
-        RrsScheduledTask task = taskMap.get(code);
-        SysScheduledTaskBo bo = scheduledTaskMapper.queryTaskByCode(code);
-        if (task == null && bo == null) {
-            throw new BizException("未找到定时任务: " + taskCode);
-        }
-        // 组装展示 DTO
-        return toInfoDto(task, bo);
+        // 校验并加载配置
+        return toInfoDto(requireConfig(taskCode));
     }
 
     /**
-     * 保存任务配置（cron / 启停 / 扩展参数）并重挂载调度。
-     *
-     * @param req 配置请求
-     * @return 更新后的任务信息
+     * 新增定时任务配置并写审计；编码唯一，保存成功后若有业务实现则按 cron 挂载调度
      */
     @Transactional(rollbackFor = Exception.class)
-    public ScheduledTaskInfoDto editTaskConfig(ScheduledTaskReq req) {
-        if (req == null || !StringUtils.hasText(req.getTaskCode())) {
-            throw new BizException("任务编码不能为空");
+    public ScheduledTaskInfoDto addTask(ScheduledTaskReq req) {
+        // 组装并校验新增字段
+        SysScheduledTaskBo bo = buildSaveBo(req, null);
+        if (scheduledTaskMapper.queryTaskByCode(bo.getTaskCode()) != null) {
+            throw new BizException("任务编码已存在: " + bo.getTaskCode());
         }
-        String taskCode = req.getTaskCode().trim();
-        RrsScheduledTask codeTask = taskMap.get(taskCode);
-        SysScheduledTaskBo existing = scheduledTaskMapper.queryTaskByCode(taskCode);
-        if (existing == null && codeTask == null) {
-            throw new BizException("未找到定时任务: " + taskCode);
-        }
-        // 解析并校验 cron
-        String cron = req.getCronExpression() != null
-                ? req.getCronExpression().trim()
-                : (existing != null ? existing.getCronExpression() : codeTask.getDefaultCronExpression());
-        if (!StringUtils.hasText(cron) || !dynamicTaskScheduler.isValidCron(cron)) {
-            throw new BizException("cron 表达式非法，请使用 Spring 6 位格式，如 0 0 2 * * ?");
-        }
-        boolean enabled = req.getScheduleEnabled() != null
-                ? req.getScheduleEnabled()
-                : (existing != null && Integer.valueOf(1).equals(existing.getScheduleEnabled()));
-        String paramJson = req.getParamJson() != null
-                ? req.getParamJson().trim()
-                : (existing != null ? existing.getParamJson()
-                : (codeTask != null ? codeTask.getDefaultParamJson() : null));
-        // 名称/描述允许页面编辑，未传则保留库表或代码默认值
-        String taskName = StringUtils.hasText(req.getTaskName())
-                ? req.getTaskName().trim()
-                : (existing != null && StringUtils.hasText(existing.getTaskName())
-                ? existing.getTaskName()
-                : (codeTask != null ? codeTask.getTaskName() : taskCode));
-        if (!StringUtils.hasText(taskName)) {
-            throw new BizException("任务名称不能为空");
-        }
-        if (taskName.length() > 128) {
-            throw new BizException("任务名称不能超过 128 字");
-        }
-        String description = req.getDescription() != null
-                ? req.getDescription().trim()
-                : (existing != null ? existing.getDescription()
-                : (codeTask != null ? codeTask.getDescription() : null));
-        if (description != null && description.length() > 500) {
-            throw new BizException("任务说明不能超过 500 字");
-        }
-
-        SysScheduledTaskBo save = new SysScheduledTaskBo();
-        save.setTaskCode(taskCode);
-        save.setTaskName(taskName);
-        save.setDescription(description);
-        save.setCronExpression(cron);
-        save.setScheduleEnabled(enabled ? 1 : 0);
-        save.setParamJson(paramJson);
-
-        if (existing == null) {
-            // 新增库表配置
-            scheduledTaskMapper.addTask(save);
-        } else {
-            // 更新已有配置
-            scheduledTaskMapper.editTaskConfig(save);
-            save.setId(existing.getId());
-        }
-        // 用本次保存值即时重挂载
-        applySchedule(taskCode, save);
-        // 回读最新配置
-        SysScheduledTaskBo latest = scheduledTaskMapper.queryTaskByCode(taskCode);
-        if (latest == null) {
-            latest = save;
-        }
-        // 写配置变更审计
-        scheduledTaskMapper.addTaskEvent(latest,
-                StringUtils.hasText(req.getOperatorId()) ? req.getOperatorId() : SYSTEM_OPERATOR_ID,
-                OPRT_TYPE_EDIT);
-        // 组装返回 DTO
-        return toInfoDto(codeTask, latest);
+        // 写入库表
+        scheduledTaskMapper.addTask(bo);
+        // 回查并挂载
+        SysScheduledTaskBo latest = requireConfig(bo.getTaskCode());
+        // 写审计
+        writeEvent(latest, req, "新增");
+        // 有实现则挂载调度
+        applySchedule(latest);
+        return toInfoDto(latest);
     }
 
     /**
-     * 手动执行单个任务。
-     *
-     * @param req 执行请求（含操作人）
-     * @return 执行结果
+     * 修改定时任务配置（名称、说明、cron、启停、扩展参数），写审计后按最新配置重挂或取消调度
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ScheduledTaskInfoDto editTask(ScheduledTaskReq req) {
+        // 加载已有配置
+        SysScheduledTaskBo existing = requireConfig(req == null ? null : req.getTaskCode());
+        // 组装保存对象
+        SysScheduledTaskBo bo = buildSaveBo(req, existing);
+        // 更新库表
+        scheduledTaskMapper.editTask(bo);
+        // 写审计
+        writeEvent(bo, req, "修改");
+        // 按本次保存值重挂调度
+        applySchedule(bo);
+        // 回查展示
+        return toInfoDto(requireConfig(bo.getTaskCode()));
+    }
+
+    /**
+     * 逻辑删除定时任务配置，取消调度并写审计，返回删除前快照
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ScheduledTaskInfoDto deleteTask(ScheduledTaskReq req) {
+        // 加载配置
+        SysScheduledTaskBo existing = requireConfig(req == null ? null : req.getTaskCode());
+        // 取消调度
+        dynamicTaskScheduler.cancel(existing.getTaskCode());
+        // 逻辑删除
+        scheduledTaskMapper.deleteTaskSoft(existing.getTaskCode());
+        existing.setIsDeleted(1);
+        existing.setScheduleEnabled(0);
+        // 写审计
+        writeEvent(existing, req, "删除");
+        return toInfoDto(existing);
+    }
+
+    /**
+     * 手动触发执行指定任务（需已有库表配置与业务实现），并写入最近执行摘要与执行历史
      */
     public ScheduledTaskResult executeTask(ScheduledTaskReq req) {
-        if (req == null || !StringUtils.hasText(req.getTaskCode())) {
-            throw new BizException("任务编码不能为空");
-        }
-        String operatorId = StringUtils.hasText(req.getOperatorId()) ? req.getOperatorId() : SYSTEM_OPERATOR_ID;
-        String operatorName = StringUtils.hasText(req.getOperatorName()) ? req.getOperatorName() : SYSTEM_OPERATOR_NAME;
-        // 手动触发执行
-        return runTask(req.getTaskCode().trim(), ScheduleTriggerType.MANUAL.getCode(), operatorId, operatorName);
+        // 必须有库表配置
+        SysScheduledTaskBo conf = requireConfig(req == null ? null : req.getTaskCode());
+        String operatorId = (req != null && StringUtils.hasText(req.getOperatorId()))
+                ? req.getOperatorId() : SYSTEM_OPERATOR_ID;
+        String operatorName = (req != null && StringUtils.hasText(req.getOperatorName()))
+                ? req.getOperatorName() : SYSTEM_OPERATOR_NAME;
+        // 执行
+        return runTask(conf.getTaskCode(), ScheduleTriggerType.MANUAL.getCode(), operatorId, operatorName);
     }
 
     /**
-     * 兼容仅传编码的调用。
-     *
-     * @param taskCode 任务编码
-     * @return 执行结果
-     */
-    public ScheduledTaskResult executeTask(String taskCode) {
-        ScheduledTaskReq req = new ScheduledTaskReq();
-        req.setTaskCode(taskCode);
-        return executeTask(req);
-    }
-
-    /**
-     * 按序批量执行任务。
-     *
-     * @param req 批量请求
-     * @return 各任务执行结果
-     */
-    public List<ScheduledTaskResult> executeTasks(ScheduledTaskReq req) {
-        if (req == null || req.getTaskCodes() == null || req.getTaskCodes().isEmpty()) {
-            throw new BizException("任务编码列表不能为空");
-        }
-        List<ScheduledTaskResult> results = new ArrayList<>();
-        for (String code : req.getTaskCodes()) {
-            try {
-                ScheduledTaskReq one = new ScheduledTaskReq();
-                one.setTaskCode(code);
-                one.setOperatorId(req.getOperatorId());
-                one.setOperatorName(req.getOperatorName());
-                // 逐个手动执行
-                results.add(executeTask(one));
-            } catch (Exception e) {
-                log.error("批量触发任务[{}]异常", code, e);
-                results.add(ScheduledTaskResult.failure(
-                        code, code, "触发失败: " + e.getMessage(), new Date(), 0L));
-            }
-        }
-        return results;
-    }
-
-    /**
-     * 分页查询执行历史。
-     *
-     * @param req 查询条件
-     * @return 分页结果
+     * 分页查询定时任务执行历史，可按任务编码筛选
      */
     public PageResult<ScheduledTaskRunLogDto> queryRunLogPage(ScheduledTaskReq req) {
         int pageIndex = req == null ? 1 : req.getPageIndex();
@@ -290,128 +199,144 @@ public class ScheduledTaskService {
         String taskCode = req == null ? null : req.getTaskCode();
         // 开启分页
         PageHelper.startPage(pageIndex, pageSize);
-        // 查询历史列表
+        // 查询列表
         List<SysScheduledTaskRunLogBo> list = scheduledTaskMapper.queryRunLogList(taskCode);
         PageInfo<SysScheduledTaskRunLogBo> pageInfo = new PageInfo<>(list);
         List<ScheduledTaskRunLogDto> dtoList = new ArrayList<>();
         if (list != null) {
             for (SysScheduledTaskRunLogBo bo : list) {
-                // 转展示 DTO
+                // 转历史展示 DTO
                 dtoList.add(toRunLogDto(bo));
             }
         }
         return new PageResult<>(dtoList, pageInfo.getTotal(), pageIndex, pageSize);
     }
 
+    // ---------- 内部 ----------
+
     /**
-     * 将代码任务种子同步到库表（仅补缺失，不覆盖已有配置）。
+     * 校验入参并组装待保存配置；existing 为空表示新增（校验编码格式），非空表示修改（编码沿用原值）
      */
-    private void syncCodeTasksToDb() {
-        for (RrsScheduledTask task : taskMap.values()) {
-            SysScheduledTaskBo existing = scheduledTaskMapper.queryTaskByCode(task.getTaskCode());
-            if (existing != null) {
-                continue;
-            }
-            SysScheduledTaskBo seed = new SysScheduledTaskBo();
-            seed.setTaskCode(task.getTaskCode());
-            seed.setTaskName(task.getTaskName());
-            seed.setDescription(task.getDescription());
-            seed.setCronExpression(task.getDefaultCronExpression());
-            seed.setScheduleEnabled(task.isDefaultScheduleEnabled() ? 1 : 0);
-            seed.setParamJson(task.getDefaultParamJson());
-            // 写入种子配置
-            scheduledTaskMapper.addTask(seed);
-            log.info("定时任务种子写入: {}", task.getTaskCode());
+    private SysScheduledTaskBo buildSaveBo(ScheduledTaskReq req, SysScheduledTaskBo existing) {
+        if (req == null) {
+            throw new BizException("请求不能为空");
         }
+        // 新增时校验编码格式；修改时沿用原编码
+        String taskCode = existing != null ? existing.getTaskCode() : trimCode(req.getTaskCode());
+        if (existing == null && !TASK_CODE_PATTERN.matcher(taskCode).matches()) {
+            throw new BizException("任务编码须以字母开头，仅含字母数字下划线，长度 2~64");
+        }
+        String taskName = StringUtils.hasText(req.getTaskName())
+                ? req.getTaskName().trim()
+                : (existing != null ? existing.getTaskName() : null);
+        if (!StringUtils.hasText(taskName)) {
+            throw new BizException("任务名称不能为空");
+        }
+        if (taskName.length() > 128) {
+            throw new BizException("任务名称不能超过 128 字");
+        }
+        String cron = req.getCronExpression() != null
+                ? req.getCronExpression().trim()
+                : (existing != null ? existing.getCronExpression() : null);
+        if (!StringUtils.hasText(cron) || !dynamicTaskScheduler.isValidCron(cron)) {
+            throw new BizException("cron 表达式非法，示例：0 0 2 * * ?");
+        }
+        String description = req.getDescription() != null
+                ? req.getDescription().trim()
+                : (existing != null ? existing.getDescription() : null);
+        if (description != null && description.length() > 500) {
+            throw new BizException("任务说明不能超过 500 字");
+        }
+        boolean enabled = req.getScheduleEnabled() != null
+                ? req.getScheduleEnabled()
+                : (existing != null && Integer.valueOf(1).equals(existing.getScheduleEnabled()));
+        String paramJson = req.getParamJson() != null
+                ? req.getParamJson().trim()
+                : (existing != null ? existing.getParamJson() : null);
+
+        SysScheduledTaskBo bo = new SysScheduledTaskBo();
+        bo.setTaskCode(taskCode);
+        bo.setTaskName(taskName);
+        bo.setDescription(description);
+        bo.setCronExpression(cron);
+        bo.setScheduleEnabled(enabled ? 1 : 0);
+        bo.setParamJson(paramJson);
+        return bo;
     }
 
     /**
-     * 按库表重新挂载全部已启用任务。
+     * 按库表重新挂载全部可调度任务：先取消已注册实现上的挂载，再逐条按配置挂载
      */
     private void reloadAllSchedules() {
-        for (String code : taskMap.keySet()) {
-            // 先全部取消再按配置挂载
+        List<SysScheduledTaskBo> list = scheduledTaskMapper.queryTaskList();
+        // 先取消全部已知实现的挂载
+        for (String code : new ArrayList<>(taskMap.keySet())) {
             dynamicTaskScheduler.cancel(code);
         }
-        List<SysScheduledTaskBo> list = scheduledTaskMapper.queryTaskList();
         if (list == null) {
             return;
         }
         for (SysScheduledTaskBo bo : list) {
             // 按单条配置挂载或取消
-            applySchedule(bo.getTaskCode(), bo);
+            applySchedule(bo);
         }
     }
 
     /**
-     * 根据配置挂载或取消调度。
-     *
-     * @param taskCode 任务编码
-     * @param conf     库表配置
+     * 按单条配置挂载或取消调度：仅当「已启用 + cron 合法 + 已有业务实现」时挂载，否则取消
      */
-    private void applySchedule(String taskCode, SysScheduledTaskBo conf) {
-        if (conf == null || !taskMap.containsKey(taskCode)) {
+    private void applySchedule(SysScheduledTaskBo conf) {
+        if (conf == null || !StringUtils.hasText(conf.getTaskCode())) {
+            return;
+        }
+        String taskCode = conf.getTaskCode();
+        boolean canRun = Integer.valueOf(1).equals(conf.getScheduleEnabled())
+                && StringUtils.hasText(conf.getCronExpression())
+                && taskMap.containsKey(taskCode);
+        if (!canRun) {
+            // 不满足挂载条件则取消
             dynamicTaskScheduler.cancel(taskCode);
             return;
         }
-        boolean enabled = Integer.valueOf(1).equals(conf.getScheduleEnabled());
-        if (!enabled || !StringUtils.hasText(conf.getCronExpression())) {
-            dynamicTaskScheduler.cancel(taskCode);
-            return;
-        }
-        // 挂载 cron 回调
+        // 按 cron 挂载调度
         dynamicTaskScheduler.schedule(taskCode, conf.getCronExpression(), () -> {
             try {
                 // 定时触发执行
                 runTask(taskCode, ScheduleTriggerType.CRON.getCode(), SYSTEM_OPERATOR_ID, SYSTEM_OPERATOR_NAME);
             } catch (Exception e) {
-                log.error("定时触发任务[{}]异常", taskCode, e);
+                log.error("定时任务执行失败: {}", taskCode, e);
             }
         });
     }
 
     /**
-     * 执行任务并写最近结果 + 历史日志（同任务串行）。
-     *
-     * @param taskCode     任务编码
-     * @param triggerType  触发方式 code
-     * @param operatorId   操作人 ID
-     * @param operatorName 操作人名称
-     * @return 执行结果
+     * 按任务编码串行执行业务实现，并持久化最近执行摘要与执行历史
      */
     private ScheduledTaskResult runTask(String taskCode, String triggerType,
                                         String operatorId, String operatorName) {
-        // 校验代码实现已注册
-        RrsScheduledTask task = requireCodeTask(taskCode);
-        // 展示名优先读库（页面可改名称）
-        String displayName = resolveTaskDisplayName(taskCode, task);
+        // 取业务实现
+        RrsScheduledTask task = requireImpl(taskCode);
+        // 展示名读库
+        String displayName = resolveTaskName(taskCode);
         Object lock = runLocks.computeIfAbsent(taskCode, k -> new Object());
         synchronized (lock) {
-            log.info("触发定时任务: {} ({}) trigger={}", displayName, taskCode, triggerType);
-            // 执行业务（逻辑在代码实现中；扩展参数由各实现自行读库）
+            log.info("执行定时任务 {} ({}) trigger={}", displayName, taskCode, triggerType);
+            // 执行业务
             ScheduledTaskResult result = task.execute();
-            // 持久化最近结果与历史
+            // 写最近结果与历史
             persistRunResult(taskCode, displayName, result, triggerType, operatorId, operatorName);
             return result;
         }
     }
 
     /**
-     * 持久化执行摘要与历史记录。
-     *
-     * @param taskCode     任务编码
-     * @param displayName  展示名称（优先库表）
-     * @param result       执行结果
-     * @param triggerType  触发方式
-     * @param operatorId   操作人 ID
-     * @param operatorName 操作人名称
+     * 将本次执行结果写入主表最近执行摘要与执行历史表（失败仅打日志，不向上抛）
      */
     private void persistRunResult(String taskCode, String displayName, ScheduledTaskResult result,
                                   String triggerType, String operatorId, String operatorName) {
         try {
-            String status = result != null && result.isSuccess()
-                    ? ScheduleRunStatus.SUCCESS.getCode()
-                    : ScheduleRunStatus.FAIL.getCode();
+            boolean ok = result != null && result.isSuccess();
+            String status = ok ? ScheduleRunStatus.SUCCESS.getCode() : ScheduleRunStatus.FAIL.getCode();
             String message = result != null ? result.getMessage() : "无结果";
             int affected = result != null ? result.getAffectedCount() : 0;
             long duration = result != null ? result.getDurationMs() : 0L;
@@ -421,12 +346,13 @@ public class ScheduledTaskService {
             SysScheduledTaskBo last = new SysScheduledTaskBo();
             last.setTaskCode(taskCode);
             last.setLastRunStatus(status);
+            // 截断过长说明
             last.setLastRunMessage(truncate(message, 1000));
             last.setLastRunTime(start);
             last.setLastAffectedCount(affected);
             last.setLastDurationMs(duration);
             last.setLastTriggerType(triggerType);
-            // 更新主表最近执行摘要
+            // 更新主表最近执行
             scheduledTaskMapper.editTaskLastRun(last);
 
             SysScheduledTaskRunLogBo logBo = new SysScheduledTaskRunLogBo();
@@ -435,6 +361,9 @@ public class ScheduledTaskService {
             logBo.setTriggerType(triggerType);
             logBo.setRunStatus(status);
             logBo.setMessage(truncate(message, 1000));
+            // 过程日志写入历史（截断防过大）
+            String detailLog = result != null ? result.getDetailLog() : null;
+            logBo.setDetailLog(truncate(detailLog, 20000));
             logBo.setAffectedCount(affected);
             logBo.setDurationMs(duration);
             logBo.setStartTime(start);
@@ -444,82 +373,93 @@ public class ScheduledTaskService {
             // 写执行历史
             scheduledTaskMapper.addRunLog(logBo);
         } catch (Exception e) {
-            log.warn("持久化任务执行结果失败: {}", taskCode, e);
+            log.warn("持久化执行结果失败: {}", taskCode, e);
         }
     }
 
     /**
-     * 解析任务展示名称：库表优先，否则代码默认名。
+     * 写入配置变更审计事件（快照 + 操作人 + 操作类型）
      */
-    private String resolveTaskDisplayName(String taskCode, RrsScheduledTask task) {
+    private void writeEvent(SysScheduledTaskBo bo, ScheduledTaskReq req, String oprtType) {
+        String opterId = (req != null && StringUtils.hasText(req.getOperatorId()))
+                ? req.getOperatorId() : SYSTEM_OPERATOR_ID;
+        // 插入审计事件
+        scheduledTaskMapper.addTaskEvent(bo, opterId, oprtType);
+    }
+
+    /**
+     * 按编码加载未删除的任务配置，不存在则抛业务异常
+     */
+    private SysScheduledTaskBo requireConfig(String taskCode) {
+        // 规范化编码
+        String code = trimCode(taskCode);
+        SysScheduledTaskBo bo = scheduledTaskMapper.queryTaskByCode(code);
+        if (bo == null) {
+            throw new BizException("未找到定时任务: " + code);
+        }
+        return bo;
+    }
+
+    /**
+     * 按编码取已注册的业务实现，未实现则抛业务异常
+     */
+    private RrsScheduledTask requireImpl(String taskCode) {
+        // 规范化编码后查注册表
+        RrsScheduledTask task = taskMap.get(trimCode(taskCode));
+        if (task == null) {
+            throw new BizException("任务[" + taskCode + "]尚未注册业务实现，请新增 RrsScheduledTask 实现类");
+        }
+        return task;
+    }
+
+    /**
+     * 从库表读取任务展示名称，读库失败或名称为空时回退为任务编码
+     */
+    private String resolveTaskName(String taskCode) {
         try {
             SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(taskCode);
             if (conf != null && StringUtils.hasText(conf.getTaskName())) {
                 return conf.getTaskName();
             }
-        } catch (Exception e) {
-            log.debug("读取任务名称失败，使用代码默认: {}", taskCode);
+        } catch (Exception ignored) {
+            // 读库失败时回退编码
         }
-        return task != null ? task.getTaskName() : taskCode;
+        return taskCode;
     }
 
     /**
-     * 加载库表任务配置 Map。
+     * 将库表配置转换为列表/详情展示 DTO，并补充实现注册与调度挂载状态
      */
-    private Map<String, SysScheduledTaskBo> loadDbTaskMap() {
-        Map<String, SysScheduledTaskBo> map = new LinkedHashMap<>();
-        try {
-            List<SysScheduledTaskBo> list = scheduledTaskMapper.queryTaskList();
-            if (list != null) {
-                for (SysScheduledTaskBo bo : list) {
-                    map.put(bo.getTaskCode(), bo);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("加载定时任务库表配置失败: {}", e.getMessage());
-        }
-        return map;
-    }
-
-    /**
-     * 合并代码实现与库表配置为展示 DTO。
-     */
-    private ScheduledTaskInfoDto toInfoDto(RrsScheduledTask task, SysScheduledTaskBo bo) {
+    private ScheduledTaskInfoDto toInfoDto(SysScheduledTaskBo bo) {
         ScheduledTaskInfoDto dto = new ScheduledTaskInfoDto();
-        String code = task != null ? task.getTaskCode() : (bo != null ? bo.getTaskCode() : null);
-        dto.setTaskCode(code);
-        dto.setCodeRegistered(task != null);
-        if (bo != null) {
-            // 库表配置优先（名称/描述等允许页面编辑后持久化）
-            dto.setId(bo.getId());
-            dto.setTaskName(StringUtils.hasText(bo.getTaskName())
-                    ? bo.getTaskName()
-                    : (task != null ? task.getTaskName() : code));
-            dto.setDescription(bo.getDescription() != null
-                    ? bo.getDescription()
-                    : (task != null ? task.getDescription() : null));
-            dto.setCronExpression(bo.getCronExpression());
-            dto.setScheduleEnabled(Integer.valueOf(1).equals(bo.getScheduleEnabled()));
-            dto.setParamJson(bo.getParamJson());
-            dto.setLastRunStatus(bo.getLastRunStatus());
-            dto.setLastRunMessage(bo.getLastRunMessage());
-            dto.setLastRunTime(bo.getLastRunTime());
-            dto.setLastAffectedCount(bo.getLastAffectedCount());
-            dto.setLastDurationMs(bo.getLastDurationMs());
-            dto.setLastTriggerType(bo.getLastTriggerType());
-        } else if (task != null) {
-            dto.setTaskName(task.getTaskName());
-            dto.setDescription(task.getDescription());
-            dto.setCronExpression(task.getDefaultCronExpression());
-            dto.setScheduleEnabled(task.isDefaultScheduleEnabled());
-            dto.setParamJson(task.getDefaultParamJson());
+        if (bo == null) {
+            return dto;
         }
+        String code = bo.getTaskCode();
+        dto.setId(bo.getId());
+        dto.setTaskCode(code);
+        dto.setTaskName(bo.getTaskName());
+        dto.setDescription(bo.getDescription());
+        dto.setCronExpression(bo.getCronExpression());
+        dto.setScheduleEnabled(Integer.valueOf(1).equals(bo.getScheduleEnabled()));
+        dto.setParamJson(bo.getParamJson());
+        // 已注册实现时带回该任务的扩展参数填写说明（通用字段，不写死具体任务）
+        if (code != null && taskMap.containsKey(code)) {
+            dto.setParamHelp(taskMap.get(code).getParamHelp());
+        }
+        dto.setCodeRegistered(code != null && taskMap.containsKey(code));
         dto.setCurrentlyScheduled(code != null && dynamicTaskScheduler.isScheduled(code));
+        dto.setLastRunStatus(bo.getLastRunStatus());
+        dto.setLastRunMessage(bo.getLastRunMessage());
+        dto.setLastRunTime(bo.getLastRunTime());
+        dto.setLastAffectedCount(bo.getLastAffectedCount());
+        dto.setLastDurationMs(bo.getLastDurationMs());
+        dto.setLastTriggerType(bo.getLastTriggerType());
         return dto;
     }
 
     /**
-     * 执行历史 Bo 转 DTO。
+     * 将执行历史 Bo 转换为前端展示 DTO
      */
     private ScheduledTaskRunLogDto toRunLogDto(SysScheduledTaskRunLogBo bo) {
         ScheduledTaskRunLogDto dto = new ScheduledTaskRunLogDto();
@@ -529,6 +469,7 @@ public class ScheduledTaskService {
         dto.setTriggerType(bo.getTriggerType());
         dto.setRunStatus(bo.getRunStatus());
         dto.setMessage(bo.getMessage());
+        dto.setDetailLog(bo.getDetailLog());
         dto.setAffectedCount(bo.getAffectedCount());
         dto.setDurationMs(bo.getDurationMs());
         dto.setStartTime(bo.getStartTime());
@@ -539,20 +480,7 @@ public class ScheduledTaskService {
     }
 
     /**
-     * 按编码取代码实现，不存在则抛业务异常。
-     */
-    private RrsScheduledTask requireCodeTask(String taskCode) {
-        // 规范化编码
-        String code = trimCode(taskCode);
-        RrsScheduledTask task = taskMap.get(code);
-        if (task == null) {
-            throw new BizException("未注册的定时任务实现: " + taskCode);
-        }
-        return task;
-    }
-
-    /**
-     * 校验并裁剪任务编码。
+     * 规范化任务编码（去首尾空白），为空则抛业务异常
      */
     private String trimCode(String taskCode) {
         if (!StringUtils.hasText(taskCode)) {
@@ -562,7 +490,7 @@ public class ScheduledTaskService {
     }
 
     /**
-     * 截断过长文案。
+     * 将文本截断到指定最大长度，超出部分丢弃
      */
     private String truncate(String text, int max) {
         if (text == null) {
