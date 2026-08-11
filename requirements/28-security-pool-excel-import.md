@@ -37,17 +37,22 @@
 
 ---
 
-## 2. 临时表
+## 2. 临时表（通用导入，非本功能独占）
 
 | 表 | 说明 |
 |----|------|
-| `sys_imp_tmp_batch` | 导入批次主表 |
-| `sys_imp_tmp` | 导入明细，`fld001`～`fld030` 通用槽 |
+| `sys_imp_tmp` | 导入临时主表（批次） |
+| `sys_imp_tmp_detl` | 导入临时明细，`fld001`～`fld030` 通用槽 |
 
 - 无 `rid`；有效性用 `is_deleted`
 - `biz_type`：`security_pool_excel` / `company_pool_excel`
-- 槽位：`fld001`代码 / `fld002`名称 / `fld003`父池 / `fld004`子池 / `fld009`解析池ID / `fld010`池类型
-- `option_json`：`{ clearTarget, allowLinkMutex, importType }`
+- 主表业务槽（由 `biz_type` 约定，DDL 注释不写业务语义）：
+  - `fld001` 调整方向 in/out
+  - `fld002` 调整原因
+  - `fld003` 调整意见
+  - `option_json`：`{ clearTarget, allowLinkMutex, importType }`
+  - `result_json`：校验快照（含 checkItems）
+- 明细槽：`fld001`代码 / `fld002`名称 / `fld003`父池 / `fld004`子池 / `fld009`解析池ID / `fld010`池类型
 
 脚本：`sql/rrs_import_temp_schema.sql` / `rrs_import_temp_demo_data.sql`（已注册 ScriptTool）。
 

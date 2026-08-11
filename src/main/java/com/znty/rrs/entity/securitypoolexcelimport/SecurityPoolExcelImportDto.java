@@ -19,19 +19,13 @@ public class SecurityPoolExcelImportDto {
     private String bizType;
     /** 文件名 */
     private String fileName;
-    /** 目标池 ID */
-    private Long targetId;
-    /** 目标池名称 */
-    private String targetName;
-    /** 目标池类型 */
-    private String targetType;
-    /** 业务模式 in/out */
+    /** 业务模式 in/out（来自主表 fld001） */
     private String bizMode;
-    /** 选项 JSON */
+    /** 选项 JSON（来自主表 option_json） */
     private String optionJson;
-    /** 调整原因 */
+    /** 调整原因（来自主表 fld002） */
     private String reason;
-    /** 调整意见 */
+    /** 调整意见（来自主表 fld003） */
     private String advice;
     /** 总行数 */
     private Integer totalCount;

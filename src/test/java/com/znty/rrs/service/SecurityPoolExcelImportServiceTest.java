@@ -1,8 +1,9 @@
 package com.znty.rrs.service;
 
+
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
-import com.znty.rrs.entity.bo.SysImpTmpBatchBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
+import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
@@ -74,7 +75,7 @@ public class SecurityPoolExcelImportServiceTest {
 
     @Test
     public void cancelImport_AlreadySubmitted_Throws() {
-        SysImpTmpBatchBo batch = new SysImpTmpBatchBo();
+        SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP1");
         batch.setSaveRslt("1");
         when(importMapper.queryByImpId("IMP1")).thenReturn(batch);
@@ -92,7 +93,7 @@ public class SecurityPoolExcelImportServiceTest {
 
     @Test
     public void submitImport_WhenNoCheckItems_Throws() {
-        SysImpTmpBatchBo batch = new SysImpTmpBatchBo();
+        SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP2");
         batch.setChkRslt("2");
         batch.setFailCount(1);
@@ -114,16 +115,16 @@ public class SecurityPoolExcelImportServiceTest {
 
     @Test
     public void checkImport_PassWhenSecurityOkAndNotInPool() {
-        SysImpTmpBatchBo batch = new SysImpTmpBatchBo();
+        SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP3");
-        batch.setBizMode("in");
+        batch.setFld001("in");
         batch.setSaveRslt("0");
         batch.setOpterId("1");
         batch.setOptionJson("{\"clearTarget\":false,\"allowLinkMutex\":false,\"importType\":\"security\"}");
         batch.setBizType("security_pool_excel");
         when(importMapper.queryByImpId("IMP3")).thenReturn(batch);
 
-        SysImpTmpBo item = new SysImpTmpBo();
+        SysImpTmpDetlBo item = new SysImpTmpDetlBo();
         item.setId(10L);
         item.setImpId("IMP3");
         item.setFld001("110001.SH");
@@ -131,7 +132,7 @@ public class SecurityPoolExcelImportServiceTest {
         item.setFld003("信用债大库");
         item.setFld004("一级库");
         item.setChkRslt("0");
-        List<SysImpTmpBo> items = new ArrayList<>();
+        List<SysImpTmpDetlBo> items = new ArrayList<>();
         items.add(item);
         when(importMapper.queryAllByImpId("IMP3")).thenReturn(items);
 
@@ -173,13 +174,13 @@ public class SecurityPoolExcelImportServiceTest {
         req.setPageIndex(1);
         req.setPageSize(20);
         when(importMapper.queryItemList(anyString(), any(), any()))
-                .thenReturn(Collections.<SysImpTmpBo>emptyList());
+                .thenReturn(Collections.<SysImpTmpDetlBo>emptyList());
 
         SecurityPoolExcelImportDto dto = service.checkImport(req);
         assertNotNull(dto);
         verify(securityPoolAdjustService).checkAdjust(any(AdjustCheckReq.class));
-        verify(importMapper).updateItemCheckResult(any(SysImpTmpBo.class));
-        verify(importMapper).updateBatchCheckResult(any(SysImpTmpBatchBo.class));
+        verify(importMapper).updateItemCheckResult(any(SysImpTmpDetlBo.class));
+        verify(importMapper).updateBatchCheckResult(any(SysImpTmpBo.class));
         verify(forbiddenPoolAdjustService, never()).checkCompanyAdjust(any());
     }
 

@@ -1963,7 +1963,7 @@ public class ScriptToolService {
                 "rrs_report_in",
                 "rrs_report_out",
                 "sys_imp_tmp",
-                "sys_imp_tmp_batch"
+                "sys_imp_tmp_detl"
         );
     }
 
@@ -1994,8 +1994,8 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "sys_attachment", "系统附件"),
                 buildTable("znty_rrs", "rrs_report_in", "入池报告"),
                 buildTable("znty_rrs", "rrs_report_out", "出池报告"),
-                buildTable("znty_rrs", "sys_imp_tmp", "导入临时明细"),
-                buildTable("znty_rrs", "sys_imp_tmp_batch", "导入数据批次")
+                buildTable("znty_rrs", "sys_imp_tmp", "通用导入临时主表"),
+                buildTable("znty_rrs", "sys_imp_tmp_detl", "通用导入临时明细")
         )));
         groups.add(buildTableGroup("security-master", "证券与临时代码", "znty_rrs", Arrays.asList(
                 buildTable("znty_rrs", "rrs_securityinfo", "证券主数据"),

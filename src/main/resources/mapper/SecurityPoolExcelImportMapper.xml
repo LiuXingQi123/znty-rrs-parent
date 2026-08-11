@@ -3,33 +3,38 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.SecurityPoolExcelImportMapper">
 
-    <!-- ═══════════ 导入批次主表 ═══════════ -->
+    <!-- ═══════════ 导入临时主表 sys_imp_tmp ═══════════ -->
 
     <!-- 新增导入批次 -->
     <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO sys_imp_tmp_batch (
-            imp_id, biz_type, template_code, file_name, file_size, file_path
-            , target_id, target_name, target_type, biz_mode, option_json, reason, advice
+        INSERT INTO sys_imp_tmp (
+            imp_id, biz_type, template_code, file_name, file_size, file_path, option_json
             , total_count, pass_count, fail_count, chk_rslt, chk_dscr
             , save_rslt, save_dscr, imp_time, opter_id, opter_name, result_json
+            , fld001, fld002, fld003, fld004, fld005, fld006, fld007, fld008, fld009, fld010
+            , fld011, fld012, fld013, fld014, fld015, fld016, fld017, fld018, fld019, fld020
             , is_deleted, crte_time, updt_time
         ) VALUES (
-            #{impId}, #{bizType}, #{templateCode}, #{fileName}, #{fileSize}, #{filePath}
-            , #{targetId}, #{targetName}, #{targetType}, #{bizMode}, #{optionJson}, #{reason}, #{advice}
+            #{impId}, #{bizType}, #{templateCode}, #{fileName}, #{fileSize}, #{filePath}, #{optionJson}
             , #{totalCount}, #{passCount}, #{failCount}, #{chkRslt}, #{chkDscr}
             , #{saveRslt}, #{saveDscr}, #{impTime}, #{opterId}, #{opterName}, #{resultJson}
+            , #{fld001}, #{fld002}, #{fld003}, #{fld004}, #{fld005}
+            , #{fld006}, #{fld007}, #{fld008}, #{fld009}, #{fld010}
+            , #{fld011}, #{fld012}, #{fld013}, #{fld014}, #{fld015}
+            , #{fld016}, #{fld017}, #{fld018}, #{fld019}, #{fld020}
             , #{isDeleted}, #{crteTime}, #{updtTime}
         )
     </insert>
 
     <!-- 按业务批次号查询有效批次 -->
-    <select id="queryByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpBatchBo">
-        SELECT id, imp_id, biz_type, template_code, file_name, file_size, file_path
-             , target_id, target_name, target_type, biz_mode, option_json, reason, advice
+    <select id="queryByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpBo">
+        SELECT id, imp_id, biz_type, template_code, file_name, file_size, file_path, option_json
              , total_count, pass_count, fail_count, chk_rslt, chk_dscr
              , save_rslt, save_dscr, imp_time, opter_id, opter_name, result_json
+             , fld001, fld002, fld003, fld004, fld005, fld006, fld007, fld008, fld009, fld010
+             , fld011, fld012, fld013, fld014, fld015, fld016, fld017, fld018, fld019, fld020
              , is_deleted, crte_time, updt_time
-        FROM sys_imp_tmp_batch
+        FROM sys_imp_tmp
         WHERE imp_id = #{impId}
           AND is_deleted = 0
         LIMIT 1
@@ -37,7 +42,7 @@
 
     <!-- 更新批次校验结果与计数 -->
     <update id="updateBatchCheckResult">
-        UPDATE sys_imp_tmp_batch
+        UPDATE sys_imp_tmp
         SET pass_count = #{passCount}
           , fail_count = #{failCount}
           , chk_rslt = #{chkRslt}
@@ -50,7 +55,7 @@
 
     <!-- 更新批次保存结果 -->
     <update id="updateBatchSaveResult">
-        UPDATE sys_imp_tmp_batch
+        UPDATE sys_imp_tmp
         SET save_rslt = #{saveRslt}
           , save_dscr = #{saveDscr}
           , result_json = #{resultJson}
@@ -61,7 +66,7 @@
 
     <!-- 逻辑删除批次 -->
     <update id="deleteBatchSoft">
-        UPDATE sys_imp_tmp_batch
+        UPDATE sys_imp_tmp
         SET is_deleted = 1
           , save_rslt = '3'
           , updt_time = NOW()
@@ -69,11 +74,11 @@
           AND is_deleted = 0
     </update>
 
-    <!-- ═══════════ 导入明细临时表 ═══════════ -->
+    <!-- ═══════════ 导入临时明细表 sys_imp_tmp_detl ═══════════ -->
 
     <!-- 批量新增导入明细 -->
     <insert id="insertItemList">
-        INSERT INTO sys_imp_tmp (
+        INSERT INTO sys_imp_tmp_detl (
             imp_detl_id, imp_id, row_no, chk_rslt, chk_dscr, save_rslt, save_dscr
             , imp_time, opter_id, ref_id
             , fld001, fld002, fld003, fld004, fld005, fld006, fld007, fld008, fld009, fld010
@@ -97,14 +102,14 @@
     </insert>
 
     <!-- 按条件查询明细列表（配合 PageHelper） -->
-    <select id="queryItemList" resultType="com.znty.rrs.entity.bo.SysImpTmpBo">
+    <select id="queryItemList" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
         SELECT id, imp_detl_id, imp_id, row_no, chk_rslt, chk_dscr, save_rslt, save_dscr
              , imp_time, opter_id, ref_id
              , fld001, fld002, fld003, fld004, fld005, fld006, fld007, fld008, fld009, fld010
              , fld011, fld012, fld013, fld014, fld015, fld016, fld017, fld018, fld019, fld020
              , fld021, fld022, fld023, fld024, fld025, fld026, fld027, fld028, fld029, fld030
              , is_deleted, crte_time, updt_time
-        FROM sys_imp_tmp
+        FROM sys_imp_tmp_detl
         <where>
             imp_id = #{impId}
             AND is_deleted = 0
@@ -119,14 +124,14 @@
     </select>
 
     <!-- 查询批次下全部有效明细 -->
-    <select id="queryAllByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpBo">
+    <select id="queryAllByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
         SELECT id, imp_detl_id, imp_id, row_no, chk_rslt, chk_dscr, save_rslt, save_dscr
              , imp_time, opter_id, ref_id
              , fld001, fld002, fld003, fld004, fld005, fld006, fld007, fld008, fld009, fld010
              , fld011, fld012, fld013, fld014, fld015, fld016, fld017, fld018, fld019, fld020
              , fld021, fld022, fld023, fld024, fld025, fld026, fld027, fld028, fld029, fld030
              , is_deleted, crte_time, updt_time
-        FROM sys_imp_tmp
+        FROM sys_imp_tmp_detl
         WHERE imp_id = #{impId}
           AND is_deleted = 0
         ORDER BY row_no ASC, id ASC
@@ -134,7 +139,7 @@
 
     <!-- 更新单条明细校验结果 -->
     <update id="updateItemCheckResult">
-        UPDATE sys_imp_tmp
+        UPDATE sys_imp_tmp_detl
         SET chk_rslt = #{chkRslt}
           , chk_dscr = #{chkDscr}
           , fld009 = #{fld009}
@@ -146,7 +151,7 @@
 
     <!-- 更新单条明细保存结果 -->
     <update id="updateItemSaveResult">
-        UPDATE sys_imp_tmp
+        UPDATE sys_imp_tmp_detl
         SET save_rslt = #{saveRslt}
           , save_dscr = #{saveDscr}
           , ref_id = #{refId}
@@ -157,7 +162,7 @@
 
     <!-- 逻辑删除批次下全部明细 -->
     <update id="deleteItemsByImpIdSoft">
-        UPDATE sys_imp_tmp
+        UPDATE sys_imp_tmp_detl
         SET is_deleted = 1
           , updt_time = NOW()
         WHERE imp_id = #{impId}
@@ -167,7 +172,7 @@
     <!-- 统计指定校验结果数量 -->
     <select id="countByChkRslt" resultType="int">
         SELECT COUNT(1)
-        FROM sys_imp_tmp
+        FROM sys_imp_tmp_detl
         WHERE imp_id = #{impId}
           AND is_deleted = 0
           AND chk_rslt = #{chkRslt}

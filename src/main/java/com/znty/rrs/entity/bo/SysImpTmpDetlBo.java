@@ -6,39 +6,24 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 通用导入临时主表实体（sys_imp_tmp）
- * <p>业务专有入参写入 fld001~fld020，语义由 biz_type 约定。</p>
+ * 通用导入临时明细实体（sys_imp_tmp_detl，通用字段槽 fld001~fld030）
  */
 @Data
-public class SysImpTmpBo {
+public class SysImpTmpDetlBo {
 
     /** 主键 ID */
     private Long id;
+    /** 导入明细号 */
+    private String impDetlId;
     /** 导入批次号 */
     private String impId;
-    /** 业务类型 code */
-    private String bizType;
-    /** 模板编码 */
-    private String templateCode;
-    /** 原始文件名 */
-    private String fileName;
-    /** 文件字节数 */
-    private Long fileSize;
-    /** 文件存储路径 */
-    private String filePath;
-    /** 导入选项 JSON */
-    private String optionJson;
-    /** 明细总行数 */
-    private Integer totalCount;
-    /** 校验通过数 */
-    private Integer passCount;
-    /** 校验失败数 */
-    private Integer failCount;
-    /** 批次校验结果：0/1/2 */
+    /** Excel 行号 */
+    private Integer rowNo;
+    /** 校验结果：0待校验 / 1通过 / 2失败 */
     private String chkRslt;
-    /** 批次校验说明 */
+    /** 校验说明 */
     private String chkDscr;
-    /** 保存结果：0/1/2/3 */
+    /** 保存结果：0未保存 / 1成功 / 2失败 / 3跳过 */
     private String saveRslt;
     /** 保存说明 */
     private String saveDscr;
@@ -47,10 +32,8 @@ public class SysImpTmpBo {
     private Date impTime;
     /** 经办人 ID */
     private String opterId;
-    /** 经办人名称 */
-    private String opterName;
-    /** 提交结果扩展 JSON */
-    private String resultJson;
+    /** 提交后关联业务单 ID */
+    private Long refId;
     /** 字段001 */
     private String fld001;
     /** 字段002 */
@@ -91,6 +74,26 @@ public class SysImpTmpBo {
     private String fld019;
     /** 字段020 */
     private String fld020;
+    /** 字段021 */
+    private String fld021;
+    /** 字段022 */
+    private String fld022;
+    /** 字段023 */
+    private String fld023;
+    /** 字段024 */
+    private String fld024;
+    /** 字段025 */
+    private String fld025;
+    /** 字段026 */
+    private String fld026;
+    /** 字段027 */
+    private String fld027;
+    /** 字段028 */
+    private String fld028;
+    /** 字段029 */
+    private String fld029;
+    /** 字段030 */
+    private String fld030;
     /** 逻辑删除标志 */
     private Integer isDeleted;
     /** 创建时间 */

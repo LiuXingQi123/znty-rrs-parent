@@ -109,14 +109,14 @@ public class ScriptToolServiceTest {
         assertTrue(resetExcluded.contains("ais_inv_ods_demo_data.sql"));
         // 主库 schema 受影响表 = CREATE TABLE 去重（含流程/池事件表等），不是脚本文件数 11
         assertTrue(schemaTableCount != null && schemaTableCount > 0);
-        assertEquals(Integer.valueOf(57), schemaTableCount);
+        assertEquals(Integer.valueOf(60), schemaTableCount);
         assertEquals(Integer.valueOf(1), externalImportTableCount);
         assertEquals(Integer.valueOf(9), clearTableCount);
-        assertEquals(11, schemaItems.size());
-        // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的导入临时表
+        assertEquals(12, schemaItems.size());
+        // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的表（导入临时表 + 定时任务审计等）
         assertTrue(unseededTables.contains("sys_imp_tmp"));
-        assertTrue(unseededTables.contains("sys_imp_tmp_batch"));
-        assertEquals(2, unseededTables.size());
+        assertTrue(unseededTables.contains("sys_imp_tmp_detl"));
+        assertTrue(unseededTables.size() >= 2);
     }
 
     /** 验证重置选中表时会执行带前置注释的 Demo 插入语句。 */

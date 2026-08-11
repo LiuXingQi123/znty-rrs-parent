@@ -15,8 +15,8 @@ import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.util.ExcelImportHelper;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
-import com.znty.rrs.entity.bo.SysImpTmpBatchBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
+import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitReq;
@@ -128,7 +128,7 @@ public class SecurityPoolExcelImportService {
         // 组装 option_json（clearTarget / allowLinkMutex / importType）
         String optionJson = buildOptionJson(req.getClearTarget(), req.getAllowLinkMutex(), importType);
 
-        SysImpTmpBatchBo batch = new SysImpTmpBatchBo();
+        SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId(impId);
         batch.setBizType(IMPORT_TYPE_COMPANY.equals(importType) ? BIZ_TYPE_COMPANY : BIZ_TYPE_SECURITY);
         batch.setTemplateCode(IMPORT_TYPE_COMPANY.equals(importType)
@@ -136,11 +136,11 @@ public class SecurityPoolExcelImportService {
         batch.setFileName(file.getOriginalFilename());
         batch.setFileSize(file.getSize());
         // 规范化调整方向
-        batch.setBizMode(normalizeDirection(req.getDirection()));
+        batch.setFld001(normalizeDirection(req.getDirection()));
         batch.setOptionJson(optionJson);
         // 空白调整原因/意见规范为 null
-        batch.setReason(trimToNull(req.getAdjustReason()));
-        batch.setAdvice(trimToNull(req.getAdjustAdvice()));
+        batch.setFld002(trimToNull(req.getAdjustReason()));
+        batch.setFld003(trimToNull(req.getAdjustAdvice()));
         batch.setTotalCount(0);
         batch.setPassCount(0);
         batch.setFailCount(0);
@@ -154,10 +154,10 @@ public class SecurityPoolExcelImportService {
         batch.setCrteTime(now);
         batch.setUpdtTime(now);
 
-        List<SysImpTmpBo> items = new ArrayList<>();
+        List<SysImpTmpDetlBo> items = new ArrayList<>();
         Set<String> seenKeys = new HashSet<>();
         for (Map<String, String> row : excelRows) {
-            SysImpTmpBo item = new SysImpTmpBo();
+            SysImpTmpDetlBo item = new SysImpTmpDetlBo();
             // 生成导入明细号
             item.setImpDetlId(nextDetlId(now));
             item.setImpId(impId);
@@ -197,7 +197,7 @@ public class SecurityPoolExcelImportService {
         }
         batch.setTotalCount(items.size());
         int preFailCount = 0;
-        for (SysImpTmpBo item : items) {
+        for (SysImpTmpDetlBo item : items) {
             if ("2".equals(item.getChkRslt())) {
                 preFailCount++;
             }
@@ -223,7 +223,7 @@ public class SecurityPoolExcelImportService {
     /** 查询导入批次主表信息（含校验结果快照） */
     public SecurityPoolExcelImportDto queryTask(SecurityPoolExcelImportReq req) {
         // 加载导入批次
-        SysImpTmpBatchBo batch = requireBatch(req == null ? null : req.getImpId());
+        SysImpTmpBo batch = requireBatch(req == null ? null : req.getImpId());
         // 主表转任务 DTO
         SecurityPoolExcelImportDto dto = toTaskDto(batch);
         if (req != null && req.getPageIndex() > 0) {
@@ -241,11 +241,11 @@ public class SecurityPoolExcelImportService {
         // 校验批次存在
         requireBatch(req.getImpId());
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<SysImpTmpBo> list = securityPoolExcelImportMapper.queryItemList(
+        List<SysImpTmpDetlBo> list = securityPoolExcelImportMapper.queryItemList(
                 req.getImpId().trim(), trimToNull(req.getChkRslt()), trimToNull(req.getKeyword()));
-        PageInfo<SysImpTmpBo> pageInfo = new PageInfo<>(list);
+        PageInfo<SysImpTmpDetlBo> pageInfo = new PageInfo<>(list);
         List<SecurityPoolExcelImportItemDto> records = new ArrayList<>();
-        for (SysImpTmpBo bo : list) {
+        for (SysImpTmpDetlBo bo : list) {
             // 明细 Bo 转 DTO
             records.add(toItemDto(bo));
         }
@@ -259,7 +259,7 @@ public class SecurityPoolExcelImportService {
             throw new BizException("导入批次号不能为空");
         }
         // 加载导入批次
-        SysImpTmpBatchBo batch = requireBatch(req.getImpId());
+        SysImpTmpBo batch = requireBatch(req.getImpId());
         if ("1".equals(batch.getSaveRslt())) {
             throw new BizException("该批次已提交，不能取消");
         }
@@ -281,18 +281,18 @@ public class SecurityPoolExcelImportService {
             throw new BizException("导入批次号不能为空");
         }
         // 加载导入批次
-        SysImpTmpBatchBo batch = requireBatch(req.getImpId());
+        SysImpTmpBo batch = requireBatch(req.getImpId());
         if ("1".equals(batch.getSaveRslt())) {
             throw new BizException("该批次已提交，不能再次校验");
         }
         String opterId = req.getCurrentUserId() != null && !req.getCurrentUserId().trim().isEmpty()
                 ? req.getCurrentUserId().trim() : batch.getOpterId();
-        List<SysImpTmpBo> items = securityPoolExcelImportMapper.queryAllByImpId(batch.getImpId());
+        List<SysImpTmpDetlBo> items = securityPoolExcelImportMapper.queryAllByImpId(batch.getImpId());
         if (items.isEmpty()) {
             throw new BizException("导入明细为空");
         }
 
-        boolean inbound = "in".equals(batch.getBizMode());
+        boolean inbound = "in".equals(batch.getFld001());
         // 解析是否允许联动与互斥
         boolean allowLinkMutex = parseAllowLinkMutex(batch.getOptionJson());
         // 解析是否首先清空目标池
@@ -322,7 +322,7 @@ public class SecurityPoolExcelImportService {
 
         int pass = 0;
         int fail = 0;
-        for (SysImpTmpBo item : items) {
+        for (SysImpTmpDetlBo item : items) {
             if ("1".equals(item.getChkRslt())) {
                 pass++;
             } else if ("2".equals(item.getChkRslt())) {
@@ -368,14 +368,14 @@ public class SecurityPoolExcelImportService {
      * 再注入目标池批量流程候选；未勾选联动互斥时仅保留手工项。</p>
      */
     private List<SecurityPoolExcelImportCheckItemDto> checkSecurityImport(
-            List<SysImpTmpBo> items, boolean inbound, boolean allowLinkMutex,
+            List<SysImpTmpDetlBo> items, boolean inbound, boolean allowLinkMutex,
             String opterId, Date now) {
         List<SecurityPoolExcelImportCheckItemDto> checkItems = new ArrayList<>();
         Map<String, InvestmentPoolBo> poolNameCache = new HashMap<>();
         String adjustMode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
         String direction = inbound ? "in" : "out";
 
-        for (SysImpTmpBo item : items) {
+        for (SysImpTmpDetlBo item : items) {
             List<String> preReasons = new ArrayList<>();
             String code = trimToEmpty(item.getFld001());
             String parentName = trimToEmpty(item.getFld003());
@@ -505,13 +505,13 @@ public class SecurityPoolExcelImportService {
      * 未勾选联动互斥时仅保留手工项。</p>
      */
     private List<SecurityPoolExcelImportCheckItemDto> checkCompanyImport(
-            List<SysImpTmpBo> items, boolean inbound, boolean allowLinkMutex,
+            List<SysImpTmpDetlBo> items, boolean inbound, boolean allowLinkMutex,
             String opterId, Date now) {
         List<SecurityPoolExcelImportCheckItemDto> checkItems = new ArrayList<>();
         Map<String, InvestmentPoolBo> poolNameCache = new HashMap<>();
         String adjustMode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
 
-        for (SysImpTmpBo item : items) {
+        for (SysImpTmpDetlBo item : items) {
             List<String> preReasons = new ArrayList<>();
             String code = trimToEmpty(item.getFld001());
             String parentName = trimToEmpty(item.getFld003());
@@ -643,7 +643,7 @@ public class SecurityPoolExcelImportService {
             throw new BizException("导入批次号不能为空");
         }
         // 加载导入批次
-        SysImpTmpBatchBo batch = requireBatch(req.getImpId());
+        SysImpTmpBo batch = requireBatch(req.getImpId());
         if ("1".equals(batch.getSaveRslt())) {
             throw new BizException("该批次已提交，请勿重复提交");
         }
@@ -663,10 +663,10 @@ public class SecurityPoolExcelImportService {
             opterName = opterId;
         }
         if (req.getAdjustReason() != null && !req.getAdjustReason().trim().isEmpty()) {
-            batch.setReason(req.getAdjustReason().trim());
+            batch.setFld002(req.getAdjustReason().trim());
         }
         if (req.getAdjustAdvice() != null && !req.getAdjustAdvice().trim().isEmpty()) {
-            batch.setAdvice(req.getAdjustAdvice().trim());
+            batch.setFld003(req.getAdjustAdvice().trim());
         }
 
         // 解析导入类型（证券/主体）
@@ -700,8 +700,8 @@ public class SecurityPoolExcelImportService {
 
         // 回写导入明细保存状态
         Date now = new Date();
-        Map<Long, SysImpTmpBo> sourceMap = new HashMap<>();
-        for (SysImpTmpBo bo : securityPoolExcelImportMapper.queryAllByImpId(batch.getImpId())) {
+        Map<Long, SysImpTmpDetlBo> sourceMap = new HashMap<>();
+        for (SysImpTmpDetlBo bo : securityPoolExcelImportMapper.queryAllByImpId(batch.getImpId())) {
             sourceMap.put(bo.getId(), bo);
         }
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
@@ -709,7 +709,7 @@ public class SecurityPoolExcelImportService {
             if (!isManualTag(ci.getItemTag()) || ci.getSourceItemId() == null) {
                 continue;
             }
-            SysImpTmpBo source = sourceMap.get(ci.getSourceItemId());
+            SysImpTmpDetlBo source = sourceMap.get(ci.getSourceItemId());
             if (source == null) {
                 continue;
             }
@@ -750,7 +750,7 @@ public class SecurityPoolExcelImportService {
      * （与批量调库 addSingleAdjustLog 同路径）。
      */
     private List<Long> submitSecurityImport(List<SecurityPoolExcelImportCheckItemDto> checkItems,
-                                            SysImpTmpBatchBo batch, String opterId, String opterName,
+                                            SysImpTmpBo batch, String opterId, String opterName,
                                             List<String> batchNos) {
         // 按 sourceSecurityCode（缺省 securityCode）分组，关联/联动/互斥同批提交
         Map<String, List<SecurityPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
@@ -776,8 +776,8 @@ public class SecurityPoolExcelImportService {
             submitReq.setSecurityShortName(primary.getSecurityShortName());
             submitReq.setSecurityType(primary.getSecurityType());
             submitReq.setAdjustType(ADJUST_TYPE_EXCEL);
-            submitReq.setAdjustReason(batch.getReason());
-            submitReq.setAdjustAdvice(batch.getAdvice());
+            submitReq.setAdjustReason(batch.getFld002());
+            submitReq.setAdjustAdvice(batch.getFld003());
             submitReq.setAdjusterId(opterId);
             submitReq.setAdjusterName(opterName);
 
@@ -819,7 +819,7 @@ public class SecurityPoolExcelImportService {
      * 主体提交：按主体代码分组，逐组调用 {@link ForbiddenPoolAdjustService#addCompanyAdjustLog}。
      */
     private List<Long> submitCompanyImport(List<SecurityPoolExcelImportCheckItemDto> checkItems,
-                                           SysImpTmpBatchBo batch, String opterId, String opterName,
+                                           SysImpTmpBo batch, String opterId, String opterName,
                                            List<String> batchNos) {
         Map<String, List<SecurityPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
@@ -844,8 +844,8 @@ public class SecurityPoolExcelImportService {
             submitReq.setCompanyShortName(primary.getSecurityShortName());
             submitReq.setSecurityType("company");
             submitReq.setAdjustType(ADJUST_TYPE_EXCEL);
-            submitReq.setAdjustReason(batch.getReason());
-            submitReq.setAdjustAdvice(batch.getAdvice());
+            submitReq.setAdjustReason(batch.getFld002());
+            submitReq.setAdjustAdvice(batch.getFld003());
             submitReq.setAdjusterId(opterId);
             submitReq.setAdjusterName(opterName);
 
@@ -897,7 +897,7 @@ public class SecurityPoolExcelImportService {
      * </p>
      */
     private List<SecurityPoolExcelImportCheckItemDto> checkClearTargetOutbound(
-            List<SysImpTmpBo> items, boolean inbound, boolean clearTarget,
+            List<SysImpTmpDetlBo> items, boolean inbound, boolean clearTarget,
             boolean companyImport, boolean allowLinkMutex, String opterId) {
         List<SecurityPoolExcelImportCheckItemDto> clearItems = new ArrayList<>();
         if (!clearTarget || !inbound || items == null || items.isEmpty()) {
@@ -907,7 +907,7 @@ public class SecurityPoolExcelImportService {
         // 汇总本批 Excel：目标池 ID → 导入代码集合
         Map<Long, Set<String>> excelCodesByPool = new LinkedHashMap<>();
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
-        for (SysImpTmpBo item : items) {
+        for (SysImpTmpDetlBo item : items) {
             // 解析明细中的目标池 ID
             Long poolId = parsePoolId(item.getFld009());
             // 读取明细证券/主体代码
@@ -1101,7 +1101,7 @@ public class SecurityPoolExcelImportService {
      * <p>按代码分组，证券走 addAdjustLog，主体走 addCompanyAdjustLog；adjustType=Excel清空。</p>
      */
     private List<Long> submitClearTargetOutbound(List<SecurityPoolExcelImportCheckItemDto> clearItems,
-                                                 SysImpTmpBatchBo batch, String opterId, String opterName,
+                                                 SysImpTmpBo batch, String opterId, String opterName,
                                                  boolean companyImport, List<String> batchNos) {
         if (clearItems == null || clearItems.isEmpty()) {
             return new ArrayList<>();
@@ -1130,8 +1130,8 @@ public class SecurityPoolExcelImportService {
                 submitReq.setCompanyShortName(primary.getSecurityShortName());
                 submitReq.setSecurityType("company");
                 submitReq.setAdjustType(ADJUST_TYPE_CLEAR);
-                submitReq.setAdjustReason(batch.getReason());
-                submitReq.setAdjustAdvice(batch.getAdvice());
+                submitReq.setAdjustReason(batch.getFld002());
+                submitReq.setAdjustAdvice(batch.getFld003());
                 submitReq.setAdjusterId(opterId);
                 submitReq.setAdjusterName(opterName);
                 List<ForbiddenPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
@@ -1167,8 +1167,8 @@ public class SecurityPoolExcelImportService {
                 submitReq.setSecurityShortName(primary.getSecurityShortName());
                 submitReq.setSecurityType(primary.getSecurityType());
                 submitReq.setAdjustType(ADJUST_TYPE_CLEAR);
-                submitReq.setAdjustReason(batch.getReason());
-                submitReq.setAdjustAdvice(batch.getAdvice());
+                submitReq.setAdjustReason(batch.getFld002());
+                submitReq.setAdjustAdvice(batch.getFld003());
                 submitReq.setAdjusterId(opterId);
                 submitReq.setAdjusterName(opterName);
                 List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
@@ -1212,7 +1212,7 @@ public class SecurityPoolExcelImportService {
      * 映射证券校验结果，并对可调整手工项注入目标池「批量」流程（对齐批量 buildBatchCheckResult）。
      */
     private SecurityPoolExcelImportCheckItemDto mapSecurityCheckResult(
-            SysImpTmpBo sourceItem, AdjustCheckDto.CheckResultItem ri,
+            SysImpTmpDetlBo sourceItem, AdjustCheckDto.CheckResultItem ri,
             String excelCode, InvestmentPoolBo excelPool, String direction) {
         SecurityPoolExcelImportCheckItemDto dto = new SecurityPoolExcelImportCheckItemDto();
         if (sourceItem != null) {
@@ -1269,7 +1269,7 @@ public class SecurityPoolExcelImportService {
      * 映射主体校验结果（流程候选项已由禁投池 checkAdjust 产出）
      */
     private SecurityPoolExcelImportCheckItemDto mapCompanyCheckResult(
-            SysImpTmpBo sourceItem, AdjustCheckDto.CheckResultItem ri, String excelCode) {
+            SysImpTmpDetlBo sourceItem, AdjustCheckDto.CheckResultItem ri, String excelCode) {
         SecurityPoolExcelImportCheckItemDto dto = new SecurityPoolExcelImportCheckItemDto();
         if (sourceItem != null) {
             dto.setSourceItemId(sourceItem.getId());
@@ -1501,7 +1501,7 @@ public class SecurityPoolExcelImportService {
     }
 
     /** 将导入明细标记为校验失败并回写临时表 */
-    private void markItemFail(SysImpTmpBo item, List<String> reasons, Date now) {
+    private void markItemFail(SysImpTmpDetlBo item, List<String> reasons, Date now) {
         item.setChkRslt("2");
         // 拼接失败原因
         item.setChkDscr(joinReasons(reasons));
@@ -1511,7 +1511,7 @@ public class SecurityPoolExcelImportService {
 
     /** 构建前置失败的手工校验结果项（不调用下游调库校验） */
     private SecurityPoolExcelImportCheckItemDto buildFailManualItem(
-            SysImpTmpBo sourceItem, String code, String shortName, String securityType,
+            SysImpTmpDetlBo sourceItem, String code, String shortName, String securityType,
             InvestmentPoolBo pool, String adjustMode, List<String> reasons) {
         SecurityPoolExcelImportCheckItemDto dto = new SecurityPoolExcelImportCheckItemDto();
         if (sourceItem != null) {
@@ -1538,7 +1538,7 @@ public class SecurityPoolExcelImportService {
 
     /** 从请求或批次快照中筛选可提交的校验结果项 */
     private List<SecurityPoolExcelImportCheckItemDto> filterSubmittableCheckItems(
-            SecurityPoolExcelImportReq req, SysImpTmpBatchBo batch) {
+            SecurityPoolExcelImportReq req, SysImpTmpBo batch) {
         List<SecurityPoolExcelImportCheckItemDto> source;
         if (req.getCheckItems() != null && !req.getCheckItems().isEmpty()) {
             source = req.getCheckItems();
@@ -1712,7 +1712,7 @@ public class SecurityPoolExcelImportService {
      * 将 Excel 行按导入类型写入通用字段槽
      * <p>表头与模板一致：证券=父池/子池/证券名称/证券代码；主体=父池/子池/主体名称/主体代码。</p>
      */
-    private void fillFromExcelRow(SysImpTmpBo item, Map<String, String> row, String importType) {
+    private void fillFromExcelRow(SysImpTmpDetlBo item, Map<String, String> row, String importType) {
         // 按表头读取父池名称
         item.setFld003(cell(row, "父池名称"));
         // 按表头读取子池名称
@@ -1785,11 +1785,11 @@ public class SecurityPoolExcelImportService {
     }
 
     /** 按批次号加载导入批次，不存在则抛业务异常 */
-    private SysImpTmpBatchBo requireBatch(String impId) {
+    private SysImpTmpBo requireBatch(String impId) {
         if (impId == null || impId.trim().isEmpty()) {
             throw new BizException("导入批次号不能为空");
         }
-        SysImpTmpBatchBo batch = securityPoolExcelImportMapper.queryByImpId(impId.trim());
+        SysImpTmpBo batch = securityPoolExcelImportMapper.queryByImpId(impId.trim());
         if (batch == null) {
             throw new BizException("导入批次不存在或已取消");
         }
@@ -1819,18 +1819,16 @@ public class SecurityPoolExcelImportService {
     }
 
     /** 批次主表转前端任务 DTO（含 checkItems 解析） */
-    private SecurityPoolExcelImportDto toTaskDto(SysImpTmpBatchBo batch) {
+    private SecurityPoolExcelImportDto toTaskDto(SysImpTmpBo batch) {
         SecurityPoolExcelImportDto dto = new SecurityPoolExcelImportDto();
         dto.setImpId(batch.getImpId());
         dto.setBizType(batch.getBizType());
         dto.setFileName(batch.getFileName());
-        dto.setTargetId(batch.getTargetId());
-        dto.setTargetName(batch.getTargetName());
-        dto.setTargetType(batch.getTargetType());
-        dto.setBizMode(batch.getBizMode());
+        // 槽位约定：fld001=方向 / fld002=原因 / fld003=意见
+        dto.setBizMode(batch.getFld001());
         dto.setOptionJson(batch.getOptionJson());
-        dto.setReason(batch.getReason());
-        dto.setAdvice(batch.getAdvice());
+        dto.setReason(batch.getFld002());
+        dto.setAdvice(batch.getFld003());
         dto.setTotalCount(batch.getTotalCount());
         dto.setPassCount(batch.getPassCount() == null ? 0 : batch.getPassCount());
         dto.setFailCount(batch.getFailCount() == null ? 0 : batch.getFailCount());
@@ -1917,7 +1915,7 @@ public class SecurityPoolExcelImportService {
     }
 
     /** 临时表明细转前端明细 DTO */
-    private SecurityPoolExcelImportItemDto toItemDto(SysImpTmpBo bo) {
+    private SecurityPoolExcelImportItemDto toItemDto(SysImpTmpDetlBo bo) {
         SecurityPoolExcelImportItemDto dto = new SecurityPoolExcelImportItemDto();
         dto.setId(bo.getId());
         dto.setImpDetlId(bo.getImpDetlId());
