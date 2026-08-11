@@ -351,7 +351,7 @@
 |---|---|
 | id | 主键 |
 | security_code / security_short_name / security_type | 证券信息 |
-| adjust_type | 手工调整/联动调整/互斥调整/关联调整/Excel导入/手动批量调整 |
+| adjust_type | 手工调整/联动调整/互斥调整/关联调整/Excel导入/Excel清空/手动批量调整 |
 | adjust_mode | 调入/调出 |
 | **adjust_batch_no** | 批次号，同组记录共用 |
 | target_pool_id / target_pool_name / pool_type | 目标池 |

@@ -69,7 +69,7 @@
 | 证券代码 | `securityCode` | `desc-link` 点击跳转 |
 | 证券类型 | `securityTypeName` | `el-tag type="info"`，空则空 |
 | 发行主体名称 | `issuer` | tooltip |
-| 调整类型 | `adjustType` | 直接显示（手工调整/联动调整/互斥调整/关联调整/Excel导入/手动批量调整） |
+| 调整类型 | `adjustType` | 直接显示（手工调整/联动调整/互斥调整/关联调整/Excel导入/Excel清空/手动批量调整） |
 | 调整方向 | `adjustMode` | `调入`→绿色 `el-tag--success`；`调出`→红色 `el-tag--danger`；其他空 |
 | 调整原因 | `adjustReason` | tooltip |
 | 投资池名称 | `targetPoolPath` | tooltip，后端填充全路径 |

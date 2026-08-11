@@ -1047,10 +1047,10 @@ public class SecurityPoolExcelImportService {
                 // 映射证券校验结果并注入批量流程
                 mapped = mapSecurityCheckResult(null, ri, code, pool, "out");
             }
-            // 主项标记为清空出库；联动/互斥保留原标签
+            // 主项标记为清空；联动/互斥保留原标签（调整类型展示/落库为 Excel清空）
             if (isManualTag(mapped.getItemTag())) {
                 mapped.setItemTag(ItemType.CLEAR.getCode());
-                mapped.setAdjustType("清空出库");
+                mapped.setAdjustType(ADJUST_TYPE_CLEAR);
                 if (mapped.isCanAdjust()) {
                     mapped.setAdjustNote("首先清空目标池");
                     List<SecurityPoolExcelImportCheckItemDto.FlowOptionDto> flowOptions =
@@ -1087,8 +1087,8 @@ public class SecurityPoolExcelImportService {
         }
         dto.setAdjustMode(AdjustMode.OUT.getCode());
         dto.setItemTag(ItemType.CLEAR.getCode());
-        dto.setAdjustType("清空出库");
-        dto.setAdjustGroupKey(code + "_" + (pool != null ? pool.getId() : "0") + "_清空出库");
+        dto.setAdjustType(ADJUST_TYPE_CLEAR);
+        dto.setAdjustGroupKey(code + "_" + (pool != null ? pool.getId() : "0") + "_" + ADJUST_TYPE_CLEAR);
         dto.setCanAdjust(false);
         List<String> reasons = new ArrayList<>();
         reasons.add(reason == null ? "清空出库失败" : reason);
@@ -1529,7 +1529,7 @@ public class SecurityPoolExcelImportService {
         }
         dto.setAdjustMode(adjustMode);
         dto.setItemTag(ItemType.MANUAL.getCode());
-        dto.setAdjustType("手工调整");
+        dto.setAdjustType(ADJUST_TYPE_EXCEL);
         dto.setAdjustGroupKey(code + "_" + (pool != null ? pool.getId() : "0") + "_" + adjustMode);
         dto.setCanAdjust(false);
         dto.setFailReasons(reasons == null ? new ArrayList<>() : new ArrayList<>(reasons));
@@ -1587,7 +1587,11 @@ public class SecurityPoolExcelImportService {
         return isManualTag(itemTag) || isClearTag(itemTag);
     }
 
-    /** 将 itemTag 转为前端展示的调整类型中文 */
+    /**
+     * 将 itemTag 转为前端展示的调整类型中文。
+     * <p>对齐批量页「手动批量调整」的渠道专属口径：Excel 手工主项展示/落库均为「Excel导入」，
+     * 清空主项为「Excel清空」；联动/互斥/关联与单笔、批量一致。</p>
+     */
     private String resolveAdjustTypeLabel(String itemTag) {
         if (ItemType.LINKAGE.getCode().equals(itemTag)) {
             return "联动调整";
@@ -1599,9 +1603,10 @@ public class SecurityPoolExcelImportService {
             return "关联调整";
         }
         if (ItemType.CLEAR.getCode().equals(itemTag)) {
-            return "清空出库";
+            return ADJUST_TYPE_CLEAR;
         }
-        return "手工调整";
+        // 手工主项：不用单笔「手工调整」，与提交 adjust_type、字典 DICT_ADJUST_TYPE 一致
+        return ADJUST_TYPE_EXCEL;
     }
 
     /** 从 option_json 解析是否首先清空目标池 */

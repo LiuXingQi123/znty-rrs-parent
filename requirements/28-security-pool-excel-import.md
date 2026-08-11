@@ -90,7 +90,8 @@ Excel 层只做：模板/临时表、父子池解析、`excel_importable` 权限
 - **未勾选**允许联动与互斥：结果中仅保留手工项
 - **勾选**后保留完整展开项（与批量一致）
 - 可调整手工项额外注入目标池**批量**调入/调出流程为推荐（对齐批量 `injectBatchFlowOption`）
-- 提交：按主券分组调用 `addAdjustLog`，`adjust_type=Excel导入`
+- 校验结果「调整类型」：手工主项 **Excel导入**（不对齐单笔「手工调整」；对齐批量渠道专属命名「手动批量调整」）；联动/互斥/关联同名；清空主项 **Excel清空**
+- 提交：按主券分组调用 `addAdjustLog`，手工主项 `adjust_type=Excel导入`（联动/互斥/关联由 `resolveAdjustType` 落各自类型）
 
 ### 4.2 主体导入
 
