@@ -10,7 +10,7 @@ import java.util.List;
  * 自动调库数据访问组件。
  *
  * <p>支持到期证券自动出池、在池主体旗下债券自动入池、
- * 外评 AA- 及以下主体自动入池等定时任务查询，
+ * 外评 AA- 及以下主体自动入池、外评非 AA- 及以下主体自动出池等定时任务查询，
  * 复用 {@link SecurityPoolAdjustMapper#addAdjustLog} /
  * {@link SecurityPoolAdjustMapper#addPoolStatus} /
  * {@link SecurityPoolAdjustMapper#deletePoolStatusSoft} 落地。
@@ -59,4 +59,15 @@ public interface AutoAdjustMapper {
      * @return 待入池主体（securityCode/securityShortName/securityType）
      */
     List<IpAdjustLogBo> queryCompanyByLowOuterRatingNotInPool(@Param("poolId") Long poolId);
+
+    /**
+     * 查询最新主体外评<strong>不在</strong>「AA-及以下」列表、且当前已在目标池生效在池的主体。
+     * <p>对应老系统 {@code AdjustRuleOutAA}（自动导出外部评级不是 AA- 及以下的主体）：
+     * 与 {@link #queryCompanyByLowOuterRatingNotInPool} 评级列表互为补集；
+     * 仅处理 security_type=company 的在池主体（不同步旗下债）。</p>
+     *
+     * @param poolId 目标池 ID
+     * @return 待出池主体（securityCode/securityShortName/securityType）
+     */
+    List<IpAdjustLogBo> queryCompanyByNotLowOuterRatingInPool(@Param("poolId") Long poolId);
 }

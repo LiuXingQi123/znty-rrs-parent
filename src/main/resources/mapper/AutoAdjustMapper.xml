@@ -119,4 +119,51 @@
         ORDER BY t.s_info_compcode ASC
     </select>
 
+    <!--
+      外评非 AA- 及以下主体自动出池候选（对应老系统 AdjustRuleOutAA）：
+      1) ais_inv_ods.wind_cbondissuerrating 每主体最新一条外评
+      2) 评级不在 AA-/A/BBB… 列表内（即 AA/AA+/AAA 等，与入池白名单互为补集）
+      3) 当前已在目标池 audit_status=20 且 security_type=company
+    -->
+    <select id="queryCompanyByNotLowOuterRatingInPool"
+            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT t.s_info_compcode AS security_code
+               ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
+               ,'company' AS security_type
+        FROM (
+            SELECT r.s_info_compcode
+                   ,r.s_info_compname
+                   ,r.b_info_creditrating
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY r.s_info_compcode
+                       ORDER BY r.ann_dt2 DESC
+                                ,r.ann_dt DESC
+                                ,r.object_id DESC
+                   ) AS rn
+            FROM ais_inv_ods.wind_cbondissuerrating r
+            WHERE r.s_info_compcode IS NOT NULL
+              AND r.s_info_compcode &lt;&gt; ''
+              AND r.b_info_creditrating IS NOT NULL
+              AND r.b_info_creditrating &lt;&gt; ''
+        ) t
+        WHERE t.rn = 1
+          AND t.b_info_creditrating NOT IN (
+              'AA-', 'A+', 'A', 'A-'
+              ,'BBB+', 'BBB', 'BBB-'
+              ,'BB+', 'BB', 'BB-'
+              ,'B+', 'B', 'B-'
+              ,'CCC', 'CC', 'C'
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM ip_pool_status ips
+              WHERE ips.security_code = t.s_info_compcode
+                AND ips.target_pool_id = #{poolId}
+                AND ips.security_type = 'company'
+                AND ips.audit_status = '20'
+                AND ips.is_deleted = 0
+          )
+        ORDER BY t.s_info_compcode ASC
+    </select>
+
 </mapper>

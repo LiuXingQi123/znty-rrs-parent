@@ -28,6 +28,7 @@
 | `security_expired_auto_out` | 到期证券自动出池 | `0 0 2 * * ?` | `{"poolIds":[15]}`：池内已生效且到期日早于当天 → 自动调出 |
 | `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 3 * * ?` | `{"poolIds":[15]}` 或 `mappings`：主体在池 → 旗下未到期未在目标池的债自动入池 |
 | `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 0 4 * * ?` | `{"poolIds":[15]}`：最新外评在 AA-/A/BBB… 列表内且未在目标池的主体 → 自动入池 |
+| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 0 5 * * ?` | `{"poolIds":[15]}`：最新外评不在 AA-/A/BBB… 列表内（如 AA/AA+/AAA）且已在目标池 → 自动出池 |
 
 ## 2. 表结构
 
@@ -73,9 +74,9 @@
 
 ## 7. 代码索引
 
-- Service：`ScheduledTaskService`、`AutoAdjustService`、`CompanyNewBondAutoInService`、`CompanyOuterRatingAaMinusAutoInService`  
+- Service：`ScheduledTaskService`、`AutoAdjustService`、`CompanyNewBondAutoInService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanyOuterRatingNotAaMinusAutoOutService`  
 - 调度：`DynamicTaskScheduler`、`RrsScheduledTask`  
-- Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`（含外评低主体查询）  
+- Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`（含外评低/高主体查询）  
 - Controller：`ScheduledTaskController`  
 - SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`
 
@@ -87,3 +88,13 @@
 2. 数据源：`ais_inv_ods.wind_cbondissuerrating`，每主体最新一条外评。  
 3. 评级命中列表：`AA-` / `A±` / `BBB…` / `BB…` / `B…` / `CCC/CC/C`（**不含** `AA`/`AA+`/`AAA`）。  
 4. 尚未在目标池 `audit_status=20` 的主体 → 写自动调整入池日志 + `ip_pool_status`（`security_type=company`）。
+
+### 7.2 `company_outer_rating_not_aa_minus_auto_out` 业务摘要
+
+对应老系统 `AdjustRuleOutAA`（自动导出外部评级不是 AA- 及以下的主体）：
+
+1. 扩展参数 `poolIds` 指定目标池（替代老系统「池上勾选自动调出规则」）。  
+2. 数据源同入池：`ais_inv_ods.wind_cbondissuerrating` 每主体最新一条外评。  
+3. 评级**不在**入池白名单内（如 `AA` / `AA+` / `AAA` 等，与 7.1 互为补集）。  
+4. 当前已在目标池 `audit_status=20` 且 `security_type=company` → 写自动调整出池日志 + 软删 `ip_pool_status`。  
+5. 仅主体维度，不同步旗下债券（与入池任务口径一致；老系统会附带旗下债，新系统刻意简化）。

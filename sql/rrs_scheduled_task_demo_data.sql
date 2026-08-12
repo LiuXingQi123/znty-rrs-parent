@@ -28,4 +28,8 @@ INSERT INTO `sys_scheduled_task` (
 (3, 'company_outer_rating_aa_minus_auto_in', '外评AA-及以下主体自动入池',
  '对应老系统 AdjustRuleInAA：扫描 Wind 主体最新外评落在 AA-/A/BBB… 列表内（不含 AA/AA+/AAA）的主体，对 param_json.poolIds 指定池自动调入（security_type=company，未在池才入）；不走审批',
  '0 0 4 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
+ 0, NOW(), NOW()),
+(4, 'company_outer_rating_not_aa_minus_auto_out', '外评非AA-及以下主体自动出池',
+ '对应老系统 AdjustRuleOutAA：扫描 Wind 主体最新外评不在 AA-/A/BBB… 列表内（如 AA/AA+/AAA）且已在目标池的主体，对 param_json.poolIds 自动调出（security_type=company）；不走审批；与入池任务评级列表互为补集',
+ '0 0 5 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW());
