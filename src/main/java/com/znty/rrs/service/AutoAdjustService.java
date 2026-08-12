@@ -28,18 +28,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 到期出池自动调库任务实现
+ * 到期证券自动出池任务实现
  * <p>
- * 任务名称/说明/cron/启停/扩展参数由库表 sys_scheduled_task 维护（task_code 见 {@link #TASK_CODE}）；
- * 扩展参数仅支持 JSON，见 {@link #getParamHelp()}。
+ * 按 param_json.poolIds 指定投资池，将池内已生效且到期日早于当日的证券自动调出
+ * （adjust_type=自动调整，audit_status=20，不走审批）。
+ * 任务名称/说明/cron/启停/扩展参数由库表 sys_scheduled_task 维护（task_code 见 {@link #TASK_CODE}）。
  * </p>
  */
 @Slf4j
 @Service
 public class AutoAdjustService implements RrsScheduledTask {
 
-    /** 任务编码（与库表 task_code 绑定，不可变） */
-    public static final String TASK_CODE = "auto_out_expired";
+    /** 任务编码（与库表 task_code 绑定） */
+    public static final String TASK_CODE = "security_expired_auto_out";
 
     /** 系统调库操作人 ID */
     private static final String AUTO_ADJUSTER_ID = "0";
@@ -58,7 +59,8 @@ public class AutoAdjustService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
                     + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[10,15]}</code>\n"
-                    + "作用：扫描 poolIds 所列投资池，将池内已到期且已生效在池的证券自动调出\n"
+                    + "作用：扫描 poolIds 所列投资池中 audit_status=20 的在池证券，"
+                    + "若主数据到期日早于当天则自动调出\n"
                     + "poolIds 必填，至少一个数字 ID\n"
                     + "未配置或格式错误则本轮失败";
 
@@ -96,7 +98,7 @@ public class AutoAdjustService implements RrsScheduledTask {
     }
 
     /**
-     * 执行到期出池：按扩展参数 poolIds 扫描各池到期证券，写调出日志并软删在池状态
+     * 执行到期证券自动出池：按扩展参数 poolIds 扫描各池到期证券，写调出日志并软删在池状态
      */
     @Override
     public ScheduledTaskResult execute() {
@@ -108,10 +110,10 @@ public class AutoAdjustService implements RrsScheduledTask {
         // 记录开始（控制台 + 过程日志）
         infoDetail(detail, taskName + " 开始");
         try {
-            // 执行到期出池（扩展参数非法时抛 BizException → 记失败）
+            // 执行到期证券自动出池（扩展参数非法时抛 BizException → 记失败）
             int total = doAutoOutExpired(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共调出 " + total + " 条到期证券";
+            String message = "本轮共自动出池 " + total + " 条到期证券";
             infoDetail(detail, taskName + " 结束，" + message);
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
                     detail.build());
@@ -130,7 +132,7 @@ public class AutoAdjustService implements RrsScheduledTask {
     }
 
     /**
-     * 到期出池核心逻辑：从 param_json 解析 poolIds，扫描到期证券并调出
+     * 到期证券自动出池核心逻辑：从 param_json 解析 poolIds，扫描到期证券并调出
      */
     private int doAutoOutExpired(String taskName, TaskDetailLog detail) {
         // 从扩展参数解析待扫描池 ID（非法则抛业务异常）

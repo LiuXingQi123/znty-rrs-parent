@@ -27,7 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 到期出池任务单元测试。
+ * 到期证券自动出池任务单元测试。
  */
 public class AutoAdjustServiceTest {
 
@@ -44,7 +44,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("到期出池");
+        conf.setTaskName("到期证券自动出池");
         conf.setParamJson("{\"poolIds\":[10]}");
         when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -69,8 +69,9 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
-        assertThat(result.getTaskName()).isEqualTo("到期出池");
+        assertThat(result.getTaskName()).isEqualTo("到期证券自动出池");
         assertThat(service.getTaskCode()).isEqualTo(AutoAdjustService.TASK_CODE);
+        assertThat(service.getTaskCode()).isEqualTo("security_expired_auto_out");
         verify(autoAdjustMapper, never()).queryAutoOutPoolIds();
     }
 
@@ -108,7 +109,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("到期出池");
+        conf.setTaskName("到期证券自动出池");
         conf.setParamJson("{\"poolIds\":'123'}");
         when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
 

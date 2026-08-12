@@ -28,25 +28,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 主体下新债自动入池任务实现
+ * 在池主体旗下债券自动入池任务实现
  * <p>
- * 对应老系统 AutoAdjustInNewBondToLimitPoolJob。
- * 名称/cron/启停/扩展参数均由库表维护；扩展参数仅支持 JSON，见 {@link #getParamHelp()}。
+ * 扫描「主体已在指定池」的发行主体，将其旗下未到期、尚未在目标池的债券自动入池
+ * （排除临时代码已更新为正式代码的记录）；adjust_type=自动调整，不走审批。
+ * 对应老系统 AutoAdjustInNewBondToLimitPoolJob。名称/cron/启停/扩展参数由库表维护。
  * </p>
  */
 @Slf4j
 @Service
 public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
-    /** 任务编码（与库表 task_code 绑定，不可变） */
-    public static final String TASK_CODE = "company_new_bond_auto_in";
+    /** 任务编码（与库表 task_code 绑定） */
+    public static final String TASK_CODE = "company_inpool_bond_auto_in";
 
     /** 系统调库操作人 ID */
     private static final String AUTO_ADJUSTER_ID = "0";
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
     /** 自动入池原因（写入调库日志） */
-    private static final String REASON_COMPANY_NEW_BOND_IN = "主体新发债券自动导入";
+    private static final String REASON_COMPANY_NEW_BOND_IN = "在池主体旗下债券自动入池";
     /** 批次号规则后缀 */
     private static final String BATCH_SUFFIX = "3002";
     /** 解析 param_json 用 */
@@ -58,8 +59,10 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
                     + "主体与债同一池（可多个）示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "主体所在池与债券写入池不同时用 mappings，示例 <code>{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}</code>\n"
-                    + "作用：扫描主体所在池内已在池主体，将其旗下未到期且尚未在写入池的债券自动入池\n"
+                    + "主体所在池与债券写入池不同时用 mappings，示例 "
+                    + "<code>{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}</code>\n"
+                    + "作用：主体已在 company 池且生效在池 → 其旗下 bond 大类、未到期、尚未在目标池的债券自动入池"
+                    + "（排除临时代码已更新正式代码的记录）\n"
                     + "主场景（债券禁止库）一般写 <code>{\"poolIds\":[15]}</code>\n"
                     + "未配置或格式错误则本轮失败";
 
@@ -90,7 +93,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 执行主体下新债自动入池：按库表 param_json 映射扫描待入池债券并落地在池状态
+     * 执行在池主体旗下债券自动入池：按库表 param_json 映射扫描待入池债券并落地在池状态
      */
     @Override
     public ScheduledTaskResult execute() {

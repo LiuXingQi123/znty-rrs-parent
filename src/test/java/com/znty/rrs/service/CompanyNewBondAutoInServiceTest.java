@@ -27,7 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 主体下新债自动入池任务单元测试。
+ * 在池主体旗下债券自动入池任务单元测试。
  */
 public class CompanyNewBondAutoInServiceTest {
 
@@ -44,7 +44,7 @@ public class CompanyNewBondAutoInServiceTest {
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("主体下新债自动入池");
+        conf.setTaskName("在池主体旗下债券自动入池");
         conf.setParamJson("{\"poolIds\":[15]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE)).thenReturn(conf);
 
@@ -151,7 +151,7 @@ public class CompanyNewBondAutoInServiceTest {
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("主体下新债");
+        conf.setTaskName("在池主体旗下债券自动入池");
         conf.setParamJson("{\"poolIds\":[15]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE)).thenReturn(conf);
         InvestmentPoolBo pool = new InvestmentPoolBo();

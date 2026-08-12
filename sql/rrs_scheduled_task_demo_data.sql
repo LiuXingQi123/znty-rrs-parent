@@ -1,7 +1,7 @@
 -- ============================================================
 -- znty-rrs 定时任务配置 - 演示数据
 -- MySQL version: 8.0.33
--- 说明：预置已知任务配置；应用启动时也会按代码实现自动补全缺失任务
+-- 说明：预置已知任务配置；task_code 须与 RrsScheduledTask 实现类一致
 -- ============================================================
 
 USE `znty_rrs`;
@@ -17,11 +17,11 @@ INSERT INTO `sys_scheduled_task` (
     `last_affected_count`, `last_duration_ms`, `last_trigger_type`,
     `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
-(1, 'auto_out_expired', '到期出池',
- '按扩展参数 poolIds 扫描指定投资池，将池内已到期证券自动调出',
+(1, 'security_expired_auto_out', '到期证券自动出池',
+ '按 param_json.poolIds 扫描指定投资池：池内已生效（audit_status=20）且主数据到期日早于当天的证券自动调出；不走审批，adjust_type=自动调整',
  '0 0 2 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW()),
-(2, 'company_new_bond_auto_in', '主体下新债自动入池',
- '扫描指定池内已在池主体，将其旗下未到期且尚未写入目标池的债券自动入池（主场景：债券禁止库）',
+(2, 'company_inpool_bond_auto_in', '在池主体旗下债券自动入池',
+ '扫描主体所在池内已在池主体，将其旗下 bond 大类、未到期、尚未在目标池的债券自动入池（排除临时代码已更新正式代码）；主场景债券禁止库；支持 poolIds 同池或 mappings 跨池',
  '0 0 3 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW());

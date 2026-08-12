@@ -25,8 +25,8 @@
 
 | taskCode | 名称 | 默认 cron | 扩展参数示例 |
 |---|---|---|---|
-| `auto_out_expired` | 到期出池 | `0 0 2 * * ?` | `{"poolIds":[15]}`（扫描这些池的到期证券并调出） |
-| `company_new_bond_auto_in` | 主体下新债自动入池 | `0 0 3 * * ?` | `{"poolIds":[15]}`（可多个；不同池用 mappings） |
+| `security_expired_auto_out` | 到期证券自动出池 | `0 0 2 * * ?` | `{"poolIds":[15]}`：池内已生效且到期日早于当天 → 自动调出 |
+| `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 3 * * ?` | `{"poolIds":[15]}` 或 `mappings`：主体在池 → 旗下未到期未在目标池的债自动入池 |
 
 ## 2. 表结构
 
