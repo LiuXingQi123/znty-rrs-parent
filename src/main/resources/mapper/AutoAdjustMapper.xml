@@ -74,6 +74,70 @@
     </select>
 
     <!--
+      主体下债券同池自动入库（对应老系统 IP_RULE type=0「主体下债券自动入库」）：
+      1) 主体已在 poolId 且 company 大类、audit_status=20
+      2) 旗下 bond 大类未到期、尚未在同一 poolId
+      3) 池 market_codes 为空/[] 不限制市场；否则债市场须命中池配置（对齐 ip_investmarket）
+      4) 不排除临时代码已更新（与 Job 版 queryCompanyNewBondForAutoIn 区分）
+    -->
+    <select id="queryCompanyBondSamePoolForAutoIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT bond.wind_code AS security_code
+               ,bond.short_name AS security_short_name
+               ,bond.security_type
+        FROM rrs_securityinfo bond
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        INNER JOIN ip_investment_pool p ON p.id = #{poolId}
+                                        AND IFNULL(p.is_deleted, 0) = 0
+        WHERE bond.issuer_code IS NOT NULL
+          AND bond.issuer_code &lt;&gt; ''
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND EXISTS (
+              SELECT 1
+              FROM ip_pool_status cps
+              INNER JOIN dict_security_type cdst ON cdst.security_type = cps.security_type
+                                                AND cdst.is_deleted = 0
+                                                AND cdst.category_type = 'company'
+              WHERE cps.security_code = bond.issuer_code
+                AND cps.target_pool_id = #{poolId}
+                AND cps.audit_status = '20'
+                AND cps.is_deleted = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status bps
+              WHERE bps.security_code = bond.wind_code
+                AND bps.target_pool_id = #{poolId}
+                AND bps.audit_status = '20'
+                AND bps.is_deleted = 0
+          )
+          AND (
+              p.market_codes IS NULL
+              OR p.market_codes = ''
+              OR p.market_codes = '[]'
+              OR (
+                  (JSON_CONTAINS(p.market_codes, '"SSE"')
+                      AND bond.wind_code_sh IS NOT NULL AND bond.wind_code_sh &lt;&gt; '')
+                  OR (JSON_CONTAINS(p.market_codes, '"SZSE"')
+                      AND bond.wind_code_sz IS NOT NULL AND bond.wind_code_sz &lt;&gt; '')
+                  OR (JSON_CONTAINS(p.market_codes, '"CIBM"')
+                      AND bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib &lt;&gt; '')
+                  OR (JSON_CONTAINS(p.market_codes, '"BSE"')
+                      AND bond.wind_code_bj IS NOT NULL AND bond.wind_code_bj &lt;&gt; '')
+                  OR (JSON_CONTAINS(p.market_codes, '"OTHER"')
+                      AND bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc &lt;&gt; '')
+                  OR (JSON_CONTAINS(p.market_codes, '"JWCW"')
+                      AND (
+                          (bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib &lt;&gt; '')
+                          OR (bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc &lt;&gt; '')
+                      ))
+              )
+          )
+        ORDER BY bond.wind_code ASC
+    </select>
+
+    <!--
       外评 AA- 及以下主体自动入池候选（对应老系统 AdjustRuleInAA）：
       1) ais_inv_ods.wind_cbondissuerrating 每主体最新一条外评
       2) 评级命中 AA-/A/BBB… 等列表（与老系统 creditrank 白名单一致，不含 AA/AA+/AAA）

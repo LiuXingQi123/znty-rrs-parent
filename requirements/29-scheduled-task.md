@@ -29,6 +29,7 @@
 | `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 3 * * ?` | `{"poolIds":[15]}` 或 `mappings`：主体在池 → 旗下未到期未在目标池的债自动入池 |
 | `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 0 4 * * ?` | `{"poolIds":[15]}`：最新外评在 AA-/A/BBB… 列表内且未在目标池的主体 → 自动入池 |
 | `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 0 5 * * ?` | `{"poolIds":[15]}`：最新外评不在 AA-/A/BBB… 列表内（如 AA/AA+/AAA）且已在目标池 → 自动出池 |
+| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 0 6 * * ?` | `{"poolIds":[15]}`：主体已在本池 → 旗下债未到期未在本池 → 同池自动入（IP_RULE 版） |
 
 ## 2. 表结构
 
@@ -74,9 +75,9 @@
 
 ## 7. 代码索引
 
-- Service：`ScheduledTaskService`、`AutoAdjustService`、`CompanyNewBondAutoInService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanyOuterRatingNotAaMinusAutoOutService`  
+- Service：`ScheduledTaskService`、`AutoAdjustService`、`CompanyNewBondAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanyOuterRatingNotAaMinusAutoOutService`  
 - 调度：`DynamicTaskScheduler`、`RrsScheduledTask`  
-- Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`（含外评低/高主体查询）  
+- Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`（含外评低/高主体、同池/跨池主体债查询）  
 - Controller：`ScheduledTaskController`  
 - SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`
 
@@ -98,3 +99,17 @@
 3. 评级**不在**入池白名单内（如 `AA` / `AA+` / `AAA` 等，与 7.1 互为补集）。  
 4. 当前已在目标池 `audit_status=20` 且 `security_type=company` → 写自动调整出池日志 + 软删 `ip_pool_status`。  
 5. 仅主体维度，不同步旗下债券（与入池任务口径一致；老系统会附带旗下债，新系统刻意简化）。
+
+### 7.3 主体旗下债券自动入池：两任务对照
+
+| 任务 | 对应老系统 | 池关系 | 主要过滤 |
+|------|------------|--------|----------|
+| `company_inpool_bond_auto_in` | `AutoAdjustInNewBondToLimitPoolJob` | 同池 `poolIds` 或跨池 `mappings` | 排除临时代码已更新 |
+| `company_same_pool_bond_auto_in` | IP_RULE type=0「主体下债券自动入库」 | **仅同池** `poolIds` | 池 `market_codes`；**不**排除临时代码 |
+
+### 7.4 `company_same_pool_bond_auto_in` 业务摘要
+
+1. 扩展参数仅 `poolIds`：每个 ID 既是主体所在池也是债写入池。  
+2. 主体 `category_type=company` 且 `audit_status=20` 在池 → 旗下 `bond` 大类未到期、未在本池 → 自动入。  
+3. 市场：池 `market_codes` 为空/`[]` 不限制；否则债须命中 SSE/SZSE/CIBM/BSE/OTHER/JWCW（对齐老系统 `ip_investmarket`）。  
+4. 免审直通，`adjust_type=自动调整`。

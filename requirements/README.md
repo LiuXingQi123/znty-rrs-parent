@@ -32,7 +32,7 @@
 | 26 | 禁投池调整 · ABS债申请（债级 调入/调出） | `forbidden_pool_adjust.html`（Tab「ABS债」） | [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md) | `ForbiddenAbsPoolAdjustApiTest` |
 | 27 | 存量证券批量调整（产品库 + 来源池） | `stock_security_batch_adjust.html` | [27-stock-security-batch-adjust.md](27-stock-security-batch-adjust.md) | `StockSecurityBatchAdjustServiceTest` |
 | 28 | 证券池 Excel 导入 | `security_pool_excel_import.html` | [28-security-pool-excel-import.md](28-security-pool-excel-import.md) | `SecurityPoolExcelImportServiceTest` / `CommonFileControllerTest` |
-| 29 | 定时任务管理（可视化启停/cron/执行） | `scheduled_task.html` | [29-scheduled-task.md](29-scheduled-task.md) | `ScheduledTaskServiceTest` / `CompanyNewBondAutoInServiceTest` / `AutoAdjustServiceTest` / `CompanyOuterRatingAaMinusAutoInServiceTest` / `CompanyOuterRatingNotAaMinusAutoOutServiceTest` |
+| 29 | 定时任务管理（可视化启停/cron/执行） | `scheduled_task.html` | [29-scheduled-task.md](29-scheduled-task.md) | `ScheduledTaskServiceTest` / `CompanyNewBondAutoInServiceTest` / `CompanySamePoolBondAutoInServiceTest` / `AutoAdjustServiceTest` / `CompanyOuterRatingAaMinusAutoInServiceTest` / `CompanyOuterRatingNotAaMinusAutoOutServiceTest` |
 
 ## 调库业务全链路索引
 

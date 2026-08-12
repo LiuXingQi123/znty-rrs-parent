@@ -32,4 +32,8 @@ INSERT INTO `sys_scheduled_task` (
 (4, 'company_outer_rating_not_aa_minus_auto_out', '外评非AA-及以下主体自动出池',
  '对应老系统 AdjustRuleOutAA：扫描 Wind 主体最新外评不在 AA-/A/BBB… 列表内（如 AA/AA+/AAA）且已在目标池的主体，对 param_json.poolIds 自动调出（security_type=company）；不走审批；与入池任务评级列表互为补集',
  '0 0 5 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
+ 0, NOW(), NOW()),
+(5, 'company_same_pool_bond_auto_in', '主体下债券自动入库',
+ '对应老系统 IP_RULE type=0「主体下债券自动入库」：主体已在 poolIds 池内 → 旗下 bond 大类未到期且尚未在同一池的债券自动入池（主体与债必须同池）；尊重池 market_codes；不排除临时代码已更新；不走审批。跨池请用 company_inpool_bond_auto_in',
+ '0 0 6 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW());
