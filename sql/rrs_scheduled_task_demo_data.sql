@@ -24,4 +24,8 @@ INSERT INTO `sys_scheduled_task` (
 (2, 'company_inpool_bond_auto_in', '在池主体旗下债券自动入池',
  '扫描主体所在池内已在池主体，将其旗下 bond 大类、未到期、尚未在目标池的债券自动入池（排除临时代码已更新正式代码）；主场景债券禁止库；支持 poolIds 同池或 mappings 跨池',
  '0 0 3 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
+ 0, NOW(), NOW()),
+(3, 'company_outer_rating_aa_minus_auto_in', '外评AA-及以下主体自动入池',
+ '对应老系统 AdjustRuleInAA：扫描 Wind 主体最新外评落在 AA-/A/BBB… 列表内（不含 AA/AA+/AAA）的主体，对 param_json.poolIds 指定池自动调入（security_type=company，未在池才入）；不走审批',
+ '0 0 4 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW());
