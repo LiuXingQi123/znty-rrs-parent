@@ -112,6 +112,31 @@ public class ScheduledTaskService {
     }
 
     /**
+     * 分页查询定时任务配置，支持名称/编码关键字与调度启停筛选
+     *
+     * @param req 分页与筛选条件
+     */
+    public PageResult<ScheduledTaskInfoDto> queryTaskPage(ScheduledTaskReq req) {
+        if (req == null) {
+            req = new ScheduledTaskReq();
+        }
+        // 开启分页
+        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
+        // 查询列表
+        List<SysScheduledTaskBo> list = scheduledTaskMapper.queryTaskPage(req);
+        // 获取分页信息
+        PageInfo<SysScheduledTaskBo> pageInfo = new PageInfo<>(list);
+        List<ScheduledTaskInfoDto> dtoList = new ArrayList<>();
+        if (list != null) {
+            for (SysScheduledTaskBo bo : list) {
+                // 转展示 DTO 并补充实现注册 / 调度挂载状态
+                dtoList.add(toInfoDto(bo));
+            }
+        }
+        return new PageResult<>(dtoList, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /**
      * 按任务编码查询单条定时任务配置详情，不存在则抛业务异常
      */
     public ScheduledTaskInfoDto queryTask(String taskCode) {

@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.PageResult;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.schedule.ScheduledTaskInfoDto;
 import com.znty.rrs.entity.schedule.ScheduledTaskReq;
@@ -51,6 +52,52 @@ public class ScheduledTaskServiceTest {
         List<ScheduledTaskInfoDto> list = service.queryTaskList();
         assertThat(list).hasSize(1);
         assertThat(list.get(0).isCodeRegistered()).isTrue();
+    }
+
+    @Test
+    public void queryTaskPageShouldReturnPagedRows() {
+        RrsScheduledTask task = mockTask("a");
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        SysScheduledTaskBo bo = new SysScheduledTaskBo();
+        bo.setTaskCode("a");
+        bo.setTaskName("任务A");
+        bo.setCronExpression("0 0 2 * * ?");
+        bo.setScheduleEnabled(1);
+        when(mapper.queryTaskPage(any(ScheduledTaskReq.class))).thenReturn(Collections.singletonList(bo));
+        when(scheduler.isScheduled("a")).thenReturn(true);
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+
+        ScheduledTaskReq req = new ScheduledTaskReq();
+        req.setKeyword("任务");
+        req.setScheduleEnabled(Boolean.TRUE);
+        req.setPageIndex(1);
+        req.setPageSize(10);
+        PageResult<ScheduledTaskInfoDto> page = service.queryTaskPage(req);
+        assertThat(page.getRecords()).hasSize(1);
+        assertThat(page.getRecords().get(0).isCodeRegistered()).isTrue();
+        assertThat(page.getPageIndex()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(10);
+        verify(mapper).queryTaskPage(any(ScheduledTaskReq.class));
+    }
+
+    @Test
+    public void queryTaskPageShouldAcceptNullReq() {
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        when(mapper.queryTaskPage(any(ScheduledTaskReq.class))).thenReturn(Collections.<SysScheduledTaskBo>emptyList());
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.<RrsScheduledTask>emptyList());
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+
+        PageResult<ScheduledTaskInfoDto> page = service.queryTaskPage(null);
+        assertThat(page.getRecords()).isEmpty();
+        assertThat(page.getPageIndex()).isEqualTo(1);
+        assertThat(page.getPageSize()).isEqualTo(20);
     }
 
     @Test

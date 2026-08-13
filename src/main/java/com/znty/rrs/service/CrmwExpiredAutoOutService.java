@@ -5,15 +5,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
-import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
+import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
-import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.schedule.RrsScheduledTask;
 import com.znty.rrs.schedule.ScheduledTaskResult;
 import com.znty.rrs.schedule.TaskDetailLog;
@@ -30,54 +30,38 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 外评 AA- 及以下主体自动入池任务
+ * CRMW 凭证到期自动出池。
  * <p>
- * 对应老系统 {@code AdjustRuleInAA}（配置名：自动入外部评级 AA- 及以下的主体）。
- * 扫描 Wind 主体有效外评（近 12 个月取档位最高，更早取日期最新，再取更近一条）
- * 落在 AA-/A/BBB… 列表内、且尚未在目标池的主体，自动调入
- * param_json.poolIds 指定池；adjust_type=自动调整，不走审批。
+ * 对应老 IP_RULE {@code AdjustRuleCrmwDueOutPool}：走 AdjustPoolByRule 出池，
+ * 到期宽限 T-2，并拦截调出限制池（关系 12）。落 {@code ip_pool_status_crmw}。
  * </p>
  */
 @Slf4j
 @Service
-public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask {
+public class CrmwExpiredAutoOutService implements RrsScheduledTask {
 
-    /** 任务编码（与库表 task_code 绑定） */
-    public static final String TASK_CODE = "company_outer_rating_aa_minus_auto_in";
+    /** 任务编码 */
+    public static final String TASK_CODE = "crmw_expired_auto_out";
 
-    /** 系统调库操作人 ID */
     private static final String AUTO_ADJUSTER_ID = "0";
-    /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    /** 自动入池原因 */
-    private static final String REASON = "外评AA-及以下主体自动入池";
-    /** 批次号后缀 */
-    private static final String BATCH_SUFFIX = "3004";
-    /** JSON 解析 */
+    private static final String REASON = "CRMW到期自动调出";
+    private static final String BATCH_SUFFIX = "3007";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
-    /**
-     * 扩展参数说明
-     */
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
-                    + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "作用：扫描 Wind 主体有效外评（近 12 个月取档位最高，更早取日期最新）"
-                    + "落在 AA-/A/BBB… 列表内（不含 AA/AA+/AAA）的主体，"
-                    + "对 poolIds 中每个目标池：主体尚未生效在池则自动调入（security_type=company）\n"
-                    + "poolIds 必填，至少一个数字 ID（对应老系统池上勾选该自动调入规则）\n"
+                    + "示例 <code>{\"poolIds\":[18]}</code>\n"
+                    + "作用：扫描 poolIds 所列 CRMW 池中已生效组合，若凭证到期日早于昨天（T-2）则自动调出；"
+                    + "当前在调出限制池（out_restrict）中则跳过\n"
+                    + "poolIds 必填，至少一个数字 ID\n"
                     + "未配置或格式错误则本轮失败";
 
-    /** 自动调库查询 */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
-    /** 调库落地 */
     @Resource
-    private SecurityPoolAdjustMapper securityPoolAdjustMapper;
-    /** 投资池 */
+    private CrmwPoolAdjustMapper crmwPoolAdjustMapper;
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
-    /** 定时任务配置 */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
 
@@ -99,9 +83,9 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         String taskName = resolveTaskName();
         infoDetail(detail, taskName + " 开始");
         try {
-            int total = doAutoIn(taskName, detail);
+            int total = doAutoOut(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共自动入池 " + total + " 个主体";
+            String message = "本轮共自动出池 " + total + " 条到期 CRMW 组合";
             infoDetail(detail, taskName + " 结束，" + message);
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
                     detail.build());
@@ -119,17 +103,14 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         }
     }
 
-    /**
-     * 按 poolIds 将外评 AA- 及以下且未在池的主体自动入池
-     */
-    private int doAutoIn(String taskName, TaskDetailLog detail) {
+    private int doAutoOut(String taskName, TaskDetailLog detail) {
         List<Long> poolIds = resolvePoolIds(taskName, detail);
-        infoDetail(detail, "目标池列表 poolIds=" + poolIds);
+        infoDetail(detail, "扫描池列表 poolIds=" + poolIds);
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         infoDetail(detail, "本轮批次号 " + batchNo);
-        List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
+        List<PoolRelationBo> allRelations = crmwPoolAdjustMapper.queryAllPoolRelationList();
         int total = 0;
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
@@ -137,103 +118,91 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 warnDetail(detail, "池[" + poolId + "]不存在，跳过");
                 continue;
             }
-            List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
-                    poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
-            List<IpAdjustLogBo> companies = autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(poolId);
-            if (companies == null || companies.isEmpty()) {
-                infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待入池低外评主体");
+            List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
+                    poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
+            List<IpAdjustLogBo> expiredList = autoAdjustMapper.queryCrmwPoolByExpired(poolId);
+            if (expiredList == null || expiredList.isEmpty()) {
+                infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无到期 CRMW");
                 continue;
             }
             int poolCount = 0;
-            for (IpAdjustLogBo company : companies) {
-                if (company == null || !StringUtils.hasText(company.getSecurityCode())) {
+            for (IpAdjustLogBo item : expiredList) {
+                if (item == null || !StringUtils.hasText(item.getCrmwScode())) {
                     continue;
                 }
-                // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
                 if (AutoAdjustRestrictHelper.isInAnyPool(
-                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(company.getSecurityCode()),
-                        inRestrictPoolIds)) {
-                    warnDetail(detail, "主体[" + company.getSecurityCode() + "]当前在调入限制池中，跳过");
+                        crmwPoolAdjustMapper.querySecurityCurrentPoolIdList(
+                                item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype()),
+                        outRestrictPoolIds)) {
+                    warnDetail(detail, "CRMW[" + item.getCrmwScode() + "]当前在调出限制池中，跳过");
                     continue;
                 }
-                company.setSecurityType("company");
-                company.setAdjustType("自动调整");
-                company.setAdjustMode(AdjustMode.IN.getCode());
-                company.setTargetPoolId(poolId);
-                company.setTargetPoolName(pool.getPoolName());
-                company.setPoolType(pool.getPoolType());
-                company.setAuditStatus(AuditStatus.APPROVED.getCode());
-                company.setAdjusterId(AUTO_ADJUSTER_ID);
-                company.setAdjusterName(AUTO_ADJUSTER_NAME);
-                company.setAdjustReason(REASON);
-                company.setAdjustAdvice(REASON);
-                company.setAdjustBatchNo(batchNo);
-                company.setSubmitTime(submitTime);
-                // 写自动入池日志
-                securityPoolAdjustMapper.addAdjustLog(company);
-                company.setAdjustLogId(company.getId());
-                // 写入在池状态
-                int inserted = securityPoolAdjustMapper.addPoolStatus(company);
-                if (inserted != 1) {
-                    warnDetail(detail, "主体[" + company.getSecurityCode() + "]写入池状态失败（可能并发已入池），跳过");
+                int deleted = crmwPoolAdjustMapper.deletePoolStatusSoft(
+                        item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype(), poolId);
+                if (deleted == 0) {
+                    warnDetail(detail, "CRMW[" + item.getCrmwScode() + "/" + item.getSecurityCode()
+                            + "]软删失败（可能并发已出池），跳过");
                     continue;
                 }
+                item.setAdjustType("自动调整");
+                item.setAdjustMode(AdjustMode.OUT.getCode());
+                item.setTargetPoolId(poolId);
+                item.setTargetPoolName(pool.getPoolName());
+                item.setPoolType(pool.getPoolType());
+                item.setAuditStatus(AuditStatus.APPROVED.getCode());
+                item.setAdjusterId(AUTO_ADJUSTER_ID);
+                item.setAdjusterName(AUTO_ADJUSTER_NAME);
+                item.setAdjustReason(REASON);
+                item.setAdjustAdvice(REASON);
+                item.setAdjustBatchNo(batchNo);
+                item.setSubmitTime(submitTime);
+                crmwPoolAdjustMapper.addAdjustLog(item);
                 poolCount++;
                 total++;
             }
-            infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 入池 " + poolCount + " 个主体");
+            infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 调出 " + poolCount + " 条");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，合计入池 " + total + " 个主体");
+        infoDetail(detail, "本轮共调出 " + total + " 条，批次号 " + batchNo);
         return total;
     }
 
-    /**
-     * 从库表 param_json 解析 poolIds
-     */
     private List<Long> resolvePoolIds(String taskName, TaskDetailLog detail) {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
         if (conf == null || !StringUtils.hasText(conf.getParamJson())) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
+            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[18]}");
         }
         infoDetail(detail, "扩展参数 param_json=" + conf.getParamJson().trim());
         return parsePoolIds(conf.getParamJson().trim(), taskName);
     }
 
-    /**
-     * 解析 {"poolIds":[15,16]}（包内可测）
-     */
     List<Long> parsePoolIds(String raw, String taskName) {
         if (!StringUtils.hasText(raw)) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
+            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[18]}");
         }
         String text = raw.trim();
         if (!text.startsWith("{")) {
-            throw new BizException("扩展参数仅支持 JSON 对象，示例 {\"poolIds\":[15]}，当前: " + text);
+            throw new BizException("扩展参数仅支持 JSON 对象，示例 {\"poolIds\":[18]}，当前: " + text);
         }
         JsonNode root;
         try {
             root = OBJECT_MAPPER.readTree(text);
         } catch (Exception e) {
-            log.warn("{}：JSON 扩展参数解析失败: {}，原因: {}", taskName, text, e.getMessage());
-            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
-                    + "；请使用标准 JSON，示例 {\"poolIds\":[15]}");
+            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage());
         }
         JsonNode poolIds = root.get("poolIds");
         if (poolIds == null || !poolIds.isArray() || poolIds.size() == 0) {
-            throw new BizException("扩展参数须包含非空 poolIds 数组，示例 {\"poolIds\":[15]}");
+            throw new BizException("扩展参数须包含非空 poolIds 数组，示例 {\"poolIds\":[18]}");
         }
         List<Long> result = new ArrayList<>();
         for (JsonNode item : poolIds) {
             if (item == null || item.isNull() || !item.isNumber()) {
-                throw new BizException("poolIds 元素须为数字，非法值: " + item
-                        + "；正确示例 {\"poolIds\":[15]}");
+                throw new BizException("poolIds 元素须为数字，非法值: " + item);
             }
             result.add(item.asLong());
         }
         return result;
     }
 
-    /** 单测入口 */
     List<Long> parsePoolIds(String raw) {
         return parsePoolIds(raw, TASK_CODE);
     }

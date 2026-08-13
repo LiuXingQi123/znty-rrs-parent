@@ -10,7 +10,9 @@
           AND is_deleted = 0
     </select>
 
-    <!-- 查询指定池中已生效且已到期的在池证券（仅回填 securityCode/securityShortName/securityType） -->
+    <!-- 查询指定池中已生效且已到期的在池证券（仅回填 securityCode/securityShortName/securityType）
+         到期宽限对齐老系统 AdjustRuleByExpired：enddate < trunc(sysdate-1)，
+         即到期日早于昨天（T-2），到期当天与到期次日仍不出池 -->
     <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT ips.security_code
                ,ips.security_short_name
@@ -22,14 +24,15 @@
           AND ips.is_deleted = 0
           AND si.maturity_date IS NOT NULL
           AND si.maturity_date &lt;&gt; ''
-          AND si.maturity_date &lt; DATE_FORMAT(CURDATE(), '%Y-%m-%d')
+          AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d')
     </select>
 
     <!--
-      主体下新债自动入池候选：
+      主体下新债自动入池候选（对齐老系统 AutoAdjustInNewBondToLimitPoolJob）：
       1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池
       2) 旗下 bond 大类未到期、尚未在 targetPoolId
       3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
+      4) 排除 ABS（老系统 sdc_cbondplate.code=5）与 CRMW（老系统 stype<>38），ABS 须走禁投 ABS 独立入口
     -->
     <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT bond.wind_code AS security_code
@@ -42,6 +45,8 @@
         WHERE bond.issuer_code IS NOT NULL
           AND bond.issuer_code &lt;&gt; ''
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND COALESCE(bond.abs_flag, 0) &lt;&gt; 1
+          AND (bond.security_type IS NULL OR bond.security_type &lt;&gt; 'crmw')
           AND EXISTS (
               SELECT 1
               FROM ip_pool_status cps
@@ -138,31 +143,97 @@
     </select>
 
     <!--
-      外评 AA- 及以下主体自动入池候选（对应老系统 AdjustRuleInAA）：
-      1) ais_inv_ods.wind_cbondissuerrating 每主体最新一条外评
-      2) 评级命中 AA-/A/BBB… 等列表（与老系统 creditrank 白名单一致，不含 AA/AA+/AAA）
-      3) 尚未在目标池 audit_status=20 在池
+      外评 AA- 及以下主体自动入池候选（对应老系统 AdjustRuleInAA）。
+      有效外评取数对齐老系统 12 个月拆分（declaredate / OUTERRANK.value）：
+      1) 评级日 < 今天往前 12 个月：按日期最新，同日取评级档位更高者
+      2) 评级日 >= 今天往前 12 个月：取评级档位更高者（不按日期）
+      3) 两段各留 1 条后再按日期取更近的一条作为有效外评
+      评级档位 value 越大越高（AAA > AA > AA-），对应老 sirm_enum OUTERRANK.value desc
+      评级日取 COALESCE(ann_dt2, ann_dt)，yyyyMMdd
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
-        SELECT t.s_info_compcode AS security_code
-               ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
-               ,'company' AS security_type
-        FROM (
+        WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
                    ,r.b_info_creditrating
-                   ,ROW_NUMBER() OVER (
-                       PARTITION BY r.s_info_compcode
-                       ORDER BY r.ann_dt2 DESC
-                                ,r.ann_dt DESC
-                                ,r.object_id DESC
-                   ) AS rn
+                   ,COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000') AS declare_dt
+                   ,CASE TRIM(r.b_info_creditrating)
+                        WHEN 'AAA+' THEN 21
+                        WHEN 'AAA' THEN 20
+                        WHEN 'AA+' THEN 19
+                        WHEN 'AA' THEN 18
+                        WHEN 'AA-' THEN 17
+                        WHEN 'A+' THEN 16
+                        WHEN 'A' THEN 15
+                        WHEN 'A-' THEN 14
+                        WHEN 'BBB+' THEN 13
+                        WHEN 'BBB' THEN 12
+                        WHEN 'BBB-' THEN 11
+                        WHEN 'BB+' THEN 10
+                        WHEN 'BB' THEN 9
+                        WHEN 'BB-' THEN 8
+                        WHEN 'B+' THEN 7
+                        WHEN 'B' THEN 6
+                        WHEN 'B-' THEN 5
+                        WHEN 'CCC' THEN 4
+                        WHEN 'CC' THEN 3
+                        WHEN 'C' THEN 2
+                        WHEN 'D' THEN 1
+                        ELSE 0
+                    END AS rating_value
             FROM ais_inv_ods.wind_cbondissuerrating r
             WHERE r.s_info_compcode IS NOT NULL
               AND r.s_info_compcode &lt;&gt; ''
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating &lt;&gt; ''
+        )
+        ,old_pick AS (
+            SELECT s_info_compcode
+                   ,s_info_compname
+                   ,b_info_creditrating
+                   ,declare_dt
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY s_info_compcode
+                       ORDER BY declare_dt DESC
+                                ,rating_value DESC
+                   ) AS rn
+            FROM rated
+            WHERE declare_dt &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
+        )
+        ,recent_pick AS (
+            SELECT s_info_compcode
+                   ,s_info_compname
+                   ,b_info_creditrating
+                   ,declare_dt
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY s_info_compcode
+                       ORDER BY rating_value DESC
+                   ) AS rn
+            FROM rated
+            WHERE declare_dt &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
+        )
+        ,merged AS (
+            SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
+            FROM old_pick
+            WHERE rn = 1
+            UNION ALL
+            SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
+            FROM recent_pick
+            WHERE rn = 1
+        )
+        SELECT t.s_info_compcode AS security_code
+               ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
+               ,'company' AS security_type
+        FROM (
+            SELECT s_info_compcode
+                   ,s_info_compname
+                   ,b_info_creditrating
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY s_info_compcode
+                       ORDER BY declare_dt DESC
+                   ) AS rn
+            FROM merged
         ) t
         WHERE t.rn = 1
           AND t.b_info_creditrating IN (
@@ -184,31 +255,94 @@
     </select>
 
     <!--
-      外评非 AA- 及以下主体自动出池候选（对应老系统 AdjustRuleOutAA）：
-      1) ais_inv_ods.wind_cbondissuerrating 每主体最新一条外评
-      2) 评级不在 AA-/A/BBB… 列表内（即 AA/AA+/AAA 等，与入池白名单互为补集）
-      3) 当前已在目标池 audit_status=20 且 security_type=company
+      外评非 AA- 及以下主体自动出池候选（对应老系统 AdjustRuleOutAA）。
+      有效外评取数与 queryCompanyByLowOuterRatingNotInPool 同构（12 个月拆分），
+      评级名单互为补集；仅处理已在目标池的 company 主体。
+      limitPoolIds 对齐 LIMITPOOLID_XYJJ：主体已在这些池则不出。
     -->
     <select id="queryCompanyByNotLowOuterRatingInPool"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
-        SELECT t.s_info_compcode AS security_code
-               ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
-               ,'company' AS security_type
-        FROM (
+        WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
                    ,r.b_info_creditrating
-                   ,ROW_NUMBER() OVER (
-                       PARTITION BY r.s_info_compcode
-                       ORDER BY r.ann_dt2 DESC
-                                ,r.ann_dt DESC
-                                ,r.object_id DESC
-                   ) AS rn
+                   ,COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000') AS declare_dt
+                   ,CASE TRIM(r.b_info_creditrating)
+                        WHEN 'AAA+' THEN 21
+                        WHEN 'AAA' THEN 20
+                        WHEN 'AA+' THEN 19
+                        WHEN 'AA' THEN 18
+                        WHEN 'AA-' THEN 17
+                        WHEN 'A+' THEN 16
+                        WHEN 'A' THEN 15
+                        WHEN 'A-' THEN 14
+                        WHEN 'BBB+' THEN 13
+                        WHEN 'BBB' THEN 12
+                        WHEN 'BBB-' THEN 11
+                        WHEN 'BB+' THEN 10
+                        WHEN 'BB' THEN 9
+                        WHEN 'BB-' THEN 8
+                        WHEN 'B+' THEN 7
+                        WHEN 'B' THEN 6
+                        WHEN 'B-' THEN 5
+                        WHEN 'CCC' THEN 4
+                        WHEN 'CC' THEN 3
+                        WHEN 'C' THEN 2
+                        WHEN 'D' THEN 1
+                        ELSE 0
+                    END AS rating_value
             FROM ais_inv_ods.wind_cbondissuerrating r
             WHERE r.s_info_compcode IS NOT NULL
               AND r.s_info_compcode &lt;&gt; ''
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating &lt;&gt; ''
+        )
+        ,old_pick AS (
+            SELECT s_info_compcode
+                   ,s_info_compname
+                   ,b_info_creditrating
+                   ,declare_dt
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY s_info_compcode
+                       ORDER BY declare_dt DESC
+                                ,rating_value DESC
+                   ) AS rn
+            FROM rated
+            WHERE declare_dt &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
+        )
+        ,recent_pick AS (
+            SELECT s_info_compcode
+                   ,s_info_compname
+                   ,b_info_creditrating
+                   ,declare_dt
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY s_info_compcode
+                       ORDER BY rating_value DESC
+                   ) AS rn
+            FROM rated
+            WHERE declare_dt &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
+        )
+        ,merged AS (
+            SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
+            FROM old_pick
+            WHERE rn = 1
+            UNION ALL
+            SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
+            FROM recent_pick
+            WHERE rn = 1
+        )
+        SELECT t.s_info_compcode AS security_code
+               ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
+               ,'company' AS security_type
+        FROM (
+            SELECT s_info_compcode
+                   ,s_info_compname
+                   ,b_info_creditrating
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY s_info_compcode
+                       ORDER BY declare_dt DESC
+                   ) AS rn
+            FROM merged
         ) t
         WHERE t.rn = 1
           AND t.b_info_creditrating NOT IN (
@@ -227,7 +361,93 @@
                 AND ips.audit_status = '20'
                 AND ips.is_deleted = 0
           )
+        <if test="limitPoolIds != null and limitPoolIds.size() &gt; 0">
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status lim
+              WHERE lim.security_code = t.s_info_compcode
+                AND lim.security_type = 'company'
+                AND lim.audit_status = '20'
+                AND lim.is_deleted = 0
+                AND lim.target_pool_id IN
+                <foreach collection="limitPoolIds" item="limitPoolId" open="(" separator="," close=")">
+                    #{limitPoolId}
+                </foreach>
+          )
+        </if>
         ORDER BY t.s_info_compcode ASC
+    </select>
+
+    <!-- 外评出池后顺带调出：主体旗下已在同一目标池的债券（对齐老 findSecurityByCompanyCode ptype=4000） -->
+    <select id="queryCompanyBondInSamePoolForAutoOut"
+            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT bond.wind_code AS security_code
+               ,bond.short_name AS security_short_name
+               ,bond.security_type
+        FROM rrs_securityinfo bond
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        INNER JOIN ip_pool_status ips ON ips.security_code = bond.wind_code
+                                     AND ips.target_pool_id = #{poolId}
+                                     AND ips.audit_status = '20'
+                                     AND ips.is_deleted = 0
+        WHERE bond.issuer_code = #{companyCode}
+        ORDER BY bond.wind_code ASC
+    </select>
+
+    <!-- CRMW 到期自动出池：凭证到期日早于昨天（T-2），对齐 AdjustRuleCrmwDueOutPool + AdjustRuleByExpired -->
+    <select id="queryCrmwPoolByExpired" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT ips.security_code
+               ,ips.security_short_name
+               ,ips.security_type
+               ,ips.crmw_name
+               ,ips.crmw_scode
+               ,ips.crmw_mktcode
+               ,ips.crmw_stype
+        FROM ip_pool_status_crmw ips
+        INNER JOIN rrs_securityinfo crmw ON crmw.wind_code = ips.crmw_scode
+        WHERE ips.target_pool_id = #{poolId}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND ips.pool_type = 'crmw'
+          AND crmw.security_type = 'crmw'
+          AND crmw.maturity_date IS NOT NULL
+          AND crmw.maturity_date &lt;&gt; ''
+          AND crmw.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d')
+        ORDER BY ips.crmw_scode ASC
+                 ,ips.security_code ASC
+    </select>
+
+    <!-- 主体不在指定池时，将其旗下已在债券池的债调出（对齐 AutoAdjustInLimitPoolToNewBondJob，排除 ABS/CRMW） -->
+    <select id="queryBondInPoolWhenCompanyNotIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT bond.wind_code AS security_code
+               ,bond.short_name AS security_short_name
+               ,bond.security_type
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo bond ON bond.wind_code = ips.security_code
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        WHERE ips.target_pool_id = #{bondPoolId}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND COALESCE(bond.abs_flag, 0) &lt;&gt; 1
+          AND (bond.security_type IS NULL OR bond.security_type &lt;&gt; 'crmw')
+          AND bond.issuer_code IS NOT NULL
+          AND bond.issuer_code &lt;&gt; ''
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status cps
+              INNER JOIN dict_security_type cdst ON cdst.security_type = cps.security_type
+                                                AND cdst.is_deleted = 0
+                                                AND cdst.category_type = 'company'
+              WHERE cps.security_code = bond.issuer_code
+                AND cps.target_pool_id = #{companyPoolId}
+                AND cps.audit_status = '20'
+                AND cps.is_deleted = 0
+          )
+        ORDER BY bond.wind_code ASC
     </select>
 
 </mapper>

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.common.enums.RelationType;
+import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
@@ -129,6 +131,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         infoDetail(detail, "本轮批次号 " + batchNo);
+        List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         int total = 0;
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
@@ -136,6 +139,8 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 warnDetail(detail, "池[" + poolId + "]不存在，跳过");
                 continue;
             }
+            List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
+                    poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
             // 查询同池待入库债券（含市场过滤）
             List<IpAdjustLogBo> bondList = autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(poolId);
             if (bondList == null || bondList.isEmpty()) {
@@ -145,6 +150,13 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
             int poolCount = 0;
             for (IpAdjustLogBo bond : bondList) {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+                    continue;
+                }
+                // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
+                if (AutoAdjustRestrictHelper.isInAnyPool(
+                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(bond.getSecurityCode()),
+                        inRestrictPoolIds)) {
+                    warnDetail(detail, "债券[" + bond.getSecurityCode() + "]当前在调入限制池中，跳过");
                     continue;
                 }
                 bond.setAdjustType("自动调整");

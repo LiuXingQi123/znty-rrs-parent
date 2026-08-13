@@ -25,6 +25,44 @@
         ORDER BY id ASC
     </select>
 
+    <!-- 分页查询未删除的定时任务配置 -->
+    <select id="queryTaskPage" resultType="com.znty.rrs.entity.bo.SysScheduledTaskBo">
+        SELECT id
+               ,task_code
+               ,task_name
+               ,description
+               ,cron_expression
+               ,schedule_enabled
+               ,param_json
+               ,last_run_status
+               ,last_run_message
+               ,last_run_time
+               ,last_affected_count
+               ,last_duration_ms
+               ,last_trigger_type
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM sys_scheduled_task
+        <where>
+            IFNULL(is_deleted, 0) = 0
+            <if test="keyword != null and keyword != ''">
+                AND (
+                    task_name LIKE CONCAT('%', #{keyword}, '%')
+                    OR task_code LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="scheduleEnabled != null">
+                AND IFNULL(schedule_enabled, 0) =
+                <choose>
+                    <when test="scheduleEnabled">1</when>
+                    <otherwise>0</otherwise>
+                </choose>
+            </if>
+        </where>
+        ORDER BY id ASC
+    </select>
+
     <!-- 按任务编码查询单条未删除的定时任务配置 -->
     <select id="queryTaskByCode" resultType="com.znty.rrs.entity.bo.SysScheduledTaskBo">
         SELECT id

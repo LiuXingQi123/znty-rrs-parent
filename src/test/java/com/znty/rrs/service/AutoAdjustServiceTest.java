@@ -2,8 +2,10 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
@@ -16,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +60,8 @@ public class AutoAdjustServiceTest {
         expired.setSecurityShortName("测试债");
         expired.setSecurityType("corporate_bond");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
+        when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
+        when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
 
@@ -118,6 +123,77 @@ public class AutoAdjustServiceTest {
         verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getMessage()).contains("JSON 解析失败");
+    }
+
+    @Test
+    public void autoOutExpiredShouldSkipWhenSoftDeleteMisses() {
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        AutoAdjustService service = new AutoAdjustService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskName("到期证券自动出池");
+        conf.setParamJson("{\"poolIds\":[10]}");
+        when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(10L);
+        pool.setPoolName("信用债大库");
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
+        IpAdjustLogBo expired = new IpAdjustLogBo();
+        expired.setSecurityCode("S001");
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
+        when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
+        when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(0);
+
+        ScheduledTaskResult result = service.execute();
+
+        verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(0);
+    }
+
+    @Test
+    public void autoOutExpiredShouldSkipWhenInOutRestrictPool() {
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        AutoAdjustService service = new AutoAdjustService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskName("到期证券自动出池");
+        conf.setParamJson("{\"poolIds\":[10]}");
+        when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(10L);
+        pool.setPoolName("信用债大库");
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
+        IpAdjustLogBo expired = new IpAdjustLogBo();
+        expired.setSecurityCode("S001");
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
+        PoolRelationBo restrict = new PoolRelationBo();
+        restrict.setPoolId(10L);
+        restrict.setRelationType(RelationType.OUT_RESTRICT.getCode());
+        restrict.setRelationPoolId(15L);
+        when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(restrict));
+        when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("S001")).thenReturn(Arrays.asList(10L, 15L));
+
+        ScheduledTaskResult result = service.execute();
+
+        verify(securityPoolAdjustMapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
+        verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(0);
     }
 
     @Test

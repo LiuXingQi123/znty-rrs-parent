@@ -2,6 +2,7 @@ package com.znty.rrs.mapper;
 
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskRunLogBo;
+import com.znty.rrs.entity.schedule.ScheduledTaskReq;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -17,6 +18,11 @@ public interface ScheduledTaskMapper {
      * 查询全部未删除的定时任务配置列表，按主键升序
      */
     List<SysScheduledTaskBo> queryTaskList();
+
+    /**
+     * 分页查询未删除的定时任务配置（关键字、调度启停）
+     */
+    List<SysScheduledTaskBo> queryTaskPage(ScheduledTaskReq req);
 
     /**
      * 按任务编码查询单条未删除的定时任务配置

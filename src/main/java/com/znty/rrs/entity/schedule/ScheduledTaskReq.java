@@ -13,6 +13,9 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 public class ScheduledTaskReq extends PageRequest {
 
+    /** 列表筛选关键字（任务名称 / 编码） */
+    private String keyword;
+
     /** 单个任务编码 */
     private String taskCode;
 
@@ -28,7 +31,7 @@ public class ScheduledTaskReq extends PageRequest {
     /** cron 表达式（保存配置） */
     private String cronExpression;
 
-    /** 是否启用定时调度（保存配置） */
+    /** 是否启用定时调度（保存配置；列表筛选时传 true/false，不传则不过滤） */
     private Boolean scheduleEnabled;
 
     /** 扩展参数（保存配置；通用文本，推荐 JSON，格式由各任务约定） */

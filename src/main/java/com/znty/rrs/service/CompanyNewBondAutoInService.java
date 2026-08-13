@@ -31,7 +31,7 @@ import java.util.Map;
  * 在池主体旗下债券自动入池任务实现
  * <p>
  * 扫描「主体已在指定池」的发行主体，将其旗下未到期、尚未在目标池的债券自动入池
- * （排除临时代码已更新为正式代码的记录）；adjust_type=自动调整，不走审批。
+ * （排除临时代码已更新为正式代码的记录，并排除 ABS / CRMW）；adjust_type=自动调整，不走审批。
  * 对应老系统 AutoAdjustInNewBondToLimitPoolJob。名称/cron/启停/扩展参数由库表维护。
  * 同池-only、带 market_codes 的 IP_RULE「主体下债券自动入库」见
  * {@link CompanySamePoolBondAutoInService}。
@@ -64,7 +64,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + "主体所在池与债券写入池不同时用 mappings，示例 "
                     + "<code>{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}</code>\n"
                     + "作用：主体已在 company 池且生效在池 → 其旗下 bond 大类、未到期、尚未在目标池的债券自动入池"
-                    + "（排除临时代码已更新正式代码的记录）\n"
+                    + "（排除临时代码已更新正式代码的记录；排除 ABS 与 CRMW，ABS 须走禁投 ABS 独立入口）\n"
                     + "主场景（债券禁止库）一般写 <code>{\"poolIds\":[15]}</code>\n"
                     + "未配置或格式错误则本轮失败";
 

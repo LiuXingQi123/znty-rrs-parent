@@ -39,6 +39,16 @@ public class ScheduledTaskController {
     }
 
     /**
+     * 分页查询定时任务配置，支持名称/编码关键字与调度启停筛选
+     *
+     * @param req 分页与筛选条件
+     */
+    @PostMapping("/queryTaskPage")
+    public ApiResponse<PageResult<ScheduledTaskInfoDto>> queryTaskPage(@RequestBody ScheduledTaskReq req) {
+        return ApiResponse.success(scheduledTaskService.queryTaskPage(req));
+    }
+
+    /**
      * 按任务编码查询单条定时任务配置详情
      */
     @PostMapping("/queryTask")

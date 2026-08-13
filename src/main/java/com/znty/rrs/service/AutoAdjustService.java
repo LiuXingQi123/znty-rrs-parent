@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
@@ -30,8 +32,9 @@ import java.util.Map;
 /**
  * 到期证券自动出池任务实现
  * <p>
- * 按 param_json.poolIds 指定投资池，将池内已生效且到期日早于当日的证券自动调出
- * （adjust_type=自动调整，audit_status=20，不走审批）。
+ * 按 param_json.poolIds 指定投资池，将池内已生效且到期日早于昨天（T-2，对齐老系统
+ * AdjustRuleByExpired）的证券自动调出；若证券当前在目标池的调出限制池（out_restrict）中则跳过。
+ * 仅软删在池状态成功才写调出日志并计数。adjust_type=自动调整，audit_status=20，不走审批。
  * 任务名称/说明/cron/启停/扩展参数由库表 sys_scheduled_task 维护（task_code 见 {@link #TASK_CODE}）。
  * </p>
  */
@@ -60,7 +63,8 @@ public class AutoAdjustService implements RrsScheduledTask {
             "须填写 JSON 对象\n"
                     + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[10,15]}</code>\n"
                     + "作用：扫描 poolIds 所列投资池中 audit_status=20 的在池证券，"
-                    + "若主数据到期日早于当天则自动调出\n"
+                    + "若主数据到期日早于昨天（T-2）则自动调出；"
+                    + "证券当前在目标池调出限制池（out_restrict）中则跳过\n"
                     + "poolIds 必填，至少一个数字 ID\n"
                     + "未配置或格式错误则本轮失败";
 
@@ -98,7 +102,8 @@ public class AutoAdjustService implements RrsScheduledTask {
     }
 
     /**
-     * 执行到期证券自动出池：按扩展参数 poolIds 扫描各池到期证券，写调出日志并软删在池状态
+     * 执行到期证券自动出池：按扩展参数 poolIds 扫描各池到期证券（T-2），
+     * 跳过调出限制池阻断项，软删成功后再写调出日志
      */
     @Override
     public ScheduledTaskResult execute() {
@@ -148,6 +153,8 @@ public class AutoAdjustService implements RrsScheduledTask {
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         infoDetail(detail, "本轮批次号 " + batchNo);
+        // 一次加载全量池关系，供调出限制池（out_restrict）拦截
+        List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         int total = 0;
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
@@ -155,12 +162,31 @@ public class AutoAdjustService implements RrsScheduledTask {
                 warnDetail(detail, "池[" + poolId + "]不存在，跳过");
                 continue;
             }
+            List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
+                    poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
             List<IpAdjustLogBo> expiredList = autoAdjustMapper.queryPoolSecurityByExpired(poolId);
             if (expiredList == null || expiredList.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无到期证券");
                 continue;
             }
+            int poolCount = 0;
             for (IpAdjustLogBo sec : expiredList) {
+                if (sec == null || !StringUtils.hasText(sec.getSecurityCode())) {
+                    continue;
+                }
+                // 对齐老 AdjustPoolByRule.checkSecurityOutPoolRelation（关系 12 / 调出限制池）
+                if (AutoAdjustRestrictHelper.isInAnyPool(
+                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(sec.getSecurityCode()),
+                        outRestrictPoolIds)) {
+                    warnDetail(detail, "证券[" + sec.getSecurityCode() + "]当前在调出限制池中，跳过");
+                    continue;
+                }
+                // 先软删，未删到则视为已不在池，不写日志、不计数
+                int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(sec.getSecurityCode(), poolId);
+                if (deleted == 0) {
+                    warnDetail(detail, "证券[" + sec.getSecurityCode() + "]软删池状态失败（可能并发已出池），跳过");
+                    continue;
+                }
                 sec.setAdjustType("自动调整");
                 sec.setAdjustMode(AdjustMode.OUT.getCode());
                 sec.setTargetPoolId(poolId);
@@ -172,14 +198,13 @@ public class AutoAdjustService implements RrsScheduledTask {
                 sec.setAdjustReason(REASON_EXPIRED_OUT);
                 sec.setAdjustBatchNo(batchNo);
                 sec.setSubmitTime(submitTime);
-                // 写自动调出日志
+                // 软删成功后再写自动调出日志
                 securityPoolAdjustMapper.addAdjustLog(sec);
-                // 软删除池状态
-                securityPoolAdjustMapper.deletePoolStatusSoft(sec.getSecurityCode(), poolId);
+                poolCount++;
                 total++;
             }
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 调出 "
-                    + expiredList.size() + " 条到期证券");
+                    + poolCount + " 条到期证券");
         }
         infoDetail(detail, "本轮共调出 " + total + " 条到期证券，批次号 " + batchNo);
         return total;
