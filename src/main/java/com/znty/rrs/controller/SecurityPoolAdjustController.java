@@ -8,6 +8,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustLogDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
 import com.znty.rrs.entity.securitypooladjust.LastCreditReportDto;
+import com.znty.rrs.entity.common.SecurityTypeOptionDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
@@ -51,6 +52,15 @@ public class SecurityPoolAdjustController {
     @PostMapping("/querySecurityPage")
     public ApiResponse<PageResult<SecurityInfoDto>> querySecurityPage(@RequestBody SecurityPoolAdjustReq req) {
         return ApiResponse.success(securityPoolAdjustService.querySecurityPage(req));
+    }
+
+    /**
+     * 查询证券类型下拉选项（code + name），用于列表筛选
+     */
+    @PostMapping("/querySecurityTypeList")
+    public ApiResponse<List<SecurityTypeOptionDto>> querySecurityTypeList(
+            @RequestBody SecurityPoolAdjustReq req) {
+        return ApiResponse.success(securityPoolAdjustService.querySecurityTypeList());
     }
 
     /**

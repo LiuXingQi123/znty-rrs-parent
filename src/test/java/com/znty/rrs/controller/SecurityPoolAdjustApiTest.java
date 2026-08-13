@@ -29,6 +29,7 @@ public class SecurityPoolAdjustApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldSupportSecuritySelectionAndDetail() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityPage", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityTypeList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityDetail", "{\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustPoolList", "{\"securityCode\":\"100001\",\"adjustDirection\":\"in\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityPoolStatus", "{\"securityCode\":\"100001\"}");

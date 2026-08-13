@@ -4,6 +4,7 @@ import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysAttachmentBo;
+import com.znty.rrs.entity.common.SecurityTypeOptionDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
@@ -28,7 +29,11 @@ public interface SecurityPoolAdjustMapper {
     /** 分页查询证券列表 */
     List<SecurityInfoDto> querySecurityPage(@Param("securityCode") String securityCode,
                                            @Param("securityShortName") String securityShortName,
+                                           @Param("securityType") String securityType,
                                            @Param("issuer") String issuer);
+
+    /** 查询候选证券中出现的证券类型选项（与列表同口径：排除 crmw/company、已删除态） */
+    List<SecurityTypeOptionDto> querySecurityTypeList();
 
     /** 根据证券代码查询证券详情 */
     SecurityInfoDetailDto querySecurityDetail(@Param("securityCode") String securityCode);

@@ -18,10 +18,25 @@
             <if test="securityShortName != null and securityShortName != ''">
                 AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
+            <if test="securityType != null and securityType != ''">
+                AND si.security_type = #{securityType}
+            </if>
             <if test="issuer != null and issuer != ''">
                 AND si.issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
         </where>
+    </select>
+
+    <!-- 查询候选证券中出现的证券类型选项（与列表同口径） -->
+    <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
+        SELECT DISTINCT si.security_type
+                       ,dst.security_type_name
+        FROM rrs_securityinfo si
+        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
+        WHERE si.security_type NOT IN ('crmw', 'company')
+          AND si.security_status != 'D'
+        ORDER BY dst.sort_order ASC
+                 ,si.security_type ASC
     </select>
 
     <!-- 查询操作人最近一次批量提交的全部手工调库记录 -->

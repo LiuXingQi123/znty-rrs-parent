@@ -22,7 +22,7 @@
 
 详情页内部再通过 `adjustStep`（1=选池，2=校验确认）控制步骤切换。
 
-**初始化**（`created`）：设置 `axios.defaults.baseURL = 'http://localhost:18090'`，调用 `loadList()` 加载证券列表。
+**初始化**（`created`）：调用 `loadSecurityTypeOptions()` 加载证券类型下拉，再调用 `loadList()` 加载证券列表。
 
 **apiPost 封装**：页面内置方法，返回 `{ success, data, message }`，`!json.success` 弹错并抛异常；附件下载接口返回 Base64 字符串后由前端还原为 Blob。
 
@@ -36,17 +36,26 @@
 |---|---|---|
 | 文本输入 | `securityCode` | 证券代码，回车查询 |
 | 文本输入 | `securityShortName` | 证券简称，回车查询 |
+| 下拉 | `securityType` | 证券类型，精确匹配；选项来自 `querySecurityTypeList` |
 | 文本输入 | `issuer` | 发行人，回车查询 |
 
 - **查询** `handleSearch()`：重置 `pageIndex=1` 后调 `loadList()`。
-- **重置** `handleReset()`：清空三字段、`pageIndex=1`、`loadList()`。
+- **重置** `handleReset()`：清空四字段、`pageIndex=1`、`loadList()`。
+- **初始化**（`created`）：`loadSecurityTypeOptions()` + `loadList()`。
 
 ### 2.2 loadList → 接口
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
-- 请求体：`{ securityCode, securityShortName, issuer, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 按 **证券类型** 排除 `security_type IN ('crmw','company')`（CRMW 凭证与公司主体；**不用** `pool_type`），按 `wind_code` / `short_name` / `issuer` 模糊匹配（列表无固定 ORDER BY），LEFT JOIN `dict_security_type` 取 `security_type_name`。
+- 请求体：`{ securityCode, securityShortName, securityType, issuer, pageIndex, pageSize }`
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 按 **证券类型** 排除 `security_type IN ('crmw','company')`（CRMW 凭证与公司主体；**不用** `pool_type`），按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），LEFT JOIN `dict_security_type` 取 `security_type_name`。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
+
+### 2.2.1 证券类型下拉 `querySecurityTypeList`
+
+- 路径：`POST /api/v1/securityPoolAdjust/querySecurityTypeList`
+- 请求体：`{}`
+- 返回：`List<SecurityTypeOptionDto>`（`{securityType, securityTypeName}`）
+- 后端 SQL：与列表同口径，`SELECT DISTINCT si.security_type, dst.security_type_name FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type NOT IN ('crmw','company') AND si.security_status != 'D' ORDER BY dst.sort_order ASC, si.security_type ASC`
 
 ### 2.3 表格列（列表页）
 
@@ -325,7 +334,8 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `querySecurityPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
+| `querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
+| `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径，排除 crmw/company 及已删除态） |
 | `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
 | `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投/观察等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 按主体内评×期限矩阵过滤信用债大库；**正式证券无主体内评分档时直接去掉全部 credit_bond 池（含 1～5 级）**；临时代码无内评默认 `grade_code=4` 再走矩阵 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |

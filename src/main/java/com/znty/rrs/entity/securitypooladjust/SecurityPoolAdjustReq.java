@@ -14,6 +14,8 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private String securityCode;
     /** 证券简称（模糊搜索） */
     private String securityShortName;
+    /** 证券类型（精确匹配 dict_security_type.security_type） */
+    private String securityType;
     /** 发行人（模糊搜索） */
     private String issuer;
     /** 调库方向：in=可调入库 / out=可调出库 */

@@ -52,6 +52,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
+import com.znty.rrs.entity.common.SecurityTypeOptionDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
@@ -173,15 +174,22 @@ public class SecurityPoolAdjustService {
     /**
      * 分页查询证券列表
      *
-     * @param req 查询条件（证券代码、简称、发行人，均为模糊匹配）
+     * @param req 查询条件（证券代码、简称、发行人为模糊匹配；证券类型为精确匹配）
      */
     public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityInfoDto> records = securityPoolAdjustMapper.querySecurityPage(
-                req.getSecurityCode(), req.getSecurityShortName(), req.getIssuer());
+                req.getSecurityCode(), req.getSecurityShortName(), req.getSecurityType(), req.getIssuer());
         PageInfo<SecurityInfoDto> pageInfo = new PageInfo<>(records);
 
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /**
+     * 查询候选证券中出现的证券类型选项（code + name）
+     */
+    public List<SecurityTypeOptionDto> querySecurityTypeList() {
+        return securityPoolAdjustMapper.querySecurityTypeList();
     }
 
     /**

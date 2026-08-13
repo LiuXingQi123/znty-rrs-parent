@@ -149,7 +149,8 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `securityPoolAdjust/querySecurityPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 列表页分页查询证券 |
+| `securityPoolAdjust/querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 列表页分页查询证券 |
+| `securityPoolAdjust/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 列表页证券类型下拉 |
 | `securityPoolAdjust/querySecurityDetail` | securityCode | `SecurityInfoDetailDto`（29+证券字段） | 详情页顶部证券基本信息 |
 | `securityPoolAdjust/queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId | `List<PoolDto>`（含互斥关系，树由前端组装） | 可调入/调出投资池 |
 | `securityPoolAdjust/querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools + issuerCurrentPools） | 当前证券所在池 + 主体所在池 |
