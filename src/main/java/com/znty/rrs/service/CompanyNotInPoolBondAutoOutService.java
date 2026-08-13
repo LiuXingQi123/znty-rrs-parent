@@ -47,11 +47,12 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     private static final String BATCH_SUFFIX = "3008";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =
-            "须填写 JSON 对象\n"
-                    + "同池示例 <code>{\"poolIds\":[15]}</code>\n"
+            "须填写 JSON 对象；poolIds 与 mappings 可组合，至少解析出一组映射\n"
+                    + "同池示例 <code>{\"poolIds\":[15]}</code>（债券池与主体池相同）\n"
                     + "跨池示例 <code>{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":15}]}</code>\n"
-                    + "作用：债已在 bondPool、发行主体不在 companyPool → 将该债从债券池自动调出"
-                    + "（排除 ABS / CRMW；独立 Job 口径，不看限制池）\n"
+                    + "作用：债已在债券池、发行主体不在对应主体池 → 将该债从债券池自动调出\n"
+                    + "排除：ABS / CRMW\n"
+                    + "不看调出限制池；仅软删成功才写日志并计数\n"
                     + "未配置或格式错误则本轮失败";
 
     @Resource

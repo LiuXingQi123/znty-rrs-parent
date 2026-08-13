@@ -59,13 +59,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
      * 本任务扩展参数说明（配置页按行拆成列表展示，勿写 1) 2) 序号）
      */
     private static final String PARAM_HELP =
-            "须填写 JSON 对象\n"
-                    + "主体与债同一池（可多个）示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "主体所在池与债券写入池不同时用 mappings，示例 "
-                    + "<code>{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}</code>\n"
-                    + "作用：主体已在 company 池且生效在池 → 其旗下 bond 大类、未到期、尚未在目标池的债券自动入池"
-                    + "（排除临时代码已更新正式代码的记录；排除 ABS 与 CRMW，ABS 须走禁投 ABS 独立入口）\n"
-                    + "主场景（债券禁止库）一般写 <code>{\"poolIds\":[15]}</code>\n"
+            "须填写 JSON 对象；poolIds / poolId / mappings 可组合，至少解析出一组映射\n"
+                    + "同池示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
+                    + "跨池示例 <code>{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}</code>\n"
+                    + "作用：主体已在主体池且生效 → 旗下债券大类、未到期、尚未在目标池的债自动入目标池\n"
+                    + "排除：临时代码已更新正式代码；ABS；CRMW\n"
+                    + "不看调入限制池，也不按池 market_codes 过滤\n"
+                    + "同池且需限制池/市场过滤时，请用任务 company_same_pool_bond_auto_in\n"
                     + "未配置或格式错误则本轮失败";
 
     /** 自动调库查询 Mapper */

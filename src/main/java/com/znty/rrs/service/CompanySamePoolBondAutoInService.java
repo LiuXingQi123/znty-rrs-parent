@@ -62,11 +62,12 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
                     + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "作用：对每个 poolId，扫描「主体已在该池」的发行主体，将其旗下 bond 大类、未到期、"
-                    + "尚未在<strong>同一池</strong>的债券自动入池（主体与债必须同一池）\n"
+                    + "作用：对每个 poolId，扫描主体已在该池的发行主体，将其旗下债券大类、未到期、"
+                    + "尚未在<strong>同一池</strong>的债券自动入该池（主体与债必须同一池，无 mappings）\n"
                     + "市场：尊重投资池 market_codes（空/[] 不限制；有配置则债须命中）\n"
-                    + "对应老系统 IP_RULE「主体下债券自动入库」；不排除临时代码已更新\n"
-                    + "跨池场景请用任务 company_inpool_bond_auto_in（mappings）\n"
+                    + "拦截：债券当前已在调入限制池中则跳过\n"
+                    + "不排除临时代码已更新，也不排除 ABS\n"
+                    + "跨池请用任务 company_inpool_bond_auto_in\n"
                     + "poolIds 必填，至少一个数字 ID\n"
                     + "未配置或格式错误则本轮失败";
 

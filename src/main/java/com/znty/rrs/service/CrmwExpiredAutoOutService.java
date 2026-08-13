@@ -51,8 +51,9 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
                     + "示例 <code>{\"poolIds\":[18]}</code>\n"
-                    + "作用：扫描 poolIds 所列 CRMW 池中已生效组合，若凭证到期日早于昨天（T-2）则自动调出；"
-                    + "当前在调出限制池（out_restrict）中则跳过\n"
+                    + "作用：扫描所列 CRMW 池中已生效组合，凭证到期日早于昨天（T-2）则自动调出\n"
+                    + "拦截：当前已在调出限制池中则跳过\n"
+                    + "计数：仅软删成功才写日志并计入影响条数\n"
                     + "poolIds 必填，至少一个数字 ID\n"
                     + "未配置或格式错误则本轮失败";
 

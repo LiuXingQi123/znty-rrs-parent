@@ -65,14 +65,12 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
                     + "示例 <code>{\"poolIds\":[16],\"limitPoolIds\":[15]}</code>\n"
-                    + "作用：扫描 Wind 主体有效外评（近 12 个月取档位最高，更早取日期最新）"
-                    + "不在 AA-/A/BBB… 列表内（如 AA/AA+/AAA）的主体，"
-                    + "对 poolIds 中每个目标池：主体已生效在池则自动调出（security_type=company），"
+                    + "作用：有效外评不在 AA-/A/BBB… 名单内（如 AA/AA+/AAA）且已在目标池的主体 → 自动调出，"
                     + "并顺带调出同池旗下债券\n"
-                    + "limitPoolIds 对齐老 LIMITPOOLID_XYJJ：主体已在这些池则不出；"
-                    + "省略则默认全部 pool_type=forbidden 的池；显式 [] 表示不拦截。"
-                    + "目标池本身在名单内时该池不会自动出任何人\n"
-                    + "与入池任务 company_outer_rating_aa_minus_auto_in 评级列表互为补集\n"
+                    + "limitPoolIds：主体已在这些池则不出；省略则默认全部禁投池；写 <code>[]</code> 表示不拦截；"
+                    + "目标池若也在名单内则该池不出任何人\n"
+                    + "拦截：主体或旗下债当前已在调出限制池中则跳过\n"
+                    + "与入池任务 company_outer_rating_aa_minus_auto_in 评级名单互为补集\n"
                     + "poolIds 必填，至少一个数字 ID\n"
                     + "未配置或格式错误则本轮失败";
 

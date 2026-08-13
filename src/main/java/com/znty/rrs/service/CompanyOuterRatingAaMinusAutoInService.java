@@ -62,10 +62,10 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
                     + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "作用：扫描 Wind 主体有效外评（近 12 个月取档位最高，更早取日期最新）"
-                    + "落在 AA-/A/BBB… 列表内（不含 AA/AA+/AAA）的主体，"
-                    + "对 poolIds 中每个目标池：主体尚未生效在池则自动调入（security_type=company）\n"
-                    + "poolIds 必填，至少一个数字 ID（对应老系统池上勾选该自动调入规则）\n"
+                    + "作用：Wind 主体有效外评（近 12 个月取档位最高，更早取日期最新）"
+                    + "落在 AA-/A/BBB…（不含 AA/AA+/AAA），且尚未在目标池 → 自动调入主体\n"
+                    + "拦截：主体当前已在调入限制池中则跳过\n"
+                    + "poolIds 必填，至少一个数字 ID\n"
                     + "未配置或格式错误则本轮失败";
 
     /** 自动调库查询 */
