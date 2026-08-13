@@ -12,16 +12,21 @@
 
     <!-- 查询指定池中已生效且已到期的在池证券（仅回填 securityCode/securityShortName/securityType）
          到期宽限对齐老系统 AdjustRuleByExpired：enddate < trunc(sysdate-1)，
-         即到期日早于昨天（T-2），到期当天与到期次日仍不出池 -->
+         即到期日早于昨天（T-2），到期当天与到期次日仍不出池。
+         大类对齐老 ptype=4000 或 2000：仅债、股；CRMW 走独立任务 crmw_expired_auto_out -->
     <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT ips.security_code
                ,ips.security_short_name
                ,ips.security_type
         FROM ip_pool_status ips
         INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type IN ('bond', 'stock')
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
+          AND (ips.security_type IS NULL OR ips.security_type &lt;&gt; 'crmw')
           AND si.maturity_date IS NOT NULL
           AND si.maturity_date &lt;&gt; ''
           AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d')
@@ -81,7 +86,7 @@
     <!--
       主体下债券同池自动入库（对应老系统 IP_RULE type=0「主体下债券自动入库」）：
       1) 主体已在 poolId 且 company 大类、audit_status=20
-      2) 旗下 bond 大类未到期、尚未在同一 poolId
+      2) 旗下 bond 大类未到期（含到期当天，对齐老 enddate &gt;= sysdate）、尚未在同一 poolId
       3) 池 market_codes 为空/[] 不限制市场；否则债市场须命中池配置（对齐 ip_investmarket）
       4) 不排除临时代码已更新（与 Job 版 queryCompanyNewBondForAutoIn 区分）
     -->
@@ -97,7 +102,7 @@
                                         AND IFNULL(p.is_deleted, 0) = 0
         WHERE bond.issuer_code IS NOT NULL
           AND bond.issuer_code &lt;&gt; ''
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
           AND EXISTS (
               SELECT 1
               FROM ip_pool_status cps
@@ -419,7 +424,9 @@
                  ,ips.security_code ASC
     </select>
 
-    <!-- 主体不在指定池时，将其旗下已在债券池的债调出（对齐 AutoAdjustInLimitPoolToNewBondJob，排除 ABS/CRMW） -->
+    <!-- 主体不在指定池时，将其旗下已在债券池的债调出。
+         老 Job 只排 CRMW（stype!=38）不排 ABS；新系统 ABS 入/出禁投走独立链路，
+         本任务无人审批，排除 abs_flag=1 与 crmw，避免绕过 ForbiddenAbsPoolAdjust -->
     <select id="queryBondInPoolWhenCompanyNotIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name

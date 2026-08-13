@@ -32,8 +32,9 @@ import java.util.Map;
 /**
  * 到期证券自动出池任务实现
  * <p>
- * 按 param_json.poolIds 指定投资池，将池内已生效且到期日早于昨天（T-2，对齐老系统
- * AdjustRuleByExpired）的证券自动调出；若证券当前在目标池的调出限制池（out_restrict）中则跳过。
+ * 按 param_json.poolIds 指定投资池，将池内已生效、债/股大类且到期日早于昨天（T-2，对齐老系统
+ * AdjustRuleByExpired，ptype=4000/2000）的证券自动调出；CRMW 走独立任务。
+ * 若证券当前在目标池的调出限制池（out_restrict）中则跳过。
  * 仅软删在池状态成功才写调出日志并计数。adjust_type=自动调整，audit_status=20，不走审批。
  * 任务名称/说明/cron/启停/扩展参数由库表 sys_scheduled_task 维护（task_code 见 {@link #TASK_CODE}）。
  * </p>
@@ -62,7 +63,7 @@ public class AutoAdjustService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
                     + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[10,15]}</code>\n"
-                    + "作用：扫描所列池中已生效在池、到期日早于昨天（T-2）的证券，自动调出（不走审批）\n"
+                    + "作用：扫描所列池中已生效在池的债、股，到期日早于昨天（T-2）则自动调出（不走审批；不含主体/基金/CRMW）\n"
                     + "拦截：证券当前已在目标池的调出限制池中则跳过\n"
                     + "计数：仅软删成功才写日志并计入影响条数\n"
                     + "poolIds 必填，至少一个数字 ID\n"

@@ -29,7 +29,8 @@ public interface AutoAdjustMapper {
      * 查询指定池中已生效（audit_status=20）且已到期的在池证券。
      *
      * <p>到期口径对齐老系统 {@code AdjustRuleByExpired}：{@code maturity_date} 早于昨天（T-2），
-     * 到期当天与到期次日仍不出池。仅回填 securityCode/securityShortName/securityType，其余由调用方补充。
+     * 到期当天与到期次日仍不出池。大类对齐老 ptype=4000/2000，仅债、股；排除 crmw。
+     * 仅回填 securityCode/securityShortName/securityType，其余由调用方补充。
      *
      * @param poolId 目标池 ID
      * @return 到期在池证券列表（每条对应一条待自动调出记录）
@@ -54,7 +55,7 @@ public interface AutoAdjustMapper {
     /**
      * 查询「主体已在本池、旗下债未在本池」的同池自动入库候选。
      * <p>对应老系统 IP_RULE type=0「主体下债券自动入库」：主体与债<strong>必须同一池</strong>；
-     * 债大类未到期；尊重池 {@code market_codes}（空则不限制）；
+     * 债大类未到期（含到期当天，对齐老 {@code enddate >= sysdate}）；尊重池 {@code market_codes}（空则不限制）；
      * <strong>不</strong>排除临时代码已更新记录（与 Job 版口径区分）。</p>
      *
      * @param poolId 主体所在池且债写入池（同一 ID）
@@ -110,7 +111,8 @@ public interface AutoAdjustMapper {
     /**
      * 查询「债已在债券池、其发行主体不在主体池」的待自动出池债券。
      *
-     * <p>对应老 {@code AutoAdjustInLimitPoolToNewBondJob}：排除 ABS / CRMW。
+     * <p>对应老 {@code AutoAdjustInLimitPoolToNewBondJob}。老 Job 只排 CRMW；
+     * 新系统排除 ABS / CRMW，避免无人审批出池绕过禁投 ABS 独立链路。
      *
      * @param bondPoolId    债券当前所在池
      * @param companyPoolId 主体应在的池（不在则出债）

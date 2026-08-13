@@ -32,8 +32,8 @@ import java.util.Map;
 /**
  * 主体下债券自动入库任务（同池）
  * <p>
- * 对应老系统 IP_RULE type=0「主体下债券自动入库」：主体已在目标池 → 旗下 bond 大类、未到期、
- * 尚未在<strong>同一池</strong>的债券自动入池；尊重池 market_codes（空不限制）；
+ * 对应老系统 IP_RULE type=0「主体下债券自动入库」：主体已在目标池 → 旗下 bond 大类、
+ * 未到期（含到期当天）、尚未在<strong>同一池</strong>的债券自动入池；尊重池 market_codes（空不限制）；
  * 不排除临时代码已更新记录。与 {@link CompanyNewBondAutoInService}
  * （对应 AutoAdjustInNewBondToLimitPoolJob，可跨池、排除临时代码）区分。
  * </p>
@@ -62,7 +62,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "须填写 JSON 对象\n"
                     + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "作用：对每个 poolId，扫描主体已在该池的发行主体，将其旗下债券大类、未到期、"
+                    + "作用：对每个 poolId，扫描主体已在该池的发行主体，将其旗下债券大类、未到期（含到期当天）、"
                     + "尚未在<strong>同一池</strong>的债券自动入该池（主体与债必须同一池，无 mappings）\n"
                     + "市场：尊重投资池 market_codes（空/[] 不限制；有配置则债须命中）\n"
                     + "拦截：债券当前已在调入限制池中则跳过\n"

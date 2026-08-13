@@ -12,7 +12,7 @@ DROP TABLE IF EXISTS `sys_scheduled_task_run_log`;
 DROP TABLE IF EXISTS `sys_scheduled_task_evt`;
 DROP TABLE IF EXISTS `sys_scheduled_task`;
 
--- 定时任务配置主表（每个 task_code 一条，由应用启动时按代码实现自动种子同步）
+-- 定时任务配置主表（每个 task_code 一条；只认库表，启动时不再按代码种子写库）
 CREATE TABLE `sys_scheduled_task`
 (
     `id`                   BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',

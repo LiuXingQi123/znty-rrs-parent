@@ -3,10 +3,12 @@ package com.znty.rrs.schedule;
 /**
  * 定时任务业务实现接口（扩展点）
  * <p>
- * 新增任务步骤：① 页面「新增」一条配置并记下 task_code；
- * ② 新建类 implements 本接口，getTaskCode() 返回同一编码并实现 execute()；
- * ③ 部署后即可执行。扩展参数存于库表 param_json，由本任务自行解析；
+ * 新增任务步骤：① 先评估与已有任务的执行顺序（见需求 29 第 4.1 / 4.2 节），再定 cron；
+ * ② 页面「新增」一条配置并记下 task_code；
+ * ③ 新建类 implements 本接口，getTaskCode() 返回同一编码并实现 execute()；
+ * ④ 部署后即可执行。扩展参数存于库表 param_json，由本任务自行解析；
  * <strong>仅支持 JSON 对象</strong>，并通过 {@link #getParamHelp()} 向配置页提供填写说明。
+ * 不同 taskCode 之间无编排，有池状态依赖时必须靠 cron 错开先后。
  * </p>
  */
 public interface RrsScheduledTask {

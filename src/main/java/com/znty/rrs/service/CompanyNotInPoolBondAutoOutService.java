@@ -32,6 +32,7 @@ import java.util.Map;
  * <p>
  * 对应老 {@code AutoAdjustInLimitPoolToNewBondJob}（独立 Job，不走 AdjustPoolByRule，
  * 因此不看调入/调出限制池）。老配置 AUTOPOOLID_BPMP 为「债券池-主体池」。
+ * 老 Job 只排 CRMW；新系统同时排除 ABS，避免绕过禁投 ABS 独立链路。
  * </p>
  */
 @Slf4j
@@ -51,7 +52,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                     + "同池示例 <code>{\"poolIds\":[15]}</code>（债券池与主体池相同）\n"
                     + "跨池示例 <code>{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":15}]}</code>\n"
                     + "作用：债已在债券池、发行主体不在对应主体池 → 将该债从债券池自动调出\n"
-                    + "排除：ABS / CRMW\n"
+                    + "排除：ABS / CRMW（ABS 走禁投独立链路，不是老 Job 原样）\n"
                     + "不看调出限制池；仅软删成功才写日志并计数\n"
                     + "未配置或格式错误则本轮失败";
 
