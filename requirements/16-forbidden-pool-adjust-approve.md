@@ -2,7 +2,7 @@
 
 > 前端页面：`forbidden_pool_adjust_approve.html`
 > 后端前缀：`/api/v1/forbiddenPoolAdjustFlow`（审批处理）+ `/api/v1/forbiddenPoolAdjust`（详情/列表/校验，复用 [15] 接口）
-> 角色定位：审核 / 审批人对主体级禁投池调库申请进行复核、驳回、修改重提、审批通过或驳回，最终通过才落地 `ip_pool_status`；**仅债券禁止库（id=15）** 时再 `syncCompanyBonds` 同步旗下未到期债券（含 ABS/crmw）。
+> 角色定位：审核 / 审批人对主体级禁投池调库申请进行复核、驳回、修改重提、审批通过或驳回，最终通过才落地 `ip_pool_status`；**仅债券禁止库(15)** 时再 `syncCompanyBonds` 同步旗下未到期债券（含 ABS/crmw）。
 
 ---
 
@@ -113,7 +113,7 @@ finishAdjustBatch(step):
   generateInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 rrs_report_in
 ```
 
-`syncCompanyBonds`（与 `syncCompanyBondsOnDirect` 同构，走 `applyPoolStatusChanges`）：**仅 `targetPoolId=15`（债券禁止库）** 且 `categoryType==='company'` 触发；调入用 `queryCompanyInboundBondForAutoList`（未到期 + 未在池 + bond 大类，含 ABS/crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期 + 当前在池）；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。观察池/黑名单质押库/重点观察名单只落主体。
+`syncCompanyBonds`（与 `syncCompanyBondsOnDirect` 同构，走 `applyPoolStatusChanges`）：**仅目标池为债券禁止库(15)** 且 `categoryType==='company'` 触发；调入用 `queryCompanyInboundBondForAutoList`（未到期 + 未在池 + bond 大类，含 ABS/crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期 + 当前在池）；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。观察池/黑名单质押库/重点观察名单只落主体。
 
 `generateInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `rrs_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
 

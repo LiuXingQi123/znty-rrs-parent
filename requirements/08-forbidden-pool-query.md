@@ -8,7 +8,7 @@
 
 ## 0. 关键现状（数据来源）
 
-**本页查询四类主体风险池**：禁投池（15 / `forbidden`）、观察池（16 / `observe`）、黑名单质押库（17 / `blacklist`）和重点观察名单（23 / `restricted`）。复用 `ip_pool_status`（投资池当前状态表），通过 `pool_type IN ('forbidden','observe','blacklist','restricted')`、`ips.is_deleted=0`、`ips.audit_status='20'` 查询当前已生效数据。主体级状态按 `ips.security_code=ais_inv_ods.wind_cbondissuer.s_info_compcode` 关联有效 Wind 主体（**该表为债券+主体粒度，JOIN 前须按 `s_info_compcode` 去重**）；债券仍按 Wind 证券代码关联 `rrs_securityinfo`。
+**本页查询四类主体风险池**：禁投池(15 / `forbidden`)、观察池(16 / `observe`)、黑名单质押库(17 / `blacklist`)和重点观察名单(23 / `restricted`)。复用 `ip_pool_status`（投资池当前状态表），通过 `pool_type IN ('forbidden','observe','blacklist','restricted')`、`ips.is_deleted=0`、`ips.audit_status='20'` 查询当前已生效数据。主体级状态按 `ips.security_code=ais_inv_ods.wind_cbondissuer.s_info_compcode` 关联有效 Wind 主体（**该表为债券+主体粒度，JOIN 前须按 `s_info_compcode` 去重**）；债券仍按 Wind 证券代码关联 `rrs_securityinfo`。
 
 ---
 
