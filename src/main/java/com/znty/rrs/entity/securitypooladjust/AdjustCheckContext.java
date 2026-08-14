@@ -53,6 +53,12 @@ public class AdjustCheckContext {
     /** 证券主体公司是否在观察池（同发行人的任意证券在观察池中） */
     private boolean issuerInObservePool;
 
+    /** 当前证券是否在重点观察名单（pool_type='restricted'，audit_status='20'） */
+    private boolean securityInRestrictedPool;
+
+    /** 证券主体公司是否在重点观察名单 */
+    private boolean issuerInRestrictedPool;
+
     /** 本次请求中所有调入操作涉及的目标池 ID 集合，用于互斥池同时勾选校验 */
     private Set<Long> requestInPoolIds;
 

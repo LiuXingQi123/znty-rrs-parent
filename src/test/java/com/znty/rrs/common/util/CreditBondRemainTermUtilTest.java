@@ -48,4 +48,23 @@ public class CreditBondRemainTermUtilTest {
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
                 .isEqualByComparingTo("2");
     }
+
+    @Test
+    public void inrightShouldUsePutDaysWhenShorterThanMaturity() {
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setInrightFlag(1);
+        sec.setDateExists(new BigDecimal("1825"));
+        sec.setDateInrightExists(new BigDecimal("365"));
+        assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
+                .isEqualByComparingTo("1");
+    }
+
+    @Test
+    public void inrightCallOnlyShouldUseMaturityDays() {
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setInrightFlag(1);
+        sec.setDateExists(new BigDecimal("730"));
+        assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
+                .isEqualByComparingTo("2");
+    }
 }

@@ -47,6 +47,12 @@ public class AdjustSharedData {
     /** 证券主体公司（发行人）旗下是否有证券在观察池中 */
     private boolean issuerInObservePool;
 
+    /** 当前证券自身是否在重点观察名单（pool_type='restricted'，audit_status='20'） */
+    private boolean securityInRestrictedPool;
+
+    /** 证券主体公司是否在重点观察名单 */
+    private boolean issuerInRestrictedPool;
+
     /** 主体评级是否下调（由 RatingDowngradeChecker 查 wind_cbondissuerrating 比较当前与前次评级判定） */
     private boolean issuerRatingDowngraded;
 

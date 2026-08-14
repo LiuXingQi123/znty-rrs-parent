@@ -26,6 +26,7 @@ import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.constants.CreditBondPoolCodes;
 import com.znty.rrs.common.util.CreditBondRemainTermUtil;
+import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 import com.znty.rrs.common.util.MarketCodeMatchUtil;
 
 import com.github.pagehelper.PageHelper;
@@ -374,14 +375,14 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 是否放开规则过滤：releaseRules=false 时，信用债大库池需满足主体债入库矩阵才保留。
+     * 选池阶段按主体债入库矩阵 + 特殊债天花板过滤信用债 / 境外债分级库。
      *
-     * <p>对齐老系统 openrule 在选池阶段过滤可调入池列表（InvestPoolAdjustManageAction:855-859：
-     * 遍历可调入池，信用债大库 ptype=4000 未放开规则时查 findMainGradeRuleList，矩阵不满足的池移除）。
-     * releaseRules=true / 可转债 / 观察池命中时不卡矩阵。
-     * <b>正式证券无主体内评分档时直接去掉全部信用债大库池（含 1～5 级）</b>；
-     * 临时代码无内评仍默认最低档 grade_code=4 再走矩阵（与 inCheckMainGradeRule 一致）；
-     * 有内评但期限档无法判定时不卡矩阵（对齐校验侧 bucket 无法匹配时跳过）。
+     * <p>正式证券无内评去掉分级库；临时代码默认档 4。观察名单按标准最好档封顶，不再跳过。
+     * 重点观察禁止新增分级库（强担保豁免）。releaseRules / 可转债跳过。
+     *
+     * @param pools 待过滤的投资池列表
+     * @param req   选池请求
+     * @return 过滤后的池列表
      */
     private List<InvestmentPoolBo> filterInboundByGradeRule(List<InvestmentPoolBo> pools, SecurityPoolAdjustReq req) {
         if (pools == null || pools.isEmpty()) {
@@ -391,15 +392,15 @@ public class SecurityPoolAdjustService {
         if (req.isReleaseRules() || req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             return pools;
         }
-        // 无信用债大库池：无需过滤
-        boolean hasCreditBondPool = false;
+        boolean hasGradedPool = false;
         for (InvestmentPoolBo p : pools) {
-            if (isCreditBondPool(p)) {
-                hasCreditBondPool = true;
+            // 判断列表里是否含信用债/境外债，没有则不必走矩阵
+            if (isGradedBondPool(p)) {
+                hasGradedPool = true;
                 break;
             }
         }
-        if (!hasCreditBondPool) {
+        if (!hasGradedPool) {
             return pools;
         }
         SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
@@ -410,34 +411,52 @@ public class SecurityPoolAdjustService {
         if ("convertible_bond".equals(securityInfo.getSecurityType())) {
             return pools;
         }
-        // 观察池命中时跳过矩阵过滤（对齐 inCheckMainGradeRule 和老系统 ASTRICTPOOLS->openrule=1）
-        if (securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
-                || securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode())) {
-            return pools;
+        // 证券自身或发行主体任一在观察名单，即按观察名单封顶
+        boolean inObserve = securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
+                || securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode());
+        // 证券自身或发行主体任一在重点观察名单，即走重点观察禁新增规则
+        boolean inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode())
+                || securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode());
+        // 当前已在池，用于重点观察判断是否「新增入库」
+        Set<Long> currentPoolIds = new HashSet<Long>();
+        List<Long> currentIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
+        if (currentIdList != null) {
+            currentPoolIds.addAll(currentIdList);
         }
-        // 主体内评分档（空串视为无内评；临时代码占位无内评默认最低档 4；担保债取主体与担保人较低者）
-        String gradeCode = normalizeGradeCode(securityInfo.getInnerIssuerRating());
-        if (gradeCode == null && isTemporarySecurity(securityInfo)) {
-            // 临时代码占位常无内评：对齐校验侧默认 grade_code=4
-            gradeCode = "4";
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
+        for (InvestmentPoolBo p : pools) {
+            poolMap.put(p.getId(), p);
         }
-        if (gradeCode != null
-                && securityInfo.getGuarantFlag() != null && securityInfo.getGuarantFlag() == 1
-                && securityInfo.getInnerGuarantorRating() != null && !securityInfo.getInnerGuarantorRating().isEmpty()) {
-            gradeCode = pickLowerRatingGrade(gradeCode, securityInfo.getInnerGuarantorRating());
+        // 取当前已在分级库的最好档，供重点观察判断「新增还是已在库」
+        Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
+        if (inRestricted && !CreditBondSpecialInboundRule.isStrongGuarantee(securityInfo)
+                && currentGradedSort == null) {
+            // 重点观察且未在分级库：整棵信用债/境外债树不可选
+            return excludeGradedBondPools(pools);
         }
-        // 正式证券无主体内评分档：可选池直接去掉信用债大库（含 1～5 级），禁止入库
+        // 临时代码默认档 4，担保债取孰高后再查矩阵
+        String gradeCode = resolveMatrixGradeCode(securityInfo);
         if (gradeCode == null) {
-            // 过滤掉全部 pool_type=credit_bond 的池节点
-            return excludeCreditBondPools(pools);
+            // 正式券无内评：去掉分级库
+            return excludeGradedBondPools(pools);
         }
-        // 期限档：date_exists（天）÷365 → 年，匹配 credit_bond_term_bucket
+        // 按含权口径换算剩余期限年，匹配期限档
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(securityInfo));
-        // 有内评但期限档无法判定：不卡矩阵（对齐 inCheckMainGradeRule bucket 无法匹配时 return null）
-        if (bucketCode == null) {
-            return pools;
+        List<Long> allowedPoolIds = null;
+        Integer bestAllowedSort = null;
+        if (bucketCode != null) {
+            allowedPoolIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
+            // 从矩阵允许池算出标准最好档
+            bestAllowedSort = resolveBestAllowedSort(allowedPoolIds, poolMap);
         }
-        List<Long> allowedPoolIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
+        // 观察/担保/私募/永续/次级/ABS 走档位封顶，普通债仍按矩阵精确池
+        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(securityInfo, inObserve);
+        Integer ceilingSort = null;
+        if (useCeiling && bestAllowedSort != null) {
+            // 特殊债/观察在标准最好档上叠加下调
+            ceilingSort = CreditBondSpecialInboundRule.resolveCeilingSort(
+                    gradeCode, bestAllowedSort, securityInfo, inObserve);
+        }
         // 保留叶子：非信用债大库叶子，或信用债大库叶子在矩阵允许列表；父级按子级递归保留（避免丢失父级树结构）
         List<Long> retained = new ArrayList<>();
         for (InvestmentPoolBo p : pools) {
@@ -451,9 +470,24 @@ public class SecurityPoolAdjustService {
             if (!isLeaf) {
                 continue;
             }
-            if (!isCreditBondPool(p)) {
+            if (!isGradedBondPool(p)) {
                 retained.add(p.getId());
-            } else if (allowedPoolIds != null && allowedPoolIds.contains(p.getId())) {
+                continue;
+            }
+            if (!CreditBondSpecialInboundRule.isGradedLevelPool(p)) {
+                continue;
+            }
+            String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
+                    securityInfo, inRestricted, currentGradedSort, p.getInnerSort());
+            if (restrictedFail != null) {
+                continue;
+            }
+            if (bucketCode == null) {
+                retained.add(p.getId());
+                continue;
+            }
+            // 按天花板或矩阵精确池判断该分级库叶子是否可保留
+            if (isLeafAllowedByGradeRule(p, allowedPoolIds, useCeiling, ceilingSort, poolMap)) {
                 retained.add(p.getId());
             }
         }
@@ -1724,10 +1758,11 @@ public class SecurityPoolAdjustService {
         shared.setPendingProcessNodeLabel(securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
         shared.setPendingPoolGroupIds(resolvePoolGroupIds(
                 securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(req.getSecurityCode(), null), poolMap));
-        // 观察池标志：老项目用于跳过债大库校验（ASTRICTPOOLS→openrule=1/isgcc=true），
-        // 当前项目主体债入库规则未落地（P2 阻塞），暂仅加载不使用，待主体债入库规则接入后启用
+        // 观察名单：证券或主体命中后按标准最好档封顶；重点观察：禁新增分级库
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
+        shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode()));
+        shared.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode()));
         // 评级下调三标志：主体/展望按发行人评级判定，担保人按前端选中代码判定（查 wind_cbondissuerrating）
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
@@ -2593,13 +2628,11 @@ public class SecurityPoolAdjustService {
      * 规则：主体债入库规则（credit_bond_pool_grade_rule 矩阵）
      *
      * <p>调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表，
-     * 目标池须在允许列表内。对应老项目 checkInPool:516-955（findMainGradeRuleList + sirmEnums sort 比对），
-     * 当前项目用 credit_bond_pool_grade_rule 矩阵（req[23]）替代老项目 IP_MainGradeRule，用
-     * SecurityInfoBo.innerIssuerRating 替代老项目 lon，用 date_exists（剩余期限天）÷365 + credit_bond_term_bucket
-     * 替代 bondDurationId。担保债取主体与担保人评级较低者（老项目 lon=min(主体,担保人)）。可转债不适用矩阵跳过。
-     * <b>正式证券无主体内评分档禁止入信用债大库 1～5 级</b>；
-     * 临时代码无内评默认最低档 grade_code=4 再走矩阵（对齐老系统 lon 默认 8.0）。
-     * 仅调入校验（老代码 checkOutPool 无）。
+     * 目标池须满足矩阵或特殊债天花板。担保债取主体与担保人内评孰高；
+     * 观察名单按标准最好档封顶；私募/永续/次级/ABS 在标准最好档上至少下调一级；
+     * 重点观察禁止新增分级库（强担保豁免）。可转债 / releaseRules 跳过。
+     * 正式证券无内评禁止入信用债/境外债 1～5 级；临时代码默认档 4。
+     * 仅调入校验。
      */
     private String inCheckMainGradeRule(AdjustCheckContext ctx) {
         // 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
@@ -2607,8 +2640,8 @@ public class SecurityPoolAdjustService {
             return null;
         }
         InvestmentPoolBo pool = ctx.getTargetPool();
-        // 前置门控：仅信用债大库池校验
-        if (!isCreditBondPool(pool)) {
+        // 前置门控：仅信用债 / 境外债分级库校验
+        if (!isGradedBondPool(pool)) {
             return null;
         }
         SecurityInfoBo sec = ctx.getSecurityInfo();
@@ -2619,58 +2652,70 @@ public class SecurityPoolAdjustService {
         if ("convertible_bond".equals(sec.getSecurityType())) {
             return null;
         }
-        // 观察池命中时跳过主体债入库规则（对齐老系统 ASTRICTPOOLS->openrule=1）
-        if (ctx.isSecurityInObservePool() || ctx.isIssuerInObservePool()) {
-            return null;
+        // 证券自身或发行主体任一在观察名单，即按观察名单封顶
+        boolean inObserve = ctx.isSecurityInObservePool() || ctx.isIssuerInObservePool();
+        // 证券自身或发行主体任一在重点观察名单，即走重点观察禁新增规则
+        boolean inRestricted = ctx.isSecurityInRestrictedPool() || ctx.isIssuerInRestrictedPool();
+        // 取当前已在分级库最好档，供重点观察区分新增/已在库
+        Integer currentGradedSort = resolveCurrentGradedSort(ctx.getCurrentPoolIds(), ctx.getPoolMap());
+        // 重点观察：禁止新增，已在库只能去五级
+        String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
+                sec, inRestricted, currentGradedSort,
+                CreditBondSpecialInboundRule.isGradedLevelPool(pool) ? pool.getInnerSort() : null);
+        if (restrictedFail != null) {
+            return restrictedFail;
         }
-        // 主体内评分档：正式证券无内评禁止入库；临时代码默认最低档 4
-        String gradeCode = normalizeGradeCode(sec.getInnerIssuerRating());
+        // 临时代码默认档 4，担保债取孰高
+        String gradeCode = resolveMatrixGradeCode(sec);
         if (gradeCode == null) {
-            // 临时代码占位证券常无内评：对齐老系统 lon 默认 8.0（对应本矩阵最低档 grade_code=4）
-            if (isTemporarySecurity(sec)) {
-                gradeCode = "4";
-            } else {
-                return "未配置主体内评分档";
-            }
+            return "未配置主体内评分档";
         }
-        // 担保债取严：主体与担保人评级较低者（sort_no 大者评级低）
-        if (sec.getGuarantFlag() != null && sec.getGuarantFlag() == 1
-                && sec.getInnerGuarantorRating() != null && !sec.getInnerGuarantorRating().isEmpty()) {
-            gradeCode = pickLowerRatingGrade(gradeCode, sec.getInnerGuarantorRating());
-        }
-        // 期限档：date_exists（天）÷365 匹配 credit_bond_term_bucket
+        // 含权口径换算期限后匹配期限档
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
         if (bucketCode == null) {
-            // 无法判定期限档（date_exists 为空或不在任何区间），跳过
             return null;
         }
-        // 查矩阵允许的池列表
         List<Long> allowedPoolIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
         if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
             return "主体债入库矩阵未配置允许池";
         }
-        // 校验目标池在允许列表内
-        if (!allowedPoolIds.contains(pool.getId())) {
-            StringBuilder names = new StringBuilder();
-            for (Long pid : allowedPoolIds) {
-                InvestmentPoolBo p = ctx.getPoolMap().get(pid);
-                String name = p != null ? p.getPoolName() : String.valueOf(pid);
-                if (names.length() > 0) {
-                    names.append("、");
-                }
-                names.append(name);
-            }
-            String targetName = pool.getPoolName() != null ? pool.getPoolName() : String.valueOf(pool.getId());
-            return "目标池「" + targetName + "」不在入库矩阵允许范围内（允许：" + names + "）";
+        // 标准矩阵最好档，再叠加特殊债下调
+        Integer bestAllowedSort = resolveBestAllowedSort(allowedPoolIds, ctx.getPoolMap());
+        // 观察/担保/私募/永续/次级/ABS 走档位封顶，普通债仍按矩阵精确池
+        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(sec, inObserve);
+        Integer ceilingSort = null;
+        if (useCeiling && bestAllowedSort != null) {
+            ceilingSort = CreditBondSpecialInboundRule.resolveCeilingSort(
+                    gradeCode, bestAllowedSort, sec, inObserve);
         }
-        return null;
+        // 目标池是否落在矩阵允许集或特殊债天花板内
+        if (isLeafAllowedByGradeRule(pool, allowedPoolIds, useCeiling, ceilingSort, ctx.getPoolMap())) {
+            return null;
+        }
+        String targetName = pool.getPoolName() != null ? pool.getPoolName() : String.valueOf(pool.getId());
+        if (useCeiling && ceilingSort != null) {
+            return "目标池「" + targetName + "」不在特殊债调整后的允许范围内（仅 " + ceilingSort + " 级及更差）";
+        }
+        StringBuilder names = new StringBuilder();
+        for (Long pid : allowedPoolIds) {
+            InvestmentPoolBo p = ctx.getPoolMap() == null ? null : ctx.getPoolMap().get(pid);
+            String name = p != null ? p.getPoolName() : String.valueOf(pid);
+            if (names.length() > 0) {
+                names.append("、");
+            }
+            names.append(name);
+        }
+        return "目标池「" + targetName + "」不在入库矩阵允许范围内（允许：" + names + "）";
     }
 
     /**
      * 按剩余期限（年）匹配信用债期限分组编码。
      *
      * <p>遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
-     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（date_exists 天 ÷365）。
+     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（含权口径天数 ÷365）。
+     *
+     * @param remainTermYears 剩余期限年数
+     * @return 期限档编码；无法匹配返回 null
      */
     private String matchTermBucket(BigDecimal remainTermYears) {
         if (remainTermYears == null) {
@@ -2694,11 +2739,15 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 取两个主体内评分档中评级较低者（sort_no 较大者）。
+     * 取两个主体内评分档中评级较高者（sort_no 较小者；担保债按主体与担保人孰高）。
      *
-     * <p>对应老项目担保债 lon=min(主体,担保人)。评分档未命中字典时保持主体评级档不变。
+     * <p>评分档未命中字典时保持主体评级档不变。
+     *
+     * @param gradeCode1 主体内评档
+     * @param gradeCode2 担保人内评档
+     * @return 更好的那档
      */
-    private String pickLowerRatingGrade(String gradeCode1, String gradeCode2) {
+    private String pickBetterRatingGrade(String gradeCode1, String gradeCode2) {
         List<CreditBondInnerRatingGradeBo> grades = creditBondGradeRuleMapper.queryEnabledRatingGradeList();
         Integer sort1 = null;
         Integer sort2 = null;
@@ -2710,11 +2759,148 @@ public class SecurityPoolAdjustService {
                 sort2 = g.getSortNo();
             }
         }
-        // 取评级低者（sort_no 大者）；任一未命中保持主体评级档
-        if (sort1 != null && sort2 != null && sort2 > sort1) {
+        if (sort1 != null && sort2 != null && sort2 < sort1) {
             return gradeCode2;
         }
         return gradeCode1;
+    }
+
+    /**
+     * 查矩阵用内评档：临时代码默认 4；担保债取主体与担保人孰高。
+     *
+     * @param sec 证券主数据
+     * @return 内评档编码；正式券无内评返回 null
+     */
+    private String resolveMatrixGradeCode(SecurityInfoBo sec) {
+        // 空串视为无内评
+        String gradeCode = normalizeGradeCode(sec.getInnerIssuerRating());
+        // 临时代码占位常无内评，默认最低档 4
+        if (gradeCode == null && isTemporarySecurity(sec)) {
+            gradeCode = "4";
+        }
+        if (gradeCode != null && CreditBondSpecialInboundRule.isGuaranteed(sec)
+                && sec.getInnerGuarantorRating() != null && !sec.getInnerGuarantorRating().isEmpty()) {
+            // 担保债用更好的那档查矩阵
+            gradeCode = pickBetterRatingGrade(gradeCode, sec.getInnerGuarantorRating());
+        }
+        return gradeCode;
+    }
+
+    /**
+     * 是否信用债或境外债树。
+     *
+     * @param pool 投资池
+     * @return true=信用债或境外债
+     */
+    private boolean isGradedBondPool(InvestmentPoolBo pool) {
+        return pool != null && CreditBondSpecialInboundRule.isGradedBondPoolType(pool.getPoolType());
+    }
+
+    /**
+     * 当前已在分级库的最好档（inner_sort 最小）。
+     *
+     * @param currentPoolIds 当前在池 ID
+     * @param poolMap        全量池索引
+     * @return 最好档；未在分级库返回 null
+     */
+    private Integer resolveCurrentGradedSort(Set<Long> currentPoolIds, Map<Long, InvestmentPoolBo> poolMap) {
+        Integer best = null;
+        if (currentPoolIds == null || poolMap == null) {
+            return null;
+        }
+        for (Long id : currentPoolIds) {
+            InvestmentPoolBo p = poolMap.get(id);
+            if (!CreditBondSpecialInboundRule.isGradedLevelPool(p)) {
+                continue;
+            }
+            if (best == null || p.getInnerSort() < best) {
+                best = p.getInnerSort();
+            }
+        }
+        return best;
+    }
+
+    /**
+     * 标准矩阵允许池的最好档。
+     *
+     * @param allowedPoolIds 矩阵允许的信用债池 ID
+     * @param poolMap        全量池索引
+     * @return 最小 inner_sort；无法解析返回 null
+     */
+    private Integer resolveBestAllowedSort(List<Long> allowedPoolIds, Map<Long, InvestmentPoolBo> poolMap) {
+        Integer best = null;
+        if (allowedPoolIds == null) {
+            return null;
+        }
+        for (Long id : allowedPoolIds) {
+            InvestmentPoolBo p = poolMap == null ? null : poolMap.get(id);
+            if (p == null || p.getInnerSort() == null) {
+                continue;
+            }
+            if (best == null || p.getInnerSort() < best) {
+                best = p.getInnerSort();
+            }
+        }
+        return best;
+    }
+
+    /**
+     * 叶子是否允许：特殊债 / 观察走天花板；普通信用债按矩阵 poolId；境外债按同一 inner_sort。
+     *
+     * @param pool           待判断叶子池
+     * @param allowedPoolIds 矩阵允许的信用债池 ID
+     * @param useCeiling     是否按档位封顶
+     * @param ceilingSort    天花板档位
+     * @param poolMap        全量池索引（境外债对齐 inner_sort）
+     * @return true=允许调入
+     */
+    private boolean isLeafAllowedByGradeRule(InvestmentPoolBo pool, List<Long> allowedPoolIds,
+                                             boolean useCeiling, Integer ceilingSort,
+                                             Map<Long, InvestmentPoolBo> poolMap) {
+        if (useCeiling) {
+            return ceilingSort != null && pool.getInnerSort() != null && pool.getInnerSort() >= ceilingSort;
+        }
+        if (isCreditBondPool(pool)) {
+            return allowedPoolIds != null && allowedPoolIds.contains(pool.getId());
+        }
+        if (isOffshoreBondPool(pool) && pool.getInnerSort() != null && allowedPoolIds != null) {
+            for (Long pid : allowedPoolIds) {
+                InvestmentPoolBo allowed = poolMap == null ? null : poolMap.get(pid);
+                if (allowed != null && pool.getInnerSort().equals(allowed.getInnerSort())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 是否境外债池。
+     *
+     * @param pool 投资池
+     * @return true=境外债
+     */
+    private boolean isOffshoreBondPool(InvestmentPoolBo pool) {
+        return pool != null && PoolType.OFFSHORE_BOND.getCode().equals(pool.getPoolType());
+    }
+
+    /**
+     * 去掉信用债 / 境外债整棵树。
+     *
+     * @param pools 原池列表
+     * @return 不含分级库的列表
+     */
+    private List<InvestmentPoolBo> excludeGradedBondPools(List<InvestmentPoolBo> pools) {
+        if (pools == null || pools.isEmpty()) {
+            return pools;
+        }
+        List<InvestmentPoolBo> result = new ArrayList<InvestmentPoolBo>();
+        for (InvestmentPoolBo p : pools) {
+            if (!isGradedBondPool(p)) {
+                result.add(p);
+            }
+        }
+        return result;
     }
 
     /**
@@ -2735,6 +2921,7 @@ public class SecurityPoolAdjustService {
         if (sec == null) {
             throw new BizException("证券不存在，无法校验改判池");
         }
+        // 按矩阵+特殊债天花板取允许改判的分级库
         List<Long> allowedPoolIds = queryAllowedPoolIdsForSecurity(sec);
         if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
             throw new BizException("该证券不符合主体债入库矩阵，无法改判");
@@ -2758,6 +2945,7 @@ public class SecurityPoolAdjustService {
         if (sec == null) {
             return new ArrayList<>();
         }
+        // 按矩阵+特殊债天花板展开改判候选项
         List<Long> allowedPoolIds = queryAllowedPoolIdsForSecurity(sec);
         if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
             return new ArrayList<>();
@@ -2898,24 +3086,56 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 查证券的主体债入库矩阵允许池 ID 列表（复用 inCheckMainGradeRule 的评级/期限档逻辑）。
+     * 查证券的主体债入库允许池 ID（矩阵 + 特殊债天花板，含境外债同档）。
+     *
+     * @param sec 证券主数据
+     * @return 允许调入的分级库 ID；无匹配返回空列表
      */
     private List<Long> queryAllowedPoolIdsForSecurity(SecurityInfoBo sec) {
-        String gradeCode = normalizeGradeCode(sec.getInnerIssuerRating());
+        // 临时代码默认档 4，担保债取孰高
+        String gradeCode = resolveMatrixGradeCode(sec);
         if (gradeCode == null) {
-            return new ArrayList<>();
+            return new ArrayList<Long>();
         }
-        // 担保债取严
-        if (sec.getGuarantFlag() != null && sec.getGuarantFlag() == 1
-                && sec.getInnerGuarantorRating() != null && !sec.getInnerGuarantorRating().isEmpty()) {
-            gradeCode = pickLowerRatingGrade(gradeCode, sec.getInnerGuarantorRating());
-        }
-        // 期限档：date_exists（天）÷365
+        // 含权口径匹配期限档
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
         if (bucketCode == null) {
-            return new ArrayList<>();
+            return new ArrayList<Long>();
         }
-        return creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
+        List<Long> matrixIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
+        if (matrixIds == null || matrixIds.isEmpty()) {
+            return new ArrayList<Long>();
+        }
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
+        for (InvestmentPoolBo p : investmentPoolMapper.queryPoolList()) {
+            poolMap.put(p.getId(), p);
+        }
+        // 标准最好档叠加特殊债下调后，展开信用债/境外债同档叶子
+        Integer bestAllowedSort = resolveBestAllowedSort(matrixIds, poolMap);
+        // 改判候选项同样：证券或主体在观察名单则走天花板
+        boolean inObserve = false;
+        if (sec.getWindCode() != null) {
+            inObserve = securityPoolAdjustMapper.querySecurityInObservePool(sec.getWindCode())
+                    || securityPoolAdjustMapper.queryIssuerInObservePool(sec.getWindCode());
+        }
+        // 观察/担保/私募/永续/次级/ABS 走档位封顶，普通债仍按矩阵精确池
+        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(sec, inObserve);
+        Integer ceilingSort = null;
+        if (useCeiling && bestAllowedSort != null) {
+            ceilingSort = CreditBondSpecialInboundRule.resolveCeilingSort(
+                    gradeCode, bestAllowedSort, sec, inObserve);
+        }
+        List<Long> result = new ArrayList<Long>();
+        for (InvestmentPoolBo p : poolMap.values()) {
+            if (!CreditBondSpecialInboundRule.isGradedLevelPool(p)) {
+                continue;
+            }
+            // 按天花板或矩阵精确池收集改判候选项
+            if (isLeafAllowedByGradeRule(p, matrixIds, useCeiling, ceilingSort, poolMap)) {
+                result.add(p.getId());
+            }
+        }
+        return result;
     }
 
     /**
@@ -3612,6 +3832,8 @@ public class SecurityPoolAdjustService {
         ctx.setPendingProcessNodeLabel(shared.getPendingProcessNodeLabel());
         ctx.setSecurityInObservePool(shared.isSecurityInObservePool());
         ctx.setIssuerInObservePool(shared.isIssuerInObservePool());
+        ctx.setSecurityInRestrictedPool(shared.isSecurityInRestrictedPool());
+        ctx.setIssuerInRestrictedPool(shared.isIssuerInRestrictedPool());
         ctx.setRequestInPoolIds(shared.getRequestInPoolIds());
         ctx.setRequestOutPoolIds(shared.getRequestOutPoolIds());
         // 调出时查询证券在目标池的入池时间，用于冻结期校验（调入时不需要）
@@ -4308,8 +4530,11 @@ public class SecurityPoolAdjustService {
         shared.setPendingPoolGroupIds(resolvePoolGroupIds(
                 securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(securityCode, null),
                 mainShared.getPoolMap()));
+        // 观察名单：证券或主体命中后按标准最好档封顶；重点观察：禁新增分级库
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(securityCode));
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(securityCode));
+        shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(securityCode));
+        shared.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(securityCode));
         // 评级下调标志按关联券自身主体信息判定
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));

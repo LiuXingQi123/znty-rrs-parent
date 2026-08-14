@@ -848,6 +848,133 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(gradeRuleMapper, never()).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
     }
 
+    /** 永续债 1 档也须下调一级，不能进一级库。 */
+    @Test
+    public void inCheckMainGradeRuleShouldDowngradePerpetualFromLevelOne() {
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo level1 = new InvestmentPoolBo();
+        level1.setId(2L);
+        level1.setPoolType("credit_bond");
+        level1.setPoolName("一级库");
+        level1.setPoolLevel(2);
+        level1.setInnerSort(1);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        sec.setYxFlag(1);
+        sec.setDateExists(new BigDecimal("1826"));
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(level1);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(Collections.singletonMap(2L, level1));
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
+                .thenReturn(Collections.singletonList(2L));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).contains("仅 2 级及更差");
+    }
+
+    /** 观察名单不再跳过矩阵，按标准最好档封顶。 */
+    @Test
+    public void inCheckMainGradeRuleShouldCapObserveAtStandardBest() {
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo level1 = new InvestmentPoolBo();
+        level1.setId(2L);
+        level1.setPoolType("credit_bond");
+        level1.setPoolName("一级库");
+        level1.setPoolLevel(2);
+        level1.setInnerSort(1);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        sec.setDateExists(new BigDecimal("1826"));
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(level1);
+        ctx.setSecurityInfo(sec);
+        ctx.setSecurityInObservePool(true);
+        ctx.setPoolMap(Collections.singletonMap(2L, level1));
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
+                .thenReturn(Collections.singletonList(2L));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isNull();
+        verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
+    }
+
+    /** 重点观察原则上不得新增进入分级库。 */
+    @Test
+    public void inCheckMainGradeRuleShouldBlockRestrictedNewInbound() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolBo level1 = new InvestmentPoolBo();
+        level1.setId(2L);
+        level1.setPoolType("credit_bond");
+        level1.setPoolName("一级库");
+        level1.setPoolLevel(2);
+        level1.setInnerSort(1);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(level1);
+        ctx.setSecurityInfo(sec);
+        ctx.setSecurityInRestrictedPool(true);
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setPoolMap(Collections.singletonMap(2L, level1));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).contains("不得新增入库");
+    }
+
+    /** 境外债按信用债矩阵 inner_sort 对齐。 */
+    @Test
+    public void inCheckMainGradeRuleShouldApplyOffshoreByInnerSort() {
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo creditL1 = new InvestmentPoolBo();
+        creditL1.setId(2L);
+        creditL1.setPoolType("credit_bond");
+        creditL1.setInnerSort(1);
+        creditL1.setPoolLevel(2);
+        InvestmentPoolBo offshoreL1 = new InvestmentPoolBo();
+        offshoreL1.setId(24L);
+        offshoreL1.setPoolType("offshore_bond");
+        offshoreL1.setPoolName("境外债一级库");
+        offshoreL1.setInnerSort(1);
+        offshoreL1.setPoolLevel(2);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
+        poolMap.put(2L, creditL1);
+        poolMap.put(24L, offshoreL1);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        sec.setDateExists(new BigDecimal("1826"));
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(offshoreL1);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(poolMap);
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
+                .thenReturn(Collections.singletonList(2L));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isNull();
+    }
+
     /** 验证 queryAdjustPoolListShouldSkipPermissionFilterForAdmin 测试场景。 */
     @Test
     public void queryAdjustPoolListShouldSkipPermissionFilterForAdmin() {

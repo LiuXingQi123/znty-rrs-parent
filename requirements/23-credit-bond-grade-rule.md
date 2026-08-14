@@ -45,7 +45,9 @@
 
 业务含义：给定一只信用债的「剩余期限分组 × 主体内评分档」，决定它可准入到信用债大库的哪几个级别库（一~五级库）。
 
-> **期限口径**：调库校验消费矩阵时，期限档按**剩余期限**匹配，取自 `rrs_securityinfo.date_exists`（天，DECIMAL(10,4)），经 `CreditBondRemainTermUtil` 按 **天数 ÷ 365** 换算为年后再匹配 `credit_bond_term_bucket`；不是证券主数据 `term_year`（发行总期限）。`date_exists` 为空时跳过期限档（不卡矩阵）。
+> **期限口径**：调库校验消费矩阵时，期限档按**剩余期限**匹配。普通债取 `rrs_securityinfo.date_exists`；含权债回售取 `date_inright_exists`/`date_repurchase_exists`，赎回取 `date_exists`，两者都有取更短。经 `CreditBondRemainTermUtil` 按 **天数 ÷ 365** 换算为年后匹配 `credit_bond_term_bucket`。`date_exists` 等为空时跳过期限档（不卡矩阵）。
+>
+> **特殊债消费**：矩阵单元格仍是「标准最好档」。私募/永续/次级/ABS/担保/观察/重点观察的下调与封顶在 `CreditBondSpecialInboundRule` 中叠加；境外债按同一 `inner_sort` 套用。
 
 **CRUD 操作**（仅 2 个接口，无单条增删改、无启用/停用单条规则）：
 - 查询矩阵：`queryGradeRuleMatrix`（只读）
