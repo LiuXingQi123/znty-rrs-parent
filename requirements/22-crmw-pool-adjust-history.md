@@ -78,7 +78,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 | 投资池名称 | `targetPoolName` | 全路径名 |
 | 审核状态 | `auditStatus` | `el-tag`（`auditStatusType`：20/10/32→success；21/-1→danger；00/11→warning；99→info） |
 
-**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId(row.id)/adjustBatchNo/entryMode=view`，跳 `crmw_pool_adjust_detail.html?...`。
+**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId(row.id)/adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键须含 `crmwScode` + `securityCode` + 批次），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
 
 ---
 
@@ -111,7 +111,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 ## 6. 与其他池模块的差异
 
 - **vs 证券池历史（10）**：CRMW 历史页筛选项为 CRMW 代码/名称（而非证券代码/简称）；主表 `ip_adjust_log` 以 `pool_type='crmw'` 过滤；表格列含 CRMW 名称/代码。
-- **vs 禁投池历史（13）**：CRMW 历史页表格中 CRMW 名称/代码/证券名称/代码**可点击跳详情**（`openCrmwAdjustDetail`，`entryMode=view`），禁投池历史页「证券名称/代码」仅样式不可点击。
+- **vs 禁投池历史（13）**：两边名称/代码均可点击跳详情。CRMW 走 `openCrmwAdjustDetail`（须带 `crmwScode`）；禁投池走 `openPoolAdjustDetail`，按 `categoryType` 分流主体/证券详情。
 - **vs CRMW 查询页（18）**：历史页主表 `ip_adjust_log`（调库流水，含所有状态）；查询页主表 `ip_pool_status_crmw`（当前状态，仅 `audit_status='20'`）。
 - 状态字典一致：8 项内联（含 `'32'`），与禁投池历史页一致。
 
@@ -127,7 +127,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 
 ## 8. 关键源码索引
 
-- 前端：`znty-rrs-ui/crmw_pool_adjust_history.html`（`loadList`、`auditStatusLabel`/`auditStatusType`、`adjustTypeTagType`、`openCrmwAdjustDetail`、`refreshTableLayout`）
+- 前端：`znty-rrs-ui/pages/crmw_pool_adjust_history.html`（`loadList`、`auditStatusLabel`/`auditStatusType`、`adjustTypeTagType`、`openCrmwAdjustDetail`、`refreshTableLayout`）
 - Controller：`CrmwPoolAdjustHistoryController.java`（`@RequestMapping("/api/v1/crmwPoolAdjustHistory")`）
 - Service：`CrmwPoolAdjustHistoryService.java`（`queryCrmwPoolAdjustHistoryPage`、`fillPoolFullName`）
 - Mapper：`CrmwPoolAdjustHistoryMapper.java` / `resources/mapper/CrmwPoolAdjustHistoryMapper.xml`

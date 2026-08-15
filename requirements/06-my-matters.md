@@ -25,7 +25,7 @@
 | `processDescription` | `''` | 文本输入 | 流程描述关键词，回车查询 |
 | `auditStatus` | `''` | 下拉 | 调整状态（8 码） |
 | `initiatorName` | `''` | 文本输入 | 发起人 |
-| `currentUserId` | `'1'` | — | TODO，1 视为管理员 |
+| `currentUserId` | `RrsAuth.getCurrentUser().userId` | — | 前端取登录用户；后端 `'1'` 视为管理员 |
 
 `auditStatusOptions`：7 码（`-1/00/11/20/21/32/99`），同 dict.js `DICT_AUDIT_STATUS`。无投资池树、无证券类型筛选。
 
@@ -54,7 +54,7 @@
 | `auditStatus` | 下拉 | 空串转 null |
 | `stepStatus` | `activeTab` | `pending` 或 `completed`，决定待处理/已完成 |
 | `initiatorName` | 表单 | 空串转 null |
-| `currentUserId` | 固定 `'1'` | 必传 |
+| `currentUserId` | `RrsAuth.getCurrentUser().userId` | 必传；后端 `'1'` 视为管理员 |
 | `pageIndex` / `pageSize` | 分页 | — |
 
 返回 `PageResult<MyMattersDto>`，取 `records`/`total`。
@@ -83,19 +83,10 @@
 
 ## 5. 跳转审核 / 详情
 
-`openMatterPage(row)`：
-```js
-const params = new URLSearchParams();
-if (row.securityCode) params.set('securityCode', row.securityCode);
-if (row.targetPoolId) params.set('targetPoolId', row.targetPoolId);
-if (row.adjustLogId) params.set('adjustLogId', row.adjustLogId);
-if (row.adjustBatchNo) params.set('adjustBatchNo', row.adjustBatchNo);
-params.set('entryMode', this.activeTab === 'pending' ? 'process' : 'view');
-const page = this.activeTab === 'pending' ? 'security_pool_adjust_approve.html' : 'security_pool_adjust_detail.html';
-window.location.href = page + '?' + params.toString();
-```
-- **待处理** → `security_pool_adjust_approve.html?entryMode=process`，审核页 `initStandaloneReviewPage` 读取参数，`entryMode !== 'next'` 即为 process 处理模式，`adjustStep=2` 进入校验确认。
-- **已完成** → `security_pool_adjust_detail.html?entryMode=view`，详情页只读模式。
+`openMatterPage(row)`：工作台内走 `RrsWorkbench.openDetailTab`，按场景+证券/主体+批次新开页签，同键复用；「我的事宜」列表 iframe 不跳走。脱离工作台时仍 `location.href`。**若公司工作台不兼容新开 Tab，此处可还原为 `location.href` + 详情页 `history.back()`**（见 [README](README.md)「跳转层可回退」）。
+- **待处理** → 对应 `*_approve.html?entryMode=process`，页签标题为「简称 审核」。
+- **已完成** → 对应 `*_detail.html?entryMode=view`，页签标题为「简称 详情」。
+- 审核/详情页「返回」关闭当前动态页签，回到「我的事宜」并重新拉取列表与角标。
 
 分页参数同前（pageIndex=1, pageSize=20, page-sizes=[10,20,50,100]）。
 
@@ -104,7 +95,7 @@ window.location.href = page + '?' + params.toString();
 独立表格，不混入待处理/已完成。接口仍是 `POST /api/v1/gradeRuleAlert/queryAlertPage` 与 `editAlertProcessed`，后端流程不变。
 
 - 列：证券代码/简称、发行主体、当前分级库、特殊类型、不符合原因、状态、扫描时间。
-- 「去调库」→ `security_pool_adjust.html?securityCode=`。
+- 「去调库」工作台内新开「证券池调整」页签（`security_pool_adjust.html?securityCode=`），不覆盖事宜页。
 - 「标记已处理」仅 `alert_status=00`，确认后调用 `editAlertProcessed`，不改池。
 - `pages/grade_rule_alert.html` 仅重定向到本页 `?tab=gradeRuleAlert`，左侧不再单列菜单。
 
@@ -114,7 +105,7 @@ window.location.href = page + '?' + params.toString();
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `myMatters/queryMyMattersPage` | flowIds, startDateStart, startDateEnd, processDescription, auditStatus, stepStatus(pending\|completed), initiatorName, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>`（含 flowName, stepName, processDescription, stepStatus, adjustLogId, targetPoolId, adjustBatchNo, securityCode） | 我的事宜分页列表（待处理/已完成） |
+| `myMatters/queryMyMattersPage` | flowIds, startDateStart, startDateEnd, processDescription, auditStatus, stepStatus(pending\|completed), initiatorName, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>`（含 flowName, stepName, processDescription, stepStatus, adjustLogId, targetPoolId, adjustBatchNo, securityCode, securityShortName, crmwScode, businessScene） | 我的事宜分页列表（待处理/已完成） |
 | `myMatters/queryFlowOptionList` | `{currentUserId}` | `List<FlowOptionDto>`（flowId/flowKey/flowName/description） | 我的事宜流程名称下拉 |
 | `gradeRuleAlert/queryAlertPage` | securityCode, alertStatus, pageIndex, pageSize | `PageResult<GradeRuleAlertDto>` | 分级规则提醒页签列表（后端原接口，未改） |
 | `gradeRuleAlert/editAlertProcessed` | id, currentUserId, currentUserName | 更新后的待办 | 标记已处理，不改池 |
@@ -179,12 +170,13 @@ window.location.href = page + '?' + params.toString();
 - 分页、组合筛选和清空筛选行为正确。
 - 跳转时携带足够的调整记录、批次和步骤标识。
 - `MyMattersApiTest` 覆盖事项分页与流程筛选接口。
+- 提醒页签复用 `gradeRuleAlert` 接口；当前无独立 `GradeRuleAlertApiTest`（任务扫描见 [29](29-scheduled-task.md) `GradeRuleAlertService`）。
 
 ## 10. 关键源码索引
 
-- 前端：`znty-rrs-ui/pages/my_matters.html`（含分级规则提醒页签）、`znty-rrs-ui/docs/dict.js`
+- 前端：`znty-rrs-ui/pages/my_matters.html`（含分级规则提醒页签）、`znty-rrs-ui/js/api.js`（`RrsWorkbench`）、`znty-rrs-ui/docs/dict.js`
 - Controller：`MyMattersController.java`；提醒页签复用 `GradeRuleAlertController`（接口未改）
 - Service：`MyMattersService.java`、`InvestmentPoolService.java`、`GradeRuleAlertService.java`
-- Mapper：`MyMattersMapper.xml`
-- 实体：`MyMattersDto`、`MyMattersReq`、`FlowOptionDto`
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log / ip_adjust_step）、`sql/rrs_flow_definition_schema.sql`
+- Mapper：`MyMattersMapper.xml`、`GradeRuleAlertMapper.xml`
+- 实体：`MyMattersDto`、`MyMattersReq`、`FlowOptionDto`、`GradeRuleAlertDto`、`GradeRuleAlertReq`
+- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log / ip_adjust_step）、`sql/rrs_flow_definition_schema.sql`、`sql/rrs_grade_rule_alert_schema.sql` + `rrs_grade_rule_alert_demo_data.sql`（`ip_grade_rule_alert`）

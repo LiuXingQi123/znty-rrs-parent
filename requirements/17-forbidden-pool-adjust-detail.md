@@ -48,7 +48,7 @@
 
 - `isViewMode=true`、`isSecurityInfoReadonly=true`（主体字段全 `disabled`）。
 - 展示：主体基本信息、当前所在池（两子块）、调库记录表、当前流程状态表。
-- **无任何提交入口**：`showLogUploadActions=false`，无审批区，无「提交」按钮。顶部「返回」（`backToList`）。终态记录（`20/21/99/-1`）同样只读。
+- **无任何提交入口**：`showLogUploadActions=false`，无审批区，无「提交」按钮。顶部「返回」`backToList()`：先 `RrsWorkbench.closeActiveTab()`，失败再回页内列表。禁止 `history.back()`。终态记录（`20/21/99/-1`）同样只读。
 - 「查看债券」按钮（`openCompanyBondDialog`）调 `queryCompanyBondList` 弹窗显示旗下债券明细。
 
 ### 3.2 adjust 可调整模式（首次调库提交，与 [15] 步骤 1/2 同构）

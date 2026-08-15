@@ -60,8 +60,8 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 | 列 | prop/渲染 | 说明 |
 |---|---|---|
 | 序号 | 计算 | 居中 |
-| 证券简称 | `securityShortName`，`desc-link` 可点击 | 点击 `openSecurityAdjustDetail(row)` |
-| 证券代码 | `securityCode`，`desc-link` 可点击 | 点击 `openSecurityAdjustDetail(row)` |
+| 证券简称 | `securityShortName`，`desc-link` 可点击 | 点击 `openPoolAdjustDetail(row)` |
+| 证券代码 | `securityCode`，`desc-link` 可点击 | 点击 `openPoolAdjustDetail(row)` |
 | 发行主体 | `issuer` | 空值空白 |
 | 调整人 | `adjusterName` | |
 | 证券类型 | `securityTypeName` | 有值 `el-tag type=info`，无值空 |
@@ -73,7 +73,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 
 ### 2.4 跳转详情
 
-`openSecurityAdjustDetail(row)`：拼 URL 参数 `securityCode`/`targetPoolId`/`adjustBatchNo`/`entryMode=view`，跳转 `security_pool_adjust_detail.html`（只读查看模式）。
+`openPoolAdjustDetail(row)`：按 `categoryType==='company'` 分流。主体拼 `companyCode` 进 `forbidden_pool_adjust_detail.html`；债券拼 `securityCode` 进 `security_pool_adjust_detail.html`。另带 `targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `forbidden-detail` 或 `security-detail` + 代码 + 批次），同键复用；脱离工作台回退 `location.href`。
 
 ### 2.5 证券类型下拉
 
@@ -158,7 +158,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 
 ## 7. 关键源码索引
 
-- 前端：`znty-rrs-ui/forbidden_pool_query.html`（`loadList`、`loadBondTypeOptions`、`getBondStatus`、`openSecurityAdjustDetail`）
+- 前端：`znty-rrs-ui/pages/forbidden_pool_query.html`（`loadList`、`loadBondTypeOptions`、`getBondStatus`、`openPoolAdjustDetail`）
 - Controller：`ForbiddenPoolQueryController.java`
 - Service：`ForbiddenPoolQueryService.java`（`queryForbiddenPoolPage`、`fillPoolFullName`、`querySecurityTypeList`）
 - Mapper：`ForbiddenPoolQueryMapper.xml`

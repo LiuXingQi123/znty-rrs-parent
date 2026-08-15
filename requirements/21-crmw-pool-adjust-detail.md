@@ -38,7 +38,7 @@
 - `entryMode='adjust'`：隐藏调库记录区与流程状态区，显示调库操作区（步骤1选池）。
 - 步骤1：左右双栏「可调入库」（绿）+「可调出库」（红），树形 `el-table`，叶子节点可勾选，互斥校验（`handleInPoolSelect`/`handleOutPoolSelect`）。
 - 步骤2（`goToStep2`）：调 `checkCrmwAdjust` → 展示校验结果表 + 原因建议。
-- 提交（`handleSubmit`→`confirmFlowSelection`→`submitAdjustLog`）：调 `addCrmwAdjustLogWithFiles`（multipart），成功后 `backToList`。
+- 提交（`handleSubmit`→`confirmFlowSelection`→`submitAdjustLog`）：调 `addCrmwAdjustLogWithFiles`（multipart），成功后 `backToList`（先 `closeActiveTab()`，失败再回页内列表）。顶部「返回」同样先关动态页签，禁止 `history.back()`。
 
 ### 3.3 详情页不实现修改节点重新提交
 

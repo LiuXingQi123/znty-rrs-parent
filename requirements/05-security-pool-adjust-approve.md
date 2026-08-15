@@ -324,29 +324,19 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
 ## 4. 我的事宜入口
 
+完整页签、筛选与提醒见 [06-my-matters.md](06-my-matters.md)。此处只记进入本审核页的约定。
+
 ### 4.1 列表查询
 
-`my_matters.html` 用 `el-tabs` 切换「待处理/已完成」两个 tab（`activeTab: 'pending'|'completed'`），切换触发 `handleTabClick` 重置页码并重新加载。
+`my_matters.html` 用 `el-tabs` 切换三个页签：`待处理(pending)` / `已完成(completed)` / `分级规则提醒(gradeRuleAlert)`。前两个走 `POST /api/v1/myMatters/queryMyMattersPage`（`stepStatus` 由页签决定）；第三个走独立 `gradeRuleAlert` 接口，**不**与审批 SQL 混排。
 
-`loadList` 调 `POST /api/v1/myMatters/queryMyMattersPage`，请求体：
-```js
-{
-  flowIds: [...],                // 流程 ID 多选
-  startDateStart, startDateEnd,  // 开始日期范围 yyyy-MM-dd
-  processDescription,            // 描述关键词
-  auditStatus,                   // 审核状态码
-  stepStatus: 'pending'|'completed',  // 由 activeTab 决定
-  initiatorName,
-  currentUserId: '1',
-  pageIndex, pageSize
-}
-```
+`currentUserId` 前端取 `RrsAuth.getCurrentUser().userId`，不再写死 `'1'`。后端 `currentUserId='1'` 仍视为管理员（不带 `handler_id` 过滤）。
 
-后端 `MyMattersMapper.xml` 核心 SQL：
+后端 `MyMattersMapper.xml` 核心 SQL（待处理/已完成）：
 - 待处理 tab：INNER JOIN 子查询取每个 `adjust_log_id` 的 `MAX(step_id)` 且 `step_status='pending'`，非管理员额外加 `handler_id = currentUserId` 过滤。
 - 已完成 tab：取每个调库记录的最新步骤，并要求该批次无 pending 步骤（`NOT EXISTS(... step_status='pending' ...)`）。
 - 全局过滤：非管理员要求该调库记录下存在 `handler_id = currentUserId` 的步骤（只显示自己参与过的）；`currentUserId` 为空时 `AND 1=0` 强制返回空。
-- 返回字段含 `stepId`（即 `s.id`）、`flowName`、`stepName`（nodeLabel）、`processDescription`（拼接「发起人 将 证券简称 调入/调出 目标池 的审批申请」）、`auditStatus`、`stepStatus`、`initiatorName`、`startTime`。
+- 返回字段含 `stepId`（即 `s.id`）、`flowName`、`stepName`（nodeLabel）、`processDescription`、`auditStatus`、`stepStatus`、`initiatorName`、`startTime`，以及跳转所需 `securityCode`/`securityShortName`/`crmwScode`/`businessScene`/`adjustLogId`/`targetPoolId`/`adjustBatchNo`。
 
 `MyMattersService.replacePoolNameWithFullPath` 后处理将描述中的「目标池叶子名称」替换为「全路径名称」。
 
@@ -356,10 +346,10 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
 ### 4.3 跳转审核页
 
-`openMatterPage(row)`：
-- 拼 URL 参数：`securityCode / targetPoolId / adjustLogId / adjustBatchNo / entryMode`。
-- `entryMode`：pending tab → `'process'`（进入 `security_pool_adjust_approve.html`）；completed tab → `'view'`（进入 `security_pool_adjust_detail.html`）。
-- `window.location.href = page + '?' + params.toString()`
+`openMatterPage(row)`：工作台内走 `RrsWorkbench.openDetailTab`，按 `businessScene` + 证券/主体/凭证 + 批次新开页签，同键复用；「我的事宜」列表 iframe 不跳走。脱离工作台时仍 `location.href`。
+- 拼 URL 参数：`securityCode`（主体场景为 `companyCode`）/ `crmwScode`（CRMW）/ `targetPoolId` / `adjustLogId` / `adjustBatchNo` / `entryMode`。
+- `entryMode`：pending tab → `'process'`（证券进 `security_pool_adjust_approve.html`，主体进 `forbidden_pool_adjust_approve.html`，CRMW 进 `crmw_pool_adjust_approve.html`）；completed tab → `'view'`（对应 `*_detail.html`）。
+- 本审核页「返回」先 `closeActiveTab()`（仅动态页签关闭成功），否则回页内列表。禁止 `history.back()`。
 
 审核页 `initStandaloneReviewPage` 解析这些 URL 参数并加载详情。
 

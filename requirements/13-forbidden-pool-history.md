@@ -69,8 +69,8 @@
 | 序号 | 计算 | 居中 |
 | 调整人 | `adjusterName` | |
 | 提交时间 | `formatDate(row.submitTime)` → `YYYY-MM-DD HH:mm` | 居中 |
-| 证券名称 | `securityShortName`，`desc-link` 样式 | **仅样式，无 `@click`**，不可点击跳转 |
-| 证券代码 | `securityCode`，`desc-link` 样式 | **仅样式，无 `@click`**，不可点击跳转 |
+| 证券名称 | `securityShortName`，`desc-link` | 点击 `openPoolAdjustDetail(row)` |
+| 证券代码 | `securityCode`，`desc-link` | 同上 |
 | 发行主体 | `issuer` | tooltip |
 | 调整类型 | `adjustType` | 居中（如「手工调整」） |
 | 调整方向 | `adjustMode` | 居中；调入=`el-tag success`、调出=`el-tag danger` |
@@ -89,7 +89,7 @@
 
 ## 3. 跳转详情
 
-表格中「证券名称」「证券代码」可跳转详情。`openPoolAdjustDetail(row)` 根据 `categoryType` 跳转主体详情或证券详情，并携带 `companyCode`/`securityCode`、`targetPoolId`、`adjustBatchNo`、`entryMode=view`；批次号用于加载同批次流程步骤。
+表格中「证券名称」「证券代码」可跳转详情。`openPoolAdjustDetail(row)` 按 `categoryType==='company'` 分流：主体进 `forbidden_pool_adjust_detail.html`（参数 `companyCode`），债券进 `security_pool_adjust_detail.html`（参数 `securityCode`）。另带 `targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`；批次号用于加载同批次流程步骤。工作台内 `RrsWorkbench.openDetailTab`，同键复用；脱离工作台回退 `location.href`。
 
 ---
 
@@ -173,7 +173,6 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 ## 7. 字典一致性缺陷（编写/改造时需注意）
 
 - **审核状态字典不一致**：禁投池查询页 7 项（缺 `'32'`），禁投池历史页 8 项（含 `'32'`），`dict.js DICT_AUDIT_STATUS` 含 `'32'`。三处口径不统一，且两页都**未引入 `dict.js`**，各自内联维护，已与全局字典脱节。
-- 历史页「证券名称/代码」具备 `desc-link` 可点击外观但无跳转，需明确是否应跳详情（与查询页对齐）。
 - 两页均无数据权限过滤，需确认是否需要按 `ip_pool_permission`（viewable）做可见范围控制。
 - `targetPoolName` 实际显示投资池全路径名而非 `ip_investment_pool.pool_name`。
 
@@ -185,7 +184,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 
 ## 9. 关键源码索引
 
-- 前端：`znty-rrs-ui/forbidden_pool_history.html`（`loadList`、`auditStatusLabel`/`auditStatusType`、`formatDate`）
+- 前端：`znty-rrs-ui/pages/forbidden_pool_history.html`（`loadList`、`openPoolAdjustDetail`、`auditStatusLabel`/`auditStatusType`、`formatDate`）
 - Controller：`ForbiddenPoolHistoryController.java`
 - Service：`ForbiddenPoolHistoryService.java`（`queryForbiddenPoolHistoryPage`、`fillPoolFullName`）
 - Mapper：`ForbiddenPoolHistoryMapper.xml`

@@ -13,7 +13,7 @@
 - **list 页**：CRMW 凭证 section（单选 radio + 分页表格）+ 可绑定证券搜索区 + 可绑定证券分页表格。
 - **detail 页**：返回按钮 + 证券基本信息 + CRMW 基本信息（只读）+ 当前所在池 + 调库操作卡（步骤 1 选池 / 步骤 2 校验确认）+ 流程选择弹窗 + 信评报告选择弹窗。
 
-**初始化**（`created`）：`this.loadCrmwList()` + `this.loadList()`（并发加载 CRMW 凭证列表与可绑定证券列表）。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。默认用户 `currentLoginUserId='1'`、`currentLoginUserName='管理员'`。
+**初始化**（`created`）：`this.applyUrlCrmwOrList()`。URL 带 `crmwScode`/`securityCode` 时选中凭证并进入该标的调库（查询/历史/事宜入口）；无参数则并发 `loadCrmwList()` + `loadList()`。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。默认用户取 `RrsAuth`。详情「返回」先 `closeActiveTab()`，失败再回页内列表。
 
 ---
 
@@ -79,7 +79,7 @@
 
 2. **`handleSubmit()`**：校验 `validCount>0` 且 `allValidRowsHaveFlow`；打开流程选择弹窗，为每条 `validManualAdjustReviewList` 选流程，`confirmFlowSelection()` → `submitAdjustLog()`。
 
-3. **`submitAdjustLog()`**：`collectSubmitFiles` 收集 File；`collectReportAttachmentIds` 收集已选报告库附件 ID；调 `submitAdjustMultipart('/api/v1/crmwPoolAdjust/addCrmwAdjustLogWithFiles', payload, submitFiles)`（multipart 入口；JSON 无附件入口为 `addCrmwAdjustLog`），`FormData`：`request` 为 JSON Blob，`files` 为 multipart 数组。成功后 `$message.success` + `backToList()`。
+3. **`submitAdjustLog()`**：`collectSubmitFiles` 收集 File；`collectReportAttachmentIds` 收集已选报告库附件 ID；调 `submitAdjustMultipart('/api/v1/crmwPoolAdjust/addCrmwAdjustLogWithFiles', payload, submitFiles)`（multipart 入口；JSON 无附件入口为 `addCrmwAdjustLog`），`FormData`：`request` 为 JSON Blob，`files` 为 multipart 数组。成功后 `$message.success` + `backToList()`（先 `closeActiveTab()`，失败再回页内列表）。
 
 ### 3.3 后端 checkCrmwAdjust 完整逻辑
 
@@ -215,7 +215,7 @@
 
 ## 9. 关键源码索引
 
-- 前端：`znty-rrs-ui/crmw_pool_adjust.html`（`loadCrmwList`、`loadList`、`handleCrmwSelect`、`loadDetailData`、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、流程弹窗、报告弹窗）
+- 前端：`znty-rrs-ui/pages/crmw_pool_adjust.html`（`applyUrlCrmwOrList`、`loadCrmwList`、`loadList`、`handleCrmwSelect`、`loadDetailData`、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、`backToList`）
 - Controller：`CrmwPoolAdjustController.java`（`@RequestMapping("/api/v1/crmwPoolAdjust")`）
 - Service：`CrmwPoolAdjustService.java`（`checkCrmwAdjust`、`addCrmwAdjustLog`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`、`resolveAdjustFlowOptions`）
 - Mapper：`CrmwPoolAdjustMapper.java` / `resources/mapper/CrmwPoolAdjustMapper.xml`

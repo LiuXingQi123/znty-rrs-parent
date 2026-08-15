@@ -30,7 +30,7 @@
 
 表格列：序号、调整人（`adjusterName`）、提交日期（`submitTime`，`YYYY-MM-DD HH:mm`）、主体名称（`companyName`）、主体代码（`companyCode`）、调整类型（`adjustType`）、调整方向（`adjustMode`，调入=success 绿、调出=danger 红 `el-tag`）、投资池名称（`targetPoolName`）、审批状态（`auditStatus`，按 `auditStatusType` 染色 + `auditStatusLabel` 中文）。
 
-主体名称/主体代码同样是 `desc-link` 样式，但**未绑定 `@click`**，无跳转。总数徽标文案「共 X 条记录」。
+主体名称/主体代码绑定 `@click="openForbiddenPoolAdjustDetail(row)"`，工作台内新开禁投池主体详情页签。总数徽标文案「共 X 条记录」。
 
 ---
 
@@ -83,7 +83,7 @@
 
 ## 4. 跳转详情的参数传递
 
-**无详情跳转。** 两页的「主体名称/主体代码」虽渲染为 `desc-link`（蓝色可悬停下划线），但均未绑定 `@click`。表格也无操作列、无行点击事件。当前实现下，主体池查询/历史是纯查询展示页，不下钻到主体详情或调库审批详情。
+`openForbiddenPoolAdjustDetail(row)`：拼 `companyCode`/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `forbidden-detail` + 主体代码 + 批次），进 `forbidden_pool_adjust_detail.html`；脱离工作台回退 `location.href`。**不要**套用证券详情页。主体池查询页（[09](09-company-pool-query.md)）同一方法。
 
 ---
 
@@ -148,7 +148,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 | 表格列 | 5 列（无状态/方向/类型） | 8 列（多调整类型、调整方向、审批状态） |
 | 排序 | `entry_time DESC, id DESC` | `submit_time DESC, adjust_batch_no DESC, id DESC` |
 | 总数文案 | 「共 X 个主体」 | 「共 X 条记录」 |
-| 详情跳转 | 无 | 无 |
+| 详情跳转 | `openForbiddenPoolAdjustDetail` → 主体详情 | 同左 |
 | 投资池树确认 | 合并 checked + halfChecked | 仅 checked |
 
 **关联**：两页是同一批「主体」数据的两个视角——查询页看「现在哪些主体在哪些池里（已生效）」，历史页看「这些主体是怎么一步步被调入/调出的（含未生效）」。二者通过 `security_type` 属于 `category_type='company'` 统一主体边界；调库审批通过（`audit_status='20'`）后写入 `ip_pool_status`，即从历史页「沉淀」到查询页。
@@ -180,7 +180,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 
 ## 9. 关键源码索引
 
-- 前端：`znty-rrs-ui/company_pool_adjust_history.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`auditStatusLabel`/`auditStatusType`、`handlePoolTreeConfirm`）
+- 前端：`znty-rrs-ui/pages/company_pool_adjust_history.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`openForbiddenPoolAdjustDetail`、`auditStatusLabel`/`auditStatusType`、`handlePoolTreeConfirm`）
 - Controller：`CompanyPoolAdjustHistoryController.java`、`CommonController.java`
 - Service：`CompanyPoolAdjustHistoryService.java`（`queryCompanyPoolAdjustHistoryPage`、`fillPoolFullName`）、`InvestmentPoolService.java`
 - Mapper：`CompanyPoolAdjustHistoryMapper.xml`、`CommonMapper.xml`

@@ -12,7 +12,7 @@
 
 **入口模式 `entryMode`**：`process`（我的事宜处理，默认）/ `next`（下一步校验确认）。
 
-**初始化**（`created`）：`this.initStandaloneReviewPage()`。从 URL 取 `securityCode`/`windCode`、`crmwScode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`（`'next'` 或默认 `'process'`）；`adjustStep=2`；`loadDetailData(securityCode)` + `restoreStandaloneAdjustDraft`（从 sessionStorage 恢复草稿）。默认 `currentLoginUserId='1'`。
+**初始化**（`created`）：`this.initStandaloneReviewPage()`。从 URL 取 `securityCode`/`windCode`、`crmwScode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`（`'next'` 或默认 `'process'`）；`adjustStep=2`；`loadDetailData(securityCode)` + `restoreStandaloneAdjustDraft`（从 sessionStorage 恢复草稿）。默认登录用户取 `RrsAuth`。顶部「返回」先 `closeActiveTab()`，失败再回页内列表；禁止 `history.back()`。
 
 > 审批页 URL 必带 `crmwScode`：`initStandaloneReviewPage` 校验 `securityCode && crmwScode`，否则提示「缺少证券或CRMW信息」。
 

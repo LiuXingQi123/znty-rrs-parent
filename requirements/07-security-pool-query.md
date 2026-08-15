@@ -84,8 +84,8 @@ this.loadList();                  // 列表数据
 | 列 | prop/字段 | 渲染逻辑 |
 |---|---|---|
 | 序号 | `$index` | `(pageIndex-1)*pageSize + $index + 1` |
-| 证券简称 | `securityShortName` | `desc-link` 可点击跳转详情，空值显示空 |
-| 证券代码 | `securityCode` | 同上，点击跳转 |
+| 证券简称 | `securityShortName` | `desc-link` 可点击 → `openSecurityAdjustDetail(row)`，空值显示空 |
+| 证券代码 | `securityCode` | 同上 |
 | 调整人 | `adjusterName` | 直接显示 |
 | 入池时间 | `entryTime` | `moment(entryTime).format('YYYY-MM-DD HH:mm')`，空则空 |
 | 投资池名称 | `targetPoolName` | tooltip，由后端 `fillPoolFullName` 填充全路径 |
@@ -102,6 +102,10 @@ this.loadList();                  // 列表数据
 | 操作 | — | `fixed="right"`，收藏按钮 |
 
 **当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。**排除范围**：仅 `ips.security_type != 'crmw'`（不展示 CRMW 凭证；禁止/观察/黑名单中的普通债券仍可查，因债券可入禁投相关池）。**不再**按 `pool_type` 排除 `crmw`/`forbidden`。证券状态由后端 `CASE WHEN bi.maturity_date >= CURDATE() THEN 'active' ELSE 'matured'` 计算。
+
+### 4.1 跳转详情
+
+`openSecurityAdjustDetail(row)`：拼 `securityCode`/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `security-detail` + 代码 + 批次），同键复用；本页 iframe 不跳走。脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。
 
 ---
 
@@ -205,7 +209,7 @@ this.loadList();                  // 列表数据
 
 ## 11. 关键源码索引
 
-- 前端：`znty-rrs-ui/security_pool_query.html`、`znty-rrs-ui/dict.js`
+- 前端：`znty-rrs-ui/pages/security_pool_query.html`（`openSecurityAdjustDetail`）、`znty-rrs-ui/js/api.js`（`RrsWorkbench`）、`znty-rrs-ui/docs/dict.js`
 - Controller：`SecurityPoolQueryController.java`、`CommonController.java`
 - Service：`SecurityPoolQueryService.java`、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
 - Mapper：`SecurityPoolQueryMapper.xml`、`CommonMapper.xml`、`MySecurityPoolMapper.xml`、`InvestmentPoolMapper.xml`

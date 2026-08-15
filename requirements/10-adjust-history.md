@@ -87,16 +87,7 @@
 
 ## 5. 跳转调库详情
 
-`openSecurityAdjustDetail`：
-```js
-const params = new URLSearchParams();
-if (row.securityCode || row.windCode) params.set('securityCode', row.securityCode || row.windCode);
-if (row.targetPoolId) params.set('targetPoolId', row.targetPoolId);
-if (row.adjustBatchNo) params.set('adjustBatchNo', row.adjustBatchNo);
-params.set('entryMode', 'view');
-window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
-```
-目标页 `security_pool_adjust_detail.html` 通过 `getUrlParam` 读取 `securityCode`/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode`，`entryMode !== 'adjust'` 时为只读详情模式。
+`openSecurityAdjustDetail(row)`：拼 `securityCode`/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `security-detail` + 代码 + 批次），本页 iframe 不跳走；脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。目标页 `getUrlParam` 读上述参数，`entryMode !== 'adjust'` 时为只读详情模式。
 
 分页参数同证券池查询页（pageIndex=1, pageSize=20, page-sizes=[10,20,50,100]）。
 
@@ -160,7 +151,7 @@ window.location.href = 'security_pool_adjust_detail.html?' + params.toString();
 
 ## 10. 关键源码索引
 
-- 前端：`znty-rrs-ui/security_pool_adjust_history.html`、`znty-rrs-ui/dict.js`
+- 前端：`znty-rrs-ui/pages/security_pool_adjust_history.html`（`openSecurityAdjustDetail`）、`znty-rrs-ui/docs/dict.js`
 - Controller：`SecurityPoolAdjustHistoryController.java`、`CommonController.java`
 - Service：`SecurityPoolAdjustHistoryService.java`、`InvestmentPoolService.java`
 - Mapper：`SecurityPoolAdjustHistoryMapper.xml`、`CommonMapper.xml`

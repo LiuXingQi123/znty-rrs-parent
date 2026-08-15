@@ -63,7 +63,7 @@
 
 - `isViewMode=true`、`isSecurityInfoReadonly=true`（所有证券字段 `el-input :disabled`）。
 - 展示：证券基本信息（`el-descriptions` 3 列）、当前所在池、调库记录表、当前流程状态表。
-- 按钮：仅顶部「返回」（`history.back()` 或跳 `security_pool_adjust.html`）。调库记录/流程区内**无**操作按钮（`showLogUploadActions=false`，信评报告/其他材料的「选择报告」「上传附件」按钮均隐藏）。
+- 按钮：仅顶部「返回」。`backToList()` 先 `RrsWorkbench.closeActiveTab()`（工作台动态页签关闭后回到来源页）；未关页签则回本页列表或跳 `security_pool_adjust.html`。禁止 `history.back()`（iframe 共用历史会回到错误页）。调库记录/流程区内**无**操作按钮（`showLogUploadActions=false`，信评报告/其他材料的「选择报告」「上传附件」按钮均隐藏）。
 - 已结束记录（`audit_status` ∈ `20/21/99/-1`）同样以 view 模式只读展示，无任何提交入口。
 
 ### 2.2 adjust 可调整模式（首次调库提交）

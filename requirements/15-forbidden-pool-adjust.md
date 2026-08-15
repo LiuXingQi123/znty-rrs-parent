@@ -15,9 +15,9 @@
 
 详情页内部通过 `adjustStep`（1=选池，2=校验确认）控制步骤切换。
 
-**初始化**（`created`）：调用 `loadList()` 加载主体列表。`baseURL` 由 `js/api.js` 统一注入（`http://localhost:18090`），`apiPost` 返回 `{ success, data, message }`，`!json.success` 弹错并抛异常，附件下载接口返回 Base64 字符串后由前端还原为 Blob。
+**初始化**（`created`）：调用 `applyUrlCompanyOrList()`。URL 带 `companyCode` 时切到主体 Tab 并进入该主体详情；带 `securityCode` 时切到 ABS 债 Tab 并进入该券（见 [26](26-forbidden-abs-pool-adjust.md)）；无参数则 `loadList()` 只加载主体列表。`baseURL` 由 `js/api.js` 统一注入（`http://localhost:18090`），`apiPost` 返回 `{ success, data, message }`，`!json.success` 弹错并抛异常，附件下载接口返回 Base64 字符串后由前端还原为 Blob。
 
-默认登录用户 `currentLoginUserId='1'`（管理员）、`currentLoginUserName='管理员'`。URL 入口参数 `targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`。
+默认登录用户取 `RrsAuth`（演示环境常为 `'1'` / 「管理员」）。URL 入口参数另含 `targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`。详情/列表「返回」先 `closeActiveTab()`，失败再回页内列表。
 
 ---
 
@@ -96,7 +96,7 @@
 
 2. **`handleSubmit()`**：校验 `validCount>0` 且 `allValidRowsHaveFlow`；打开流程选择弹窗，为每条 `validManualAdjustReviewList`（`itemTag==='manual' && valid`）选流程，`confirmFlowSelection()` → `submitAdjustLog()`。
 
-3. **`submitAdjustLog()`**：`collectSubmitFiles` 收集 File 到 `submitFiles`；`collectReportAttachmentIds` 收集已选报告库附件 ID；调 `submitAdjustMultipart('/api/v1/forbiddenPoolAdjust/addAdjustLogWithFiles', payload, submitFiles)`（multipart 入口；JSON 无附件入口为 `addAdjustLog`），`FormData`：`request` 为 JSON Blob，`files` 为 multipart 数组。成功后 `$message.success` + `backToList()`。
+3. **`submitAdjustLog()`**：`collectSubmitFiles` 收集 File 到 `submitFiles`；`collectReportAttachmentIds` 收集已选报告库附件 ID；调 `submitAdjustMultipart('/api/v1/forbiddenPoolAdjust/addAdjustLogWithFiles', payload, submitFiles)`（multipart 入口；JSON 无附件入口为 `addAdjustLog`），`FormData`：`request` 为 JSON Blob，`files` 为 multipart 数组。成功后 `$message.success` + `backToList()`（先 `closeActiveTab()`，失败再回页内列表）。
 
 ### 3.3 后端 checkCompanyAdjust → checkAdjust 完整逻辑
 
@@ -274,7 +274,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 ## 9. 关键源码索引
 
-- 前端：`znty-rrs-ui/forbidden_pool_adjust.html`（列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、`openCompanyBondDialog`）
+- 前端：`znty-rrs-ui/pages/forbidden_pool_adjust.html`（`applyUrlCompanyOrList`、列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、`openCompanyBondDialog`、`backToList`）
 - 前端公共：`znty-rrs-ui/js/api.js`、`css/forbidden_pool_adjust.css`
 - dict.js / 内联字典：`poolTypeLabel`（forbidden:'禁投池', observe:'观察池', blacklist:'黑名单', restricted:'限制名单'）、`auditStatusLabel`/`auditStatusTagType`
 - Controller：`ForbiddenPoolAdjustController.java`（`@RequestMapping("/api/v1/forbiddenPoolAdjust")`，11 端点）

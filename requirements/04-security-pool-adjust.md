@@ -22,7 +22,7 @@
 
 详情页内部再通过 `adjustStep`（1=选池，2=校验确认）控制步骤切换。
 
-**初始化**（`created`）：调用 `loadSecurityTypeOptions()` 加载证券类型下拉，再调用 `loadList()` 加载证券列表。
+**初始化**（`created`）：调用 `loadSecurityTypeOptions()` 加载证券类型下拉，再调用 `applyUrlSecurityOrList()`：URL 带 `securityCode` 时写入筛选并进入该券详情（事宜「去调库」、查询/历史点代码等入口）；无参数则 `loadList()` 只加载列表。
 
 **apiPost 封装**：页面内置方法，返回 `{ success, data, message }`，`!json.success` 弹错并抛异常；附件下载接口返回 Base64 字符串后由前端还原为 Blob。
 
@@ -41,7 +41,7 @@
 
 - **查询** `handleSearch()`：重置 `pageIndex=1` 后调 `loadList()`。
 - **重置** `handleReset()`：清空四字段、`pageIndex=1`、`loadList()`。
-- **初始化**（`created`）：`loadSecurityTypeOptions()` + `loadList()`。
+- **初始化**（`created`）：`loadSecurityTypeOptions()` + `applyUrlSecurityOrList()`（有 `securityCode` 进详情，否则 `loadList()`）。
 
 ### 2.2 loadList → 接口
 
@@ -154,7 +154,7 @@
    - `collectSubmitFiles` 收集本地上传 File 到 `submitFiles` 数组，并记录每个 item 的 `creditReportFileIndexes`/`materialFileIndexes`。
    - `collectReportAttachmentIds` 收集已选报告库附件 ID 到 `creditReportSourceAttachmentIds`/`materialSourceAttachmentIds`。
    - `submitAdjustMultipart('/api/v1/securityPoolAdjust/addAdjustLogWithFiles', payload, submitFiles)` 用 `FormData` 提交：`request` 为 JSON Blob，`files` 为 multipart 文件数组（multipart 入口路径与 JSON 入口 `addAdjustLog` 不同，前端实际调 `addAdjustLogWithFiles`）。
-   - 成功后 `$message.success` + `backToList()`。
+   - 成功后 `$message.success` + `backToList()`：工作台动态页签先 `RrsWorkbench.closeActiveTab()`（仅动态页签返回 true）；菜单进入则回页内列表。禁止 `history.back()`。
 
 ### 3.3 addAdjustLog 请求体（`SecurityPoolAdjustSubmitReq`）
 
@@ -516,7 +516,7 @@
 
 ## 10. 关键源码索引
 
-- 前端：`znty-rrs-ui/security_pool_adjust.html`（列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`）
+- 前端：`znty-rrs-ui/pages/security_pool_adjust.html`（`applyUrlSecurityOrList`、列表、详情步骤 1/2、流程弹窗、报告弹窗、`goToStep2`、`submitAdjustLog`、`submitAdjustMultipart`、`backToList`）
 - dict.js：`DICT_AUDIT_STATUS`、`DICT_POOL_RELATION_TYPE`、`DICT_POOL_TYPE`
 - Controller：`SecurityPoolAdjustController.java`
 - Service：`SecurityPoolAdjustService.java`（`checkAdjust`、`addAdjustLog`、`submitAdjustLog`、`isDirectAdjustFlow`、`recheckBeforeFinalApproval`、`checkInConditions`、`checkOutConditions`、`isDirectFlow`、`createInitialSteps`、`buildAdjustBatchNo`、`BatchNoContext`）

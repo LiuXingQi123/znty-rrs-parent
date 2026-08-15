@@ -125,10 +125,10 @@
 ## 7. 代码索引
 
 - 编排：`ScheduledTaskService`、`DynamicTaskScheduler`、`RrsScheduledTask`  
-- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`  
-- Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`  
-- Controller：`ScheduledTaskController`  
-- SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`  
+- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`GradeRuleAlertService`  
+- Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`、`GradeRuleAlertMapper` / `.xml`  
+- Controller：`ScheduledTaskController`；提醒查询/处理另见 `GradeRuleAlertController`（`/api/v1/gradeRuleAlert`）  
+- SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`、`rrs_grade_rule_alert_schema.sql`、`rrs_grade_rule_alert_demo_data.sql`  
 
 以下业务摘要按 **Demo cron 执行顺序** 编排（与第 4.1 节一致）。
 
@@ -208,3 +208,15 @@
 4. Demo 默认 `schedule_enabled=0`。  
 
 > **禁投人工链路 `syncCompanyBonds` 仍含 ABS/crmw**，与 Job 版定时任务排除 ABS 不是同一条链路。本次不改，待业务确认。
+
+### 7.7 `bond_grade_inconformity_alert`（09:00）
+
+对应老系统 `InconformityMaingrade2Job`。实现类 `GradeRuleAlertService`（`implements RrsScheduledTask`），**只提醒、不改池**。
+
+1. 扫已在信用债/境外债 1～5 级且 `audit_status=20` 的债券（`queryGradedBondInPoolList`）。  
+2. 对每条调用 `SecurityPoolAdjustService.evaluateGradedInboundForPool`（含特殊债天花板、观察/重点观察封顶）。  
+3. 仍允许则跳过；不再允许则 `upsert` `ip_grade_rule_alert`（`alert_status=00`），刷新原因与扫描时间。  
+4. 本轮未再命中的待处理记录置 `99` 失效。  
+5. 人工入口在「我的事宜」第三页签（[06](06-my-matters.md)）：`queryAlertPage` 列表、`editAlertProcessed` 标记已处理（不改 `ip_pool_status`）。「去调库」打开证券池调整页，由人下调或出库。  
+
+当前无独立 `GradeRuleAlertApiTest` / `GradeRuleAlertServiceTest`。

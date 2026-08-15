@@ -32,7 +32,7 @@
 | 26 | 禁投池调整 · ABS债申请（债级 调入/调出） | `forbidden_pool_adjust.html`（Tab「ABS债」） | [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md) | `ForbiddenAbsPoolAdjustApiTest` |
 | 27 | 存量证券批量调整（产品库 + 来源池） | `stock_security_batch_adjust.html` | [27-stock-security-batch-adjust.md](27-stock-security-batch-adjust.md) | `StockSecurityBatchAdjustServiceTest` |
 | 28 | 证券池 Excel 导入 | `security_pool_excel_import.html` | [28-security-pool-excel-import.md](28-security-pool-excel-import.md) | `SecurityPoolExcelImportServiceTest` / `CommonFileControllerTest` |
-| 29 | 定时任务管理（可视化启停/cron/执行） | `scheduled_task.html` | [29-scheduled-task.md](29-scheduled-task.md) | `ScheduledTaskServiceTest` / `AutoAdjustServiceTest` / `CrmwExpiredAutoOutServiceTest` / `CompanyOuterRatingNotAaMinusAutoOutServiceTest` / `CompanyOuterRatingAaMinusAutoInServiceTest` / `CompanySamePoolBondAutoInServiceTest` / `CompanyNewBondAutoInServiceTest` / `CompanyNotInPoolBondAutoOutServiceTest` |
+| 29 | 定时任务管理（可视化启停/cron/执行） | `scheduled_task.html` | [29-scheduled-task.md](29-scheduled-task.md) | `ScheduledTaskServiceTest` / `AutoAdjustServiceTest` / `CrmwExpiredAutoOutServiceTest` / `CompanyOuterRatingNotAaMinusAutoOutServiceTest` / `CompanyOuterRatingAaMinusAutoInServiceTest` / `CompanySamePoolBondAutoInServiceTest` / `CompanyNewBondAutoInServiceTest` / `CompanyNotInPoolBondAutoOutServiceTest`（`GradeRuleAlertService` 暂无独立测试） |
 
 ## 调库业务全链路索引
 
@@ -43,7 +43,7 @@
 - **存量证券批量调整**：[27](27-stock-security-batch-adjust.md) — 目标限债券产品库（`bond_product_root` 子树）→ 必选来源池（CRMW/信用债一~三级/转债核心·重点）→ 可选发行主体 → 校验/提交与证券池批量同构，委托 `SecurityPoolAdjustService`（不注入 batch 专用流程）。
 - **证券池 Excel 导入**：[28](28-security-pool-excel-import.md) — 下载模板 → 上传写 `sys_imp_tmp`/`sys_imp_tmp_detl` → 页面预览 → 校验 → 提交（`adjust_type=Excel导入`）；公共模板下载 `/api/v1/commonFile/downloadTemplate`。
 - **审核/审批流转**：[05](05-security-pool-adjust-approve.md) — `submitAdjustAudit` 推进节点（抢占/会签/发起人），最终通过才落地 `ip_pool_status`。
-- **查询入口**：[07](07-security-pool-query.md) 证券池当前状态查询、[10](10-adjust-history.md) 调库历史追溯、[06](06-my-matters.md) 我的待办/已办。
+- **查询入口**：[07](07-security-pool-query.md) 证券池当前状态查询、[10](10-adjust-history.md) 调库历史追溯、[06](06-my-matters.md) 我的待办/已办 + 分级规则提醒（第三页签，独立 `gradeRuleAlert` 接口）。
 - **详情查看**：[11](11-security-pool-adjust-detail.md) 单只证券及批次完整业务上下文（只读 / 首次调库提交；修改节点重新提交在 [05]）。
 - **禁投池查询视角**：[08](08-forbidden-pool-query.md) 当前在禁投池的证券、[13](13-forbidden-pool-history.md) 禁投池调库流水（`pool_type='forbidden'` 过滤）。
 - **禁投池调整链路（主体级，独立于证券级调库）**：[15](15-forbidden-pool-adjust.md) 主体检索 → 选目标池（仅债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)）→ `checkAdjust` 校验 → `addAdjustLogWithFiles` 提交；[16](16-forbidden-pool-adjust-approve.md) `submitAdjustAudit` 审批流转，通过后落地 `ip_pool_status`；**仅目标池为债券禁止库(15)时** `syncCompanyBonds` 同步旗下**未到期**债券（含 ABS/crmw）；[17](17-forbidden-pool-adjust-detail.md) 主体调库只读 / 首次提交（修改节点重提在 [16]）。
@@ -63,6 +63,8 @@
 - 删除优先遵循各模块既有逻辑删除或级联规则，不允许产生悬空业务引用。
 - 流程、规则、投资池、证券、用户和角色之间的关联必须引用有效数据。
 - 涉及审批的操作必须保留调整日志和步骤记录，最终池状态只由已生效结果产生。
+- **研究管理跨页跳转**（查询/历史/事宜 → 审核或详情）：当前工作台内走 `RrsWorkbench.openDetailTab`（`znty-rrs-ui/js/api.js`），按对象+批次新开页签、同键复用；列表 iframe 不 `location.href`。审核/详情「返回」先 `closeActiveTab()`（仅动态页签返回 true），禁止 `history.back()`。带代码进入申请页须走 `applyUrlSecurityOrList` / `applyUrlCompanyOrList` / `applyUrlCrmwOrList`，不能只 `loadList()`。主体点代码进禁投主体详情，不要套证券详情。CRMW 页签键须含 `crmwScode`。完整约定见前端 `AGENTS.md` 工作台节。
+- **跳转层可回退**：新开 Tab 仅前端导航。公司工作台不兼容时，跨页跳转应还原为 iframe 内 `location.href` + 详情 `history.back()`，后端接口不用改。`applyUrl*`、主体进禁投详情、事宜第三页签可保留。对照见前端 `docs/version-changelog-20260815-workbench-nav.html` 第 0 节。
 
 ## 测试分层
 

@@ -28,9 +28,13 @@
 2. `loadPoolTree()` — 加载投资池树
 3. `loadList()` — 首次加载主体池列表（无筛选，第 1 页 20 条）
 
-表格列：序号、主体名称（`securityShortName`）、主体代码（`securityCode`）、调整人（`adjusterName`）、入池时间（`entryTime`，`YYYY-MM-DD HH:mm`）、投资池名称（`targetPoolName`）。主体名称/主体代码以 `desc-link` 样式呈现，但**未绑定 `@click`**，仅视觉上是链接，无跳转。
+表格列：序号、主体名称（`securityShortName`）、主体代码（`securityCode`）、调整人（`adjusterName`）、入池时间（`entryTime`，`YYYY-MM-DD HH:mm`）、投资池名称（`targetPoolName`）。主体名称/主体代码绑定 `@click="openForbiddenPoolAdjustDetail(row)"`，工作台内新开禁投池主体详情页签。
 
 总数徽标文案「共 X 个主体」。
+
+### 1.1 跳转详情
+
+`openForbiddenPoolAdjustDetail(row)`：拼 `companyCode`（取 `securityCode` 或 `companyCode`）/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `forbidden-detail` + 主体代码 + 批次），进 `forbidden_pool_adjust_detail.html`；脱离工作台回退 `location.href`。**不要**套用证券详情页 `security_pool_adjust_detail.html`。
 
 ---
 
@@ -140,7 +144,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 
 ## 8. 关键源码索引
 
-- 前端：`znty-rrs-ui/company_pool_query.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`handlePoolTreeConfirm`）
+- 前端：`znty-rrs-ui/pages/company_pool_query.html`（`loadPoolTree`/`buildPoolTree`、`loadList`、`handlePoolTreeConfirm`、`openForbiddenPoolAdjustDetail`）
 - Controller：`CompanyPoolQueryController.java`、`CommonController.java`
 - Service：`CompanyPoolQueryService.java`（`queryCompanyPoolPage`、`fillPoolFullName`）、`InvestmentPoolService.java`（`queryPoolFullNameMap`）
 - Mapper：`CompanyPoolQueryMapper.xml`、`CommonMapper.xml`

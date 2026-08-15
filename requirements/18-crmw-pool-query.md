@@ -71,7 +71,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 | 入池时间 | `entryTime` | `moment(entryTime).format('YYYY-MM-DD HH:mm')`，空则空 |
 | 投资池名称 | `targetPoolName` | 全路径名 |
 
-**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId/adjustBatchNo/entryMode=view`，跳 `crmw_pool_adjust_detail.html?...`。
+**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId/adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键须含 `crmwScode` + `securityCode` + 批次，否则同凭证不同标的会串页签），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
 
 ---
 
@@ -118,7 +118,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 
 ## 8. 关键源码索引
 
-- 前端：`znty-rrs-ui/crmw_pool_query.html`（`loadList`、`openCrmwAdjustDetail`、`refreshTableLayout`）
+- 前端：`znty-rrs-ui/pages/crmw_pool_query.html`（`loadList`、`openCrmwAdjustDetail`、`refreshTableLayout`）
 - Controller：`CrmwPoolQueryController.java`（`@RequestMapping("/api/v1/crmwPoolQuery")`）
 - Service：`CrmwPoolQueryService.java`（`queryCrmwPoolPage`、`fillPoolFullName`）
 - Mapper：`CrmwPoolQueryMapper.java` / `resources/mapper/CrmwPoolQueryMapper.xml`
