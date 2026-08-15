@@ -2,15 +2,15 @@
 
 > 前端页面：`my_matters.html`
 > 后端前缀：`/api/v1/myMatters`
-> 角色定位：登录用户集中查看与本人相关的待办、已办及流程事项，按流程、状态和时间筛选后进入对应业务详情（审核页 / 只读详情页）。
+> 角色定位：登录用户集中查看与本人相关的待办、已办及流程事项，按流程、状态和时间筛选后进入对应业务详情（审核页 / 只读详情页）。另有独立页签「分级规则提醒」，复用 `gradeRuleAlert` 接口，不与审批列表混排。
 
 ---
 
 ## 1. 页面概览与初始化
 
-根容器 `#my_matters`，标题「我的事宜」。`mounted` 调用 `loadFlowOptions()` 与 `loadList()`。页面带 `el-tabs`：`待处理(pending)` / `已完成(completed)`，`activeTab` 默认 `'pending'`，切换触发 `handleTabClick` 重置页码并重新加载。
+根容器 `#my_matters`，标题「我的事宜」。`mounted` 调用 `loadFlowOptions()`、`loadAlertOpenCount()` 与 `reloadCurrentTab()`。页面带 `el-tabs`：`待处理(pending)` / `已完成(completed)` / `分级规则提醒(gradeRuleAlert)`，`activeTab` 默认 `'pending'`（URL `?tab=gradeRuleAlert` 可直达提醒页签），切换触发 `handleTabClick` 重置页码并按页签加载。
 
-顶部统计徽章随页签变化：`共 {{total}} 条{{ activeTab==='pending' ? '待处理' : '已完成' }}事宜`。
+顶部统计徽章随页签变化：审批页签为「共 N 条待处理/已完成事宜」，提醒页签为「共 N 条分级规则提醒」。三个 Tab 标题旁均标注条数（大于 0 时显示）：待处理 / 已完成查审批总量，分级规则提醒查待处理提醒数。
 
 ---
 
@@ -28,6 +28,8 @@
 | `currentUserId` | `'1'` | — | TODO，1 视为管理员 |
 
 `auditStatusOptions`：7 码（`-1/00/11/20/21/32/99`），同 dict.js `DICT_AUDIT_STATUS`。无投资池树、无证券类型筛选。
+
+提醒页签单独用 `alertSearchForm`：`securityCode`、`alertStatus`（默认 `00` 待处理），不共用审批筛选项。
 
 ---
 
@@ -97,6 +99,15 @@ window.location.href = page + '?' + params.toString();
 
 分页参数同前（pageIndex=1, pageSize=20, page-sizes=[10,20,50,100]）。
 
+### 5.1 分级规则提醒页签
+
+独立表格，不混入待处理/已完成。接口仍是 `POST /api/v1/gradeRuleAlert/queryAlertPage` 与 `editAlertProcessed`，后端流程不变。
+
+- 列：证券代码/简称、发行主体、当前分级库、特殊类型、不符合原因、状态、扫描时间。
+- 「去调库」→ `security_pool_adjust.html?securityCode=`。
+- 「标记已处理」仅 `alert_status=00`，确认后调用 `editAlertProcessed`，不改池。
+- `pages/grade_rule_alert.html` 仅重定向到本页 `?tab=gradeRuleAlert`，左侧不再单列菜单。
+
 ---
 
 ## 6. 接口清单
@@ -105,6 +116,8 @@ window.location.href = page + '?' + params.toString();
 |---|---|---|---|
 | `myMatters/queryMyMattersPage` | flowIds, startDateStart, startDateEnd, processDescription, auditStatus, stepStatus(pending\|completed), initiatorName, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>`（含 flowName, stepName, processDescription, stepStatus, adjustLogId, targetPoolId, adjustBatchNo, securityCode） | 我的事宜分页列表（待处理/已完成） |
 | `myMatters/queryFlowOptionList` | `{currentUserId}` | `List<FlowOptionDto>`（flowId/flowKey/flowName/description） | 我的事宜流程名称下拉 |
+| `gradeRuleAlert/queryAlertPage` | securityCode, alertStatus, pageIndex, pageSize | `PageResult<GradeRuleAlertDto>` | 分级规则提醒页签列表（后端原接口，未改） |
+| `gradeRuleAlert/editAlertProcessed` | id, currentUserId, currentUserName | 更新后的待办 | 标记已处理，不改池 |
 
 > 路径均带前缀 `/api/v1/`。
 
@@ -119,6 +132,7 @@ window.location.href = page + '?' + params.toString();
 | `ip_adjust_log` | 证券池调库记录（主表） | id, security_code, security_short_name, adjust_mode, target_pool_name, adjust_batch_no, audit_status, adjuster_id, adjuster_name, is_deleted |
 | `ip_adjust_step` | 调库流程步骤记录 | id, adjust_log_id, adjust_batch_no, flow_node_id, node_label, node_type, step_status, handler_id, handler_name, start_time, process_time |
 | `wf_flow_node` / `wf_flow_definition` | 流程节点/定义 | id, flow_id, flow_key, name, description, is_deleted |
+| `ip_grade_rule_alert` | 分级规则提醒（仅提醒页签查询，不进审批 SQL） | id, security_code, current_pool_id, fail_reason, alert_status(00/20/99) |
 
 ### 7.2 可见数据范围控制
 
@@ -168,9 +182,9 @@ window.location.href = page + '?' + params.toString();
 
 ## 10. 关键源码索引
 
-- 前端：`znty-rrs-ui/my_matters.html`、`znty-rrs-ui/dict.js`
-- Controller：`MyMattersController.java`
-- Service：`MyMattersService.java`、`InvestmentPoolService.java`
+- 前端：`znty-rrs-ui/pages/my_matters.html`（含分级规则提醒页签）、`znty-rrs-ui/docs/dict.js`
+- Controller：`MyMattersController.java`；提醒页签复用 `GradeRuleAlertController`（接口未改）
+- Service：`MyMattersService.java`、`InvestmentPoolService.java`、`GradeRuleAlertService.java`
 - Mapper：`MyMattersMapper.xml`
 - 实体：`MyMattersDto`、`MyMattersReq`、`FlowOptionDto`
 - SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log / ip_adjust_step）、`sql/rrs_flow_definition_schema.sql`

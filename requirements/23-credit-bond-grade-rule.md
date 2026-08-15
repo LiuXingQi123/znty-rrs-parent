@@ -51,7 +51,7 @@
 >
 > **观察名单与老系统差异**：老系统主体或券在观察池（`ASTRICTPOOLS`）时设 `openrule=1`，**跳过**债大库矩阵。新需求改为「不高于标准规则对应等级」（按标准最好档封顶，不再跳过）。识别对象仍对齐老系统：券自己在观察，或**主体级记录**（`ip_pool_status.security_code = issuer_code`）在观察 / 重点观察。
 >
-> **已在库不符**：定时任务 `bond_grade_inconformity_alert` 每天扫描已在 1～5 级但按当前规则不再允许的债券，写入 `ip_grade_rule_alert` 待办，由人工在「不符合分级规则提醒」页处理（去调库或标记已处理），**不自动出池**。对齐老系统 InconformityMaingrade2Job。
+> **已在库不符**：定时任务 `bond_grade_inconformity_alert` 每天扫描已在 1～5 级但按当前规则不再允许的债券，写入 `ip_grade_rule_alert` 待办，由人工在「我的事宜」第三页签「分级规则提醒」处理（去调库或标记已处理），**不自动出池**。后端仍是独立 `gradeRuleAlert` 接口。对齐老系统 InconformityMaingrade2Job。
 
 **CRUD 操作**（仅 2 个接口，无单条增删改、无启用/停用单条规则）：
 - 查询矩阵：`queryGradeRuleMatrix`（只读）

@@ -32,7 +32,7 @@
 | `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 0 6 * * ?` | `{"poolIds":[15]}`：主体已在本池 → 旗下债未到期（含当天）未在本池 → 同池自动入（IP_RULE 版）；调入限制池阻断 |
 | `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 7 * * ?` | `{"poolIds":[15]}` 或 `mappings`：主体在池 → 旗下未到期未在目标池的债自动入池（排除临时代码已更新、ABS、CRMW） |
 | `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池 | `0 0 8 * * ?` | `{"poolIds":[15]}` 或 mappings：债在债券池、主体不在主体池 → 出债（排除 ABS/CRMW，不看限制池） |
-| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 无需参数。扫描已在 1～5 级但按当前特殊债规则不再允许的债券，写入 `ip_grade_rule_alert` 待办；**不自动出池**。对齐老系统 InconformityMaingrade2Job |
+| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 无需参数。扫描已在 1～5 级但按当前特殊债规则不再允许的债券，写入 `ip_grade_rule_alert` 待办；人工在「我的事宜」分级规则提醒页签处理，**不自动出池**。对齐老系统 InconformityMaingrade2Job |
 
 > Demo **cron** 须与下方「执行顺序」一致；列表 id 不要求和执行顺序相同。新增或改 cron 时必须先读第 4.1 节。
 

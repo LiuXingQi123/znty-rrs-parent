@@ -27,7 +27,7 @@ import java.util.List;
 /**
  * 不符合主体债入库规则提醒：定时扫描已在分级库但按当前规则不再允许的债券，生成待办供人工处理。
  *
- * <p>对齐老系统 InconformityMaingrade2Job：只提醒、不自动出池。处理人在页面标记已处理或跳转证券池调库。</p>
+ * <p>对齐老系统 InconformityMaingrade2Job：只提醒、不自动出池。处理入口在「我的事宜」分级规则提醒页签。</p>
  */
 @Slf4j
 @Service
@@ -49,7 +49,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             "本任务无需扩展参数，请将 param_json 留空\n"
                     + "扫描已在信用债/境外债 1～5 级且生效的债券\n"
                     + "按当前主体债入库规则（含特殊债天花板、观察封顶、重点观察）复核\n"
-                    + "不符合则写入待办，不自动出池；人工在「不符合分级规则提醒」页处理";
+                    + "不符合则写入待办，不自动出池；人工在「我的事宜」分级规则提醒页签处理";
 
     /** 待办 Mapper */
     @Resource
