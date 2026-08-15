@@ -2992,12 +2992,23 @@ public class ForbiddenAbsPoolAdjustService {
         }
         // 标准最好档叠加特殊债下调后，展开信用债/境外债同档叶子
         Integer bestAllowedSort = resolveBestAllowedSort(matrixIds, poolMap);
-        // 改判候选项同样：证券或主体在观察名单则走天花板
+        // 改判候选项：证券自身或发行主体在观察/重点观察
         boolean inObserve = false;
+        boolean inRestricted = false;
         if (sec.getWindCode() != null) {
             inObserve = forbiddenAbsPoolAdjustMapper.querySecurityInObservePool(sec.getWindCode())
                     || forbiddenAbsPoolAdjustMapper.queryIssuerInObservePool(sec.getWindCode());
+            inRestricted = forbiddenAbsPoolAdjustMapper.querySecurityInRestrictedPool(sec.getWindCode())
+                    || forbiddenAbsPoolAdjustMapper.queryIssuerInRestrictedPool(sec.getWindCode());
         }
+        Set<Long> currentPoolIds = new HashSet<Long>();
+        if (sec.getWindCode() != null) {
+            List<Long> currentIdList = forbiddenAbsPoolAdjustMapper.querySecurityCurrentPoolIdList(sec.getWindCode());
+            if (currentIdList != null) {
+                currentPoolIds.addAll(currentIdList);
+            }
+        }
+        Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
         // 观察/担保/私募/永续/次级/ABS 走档位封顶，普通债仍按矩阵精确池
         boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(sec, inObserve);
         Integer ceilingSort = null;
@@ -3008,6 +3019,12 @@ public class ForbiddenAbsPoolAdjustService {
         List<Long> result = new ArrayList<Long>();
         for (InvestmentPoolBo p : poolMap.values()) {
             if (!CreditBondSpecialInboundRule.isGradedLevelPool(p)) {
+                continue;
+            }
+            // 改判同样套重点观察：禁新增、已在 1～4 只能去五级
+            String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
+                    sec, inRestricted, currentGradedSort, p.getInnerSort());
+            if (restrictedFail != null) {
                 continue;
             }
             // 按天花板或矩阵精确池收集改判候选项

@@ -32,6 +32,7 @@
 | `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 0 6 * * ?` | `{"poolIds":[15]}`：主体已在本池 → 旗下债未到期（含当天）未在本池 → 同池自动入（IP_RULE 版）；调入限制池阻断 |
 | `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 7 * * ?` | `{"poolIds":[15]}` 或 `mappings`：主体在池 → 旗下未到期未在目标池的债自动入池（排除临时代码已更新、ABS、CRMW） |
 | `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池 | `0 0 8 * * ?` | `{"poolIds":[15]}` 或 mappings：债在债券池、主体不在主体池 → 出债（排除 ABS/CRMW，不看限制池） |
+| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 无需参数。扫描已在 1～5 级但按当前特殊债规则不再允许的债券，写入 `ip_grade_rule_alert` 待办；**不自动出池**。对齐老系统 InconformityMaingrade2Job |
 
 > Demo **cron** 须与下方「执行顺序」一致；列表 id 不要求和执行顺序相同。新增或改 cron 时必须先读第 4.1 节。
 
@@ -72,7 +73,7 @@
 
 调度器**不会**保证「A 跑完再跑 B」。若任务 B 依赖任务 A 改过的池状态，必须满足：`A 的 cron < B 的 cron`，并留足 A 跑完的时间（Demo 按整点错开）。
 
-当前 7 个任务的**必须顺序**与 Demo cron：
+当前 8 个任务的**必须顺序**与 Demo cron：
 
 | 顺序 | 时刻 | 任务 | 为何必须在这 |
 |------|------|------|----------------|
@@ -83,6 +84,7 @@
 | 5 | 06:00 | `company_same_pool_bond_auto_in` | 主体池已稳定后，才把「已在本池主体」的债同池入库 |
 | 6 | 07:00 | `company_inpool_bond_auto_in` | 同上，Job 版入债（可跨池）；须在外评入主体之后，当天才能带上新入池主体的债 |
 | 7 | 08:00 | `company_not_in_pool_bond_auto_out` | **最后**清「主体已不在池」的债，覆盖刚被外评出池的主体 |
+| 8 | 09:00 | `bond_grade_inconformity_alert` | 池状态已稳定后再扫分级库不符，生成待办；不改池 |
 
 违反顺序的典型后果：
 

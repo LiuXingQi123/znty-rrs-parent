@@ -108,13 +108,13 @@ public interface SecurityPoolAdjustMapper {
     /** 查询当前证券是否在观察池（pool_type='observe'，audit_status='20'） */
     boolean querySecurityInObservePool(@Param("securityCode") String securityCode);
 
-    /** 查询证券主体公司是否在观察池（同发行人的任意证券在观察池中） */
+    /** 查询证券发行主体是否在观察池（主体级 ip_pool_status.security_code = issuer_code） */
     boolean queryIssuerInObservePool(@Param("securityCode") String securityCode);
 
     /** 查询当前证券是否在重点观察名单（pool_type='restricted'，audit_status='20'） */
     boolean querySecurityInRestrictedPool(@Param("securityCode") String securityCode);
 
-    /** 查询证券主体公司是否在重点观察名单（同发行人的任意证券在 restricted 池中） */
+    /** 查询证券发行主体是否在重点观察名单（主体级 ip_pool_status.security_code = issuer_code） */
     boolean queryIssuerInRestrictedPool(@Param("securityCode") String securityCode);
 
     /** 查询同主体在目标池中已有债券的最大剩余期限天数（date_exists） */

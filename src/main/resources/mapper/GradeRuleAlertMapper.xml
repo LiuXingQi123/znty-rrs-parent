@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.GradeRuleAlertMapper">
+
+    <!-- 已在信用债/境外债 1～5 级叶子且生效的债券 -->
+    <select id="queryGradedBondInPoolList" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
+        SELECT ips.security_code
+              ,ips.security_short_name
+              ,si.issuer_code
+              ,si.issuer issuer_name
+              ,ips.target_pool_id current_pool_id
+              ,ips.target_pool_name current_pool_name
+              ,p.inner_sort current_sort
+        FROM ip_pool_status ips
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
+                                       AND p.is_deleted = 0
+        LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        WHERE ips.is_deleted = 0
+          AND ips.audit_status = '20'
+          AND p.pool_type IN ('credit_bond', 'offshore_bond')
+          AND p.inner_sort BETWEEN 1 AND 5
+          AND (p.pool_level IS NULL OR p.pool_level = 2)
+    </select>
+
+    <select id="queryAlertPage" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
+        SELECT id
+              ,security_code
+              ,security_short_name
+              ,issuer_code
+              ,issuer_name
+              ,current_pool_id
+              ,current_pool_name
+              ,current_sort
+              ,fail_reason
+              ,special_type_desc
+              ,alert_status
+              ,last_scan_time
+              ,deal_user_id
+              ,deal_user_name
+              ,deal_time
+              ,crte_time
+              ,updt_time
+        FROM ip_grade_rule_alert
+        <where>
+            AND is_deleted = 0
+            <if test="securityCode != null and securityCode != ''">
+                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="alertStatus != null and alertStatus != ''">
+                AND alert_status = #{alertStatus}
+            </if>
+        </where>
+        ORDER BY last_scan_time DESC
+                ,id DESC
+    </select>
+
+    <select id="queryOpenAlert" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
+        SELECT id
+              ,security_code
+              ,current_pool_id
+              ,alert_status
+        FROM ip_grade_rule_alert
+        WHERE is_deleted = 0
+          AND alert_status = '00'
+          AND security_code = #{securityCode}
+          AND current_pool_id = #{currentPoolId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="queryAlertById" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
+        SELECT id
+              ,security_code
+              ,security_short_name
+              ,issuer_code
+              ,issuer_name
+              ,current_pool_id
+              ,current_pool_name
+              ,current_sort
+              ,fail_reason
+              ,special_type_desc
+              ,alert_status
+              ,last_scan_time
+              ,deal_user_id
+              ,deal_user_name
+              ,deal_time
+        FROM ip_grade_rule_alert
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </select>
+
+    <insert id="addAlert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_grade_rule_alert (
+            security_code
+           ,security_short_name
+           ,issuer_code
+           ,issuer_name
+           ,current_pool_id
+           ,current_pool_name
+           ,current_sort
+           ,fail_reason
+           ,special_type_desc
+           ,alert_status
+           ,last_scan_time
+           ,is_deleted
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{securityCode}
+           ,#{securityShortName}
+           ,#{issuerCode}
+           ,#{issuerName}
+           ,#{currentPoolId}
+           ,#{currentPoolName}
+           ,#{currentSort}
+           ,#{failReason}
+           ,#{specialTypeDesc}
+           ,#{alertStatus}
+           ,#{lastScanTime}
+           ,0
+           ,#{crteTime}
+           ,#{updtTime}
+        )
+    </insert>
+
+    <update id="editAlertScan">
+        UPDATE ip_grade_rule_alert
+        SET security_short_name = #{securityShortName}
+           ,issuer_code = #{issuerCode}
+           ,issuer_name = #{issuerName}
+           ,current_pool_name = #{currentPoolName}
+           ,current_sort = #{currentSort}
+           ,fail_reason = #{failReason}
+           ,special_type_desc = #{specialTypeDesc}
+           ,last_scan_time = #{lastScanTime}
+           ,updt_time = #{updtTime}
+        WHERE id = #{id}
+    </update>
+
+    <update id="editStaleOpenAlertInvalid">
+        UPDATE ip_grade_rule_alert
+        SET alert_status = '99'
+           ,updt_time = #{scanTime}
+        WHERE is_deleted = 0
+          AND alert_status = '00'
+          AND (last_scan_time IS NULL OR last_scan_time &lt; #{scanTime})
+    </update>
+
+    <update id="editAlertProcessed">
+        UPDATE ip_grade_rule_alert
+        SET alert_status = '20'
+           ,deal_user_id = #{dealUserId}
+           ,deal_user_name = #{dealUserName}
+           ,deal_time = #{dealTime}
+           ,updt_time = #{updtTime}
+        WHERE id = #{id}
+          AND is_deleted = 0
+          AND alert_status = '00'
+    </update>
+</mapper>

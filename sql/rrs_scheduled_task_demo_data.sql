@@ -48,4 +48,8 @@ INSERT INTO `sys_scheduled_task` (
 (7, 'company_not_in_pool_bond_auto_out', '主体不在池债券自动出池',
  '债已在债券池、主体不在对应主体池则出债；排除 ABS/CRMW（ABS 走禁投独立链路）；不看限制池。默认关闭。同池 poolIds，跨池 mappings',
  '0 0 8 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
+ 0, NOW(), NOW()),
+(8, 'bond_grade_inconformity_alert', '不符合主体债入库规则提醒',
+ '扫描已在信用债/境外债 1～5 级且按当前特殊债规则不再允许待在该档的债券，写入待办供人工下调或出库；不自动改池。对齐老系统 InconformityMaingrade2Job',
+ '0 0 9 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW());

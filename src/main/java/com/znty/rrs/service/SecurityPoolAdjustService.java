@@ -3112,12 +3112,23 @@ public class SecurityPoolAdjustService {
         }
         // 标准最好档叠加特殊债下调后，展开信用债/境外债同档叶子
         Integer bestAllowedSort = resolveBestAllowedSort(matrixIds, poolMap);
-        // 改判候选项同样：证券或主体在观察名单则走天花板
+        // 改判候选项：证券自身或发行主体在观察/重点观察
         boolean inObserve = false;
+        boolean inRestricted = false;
         if (sec.getWindCode() != null) {
             inObserve = securityPoolAdjustMapper.querySecurityInObservePool(sec.getWindCode())
                     || securityPoolAdjustMapper.queryIssuerInObservePool(sec.getWindCode());
+            inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(sec.getWindCode())
+                    || securityPoolAdjustMapper.queryIssuerInRestrictedPool(sec.getWindCode());
         }
+        Set<Long> currentPoolIds = new HashSet<Long>();
+        if (sec.getWindCode() != null) {
+            List<Long> currentIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(sec.getWindCode());
+            if (currentIdList != null) {
+                currentPoolIds.addAll(currentIdList);
+            }
+        }
+        Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
         // 观察/担保/私募/永续/次级/ABS 走档位封顶，普通债仍按矩阵精确池
         boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(sec, inObserve);
         Integer ceilingSort = null;
@@ -3130,12 +3141,58 @@ public class SecurityPoolAdjustService {
             if (!CreditBondSpecialInboundRule.isGradedLevelPool(p)) {
                 continue;
             }
+            // 改判同样套重点观察：禁新增、已在 1～4 只能去五级
+            String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
+                    sec, inRestricted, currentGradedSort, p.getInnerSort());
+            if (restrictedFail != null) {
+                continue;
+            }
             // 按天花板或矩阵精确池收集改判候选项
             if (isLeafAllowedByGradeRule(p, matrixIds, useCeiling, ceilingSort, poolMap)) {
                 result.add(p.getId());
             }
         }
         return result;
+    }
+
+    /**
+     * 评估证券当前所在分级库是否仍符合主体债入库规则（定时扫描复用校验口径）。
+     *
+     * @param securityCode  证券代码
+     * @param targetPoolId  当前所在分级库 ID
+     * @return 不符合原因；符合返回 null
+     */
+    public String evaluateGradedInboundForPool(String securityCode, Long targetPoolId) {
+        if (securityCode == null || securityCode.isEmpty() || targetPoolId == null) {
+            return "证券或目标池为空";
+        }
+        SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
+        if (sec == null) {
+            return "证券不存在";
+        }
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
+        for (InvestmentPoolBo p : investmentPoolMapper.queryPoolList()) {
+            poolMap.put(p.getId(), p);
+        }
+        InvestmentPoolBo pool = poolMap.get(targetPoolId);
+        if (pool == null) {
+            return "目标投资池不存在";
+        }
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(sec);
+        ctx.setTargetPool(pool);
+        ctx.setPoolMap(poolMap);
+        Set<Long> currentPoolIds = new HashSet<Long>();
+        List<Long> currentIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(securityCode);
+        if (currentIdList != null) {
+            currentPoolIds.addAll(currentIdList);
+        }
+        ctx.setCurrentPoolIds(currentPoolIds);
+        ctx.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(securityCode));
+        ctx.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(securityCode));
+        ctx.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(securityCode));
+        ctx.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(securityCode));
+        return inCheckMainGradeRule(ctx);
     }
 
     /**

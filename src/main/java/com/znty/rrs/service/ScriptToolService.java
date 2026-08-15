@@ -1585,6 +1585,7 @@ public class ScriptToolService {
         if (fileName.startsWith("rrs_credit_bond_grade_rule")) return "credit-bond-grade";
         if (fileName.startsWith("rrs_temp_security_code")) return "temp-security-code";
         if (fileName.startsWith("rrs_scheduled_task")) return "scheduled-task";
+        if (fileName.startsWith("rrs_grade_rule_alert")) return "grade-rule-alert";
         return "unknown";
     }
 
@@ -1606,6 +1607,7 @@ public class ScriptToolService {
         if ("my-security-pool".equals(moduleCode)) return "我的证券池";
         if ("credit-bond-grade".equals(moduleCode)) return "信用债评级规则";
         if ("temp-security-code".equals(moduleCode)) return "临时代码";
+        if ("grade-rule-alert".equals(moduleCode)) return "不符合分级规则提醒";
         return "未识别模块";
     }
 
@@ -1626,6 +1628,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "credit-bond-grade", "信用债评级规则", "重置信用债主体内评分档和评级准入规则。", "medium", "rrs_credit_bond_grade_rule_demo_data.sql");
         addModuleTask(taskMap, "temp-security-code", "临时代码", "重置临时代码管理演示数据。", "medium", "rrs_temp_security_code_demo_data.sql");
         addModuleTask(taskMap, "scheduled-task", "定时任务配置", "重置定时任务配置与执行历史演示数据。", "medium", "rrs_scheduled_task_demo_data.sql");
+        addModuleTask(taskMap, "grade-rule-alert", "不符合分级规则提醒", "重置不符合主体债入库规则提醒待办。", "medium", "rrs_grade_rule_alert_demo_data.sql");
         addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体评级、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
         addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 债券发行人主体与评级表演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;
@@ -1854,7 +1857,8 @@ public class ScriptToolService {
                 "rrs_credit_bond_grade_rule_schema.sql",
                 "rrs_temp_security_code_schema.sql",
                 "rrs_import_temp_schema.sql",
-                "rrs_scheduled_task_schema.sql"
+                "rrs_scheduled_task_schema.sql",
+                "rrs_grade_rule_alert_schema.sql"
         );
     }
 
@@ -1877,7 +1881,8 @@ public class ScriptToolService {
                 "rrs_credit_bond_grade_rule_demo_data.sql",
                 "rrs_temp_security_code_demo_data.sql",
                 "rrs_import_temp_demo_data.sql",
-                "rrs_scheduled_task_demo_data.sql"
+                "rrs_scheduled_task_demo_data.sql",
+                "rrs_grade_rule_alert_demo_data.sql"
         );
     }
 
@@ -2054,6 +2059,8 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "credit_bond_pool_grade_rule", "信用债大库评级准入规则"),
                 buildTable("znty_rrs", "credit_bond_inner_rating_grade", "主体内评分档"),
                 buildTable("znty_rrs", "credit_bond_term_bucket", "期限分组"),
+                buildTable("znty_rrs", "ip_grade_rule_alert", "不符合分级规则提醒"),
+                buildTable("znty_rrs", "ip_grade_rule_alert_evt", "不符合分级规则提醒事件"),
                 buildTable("znty_rrs", "my_security_pool", "我的证券池")
         )));
         groups.add(buildTableGroup("scheduled-task", "定时任务", "znty_rrs", Arrays.asList(

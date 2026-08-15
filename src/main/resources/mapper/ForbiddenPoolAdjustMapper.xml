@@ -571,17 +571,18 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- 查询证券主体公司是否在观察池（同发行人的任意证券在观察池中） -->
+    <!-- 查询证券发行主体是否在观察池（主体级记录：ips.security_code = 发行人码） -->
     <select id="queryIssuerInObservePool" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips
-        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        WHERE si.issuer = (
-            SELECT issuer
-            FROM rrs_securityinfo
-            WHERE wind_code = #{securityCode}
+        WHERE ips.security_code = (
+            SELECT si.issuer_code
+            FROM rrs_securityinfo si
+            WHERE si.wind_code = #{securityCode}
+              AND si.issuer_code IS NOT NULL
+              AND si.issuer_code &lt;&gt; ''
             LIMIT 1
         )
           AND p.pool_type = 'observe'

@@ -50,7 +50,7 @@ public class AdjustCheckContext {
     /** 当前证券是否在观察池（pool_type='observe'，audit_status='20'） */
     private boolean securityInObservePool;
 
-    /** 证券主体公司是否在观察池（同发行人的任意证券在观察池中） */
+    /** 证券发行主体是否在观察池（主体级记录，issuer_code） */
     private boolean issuerInObservePool;
 
     /** 当前证券是否在重点观察名单（pool_type='restricted'，audit_status='20'） */
