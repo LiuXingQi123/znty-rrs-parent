@@ -71,7 +71,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 | 入池时间 | `entryTime` | `moment(entryTime).format('YYYY-MM-DD HH:mm')`，空则空 |
 | 投资池名称 | `targetPoolName` | 全路径名 |
 
-**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId/adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键须含 `crmwScode` + `securityCode` + 批次，否则同凭证不同标的会串页签），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
+**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, false)`，状态表 `adjust_log_id`）/`adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含 `crmwScode` + `securityCode` + 记录 ID + 批次，否则同凭证不同标的会串页签），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
 
 ---
 

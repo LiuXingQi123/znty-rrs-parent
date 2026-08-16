@@ -13,6 +13,8 @@
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
+               ,al.id AS adjustLogId
+               ,al.adjust_batch_no
                ,COALESCE(al.target_pool_name, p.pool_name) AS target_pool_name
                ,al.audit_status
         FROM ip_adjust_log al

@@ -105,7 +105,7 @@ this.loadList();                  // 列表数据
 
 ### 4.1 跳转详情
 
-`openSecurityAdjustDetail(row)`：拼 `securityCode`/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `security-detail` + 代码 + 批次），同键复用；本页 iframe 不跳走。脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。
+`openSecurityAdjustDetail(row)`：拼 `securityCode`/`targetPoolId`/`adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, false)`，状态表 `adjust_log_id`，非本行状态主键 `id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含代码 + 记录 ID + 批次），同键复用；本页 iframe 不跳走。脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。
 
 ---
 
@@ -139,7 +139,7 @@ this.loadList();                  // 列表数据
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树（含全路径） |
-| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId 用于收藏态） | 证券池分页查询（仅 audit_status='20'；`security_type != 'crmw'`） |
+| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo 等） | 证券池分页查询（仅 audit_status='20'；`security_type != 'crmw'`） |
 | `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（限池内已审批，排除 crmw） |
 | `securityPoolQuery/querySecurityStatusList` | `{}` | `List<String>` = `['active','matured']` | 证券状态下拉（前端未调用，硬编码） |
 | `securityPoolQuery/addSecurityToMyPool` | `{securityCode, securityType, market, userId}` | `MySecurityPoolBo` | 添加收藏（幂等） |

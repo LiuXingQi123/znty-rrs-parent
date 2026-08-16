@@ -67,7 +67,7 @@
   ```
   注意：调整日期前端传 `yyyy-MM-dd`（不补秒），**后端**对 `adjustTimeEnd` 拼 `' 23:59:59'`，`adjustTimeStart` 直接比较。这与主体池查询页（前端补秒）的分工相反。
 - 后端 `CompanyPoolAdjustHistoryService`：`PageHelper.startPage` 分页；`queryCompanyPoolAdjustHistoryPage` SQL；`fillPoolFullName`（用投资池全路径名覆盖 `targetPoolName`）；返回 `PageResult`。
-- 返回 `PageResult<CompanyPoolAdjustHistoryDto>`（`id, adjusterName, submitTime, companyName, companyCode, adjustType, adjustMode, targetPoolName, targetPoolId, auditStatus`）。
+- 返回 `PageResult<CompanyPoolAdjustHistoryDto>`（`id, adjusterName, submitTime, companyName, companyCode, adjustType, adjustMode, targetPoolName, targetPoolId, adjustLogId, adjustBatchNo, auditStatus`）。
 
 ### 2.3 分页
 
@@ -83,7 +83,7 @@
 
 ## 4. 跳转详情的参数传递
 
-`openForbiddenPoolAdjustDetail(row)`：拼 `companyCode`/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `forbidden-detail` + 主体代码 + 批次），进 `forbidden_pool_adjust_detail.html`；脱离工作台回退 `location.href`。**不要**套用证券详情页。主体池查询页（[09](09-company-pool-query.md)）同一方法。
+`openForbiddenPoolAdjustDetail(row)`：拼 `companyCode`/`targetPoolId`/`adjustLogId`（`al.id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含主体代码 + 记录 ID + 批次），进 `forbidden_pool_adjust_detail.html`；脱离工作台回退 `location.href`。**不要**套用证券详情页。主体池查询页（[09](09-company-pool-query.md)）同一方法。
 
 ---
 

@@ -39,6 +39,12 @@ public class CompanyPoolAdjustHistoryDto {
     /** 目标投资池 ID */
     private Long targetPoolId;
 
+    /** 调库记录 ID */
+    private Long adjustLogId;
+
+    /** 调库批次号 */
+    private String adjustBatchNo;
+
     /** 审批状态 */
     private String auditStatus;
 }

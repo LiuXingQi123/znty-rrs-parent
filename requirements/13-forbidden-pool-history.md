@@ -89,7 +89,7 @@
 
 ## 3. 跳转详情
 
-表格中「证券名称」「证券代码」可跳转详情。`openPoolAdjustDetail(row)` 按 `categoryType==='company'` 分流：主体进 `forbidden_pool_adjust_detail.html`（参数 `companyCode`），债券进 `security_pool_adjust_detail.html`（参数 `securityCode`）。另带 `targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`；批次号用于加载同批次流程步骤。工作台内 `RrsWorkbench.openDetailTab`，同键复用；脱离工作台回退 `location.href`。
+表格中「证券名称」「证券代码」可跳转详情。`openPoolAdjustDetail(row)` 按 `categoryType==='company'` 分流：主体进 `forbidden_pool_adjust_detail.html`（参数 `companyCode`），债券进 `security_pool_adjust_detail.html`（参数 `securityCode`）。另带 `targetPoolId`/`adjustLogId`（与 `id` 同值）/`adjustBatchNo`/`entryMode=view`；批次号用于加载同批次流程步骤。工作台内 `RrsWorkbench.openDetailTab`，同键复用；脱离工作台回退 `location.href`。
 
 ---
 

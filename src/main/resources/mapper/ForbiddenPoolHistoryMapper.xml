@@ -9,6 +9,7 @@
     -->
     <select id="queryForbiddenPoolHistoryPage" resultType="com.znty.rrs.entity.forbiddenpoolhistory.ForbiddenPoolHistoryDto">
         SELECT al.id
+               ,al.id AS adjustLogId
                ,al.adjuster_name
                ,al.submit_time
                ,al.security_short_name

@@ -32,4 +32,10 @@ public class CompanyPoolQueryDto {
 
     /** 目标投资池 ID */
     private Long targetPoolId;
+
+    /** 来源调库日志 ID */
+    private Long adjustLogId;
+
+    /** 调库批次号 */
+    private String adjustBatchNo;
 }

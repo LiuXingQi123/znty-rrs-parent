@@ -14,6 +14,9 @@ public class CrmwPoolAdjustHistoryDto {
     /** 主键 ID */
     private Long id;
 
+    /** 调库记录 ID（与 id 同值，供跳转详情使用） */
+    private Long adjustLogId;
+
     /** 调库批次号 */
     private String adjustBatchNo;
 

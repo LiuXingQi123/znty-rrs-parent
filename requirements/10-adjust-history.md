@@ -87,7 +87,7 @@
 
 ## 5. 跳转调库详情
 
-`openSecurityAdjustDetail(row)`：拼 `securityCode`/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `security-detail` + 代码 + 批次），本页 iframe 不跳走；脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。目标页 `getUrlParam` 读上述参数，`entryMode !== 'adjust'` 时为只读详情模式。
+`openSecurityAdjustDetail(row)`：拼 `securityCode`/`targetPoolId`/`adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, true)`：优先 `adjustLogId`，可回退本行 `id`，二者同为 `ip_adjust_log.id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含代码 + 记录 ID + 批次），本页 iframe 不跳走；脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。目标页 `getUrlParam` 读上述参数，`entryMode !== 'adjust'` 时为只读详情模式。
 
 分页参数同证券池查询页（pageIndex=1, pageSize=20, page-sizes=[10,20,50,100]）。
 
@@ -98,7 +98,7 @@
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树 |
-| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态；`security_type != 'crmw'`，不按 pool_type 排除禁投） |
+| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 id、adjustLogId（与 id 同值）、targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态；`security_type != 'crmw'`，不按 pool_type 排除禁投） |
 | `securityPoolAdjustHistory/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（不限 audit_status） |
 
 > 路径均带前缀 `/api/v1/`。

@@ -11,6 +11,8 @@
                ,ips.adjuster_name
                ,ips.entry_time
                ,ips.target_pool_id
+               ,ips.adjust_log_id
+               ,ips.adjust_batch_no
                ,p.pool_name AS target_pool_name
         FROM ip_pool_status ips
         INNER JOIN dict_security_type dst ON ips.security_type = dst.security_type

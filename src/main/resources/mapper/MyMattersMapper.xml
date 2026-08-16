@@ -17,9 +17,14 @@
                ,s.id AS stepId
                ,f.name AS flowName
                ,s.node_label AS stepName
+               -- 主体禁投：先看 pool_type，旧数据无类型时再用 15/16/17/23 兜底
                ,CASE WHEN al.pool_type = 'crmw'
                      THEN 'crmwAdjust'
-                     WHEN dst.category_type = 'company' AND al.target_pool_id IN (15, 16, 17)
+                     WHEN dst.category_type = 'company'
+                          AND (
+                              al.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
+                              OR al.target_pool_id IN (15, 16, 17, 23)
+                          )
                      THEN 'forbiddenCompanyAdjust'
                      ELSE 'securityAdjust'
                 END AS businessScene

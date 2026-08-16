@@ -7,6 +7,7 @@
     <!-- 分页查询证券池调整历史列表 -->
     <select id="querySecurityPoolAdjustHistoryPage" resultType="com.znty.rrs.entity.securitypooladjusthistory.SecurityPoolAdjustHistoryDto">
         SELECT al.id
+               ,al.id AS adjustLogId
                ,al.security_code
                ,al.security_short_name
                ,al.security_type

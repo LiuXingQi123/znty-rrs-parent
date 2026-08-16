@@ -14,6 +14,9 @@ public class SecurityPoolAdjustHistoryDto {
     /** 记录 ID */
     private Long id;
 
+    /** 调库记录 ID（与 id 同值，供跳转详情使用） */
+    private Long adjustLogId;
+
     /** 证券代码 */
     private String securityCode;
 

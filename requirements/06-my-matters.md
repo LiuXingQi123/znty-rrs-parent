@@ -84,6 +84,7 @@
 ## 5. 跳转审核 / 详情
 
 `openMatterPage(row)`：工作台内走 `RrsWorkbench.openDetailTab`，按场景+证券/主体+批次新开页签，同键复用；「我的事宜」列表 iframe 不跳走。脱离工作台时仍 `location.href`。**若公司工作台不兼容新开 Tab，此处可还原为 `location.href` + 详情页 `history.back()`**（见 [README](README.md)「跳转层可回退」）。
+- 场景：`pool_type=crmw` → CRMW；`category_type=company` 且（`pool_type` 为 forbidden/observe/blacklist/restricted，或目标池 15/16/17/23）→ 禁投主体；否则证券。
 - **待处理** → 对应 `*_approve.html?entryMode=process`，页签标题为「简称 审核」。
 - **已完成** → 对应 `*_detail.html?entryMode=view`，页签标题为「简称 详情」。
 - 审核/详情页「返回」关闭当前动态页签，回到「我的事宜」并重新拉取列表与角标。

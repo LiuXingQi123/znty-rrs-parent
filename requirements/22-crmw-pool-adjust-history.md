@@ -39,9 +39,10 @@
 - SQL（`CrmwPoolAdjustHistoryMapper.xml` `queryCrmwPoolAdjustHistoryPage`）：
 
 ```sql
-SELECT al.id, al.adjust_batch_no, al.adjuster_name, al.submit_time, al.crmw_name, al.crmw_scode,
-       al.security_short_name, al.security_code, al.adjust_type, al.adjust_mode,
-       al.target_pool_id, p.pool_name AS target_pool_name, al.audit_status
+SELECT al.id, al.id AS adjustLogId, al.adjust_batch_no, al.adjuster_name, al.submit_time,
+       al.crmw_name, al.crmw_scode, al.security_short_name, al.security_code,
+       al.adjust_type, al.adjust_mode, al.target_pool_id,
+       p.pool_name AS target_pool_name, al.audit_status
 FROM ip_adjust_log al
 LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id AND p.is_deleted = 0
 <where>
@@ -78,7 +79,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 | 投资池名称 | `targetPoolName` | 全路径名 |
 | 审核状态 | `auditStatus` | `el-tag`（`auditStatusType`：20/10/32→success；21/-1→danger；00/11→warning；99→info） |
 
-**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId(row.id)/adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键须含 `crmwScode` + `securityCode` + 批次），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
+**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, true)`：优先 `adjustLogId`，可回退 `id`，二者同为 `ip_adjust_log.id`）/`adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含 `crmwScode` + `securityCode` + 记录 ID + 批次），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
 
 ---
 
@@ -86,7 +87,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `crmwPoolAdjustHistory/queryCrmwPoolAdjustHistoryPage` | crmwScode, crmwName, adjustTimeStart, adjustTimeEnd, adjusterName, adjustMode, auditStatus, pageIndex, pageSize | `PageResult<CrmwPoolAdjustHistoryDto>` | CRMW 池调库历史分页查询（所有状态） |
+| `crmwPoolAdjustHistory/queryCrmwPoolAdjustHistoryPage` | crmwScode, crmwName, adjustTimeStart, adjustTimeEnd, adjusterName, adjustMode, auditStatus, pageIndex, pageSize | `PageResult<CrmwPoolAdjustHistoryDto>`（含 id、adjustLogId 与 id 同值、adjustBatchNo 等） | CRMW 池调库历史分页查询（所有状态） |
 
 > 路径带前缀 `/api/v1/`。该 Controller **只有一个接口**（无下拉选项接口）。
 

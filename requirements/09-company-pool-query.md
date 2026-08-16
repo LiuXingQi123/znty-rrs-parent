@@ -34,7 +34,7 @@
 
 ### 1.1 跳转详情
 
-`openForbiddenPoolAdjustDetail(row)`：拼 `companyCode`（取 `securityCode` 或 `companyCode`）/`targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `forbidden-detail` + 主体代码 + 批次），进 `forbidden_pool_adjust_detail.html`；脱离工作台回退 `location.href`。**不要**套用证券详情页 `security_pool_adjust_detail.html`。
+`openForbiddenPoolAdjustDetail(row)`：拼 `companyCode`（取 `securityCode` 或 `companyCode`）/`targetPoolId`/`adjustLogId`（状态表 `adjust_log_id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含主体代码 + 记录 ID + 批次），进 `forbidden_pool_adjust_detail.html`；脱离工作台回退 `location.href`。**不要**套用证券详情页 `security_pool_adjust_detail.html`。
 
 ---
 
@@ -63,7 +63,7 @@
   ```
   前端将日期范围补全为 `起 00:00:00`/`止 23:59:59`；`poolIds` 为空数组时传 null。
 - 后端 `CompanyPoolQueryService`：`PageHelper.startPage` 分页；`queryCompanyPoolPage` SQL；`fillPoolFullName`（用投资池全路径名覆盖 `targetPoolName`）；返回 `PageResult`。
-- 返回 `PageResult<CompanyPoolQueryDto>`（`id, securityShortName(主体名称), securityCode(主体代码), adjusterName, entryTime, targetPoolName, targetPoolId`）。
+- 返回 `PageResult<CompanyPoolQueryDto>`（`id, securityShortName(主体名称), securityCode(主体代码), adjusterName, entryTime, targetPoolName, targetPoolId, adjustLogId, adjustBatchNo`）。
 
 ### 2.3 分页
 

@@ -53,7 +53,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
     "pageIndex", "pageSize" }
   ```
 - 后端 `ForbiddenPoolQueryService.queryForbiddenPoolPage`：`PageHelper.startPage` 分页；`queryForbiddenPoolPage` SQL；`fillPoolFullName`（用投资池全路径名覆盖 `targetPoolName`）；返回 `PageResult`。
-- 返回 `PageResult<ForbiddenPoolQueryDto>`（`id, securityShortName, securityCode, issuer, adjusterName, securityType, securityTypeName, targetPoolName, targetPoolId, adjustBatchNo, entryTime, maturityDate, delistDate, repurchaseDate`）。
+- 返回 `PageResult<ForbiddenPoolQueryDto>`（`id, securityShortName, securityCode, issuer, adjusterName, securityType, securityTypeName, targetPoolName, targetPoolId, adjustLogId(状态表 adjust_log_id，非本行 id), adjustBatchNo, entryTime, maturityDate, delistDate, repurchaseDate`）。
 
 ### 2.3 表格列渲染
 
@@ -73,7 +73,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 
 ### 2.4 跳转详情
 
-`openPoolAdjustDetail(row)`：按 `categoryType==='company'` 分流。主体拼 `companyCode` 进 `forbidden_pool_adjust_detail.html`；债券拼 `securityCode` 进 `security_pool_adjust_detail.html`。另带 `targetPoolId`/`adjustLogId`/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键 `forbidden-detail` 或 `security-detail` + 代码 + 批次），同键复用；脱离工作台回退 `location.href`。
+`openPoolAdjustDetail(row)`：按 `categoryType==='company'` 分流。主体拼 `companyCode` 进 `forbidden_pool_adjust_detail.html`；债券拼 `securityCode` 进 `security_pool_adjust_detail.html`。另带 `targetPoolId`/`adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, false)`，只认状态表 `adjust_log_id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含代码 + 记录 ID + 批次），同键复用；脱离工作台回退 `location.href`。
 
 ### 2.5 证券类型下拉
 
