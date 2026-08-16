@@ -1,8 +1,11 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.entity.scripttool.ScriptToolReq;
+import com.znty.rrs.exception.BizException;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.File;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -24,7 +28,7 @@ import static org.mockito.Mockito.verify;
  */
 public class ScriptToolServiceTest {
 
-    /** 验证结构差异检查能够解析项目关键表。 */
+    /** 验证结构差异检查能够解析项目关键表，且与可清空表白名单一致。 */
     @Test
     public void shouldParseAllSchemaTables() {
         ScriptToolService service = new ScriptToolService();
@@ -38,7 +42,39 @@ public class ScriptToolServiceTest {
         assertTrue(tables.containsKey("znty_rrs.rrs_securityinfo"));
         assertTrue(tables.containsKey("znty_rrs.rrs_temp_security_code"));
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_log"));
+        assertTrue(tables.containsKey("znty_rrs.ip_adjust_security_snapshot"));
+        assertTrue(tables.containsKey("znty_rrs.ip_adjust_security_snapshot_crmw"));
         assertEquals(tables.keySet(), healthTables.keySet());
+    }
+
+    /** 验证 sql/ 目录业务脚本均已注册到 schema/demo 白名单（排除只读工具脚本）。 */
+    @Test
+    public void shouldRegisterAllSqlFilesExceptToolScripts() {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+
+        @SuppressWarnings("unchecked")
+        List<String> schemaFiles = (List<String>) ReflectionTestUtils.invokeMethod(service, "querySchemaFiles");
+        @SuppressWarnings("unchecked")
+        List<String> demoFiles = (List<String>) ReflectionTestUtils.invokeMethod(service, "queryDemoFiles");
+        @SuppressWarnings("unchecked")
+        List<String> excluded = (List<String>) ReflectionTestUtils.invokeMethod(service, "querySqlFilesExcludedFromRegistration");
+
+        Set<String> registered = new HashSet<>();
+        registered.addAll(schemaFiles);
+        registered.addAll(demoFiles);
+        registered.addAll(excluded);
+
+        File sqlDir = new File("sql");
+        assertTrue("sql 目录应存在: " + sqlDir.getAbsolutePath(), sqlDir.isDirectory());
+        File[] files = sqlDir.listFiles((dir, name) -> name != null && name.endsWith(".sql"));
+        assertTrue(files != null && files.length > 0);
+        for (File file : files) {
+            assertTrue("未注册到 ScriptTool 白名单: " + file.getName(), registered.contains(file.getName()));
+        }
+        assertTrue(schemaFiles.contains("rrs_adjust_snapshot_schema.sql"));
+        assertTrue(schemaFiles.contains("rrs_grade_rule_alert_schema.sql"));
+        assertTrue(schemaFiles.contains("rrs_scheduled_task_schema.sql"));
     }
 
     /** 验证主库批量任务排除外部导入表，且 AIS/外部导入拆为独立任务。 */
@@ -86,6 +122,8 @@ public class ScriptToolServiceTest {
         Integer externalImportTableCount = (Integer) ReflectionTestUtils.getField(externalImportSchema, "tableCount");
         @SuppressWarnings("unchecked")
         List<String> unseededTables = (List<String>) ReflectionTestUtils.getField(initDemo, "unseededTables");
+        @SuppressWarnings("unchecked")
+        List<String> clearItems = (List<String>) ReflectionTestUtils.getField(clearFlow, "items");
 
         assertTrue(!schemaItems.contains("rrs_external_import_schema.sql"));
         assertTrue(!demoItems.contains("rrs_external_import_demo_data.sql"));
@@ -95,6 +133,7 @@ public class ScriptToolServiceTest {
         assertTrue(!resetItems.contains("rrs_external_import_demo_data.sql"));
         assertTrue(!resetItems.contains("ais_inv_analysis_demo_data.sql"));
         assertTrue(!resetItems.contains("ais_inv_ods_demo_data.sql"));
+        assertTrue(schemaItems.contains("rrs_adjust_snapshot_schema.sql"));
         assertTrue(externalSchemaItems.contains("rrs_external_import_schema.sql"));
         // 主库批量任务「已排除」须标出 AIS 与外部导入脚本，便于页面展示
         assertTrue(excluded.contains("ais_inv_analysis_demo_data.sql"));
@@ -107,16 +146,73 @@ public class ScriptToolServiceTest {
         List<String> resetExcluded = (List<String>) ReflectionTestUtils.getField(resetAll, "excludedItems");
         assertTrue(resetExcluded.contains("ais_inv_analysis_demo_data.sql"));
         assertTrue(resetExcluded.contains("ais_inv_ods_demo_data.sql"));
-        // 主库 schema 受影响表 = CREATE TABLE 去重（含流程/池事件表等），不是脚本文件数 11
+        // 表数/文件数随脚本增减变化，只断言与清单动态一致，避免硬编码漂移
         assertTrue(schemaTableCount != null && schemaTableCount > 0);
-        assertEquals(Integer.valueOf(60), schemaTableCount);
         assertEquals(Integer.valueOf(1), externalImportTableCount);
-        assertEquals(Integer.valueOf(9), clearTableCount);
-        assertEquals(12, schemaItems.size());
-        // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的表（导入临时表 + 定时任务审计等）
+        assertEquals(Integer.valueOf(clearItems.size()), clearTableCount);
+        assertTrue(clearItems.contains("ip_adjust_security_snapshot"));
+        assertTrue(clearItems.contains("ip_adjust_security_snapshot_crmw"));
+        assertEquals(schemaItems.size(), ((List<?>) ReflectionTestUtils.invokeMethod(service, "queryRrsSchemaFiles")).size());
+        // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的表（导入临时表 + 快照等）
         assertTrue(unseededTables.contains("sys_imp_tmp"));
         assertTrue(unseededTables.contains("sys_imp_tmp_detl"));
+        assertTrue(unseededTables.contains("ip_adjust_security_snapshot"));
+        assertTrue(unseededTables.contains("ip_adjust_security_snapshot_crmw"));
         assertTrue(unseededTables.size() >= 2);
+    }
+
+    /** 验证 Demo 场景清单覆盖主要业务链路。 */
+    @Test
+    public void shouldExposeExpandedDemoScenes() {
+        ScriptToolService service = new ScriptToolService();
+        @SuppressWarnings("unchecked")
+        Map<String, ?> sceneMap = (Map<String, ?>) ReflectionTestUtils.invokeMethod(service, "queryDemoSceneMap");
+        assertTrue(sceneMap.size() >= 14);
+        assertTrue(sceneMap.containsKey("security-pending-review"));
+        assertTrue(sceneMap.containsKey("security-final-reject"));
+        assertTrue(sceneMap.containsKey("security-outbound-approved"));
+        assertTrue(sceneMap.containsKey("security-withdrawn"));
+        assertTrue(sceneMap.containsKey("forbidden-company-pending"));
+        assertTrue(sceneMap.containsKey("forbidden-observe-pending"));
+        assertTrue(sceneMap.containsKey("forbidden-restricted-pending"));
+        assertTrue(sceneMap.containsKey("forbidden-company-approved"));
+        assertTrue(sceneMap.containsKey("forbidden-abs-pending"));
+        assertTrue(sceneMap.containsKey("crmw-pending-review"));
+        assertTrue(sceneMap.containsKey("crmw-approved-history"));
+        assertTrue(sceneMap.containsKey("grade-rule-alert-pending"));
+        @SuppressWarnings("unchecked")
+        List<String> forbiddenSql = (List<String>) ReflectionTestUtils.invokeMethod(service, "buildDemoSceneStatements", "forbidden-company-pending");
+        assertTrue(forbiddenSql.toString().contains("company:forbidden-inbound"));
+        assertTrue(forbiddenSql.toString().contains("11303"));
+    }
+
+    /** 验证模块编码/名称映射覆盖新模块。 */
+    @Test
+    public void shouldResolveModuleNamesForNewModules() {
+        ScriptToolService service = new ScriptToolService();
+        assertEquals("scheduled-task", ReflectionTestUtils.invokeMethod(service, "resolveModuleCode", "rrs_scheduled_task_schema.sql"));
+        assertEquals("定时任务配置", ReflectionTestUtils.invokeMethod(service, "resolveModuleName", "rrs_scheduled_task_demo_data.sql"));
+        assertEquals("import-temp", ReflectionTestUtils.invokeMethod(service, "resolveModuleCode", "rrs_import_temp_schema.sql"));
+        assertEquals("Excel 导入临时表", ReflectionTestUtils.invokeMethod(service, "resolveModuleName", "rrs_import_temp_schema.sql"));
+        assertEquals("adjust-snapshot", ReflectionTestUtils.invokeMethod(service, "resolveModuleCode", "rrs_adjust_snapshot_schema.sql"));
+        assertEquals("调库信息快照", ReflectionTestUtils.invokeMethod(service, "resolveModuleName", "rrs_adjust_snapshot_schema.sql"));
+    }
+
+    /** 验证关闭开关后写操作被拒绝。 */
+    @Test
+    public void shouldRejectWriteWhenScriptToolDisabled() {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "scriptEnabled", Boolean.FALSE);
+        ScriptToolReq req = new ScriptToolReq();
+        req.setTaskCode("INIT_SCHEMA");
+        req.setConfirmText("INIT_SCHEMA");
+        try {
+            service.executeScriptTask(req);
+            org.junit.Assert.fail("关闭开关后应拒绝执行");
+        } catch (BizException e) {
+            assertTrue(e.getMessage().contains("脚本工具已禁用"));
+        }
+        assertFalse(service.isScriptToolEnabled());
     }
 
     /** 验证重置选中表时会执行带前置注释的 Demo 插入语句。 */

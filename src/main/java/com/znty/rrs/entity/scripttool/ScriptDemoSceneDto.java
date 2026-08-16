@@ -19,6 +19,9 @@ public class ScriptDemoSceneDto {
     /** 场景说明 */
     private String description;
 
+    /** 场景分类：security / forbidden / crmw / alert */
+    private String sceneCategory;
+
     /** 风险等级 */
     private String riskLevel;
 

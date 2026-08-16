@@ -7,6 +7,7 @@ import com.znty.rrs.entity.scripttool.ScriptInspectionDto;
 import com.znty.rrs.entity.scripttool.ScriptModuleTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptOverviewDto;
 import com.znty.rrs.entity.scripttool.ScriptTableGroupDto;
+import com.znty.rrs.entity.scripttool.ScriptTableRowCountGroupDto;
 import com.znty.rrs.entity.scripttool.ScriptTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptToolReq;
 import com.znty.rrs.exception.BizException;
@@ -43,6 +44,35 @@ public class ScriptToolApiTest extends ControllerApiTestSupport {
         scriptToolService = mock(ScriptToolService.class);
         ReflectionTestUtils.setField(controller, "scriptToolService", scriptToolService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+    }
+
+    /** 验证脚本工具开关状态查询接口。 */
+    @Test
+    public void shouldQueryScriptToolStatus() throws Exception {
+        when(scriptToolService.isScriptToolEnabled()).thenReturn(true);
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryScriptToolStatus", "{}");
+    }
+
+    /** 验证脚本工具写操作审计列表接口。 */
+    @Test
+    public void shouldQueryScriptToolRunLogList() throws Exception {
+        when(scriptToolService.queryScriptToolRunLogList(any(ScriptToolReq.class)))
+                .thenReturn(Collections.emptyList());
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryScriptToolRunLogList", "{}");
+    }
+
+    /** 验证表记录数统计接口。 */
+    @Test
+    public void shouldQueryTableRowCounts() throws Exception {
+        ScriptTableRowCountGroupDto group = new ScriptTableRowCountGroupDto();
+        group.setDatabaseName("znty_rrs");
+        group.setDatabaseDesc("主业务库");
+        when(scriptToolService.queryTableRowCounts(any(ScriptToolReq.class)))
+                .thenReturn(Collections.singletonList(group));
+
+        assertPostSuccess(mockMvc, "/api/v1/scriptTool/queryTableRowCounts", "{}");
     }
 
     /** 验证脚本任务列表查询接口。 */

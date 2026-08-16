@@ -161,8 +161,11 @@ AIS 库将库名换成 `ais_inv_analysis` / `ais_inv_ods` 即可。
 | 主库批量 INIT / RESET | `queryTaskMap()` 中 `INIT_SCHEMA` / `INIT_DEMO` / `RESET_ALL`（经 `queryRrsSchemaFiles()` / `queryRrsDemoFiles()`，排除 AIS 与外部导入） |
 | 外部导入 | `INIT_EXTERNAL_IMPORT_SCHEMA` / `INIT_EXTERNAL_IMPORT_DEMO` |
 | AIS | `INIT_AIS_SCHEMA` / `INIT_AIS_DEMO` |
+| 调库运行态清空 | `queryAdjustFlowRuntimeTables()`（含调库日志/步骤/池状态/快照/附件/报告/导入临时表） |
+| 仅工具脚本不注册 | 如 `tool_table_row_counts.sql`，列入 `querySqlFilesExcludedFromRegistration()` |
 
-只把文件丢进 `sql/` 而不改 `ScriptToolService`，**线上初始化页不会执行该脚本**。
+只把文件丢进 `sql/` 而不改 `ScriptToolService`，**线上初始化页不会执行该脚本**。  
+生产请关闭写操作：`rrs.script.enabled=false` / `RRS_SCRIPT_ENABLED=false`。
 
 ### 演示 / 初始化数据（Demo）
 

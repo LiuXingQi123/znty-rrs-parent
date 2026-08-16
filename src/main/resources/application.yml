@@ -45,6 +45,9 @@ rrs:
   attachment:
     storage-path: ${RRS_ATTACHMENT_STORAGE_PATH:D:/uploads/znty_rrs}
   script:
+    # SQL 脚本目录（相对 user.dir 或绝对路径）
     sql-path: ${RRS_SCRIPT_SQL_PATH:sql}
+    # 脚本工具总开关：开发/演示默认 true；生产务必 false（写操作拒绝执行）
+    enabled: ${RRS_SCRIPT_ENABLED:true}
   # 定时任务启停/cron/扩展参数已迁至库表 sys_scheduled_task，由「RRS配置 → 定时任务管理」可视化维护
   # 历史环境变量（RRS_AUTO_ADJUST_* / RRS_COMPANY_NEW_BOND_*）不再读取；首次建表见 rrs_scheduled_task_schema.sql

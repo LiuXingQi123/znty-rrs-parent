@@ -11,6 +11,8 @@ import com.znty.rrs.entity.scripttool.ScriptTableGroupDto;
 import com.znty.rrs.entity.scripttool.ScriptTableRowCountGroupDto;
 import com.znty.rrs.entity.scripttool.ScriptTaskDto;
 import com.znty.rrs.entity.scripttool.ScriptToolReq;
+import com.znty.rrs.entity.scripttool.ScriptToolRunLogDto;
+import com.znty.rrs.entity.scripttool.ScriptToolStatusDto;
 import com.znty.rrs.service.ScriptToolService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,6 +33,24 @@ public class ScriptToolController {
     /** 脚本工具服务 */
     @Resource
     private ScriptToolService scriptToolService;
+
+    /**
+     * 查询脚本工具开关状态。
+     */
+    @PostMapping("/queryScriptToolStatus")
+    public ApiResponse<ScriptToolStatusDto> queryScriptToolStatus(@RequestBody ScriptToolReq req) {
+        ScriptToolStatusDto status = new ScriptToolStatusDto();
+        status.setEnabled(scriptToolService.isScriptToolEnabled());
+        return ApiResponse.success(status);
+    }
+
+    /**
+     * 查询脚本工具写操作审计列表。
+     */
+    @PostMapping("/queryScriptToolRunLogList")
+    public ApiResponse<List<ScriptToolRunLogDto>> queryScriptToolRunLogList(@RequestBody ScriptToolReq req) {
+        return ApiResponse.success(scriptToolService.queryScriptToolRunLogList(req));
+    }
 
     /**
      * 查询可执行脚本任务列表。

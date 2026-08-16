@@ -15,7 +15,7 @@
 --   6. 一期不建 _evt；多期财报另表。
 --   7. 字段顺序：快照关联键 →（CRMW 表：凭证四元组）→ 调库详情已用字段
 --      → 预留字段 → is_deleted / crte_time / updt_time 固定置尾。
---   8. 未注册 ScriptTool，可直接在库执行建表。
+--   8. 已注册 ScriptTool：INIT_SCHEMA / RESET_ALL / 结构差异 / 表清空 / CLEAR_ADJUST_FLOW。
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
