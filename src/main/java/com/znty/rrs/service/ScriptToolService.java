@@ -1485,7 +1485,7 @@ public class ScriptToolService {
                 "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE l.id IS NULL",
                 STATUS_FAILED, "存在找不到调库申请的审批步骤", "清理孤儿步骤或补回对应调库申请"));
         rules.add(buildIntegrityRule("adjust-step-batch", "调库流程", "ip_adjust_step.adjust_batch_no", "步骤批次号一致性",
-                "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE COALESCE(s.adjust_batch_no, '') <> COALESCE(l.adjust_batch_no, '')",
+                "SELECT COUNT(*) FROM znty_rrs.ip_adjust_step s JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE COALESCE(s.adjust_batch_no, '') != COALESCE(l.adjust_batch_no, '')",
                 STATUS_FAILED, "步骤批次号与申请批次号不一致", "按调库申请批次号修正步骤记录"));
         rules.add(buildIntegrityRule("pool-status-log", "调库流程", "ip_pool_status → ip_adjust_log", "证券池状态来源申请",
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_status p LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = p.adjust_log_id WHERE l.id IS NULL",
@@ -1500,10 +1500,10 @@ public class ScriptToolService {
                 "SELECT COUNT(*) FROM znty_rrs.ip_adjust_security_snapshot_crmw s LEFT JOIN znty_rrs.ip_adjust_log l ON l.id = s.adjust_log_id WHERE s.adjust_log_id IS NOT NULL AND l.id IS NULL",
                 STATUS_FAILED, "存在找不到来源申请的 CRMW 调库信息快照", "清理孤儿快照或补回对应调库申请"));
         rules.add(buildIntegrityRule("pool-status-audit", "调库流程", "ip_pool_status.audit_status", "证券池落地状态合法性",
-                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status WHERE COALESCE(is_deleted, 0) = 0 AND audit_status <> '20'",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status WHERE COALESCE(is_deleted, 0) = 0 AND audit_status != '20'",
                 STATUS_FAILED, "当前池状态中存在非审批通过数据", "核对落池逻辑，仅保留 audit_status=20 的有效状态"));
         rules.add(buildIntegrityRule("crmw-status-audit", "调库流程", "ip_pool_status_crmw.audit_status", "CRMW 落地状态合法性",
-                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw WHERE COALESCE(is_deleted, 0) = 0 AND audit_status <> '20'",
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_status_crmw WHERE COALESCE(is_deleted, 0) = 0 AND audit_status != '20'",
                 STATUS_FAILED, "CRMW 当前池状态中存在非审批通过数据", "核对落池逻辑，仅保留 audit_status=20 的有效状态"));
         rules.add(buildIntegrityRule("pool-status-duplicate", "调库流程", "ip_pool_status", "证券池有效状态重复",
                 "SELECT COALESCE(SUM(t.cnt - 1), 0) FROM (SELECT COUNT(*) cnt FROM znty_rrs.ip_pool_status WHERE COALESCE(is_deleted, 0) = 0 GROUP BY security_code, target_pool_id HAVING COUNT(*) > 1) t",

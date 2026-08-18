@@ -47,7 +47,7 @@
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
 - 请求体：`{ securityCode, securityShortName, securityType, issuer, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 按 **证券类型** 排除 `security_type IN ('crmw','company')`（CRMW 凭证与公司主体；**不用** `pool_type`），按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），LEFT JOIN `dict_security_type` 取 `security_type_name`。
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除 `security_status='D'`；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。与禁投池「旗下债券数量」主数据统计同口径。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.2.1 证券类型下拉 `querySecurityTypeList`
@@ -335,7 +335,7 @@
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
-| `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径，排除 crmw/company 及已删除态） |
+| `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：仅 bond，排除 crmw 及已删除态） |
 | `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
 | `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投/观察等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 按主体内评×期限矩阵过滤信用债大库；**正式证券无主体内评分档时直接去掉全部 credit_bond 池（含 1～5 级）**；临时代码无内评默认 `grade_code=4` 再走矩阵 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |

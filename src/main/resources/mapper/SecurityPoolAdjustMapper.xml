@@ -3,14 +3,16 @@
 <mapper namespace="com.znty.rrs.mapper.SecurityPoolAdjustMapper">
     <!-- 证券池调整 mapper，对应表：rrs_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status（证券池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
 
-    <!-- 分页查询证券列表 -->
+    <!-- 分页查询证券列表（仅债券大类，与禁投池「旗下债券数量」同口径） -->
     <select id="querySecurityPage" resultType="com.znty.rrs.entity.securitypooladjust.SecurityInfoDto">
         SELECT si.*
                ,dst.security_type_name
         FROM rrs_securityinfo si
-        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
+        INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
         <where>
-            AND si.security_type NOT IN ('crmw', 'company')
+            AND si.security_type != 'crmw'
             AND si.security_status != 'D'
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
@@ -27,13 +29,15 @@
         </where>
     </select>
 
-    <!-- 查询候选证券中出现的证券类型选项（与列表同口径） -->
+    <!-- 查询候选证券中出现的证券类型选项（与列表同口径：仅 bond） -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT si.security_type
                        ,dst.security_type_name
         FROM rrs_securityinfo si
-        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
-        WHERE si.security_type NOT IN ('crmw', 'company')
+        INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        WHERE si.security_type != 'crmw'
           AND si.security_status != 'D'
         ORDER BY dst.sort_order ASC
                  ,si.security_type ASC
@@ -391,7 +395,7 @@
             FROM rrs_securityinfo si
             WHERE si.wind_code = #{securityCode}
               AND si.issuer_code IS NOT NULL
-              AND si.issuer_code &lt;&gt; ''
+              AND si.issuer_code != ''
             LIMIT 1
         )
           AND p.pool_type = 'observe'
@@ -422,7 +426,7 @@
             FROM rrs_securityinfo si
             WHERE si.wind_code = #{securityCode}
               AND si.issuer_code IS NOT NULL
-              AND si.issuer_code &lt;&gt; ''
+              AND si.issuer_code != ''
             LIMIT 1
         )
           AND p.pool_type = 'restricted'

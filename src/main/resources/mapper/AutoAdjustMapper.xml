@@ -26,9 +26,9 @@
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND (ips.security_type IS NULL OR ips.security_type &lt;&gt; 'crmw')
+          AND (ips.security_type IS NULL OR ips.security_type != 'crmw')
           AND si.maturity_date IS NOT NULL
-          AND si.maturity_date &lt;&gt; ''
+          AND si.maturity_date != ''
           AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d')
     </select>
 
@@ -37,7 +37,7 @@
       1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池
       2) 旗下 bond 大类未到期、尚未在 targetPoolId
       3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
-      4) 排除 ABS（老系统 sdc_cbondplate.code=5）与 CRMW（老系统 stype<>38），ABS 须走禁投 ABS 独立入口
+      4) 排除 ABS（老系统 sdc_cbondplate.code=5）与 CRMW（老系统 stype!=38），ABS 须走禁投 ABS 独立入口
     -->
     <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT bond.wind_code AS security_code
@@ -48,10 +48,10 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE bond.issuer_code IS NOT NULL
-          AND bond.issuer_code &lt;&gt; ''
+          AND bond.issuer_code != ''
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
-          AND COALESCE(bond.abs_flag, 0) &lt;&gt; 1
-          AND (bond.security_type IS NULL OR bond.security_type &lt;&gt; 'crmw')
+          AND COALESCE(bond.abs_flag, 0) != 1
+          AND (bond.security_type IS NULL OR bond.security_type != 'crmw')
           AND EXISTS (
               SELECT 1
               FROM ip_pool_status cps
@@ -76,7 +76,7 @@
               FROM rrs_temp_security_code ts
               WHERE ts.temp_security_code = bond.wind_code
                 AND ts.security_code IS NOT NULL
-                AND ts.security_code &lt;&gt; ''
+                AND ts.security_code != ''
                 AND IFNULL(ts.is_deleted, 0) = 0
                 AND ts.status = 'updated'
           )
@@ -101,7 +101,7 @@
         INNER JOIN ip_investment_pool p ON p.id = #{poolId}
                                         AND IFNULL(p.is_deleted, 0) = 0
         WHERE bond.issuer_code IS NOT NULL
-          AND bond.issuer_code &lt;&gt; ''
+          AND bond.issuer_code != ''
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
           AND EXISTS (
               SELECT 1
@@ -128,19 +128,19 @@
               OR p.market_codes = '[]'
               OR (
                   (JSON_CONTAINS(p.market_codes, '"SSE"')
-                      AND bond.wind_code_sh IS NOT NULL AND bond.wind_code_sh &lt;&gt; '')
+                      AND bond.wind_code_sh IS NOT NULL AND bond.wind_code_sh != '')
                   OR (JSON_CONTAINS(p.market_codes, '"SZSE"')
-                      AND bond.wind_code_sz IS NOT NULL AND bond.wind_code_sz &lt;&gt; '')
+                      AND bond.wind_code_sz IS NOT NULL AND bond.wind_code_sz != '')
                   OR (JSON_CONTAINS(p.market_codes, '"CIBM"')
-                      AND bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib &lt;&gt; '')
+                      AND bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib != '')
                   OR (JSON_CONTAINS(p.market_codes, '"BSE"')
-                      AND bond.wind_code_bj IS NOT NULL AND bond.wind_code_bj &lt;&gt; '')
+                      AND bond.wind_code_bj IS NOT NULL AND bond.wind_code_bj != '')
                   OR (JSON_CONTAINS(p.market_codes, '"OTHER"')
-                      AND bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc &lt;&gt; '')
+                      AND bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc != '')
                   OR (JSON_CONTAINS(p.market_codes, '"JWCW"')
                       AND (
-                          (bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib &lt;&gt; '')
-                          OR (bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc &lt;&gt; '')
+                          (bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib != '')
+                          OR (bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc != '')
                       ))
               )
           )
@@ -189,9 +189,9 @@
                     END AS rating_value
             FROM ais_inv_ods.wind_cbondissuerrating r
             WHERE r.s_info_compcode IS NOT NULL
-              AND r.s_info_compcode &lt;&gt; ''
+              AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
-              AND r.b_info_creditrating &lt;&gt; ''
+              AND r.b_info_creditrating != ''
         )
         ,old_pick AS (
             SELECT s_info_compcode
@@ -298,9 +298,9 @@
                     END AS rating_value
             FROM ais_inv_ods.wind_cbondissuerrating r
             WHERE r.s_info_compcode IS NOT NULL
-              AND r.s_info_compcode &lt;&gt; ''
+              AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
-              AND r.b_info_creditrating &lt;&gt; ''
+              AND r.b_info_creditrating != ''
         )
         ,old_pick AS (
             SELECT s_info_compcode
@@ -418,7 +418,7 @@
           AND ips.pool_type = 'crmw'
           AND crmw.security_type = 'crmw'
           AND crmw.maturity_date IS NOT NULL
-          AND crmw.maturity_date &lt;&gt; ''
+          AND crmw.maturity_date != ''
           AND crmw.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d')
         ORDER BY ips.crmw_scode ASC
                  ,ips.security_code ASC
@@ -439,10 +439,10 @@
         WHERE ips.target_pool_id = #{bondPoolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND COALESCE(bond.abs_flag, 0) &lt;&gt; 1
-          AND (bond.security_type IS NULL OR bond.security_type &lt;&gt; 'crmw')
+          AND COALESCE(bond.abs_flag, 0) != 1
+          AND (bond.security_type IS NULL OR bond.security_type != 'crmw')
           AND bond.issuer_code IS NOT NULL
-          AND bond.issuer_code &lt;&gt; ''
+          AND bond.issuer_code != ''
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status cps

@@ -39,7 +39,7 @@
 - 路径：`POST /api/v1/forbiddenPoolAdjust/queryCompanyPage`
 - 请求体：`{ companyCode, companyFullName, industryName, pageIndex, pageSize }`
 - 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_cbondissuer` 的 `used=1` 记录。**注意：该表约 70 万债行 / 约 4 万主体（债券+主体粒度），外部 ODS 不自建二级索引；列表用 `GROUP BY s_info_compcode` 去重 + `MAX` 取展示字段，不做无业务含义的排序**；行业关键字匹配一级或二级行业。列表返回主体代码、主体名称、一级/二级行业和旗下债券数量。
-- `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...)` 且 `category_type='bond'`，`GROUP BY issuer_code`）批量回填 `companyBondCount`。该数为 **主数据旗下债券总数**（展示口径不单独排除 crmw），不等于「各池在池债券数」之和（未入池债仍计入总数；同一债在多池会出现分池合计大于总数的情况）。
+- `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...)` 且 `category_type='bond'`，排除 `security_type='crmw'` 与 `security_status='D'`，`GROUP BY issuer_code`）批量回填 `companyBondCount`。`company` 大类非 bond，不必再排。该数与证券池调整列表主数据口径一致；不等于「各池在池债券数」之和（未入池债仍计入总数；同一债在多池会出现分池合计大于总数的情况）。对比证券池时用主体全称填「发行人」（名称模糊），禁投侧按主体代码精确关联。
 - 返回 `PageResult<ForbiddenPoolAdjustDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.3 表格列（列表页）

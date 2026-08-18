@@ -71,7 +71,8 @@
 
     <!--
       批量查询主体旗下债券数量（主数据口径）。
-      category_type=bond（含字典归 bond 的类型，不单独排除 crmw，与展示口径一致）。
+      与证券池调整列表同口径：category_type=bond，排除 crmw（字典归 bond），排除 security_status=D。
+      company 大类本就不是 bond，不必再写。关联键为本页主体码 issuer_code；证券池按发行人名称模糊筛时需用同一主体全称对比。
     -->
     <select id="queryCompanyBondCountList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBondCount">
         SELECT bond.issuer_code AS companyCode
@@ -80,7 +81,9 @@
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
-        WHERE bond.issuer_code IN
+        WHERE bond.security_type != 'crmw'
+          AND bond.security_status != 'D'
+          AND bond.issuer_code IN
         <foreach collection="companyCodes" item="companyCode" open="(" separator="," close=")">
             #{companyCode}
         </foreach>
@@ -582,7 +585,7 @@
             FROM rrs_securityinfo si
             WHERE si.wind_code = #{securityCode}
               AND si.issuer_code IS NOT NULL
-              AND si.issuer_code &lt;&gt; ''
+              AND si.issuer_code != ''
             LIMIT 1
         )
           AND p.pool_type = 'observe'
