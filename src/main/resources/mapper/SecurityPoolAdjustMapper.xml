@@ -254,8 +254,8 @@
     <!-- 根据证券代码查询调库记录列表 -->
     <!--
       调库记录列表：
-      - 有批次号：仅按批次查（同批手工/联动/互斥/关联调整全部返回，含不同 security_code）
-      - 无批次号：按证券代码查未终结流程（申请页进入时展示该券在途记录）
+      - 有批次号：仅按批次查（同批手工/联动/互斥/关联调整全部返回，含不同 security_code，含终态）
+      - 无批次号：按证券代码做调库入口未带批次时的查询（见下方终态排除说明）
     -->
     <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
@@ -289,6 +289,11 @@
               </when>
               <otherwise>
                   AND al.security_code = #{securityCode}
+                  <!--
+                    无批次时排除终态：对应调库页面点「调库」进入、且请求未带 adjustBatchNo 的查询；只留在途（如 00/11/32），
+                    避免已通过/驳回/撤回流水铺满。有批次（历史/事宜跳转）不走本分支，同批含终态。
+                    调库页面当前常不展示调库记录区，但仍可能调用本接口；过滤保留以兼容该入口与既有需求口径。
+                  -->
                   AND al.audit_status NOT IN ('-1', '20', '21', '99')
               </otherwise>
           </choose>

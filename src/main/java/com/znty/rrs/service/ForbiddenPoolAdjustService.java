@@ -1501,16 +1501,27 @@ public class ForbiddenPoolAdjustService {
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * 查询证券的历史调库记录列表（全量，不分页）
+     * 查询调库记录列表（全量，不分页）。
      *
-     * @param req 需携带 securityCode
+     * <p>有批次时返回同批全部主体行（不含同步债，含终态）；无批时可用 adjustLogId 回看单条；
+     * 仅主体代码时走「调库入口未带批次时的查询」（调库页面点「调库」、未带 adjustBatchNo）：
+     * 排除终态 {@code NOT IN ('-1','20','21','99')}，只留在途——历史约定，避免无批时铺满流水；
+     * 有批次的历史/事宜跳转不走该过滤。调库页面常不展示调库记录区，但仍可能调用本接口。
+     * adjustLogId 主要由前端选中原因/流程，不缩窄同批列表。
+     * 字段回填对齐证券池详情 {@code SecurityPoolAdjustService#queryAdjustLogList}。
+     *
+     * @param req 历史查看带 adjustBatchNo（及可选 adjustLogId）；调库入口至少带 securityCode
      */
     public List<AdjustLogDto> queryAdjustLogList(SecurityPoolAdjustReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        boolean hasLogId = req.getAdjustLogId() != null;
+        boolean hasBatch = req.getAdjustBatchNo() != null && !req.getAdjustBatchNo().isEmpty();
+        if (!hasLogId && !hasBatch
+                && (req.getSecurityCode() == null || req.getSecurityCode().isEmpty())) {
             throw new BizException("证券代码不能为空");
         }
+        // 有批次时按批查主体行；无批才用 adjustLogId / 在途
         List<IpAdjustLogBo> logs = forbiddenPoolAdjustMapper.queryAdjustLogList(
-                req.getSecurityCode(), req.getAdjustBatchNo());
+                req.getSecurityCode(), req.getAdjustBatchNo(), req.getAdjustLogId());
         if (logs.isEmpty()) {
             return new ArrayList<>();
         }
@@ -1522,10 +1533,15 @@ public class ForbiddenPoolAdjustService {
         for (IpAdjustLogBo log : logs) {
             AdjustLogDto dto = new AdjustLogDto();
             dto.setId(log.getId());
+            // 回填代码/简称/类型，便于详情「调整对象」与流程类型展示（对齐证券侧）
+            dto.setSecurityCode(log.getSecurityCode());
+            dto.setSecurityShortName(log.getSecurityShortName());
+            dto.setSecurityType(log.getSecurityType());
             dto.setAdjustBatchNo(log.getAdjustBatchNo());
             dto.setPoolPath(poolFullNameMap.get(log.getTargetPoolId()));
             dto.setAdjustType(log.getAdjustType());
             dto.setAdjustMode(log.getAdjustMode());
+            dto.setFlowType(log.getFlowType());
             dto.setFlowName(log.getFlowName());
             dto.setAuditStatus(log.getAuditStatus());
             dto.setAdjustReason(log.getAdjustReason());

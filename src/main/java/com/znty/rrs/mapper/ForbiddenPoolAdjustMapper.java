@@ -91,9 +91,16 @@ public interface ForbiddenPoolAdjustMapper {
     /** 更新调库详情页传入的证券基础信息字段 */
     int editSecurityInfoForAdjust(SecurityPoolAdjustSubmitReq req);
 
-    /** 根据证券代码和可选目标池查询调库记录列表 */
+    /**
+     * 查询调库记录列表。
+     *
+     * @param securityCode   主体代码（无批无 id 时必填；在途查询用）
+     * @param adjustBatchNo  有则返回同批全部主体行（优先于 adjustLogId）
+     * @param adjustLogId    无批时按主键回看单条兜底
+     */
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
-                                           @Param("adjustBatchNo") String adjustBatchNo);
+                                           @Param("adjustBatchNo") String adjustBatchNo,
+                                           @Param("adjustLogId") Long adjustLogId);
 
     /** 查询操作人近期有效的手工主体调库记录 */
     List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("companyCode") String companyCode,
