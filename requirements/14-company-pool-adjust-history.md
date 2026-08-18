@@ -157,7 +157,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 
 | 维度 | 主体池调整历史（本文） | 证券池调整历史（SecurityPoolAdjustHistory，[10](10-adjust-history.md)） |
 |---|---|---|
-| category_type 过滤 | `='company'`（INNER JOIN dict） | 不过滤，全部证券类型 |
+| category_type 过滤 | `='company'`（INNER JOIN dict） | `='bond'`（INNER JOIN dict）并排除 `crmw` |
 | 关联 rrs_securityinfo | 否 | 是（取 issuer、到期状态） |
 | 字段口径 | `security_short_name`→主体名称 | `security_short_name`→证券简称，另带 `issuer` |
 | 证券状态筛选 | 无 | 有（存续/到期，CASE WHEN 计算） |
@@ -167,7 +167,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 | 排序 | `submit_time DESC, adjust_batch_no DESC, id DESC` | `submit_time DESC, adjust_batch_no DESC, id DESC`（四类历史统一） |
 | DTO 投资池字段名 | `targetPoolName` | `targetPoolPath`（命名不同） |
 
-核心区别：主体池历史 = 证券池历史的「主体子集」视图，共用 `ip_adjust_log`，区别在 SQL 是否 JOIN `dict_security_type` 并限定 `category_type='company'`。四类调整历史排序统一为 `submit_time DESC, adjust_batch_no DESC, id DESC`。
+核心区别：主体池历史与证券池历史共用 `ip_adjust_log`，分别按 `category_type='company'` / `'bond'`（证券侧另排 crmw）切分，不再互相混入。四类调整历史排序统一为 `submit_time DESC, adjust_batch_no DESC, id DESC`。
 
 ---
 
