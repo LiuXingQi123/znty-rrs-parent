@@ -32,7 +32,7 @@
 | `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 0 6 * * ?` | `{"poolIds":[15]}`：主体已在本池 → 旗下债未到期（含当天）未在本池 → 同池自动入（IP_RULE 版）；调入限制池阻断 |
 | `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 7 * * ?` | `{"poolIds":[15]}` 或 `mappings`：主体在池 → 旗下未到期未在目标池的债自动入池（排除临时代码已更新、ABS、CRMW） |
 | `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池 | `0 0 8 * * ?` | `{"poolIds":[15]}` 或 mappings：债在债券池、主体不在主体池 → 出债（排除 ABS/CRMW，不看限制池） |
-| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 无需参数。扫描已在 1～5 级但按当前特殊债规则不再允许的债券，写入 `ip_grade_rule_alert` 待办；人工在「我的事宜」分级规则提醒页签处理，**不自动出池**。对齐老系统 InconformityMaingrade2Job |
+| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 无需参数。扫描已在 1～5 级但按当前特殊债规则不再允许的债券，写入 `ip_grade_rule_alert` 待办；执行摘要区分**本轮命中** / **本轮失效**（曾待处理现已合规或已不在扫描范围）/ **仍待处理**；人工在「我的事宜」分级规则提醒页签处理，**不自动出池**。对齐老系统 InconformityMaingrade2Job |
 
 > Demo **cron** 须与下方「执行顺序」一致；列表 id 不要求和执行顺序相同。新增或改 cron 时必须先读第 4.1 节。
 
@@ -215,8 +215,9 @@
 
 1. 扫已在信用债/境外债 1～5 级且 `audit_status=20` 的债券（`queryGradedBondInPoolList`）。  
 2. 对每条调用 `SecurityPoolAdjustService.evaluateGradedInboundForPool`（含特殊债天花板、观察/重点观察封顶）。  
-3. 仍允许则跳过；不再允许则 `upsert` `ip_grade_rule_alert`（`alert_status=00`），刷新原因与扫描时间。  
-4. 本轮未再命中的待处理记录置 `99` 失效。  
-5. 人工入口在「我的事宜」第三页签（[06](06-my-matters.md)）：`queryAlertPage` 列表、`editAlertProcessed` 标记已处理（不改 `ip_pool_status`）。「去调库」打开证券池调整页，由人下调或出库。  
+3. 仍允许则跳过；不再允许则 `upsert` `ip_grade_rule_alert`（`alert_status=00`），刷新原因与扫描时间（计入**本轮命中**）。  
+4. 本轮未再命中的待处理记录置 `99` 失效（计入**本轮失效**；含义：曾告警，现已合规或已不在扫描范围）。  
+5. 再统计 `alert_status=00` 为**仍待处理**（执行摘要与影响条数以此为准；过程日志三项分列）。失效比较参数传秒级时间字符串 `yyyy-MM-dd HH:mm:ss`。  
+6. 人工入口在「我的事宜」第三页签（[06](06-my-matters.md)）：`queryAlertPage` 列表、`editAlertProcessed` 标记已处理（不改 `ip_pool_status`）。「去调库」打开证券池调整页，由人下调或出库。  
 
 当前无独立 `GradeRuleAlertApiTest` / `GradeRuleAlertServiceTest`。

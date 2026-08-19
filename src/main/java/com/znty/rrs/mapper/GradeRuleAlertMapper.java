@@ -4,7 +4,6 @@ import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.entity.graderulealert.GradeRuleAlertReq;
 import org.apache.ibatis.annotations.Param;
 
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -56,10 +55,17 @@ public interface GradeRuleAlertMapper {
     /**
      * 将未命中本轮扫描的待处理待办置为已失效
      *
-     * @param scanTime 本轮扫描时间
-     * @return 行数
+     * @param scanTime 本轮扫描时间（yyyy-MM-dd HH:mm:ss）
+     * @return 影响行数
      */
-    int editStaleOpenAlertInvalid(@Param("scanTime") Date scanTime);
+    int editStaleOpenAlertInvalid(@Param("scanTime") String scanTime);
+
+    /**
+     * 统计待处理待办数量
+     *
+     * @return 待处理条数
+     */
+    int queryOpenAlertCount();
 
     /**
      * 标记已处理

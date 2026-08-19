@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -49,7 +50,10 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             "本任务无需扩展参数，请将 param_json 留空\n"
                     + "扫描已在信用债/境外债 1～5 级且生效的债券\n"
                     + "按当前主体债入库规则（含特殊债天花板、观察封顶、重点观察）复核\n"
-                    + "不符合则写入待办，不自动出池；人工在「我的事宜」分级规则提醒页签处理";
+                    + "本轮命中：本轮判定仍不符合并新增/刷新的待办\n"
+                    + "本轮失效：曾待处理、本轮未再命中（已合规或已不在扫描范围）的待办，置为 99\n"
+                    + "仍待处理：执行结束后库中 alert_status=00 的条数（我的事宜可见）\n"
+                    + "不自动出池；人工在「我的事宜」分级规则提醒页签处理";
 
     /** 待办 Mapper */
     @Resource
@@ -78,18 +82,24 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     public ScheduledTaskResult execute() {
         Date start = new Date();
         TaskDetailLog detailLog = new TaskDetailLog();
-        detailLog.line("开始扫描已在分级库债券是否仍符合入库规则");
+        detailLog.line("开始扫描：已在信用债/境外债 1～5 级且生效的债券是否仍符合主体债入库规则");
+
+        // 拉取扫描样本
         List<IpGradeRuleAlertBo> inPoolList = gradeRuleAlertMapper.queryGradedBondInPoolList();
         if (inPoolList == null) {
             inPoolList = new ArrayList<IpGradeRuleAlertBo>();
         }
-        detailLog.line("在池分级库记录 " + inPoolList.size() + " 条");
+        detailLog.line("扫描样本（在池分级库记录）" + inPoolList.size() + " 条");
+
         int hitCount = 0;
         Date scanTime = new Date();
+        // 失效比较使用秒级时间字符串，与 DATETIME 精度对齐
+        String scanTimeText = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(scanTime);
         for (IpGradeRuleAlertBo row : inPoolList) {
             if (row.getSecurityCode() == null || row.getCurrentPoolId() == null) {
                 continue;
             }
+            // 按当前所在分级库复核主体债入库规则
             String fail = securityPoolAdjustService.evaluateGradedInboundForPool(
                     row.getSecurityCode(), row.getCurrentPoolId());
             if (fail == null || fail.isEmpty()) {
@@ -99,11 +109,20 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             // 命中则新增或刷新待处理待办
             upsertOpenAlert(row, fail, scanTime);
         }
-        int invalidCount = gradeRuleAlertMapper.editStaleOpenAlertInvalid(scanTime);
-        detailLog.line("本轮新增/刷新待办 " + hitCount + " 条，失效 " + invalidCount + " 条");
-        return ScheduledTaskResult.success(TASK_CODE, TASK_NAME,
-                "扫描完成，待办 " + hitCount + " 条，失效 " + invalidCount + " 条",
-                hitCount, start, System.currentTimeMillis() - start.getTime(), detailLog.build());
+        detailLog.line("本轮命中（新增/刷新待办）" + hitCount + " 条");
+
+        // 关闭本轮未再命中的旧待处理待办
+        int invalidCount = gradeRuleAlertMapper.editStaleOpenAlertInvalid(scanTimeText);
+        detailLog.line("本轮失效（曾待处理、本轮未再命中，已置 99）" + invalidCount + " 条");
+
+        // 统计执行后仍待处理数量，供摘要与影响条数
+        int openCount = gradeRuleAlertMapper.queryOpenAlertCount();
+        detailLog.line("仍待处理（alert_status=00，我的事宜可见）" + openCount + " 条");
+
+        String message = "扫描完成：本轮命中 " + hitCount + " 条，本轮失效 " + invalidCount
+                + " 条，仍待处理 " + openCount + " 条";
+        return ScheduledTaskResult.success(TASK_CODE, TASK_NAME, message,
+                openCount, start, System.currentTimeMillis() - start.getTime(), detailLog.build());
     }
 
     /**
@@ -149,6 +168,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         exist.setDealUserName(req.getCurrentUserName());
         exist.setDealTime(now);
         exist.setUpdtTime(now);
+        // 条件更新待办为已处理
         int n = gradeRuleAlertMapper.editAlertProcessed(exist);
         if (n == 0) {
             throw new BizException("待办状态已变化，请刷新后重试");
@@ -166,7 +186,9 @@ public class GradeRuleAlertService implements RrsScheduledTask {
      * @param scanTime 本轮扫描时间
      */
     private void upsertOpenAlert(IpGradeRuleAlertBo row, String fail, Date scanTime) {
+        // 查询是否已有同券同池待处理待办
         IpGradeRuleAlertBo open = gradeRuleAlertMapper.queryOpenAlert(row.getSecurityCode(), row.getCurrentPoolId());
+        // 拼特殊类型说明
         SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(row.getSecurityCode());
         String specialDesc = buildSpecialTypeDesc(sec, row.getSecurityCode());
         if (open == null) {
@@ -176,6 +198,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             row.setLastScanTime(scanTime);
             row.setCrteTime(scanTime);
             row.setUpdtTime(scanTime);
+            // 新增待处理待办
             gradeRuleAlertMapper.addAlert(row);
             return;
         }
@@ -188,6 +211,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         open.setSpecialTypeDesc(specialDesc);
         open.setLastScanTime(scanTime);
         open.setUpdtTime(scanTime);
+        // 刷新已有待处理待办
         gradeRuleAlertMapper.editAlertScan(open);
     }
 

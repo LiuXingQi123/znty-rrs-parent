@@ -24,7 +24,10 @@ public class GradeRuleAlertController {
     private GradeRuleAlertService gradeRuleAlertService;
 
     /**
-     * 分页查询待办
+     * 分页查询待办。
+     *
+     * @param req 查询条件
+     * @return 分页结果
      */
     @PostMapping("/queryAlertPage")
     public ApiResponse<PageResult<GradeRuleAlertDto>> queryAlertPage(@RequestBody GradeRuleAlertReq req) {
@@ -32,7 +35,10 @@ public class GradeRuleAlertController {
     }
 
     /**
-     * 人工标记已处理
+     * 人工标记已处理（不改池状态）。
+     *
+     * @param req 含待办 id 与处理人
+     * @return 更新后的待办
      */
     @PostMapping("/editAlertProcessed")
     public ApiResponse<GradeRuleAlertDto> editAlertProcessed(@RequestBody GradeRuleAlertReq req) {

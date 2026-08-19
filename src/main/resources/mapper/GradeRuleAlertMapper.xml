@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.GradeRuleAlertMapper">
 
-    <!-- 已在信用债/境外债 1～5 级叶子且生效的债券 -->
+    <!-- 查询已在信用债/境外债 1～5 级叶子且生效的债券 -->
     <select id="queryGradedBondInPoolList" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT ips.security_code
               ,ips.security_short_name
@@ -23,6 +23,7 @@
           AND (p.pool_level IS NULL OR p.pool_level = 2)
     </select>
 
+    <!-- 按条件分页查询待办 -->
     <select id="queryAlertPage" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
               ,security_code
@@ -55,6 +56,7 @@
                 ,id DESC
     </select>
 
+    <!-- 查询同一证券+当前池的待处理待办 -->
     <select id="queryOpenAlert" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
               ,security_code
@@ -69,6 +71,7 @@
         LIMIT 1
     </select>
 
+    <!-- 按主键查询待办 -->
     <select id="queryAlertById" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
               ,security_code
@@ -90,6 +93,15 @@
           AND is_deleted = 0
     </select>
 
+    <!-- 统计待处理待办数量 -->
+    <select id="queryOpenAlertCount" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_grade_rule_alert
+        WHERE is_deleted = 0
+          AND alert_status = '00'
+    </select>
+
+    <!-- 新增待办 -->
     <insert id="addAlert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_grade_rule_alert (
             security_code
@@ -124,6 +136,7 @@
         )
     </insert>
 
+    <!-- 刷新待办扫描结果 -->
     <update id="editAlertScan">
         UPDATE ip_grade_rule_alert
         SET security_short_name = #{securityShortName}
@@ -138,6 +151,7 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 将未命中本轮扫描的待处理待办置为已失效 -->
     <update id="editStaleOpenAlertInvalid">
         UPDATE ip_grade_rule_alert
         SET alert_status = '99'
@@ -147,6 +161,7 @@
           AND (last_scan_time IS NULL OR last_scan_time &lt; #{scanTime})
     </update>
 
+    <!-- 标记待办已处理 -->
     <update id="editAlertProcessed">
         UPDATE ip_grade_rule_alert
         SET alert_status = '20'
