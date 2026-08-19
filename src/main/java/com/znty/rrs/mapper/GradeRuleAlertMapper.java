@@ -12,7 +12,7 @@ import java.util.List;
 public interface GradeRuleAlertMapper {
 
     /**
-     * 查询已在信用债 / 境外债 1～5 级且生效的债券在池记录
+     * 查询已在信用债 1～5 级且生效的债券在池记录（不含境外债）
      *
      * @return 在池记录
      */

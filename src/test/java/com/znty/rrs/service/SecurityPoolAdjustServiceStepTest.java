@@ -936,41 +936,23 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failure).contains("不得新增入库");
     }
 
-    /** 境外债按信用债矩阵 inner_sort 对齐。 */
+    /** 境外债目标池不走主体评分档套件（对齐老 polidEnum）。 */
     @Test
-    public void inCheckMainGradeRuleShouldApplyOffshoreByInnerSort() {
-        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+    public void inCheckMainGradeRuleShouldSkipWhenOffshoreBondPool() {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
-        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
-        InvestmentPoolBo creditL1 = new InvestmentPoolBo();
-        creditL1.setId(2L);
-        creditL1.setPoolType("credit_bond");
-        creditL1.setInnerSort(1);
-        creditL1.setPoolLevel(2);
         InvestmentPoolBo offshoreL1 = new InvestmentPoolBo();
         offshoreL1.setId(24L);
         offshoreL1.setPoolType("offshore_bond");
         offshoreL1.setPoolName("境外债一级库");
         offshoreL1.setInnerSort(1);
         offshoreL1.setPoolLevel(2);
-        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
-        poolMap.put(2L, creditL1);
-        poolMap.put(24L, offshoreL1);
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
-        sec.setInnerIssuerRating("1");
-        sec.setDateExists(new BigDecimal("1826"));
+        // 无内评：若误入评分档套件会失败；跳过后应直接通过
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(offshoreL1);
         ctx.setSecurityInfo(sec);
-        ctx.setPoolMap(poolMap);
-        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
-        gt5.setBucketCode("GT_5");
-        gt5.setMinTermYear(new BigDecimal("5"));
-        gt5.setMinInclusive(0);
-        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
-        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
-                .thenReturn(Collections.singletonList(2L));
+        ctx.setPoolMap(Collections.singletonMap(24L, offshoreL1));
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
         assertThat(failure).isNull();
     }

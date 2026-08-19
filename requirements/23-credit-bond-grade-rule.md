@@ -47,11 +47,11 @@
 
 > **期限口径**：调库校验消费矩阵时，期限档按**剩余期限**匹配。普通债取 `rrs_securityinfo.date_exists`；含权债回售取 `date_inright_exists`/`date_repurchase_exists`，赎回取 `date_exists`，两者都有取更短。经 `CreditBondRemainTermUtil` 按 **天数 ÷ 365** 换算为年后匹配 `credit_bond_term_bucket`。`date_exists` 等为空时跳过期限档（不卡矩阵）。
 >
-> **特殊债消费**：矩阵单元格仍是「标准最好档」。私募/永续/次级/ABS/担保/观察/重点观察的下调与封顶在 `CreditBondSpecialInboundRule` 中叠加；境外债按同一 `inner_sort` 套用。
+> **特殊债消费**：矩阵单元格仍是「标准最好档」。私募/永续/次级/ABS/担保/观察/重点观察的下调与封顶在 `CreditBondSpecialInboundRule` 中叠加；境外债分级库不走本矩阵套件（对齐老 `polidEnum`）。
 >
 > **观察名单与老系统差异**：老系统主体或券在观察池（`ASTRICTPOOLS`）时设 `openrule=1`，**跳过**债大库矩阵。新需求改为「不高于标准规则对应等级」（按标准最好档封顶，不再跳过）。识别对象仍对齐老系统：券自己在观察，或**主体级记录**（`ip_pool_status.security_code = issuer_code`）在观察 / 重点观察。
 >
-> **已在库不符**：定时任务 `bond_grade_inconformity_alert` 每天扫描已在 1～5 级但按当前规则不再允许的债券，写入 `ip_grade_rule_alert` 待办，由人工在「我的事宜」第三页签「分级规则提醒」处理（去调库或标记已处理），**不自动出池**。后端仍是独立 `gradeRuleAlert` 接口。对齐老系统 InconformityMaingrade2Job。
+> **已在库不符**：定时任务 `bond_grade_inconformity_alert` 每天扫描已在信用债 1～5 级但按当前规则不再允许的债券，写入 `ip_grade_rule_alert` 待办，由人工在「我的事宜」第三页签「分级规则提醒」处理（去调库或标记已处理），**不自动出池**。后端仍是独立 `gradeRuleAlert` 接口。对齐老系统 InconformityMaingrade2Job。
 
 **CRUD 操作**（仅 2 个接口，无单条增删改、无启用/停用单条规则）：
 - 查询矩阵：`queryGradeRuleMatrix`（只读）

@@ -3,7 +3,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.GradeRuleAlertMapper">
 
-    <!-- 查询已在信用债/境外债 1～5 级叶子且生效的债券 -->
+    <!-- 查询已在信用债 1～5 级叶子且生效的债券（对齐老 polidEnum，不含境外债） -->
     <select id="queryGradedBondInPoolList" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT ips.security_code
               ,ips.security_short_name
@@ -18,7 +18,7 @@
         LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'
-          AND p.pool_type IN ('credit_bond', 'offshore_bond')
+          AND p.pool_type = 'credit_bond'
           AND p.inner_sort BETWEEN 1 AND 5
           AND (p.pool_level IS NULL OR p.pool_level = 2)
     </select>

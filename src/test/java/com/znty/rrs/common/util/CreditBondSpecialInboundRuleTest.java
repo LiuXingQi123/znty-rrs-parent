@@ -97,9 +97,16 @@ public class CreditBondSpecialInboundRuleTest {
         assertThat(CreditBondSpecialInboundRule.isGradedLevelPool(root)).isFalse();
 
         InvestmentPoolBo level2 = new InvestmentPoolBo();
-        level2.setPoolType("offshore_bond");
+        level2.setPoolType("credit_bond");
         level2.setPoolLevel(2);
         level2.setInnerSort(2);
         assertThat(CreditBondSpecialInboundRule.isGradedLevelPool(level2)).isTrue();
+
+        InvestmentPoolBo offshore = new InvestmentPoolBo();
+        offshore.setPoolType("offshore_bond");
+        offshore.setPoolLevel(2);
+        offshore.setInnerSort(2);
+        assertThat(CreditBondSpecialInboundRule.isGradedLevelPool(offshore)).isFalse();
+        assertThat(CreditBondSpecialInboundRule.isGradedBondPoolType("offshore_bond")).isFalse();
     }
 }

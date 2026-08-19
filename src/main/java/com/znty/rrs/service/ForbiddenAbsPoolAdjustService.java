@@ -327,7 +327,7 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 选池阶段按主体债入库矩阵 + 特殊债天花板过滤信用债 / 境外债分级库。
+     * 选池阶段按主体债入库矩阵 + 特殊债天花板过滤信用债分级库（境外债不走评分档套件）。
      *
      * <p>正式证券无内评去掉分级库；临时代码默认档 4。观察名单按标准最好档封顶，不再跳过。
      * 重点观察禁止新增分级库（强担保豁免）。releaseRules / 可转债跳过。
@@ -346,7 +346,7 @@ public class ForbiddenAbsPoolAdjustService {
         }
         boolean hasGradedPool = false;
         for (InvestmentPoolBo p : pools) {
-            // 判断列表里是否含信用债/境外债，没有则不必走矩阵
+            // 判断列表里是否含信用债分级库，没有则不必走矩阵
             if (isGradedBondPool(p)) {
                 hasGradedPool = true;
                 break;
@@ -383,7 +383,7 @@ public class ForbiddenAbsPoolAdjustService {
         Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
         if (inRestricted && !CreditBondSpecialInboundRule.isStrongGuarantee(securityInfo)
                 && currentGradedSort == null) {
-            // 重点观察且未在分级库：整棵信用债/境外债树不可选
+            // 重点观察且未在信用债分级库：整棵信用债树不可选（境外债不受评分档套件限制）
             return excludeGradedBondPools(pools);
         }
         // 临时代码默认档 4，担保债取孰高后再查矩阵
@@ -2516,8 +2516,8 @@ public class ForbiddenAbsPoolAdjustService {
      * 目标池须满足矩阵或特殊债天花板。担保债取主体与担保人内评孰高；
      * 观察名单按标准最好档封顶；私募/永续/次级/ABS 在标准最好档上至少下调一级；
      * 重点观察禁止新增分级库（强担保豁免）。可转债 / releaseRules 跳过。
-     * 正式证券无内评禁止入信用债/境外债 1～5 级；临时代码默认档 4。
-     * 仅调入校验。
+     * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4。
+     * 境外债目标池不走本规则（对齐老 polidEnum）。仅调入校验。
      */
     private String inCheckMainGradeRule(AdjustCheckContext ctx) {
         // 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
@@ -2525,7 +2525,7 @@ public class ForbiddenAbsPoolAdjustService {
             return null;
         }
         InvestmentPoolBo pool = ctx.getTargetPool();
-        // 前置门控：仅信用债 / 境外债分级库校验
+        // 前置门控：仅信用债分级库校验（境外债跳过）
         if (!isGradedBondPool(pool)) {
             return null;
         }
@@ -2669,10 +2669,10 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 是否信用债或境外债树。
+     * 是否信用债大库树（主体评分档套件范围）。
      *
      * @param pool 投资池
-     * @return true=信用债或境外债
+     * @return true=信用债
      */
     private boolean isGradedBondPool(InvestmentPoolBo pool) {
         return pool != null && CreditBondSpecialInboundRule.isGradedBondPoolType(pool.getPoolType());
@@ -2727,13 +2727,13 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 叶子是否允许：特殊债 / 观察走天花板；普通信用债按矩阵 poolId；境外债按同一 inner_sort。
+     * 信用债叶子是否允许：特殊债 / 观察走天花板；普通债按矩阵 poolId。
      *
      * @param pool           待判断叶子池
      * @param allowedPoolIds 矩阵允许的信用债池 ID
      * @param useCeiling     是否按档位封顶
      * @param ceilingSort    天花板档位
-     * @param poolMap        全量池索引（境外债对齐 inner_sort）
+     * @param poolMap        全量池索引（保留参数，便于调用方统一传入）
      * @return true=允许调入
      */
     private boolean isLeafAllowedByGradeRule(InvestmentPoolBo pool, List<Long> allowedPoolIds,
@@ -2745,32 +2745,14 @@ public class ForbiddenAbsPoolAdjustService {
         if (isCreditBondPool(pool)) {
             return allowedPoolIds != null && allowedPoolIds.contains(pool.getId());
         }
-        if (isOffshoreBondPool(pool) && pool.getInnerSort() != null && allowedPoolIds != null) {
-            for (Long pid : allowedPoolIds) {
-                InvestmentPoolBo allowed = poolMap == null ? null : poolMap.get(pid);
-                if (allowed != null && pool.getInnerSort().equals(allowed.getInnerSort())) {
-                    return true;
-                }
-            }
-        }
         return false;
     }
 
     /**
-     * 是否境外债池。
-     *
-     * @param pool 投资池
-     * @return true=境外债
-     */
-    private boolean isOffshoreBondPool(InvestmentPoolBo pool) {
-        return pool != null && PoolType.OFFSHORE_BOND.getCode().equals(pool.getPoolType());
-    }
-
-    /**
-     * 去掉信用债 / 境外债整棵树。
+     * 去掉信用债大库整棵树。
      *
      * @param pools 原池列表
-     * @return 不含分级库的列表
+     * @return 不含信用债分级库的列表
      */
     private List<InvestmentPoolBo> excludeGradedBondPools(List<InvestmentPoolBo> pools) {
         if (pools == null || pools.isEmpty()) {
@@ -2968,10 +2950,10 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 查证券的主体债入库允许池 ID（矩阵 + 特殊债天花板，含境外债同档）。
+     * 查证券的主体债入库允许池 ID（矩阵 + 特殊债天花板，仅信用债分级库）。
      *
      * @param sec 证券主数据
-     * @return 允许调入的分级库 ID；无匹配返回空列表
+     * @return 允许调入的信用债分级库 ID；无匹配返回空列表
      */
     private List<Long> queryAllowedPoolIdsForSecurity(SecurityInfoBo sec) {
         // 临时代码默认档 4，担保债取孰高
@@ -2992,7 +2974,7 @@ public class ForbiddenAbsPoolAdjustService {
         for (InvestmentPoolBo p : investmentPoolMapper.queryPoolList()) {
             poolMap.put(p.getId(), p);
         }
-        // 标准最好档叠加特殊债下调后，展开信用债/境外债同档叶子
+        // 标准最好档叠加特殊债下调后，展开信用债分级叶子
         Integer bestAllowedSort = resolveBestAllowedSort(matrixIds, poolMap);
         // 改判候选项：证券自身或发行主体在观察/重点观察
         boolean inObserve = false;

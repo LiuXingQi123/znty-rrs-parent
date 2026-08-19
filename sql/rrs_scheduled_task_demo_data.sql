@@ -50,6 +50,6 @@ INSERT INTO `sys_scheduled_task` (
  '0 0 8 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW()),
 (8, 'bond_grade_inconformity_alert', '不符合主体债入库规则提醒',
- '扫描已在信用债/境外债 1～5 级且按当前特殊债规则不再允许待在该档的债券，写入待办供人工下调或出库；摘要区分本轮命中/本轮失效/仍待处理；不自动改池。对齐老系统 InconformityMaingrade2Job',
+ '扫描已在信用债 1～5 级且按当前特殊债规则不再允许待在该档的债券（不含境外债），写入待办供人工下调或出库；摘要区分本轮命中/本轮失效/仍待处理；不自动改池。对齐老系统 InconformityMaingrade2Job',
  '0 0 9 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW());

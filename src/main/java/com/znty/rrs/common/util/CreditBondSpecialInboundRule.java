@@ -4,10 +4,11 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 
 /**
- * 信用债 / 境外债分级库特殊债入库规则。
+ * 信用债大库分级库特殊债入库规则（对齐老 polidEnum：仅信用债 1～5）。
  *
  * <p>标准矩阵给出最好档后，私募 / 永续 / 次级 / ABS 再下调；担保与观察名单按最好档封顶；
- * 重点观察禁止新增进入 1～5 级（强担保豁免）。重叠时取最严天花板。</p>
+ * 重点观察禁止新增进入信用债 1～5 级（强担保豁免）。重叠时取最严天花板。
+ * 境外债分级库不走本套规则（老系统目标池不在 polidEnum 时整段跳过 MainGrade）。</p>
  */
 public final class CreditBondSpecialInboundRule {
 
@@ -171,7 +172,7 @@ public final class CreditBondSpecialInboundRule {
             return null;
         }
         if (currentGradedSort == null) {
-            return "重点观察名单原则上不得新增入库信用债/境外债分级库";
+            return "重点观察名单原则上不得新增入库信用债分级库";
         }
         if (currentGradedSort <= 4 && targetSort != MAX_LEVEL) {
             return "重点观察名单已在库债券只能调入五级库或调出";
@@ -183,20 +184,20 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否信用债或境外债树（含根节点）。
+     * 是否信用债大库树（含根节点）。境外债不纳入主体评分档套件。
      *
      * @param poolType 投资池类型
-     * @return true=信用债或境外债
+     * @return true=信用债
      */
     public static boolean isGradedBondPoolType(String poolType) {
-        return "credit_bond".equals(poolType) || "offshore_bond".equals(poolType);
+        return "credit_bond".equals(poolType);
     }
 
     /**
-     * 是否分级库叶子（一～五级）。根节点 pool_level=1 排除。
+     * 是否信用债分级库叶子（一～五级）。根节点 pool_level=1 排除。
      *
      * @param pool 投资池
-     * @return true=一～五级叶子
+     * @return true=信用债一～五级叶子
      */
     public static boolean isGradedLevelPool(InvestmentPoolBo pool) {
         if (pool == null || !isGradedBondPoolType(pool.getPoolType())) {

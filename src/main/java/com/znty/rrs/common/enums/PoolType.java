@@ -16,7 +16,7 @@ public enum PoolType {
 
     /** 信用债大库：升降级流程、主体内评矩阵、互斥特殊审批排除等（硬逻辑） */
     CREDIT_BOND("credit_bond"),
-    /** 境外债库：与信用债大库共用分级入库天花板（按 inner_sort） */
+    /** 境外债库：走通用调库+市场闸门；不走信用债主体评分档套件（对齐老 polidEnum） */
     OFFSHORE_BOND("offshore_bond"),
     /** 转债库 / 转债产品库 */
     CONVERTIBLE_BOND("convertible_bond"),
@@ -45,7 +45,7 @@ public enum PoolType {
     OBSERVE("observe"),
     /** 黑名单：风险池查询用，不参与全局禁止（全局禁止仅 forbidden） */
     BLACKLIST("blacklist"),
-    /** 限制名单（重点观察）：禁止新增入信用债/境外债 1～5 级（强担保豁免）；已在库只能去五级或出库 */
+    /** 限制名单（重点观察）：禁止新增入信用债 1～5 级（强担保豁免）；已在库只能去五级或出库 */
     RESTRICTED("restricted"),
     /** 白名单库（流程/规则白名单池，预留） */
     WHITELIST("whitelist"),
