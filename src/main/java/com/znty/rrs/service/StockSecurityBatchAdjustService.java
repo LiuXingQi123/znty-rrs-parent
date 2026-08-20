@@ -787,7 +787,7 @@ public class StockSecurityBatchAdjustService {
     /**
      * 填充当前页投资池现有证券数量（按类型分项 + 合计）。
      *
-     * <p>统计 ip_pool_status 全部有效在池代码，按 company / crmw / category_type 分项，
+     * <p>统计 ip_pool_status 全部有效在池代码，按池状态 security_type 分 company / crmw / category_type，
      * 前端展示「主体：n只 / 债券：n只 …」；合计写入 currentCount。
      * 容量校验仍走单券链路全量 count，不受展示分项影响。
      */

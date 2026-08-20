@@ -55,20 +55,22 @@
                  ,p.id ASC
     </select>
 
-    <!-- 按类型分项统计在池数量（与证券池批量展示口径一致） -->
+    <!--
+      按类型分项统计在池数量（与证券池批量展示口径一致）。
+      分类取 ip_pool_status.security_type，不关联 rrs_securityinfo。
+    -->
     <select id="queryPoolCurrentCountByTypeList"
             resultType="com.znty.rrs.entity.stocksecuritybatchadjust.StockPoolTypeCountDto">
         SELECT ips.target_pool_id AS poolId
                ,CASE
-                    WHEN si.security_type = 'crmw' THEN 'crmw'
-                    WHEN si.security_type = 'company' THEN 'company'
+                    WHEN ips.security_type = 'crmw' THEN 'crmw'
+                    WHEN ips.security_type = 'company' THEN 'company'
                     WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
                     ELSE 'unknown'
                 END AS typeCode
                ,COUNT(DISTINCT ips.security_code) AS count
         FROM ip_pool_status ips
-        LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
-        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
+        LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                         AND dst.is_deleted = 0
         WHERE ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -78,8 +80,8 @@
             </foreach>
         GROUP BY ips.target_pool_id
                  ,CASE
-                      WHEN si.security_type = 'crmw' THEN 'crmw'
-                      WHEN si.security_type = 'company' THEN 'company'
+                      WHEN ips.security_type = 'crmw' THEN 'crmw'
+                      WHEN ips.security_type = 'company' THEN 'company'
                       WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
                       ELSE 'unknown'
                   END

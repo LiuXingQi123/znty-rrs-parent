@@ -35,7 +35,9 @@
         LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
                                       AND p.is_deleted = 0
         LEFT JOIN rrs_securityinfo bi ON ips.security_code = bi.wind_code
-        LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
         LEFT JOIN my_security_pool mbp
             ON ips.security_code = mbp.security_code
             AND mbp.user_id = #{currentUserId}
@@ -43,7 +45,7 @@
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
-            <!-- 仅排除 CRMW 凭证；禁止/观察/黑名单中的债券仍展示（可入禁投的普通证券） -->
+            <!-- 与证券池调整/历史同口径：仅债券大类；crmw 字典归 bond，须单独排除；主体走主体池查询 -->
             AND ips.security_type != 'crmw'
             <if test="securityStatus == 'active'">
                 AND bi.maturity_date &gt;= CURDATE()
@@ -86,12 +88,14 @@
                  ,ips.id DESC
     </select>
 
-    <!-- 查询证券池中出现的证券类型选项 -->
+    <!-- 查询证券池中出现的证券类型选项（与列表同口径：仅 bond，排除 crmw） -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
                        ,dst.security_type_name
         FROM ip_pool_status ips
-        LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'
           AND ips.security_type != 'crmw'

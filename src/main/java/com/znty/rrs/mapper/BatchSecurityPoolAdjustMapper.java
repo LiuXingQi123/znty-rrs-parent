@@ -20,6 +20,7 @@ public interface BatchSecurityPoolAdjustMapper {
 
     /**
      * 查询指定投资池当前有效在池数量（按证券类型分项）。
+     * 分类取 ip_pool_status.security_type（不经 rrs_securityinfo）；
      * typeCode：crmw / company / category_type（bond 等）/ unknown
      */
     List<BatchPoolTypeCountDto> queryPoolCurrentCountByTypeList(@Param("poolIds") List<Long> poolIds);

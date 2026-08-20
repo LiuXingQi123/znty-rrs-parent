@@ -51,7 +51,7 @@ this.loadList();                  // 列表数据
 
 - 路径：`POST /api/v1/securityPoolQuery/querySecurityTypeList`，请求体 `{}`
 - 返回 `List<SecurityTypeOptionDto>`（`{securityType, securityTypeName}`）
-- 后端 SQL：`SELECT DISTINCT ips.security_type, dst.security_type_name FROM ip_pool_status ips LEFT JOIN dict_security_type dst ... WHERE ips.is_deleted=0 AND ips.audit_status='20' ORDER BY dst.sort_order ASC, ips.security_type ASC`（`security_type` 落池时必有值，不再写 `IS NOT NULL`）
+- 后端 SQL：内连 `dict_security_type` 且 `category_type='bond'`，`ips.is_deleted=0 AND ips.audit_status='20' AND ips.security_type != 'crmw'`（与列表同口径；主体不进本下拉）
 
 ### 2.4 证券状态下拉
 
@@ -101,7 +101,7 @@ this.loadList();                  // 列表数据
 | 行权日期（回售） | `repurchaseDate` | 居中 |
 | 操作 | — | `fixed="right"`，收藏按钮 |
 
-**当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。**排除范围**：仅 `ips.security_type != 'crmw'`（不展示 CRMW 凭证；禁止/观察/黑名单中的普通债券仍可查，因债券可入禁投相关池）。**不再**按 `pool_type` 排除 `crmw`/`forbidden`。证券状态由后端 `CASE WHEN bi.maturity_date >= CURDATE() THEN 'active' ELSE 'matured'` 计算。
+**当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。**查询范围**：内连 `dict_security_type` 且 `category_type='bond'`（仅债券大类），并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；主体 `category_type=company` 走主体池查询）。禁止/观察/黑名单中的普通债券仍可查。**不再**按 `pool_type` 排除 `crmw`/`forbidden`。证券状态由后端 `CASE WHEN bi.maturity_date >= CURDATE() THEN 'active' ELSE 'matured'` 计算。
 
 ### 4.1 跳转详情
 
@@ -139,8 +139,8 @@ this.loadList();                  // 列表数据
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树（含全路径） |
-| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo 等） | 证券池分页查询（仅 audit_status='20'；`security_type != 'crmw'`） |
-| `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（限池内已审批，排除 crmw） |
+| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo 等） | 证券池分页查询（仅 audit_status='20'；`category_type=bond` 且 `security_type != 'crmw'`） |
+| `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：仅 bond，排除 crmw） |
 | `securityPoolQuery/querySecurityStatusList` | `{}` | `List<String>` = `['active','matured']` | 证券状态下拉（前端未调用，硬编码） |
 | `securityPoolQuery/addSecurityToMyPool` | `{securityCode, securityType, market, userId}` | `MySecurityPoolBo` | 添加收藏（幂等） |
 | `securityPoolQuery/deleteSecurityFromMyPool` | `{securityCode, userId}` | `MySecurityPoolBo`（不存在返回 null） | 取消收藏（软删除 status='del'） |
@@ -173,9 +173,9 @@ this.loadList();                  // 列表数据
 - **JOIN**：
   - `LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id`（取池名称，注意此 JOIN 未带 `p.is_deleted=0`）
   - `LEFT JOIN rrs_securityinfo bi ON ips.security_code = bi.wind_code`（取证券基础信息）
-  - `LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted=0`（取证券类型名称）
+  - `INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted=0 AND dst.category_type='bond'`（仅债券大类；取证券类型名称）
   - `LEFT JOIN my_security_pool mbp ON ips.security_code = mbp.security_code AND mbp.user_id=#{currentUserId} AND mbp.status='use'`（取收藏 ID，用户隔离）
-- **WHERE 条件构造**：固定 `ips.is_deleted=0 AND ips.audit_status='20'`；动态条件用 `<if>`：
+- **WHERE 条件构造**：固定 `ips.is_deleted=0 AND ips.audit_status='20' AND ips.security_type != 'crmw'`（crmw 字典归 bond，须单独排除）；动态条件用 `<if>`：
   - `securityStatus='active'` → `bi.maturity_date >= CURDATE()`；`'matured'` → `bi.maturity_date < CURDATE()`
   - `poolIds` → `ips.target_pool_id IN (...)` foreach
   - `securityCode`/`securityShortName`/`adjusterName` → `LIKE CONCAT('%', #{x}, '%')`
