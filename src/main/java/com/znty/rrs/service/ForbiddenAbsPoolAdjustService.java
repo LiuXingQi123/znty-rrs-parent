@@ -49,7 +49,6 @@ import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
-import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
@@ -329,8 +328,9 @@ public class ForbiddenAbsPoolAdjustService {
     /**
      * 选池阶段按主体债入库矩阵 + 特殊债天花板过滤信用债分级库（境外债不走评分档套件）。
      *
-     * <p>正式证券无内评去掉分级库；临时代码默认档 4。观察名单按标准最好档封顶，不再跳过。
-     * 重点观察禁止新增分级库（强担保豁免）。releaseRules / 可转债跳过。
+     * <p>正式证券无内评去掉分级库；临时代码默认档 4。期限为空默认最长档继续走矩阵，不跳过。
+     * 观察名单按标准最好档封顶，不再跳过。重点观察禁止新增分级库（强担保豁免）。
+     * releaseRules / 可转债跳过。
      *
      * @param pools 待过滤的投资池列表
      * @param req   选池请求
@@ -434,8 +434,8 @@ public class ForbiddenAbsPoolAdjustService {
             if (restrictedFail != null) {
                 continue;
             }
+            // 期限档无法匹配时不放开全部信用债分级库（对齐老系统，不跳过矩阵）
             if (bucketCode == null) {
-                retained.add(p.getId());
                 continue;
             }
             // 按天花板或矩阵精确池判断该分级库叶子是否可保留
@@ -2517,6 +2517,7 @@ public class ForbiddenAbsPoolAdjustService {
      * 观察名单按标准最好档封顶；私募/永续/次级/ABS 在标准最好档上至少下调一级；
      * 重点观察禁止新增分级库（强担保豁免）。可转债 / releaseRules 跳过。
      * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4。
+     * 期限为空默认最长档（期限&gt;5）继续走矩阵，不跳过。
      * 境外债目标池不走本规则（对齐老 polidEnum）。仅调入校验。
      */
     private String inCheckMainGradeRule(AdjustCheckContext ctx) {
@@ -2554,10 +2555,10 @@ public class ForbiddenAbsPoolAdjustService {
         if (gradeCode == null) {
             return "未配置主体内评分档";
         }
-        // 含权口径换算期限后匹配期限档
+        // 含权口径换算期限后匹配期限档；算不出期限时按最长档继续走矩阵，不跳过
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
         if (bucketCode == null) {
-            return null;
+            return "无法匹配债券期限档";
         }
         List<Long> allowedPoolIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
         if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
@@ -2598,28 +2599,12 @@ public class ForbiddenAbsPoolAdjustService {
      * <p>遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
      * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（含权口径天数 ÷365）。
      *
-     * @param remainTermYears 剩余期限年数
-     * @return 期限档编码；无法匹配返回 null
+     * @param remainTermYears 剩余期限年数；null 时按最长档（期限&gt;5）兜底
+     * @return 期限档编码；无可用档或年数落不进任何档时返回 null
      */
     private String matchTermBucket(BigDecimal remainTermYears) {
-        if (remainTermYears == null) {
-            return null;
-        }
-        List<CreditBondTermBucketBo> buckets = creditBondGradeRuleMapper.queryEnabledTermBucketList();
-        for (CreditBondTermBucketBo b : buckets) {
-            boolean minOk = b.getMinTermYear() == null
-                    || (b.getMinInclusive() != null && b.getMinInclusive() == 1
-                        ? remainTermYears.compareTo(b.getMinTermYear()) >= 0
-                        : remainTermYears.compareTo(b.getMinTermYear()) > 0);
-            boolean maxOk = b.getMaxTermYear() == null
-                    || (b.getMaxInclusive() != null && b.getMaxInclusive() == 1
-                        ? remainTermYears.compareTo(b.getMaxTermYear()) <= 0
-                        : remainTermYears.compareTo(b.getMaxTermYear()) < 0);
-            if (minOk && maxOk) {
-                return b.getBucketCode();
-            }
-        }
-        return null;
+        return CreditBondRemainTermUtil.matchTermBucket(
+                remainTermYears, creditBondGradeRuleMapper.queryEnabledTermBucketList());
     }
 
     /**
@@ -2961,7 +2946,7 @@ public class ForbiddenAbsPoolAdjustService {
         if (gradeCode == null) {
             return new ArrayList<Long>();
         }
-        // 含权口径匹配期限档
+        // 含权口径匹配期限档；算不出期限时按最长档继续走矩阵
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
         if (bucketCode == null) {
             return new ArrayList<Long>();

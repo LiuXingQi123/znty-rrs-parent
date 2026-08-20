@@ -1,9 +1,11 @@
 package com.znty.rrs.common.util;
 
+import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 
 /**
  * 信用债剩余期限：读取 {@code rrs_securityinfo.date_exists}（天，DECIMAL）并换算为年。
@@ -28,7 +30,7 @@ public final class CreditBondRemainTermUtil {
      * （{@code dateExists}）；两者都有时取更短。</p>
      *
      * @param sec 证券主数据
-     * @return 剩余期限年数；无法解析时返回 null（跳过矩阵期限档）
+     * @return 剩余期限年数；无法解析时返回 null（由 {@link #matchTermBucket} 按最长档兜底）
      */
     public static BigDecimal resolveRemainTermYears(SecurityInfoBo sec) {
         // 先按含权口径取天数，再换算为年供期限档匹配
@@ -100,5 +102,76 @@ public final class CreditBondRemainTermUtil {
         }
         // 转成 BigDecimal 后走统一换算
         return daysToYears(BigDecimal.valueOf(remainDays.longValue()));
+    }
+
+    /**
+     * 按剩余期限（年）匹配期限档。年数为 null 时对齐老系统：默认最长档（无上限或下限最高，对应期限&gt;5）。
+     *
+     * @param remainTermYears 剩余期限年数，null 表示无法解析
+     * @param buckets         启用的期限档
+     * @return 期限档编码；无可用档或年数落不进任何档时返回 null
+     */
+    public static String matchTermBucket(BigDecimal remainTermYears, List<CreditBondTermBucketBo> buckets) {
+        if (buckets == null || buckets.isEmpty()) {
+            return null;
+        }
+        if (remainTermYears == null) {
+            // 老系统 date/endDate 皆空时 bondDurationId=2（期限>5），不跳过矩阵
+            return pickLongestTermBucket(buckets);
+        }
+        for (CreditBondTermBucketBo bucket : buckets) {
+            if (bucket == null || bucket.getBucketCode() == null || bucket.getBucketCode().isEmpty()) {
+                continue;
+            }
+            if (inTermRange(remainTermYears, bucket)) {
+                return bucket.getBucketCode();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 是否落入期限档区间（含 inclusive 标志）。
+     */
+    private static boolean inTermRange(BigDecimal years, CreditBondTermBucketBo bucket) {
+        boolean minOk = bucket.getMinTermYear() == null
+                || (bucket.getMinInclusive() != null && bucket.getMinInclusive() == 1
+                    ? years.compareTo(bucket.getMinTermYear()) >= 0
+                    : years.compareTo(bucket.getMinTermYear()) > 0);
+        boolean maxOk = bucket.getMaxTermYear() == null
+                || (bucket.getMaxInclusive() != null && bucket.getMaxInclusive() == 1
+                    ? years.compareTo(bucket.getMaxTermYear()) <= 0
+                    : years.compareTo(bucket.getMaxTermYear()) < 0);
+        return minOk && maxOk;
+    }
+
+    /**
+     * 取最长期限档：优先无上限（max 为空），同为无上限时取下限更高者。
+     */
+    private static String pickLongestTermBucket(List<CreditBondTermBucketBo> buckets) {
+        CreditBondTermBucketBo best = null;
+        for (CreditBondTermBucketBo bucket : buckets) {
+            if (bucket == null || bucket.getBucketCode() == null || bucket.getBucketCode().isEmpty()) {
+                continue;
+            }
+            if (best == null) {
+                best = bucket;
+                continue;
+            }
+            boolean bucketOpen = bucket.getMaxTermYear() == null;
+            boolean bestOpen = best.getMaxTermYear() == null;
+            if (bucketOpen && !bestOpen) {
+                best = bucket;
+                continue;
+            }
+            if (bucketOpen == bestOpen) {
+                BigDecimal bucketMin = bucket.getMinTermYear() == null ? BigDecimal.ZERO : bucket.getMinTermYear();
+                BigDecimal bestMin = best.getMinTermYear() == null ? BigDecimal.ZERO : best.getMinTermYear();
+                if (bucketMin.compareTo(bestMin) > 0) {
+                    best = bucket;
+                }
+            }
+        }
+        return best == null ? null : best.getBucketCode();
     }
 }

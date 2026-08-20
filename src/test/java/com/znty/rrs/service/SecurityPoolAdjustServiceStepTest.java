@@ -755,6 +755,76 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failure).isEqualTo("未配置主体内评分档");
     }
 
+    /** 主体债入库规则：剩余期限为空时按最长档 GT_5 继续走矩阵，不跳过。 */
+    @Test
+    public void inCheckMainGradeRuleShouldDefaultLongestBucketWhenTermMissing() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(2L);
+        pool.setPoolType("credit_bond");
+        pool.setPoolName("一级库");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(Collections.singletonMap(2L, pool));
+        CreditBondTermBucketBo le1 = new CreditBondTermBucketBo();
+        le1.setBucketCode("LE_1");
+        le1.setMaxTermYear(new BigDecimal("1"));
+        le1.setMaxInclusive(1);
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Arrays.asList(le1, gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("1", "GT_5"))
+                .thenReturn(Collections.singletonList(2L));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isNull();
+        verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket("1", "GT_5");
+    }
+
+    /** 主体债入库规则：已算出期限但落不进任何档时失败，不兜底最长档。 */
+    @Test
+    public void inCheckMainGradeRuleShouldFailWhenTermDoesNotMatchAnyBucket() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(2L);
+        pool.setPoolType("credit_bond");
+        pool.setPoolName("一级库");
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        // 2 年：LE_1（≤1）与 GT_5（>5）之间缺口
+        sec.setDateExists(new BigDecimal("730"));
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(pool);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(Collections.singletonMap(2L, pool));
+        CreditBondTermBucketBo le1 = new CreditBondTermBucketBo();
+        le1.setBucketCode("LE_1");
+        le1.setMaxTermYear(new BigDecimal("1"));
+        le1.setMaxInclusive(1);
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Arrays.asList(le1, gt5));
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isEqualTo("无法匹配债券期限档");
+        verify(gradeRuleMapper, never()).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
+    }
+
     /** 主体债入库规则：临时代码无内评默认最低档 4 再走矩阵。 */
     @Test
     public void inCheckMainGradeRuleShouldDefaultGrade4WhenTemporaryNoGrade() {
@@ -825,6 +895,60 @@ public class SecurityPoolAdjustServiceStepTest {
 
         assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(20L, 21L);
         verify(gradeRuleMapper, never()).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
+    }
+
+    /** 可调入库：剩余期限为空时按最长档 GT_5 走矩阵，不放开全部信用债分级库。 */
+    @Test
+    public void filterInboundByGradeRuleShouldDefaultLongestBucketWhenTermMissing() {
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+
+        InvestmentPoolBo creditRoot = buildPool(10L, null, "信用债大库");
+        creditRoot.setPoolType("credit_bond");
+        InvestmentPoolBo level1 = buildPool(11L, 10L, "一级库");
+        level1.setPoolType("credit_bond");
+        level1.setPoolLevel(2);
+        level1.setInnerSort(1);
+        InvestmentPoolBo level5 = buildPool(15L, 10L, "五级库");
+        level5.setPoolType("credit_bond");
+        level5.setPoolLevel(2);
+        level5.setInnerSort(5);
+        InvestmentPoolBo specialRoot = buildPool(20L, null, "专户产品");
+        specialRoot.setPoolType("special_account");
+        InvestmentPoolBo specialLeaf = buildPool(21L, 20L, "专户一级");
+        specialLeaf.setPoolType("special_account");
+        List<InvestmentPoolBo> pools = Arrays.asList(creditRoot, level1, level5, specialRoot, specialLeaf);
+
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("1");
+        when(adjustMapper.querySecurityBoByCode("NO_TERM.IB")).thenReturn(sec);
+        when(adjustMapper.querySecurityInObservePool("NO_TERM.IB")).thenReturn(false);
+        when(adjustMapper.queryIssuerInObservePool("NO_TERM.IB")).thenReturn(false);
+        CreditBondTermBucketBo le1 = new CreditBondTermBucketBo();
+        le1.setBucketCode("LE_1");
+        le1.setMaxTermYear(new BigDecimal("1"));
+        le1.setMaxInclusive(1);
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Arrays.asList(le1, gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("1", "GT_5"))
+                .thenReturn(Collections.singletonList(11L));
+
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityCode("NO_TERM.IB");
+        req.setReleaseRules(false);
+
+        List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
+                service, "filterInboundByGradeRule", pools, req);
+
+        assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(10L, 11L, 20L, 21L);
+        verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket("1", "GT_5");
     }
 
     /** 主体债入库规则：目标池非信用债大库时应跳过。 */
