@@ -171,13 +171,18 @@ public class TempSecurityCodeService {
         // 页面人工更新为正式
         bo.setOprtSource(TempOprtSource.MANUAL.getCode());
         bo.setUpdtTime(now);
+        Long tempCodeId = oldBo.getId();
+        // 先落主表状态，避免替换 SQL 的 id 绑定把后续主表更新冲成 0 行
+        int updatedRows = tempSecurityCodeMapper.editTempSecurityCodeToUpdated(bo);
+        if (updatedRows != 1) {
+            throw new BizException("更新临时代码失败，记录不存在或已不是临时状态，id=" + tempCodeId);
+        }
         // 按老系统分叉处理在途日志与已在池状态
         convertTempSecurityBusinessData(oldBo, bo);
         // 禁用原临时代码占位证券主数据
         disableTempSecurityInfo(oldBo, now);
-        tempSecurityCodeMapper.editTempSecurityCodeToUpdated(bo);
         // 查询更新后的临时代码详情
-        return queryTempSecurityCodeDetail(bo.getId());
+        return queryTempSecurityCodeDetail(tempCodeId);
     }
 
     /**
@@ -369,6 +374,7 @@ public class TempSecurityCodeService {
         bo.setSecurityCode(sourceBo.getTempSecurityCode());
         bo.setSecurityMarket(sourceBo.getTempSecurityMarket());
         bo.setSecurityType(sourceBo.getTempSecurityType());
+        bo.setTempCompanyCode(sourceBo.getTempCompanyCode());
         bo.setTempCompanyNameSnapshot(sourceBo.getTempCompanyNameSnapshot());
         bo.setTempIssueDate(sourceBo.getTempIssueDate());
         bo.setTempMaturityDate(sourceBo.getTempMaturityDate());

@@ -13,7 +13,7 @@
                                          AND dst.category_type = 'bond'
         <where>
             AND si.security_type != 'crmw'
-            AND si.security_status != 'D'
+            AND (si.security_status IS NULL OR si.security_status != 'D')
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
@@ -38,7 +38,7 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE si.security_type != 'crmw'
-          AND si.security_status != 'D'
+          AND (si.security_status IS NULL OR si.security_status != 'D')
         ORDER BY dst.sort_order ASC
                  ,si.security_type ASC
     </select>

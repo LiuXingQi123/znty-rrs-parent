@@ -42,8 +42,8 @@
             </if>
             <if test="statusList != null and statusList.size() > 0">
                 AND t.status IN
-                <foreach collection="statusList" item="status" open="(" separator="," close=")">
-                    #{status}
+                <foreach collection="statusList" item="item" open="(" separator="," close=")">
+                    #{item}
                 </foreach>
             </if>
         </where>
@@ -267,7 +267,7 @@
         WHERE wind_code = #{securityCode}
     </select>
 
-    <!-- 新增证券信息 -->
+    <!-- 新增临时代码占位证券：须写 security_status=L，否则证券池调整 si.security_status != 'D' 会因 NULL 把该行滤掉 -->
     <insert id="addSecurityInfo">
         INSERT INTO rrs_securityinfo (
             wind_code
@@ -280,8 +280,10 @@
             ,wind_code_nbc
             ,security_type
             ,issuer
+            ,issuer_code
             ,firstissue_date
             ,maturity_date
+            ,security_status
             ,security_source
             ,create_time
             ,ts
@@ -296,8 +298,10 @@
             ,CASE WHEN #{securityMarket} IN ('OTC', 'QDII', 'OTHER', 'COMPANY') THEN #{securityCode} ELSE NULL END
             ,#{securityType}
             ,#{tempCompanyNameSnapshot}
+            ,#{tempCompanyCode}
             ,DATE_FORMAT(#{tempIssueDate}, '%Y-%m-%d')
             ,DATE_FORMAT(#{tempMaturityDate}, '%Y-%m-%d')
+            ,'L'
             ,#{securitySource}
             ,#{updateTime}
             ,#{updateTime}
@@ -378,28 +382,29 @@
         )
     </insert>
 
-    <!-- 更新临时代码为已更新 -->
+    <!-- 更新临时代码为已更新：参数一律走 bo.，避免后续替换 SQL 的 id 绑定污染 WHERE -->
     <update id="editTempSecurityCodeToUpdated">
         UPDATE rrs_temp_security_code
-        SET temp_security_name = #{tempSecurityName}
-           ,temp_security_code = #{tempSecurityCode}
-           ,temp_security_market = #{tempSecurityMarket}
-           ,temp_security_type = #{tempSecurityType}
-           ,temp_mitigation_code = #{tempMitigationCode}
-           ,temp_company_code = #{tempCompanyCode}
-           ,temp_company_name_snapshot = #{tempCompanyNameSnapshot}
-           ,temp_issue_date = #{tempIssueDate}
-           ,temp_maturity_date = #{tempMaturityDate}
-           ,security_name = #{securityName}
-           ,security_code = #{securityCode}
-           ,security_market = #{securityMarket}
-           ,security_type = #{securityType}
-           ,update_time = #{updateTime}
-           ,status = #{status}
-           ,oprt_source = #{oprtSource}
-           ,updt_time = #{updtTime}
-        WHERE id = #{id}
+        SET temp_security_name = #{bo.tempSecurityName}
+           ,temp_security_code = #{bo.tempSecurityCode}
+           ,temp_security_market = #{bo.tempSecurityMarket}
+           ,temp_security_type = #{bo.tempSecurityType}
+           ,temp_mitigation_code = #{bo.tempMitigationCode}
+           ,temp_company_code = #{bo.tempCompanyCode}
+           ,temp_company_name_snapshot = #{bo.tempCompanyNameSnapshot}
+           ,temp_issue_date = #{bo.tempIssueDate}
+           ,temp_maturity_date = #{bo.tempMaturityDate}
+           ,security_name = #{bo.securityName}
+           ,security_code = #{bo.securityCode}
+           ,security_market = #{bo.securityMarket}
+           ,security_type = #{bo.securityType}
+           ,update_time = #{bo.updateTime}
+           ,status = #{bo.status}
+           ,oprt_source = #{bo.oprtSource}
+           ,updt_time = #{bo.updtTime}
+        WHERE id = #{bo.id}
           AND is_deleted = 0
+          AND status = 'temporary'
     </update>
 
     <!-- 取消发行临时代码 -->
@@ -629,8 +634,8 @@
            ,security_type = #{bo.securityType}
            ,updt_time = #{bo.updateTime}
         WHERE id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
         </foreach>
     </update>
 
@@ -642,8 +647,8 @@
            ,crmw_stype = #{bo.securityType}
            ,updt_time = #{bo.updateTime}
         WHERE id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
         </foreach>
     </update>
 
@@ -655,8 +660,8 @@
            ,crmw_stype = #{bo.securityType}
            ,updt_time = #{bo.updateTime}
         WHERE id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
         </foreach>
     </update>
 
@@ -668,8 +673,8 @@
            ,crmw_stype = #{bo.securityType}
            ,updt_time = #{bo.updateTime}
         WHERE id IN
-        <foreach collection="ids" item="id" open="(" separator="," close=")">
-            #{id}
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
         </foreach>
     </update>
 

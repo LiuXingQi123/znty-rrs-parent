@@ -53,6 +53,7 @@ public class TempSecurityCodeServiceTest {
         assertThat(captor.getValue().getSecurityCode()).isEqualTo("TMP001");
         assertThat(captor.getValue().getSecurityName()).isEqualTo("某基建集团临时中票");
         assertThat(captor.getValue().getSecurityMarket()).isEqualTo(MarketCode.CIBM.getCode());
+        assertThat(captor.getValue().getTempCompanyCode()).isEqualTo("C10001");
         assertThat(captor.getValue().getSecuritySource()).isEqualTo("temporary");
     }
 
@@ -78,6 +79,7 @@ public class TempSecurityCodeServiceTest {
                 .thenReturn(Collections.<IpPoolStatusBo>emptyList());
         when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
+        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
 
         service.editTempSecurityCodeToUpdated(req);
 
@@ -116,6 +118,7 @@ public class TempSecurityCodeServiceTest {
         when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
         when(mapper.queryActivePoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(0);
+        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
 
         service.editTempSecurityCodeToUpdated(req);
 
@@ -154,6 +157,7 @@ public class TempSecurityCodeServiceTest {
                 .thenReturn(Collections.<Long>emptyList());
         // 正式已在池
         when(mapper.queryActivePoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(1);
+        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
 
         service.editTempSecurityCodeToUpdated(req);
 
@@ -178,6 +182,25 @@ public class TempSecurityCodeServiceTest {
         assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("正式证券不存在或不可用");
+    }
+
+    /** 验证主表未更新成功时不继续改调库/池状态。 */
+    @Test
+    public void editTempSecurityCodeToUpdatedShouldRejectWhenMainRowNotUpdated() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        TempSecurityCodeService service = buildService(mapper, adjustMapper);
+        TempSecurityCodeReq req = buildUpdateReq();
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("已不是临时状态");
+        verify(mapper, never()).queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class));
+        verify(mapper, never()).editTempSecurityInfoToDisabled(any(TempSecurityCodeBo.class));
+        verify(adjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
     }
 
     /** 验证已被核心调库业务引用的临时代码不允许删除。 */

@@ -69,8 +69,8 @@ public interface TempSecurityCodeMapper {
     /** 新增临时代码 */
     void addTempSecurityCode(TempSecurityCodeBo bo);
 
-    /** 更新临时代码为已更新 */
-    void editTempSecurityCodeToUpdated(TempSecurityCodeBo bo);
+    /** 更新临时代码为已更新，返回影响行数 */
+    int editTempSecurityCodeToUpdated(@Param("bo") TempSecurityCodeBo bo);
 
     /** 取消发行临时代码 */
     void editTempSecurityCodeToCancelled(TempSecurityCodeBo bo);
@@ -116,16 +116,16 @@ public interface TempSecurityCodeMapper {
     List<Long> queryCrmwPoolStatusCrmwReferenceIdList(TempSecurityCodeBo bo);
 
     /** 批量替换在途调库日志证券引用 */
-    void editAdjustLogSecurityReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
+    void editAdjustLogSecurityReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);
 
     /** 批量替换在途调库日志 CRMW 引用 */
-    void editAdjustLogCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
+    void editAdjustLogCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);
 
     /** 批量替换当前池状态 CRMW 引用 */
-    void editPoolStatusCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
+    void editPoolStatusCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);
 
     /** 批量替换 CRMW 池状态 CRMW 引用 */
-    void editCrmwPoolStatusCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("ids") List<Long> ids);
+    void editCrmwPoolStatusCrmwReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);
 
     /** 新增 CRMW 池状态 */
     void addCrmwPoolStatus(IpPoolStatusBo bo);
