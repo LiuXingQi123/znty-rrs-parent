@@ -377,8 +377,8 @@ public class SecurityPoolAdjustService {
      * 选池阶段按主体债入库矩阵 + 特殊债天花板过滤信用债分级库（境外债不走评分档套件）。
      *
      * <p>正式证券无内评去掉分级库；临时代码默认档 4。期限为空默认最长档继续走矩阵，不跳过。
-     * 观察名单按标准最好档封顶，不再跳过。重点观察禁止新增分级库（强担保豁免）。
-     * releaseRules / 可转债跳过。
+     * 可转债 / 可交换债 / CRMW 去掉信用债 1～5。私募 / ABS / 次级非 1 档、永续至少下调一级后开放该档至五级；
+     * 其余按矩阵精确池。重点观察禁止新增分级库（强担保豁免）。releaseRules 跳过矩阵。
      *
      * @param pools 待过滤的投资池列表
      * @param req   选池请求
@@ -407,13 +407,10 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             return pools;
         }
-        // 可转债不适用主体债入库矩阵
-        if ("convertible_bond".equals(securityInfo.getSecurityType())) {
-            return pools;
+        // 可转债 / 可交换债 / CRMW 不适用信用债 1～5，选池直接去掉
+        if (CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(securityInfo)) {
+            return excludeGradedBondPools(pools);
         }
-        // 证券自身或发行主体任一在观察名单，即按观察名单封顶
-        boolean inObserve = securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
-                || securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode());
         // 证券自身或发行主体任一在重点观察名单，即走重点观察禁新增规则
         boolean inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode())
                 || securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode());
@@ -449,13 +446,12 @@ public class SecurityPoolAdjustService {
             // 从矩阵允许池算出标准最好档
             bestAllowedSort = resolveBestAllowedSort(allowedPoolIds, poolMap);
         }
-        // 观察/担保/私募/永续/次级/ABS 走档位封顶，普通债仍按矩阵精确池
-        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(securityInfo, inObserve);
+        // 私募/永续/次级/ABS 需下调时开放新最好档至五级；其余按矩阵精确池
+        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(securityInfo, gradeCode);
         Integer ceilingSort = null;
         if (useCeiling && bestAllowedSort != null) {
-            // 特殊债/观察在标准最好档上叠加下调
             ceilingSort = CreditBondSpecialInboundRule.resolveCeilingSort(
-                    gradeCode, bestAllowedSort, securityInfo, inObserve);
+                    gradeCode, bestAllowedSort, securityInfo);
         }
         // 保留叶子：非信用债大库叶子，或信用债大库叶子在矩阵允许列表；父级按子级递归保留（避免丢失父级树结构）
         List<Long> retained = new ArrayList<>();
@@ -2630,9 +2626,9 @@ public class SecurityPoolAdjustService {
      * 规则：主体债入库规则（credit_bond_pool_grade_rule 矩阵）
      *
      * <p>调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表，
-     * 目标池须满足矩阵或特殊债天花板。担保债取主体与担保人内评孰高；
-     * 观察名单按标准最好档封顶；私募/永续/次级/ABS 在标准最好档上至少下调一级；
-     * 重点观察禁止新增分级库（强担保豁免）。可转债 / releaseRules 跳过。
+     * 目标池须满足矩阵，或特殊债下调后的「该档至五级」。担保债取主体与担保人内评孰高；
+     * 观察名单沿用矩阵允许池；私募/永续/次级/ABS 按截图至少下调一级后开放至五级；
+     * 重点观察禁止新增分级库（强担保豁免）。可转债/可交换债/CRMW 不适用信用债 1～5。
      * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4。
      * 期限为空默认最长档（期限&gt;5）继续走矩阵，不跳过。
      * 境外债目标池不走本规则（对齐老 polidEnum）。仅调入校验。
@@ -2651,12 +2647,10 @@ public class SecurityPoolAdjustService {
         if (sec == null) {
             return null;
         }
-        // 可转债不适用主体债入库矩阵
-        if ("convertible_bond".equals(sec.getSecurityType())) {
-            return null;
+        // 可转债 / 可交换债 / CRMW 不能调入信用债分级库
+        if (CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(sec)) {
+            return "可转债、可交换债、信用风险缓释工具不适用信用债分级库";
         }
-        // 证券自身或发行主体任一在观察名单，即按观察名单封顶
-        boolean inObserve = ctx.isSecurityInObservePool() || ctx.isIssuerInObservePool();
         // 证券自身或发行主体任一在重点观察名单，即走重点观察禁新增规则
         boolean inRestricted = ctx.isSecurityInRestrictedPool() || ctx.isIssuerInRestrictedPool();
         // 取当前已在分级库最好档，供重点观察区分新增/已在库
@@ -2684,12 +2678,12 @@ public class SecurityPoolAdjustService {
         }
         // 标准矩阵最好档，再叠加特殊债下调
         Integer bestAllowedSort = resolveBestAllowedSort(allowedPoolIds, ctx.getPoolMap());
-        // 观察/担保/私募/永续/次级/ABS 走档位封顶，普通债仍按矩阵精确池
-        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(sec, inObserve);
+        // 私募/永续/次级/ABS 需下调时开放新最好档至五级；其余按矩阵精确池
+        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(sec, gradeCode);
         Integer ceilingSort = null;
         if (useCeiling && bestAllowedSort != null) {
             ceilingSort = CreditBondSpecialInboundRule.resolveCeilingSort(
-                    gradeCode, bestAllowedSort, sec, inObserve);
+                    gradeCode, bestAllowedSort, sec);
         }
         // 目标池是否落在矩阵允许集或特殊债天花板内
         if (isLeafAllowedByGradeRule(pool, allowedPoolIds, useCeiling, ceilingSort, ctx.getPoolMap())) {
@@ -2832,7 +2826,7 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 信用债叶子是否允许：特殊债 / 观察走天花板；普通债按矩阵 poolId。
+     * 信用债叶子是否允许：下调类特殊债开放新最好档至五级；其余按矩阵 poolId。
      *
      * @param pool           待判断叶子池
      * @param allowedPoolIds 矩阵允许的信用债池 ID
@@ -3061,6 +3055,9 @@ public class SecurityPoolAdjustService {
      * @return 允许调入的信用债分级库 ID；无匹配返回空列表
      */
     private List<Long> queryAllowedPoolIdsForSecurity(SecurityInfoBo sec) {
+        if (CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(sec)) {
+            return new ArrayList<Long>();
+        }
         // 临时代码默认档 4，担保债取孰高
         String gradeCode = resolveMatrixGradeCode(sec);
         if (gradeCode == null) {
@@ -3081,12 +3078,9 @@ public class SecurityPoolAdjustService {
         }
         // 标准最好档叠加特殊债下调后，展开信用债分级叶子
         Integer bestAllowedSort = resolveBestAllowedSort(matrixIds, poolMap);
-        // 改判候选项：证券自身或发行主体在观察/重点观察
-        boolean inObserve = false;
+        // 改判候选项：证券自身或发行主体在重点观察
         boolean inRestricted = false;
         if (sec.getWindCode() != null) {
-            inObserve = securityPoolAdjustMapper.querySecurityInObservePool(sec.getWindCode())
-                    || securityPoolAdjustMapper.queryIssuerInObservePool(sec.getWindCode());
             inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(sec.getWindCode())
                     || securityPoolAdjustMapper.queryIssuerInRestrictedPool(sec.getWindCode());
         }
@@ -3098,12 +3092,12 @@ public class SecurityPoolAdjustService {
             }
         }
         Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
-        // 观察/担保/私募/永续/次级/ABS 走档位封顶，普通债仍按矩阵精确池
-        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(sec, inObserve);
+        // 私募/永续/次级/ABS 需下调时开放新最好档至五级；其余按矩阵精确池
+        boolean useCeiling = CreditBondSpecialInboundRule.needsCeilingModel(sec, gradeCode);
         Integer ceilingSort = null;
         if (useCeiling && bestAllowedSort != null) {
             ceilingSort = CreditBondSpecialInboundRule.resolveCeilingSort(
-                    gradeCode, bestAllowedSort, sec, inObserve);
+                    gradeCode, bestAllowedSort, sec);
         }
         List<Long> result = new ArrayList<Long>();
         for (InvestmentPoolBo p : poolMap.values()) {

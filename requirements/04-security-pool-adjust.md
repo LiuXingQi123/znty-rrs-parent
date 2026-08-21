@@ -227,7 +227,7 @@
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池不在矩阵/特殊债天花板范围内；**未配置主体内评分档**（正式证券无内评禁止入信用债 1～5 级；临时代码默认档 `4`）；**无法匹配债券期限档**。矩阵：内评档×剩余期限（含权回售按行权期限、赎回按 `date_exists`，÷365）；期限为空时默认最长档（>5 年）继续走矩阵，不跳过。**担保债取孰高**；可转债/`releaseRules` 跳过。观察名单不跳过，按标准最好档封顶。私募/ABS 非 1 档、永续（含 1 档）、次级非 1 档在标准最好档上至少下调一级。重点观察禁止新增信用债分级库（强担保豁免），已在 1～4 级只能去五级或出库。境外债分级库不走主体评分档套件（对齐老 `polidEnum`）。 |
+| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池不在矩阵/特殊债下调后允许范围内；**未配置主体内评分档**（正式证券无内评禁止入信用债 1～5 级；临时代码默认档 `4`）；**无法匹配债券期限档**；**可转债、可交换债、信用风险缓释工具不适用信用债分级库**。矩阵：内评档×剩余期限（含权回售按行权期限、赎回按 `date_exists`，÷365）；期限为空时默认最长档（>5 年）继续走矩阵，不跳过。**普通债按矩阵精确池**（匹配 2、3 只显示 2、3）。私募/ABS/次级非 1 档、永续（含 1 档）在标准最好档上至少下调一级后开放该档至五级（矩阵仅 1 则 2～5；最好档 2 则 3～5）；1 档私募/ABS/次级不额外下调。**担保债取孰高**后走矩阵；观察名单沿用矩阵允许池。重点观察禁止新增信用债分级库（强担保豁免），已在 1～4 级只能去五级或出库。可转债/可交换债/可分离转债/CRMW 选池去掉信用债 1～5。境外债分级库不走主体评分档套件（对齐老 `polidEnum`）。`releaseRules` 仍跳过矩阵。 |
 | 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（`delist_date` 早于今日）；`grade_astrict` 入口仍调用但**方法恒 return null**（未接 StockResearch/investrank，空实现不拦截） |
 | 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（仅 **checkAdjust** 按请求 `fundRate` 校验；**正式提交不携带 fundRate、不再次校验**） |
 | 主体 company | —（主体不校验到期，暂无） | |
@@ -337,7 +337,7 @@
 | `querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
 | `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：仅 bond，排除 crmw 及已删除态） |
 | `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
-| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投/观察等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 按主体内评×期限矩阵过滤信用债大库；**正式证券无主体内评分档时直接去掉全部 credit_bond 池（含 1～5 级）**；临时代码无内评默认 `grade_code=4` 再走矩阵；**期限为空默认最长档（>5 / `GT_5`）继续走矩阵，不跳过** |
+| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投/观察等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 过滤信用债 1～5：可转债/可交换债/可分离转债/CRMW 不显示信用债 1～5 级；正式证券无内评去掉；临时代码默认档 4；普通债按矩阵精确池；私募/ABS/次级非 1 档、永续至少下调一级后开放该档至五级；期限为空默认最长档继续走矩阵 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
@@ -472,7 +472,7 @@
 | 股票入池评级限制 | `grade_astrict` + `StockResearch.investrank` | 入口保留，但当前无股票评级来源，先跳过 | 当前是有意放宽；后续接股票研究评级后再补强 |
 | 股票退市 | 股票 `EndDate` 有值就拦 | `delist_date < today` 才拦 | 口径不同，老系统更严格 |
 | 债券到期 | 到期日早于当前日则拦 | 已有 | 基本一致 |
-| 债券大库/主体评级矩阵 | 私募/永续/次级/ABS 在标准最好档上至少下调一级、担保孰高、含权期限、观察名单封顶、重点观察禁新增（仅信用债分级库；境外债不套） | 已落地（选池+校验+证券池审核页改判）；观察识别含主体级 issuer_code；白名单流程当前空集选不中；**期限为空默认最长档（>5）继续走矩阵，对齐老 `bondDurationId=2`** | 老系统观察是跳过矩阵，新需求改为封顶。已在库不符由定时任务生成待办，不自动出池。CRMW 按需求豁免 |
+| 债券大库/主体评级矩阵 | 私募/永续/次级/ABS 至少下调一级后开放该档至五级；1 档私募/ABS/次级与普通债按矩阵精确池；担保孰高；含权只改期限；观察沿用矩阵；重点观察禁新增；可转债/可交换/CRMW 不适用 1～5 | 已落地（选池+校验+证券池审核页改判）；观察识别含主体级 issuer_code；白名单流程当前空集选不中；**期限为空默认最长档（>5）继续走矩阵，对齐老 `bondDurationId=2`** | 老系统观察是跳过矩阵；1 档特殊债老代码不限制 1～5。已在库不符由定时任务生成待办，不自动出池。CRMW 按需求豁免 |
 | 基金评分 | 池配置 `FundRateLimit`，且传了 `fundRate` 才校验 | 池配置后，未传 `fundRate` 也失败 | 新系统更严格，需确认前端是否总能提供基金评分 |
 | 研报限制 | check/提交阶段均有逻辑，且支持 `RschDocMode > 100` 自定义规则类 | 提交阶段支持 none/any/internal | 缺少自定义研报规则；批量跳过报告配置也未复刻 |
 | 互斥池特殊审批模板 | 调入目标池时，若证券当前在该目标池的调入互斥池中，可按 `目标池+调入互斥池` 配置覆盖审批模板 | 命中任意 `in_mutex` 当前所在池时固定走 `bond:special-inbound`；**信用债大库默认排除** | 第一阶段用代码常量覆盖；信用债互斥走升降级/默认流；后续可扩展配置表 |

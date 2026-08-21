@@ -6,9 +6,12 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 /**
  * 信用债大库分级库特殊债入库规则（对齐老 polidEnum：仅信用债 1～5）。
  *
- * <p>标准矩阵给出最好档后，私募 / 永续 / 次级 / ABS 再下调；担保与观察名单按最好档封顶；
- * 重点观察禁止新增进入信用债 1～5 级（强担保豁免）。重叠时取最严天花板。
- * 境外债分级库不走本套规则（老系统目标池不在 polidEnum 时整段跳过 MainGrade）。</p>
+ * <p>普通债按矩阵精确池。私募 / ABS / 次级非 1 档、永续（含 1 档）在标准最好档上至少下调一级，
+ * 下调后开放「该档至五级」（矩阵仅 1 则 2～5；矩阵最好档 2 则 3～5）。
+ * 1 档私募 / ABS / 次级不额外下调，仍按矩阵精确池。担保取孰高后走矩阵；观察不高于标准即沿用矩阵。
+ * 可转债 / 可交换债 / 可分离转债 / CRMW 不适用信用债 1～5。
+ * 重点观察禁止新增进入信用债 1～5 级（强担保豁免）。
+ * 境外债分级库不走本套规则。</p>
  */
 public final class CreditBondSpecialInboundRule {
 
@@ -57,13 +60,37 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否资产支持证券 / ABS。
+     * 是否资产支持证券 / ABS（含 ABN）。
      *
      * @param sec 证券主数据
      * @return true=ABS
      */
     public static boolean isAbs(SecurityInfoBo sec) {
-        return sec != null && sec.getAbsFlag() != null && sec.getAbsFlag() == 1;
+        if (sec == null) {
+            return false;
+        }
+        if (sec.getAbsFlag() != null && sec.getAbsFlag() == 1) {
+            return true;
+        }
+        String type = sec.getSecurityType();
+        return "abs".equals(type) || "abn".equals(type);
+    }
+
+    /**
+     * 可转债 / 可交换债 / 可分离转债 / CRMW：信用债 1～5 不适用。
+     *
+     * @param sec 证券主数据
+     * @return true=选池去掉分级库，校验目标为分级库时失败
+     */
+    public static boolean isExcludedFromCreditBondGradedPool(SecurityInfoBo sec) {
+        if (sec == null) {
+            return false;
+        }
+        String type = sec.getSecurityType();
+        return "convertible_bond".equals(type)
+                || "exchangeable_bond".equals(type)
+                || "detachable_convertible_bond".equals(type)
+                || "crmw".equals(type);
     }
 
     /**
@@ -107,51 +134,36 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否走「天花板」模型（目标 inner_sort ≥ 最好档），而不是矩阵精确 poolId。
+     * 是否走「下调后开放该档至五级」，而不是矩阵精确 poolId。
      *
-     * <p>观察名单、担保债、私募 / 永续 / 次级 / ABS 均按档位封顶。
+     * <p>永续（含 1 档）、私募 / ABS / 次级非 1 档为 true。观察 / 担保 / 含权 / 普通债为 false。
      *
      * @param sec       证券主数据
-     * @param inObserve 证券或主体是否在观察名单
-     * @return true=按天花板校验
+     * @param gradeCode 用于查矩阵的内评档（担保已取孰高）
+     * @return true=下调后 inner_sort ≥ 新最好档直至五级
      */
-    public static boolean needsCeilingModel(SecurityInfoBo sec, boolean inObserve) {
-        return inObserve || isGuaranteed(sec) || isPrivateBond(sec)
-                || isPerpetual(sec) || isSubordinated(sec) || isAbs(sec);
+    public static boolean needsCeilingModel(SecurityInfoBo sec, String gradeCode) {
+        if (isPerpetual(sec)) {
+            return true;
+        }
+        return !isGradeOne(gradeCode) && (isPrivateBond(sec) || isAbs(sec) || isSubordinated(sec));
     }
 
     /**
-     * 在标准最好档上叠加特殊债下调，重叠取最严（sort 更大）。
+     * 标准最好档下调后的新最好档（可入该档至五级）。
      *
      * @param gradeCode       用于查矩阵的内评档（担保已取孰高）
      * @param bestAllowedSort 标准矩阵允许池的最小 inner_sort
      * @param sec             证券
-     * @param inObserve       证券或主体在观察名单
-     * @return 1～5 的天花板
+     * @return 1～5 的新最好档
      */
-    public static int resolveCeilingSort(String gradeCode, int bestAllowedSort, SecurityInfoBo sec,
-                                         boolean inObserve) {
-        // 先把标准最好档限制在 1～5
+    public static int resolveCeilingSort(String gradeCode, int bestAllowedSort, SecurityInfoBo sec) {
         int ceiling = clampLevel(bestAllowedSort);
-        if (isAbs(sec) && !isGradeOne(gradeCode)) {
-            ceiling = Math.max(ceiling, bestAllowedSort + 1);
+        if (needsCeilingModel(sec, gradeCode)) {
+            // 至少下调一级：矩阵最好档 1 → 2～5；最好档 2 → 3～5
+            ceiling = clampLevel(bestAllowedSort + 1);
         }
-        if (isPrivateBond(sec) && !isGradeOne(gradeCode)) {
-            ceiling = Math.max(ceiling, bestAllowedSort + 1);
-        }
-        // 永续：1 档也下调一级
-        if (isPerpetual(sec)) {
-            ceiling = Math.max(ceiling, bestAllowedSort + 1);
-        }
-        if (isSubordinated(sec) && !isGradeOne(gradeCode)) {
-            ceiling = Math.max(ceiling, bestAllowedSort + 1);
-        }
-        // 担保债、观察名单：不额外 +1，封顶即为标准最好档
-        if (inObserve || isGuaranteed(sec)) {
-            ceiling = Math.max(ceiling, bestAllowedSort);
-        }
-        // 下调后仍不超过五级库
-        return clampLevel(ceiling);
+        return ceiling;
     }
 
     /**

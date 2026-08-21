@@ -47,9 +47,9 @@
 
 > **期限口径**：调库校验消费矩阵时，期限档按**剩余期限**匹配。普通债取 `rrs_securityinfo.date_exists`；含权债回售取 `date_inright_exists`/`date_repurchase_exists`，赎回取 `date_exists`，两者都有取更短。经 `CreditBondRemainTermUtil` 按 **天数 ÷ 365** 换算为年后匹配 `credit_bond_term_bucket`。`date_exists` 等为空时对齐老系统：默认最长档（期限>5 / `GT_5`）继续走矩阵，**不跳过**。无启用期限档或年数落不进任何档时报「无法匹配债券期限档」。
 >
-> **特殊债消费**：矩阵单元格仍是「标准最好档」。私募/永续/次级/ABS/担保/观察/重点观察的下调与封顶在 `CreditBondSpecialInboundRule` 中叠加；境外债分级库不走本矩阵套件（对齐老 `polidEnum`）。
+> **特殊债消费**：矩阵单元格仍是「标准最好档」。私募/ABS/次级非 1 档、永续（含 1 档）在标准最好档上至少下调一级后，可调入**该档至五级**（矩阵仅一级则 2～5；最好档为 2 则 3～5）。1 档私募/ABS/次级与普通债按矩阵精确池（匹配 2、3 只显示 2、3）。担保取孰高后走矩阵；观察不高于标准即沿用矩阵允许池。可转债/可交换债/可分离转债/CRMW 不适用信用债 1～5（选池不显示这五级）。境外债分级库不走本矩阵套件（对齐老 `polidEnum`）。
 >
-> **观察名单与老系统差异**：老系统主体或券在观察池（`ASTRICTPOOLS`）时设 `openrule=1`，**跳过**债大库矩阵。新需求改为「不高于标准规则对应等级」（按标准最好档封顶，不再跳过）。识别对象仍对齐老系统：券自己在观察，或**主体级记录**（`ip_pool_status.security_code = issuer_code`）在观察 / 重点观察。
+> **观察名单与老系统差异**：老系统主体或券在观察池（`ASTRICTPOOLS`）时设 `openrule=1`，**跳过**债大库矩阵。新需求改为沿用标准矩阵允许池（不高于标准对应等级，不再跳过、不再把更差档全部放开）。识别对象仍对齐老系统：券自己在观察，或**主体级记录**（`ip_pool_status.security_code = issuer_code`）在观察 / 重点观察。
 >
 > **已在库不符**：定时任务 `bond_grade_inconformity_alert` 每天扫描已在信用债 1～5 级但按当前规则不再允许的债券，写入 `ip_grade_rule_alert` 待办，由人工在「我的事宜」第三页签「分级规则提醒」处理（去调库或标记已处理），**不自动出池**。后端仍是独立 `gradeRuleAlert` 接口。对齐老系统 InconformityMaingrade2Job。
 
