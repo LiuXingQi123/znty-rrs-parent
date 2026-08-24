@@ -74,7 +74,16 @@
 | 剩余期限 | `dateExists` | 库字段 `date_exists`（DECIMAL(10,4)，天）；列表表格前端 ÷365 展示为年（四位小数）；证券基本信息区输入天数，旁同步展示「x.xxxx年」（`formatRemainTermYears`）；矩阵后端 ÷365 匹配期限档；**为空时默认最长档（>5 / `GT_5`）继续走矩阵，不跳过** |
 | 证券评级 | `ratingBond` | `el-tag type=success`，有值才显示 |
 | 主体评级 | `ratingBondissuer` | 空值空白 |
+| 主体内评分档 | `innerIssuerRating` | `el-tag`，空值空白 |
+| 是否担保 | `guarantFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
+| 是否含权 | `inrightFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
+| 是否永续 | `yxFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
+| 是否私募 | `issueType` / `innerClass` | 前端对齐 `CreditBondSpecialInboundRule.isPrivateBond`：发行方式或内部分类含「私募」为是 |
+| 是否ABS | `absFlag` / `securityType` | 前端对齐 `isAbs`：`absFlag=1` 或证券类型为 `abs`/`abn` 为是 |
+| 是否次级 | `cjFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
 | 操作 | — | 「调库」按钮 → `handleAdjust(row)` |
+
+> 是否类字段由前端统一判定并展示「是/否」Tag（是=`success`，否=`info`），后端仍返回原始 flag / 文案，不做中文映射。仅主列表展示，详情页「证券基本信息」不增加这些字段。
 
 ### 2.4 分页
 
