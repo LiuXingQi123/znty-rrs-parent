@@ -105,7 +105,7 @@ public final class CreditBondRemainTermUtil {
     }
 
     /**
-     * 按剩余期限（年）匹配期限档。年数为 null 时对齐老系统：默认最长档（无上限或下限最高，对应期限&gt;5）。
+     * 按剩余期限（年）匹配期限档。年数为 null 时默认最长档（无上限或下限最高，对应期限>5）。
      *
      * @param remainTermYears 剩余期限年数，null 表示无法解析
      * @param buckets         启用的期限档
@@ -116,7 +116,7 @@ public final class CreditBondRemainTermUtil {
             return null;
         }
         if (remainTermYears == null) {
-            // 老系统 date/endDate 皆空时 bondDurationId=2（期限>5），不跳过矩阵
+            // 期限为空时按期限>5 的最长档继续匹配，不跳过矩阵
             return pickLongestTermBucket(buckets);
         }
         for (CreditBondTermBucketBo bucket : buckets) {

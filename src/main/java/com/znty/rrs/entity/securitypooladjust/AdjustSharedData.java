@@ -44,13 +44,13 @@ public class AdjustSharedData {
     /** 当前证券自身是否在观察池（pool_type='observe'，audit_status='20'） */
     private boolean securityInObservePool;
 
-    /** 证券主体公司（发行人）旗下是否有证券在观察池中 */
+    /** 发行主体是否在观察池（主体级记录：ip_pool_status.security_code = issuer_code） */
     private boolean issuerInObservePool;
 
     /** 当前证券自身是否在重点观察名单（pool_type='restricted'，audit_status='20'） */
     private boolean securityInRestrictedPool;
 
-    /** 证券主体公司是否在重点观察名单 */
+    /** 发行主体是否在重点观察名单（主体级记录：ip_pool_status.security_code = issuer_code） */
     private boolean issuerInRestrictedPool;
 
     /** 主体评级是否下调（由 RatingDowngradeChecker 查 wind_cbondissuerrating 比较当前与前次评级判定） */

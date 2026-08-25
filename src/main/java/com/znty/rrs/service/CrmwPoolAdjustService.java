@@ -3882,7 +3882,7 @@ public class CrmwPoolAdjustService {
         /** 当前证券自身是否在观察池（pool_type='observe'，audit_status='20'） */
         final boolean securityInObservePool;
 
-        /** 证券主体公司（发行人）旗下是否有证券在观察池中 */
+        /** 发行主体是否在观察池（主体级记录：ip_pool_status.security_code = issuer_code） */
         final boolean issuerInObservePool;
 
         /** 流程快照索引（flowId → FlowSnapshot），供第三/四阶段快速判断直通流程 */

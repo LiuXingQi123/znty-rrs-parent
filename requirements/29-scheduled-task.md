@@ -214,7 +214,7 @@
 对应老系统 `InconformityMaingrade2Job`。实现类 `GradeRuleAlertService`（`implements RrsScheduledTask`），**只提醒、不改池**。
 
 1. 扫已在信用债 1～5 级且 `audit_status=20` 的债券（`queryGradedBondInPoolList`；不含境外债，对齐老 polidEnum）。  
-2. 对每条调用 `SecurityPoolAdjustService.evaluateGradedInboundForPool`（含特殊债天花板、观察/重点观察封顶）。  
+2. 对每条调用 `SecurityPoolAdjustService.evaluateGradedInboundForPool`（含特殊债/担保债/观察池、重点观察名单）。  
 3. 仍允许则跳过；不再允许则 `upsert` `ip_grade_rule_alert`（`alert_status=00`），刷新原因与扫描时间（计入**本轮命中**）。  
 4. 本轮未再命中的待处理记录置 `99` 失效（计入**本轮失效**；含义：曾告警，现已合规或已不在扫描范围）。  
 5. 再统计 `alert_status=00` 为**仍待处理**（执行摘要与影响条数以此为准；过程日志三项分列）。失效比较参数传秒级时间字符串 `yyyy-MM-dd HH:mm:ss`。  

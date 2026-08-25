@@ -858,6 +858,147 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket("4", "GT_5");
     }
 
+    /** 永续债发债主体内评 1 档：下调一级，只留矩阵最好档再降一档那一级。 */
+    @Test
+    public void inCheckMainGradeRulePerpetualIssuerGradeOneAllowsOnlyExactDowngrade() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo level1 = new InvestmentPoolBo();
+        level1.setId(2L);
+        level1.setPoolType("credit_bond");
+        level1.setPoolName("一级库");
+        level1.setInnerSort(1);
+        InvestmentPoolBo level2 = new InvestmentPoolBo();
+        level2.setId(3L);
+        level2.setPoolType("credit_bond");
+        level2.setPoolName("二级库");
+        level2.setInnerSort(2);
+        InvestmentPoolBo level3 = new InvestmentPoolBo();
+        level3.setId(4L);
+        level3.setPoolType("credit_bond");
+        level3.setPoolName("三级库");
+        level3.setInnerSort(3);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
+        poolMap.put(2L, level1);
+        poolMap.put(3L, level2);
+        poolMap.put(4L, level3);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setYxFlag(1);
+        sec.setInnerIssuerRating("1");
+        sec.setDateExists(new BigDecimal("1826"));
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("1", "GT_5"))
+                .thenReturn(Collections.singletonList(2L));
+        AdjustCheckContext passCtx = new AdjustCheckContext();
+        passCtx.setTargetPool(level2);
+        passCtx.setSecurityInfo(sec);
+        passCtx.setPoolMap(poolMap);
+        String passFailure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", passCtx);
+        assertThat(passFailure).isNull();
+        AdjustCheckContext failCtx = new AdjustCheckContext();
+        failCtx.setTargetPool(level3);
+        failCtx.setSecurityInfo(sec);
+        failCtx.setPoolMap(poolMap);
+        String failFailure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", failCtx);
+        assertThat(failFailure).isEqualTo("目标池「三级库」不在特殊债调整后的允许范围内（仅 2 级）");
+    }
+
+    /** 私募债发债主体内评 1 档：可调入一级库，1～5 都可通过。 */
+    @Test
+    public void inCheckMainGradeRulePrivateIssuerGradeOneAllowsLevelOneToFive() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo level1 = new InvestmentPoolBo();
+        level1.setId(2L);
+        level1.setPoolType("credit_bond");
+        level1.setPoolName("一级库");
+        level1.setInnerSort(1);
+        InvestmentPoolBo level5 = new InvestmentPoolBo();
+        level5.setId(6L);
+        level5.setPoolType("credit_bond");
+        level5.setPoolName("五级库");
+        level5.setInnerSort(5);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
+        poolMap.put(2L, level1);
+        poolMap.put(6L, level5);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setIssueType("私募债");
+        sec.setInnerIssuerRating("1");
+        sec.setDateExists(new BigDecimal("1826"));
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("1", "GT_5"))
+                .thenReturn(Collections.singletonList(2L));
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(level5);
+        ctx.setSecurityInfo(sec);
+        ctx.setPoolMap(poolMap);
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+        assertThat(failure).isNull();
+    }
+
+    /** 次级债发债主体内评 1 档：只能调入一级库。 */
+    @Test
+    public void inCheckMainGradeRuleSubordinatedIssuerGradeOneAllowsOnlyLevelOne() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo level1 = new InvestmentPoolBo();
+        level1.setId(2L);
+        level1.setPoolType("credit_bond");
+        level1.setPoolName("一级库");
+        level1.setInnerSort(1);
+        InvestmentPoolBo level2 = new InvestmentPoolBo();
+        level2.setId(3L);
+        level2.setPoolType("credit_bond");
+        level2.setPoolName("二级库");
+        level2.setInnerSort(2);
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
+        poolMap.put(2L, level1);
+        poolMap.put(3L, level2);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setCjFlag(1);
+        sec.setInnerIssuerRating("1");
+        sec.setDateExists(new BigDecimal("1826"));
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("1", "GT_5"))
+                .thenReturn(Collections.singletonList(2L));
+        AdjustCheckContext passCtx = new AdjustCheckContext();
+        passCtx.setTargetPool(level1);
+        passCtx.setSecurityInfo(sec);
+        passCtx.setPoolMap(poolMap);
+        String passFailure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", passCtx);
+        assertThat(passFailure).isNull();
+        AdjustCheckContext failCtx = new AdjustCheckContext();
+        failCtx.setTargetPool(level2);
+        failCtx.setSecurityInfo(sec);
+        failCtx.setPoolMap(poolMap);
+        String failFailure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", failCtx);
+        assertThat(failFailure).isEqualTo("目标池「二级库」不在特殊债调整后的允许范围内（仅 1 级）");
+    }
+
     /** 可调入库：无内评时直接去掉信用债大库（含 1～5 级），保留其他类型池。 */
     @Test
     public void filterInboundByGradeRuleShouldExcludeCreditBondWhenNoGrade() {
@@ -1039,9 +1180,9 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(10L, 13L, 14L, 15L, 20L, 21L);
     }
 
-    /** 可调入库：私募 1 档不额外下调，矩阵仅一级则只留一级。 */
+    /** 可调入库：私募 1 档不限制信用债 1～5。 */
     @Test
-    public void filterInboundByGradeRuleShouldKeepOnlyLevelOneWhenPrivateGradeOne() {
+    public void filterInboundByGradeRuleShouldOpenAllGradedWhenPrivateGradeOne() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
@@ -1065,7 +1206,41 @@ public class SecurityPoolAdjustServiceStepTest {
         req.setSecurityCode("PPB1.IB");
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
                 service, "filterInboundByGradeRule", pools, req);
-        assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(10L, 11L, 20L, 21L);
+        assertThat(result).extracting(InvestmentPoolBo::getId)
+                .containsExactly(10L, 11L, 12L, 13L, 14L, 15L, 20L, 21L);
+    }
+
+    /** 可调入库：永续+次级+私募+担保时担保覆盖，按担保债从矩阵最好档开到五级。 */
+    @Test
+    public void filterInboundByGradeRuleShouldFollowGuaranteeWhenOverlappingSpecialTypes() {
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        List<InvestmentPoolBo> pools = buildCreditBondTreeWithSpecial();
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setIssueType("私募");
+        sec.setCjFlag(1);
+        sec.setYxFlag(1);
+        sec.setGuarantFlag(1);
+        sec.setInnerIssuerRating("2");
+        sec.setDateExists(new BigDecimal("1826"));
+        when(adjustMapper.querySecurityBoByCode("OVLP.IB")).thenReturn(sec);
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("2", "GT_5"))
+                .thenReturn(Arrays.asList(12L, 13L));
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityCode("OVLP.IB");
+        List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
+                service, "filterInboundByGradeRule", pools, req);
+        assertThat(result).extracting(InvestmentPoolBo::getId)
+                .containsExactly(10L, 12L, 13L, 14L, 15L, 20L, 21L);
     }
 
     /** 可调入库：可转债 / 可交换债 / CRMW 去掉信用债 1～5。 */
@@ -1110,9 +1285,9 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(gradeRuleMapper, never()).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
     }
 
-    /** 永续债 1 档也须下调一级，不能进一级库。 */
+    /** 永续债发债主体内评 1 档：下调一级，不能进一级库。 */
     @Test
-    public void inCheckMainGradeRuleShouldDowngradePerpetualFromLevelOne() {
+    public void inCheckMainGradeRuleShouldRejectPerpetualIssuerGradeOneIntoLevelOne() {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
@@ -1139,10 +1314,10 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
                 .thenReturn(Collections.singletonList(2L));
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
-        assertThat(failure).contains("仅 2 级及更差");
+        assertThat(failure).isEqualTo("目标池「一级库」不在特殊债调整后的允许范围内（仅 2 级）");
     }
 
-    /** 观察名单沿用矩阵允许池，一级库在矩阵内应通过。 */
+    /** 已在观察池：矩阵最好档及更差档，一级库在矩阵内应通过。 */
     @Test
     public void inCheckMainGradeRuleShouldCapObserveAtStandardBest() {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
@@ -1175,9 +1350,9 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
     }
 
-    /** 观察名单沿用矩阵精确池，不能因封顶放开矩阵未配的更差档。 */
+    /** 已在观察池与担保债同一分支：矩阵最好档及更差档均可入。 */
     @Test
-    public void inCheckMainGradeRuleShouldKeepObserveAtMatrixPools() {
+    public void inCheckMainGradeRuleShouldAllowObserveWorseThanMatrixBest() {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
@@ -1212,7 +1387,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
                 .thenReturn(Collections.singletonList(2L));
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
-        assertThat(failure).contains("不在入库矩阵允许范围内");
+        assertThat(failure).isNull();
     }
 
     /** 可转债调入信用债分级库应失败。 */
@@ -1232,7 +1407,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failure).isEqualTo("可转债、可交换债、信用风险缓释工具不适用信用债分级库");
     }
 
-    /** 重点观察原则上不得新增进入分级库。 */
+    /** 已在重点观察名单原则上不得新增进入分级库。 */
     @Test
     public void inCheckMainGradeRuleShouldBlockRestrictedNewInbound() {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();

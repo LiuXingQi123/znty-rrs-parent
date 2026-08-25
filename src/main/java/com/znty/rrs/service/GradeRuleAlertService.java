@@ -49,7 +49,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "本任务无需扩展参数，请将 param_json 留空\n"
                     + "扫描已在信用债 1～5 级且生效的债券（不含境外债，对齐老 polidEnum）\n"
-                    + "按当前主体债入库规则（含特殊债天花板、观察封顶、重点观察）复核\n"
+                    + "按当前主体债入库规则（特殊债/担保债/观察池、重点观察名单）复核\n"
                     + "本轮命中：本轮判定仍不符合并新增/刷新的待办\n"
                     + "本轮失效：曾待处理、本轮未再命中（已合规或已不在扫描范围）的待办，置为 99\n"
                     + "仍待处理：执行结束后库中 alert_status=00 的条数（我的事宜可见）\n"
@@ -244,11 +244,11 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         }
         if (securityPoolAdjustMapper.querySecurityInObservePool(securityCode)
                 || securityPoolAdjustMapper.queryIssuerInObservePool(securityCode)) {
-            parts.add("观察名单");
+            parts.add("观察池");
         }
         if (securityPoolAdjustMapper.querySecurityInRestrictedPool(securityCode)
                 || securityPoolAdjustMapper.queryIssuerInRestrictedPool(securityCode)) {
-            parts.add("重点观察");
+            parts.add("重点观察名单");
         }
         if (parts.isEmpty()) {
             return "普通债/内评或期限变化";

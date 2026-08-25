@@ -7,7 +7,7 @@ import org.junit.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 特殊债分级入库规则：私募/永续/次级/ABS 下调、担保孰高、观察封顶、重点观察禁新增。
+ * 信用债 1～5 级准入：类型覆盖、特殊债/担保债/观察池/矩阵点名池。
  */
 public class CreditBondSpecialInboundRuleTest {
 
@@ -29,50 +29,193 @@ public class CreditBondSpecialInboundRuleTest {
     }
 
     @Test
-    public void perpetualAlwaysDowngradeAtLeastOneLevel() {
+    public void exclusiveMemoOverwritesPrivateThenSubordinatedThenPerpetualThenGuarantee() {
         SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setIssueType("私募");
+        assertThat(CreditBondSpecialInboundRule.resolveExclusiveMemo(sec))
+                .isEqualTo(CreditBondSpecialInboundRule.MEMO_PRIVATE);
+        sec.setCjFlag(1);
+        assertThat(CreditBondSpecialInboundRule.resolveExclusiveMemo(sec))
+                .isEqualTo(CreditBondSpecialInboundRule.MEMO_SUBORDINATED);
         sec.setYxFlag(1);
-        // 1 档也下调一级：矩阵最好档 1 → 2～5；最好档 2 → 3～5
-        assertThat(CreditBondSpecialInboundRule.needsCeilingModel(sec, "1")).isTrue();
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("1", 1, sec)).isEqualTo(2);
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("3", 2, sec)).isEqualTo(3);
+        assertThat(CreditBondSpecialInboundRule.resolveExclusiveMemo(sec))
+                .isEqualTo(CreditBondSpecialInboundRule.MEMO_PERPETUAL);
+        sec.setGuarantFlag(1);
+        assertThat(CreditBondSpecialInboundRule.resolveExclusiveMemo(sec))
+                .isEqualTo(CreditBondSpecialInboundRule.MEMO_GUARANTEED);
     }
 
     @Test
-    public void privateAndAbsGradeOneStayAtMatrixWithoutDowngrade() {
+    public void privateAndAbsIssuerGradeOneCanEnterLevelOneToFive() {
         SecurityInfoBo priv = new SecurityInfoBo();
         priv.setIssueType("私募债");
-        assertThat(CreditBondSpecialInboundRule.needsCeilingModel(priv, "1")).isFalse();
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("1", 1, priv)).isEqualTo(1);
-        assertThat(CreditBondSpecialInboundRule.needsCeilingModel(priv, "2")).isTrue();
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("2", 1, priv)).isEqualTo(2);
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("2", 2, priv)).isEqualTo(3);
+        priv.setInnerIssuerRating("1");
+        CreditBondSpecialInboundRule.GradedInboundMode privMode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(priv, false);
+        assertThat(privMode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.UNRESTRICTED);
+        assertThat(privMode.usesSort()).isTrue();
+        assertThat(privMode.resolveStartSort(1)).isEqualTo(1);
+        assertThat(privMode.allows(5, 1)).isTrue();
 
         SecurityInfoBo abs = new SecurityInfoBo();
         abs.setAbsFlag(1);
-        assertThat(CreditBondSpecialInboundRule.needsCeilingModel(abs, "1")).isFalse();
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("1", 1, abs)).isEqualTo(1);
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("3", 2, abs)).isEqualTo(3);
+        abs.setInnerIssuerRating("1");
+        assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(abs, false))
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.UNRESTRICTED);
     }
 
     @Test
-    public void observeAndGuaranteeDoNotUseDowngradeCeiling() {
-        SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setGuarantFlag(1);
-        assertThat(CreditBondSpecialInboundRule.needsCeilingModel(sec, "2")).isFalse();
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("2", 2, sec)).isEqualTo(2);
-        assertThat(CreditBondSpecialInboundRule.needsCeilingModel(new SecurityInfoBo(), "1")).isFalse();
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("1", 1, new SecurityInfoBo())).isEqualTo(1);
+    public void perpetualIssuerGradeOneDowngradesExactlyOneLevel() {
+        SecurityInfoBo perpetual = new SecurityInfoBo();
+        perpetual.setYxFlag(1);
+        perpetual.setInnerIssuerRating("1");
+        CreditBondSpecialInboundRule.GradedInboundMode mode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(perpetual, false);
+        assertThat(mode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_EXACT);
+        Integer start = mode.resolveStartSort(1);
+        assertThat(start).isEqualTo(2);
+        assertThat(mode.allows(2, start)).isTrue();
+        assertThat(mode.allows(3, start)).isFalse();
+        assertThat(mode.describeRange(start)).isEqualTo("仅 2 级");
     }
 
     @Test
-    public void overlapTakesStrictestCeiling() {
+    public void subordinatedSplitsThreeWaysByIssuerGrade() {
+        SecurityInfoBo sub = new SecurityInfoBo();
+        sub.setCjFlag(1);
+        sub.setInnerIssuerRating("1");
+        CreditBondSpecialInboundRule.GradedInboundMode oneMode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(sub, false);
+        assertThat(oneMode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.LEVEL_ONE_ONLY);
+        Integer oneStart = oneMode.resolveStartSort(1);
+        assertThat(oneStart).isEqualTo(1);
+        assertThat(oneMode.allows(1, oneStart)).isTrue();
+        assertThat(oneMode.allows(2, oneStart)).isFalse();
+        assertThat(oneMode.describeRange(oneStart)).isEqualTo("仅 1 级");
+
+        sub.setInnerIssuerRating("2+");
+        CreditBondSpecialInboundRule.GradedInboundMode twoMode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(sub, false);
+        assertThat(twoMode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_EXACT);
+        assertThat(twoMode.resolveStartSort(2)).isEqualTo(3);
+
+        sub.setInnerIssuerRating("2");
+        assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(sub, false))
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_EXACT);
+
+        sub.setInnerIssuerRating("2-");
+        assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(sub, false))
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_EXACT);
+
+        sub.setInnerIssuerRating("3");
+        CreditBondSpecialInboundRule.GradedInboundMode restMode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(sub, false);
+        assertThat(restMode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
+        assertThat(restMode.resolveStartSort(3)).isEqualTo(4);
+    }
+
+    @Test
+    public void specialNotIssuerGradeOneDowngradesAtLeastOneLevel() {
+        SecurityInfoBo priv = new SecurityInfoBo();
+        priv.setIssueType("私募债");
+        priv.setInnerIssuerRating("2");
+        CreditBondSpecialInboundRule.GradedInboundMode mode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(priv, false);
+        assertThat(mode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
+        assertThat(mode.usesSort()).isTrue();
+        assertThat(mode.resolveStartSort(1)).isEqualTo(2);
+        assertThat(mode.resolveStartSort(2)).isEqualTo(3);
+        assertThat(mode.allows(2, 2)).isTrue();
+        assertThat(mode.allows(5, 2)).isTrue();
+        assertThat(mode.allows(1, 2)).isFalse();
+
+        SecurityInfoBo perpetual = new SecurityInfoBo();
+        perpetual.setYxFlag(1);
+        perpetual.setInnerIssuerRating("2");
+        CreditBondSpecialInboundRule.GradedInboundMode perpetualMode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(perpetual, false);
+        assertThat(perpetualMode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
+        assertThat(perpetualMode.resolveStartSort(2)).isEqualTo(3);
+    }
+
+    @Test
+    public void specialOneGradeUsesIssuerRatingNotGuarantorBetter() {
+        SecurityInfoBo abs = new SecurityInfoBo();
+        abs.setAbsFlag(1);
+        abs.setGuarantFlag(1);
+        abs.setInnerIssuerRating("2");
+        abs.setInnerGuarantorRating("1");
+        assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(abs, false))
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
+
+        abs.setInnerIssuerRating("1");
+        abs.setInnerGuarantorRating("3");
+        assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(abs, false))
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.UNRESTRICTED);
+    }
+
+    @Test
+    public void guaranteeAndObserveUseBestAndWorseWithoutExtraDowngrade() {
+        SecurityInfoBo guaranteed = new SecurityInfoBo();
+        guaranteed.setGuarantFlag(1);
+        CreditBondSpecialInboundRule.GradedInboundMode guaranteedMode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(guaranteed, false);
+        assertThat(guaranteedMode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.BEST_AND_WORSE);
+        assertThat(guaranteedMode.usesSort()).isTrue();
+        assertThat(guaranteedMode.resolveStartSort(2)).isEqualTo(2);
+
+        SecurityInfoBo normal = new SecurityInfoBo();
+        CreditBondSpecialInboundRule.GradedInboundMode observeMode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(normal, true);
+        assertThat(observeMode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.BEST_AND_WORSE);
+        assertThat(observeMode.resolveStartSort(1)).isEqualTo(1);
+
+        CreditBondSpecialInboundRule.GradedInboundMode ordinary =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(new SecurityInfoBo(), false);
+        assertThat(ordinary.usesSort()).isFalse();
+        assertThat(ordinary.resolveStartSort(1)).isNull();
+    }
+
+    @Test
+    public void guaranteeOverridesPerpetualInBranchOrder() {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setIssueType("私募");
+        sec.setCjFlag(1);
         sec.setYxFlag(1);
-        // 私募 1 档可进一级，永续仍降一级
-        assertThat(CreditBondSpecialInboundRule.needsCeilingModel(sec, "1")).isTrue();
-        assertThat(CreditBondSpecialInboundRule.resolveCeilingSort("1", 1, sec)).isEqualTo(2);
+        sec.setGuarantFlag(1);
+        sec.setInnerIssuerRating("1");
+        assertThat(CreditBondSpecialInboundRule.isSpecialBranch(sec)).isFalse();
+        CreditBondSpecialInboundRule.GradedInboundMode mode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, false);
+        assertThat(mode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.BEST_AND_WORSE);
+        assertThat(mode.resolveStartSort(1)).isEqualTo(1);
+        assertThat(mode.resolveStartSort(2)).isEqualTo(2);
+    }
+
+    @Test
+    public void absStaysSpecialEvenWithGuarantee() {
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setAbsFlag(1);
+        sec.setYxFlag(1);
+        sec.setGuarantFlag(1);
+        sec.setInnerIssuerRating("1");
+        assertThat(CreditBondSpecialInboundRule.isSpecialBranch(sec)).isTrue();
+        assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, false))
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.UNRESTRICTED);
+        sec.setInnerIssuerRating("2");
+        assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, false))
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
+    }
+
+    @Test
+    public void observeDoesNotOverrideSpecialBranch() {
+        SecurityInfoBo perpetual = new SecurityInfoBo();
+        perpetual.setYxFlag(1);
+        perpetual.setInnerIssuerRating("2");
+        CreditBondSpecialInboundRule.GradedInboundMode mode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(perpetual, true);
+        assertThat(mode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
+        assertThat(mode.resolveStartSort(2)).isEqualTo(3);
     }
 
     @Test
