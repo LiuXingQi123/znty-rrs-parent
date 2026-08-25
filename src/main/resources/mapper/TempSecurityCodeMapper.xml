@@ -197,8 +197,8 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
                                         AND dst.is_deleted = 0
         <where>
-            AND (si.security_status IS NULL OR si.security_status != 'D')
-            AND (si.security_source IS NULL OR si.security_source != 'temporary')
+            AND si.security_status != 'D'
+            AND si.security_source != 'temporary'
             AND si.security_type NOT IN ('crmw', 'company')
             <if test="securityKeyword != null and securityKeyword != ''">
                 AND (si.wind_code LIKE CONCAT('%', #{securityKeyword}, '%')
@@ -232,8 +232,8 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
                                         AND dst.is_deleted = 0
         WHERE si.wind_code = #{securityCode}
-          AND (si.security_status IS NULL OR si.security_status != 'D')
-          AND (si.security_source IS NULL OR si.security_source != 'temporary')
+          AND si.security_status != 'D'
+          AND si.security_source != 'temporary'
           AND si.security_type NOT IN ('crmw', 'company')
         LIMIT 1
     </select>

@@ -36,7 +36,7 @@
 字段同上（`securityCode`/`securityShortName`/`issuer`）。
 
 - 接口：`POST /api/v1/crmwPoolAdjust/queryBindableSecurityPage`，返回 `PageResult<SecurityInfoDto>`。
-- SQL（`queryBindableSecurityPage`）：`WHERE (si.security_type IS NULL OR si.security_type != 'crmw')` — **排除 CRMW 凭证**。
+- SQL（`queryBindableSecurityPage`）：`WHERE si.security_type != 'crmw'` — **排除 CRMW 凭证**。
 - 分页：`pagination: {pageIndex:1, pageSize:5, total:0}`，`page-sizes=[5,10,20,50,100]`。
 
 ### 2.3 CRMW 凭证选择（`handleCrmwSelect`）

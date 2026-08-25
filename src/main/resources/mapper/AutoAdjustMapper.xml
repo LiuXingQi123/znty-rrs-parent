@@ -26,7 +26,7 @@
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND (ips.security_type IS NULL OR ips.security_type != 'crmw')
+          AND ips.security_type != 'crmw'
           AND si.maturity_date IS NOT NULL
           AND si.maturity_date != ''
           AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d')
@@ -51,7 +51,7 @@
           AND bond.issuer_code != ''
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
           AND COALESCE(bond.abs_flag, 0) != 1
-          AND (bond.security_type IS NULL OR bond.security_type != 'crmw')
+          AND bond.security_type != 'crmw'
           AND EXISTS (
               SELECT 1
               FROM ip_pool_status cps
@@ -440,7 +440,7 @@
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
           AND COALESCE(bond.abs_flag, 0) != 1
-          AND (bond.security_type IS NULL OR bond.security_type != 'crmw')
+          AND bond.security_type != 'crmw'
           AND bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
           AND NOT EXISTS (
