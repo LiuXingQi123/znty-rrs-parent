@@ -330,7 +330,7 @@ public class ForbiddenAbsPoolAdjustService {
      *
      * <p>正式证券无内评去掉分级库；临时代码默认档 4。期限为空默认最长档继续走矩阵，不跳过。
      * 可转债 / 可交换债 / CRMW 去掉信用债 1～5。
-     * ABS 按特殊债：发债主体内评 1 档可调入一级库（1～5），其余至少下调一级。「1 档」只看发债主体内评。
+     * ABS 按特殊债：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级。「1 档」只看担保人内评。
      * 担保债，或证券/主体已在观察池：不得高于矩阵最好档，从该档开到五级。普通债只保留矩阵单元格。
      * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只留五级。含权只改期限。releaseRules 跳过矩阵。
      *
@@ -400,7 +400,7 @@ public class ForbiddenAbsPoolAdjustService {
             // 从矩阵允许池算出标准最好档
             bestAllowedSort = resolveBestAllowedSort(allowedPoolIds, poolMap);
         }
-        // ABS 一律按特殊债算档（即使同时有担保）；1 档只看发债主体内评
+        // ABS 一律按特殊债算档（即使同时有担保）；1 档只看担保人内评
         boolean inObserve = forbiddenAbsPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
                 || forbiddenAbsPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode());
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
@@ -2510,8 +2510,8 @@ public class ForbiddenAbsPoolAdjustService {
      * 规则：主体债入库规则（credit_bond_pool_grade_rule 矩阵）
      *
      * <p>调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表。
-     * 担保债取主体与担保人内评孰高后再查矩阵；ABS 按特殊债：发债主体内评 1 档可调入一级库（1～5），其余至少下调一级。
-     * 「1 档」只看发债主体内评，不用担保人内评孰高。担保债或已在观察池：不得高于矩阵最好档，从该档开到五级。
+     * 担保债取主体与担保人内评孰高后再查矩阵；ABS 按特殊债：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级。
+     * ABS「1 档」只看担保人内评。担保债或已在观察池：不得高于矩阵最好档，从该档开到五级。
      * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只能去五级。可转债/可交换债/CRMW 不适用信用债 1～5。
      * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4。
      * 期限为空默认最长档（期限>5）继续走矩阵，不跳过。
@@ -2706,7 +2706,7 @@ public class ForbiddenAbsPoolAdjustService {
 
     /**
      * 这一级信用债库能不能调入。
-     * 只能调入一级库 / 下调一级：只留起始档那一级；可调入一级库 / 至少下调一级 / 担保或观察池：起始档及更差；
+     * 只能调入一级库 / 下调一级：只留起始档那一级；至少下调一级 / 担保或观察池：起始档及更差；
      * 算不出起始档或普通债：只认矩阵点名的那些池 ID。
      *
      * @param pool           待判断叶子池

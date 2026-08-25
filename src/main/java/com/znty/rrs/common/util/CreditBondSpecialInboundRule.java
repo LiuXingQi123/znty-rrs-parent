@@ -10,16 +10,16 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
  * 私募 → 次级 → 永续 → 担保。例如永续+担保最终按担保处理。
  * ABS（{@code absFlag=1} 或证券类型 abs/abn）不看标签，始终走特殊债。</p>
  *
- * <p>特殊债口径（「1 档」只看<strong>发债主体内评</strong> {@code innerIssuerRating}，不用担保人内评孰高）：
+ * <p>特殊债口径（私募/永续/次级的「1 档」只看<strong>发债主体内评</strong> {@code innerIssuerRating}；
+ * ABS 的「1 档」只看<strong>页面所选担保人内评</strong> {@code innerGuarantorRating}，无担保人则不是 1 档）：
  * <ul>
- *   <li>可调入一级库：信用债 1～5 级都可进（私募 / ABS 发债主体内评 1 档）。</li>
- *   <li>只能调入一级库：仅一级（次级发债主体内评 1 档）。</li>
+ *   <li>只能调入一级库：仅一级。</li>
  *   <li>下调一级：矩阵最好档再降一档，且只留那一档（最好已是五级则仍是五级）。</li>
- *   <li>至少下调一级：从「矩阵最好档再降一档」起一直开到五级（最好 1 则 2～5，最好 2 则 3～5）。</li>
+ *   <li>至少下调一级：从「矩阵最好档再降一档」起一直开到五级（最好 1 则 2～5）。</li>
  * </ul>
- * 私募、ABS：发债主体内评 1 档可调入一级库（1～5），其余至少下调一级。
- * 永续：发债主体内评 1 档下调一级，其余至少下调一级。
- * 次级：发债主体内评 1 档只能调入一级库；2+/2/2- 下调一级；其余至少下调一级。</p>
+ * ABS：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级。
+ * 私募、永续：发债主体内评 1 档只能调入一级库，其余至少下调一级。
+ * 次级：发债主体内评 1 档只能调入一级库；2+/2/2- 下调一级（只留那一档）；其余至少下调一级。</p>
  *
  * <p>再按下面顺序选一种准入方式（先命中先走）：
  * <ol>
@@ -54,8 +54,6 @@ public final class CreditBondSpecialInboundRule {
      * 信用债 1～5 级准入方式。档位从哪一级起、是只留那一级还是开到五级，都由枚举自己判断。
      */
     public enum GradedInboundMode {
-        /** 可调入一级库：信用债 1～5 级都可进 */
-        UNRESTRICTED(false),
         /** 只能调入一级库：仅一级 */
         LEVEL_ONE_ONLY(true),
         /** 至少下调一级：矩阵最好档再降一档后，从该档开到五级 */
@@ -93,7 +91,7 @@ public final class CreditBondSpecialInboundRule {
             if (bestAllowedSort == null || this == EXACT_MATRIX) {
                 return null;
             }
-            if (this == UNRESTRICTED || this == LEVEL_ONE_ONLY) {
+            if (this == LEVEL_ONE_ONLY) {
                 return MIN_LEVEL;
             }
             if (this == DOWNGRADE_CEILING || this == DOWNGRADE_EXACT) {
@@ -282,7 +280,7 @@ public final class CreditBondSpecialInboundRule {
 
     /**
      * 解析准入方式。顺序：特殊债（ABS 或私募/次级/永续）→ 担保债或已在观察池 → 普通债只认矩阵点名的池。
-     * 特殊债「1 档 / 2+/2/2-」只看发债主体内评，不用查矩阵用的孰高档。
+     * 私募/永续/次级「1 档 / 2+/2/2-」只看发债主体内评；ABS「1 档」只看担保人内评（无担保人则不是 1 档）。
      * 重点观察名单不在这里，见 {@link #checkRestricted}。
      *
      * @param sec       证券主数据
@@ -292,14 +290,15 @@ public final class CreditBondSpecialInboundRule {
     public static GradedInboundMode resolveGradedInboundMode(SecurityInfoBo sec, boolean inObserve) {
         boolean issuerOne = isIssuerGradeOne(sec);
         if (isAbs(sec)) {
-            return issuerOne ? GradedInboundMode.UNRESTRICTED : GradedInboundMode.DOWNGRADE_CEILING;
+            // ABS：1 档看页面所选担保人内评；无担保人或非 1 档走至少下调一级
+            return isGuarantorGradeOne(sec) ? GradedInboundMode.LEVEL_ONE_ONLY : GradedInboundMode.DOWNGRADE_CEILING;
         }
         String memo = resolveExclusiveMemo(sec);
         if (MEMO_PRIVATE.equals(memo)) {
-            return issuerOne ? GradedInboundMode.UNRESTRICTED : GradedInboundMode.DOWNGRADE_CEILING;
+            return issuerOne ? GradedInboundMode.LEVEL_ONE_ONLY : GradedInboundMode.DOWNGRADE_CEILING;
         }
         if (MEMO_PERPETUAL.equals(memo)) {
-            return issuerOne ? GradedInboundMode.DOWNGRADE_EXACT : GradedInboundMode.DOWNGRADE_CEILING;
+            return issuerOne ? GradedInboundMode.LEVEL_ONE_ONLY : GradedInboundMode.DOWNGRADE_CEILING;
         }
         if (MEMO_SUBORDINATED.equals(memo)) {
             if (issuerOne) {
@@ -408,6 +407,16 @@ public final class CreditBondSpecialInboundRule {
      */
     private static boolean isIssuerGradeOne(SecurityInfoBo sec) {
         return sec != null && isGradeOne(sec.getInnerIssuerRating());
+    }
+
+    /**
+     * 页面所选担保人内评是否为 1 档。只看 {@code innerGuarantorRating}；无担保人返回 false。
+     *
+     * @param sec 证券主数据
+     * @return true=担保人内评 1 档
+     */
+    private static boolean isGuarantorGradeOne(SecurityInfoBo sec) {
+        return sec != null && isGradeOne(sec.getInnerGuarantorRating());
     }
 
     /**

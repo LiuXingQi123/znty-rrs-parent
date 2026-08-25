@@ -2146,7 +2146,7 @@ public class ScriptToolService {
     private List<String> buildGradeRuleAlertPendingScene() {
         List<String> statements = new ArrayList<>();
         statements.add("DELETE FROM `ip_grade_rule_alert` WHERE `security_code` = '108008901.IB' AND `fail_reason` LIKE '脚本工具生成：%'");
-        statements.add("INSERT INTO `ip_grade_rule_alert` (`security_code`, `security_short_name`, `issuer_code`, `issuer_name`, `current_pool_id`, `current_pool_name`, `current_sort`, `fail_reason`, `special_type_desc`, `alert_status`, `last_scan_time`, `deal_user_id`, `deal_user_name`, `deal_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES ('108008901.IB', '23某资A', 'C10008', '某资产管理公司', 3, '二级库', 2, '脚本工具生成：ABS 发债主体内评非 1 档须至少下调一级，当前二级库已不符合入库规则', 'ABS', '00', NOW(), NULL, NULL, NULL, 0, NOW(), NOW())");
+        statements.add("INSERT INTO `ip_grade_rule_alert` (`security_code`, `security_short_name`, `issuer_code`, `issuer_name`, `current_pool_id`, `current_pool_name`, `current_sort`, `fail_reason`, `special_type_desc`, `alert_status`, `last_scan_time`, `deal_user_id`, `deal_user_name`, `deal_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES ('108008901.IB', '23某资A', 'C10008', '某资产管理公司', 3, '二级库', 2, '脚本工具生成：ABS 担保人内评非 1 档须至少下调一级，当前二级库已不符合入库规则', 'ABS', '00', NOW(), NULL, NULL, NULL, 0, NOW(), NOW())");
         return statements;
     }
 
