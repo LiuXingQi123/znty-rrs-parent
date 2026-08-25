@@ -69,18 +69,19 @@ public class CreditBondSpecialInboundRuleTest {
     }
 
     @Test
-    public void perpetualIssuerGradeOneAllowsOnlyLevelOne() {
+    public void perpetualIssuerGradeOneDowngradesExactlyOneLevel() {
         SecurityInfoBo perpetual = new SecurityInfoBo();
         perpetual.setYxFlag(1);
         perpetual.setInnerIssuerRating("1");
         CreditBondSpecialInboundRule.GradedInboundMode mode =
                 CreditBondSpecialInboundRule.resolveGradedInboundMode(perpetual, false);
-        assertThat(mode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.LEVEL_ONE_ONLY);
+        assertThat(mode).isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_EXACT);
         Integer start = mode.resolveStartSort(1);
-        assertThat(start).isEqualTo(1);
-        assertThat(mode.allows(1, start)).isTrue();
-        assertThat(mode.allows(2, start)).isFalse();
-        assertThat(mode.describeRange(start)).isEqualTo("仅 1 级");
+        assertThat(start).isEqualTo(2);
+        assertThat(mode.allows(2, start)).isTrue();
+        assertThat(mode.allows(1, start)).isFalse();
+        assertThat(mode.allows(3, start)).isFalse();
+        assertThat(mode.describeRange(start)).isEqualTo("仅 2 级");
     }
 
     @Test

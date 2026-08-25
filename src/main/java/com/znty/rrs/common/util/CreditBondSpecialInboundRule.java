@@ -18,7 +18,8 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
  *   <li>至少下调一级：从「矩阵最好档再降一档」起一直开到五级（最好 1 则 2～5）。</li>
  * </ul>
  * ABS：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级。
- * 私募、永续：发债主体内评 1 档只能调入一级库，其余至少下调一级。
+ * 私募：发债主体内评 1 档只能调入一级库，其余至少下调一级。
+ * 永续：发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级。
  * 次级：发债主体内评 1 档只能调入一级库；2+/2/2- 下调一级（只留那一档）；其余至少下调一级。</p>
  *
  * <p>再按下面顺序选一种准入方式（先命中先走）：
@@ -298,7 +299,8 @@ public final class CreditBondSpecialInboundRule {
             return issuerOne ? GradedInboundMode.LEVEL_ONE_ONLY : GradedInboundMode.DOWNGRADE_CEILING;
         }
         if (MEMO_PERPETUAL.equals(memo)) {
-            return issuerOne ? GradedInboundMode.LEVEL_ONE_ONLY : GradedInboundMode.DOWNGRADE_CEILING;
+            // 发债主体内评 1 档：按矩阵最好档下调一级，只留那一档
+            return issuerOne ? GradedInboundMode.DOWNGRADE_EXACT : GradedInboundMode.DOWNGRADE_CEILING;
         }
         if (MEMO_SUBORDINATED.equals(memo)) {
             if (issuerOne) {

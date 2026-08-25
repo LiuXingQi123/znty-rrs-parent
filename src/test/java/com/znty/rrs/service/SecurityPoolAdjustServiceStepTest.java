@@ -858,9 +858,9 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket("4", "GT_5");
     }
 
-    /** 永续债发债主体内评 1 档：只能调入一级库。 */
+    /** 永续债发债主体内评 1 档：按矩阵最好档下调一级，只留那一档。 */
     @Test
-    public void inCheckMainGradeRulePerpetualIssuerGradeOneAllowsOnlyLevelOne() {
+    public void inCheckMainGradeRulePerpetualIssuerGradeOneAllowsOnlyExactDowngrade() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
@@ -898,17 +898,23 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("1", "GT_5"))
                 .thenReturn(Collections.singletonList(2L));
         AdjustCheckContext passCtx = new AdjustCheckContext();
-        passCtx.setTargetPool(level1);
+        passCtx.setTargetPool(level2);
         passCtx.setSecurityInfo(sec);
         passCtx.setPoolMap(poolMap);
         String passFailure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", passCtx);
         assertThat(passFailure).isNull();
+        AdjustCheckContext failLevelOne = new AdjustCheckContext();
+        failLevelOne.setTargetPool(level1);
+        failLevelOne.setSecurityInfo(sec);
+        failLevelOne.setPoolMap(poolMap);
+        String failOne = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", failLevelOne);
+        assertThat(failOne).isEqualTo("目标池「一级库」不在特殊债调整后的允许范围内（仅 2 级）");
         AdjustCheckContext failCtx = new AdjustCheckContext();
-        failCtx.setTargetPool(level2);
+        failCtx.setTargetPool(level3);
         failCtx.setSecurityInfo(sec);
         failCtx.setPoolMap(poolMap);
         String failFailure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", failCtx);
-        assertThat(failFailure).isEqualTo("目标池「二级库」不在特殊债调整后的允许范围内（仅 1 级）");
+        assertThat(failFailure).isEqualTo("目标池「三级库」不在特殊债调整后的允许范围内（仅 2 级）");
     }
 
     /** 私募债发债主体内评 1 档：只能调入一级库，五级不可过。 */
@@ -1291,9 +1297,9 @@ public class SecurityPoolAdjustServiceStepTest {
         verify(gradeRuleMapper, never()).queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class));
     }
 
-    /** 永续债发债主体内评 1 档：只能调入一级库，一级库可通过。 */
+    /** 永续债发债主体内评 1 档：按矩阵下调一级，不能进一级库。 */
     @Test
-    public void inCheckMainGradeRuleShouldAllowPerpetualIssuerGradeOneIntoLevelOne() {
+    public void inCheckMainGradeRuleShouldRejectPerpetualIssuerGradeOneIntoLevelOne() {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
@@ -1320,7 +1326,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
                 .thenReturn(Collections.singletonList(2L));
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
-        assertThat(failure).isNull();
+        assertThat(failure).isEqualTo("目标池「一级库」不在特殊债调整后的允许范围内（仅 2 级）");
     }
 
     /** 已在观察池：矩阵最好档及更差档，一级库在矩阵内应通过。 */
