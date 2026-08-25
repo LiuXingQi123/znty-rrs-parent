@@ -11,7 +11,7 @@ import java.util.Collections;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * date_exists（天，DECIMAL）→ 年 换算。
+ * 剩余期限换算：date_exists 是天，含权/赎回行权/回购剩余期限是年。
  */
 public class CreditBondRemainTermUtilTest {
 
@@ -53,13 +53,34 @@ public class CreditBondRemainTermUtilTest {
     }
 
     @Test
-    public void inrightShouldUsePutDaysWhenShorterThanMaturity() {
+    public void inrightShouldUsePutYearsWhenShorterThanMaturity() {
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setInrightFlag(1);
+        // date_exists 1825 天 ≈ 5 年；含权剩余期限 1 年（已是年，不再 ÷365）
+        sec.setDateExists(new BigDecimal("1825"));
+        sec.setDateInrightExists(new BigDecimal("1"));
+        assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
+                .isEqualByComparingTo("1");
+    }
+
+    @Test
+    public void inrightShouldNotTreatInrightYearsAsDays() {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setInrightFlag(1);
         sec.setDateExists(new BigDecimal("1825"));
-        sec.setDateInrightExists(new BigDecimal("365"));
+        sec.setDateInrightExists(new BigDecimal("2"));
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
-                .isEqualByComparingTo("1");
+                .isEqualByComparingTo("2");
+    }
+
+    @Test
+    public void inrightShouldFallbackToRepurchaseYears() {
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setInrightFlag(1);
+        sec.setDateExists(new BigDecimal("1825"));
+        sec.setDateRepurchaseExists(new BigDecimal("1.5"));
+        assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
+                .isEqualByComparingTo("1.5");
     }
 
     @Test

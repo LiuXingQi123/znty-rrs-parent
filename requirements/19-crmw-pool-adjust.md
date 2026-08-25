@@ -11,7 +11,7 @@
 单 Vue 实例（`el: '#crmw_pool_adjust'`），`currentPage` 在 `'list'`/`'detail'` 两视图间切换：
 
 - **list 页**：CRMW 凭证 section（单选 radio + 分页表格）+ 可绑定证券搜索区 + 可绑定证券分页表格。
-- **detail 页**：返回按钮 + 证券基本信息 + CRMW 基本信息（只读）+ 当前所在池 + 调库操作卡（步骤 1 选池 / 步骤 2 校验确认）+ 流程选择弹窗 + 信评报告选择弹窗。
+- **detail 页**：返回按钮 + 证券基本信息（字段与单位同 [04]/[11]：`date_exists` **天**，含权/赎回行权/回购剩余期限 **年**）+ CRMW 基本信息（只读）+ 当前所在池 + 调库操作卡（步骤 1 选池 / 步骤 2 校验确认）+ 流程选择弹窗 + 信评报告选择弹窗。
 
 **初始化**（`created`）：`this.applyUrlCrmwOrList()`。URL 带 `crmwScode`/`securityCode` 时选中凭证并进入该标的调库（查询/历史/事宜入口）；无参数则并发 `loadCrmwList()` + `loadList()`。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。默认用户取 `RrsAuth`。详情「返回」先 `closeActiveTab()`，失败再回页内列表。
 

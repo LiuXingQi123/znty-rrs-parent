@@ -50,7 +50,7 @@
   "securityCode": null, "securityShortName": null, "marketCodes": null,
   "pageIndex": 1, "pageSize": 20 }
 ```
-返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（securityCode/securityShortName/securityType/marketCodes/issuer/ratingBond/maturityDate）。
+返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（securityCode/securityShortName/securityType/marketCodes/issuer/ratingBond/maturityDate、`dateExists` 剩余期限**天**，列表前端 ÷365 展示为年）。
 候选证券固定排除 `security_type IN ('crmw','company')` 的 CRMW 凭证和公司主体，避免混入证券池批量调整。
 
 > 选择页 `batch_security_pool_adjust_select.html` 的筛选条件与查询接口一致（路径同为 `querySecurityPage`），区别仅在独立屏布局与 mock 报告数据。
@@ -167,7 +167,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 **调入校验规则顺序**（与单笔 `checkCommonIn` + 类型特有一致）：
 
-池锁定 → 品种 → 市场 → pending → 已在目标池 → 容量 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突 → 弹性禁投(in_soft_restrict，警告) → 全局禁止池 → **行业限制（已注释）** → 开放日 →（债券）到期 → 主体内评矩阵（普通债精确池；ABS/私募：发债主体内评 1 档可调入一级库否则至少下调一级；永续：发债主体内评 1 档下调一级否则至少下调一级；次级：1 档只能调入一级库、2+/2/2- 下调一级、其余至少下调一级；1 档只看发债主体内评；担保债覆盖永续等或已在观察池：不得高于矩阵最好档、从该档开到五级；重点观察名单禁新增、已在库只能去五级；可转债/可交换/CRMW 不适用 1～5；期限为空默认最长档继续走矩阵） /（股票）退市 → 评级限制（空实现）/（基金）评分（仅 check）。
+池锁定 → 品种 → 市场 → pending → 已在目标池 → 容量 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突 → 弹性禁投(in_soft_restrict，警告) → 全局禁止池 → **行业限制（已注释）** → 开放日 →（债券）到期 → 主体内评矩阵（期限口径同 [04]/[23]：普通债 `date_exists` 天÷365；含权回售用年字段、赎回用 `date_exists` 天÷365；普通债精确池；ABS/私募：发债主体内评 1 档可调入一级库否则至少下调一级；永续：发债主体内评 1 档下调一级否则至少下调一级；次级：1 档只能调入一级库、2+/2/2- 下调一级、其余至少下调一级；1 档只看发债主体内评；担保债覆盖永续等或已在观察池：不得高于矩阵最好档、从该档开到五级；重点观察名单禁新增、已在库只能去五级；可转债/可交换/CRMW 不适用 1～5；期限为空默认最长档继续走矩阵） /（股票）退市 → 评级限制（空实现）/（基金）评分（仅 check）。
 
 **调出校验规则顺序**（与单笔 `checkCommonOut` + 类型特有一致）：
 

@@ -96,6 +96,7 @@ this.loadList();                  // 列表数据
 | 发行日期 | `issueDate` | 居中 |
 | 起息日 | `carryDate` | 居中 |
 | 到期日 | `maturityDate` | 居中 |
+| 剩余期限(年) | `dateExists` | 库字段 `date_exists`（**天**）；前端 `formatRemainTermYears` ÷365 展示四位小数；空则空 |
 | 证券状态 | `securityStatus` | `active`→绿色「存续」；`matured`→琥珀「到期」；其他空 |
 | 退市日期 | `delistDate` | 居中 |
 | 行权日期（回售） | `repurchaseDate` | 居中 |

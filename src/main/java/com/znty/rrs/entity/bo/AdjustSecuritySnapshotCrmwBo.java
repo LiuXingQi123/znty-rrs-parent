@@ -53,7 +53,7 @@ public class AdjustSecuritySnapshotCrmwBo {
     private BigDecimal issueAmountplan;
     /** 票面利率(%) */
     private String couponRate;
-    /** 含权债剩余期限-最新 */
+    /** 含权债剩余期限-最新（年） */
     private BigDecimal dateInrightExists;
     /** 起息日期 */
     private String carryDate;
@@ -81,7 +81,7 @@ public class AdjustSecuritySnapshotCrmwBo {
     private String securityType;
     /** 品种类别 */
     private String secTypename;
-    /** 赎回剩余期限-最新 */
+    /** 赎回行权剩余期限-最新（年） */
     private BigDecimal dateCallExists;
     /** 担保人主体内评分 */
     private String innerGuarantorRating;
@@ -106,7 +106,7 @@ public class AdjustSecuritySnapshotCrmwBo {
     private String compType;
     /** 发行总额-亿 */
     private BigDecimal issueAmountact;
-    /** 回购剩余期限-最新 */
+    /** 回购剩余期限-最新（年） */
     private BigDecimal dateRepurchaseExists;
     /** 是否 ABS */
     private Integer absFlag;

@@ -121,11 +121,11 @@ public class SecurityInfoBo {
     private Integer yxFlag;
     /** 是否递延 */
     private Integer dyFlag;
-    /** 赎回剩余期限-最新 */
+    /** 赎回行权剩余期限-最新（年） */
     private BigDecimal dateCallExists;
     /** 剩余期限-最新（天），对应 rrs_securityinfo.date_exists */
     private BigDecimal dateExists;
-    /** 含权证券剩余期限-最新 */
+    /** 含权债剩余期限-最新（年） */
     private BigDecimal dateInrightExists;
     /** 证券评级 */
     private String ratingBond;
@@ -173,7 +173,7 @@ public class SecurityInfoBo {
     private String promptReason;
     /** 证券分析 */
     private String analysis;
-    /** 回购剩余期限-最新 */
+    /** 回购剩余期限-最新（年） */
     private BigDecimal dateRepurchaseExists;
     /** 是否担保 */
     private Integer guarantFlag;

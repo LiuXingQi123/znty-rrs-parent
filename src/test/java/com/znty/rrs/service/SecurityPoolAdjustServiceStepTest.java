@@ -2711,7 +2711,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityInfoBo current = new SecurityInfoBo();
         current.setShortName("原简称");
-        current.setDateRepurchaseExists(new BigDecimal("365.0000"));
+        current.setDateRepurchaseExists(new BigDecimal("1.0000"));
         current.setGuarantFlag(1);
         current.setGuarantType("连带责任担保");
         current.setAbsFlag(1);
@@ -2721,7 +2721,7 @@ public class SecurityPoolAdjustServiceStepTest {
         ReflectionTestUtils.invokeMethod(service, "mergeSecurityInfo", current, changed);
 
         assertThat(current.getShortName()).isEqualTo("新简称");
-        assertThat(current.getDateRepurchaseExists()).isEqualByComparingTo("365");
+        assertThat(current.getDateRepurchaseExists()).isEqualByComparingTo("1");
         assertThat(current.getGuarantFlag()).isEqualTo(1);
         assertThat(current.getGuarantType()).isEqualTo("连带责任担保");
         assertThat(current.getAbsFlag()).isEqualTo(1);

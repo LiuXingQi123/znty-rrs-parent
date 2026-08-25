@@ -391,7 +391,7 @@ public class ForbiddenAbsPoolAdjustService {
             // 正式券无内评：去掉分级库
             return excludeGradedBondPools(pools);
         }
-        // 按含权口径换算剩余期限年，匹配期限档
+        // 按含权口径取剩余期限年（date_exists 天÷365，含权/回购已是年），匹配期限档
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(securityInfo));
         List<Long> allowedPoolIds = null;
         Integer bestAllowedSort = null;
@@ -2550,7 +2550,7 @@ public class ForbiddenAbsPoolAdjustService {
         if (gradeCode == null) {
             return "未配置主体内评分档";
         }
-        // 含权口径换算期限后匹配期限档；算不出期限时按最长档继续走矩阵，不跳过
+        // 含权口径取剩余期限年（date_exists 天÷365，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
         if (bucketCode == null) {
             return "无法匹配债券期限档";
@@ -2590,7 +2590,7 @@ public class ForbiddenAbsPoolAdjustService {
      * 按剩余期限（年）匹配信用债期限分组编码。
      *
      * <p>遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
-     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（含权口径天数 ÷365）。
+     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（date_exists 天÷365，含权/回购已是年）。
      *
      * @param remainTermYears 剩余期限年数；null 时按最长档（期限>5）兜底
      * @return 期限档编码；无可用档或年数落不进任何档时返回 null
@@ -2945,7 +2945,7 @@ public class ForbiddenAbsPoolAdjustService {
         if (gradeCode == null) {
             return new ArrayList<Long>();
         }
-        // 含权口径匹配期限档；算不出期限时按最长档继续走矩阵
+        // 含权口径取剩余期限年匹配期限档；算不出期限时按最长档继续走矩阵
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
         if (bucketCode == null) {
             return new ArrayList<Long>();
