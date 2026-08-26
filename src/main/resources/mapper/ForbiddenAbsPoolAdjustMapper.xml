@@ -22,6 +22,24 @@
             <if test="issuer != null and issuer != ''">
                 AND si.issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('guarant')">
+                AND COALESCE(si.guarant_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
+                AND COALESCE(si.inright_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
+                AND COALESCE(si.yx_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('private')">
+                AND (si.issue_type LIKE CONCAT('%', '私募', '%') OR si.inner_class LIKE CONCAT('%', '私募', '%'))
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('abs')">
+                AND (COALESCE(si.abs_flag, 0) = 1 OR si.security_type = 'abs')
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('cj')">
+                AND COALESCE(si.cj_flag, 0) = 1
+            </if>
         </where>
     </select>
 

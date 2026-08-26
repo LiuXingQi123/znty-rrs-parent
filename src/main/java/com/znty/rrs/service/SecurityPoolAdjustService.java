@@ -179,7 +179,8 @@ public class SecurityPoolAdjustService {
     public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityInfoDto> records = securityPoolAdjustMapper.querySecurityPage(
-                req.getSecurityCode(), req.getSecurityShortName(), req.getSecurityType(), req.getIssuer());
+                req.getSecurityCode(), req.getSecurityShortName(), req.getSecurityType(), req.getIssuer(),
+                req.getBondYesFlags());
         PageInfo<SecurityInfoDto> pageInfo = new PageInfo<>(records);
 
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());

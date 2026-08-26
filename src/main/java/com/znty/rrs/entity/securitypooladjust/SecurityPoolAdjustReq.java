@@ -4,6 +4,8 @@ import com.znty.rrs.common.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 /**
  * 证券池调库请求对象
  */
@@ -18,6 +20,11 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private String securityType;
     /** 发行人（模糊搜索） */
     private String issuer;
+    /**
+     * 是否特征多选（勾选即筛「是」，多选 AND）：
+     * guarant / inright / yx / private / abs / cj
+     */
+    private List<String> bondYesFlags;
     /** 调库方向：in=可调入库 / out=可调出库 */
     private String adjustDirection;
     /** 当前用户 ID，1 视为管理员 */

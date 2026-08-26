@@ -30,7 +30,8 @@ public interface SecurityPoolAdjustMapper {
     List<SecurityInfoDto> querySecurityPage(@Param("securityCode") String securityCode,
                                            @Param("securityShortName") String securityShortName,
                                            @Param("securityType") String securityType,
-                                           @Param("issuer") String issuer);
+                                           @Param("issuer") String issuer,
+                                           @Param("bondYesFlags") List<String> bondYesFlags);
 
     /** 查询候选证券中出现的证券类型选项（与列表同口径：排除 crmw/company、已删除态） */
     List<SecurityTypeOptionDto> querySecurityTypeList();

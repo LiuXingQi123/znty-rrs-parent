@@ -46,8 +46,8 @@
 ### 2.2 loadList → 接口
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
-- 请求体：`{ securityCode, securityShortName, securityType, issuer, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。与禁投池「旗下债券数量」主数据统计同口径。
+- 请求体：`{ securityCode, securityShortName, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.2.1 证券类型下拉 `querySecurityTypeList`

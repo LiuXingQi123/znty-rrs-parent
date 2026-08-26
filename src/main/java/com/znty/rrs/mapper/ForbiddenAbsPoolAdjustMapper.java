@@ -27,7 +27,8 @@ public interface ForbiddenAbsPoolAdjustMapper {
     /** 分页查询证券列表 */
     List<SecurityInfoDto> querySecurityPage(@Param("securityCode") String securityCode,
                                            @Param("securityShortName") String securityShortName,
-                                           @Param("issuer") String issuer);
+                                           @Param("issuer") String issuer,
+                                           @Param("bondYesFlags") List<String> bondYesFlags);
 
     /** 根据证券代码查询证券详情 */
     SecurityInfoDetailDto querySecurityDetail(@Param("securityCode") String securityCode);
