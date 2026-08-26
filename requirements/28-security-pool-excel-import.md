@@ -63,7 +63,7 @@
 | 接口 | 说明 |
 |------|------|
 | `POST commonFile/downloadTemplate` | `{ templateCode: security_pool_import \| company_pool_import }` → Base64 xlsx |
-| `POST securityPoolExcelImport/uploadExcel` | multipart：`request` JSON（含 `importType`）+ `file` |
+| `POST securityPoolExcelImport/uploadExcel` | multipart：`request` JSON（含 `importType`）+ `file` + 可选 `originalFileNameListJson`（JSON 数组，单文件时长度 1；兼容公司环境中文文件名乱码） |
 | `POST .../queryTask` | 批次信息 + `checkItems` |
 | `POST .../queryItemPage` | 明细分页 |
 | `POST .../checkImport` | 内联校验，回写 chk_* 与 `result_json` |

@@ -285,6 +285,15 @@ public class StockSecurityBatchAdjustService {
     @Transactional(rollbackFor = Exception.class)
     public StockSecurityBatchAdjustDto addAdjustLog(
             StockSecurityBatchAdjustSubmitReq req, List<MultipartFile> files) {
+        return addAdjustLog(req, files, null);
+    }
+
+    /**
+     * 股票批量提交调库申请及附件（可带前端原始文件名 JSON 数组）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public StockSecurityBatchAdjustDto addAdjustLog(
+            StockSecurityBatchAdjustSubmitReq req, List<MultipartFile> files, String originalFileNameListJson) {
         // 校验批量调库提交参数
         validateAdjustSubmitReq(req);
         // 校验批量调库目标池权限
@@ -311,9 +320,11 @@ public class StockSecurityBatchAdjustService {
         StockSecurityBatchAdjustDto dto = new StockSecurityBatchAdjustDto();
         dto.setSecurityCount(itemMap.size());
         dto.setSubmitCount(0);
+        List<String> originalFileNameList =
+                sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
         // 创建批量提交附件上下文（整批共用，避免重复落盘）
         SysAttachmentService.SubmissionFiles submissionFiles =
-                sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
+                sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId(), originalFileNameList);
         // 整批共用单券批次号上下文，保证多证券批次号序号连续
         SecurityPoolAdjustService.BatchNoContext batchNoContext = new SecurityPoolAdjustService.BatchNoContext();
         for (Map.Entry<String, List<StockSecurityBatchAdjustSubmitReq.AdjustItem>> entry : itemMap.entrySet()) {

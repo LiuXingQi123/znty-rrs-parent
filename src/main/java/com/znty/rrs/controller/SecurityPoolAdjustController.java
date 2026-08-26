@@ -20,6 +20,7 @@ import com.znty.rrs.service.SecurityPoolAdjustService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.MediaType;
@@ -109,9 +110,10 @@ public class SecurityPoolAdjustController {
     @PostMapping(value = "/addAdjustLogWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<AdjustSubmitDto> addAdjustLogWithFiles(
             @RequestPart("request") SecurityPoolAdjustSubmitReq req,
-            @RequestPart(value = "files", required = false) MultipartFile[] files) {
+            @RequestPart(value = "files", required = false) MultipartFile[] files,
+            @RequestParam(value = "originalFileNameListJson", required = false) String originalFileNameListJson) {
         return ApiResponse.success(securityPoolAdjustService.addAdjustLog(
-                req, files == null ? null : Arrays.asList(files)));
+                req, files == null ? null : Arrays.asList(files), originalFileNameListJson));
     }
 
     /**

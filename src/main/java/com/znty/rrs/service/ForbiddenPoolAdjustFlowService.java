@@ -111,6 +111,15 @@ public class ForbiddenPoolAdjustFlowService {
      */
     @Transactional(rollbackFor = Exception.class)
     public SecurityPoolAdjustAuditDto submitAdjustAudit(SecurityPoolAdjustAuditReq req, List<MultipartFile> files) {
+        return submitAdjustAudit(req, files, null);
+    }
+
+    /**
+     * 提交禁投池审批（可带前端原始文件名 JSON 数组）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SecurityPoolAdjustAuditDto submitAdjustAudit(SecurityPoolAdjustAuditReq req, List<MultipartFile> files,
+                                                        String originalFileNameListJson) {
         // 校验审批提交参数
         validateAuditReq(req);
 
@@ -123,8 +132,10 @@ public class ForbiddenPoolAdjustFlowService {
         // 校验发起人不能参与后续流程操作
         validateSubmitterCannotProcess(req, step);
 
+        List<String> originalFileNameList =
+                sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
         // 驳回待修改提交时保存调库记录附件变更
-        applyAttachmentChangesForModifySubmit(req, step, files);
+        applyAttachmentChangesForModifySubmit(req, step, files, originalFileNameList);
 
         // 处理当前步骤并按流程配置推进
         return processAdjustAudit(req, step);
@@ -213,7 +224,8 @@ public class ForbiddenPoolAdjustFlowService {
      * 驳回待修改节点提交时保存附件新增、报告附件复制和删除。
      */
     private void applyAttachmentChangesForModifySubmit(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step,
-                                                       List<MultipartFile> files) {
+                                                       List<MultipartFile> files,
+                                                       List<String> originalFileNameList) {
         if (req.getAttachmentChanges() == null || req.getAttachmentChanges().isEmpty()) {
             return;
         }
@@ -235,7 +247,7 @@ public class ForbiddenPoolAdjustFlowService {
             poolMap.put(pool.getId(), pool);
         }
         SysAttachmentService.SubmissionFiles submissionFiles =
-                sysAttachmentService.createSubmissionFiles(files, req.getHandlerId());
+                sysAttachmentService.createSubmissionFiles(files, req.getHandlerId(), originalFileNameList);
         for (SecurityPoolAdjustAuditReq.AttachmentChange change : req.getAttachmentChanges()) {
             if (change == null || change.getAdjustLogId() == null) {
                 throw new BizException("附件变更调库记录 ID 不能为空");

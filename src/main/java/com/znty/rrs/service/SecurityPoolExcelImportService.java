@@ -107,6 +107,9 @@ public class SecurityPoolExcelImportService {
     /** 禁投池主体完整校验/提交 */
     @Resource
     private ForbiddenPoolAdjustService forbiddenPoolAdjustService;
+    /** 附件服务（解析前端原始文件名，兼容公司环境中文乱码） */
+    @Resource
+    private SysAttachmentService sysAttachmentService;
 
     // ═══════════════════════════════════════════════════════════
     //  上传 / 查询 / 取消
@@ -115,8 +118,20 @@ public class SecurityPoolExcelImportService {
     /** 上传 Excel 并写入导入临时表 */
     @Transactional(rollbackFor = Exception.class)
     public SecurityPoolExcelImportDto uploadExcel(SecurityPoolExcelImportReq req, MultipartFile file) {
+        return uploadExcel(req, file, null);
+    }
+
+    /**
+     * 上传 Excel 并写入导入临时表（可带前端原始文件名 JSON 数组，兼容公司环境中文名乱码）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SecurityPoolExcelImportDto uploadExcel(SecurityPoolExcelImportReq req, MultipartFile file,
+                                                  String originalFileNameListJson) {
         // 校验上传请求与文件基础参数
         validateUploadReq(req, file);
+        List<String> originalFileNameList =
+                sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
+        String uploadFileName = sysAttachmentService.resolveUploadOriginalFileName(file, originalFileNameList);
         // 规范化导入类型（security / company）
         String importType = normalizeImportType(req.getImportType());
 
@@ -133,7 +148,7 @@ public class SecurityPoolExcelImportService {
         batch.setBizType(IMPORT_TYPE_COMPANY.equals(importType) ? BIZ_TYPE_COMPANY : BIZ_TYPE_SECURITY);
         batch.setTemplateCode(IMPORT_TYPE_COMPANY.equals(importType)
                 ? "company_pool_import" : "security_pool_import");
-        batch.setFileName(file.getOriginalFilename());
+        batch.setFileName(uploadFileName);
         batch.setFileSize(file.getSize());
         // 规范化调整方向
         batch.setFld001(normalizeDirection(req.getDirection()));

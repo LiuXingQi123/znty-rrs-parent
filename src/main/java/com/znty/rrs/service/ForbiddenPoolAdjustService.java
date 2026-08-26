@@ -334,6 +334,16 @@ public class ForbiddenPoolAdjustService {
     @Transactional(rollbackFor = Exception.class)
     public ForbiddenPoolAdjustSubmitDto addCompanyAdjustLog(ForbiddenPoolAdjustSubmitReq req,
                                                              List<MultipartFile> files) {
+        return addCompanyAdjustLog(req, files, null);
+    }
+
+    /**
+     * 提交主体调整申请及附件（可带前端原始文件名 JSON 数组）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ForbiddenPoolAdjustSubmitDto addCompanyAdjustLog(ForbiddenPoolAdjustSubmitReq req,
+                                                             List<MultipartFile> files,
+                                                             String originalFileNameListJson) {
         // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         ForbiddenPoolAdjustReq detailReq = new ForbiddenPoolAdjustReq();
@@ -345,7 +355,7 @@ public class ForbiddenPoolAdjustService {
         // 转换为主体对应的调库提交请求
         SecurityPoolAdjustSubmitReq submitReq = convertCompanySubmitReq(req, company);
         // 调用本类独立复制的调库提交实现
-        AdjustSubmitDto result = addAdjustLog(submitReq, files);
+        AdjustSubmitDto result = addAdjustLog(submitReq, files, originalFileNameListJson);
         ForbiddenPoolAdjustSubmitDto dto = new ForbiddenPoolAdjustSubmitDto();
         dto.setCompanyCode(result.getSecurityCode());
         dto.setSubmitCount(result.getSubmitCount());
@@ -724,8 +734,19 @@ public class ForbiddenPoolAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req, List<MultipartFile> files) {
+        return addAdjustLog(req, files, null);
+    }
+
+    /**
+     * 提交禁投池调库申请及附件（可带前端原始文件名 JSON 数组）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req, List<MultipartFile> files,
+                                        String originalFileNameListJson) {
+        List<String> originalFileNameList =
+                sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
         SysAttachmentService.SubmissionFiles submissionFiles =
-                sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
+                sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId(), originalFileNameList);
         return submitAdjustLog(req, submissionFiles, new BatchNoContext());
     }
 

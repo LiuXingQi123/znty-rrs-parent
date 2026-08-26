@@ -16,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -85,9 +86,10 @@ public class ForbiddenPoolAdjustController {
     @PostMapping(value = "/addAdjustLogWithFiles", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ForbiddenPoolAdjustSubmitDto> addAdjustLogWithFiles(
             @RequestPart("request") ForbiddenPoolAdjustSubmitReq req,
-            @RequestPart(value = "files", required = false) MultipartFile[] files) {
+            @RequestPart(value = "files", required = false) MultipartFile[] files,
+            @RequestParam(value = "originalFileNameListJson", required = false) String originalFileNameListJson) {
         return ApiResponse.success(forbiddenPoolAdjustService.addCompanyAdjustLog(
-                req, files == null ? null : Arrays.asList(files)));
+                req, files == null ? null : Arrays.asList(files), originalFileNameListJson));
     }
 
     /** 查询主体调库记录 */

@@ -1,5 +1,7 @@
 package com.znty.rrs.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
 
@@ -62,6 +64,9 @@ public class SysAttachmentService {
     private static final DateTimeFormatter FILE_NAME_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
+    /** 解析前端传入的原始文件名 JSON 数组 */
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     /** 附件数据访问组件 */
     @Resource
     private SysAttachmentMapper sysAttachmentMapper;
@@ -86,17 +91,59 @@ public class SysAttachmentService {
         }
     }
 
-    /** 创建本次提交的文件上下文 */
+    /** 创建本次提交的文件上下文（无前端原始文件名列表） */
     public SubmissionFiles createSubmissionFiles(List<MultipartFile> files, String uploaderId) {
+        return createSubmissionFiles(files, uploaderId, null);
+    }
+
+    /**
+     * 创建本次提交的文件上下文。
+     * <p>
+     * {@code originalFileNameList} 与 {@code files} 同序；公司环境 multipart 中文名可能乱码，
+     * 优先用前端显式传入的原始名落库。
+     * </p>
+     */
+    public SubmissionFiles createSubmissionFiles(List<MultipartFile> files, String uploaderId,
+                                                 List<String> originalFileNameList) {
         if (uploaderId == null || uploaderId.trim().isEmpty()) {
             throw new BizException("上传人 ID 不能为空");
         }
         List<MultipartFile> fileList = files == null ? new ArrayList<MultipartFile>() : files;
-        for (MultipartFile file : fileList) {
-            // 校验单个提交文件
-            validateFile(file);
+        List<String> nameList = normalizeOriginalFileNameList(originalFileNameList, fileList.size());
+        for (int i = 0; i < fileList.size(); i++) {
+            // 校验单个提交文件（优先用前端原始名）
+            validateFile(fileList.get(i), resolveOriginalFileName(fileList.get(i), nameList, i));
         }
-        return new SubmissionFiles(fileList, uploaderId);
+        return new SubmissionFiles(fileList, uploaderId, nameList);
+    }
+
+    /**
+     * 解析前端 FormData 字段 {@code originalFileNameListJson}（JSON 数组字符串）。
+     * 空/空白返回 null；非法 JSON 抛业务异常。
+     */
+    public List<String> parseOriginalFileNameListJson(String originalFileNameListJson) {
+        if (originalFileNameListJson == null || originalFileNameListJson.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            List<String> names = OBJECT_MAPPER.readValue(originalFileNameListJson.trim(),
+                    new TypeReference<List<String>>() {
+                    });
+            return names;
+        } catch (IOException e) {
+            throw new BizException("原始文件名列表格式错误，须为 JSON 数组");
+        }
+    }
+
+    /**
+     * 解析单文件上传的原始文件名（Excel 导入等）：优先取列表首项，否则回退 multipart 文件名。
+     */
+    public String resolveUploadOriginalFileName(MultipartFile file, List<String> originalFileNameList) {
+        List<String> nameList = originalFileNameList;
+        if (nameList != null && nameList.size() != 1 && file != null && !file.isEmpty()) {
+            throw new BizException("原始文件名列表数量须与上传文件数量一致");
+        }
+        return resolveOriginalFileName(file, nameList, 0);
     }
 
     /** 将本次提交文件绑定到调库日志 */
@@ -301,16 +348,48 @@ public class SysAttachmentService {
         }
     }
 
-    /** 校验提交文件 */
-    private void validateFile(MultipartFile file) {
+    /** 校验提交文件（使用已解析的原始文件名） */
+    private void validateFile(MultipartFile file, String originalFileName) {
         if (file == null || file.isEmpty()) {
             throw new BizException("提交附件不能为空");
         }
-        String originalFileName = file.getOriginalFilename();
         if (originalFileName == null || originalFileName.trim().isEmpty()) {
             throw new BizException("上传文件名称不能为空");
         }
         resolveFileType(Paths.get(originalFileName).getFileName().toString());
+    }
+
+    /**
+     * 规范化前端原始文件名列表：null 表示未传；非 null 时数量必须与文件数一致。
+     */
+    private List<String> normalizeOriginalFileNameList(List<String> originalFileNameList, int fileCount) {
+        if (originalFileNameList == null) {
+            return null;
+        }
+        if (originalFileNameList.size() != fileCount) {
+            throw new BizException("原始文件名列表数量须与上传文件数量一致");
+        }
+        return originalFileNameList;
+    }
+
+    /**
+     * 按下标取原始文件名：列表有效值优先，否则回退 multipart 自带文件名。
+     */
+    private String resolveOriginalFileName(MultipartFile file, List<String> originalFileNameList, int index) {
+        if (originalFileNameList != null && index >= 0 && index < originalFileNameList.size()) {
+            String name = originalFileNameList.get(index);
+            if (name != null && !name.trim().isEmpty()) {
+                return Paths.get(name.trim()).getFileName().toString();
+            }
+        }
+        if (file == null) {
+            return null;
+        }
+        String multipartName = file.getOriginalFilename();
+        if (multipartName == null || multipartName.trim().isEmpty()) {
+            return multipartName;
+        }
+        return Paths.get(multipartName).getFileName().toString();
     }
 
     /** 校验复制来源必须为报告库附件 */
@@ -348,8 +427,12 @@ public class SysAttachmentService {
     }
 
     /** 保存提交文件并返回存储信息 */
-    private StoredFile storeFile(MultipartFile file, String attachmentCategory, Long adjustLogId) {
-        String originalFileName = Paths.get(file.getOriginalFilename()).getFileName().toString();
+    private StoredFile storeFile(MultipartFile file, String originalFileName,
+                                 String attachmentCategory, Long adjustLogId) {
+        if (originalFileName == null || originalFileName.trim().isEmpty()) {
+            throw new BizException("上传文件名称不能为空");
+        }
+        originalFileName = Paths.get(originalFileName).getFileName().toString();
         // 解析并校验文件类型
         String fileType = resolveFileType(originalFileName);
         String dateDirectory = LocalDate.now().format(DATE_DIRECTORY_FORMATTER);
@@ -470,12 +553,15 @@ public class SysAttachmentService {
         private final List<MultipartFile> files;
         /** 上传人 ID */
         private final String uploaderId;
+        /** 与 files 同序的前端原始文件名（可为 null） */
+        private final List<String> originalFileNameList;
         /** 已保存文件缓存，同一日志、分类和文件下标只保存一次 */
         private final Map<String, StoredFile> storedFileMap = new HashMap<>();
 
-        SubmissionFiles(List<MultipartFile> files, String uploaderId) {
+        SubmissionFiles(List<MultipartFile> files, String uploaderId, List<String> originalFileNameList) {
             this.files = files;
             this.uploaderId = uploaderId;
+            this.originalFileNameList = originalFileNameList;
         }
 
         /** 按下标获取并保存文件 */
@@ -486,8 +572,10 @@ public class SysAttachmentService {
             String storedFileKey = fileIndex + "|" + attachmentCategory + "|" + adjustLogId;
             StoredFile storedFile = storedFileMap.get(storedFileKey);
             if (storedFile == null) {
+                MultipartFile file = files.get(fileIndex);
+                String originalFileName = resolveOriginalFileName(file, originalFileNameList, fileIndex);
                 // 保存提交文件并返回存储信息
-                storedFile = storeFile(files.get(fileIndex), attachmentCategory, adjustLogId);
+                storedFile = storeFile(file, originalFileName, attachmentCategory, adjustLogId);
                 storedFileMap.put(storedFileKey, storedFile);
             }
             return storedFile;

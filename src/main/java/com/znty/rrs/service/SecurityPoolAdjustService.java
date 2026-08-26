@@ -706,9 +706,20 @@ public class SecurityPoolAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req, List<MultipartFile> files) {
+        return addAdjustLog(req, files, null);
+    }
+
+    /**
+     * 提交调库申请及附件（可带前端原始文件名 JSON 数组，兼容公司环境中文名乱码）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AdjustSubmitDto addAdjustLog(SecurityPoolAdjustSubmitReq req, List<MultipartFile> files,
+                                        String originalFileNameListJson) {
+        List<String> originalFileNameList =
+                sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
         // 创建本次提交附件上下文
         SysAttachmentService.SubmissionFiles submissionFiles =
-                sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId());
+                sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId(), originalFileNameList);
         return submitAdjustLog(req, submissionFiles, new BatchNoContext());
     }
 

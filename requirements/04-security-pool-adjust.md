@@ -162,7 +162,7 @@
    - 取 `adjustReviewList.filter(r=>r.valid)` 为 `validItems`。
    - `collectSubmitFiles` 收集本地上传 File 到 `submitFiles` 数组，并记录每个 item 的 `creditReportFileIndexes`/`materialFileIndexes`。
    - `collectReportAttachmentIds` 收集已选报告库附件 ID 到 `creditReportSourceAttachmentIds`/`materialSourceAttachmentIds`。
-   - `submitAdjustMultipart('/api/v1/securityPoolAdjust/addAdjustLogWithFiles', payload, submitFiles)` 用 `FormData` 提交：`request` 为 JSON Blob，`files` 为 multipart 文件数组（multipart 入口路径与 JSON 入口 `addAdjustLog` 不同，前端实际调 `addAdjustLogWithFiles`）。
+   - `submitAdjustMultipart('/api/v1/securityPoolAdjust/addAdjustLogWithFiles', payload, submitFiles)` 用 `FormData` 提交：`request` 为 JSON Blob，`files` 为 multipart 文件数组，并附带同序 `originalFileNameListJson`（JSON 数组字符串，值为浏览器 `file.name`，兼容公司环境 multipart 中文名乱码；后端优先写入 `original_file_name`）。multipart 入口路径与 JSON 入口 `addAdjustLog` 不同，前端实际调 `addAdjustLogWithFiles`。
    - 成功后 `$message.success` + `backToList()`：工作台动态页签先 `RrsWorkbench.closeActiveTab()`（仅动态页签返回 true）；菜单进入则回页内列表。禁止 `history.back()`。
 
 ### 3.3 addAdjustLog 请求体（`SecurityPoolAdjustSubmitReq`）
@@ -350,7 +350,7 @@
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
-| `addAdjustLogWithFiles`（multipart） | `request`=JSON + `files`=MultipartFile[] | `AdjustSubmitDto` | 提交调库申请（带附件，multipart 入口；JSON 无附件入口为 `addAdjustLog`） |
+| `addAdjustLogWithFiles`（multipart） | `request`=JSON + `files`=MultipartFile[] + `originalFileNameListJson`=JSON 数组字符串（可选，与 files 同序） | `AdjustSubmitDto` | 提交调库申请（带附件，multipart 入口；JSON 无附件入口为 `addAdjustLog`）。公司环境优先用 `originalFileNameListJson` 落库原始中文名 |
 | `queryAdjustLogList` | securityCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录 |
 | `queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表 |
 | `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |

@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -33,9 +34,10 @@ public class SecurityPoolExcelImportController {
     @PostMapping(value = "/uploadExcel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<SecurityPoolExcelImportDto> uploadExcel(
             @RequestPart("request") SecurityPoolExcelImportReq req,
-            @RequestPart("file") MultipartFile file) {
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(value = "originalFileNameListJson", required = false) String originalFileNameListJson) {
         // 委托服务层解析 Excel 并落临时表
-        return ApiResponse.success(securityPoolExcelImportService.uploadExcel(req, file));
+        return ApiResponse.success(securityPoolExcelImportService.uploadExcel(req, file, originalFileNameListJson));
     }
 
     /**
