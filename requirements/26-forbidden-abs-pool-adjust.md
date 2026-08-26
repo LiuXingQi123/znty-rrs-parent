@@ -59,7 +59,7 @@
 | 是否含权 | `inrightFlag` | `===1` 为是 |
 | 是否永续 | `yxFlag` | `===1` 为是 |
 | 是否私募 | `issueType` / `innerClass` | 对齐 `isPrivateBond`：发行方式或内部分类含「私募」 |
-| 是否ABS | `absFlag` / `securityType` | 对齐 `isAbs`：`absFlag=1` 或类型 `abs`/`abn`（本列表强制 `abs_flag=1`，通常均为「是」） |
+| 是否ABS | `absFlag` / `securityType` | 对齐 `isAbs`：`absFlag=1` 或类型 `abs`（`abs_all` 不算；本列表强制 `abs_flag=1`，通常均为「是」） |
 | 是否次级 | `cjFlag` | `===1` 为是 |
 | 操作 | — | 「调库」→ `absHandleAdjust` |
 

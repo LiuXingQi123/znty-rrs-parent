@@ -8,7 +8,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
  *
  * <p>一只券可能同时是私募、次级、永续、担保。先压成<strong>一个</strong>类型标签，后写覆盖先写：
  * 私募 → 次级 → 永续 → 担保。例如永续+担保最终按担保处理。
- * ABS（{@code absFlag=1} 或证券类型 abs/abn）不看标签，始终走特殊债。</p>
+ * ABS（{@code absFlag=1} 或证券类型 {@code abs}）不看标签，始终走特殊债；{@code abs_all} 不算 ABS。</p>
  *
  * <p>特殊债口径（私募/永续/次级的「1 档」只看<strong>发债主体内评</strong> {@code innerIssuerRating}；
  * ABS 的「1 档」只看<strong>页面所选担保人内评</strong> {@code innerGuarantorRating}，无担保人则不是 1 档）：
@@ -174,7 +174,7 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 是否资产支持证券 / ABS（含 ABN）。
+     * 是否资产支持证券 / ABS（仅 {@code abs}；{@code abs_all} 资产证券化不算）。
      *
      * @param sec 证券主数据
      * @return true=ABS
@@ -186,8 +186,7 @@ public final class CreditBondSpecialInboundRule {
         if (sec.getAbsFlag() != null && sec.getAbsFlag() == 1) {
             return true;
         }
-        String type = sec.getSecurityType();
-        return "abs".equals(type) || "abn".equals(type);
+        return "abs".equals(sec.getSecurityType());
     }
 
     /**

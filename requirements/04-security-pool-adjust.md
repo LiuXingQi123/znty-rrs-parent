@@ -79,7 +79,7 @@
 | 是否含权 | `inrightFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
 | 是否永续 | `yxFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
 | 是否私募 | `issueType` / `innerClass` | 前端对齐 `CreditBondSpecialInboundRule.isPrivateBond`：发行方式或内部分类含「私募」为是 |
-| 是否ABS | `absFlag` / `securityType` | 前端对齐 `isAbs`：`absFlag=1` 或证券类型为 `abs`/`abn` 为是 |
+| 是否ABS | `absFlag` / `securityType` | 前端对齐 `isAbs`：`absFlag=1` 或证券类型为 `abs` 为是（`abs_all` 资产证券化不算） |
 | 是否次级 | `cjFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
 | 操作 | — | 「调库」按钮 → `handleAdjust(row)` |
 

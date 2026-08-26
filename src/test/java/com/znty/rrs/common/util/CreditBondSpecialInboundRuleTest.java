@@ -26,6 +26,12 @@ public class CreditBondSpecialInboundRuleTest {
         assertThat(CreditBondSpecialInboundRule.isAbs(sec)).isTrue();
         assertThat(CreditBondSpecialInboundRule.isGuaranteed(sec)).isTrue();
         assertThat(CreditBondSpecialInboundRule.isInright(sec)).isTrue();
+
+        SecurityInfoBo byType = new SecurityInfoBo();
+        byType.setSecurityType("abs");
+        assertThat(CreditBondSpecialInboundRule.isAbs(byType)).isTrue();
+        byType.setSecurityType("abs_all");
+        assertThat(CreditBondSpecialInboundRule.isAbs(byType)).isFalse();
     }
 
     @Test
