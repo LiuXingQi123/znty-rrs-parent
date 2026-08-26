@@ -29,11 +29,39 @@
 | `absAdjustStep` | `1` 选池 / `2` 校验提交 |
 
 - **列表 · 主体**：既有主体检索与调库入口，逻辑不变。  
-- **列表 · ABS债**：筛选证券代码 / 简称 / 发行人；表格列对齐证券池调库列表。  
+- **列表 · ABS债**：筛选证券代码 / 简称 / 发行人；表格列对齐证券池调库列表（含是否类字段，见下）。  
 - **ABS 详情**：证券基本信息与证券池调库对齐（步骤1可编辑、步骤2只读，含担保人选择；字段单位同 [04]/[11]：`date_exists` **天**，含权/赎回行权/回购剩余期限 **年**）→ 当前所在池 → 可调入/可调出（仅债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)）→ 校验 → 流程选择 → multipart 提交。  
 - **URL 入口**：同页 `applyUrlCompanyOrList()`。带 `companyCode` 进主体详情；带 `securityCode`（无主体码）切 ABS Tab 并进入该券。ABS 详情「返回」先 `closeActiveTab()`。
 
 审批：**不**新建 ABS 审核页。非直通流程进入「我的事宜」，`businessScene` 为 `securityAdjust`，打开 `security_pool_adjust_approve.html`。
+
+### 2.1 ABS债列表表格列
+
+对齐 [04-security-pool-adjust.md](04-security-pool-adjust.md) 主列表。后端 `querySecurityPage` 为 `SELECT si.*`，原始 flag / 文案原样返回，**不做** code→中文映射；是否类字段由前端判定并展示「是/否」Tag（是=`success`，否=`info`）。**仅主列表展示**，ABS 详情「证券基本信息」不增加这些字段。
+
+| 列 | prop / 判定 | 渲染 |
+|---|---|---|
+| 序号 | — | `(pageIndex-1)*pageSize + $index + 1` |
+| 证券代码 | `windCode` | 可点击 → `absHandleAdjust` |
+| 证券简称 | `shortName` | 可点击 |
+| 证券全称 | `fullName` | tooltip |
+| 发行人 | `issuer` | tooltip |
+| 证券类型 | `securityTypeName` | `el-tag type=info` |
+| 发行总额(亿) | `issueAmountplan` | 等宽字体 |
+| 当期利率(%) | `couponRate` | 等宽字体 |
+| 起息日期 | `carryDate` | 居中 |
+| 到期日 | `maturityDate` | 居中 |
+| 剩余期限(年) | `dateExists` | 天÷365，四位小数 |
+| 证券评级 | `ratingBond` | `el-tag type=success` |
+| 主体评级 | `ratingBondissuer` | 空值空白 |
+| 主体内评分档 | `innerIssuerRating` | `el-tag` |
+| 是否担保 | `guarantFlag` | `===1` 为是 |
+| 是否含权 | `inrightFlag` | `===1` 为是 |
+| 是否永续 | `yxFlag` | `===1` 为是 |
+| 是否私募 | `issueType` / `innerClass` | 对齐 `isPrivateBond`：发行方式或内部分类含「私募」 |
+| 是否ABS | `absFlag` / `securityType` | 对齐 `isAbs`：`absFlag=1` 或类型 `abs`/`abn`（本列表强制 `abs_flag=1`，通常均为「是」） |
+| 是否次级 | `cjFlag` | `===1` 为是 |
+| 操作 | — | 「调库」→ `absHandleAdjust` |
 
 ---
 
@@ -92,6 +120,7 @@
 
 - [ ] 列表 Tab「主体」「ABS债」；主体行为与改前一致  
 - [ ] ABS 列表仅 `abs_flag=1`  
+- [ ] ABS 主列表在操作列前展示是否担保/含权/永续/私募/ABS/次级（是/否 Tag，口径对齐证券池调库）  
 - [ ] 仅能选/提交债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)  
 - [ ] 非 ABS 详情/校验失败  
 - [ ] 直通只动该 ABS 的 `ip_pool_status`，不同步同主体其他债  
