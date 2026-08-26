@@ -25,16 +25,17 @@
 
 | taskCode | 名称 | 默认 cron | 扩展参数示例 |
 |---|---|---|---|
-| `security_expired_auto_out` | 到期证券自动出池 | `0 0 2 * * ?` | `{"poolIds":[15]}`：池内已生效债/股且到期日早于昨天（T-2）→ 自动调出；调出限制池阻断；软删成功才计数 |
-| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 0 3 * * ?` | `{"poolIds":[18]}`：CRMW 池内凭证到期日早于昨天（T-2）→ 自动调出；调出限制池阻断 |
-| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 0 4 * * ?` | `{"poolIds":[16],"limitPoolIds":[15]}`：有效外评不在名单内则出；已在禁投拦截池则不出；顺带出同池债 |
-| `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 0 5 * * ?` | `{"poolIds":[15]}`：有效外评在 AA-/A/BBB… 列表内且未在目标池的主体 → 自动入池 |
-| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 0 6 * * ?` | `{"poolIds":[15]}`：主体已在本池 → 旗下债未到期（含当天）未在本池 → 同池自动入（IP_RULE 版）；调入限制池阻断 |
-| `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 7 * * ?` | `{"poolIds":[15]}` 或 `mappings`：主体在池 → 旗下未到期未在目标池的债自动入池（排除临时代码已更新、ABS、CRMW） |
-| `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池 | `0 0 8 * * ?` | `{"poolIds":[15]}` 或 mappings：债在债券池、主体不在主体池 → 出债（排除 ABS/CRMW，不看限制池） |
-| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 无需参数。扫描已在信用债 1～5 级但按当前特殊债规则不再允许的债券（不含境外债），写入 `ip_grade_rule_alert` 待办；执行摘要区分**本轮命中** / **本轮失效**（曾待处理现已合规或已不在扫描范围）/ **仍待处理**；人工在「我的事宜」分级规则提醒页签处理，**不自动出池**。对齐老系统 InconformityMaingrade2Job |
+| `security_expired_auto_out` | 到期证券自动出池 | `0 0 2 * * ?` | 每天 02:00 执行。`{"poolIds":[15]}`：池内已生效债/股且到期日早于昨天（T-2）→ 自动调出；调出限制池阻断；软删成功才计数 |
+| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 0 3 * * ?` | 每天 03:00 执行。`{"poolIds":[18]}`：CRMW 池内凭证到期日早于昨天（T-2）→ 自动调出；调出限制池阻断 |
+| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 0 4 * * ?` | 每天 04:00 执行。`{"poolIds":[16],"limitPoolIds":[15]}`：有效外评不在名单内则出；已在禁投拦截池则不出；顺带出同池债 |
+| `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 0 5 * * ?` | 每天 05:00 执行。`{"poolIds":[15]}`：有效外评在 AA-/A/BBB… 列表内且未在目标池的主体 → 自动入池 |
+| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 0 6 * * ?` | 每天 06:00 执行。`{"poolIds":[15]}`：主体已在本池 → 旗下债未到期（含当天）未在本池 → 同池自动入（IP_RULE 版）；调入限制池阻断 |
+| `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 7 * * ?` | 每天 07:00 执行。`{"poolIds":[15]}` 或 `mappings`：主体在池 → 旗下未到期未在目标池的债自动入池（排除临时代码已更新、ABS、CRMW） |
+| `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池 | `0 0 8 * * ?` | 每天 08:00 执行。`{"poolIds":[15]}` 或 mappings：债在债券池、主体不在主体池 → 出债（排除 ABS/CRMW，不看限制池） |
+| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 每天 09:00 执行。无需参数。扫描已在信用债 1～5 级但按当前特殊债规则不再允许的债券（不含境外债），写入 `ip_grade_rule_alert` 待办；执行摘要区分**本轮命中** / **本轮失效**（曾待处理现已合规或已不在扫描范围）/ **仍待处理**；人工在「我的事宜」分级规则提醒页签处理，**不自动出池**。对齐老系统 InconformityMaingrade2Job |
+| `wind_code_sync` | Wind代码变更同步 | `0 */10 * * * ?` | 每 10 分钟执行一次。无需参数（空壳）。将临时代码同步为正式代码：非「临时代码管理」页人工更新，但复用同一套更新方法；部分临时代码可能未经管理页，由 Wind 变更后直接在库中更新，本任务扫描并落业务数据。实现类 `WindCodeSyncService`。**无池状态依赖**，不插入下方 02～09 顺序链，可与自动调库并行 |
 
-> Demo **cron** 须与下方「执行顺序」一致；列表 id 不要求和执行顺序相同。新增或改 cron 时必须先读第 4.1 节。
+> Demo **cron** 须与下方「执行顺序」一致；列表 id 不要求和执行顺序相同。新增或改 cron 时必须先读第 4.1 节。`wind_code_sync` 无池依赖，不受 4.1 顺序表约束。
 
 ## 2. 表结构
 
@@ -86,6 +87,8 @@
 | 7 | 08:00 | `company_not_in_pool_bond_auto_out` | **最后**清「主体已不在池」的债，覆盖刚被外评出池的主体 |
 | 8 | 09:00 | `bond_grade_inconformity_alert` | 池状态已稳定后再扫分级库不符，生成待办；不改池 |
 
+另：`wind_code_sync`（每 10 分钟，`0 */10 * * * ?`）将临时代码同步为正式代码（复用临时代码「更新为正式证券」方法，入口非管理页），**不读写池状态**，不插入上表顺序；可与上表任务并行（仍建议避免与重负载任务完全同秒打满库）。
+
 违反顺序的典型后果：
 
 - 入债早于外评入主体 → 当天新入池主体的债要等到次日。  
@@ -125,7 +128,7 @@
 ## 7. 代码索引
 
 - 编排：`ScheduledTaskService`、`DynamicTaskScheduler`、`RrsScheduledTask`  
-- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`GradeRuleAlertService`  
+- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）  
 - Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`、`GradeRuleAlertMapper` / `.xml`  
 - Controller：`ScheduledTaskController`；提醒查询/处理另见 `GradeRuleAlertController`（`/api/v1/gradeRuleAlert`）  
 - SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`、`rrs_grade_rule_alert_schema.sql`、`rrs_grade_rule_alert_demo_data.sql`  
