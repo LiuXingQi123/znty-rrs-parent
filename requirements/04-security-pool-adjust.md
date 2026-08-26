@@ -47,7 +47,7 @@
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
 - 请求体：`{ securityCode, securityShortName, securityType, issuer, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。与禁投池「旗下债券数量」主数据统计同口径。
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。与禁投池「旗下债券数量」主数据统计同口径。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.2.1 证券类型下拉 `querySecurityTypeList`
@@ -55,7 +55,7 @@
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityTypeList`
 - 请求体：`{}`
 - 返回：`List<SecurityTypeOptionDto>`（`{securityType, securityTypeName}`）
-- 后端 SQL：与列表同口径，`SELECT DISTINCT si.security_type, dst.security_type_name FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type NOT IN ('crmw','company') AND si.security_status != 'D' ORDER BY dst.sort_order ASC, si.security_type ASC`
+- 后端 SQL：与列表同口径，`SELECT DISTINCT si.security_type, dst.security_type_name FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type NOT IN ('crmw','company') AND si.security_status != 'D' ORDER BY dst.sort_order ASC, si.security_type ASC`（同上，仅排除退市 `D`；`U` 未知可出现在下拉候选来源证券中）
 
 ### 2.3 表格列（列表页）
 

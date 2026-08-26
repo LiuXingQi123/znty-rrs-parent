@@ -55,7 +55,7 @@
 
 ### 3.1 新增 `addTempSecurityCode`（`@Transactional`）
 
-`validateAddReq` → 查 `queryCompanyByCode(tempCompanyCode)` 校验主体存在（`wind_cbondissuer`）→ `resolveCompanyName`（fullName 优先，其次 shortName，否则抛「发行主体缺少名称」）→ 构造 `TempSecurityCodeBo`，`status = TempStatus.TEMPORARY.getCode()`（`temporary`）、`oprtSource = manual`、`isDeleted=0`、`crteTime`/`updtTime=now` → `addTempSecurityCode` INSERT（回填 id）→ 同步写入 `rrs_securityinfo`（`wind_code=tempSecurityCode`，名称、市场、类型、发行主体名称+`issuer_code`、`firstissue_date`/`maturity_date` 取表单发行/到期日，起息/止息/`date_exists` 未知不写，`security_status='L'` 上市中，`security_source='temporary'`）→ `queryTempSecurityCodeDetail` 返回详情。正式证券字段仍为 NULL。**必须写 `security_status='L'`**：证券池调整列表条件是 `security_status != 'D'`，未写时该列为 NULL，SQL 三值逻辑会把行滤掉。
+`validateAddReq` → 查 `queryCompanyByCode(tempCompanyCode)` 校验主体存在（`wind_cbondissuer`）→ `resolveCompanyName`（fullName 优先，其次 shortName，否则抛「发行主体缺少名称」）→ 构造 `TempSecurityCodeBo`，`status = TempStatus.TEMPORARY.getCode()`（`temporary`）、`oprtSource = manual`、`isDeleted=0`、`crteTime`/`updtTime=now` → `addTempSecurityCode` INSERT（回填 id）→ 同步写入 `rrs_securityinfo`（`wind_code=tempSecurityCode`，名称、市场、类型、发行主体名称+`issuer_code`、`firstissue_date`/`maturity_date` 取表单发行/到期日，起息/止息/`date_exists` 未知不写，`security_status='L'` 上市中，`security_source='temporary'`）→ `queryTempSecurityCodeDetail` 返回详情。正式证券字段仍为 NULL。**必须写明确的 `security_status`**：临时代码占位写 `'L'`（上市中）；外部/特殊来源若无状态写 `'U'`（未知，`SecurityStatus.UNKNOWN`）。证券池调整列表条件是 `security_status != 'D'`，若留 `NULL`/空串，SQL 三值逻辑会把行滤掉。
 
 ### 3.2 更新为正式证券 `editTempSecurityCodeToUpdated`（`@Transactional`）
 
@@ -115,7 +115,7 @@
 | `rrs_temp_security_code_update_log`（日志表） | 替换日志 | 记录临时代码、正式代码、被替换表名、被替换记录 ID、替换状态、替换时间 |
 | `dict_security_type`（只读+校验） | 证券类型字典 | `security_type, security_type_name, category_type(bond/stock/fund/company), category_type_name, sort_order, is_deleted`；`querySecurityTypeList` 过滤 `category_type != 'company'`，`querySecurityTypeCount` 校验类型存在 |
 | `ais_inv_ods.wind_cbondissuer`（跨库只读） | 发行主体 | `s_info_compcode, s_info_compname, used`；`queryCompanyOptionList`/`queryCompanyByCode` 读取，`used=1`，`LIMIT 50` |
-| `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始正式证券 / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、市场码列按 market 填充、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 取表单发行/到期日（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中，否则调库列表因 NULL 查不到）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
+| `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始正式证券 / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、市场码列按 market 填充、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 取表单发行/到期日（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中；上市状态枚举 `SecurityStatus`：`L`/`N`/`D`/`U`，勿留 NULL，否则调库列表 `!= 'D'` 查不到；来源无状态用 `U`）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
 
 ---
 
@@ -169,7 +169,7 @@
 - **更新校验** `validateUpdateReq`：同新增全部临时字段校验 + `validateIdReq`（id 必填）+ 唯一性排除自身 `queryTempSecurityCodeCount(tempSecurityCode, id)` + 正式证券字段 `securityName`/`securityCode`/`securityMarket`/`securityType` 必填 + `validateMarket(securityMarket)` + `validateSecurityType(securityType)`。
 - **取消发行/删除校验**：`validateIdReq`（id 必填）；取消发行额外要求 `temporary` 状态；删除仅要求存在且未删。
 - **主体快照** `resolveCompanyName`：`fullName` 优先，其次 `shortName`，两者皆空抛「发行主体缺少名称，companyId=...」。
-- **`rrs_securityinfo` 占位写入**：以 `securityCode` 为 `wind_code` 主键判定。市场→wind_code 列映射：`SSE→wind_code_sh`、`SZSE→wind_code_sz`、`CIBM→wind_code_nib`、`BSE→wind_code_bj`、`OTC/QDII/OTHER/COMPANY→wind_code_nbc`（其余列置 NULL）。`issuer` 取 `tempCompanyNameSnapshot`，`issuer_code` 取 `tempCompanyCode`。表单发行/到期写入 `firstissue_date`/`maturity_date`；起息、止息、`date_exists` 未知不写。**`security_status` 固定 `'L'`**（上市中；不写则为 NULL，证券池调整 `!= 'D'` 查不到）。`create_time`/`ts` 取新增时间。转正时正式主数据已存在则不再覆盖。
+- **`rrs_securityinfo` 占位写入**：以 `securityCode` 为 `wind_code` 主键判定。市场→wind_code 列映射：`SSE→wind_code_sh`、`SZSE→wind_code_sz`、`CIBM→wind_code_nib`、`BSE→wind_code_bj`、`OTC/QDII/OTHER/COMPANY→wind_code_nbc`（其余列置 NULL）。`issuer` 取 `tempCompanyNameSnapshot`，`issuer_code` 取 `tempCompanyCode`。表单发行/到期写入 `firstissue_date`/`maturity_date`；起息、止息、`date_exists` 未知不写。**`security_status` 固定 `'L'`**（上市中；枚举见 `SecurityStatus`；不写则为 NULL，证券池调整 `!= 'D'` 查不到；外部无状态数据应落 `'U'`）。`create_time`/`ts` 取新增时间。转正时正式主数据已存在则不再覆盖。
 - **事务**：`addTempSecurityCode`/`editTempSecurityCodeToUpdated`/`editTempSecurityCodeToCancelled`/`deleteTempSecurityCode` 均 `@Transactional(rollbackFor = Exception.class)`。
 - **前端校验** `addRules`/`updateRules`：与后端必填项对齐（`required:true`）；日期 `value-format="yyyy-MM-dd"`；`openUpdateDialog` 回显时正式证券字段缺省取临时字段（`securityName: row.securityName || row.tempSecurityName || ''` 等）。
 

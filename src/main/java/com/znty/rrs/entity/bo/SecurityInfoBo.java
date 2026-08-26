@@ -153,7 +153,7 @@ public class SecurityInfoBo {
     private String agencyName;
     /** 主承销商Id */
     private String agencyNameid;
-    /** 证券状态 */
+    /** 证券状态：L=上市中 / N=待上市 / D=退市 / U=未知（对应 SecurityStatus；勿与 BondStatus 存续/到期混淆） */
     private String securityStatus;
     /** 证券来源 */
     private String securitySource;

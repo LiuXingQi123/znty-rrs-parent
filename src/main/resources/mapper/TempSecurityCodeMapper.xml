@@ -267,7 +267,7 @@
         WHERE wind_code = #{securityCode}
     </select>
 
-    <!-- 新增临时代码占位证券：须写 security_status=L，否则证券池调整 si.security_status != 'D' 会因 NULL 把该行滤掉 -->
+    <!-- 新增临时代码占位证券：须写明确 security_status（占位用 L；来源无状态用 U），否则 != 'D' 会因 NULL 三值逻辑滤行 -->
     <insert id="addSecurityInfo">
         INSERT INTO rrs_securityinfo (
             wind_code
