@@ -176,7 +176,7 @@ public class CrmwPoolAdjustService {
     public PageResult<SecurityInfoDto> queryBindableSecurityPage(CrmwPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityInfoDto> records = crmwPoolAdjustMapper.queryBindableSecurityPage(
-                req.getSecurityCode(), req.getSecurityShortName(), req.getIssuer());
+                req.getSecurityCode(), req.getSecurityShortName(), req.getIssuer(), req.getBondYesFlags());
         PageInfo<SecurityInfoDto> pageInfo = new PageInfo<>(records);
 
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());

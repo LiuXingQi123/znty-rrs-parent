@@ -33,10 +33,11 @@
 
 ### 2.2 可绑定证券列表（`searchForm`）
 
-字段同上（`securityCode`/`securityShortName`/`issuer`）。
+字段：`securityCode`/`securityShortName`/`issuer`，以及是否特征多选 `bondYesFlags`（顺序与证券池调整一致：ABS / 担保 / 永续 / 次级 / 私募 / 含权；勾选即筛「是」，多选 AND）。
 
 - 接口：`POST /api/v1/crmwPoolAdjust/queryBindableSecurityPage`，返回 `PageResult<SecurityInfoDto>`。
-- SQL（`queryBindableSecurityPage`）：`WHERE si.security_type != 'crmw'` — **排除 CRMW 凭证**。
+- SQL（`queryBindableSecurityPage`）：`WHERE si.security_type != 'crmw'` — **排除 CRMW 凭证**；`bondYesFlags` 条件口径同 [04]（`abs` 为 `absFlag=1` 或类型 `abs`，`private` 为发行方式/内部分类含「私募」）。
+- 表格在操作列前展示是否 ABS/担保/永续/次级/私募/含权（是/否 Tag）。
 - 分页：`pagination: {pageIndex:1, pageSize:5, total:0}`，`page-sizes=[5,10,20,50,100]`。
 
 ### 2.3 CRMW 凭证选择（`handleCrmwSelect`）
@@ -131,7 +132,7 @@
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `queryCrmwPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询 CRMW 凭证列表（`security_type='crmw'`） |
-| `queryBindableSecurityPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询可绑定证券（排除 crmw） |
+| `queryBindableSecurityPage` | securityCode, securityShortName, issuer, bondYesFlags?, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询可绑定证券（排除 crmw；可选是否特征多选） |
 | `queryCrmwDetail` | securityCode | `SecurityInfoDetailDto` | CRMW 凭证详情（必须 `security_type='crmw'`） |
 | `querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 标的证券详情（不能是 crmw） |
 | `queryCrmwAdjustPoolList` | securityCode, adjustDirection, currentUserId, targetPoolId | `List<PoolDto>` | 可调入/调出 CRMW 投资池列表（含互斥关系） |

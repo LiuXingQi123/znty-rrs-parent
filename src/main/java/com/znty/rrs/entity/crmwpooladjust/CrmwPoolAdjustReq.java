@@ -4,6 +4,8 @@ import com.znty.rrs.common.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+
 /**
  * CRMW池调整请求对象
  */
@@ -16,6 +18,11 @@ public class CrmwPoolAdjustReq extends PageRequest {
     private String securityShortName;
     /** 发行人（模糊搜索） */
     private String issuer;
+    /**
+     * 是否特征多选（勾选即筛「是」，多选 AND；可绑定证券列表使用）：
+     * abs / guarant / yx / cj / private / inright
+     */
+    private List<String> bondYesFlags;
     /** CRMW 凭证代码 */
     private String crmwScode;
     /** CRMW 证券类型 */
