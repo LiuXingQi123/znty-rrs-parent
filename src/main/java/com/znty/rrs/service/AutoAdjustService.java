@@ -61,13 +61,17 @@ public class AutoAdjustService implements RrsScheduledTask {
      * 本任务扩展参数说明（配置页按行拆成列表展示）
      */
     private static final String PARAM_HELP =
-            "须填写 JSON 对象\n"
-                    + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[10,15]}</code>\n"
-                    + "作用：扫描所列池中已生效在池的债、股，到期日早于昨天（T-2）则自动调出（不走审批；不含主体/基金/CRMW）\n"
-                    + "拦截：证券当前已在目标池的调出限制池中则跳过\n"
-                    + "计数：仅软删成功才写日志并计入影响条数\n"
-                    + "poolIds 必填，至少一个数字 ID\n"
-                    + "未配置或格式错误则本轮失败";
+            "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 15（债券禁止库）内已生效的债券、股票，到期后从 15（债券禁止库）自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,16]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）内的证券，到期后从各自所在池自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（到期出池扫描池）：必填；任务只扫描这些池内已生效的债券、股票，到期后从各自所在池出库，可填写多个数字 ID\n"
+                    + "处理规则：扫描目标池内已生效的债券、股票；到期日早于昨天（T-2）时自动调出\n"
+                    + "排除范围：主体、基金和 CRMW 不处理；CRMW 请使用“CRMW到期自动出池”任务\n"
+                    + "限制规则：证券已在目标池配置的调出限制池时，跳过该条记录\n"
+                    + "执行方式：直接生效，不走审批；仅软删除成功才写日志并计入影响条数\n"
+                    + "参数缺失或格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
     @Resource

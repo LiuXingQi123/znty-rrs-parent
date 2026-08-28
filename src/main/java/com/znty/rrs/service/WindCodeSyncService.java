@@ -28,7 +28,12 @@ public class WindCodeSyncService implements RrsScheduledTask {
     /** 任务名称 */
     public static final String TASK_NAME = "Wind代码变更同步";
 
-    private static final String PARAM_HELP = "本任务暂无扩展参数，请将 param_json 留空";
+    private static final String PARAM_HELP =
+            "参数说明：本任务暂无扩展参数，请将 param_json 留空\n"
+                    + "执行频率：默认每 10 分钟执行一次\n"
+                    + "当前状态：任务为空壳，仅用于验证页面立即执行和定时调度挂载\n"
+                    + "后续用途：接入后扫描 Wind 代码变更，将临时代码同步为正式代码\n"
+                    + "依赖关系：不读写池状态，可与自动调库任务并行执行";
 
     @Override
     public String getTaskCode() {

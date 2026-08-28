@@ -63,16 +63,22 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
      * 扩展参数说明
      */
     private static final String PARAM_HELP =
-            "须填写 JSON 对象\n"
-                    + "示例 <code>{\"poolIds\":[16],\"limitPoolIds\":[15]}</code>\n"
-                    + "作用：有效外评不在 AA-/A/BBB… 名单内（如 AA/AA+/AAA）且已在目标池的主体 → 自动调出，"
-                    + "并顺带调出同池旗下债券\n"
-                    + "limitPoolIds：主体已在这些池则不出；省略则默认全部禁投池；写 <code>[]</code> 表示不拦截；"
-                    + "目标池若也在名单内则该池不出任何人\n"
-                    + "拦截：主体或旗下债当前已在调出限制池中则跳过\n"
-                    + "与入池任务 company_outer_rating_aa_minus_auto_in 评级名单互为补集\n"
-                    + "poolIds 必填，至少一个数字 ID\n"
-                    + "未配置或格式错误则本轮失败";
+            "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[16],\"limitPoolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（仅目标池）：<code>{\"poolIds\":[16]}</code>；未填写 limitPoolIds 时，默认使用全部禁投池拦截\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：外评已不属于 AA-及以下、当前在 16（观察池）的主体，会自动调出；但同时在任一禁投池的主体不调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（目标池 + 拦截池）：<code>{\"poolIds\":[16],\"limitPoolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：外评已不属于 AA-及以下、当前在 16（观察池）的主体，会自动调出；同时在 15（债券禁止库）的主体被排除，不从观察池调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多目标池）：<code>{\"poolIds\":[16,17],\"limitPoolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 16、17 两个目标池；外评已不属于 AA-及以下的在池主体自动调出，但同时在 15（债券禁止库）的主体不调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "关闭拦截写法：<code>{\"poolIds\":[16],\"limitPoolIds\":[]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：外评已不属于 AA-及以下、当前在 16（观察池）的主体均可自动调出，不再按禁投池排除（仍受目标池自身调出限制关系约束）\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体出池目标池）：必填；仅处理当前已在这些池内的主体，主体成功出池后，同一池内旗下债券也会出库，可填写多个数字 ID\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds（禁止出池拦截池）：可选；主体当前已在这些池中的任一池时，不从 poolIds 指定的目标池自动出库\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds 省略：默认使用全部禁投池；填写 <code>[]</code>：关闭禁投拦截\n"
+                    + "处理规则：有效外评为 AA、AA+、AAA 等非 AA-及以下名单，且主体已在目标池时，自动调出主体\n"
+                    + "联动处理：主体成功出池后，继续调出该主体在同一目标池内的旗下债券\n"
+                    + "限制规则：主体或旗下债已在目标池配置的调出限制池时，跳过该条记录\n"
+                    + "执行方式：直接生效，不走审批；参数缺失或格式错误时，本轮任务失败";
 
     /** 自动调库查询 */
     @Resource

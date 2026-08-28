@@ -14,6 +14,12 @@ package com.znty.rrs.schedule;
 public interface RrsScheduledTask {
 
     /**
+     * 参数说明中仅在配置页悬浮提示展示的行前缀。
+     * 前缀由前端移除后展示，避免根据中文文案猜测行的展示位置。
+     */
+    String PARAM_HELP_TOOLTIP_PREFIX = "[[TOOLTIP]]";
+
+    /**
      * 返回任务编码，须与库表 sys_scheduled_task.task_code 一致
      */
     String getTaskCode();
@@ -27,7 +33,8 @@ public interface RrsScheduledTask {
      * 扩展参数填写说明（配置页展示）
      * <p>
      * 通用约定：param_json 仅 JSON 对象，由本任务解析所需字段；无参数可说明「请留空」。
-     * 勿在前端写死某一任务的格式。
+     * 勿在前端写死某一任务的格式。仅需在悬浮提示中展示的示例、字段说明等行，
+     * 应以前缀 {@link #PARAM_HELP_TOOLTIP_PREFIX} 标记。
      * </p>
      *
      * @return 说明文案，无则 null

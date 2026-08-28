@@ -158,6 +158,7 @@
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        <!-- 汇总 Wind 主体外评，并将评级文本转换为可比较的数值档位。 -->
         WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
@@ -193,6 +194,7 @@
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating != ''
         )
+        <!-- 近 12 个月以前：每个主体取公告日期最新的评级；同日取评级档位更高者。 -->
         ,old_pick AS (
             SELECT s_info_compcode
                    ,s_info_compname
@@ -206,6 +208,7 @@
             FROM rated
             WHERE declare_dt &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
         )
+        <!-- 近 12 个月内：每个主体直接取评级档位最高的评级，不按公告日期优先。 -->
         ,recent_pick AS (
             SELECT s_info_compcode
                    ,s_info_compname
@@ -218,6 +221,7 @@
             FROM rated
             WHERE declare_dt &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
         )
+        <!-- 合并新旧两段的候选评级，供后续按日期选出最终有效外评。 -->
         ,merged AS (
             SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
             FROM old_pick
@@ -227,6 +231,7 @@
             FROM recent_pick
             WHERE rn = 1
         )
+        <!-- 每个主体从两段候选中取日期更近的有效外评，再筛选 AA- 及以下且尚未在目标池的主体。 -->
         SELECT t.s_info_compcode AS security_code
                ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
                ,'company' AS security_type
@@ -267,6 +272,7 @@
     -->
     <select id="queryCompanyByNotLowOuterRatingInPool"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        <!-- 汇总 Wind 主体外评，并将评级文本转换为可比较的数值档位。 -->
         WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
@@ -302,6 +308,7 @@
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating != ''
         )
+        <!-- 近 12 个月以前：每个主体取公告日期最新的评级；同日取评级档位更高者。 -->
         ,old_pick AS (
             SELECT s_info_compcode
                    ,s_info_compname
@@ -315,6 +322,7 @@
             FROM rated
             WHERE declare_dt &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
         )
+        <!-- 近 12 个月内：每个主体直接取评级档位最高的评级，不按公告日期优先。 -->
         ,recent_pick AS (
             SELECT s_info_compcode
                    ,s_info_compname
@@ -327,6 +335,7 @@
             FROM rated
             WHERE declare_dt &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
         )
+        <!-- 合并新旧两段的候选评级，供后续按日期选出最终有效外评。 -->
         ,merged AS (
             SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
             FROM old_pick
@@ -336,6 +345,7 @@
             FROM recent_pick
             WHERE rn = 1
         )
+        <!-- 每个主体从两段候选中取日期更近的有效外评，再筛选不在 AA- 及以下名单且已在目标池的主体。 -->
         SELECT t.s_info_compcode AS security_code
                ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
                ,'company' AS security_type

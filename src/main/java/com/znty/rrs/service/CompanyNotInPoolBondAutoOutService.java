@@ -48,13 +48,23 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     private static final String BATCH_SUFFIX = "3008";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =
-            "须填写 JSON 对象；poolIds 与 mappings 可组合，至少解析出一组映射\n"
-                    + "同池示例 <code>{\"poolIds\":[15]}</code>（债券池与主体池相同）\n"
-                    + "跨池示例 <code>{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":15}]}</code>\n"
-                    + "作用：债已在债券池、发行主体不在对应主体池 → 将该债从债券池自动调出\n"
-                    + "排除：ABS / CRMW（ABS 走禁投独立链路，不是老 Job 原样）\n"
-                    + "不看调出限制池；仅软删成功才写日志并计数\n"
-                    + "未配置或格式错误则本轮失败";
+            "参数格式：须填写 JSON 对象；poolIds、mappings 可组合，例如 <code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单个同池）：<code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：债券在 15（债券禁止库）、发行主体不在 15（债券禁止库）时，债券从 15（债券禁止库）自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多个同池）：<code>{\"poolIds\":[15,16]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别检查债券与主体在 15（债券禁止库）、16（观察池）的同池关系；主体不在对应池时，债券从该池自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "跨池映射写法：<code>{\"mappings\":[{\"bondPoolId\":16,\"companyPoolId\":15}]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：债券在 16（观察池）、发行主体不在 15（债券禁止库）时，债券从 16（观察池）自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "组合写法：<code>{\"poolIds\":[15],\"mappings\":[{\"bondPoolId\":16,\"companyPoolId\":15}]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：同时检查两组关系：债券在 15（债券禁止库）且主体不在 15（债券禁止库）时出池；以及债券在 16（观察池）且主体不在 15（债券禁止库）时出池\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（债券当前所在池 + 主体应在池）：可选；债券在这些池内、但发行主体不在同一池时，债券从该池出库；可填写多个数字 ID\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "mappings（跨池出池映射）：可选；用于债券当前所在池与主体应在池不一致的场景，可配置多组\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "bondPoolId（债券当前所在池）：扫描该池内的债券；命中条件后，债券从该池出库\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "companyPoolId（主体应在池）：用于检查债券发行主体是否仍在该池；主体不在该池时，债券才出库\n"
+                    + "处理规则：债券已在债券池、发行主体不在对应主体池时，将该债券自动调出\n"
+                    + "排除范围：ABS、CRMW 不处理；ABS 需走禁投 ABS 独立链路\n"
+                    + "范围说明：不检查调出限制池；仅软删除成功才写日志并计入影响条数\n"
+                    + "参数缺失或格式错误时，本轮任务失败";
 
     @Resource
     private AutoAdjustMapper autoAdjustMapper;

@@ -60,13 +60,16 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * 扩展参数说明
      */
     private static final String PARAM_HELP =
-            "须填写 JSON 对象\n"
-                    + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "作用：Wind 主体有效外评（近 12 个月取档位最高，更早取日期最新）"
-                    + "落在 AA-/A/BBB…（不含 AA/AA+/AAA），且尚未在目标池 → 自动调入主体\n"
-                    + "拦截：主体当前已在调入限制池中则跳过\n"
-                    + "poolIds 必填，至少一个数字 ID\n"
-                    + "未配置或格式错误则本轮失败";
+            "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：外评为 AA-及以下、尚未在 15（债券禁止库）的主体，自动调入 15（债券禁止库）\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,16]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：外评为 AA-及以下的主体，分别补充调入 15（债券禁止库）、16（观察池）中尚未在池的目标池\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体入池目标池）：必填；符合外评条件的主体会被写入这些池，可填写多个数字 ID\n"
+                    + "处理规则：有效外评落在 AA-、A、BBB、BB、B、CCC/CC/C 等名单内，且尚未在目标池的主体自动入池\n"
+                    + "评级口径：近 12 个月取评级档位最高，更早评级取日期最新，再选取日期更近的有效外评\n"
+                    + "限制规则：主体已在目标池配置的调入限制池时，跳过该条记录\n"
+                    + "执行方式：直接生效，不走审批；参数缺失或格式错误时，本轮任务失败";
 
     /** 自动调库查询 */
     @Resource

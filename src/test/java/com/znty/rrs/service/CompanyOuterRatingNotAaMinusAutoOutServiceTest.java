@@ -36,6 +36,19 @@ import static org.mockito.Mockito.when;
 public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
     @Test
+    public void getParamHelp_ShouldDescribeDefaultPoolsAndParameters() {
+        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+
+        assertThat(service.getParamHelp()).contains("poolIds（主体出池目标池）：必填")
+                .contains("16（观察池）")
+                .contains("主体出池目标池")
+                .contains("禁止出池拦截池")
+                .contains("不从 poolIds 指定的目标池自动出库")
+                .contains("同时在 15（债券禁止库）的主体被排除")
+                .contains("15（债券禁止库）");
+    }
+
+    @Test
     public void execute_ShouldAutoOutCompanyWithHighOuterRating() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);

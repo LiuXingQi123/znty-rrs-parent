@@ -191,6 +191,7 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 ### SQL 格式
 
 - 每个 SQL 标签上方添加注释
+- **复杂 SQL 的 CTE 别名分段必须加注释**：对 `WITH rated AS (...)`、`, old_pick AS (...)`、`, recent_pick AS (...)` 等有业务含义的 CTE，在定义上方使用 `<!-- ... -->` 说明该段用途、数据来源及关键筛选/聚合/排序口径；最终查询前也应说明候选筛选目标。普通字段映射或计算列的 `AS` 别名无需逐字段添加注释。
 - 禁止使用 `<sql>` + `<include>` 抽取公共片段
 - 禁止手动拼 `WHERE 1=1`，统一使用 `<where>` + `<if>`
 - **逗号前置**：`,` 写在列/字段/排序项的前面，不写在后缀行尾

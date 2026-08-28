@@ -59,14 +59,26 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
      * 本任务扩展参数说明（配置页按行拆成列表展示，勿写 1) 2) 序号）
      */
     private static final String PARAM_HELP =
-            "须填写 JSON 对象；poolIds / poolId / mappings 可组合，至少解析出一组映射\n"
-                    + "同池示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "跨池示例 <code>{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}</code>\n"
-                    + "作用：主体已在主体池且生效 → 旗下债券大类、未到期、尚未在目标池的债自动入目标池\n"
-                    + "排除：临时代码已更新正式代码；ABS；CRMW\n"
-                    + "不看调入限制池，也不按池 market_codes 过滤\n"
-                    + "同池且需限制池/市场过滤时，请用任务 company_same_pool_bond_auto_in\n"
-                    + "未配置或格式错误则本轮失败";
+            "参数格式：须填写 JSON 对象；poolIds、poolId、mappings 可组合，例如 <code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单个同池）：<code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：主体在 15（债券禁止库）时，旗下符合条件的债券自动调入 15（债券禁止库）\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多个同池）：<code>{\"poolIds\":[15,16]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：主体在 15（债券禁止库）或 16（观察池）时，旗下符合条件的债券自动调入主体所在的同一池\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "单个写法（单个同池）：<code>{\"poolId\":15}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：与 <code>{\"poolIds\":[15]}</code> 相同，主体在 15（债券禁止库）时，旗下符合条件的债券自动调入 15（债券禁止库）\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "跨池映射写法：<code>{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":16}]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：主体在 15（债券禁止库）时，旗下符合条件的债券自动调入 16（观察池）\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "组合写法：<code>{\"poolIds\":[15],\"mappings\":[{\"companyInPoolId\":16,\"bondTargetPoolId\":15}]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：同时执行两组映射：15（债券禁止库）主体的债券入 15（债券禁止库）；16（观察池）主体的债券入 15（债券禁止库）\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体所在池 + 债券入池目标池）：可选；主体在这些池内时，旗下债券自动入同一个池；poolIds 可填写多个数字 ID\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolId（主体所在池 + 债券入池目标池）：可选；与 poolIds 作用相同，但仅配置一个池 ID\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "mappings（跨池入池映射）：可选；用于主体所在池与债券入池目标池不一致的场景，可配置多组\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "companyInPoolId（主体所在池）：主体必须已在该池内，才扫描其旗下债券\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "bondTargetPoolId（债券入池目标池）：上述主体旗下符合条件的债券将自动写入该池\n"
+                    + "处理规则：主体已在主体池且生效时，将其旗下未到期且未在债券目标池的债券自动入池\n"
+                    + "排除范围：已更新正式代码的临时代码、ABS、CRMW 不处理\n"
+                    + "范围说明：不检查调入限制池，也不按目标池 market_codes 过滤；需要同池市场/限制校验时请使用“主体下债券自动入库”任务\n"
+                    + "参数缺失或格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
     @Resource

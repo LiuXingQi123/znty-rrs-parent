@@ -60,16 +60,17 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
      * 扩展参数说明
      */
     private static final String PARAM_HELP =
-            "须填写 JSON 对象\n"
-                    + "示例 <code>{\"poolIds\":[15]}</code> 或 <code>{\"poolIds\":[15,16]}</code>\n"
-                    + "作用：对每个 poolId，扫描主体已在该池的发行主体，将其旗下债券大类、未到期（含到期当天）、"
-                    + "尚未在<strong>同一池</strong>的债券自动入该池（主体与债必须同一池，无 mappings）\n"
-                    + "市场：尊重投资池 market_codes（空/[] 不限制；有配置则债须命中）\n"
-                    + "拦截：债券当前已在调入限制池中则跳过\n"
-                    + "不排除临时代码已更新，也不排除 ABS\n"
-                    + "跨池请用任务 company_inpool_bond_auto_in\n"
-                    + "poolIds 必填，至少一个数字 ID\n"
-                    + "未配置或格式错误则本轮失败";
+            "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[15]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：主体已在 15（债券禁止库）时，旗下符合条件且尚未在 15（债券禁止库）的债券自动调入该池\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,16]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）内的主体，将其旗下符合条件的债券补充调入主体所在的同一池\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体所在池 + 债券入池目标池）：必填；主体在这些池内时，旗下符合条件的债券自动入同一个池，可填写多个数字 ID\n"
+                    + "处理规则：主体已在目标池时，将其旗下未到期（含到期当天）且未在同一池的债券自动入池\n"
+                    + "市场规则：目标池 market_codes 为空或 [] 时不限制；有配置时债券须命中允许市场\n"
+                    + "限制规则：债券已在目标池配置的调入限制池时，跳过该条记录\n"
+                    + "范围说明：不排除已更新临时代码和 ABS；跨池场景请使用“在池主体旗下债券自动入池”任务\n"
+                    + "参数缺失或格式错误时，本轮任务失败";
 
     /** 自动调库查询 */
     @Resource

@@ -49,13 +49,14 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private static final String BATCH_SUFFIX = "3007";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =
-            "须填写 JSON 对象\n"
-                    + "示例 <code>{\"poolIds\":[18]}</code>\n"
-                    + "作用：扫描所列 CRMW 池中已生效组合，凭证到期日早于昨天（T-2）则自动调出\n"
-                    + "拦截：当前已在调出限制池中则跳过\n"
-                    + "计数：仅软删成功才写日志并计入影响条数\n"
-                    + "poolIds 必填，至少一个数字 ID\n"
-                    + "未配置或格式错误则本轮失败";
+            "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[18]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[18]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 18（CRMW库）内已生效的 CRMW 组合，到期后从 18（CRMW库）自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（CRMW 出池扫描池）：必填；任务只扫描这些池内已生效的 CRMW 组合，到期后从各自所在池出库，可填写多个数字 ID\n"
+                    + "处理规则：扫描目标池内已生效的 CRMW 组合；凭证到期日早于昨天（T-2）时自动调出\n"
+                    + "限制规则：当前已在目标池配置的调出限制池时，跳过该条记录\n"
+                    + "执行方式：直接生效，不走审批；仅软删除成功才写日志并计入影响条数\n"
+                    + "参数缺失或格式错误时，本轮任务失败";
 
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
