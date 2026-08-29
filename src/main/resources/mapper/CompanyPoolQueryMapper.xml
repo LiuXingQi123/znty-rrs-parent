@@ -41,6 +41,9 @@
             <if test="companyCode != null and companyCode != ''">
                 AND ips.security_code LIKE CONCAT('%', #{companyCode}, '%')
             </if>
+            <if test="companyName != null and companyName != ''">
+                AND ips.security_short_name LIKE CONCAT('%', #{companyName}, '%')
+            </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
                 AND ips.entry_time &gt;= #{entryTimeStart}
             </if>

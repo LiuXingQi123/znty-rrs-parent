@@ -30,7 +30,7 @@ public class ForbiddenPoolQueryReq extends PageRequest {
     /** 证券类型（精确匹配） */
     private String securityType;
 
-    /** 证券状态：active=存续 / matured=到期 */
+    /** 证券状态：active=存续 / matured=到期 / unknown=未知到期日 */
     private String securityStatus;
 
     /** 入池日期起（yyyy-MM-dd） */

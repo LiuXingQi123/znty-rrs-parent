@@ -27,6 +27,9 @@ public class CompanyPoolQueryReq extends PageRequest {
     /** 主体代码（模糊搜索） */
     private String companyCode;
 
+    /** 主体名称（模糊搜索） */
+    private String companyName;
+
     /** 入池时间起 */
     private String entryTimeStart;
 

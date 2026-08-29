@@ -53,6 +53,9 @@
             <if test="securityStatus == 'matured'">
                 AND bi.maturity_date &lt; CURDATE()
             </if>
+            <if test="securityStatus == 'unknown'">
+                AND bi.maturity_date IS NULL
+            </if>
             <if test="poolIds != null and poolIds.size() > 0">
                 AND ips.target_pool_id IN
                 <foreach collection="poolIds" item="pid" open="(" separator="," close=")">

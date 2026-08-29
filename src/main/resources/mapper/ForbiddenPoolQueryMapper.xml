@@ -67,6 +67,10 @@
                 AND dst.category_type = 'bond'
                 AND bi.maturity_date &lt; CURDATE()
             </if>
+            <if test="securityStatus == 'unknown'">
+                AND dst.category_type = 'bond'
+                AND bi.maturity_date IS NULL
+            </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
                 AND ips.entry_time &gt;= #{entryTimeStart}
             </if>
