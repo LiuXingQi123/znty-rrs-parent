@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.HsPoolExcelExportMapper">
+    <!-- 查询未删除、配置恒生池名称且无子池的投资池，用于生成 Excel Sheet -->
+    <select id="queryExportPoolList" resultType="com.znty.rrs.entity.schedule.HsPoolExportPoolDto">
+        SELECT p.id AS poolId
+               ,p.pool_name
+               ,p.hs_pool_name
+        FROM ip_investment_pool p
+        WHERE p.is_deleted = 0
+          AND p.hs_pool_name IS NOT NULL AND TRIM(p.hs_pool_name) != ''
+          AND NOT EXISTS (SELECT 1 FROM ip_investment_pool child WHERE child.parent_id = p.id AND child.is_deleted = 0)
+        ORDER BY p.id ASC
+    </select>
+
+    <!-- 查询叶子恒生池下当前已生效的普通债券与 ABS，供全量 Excel 导出 -->
+    <select id="queryFullExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
+        SELECT si.short_name AS securityShortName
+               ,si.wind_code_sh
+               ,si.wind_code_sz
+               ,si.wind_code_nib
+               ,si.wind_code_bj
+               ,si.wind_code_nbc
+               ,al.adjust_reason
+        FROM ip_pool_status ips
+        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id AND p.is_deleted = 0
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                             AND dst.is_deleted = 0 AND dst.category_type = 'bond'
+        LEFT JOIN ip_adjust_log al ON al.id = ips.adjust_log_id AND al.is_deleted = 0
+        WHERE p.id = #{poolId}
+          AND ips.is_deleted = 0 AND ips.audit_status = '20' AND ips.security_type != 'crmw'
+          AND p.hs_pool_name IS NOT NULL AND TRIM(p.hs_pool_name) != ''
+          AND NOT EXISTS (SELECT 1 FROM ip_investment_pool child WHERE child.parent_id = p.id AND child.is_deleted = 0)
+        ORDER BY p.id ASC, si.wind_code ASC
+    </select>
+
+    <!-- 查询增量时间窗内已生效调入且当前仍在叶子恒生池的普通债券与 ABS -->
+    <select id="queryIncrementExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
+        SELECT DISTINCT si.short_name AS securityShortName
+               ,si.wind_code_sh
+               ,si.wind_code_sz
+               ,si.wind_code_nib
+               ,si.wind_code_bj
+               ,si.wind_code_nbc
+               ,current_al.adjust_reason
+        FROM ip_adjust_log al
+        INNER JOIN ip_pool_status ips ON ips.security_code = al.security_code
+                                   AND ips.target_pool_id = al.target_pool_id
+                                   AND ips.is_deleted = 0 AND ips.audit_status = '20'
+        INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id AND p.is_deleted = 0
+        INNER JOIN rrs_securityinfo si ON si.wind_code = al.security_code
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                             AND dst.is_deleted = 0 AND dst.category_type = 'bond'
+        LEFT JOIN ip_adjust_log current_al ON current_al.id = ips.adjust_log_id AND current_al.is_deleted = 0
+        WHERE p.id = #{poolId}
+          AND al.is_deleted = 0 AND al.audit_status = '20' AND al.adjust_mode = '调入'
+          AND al.audit_time &gt; #{startTime} AND al.audit_time &lt;= #{endTime}
+          AND ips.security_type != 'crmw' AND p.hs_pool_name IS NOT NULL AND TRIM(p.hs_pool_name) != ''
+          AND NOT EXISTS (SELECT 1 FROM ip_investment_pool child WHERE child.parent_id = p.id AND child.is_deleted = 0)
+        ORDER BY p.id ASC, si.wind_code ASC
+    </select>
+</mapper>

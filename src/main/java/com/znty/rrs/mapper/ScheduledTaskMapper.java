@@ -6,6 +6,7 @@ import com.znty.rrs.entity.schedule.ScheduledTaskReq;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -65,4 +66,7 @@ public interface ScheduledTaskMapper {
      * 查询执行历史列表（可按任务编码筛选），由 PageHelper 做外层分页
      */
     List<SysScheduledTaskRunLogBo> queryRunLogList(@Param("taskCode") String taskCode);
+
+    /** 查询指定任务最近一次成功执行的开始时间。 */
+    Date queryLastSuccessStartTime(@Param("taskCode") String taskCode);
 }

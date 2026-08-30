@@ -1,5 +1,12 @@
 # 29 定时任务管理
 
+## 恒生池 Excel 导出
+
+- `hs_pool_full_excel_export`：按 `hs_pool_name` 非空的叶子投资池导出当前在库普通债券和 ABS；每个恒生池名称一个 Sheet。
+- `hs_pool_increment_excel_export`：首次全量，后续按上次成功执行时间后已生效调入且当前仍在库的数据导出；不含调出记录。
+- 证券按沪市、深市、银行间、北交所及其他市场代码拆行；备注取当前 `ip_pool_status.adjust_log_id` 对应调库日志的调整原因；`param_json` 可选 `{"outputDir":"D:/exports"}`，未填使用应用默认目录。
+- CRMW 凭证存放在独立的 `ip_pool_status_crmw`，不在本任务查询范围；普通债券即使关联了 CRMW，仍属于 `ip_pool_status` 中的债券数据，应正常导出。
+
 > 前端页面：`scheduled_task.html`  
 > 后端前缀：`/api/v1/scheduledTask`  
 > 角色定位：运维 / 管理员在「RRS配置」下可视化查看、启停、改 cron、手动执行定时任务，并查看执行历史。
@@ -34,8 +41,10 @@
 | `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池 | `0 0 8 * * ?` | 每天 08:00 执行。`poolIds` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定债券池与主体池映射；债在债券池、主体不在主体池时出债，排除 ABS/CRMW |
 | `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 每天 09:00 执行。无需参数；扫描不符合当前主体债入库规则的在池信用债，生成待办供人工处理，不自动出池；摘要区分**本轮命中** / **本轮失效** / **仍待处理** |
 | `wind_code_sync` | Wind代码变更同步 | `0 */10 * * * ?` | 每 10 分钟执行一次。无需参数；当前为空壳，仅验证立即执行与调度挂载。后续用于扫描 Wind 代码变更并同步临时代码；**无池状态依赖**，可与自动调库并行 |
+| `hs_pool_full_excel_export` | 恒生池全量数据导出 | `0 0 1 * * ?` | 每天 01:00 执行，默认关闭；每个配置 `hs_pool_name` 的叶子投资池一个 Sheet，导出当前在库普通债券和 ABS；可选 `{"outputDir":"D:/exports"}` 覆盖默认目录 |
+| `hs_pool_increment_excel_export` | 恒生池增量数据导出 | `0 30 1 * * ?` | 每天 01:30 执行，默认关闭；首次全量，后续仅导出上次成功执行开始时间后的已生效调入记录，且证券当前仍在对应池；不导出调出记录 |
 
-> Demo **cron** 须与下方「执行顺序」一致；列表 id 不要求和执行顺序相同。新增或改 cron 时必须先读第 4.1 节。`wind_code_sync` 无池依赖，不受 4.1 顺序表约束。
+> Demo **cron** 须与下方「执行顺序」一致；列表 id 不要求和执行顺序相同。新增或改 cron 时必须先读第 4.1 节。`wind_code_sync` 与两项恒生池 Excel 导出任务均不改池状态，不受 4.1 顺序表约束。
 
 ## 2. 表结构
 
@@ -74,7 +83,7 @@
 
 调度器**不会**保证「A 跑完再跑 B」。若任务 B 依赖任务 A 改过的池状态，必须满足：`A 的 cron < B 的 cron`，并留足 A 跑完的时间（Demo 按整点错开）。
 
-当前 8 个任务的**必须顺序**与 Demo cron：
+当前 8 个需要池状态先后编排的任务，其**必须顺序**与 Demo cron：
 
 | 顺序 | 时刻 | 任务 | 为何必须在这 |
 |------|------|------|----------------|
@@ -128,8 +137,8 @@
 ## 7. 代码索引
 
 - 编排：`ScheduledTaskService`、`DynamicTaskScheduler`、`RrsScheduledTask`  
-- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）  
-- Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`、`GradeRuleAlertMapper` / `.xml`  
+- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）、`HsPoolFullExcelExportService`、`HsPoolIncrementExcelExportService`
+- Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`、`GradeRuleAlertMapper` / `.xml`、`HsPoolExcelExportMapper` / `.xml`
 - Controller：`ScheduledTaskController`；提醒查询/处理另见 `GradeRuleAlertController`（`/api/v1/gradeRuleAlert`）  
 - SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`、`rrs_grade_rule_alert_schema.sql`、`rrs_grade_rule_alert_demo_data.sql`  
 

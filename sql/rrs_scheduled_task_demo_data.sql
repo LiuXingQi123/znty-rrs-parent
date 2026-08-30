@@ -57,4 +57,12 @@ INSERT INTO `sys_scheduled_task` (
 (9, 'wind_code_sync', 'Wind代码变更同步',
  '1. 默认每 10 分钟执行一次，无需扩展参数。\n2. 当前为空壳任务，仅用于验证页面立即执行和定时调度挂载。\n3. 后续接入后扫描 Wind 代码变更，将临时代码同步为正式代码。\n4. 不读写池状态，与自动调库任务无编排依赖，可并行执行。',
  '0 */10 * * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
- 0, NOW(), NOW());
+0, NOW(), NOW());
+
+INSERT INTO `sys_scheduled_task` (`id`, `task_code`, `task_name`, `description`, `cron_expression`, `schedule_enabled`, `param_json`, `is_deleted`, `crte_time`, `updt_time`) VALUES
+(10, 'hs_pool_full_excel_export', '恒生池全量数据导出',
+ '1. 每天 01:00 执行，默认关闭调度。\n2. 仅处理已配置恒生池名称且没有子池的叶子投资池。\n3. 每个叶子投资池生成一个以恒生池名称命名的 Sheet。\n4. 导出当前在库普通债券和 ABS，不导出主体或 CRMW 凭证。\n5. 同一证券按非空市场代码拆行，固定导出证券代码、证券名称、投资市场、备注。\n6. outputDir 可覆盖应用默认导出目录。',
+ '0 0 1 * * ?', 0, NULL, 0, NOW(), NOW()),
+(11, 'hs_pool_increment_excel_export', '恒生池增量数据导出',
+ '1. 每天 01:30 执行，默认关闭调度。\n2. 首次成功执行前按全量导出，建立初始数据集。\n3. 后续以上次成功执行开始时间为下界、本次开始时间为上界。\n4. 仅导出时间窗口内已生效调入且当前仍在对应池的普通债券和 ABS。\n5. 不导出调出记录，每个叶子投资池仍保留独立 Sheet。\n6. outputDir 可覆盖应用默认导出目录。',
+ '0 30 1 * * ?', 0, NULL, 0, NOW(), NOW());

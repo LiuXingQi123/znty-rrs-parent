@@ -44,6 +44,8 @@ logging:
 rrs:
   attachment:
     storage-path: ${RRS_ATTACHMENT_STORAGE_PATH:D:/uploads/znty_rrs}
+  hs-pool-export:
+    storage-path: ${RRS_HS_POOL_EXPORT_STORAGE_PATH:D:/uploads/znty_rrs/hs-pool-export}
   script:
     # SQL 脚本目录（相对 user.dir 或绝对路径）
     sql-path: ${RRS_SCRIPT_SQL_PATH:sql}

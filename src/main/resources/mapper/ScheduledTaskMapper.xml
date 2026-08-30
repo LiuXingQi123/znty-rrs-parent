@@ -251,4 +251,16 @@
                  ,id DESC
     </select>
 
+    <!-- 查询指定任务最近一次成功执行的开始时间，作为增量任务水位线 -->
+    <select id="queryLastSuccessStartTime" resultType="java.util.Date">
+        SELECT start_time
+        FROM sys_scheduled_task_run_log
+        WHERE task_code = #{taskCode}
+          AND run_status = 'success'
+          AND IFNULL(is_deleted, 0) = 0
+        ORDER BY start_time DESC
+                 ,id DESC
+        LIMIT 1
+    </select>
+
 </mapper>
