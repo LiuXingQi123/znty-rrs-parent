@@ -61,8 +61,8 @@ INSERT INTO `sys_scheduled_task` (
 
 INSERT INTO `sys_scheduled_task` (`id`, `task_code`, `task_name`, `description`, `cron_expression`, `schedule_enabled`, `param_json`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 (10, 'hs_pool_full_excel_export', '恒生池全量数据导出',
- '1. 每天 01:00 执行，默认关闭调度。\n2. 仅处理已配置恒生池名称且没有子池的叶子投资池。\n3. 每个叶子投资池生成一个以恒生池名称命名的 Sheet。\n4. 导出当前在库普通债券和 ABS，不导出主体或 CRMW 凭证。\n5. 同一证券按非空市场代码拆行，固定导出证券代码、证券名称、投资市场、备注。\n6. outputDir 可覆盖应用默认导出目录。',
+ '1. 每天 01:00 执行，默认关闭调度。\n2. poolIds 可限制导出叶子池，未填写时导出全部叶子池。\n3. 导出当前已生效的非主体证券和 CRMW；普通证券排除已到期数据，CRMW 不校验到期日。\n4. 恒生池名称为空时使用投资池完整名称，竖线可拆分多个 Sheet，同名 Sheet 合并并记录警告。\n5. 固定导出证券名称、证券代码、操作类型、市场名称、备注；全量操作类型和备注为空。\n6. 市场输出中文名称并按多个市场代码字段拆行，该口径后续再确认。\n7. outputDir 下按 yyyyMMdd 建日期目录并生成 bak 备份；FTP 暂未接入。',
  '0 0 1 * * ?', 0, NULL, 0, NOW(), NOW()),
 (11, 'hs_pool_increment_excel_export', '恒生池增量数据导出',
- '1. 每天 01:30 执行，默认关闭调度。\n2. 首次成功执行前按全量导出，建立初始数据集。\n3. 后续以上次成功执行开始时间为下界、本次开始时间为上界。\n4. 仅导出时间窗口内已生效调入且当前仍在对应池的普通债券和 ABS。\n5. 不导出调出记录，每个叶子投资池仍保留独立 Sheet。\n6. outputDir 可覆盖应用默认导出目录。',
- '0 30 1 * * ?', 0, NULL, 0, NOW(), NOW());
+ '1. 每天 01:30 执行，默认关闭调度；交易日列表入口已预留，当前列表为空，因此交易日和非交易日均正常执行。\n2. 首次以 initialStartTime 为下界，后续以上次成功执行开始时间为下界，本次开始时间为上界。\n3. 老系统通过 exportflag 控制增量；新系统使用任务成功时间水位线，不更新业务调库日志。\n4. 导出窗口内审批通过的调入和调出事件，不要求证券当前仍在池。\n5. 调出记录操作类型写删除，包含普通非主体证券和 CRMW。\n6. 市场输出中文名称并按多个市场代码字段拆行，该口径后续再确认。\n7. poolIds 和 exportEmptyPool 与全量任务保持一致。\n8. outputDir 下按 yyyyMMdd 建日期目录并生成 bak 备份；FTP 暂未接入。',
+ '0 30 1 * * ?', 0, '{"initialStartTime":"2026-01-01 00:00:00"}', 0, NOW(), NOW());

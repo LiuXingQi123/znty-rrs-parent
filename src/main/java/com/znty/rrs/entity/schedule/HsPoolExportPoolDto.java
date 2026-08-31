@@ -9,6 +9,8 @@ public class HsPoolExportPoolDto {
     private Long poolId;
     /** 投资池名称。 */
     private String poolName;
-    /** 恒生池名称，同时作为 Sheet 名称。 */
+    /** 投资池完整层级名称，恒生池名称为空时作为 Sheet 名称。 */
+    private String poolFullName;
+    /** 恒生池名称，支持使用竖线配置多个 Sheet 名称。 */
     private String hsPoolName;
 }

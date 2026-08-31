@@ -17,6 +17,6 @@ public class HsPoolExportRowDto {
     private String windCodeBj;
     /** 其他市场证券代码。 */
     private String windCodeNbc;
-    /** 当前在池状态对应调库日志的调整原因。 */
-    private String adjustReason;
+    /** 操作类型，调出时为“删除”，调入和全量时为空。 */
+    private String operationType;
 }

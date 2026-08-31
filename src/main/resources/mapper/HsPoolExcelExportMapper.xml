@@ -1,63 +1,167 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.HsPoolExcelExportMapper">
-    <!-- 查询未删除、配置恒生池名称且无子池的投资池，用于生成 Excel Sheet -->
+    <!-- 递归生成投资池完整层级名称，再筛选未删除的叶子池 -->
     <select id="queryExportPoolList" resultType="com.znty.rrs.entity.schedule.HsPoolExportPoolDto">
+        WITH RECURSIVE pool_tree AS (
+            SELECT p.id
+                   ,p.parent_id
+                   ,p.pool_name
+                   ,p.hs_pool_name
+                   ,CAST(p.pool_name AS CHAR(2000)) AS poolFullName
+            FROM ip_investment_pool p
+            WHERE p.is_deleted = 0
+              AND p.parent_id IS NULL
+            UNION ALL
+            SELECT child.id
+                   ,child.parent_id
+                   ,child.pool_name
+                   ,child.hs_pool_name
+                   ,CONCAT(parent.poolFullName, '/', child.pool_name) AS poolFullName
+            FROM ip_investment_pool child
+            INNER JOIN pool_tree parent ON parent.id = child.parent_id
+            WHERE child.is_deleted = 0
+        )
         SELECT p.id AS poolId
                ,p.pool_name
+               ,p.poolFullName
                ,p.hs_pool_name
-        FROM ip_investment_pool p
-        WHERE p.is_deleted = 0
-          AND p.hs_pool_name IS NOT NULL AND TRIM(p.hs_pool_name) != ''
-          AND NOT EXISTS (SELECT 1 FROM ip_investment_pool child WHERE child.parent_id = p.id AND child.is_deleted = 0)
+        FROM pool_tree p
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM ip_investment_pool child
+            WHERE child.parent_id = p.id
+              AND child.is_deleted = 0
+        )
+        <if test="poolIds != null and poolIds.size() > 0">
+            AND p.id IN
+            <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+                #{poolId}
+            </foreach>
+        </if>
         ORDER BY p.id ASC
     </select>
 
-    <!-- 查询叶子恒生池下当前已生效的普通债券与 ABS，供全量 Excel 导出 -->
+    <!-- 合并普通池状态与独立 CRMW 状态：普通证券排除已到期数据，CRMW 按老系统口径不校验到期日 -->
     <select id="queryFullExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
-        SELECT si.short_name AS securityShortName
-               ,si.wind_code_sh
-               ,si.wind_code_sz
-               ,si.wind_code_nib
-               ,si.wind_code_bj
-               ,si.wind_code_nbc
-               ,al.adjust_reason
-        FROM ip_pool_status ips
-        INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id AND p.is_deleted = 0
-        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
-        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
-                                             AND dst.is_deleted = 0 AND dst.category_type = 'bond'
-        LEFT JOIN ip_adjust_log al ON al.id = ips.adjust_log_id AND al.is_deleted = 0
-        WHERE p.id = #{poolId}
-          AND ips.is_deleted = 0 AND ips.audit_status = '20' AND ips.security_type != 'crmw'
-          AND p.hs_pool_name IS NOT NULL AND TRIM(p.hs_pool_name) != ''
-          AND NOT EXISTS (SELECT 1 FROM ip_investment_pool child WHERE child.parent_id = p.id AND child.is_deleted = 0)
-        ORDER BY p.id ASC, si.wind_code ASC
+        SELECT export_row.securityShortName
+               ,export_row.wind_code_sh
+               ,export_row.wind_code_sz
+               ,export_row.wind_code_nib
+               ,export_row.wind_code_bj
+               ,export_row.wind_code_nbc
+               ,export_row.operationType
+        FROM (
+            <!-- 普通证券当前状态：排除主体和 CRMW，保留股票、债券及其他非主体证券 -->
+            SELECT si.short_name AS securityShortName
+                   ,si.wind_code_sh
+                   ,si.wind_code_sz
+                   ,si.wind_code_nib
+                   ,si.wind_code_bj
+                   ,si.wind_code_nbc
+                   ,'' AS operationType
+            FROM ip_pool_status ips
+            INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+            INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                                 AND dst.is_deleted = 0
+            WHERE ips.target_pool_id = #{poolId}
+              AND ips.is_deleted = 0
+              AND ips.audit_status = '20'
+              AND dst.category_type != 'company'
+              AND ips.security_type != 'crmw'
+              AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y-%m-%d'))
+            UNION ALL
+            <!-- CRMW 当前状态：导出凭证本身，主数据缺失时使用状态表凭证代码和名称兜底 -->
+            SELECT COALESCE(crmw_si.short_name, ips.crmw_name) AS securityShortName
+                   ,crmw_si.wind_code_sh
+                   ,crmw_si.wind_code_sz
+                   ,CASE
+                        WHEN crmw_si.wind_code_sh IS NULL
+                             AND crmw_si.wind_code_sz IS NULL
+                             AND crmw_si.wind_code_nib IS NULL
+                             AND crmw_si.wind_code_bj IS NULL
+                             AND crmw_si.wind_code_nbc IS NULL
+                            THEN ips.crmw_scode
+                        ELSE crmw_si.wind_code_nib
+                    END AS wind_code_nib
+                   ,crmw_si.wind_code_bj
+                   ,crmw_si.wind_code_nbc
+                   ,'' AS operationType
+            FROM ip_pool_status_crmw ips
+            LEFT JOIN rrs_securityinfo crmw_si ON crmw_si.wind_code = ips.crmw_scode
+            WHERE ips.target_pool_id = #{poolId}
+              AND ips.is_deleted = 0
+              AND ips.audit_status = '20'
+        ) export_row
+        ORDER BY export_row.securityShortName ASC
     </select>
 
-    <!-- 查询增量时间窗内已生效调入且当前仍在叶子恒生池的普通债券与 ABS -->
+    <!-- 合并普通调库日志与 CRMW 调库日志，查询时间窗口内审批通过的调入、调出事件 -->
     <select id="queryIncrementExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
-        SELECT DISTINCT si.short_name AS securityShortName
-               ,si.wind_code_sh
-               ,si.wind_code_sz
-               ,si.wind_code_nib
-               ,si.wind_code_bj
-               ,si.wind_code_nbc
-               ,current_al.adjust_reason
-        FROM ip_adjust_log al
-        INNER JOIN ip_pool_status ips ON ips.security_code = al.security_code
-                                   AND ips.target_pool_id = al.target_pool_id
-                                   AND ips.is_deleted = 0 AND ips.audit_status = '20'
-        INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id AND p.is_deleted = 0
-        INNER JOIN rrs_securityinfo si ON si.wind_code = al.security_code
-        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
-                                             AND dst.is_deleted = 0 AND dst.category_type = 'bond'
-        LEFT JOIN ip_adjust_log current_al ON current_al.id = ips.adjust_log_id AND current_al.is_deleted = 0
-        WHERE p.id = #{poolId}
-          AND al.is_deleted = 0 AND al.audit_status = '20' AND al.adjust_mode = '调入'
-          AND al.audit_time &gt; #{startTime} AND al.audit_time &lt;= #{endTime}
-          AND ips.security_type != 'crmw' AND p.hs_pool_name IS NOT NULL AND TRIM(p.hs_pool_name) != ''
-          AND NOT EXISTS (SELECT 1 FROM ip_investment_pool child WHERE child.parent_id = p.id AND child.is_deleted = 0)
-        ORDER BY p.id ASC, si.wind_code ASC
+        SELECT export_row.securityShortName
+               ,export_row.wind_code_sh
+               ,export_row.wind_code_sz
+               ,export_row.wind_code_nib
+               ,export_row.wind_code_bj
+               ,export_row.wind_code_nbc
+               ,export_row.operationType
+        FROM (
+            <!-- 普通证券增量：不校验当前仍在池，调出事件保留为删除记录 -->
+            SELECT COALESCE(si.short_name, al.security_short_name) AS securityShortName
+                   ,si.wind_code_sh
+                   ,si.wind_code_sz
+                   ,CASE
+                        WHEN si.wind_code_sh IS NULL
+                             AND si.wind_code_sz IS NULL
+                             AND si.wind_code_nib IS NULL
+                             AND si.wind_code_bj IS NULL
+                             AND si.wind_code_nbc IS NULL
+                            THEN al.security_code
+                        ELSE si.wind_code_nib
+                    END AS wind_code_nib
+                   ,si.wind_code_bj
+                   ,si.wind_code_nbc
+                   ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
+            FROM ip_adjust_log al
+            LEFT JOIN rrs_securityinfo si ON si.wind_code = al.security_code
+            INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
+                                                 AND dst.is_deleted = 0
+            WHERE al.target_pool_id = #{poolId}
+              AND al.is_deleted = 0
+              AND al.audit_status = '20'
+              AND al.adjust_mode IN ('调入', '调出')
+              AND al.audit_time &gt; #{startTime}
+              AND al.audit_time &lt;= #{endTime}
+              AND dst.category_type != 'company'
+              AND al.security_type != 'crmw'
+            UNION ALL
+            <!-- CRMW 增量：同一调库日志按凭证信息生成调入或删除记录 -->
+            SELECT COALESCE(crmw_si.short_name, al.crmw_name) AS securityShortName
+                   ,crmw_si.wind_code_sh
+                   ,crmw_si.wind_code_sz
+                   ,CASE
+                        WHEN crmw_si.wind_code_sh IS NULL
+                             AND crmw_si.wind_code_sz IS NULL
+                             AND crmw_si.wind_code_nib IS NULL
+                             AND crmw_si.wind_code_bj IS NULL
+                             AND crmw_si.wind_code_nbc IS NULL
+                            THEN al.crmw_scode
+                        ELSE crmw_si.wind_code_nib
+                    END AS wind_code_nib
+                   ,crmw_si.wind_code_bj
+                   ,crmw_si.wind_code_nbc
+                   ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
+            FROM ip_adjust_log al
+            LEFT JOIN rrs_securityinfo crmw_si ON crmw_si.wind_code = al.crmw_scode
+            WHERE al.target_pool_id = #{poolId}
+              AND al.is_deleted = 0
+              AND al.audit_status = '20'
+              AND al.adjust_mode IN ('调入', '调出')
+              AND al.audit_time &gt; #{startTime}
+              AND al.audit_time &lt;= #{endTime}
+              AND al.crmw_scode IS NOT NULL
+              AND TRIM(al.crmw_scode) != ''
+        ) export_row
+        ORDER BY export_row.securityShortName ASC
     </select>
 </mapper>
