@@ -1,6 +1,6 @@
 # 智慧风控平台功能需求说明
 
-本目录按前端业务页面整理需求，当前覆盖 29 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
+本目录按前端业务页面整理需求，当前覆盖 30 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
 
 | 序号 | 功能 | 前端页面 | 需求文档 | 接口测试 |
 |---|---|---|---|---|
@@ -33,6 +33,7 @@
 | 27 | 存量证券批量调整（产品库 + 来源池） | `stock_security_batch_adjust.html` | [27-stock-security-batch-adjust.md](27-stock-security-batch-adjust.md) | `StockSecurityBatchAdjustServiceTest` |
 | 28 | 证券池 Excel 导入 | `security_pool_excel_import.html` | [28-security-pool-excel-import.md](28-security-pool-excel-import.md) | `SecurityPoolExcelImportServiceTest` / `CommonFileControllerTest` |
 | 29 | 定时任务管理（可视化启停/cron/执行） | `scheduled_task.html` | [29-scheduled-task.md](29-scheduled-task.md) | `ScheduledTaskServiceTest` / `AutoAdjustServiceTest` / `CrmwExpiredAutoOutServiceTest` / `CompanyOuterRatingNotAaMinusAutoOutServiceTest` / `CompanyOuterRatingAaMinusAutoInServiceTest` / `CompanySamePoolBondAutoInServiceTest` / `CompanyNewBondAutoInServiceTest` / `CompanyNotInPoolBondAutoOutServiceTest`（`GradeRuleAlertService` / `WindCodeSyncService` 暂无独立测试） |
+| 30 | 恒生格式手动导出 | `hs_pool_manual_export.html` | [30-hs-pool-manual-export.md](30-hs-pool-manual-export.md) | `HsPoolManualExportServiceTest` |
 
 ## 调库业务全链路索引
 

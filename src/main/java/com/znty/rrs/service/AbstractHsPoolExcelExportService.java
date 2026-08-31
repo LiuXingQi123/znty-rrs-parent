@@ -3,6 +3,7 @@ package com.znty.rrs.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
+import com.znty.rrs.entity.commonfile.CommonFileDto;
 import com.znty.rrs.entity.schedule.HsPoolExportPoolDto;
 import com.znty.rrs.entity.schedule.HsPoolExportRowDto;
 import com.znty.rrs.exception.BizException;
@@ -19,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,6 +29,7 @@ import java.nio.file.StandardCopyOption;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -73,6 +76,40 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
      * @return 文件名前缀
      */
     protected abstract String filePrefix();
+
+    /**
+     * 按页面指定条件生成恒生格式 Excel，不写服务器目录。
+     *
+     * @param poolIds 指定叶子投资池；为空时导出全部叶子池
+     * @param startTime 增量开始时间；全量模式仅用于参数统一
+     * @param endTime 增量结束时间和文件时间
+     * @return 可供前端下载的 Excel 文件
+     * @throws Exception 查询或工作簿生成失败
+     */
+    public CommonFileDto exportManual(List<Long> poolIds, Date startTime, Date endTime) throws Exception {
+        List<HsPoolExportPoolDto> pools = hsPoolExcelExportMapper.queryExportPoolList(poolIds);
+        TaskDetailLog detail = new TaskDetailLog();
+        SXSSFWorkbook workbook = new SXSSFWorkbook(ROW_ACCESS_WINDOW_SIZE);
+        workbook.setCompressTempFiles(true);
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            // 手动导出默认保留空池 Sheet，与定时任务默认行为一致。
+            populateWorkbook(workbook, pools, startTime, endTime, true, detail);
+            workbook.write(outputStream);
+            byte[] bytes = outputStream.toByteArray();
+            CommonFileDto result = new CommonFileDto();
+            result.setFileName(filePrefix() + "_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(endTime) + ".xlsx");
+            result.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            result.setFileSize((long) bytes.length);
+            result.setContentBase64(Base64.getEncoder().encodeToString(bytes));
+            return result;
+        } finally {
+            try {
+                workbook.close();
+            } finally {
+                workbook.dispose();
+            }
+        }
+    }
 
     /**
      * 执行恒生池 Excel 导出任务。
@@ -285,39 +322,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         SXSSFWorkbook workbook = new SXSSFWorkbook(ROW_ACCESS_WINDOW_SIZE);
         workbook.setCompressTempFiles(true);
         try {
-            int rowCount = 0;
-            Map<String, Sheet> sheets = new HashMap<>();
-            Map<String, String> sheetOwners = new HashMap<>();
-            for (HsPoolExportPoolDto pool : pools) {
-                // 逐池查询，避免一次性将全部池数据加载到内存。
-                List<HsPoolExportRowDto> poolRows = queryRows(pool.getPoolId(), windowStart, endTime);
-                if (!exportEmptyPool && (poolRows == null || poolRows.isEmpty())) {
-                    detail.line("INFO", "投资池 " + pool.getPoolId() + "-" + pool.getPoolName() + " 为空，已跳过 Sheet");
-                    continue;
-                }
-                // 一个恒生池名称可使用竖线拆分为多个 Sheet 名称。
-                for (String sheetName : resolveSheetNames(pool)) {
-                    String sheetKey = sheetName.toLowerCase(Locale.ROOT);
-                    Sheet sheet = sheets.get(sheetKey);
-                    if (sheet == null) {
-                        sheet = workbook.createSheet(sheetName);
-                        sheets.put(sheetKey, sheet);
-                        sheetOwners.put(sheetKey, pool.getPoolId() + "-" + pool.getPoolName());
-                        // 新建 Sheet 时写入固定表头并设置列宽。
-                        createHeader(sheet);
-                    } else {
-                        detail.line("WARN", "Sheet 名称重复，已合并追加：" + sheetName + "；原池="
-                                + sheetOwners.get(sheetKey) + "，当前池=" + pool.getPoolId() + "-" + pool.getPoolName());
-                    }
-                    // 全量按市场和代码去重；增量保留同一证券的多次调入、调出事件。
-                    rowCount += writePoolRows(sheet, poolRows, !isIncrement());
-                }
-            }
-            if (sheets.isEmpty()) {
-                Sheet emptySheet = workbook.createSheet("（空池）");
-                createHeader(emptySheet);
-                sheets.put("（空池）", emptySheet);
-            }
+            WorkbookSummary summary = populateWorkbook(workbook, pools, windowStart, endTime, exportEmptyPool, detail);
             String fileName = filePrefix() + "_"
                     + new SimpleDateFormat("yyyyMMdd_HHmmss").format(endTime) + ".xlsx";
             Path filePath = outputDir.resolve(fileName).toAbsolutePath().normalize();
@@ -330,7 +335,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
             Path backupPath = backupDir.resolve(fileName).toAbsolutePath().normalize();
             Files.copy(filePath, backupPath, StandardCopyOption.REPLACE_EXISTING);
             // TODO 后续接入公司 FTP 配置，将主文件和备份文件上传至恒生接收目录。
-            return new ExportResult(filePath.toString(), backupPath.toString(), sheets.size(), rowCount);
+            return new ExportResult(filePath.toString(), backupPath.toString(), summary.sheetCount, summary.rowCount);
         } finally {
             try {
                 workbook.close();
@@ -338,6 +343,48 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
                 workbook.dispose();
             }
         }
+    }
+
+    /**
+     * 查询各投资池并写入工作簿。
+     */
+    private WorkbookSummary populateWorkbook(SXSSFWorkbook workbook, List<HsPoolExportPoolDto> pools,
+                                               Date windowStart, Date endTime, boolean exportEmptyPool,
+                                               TaskDetailLog detail) {
+        int rowCount = 0;
+        Map<String, Sheet> sheets = new HashMap<>();
+        Map<String, String> sheetOwners = new HashMap<>();
+        for (HsPoolExportPoolDto pool : pools) {
+            // 逐池查询，避免一次性将全部池数据加载到内存。
+            List<HsPoolExportRowDto> poolRows = queryRows(pool.getPoolId(), windowStart, endTime);
+            if (!exportEmptyPool && (poolRows == null || poolRows.isEmpty())) {
+                detail.line("INFO", "投资池 " + pool.getPoolId() + "-" + pool.getPoolName() + " 为空，已跳过 Sheet");
+                continue;
+            }
+            // 一个恒生池名称可使用竖线拆分为多个 Sheet 名称。
+            for (String sheetName : resolveSheetNames(pool)) {
+                String sheetKey = sheetName.toLowerCase(Locale.ROOT);
+                Sheet sheet = sheets.get(sheetKey);
+                if (sheet == null) {
+                    sheet = workbook.createSheet(sheetName);
+                    sheets.put(sheetKey, sheet);
+                    sheetOwners.put(sheetKey, pool.getPoolId() + "-" + pool.getPoolName());
+                    // 新建 Sheet 时写入固定表头并设置列宽。
+                    createHeader(sheet);
+                } else {
+                    detail.line("WARN", "Sheet 名称重复，已合并追加：" + sheetName + "；原池="
+                            + sheetOwners.get(sheetKey) + "，当前池=" + pool.getPoolId() + "-" + pool.getPoolName());
+                }
+                // 全量按市场和代码去重；增量保留同一证券的多次调入、调出事件。
+                rowCount += writePoolRows(sheet, poolRows, !isIncrement());
+            }
+        }
+        if (sheets.isEmpty()) {
+            Sheet emptySheet = workbook.createSheet("（空池）");
+            createHeader(emptySheet);
+            sheets.put("（空池）", emptySheet);
+        }
+        return new WorkbookSummary(sheets.size(), rowCount);
     }
 
     /**
@@ -494,6 +541,20 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         private ExportResult(String filePath, String backupPath, int sheetCount, int rowCount) {
             this.filePath = filePath;
             this.backupPath = backupPath;
+            this.sheetCount = sheetCount;
+            this.rowCount = rowCount;
+        }
+    }
+
+    /** 工作簿内容统计。 */
+    private static class WorkbookSummary {
+        /** Sheet 数量。 */
+        private final int sheetCount;
+        /** 实际数据行数。 */
+        private final int rowCount;
+
+        /** 构造工作簿统计。 */
+        private WorkbookSummary(int sheetCount, int rowCount) {
             this.sheetCount = sheetCount;
             this.rowCount = rowCount;
         }

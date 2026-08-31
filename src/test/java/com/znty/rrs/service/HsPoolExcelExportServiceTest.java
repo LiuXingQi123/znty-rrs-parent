@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
+import com.znty.rrs.entity.commonfile.CommonFileDto;
 import com.znty.rrs.entity.schedule.HsPoolExportPoolDto;
 import com.znty.rrs.entity.schedule.HsPoolExportRowDto;
 import com.znty.rrs.mapper.HsPoolExcelExportMapper;
@@ -10,6 +11,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
@@ -256,6 +259,40 @@ public class HsPoolExcelExportServiceTest {
 
             assertThat(result.isSuccess()).isTrue();
             verify(exportMapper).queryIncrementExportRowList(eq(1L), eq(watermark), any(Date.class));
+        } finally {
+            deleteDirectory(outputDir);
+        }
+    }
+
+    /** 验证手动导出直接返回可下载的 Base64 工作簿，不写服务器目录。 */
+    @Test
+    public void manualExportShouldReturnDownloadableWorkbook() throws Exception {
+        HsPoolExcelExportMapper exportMapper = mock(HsPoolExcelExportMapper.class);
+        ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+        HsPoolFullExcelExportService service = new HsPoolFullExcelExportService();
+        Path outputDir = Files.createTempDirectory("hs-pool-manual-test");
+        try {
+            inject(service, exportMapper, taskMapper, outputDir);
+            when(exportMapper.queryExportPoolList(Collections.singletonList(15L)))
+                    .thenReturn(Collections.singletonList(pool(15L, "恒生债池")));
+            when(exportMapper.queryFullExportRowList(15L)).thenReturn(Collections.singletonList(row()));
+            Date endTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2026-08-31 10:30:00");
+
+            CommonFileDto file = service.exportManual(Collections.singletonList(15L), null, endTime);
+
+            assertThat(file.getFileName()).isEqualTo("hs_pool_full_20260831_103000.xlsx");
+            assertThat(file.getContentType())
+                    .isEqualTo("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            byte[] bytes = Base64.getDecoder().decode(file.getContentBase64());
+            assertThat(file.getFileSize()).isEqualTo((long) bytes.length);
+            try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+                assertThat(workbook.getSheet("恒生债池").getRow(0).getCell(0).getStringCellValue())
+                        .isEqualTo("证券名称");
+                assertThat(workbook.getSheet("恒生债池").getLastRowNum()).isEqualTo(2);
+            }
+            try (Stream<Path> paths = Files.list(outputDir)) {
+                assertThat(paths.count()).isZero();
+            }
         } finally {
             deleteDirectory(outputDir);
         }
