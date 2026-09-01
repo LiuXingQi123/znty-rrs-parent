@@ -2,9 +2,10 @@
 
 ## 恒生池 Excel 导出
 
-- `hs_pool_full_excel_export`：导出指定叶子池当前已生效的非主体证券及 CRMW；普通证券排除已到期数据，CRMW 按老系统定时任务口径不校验到期日；未指定 `poolIds` 时导出全部叶子池。
+- `hs_pool_full_excel_export`：对应老系统 `ExportStatusToHsJob`，导出指定叶子池当前已生效的非主体证券及 CRMW；普通证券排除已到期数据，CRMW 按老系统定时任务口径不校验到期日；未指定 `poolIds` 时导出全部叶子池。
+- `hs_pool_full_including_expired_excel_export`：对应老系统 `ExportStatusToHsJob2`，与上一任务使用相同池范围和 Excel 结构，但普通证券包含已到期数据；CRMW 同样不校验到期日。
 - `hs_pool_increment_excel_export`：首次以 `initialStartTime` 为下界，后续以上次成功执行开始时间为下界，导出窗口内审批通过的调入和调出事件，不要求证券当前仍在池。老系统通过调库日志 `exportflag` 控制增量，新系统明确使用任务成功时间水位线，不更新业务调库日志。
-- 两个任务均使用五列表头：证券名称、证券代码、操作类型、市场名称、备注；调出操作类型写“删除”，备注留空。市场值继续输出中文名称，并按证券的多个市场代码字段拆行；这两项与老系统恒生市场编码口径不同，保留为待讨论项。
+- 三个任务均使用五列表头：证券名称、证券代码、操作类型、市场名称、备注；调出操作类型写“删除”，备注留空。市场值继续输出中文名称，并按证券的多个市场代码字段拆行；这两项与老系统恒生市场编码口径不同，保留为待讨论项。
 - `hs_pool_name` 为空时使用投资池完整名称，支持竖线拆分多个 Sheet；名称超过 31 位截断，同名 Sheet 合并追加并写过程警告日志。老系统页面手动导出会合并同名 Sheet，但老系统定时任务未做重名判断、直接创建时可能抛异常；新系统采用页面导出的容错方式。
 - 增量任务已预留交易日日期列表入口；当前列表固定为空，表示尚未启用过滤，因此交易日和非交易日均正常执行。交易日数据源、查询异常策略和非交易日强制执行配置后续确认。
 - `param_json` 支持 `poolIds`、`exportEmptyPool`、`outputDir`；增量首次执行还必须配置 `initialStartTime`。文件写入 `输出根目录/yyyyMMdd`，并复制到同日 `bak` 目录；FTP 暂未接入，代码保留 TODO。
@@ -34,19 +35,20 @@
 
 | taskCode | 名称 | 默认 cron | 扩展参数示例 |
 |---|---|---|---|
-| `security_expired_auto_out` | 到期证券自动出池 | `0 0 2 * * ?` | 每天 02:00 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；扫描已生效债券、股票，到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
-| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 0 3 * * ?` | 每天 03:00 执行。`poolIds` 必填，默认 `[18]`（18（CRMW库））；扫描已生效 CRMW 组合，凭证到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
-| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 0 4 * * ?` | 每天 04:00 执行。`poolIds` 必填，默认 `[16]`（16（观察池））；`limitPoolIds` 可选，默认 `[15]`（15（债券禁止库）），用于拦截已在该池的主体。有效外评不在 AA-及以下名单则出主体，成功后顺带出同池旗下债 |
-| `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 0 5 * * ?` | 每天 05:00 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；有效外评在 AA-及以下名单内且未在目标池的主体自动入池，命中调入限制池则跳过 |
-| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 0 6 * * ?` | 每天 06:00 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；主体已在该池时，旗下未到期（含当天）且未在同一池的债券自动入池 |
-| `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 0 7 * * ?` | 每天 07:00 执行。`poolIds` / `poolId` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定主体池至债券目标池的跨池映射；排除已更新临时代码、ABS、CRMW |
-| `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池 | `0 0 8 * * ?` | 每天 08:00 执行。`poolIds` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定债券池与主体池映射；债在债券池、主体不在主体池时出债，排除 ABS/CRMW |
-| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 9 * * ?` | 每天 09:00 执行。无需参数；扫描不符合当前主体债入库规则的在池信用债，生成待办供人工处理，不自动出池；摘要区分**本轮命中** / **本轮失效** / **仍待处理** |
+| `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；扫描已生效债券、股票，到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
+| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`poolIds` 必填，默认 `[18]`（18（CRMW库））；扫描已生效 CRMW 组合，凭证到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
+| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 10 23 * * ?` | 每天 23:10 执行。`poolIds` 必填，默认 `[16]`（16（观察池））；`limitPoolIds` 可选，默认 `[15]`（15（债券禁止库）），用于拦截已在该池的主体。有效外评不在 AA-及以下名单则出主体，成功后顺带出同池旗下债 |
+| `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 15 23 * * ?` | 每天 23:15 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；有效外评在 AA-及以下名单内且未在目标池的主体自动入池，命中调入限制池则跳过 |
+| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 20 23 * * ?` | 每天 23:20 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；主体已在该池时，旗下未到期（含当天）且未在同一池的债券自动入池 |
+| `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 */10 * * * ?` | 每 10 分钟执行一次。`poolIds` / `poolId` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定主体池至债券目标池的跨池映射；排除已更新临时代码、ABS、CRMW |
+| `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池(默认关闭) | `0 0 0 * * ?` | 每天 00:00 执行，建议按需手动执行。`poolIds` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定债券池与主体池映射；债在债券池、主体不在主体池时出债，排除 ABS/CRMW |
+| `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 1 * * ?` | 每天 01:00 执行。无需参数；扫描不符合当前主体债入库规则的在池信用债，生成待办供人工处理，不自动出池；摘要区分**本轮命中** / **本轮失效** / **仍待处理** |
+| `hs_pool_full_excel_export` | 恒生池全量数据导出（不含已到期） | `0 10 1 * * ?` | 每天 01:10 执行；`poolIds` 可限制叶子池，省略时导出全部叶子池；默认生成空池 Sheet；导出当前已生效的非主体证券及 CRMW，普通证券排除已到期数据，CRMW 不校验到期日 |
+| `hs_pool_full_including_expired_excel_export` | 恒生池全量数据导出（含已到期） | `0 20 1 * * ?` | 每天 01:20 执行；参数与不含已到期全量任务一致；普通证券不校验到期日，包含仍在池的已到期数据，CRMW 同样不校验到期日 |
+| `hs_pool_increment_excel_export` | 恒生池增量数据导出 | `0 */6 * * * ?` | 每 6 分钟执行一次；首次从 `initialStartTime` 开始，后续从上次成功执行开始时间继续；导出窗口内审批通过的调入和调出，调出标记“删除”；交易日过滤暂未启用 |
 | `wind_code_sync` | Wind代码变更同步 | `0 */10 * * * ?` | 每 10 分钟执行一次。无需参数；当前为空壳，仅验证立即执行与调度挂载。后续用于扫描 Wind 代码变更并同步临时代码；**无池状态依赖**，可与自动调库并行 |
-| `hs_pool_full_excel_export` | 恒生池全量数据导出 | `0 0 1 * * ?` | 每天 01:00 执行，默认关闭；`poolIds` 可限制叶子池，省略时导出全部叶子池；默认生成空池 Sheet；导出当前已生效的非主体证券及 CRMW，普通证券排除已到期数据，CRMW 不校验到期日 |
-| `hs_pool_increment_excel_export` | 恒生池增量数据导出 | `0 30 1 * * ?` | 每天 01:30 执行，默认关闭；首次从 `initialStartTime` 开始，后续从上次成功执行开始时间继续；导出窗口内审批通过的调入和调出，调出标记“删除”；交易日过滤暂未启用 |
 
-> Demo **cron** 须与下方「执行顺序」一致；列表 id 不要求和执行顺序相同。新增或改 cron 时必须先读第 4.1 节。`wind_code_sync` 与两项恒生池 Excel 导出任务均不改池状态，不受 4.1 顺序表约束。
+> Demo 行与 id 按上表顺序排列，且全部 `schedule_enabled=0`（默认关闭）。Demo **cron** 须与下方「执行顺序」一致；新增或改 cron 时必须先读第 4.1 节。`wind_code_sync` 与三项恒生池 Excel 导出任务均不改池状态，不受 4.1 顺序表约束。
 
 ## 2. 表结构
 
@@ -89,16 +91,16 @@
 
 | 顺序 | 时刻 | 任务 | 为何必须在这 |
 |------|------|------|----------------|
-| 1 | 02:00 | `security_expired_auto_out` | 先清到期债/股，避免后面入债再扫到已到期券 |
-| 2 | 03:00 | `crmw_expired_auto_out` | 先清到期 CRMW（独立表，与债股到期同属「先清理」） |
-| 3 | 04:00 | `company_outer_rating_not_aa_minus_auto_out` | **先改主体**：外评升高的主体先出池，并顺带出同池债 |
-| 4 | 05:00 | `company_outer_rating_aa_minus_auto_in` | 再入外评降低的主体（与上一条评级名单互斥，但仍须先出后入） |
-| 5 | 06:00 | `company_same_pool_bond_auto_in` | 主体池已稳定后，才把「已在本池主体」的债同池入库 |
-| 6 | 07:00 | `company_inpool_bond_auto_in` | 同上，Job 版入债（可跨池）；须在外评入主体之后，当天才能带上新入池主体的债 |
-| 7 | 08:00 | `company_not_in_pool_bond_auto_out` | **最后**清「主体已不在池」的债，覆盖刚被外评出池的主体 |
-| 8 | 09:00 | `bond_grade_inconformity_alert` | 池状态已稳定后再扫分级库不符，生成待办；不改池 |
+| 1 | 23:00 | `security_expired_auto_out` | 先清到期债/股，避免后面入债再扫到已到期券 |
+| 2 | 23:05 | `crmw_expired_auto_out` | 先清到期 CRMW（独立表，与债股到期同属「先清理」） |
+| 3 | 23:10 | `company_outer_rating_not_aa_minus_auto_out` | **先改主体**：外评升高的主体先出池，并顺带出同池债 |
+| 4 | 23:15 | `company_outer_rating_aa_minus_auto_in` | 再入外评降低的主体（与上一条评级名单互斥，但仍须先出后入） |
+| 5 | 23:20 | `company_same_pool_bond_auto_in` | 主体池已稳定后，才把「已在本池主体」的债同池入库 |
+| 6 | 每 10 分钟 | `company_inpool_bond_auto_in` | Job 版入债（可跨池）；高频扫描在池主体旗下新债 |
+| 7 | 次日 00:00 | `company_not_in_pool_bond_auto_out` | **最后**清「主体已不在池」的债；Demo 默认关闭，建议按需手动执行 |
+| 8 | 次日 01:00 | `bond_grade_inconformity_alert` | 池状态已稳定后再扫分级库不符，生成待办；不改池 |
 
-另：`wind_code_sync`（每 10 分钟，`0 */10 * * * ?`）将临时代码同步为正式代码（复用临时代码「更新为正式证券」方法，入口非管理页），**不读写池状态**，不插入上表顺序；可与上表任务并行（仍建议避免与重负载任务完全同秒打满库）。
+另：`wind_code_sync`（每 10 分钟，`0 */10 * * * ?`）将临时代码同步为正式代码（复用临时代码「更新为正式证券」方法，入口非管理页），**不读写池状态**，不插入上表顺序。按本次业务确认，`company_inpool_bond_auto_in` 也采用每 10 分钟执行，会在 23:00 / 23:10 / 23:20 与固定任务同秒触发；不同 taskCode 没有全局锁，启用前需确认数据库负载和并发执行可接受。
 
 违反顺序的典型后果：
 
@@ -139,14 +141,14 @@
 ## 7. 代码索引
 
 - 编排：`ScheduledTaskService`、`DynamicTaskScheduler`、`RrsScheduledTask`  
-- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）、`HsPoolFullExcelExportService`、`HsPoolIncrementExcelExportService`
+- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）、`HsPoolFullExcelExportService`、`HsPoolFullIncludingExpiredExcelExportService`、`HsPoolIncrementExcelExportService`
 - Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`、`GradeRuleAlertMapper` / `.xml`、`HsPoolExcelExportMapper` / `.xml`
 - Controller：`ScheduledTaskController`；提醒查询/处理另见 `GradeRuleAlertController`（`/api/v1/gradeRuleAlert`）  
 - SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`、`rrs_grade_rule_alert_schema.sql`、`rrs_grade_rule_alert_demo_data.sql`  
 
 以下业务摘要按 **Demo cron 执行顺序** 编排（与第 4.1 节一致）。
 
-### 7.0 `security_expired_auto_out`（02:00）
+### 7.0 `security_expired_auto_out`（23:00）
 
 对应老系统 `AdjustRuleByExpired` + `AdjustPoolByRule.doAdjustOutByRule`：
 
@@ -155,7 +157,7 @@
 3. 调出限制：目标池若配置 `out_restrict`（老关系类型 12），证券当前已在任一限制池中则跳过。  
 4. 仅 `deletePoolStatusSoft` 实际删到记录才写 `ip_adjust_log` 并计入影响条数。  
 
-### 7.1 `crmw_expired_auto_out`（03:00）
+### 7.1 `crmw_expired_auto_out`（23:05）
 
 对应老 IP_RULE `AdjustRuleCrmwDueOutPool`：
 
@@ -163,7 +165,7 @@
 2. 调出限制池阻断；仅软删成功才写日志。  
 3. 不走审批。  
 
-### 7.2 `company_outer_rating_not_aa_minus_auto_out`（04:00）
+### 7.2 `company_outer_rating_not_aa_minus_auto_out`（23:10）
 
 对应老系统 `AdjustRuleOutAA`（自动导出外部评级不是 AA- 及以下的主体）：
 
@@ -174,7 +176,7 @@
 5. 主体出池成功后，顺带调出同池旗下 `bond` 大类（对齐老 `findSecurityByCompanyCode(..., 4000)`）。  
 6. 调出限制池（关系 12 / `out_restrict`）对主体与旗下债分别拦截。  
 
-### 7.3 `company_outer_rating_aa_minus_auto_in`（05:00）
+### 7.3 `company_outer_rating_aa_minus_auto_in`（23:15）
 
 对应老系统 `AdjustRuleInAA`（自动入外部评级 AA- 及以下的主体）：
 
@@ -186,7 +188,7 @@
 
 > 本轮不实现老系统 `CEVALUITCODES`（评级机构白名单）；未配置时老系统整轮不跑，新系统用 Wind 全量外评。
 
-### 7.4 `company_same_pool_bond_auto_in`（06:00）
+### 7.4 `company_same_pool_bond_auto_in`（23:20）
 
 对应老 IP_RULE type=0「主体下债券自动入库」：
 
@@ -196,7 +198,7 @@
 4. **不**排除临时代码已更新，**不**排除 ABS。  
 5. 调入限制池（关系 11）阻断。  
 
-### 7.5 `company_inpool_bond_auto_in`（07:00）
+### 7.5 `company_inpool_bond_auto_in`（每 10 分钟）
 
 对应老 `AutoAdjustInNewBondToLimitPoolJob`：
 
@@ -212,7 +214,7 @@
 | `company_same_pool_bond_auto_in` | IP_RULE type=0 | **仅同池** `poolIds` | **可入** | `market_codes`；不排除临时代码 / ABS；看限制池 |
 | `company_inpool_bond_auto_in` | `AutoAdjustInNewBondToLimitPoolJob` | 同池或跨池 `mappings` | **不入** | 排除临时代码 / ABS / CRMW；不看限制池 |
 
-### 7.6 `company_not_in_pool_bond_auto_out`（08:00）
+### 7.6 `company_not_in_pool_bond_auto_out`（00:00，默认关闭）
 
 对应老 `AutoAdjustInLimitPoolToNewBondJob`（Quartz 默认不启用）：
 
@@ -223,7 +225,7 @@
 
 > **禁投人工链路 `syncCompanyBonds` 仍含 ABS/crmw**，与 Job 版定时任务排除 ABS 不是同一条链路。本次不改，待业务确认。
 
-### 7.7 `bond_grade_inconformity_alert`（09:00）
+### 7.7 `bond_grade_inconformity_alert`（01:00）
 
 对应老系统 `InconformityMaingrade2Job`。实现类 `GradeRuleAlertService`（`implements RrsScheduledTask`），**只提醒、不改池**。
 

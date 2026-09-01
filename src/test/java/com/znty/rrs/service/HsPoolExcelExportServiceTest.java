@@ -51,8 +51,8 @@ public class HsPoolExcelExportServiceTest {
             HsPoolExportPoolDto emptyPool = pool(2L, "恒生空池");
             when(exportMapper.queryExportPoolList(null)).thenReturn(Arrays.asList(bondPool, emptyPool));
             HsPoolExportRowDto exportRow = row();
-            when(exportMapper.queryFullExportRowList(1L)).thenReturn(Collections.singletonList(exportRow));
-            when(exportMapper.queryFullExportRowList(2L)).thenReturn(Collections.emptyList());
+            when(exportMapper.queryFullExportRowList(1L, false)).thenReturn(Collections.singletonList(exportRow));
+            when(exportMapper.queryFullExportRowList(2L, false)).thenReturn(Collections.emptyList());
 
             ScheduledTaskResult result = service.execute();
 
@@ -74,6 +74,35 @@ public class HsPoolExcelExportServiceTest {
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(3).getStringCellValue()).isEqualTo("上海证券交易所");
                 assertThat(workbook.getSheet("恒生空池").getLastRowNum()).isZero();
             }
+        } finally {
+            deleteDirectory(outputDir);
+        }
+    }
+
+    /** 验证含已到期全量任务使用包含到期数据口径并生成独立文件名。 */
+    @Test
+    public void fullIncludingExpiredExportShouldUseIncludingExpiredQuery() throws Exception {
+        HsPoolExcelExportMapper exportMapper = mock(HsPoolExcelExportMapper.class);
+        ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+        HsPoolFullIncludingExpiredExcelExportService service =
+                new HsPoolFullIncludingExpiredExcelExportService();
+        Path outputDir = Files.createTempDirectory("hs-pool-full-including-expired-test");
+        try {
+            inject(service, exportMapper, taskMapper, outputDir);
+            when(taskMapper.queryTaskByCode(HsPoolFullIncludingExpiredExcelExportService.TASK_CODE))
+                    .thenReturn(task("恒生池全量数据导出（含已到期）", null));
+            when(exportMapper.queryExportPoolList(null))
+                    .thenReturn(Collections.singletonList(pool(1L, "恒生债池")));
+            when(exportMapper.queryFullExportRowList(1L, true))
+                    .thenReturn(Collections.singletonList(row()));
+
+            ScheduledTaskResult result = service.execute();
+
+            assertThat(result.isSuccess()).isTrue();
+            verify(exportMapper).queryFullExportRowList(1L, true);
+            String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
+            assertThat(Paths.get(filePath).getFileName().toString())
+                    .startsWith("hs_pool_full_including_expired_");
         } finally {
             deleteDirectory(outputDir);
         }
@@ -105,7 +134,7 @@ public class HsPoolExcelExportServiceTest {
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getMessage()).contains("首次增量");
             verify(exportMapper).queryIncrementExportRowList(eq(1L), eq(initialTime), any(Date.class));
-            verify(exportMapper, never()).queryFullExportRowList(any(Long.class));
+            verify(exportMapper, never()).queryFullExportRowList(any(Long.class), eq(false));
             String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
             try (XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(filePath))) {
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(2).getStringCellValue()).isEqualTo("删除");
@@ -130,7 +159,7 @@ public class HsPoolExcelExportServiceTest {
             fallbackPool.setPoolFullName("投资池/债券池");
             HsPoolExportPoolDto multiNamePool = pool(2L, "恒生池A|恒生池B");
             when(exportMapper.queryExportPoolList(null)).thenReturn(Arrays.asList(fallbackPool, multiNamePool));
-            when(exportMapper.queryFullExportRowList(any(Long.class))).thenReturn(Collections.emptyList());
+            when(exportMapper.queryFullExportRowList(any(Long.class), eq(false))).thenReturn(Collections.emptyList());
 
             ScheduledTaskResult result = service.execute();
 
@@ -162,12 +191,12 @@ public class HsPoolExcelExportServiceTest {
             HsPoolExportPoolDto secondPool = pool(2L, "恒生债池");
             secondPool.setPoolName("债券池二");
             when(exportMapper.queryExportPoolList(null)).thenReturn(Arrays.asList(firstPool, secondPool));
-            when(exportMapper.queryFullExportRowList(1L)).thenReturn(Collections.singletonList(row()));
+            when(exportMapper.queryFullExportRowList(1L, false)).thenReturn(Collections.singletonList(row()));
             HsPoolExportRowDto secondRow = row();
             secondRow.setSecurityShortName("测试债二");
             secondRow.setWindCodeSh("110002.SH");
             secondRow.setWindCodeNib("112002.IB");
-            when(exportMapper.queryFullExportRowList(2L)).thenReturn(Collections.singletonList(secondRow));
+            when(exportMapper.queryFullExportRowList(2L, false)).thenReturn(Collections.singletonList(secondRow));
 
             ScheduledTaskResult result = service.execute();
 
@@ -225,7 +254,7 @@ public class HsPoolExcelExportServiceTest {
             HsPoolExportPoolDto emptyPool = pool(15L, "空池");
             when(exportMapper.queryExportPoolList(Arrays.asList(15L, 16L)))
                     .thenReturn(Collections.singletonList(emptyPool));
-            when(exportMapper.queryFullExportRowList(15L)).thenReturn(Collections.emptyList());
+            when(exportMapper.queryFullExportRowList(15L, false)).thenReturn(Collections.emptyList());
 
             ScheduledTaskResult result = service.execute();
 
@@ -275,7 +304,7 @@ public class HsPoolExcelExportServiceTest {
             inject(service, exportMapper, taskMapper, outputDir);
             when(exportMapper.queryExportPoolList(Collections.singletonList(15L)))
                     .thenReturn(Collections.singletonList(pool(15L, "恒生债池")));
-            when(exportMapper.queryFullExportRowList(15L)).thenReturn(Collections.singletonList(row()));
+            when(exportMapper.queryFullExportRowList(15L, false)).thenReturn(Collections.singletonList(row()));
             Date endTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2026-08-31 10:30:00");
 
             CommonFileDto file = service.exportManual(Collections.singletonList(15L), null, endTime);
@@ -298,16 +327,20 @@ public class HsPoolExcelExportServiceTest {
         }
     }
 
-    /** 验证全量 SQL 仅过滤普通证券到期日，不过滤 CRMW 到期日。 */
+    /** 验证全量 SQL 按参数过滤普通证券到期日，但始终不过滤 CRMW 到期日。 */
     @Test
     public void fullExportSqlShouldNotFilterCrmwMaturityDate() throws Exception {
         Path mapperPath = Paths.get("src/main/resources/mapper/HsPoolExcelExportMapper.xml");
         String mapperXml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
+        int ordinaryBlockStart = mapperXml.indexOf("<!-- 普通证券当前状态");
         int crmwBlockStart = mapperXml.indexOf("<!-- CRMW 当前状态");
         int crmwBlockEnd = mapperXml.indexOf(") export_row", crmwBlockStart);
 
+        assertThat(ordinaryBlockStart).isGreaterThanOrEqualTo(0);
         assertThat(crmwBlockStart).isGreaterThanOrEqualTo(0);
         assertThat(crmwBlockEnd).isGreaterThan(crmwBlockStart);
+        assertThat(mapperXml.substring(ordinaryBlockStart, crmwBlockStart))
+                .contains("<if test=\"!includeExpired\">", "maturity_date");
         assertThat(mapperXml.substring(crmwBlockStart, crmwBlockEnd)).doesNotContain("maturity_date");
     }
 

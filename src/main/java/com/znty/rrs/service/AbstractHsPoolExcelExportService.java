@@ -71,6 +71,15 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     protected abstract boolean isIncrement();
 
     /**
+     * 判断全量任务是否包含已到期普通证券。
+     *
+     * @return true 表示包含已到期普通证券；增量任务不使用该配置
+     */
+    protected boolean includeExpiredForFullExport() {
+        return false;
+    }
+
+    /**
      * 获取导出文件名前缀。
      *
      * @return 文件名前缀
@@ -215,7 +224,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
      */
     private List<HsPoolExportRowDto> queryRows(Long poolId, Date windowStart, Date endTime) {
         if (!isIncrement()) {
-            return hsPoolExcelExportMapper.queryFullExportRowList(poolId);
+            return hsPoolExcelExportMapper.queryFullExportRowList(poolId, includeExpiredForFullExport());
         }
         return hsPoolExcelExportMapper.queryIncrementExportRowList(poolId, windowStart, endTime);
     }

@@ -42,7 +42,7 @@
         ORDER BY p.id ASC
     </select>
 
-    <!-- 合并普通池状态与独立 CRMW 状态：普通证券排除已到期数据，CRMW 按老系统口径不校验到期日 -->
+    <!-- 合并普通池状态与独立 CRMW 状态：普通证券按任务参数决定是否排除已到期数据，CRMW 按老系统口径不校验到期日 -->
     <select id="queryFullExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
         SELECT export_row.securityShortName
                ,export_row.wind_code_sh
@@ -69,7 +69,9 @@
               AND ips.audit_status = '20'
               AND dst.category_type != 'company'
               AND ips.security_type != 'crmw'
-              AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y-%m-%d'))
+              <if test="!includeExpired">
+                  AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y-%m-%d'))
+              </if>
             UNION ALL
             <!-- CRMW 当前状态：导出凭证本身，主数据缺失时使用状态表凭证代码和名称兜底 -->
             SELECT COALESCE(crmw_si.short_name, ips.crmw_name) AS securityShortName
