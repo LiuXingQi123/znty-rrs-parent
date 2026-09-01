@@ -16,6 +16,6 @@ public class PresetSetDto {
     /** 选项集名称 */
     private String name;
 
-    /** 选项值列表 */
-    private List<String> options;
+    /** 选项列表（value=脚本取值，label=中文名称） */
+    private List<PresetOptionDto> options;
 }

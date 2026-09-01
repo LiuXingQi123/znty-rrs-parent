@@ -73,7 +73,7 @@ public class RuleServiceTest {
         RuleReq req = new RuleReq();
         req.setId(id);
         req.setName("评级规则");
-        req.setCategory("business");
+        req.setCategory("adjust_in");
         req.setScript("return true;");
         return req;
     }
@@ -83,7 +83,7 @@ public class RuleServiceTest {
         RuleDefinitionBo rule = new RuleDefinitionBo();
         rule.setId(id);
         rule.setRuleName("评级规则");
-        rule.setCategoryCode("business");
+        rule.setCategoryCode("adjust_in");
         rule.setScript("return true;");
         return rule;
     }

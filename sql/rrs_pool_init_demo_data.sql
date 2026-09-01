@@ -323,8 +323,8 @@ INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, 
 
 -- 自动调库规则
 INSERT INTO `ip_pool_auto_rule` (`id`, `pool_id`, `rule_type`, `rule_id`, `rule_desc`, `is_deleted`, `crte_time`, `updt_time`) VALUES
-(1, 15, 'auto_in', 5, '风险预警规则触发列入债券禁止库', 0, NOW(), NOW()),
-(2, 15, 'auto_out', 5, '债券禁止库自动调出', 0, NOW(), NOW());
+(1, 15, 'auto_out', 43, '到期自动出池（规则管理：自动-到期出池）', 0, NOW(), NOW()),
+(2, 15, 'auto_in', 44, '主体外评AA-自动入池（规则管理：自动-主体外评AA-入池）', 0, NOW(), NOW());
 
 INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `handler_type`, `handler_id`, `handler_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 (1,  'viewable',         'user', 1, '管理员', 0, NOW(), NOW()),

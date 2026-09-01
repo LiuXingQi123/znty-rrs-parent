@@ -27,8 +27,8 @@ DROP TABLE IF EXISTS `rule_category`;
 -- ----------------------------------------------------------------------------
 CREATE TABLE `rule_category` (
   `id`            BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
-  `category_code` VARCHAR(32)  DEFAULT NULL             COMMENT '分类编码，如 risk、marketing、pricing',
-  `category_name` VARCHAR(50)  DEFAULT NULL             COMMENT '分类名称，如风控规则、营销规则、定价规则',
+  `category_code` VARCHAR(32)  DEFAULT NULL             COMMENT '分类编码，如 adjust_in、adjust_out、grade_matrix、flow_match',
+  `category_name` VARCHAR(50)  DEFAULT NULL             COMMENT '分类名称，如调入通用校验、调出通用校验、信用债分级矩阵、流程匹配',
   `sort_no`       INT          DEFAULT NULL             COMMENT '排序号',
   `enabled`       TINYINT      DEFAULT NULL             COMMENT '是否启用：1=启用 / 0=停用',
   `crte_time`     DATETIME     DEFAULT NULL             COMMENT '创建时间',
@@ -64,8 +64,8 @@ CREATE TABLE `rule_definition` (
 CREATE TABLE `rule_param` (
   `id`          BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
   `rule_id`     BIGINT       DEFAULT NULL             COMMENT '规则 ID，对应 rule_definition.id',
-  `param_name`  VARCHAR(64)  DEFAULT NULL             COMMENT '参数字段名，即脚本变量名，如 orderAmount',
-  `param_label` VARCHAR(100) DEFAULT NULL             COMMENT '参数显示名称，如订单金额',
+  `param_name`  VARCHAR(64)  DEFAULT NULL             COMMENT '参数字段名，即脚本变量名，如 innerIssuerRating、absFlag',
+  `param_label` VARCHAR(100) DEFAULT NULL             COMMENT '参数显示名称，如发债主体内评',
   `param_type`  VARCHAR(32)  DEFAULT NULL             COMMENT '参数类型：string=字符串 / number=数值 / select=单选 / multiselect=多选',
   `required`    TINYINT      DEFAULT NULL             COMMENT '是否必填：1=必填 / 0=非必填',
   `sort_no`     INT          DEFAULT NULL             COMMENT '排序号',

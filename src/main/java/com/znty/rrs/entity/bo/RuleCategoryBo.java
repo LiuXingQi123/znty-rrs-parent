@@ -7,13 +7,13 @@ import java.util.Date;
 
 /**
  * 规则分类实体，对应表 rule_category。
- * <p>用于对规则进行分组管理（如风控规则、营销规则），支持启用/禁用的排序。</p>
+ * <p>用于对规则按 checkAdjust 调用点分组（调入通用、调出通用、分级矩阵等）。</p>
  */
 @Data
 public class RuleCategoryBo {
     /** 主键 ID */
     private Long id;
-    /** 分类编码（唯一标识，如 risk、marketing） */
+    /** 分类编码（唯一标识，如 adjust_in、grade_matrix） */
     private String categoryCode;
     /** 分类名称 */
     private String categoryName;

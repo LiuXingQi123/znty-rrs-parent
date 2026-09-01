@@ -69,17 +69,17 @@ Vue 2.5 + Element UI 2.15 + axios + moment（CDN）。所有请求走统一封�
 ### 3.1 新建/编辑规则
 
 - 入口：「新建规则」→ `openCreateRuleDialog`（`editingRule=null`）；表格「编辑」/规则名链接 → `editRule(rule)`（`editingRule=rule`，深拷贝避免污染列表）。
-- 表单字段：规则名称（maxlength=50）、规则描述、规则分类、规则参数（标签云，每标签显示类型徽标+名称，可关闭）、规则脚本（textarea + 4 个快速模板：条件折扣/分级评分/开关控制/加权计算）。
+- 表单字段：规则名称（maxlength=50）、规则描述、规则分类、规则参数（标签云，每标签显示类型徽标+名称，可关闭）、规则脚本（textarea + 4 个快速模板：池锁定/进行中流程/债券到期/ABS只能一级库）。模板均先校验证券代码非空，失败文案与 `checkAdjust` / `describeRange` 对齐。
 - 保存 `saveRule()`：前端校验 `name` 和 `script` 非空，构造请求体：
   ```json
   { "id": "编辑时为规则ID，新建时为null", "name", "description", "category",
-    "paramList": [{"label","name","type":"string|number|select|multiselect","options":["..."]}],
+    "paramList": [{"label","name","type":"string|number|select|multiselect","options":[{"value","label"}]}],
     "script" }
   ```
   注意：前端 `_value`/`_multiValue`（临时输入值）**不发送**，仅发配置字段。
 - 接口：新建 `/api/v1/rules/addRule`，编辑 `/api/v1/rules/editRule`。成功后关弹窗、notify、`loadRules()` 刷新。
 
-**后端 addRule**（`@Transactional`）：`validateSaveReq`（name/script 非空）；构造 `RuleDefinitionBo`（`ruleName` trim、`categoryCode` 默认 "business"、`status="active"`、`deletedFlag=0`）；`addRule` INSERT 回填 id；`replaceParams` 全量替换参数和选项（先删后增：`deleteParamOptionsByRuleId` + `deleteParamsByRuleId`，再遍历 paramList 插入 `RuleParamBo`，`paramType` 默认 "string"、`paramLabel` 默认取 `paramName`、`required=0`、`sortNo=i+1`，`saveOptions` 写候选项）；返回 `detailById`。
+**后端 addRule**（`@Transactional`）：`validateSaveReq`（name/script 非空）；构造 `RuleDefinitionBo`（`ruleName` trim、`categoryCode` 默认 "adjust_in"、`status="active"`、`deletedFlag=0`）；`addRule` INSERT 回填 id；`replaceParams` 全量替换参数和选项（先删后增：`deleteParamOptionsByRuleId` + `deleteParamsByRuleId`，再遍历 paramList 插入 `RuleParamBo`，`paramType` 默认 "string"、`paramLabel` 默认取 `paramName`、`required=0`、`sortNo=i+1`，`saveOptions` 写候选项）；返回 `detailById`。
 
 **后端 editRule**（`@Transactional`）：`validateSaveReq`；`requireRule(id)` 校验存在；`editRule` UPDATE（仅未删除记录）；`replaceParams` 全量替换；返回 `detailById`。
 
@@ -97,7 +97,7 @@ Vue 2.5 + Element UI 2.15 + axios + moment（CDN）。所有请求走统一封�
 
 参数由「新增参数 Dialog」两步式录入：
 - **第一步**选类型：4 张卡片 `string`（任意文本）/`number`（整数或小数）/`select`（单选）/`multiselect`（多选）。
-- **第二步**填信息：显示名称（`label`）、字段名（`name`，作为脚本变量名）；select/multiselect 多一个「选项来源」，可选预设选项集或自定义选项（手动输入回车追加）。
+- **第二步**填信息：显示名称（`label`）、字段名（`name`，作为脚本变量名）；select/multiselect 多一个「选项来源」，可选预设选项集或自定义选项（手动输入回车追加）。预设芯片与测试下拉同时展示选项编码和中文名称（编码在左、中文靠右）；脚本仍写入编码。
 
 `confirmAddParam()` 前端校验：`label`/`name` 非空，select/multiselect 须有 ≥1 选项，`name` 不与已有参数重名。通过后 `form.params.push({label,name,type,options})`。
 
@@ -149,7 +149,7 @@ Vue 2.5 + Element UI 2.15 + axios + moment（CDN）。所有请求走统一封�
 
 ### 4.5 执行结果展示
 
-执行测试 Dialog 底部「执行输出」区：黑底控制台 `v-for` 渲染 `testOutput`，每行 `{time, type, msg}`：时间灰色、tag 按类型着色（info 蓝/success 绿/error 红/warn 橙）、msg。与后端 `RuleRunResultDto.logs` 结构一致。
+执行测试 Dialog 底部「执行输出」区：上方展示返回值摘要（通过绿底 / 业务失败黄底 / 脚本异常红底），下方浅底高对比日志 `v-for` 渲染 `testOutput`，每行 `{time, type, msg}`：时间次级色、tag 按类型着色（info 蓝/success 绿/error 红/warn 金）、正文一级文字。执行后日志滚到最新一行。与后端 `RuleRunResultDto.logs` / `output` 结构一致。
 
 ### 4.6 测试用例管理
 
@@ -203,8 +203,9 @@ Vue 2.5 + Element UI 2.15 + axios + moment（CDN）。所有请求走统一封�
 
 ### 5.3 返回结构细节
 
-- `RuleRunResultDto`：`id/ruleId/caseId/status/output/errorMessage/startTime/finishTime/logs`，`logs` 每项 `{time(HH:mm:ss), type(info\|success\|error), msg}`。
-- `RuleDto.params` 每项 Map：`{id:Long, label, name, type, options:List<String>}`。
+- `RuleRunResultDto`：`id/ruleId/caseId/status/output/errorMessage/startTime/finishTime/logs`，`logs` 每项 `{time(HH:mm:ss), type(info\|success\|error), msg}`。`status=pass` 表示脚本无异常（业务拦截文案在 `output`，不把 `pass` 当成「校验通过」）。
+- `RuleDto.params` 每项 Map：`{id:Long, label, name, type, options:List<{value,label}>}`（兼容旧数据纯字符串）。
+- `PresetSetDto.options`：`List<{value,label}>`，中文名来自 `rule_preset_option_item.option_label`。
 - `TestCaseDto.params`：`LinkedHashMap<String,String>` 保持插入顺序。
 
 ---
@@ -218,8 +219,8 @@ Vue 2.5 + Element UI 2.15 + axios + moment（CDN）。所有请求走统一封�
 | `rule_definition` | 规则定义 | `rule_name, description, category_code, script(MEDIUMTEXT), status(active/disabled), deleted_flag(0/1)` |
 | `rule_param` | 规则参数 | `rule_id, param_name(脚本变量名), param_label, param_type(string/number/select/multiselect), required, sort_no` |
 | `rule_param_option` | 参数选项 | `param_id, option_value, option_label, sort_no` |
-| `rule_category` | 规则分类 | `category_code, category_name, sort_no, enabled`（6 类：risk/credit/pricing/admission/warning/other） |
-| `rule_preset_option_set` + `rule_preset_option_item` | 预设选项集 | 12 套预设（主体评级/外评机构/债券期限/证券类型/行业分类等） |
+| `rule_category` | 规则分类 | `category_code, category_name, sort_no, enabled`（按 checkAdjust 调用点：adjust_in/adjust_out/bond/stock/fund/grade_matrix/flow_match/submit/auto_adjust/other） |
+| `rule_preset_option_set` + `rule_preset_option_item` | 预设选项集 | 10 套预设（是否、主体内评分档 8 档、证券类型、分级库档位、特殊债类型、调整方向、审核状态、报告限制、品种大类、交易场所） |
 | `rule_test_case` | 测试用例 | `case_name, rule_id, rule_name_snapshot, last_result(pending/running/pass/fail，pending 存 NULL), last_output, last_run_time` |
 | `rule_test_case_param` | 用例参数值 | `case_id, param_name, param_label_snapshot, param_type_snapshot, param_value(TEXT，multiselect 逗号分隔)` |
 | `rule_test_run` | 测试执行记录 | `case_id(临时执行为 NULL), rule_id, run_status(running/pass/fail), output, error_message, start_time, finish_time` |
@@ -278,6 +279,12 @@ rule_preset_option_set 1──N rule_preset_option_item（独立，仅作选项�
 
 ## 8. 验收标准
 
+- Demo 规则按 checkAdjust 检查项拆分（调入/调出通用、债券矩阵、流程匹配、提交、自动调库），描述带 Java 方法名，返回「通过」或与运行时相同的失败文案，便于后续按规则名调用。
+- 调库类规则脚本开头对齐 `validateCheckAdjustReq` / `loadSharedData`：证券代码空 → `证券代码不能为空`；调库项/目标池 ID 空 → `调库项不能为空`；`securityExists=否` → `证券不存在`；`poolExists=否` → `目标投资池不存在`。未填任何参数不得返回「通过」。
+- 布尔条件同时认 `是` / `1` / 数值 1，对齐 Java `lock_flag==1` 等整型字段，便于后续 `executeRule` 传入上下文。
+- 主体债入库失败文案对齐 `CreditBondSpecialInboundRule.describeRange`（如 `目标池「二级库」不在特殊债调整后的允许范围内（仅 1 级）`）。
+- 白名单规则按当前 `WHITELIST_POOL_IDS` 空集：未配置时固定不命中。
+- 自动入池按 `CompanyOuterRatingAaMinusAutoInService`：外评 AA- 及以下（含 A+）才入，AAA/AA/AA+ 不入。
 - 规则脚本保存后可立即执行，并可查看完整执行日志。
 - number 参数按 BigDecimal 精确解析，含小数点→Double，否则→Long。
 - 批量执行单条失败不阻断其他用例。

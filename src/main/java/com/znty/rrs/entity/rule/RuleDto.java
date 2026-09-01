@@ -19,7 +19,7 @@ public class RuleDto {
     private String description;
     /** 所属分类编码 */
     private String category;
-    /** 规则参数列表，每项含 id/label/name/type/options 键 */
+    /** 规则参数列表，每项含 id/label/name/type/options[{value,label}] */
     private List<Map<String, Object>> params = new ArrayList<>();
     /** QLExpress 规则脚本 */
     private String script;

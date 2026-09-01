@@ -14,6 +14,7 @@ import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.RuleMapper;
 import com.znty.rrs.mapper.TestCaseMapper;
 import com.znty.rrs.entity.rule.CategoryDto;
+import com.znty.rrs.entity.rule.PresetOptionDto;
 import com.znty.rrs.entity.rule.PresetSetDto;
 import com.znty.rrs.entity.bo.RuleDefinitionBo;
 import com.znty.rrs.entity.rule.RuleDto;
@@ -104,7 +105,7 @@ public class RuleService {
         rule.setRuleName(req.getName().trim());
         rule.setDescription(req.getDescription());
         // 填充字符串默认值
-        rule.setCategoryCode(defaultText(req.getCategory(), "business"));
+        rule.setCategoryCode(defaultText(req.getCategory(), "adjust_in"));
         rule.setScript(req.getScript());
         rule.setStatus(RuleStatus.ACTIVE.getCode());
         rule.setDeletedFlag(0);
@@ -126,7 +127,7 @@ public class RuleService {
         rule.setRuleName(req.getName().trim());
         rule.setDescription(req.getDescription());
         // 填充字符串默认值
-        rule.setCategoryCode(defaultText(req.getCategory(), "business"));
+        rule.setCategoryCode(defaultText(req.getCategory(), "adjust_in"));
         rule.setScript(req.getScript());
         ruleMapper.editRule(rule);
         // 全量替换规则的参数和选项（先删后增）
@@ -294,16 +295,16 @@ public class RuleService {
             return Collections.emptyList();
         }
         List<Long> setIds = sets.stream().map(RulePresetOptionSetBo::getId).collect(Collectors.toList());
-        Map<Long, List<String>> itemMap = ruleMapper.queryPresetItemList(setIds).stream()
-                .collect(Collectors.groupingBy(
-                        RulePresetOptionItemBo::getSetId,
-                        Collectors.mapping(RulePresetOptionItemBo::getOptionValue, Collectors.toList())
-                ));
+        Map<Long, List<RulePresetOptionItemBo>> itemMap = ruleMapper.queryPresetItemList(setIds).stream()
+                .collect(Collectors.groupingBy(RulePresetOptionItemBo::getSetId));
         return sets.stream().map(set -> {
             PresetSetDto dto = new PresetSetDto();
             dto.setId(set.getId());
             dto.setName(set.getSetName());
-            dto.setOptions(itemMap.getOrDefault(set.getId(), Collections.emptyList()));
+            // 选项同时带编码和中文名，供预设芯片与参数下拉展示
+            dto.setOptions(itemMap.getOrDefault(set.getId(), Collections.emptyList()).stream()
+                    .map(this::toPresetOption)
+                    .collect(Collectors.toList()));
             return dto;
         }).collect(Collectors.toList());
     }
@@ -367,15 +368,25 @@ public class RuleService {
         List<Object> rawList = (List<Object>) optionsObj;
         int idx = 0;
         for (Object item : rawList) {
-            String value = item == null ? null : String.valueOf(item);
+            String value = null;
+            String label = null;
+            if (item instanceof Map) {
+                Map<?, ?> optionMap = (Map<?, ?>) item;
+                Object rawValue = optionMap.get("value");
+                Object rawLabel = optionMap.get("label");
+                value = rawValue == null ? null : String.valueOf(rawValue);
+                label = rawLabel == null ? null : String.valueOf(rawLabel);
+            } else if (item != null) {
+                value = String.valueOf(item);
+            }
             if (!StringUtils.hasText(value)) {
                 continue;
             }
             idx++;
             RuleParamOptionBo option = new RuleParamOptionBo();
             option.setParamId(paramId);
-            option.setOptionValue(value);
-            option.setOptionLabel(value);
+            option.setOptionValue(value.trim());
+            option.setOptionLabel(StringUtils.hasText(label) ? label.trim() : value.trim());
             option.setSortNo(idx);
             ruleMapper.addParamOption(option);
         }
@@ -420,16 +431,34 @@ public class RuleService {
         return dto;
     }
 
-    /** RuleParamBo → Map，附带选项值列表 */
+    /** RuleParamBo → Map，附带选项 value/label */
     private Map<String, Object> toParamMap(RuleParamBo param, List<RuleParamOptionBo> options) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", param.getId());
         map.put("label", param.getParamLabel());
         map.put("name", param.getParamName());
         map.put("type", param.getParamType());
+        // 选项带 value/label，脚本仍用 value
         map.put("options", options == null
                 ? new ArrayList<>()
-                : options.stream().map(RuleParamOptionBo::getOptionValue).collect(Collectors.toList()));
+                : options.stream().map(this::toParamOptionMap).collect(Collectors.toList()));
+        return map;
+    }
+
+    /** 预设选项 Bo → 值+中文名 */
+    private PresetOptionDto toPresetOption(RulePresetOptionItemBo item) {
+        PresetOptionDto dto = new PresetOptionDto();
+        dto.setValue(item.getOptionValue());
+        dto.setLabel(StringUtils.hasText(item.getOptionLabel()) ? item.getOptionLabel() : item.getOptionValue());
+        return dto;
+    }
+
+    /** 参数选项 Bo → {value,label}，供下拉展示中文名 */
+    private Map<String, Object> toParamOptionMap(RuleParamOptionBo option) {
+        Map<String, Object> map = new LinkedHashMap<String, Object>();
+        String value = option.getOptionValue();
+        map.put("value", value);
+        map.put("label", StringUtils.hasText(option.getOptionLabel()) ? option.getOptionLabel() : value);
         return map;
     }
 
