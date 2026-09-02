@@ -55,4 +55,10 @@ public class SysAttachmentControllerTest extends ControllerApiTestSupport {
     public void queryAttachmentList_ValidRequest_ReturnsApiResponse() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/attachments/queryAttachmentList", "{\"adjustLogId\":1}");
     }
+
+    /** 验证批量查询附件列表仍返回统一响应 */
+    @Test
+    public void queryAttachmentList_MultipleIds_ReturnsApiResponse() throws Exception {
+        assertPostSuccess(mockMvc, "/api/v1/attachments/queryAttachmentList", "{\"adjustLogIds\":[1,2]}");
+    }
 }

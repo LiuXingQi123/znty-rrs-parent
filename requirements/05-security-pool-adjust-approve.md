@@ -123,7 +123,7 @@
 5. `POST /api/v1/securityPoolAdjust/queryAdjustLogList {securityCode, adjustBatchNo}` — 调库记录列表（按批次过滤；若不传批次，后端只返回未终结流程的记录：`audit_status NOT IN ('-1','20','21','99')`）
 
 随后串行调用：
-- `loadLogAttachments(adjustLogList)` — 对每条调库记录调 `POST /api/v1/attachments/queryAttachmentList {adjustLogId}`，按 `attachmentCategory` 分组为 `attachmentFiles`（信评报告）/`materialFiles`（其他材料）。
+- `loadLogAttachments(adjustLogList)` — 收集并去重全部日志 ID，一次调用 `POST /api/v1/attachments/queryAttachmentList {adjustLogIds}`，按返回的 `mainId` 与 `attachmentCategory` 分组为 `attachmentFiles`（信评报告）/`materialFiles`（其他材料）。
 - `loadFlowSteps(adjustLogList)` — 对候选调库记录逐个调 `POST /api/v1/securityPoolAdjust/queryAdjustStepList {adjustLogId, adjustBatchNo}`，找到第一个有 `stepStatus==='pending'` 步骤的记录作为 `activeAdjustLog`，其步骤列表存入 `flowStepList`。
 
 ### 2.3 详情区与流程状态表渲染
@@ -373,7 +373,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 | `securityPoolAdjust/addAdjustLogWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `AdjustSubmitDto` | 提交调库申请（带附件，含直通流程即时入池） |
 | `myMatters/queryMyMattersPage` | flowIds/startDateStart/startDateEnd/processDescription/auditStatus/stepStatus(pending\|completed)/initiatorName/currentUserId + 分页 | `PageResult<MyMattersDto>` | 我的事宜分页列表 |
 | `myMatters/queryFlowOptionList` | `{currentUserId}` | `List<FlowOptionDto>` | 我的事宜流程名称下拉 |
-| `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
+| `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 
 > 路径均带前缀 `/api/v1/`。
 

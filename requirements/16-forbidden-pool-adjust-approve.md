@@ -24,7 +24,7 @@
 
 `queryCompanyDetail` / `queryAdjustPoolList`(in) / `queryAdjustPoolList`(out) / `queryCompanyPoolStatus` / `queryAdjustLogList { companyCode, adjustBatchNo }`。
 
-随后 `loadLogAttachments(adjustLogList)`（每条调 `/api/v1/attachments/queryAttachmentList`，按 `attachmentCategory` 拆信评报告/其他材料）、`loadFlowSteps(adjustLogList)`（`uniqueAdjustLogsByFlow` 按 `batch:批次号`/`log:记录ID` 去重，逐个调 `queryAdjustStepList`，选首个含 `pending` 步骤的为 `activeAdjustLog`，步骤存 `flowStepList`）。
+随后 `loadLogAttachments(adjustLogList)`（收集并去重全部日志 ID，一次调用 `/api/v1/attachments/queryAttachmentList`，按返回的 `mainId` 与 `attachmentCategory` 拆信评报告/其他材料）、`loadFlowSteps(adjustLogList)`（`uniqueAdjustLogsByFlow` 按 `batch:批次号`/`log:记录ID` 去重，逐个调 `queryAdjustStepList`，选首个含 `pending` 步骤的为 `activeAdjustLog`，步骤存 `flowStepList`）。
 
 ### 2.2 调库记录表列
 
@@ -142,7 +142,7 @@ finishAdjustBatch(step):
 | `forbiddenPoolAdjust/addAdjustLog`（JSON）/ `addAdjustLogWithFiles`（multipart） | `ForbiddenPoolAdjustSubmitReq` | `ForbiddenPoolAdjustSubmitDto` | next 模式提交调库申请 |
 | `myMatters/queryMyMattersPage` | flowIds, startDateStart/End, processDescription, auditStatus, stepStatus(pending\|completed), initiatorName, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>` | 我的事宜分页（待办入口） |
 | `myMatters/queryFlowOptionList` | `{ currentUserId }` | `List<FlowOptionDto>` | 我的事宜流程名称下拉 |
-| `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
+| `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 
 > 路径均带前缀 `/api/v1/`。`SecurityPoolAdjustAuditDto`：`{ adjustLogId, adjustBatchNo, stepId, auditStatus, finished, nextStepCreated, message }`。`SecurityPoolAdjustAuditReq.AttachmentChange`：`adjustLogId/creditReportFileIndexes/materialFileIndexes/creditReportSourceAttachmentIds/materialSourceAttachmentIds/deleteAttachmentIds`。
 

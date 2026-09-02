@@ -267,13 +267,23 @@ public class SysAttachmentService {
         }
     }
 
-    /** 按调库日志 ID 查询附件列表 */
+    /** 按单个或多个调库日志 ID 查询附件列表 */
     public List<SysAttachmentDto> queryAttachmentList(SysAttachmentReq req) {
-        Long adjustLogId = req.getAdjustLogId();
-        if (adjustLogId == null) {
+        LinkedHashSet<Long> adjustLogIds = new LinkedHashSet<>();
+        if (req != null && req.getAdjustLogIds() != null) {
+            for (Long adjustLogId : req.getAdjustLogIds()) {
+                if (adjustLogId != null) {
+                    adjustLogIds.add(adjustLogId);
+                }
+            }
+        }
+        if (req != null && req.getAdjustLogId() != null) {
+            adjustLogIds.add(req.getAdjustLogId());
+        }
+        if (adjustLogIds.isEmpty()) {
             throw new BizException("调库日志 ID 不能为空");
         }
-        return sysAttachmentMapper.queryAttachmentList(adjustLogId);
+        return sysAttachmentMapper.queryAttachmentList(new ArrayList<>(adjustLogIds));
     }
 
     /**

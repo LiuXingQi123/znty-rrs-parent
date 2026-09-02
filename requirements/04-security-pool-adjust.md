@@ -353,7 +353,7 @@
 | `addAdjustLogWithFiles`（multipart） | `request`=JSON + `files`=MultipartFile[] + `originalFileNameListJson`=JSON 数组字符串（可选，与 files 同序） | `AdjustSubmitDto` | 提交调库申请（带附件，multipart 入口；JSON 无附件入口为 `addAdjustLog`）。公司环境优先用 `originalFileNameListJson` 落库原始中文名 |
 | `queryAdjustLogList` | securityCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录 |
 | `queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表 |
-| `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
+| `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 内部报告分页 |
 | `reports/queryOutReportPage` | 同上 | PageResult | 外部报告分页 |

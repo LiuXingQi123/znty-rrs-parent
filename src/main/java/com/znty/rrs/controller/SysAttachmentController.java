@@ -27,7 +27,7 @@ public class SysAttachmentController {
     @Resource
     private SysAttachmentService sysAttachmentService;
 
-    /** 查询调库日志附件列表 */
+    /** 按单个或多个调库日志 ID 查询附件列表 */
     @PostMapping("/queryAttachmentList")
     public ApiResponse<List<SysAttachmentDto>> queryAttachmentList(@RequestBody SysAttachmentReq req) {
         return ApiResponse.success(sysAttachmentService.queryAttachmentList(req));

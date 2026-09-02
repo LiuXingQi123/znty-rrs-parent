@@ -115,7 +115,7 @@
 
 ### 3.5 附件展示与下载
 
-- 调库记录附件：`loadLogAttachments` 对每条 log 调 `/api/v1/attachments/queryAttachmentList { adjustLogId }`，按 `attachmentCategory` 拆为信评报告（`credit_report_hand/in/out`）与其他材料（`material_hand/in/out`）。
+- 调库记录附件：`loadLogAttachments` 收集并去重全部日志 ID，一次调用 `/api/v1/attachments/queryAttachmentList { adjustLogIds }`，按返回的 `mainId` 和 `attachmentCategory` 拆为信评报告（`credit_report_hand/in/out`）与其他材料（`material_hand/in/out`）。
 - 下载：`downloadAttachment` `POST /api/v1/attachments/downloadAttachment { id }` 返回 `ApiResponse<String>`（Base64），前端解码为 Blob 后 `URL.createObjectURL` + `<a download>`。本地待提交文件用 `downloadLocalFile`。
 - 信评报告选择弹窗：内/外报告 Tab，分页查询 `/api/v1/reports/queryInReportPage`、`/api/v1/reports/queryOutReportPage`，支持标题/证券编码/类型/撰写日期筛选，选中后回填到 `creditReportSelections`/`otherMaterialSelections`。打开弹窗时默认带上当前证券编码（`bondDetail.windCode`）作为 `securityCode` 查询条件。
 
@@ -161,7 +161,7 @@
 | `securityPoolAdjust/queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表（批次号优先） |
 | `securityPoolAdjustFlow/submitAdjustAudit`（application/json） | adjustLogId, adjustBatchNo, stepId, processAction(approve/reject), processComment, handlerId, handlerName, attachmentChanges? | `SecurityPoolAdjustAuditDto` | 审批/修改节点重新提交（无附件变更） |
 | `securityPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `SecurityPoolAdjustAuditDto` | 审批/修改节点重新提交（带附件变更，approve.html 用） |
-| `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
+| `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` / `queryOutReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 信评报告弹窗内/外报告查询 |
 

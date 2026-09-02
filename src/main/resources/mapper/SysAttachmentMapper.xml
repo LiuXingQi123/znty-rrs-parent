@@ -39,9 +39,10 @@
         )
     </insert>
 
-    <!-- 按调库日志 ID 查询附件列表 -->
+    <!-- 按调库日志 ID 列表查询附件列表 -->
     <select id="queryAttachmentList" resultType="com.znty.rrs.entity.sysattachment.SysAttachmentDto">
         SELECT id
+               ,main_id
                ,attachment_category
                ,original_file_name
                ,file_type
@@ -50,9 +51,13 @@
                ,full_url
         FROM sys_attachment
         WHERE table_name = 'ip_adjust_log'
-          AND main_id = #{adjustLogId}
+          AND main_id IN
+          <foreach collection="adjustLogIds" item="adjustLogId" open="(" separator="," close=")">
+              #{adjustLogId}
+          </foreach>
           AND is_deleted = 0
-        ORDER BY id ASC
+        ORDER BY main_id ASC
+                 ,id ASC
     </select>
 
     <!-- 按附件 ID 查询附件 -->

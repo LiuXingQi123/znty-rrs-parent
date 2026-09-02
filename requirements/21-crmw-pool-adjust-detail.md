@@ -63,7 +63,7 @@
 | `crmwPoolAdjust/queryCrmwAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表 |
 | `crmwPoolAdjust/checkCrmwAdjust` | `AdjustCheckReq` | `AdjustCheckDto` | adjust 模式校验确认 |
 | `crmwPoolAdjust/addCrmwAdjustLog`（JSON）/ `addCrmwAdjustLogWithFiles`（multipart） | `CrmwPoolAdjustSubmitReq` | `AdjustSubmitDto` | adjust 模式首次提交 |
-| `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
+| `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` / `queryOutReportPage` | 分页+筛选 | PageResult | 信评报告弹窗 |
 

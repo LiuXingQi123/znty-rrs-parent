@@ -192,7 +192,7 @@ syncCompanyBondsOnDirect(companyLog):
 | `addAdjustLogWithFiles`（multipart/form-data） | `request`=JSON Blob + `files`=MultipartFile[] | `ForbiddenPoolAdjustSubmitDto` | 提交调库申请（带附件，**前端实际调用入口**） |
 | `queryAdjustLogList` | companyCode, adjustBatchNo | `List<AdjustLogDto>` | 主体调库记录（无批次排除终态） |
 | `queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表（批次号优先） |
-| `attachments/queryAttachmentList` | adjustLogId | 附件列表 | 加载调库记录附件 |
+| `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 内部报告分页 |
 | `reports/queryOutReportPage` | 同上 | PageResult | 外部报告分页 |

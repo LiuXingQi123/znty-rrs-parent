@@ -6,6 +6,7 @@ import com.znty.rrs.common.enums.AttachmentCategory;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.SysAttachmentMapper;
 import com.znty.rrs.entity.bo.SysAttachmentBo;
+import com.znty.rrs.entity.sysattachment.SysAttachmentReq;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -14,6 +15,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -83,6 +85,43 @@ public class SysAttachmentServiceTest {
                 Collections.singletonList(file), "1"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("不支持的附件类型");
+    }
+
+    /** 验证单个调库日志 ID 仍兼容附件查询 */
+    @Test
+    public void queryAttachmentList_SingleId_QueriesSingleItemList() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        SysAttachmentReq req = new SysAttachmentReq();
+        req.setAdjustLogId(88L);
+
+        service.queryAttachmentList(req);
+
+        verify(mapper).queryAttachmentList(Collections.singletonList(88L));
+    }
+
+    /** 验证批量调库日志 ID 会去重并一次查询 */
+    @Test
+    public void queryAttachmentList_MultipleIds_DeduplicatesAndQueriesOnce() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        SysAttachmentReq req = new SysAttachmentReq();
+        req.setAdjustLogIds(Arrays.asList(88L, 99L, 88L, null));
+
+        service.queryAttachmentList(req);
+
+        verify(mapper).queryAttachmentList(Arrays.asList(88L, 99L));
+    }
+
+    /** 验证未提供调库日志 ID 时拒绝查询 */
+    @Test
+    public void queryAttachmentList_EmptyIds_ThrowsBizException() throws Exception {
+        SysAttachmentService service = buildService(mock(SysAttachmentMapper.class));
+        SysAttachmentReq req = new SysAttachmentReq();
+
+        assertThatThrownBy(() -> service.queryAttachmentList(req))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("调库日志 ID 不能为空");
     }
 
     /** 验证内部报告库附件可以复制绑定为调库日志信评报告附件 */

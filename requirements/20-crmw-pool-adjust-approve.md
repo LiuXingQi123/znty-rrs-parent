@@ -31,7 +31,7 @@
 | `queryCrmwPoolStatus` | `{ securityCode }` | 当前证券/主体所在池 |
 | `queryCrmwAdjustLogList` | `{ securityCode, adjustBatchNo }` | 调库记录（无批次仅返回未终结流程） |
 
-随后串行：构建调入/调出树、互斥映射、`loadLogAttachments`（每条 log 调 `/api/v1/attachments/queryAttachmentList`）、`loadFlowSteps`（逐个调 `queryCrmwAdjustStepList`，找含 `stepStatus==='pending'` 的记录作为 `activeAdjustLog`）。
+随后串行：构建调入/调出树、互斥映射、`loadLogAttachments`（收集并去重全部日志 ID，一次调用 `/api/v1/attachments/queryAttachmentList`，按 `mainId` 回填）、`loadFlowSteps`（逐个调 `queryCrmwAdjustStepList`，找含 `stepStatus==='pending'` 的记录作为 `activeAdjustLog`）。
 
 ---
 
