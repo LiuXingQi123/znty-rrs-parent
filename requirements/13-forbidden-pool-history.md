@@ -125,7 +125,6 @@ LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
 LEFT JOIN (
     SELECT s_info_compcode, MAX(s_info_compname) AS s_info_compname
     FROM ais_inv_ods.wind_cbondissuer
-    WHERE used = 1
     GROUP BY s_info_compcode
 ) wci ON wci.s_info_compcode = al.security_code AND al.security_type = 'company'
 <where>

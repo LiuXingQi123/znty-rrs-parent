@@ -34,7 +34,6 @@
             SELECT s_info_compcode
                    ,MAX(s_info_compname) AS s_info_compname
             FROM ais_inv_ods.wind_cbondissuer
-            WHERE used = 1
             GROUP BY s_info_compcode
         ) wci ON wci.s_info_compcode = ips.security_code
              AND ips.security_type = 'company'

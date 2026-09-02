@@ -44,7 +44,7 @@
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodeOptions`
 - 请求体：`{}`（`TempSecurityCodeReq`）
 - 后端 `queryTempSecurityCodeOptions`：`OptionBundle` 装载 `queryCompanyOptionList(req)` + `querySecurityTypeList()`。
-  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_cbondissuer`（**跨库**，`used=1`；债券+主体粒度，**`GROUP BY s_info_compcode` 去重**），可选按 `companyKeyword` 模糊匹配名称/代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。
+  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_cbondissuer`（**跨库**，不按 `used` 过滤；债券+主体粒度，**`GROUP BY s_info_compcode` 去重**），可选按 `companyKeyword` 模糊匹配名称/代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。
   - `querySecurityTypeList`：`FROM dict_security_type WHERE is_deleted = 0 AND category_type != 'company' ORDER BY category_type ASC, sort_order ASC, id ASC`，返回 `securityType/securityTypeName/categoryType/categoryTypeName`。
 
 ---
@@ -114,7 +114,7 @@
 | `rrs_temp_security_code`（主表） | 临时代码 | `id, temp_security_name, temp_security_code, temp_security_market, temp_security_type, temp_mitigation_code, temp_company_code, temp_company_name_snapshot, temp_issue_date DATE, temp_maturity_date DATE, security_name, security_code, security_market, security_type, update_time, status, is_deleted, oprt_source, memo, crte_time, updt_time`；`oprt_source`：manual=人工 / job=定时任务 / other=其他（仅记最近一次）；仅主键，无二级索引 |
 | `rrs_temp_security_code_update_log`（日志表） | 替换日志 | 记录临时代码、正式代码、被替换表名、被替换记录 ID、替换状态、替换时间 |
 | `dict_security_type`（只读+校验） | 证券类型字典 | `security_type, security_type_name, category_type(bond/stock/fund/company), category_type_name, sort_order, is_deleted`；`querySecurityTypeList` 过滤 `category_type != 'company'`，`querySecurityTypeCount` 校验类型存在 |
-| `ais_inv_ods.wind_cbondissuer`（跨库只读） | 发行主体 | `s_info_compcode, s_info_compname, used`；`queryCompanyOptionList`/`queryCompanyByCode` 读取，`used=1`，`LIMIT 50` |
+| `ais_inv_ods.wind_cbondissuer`（跨库只读） | 发行主体 | `s_info_compcode, s_info_compname, used`；`queryCompanyOptionList`/`queryCompanyByCode` 读取时不按 `used` 过滤，`LIMIT 50` |
 | `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始正式证券 / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、市场码列按 market 填充、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 取表单发行/到期日（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中；上市状态枚举 `SecurityStatus`：`L`/`N`/`D`/`U`，勿留 NULL，否则调库列表 `!= 'D'` 查不到；来源无状态用 `U`）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
 
 ---

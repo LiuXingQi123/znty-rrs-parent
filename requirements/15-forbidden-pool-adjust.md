@@ -2,7 +2,7 @@
 
 > 前端页面：`forbidden_pool_adjust.html`（列表 Tab「主体」+ 主体详情两视图；同页另有 Tab「ABS债」，见 [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md)）
 > 后端前缀：`/api/v1/forbiddenPoolAdjust`（主体；ABS 走独立前缀 `/api/v1/forbiddenAbsPoolAdjust`）
-> 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库 / 重点观察名单的调入或调出申请。**仅当目标池为「债券禁止库(15)」且主体生效（`audit_status=20`）时**，才自动同步旗下**未到期**债券（bond 大类，**含 ABS / crmw**，不排除）。主体基础信息只读自 `ais_inv_ods.wind_cbondissuer` 的有效记录（`used=1`），以 `s_info_compcode` 作为主体代码；不关联 `rrs_securityinfo` 的主体记录。
+> 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库 / 重点观察名单的调入或调出申请。**仅当目标池为「债券禁止库(15)」且主体生效（`audit_status=20`）时**，才自动同步旗下**未到期**债券（bond 大类，**含 ABS / crmw**，不排除）。主体基础信息只读自 `ais_inv_ods.wind_cbondissuer`，不再按 `used` 过滤，以 `s_info_compcode` 作为主体代码；不关联 `rrs_securityinfo` 的主体记录。
 
 ---
 
@@ -38,7 +38,7 @@
 
 - 路径：`POST /api/v1/forbiddenPoolAdjust/queryCompanyPage`
 - 请求体：`{ companyCode, companyFullName, industryName, pageIndex, pageSize }`
-- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_cbondissuer` 的 `used=1` 记录。**注意：该表约 70 万债行 / 约 4 万主体（债券+主体粒度），外部 ODS 不自建二级索引；列表用 `GROUP BY s_info_compcode` 去重 + `MAX` 取展示字段，不做无业务含义的排序**；行业关键字匹配一级或二级行业。列表返回主体代码、主体名称、一级/二级行业和旗下债券数量。
+- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_cbondissuer`，不按 `used` 过滤。**注意：该表约 70 万债行 / 约 4 万主体（债券+主体粒度），外部 ODS 不自建二级索引；列表用 `GROUP BY s_info_compcode` 去重 + `MAX` 取展示字段，不做无业务含义的排序**；行业关键字匹配一级或二级行业。列表返回主体代码、主体名称、一级/二级行业和旗下债券数量。
 - `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...)` 且 `category_type='bond'`，排除 `security_type='crmw'` 与 `security_status='D'`，`GROUP BY issuer_code`）批量回填 `companyBondCount`。`company` 大类非 bond，不必再排。该数与证券池调整列表主数据口径一致；不等于「各池在池债券数」之和（未入池债仍计入总数；同一债在多池会出现分池合计大于总数的情况）。对比证券池时用主体全称填「发行人」（名称模糊），禁投侧按主体代码精确关联。
 - 返回 `PageResult<ForbiddenPoolAdjustDto>`，前端取 `data.records` 与 `data.total`。
 
@@ -182,8 +182,8 @@ syncCompanyBondsOnDirect(companyLog):
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `queryCompanyPage` | companyCode, companyFullName, industryName, pageIndex, pageSize | `PageResult<ForbiddenPoolAdjustDto>` | 分页查询有效 Wind 主体，回填旗下债券数 |
-| `queryCompanyDetail` | companyCode | `ForbiddenPoolAdjustDto` | 主体详情（读有效 Wind 主体；返回四级行业、主体类型、注册地址、金融机构标识等） |
+| `queryCompanyPage` | companyCode, companyFullName, industryName, pageIndex, pageSize | `PageResult<ForbiddenPoolAdjustDto>` | 分页查询 Wind 主体（不按 `used` 过滤），回填旗下债券数 |
+| `queryCompanyDetail` | companyCode | `ForbiddenPoolAdjustDto` | 主体详情（读 Wind 主体且不按 `used` 过滤；返回四级行业、主体类型、注册地址、金融机构标识等） |
 | `queryCompanyPoolStatus` | companyCode | `ForbiddenPoolAdjustDto.PoolStatusBundle` | 当前主体所在池 + 旗下债券所在池 |
 | `queryCompanyBondList` | companyCode, targetPoolId | `List<ForbiddenPoolAdjustDto.CompanyBond>` | 主体旗下指定池中的债券明细 |
 | `queryAdjustPoolList` | companyCode, adjustDirection(in/out), currentUserId | `List<PoolDto>` | 可调入/调出池（仅债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)，含互斥关系与 currentCount） |
@@ -217,7 +217,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 ### 5.4 `wind_cbondissuer` + `rrs_securityinfo`
 
-主体信息读取 `ais_inv_ods.wind_cbondissuer`，以有效记录的 `s_info_compcode` 作为主体代码。**该表不是主体唯一：业务粒度是债券 Wind 代码 + 主体代码**，查询主体列表/详情/JOIN 补名称时必须对 `s_info_compcode` 去重；该表不修改、不与 `rrs_securityinfo` 主体记录关联。旗下债券仍由 `rrs_securityinfo` 的债券行读取，以 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type='company'`。
+主体信息读取 `ais_inv_ods.wind_cbondissuer`，不按 `used` 过滤，以 `s_info_compcode` 作为主体代码。**该表不是主体唯一：业务粒度是债券 Wind 代码 + 主体代码**，查询主体列表/详情/JOIN 补名称时必须对 `s_info_compcode` 去重；该表不修改、不与 `rrs_securityinfo` 主体记录关联。旗下债券仍由 `rrs_securityinfo` 的债券行读取，以 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type='company'`。
 
 ### 5.5 `ip_investment_pool` / `ip_pool_relation`
 
