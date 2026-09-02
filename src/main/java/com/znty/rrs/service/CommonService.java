@@ -1,6 +1,8 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.entity.common.CommonReq;
+import com.znty.rrs.entity.common.GuarantorGradeDto;
+import com.znty.rrs.entity.common.GuarantorGradeReq;
 import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.entity.common.PoolTreeDto;
 import org.springframework.stereotype.Service;
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -62,5 +65,45 @@ public class CommonService {
             }
         }
         return filtered;
+    }
+
+    /**
+     * 批量查询担保人的最新主体内评分。
+     *
+     * @param req Wind 主体代码列表
+     * @return 查到评分的担保人列表；无评分的代码不返回记录
+     */
+    public List<GuarantorGradeDto> queryGuarantorGradeList(GuarantorGradeReq req) {
+        if (req == null || req.getWindCodes() == null || req.getWindCodes().isEmpty()) {
+            return new ArrayList<>();
+        }
+        Set<String> normalizedCodes = new LinkedHashSet<>();
+        for (String windCode : req.getWindCodes()) {
+            if (windCode != null && !windCode.trim().isEmpty()) {
+                normalizedCodes.add(windCode.trim());
+            }
+        }
+        if (normalizedCodes.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 按去重后的 Wind 主体代码一次性查询最新内评
+        return commonMapper.queryGuarantorGradeList(new ArrayList<>(normalizedCodes));
+    }
+
+    /**
+     * 查询单个担保人的最新主体内评分。
+     *
+     * @param windCode Wind 主体代码
+     * @return 最新主体内评分；未查到时返回 null
+     */
+    public GuarantorGradeDto queryLatestGuarantorGrade(String windCode) {
+        if (windCode == null || windCode.trim().isEmpty()) {
+            return null;
+        }
+        List<String> windCodes = new ArrayList<>();
+        windCodes.add(windCode.trim());
+        // 复用批量查询，保证页面展示与调库规则使用同一套最新记录口径
+        List<GuarantorGradeDto> records = commonMapper.queryGuarantorGradeList(windCodes);
+        return records.isEmpty() ? null : records.get(0);
     }
 }

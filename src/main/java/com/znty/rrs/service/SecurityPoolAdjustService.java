@@ -53,6 +53,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
+import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
@@ -146,6 +147,10 @@ public class SecurityPoolAdjustService {
     /** 信用债评级矩阵数据访问组件（主体债入库规则校验用） */
     @Resource
     private CreditBondGradeRuleMapper creditBondGradeRuleMapper;
+
+    /** 公共查询服务（按担保人代码读取 AIS 最新主体内评） */
+    @Resource
+    private CommonService commonService;
 
     /** 系统附件业务服务 */
     @Resource
@@ -413,6 +418,8 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             return pools;
         }
+        // 规则中的担保人内评以页面所选担保人在 AIS 的最新结果为准
+        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
         // 可转债 / 可交换债 / CRMW 不适用信用债 1～5，选池直接去掉
         if (CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(securityInfo)) {
             return excludeGradedBondPools(pools);
@@ -1006,6 +1013,8 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
+        // 校验口径与页面展示一致，不再读取证券主数据中的担保人评分逗号串
+        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1454,7 +1463,10 @@ public class SecurityPoolAdjustService {
             return;
         }
         // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
-        req.setSecurityInfo(buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo()));
+        SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo());
+        // 担保人内评使用提交阶段按所选担保人从 AIS 查询的最新值，禁止前端旧值进入快照
+        mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
+        req.setSecurityInfo(mergedSecurityInfo);
         // 按调库日志落证券信息快照
         saveAdjustSecuritySnapshots(req, logIds);
     }
@@ -1735,6 +1747,8 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
+        // 校验口径与页面展示一致，不再读取证券主数据中的担保人评分逗号串
+        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1788,6 +1802,26 @@ public class SecurityPoolAdjustService {
         // 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
         shared.setReleaseRules(req.isReleaseRules());
         return shared;
+    }
+
+    /**
+     * 校验所选担保人属于当前证券，并将其 AIS 最新内评放入本次校验使用的临时对象。
+     */
+    private void applySelectedGuarantorGrade(SecurityInfoBo securityInfo, String guarantorCode) {
+        securityInfo.setInnerGuarantorRating(null);
+        if (guarantorCode == null || guarantorCode.trim().isEmpty()) {
+            return;
+        }
+        String selectedCode = guarantorCode.trim();
+        boolean matched = Arrays.stream((securityInfo.getGuarantorId() == null ? "" : securityInfo.getGuarantorId()).split(","))
+                .map(String::trim)
+                .anyMatch(selectedCode::equals);
+        if (!matched) {
+            throw new BizException("所选担保人不属于当前证券");
+        }
+        // 按担保人 Wind 主体代码查询最新内评，未查到时保持空值
+        GuarantorGradeDto grade = commonService.queryLatestGuarantorGrade(selectedCode);
+        securityInfo.setInnerGuarantorRating(grade == null ? null : grade.getTotalScore());
     }
 
     /**

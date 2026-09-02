@@ -37,4 +37,6 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private String adjustBatchNo;
     /** 是否放开规则（false=信用债大库池需满足主体债入库矩阵才显示可调；true=不卡矩阵） */
     private boolean releaseRules;
+    /** 当前选择的担保人 Wind 主体代码（查询可调入池时用于匹配最新担保人内评） */
+    private String guarantorCode;
 }

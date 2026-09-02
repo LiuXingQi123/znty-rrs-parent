@@ -86,6 +86,9 @@ public class BatchSecurityInboundAdjustReq {
         /** 证券类型 */
         private String securityType;
 
+        /** 本次校验时选择的担保人 Wind 主体代码 */
+        private String guarantorCode;
+
         /** CRMW名称 */
         private String crmwName;
 

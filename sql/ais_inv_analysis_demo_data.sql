@@ -2,7 +2,7 @@
 -- AIS 投资分析库 - 演示数据初始化脚本
 -- MySQL version: 8.0.33
 -- 前提：需先执行 ais_inv_analysis_schema.sql 完成建表
--- 说明：10 个主体 C10001～C10010，与 rrs_securityinfo.issuer_code / wind_cbondissuer.s_info_compcode 对齐
+-- 说明：10 个主体 C10001～C10010，并提供担保人有评分/无评分场景
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `ais_inv_analysis` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -13,6 +13,7 @@ SET NAMES utf8mb4;
 -- 清空业务表
 -- ----------------------------------------------------------------------------
 TRUNCATE TABLE `t_inv_grade_result`;
+TRUNCATE TABLE `v_inv_grade_result`;
 TRUNCATE TABLE `t_sys_user_role`;
 TRUNCATE TABLE `t_inv_company`;
 TRUNCATE TABLE `t_sys_user`;
@@ -153,6 +154,18 @@ INSERT INTO `t_inv_grade_result` (
 (10, 10, 110000, 101, 1001, '2026-06-10 10:00:00', 92.00, 93.00,
  '{"external_rating":"AAA","finance_score":90.8,"industry_score":90.0}', '初评映射', 3, '一级复核',
  2, '2026-06-10 10:05:00', '金融机构资本充足、评级稳定。', 1, 92.30, 'normal');
+
+-- ----------------------------------------------------------------------------
+-- 担保人内评结果样例
+-- C10010 有内评；C10008 故意不造数据，用于验证有担保人但无评分时页面显示空白
+-- ----------------------------------------------------------------------------
+INSERT INTO `v_inv_grade_result` (
+    `windcode`
+    ,`windname`
+    ,`total_score`
+    ,`ts`
+) VALUES
+('C10010', '某金融公司', '1', '2026-06-10 10:05:00');
 
 -- ----------------------------------------------------------------------------
 -- 角色和用户样例

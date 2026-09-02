@@ -18,6 +18,7 @@ import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
@@ -59,6 +60,38 @@ import static org.mockito.Mockito.when;
 
 /** SecurityPoolAdjustServiceStepTest 测试类。 */
 public class SecurityPoolAdjustServiceStepTest {
+
+    /** 提交快照中的担保人内评必须使用后端已查询的 AIS 最新值。 */
+    @Test
+    public void postSubmitProcessShouldUseLatestGuarantorGradeFromSharedData() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+
+        SecurityInfoBo master = new SecurityInfoBo();
+        master.setWindCode("110010123");
+        when(mapper.querySecurityBoByCode("110010123")).thenReturn(master);
+
+        SecurityInfoBo frontendInfo = new SecurityInfoBo();
+        frontendInfo.setInnerGuarantorRating("前端旧评分");
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("110010123");
+        req.setAdjusterId("1");
+        req.setSecurityInfo(frontendInfo);
+
+        Object shared = buildSubmitSharedData();
+        SecurityInfoBo serverInfo = (SecurityInfoBo) ReflectionTestUtils.getField(shared, "securityInfo");
+        serverInfo.setInnerGuarantorRating("1");
+
+        ReflectionTestUtils.invokeMethod(service, "postSubmitProcess", req, shared,
+                Collections.singletonList(100L));
+
+        ArgumentCaptor<AdjustSecuritySnapshotBo> snapshotCaptor =
+                ArgumentCaptor.forClass(AdjustSecuritySnapshotBo.class);
+        verify(mapper).addAdjustSecuritySnapshot(snapshotCaptor.capture());
+        assertThat(snapshotCaptor.getValue().getInnerGuarantorRating()).isEqualTo("1");
+        assertThat(req.getSecurityInfo().getInnerGuarantorRating()).isEqualTo("1");
+    }
 
     /** 验证调库记录应返回流程名称。 */
     @Test

@@ -1,7 +1,7 @@
 -- ============================================================
 -- AIS 投资分析库 - 建库建表脚本
 -- MySQL version: 8.0.33
--- 说明：创建主体评级、角色、用户及用户角色关联表
+-- 说明：创建主体评级、担保人内评结果、角色、用户及用户角色关联表
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `ais_inv_analysis` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -12,6 +12,7 @@ SET NAMES utf8mb4;
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `t_inv_grade_result`;
+DROP TABLE IF EXISTS `v_inv_grade_result`;
 DROP TABLE IF EXISTS `t_inv_company`;
 DROP TABLE IF EXISTS `t_sys_user_role`;
 DROP TABLE IF EXISTS `t_sys_user`;
@@ -78,7 +79,19 @@ CREATE TABLE `t_inv_grade_result`
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='主体评级结果表';
 
 -- ----------------------------------------------------------------------------
--- 3. 角色/部门表
+-- 3. 担保人内评结果表
+-- 说明：生产环境同名对象由 AIS 提供；本地以表模拟其查询结果
+-- ----------------------------------------------------------------------------
+CREATE TABLE `v_inv_grade_result`
+(
+    `windcode`    VARCHAR(100)  DEFAULT NULL COMMENT 'Wind 主体代码',
+    `windname`    VARCHAR(1000) DEFAULT NULL COMMENT 'Wind 主体名称',
+    `total_score` VARCHAR(50)   DEFAULT NULL COMMENT '主体内评分档',
+    `ts`          TIMESTAMP     DEFAULT NULL COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='担保人内评结果表';
+
+-- ----------------------------------------------------------------------------
+-- 4. 角色/部门表
 -- ----------------------------------------------------------------------------
 CREATE TABLE `t_sys_role` (
     `id`               BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
@@ -96,7 +109,7 @@ CREATE TABLE `t_sys_role` (
   COMMENT = '角色/部门表';
 
 -- ----------------------------------------------------------------------------
--- 4. 用户表
+-- 5. 用户表
 -- ----------------------------------------------------------------------------
 CREATE TABLE `t_sys_user` (
     `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
@@ -119,7 +132,7 @@ CREATE TABLE `t_sys_user` (
   COMMENT = '用户表';
 
 -- ----------------------------------------------------------------------------
--- 5. 用户角色关联表
+-- 6. 用户角色关联表
 -- ----------------------------------------------------------------------------
 CREATE TABLE `t_sys_user_role` (
     `id`      BIGINT    NOT NULL AUTO_INCREMENT COMMENT '主键 ID',

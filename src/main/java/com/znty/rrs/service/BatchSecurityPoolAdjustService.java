@@ -478,6 +478,7 @@ public class BatchSecurityPoolAdjustService {
         submitReq.setSecurityCode(resolveBatchSubmitGroupKey(primary));
         submitReq.setSecurityShortName(primary.getSecurityShortName());
         submitReq.setSecurityType(primary.getSecurityType());
+        submitReq.setGuarantorCode(primary.getGuarantorCode());
         // 若 primary 是 related，主券简称可能不对，回查主券主数据
         if (ItemType.RELATED.getCode().equals(primary.getItemTag())) {
             SecurityInfoBo primarySec = securityPoolAdjustMapper.querySecurityBoByCode(submitReq.getSecurityCode());

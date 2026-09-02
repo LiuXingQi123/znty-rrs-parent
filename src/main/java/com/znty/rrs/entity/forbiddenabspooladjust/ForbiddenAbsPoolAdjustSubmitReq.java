@@ -45,6 +45,9 @@ public class ForbiddenAbsPoolAdjustSubmitReq {
     /** 证券基础信息 */
     private SecurityInfoBo securityInfo;
 
+    /** 当前选择的担保人 Wind 主体代码 */
+    private String guarantorCode;
+
     /** 调整人 ID */
     private String adjusterId;
 

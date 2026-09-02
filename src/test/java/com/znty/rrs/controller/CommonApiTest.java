@@ -34,4 +34,11 @@ public class CommonApiTest extends ControllerApiTestSupport {
                 "/api/v1/common/queryPoolTreeList",
                 "{\"excludePoolTypes\":[\"crmw\",\"forbidden\"]}");
     }
+
+    /** 验证批量查询担保人主体内评分接口 */
+    @Test
+    public void shouldQueryGuarantorGradeList() throws Exception {
+        assertPostSuccess(mockMvc, "/api/v1/common/queryGuarantorGradeList",
+                "{\"windCodes\":[\"C10010\",\"C10008\"]}");
+    }
 }

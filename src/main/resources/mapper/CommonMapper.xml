@@ -60,4 +60,32 @@
         ORDER BY sort_path ASC
                  ,id ASC
     </select>
+
+    <!-- 批量查询担保人的最新主体内评分；同一代码存在多条时按 ts 取最新记录 -->
+    <select id="queryGuarantorGradeList" resultType="com.znty.rrs.entity.common.GuarantorGradeDto">
+        <!-- 对每个 Wind 主体代码的评级结果按更新时间倒序编号 -->
+        WITH ranked_grade AS (
+            SELECT windcode
+                   ,windname
+                   ,total_score
+                   ,ts
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY windcode
+                       ORDER BY ts DESC
+                   ) AS row_num
+            FROM ais_inv_analysis.v_inv_grade_result
+            WHERE windcode IN
+            <foreach collection="windCodes" item="windCode" open="(" separator="," close=")">
+                #{windCode}
+            </foreach>
+        )
+        <!-- 仅返回每个担保人最新的一条评分结果 -->
+        SELECT windcode
+               ,windname
+               ,total_score
+               ,ts
+        FROM ranked_grade
+        WHERE row_num = 1
+        ORDER BY windcode ASC
+    </select>
 </mapper>
