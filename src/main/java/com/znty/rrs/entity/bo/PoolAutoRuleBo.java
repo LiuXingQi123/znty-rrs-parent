@@ -5,7 +5,7 @@ import java.util.Date;
 import lombok.Data;
 
 /**
- * 投资池自动规则备注业务对象
+ * 投资池自动调入调出定时任务绑定业务对象
  */
 @Data
 public class PoolAutoRuleBo {
@@ -19,10 +19,13 @@ public class PoolAutoRuleBo {
     /** 规则类型 */
     private String ruleType;
 
-    /** 关联规则 ID（规则管理中心） */
+    /** 关联定时任务 ID（sys_scheduled_task.id） */
     private Long ruleId;
 
-    /** 规则描述 */
+    /** 定时任务编码（sys_scheduled_task.task_code） */
+    private String taskCode;
+
+    /** 定时任务名称快照 */
     private String ruleDesc;
 
     /** 逻辑删除标志 */

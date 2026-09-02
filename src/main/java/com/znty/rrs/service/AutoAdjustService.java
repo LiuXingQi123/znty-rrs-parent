@@ -1,10 +1,9 @@
 package com.znty.rrs.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
+import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -23,7 +22,6 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -32,7 +30,8 @@ import java.util.Map;
 /**
  * 到期证券自动出池任务实现
  * <p>
- * 按 param_json.poolIds 指定投资池，将池内已生效、债/股大类且到期日早于昨天（T-2，对齐老系统
+ * 扫描池 = param_json.poolIds ∪ 投资池关系配置中绑定本任务（auto_out）的池。
+ * 将池内已生效、债/股大类且到期日早于昨天（T-2，对齐老系统
  * AdjustRuleByExpired，ptype=4000/2000）的证券自动调出；CRMW 走独立任务。
  * 若证券当前在目标池的调出限制池（out_restrict）中则跳过。
  * 仅软删在池状态成功才写调出日志并计数。adjust_type=自动调整，audit_status=20，不走审批。
@@ -54,24 +53,23 @@ public class AutoAdjustService implements RrsScheduledTask {
     private static final String REASON_EXPIRED_OUT = "证券到期自动调出";
     /** 批次号规则后缀 */
     private static final String BATCH_SUFFIX = "3001";
-    /** 解析 param_json 用 */
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * 本任务扩展参数说明（配置页按行拆成列表展示）
      */
     private static final String PARAM_HELP =
-            "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[15]}</code>\n"
+            "参数格式：JSON 对象，例如 <code>{\"poolIds\":[15]}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[15]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 15（债券禁止库）内已生效的债券、股票，到期后从 15（债券禁止库）自动调出\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,16]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）内的证券，到期后从各自所在池自动调出\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（到期出池扫描池）：必填；任务只扫描这些池内已生效的债券、股票，到期后从各自所在池出库，可填写多个数字 ID\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（到期出池扫描池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
+                    + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：扫描目标池内已生效的债券、股票；到期日早于昨天（T-2）时自动调出\n"
                     + "排除范围：主体、基金和 CRMW 不处理；CRMW 请使用“CRMW到期自动出池”任务\n"
                     + "限制规则：证券已在目标池配置的调出限制池时，跳过该条记录\n"
                     + "执行方式：直接生效，不走审批；仅软删除成功才写日志并计入影响条数\n"
-                    + "参数缺失或格式错误时，本轮任务失败";
+                    + "参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
     @Resource
@@ -85,6 +83,9 @@ public class AutoAdjustService implements RrsScheduledTask {
     /** 定时任务配置 Mapper（param_json / 名称） */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+    /** 扫描池并集（参数 ∪ 关系配置） */
+    @Resource
+    private AutoAdjustPoolScopeHelper poolScopeHelper;
 
     @Override
     public String getTaskCode() {
@@ -142,7 +143,7 @@ public class AutoAdjustService implements RrsScheduledTask {
     }
 
     /**
-     * 到期证券自动出池核心逻辑：从 param_json 解析 poolIds，扫描到期证券并调出
+     * 到期证券自动出池核心逻辑：参数 poolIds 与关系配置绑定池取并集后扫描到期证券并调出
      */
     private int doAutoOutExpired(String taskName, TaskDetailLog detail) {
         // 从扩展参数解析待扫描池 ID（非法则抛业务异常）
@@ -216,52 +217,27 @@ public class AutoAdjustService implements RrsScheduledTask {
     }
 
     /**
-     * 从库表 param_json 解析 poolIds（仅合法 JSON；缺失或非法抛业务异常）
+     * 解析扫描池：扩展参数 poolIds 与关系配置绑定本任务的池取并集
      */
     private List<Long> resolvePoolIds(String taskName, TaskDetailLog detail) {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
-        if (conf == null || !StringUtils.hasText(conf.getParamJson())) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
-        }
-        infoDetail(detail, "扩展参数 param_json=" + conf.getParamJson().trim());
-        // 解析 JSON 扩展参数
-        return parsePoolIds(conf.getParamJson().trim(), taskName);
+        String paramJson = (conf != null && StringUtils.hasText(conf.getParamJson()))
+                ? conf.getParamJson().trim() : null;
+        infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
+        // 参数池与关系配置绑定池取并集
+        return poolScopeHelper.resolveUnionPoolIds(paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
     }
 
     /**
      * 解析扩展参数 JSON 为池 ID 列表，格式：{"poolIds":[10,15]}
-     * <p>非法 JSON、缺 poolIds、无有效 ID 均抛 {@link BizException}（由 execute 记失败）。
+     * <p>非法 JSON 抛 {@link BizException}；空结果抛业务异常（单测用，执行走并集解析）。
      */
     List<Long> parsePoolIds(String raw, String taskName) {
-        if (!StringUtils.hasText(raw)) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
-        }
-        String text = raw.trim();
-        if (!text.startsWith("{")) {
-            throw new BizException("扩展参数仅支持 JSON 对象，示例 {\"poolIds\":[15]}，当前: " + text);
-        }
-        JsonNode root;
-        try {
-            root = OBJECT_MAPPER.readTree(text);
-        } catch (Exception e) {
-            log.warn("{}：JSON 扩展参数解析失败: {}，原因: {}", taskName, text, e.getMessage());
-            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
-                    + "；请使用标准 JSON，数字勿加单引号，示例 {\"poolIds\":[15]}");
-        }
-        JsonNode poolIds = root.get("poolIds");
-        if (poolIds == null || !poolIds.isArray() || poolIds.size() == 0) {
+        List<Long> ids = AutoAdjustPoolScopeHelper.parseOptionalPoolIds(raw);
+        if (ids.isEmpty()) {
             throw new BizException("扩展参数须包含非空 poolIds 数组，示例 {\"poolIds\":[15]}");
         }
-        List<Long> result = new ArrayList<>();
-        for (JsonNode item : poolIds) {
-            Long id = readPoolId(item);
-            if (id == null) {
-                throw new BizException("poolIds 元素须为数字，非法值: " + item
-                        + "；正确示例 {\"poolIds\":[15]}（勿写 '15' 单引号）");
-            }
-            result.add(id);
-        }
-        return result;
+        return ids;
     }
 
     /**
@@ -289,19 +265,6 @@ public class AutoAdjustService implements RrsScheduledTask {
      */
     List<Long> parsePoolIds(String raw) {
         return parsePoolIds(raw, TASK_CODE);
-    }
-
-    /**
-     * 读取 poolIds 数组中的单个 ID（仅数字节点）
-     */
-    private Long readPoolId(JsonNode item) {
-        if (item == null || item.isNull()) {
-            return null;
-        }
-        if (item.isNumber()) {
-            return item.asLong();
-        }
-        return null;
     }
 
     /**

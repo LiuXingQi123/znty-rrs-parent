@@ -2,7 +2,7 @@ package com.znty.rrs.controller;
 
 import com.znty.rrs.service.InvestmentPoolService;
 import com.znty.rrs.service.FlowService;
-import com.znty.rrs.service.RuleService;
+import com.znty.rrs.service.ScheduledTaskService;
 import org.junit.Before;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -24,11 +24,11 @@ public class InvestmentPoolApiTest extends ControllerApiTestSupport {
     public void setUp() {
         InvestmentPoolController poolController = new InvestmentPoolController();
         FlowController flowController = new FlowController();
-        RuleController ruleController = new RuleController();
+        ScheduledTaskController taskController = new ScheduledTaskController();
         ReflectionTestUtils.setField(poolController, "investmentPoolService", mock(InvestmentPoolService.class));
         ReflectionTestUtils.setField(flowController, "flowService", mock(FlowService.class));
-        ReflectionTestUtils.setField(ruleController, "ruleService", mock(RuleService.class));
-        mockMvc = MockMvcBuilders.standaloneSetup(poolController, flowController, ruleController).build();
+        ReflectionTestUtils.setField(taskController, "scheduledTaskService", mock(ScheduledTaskService.class));
+        mockMvc = MockMvcBuilders.standaloneSetup(poolController, flowController, taskController).build();
     }
 
     /** 验证 shouldSupportPoolTreeMaintenance 测试场景。 */
@@ -58,7 +58,6 @@ public class InvestmentPoolApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/queryRoleList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/investmentPool/queryUserList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/flows/queryFlowList", "{\"status\":\"active\"}");
-        assertPostSuccess(mockMvc, "/api/v1/rules/options/queryCategoryList", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/rules/queryRulePage", "{\"status\":\"active\"}");
+        assertPostSuccess(mockMvc, "/api/v1/scheduledTask/queryTaskList", "{}");
     }
 }

@@ -1,10 +1,9 @@
 package com.znty.rrs.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
+import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -23,7 +22,6 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -47,16 +45,16 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_NAME = "系统";
     private static final String REASON = "CRMW到期自动调出";
     private static final String BATCH_SUFFIX = "3007";
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =
-            "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[18]}</code>\n"
+            "参数格式：JSON 对象，例如 <code>{\"poolIds\":[18]}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[18]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 18（CRMW库）内已生效的 CRMW 组合，到期后从 18（CRMW库）自动调出\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（CRMW 出池扫描池）：必填；任务只扫描这些池内已生效的 CRMW 组合，到期后从各自所在池出库，可填写多个数字 ID\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（CRMW 出池扫描池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
+                    + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：扫描目标池内已生效的 CRMW 组合；凭证到期日早于昨天（T-2）时自动调出\n"
                     + "限制规则：当前已在目标池配置的调出限制池时，跳过该条记录\n"
                     + "执行方式：直接生效，不走审批；仅软删除成功才写日志并计入影响条数\n"
-                    + "参数缺失或格式错误时，本轮任务失败";
+                    + "参数格式错误时，本轮任务失败";
 
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
@@ -66,6 +64,9 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private InvestmentPoolMapper investmentPoolMapper;
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+    /** 扫描池并集（参数 ∪ 关系配置） */
+    @Resource
+    private AutoAdjustPoolScopeHelper poolScopeHelper;
 
     @Override
     public String getTaskCode() {
@@ -170,39 +171,18 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
 
     private List<Long> resolvePoolIds(String taskName, TaskDetailLog detail) {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
-        if (conf == null || !StringUtils.hasText(conf.getParamJson())) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[18]}");
-        }
-        infoDetail(detail, "扩展参数 param_json=" + conf.getParamJson().trim());
-        return parsePoolIds(conf.getParamJson().trim(), taskName);
+        String paramJson = (conf != null && StringUtils.hasText(conf.getParamJson()))
+                ? conf.getParamJson().trim() : null;
+        infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
+        return poolScopeHelper.resolveUnionPoolIds(paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
     }
 
     List<Long> parsePoolIds(String raw, String taskName) {
-        if (!StringUtils.hasText(raw)) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[18]}");
-        }
-        String text = raw.trim();
-        if (!text.startsWith("{")) {
-            throw new BizException("扩展参数仅支持 JSON 对象，示例 {\"poolIds\":[18]}，当前: " + text);
-        }
-        JsonNode root;
-        try {
-            root = OBJECT_MAPPER.readTree(text);
-        } catch (Exception e) {
-            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage());
-        }
-        JsonNode poolIds = root.get("poolIds");
-        if (poolIds == null || !poolIds.isArray() || poolIds.size() == 0) {
+        List<Long> ids = AutoAdjustPoolScopeHelper.parseOptionalPoolIds(raw);
+        if (ids.isEmpty()) {
             throw new BizException("扩展参数须包含非空 poolIds 数组，示例 {\"poolIds\":[18]}");
         }
-        List<Long> result = new ArrayList<>();
-        for (JsonNode item : poolIds) {
-            if (item == null || item.isNull() || !item.isNumber()) {
-                throw new BizException("poolIds 元素须为数字，非法值: " + item);
-            }
-            result.add(item.asLong());
-        }
-        return result;
+        return ids;
     }
 
     List<Long> parsePoolIds(String raw) {

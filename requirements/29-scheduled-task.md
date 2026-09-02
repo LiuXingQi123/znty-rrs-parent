@@ -35,11 +35,11 @@
 
 | taskCode | 名称 | 默认 cron | 扩展参数示例 |
 |---|---|---|---|
-| `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；扫描已生效债券、股票，到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
-| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`poolIds` 必填，默认 `[18]`（18（CRMW库））；扫描已生效 CRMW 组合，凭证到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
-| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 10 23 * * ?` | 每天 23:10 执行。`poolIds` 必填，默认 `[16]`（16（观察池））；`limitPoolIds` 可选，默认 `[15]`（15（债券禁止库）），用于拦截已在该池的主体。有效外评不在 AA-及以下名单则出主体，成功后顺带出同池旗下债 |
-| `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 15 23 * * ?` | 每天 23:15 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；有效外评在 AA-及以下名单内且未在目标池的主体自动入池，命中调入限制池则跳过 |
-| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 20 23 * * ?` | 每天 23:20 执行。`poolIds` 必填，默认 `[15]`（15（债券禁止库））；主体已在该池时，旗下未到期（含当天）且未在同一池的债券自动入池 |
+| `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`poolIds` 可选，默认 `[15]`（15（债券禁止库）），与投资池关系配置绑定本任务的池取并集；扫描已生效债券、股票，到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
+| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`poolIds` 可选，默认 `[18]`（18（CRMW库）），与关系配置绑定池取并集；扫描已生效 CRMW 组合，凭证到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
+| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 10 23 * * ?` | 每天 23:10 执行。`poolIds` 可选，默认 `[16]`（16（观察池）），与关系配置绑定池取并集；`limitPoolIds` 可选，默认 `[15]`（15（债券禁止库）），用于拦截已在该池的主体。有效外评不在 AA-及以下名单则出主体，成功后顺带出同池旗下债 |
+| `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 15 23 * * ?` | 每天 23:15 执行。`poolIds` 可选，默认 `[15]`（15（债券禁止库）），与关系配置绑定池取并集；有效外评在 AA-及以下名单内且未在目标池的主体自动入池，命中调入限制池则跳过 |
+| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 20 23 * * ?` | 每天 23:20 执行。`poolIds` 可选，默认 `[15]`（15（债券禁止库）），与关系配置绑定池取并集；主体已在该池时，旗下未到期（含当天）且未在同一池的债券自动入池 |
 | `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 */10 * * * ?` | 每 10 分钟执行一次。`poolIds` / `poolId` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定主体池至债券目标池的跨池映射；排除已更新临时代码、ABS、CRMW |
 | `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池(默认关闭) | `0 0 0 * * ?` | 每天 00:00 执行，建议按需手动执行。`poolIds` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定债券池与主体池映射；债在债券池、主体不在主体池时出债，排除 ABS/CRMW |
 | `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 1 * * ?` | 每天 01:00 执行。无需参数；扫描不符合当前主体债入库规则的在池信用债，生成待办供人工处理，不自动出池；摘要区分**本轮命中** / **本轮失效** / **仍待处理** |
@@ -141,12 +141,22 @@
 ## 7. 代码索引
 
 - 编排：`ScheduledTaskService`、`DynamicTaskScheduler`、`RrsScheduledTask`  
-- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）、`HsPoolFullExcelExportService`、`HsPoolFullIncludingExpiredExcelExportService`、`HsPoolIncrementExcelExportService`
+- 业务：`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`AutoAdjustPoolScopeHelper`（参数 poolIds ∪ 关系配置绑定池）、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）、`HsPoolFullExcelExportService`、`HsPoolFullIncludingExpiredExcelExportService`、`HsPoolIncrementExcelExportService`
 - Mapper：`ScheduledTaskMapper` / `.xml`、`AutoAdjustMapper`、`GradeRuleAlertMapper` / `.xml`、`HsPoolExcelExportMapper` / `.xml`
 - Controller：`ScheduledTaskController`；提醒查询/处理另见 `GradeRuleAlertController`（`/api/v1/gradeRuleAlert`）  
 - SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`、`rrs_grade_rule_alert_schema.sql`、`rrs_grade_rule_alert_demo_data.sql`  
 
 以下业务摘要按 **Demo cron 执行顺序** 编排（与第 4.1 节一致）。
+
+### 扫描范围（参数 ∪ 关系配置）
+
+自动调入/调出类任务的扫描池 = **扩展参数 `poolIds`（及 mappings） ∪ 投资池关系配置中绑定了本任务的池**。
+
+1. 投资池维护页「自动调入规则 / 自动调出规则」选择定时任务，写入 `ip_pool_auto_rule`（`rule_id`=`sys_scheduled_task.id`，`task_code`，`rule_type`=auto_in/auto_out）。  
+2. 任务执行时按自身 `task_code` + 对应 `rule_type` 查出绑定池，与 `param_json.poolIds` 去重并集。  
+3. 映射类任务（`company_inpool_bond_auto_in` / `company_not_in_pool_bond_auto_out`）把绑定池按**同池映射**追加，跨池 `mappings` 仍只来自参数。  
+4. 参数 JSON 非法仍失败；参数为空但关系配置有绑定池则只扫配置池；两边都空则本轮失败。  
+5. 恒生池导出、评级不符提醒、Wind 代码同步不走此并集。
 
 ### 7.0 `security_expired_auto_out`（23:00）
 
@@ -169,7 +179,7 @@
 
 对应老系统 `AdjustRuleOutAA`（自动导出外部评级不是 AA- 及以下的主体）：
 
-1. `poolIds`：必填，指定自动出池的目标池；默认 `[16]`，即 16（观察池）（替代老系统「池上勾选自动调出规则」）。
+1. `poolIds`：可选，指定自动出池的目标池；默认 `[16]`，即 16（观察池）；与投资池关系配置中绑定本任务的池取并集（替代老系统「池上勾选自动调出规则」）。
 2. 数据源同 7.3：有效外评按 12 个月拆分。  
 3. 评级**不在**入池白名单内（如 `AA` / `AA+` / `AAA` 等，与 7.3 互为补集）。  
 4. `limitPoolIds`：可选，对齐老 `LIMITPOOLID_XYJJ`；主体已在这些池则不出。默认 `[15]`，即 15（债券禁止库）；省略则默认全部 `pool_type=forbidden` 的池；显式 `[]` 关闭拦截。目标池本身在名单内时该池不会自动出任何人。
@@ -180,7 +190,7 @@
 
 对应老系统 `AdjustRuleInAA`（自动入外部评级 AA- 及以下的主体）：
 
-1. 扩展参数 `poolIds` 指定目标池（替代老系统「池上勾选自动调入规则」）。  
+1. 扩展参数 `poolIds` 指定目标池，与投资池关系配置中绑定本任务的池取并集（替代老系统「池上勾选自动调入规则」）。  
 2. 数据源：`ais_inv_ods.wind_cbondissuerrating`。有效外评按 12 个月拆分：近 12 个月取档位最高，12 个月前取日期最新再比档位；两段候选再取日期更近的一条。  
 3. 评级命中列表：`AA-` / `A±` / `BBB…` / `BB…` / `B…` / `CCC/CC/C`（**不含** `AA`/`AA+`/`AAA`）。  
 4. 尚未在目标池 `audit_status=20` 的主体 → 写自动调整入池日志 + `ip_pool_status`（`security_type=company`）。  

@@ -43,6 +43,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评AA-及以下主体自动入池");
@@ -91,18 +92,20 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
     @Test
     public void execute_ShouldFailWhenParamMissing() {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
-        ReflectionTestUtils.setField(service, "autoAdjustMapper", mock(AutoAdjustMapper.class));
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
         when(scheduledTaskMapper.queryTaskByCode(CompanyOuterRatingAaMinusAutoInService.TASK_CODE))
                 .thenReturn(null);
 
         ScheduledTaskResult result = service.execute();
 
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getMessage()).contains("扩展参数未配置");
+        assertThat(result.getMessage()).contains("未配置扫描池");
     }
 
     @Test
@@ -116,6 +119,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评AA-及以下主体自动入池");

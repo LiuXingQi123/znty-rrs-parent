@@ -321,10 +321,10 @@ INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, 
 (103, 'in_mutex', 104, '流通受限库', 10, 0, NOW(), NOW()),
 (104, 'in_mutex', 103, '四级库', 10, 0, NOW(), NOW());
 
--- 自动调库规则
-INSERT INTO `ip_pool_auto_rule` (`id`, `pool_id`, `rule_type`, `rule_id`, `rule_desc`, `is_deleted`, `crte_time`, `updt_time`) VALUES
-(1, 15, 'auto_out', 43, '到期自动出池（规则管理：自动-到期出池）', 0, NOW(), NOW()),
-(2, 15, 'auto_in', 44, '主体外评AA-自动入池（规则管理：自动-主体外评AA-入池）', 0, NOW(), NOW());
+-- 自动调库定时任务绑定（rule_id = sys_scheduled_task.id，与 rrs_scheduled_task_demo_data 对齐）
+INSERT INTO `ip_pool_auto_rule` (`id`, `pool_id`, `rule_type`, `rule_id`, `task_code`, `rule_desc`, `is_deleted`, `crte_time`, `updt_time`) VALUES
+(1, 15, 'auto_out', 1, 'security_expired_auto_out', '到期证券自动出池', 0, NOW(), NOW()),
+(2, 15, 'auto_in', 4, 'company_outer_rating_aa_minus_auto_in', '外评AA-及以下主体自动入池', 0, NOW(), NOW());
 
 INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `handler_type`, `handler_id`, `handler_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 (1,  'viewable',         'user', 1, '管理员', 0, NOW(), NOW()),

@@ -23,7 +23,7 @@
 1. `initRelationForm()`：为 9 种关系类型各置空数组。
 2. `loadFlowOptions()`：`POST /api/v1/flows/queryFlowList` 请求 `status:'active'` 流程，首位插入「不需要审批」占位项。
 3. `loadPoolTree()`：`POST /api/v1/investmentPool/queryPoolList`，`buildPoolTree` 组装树、`flattenPools` 展平、`buildPoolParentMap` 构建面包屑映射，默认选中第一个节点并 `loadPoolDetail`。
-4. `loadRuleCategories()` + `loadRules()`：请求规则分类和启用规则，用于自动规则选择弹窗。
+4. `loadScheduledTasks()`：`POST /api/v1/scheduledTask/queryTaskList` 加载全部定时任务，用于自动调入/调出规则选择弹窗。
 
 请求封装 `Vue.prototype.apiPost`：`apiBase='http://localhost:18090'`，统一 POST，`!json.success` 弹错并抛异常。
 
@@ -137,7 +137,7 @@
 
 - 后端 `editPoolRelation`（`@Transactional`）：**全量替换**——先审计+逻辑删旧关系，再 `addRelations`（批量查名称快照，按 `RELATION_TYPES` 固定顺序逐条 insert，`relation_pool_name` 存快照名，`sort_order` 从 1 递增）；自动规则同样全量替换（auto_in/auto_out，下标对齐取 descs）。
 - 前端配置：9 张关系卡片，点击「选择」打开关系池选择弹窗（深拷贝主树、预填已选、过滤不可选节点）。可选性判断 `isPoolPickerNodeSelectable`：**排除当前池本身 + 排除有子节点的父节点（只允许选叶子池）**。关系池 chip 显示面包屑，可单独移除。
-- 自动规则配置：点击「选择」打开规则选择弹窗（左侧表格多选启用规则，右侧已选列表），确认后写回 `autoInRuleIds/Descs` 或 `autoOutRuleIds/Descs`。desc 实际是规则名称快照。
+- 自动规则配置：点击「选择」打开定时任务选择弹窗（左侧表格多选全部 `sys_scheduled_task`，列：任务名称、任务说明；右侧已选列表），确认后写回 `autoInRuleIds/Descs` 或 `autoOutRuleIds/Descs`。`rule_id` 存定时任务主键，`task_code` 由后端按 id 回填，desc 为任务名称快照。绑定后，对应自动调库任务扫描该池，并与任务扩展参数 `poolIds` 取并集。
 
 ### 3.6 流程绑定
 
@@ -201,7 +201,7 @@
 | `queryUserList` | roleId?, keyword? | `List<UserDto>` | 查人员（按角色树递归 + 关键字） |
 | `editPoolPermission` | id, permissions, operatorId? | `InvestmentPoolDto` | 全量替换权限配置 |
 
-> 路径均带前缀 `/api/v1/investmentPool`。另：前端 `created` 还调用流程定义模块 `/api/v1/flows/queryFlowList` 和规则模块 `/api/v1/rules/options/queryCategoryList`、`/api/v1/rules/queryRulePage`。
+> 路径均带前缀 `/api/v1/investmentPool`。另：前端 `created` 还调用流程定义模块 `/api/v1/flows/queryFlowList` 和定时任务模块 `/api/v1/scheduledTask/queryTaskList`。
 
 ---
 
@@ -221,9 +221,9 @@
 
 `id, pool_id, relation_type(source/in_restrict/out_restrict/in_linked/out_linked/in_mutex/out_mutex/in_soft_restrict/out_soft_restrict), relation_pool_id, relation_pool_name(快照), sort_order, remark, is_deleted`。
 
-### 5.3 `ip_pool_auto_rule`（自动调入调出规则备注表）
+### 5.3 `ip_pool_auto_rule`（自动调入调出定时任务绑定表）
 
-`id, pool_id, rule_type(auto_in/auto_out), rule_id, rule_desc, is_deleted`。一期仅保存备注不执行。
+`id, pool_id, rule_type(auto_in/auto_out), rule_id（sys_scheduled_task.id）, task_code, rule_desc（任务名称快照）, is_deleted`。自动调库任务按 `task_code + rule_type` 查出绑定池，与扩展参数 `poolIds` 取并集后扫描。
 
 ### 5.4 `ip_pool_permission`（投资池权限配置表）
 

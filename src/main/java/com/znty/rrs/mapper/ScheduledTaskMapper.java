@@ -26,6 +26,11 @@ public interface ScheduledTaskMapper {
     List<SysScheduledTaskBo> queryTaskPage(ScheduledTaskReq req);
 
     /**
+     * 按主键查询单条未删除的定时任务配置
+     */
+    SysScheduledTaskBo queryTaskById(@Param("id") Long id);
+
+    /**
      * 按任务编码查询单条未删除的定时任务配置
      */
     SysScheduledTaskBo queryTaskByCode(@Param("taskCode") String taskCode);

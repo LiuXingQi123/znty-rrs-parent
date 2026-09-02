@@ -42,6 +42,7 @@ public class CompanyNewBondAutoInServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("在池主体旗下债券自动入池");
@@ -91,12 +92,13 @@ public class CompanyNewBondAutoInServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         when(scheduledTaskMapper.queryTaskByCode(any(String.class))).thenReturn(null);
 
         ScheduledTaskResult result = service.execute();
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getMessage()).contains("扩展参数未配置");
+        assertThat(result.getMessage()).contains("未配置扫描池");
         verify(autoAdjustMapper, never()).queryCompanyNewBondForAutoIn(any(Long.class), any(Long.class));
     }
 
@@ -149,6 +151,7 @@ public class CompanyNewBondAutoInServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("在池主体旗下债券自动入池");

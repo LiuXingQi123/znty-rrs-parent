@@ -39,11 +39,11 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void getParamHelp_ShouldDescribeDefaultPoolsAndParameters() {
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
 
-        assertThat(service.getParamHelp()).contains("poolIds（主体出池目标池）：必填")
+        assertThat(service.getParamHelp()).contains("poolIds（主体出池目标池）：可选")
                 .contains("16（观察池）")
                 .contains("主体出池目标池")
                 .contains("禁止出池拦截池")
-                .contains("不从 poolIds 指定的目标池自动出库")
+                .contains("不从扫描目标池自动出库")
                 .contains("同时在 15（债券禁止库）的主体被排除")
                 .contains("15（债券禁止库）");
     }
@@ -59,6 +59,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评非AA-及以下主体自动出池");
@@ -109,18 +110,20 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     @Test
     public void execute_ShouldFailWhenParamMissing() {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
-        ReflectionTestUtils.setField(service, "autoAdjustMapper", mock(AutoAdjustMapper.class));
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
         when(scheduledTaskMapper.queryTaskByCode(CompanyOuterRatingNotAaMinusAutoOutService.TASK_CODE))
                 .thenReturn(null);
 
         ScheduledTaskResult result = service.execute();
 
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getMessage()).contains("扩展参数未配置");
+        assertThat(result.getMessage()).contains("未配置扫描池");
     }
 
     @Test
@@ -134,6 +137,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评非AA-及以下主体自动出池");
@@ -166,6 +170,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评非AA-及以下主体自动出池");

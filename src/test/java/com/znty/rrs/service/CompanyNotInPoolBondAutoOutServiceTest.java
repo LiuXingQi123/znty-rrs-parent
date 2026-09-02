@@ -5,7 +5,6 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
-import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
@@ -17,7 +16,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
@@ -40,6 +38,7 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("主体不在池债券自动出池");
@@ -76,6 +75,6 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         assertThat(service.parseParamMappings(
                 "{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":16}]}").get(0))
                 .containsExactly(15L, 16L);
-        assertThatThrownBy(() -> service.parseParamMappings("{}")).isInstanceOf(BizException.class);
+        assertThat(service.parseParamMappings("{}")).isEmpty();
     }
 }

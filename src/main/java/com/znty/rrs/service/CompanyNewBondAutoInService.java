@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
@@ -75,10 +76,12 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "mappings（跨池入池映射）：可选；用于主体所在池与债券入池目标池不一致的场景，可配置多组\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "companyInPoolId（主体所在池）：主体必须已在该池内，才扫描其旗下债券\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "bondTargetPoolId（债券入池目标池）：上述主体旗下符合条件的债券将自动写入该池\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调入规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
+                    + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
                     + "处理规则：主体已在主体池且生效时，将其旗下未到期且未在债券目标池的债券自动入池\n"
                     + "排除范围：已更新正式代码的临时代码、ABS、CRMW 不处理\n"
                     + "范围说明：不检查调入限制池，也不按目标池 market_codes 过滤；需要同池市场/限制校验时请使用“主体下债券自动入库”任务\n"
-                    + "参数缺失或格式错误时，本轮任务失败";
+                    + "参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
     @Resource
@@ -92,6 +95,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     /** 定时任务配置 Mapper（param_json / 名称） */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+    /** 扫描池并集（参数 ∪ 关系配置） */
+    @Resource
+    private AutoAdjustPoolScopeHelper poolScopeHelper;
 
     @Override
     public String getTaskCode() {
@@ -148,7 +154,8 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
         // 解析为 [主体所在池ID, 债券写入池ID] 列表（非法则抛业务异常）
-        List<long[]> pairList = parseParamMappings(paramJson, taskName);
+        List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
+                parseParamMappings(paramJson, taskName), TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
         infoDetail(detail, "有效映射组数 " + pairList.size());
         // 构建池 ID → 池信息映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
@@ -270,12 +277,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
      * <p>
      * 支持：{@code poolIds} 数组（主体与债同一池，可多个）、{@code poolId} 单个、
      * {@code mappings} 显式「主体所在池→债券写入池」。
-     * 缺失、非法 JSON、无有效映射均抛 {@link BizException}。
+     * 非法 JSON 抛 {@link BizException}；无有效映射时返回空列表，由并集解析再决定是否失败。
      * </p>
      */
     List<long[]> parseParamMappings(String raw, String taskName) {
+        List<long[]> result = new ArrayList<>();
         if (!StringUtils.hasText(raw)) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
+            return result;
         }
         String text = raw.trim();
         if (!text.startsWith("{")) {
@@ -289,12 +297,11 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
                     + "；请使用标准 JSON，示例 {\"poolIds\":[15]}");
         }
-        List<long[]> result = new ArrayList<>();
         // 同池多个：poolIds
         JsonNode poolIdsNode = root.get("poolIds");
         if (poolIdsNode != null && !poolIdsNode.isNull()) {
-            if (!poolIdsNode.isArray() || poolIdsNode.size() == 0) {
-                throw new BizException("poolIds 须为非空数字数组，示例 {\"poolIds\":[15,16]}");
+            if (!poolIdsNode.isArray()) {
+                throw new BizException("poolIds 须为数字数组，示例 {\"poolIds\":[15,16]}");
             }
             for (JsonNode item : poolIdsNode) {
                 Long id = readNumberNode(item);
@@ -327,11 +334,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 }
                 result.add(new long[]{companyIn, bondTarget});
             }
-        }
-        if (result.isEmpty()) {
-            throw new BizException(
-                    "扩展参数未解析到有效映射，示例 {\"poolIds\":[15]} 或 "
-                            + "{\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":100}]}");
         }
         return result;
     }

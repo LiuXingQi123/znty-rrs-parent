@@ -97,8 +97,9 @@ CREATE TABLE `ip_pool_auto_rule` (
     `id`         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `pool_id`    BIGINT       DEFAULT NULL            COMMENT '投资池 ID，关联 ip_investment_pool.id',
     `rule_type`  VARCHAR(16)  DEFAULT NULL            COMMENT '规则类型：auto_in=自动调入 / auto_out=自动调出',
-    `rule_id`    BIGINT       DEFAULT NULL            COMMENT '关联规则 ID（规则管理中心）',
-    `rule_desc`  VARCHAR(1000) DEFAULT NULL           COMMENT '规则描述文本，一期仅保存备注不执行',
+    `rule_id`    BIGINT       DEFAULT NULL            COMMENT '关联定时任务 ID，对应 sys_scheduled_task.id',
+    `task_code`  VARCHAR(64)  DEFAULT NULL            COMMENT '定时任务编码，对应 sys_scheduled_task.task_code',
+    `rule_desc`  VARCHAR(1000) DEFAULT NULL           COMMENT '定时任务名称快照',
     `is_deleted` TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
     `crte_time`  DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
@@ -106,7 +107,7 @@ CREATE TABLE `ip_pool_auto_rule` (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
-  COMMENT = '投资池自动调入调出规则备注表';
+  COMMENT = '投资池自动调入调出定时任务绑定表';
 
 CREATE TABLE `ip_pool_permission` (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
@@ -208,8 +209,9 @@ CREATE TABLE `ip_pool_auto_rule_evt` (
     `id`         BIGINT       DEFAULT NULL            COMMENT '主键 ID',
     `pool_id`    BIGINT       DEFAULT NULL            COMMENT '投资池 ID，关联 ip_investment_pool.id',
     `rule_type`  VARCHAR(16)  DEFAULT NULL            COMMENT '规则类型：auto_in=自动调入 / auto_out=自动调出',
-    `rule_id`    BIGINT       DEFAULT NULL            COMMENT '关联规则 ID（规则管理中心）',
-    `rule_desc`  VARCHAR(1000) DEFAULT NULL           COMMENT '规则描述文本，一期仅保存备注不执行',
+    `rule_id`    BIGINT       DEFAULT NULL            COMMENT '关联定时任务 ID，对应 sys_scheduled_task.id',
+    `task_code`  VARCHAR(64)  DEFAULT NULL            COMMENT '定时任务编码，对应 sys_scheduled_task.task_code',
+    `rule_desc`  VARCHAR(1000) DEFAULT NULL           COMMENT '定时任务名称快照',
     `is_deleted` TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
     `crte_time`  DATETIME     DEFAULT NULL            COMMENT '创建时间',
     `updt_time`  DATETIME     DEFAULT NULL            COMMENT '修改时间',
@@ -220,7 +222,7 @@ CREATE TABLE `ip_pool_auto_rule_evt` (
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
-  COMMENT = '投资池自动调入调出规则备注表（操作审计）';
+  COMMENT = '投资池自动调入调出定时任务绑定表（操作审计）';
 
 CREATE TABLE `ip_pool_permission_evt` (
     `evt_id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',

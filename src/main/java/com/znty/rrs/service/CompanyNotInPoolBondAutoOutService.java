@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
@@ -61,10 +62,12 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "mappings（跨池出池映射）：可选；用于债券当前所在池与主体应在池不一致的场景，可配置多组\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "bondPoolId（债券当前所在池）：扫描该池内的债券；命中条件后，债券从该池出库\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "companyPoolId（主体应在池）：用于检查债券发行主体是否仍在该池；主体不在该池时，债券才出库\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调出规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
+                    + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
                     + "处理规则：债券已在债券池、发行主体不在对应主体池时，将该债券自动调出\n"
                     + "排除范围：ABS、CRMW 不处理；ABS 需走禁投 ABS 独立链路\n"
                     + "范围说明：不检查调出限制池；仅软删除成功才写日志并计入影响条数\n"
-                    + "参数缺失或格式错误时，本轮任务失败";
+                    + "参数格式错误时，本轮任务失败";
 
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
@@ -74,6 +77,9 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     private InvestmentPoolMapper investmentPoolMapper;
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+    /** 扫描池并集（参数 ∪ 关系配置） */
+    @Resource
+    private AutoAdjustPoolScopeHelper poolScopeHelper;
 
     @Override
     public String getTaskCode() {
@@ -116,7 +122,8 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     private int doAutoOut(String taskName, TaskDetailLog detail) {
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
-        List<long[]> pairList = parseParamMappings(paramJson, taskName);
+        List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
+                parseParamMappings(paramJson, taskName), TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
         infoDetail(detail, "有效映射组数 " + pairList.size());
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         Date submitTime = new Date();
@@ -184,8 +191,9 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
      * 解析为 [bondPoolId, companyPoolId]；poolIds 表示两池相同。
      */
     List<long[]> parseParamMappings(String raw, String taskName) {
+        List<long[]> result = new ArrayList<>();
         if (!StringUtils.hasText(raw)) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
+            return result;
         }
         String text = raw.trim();
         if (!text.startsWith("{")) {
@@ -197,11 +205,10 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         } catch (Exception e) {
             throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage());
         }
-        List<long[]> result = new ArrayList<>();
         JsonNode poolIdsNode = root.get("poolIds");
         if (poolIdsNode != null && !poolIdsNode.isNull()) {
-            if (!poolIdsNode.isArray() || poolIdsNode.size() == 0) {
-                throw new BizException("poolIds 须为非空数字数组，示例 {\"poolIds\":[15]}");
+            if (!poolIdsNode.isArray()) {
+                throw new BizException("poolIds 须为数字数组，示例 {\"poolIds\":[15]}");
             }
             for (JsonNode item : poolIdsNode) {
                 if (item == null || item.isNull() || !item.isNumber()) {
@@ -224,10 +231,6 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 }
                 result.add(new long[]{bondNode.asLong(), companyNode.asLong()});
             }
-        }
-        if (result.isEmpty()) {
-            throw new BizException("扩展参数未解析到有效映射，示例 {\"poolIds\":[15]} 或 "
-                    + "{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":15}]}");
         }
         return result;
     }

@@ -2,12 +2,15 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.AutoAdjustMapper">
 
-    <!-- 查询配置了自动调出规则（rule_type=auto_out）的启用投资池 ID 列表 -->
-    <select id="queryAutoOutPoolIds" resultType="java.lang.Long">
+    <!-- 查询投资池关系配置中绑定了指定定时任务与调入/调出类型的池 ID -->
+    <select id="queryBoundPoolIds" resultType="java.lang.Long">
         SELECT DISTINCT pool_id
         FROM ip_pool_auto_rule
-        WHERE rule_type = 'auto_out'
-          AND is_deleted = 0
+        WHERE is_deleted = 0
+          AND task_code = #{taskCode}
+          AND rule_type = #{ruleType}
+          AND pool_id IS NOT NULL
+        ORDER BY pool_id ASC
     </select>
 
     <!-- 查询指定池中已生效且已到期的在池证券（仅回填 securityCode/securityShortName/securityType）

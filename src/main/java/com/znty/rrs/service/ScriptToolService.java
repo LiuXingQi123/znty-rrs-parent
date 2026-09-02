@@ -212,7 +212,7 @@ public class ScriptToolService {
         groups.add(buildRowCountGroup("znty_rrs", "主业务库", null));
         // AIS 投资分析库：仅统计本地已有表（公司库表多，显式指定）
         groups.add(buildRowCountGroup("ais_inv_analysis", "AIS 投资分析库", Arrays.asList(
-                "t_inv_company", "t_inv_grade_result",
+                "t_inv_company", "t_inv_grade_result", "v_inv_grade_result",
                 "t_sys_role", "t_sys_role_evt",
                 "t_sys_user", "t_sys_user_evt",
                 "t_sys_user_role", "t_sys_user_role_evt")));
@@ -1527,8 +1527,8 @@ public class ScriptToolService {
                 "SELECT COUNT(*) FROM znty_rrs.ip_pool_permission p LEFT JOIN ais_inv_analysis.t_sys_user u ON p.handler_type = 'user' AND u.id = p.handler_id LEFT JOIN ais_inv_analysis.t_sys_role r ON p.handler_type = 'role' AND r.id = p.handler_id WHERE (p.handler_type = 'user' AND u.id IS NULL) OR (p.handler_type = 'role' AND r.id IS NULL)",
                 STATUS_FAILED, "投资池权限引用了不存在的用户或角色", "修正 handler_type/handler_id 或补回用户角色数据"));
         rules.add(buildIntegrityRule("pool-auto-rule", "投资池", "ip_pool_auto_rule", "投资池自动规则关联",
-                "SELECT COUNT(*) FROM znty_rrs.ip_pool_auto_rule a LEFT JOIN znty_rrs.ip_investment_pool p ON p.id = a.pool_id LEFT JOIN znty_rrs.rule_definition r ON r.id = a.rule_id WHERE p.id IS NULL OR (a.rule_id IS NOT NULL AND r.id IS NULL)",
-                STATUS_FAILED, "自动规则引用了不存在的投资池或规则", "修正 pool_id/rule_id 或清理孤儿配置"));
+                "SELECT COUNT(*) FROM znty_rrs.ip_pool_auto_rule a LEFT JOIN znty_rrs.ip_investment_pool p ON p.id = a.pool_id LEFT JOIN znty_rrs.sys_scheduled_task t ON t.id = a.rule_id AND IFNULL(t.is_deleted, 0) = 0 WHERE IFNULL(a.is_deleted, 0) = 0 AND (p.id IS NULL OR (a.rule_id IS NOT NULL AND t.id IS NULL) OR (a.task_code IS NOT NULL AND t.id IS NOT NULL AND t.task_code != a.task_code))",
+                STATUS_FAILED, "自动规则引用了不存在的投资池或定时任务", "修正 pool_id/rule_id/task_code 或清理孤儿配置"));
         rules.add(buildIntegrityRule("flow-version", "流程配置", "wf_flow_version → wf_flow_definition", "流程版本归属",
                 "SELECT COUNT(*) FROM znty_rrs.wf_flow_version v LEFT JOIN znty_rrs.wf_flow_definition f ON f.id = v.flow_id WHERE v.flow_id IS NOT NULL AND f.id IS NULL",
                 STATUS_FAILED, "流程版本找不到流程定义", "修正 flow_id 或补回流程定义"));
@@ -1789,7 +1789,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "temp-security-code", "临时代码", "重置临时代码管理演示数据。", "medium", "rrs_temp_security_code_demo_data.sql");
         addModuleTask(taskMap, "scheduled-task", "定时任务配置", "重置定时任务配置与执行历史演示数据。", "medium", "rrs_scheduled_task_demo_data.sql");
         addModuleTask(taskMap, "grade-rule-alert", "不符合分级规则提醒", "重置不符合主体债入库规则提醒待办。", "medium", "rrs_grade_rule_alert_demo_data.sql");
-        addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体评级、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
+        addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体评级、担保人内评、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
         addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 债券发行人主体与评级表演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;
     }
@@ -2411,6 +2411,7 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "sys_script_tool_run_log", "脚本工具写操作审计")
         )));
         groups.add(buildTableGroup("ais-analysis", "AIS 投资分析库", "ais_inv_analysis", Arrays.asList(
+                buildTable("ais_inv_analysis", "v_inv_grade_result", "担保人内评结果"),
                 buildTable("ais_inv_analysis", "t_inv_grade_result", "主体评级结果"),
                 buildTable("ais_inv_analysis", "t_inv_company", "投资分析主体"),
                 buildTable("ais_inv_analysis", "t_sys_user_role", "用户角色关系"),

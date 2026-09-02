@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -72,13 +73,14 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 16、17 两个目标池；外评已不属于 AA-及以下的在池主体自动调出，但同时在 15（债券禁止库）的主体不调出\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "关闭拦截写法：<code>{\"poolIds\":[16],\"limitPoolIds\":[]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：外评已不属于 AA-及以下、当前在 16（观察池）的主体均可自动调出，不再按禁投池排除（仍受目标池自身调出限制关系约束）\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体出池目标池）：必填；仅处理当前已在这些池内的主体，主体成功出池后，同一池内旗下债券也会出库，可填写多个数字 ID\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds（禁止出池拦截池）：可选；主体当前已在这些池中的任一池时，不从 poolIds 指定的目标池自动出库\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体出池目标池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds（禁止出池拦截池）：可选；主体当前已在这些池中的任一池时，不从扫描目标池自动出库\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds 省略：默认使用全部禁投池；填写 <code>[]</code>：关闭禁投拦截\n"
+                    + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：有效外评为 AA、AA+、AAA 等非 AA-及以下名单，且主体已在目标池时，自动调出主体\n"
                     + "联动处理：主体成功出池后，继续调出该主体在同一目标池内的旗下债券\n"
                     + "限制规则：主体或旗下债已在目标池配置的调出限制池时，跳过该条记录\n"
-                    + "执行方式：直接生效，不走审批；参数缺失或格式错误时，本轮任务失败";
+                    + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 */
     @Resource
@@ -92,6 +94,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     /** 定时任务配置 */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+    /** 扫描池并集（参数 ∪ 关系配置） */
+    @Resource
+    private AutoAdjustPoolScopeHelper poolScopeHelper;
 
     @Override
     public String getTaskCode() {
@@ -137,7 +142,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     private int doAutoOut(String taskName, TaskDetailLog detail) {
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
-        List<Long> poolIds = parsePoolIds(paramJson, taskName);
+        List<Long> poolIds = poolScopeHelper.resolveUnionPoolIds(
+                paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
         infoDetail(detail, "目标池列表 poolIds=" + poolIds);
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         List<Long> limitPoolIds = resolveLimitPoolIds(paramJson, poolMap);
@@ -330,34 +336,11 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
      * 解析 {"poolIds":[15,16]}（包内可测）
      */
     List<Long> parsePoolIds(String raw, String taskName) {
-        if (!StringUtils.hasText(raw)) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
-        }
-        String text = raw.trim();
-        if (!text.startsWith("{")) {
-            throw new BizException("扩展参数仅支持 JSON 对象，示例 {\"poolIds\":[15]}，当前: " + text);
-        }
-        JsonNode root;
-        try {
-            root = OBJECT_MAPPER.readTree(text);
-        } catch (Exception e) {
-            log.warn("{}：JSON 扩展参数解析失败: {}，原因: {}", taskName, text, e.getMessage());
-            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
-                    + "；请使用标准 JSON，示例 {\"poolIds\":[15]}");
-        }
-        JsonNode poolIds = root.get("poolIds");
-        if (poolIds == null || !poolIds.isArray() || poolIds.size() == 0) {
+        List<Long> ids = AutoAdjustPoolScopeHelper.parseOptionalPoolIds(raw);
+        if (ids.isEmpty()) {
             throw new BizException("扩展参数须包含非空 poolIds 数组，示例 {\"poolIds\":[15]}");
         }
-        List<Long> result = new ArrayList<>();
-        for (JsonNode item : poolIds) {
-            if (item == null || item.isNull() || !item.isNumber()) {
-                throw new BizException("poolIds 元素须为数字，非法值: " + item
-                        + "；正确示例 {\"poolIds\":[15]}");
-            }
-            result.add(item.asLong());
-        }
-        return result;
+        return ids;
     }
 
     /** 单测入口 */

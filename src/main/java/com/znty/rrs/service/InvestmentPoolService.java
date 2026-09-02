@@ -12,7 +12,9 @@ import com.znty.rrs.common.enums.HandlerType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.exception.BizException;
+import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
+import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.entity.flow.FlowOptionDto;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.investmentpool.InvestmentPoolDto;
@@ -55,6 +57,10 @@ public class InvestmentPoolService {
     /** 投资池数据访问组件 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
+
+    /** 定时任务配置（自动调入/调出绑定） */
+    @Resource
+    private ScheduledTaskMapper scheduledTaskMapper;
 
     /** JSON 序列化组件 */
     @Resource
@@ -191,7 +197,7 @@ public class InvestmentPoolService {
                 Long ruleId = req.getAutoInRuleIds().get(i);
                 // 下标对齐取备注，防止 inDescs 列表长度不足时越界
                 String ruleDesc = (inDescs != null && i < inDescs.size()) ? inDescs.get(i) : "";
-                // 新增自动规则备注
+                // 绑定自动调入定时任务
                 addAutoRule(poolId, RuleType.AUTO_IN.getCode(), ruleId, ruleDesc, operatorId);
             }
         }
@@ -201,7 +207,7 @@ public class InvestmentPoolService {
                 Long ruleId = req.getAutoOutRuleIds().get(i);
                 // 下标对齐取备注，防止 outDescs 列表长度不足时越界
                 String ruleDesc = (outDescs != null && i < outDescs.size()) ? outDescs.get(i) : "";
-                // 新增自动规则备注
+                // 绑定自动调出定时任务
                 addAutoRule(poolId, RuleType.AUTO_OUT.getCode(), ruleId, ruleDesc, operatorId);
             }
         }
@@ -637,7 +643,7 @@ public class InvestmentPoolService {
     private void copyParentAutoRuleConfig(Long parentPoolId, Long childPoolId, String operatorId) {
         List<PoolAutoRuleBo> rules = investmentPoolMapper.queryAutoRuleList(parentPoolId);
         for (PoolAutoRuleBo parentRule : rules) {
-            // 新增自动规则备注
+            // 复制父级自动调入/调出定时任务绑定
             addAutoRule(childPoolId, parentRule.getRuleType(), parentRule.getRuleId(), parentRule.getRuleDesc(), operatorId);
         }
     }
@@ -779,22 +785,36 @@ public class InvestmentPoolService {
     }
 
     /**
-     * 新增自动规则备注
+     * 新增自动调入/调出定时任务绑定
      */
     private void addAutoRule(Long poolId, String ruleType, Long ruleId, String ruleDesc, String operatorId) {
         if ((ruleId == null) && (ruleDesc == null || ruleDesc.trim().isEmpty())) {
             return;
         }
+        String taskCode = null;
+        String desc = ruleDesc;
+        if (ruleId != null) {
+            // 按所选定时任务主键回填编码，并在备注为空时用任务名称
+            SysScheduledTaskBo task = scheduledTaskMapper.queryTaskById(ruleId);
+            if (task == null) {
+                throw new BizException("所选定时任务不存在");
+            }
+            taskCode = task.getTaskCode();
+            if (desc == null || desc.trim().isEmpty()) {
+                desc = task.getTaskName();
+            }
+        }
         PoolAutoRuleBo rule = new PoolAutoRuleBo();
         rule.setPoolId(poolId);
         rule.setRuleType(ruleType);
         rule.setRuleId(ruleId);
-        rule.setRuleDesc(ruleDesc);
+        rule.setTaskCode(taskCode);
+        rule.setRuleDesc(desc);
         rule.setIsDeleted(0);
         Date now = new Date();
         rule.setCrteTime(now);
         rule.setUpdtTime(now);
-        // 新增自动规则备注
+        // 写入自动规则绑定及审计
         investmentPoolMapper.addAutoRule(rule);
         investmentPoolMapper.addAutoRuleEvent(rule.getId(), operatorId, EventType.INSERT.getCode());
     }

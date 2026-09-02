@@ -89,16 +89,16 @@ public class InvestmentPoolReq {
     /** 关系类型到投资池 ID 列表映射 */
     private Map<String, List<Long>> relationPoolIds;
 
-    /** 自动调入规则 ID 列表 */
+    /** 自动调入定时任务 ID 列表（sys_scheduled_task.id） */
     private List<Long> autoInRuleIds;
 
-    /** 自动调入规则备注列表 */
+    /** 自动调入定时任务名称快照 */
     private List<String> autoInRuleDescs;
 
-    /** 自动调出规则 ID 列表 */
+    /** 自动调出定时任务 ID 列表（sys_scheduled_task.id） */
     private List<Long> autoOutRuleIds;
 
-    /** 自动调出规则备注列表 */
+    /** 自动调出定时任务名称快照 */
     private List<String> autoOutRuleDescs;
 
     /** 是否继承父级配置 */

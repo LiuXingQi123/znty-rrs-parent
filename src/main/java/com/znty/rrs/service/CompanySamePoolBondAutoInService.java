@@ -1,10 +1,9 @@
 package com.znty.rrs.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
+import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
@@ -23,7 +22,6 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -53,24 +51,23 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     private static final String REASON = "主体下债券自动入库";
     /** 批次号后缀 */
     private static final String BATCH_SUFFIX = "3006";
-    /** JSON 解析 */
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * 扩展参数说明
      */
     private static final String PARAM_HELP =
-            "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[15]}</code>\n"
+            "参数格式：JSON 对象，例如 <code>{\"poolIds\":[15]}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[15]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：主体已在 15（债券禁止库）时，旗下符合条件且尚未在 15（债券禁止库）的债券自动调入该池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,16]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）内的主体，将其旗下符合条件的债券补充调入主体所在的同一池\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体所在池 + 债券入池目标池）：必填；主体在这些池内时，旗下符合条件的债券自动入同一个池，可填写多个数字 ID\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体所在池 + 债券入池目标池）：可选；与投资池「关系配置 → 自动调入规则」中绑定本任务的池取并集后扫描\n"
+                    + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：主体已在目标池时，将其旗下未到期（含到期当天）且未在同一池的债券自动入池\n"
                     + "市场规则：目标池 market_codes 为空或 [] 时不限制；有配置时债券须命中允许市场\n"
                     + "限制规则：债券已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "范围说明：不排除已更新临时代码和 ABS；跨池场景请使用“在池主体旗下债券自动入池”任务\n"
-                    + "参数缺失或格式错误时，本轮任务失败";
+                    + "参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 */
     @Resource
@@ -84,6 +81,9 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     /** 定时任务配置 */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
+    /** 扫描池并集（参数 ∪ 关系配置） */
+    @Resource
+    private AutoAdjustPoolScopeHelper poolScopeHelper;
 
     @Override
     public String getTaskCode() {
@@ -192,49 +192,25 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 从库表 param_json 解析 poolIds
+     * 解析扫描池：扩展参数 poolIds 与关系配置绑定本任务的池取并集
      */
     private List<Long> resolvePoolIds(String taskName, TaskDetailLog detail) {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
-        if (conf == null || !StringUtils.hasText(conf.getParamJson())) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
-        }
-        infoDetail(detail, "扩展参数 param_json=" + conf.getParamJson().trim());
-        return parsePoolIds(conf.getParamJson().trim(), taskName);
+        String paramJson = (conf != null && StringUtils.hasText(conf.getParamJson()))
+                ? conf.getParamJson().trim() : null;
+        infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
+        return poolScopeHelper.resolveUnionPoolIds(paramJson, TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
     }
 
     /**
      * 解析 {"poolIds":[15,16]}（包内可测）
      */
     List<Long> parsePoolIds(String raw, String taskName) {
-        if (!StringUtils.hasText(raw)) {
-            throw new BizException("扩展参数未配置，须为 JSON，例如 {\"poolIds\":[15]}");
-        }
-        String text = raw.trim();
-        if (!text.startsWith("{")) {
-            throw new BizException("扩展参数仅支持 JSON 对象，示例 {\"poolIds\":[15]}，当前: " + text);
-        }
-        JsonNode root;
-        try {
-            root = OBJECT_MAPPER.readTree(text);
-        } catch (Exception e) {
-            log.warn("{}：JSON 扩展参数解析失败: {}，原因: {}", taskName, text, e.getMessage());
-            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
-                    + "；请使用标准 JSON，示例 {\"poolIds\":[15]}");
-        }
-        JsonNode poolIds = root.get("poolIds");
-        if (poolIds == null || !poolIds.isArray() || poolIds.size() == 0) {
+        List<Long> ids = AutoAdjustPoolScopeHelper.parseOptionalPoolIds(raw);
+        if (ids.isEmpty()) {
             throw new BizException("扩展参数须包含非空 poolIds 数组，示例 {\"poolIds\":[15]}");
         }
-        List<Long> result = new ArrayList<>();
-        for (JsonNode item : poolIds) {
-            if (item == null || item.isNull() || !item.isNumber()) {
-                throw new BizException("poolIds 元素须为数字，非法值: " + item
-                        + "；正确示例 {\"poolIds\":[15]}");
-            }
-            result.add(item.asLong());
-        }
-        return result;
+        return ids;
     }
 
     /** 单测入口 */

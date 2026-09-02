@@ -19,11 +19,13 @@ import java.util.List;
 public interface AutoAdjustMapper {
 
     /**
-     * 查询配置了自动调出规则（rule_type=auto_out）的启用投资池 ID 列表。
+     * 查询投资池关系配置中绑定了指定定时任务与调入/调出类型的池 ID。
      *
-     * @return 池 ID 列表
+     * @param taskCode 定时任务编码（sys_scheduled_task.task_code）
+     * @param ruleType 规则类型：auto_in / auto_out
+     * @return 池 ID 列表（去重）
      */
-    List<Long> queryAutoOutPoolIds();
+    List<Long> queryBoundPoolIds(@Param("taskCode") String taskCode, @Param("ruleType") String ruleType);
 
     /**
      * 查询指定池中已生效（audit_status=20）且已到期的在池证券。

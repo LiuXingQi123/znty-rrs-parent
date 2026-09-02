@@ -42,6 +42,7 @@ public class CrmwExpiredAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", crmwPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("CRMW到期自动出池");
@@ -83,6 +84,7 @@ public class CrmwExpiredAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", crmwPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("CRMW到期自动出池");
