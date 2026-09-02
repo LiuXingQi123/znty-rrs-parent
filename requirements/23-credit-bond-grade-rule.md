@@ -92,7 +92,7 @@
 | `credit_bond_pool_grade_rule` | 期限×评分档×投资池关系 | `id, term_bucket_id, inner_rating_grade_id, pool_id, pool_code_snapshot, pool_name_snapshot, enabled(1/0), sort_no, crte_time, updt_time`；UNIQUE KEY `uk_credit_bond_pool_grade_rule (term_bucket_id, inner_rating_grade_id, pool_id)` |
 | `ip_investment_pool`（只读引用） | 信用债大库一~五级库 | 查询条件 `parent_id=1 AND pool_type='credit_bond' AND pool_level=2 AND inner_sort BETWEEN 1 AND 5 AND status='enabled' AND is_deleted=0` |
 
-> 演示数据：期限 4 档、评分档 8 档（id 1~8）、关系 38 条。pool_id 2=一级库、3=二级库、4=三级库、5=四级库、6=五级库。
+> 演示数据：期限 4 档、评分档 8 档（id 1~8）、关系 40 条；其中 `3≥期限>1 × 3+` 可准入三级库、四级库、五级库。pool_id 2=一级库、3=二级库、4=三级库、5=四级库、6=五级库。
 
 ---
 
