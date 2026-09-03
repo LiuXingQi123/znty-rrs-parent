@@ -106,7 +106,7 @@
 | `querySecurityPoolStatus` | `{ securityCode }` | 当前所在池 + 主体所在池 |
 | `queryAdjustLogList` | `{ securityCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
 
-单担保人首次加载时，调入池查询直接携带默认 `guarantorCode`，不产生第二次查询。多担保人切换时，页面更新只读评分，并携带新的 `guarantorCode` 重新调用一次调入方向的 `queryAdjustPoolList`；不缓存查询结果、不重新查询最近信评报告。重新计算后仅保留仍然可调入的已选池，并同步更新调入互斥关系。
+单担保人首次加载时，调入池查询直接携带默认 `guarantorCode`，不产生第二次查询。多担保人切换时，页面更新只读评分，并携带新的 `guarantorCode` 重新调用一次调入方向的 `queryAdjustPoolList`；不缓存查询结果、不重新查询最近信评报告。规则口径变化后清空原有调入选择，并同步更新调入互斥关系。
 
 随后：
 1. 用 `securityCurrentPools.targetPoolId` 构建 `currentSecurityPoolIds` 集合。
