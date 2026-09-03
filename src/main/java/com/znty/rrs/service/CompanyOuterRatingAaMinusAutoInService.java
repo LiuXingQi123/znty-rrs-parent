@@ -64,7 +64,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体入池目标池）：可选；与投资池「关系配置 → 自动调入规则」中绑定本任务的池取并集后扫描\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：有效外评落在 AA-、A、BBB、BB、B、CCC/CC/C 等名单内，且尚未在目标池的主体自动入池\n"
-                    + "评级口径：近 12 个月取评级档位最高，更早评级取日期最新，再选取日期更近的有效外评\n"
+                    + "评级口径：近 12 个月取评级档位最高，更早评级取日期最新，再选取日期更近的有效外评；仅认机构 2/4/5/6/7/13/14/19/20\n"
                     + "限制规则：主体已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
@@ -168,8 +168,9 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 company.setAuditStatus(AuditStatus.APPROVED.getCode());
                 company.setAdjusterId(AUTO_ADJUSTER_ID);
                 company.setAdjusterName(AUTO_ADJUSTER_NAME);
-                company.setAdjustReason(REASON);
-                company.setAdjustAdvice(REASON);
+                String reason = buildAdjustReason(company.getOuterRating());
+                company.setAdjustReason(reason);
+                company.setAdjustAdvice(reason);
                 company.setAdjustBatchNo(batchNo);
                 company.setSubmitTime(submitTime);
                 // 写自动入池日志
@@ -188,6 +189,16 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         }
         infoDetail(detail, "批次号 " + batchNo + "，合计入池 " + total + " 个主体");
         return total;
+    }
+
+    /**
+     * 调整原因带上主体当前有效外评。
+     */
+    static String buildAdjustReason(String outerRating) {
+        if (!StringUtils.hasText(outerRating)) {
+            return REASON;
+        }
+        return REASON + "（当前外评：" + outerRating.trim() + "）";
     }
 
     /**

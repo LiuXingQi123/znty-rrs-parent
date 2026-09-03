@@ -158,6 +158,7 @@
       3) 两段各留 1 条后再按日期取更近的一条作为有效外评
       评级档位 value 越大越高（AAA > AA > AA-），对应老 sirm_enum OUTERRANK.value desc
       评级日取 COALESCE(ann_dt2, ann_dt)，yyyyMMdd
+      仅认可评级机构：b_info_creditratingagency IN (2,4,5,6,7,13,14,19,20)
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
@@ -196,6 +197,7 @@
               AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating != ''
+              AND r.b_info_creditratingagency IN ('2', '4', '5', '6', '7', '13', '14', '19', '20')
         )
         <!-- 近 12 个月以前：每个主体取公告日期最新的评级；同日取评级档位更高者。 -->
         ,old_pick AS (
@@ -238,6 +240,7 @@
         SELECT t.s_info_compcode AS security_code
                ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
                ,'company' AS security_type
+               ,t.b_info_creditrating AS outer_rating
         FROM (
             SELECT s_info_compcode
                    ,s_info_compname
@@ -271,6 +274,7 @@
       外评非 AA- 及以下主体自动出池候选（对应老系统 AdjustRuleOutAA）。
       有效外评取数与 queryCompanyByLowOuterRatingNotInPool 同构（12 个月拆分），
       评级名单互为补集；仅处理已在目标池的 company 主体。
+      仅认可评级机构：b_info_creditratingagency IN (2,4,5,6,7,13,14,19,20)
       limitPoolIds 对齐 LIMITPOOLID_XYJJ：主体已在这些池则不出。
     -->
     <select id="queryCompanyByNotLowOuterRatingInPool"
@@ -310,6 +314,7 @@
               AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating != ''
+              AND r.b_info_creditratingagency IN ('2', '4', '5', '6', '7', '13', '14', '19', '20')
         )
         <!-- 近 12 个月以前：每个主体取公告日期最新的评级；同日取评级档位更高者。 -->
         ,old_pick AS (
@@ -352,6 +357,7 @@
         SELECT t.s_info_compcode AS security_code
                ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
                ,'company' AS security_type
+               ,t.b_info_creditrating AS outer_rating
         FROM (
             SELECT s_info_compcode
                    ,s_info_compname

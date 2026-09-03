@@ -61,6 +61,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         company.setSecurityCode("C90005");
         company.setSecurityShortName("某地产公司");
         company.setSecurityType("company");
+        company.setOuterRating("AA-");
         when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(15L))
                 .thenReturn(Collections.singletonList(company));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
@@ -86,7 +87,8 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(15L);
-        assertThat(log.getAdjustReason()).contains("外评AA-及以下");
+        assertThat(log.getAdjustReason()).isEqualTo("外评AA-及以下主体自动入池（当前外评：AA-）");
+        assertThat(log.getAdjustAdvice()).isEqualTo(log.getAdjustReason());
     }
 
     @Test

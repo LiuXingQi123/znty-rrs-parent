@@ -69,7 +69,7 @@ public interface AutoAdjustMapper {
      * 查询最新主体外评落在「AA-及以下」列表、且尚未在目标池生效在池的主体。
      * <p>对应老系统 {@code AdjustRuleInAA}：数据源为 Wind 表 ais_inv_ods.wind_cbondissuerrating；
      * 有效外评按 12 个月拆分（近 12 个月取档位最高，12 个月前取日期最新）后再取更近一条；
-     * 评级命中 AA-/A/BBB… 等列表；security_type 固定 company。</p>
+     * 仅认可评级机构 2/4/5/6/7/13/14/19/20；评级命中 AA-/A/BBB… 等列表；security_type 固定 company。</p>
      *
      * @param poolId 目标池 ID
      * @return 待入池主体（securityCode/securityShortName/securityType）
@@ -79,7 +79,7 @@ public interface AutoAdjustMapper {
     /**
      * 查询最新主体外评<strong>不在</strong>「AA-及以下」列表、且当前已在目标池生效在池的主体。
      * <p>对应老系统 {@code AdjustRuleOutAA}：有效外评取数与
-     * {@link #queryCompanyByLowOuterRatingNotInPool} 同构（12 个月拆分），评级列表互为补集。
+     * {@link #queryCompanyByLowOuterRatingNotInPool} 同构（12 个月拆分、仅认可评级机构），评级列表互为补集。
      * {@code limitPoolIds} 对应老配置 LIMITPOOLID_XYJJ：主体已在这些池则不出
      * （规则挂在禁止库且禁止库也在名单内时，该池不会自动出任何人）。</p>
      *

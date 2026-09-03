@@ -14,7 +14,7 @@ import javax.annotation.Resource;
 /**
  * 评级下调判定组件（证券池/批量/禁投池/CRMW 四链路共享）。
  *
- * <p>主体/担保人评级下调：查 wind_cbondissuerrating 最新一条，比较当前 vs 前次评级（序号法）。
+ * <p>主体/担保人评级下调：查 wind_cbondissuerrating 认可机构最新一条，比较当前 vs 前次评级（序号法）。
  * 展望评级下调：读 rrs_securityinfo.rating_outlook 是否为"负面"（本地列，wind 同步的中文字符串）。</p>
  *
  * <p>查询失败/无记录 fail open 返回 false，不阻断简易流程（H2 测试库无 wind 表、生产 wind 库不可达等场景）。</p>

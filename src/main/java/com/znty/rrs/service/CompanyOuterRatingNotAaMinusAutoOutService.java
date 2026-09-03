@@ -78,6 +78,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds 省略：默认使用全部禁投池；填写 <code>[]</code>：关闭禁投拦截\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：有效外评为 AA、AA+、AAA 等非 AA-及以下名单，且主体已在目标池时，自动调出主体\n"
+                    + "评级口径：仅认机构 2/4/5/6/7/13/14/19/20；无认可机构外评的主体不处理\n"
                     + "联动处理：主体成功出池后，继续调出该主体在同一目标池内的旗下债券\n"
                     + "限制规则：主体或旗下债已在目标池配置的调出限制池时，跳过该条记录\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
@@ -180,7 +181,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     warnDetail(detail, "主体[" + company.getSecurityCode() + "]当前在调出限制池中，跳过");
                     continue;
                 }
-                fillAutoOutLog(company, pool, poolId, batchNo, submitTime, REASON);
+                String reason = buildAdjustReason(company.getOuterRating());
+                fillAutoOutLog(company, pool, poolId, batchNo, submitTime, reason);
                 // 写自动出池日志
                 securityPoolAdjustMapper.addAdjustLog(company);
                 // 软删除池状态
@@ -193,7 +195,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                 total++;
                 // 主体出池成功后，顺带调出同池旗下债券
                 total += outSamePoolBonds(company.getSecurityCode(), pool, poolId, batchNo, submitTime,
-                        outRestrictPoolIds, detail);
+                        outRestrictPoolIds, detail, reason);
             }
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 出池 "
                     + poolCount + " 个主体（含同池债计入合计）");
@@ -207,13 +209,13 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
      */
     private int outSamePoolBonds(String companyCode, InvestmentPoolBo pool, Long poolId,
                                  String batchNo, Date submitTime, List<Long> outRestrictPoolIds,
-                                 TaskDetailLog detail) {
+                                 TaskDetailLog detail, String companyReason) {
         List<IpAdjustLogBo> bonds = autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(companyCode, poolId);
         if (bonds == null || bonds.isEmpty()) {
             return 0;
         }
         int bondCount = 0;
-        String bondReason = REASON + "（同池旗下债）";
+        String bondReason = companyReason + "（同池旗下债）";
         for (IpAdjustLogBo bond : bonds) {
             if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                 continue;
@@ -237,6 +239,16 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
             infoDetail(detail, "主体[" + companyCode + "]同池旗下债调出 " + bondCount + " 条");
         }
         return bondCount;
+    }
+
+    /**
+     * 调整原因带上主体当前有效外评。
+     */
+    static String buildAdjustReason(String outerRating) {
+        if (!StringUtils.hasText(outerRating)) {
+            return REASON;
+        }
+        return REASON + "（当前外评：" + outerRating.trim() + "）";
     }
 
     /**

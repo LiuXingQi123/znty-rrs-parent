@@ -27,6 +27,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -77,6 +78,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         company.setSecurityCode("C90001");
         company.setSecurityShortName("某高评级公司");
         company.setSecurityType("company");
+        company.setOuterRating("AAA");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(16L), eq(Collections.singletonList(15L))))
                 .thenReturn(Collections.singletonList(company));
         when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut("C90001", 16L))
@@ -104,7 +106,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(16L);
-        assertThat(log.getAdjustReason()).contains("外评非AA-及以下");
+        assertThat(log.getAdjustReason()).isEqualTo("外评非AA-及以下主体自动出池（当前外评：AAA）");
+        assertThat(log.getAdjustAdvice()).isEqualTo(log.getAdjustReason());
     }
 
     @Test
@@ -186,6 +189,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         IpAdjustLogBo company = new IpAdjustLogBo();
         company.setSecurityCode("C90001");
         company.setSecurityType("company");
+        company.setOuterRating("AA");
         IpAdjustLogBo bond = new IpAdjustLogBo();
         bond.setSecurityCode("B001");
         bond.setSecurityShortName("某债");
@@ -204,6 +208,12 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(result.getAffectedCount()).isEqualTo(2);
         verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("C90001"), eq(16L));
         verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("B001"), eq(16L));
+        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(securityPoolAdjustMapper, times(2)).addAdjustLog(captor.capture());
+        assertThat(captor.getAllValues().get(0).getAdjustReason())
+                .isEqualTo("外评非AA-及以下主体自动出池（当前外评：AA）");
+        assertThat(captor.getAllValues().get(1).getAdjustReason())
+                .isEqualTo("外评非AA-及以下主体自动出池（当前外评：AA）（同池旗下债）");
     }
 
     @Test

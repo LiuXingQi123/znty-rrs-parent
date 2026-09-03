@@ -80,6 +80,12 @@ public class IpAdjustLogBo {
     /** 调整原因 */
     private String adjustReason;
 
+    /**
+     * 查询用有效外评（不落库）。
+     * <p>外评自动入/出池 SQL 回填，供拼接调整原因。
+     */
+    private String outerRating;
+
     /** 调整意见 */
     private String adjustAdvice;
 
