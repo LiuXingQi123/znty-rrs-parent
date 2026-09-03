@@ -51,6 +51,12 @@ public interface ForbiddenPoolAdjustMapper {
     List<SecurityInfoBo> queryCompanyInboundBondForAutoList(@Param("companyCode") String companyCode,
                                                             @Param("targetPoolId") Long targetPoolId);
 
+    /** 查询主体调入债券禁止库时，需要从关系池互斥调出的旗下债券 */
+    List<ForbiddenPoolAdjustDto.CompanyBond> queryCompanyBondMutexOutList(
+            @Param("companyCode") String companyCode,
+            @Param("targetPoolId") Long targetPoolId,
+            @Param("relationPoolIds") List<Long> relationPoolIds);
+
     /** 查询主体调出债券禁止库时需同步的未到期且当前在池旗下债券（含 ABS/crmw） */
     List<SecurityInfoBo> queryCompanyOutboundBondForAutoList(@Param("companyCode") String companyCode,
                                                              @Param("targetPoolId") Long targetPoolId);
@@ -95,7 +101,7 @@ public interface ForbiddenPoolAdjustMapper {
      * 查询调库记录列表。
      *
      * @param securityCode   主体代码（无批无 id 时必填；在途查询用）
-     * @param adjustBatchNo  有则返回同批全部主体行（优先于 adjustLogId）
+     * @param adjustBatchNo  有则返回同批全部调整对象（优先于 adjustLogId）
      * @param adjustLogId    无批时按主键回看单条兜底
      */
     List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,

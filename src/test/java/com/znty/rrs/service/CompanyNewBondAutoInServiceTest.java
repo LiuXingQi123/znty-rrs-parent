@@ -4,6 +4,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -53,32 +54,49 @@ public class CompanyNewBondAutoInServiceTest {
         pool.setId(15L);
         pool.setPoolName("债券禁止库");
         pool.setPoolType("forbidden");
-        when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
+        InvestmentPoolBo relatedPool = new InvestmentPoolBo();
+        relatedPool.setId(3L);
+        relatedPool.setPoolName("二级库");
+        relatedPool.setPoolType("credit_bond");
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool, relatedPool));
+        when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
+                buildRelation(15L, "in_mutex", 3L),
+                buildRelation(3L, "in_restrict", 15L)));
 
         IpAdjustLogBo bond = new IpAdjustLogBo();
         bond.setSecurityCode("BOND001.IB");
         bond.setSecurityShortName("测试新债");
         bond.setSecurityType("mtn");
         when(autoAdjustMapper.queryCompanyNewBondForAutoIn(15L, 15L)).thenReturn(Arrays.asList(bond));
+        when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("BOND001.IB"))
+                .thenReturn(Arrays.asList(3L));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(9001L);
             return 1;
         });
         when(securityPoolAdjustMapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
+        when(securityPoolAdjustMapper.deletePoolStatusSoft("BOND001.IB", 3L)).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
 
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(securityPoolAdjustMapper).addAdjustLog(logCaptor.capture());
-        verify(securityPoolAdjustMapper).addPoolStatus(logCaptor.capture());
+        verify(securityPoolAdjustMapper, times(2)).addAdjustLog(logCaptor.capture());
+        verify(securityPoolAdjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
         IpAdjustLogBo adjustLog = logCaptor.getAllValues().get(0);
+        IpAdjustLogBo autoOutLog = logCaptor.getAllValues().get(1);
         assertThat(adjustLog.getAdjustType()).isEqualTo("自动调整");
         assertThat(adjustLog.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(adjustLog.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
+        assertThat(autoOutLog.getAdjustType()).isEqualTo("互斥调整");
+        assertThat(autoOutLog.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
+        assertThat(autoOutLog.getTargetPoolId()).isEqualTo(3L);
+        assertThat(autoOutLog.getTargetPoolName()).isEqualTo("二级库");
+        assertThat(autoOutLog.getAdjustBatchNo()).isEqualTo(adjustLog.getAdjustBatchNo());
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
         verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L));
+        verify(securityPoolAdjustMapper).deletePoolStatusSoft("BOND001.IB", 3L);
     }
 
     @Test
@@ -182,5 +200,13 @@ public class CompanyNewBondAutoInServiceTest {
         ScheduledTaskResult result = service.execute();
         verify(securityPoolAdjustMapper, times(2)).addAdjustLog(any(IpAdjustLogBo.class));
         assertThat(result.getAffectedCount()).isEqualTo(1);
+    }
+
+    private PoolRelationBo buildRelation(Long poolId, String relationType, Long relationPoolId) {
+        PoolRelationBo relation = new PoolRelationBo();
+        relation.setPoolId(poolId);
+        relation.setRelationType(relationType);
+        relation.setRelationPoolId(relationPoolId);
+        return relation;
     }
 }

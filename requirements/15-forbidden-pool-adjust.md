@@ -88,21 +88,22 @@
 
 **信评报告 / 其他材料**：`openReportDialog(poolId,'credit'|'material')` 打开弹窗，含内部报告 Tab（`/api/v1/reports/queryInReportPage`）与外部报告 Tab（`/api/v1/reports/queryOutReportPage`），支持标题/证券编码/类型/撰写日期筛选 + 分页；`el-upload auto-upload=false` 暂存 File。`handleConfirmReportDialog` 回填 `creditReportSelections`/`otherMaterialSelections`。**打开弹窗时默认将当前主体代码（`companyDetail.companyCode`）写入筛选条件 `securityCode` 并自动查询**。
 
-**步骤 2（校验确认，`adjustStep===2`）**：显示「调库校验结果」表格（`adjustReviewList`）与「原因和建议」区（`adjustReason`/`adjustAdvice` 文本域）。
+**步骤 2（校验确认，`adjustStep===2`）**：显示「调库校验结果」表格（`adjustReviewList`）与「原因和建议」区（`adjustReason`/`adjustAdvice` 文本域）。表格展示证券代码、证券简称、投资池、调整类型和方向；主体调入债券禁止库时，额外展示旗下债券从关系池互斥调出的真实调库项，这些调库项与主体手工项同批提交和审批。
 
 ### 3.2 接口调用顺序
 
-1. **`goToStep2()`**：`syncSelectedPoolsFromTables()` 规范化（仅叶子、去重）；组装 `items`（调入 `adjustMode:'调入'`，调出 `adjustMode:'调出'`）；调 `POST /api/v1/forbiddenPoolAdjust/checkAdjust`，请求体 `ForbiddenPoolAdjustCheckReq`：`{ companyCode, companyShortName, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`；后端固定主体调库类型为 `company`。用 `adjustCheckSeq` 防旧请求覆盖；返回 `AdjustCheckDto` 映射为 `adjustReviewList`，`adjustStep=2`。
+1. **`goToStep2()`**：`syncSelectedPoolsFromTables()` 规范化（仅叶子、去重）；组装 `items`（调入 `adjustMode:'调入'`，调出 `adjustMode:'调出'`）；调 `POST /api/v1/forbiddenPoolAdjust/checkAdjust`，请求体 `ForbiddenPoolAdjustCheckReq`：`{ companyCode, companyShortName, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`；后端固定请求级主体类型为 `company`。用 `adjustCheckSeq` 防旧请求覆盖；返回 `AdjustCheckDto` 映射为 `adjustReviewList`，`adjustStep=2`。主体调入债券禁止库时，债券互斥调出行携带自身证券代码、简称和类型。
 
 2. **`handleSubmit()`**：校验 `validCount>0` 且 `allValidRowsHaveFlow`；打开流程选择弹窗，为每条 `validManualAdjustReviewList`（`itemTag==='manual' && valid`）选流程，`confirmFlowSelection()` → `submitAdjustLog()`。
 
-3. **`submitAdjustLog()`**：`collectSubmitFiles` 收集 File 到 `submitFiles`；`collectReportAttachmentIds` 收集已选报告库附件 ID；调 `submitAdjustMultipart('/api/v1/forbiddenPoolAdjust/addAdjustLogWithFiles', payload, submitFiles)`（multipart 入口；JSON 无附件入口为 `addAdjustLog`），`FormData`：`request` 为 JSON Blob，`files` 为 multipart 数组。成功后 `$message.success` + `backToList()`（先 `closeActiveTab()`，失败再回页内列表）。
+3. **`submitAdjustLog()`**：提交全部 `valid` 调库项；每项携带实际调整对象的 `securityCode/securityShortName/securityType`。`collectSubmitFiles` 收集 File 到 `submitFiles`；`collectReportAttachmentIds` 收集已选报告库附件 ID；调 `submitAdjustMultipart('/api/v1/forbiddenPoolAdjust/addAdjustLogWithFiles', payload, submitFiles)`（multipart 入口；JSON 无附件入口为 `addAdjustLog`），`FormData`：`request` 为 JSON Blob，`files` 为 multipart 数组。债券互斥项与主体手工项共用流程和批次，并以债券为调整对象建申请记录。成功后 `$message.success` + `backToList()`（先 `closeActiveTab()`，失败再回页内列表）。
 
 ### 3.3 后端 checkCompanyAdjust → checkAdjust 完整逻辑
 
 1. `validateCompanyCode` + `queryCompanyDetail`（null 抛 404「公司主体不存在」）。
 2. `validateManualCheckPoolIds`：每个手工项 `targetPoolId` 必须 ∈ `{15,16,17,23}`（债券禁止库、观察池、黑名单质押库、重点观察名单），否则抛「禁投池调整手工目标池仅允许债券禁止库(15)、观察池(16)、黑名单质押库(17)、重点观察名单(23)」。主体调库类型由后端固定为 `company`，不依赖前端传入。
 3. 将 `ForbiddenPoolAdjustCheckReq` 转为 `AdjustCheckReq`（`securityCode=companyCode`），调本类内部 `checkAdjust(checkReq)`。
+4. 若存在债券禁止库(15)手工调入项，`appendCompanyBondMutexOutItems` 按“禁止库 `in_mutex` + 反向指向禁止库的 `in_restrict`”解析关系池；查询未到期、尚未在禁止库且当前实际位于关系池的旗下债券，逐券逐池追加 `itemTag='mutex'`、`adjustMode='调出'` 的真实调库项。该项与主体手工项同批审批，最终审批前按债券最新池状态复核。
 
 `checkAdjust` 五阶段（与证券池调库同源，操作 `forbiddenPoolAdjustMapper`）：主体基础信息读 `wind_cbondissuer` 并映射为调库所需最小字段；主体不执行到期、品种、市场校验，保留进行中、重复入/未入池、容量、来源池、限制池、互斥、弹性禁投池等可用规则。
 
@@ -159,10 +160,17 @@ syncCompanyBondsOnDirect(companyLog):
   for bond in bonds:
     autoLog = buildCompanyBondAutoLog(companyLog, bond)   // adjustType='自动调整', auditStatus='20'
     addAdjustLog(autoLog)
-    if inbound: addPoolStatus(autoLog) else: deletePoolStatusSoft(bond.windCode, targetPoolId)
+    if inbound:
+      addPoolStatus(autoLog)
+      // 合并：目标池的 in_mutex + 反向指向目标池的 in_restrict，并按池 ID 去重
+      autoOutPoolIds = resolveCompanyBondAutoOutPoolIds(targetPoolId)
+      for outPoolId in intersection(bond.currentPoolIds, autoOutPoolIds):
+        addAdjustLog(autoOutLog)                          // adjustType='互斥调整'，adjustMode='调出'
+        deletePoolStatusSoft(bond.windCode, outPoolId)
+    else: deletePoolStatusSoft(bond.windCode, targetPoolId)
 ```
 
-主体对**债券禁止库**直通入池/出池后，旗下**未到期**债券（含 ABS、crmw，bond 大类）自动同步入/出同一目标池；每条写 `ip_adjust_log`（`adjust_type='自动调整'`，`audit_status='20'`）+ `ip_pool_status`。对其它手工风险池（16/17/23）**不同步**旗下债。
+主体对**债券禁止库**直通入池/出池后，旗下**未到期**债券（含 ABS、crmw，bond 大类）自动同步入/出同一目标池；同步日志写 `adjust_type='自动调整'`、`audit_status='20'`。主体调入债券禁止库时，还会按 `ip_pool_relation` 配置，把债券从禁止库的 `in_mutex` 池，以及把禁止库配置为 `in_restrict` 的反向池中自动调出；仅对债券当前实际所在池生效，同一池去重，并为每次自动调出单独写入 `adjust_type='互斥调整'`、`adjust_mode='调出'` 的已通过日志。对其它手工风险池（16/17/23）**不同步**旗下债。
 
 ### 3.6 涉及的数据库表与写入
 
@@ -187,7 +195,7 @@ syncCompanyBondsOnDirect(companyLog):
 | `queryCompanyPoolStatus` | companyCode | `ForbiddenPoolAdjustDto.PoolStatusBundle` | 当前主体所在池 + 旗下债券所在池 |
 | `queryCompanyBondList` | companyCode, targetPoolId | `List<ForbiddenPoolAdjustDto.CompanyBond>` | 主体旗下指定池中的债券明细 |
 | `queryAdjustPoolList` | companyCode, adjustDirection(in/out), currentUserId | `List<PoolDto>` | 可调入/调出池（仅债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)，含互斥关系与 currentCount） |
-| `checkAdjust` | companyCode, companyShortName, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 主体调库可行性校验 + 自动联动/互斥项 + 流程候选 |
+| `checkAdjust` | companyCode, companyShortName, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 主体调库可行性校验 + 自动联动/互斥项 + 旗下债券互斥调出项 + 流程候选 |
 | `addAdjustLog`（application/json） | `ForbiddenPoolAdjustSubmitReq` | `ForbiddenPoolAdjustSubmitDto` | 提交调库申请（无附件） |
 | `addAdjustLogWithFiles`（multipart/form-data） | `request`=JSON Blob + `files`=MultipartFile[] | `ForbiddenPoolAdjustSubmitDto` | 提交调库申请（带附件，**前端实际调用入口**） |
 | `queryAdjustLogList` | companyCode, adjustBatchNo | `List<AdjustLogDto>` | 主体调库记录（无批次排除终态） |
@@ -205,7 +213,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 ### 5.1 `ip_adjust_log`（共享调库记录表）
 
-主体调库写入时 `pool_type` 为 `forbidden`/`observe`/`blacklist`/`restricted`；`security_code` 存主体代码；旗下债券自动调整记录 `security_code` 存债券 `wind_code`，`adjust_type='自动调整'`，`adjust_reason='主体"XXX"调入/调出，旗下债券自动同步调整'`。`adjust_batch_no` 以 `BOND` 前缀。
+主体调库写入时 `pool_type` 为 `forbidden`/`observe`/`blacklist`/`restricted`；`security_code` 存主体代码。旗下债券同步入/出禁止库的记录使用 `adjust_type='自动调整'`；从互斥/受限池自动调出的记录使用 `adjust_type='互斥调整'`、`adjust_mode='调出'`，目标池、池类型和原因均记录实际被调出的池。`adjust_batch_no` 沿用主体批次并以 `BOND` 前缀。
 
 ### 5.2 `ip_pool_status`（投资池当前状态表）
 
@@ -221,7 +229,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 ### 5.5 `ip_investment_pool` / `ip_pool_relation`
 
-禁投池模块仅暴露债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)；`ip_pool_relation` 的 `relation_type` 含 source/in_restrict/out_restrict/in_linked/out_linked/in_mutex/out_mutex/in_soft_restrict/out_soft_restrict。
+禁投池模块仅暴露债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)；`ip_pool_relation` 的 `relation_type` 含 source/in_restrict/out_restrict/in_linked/out_linked/in_mutex/out_mutex/in_soft_restrict/out_soft_restrict。主体调入债券禁止库后的债券自动调出同时读取 `pool_id=15 AND relation_type='in_mutex'`，以及 `relation_pool_id=15 AND relation_type='in_restrict'` 两个方向的配置。
 
 ---
 
@@ -267,7 +275,8 @@ syncCompanyBondsOnDirect(companyLog):
 ## 8. 验收标准
 
 - 提交成功后主记录、从属记录、批次号和初始步骤一致。
-- 直通流程即时入池；目标为债券禁止库时同步旗下未到期债；非直通流程进入流程中，最终通过后同样规则。
+- 直通流程即时入池；目标为债券禁止库时同步旗下未到期债，并从当前实际所在的互斥/受限池自动调出且生成日志；非直通流程进入流程中，最终通过后同样规则。
+- 主体调入债券禁止库进入校验确认页时，逐券展示将从关系池互斥调出的债券、目标池与调整方向；每条债券互斥项均为真实调库项，以具体债券作为调整对象，与主体手工项同批提交和审批，最终审批前按债券最新池状态复核。
 - 手工项目标池必须为债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)，否则校验拦截。
 - 仅 `audit_status='20'` 落地 `ip_pool_status` 并触发债券同步。
 - `ForbiddenPoolAdjustApiTest` 覆盖查询、校验、提交和债券同步业务线。

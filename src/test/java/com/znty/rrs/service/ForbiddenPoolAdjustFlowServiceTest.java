@@ -179,7 +179,7 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         req.setAttachmentChanges(Collections.singletonList(change));
 
         ReflectionTestUtils.invokeMethod(service, "applyAttachmentChangesForModifySubmit",
-                req, step, Collections.emptyList());
+                req, step, Collections.emptyList(), Collections.emptyList());
 
         verify(attachmentService).validateCreditReportSources(Collections.singletonList(100L), true);
     }

@@ -66,6 +66,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                     + "处理规则：主体已在目标池时，将其旗下未到期（含到期当天）且未在同一池的债券自动入池\n"
                     + "市场规则：目标池 market_codes 为空或 [] 时不限制；有配置时债券须命中允许市场\n"
                     + "限制规则：债券已在目标池配置的调入限制池时，跳过该条记录\n"
+                    + "关系调出：入池成功后，按目标池调入互斥关系及反向调入限制关系自动调出债券原所在池并记录日志\n"
                     + "范围说明：不排除已更新临时代码和 ABS；跨池场景请使用“在池主体旗下债券自动入池”任务\n"
                     + "参数格式错误时，本轮任务失败";
 
@@ -154,10 +155,11 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     continue;
                 }
+                List<Long> currentPoolIds = securityPoolAdjustMapper
+                        .querySecurityCurrentPoolIdList(bond.getSecurityCode());
                 // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
                 if (AutoAdjustRestrictHelper.isInAnyPool(
-                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(bond.getSecurityCode()),
-                        inRestrictPoolIds)) {
+                        currentPoolIds, inRestrictPoolIds)) {
                     warnDetail(detail, "债券[" + bond.getSecurityCode() + "]当前在调入限制池中，跳过");
                     continue;
                 }
@@ -184,6 +186,13 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 }
                 poolCount++;
                 total++;
+                // 入池成功后从当前实际所在的互斥/受限池调出，并写同批自动调出日志
+                int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
+                        bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
+                if (autoOutCount > 0) {
+                    infoDetail(detail, "债券[" + bond.getSecurityCode() + "]自动调出关系池 "
+                            + autoOutCount + " 个");
+                }
             }
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 入池 " + poolCount + " 条");
         }

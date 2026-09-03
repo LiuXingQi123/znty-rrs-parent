@@ -83,7 +83,7 @@
 
 ## 4. 跳转详情的参数传递
 
-`openForbiddenPoolAdjustDetail(row)`：与**禁投池历史主体行**同构，拼 `companyCode`/`targetPoolId`/`adjustLogId`（`al.id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含主体代码 + 记录 ID + 批次），进 `forbidden_pool_adjust_detail.html`；详情 `queryAdjustLogList` 按同批全部主体行展示，`adjustLogId` 用于选中原因/流程。脱离工作台回退 `location.href`。**不要**套用证券详情页。主体池查询页（[09](09-company-pool-query.md)）同一方法。
+`openForbiddenPoolAdjustDetail(row)`：与**禁投池历史主体行**同构，拼 `companyCode`/`targetPoolId`/`adjustLogId`（`al.id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含主体代码 + 记录 ID + 批次），进 `forbidden_pool_adjust_detail.html`；详情 `queryAdjustLogList` 按同批全部调整对象展示（主体、联动主体及互斥债券），`adjustLogId` 用于选中原因/流程。脱离工作台回退 `location.href`。**不要**套用证券详情页。主体池查询页（[09](09-company-pool-query.md)）同一方法。
 
 ---
 

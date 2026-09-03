@@ -66,29 +66,44 @@ public interface AutoAdjustMapper {
     List<IpAdjustLogBo> queryCompanyBondSamePoolForAutoIn(@Param("poolId") Long poolId);
 
     /**
-     * 查询最新主体外评落在「AA-及以下」列表、且尚未在目标池生效在池的主体。
-     * <p>对应老系统 {@code AdjustRuleInAA}：数据源为 Wind 表 ais_inv_ods.wind_cbondissuerrating；
-     * 有效外评按 12 个月拆分（近 12 个月取档位最高，12 个月前取日期最新）后再取更近一条；
-     * 仅认可评级机构 2/4/5/6/7/13/14/19/20；评级命中 AA-/A/BBB… 等列表；security_type 固定 company。</p>
+     * 查询当前已在来源池、尚未在目标池的主体。
+     * <p>供条款（一）禁止库、条款（三）重点观察名单复用；security_type 固定 company。</p>
      *
-     * @param poolId 目标池 ID
-     * @return 待入池主体（securityCode/securityShortName/securityType）
+     * @param sourcePoolId 来源池 ID
+     * @param targetPoolId 入池目标池 ID
+     * @return 待入池主体
+     */
+    List<IpAdjustLogBo> queryCompanyInPoolNotInTarget(@Param("sourcePoolId") Long sourcePoolId,
+                                                      @Param("targetPoolId") Long targetPoolId);
+
+    /**
+     * 查询近一年认可外评孰低为 AA-及以下、且尚未在目标池的主体。
+     * <p>仅条款（二）；一年以前忽略；仅认机构 2/3/4/5/6/7/13/14/19/20。</p>
+     *
+     * @param poolId 入池目标池 ID
+     * @return 待入池主体（含 outerRating）
      */
     List<IpAdjustLogBo> queryCompanyByLowOuterRatingNotInPool(@Param("poolId") Long poolId);
 
     /**
-     * 查询最新主体外评<strong>不在</strong>「AA-及以下」列表、且当前已在目标池生效在池的主体。
-     * <p>对应老系统 {@code AdjustRuleOutAA}：有效外评取数与
-     * {@link #queryCompanyByLowOuterRatingNotInPool} 同构（12 个月拆分、仅认可评级机构），评级列表互为补集。
-     * {@code limitPoolIds} 对应老配置 LIMITPOOLID_XYJJ：主体已在这些池则不出
-     * （规则挂在禁止库且禁止库也在名单内时，该池不会自动出任何人）。</p>
+     * 查询已在目标池、近一年认可外评孰低不属于 AA-及以下的主体。
+     * <p>仅条款（二）的反面；无认可外评不返回。条款（一）（三）由调用方按在池名单排除。
+     * {@code limitPoolIds} 为额外拦截池，空则不加这段。</p>
      *
-     * @param poolId        目标池 ID
-     * @param limitPoolIds  禁投拦截池；空则不追加「已在禁投池则跳过」
-     * @return 待出池主体（securityCode/securityShortName/securityType）
+     * @param poolId       出池目标池 ID
+     * @param limitPoolIds 额外拦截池；空则不追加
+     * @return 待出池主体（含 outerRating）
      */
     List<IpAdjustLogBo> queryCompanyByNotLowOuterRatingInPool(@Param("poolId") Long poolId,
                                                               @Param("limitPoolIds") List<Long> limitPoolIds);
+
+    /**
+     * 查询指定池中当前已生效的主体代码。
+     *
+     * @param poolId 池 ID
+     * @return 主体代码列表
+     */
+    List<String> queryCompanyCodeListInPool(@Param("poolId") Long poolId);
 
     /**
      * 查询主体旗下当前已在指定池的债券（bond 大类），供外评出池时顺带出同池债。

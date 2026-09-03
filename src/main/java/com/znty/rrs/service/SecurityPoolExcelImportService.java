@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * 证券/主体 Excel 导入服务
@@ -591,8 +592,9 @@ public class SecurityPoolExcelImportService {
                 continue;
             }
 
-            List<AdjustCheckDto.CheckResultItem> resultItems =
-                    checkDto.getItems() == null ? new ArrayList<>() : checkDto.getItems();
+            List<AdjustCheckDto.CheckResultItem> resultItems = checkDto.getItems() == null
+                    ? new ArrayList<>()
+                    : new ArrayList<>(checkDto.getItems());
             // 未勾选联动与互斥：只保留手工项
             if (!allowLinkMutex) {
                 List<AdjustCheckDto.CheckResultItem> manuals = new ArrayList<>();
@@ -873,6 +875,9 @@ public class SecurityPoolExcelImportService {
                 validateExcelImportPermission(opterId, ci.getTargetPoolId());
 
                 ForbiddenPoolAdjustSubmitReq.AdjustItem si = new ForbiddenPoolAdjustSubmitReq.AdjustItem();
+                si.setSecurityCode(ci.getSecurityCode());
+                si.setSecurityShortName(ci.getSecurityShortName());
+                si.setSecurityType(ci.getSecurityType());
                 si.setTargetPoolId(ci.getTargetPoolId());
                 si.setTargetPoolName(ci.getTargetPoolName());
                 si.setPoolType(ci.getPoolType());
@@ -1154,6 +1159,9 @@ public class SecurityPoolExcelImportService {
                     // 校验 Excel 导入权限
                     validateExcelImportPermission(opterId, ci.getTargetPoolId());
                     ForbiddenPoolAdjustSubmitReq.AdjustItem si = new ForbiddenPoolAdjustSubmitReq.AdjustItem();
+                    si.setSecurityCode(ci.getSecurityCode());
+                    si.setSecurityShortName(ci.getSecurityShortName());
+                    si.setSecurityType(ci.getSecurityType());
                     si.setTargetPoolId(ci.getTargetPoolId());
                     si.setTargetPoolName(ci.getTargetPoolName());
                     si.setPoolType(ci.getPoolType());

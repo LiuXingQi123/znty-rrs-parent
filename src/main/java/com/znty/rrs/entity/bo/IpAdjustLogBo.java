@@ -86,6 +86,21 @@ public class IpAdjustLogBo {
      */
     private String outerRating;
 
+    /**
+     * 查询用：当前是否在公司信用债禁止库（1=是，不落库）。
+     */
+    private Integer inForbiddenPool;
+
+    /**
+     * 查询用：当前是否在重点观察名单（1=是，不落库）。
+     */
+    private Integer inRestrictedPool;
+
+    /**
+     * 查询用：近一年认可外评孰低是否为 AA-及以下（1=是，不落库）。
+     */
+    private Integer inLowOuterRating;
+
     /** 调整意见 */
     private String adjustAdvice;
 

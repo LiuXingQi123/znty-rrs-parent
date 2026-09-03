@@ -7,6 +7,7 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
@@ -80,6 +81,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
                     + "处理规则：主体已在主体池且生效时，将其旗下未到期且未在债券目标池的债券自动入池\n"
                     + "排除范围：已更新正式代码的临时代码、ABS、CRMW 不处理\n"
+                    + "关系调出：入池成功后，按目标池调入互斥关系及反向调入限制关系自动调出债券原所在池并记录日志\n"
                     + "范围说明：不检查调入限制池，也不按目标池 market_codes 过滤；需要同池市场/限制校验时请使用“主体下债券自动入库”任务\n"
                     + "参数格式错误时，本轮任务失败";
 
@@ -159,6 +161,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         infoDetail(detail, "有效映射组数 " + pairList.size());
         // 构建池 ID → 池信息映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
+        List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         infoDetail(detail, "本轮批次号 " + batchNo);
@@ -181,6 +184,8 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             }
             int pairCount = 0;
             for (IpAdjustLogBo bond : bondList) {
+                List<Long> currentPoolIds = securityPoolAdjustMapper
+                        .querySecurityCurrentPoolIdList(bond.getSecurityCode());
                 bond.setAdjustType("自动调整");
                 bond.setAdjustMode(AdjustMode.IN.getCode());
                 bond.setTargetPoolId(bondTargetPoolId);
@@ -204,6 +209,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 }
                 pairCount++;
                 total++;
+                // 入池成功后从当前实际所在的互斥/受限池调出，并写同批自动调出日志
+                int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
+                        bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
+                if (autoOutCount > 0) {
+                    infoDetail(detail, "债券[" + bond.getSecurityCode() + "]自动调出关系池 "
+                            + autoOutCount + " 个");
+                }
             }
             infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
                     + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 入池 " + pairCount + " 条");

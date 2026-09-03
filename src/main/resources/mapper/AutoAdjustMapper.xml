@@ -150,19 +150,37 @@
         ORDER BY bond.wind_code ASC
     </select>
 
+    <!-- 条款（一）（三）共用：当前已在来源池、尚未在目标池的主体。 -->
+    <select id="queryCompanyInPoolNotInTarget"
+            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT ips.security_code
+               ,MAX(ips.security_short_name) AS security_short_name
+               ,'company' AS security_type
+        FROM ip_pool_status ips
+        WHERE ips.target_pool_id = #{sourcePoolId}
+          AND ips.security_type = 'company'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status tgt
+              WHERE tgt.security_code = ips.security_code
+                AND tgt.target_pool_id = #{targetPoolId}
+                AND tgt.security_type = 'company'
+                AND tgt.audit_status = '20'
+                AND tgt.is_deleted = 0
+          )
+        GROUP BY ips.security_code
+        ORDER BY ips.security_code ASC
+    </select>
+
     <!--
-      外评 AA- 及以下主体自动入池候选（对应老系统 AdjustRuleInAA）。
-      有效外评取数对齐老系统 12 个月拆分（declaredate / OUTERRANK.value）：
-      1) 评级日 < 今天往前 12 个月：按日期最新，同日取评级档位更高者
-      2) 评级日 >= 今天往前 12 个月：取评级档位更高者（不按日期）
-      3) 两段各留 1 条后再按日期取更近的一条作为有效外评
-      评级档位 value 越大越高（AAA > AA > AA-），对应老 sirm_enum OUTERRANK.value desc
-      评级日取 COALESCE(ann_dt2, ann_dt)，yyyyMMdd
-      仅认可评级机构：b_info_creditratingagency IN (2,4,5,6,7,13,14,19,20)
+      条款（二）：近一年认可机构外评孰低为 AA-及以下、且尚未在目标池。
+      一年以前忽略；未知档位不参与比较；机构 IN (2,3,4,5,6,7,13,14,19,20)
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
-        <!-- 汇总 Wind 主体外评，并将评级文本转换为可比较的数值档位。 -->
+        <!-- 近一年认可机构外评，并转成可比较档位。 -->
         WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
@@ -197,199 +215,145 @@
               AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating != ''
-              AND r.b_info_creditratingagency IN ('2', '4', '5', '6', '7', '13', '14', '19', '20')
+              AND r.b_info_creditratingagency IN ('2', '3', '4', '5', '6', '7', '13', '14', '19', '20')
+              AND COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000')
+                    &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
         )
-        <!-- 近 12 个月以前：每个主体取公告日期最新的评级；同日取评级档位更高者。 -->
-        ,old_pick AS (
+        <!-- 每个主体取近一年孰低外评；同档取日期更新的一条。 -->
+        ,effective AS (
             SELECT s_info_compcode
                    ,s_info_compname
                    ,b_info_creditrating
-                   ,declare_dt
-                   ,ROW_NUMBER() OVER (
-                       PARTITION BY s_info_compcode
-                       ORDER BY declare_dt DESC
-                                ,rating_value DESC
-                   ) AS rn
-            FROM rated
-            WHERE declare_dt &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
+            FROM (
+                SELECT s_info_compcode
+                       ,s_info_compname
+                       ,b_info_creditrating
+                       ,ROW_NUMBER() OVER (
+                           PARTITION BY s_info_compcode
+                           ORDER BY rating_value ASC
+                                    ,declare_dt DESC
+                       ) AS rn
+                FROM rated
+                WHERE rating_value &gt; 0
+            ) t
+            WHERE t.rn = 1
         )
-        <!-- 近 12 个月内：每个主体直接取评级档位最高的评级，不按公告日期优先。 -->
-        ,recent_pick AS (
-            SELECT s_info_compcode
-                   ,s_info_compname
-                   ,b_info_creditrating
-                   ,declare_dt
-                   ,ROW_NUMBER() OVER (
-                       PARTITION BY s_info_compcode
-                       ORDER BY rating_value DESC
-                   ) AS rn
-            FROM rated
-            WHERE declare_dt &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
-        )
-        <!-- 合并新旧两段的候选评级，供后续按日期选出最终有效外评。 -->
-        ,merged AS (
-            SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
-            FROM old_pick
-            WHERE rn = 1
-            UNION ALL
-            SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
-            FROM recent_pick
-            WHERE rn = 1
-        )
-        <!-- 每个主体从两段候选中取日期更近的有效外评，再筛选 AA- 及以下且尚未在目标池的主体。 -->
-        SELECT t.s_info_compcode AS security_code
-               ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
+        <!-- 孰低落在 AA-及以下且尚未在目标池的主体。 -->
+        SELECT e.s_info_compcode AS security_code
+               ,COALESCE(NULLIF(e.s_info_compname, ''), e.s_info_compcode) AS security_short_name
                ,'company' AS security_type
-               ,t.b_info_creditrating AS outer_rating
-        FROM (
-            SELECT s_info_compcode
-                   ,s_info_compname
-                   ,b_info_creditrating
-                   ,ROW_NUMBER() OVER (
-                       PARTITION BY s_info_compcode
-                       ORDER BY declare_dt DESC
-                   ) AS rn
-            FROM merged
-        ) t
-        WHERE t.rn = 1
-          AND t.b_info_creditrating IN (
+               ,e.b_info_creditrating AS outer_rating
+        FROM effective e
+        WHERE e.b_info_creditrating IN (
               'AA-', 'A+', 'A', 'A-'
               ,'BBB+', 'BBB', 'BBB-'
               ,'BB+', 'BB', 'BB-'
               ,'B+', 'B', 'B-'
               ,'CCC', 'CC', 'C'
+              ,'D'
           )
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status ips
-              WHERE ips.security_code = t.s_info_compcode
-                AND ips.target_pool_id = #{poolId}
-                AND ips.audit_status = '20'
-                AND ips.is_deleted = 0
-          )
-        ORDER BY t.s_info_compcode ASC
-    </select>
-
-    <!--
-      外评非 AA- 及以下主体自动出池候选（对应老系统 AdjustRuleOutAA）。
-      有效外评取数与 queryCompanyByLowOuterRatingNotInPool 同构（12 个月拆分），
-      评级名单互为补集；仅处理已在目标池的 company 主体。
-      仅认可评级机构：b_info_creditratingagency IN (2,4,5,6,7,13,14,19,20)
-      limitPoolIds 对齐 LIMITPOOLID_XYJJ：主体已在这些池则不出。
-    -->
-    <select id="queryCompanyByNotLowOuterRatingInPool"
-            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
-        <!-- 汇总 Wind 主体外评，并将评级文本转换为可比较的数值档位。 -->
-        WITH rated AS (
-            SELECT r.s_info_compcode
-                   ,r.s_info_compname
-                   ,r.b_info_creditrating
-                   ,COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000') AS declare_dt
-                   ,CASE TRIM(r.b_info_creditrating)
-                        WHEN 'AAA+' THEN 21
-                        WHEN 'AAA' THEN 20
-                        WHEN 'AA+' THEN 19
-                        WHEN 'AA' THEN 18
-                        WHEN 'AA-' THEN 17
-                        WHEN 'A+' THEN 16
-                        WHEN 'A' THEN 15
-                        WHEN 'A-' THEN 14
-                        WHEN 'BBB+' THEN 13
-                        WHEN 'BBB' THEN 12
-                        WHEN 'BBB-' THEN 11
-                        WHEN 'BB+' THEN 10
-                        WHEN 'BB' THEN 9
-                        WHEN 'BB-' THEN 8
-                        WHEN 'B+' THEN 7
-                        WHEN 'B' THEN 6
-                        WHEN 'B-' THEN 5
-                        WHEN 'CCC' THEN 4
-                        WHEN 'CC' THEN 3
-                        WHEN 'C' THEN 2
-                        WHEN 'D' THEN 1
-                        ELSE 0
-                    END AS rating_value
-            FROM ais_inv_ods.wind_cbondissuerrating r
-            WHERE r.s_info_compcode IS NOT NULL
-              AND r.s_info_compcode != ''
-              AND r.b_info_creditrating IS NOT NULL
-              AND r.b_info_creditrating != ''
-              AND r.b_info_creditratingagency IN ('2', '4', '5', '6', '7', '13', '14', '19', '20')
-        )
-        <!-- 近 12 个月以前：每个主体取公告日期最新的评级；同日取评级档位更高者。 -->
-        ,old_pick AS (
-            SELECT s_info_compcode
-                   ,s_info_compname
-                   ,b_info_creditrating
-                   ,declare_dt
-                   ,ROW_NUMBER() OVER (
-                       PARTITION BY s_info_compcode
-                       ORDER BY declare_dt DESC
-                                ,rating_value DESC
-                   ) AS rn
-            FROM rated
-            WHERE declare_dt &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
-        )
-        <!-- 近 12 个月内：每个主体直接取评级档位最高的评级，不按公告日期优先。 -->
-        ,recent_pick AS (
-            SELECT s_info_compcode
-                   ,s_info_compname
-                   ,b_info_creditrating
-                   ,declare_dt
-                   ,ROW_NUMBER() OVER (
-                       PARTITION BY s_info_compcode
-                       ORDER BY rating_value DESC
-                   ) AS rn
-            FROM rated
-            WHERE declare_dt &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 MONTH), '%Y%m%d')
-        )
-        <!-- 合并新旧两段的候选评级，供后续按日期选出最终有效外评。 -->
-        ,merged AS (
-            SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
-            FROM old_pick
-            WHERE rn = 1
-            UNION ALL
-            SELECT s_info_compcode, s_info_compname, b_info_creditrating, declare_dt
-            FROM recent_pick
-            WHERE rn = 1
-        )
-        <!-- 每个主体从两段候选中取日期更近的有效外评，再筛选不在 AA- 及以下名单且已在目标池的主体。 -->
-        SELECT t.s_info_compcode AS security_code
-               ,COALESCE(NULLIF(t.s_info_compname, ''), t.s_info_compcode) AS security_short_name
-               ,'company' AS security_type
-               ,t.b_info_creditrating AS outer_rating
-        FROM (
-            SELECT s_info_compcode
-                   ,s_info_compname
-                   ,b_info_creditrating
-                   ,ROW_NUMBER() OVER (
-                       PARTITION BY s_info_compcode
-                       ORDER BY declare_dt DESC
-                   ) AS rn
-            FROM merged
-        ) t
-        WHERE t.rn = 1
-          AND t.b_info_creditrating NOT IN (
-              'AA-', 'A+', 'A', 'A-'
-              ,'BBB+', 'BBB', 'BBB-'
-              ,'BB+', 'BB', 'BB-'
-              ,'B+', 'B', 'B-'
-              ,'CCC', 'CC', 'C'
-          )
-          AND EXISTS (
-              SELECT 1
-              FROM ip_pool_status ips
-              WHERE ips.security_code = t.s_info_compcode
+              WHERE ips.security_code = e.s_info_compcode
                 AND ips.target_pool_id = #{poolId}
                 AND ips.security_type = 'company'
                 AND ips.audit_status = '20'
                 AND ips.is_deleted = 0
           )
+        ORDER BY e.s_info_compcode ASC
+    </select>
+
+    <!--
+      条款（二）反面：已在目标池、近一年孰低不属于 AA-及以下。
+      无认可外评不返回；条款（一）（三）由 Java 按在池名单排除。
+      limitPoolIds 为额外拦截；空则不加这段。
+    -->
+    <select id="queryCompanyByNotLowOuterRatingInPool"
+            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        <!-- 近一年认可机构外评，并转成可比较档位。 -->
+        WITH rated AS (
+            SELECT r.s_info_compcode
+                   ,r.s_info_compname
+                   ,r.b_info_creditrating
+                   ,COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000') AS declare_dt
+                   ,CASE TRIM(r.b_info_creditrating)
+                        WHEN 'AAA+' THEN 21
+                        WHEN 'AAA' THEN 20
+                        WHEN 'AA+' THEN 19
+                        WHEN 'AA' THEN 18
+                        WHEN 'AA-' THEN 17
+                        WHEN 'A+' THEN 16
+                        WHEN 'A' THEN 15
+                        WHEN 'A-' THEN 14
+                        WHEN 'BBB+' THEN 13
+                        WHEN 'BBB' THEN 12
+                        WHEN 'BBB-' THEN 11
+                        WHEN 'BB+' THEN 10
+                        WHEN 'BB' THEN 9
+                        WHEN 'BB-' THEN 8
+                        WHEN 'B+' THEN 7
+                        WHEN 'B' THEN 6
+                        WHEN 'B-' THEN 5
+                        WHEN 'CCC' THEN 4
+                        WHEN 'CC' THEN 3
+                        WHEN 'C' THEN 2
+                        WHEN 'D' THEN 1
+                        ELSE 0
+                    END AS rating_value
+            FROM ais_inv_ods.wind_cbondissuerrating r
+            WHERE r.s_info_compcode IS NOT NULL
+              AND r.s_info_compcode != ''
+              AND r.b_info_creditrating IS NOT NULL
+              AND r.b_info_creditrating != ''
+              AND r.b_info_creditratingagency IN ('2', '3', '4', '5', '6', '7', '13', '14', '19', '20')
+              AND COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000')
+                    &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
+        )
+        <!-- 每个主体取近一年孰低外评；同档取日期更新的一条。 -->
+        ,effective AS (
+            SELECT s_info_compcode
+                   ,s_info_compname
+                   ,b_info_creditrating
+            FROM (
+                SELECT s_info_compcode
+                       ,s_info_compname
+                       ,b_info_creditrating
+                       ,ROW_NUMBER() OVER (
+                           PARTITION BY s_info_compcode
+                           ORDER BY rating_value ASC
+                                    ,declare_dt DESC
+                       ) AS rn
+                FROM rated
+                WHERE rating_value &gt; 0
+            ) t
+            WHERE t.rn = 1
+        )
+        <!-- 已在目标池且孰低不属于 AA-及以下的主体。 -->
+        SELECT ips.security_code
+               ,COALESCE(NULLIF(e.s_info_compname, ''), NULLIF(ips.security_short_name, ''), ips.security_code)
+                   AS security_short_name
+               ,'company' AS security_type
+               ,e.b_info_creditrating AS outer_rating
+        FROM ip_pool_status ips
+        INNER JOIN effective e ON e.s_info_compcode = ips.security_code
+        WHERE ips.target_pool_id = #{poolId}
+          AND ips.security_type = 'company'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND e.b_info_creditrating NOT IN (
+              'AA-', 'A+', 'A', 'A-'
+              ,'BBB+', 'BBB', 'BBB-'
+              ,'BB+', 'BB', 'BB-'
+              ,'B+', 'B', 'B-'
+              ,'CCC', 'CC', 'C'
+              ,'D'
+          )
         <if test="limitPoolIds != null and limitPoolIds.size() &gt; 0">
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status lim
-              WHERE lim.security_code = t.s_info_compcode
+              WHERE lim.security_code = ips.security_code
                 AND lim.security_type = 'company'
                 AND lim.audit_status = '20'
                 AND lim.is_deleted = 0
@@ -399,7 +363,17 @@
                 </foreach>
           )
         </if>
-        ORDER BY t.s_info_compcode ASC
+        ORDER BY ips.security_code ASC
+    </select>
+
+    <!-- 指定池中当前已生效的主体代码，供出池时排除仍命中条款（一）（三）的主体。 -->
+    <select id="queryCompanyCodeListInPool" resultType="java.lang.String">
+        SELECT DISTINCT ips.security_code
+        FROM ip_pool_status ips
+        WHERE ips.target_pool_id = #{poolId}
+          AND ips.security_type = 'company'
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
     </select>
 
     <!-- 外评出池后顺带调出：主体旗下已在同一目标池的债券（对齐老 findSecurityByCompanyCode ptype=4000） -->

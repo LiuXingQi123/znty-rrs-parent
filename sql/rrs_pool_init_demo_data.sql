@@ -324,7 +324,8 @@ INSERT INTO `ip_pool_relation` (`pool_id`, `relation_type`, `relation_pool_id`, 
 -- 自动调库定时任务绑定（rule_id = sys_scheduled_task.id，与 rrs_scheduled_task_demo_data 对齐）
 INSERT INTO `ip_pool_auto_rule` (`id`, `pool_id`, `rule_type`, `rule_id`, `task_code`, `rule_desc`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 (1, 15, 'auto_out', 1, 'security_expired_auto_out', '到期证券自动出池', 0, NOW(), NOW()),
-(2, 15, 'auto_in', 4, 'company_outer_rating_aa_minus_auto_in', '外评AA-及以下主体自动入池', 0, NOW(), NOW());
+(2, 17, 'auto_in', 4, 'company_outer_rating_aa_minus_auto_in', '外评AA-及以下主体自动入池', 0, NOW(), NOW()),
+(3, 17, 'auto_out', 3, 'company_outer_rating_not_aa_minus_auto_out', '外评非AA-及以下主体自动出池', 0, NOW(), NOW());
 
 INSERT INTO `ip_pool_permission` (`pool_id`, `permission_type`, `handler_type`, `handler_id`, `handler_name`, `is_deleted`, `crte_time`, `updt_time`) VALUES
 (1,  'viewable',         'user', 1, '管理员', 0, NOW(), NOW()),

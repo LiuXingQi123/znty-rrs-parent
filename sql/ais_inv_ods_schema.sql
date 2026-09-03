@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS `wind_cbondissuerrating` (
     `b_rate_style`                 VARCHAR(100)  DEFAULT NULL COMMENT '评级类型',
     `b_info_creditrating`          VARCHAR(40)   DEFAULT NULL COMMENT '主体信用评级',
     `b_rate_ratingoutlook`         DOUBLE        DEFAULT NULL COMMENT '评级展望',
-    `b_info_creditratingagency`    VARCHAR(10)   DEFAULT NULL COMMENT '评级机构；有效外评仅认 2/4/5/6/7/13/14/19/20',
+    `b_info_creditratingagency`    VARCHAR(10)   DEFAULT NULL COMMENT '评级机构；有效外评仅认 2/3/4/5/6/7/13/14/19/20',
     `s_info_compcode`              VARCHAR(10)   DEFAULT NULL COMMENT '公司代码',
     `b_info_creditratingexplain`   VARCHAR(1000) DEFAULT NULL COMMENT '评级说明',
     `b_info_precreditrating`       VARCHAR(40)   DEFAULT NULL COMMENT '前次主体信用评级',

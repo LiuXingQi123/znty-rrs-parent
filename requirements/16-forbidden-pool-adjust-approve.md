@@ -12,7 +12,7 @@
 
 **入口模式 `entryMode`**：`'process'`（我的事宜处理，默认）/ `'next'`（下一步校验确认）。URL `entryMode=next` 切换；`adjustStep` 默认 `2`。
 
-**详情页区块**（CSS order）：主体基本信息（只读）→ 当前所在池（主体所在池 + 旗下债券所在池）→ 调库记录表 → 调库校验结果（仅 `isNextMode`）→ 原因和建议 → 当前流程状态（仅 `isProcessMode`）→ 审核审批区（仅 `isProcessMode`）→ 调库操作区（恒 false，隐藏）。
+**详情页区块**（CSS order）：主体基本信息（只读）→ 当前所在池（主体所在池 + 旗下债券所在池）→ 调库记录表 → 调库校验结果（仅 `isNextMode`）→ 原因和建议 → 当前流程状态（仅 `isProcessMode`）→ 审核审批区（仅 `isProcessMode`）→ 调库操作区（恒 false，隐藏）。next 模式的校验表会逐券展示主体调入债券禁止库产生的互斥调出项，并以债券代码、简称作为调整对象提交。
 
 **初始化**（`created`）：`this.initStandaloneReviewPage()`。读 URL `companyCode`（缺则提示「缺少主体信息，请从业务页面进入」）、`targetPoolId`/`adjustLogId`/`adjustBatchNo`、`entryMode`，`adjustStep=2`，`loadDetailData(companyCode)` + `restoreStandaloneAdjustDraft()`（从 sessionStorage 按 `adjustDraftKey` 恢复 next 模式草稿）。默认登录用户取 `RrsAuth`。顶部「返回」先 `RrsWorkbench.closeActiveTab()`，失败再回页内列表；禁止 `history.back()`。
 
@@ -113,7 +113,7 @@ finishAdjustBatch(step):
   generateInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 rrs_report_in
 ```
 
-`syncCompanyBonds`（与 `syncCompanyBondsOnDirect` 同构，走 `applyPoolStatusChanges`）：**仅目标池为债券禁止库(15)** 且 `categoryType==='company'` 触发；调入用 `queryCompanyInboundBondForAutoList`（未到期 + 未在池 + bond 大类，含 ABS/crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期 + 当前在池）；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。观察池/黑名单质押库/重点观察名单只落主体。
+`syncCompanyBonds`（与 `syncCompanyBondsOnDirect` 同构，走 `applyPoolStatusChanges`）：**仅目标池为债券禁止库(15)** 且 `categoryType==='company'` 触发；调入用 `queryCompanyInboundBondForAutoList`（未到期 + 未在池 + bond 大类，含 ABS/crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期 + 当前在池）；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。主体调入禁止库后，再合并禁止库的 `in_mutex` 与反向指向禁止库的 `in_restrict` 配置，只将债券从当前实际所在的关系池自动调出，并为每个实际调出的池生成一条 `adjustType='互斥调整'`、已通过的调出日志。观察池/黑名单质押库/重点观察名单只落主体。
 
 `generateInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `rrs_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
 
@@ -153,7 +153,7 @@ finishAdjustBatch(step):
 | 表 | 操作 | 关键字段 |
 |---|---|---|
 | `ip_adjust_step` | UPDATE（`editAdjustStepProcess` 乐观锁 / `editOtherPendingStepSkipped`）/ INSERT（`addAdjustStep` 创建下一步 pending / 终止分支 auto_process） | id, step_status, process_action, process_comment, process_time |
-| `ip_adjust_log` | UPDATE（`editAdjustLogAuditStatus` 按 adjustBatchNo 批量更新 `audit_status`+`audit_time`）；INSERT（旗下债券自动调整记录） | adjust_batch_no, audit_status, adjust_type(自动调整) |
+| `ip_adjust_log` | UPDATE（`editAdjustLogAuditStatus` 按 adjustBatchNo 批量更新 `audit_status`+`audit_time`）；INSERT（旗下债券同步入/出禁止库及从互斥/受限池自动调出的记录） | adjust_batch_no, audit_status, adjust_type(自动调整/互斥调整), adjust_mode, target_pool_id |
 | `ip_pool_status` | INSERT（调入生效）/ UPDATE 软删（调出生效） | security_code, target_pool_id, pool_type, audit_status='20', is_deleted |
 | `rrs_report_in` | INSERT（`generateInternalReportsOnFinish` 审批通过后沉淀手工信评报告） | report_title, report_type, security_code, company_code, data_source='uploaded' |
 | `wf_flow_*` | 只读（构建 FlowSnapshot） | 流程定义/版本/节点/连线/审批配置/处理人/角色 |
@@ -205,7 +205,7 @@ finishAdjustBatch(step):
 | Service | `SecurityPoolAdjustFlowService` | `ForbiddenPoolAdjustFlowService`（**完整复制** security-pool flow 逻辑，操作 `forbiddenPoolAdjustMapper`） |
 | 请求/返回实体 | `SecurityPoolAdjustAuditReq/Dto` | **直接复用** `SecurityPoolAdjustAuditReq/Dto`（无 forbidden 专属审批实体） |
 | 详情加载接口 | `querySecurityDetail`/`querySecurityPoolStatus`/`queryAdjustLogList` | `queryCompanyDetail`/`queryCompanyPoolStatus`/`queryAdjustLogList`（companyCode 维度） |
-| `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `generateInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后，**仅债券禁止库**再 `syncCompanyBonds(log)`：未到期旗下债（含 ABS/crmw）写 `adjust_type='自动调整'` 的 `ip_adjust_log` + `ip_pool_status` |
+| `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `generateInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后，**仅债券禁止库**再 `syncCompanyBonds(log)`：未到期旗下债（含 ABS/crmw）同步入库写 `adjust_type='自动调整'`；从互斥/受限池调出写 `adjust_type='互斥调整'` |
 | 前端入口参数 | `securityCode` | `companyCode` |
 | 审批策略/节点语义识别/管理员代办 | — | **完全相同**（关键字、`ADMIN_USER_ID='1'` 一致） |
 
@@ -215,7 +215,8 @@ finishAdjustBatch(step):
 
 - 复核 approve → `10`，复核 reject → `11` 并在修改节点创建发起人 pending。
 - 修改节点 approve（前端「提交」）→ `00` 回复核；修改节点 reject（前端「终止流程」）→ `99` 终止。
-- 审批 approve → `20`，`finishAdjustBatch` 落地池状态 + 同步旗下债券 + 生成内部报告；审批 reject → `21` 终止。
+- 审批 approve → `20`，`finishAdjustBatch` 落地池状态 + 同步旗下债券；主体调入债券禁止库时，债券从当前实际所在的互斥/受限池自动调出并生成日志；随后生成内部报告。审批 reject → `21` 终止。
+- next 模式校验结果须显示旗下债券互斥调出的证券代码、证券简称、关系池和调整类型；提交后同批调库记录仍以具体债券作为该互斥调出项的调整对象。
 - 会签节点需全部 approve 才推进；抢占节点首位处理即跳过其余。
 - 发起人不得参与后续流程节点处理（`validateSubmitterCannotProcess`）。
 - 仅 `audit_status='20'` 落地 `ip_pool_status`。

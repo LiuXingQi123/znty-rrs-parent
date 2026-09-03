@@ -34,6 +34,12 @@ public class ForbiddenPoolAdjustSubmitReq {
      */
     @Data
     public static class AdjustItem {
+        /** 调整对象代码（空则回退主体代码） */
+        private String securityCode;
+        /** 调整对象简称 */
+        private String securityShortName;
+        /** 调整对象证券类型 */
+        private String securityType;
         /** 目标投资池 ID */
         private Long targetPoolId;
         /** 目标投资池名称 */
