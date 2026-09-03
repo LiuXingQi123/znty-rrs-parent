@@ -10,11 +10,17 @@ import java.util.Date;
 @Data
 public class GuarantorGradeDto {
 
+    /** 所属证券 Wind 代码 */
+    private String securityCode;
+
     /** Wind 主体代码 */
     private String windcode;
 
     /** Wind 主体名称 */
     private String windname;
+
+    /** Wind 担保人类型编码 */
+    private Long guarantorTypeCode;
 
     /** 主体内评分档 */
     private String totalScore;

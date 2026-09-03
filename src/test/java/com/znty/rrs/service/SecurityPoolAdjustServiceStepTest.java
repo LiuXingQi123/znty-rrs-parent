@@ -28,6 +28,7 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
+import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.exception.BizException;
 import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
@@ -60,6 +61,39 @@ import static org.mockito.Mockito.when;
 
 /** SecurityPoolAdjustServiceStepTest 测试类。 */
 public class SecurityPoolAdjustServiceStepTest {
+
+    /** 符合主体类型但暂无评分的担保人允许参与调库，评分保持为空。 */
+    @Test
+    public void applySelectedGuarantorGradeShouldKeepEligibleGuarantorWithoutGrade() {
+        CommonService commonService = mock(CommonService.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "commonService", commonService);
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("DBB002.IB");
+        GuarantorGradeDto guarantor = new GuarantorGradeDto();
+        guarantor.setWindcode("C10008");
+        when(commonService.queryGuarantorGrade("DBB002.IB", "C10008")).thenReturn(guarantor);
+
+        ReflectionTestUtils.invokeMethod(service, "applySelectedGuarantorGrade", securityInfo, "C10008");
+
+        assertThat(securityInfo.getInnerGuarantorRating()).isNull();
+    }
+
+    /** 主体类型不符合要求的担保人即使存在于原始逗号串中也不得参与调库。 */
+    @Test
+    public void applySelectedGuarantorGradeShouldRejectIneligibleGuarantor() {
+        CommonService commonService = mock(CommonService.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "commonService", commonService);
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("DBB002.IB");
+        when(commonService.queryGuarantorGrade("DBB002.IB", "C10007")).thenReturn(null);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                service, "applySelectedGuarantorGrade", securityInfo, "C10007"))
+                .isInstanceOf(BizException.class)
+                .hasMessage("所选担保人不属于当前证券或主体类型不符合要求");
+    }
 
     /** 提交快照中的担保人内评必须使用后端已查询的 AIS 最新值。 */
     @Test

@@ -10,6 +10,6 @@ import java.util.List;
 @Data
 public class GuarantorGradeReq {
 
-    /** Wind 主体代码列表 */
-    private List<String> windCodes;
+    /** Wind 证券代码列表 */
+    private List<String> securityCodes;
 }

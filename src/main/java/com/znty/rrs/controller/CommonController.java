@@ -38,10 +38,10 @@ public class CommonController {
     }
 
     /**
-     * 批量查询担保人主体内评分
+     * 批量筛选合格担保人并查询主体内评分
      *
-     * @param req 担保人 Wind 主体代码列表
-     * @return 每个主体最新的内评结果
+     * @param req Wind 证券代码列表
+     * @return 主体类型为 115203000/115201000 的担保人、类型编码及其最新内评结果
      */
     @PostMapping("/queryGuarantorGradeList")
     public ApiResponse<List<GuarantorGradeDto>> queryGuarantorGradeList(

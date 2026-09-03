@@ -1686,15 +1686,12 @@ public class ForbiddenAbsPoolAdjustService {
             return;
         }
         String selectedCode = guarantorCode.trim();
-        boolean matched = Arrays.stream((securityInfo.getGuarantorId() == null ? "" : securityInfo.getGuarantorId()).split(","))
-                .map(String::trim)
-                .anyMatch(selectedCode::equals);
-        if (!matched) {
-            throw new BizException("所选担保人不属于当前证券");
+        // 按证券代码查询 Wind 担保人关系并读取最新内评，不依赖证券主数据的 guarantor_id
+        GuarantorGradeDto grade = commonService.queryGuarantorGrade(securityInfo.getWindCode(), selectedCode);
+        if (grade == null) {
+            throw new BizException("所选担保人不属于当前证券或主体类型不符合要求");
         }
-        // 按担保人 Wind 主体代码查询最新内评，未查到时保持空值
-        GuarantorGradeDto grade = commonService.queryLatestGuarantorGrade(selectedCode);
-        securityInfo.setInnerGuarantorRating(grade == null ? null : grade.getTotalScore());
+        securityInfo.setInnerGuarantorRating(grade.getTotalScore());
     }
 
     /**

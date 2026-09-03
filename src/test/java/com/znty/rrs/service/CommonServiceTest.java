@@ -21,23 +21,26 @@ import static org.mockito.Mockito.when;
  */
 public class CommonServiceTest {
 
-    /** 验证担保人代码会去空、去重后一次性查询 */
+    /** 验证证券代码会去空、去重后一次性筛选合格主体并查询评分 */
     @Test
     public void queryGuarantorGradeListShouldNormalizeCodesAndQueryOnce() {
         CommonMapper mapper = mock(CommonMapper.class);
         CommonService service = new CommonService();
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
-        List<String> normalizedCodes = Arrays.asList("C10010", "C10008");
+        List<String> normalizedCodes = Arrays.asList("DBB001.IB", "DBB002.IB");
         GuarantorGradeDto grade = new GuarantorGradeDto();
+        grade.setSecurityCode("DBB001.IB");
         grade.setWindcode("C10010");
+        grade.setGuarantorTypeCode(115203000L);
         grade.setTotalScore("1");
         when(mapper.queryGuarantorGradeList(normalizedCodes)).thenReturn(Collections.singletonList(grade));
 
         GuarantorGradeReq req = new GuarantorGradeReq();
-        req.setWindCodes(Arrays.asList(" C10010 ", "", null, "C10008", "C10010"));
+        req.setSecurityCodes(Arrays.asList(" DBB001.IB ", "", null, "DBB002.IB", "DBB001.IB"));
         List<GuarantorGradeDto> result = service.queryGuarantorGradeList(req);
 
         assertThat(result).containsExactly(grade);
+        assertThat(result.get(0).getGuarantorTypeCode()).isEqualTo(115203000L);
         verify(mapper).queryGuarantorGradeList(normalizedCodes);
     }
 
@@ -48,9 +51,27 @@ public class CommonServiceTest {
         CommonService service = new CommonService();
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         GuarantorGradeReq req = new GuarantorGradeReq();
-        req.setWindCodes(Arrays.asList(" ", null));
+        req.setSecurityCodes(Arrays.asList(" ", null));
 
         assertThat(service.queryGuarantorGradeList(req)).isEmpty();
         verifyZeroInteractions(mapper);
+    }
+
+    /** 验证符合主体类型但暂无评分的担保人仍会返回 */
+    @Test
+    public void queryGuarantorGradeShouldKeepEligibleGuarantorWithoutGrade() {
+        CommonMapper mapper = mock(CommonMapper.class);
+        CommonService service = new CommonService();
+        ReflectionTestUtils.setField(service, "commonMapper", mapper);
+        GuarantorGradeDto guarantor = new GuarantorGradeDto();
+        guarantor.setWindcode("C10008");
+        when(mapper.queryGuarantorGradeList(Collections.singletonList("DBB002.IB")))
+                .thenReturn(Collections.singletonList(guarantor));
+
+        GuarantorGradeDto result = service.queryGuarantorGrade(" DBB002.IB ", " C10008 ");
+
+        assertThat(result).isSameAs(guarantor);
+        assertThat(result.getTotalScore()).isNull();
+        verify(mapper).queryGuarantorGradeList(Collections.singletonList("DBB002.IB"));
     }
 }

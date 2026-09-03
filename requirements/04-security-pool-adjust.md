@@ -100,7 +100,7 @@
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `queryGuarantorGradeList` | `{ windCodes }` | 一次性取得全部担保人的最新主体内评分 |
+| `queryGuarantorGradeList` | `{ securityCodes }` | 按 `ais_inv_ods.wind_cbondissuer.s_info_windcode` 查询证券对应关系，仅返回 `s_info_typecode IN (115203000,115201000)` 的 `s_info_compcode`/`s_info_compname` 作为担保人，同时返回 `guarantorTypeCode` 供前端映射类型名称及最新主体内评分；合格但无评分时仍返回，评分为空 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode }` | 可调入池 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
 | `querySecurityPoolStatus` | `{ securityCode }` | 当前所在池 + 主体所在池 |
@@ -348,7 +348,7 @@
 | `querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
 | `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：仅 bond，排除 crmw 及已删除态） |
 | `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
-| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投池/观察池等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 过滤信用债 1～5：可转债/可交换债/可分离转债/CRMW 不显示 1～5 级；正式证券无内评去掉；临时代码默认档 4；普通债按矩阵精确池；ABS 担保人内评 1 档只能调入一级库否则至少下调一级（无担保人按其余）；私募发债主体内评 1 档只能调入一级库否则至少下调一级；永续发债主体内评 1 档下调一级（只留那一档）否则至少下调一级；次级发债主体内评 1 档只能调入一级库、2+/2/2- 下调一级（只留那一档）、其余至少下调一级；担保债（覆盖永续等）或已在观察池不得高于矩阵最好档、从该档开到五级；重点观察名单禁新增、已在 1～4 级只留五级；期限为空默认最长档继续走矩阵。`guarantorCode` 须属于证券的 `guarantor_id`，其内评按 `ais_inv_analysis.v_inv_grade_result.windcode` 查询最新 `total_score` |
+| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投池/观察池等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 过滤信用债 1～5：可转债/可交换债/可分离转债/CRMW 不显示 1～5 级；正式证券无内评去掉；临时代码默认档 4；普通债按矩阵精确池；ABS 担保人内评 1 档只能调入一级库否则至少下调一级（无担保人按其余）；私募发债主体内评 1 档只能调入一级库否则至少下调一级；永续发债主体内评 1 档下调一级（只留那一档）否则至少下调一级；次级发债主体内评 1 档只能调入一级库、2+/2/2- 下调一级（只留那一档）、其余至少下调一级；担保债（覆盖永续等）或已在观察池不得高于矩阵最好档、从该档开到五级；重点观察名单禁新增、已在 1～4 级只留五级；期限为空默认最长档继续走矩阵。`guarantorCode` 必须属于当前证券按 `wind_cbondissuer.s_info_windcode` 查到且 `s_info_typecode IN (115203000,115201000)` 的主体，其内评按 `ais_inv_analysis.v_inv_grade_result.windcode` 查询最新 `total_score` |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
@@ -415,7 +415,7 @@
 
 > 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
 
-详情页可编辑字段约 28 个。关键只读字段：`maturity_date`（到期校验）、`date_next`（下一个行权日，yyyyMMdd）、`guarantor`/`guarantor_id`（担保人判断）。担保人下拉仅将数量一致的 `guarantor_id`、`guarantor` 两个逗号分隔字段按位置配对；页面把全部担保人代码一次传给 `queryGuarantorGradeList`，按 `ais_inv_analysis.v_inv_grade_result.windcode` 取得各自最新 `total_score`。选项左侧显示担保人、右侧显示内评；单担保人首次加载自动选中并在首次调入池查询中直接携带其代码，不重复请求；多担保人切换时从已加载映射覆盖“担保人主体内评分”，并携带所选代码重新查询一次可调入池，不使用缓存、不重新查询信评报告。下一步 `checkAdjust` 仍按所选代码执行后端校验。提交时后端再次按所选担保人查询 AIS 最新评分，并覆盖本次调库快照的 `inner_guarantor_rating`，不采信前端评分值。未查到评分时显示空白，不再按位置读取 `rrs_securityinfo.inner_guarantor_rating`，也不得覆盖该主数据字段。期限字段单位：`date_exists` 剩余期限（**天**）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
+详情页可编辑字段约 28 个。关键只读字段：`maturity_date`（到期校验）、`date_next`（下一个行权日，yyyyMMdd）。担保人下拉不读取 `rrs_securityinfo.guarantor_id`/`guarantor`，而是把当前证券代码传给 `queryGuarantorGradeList`，按 `ais_inv_ods.wind_cbondissuer.s_info_windcode` 查询并仅保留 `s_info_typecode IN (115203000,115201000)` 的记录，以 `s_info_compcode`/`s_info_compname` 作为担保人代码和名称；内评按 `ais_inv_analysis.v_inv_grade_result.windcode` 取最新 `total_score`，合格但未查到评分时仍展示担保人且评分为空。下拉项展示担保人名称、类型标签和右侧内评，类型由前端将 `115203000` 映射为“差额支付承诺人”、`115201000` 映射为“原始权益人”；选择框收起后显示“担保人名称（类型）”。查询后仅剩一个担保人时首次加载自动选中并在首次调入池查询中直接携带其代码，不重复请求；多个担保人切换时从已加载映射覆盖“担保人主体内评分”，并携带所选代码重新查询一次可调入池，不使用缓存、不重新查询信评报告。下一步 `checkAdjust` 仍按同一 Wind 关系口径校验所选代码。提交时后端再次按当前证券代码和所选担保人查询 AIS 最新评分，并覆盖本次调库快照的 `inner_guarantor_rating`，不采信前端评分值。未查到评分时显示空白，不读取或覆盖 `rrs_securityinfo.inner_guarantor_rating`。期限字段单位：`date_exists` 剩余期限（**天**）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
 

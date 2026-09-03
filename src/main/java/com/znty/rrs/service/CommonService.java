@@ -68,42 +68,50 @@ public class CommonService {
     }
 
     /**
-     * 批量查询担保人的最新主体内评分。
+     * 批量查询符合 Wind 主体类型要求的担保人及其最新主体内评分。
      *
-     * @param req Wind 主体代码列表
-     * @return 查到评分的担保人列表；无评分的代码不返回记录
+     * @param req Wind 证券代码列表
+     * @return 符合主体类型要求的担保人及类型编码列表；无评分时 totalScore 为空
      */
     public List<GuarantorGradeDto> queryGuarantorGradeList(GuarantorGradeReq req) {
-        if (req == null || req.getWindCodes() == null || req.getWindCodes().isEmpty()) {
+        if (req == null || req.getSecurityCodes() == null || req.getSecurityCodes().isEmpty()) {
             return new ArrayList<>();
         }
         Set<String> normalizedCodes = new LinkedHashSet<>();
-        for (String windCode : req.getWindCodes()) {
-            if (windCode != null && !windCode.trim().isEmpty()) {
-                normalizedCodes.add(windCode.trim());
+        for (String securityCode : req.getSecurityCodes()) {
+            if (securityCode != null && !securityCode.trim().isEmpty()) {
+                normalizedCodes.add(securityCode.trim());
             }
         }
         if (normalizedCodes.isEmpty()) {
             return new ArrayList<>();
         }
-        // 按去重后的 Wind 主体代码一次性查询最新内评
+        // 按去重后的 Wind 证券代码一次性筛选合格担保人并查询最新内评
         return commonMapper.queryGuarantorGradeList(new ArrayList<>(normalizedCodes));
     }
 
     /**
-     * 查询单个担保人的最新主体内评分。
+     * 查询当前证券下指定的合格担保人及其最新主体内评分。
      *
-     * @param windCode Wind 主体代码
-     * @return 最新主体内评分；未查到时返回 null
+     * @param securityCode 证券 Wind 代码
+     * @param guarantorCode 担保人主体代码
+     * @return 当前证券下的合格担保人及其最新主体内评分；不存在时返回 null
      */
-    public GuarantorGradeDto queryLatestGuarantorGrade(String windCode) {
-        if (windCode == null || windCode.trim().isEmpty()) {
+    public GuarantorGradeDto queryGuarantorGrade(String securityCode, String guarantorCode) {
+        if (securityCode == null || securityCode.trim().isEmpty()
+                || guarantorCode == null || guarantorCode.trim().isEmpty()) {
             return null;
         }
-        List<String> windCodes = new ArrayList<>();
-        windCodes.add(windCode.trim());
-        // 复用批量查询，保证页面展示与调库规则使用同一套最新记录口径
-        List<GuarantorGradeDto> records = commonMapper.queryGuarantorGradeList(windCodes);
-        return records.isEmpty() ? null : records.get(0);
+        List<String> securityCodes = new ArrayList<>();
+        securityCodes.add(securityCode.trim());
+        // 复用按证券查询，保证页面展示与调库规则使用同一套担保人关系口径
+        List<GuarantorGradeDto> records = commonMapper.queryGuarantorGradeList(securityCodes);
+        String selectedCode = guarantorCode.trim();
+        for (GuarantorGradeDto record : records) {
+            if (selectedCode.equals(record.getWindcode())) {
+                return record;
+            }
+        }
+        return null;
     }
 }

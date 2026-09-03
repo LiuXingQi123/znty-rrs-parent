@@ -30,7 +30,7 @@
 
 - **列表 · 主体**：既有主体检索与调库入口，逻辑不变。  
 - **列表 · ABS债**：筛选证券代码 / 简称 / 发行人，以及是否特征多选 `bondYesFlags`（担保/含权/永续/私募/ABS/次级，勾选即「是」、多选 AND，口径对齐证券池调库）；表格列对齐证券池调库列表（含是否类字段，见下）。  
-- **ABS 详情**：证券基本信息与证券池调库对齐（步骤1可编辑、步骤2只读；担保人下拉仅将代码、名称两个逗号串按位置配对，内评按全部担保人代码一次查询 `ais_inv_analysis.v_inv_grade_result`，以 `windcode` 匹配最新 `total_score`，缺失评分显示空白；左侧显示担保人、右侧显示内评，选择后只读展示且不覆盖 `rrs_securityinfo.inner_guarantor_rating`；字段单位同 [04]/[11]：`date_exists` **天**，含权/赎回行权/回购剩余期限 **年**）→ 当前所在池 → 可调入/可调出（仅债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)）→ 校验 → 流程选择 → multipart 提交。
+- **ABS 详情**：证券基本信息与证券池调库对齐（步骤1可编辑、步骤2只读；担保人下拉不读取证券主数据的担保人逗号串，而是按当前证券代码匹配 `ais_inv_ods.wind_cbondissuer.s_info_windcode`，仅保留 `s_info_typecode IN (115203000,115201000)` 的记录，以 `s_info_compcode`/`s_info_compname` 作为担保人；内评按 `ais_inv_analysis.v_inv_grade_result.windcode` 取最新 `total_score`，合格但缺失评分时显示空白；展开项显示担保人名称、类型标签及右侧内评，前端映射 `115203000=差额支付承诺人`、`115201000=原始权益人`，收起后显示“名称（类型）”；选择后评分只读展示且不覆盖 `rrs_securityinfo.inner_guarantor_rating`；字段单位同 [04]/[11]：`date_exists` **天**，含权/赎回行权/回购剩余期限 **年**）→ 当前所在池 → 可调入/可调出（仅债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)）→ 校验 → 流程选择 → multipart 提交。
 - **URL 入口**：同页 `applyUrlCompanyOrList()`。带 `companyCode` 进主体详情；带 `securityCode`（无主体码）切 ABS Tab 并进入该券。ABS 详情「返回」先 `closeActiveTab()`。
 
 审批：**不**新建 ABS 审核页。非直通流程进入「我的事宜」，`businessScene` 为 `securityAdjust`，打开 `security_pool_adjust_approve.html`。

@@ -39,6 +39,6 @@ public class CommonApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldQueryGuarantorGradeList() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/common/queryGuarantorGradeList",
-                "{\"windCodes\":[\"C10010\",\"C10008\"]}");
+                "{\"securityCodes\":[\"DBB001.IB\",\"DBB002.IB\"]}");
     }
 }
