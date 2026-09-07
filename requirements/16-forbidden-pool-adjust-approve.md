@@ -2,7 +2,7 @@
 
 > 前端页面：`forbidden_pool_adjust_approve.html`
 > 后端前缀：`/api/v1/forbiddenPoolAdjustFlow`（审批处理）+ `/api/v1/forbiddenPoolAdjust`（详情/列表/校验，复用 [15] 接口）
-> 角色定位：审核 / 审批人对主体级禁投池调库申请进行复核、驳回、修改重提、审批通过或驳回，最终通过才落地 `ip_pool_status`；**仅债券禁止库(15)** 时再 `syncCompanyBonds` 同步旗下未到期债券（含 ABS/crmw）。
+> 角色定位：审核 / 审批人对主体级禁投池调库申请进行复核、驳回、修改重提、审批通过或驳回，最终通过才落地 `ip_pool_status`；目标池为债券禁止库15或黑名单质押库17时，`syncCompanyBonds` 同步旗下未到期（含当天）bond 大类债券（含普通债、ABS、crmw）；15/23 状态变化后按三个条件重新判定17。
 
 ---
 
@@ -109,11 +109,11 @@ finishAdjustBatch(step):
   for log in logList:
     if log.adjustMode == '调入': addPoolStatus(log)
     elif log.adjustMode == '调出': deletePoolStatusSoft(log.securityCode, log.targetPoolId)
-    syncCompanyBonds(log)                       // ★ 仅债券禁止库：同步旗下未到期债券
+    syncCompanyBonds(log)                       // ★ 债券禁止库或黑名单质押库：同步旗下有效债券
   generateInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 rrs_report_in
 ```
 
-`syncCompanyBonds`（与 `syncCompanyBondsOnDirect` 同构，走 `applyPoolStatusChanges`）：**仅目标池为债券禁止库(15)** 且 `categoryType==='company'` 触发；调入用 `queryCompanyInboundBondForAutoList`（未到期 + 未在池 + bond 大类，含 ABS/crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期 + 当前在池）；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。主体调入禁止库后，再合并禁止库的 `in_mutex` 与反向指向禁止库的 `in_restrict` 配置，只将债券从当前实际所在的关系池自动调出，并为每个实际调出的池生成一条 `adjustType='互斥调整'`、已通过的调出日志。观察池/黑名单质押库/重点观察名单只落主体。
+`syncCompanyBonds`（走 `applyPoolStatusChanges`）：目标池为债券禁止库15或黑名单质押库17且 `categoryType==='company'` 时触发；调入用 `queryCompanyInboundBondForAutoList`（未到期含当天 + 未在池 + bond 大类，含普通债、ABS、crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期含当天 + 当前在池）；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。主体调入目标池后，再合并目标池的 `in_mutex` 与反向指向目标池的 `in_restrict` 配置，只将债券从当前实际所在的关系池自动调出，并为每个实际调出的池生成一条 `adjustType='互斥调整'`、已通过的调出日志。主体调整15/23后重新判定17：任一条件成立则主体及旗下债在17保留或进入，三个条件全部不成立才调出17。
 
 `generateInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `rrs_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
 
@@ -205,7 +205,7 @@ finishAdjustBatch(step):
 | Service | `SecurityPoolAdjustFlowService` | `ForbiddenPoolAdjustFlowService`（**完整复制** security-pool flow 逻辑，操作 `forbiddenPoolAdjustMapper`） |
 | 请求/返回实体 | `SecurityPoolAdjustAuditReq/Dto` | **直接复用** `SecurityPoolAdjustAuditReq/Dto`（无 forbidden 专属审批实体） |
 | 详情加载接口 | `querySecurityDetail`/`querySecurityPoolStatus`/`queryAdjustLogList` | `queryCompanyDetail`/`queryCompanyPoolStatus`/`queryAdjustLogList`（companyCode 维度） |
-| `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `generateInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后，**仅债券禁止库**再 `syncCompanyBonds(log)`：未到期旗下债（含 ABS/crmw）同步入库写 `adjust_type='自动调整'`；从互斥/受限池调出写 `adjust_type='互斥调整'` |
+| `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `generateInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后，目标池为**债券禁止库15或黑名单质押库17**时再 `syncCompanyBonds(log)`：到期日为空或大于等于当天的旗下 bond 大类债券（含普通债、ABS、crmw）同步入库写 `adjust_type='自动调整'`；从互斥/受限池调出写 `adjust_type='互斥调整'`；17按主体三个条件统一判定 |
 | 前端入口参数 | `securityCode` | `companyCode` |
 | 审批策略/节点语义识别/管理员代办 | — | **完全相同**（关键字、`ADMIN_USER_ID='1'` 一致） |
 

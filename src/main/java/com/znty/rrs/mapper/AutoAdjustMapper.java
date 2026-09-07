@@ -19,6 +19,23 @@ import java.util.List;
 public interface AutoAdjustMapper {
 
     /**
+     * 查询主体当前是否已在指定池生效。
+     *
+     * @param companyCode 发行主体代码
+     * @param poolId      投资池 ID
+     * @return {@code true}=主体当前已在指定池生效
+     */
+    boolean queryCompanyInPool(@Param("companyCode") String companyCode, @Param("poolId") Long poolId);
+
+    /**
+     * 查询主体近一年认可机构外评是否存在 AA- 及以下档位。
+     *
+     * @param companyCode 发行主体代码
+     * @return {@code true}=近一年认可机构外评孰低为 AA- 及以下
+     */
+    boolean queryCompanyHasLowOuterRating(@Param("companyCode") String companyCode);
+
+    /**
      * 查询投资池关系配置中绑定了指定定时任务与调入/调出类型的池 ID。
      *
      * @param taskCode 定时任务编码（sys_scheduled_task.task_code）

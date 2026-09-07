@@ -32,6 +32,7 @@ import static org.mockito.Mockito.when;
  */
 public class CompanyOuterRatingAaMinusAutoInServiceTest {
 
+    /** 验证低外评主体自动调入并同步旗下债券。 */
     @Test
     public void execute_ShouldAutoInCompanyWithLowOuterRating() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -43,6 +44,10 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        ForbiddenPoolAdjustService forbiddenPoolAdjustService = mock(ForbiddenPoolAdjustService.class);
+        ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService", forbiddenPoolAdjustService);
+        PledgeBlacklistRuleService ruleService = mock(PledgeBlacklistRuleService.class);
+        ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", ruleService);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
@@ -70,6 +75,8 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
         when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L)))
                 .thenReturn(Collections.singletonList(company));
+        when(ruleService.evaluate("C90005"))
+                .thenReturn(new PledgeBlacklistRuleService.Decision(false, true, false));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(8001L);
@@ -86,6 +93,8 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(securityPoolAdjustMapper).addAdjustLog(captor.capture());
         verify(securityPoolAdjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
+        verify(forbiddenPoolAdjustService).syncCompanyBondsForAutomaticAdjustment(any(IpAdjustLogBo.class));
+        verify(ruleService).evaluate("C90005");
         IpAdjustLogBo log = captor.getValue();
         assertThat(log.getSecurityCode()).isEqualTo("C90005");
         assertThat(log.getSecurityType()).isEqualTo("company");
@@ -97,6 +106,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         assertThat(log.getAdjustAdvice()).isEqualTo(log.getAdjustReason());
     }
 
+    /** 验证参数说明包含黑名单质押库入池口径。 */
     @Test
     public void getParamHelp_ShouldDescribePledgeBlacklistInbound() {
         CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
@@ -107,6 +117,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .contains("2/3/4/5/6/7/13/14/19/20");
     }
 
+    /** 验证调整原因合并展示所有命中条件。 */
     @Test
     public void buildAdjustReason_ShouldJoinHitClauses() {
         IpAdjustLogBo company = new IpAdjustLogBo();
@@ -118,6 +129,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .isEqualTo("外评AA-及以下主体自动入池（公司信用债禁止库内主体；近一年孰低外评：A；重点观察名单内主体）");
     }
 
+    /** 验证禁止库与低外评候选按主体代码合并。 */
     @Test
     public void execute_ShouldMergeForbiddenAndLowRatingHits() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -129,6 +141,10 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService",
+                mock(ForbiddenPoolAdjustService.class));
+        PledgeBlacklistRuleService ruleService = mock(PledgeBlacklistRuleService.class);
+        ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", ruleService);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
@@ -156,6 +172,8 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
         when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L)))
                 .thenReturn(Collections.singletonList(lowRating));
+        when(ruleService.evaluate("C90005"))
+                .thenReturn(new PledgeBlacklistRuleService.Decision(true, true, false));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(8002L);
@@ -173,6 +191,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .isEqualTo("外评AA-及以下主体自动入池（公司信用债禁止库内主体；近一年孰低外评：AA-）");
     }
 
+    /** 验证缺少扫描池参数时任务失败。 */
     @Test
     public void execute_ShouldFailWhenParamMissing() {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
@@ -192,6 +211,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         assertThat(result.getMessage()).contains("未配置扫描池");
     }
 
+    /** 验证没有候选主体时任务成功且不写数据。 */
     @Test
     public void execute_ShouldSkipWhenNoCandidate() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -226,6 +246,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
     }
 
+    /** 验证任务参数可解析池 ID 数组。 */
     @Test
     public void parsePoolIds_ShouldAcceptJsonArray() {
         CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();

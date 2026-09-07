@@ -20,6 +20,9 @@ import com.znty.rrs.schedule.ScheduledTaskResult;
 import com.znty.rrs.schedule.TaskDetailLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.NoTransactionException;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
@@ -27,16 +30,14 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 外评非 AA- 及以下主体自动出池任务
  * <p>
  * 对应老系统 {@code AdjustRuleOutAA}。现按质押券黑名单管理办法：
- * 已在目标池且（一）（二）（三）均不满足才出池。近一年无认可外评不出。
+ * 已在目标池且（一）（二）（三）均不满足才出池。近一年无认可外评按（二）不满足处理。
  * Demo 目标池为黑名单质押库 17，limitPoolIds 为空数组。adjust_type=自动调整，不走审批。
  * </p>
  */
@@ -73,10 +74,10 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds（禁止出池拦截池）：可选；Demo 为 <code>[]</code>。主体当前已在这些池中的任一池时，不从扫描目标池自动出库\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds 省略或 <code>[]</code>：不追加额外拦截（条款（一）（三）已在扫描中排除 15/23）\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
-                    + "处理规则：已在目标池，且不在 15、不在 23、近一年认可外评存在且孰低不属于 AA-及以下时，自动调出主体\n"
-                    + "评级口径：近一年（日历年）内 10 家认可机构多评级取孰低；仅认机构 2/3/4/5/6/7/13/14/19/20；无认可外评的主体不处理（不出）\n"
+                    + "处理规则：已在目标池，且不在 15、不在 23、近一年认可外评孰低不属于 AA-及以下（含无认可外评）时，自动调出主体\n"
+                    + "评级口径：近一年（日历年）内 10 家认可机构多评级取孰低；仅认机构 2/3/4/5/6/7/13/14/19/20；无认可外评按条件（二）不满足处理\n"
                     + "联动处理：主体成功出池后，继续调出该主体在同一目标池内的旗下债券\n"
-                    + "限制规则：主体或旗下债已在目标池配置的调出限制池时，跳过该条记录\n"
+                    + "限制规则：主体命中调出限制池时跳过该主体；旗下债命中时阻断主体联动并回滚本轮任务\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
@@ -94,6 +95,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     /** 扫描池并集（参数 ∪ 关系配置） */
     @Resource
     private AutoAdjustPoolScopeHelper poolScopeHelper;
+    /** 黑名单质押库三条件统一判定 */
+    @Resource
+    private PledgeBlacklistRuleService pledgeBlacklistRuleService;
 
     /**
      * 返回与库表绑定的任务编码
@@ -115,6 +119,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
      * 执行质押券黑名单自动出池：已在目标池且（一）（二）（三）均不满足的主体出库
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
@@ -133,12 +138,16 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
+            // 返回失败结果前标记本轮事务回滚
+            markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             // 记录业务失败
             warnDetail(detail, taskName + " 失败: " + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
         } catch (Exception e) {
+            // 返回失败结果前标记本轮事务回滚
+            markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             log.error("{} 异常", taskName, e);
             detail.line("ERROR", taskName + " 异常: " + e.getMessage());
@@ -182,11 +191,11 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
             // 解析目标池的调出限制池
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
-            // 条款（二）反面：已在目标池且近一年孰低不属于 AA-及以下
+            // 条款（二）反面：已在目标池且近一年孰低不属于 AA-及以下（含无认可外评）
             List<IpAdjustLogBo> companies = autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
                     poolId, limitPoolIds);
-            // 仍命中（一）或（三）的主体不出
-            companies = excludeCompaniesStillMatchingClauseOneOrThree(companies);
+            // 使用统一规则筛出三个条件全部不满足的主体
+            companies = filterCompaniesNotMatchingBlacklistConditions(companies);
             if (companies == null || companies.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待出池主体");
                 continue;
@@ -208,12 +217,14 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                 // 回填自动出池日志公共字段
                 fillAutoOutLog(company, pool, poolId, batchNo, submitTime, reason);
                 // 写自动出池日志
-                securityPoolAdjustMapper.addAdjustLog(company);
+                if (securityPoolAdjustMapper.addAdjustLog(company) != 1) {
+                    throw new BizException("主体[" + company.getSecurityCode() + "]自动调出日志写入失败");
+                }
                 // 软删除池状态
                 int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(company.getSecurityCode(), poolId);
                 if (deleted != 1) {
-                    warnDetail(detail, "主体[" + company.getSecurityCode() + "]软删池状态失败（可能并发已出池），跳过");
-                    continue;
+                    throw new BizException("主体[" + company.getSecurityCode()
+                            + "]软删池状态失败（可能并发已出池）");
                 }
                 poolCount++;
                 total++;
@@ -229,50 +240,24 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     }
 
     /**
-     * 排除当前仍在禁止库或重点观察名单的主体（条款（一）（三）仍成立则不出）。
+     * 使用统一判定再次筛出三个条件均不满足的主体。
      *
-     * @param companies 条款（二）反面的出池候选
-     * @return 三条均不满足的主体
+     * @param companies 条件（二）反面的出池候选
+     * @return 三个条件全部不满足的主体
      */
-    private List<IpAdjustLogBo> excludeCompaniesStillMatchingClauseOneOrThree(List<IpAdjustLogBo> companies) {
+    private List<IpAdjustLogBo> filterCompaniesNotMatchingBlacklistConditions(List<IpAdjustLogBo> companies) {
         if (companies == null || companies.isEmpty()) {
-            return companies;
-        }
-        // 查询仍在禁止库、重点观察的主体代码
-        Set<String> stayCodes = new HashSet<>();
-        addCompanyCodes(stayCodes, autoAdjustMapper.queryCompanyCodeListInPool(
-                AutoAdjustRestrictHelper.COMPANY_FORBIDDEN_POOL_ID));
-        addCompanyCodes(stayCodes, autoAdjustMapper.queryCompanyCodeListInPool(
-                AutoAdjustRestrictHelper.KEY_WATCH_POOL_ID));
-        if (stayCodes.isEmpty()) {
             return companies;
         }
         List<IpAdjustLogBo> result = new ArrayList<>();
         for (IpAdjustLogBo company : companies) {
             if (company == null || !StringUtils.hasText(company.getSecurityCode())
-                    || stayCodes.contains(company.getSecurityCode())) {
+                    || pledgeBlacklistRuleService.evaluate(company.getSecurityCode()).shouldBeInBlacklist()) {
                 continue;
             }
             result.add(company);
         }
         return result;
-    }
-
-    /**
-     * 将在池主体代码并入排除集合。
-     *
-     * @param stayCodes 排除集合
-     * @param codes     在池主体代码
-     */
-    private void addCompanyCodes(Set<String> stayCodes, List<String> codes) {
-        if (codes == null || codes.isEmpty()) {
-            return;
-        }
-        for (String code : codes) {
-            if (StringUtils.hasText(code)) {
-                stayCodes.add(code);
-            }
-        }
     }
 
     /**
@@ -306,18 +291,20 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
             if (AutoAdjustRestrictHelper.isInAnyPool(
                     securityPoolAdjustMapper.querySecurityCurrentPoolIdList(bond.getSecurityCode()),
                     outRestrictPoolIds)) {
-                warnDetail(detail, "债券[" + bond.getSecurityCode() + "]当前在调出限制池中，跳过");
-                continue;
+                throw new BizException("债券[" + bond.getSecurityCode()
+                        + "]当前在调出限制池中，不能联动调出主体");
             }
             // 回填自动出池日志公共字段
             fillAutoOutLog(bond, pool, poolId, batchNo, submitTime, bondReason);
             // 写自动出池日志
-            securityPoolAdjustMapper.addAdjustLog(bond);
+            if (securityPoolAdjustMapper.addAdjustLog(bond) != 1) {
+                throw new BizException("债券[" + bond.getSecurityCode() + "]自动调出日志写入失败");
+            }
             // 软删除池状态
             int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(bond.getSecurityCode(), poolId);
             if (deleted != 1) {
-                warnDetail(detail, "债券[" + bond.getSecurityCode() + "]软删池状态失败（可能并发已出池），跳过");
-                continue;
+                throw new BizException("债券[" + bond.getSecurityCode()
+                        + "]软删池状态失败（可能并发已出池）");
             }
             bondCount++;
         }
@@ -504,6 +491,15 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         log.warn(line);
         if (detail != null) {
             detail.line("WARN", line);
+        }
+    }
+
+    /** 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚。 */
+    private void markTransactionRollbackOnly() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (NoTransactionException ignored) {
+            log.debug("当前无可回滚事务: {}", TASK_CODE);
         }
     }
 }

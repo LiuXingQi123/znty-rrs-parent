@@ -165,6 +165,10 @@ public class ForbiddenPoolAdjustService {
     @Resource
     private RatingDowngradeChecker ratingDowngradeChecker;
 
+    /** 黑名单质押库三条件统一判定服务。 */
+    @Resource
+    private PledgeBlacklistRuleService pledgeBlacklistRuleService;
+
     /** 信用债白名单调入流程 Key */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
     /** 信用债标准上调流程 Key */
@@ -1889,9 +1893,19 @@ public class ForbiddenPoolAdjustService {
                     item.getTargetPoolId(), Collections.emptyMap());
 
             // 联动调入：目标池调入时，其联动池（in_linked）需同步调入
+            List<AdjustCheckDto.CheckResultItem> groupLinkedItems = new ArrayList<>();
             List<Long> inLinkage = relations.get(RelationType.IN_LINKED.getCode());
             if (inLinkage != null) {
                 for (Long linkedId : inLinkage) {
+                    if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
+                            && !pledgeBlacklistRuleService.evaluate(req.getSecurityCode(),
+                            shared.getRequestInPoolIds(), shared.getRequestOutPoolIds()).shouldBeInBlacklist()) {
+                        continue;
+                    }
+                    if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
+                            && shared.getCurrentPoolIds().contains(linkedId)) {
+                        continue;
+                    }
                     // coveredKeys.add 返回 true 表示该 key 是首次出现，生成自动项
                     if (coveredKeys.add(linkedId + "_调入")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
@@ -1899,10 +1913,14 @@ public class ForbiddenPoolAdjustService {
                                 buildAutoResultItem(linkedId, AdjustMode.IN.getCode(), ItemType.LINKAGE.getCode(), adjustGroupKey, shared);
                         // 关联手工项失败时阻断自动联动项
                         inheritManualItemFailure(autoItem, resultItem);
+                        groupLinkedItems.add(autoItem);
                         results.add(autoItem);
                     }
                 }
             }
+
+            // 联动池失败时反向阻断来源项，避免来源池单独生效
+            propagateAutoFailureToManual(resultItem, groupLinkedItems, "配套联动调入未通过");
 
             // 互斥配套调出：目标池调入时，若证券已在其互斥池（in_mutex）中，
             // 则需同步调出该互斥池，由系统自动追加调出校验项
@@ -1984,19 +2002,33 @@ public class ForbiddenPoolAdjustService {
             // 联动调出：目标池调出时，其联动池（out_linked）需同步调出
             Map<String, List<Long>> relations = shared.getPoolRelationMap().getOrDefault(
                     item.getTargetPoolId(), Collections.emptyMap());
+            List<AdjustCheckDto.CheckResultItem> groupLinkedItems = new ArrayList<>();
             List<Long> outLinkage = relations.get(RelationType.OUT_LINKED.getCode());
             if (outLinkage != null) {
                 for (Long linkedId : outLinkage) {
+                    // 15/23 调出后若另外条件仍成立，主体与旗下债继续保留在黑名单质押库。
+                    if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
+                            && pledgeBlacklistRuleService.evaluate(req.getSecurityCode(),
+                            shared.getRequestInPoolIds(), shared.getRequestOutPoolIds()).shouldBeInBlacklist()) {
+                        continue;
+                    }
+                    if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
+                            && !shared.getCurrentPoolIds().contains(linkedId)) {
+                        continue;
+                    }
                     if (coveredKeys.add(linkedId + "_调出")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
                         AdjustCheckDto.CheckResultItem autoItem =
                                 buildAutoResultItem(linkedId, AdjustMode.OUT.getCode(), ItemType.LINKAGE.getCode(), adjustGroupKey, shared);
                         // 关联手工项失败时阻断自动联动项
                         inheritManualItemFailure(autoItem, resultItem);
+                        groupLinkedItems.add(autoItem);
                         results.add(autoItem);
                     }
                 }
             }
+            // 联动池失败时反向阻断来源项，避免来源池单独生效
+            propagateAutoFailureToManual(resultItem, groupLinkedItems, "配套联动调出未通过");
         }
 
         return results;
@@ -2597,6 +2629,18 @@ public class ForbiddenPoolAdjustService {
         }
         Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
                 forbiddenPoolAdjustMapper.queryAllPoolRelationList());
+        Set<Long> projectedInPoolIds = logList.stream()
+                .filter(log -> COMPANY_SECURITY_TYPE.equals(log.getSecurityType()))
+                .filter(log -> AdjustMode.IN.getCode().equals(log.getAdjustMode()))
+                .map(IpAdjustLogBo::getTargetPoolId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> projectedOutPoolIds = logList.stream()
+                .filter(log -> COMPANY_SECURITY_TYPE.equals(log.getSecurityType()))
+                .filter(log -> AdjustMode.OUT.getCode().equals(log.getAdjustMode()))
+                .map(IpAdjustLogBo::getTargetPoolId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         Map<Long, Integer> inboundIncrements = new HashMap<>();
         for (IpAdjustLogBo log : logList) {
             InvestmentPoolBo pool = poolMap.get(log.getTargetPoolId());
@@ -2616,15 +2660,17 @@ public class ForbiddenPoolAdjustService {
                     .querySecurityCurrentPoolIdList(log.getSecurityCode())));
             ctx.setTargetPoolRelations(relationMap.getOrDefault(pool.getId(), Collections.emptyMap()));
             ctx.setCategoryType(categoryType);
-            ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+            ctx.setRequestInPoolIds(projectedInPoolIds);
+            ctx.setRequestOutPoolIds(projectedOutPoolIds);
             String failure;
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 failure = firstFinalFailure(inCheckPoolLocked(ctx), inCheckSecurityAlreadyInPool(ctx),
                         inCheckSourcePool(ctx), inCheckRestrictPool(ctx), inCheckForbiddenPool(ctx));
                 int increment = inboundIncrements.getOrDefault(pool.getId(), 0);
                 int currentCount = forbiddenPoolAdjustMapper.queryPoolCurrentCount(pool.getId());
-                // 仅债券禁止库会同步旗下未到期债券，容量按「主体 + 同步债」预占；其它池只计主体
-                int syncBondCount = BOND_FORBIDDEN_POOL_ID.equals(pool.getId())
+                // 债券禁止库和黑名单质押库会同步旗下未到期债券，容量按「主体 + 同步债」预占
+                int syncBondCount = (BOND_FORBIDDEN_POOL_ID.equals(pool.getId())
+                        || PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(pool.getId()))
                         && CategoryType.COMPANY.getCode().equals(categoryType)
                         ? forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
                                 log.getSecurityCode(), pool.getId()).size()
@@ -2643,6 +2689,10 @@ public class ForbiddenPoolAdjustService {
                 failure = firstFinalFailure(outCheckPoolLocked(ctx), outCheckSecurityNotInPool(ctx),
                         outCheckRestrictPool(ctx), outCheckFrozenPeriod(ctx));
             }
+            if (failure == null && PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(pool.getId())) {
+                failure = pledgeBlacklistRuleService.validate(log.getSecurityCode(), log.getAdjustMode(),
+                        projectedInPoolIds, projectedOutPoolIds);
+            }
             if (failure != null) throwFinalRecheckFailure(log, failure);
         }
     }
@@ -2658,7 +2708,11 @@ public class ForbiddenPoolAdjustService {
         applyPoolStatusChanges(directApplyLogs);
     }
 
-    /** 统一应用主体池状态；目标为债券禁止库时再同步旗下未到期债券。 */
+    /**
+     * 统一应用主体池状态；目标为债券禁止库或黑名单质押库时再同步旗下未到期债券。
+     *
+     * @param logList 同一批次待生效的调整日志
+     */
     public void applyPoolStatusChanges(List<IpAdjustLogBo> logList) {
         if (logList == null || logList.isEmpty()) {
             return;
@@ -2682,24 +2736,45 @@ public class ForbiddenPoolAdjustService {
                     throw new BizException("主体当前池状态已发生变化，请刷新后重试");
                 }
             }
-            // 仅债券禁止库：主体生效后同步旗下未到期债券
+            // 债券禁止库 / 黑名单质押库：主体生效后同步旗下未到期债券
             syncCompanyBonds(log, explicitOutboundKeys);
+            // 15/23 条件变化后，若主体本来就在 17，补齐此前遗漏或新发行的旗下债券
+            syncExistingBlacklistBondsIfRequired(log, explicitOutboundKeys);
         }
+    }
+
+    /**
+     * 定时任务在主体状态落池后，同批同步旗下未到期债券。
+     *
+     * @param companyLog 已生效的主体调整日志
+     */
+    public void syncCompanyBondsForAutomaticAdjustment(IpAdjustLogBo companyLog) {
+        // 复用人工主体调库的统一债券同步逻辑
+        syncCompanyBonds(companyLog);
     }
 
     /**
      * 同步主体旗下未到期债券并检查写入结果。
      *
-     * <p>仅当目标池为「债券禁止库」时执行；观察池 / 黑名单质押库 / 重点观察名单只落主体，不同步债。
+     * <p>仅当目标池为「债券禁止库」或「黑名单质押库」时执行；观察池 / 重点观察名单只落主体。
      * 同步范围：issuer 下全部 bond 大类（含 ABS、crmw），排除已过期；调入再排除已在目标池，调出仅处理当前在池。
+     *
+     * @param companyLog 已生效的主体调整日志
      */
     private void syncCompanyBonds(IpAdjustLogBo companyLog) {
+        // 按无显式债券调出项的场景同步旗下债券
         syncCompanyBonds(companyLog, Collections.<String>emptySet());
     }
 
-    /** 同步主体旗下债券；同批已存在的显式债券调出项由批次后续统一落池。 */
+    /**
+     * 同步主体旗下债券；同批已存在的显式债券调出项由批次后续统一落池。
+     *
+     * @param companyLog          已生效的主体调整日志
+     * @param explicitOutboundKeys 同批显式债券调出项唯一键
+     */
     private void syncCompanyBonds(IpAdjustLogBo companyLog, Set<String> explicitOutboundKeys) {
-        if (companyLog == null || !BOND_FORBIDDEN_POOL_ID.equals(companyLog.getTargetPoolId())) {
+        if (companyLog == null || (!BOND_FORBIDDEN_POOL_ID.equals(companyLog.getTargetPoolId())
+                && !PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(companyLog.getTargetPoolId()))) {
             return;
         }
         String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(companyLog.getSecurityType());
@@ -2777,6 +2852,52 @@ public class ForbiddenPoolAdjustService {
         }
     }
 
+    /**
+     * 15/23 调整后主体仍应在 17 时，补齐 17 中缺少的旗下债券。
+     *
+     * @param sourceLog            触发条件变化的主体调整日志
+     * @param explicitOutboundKeys 同批显式债券调出项唯一键
+     */
+    private void syncExistingBlacklistBondsIfRequired(IpAdjustLogBo sourceLog,
+                                                       Set<String> explicitOutboundKeys) {
+        if (sourceLog == null || (!BOND_FORBIDDEN_POOL_ID.equals(sourceLog.getTargetPoolId())
+                && !PledgeBlacklistRuleService.KEY_WATCH_POOL_ID.equals(sourceLog.getTargetPoolId()))) {
+            return;
+        }
+        String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(sourceLog.getSecurityType());
+        if (!CategoryType.COMPANY.getCode().equals(categoryType)
+                || !pledgeBlacklistRuleService.evaluate(sourceLog.getSecurityCode()).shouldBeInBlacklist()) {
+            return;
+        }
+        List<Long> currentPoolIds = forbiddenPoolAdjustMapper
+                .querySecurityCurrentPoolIdList(sourceLog.getSecurityCode());
+        if (currentPoolIds == null
+                || !currentPoolIds.contains(PledgeBlacklistRuleService.BLACKLIST_POOL_ID)) {
+            return;
+        }
+        List<InvestmentPoolBo> pools = investmentPoolMapper.queryPoolByIdsList(
+                Collections.singletonList(PledgeBlacklistRuleService.BLACKLIST_POOL_ID));
+        if (pools == null || pools.isEmpty()) {
+            throw new BizException("黑名单质押库配置不存在");
+        }
+        InvestmentPoolBo blacklistPool = pools.get(0);
+        IpAdjustLogBo syncLog = new IpAdjustLogBo();
+        syncLog.setSecurityCode(sourceLog.getSecurityCode());
+        syncLog.setSecurityShortName(sourceLog.getSecurityShortName());
+        syncLog.setSecurityType(sourceLog.getSecurityType());
+        syncLog.setAdjustMode(AdjustMode.IN.getCode());
+        syncLog.setAdjustBatchNo(sourceLog.getAdjustBatchNo());
+        syncLog.setTargetPoolId(blacklistPool.getId());
+        syncLog.setTargetPoolName(blacklistPool.getPoolName());
+        syncLog.setPoolType(blacklistPool.getPoolType());
+        syncLog.setAdjusterId(sourceLog.getAdjusterId());
+        syncLog.setAdjusterName(sourceLog.getAdjusterName());
+        syncLog.setAdjustAdvice(sourceLog.getAdjustAdvice());
+        syncLog.setSubmitTime(sourceLog.getSubmitTime());
+        // 复用统一债券同步逻辑补齐黑名单质押库债券
+        syncCompanyBonds(syncLog, explicitOutboundKeys);
+    }
+
     /** 构建调整对象与投资池的唯一键。 */
     private String buildSecurityPoolKey(String securityCode, Long poolId) {
         return (securityCode == null ? "" : securityCode) + "|" + poolId;
@@ -2823,6 +2944,8 @@ public class ForbiddenPoolAdjustService {
         } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
             failures.addAll(checkCompanyIn(ctx));
         }
+        // 按发行主体复核黑名单质押库调入条件
+        addPledgeBlacklistFailure(failures, ctx, AdjustMode.IN.getCode());
         return failures;
     }
 
@@ -2926,7 +3049,35 @@ public class ForbiddenPoolAdjustService {
         } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
             failures.addAll(checkCompanyOut(ctx));
         }
+        // 按发行主体复核黑名单质押库调出条件
+        addPledgeBlacklistFailure(failures, ctx, AdjustMode.OUT.getCode());
         return failures;
+    }
+
+    /**
+     * 主体或债券进入/退出黑名单质押库时统一复核三条件。
+     *
+     * @param failures   校验失败原因
+     * @param ctx        调库校验上下文
+     * @param adjustMode 调整方向
+     */
+    private void addPledgeBlacklistFailure(List<String> failures, AdjustCheckContext ctx, String adjustMode) {
+        if (ctx == null || ctx.getTargetPool() == null
+                || !PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(ctx.getTargetPool().getId())) {
+            return;
+        }
+        SecurityInfoBo security = ctx.getSecurityInfo();
+        String companyCode = security == null ? null
+                : (CategoryType.COMPANY.getCode().equals(ctx.getCategoryType())
+                ? security.getWindCode() : security.getIssuerCode());
+        Set<Long> inboundPoolIds = CategoryType.COMPANY.getCode().equals(ctx.getCategoryType())
+                ? ctx.getRequestInPoolIds() : Collections.<Long>emptySet();
+        Set<Long> outboundPoolIds = CategoryType.COMPANY.getCode().equals(ctx.getCategoryType())
+                ? ctx.getRequestOutPoolIds() : Collections.<Long>emptySet();
+        String failure = pledgeBlacklistRuleService.validate(companyCode, adjustMode,
+                inboundPoolIds, outboundPoolIds);
+        // 汇总黑名单质押库校验失败原因
+        addIfFailed(failures, failure);
     }
 
     /**
@@ -3580,6 +3731,41 @@ public class ForbiddenPoolAdjustService {
     }
 
     /**
+     * 自动联动项失败时反向阻断同组来源项。
+     *
+     * @param manualItem    来源手工调整项
+     * @param autoItems     同组自动联动项
+     * @param failurePrefix 联动失败提示前缀
+     */
+    private void propagateAutoFailureToManual(AdjustCheckDto.CheckResultItem manualItem,
+                                              List<AdjustCheckDto.CheckResultItem> autoItems,
+                                              String failurePrefix) {
+        if (manualItem == null || !manualItem.isCanAdjust() || autoItems == null || autoItems.isEmpty()) {
+            return;
+        }
+        List<String> failures = new ArrayList<>();
+        for (AdjustCheckDto.CheckResultItem autoItem : autoItems) {
+            if (autoItem == null || autoItem.isCanAdjust()) {
+                continue;
+            }
+            String poolName = autoItem.getPoolName() != null
+                    ? autoItem.getPoolName() : String.valueOf(autoItem.getTargetPoolId());
+            failures.add(failurePrefix + "（" + poolName + "）");
+            if (autoItem.getFailReasons() != null) {
+                failures.addAll(autoItem.getFailReasons());
+            }
+        }
+        if (failures.isEmpty()) {
+            return;
+        }
+        if (manualItem.getFailReasons() != null) {
+            failures.addAll(manualItem.getFailReasons());
+        }
+        manualItem.setCanAdjust(false);
+        manualItem.setFailReasons(failures);
+    }
+
+    /**
      * 组装提交阶段配套互斥调出失败的异常文案（总述 + 编号原因）。
      */
     private String buildMutexOutboundFailureMessage(String mutexPoolName, List<String> outFailures) {
@@ -4069,7 +4255,7 @@ public class ForbiddenPoolAdjustService {
     }
 
     /**
-     * 无需人工审批的主体调整生效后，同步旗下债券（仅债券禁止库，逻辑见 {@link #syncCompanyBonds}）。
+     * 无需人工审批的主体调整生效后，同步旗下债券（债券禁止库或黑名单质押库，逻辑见 {@link #syncCompanyBonds}）。
      */
     private void syncCompanyBondsOnDirect(IpAdjustLogBo companyLog) {
         // 使用统一债券同步与结果检查逻辑

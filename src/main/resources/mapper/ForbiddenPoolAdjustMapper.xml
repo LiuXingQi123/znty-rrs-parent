@@ -223,7 +223,7 @@
         ORDER BY t.wind_code ASC
     </select>
 
-    <!-- 查询主体调入债券禁止库时需同步的未到期旗下债券（含 ABS/crmw，排除已在目标池） -->
+    <!-- 查询主体调入15/17时需同步的未到期（含当天）旗下债券（含 ABS/crmw，排除已在目标池） -->
     <select id="queryCompanyInboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
@@ -231,7 +231,7 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE bond.issuer_code = #{companyCode}
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status ips
@@ -258,7 +258,7 @@
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
         WHERE bond.issuer_code = #{companyCode}
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status target_status
@@ -274,7 +274,7 @@
         ORDER BY bond.wind_code ASC, ips.target_pool_id ASC
     </select>
 
-    <!-- 查询主体调出债券禁止库时需同步的未到期且当前在池旗下债券（含 ABS/crmw） -->
+    <!-- 查询主体调出15/17时需同步的未到期（含当天）且当前在池旗下债券（含 ABS/crmw） -->
     <select id="queryCompanyOutboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
@@ -286,7 +286,7 @@
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
         WHERE bond.issuer_code = #{companyCode}
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
         ORDER BY bond.wind_code ASC
     </select>
 

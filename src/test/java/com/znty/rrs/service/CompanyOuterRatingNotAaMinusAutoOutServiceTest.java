@@ -16,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.when;
  */
 public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
+    /** 验证参数说明包含默认池与额外拦截参数。 */
     @Test
     public void getParamHelp_ShouldDescribeDefaultPoolsAndParameters() {
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
@@ -46,6 +48,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
                 .contains("禁止库 15");
     }
 
+    /** 验证高外评且其余条件不成立的主体自动调出。 */
     @Test
     public void execute_ShouldAutoOutCompanyWithHighOuterRating() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -57,6 +60,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        // 注入黑名单质押库统一判定服务
+        bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
@@ -78,8 +83,6 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         company.setOuterRating("AAA");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), eq(Collections.<Long>emptyList())))
                 .thenReturn(Collections.singletonList(company));
-        when(autoAdjustMapper.queryCompanyCodeListInPool(any(Long.class)))
-                .thenReturn(Collections.<String>emptyList());
         when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut("C90001", 17L))
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
@@ -109,6 +112,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(log.getAdjustAdvice()).isEqualTo(log.getAdjustReason());
     }
 
+    /** 验证缺少扫描池参数时任务失败。 */
     @Test
     public void execute_ShouldFailWhenParamMissing() {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
@@ -118,6 +122,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        // 注入黑名单质押库统一判定服务
+        bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
         when(scheduledTaskMapper.queryTaskByCode(CompanyOuterRatingNotAaMinusAutoOutService.TASK_CODE))
                 .thenReturn(null);
@@ -128,6 +134,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(result.getMessage()).contains("未配置扫描池");
     }
 
+    /** 验证没有候选主体时任务成功且不写数据。 */
     @Test
     public void execute_ShouldSkipWhenNoCandidate() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -139,6 +146,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        // 注入黑名单质押库统一判定服务
+        bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
@@ -161,6 +170,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         verify(securityPoolAdjustMapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
     }
 
+    /** 验证主体仍在债券禁止库时不调出黑名单质押库。 */
     @Test
     public void execute_ShouldSkipOutWhenCompanyStillInForbiddenPool() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -172,6 +182,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        // 注入黑名单质押库统一判定服务
+        bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
@@ -189,10 +201,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         company.setOuterRating("AAA");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), any(List.class)))
                 .thenReturn(Collections.singletonList(company));
-        when(autoAdjustMapper.queryCompanyCodeListInPool(eq(AutoAdjustRestrictHelper.COMPANY_FORBIDDEN_POOL_ID)))
-                .thenReturn(Collections.singletonList("C90001"));
-        when(autoAdjustMapper.queryCompanyCodeListInPool(eq(AutoAdjustRestrictHelper.KEY_WATCH_POOL_ID)))
-                .thenReturn(Collections.<String>emptyList());
+        when(autoAdjustMapper.queryCompanyInPool("C90001", PledgeBlacklistRuleService.FORBIDDEN_POOL_ID))
+                .thenReturn(true);
 
         ScheduledTaskResult result = service.execute();
 
@@ -201,6 +211,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         verify(securityPoolAdjustMapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
     }
 
+    /** 验证主体调出后同批调出符合范围的旗下债券。 */
     @Test
     public void execute_ShouldOutSamePoolBondsAfterCompanyOut() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -212,6 +223,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        // 注入黑名单质押库统一判定服务
+        bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
@@ -235,8 +248,6 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         bond.setSecurityType("corporate_bond");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), eq(Collections.<Long>emptyList())))
                 .thenReturn(Collections.singletonList(company));
-        when(autoAdjustMapper.queryCompanyCodeListInPool(any(Long.class)))
-                .thenReturn(Collections.<String>emptyList());
         when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut("C90001", 17L))
                 .thenReturn(Collections.singletonList(bond));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
@@ -257,6 +268,35 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
                 .isEqualTo("外评非AA-及以下主体自动出池（近一年孰低外评：AA）（同池旗下债）");
     }
 
+    /** 验证旗下债命中调出限制池时阻断主体联动。 */
+    @Test
+    public void outSamePoolBonds_ShouldFailWhenBondIsOutRestricted() {
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
+
+        IpAdjustLogBo bond = new IpAdjustLogBo();
+        bond.setSecurityCode("B001");
+        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut("C001", 17L))
+                .thenReturn(Collections.singletonList(bond));
+        when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("B001"))
+                .thenReturn(Collections.singletonList(99L));
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(17L);
+        pool.setPoolName("黑名单质押库");
+
+        // 执行旗下债券联动调出并校验限制池阻断
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "outSamePoolBonds",
+                "C001", pool, 17L, "BATCH001", new Date(), Collections.singletonList(99L),
+                null, "自动出池"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("不能联动调出主体");
+        verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
+    }
+
+    /** 验证未配置或配置空额外拦截池时均按不拦截处理。 */
     @Test
     public void resolveLimitPoolIds_ShouldTreatOmittedAndEmptyAsNoIntercept() {
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
@@ -267,6 +307,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
                 .containsExactly(16L);
     }
 
+    /** 验证任务参数可解析池 ID 数组。 */
     @Test
     public void parsePoolIds_ShouldAcceptJsonArray() {
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
@@ -274,5 +315,18 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(ids).containsExactly(15L, 16L);
         assertThatThrownBy(() -> service.parsePoolIds("{}")).isInstanceOf(BizException.class);
         assertThatThrownBy(() -> service.parsePoolIds(null)).isInstanceOf(BizException.class);
+    }
+
+    /**
+     * 为定时任务注入真实规则服务及模拟数据访问组件。
+     *
+     * @param service          待测试的定时任务服务
+     * @param autoAdjustMapper 自动调库规则查询数据访问组件
+     */
+    private void bindPledgeBlacklistRule(CompanyOuterRatingNotAaMinusAutoOutService service,
+                                         AutoAdjustMapper autoAdjustMapper) {
+        PledgeBlacklistRuleService ruleService = new PledgeBlacklistRuleService();
+        ReflectionTestUtils.setField(ruleService, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", ruleService);
     }
 }

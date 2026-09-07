@@ -7,6 +7,7 @@ import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
@@ -18,6 +19,9 @@ import com.znty.rrs.schedule.ScheduledTaskResult;
 import com.znty.rrs.schedule.TaskDetailLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.NoTransactionException;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
@@ -56,14 +60,15 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
      * 扩展参数说明
      */
     private static final String PARAM_HELP =
-            "参数格式：JSON 对象，例如 <code>{\"poolIds\":[15]}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
+            "参数格式：JSON 对象，例如 <code>{\"poolIds\":[15,17]}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[15]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：主体已在 15（债券禁止库）时，旗下符合条件且尚未在 15（债券禁止库）的债券自动调入该池\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,16]}</code>\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）内的主体，将其旗下符合条件的债券补充调入主体所在的同一池\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,17]}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、17（黑名单质押库）内的主体，将其旗下符合条件的债券补充调入主体所在的同一池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体所在池 + 债券入池目标池）：可选；与投资池「关系配置 → 自动调入规则」中绑定本任务的池取并集后扫描\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：主体已在目标池时，将其旗下未到期（含到期当天）且未在同一池的债券自动入池\n"
+                    + "17 特别规则：扫描黑名单质押库时再次校验主体三条件，三个条件均不满足则不补债\n"
                     + "市场规则：目标池 market_codes 为空或 [] 时不限制；有配置时债券须命中允许市场\n"
                     + "限制规则：债券已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "关系调出：入池成功后，按目标池调入互斥关系及反向调入限制关系自动调出债券原所在池并记录日志\n"
@@ -85,6 +90,9 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     /** 扫描池并集（参数 ∪ 关系配置） */
     @Resource
     private AutoAdjustPoolScopeHelper poolScopeHelper;
+    /** 黑名单质押库三条件统一判定 */
+    @Resource
+    private PledgeBlacklistRuleService pledgeBlacklistRuleService;
 
     @Override
     public String getTaskCode() {
@@ -97,6 +105,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
@@ -111,11 +120,15 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
+            // 返回失败结果前标记本轮事务回滚
+            markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             warnDetail(detail, taskName + " 失败: " + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
         } catch (Exception e) {
+            // 返回失败结果前标记本轮事务回滚
+            markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             log.error("{} 异常", taskName, e);
             detail.line("ERROR", taskName + " 异常: " + e.getMessage());
@@ -155,6 +168,18 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     continue;
                 }
+                if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId)) {
+                    SecurityInfoBo security = securityPoolAdjustMapper
+                            .querySecurityBoByCode(bond.getSecurityCode());
+                    String companyCode = security == null ? null : security.getIssuerCode();
+                    if (companyCode == null
+                            || !pledgeBlacklistRuleService.evaluate(companyCode).shouldBeInBlacklist()) {
+                        // 记录未命中黑名单质押库条件的跳过原因
+                        warnDetail(detail, "债券[" + bond.getSecurityCode()
+                                + "]发行主体未命中黑名单质押库三个条件，跳过");
+                        continue;
+                    }
+                }
                 List<Long> currentPoolIds = securityPoolAdjustMapper
                         .querySecurityCurrentPoolIdList(bond.getSecurityCode());
                 // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
@@ -176,13 +201,15 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 // 写自动入池日志
-                securityPoolAdjustMapper.addAdjustLog(bond);
+                if (securityPoolAdjustMapper.addAdjustLog(bond) != 1) {
+                    throw new BizException("债券[" + bond.getSecurityCode() + "]自动调入日志写入失败");
+                }
                 bond.setAdjustLogId(bond.getId());
                 // 写入在池状态
                 int inserted = securityPoolAdjustMapper.addPoolStatus(bond);
                 if (inserted != 1) {
-                    warnDetail(detail, "债券[" + bond.getSecurityCode() + "]写入池状态失败（可能并发已入池），跳过");
-                    continue;
+                    throw new BizException("债券[" + bond.getSecurityCode()
+                            + "]写入池状态失败（可能并发已入池）");
                 }
                 poolCount++;
                 total++;
@@ -261,6 +288,15 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
         log.warn(line);
         if (detail != null) {
             detail.line("WARN", line);
+        }
+    }
+
+    /** 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚。 */
+    private void markTransactionRollbackOnly() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (NoTransactionException ignored) {
+            log.debug("当前无可回滚事务: {}", TASK_CODE);
         }
     }
 }

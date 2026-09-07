@@ -167,6 +167,10 @@ public class ForbiddenAbsPoolAdjustService {
     /** 评级下调判定组件（主体/展望/担保人评级下调判断，查 wind_cbondissuerrating） */
     @Resource
     private RatingDowngradeChecker ratingDowngradeChecker;
+
+    /** 黑名单质押库三条件统一判定服务。 */
+    @Resource
+    private PledgeBlacklistRuleService pledgeBlacklistRuleService;
     /**
      * TODO 白名单流程尚未迁移：老系统读取 WHITEPOOLID_XYJJ 配置的主体白名单池，并校验期限及债券类型，
      * 命中后仍由用户选择是否走白名单流程；老系统的判断不依赖 WHITESECURITYLIST 表。
@@ -2488,6 +2492,8 @@ public class ForbiddenAbsPoolAdjustService {
         } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
             failures.addAll(checkCompanyIn(ctx));
         }
+        // 按发行主体复核黑名单质押库调入条件
+        addPledgeBlacklistFailure(failures, ctx, AdjustMode.IN.getCode());
         return failures;
     }
 
@@ -2903,6 +2909,10 @@ public class ForbiddenAbsPoolAdjustService {
                 failure = firstFailure(outCheckPoolLocked(ctx), outCheckSecurityNotInPool(ctx),
                         outCheckRestrictPool(ctx), outCheckFrozenPeriod(ctx));
             }
+            if (failure == null && PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(pool.getId())) {
+                failure = pledgeBlacklistRuleService.validate(security.getIssuerCode(), log.getAdjustMode(),
+                        Collections.<Long>emptySet(), Collections.<Long>emptySet());
+            }
             if (failure != null) {
                 throwApprovalRecheckFailure(log, failure);
             }
@@ -3158,7 +3168,29 @@ public class ForbiddenAbsPoolAdjustService {
         } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
             failures.addAll(checkCompanyOut(ctx));
         }
+        // 按发行主体复核黑名单质押库调出条件
+        addPledgeBlacklistFailure(failures, ctx, AdjustMode.OUT.getCode());
         return failures;
+    }
+
+    /**
+     * ABS 债进入或退出黑名单质押库时，按发行主体复核三条件。
+     *
+     * @param failures   校验失败原因
+     * @param ctx        调库校验上下文
+     * @param adjustMode 调整方向
+     */
+    private void addPledgeBlacklistFailure(List<String> failures, AdjustCheckContext ctx, String adjustMode) {
+        if (ctx == null || ctx.getTargetPool() == null
+                || !PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(ctx.getTargetPool().getId())) {
+            return;
+        }
+        SecurityInfoBo security = ctx.getSecurityInfo();
+        String companyCode = security == null ? null : security.getIssuerCode();
+        String failure = pledgeBlacklistRuleService.validate(companyCode, adjustMode,
+                Collections.<Long>emptySet(), Collections.<Long>emptySet());
+        // 汇总黑名单质押库校验失败原因
+        addIfFailed(failures, failure);
     }
 
     /**

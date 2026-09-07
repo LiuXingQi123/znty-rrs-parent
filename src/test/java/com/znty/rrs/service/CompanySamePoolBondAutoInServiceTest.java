@@ -5,6 +5,7 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
@@ -35,6 +36,7 @@ import static org.mockito.Mockito.when;
  */
 public class CompanySamePoolBondAutoInServiceTest {
 
+    /** 验证主体在同池时自动调入债券并处理互斥池。 */
     @Test
     public void execute_ShouldAutoInBondSamePool() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -62,6 +64,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         relatedPool.setPoolName("二级库");
         relatedPool.setPoolType("credit_bond");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool, relatedPool));
+        // 构建目标池的互斥及反向限制关系
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
                 buildRelation(15L, "in_mutex", 3L),
                 buildRelation(3L, "in_restrict", 15L)));
@@ -107,6 +110,67 @@ public class CompanySamePoolBondAutoInServiceTest {
         verify(securityPoolAdjustMapper).deletePoolStatusSoft("112008001.IB", 3L);
     }
 
+    /** 验证扫描17时只补充发行主体命中三个条件的债券。 */
+    @Test
+    public void execute_ShouldGatePool17ByIssuerConditions() {
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        PledgeBlacklistRuleService ruleService = mock(PledgeBlacklistRuleService.class);
+        CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", ruleService);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskName("主体下债券自动入库");
+        conf.setParamJson("{\"poolIds\":[17]}");
+        when(scheduledTaskMapper.queryTaskByCode(CompanySamePoolBondAutoInService.TASK_CODE)).thenReturn(conf);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(PledgeBlacklistRuleService.BLACKLIST_POOL_ID);
+        pool.setPoolName("黑名单质押库");
+        pool.setPoolType("blacklist");
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+        when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
+
+        IpAdjustLogBo matchedBond = new IpAdjustLogBo();
+        matchedBond.setSecurityCode("B001");
+        matchedBond.setSecurityType("corporate_bond");
+        IpAdjustLogBo unmatchedBond = new IpAdjustLogBo();
+        unmatchedBond.setSecurityCode("B002");
+        unmatchedBond.setSecurityType("corporate_bond");
+        when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(PledgeBlacklistRuleService.BLACKLIST_POOL_ID))
+                .thenReturn(Arrays.asList(matchedBond, unmatchedBond));
+        SecurityInfoBo matchedSecurity = new SecurityInfoBo();
+        matchedSecurity.setIssuerCode("C001");
+        SecurityInfoBo unmatchedSecurity = new SecurityInfoBo();
+        unmatchedSecurity.setIssuerCode("C002");
+        when(securityPoolAdjustMapper.querySecurityBoByCode("B001")).thenReturn(matchedSecurity);
+        when(securityPoolAdjustMapper.querySecurityBoByCode("B002")).thenReturn(unmatchedSecurity);
+        when(ruleService.evaluate("C001"))
+                .thenReturn(new PledgeBlacklistRuleService.Decision(true, false, false));
+        when(ruleService.evaluate("C002"))
+                .thenReturn(new PledgeBlacklistRuleService.Decision(false, false, false));
+        when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("B001"))
+                .thenReturn(Collections.<Long>emptyList());
+        when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
+        when(securityPoolAdjustMapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(1);
+        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(securityPoolAdjustMapper).addAdjustLog(captor.capture());
+        assertThat(captor.getValue().getSecurityCode()).isEqualTo("B001");
+        verify(securityPoolAdjustMapper, never()).querySecurityCurrentPoolIdList("B002");
+    }
+
+    /** 验证缺少扫描池参数时任务失败。 */
     @Test
     public void execute_ShouldFailWhenParamMissing() {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
@@ -125,6 +189,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         assertThat(result.getMessage()).contains("未配置扫描池");
     }
 
+    /** 验证没有待补债券时任务成功且不写数据。 */
     @Test
     public void execute_ShouldSkipWhenNoCandidate() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -156,6 +221,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
     }
 
+    /** 验证任务参数可解析池 ID 数组。 */
     @Test
     public void parsePoolIds_ShouldAcceptJsonArray() {
         CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
@@ -164,6 +230,14 @@ public class CompanySamePoolBondAutoInServiceTest {
         assertThatThrownBy(() -> service.parsePoolIds("{}")).isInstanceOf(BizException.class);
     }
 
+    /**
+     * 构建测试用投资池关系。
+     *
+     * @param poolId        来源池 ID
+     * @param relationType  关系类型
+     * @param relationPoolId 关系池 ID
+     * @return 投资池关系
+     */
     private PoolRelationBo buildRelation(Long poolId, String relationType, Long relationPoolId) {
         PoolRelationBo relation = new PoolRelationBo();
         relation.setPoolId(poolId);

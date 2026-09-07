@@ -18,6 +18,9 @@ import com.znty.rrs.schedule.ScheduledTaskResult;
 import com.znty.rrs.schedule.TaskDetailLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.NoTransactionException;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
@@ -84,6 +87,12 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     /** 扫描池并集（参数 ∪ 关系配置） */
     @Resource
     private AutoAdjustPoolScopeHelper poolScopeHelper;
+    /** 主体入池后的旗下债券统一同步能力 */
+    @Resource
+    private ForbiddenPoolAdjustService forbiddenPoolAdjustService;
+    /** 黑名单质押库三条件统一判定服务 */
+    @Resource
+    private PledgeBlacklistRuleService pledgeBlacklistRuleService;
 
     /**
      * 返回与库表绑定的任务编码
@@ -105,6 +114,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * 执行质押券黑名单自动入池：扫描满足（一）（二）（三）之一且未在目标池的主体
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
@@ -123,12 +133,16 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
+            // 返回失败结果前标记本轮事务回滚
+            markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             // 记录业务失败
             warnDetail(detail, taskName + " 失败: " + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
         } catch (Exception e) {
+            // 返回失败结果前标记本轮事务回滚
+            markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             log.error("{} 异常", taskName, e);
             detail.line("ERROR", taskName + " 异常: " + e.getMessage());
@@ -176,6 +190,13 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 if (company == null || !StringUtils.hasText(company.getSecurityCode())) {
                     continue;
                 }
+                if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId)
+                        && !pledgeBlacklistRuleService.evaluate(company.getSecurityCode()).shouldBeInBlacklist()) {
+                    // 记录候选状态变化后的跳过原因
+                    warnDetail(detail, "主体[" + company.getSecurityCode()
+                            + "]已不再命中黑名单质押库三个条件，跳过");
+                    continue;
+                }
                 // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
                 if (AutoAdjustRestrictHelper.isInAnyPool(
                         securityPoolAdjustMapper.querySecurityCurrentPoolIdList(company.getSecurityCode()),
@@ -199,14 +220,18 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 company.setAdjustBatchNo(batchNo);
                 company.setSubmitTime(submitTime);
                 // 写自动入池日志
-                securityPoolAdjustMapper.addAdjustLog(company);
+                if (securityPoolAdjustMapper.addAdjustLog(company) != 1) {
+                    throw new BizException("主体[" + company.getSecurityCode() + "]自动调入日志写入失败");
+                }
                 company.setAdjustLogId(company.getId());
                 // 写入在池状态
                 int inserted = securityPoolAdjustMapper.addPoolStatus(company);
                 if (inserted != 1) {
-                    warnDetail(detail, "主体[" + company.getSecurityCode() + "]写入池状态失败（可能并发已入池），跳过");
-                    continue;
+                    throw new BizException("主体[" + company.getSecurityCode()
+                            + "]写入池状态失败（可能并发已入池）");
                 }
+                // 主体进入 17 后，同批同步全部符合范围的旗下债券
+                forbiddenPoolAdjustService.syncCompanyBondsForAutomaticAdjustment(company);
                 poolCount++;
                 total++;
             }
@@ -445,6 +470,15 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         log.warn(line);
         if (detail != null) {
             detail.line("WARN", line);
+        }
+    }
+
+    /** 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚。 */
+    private void markTransactionRollbackOnly() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (NoTransactionException ignored) {
+            log.debug("当前无可回滚事务: {}", TASK_CODE);
         }
     }
 }
