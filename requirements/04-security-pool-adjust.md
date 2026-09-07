@@ -125,7 +125,7 @@
 **步骤 1（选池，`adjustStep===1`）**：
 - 左右双栏：左「可调入库」（绿色），右「可调出库」（红色），均为树表格（`row-key="id"`），仅叶子节点可选。可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出库仍默认全部展开。
 - 每个叶子行展示：投资池名称、上限数量（`maxCapacity`）、现有数量（`currentCount`）、信评报告列（选择报告 + 上传附件）、其他材料列（同上）。
-- 底部「下一步」按钮，`disabled` 当 `selectedInPools.length===0 && selectedOutPools.length===0`。
+- 固定在页面可视区底部的操作栏展示「取消」「下一步」按钮，页面内容区预留底部空间；`disabled` 当 `selectedInPools.length===0 && selectedOutPools.length===0`。
 
 **前端互斥校验**：
 - `handleInPoolSelect`：勾选调入池时检查 `inMutexMap[id]` 是否与已选调入池或已选调出池冲突，冲突弹 warning 并取消勾选。
@@ -141,7 +141,7 @@
 
 **步骤 2（校验确认，`adjustStep===2`）**：
 - 显示「调库校验结果」表格（`adjustReviewList`）与「原因和建议」区（`adjustReason`/`adjustAdvice` 文本域，maxlength 500）。
-- 底部「上一步」与「提交」按钮。
+- 固定在页面可视区底部的操作栏展示「返回列表」「上一步」「提交」按钮，滚动校验结果与原因建议时始终可操作。
 
 ### 3.2 接口调用顺序
 

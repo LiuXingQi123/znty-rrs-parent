@@ -68,6 +68,8 @@
 
 **步骤 1（选池）**：左右双栏树表格（`row-key="id"`，仅叶子可勾选）：左「可调入库」（绿），右「可调出库」（红）。可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起（CRMW 池树不含该节点时即默认全部收起）；可调出库默认全部展开。每叶子行展示投资池名称、上限数量（`maxCapacity`）、现有数量（`currentCount`）、信评报告列、其他材料列。
 
+步骤 1 的「取消」「下一步」与步骤 2 的「返回列表」「上一步」「提交」均使用页面专属固定底栏，滚动凭证、标的证券或校验内容时保持在可视区底部；内容区预留底部空间。
+
 **前端互斥校验**：`handleInPoolSelect`/`handleOutPoolSelect` 检查 `inMutexMap`/`outMutexMap`，冲突弹 warning 并取消勾选。
 
 **信评报告 / 其他材料**：`openReportDialog(poolId,'credit'|'material')` 打开弹窗，含内部报告 Tab（`/api/v1/reports/queryInReportPage`）与外部报告 Tab（`/api/v1/reports/queryOutReportPage`），支持筛选 + 分页；`el-upload auto-upload=false` 暂存 File。**打开弹窗时默认将当前标的证券编码（`bondDetail.windCode`）写入筛选条件 `securityCode` 并自动查询**。

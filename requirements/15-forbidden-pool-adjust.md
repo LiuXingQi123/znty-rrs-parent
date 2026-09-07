@@ -82,6 +82,8 @@
 
 **步骤 1（选池，`adjustStep===1`）**：左右双栏树表格（`row-key="id"`，仅叶子可勾选）：左「可调入库」（绿），右「可调出库」（红）。可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出库默认全部展开。每叶子行展示投资池名称、上限数量（`maxCapacity`）、现有数量（`currentCount`）、信评报告列、其他材料列。
 
+步骤 1 的「取消」「下一步」与步骤 2 的「返回列表」「上一步」「提交」均使用页面专属固定底栏，滚动主体或校验内容时保持在可视区底部；内容区预留底部空间，主体与 ABS 债 Tab 交互一致。
+
 > **可调池范围硬编码**：`ALLOWED_MANUAL_POOL_IDS = {15L, 16L, 17L, 23L}`（债券禁止库 / 观察池 / 黑名单质押库 / 重点观察名单），`queryCompanyAdjustPoolList` 强制四池必须存在且 `status='enabled'`/`is_deleted!=1`，否则抛「禁投池调整配置不完整」或「目标池未启用」。
 
 **前端互斥校验**：`handleInPoolSelect`/`handleOutPoolSelect` 检查 `inMutexMap`/`outMutexMap`，同面板 + 跨面板冲突弹 warning 并 `toggleRowSelection(row,false)`。
