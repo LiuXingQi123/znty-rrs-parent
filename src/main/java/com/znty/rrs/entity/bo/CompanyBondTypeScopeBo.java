@@ -38,6 +38,11 @@ public class CompanyBondTypeScopeBo {
     /**
      * 构建带显式排除条件的范围，供后续差异化业务使用。
      *
+     * <p>调用示例见 {@code CompanyBondSyncPolicy#currentTypeScope()}：
+     * {@code excluding(true, Arrays.asList("crmw"))} 排除 ABS 和 CRMW；
+     * {@code excluding(false, Arrays.asList("crmw"))} 只排除 CRMW；
+     * {@code excluding(true, Collections.emptyList())} 只排除 ABS。</p>
+     *
      * @param excludeAbs 是否排除 ABS
      * @param excludedSecurityTypes 需排除的证券类型编码
      * @return 防御性复制后的债券类型范围

@@ -14,12 +14,12 @@ import java.util.List;
 public interface SecurityPoolQueryMapper {
 
     /**
-     * 分页查询证券池中的证券列表（仅债券大类，排除 crmw）
+     * 分页查询证券池中的证券列表（债券大类，含 crmw 跟债记录）
      */
     List<SecurityPoolQueryDto> querySecurityPoolPage(SecurityPoolQueryReq req);
 
     /**
-     * 查询证券池中出现的证券类型选项（与列表同口径：仅 bond，排除 crmw）
+     * 查询证券池中出现的证券类型选项（与列表同口径：债券大类，含 crmw）
      */
     List<SecurityTypeOptionDto> querySecurityTypeList();
 }

@@ -52,7 +52,7 @@
                ,export_row.wind_code_nbc
                ,export_row.operationType
         FROM (
-            <!-- 普通证券当前状态：排除主体和 CRMW，保留股票、债券及其他非主体证券 -->
+            <!-- 普通证券当前状态：排除主体；含 ip_pool_status 中的 crmw 凭证跟债记录 -->
             SELECT si.short_name AS securityShortName
                    ,si.wind_code_sh
                    ,si.wind_code_sz
@@ -68,7 +68,6 @@
               AND ips.is_deleted = 0
               AND ips.audit_status = '20'
               AND dst.category_type != 'company'
-              AND ips.security_type != 'crmw'
               <if test="!includeExpired">
                   AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y-%m-%d'))
               </if>
@@ -108,7 +107,7 @@
                ,export_row.wind_code_nbc
                ,export_row.operationType
         FROM (
-            <!-- 普通证券增量：不校验当前仍在池，调出事件保留为删除记录 -->
+            <!-- 普通证券增量：含 ip_pool_status 中 crmw 跟债日志；不校验当前仍在池，调出事件保留为删除记录 -->
             SELECT COALESCE(si.short_name, al.security_short_name) AS securityShortName
                    ,si.wind_code_sh
                    ,si.wind_code_sz
@@ -135,7 +134,6 @@
               AND al.audit_time &gt; #{startTime}
               AND al.audit_time &lt;= #{endTime}
               AND dst.category_type != 'company'
-              AND al.security_type != 'crmw'
             UNION ALL
             <!-- CRMW 增量：同一调库日志按凭证信息生成调入或删除记录 -->
             SELECT COALESCE(crmw_si.short_name, al.crmw_name) AS securityShortName

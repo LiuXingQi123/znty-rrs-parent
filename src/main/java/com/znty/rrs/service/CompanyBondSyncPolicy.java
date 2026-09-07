@@ -20,9 +20,25 @@ public final class CompanyBondSyncPolicy {
     /**
      * 获取当前主体旗下债券类型范围。
      *
+     * <p>当前口径：不排除任何 bond 子类型，普通债、ABS、CRMW 都跟随主体入/出池。
+     * CRMW 凭证作为旗下债写入 {@code ip_pool_status}；凭证+标的进 CRMW 库仍走专用链路写 {@code ip_pool_status_crmw}。</p>
+     *
+     * <p>后续若要改排除范围，只改本方法返回值，例如：</p>
+     * <pre>
+     * // 排除 ABS，同时排除 CRMW
+     * return CompanyBondTypeScopeBo.excluding(true, Arrays.asList("crmw"));
+     *
+     * // 只排除 CRMW，ABS 仍跟随
+     * return CompanyBondTypeScopeBo.excluding(false, Arrays.asList("crmw"));
+     *
+     * // 只排除 ABS，CRMW 仍跟随
+     * return CompanyBondTypeScopeBo.excluding(true, Collections.emptyList());
+     * </pre>
+     *
      * @return 包含普通债、ABS、CRMW及其他 bond 子类型的范围
      */
     public static CompanyBondTypeScopeBo currentTypeScope() {
+        // 当前不排除 ABS / CRMW。若要排除，按上方注释示例改这一行即可。
         return CompanyBondTypeScopeBo.includeAllBondTypes();
     }
 

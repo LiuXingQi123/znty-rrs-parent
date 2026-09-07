@@ -45,8 +45,7 @@
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
-            <!-- 与证券池调整/历史同口径：仅债券大类；crmw 字典归 bond，须单独排除；主体走主体池查询 -->
-            AND ips.security_type != 'crmw'
+            <!-- 仅债券大类（含 crmw 凭证在 ip_pool_status 的跟债记录）；主体走主体池查询 -->
             <if test="securityStatus == 'active'">
                 AND bi.maturity_date &gt;= CURDATE()
             </if>
@@ -91,7 +90,7 @@
                  ,ips.id DESC
     </select>
 
-    <!-- 查询证券池中出现的证券类型选项（与列表同口径：仅 bond，排除 crmw） -->
+    <!-- 查询证券池中出现的证券类型选项（与列表同口径：债券大类，含 crmw） -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
                        ,dst.security_type_name
@@ -101,7 +100,6 @@
                                          AND dst.category_type = 'bond'
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'
-          AND ips.security_type != 'crmw'
         ORDER BY dst.sort_order ASC
                  ,ips.security_type ASC
     </select>

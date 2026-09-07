@@ -31,8 +31,7 @@
                                          AND dst.category_type = 'bond'
         <where>
             al.is_deleted = 0
-            <!-- 与证券池调整列表同口径：仅债券大类；crmw 字典归 bond，须单独排除；主体走主体历史 -->
-            AND al.security_type != 'crmw'
+            <!-- 仅债券大类（含 crmw 凭证在 ip_adjust_log 的跟债记录）；主体走主体历史 -->
             <if test="poolIds != null and poolIds.size() > 0">
                 AND al.target_pool_id IN
                 <foreach collection="poolIds" item="id" open="(" separator="," close=")">
@@ -84,7 +83,7 @@
                  ,al.id DESC
     </select>
 
-    <!-- 查询调整历史中出现的证券类型选项（与列表同口径：仅 bond，排除 crmw） -->
+    <!-- 查询调整历史中出现的证券类型选项（与列表同口径：债券大类，含 crmw） -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT al.security_type
                        ,dst.security_type_name
@@ -94,7 +93,6 @@
                                          AND dst.category_type = 'bond'
         WHERE al.is_deleted = 0
           AND al.security_type IS NOT NULL
-          AND al.security_type != 'crmw'
         ORDER BY dst.sort_order ASC
                  ,al.security_type ASC
     </select>
