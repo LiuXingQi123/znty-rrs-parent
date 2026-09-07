@@ -72,7 +72,7 @@
       1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池
       2) 旗下 bond 大类未到期、尚未在 targetPoolId
       3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
-      4) 排除 ABS（老系统 sdc_cbondplate.code=5）与 CRMW（老系统 stype!=38），ABS 须走禁投 ABS 独立入口
+      4) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
     -->
     <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT bond.wind_code AS security_code
@@ -85,8 +85,15 @@
         WHERE bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
-          AND COALESCE(bond.abs_flag, 0) != 1
-          AND bond.security_type != 'crmw'
+        <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
+          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+        </if>
+        <if test="bondTypeScope != null and bondTypeScope.excludedSecurityTypes != null and bondTypeScope.excludedSecurityTypes.size() > 0">
+          AND bond.security_type NOT IN
+          <foreach collection="bondTypeScope.excludedSecurityTypes" item="securityType" open="(" separator="," close=")">
+              #{securityType}
+          </foreach>
+        </if>
           AND EXISTS (
               SELECT 1
               FROM ip_pool_status cps
@@ -124,6 +131,7 @@
       2) 旗下 bond 大类未到期（含到期当天，对齐老 enddate &gt;= sysdate）、尚未在同一 poolId
       3) 池 market_codes 为空/[] 不限制市场；否则债市场须命中池配置（对齐 ip_investmarket）
       4) 不排除临时代码已更新（与 Job 版 queryCompanyNewBondForAutoIn 区分）
+      5) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
     -->
     <select id="queryCompanyBondSamePoolForAutoIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT bond.wind_code AS security_code
@@ -138,6 +146,15 @@
         WHERE bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
+        <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
+          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+        </if>
+        <if test="bondTypeScope != null and bondTypeScope.excludedSecurityTypes != null and bondTypeScope.excludedSecurityTypes.size() > 0">
+          AND bond.security_type NOT IN
+          <foreach collection="bondTypeScope.excludedSecurityTypes" item="securityType" open="(" separator="," close=")">
+              #{securityType}
+          </foreach>
+        </if>
           AND EXISTS (
               SELECT 1
               FROM ip_pool_status cps
@@ -409,7 +426,7 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- 外评出池后顺带调出：主体旗下已在同一目标池的债券（对齐老 findSecurityByCompanyCode ptype=4000） -->
+    <!-- 外评出池后顺带调出：主体旗下已在同一目标池的债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyBondInSamePoolForAutoOut"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT bond.wind_code AS security_code
@@ -425,6 +442,15 @@
                                      AND ips.is_deleted = 0
         WHERE bond.issuer_code = #{companyCode}
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
+        <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
+          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+        </if>
+        <if test="bondTypeScope != null and bondTypeScope.excludedSecurityTypes != null and bondTypeScope.excludedSecurityTypes.size() > 0">
+          AND bond.security_type NOT IN
+          <foreach collection="bondTypeScope.excludedSecurityTypes" item="securityType" open="(" separator="," close=")">
+              #{securityType}
+          </foreach>
+        </if>
         ORDER BY bond.wind_code ASC
     </select>
 
@@ -452,8 +478,7 @@
     </select>
 
     <!-- 主体不在指定池时，将其旗下已在债券池的债调出。
-         老 Job 只排 CRMW（stype!=38）不排 ABS；新系统 ABS 入/出禁投走独立链路，
-         本任务无人审批，排除 abs_flag=1 与 crmw，避免绕过 ForbiddenAbsPoolAdjust -->
+         当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制。 -->
     <select id="queryBondInPoolWhenCompanyNotIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
@@ -466,8 +491,15 @@
         WHERE ips.target_pool_id = #{bondPoolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND COALESCE(bond.abs_flag, 0) != 1
-          AND bond.security_type != 'crmw'
+        <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
+          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+        </if>
+        <if test="bondTypeScope != null and bondTypeScope.excludedSecurityTypes != null and bondTypeScope.excludedSecurityTypes.size() > 0">
+          AND bond.security_type NOT IN
+          <foreach collection="bondTypeScope.excludedSecurityTypes" item="securityType" open="(" separator="," close=")">
+              #{securityType}
+          </foreach>
+        </if>
           AND bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
           AND NOT EXISTS (

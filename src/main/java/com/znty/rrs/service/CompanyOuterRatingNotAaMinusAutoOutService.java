@@ -277,7 +277,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                                  String batchNo, Date submitTime, List<Long> outRestrictPoolIds,
                                  TaskDetailLog detail, String companyReason) {
         // 查询该主体旗下已在同一目标池的债券
-        List<IpAdjustLogBo> bonds = autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(companyCode, poolId);
+        List<IpAdjustLogBo> bonds = autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(
+                companyCode, poolId, CompanyBondSyncPolicy.currentTypeScope());
         if (bonds == null || bonds.isEmpty()) {
             return 0;
         }

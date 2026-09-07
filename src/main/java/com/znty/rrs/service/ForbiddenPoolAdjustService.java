@@ -358,7 +358,8 @@ public class ForbiddenPoolAdjustService {
             return;
         }
         List<ForbiddenPoolAdjustDto.CompanyBond> bonds = forbiddenPoolAdjustMapper
-                .queryCompanyBondMutexOutList(companyCode, BOND_FORBIDDEN_POOL_ID, relationPoolIds);
+                .queryCompanyBondMutexOutList(companyCode, BOND_FORBIDDEN_POOL_ID, relationPoolIds,
+                        CompanyBondSyncPolicy.currentTypeScope());
         if (bonds == null || bonds.isEmpty()) {
             return;
         }
@@ -445,8 +446,8 @@ public class ForbiddenPoolAdjustService {
     /**
      * 批量回填主体旗下债券数量（主数据口径）。
      * <p>统计 {@code rrs_securityinfo} 中 {@code issuer_code} 匹配且 {@code category_type=bond}
-     * 的证券总数（含 crmw，展示不排除）。在池汇总见 {@code queryCompanyBondPoolList}（普通池 + CRMW 池）。
-     * 主体生效后同步入/出池仍单独排除 crmw。
+     * 的证券总数（含 CRMW，展示不排除）。在池汇总见 {@code queryCompanyBondPoolList}（普通池 + CRMW 池）。
+     * 主体生效后的旗下债券同步也包含普通债、ABS、CRMW。
      */
     private void fillCompanyBondCount(List<ForbiddenPoolAdjustDto> companies) {
         if (companies == null || companies.isEmpty()) {
@@ -2673,7 +2674,8 @@ public class ForbiddenPoolAdjustService {
                         || PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(pool.getId()))
                         && CategoryType.COMPANY.getCode().equals(categoryType)
                         ? forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
-                                log.getSecurityCode(), pool.getId()).size()
+                                log.getSecurityCode(), pool.getId(),
+                                CompanyBondSyncPolicy.currentTypeScope()).size()
                         : 0;
                 int totalIncrement = 1 + syncBondCount;
                 if (failure == null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
@@ -2784,9 +2786,11 @@ public class ForbiddenPoolAdjustService {
         boolean inbound = AdjustMode.IN.getCode().equals(companyLog.getAdjustMode());
         List<SecurityInfoBo> bonds = inbound
                 ? forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
-                        companyLog.getSecurityCode(), companyLog.getTargetPoolId())
+                        companyLog.getSecurityCode(), companyLog.getTargetPoolId(),
+                        CompanyBondSyncPolicy.currentTypeScope())
                 : forbiddenPoolAdjustMapper.queryCompanyOutboundBondForAutoList(
-                        companyLog.getSecurityCode(), companyLog.getTargetPoolId());
+                        companyLog.getSecurityCode(), companyLog.getTargetPoolId(),
+                        CompanyBondSyncPolicy.currentTypeScope());
         // 主体调入禁止库时，按互斥池及反向调入限制池配置确定旗下债券需自动调出的池
         List<Long> autoOutPoolIds = inbound
                 ? AutoAdjustRelationHelper.resolveInboundAutoOutPoolIds(companyLog.getTargetPoolId(),

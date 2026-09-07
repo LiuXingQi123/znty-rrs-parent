@@ -72,7 +72,8 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                     + "市场规则：目标池 market_codes 为空或 [] 时不限制；有配置时债券须命中允许市场\n"
                     + "限制规则：债券已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "关系调出：入池成功后，按目标池调入互斥关系及反向调入限制关系自动调出债券原所在池并记录日志\n"
-                    + "范围说明：不排除已更新临时代码和 ABS；跨池场景请使用“在池主体旗下债券自动入池”任务\n"
+                    + "范围说明：不排除已更新临时代码、ABS、CRMW；跨池场景请使用“在池主体旗下债券自动入池”任务\n"
+                    + "CRMW 说明：CRMW 证券跟随主体进入普通目标池时写 ip_pool_status，不写 CRMW 组合状态表\n"
                     + "参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 */
@@ -155,10 +156,16 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 warnDetail(detail, "池[" + poolId + "]不存在，跳过");
                 continue;
             }
+            if (CompanyBondSyncPolicy.isCrmwCombinationPool(pool)) {
+                warnDetail(detail, "池[" + poolId
+                        + "]为 CRMW 组合池，主体旗下证券不能通过普通池状态写入，跳过");
+                continue;
+            }
             List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
             // 查询同池待入库债券（含市场过滤）
-            List<IpAdjustLogBo> bondList = autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(poolId);
+            List<IpAdjustLogBo> bondList = autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(
+                    poolId, CompanyBondSyncPolicy.currentTypeScope());
             if (bondList == null || bondList.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待入库同池债券");
                 continue;

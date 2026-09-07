@@ -33,7 +33,7 @@ import java.util.Map;
  * <p>
  * 对应老 {@code AutoAdjustInLimitPoolToNewBondJob}（独立 Job，不走 AdjustPoolByRule，
  * 因此不看调入/调出限制池）。老配置 AUTOPOOLID_BPMP 为「债券池-主体池」。
- * 老 Job 只排 CRMW；新系统同时排除 ABS，避免绕过禁投 ABS 独立链路。
+ * 当前统一处理全部 bond 大类，不排除 ABS / CRMW。
  * </p>
  */
 @Slf4j
@@ -65,7 +65,8 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调出规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
                     + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
                     + "处理规则：债券已在债券池、发行主体不在对应主体池时，将该债券自动调出\n"
-                    + "排除范围：ABS、CRMW 不处理；ABS 需走禁投 ABS 独立链路\n"
+                    + "类型范围：普通债、ABS、CRMW 均处理\n"
+                    + "CRMW 说明：仅调出 CRMW 证券在普通池的 ip_pool_status，不操作 CRMW 组合状态表\n"
                     + "范围说明：不检查调出限制池；仅软删除成功才写日志并计入影响条数\n"
                     + "参数格式错误时，本轮任务失败";
 
@@ -139,8 +140,13 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                         + bondPoolId + "←主体池" + companyPoolId);
                 continue;
             }
+            if (CompanyBondSyncPolicy.isCrmwCombinationPool(bondPool)) {
+                warnDetail(detail, "债券池[" + bondPoolId
+                        + "]为 CRMW 组合池，主体旗下证券不能通过普通池状态调出，跳过该映射");
+                continue;
+            }
             List<IpAdjustLogBo> bonds = autoAdjustMapper.queryBondInPoolWhenCompanyNotIn(
-                    bondPoolId, companyPoolId);
+                    bondPoolId, companyPoolId, CompanyBondSyncPolicy.currentTypeScope());
             if (bonds == null || bonds.isEmpty()) {
                 infoDetail(detail, "债券池[" + bondPool.getPoolName() + "](" + bondPoolId
                         + ") 无「主体不在池" + companyPoolId + "」待出债");

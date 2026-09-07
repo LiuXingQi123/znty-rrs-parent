@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
@@ -11,6 +12,7 @@ import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
@@ -53,7 +55,8 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         IpAdjustLogBo bond = new IpAdjustLogBo();
         bond.setSecurityCode("B001");
         bond.setSecurityShortName("某债");
-        when(autoAdjustMapper.queryBondInPoolWhenCompanyNotIn(15L, 15L))
+        when(autoAdjustMapper.queryBondInPoolWhenCompanyNotIn(eq(15L), eq(15L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(bond));
         when(securityPoolAdjustMapper.deletePoolStatusSoft("B001", 15L)).thenReturn(1);
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
@@ -63,6 +66,10 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
         verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("B001"), eq(15L));
+        ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
+        verify(autoAdjustMapper).queryBondInPoolWhenCompanyNotIn(eq(15L), eq(15L), scopeCaptor.capture());
+        assertThat(scopeCaptor.getValue().isExcludeAbs()).isFalse();
+        assertThat(scopeCaptor.getValue().getExcludedSecurityTypes()).isEmpty();
         assertThat(bond.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(bond.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(bond.getAdjustReason()).contains("主体不在池");

@@ -4,6 +4,7 @@ import com.znty.rrs.entity.bo.FlowDefinitionBo;
 import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.FlowVersionBo;
+import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
@@ -35,6 +36,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyListOf;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -220,7 +222,8 @@ public class ForbiddenPoolAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
         SecurityInfoBo newBond = buildBond("B002");
         when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-        when(mapper.queryCompanyInboundBondForAutoList("C10001", 15L))
+        when(mapper.queryCompanyInboundBondForAutoList(eq("C10001"), eq(15L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(newBond));
         when(mapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
                 buildRelation(15L, "in_mutex", 3L),
@@ -276,7 +279,8 @@ public class ForbiddenPoolAdjustServiceTest {
         ForbiddenPoolAdjustService service = buildService(mapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
         when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-        when(mapper.queryCompanyInboundBondForAutoList("C10001", 15L))
+        when(mapper.queryCompanyInboundBondForAutoList(eq("C10001"), eq(15L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(buildBond("B002")));
         when(mapper.queryAllPoolRelationList()).thenReturn(
                 Collections.singletonList(buildRelation(15L, "in_mutex", 3L)));
@@ -322,7 +326,8 @@ public class ForbiddenPoolAdjustServiceTest {
         bond.setShortName("测试债券");
         bond.setSecurityType("company_bond");
         bond.setTargetPoolId(3L);
-        when(mapper.queryCompanyBondMutexOutList("C10001", 15L, Collections.singletonList(3L)))
+        when(mapper.queryCompanyBondMutexOutList(eq("C10001"), eq(15L),
+                eq(Collections.singletonList(3L)), any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(bond));
         when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(
                 buildPool(1L, "信用债大库", "credit_bond"),
@@ -367,8 +372,10 @@ public class ForbiddenPoolAdjustServiceTest {
         ReflectionTestUtils.invokeMethod(service, "syncCompanyBondsOnDirect", companyLog);
 
         verify(mapper, never()).queryCategoryTypeBySecurityType(any(String.class));
-        verify(mapper, never()).queryCompanyInboundBondForAutoList(any(String.class), any(Long.class));
-        verify(mapper, never()).queryCompanyOutboundBondForAutoList(any(String.class), any(Long.class));
+        verify(mapper, never()).queryCompanyInboundBondForAutoList(
+                any(String.class), any(Long.class), any(CompanyBondTypeScopeBo.class));
+        verify(mapper, never()).queryCompanyOutboundBondForAutoList(
+                any(String.class), any(Long.class), any(CompanyBondTypeScopeBo.class));
         verify(mapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
         verify(mapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
     }
@@ -379,7 +386,8 @@ public class ForbiddenPoolAdjustServiceTest {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
         ForbiddenPoolAdjustService service = buildService(mapper);
         when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-        when(mapper.queryCompanyInboundBondForAutoList("C10001", 15L))
+        when(mapper.queryCompanyInboundBondForAutoList(eq("C10001"), eq(15L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(buildBond("B002")));
         doAnswer(invocation -> {
             ((IpAdjustLogBo) invocation.getArguments()[0]).setId(99L);

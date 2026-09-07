@@ -1,5 +1,6 @@
 package com.znty.rrs.mapper;
 
+import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -61,26 +62,30 @@ public interface AutoAdjustMapper {
      *
      * <p>对应老系统 {@code AutoAdjustInNewBondToLimitPoolJob}：
      * 主体在 companyPoolId（category_type=company）且 bond 大类未到期、未在 targetPoolId；
-     * 排除已更新为正式代码的临时代码；排除 ABS（{@code abs_flag=1}）与 CRMW
-     * （{@code security_type=crmw}）。ABS 须走禁投 ABS 独立入口，与主体禁止库同步债口径不同。
+     * 仅排除已更新为正式代码的临时代码；当前 {@code bondTypeScope} 不排除 ABS / CRMW。
      *
      * @param companyPoolId 主体所在池 ID（如债券禁止库 15）
      * @param targetPoolId  债券自动入池目标池 ID（可与主体池相同）
+     * @param bondTypeScope 主体旗下债券类型范围
      * @return 待入池债券（仅回填 securityCode/securityShortName/securityType）
      */
     List<IpAdjustLogBo> queryCompanyNewBondForAutoIn(@Param("companyPoolId") Long companyPoolId,
-                                                     @Param("targetPoolId") Long targetPoolId);
+                                                     @Param("targetPoolId") Long targetPoolId,
+                                                     @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
      * 查询「主体已在本池、旗下债未在本池」的同池自动入库候选。
      * <p>对应老系统 IP_RULE type=0「主体下债券自动入库」：主体与债<strong>必须同一池</strong>；
      * 债大类未到期（含到期当天，对齐老 {@code enddate >= sysdate}）；尊重池 {@code market_codes}（空则不限制）；
-     * <strong>不</strong>排除临时代码已更新记录（与 Job 版口径区分）。</p>
+     * <strong>不</strong>排除临时代码已更新记录（与 Job 版口径区分）；当前类型范围包含 ABS / CRMW。</p>
      *
      * @param poolId 主体所在池且债写入池（同一 ID）
+     * @param bondTypeScope 主体旗下债券类型范围
      * @return 待入池债券（securityCode/securityShortName/securityType）
      */
-    List<IpAdjustLogBo> queryCompanyBondSamePoolForAutoIn(@Param("poolId") Long poolId);
+    List<IpAdjustLogBo> queryCompanyBondSamePoolForAutoIn(
+            @Param("poolId") Long poolId,
+            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
      * 查询当前已在来源池、尚未在目标池的主体。
@@ -125,14 +130,17 @@ public interface AutoAdjustMapper {
     /**
      * 查询主体旗下当前已在指定池的债券（bond 大类），供外评出池时顺带出同池债。
      *
-     * <p>对应老系统 {@code findSecurityByCompanyCode(..., 4000)} 后再按在池过滤。
+     * <p>对应老系统 {@code findSecurityByCompanyCode(..., 4000)} 后再按在池过滤；
+     * 当前类型范围包含 ABS / CRMW。
      *
      * @param companyCode 主体代码
      * @param poolId      与主体相同的目标池
+     * @param bondTypeScope 主体旗下债券类型范围
      * @return 在池债券（securityCode/securityShortName/securityType）
      */
     List<IpAdjustLogBo> queryCompanyBondInSamePoolForAutoOut(@Param("companyCode") String companyCode,
-                                                             @Param("poolId") Long poolId);
+                                                             @Param("poolId") Long poolId,
+                                                             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
      * 查询 CRMW 池中已生效且凭证到期日早于昨天（T-2）的在池组合。
@@ -145,12 +153,15 @@ public interface AutoAdjustMapper {
     /**
      * 查询「债已在债券池、其发行主体不在主体池」的待自动出池债券。
      *
-     * <p>对应老 {@code AutoAdjustInLimitPoolToNewBondJob}。老 Job 只排 CRMW；
-     * 新系统排除 ABS / CRMW，避免无人审批出池绕过禁投 ABS 独立链路。
+     * <p>对应老 {@code AutoAdjustInLimitPoolToNewBondJob}，当前通过 {@code bondTypeScope}
+     * 统一包含普通债、ABS、CRMW；后续差异化排除也须通过该范围参数表达。
      *
      * @param bondPoolId    债券当前所在池
      * @param companyPoolId 主体应在的池（不在则出债）
+     * @param bondTypeScope 主体旗下债券类型范围
+     * @return 待调出债券
      */
     List<IpAdjustLogBo> queryBondInPoolWhenCompanyNotIn(@Param("bondPoolId") Long bondPoolId,
-                                                        @Param("companyPoolId") Long companyPoolId);
+                                                        @Param("companyPoolId") Long companyPoolId,
+                                                        @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 }

@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
@@ -83,7 +84,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         company.setOuterRating("AAA");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), eq(Collections.<Long>emptyList())))
                 .thenReturn(Collections.singletonList(company));
-        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut("C90001", 17L))
+        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C90001"), eq(17L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
@@ -248,7 +250,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         bond.setSecurityType("corporate_bond");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), eq(Collections.<Long>emptyList())))
                 .thenReturn(Collections.singletonList(company));
-        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut("C90001", 17L))
+        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C90001"), eq(17L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(bond));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
         when(securityPoolAdjustMapper.deletePoolStatusSoft("C90001", 17L)).thenReturn(1);
@@ -279,7 +282,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
         IpAdjustLogBo bond = new IpAdjustLogBo();
         bond.setSecurityCode("B001");
-        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut("C001", 17L))
+        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C001"), eq(17L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(bond));
         when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("B001"))
                 .thenReturn(Collections.singletonList(99L));

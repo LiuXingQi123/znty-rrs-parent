@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -73,7 +74,8 @@ public class CompanySamePoolBondAutoInServiceTest {
         bond.setSecurityCode("112008001.IB");
         bond.setSecurityShortName("测试债");
         bond.setSecurityType("mtn");
-        when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(15L))
+        when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(eq(15L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(bond));
         when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("112008001.IB"))
                 .thenReturn(Collections.singletonList(3L));
@@ -90,7 +92,8 @@ public class CompanySamePoolBondAutoInServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
         assertThat(service.getTaskCode()).isEqualTo("company_same_pool_bond_auto_in");
-        verify(autoAdjustMapper).queryCompanyBondSamePoolForAutoIn(eq(15L));
+        verify(autoAdjustMapper).queryCompanyBondSamePoolForAutoIn(
+                eq(15L), any(CompanyBondTypeScopeBo.class));
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(securityPoolAdjustMapper, times(2)).addAdjustLog(captor.capture());
@@ -143,7 +146,8 @@ public class CompanySamePoolBondAutoInServiceTest {
         IpAdjustLogBo unmatchedBond = new IpAdjustLogBo();
         unmatchedBond.setSecurityCode("B002");
         unmatchedBond.setSecurityType("corporate_bond");
-        when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(PledgeBlacklistRuleService.BLACKLIST_POOL_ID))
+        when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(
+                eq(PledgeBlacklistRuleService.BLACKLIST_POOL_ID), any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Arrays.asList(matchedBond, unmatchedBond));
         SecurityInfoBo matchedSecurity = new SecurityInfoBo();
         matchedSecurity.setIssuerCode("C001");
@@ -211,7 +215,8 @@ public class CompanySamePoolBondAutoInServiceTest {
         pool.setId(15L);
         pool.setPoolName("债券禁止库");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
-        when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(15L))
+        when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(eq(15L),
+                any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
 
         ScheduledTaskResult result = service.execute();

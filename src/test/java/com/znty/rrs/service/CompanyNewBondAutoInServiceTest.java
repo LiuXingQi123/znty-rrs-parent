@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -67,7 +68,8 @@ public class CompanyNewBondAutoInServiceTest {
         bond.setSecurityCode("BOND001.IB");
         bond.setSecurityShortName("测试新债");
         bond.setSecurityType("mtn");
-        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(15L, 15L)).thenReturn(Arrays.asList(bond));
+        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L),
+                any(CompanyBondTypeScopeBo.class))).thenReturn(Arrays.asList(bond));
         when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("BOND001.IB"))
                 .thenReturn(Arrays.asList(3L));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
@@ -95,7 +97,10 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(autoOutLog.getAdjustBatchNo()).isEqualTo(adjustLog.getAdjustBatchNo());
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
-        verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L));
+        ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
+        verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L), scopeCaptor.capture());
+        assertThat(scopeCaptor.getValue().isExcludeAbs()).isFalse();
+        assertThat(scopeCaptor.getValue().getExcludedSecurityTypes()).isEmpty();
         verify(securityPoolAdjustMapper).deletePoolStatusSoft("BOND001.IB", 3L);
     }
 
@@ -117,7 +122,8 @@ public class CompanyNewBondAutoInServiceTest {
         ScheduledTaskResult result = service.execute();
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getMessage()).contains("未配置扫描池");
-        verify(autoAdjustMapper, never()).queryCompanyNewBondForAutoIn(any(Long.class), any(Long.class));
+        verify(autoAdjustMapper, never()).queryCompanyNewBondForAutoIn(
+                any(Long.class), any(Long.class), any(CompanyBondTypeScopeBo.class));
     }
 
     @Test
@@ -189,7 +195,8 @@ public class CompanyNewBondAutoInServiceTest {
         bond2.setSecurityCode("B2");
         bond2.setSecurityShortName("债2");
         bond2.setSecurityType("mtn");
-        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(15L, 15L)).thenReturn(Arrays.asList(bond1, bond2));
+        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L),
+                any(CompanyBondTypeScopeBo.class))).thenReturn(Arrays.asList(bond1, bond2));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(1L);
