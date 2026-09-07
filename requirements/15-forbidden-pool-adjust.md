@@ -80,7 +80,7 @@
 
 ### 3.1 用户操作步骤
 
-**步骤 1（选池，`adjustStep===1`）**：左右双栏树表格（`row-key="id"`，`default-expand-all`，仅叶子可勾选）：左「可调入库」（绿），右「可调出库」（红）。每叶子行展示投资池名称、上限数量（`maxCapacity`）、现有数量（`currentCount`）、信评报告列、其他材料列。
+**步骤 1（选池，`adjustStep===1`）**：左右双栏树表格（`row-key="id"`，仅叶子可勾选）：左「可调入库」（绿），右「可调出库」（红）。可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出库默认全部展开。每叶子行展示投资池名称、上限数量（`maxCapacity`）、现有数量（`currentCount`）、信评报告列、其他材料列。
 
 > **可调池范围硬编码**：`ALLOWED_MANUAL_POOL_IDS = {15L, 16L, 17L, 23L}`（债券禁止库 / 观察池 / 黑名单质押库 / 重点观察名单），`queryCompanyAdjustPoolList` 强制四池必须存在且 `status='enabled'`/`is_deleted!=1`，否则抛「禁投池调整配置不完整」或「目标池未启用」。
 

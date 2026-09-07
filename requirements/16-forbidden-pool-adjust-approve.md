@@ -24,6 +24,8 @@
 
 `queryCompanyDetail` / `queryAdjustPoolList`(in) / `queryAdjustPoolList`(out) / `queryCompanyPoolStatus` / `queryAdjustLogList { companyCode, adjustBatchNo }`。
 
+可调入池树默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出池树仍默认全部展开。
+
 随后 `loadLogAttachments(adjustLogList)`（收集并去重全部日志 ID，一次调用 `/api/v1/attachments/queryAttachmentList`，按返回的 `mainId` 与 `attachmentCategory` 拆信评报告/其他材料）、`loadFlowSteps(adjustLogList)`（`uniqueAdjustLogsByFlow` 按 `batch:批次号`/`log:记录ID` 去重，逐个调 `queryAdjustStepList`，选首个含 `pending` 步骤的为 `activeAdjustLog`，步骤存 `flowStepList`）。
 
 ### 2.2 调库记录表列

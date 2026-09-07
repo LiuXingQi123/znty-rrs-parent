@@ -70,7 +70,7 @@
 
 - 入口：URL `entryMode=adjust`，或 list 页「调库」按钮。
 - `isAdjustMode=true`，隐藏调库记录区与流程状态区，显示调库操作区（步骤1）。
-- 步骤1：左右双栏——「可调入库」（绿）+「可调出库」（红），均为树形 `el-table`，叶子节点可勾选。勾选时做互斥校验（`handleInPoolSelect`/`handleOutPoolSelect`，同面板+跨面板互斥）。每池可挂信评报告/其他材料附件。
+- 步骤1：左右双栏——「可调入库」（绿）+「可调出库」（红），均为树形 `el-table`，叶子节点可勾选。可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出库默认全部展开。勾选时做互斥校验（`handleInPoolSelect`/`handleOutPoolSelect`，同面板+跨面板互斥）。每池可挂信评报告/其他材料附件。
 - 点「下一步」（`goToStep2`）：调 `checkAdjust` 校验 → 进入步骤2，展示校验结果表 + 原因建议。
 - 点「提交」（`handleSubmit`）：打开流程选择弹窗，为每个手工项选流程后 `confirmFlowSelection` → `submitAdjustLog` → `addAdjustLogWithFiles`（multipart）→ 成功后 `backToList`。
 

@@ -66,7 +66,7 @@
 
 ### 3.1 用户操作步骤
 
-**步骤 1（选池）**：左右双栏树表格（`row-key="id"`，`default-expand-all`，仅叶子可勾选）：左「可调入库」（绿），右「可调出库」（红）。每叶子行展示投资池名称、上限数量（`maxCapacity`）、现有数量（`currentCount`）、信评报告列、其他材料列。
+**步骤 1（选池）**：左右双栏树表格（`row-key="id"`，仅叶子可勾选）：左「可调入库」（绿），右「可调出库」（红）。可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起（CRMW 池树不含该节点时即默认全部收起）；可调出库默认全部展开。每叶子行展示投资池名称、上限数量（`maxCapacity`）、现有数量（`currentCount`）、信评报告列、其他材料列。
 
 **前端互斥校验**：`handleInPoolSelect`/`handleOutPoolSelect` 检查 `inMutexMap`/`outMutexMap`，冲突弹 warning 并取消勾选。
 

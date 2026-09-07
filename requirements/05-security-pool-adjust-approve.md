@@ -122,6 +122,8 @@
 4. `POST /api/v1/securityPoolAdjust/querySecurityPoolStatus` — 当前证券/主体所在池
 5. `POST /api/v1/securityPoolAdjust/queryAdjustLogList {securityCode, adjustBatchNo}` — 调库记录列表（按批次过滤；若不传批次，后端只返回未终结流程的记录：`audit_status NOT IN ('-1','20','21','99')`）
 
+可调入池树默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出池树仍默认全部展开。
+
 随后串行调用：
 - `loadLogAttachments(adjustLogList)` — 收集并去重全部日志 ID，一次调用 `POST /api/v1/attachments/queryAttachmentList {adjustLogIds}`，按返回的 `mainId` 与 `attachmentCategory` 分组为 `attachmentFiles`（信评报告）/`materialFiles`（其他材料）。
 - `loadFlowSteps(adjustLogList)` — 对候选调库记录逐个调 `POST /api/v1/securityPoolAdjust/queryAdjustStepList {adjustLogId, adjustBatchNo}`，找到第一个有 `stepStatus==='pending'` 步骤的记录作为 `activeAdjustLog`，其步骤列表存入 `flowStepList`。
