@@ -88,7 +88,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 - **只返回已生效风险池数据**：`INNER JOIN ip_investment_pool p ON p.id=ips.target_pool_id AND p.is_deleted=0 AND p.pool_type IN ('forbidden','observe','blacklist','restricted')`，并强制 `ips.is_deleted=0 AND ips.audit_status='20'`。
 - **逻辑删除过滤**：`ips.is_deleted=0`。
 - **分页硬上限**：`PageRequest.getPageSize()` 限制最大 100；`pageIndex` <1 兜底为 1。
-- **证券状态筛选 SQL**：`securityStatus == 'active'` → `bi.maturity_date >= CURDATE()`；`'matured'` → `bi.maturity_date < CURDATE()`，与证券池查询保持一致。
+- **证券状态筛选 SQL**：`maturity_date` 按 `yyyyMMdd` 存储；`securityStatus == 'active'` → `bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')`；`'matured'` → `bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d')`，与证券池查询保持一致。
 - **`targetPoolName` 覆盖**：XML 查出的 `p.pool_name AS target_pool_name` 会被 Service 的 `fillPoolFullName` 用投资池全路径名覆盖。即表格「投资池名称」列实际显示全路径名（含父级）。
 - **无可见数据范围/权限校验**：无按当前用户或角色过滤的逻辑，未引用 `ip_pool_permission`。任何调用方都能看到全部禁投池数据。
 - 日期筛选与排序均使用 `ips.entry_time`（入池时间）。
@@ -139,8 +139,8 @@ LEFT JOIN (
     <if securityCode> AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%') </if>
     <if securityShortName> AND ips.security_short_name LIKE CONCAT('%', #{securityShortName}, '%') </if>
     <if securityType> AND ips.security_type = #{securityType} </if>
-    <if securityStatus=='active'> AND dst.category_type = 'bond' AND bi.maturity_date >= CURDATE() </if>
-    <if securityStatus=='matured'> AND dst.category_type = 'bond' AND bi.maturity_date < CURDATE() </if>
+    <if securityStatus=='active'> AND dst.category_type = 'bond' AND bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d') </if>
+    <if securityStatus=='matured'> AND dst.category_type = 'bond' AND bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d') </if>
     <if entryTimeStart> AND ips.entry_time >= #{entryTimeStart} </if>
     <if entryTimeEnd> AND ips.entry_time <= CONCAT(#{entryTimeEnd}, ' 23:59:59') </if>
     <if adjusterName> AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%') </if>

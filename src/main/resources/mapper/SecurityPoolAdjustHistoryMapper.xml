@@ -50,7 +50,7 @@
             <if test="securityStatus != null and securityStatus != ''">
                 AND (CASE
                          WHEN sb.maturity_date IS NOT NULL
-                              AND sb.maturity_date &lt; DATE_FORMAT(NOW(), '%Y-%m-%d')
+                              AND sb.maturity_date &lt; DATE_FORMAT(NOW(), '%Y%m%d')
                          THEN '到期'
                          ELSE '存续'
                      END) = #{securityStatus}

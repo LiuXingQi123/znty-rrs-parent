@@ -115,7 +115,7 @@ finishAdjustBatch(step):
   generateInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 rrs_report_in
 ```
 
-`syncCompanyBonds`（走 `applyPoolStatusChanges`）：目标池为债券禁止库15或黑名单质押库17且 `categoryType==='company'` 时触发；调入用 `queryCompanyInboundBondForAutoList`（未到期含当天 + 未在池 + bond 大类，含普通债、ABS、crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期含当天 + 当前在池）；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。主体调入目标池后，再合并目标池的 `in_mutex` 与反向指向目标池的 `in_restrict` 配置，只将债券从当前实际所在的关系池自动调出，并为每个实际调出的池生成一条 `adjustType='互斥调整'`、已通过的调出日志。主体调整15/23后重新判定17：任一条件成立则主体及旗下债在17保留或进入，三个条件全部不成立才调出17。
+`syncCompanyBonds`（走 `applyPoolStatusChanges`）：目标池为债券禁止库15或黑名单质押库17且 `categoryType==='company'` 时触发；调入用 `queryCompanyInboundBondForAutoList`（未到期含当天 + 未在池 + bond 大类，含普通债、ABS、crmw），调出用 `queryCompanyOutboundBondForAutoList`（未到期含当天 + 当前在池）；`maturity_date` 按 `yyyyMMdd` 与 `DATE_FORMAT(CURDATE(), '%Y%m%d')` 比较；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。主体调入目标池后，再合并目标池的 `in_mutex` 与反向指向目标池的 `in_restrict` 配置，只将债券从当前实际所在的关系池自动调出，并为每个实际调出的池生成一条 `adjustType='互斥调整'`、已通过的调出日志。主体调整15/23后重新判定17：任一条件成立则主体及旗下债在17保留或进入，三个条件全部不成立才调出17。
 
 `generateInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `rrs_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
 

@@ -64,7 +64,7 @@
           AND ips.security_type != 'crmw'
           AND si.maturity_date IS NOT NULL
           AND si.maturity_date != ''
-          AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d')
+          AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y%m%d')
     </select>
 
     <!--
@@ -84,7 +84,7 @@
                                          AND dst.category_type = 'bond'
         WHERE bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; CURDATE())
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
         </if>
@@ -145,7 +145,7 @@
                                         AND IFNULL(p.is_deleted, 0) = 0
         WHERE bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
         </if>
@@ -441,7 +441,7 @@
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
         WHERE bond.issuer_code = #{companyCode}
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= CURDATE())
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
         </if>
@@ -472,7 +472,7 @@
           AND crmw.security_type = 'crmw'
           AND crmw.maturity_date IS NOT NULL
           AND crmw.maturity_date != ''
-          AND crmw.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y-%m-%d')
+          AND crmw.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y%m%d')
         ORDER BY ips.crmw_scode ASC
                  ,ips.security_code ASC
     </select>

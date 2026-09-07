@@ -128,6 +128,7 @@
   - `LEFT JOIN rrs_securityinfo sb ON sb.wind_code=al.security_code`
   - `INNER JOIN dict_security_type dst ON dst.security_type=al.security_type AND dst.is_deleted=0 AND dst.category_type='bond'`（仅债券大类，与证券池调整列表同口径；主体归主体历史）
 - **WHERE**：`al.is_deleted=0`（债券大类，含 crmw 跟债记录；不限 audit_status，含全量历史；禁投/观察/黑名单/重点观察目标池的债券记录可查；**不再** `pool_type NOT IN ('crmw','forbidden')`）
+  - 预留的 `securityStatus` 筛选按 `yyyyMMdd` 格式比较 `maturity_date` 与 `DATE_FORMAT(NOW(), '%Y%m%d')`
   - `adjustTimeEnd` 后端补 `CONCAT(#{adjustTimeEnd}, ' 23:59:59')`，start 直接用日期串
   - `myBonds==true` → `al.adjuster_id = #{currentUserId}`
 - **SELECT**：`p.pool_name AS target_pool_path`（先取叶子名）

@@ -60,11 +60,11 @@
             </if>
             <if test="securityStatus == 'active'">
                 AND dst.category_type = 'bond'
-                AND bi.maturity_date &gt;= CURDATE()
+                AND bi.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d')
             </if>
             <if test="securityStatus == 'matured'">
                 AND dst.category_type = 'bond'
-                AND bi.maturity_date &lt; CURDATE()
+                AND bi.maturity_date &lt; DATE_FORMAT(CURDATE(), '%Y%m%d')
             </if>
             <if test="securityStatus == 'unknown'">
                 AND dst.category_type = 'bond'

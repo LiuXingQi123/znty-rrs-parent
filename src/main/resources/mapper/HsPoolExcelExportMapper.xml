@@ -69,7 +69,7 @@
               AND ips.audit_status = '20'
               AND dst.category_type != 'company'
               <if test="!includeExpired">
-                  AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y-%m-%d'))
+                  AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
               </if>
             UNION ALL
             <!-- CRMW 当前状态：导出凭证本身，主数据缺失时使用状态表凭证代码和名称兜底 -->

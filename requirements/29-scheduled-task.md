@@ -152,6 +152,8 @@
 
 自动调入/调出类任务的扫描池 = **扩展参数 `poolIds`（及 mappings） ∪ 投资池关系配置中绑定了本任务的池**。
 
+证券主数据 `maturity_date` 为 `yyyyMMdd` 字符串；所有到期/未到期 SQL 均使用 `DATE_FORMAT(CURDATE(), '%Y%m%d')`（需要宽限日时先 `DATE_SUB`）生成同格式比较值。
+
 1. 投资池维护页「自动调入规则 / 自动调出规则」选择定时任务，写入 `ip_pool_auto_rule`（`rule_id`=`sys_scheduled_task.id`，`task_code`，`rule_type`=auto_in/auto_out）。  
 2. 任务执行时按自身 `task_code` + 对应 `rule_type` 查出绑定池，与 `param_json.poolIds` 去重并集。  
 3. 映射类任务（`company_inpool_bond_auto_in` / `company_not_in_pool_bond_auto_out`）把绑定池按**同池映射**追加，跨池 `mappings` 仍只来自参数。  

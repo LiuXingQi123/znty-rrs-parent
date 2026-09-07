@@ -59,6 +59,6 @@ public class TempSecurityCodeBo {
     private Long replaceRecordId;
     /** 替换状态 */
     private String replaceStatus;
-    /** 取消发行日期 */
+    /** 取消发行日期，格式 yyyyMMdd */
     private String cancelDate;
 }

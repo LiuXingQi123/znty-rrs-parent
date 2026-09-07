@@ -236,7 +236,7 @@ public class TempSecurityCodeServiceTest {
         ArgumentCaptor<TempSecurityCodeBo> captor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
         verify(mapper).editSecurityInfoToCancelled(captor.capture());
         assertThat(captor.getValue().getTempSecurityCode()).isEqualTo("TMP001");
-        assertThat(captor.getValue().getCancelDate()).isNotBlank();
+        assertThat(captor.getValue().getCancelDate()).matches("\\d{8}");
     }
 
     /** 构建测试服务。 */

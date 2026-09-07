@@ -26,7 +26,7 @@
                ,bi.date_exists
                ,CASE
                     WHEN bi.maturity_date IS NULL OR bi.maturity_date = '' THEN NULL
-                    WHEN bi.maturity_date &gt;= CURDATE() THEN 'active'
+                    WHEN bi.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d') THEN 'active'
                     ELSE 'matured'
                 END AS securityStatus
                ,bi.delist_date
@@ -47,10 +47,10 @@
             AND ips.audit_status = '20'
             <!-- 仅债券大类（含 crmw 凭证在 ip_pool_status 的跟债记录）；主体走主体池查询 -->
             <if test="securityStatus == 'active'">
-                AND bi.maturity_date &gt;= CURDATE()
+                AND bi.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d')
             </if>
             <if test="securityStatus == 'matured'">
-                AND bi.maturity_date &lt; CURDATE()
+                AND bi.maturity_date &lt; DATE_FORMAT(CURDATE(), '%Y%m%d')
             </if>
             <if test="securityStatus == 'unknown'">
                 AND bi.maturity_date IS NULL

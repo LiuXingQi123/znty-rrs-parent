@@ -102,7 +102,7 @@ this.loadList();                  // 列表数据
 | 行权日期（回售） | `repurchaseDate` | 居中 |
 | 操作 | — | `fixed="right"`，收藏按钮 |
 
-**当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。**查询范围**：内连 `dict_security_type` 且 `category_type='bond'`（债券大类，含 `ip_pool_status` 中 `security_type=crmw` 的跟债记录；主体 `category_type=company` 走主体池查询）。禁止/观察/黑名单中的债券（含跟进的 CRMW 凭证）仍可查。CRMW 库的「凭证+标的」仍走 CRMW 池查询（`ip_pool_status_crmw`）。**不再**按 `pool_type` 排除 `crmw`/`forbidden`。证券状态由后端 `CASE WHEN bi.maturity_date >= CURDATE() THEN 'active' ELSE 'matured'` 计算。
+**当前有效池展示逻辑**：后端 SQL 固定 `WHERE ips.is_deleted=0 AND ips.audit_status='20'`，即只返回审批通过（20）的池状态记录，未审批/驳回数据不会混入。**查询范围**：内连 `dict_security_type` 且 `category_type='bond'`（债券大类，含 `ip_pool_status` 中 `security_type=crmw` 的跟债记录；主体 `category_type=company` 走主体池查询）。禁止/观察/黑名单中的债券（含跟进的 CRMW 凭证）仍可查。CRMW 库的「凭证+标的」仍走 CRMW 池查询（`ip_pool_status_crmw`）。**不再**按 `pool_type` 排除 `crmw`/`forbidden`。`maturity_date` 为 `yyyyMMdd` 字符串，证券状态由后端与 `DATE_FORMAT(CURDATE(), '%Y%m%d')` 比较后计算。
 
 ### 4.1 跳转详情
 
@@ -177,14 +177,14 @@ this.loadList();                  // 列表数据
   - `INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted=0 AND dst.category_type='bond'`（仅债券大类；取证券类型名称）
   - `LEFT JOIN my_security_pool mbp ON ips.security_code = mbp.security_code AND mbp.user_id=#{currentUserId} AND mbp.status='use'`（取收藏 ID，用户隔离）
 - **WHERE 条件构造**：固定 `ips.is_deleted=0 AND ips.audit_status='20'`（债券大类，含 crmw 跟债记录；主体不进本页）；动态条件用 `<if>`：
-  - `securityStatus='active'` → `bi.maturity_date >= CURDATE()`；`'matured'` → `bi.maturity_date < CURDATE()`
+  - `securityStatus='active'` → `bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')`；`'matured'` → `bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d')`
   - `poolIds` → `ips.target_pool_id IN (...)` foreach
   - `securityCode`/`securityShortName`/`adjusterName` → `LIKE CONCAT('%', #{x}, '%')`
   - `securityType` → `=`
   - `entryTimeStart`/`entryTimeEnd` → `>=` / `<=`
   - `issuer` → `bi.issuer LIKE`
   - `mySecurities==true` → `mbp.id IS NOT NULL`
-- **SELECT 计算列**：证券状态 `CASE WHEN maturity_date IS NULL OR '' THEN NULL WHEN >= CURDATE() THEN 'active' ELSE 'matured' END AS securityStatus`；`mySecurityPoolId` 直接取 `mbp.id`
+- **SELECT 计算列**：证券状态 `CASE WHEN maturity_date IS NULL OR '' THEN NULL WHEN >= DATE_FORMAT(CURDATE(), '%Y%m%d') THEN 'active' ELSE 'matured' END AS securityStatus`；`mySecurityPoolId` 直接取 `mbp.id`
 - **排序**：`entry_time DESC, id DESC`
 - **Service 后处理**：`fillPoolFullName` 用 `investmentPoolService.queryPoolFullNameMap()`（递归 CTE 全路径映射）覆盖 `targetPoolName` 为全路径
 

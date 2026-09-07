@@ -297,8 +297,8 @@
             ,#{securityType}
             ,#{tempCompanyNameSnapshot}
             ,#{tempCompanyCode}
-            ,DATE_FORMAT(#{tempIssueDate}, '%Y-%m-%d')
-            ,DATE_FORMAT(#{tempMaturityDate}, '%Y-%m-%d')
+            ,DATE_FORMAT(#{tempIssueDate}, '%Y%m%d')
+            ,DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d')
             ,'L'
             ,#{securitySource}
             ,#{updateTime}
@@ -318,8 +318,8 @@
            ,wind_code_nbc = CASE WHEN #{securityMarket} IN ('OTC', 'QDII', 'OTHER', 'COMPANY') THEN #{securityCode} ELSE NULL END
            ,security_type = #{securityType}
            ,issuer = #{tempCompanyNameSnapshot}
-           ,firstissue_date = DATE_FORMAT(#{tempIssueDate}, '%Y-%m-%d')
-           ,maturity_date = DATE_FORMAT(#{tempMaturityDate}, '%Y-%m-%d')
+           ,firstissue_date = DATE_FORMAT(#{tempIssueDate}, '%Y%m%d')
+           ,maturity_date = DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d')
            ,ts = #{updateTime}
         WHERE wind_code = #{securityCode}
     </update>

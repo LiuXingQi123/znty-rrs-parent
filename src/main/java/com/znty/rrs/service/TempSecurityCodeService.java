@@ -631,7 +631,7 @@ public class TempSecurityCodeService {
     private String queryCancelIssueDate() {
         Calendar calendar = Calendar.getInstance();
         calendar.add(Calendar.DATE, -1);
-        return new SimpleDateFormat("yyyy-MM-dd").format(calendar.getTime());
+        return new SimpleDateFormat("yyyyMMdd").format(calendar.getTime());
     }
 
     /**

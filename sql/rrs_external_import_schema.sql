@@ -51,7 +51,7 @@ CREATE TABLE `rrs_securityinfo`
     `issue_amountplan`           decimal(10, 0)  DEFAULT NULL COMMENT '发行规模(亿元)',
     `list_date`                  varchar(10)     DEFAULT NULL COMMENT '上市日期',
     `firstissue_date`            varchar(10)     DEFAULT NULL COMMENT '发行日期',
-    `maturity_date`              varchar(10)     DEFAULT NULL COMMENT '到期日期',
+    `maturity_date`              varchar(10)     DEFAULT NULL COMMENT '到期日期，格式 yyyyMMdd',
     `carry_date`                 varchar(10)     DEFAULT NULL COMMENT '起息日期',
     `end_date`                   varchar(10)     DEFAULT NULL COMMENT '止息日期',
     `interest_type`              varchar(20)     DEFAULT NULL COMMENT '利率类型',

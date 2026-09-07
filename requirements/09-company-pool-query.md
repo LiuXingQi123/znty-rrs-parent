@@ -129,7 +129,7 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 | category_type 过滤 | `='company'`（INNER JOIN dict） | 不过滤，全部证券类型 |
 | 关联 rrs_securityinfo | 否 | 是（取 issuer/评级/到期/票面/全称等） |
 | 字段口径 | `security_short_name`→主体名称 | `security_short_name`→证券简称，另带 `issuer` |
-| 证券状态筛选 | 无 | 有（active/matured，按 maturity_date 与 CURDATE 比较） |
+| 证券状态筛选 | 无 | 有（active/matured，按 yyyyMMdd 格式的 maturity_date 与 `DATE_FORMAT(CURDATE(), '%Y%m%d')` 比较） |
 | 发行主体筛选 | 无 | 有（issuer LIKE） |
 | 证券类型筛选 | 无 | 有（securityType 精确 + 下拉接口） |
 | 「我的」过滤 | 无 | 有（mySecurities + currentUserId，联 my_security_pool） |

@@ -53,7 +53,7 @@ public class SecurityInfoBo {
     private String listDate;
     /** 发行日期 */
     private String firstissueDate;
-    /** 到期日期 */
+    /** 到期日期，格式 yyyyMMdd */
     private String maturityDate;
     /** 起息日期 */
     private String carryDate;
