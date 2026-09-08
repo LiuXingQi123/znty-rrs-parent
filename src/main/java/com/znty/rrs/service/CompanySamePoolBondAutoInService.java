@@ -144,6 +144,9 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     private int doAutoIn(String taskName, TaskDetailLog detail) {
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "目标池列表 poolIds=" + poolIds + "（主体与债同一池）");
+        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、rrs_securityinfo.issuer_code非空、"
+                + "maturity_date为空或>=今日；发行主体已在目标池 " + poolIds
+                + " 生效、债券未在同池生效，并满足目标池 market_codes");
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;

@@ -35,8 +35,8 @@
 
 | taskCode | 名称 | 默认 cron | 扩展参数示例 |
 |---|---|---|---|
-| `bond_temp_code_replace` | 债券临时代码替换 | `0 40 22 * * ?` | 每天 22:40 执行。无需参数；扫描 `rrs_temp_security_code.status=temporary` 且已由外部数据补齐 `security_code` 的记录，复用临时代码人工转正的完整分叉逻辑，操作来源记为 `job` |
-| `bond_security_type_change` | 债券类型变更 | `0 50 22 * * ?` | 每天 22:50 执行。无需参数；以 `rrs_securityinfo.security_type` 为准，同步普通池、CRMW 池标的证券及当前关联调库日志中的债券类型 |
+| `bond_temp_code_replace` | 债券临时代码替换 | `0 40 4,8,9,13,18,22 * * ?` | 每天 04:40、08:40、09:40、13:40、18:40、22:40 执行。无需参数；扫描 `rrs_temp_security_code.status=temporary` 且已由外部数据补齐 `security_code` 的记录，复用临时代码人工转正的完整分叉逻辑，操作来源记为 `job` |
+| `bond_security_type_change` | 债券类型变更 | `0 0 22 * * ?` | 每天 22:00 执行。无需参数；以 `rrs_securityinfo.security_type` 为准，同步普通池、CRMW 池标的证券及当前关联调库日志中的债券类型 |
 | `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`poolIds` 可选，默认 `[15]`（15（债券禁止库）），与投资池关系配置绑定本任务的池取并集；扫描已生效债券、股票，到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
 | `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`poolIds` 可选，默认 `[18]`（18（CRMW库）），与关系配置绑定池取并集；扫描已生效 CRMW 组合，凭证到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
 | `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 10 23 * * ?` | 每天 23:10 执行。`poolIds` 可选，默认 `[17]`（17（黑名单质押库）），与关系配置绑定池取并集；`limitPoolIds` Demo 为 `[]`。已在目标池且不满足（一）禁止库 15 /（二）近一年孰低 AA-及以下 /（三）重点观察 23 时出主体；近一年无认可外评按（二）不满足处理。成功后同批出符合范围的旗下债 |
@@ -47,8 +47,8 @@
 | `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 1 * * ?` | 每天 01:00 执行。无需参数；扫描不符合当前主体债入库规则的在池信用债，生成待办供人工处理，不自动出池；摘要区分**本轮命中** / **本轮失效** / **仍待处理** |
 | `hs_pool_full_excel_export` | 恒生池全量数据导出（不含已到期） | `0 10 1 * * ?` | 每天 01:10 执行；`poolIds` 可限制叶子池，省略时导出全部叶子池；默认生成空池 Sheet；导出当前已生效的非主体证券及 CRMW，普通证券排除已到期数据，CRMW 不校验到期日 |
 | `hs_pool_full_including_expired_excel_export` | 恒生池全量数据导出（含已到期） | `0 20 1 * * ?` | 每天 01:20 执行；参数与不含已到期全量任务一致；普通证券不校验到期日，包含仍在池的已到期数据，CRMW 同样不校验到期日 |
-| `pledge_blacklist_daily_increment_reminder` | 质押黑名单库每日增量提醒 | `0 30 1 * * ?` | 每天 01:30 执行；`poolIds` 默认 `[17]`；按上次成功执行时间水位扫描审批通过的债券、主体调入调出流水。当前仅生成候选与过程日志，通知通道待接入 |
-| `bond_issuer_not_in_company_pool_reminder` | 主体库内债券主体不在池债邮件提醒 | `0 40 1 * * ?` | 每天 01:40 执行；`poolIds` 支持同池，`mappings` 支持债券池与主体池跨池映射；扫描发行主体不在对应主体池的在池债券，排除 CRMW。当前仅生成候选与过程日志，通知通道待接入 |
+| `pledge_blacklist_daily_increment_reminder` | 质押黑名单库每日增量提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 默认 `[17]`；按上次成功执行时间水位扫描审批通过的债券、主体调入调出流水。当前仅生成候选与过程日志，通知通道待接入 |
+| `bond_issuer_not_in_company_pool_reminder` | 主体库内债券主体不在池债邮件提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 支持同池，`mappings` 支持债券池与主体池跨池映射；扫描发行主体不在对应主体池的在池债券，排除 CRMW。当前仅生成候选与过程日志，通知通道待接入 |
 | `hs_pool_increment_excel_export` | 恒生池增量数据导出 | `0 */6 * * * ?` | 每 6 分钟执行一次；首次从 `initialStartTime` 开始，后续从上次成功执行开始时间继续；导出窗口内审批通过的调入和调出，调出标记“删除”；交易日过滤暂未启用 |
 | `wind_code_sync` | Wind代码变更同步 | `0 */10 * * * ?` | 每 10 分钟执行一次。无需参数；当前为空壳，仅验证立即执行与调度挂载；**无池状态依赖**，可与自动调库并行。本次债券临时代码替换使用独立任务，不复用该编码 |
 
@@ -95,8 +95,8 @@
 
 | 顺序 | 时刻 | 任务 | 为何必须在这 |
 |------|------|------|----------------|
-| 1 | 22:40 | `bond_temp_code_replace` | 先把外部数据已匹配的临时代码转正式；会改在途日志及普通/CRMW 池状态 |
-| 2 | 22:50 | `bond_security_type_change` | 在临时代码替换后，以最新主数据统一当前在池债券类型 |
+| 1 | 04:40、08:40、09:40、13:40、18:40、22:40 | `bond_temp_code_replace` | 多时点把外部数据已匹配的临时代码转正式；会改在途日志及普通/CRMW 池状态；22:40 批次直接使用正式主数据类型 |
+| 2 | 22:00 | `bond_security_type_change` | 在 18:40 临时代码替换后，以最新主数据统一当前在池债券类型；早于 22:40 替换批次 |
 | 3 | 23:00 | `security_expired_auto_out` | 先清到期债/股，避免后面入债再扫到已到期券 |
 | 4 | 23:05 | `crmw_expired_auto_out` | 先清到期 CRMW（独立表，与债股到期同属「先清理」） |
 | 5 | 23:10 | `company_outer_rating_not_aa_minus_auto_out` | **先改主体**：不再满足质押券黑名单（一）（二）（三）的主体先出 17，并顺带出同池债 |
@@ -105,10 +105,10 @@
 | 8 | 每 10 分钟 | `company_inpool_bond_auto_in` | Job 版入债（可跨池）；高频扫描在池主体旗下新债 |
 | 9 | 次日 00:00 | `company_not_in_pool_bond_auto_out` | **最后**清「主体已不在池」的债；Demo 默认关闭，建议按需手动执行 |
 | 10 | 次日 01:00 | `bond_grade_inconformity_alert` | 池状态已稳定后再扫分级库不符，生成待办；不改池 |
-| 11 | 次日 01:30 | `pledge_blacklist_daily_increment_reminder` | 依赖前序调库流水稳定后再汇总当日增量；只读，不改池 |
-| 12 | 次日 01:40 | `bond_issuer_not_in_company_pool_reminder` | 在所有主体/债券自动调库完成后检查最终不一致；只读，不改池 |
+| 11 | 次日 09:00 | `pledge_blacklist_daily_increment_reminder` | 依赖前序调库流水稳定后再汇总增量；只读，不改池 |
+| 12 | 次日 09:00 | `bond_issuer_not_in_company_pool_reminder` | 在所有主体/债券自动调库完成后检查最终不一致；只读，不改池 |
 
-另：`wind_code_sync`（每 10 分钟，`0 */10 * * * ?`）仍为空壳且**不读写池状态**，不插入上表顺序；债券临时代码替换由独立的 `bond_temp_code_replace` 完成。按本次业务确认，`company_inpool_bond_auto_in` 也采用每 10 分钟执行，会在 23:00 / 23:10 / 23:20 与固定任务同秒触发；不同 taskCode 没有全局锁，启用前需确认数据库负载和并发执行可接受。
+另：`wind_code_sync`（每 10 分钟，`0 */10 * * * ?`）仍为空壳且**不读写池状态**，不插入上表顺序；债券临时代码替换由独立的 `bond_temp_code_replace` 完成。按本次业务确认，`company_inpool_bond_auto_in` 也采用每 10 分钟执行，会在 23:00 / 23:10 / 23:20 与固定任务同秒触发；两个 09:00 提醒任务均为只读，可并行执行。不同 taskCode 没有全局锁，启用前需确认数据库负载和并发执行可接受。
 
 违反顺序的典型后果：
 
@@ -156,7 +156,7 @@
 
 ### 过程日志约定
 
-新增的债券维护与提醒任务统一输出以下关键阶段，所有行由 `TaskDetailLog` 自动添加 `yyyy-MM-dd HH:mm:ss` 时间：
+系统全部定时任务每次执行都必须输出以 `扫描条件：` 开头的过程日志，记录实际目标表、池范围、时间窗口及关键过滤条件；空壳任务须明确当前未扫描业务表。债券维护与提醒任务统一输出以下关键阶段，所有行由 `TaskDetailLog` 自动添加 `yyyy-MM-dd HH:mm:ss` 时间：
 
 1. **任务开始**：明确任务名称，便于从长日志中识别边界。
 2. **扫描条件/范围**：记录目标表或池、增量时间窗口及关键过滤条件。
@@ -180,7 +180,7 @@
 4. 参数 JSON 非法仍失败；参数为空但关系配置有绑定池则只扫配置池；两边都空则本轮失败。  
 5. 恒生池导出、评级不符提醒、Wind 代码同步不走此并集。
 
-### 债券临时代码替换 `bond_temp_code_replace`（22:40）
+### 债券临时代码替换 `bond_temp_code_replace`（04:40、08:40、09:40、13:40、18:40、22:40）
 
 对应老系统 `BondTempCodeReplaceJob`，但按新系统现有临时代码表与转正分叉实现：
 
@@ -191,7 +191,7 @@
 5. 每条映射独立事务；失败记录保持 `temporary` 供下次重试，任务摘要列出成功/失败数。
 6. 与 `wind_code_sync` 完全独立，不调用、不修改该空壳任务。
 
-### 债券类型变更 `bond_security_type_change`（22:50）
+### 债券类型变更 `bond_security_type_change`（22:00）
 
 对应老系统 `BondStypeChangeJob`，以新系统当前池状态拆表后的口径实现：
 
@@ -199,7 +199,7 @@
 2. 扫描 `audit_status='20'` 且未删除的 `ip_pool_status`、`ip_pool_status_crmw` 标的证券字段。
 3. 条件更新池状态的 `security_type`，并同步该池状态 `adjust_log_id` 指向的当前 `ip_adjust_log.security_type`；其余历史调库日志保留原始快照。
 4. 不修改 CRMW 凭证字段 `crmw_stype`；该字段代表凭证自身类型，不属于老任务的标的债券类型变更范围。
-5. 排在临时代码替换之后，使本轮新生成的正式池状态也能按最新主数据校正；排在到期和主体调库前，避免后序任务读取旧类型。
+5. 排在 18:40 临时代码替换之后、22:40 替换之前；22:40 新转正式记录在替换时直接使用正式主数据类型。任务仍早于到期和主体调库，避免后序任务读取旧类型。
 
 ### 7.0 `security_expired_auto_out`（23:00）
 
@@ -295,7 +295,7 @@
 
 当前无独立 `GradeRuleAlertApiTest` / `GradeRuleAlertServiceTest`。
 
-### 7.8 `pledge_blacklist_daily_increment_reminder`（01:30）
+### 7.8 `pledge_blacklist_daily_increment_reminder`（09:00）
 
 对应老系统 `BlackPoolRemindJob`，只读取调库流水，不改变池状态：
 
@@ -306,7 +306,7 @@
 5. 无增量时仍构造“当日无增量调整”消息，保持老系统每日提醒语义。
 6. 当前 `ScheduledReminderDeliveryService` 明确返回 `delivered=false`，不执行外部发送；接入邮件/站内信时只替换该投递服务。
 
-### 7.9 `bond_issuer_not_in_company_pool_reminder`（01:40）
+### 7.9 `bond_issuer_not_in_company_pool_reminder`（09:00）
 
 对应老系统 `RemindLimitPoolToNewBondJob`，只检查最终池状态，不自动出池：
 

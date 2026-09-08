@@ -176,6 +176,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         // 解析额外拦截池（省略或 [] 都不拦截）
         List<Long> limitPoolIds = resolveLimitPoolIds(paramJson);
         infoDetail(detail, "额外拦截池 limitPoolIds=" + limitPoolIds);
+        infoDetail(detail, "扫描条件：ip_pool_status.is_deleted=0、audit_status=20、security_type=company、"
+                + "target_pool_id IN " + poolIds + "；近一年认可外评孰低不属于AA-及以下或无认可外评，"
+                + "且禁止库15/近一年AA-及以下/重点观察23三个条件均不满足；额外拦截池=" + limitPoolIds);
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         infoDetail(detail, "本轮批次号 " + batchNo);

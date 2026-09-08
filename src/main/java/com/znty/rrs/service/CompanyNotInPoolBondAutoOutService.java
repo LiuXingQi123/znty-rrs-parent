@@ -126,6 +126,9 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
                 parseParamMappings(paramJson, taskName), TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
         infoDetail(detail, "有效映射组数 " + pairList.size());
+        infoDetail(detail, "扫描条件：ip_pool_status.is_deleted=0、audit_status=20、category_type=bond；"
+                + "债券已在映射债券池生效、issuer_code非空，发行主体不在映射主体池的生效主体记录中；"
+                + "映射组数=" + pairList.size());
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;

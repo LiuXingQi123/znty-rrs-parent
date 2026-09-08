@@ -60,7 +60,8 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
         long begin = System.currentTimeMillis();
         TaskDetailLog detail = new TaskDetailLog();
         detail.line("任务开始：【" + TASK_NAME + "】");
-        detail.line("扫描条件：status=temporary、is_deleted=0、security_code 已补齐");
+        detail.line("扫描条件：rrs_temp_security_code.is_deleted=0、status=temporary、"
+                + "security_code IS NOT NULL 且 TRIM 后非空");
         try {
             List<TempSecurityCodeBo> sourceList = tempSecurityCodeMapper.queryJobReadyTempSecurityCodeList();
             List<TempSecurityCodeBo> rows = sourceList == null

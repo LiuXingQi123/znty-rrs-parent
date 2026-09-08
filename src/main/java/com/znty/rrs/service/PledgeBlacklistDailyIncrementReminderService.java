@@ -83,7 +83,8 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
             List<Long> poolIds = resolvePoolIds();
             // 使用上次成功执行时间构造不重不漏的左闭右开窗口
             Date windowStart = resolveWindowStart(startTime);
-            detail.line("扫描条件：目标池=" + poolIds + "，审核状态=20，证券范围=债券/主体");
+            detail.line("扫描条件：ip_adjust_log.is_deleted=0、audit_status=20、target_pool_id IN "
+                    + poolIds + "、category_type IN (bond,company)；债券 maturity_date IS NULL 或大于今日");
             detail.line("增量窗口：[" + formatTime(windowStart)
                     + ", " + formatTime(startTime) + ")");
             // 查询本轮增量提醒候选

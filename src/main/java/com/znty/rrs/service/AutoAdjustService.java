@@ -149,6 +149,8 @@ public class AutoAdjustService implements RrsScheduledTask {
         // 从扩展参数解析待扫描池 ID（非法则抛业务异常）
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "扫描池列表 poolIds=" + poolIds);
+        infoDetail(detail, "扫描条件：ip_pool_status.is_deleted=0、audit_status=20、target_pool_id IN "
+                + poolIds + "、category_type IN (bond,stock)、security_type!=crmw、maturity_date<昨日");
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         List<InvestmentPoolBo> poolList = investmentPoolMapper.queryPoolList();
         if (poolList != null) {

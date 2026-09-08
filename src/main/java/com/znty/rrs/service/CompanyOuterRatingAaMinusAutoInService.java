@@ -162,6 +162,8 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         // 从扩展参数与关系配置解析入池目标池
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "目标池列表 poolIds=" + poolIds);
+        infoDetail(detail, "扫描条件：主体未在目标池 " + poolIds
+                + " 的生效记录中，且满足禁止库15、近一年认可外评孰低AA-及以下、重点观察23任一条件");
         // 构建池 ID → 池对象映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         Date submitTime = new Date();

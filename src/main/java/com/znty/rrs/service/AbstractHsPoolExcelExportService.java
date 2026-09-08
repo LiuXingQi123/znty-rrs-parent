@@ -137,6 +137,19 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
                     ? getTaskCode() : taskConfig.getTaskName();
             // 解析当前任务的池范围、空池、目录和首次增量时间参数。
             ExportParams params = parseParams(taskConfig);
+            detail.line("任务开始：【" + taskName + "】");
+            String poolScope = params.poolIds == null || params.poolIds.isEmpty()
+                    ? "全部叶子池" : params.poolIds.toString();
+            if (isIncrement()) {
+                detail.line("扫描条件：poolIds=" + poolScope
+                        + "；ip_adjust_log.is_deleted=0、audit_status=20、adjust_mode IN (调入,调出)、"
+                        + "category_type!=company；CRMW 要求 crmw_scode 非空；时间范围见增量窗口");
+            } else {
+                detail.line("扫描条件：poolIds=" + poolScope
+                        + "；ip_pool_status/ip_pool_status_crmw.is_deleted=0、audit_status=20、"
+                        + "category_type!=company；普通证券包含已到期=" + includeExpiredForFullExport()
+                        + "，CRMW 不校验到期日");
+            }
             // 预留增量任务交易日过滤入口，交易日数据源和非交易日策略确认后再启用。
             if (isIncrement() && shouldSkipByTradeDay(startTime)) {
                 detail.line("INFO", "当前日期不满足交易日执行条件，本次增量导出不执行");

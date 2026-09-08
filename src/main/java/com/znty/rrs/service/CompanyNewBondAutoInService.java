@@ -160,6 +160,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
                 parseParamMappings(paramJson, taskName), TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
         infoDetail(detail, "有效映射组数 " + pairList.size());
+        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、rrs_securityinfo.issuer_code非空、"
+                + "maturity_date为空或>今日；发行主体已在映射主体池生效、债券未在映射目标池生效，"
+                + "并排除 status=updated 且已补齐正式代码的临时代码记录；映射组数=" + pairList.size());
         // 构建池 ID → 池信息映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();

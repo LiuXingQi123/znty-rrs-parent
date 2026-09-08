@@ -55,6 +55,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
         long begin = System.currentTimeMillis();
         TaskDetailLog detail = new TaskDetailLog();
         detail.line(TASK_NAME + " 开始（空壳，待接入公司逻辑）");
+        detail.line("扫描条件：待接入 Wind 代码变更数据源，当前不扫描业务表");
         // TODO 后续将公司 WindCodeSyncService 业务逻辑按本项目写法迁入此处
         detail.line(TASK_NAME + " 结束：暂无业务处理");
         long duration = System.currentTimeMillis() - begin;

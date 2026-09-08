@@ -57,7 +57,8 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
         long begin = System.currentTimeMillis();
         TaskDetailLog detail = new TaskDetailLog();
         detail.line("任务开始：【" + TASK_NAME + "】");
-        detail.line("扫描范围：普通池 ip_pool_status、CRMW 池 ip_pool_status_crmw；仅比较债券大类");
+        detail.line("扫描条件：ip_pool_status/ip_pool_status_crmw.is_deleted=0、audit_status=20；"
+                + "rrs_securityinfo 按 wind_code 匹配；新旧 security_type 均属于 bond 大类且不相等");
         try {
             List<BondSecurityTypeChangeDto> normalRows =
                     bondSecurityMaintenanceMapper.queryPoolSecurityTypeChangeList();

@@ -109,6 +109,8 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private int doAutoOut(String taskName, TaskDetailLog detail) {
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "扫描池列表 poolIds=" + poolIds);
+        infoDetail(detail, "扫描条件：ip_pool_status_crmw.is_deleted=0、audit_status=20、target_pool_id IN "
+                + poolIds + "、pool_type=crmw、凭证 security_type=crmw、maturity_date<昨日");
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;

@@ -50,7 +50,8 @@ public class PledgeBlacklistDailyIncrementReminderServiceTest {
         assertThat(result.getAffectedCount()).isEqualTo(1);
         assertThat(result.getMessage()).contains("通知通道未接入");
         assertThat(result.getDetailLog()).contains("任务开始：【质押黑名单库每日增量提醒】")
-                .contains("扫描条件：目标池=[17]")
+                .contains("扫描条件：ip_adjust_log.is_deleted=0、audit_status=20、target_pool_id IN [17]")
+                .contains("category_type IN (bond,company)；债券 maturity_date IS NULL 或大于今日")
                 .contains("扫描完成：增量提醒候选 1 条")
                 .contains("消息投递状态=待接入")
                 .contains("任务结束（成功）：候选 1 条，通知状态=待接入");

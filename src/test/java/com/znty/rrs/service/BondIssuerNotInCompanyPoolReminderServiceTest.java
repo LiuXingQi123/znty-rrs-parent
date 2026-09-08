@@ -43,6 +43,8 @@ public class BondIssuerNotInCompanyPoolReminderServiceTest {
         assertThat(result.getAffectedCount()).isEqualTo(1);
         assertThat(result.getMessage()).contains("通知通道未接入");
         assertThat(result.getDetailLog()).contains("任务开始：【主体库内债券主体不在池债邮件提醒】")
+                .contains("扫描条件：ip_pool_status.is_deleted=0、audit_status=20、category_type=bond")
+                .contains("债券在 bondPoolId，发行主体不在对应 companyPoolId 的生效主体记录中")
                 .contains("扫描范围：池映射 1 组")
                 .contains("映射 bondPoolId=17，companyPoolId=15，命中 1 条")
                 .contains("扫描完成：主体不在池债券候选 1 条")

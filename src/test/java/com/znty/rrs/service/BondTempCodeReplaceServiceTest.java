@@ -31,6 +31,8 @@ public class BondTempCodeReplaceServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(2);
         assertThat(result.getDetailLog()).contains("任务开始：【债券临时代码替换】")
+                .contains("扫描条件：rrs_temp_security_code.is_deleted=0、status=temporary、"
+                        + "security_code IS NOT NULL 且 TRIM 后非空")
                 .contains("扫描完成：待替换候选 2 条")
                 .contains("记录ID=1，临时代码=TMP001，正式代码=110001.IB")
                 .contains("任务结束（成功）：候选 2 条，成功 2 条，失败 0 条");

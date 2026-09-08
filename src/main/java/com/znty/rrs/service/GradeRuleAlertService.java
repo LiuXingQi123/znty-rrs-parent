@@ -83,6 +83,9 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         Date start = new Date();
         TaskDetailLog detailLog = new TaskDetailLog();
         detailLog.line("开始扫描：已在信用债 1～5 级且生效的债券是否仍符合主体债入库规则");
+        detailLog.line("扫描条件：ip_pool_status.is_deleted=0、audit_status=20；"
+                + "ip_investment_pool.is_deleted=0、pool_type=credit_bond、inner_sort BETWEEN 1 AND 5、"
+                + "pool_level为空或=2");
 
         // 拉取扫描样本
         List<IpGradeRuleAlertBo> inPoolList = gradeRuleAlertMapper.queryGradedBondInPoolList();

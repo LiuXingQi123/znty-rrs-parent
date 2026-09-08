@@ -79,7 +79,8 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         try {
             // 解析债券池与主体池映射
             List<long[]> mappings = resolveMappings();
-            detail.line("扫描条件：生效债券、发行主体未在对应主体池；排除 CRMW");
+            detail.line("扫描条件：ip_pool_status.is_deleted=0、audit_status=20、category_type=bond、"
+                    + "security_type!=crmw；债券在 bondPoolId，发行主体不在对应 companyPoolId 的生效主体记录中");
             detail.line("扫描范围：池映射 " + mappings.size() + " 组");
             List<BondReminderDto> rows = new ArrayList<BondReminderDto>();
             for (long[] mapping : mappings) {
