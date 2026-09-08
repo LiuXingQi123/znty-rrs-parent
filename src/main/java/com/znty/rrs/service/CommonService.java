@@ -68,10 +68,10 @@ public class CommonService {
     }
 
     /**
-     * 批量查询符合 Wind 主体类型要求的担保人及其最新主体内评分。
+     * 按担保债/ABS 属性批量查询符合 Wind 主体类型要求的担保人及其最新主体内评分。
      *
      * @param req Wind 证券代码列表
-     * @return 符合主体类型要求的担保人及类型编码列表；无评分时 totalScore 为空
+     * @return 担保债返回担保人类型，ABS 返回四类相关主体；无评分时 totalScore 为空
      */
     public List<GuarantorGradeDto> queryGuarantorGradeList(GuarantorGradeReq req) {
         if (req == null || req.getSecurityCodes() == null || req.getSecurityCodes().isEmpty()) {

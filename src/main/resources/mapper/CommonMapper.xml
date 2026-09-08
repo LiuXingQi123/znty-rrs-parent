@@ -61,7 +61,7 @@
                  ,id ASC
     </select>
 
-    <!-- 批量查询符合主体类型要求的担保人及其最新内评；同一代码存在多条评分时按 ts 取最新记录 -->
+    <!-- 按担保债/ABS 属性批量查询符合主体类型要求的担保人及其最新内评；同一代码存在多条评分时按 ts 取最新记录 -->
     <select id="queryGuarantorGradeList" resultType="com.znty.rrs.entity.common.GuarantorGradeDto">
         WITH eligible_guarantor AS (
             SELECT issuer.s_info_windcode AS security_code
@@ -69,7 +69,20 @@
                    ,MAX(issuer.s_info_compname) AS windname
                    ,issuer.s_info_typecode AS guarantor_type_code
             FROM ais_inv_ods.wind_cbondissuer issuer
-            WHERE issuer.s_info_typecode IN (115203000, 115201000)
+            INNER JOIN rrs_securityinfo security ON security.wind_code = issuer.s_info_windcode
+            WHERE (
+                    (
+                        COALESCE(security.abs_flag, 0) = 1
+                        OR security.security_type = 'abs'
+                    )
+                    AND issuer.s_info_typecode IN (115200000, 115004000, 115203000, 115201000)
+                  OR (
+                        COALESCE(security.abs_flag, 0) != 1
+                        AND (security.security_type IS NULL OR security.security_type != 'abs')
+                        AND COALESCE(security.guarant_flag, 0) = 1
+                        AND issuer.s_info_typecode = 115004000
+                  )
+            )
               AND issuer.s_info_compcode IS NOT NULL
               AND issuer.s_info_compcode != ''
               AND issuer.s_info_windcode IN

@@ -31,7 +31,7 @@ public class CommonServiceTest {
         GuarantorGradeDto grade = new GuarantorGradeDto();
         grade.setSecurityCode("DBB001.IB");
         grade.setWindcode("C10010");
-        grade.setGuarantorTypeCode(115203000L);
+        grade.setGuarantorTypeCode(115004000L);
         grade.setTotalScore("1");
         when(mapper.queryGuarantorGradeList(normalizedCodes)).thenReturn(Collections.singletonList(grade));
 
@@ -40,7 +40,7 @@ public class CommonServiceTest {
         List<GuarantorGradeDto> result = service.queryGuarantorGradeList(req);
 
         assertThat(result).containsExactly(grade);
-        assertThat(result.get(0).getGuarantorTypeCode()).isEqualTo(115203000L);
+        assertThat(result.get(0).getGuarantorTypeCode()).isEqualTo(115004000L);
         verify(mapper).queryGuarantorGradeList(normalizedCodes);
     }
 
