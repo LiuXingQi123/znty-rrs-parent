@@ -6,7 +6,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
-import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -173,6 +173,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         for (long[] pair : pairList) {
             Long companyInPoolId = pair[0];
             Long bondTargetPoolId = pair[1];
+            InvestmentPoolBo companyPool = poolMap.get(companyInPoolId);
             InvestmentPoolBo targetPool = poolMap.get(bondTargetPoolId);
             if (targetPool == null) {
                 warnDetail(detail, "债券写入池[" + bondTargetPoolId + "]不存在，跳过映射 "
@@ -184,7 +185,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                         + "]为 CRMW 组合池，主体旗下证券不能通过普通池状态写入，跳过该映射");
                 continue;
             }
-            List<IpAdjustLogBo> bondList = autoAdjustMapper.queryCompanyNewBondForAutoIn(
+            List<ScheduledAdjustCandidateDto> bondList = autoAdjustMapper.queryCompanyNewBondForAutoIn(
                     companyInPoolId, bondTargetPoolId, CompanyBondSyncPolicy.currentTypeScope());
             if (bondList == null || bondList.isEmpty()) {
                 infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
@@ -192,7 +193,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 continue;
             }
             int pairCount = 0;
-            for (IpAdjustLogBo bond : bondList) {
+            for (ScheduledAdjustCandidateDto bond : bondList) {
                 List<Long> currentPoolIds = securityPoolAdjustMapper
                         .querySecurityCurrentPoolIdList(bond.getSecurityCode());
                 bond.setAdjustType("自动调整");
@@ -203,8 +204,11 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 bond.setAuditStatus(AuditStatus.APPROVED.getCode());
                 bond.setAdjusterId(AUTO_ADJUSTER_ID);
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
-                bond.setAdjustReason(REASON_COMPANY_NEW_BOND_IN);
-                bond.setAdjustAdvice(REASON_COMPANY_NEW_BOND_IN);
+                String reason = ScheduledAdjustLogHelper.appendDetails(REASON_COMPANY_NEW_BOND_IN,
+                        ScheduledAdjustLogHelper.issuerDetail(bond),
+                        ScheduledAdjustLogHelper.poolDetail("主体所在池", companyPool, companyInPoolId));
+                bond.setAdjustReason(reason);
+                bond.setAdjustAdvice(reason);
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 // 写自动调入日志

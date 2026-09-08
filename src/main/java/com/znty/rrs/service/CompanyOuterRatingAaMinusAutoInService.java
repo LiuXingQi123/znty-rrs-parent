@@ -8,6 +8,7 @@ import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -187,13 +188,13 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
             // 分别查询（一）（二）（三）后在内存合并去重
-            List<IpAdjustLogBo> companies = queryInboundCandidates(poolId, agencyCodes);
+            List<ScheduledAdjustCandidateDto> companies = queryInboundCandidates(poolId, agencyCodes);
             if (companies == null || companies.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待入池黑名单主体");
                 continue;
             }
             int poolCount = 0;
-            for (IpAdjustLogBo company : companies) {
+            for (ScheduledAdjustCandidateDto company : companies) {
                 if (company == null || !StringUtils.hasText(company.getSecurityCode())) {
                     continue;
                 }
@@ -255,8 +256,9 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * @param agencyCodes 有效外部评级机构编码
      * @return 去重后的待入池主体
      */
-    private List<IpAdjustLogBo> queryInboundCandidates(Long targetPoolId, List<String> agencyCodes) {
-        Map<String, IpAdjustLogBo> merged = new LinkedHashMap<>();
+    private List<ScheduledAdjustCandidateDto> queryInboundCandidates(
+            Long targetPoolId, List<String> agencyCodes) {
+        Map<String, ScheduledAdjustCandidateDto> merged = new LinkedHashMap<>();
         // 条款（一）：当前在禁止库且尚未在目标池
         mergeInboundHits(merged, autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 AutoAdjustRestrictHelper.COMPANY_FORBIDDEN_POOL_ID, targetPoolId), true, false, false);
@@ -278,16 +280,17 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * @param lowRating  是否条款（二）
      * @param restricted 是否条款（三）
      */
-    private void mergeInboundHits(Map<String, IpAdjustLogBo> merged, List<IpAdjustLogBo> rows,
+    private void mergeInboundHits(Map<String, ScheduledAdjustCandidateDto> merged,
+                                  List<ScheduledAdjustCandidateDto> rows,
                                   boolean forbidden, boolean lowRating, boolean restricted) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
-        for (IpAdjustLogBo row : rows) {
+        for (ScheduledAdjustCandidateDto row : rows) {
             if (row == null || !StringUtils.hasText(row.getSecurityCode())) {
                 continue;
             }
-            IpAdjustLogBo exist = merged.get(row.getSecurityCode());
+            ScheduledAdjustCandidateDto exist = merged.get(row.getSecurityCode());
             if (exist == null) {
                 exist = row;
                 exist.setSecurityType("company");
@@ -317,7 +320,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * @param company 入池候选（含命中标记与孰低外评）
      * @return 调整原因
      */
-    static String buildAdjustReason(IpAdjustLogBo company) {
+    static String buildAdjustReason(ScheduledAdjustCandidateDto company) {
         if (company == null) {
             return REASON;
         }
@@ -369,7 +372,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * @param company 入池候选
      * @return true=命中近一年孰低 AA-及以下
      */
-    private static boolean isLowOuterRatingHit(IpAdjustLogBo company) {
+    private static boolean isLowOuterRatingHit(ScheduledAdjustCandidateDto company) {
         // 优先使用 SQL 回填的（二）命中标记
         if (isFlagHit(company.getInLowOuterRating())) {
             return true;

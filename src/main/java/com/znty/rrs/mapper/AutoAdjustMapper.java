@@ -1,7 +1,7 @@
 package com.znty.rrs.mapper;
 
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
-import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -52,12 +52,12 @@ public interface AutoAdjustMapper {
      *
      * <p>到期口径对齐老系统 {@code AdjustRuleByExpired}：{@code maturity_date} 早于昨天（T-2），
      * 到期当天与到期次日仍不出池。大类对齐老 ptype=4000/2000，仅债、股；排除 crmw。
-     * 仅回填 securityCode/securityShortName/securityType，其余由调用方补充。
+     * 回填证券基本信息与 maturityDate，供自动调出日志展示实际到期日。
      *
      * @param poolId 目标池 ID
      * @return 到期在池证券列表（每条对应一条待自动调出记录）
      */
-    List<IpAdjustLogBo> queryPoolSecurityByExpired(@Param("poolId") Long poolId);
+    List<ScheduledAdjustCandidateDto> queryPoolSecurityByExpired(@Param("poolId") Long poolId);
 
     /**
      * 查询「主体已在主体池、旗下未到期债券尚未在目标池」的待自动入池债券。
@@ -69,11 +69,12 @@ public interface AutoAdjustMapper {
      * @param companyPoolId 主体所在池 ID（如债券禁止库 15）
      * @param targetPoolId  债券自动入池目标池 ID（可与主体池相同）
      * @param bondTypeScope 主体旗下债券类型范围
-     * @return 待入池债券（仅回填 securityCode/securityShortName/securityType）
+     * @return 待入池债券（含发行主体代码与名称）
      */
-    List<IpAdjustLogBo> queryCompanyNewBondForAutoIn(@Param("companyPoolId") Long companyPoolId,
-                                                     @Param("targetPoolId") Long targetPoolId,
-                                                     @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
+    List<ScheduledAdjustCandidateDto> queryCompanyNewBondForAutoIn(
+            @Param("companyPoolId") Long companyPoolId,
+            @Param("targetPoolId") Long targetPoolId,
+            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
      * 查询「主体已在本池、旗下债未在本池」的同池自动入库候选。
@@ -83,9 +84,9 @@ public interface AutoAdjustMapper {
      *
      * @param poolId 主体所在池且债写入池（同一 ID）
      * @param bondTypeScope 主体旗下债券类型范围
-     * @return 待入池债券（securityCode/securityShortName/securityType）
+     * @return 待入池债券（含发行主体代码与名称）
      */
-    List<IpAdjustLogBo> queryCompanyBondSamePoolForAutoIn(
+    List<ScheduledAdjustCandidateDto> queryCompanyBondSamePoolForAutoIn(
             @Param("poolId") Long poolId,
             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
@@ -97,8 +98,9 @@ public interface AutoAdjustMapper {
      * @param targetPoolId 入池目标池 ID
      * @return 待入池主体
      */
-    List<IpAdjustLogBo> queryCompanyInPoolNotInTarget(@Param("sourcePoolId") Long sourcePoolId,
-                                                      @Param("targetPoolId") Long targetPoolId);
+    List<ScheduledAdjustCandidateDto> queryCompanyInPoolNotInTarget(
+            @Param("sourcePoolId") Long sourcePoolId,
+            @Param("targetPoolId") Long targetPoolId);
 
     /**
      * 查询近一年认可外评孰低为 AA-及以下、且尚未在目标池的主体。
@@ -108,8 +110,9 @@ public interface AutoAdjustMapper {
      * @param agencyCodes 有效外部评级机构编码
      * @return 待入池主体（含 outerRating）
      */
-    List<IpAdjustLogBo> queryCompanyByLowOuterRatingNotInPool(@Param("poolId") Long poolId,
-                                                              @Param("agencyCodes") List<String> agencyCodes);
+    List<ScheduledAdjustCandidateDto> queryCompanyByLowOuterRatingNotInPool(
+            @Param("poolId") Long poolId,
+            @Param("agencyCodes") List<String> agencyCodes);
 
     /**
      * 查询已在目标池、近一年认可外评孰低不属于 AA-及以下的主体。
@@ -121,9 +124,10 @@ public interface AutoAdjustMapper {
      * @param agencyCodes  有效外部评级机构编码
      * @return 待出池主体（含 outerRating）
      */
-    List<IpAdjustLogBo> queryCompanyByNotLowOuterRatingInPool(@Param("poolId") Long poolId,
-                                                              @Param("limitPoolIds") List<Long> limitPoolIds,
-                                                              @Param("agencyCodes") List<String> agencyCodes);
+    List<ScheduledAdjustCandidateDto> queryCompanyByNotLowOuterRatingInPool(
+            @Param("poolId") Long poolId,
+            @Param("limitPoolIds") List<Long> limitPoolIds,
+            @Param("agencyCodes") List<String> agencyCodes);
 
     /**
      * 查询指定池中当前已生效的主体代码。
@@ -144,9 +148,10 @@ public interface AutoAdjustMapper {
      * @param bondTypeScope 主体旗下债券类型范围
      * @return 在池债券（securityCode/securityShortName/securityType）
      */
-    List<IpAdjustLogBo> queryCompanyBondInSamePoolForAutoOut(@Param("companyCode") String companyCode,
-                                                             @Param("poolId") Long poolId,
-                                                             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
+    List<ScheduledAdjustCandidateDto> queryCompanyBondInSamePoolForAutoOut(
+            @Param("companyCode") String companyCode,
+            @Param("poolId") Long poolId,
+            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
      * 查询 CRMW 池中已生效且凭证到期日早于昨天（T-2）的在池组合。
@@ -154,7 +159,7 @@ public interface AutoAdjustMapper {
      * <p>对应老 IP_RULE {@code AdjustRuleCrmwDueOutPool}。到期看凭证 {@code crmw_scode}
      * 主数据 {@code maturity_date}，落地表 {@code ip_pool_status_crmw}。
      */
-    List<IpAdjustLogBo> queryCrmwPoolByExpired(@Param("poolId") Long poolId);
+    List<ScheduledAdjustCandidateDto> queryCrmwPoolByExpired(@Param("poolId") Long poolId);
 
     /**
      * 查询「债已在债券池、其发行主体不在主体池」的待自动出池债券。
@@ -165,9 +170,10 @@ public interface AutoAdjustMapper {
      * @param bondPoolId    债券当前所在池
      * @param companyPoolId 主体应在的池（不在则出债）
      * @param bondTypeScope 主体旗下债券类型范围
-     * @return 待调出债券
+     * @return 待调出债券（含发行主体代码与名称）
      */
-    List<IpAdjustLogBo> queryBondInPoolWhenCompanyNotIn(@Param("bondPoolId") Long bondPoolId,
-                                                        @Param("companyPoolId") Long companyPoolId,
-                                                        @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
+    List<ScheduledAdjustCandidateDto> queryBondInPoolWhenCompanyNotIn(
+            @Param("bondPoolId") Long bondPoolId,
+            @Param("companyPoolId") Long companyPoolId,
+            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 }

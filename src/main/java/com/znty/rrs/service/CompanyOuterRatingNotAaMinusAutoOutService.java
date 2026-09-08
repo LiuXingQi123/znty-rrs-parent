@@ -10,6 +10,7 @@ import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -200,7 +201,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
             // 条款（二）反面：已在目标池且近一年孰低不属于 AA-及以下（含无认可外评）
-            List<IpAdjustLogBo> companies = autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
+            List<ScheduledAdjustCandidateDto> companies = autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
                     poolId, limitPoolIds, agencyCodes);
             // 使用统一规则筛出三个条件全部不满足的主体
             companies = filterCompaniesNotMatchingBlacklistConditions(companies);
@@ -209,7 +210,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                 continue;
             }
             int poolCount = 0;
-            for (IpAdjustLogBo company : companies) {
+            for (ScheduledAdjustCandidateDto company : companies) {
                 if (company == null || !StringUtils.hasText(company.getSecurityCode())) {
                     continue;
                 }
@@ -253,12 +254,13 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
      * @param companies 条件（二）反面的出池候选
      * @return 三个条件全部不满足的主体
      */
-    private List<IpAdjustLogBo> filterCompaniesNotMatchingBlacklistConditions(List<IpAdjustLogBo> companies) {
+    private List<ScheduledAdjustCandidateDto> filterCompaniesNotMatchingBlacklistConditions(
+            List<ScheduledAdjustCandidateDto> companies) {
         if (companies == null || companies.isEmpty()) {
             return companies;
         }
-        List<IpAdjustLogBo> result = new ArrayList<>();
-        for (IpAdjustLogBo company : companies) {
+        List<ScheduledAdjustCandidateDto> result = new ArrayList<>();
+        for (ScheduledAdjustCandidateDto company : companies) {
             if (company == null || !StringUtils.hasText(company.getSecurityCode())
                     || pledgeBlacklistRuleService.evaluate(company.getSecurityCode()).shouldBeInBlacklist()) {
                 continue;
@@ -285,14 +287,14 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                                  String batchNo, Date submitTime, List<Long> outRestrictPoolIds,
                                  TaskDetailLog detail, String companyReason) {
         // 查询该主体旗下已在同一目标池的债券
-        List<IpAdjustLogBo> bonds = autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(
+        List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(
                 companyCode, poolId, CompanyBondSyncPolicy.currentTypeScope());
         if (bonds == null || bonds.isEmpty()) {
             return 0;
         }
         int bondCount = 0;
         String bondReason = companyReason + "（同池旗下债）";
-        for (IpAdjustLogBo bond : bonds) {
+        for (ScheduledAdjustCandidateDto bond : bonds) {
             if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                 continue;
             }

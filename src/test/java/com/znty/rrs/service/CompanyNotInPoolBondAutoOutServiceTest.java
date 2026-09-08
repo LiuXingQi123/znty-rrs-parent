@@ -5,6 +5,7 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -52,9 +53,11 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         pool.setPoolType("forbidden");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
 
-        IpAdjustLogBo bond = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("B001");
         bond.setSecurityShortName("某债");
+        bond.setIssuerCode("C001");
+        bond.setIssuerName("测试集团");
         when(autoAdjustMapper.queryBondInPoolWhenCompanyNotIn(eq(15L), eq(15L),
                 any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(bond));
@@ -72,7 +75,9 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         assertThat(scopeCaptor.getValue().getExcludedSecurityTypes()).isEmpty();
         assertThat(bond.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(bond.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
-        assertThat(bond.getAdjustReason()).contains("主体不在池");
+        assertThat(bond.getAdjustReason())
+                .isEqualTo("债券主体不在池债券出池（发行主体：测试集团/C001；主体未在池：债券禁止库）");
+        assertThat(bond.getAdjustAdvice()).isEqualTo(bond.getAdjustReason());
     }
 
     @Test

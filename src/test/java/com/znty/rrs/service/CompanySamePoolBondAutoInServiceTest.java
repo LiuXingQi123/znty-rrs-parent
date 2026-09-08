@@ -5,6 +5,7 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
@@ -70,10 +71,12 @@ public class CompanySamePoolBondAutoInServiceTest {
                 buildRelation(15L, "in_mutex", 3L),
                 buildRelation(3L, "in_restrict", 15L)));
 
-        IpAdjustLogBo bond = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("112008001.IB");
         bond.setSecurityShortName("测试债");
         bond.setSecurityType("mtn");
+        bond.setIssuerCode("C001");
+        bond.setIssuerName("测试集团");
         when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(eq(15L),
                 any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(bond));
@@ -104,12 +107,16 @@ public class CompanySamePoolBondAutoInServiceTest {
         assertThat(inboundLog.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(inboundLog.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(inboundLog.getTargetPoolId()).isEqualTo(15L);
-        assertThat(inboundLog.getAdjustReason()).contains("主体下债券自动入库");
+        assertThat(inboundLog.getAdjustReason())
+                .isEqualTo("主体下债券自动入库（发行主体：测试集团/C001；主体所在池：债券禁止库）");
+        assertThat(inboundLog.getAdjustAdvice()).isEqualTo(inboundLog.getAdjustReason());
         assertThat(outboundLog.getAdjustType()).isEqualTo("互斥调整");
         assertThat(outboundLog.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(outboundLog.getTargetPoolId()).isEqualTo(3L);
         assertThat(outboundLog.getTargetPoolName()).isEqualTo("二级库");
         assertThat(outboundLog.getAdjustBatchNo()).isEqualTo(inboundLog.getAdjustBatchNo());
+        assertThat(outboundLog.getAdjustReason()).contains("池关系触发：调入债券禁止库后自动调出二级库");
+        assertThat(outboundLog.getAdjustAdvice()).isEqualTo(outboundLog.getAdjustReason());
         verify(securityPoolAdjustMapper).deletePoolStatusSoft("112008001.IB", 3L);
     }
 
@@ -140,10 +147,10 @@ public class CompanySamePoolBondAutoInServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
 
-        IpAdjustLogBo matchedBond = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto matchedBond = new ScheduledAdjustCandidateDto();
         matchedBond.setSecurityCode("B001");
         matchedBond.setSecurityType("corporate_bond");
-        IpAdjustLogBo unmatchedBond = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto unmatchedBond = new ScheduledAdjustCandidateDto();
         unmatchedBond.setSecurityCode("B002");
         unmatchedBond.setSecurityType("corporate_bond");
         when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(
@@ -217,7 +224,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(eq(15L),
                 any(CompanyBondTypeScopeBo.class)))
-                .thenReturn(Collections.<IpAdjustLogBo>emptyList());
+                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
 
         ScheduledTaskResult result = service.execute();
 

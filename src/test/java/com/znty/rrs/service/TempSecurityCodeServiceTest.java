@@ -129,10 +129,17 @@ public class TempSecurityCodeServiceTest {
         verify(adjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(adjustMapper, times(2)).addAdjustLog(logCaptor.capture());
-        assertThat(logCaptor.getAllValues().get(0).getAdjustReason()).isEqualTo("债券临时代码调出");
+        assertThat(logCaptor.getAllValues().get(0).getAdjustReason())
+                .isEqualTo("债券临时代码调出（临时代码：TMP001；正式代码：110001.IB）");
+        assertThat(logCaptor.getAllValues().get(0).getAdjustAdvice())
+                .isEqualTo(logCaptor.getAllValues().get(0).getAdjustReason());
         assertThat(logCaptor.getAllValues().get(0).getAdjustMode()).isEqualTo("调出");
         assertThat(logCaptor.getAllValues().get(1).getSecurityCode()).isEqualTo("110001.IB");
         assertThat(logCaptor.getAllValues().get(1).getAdjustMode()).isEqualTo("调入");
+        assertThat(logCaptor.getAllValues().get(1).getAdjustReason())
+                .isEqualTo("研究建议（代码替换：TMP001→110001.IB）");
+        assertThat(logCaptor.getAllValues().get(1).getAdjustAdvice())
+                .isEqualTo(logCaptor.getAllValues().get(1).getAdjustReason());
     }
 
     /** 验证正式码已在池时只出不入。 */

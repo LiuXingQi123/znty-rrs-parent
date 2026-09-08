@@ -35,6 +35,8 @@ public class TempSecurityCodeService {
 
     /** 转正时临时出库原因（对齐老系统「债券临时代码调出」） */
     private static final String REASON_TEMP_OUT = "债券临时代码调出";
+    /** 原在池记录缺少原因时使用的正式代码调入原因 */
+    private static final String REASON_FORMAL_IN = "债券正式代码调入";
     /** 系统操作人 ID（对齐老系统 inputId=0） */
     private static final String SYSTEM_ADJUSTER_ID = "0";
     /** 系统操作人名称 */
@@ -494,7 +496,7 @@ public class TempSecurityCodeService {
     private void convertOnePoolStatus(IpPoolStatusBo poolStatus, TempSecurityCodeBo replaceBo, boolean crmwPool) {
         Date now = replaceBo.getUpdateTime();
         // ① 写临时出库调库日志（直通通过）
-        IpAdjustLogBo outLog = buildTempOutAdjustLog(poolStatus, now);
+        IpAdjustLogBo outLog = buildTempOutAdjustLog(poolStatus, replaceBo, now);
         securityPoolAdjustMapper.addAdjustLog(outLog);
 
         // ② 软删临时在池记录
@@ -535,7 +537,8 @@ public class TempSecurityCodeService {
     /**
      * 构建临时出库调库日志
      */
-    private IpAdjustLogBo buildTempOutAdjustLog(IpPoolStatusBo poolStatus, Date now) {
+    private IpAdjustLogBo buildTempOutAdjustLog(IpPoolStatusBo poolStatus,
+                                                TempSecurityCodeBo replaceBo, Date now) {
         IpAdjustLogBo log = new IpAdjustLogBo();
         log.setSecurityCode(poolStatus.getSecurityCode());
         log.setSecurityShortName(poolStatus.getSecurityShortName());
@@ -553,8 +556,11 @@ public class TempSecurityCodeService {
         log.setAuditStatus(AuditStatus.APPROVED.getCode());
         log.setAdjusterId(SYSTEM_ADJUSTER_ID);
         log.setAdjusterName(SYSTEM_ADJUSTER_NAME);
-        log.setAdjustReason(REASON_TEMP_OUT);
-        log.setAdjustAdvice(REASON_TEMP_OUT);
+        String reason = ScheduledAdjustLogHelper.appendDetails(REASON_TEMP_OUT,
+                "临时代码：" + poolStatus.getSecurityCode(),
+                "正式代码：" + replaceBo.getSecurityCode());
+        log.setAdjustReason(reason);
+        log.setAdjustAdvice(reason);
         log.setSubmitTime(now);
         return log;
     }
@@ -581,8 +587,9 @@ public class TempSecurityCodeService {
         // 调整人/原因继承原在池记录
         log.setAdjusterId(poolStatus.getAdjusterId() != null ? poolStatus.getAdjusterId() : SYSTEM_ADJUSTER_ID);
         log.setAdjusterName(poolStatus.getAdjusterName() != null ? poolStatus.getAdjusterName() : SYSTEM_ADJUSTER_NAME);
-        log.setAdjustReason(poolStatus.getAdjustReason());
-        log.setAdjustAdvice(poolStatus.getAdjustAdvice());
+        String reason = buildFormalInReason(poolStatus, replaceBo);
+        log.setAdjustReason(reason);
+        log.setAdjustAdvice(reason);
         log.setSubmitTime(now);
         return log;
     }
@@ -610,14 +617,24 @@ public class TempSecurityCodeService {
         status.setAuditStatus(AuditStatus.APPROVED.getCode());
         status.setAdjusterId(oldStatus.getAdjusterId() != null ? oldStatus.getAdjusterId() : SYSTEM_ADJUSTER_ID);
         status.setAdjusterName(oldStatus.getAdjusterName() != null ? oldStatus.getAdjusterName() : SYSTEM_ADJUSTER_NAME);
-        status.setAdjustReason(oldStatus.getAdjustReason());
-        status.setAdjustAdvice(oldStatus.getAdjustAdvice());
+        String reason = buildFormalInReason(oldStatus, replaceBo);
+        status.setAdjustReason(reason);
+        status.setAdjustAdvice(reason);
         status.setSubmitTime(now);
         status.setEntryTime(now);
         status.setIsDeleted(0);
         status.setCrteTime(now);
         status.setUpdtTime(now);
         return status;
+    }
+
+    /** 在原在池原因后补充临时代码转正式代码的判断信息。 */
+    private String buildFormalInReason(IpPoolStatusBo poolStatus, TempSecurityCodeBo replaceBo) {
+        String baseReason = poolStatus.getAdjustReason() == null
+                || poolStatus.getAdjustReason().trim().isEmpty()
+                ? REASON_FORMAL_IN : poolStatus.getAdjustReason().trim();
+        return ScheduledAdjustLogHelper.appendDetails(baseReason,
+                "代码替换：" + poolStatus.getSecurityCode() + "→" + replaceBo.getSecurityCode());
     }
 
     /**

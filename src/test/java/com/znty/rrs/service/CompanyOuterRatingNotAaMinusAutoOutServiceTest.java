@@ -5,6 +5,7 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
@@ -94,7 +95,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         pool.setPoolType("blacklist");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
 
-        IpAdjustLogBo company = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setSecurityCode("C90001");
         company.setSecurityShortName("某高评级公司");
         company.setSecurityType("company");
@@ -104,7 +105,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
                 .thenReturn(Collections.singletonList(company));
         when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C90001"), eq(17L),
                 any(CompanyBondTypeScopeBo.class)))
-                .thenReturn(Collections.<IpAdjustLogBo>emptyList());
+                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(9001L);
@@ -181,7 +182,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
                 eq(17L), any(List.class), any(List.class)))
-                .thenReturn(Collections.<IpAdjustLogBo>emptyList());
+                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
 
         ScheduledTaskResult result = service.execute();
 
@@ -217,7 +218,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         pool.setPoolName("黑名单质押库");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
 
-        IpAdjustLogBo company = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setSecurityCode("C90001");
         company.setOuterRating("AAA");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
@@ -260,11 +261,11 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         pool.setPoolType("blacklist");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
 
-        IpAdjustLogBo company = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setSecurityCode("C90001");
         company.setSecurityType("company");
         company.setOuterRating("AA");
-        IpAdjustLogBo bond = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("B001");
         bond.setSecurityShortName("某债");
         bond.setSecurityType("corporate_bond");
@@ -301,7 +302,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
 
-        IpAdjustLogBo bond = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("B001");
         when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C001"), eq(17L),
                 any(CompanyBondTypeScopeBo.class)))

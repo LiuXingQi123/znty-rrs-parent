@@ -4,6 +4,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -55,10 +56,11 @@ public class CrmwExpiredAutoOutServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(crmwPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
 
-        IpAdjustLogBo item = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto item = new ScheduledAdjustCandidateDto();
         item.setSecurityCode("B001");
         item.setCrmwScode("CRMW001");
         item.setCrmwStype("crmw");
+        item.setMaturityDate("20260831");
         when(autoAdjustMapper.queryCrmwPoolByExpired(18L)).thenReturn(Collections.singletonList(item));
         when(crmwPoolAdjustMapper.deletePoolStatusSoft("B001", "CRMW001", "crmw", 18L)).thenReturn(1);
         when(crmwPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
@@ -71,6 +73,9 @@ public class CrmwExpiredAutoOutServiceTest {
         verify(crmwPoolAdjustMapper).addAdjustLog(any(IpAdjustLogBo.class));
         assertThat(item.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(item.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
+        assertThat(item.getAdjustReason())
+                .isEqualTo("CRMW到期自动调出（凭证到期日：2026-08-31；出池口径：到期日早于昨日）");
+        assertThat(item.getAdjustAdvice()).isEqualTo(item.getAdjustReason());
     }
 
     @Test
@@ -95,7 +100,7 @@ public class CrmwExpiredAutoOutServiceTest {
         pool.setPoolName("CRMW库");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(crmwPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
-        IpAdjustLogBo item = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto item = new ScheduledAdjustCandidateDto();
         item.setSecurityCode("B001");
         item.setCrmwScode("CRMW001");
         item.setCrmwStype("crmw");

@@ -5,7 +5,7 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
-import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -172,13 +172,13 @@ public class AutoAdjustService implements RrsScheduledTask {
             }
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
-            List<IpAdjustLogBo> expiredList = autoAdjustMapper.queryPoolSecurityByExpired(poolId);
+            List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryPoolSecurityByExpired(poolId);
             if (expiredList == null || expiredList.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无到期证券");
                 continue;
             }
             int poolCount = 0;
-            for (IpAdjustLogBo sec : expiredList) {
+            for (ScheduledAdjustCandidateDto sec : expiredList) {
                 if (sec == null || !StringUtils.hasText(sec.getSecurityCode())) {
                     continue;
                 }
@@ -203,7 +203,11 @@ public class AutoAdjustService implements RrsScheduledTask {
                 sec.setAuditStatus(AuditStatus.APPROVED.getCode());
                 sec.setAdjusterId(AUTO_ADJUSTER_ID);
                 sec.setAdjusterName(AUTO_ADJUSTER_NAME);
-                sec.setAdjustReason(REASON_EXPIRED_OUT);
+                String reason = ScheduledAdjustLogHelper.appendDetails(REASON_EXPIRED_OUT,
+                        ScheduledAdjustLogHelper.dateDetail("到期日", sec.getMaturityDate()),
+                        "出池口径：到期日早于昨日");
+                sec.setAdjustReason(reason);
+                sec.setAdjustAdvice(reason);
                 sec.setAdjustBatchNo(batchNo);
                 sec.setSubmitTime(submitTime);
                 // 软删成功后再写自动调出日志

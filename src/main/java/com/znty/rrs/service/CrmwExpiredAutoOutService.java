@@ -5,7 +5,7 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
-import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -125,13 +125,13 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
             }
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
-            List<IpAdjustLogBo> expiredList = autoAdjustMapper.queryCrmwPoolByExpired(poolId);
+            List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryCrmwPoolByExpired(poolId);
             if (expiredList == null || expiredList.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无到期 CRMW");
                 continue;
             }
             int poolCount = 0;
-            for (IpAdjustLogBo item : expiredList) {
+            for (ScheduledAdjustCandidateDto item : expiredList) {
                 if (item == null || !StringUtils.hasText(item.getCrmwScode())) {
                     continue;
                 }
@@ -157,8 +157,11 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                 item.setAuditStatus(AuditStatus.APPROVED.getCode());
                 item.setAdjusterId(AUTO_ADJUSTER_ID);
                 item.setAdjusterName(AUTO_ADJUSTER_NAME);
-                item.setAdjustReason(REASON);
-                item.setAdjustAdvice(REASON);
+                String reason = ScheduledAdjustLogHelper.appendDetails(REASON,
+                        ScheduledAdjustLogHelper.dateDetail("凭证到期日", item.getMaturityDate()),
+                        "出池口径：到期日早于昨日");
+                item.setAdjustReason(reason);
+                item.setAdjustAdvice(reason);
                 item.setAdjustBatchNo(batchNo);
                 item.setSubmitTime(submitTime);
                 crmwPoolAdjustMapper.addAdjustLog(item);

@@ -6,7 +6,7 @@ import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
-import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -167,14 +167,14 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
             List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
             // 查询同池待入库债券（含市场过滤）
-            List<IpAdjustLogBo> bondList = autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(
+            List<ScheduledAdjustCandidateDto> bondList = autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(
                     poolId, CompanyBondSyncPolicy.currentTypeScope());
             if (bondList == null || bondList.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待入库同池债券");
                 continue;
             }
             int poolCount = 0;
-            for (IpAdjustLogBo bond : bondList) {
+            for (ScheduledAdjustCandidateDto bond : bondList) {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     continue;
                 }
@@ -206,8 +206,11 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 bond.setAuditStatus(AuditStatus.APPROVED.getCode());
                 bond.setAdjusterId(AUTO_ADJUSTER_ID);
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
-                bond.setAdjustReason(REASON);
-                bond.setAdjustAdvice(REASON);
+                String reason = ScheduledAdjustLogHelper.appendDetails(REASON,
+                        ScheduledAdjustLogHelper.issuerDetail(bond),
+                        ScheduledAdjustLogHelper.poolDetail("主体所在池", pool, poolId));
+                bond.setAdjustReason(reason);
+                bond.setAdjustAdvice(reason);
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 // 写自动入池日志

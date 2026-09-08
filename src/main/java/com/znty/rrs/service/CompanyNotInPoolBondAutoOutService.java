@@ -6,7 +6,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
-import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
@@ -138,6 +138,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
             Long bondPoolId = pair[0];
             Long companyPoolId = pair[1];
             InvestmentPoolBo bondPool = poolMap.get(bondPoolId);
+            InvestmentPoolBo companyPool = poolMap.get(companyPoolId);
             if (bondPool == null) {
                 warnDetail(detail, "债券池[" + bondPoolId + "]不存在，跳过映射 "
                         + bondPoolId + "←主体池" + companyPoolId);
@@ -148,7 +149,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                         + "]为 CRMW 组合池，主体旗下证券不能通过普通池状态调出，跳过该映射");
                 continue;
             }
-            List<IpAdjustLogBo> bonds = autoAdjustMapper.queryBondInPoolWhenCompanyNotIn(
+            List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryBondInPoolWhenCompanyNotIn(
                     bondPoolId, companyPoolId, CompanyBondSyncPolicy.currentTypeScope());
             if (bonds == null || bonds.isEmpty()) {
                 infoDetail(detail, "债券池[" + bondPool.getPoolName() + "](" + bondPoolId
@@ -156,7 +157,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 continue;
             }
             int pairCount = 0;
-            for (IpAdjustLogBo bond : bonds) {
+            for (ScheduledAdjustCandidateDto bond : bonds) {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     continue;
                 }
@@ -173,8 +174,11 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 bond.setAuditStatus(AuditStatus.APPROVED.getCode());
                 bond.setAdjusterId(AUTO_ADJUSTER_ID);
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
-                bond.setAdjustReason(REASON);
-                bond.setAdjustAdvice(REASON);
+                String reason = ScheduledAdjustLogHelper.appendDetails(REASON,
+                        ScheduledAdjustLogHelper.issuerDetail(bond),
+                        ScheduledAdjustLogHelper.poolDetail("主体未在池", companyPool, companyPoolId));
+                bond.setAdjustReason(reason);
+                bond.setAdjustAdvice(reason);
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 securityPoolAdjustMapper.addAdjustLog(bond);

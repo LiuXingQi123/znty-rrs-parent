@@ -59,10 +59,11 @@
          到期宽限对齐老系统 AdjustRuleByExpired：enddate < trunc(sysdate-1)，
          即到期日早于昨天（T-2），到期当天与到期次日仍不出池。
          大类对齐老 ptype=4000 或 2000：仅债、股；CRMW 走独立任务 crmw_expired_auto_out -->
-    <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+    <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
                ,ips.security_short_name
                ,ips.security_type
+               ,si.maturity_date
         FROM ip_pool_status ips
         INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
@@ -84,10 +85,12 @@
       3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
       4) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
     -->
-    <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+    <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
+               ,bond.issuer_code
+               ,bond.issuer AS issuer_name
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
@@ -143,10 +146,12 @@
       4) 不排除临时代码已更新（与 Job 版 queryCompanyNewBondForAutoIn 区分）
       5) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
     -->
-    <select id="queryCompanyBondSamePoolForAutoIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+    <select id="queryCompanyBondSamePoolForAutoIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
+               ,bond.issuer_code
+               ,bond.issuer AS issuer_name
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
@@ -211,7 +216,7 @@
 
     <!-- 条款（一）（三）共用：当前已在来源池、尚未在目标池的主体。 -->
     <select id="queryCompanyInPoolNotInTarget"
-            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+            resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
                ,MAX(ips.security_short_name) AS security_short_name
                ,'company' AS security_type
@@ -238,7 +243,7 @@
       一年以前忽略；未知档位不参与比较；认可机构由配置参数控制。
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
-            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+            resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         <!-- 近一年认可机构外评，并转成可比较档位。 -->
         WITH rated AS (
             SELECT r.s_info_compcode
@@ -339,7 +344,7 @@
       limitPoolIds 为额外拦截；空则不加这段。
     -->
     <select id="queryCompanyByNotLowOuterRatingInPool"
-            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+            resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         <!-- 近一年认可机构外评，并转成可比较档位。 -->
         WITH rated AS (
             SELECT r.s_info_compcode
@@ -458,7 +463,7 @@
 
     <!-- 外评出池后顺带调出：主体旗下已在同一目标池的债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyBondInSamePoolForAutoOut"
-            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+            resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
@@ -485,7 +490,7 @@
     </select>
 
     <!-- CRMW 到期自动出池：凭证到期日早于昨天（T-2），对齐 AdjustRuleCrmwDueOutPool + AdjustRuleByExpired -->
-    <select id="queryCrmwPoolByExpired" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+    <select id="queryCrmwPoolByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
                ,ips.security_short_name
                ,ips.security_type
@@ -493,6 +498,7 @@
                ,ips.crmw_scode
                ,ips.crmw_mktcode
                ,ips.crmw_stype
+               ,crmw.maturity_date
         FROM ip_pool_status_crmw ips
         INNER JOIN rrs_securityinfo crmw ON crmw.wind_code = ips.crmw_scode
         WHERE ips.target_pool_id = #{poolId}
@@ -509,10 +515,12 @@
 
     <!-- 主体不在指定池时，将其旗下已在债券池的债调出。
          当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制。 -->
-    <select id="queryBondInPoolWhenCompanyNotIn" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+    <select id="queryBondInPoolWhenCompanyNotIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
+               ,bond.issuer_code
+               ,bond.issuer AS issuer_name
         FROM ip_pool_status ips
         INNER JOIN rrs_securityinfo bond ON bond.wind_code = ips.security_code
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type

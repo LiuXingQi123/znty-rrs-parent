@@ -4,6 +4,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
@@ -63,17 +64,17 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         pool.setPoolType("blacklist");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
 
-        IpAdjustLogBo company = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setSecurityCode("C90005");
         company.setSecurityShortName("某地产公司");
         company.setSecurityType("company");
         company.setOuterRating("AA-");
         when(autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 eq(AutoAdjustRestrictHelper.COMPANY_FORBIDDEN_POOL_ID), eq(17L)))
-                .thenReturn(Collections.<IpAdjustLogBo>emptyList());
+                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
         when(autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 eq(AutoAdjustRestrictHelper.KEY_WATCH_POOL_ID), eq(17L)))
-                .thenReturn(Collections.<IpAdjustLogBo>emptyList());
+                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
         when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L), any(List.class)))
                 .thenReturn(Collections.singletonList(company));
         when(ruleService.evaluate("C90005"))
@@ -138,7 +139,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
     /** 验证调整原因合并展示所有命中条件。 */
     @Test
     public void buildAdjustReason_ShouldJoinHitClauses() {
-        IpAdjustLogBo company = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setInForbiddenPool(1);
         company.setInRestrictedPool(1);
         company.setInLowOuterRating(1);
@@ -177,10 +178,10 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         pool.setPoolType("blacklist");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
 
-        IpAdjustLogBo forbidden = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto forbidden = new ScheduledAdjustCandidateDto();
         forbidden.setSecurityCode("C90005");
         forbidden.setSecurityShortName("某地产公司");
-        IpAdjustLogBo lowRating = new IpAdjustLogBo();
+        ScheduledAdjustCandidateDto lowRating = new ScheduledAdjustCandidateDto();
         lowRating.setSecurityCode("C90005");
         lowRating.setOuterRating("AA-");
         when(autoAdjustMapper.queryCompanyInPoolNotInTarget(
@@ -188,7 +189,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .thenReturn(Collections.singletonList(forbidden));
         when(autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 eq(AutoAdjustRestrictHelper.KEY_WATCH_POOL_ID), eq(17L)))
-                .thenReturn(Collections.<IpAdjustLogBo>emptyList());
+                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
         when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L), any(List.class)))
                 .thenReturn(Collections.singletonList(lowRating));
         when(ruleService.evaluate("C90005"))
@@ -256,9 +257,9 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         pool.setPoolName("黑名单质押库");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(autoAdjustMapper.queryCompanyInPoolNotInTarget(any(Long.class), eq(17L)))
-                .thenReturn(Collections.<IpAdjustLogBo>emptyList());
+                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
         when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L), any(List.class)))
-                .thenReturn(Collections.<IpAdjustLogBo>emptyList());
+                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
 
         ScheduledTaskResult result = service.execute();
 
