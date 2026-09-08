@@ -8,7 +8,7 @@
 
 ## 1. 页面概览
 
-单 Vue 实例（`el: '#crmw_pool_adjust_approve'`），`currentPage='detail'`（默认直接进详情页）。
+单 Vue 实例（`el: '#crmw_pool_adjust_approve'`），`currentPage='detail'`（默认直接进详情页）。证券基本信息字段与调库页保持一致，在“展望评级”后只读展示申请快照中的 `guarantor` 担保人，“担保人主体内评分”展示提交时联动保存的 AIS 评分；重新校验时携带快照中的 `guarantorId`。
 
 **入口模式 `entryMode`**：`process`（我的事宜处理，默认）/ `next`（下一步校验确认）。
 

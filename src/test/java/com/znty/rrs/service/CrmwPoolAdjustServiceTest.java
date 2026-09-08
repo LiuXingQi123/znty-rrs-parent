@@ -2,9 +2,11 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.entity.bo.FlowDefinitionBo;
+import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustSharedData;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustReq;
@@ -13,8 +15,10 @@ import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
 import com.znty.rrs.mapper.FlowMapper;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,6 +41,96 @@ import static org.mockito.Mockito.when;
  * 确认 CRMW 链路与证券池链路同构，并落实 CRMW 链路特有的组合键校验。
  */
 public class CrmwPoolAdjustServiceTest {
+
+    /** CRMW 标的证券所选担保人应回填名称、代码和最新内评。 */
+    @Test
+    public void applySelectedGuarantorGradeShouldUseLatestGrade() {
+        CommonService commonService = mock(CommonService.class);
+        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "commonService", commonService);
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("BOND001");
+        GuarantorGradeDto guarantor = new GuarantorGradeDto();
+        guarantor.setWindcode("C10008");
+        guarantor.setWindname("测试担保人");
+        guarantor.setTotalScore("1");
+        when(commonService.queryGuarantorGrade("BOND001", "C10008")).thenReturn(guarantor);
+
+        ReflectionTestUtils.invokeMethod(service, "applySelectedGuarantorGrade", securityInfo, "C10008");
+
+        assertThat(securityInfo.getGuarantor()).isEqualTo("测试担保人");
+        assertThat(securityInfo.getGuarantorId()).isEqualTo("C10008");
+        assertThat(securityInfo.getInnerGuarantorRating()).isEqualTo("1");
+    }
+
+    /** CRMW 标的证券不允许提交不属于当前证券的担保人。 */
+    @Test
+    public void applySelectedGuarantorGradeShouldRejectIneligibleGuarantor() {
+        CommonService commonService = mock(CommonService.class);
+        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "commonService", commonService);
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("BOND001");
+        when(commonService.queryGuarantorGrade("BOND001", "C10007")).thenReturn(null);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
+                service, "applySelectedGuarantorGrade", securityInfo, "C10007"))
+                .isInstanceOf(BizException.class)
+                .hasMessage("所选担保人不属于当前证券或主体类型不符合要求");
+    }
+
+    /** CRMW 提交快照必须使用后端校验后的所选担保人。 */
+    @Test
+    public void postSubmitProcessShouldUseSelectedGuarantorFromSharedData() throws Exception {
+        CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
+        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
+        SecurityInfoBo master = new SecurityInfoBo();
+        master.setWindCode("BOND001");
+        when(mapper.querySecurityBoByCode("BOND001")).thenReturn(master);
+
+        SecurityInfoBo frontendInfo = new SecurityInfoBo();
+        frontendInfo.setInnerGuarantorRating("前端旧评分");
+        CrmwPoolAdjustSubmitReq req = new CrmwPoolAdjustSubmitReq();
+        req.setSecurityCode("BOND001");
+        req.setCrmwScode("CRMW001");
+        req.setCrmwStype("crmw");
+        req.setAdjusterId("1");
+        req.setSecurityInfo(frontendInfo);
+
+        SecurityInfoBo serverInfo = new SecurityInfoBo();
+        serverInfo.setGuarantor("当次选择担保人");
+        serverInfo.setGuarantorId("C10008");
+        serverInfo.setInnerGuarantorRating("1");
+        Object shared = buildSubmitSharedData(serverInfo);
+
+        ReflectionTestUtils.invokeMethod(service, "postSubmitProcess", req, shared,
+                Collections.singletonList(100L));
+
+        ArgumentCaptor<AdjustSecuritySnapshotCrmwBo> snapshotCaptor =
+                ArgumentCaptor.forClass(AdjustSecuritySnapshotCrmwBo.class);
+        verify(mapper).addAdjustSecuritySnapshotCrmw(snapshotCaptor.capture());
+        assertThat(snapshotCaptor.getValue().getGuarantor()).isEqualTo("当次选择担保人");
+        assertThat(snapshotCaptor.getValue().getGuarantorId()).isEqualTo("C10008");
+        assertThat(snapshotCaptor.getValue().getInnerGuarantorRating()).isEqualTo("1");
+    }
+
+    /** 构建 CRMW 调库提交共享数据测试对象。 */
+    private Object buildSubmitSharedData(SecurityInfoBo securityInfo) throws Exception {
+        Class<?> sharedClass = Class.forName("com.znty.rrs.service.CrmwPoolAdjustService$SubmitSharedData");
+        Constructor<?> constructor = sharedClass.getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+        return constructor.newInstance(
+                securityInfo,
+                new HashMap<Long, InvestmentPoolBo>(),
+                Collections.<Long>emptySet(),
+                new HashMap<Long, Map<String, List<Long>>>(),
+                false,
+                false,
+                false,
+                new HashMap<Long, Object>(),
+                new CrmwPoolAdjustService.BatchNoContext());
+    }
 
     /** 当前池查询必须使用完整 CRMW 凭证与标的证券组合键。 */
     @Test

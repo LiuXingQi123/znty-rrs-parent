@@ -46,6 +46,7 @@ import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.common.GuarantorGradeDto;
 import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDto;
@@ -138,6 +139,10 @@ public class CrmwPoolAdjustService {
     /** 系统附件业务服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;    private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
+
+    /** 通用查询服务 */
+    @Resource
+    private CommonService commonService;
 
     /** 评级下调判定组件（主体/展望/担保人评级下调判断，查 wind_cbondissuerrating） */
     @Resource
@@ -761,6 +766,8 @@ public class CrmwPoolAdjustService {
         if (CRMW_SECURITY_TYPE.equals(securityInfo.getSecurityType())) {
             throw new BizException("调库对象不能是 CRMW 凭证");
         }
+        // 担保人名称、代码和内评以页面所选 Wind 关系及 AIS 最新评分为准
+        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1304,7 +1311,12 @@ public class CrmwPoolAdjustService {
             return;
         }
         // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
-        req.setSecurityInfo(buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo()));
+        SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo());
+        // 担保人名称、代码和内评使用提交阶段校验后的所选担保人，禁止前端旧值进入快照
+        mergedSecurityInfo.setGuarantor(shared.securityInfo.getGuarantor());
+        mergedSecurityInfo.setGuarantorId(shared.securityInfo.getGuarantorId());
+        mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
+        req.setSecurityInfo(mergedSecurityInfo);
         // 按调库日志落 CRMW 证券信息快照
         saveAdjustSecuritySnapshotsCrmw(req, logIds);
     }
@@ -1599,6 +1611,8 @@ public class CrmwPoolAdjustService {
         if (CRMW_SECURITY_TYPE.equals(securityInfo.getSecurityType())) {
             throw new BizException("调库对象不能是 CRMW 凭证");
         }
+        // 校验口径与页面展示一致，不读取证券主数据中的担保人评分逗号串
+        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
         SecurityInfoBo crmwInfo = crmwPoolAdjustMapper.querySecurityBoByCode(req.getCrmwScode());
         if (crmwInfo == null || !CRMW_SECURITY_TYPE.equals(crmwInfo.getSecurityType())) {
             throw new BizException("CRMW凭证不存在或类型不正确");
@@ -1649,13 +1663,32 @@ public class CrmwPoolAdjustService {
         // 当前项目主体债入库规则未落地（P2 阻塞），暂仅加载不使用，待主体债入库规则接入后启用
         shared.setSecurityInObservePool(crmwPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(crmwPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        // 评级下调三标志：主体/展望按发行人评级判定；CRMW 凭证级无担保人，担保人标志恒 false（查 wind_cbondissuerrating）
+        // 评级下调三标志：主体/展望按发行人评级判定，担保人按页面所选主体代码判定
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
-        shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(null));
+        shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(req.getGuarantorCode()));
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         return shared;
+    }
+
+    /**
+     * 校验所选担保人属于当前证券，并将其名称、代码及 AIS 最新内评放入本次业务对象。
+     */
+    private void applySelectedGuarantorGrade(SecurityInfoBo securityInfo, String guarantorCode) {
+        securityInfo.setInnerGuarantorRating(null);
+        if (guarantorCode == null || guarantorCode.trim().isEmpty()) {
+            return;
+        }
+        String selectedCode = guarantorCode.trim();
+        // 按证券代码查询 Wind 担保人关系并读取最新内评，不依赖证券主数据的 guarantor_id
+        GuarantorGradeDto grade = commonService.queryGuarantorGrade(securityInfo.getWindCode(), selectedCode);
+        if (grade == null) {
+            throw new BizException("所选担保人不属于当前证券或主体类型不符合要求");
+        }
+        securityInfo.setGuarantor(grade.getWindname());
+        securityInfo.setGuarantorId(selectedCode);
+        securityInfo.setInnerGuarantorRating(grade.getTotalScore());
     }
 
     /**

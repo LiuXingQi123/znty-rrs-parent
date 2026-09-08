@@ -113,6 +113,7 @@ public class BatchCrmwPoolAdjustServiceTest {
         security.setSecurityType("mtn");
         security.setCrmwScode("CRMW001.IB");
         security.setCrmwName("某CRMW凭证A");
+        security.setGuarantorCode("C10008");
         req.setSecurities(Collections.singletonList(security));
 
         BatchCrmwAdjustDto dto = service.checkAdjust(req);
@@ -125,6 +126,7 @@ public class BatchCrmwPoolAdjustServiceTest {
         verify(crmwPoolAdjustService).checkCrmwAdjust(captor.capture());
         assertThat(captor.getValue().getCrmwScode()).isEqualTo("CRMW001.IB");
         assertThat(captor.getValue().getCrmwName()).isEqualTo("某CRMW凭证A");
+        assertThat(captor.getValue().getGuarantorCode()).isEqualTo("C10008");
         assertThat(captor.getValue().getItems().get(0).getPoolType()).isEqualTo("crmw");
     }
 
@@ -145,6 +147,7 @@ public class BatchCrmwPoolAdjustServiceTest {
         item.setSecurityType("mtn");
         item.setCrmwScode("CRMW001.IB");
         item.setCrmwName("某CRMW凭证A");
+        item.setGuarantorCode("C10008");
         item.setTargetPoolId(18L);
         item.setAdjustMode("调入");
         item.setFlowId(1L);
@@ -160,6 +163,7 @@ public class BatchCrmwPoolAdjustServiceTest {
         assertThat(submitReq.getSecurityCode()).isEqualTo("MTN001.IB");
         assertThat(submitReq.getCrmwScode()).isEqualTo("CRMW001.IB");
         assertThat(submitReq.getCrmwStype()).isEqualTo("crmw");
+        assertThat(submitReq.getGuarantorCode()).isEqualTo("C10008");
         assertThat(submitReq.getAdjustType()).isEqualTo("手动批量调整");
         assertThat(submitReq.getItems().get(0).getPoolType()).isEqualTo("crmw");
         assertThat(submitReq.getItems().get(0).getCreditReportFileIndexes()).containsExactly(0);

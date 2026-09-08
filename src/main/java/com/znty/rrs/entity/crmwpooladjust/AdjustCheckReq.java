@@ -28,6 +28,9 @@ public class AdjustCheckReq {
     /** CRMW 证券类型 */
     private String crmwStype;
 
+    /** 当前选择的担保人 Wind 主体代码 */
+    private String guarantorCode;
+
     /** 待校验的调库项列表 */
     private List<CheckItem> items;
 

@@ -1468,7 +1468,9 @@ public class SecurityPoolAdjustService {
         }
         // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
         SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo());
-        // 担保人内评使用提交阶段按所选担保人从 AIS 查询的最新值，禁止前端旧值进入快照
+        // 担保人名称、代码和内评均使用提交阶段校验后的所选担保人，避免快照保留主档旧值
+        mergedSecurityInfo.setGuarantor(shared.securityInfo.getGuarantor());
+        mergedSecurityInfo.setGuarantorId(shared.securityInfo.getGuarantorId());
         mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
         req.setSecurityInfo(mergedSecurityInfo);
         // 按调库日志落证券信息快照
@@ -1809,7 +1811,7 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 校验所选担保人属于当前证券，并将其 AIS 最新内评放入本次校验使用的临时对象。
+     * 校验所选担保人属于当前证券，并将其名称、代码及 AIS 最新内评放入本次业务对象。
      */
     private void applySelectedGuarantorGrade(SecurityInfoBo securityInfo, String guarantorCode) {
         securityInfo.setInnerGuarantorRating(null);
@@ -1822,6 +1824,8 @@ public class SecurityPoolAdjustService {
         if (grade == null) {
             throw new BizException("所选担保人不属于当前证券或主体类型不符合要求");
         }
+        securityInfo.setGuarantor(grade.getWindname());
+        securityInfo.setGuarantorId(selectedCode);
         securityInfo.setInnerGuarantorRating(grade.getTotalScore());
     }
 

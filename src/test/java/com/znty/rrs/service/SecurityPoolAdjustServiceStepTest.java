@@ -72,10 +72,13 @@ public class SecurityPoolAdjustServiceStepTest {
         securityInfo.setWindCode("DBB002.IB");
         GuarantorGradeDto guarantor = new GuarantorGradeDto();
         guarantor.setWindcode("C10008");
+        guarantor.setWindname("测试担保人");
         when(commonService.queryGuarantorGrade("DBB002.IB", "C10008")).thenReturn(guarantor);
 
         ReflectionTestUtils.invokeMethod(service, "applySelectedGuarantorGrade", securityInfo, "C10008");
 
+        assertThat(securityInfo.getGuarantor()).isEqualTo("测试担保人");
+        assertThat(securityInfo.getGuarantorId()).isEqualTo("C10008");
         assertThat(securityInfo.getInnerGuarantorRating()).isNull();
     }
 
@@ -95,7 +98,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 .hasMessage("所选担保人不属于当前证券或主体类型不符合要求");
     }
 
-    /** 提交快照中的担保人内评必须使用后端已查询的 AIS 最新值。 */
+    /** 提交快照中的担保人名称、代码和内评必须使用后端校验后的所选担保人。 */
     @Test
     public void postSubmitProcessShouldUseLatestGuarantorGradeFromSharedData() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
@@ -115,6 +118,8 @@ public class SecurityPoolAdjustServiceStepTest {
 
         Object shared = buildSubmitSharedData();
         SecurityInfoBo serverInfo = (SecurityInfoBo) ReflectionTestUtils.getField(shared, "securityInfo");
+        serverInfo.setGuarantor("当次选择担保人");
+        serverInfo.setGuarantorId("C10008");
         serverInfo.setInnerGuarantorRating("1");
 
         ReflectionTestUtils.invokeMethod(service, "postSubmitProcess", req, shared,
@@ -123,7 +128,11 @@ public class SecurityPoolAdjustServiceStepTest {
         ArgumentCaptor<AdjustSecuritySnapshotBo> snapshotCaptor =
                 ArgumentCaptor.forClass(AdjustSecuritySnapshotBo.class);
         verify(mapper).addAdjustSecuritySnapshot(snapshotCaptor.capture());
+        assertThat(snapshotCaptor.getValue().getGuarantor()).isEqualTo("当次选择担保人");
+        assertThat(snapshotCaptor.getValue().getGuarantorId()).isEqualTo("C10008");
         assertThat(snapshotCaptor.getValue().getInnerGuarantorRating()).isEqualTo("1");
+        assertThat(req.getSecurityInfo().getGuarantor()).isEqualTo("当次选择担保人");
+        assertThat(req.getSecurityInfo().getGuarantorId()).isEqualTo("C10008");
         assertThat(req.getSecurityInfo().getInnerGuarantorRating()).isEqualTo("1");
     }
 

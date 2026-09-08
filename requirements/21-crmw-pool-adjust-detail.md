@@ -29,15 +29,16 @@
 ### 3.1 view 只读模式（默认）
 
 - `isViewMode=true`、`isSecurityInfoReadonly=true`（所有证券字段 `el-input :disabled`）。
-- 展示：证券基本信息（`el-descriptions` 3 列，字段与单位同 [11]：赎回/含权债剩余期限(**年**)，剩余期限(**天**，旁同步展示年)）、CRMW 基本信息（只读）、当前所在池、调库记录表（`showAdjustLogSection=true`）、当前流程状态表（`showFlowStatusSection=true`）。
+- 展示：证券基本信息（`el-descriptions` 3 列，共 29 项，字段及顺序同 [11]；在“展望评级”后只读展示 `guarantor` 担保人；赎回/含权债剩余期限为**年**，剩余期限为**天**且旁同步展示年）、CRMW 基本信息（只读）、当前所在池、调库记录表（`showAdjustLogSection=true`）、当前流程状态表（`showFlowStatusSection=true`）。
 - `showLogUploadActions=false`（信评报告/其他材料的「选择报告」「上传附件」按钮均隐藏）。
 - 终态记录（`20/21/99/-1`）同样只读展示。
 
 ### 3.2 adjust 可调整模式（首次调库提交）
 
 - `entryMode='adjust'`：隐藏调库记录区与流程状态区，显示调库操作区（步骤1选池）。
+- 证券基本信息中的“担保人”改为与证券池调库一致的下拉：候选类型按债券/ABS 口径控制，单候选默认选中，多候选默认不选且下一步必须选择；变更后联动展示所选主体的 AIS 最新内评分。
 - 步骤1：左右双栏「可调入库」（绿）+「可调出库」（红），树形 `el-table`，叶子节点可勾选；可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起（CRMW 池树不含该节点时即默认全部收起），可调出库默认全部展开；互斥校验（`handleInPoolSelect`/`handleOutPoolSelect`）。
-- 步骤2（`goToStep2`）：调 `checkCrmwAdjust` → 展示校验结果表 + 原因建议。
+- 步骤2（`goToStep2`）：携带所选 `guarantorCode` 调 `checkCrmwAdjust` → 展示校验结果表 + 原因建议。
 - 提交（`handleSubmit`→`confirmFlowSelection`→`submitAdjustLog`）：调 `addCrmwAdjustLogWithFiles`（multipart），成功后 `backToList`（先 `closeActiveTab()`，失败再回页内列表）。顶部「返回」同样先关动态页签，禁止 `history.back()`。
 
 ### 3.3 详情页不实现修改节点重新提交
@@ -61,8 +62,8 @@
 | `crmwPoolAdjust/queryCrmwPoolStatus` | securityCode | `SecurityPoolStatusDto` | 当前证券/主体所在池 |
 | `crmwPoolAdjust/queryCrmwAdjustLogList` | securityCode, adjustBatchNo? | `List<AdjustLogDto>` | 调库记录（无批次时排除终态） |
 | `crmwPoolAdjust/queryCrmwAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表 |
-| `crmwPoolAdjust/checkCrmwAdjust` | `AdjustCheckReq` | `AdjustCheckDto` | adjust 模式校验确认 |
-| `crmwPoolAdjust/addCrmwAdjustLog`（JSON）/ `addCrmwAdjustLogWithFiles`（multipart） | `CrmwPoolAdjustSubmitReq` | `AdjustSubmitDto` | adjust 模式首次提交 |
+| `crmwPoolAdjust/checkCrmwAdjust` | `AdjustCheckReq`（含 guarantorCode） | `AdjustCheckDto` | adjust 模式校验确认，后端复核所选担保人 |
+| `crmwPoolAdjust/addCrmwAdjustLog`（JSON）/ `addCrmwAdjustLogWithFiles`（multipart） | `CrmwPoolAdjustSubmitReq`（含 guarantorCode） | `AdjustSubmitDto` | adjust 模式首次提交，快照保存所选担保人及最新内评分 |
 | `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
 | `reports/queryInReportPage` / `queryOutReportPage` | 分页+筛选 | PageResult | 信评报告弹窗 |

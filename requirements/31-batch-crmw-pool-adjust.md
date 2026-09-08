@@ -36,7 +36,7 @@
 编排层 `BatchCrmwPoolAdjustService`：
 
 - `checkAdjust` 逐组合组装与单笔相同的 `AdjustCheckReq`，直接调用 `CrmwPoolAdjustService.checkCrmwAdjust`（与证券池批量调用 `checkAdjust` 同构）；结果项身份、流程候选与 `warnings` 透传单笔返回，不在批量侧重写规则。调入「已在池」按凭证+标的组合判断。
-- CRMW 单笔 `AdjustCheckReq` **没有** `releaseRules` / `guarantorCode`（凭证级无担保人、目标池不是信用债大库，不走主体债矩阵）。页面工作台仍保留与证券池批量相同的「放开规则 / 担保人」控件；`releaseRules=yes` 仅在提交时把说明追加到调整意见/调整说明，**不改变**单笔校验结果。
+- CRMW 单笔 `AdjustCheckReq` 和 `CrmwPoolAdjustSubmitReq` 均接收 `guarantorCode`；批量编排层把每个标的选择的担保人透传给单笔校验与提交，用于关系复核、担保人评级下调判断及快照保存。目标池仍不是信用债大库，不走主体债矩阵；`releaseRules=yes` 仅在提交时把说明追加到调整意见/调整说明，**不改变**单笔校验结果。
 - `addAdjustLog` 按组合分组后委托 `submitAdjustLog`，整批共享附件与 `BatchNoContext`。
 - 手工项 `adjustType=手动批量调整`；批次号前缀仍为 `CRMW`。
 - 整批一个事务；约 30 秒防重复键含 `crmwScode`。

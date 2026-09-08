@@ -11,7 +11,7 @@
 单 Vue 实例（`el: '#crmw_pool_adjust'`），`currentPage` 在 `'list'`/`'detail'` 两视图间切换：
 
 - **list 页**：CRMW 凭证 section（单选 radio + 分页表格）+ 可绑定证券搜索区 + 可绑定证券分页表格。
-- **detail 页**：返回按钮 + 证券基本信息（字段与单位同 [04]/[11]：`date_exists` **天**，含权/赎回行权/回购剩余期限 **年**）+ CRMW 基本信息（只读）+ 当前所在池 + 调库操作卡（步骤 1 选池 / 步骤 2 校验确认）+ 流程选择弹窗 + 信评报告选择弹窗。
+- **detail 页**：返回按钮 + 证券基本信息（字段与顺序同 [04]/[11]；在“展望评级”后展示担保人下拉，候选及类型口径与证券池调库一致，单候选默认选中、多候选必须手工选择，选择后联动只读的“担保人主体内评分”；`date_exists` **天**，含权/赎回行权/回购剩余期限 **年**）+ CRMW 基本信息（只读）+ 当前所在池 + 调库操作卡（步骤 1 选池 / 步骤 2 校验确认）+ 流程选择弹窗 + 信评报告选择弹窗。
 
 **初始化**（`created`）：`this.applyUrlCrmwOrList()`。URL 带 `crmwScode`/`securityCode` 时选中凭证并进入该标的调库（查询/历史/事宜入口）；无参数则并发 `loadCrmwList()` + `loadList()`。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。默认用户取 `RrsAuth`。详情「返回」先 `closeActiveTab()`，失败再回页内列表。
 
@@ -78,7 +78,7 @@
 
 ### 3.2 接口调用顺序
 
-1. **`goToStep2()`**：`syncSelectedPoolsFromTables()` 规范化；组装 `items`（调入 `adjustMode:'调入'`，调出 `adjustMode:'调出'`）；调 `POST /api/v1/crmwPoolAdjust/checkCrmwAdjust`，请求体 `AdjustCheckReq`：`{ securityCode, securityShortName, securityType, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`；用 `adjustCheckSeq` 防旧请求覆盖；返回 `AdjustCheckDto` 映射为 `adjustReviewList`，`adjustStep=2`。
+1. **`goToStep2()`**：`syncSelectedPoolsFromTables()` 规范化；有担保人候选但尚未选择时提示并阻断；组装 `items`（调入 `adjustMode:'调入'`，调出 `adjustMode:'调出'`）；调 `POST /api/v1/crmwPoolAdjust/checkCrmwAdjust`，请求体 `AdjustCheckReq`：`{ securityCode, securityShortName, securityType, guarantorCode, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`；用 `adjustCheckSeq` 防旧请求覆盖；返回 `AdjustCheckDto` 映射为 `adjustReviewList`，`adjustStep=2`。
 
 2. **`handleSubmit()`**：校验 `validCount>0` 且 `allValidRowsHaveFlow`；打开流程选择弹窗，为每条 `validManualAdjustReviewList` 选流程，`confirmFlowSelection()` → `submitAdjustLog()`。
 
@@ -89,7 +89,7 @@
 入口 `CrmwPoolAdjustService.checkCrmwAdjust(AdjustCheckReq)`，五阶段：
 
 1. **前置校验** `validateCheckAdjustReq`：`securityCode` 非空、`items` 非空、每项 `poolType` 必须 `PoolType.CRMW.getCode()`（`'crmw'`），否则 `BizException("CRMW池调整仅支持选择 CRMW库")`。
-2. **参数初始化** `loadSharedData`：
+2. **参数初始化** `loadSharedData`：校验 `guarantorCode` 属于当前证券允许的 Wind 担保关系，并以 AIS 最新评分覆盖本次业务对象的担保人名称、代码和内评分；未选择时不参与担保人评级下调判断。
    - `querySecurityBoByCode(securityCode)`：null → `"证券不存在"`；`securityType=='crmw'` → `"调库对象不能是 CRMW 凭证"`。
    - 全量 `investmentPoolMapper.queryPoolList()` → `poolMap`；`validateCheckTargetPools` 校验目标池均为 CRMW 池。
    - `querySecurityCurrentPoolIdList`（`ip_pool_status_crmw` 中 `audit_status='20' AND pool_type='crmw'`）→ `currentPoolIds`。
@@ -139,8 +139,8 @@
 | `querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 标的证券详情（不能是 crmw） |
 | `queryCrmwAdjustPoolList` | securityCode, adjustDirection, currentUserId, targetPoolId | `List<PoolDto>` | 可调入/调出 CRMW 投资池列表（含互斥关系） |
 | `queryCrmwPoolStatus` | securityCode | `SecurityPoolStatusDto` | 证券/主体当前所在 CRMW 池 |
-| `checkCrmwAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 调库可行性预校验 + 流程候选 |
-| `addCrmwAdjustLog`（application/json） | `CrmwPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
+| `checkCrmwAdjust` | securityCode, securityShortName, securityType, guarantorCode, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 调库可行性预校验 + 流程候选；所选担保人后端复核 |
+| `addCrmwAdjustLog`（application/json） | `CrmwPoolAdjustSubmitReq`（含 guarantorCode） | `AdjustSubmitDto` | 提交调库申请（无附件）；快照保存所选担保人及 AIS 最新内评分 |
 | `addCrmwAdjustLogWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `AdjustSubmitDto` | 提交调库申请（带附件，**前端实际调用入口**） |
 | `queryCrmwAdjustLogList` | securityCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录（无批次仅返回未终结流程） |
 | `queryCrmwAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 同批次流程步骤列表 |
