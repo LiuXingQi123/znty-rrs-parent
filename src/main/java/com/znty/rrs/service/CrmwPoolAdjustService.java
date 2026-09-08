@@ -485,11 +485,45 @@ public class CrmwPoolAdjustService {
     }
 
     /**
-     * 提交调库申请内部实现。
+     * 判断指定流程是否为直通（无人工审批节点）。
+     *
+     * <p>供 CRMW 批量调整在整批提交前做直通预检，口径与单笔 {@link #isDirectFlow} 一致。
+     *
+     * @param flowId  流程定义 ID，可为 null
+     * @param flowKey 流程 Key，可为 null/空
+     * @return true=直通或无流程
      */
-    private AdjustSubmitDto submitAdjustLog(CrmwPoolAdjustSubmitReq req,
-                                            SysAttachmentService.SubmissionFiles submissionFiles,
-                                            BatchNoContext batchNoContext) {
+    public boolean isDirectAdjustFlow(Long flowId, String flowKey) {
+        if (flowId == null && (flowKey == null || flowKey.isEmpty())) {
+            return true;
+        }
+        Long resolvedId = flowId;
+        if (resolvedId == null) {
+            FlowDefinitionBo definition = flowMapper.queryActiveFlowByKey(flowKey);
+            resolvedId = definition != null ? definition.getId() : null;
+        }
+        if (resolvedId == null) {
+            // 配置了 key 但解析不到定义时，按非直通走后续提交校验
+            return false;
+        }
+        FlowSnapshot snapshot = buildFlowSnapshot(resolvedId);
+        return snapshot != null && isDirectFlow(snapshot);
+    }
+
+    /**
+     * 提交调库申请核心实现。
+     *
+     * <p>与 {@link #addCrmwAdjustLog(CrmwPoolAdjustSubmitReq, List)} 的区别：
+     * 调用方自行提供附件上下文与批次号上下文，供 CRMW 批量调整按组合循环提交时整批共享。
+     *
+     * @param req             单组合调库提交请求
+     * @param submissionFiles 已创建的附件上下文（可为整批共享）
+     * @param batchNoContext  批次号上下文（可为整批共享）
+     * @return 提交结果
+     */
+    public AdjustSubmitDto submitAdjustLog(CrmwPoolAdjustSubmitReq req,
+                                           SysAttachmentService.SubmissionFiles submissionFiles,
+                                           BatchNoContext batchNoContext) {
         // ══ 第一阶段：前置校验 ══
         validateSubmitReq(req);
         // 检查短时间内是否已提交相同申请
@@ -1046,18 +1080,18 @@ public class CrmwPoolAdjustService {
     /**
      * 规则：CRMW组合校验（调入侧，提交阶段）
      *
-     * <p>调入 CRMW 池时校验凭证状态：
-     * <ul>
-     *   <li>凭证已在池：该 CRMW 凭证已在目标池（audit_status=20）则禁止重复调入</li>
-     * </ul>
-     * 对应老项目 checkBasisAndProductInPool 的 checkCrmwInPool；组合与池组 pending 在统一提交校验中处理。
+     * <p>调入 CRMW 池时按凭证+标的组合判断是否已在池：
+     * 同一凭证可绑定不同标的分别入池；仅当该组合已在目标池（audit_status=20）时禁止重复调入。
+     * 对应老项目 checkOutPool / 7 参 checkCrmwInPool 的组合键；池组 pending 在统一提交校验中处理。
      * 「池必填凭证」已在 validateSubmitReq 强制（CRMW 提交必带 crmwScode）。
      */
     private void checkCrmwInboundCombination(CrmwPoolAdjustSubmitReq req, CrmwPoolAdjustSubmitReq.AdjustItem item) {
         String crmwScode = req.getCrmwScode();
-        // 凭证已在池：同一 CRMW 凭证已在目标池，不可重复调入
-        if (crmwPoolAdjustMapper.queryCrmwAlreadyInPool(crmwScode, req.getCrmwStype(), item.getTargetPoolId())) {
-            throw new BizException("信用缓释凭证代码（" + crmwScode + "）已经在池！");
+        // 组合已在池：同一凭证+标的已在目标池，不可重复调入
+        if (crmwPoolAdjustMapper.queryCrmwComboInPool(crmwScode, req.getCrmwStype(),
+                req.getSecurityCode(), item.getTargetPoolId())) {
+            throw new BizException("信用缓释凭证代码（" + crmwScode + "）和债券代码（"
+                    + req.getSecurityCode() + "）组合已经在池！");
         }
     }
 
@@ -1495,6 +1529,9 @@ public class CrmwPoolAdjustService {
         // ══ 第四阶段：调出校验 ══
         resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys));
 
+        // 回填凭证+标的身份，供批量编排层按单笔结果透传（对齐证券池 checkAdjust）
+        fillCheckResultIdentity(req, shared, resultItems);
+
         // ══ 第五阶段：流程类型判断 ══
         List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
 
@@ -1669,10 +1706,6 @@ public class CrmwPoolAdjustService {
             // 构建调库校验上下文
             AdjustCheckContext ctx = buildCheckContext(item, poolCurrentCount, shared);
             List<String> failures = checkInConditions(ctx);
-            if (crmwPoolAdjustMapper.queryCrmwAlreadyInPool(req.getCrmwScode(),
-                    req.getCrmwStype(), item.getTargetPoolId())) {
-                failures.add("信用缓释凭证已经在目标投资池中");
-            }
 
             AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
             resultItem.setTargetPoolId(item.getTargetPoolId());
@@ -2424,9 +2457,9 @@ public class CrmwPoolAdjustService {
             ctx.setRequestInPoolIds(Collections.<Long>emptySet());
             String failure;
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
-                boolean alreadyIn = crmwPoolAdjustMapper.queryCrmwAlreadyInPool(log.getCrmwScode(),
-                        log.getCrmwStype(), pool.getId());
-                failure = alreadyIn ? "信用缓释凭证已在目标投资池中" : firstFinalFailure(
+                boolean alreadyIn = crmwPoolAdjustMapper.queryCrmwComboInPool(log.getCrmwScode(),
+                        log.getCrmwStype(), log.getSecurityCode(), pool.getId());
+                failure = alreadyIn ? "信用缓释凭证与标的证券组合已在目标投资池中" : firstFinalFailure(
                         inCheckPoolLocked(ctx), inCheckVariety(ctx), inCheckSourcePool(ctx),
                         inCheckRestrictPool(ctx), inCheckForbiddenPool(ctx));
                 int increment = inboundIncrements.getOrDefault(pool.getId(), 0);
@@ -2780,12 +2813,13 @@ public class CrmwPoolAdjustService {
     /**
      * 规则：证券是否已在目标池中
      *
-     * <p>以 ip_pool_status_crmw 中 audit_status='20' 的有效记录为准，重复调入无实际意义。
+     * <p>以 ip_pool_status_crmw 中 audit_status='20' 的有效组合为准（凭证+标的），
+     * 同一凭证绑定其他标的不算重复入池。
      */
     private String inCheckSecurityAlreadyInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
         if (poolId != null && ctx.getCurrentPoolIds().contains(poolId)) {
-            return "证券已在目标投资池中";
+            return "信用缓释凭证与标的证券组合已在目标投资池中";
         }
         return null;
     }
@@ -3178,6 +3212,42 @@ public class CrmwPoolAdjustService {
     }
 
     /**
+     * 将本次校验的凭证+标的身份回填到结果项（空字段才写，避免覆盖关联扩批已填值）。
+     */
+    private void fillCheckResultIdentity(AdjustCheckReq req, AdjustSharedData shared,
+                                         List<AdjustCheckDto.CheckResultItem> resultItems) {
+        if (resultItems == null || resultItems.isEmpty()) {
+            return;
+        }
+        SecurityInfoBo securityInfo = shared.getSecurityInfo();
+        String securityCode = securityInfo != null && securityInfo.getWindCode() != null
+                ? securityInfo.getWindCode() : req.getSecurityCode();
+        String securityShortName = securityInfo != null && securityInfo.getShortName() != null
+                ? securityInfo.getShortName() : req.getSecurityShortName();
+        String securityType = securityInfo != null && securityInfo.getSecurityType() != null
+                ? securityInfo.getSecurityType() : req.getSecurityType();
+        String crmwScode = shared.getCrmwScode() != null ? shared.getCrmwScode() : req.getCrmwScode();
+        String crmwStype = shared.getCrmwStype() != null ? shared.getCrmwStype() : req.getCrmwStype();
+        String crmwName = req.getCrmwName();
+        String sourceKey = (crmwScode == null ? "" : crmwScode) + "|" + (securityCode == null ? "" : securityCode);
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
+                item.setSecurityCode(securityCode);
+                item.setSecurityShortName(securityShortName);
+                item.setSecurityType(securityType);
+            }
+            if (item.getCrmwScode() == null || item.getCrmwScode().isEmpty()) {
+                item.setCrmwScode(crmwScode);
+                item.setCrmwName(crmwName);
+                item.setCrmwStype(crmwStype);
+            }
+            if (item.getSourceSecurityCode() == null || item.getSourceSecurityCode().isEmpty()) {
+                item.setSourceSecurityCode(sourceKey);
+            }
+        }
+    }
+
+    /**
      * 构建自动生成的联动/互斥调整项校验结果
      *
      * <p>与手动项校验流程完全相同，区别在于：
@@ -3208,11 +3278,6 @@ public class CrmwPoolAdjustService {
         AdjustCheckContext ctx = buildCheckContext(fakeItem, poolCurrentCount, shared);
 
         List<String> failures = AdjustMode.IN.getCode().equals(adjustMode) ? checkInConditions(ctx) : checkOutConditions(ctx);
-        if (AdjustMode.IN.getCode().equals(adjustMode)
-                && crmwPoolAdjustMapper.queryCrmwAlreadyInPool(shared.getCrmwScode(),
-                shared.getCrmwStype(), targetPoolId)) {
-            failures.add("信用缓释凭证已经在目标投资池中");
-        }
         if (AdjustMode.OUT.getCode().equals(adjustMode)
                 && !crmwPoolAdjustMapper.queryCrmwComboInPool(shared.getCrmwScode(),
                 shared.getCrmwStype(), shared.getSecurityInfo().getWindCode(), targetPoolId)) {

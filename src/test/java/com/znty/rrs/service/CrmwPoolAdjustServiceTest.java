@@ -33,8 +33,8 @@ import static org.mockito.Mockito.when;
 /**
  * CRMW 池调库服务单元测试。
  *
- * <p>覆盖报告必填校验（{@code checkReportRequired}）与 CRMW组合校验（调入凭证已在池、调出组合在池），
- * 确认 CRMW 链路与证券池链路同构，并落实 CRMW 链路特有的凭证级校验。
+ * <p>覆盖报告必填校验（{@code checkReportRequired}）与 CRMW组合校验（调入/调出均按凭证+标的组合判断在池），
+ * 确认 CRMW 链路与证券池链路同构，并落实 CRMW 链路特有的组合键校验。
  */
 public class CrmwPoolAdjustServiceTest {
 
@@ -90,32 +90,32 @@ public class CrmwPoolAdjustServiceTest {
         ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal", null);
     }
 
-    /** CRMW组合校验（调入）：凭证已在目标池时应抛出异常。 */
+    /** CRMW组合校验（调入）：同一凭证+标的已在目标池时应抛出异常。 */
     @Test
-    public void checkCrmwInboundCombinationShouldFailWhenCrmwAlreadyInPool() {
+    public void checkCrmwInboundCombinationShouldFailWhenComboAlreadyInPool() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
-        // 凭证已在池
-        when(mapper.queryCrmwAlreadyInPool(anyString(), anyString(), anyLong())).thenReturn(true);
+        // 组合已在池
+        when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(true);
         try {
             ReflectionTestUtils.invokeMethod(service, "checkCrmwInboundCombination", buildCrmwReq(), buildItem());
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
-            assertThat(e.getMessage()).contains("已经在池");
+            assertThat(e.getMessage()).contains("组合已经在池");
             return;
         }
-        throw new AssertionError("凭证已在池时应抛出异常");
+        throw new AssertionError("组合已在池时应抛出异常");
     }
 
-    /** CRMW组合校验（调入）：凭证不在池时应通过，pending 由组合池组查询统一处理。 */
+    /** CRMW组合校验（调入）：同一凭证绑定其他标的时允许调入。 */
     @Test
-    public void checkCrmwInboundCombinationShouldPassWhenCrmwFree() {
+    public void checkCrmwInboundCombinationShouldPassWhenSameCrmwDifferentBond() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
-        // 凭证不在池，应通过
-        when(mapper.queryCrmwAlreadyInPool(anyString(), anyString(), anyLong())).thenReturn(false);
+        // 本组合不在池（即使同凭证其它标的已在池）
+        when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(false);
         ReflectionTestUtils.invokeMethod(service, "checkCrmwInboundCombination", buildCrmwReq(), buildItem());
     }
 

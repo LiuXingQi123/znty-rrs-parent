@@ -19,6 +19,9 @@ public class AdjustCheckReq {
     /** 证券类型 */
     private String securityType;
 
+    /** CRMW 凭证名称 */
+    private String crmwName;
+
     /** CRMW 凭证代码 */
     private String crmwScode;
 

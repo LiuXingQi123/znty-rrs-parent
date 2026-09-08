@@ -181,12 +181,7 @@ public interface CrmwPoolAdjustMapper {
     /** 根据证券类型编码查询所属大类（dict_security_type.category_type） */
     String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);
 
-    /** 查询 CRMW 凭证是否已在目标池（audit_status=20），用于调入「凭证已在池」校验 */
-    boolean queryCrmwAlreadyInPool(@Param("crmwScode") String crmwScode,
-                                   @Param("crmwStype") String crmwStype,
-                                   @Param("targetPoolId") Long targetPoolId);
-
-    /** 查询 CRMW 凭证与标的证券组合是否在目标池（audit_status=20），用于调出「组合在池」校验 */
+    /** 查询 CRMW 凭证与标的证券组合是否在目标池（audit_status=20），用于调入/调出「组合在池」校验 */
     boolean queryCrmwComboInPool(@Param("crmwScode") String crmwScode,
                                  @Param("crmwStype") String crmwStype,
                                  @Param("securityCode") String securityCode,

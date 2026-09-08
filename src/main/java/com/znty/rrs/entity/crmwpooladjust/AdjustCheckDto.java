@@ -31,6 +31,27 @@ public class AdjustCheckDto {
     @Data
     public static class CheckResultItem {
 
+        /** 标的证券代码 */
+        private String securityCode;
+
+        /** 标的证券简称 */
+        private String securityShortName;
+
+        /** 标的证券类型 */
+        private String securityType;
+
+        /** CRMW 凭证名称 */
+        private String crmwName;
+
+        /** CRMW 凭证代码 */
+        private String crmwScode;
+
+        /** CRMW 证券类型 */
+        private String crmwStype;
+
+        /** 触发扩批的主组合键（crmwScode|securityCode） */
+        private String sourceSecurityCode;
+
         /** 目标投资池 ID */
         private Long targetPoolId;
 
