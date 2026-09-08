@@ -28,6 +28,17 @@ public class CommonFileServiceTest {
     }
 
     @Test
+    public void downloadTemplate_CrmwPoolImport_ReturnsBytes() {
+        CommonFileReq req = new CommonFileReq();
+        req.setTemplateCode("crmw_pool_import");
+        CommonFileDto dto = service.downloadTemplate(req);
+        assertNotNull(dto);
+        assertNotNull(dto.getContentBase64());
+        assertTrue(dto.getContentBase64().length() > 0);
+        assertTrue(dto.getFileSize() != null && dto.getFileSize() > 0);
+    }
+
+    @Test
     public void downloadTemplate_UnknownCode_Throws() {
         CommonFileReq req = new CommonFileReq();
         req.setTemplateCode("not_exists_tpl");

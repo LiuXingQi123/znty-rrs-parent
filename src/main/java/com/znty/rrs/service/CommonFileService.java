@@ -30,6 +30,7 @@ public class CommonFileService {
         Map<String, String> map = new HashMap<>();
         map.put("security_pool_import", "xlsx/security_pool_import.xlsx");
         map.put("company_pool_import", "xlsx/company_pool_import.xlsx");
+        map.put("crmw_pool_import", "xlsx/crmw_pool_import.xlsx");
         TEMPLATE_PATH_MAP = Collections.unmodifiableMap(map);
     }
 
