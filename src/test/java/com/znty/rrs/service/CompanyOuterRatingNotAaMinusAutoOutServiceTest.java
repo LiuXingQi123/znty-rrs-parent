@@ -49,6 +49,23 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
                 .contains("禁止库 15");
     }
 
+    /** 未配置有效外部评级机构时应阻断本轮自动出池。 */
+    @Test
+    public void execute_ShouldFailWhenNoAgencyConfigured() {
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        ExternalRatingAgencyService agencyService = mock(ExternalRatingAgencyService.class);
+        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        ReflectionTestUtils.setField(service, "externalRatingAgencyService", agencyService);
+        when(agencyService.queryRequiredAgencyCodeList())
+                .thenThrow(new BizException("未配置有效外部评级机构"));
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("未配置有效外部评级机构");
+    }
+
     /** 验证高外评且其余条件不成立的主体自动调出。 */
     @Test
     public void execute_ShouldAutoOutCompanyWithHighOuterRating() {
@@ -82,7 +99,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         company.setSecurityShortName("某高评级公司");
         company.setSecurityType("company");
         company.setOuterRating("AAA");
-        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), eq(Collections.<Long>emptyList())))
+        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
+                eq(17L), eq(Collections.<Long>emptyList()), any(List.class)))
                 .thenReturn(Collections.singletonList(company));
         when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C90001"), eq(17L),
                 any(CompanyBondTypeScopeBo.class)))
@@ -161,7 +179,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         pool.setId(17L);
         pool.setPoolName("黑名单质押库");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
-        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), any(List.class)))
+        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
+                eq(17L), any(List.class), any(List.class)))
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
 
         ScheduledTaskResult result = service.execute();
@@ -201,7 +220,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         IpAdjustLogBo company = new IpAdjustLogBo();
         company.setSecurityCode("C90001");
         company.setOuterRating("AAA");
-        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), any(List.class)))
+        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
+                eq(17L), any(List.class), any(List.class)))
                 .thenReturn(Collections.singletonList(company));
         when(autoAdjustMapper.queryCompanyInPool("C90001", PledgeBlacklistRuleService.FORBIDDEN_POOL_ID))
                 .thenReturn(true);
@@ -248,7 +268,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         bond.setSecurityCode("B001");
         bond.setSecurityShortName("某债");
         bond.setSecurityType("corporate_bond");
-        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(eq(17L), eq(Collections.<Long>emptyList())))
+        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
+                eq(17L), eq(Collections.<Long>emptyList()), any(List.class)))
                 .thenReturn(Collections.singletonList(company));
         when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C90001"), eq(17L),
                 any(CompanyBondTypeScopeBo.class)))
@@ -329,8 +350,12 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
      */
     private void bindPledgeBlacklistRule(CompanyOuterRatingNotAaMinusAutoOutService service,
                                          AutoAdjustMapper autoAdjustMapper) {
+        ExternalRatingAgencyService agencyService = mock(ExternalRatingAgencyService.class);
+        when(agencyService.queryRequiredAgencyCodeList()).thenReturn(Collections.singletonList("2"));
         PledgeBlacklistRuleService ruleService = new PledgeBlacklistRuleService();
         ReflectionTestUtils.setField(ruleService, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(ruleService, "externalRatingAgencyService", agencyService);
         ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", ruleService);
+        ReflectionTestUtils.setField(service, "externalRatingAgencyService", agencyService);
     }
 }

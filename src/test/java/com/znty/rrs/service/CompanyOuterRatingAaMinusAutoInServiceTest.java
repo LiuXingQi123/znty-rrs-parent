@@ -49,6 +49,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         PledgeBlacklistRuleService ruleService = mock(PledgeBlacklistRuleService.class);
         ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", ruleService);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        bindExternalRatingAgency(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评AA-及以下主体自动入池");
@@ -73,7 +74,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         when(autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 eq(AutoAdjustRestrictHelper.KEY_WATCH_POOL_ID), eq(17L)))
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
-        when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L)))
+        when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L), any(List.class)))
                 .thenReturn(Collections.singletonList(company));
         when(ruleService.evaluate("C90005"))
                 .thenReturn(new PledgeBlacklistRuleService.Decision(false, true, false));
@@ -114,7 +115,24 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .contains("17（黑名单质押库）")
                 .contains("公司信用债禁止库 15")
                 .contains("重点观察名单 23")
-                .contains("2/3/4/5/6/7/13/14/19/20");
+                .contains("配置表中的有效机构");
+    }
+
+    /** 未配置有效外部评级机构时应阻断本轮自动入池。 */
+    @Test
+    public void execute_ShouldFailWhenNoAgencyConfigured() {
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        ExternalRatingAgencyService agencyService = mock(ExternalRatingAgencyService.class);
+        CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        ReflectionTestUtils.setField(service, "externalRatingAgencyService", agencyService);
+        when(agencyService.queryRequiredAgencyCodeList())
+                .thenThrow(new BizException("未配置有效外部评级机构"));
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("未配置有效外部评级机构");
     }
 
     /** 验证调整原因合并展示所有命中条件。 */
@@ -146,6 +164,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         PledgeBlacklistRuleService ruleService = mock(PledgeBlacklistRuleService.class);
         ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", ruleService);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        bindExternalRatingAgency(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评AA-及以下主体自动入池");
@@ -170,7 +189,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         when(autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 eq(AutoAdjustRestrictHelper.KEY_WATCH_POOL_ID), eq(17L)))
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
-        when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L)))
+        when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L), any(List.class)))
                 .thenReturn(Collections.singletonList(lowRating));
         when(ruleService.evaluate("C90005"))
                 .thenReturn(new PledgeBlacklistRuleService.Decision(true, true, false));
@@ -202,6 +221,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        bindExternalRatingAgency(service);
         when(scheduledTaskMapper.queryTaskByCode(CompanyOuterRatingAaMinusAutoInService.TASK_CODE))
                 .thenReturn(null);
 
@@ -224,6 +244,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        bindExternalRatingAgency(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评AA-及以下主体自动入池");
@@ -236,7 +257,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(autoAdjustMapper.queryCompanyInPoolNotInTarget(any(Long.class), eq(17L)))
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
-        when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L)))
+        when(autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(eq(17L), any(List.class)))
                 .thenReturn(Collections.<IpAdjustLogBo>emptyList());
 
         ScheduledTaskResult result = service.execute();
@@ -254,5 +275,12 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         assertThat(ids).containsExactly(15L, 16L);
         assertThatThrownBy(() -> service.parsePoolIds("{}")).isInstanceOf(BizException.class);
         assertThatThrownBy(() -> service.parsePoolIds(null)).isInstanceOf(BizException.class);
+    }
+
+    /** 为任务注入有效外部评级机构配置。 */
+    private void bindExternalRatingAgency(CompanyOuterRatingAaMinusAutoInService service) {
+        ExternalRatingAgencyService agencyService = mock(ExternalRatingAgencyService.class);
+        when(agencyService.queryRequiredAgencyCodeList()).thenReturn(Collections.singletonList("2"));
+        ReflectionTestUtils.setField(service, "externalRatingAgencyService", agencyService);
     }
 }

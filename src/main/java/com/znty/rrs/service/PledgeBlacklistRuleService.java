@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 /** 黑名单质押库三条件统一判定服务。 */
@@ -22,6 +23,9 @@ public class PledgeBlacklistRuleService {
     /** 自动调库规则查询数据访问组件。 */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
+    /** 外部评级机构配置服务。 */
+    @Resource
+    private ExternalRatingAgencyService externalRatingAgencyService;
 
     /**
      * 按当前已生效池状态判断主体是否应在黑名单质押库。
@@ -49,7 +53,9 @@ public class PledgeBlacklistRuleService {
         boolean inForbidden = projectedInPool(companyCode, FORBIDDEN_POOL_ID, inIds, outIds);
         // 计算本批完成后主体在重点观察名单的预期状态
         boolean inKeyWatch = projectedInPool(companyCode, KEY_WATCH_POOL_ID, inIds, outIds);
-        boolean lowOuterRating = autoAdjustMapper.queryCompanyHasLowOuterRating(companyCode);
+        // 使用当前有效外部评级机构配置判断低外评条件
+        List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
+        boolean lowOuterRating = autoAdjustMapper.queryCompanyHasLowOuterRating(companyCode, agencyCodes);
         return new Decision(inForbidden, lowOuterRating, inKeyWatch);
     }
 

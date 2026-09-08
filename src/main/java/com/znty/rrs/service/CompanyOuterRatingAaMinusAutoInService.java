@@ -68,7 +68,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体入池目标池）：可选；与投资池「关系配置 → 自动调入规则」中绑定本任务的池取并集后扫描\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：满足下列任一且尚未在目标池则自动入池：（一）当前在公司信用债禁止库 15；（二）近一年认可外评孰低为 AA-及以下；（三）当前在重点观察名单 23\n"
-                    + "评级口径：近一年（日历年）内 10 家认可机构多评级取孰低，一年以前忽略；仅认机构 2/3/4/5/6/7/13/14/19/20；近一年无认可外评不因（二）入库\n"
+                    + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低，一年以前忽略；近一年无认可外评不因（二）入库\n"
                     + "限制规则：主体已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
@@ -93,6 +93,9 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     /** 黑名单质押库三条件统一判定服务 */
     @Resource
     private PledgeBlacklistRuleService pledgeBlacklistRuleService;
+    /** 外部评级机构配置服务。 */
+    @Resource
+    private ExternalRatingAgencyService externalRatingAgencyService;
 
     /**
      * 返回与库表绑定的任务编码
@@ -159,6 +162,8 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * @return 本轮入池主体数
      */
     private int doAutoIn(String taskName, TaskDetailLog detail) {
+        // 本轮任务统一使用同一份有效外部评级机构配置
+        List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
         // 从扩展参数与关系配置解析入池目标池
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "目标池列表 poolIds=" + poolIds);
@@ -182,7 +187,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
             // 分别查询（一）（二）（三）后在内存合并去重
-            List<IpAdjustLogBo> companies = queryInboundCandidates(poolId);
+            List<IpAdjustLogBo> companies = queryInboundCandidates(poolId, agencyCodes);
             if (companies == null || companies.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待入池黑名单主体");
                 continue;
@@ -247,9 +252,10 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * 分别查询条款（一）（二）（三），按主体代码合并并回填命中标记。
      *
      * @param targetPoolId 入池目标池
+     * @param agencyCodes 有效外部评级机构编码
      * @return 去重后的待入池主体
      */
-    private List<IpAdjustLogBo> queryInboundCandidates(Long targetPoolId) {
+    private List<IpAdjustLogBo> queryInboundCandidates(Long targetPoolId, List<String> agencyCodes) {
         Map<String, IpAdjustLogBo> merged = new LinkedHashMap<>();
         // 条款（一）：当前在禁止库且尚未在目标池
         mergeInboundHits(merged, autoAdjustMapper.queryCompanyInPoolNotInTarget(
@@ -258,7 +264,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         mergeInboundHits(merged, autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 AutoAdjustRestrictHelper.KEY_WATCH_POOL_ID, targetPoolId), false, false, true);
         // 条款（二）：近一年孰低 AA-及以下且尚未在目标池
-        mergeInboundHits(merged, autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(targetPoolId),
+        mergeInboundHits(merged, autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(targetPoolId, agencyCodes),
                 false, true, false);
         return new ArrayList<>(merged.values());
     }

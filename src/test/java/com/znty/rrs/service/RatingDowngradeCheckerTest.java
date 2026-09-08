@@ -9,9 +9,11 @@ import org.springframework.jdbc.BadSqlGrammarException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.sql.SQLException;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,14 +25,19 @@ import static org.mockito.Mockito.when;
 public class RatingDowngradeCheckerTest {
 
     private WindRatingMapper windRatingMapper;
+    private ExternalRatingAgencyService externalRatingAgencyService;
     private RatingDowngradeChecker checker;
 
     @Before
     public void setUp() {
         windRatingMapper = mock(WindRatingMapper.class);
+        externalRatingAgencyService = mock(ExternalRatingAgencyService.class);
+        when(externalRatingAgencyService.queryActiveAgencyCodeList())
+                .thenReturn(Collections.singletonList("2"));
         checker = new RatingDowngradeChecker();
         // 注入 mock 的 WindRatingMapper
         ReflectionTestUtils.setField(checker, "windRatingMapper", windRatingMapper);
+        ReflectionTestUtils.setField(checker, "externalRatingAgencyService", externalRatingAgencyService);
     }
 
     // ===== 主体评级下调 =====
@@ -44,7 +51,7 @@ public class RatingDowngradeCheckerTest {
         rating.setCreditRating("AA");
         rating.setPreCreditRating("AAA");
         rating.setCreditRatingChange("下调");
-        when(windRatingMapper.queryLatestRating("C10001")).thenReturn(rating);
+        when(windRatingMapper.queryLatestRating("C10001", Collections.singletonList("2"))).thenReturn(rating);
 
         assertThat(checker.isIssuerDowngraded(sec)).isTrue();
     }
@@ -57,7 +64,7 @@ public class RatingDowngradeCheckerTest {
         rating.setCreditRating("AAA");
         rating.setPreCreditRating("AAA");
         rating.setCreditRatingChange("维持");
-        when(windRatingMapper.queryLatestRating("C10001")).thenReturn(rating);
+        when(windRatingMapper.queryLatestRating("C10001", Collections.singletonList("2"))).thenReturn(rating);
 
         assertThat(checker.isIssuerDowngraded(sec)).isFalse();
     }
@@ -66,7 +73,7 @@ public class RatingDowngradeCheckerTest {
     public void 主体无wind记录应返回false() {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setIssuerCode("C10001");
-        when(windRatingMapper.queryLatestRating("C10001")).thenReturn(null);
+        when(windRatingMapper.queryLatestRating("C10001", Collections.singletonList("2"))).thenReturn(null);
 
         assertThat(checker.isIssuerDowngraded(sec)).isFalse();
     }
@@ -76,7 +83,7 @@ public class RatingDowngradeCheckerTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setIssuerCode("C10001");
         // 模拟 H2 测试库无 wind 表场景
-        when(windRatingMapper.queryLatestRating("C10001"))
+        when(windRatingMapper.queryLatestRating("C10001", Collections.singletonList("2")))
                 .thenThrow(new BadSqlGrammarException("query", "SELECT ...", new SQLException("table not found")));
 
         assertThat(checker.isIssuerDowngraded(sec)).isFalse();
@@ -92,7 +99,7 @@ public class RatingDowngradeCheckerTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setIssuerCode("");
         assertThat(checker.isIssuerDowngraded(sec)).isFalse();
-        verify(windRatingMapper, never()).queryLatestRating(anyString());
+        verify(windRatingMapper, never()).queryLatestRating(anyString(), anyList());
     }
 
     // ===== 展望评级下调 =====
@@ -139,7 +146,7 @@ public class RatingDowngradeCheckerTest {
         assertThat(checker.isGuarantorDowngraded(null)).isFalse();
         assertThat(checker.isGuarantorDowngraded("")).isFalse();
         assertThat(checker.isGuarantorDowngraded("  ")).isFalse();
-        verify(windRatingMapper, never()).queryLatestRating(anyString());
+        verify(windRatingMapper, never()).queryLatestRating(anyString(), anyList());
     }
 
     @Test
@@ -148,14 +155,22 @@ public class RatingDowngradeCheckerTest {
         rating.setCreditRating("A");
         rating.setPreCreditRating("AA");
         rating.setCreditRatingChange("下调");
-        when(windRatingMapper.queryLatestRating("C90005")).thenReturn(rating);
+        when(windRatingMapper.queryLatestRating("C90005", Collections.singletonList("2"))).thenReturn(rating);
 
         assertThat(checker.isGuarantorDowngraded("C90005")).isTrue();
     }
 
     @Test
     public void 担保人无wind记录应返回false() {
-        when(windRatingMapper.queryLatestRating("C90005")).thenReturn(null);
+        when(windRatingMapper.queryLatestRating("C90005", Collections.singletonList("2"))).thenReturn(null);
         assertThat(checker.isGuarantorDowngraded("C90005")).isFalse();
+    }
+
+    @Test
+    public void 未配置外部评级机构应failOpen返回false() {
+        when(externalRatingAgencyService.queryActiveAgencyCodeList()).thenReturn(Collections.<String>emptyList());
+
+        assertThat(checker.isGuarantorDowngraded("C90006")).isFalse();
+        verify(windRatingMapper, never()).queryLatestRating(anyString(), anyList());
     }
 }

@@ -75,7 +75,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds 省略或 <code>[]</code>：不追加额外拦截（条款（一）（三）已在扫描中排除 15/23）\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：已在目标池，且不在 15、不在 23、近一年认可外评孰低不属于 AA-及以下（含无认可外评）时，自动调出主体\n"
-                    + "评级口径：近一年（日历年）内 10 家认可机构多评级取孰低；仅认机构 2/3/4/5/6/7/13/14/19/20；无认可外评按条件（二）不满足处理\n"
+                    + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低；无认可外评按条件（二）不满足处理\n"
                     + "联动处理：主体成功出池后，继续调出该主体在同一目标池内的旗下债券\n"
                     + "限制规则：主体命中调出限制池时跳过该主体；旗下债命中时阻断主体联动并回滚本轮任务\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
@@ -98,6 +98,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     /** 黑名单质押库三条件统一判定 */
     @Resource
     private PledgeBlacklistRuleService pledgeBlacklistRuleService;
+    /** 外部评级机构配置服务。 */
+    @Resource
+    private ExternalRatingAgencyService externalRatingAgencyService;
 
     /**
      * 返回与库表绑定的任务编码
@@ -164,6 +167,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
      * @return 本轮出池条数（含同池旗下债）
      */
     private int doAutoOut(String taskName, TaskDetailLog detail) {
+        // 本轮任务统一使用同一份有效外部评级机构配置
+        List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
         // 读取本任务扩展参数
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
@@ -196,7 +201,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
             // 条款（二）反面：已在目标池且近一年孰低不属于 AA-及以下（含无认可外评）
             List<IpAdjustLogBo> companies = autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
-                    poolId, limitPoolIds);
+                    poolId, limitPoolIds, agencyCodes);
             // 使用统一规则筛出三个条件全部不满足的主体
             companies = filterCompaniesNotMatchingBlacklistConditions(companies);
             if (companies == null || companies.isEmpty()) {

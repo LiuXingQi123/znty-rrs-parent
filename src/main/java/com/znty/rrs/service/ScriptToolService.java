@@ -2394,6 +2394,7 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "rule_category", "规则分类")
         )));
         groups.add(buildTableGroup("dict-grade", "字典与评级规则", "znty_rrs", Arrays.asList(
+                buildTable("znty_rrs", "dict_external_rating_agency", "外部评级机构字典"),
                 buildTable("znty_rrs", "dict_security_type", "证券类型字典"),
                 buildTable("znty_rrs", "credit_bond_pool_grade_rule", "信用债大库评级准入规则"),
                 buildTable("znty_rrs", "credit_bond_inner_rating_grade", "主体内评分档"),

@@ -21,7 +21,17 @@
             SELECT 1
             FROM ais_inv_ods.wind_cbondissuerrating r
             WHERE r.s_info_compcode = #{companyCode}
-              AND r.b_info_creditratingagency IN ('2', '3', '4', '5', '6', '7', '13', '14', '19', '20')
+            <choose>
+                <when test="agencyCodes != null and agencyCodes.size() &gt; 0">
+                  AND r.b_info_creditratingagency IN
+                  <foreach collection="agencyCodes" item="agencyCode" open="(" separator="," close=")">
+                      #{agencyCode}
+                  </foreach>
+                </when>
+                <otherwise>
+                  AND 1 = 0
+                </otherwise>
+            </choose>
               AND COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000')
                     &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
               AND TRIM(r.b_info_creditrating) IN (
@@ -225,7 +235,7 @@
 
     <!--
       条款（二）：近一年认可机构外评孰低为 AA-及以下、且尚未在目标池。
-      一年以前忽略；未知档位不参与比较；机构 IN (2,3,4,5,6,7,13,14,19,20)
+      一年以前忽略；未知档位不参与比较；认可机构由配置参数控制。
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
@@ -264,7 +274,17 @@
               AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating != ''
-              AND r.b_info_creditratingagency IN ('2', '3', '4', '5', '6', '7', '13', '14', '19', '20')
+            <choose>
+                <when test="agencyCodes != null and agencyCodes.size() &gt; 0">
+                  AND r.b_info_creditratingagency IN
+                  <foreach collection="agencyCodes" item="agencyCode" open="(" separator="," close=")">
+                      #{agencyCode}
+                  </foreach>
+                </when>
+                <otherwise>
+                  AND 1 = 0
+                </otherwise>
+            </choose>
               AND COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000')
                     &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
         )
@@ -355,7 +375,17 @@
               AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
               AND r.b_info_creditrating != ''
-              AND r.b_info_creditratingagency IN ('2', '3', '4', '5', '6', '7', '13', '14', '19', '20')
+            <choose>
+                <when test="agencyCodes != null and agencyCodes.size() &gt; 0">
+                  AND r.b_info_creditratingagency IN
+                  <foreach collection="agencyCodes" item="agencyCode" open="(" separator="," close=")">
+                      #{agencyCode}
+                  </foreach>
+                </when>
+                <otherwise>
+                  AND 1 = 0
+                </otherwise>
+            </choose>
               AND COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000')
                     &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
         )

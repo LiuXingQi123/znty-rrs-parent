@@ -1,14 +1,18 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import org.junit.Before;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +21,8 @@ public class PledgeBlacklistRuleServiceTest {
 
     /** 自动调库规则查询数据访问组件。 */
     private AutoAdjustMapper autoAdjustMapper;
+    /** 外部评级机构配置服务。 */
+    private ExternalRatingAgencyService externalRatingAgencyService;
     /** 待测试的黑名单质押库规则服务。 */
     private PledgeBlacklistRuleService service;
 
@@ -24,8 +30,12 @@ public class PledgeBlacklistRuleServiceTest {
     @Before
     public void setUp() {
         autoAdjustMapper = mock(AutoAdjustMapper.class);
+        externalRatingAgencyService = mock(ExternalRatingAgencyService.class);
+        when(externalRatingAgencyService.queryRequiredAgencyCodeList())
+                .thenReturn(Collections.singletonList("2"));
         service = new PledgeBlacklistRuleService();
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "externalRatingAgencyService", externalRatingAgencyService);
     }
 
     /** 任一条件成立时应判定主体需要进入黑名单质押库。 */
@@ -43,7 +53,7 @@ public class PledgeBlacklistRuleServiceTest {
     /** 无外评且两个条件池均未命中时应允许调出。 */
     @Test
     public void validateOut_ShouldAllowWhenNoRatingAndNoConditionPool() {
-        when(autoAdjustMapper.queryCompanyHasLowOuterRating("C002")).thenReturn(false);
+        when(autoAdjustMapper.queryCompanyHasLowOuterRating(any(String.class), any(List.class))).thenReturn(false);
 
         String failure = service.validate("C002", AdjustMode.OUT.getCode(),
                 Collections.<Long>emptySet(), Collections.<Long>emptySet());
@@ -54,7 +64,7 @@ public class PledgeBlacklistRuleServiceTest {
     /** 本批调入和调出条件池时应使用预计完成后的状态。 */
     @Test
     public void evaluate_ShouldUseProjectedPoolState() {
-        when(autoAdjustMapper.queryCompanyHasLowOuterRating("C003")).thenReturn(false);
+        when(autoAdjustMapper.queryCompanyHasLowOuterRating(any(String.class), any(List.class))).thenReturn(false);
 
         PledgeBlacklistRuleService.Decision inbound = service.evaluate("C003",
                 Collections.singleton(PledgeBlacklistRuleService.KEY_WATCH_POOL_ID),
@@ -74,5 +84,16 @@ public class PledgeBlacklistRuleServiceTest {
                 Collections.<Long>emptySet(), Collections.<Long>emptySet());
 
         assertThat(failure).contains("未命中黑名单质押库三个条件");
+    }
+
+    /** 未配置有效外部评级机构时应阻断黑名单规则判定。 */
+    @Test
+    public void evaluate_ShouldRejectWhenNoAgencyConfigured() {
+        when(externalRatingAgencyService.queryRequiredAgencyCodeList())
+                .thenThrow(new BizException("未配置有效外部评级机构"));
+
+        assertThatThrownBy(() -> service.evaluate("C005"))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("未配置有效外部评级机构");
     }
 }

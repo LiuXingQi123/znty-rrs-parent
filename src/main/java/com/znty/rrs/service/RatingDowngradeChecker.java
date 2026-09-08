@@ -10,6 +10,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
+import java.util.List;
 
 /**
  * 评级下调判定组件（证券池/批量/禁投池/CRMW 四链路共享）。
@@ -29,6 +30,9 @@ public class RatingDowngradeChecker {
 
     @Resource
     private WindRatingMapper windRatingMapper;
+    /** 外部评级机构配置服务。 */
+    @Resource
+    private ExternalRatingAgencyService externalRatingAgencyService;
 
     /**
      * 主体评级是否下调：按发行人代码查 wind 最新评级，比较当前 vs 前次。
@@ -73,7 +77,13 @@ public class RatingDowngradeChecker {
      */
     private WindIssuerRatingBo queryLatestRatingSafely(String compCode) {
         try {
-            return windRatingMapper.queryLatestRating(compCode);
+            // 评级下调检查使用当前有效外部评级机构配置；空配置按既有 fail open 处理
+            List<String> agencyCodes = externalRatingAgencyService.queryActiveAgencyCodeList();
+            if (agencyCodes.isEmpty()) {
+                log.warn("未配置有效外部评级机构，fail open 视为未下调：compCode={}", compCode);
+                return null;
+            }
+            return windRatingMapper.queryLatestRating(compCode, agencyCodes);
         } catch (DataAccessException e) {
             log.warn("查询 Wind 发行人评级失败，fail open 视为未下调：compCode={}, err={}", compCode, e.getMessage());
             return null;

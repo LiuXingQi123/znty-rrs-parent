@@ -12,6 +12,25 @@ SET NAMES utf8mb4;
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `dict_security_type`;
+DROP TABLE IF EXISTS `dict_external_rating_agency`;
+
+-- ----------------------------------------------------------------------------
+-- 外部评级机构字典表
+-- ----------------------------------------------------------------------------
+CREATE TABLE `dict_external_rating_agency` (
+    `id`                          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `b_info_creditratingagency`   VARCHAR(10)  DEFAULT NULL            COMMENT 'Wind 外部评级机构编码',
+    `b_info_creditrating_name`    VARCHAR(100) DEFAULT NULL            COMMENT '外部评级机构名称',
+    `s_info_compcode`             VARCHAR(10)  DEFAULT NULL            COMMENT '外部评级机构主体代码',
+    `is_deleted`                  TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
+    `memo`                        VARCHAR(500) DEFAULT NULL            COMMENT '备注',
+    `crte_time`                   DATETIME     DEFAULT NULL            COMMENT '创建时间',
+    `updt_time`                   DATETIME     DEFAULT NULL            COMMENT '修改时间',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci
+  COMMENT = '外部评级机构字典表';
 
 -- ----------------------------------------------------------------------------
 -- 证券类型字典表

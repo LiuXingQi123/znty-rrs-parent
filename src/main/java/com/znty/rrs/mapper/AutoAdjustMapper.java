@@ -32,9 +32,11 @@ public interface AutoAdjustMapper {
      * 查询主体近一年认可机构外评是否存在 AA- 及以下档位。
      *
      * @param companyCode 发行主体代码
+     * @param agencyCodes 有效外部评级机构编码
      * @return {@code true}=近一年认可机构外评孰低为 AA- 及以下
      */
-    boolean queryCompanyHasLowOuterRating(@Param("companyCode") String companyCode);
+    boolean queryCompanyHasLowOuterRating(@Param("companyCode") String companyCode,
+                                          @Param("agencyCodes") List<String> agencyCodes);
 
     /**
      * 查询投资池关系配置中绑定了指定定时任务与调入/调出类型的池 ID。
@@ -100,12 +102,14 @@ public interface AutoAdjustMapper {
 
     /**
      * 查询近一年认可外评孰低为 AA-及以下、且尚未在目标池的主体。
-     * <p>仅条款（二）；一年以前忽略；仅认机构 2/3/4/5/6/7/13/14/19/20。</p>
+     * <p>仅条款（二）；一年以前忽略；认可机构由外部评级机构配置表控制。</p>
      *
      * @param poolId 入池目标池 ID
+     * @param agencyCodes 有效外部评级机构编码
      * @return 待入池主体（含 outerRating）
      */
-    List<IpAdjustLogBo> queryCompanyByLowOuterRatingNotInPool(@Param("poolId") Long poolId);
+    List<IpAdjustLogBo> queryCompanyByLowOuterRatingNotInPool(@Param("poolId") Long poolId,
+                                                              @Param("agencyCodes") List<String> agencyCodes);
 
     /**
      * 查询已在目标池、近一年认可外评孰低不属于 AA-及以下的主体。
@@ -114,10 +118,12 @@ public interface AutoAdjustMapper {
      *
      * @param poolId       出池目标池 ID
      * @param limitPoolIds 额外拦截池；空则不追加
+     * @param agencyCodes  有效外部评级机构编码
      * @return 待出池主体（含 outerRating）
      */
     List<IpAdjustLogBo> queryCompanyByNotLowOuterRatingInPool(@Param("poolId") Long poolId,
-                                                              @Param("limitPoolIds") List<Long> limitPoolIds);
+                                                              @Param("limitPoolIds") List<Long> limitPoolIds,
+                                                              @Param("agencyCodes") List<String> agencyCodes);
 
     /**
      * 查询指定池中当前已生效的主体代码。
