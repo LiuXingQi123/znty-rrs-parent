@@ -13,6 +13,7 @@
 
 - 视图 A `poolList`：投资池树筛选（`includePoolTypes=['crmw']`）+ CRMW 叶子池表格（调入/调出）。
 - 视图 B `adjustWorkbench`：步骤 1 材料 + 可选组合表；步骤 2 校验结果列：证券名称、证券代码、CRMW名称、CRMW代码、投资池名称、调整类型、调整方向、审批流程、调整说明、校验结果。
+- 工作台内容区独立滚动并为固定操作底栏预留安全区，步骤 1 候选组合分页和步骤 2 末尾内容均不得被底栏遮挡。
 
 现有数量统计 `ip_pool_status_crmw` 有效组合，分项 `typeCode=crmw`。
 
