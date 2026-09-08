@@ -20,6 +20,8 @@ public class ScheduledTaskDemoDataTest {
         String sql = new String(Files.readAllBytes(Paths.get("sql", "rrs_scheduled_task_demo_data.sql")),
                 StandardCharsets.UTF_8);
         List<TaskConfig> configs = Arrays.asList(
+                new TaskConfig("bond_temp_code_replace", "债券临时代码替换", "0 40 22 * * ?"),
+                new TaskConfig("bond_security_type_change", "债券类型变更", "0 50 22 * * ?"),
                 new TaskConfig("security_expired_auto_out", "到期证券自动出池", "0 0 23 * * ?"),
                 new TaskConfig("crmw_expired_auto_out", "CRMW到期自动出池", "0 5 23 * * ?"),
                 new TaskConfig("company_outer_rating_not_aa_minus_auto_out", "外评非AA-及以下主体自动出池", "0 10 23 * * ?"),
@@ -30,6 +32,8 @@ public class ScheduledTaskDemoDataTest {
                 new TaskConfig("bond_grade_inconformity_alert", "不符合主体债入库规则提醒", "0 0 1 * * ?"),
                 new TaskConfig("hs_pool_full_excel_export", "恒生池全量数据导出（不含已到期）", "0 10 1 * * ?"),
                 new TaskConfig("hs_pool_full_including_expired_excel_export", "恒生池全量数据导出（含已到期）", "0 20 1 * * ?"),
+                new TaskConfig("pledge_blacklist_daily_increment_reminder", "质押黑名单库每日增量提醒", "0 30 1 * * ?"),
+                new TaskConfig("bond_issuer_not_in_company_pool_reminder", "主体库内债券主体不在池债邮件提醒", "0 40 1 * * ?"),
                 new TaskConfig("hs_pool_increment_excel_export", "恒生池增量数据导出", "0 */6 * * * ?"),
                 new TaskConfig("wind_code_sync", "Wind代码变更同步", "0 */10 * * * ?")
         );

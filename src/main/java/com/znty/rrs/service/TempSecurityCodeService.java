@@ -148,6 +148,40 @@ public class TempSecurityCodeService {
         if (formalSecurity.getSecurityCode().equals(oldBo.getTempSecurityCode())) {
             throw new BizException("正式证券代码不能与临时代码相同");
         }
+        // 使用人工来源执行统一转正分叉
+        return editTempSecurityCodeToUpdated(oldBo, formalSecurity, TempOprtSource.MANUAL.getCode());
+    }
+
+    /**
+     * 定时任务将已取得正式码映射的临时代码转为正式证券。
+     *
+     * @param id 临时代码记录 ID
+     * @return 更新后的记录
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public TempSecurityCodeDto editTempSecurityCodeToUpdatedByJob(Long id) {
+        if (id == null) {
+            throw new BizException("临时代码记录 ID 不能为空");
+        }
+        // 查询并校验临时代码当前状态
+        TempSecurityCodeBo oldBo = queryOperableTempSecurityCode(id);
+        // 使用外部数据预先写入的正式证券代码查询权威主数据
+        TempSecurityCodeDto.FormalSecurityOption formalSecurity =
+                queryRequiredFormalSecurity(oldBo.getSecurityCode());
+        if (formalSecurity.getSecurityCode().equals(oldBo.getTempSecurityCode())) {
+            throw new BizException("正式证券代码不能与临时代码相同，id=" + id);
+        }
+        // 使用定时任务来源执行统一转正分叉
+        return editTempSecurityCodeToUpdated(oldBo, formalSecurity, TempOprtSource.JOB.getCode());
+    }
+
+    /**
+     * 按指定来源执行临时代码转正，人工与定时任务共用同一套业务分叉。
+     */
+    private TempSecurityCodeDto editTempSecurityCodeToUpdated(
+            TempSecurityCodeBo oldBo,
+            TempSecurityCodeDto.FormalSecurityOption formalSecurity,
+            String oprtSource) {
         Date now = new Date();
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setId(oldBo.getId());
@@ -168,8 +202,8 @@ public class TempSecurityCodeService {
         bo.setSecurityType(formalSecurity.getSecurityType());
         bo.setUpdateTime(now);
         bo.setStatus(TempStatus.UPDATED.getCode());
-        // 页面人工更新为正式
-        bo.setOprtSource(TempOprtSource.MANUAL.getCode());
+        // 记录人工或定时任务来源
+        bo.setOprtSource(oprtSource);
         bo.setUpdtTime(now);
         Long tempCodeId = oldBo.getId();
         // 先落主表状态，避免替换 SQL 的 id 绑定把后续主表更新冲成 0 行

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.BondReminderMapper">
+
+    <!-- 查询质押黑名单库增量调库：审批通过、审核时间落在本次水位窗口、范围限债券和主体 -->
+    <select id="queryPledgeBlacklistIncrementList"
+            resultType="com.znty.rrs.entity.schedule.BondReminderDto">
+        SELECT al.id record_id
+              ,al.security_code
+              ,al.security_short_name
+              ,al.security_type
+              ,si.issuer_code
+              ,si.issuer issuer_name
+              ,al.target_pool_id
+              ,al.target_pool_name
+              ,al.adjust_mode
+              ,al.audit_time
+        FROM ip_adjust_log al
+        INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type IN ('bond', 'company')
+        LEFT JOIN rrs_securityinfo si ON si.wind_code = al.security_code
+        WHERE al.is_deleted = 0
+          AND al.audit_status = '20'
+          AND al.target_pool_id IN
+        <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+            #{poolId}
+        </foreach>
+          AND al.audit_time &gt;= #{windowStart}
+          AND al.audit_time &lt; #{windowEnd}
+          AND (
+              dst.category_type = 'company'
+              OR si.maturity_date IS NULL
+              OR si.maturity_date &gt; DATE_FORMAT(CURDATE(), '%Y%m%d')
+          )
+        ORDER BY al.audit_time ASC
+                ,al.id ASC
+    </select>
+
+    <!-- 查询债券池中发行主体不在对应主体池的债券；对齐老任务排除 CRMW -->
+    <select id="queryIssuerNotInCompanyPoolBondList"
+            resultType="com.znty.rrs.entity.schedule.BondReminderDto">
+        SELECT ips.id record_id
+              ,ips.security_code
+              ,ips.security_short_name
+              ,ips.security_type
+              ,si.issuer_code
+              ,si.issuer issuer_name
+              ,ips.target_pool_id
+              ,ips.target_pool_name
+              ,ips.adjust_mode
+              ,ips.audit_time
+        FROM ip_pool_status ips
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        WHERE ips.is_deleted = 0
+          AND ips.audit_status = '20'
+          AND ips.target_pool_id = #{bondPoolId}
+          AND ips.security_type != 'crmw'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status company_status
+              INNER JOIN dict_security_type company_type
+                      ON company_type.security_type = company_status.security_type
+                     AND company_type.is_deleted = 0
+                     AND company_type.category_type = 'company'
+              WHERE company_status.is_deleted = 0
+                AND company_status.audit_status = '20'
+                AND company_status.target_pool_id = #{companyPoolId}
+                AND company_status.security_code = si.issuer_code
+          )
+        ORDER BY ips.security_code ASC
+                ,ips.id ASC
+    </select>
+
+</mapper>

@@ -121,6 +121,20 @@
           AND t.is_deleted = 0
     </select>
 
+    <!-- 查询外部数据已补齐正式证券代码、等待定时替换的临时代码；正式主数据合法性由服务统一校验 -->
+    <select id="queryJobReadyTempSecurityCodeList" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
+        SELECT id
+              ,temp_security_code
+              ,temp_security_name
+              ,security_code
+        FROM rrs_temp_security_code
+        WHERE is_deleted = 0
+          AND status = 'temporary'
+          AND security_code IS NOT NULL
+          AND TRIM(security_code) != ''
+        ORDER BY id ASC
+    </select>
+
     <!-- 查询临时代码未删除记录数量 -->
     <select id="queryTempSecurityCodeCount" resultType="int">
         SELECT COUNT(1)

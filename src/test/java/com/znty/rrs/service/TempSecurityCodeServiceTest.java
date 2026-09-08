@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.MarketCode;
+import com.znty.rrs.common.enums.TempOprtSource;
 import com.znty.rrs.common.enums.TempStatus;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpPoolStatusBo;
@@ -182,6 +183,39 @@ public class TempSecurityCodeServiceTest {
         assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("正式证券不存在或不可用");
+    }
+
+    /** 验证定时任务入口复用转正逻辑并记录 job 来源。 */
+    @Test
+    public void editTempSecurityCodeToUpdatedByJobShouldUseMappedFormalCode() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        TempSecurityCodeService service = buildService(mapper, adjustMapper);
+        TempSecurityCodeBo oldBo = buildOldBo();
+        oldBo.setSecurityCode("110001.IB");
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
+                .thenReturn(Collections.<Long>emptyList());
+        when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
+                .thenReturn(Collections.<Long>emptyList());
+        when(mapper.queryActivePoolStatusList(any(TempSecurityCodeBo.class)))
+                .thenReturn(Collections.<IpPoolStatusBo>emptyList());
+        when(mapper.queryPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
+                .thenReturn(Collections.<Long>emptyList());
+        when(mapper.queryActiveCrmwPoolStatusList(any(TempSecurityCodeBo.class)))
+                .thenReturn(Collections.<IpPoolStatusBo>emptyList());
+        when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
+                .thenReturn(Collections.<Long>emptyList());
+        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
+
+        service.editTempSecurityCodeToUpdatedByJob(1L);
+
+        ArgumentCaptor<TempSecurityCodeBo> captor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
+        verify(mapper).editTempSecurityCodeToUpdated(captor.capture());
+        assertThat(captor.getValue().getSecurityCode()).isEqualTo("110001.IB");
+        assertThat(captor.getValue().getOprtSource()).isEqualTo(TempOprtSource.JOB.getCode());
+        verify(mapper).editTempSecurityInfoToDisabled(any(TempSecurityCodeBo.class));
     }
 
     /** 验证主表未更新成功时不继续改调库/池状态。 */

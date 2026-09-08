@@ -19,8 +19,16 @@ INSERT INTO `sys_scheduled_task` (
     `last_affected_count`, `last_duration_ms`, `last_trigger_type`,
     `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
--- cron 执行顺序：先清到期 → 先改主体（先出后入）→ 再同步旗下债（先入后出）
--- 23:00 到期债股出 → 23:05 CRMW到期出 → 23:10 外评主体出 → 23:15 外评主体入 → 23:20 同池债入
+-- cron 执行顺序：先替换临时代码 → 再同步债券类型 → 再清到期 → 先改主体（先出后入）→ 再同步旗下债（先入后出）
+-- 22:40 临时代码替换 → 22:50 债券类型变更 → 23:00 到期债股出 → 23:05 CRMW到期出 → 23:10 外评主体出 → 23:15 外评主体入 → 23:20 同池债入
+(13, 'bond_temp_code_replace', '债券临时代码替换',
+ '1. 每天 22:40 执行，默认关闭调度，无需扩展参数。\n2. 扫描 rrs_temp_security_code 中 status=temporary 且已由外部数据补齐 security_code 的记录。\n3. 正式名称、市场、类型以 rrs_securityinfo 正式主数据为准。\n4. 在途日志只改码；已在池执行临时码出池，正式码未在同池时再调入。\n5. 同时处理普通池、CRMW 池及 CRMW 字段引用，oprt_source 记为 job。\n6. 本任务独立于 wind_code_sync，不调用也不修改该空壳任务。',
+ '0 40 22 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+ 0, NOW(), NOW()),
+(14, 'bond_security_type_change', '债券类型变更',
+ '1. 每天 22:50 执行，默认关闭调度，无需扩展参数。\n2. 以 rrs_securityinfo.security_type 为最新证券类型。\n3. 仅处理新旧类型都属于 bond 大类的生效记录。\n4. 同步 ip_pool_status、ip_pool_status_crmw 及各池状态当前关联的 ip_adjust_log。\n5. 其他历史调库日志保留原始快照。\n6. 排在临时代码替换之后、到期及主体调库任务之前。',
+ '0 50 22 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+ 0, NOW(), NOW()),
 (1, 'security_expired_auto_out', '到期证券自动出池',
  '1. 每天 23:00 执行，默认关闭调度。\n2. 扫描 poolIds 指定目标池；默认 [15]，即 15（债券禁止库）。\n3. 已生效债券、股票的到期日早于昨天（T-2）时，自动调出。\n4. 主体、基金、CRMW 不处理；CRMW 请使用独立到期出池任务。\n5. 证券命中目标池的调出限制池时，跳过该条记录。\n6. 仅软删除成功才写日志并计入影响条数。',
  '0 0 23 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
@@ -60,6 +68,14 @@ INSERT INTO `sys_scheduled_task` (
 (10, 'hs_pool_full_including_expired_excel_export', '恒生池全量数据导出（含已到期）',
  '1. 每天 01:20 执行，默认关闭调度。\n2. poolIds 可限制导出叶子池，未填写时导出全部叶子池。\n3. 导出当前已生效的非主体证券和 CRMW；普通证券包含已到期数据，CRMW 不校验到期日。\n4. 恒生池名称为空时使用投资池完整名称，竖线可拆分多个 Sheet，同名 Sheet 合并并记录警告。\n5. 固定导出证券名称、证券代码、操作类型、市场名称、备注；全量操作类型和备注为空。\n6. 市场输出中文名称并按多个市场代码字段拆行，该口径后续再确认。\n7. outputDir 下按 yyyyMMdd 建日期目录并生成 bak 备份；FTP 暂未接入。',
  '0 20 1 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+ 0, NOW(), NOW()),
+(15, 'pledge_blacklist_daily_increment_reminder', '质押黑名单库每日增量提醒',
+ '1. 每天 01:30 执行，默认关闭调度。\n2. poolIds 为质押黑名单扫描池，默认 [17]。\n3. 首次从当天 00:00:00 开始，后续以上次成功执行开始时间为水位，扫描审批通过的债券和主体调入调出流水。\n4. 到期债券不进入提醒；无增量时仍生成无增量消息内容。\n5. 当前通知通道未接入，仅生成候选并写定时任务过程日志，不会误报发送成功。',
+ '0 30 1 * * ?', 0, '{"poolIds":[17]}', NULL, NULL, NULL, NULL, NULL, NULL,
+ 0, NOW(), NOW()),
+(16, 'bond_issuer_not_in_company_pool_reminder', '主体库内债券主体不在池债邮件提醒',
+ '1. 每天 01:40 执行，默认关闭调度。\n2. poolIds 表示债券池与主体池相同；mappings 可分别配置 bondPoolId、companyPoolId；默认同池 [15]。\n3. 扫描债券池中已生效、但发行主体不在对应主体池的债券。\n4. 对齐老系统排除 CRMW，缺失发行主体主数据的债券也进入提醒候选。\n5. 当前通知通道未接入，仅生成候选并写定时任务过程日志，不会误报发送成功。',
+ '0 40 1 * * ?', 0, '{"poolIds":[15]}', NULL, NULL, NULL, NULL, NULL, NULL,
  0, NOW(), NOW()),
 (11, 'hs_pool_increment_excel_export', '恒生池增量数据导出',
  '1. 每 6 分钟执行一次，默认关闭调度；交易日列表入口已预留，当前列表为空，因此交易日和非交易日均正常执行。\n2. 首次以 initialStartTime 为下界，后续以上次成功执行开始时间为下界，本次开始时间为上界。\n3. 老系统通过 exportflag 控制增量；新系统使用任务成功时间水位线，不更新业务调库日志。\n4. 导出窗口内审批通过的调入和调出事件，不要求证券当前仍在池。\n5. 调出记录操作类型写删除，包含普通非主体证券和 CRMW。\n6. 市场输出中文名称并按多个市场代码字段拆行，该口径后续再确认。\n7. poolIds 和 exportEmptyPool 与全量任务保持一致。\n8. outputDir 下按 yyyyMMdd 建日期目录并生成 bak 备份；FTP 暂未接入。',

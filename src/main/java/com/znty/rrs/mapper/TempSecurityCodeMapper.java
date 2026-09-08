@@ -24,6 +24,9 @@ public interface TempSecurityCodeMapper {
     /** 根据 ID 查询临时代码详情 */
     TempSecurityCodeDto queryTempSecurityCodeDetail(@Param("id") Long id);
 
+    /** 查询已由外部数据补齐正式证券代码、等待定时替换的临时代码 */
+    List<TempSecurityCodeBo> queryJobReadyTempSecurityCodeList();
+
     /** 查询临时代码未删除记录数量 */
     int queryTempSecurityCodeCount(@Param("tempSecurityCode") String tempSecurityCode, @Param("excludeId") Long excludeId);
 

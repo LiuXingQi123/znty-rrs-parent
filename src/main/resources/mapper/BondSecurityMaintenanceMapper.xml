@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.BondSecurityMaintenanceMapper">
+
+    <!-- 查询普通池中证券类型与主数据不一致、且新旧类型都属于债券大类的生效记录 -->
+    <select id="queryPoolSecurityTypeChangeList"
+            resultType="com.znty.rrs.entity.schedule.BondSecurityTypeChangeDto">
+        SELECT ips.id pool_status_id
+              ,ips.adjust_log_id
+              ,ips.security_code
+              ,ips.security_short_name
+              ,ips.security_type old_security_type
+              ,si.security_type new_security_type
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN dict_security_type old_type ON old_type.security_type = ips.security_type
+                                                AND old_type.category_type = 'bond'
+                                                AND old_type.is_deleted = 0
+        INNER JOIN dict_security_type new_type ON new_type.security_type = si.security_type
+                                                AND new_type.category_type = 'bond'
+                                                AND new_type.is_deleted = 0
+        WHERE ips.is_deleted = 0
+          AND ips.audit_status = '20'
+          AND ips.security_type != si.security_type
+        ORDER BY ips.id ASC
+    </select>
+
+    <!-- 查询 CRMW 池中标的证券类型与主数据不一致、且新旧类型都属于债券大类的生效记录 -->
+    <select id="queryCrmwPoolSecurityTypeChangeList"
+            resultType="com.znty.rrs.entity.schedule.BondSecurityTypeChangeDto">
+        SELECT ips.id pool_status_id
+              ,ips.adjust_log_id
+              ,ips.security_code
+              ,ips.security_short_name
+              ,ips.security_type old_security_type
+              ,si.security_type new_security_type
+        FROM ip_pool_status_crmw ips
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN dict_security_type old_type ON old_type.security_type = ips.security_type
+                                                AND old_type.category_type = 'bond'
+                                                AND old_type.is_deleted = 0
+        INNER JOIN dict_security_type new_type ON new_type.security_type = si.security_type
+                                                AND new_type.category_type = 'bond'
+                                                AND new_type.is_deleted = 0
+        WHERE ips.is_deleted = 0
+          AND ips.audit_status = '20'
+          AND ips.security_type != si.security_type
+        ORDER BY ips.id ASC
+    </select>
+
+    <!-- 按旧类型条件更新普通池，避免覆盖并发变更 -->
+    <update id="editPoolSecurityType">
+        UPDATE ip_pool_status
+        SET security_type = #{row.newSecurityType}
+           ,updt_time = #{updateTime}
+        WHERE id = #{row.poolStatusId}
+          AND is_deleted = 0
+          AND audit_status = '20'
+          AND security_type = #{row.oldSecurityType}
+    </update>
+
+    <!-- 按旧类型条件更新 CRMW 池标的证券，避免覆盖并发变更 -->
+    <update id="editCrmwPoolSecurityType">
+        UPDATE ip_pool_status_crmw
+        SET security_type = #{row.newSecurityType}
+           ,updt_time = #{updateTime}
+        WHERE id = #{row.poolStatusId}
+          AND is_deleted = 0
+          AND audit_status = '20'
+          AND security_type = #{row.oldSecurityType}
+    </update>
+
+    <!-- 同步当前池状态关联的调库日志；历史日志保持原始快照 -->
+    <update id="editAdjustLogSecurityType">
+        UPDATE ip_adjust_log
+        SET security_type = #{securityType}
+           ,updt_time = #{updateTime}
+        WHERE id = #{adjustLogId}
+          AND is_deleted = 0
+    </update>
+
+</mapper>
