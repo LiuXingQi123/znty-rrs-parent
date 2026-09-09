@@ -26,12 +26,14 @@
                  ,si.wind_code DESC
     </select>
 
-    <!-- 分页查询可绑定证券列表 -->
+    <!-- 分页查询可绑定债券列表 -->
     <select id="queryBindableSecurityPage" resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDto">
         SELECT si.*
                ,dst.security_type_name
         FROM rrs_securityinfo si
-        LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
+        INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
+                                             AND dst.is_deleted = 0
+                                             AND dst.category_type = 'bond'
         <where>
             AND si.security_type != 'crmw'
             AND si.security_status != 'D'

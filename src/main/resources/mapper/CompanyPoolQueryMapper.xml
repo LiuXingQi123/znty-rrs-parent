@@ -17,12 +17,12 @@
         FROM ip_pool_status ips
         INNER JOIN dict_security_type dst ON ips.security_type = dst.security_type
                                              AND dst.is_deleted = 0
+                                             AND dst.category_type = 'company'
         INNER JOIN ip_investment_pool p ON ips.target_pool_id = p.id
                                         AND p.is_deleted = 0
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
-            AND dst.category_type = 'company'
             <if test="viewablePoolIds != null and viewablePoolIds.size() == 0">
                 AND 1 = 0
             </if>

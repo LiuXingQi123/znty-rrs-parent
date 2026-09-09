@@ -105,18 +105,20 @@
 SELECT ips.id, ips.security_code, ips.security_short_name, ips.adjuster_name,
        ips.entry_time, ips.target_pool_id, p.pool_name AS target_pool_name
 FROM ip_pool_status ips
-JOIN dict_security_type dst ON ips.security_type = dst.security_type
-LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
+INNER JOIN dict_security_type dst ON ips.security_type = dst.security_type
+                                    AND dst.is_deleted = 0
+                                    AND dst.category_type = 'company'
+INNER JOIN ip_investment_pool p ON ips.target_pool_id = p.id
+                                AND p.is_deleted = 0
 WHERE ips.is_deleted = 0
   AND ips.audit_status = '20'
-  AND dst.category_type = 'company'
   ...动态条件
 ORDER BY ips.entry_time DESC, ips.id DESC
 ```
 
 要点：
-- `JOIN dict_security_type dst`（INNER JOIN，确保只取 `category_type='company'` 的记录）。
-- `LEFT JOIN ip_investment_pool p`（**未带** `p.is_deleted=0` 条件，与调整历史 XML 不同；通常以 Service 层 `queryPoolFullNameMap` 覆盖为准）。
+- `INNER JOIN dict_security_type dst` 的 ON 条件同时限定 `dst.is_deleted=0` 和 `dst.category_type='company'`，确保只取有效的主体类型记录。
+- `INNER JOIN ip_investment_pool p` 的 ON 条件限定 `p.is_deleted=0`，已删除投资池不进入当前主体池列表；Service 层 `fillPoolFullName` 再覆盖为完整路径名称。
 - 无 GROUP BY、无聚合函数，每条 `ip_pool_status` 一行。
 - Service 层 `fillPoolFullName` 用 `InvestmentPoolService.queryPoolFullNameMap()`（递归 CTE 拼 `父池名/子池名` 全路径）按 `targetPoolId` 覆盖为全路径名称。
 

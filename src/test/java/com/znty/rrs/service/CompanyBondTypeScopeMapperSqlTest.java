@@ -39,6 +39,20 @@ public class CompanyBondTypeScopeMapperSqlTest {
         assertThat(select).doesNotContain("bond.security_type != 'crmw'");
     }
 
+    /** 验证 CRMW 单笔调库的可绑定标的仅包含非 CRMW 债券。 */
+    @Test
+    public void crmwBindableSecurityQueryShouldOnlyIncludeBonds() throws Exception {
+        Path mapperPath = Paths.get("src", "main", "resources", "mapper", "CrmwPoolAdjustMapper.xml");
+        String xml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
+        // 候选查询必须依赖有效债券类型字典，避免主体、股票和基金进入列表
+        String select = selectBlock(xml, "queryBindableSecurityPage");
+        assertThat(select).contains("INNER JOIN dict_security_type dst")
+                .contains("AND dst.is_deleted = 0")
+                .contains("AND dst.category_type = 'bond'")
+                .contains("AND si.security_type != 'crmw'")
+                .doesNotContain("LEFT JOIN dict_security_type dst");
+    }
+
     /**
      * 校验一个 Mapper 中指定主体债查询的类型过滤表达式。
      *

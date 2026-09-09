@@ -2,7 +2,7 @@
 
 > 前端页面：`crmw_pool_adjust.html`（列表 + 详情两视图）
 > 后端前缀：`/api/v1/crmwPoolAdjust`
-> 角色定位：业务人员先选择一个 CRMW 凭证，再选择可绑定的标的证券（不能是 CRMW 凭证），在权限范围内发起 CRMW 池的调入或调出申请。逻辑与证券池调库（[04]）同构，差异见第 7 节。
+> 角色定位：业务人员先选择一个 CRMW 凭证，再选择可绑定的债券类标的证券（`category_type='bond'` 且不能是 CRMW 凭证），在权限范围内发起 CRMW 池的调入或调出申请。逻辑与证券池调库（[04]）同构，差异见第 7 节。
 
 ---
 
@@ -36,7 +36,7 @@
 字段：`securityCode`/`securityShortName`/`issuer`，以及是否特征多选 `bondYesFlags`（顺序与证券池调整一致：ABS / 担保 / 永续 / 次级 / 私募 / 含权；勾选即筛「是」，多选 AND）。
 
 - 接口：`POST /api/v1/crmwPoolAdjust/queryBindableSecurityPage`，返回 `PageResult<SecurityInfoDto>`。
-- SQL（`queryBindableSecurityPage`）：`WHERE si.security_type != 'crmw'` — **排除 CRMW 凭证**；`bondYesFlags` 条件口径同 [04]（`abs` 为 `absFlag=1` 或类型 `abs`，`private` 为发行方式/内部分类含「私募」）。
+- SQL（`queryBindableSecurityPage`）：`INNER JOIN dict_security_type dst ... AND dst.category_type='bond'` 限定债券大类，再通过 `WHERE si.security_type != 'crmw'` 排除 CRMW 凭证；未维护有效债券类型字典的证券不会进入候选。`bondYesFlags` 条件口径同 [04]（`abs` 为 `absFlag=1` 或类型 `abs`，`private` 为发行方式/内部分类含「私募」）。
 - 表格在操作列前展示是否 ABS/担保/永续/次级/私募/含权（是/否 Tag）。
 - 分页：`pagination: {pageIndex:1, pageSize:5, total:0}`，`page-sizes=[5,10,20,50,100]`。
 
@@ -134,7 +134,7 @@
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `queryCrmwPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询 CRMW 凭证列表（`security_type='crmw'`） |
-| `queryBindableSecurityPage` | securityCode, securityShortName, issuer, bondYesFlags?, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询可绑定证券（排除 crmw；可选是否特征多选） |
+| `queryBindableSecurityPage` | securityCode, securityShortName, issuer, bondYesFlags?, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询可绑定债券（仅 bond，排除 crmw；可选是否特征多选） |
 | `queryCrmwDetail` | securityCode | `SecurityInfoDetailDto` | CRMW 凭证详情（必须 `security_type='crmw'`） |
 | `querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 标的证券详情（不能是 crmw） |
 | `queryCrmwAdjustPoolList` | securityCode, adjustDirection, currentUserId, targetPoolId | `List<PoolDto>` | 可调入/调出 CRMW 投资池列表（含互斥关系） |
@@ -197,7 +197,7 @@
 
 ## 7. 与其他池模块的差异
 
-- **两步选择**：列表页先选 CRMW 凭证（radio），再选可绑定标的证券；标的证券不能是 CRMW 凭证（`queryBindableSecurityPage` 排除 `security_type='crmw'`）。
+- **两步选择**：列表页先选 CRMW 凭证（radio），再选可绑定债券类标的证券；`queryBindableSecurityPage` 限定 `category_type='bond'` 并排除 `security_type='crmw'`。
 - **独立状态表**：`ip_pool_status_crmw` 使用 `crmw_scode + security_code` 标识凭证与标的组合；`crmw_mktcode` 字段仅兼容历史数据；证券池调库用 `ip_pool_status`。
 - **批次号前缀**：`CRMW`（证券池用 `BOND`）。
 - **校验强制 poolType**：`validateCheckAdjustReq`/`validateSubmitReq`/`validateSubmitTargetPools` 均强制 `PoolType.CRMW.getCode()='crmw'`。
