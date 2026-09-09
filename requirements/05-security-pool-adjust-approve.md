@@ -122,6 +122,8 @@
 4. `POST /api/v1/securityPoolAdjust/querySecurityPoolStatus` — 当前证券/主体所在池
 5. `POST /api/v1/securityPoolAdjust/queryAdjustLogList {securityCode, adjustBatchNo}` — 调库记录列表（按批次过滤；若不传批次，后端只返回未终结流程的记录：`audit_status NOT IN ('-1','20','21','99')`）
 
+证券基本信息字段和顺序与申请页一致：非 ABS 展示当笔快照中的担保人；ABS 展示普通权益人和自选权益人；两类证券均展示“担保人主体内评分”，ABS 对应提交时最终生效的自选权益人（优先）或普通权益人内评。
+
 可调入池树默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出池树仍默认全部展开。
 
 随后串行调用：

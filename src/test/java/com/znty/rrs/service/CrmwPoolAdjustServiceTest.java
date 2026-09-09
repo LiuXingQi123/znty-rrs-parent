@@ -6,7 +6,6 @@ import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
-import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustSharedData;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustReq;
@@ -42,41 +41,46 @@ import static org.mockito.Mockito.when;
  */
 public class CrmwPoolAdjustServiceTest {
 
-    /** CRMW 标的证券所选担保人应回填名称、代码和最新内评。 */
+    /** CRMW 标的证券应复用证券池调库的评级主体校验口径。 */
     @Test
     public void applySelectedGuarantorGradeShouldUseLatestGrade() {
-        CommonService commonService = mock(CommonService.class);
+        SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
-        ReflectionTestUtils.setField(service, "commonService", commonService);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("BOND001");
-        GuarantorGradeDto guarantor = new GuarantorGradeDto();
-        guarantor.setWindcode("C10008");
-        guarantor.setWindname("测试担保人");
-        guarantor.setTotalScore("1");
-        when(commonService.queryGuarantorGrade("BOND001", "C10008")).thenReturn(guarantor);
+        when(securityPoolAdjustService.applySelectedRatingSubject(
+                securityInfo, "C10008", null, null, false)).thenAnswer(invocation -> {
+                    securityInfo.setGuarantor("测试担保人");
+                    securityInfo.setGuarantorId("C10008");
+                    securityInfo.setInnerGuarantorRating("1");
+                    return new SecurityPoolAdjustService.SelectedRatingSubjectData();
+                });
 
-        ReflectionTestUtils.invokeMethod(service, "applySelectedGuarantorGrade", securityInfo, "C10008");
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+                securityInfo, "C10008", null, null, false);
 
         assertThat(securityInfo.getGuarantor()).isEqualTo("测试担保人");
         assertThat(securityInfo.getGuarantorId()).isEqualTo("C10008");
         assertThat(securityInfo.getInnerGuarantorRating()).isEqualTo("1");
     }
 
-    /** CRMW 标的证券不允许提交不属于当前证券的担保人。 */
+    /** CRMW 标的证券不允许提交不属于当前证券的评级主体。 */
     @Test
     public void applySelectedGuarantorGradeShouldRejectIneligibleGuarantor() {
-        CommonService commonService = mock(CommonService.class);
+        SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
-        ReflectionTestUtils.setField(service, "commonService", commonService);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("BOND001");
-        when(commonService.queryGuarantorGrade("BOND001", "C10007")).thenReturn(null);
+        when(securityPoolAdjustService.applySelectedRatingSubject(
+                securityInfo, "C10007", null, null, false))
+                .thenThrow(new BizException("所选担保人不属于当前证券"));
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
-                service, "applySelectedGuarantorGrade", securityInfo, "C10007"))
+                service, "applySelectedRatingSubject", securityInfo, "C10007", null, null, false))
                 .isInstanceOf(BizException.class)
-                .hasMessage("所选担保人不属于当前证券或主体类型不符合要求");
+                .hasMessage("所选担保人不属于当前证券");
     }
 
     /** CRMW 提交快照必须使用后端校验后的所选担保人。 */

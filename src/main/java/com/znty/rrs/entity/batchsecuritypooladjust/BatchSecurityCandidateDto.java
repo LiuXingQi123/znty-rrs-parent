@@ -45,6 +45,9 @@ public class BatchSecurityCandidateDto {
     /** 主体内评分档 */
     private String innerIssuerRating;
 
+    /** 是否 ABS：1=是 / 0=否 */
+    private String absFlag;
+
     /** 担保人（名称，多担保人逗号分隔） */
     private String guarantor;
 

@@ -46,6 +46,12 @@
                     #{item}
                 </foreach>
             </if>
+            <if test="oprtSourceList != null and oprtSourceList.size() > 0">
+                AND t.oprt_source IN
+                <foreach collection="oprtSourceList" item="item" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+            </if>
         </where>
         <!-- 对齐老系统：status ASC, updatetime DESC, createtimestamp DESC（字符串状态用 CASE 映射 1临时/2已更新/3取消发行/4已删除） -->
         ORDER BY CASE t.status

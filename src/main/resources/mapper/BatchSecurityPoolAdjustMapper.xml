@@ -92,6 +92,7 @@
                ,si.rating_bond
                ,si.rating_bondissuer
                ,si.inner_issuer_rating
+               ,si.abs_flag
                ,si.maturity_date
                ,si.date_exists
                ,si.guarantor

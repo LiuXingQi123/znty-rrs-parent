@@ -19,8 +19,38 @@ public class SecurityPoolAdjustRelatedSubjectMapperSqlTest {
         String select = selectBlock(xml, "queryRelatedRatingSubjectList");
 
         assertThat(select)
-                .contains("issuer.s_info_typecode IN (115200000, 115004000, 115203000, 115201000)")
-                .contains("LEFT JOIN ranked_grade")
+                .contains("issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)")
+                .contains("WHEN 115004000 THEN 1")
+                .contains("WHEN 115203000 THEN 2")
+                .contains("WHEN 115202000 THEN 3")
+                .contains("WHEN 115201000 THEN 4")
+                .contains("INNER JOIN ranked_grade")
+                .contains("grade.total_score IS NOT NULL")
+                .contains("ORDER BY eligible.relation_sort_no ASC")
+                .contains(",grade.ts DESC")
+                .doesNotContain("security.abs_flag")
+                .doesNotContain("security.guarant_flag")
+                .doesNotContain("issuer.used = 1");
+    }
+
+    /** 批量调库共用查询同样应对所有证券返回四类关系主体。 */
+    @Test
+    public void commonRelatedSubjectQueryShouldUseFourRelationTypesForAllBonds() throws Exception {
+        Path path = Paths.get("src", "main", "resources", "mapper", "CommonMapper.xml");
+        String xml = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+        String select = selectBlock(xml, "queryGuarantorGradeList");
+
+        assertThat(select)
+                .contains("issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)")
+                .contains("WHEN 115004000 THEN 1")
+                .contains("WHEN 115203000 THEN 2")
+                .contains("WHEN 115202000 THEN 3")
+                .contains("WHEN 115201000 THEN 4")
+                .contains("INNER JOIN ranked_grade")
+                .contains("grade.total_score IS NOT NULL")
+                .contains("ORDER BY eligible.security_code ASC")
+                .contains(",eligible.guarantor_sort_no ASC")
+                .contains(",grade.ts DESC")
                 .doesNotContain("security.abs_flag")
                 .doesNotContain("security.guarant_flag")
                 .doesNotContain("issuer.used = 1");
@@ -38,6 +68,21 @@ public class SecurityPoolAdjustRelatedSubjectMapperSqlTest {
                     .contains("FROM ais_inv_analysis.t_inv_company company")
                     .contains("LEFT JOIN ranked_grade")
                     .doesNotContain("wind_cbondissuer");
+        }
+    }
+
+    /** 调库详情的指定快照和最新快照都应返回普通权益人与自选权益人。 */
+    @Test
+    public void securitySnapshotDetailShouldReturnRightsHolderNames() throws Exception {
+        String xml = readMapper();
+
+        for (String queryId : new String[]{
+                "querySecuritySnapshotDetailByAdjustLogId",
+                "queryLatestSecuritySnapshotDetailByWindCode"}) {
+            assertThat(selectBlock(xml, queryId))
+                    .contains("snap.abs_originator_name")
+                    .contains("snap.company_selector")
+                    .contains("snap.inner_guarantor_rating");
         }
     }
 

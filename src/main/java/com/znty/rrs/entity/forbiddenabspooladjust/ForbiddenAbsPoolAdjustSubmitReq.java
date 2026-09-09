@@ -48,6 +48,12 @@ public class ForbiddenAbsPoolAdjustSubmitReq {
     /** 当前选择的担保人 Wind 主体代码 */
     private String guarantorCode;
 
+    /** 当前选中的权益人主体代码 */
+    private String rightsHolderCode;
+
+    /** 当前选中的自选权益人主体代码 */
+    private String selfSelectedRightsHolderCode;
+
     /** 调整人 ID */
     private String adjusterId;
 

@@ -69,6 +69,12 @@ public class StockSecurityBatchAdjustSubmitReq {
 
         /** 前端选中的担保人代码（多担保人时下拉二选一；用于简易流程第⑤条件担保人评级下调判断，空表示无担保人/未选中） */
         private String guarantorCode;
+
+        /** ABS 当前选中的权益人主体代码 */
+        private String rightsHolderCode;
+
+        /** ABS 当前选中的自选权益人主体代码 */
+        private String selfSelectedRightsHolderCode;
     }
 
     /**
@@ -130,6 +136,15 @@ public class StockSecurityBatchAdjustSubmitReq {
 
         /** 调整说明 */
         private String adjustmentNote;
+
+        /** 本次校验选中的担保人代码 */
+        private String guarantorCode;
+
+        /** 本次校验选中的权益人主体代码 */
+        private String rightsHolderCode;
+
+        /** 本次校验选中的自选权益人主体代码 */
+        private String selfSelectedRightsHolderCode;
 
         /** 信评报告附件在 multipart 文件数组中的下标 */
         private List<Integer> creditReportFileIndexes;

@@ -449,6 +449,8 @@ public class BatchCrmwPoolAdjustService {
         checkReq.setCrmwScode(security.getCrmwScode());
         checkReq.setCrmwStype(resolveCrmwStype(security.getCrmwStype()));
         checkReq.setGuarantorCode(security.getGuarantorCode());
+        checkReq.setRightsHolderCode(security.getRightsHolderCode());
+        checkReq.setSelfSelectedRightsHolderCode(security.getSelfSelectedRightsHolderCode());
         checkReq.setItems(Collections.singletonList(item));
         return checkReq;
     }
@@ -518,6 +520,8 @@ public class BatchCrmwPoolAdjustService {
         submitReq.setCrmwScode(primary.getCrmwScode());
         submitReq.setCrmwStype(resolveCrmwStype(primary.getCrmwStype()));
         submitReq.setGuarantorCode(primary.getGuarantorCode());
+        submitReq.setRightsHolderCode(primary.getRightsHolderCode());
+        submitReq.setSelfSelectedRightsHolderCode(primary.getSelfSelectedRightsHolderCode());
         submitReq.setAdjustType("手动批量调整");
         submitReq.setAdjustReason(req.getAdjustReason());
         submitReq.setAdjustAdvice(buildBatchAdjustAdvice(req));

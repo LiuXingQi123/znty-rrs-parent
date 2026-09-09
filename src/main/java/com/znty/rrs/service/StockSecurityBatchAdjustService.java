@@ -544,6 +544,8 @@ public class StockSecurityBatchAdjustService {
         checkReq.setSecurityType(security.getSecurityType());
         // 透传前端选中的担保人代码（简易流程第⑤条件担保人评级下调判断用）
         checkReq.setGuarantorCode(security.getGuarantorCode());
+        checkReq.setRightsHolderCode(security.getRightsHolderCode());
+        checkReq.setSelfSelectedRightsHolderCode(security.getSelfSelectedRightsHolderCode());
         checkReq.setReleaseRules("yes".equals(req.getReleaseRules()));
         checkReq.setItems(Collections.singletonList(item));
         return checkReq;
@@ -616,6 +618,9 @@ public class StockSecurityBatchAdjustService {
         submitReq.setAdjustAdvice(buildBatchAdjustAdvice(req));
         submitReq.setAdjusterId(req.getAdjusterId());
         submitReq.setAdjusterName(req.getAdjusterName());
+        submitReq.setGuarantorCode(primary.getGuarantorCode());
+        submitReq.setRightsHolderCode(primary.getRightsHolderCode());
+        submitReq.setSelfSelectedRightsHolderCode(primary.getSelfSelectedRightsHolderCode());
 
         List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
         for (StockSecurityBatchAdjustSubmitReq.AdjustItem item : items) {

@@ -1096,6 +1096,8 @@
                ,snap.guarant_type
                ,snap.rating_bondissuer_agency
                ,snap.agency_nameid
+               ,snap.abs_originator_name
+               ,snap.company_selector
                ,dst.security_type_name
         FROM ip_adjust_security_snapshot_crmw snap
         LEFT JOIN dict_security_type dst ON dst.security_type = snap.security_type AND dst.is_deleted = 0
@@ -1151,6 +1153,8 @@
                ,snap.guarant_type
                ,snap.rating_bondissuer_agency
                ,snap.agency_nameid
+               ,snap.abs_originator_name
+               ,snap.company_selector
                ,dst.security_type_name
         FROM ip_adjust_security_snapshot_crmw snap
         LEFT JOIN dict_security_type dst ON dst.security_type = snap.security_type AND dst.is_deleted = 0

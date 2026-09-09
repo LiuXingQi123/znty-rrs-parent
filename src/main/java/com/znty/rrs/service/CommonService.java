@@ -68,10 +68,10 @@ public class CommonService {
     }
 
     /**
-     * 按担保债/ABS 属性批量查询符合 Wind 主体类型要求的担保人及其最新主体内评分。
+     * 批量查询证券的四类关系主体及其最新主体内评分。
      *
      * @param req Wind 证券代码列表
-     * @return 担保债返回担保人类型，ABS 返回四类相关主体；无评分时 totalScore 为空
+     * @return 担保人、差额支付承诺人、权益相关主体、原始权益人；仅含有最新内评的主体
      */
     public List<GuarantorGradeDto> queryGuarantorGradeList(GuarantorGradeReq req) {
         if (req == null || req.getSecurityCodes() == null || req.getSecurityCodes().isEmpty()) {
@@ -86,7 +86,7 @@ public class CommonService {
         if (normalizedCodes.isEmpty()) {
             return new ArrayList<>();
         }
-        // 按去重后的 Wind 证券代码一次性筛选合格担保人并查询最新内评
+        // 按去重后的 Wind 证券代码一次性查询四类关系主体及最新内评
         return commonMapper.queryGuarantorGradeList(new ArrayList<>(normalizedCodes));
     }
 

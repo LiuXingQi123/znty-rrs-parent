@@ -22,6 +22,8 @@ public class TempSecurityCodeReq extends PageRequest {
     private String tempSecurityCode;
     /** 状态列表（多选：temporary/updated/cancelled/deleted） */
     private List<String> statusList;
+    /** 操作来源列表（多选：manual/job/other） */
+    private List<String> oprtSourceList;
     /** 临时证券市场 */
     private String tempSecurityMarket;
     /** 临时证券类型 */

@@ -14,4 +14,10 @@ public class SecurityInfoDetailDto extends SecurityInfoBo {
 
     /** 证券类型名称 */
     private String securityTypeName;
+
+    /** ABS 普通权益人名称 */
+    private String absOriginatorName;
+
+    /** ABS 自选权益人名称 */
+    private String companySelector;
 }

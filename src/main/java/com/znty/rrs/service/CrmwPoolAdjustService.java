@@ -46,7 +46,6 @@ import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
-import com.znty.rrs.entity.common.GuarantorGradeDto;
 import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDto;
@@ -143,6 +142,10 @@ public class CrmwPoolAdjustService {
     /** 通用查询服务 */
     @Resource
     private CommonService commonService;
+
+    /** 复用证券池调库的评级主体选择与防伪校验口径 */
+    @Resource
+    private SecurityPoolAdjustService securityPoolAdjustService;
 
     /** 评级下调判定组件（主体/展望/担保人评级下调判断，查 wind_cbondissuerrating） */
     @Resource
@@ -270,6 +273,8 @@ public class CrmwPoolAdjustService {
         master.setFundUse(snapshot.getFundUse());
         master.setPromptReason(snapshot.getPromptReason());
         master.setAnalysis(snapshot.getAnalysis());
+        master.setAbsOriginatorName(snapshot.getAbsOriginatorName());
+        master.setCompanySelector(snapshot.getCompanySelector());
     }
 
     /**
@@ -766,8 +771,12 @@ public class CrmwPoolAdjustService {
         if (CRMW_SECURITY_TYPE.equals(securityInfo.getSecurityType())) {
             throw new BizException("调库对象不能是 CRMW 凭证");
         }
-        // 担保人名称、代码和内评以页面所选 Wind 关系及 AIS 最新评分为准
-        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
+        // 按证券池调库口径校验并回填担保人 / 权益人 / 自选权益人
+        SecurityPoolAdjustService.SelectedRatingSubjectData selectedRatingSubject =
+                applySelectedRatingSubject(securityInfo, req.getGuarantorCode(),
+                        req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode(), true);
+        req.setAbsOriginatorName(selectedRatingSubject.getRightsHolderName());
+        req.setCompanySelector(selectedRatingSubject.getSelfSelectedRightsHolderName());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1353,6 +1362,8 @@ public class CrmwPoolAdjustService {
         snapshot.setCrmwScode(req.getCrmwScode());
         // 提交请求未带 mktcode，快照侧预留列允许为空
         snapshot.setCrmwStype(req.getCrmwStype());
+        snapshot.setAbsOriginatorName(req.getAbsOriginatorName());
+        snapshot.setCompanySelector(req.getCompanySelector());
         snapshot.setIsDeleted(0);
         snapshot.setCrteTime(submitTime);
         snapshot.setUpdtTime(submitTime);
@@ -1611,8 +1622,9 @@ public class CrmwPoolAdjustService {
         if (CRMW_SECURITY_TYPE.equals(securityInfo.getSecurityType())) {
             throw new BizException("调库对象不能是 CRMW 凭证");
         }
-        // 校验口径与页面展示一致，不读取证券主数据中的担保人评分逗号串
-        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
+        // 校验口径与证券池调库页面一致
+        applySelectedRatingSubject(securityInfo, req.getGuarantorCode(),
+                req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode(), true);
         SecurityInfoBo crmwInfo = crmwPoolAdjustMapper.querySecurityBoByCode(req.getCrmwScode());
         if (crmwInfo == null || !CRMW_SECURITY_TYPE.equals(crmwInfo.getSecurityType())) {
             throw new BizException("CRMW凭证不存在或类型不正确");
@@ -1672,23 +1684,12 @@ public class CrmwPoolAdjustService {
         return shared;
     }
 
-    /**
-     * 校验所选担保人属于当前证券，并将其名称、代码及 AIS 最新内评放入本次业务对象。
-     */
-    private void applySelectedGuarantorGrade(SecurityInfoBo securityInfo, String guarantorCode) {
-        securityInfo.setInnerGuarantorRating(null);
-        if (guarantorCode == null || guarantorCode.trim().isEmpty()) {
-            return;
-        }
-        String selectedCode = guarantorCode.trim();
-        // 按证券代码查询 Wind 担保人关系并读取最新内评，不依赖证券主数据的 guarantor_id
-        GuarantorGradeDto grade = commonService.queryGuarantorGrade(securityInfo.getWindCode(), selectedCode);
-        if (grade == null) {
-            throw new BizException("所选担保人不属于当前证券或主体类型不符合要求");
-        }
-        securityInfo.setGuarantor(grade.getWindname());
-        securityInfo.setGuarantorId(selectedCode);
-        securityInfo.setInnerGuarantorRating(grade.getTotalScore());
+    /** 复用证券池调库的评级主体校验与回填逻辑。 */
+    private SecurityPoolAdjustService.SelectedRatingSubjectData applySelectedRatingSubject(
+            SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
+            String selfSelectedRightsHolderCode, boolean requireAbsSelection) {
+        return securityPoolAdjustService.applySelectedRatingSubject(securityInfo, guarantorCode,
+                rightsHolderCode, selfSelectedRightsHolderCode, requireAbsSelection);
     }
 
     /**

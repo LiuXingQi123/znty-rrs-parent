@@ -14,6 +14,7 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import org.junit.Test;
@@ -42,6 +43,41 @@ import static org.mockito.Mockito.when;
  * 证券池批量调整服务测试
  */
 public class BatchSecurityPoolAdjustServiceTest {
+
+    /** 批量校验和提交都应透传 ABS 普通权益人与自选权益人编码。 */
+    @Test
+    public void batchRequestShouldPassThroughRightsHolderCodes() {
+        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
+        req.setDirection("in");
+        req.setPoolId(11L);
+        req.setPoolName("一级库");
+        req.setPoolType("credit_bond");
+
+        BatchSecurityInboundAdjustReq.SecurityItem security = new BatchSecurityInboundAdjustReq.SecurityItem();
+        security.setSecurityCode("ABS001");
+        security.setSecurityShortName("测试ABS");
+        security.setSecurityType("abs");
+        security.setRightsHolderCode("RIGHTS001");
+        security.setSelfSelectedRightsHolderCode("SELF001");
+        AdjustCheckReq checkReq = ReflectionTestUtils.invokeMethod(
+                service, "buildSingleCheckReq", req, security);
+        assertThat(checkReq.getRightsHolderCode()).isEqualTo("RIGHTS001");
+        assertThat(checkReq.getSelfSelectedRightsHolderCode()).isEqualTo("SELF001");
+
+        BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
+        item.setSecurityCode("ABS001");
+        item.setSecurityShortName("测试ABS");
+        item.setSecurityType("abs");
+        item.setRightsHolderCode("RIGHTS001");
+        item.setSelfSelectedRightsHolderCode("SELF001");
+        item.setTargetPoolId(11L);
+        item.setAdjustMode("调入");
+        SecurityPoolAdjustSubmitReq submitReq = ReflectionTestUtils.invokeMethod(
+                service, "buildSingleSubmitReq", req, Collections.singletonList(item));
+        assertThat(submitReq.getRightsHolderCode()).isEqualTo("RIGHTS001");
+        assertThat(submitReq.getSelfSelectedRightsHolderCode()).isEqualTo("SELF001");
+    }
 
     /** 验证分页查询按类型分项回填现有数量，无数据池合计为 0 */
     @Test

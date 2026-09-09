@@ -421,8 +421,10 @@ public class BatchSecurityPoolAdjustService {
         checkReq.setSecurityCode(security.getSecurityCode());
         checkReq.setSecurityShortName(security.getSecurityShortName());
         checkReq.setSecurityType(security.getSecurityType());
-        // 透传前端选中的担保人代码（简易流程第⑤条件担保人评级下调判断用）
+        // 透传前端选中的担保人、普通权益人和自选权益人代码
         checkReq.setGuarantorCode(security.getGuarantorCode());
+        checkReq.setRightsHolderCode(security.getRightsHolderCode());
+        checkReq.setSelfSelectedRightsHolderCode(security.getSelfSelectedRightsHolderCode());
         checkReq.setReleaseRules("yes".equals(req.getReleaseRules()));
         checkReq.setItems(Collections.singletonList(item));
         return checkReq;
@@ -479,6 +481,8 @@ public class BatchSecurityPoolAdjustService {
         submitReq.setSecurityShortName(primary.getSecurityShortName());
         submitReq.setSecurityType(primary.getSecurityType());
         submitReq.setGuarantorCode(primary.getGuarantorCode());
+        submitReq.setRightsHolderCode(primary.getRightsHolderCode());
+        submitReq.setSelfSelectedRightsHolderCode(primary.getSelfSelectedRightsHolderCode());
         // 若 primary 是 related，主券简称可能不对，回查主券主数据
         if (ItemType.RELATED.getCode().equals(primary.getItemTag())) {
             SecurityInfoBo primarySec = securityPoolAdjustMapper.querySecurityBoByCode(submitReq.getSecurityCode());

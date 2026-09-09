@@ -90,7 +90,7 @@
 
 ### 3.1 证券基本信息（section-bond-info）
 
-`el-descriptions :column="3" border`，共 29 项，字段及顺序与调库页一致：证券全称/简称/代码、发行人、银行间/沪/深/北交所代码、发行总额、当期利率、含权期限说明、起息/到期日、质押比率、评级机构/证券评级/主体评级/展望评级、担保人、主承销商、主体内评分档、证券类型、赎回行权剩余期限(年)、担保人主体内评分、含权债剩余期限(年)、**剩余期限(天)**（`dateExists`，与库 `date_exists` 一致；输入框旁用 `formatRemainTermYears` ÷365 同步展示「x.xxxx年」四位小数；列表表格同样 ÷365 展示为年、四位小数）、募集资金用途/提示原因/证券分析（3 个 textarea，span=3）。担保人字段在详情页和审核页只读，展示当笔提交快照中的 `guarantor`；数据来自 `querySecurityDetail` → `bondDetail`。
+`el-descriptions :column="3" border`，字段及顺序与调库页一致：证券全称/简称/代码、发行人、银行间/沪/深/北交所代码、发行总额、当期利率、含权期限说明、起息/到期日、质押比率、评级机构/证券评级/主体评级/展望评级；非 ABS 展示担保人，ABS 展示权益人和自选权益人；随后展示主承销商、主体内评分档、证券类型、赎回行权剩余期限(年)、担保人主体内评分、含权债剩余期限(年)、**剩余期限(天)**（`dateExists`，与库 `date_exists` 一致；输入框旁用 `formatRemainTermYears` ÷365 同步展示「x.xxxx年」四位小数；列表表格同样 ÷365 展示为年、四位小数）、募集资金用途/提示原因/证券分析（3 个 textarea，span=3）。详情页和审核页均只读展示当笔提交快照：非 ABS 的担保人取 `guarantor`；ABS 的普通权益人取 `absOriginatorName`、自选权益人取 `companySelector`；“担保人主体内评分”统一取 `innerGuarantorRating`，即提交时最终生效评级主体的内评。
 
 ### 3.2 当前所在池（section-current-pools）
 

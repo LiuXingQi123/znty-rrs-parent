@@ -26,18 +26,20 @@
 |---|---|---|
 | `tempSecurityCode` | el-input（`v-model.trim`，回车查询） | LIKE `%xxx%` |
 | `tempSecurityName` | el-input（`v-model.trim`，回车查询） | LIKE `%xxx%` |
+| `statusList` | el-select 多选（`collapse-tags`，可清空） | `status IN (...)` |
+| `oprtSourceList` | el-select 多选（`collapse-tags`，可清空）；**默认 `['manual']`** | `oprt_source IN (...)`；取值 `manual=人工 / job=定时任务 / other=其他` |
 
-操作：`handleSearch`（重置 `pageIndex=1` 后 `loadList`）、`handleReset`（清空两项+回首页）、`openAddDialog`（新增）。
+操作：`handleSearch`（重置 `pageIndex=1` 后 `loadList`）、`handleReset`（清空代码/名称/状态，操作来源恢复默认 `['manual']` 后回首页）、`openAddDialog`（新增）。
 
 ### 2.2 列表查询
 
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodePage`
-- 请求体：`{ tempSecurityCode, tempSecurityName, pageIndex, pageSize }`（`TempSecurityCodeReq extends PageRequest`）
+- 请求体：`{ tempSecurityCode, tempSecurityName, statusList, oprtSourceList, pageIndex, pageSize }`（`TempSecurityCodeReq extends PageRequest`）
 - 后端 `TempSecurityCodeService.queryTempSecurityCodePage`：`PageHelper.startPage(pageIndex, pageSize)` → `tempSecurityCodeMapper.queryTempSecurityCodePage(req)` → `PageInfo` → `PageResult`。
-- SQL 行为：`FROM rrs_temp_security_code t`，`LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type AND dst_temp.is_deleted = 0`（取 `tempSecurityTypeName`），`LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type AND dst.is_deleted = 0`（取正式 `security_type_name`）；`<where>` 仅拼 `temp_security_code LIKE` 与 `temp_security_name LIKE`；`ORDER BY t.crte_time DESC, t.id DESC`。
+- SQL 行为：`FROM rrs_temp_security_code t`，`LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type AND dst_temp.is_deleted = 0`（取 `tempSecurityTypeName`），`LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type AND dst.is_deleted = 0`（取正式 `security_type_name`）；`<where>` 拼 `temp_security_code LIKE`、`temp_security_name LIKE`、可选 `status IN`、可选 `oprt_source IN`；排序按状态优先级 + `update_time`/`crte_time`/`id`。
 - **注意**：列表 SQL **未过滤 `is_deleted = 0`**，而 `queryTempSecurityCodeById`/`queryTempSecurityCodeDetail` 均 `AND is_deleted = 0`。即软删除后（`is_deleted=1, status='deleted'`）的记录仍会出现在列表中（显示「已删除」tag），但按 id 查详情会返回 null。这是列表与详情的过滤口径不一致点。
 - 分页：前端 `page-sizes=[10,20,50,100]`，默认 `pageSize=20`；`PageRequest` 后端 pageSize 上限 100。
-- 表格列：序号、临时证券名称/代码/市场(el-tag)/类型(el-tag `tempSecurityTypeName`)、临时缓释凭证代码、临时关联主体(`tempCompanyNameSnapshot`)、临时发行/到期日期、证券名称/代码/市场(el-tag)/类型(el-tag `securityTypeName`)、更新时间(`updateTime`)、状态(el-tag)、操作（更新/取消发行/删除）。
+- 表格列：序号、临时证券名称/代码/市场(el-tag)/类型(el-tag `tempSecurityTypeName`)、临时缓释凭证代码、临时关联主体(`tempCompanyNameSnapshot`)、临时发行/到期日期、状态(el-tag)、**操作来源(el-tag `oprtSource`)**、证券名称/代码/市场(el-tag)/类型(el-tag `securityTypeName`)、更新时间(`updateTime`)、操作（更新/取消发行/删除）。
 
 ### 2.3 下拉选项查询
 
@@ -94,14 +96,14 @@
 
 | 路径 | 请求体字段 | 返回类型 | 用途 |
 |---|---|---|---|
-| `queryTempSecurityCodePage` | `tempSecurityCode?, tempSecurityName?, pageIndex, pageSize` | `ApiResponse<PageResult<TempSecurityCodeDto>>` | 分页查询临时代码列表 |
+| `queryTempSecurityCodePage` | `tempSecurityCode?, tempSecurityName?, statusList?, oprtSourceList?, pageIndex, pageSize` | `ApiResponse<PageResult<TempSecurityCodeDto>>` | 分页查询临时代码列表；前端默认传 `oprtSourceList=['manual']` |
 | `queryTempSecurityCodeOptions` | `companyKeyword?`（远程搜索）/`tempCompanyCode?`（精确回显） | `ApiResponse<TempSecurityCodeDto.OptionBundle>` | 查下拉：发行主体（wind_cbondissuer 最多 50 条）+ 证券类型 |
 | `addTempSecurityCode` | `tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyCode, tempIssueDate, tempMaturityDate` | `ApiResponse<TempSecurityCodeDto>` | 新增临时代码（status=temporary） |
 | `editTempSecurityCodeToUpdated` | `id, tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyCode, tempIssueDate, tempMaturityDate, securityName, securityCode, securityMarket, securityType` | `ApiResponse<TempSecurityCodeDto>` | 更新为正式证券（status=updated，同步 upsert rrs_securityinfo） |
 | `editTempSecurityCodeToCancelled` | `id` | `ApiResponse<TempSecurityCodeDto>` | 取消发行（status=cancelled） |
 | `deleteTempSecurityCode` | `id` | `ApiResponse<TempSecurityCodeDto>`（实返 null） | 软删除（status=deleted, is_deleted=1） |
 
-> `TempSecurityCodeReq extends PageRequest`，含 `id, tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode, tempCompanyCode, companyKeyword, tempIssueDate(yyyy-MM-dd), tempMaturityDate(yyyy-MM-dd), securityName, securityCode, securityMarket, securityType, operatorId`。`operatorId` **后端未使用**（无审计表），前端不传。`TempSecurityCodeDto` 含主表全字段 + `tempSecurityTypeName`/`securityTypeName`（JOIN dict 得来）+ 静态内部类 `CompanyOption`/`SecurityTypeOption`/`OptionBundle`。
+> `TempSecurityCodeReq extends PageRequest`，含 `id, tempSecurityName, tempSecurityCode, statusList, oprtSourceList, tempSecurityMarket, tempSecurityType, tempMitigationCode, tempCompanyCode, companyKeyword, tempIssueDate(yyyy-MM-dd), tempMaturityDate(yyyy-MM-dd), securityName, securityCode, securityMarket, securityType, operatorId`。`operatorId` **后端未使用**（无审计表），前端不传。`TempSecurityCodeDto` 含主表全字段（含 `oprtSource`）+ `tempSecurityTypeName`/`securityTypeName`（JOIN dict 得来）+ 静态内部类 `CompanyOption`/`SecurityTypeOption`/`OptionBundle`。
 
 ---
 

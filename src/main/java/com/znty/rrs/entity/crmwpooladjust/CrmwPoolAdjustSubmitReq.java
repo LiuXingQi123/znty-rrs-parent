@@ -45,6 +45,18 @@ public class CrmwPoolAdjustSubmitReq {
     /** 当前选择的担保人 Wind 主体代码 */
     private String guarantorCode;
 
+    /** ABS 当前选中的权益人主体代码 */
+    private String rightsHolderCode;
+
+    /** ABS 当前选中的自选权益人主体代码 */
+    private String selfSelectedRightsHolderCode;
+
+    /** ABS 普通权益人名称，由后端校验后回填 */
+    private String absOriginatorName;
+
+    /** ABS 自选权益人名称，由后端校验后回填 */
+    private String companySelector;
+
     /** 调整人 ID */
     private String adjusterId;
 

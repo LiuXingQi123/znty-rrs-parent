@@ -50,7 +50,6 @@ import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
-import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.forbiddenabspooladjust.ForbiddenAbsPoolAdjustReq;
@@ -137,6 +136,10 @@ public class ForbiddenAbsPoolAdjustService {
     /** ABS禁投池调库数据访问组件 */
     @Resource
     private ForbiddenAbsPoolAdjustMapper forbiddenAbsPoolAdjustMapper;
+
+    /** 复用证券池调库的 ABS 权益人选择与防伪校验口径 */
+    @Resource
+    private SecurityPoolAdjustService securityPoolAdjustService;
 
     /** 投资池数据访问组件 */
     @Resource
@@ -926,8 +929,9 @@ public class ForbiddenAbsPoolAdjustService {
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
-        // 校验口径与页面展示一致，不再读取证券主数据中的担保人评分逗号串
-        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
+        // ABS 按证券池调库口径校验权益人，自选权益人优先
+        securityPoolAdjustService.applySelectedRatingSubject(securityInfo, null, req.getRightsHolderCode(),
+                req.getSelfSelectedRightsHolderCode(), true);
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1624,8 +1628,9 @@ public class ForbiddenAbsPoolAdjustService {
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
-        // 校验口径与页面展示一致，不再读取证券主数据中的担保人评分逗号串
-        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
+        // ABS 按证券池调库口径校验权益人，自选权益人优先
+        securityPoolAdjustService.applySelectedRatingSubject(securityInfo, null, req.getRightsHolderCode(),
+                req.getSelfSelectedRightsHolderCode(), true);
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1679,23 +1684,6 @@ public class ForbiddenAbsPoolAdjustService {
         // 是否放开规则：是=跳过主体债入库矩阵校验（对齐批量调库 releaseRules）
         shared.setReleaseRules(req.isReleaseRules());
         return shared;
-    }
-
-    /**
-     * 校验所选担保人属于当前证券，并将其 AIS 最新内评放入本次校验使用的临时对象。
-     */
-    private void applySelectedGuarantorGrade(SecurityInfoBo securityInfo, String guarantorCode) {
-        securityInfo.setInnerGuarantorRating(null);
-        if (guarantorCode == null || guarantorCode.trim().isEmpty()) {
-            return;
-        }
-        String selectedCode = guarantorCode.trim();
-        // 按证券代码查询 Wind 担保人关系并读取最新内评，不依赖证券主数据的 guarantor_id
-        GuarantorGradeDto grade = commonService.queryGuarantorGrade(securityInfo.getWindCode(), selectedCode);
-        if (grade == null) {
-            throw new BizException("所选担保人不属于当前证券或主体类型不符合要求");
-        }
-        securityInfo.setInnerGuarantorRating(grade.getTotalScore());
     }
 
     /**

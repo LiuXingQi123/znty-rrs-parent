@@ -78,6 +78,12 @@ public class BatchCrmwAdjustReq {
 
         /** 前端选中的担保人代码 */
         private String guarantorCode;
+
+        /** ABS 当前选中的权益人主体代码 */
+        private String rightsHolderCode;
+
+        /** ABS 当前选中的自选权益人主体代码 */
+        private String selfSelectedRightsHolderCode;
     }
 
     /**
@@ -97,6 +103,12 @@ public class BatchCrmwAdjustReq {
 
         /** 本次校验时选择的担保人 Wind 主体代码 */
         private String guarantorCode;
+
+        /** 本次校验时选择的权益人主体代码 */
+        private String rightsHolderCode;
+
+        /** 本次校验时选择的自选权益人主体代码 */
+        private String selfSelectedRightsHolderCode;
 
         /** CRMW 凭证名称 */
         private String crmwName;

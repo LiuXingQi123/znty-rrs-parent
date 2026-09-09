@@ -17,4 +17,10 @@ public class SecurityInfoDetailDto extends SecurityInfoBo {
 
     /** 证券品种大类（bond/fund/stock/company，由 dict_security_type 推导，前端按类型差异化展示） */
     private String categoryType;
+
+    /** ABS 普通权益人名称（调库快照展示字段） */
+    private String absOriginatorName;
+
+    /** ABS 自选权益人名称（调库快照展示字段） */
+    private String companySelector;
 }

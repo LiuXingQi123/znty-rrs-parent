@@ -100,14 +100,14 @@
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `queryRelatedRatingSubjectList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115200000/115004000/115203000/115201000` 四类关系主体，并关联最新主体内评；无内评的关系主体仍返回 |
+| `queryRelatedRatingSubjectList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115202000/115201000` 四类关系主体，仅返回有最新主体内评的候选；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
 | `querySelfSelectedRightsHolderPage` | `{ companyCode, companyName, pageIndex, pageSize }` | ABS 自选权益人分页；从 `ais_inv_analysis.t_inv_company` 查询全市场主体，编码/名称模糊查询，关联最新主体内评，默认每页 20 条，可切换 10/20/30/50 条 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode }` | 可调入池 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
 | `querySecurityPoolStatus` | `{ securityCode }` | 当前所在池 + 主体所在池 |
 | `queryAdjustLogList` | `{ securityCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
 
-非 ABS 和 ABS 都使用上述四类关系主体：页面分别展示为“担保人”和“权益人”。单候选首次加载时直接携带默认编码查询调入池；多候选需手工选择。ABS 还可从全市场主体选择自选权益人，自选存在时优先于普通权益人，清除后回退普通权益人。任一选择变化均重新查询可调入池并清空原有调入选择，不缓存查询结果、不重新查询最近信评报告。
+非 ABS 和 ABS 都使用上述四类关系主体：页面分别展示为“担保人”和“权益人”。页面首次加载时按接口顺序默认选中第一条，用户可改选。ABS 还可从全市场主体选择自选权益人，自选存在时优先于普通权益人，清除后回退普通权益人。任一选择变化均重新查询可调入池并清空原有调入选择，不缓存查询结果、不重新查询最近信评报告。
 
 随后：
 1. 用 `securityCurrentPools.targetPoolId` 构建 `currentSecurityPoolIds` 集合。
@@ -418,7 +418,7 @@
 
 > 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
 
-详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingSubjectList` 查询当前证券四类关系主体：`115200000=债务主体`、`115004000=担保人`、`115203000=差额支付承诺人`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，未查到内评仍展示。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 分页查询，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；编码和名称支持模糊查询。单候选自动选中，多候选手工选择；自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段单位：`date_exists` 剩余期限（**天**）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
+详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingSubjectList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，仅返回有最新内评的主体。四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 分页查询，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段单位：`date_exists` 剩余期限（**天**）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
 

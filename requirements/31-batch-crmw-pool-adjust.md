@@ -26,7 +26,7 @@
 | 调出 | `ip_pool_status_crmw` 当前有效组合，左连标的 `rrs_securityinfo` |
 | 调入 | CRMW 凭证 × 可绑定标的（排除 `crmw`/`company`），且该组合尚未在目标池 |
 
-候选表列：证券名称、证券代码、市场、CRMW名称、CRMW代码、发行人、证券评级、主体评级、主体内评分档、到期日期、剩余期限(年)、担保人*。
+候选表默认 10 条/页，列包含证券名称、证券代码、市场、CRMW名称、CRMW代码、发行人、证券评级、主体评级、主体内评分档、到期日期、剩余期限(年)、担保人/权益人、自选权益人、担保人主体内评分。关系主体按 `115004000`、`115203000`、`115202000`、`115201000` 映射为 1‑4 升序，其中 `115202000=债务主体`，页面默认选中第一条。
 
 跨页多选键：`crmwScode|securityCode`。
 
@@ -37,7 +37,7 @@
 编排层 `BatchCrmwPoolAdjustService`：
 
 - `checkAdjust` 逐组合组装与单笔相同的 `AdjustCheckReq`，直接调用 `CrmwPoolAdjustService.checkCrmwAdjust`（与证券池批量调用 `checkAdjust` 同构）；结果项身份、流程候选与 `warnings` 透传单笔返回，不在批量侧重写规则。调入「已在池」按凭证+标的组合判断。
-- CRMW 单笔 `AdjustCheckReq` 和 `CrmwPoolAdjustSubmitReq` 均接收 `guarantorCode`；批量编排层把每个标的选择的担保人透传给单笔校验与提交，用于关系复核、担保人评级下调判断及快照保存。目标池仍不是信用债大库，不走主体债矩阵；`releaseRules=yes` 仅在提交时把说明追加到调整意见/调整说明，**不改变**单笔校验结果。
+- CRMW 单笔 `AdjustCheckReq` 和 `CrmwPoolAdjustSubmitReq` 均接收 `guarantorCode`、`rightsHolderCode`、`selfSelectedRightsHolderCode`；批量编排层按标的类型透传实际选中的评级主体。ABS 自选权益人优先，两者均未选时阻断。目标池仍不是信用债大库，不走主体债矩阵；`releaseRules=yes` 仅在提交时把说明追加到调整意见/调整说明，**不改变**单笔校验结果。
 - `addAdjustLog` 按组合分组后委托 `submitAdjustLog`，整批共享附件与 `BatchNoContext`。
 - 手工项 `adjustType=手动批量调整`；批次号前缀仍为 `CRMW`。
 - 整批一个事务；约 30 秒防重复键含 `crmwScode`。

@@ -67,8 +67,14 @@ public class BatchSecurityInboundAdjustReq {
         /** 证券类型 */
         private String securityType;
 
-        /** 前端选中的担保人代码（多担保人时下拉二选一；用于简易流程第⑤条件担保人评级下调判断，空表示无担保人/未选中） */
+        /** 非 ABS 前端选中的担保人代码 */
         private String guarantorCode;
+
+        /** ABS 前端选中的普通权益人代码 */
+        private String rightsHolderCode;
+
+        /** ABS 前端选中的自选权益人代码 */
+        private String selfSelectedRightsHolderCode;
     }
 
     /**
@@ -88,6 +94,12 @@ public class BatchSecurityInboundAdjustReq {
 
         /** 本次校验时选择的担保人 Wind 主体代码 */
         private String guarantorCode;
+
+        /** 本次校验时选择的普通权益人主体代码 */
+        private String rightsHolderCode;
+
+        /** 本次校验时选择的自选权益人主体代码 */
+        private String selfSelectedRightsHolderCode;
 
         /** CRMW名称 */
         private String crmwName;

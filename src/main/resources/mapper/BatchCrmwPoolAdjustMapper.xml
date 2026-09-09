@@ -63,6 +63,7 @@
         SELECT si.wind_code AS securityCode
                ,si.short_name AS securityShortName
                ,si.security_type
+               ,si.abs_flag
                ,CONCAT_WS(','
                    ,IF(si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '', 'SSE', NULL)
                    ,IF(si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '', 'SZSE', NULL)
@@ -125,6 +126,7 @@
         SELECT bond.wind_code AS securityCode
                ,bond.short_name AS securityShortName
                ,bond.security_type
+               ,bond.abs_flag
                ,CONCAT_WS(','
                    ,IF(bond.wind_code_sh IS NOT NULL AND bond.wind_code_sh != '', 'SSE', NULL)
                    ,IF(bond.wind_code_sz IS NOT NULL AND bond.wind_code_sz != '', 'SZSE', NULL)

@@ -29,14 +29,14 @@
 ### 3.1 view 只读模式（默认）
 
 - `isViewMode=true`、`isSecurityInfoReadonly=true`（所有证券字段 `el-input :disabled`）。
-- 展示：证券基本信息（`el-descriptions` 3 列，共 29 项，字段及顺序同 [11]；在“展望评级”后只读展示 `guarantor` 担保人；赎回/含权债剩余期限为**年**，剩余期限为**天**且旁同步展示年）、CRMW 基本信息（只读）、当前所在池、调库记录表（`showAdjustLogSection=true`）、当前流程状态表（`showFlowStatusSection=true`）。
+- 展示：证券基本信息（`el-descriptions` 3 列，字段及顺序同 [11]；非 ABS 展示担保人，ABS 展示权益人、自选权益人和担保人主体内评分；赎回/含权债剩余期限为**年**，剩余期限为**天**且旁同步展示年）、CRMW 基本信息（只读）、当前所在池、调库记录表（`showAdjustLogSection=true`）、当前流程状态表（`showFlowStatusSection=true`）。
 - `showLogUploadActions=false`（信评报告/其他材料的「选择报告」「上传附件」按钮均隐藏）。
 - 终态记录（`20/21/99/-1`）同样只读展示。
 
 ### 3.2 adjust 可调整模式（首次调库提交）
 
 - `entryMode='adjust'`：隐藏调库记录区与流程状态区，显示调库操作区（步骤1选池）。
-- 证券基本信息中的“担保人”改为与证券池调库一致的下拉：候选类型按债券/ABS 口径控制，单候选默认选中，多候选默认不选且下一步必须选择；变更后联动展示所选主体的 AIS 最新内评分。
+- 证券基本信息中的“担保人”改为与证券池调库一致的下拉：候选类型及排序口径保持一致，页面默认选中第一条并允许改选；变更后联动展示所选主体的 AIS 最新内评分。
 - 步骤1：左右双栏「可调入库」（绿）+「可调出库」（红），树形 `el-table`，叶子节点可勾选；可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起（CRMW 池树不含该节点时即默认全部收起），可调出库默认全部展开；互斥校验（`handleInPoolSelect`/`handleOutPoolSelect`）。
 - 步骤2（`goToStep2`）：携带所选 `guarantorCode` 调 `checkCrmwAdjust` → 展示校验结果表 + 原因建议。
 - 提交（`handleSubmit`→`confirmFlowSelection`→`submitAdjustLog`）：调 `addCrmwAdjustLogWithFiles`（multipart），成功后 `backToList`（先 `closeActiveTab()`，失败再回页内列表）。顶部「返回」同样先关动态页签，禁止 `history.back()`。
