@@ -16,6 +16,9 @@ import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.IpAdjustStepDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolStatusDto;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderReq;
 import com.znty.rrs.service.SecurityPoolAdjustService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -70,6 +73,24 @@ public class SecurityPoolAdjustController {
     @PostMapping("/querySecurityDetail")
     public ApiResponse<SecurityInfoDetailDto> querySecurityDetail(@RequestBody SecurityPoolAdjustReq req) {
         return ApiResponse.success(securityPoolAdjustService.querySecurityDetail(req));
+    }
+
+    /**
+     * 查询证券池调库页面担保人、权益人下拉共用的四类关系主体及其最新内评
+     */
+    @PostMapping("/queryRelatedRatingSubjectList")
+    public ApiResponse<List<RelatedRatingSubjectDto>> queryRelatedRatingSubjectList(
+            @RequestBody SecurityPoolAdjustReq req) {
+        return ApiResponse.success(securityPoolAdjustService.queryRelatedRatingSubjectList(req));
+    }
+
+    /**
+     * 分页查询 ABS 自选权益人候选
+     */
+    @PostMapping("/querySelfSelectedRightsHolderPage")
+    public ApiResponse<PageResult<SelfSelectedRightsHolderDto>> querySelfSelectedRightsHolderPage(
+            @RequestBody SelfSelectedRightsHolderReq req) {
+        return ApiResponse.success(securityPoolAdjustService.querySelfSelectedRightsHolderPage(req));
     }
 
     /**

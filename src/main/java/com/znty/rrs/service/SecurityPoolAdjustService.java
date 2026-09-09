@@ -53,7 +53,9 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
-import com.znty.rrs.entity.common.GuarantorGradeDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
@@ -148,10 +150,6 @@ public class SecurityPoolAdjustService {
     @Resource
     private CreditBondGradeRuleMapper creditBondGradeRuleMapper;
 
-    /** 公共查询服务（按担保人代码读取 AIS 最新主体内评） */
-    @Resource
-    private CommonService commonService;
-
     /** 系统附件业务服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
@@ -231,6 +229,29 @@ public class SecurityPoolAdjustService {
         // 回填证券品种大类（dict_security_type.category_type），供前端按类型差异化展示（如基金评分输入）
         dto.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(dto.getSecurityType()));
         return dto;
+    }
+
+    /**
+     * 查询证券池调库页面担保人、权益人下拉共用的四类关系主体候选。
+     */
+    public List<RelatedRatingSubjectDto> queryRelatedRatingSubjectList(SecurityPoolAdjustReq req) {
+        if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return securityPoolAdjustMapper.queryRelatedRatingSubjectList(req.getSecurityCode().trim());
+    }
+
+    /**
+     * 分页查询全市场自选权益人候选。
+     */
+    public PageResult<SelfSelectedRightsHolderDto> querySelfSelectedRightsHolderPage(
+            SelfSelectedRightsHolderReq req) {
+        SelfSelectedRightsHolderReq queryReq = req == null ? new SelfSelectedRightsHolderReq() : req;
+        PageHelper.startPage(queryReq.getPageIndex(), queryReq.getPageSize());
+        List<SelfSelectedRightsHolderDto> records = securityPoolAdjustMapper.querySelfSelectedRightsHolderPage(
+                emptyToNull(queryReq.getCompanyCode()), emptyToNull(queryReq.getCompanyName()));
+        PageInfo<SelfSelectedRightsHolderDto> pageInfo = new PageInfo<>(records);
+        return new PageResult<>(records, pageInfo.getTotal(), queryReq.getPageIndex(), queryReq.getPageSize());
     }
 
     /**
@@ -422,8 +443,9 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             return pools;
         }
-        // 规则中的担保人内评以页面所选担保人在 AIS 的最新结果为准
-        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
+        // 按证券类型解析本次评级主体：非 ABS 使用担保人，ABS 使用权益人或自选权益人
+        applySelectedRatingSubject(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
+                req.getSelfSelectedRightsHolderCode(), false);
         // 可转债 / 可交换债 / CRMW 不适用信用债 1～5，选池直接去掉
         if (CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(securityInfo)) {
             return excludeGradedBondPools(pools);
@@ -443,7 +465,7 @@ public class SecurityPoolAdjustService {
         }
         // 取当前已在分级库的最好档，供重点观察名单判断「新增还是已在库」
         Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
-        if (inRestricted && !CreditBondSpecialInboundRule.isStrongGuarantee(securityInfo)
+        if (inRestricted && !isStrongGuaranteeForSecurityAdjust(securityInfo)
                 && currentGradedSort == null) {
             // 已在重点观察名单且未在信用债分级库：整棵信用债树不可选（境外债不受评分档套件限制）
             return excludeGradedBondPools(pools);
@@ -489,7 +511,7 @@ public class SecurityPoolAdjustService {
             if (!CreditBondSpecialInboundRule.isGradedLevelPool(p)) {
                 continue;
             }
-            String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
+            String restrictedFail = checkRestrictedForSecurityAdjust(
                     securityInfo, inRestricted, currentGradedSort, p.getInnerSort());
             if (restrictedFail != null) {
                 continue;
@@ -1017,8 +1039,10 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
-        // 校验口径与页面展示一致，不再读取证券主数据中的担保人评分逗号串
-        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
+        // 提交时重新校验并读取最终评级主体，ABS 必须选择权益人或自选权益人
+        SelectedRatingSubjectData selectedRatingSubject = applySelectedRatingSubject(
+                securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
+                req.getSelfSelectedRightsHolderCode(), true);
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1064,7 +1088,8 @@ public class SecurityPoolAdjustService {
                 securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
                 securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
                 flowSnapshotMap,
-                batchNoContext
+                batchNoContext,
+                selectedRatingSubject
         );
     }
 
@@ -1474,13 +1499,14 @@ public class SecurityPoolAdjustService {
         mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
         req.setSecurityInfo(mergedSecurityInfo);
         // 按调库日志落证券信息快照
-        saveAdjustSecuritySnapshots(req, logIds);
+        saveAdjustSecuritySnapshots(req, logIds, shared.selectedRatingSubject);
     }
 
     /**
      * 为本次提交的每个调库日志写入证券信息快照。
      */
-    private void saveAdjustSecuritySnapshots(SecurityPoolAdjustSubmitReq req, List<Long> logIds) {
+    private void saveAdjustSecuritySnapshots(SecurityPoolAdjustSubmitReq req, List<Long> logIds,
+                                             SelectedRatingSubjectData selectedRatingSubject) {
         if (logIds == null || logIds.isEmpty() || req.getSecurityInfo() == null) {
             return;
         }
@@ -1492,6 +1518,10 @@ public class SecurityPoolAdjustService {
             // 从合并后的证券信息拷贝同名字段，并补齐快照关联字段
             AdjustSecuritySnapshotBo snapshot = buildAdjustSecuritySnapshot(req.getSecurityInfo(), logId,
                     req.getAdjusterId(), now);
+            if (selectedRatingSubject != null) {
+                snapshot.setAbsOriginatorName(selectedRatingSubject.rightsHolderName);
+                snapshot.setCompanySelector(selectedRatingSubject.selfSelectedRightsHolderName);
+            }
             securityPoolAdjustMapper.addAdjustSecuritySnapshot(snapshot);
         }
     }
@@ -1753,8 +1783,9 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
-        // 校验口径与页面展示一致，不再读取证券主数据中的担保人评分逗号串
-        applySelectedGuarantorGrade(securityInfo, req.getGuarantorCode());
+        // 校验时重新解析最终评级主体，ABS 必须选择权益人或自选权益人
+        applySelectedRatingSubject(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
+                req.getSelfSelectedRightsHolderCode(), true);
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1797,10 +1828,13 @@ public class SecurityPoolAdjustService {
         shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
         shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode()));
         shared.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode()));
-        // 评级下调三标志：主体/展望按发行人评级判定，担保人按前端选中代码判定（查 wind_cbondissuerrating）
+        // 评级下调三标志：非 ABS 担保债才按所选担保人代码判断担保人评级下调
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
-        shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(req.getGuarantorCode()));
+        String downgradeGuarantorCode = CreditBondSpecialInboundRule.isGuaranteed(securityInfo)
+                && !CreditBondSpecialInboundRule.isAbs(securityInfo) ? req.getGuarantorCode() : null;
+        shared.setGuarantorRatingDowngraded(
+                ratingDowngradeChecker.isGuarantorDowngraded(downgradeGuarantorCode));
         shared.setRequestInPoolIds(requestInPoolIds);
         shared.setRequestOutPoolIds(requestOutPoolIds);
         // 基金评分（基金证券调入校验用，透传请求级 fundRate）
@@ -1811,22 +1845,73 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 校验所选担保人属于当前证券，并将其名称、代码及 AIS 最新内评放入本次业务对象。
+     * 按证券类型校验并回填本次评级主体：ABS 自选权益人优先，非 ABS 使用担保人。
      */
-    private void applySelectedGuarantorGrade(SecurityInfoBo securityInfo, String guarantorCode) {
+    private SelectedRatingSubjectData applySelectedRatingSubject(
+            SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
+            String selfSelectedRightsHolderCode, boolean requireAbsSelection) {
+        securityInfo.setGuarantor(null);
+        securityInfo.setGuarantorId(null);
         securityInfo.setInnerGuarantorRating(null);
-        if (guarantorCode == null || guarantorCode.trim().isEmpty()) {
-            return;
+        SelectedRatingSubjectData result = new SelectedRatingSubjectData();
+        if (CreditBondSpecialInboundRule.isAbs(securityInfo)) {
+            RelatedRatingSubjectDto rightsHolder = null;
+            SelfSelectedRightsHolderDto selfSelected = null;
+            if (rightsHolderCode != null && !rightsHolderCode.trim().isEmpty()) {
+                rightsHolder = findRelatedRatingSubject(
+                        securityInfo.getWindCode(), rightsHolderCode.trim(), "所选权益人不属于当前证券");
+                result.rightsHolderName = rightsHolder.getCompanyName();
+            }
+            if (selfSelectedRightsHolderCode != null && !selfSelectedRightsHolderCode.trim().isEmpty()) {
+                selfSelected = securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(
+                        selfSelectedRightsHolderCode.trim());
+                if (selfSelected == null) {
+                    throw new BizException("所选自选权益人不存在或已失效");
+                }
+                result.selfSelectedRightsHolderName = selfSelected.getCompanyName();
+            }
+            if (requireAbsSelection && rightsHolder == null && selfSelected == null) {
+                throw new BizException("请选择权益人或自选权益人");
+            }
+            if (selfSelected != null) {
+                fillSelectedRatingSubject(securityInfo, selfSelected.getCompanyCode(),
+                        selfSelected.getCompanyName(), selfSelected.getInnerRating());
+            } else if (rightsHolder != null) {
+                fillSelectedRatingSubject(securityInfo, rightsHolder.getCompanyCode(),
+                        rightsHolder.getCompanyName(), rightsHolder.getInnerRating());
+            }
+            return result;
         }
-        String selectedCode = guarantorCode.trim();
-        // 按证券代码查询 Wind 担保人关系并读取最新内评，不依赖证券主数据的 guarantor_id
-        GuarantorGradeDto grade = commonService.queryGuarantorGrade(securityInfo.getWindCode(), selectedCode);
-        if (grade == null) {
-            throw new BizException("所选担保人不属于当前证券或主体类型不符合要求");
+        if (guarantorCode != null && !guarantorCode.trim().isEmpty()) {
+            RelatedRatingSubjectDto guarantor = findRelatedRatingSubject(
+                    securityInfo.getWindCode(), guarantorCode.trim(), "所选担保人不属于当前证券");
+            fillSelectedRatingSubject(securityInfo, guarantor.getCompanyCode(),
+                    guarantor.getCompanyName(), guarantor.getInnerRating());
         }
-        securityInfo.setGuarantor(grade.getWindname());
-        securityInfo.setGuarantorId(selectedCode);
-        securityInfo.setInnerGuarantorRating(grade.getTotalScore());
+        return result;
+    }
+
+    /** 查询并校验当前证券的相关评级主体。 */
+    private RelatedRatingSubjectDto findRelatedRatingSubject(
+            String securityCode, String companyCode, String errorMessage) {
+        List<RelatedRatingSubjectDto> records = securityPoolAdjustMapper.queryRelatedRatingSubjectList(securityCode);
+        if (records == null) {
+            records = Collections.emptyList();
+        }
+        for (RelatedRatingSubjectDto record : records) {
+            if (companyCode.equals(record.getCompanyCode())) {
+                return record;
+            }
+        }
+        throw new BizException(errorMessage);
+    }
+
+    /** 将后端重查的主体名称、代码及最新内评写入本次业务对象。 */
+    private void fillSelectedRatingSubject(
+            SecurityInfoBo securityInfo, String companyCode, String companyName, String innerRating) {
+        securityInfo.setGuarantor(companyName);
+        securityInfo.setGuarantorId(companyCode);
+        securityInfo.setInnerGuarantorRating(innerRating);
     }
 
     /**
@@ -2485,8 +2570,39 @@ public class SecurityPoolAdjustService {
         if (securityInfo == null) {
             return false;
         }
-        return (securityInfo.getGuarantor() != null && !securityInfo.getGuarantor().trim().isEmpty())
-                || (securityInfo.getGuarantorId() != null && !securityInfo.getGuarantorId().trim().isEmpty());
+        return !CreditBondSpecialInboundRule.isAbs(securityInfo)
+                && CreditBondSpecialInboundRule.isGuaranteed(securityInfo)
+                && ((securityInfo.getGuarantor() != null && !securityInfo.getGuarantor().trim().isEmpty())
+                || (securityInfo.getGuarantorId() != null && !securityInfo.getGuarantorId().trim().isEmpty()));
+    }
+
+    /** ABS 的权益人内评不属于强担保，不享受重点观察名单豁免。 */
+    private boolean isStrongGuaranteeForSecurityAdjust(SecurityInfoBo securityInfo) {
+        return !CreditBondSpecialInboundRule.isAbs(securityInfo)
+                && CreditBondSpecialInboundRule.isStrongGuarantee(securityInfo);
+    }
+
+    /** 证券池调库专用重点观察名单校验，避免 ABS 权益人内评触发强担保豁免。 */
+    private String checkRestrictedForSecurityAdjust(SecurityInfoBo securityInfo, boolean inRestricted,
+                                                    Integer currentGradedSort, Integer targetSort) {
+        if (!CreditBondSpecialInboundRule.isAbs(securityInfo)) {
+            return CreditBondSpecialInboundRule.checkRestricted(
+                    securityInfo, inRestricted, currentGradedSort, targetSort);
+        }
+        if (!inRestricted || targetSort == null) {
+            return null;
+        }
+        if (currentGradedSort == null) {
+            return "重点观察名单原则上不得新增入库信用债分级库";
+        }
+        if (currentGradedSort <= 4 && targetSort != CreditBondSpecialInboundRule.MAX_LEVEL) {
+            return "重点观察名单已在库债券只能调入五级库或调出";
+        }
+        if (currentGradedSort == CreditBondSpecialInboundRule.MAX_LEVEL
+                && targetSort < CreditBondSpecialInboundRule.MAX_LEVEL) {
+            return "重点观察名单已在五级库，不可上调";
+        }
+        return null;
     }
 
     /**
@@ -2717,7 +2833,7 @@ public class SecurityPoolAdjustService {
         // 取当前已在分级库最好档，供重点观察名单区分新增/已在库
         Integer currentGradedSort = resolveCurrentGradedSort(ctx.getCurrentPoolIds(), ctx.getPoolMap());
         // 重点观察名单：未在分级库不得新增；已在 1～4 级只能去五级
-        String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
+        String restrictedFail = checkRestrictedForSecurityAdjust(
                 sec, inRestricted, currentGradedSort,
                 CreditBondSpecialInboundRule.isGradedLevelPool(pool) ? pool.getInnerSort() : null);
         if (restrictedFail != null) {
@@ -2726,7 +2842,8 @@ public class SecurityPoolAdjustService {
         // 临时代码默认档 4，担保债取孰高
         String gradeCode = resolveMatrixGradeCode(sec);
         if (gradeCode == null) {
-            return "未配置主体内评分档";
+            return CreditBondSpecialInboundRule.isAbs(sec)
+                    ? "未配置权益人内评分档" : "未配置主体内评分档";
         }
         // 含权口径取剩余期限年（date_exists 天÷365，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
@@ -2806,12 +2923,16 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 查矩阵用内评档：临时代码默认 4；担保债取主体与担保人孰高。
+     * 查矩阵用内评档：ABS 直接使用权益人内评；其它临时代码默认 4，担保债取主体与担保人孰高。
      *
      * @param sec 证券主数据
      * @return 内评档编码；正式券无内评返回 null
      */
     private String resolveMatrixGradeCode(SecurityInfoBo sec) {
+        if (CreditBondSpecialInboundRule.isAbs(sec)) {
+            // ABS 不与债务主体或担保人取孰高，直接采用权益人/自选权益人内评
+            return normalizeGradeCode(sec.getInnerGuarantorRating());
+        }
         // 空串视为无内评
         String gradeCode = normalizeGradeCode(sec.getInnerIssuerRating());
         // 临时代码占位常无内评，默认最低档 4
@@ -3173,7 +3294,7 @@ public class SecurityPoolAdjustService {
                 continue;
             }
             // 改判同样套重点观察名单：禁新增、已在 1～4 只能去五级
-            String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
+            String restrictedFail = checkRestrictedForSecurityAdjust(
                     sec, inRestricted, currentGradedSort, p.getInnerSort());
             if (restrictedFail != null) {
                 continue;
@@ -4629,6 +4750,12 @@ public class SecurityPoolAdjustService {
     private AdjustSharedData loadSharedDataForSecurity(String securityCode, SecurityInfoBo securityInfo,
                                                        AdjustSharedData mainShared, AdjustCheckReq mainReq) {
         AdjustSharedData shared = new AdjustSharedData();
+        // 多市场代码属于同一证券，沿用主券已完成防伪校验的最终评级主体
+        if (securityInfo != null && mainShared.getSecurityInfo() != null) {
+            securityInfo.setGuarantor(mainShared.getSecurityInfo().getGuarantor());
+            securityInfo.setGuarantorId(mainShared.getSecurityInfo().getGuarantorId());
+            securityInfo.setInnerGuarantorRating(mainShared.getSecurityInfo().getInnerGuarantorRating());
+        }
         shared.setSecurityInfo(securityInfo);
         shared.setPoolMap(mainShared.getPoolMap());
         shared.setCurrentPoolIds(new HashSet<>(
@@ -4648,8 +4775,10 @@ public class SecurityPoolAdjustService {
         // 评级下调标志按关联券自身主体信息判定
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
+        String guarantorCode = CreditBondSpecialInboundRule.isGuaranteed(securityInfo)
+                && !CreditBondSpecialInboundRule.isAbs(securityInfo) ? mainReq.getGuarantorCode() : null;
         shared.setGuarantorRatingDowngraded(
-                ratingDowngradeChecker.isGuarantorDowngraded(mainReq.getGuarantorCode()));
+                ratingDowngradeChecker.isGuarantorDowngraded(guarantorCode));
         shared.setRequestInPoolIds(mainShared.getRequestInPoolIds());
         shared.setRequestOutPoolIds(mainShared.getRequestOutPoolIds());
         shared.setFundRate(mainReq.getFundRate());
@@ -4889,6 +5018,9 @@ public class SecurityPoolAdjustService {
         /** 批次号生成上下文 */
         final BatchNoContext batchNoContext;
 
+        /** 本次后端校验后的普通权益人、自选权益人留痕信息 */
+        final SelectedRatingSubjectData selectedRatingSubject;
+
         /** 调库分组批次号索引（adjustGroupKey → adjustBatchNo），用于联动/互斥记录复用 */
         final Map<String, String> adjustBatchNoMap = new HashMap<>();
 
@@ -4900,7 +5032,8 @@ public class SecurityPoolAdjustService {
                          boolean securityInObservePool,
                          boolean issuerInObservePool,
                          Map<Long, FlowSnapshot> flowSnapshotMap,
-                         BatchNoContext batchNoContext) {
+                         BatchNoContext batchNoContext,
+                         SelectedRatingSubjectData selectedRatingSubject) {
             this.securityInfo = securityInfo;
             this.poolMap = poolMap;
             this.currentPoolIds = currentPoolIds;
@@ -4910,7 +5043,18 @@ public class SecurityPoolAdjustService {
             this.issuerInObservePool = issuerInObservePool;
             this.flowSnapshotMap = flowSnapshotMap;
             this.batchNoContext = batchNoContext;
+            this.selectedRatingSubject = selectedRatingSubject;
         }
+    }
+
+    /** 证券池调库页面所选权益人的快照留痕信息。 */
+    private static class SelectedRatingSubjectData {
+
+        /** 当前证券关系中的普通权益人名称 */
+        private String rightsHolderName;
+
+        /** 用户从全市场主体中选择的自选权益人名称 */
+        private String selfSelectedRightsHolderName;
     }
 
     /**

@@ -96,17 +96,18 @@
 
 ### 2.6 详情页初始化（并发加载）
 
-`loadDetailData(securityCode)` 先调用 `querySecurityDetail` 取得证券基本信息，并据此确定单担保人的默认 `guarantorCode`；随后用 `Promise.all` 并发 5 个接口：
+`loadDetailData(securityCode)` 先调用 `querySecurityDetail` 取得证券基本信息，再调用调库专用相关主体接口；若相关主体只有一个，非 ABS 自动作为担保人、ABS 自动作为权益人。随后并发加载池列表、池状态和调库记录：
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `queryGuarantorGradeList` | `{ securityCodes }` | 按 `rrs_securityinfo` 的担保/ABS 属性及 `ais_inv_ods.wind_cbondissuer.s_info_windcode` 查询证券对应关系：担保债且非 ABS 仅返回 `115004000`，ABS（含担保+ABS）返回 `115200000/115004000/115203000/115201000`，非担保且非 ABS 返回空；以 `s_info_compcode`/`s_info_compname` 作为担保人，同时返回 `guarantorTypeCode` 供前端映射类型名称及最新主体内评分；合格但无评分时仍返回，评分为空 |
-| `queryAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode }` | 可调入池 |
+| `queryRelatedRatingSubjectList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115200000/115004000/115203000/115201000` 四类关系主体，并关联最新主体内评；无内评的关系主体仍返回 |
+| `querySelfSelectedRightsHolderPage` | `{ companyCode, companyName, pageIndex, pageSize }` | ABS 自选权益人分页；从 `ais_inv_analysis.t_inv_company` 查询全市场主体，编码/名称模糊查询，关联最新主体内评，默认每页 20 条，可切换 10/20/30/50 条 |
+| `queryAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode }` | 可调入池 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
 | `querySecurityPoolStatus` | `{ securityCode }` | 当前所在池 + 主体所在池 |
 | `queryAdjustLogList` | `{ securityCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
 
-单担保人首次加载时，调入池查询直接携带默认 `guarantorCode`，不产生第二次查询。多担保人切换时，页面更新只读评分，并携带新的 `guarantorCode` 重新调用一次调入方向的 `queryAdjustPoolList`；不缓存查询结果、不重新查询最近信评报告。规则口径变化后清空原有调入选择，并同步更新调入互斥关系。
+非 ABS 和 ABS 都使用上述四类关系主体：页面分别展示为“担保人”和“权益人”。单候选首次加载时直接携带默认编码查询调入池；多候选需手工选择。ABS 还可从全市场主体选择自选权益人，自选存在时优先于普通权益人，清除后回退普通权益人。任一选择变化均重新查询可调入池并清空原有调入选择，不缓存查询结果、不重新查询最近信评报告。
 
 随后：
 1. 用 `securityCurrentPools.targetPoolId` 构建 `currentSecurityPoolIds` 集合。
@@ -238,7 +239,7 @@
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池不在矩阵/特殊债下调后允许范围内；**未配置主体内评分档**（正式证券无内评禁止入信用债 1～5 级；临时代码默认档 `4`）；**无法匹配债券期限档**；**可转债、可交换债、信用风险缓释工具不适用信用债分级库**。矩阵：内评档×剩余期限（`date_exists` 天÷365；含权回售按 `date_inright_exists`/`date_repurchase_exists` 年、赎回按 `date_exists` 天÷365，两者都有取更短）；期限为空时默认最长档（>5 年）继续走矩阵，不跳过。**普通债按矩阵精确池**（匹配 2、3 只显示 2、3）。多种类型只留一个标签，后写覆盖先写：私募 → 次级 → 永续 → 担保。口径：私募/永续/次级 **1 档只看发债主体内评**；ABS **1 档只看页面所选担保人内评**（无担保人则不是 1 档）。ABS/私募/次级 1 档**只能调入一级库**（仅一级）；永续 1 档及次级 2+/2/2- **下调一级**（矩阵最好档再降一档且只留那一档）；上述类型其余档**至少下调一级**（从该降一档开到五级，x～5）。担保债或已在观察池：入库不得高于矩阵最好档，从该档开到五级；担保查矩阵前取主体/担保人内评更好的一档（只影响查哪一格）。已在重点观察名单的禁止新增信用债 1～5（强担保豁免），已在 1～4 级只能去五级或出库。可转债/可交换债/可分离转债/CRMW 选池去掉信用债 1～5。境外债不走本矩阵。`releaseRules` 仍跳过矩阵。 |
+| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池不在矩阵/特殊债下调后允许范围内；**未配置主体内评分档**（ABS 为“未配置权益人内评分档”）；**无法匹配债券期限档**；**可转债、可交换债、信用风险缓释工具不适用信用债分级库**。矩阵内评来源：非 ABS 非担保债只用债务主体内评；非 ABS 担保债取债务主体与页面所选担保人内评较优值；ABS 直接使用自选权益人（优先）或普通权益人内评，不与债务主体/担保人孰高。特殊债降档、期限档和观察池规则保持不变。ABS 权益人内评不作为强担保评级，不触发重点观察名单强担保豁免。`releaseRules` 仍跳过矩阵。 |
 | 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（`delist_date` 早于今日）；`grade_astrict` 入口仍调用但**方法恒 return null**（未接 StockResearch/investrank，空实现不拦截） |
 | 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（仅 **checkAdjust** 按请求 `fundRate` 校验；**正式提交不携带 fundRate、不再次校验**） |
 | 主体 company | —（主体不校验到期，暂无） | |
@@ -348,7 +349,9 @@
 | `querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
 | `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：仅 bond，排除 crmw 及已删除态） |
 | `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
-| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。入/出均按 **`pool_type` 排除 crmw**（CRMW 独立链路）；禁投池/观察池等不排。**调入**且 `releaseRules≠true` 时：`filterInboundByGradeRule` 过滤信用债 1～5：可转债/可交换债/可分离转债/CRMW 不显示 1～5 级；正式证券无内评去掉；临时代码默认档 4；普通债按矩阵精确池；ABS 担保人内评 1 档只能调入一级库否则至少下调一级（无担保人按其余）；私募发债主体内评 1 档只能调入一级库否则至少下调一级；永续发债主体内评 1 档下调一级（只留那一档）否则至少下调一级；次级发债主体内评 1 档只能调入一级库、2+/2/2- 下调一级（只留那一档）、其余至少下调一级；担保债（覆盖永续等）或已在观察池不得高于矩阵最好档、从该档开到五级；重点观察名单禁新增、已在 1～4 级只留五级；期限为空默认最长档继续走矩阵。`guarantorCode` 必须属于当前证券按担保/ABS 属性筛出的 Wind 关系：担保债且非 ABS 仅 `115004000`，ABS（含担保+ABS）为 `115200000/115004000/115203000/115201000`，非担保且非 ABS 无候选；其内评按 `ais_inv_analysis.v_inv_grade_result.windcode` 查询最新 `total_score` |
+| `queryRelatedRatingSubjectList` | securityCode | `List<RelatedRatingSubjectDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；主体内评左关联，未评级主体仍返回 |
+| `querySelfSelectedRightsHolderPage` | companyCode?, companyName?, pageIndex, pageSize | `PageResult<SelfSelectedRightsHolderDto>` | 从 `ais_inv_analysis.t_inv_company` 分页查询自选权益人，关联最新内评 |
+| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。三个主体编码均由后端重查校验 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
@@ -415,7 +418,7 @@
 
 > 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
 
-详情页可编辑字段约 28 个。关键只读字段：`maturity_date`（到期校验）、`date_next`（下一个行权日，yyyyMMdd）。担保人下拉不读取 `rrs_securityinfo.guarantor_id`/`guarantor`，而是把当前证券代码传给 `queryGuarantorGradeList`，按证券主数据属性筛选 `ais_inv_ods.wind_cbondissuer.s_info_windcode` 关系：担保债且非 ABS 仅显示 `115004000=担保人`；ABS（含担保+ABS）显示 `115200000=债务主体`、`115004000=担保人`、`115203000=差额支付承诺人`、`115201000=原始权益人`；非担保且非 ABS 为空。以 `s_info_compcode`/`s_info_compname` 作为担保人代码和名称；内评按 `ais_inv_analysis.v_inv_grade_result.windcode` 取最新 `total_score`，合格但未查到评分时仍展示担保人且评分为空。下拉项展示担保人名称、类型标签和右侧内评，选择框收起后显示“担保人名称（类型）”。查询后仅剩一个担保人时首次加载自动选中并在首次调入池查询中直接携带其代码，不重复请求；多个担保人切换时从已加载映射覆盖“担保人主体内评分”，并携带所选代码重新查询一次可调入池，不使用缓存、不重新查询信评报告。下一步 `checkAdjust` 仍按同一 Wind 关系口径校验所选代码。提交时后端再次按当前证券代码和所选担保人查询 AIS 最新名称、代码及评分，并覆盖本次调库快照的 `guarantor`、`guarantor_id`、`inner_guarantor_rating`，不采信前端旧值；详情页和审核页在“展望评级”之后展示该笔快照的担保人。未查到评分时评分显示空白，不读取或覆盖 `rrs_securityinfo.inner_guarantor_rating`。期限字段单位：`date_exists` 剩余期限（**天**）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
+详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingSubjectList` 查询当前证券四类关系主体：`115200000=债务主体`、`115004000=担保人`、`115203000=差额支付承诺人`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，未查到内评仍展示。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 分页查询，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；编码和名称支持模糊查询。单候选自动选中，多候选手工选择；自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段单位：`date_exists` 剩余期限（**天**）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
 
@@ -483,7 +486,7 @@
 | 股票入池评级限制 | `grade_astrict` + `StockResearch.investrank` | 入口保留，但当前无股票评级来源，先跳过 | 当前是有意放宽；后续接股票研究评级后再补强 |
 | 股票退市 | 股票 `EndDate` 有值就拦 | `delist_date < today` 才拦 | 口径不同，老系统更严格 |
 | 债券到期 | 到期日早于当前日则拦 | 已有 | 基本一致 |
-| 债券大库/主体评级矩阵 | 私募→次级→永续→担保后写覆盖；ABS：担保人内评 1 档只能调入一级库否则至少下调一级（无担保人按其余）；私募：发债主体内评 1 档只能调入一级库否则至少下调一级；永续：发债主体内评 1 档下调一级（只留那一档）否则至少下调一级；次级：1 档只能调入一级库、2+/2/2- 下调一级（只留那一档）、其余至少下调一级；担保债或已在观察池：不得高于矩阵最好档、开到五级；普通债精确池；担保孰高只用于查矩阵；含权只改期限；重点观察名单禁新增、已在库只能去五级；可转债/可交换/CRMW 不适用 1～5 | 已落地（选池+校验+证券池审核页改判）；观察池含券自身或主体 issuer_code；白名单流程当前空集选不中；**期限为空默认最长档（>5）继续走矩阵** | 永续+担保按担保债，不再强制下调。观察池不跳过矩阵。已在库不符由定时任务生成待办，不自动出池。CRMW 按需求豁免 |
+| 债券大库/主体评级矩阵 | 私募→次级→永续→担保后写覆盖；ABS 直接使用自选权益人（优先）或普通权益人内评并保留原特殊债降档；非 ABS 担保债取主体/所选担保人内评孰优，非担保债仅主体内评；含权只改期限；重点观察名单禁新增、已在库只能去五级，ABS 权益人不享受强担保豁免；可转债/可交换/CRMW 不适用 1～5 | 已落地于证券池调库申请页的选池、校验和提交链路；本次不改变批量调库、CRMW、详情及审批页面 | 永续+担保按担保债，不再强制下调。观察池不跳过矩阵。已在库不符由定时任务生成待办，不自动出池。CRMW 按需求豁免 |
 | 基金评分 | 池配置 `FundRateLimit`，且传了 `fundRate` 才校验 | 池配置后，未传 `fundRate` 也失败 | 新系统更严格，需确认前端是否总能提供基金评分 |
 | 研报限制 | check/提交阶段均有逻辑，且支持 `RschDocMode > 100` 自定义规则类 | 提交阶段支持 none/any/internal | 缺少自定义研报规则；批量跳过报告配置也未复刻 |
 | 互斥池特殊审批模板 | 调入目标池时，若证券当前在该目标池的调入互斥池中，可按 `目标池+调入互斥池` 配置覆盖审批模板 | 命中任意 `in_mutex` 当前所在池时固定走 `bond:special-inbound`；**信用债大库默认排除** | 第一阶段用代码常量覆盖；信用债互斥走升降级/默认流；后续可扩展配置表 |

@@ -45,8 +45,14 @@ public class SecurityPoolAdjustSubmitReq {
     /** 证券基础信息 */
     private SecurityInfoBo securityInfo;
 
-    /** 当前选择的担保人 Wind 主体代码 */
+    /** 当前选择的担保人主体代码 */
     private String guarantorCode;
+
+    /** ABS 当前选择的权益人主体代码 */
+    private String rightsHolderCode;
+
+    /** ABS 当前选择的自选权益人主体代码，自选时优先于 rightsHolderCode */
+    private String selfSelectedRightsHolderCode;
 
     /** 调整人 ID */
     private String adjusterId;

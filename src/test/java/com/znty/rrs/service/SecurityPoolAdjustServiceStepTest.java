@@ -18,6 +18,7 @@ import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
+import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
@@ -28,7 +29,8 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
-import com.znty.rrs.entity.common.GuarantorGradeDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
 import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
@@ -64,18 +66,20 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 符合主体类型但暂无评分的担保人允许参与调库，评分保持为空。 */
     @Test
-    public void applySelectedGuarantorGradeShouldKeepEligibleGuarantorWithoutGrade() {
-        CommonService commonService = mock(CommonService.class);
+    public void applySelectedRatingSubjectShouldKeepEligibleGuarantorWithoutGrade() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
-        ReflectionTestUtils.setField(service, "commonService", commonService);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("DBB002.IB");
-        GuarantorGradeDto guarantor = new GuarantorGradeDto();
-        guarantor.setWindcode("C10008");
-        guarantor.setWindname("测试担保人");
-        when(commonService.queryGuarantorGrade("DBB002.IB", "C10008")).thenReturn(guarantor);
+        RelatedRatingSubjectDto guarantor = new RelatedRatingSubjectDto();
+        guarantor.setCompanyCode("C10008");
+        guarantor.setCompanyName("测试担保人");
+        when(mapper.queryRelatedRatingSubjectList("DBB002.IB"))
+                .thenReturn(Collections.singletonList(guarantor));
 
-        ReflectionTestUtils.invokeMethod(service, "applySelectedGuarantorGrade", securityInfo, "C10008");
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+                securityInfo, "C10008", null, null, false);
 
         assertThat(securityInfo.getGuarantor()).isEqualTo("测试担保人");
         assertThat(securityInfo.getGuarantorId()).isEqualTo("C10008");
@@ -84,18 +88,113 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 主体类型不符合要求的担保人即使存在于原始逗号串中也不得参与调库。 */
     @Test
-    public void applySelectedGuarantorGradeShouldRejectIneligibleGuarantor() {
-        CommonService commonService = mock(CommonService.class);
+    public void applySelectedRatingSubjectShouldRejectIneligibleGuarantor() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
-        ReflectionTestUtils.setField(service, "commonService", commonService);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("DBB002.IB");
-        when(commonService.queryGuarantorGrade("DBB002.IB", "C10007")).thenReturn(null);
+        when(mapper.queryRelatedRatingSubjectList("DBB002.IB")).thenReturn(Collections.emptyList());
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
-                service, "applySelectedGuarantorGrade", securityInfo, "C10007"))
+                service, "applySelectedRatingSubject", securityInfo, "C10007", null, null, false))
                 .isInstanceOf(BizException.class)
-                .hasMessage("所选担保人不属于当前证券或主体类型不符合要求");
+                .hasMessage("所选担保人不属于当前证券");
+    }
+
+    /** ABS 自选权益人优先于普通权益人，且直接作为矩阵内评来源。 */
+    @Test
+    public void absShouldPreferSelfSelectedRightsHolder() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("ABS001.IB");
+        securityInfo.setAbsFlag(1);
+        securityInfo.setInnerIssuerRating("1");
+        RelatedRatingSubjectDto related = new RelatedRatingSubjectDto();
+        related.setCompanyCode("C10001");
+        related.setCompanyName("普通权益人");
+        related.setInnerRating("3");
+        SelfSelectedRightsHolderDto selfSelected = new SelfSelectedRightsHolderDto();
+        selfSelected.setCompanyCode("C20001");
+        selfSelected.setCompanyName("自选权益人");
+        selfSelected.setInnerRating("2");
+        when(mapper.queryRelatedRatingSubjectList("ABS001.IB"))
+                .thenReturn(Collections.singletonList(related));
+        when(mapper.querySelfSelectedRightsHolderByCode("C20001")).thenReturn(selfSelected);
+
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+                securityInfo, null, "C10001", "C20001", true);
+
+        assertThat(securityInfo.getGuarantor()).isEqualTo("自选权益人");
+        assertThat(securityInfo.getGuarantorId()).isEqualTo("C20001");
+        assertThat((String) ReflectionTestUtils.invokeMethod(service, "resolveMatrixGradeCode", securityInfo))
+                .isEqualTo("2");
+    }
+
+    /** ABS 未选择普通权益人和自选权益人时后端拒绝继续。 */
+    @Test
+    public void absShouldRequireRightsHolderSelection() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("ABS001.IB");
+        securityInfo.setAbsFlag(1);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+                securityInfo, null, null, null, true))
+                .isInstanceOf(BizException.class)
+                .hasMessage("请选择权益人或自选权益人");
+    }
+
+    /** 非担保债即使选择关系主体，矩阵仍只使用债务主体内评。 */
+    @Test
+    public void nonGuaranteedBondShouldUseIssuerRatingOnly() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setGuarantFlag(0);
+        securityInfo.setInnerIssuerRating("3");
+        securityInfo.setInnerGuarantorRating("1");
+
+        assertThat((String) ReflectionTestUtils.invokeMethod(service, "resolveMatrixGradeCode", securityInfo))
+                .isEqualTo("3");
+    }
+
+    /** 非 ABS 担保债使用债务主体与所选担保人内评较优值。 */
+    @Test
+    public void guaranteedBondShouldUseBetterRating() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        CreditBondInnerRatingGradeBo gradeOne = new CreditBondInnerRatingGradeBo();
+        gradeOne.setGradeCode("1");
+        gradeOne.setSortNo(1);
+        CreditBondInnerRatingGradeBo gradeThree = new CreditBondInnerRatingGradeBo();
+        gradeThree.setGradeCode("3");
+        gradeThree.setSortNo(3);
+        when(gradeRuleMapper.queryEnabledRatingGradeList())
+                .thenReturn(Arrays.asList(gradeOne, gradeThree));
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setGuarantFlag(1);
+        securityInfo.setInnerIssuerRating("3");
+        securityInfo.setInnerGuarantorRating("1");
+
+        assertThat((String) ReflectionTestUtils.invokeMethod(service, "resolveMatrixGradeCode", securityInfo))
+                .isEqualTo("1");
+    }
+
+    /** ABS 权益人一档不属于强担保，不能豁免重点观察名单新增限制。 */
+    @Test
+    public void absRightsHolderShouldNotTriggerStrongGuaranteeExemption() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setAbsFlag(1);
+        securityInfo.setGuarantFlag(1);
+        securityInfo.setInnerGuarantorRating("1");
+
+        assertThat((String) ReflectionTestUtils.invokeMethod(service, "checkRestrictedForSecurityAdjust",
+                securityInfo, true, null, 1))
+                .isEqualTo("重点观察名单原则上不得新增入库信用债分级库");
     }
 
     /** 提交快照中的担保人名称、代码和内评必须使用后端校验后的所选担保人。 */
@@ -121,6 +220,22 @@ public class SecurityPoolAdjustServiceStepTest {
         serverInfo.setGuarantor("当次选择担保人");
         serverInfo.setGuarantorId("C10008");
         serverInfo.setInnerGuarantorRating("1");
+        SecurityInfoBo absSecurity = new SecurityInfoBo();
+        absSecurity.setWindCode("ABS001.IB");
+        absSecurity.setAbsFlag(1);
+        RelatedRatingSubjectDto related = new RelatedRatingSubjectDto();
+        related.setCompanyCode("C10001");
+        related.setCompanyName("普通权益人");
+        SelfSelectedRightsHolderDto selfSelected = new SelfSelectedRightsHolderDto();
+        selfSelected.setCompanyCode("C20001");
+        selfSelected.setCompanyName("自选权益人");
+        selfSelected.setInnerRating("1");
+        when(mapper.queryRelatedRatingSubjectList("ABS001.IB"))
+                .thenReturn(Collections.singletonList(related));
+        when(mapper.querySelfSelectedRightsHolderByCode("C20001")).thenReturn(selfSelected);
+        Object selected = ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+                absSecurity, null, "C10001", "C20001", true);
+        ReflectionTestUtils.setField(shared, "selectedRatingSubject", selected);
 
         ReflectionTestUtils.invokeMethod(service, "postSubmitProcess", req, shared,
                 Collections.singletonList(100L));
@@ -131,6 +246,8 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(snapshotCaptor.getValue().getGuarantor()).isEqualTo("当次选择担保人");
         assertThat(snapshotCaptor.getValue().getGuarantorId()).isEqualTo("C10008");
         assertThat(snapshotCaptor.getValue().getInnerGuarantorRating()).isEqualTo("1");
+        assertThat(snapshotCaptor.getValue().getAbsOriginatorName()).isEqualTo("普通权益人");
+        assertThat(snapshotCaptor.getValue().getCompanySelector()).isEqualTo("自选权益人");
         assertThat(req.getSecurityInfo().getGuarantor()).isEqualTo("当次选择担保人");
         assertThat(req.getSecurityInfo().getGuarantorId()).isEqualTo("C10008");
         assertThat(req.getSecurityInfo().getInnerGuarantorRating()).isEqualTo("1");
@@ -2548,7 +2665,8 @@ public class SecurityPoolAdjustServiceStepTest {
                 false,
                 false,
                 snapshotMap,
-                batchNoContext);
+                batchNoContext,
+                null);
     }
 
     /** 构建直通调入提交请求。 */

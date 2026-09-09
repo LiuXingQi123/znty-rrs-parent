@@ -12,6 +12,8 @@ import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.securitypooladjust.PoolStatusDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.entity.report.ReportDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -41,6 +43,19 @@ public interface SecurityPoolAdjustMapper {
 
     /** 根据证券代码查询证券基础信息实体 */
     SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
+
+    /** 查询证券池调库页面担保人、权益人下拉共用的四类关系主体候选 */
+    List<RelatedRatingSubjectDto> queryRelatedRatingSubjectList(
+            @Param("securityCode") String securityCode);
+
+    /** 分页查询全市场自选权益人候选 */
+    List<SelfSelectedRightsHolderDto> querySelfSelectedRightsHolderPage(
+            @Param("companyCode") String companyCode,
+            @Param("companyName") String companyName);
+
+    /** 按主体编码查询有效自选权益人及其最新内评 */
+    SelfSelectedRightsHolderDto querySelfSelectedRightsHolderByCode(
+            @Param("companyCode") String companyCode);
 
     /** 新增调库记录（非直通流程，audit_status='00' 流程中） */
     int addAdjustLog(IpAdjustLogBo bo);

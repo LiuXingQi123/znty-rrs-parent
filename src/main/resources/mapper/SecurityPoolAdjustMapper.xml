@@ -164,6 +164,128 @@
         WHERE wind_code = #{securityCode}
     </select>
 
+    <!-- 证券池调库相关评级主体：担保人、权益人均查询四类关系主体 -->
+    <select id="queryRelatedRatingSubjectList"
+            resultType="com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto">
+        WITH eligible_subject AS (
+            SELECT issuer.s_info_windcode AS security_code
+                   ,issuer.s_info_compcode AS company_code
+                   ,MAX(issuer.s_info_compname) AS company_name
+                   ,MIN(issuer.s_info_typecode) AS relation_type_code
+            FROM ais_inv_ods.wind_cbondissuer issuer
+            WHERE issuer.s_info_windcode = #{securityCode}
+              AND issuer.s_info_compcode IS NOT NULL
+              AND issuer.s_info_compcode != ''
+              AND issuer.s_info_typecode IN (115200000, 115004000, 115203000, 115201000)
+            GROUP BY issuer.s_info_windcode
+                    ,issuer.s_info_compcode
+        ), ranked_grade AS (
+            SELECT grade.windcode
+                   ,grade.windname
+                   ,grade.total_score
+                   ,grade.ts
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY grade.windcode
+                       ORDER BY grade.ts DESC
+                   ) AS row_num
+            FROM ais_inv_analysis.v_inv_grade_result grade
+            WHERE EXISTS (
+                SELECT 1
+                FROM eligible_subject eligible
+                WHERE eligible.company_code = grade.windcode
+            )
+        )
+        SELECT eligible.security_code
+               ,eligible.company_code
+               ,COALESCE(grade.windname, eligible.company_name) AS company_name
+               ,eligible.relation_type_code
+               ,grade.total_score AS inner_rating
+               ,grade.ts AS rating_time
+        FROM eligible_subject eligible
+        LEFT JOIN ranked_grade grade ON grade.windcode = eligible.company_code
+                                    AND grade.row_num = 1
+        ORDER BY eligible.company_code ASC
+                 ,eligible.relation_type_code ASC
+    </select>
+
+    <!-- 全市场自选权益人：按投资分析主体表去重，并关联最新内评 -->
+    <select id="querySelfSelectedRightsHolderPage"
+            resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
+        WITH source_subject AS (
+            SELECT company.code AS company_code
+                   ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, ''))) AS company_name
+            FROM ais_inv_analysis.t_inv_company company
+            <where>
+                AND company.code IS NOT NULL
+                AND company.code != ''
+                AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, '')) IS NOT NULL
+                <if test="companyCode != null and companyCode != ''">
+                    AND company.code LIKE CONCAT('%', #{companyCode}, '%')
+                </if>
+                <if test="companyName != null and companyName != ''">
+                    AND (company.full_name LIKE CONCAT('%', #{companyName}, '%')
+                         OR company.short_name LIKE CONCAT('%', #{companyName}, '%'))
+                </if>
+            </where>
+            GROUP BY company.code
+        ), ranked_grade AS (
+            SELECT grade.windcode
+                   ,grade.windname
+                   ,grade.total_score
+                   ,grade.ts
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY grade.windcode
+                       ORDER BY grade.ts DESC
+                   ) AS row_num
+            FROM ais_inv_analysis.v_inv_grade_result grade
+            WHERE EXISTS (
+                SELECT 1
+                FROM source_subject subject
+                WHERE subject.company_code = grade.windcode
+            )
+        )
+        SELECT subject.company_code
+               ,COALESCE(grade.windname, subject.company_name) AS company_name
+               ,grade.total_score AS inner_rating
+               ,grade.ts AS rating_time
+        FROM source_subject subject
+        LEFT JOIN ranked_grade grade ON grade.windcode = subject.company_code
+                                    AND grade.row_num = 1
+        ORDER BY subject.company_code ASC
+    </select>
+
+    <!-- 自选权益人提交防伪：按精确主体编码重新查询投资分析主体和最新内评 -->
+    <select id="querySelfSelectedRightsHolderByCode"
+            resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
+        WITH source_subject AS (
+            SELECT company.code AS company_code
+                   ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, ''))) AS company_name
+            FROM ais_inv_analysis.t_inv_company company
+            WHERE company.code = #{companyCode}
+              AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, '')) IS NOT NULL
+            GROUP BY company.code
+        ), ranked_grade AS (
+            SELECT grade.windcode
+                   ,grade.windname
+                   ,grade.total_score
+                   ,grade.ts
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY grade.windcode
+                       ORDER BY grade.ts DESC
+                   ) AS row_num
+            FROM ais_inv_analysis.v_inv_grade_result grade
+            WHERE grade.windcode = #{companyCode}
+        )
+        SELECT subject.company_code
+               ,COALESCE(grade.windname, subject.company_name) AS company_name
+               ,grade.total_score AS inner_rating
+               ,grade.ts AS rating_time
+        FROM source_subject subject
+        LEFT JOIN ranked_grade grade ON grade.windcode = subject.company_code
+                                    AND grade.row_num = 1
+        LIMIT 1
+    </select>
+
     <!-- 新增调库记录 -->
     <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_adjust_log (security_code

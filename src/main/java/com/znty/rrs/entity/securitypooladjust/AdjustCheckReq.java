@@ -22,8 +22,14 @@ public class AdjustCheckReq {
     /** 基金评分（基金证券调入校验用，前端传入；空则跳过基金评分校验） */
     private String fundRate;
 
-    /** 前端选中的担保人代码（多担保人时下拉二选一；用于简易流程第⑤条件担保人评级下调判断，空表示无担保人/未选中） */
+    /** 非 ABS 页面从四类关系主体中选中的担保人代码 */
     private String guarantorCode;
+
+    /** ABS 当前选择的权益人主体代码 */
+    private String rightsHolderCode;
+
+    /** ABS 当前选择的自选权益人主体代码，自选时优先于 rightsHolderCode */
+    private String selfSelectedRightsHolderCode;
 
     /** 是否放开主体债入库矩阵规则 */
     private boolean releaseRules;
