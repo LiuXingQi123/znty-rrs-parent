@@ -25,6 +25,24 @@ public class BatchCrmwCandidateDto {
     /** 标的证券是否 ABS：1=是 / 0=否 */
     private Integer absFlag;
 
+    /** 标的证券是否担保：1=是 / 0=否 */
+    private Integer guarantFlag;
+
+    /** 标的证券是否永续：1=是 / 0=否 */
+    private Integer yxFlag;
+
+    /** 标的证券是否次级：1=是 / 0=否 */
+    private Integer cjFlag;
+
+    /** 标的证券发行方式 */
+    private String issueType;
+
+    /** 标的证券内部分类 */
+    private String innerClass;
+
+    /** 标的证券是否含权：1=是 / 0=否 */
+    private Integer inrightFlag;
+
     /**
      * 市场编码列表：
      * SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 /

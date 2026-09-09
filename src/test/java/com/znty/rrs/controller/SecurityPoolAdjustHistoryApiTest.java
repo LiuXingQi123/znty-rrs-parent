@@ -33,7 +33,7 @@ public class SecurityPoolAdjustHistoryApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage",
-                "{\"poolIds\":[2,3],\"pageIndex\":1,\"pageSize\":20}");
+                "{\"poolIds\":[2,3],\"bondYesFlags\":[\"abs\",\"private\"],\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjustHistory/querySecurityTypeList", "{}");
     }
 }

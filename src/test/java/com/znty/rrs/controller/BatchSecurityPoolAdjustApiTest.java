@@ -43,7 +43,7 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchSecurityPoolAdjust/querySecurityPage",
-                "{\"poolId\":2,\"direction\":\"in\",\"pageIndex\":1,\"pageSize\":20}");
+                "{\"poolId\":2,\"direction\":\"in\",\"bondYesFlags\":[\"abs\",\"guarant\"],\"pageIndex\":1,\"pageSize\":20}");
     }
 
     /** 验证批量调库下一步校验接口支持调入 */

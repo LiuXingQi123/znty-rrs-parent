@@ -13,6 +13,13 @@
                ,al.security_type
                ,dst.security_type_name
                ,sb.issuer
+               ,sb.abs_flag
+               ,sb.guarant_flag
+               ,sb.yx_flag
+               ,sb.cj_flag
+               ,sb.issue_type
+               ,sb.inner_class
+               ,sb.inright_flag
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
@@ -66,6 +73,24 @@
             </if>
             <if test="issuer != null and issuer != ''">
                 AND sb.issuer LIKE CONCAT('%', #{issuer}, '%')
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('guarant')">
+                AND COALESCE(sb.guarant_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
+                AND COALESCE(sb.inright_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
+                AND COALESCE(sb.yx_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('private')">
+                AND (sb.issue_type LIKE CONCAT('%', '私募', '%') OR sb.inner_class LIKE CONCAT('%', '私募', '%'))
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('abs')">
+                AND (COALESCE(sb.abs_flag, 0) = 1 OR sb.security_type = 'abs')
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('cj')">
+                AND COALESCE(sb.cj_flag, 0) = 1
             </if>
             <if test="adjustMode != null and adjustMode != ''">
                 AND al.adjust_mode = #{adjustMode}

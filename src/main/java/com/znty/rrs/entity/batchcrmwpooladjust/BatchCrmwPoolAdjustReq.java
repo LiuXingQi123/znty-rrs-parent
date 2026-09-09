@@ -40,4 +40,10 @@ public class BatchCrmwPoolAdjustReq extends PageRequest {
      * COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / JWCW=JWCW市场 / UNKNOWN=未知 / OTHER=其他
      */
     private List<String> marketCodes;
+
+    /**
+     * 标的证券是否特征多选（勾选即筛「是」，多选 AND）：
+     * guarant / inright / yx / private / abs / cj
+     */
+    private List<String> bondYesFlags;
 }

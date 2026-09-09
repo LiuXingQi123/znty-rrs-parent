@@ -26,7 +26,7 @@
 | 调出 | `ip_pool_status_crmw` 当前有效组合，左连标的 `rrs_securityinfo` |
 | 调入 | CRMW 凭证 × 可绑定标的（排除 `crmw`/`company`），且该组合尚未在目标池 |
 
-候选表默认 10 条/页，列包含证券名称、证券代码、市场、CRMW名称、CRMW代码、发行人、证券评级、主体评级、主体内评分档、到期日期、剩余期限(年)、担保人/权益人、自选权益人、担保人主体内评分。关系主体按 `115004000`、`115203000`、`115202000`、`115201000` 映射为 1‑4 升序，其中 `115202000=债务主体`，页面默认选中第一条。
+候选表默认 10 条/页，支持按标的证券的是否特征（ABS/担保/永续/次级/私募/含权）多选筛选，勾选即筛「是」、多选 AND。列包含证券名称、证券代码、市场、CRMW名称、CRMW代码、发行人、证券评级、主体评级、主体内评分档、是否ABS/担保/永续/次级/私募/含权、到期日期、剩余期限(年)、担保人/权益人、自选权益人、担保人主体内评分。关系主体按 `115004000`、`115203000`、`115202000`、`115201000` 映射为 1‑4 升序，其中 `115202000=债务主体`，页面默认选中第一条。
 
 跨页多选键：`crmwScode|securityCode`。
 
@@ -55,8 +55,8 @@
 |---|---|
 | `common/queryPoolTreeList` | `{ includePoolTypes: ['crmw'] }` 筛选树 |
 | `batchCrmwPoolAdjust/queryPoolPage` | CRMW 叶子池分页 |
-| `batchCrmwPoolAdjust/queryInboundCandidatePage` | 可调入候选组合分页 |
-| `batchCrmwPoolAdjust/queryOutboundCandidatePage` | 可调出候选组合分页 |
+| `batchCrmwPoolAdjust/queryInboundCandidatePage` | 可调入候选组合分页；`bondYesFlags` 按标的证券特征多选 AND |
+| `batchCrmwPoolAdjust/queryOutboundCandidatePage` | 可调出候选组合分页；`bondYesFlags` 按标的证券特征多选 AND |
 | `batchCrmwPoolAdjust/checkAdjust` | 下一步校验 |
 | `batchCrmwPoolAdjust/addAdjustLog` | JSON 提交 |
 | `batchCrmwPoolAdjust/addAdjustLogWithFiles` | multipart 提交（页面实际入口） |

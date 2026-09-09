@@ -43,7 +43,7 @@ public class BatchCrmwPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchCrmwPoolAdjust/queryInboundCandidatePage",
-                "{\"poolId\":18,\"pageIndex\":1,\"pageSize\":20}");
+                "{\"poolId\":18,\"bondYesFlags\":[\"abs\",\"guarant\"],\"pageIndex\":1,\"pageSize\":20}");
     }
 
     /** 验证批量调出候选组合分页接口 */
@@ -52,7 +52,7 @@ public class BatchCrmwPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchCrmwPoolAdjust/queryOutboundCandidatePage",
-                "{\"poolId\":18,\"pageIndex\":1,\"pageSize\":20}");
+                "{\"poolId\":18,\"bondYesFlags\":[\"yx\",\"private\"],\"pageIndex\":1,\"pageSize\":20}");
     }
 
     /** 验证批量调库下一步校验接口支持调入 */

@@ -64,6 +64,12 @@
                ,si.short_name AS securityShortName
                ,si.security_type
                ,si.abs_flag
+               ,si.guarant_flag
+               ,si.yx_flag
+               ,si.cj_flag
+               ,si.issue_type
+               ,si.inner_class
+               ,si.inright_flag
                ,CONCAT_WS(','
                    ,IF(si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '', 'SSE', NULL)
                    ,IF(si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '', 'SZSE', NULL)
@@ -116,6 +122,24 @@
                     </foreach>
                 )
             </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('guarant')">
+                AND COALESCE(si.guarant_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
+                AND COALESCE(si.inright_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
+                AND COALESCE(si.yx_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('private')">
+                AND (si.issue_type LIKE CONCAT('%', '私募', '%') OR si.inner_class LIKE CONCAT('%', '私募', '%'))
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('abs')">
+                AND (COALESCE(si.abs_flag, 0) = 1 OR si.security_type = 'abs')
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('cj')">
+                AND COALESCE(si.cj_flag, 0) = 1
+            </if>
         </where>
         ORDER BY ips.crmw_scode ASC
                  ,ips.security_code ASC
@@ -127,6 +151,12 @@
                ,bond.short_name AS securityShortName
                ,bond.security_type
                ,bond.abs_flag
+               ,bond.guarant_flag
+               ,bond.yx_flag
+               ,bond.cj_flag
+               ,bond.issue_type
+               ,bond.inner_class
+               ,bond.inright_flag
                ,CONCAT_WS(','
                    ,IF(bond.wind_code_sh IS NOT NULL AND bond.wind_code_sh != '', 'SSE', NULL)
                    ,IF(bond.wind_code_sz IS NOT NULL AND bond.wind_code_sz != '', 'SZSE', NULL)
@@ -189,6 +219,24 @@
                         </choose>
                     </foreach>
                 )
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('guarant')">
+                AND COALESCE(bond.guarant_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
+                AND COALESCE(bond.inright_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
+                AND COALESCE(bond.yx_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('private')">
+                AND (bond.issue_type LIKE CONCAT('%', '私募', '%') OR bond.inner_class LIKE CONCAT('%', '私募', '%'))
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('abs')">
+                AND (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('cj')">
+                AND COALESCE(bond.cj_flag, 0) = 1
             </if>
         </where>
         ORDER BY crmw.wind_code ASC

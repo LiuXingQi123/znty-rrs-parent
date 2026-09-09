@@ -40,6 +40,12 @@ public class SecurityPoolAdjustHistoryReq extends PageRequest {
     /** 发行主体名称（模糊，联查 rrs_securityinfo） */
     private String issuer;
 
+    /**
+     * 是否特征多选（勾选即筛「是」，多选 AND）：
+     * guarant / inright / yx / private / abs / cj
+     */
+    private List<String> bondYesFlags;
+
     /** 调整方向：调入 / 调出 */
     private String adjustMode;
 

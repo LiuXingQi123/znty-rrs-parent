@@ -48,6 +48,24 @@ public class BatchSecurityCandidateDto {
     /** 是否 ABS：1=是 / 0=否 */
     private String absFlag;
 
+    /** 是否担保：1=是 / 0=否 */
+    private Integer guarantFlag;
+
+    /** 是否永续：1=是 / 0=否 */
+    private Integer yxFlag;
+
+    /** 是否次级：1=是 / 0=否 */
+    private Integer cjFlag;
+
+    /** 发行方式 */
+    private String issueType;
+
+    /** 内部分类 */
+    private String innerClass;
+
+    /** 是否含权：1=是 / 0=否 */
+    private Integer inrightFlag;
+
     /** 担保人（名称，多担保人逗号分隔） */
     private String guarantor;
 

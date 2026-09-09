@@ -30,6 +30,11 @@ public class SecurityPoolQueryReq extends PageRequest {
     private String adjusterName;
     /** 发行主体名称（模糊搜索） */
     private String issuer;
+    /**
+     * 是否特征多选（勾选即筛「是」，多选 AND）：
+     * guarant / inright / yx / private / abs / cj
+     */
+    private List<String> bondYesFlags;
     /** 我的证券 */
     private Boolean mySecurities;
     /** 当前用户ID（我的证券勾选时使用） */

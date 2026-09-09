@@ -39,6 +39,12 @@ public class StockSecurityBatchAdjustReq extends PageRequest {
     private List<String> marketCodes;
 
     /**
+     * 是否特征多选（勾选即筛「是」，多选 AND）：
+     * guarant / inright / yx / private / abs / cj
+     */
+    private List<String> bondYesFlags;
+
+    /**
      * 来源池 ID 列表（必选至少一个；须在白名单内）。
      * 白名单 pool_code：crmw_root / credit_bond_level_1~3 / convertible_bond_core / convertible_bond_focus
      */

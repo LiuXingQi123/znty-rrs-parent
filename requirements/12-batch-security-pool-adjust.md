@@ -44,14 +44,15 @@
 | 文本输入 | `securityCode` | 证券代码 |
 | 文本输入 | `securityShortName` | 证券简称 |
 | 多选 | `marketCodes` | 市场（SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他） |
+| 多选 | `bondYesFlags` | 是否特征：ABS/担保/永续/次级/私募/含权；勾选即筛「是」，多选 AND |
 
 查询接口：`POST /api/v1/batchSecurityPoolAdjust/querySecurityPage`（`loadSecurityList`），请求体：
 ```json
 { "currentUserId": "1", "poolId": <Long>, "direction": "in|out",
-  "securityCode": null, "securityShortName": null, "marketCodes": null,
+  "securityCode": null, "securityShortName": null, "marketCodes": null, "bondYesFlags": null,
   "pageIndex": 1, "pageSize": 20 }
 ```
-返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（securityCode/securityShortName/securityType/marketCodes/issuer/ratingBond/maturityDate、`dateExists` 剩余期限**天**，列表前端 ÷365 展示为年）。
+返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（含证券基础信息及 ABS/担保/永续/次级/私募/含权原始字段；`dateExists` 剩余期限为**天**，列表前端 ÷365 展示为年）。候选表按证券池调整页样式展示六个「是/否」Tag。
 候选证券固定排除 `security_type IN ('crmw','company')` 的 CRMW 凭证和公司主体，避免混入证券池批量调整。
 
 > 选择页 `batch_security_pool_adjust_select.html` 的筛选条件与查询接口一致（路径同为 `querySecurityPage`），区别仅在独立屏布局与 mock 报告数据。
@@ -215,7 +216,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<PoolTreeDto>` | 主页面初始化投资池筛选树 |
 | `batchSecurityPoolAdjust/queryPoolPage` | currentUserId, poolIds, pageIndex, pageSize | `PageResult<BatchSecurityPoolDto>`（records:[id/poolName/poolFullName/poolType/marketCodes/varietyCodes/description/maxCapacity/currentCount], total） | 分页查询当前用户可调整的启用叶子投资池；**按 `pool_type != 'crmw'` 排除 CRMW 池**（凭证匹配走 CRMW 链路）；候选证券另按 `security_type NOT IN ('crmw','company')` |
-| `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), securityCode, securityShortName, marketCodes, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券 |
+| `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), securityCode, securityShortName, marketCodes, bondYesFlags, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券；特征多选按 AND |
 | `batchSecurityPoolAdjust/checkAdjust` | `BatchSecurityInboundAdjustReq`: currentUserId, direction, poolId, poolName, poolType, securities:[{securityCode,securityShortName,securityType}] | `BatchSecurityInboundAdjustDto`（items:[{...,canAdjust,failReasons,flowOptions}]） | 批量调库下一步校验 |
 | `batchSecurityPoolAdjust/addAdjustLog`（JSON） | `BatchSecurityInboundAdjustReq`（含 items:[{...,flowId/flowKey/flowType,creditReportFileIndexes,...}]） | `BatchSecurityInboundAdjustDto`（securityCount, submitCount, logIds） | 批量提交调库申请（无附件） |
 | `batchSecurityPoolAdjust/addAdjustLogWithFiles`（multipart） | `request`=JSON Blob + `files`=MultipartFile[] | 同上 | 批量提交调库申请及附件（前端实际用此入口；JSON 无附件入口为 `addAdjustLog`） |

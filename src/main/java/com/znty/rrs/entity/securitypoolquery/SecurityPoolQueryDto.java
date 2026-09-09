@@ -52,6 +52,20 @@ public class SecurityPoolQueryDto {
     private String maturityDate;
     /** 剩余期限（天），对应 rrs_securityinfo.date_exists；列表前端 ÷365 展示为年 */
     private BigDecimal dateExists;
+    /** 是否 ABS：1=是 / 0=否 */
+    private Integer absFlag;
+    /** 是否担保：1=是 / 0=否 */
+    private Integer guarantFlag;
+    /** 是否永续：1=是 / 0=否 */
+    private Integer yxFlag;
+    /** 是否次级：1=是 / 0=否 */
+    private Integer cjFlag;
+    /** 发行方式 */
+    private String issueType;
+    /** 内部分类 */
+    private String innerClass;
+    /** 是否含权：1=是 / 0=否 */
+    private Integer inrightFlag;
     /** 证券状态：active=存续 / matured=到期 */
     private String securityStatus;
     /** 退市日期 */

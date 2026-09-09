@@ -32,7 +32,7 @@ public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/securityPoolQuery/querySecurityPoolPage",
-                "{\"poolIds\":[2,3],\"securityStatus\":\"active\",\"pageIndex\":1,\"pageSize\":20}");
+                "{\"poolIds\":[2,3],\"securityStatus\":\"active\",\"bondYesFlags\":[\"cj\",\"inright\"],\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityTypeList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityStatusList", "{}");
     }

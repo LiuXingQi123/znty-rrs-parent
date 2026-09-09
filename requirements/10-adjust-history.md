@@ -23,6 +23,7 @@
 | `securityType` | `''` | 下拉 | 动态加载 |
 | `adjustTimeRange` | `null` | 日期范围 | 调整时间（提交时间） |
 | `adjusterName` / `issuer` | `''` | 文本输入 | |
+| `bondYesFlags` | `[]` | 是否特征多选 | 可选 ABS/担保/永续/次级/私募/含权；勾选即筛「是」，多选 AND |
 | `adjustMode` | `''` | 下拉 | 调入/调出 |
 | `auditStatus` | `''` | 下拉 | 8 种审核状态 |
 | `myBonds` | `false` | 复选框 | 我的调整，change 即查询 |
@@ -49,6 +50,7 @@
 | `securityCode` / `securityShortName` / `securityType` | 表单 | 空串转 null |
 | `adjustTimeStart` / `adjustTimeEnd` | `adjustTimeRange[0/1]` | 直接取日期串（无时分秒补全，后端对 End 拼 ` 23:59:59`） |
 | `adjusterName` / `issuer` | 表单 | 空串转 null |
+| `bondYesFlags` | 是否特征多选 | 空数组转 null；多选按 AND |
 | `adjustMode` / `auditStatus` | 下拉 | 空串转 null |
 | `myBonds` | 复选框 | false 转 null |
 | `currentUserId` | 固定 `'1'` | 必传 |
@@ -69,6 +71,7 @@
 | 证券代码 | `securityCode` | `desc-link` 点击跳转 |
 | 证券类型 | `securityTypeName` | `el-tag type="info"`，空则空 |
 | 发行主体名称 | `issuer` | tooltip |
+| 是否ABS/担保/永续/次级/私募/含权 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
 | 调整类型 | `adjustType` | 直接显示（手工调整/联动调整/互斥调整/关联调整/Excel导入/Excel清空/手动批量调整） |
 | 调整方向 | `adjustMode` | `调入`→绿色 `el-tag--success`；`调出`→红色 `el-tag--danger`；其他空 |
 | 调整原因 | `adjustReason` | tooltip |
@@ -98,7 +101,7 @@
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树 |
-| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 id、adjustLogId（与 id 同值）、targetPoolPath, adjustBatchNo, auditStatus 等） | 调库历史分页（含所有状态；`category_type=bond`，含 crmw 跟债记录，不按 pool_type 排除禁投） |
+| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, bondYesFlags, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 id、adjustLogId、targetPoolPath、adjustBatchNo、auditStatus、证券特征等） | 调库历史分页（含所有状态；`category_type=bond`，含 crmw 跟债记录，不按 pool_type 排除禁投） |
 | `securityPoolAdjustHistory/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：债券大类，含 crmw；不限 audit_status） |
 
 > 路径均带前缀 `/api/v1/`。
@@ -131,6 +134,7 @@
   - 预留的 `securityStatus` 筛选按 `yyyyMMdd` 格式比较 `maturity_date` 与 `DATE_FORMAT(NOW(), '%Y%m%d')`
   - `adjustTimeEnd` 后端补 `CONCAT(#{adjustTimeEnd}, ' 23:59:59')`，start 直接用日期串
   - `myBonds==true` → `al.adjuster_id = #{currentUserId}`
+  - `bondYesFlags` → 按主档证券特征逐项追加条件，多选 AND
 - **SELECT**：`p.pool_name AS target_pool_path`（先取叶子名）
 - **排序**：`submit_time DESC, adjust_batch_no DESC, id DESC`（时间优先最新在前，批次号次之用于同组聚拢）
 - **Service 后处理**：`fillPoolFullName` 用全路径映射覆盖 `targetPoolPath`
