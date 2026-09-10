@@ -2,13 +2,13 @@
 
 > 前端页面：`forbidden_pool_history.html`
 > 后端前缀：`/api/v1/forbiddenPoolHistory`
-> 角色定位：风控、合规和审计人员查询针对禁投池、观察池和黑名单质押库的全部调库流水（含调入/调出/驳回/撤回），追溯主体风险池调整历史。
+> 角色定位：风控、合规和审计人员查询债券禁止库的全部调库流水（含调入/调出/驳回/撤回），追溯调整历史。
 
 ---
 
 ## 0. 关键现状（数据来源）
 
-**风险池历史不是独立表**，而是复用 `ip_adjust_log`（证券池调库记录表），通过 `INNER JOIN ip_investment_pool p ON p.pool_type IN ('forbidden','observe','blacklist','restricted')` 过滤出四类风险池的调库流水。
+**禁投池历史不是独立表**，而是复用 `ip_adjust_log`（证券池调库记录表），通过 `INNER JOIN ip_investment_pool p ON p.pool_type='forbidden'` 仅过滤债券禁止库的调库流水。
 
 - 禁投池查询（[08](08-forbidden-pool-query.md)）→ 读 `ip_pool_status`（当前在禁投池中的证券快照）
 - 禁投池历史（本文）→ 读 `ip_adjust_log`（针对禁投池的全部调库流水，含所有状态）
@@ -39,6 +39,7 @@
 | 文本输入 | `companyName` | 模糊 | 主体名称，回车查询 |
 | 文本输入 | `securityCode` | 模糊 | 证券代码，回车查询 |
 | 文本输入 | `securityShortName` | 模糊 | 证券名称，回车查询 |
+| 下拉 | `categoryType` | 精确 | 对象类型：`company`=主体 / `bond`=债券；未选则全部 |
 | 日期范围 | `adjustTimeRange` | 范围 | 调整开始/结束，`value-format="yyyy-MM-dd"` |
 | 文本输入 | `adjusterName` | 模糊 | 调整人，回车查询 |
 | 下拉 | `adjustMode` | 精确 | 调整方向：调入/调出 |
@@ -56,7 +57,7 @@
   ```json
   { "companyCode", "companyName", "securityCode", "securityShortName",
     "adjustTimeStart": range ? range[0] : null, "adjustTimeEnd": range ? range[1] : null,
-    "adjusterName", "adjustMode", "auditStatus",
+    "adjusterName", "categoryType", "adjustMode", "auditStatus",
     "pageIndex", "pageSize" }
   ```
 - 后端 `ForbiddenPoolHistoryService`：`PageHelper.startPage` 分页；`queryForbiddenPoolHistoryPage` SQL；`fillPoolFullName`（用投资池全路径名覆盖 `targetPoolName`）；返回 `PageResult`。
@@ -119,7 +120,7 @@ SELECT al.id, al.adjuster_name, al.submit_time, al.security_short_name,
        al.target_pool_id, p.pool_name AS target_pool_name, al.audit_status
 FROM ip_adjust_log al
 INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
-                                 AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
+                                 AND p.pool_type = 'forbidden'
 LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
 -- wind_cbondissuer 为债券+主体粒度，先按主体代码去重再 JOIN，避免同主体多债行膨胀
 LEFT JOIN (
@@ -133,6 +134,8 @@ LEFT JOIN (
     <if companyName>   AND COALESCE(wci.s_info_compname, bi.issuer) LIKE CONCAT('%', #{companyName}, '%') </if>
     <if securityCode>  AND al.security_code LIKE CONCAT('%', #{securityCode}, '%') </if>
     <if securityShortName> AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%') </if>
+    <if categoryType=='company'> AND al.security_type = 'company' </if>
+    <if categoryType=='bond'> AND dst.category_type = 'bond' </if>
     <if adjustTimeStart> AND al.submit_time >= #{adjustTimeStart} </if>
     <if adjustTimeEnd>   AND al.submit_time <= CONCAT(#{adjustTimeEnd}, ' 23:59:59') </if>
     <if adjusterName>  AND al.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%') </if>
@@ -146,6 +149,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 - 主体级流水通过去重后的 Wind 主体表（`s_info_compcode`/`s_info_compname`）匹配；债券流水继续通过 `rrs_securityinfo` 的 `issuer_code`/`issuer` 反查。
 - 返回 `adjustBatchNo`，历史页跳转详情时携带该批次号以加载同批次流程步骤。
 - 历史筛选日期语义为提交日期（`al.submit_time`）；页面显示“提交开始/提交结束”。
+- 对象类型筛选：`categoryType='company'` 时仅主体；`categoryType='bond'` 时仅债券；未传则不限制。
 - 投资池已删除时仍保留对应历史流水。
 - 排序按 `submit_time DESC, adjust_batch_no DESC, id DESC`（时间优先最新在前；同秒内按批次号聚拢同组手工/联动/互斥）。
 - `target_pool_name` 同样被 Service 覆盖为全路径名。
@@ -159,8 +163,8 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 |---|---|---|
 | 主表 | `ip_pool_status`（当前状态表，快照） | `ip_adjust_log`（调库流水表） |
 | 含义 | 此刻仍在禁投池中的证券 | 所有针对禁投池的调整动作（含已调出/驳回/撤回） |
-| 风险池过滤 | `INNER JOIN ip_investment_pool p ON p.pool_type IN ('forbidden','observe','blacklist','restricted')` | 同左 |
-| 筛选项 | 证券代码/简称/类型/状态/调整日期/调整人/发行主体/调整状态 | 主体代码/主体名称/证券代码/证券名称/调整日期/调整人/调整方向/调整状态 |
+| 池范围过滤 | `INNER JOIN ip_investment_pool p ON p.pool_type='forbidden'` | 同左 |
+| 筛选项 | 证券代码/简称/类型/对象类型/状态/调整日期/调整人/发行主体/调整状态 | 主体代码/主体名称/证券代码/证券名称/对象类型/调整日期/调整人/调整方向/调整状态 |
 | 表格列 | 含证券类型/证券状态/退市日期/行权日期 | 含调整类型/调整方向/审批状态 |
 | 证券名称/代码 | 可点击跳详情 | 可点击跳详情，主体记录跳主体详情 |
 | 接口数 | 2（分页 + 类型下拉） | 1（仅分页） |

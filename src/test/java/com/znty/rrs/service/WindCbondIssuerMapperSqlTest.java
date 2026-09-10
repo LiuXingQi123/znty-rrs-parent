@@ -35,4 +35,40 @@ public class WindCbondIssuerMapperSqlTest {
                     .isFalse();
         }
     }
+
+    /** 校验禁投池查询和历史仅覆盖债券禁止库。 */
+    @Test
+    public void forbiddenPoolQueriesShouldOnlyQueryForbiddenPool() throws Exception {
+        List<String> mapperFiles = Arrays.asList(
+                "ForbiddenPoolHistoryMapper.xml",
+                "ForbiddenPoolQueryMapper.xml"
+        );
+
+        for (String mapperFile : mapperFiles) {
+            Path mapperPath = Paths.get("src", "main", "resources", "mapper", mapperFile);
+            String xml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
+            assertThat(xml).as(mapperFile + " 应仅查询债券禁止库")
+                    .contains("p.pool_type = 'forbidden'")
+                    .doesNotContain("p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')");
+        }
+    }
+
+    /** 校验禁投池查询和历史支持按主体或债券筛选。 */
+    @Test
+    public void forbiddenPoolQueriesShouldSupportCategoryTypeFilter() throws Exception {
+        List<String> mapperFiles = Arrays.asList(
+                "ForbiddenPoolHistoryMapper.xml",
+                "ForbiddenPoolQueryMapper.xml"
+        );
+
+        for (String mapperFile : mapperFiles) {
+            Path mapperPath = Paths.get("src", "main", "resources", "mapper", mapperFile);
+            String xml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
+            assertThat(xml).as(mapperFile + " 应支持主体和债券对象类型筛选")
+                    .contains("test=\"categoryType == 'company'\"")
+                    .contains("test=\"categoryType == 'bond'\"")
+                    .contains("security_type = 'company'")
+                    .contains("dst.category_type = 'bond'");
+        }
+    }
 }

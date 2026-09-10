@@ -30,6 +30,9 @@ public class ForbiddenPoolQueryReq extends PageRequest {
     /** 证券类型（精确匹配） */
     private String securityType;
 
+    /** 对象类型：company=主体 / bond=债券 */
+    private String categoryType;
+
     /** 证券状态：active=存续 / matured=到期 / unknown=未知到期日 */
     private String securityStatus;
 

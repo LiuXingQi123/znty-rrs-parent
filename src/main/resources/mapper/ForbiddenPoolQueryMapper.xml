@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolQueryMapper">
-    <!-- 风险池查询 mapper，对应表：ip_pool_status（证券池状态），覆盖禁投池、观察池和黑名单质押库 -->
+    <!-- 禁投池查询 mapper，对应表：ip_pool_status（证券池状态），仅查询债券禁止库 -->
 
     <!--
       分页查询禁投池证券列表。
@@ -27,7 +27,7 @@
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
+                                       AND p.pool_type = 'forbidden'
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         LEFT JOIN (
@@ -58,6 +58,12 @@
             <if test="securityType != null and securityType != ''">
                 AND ips.security_type = #{securityType}
             </if>
+            <if test="categoryType == 'company'">
+                AND ips.security_type = 'company'
+            </if>
+            <if test="categoryType == 'bond'">
+                AND dst.category_type = 'bond'
+            </if>
             <if test="securityStatus == 'active'">
                 AND dst.category_type = 'bond'
                 AND bi.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d')
@@ -87,14 +93,14 @@
                  ,ips.id DESC
     </select>
 
-    <!-- 查询风险池中出现的证券类型选项 -->
+    <!-- 查询债券禁止库中出现的证券类型选项 -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT ips.security_type
                        ,dst.security_type_name
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
+                                       AND p.pool_type = 'forbidden'
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'

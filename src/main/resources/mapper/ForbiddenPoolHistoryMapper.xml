@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolHistoryMapper">
-    <!-- 风险池历史查询 mapper，对应表：ip_adjust_log（调库记录），覆盖禁投池、观察池和黑名单质押库 -->
+    <!-- 禁投池历史查询 mapper，对应表：ip_adjust_log（调库记录），仅查询债券禁止库 -->
 
     <!--
       分页查询禁投池调整历史。
@@ -24,7 +24,7 @@
                ,al.audit_status
         FROM ip_adjust_log al
         INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
-                                       AND p.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
+                                       AND p.pool_type = 'forbidden'
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type
                                         AND dst.is_deleted = 0
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
@@ -58,6 +58,12 @@
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')
+            </if>
+            <if test="categoryType == 'company'">
+                AND al.security_type = 'company'
+            </if>
+            <if test="categoryType == 'bond'">
+                AND dst.category_type = 'bond'
             </if>
             <if test="adjustTimeStart != null and adjustTimeStart != ''">
                 AND al.submit_time &gt;= #{adjustTimeStart}
