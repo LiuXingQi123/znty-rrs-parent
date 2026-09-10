@@ -24,6 +24,7 @@ import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -86,11 +87,11 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         String taskName = resolveTaskName();
         infoDetail(detail, taskName + " 开始");
         try {
-            int total = doAutoOut(taskName, detail);
+            AutoOutSummary summary = doAutoOut(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共自动出池 " + total + " 条到期 CRMW 组合";
+            String message = summary.buildMessage();
             infoDetail(detail, taskName + " 结束，" + message);
-            return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
+            return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
             long duration = System.currentTimeMillis() - begin;
@@ -106,7 +107,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         }
     }
 
-    private int doAutoOut(String taskName, TaskDetailLog detail) {
+    private AutoOutSummary doAutoOut(String taskName, TaskDetailLog detail) {
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "扫描池列表 poolIds=" + poolIds);
         infoDetail(detail, "扫描条件：ip_pool_status_crmw.is_deleted=0、audit_status=20、target_pool_id IN "
@@ -116,7 +117,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         infoDetail(detail, "本轮批次号 " + batchNo);
         List<PoolRelationBo> allRelations = crmwPoolAdjustMapper.queryAllPoolRelationList();
-        int total = 0;
+        AutoOutSummary summary = new AutoOutSummary();
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
@@ -166,12 +167,63 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                 item.setSubmitTime(submitTime);
                 crmwPoolAdjustMapper.addAdjustLog(item);
                 poolCount++;
-                total++;
             }
+            summary.addPool(poolId, pool.getPoolName(), poolCount);
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 调出 " + poolCount + " 条");
         }
-        infoDetail(detail, "本轮共调出 " + total + " 条，批次号 " + batchNo);
-        return total;
+        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        return summary;
+    }
+
+    /** 本轮 CRMW 到期出池汇总。 */
+    private static final class AutoOutSummary {
+
+        /** 本轮实际出池总数。 */
+        private int total;
+        /** 按目标池保存实际出池数量。 */
+        private final Map<Long, PoolSummary> poolSummaries = new LinkedHashMap<>();
+
+        /** 累加目标池出池数量。 */
+        private void addPool(Long poolId, String poolName, int count) {
+            poolSummaries.put(poolId, new PoolSummary(poolId, poolName, count));
+            total += count;
+        }
+
+        /** 构建最近执行结果文案。 */
+        private String buildMessage() {
+            StringBuilder message = new StringBuilder("本轮共自动出池 ")
+                    .append(total).append(" 条到期 CRMW 组合");
+            if (!poolSummaries.isEmpty()) {
+                message.append("；目标池明细：");
+                int index = 0;
+                for (PoolSummary pool : poolSummaries.values()) {
+                    if (index++ > 0) {
+                        message.append("；");
+                    }
+                    message.append(pool.poolName).append("(").append(pool.poolId).append(")：")
+                            .append(pool.count).append(" 条 CRMW 组合");
+                }
+            }
+            return message.toString();
+        }
+    }
+
+    /** 单个目标池出池统计。 */
+    private static final class PoolSummary {
+
+        /** 目标池 ID。 */
+        private final Long poolId;
+        /** 目标池名称。 */
+        private final String poolName;
+        /** 实际出池数量。 */
+        private final int count;
+
+        /** 创建目标池统计。 */
+        private PoolSummary(Long poolId, String poolName, int count) {
+            this.poolId = poolId;
+            this.poolName = poolName;
+            this.count = count;
+        }
     }
 
     private List<Long> resolvePoolIds(String taskName, TaskDetailLog detail) {

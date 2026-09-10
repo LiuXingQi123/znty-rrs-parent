@@ -85,11 +85,15 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
             return 1;
         });
         when(securityPoolAdjustMapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
+        when(forbiddenPoolAdjustService.syncCompanyBondsForAutomaticAdjustment(any(IpAdjustLogBo.class)))
+                .thenReturn(3);
 
         ScheduledTaskResult result = service.execute();
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getMessage()).contains("本轮共自动入池 1 个主体、3 只债券")
+                .contains("黑名单质押库(17)：1 个主体、3 只债券");
         assertThat(service.getTaskCode()).isEqualTo("company_outer_rating_aa_minus_auto_in");
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);

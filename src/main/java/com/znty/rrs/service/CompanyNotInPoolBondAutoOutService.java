@@ -25,6 +25,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -100,11 +101,11 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         String taskName = resolveTaskName();
         infoDetail(detail, taskName + " 开始");
         try {
-            int total = doAutoOut(taskName, detail);
+            AutoOutSummary summary = doAutoOut(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共自动出池 " + total + " 条债券";
+            String message = summary.buildMessage();
             infoDetail(detail, taskName + " 结束，" + message);
-            return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
+            return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
             long duration = System.currentTimeMillis() - begin;
@@ -120,7 +121,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         }
     }
 
-    private int doAutoOut(String taskName, TaskDetailLog detail) {
+    private AutoOutSummary doAutoOut(String taskName, TaskDetailLog detail) {
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
         List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
@@ -133,7 +134,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         infoDetail(detail, "本轮批次号 " + batchNo);
-        int total = 0;
+        AutoOutSummary summary = new AutoOutSummary();
         for (long[] pair : pairList) {
             Long bondPoolId = pair[0];
             Long companyPoolId = pair[1];
@@ -183,13 +184,78 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 bond.setSubmitTime(submitTime);
                 securityPoolAdjustMapper.addAdjustLog(bond);
                 pairCount++;
-                total++;
             }
+            summary.addMapping(bondPoolId, bondPool.getPoolName(), companyPoolId,
+                    companyPool == null ? null : companyPool.getPoolName(), pairCount);
             infoDetail(detail, "债券池[" + bondPool.getPoolName() + "](" + bondPoolId
                     + ")←主体池[" + companyPoolId + "] 出池 " + pairCount + " 条");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，合计出池 " + total + " 条");
-        return total;
+        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        return summary;
+    }
+
+    /** 本轮主体不在池债券出池汇总。 */
+    private static final class AutoOutSummary {
+
+        /** 本轮实际出池总数。 */
+        private int total;
+        /** 按债券池与主体池映射保存出池数量。 */
+        private final Map<String, MappingSummary> mappingSummaries = new LinkedHashMap<>();
+
+        /** 累加一个债券池与主体池映射的出池数量。 */
+        private void addMapping(Long bondPoolId, String bondPoolName, Long companyPoolId,
+                                String companyPoolName, int count) {
+            String key = bondPoolId + "-" + companyPoolId;
+            mappingSummaries.put(key, new MappingSummary(bondPoolId, bondPoolName,
+                    companyPoolId, companyPoolName, count));
+            total += count;
+        }
+
+        /** 构建最近执行结果文案。 */
+        private String buildMessage() {
+            StringBuilder message = new StringBuilder("本轮共自动出池 ")
+                    .append(total).append(" 条债券");
+            if (!mappingSummaries.isEmpty()) {
+                message.append("；目标池明细：");
+                int index = 0;
+                for (MappingSummary mapping : mappingSummaries.values()) {
+                    if (index++ > 0) {
+                        message.append("；");
+                    }
+                    message.append("债券池").append(mapping.bondPoolName).append("(")
+                            .append(mapping.bondPoolId).append(")←主体池")
+                            .append(mapping.companyPoolName == null ? "" : mapping.companyPoolName)
+                            .append("(").append(mapping.companyPoolId).append(")：")
+                            .append(mapping.count).append(" 条债券");
+                }
+            }
+            return message.toString();
+        }
+    }
+
+    /** 单个债券池与主体池映射的出池统计。 */
+    private static final class MappingSummary {
+
+        /** 债券目标池 ID。 */
+        private final Long bondPoolId;
+        /** 债券目标池名称。 */
+        private final String bondPoolName;
+        /** 主体所在池 ID。 */
+        private final Long companyPoolId;
+        /** 主体所在池名称。 */
+        private final String companyPoolName;
+        /** 实际出池数量。 */
+        private final int count;
+
+        /** 创建映射统计。 */
+        private MappingSummary(Long bondPoolId, String bondPoolName, Long companyPoolId,
+                               String companyPoolName, int count) {
+            this.bondPoolId = bondPoolId;
+            this.bondPoolName = bondPoolName;
+            this.companyPoolId = companyPoolId;
+            this.companyPoolName = companyPoolName;
+            this.count = count;
+        }
     }
 
     private String resolveParamJson() {

@@ -69,6 +69,8 @@ public class CrmwExpiredAutoOutServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getMessage()).contains("本轮共自动出池 1 条到期 CRMW 组合")
+                .contains("目标池明细：CRMW库(18)：1 条 CRMW 组合");
         verify(crmwPoolAdjustMapper).deletePoolStatusSoft(eq("B001"), eq("CRMW001"), eq("crmw"), eq(18L));
         verify(crmwPoolAdjustMapper).addAdjustLog(any(IpAdjustLogBo.class));
         assertThat(item.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());

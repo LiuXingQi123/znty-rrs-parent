@@ -94,6 +94,8 @@ public class CompanySamePoolBondAutoInServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getMessage()).contains("本轮共自动入池 1 条债券")
+                .contains("目标池明细：债券禁止库(15)：1 条债券");
         assertThat(service.getTaskCode()).isEqualTo("company_same_pool_bond_auto_in");
         verify(autoAdjustMapper).queryCompanyBondSamePoolForAutoIn(
                 eq(15L), any(CompanyBondTypeScopeBo.class));

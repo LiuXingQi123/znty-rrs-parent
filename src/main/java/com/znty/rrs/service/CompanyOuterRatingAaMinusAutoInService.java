@@ -129,12 +129,12 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         infoDetail(detail, taskName + " 开始");
         try {
             // 执行自动入池（扩展参数非法时抛 BizException → 记失败）
-            int total = doAutoIn(taskName, detail);
+            AutoInSummary summary = doAutoIn(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共自动入池 " + total + " 个主体";
+            String message = summary.buildMessage();
             // 记录结束（控制台 + 过程日志）
             infoDetail(detail, taskName + " 结束，" + message);
-            return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
+            return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.companyCount, startTime, duration,
                     detail.build());
         } catch (BizException e) {
             // 返回失败结果前标记本轮事务回滚
@@ -160,9 +160,9 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      *
      * @param taskName 任务展示名称
      * @param detail   过程日志
-     * @return 本轮入池主体数
+     * @return 本轮主体与债券入池汇总
      */
-    private int doAutoIn(String taskName, TaskDetailLog detail) {
+    private AutoInSummary doAutoIn(String taskName, TaskDetailLog detail) {
         // 本轮任务统一使用同一份有效外部评级机构配置
         List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
         // 从扩展参数与关系配置解析入池目标池
@@ -177,7 +177,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         infoDetail(detail, "本轮批次号 " + batchNo);
         // 一次加载全量池关系，供调入限制池（in_restrict）拦截
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
-        int total = 0;
+        AutoInSummary summary = new AutoInSummary();
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
@@ -194,6 +194,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 continue;
             }
             int poolCount = 0;
+            int poolBondCount = 0;
             for (ScheduledAdjustCandidateDto company : companies) {
                 if (company == null || !StringUtils.hasText(company.getSecurityCode())) {
                     continue;
@@ -239,14 +240,80 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                             + "]写入池状态失败（可能并发已入池）");
                 }
                 // 主体进入 17 后，同批同步全部符合范围的旗下债券
-                forbiddenPoolAdjustService.syncCompanyBondsForAutomaticAdjustment(company);
+                // 同步旗下符合条件的未到期债券，并纳入本轮结果统计
+                poolBondCount += forbiddenPoolAdjustService.syncCompanyBondsForAutomaticAdjustment(company);
                 poolCount++;
-                total++;
             }
-            infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 入池 " + poolCount + " 个主体");
+            summary.addPool(poolId, pool.getPoolName(), poolCount, poolBondCount);
+            infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 入池 "
+                    + poolCount + " 个主体、" + poolBondCount + " 只债券");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，合计入池 " + total + " 个主体");
-        return total;
+        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        return summary;
+    }
+
+    /** 本轮主体自动入池及其旗下债券同步结果。 */
+    private static final class AutoInSummary {
+
+        /** 本轮自动入池主体总数。 */
+        private int companyCount;
+        /** 本轮同步入池债券总数。 */
+        private int bondCount;
+        /** 按目标池保存入池统计，保持任务扫描顺序。 */
+        private final Map<Long, PoolAutoInSummary> poolSummaries = new LinkedHashMap<>();
+
+        /** 累加一个目标池的主体和债券入池数量。 */
+        private void addPool(Long poolId, String poolName, int companyCount, int bondCount) {
+            PoolAutoInSummary poolSummary = poolSummaries.get(poolId);
+            if (poolSummary == null) {
+                poolSummary = new PoolAutoInSummary(poolId, poolName);
+                poolSummaries.put(poolId, poolSummary);
+            }
+            poolSummary.companyCount += companyCount;
+            poolSummary.bondCount += bondCount;
+            this.companyCount += companyCount;
+            this.bondCount += bondCount;
+        }
+
+        /** 构建最近结果展示的主体、债券及目标池明细。 */
+        private String buildMessage() {
+            StringBuilder message = new StringBuilder("本轮共自动入池 ")
+                    .append(companyCount).append(" 个主体、")
+                    .append(bondCount).append(" 只债券");
+            if (!poolSummaries.isEmpty()) {
+                message.append("；目标池明细：");
+                int index = 0;
+                for (PoolAutoInSummary poolSummary : poolSummaries.values()) {
+                    if (index++ > 0) {
+                        message.append("；");
+                    }
+                    message.append(poolSummary.poolName).append("(")
+                            .append(poolSummary.poolId).append(")：")
+                            .append(poolSummary.companyCount).append(" 个主体、")
+                            .append(poolSummary.bondCount).append(" 只债券");
+                }
+            }
+            return message.toString();
+        }
+    }
+
+    /** 单个目标池的主体和债券入池统计。 */
+    private static final class PoolAutoInSummary {
+
+        /** 目标池 ID。 */
+        private final Long poolId;
+        /** 目标池名称。 */
+        private final String poolName;
+        /** 目标池主体入池数。 */
+        private int companyCount;
+        /** 目标池债券入池数。 */
+        private int bondCount;
+
+        /** 创建目标池统计对象。 */
+        private PoolAutoInSummary(Long poolId, String poolName) {
+            this.poolId = poolId;
+            this.poolName = poolName;
+        }
     }
 
     /**

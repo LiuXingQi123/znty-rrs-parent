@@ -31,6 +31,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -134,12 +135,13 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         infoDetail(detail, taskName + " 开始");
         try {
             // 执行自动出池（扩展参数非法时抛 BizException → 记失败）
-            int total = doAutoOut(taskName, detail);
+            AutoOutSummary summary = doAutoOut(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共自动出池 " + total + " 条（含主体及同池旗下债）";
+            String message = summary.buildMessage();
             // 记录结束（控制台 + 过程日志）
             infoDetail(detail, taskName + " 结束，" + message);
-            return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
+            return ScheduledTaskResult.success(TASK_CODE, taskName, message,
+                    summary.companyCount + summary.bondCount, startTime, duration,
                     detail.build());
         } catch (BizException e) {
             // 返回失败结果前标记本轮事务回滚
@@ -165,9 +167,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
      *
      * @param taskName 任务展示名称
      * @param detail   过程日志
-     * @return 本轮出池条数（含同池旗下债）
+     * @return 本轮主体与旗下债券出池汇总
      */
-    private int doAutoOut(String taskName, TaskDetailLog detail) {
+    private AutoOutSummary doAutoOut(String taskName, TaskDetailLog detail) {
         // 本轮任务统一使用同一份有效外部评级机构配置
         List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
         // 读取本任务扩展参数
@@ -190,7 +192,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         infoDetail(detail, "本轮批次号 " + batchNo);
         // 一次加载全量池关系，供调出限制池（out_restrict）拦截
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
-        int total = 0;
+        AutoOutSummary summary = new AutoOutSummary();
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
@@ -210,6 +212,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                 continue;
             }
             int poolCount = 0;
+            int poolBondCount = 0;
             for (ScheduledAdjustCandidateDto company : companies) {
                 if (company == null || !StringUtils.hasText(company.getSecurityCode())) {
                     continue;
@@ -236,16 +239,80 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                             + "]软删池状态失败（可能并发已出池）");
                 }
                 poolCount++;
-                total++;
                 // 主体出池成功后，顺带调出同池旗下债券
-                total += outSamePoolBonds(company.getSecurityCode(), pool, poolId, batchNo, submitTime,
+                poolBondCount += outSamePoolBonds(company.getSecurityCode(), pool, poolId, batchNo, submitTime,
                         outRestrictPoolIds, detail, reason);
             }
+            summary.addPool(poolId, pool.getPoolName(), poolCount, poolBondCount);
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 出池 "
-                    + poolCount + " 个主体（含同池债计入合计）");
+                    + poolCount + " 个主体、" + poolBondCount + " 只债券");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，合计出池 " + total + " 条（含主体及同池旗下债）");
-        return total;
+        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        return summary;
+    }
+
+    /** 本轮主体自动出池及其旗下债券同步结果。 */
+    private static final class AutoOutSummary {
+
+        /** 本轮自动出池主体总数。 */
+        private int companyCount;
+        /** 本轮同步出池债券总数。 */
+        private int bondCount;
+        /** 按目标池保存出池统计，保持任务扫描顺序。 */
+        private final Map<Long, PoolAutoOutSummary> poolSummaries = new LinkedHashMap<>();
+
+        /** 累加一个目标池的主体和债券出池数量。 */
+        private void addPool(Long poolId, String poolName, int companyCount, int bondCount) {
+            PoolAutoOutSummary poolSummary = poolSummaries.get(poolId);
+            if (poolSummary == null) {
+                poolSummary = new PoolAutoOutSummary(poolId, poolName);
+                poolSummaries.put(poolId, poolSummary);
+            }
+            poolSummary.companyCount += companyCount;
+            poolSummary.bondCount += bondCount;
+            this.companyCount += companyCount;
+            this.bondCount += bondCount;
+        }
+
+        /** 构建最近结果展示的主体、债券及目标池明细。 */
+        private String buildMessage() {
+            StringBuilder message = new StringBuilder("本轮共自动出池 ")
+                    .append(companyCount).append(" 个主体、")
+                    .append(bondCount).append(" 只债券");
+            if (!poolSummaries.isEmpty()) {
+                message.append("；目标池明细：");
+                int index = 0;
+                for (PoolAutoOutSummary poolSummary : poolSummaries.values()) {
+                    if (index++ > 0) {
+                        message.append("；");
+                    }
+                    message.append(poolSummary.poolName).append("(")
+                            .append(poolSummary.poolId).append(")：")
+                            .append(poolSummary.companyCount).append(" 个主体、")
+                            .append(poolSummary.bondCount).append(" 只债券");
+                }
+            }
+            return message.toString();
+        }
+    }
+
+    /** 单个目标池的主体和债券出池统计。 */
+    private static final class PoolAutoOutSummary {
+
+        /** 目标池 ID。 */
+        private final Long poolId;
+        /** 目标池名称。 */
+        private final String poolName;
+        /** 目标池主体出池数。 */
+        private int companyCount;
+        /** 目标池债券出池数。 */
+        private int bondCount;
+
+        /** 创建目标池统计对象。 */
+        private PoolAutoOutSummary(Long poolId, String poolName) {
+            this.poolId = poolId;
+            this.poolName = poolName;
+        }
     }
 
     /**

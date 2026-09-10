@@ -24,6 +24,7 @@ import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -122,11 +123,11 @@ public class AutoAdjustService implements RrsScheduledTask {
         infoDetail(detail, taskName + " 开始");
         try {
             // 执行到期证券自动出池（扩展参数非法时抛 BizException → 记失败）
-            int total = doAutoOutExpired(taskName, detail);
+            AutoOutSummary summary = doAutoOutExpired(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共自动出池 " + total + " 条到期证券";
+            String message = summary.buildMessage();
             infoDetail(detail, taskName + " 结束，" + message);
-            return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
+            return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
             long duration = System.currentTimeMillis() - begin;
@@ -145,7 +146,7 @@ public class AutoAdjustService implements RrsScheduledTask {
     /**
      * 到期证券自动出池核心逻辑：参数 poolIds 与关系配置绑定池取并集后扫描到期证券并调出
      */
-    private int doAutoOutExpired(String taskName, TaskDetailLog detail) {
+    private AutoOutSummary doAutoOutExpired(String taskName, TaskDetailLog detail) {
         // 从扩展参数解析待扫描池 ID（非法则抛业务异常）
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "扫描池列表 poolIds=" + poolIds);
@@ -163,7 +164,7 @@ public class AutoAdjustService implements RrsScheduledTask {
         infoDetail(detail, "本轮批次号 " + batchNo);
         // 一次加载全量池关系，供调出限制池（out_restrict）拦截
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
-        int total = 0;
+        AutoOutSummary summary = new AutoOutSummary();
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
@@ -213,13 +214,64 @@ public class AutoAdjustService implements RrsScheduledTask {
                 // 软删成功后再写自动调出日志
                 securityPoolAdjustMapper.addAdjustLog(sec);
                 poolCount++;
-                total++;
             }
+            summary.addPool(poolId, pool.getPoolName(), poolCount);
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 调出 "
                     + poolCount + " 条到期证券");
         }
-        infoDetail(detail, "本轮共调出 " + total + " 条到期证券，批次号 " + batchNo);
-        return total;
+        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        return summary;
+    }
+
+    /** 本轮到期证券出池汇总。 */
+    private static final class AutoOutSummary {
+
+        /** 本轮实际出池总数。 */
+        private int total;
+        /** 按目标池保存实际出池数量。 */
+        private final Map<Long, PoolSummary> poolSummaries = new LinkedHashMap<>();
+
+        /** 累加目标池出池数量。 */
+        private void addPool(Long poolId, String poolName, int count) {
+            poolSummaries.put(poolId, new PoolSummary(poolId, poolName, count));
+            total += count;
+        }
+
+        /** 构建最近执行结果文案。 */
+        private String buildMessage() {
+            StringBuilder message = new StringBuilder("本轮共自动出池 ")
+                    .append(total).append(" 条到期证券");
+            if (!poolSummaries.isEmpty()) {
+                message.append("；目标池明细：");
+                int index = 0;
+                for (PoolSummary pool : poolSummaries.values()) {
+                    if (index++ > 0) {
+                        message.append("；");
+                    }
+                    message.append(pool.poolName).append("(").append(pool.poolId).append(")：")
+                            .append(pool.count).append(" 条");
+                }
+            }
+            return message.toString();
+        }
+    }
+
+    /** 单个目标池出池统计。 */
+    private static final class PoolSummary {
+
+        /** 目标池 ID。 */
+        private final Long poolId;
+        /** 目标池名称。 */
+        private final String poolName;
+        /** 实际出池数量。 */
+        private final int count;
+
+        /** 创建目标池统计。 */
+        private PoolSummary(Long poolId, String poolName, int count) {
+            this.poolId = poolId;
+            this.poolName = poolName;
+            this.count = count;
+        }
     }
 
     /**

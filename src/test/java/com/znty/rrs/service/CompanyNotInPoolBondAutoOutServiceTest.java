@@ -68,6 +68,8 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getMessage()).contains("本轮共自动出池 1 条债券")
+                .contains("目标池明细：债券池债券禁止库(15)←主体池债券禁止库(15)：1 条债券");
         verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("B001"), eq(15L));
         ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
         verify(autoAdjustMapper).queryBondInPoolWhenCompanyNotIn(eq(15L), eq(15L), scopeCaptor.capture());

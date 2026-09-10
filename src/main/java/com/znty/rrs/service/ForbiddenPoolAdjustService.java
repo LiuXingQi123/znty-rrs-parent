@@ -2749,10 +2749,11 @@ public class ForbiddenPoolAdjustService {
      * 定时任务在主体状态落池后，同批同步旗下未到期债券。
      *
      * @param companyLog 已生效的主体调整日志
+     * @return 实际成功调入目标池的债券数量
      */
-    public void syncCompanyBondsForAutomaticAdjustment(IpAdjustLogBo companyLog) {
+    public int syncCompanyBondsForAutomaticAdjustment(IpAdjustLogBo companyLog) {
         // 复用人工主体调库的统一债券同步逻辑
-        syncCompanyBonds(companyLog);
+        return syncCompanyBonds(companyLog);
     }
 
     /**
@@ -2762,10 +2763,11 @@ public class ForbiddenPoolAdjustService {
      * 同步范围：issuer 下全部 bond 大类（含 ABS、crmw），排除已过期；调入再排除已在目标池，调出仅处理当前在池。
      *
      * @param companyLog 已生效的主体调整日志
+     * @return 实际成功调入目标池的债券数量；调出场景返回 0
      */
-    private void syncCompanyBonds(IpAdjustLogBo companyLog) {
+    private int syncCompanyBonds(IpAdjustLogBo companyLog) {
         // 按无显式债券调出项的场景同步旗下债券
-        syncCompanyBonds(companyLog, Collections.<String>emptySet());
+        return syncCompanyBonds(companyLog, Collections.<String>emptySet());
     }
 
     /**
@@ -2773,15 +2775,16 @@ public class ForbiddenPoolAdjustService {
      *
      * @param companyLog          已生效的主体调整日志
      * @param explicitOutboundKeys 同批显式债券调出项唯一键
+     * @return 实际成功调入目标池的债券数量；调出场景返回 0
      */
-    private void syncCompanyBonds(IpAdjustLogBo companyLog, Set<String> explicitOutboundKeys) {
+    private int syncCompanyBonds(IpAdjustLogBo companyLog, Set<String> explicitOutboundKeys) {
         if (companyLog == null || (!BOND_FORBIDDEN_POOL_ID.equals(companyLog.getTargetPoolId())
                 && !PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(companyLog.getTargetPoolId()))) {
-            return;
+            return 0;
         }
         String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(companyLog.getSecurityType());
         if (!CategoryType.COMPANY.getCode().equals(categoryType)) {
-            return;
+            return 0;
         }
         boolean inbound = AdjustMode.IN.getCode().equals(companyLog.getAdjustMode());
         List<SecurityInfoBo> bonds = inbound
@@ -2791,6 +2794,7 @@ public class ForbiddenPoolAdjustService {
                 : forbiddenPoolAdjustMapper.queryCompanyOutboundBondForAutoList(
                         companyLog.getSecurityCode(), companyLog.getTargetPoolId(),
                         CompanyBondSyncPolicy.currentTypeScope());
+        int synchronizedBondCount = 0;
         // 主体调入禁止库时，按互斥池及反向调入限制池配置确定旗下债券需自动调出的池
         List<Long> autoOutPoolIds = inbound
                 ? AutoAdjustRelationHelper.resolveInboundAutoOutPoolIds(companyLog.getTargetPoolId(),
@@ -2813,6 +2817,7 @@ public class ForbiddenPoolAdjustService {
                 if (forbiddenPoolAdjustMapper.addPoolStatus(autoLog) != 1) {
                     throw new BizException("旗下债券[" + bond.getWindCode() + "]调入失败，请刷新后重试");
                 }
+                synchronizedBondCount++;
                 List<Long> currentPoolIds = forbiddenPoolAdjustMapper
                         .querySecurityCurrentPoolIdList(bond.getWindCode());
                 List<Long> actualOutPoolIds = currentPoolIds == null
@@ -2854,6 +2859,7 @@ public class ForbiddenPoolAdjustService {
                 }
             }
         }
+        return synchronizedBondCount;
     }
 
     /**

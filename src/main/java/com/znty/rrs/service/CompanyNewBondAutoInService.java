@@ -26,6 +26,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -129,11 +130,11 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         infoDetail(detail, taskName + " 开始");
         try {
             // 执行主体新债自动入池（扩展参数非法时抛 BizException → 记失败）
-            int total = doAutoInCompanyNewBond(taskName, detail);
+            AutoInSummary summary = doAutoInCompanyNewBond(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共入池 " + total + " 条";
+            String message = summary.buildMessage();
             infoDetail(detail, taskName + " 结束，" + message);
-            return ScheduledTaskResult.success(TASK_CODE, taskName, message, total, startTime, duration,
+            return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
             long duration = System.currentTimeMillis() - begin;
@@ -152,7 +153,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     /**
      * 按扩展参数中的「主体所在池 → 债券写入池」映射扫描待入池新债，写调入日志并落在池状态
      */
-    private int doAutoInCompanyNewBond(String taskName, TaskDetailLog detail) {
+    private AutoInSummary doAutoInCompanyNewBond(String taskName, TaskDetailLog detail) {
         // 读取扩展参数原文
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
@@ -169,7 +170,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         Date submitTime = new Date();
         String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
         infoDetail(detail, "本轮批次号 " + batchNo);
-        int total = 0;
+        AutoInSummary summary = new AutoInSummary();
         for (long[] pair : pairList) {
             Long companyInPoolId = pair[0];
             Long bondTargetPoolId = pair[1];
@@ -221,7 +222,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     continue;
                 }
                 pairCount++;
-                total++;
                 // 入池成功后从当前实际所在的互斥/受限池调出，并写同批自动调出日志
                 int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
                         bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
@@ -230,11 +230,77 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                             + autoOutCount + " 个");
                 }
             }
+            summary.addMapping(companyInPoolId, companyPool == null ? null : companyPool.getPoolName(),
+                    bondTargetPoolId, targetPool.getPoolName(), pairCount);
             infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
                     + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 入池 " + pairCount + " 条");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，合计入池 " + total + " 条");
-        return total;
+        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        return summary;
+    }
+
+    /** 本轮在池主体旗下债券入池汇总。 */
+    private static final class AutoInSummary {
+
+        /** 本轮实际入池总数。 */
+        private int total;
+        /** 按主体所在池与债券目标池映射保存入池数量。 */
+        private final Map<String, MappingSummary> mappingSummaries = new LinkedHashMap<>();
+
+        /** 累加一个主体池与债券目标池映射的入池数量。 */
+        private void addMapping(Long companyPoolId, String companyPoolName, Long bondPoolId,
+                                String bondPoolName, int count) {
+            String key = companyPoolId + "-" + bondPoolId;
+            mappingSummaries.put(key, new MappingSummary(companyPoolId, companyPoolName,
+                    bondPoolId, bondPoolName, count));
+            total += count;
+        }
+
+        /** 构建最近执行结果文案。 */
+        private String buildMessage() {
+            StringBuilder message = new StringBuilder("本轮共自动入池 ")
+                    .append(total).append(" 条债券");
+            if (!mappingSummaries.isEmpty()) {
+                message.append("；目标池明细：");
+                int index = 0;
+                for (MappingSummary mapping : mappingSummaries.values()) {
+                    if (index++ > 0) {
+                        message.append("；");
+                    }
+                    message.append("主体池")
+                            .append(mapping.companyPoolName == null ? "" : mapping.companyPoolName)
+                            .append("(").append(mapping.companyPoolId).append(")→债券池")
+                            .append(mapping.bondPoolName).append("(").append(mapping.bondPoolId)
+                            .append(")：").append(mapping.count).append(" 条债券");
+                }
+            }
+            return message.toString();
+        }
+    }
+
+    /** 单个主体池与债券目标池映射的入池统计。 */
+    private static final class MappingSummary {
+
+        /** 主体所在池 ID。 */
+        private final Long companyPoolId;
+        /** 主体所在池名称。 */
+        private final String companyPoolName;
+        /** 债券目标池 ID。 */
+        private final Long bondPoolId;
+        /** 债券目标池名称。 */
+        private final String bondPoolName;
+        /** 实际入池数量。 */
+        private final int count;
+
+        /** 创建映射统计。 */
+        private MappingSummary(Long companyPoolId, String companyPoolName, Long bondPoolId,
+                               String bondPoolName, int count) {
+            this.companyPoolId = companyPoolId;
+            this.companyPoolName = companyPoolName;
+            this.bondPoolId = bondPoolId;
+            this.bondPoolName = bondPoolName;
+            this.count = count;
+        }
     }
 
     /**

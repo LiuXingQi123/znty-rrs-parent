@@ -106,6 +106,8 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(autoOutLog.getAdjustAdvice()).isEqualTo(autoOutLog.getAdjustReason());
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getMessage()).contains("本轮共自动入池 1 条债券")
+                .contains("主体池债券禁止库(15)→债券池债券禁止库(15)：1 条债券");
         ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
         verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L), scopeCaptor.capture());
         assertThat(scopeCaptor.getValue().isExcludeAbs()).isFalse();

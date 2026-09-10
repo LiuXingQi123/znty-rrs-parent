@@ -80,6 +80,8 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAdjustAdvice()).isEqualTo(log.getAdjustReason());
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getMessage()).contains("本轮共自动出池 1 条到期证券")
+                .contains("目标池明细：信用债大库(10)：1 条");
         assertThat(result.getTaskName()).isEqualTo("到期证券自动出池");
         assertThat(service.getTaskCode()).isEqualTo(AutoAdjustService.TASK_CODE);
         assertThat(service.getTaskCode()).isEqualTo("security_expired_auto_out");

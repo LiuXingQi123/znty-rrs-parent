@@ -283,6 +283,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(2);
+        assertThat(result.getMessage()).contains("本轮共自动出池 1 个主体、1 只债券")
+                .contains("黑名单质押库(17)：1 个主体、1 只债券");
         verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("C90001"), eq(17L));
         verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("B001"), eq(17L));
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
