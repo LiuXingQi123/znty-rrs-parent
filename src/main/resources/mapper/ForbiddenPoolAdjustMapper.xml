@@ -421,13 +421,7 @@
                  ,ips.pool_type
     </select>
 
-    <!--
-      查询调库记录列表（主体详情）：
-      1) 有 adjustBatchNo：返回同批全部调整对象（含主体、联动主体及互斥债券），含终态
-      2) 无批仅有 adjustLogId：按主键回看单条（兜底）
-      3) 仅 securityCode：调库入口未带批次时的查询（见下方终态排除说明）
-      adjustLogId 不用于缩窄同批列表，前端用其选中原因/流程。
-    -->
+    <!-- 调库记录列表：固定按当前主体代码和 company 类型查询全部历史；批次和日志 ID 仅用于流程定位。 -->
     <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
                ,al.security_code
@@ -453,28 +447,24 @@
                ,al.entry_time
         FROM ip_adjust_log al
         LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
-        <where>
-            al.is_deleted = 0
-            <choose>
-                <when test="adjustBatchNo != null and adjustBatchNo != ''">
-                    AND al.adjust_batch_no = #{adjustBatchNo}
-                </when>
-                <when test="adjustLogId != null">
-                    AND al.id = #{adjustLogId}
-                </when>
-                <otherwise>
-                    AND al.security_code = #{securityCode}
-                    AND al.security_type = 'company'
-                    <!--
-                      无批次时排除终态：对应调库页面点「调库」进入、且请求未带 adjustBatchNo 的查询；只留在途（如 00/11/32），
-                      避免已通过/驳回/撤回流水铺满。有批次（历史/事宜跳转）不走本分支，同批含终态。
-                      调库页面当前常不展示调库记录区，但仍可能调用本接口；过滤保留以兼容该入口与既有需求口径。
-                    -->
-                    AND al.audit_status NOT IN ('-1', '20', '21', '99')
-                </otherwise>
-            </choose>
-        </where>
-        ORDER BY al.crte_time DESC
+        WHERE al.is_deleted = 0
+          AND al.security_code = #{securityCode}
+          AND al.security_type = 'company'
+        <!--
+          当前不启用：原按批次、日志 ID 或无批次仅在途的过滤口径保留备查。
+          启用会混入同批其他主体，或隐藏当前主体的终态历史。
+          <if test="adjustBatchNo != null and adjustBatchNo != ''">
+              AND al.adjust_batch_no = #{adjustBatchNo}
+          </if>
+          <if test="adjustLogId != null">
+              AND al.id = #{adjustLogId}
+          </if>
+          <if test="adjustBatchNo == null or adjustBatchNo == ''">
+              AND al.audit_status NOT IN ('-1', '20', '21', '99')
+          </if>
+        -->
+        ORDER BY al.submit_time DESC
+                 ,al.id DESC
     </select>
 
     <!-- 查询当前有效所在池 ID 列表 -->

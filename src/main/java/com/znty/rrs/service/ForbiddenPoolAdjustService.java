@@ -1589,23 +1589,16 @@ public class ForbiddenPoolAdjustService {
     /**
      * 查询调库记录列表（全量，不分页）。
      *
-     * <p>有批次时返回同批全部调整对象（主体、联动主体及互斥债券，含终态）；无批时可用 adjustLogId 回看单条；
-     * 仅主体代码时走「调库入口未带批次时的查询」（调库页面点「调库」、未带 adjustBatchNo）：
-     * 排除终态 {@code NOT IN ('-1','20','21','99')}，只留在途——历史约定，避免无批时铺满流水；
-     * 有批次的历史/事宜跳转不走该过滤。调库页面常不展示调库记录区，但仍可能调用本接口。
-     * adjustLogId 主要由前端选中原因/流程，不缩窄同批列表。
+     * <p>按主体代码返回全部主体级调库历史（含终态），不以调库批次号或调库记录 ID 过滤。
      * 字段回填对齐证券池详情 {@code SecurityPoolAdjustService#queryAdjustLogList}。
      *
-     * @param req 历史查看带 adjustBatchNo（及可选 adjustLogId）；调库入口至少带 securityCode
+     * @param req securityCode 必填；adjustBatchNo 和 adjustLogId 仅供流程定位，本查询不使用
      */
     public List<AdjustLogDto> queryAdjustLogList(SecurityPoolAdjustReq req) {
-        boolean hasLogId = req.getAdjustLogId() != null;
-        boolean hasBatch = req.getAdjustBatchNo() != null && !req.getAdjustBatchNo().isEmpty();
-        if (!hasLogId && !hasBatch
-                && (req.getSecurityCode() == null || req.getSecurityCode().isEmpty())) {
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        // 有批次时按批查全部调整对象；无批才用 adjustLogId / 在途主体记录
+        // 查询当前主体的全部主体级调库历史
         List<IpAdjustLogBo> logs = forbiddenPoolAdjustMapper.queryAdjustLogList(
                 req.getSecurityCode(), req.getAdjustBatchNo(), req.getAdjustLogId());
         if (logs.isEmpty()) {

@@ -428,12 +428,7 @@
                  ,ips.pool_type
     </select>
 
-    <!-- 根据证券代码查询调库记录列表 -->
-    <!--
-      调库记录列表：
-      - 有批次号：仅按批次查（同批手工/联动/互斥/关联调整全部返回，含不同 security_code，含终态）
-      - 无批次号：按证券代码做调库入口未带批次时的查询（见下方终态排除说明）
-    -->
+    <!-- 调库记录列表：固定按当前证券代码查询全部历史；批次仅用于流程定位，不参与本列表过滤。 -->
     <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
                ,al.security_code
@@ -460,21 +455,19 @@
         FROM ip_adjust_log al
         LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
         WHERE al.is_deleted = 0
-          <choose>
-              <when test="adjustBatchNo != null and adjustBatchNo != ''">
-                  AND al.adjust_batch_no = #{adjustBatchNo}
-              </when>
-              <otherwise>
-                  AND al.security_code = #{securityCode}
-                  <!--
-                    无批次时排除终态：对应调库页面点「调库」进入、且请求未带 adjustBatchNo 的查询；只留在途（如 00/11/32），
-                    避免已通过/驳回/撤回流水铺满。有批次（历史/事宜跳转）不走本分支，同批含终态。
-                    调库页面当前常不展示调库记录区，但仍可能调用本接口；过滤保留以兼容该入口与既有需求口径。
-                  -->
-                  AND al.audit_status NOT IN ('-1', '20', '21', '99')
-              </otherwise>
-          </choose>
-        ORDER BY al.crte_time DESC
+          AND al.security_code = #{securityCode}
+        <!--
+          当前不启用：原按批次或无批次仅在途的过滤口径保留备查。
+          启用会使调库记录不再展示当前证券的全部历史。
+          <if test="adjustBatchNo != null and adjustBatchNo != ''">
+              AND al.adjust_batch_no = #{adjustBatchNo}
+          </if>
+          <if test="adjustBatchNo == null or adjustBatchNo == ''">
+              AND al.audit_status NOT IN ('-1', '20', '21', '99')
+          </if>
+        -->
+        ORDER BY al.submit_time DESC
+                 ,al.id DESC
     </select>
 
     <!-- 查询证券当前有效所在池 ID 列表 -->

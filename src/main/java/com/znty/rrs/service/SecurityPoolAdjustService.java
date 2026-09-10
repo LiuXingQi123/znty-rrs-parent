@@ -1604,16 +1604,12 @@ public class SecurityPoolAdjustService {
     /**
      * 查询调库记录列表（全量，不分页）。
      *
-     * <p>有批次号时按批次返回同批全部记录（含关联码不同 security_code，含终态）。
-     * 无批次号时为「调库入口未带批次时的查询」（调库页面点「调库」、未带 adjustBatchNo）：
-     * 排除终态 {@code audit_status NOT IN ('-1','20','21','99')}，只留在途——历史约定，避免无批时铺满流水；
-     * 有批次的历史/事宜跳转不走该过滤。调库页面常不展示调库记录区，但仍可能调用本接口。
+     * <p>按证券代码返回全部调库历史（含终态），不以调库批次号过滤。
      *
-     * @param req 有批次时 adjustBatchNo 必填即可；无批次时需 securityCode
+     * @param req securityCode 必填；adjustBatchNo 仅供流程定位，本查询不使用
      */
     public List<AdjustLogDto> queryAdjustLogList(SecurityPoolAdjustReq req) {
-        boolean hasBatch = req.getAdjustBatchNo() != null && !req.getAdjustBatchNo().isEmpty();
-        if (!hasBatch && (req.getSecurityCode() == null || req.getSecurityCode().isEmpty())) {
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
         List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(

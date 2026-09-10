@@ -1430,12 +1430,9 @@ public class CrmwPoolAdjustService {
     /**
      * 查询 CRMW 调库记录列表（全量，不分页）。
      *
-     * <p>有批次号时按组合键+批次返回（含终态）。无批次号时为「调库入口未带批次时的查询」
-     * （调库页面点「调库」、未带 adjustBatchNo）：排除终态
-     * {@code audit_status NOT IN ('-1','20','21','99')}，只留在途——历史约定，避免无批时铺满流水；
-     * 有批次的历史/事宜跳转不走该过滤。调库页面常不展示调库记录区，但仍可能调用本接口。
+     * <p>按标的证券与 CRMW 凭证组合键返回全部调库历史（含终态），不以调库批次号过滤。
      *
-     * @param req 需携带 securityCode、crmwScode、crmwStype；可选 adjustBatchNo
+     * @param req 需携带 securityCode、crmwScode、crmwStype；adjustBatchNo 仅供流程定位，本查询不使用
      */
     public List<AdjustLogDto> queryCrmwAdjustLogList(CrmwPoolAdjustReq req) {
         if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {

@@ -270,12 +270,11 @@ public class SecurityPoolAdjustServiceStepTest {
         log.setTargetPoolId(3L);
         log.setFlowName("信用债入库审批流程");
         log.setFlowType("normalInbound");
-        when(mapper.queryAdjustLogList("110010123", "BATCH001")).thenReturn(Collections.singletonList(log));
+        when(mapper.queryAdjustLogList("110010123", null)).thenReturn(Collections.singletonList(log));
         when(investmentPoolService.queryPoolFullNameMap()).thenReturn(Collections.singletonMap(3L, "信用债大库/二级库"));
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
         req.setSecurityCode("110010123");
-        req.setAdjustBatchNo("BATCH001");
 
         List<AdjustLogDto> result = service.queryAdjustLogList(req);
 
@@ -285,9 +284,9 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result.get(0).getFlowType()).isEqualTo("normalInbound");
     }
 
-    /** 有批次号时同批应包含主券与关联调整不同 securityCode 的记录。 */
+    /** 查询调库记录时仅应传入当前证券编码，不以批次号扩大查询范围。 */
     @Test
-    public void queryAdjustLogListShouldReturnRelatedRowsInSameBatch() {
+    public void queryAdjustLogListShouldQueryCurrentSecurityHistoryOnly() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
@@ -300,25 +299,17 @@ public class SecurityPoolAdjustServiceStepTest {
         manual.setAdjustType("手工调整");
         manual.setAdjustBatchNo("BATCH_REL");
         manual.setTargetPoolId(2L);
-        IpAdjustLogBo related = new IpAdjustLogBo();
-        related.setId(2L);
-        related.setSecurityCode("101.SH");
-        related.setAdjustType("关联调整");
-        related.setAdjustBatchNo("BATCH_REL");
-        related.setTargetPoolId(2L);
-        when(mapper.queryAdjustLogList("101.IB", "BATCH_REL"))
-                .thenReturn(Arrays.asList(manual, related));
+        when(mapper.queryAdjustLogList("101.IB", null)).thenReturn(Collections.singletonList(manual));
         when(investmentPoolService.queryPoolFullNameMap())
                 .thenReturn(Collections.singletonMap(2L, "信用债大库/一级库"));
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
         req.setSecurityCode("101.IB");
-        req.setAdjustBatchNo("BATCH_REL");
         List<AdjustLogDto> result = service.queryAdjustLogList(req);
 
-        assertThat(result).hasSize(2);
-        assertThat(result).extracting(AdjustLogDto::getSecurityCode).containsExactly("101.IB", "101.SH");
-        assertThat(result).extracting(AdjustLogDto::getAdjustType).contains("关联调整");
+        assertThat(result).hasSize(1);
+        assertThat(result).extracting(AdjustLogDto::getSecurityCode).containsExactly("101.IB");
+        verify(mapper).queryAdjustLogList("101.IB", null);
     }
 
     /** 验证 checkInConditionsShouldShowPendingProcessNodeLabel 测试场景。 */
