@@ -36,7 +36,7 @@ CREATE TABLE `t_inv_company`
     `province_id`    VARCHAR(100)  DEFAULT NULL COMMENT '省份 ID',
     `reg_address`    VARCHAR(100)  DEFAULT NULL COMMENT '注册地址',
     `reg_capital`    VARCHAR(100)  DEFAULT NULL COMMENT '注册资本',
-    `short_name`     VARCHAR(100)  DEFAULT NULL COMMENT '主体简称',
+    `short_names`    VARCHAR(100)  DEFAULT NULL COMMENT '主体简称',
     `stock_sty`      VARCHAR(100)  DEFAULT NULL COMMENT '股票类型',
     `village_id`     VARCHAR(100)  DEFAULT NULL COMMENT '街道或乡镇 ID',
     `web_site`       VARCHAR(100)  DEFAULT NULL COMMENT '官方网站',

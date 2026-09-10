@@ -221,7 +221,7 @@
                 WHERE eligible.company_code = grade.windcode
             )
         )
-        <!-- 返回具有最新有效内评的当前证券关系主体。 -->
+        <!-- 返回当前证券关系主体；无内评时评分字段为空。 -->
         SELECT eligible.security_code
                ,eligible.company_code
                ,COALESCE(grade.windname, eligible.company_name) AS company_name
@@ -229,9 +229,8 @@
                ,grade.total_score AS inner_rating
                ,grade.ts AS rating_time
         FROM eligible_subject eligible
-        INNER JOIN ranked_grade grade ON grade.windcode = eligible.company_code
-                                     AND grade.row_num = 1
-                                     AND grade.total_score IS NOT NULL
+        LEFT JOIN ranked_grade grade ON grade.windcode = eligible.company_code
+                                    AND grade.row_num = 1
         ORDER BY eligible.relation_sort_no ASC
                  ,grade.ts DESC
                  ,eligible.company_code ASC
@@ -242,22 +241,22 @@
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
         <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件。 -->
         WITH source_subject AS (
-            SELECT company.code AS company_code
-                   ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, ''))) AS company_name
+            SELECT company.wind_code AS company_code
+                   ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
             FROM ais_inv_analysis.t_inv_company company
             <where>
-                AND company.code IS NOT NULL
-                AND company.code != ''
-                AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, '')) IS NOT NULL
+                AND company.wind_code IS NOT NULL
+                AND company.wind_code != ''
+                AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
                 <if test="companyCode != null and companyCode != ''">
-                    AND company.code LIKE CONCAT('%', #{companyCode}, '%')
+                    AND company.wind_code LIKE CONCAT('%', #{companyCode}, '%')
                 </if>
                 <if test="companyName != null and companyName != ''">
                     AND (company.full_name LIKE CONCAT('%', #{companyName}, '%')
-                         OR company.short_name LIKE CONCAT('%', #{companyName}, '%'))
+                         OR company.short_names LIKE CONCAT('%', #{companyName}, '%'))
                 </if>
             </where>
-            GROUP BY company.code
+            GROUP BY company.wind_code
         )
         <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
         ,ranked_grade AS (
@@ -292,12 +291,12 @@
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
         <!-- 按提交编码从投资分析主体表精确读取有效主体。 -->
         WITH source_subject AS (
-            SELECT company.code AS company_code
-                   ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, ''))) AS company_name
+            SELECT company.wind_code AS company_code
+                   ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
             FROM ais_inv_analysis.t_inv_company company
-            WHERE company.code = #{companyCode}
-              AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, '')) IS NOT NULL
-            GROUP BY company.code
+            WHERE company.wind_code = #{companyCode}
+              AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
+            GROUP BY company.wind_code
         )
         <!-- 读取该主体的内评，并按更新时间倒序编号。 -->
         ,ranked_grade AS (

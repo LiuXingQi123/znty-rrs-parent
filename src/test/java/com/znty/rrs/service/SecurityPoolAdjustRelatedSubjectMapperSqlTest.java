@@ -24,8 +24,8 @@ public class SecurityPoolAdjustRelatedSubjectMapperSqlTest {
                 .contains("WHEN 115203000 THEN 2")
                 .contains("WHEN 115202000 THEN 3")
                 .contains("WHEN 115201000 THEN 4")
-                .contains("INNER JOIN ranked_grade")
-                .contains("grade.total_score IS NOT NULL")
+                .contains("LEFT JOIN ranked_grade")
+                .doesNotContain("grade.total_score IS NOT NULL")
                 .contains("ORDER BY eligible.relation_sort_no ASC")
                 .contains(",grade.ts DESC")
                 .doesNotContain("security.abs_flag")
@@ -46,8 +46,8 @@ public class SecurityPoolAdjustRelatedSubjectMapperSqlTest {
                 .contains("WHEN 115203000 THEN 2")
                 .contains("WHEN 115202000 THEN 3")
                 .contains("WHEN 115201000 THEN 4")
-                .contains("INNER JOIN ranked_grade")
-                .contains("grade.total_score IS NOT NULL")
+                .contains("LEFT JOIN ranked_grade")
+                .doesNotContain("grade.total_score IS NOT NULL")
                 .contains("ORDER BY eligible.security_code ASC")
                 .contains(",eligible.guarantor_sort_no ASC")
                 .contains(",grade.ts DESC")
@@ -67,8 +67,24 @@ public class SecurityPoolAdjustRelatedSubjectMapperSqlTest {
             assertThat(select)
                     .contains("FROM ais_inv_analysis.t_inv_company company")
                     .contains("LEFT JOIN ranked_grade")
+                    .contains("company.wind_code")
+                    .contains("company.short_names")
+                    .doesNotContain("company.code")
+                    .doesNotContain("NULLIF(company.short_name, '')")
+                    .doesNotContain("OR company.short_name LIKE")
                     .doesNotContain("wind_cbondissuer");
         }
+    }
+
+    /** AIS 主体 Demo 的 Wind 主体编码应与评级、发行人关系表保持无后缀一致。 */
+    @Test
+    public void companyDemoWindCodesShouldNotUseWiSuffix() throws Exception {
+        Path path = Paths.get("sql", "ais_inv_analysis_demo_data.sql");
+        String sql = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+
+        assertThat(sql)
+                .contains("'C10001'")
+                .doesNotContain(".WI");
     }
 
     /** 调库详情的指定快照和最新快照都应返回普通权益人与自选权益人。 */

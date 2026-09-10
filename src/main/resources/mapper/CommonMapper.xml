@@ -120,7 +120,7 @@
                 WHERE eligible.windcode = grade.windcode
             )
         )
-        <!-- 返回具有最新有效内评的关系主体，并保持关系优先级顺序。 -->
+        <!-- 返回关系主体；无内评时评分字段为空，并保持关系优先级顺序。 -->
         SELECT eligible.security_code
                ,eligible.windcode
                ,COALESCE(grade.windname, eligible.windname) AS windname
@@ -128,9 +128,8 @@
                ,grade.total_score
                ,grade.ts
         FROM eligible_guarantor eligible
-        INNER JOIN ranked_grade grade ON grade.windcode = eligible.windcode
-                                     AND grade.row_num = 1
-                                     AND grade.total_score IS NOT NULL
+        LEFT JOIN ranked_grade grade ON grade.windcode = eligible.windcode
+                                    AND grade.row_num = 1
         ORDER BY eligible.security_code ASC
                  ,eligible.guarantor_sort_no ASC
                  ,grade.ts DESC
