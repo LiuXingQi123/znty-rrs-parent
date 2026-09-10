@@ -10,6 +10,7 @@ import java.util.List;
 /** 定时任务调库日志文案辅助逻辑。 */
 final class ScheduledAdjustLogHelper {
 
+    /** 禁止实例化定时调库日志辅助类。 */
     private ScheduledAdjustLogHelper() {
     }
 
@@ -66,6 +67,7 @@ final class ScheduledAdjustLogHelper {
         return label + "：" + value;
     }
 
+    /** 去除字符串首尾空白，并将空字符串转换为 {@code null}。 */
     private static String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }

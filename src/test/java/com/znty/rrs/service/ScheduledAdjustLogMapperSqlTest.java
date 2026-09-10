@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 定时任务调库日志判断信息查询字段测试。 */
 public class ScheduledAdjustLogMapperSqlTest {
 
+    /** 验证定时调库候选查询返回日志判断所需字段。 */
     @Test
     public void scheduledAdjustQueriesShouldReturnReasonDetails() throws Exception {
         Path path = Paths.get("src", "main", "resources", "mapper", "AutoAdjustMapper.xml");
@@ -29,6 +30,7 @@ public class ScheduledAdjustLogMapperSqlTest {
         assertIssuerColumns(selectBlock(xml, "queryBondInPoolWhenCompanyNotIn"));
     }
 
+    /** 验证调库日志实体不混入仅用于定时任务判断的辅助字段。 */
     @Test
     public void adjustLogBoShouldOnlyContainTableFields() {
         assertThat(Arrays.stream(IpAdjustLogBo.class.getDeclaredFields())
@@ -38,11 +40,13 @@ public class ScheduledAdjustLogMapperSqlTest {
                         "inForbiddenPool", "inRestrictedPool", "inLowOuterRating");
     }
 
+    /** 验证查询片段包含发行主体编码和名称。 */
     private void assertIssuerColumns(String select) {
         assertThat(select).contains(",bond.issuer_code")
                 .contains(",bond.issuer AS issuer_name");
     }
 
+    /** 从 Mapper XML 中截取指定查询片段并验证结果类型。 */
     private String selectBlock(String xml, String queryId) {
         String marker = "<select id=\"" + queryId + "\"";
         int start = xml.indexOf(marker);

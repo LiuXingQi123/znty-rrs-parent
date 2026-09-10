@@ -19,6 +19,7 @@ import java.util.TreeSet;
 /** 自动入池后的互斥/反向限制池调出辅助逻辑。 */
 final class AutoAdjustRelationHelper {
 
+    /** 禁止实例化自动调库关系辅助类。 */
     private AutoAdjustRelationHelper() {
     }
 

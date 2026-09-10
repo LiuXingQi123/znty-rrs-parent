@@ -1271,6 +1271,7 @@ public class CrmwPoolExcelImportService {
         return text.length() > 500 ? text.substring(0, 500) : text;
     }
 
+    /** 去除字符串首尾空白，并将空字符串转换为 {@code null}。 */
     private String trimToNull(String s) {
         if (s == null) {
             return null;
@@ -1279,10 +1280,12 @@ public class CrmwPoolExcelImportService {
         return t.isEmpty() ? null : t;
     }
 
+    /** 去除字符串首尾空白，并将 {@code null} 转换为空字符串。 */
     private String trimToEmpty(String s) {
         return s == null ? "" : s.trim();
     }
 
+    /** 判断字符串是否为空或仅包含空白字符。 */
     private boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
     }

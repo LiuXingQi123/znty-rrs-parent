@@ -8,6 +8,7 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
+import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
@@ -158,7 +159,7 @@ public class CompanyNewBondAutoInServiceTest {
         try {
             service.parseParamMappings("15-15,16-100");
             org.junit.Assert.fail("expected BizException");
-        } catch (com.znty.rrs.exception.BizException expected) {
+        } catch (BizException expected) {
             assertThat(expected.getMessage()).contains("JSON");
         }
     }
@@ -217,6 +218,7 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(result.getAffectedCount()).isEqualTo(1);
     }
 
+    /** 构建测试用投资池关系。 */
     private PoolRelationBo buildRelation(Long poolId, String relationType, Long relationPoolId) {
         PoolRelationBo relation = new PoolRelationBo();
         relation.setPoolId(poolId);

@@ -11,7 +11,9 @@ import java.util.List;
 import javax.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.NoTransactionException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
  * 债券类型变更任务：以证券主数据为准同步当前生效池状态及其关联调库日志。
@@ -37,11 +39,13 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
     @Resource
     private BondSecurityMaintenanceMapper bondSecurityMaintenanceMapper;
 
+    /** 返回债券类型变更任务编码。 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
+    /** 返回债券类型变更任务参数说明。 */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
@@ -82,12 +86,23 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
             return ScheduledTaskResult.success(TASK_CODE, TASK_NAME, message, total, startTime,
                     duration, detail.build());
         } catch (Exception e) {
+            // 返回失败结果前标记本轮事务回滚，避免池状态与关联日志部分更新
+            markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             log.error("{}执行异常", TASK_NAME, e);
             detail.line("ERROR", "执行异常：" + e.getMessage());
             detail.line("ERROR", "任务结束（失败）：类型同步过程异常，耗时 " + duration + " 毫秒");
             return ScheduledTaskResult.failure(TASK_CODE, TASK_NAME, "执行异常: " + e.getMessage(),
                     startTime, duration, detail.build());
+        }
+    }
+
+    /** 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚。 */
+    private void markTransactionRollbackOnly() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (NoTransactionException ignored) {
+            log.debug("当前无可回滚事务: {}", TASK_CODE);
         }
     }
 

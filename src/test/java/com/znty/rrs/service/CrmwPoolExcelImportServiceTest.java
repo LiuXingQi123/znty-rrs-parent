@@ -36,12 +36,22 @@ import static org.mockito.Mockito.when;
  */
 public class CrmwPoolExcelImportServiceTest {
 
+    /** 待测试的 CRMW 池 Excel 导入服务。 */
     private CrmwPoolExcelImportService service;
+
+    /** CRMW 池 Excel 导入数据访问组件。 */
     private CrmwPoolExcelImportMapper importMapper;
+
+    /** 投资池数据访问组件。 */
     private InvestmentPoolMapper investmentPoolMapper;
+
+    /** CRMW 池调库服务。 */
     private CrmwPoolAdjustService crmwPoolAdjustService;
+
+    /** 系统附件服务。 */
     private SysAttachmentService sysAttachmentService;
 
+    /** 初始化待测试服务及其依赖。 */
     @Before
     public void setUp() {
         service = new CrmwPoolExcelImportService();
@@ -55,8 +65,9 @@ public class CrmwPoolExcelImportServiceTest {
         ReflectionTestUtils.setField(service, "sysAttachmentService", sysAttachmentService);
     }
 
+    /** 验证上传时缺少调整方向会被拒绝。 */
     @Test
-    public void uploadExcel_MissingDirection_Throws() {
+    public void uploadExcelShouldThrowWhenDirectionMissing() {
         CrmwPoolExcelImportReq req = new CrmwPoolExcelImportReq();
         req.setCurrentUserId("1");
         req.setTargetPoolId(18L);
@@ -70,8 +81,9 @@ public class CrmwPoolExcelImportServiceTest {
         }
     }
 
+    /** 验证上传时缺少目标池会被拒绝。 */
     @Test
-    public void uploadExcel_MissingTargetPool_Throws() {
+    public void uploadExcelShouldThrowWhenTargetPoolMissing() {
         CrmwPoolExcelImportReq req = new CrmwPoolExcelImportReq();
         req.setCurrentUserId("1");
         req.setDirection("in");
@@ -85,8 +97,9 @@ public class CrmwPoolExcelImportServiceTest {
         }
     }
 
+    /** 验证已提交的导入批次不能取消。 */
     @Test
-    public void cancelImport_AlreadySubmitted_Throws() {
+    public void cancelImportShouldThrowWhenAlreadySubmitted() {
         SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP1");
         batch.setSaveRslt("1");
@@ -103,8 +116,9 @@ public class CrmwPoolExcelImportServiceTest {
         verify(importMapper, never()).deleteItemsByImpIdSoft(anyString());
     }
 
+    /** 验证没有有效校验项时不能提交导入批次。 */
     @Test
-    public void submitImport_WhenNoCheckItems_Throws() {
+    public void submitImportShouldThrowWhenCheckItemsMissing() {
         SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP2");
         batch.setChkRslt("2");
@@ -125,8 +139,9 @@ public class CrmwPoolExcelImportServiceTest {
         }
     }
 
+    /** 验证凭证与标的主数据有效时校验通过并保存结果。 */
     @Test
-    public void checkImport_PassWhenComboOk() {
+    public void checkImportShouldPassWhenCombinationValid() {
         SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP3");
         batch.setFld001("in");
@@ -207,8 +222,9 @@ public class CrmwPoolExcelImportServiceTest {
         verify(importMapper).updateBatchCheckResult(any(SysImpTmpBo.class));
     }
 
+    /** 验证查询不存在的导入批次会被拒绝。 */
     @Test
-    public void queryTask_NotFound_Throws() {
+    public void queryTaskShouldThrowWhenBatchMissing() {
         when(importMapper.queryByImpId("NOPE")).thenReturn(null);
         CrmwPoolExcelImportReq req = new CrmwPoolExcelImportReq();
         req.setImpId("NOPE");

@@ -27,6 +27,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Constructor;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -339,7 +340,7 @@ public class ForbiddenPoolAdjustServiceTest {
         manual.setAdjustGroupKey("15_调入");
         manual.setCanAdjust(true);
         AdjustCheckDto result = new AdjustCheckDto();
-        result.setItems(new java.util.ArrayList<>(Collections.singletonList(manual)));
+        result.setItems(new ArrayList<>(Collections.singletonList(manual)));
 
         ReflectionTestUtils.invokeMethod(service, "appendCompanyBondMutexOutItems", "C10001", result);
 

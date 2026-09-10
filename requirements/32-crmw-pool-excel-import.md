@@ -1,8 +1,8 @@
 # CRMW 池 Excel 导入需求说明
 
-> 前端页面：`crmw_pool_excel_import.html`  
-> 后端前缀：`/api/v1/crmwPoolExcelImport`  
-> 公共模板下载：`/api/v1/commonFile/downloadTemplate`  
+> 前端页面：`crmw_pool_excel_import.html`
+> 后端前缀：`/api/v1/crmwPoolExcelImport`
+> 公共模板下载：`/api/v1/commonFile/downloadTemplate`
 > 角色定位：具备 CRMW 投资池 `excel_importable` 权限的用户，通过 Excel 批量发起 **CRMW 凭证 + 标的证券** 组合的调入/调出。
 
 ---
@@ -71,7 +71,7 @@ CRMW代码、CRMW全称、CRMW市场、证券代码、证券全称、证券类�
 
 ## 4. 校验与提交口径
 
-Excel 层只做：模板/临时表、目标池解析、`excel_importable` 权限、主数据回填。  
+Excel 层只做：模板/临时表、目标池解析、`excel_importable` 权限、主数据回填。
 **调库可行性与落库不再自写简化版**，委托：
 
 | 动作 | 服务 |

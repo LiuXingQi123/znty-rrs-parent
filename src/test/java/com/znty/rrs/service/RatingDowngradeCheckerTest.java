@@ -25,6 +25,8 @@ import static org.mockito.Mockito.when;
 public class RatingDowngradeCheckerTest {
 
     private WindRatingMapper windRatingMapper;
+
+    /** 外部评级机构配置服务。 */
     private ExternalRatingAgencyService externalRatingAgencyService;
     private RatingDowngradeChecker checker;
 
@@ -166,8 +168,9 @@ public class RatingDowngradeCheckerTest {
         assertThat(checker.isGuarantorDowngraded("C90005")).isFalse();
     }
 
+    /** 验证未配置有效外评机构时按 fail-open 返回未下调。 */
     @Test
-    public void 未配置外部评级机构应failOpen返回false() {
+    public void missingExternalRatingAgencyShouldFailOpenAndReturnFalse() {
         when(externalRatingAgencyService.queryActiveAgencyCodeList()).thenReturn(Collections.<String>emptyList());
 
         assertThat(checker.isGuarantorDowngraded("C90006")).isFalse();

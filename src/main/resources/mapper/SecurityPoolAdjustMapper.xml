@@ -167,6 +167,7 @@
     <!-- 证券池调库相关评级主体：担保人、权益人均查询四类关系主体 -->
     <select id="queryRelatedRatingSubjectList"
             resultType="com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto">
+        <!-- 从 Wind 债券发行主体关系表读取当前证券的四类候选，并按关系优先级去重。 -->
         WITH source_subject AS (
             SELECT issuer.s_info_windcode AS security_code
                    ,issuer.s_info_compcode AS company_code
@@ -192,7 +193,9 @@
               AND issuer.s_info_compcode IS NOT NULL
               AND issuer.s_info_compcode != ''
               AND issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
-        ), eligible_subject AS (
+        )
+        <!-- 每个主体仅保留优先级最高的一类有效关系。 -->
+        ,eligible_subject AS (
             SELECT security_code
                    ,company_code
                    ,company_name
@@ -200,7 +203,9 @@
                    ,relation_sort_no
             FROM source_subject
             WHERE row_num = 1
-        ), ranked_grade AS (
+        )
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
+        ,ranked_grade AS (
             SELECT grade.windcode
                    ,grade.windname
                    ,grade.total_score
@@ -216,6 +221,7 @@
                 WHERE eligible.company_code = grade.windcode
             )
         )
+        <!-- 返回具有最新有效内评的当前证券关系主体。 -->
         SELECT eligible.security_code
                ,eligible.company_code
                ,COALESCE(grade.windname, eligible.company_name) AS company_name
@@ -234,6 +240,7 @@
     <!-- 全市场自选权益人：按投资分析主体表去重，并关联最新内评 -->
     <select id="querySelfSelectedRightsHolderPage"
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
+        <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件。 -->
         WITH source_subject AS (
             SELECT company.code AS company_code
                    ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, ''))) AS company_name
@@ -251,7 +258,9 @@
                 </if>
             </where>
             GROUP BY company.code
-        ), ranked_grade AS (
+        )
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
+        ,ranked_grade AS (
             SELECT grade.windcode
                    ,grade.windname
                    ,grade.total_score
@@ -267,6 +276,7 @@
                 WHERE subject.company_code = grade.windcode
             )
         )
+        <!-- 返回主体及其最新内评；无内评主体仍可作为自选权益人展示。 -->
         SELECT subject.company_code
                ,COALESCE(grade.windname, subject.company_name) AS company_name
                ,grade.total_score AS inner_rating
@@ -280,6 +290,7 @@
     <!-- 自选权益人提交防伪：按精确主体编码重新查询投资分析主体和最新内评 -->
     <select id="querySelfSelectedRightsHolderByCode"
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
+        <!-- 按提交编码从投资分析主体表精确读取有效主体。 -->
         WITH source_subject AS (
             SELECT company.code AS company_code
                    ,MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, ''))) AS company_name
@@ -287,7 +298,9 @@
             WHERE company.code = #{companyCode}
               AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_name, '')) IS NOT NULL
             GROUP BY company.code
-        ), ranked_grade AS (
+        )
+        <!-- 读取该主体的内评，并按更新时间倒序编号。 -->
+        ,ranked_grade AS (
             SELECT grade.windcode
                    ,grade.windname
                    ,grade.total_score
@@ -299,6 +312,7 @@
             FROM ais_inv_analysis.v_inv_grade_result grade
             WHERE grade.windcode = #{companyCode}
         )
+        <!-- 返回防伪校验后的主体及其最新内评。 -->
         SELECT subject.company_code
                ,COALESCE(grade.windname, subject.company_name) AS company_name
                ,grade.total_score AS inner_rating

@@ -63,6 +63,7 @@
 
     <!-- 批量查询证券的四类关系主体及其最新内评；同一代码存在多条评分时按 ts 取最新记录 -->
     <select id="queryGuarantorGradeList" resultType="com.znty.rrs.entity.common.GuarantorGradeDto">
+        <!-- 从 Wind 债券发行主体关系表读取四类候选，并按关系优先级对同证券、同主体去重。 -->
         WITH source_guarantor AS (
             SELECT issuer.s_info_windcode AS security_code
                    ,issuer.s_info_compcode AS windcode
@@ -91,7 +92,9 @@
               <foreach collection="securityCodes" item="securityCode" open="(" separator="," close=")">
                   #{securityCode}
               </foreach>
-        ), eligible_guarantor AS (
+        )
+        <!-- 每个证券和主体仅保留优先级最高的一类有效关系。 -->
+        ,eligible_guarantor AS (
             SELECT security_code
                    ,windcode
                    ,windname
@@ -99,7 +102,9 @@
                    ,guarantor_sort_no
             FROM source_guarantor
             WHERE row_num = 1
-        ), ranked_grade AS (
+        )
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
+        ,ranked_grade AS (
             SELECT grade.windcode
                    ,grade.windname
                    ,grade.total_score
@@ -115,6 +120,7 @@
                 WHERE eligible.windcode = grade.windcode
             )
         )
+        <!-- 返回具有最新有效内评的关系主体，并保持关系优先级顺序。 -->
         SELECT eligible.security_code
                ,eligible.windcode
                ,COALESCE(grade.windname, eligible.windname) AS windname

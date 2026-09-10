@@ -1,5 +1,6 @@
 package com.znty.rrs.entity.schedule;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.util.Date;
 import lombok.Data;
 
@@ -37,5 +38,6 @@ public class BondReminderDto {
     private String adjustMode;
 
     /** 审核通过时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date auditTime;
 }

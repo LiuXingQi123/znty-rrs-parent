@@ -27,8 +27,9 @@ public class CommonFileServiceTest {
         assertTrue(dto.getFileSize() != null && dto.getFileSize() > 0);
     }
 
+    /** 验证 CRMW 池导入模板可从 classpath 正常读取。 */
     @Test
-    public void downloadTemplate_CrmwPoolImport_ReturnsBytes() {
+    public void downloadTemplateShouldReturnCrmwPoolImportBytes() {
         CommonFileReq req = new CommonFileReq();
         req.setTemplateCode("crmw_pool_import");
         CommonFileDto dto = service.downloadTemplate(req);

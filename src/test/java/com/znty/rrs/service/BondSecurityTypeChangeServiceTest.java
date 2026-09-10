@@ -50,6 +50,25 @@ public class BondSecurityTypeChangeServiceTest {
         verify(mapper).editAdjustLogSecurityType(eq(22L), eq("new_b"), any(Date.class));
     }
 
+    /** 验证同步过程异常时任务返回失败，供事务代理统一回滚本轮修改。 */
+    @Test
+    public void executeShouldReturnFailureWhenUpdateThrows() {
+        BondSecurityMaintenanceMapper mapper = mock(BondSecurityMaintenanceMapper.class);
+        BondSecurityTypeChangeService service = new BondSecurityTypeChangeService();
+        ReflectionTestUtils.setField(service, "bondSecurityMaintenanceMapper", mapper);
+        BondSecurityTypeChangeDto normal = buildRow(1L, 11L, "old_a", "new_a");
+        when(mapper.queryPoolSecurityTypeChangeList()).thenReturn(Collections.singletonList(normal));
+        when(mapper.queryCrmwPoolSecurityTypeChangeList()).thenReturn(Collections.<BondSecurityTypeChangeDto>emptyList());
+        when(mapper.editPoolSecurityType(eq(normal), any(Date.class)))
+                .thenThrow(new IllegalStateException("模拟更新异常"));
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("模拟更新异常");
+        assertThat(result.getDetailLog()).contains("任务结束（失败）");
+    }
+
     /** 构建类型变更记录。 */
     private BondSecurityTypeChangeDto buildRow(Long poolStatusId, Long adjustLogId,
                                                String oldType, String newType) {

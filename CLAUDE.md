@@ -111,7 +111,7 @@ Mapper       ── 数据库操作接口，对应 XML
 - 禁止 `PageList` / `ListPage` 混合写法
 - 禁止 `add()`、`query()` 等无功能描述的命名
 - 主键字段统一使用 `Long` 类型
-- 时间字段统一使用 `Date` + `@JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")`
+- 时间字段统一使用 `Date`；显式标注时使用 `@JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")`
 - 类名使用 PascalCase + 后缀（`FlowBo`、`FlowDto`、`FlowReq`）
 - 方法名、字段名使用 camelCase
 - **禁止正文写全限定类名**：类型引用统一文件顶部 `import` + 简单类名（如 `BigDecimal`、`AdjustSharedData`），禁止在方法体/签名中写 `java.math.BigDecimal`、`com.znty.rrs.entity.xxx.Foo` 等。同名类冲突时优先拆到不同类/测试文件各自 import；确需同文件并存时才允许其中一方保留全限定名。反射用字符串类名、`package`/`import` 语句、JavaDoc `{@link}` 除外

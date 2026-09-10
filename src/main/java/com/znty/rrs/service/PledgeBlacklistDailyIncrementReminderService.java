@@ -61,11 +61,13 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
     @Resource
     private ScheduledReminderDeliveryService reminderDeliveryService;
 
+    /** 返回黑名单质押库每日增量提醒任务编码。 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
+    /** 返回黑名单质押库每日增量提醒任务参数说明。 */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;

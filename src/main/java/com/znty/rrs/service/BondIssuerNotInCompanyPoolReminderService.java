@@ -59,11 +59,13 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
     @Resource
     private ScheduledReminderDeliveryService reminderDeliveryService;
 
+    /** 返回主体不在池债券提醒任务编码。 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
+    /** 返回主体不在池债券提醒任务参数说明。 */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
