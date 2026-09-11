@@ -19,7 +19,7 @@
 **配置与实现分离**（先建库表配置，再写业务实现）：
 
 1. **库表配置** `sys_scheduled_task`：名称 / 说明 / cron / 启停 / **扩展参数（通用字段 param_json）** — 页面新增、编辑、删除  
-2. **代码实现** `RrsScheduledTask`：`getTaskCode()` + `execute()` + 可选 `getParamHelp()`，与库表 `task_code` 绑定  
+2. **代码实现** `RrsScheduledTask`：`getTaskCode()` + `execute()` + 可选 `getParamHelp()`，与库表 `task_code` 绑定；任务编码须字母开头，仅含字母、数字、下划线，长度 2～50 位
 3. **执行历史** `sys_scheduled_task_run_log`：手动 / 定时触发留痕  
 
 外部评级相关任务与人工调库评级下调检查共用 `dict_external_rating_agency`：只读取 `is_deleted=0` 且机构编码非空的数据。业务先查询有效 `b_info_creditratingagency` 列表，再作为参数传入 Wind 评级查询；未配置有效机构时，自动调库与黑名单校验阻断，评级下调检查按 fail-open 视为未下调。

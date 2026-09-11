@@ -47,8 +47,10 @@ public class ScheduledTaskService {
     private static final String SYSTEM_OPERATOR_ID = "0";
     /** 系统操作人名称 */
     private static final String SYSTEM_OPERATOR_NAME = "系统";
-    /** 任务编码：字母开头，字母数字下划线，2~64 位 */
-    private static final Pattern TASK_CODE_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9_]{1,63}$");
+    /** 任务编码：字母开头，字母数字下划线，2~50 位 */
+    private static final Pattern TASK_CODE_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9_]{1,49}$");
+    /** MySQL 命名锁前缀 */
+    private static final String LOCK_NAME_PREFIX = "rrs_scheduled_";
 
     /** taskCode → 业务实现 */
     private final Map<String, RrsScheduledTask> taskMap;
@@ -61,6 +63,9 @@ public class ScheduledTaskService {
     /** 动态调度器 */
     @Resource
     private DynamicTaskScheduler dynamicTaskScheduler;
+    /** 多实例任务锁 */
+    @Resource
+    private JobLockService jobLockService;
 
     /**
      * 构造时收集全部 {@link RrsScheduledTask} 实现，按 taskCode 注册到内存映射（编码不可重复）
@@ -250,7 +255,7 @@ public class ScheduledTaskService {
         // 新增时校验编码格式；修改时沿用原编码
         String taskCode = existing != null ? existing.getTaskCode() : trimCode(req.getTaskCode());
         if (existing == null && !TASK_CODE_PATTERN.matcher(taskCode).matches()) {
-            throw new BizException("任务编码须以字母开头，仅含字母数字下划线，长度 2~64");
+            throw new BizException("任务编码须以字母开头，仅含字母数字下划线，长度 2~50");
         }
         String taskName = StringUtils.hasText(req.getTaskName())
                 ? req.getTaskName().trim()
@@ -336,7 +341,7 @@ public class ScheduledTaskService {
     }
 
     /**
-     * 按任务编码串行执行业务实现，并持久化最近执行摘要与执行历史
+     * 按任务编码串行执行业务实现，并在 MySQL 命名锁内持久化最近执行摘要与执行历史。
      */
     private ScheduledTaskResult runTask(String taskCode, String triggerType,
                                         String operatorId, String operatorName) {
@@ -344,15 +349,58 @@ public class ScheduledTaskService {
         RrsScheduledTask task = requireImpl(taskCode);
         // 展示名读库
         String displayName = resolveTaskName(taskCode);
+        // 本机锁只负责同一 JVM 内同任务串行；保留它可使本机并发触发按顺序执行，
+        // 避免它们在尚未执行时就相互判定为“其他节点正在执行”。
         Object lock = runLocks.computeIfAbsent(taskCode, k -> new Object());
         synchronized (lock) {
             log.info("执行定时任务 {} ({}) trigger={}", displayName, taskCode, triggerType);
-            // 执行业务
-            ScheduledTaskResult result = task.execute();
-            // 写最近结果与历史
-            persistRunResult(taskCode, displayName, result, triggerType, operatorId, operatorName);
-            return result;
+            // 回调在当前线程同步执行，数组仅用于从 Runnable 回传本次执行结果。
+            ScheduledTaskResult[] resultHolder = new ScheduledTaskResult[1];
+            // MySQL 命名锁负责多 JVM / 多机器互斥；等待 0 秒，未获锁立即返回，
+            // 不占用动态调度线程。任务执行和结果落库均置于持锁回调内，避免其他实例
+            // 在业务已完成但历史尚未写入的窗口内重复执行。
+            boolean acquired = jobLockService.executeWithLock(buildLockName(taskCode), 0, () -> {
+                Date startTime = new Date();
+                try {
+                    // 执行业务并在持锁期间写入执行结果
+                    resultHolder[0] = task.execute();
+                    persistRunResult(taskCode, displayName, resultHolder[0], triggerType, operatorId, operatorName);
+                } catch (RuntimeException | Error e) {
+                    // 未捕获异常也要记录失败结果，再保留原异常继续向上抛出
+                    long duration = System.currentTimeMillis() - startTime.getTime();
+                    ScheduledTaskResult failure = ScheduledTaskResult.failure(taskCode, displayName,
+                            "执行异常: " + buildExceptionMessage(e), startTime, duration);
+                    persistRunResult(taskCode, displayName, failure, triggerType, operatorId, operatorName);
+                    throw e;
+                }
+            });
+            if (!acquired) {
+                // 手动触发需要明确告知操作者；不写执行历史，也不覆盖最近执行摘要。
+                if (ScheduleTriggerType.MANUAL.getCode().equals(triggerType)) {
+                    throw new BizException("任务正在其他节点执行");
+                }
+                // cron 触发由其他实例执行时仅记录跳过日志，不写执行历史或最近执行摘要。
+                log.info("定时任务 {} ({}) 正在其他节点执行，已跳过", displayName, taskCode);
+                return null;
+            }
+            // 已获取分布式锁时，返回持锁回调内产生的业务执行结果。
+            return resultHolder[0];
         }
+    }
+
+    /**
+     * 组装 MySQL 命名锁。任务编码最多 50 字符，加上 14 字符前缀后总长不超过 64。
+     */
+    private String buildLockName(String taskCode) {
+        return LOCK_NAME_PREFIX + taskCode;
+    }
+
+    /**
+     * 生成异常摘要，异常消息为空时回退到异常类型。
+     */
+    private String buildExceptionMessage(Throwable throwable) {
+        return StringUtils.hasText(throwable.getMessage())
+                ? throwable.getMessage() : throwable.getClass().getSimpleName();
     }
 
     /**

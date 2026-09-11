@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS `sys_scheduled_task`;
 CREATE TABLE `sys_scheduled_task`
 (
     `id`                   BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `task_code`            VARCHAR(64)  DEFAULT NULL            COMMENT '任务编码（稳定标识，对应代码实现 getTaskCode）',
+    `task_code`            VARCHAR(50)  DEFAULT NULL            COMMENT '任务编码（稳定标识，对应代码实现 getTaskCode，最长50字符）',
     `task_name`            VARCHAR(128) DEFAULT NULL            COMMENT '任务名称（页面展示，启动同步时可用代码默认名覆盖）',
     `description`          VARCHAR(500) DEFAULT NULL            COMMENT '任务说明',
     `cron_expression`      VARCHAR(64)  DEFAULT NULL            COMMENT 'cron 表达式（6 位 Spring 风格：秒 分 时 日 月 周）',
@@ -39,7 +39,7 @@ CREATE TABLE `sys_scheduled_task_evt`
 (
     `evt_id`               BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
     `id`                   BIGINT       DEFAULT NULL            COMMENT '主表主键 ID',
-    `task_code`            VARCHAR(64)  DEFAULT NULL            COMMENT '任务编码（稳定标识，对应代码实现 getTaskCode）',
+    `task_code`            VARCHAR(50)  DEFAULT NULL            COMMENT '任务编码（稳定标识，对应代码实现 getTaskCode，最长50字符）',
     `task_name`            VARCHAR(128) DEFAULT NULL            COMMENT '任务名称（页面展示，启动同步时可用代码默认名覆盖）',
     `description`          VARCHAR(500) DEFAULT NULL            COMMENT '任务说明',
     `cron_expression`      VARCHAR(64)  DEFAULT NULL            COMMENT 'cron 表达式（6 位 Spring 风格：秒 分 时 日 月 周）',
@@ -64,7 +64,7 @@ CREATE TABLE `sys_scheduled_task_evt`
 CREATE TABLE `sys_scheduled_task_run_log`
 (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `task_code`       VARCHAR(64)  DEFAULT NULL            COMMENT '任务编码',
+    `task_code`       VARCHAR(50)  DEFAULT NULL            COMMENT '任务编码，最长50字符',
     `task_name`       VARCHAR(128) DEFAULT NULL            COMMENT '任务名称快照',
     `trigger_type`    VARCHAR(32)  DEFAULT NULL            COMMENT '触发方式：manual=手动 / cron=定时',
     `run_status`      VARCHAR(32)  DEFAULT NULL            COMMENT '执行状态：success=成功 / fail=失败',

@@ -130,6 +130,19 @@ public class ScheduledTaskServiceTest {
     }
 
     @Test
+    public void addTaskShouldRejectTaskCodeLongerThan50Chars() {
+        ScheduledTaskService service = new ScheduledTaskService(Collections.<RrsScheduledTask>emptyList());
+        ScheduledTaskReq req = new ScheduledTaskReq();
+        req.setTaskCode(buildTaskCode(51));
+        req.setTaskName("新任务");
+        req.setCronExpression("0 0 1 * * ?");
+
+        assertThatThrownBy(() -> service.addTask(req))
+                .isInstanceOf(BizException.class)
+                .hasMessage("任务编码须以字母开头，仅含字母数字下划线，长度 2~50");
+    }
+
+    @Test
     public void addTaskWithImplShouldScheduleWhenEnabled() {
         RrsScheduledTask task = mockTask("job_a");
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
@@ -240,6 +253,8 @@ public class ScheduledTaskServiceTest {
         ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
         ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+        JobLockService jobLockService = executeTaskJobLock();
+        ReflectionTestUtils.setField(service, "jobLockService", jobLockService);
 
         ScheduledTaskReq req = new ScheduledTaskReq();
         req.setTaskCode("a");
@@ -247,6 +262,109 @@ public class ScheduledTaskServiceTest {
         assertThat(result.isSuccess()).isTrue();
         verify(task, times(1)).execute();
         verify(mapper).addRunLog(any());
+    }
+
+    @Test
+    public void cronTaskShouldSkipWithoutHistoryWhenLockIsHeldByAnotherNode() {
+        RrsScheduledTask task = mockTask("a");
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskCode("a");
+        conf.setTaskName("任务A");
+        when(mapper.queryTaskByCode("a")).thenReturn(conf);
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "jobLockService", unavailableJobLock());
+
+        ScheduledTaskResult result = ReflectionTestUtils.invokeMethod(service, "runTask",
+                "a", "cron", "0", "系统");
+        assertThat(result).isNull();
+        verify(task, never()).execute();
+        verify(mapper, never()).addRunLog(any());
+        verify(mapper, never()).editTaskLastRun(any(SysScheduledTaskBo.class));
+    }
+
+    @Test
+    public void manualTaskShouldRejectWhenLockIsHeldByAnotherNode() {
+        RrsScheduledTask task = mockTask("a");
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskCode("a");
+        conf.setTaskName("任务A");
+        when(mapper.queryTaskByCode("a")).thenReturn(conf);
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+        ReflectionTestUtils.setField(service, "jobLockService", unavailableJobLock());
+
+        ScheduledTaskReq req = new ScheduledTaskReq();
+        req.setTaskCode("a");
+        assertThatThrownBy(() -> service.executeTask(req))
+                .isInstanceOf(BizException.class)
+                .hasMessage("任务正在其他节点执行");
+        verify(task, never()).execute();
+        verify(mapper, never()).addRunLog(any());
+    }
+
+    @Test
+    public void executeTaskShouldPersistFailureAndRethrowUnhandledException() {
+        RrsScheduledTask task = mockTask("a");
+        when(task.execute()).thenThrow(new IllegalStateException("测试异常"));
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskCode("a");
+        conf.setTaskName("任务A");
+        when(mapper.queryTaskByCode("a")).thenReturn(conf);
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+        ReflectionTestUtils.setField(service, "jobLockService", executeTaskJobLock());
+
+        ScheduledTaskReq req = new ScheduledTaskReq();
+        req.setTaskCode("a");
+        assertThatThrownBy(() -> service.executeTask(req))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("测试异常");
+        verify(mapper).addRunLog(any());
+        verify(mapper).editTaskLastRun(any(SysScheduledTaskBo.class));
+    }
+
+    @Test
+    public void buildLockNameShouldUseReadablePrefixAndTaskCode() {
+        ScheduledTaskService service = new ScheduledTaskService(Collections.<RrsScheduledTask>emptyList());
+        String taskCode = buildTaskCode(50);
+
+        String lockName = ReflectionTestUtils.invokeMethod(service, "buildLockName", taskCode);
+        assertThat(lockName).isEqualTo("rrs_scheduled_" + taskCode);
+        assertThat(lockName).hasSize(64);
+    }
+
+    private JobLockService executeTaskJobLock() {
+        JobLockService jobLockService = mock(JobLockService.class);
+        when(jobLockService.executeWithLock(anyString(), eq(0), any(Runnable.class))).thenAnswer(invocation -> {
+            ((Runnable) invocation.getArguments()[2]).run();
+            return true;
+        });
+        return jobLockService;
+    }
+
+    private JobLockService unavailableJobLock() {
+        JobLockService jobLockService = mock(JobLockService.class);
+        when(jobLockService.executeWithLock(anyString(), eq(0), any(Runnable.class))).thenReturn(false);
+        return jobLockService;
+    }
+
+    private String buildTaskCode(int length) {
+        StringBuilder taskCode = new StringBuilder("a");
+        while (taskCode.length() < length) {
+            taskCode.append('a');
+        }
+        return taskCode.toString();
     }
 
     private RrsScheduledTask mockTask(String code) {
