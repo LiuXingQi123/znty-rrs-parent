@@ -21,6 +21,9 @@ import java.sql.SQLException;
 @Service
 public class JobLockService {
 
+    /** MySQL 命名锁名称最大字符数 */
+    private static final int MYSQL_LOCK_NAME_MAX_LENGTH = 64;
+
     /** 数据库连接池 */
     @Resource
     private DataSource dataSource;
@@ -41,12 +44,25 @@ public class JobLockService {
                 log.info("定时任务锁[{}]正由其他实例持有，本次跳过", lockName);
                 return false;
             }
+            Throwable taskFailure = null;
             try {
                 task.run();
                 return true;
+            } catch (RuntimeException | Error e) {
+                taskFailure = e;
+                throw e;
             } finally {
                 // 任务结束或异常后释放当前连接持有的命名锁
-                releaseLock(connection, lockName);
+                try {
+                    releaseLock(connection, lockName);
+                } catch (SQLException e) {
+                    log.error("定时任务锁[{}]释放异常", lockName, e);
+                    if (taskFailure != null) {
+                        taskFailure.addSuppressed(e);
+                    } else {
+                        throw new IllegalStateException("定时任务分布式锁释放失败", e);
+                    }
+                }
             }
         } catch (SQLException e) {
             log.error("定时任务锁[{}]获取或释放异常", lockName, e);
@@ -64,6 +80,9 @@ public class JobLockService {
     private void validateParams(String lockName, int waitSeconds, Runnable task) {
         if (!StringUtils.hasText(lockName)) {
             throw new IllegalArgumentException("锁名称不能为空");
+        }
+        if (lockName.length() > MYSQL_LOCK_NAME_MAX_LENGTH) {
+            throw new IllegalArgumentException("锁名称不能超过 " + MYSQL_LOCK_NAME_MAX_LENGTH + " 个字符");
         }
         if (waitSeconds < 0) {
             throw new IllegalArgumentException("锁等待秒数不能小于 0");
