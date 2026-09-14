@@ -130,7 +130,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(17L);
         assertThat(log.getAdjustReason()).isEqualTo("外评非AA-及以下主体自动出池（近一年孰低外评：AAA）");
-        assertThat(log.getAdjustAdvice()).isEqualTo(log.getAdjustReason());
+        assertThat(log.getAdjustAdvice()).isNull();
+        assertThat(log.getAdjustBatchNo()).matches("COMP\\d{17}2001");
+        assertThat(result.getDetailLog()).doesNotContain("批次号");
     }
 
     /** 验证缺少扫描池参数时任务失败。 */
@@ -293,6 +295,11 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
                 .isEqualTo("外评非AA-及以下主体自动出池（近一年孰低外评：AA）");
         assertThat(captor.getAllValues().get(1).getAdjustReason())
                 .isEqualTo("外评非AA-及以下主体自动出池（近一年孰低外评：AA）（同池旗下债）");
+        assertThat(captor.getAllValues().get(0).getAdjustAdvice()).isNull();
+        assertThat(captor.getAllValues().get(1).getAdjustAdvice()).isNull();
+        assertThat(captor.getAllValues().get(0).getAdjustBatchNo()).matches("COMP\\d{17}2001");
+        assertThat(captor.getAllValues().get(1).getAdjustBatchNo())
+                .isEqualTo(captor.getAllValues().get(0).getAdjustBatchNo());
     }
 
     /** 验证旗下债命中调出限制池时阻断主体联动。 */

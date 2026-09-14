@@ -25,8 +25,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -77,14 +79,59 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getAdjustReason())
                 .isEqualTo("证券到期自动调出（到期日：2026-09-01；出池口径：到期日早于昨日）");
-        assertThat(log.getAdjustAdvice()).isEqualTo(log.getAdjustReason());
+        assertThat(log.getAdjustAdvice()).isNull();
+        assertThat(log.getAdjustBatchNo()).matches("BOND\\d{17}2001");
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
         assertThat(result.getMessage()).contains("本轮共自动出池 1 条到期证券")
                 .contains("目标池明细：信用债大库(10)：1 条");
+        assertThat(result.getDetailLog()).doesNotContain("批次号");
         assertThat(result.getTaskName()).isEqualTo("到期证券自动出池");
         assertThat(service.getTaskCode()).isEqualTo(AutoAdjustService.TASK_CODE);
         assertThat(service.getTaskCode()).isEqualTo("security_expired_auto_out");
+    }
+
+    /** 同一任务内不同证券应分别生成 BOND 批次。 */
+    @Test
+    public void autoOutExpiredShouldSeparateBatchBySecurityCode() {
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        AutoAdjustService service = new AutoAdjustService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskName("到期证券自动出池");
+        conf.setParamJson("{\"poolIds\":[10]}");
+        when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(10L);
+        pool.setPoolName("信用债大库");
+        pool.setPoolType("credit_bond");
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+        ScheduledAdjustCandidateDto first = new ScheduledAdjustCandidateDto();
+        first.setSecurityCode("S001");
+        ScheduledAdjustCandidateDto second = new ScheduledAdjustCandidateDto();
+        second.setSecurityCode("S002");
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(first, second));
+        when(securityPoolAdjustMapper.queryAllPoolRelationList())
+                .thenReturn(Collections.<PoolRelationBo>emptyList());
+        when(securityPoolAdjustMapper.deletePoolStatusSoft(any(String.class), eq(10L))).thenReturn(1);
+
+        ScheduledTaskResult result = service.execute();
+
+        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(securityPoolAdjustMapper, times(2)).addAdjustLog(captor.capture());
+        List<IpAdjustLogBo> logs = captor.getAllValues();
+        assertThat(logs.get(0).getAdjustBatchNo()).matches("BOND\\d{17}2001");
+        assertThat(logs.get(1).getAdjustBatchNo()).matches("BOND\\d{17}2002");
+        assertThat(logs.get(0).getAdjustBatchNo()).isNotEqualTo(logs.get(1).getAdjustBatchNo());
+        assertThat(result.getAffectedCount()).isEqualTo(2);
     }
 
     @Test

@@ -192,7 +192,7 @@ public class TempSecurityCodeServiceTest {
                 .hasMessageContaining("正式证券不存在或不可用");
     }
 
-    /** 验证定时任务入口复用转正逻辑并记录 job 来源。 */
+    /** 验证定时任务入口记录 job 来源，且自动调库日志不写调整建议。 */
     @Test
     public void editTempSecurityCodeToUpdatedByJobShouldUseMappedFormalCode() {
         TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
@@ -200,6 +200,9 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeService service = buildService(mapper, adjustMapper);
         TempSecurityCodeBo oldBo = buildOldBo();
         oldBo.setSecurityCode("110001.IB");
+        IpPoolStatusBo crmwPoolStatus = buildPoolStatus();
+        crmwPoolStatus.setId(89L);
+        crmwPoolStatus.setPoolType("crmw");
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
         when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
         when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
@@ -207,13 +210,15 @@ public class TempSecurityCodeServiceTest {
         when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
         when(mapper.queryActivePoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<IpPoolStatusBo>emptyList());
+                .thenReturn(Collections.singletonList(buildPoolStatus()));
         when(mapper.queryPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
         when(mapper.queryActiveCrmwPoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<IpPoolStatusBo>emptyList());
+                .thenReturn(Collections.singletonList(crmwPoolStatus));
         when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
+        when(mapper.queryActivePoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(0);
+        when(mapper.queryActiveCrmwPoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(0);
         when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
 
         service.editTempSecurityCodeToUpdatedByJob(1L);
@@ -222,6 +227,21 @@ public class TempSecurityCodeServiceTest {
         verify(mapper).editTempSecurityCodeToUpdated(captor.capture());
         assertThat(captor.getValue().getSecurityCode()).isEqualTo("110001.IB");
         assertThat(captor.getValue().getOprtSource()).isEqualTo(TempOprtSource.JOB.getCode());
+        ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(adjustMapper, times(4)).addAdjustLog(logCaptor.capture());
+        assertThat(logCaptor.getAllValues().get(0).getAdjustReason())
+                .isEqualTo("债券临时代码调出（临时代码：TMP001；正式代码：110001.IB）");
+        assertThat(logCaptor.getAllValues().get(1).getAdjustReason())
+                .isEqualTo("研究建议（代码替换：TMP001→110001.IB）");
+        for (IpAdjustLogBo log : logCaptor.getAllValues()) {
+            assertThat(log.getAdjustAdvice()).isNull();
+        }
+        ArgumentCaptor<IpAdjustLogBo> statusCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(adjustMapper).addPoolStatus(statusCaptor.capture());
+        assertThat(statusCaptor.getValue().getAdjustAdvice()).isNull();
+        ArgumentCaptor<IpPoolStatusBo> crmwStatusCaptor = ArgumentCaptor.forClass(IpPoolStatusBo.class);
+        verify(mapper).addCrmwPoolStatus(crmwStatusCaptor.capture());
+        assertThat(crmwStatusCaptor.getValue().getAdjustAdvice()).isNull();
         verify(mapper).editTempSecurityInfoToDisabled(any(TempSecurityCodeBo.class));
     }
 

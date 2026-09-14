@@ -24,7 +24,9 @@
 
 外部评级相关任务与人工调库评级下调检查共用 `dict_external_rating_agency`：只读取 `is_deleted=0` 且机构编码非空的数据。业务先查询有效 `b_info_creditratingagency` 列表，再作为参数传入 Wind 评级查询；未配置有效机构时，自动调库与黑名单校验阻断，评级下调检查按 fail-open 视为未下调。
 
-自动调库任务写入 `ip_adjust_log` / `ip_adjust_log_crmw` 时，`adjust_reason` 与 `adjust_advice` 使用相同文案，并在基础原因后的中文括号中展示本次判断的重要依据。到期任务展示实际到期日与出池口径；主体旗下债券任务展示发行主体及主体所在/未在池；池关系联动出池展示调入池和被调出池；临时代码替换展示临时代码与正式代码。示例：`证券到期自动调出（到期日：2026-09-01；出池口径：到期日早于昨日）`、`主体下债券自动入库（发行主体：某集团/C001；主体所在池：债券禁止库）`。
+定时任务写入 `ip_adjust_log` / `ip_adjust_log_crmw` 时只赋值 `adjust_reason`，`adjust_advice` 保持 `NULL`；人工调库及人工临时代码转正不受此规则影响。调整原因在基础原因后的中文括号中展示本次判断的重要依据：到期任务展示实际到期日与出池口径；主体旗下债券任务展示发行主体及主体所在/未在池；池关系联动出池展示调入池和被调出池；临时代码替换定时任务展示临时代码与正式代码。示例：`证券到期自动调出（到期日：2026-09-01；出池口径：到期日早于昨日）`、`主体下债券自动入库（发行主体：某集团/C001；主体所在池：债券禁止库）`。
+
+自动调库批次号按“实际主调整对象 + 主目标池 + 调整方向”生成。同一主体主调整与其同步的旗下债券、关联/互斥项共用 `COMP` 批次；只有债券/普通证券调整时按证券代码生成 `BOND` 批次，其关联/互斥项继承主日志批次；CRMW 按“凭证代码 + 标的证券代码”组合生成 `CRMW` 批次。不同主对象或不同主目标池不得共用批次。历史 `AUTO` 前缀记录不迁移；新任务过程日志不输出批次号，但 `adjust_batch_no` 继续写入业务调库日志和池状态。
 
 ### 扩展参数（通用约定）
 
@@ -153,7 +155,7 @@
 ## 7. 代码索引
 
 - 编排：`ScheduledTaskService`、`DynamicTaskScheduler`、`RrsScheduledTask`  
-- 业务：`BondTempCodeReplaceService`、`BondSecurityTypeChangeService`、`PledgeBlacklistDailyIncrementReminderService`、`BondIssuerNotInCompanyPoolReminderService`、`ScheduledReminderDeliveryService`（通知占位）、`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`AutoAdjustPoolScopeHelper`（参数 poolIds ∪ 关系配置绑定池）、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）、`HsPoolFullExcelExportService`、`HsPoolFullIncludingExpiredExcelExportService`、`HsPoolIncrementExcelExportService`
+- 业务：`BondTempCodeReplaceService`、`BondSecurityTypeChangeService`、`PledgeBlacklistDailyIncrementReminderService`、`BondIssuerNotInCompanyPoolReminderService`、`ScheduledReminderDeliveryService`（通知占位）、`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`ScheduledAdjustBatchNoContext`（自动调库批次分组）、`AutoAdjustPoolScopeHelper`（参数 poolIds ∪ 关系配置绑定池）、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）、`HsPoolFullExcelExportService`、`HsPoolFullIncludingExpiredExcelExportService`、`HsPoolIncrementExcelExportService`
 - Mapper：`ScheduledTaskMapper` / `.xml`、`BondSecurityMaintenanceMapper` / `.xml`、`BondReminderMapper` / `.xml`、`TempSecurityCodeMapper` / `.xml`、`AutoAdjustMapper`、`GradeRuleAlertMapper` / `.xml`、`HsPoolExcelExportMapper` / `.xml`
 - Controller：`ScheduledTaskController`；提醒查询/处理另见 `GradeRuleAlertController`（`/api/v1/gradeRuleAlert`）  
 - SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`、`rrs_grade_rule_alert_schema.sql`、`rrs_grade_rule_alert_demo_data.sql`  
@@ -169,6 +171,8 @@
 5. **任务结束**：成功和异常路径均输出结束标识、成功/跳过/失败/候选数量以及毫秒耗时。
 
 执行摘要仍写入 `message` 供历史列表快速查看；上述过程写入 `detail_log`，供「过程日志」弹窗核查。当前通知通道未接入时，结束日志显示 `通知状态=待接入`，不表述为已发送。
+
+自动调库任务的过程日志只输出扫描条件、处理明细和业务汇总，不输出批次号；批次号仅作为业务日志的内部关联键保留。
 
 以下业务摘要按 **Demo cron 执行顺序** 编排（与第 4.1 节一致）。
 

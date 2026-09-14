@@ -25,7 +25,6 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -54,9 +53,6 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     private static final String AUTO_ADJUSTER_NAME = "系统";
     /** 自动入池原因 */
     private static final String REASON = "外评AA-及以下主体自动入池";
-    /** 批次号后缀 */
-    private static final String BATCH_SUFFIX = "3004";
-
     /**
      * 本任务扩展参数说明（配置页按行拆成列表展示）
      */
@@ -172,9 +168,8 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 + " 的生效记录中，且满足禁止库15、近一年认可外评孰低AA-及以下、重点观察23任一条件");
         // 构建池 ID → 池对象映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
-        Date submitTime = new Date();
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
-        infoDetail(detail, "本轮批次号 " + batchNo);
+        ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
+        Date submitTime = batchNoContext.getSubmitTime();
         // 一次加载全量池关系，供调入限制池（in_restrict）拦截
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         AutoInSummary summary = new AutoInSummary();
@@ -225,7 +220,9 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 // 按命中的（一）（二）（三）拼接调整原因
                 String reason = buildAdjustReason(company);
                 company.setAdjustReason(reason);
-                company.setAdjustAdvice(reason);
+                // 按主体和目标池生成自动调库批次号
+                String batchNo = batchNoContext.resolveCompanyBatchNo(
+                        company.getSecurityCode(), poolId, AdjustMode.IN.getCode());
                 company.setAdjustBatchNo(batchNo);
                 company.setSubmitTime(submitTime);
                 // 写自动入池日志
@@ -248,7 +245,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 入池 "
                     + poolCount + " 个主体、" + poolBondCount + " 只债券");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        infoDetail(detail, summary.buildMessage());
         return summary;
     }
 

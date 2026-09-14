@@ -560,7 +560,10 @@ public class TempSecurityCodeService {
                 "临时代码：" + poolStatus.getSecurityCode(),
                 "正式代码：" + replaceBo.getSecurityCode());
         log.setAdjustReason(reason);
-        log.setAdjustAdvice(reason);
+        // 定时任务自动生成记录时调整建议保持为空，人工转正仍沿用原建议
+        if (!TempOprtSource.JOB.getCode().equals(replaceBo.getOprtSource())) {
+            log.setAdjustAdvice(reason);
+        }
         log.setSubmitTime(now);
         return log;
     }
@@ -589,7 +592,10 @@ public class TempSecurityCodeService {
         log.setAdjusterName(poolStatus.getAdjusterName() != null ? poolStatus.getAdjusterName() : SYSTEM_ADJUSTER_NAME);
         String reason = buildFormalInReason(poolStatus, replaceBo);
         log.setAdjustReason(reason);
-        log.setAdjustAdvice(reason);
+        // 定时任务自动生成记录时调整建议保持为空，人工转正仍沿用原建议
+        if (!TempOprtSource.JOB.getCode().equals(replaceBo.getOprtSource())) {
+            log.setAdjustAdvice(reason);
+        }
         log.setSubmitTime(now);
         return log;
     }
@@ -619,7 +625,10 @@ public class TempSecurityCodeService {
         status.setAdjusterName(oldStatus.getAdjusterName() != null ? oldStatus.getAdjusterName() : SYSTEM_ADJUSTER_NAME);
         String reason = buildFormalInReason(oldStatus, replaceBo);
         status.setAdjustReason(reason);
-        status.setAdjustAdvice(reason);
+        // 定时任务自动生成池状态时调整建议保持为空，人工转正仍沿用原建议
+        if (!TempOprtSource.JOB.getCode().equals(replaceBo.getOprtSource())) {
+            status.setAdjustAdvice(reason);
+        }
         status.setSubmitTime(now);
         status.setEntryTime(now);
         status.setIsDeleted(0);
@@ -651,6 +660,8 @@ public class TempSecurityCodeService {
         bo.setSecurityMarket(newBo.getSecurityMarket());
         bo.setSecurityType(newBo.getSecurityType());
         bo.setUpdateTime(newBo.getUpdateTime());
+        // 向后续日志构建传递人工或定时任务来源
+        bo.setOprtSource(newBo.getOprtSource());
         bo.setReplaceStatus("success");
         return bo;
     }

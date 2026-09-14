@@ -139,7 +139,7 @@
 
    - **① 前置校验** `validateSubmitReq`：`securityCode`/`items`/每项 `adjustMode`/`targetPoolId` 非空。
    - **② 参数初始化** `loadSubmitSharedData`：取证券、全量池 Map、`currentPoolIds`、`poolRelationMap`、证券级标志；为每个唯一 flowId `buildFlowSnapshot`；`BatchNoContext`（时间片 `yyyyMMddHHmmss` + 调入/调出/无流程三个序号）。
-   - **批次号规则** `buildAdjustBatchNo`：无流程 `BOND+batchTimeText+(3000+seq)`；调入 `+(1000+seq)`；调出 `+(2000+seq)`；同 `adjustGroupKey` 复用。
+   - **批次号规则** `buildAdjustBatchNo`：无流程 `COMP+batchTimeText+(3000+seq)`；调入 `+(1000+seq)`；调出 `+(2000+seq)`；同 `adjustGroupKey` 复用。
    - **直通判断** `isDirectFlow`：start 出边全部直达 end，或经发起人自动提交节点后到 end。
    - **③ 调入处理** `executeInboundSubmit`：
      - 直通：`buildAdjustLog` → `auditStatus='20'` → `addAdjustLog` → `bindSubmitAttachments` → 手工项 `createInitialSteps` → `addPoolStatus`（`audit_status='20'` 即时生效）→ **`syncCompanyBondsOnDirect(logBo)`**（主体级特有，见 3.5）。
@@ -215,7 +215,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 ### 5.1 `ip_adjust_log`（共享调库记录表）
 
-主体调库写入时 `pool_type` 为 `forbidden`/`observe`/`blacklist`/`restricted`；`security_code` 存主体代码。旗下债券同步入/出禁止库的记录使用 `adjust_type='自动调整'`；从互斥/受限池自动调出的记录使用 `adjust_type='互斥调整'`、`adjust_mode='调出'`，目标池、池类型和原因均记录实际被调出的池。`adjust_batch_no` 沿用主体批次并以 `BOND` 前缀。
+主体调库写入时 `pool_type` 为 `forbidden`/`observe`/`blacklist`/`restricted`；`security_code` 存主体代码。旗下债券同步入/出禁止库的记录使用 `adjust_type='自动调整'`；从互斥/受限池自动调出的记录使用 `adjust_type='互斥调整'`、`adjust_mode='调出'`，目标池、池类型和原因均记录实际被调出的池。`adjust_batch_no` 沿用主体批次并以 `COMP` 前缀。
 
 ### 5.2 `ip_pool_status`（投资池当前状态表）
 

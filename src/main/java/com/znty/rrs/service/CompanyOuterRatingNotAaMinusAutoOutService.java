@@ -27,7 +27,6 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -56,8 +55,6 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     private static final String AUTO_ADJUSTER_NAME = "系统";
     /** 自动出池原因 */
     private static final String REASON = "外评非AA-及以下主体自动出池";
-    /** 批次号后缀 */
-    private static final String BATCH_SUFFIX = "3005";
     /** JSON 解析 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -187,9 +184,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         infoDetail(detail, "扫描条件：ip_pool_status.is_deleted=0、audit_status=20、security_type=company、"
                 + "target_pool_id IN " + poolIds + "；近一年认可外评孰低不属于AA-及以下或无认可外评，"
                 + "且禁止库15/近一年AA-及以下/重点观察23三个条件均不满足；额外拦截池=" + limitPoolIds);
-        Date submitTime = new Date();
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
-        infoDetail(detail, "本轮批次号 " + batchNo);
+        ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
+        Date submitTime = batchNoContext.getSubmitTime();
         // 一次加载全量池关系，供调出限制池（out_restrict）拦截
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         AutoOutSummary summary = new AutoOutSummary();
@@ -226,6 +222,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                 }
                 // 调整原因带近一年孰低外评
                 String reason = buildAdjustReason(company.getOuterRating());
+                // 按主体和目标池生成自动调库批次号
+                String batchNo = batchNoContext.resolveCompanyBatchNo(
+                        company.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
                 // 回填自动出池日志公共字段
                 fillAutoOutLog(company, pool, poolId, batchNo, submitTime, reason);
                 // 写自动出池日志
@@ -247,7 +246,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 出池 "
                     + poolCount + " 个主体、" + poolBondCount + " 只债券");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        infoDetail(detail, summary.buildMessage());
         return summary;
     }
 
@@ -426,7 +425,6 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         log.setAdjusterId(AUTO_ADJUSTER_ID);
         log.setAdjusterName(AUTO_ADJUSTER_NAME);
         log.setAdjustReason(reason);
-        log.setAdjustAdvice(reason);
         log.setAdjustBatchNo(batchNo);
         log.setSubmitTime(submitTime);
     }

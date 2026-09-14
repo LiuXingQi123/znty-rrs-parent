@@ -21,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -52,9 +51,6 @@ public class AutoAdjustService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_NAME = "系统";
     /** 自动调出原因（写入调库日志） */
     private static final String REASON_EXPIRED_OUT = "证券到期自动调出";
-    /** 批次号规则后缀 */
-    private static final String BATCH_SUFFIX = "3001";
-
     /**
      * 本任务扩展参数说明（配置页按行拆成列表展示）
      */
@@ -159,9 +155,8 @@ public class AutoAdjustService implements RrsScheduledTask {
                 poolMap.put(pool.getId(), pool);
             }
         }
-        Date submitTime = new Date();
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
-        infoDetail(detail, "本轮批次号 " + batchNo);
+        ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
+        Date submitTime = batchNoContext.getSubmitTime();
         // 一次加载全量池关系，供调出限制池（out_restrict）拦截
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         AutoOutSummary summary = new AutoOutSummary();
@@ -208,7 +203,9 @@ public class AutoAdjustService implements RrsScheduledTask {
                         ScheduledAdjustLogHelper.dateDetail("到期日", sec.getMaturityDate()),
                         "出池口径：到期日早于昨日");
                 sec.setAdjustReason(reason);
-                sec.setAdjustAdvice(reason);
+                // 按实际证券和目标池生成自动调库批次号
+                String batchNo = batchNoContext.resolveBondBatchNo(
+                        sec.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
                 sec.setAdjustBatchNo(batchNo);
                 sec.setSubmitTime(submitTime);
                 // 软删成功后再写自动调出日志
@@ -219,7 +216,7 @@ public class AutoAdjustService implements RrsScheduledTask {
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 调出 "
                     + poolCount + " 条到期证券");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        infoDetail(detail, summary.buildMessage());
         return summary;
     }
 

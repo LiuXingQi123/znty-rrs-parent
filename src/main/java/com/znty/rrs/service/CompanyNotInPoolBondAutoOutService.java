@@ -21,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -47,7 +46,6 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_ID = "0";
     private static final String AUTO_ADJUSTER_NAME = "系统";
     private static final String REASON = "债券主体不在池债券出池";
-    private static final String BATCH_SUFFIX = "3008";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =
             "参数格式：须填写 JSON 对象；poolIds、mappings 可组合，例如 <code>{\"poolIds\":[15]}</code>\n"
@@ -131,9 +129,8 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 + "债券已在映射债券池生效、issuer_code非空，发行主体不在映射主体池的生效主体记录中；"
                 + "映射组数=" + pairList.size());
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
-        Date submitTime = new Date();
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
-        infoDetail(detail, "本轮批次号 " + batchNo);
+        ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
+        Date submitTime = batchNoContext.getSubmitTime();
         AutoOutSummary summary = new AutoOutSummary();
         for (long[] pair : pairList) {
             Long bondPoolId = pair[0];
@@ -179,7 +176,9 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                         ScheduledAdjustLogHelper.issuerDetail(bond),
                         ScheduledAdjustLogHelper.poolDetail("主体未在池", companyPool, companyPoolId));
                 bond.setAdjustReason(reason);
-                bond.setAdjustAdvice(reason);
+                // 按实际债券和目标池生成自动调库批次号
+                String batchNo = batchNoContext.resolveBondBatchNo(
+                        bond.getSecurityCode(), bondPoolId, AdjustMode.OUT.getCode());
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 securityPoolAdjustMapper.addAdjustLog(bond);
@@ -190,7 +189,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
             infoDetail(detail, "债券池[" + bondPool.getPoolName() + "](" + bondPoolId
                     + ")←主体池[" + companyPoolId + "] 出池 " + pairCount + " 条");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        infoDetail(detail, summary.buildMessage());
         return summary;
     }
 

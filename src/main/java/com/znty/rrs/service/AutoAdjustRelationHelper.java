@@ -100,7 +100,6 @@ final class AutoAdjustRelationHelper {
         String reason = ScheduledAdjustLogHelper.appendDetails(inboundLog.getAdjustReason(),
                 "池关系触发：调入" + inboundLog.getTargetPoolName() + "后自动调出" + outPool.getPoolName());
         autoOutLog.setAdjustReason(reason);
-        autoOutLog.setAdjustAdvice(reason);
         autoOutLog.setSubmitTime(inboundLog.getSubmitTime());
         return autoOutLog;
     }

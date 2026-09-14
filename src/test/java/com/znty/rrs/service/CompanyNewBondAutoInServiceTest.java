@@ -96,18 +96,20 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(adjustLog.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(adjustLog.getAdjustReason())
                 .isEqualTo("在池主体旗下债券自动入池（发行主体：测试集团/C001；主体所在池：债券禁止库）");
-        assertThat(adjustLog.getAdjustAdvice()).isEqualTo(adjustLog.getAdjustReason());
+        assertThat(adjustLog.getAdjustAdvice()).isNull();
+        assertThat(adjustLog.getAdjustBatchNo()).matches("BOND\\d{17}1001");
         assertThat(autoOutLog.getAdjustType()).isEqualTo("互斥调整");
         assertThat(autoOutLog.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(autoOutLog.getTargetPoolId()).isEqualTo(3L);
         assertThat(autoOutLog.getTargetPoolName()).isEqualTo("二级库");
         assertThat(autoOutLog.getAdjustBatchNo()).isEqualTo(adjustLog.getAdjustBatchNo());
         assertThat(autoOutLog.getAdjustReason()).contains("池关系触发：调入债券禁止库后自动调出二级库");
-        assertThat(autoOutLog.getAdjustAdvice()).isEqualTo(autoOutLog.getAdjustReason());
+        assertThat(autoOutLog.getAdjustAdvice()).isNull();
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
         assertThat(result.getMessage()).contains("本轮共自动入池 1 条债券")
                 .contains("主体池债券禁止库(15)→债券池债券禁止库(15)：1 条债券");
+        assertThat(result.getDetailLog()).doesNotContain("批次号");
         ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
         verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L), scopeCaptor.capture());
         assertThat(scopeCaptor.getValue().isExcludeAbs()).isFalse();

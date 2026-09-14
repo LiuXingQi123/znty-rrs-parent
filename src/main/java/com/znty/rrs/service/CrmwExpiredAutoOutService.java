@@ -21,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -45,7 +44,6 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_ID = "0";
     private static final String AUTO_ADJUSTER_NAME = "系统";
     private static final String REASON = "CRMW到期自动调出";
-    private static final String BATCH_SUFFIX = "3007";
     private static final String PARAM_HELP =
             "参数格式：JSON 对象，例如 <code>{\"poolIds\":[18]}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[18]}</code>\n"
@@ -113,9 +111,8 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         infoDetail(detail, "扫描条件：ip_pool_status_crmw.is_deleted=0、audit_status=20、target_pool_id IN "
                 + poolIds + "、pool_type=crmw、凭证 security_type=crmw、maturity_date<昨日");
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
-        Date submitTime = new Date();
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
-        infoDetail(detail, "本轮批次号 " + batchNo);
+        ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
+        Date submitTime = batchNoContext.getSubmitTime();
         List<PoolRelationBo> allRelations = crmwPoolAdjustMapper.queryAllPoolRelationList();
         AutoOutSummary summary = new AutoOutSummary();
         for (Long poolId : poolIds) {
@@ -162,7 +159,9 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                         ScheduledAdjustLogHelper.dateDetail("凭证到期日", item.getMaturityDate()),
                         "出池口径：到期日早于昨日");
                 item.setAdjustReason(reason);
-                item.setAdjustAdvice(reason);
+                // 按 CRMW 凭证和标的证券组合生成自动调库批次号
+                String batchNo = batchNoContext.resolveCrmwBatchNo(
+                        item.getCrmwScode(), item.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
                 item.setAdjustBatchNo(batchNo);
                 item.setSubmitTime(submitTime);
                 crmwPoolAdjustMapper.addAdjustLog(item);
@@ -171,7 +170,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
             summary.addPool(poolId, pool.getPoolName(), poolCount);
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 调出 " + poolCount + " 条");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        infoDetail(detail, summary.buildMessage());
         return summary;
     }
 

@@ -109,7 +109,9 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(17L);
         assertThat(log.getAdjustReason()).isEqualTo("外评AA-及以下主体自动入池（近一年孰低外评：AA-）");
-        assertThat(log.getAdjustAdvice()).isEqualTo(log.getAdjustReason());
+        assertThat(log.getAdjustAdvice()).isNull();
+        assertThat(log.getAdjustBatchNo()).matches("COMP\\d{17}1001");
+        assertThat(result.getDetailLog()).doesNotContain("批次号");
     }
 
     /** 验证参数说明包含黑名单质押库入池口径。 */

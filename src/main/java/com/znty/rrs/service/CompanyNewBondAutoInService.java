@@ -22,7 +22,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -53,8 +52,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_NAME = "系统";
     /** 自动入池原因（写入调库日志） */
     private static final String REASON_COMPANY_NEW_BOND_IN = "在池主体旗下债券自动入池";
-    /** 批次号规则后缀 */
-    private static final String BATCH_SUFFIX = "3002";
     /** 解析 param_json 用 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -167,9 +164,8 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         // 构建池 ID → 池信息映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
-        Date submitTime = new Date();
-        String batchNo = "AUTO" + new SimpleDateFormat("yyyyMMddHHmmssSSS").format(submitTime) + BATCH_SUFFIX;
-        infoDetail(detail, "本轮批次号 " + batchNo);
+        ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
+        Date submitTime = batchNoContext.getSubmitTime();
         AutoInSummary summary = new AutoInSummary();
         for (long[] pair : pairList) {
             Long companyInPoolId = pair[0];
@@ -209,7 +205,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                         ScheduledAdjustLogHelper.issuerDetail(bond),
                         ScheduledAdjustLogHelper.poolDetail("主体所在池", companyPool, companyInPoolId));
                 bond.setAdjustReason(reason);
-                bond.setAdjustAdvice(reason);
+                // 按实际债券和目标池生成自动调库批次号
+                String batchNo = batchNoContext.resolveBondBatchNo(
+                        bond.getSecurityCode(), bondTargetPoolId, AdjustMode.IN.getCode());
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 // 写自动调入日志
@@ -235,7 +233,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
                     + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 入池 " + pairCount + " 条");
         }
-        infoDetail(detail, "批次号 " + batchNo + "，" + summary.buildMessage());
+        infoDetail(detail, summary.buildMessage());
         return summary;
     }
 
