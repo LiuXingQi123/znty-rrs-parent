@@ -65,8 +65,8 @@ CREATE TABLE `ip_adjust_security_snapshot`
     `inner_guarantor_rating`     VARCHAR(50)    DEFAULT NULL COMMENT '担保人主体内评分',
     `date_exists`                DECIMAL(10, 4) DEFAULT NULL COMMENT '剩余期限-最新（天）',
     `fund_use`                   LONGTEXT       DEFAULT NULL COMMENT '资金募集用途',
-    `prompt_reason`              LONGTEXT       DEFAULT NULL COMMENT '提示原因',
-    `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析',
+    `prompt_reason`              LONGTEXT       DEFAULT NULL COMMENT '观察事项',
+    `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字',
 
     -- ========== 预留：与 rrs_securityinfo 对应的仍用同名同类型 ==========
     `wind_code_nbc`              VARCHAR(100)   DEFAULT NULL COMMENT '其他',
@@ -154,8 +154,8 @@ CREATE TABLE `ip_adjust_security_snapshot_crmw`
     `inner_guarantor_rating`     VARCHAR(50)    DEFAULT NULL COMMENT '担保人主体内评分',
     `date_exists`                DECIMAL(10, 4) DEFAULT NULL COMMENT '剩余期限-最新（天）',
     `fund_use`                   LONGTEXT       DEFAULT NULL COMMENT '资金募集用途',
-    `prompt_reason`              LONGTEXT       DEFAULT NULL COMMENT '提示原因',
-    `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析',
+    `prompt_reason`              LONGTEXT       DEFAULT NULL COMMENT '观察事项',
+    `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字',
 
     -- ========== 预留：与 rrs_securityinfo 对应的仍用同名同类型 ==========
     `wind_code_nbc`              VARCHAR(100)   DEFAULT NULL COMMENT '其他',
@@ -193,3 +193,16 @@ CREATE TABLE `ip_adjust_security_snapshot_crmw`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = 'CRMW调库证券信息快照表';
+
+-- 已建库升级时仅执行本节；不需要重建快照表，也不会修改已存文本内容。
+ALTER TABLE `ip_adjust_security_snapshot`
+    MODIFY COLUMN `prompt_reason` LONGTEXT DEFAULT NULL
+        COMMENT '观察事项',
+    MODIFY COLUMN `analysis` LONGTEXT DEFAULT NULL
+        COMMENT '证券分析，最大输入长度 5000 字';
+
+ALTER TABLE `ip_adjust_security_snapshot_crmw`
+    MODIFY COLUMN `prompt_reason` LONGTEXT DEFAULT NULL
+        COMMENT '观察事项',
+    MODIFY COLUMN `analysis` LONGTEXT DEFAULT NULL
+        COMMENT '证券分析，最大输入长度 5000 字';

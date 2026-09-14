@@ -169,7 +169,7 @@ public class SecurityInfoBo {
     private String innerIssuerRating;
     /** 担保人主体内评分 */
     private String innerGuarantorRating;
-    /** 提示原因 */
+    /** 观察事项 */
     private String promptReason;
     /** 证券分析 */
     private String analysis;

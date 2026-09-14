@@ -89,7 +89,7 @@ public class AdjustSecuritySnapshotCrmwBo {
     private BigDecimal dateExists;
     /** 资金募集用途 */
     private String fundUse;
-    /** 提示原因 */
+    /** 观察事项 */
     private String promptReason;
     /** 证券分析 */
     private String analysis;

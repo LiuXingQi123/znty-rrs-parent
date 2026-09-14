@@ -133,8 +133,8 @@ CREATE TABLE `rrs_securityinfo`
     `info_pledge_ratio`          decimal(10, 4)  DEFAULT NULL COMMENT '质押比率(%)',
     `inner_issuer_rating`        varchar(50)     DEFAULT NULL COMMENT '主体内评分档',
     `inner_guarantor_rating`     varchar(50)     DEFAULT NULL COMMENT '担保人主体内评分',
-    `prompt_reason`              longtext        COMMENT '提示原因',
-    `analysis`                   longtext        COMMENT '证券分析',
+    `prompt_reason`              longtext        DEFAULT NULL COMMENT '观察事项',
+    `analysis`                   longtext        DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字',
     `date_repurchase_exists`     decimal(10, 4)  DEFAULT NULL COMMENT '回购剩余期限-最新（年）',
     `guarant_flag`               int             DEFAULT NULL COMMENT '是否担保',
     `guarant_type`               varchar(100)    DEFAULT NULL COMMENT '担保类型',
@@ -155,6 +155,14 @@ CREATE TABLE `rrs_securityinfo`
 ALTER TABLE `rrs_securityinfo`
     MODIFY COLUMN `security_status` varchar(1) DEFAULT NULL
         COMMENT '证券状态：L=上市中 / N=待上市 / D=退市 / U=未知';
+
+ALTER TABLE `rrs_securityinfo`
+    MODIFY COLUMN `prompt_reason` longtext DEFAULT NULL
+        COMMENT '观察事项';
+
+ALTER TABLE `rrs_securityinfo`
+    MODIFY COLUMN `analysis` longtext DEFAULT NULL
+        COMMENT '证券分析，最大输入长度 5000 字';
 
 UPDATE `rrs_securityinfo`
 SET `security_status` = 'U'
