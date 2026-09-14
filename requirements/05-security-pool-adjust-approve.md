@@ -101,7 +101,7 @@
 - e7: n5→n6 `routeAction=approve`（审批通过 → O32 自动审批）
 - e8: n4→n7 `routeAction=reject`（修改节点终止 → 结束）
 
-直通流程样例（白名单入库）：`start → 研究员A发起(initiator) → end`，提交时即落地池状态。
+直通流程样例（白名单入库）：`start → 研究员A发起(initiator) → end`，提交时即落地池状态。当前白名单流程开关关闭，校验候选项不返回该流程；保留定义供后续启用。
 
 ---
 

@@ -137,7 +137,11 @@ public class CrmwPoolAdjustService {
 
     /** 系统附件业务服务 */
     @Resource
-    private SysAttachmentService sysAttachmentService;    private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
+    private SysAttachmentService sysAttachmentService;
+    /** 白名单调入流程 Key */
+    private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
+    /** 是否启用白名单调入流程；当前业务未启用，恢复时改为 true。 */
+    private static final boolean WHITELIST_FLOW_ENABLED = false;
 
     /** 通用查询服务 */
     @Resource
@@ -1996,12 +2000,17 @@ public class CrmwPoolAdjustService {
             return Collections.singletonList(buildPoolFlowOption(p));
         }
 
-        // ── 证券不在信用债大库中：依次评估白名单 → 简易 → 默认调入流程 ──
+        // ── 证券不在信用债大库中：按开关评估白名单，再评估简易和默认调入流程 ──
         // 白名单流程命中判断
-        List<String> whitelistMatchReasons = new ArrayList<>();
-        List<String> whitelistUnmatchReasons = new ArrayList<>();
-        // 判断白名单流程是否命中
-        boolean whitelistMatched = isWhitelistFlowMatched(req, shared, whitelistMatchReasons, whitelistUnmatchReasons);
+        List<String> whitelistMatchReasons = Collections.emptyList();
+        List<String> whitelistUnmatchReasons = Collections.emptyList();
+        boolean whitelistMatched = false;
+        if (WHITELIST_FLOW_ENABLED) {
+            whitelistMatchReasons = new ArrayList<>();
+            whitelistUnmatchReasons = new ArrayList<>();
+            // 判断白名单流程是否命中
+            whitelistMatched = isWhitelistFlowMatched(req, shared, whitelistMatchReasons, whitelistUnmatchReasons);
+        }
 
         // 简易流程命中判断
         List<String> simpleMatchReasons = new ArrayList<>();
@@ -2011,19 +2020,21 @@ public class CrmwPoolAdjustService {
                 req, shared, targetPool, simpleMatchReasons, simpleUnmatchReasons);
 
         // 推荐优先级：白名单 > 简易 > 默认调入
-        String recommendedType = whitelistMatched ? FlowType.WHITELIST_INBOUND.getCode()
+        String recommendedType = WHITELIST_FLOW_ENABLED && whitelistMatched ? FlowType.WHITELIST_INBOUND.getCode()
                 : (simpleMatched ? FlowType.SIMPLE_INBOUND.getCode() : FlowType.NORMAL_INBOUND.getCode());
 
-        // 构建三种流程候选项返回前端，由前端根据 recommended 标识决定默认选中项
+        // 构建启用的流程候选项返回前端，由前端根据 recommended 标识决定默认选中项
         List<AdjustCheckDto.FlowOption> options = new ArrayList<>();
-        // 白名单流程
-        FlowOptionParam whitelistP = new FlowOptionParam();
-        whitelistP.setRecommended(FlowType.WHITELIST_INBOUND.getCode().equals(recommendedType));
-        whitelistP.setMatched(whitelistMatched);
-        whitelistP.setMatchReasons(whitelistMatchReasons);
-        whitelistP.setUnmatchReasons(whitelistUnmatchReasons);
-        // 构建白名单流程候选项
-        options.add(buildWhitelistFlowOption(whitelistP));
+        if (WHITELIST_FLOW_ENABLED) {
+            // 白名单流程
+            FlowOptionParam whitelistP = new FlowOptionParam();
+            whitelistP.setRecommended(FlowType.WHITELIST_INBOUND.getCode().equals(recommendedType));
+            whitelistP.setMatched(whitelistMatched);
+            whitelistP.setMatchReasons(whitelistMatchReasons);
+            whitelistP.setUnmatchReasons(whitelistUnmatchReasons);
+            // 构建白名单流程候选项
+            options.add(buildWhitelistFlowOption(whitelistP));
+        }
         // 简易流程
         String simpleFlowName = resolveFlowName(targetPool.getSimpleInFlowName(), "简易流程");
         FlowOptionParam simpleP = new FlowOptionParam();

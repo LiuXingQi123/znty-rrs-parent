@@ -193,7 +193,7 @@
 - `flowOptions`：全局去重的流程候选项。
 - `recommendedFlowId/Key/Type`。
 
-`FlowOption`：`flowType`（whitelistInbound/simpleInbound/normalInbound/specialInbound/upgradeInbound/downgradeInbound/normalOutbound）、`flowName`、`flowId`、`flowKey`、`recommended`、`matched`、`selectable`、`matchReasons`、`unmatchReasons`。
+`FlowOption`：`flowType`（simpleInbound/normalInbound/specialInbound/upgradeInbound/downgradeInbound/normalOutbound；白名单流程开关关闭时不返回 whitelistInbound）、`flowName`、`flowId`、`flowKey`、`recommended`、`matched`、`selectable`、`matchReasons`、`unmatchReasons`。
 
 ### 3.5 前端校验结果展示
 

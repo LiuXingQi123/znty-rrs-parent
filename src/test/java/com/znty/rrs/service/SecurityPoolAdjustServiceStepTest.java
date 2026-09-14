@@ -2774,7 +2774,41 @@ public class SecurityPoolAdjustServiceStepTest {
         return map;
     }
 
-    // ===== 白名单流程 5 条件判断测试（isWhitelistFlowMatched）=====
+    /** 白名单流程关闭时，不构建候选项，也不执行白名单条件或流程定义查询。 */
+    @Test
+    public void resolveAdjustFlowOptionsShouldSkipWhitelistWhenDisabled() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
+
+        InvestmentPoolBo targetPool = buildPool(2L, null, "信用债大库/一级库");
+        targetPool.setPoolType("credit_bond");
+        targetPool.setInFlowId(101L);
+        targetPool.setInFlowKey("bond:standard-inbound");
+        targetPool.setInFlowName("债券一般入库流程");
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setDateExists(new BigDecimal("365"));
+        securityInfo.setSecurityType("bond");
+        AdjustSharedData shared = new AdjustSharedData();
+        shared.setSecurityInfo(securityInfo);
+        shared.setPoolMap(Collections.singletonMap(2L, targetPool));
+        shared.setCurrentPoolIds(Collections.<Long>emptySet());
+        shared.setPoolRelationMap(Collections.<Long, Map<String, List<Long>>>emptyMap());
+        AdjustCheckReq req = new AdjustCheckReq();
+        req.setSecurityCode("TEST001.IB");
+
+        List<AdjustCheckDto.FlowOption> options = ReflectionTestUtils.invokeMethod(
+                service, "resolveAdjustFlowOptionsForItem", req, shared, buildManualInboundItem(2L));
+
+        assertThat(options).extracting(AdjustCheckDto.FlowOption::getFlowType)
+                .doesNotContain("whitelistInbound");
+        verify(mapper, never()).queryCategoryTypeBySecurityType(anyString());
+        verify(flowMapper, never()).queryActiveFlowByKey("bond:whitelist-inbound");
+    }
+
+    // ===== 白名单流程 5 条件判断测试（isWhitelistFlowMatched，开关恢复后复用）=====
 
     /** 验证白名单条件1：剩余期限超过3年时不命中。 */
     @Test
