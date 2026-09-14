@@ -46,7 +46,7 @@
 **阶段1 参数与步骤校验**
 1. `validateAuditReq`：`stepId` 非空；`processAction` 必须是 `ProcessAction.APPROVE`/`REJECT`；`reject` 时 `processComment` 必填。
 2. `queryAdjustStepById(stepId)` 查当前 step。
-3. `resolveActualProcessStep`：管理员（`handlerId==='1'`）且 step 不属于自己时，用 `queryPendingStepByHandler` 找管理员自己的 pending 步骤优先处理。
+3. `resolveActualProcessStep`：管理员（`handlerId` 为 `'1'` 或 `10000–10100`）且 step 不属于自己时，用 `queryPendingStepByHandler` 找管理员自己的 pending 步骤优先处理。
 4. `validatePendingStep`：step 不存在→`"流程步骤不存在"`；`stepStatus` 必须 `pending`→否则`"当前流程步骤已处理，请刷新后重试"`；`handlerId` 有值且不等于 req 且非管理员→`"当前用户不是该步骤处理人"`；反查回填 `adjustBatchNo`/`adjustLogId`。
 5. `validateSubmitterCannotProcess`：管理员、发起/修改语义节点跳过；否则查同批次所有调库记录，若 `handlerId` 等于任一记录 `adjusterId`→`"发起人不能参与后续流程操作"`。
 

@@ -16,6 +16,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
+import com.znty.rrs.common.util.AdminUserIdUtil;
 
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
@@ -58,9 +59,6 @@ import java.util.Set;
  */
 @Service
 public class CrmwPoolAdjustFlowService {
-
-    /** 管理员用户 ID */
-    private static final String ADMIN_USER_ID = "1";
 
     /** CRMW池调整数据库操作 */
     @Resource
@@ -993,7 +991,7 @@ public class CrmwPoolAdjustFlowService {
      * 判断当前操作人是否为管理员。
      */
     private boolean isAdminOperator(CrmwPoolAdjustAuditReq req) {
-        return req != null && ADMIN_USER_ID.equals(req.getHandlerId());
+        return req != null && AdminUserIdUtil.isAdminUser(req.getHandlerId());
     }
 
     /**

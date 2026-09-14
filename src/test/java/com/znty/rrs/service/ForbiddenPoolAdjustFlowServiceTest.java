@@ -29,6 +29,18 @@ import static org.mockito.Mockito.when;
 /** 禁投池主体调整审批服务测试。 */
 public class ForbiddenPoolAdjustFlowServiceTest {
 
+    /** 验证预留管理员用户可以代办禁投池审批步骤。 */
+    @Test
+    public void isAdminOperatorShouldRecognizeReservedAdminUserId() {
+        ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
+        SecurityPoolAdjustAuditReq req = new SecurityPoolAdjustAuditReq();
+        req.setHandlerId("10100");
+
+        Boolean isAdmin = ReflectionTestUtils.invokeMethod(service, "isAdminOperator", req);
+
+        assertThat(isAdmin).isTrue();
+    }
+
     /** 验证审批最终通过后主体和实际变化的旗下债券一并入池。 */
     @Test
     public void finishAdjustBatchShouldSyncCompanyAndChangedBonds() {

@@ -53,7 +53,7 @@
                     FROM ip_adjust_step
                     <where>
                         step_status = 'pending'
-                        <if test="currentUserId != null and currentUserId != '' and currentUserId != '1'.toString()">
+                        <if test="currentUserId != null and currentUserId != '' and !@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)">
                             AND handler_id = #{currentUserId}
                         </if>
                         <if test="currentUserId == null or currentUserId == ''">
@@ -77,7 +77,7 @@
         LEFT JOIN wf_flow_definition f ON f.id = n.flow_id AND f.is_deleted = 0
         <where>
             al.is_deleted = 0
-            <if test="currentUserId != null and currentUserId != '' and currentUserId != '1'.toString()">
+            <if test="currentUserId != null and currentUserId != '' and !@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)">
                 AND EXISTS (
                     SELECT 1
                     FROM ip_adjust_step us
@@ -152,7 +152,7 @@
         INNER JOIN wf_flow_definition f ON f.id = n.flow_id AND f.is_deleted = 0
         <where>
             al.is_deleted = 0
-            <if test="currentUserId != null and currentUserId != '' and currentUserId != '1'.toString()">
+            <if test="currentUserId != null and currentUserId != '' and !@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)">
                 AND EXISTS (
                     SELECT 1
                     FROM ip_adjust_step us

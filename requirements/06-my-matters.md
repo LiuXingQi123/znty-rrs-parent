@@ -25,7 +25,7 @@
 | `processDescription` | `''` | 文本输入 | 流程描述关键词，回车查询 |
 | `auditStatus` | `''` | 下拉 | 调整状态（8 码） |
 | `initiatorName` | `''` | 文本输入 | 发起人 |
-| `currentUserId` | `RrsAuth.getCurrentUser().userId` | — | 前端取登录用户；后端 `'1'` 视为管理员 |
+| `currentUserId` | `RrsAuth.getCurrentUser().userId` | — | 前端取登录用户；后端 `'1'` 或 `10000–10100` 视为管理员 |
 
 `auditStatusOptions`：7 码（`-1/00/11/20/21/32/99`），同 dict.js `DICT_AUDIT_STATUS`。无投资池树、无证券类型筛选。
 
@@ -54,7 +54,7 @@
 | `auditStatus` | 下拉 | 空串转 null |
 | `stepStatus` | `activeTab` | `pending` 或 `completed`，决定待处理/已完成 |
 | `initiatorName` | 表单 | 空串转 null |
-| `currentUserId` | `RrsAuth.getCurrentUser().userId` | 必传；后端 `'1'` 视为管理员 |
+| `currentUserId` | `RrsAuth.getCurrentUser().userId` | 必传；后端 `'1'` 或 `10000–10100` 视为管理员 |
 | `pageIndex` / `pageSize` | 分页 | — |
 
 返回 `PageResult<MyMattersDto>`，取 `records`/`total`。
@@ -141,7 +141,7 @@
 - **流程关联**：`LEFT JOIN wf_flow_node n ON n.id=s.flow_node_id` → `LEFT JOIN wf_flow_definition f ON f.id=n.flow_id AND f.is_deleted=0`（LEFT JOIN，流程可能缺失）
 - **WHERE**：
   - `al.is_deleted=0`
-  - 用户隔离（非 1 管理员）：`AND EXISTS(SELECT 1 FROM ip_adjust_step us WHERE us.adjust_log_id=al.id AND us.handler_id=#{currentUserId})`
+  - 用户隔离（非管理员）：`AND EXISTS(SELECT 1 FROM ip_adjust_step us WHERE us.adjust_log_id=al.id AND us.handler_id=#{currentUserId})`
   - `currentUserId` 为空时：`AND 1=0`（强制返回空）
   - `flowIds` → `f.id IN (...)`
   - `startDateStart`/`startDateEnd` → `s.start_time >= CONCAT(#{x},' 00:00:00')` / `<= CONCAT(#{x},' 23:59:59')`
@@ -156,7 +156,7 @@
 
 ### 7.4 管理员穿透
 
-`currentUserId='1'` 被特判为管理员：不追加 `handler_id` 过滤，可见全部事宜。
+`currentUserId='1'` 或位于闭区间 `10000–10100` 时被视为管理员：不追加 `handler_id` 过滤，可见全部事宜。
 
 ---
 

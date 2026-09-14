@@ -16,6 +16,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
+import com.znty.rrs.common.util.AdminUserIdUtil;
 
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
@@ -59,9 +60,6 @@ import java.util.Set;
  */
 @Service
 public class ForbiddenPoolAdjustFlowService {
-
-    /** 管理员用户 ID */
-    private static final String ADMIN_USER_ID = "1";
 
     /** 证券池调库数据库操作 */
     @Resource
@@ -1010,7 +1008,7 @@ public class ForbiddenPoolAdjustFlowService {
      * 判断当前操作人是否为管理员。
      */
     private boolean isAdminOperator(SecurityPoolAdjustAuditReq req) {
-        return req != null && ADMIN_USER_ID.equals(req.getHandlerId());
+        return req != null && AdminUserIdUtil.isAdminUser(req.getHandlerId());
     }
 
     /**

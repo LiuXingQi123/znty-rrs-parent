@@ -42,11 +42,11 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建待处理流程步骤测试数据
         IpAdjustStepBo otherStep = buildPendingStep(10L, "3", "研究员2");
         // 构建待处理流程步骤测试数据
-        IpAdjustStepBo adminStep = buildPendingStep(11L, "1", "管理员");
+        IpAdjustStepBo adminStep = buildPendingStep(11L, "10000", "预留管理员");
         // 构建审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "管理员", "同意");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "10000", "预留管理员", "同意");
         when(mapper.queryAdjustStepById(10L)).thenReturn(otherStep);
-        when(mapper.queryPendingStepByHandler(1L, "BATCH001", 10103L, "1")).thenReturn(adminStep);
+        when(mapper.queryPendingStepByHandler(1L, "BATCH001", 10103L, "10000")).thenReturn(adminStep);
         when(mapper.editAdjustStepProcess(11L, "approve", "approve", "同意")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         // 构建调库日志测试数据
@@ -69,9 +69,9 @@ public class SecurityPoolAdjustFlowServiceTest {
         // 构建待处理流程步骤测试数据
         IpAdjustStepBo otherStep = buildPendingStep(10L, "3", "研究员2");
         // 构建审批请求测试数据
-        SecurityPoolAdjustAuditReq req = buildReq(10L, "1", "管理员", "同意");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "10000", "预留管理员", "同意");
         when(mapper.queryAdjustStepById(10L)).thenReturn(otherStep);
-        when(mapper.queryPendingStepByHandler(1L, "BATCH001", 10103L, "1")).thenReturn(null);
+        when(mapper.queryPendingStepByHandler(1L, "BATCH001", 10103L, "10000")).thenReturn(null);
         when(mapper.editAdjustStepProcess(10L, "approve", "approve", "同意（由管理员操作）")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         // 构建调库日志测试数据
