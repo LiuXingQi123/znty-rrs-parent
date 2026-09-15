@@ -1871,6 +1871,13 @@ public class SecurityPoolAdjustService {
                 }
                 result.selfSelectedRightsHolderName = selfSelected.getCompanyName();
             }
+            if (rightsHolder == null && selfSelected == null) {
+                // 前端未传选择时，直接采用关联评级主体接口返回的首条，不按关系类型二次筛选
+                rightsHolder = queryFirstRelatedRatingSubject(securityInfo.getWindCode());
+                if (rightsHolder != null) {
+                    result.rightsHolderName = rightsHolder.getCompanyName();
+                }
+            }
             if (requireAbsSelection && rightsHolder == null && selfSelected == null) {
                 throw new BizException("请选择权益人或自选权益人");
             }
@@ -1883,9 +1890,15 @@ public class SecurityPoolAdjustService {
             }
             return result;
         }
+        RelatedRatingSubjectDto guarantor = null;
         if (guarantorCode != null && !guarantorCode.trim().isEmpty()) {
-            RelatedRatingSubjectDto guarantor = findRelatedRatingSubject(
+            guarantor = findRelatedRatingSubject(
                     securityInfo.getWindCode(), guarantorCode.trim(), "所选担保人不属于当前证券");
+        } else {
+            // 前端未传选择时，直接采用关联评级主体接口返回的首条，不按关系类型二次筛选
+            guarantor = queryFirstRelatedRatingSubject(securityInfo.getWindCode());
+        }
+        if (guarantor != null) {
             fillSelectedRatingSubject(securityInfo, guarantor.getCompanyCode(),
                     guarantor.getCompanyName(), guarantor.getInnerRating());
         }
@@ -1915,6 +1928,12 @@ public class SecurityPoolAdjustService {
             }
         }
         throw new BizException(errorMessage);
+    }
+
+    /** 查询关联评级主体接口返回的首条记录，不按关系类型二次筛选。 */
+    private RelatedRatingSubjectDto queryFirstRelatedRatingSubject(String securityCode) {
+        List<RelatedRatingSubjectDto> records = securityPoolAdjustMapper.queryRelatedRatingSubjectList(securityCode);
+        return records == null || records.isEmpty() ? null : records.get(0);
     }
 
     /** 将后端重查的主体名称、代码及最新内评写入本次业务对象。 */

@@ -2,12 +2,15 @@ package com.znty.rrs.service;
 
 
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -182,6 +185,48 @@ public class SecurityPoolExcelImportServiceTest {
         verify(importMapper).updateItemCheckResult(any(SysImpTmpDetlBo.class));
         verify(importMapper).updateBatchCheckResult(any(SysImpTmpBo.class));
         verify(forbiddenPoolAdjustService, never()).checkCompanyAdjust(any());
+    }
+
+    /** Excel 导入应按证券类型默认选择首个关联评级主体。 */
+    @Test
+    public void applyDefaultRatingSubject_ShouldFillAbsRightsHolderAndNonAbsGuarantor() {
+        SecurityInfoBo absSecurity = new SecurityInfoBo();
+        absSecurity.setAbsFlag(1);
+        when(securityPoolAdjustMapper.querySecurityBoByCode("ABS001.IB")).thenReturn(absSecurity);
+        when(securityPoolAdjustMapper.queryRelatedRatingSubjectList("ABS001.IB"))
+                .thenReturn(buildRelatedSubjects("RIGHTS_FIRST", "RIGHTS_SECOND"));
+
+        AdjustCheckReq absReq = new AdjustCheckReq();
+        absReq.setSecurityCode("ABS001.IB");
+        ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingSubject", absReq);
+
+        assertEquals("RIGHTS_FIRST", absReq.getRightsHolderCode());
+        assertEquals(null, absReq.getGuarantorCode());
+
+        SecurityInfoBo normalSecurity = new SecurityInfoBo();
+        normalSecurity.setAbsFlag(0);
+        when(securityPoolAdjustMapper.querySecurityBoByCode("BOND001.IB")).thenReturn(normalSecurity);
+        when(securityPoolAdjustMapper.queryRelatedRatingSubjectList("BOND001.IB"))
+                .thenReturn(buildRelatedSubjects("GUARANTOR_FIRST", "GUARANTOR_SECOND"));
+
+        SecurityPoolAdjustSubmitReq normalReq = new SecurityPoolAdjustSubmitReq();
+        normalReq.setSecurityCode("BOND001.IB");
+        ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingSubject", normalReq);
+
+        assertEquals("GUARANTOR_FIRST", normalReq.getGuarantorCode());
+        assertEquals(null, normalReq.getRightsHolderCode());
+    }
+
+    /** 构造已按关联主体接口顺序返回的测试数据。 */
+    private List<RelatedRatingSubjectDto> buildRelatedSubjects(String firstCode, String secondCode) {
+        RelatedRatingSubjectDto first = new RelatedRatingSubjectDto();
+        first.setCompanyCode(firstCode);
+        RelatedRatingSubjectDto second = new RelatedRatingSubjectDto();
+        second.setCompanyCode(secondCode);
+        List<RelatedRatingSubjectDto> subjects = new ArrayList<>();
+        subjects.add(first);
+        subjects.add(second);
+        return subjects;
     }
 
     @Test

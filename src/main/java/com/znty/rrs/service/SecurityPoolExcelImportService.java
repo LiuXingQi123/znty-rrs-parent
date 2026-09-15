@@ -12,9 +12,11 @@ import com.znty.rrs.common.enums.FlowType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.enums.ItemType;
 import com.znty.rrs.common.enums.PermissionType;
+import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 import com.znty.rrs.common.util.ExcelImportHelper;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
@@ -28,6 +30,7 @@ import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -438,6 +441,8 @@ public class SecurityPoolExcelImportService {
             AdjustCheckReq checkReq = new AdjustCheckReq();
             checkReq.setSecurityCode(code);
             checkReq.setSecurityShortName(trimToNull(item.getFld002()));
+            // 为 Excel 导入补齐默认评级主体，保证 ABS 与非 ABS 均可复用完整单券校验
+            applyDefaultRatingSubject(checkReq);
             AdjustCheckReq.CheckItem checkItem = new AdjustCheckReq.CheckItem();
             checkItem.setTargetPoolId(pool.getId());
             checkItem.setTargetPoolName(pool.getPoolName());
@@ -797,6 +802,8 @@ public class SecurityPoolExcelImportService {
             submitReq.setAdjustAdvice(batch.getFld003());
             submitReq.setAdjusterId(opterId);
             submitReq.setAdjusterName(opterName);
+            // 与校验阶段使用同一默认评级主体，保证提交阶段口径一致
+            applyDefaultRatingSubject(submitReq);
 
             List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
             for (SecurityPoolExcelImportCheckItemDto ci : group) {
@@ -1026,6 +1033,8 @@ public class SecurityPoolExcelImportService {
                 checkReq.setSecurityCode(code);
                 checkReq.setSecurityShortName(shortName);
                 checkReq.setSecurityType(securityType);
+                // 清空出库同样复用完整单券校验，补齐默认评级主体
+                applyDefaultRatingSubject(checkReq);
                 AdjustCheckReq.CheckItem checkItem = new AdjustCheckReq.CheckItem();
                 checkItem.setTargetPoolId(pool.getId());
                 checkItem.setTargetPoolName(pool.getPoolName());
@@ -1194,6 +1203,8 @@ public class SecurityPoolExcelImportService {
                 submitReq.setAdjustAdvice(batch.getFld003());
                 submitReq.setAdjusterId(opterId);
                 submitReq.setAdjusterName(opterName);
+                // 清空出库提交与校验阶段使用同一默认评级主体
+                applyDefaultRatingSubject(submitReq);
                 List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
                 for (SecurityPoolExcelImportCheckItemDto ci : group) {
                     // 校验 Excel 导入权限
@@ -1448,6 +1459,74 @@ public class SecurityPoolExcelImportService {
         if (flowOptions != null) {
             flowOptions.add(0, opt);
         }
+    }
+
+    /**
+     * 为 Excel 导入校验请求补齐默认评级主体。
+     *
+     * <p>关联主体查询已按关系优先级、同类型最新内评排序；导入页无逐券选择控件时，
+     * 直接取首条。ABS 写入权益人，非 ABS 写入担保人；无候选时保留单券服务的原有拦截。</p>
+     *
+     * @param req 单券校验请求
+     */
+    private void applyDefaultRatingSubject(AdjustCheckReq req) {
+        if (req == null || isBlank(req.getSecurityCode())) {
+            return;
+        }
+        DefaultRatingSubject subject = queryDefaultRatingSubject(req.getSecurityCode());
+        if (subject == null) {
+            return;
+        }
+        if (subject.abs) {
+            req.setRightsHolderCode(subject.companyCode);
+        } else {
+            req.setGuarantorCode(subject.companyCode);
+        }
+    }
+
+    /**
+     * 为 Excel 导入提交请求补齐默认评级主体。
+     *
+     * @param req 单券提交请求
+     */
+    private void applyDefaultRatingSubject(SecurityPoolAdjustSubmitReq req) {
+        if (req == null || isBlank(req.getSecurityCode())) {
+            return;
+        }
+        DefaultRatingSubject subject = queryDefaultRatingSubject(req.getSecurityCode());
+        if (subject == null) {
+            return;
+        }
+        if (subject.abs) {
+            req.setRightsHolderCode(subject.companyCode);
+        } else {
+            req.setGuarantorCode(subject.companyCode);
+        }
+    }
+
+    /** 查询证券首个关联评级主体及其在当前证券类型下的角色。 */
+    private DefaultRatingSubject queryDefaultRatingSubject(String securityCode) {
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(securityCode.trim());
+        if (securityInfo == null) {
+            return null;
+        }
+        List<RelatedRatingSubjectDto> subjects =
+                securityPoolAdjustMapper.queryRelatedRatingSubjectList(securityCode.trim());
+        if (subjects == null || subjects.isEmpty() || isBlank(subjects.get(0).getCompanyCode())) {
+            return null;
+        }
+        DefaultRatingSubject subject = new DefaultRatingSubject();
+        subject.abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
+        subject.companyCode = subjects.get(0).getCompanyCode();
+        return subject;
+    }
+
+    /** Excel 导入默认评级主体。 */
+    private static class DefaultRatingSubject {
+        /** 是否 ABS 证券。 */
+        private boolean abs;
+        /** 默认关联主体编码。 */
+        private String companyCode;
     }
 
     /** 将证券调库流程候选项映射为导入页流程 DTO */

@@ -133,18 +133,65 @@ public class SecurityPoolAdjustServiceStepTest {
                 .isEqualTo("2");
     }
 
-    /** ABS 未选择普通权益人和自选权益人时后端拒绝继续。 */
+    /** ABS 未选择普通权益人和自选权益人时默认使用关联主体接口返回的首条。 */
     @Test
-    public void absShouldRequireRightsHolderSelection() {
+    public void absShouldDefaultToFirstRelatedSubjectWhenNoSelection() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("ABS001.IB");
         securityInfo.setAbsFlag(1);
+        RelatedRatingSubjectDto firstSubject = new RelatedRatingSubjectDto();
+        firstSubject.setCompanyCode("C10001");
+        firstSubject.setCompanyName("接口首条主体");
+        firstSubject.setInnerRating("3");
+        when(mapper.queryRelatedRatingSubjectList("ABS001.IB"))
+                .thenReturn(Collections.singletonList(firstSubject));
+
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+                securityInfo, null, null, null, true);
+
+        assertThat(securityInfo.getGuarantorId()).isEqualTo("C10001");
+        assertThat(securityInfo.getGuarantor()).isEqualTo("接口首条主体");
+    }
+
+    /** ABS 无关联评级主体时，后端仍返回明确的主体选择失败原因。 */
+    @Test
+    public void absShouldRequireRightsHolderWhenNoRelatedSubjectExists() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("ABS001.IB");
+        securityInfo.setAbsFlag(1);
+        when(mapper.queryRelatedRatingSubjectList("ABS001.IB")).thenReturn(Collections.emptyList());
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
                 securityInfo, null, null, null, true))
                 .isInstanceOf(BizException.class)
                 .hasMessage("请选择权益人或自选权益人");
+    }
+
+    /** 非 ABS 未选择担保人时默认使用关联主体接口返回的首条。 */
+    @Test
+    public void nonAbsShouldDefaultToFirstRelatedSubjectWhenNoSelection() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        SecurityInfoBo securityInfo = new SecurityInfoBo();
+        securityInfo.setWindCode("BOND001.IB");
+        RelatedRatingSubjectDto firstSubject = new RelatedRatingSubjectDto();
+        firstSubject.setCompanyCode("C20001");
+        firstSubject.setCompanyName("接口首条主体");
+        when(mapper.queryRelatedRatingSubjectList("BOND001.IB"))
+                .thenReturn(Collections.singletonList(firstSubject));
+
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+                securityInfo, null, null, null, false);
+
+        assertThat(securityInfo.getGuarantorId()).isEqualTo("C20001");
+        assertThat(securityInfo.getGuarantor()).isEqualTo("接口首条主体");
     }
 
     /** 非担保债即使选择关系主体，矩阵仍只使用债务主体内评。 */
