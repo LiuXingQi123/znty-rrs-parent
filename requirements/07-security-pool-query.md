@@ -77,6 +77,10 @@ this.loadList();                  // 列表数据
 
 返回 `PageResult<SecurityPoolQueryDto>`（`{records, total, pageIndex, pageSize}`）。前端取 `data.records` 填表、`data.total` 填分页。
 
+### 3.1 导出当前查询结果
+
+点击页面“导出”按钮调用 `POST /api/v1/securityPoolQuery/exportSecurityPoolExcel`，请求参数与列表查询相同但不传分页参数；后端复用列表 SQL 全量查询全部命中记录并回填投资池全路径。Excel 基于 `src/main/resources/xlsx/security_pool_query_export_template.xlsx` 填充：第一行为楷体字段表头，第二行起为数据，字段顺序与页面展示一致（不含序号、收藏操作列），返回 `CommonFileDto`（Base64）由前端调用 `downloadBase64File` 下载。
+
 ---
 
 ## 4. 表格列定义与渲染
@@ -144,6 +148,7 @@ this.loadList();                  // 列表数据
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树（含全路径） |
 | `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, bondYesFlags, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo、证券特征等） | 证券池分页查询（仅 audit_status='20'；`category_type=bond`，含 crmw 跟债记录） |
+| `securityPoolQuery/exportSecurityPoolExcel` | 与分页查询相同，但不传 pageIndex/pageSize | `CommonFileDto`（Base64 `.xlsx`） | 按当前筛选条件导出全部命中记录，字段与页面表格一致 |
 | `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：债券大类，含 crmw） |
 | `securityPoolQuery/querySecurityStatusList` | `{}` | `List<String>` = `['active','matured']` | 证券状态下拉（前端未调用，硬编码） |
 | `securityPoolQuery/addSecurityToMyPool` | `{securityCode, securityType, market, userId}` | `MySecurityPoolBo` | 添加收藏（幂等） |

@@ -2,6 +2,7 @@ package com.znty.rrs.controller;
 
 import com.znty.rrs.common.ApiResponse;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.entity.commonfile.CommonFileDto;
 import com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryDto;
 import com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryReq;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
@@ -37,6 +38,12 @@ public class SecurityPoolQueryController {
     @PostMapping("/querySecurityPoolPage")
     public ApiResponse<PageResult<SecurityPoolQueryDto>> querySecurityPoolPage(@RequestBody SecurityPoolQueryReq req) {
         return ApiResponse.success(securityPoolQueryService.querySecurityPoolPage(req));
+    }
+
+    /** 按当前查询条件导出证券池列表。 */
+    @PostMapping("/exportSecurityPoolExcel")
+    public ApiResponse<CommonFileDto> exportSecurityPoolExcel(@RequestBody SecurityPoolQueryReq req) {
+        return ApiResponse.success(securityPoolQueryService.exportSecurityPoolExcel(req));
     }
 
     /**

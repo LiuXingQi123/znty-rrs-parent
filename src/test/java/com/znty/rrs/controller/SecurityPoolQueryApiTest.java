@@ -35,6 +35,7 @@ public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
                 "{\"poolIds\":[2,3],\"securityStatus\":\"active\",\"bondYesFlags\":[\"cj\",\"inright\"],\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityTypeList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityStatusList", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/exportSecurityPoolExcel", "{\"securityCode\":\"100001\"}");
     }
 
     /** 验证 shouldSupportMyPoolFavorites 测试场景。 */
