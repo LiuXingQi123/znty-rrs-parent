@@ -252,7 +252,7 @@ syncCompanyBondsOnDirect(companyLog):
 ### 6.2 流转条件（申请阶段）
 
 - 直通流程（无流程 或 `isDirectFlow`）→ `audit_status='20'`，直接写/删 `ip_pool_status` + `syncCompanyBondsOnDirect`。
-- 非直通流程 → `audit_status='00'`，`createInitialSteps` 创建 pending 步骤；若初始即到 end 则升级 `'20'` 并落地 + 同步债券。
+- 非直通流程 → `audit_status='00'`，`createInitialSteps` 创建 pending 步骤（展开处理人时排除本批次已出现的 `handler_id`，与 [04]/[05] 同构）；若初始即到 end 则升级 `'20'` 并落地 + 同步债券。
 
 后续审批推进见 [16-forbidden-pool-adjust-approve.md](16-forbidden-pool-adjust-approve.md)。
 

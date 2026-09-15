@@ -16,6 +16,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
+import com.znty.rrs.common.util.AdjustStepHandlerExcludeUtil;
 import com.znty.rrs.common.util.AdminUserIdUtil;
 
 import com.znty.rrs.exception.BizException;
@@ -680,6 +681,8 @@ public class ForbiddenPoolAdjustFlowService {
                     StepStatus.PENDING.getCode(), null, null, null, null, now);
             return;
         }
+        // 排除本批次已参与人员，保证同一人不能出现在多个环节
+        handlers = excludeParticipatedHandlers(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), handlers);
         for (HandlerTarget handler : handlers) {
             // 按处理人创建待处理步骤
             insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
@@ -890,6 +893,13 @@ public class ForbiddenPoolAdjustFlowService {
         NodeApprovalConfigBo config = snapshot.getApprovalConfigMap().get(node.getId());
         List<HandlerTarget> handlers = resolveApprovalHandlers(config, snapshot);
         int sortOrder = node.getSortOrder() != null ? node.getSortOrder() : 1;
+        if (!handlers.isEmpty()) {
+            // 自动节点同样排除已参与人；剔光后改为空处理人自动通过，不阻断流转
+            List<IpAdjustStepBo> existingSteps = forbiddenPoolAdjustMapper.queryAdjustStepByBatchList(
+                    currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo());
+            Set<String> participated = AdjustStepHandlerExcludeUtil.collectParticipatedHandlerIds(existingSteps);
+            handlers = AdjustStepHandlerExcludeUtil.excludeParticipated(handlers, participated, h -> h.handlerId);
+        }
         if (handlers.isEmpty()) {
             insertStepRecord(currentStep.getAdjustLogId(), currentStep.getAdjustBatchNo(), node, config, sortOrder,
                     StepStatus.AUTO_PROCESS.getCode(), null, null,
@@ -901,6 +911,22 @@ public class ForbiddenPoolAdjustFlowService {
                     StepStatus.AUTO_PROCESS.getCode(), handler.handlerId, handler.handlerName,
                     ProcessAction.AUTO_PROCESS.getCode(), "系统自动审批通过", now);
         }
+    }
+
+    /**
+     * 排除本批次已参与处理人；配置非空但剔光时抛业务异常。
+     */
+    private List<HandlerTarget> excludeParticipatedHandlers(Long adjustLogId, String adjustBatchNo,
+                                                            List<HandlerTarget> handlers) {
+        List<IpAdjustStepBo> existingSteps = forbiddenPoolAdjustMapper.queryAdjustStepByBatchList(
+                adjustLogId, adjustBatchNo);
+        Set<String> participated = AdjustStepHandlerExcludeUtil.collectParticipatedHandlerIds(existingSteps);
+        List<HandlerTarget> filtered = AdjustStepHandlerExcludeUtil.excludeParticipated(
+                handlers, participated, h -> h.handlerId);
+        if (filtered.isEmpty()) {
+            throw new BizException(AdjustStepHandlerExcludeUtil.NO_AVAILABLE_HANDLER_MSG);
+        }
+        return filtered;
     }
 
     /**

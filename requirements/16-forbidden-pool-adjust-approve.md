@@ -100,7 +100,7 @@
 
 **阶段 5：终止分支** `isTerminalByCurrentNode`：reject 且当前是修改/审批节点 → `createTerminalEndStep` 沿 reject 路径插 `auto_process` 直到 end，返回「审批流程已结束」。
 
-**阶段 6：推进下一可处理节点** `advanceToNextAvailableStep`：自动审批节点（label 含「自动审批/o32」）直插 `auto_process` 继续；approval 节点 `createPendingSteps` 创建 pending 返回；end 节点插 `auto_process`，`finished=true` → **`finishAdjustBatch(step)`**。
+**阶段 6：推进下一可处理节点** `advanceToNextAvailableStep`：自动审批节点（`approval_strategy=o32/auto`）经 `createAutoProcessSteps` 写 `auto_process`（排除本批次已参与人，剔光则空处理人）并继续；approval 节点 `createPendingSteps` 创建 pending 返回（展开处理人后排除本批次已出现的 `handler_id`；发起人/修改节点回退不排除；剔光抛「下一节点无可用审批人（已排除本流程已参与人员）」）；end 节点插 `auto_process`，`finished=true` → **`finishAdjustBatch(step)`**。
 
 ### 3.6 `finishAdjustBatch`（主体级特有：落地池状态 + 同步旗下债券 + 生成内部报告）
 

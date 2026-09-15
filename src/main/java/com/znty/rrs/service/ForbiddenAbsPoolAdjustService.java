@@ -25,6 +25,7 @@ import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.constants.CreditBondPoolCodes;
+import com.znty.rrs.common.util.AdjustStepHandlerExcludeUtil;
 import com.znty.rrs.common.util.CreditBondRemainTermUtil;
 import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 import com.znty.rrs.common.util.MarketCodeMatchUtil;
@@ -4151,13 +4152,31 @@ public class ForbiddenAbsPoolAdjustService {
             // 无配置处理人时仍创建一条空处理人的待处理记录
             insertStepRecord(adjustLogId, adjustBatchNo, node, config, sortOrder, StepStatus.PENDING.getCode(),
                              null, null, null, null, now);
-        } else {
-            for (HandlerTarget handler : handlers) {
-                // 插入单条步骤记录到 ip_adjust_step
-                insertStepRecord(adjustLogId, adjustBatchNo, node, config, sortOrder, StepStatus.PENDING.getCode(),
-                                 handler.handlerId, handler.handlerName, null, null, now);
-            }
+            return;
         }
+        // 排除本批次已参与人员，保证同一人不能出现在多个环节
+        handlers = excludeParticipatedHandlers(adjustLogId, adjustBatchNo, handlers);
+        for (HandlerTarget handler : handlers) {
+            // 插入单条步骤记录到 ip_adjust_step
+            insertStepRecord(adjustLogId, adjustBatchNo, node, config, sortOrder, StepStatus.PENDING.getCode(),
+                             handler.handlerId, handler.handlerName, null, null, now);
+        }
+    }
+
+    /**
+     * 排除本批次已参与处理人；配置非空但剔光时抛业务异常。
+     */
+    private List<HandlerTarget> excludeParticipatedHandlers(Long adjustLogId, String adjustBatchNo,
+                                                            List<HandlerTarget> handlers) {
+        List<IpAdjustStepBo> existingSteps = forbiddenAbsPoolAdjustMapper.queryAdjustStepByBatchList(
+                adjustLogId, adjustBatchNo);
+        Set<String> participated = AdjustStepHandlerExcludeUtil.collectParticipatedHandlerIds(existingSteps);
+        List<HandlerTarget> filtered = AdjustStepHandlerExcludeUtil.excludeParticipated(
+                handlers, participated, h -> h.handlerId);
+        if (filtered.isEmpty()) {
+            throw new BizException(AdjustStepHandlerExcludeUtil.NO_AVAILABLE_HANDLER_MSG);
+        }
+        return filtered;
     }
 
     /**

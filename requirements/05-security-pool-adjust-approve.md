@@ -287,9 +287,10 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
     - `end` 节点：插入 `auto_process` 步骤，`finished=true`。
     - 其他节点：插入 `auto_process` 步骤并继续。
 13. `createPendingSteps`：
-    - 修改语义节点或发起语义节点 → `createInitiatorPendingStep`：查同批次首条调库记录的 `adjusterId/adjusterName` 作为处理人。
-    - 其他审批节点 → `resolveApprovalHandlers` 展开角色/人员，按每个处理人插入一条 `pending` 步骤。
+    - 修改语义节点或发起语义节点 → `createInitiatorPendingStep`：查同批次首条调库记录的 `adjusterId/adjusterName` 作为处理人（**不排除**已参与人，须回到原发起人）。
+    - 其他审批节点 → `resolveApprovalHandlers` 展开角色/人员后，**排除本批次 `ip_adjust_step` 中已出现过的 `handler_id`**（含发起人 submit、前序 pending/approve/reject/skipped/auto_process），再按剩余处理人插入 `pending` 步骤；配置本非空但剔光时抛「下一节点无可用审批人（已排除本流程已参与人员）」。
     - 无处理人配置时插入一条 `handlerId=null` 的 pending 步骤。
+    - O32/系统自动节点的 `createAutoProcessSteps` 同样排除已参与人；剔光后改为写入一条 `handlerId=null` 的 `auto_process` 并继续流转。
 14. 若 `advanceResult.finished=true`，调 `finishAdjustBatch(step)` 落地同批次调库结果，返回 `auditStatus='20'`，message="审批已通过，调库结果已生效"。
 
 ### 3.3 最终通过时池状态落地

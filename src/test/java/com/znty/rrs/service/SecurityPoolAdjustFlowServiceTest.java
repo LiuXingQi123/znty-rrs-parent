@@ -3,12 +3,14 @@ package com.znty.rrs.service;
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
 
+import com.znty.rrs.common.util.AdjustStepHandlerExcludeUtil;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
+import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
@@ -24,9 +26,11 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -390,6 +394,41 @@ public class SecurityPoolAdjustFlowServiceTest {
         when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(Collections.emptyList());
     }
 
+    /** 模拟推进到下一审批节点所需的流程快照。 */
+    private void mockFlowAdvance(FlowMapper flowMapper, FlowNodeBo currentNode, FlowNodeBo nextNode,
+                                 FlowEdgeBo edge, NodeApprovalConfigBo nextConfig,
+                                 List<NodeApprovalHandlerBo> nextHandlers) {
+        FlowVersionBo version = new FlowVersionBo();
+        version.setId(1L);
+        when(flowMapper.queryFlowNodeById(currentNode.getId())).thenReturn(currentNode);
+        when(flowMapper.queryFlowVersionById(1L)).thenReturn(version);
+        when(flowMapper.queryFlowNodeListByVersionId(1L)).thenReturn(Arrays.asList(currentNode, nextNode));
+        when(flowMapper.queryFlowEdgeListByVersionId(1L)).thenReturn(Collections.singletonList(edge));
+        when(flowMapper.queryCondRuleListByVersionId(1L)).thenReturn(Collections.emptyList());
+        when(flowMapper.queryApprovalConfigListByVersionId(1L)).thenReturn(Collections.singletonList(nextConfig));
+        when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(nextHandlers);
+    }
+
+    /** 构建审批节点配置。 */
+    private NodeApprovalConfigBo buildApprovalConfig(Long id, Long nodeId, String strategy) {
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setId(id);
+        config.setNodeId(nodeId);
+        config.setApprovalStrategy(strategy);
+        return config;
+    }
+
+    /** 构建审批处理人配置（人员）。 */
+    private NodeApprovalHandlerBo buildApprovalHandler(Long id, Long approvalConfigId, Long handlerId, String handlerName) {
+        NodeApprovalHandlerBo handler = new NodeApprovalHandlerBo();
+        handler.setId(id);
+        handler.setApprovalConfigId(approvalConfigId);
+        handler.setHandlerType("user");
+        handler.setHandlerId(handlerId);
+        handler.setHandlerName(handlerName);
+        return handler;
+    }
+
     /** 构建调库日志测试数据。 */
     private IpAdjustLogBo buildLog(String auditStatus) {
         IpAdjustLogBo log = new IpAdjustLogBo();
@@ -409,6 +448,78 @@ public class SecurityPoolAdjustFlowServiceTest {
         IpAdjustLogBo log = buildLog(auditStatus, adjusterId);
         log.setId(id);
         return log;
+    }
+
+    /** 推进下一审批节点时排除本批次已参与处理人。 */
+    @Test
+    public void submitAdjustAuditShouldExcludeParticipatedHandlersWhenCreateNextPending() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustFlowService service = buildService(mapper, flowMapper);
+
+        IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
+        step.setApprovalStrategy("preempt");
+        step.setNodeLabel("部门负责人审核");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "3", "研究员2", "同意");
+        when(mapper.queryAdjustStepById(10L)).thenReturn(step);
+        when(mapper.editAdjustStepProcess(10L, "approve", "approve", "同意")).thenReturn(1);
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00", "2")));
+
+        FlowNodeBo currentNode = buildFlowNode(10103L, "n3", "approval", "部门负责人审核");
+        FlowNodeBo nextNode = buildFlowNode(10104L, "n4", "approval", "风控负责人审核");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "approve");
+        NodeApprovalConfigBo nextConfig = buildApprovalConfig(201L, 10104L, "preempt");
+        NodeApprovalHandlerBo participatedHandler = buildApprovalHandler(301L, 201L, 3L, "研究员2");
+        NodeApprovalHandlerBo availableHandler = buildApprovalHandler(302L, 201L, 4L, "研究员3");
+        mockFlowAdvance(flowMapper, currentNode, nextNode, edge, nextConfig,
+                Arrays.asList(participatedHandler, availableHandler));
+
+        IpAdjustStepBo submitStep = buildPendingStep(1L, "2", "研究员1");
+        submitStep.setStepStatus("submit");
+        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Arrays.asList(submitStep, step));
+
+        service.submitAdjustAudit(req);
+
+        ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
+        verify(mapper, times(1)).addAdjustStep(captor.capture());
+        assertThat(captor.getValue().getHandlerId()).isEqualTo("4");
+        assertThat(captor.getValue().getHandlerName()).isEqualTo("研究员3");
+        assertThat(captor.getValue().getStepStatus()).isEqualTo("pending");
+    }
+
+    /** 下一审批节点配置人全部已参与时抛业务异常且不落步骤。 */
+    @Test
+    public void submitAdjustAuditShouldRejectWhenNoAvailableHandlerAfterExclude() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustFlowService service = buildService(mapper, flowMapper);
+
+        IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
+        step.setApprovalStrategy("preempt");
+        step.setNodeLabel("部门负责人审核");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "3", "研究员2", "同意");
+        when(mapper.queryAdjustStepById(10L)).thenReturn(step);
+        when(mapper.editAdjustStepProcess(10L, "approve", "approve", "同意")).thenReturn(1);
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00", "2")));
+
+        FlowNodeBo currentNode = buildFlowNode(10103L, "n3", "approval", "部门负责人审核");
+        FlowNodeBo nextNode = buildFlowNode(10104L, "n4", "approval", "风控负责人审核");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "approve");
+        NodeApprovalConfigBo nextConfig = buildApprovalConfig(201L, 10104L, "preempt");
+        NodeApprovalHandlerBo onlyParticipated = buildApprovalHandler(301L, 201L, 3L, "研究员2");
+        mockFlowAdvance(flowMapper, currentNode, nextNode, edge, nextConfig,
+                Collections.singletonList(onlyParticipated));
+        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Collections.singletonList(step));
+
+        try {
+            service.submitAdjustAudit(req);
+        } catch (Exception e) {
+            assertThat(e).isInstanceOf(BizException.class);
+            assertThat(e.getMessage()).contains(AdjustStepHandlerExcludeUtil.NO_AVAILABLE_HANDLER_MSG);
+            verify(mapper, never()).addAdjustStep(any(IpAdjustStepBo.class));
+            return;
+        }
+        throw new AssertionError("下一节点无可用审批人时应抛出业务异常");
     }
 
     /** 评级联动改判：改判池在矩阵允许列表内时，应更新日志目标池并落地到改判池。 */

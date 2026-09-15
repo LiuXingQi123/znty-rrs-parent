@@ -80,7 +80,7 @@
 8. `createTerminalEndStep`：沿 reject 路径插入 auto_process 步骤直到 end。
 
 **阶段6 推进下一可处理节点**（`advanceToNextAvailableStep`）
-9. 自动审批节点→直接 auto_process 继续；approval 节点→`createPendingSteps` 创建 pending；end→auto_process + `finished=true`。
+9. 自动审批节点→`createAutoProcessSteps` 写 auto_process 继续（排除本批次已参与人，剔光则空处理人）；approval 节点→`createPendingSteps` 创建 pending（展开后排除本批次已出现的 `handler_id`；发起人/修改节点回退不排除；剔光抛「下一节点无可用审批人（已排除本流程已参与人员）」）；end→auto_process + `finished=true`。
 10. `finished=true` 时调 `finishAdjustBatch(step)`：
     - `editAdjustLogAuditStatus(..., '20')` 整批置审批通过。
     - 逐条：调入→`addPoolStatus`（写 `ip_pool_status_crmw`）；调出→`deletePoolStatusSoft`，按 CRMW 凭证代码、标的证券及目标池精确软删除，市场代码不参与业务键。
