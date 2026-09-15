@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
  * 存量证券批量调整业务服务。
  *
  * <p>校验/提交/直通复核与 {@link BatchSecurityPoolAdjustService} 同构，均委托
- * {@link SecurityPoolAdjustService}；本类仅保留产品库目标池、来源池白名单等存量差异。
+ * {@link SecurityPoolAdjustService}；本类仅保留产品库目标池、调入来源池白名单等存量差异。
  */
 @Service
 public class StockSecurityBatchAdjustService {
@@ -63,7 +63,7 @@ public class StockSecurityBatchAdjustService {
 
     /**
      * 来源池白名单 pool_code（有序，与前端下拉一致）。
-     * crmw_root 走 ip_pool_status_crmw，其余走 ip_pool_status。
+     * 所有来源池均走 ip_pool_status。
      * 目标池范围由 Mapper 限定 pool_code=bond_product_root 子树叶子。
      */
     private static final List<String> SOURCE_POOL_CODES = Collections.unmodifiableList(Arrays.asList(
@@ -73,9 +73,6 @@ public class StockSecurityBatchAdjustService {
             "credit_bond_level_3",
             "convertible_bond_core",
             "convertible_bond_focus"));
-
-    /** CRMW 来源池编码 */
-    private static final String SOURCE_POOL_CODE_CRMW = "crmw_root";
 
     /** 存量证券批量调整数据访问组件 */
     @Resource
@@ -143,13 +140,11 @@ public class StockSecurityBatchAdjustService {
     }
 
     /**
-     * 分页查询目标池批量调整候选证券（须选来源池 + 可选发行主体）。
+     * 分页查询目标池批量调整候选证券（调入须选来源池，调出不按来源池筛选）。
      */
     public PageResult<StockSecurityBatchCandidateDto> querySecurityPage(StockSecurityBatchAdjustReq req) {
-        // 校验候选证券查询参数（含来源池必选与白名单）
+        // 校验候选证券查询参数（调入校验来源池）
         validateSecurityPageReq(req);
-        // 拆分普通来源 / CRMW 来源供 Mapper 使用
-        prepareSourcePoolIds(req);
         // 校验目标投资池调整权限
         validatePoolPermission(req);
 
@@ -343,7 +338,7 @@ public class StockSecurityBatchAdjustService {
     }
 
     /**
-     * 校验候选证券查询参数（目标须为债券产品库叶子；来源池至少一个且在白名单）。
+     * 校验候选证券查询参数（目标须为债券产品库叶子；调入来源池至少一个且在白名单）。
      */
     private void validateSecurityPageReq(StockSecurityBatchAdjustReq req) {
         if (req.getPoolId() == null) {
@@ -353,6 +348,9 @@ public class StockSecurityBatchAdjustService {
         validateAdjustDirection(req.getDirection());
         if (stockSecurityBatchAdjustMapper.queryEnabledLeafPoolCount(req.getPoolId()) == 0) {
             throw new BizException("目标投资池不存在、未启用，或不在债券产品库范围内");
+        }
+        if (!"in".equals(req.getDirection())) {
+            return;
         }
         if (req.getSourcePoolIds() == null || req.getSourcePoolIds().isEmpty()) {
             throw new BizException("请至少选择一个来源池");
@@ -364,30 +362,6 @@ public class StockSecurityBatchAdjustService {
             if (sourcePoolId == null || !allowedIds.contains(sourcePoolId)) {
                 throw new BizException("来源池不在允许范围内");
             }
-        }
-    }
-
-    /**
-     * 将来源池拆成普通池 / CRMW 池 ID，写入 Req 供 Mapper 动态 SQL 使用。
-     */
-    private void prepareSourcePoolIds(StockSecurityBatchAdjustReq req) {
-        Map<String, InvestmentPoolBo> byCode = resolveSourcePoolMap();
-        Long crmwPoolId = byCode.get(SOURCE_POOL_CODE_CRMW) == null
-                ? null : byCode.get(SOURCE_POOL_CODE_CRMW).getId();
-        List<Long> normalIds = new ArrayList<>();
-        List<Long> crmwIds = new ArrayList<>();
-        for (Long sourcePoolId : req.getSourcePoolIds()) {
-            if (crmwPoolId != null && crmwPoolId.equals(sourcePoolId)) {
-                crmwIds.add(sourcePoolId);
-            } else {
-                normalIds.add(sourcePoolId);
-            }
-        }
-        req.setNormalSourcePoolIds(normalIds.isEmpty() ? null : normalIds);
-        req.setCrmwSourcePoolIds(crmwIds.isEmpty() ? null : crmwIds);
-        if ((req.getNormalSourcePoolIds() == null || req.getNormalSourcePoolIds().isEmpty())
-                && (req.getCrmwSourcePoolIds() == null || req.getCrmwSourcePoolIds().isEmpty())) {
-            throw new BizException("请至少选择一个来源池");
         }
     }
 

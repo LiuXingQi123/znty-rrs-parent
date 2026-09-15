@@ -30,7 +30,7 @@
 | 24 | 临时代码管理 | `temp_security_code.html` | [24-temp-security-code.md](24-temp-security-code.md) | — |
 | 25 | 投资池开放日维护 | `pool_open_day.html` | [25-pool-open-day.md](25-pool-open-day.md) | `PoolOpenDayApiTest` |
 | 26 | 禁投池调整 · ABS债申请（债级 调入/调出） | `forbidden_pool_adjust.html`（Tab「ABS债」） | [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md) | `ForbiddenAbsPoolAdjustApiTest` |
-| 27 | 存量证券批量调整（产品库 + 来源池） | `stock_security_batch_adjust.html` | [27-stock-security-batch-adjust.md](27-stock-security-batch-adjust.md) | `StockSecurityBatchAdjustServiceTest` |
+| 27 | 存量证券批量调整（产品库 + 调入来源池） | `stock_security_batch_adjust.html` | [27-stock-security-batch-adjust.md](27-stock-security-batch-adjust.md) | `StockSecurityBatchAdjustServiceTest` |
 | 28 | 证券池 Excel 导入 | `security_pool_excel_import.html` | [28-security-pool-excel-import.md](28-security-pool-excel-import.md) | `SecurityPoolExcelImportServiceTest` / `CommonFileControllerTest` |
 | 29 | 定时任务管理（可视化启停/cron/执行） | `scheduled_task.html` | [29-scheduled-task.md](29-scheduled-task.md) | `ScheduledTaskServiceTest` / `AutoAdjustServiceTest` / `CrmwExpiredAutoOutServiceTest` / `CompanyOuterRatingNotAaMinusAutoOutServiceTest` / `CompanyOuterRatingAaMinusAutoInServiceTest` / `CompanySamePoolBondAutoInServiceTest` / `CompanyNewBondAutoInServiceTest` / `CompanyNotInPoolBondAutoOutServiceTest`（`GradeRuleAlertService` / `WindCodeSyncService` 暂无独立测试） |
 | 30 | 恒生格式手动导出 | `hs_pool_manual_export.html` | [30-hs-pool-manual-export.md](30-hs-pool-manual-export.md) | `HsPoolManualExportServiceTest` |
@@ -43,7 +43,7 @@
 
 - **单笔调入/调出申请**：[04](04-security-pool-adjust.md) — 检索证券 → 选目标池 → `checkAdjust` 校验 → `addAdjustLog` 提交（含直通流程即时入池）。
 - **批量调入/调出申请**：[12](12-batch-security-pool-adjust.md) — 选目标池 → 批量勾选证券 → 编排层逐券 `checkAdjust` / 分组 `submitAdjustLog`（不注入 batch 流程；整批防重复与直通复核），共用批次号、附件、事务。
-- **存量证券批量调整**：[27](27-stock-security-batch-adjust.md) — 目标限债券产品库（`bond_product_root` 子树）→ 必选来源池（CRMW/信用债一~三级/转债核心·重点）→ 可选发行主体 → 校验/提交与证券池批量同构，委托 `SecurityPoolAdjustService`（不注入 batch 专用流程）。
+- **存量证券批量调整**：[27](27-stock-security-batch-adjust.md) — 目标限债券产品库（`bond_product_root` 子树）→ 调入必选来源池、调出不限制来源池 → 可选发行主体 → 校验/提交与证券池批量同构，委托 `SecurityPoolAdjustService`（不注入 batch 专用流程）。
 - **证券池 Excel 导入**：[28](28-security-pool-excel-import.md) — 下载模板 → 上传写 `sys_imp_tmp`/`sys_imp_tmp_detl` → 页面预览 → 校验 → 提交（`adjust_type=Excel导入`）；公共模板下载 `/api/v1/commonFile/downloadTemplate`。
 - **审核/审批流转**：[05](05-security-pool-adjust-approve.md) — `submitAdjustAudit` 推进节点（抢占/会签/发起人），最终通过才落地 `ip_pool_status`。
 - **查询入口**：[07](07-security-pool-query.md) 证券池当前状态查询、[10](10-adjust-history.md) 调库历史追溯、[06](06-my-matters.md) 我的待办/已办 + 分级规则提醒（第三页签，独立 `gradeRuleAlert` 接口）。

@@ -53,15 +53,4 @@ public class StockSecurityBatchAdjustReq extends PageRequest {
     /** 发行主体（模糊匹配 issuer / issuer_code） */
     private String issuer;
 
-    /**
-     * 普通来源池 ID（Service 拆分后供 Mapper 使用，非前端入参）。
-     * 读 ip_pool_status。
-     */
-    private List<Long> normalSourcePoolIds;
-
-    /**
-     * CRMW 来源池 ID（Service 拆分后供 Mapper 使用，非前端入参）。
-     * 读 ip_pool_status_crmw。
-     */
-    private List<Long> crmwSourcePoolIds;
 }
