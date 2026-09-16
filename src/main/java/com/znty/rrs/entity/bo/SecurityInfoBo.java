@@ -125,6 +125,8 @@ public class SecurityInfoBo {
     private BigDecimal dateCallExists;
     /** 剩余期限-最新（天），对应 rrs_securityinfo.date_exists */
     private BigDecimal dateExists;
+    /** 证券期限（展示串，如：3年6天），对应 rrs_securityinfo.date_exists_str */
+    private String dateExistsStr;
     /** 含权债剩余期限-最新（年） */
     private BigDecimal dateInrightExists;
     /** 证券评级 */

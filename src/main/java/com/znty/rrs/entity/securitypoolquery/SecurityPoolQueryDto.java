@@ -50,8 +50,10 @@ public class SecurityPoolQueryDto {
     private String carryDate;
     /** 到期日 */
     private String maturityDate;
-    /** 剩余期限（天），对应 rrs_securityinfo.date_exists；列表前端 ÷365 展示为年 */
+    /** 剩余期限（天），对应 rrs_securityinfo.date_exists；业务校验仍用天数 */
     private BigDecimal dateExists;
+    /** 证券期限（展示串），对应 rrs_securityinfo.date_exists_str */
+    private String dateExistsStr;
     /** 是否 ABS：1=是 / 0=否 */
     private Integer absFlag;
     /** 是否担保：1=是 / 0=否 */

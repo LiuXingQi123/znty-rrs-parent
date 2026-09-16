@@ -24,6 +24,7 @@
                ,bi.carry_date
                ,bi.maturity_date
                ,bi.date_exists
+               ,bi.date_exists_str
                ,bi.abs_flag
                ,bi.guarant_flag
                ,bi.yx_flag

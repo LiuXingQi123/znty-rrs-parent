@@ -949,6 +949,7 @@
            ,date_call_exists
            ,inner_guarantor_rating
            ,date_exists
+           ,date_exists_str
            ,fund_use
            ,prompt_reason
            ,analysis
@@ -1014,6 +1015,7 @@
            ,#{dateCallExists}
            ,#{innerGuarantorRating}
            ,#{dateExists}
+           ,#{dateExistsStr}
            ,#{fundUse}
            ,#{promptReason}
            ,#{analysis}
@@ -1077,6 +1079,7 @@
                ,snap.date_call_exists
                ,snap.inner_guarantor_rating
                ,snap.date_exists
+               ,snap.date_exists_str
                ,snap.fund_use
                ,snap.prompt_reason
                ,snap.analysis
@@ -1134,6 +1137,7 @@
                ,snap.date_call_exists
                ,snap.inner_guarantor_rating
                ,snap.date_exists
+               ,snap.date_exists_str
                ,snap.fund_use
                ,snap.prompt_reason
                ,snap.analysis

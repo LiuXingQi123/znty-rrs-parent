@@ -102,7 +102,7 @@ this.loadList();                  // 列表数据
 | 发行日期 | `issueDate` | 居中 |
 | 起息日 | `carryDate` | 居中 |
 | 到期日 | `maturityDate` | 居中 |
-| 剩余期限(年) | `dateExists` | 库字段 `date_exists`（**天**）；前端 `formatRemainTermYears` ÷365 展示四位小数；空则空 |
+| 证券期限 | `dateExistsStr` | 库字段 `date_exists_str`（展示串）；列表只读展示，空则空。原 `dateExists`/`date_exists`（天）仍保留供业务校验，列表不再展示 |
 | 是否ABS/担保/永续/次级/私募/含权 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
 | 证券状态 | `securityStatus` | `active`→绿色「存续」；`matured`→琥珀「到期」；其他空 |
 | 退市日期 | `delistDate` | 居中 |

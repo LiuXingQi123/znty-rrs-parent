@@ -78,6 +78,8 @@ public class AdjustSecuritySnapshotBo {
     private String innerGuarantorRating;
     /** 剩余期限-最新（天） */
     private BigDecimal dateExists;
+    /** 证券期限（展示串，如：3年6天） */
+    private String dateExistsStr;
     /** 资金募集用途 */
     private String fundUse;
     /** 观察事项 */

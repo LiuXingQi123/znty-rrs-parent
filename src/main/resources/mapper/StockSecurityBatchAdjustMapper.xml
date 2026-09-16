@@ -112,6 +112,7 @@
                ,si.inner_issuer_rating
                ,si.maturity_date
                ,si.date_exists
+               ,si.date_exists_str
                ,si.guarantor
                ,si.guarantor_id
         FROM rrs_securityinfo si
