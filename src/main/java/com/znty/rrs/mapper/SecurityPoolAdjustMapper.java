@@ -7,6 +7,7 @@ import com.znty.rrs.entity.bo.SysAttachmentBo;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
+import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -40,6 +41,17 @@ public interface SecurityPoolAdjustMapper {
 
     /** 根据证券代码查询证券详情 */
     SecurityInfoDetailDto querySecurityDetail(@Param("securityCode") String securityCode);
+
+    /** 查询证券发行主体最近三个有数据年份各自最新的财务指标 */
+    List<IssuerFinancialDto> queryIssuerFinancialList(@Param("securityCode") String securityCode);
+
+    /** 查询证券发行主体指定报告日期的财务指标 */
+    IssuerFinancialDto queryIssuerFinancialByReportDate(@Param("securityCode") String securityCode,
+                                                        @Param("reportDate") Long reportDate);
+
+    /** 新增或更新证券发行主体指定报告日期的财务指标 */
+    int saveIssuerFinancial(@Param("securityCode") String securityCode,
+                            @Param("financial") IssuerFinancialDto financial);
 
     /** 根据证券代码查询证券基础信息实体 */
     SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);

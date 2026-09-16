@@ -67,6 +67,7 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.securitypooladjust.IpAdjustStepDto;
+import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.securitypooladjust.LastCreditReportDto;
@@ -233,6 +234,35 @@ public class SecurityPoolAdjustService {
         // 回填证券品种大类（dict_security_type.category_type），供前端按类型差异化展示（如基金评分输入）
         dto.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(dto.getSecurityType()));
         return dto;
+    }
+
+    /**
+     * 查询发行主体最近三个有数据年份各自最新的财务指标
+     *
+     * @param req 需携带证券代码
+     * @return 最近三个有数据年份的财务指标，按报告日期升序
+     */
+    public List<IssuerFinancialDto> queryIssuerFinancialList(SecurityPoolAdjustReq req) {
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+            throw new BizException("证券代码不能为空");
+        }
+        return securityPoolAdjustMapper.queryIssuerFinancialList(req.getSecurityCode());
+    }
+
+    /**
+     * 查询发行主体指定报告日期的财务指标
+     *
+     * @param req 需携带证券代码和报告日期
+     * @return 对应报告期财务指标，不存在时返回空
+     */
+    public IssuerFinancialDto queryIssuerFinancialByReportDate(SecurityPoolAdjustReq req) {
+        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+            throw new BizException("证券代码不能为空");
+        }
+        // 校验报告日期格式及允许的报告期
+        validateFinancialReportDate(req.getReportDate());
+        return securityPoolAdjustMapper.queryIssuerFinancialByReportDate(
+                req.getSecurityCode(), req.getReportDate());
     }
 
     /**
@@ -839,12 +869,41 @@ public class SecurityPoolAdjustService {
         // ══ 第五阶段：后续处理（按 log 写证券信息快照，不改主档） ══
         postSubmitProcess(req, shared, allIds);
 
+        // 新增或更新本次编辑的发行主体财务报告
+        saveIssuerFinancial(req);
+
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
         dto.setSecurityCode(req.getSecurityCode());
         dto.setSubmitCount(allIds.size());
         dto.setLogIds(allIds);
         return dto;
+    }
+
+    /** 新增或更新本次调库提交编辑的发行主体财务报告。 */
+    private void saveIssuerFinancial(SecurityPoolAdjustSubmitReq req) {
+        IssuerFinancialDto financial = req.getIssuerFinancial();
+        if (financial == null) {
+            return;
+        }
+        // 校验报告日期格式及允许的报告期
+        validateFinancialReportDate(financial.getReportDate());
+        securityPoolAdjustMapper.saveIssuerFinancial(req.getSecurityCode(), financial);
+    }
+
+    /** 校验财务报告日期为 yyyyMMdd 且属于四个标准报告期。 */
+    private void validateFinancialReportDate(Long reportDate) {
+        if (reportDate == null) {
+            throw new BizException("财务报告日期不能为空");
+        }
+        String value = String.valueOf(reportDate);
+        if (value.length() != 8) {
+            throw new BizException("财务报告日期格式不正确");
+        }
+        String suffix = value.substring(4);
+        if (!Arrays.asList("0331", "0630", "0930", "1231").contains(suffix)) {
+            throw new BizException("财务报告日期仅支持一季报、半年报、三季报或年报");
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

@@ -14,6 +14,7 @@ import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.IpAdjustStepDto;
+import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolStatusDto;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
@@ -73,6 +74,19 @@ public class SecurityPoolAdjustController {
     @PostMapping("/querySecurityDetail")
     public ApiResponse<SecurityInfoDetailDto> querySecurityDetail(@RequestBody SecurityPoolAdjustReq req) {
         return ApiResponse.success(securityPoolAdjustService.querySecurityDetail(req));
+    }
+
+    /** 查询发行主体最近三个有数据年份各自最新的财务指标 */
+    @PostMapping("/queryIssuerFinancialList")
+    public ApiResponse<List<IssuerFinancialDto>> queryIssuerFinancialList(@RequestBody SecurityPoolAdjustReq req) {
+        return ApiResponse.success(securityPoolAdjustService.queryIssuerFinancialList(req));
+    }
+
+    /** 查询发行主体指定报告日期的财务指标 */
+    @PostMapping("/queryIssuerFinancialByReportDate")
+    public ApiResponse<IssuerFinancialDto> queryIssuerFinancialByReportDate(
+            @RequestBody SecurityPoolAdjustReq req) {
+        return ApiResponse.success(securityPoolAdjustService.queryIssuerFinancialByReportDate(req));
     }
 
     /**

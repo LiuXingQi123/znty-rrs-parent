@@ -45,6 +45,9 @@ public class SecurityPoolAdjustSubmitReq {
     /** 证券基础信息 */
     private SecurityInfoBo securityInfo;
 
+    /** 本次提交编辑的发行主体财务数据 */
+    private IssuerFinancialDto issuerFinancial;
+
     /** 当前选择的担保人主体代码 */
     private String guarantorCode;
 

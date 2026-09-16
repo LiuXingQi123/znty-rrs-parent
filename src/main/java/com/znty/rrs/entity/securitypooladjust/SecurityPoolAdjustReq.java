@@ -33,6 +33,8 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private Long targetPoolId;
     /** 调库记录 ID（查询流程步骤时使用） */
     private Long adjustLogId;
+    /** 财务报告日期（yyyyMMdd，按指定报告期查询时使用） */
+    private Long reportDate;
     /** 调库批次号（查询同批次共用流程步骤时使用） */
     private String adjustBatchNo;
     /** 是否放开规则（false=信用债大库池需满足主体债入库矩阵才显示可调；true=不卡矩阵） */

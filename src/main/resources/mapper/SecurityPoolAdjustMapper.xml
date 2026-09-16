@@ -157,6 +157,127 @@
         WHERE si.wind_code = #{securityCode}
     </select>
 
+    <!-- 按主体与年份分组，查询最近三个有数据年份各自报告日期最大的一条财务指标 -->
+    <select id="queryIssuerFinancialList"
+            resultType="com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto">
+        <!-- 同一有数据年份只保留报告日期最大的一条。 -->
+        WITH yearly_latest AS (
+            SELECT f.*
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY FLOOR(f.REPORTDATE / 10000)
+                       ORDER BY f.REPORTDATE DESC
+                   ) AS year_row_no
+            FROM ais_inv_ods.wind_companyfinancial f
+            INNER JOIN rrs_securityinfo si ON si.issuer_code = f.COMPANYCODE
+            WHERE si.wind_code = #{securityCode}
+        ),
+        <!-- 从有数据年份中倒序截取最近三个年份。 -->
+        recent_three AS (
+            SELECT *
+            FROM yearly_latest
+            WHERE year_row_no = 1
+            ORDER BY REPORTDATE DESC
+            LIMIT 3
+        )
+        <!-- 页面按年份从早到晚展示三个只读列。 -->
+        SELECT REPORTDATE AS report_date
+               ,TOT_ASSETS
+               ,SHAREHOLDER_EQUITY
+               ,DEBT_ASSETS_RATIO
+               ,TOT_REV
+               ,NET_PROFIT
+               ,NET_CASH_OPER
+               ,NET_CASH_INV
+               ,GRP
+               ,GENERAL_BUDGET_REV
+               ,GENERAL_BUDGET_EXP
+               ,ROE
+               ,EBIT_INT_COV
+               ,EBITDA
+               ,EBITDA_TO_DEBT
+        FROM recent_three
+        ORDER BY REPORTDATE ASC
+    </select>
+
+    <!-- 查询证券发行主体指定报告日期的财务指标 -->
+    <select id="queryIssuerFinancialByReportDate"
+            resultType="com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto">
+        SELECT f.REPORTDATE AS report_date
+               ,f.TOT_ASSETS
+               ,f.SHAREHOLDER_EQUITY
+               ,f.DEBT_ASSETS_RATIO
+               ,f.TOT_REV
+               ,f.NET_PROFIT
+               ,f.NET_CASH_OPER
+               ,f.NET_CASH_INV
+               ,f.GRP
+               ,f.GENERAL_BUDGET_REV
+               ,f.GENERAL_BUDGET_EXP
+               ,f.ROE
+               ,f.EBIT_INT_COV
+               ,f.EBITDA
+               ,f.EBITDA_TO_DEBT
+        FROM ais_inv_ods.wind_companyfinancial f
+        INNER JOIN rrs_securityinfo si ON si.issuer_code = f.COMPANYCODE
+        WHERE si.wind_code = #{securityCode}
+          AND f.REPORTDATE = #{reportDate}
+    </select>
+
+    <!-- 新增或更新证券发行主体指定报告日期的财务指标，金额字段直接按亿元保存 -->
+    <insert id="saveIssuerFinancial">
+        INSERT INTO ais_inv_ods.wind_companyfinancial (
+            COMPANYCODE
+           ,REPORTDATE
+           ,TOT_ASSETS
+           ,SHAREHOLDER_EQUITY
+           ,DEBT_ASSETS_RATIO
+           ,TOT_REV
+           ,NET_PROFIT
+           ,NET_CASH_OPER
+           ,NET_CASH_INV
+           ,GRP
+           ,GENERAL_BUDGET_REV
+           ,GENERAL_BUDGET_EXP
+           ,ROE
+           ,EBIT_INT_COV
+           ,EBITDA
+           ,EBITDA_TO_DEBT
+        )
+        SELECT issuer_code
+               ,#{financial.reportDate}
+               ,#{financial.totAssets}
+               ,#{financial.shareholderEquity}
+               ,#{financial.debtAssetsRatio}
+               ,#{financial.totRev}
+               ,#{financial.netProfit}
+               ,#{financial.netCashOper}
+               ,#{financial.netCashInv}
+               ,#{financial.grp}
+               ,#{financial.generalBudgetRev}
+               ,#{financial.generalBudgetExp}
+               ,#{financial.roe}
+               ,#{financial.ebitIntCov}
+               ,#{financial.ebitda}
+               ,#{financial.ebitdaToDebt}
+        FROM rrs_securityinfo
+        WHERE wind_code = #{securityCode}
+        ON DUPLICATE KEY UPDATE
+            TOT_ASSETS = VALUES(TOT_ASSETS)
+           ,SHAREHOLDER_EQUITY = VALUES(SHAREHOLDER_EQUITY)
+           ,DEBT_ASSETS_RATIO = VALUES(DEBT_ASSETS_RATIO)
+           ,TOT_REV = VALUES(TOT_REV)
+           ,NET_PROFIT = VALUES(NET_PROFIT)
+           ,NET_CASH_OPER = VALUES(NET_CASH_OPER)
+           ,NET_CASH_INV = VALUES(NET_CASH_INV)
+           ,GRP = VALUES(GRP)
+           ,GENERAL_BUDGET_REV = VALUES(GENERAL_BUDGET_REV)
+           ,GENERAL_BUDGET_EXP = VALUES(GENERAL_BUDGET_EXP)
+           ,ROE = VALUES(ROE)
+           ,EBIT_INT_COV = VALUES(EBIT_INT_COV)
+           ,EBITDA = VALUES(EBITDA)
+           ,EBITDA_TO_DEBT = VALUES(EBITDA_TO_DEBT)
+    </insert>
+
     <!-- 根据证券代码查询证券基础信息实体 -->
     <select id="querySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT *

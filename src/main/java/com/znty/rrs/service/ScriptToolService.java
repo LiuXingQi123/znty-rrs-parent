@@ -2421,7 +2421,8 @@ public class ScriptToolService {
         )));
         groups.add(buildTableGroup("ais-ods", "AIS 投资 ODS 库", "ais_inv_ods", Arrays.asList(
                 buildTable("ais_inv_ods", "wind_cbondissuer", "Wind 中国债券发行主体信息表"),
-                buildTable("ais_inv_ods", "wind_cbondissuerrating", "Wind 中国债券发行主体信用评级表")
+                buildTable("ais_inv_ods", "wind_cbondissuerrating", "Wind 中国债券发行主体信用评级表"),
+                buildTable("ais_inv_ods", "wind_companyfinancial", "Wind 公司财务指标表")
         )));
         return groups;
     }
