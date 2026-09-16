@@ -62,7 +62,7 @@
 ### 2.1 view 只读模式
 
 - `isViewMode=true`、`isSecurityInfoReadonly=true`（所有证券字段 `el-input :disabled`）。
-- 展示：证券基本信息（`el-descriptions` 3 列；赎回/含权债剩余期限 **年**，剩余期限 **天**，旁同步展示年）、当前所在池、调库记录表、当前流程状态表。
+- 展示：证券基本信息（`el-descriptions` 3 列；赎回/含权债剩余期限 **年**，剩余期限 **天**，旁同步展示年）、发行主体最近三年及一期财务数据（只读）、当前所在池、调库记录表、当前流程状态表。
 - 按钮：仅顶部「返回」。`backToList()` 先 `RrsWorkbench.closeActiveTab()`（工作台动态页签关闭后回到来源页）；未关页签则回本页列表或跳 `security_pool_adjust.html`。禁止 `history.back()`（iframe 共用历史会回到错误页）。调库记录/流程区内**无**操作按钮（`showLogUploadActions=false`，信评报告/其他材料的「选择报告」「上传附件」按钮均隐藏）。
 - 已结束记录（`audit_status` ∈ `20/21/99/-1`）同样以 view 模式只读展示，无任何提交入口。
 
@@ -91,6 +91,8 @@
 ### 3.1 证券基本信息（section-bond-info）
 
 `el-descriptions :column="3" border`，字段及顺序与调库页一致：证券全称/简称/代码、发行人、银行间/沪/深/北交所代码、发行总额、当期利率、含权期限说明、起息/到期日、质押比率、评级机构/证券评级/主体评级/展望评级；非 ABS 展示担保人，ABS 展示权益人和自选权益人；随后展示主承销商、主体内评分档、证券类型、赎回行权剩余期限(年)、担保人主体内评分、含权债剩余期限(年)、**剩余期限(天)**（`dateExists`，与库 `date_exists` 一致；输入框旁用 `formatRemainTermYears` ÷365 同步展示「x.xxxx年」四位小数；列表表格同样 ÷365 展示为年、四位小数）、募集资金用途/观察事项/证券分析（3 个 textarea，span=3，证券分析最大输入长度为 5000 字）。详情页和审核页均只读展示当笔提交快照：非 ABS 的担保人取 `guarantor`；ABS 的普通权益人取 `absOriginatorName`、自选权益人取 `companySelector`；“担保人主体内评分”统一取 `innerGuarantorRating`，即提交时最终生效评级主体的内评。
+
+证券基本信息下方调用 `queryIssuerFinancialList` 只读展示发行主体财务数据。城投债和产业债仅切换指标口径；前三列取最近三个有数据年份各自最新报告，第四列展示数据库当前最新一期，所有值按数据库原值显示。
 
 ### 3.2 当前所在池（section-current-pools）
 

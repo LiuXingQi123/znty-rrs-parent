@@ -29,7 +29,7 @@
 ### 3.1 view 只读模式（默认）
 
 - `isViewMode=true`、`isSecurityInfoReadonly=true`（所有证券字段 `el-input :disabled`）。
-- 展示：证券基本信息（`el-descriptions` 3 列，字段及顺序同 [11]；非 ABS 展示担保人，ABS 展示权益人、自选权益人和担保人主体内评分；赎回/含权债剩余期限为**年**，剩余期限为**天**且旁同步展示年）、CRMW 基本信息（只读）、当前所在池、调库记录表（`showAdjustLogSection=true`）、当前流程状态表（`showFlowStatusSection=true`）。
+- 展示：证券基本信息（`el-descriptions` 3 列，字段及顺序同 [11]；非 ABS 展示担保人，ABS 展示权益人、自选权益人和担保人主体内评分；赎回/含权债剩余期限为**年**，剩余期限为**天**且旁同步展示年）、发行主体最近三年及一期财务数据（只读，可切换城投债/产业债指标口径）、CRMW 基本信息（只读）、当前所在池、调库记录表（`showAdjustLogSection=true`）、当前流程状态表（`showFlowStatusSection=true`）。
 - `showLogUploadActions=false`（信评报告/其他材料的「选择报告」「上传附件」按钮均隐藏）。
 - 终态记录（`20/21/99/-1`）同样只读展示。
 

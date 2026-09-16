@@ -10,6 +10,8 @@
 
 单 Vue 实例（`el: '#crmw_pool_adjust_approve'`），`currentPage='detail'`（默认直接进详情页）。证券基本信息字段与调库页保持一致：非 ABS 展示担保人，ABS 展示普通权益人、自选权益人及实际生效主体的内评分；重新校验时按快照中 `companySelector` 是否有值将 `guarantorId` 作为普通或自选权益人代码传递。
 
+证券基本信息下方独立查询并只读展示发行主体最近三年及一期财务数据，字段顺序、四列规则及城投债/产业债切换样式与证券池调库页一致，不参与审批修改与提交。
+
 **入口模式 `entryMode`**：`process`（我的事宜处理，默认）/ `next`（下一步校验确认）。
 
 **初始化**（`created`）：`this.initStandaloneReviewPage()`。从 URL 取 `securityCode`/`windCode`、`crmwScode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`（`'next'` 或默认 `'process'`）；`adjustStep=2`；`loadDetailData(securityCode)` + `restoreStandaloneAdjustDraft`（从 sessionStorage 恢复草稿）。默认登录用户取 `RrsAuth`。顶部「返回」先 `closeActiveTab()`，失败再回页内列表；禁止 `history.back()`。

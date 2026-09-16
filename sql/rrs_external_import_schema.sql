@@ -93,6 +93,7 @@ CREATE TABLE `rrs_securityinfo`
     `yx_flag`                    int             DEFAULT NULL COMMENT '是否永续',
     `dy_flag`                    int             DEFAULT NULL COMMENT '是否递延',
     `date_exists`                decimal(10, 4)  DEFAULT NULL COMMENT '剩余期限-最新（天）',
+    `date_exists_str`            varchar(20)     DEFAULT NULL COMMENT '证券期限（如：3年6天、3年6个月3天、6个月3天、6天）',
 
     -- ==========================================
     -- 评级相关字段
