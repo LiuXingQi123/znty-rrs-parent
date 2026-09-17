@@ -31,8 +31,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
@@ -133,6 +135,28 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(log.getSecurityShortName()).isEqualTo("测试债券");
         assertThat(log.getSecurityType()).isEqualTo("company_bond");
         assertThat(log.getAdjustType()).isEqualTo("互斥调整");
+    }
+
+    /** 验证提交复核不会把旗下不同债券的调出池误算到主体。 */
+    @Test
+    public void validateRequiredMutexOutboundShouldSeparateDifferentSecurities() throws Exception {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        SecurityPoolAdjustSubmitReq req = buildCompanyMutexSubmitReq("B002");
+        Object shared = buildSubmitSharedData();
+        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
+
+        ReflectionTestUtils.invokeMethod(service, "validateRequiredMutexOutboundOnSubmit", req, shared);
+    }
+
+    /** 验证同一主体同时调出互斥池时仍会被提交复核拦截。 */
+    @Test(expected = BizException.class)
+    public void validateRequiredMutexOutboundShouldRejectSameSecurityConflict() throws Exception {
+        ForbiddenPoolAdjustService service = buildService(mock(ForbiddenPoolAdjustMapper.class));
+        SecurityPoolAdjustSubmitReq req = buildCompanyMutexSubmitReq("C10001");
+        Object shared = buildSubmitSharedData();
+
+        ReflectionTestUtils.invokeMethod(service, "validateRequiredMutexOutboundOnSubmit", req, shared);
     }
 
     /** 验证最终审批复核按债券代码校验互斥调出，不再误用主体代码。 */
@@ -548,6 +572,60 @@ public class ForbiddenPoolAdjustServiceTest {
         ctor.setAccessible(true);
         return ctor.newInstance(null, null, nodeMap, edges, configMap,
                 Collections.<Long, List<NodeApprovalHandlerBo>>emptyMap());
+    }
+
+    /** 构造主体调入及主体、旗下债券互斥调出请求。 */
+    private SecurityPoolAdjustSubmitReq buildCompanyMutexSubmitReq(String thirdLevelSecurityCode) {
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("C10001");
+        req.setSecurityType("company");
+        SecurityPoolAdjustSubmitReq.AdjustItem inbound = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        inbound.setSecurityCode("C10001");
+        inbound.setTargetPoolId(15L);
+        inbound.setAdjustMode("调入");
+        inbound.setItemTag("manual");
+        SecurityPoolAdjustSubmitReq.AdjustItem companyOutbound = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        companyOutbound.setSecurityCode("C10001");
+        companyOutbound.setTargetPoolId(2L);
+        companyOutbound.setAdjustMode("调出");
+        companyOutbound.setItemTag("mutex");
+        SecurityPoolAdjustSubmitReq.AdjustItem bondOutbound = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        bondOutbound.setSecurityCode(thirdLevelSecurityCode);
+        bondOutbound.setTargetPoolId(4L);
+        bondOutbound.setAdjustMode("调出");
+        bondOutbound.setItemTag("mutex");
+        req.setItems(Arrays.asList(inbound, companyOutbound, bondOutbound));
+        return req;
+    }
+
+    /** 构造提交阶段共享数据：禁投池调入要求主体从一级库调出，一级库与三级库互斥。 */
+    private Object buildSubmitSharedData() throws Exception {
+        SecurityInfoBo company = new SecurityInfoBo();
+        company.setWindCode("C10001");
+        company.setSecurityType("company");
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(15L, buildPool(15L, "债券禁止库", "forbidden"));
+        poolMap.put(1L, buildPool(1L, "信用债大库", "credit_bond"));
+        poolMap.put(2L, buildChildPool(2L, 1L, "一级库", "credit_bond"));
+        poolMap.put(4L, buildChildPool(4L, 1L, "三级库", "credit_bond"));
+        Map<Long, Map<String, List<Long>>> relationMap = new HashMap<>();
+        Map<String, List<Long>> forbiddenRelations = new HashMap<>();
+        forbiddenRelations.put("in_mutex", Collections.singletonList(2L));
+        relationMap.put(15L, forbiddenRelations);
+        Map<String, List<Long>> firstLevelRelations = new HashMap<>();
+        firstLevelRelations.put("in_mutex", Collections.singletonList(4L));
+        relationMap.put(2L, firstLevelRelations);
+        Set<Long> currentPoolIds = new HashSet<>(Collections.singletonList(2L));
+        Class<?> sharedClass = Class.forName(
+                "com.znty.rrs.service.ForbiddenPoolAdjustService$SubmitSharedData");
+        Constructor<?> ctor = sharedClass.getDeclaredConstructor(
+                SecurityInfoBo.class, Map.class, Set.class, Map.class,
+                boolean.class, boolean.class, boolean.class, Map.class,
+                ForbiddenPoolAdjustService.BatchNoContext.class);
+        ctor.setAccessible(true);
+        return ctor.newInstance(company, poolMap, currentPoolIds, relationMap,
+                false, false, false, Collections.emptyMap(),
+                new ForbiddenPoolAdjustService.BatchNoContext());
     }
 
     private FlowNodeBo buildFlowNode(Long id, String nodeType) {

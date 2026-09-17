@@ -892,11 +892,15 @@ public class ForbiddenPoolAdjustService {
      * 提交时校验：调入目标池若要求配套互斥调出，请求中必须包含对应调出项且调出校验通过。
      */
     private void validateRequiredMutexOutboundOnSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
-        Set<Long> requestOutPoolIds = new HashSet<>();
+        Map<String, Set<Long>> requestOutPoolIdsBySecurityCode = new HashMap<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             if (item != null && AdjustMode.OUT.getCode().equals(item.getAdjustMode())
                     && item.getTargetPoolId() != null) {
-                requestOutPoolIds.add(item.getTargetPoolId());
+                // 按调库项解析实际调整对象，避免主体与旗下不同债券的调出池互相干扰
+                String itemSecurityCode = resolveItemSecurityCode(req, item);
+                requestOutPoolIdsBySecurityCode
+                        .computeIfAbsent(itemSecurityCode, key -> new HashSet<>())
+                        .add(item.getTargetPoolId());
             }
         }
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
@@ -912,6 +916,10 @@ public class ForbiddenPoolAdjustService {
             if (inMutex == null || inMutex.isEmpty()) {
                 continue;
             }
+            // 仅使用当前调入对象自己的调出池复核互斥关系
+            String itemSecurityCode = resolveItemSecurityCode(req, item);
+            Set<Long> requestOutPoolIds = requestOutPoolIdsBySecurityCode.getOrDefault(
+                    itemSecurityCode, Collections.emptySet());
             for (Long mutexId : inMutex) {
                 if (mutexId == null || !shared.currentPoolIds.contains(mutexId)) {
                     continue;

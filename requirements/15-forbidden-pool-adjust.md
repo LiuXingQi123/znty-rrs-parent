@@ -139,6 +139,7 @@
 
    - **① 前置校验** `validateSubmitReq`：`securityCode`/`items`/每项 `adjustMode`/`targetPoolId` 非空。
    - **② 参数初始化** `loadSubmitSharedData`：取证券、全量池 Map、`currentPoolIds`、`poolRelationMap`、证券级标志；为每个唯一 flowId `buildFlowSnapshot`；`BatchNoContext`（时间片 `yyyyMMddHHmmss` + 调入/调出/无流程三个序号）。
+   - **互斥调出提交复核** `validateRequiredMutexOutboundOnSubmit`：调出池按调库项实际 `securityCode` 分组；主体手工调入只检查同一主体的配套调出，不把旗下其他债券的调出池合并参与互斥冲突判断。不同调整对象可分别调出互斥池，同一调整对象同时调出互斥池仍拒绝。
    - **批次号规则** `buildAdjustBatchNo`：无流程 `COMP+batchTimeText+(3000+seq)`；调入 `+(1000+seq)`；调出 `+(2000+seq)`；同 `adjustGroupKey` 复用。
    - **直通判断** `isDirectFlow`：start 出边全部直达 end，或经发起人自动提交节点后到 end。
    - **③ 调入处理** `executeInboundSubmit`：
