@@ -67,6 +67,8 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     + "处理规则：满足下列任一且尚未在目标池则自动入池：（一）当前在公司信用债禁止库 15；（二）近一年认可外评孰低为 AA-及以下；（三）当前在重点观察名单 23\n"
                     + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低，一年以前忽略；近一年无认可外评不因（二）入库\n"
                     + "限制规则：主体已在目标池配置的调入限制池时，跳过该条记录\n"
+                    + "联动处理：主体成功入池后，本任务内自写逻辑同批调入该主体旗下未到期债券（不复用人工 syncCompanyBonds）；"
+                    + "债命中调入限制池则跳过该债；入池后按互斥/反向限制从债当前所在池自动调出\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
@@ -84,9 +86,6 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     /** 扫描池并集（参数 ∪ 关系配置） */
     @Resource
     private AutoAdjustPoolScopeHelper poolScopeHelper;
-    /** 主体入池后的旗下债券统一同步能力 */
-    @Resource
-    private ForbiddenPoolAdjustService forbiddenPoolAdjustService;
     /** 黑名单质押库三条件统一判定服务 */
     @Resource
     private PledgeBlacklistRuleService pledgeBlacklistRuleService;
@@ -236,9 +235,8 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     throw new BizException("主体[" + company.getSecurityCode()
                             + "]写入池状态失败（可能并发已入池）");
                 }
-                // 主体进入 17 后，同批同步全部符合范围的旗下债券
-                // 同步旗下符合条件的未到期债券，并纳入本轮结果统计
-                poolBondCount += forbiddenPoolAdjustService.syncCompanyBondsForAutomaticAdjustment(company);
+                // 主体入池成功后，本任务内自写逻辑同批调入旗下未到期债（不复用人工 syncCompanyBonds）
+                poolBondCount += inSamePoolBonds(company, pool, allRelations, poolMap, detail);
                 poolCount++;
             }
             summary.addPool(poolId, pool.getPoolName(), poolCount, poolBondCount);
@@ -418,6 +416,111 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         }
         builder.append('）');
         return builder.toString();
+    }
+
+    /**
+     * 将主体旗下尚未在同一目标池的未到期债券一并调入，并处理互斥/反向限制出池。
+     *
+     * <p>批次号、提交时间、调整原因、目标池 ID 均从已落库的主体日志读取，避免参数过多。
+     *
+     * @param companyLog   已生效的主体入池日志
+     * @param pool         目标池
+     * @param allRelations 全量池关系（解析调入限制与互斥出池）
+     * @param poolMap      全量池映射（互斥调出取池名）
+     * @param detail       过程日志
+     * @return 实际入池债券条数
+     */
+    private int inSamePoolBonds(IpAdjustLogBo companyLog, InvestmentPoolBo pool,
+                                List<PoolRelationBo> allRelations, Map<Long, InvestmentPoolBo> poolMap,
+                                TaskDetailLog detail) {
+        if (companyLog == null || pool == null || companyLog.getTargetPoolId() == null
+                || !StringUtils.hasText(companyLog.getSecurityCode())) {
+            return 0;
+        }
+        Long poolId = companyLog.getTargetPoolId();
+        String companyCode = companyLog.getSecurityCode();
+        // 历史口径（对齐人工 syncCompanyBonds）：仅债券禁止库(15)、黑名单质押库(17)同步旗下债；
+        // 观察池(16)/重点观察名单(23)只落主体。当前外评自动入池任务要求目标池均可跟债，故先注释；
+        // 若后续需恢复限制，取消下方注释即可。
+        // if (!Long.valueOf(AutoAdjustRestrictHelper.COMPANY_FORBIDDEN_POOL_ID).equals(poolId)
+        //         && !PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId)) {
+        //     return 0;
+        // }
+        // CRMW 组合池不能写普通池状态，跳过跟债
+        if (CompanyBondSyncPolicy.isCrmwCombinationPool(pool)) {
+            warnDetail(detail, "池[" + pool.getPoolName() + "](" + poolId
+                    + ")为 CRMW 组合池，主体旗下证券不能通过普通池状态写入，跳过跟债");
+            return 0;
+        }
+        List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryCompanyBondNotInSamePoolForAutoIn(
+                companyCode, poolId, CompanyBondSyncPolicy.currentTypeScope());
+        if (bonds == null || bonds.isEmpty()) {
+            return 0;
+        }
+        // 解析目标池调入限制池，债命中则跳过
+        List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
+                poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
+        int bondCount = 0;
+        String bondReason = (companyLog.getAdjustReason() == null ? REASON : companyLog.getAdjustReason())
+                + "（同池旗下债）";
+        for (ScheduledAdjustCandidateDto bond : bonds) {
+            if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+                continue;
+            }
+            List<Long> currentPoolIds = securityPoolAdjustMapper
+                    .querySecurityCurrentPoolIdList(bond.getSecurityCode());
+            // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
+            if (AutoAdjustRestrictHelper.isInAnyPool(currentPoolIds, inRestrictPoolIds)) {
+                warnDetail(detail, "债券[" + bond.getSecurityCode() + "]当前在调入限制池中，跳过");
+                continue;
+            }
+            // 回填自动入池日志公共字段（与主体同批次）
+            fillAutoInBondLog(bond, companyLog, pool, bondReason);
+            if (securityPoolAdjustMapper.addAdjustLog(bond) != 1) {
+                throw new BizException("债券[" + bond.getSecurityCode() + "]自动调入日志写入失败");
+            }
+            bond.setAdjustLogId(bond.getId());
+            int inserted = securityPoolAdjustMapper.addPoolStatus(bond);
+            if (inserted != 1) {
+                throw new BizException("债券[" + bond.getSecurityCode()
+                        + "]写入池状态失败（可能并发已入池）");
+            }
+            bondCount++;
+            // 入目标池后，从债当前所在的互斥/反向限制池自动调出
+            int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
+                    bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
+            if (autoOutCount > 0) {
+                infoDetail(detail, "债券[" + bond.getSecurityCode() + "]自动调出关系池 "
+                        + autoOutCount + " 个");
+            }
+        }
+        if (bondCount > 0) {
+            infoDetail(detail, "主体[" + companyCode + "]同池旗下债调入 " + bondCount + " 条");
+        }
+        return bondCount;
+    }
+
+    /**
+     * 按主体入池日志回填旗下债自动入池公共字段。
+     *
+     * @param bond       旗下债日志
+     * @param companyLog 主体入池日志
+     * @param pool       目标池
+     * @param reason     调整原因
+     */
+    private void fillAutoInBondLog(IpAdjustLogBo bond, IpAdjustLogBo companyLog,
+                                   InvestmentPoolBo pool, String reason) {
+        bond.setAdjustType("自动调整");
+        bond.setAdjustMode(AdjustMode.IN.getCode());
+        bond.setTargetPoolId(companyLog.getTargetPoolId());
+        bond.setTargetPoolName(pool.getPoolName());
+        bond.setPoolType(pool.getPoolType());
+        bond.setAuditStatus(AuditStatus.APPROVED.getCode());
+        bond.setAdjusterId(AUTO_ADJUSTER_ID);
+        bond.setAdjusterName(AUTO_ADJUSTER_NAME);
+        bond.setAdjustReason(reason);
+        bond.setAdjustBatchNo(companyLog.getAdjustBatchNo());
+        bond.setSubmitTime(companyLog.getSubmitTime());
     }
 
     /**

@@ -461,6 +461,40 @@
           AND ips.is_deleted = 0
     </select>
 
+    <!-- 外评入池后同批跟进：主体旗下尚未在同一目标池的未到期债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
+    <select id="queryCompanyBondNotInSamePoolForAutoIn"
+            resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
+        SELECT bond.wind_code AS security_code
+               ,bond.short_name AS security_short_name
+               ,bond.security_type
+               ,bond.issuer_code
+               ,bond.issuer AS issuer_name
+        FROM rrs_securityinfo bond
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        WHERE bond.issuer_code = #{companyCode}
+          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
+        <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
+          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+        </if>
+        <if test="bondTypeScope != null and bondTypeScope.excludedSecurityTypes != null and bondTypeScope.excludedSecurityTypes.size() > 0">
+          AND bond.security_type NOT IN
+          <foreach collection="bondTypeScope.excludedSecurityTypes" item="securityType" open="(" separator="," close=")">
+              #{securityType}
+          </foreach>
+        </if>
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status ips
+              WHERE ips.security_code = bond.wind_code
+                AND ips.target_pool_id = #{poolId}
+                AND ips.audit_status = '20'
+                AND ips.is_deleted = 0
+          )
+        ORDER BY bond.wind_code ASC
+    </select>
+
     <!-- 外评出池后顺带调出：主体旗下已在同一目标池的债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyBondInSamePoolForAutoOut"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">

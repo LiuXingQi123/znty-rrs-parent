@@ -138,6 +138,21 @@ public interface AutoAdjustMapper {
     List<String> queryCompanyCodeListInPool(@Param("poolId") Long poolId);
 
     /**
+     * 查询主体旗下尚未在指定池的债券（bond 大类），供外评入池后同批跟进同池债。
+     *
+     * <p>未到期含当天；当前类型范围包含 ABS / CRMW。
+     *
+     * @param companyCode   主体代码
+     * @param poolId        与主体相同的目标池
+     * @param bondTypeScope 主体旗下债券类型范围
+     * @return 待入池债券（securityCode/securityShortName/securityType）
+     */
+    List<ScheduledAdjustCandidateDto> queryCompanyBondNotInSamePoolForAutoIn(
+            @Param("companyCode") String companyCode,
+            @Param("poolId") Long poolId,
+            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
+
+    /**
      * 查询主体旗下当前已在指定池的债券（bond 大类），供外评出池时顺带出同池债。
      *
      * <p>对应老系统 {@code findSecurityByCompanyCode(..., 4000)} 后再按在池过滤；
