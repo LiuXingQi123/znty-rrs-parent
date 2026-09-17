@@ -53,6 +53,10 @@ public interface SecurityPoolAdjustMapper {
     int saveIssuerFinancial(@Param("securityCode") String securityCode,
                             @Param("financial") IssuerFinancialDto financial);
 
+    /** 仅更新已存在的证券发行主体指定报告日期财务指标 */
+    int updateExistingIssuerFinancial(@Param("issuerCode") String issuerCode,
+                                      @Param("financial") IssuerFinancialDto financial);
+
     /** 根据证券代码查询证券基础信息实体 */
     SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
 

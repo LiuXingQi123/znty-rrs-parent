@@ -26,16 +26,24 @@ public class SecurityPoolAdjustFinancialMapperSqlTest {
                 .doesNotContain("- 3");
     }
 
-    /** 第四列切换应精确查询报告日期，提交应按主体和报告日期新增或更新。 */
+    /** 第四列切换应精确查询报告日期，提交仅更新已有主体报告；旧新增逻辑须保留。 */
     @Test
-    public void editableFinancialReportShouldSupportExactQueryAndUpsert() throws Exception {
+    public void editableFinancialReportShouldSupportExactQueryAndUpdateExistingOnly() throws Exception {
         String select = mapperBlock("select", "queryIssuerFinancialByReportDate");
-        String insert = mapperBlock("insert", "saveIssuerFinancial");
+        String update = mapperBlock("update", "updateExistingIssuerFinancial");
+        String legacyUpsert = mapperBlock("insert", "saveIssuerFinancial");
 
         assertThat(select)
                 .contains("f.REPORTDATE = #{reportDate}")
                 .contains("si.issuer_code = f.COMPANYCODE");
-        assertThat(insert)
+        assertThat(update)
+                .contains("UPDATE ais_inv_ods.wind_companyfinancial f")
+                .contains("f.COMPANYCODE = #{issuerCode}")
+                .contains("f.REPORTDATE = #{financial.reportDate}")
+                .contains("f.TOT_ASSETS = #{financial.totAssets}")
+                .doesNotContain("INSERT INTO")
+                .doesNotContain("rrs_securityinfo");
+        assertThat(legacyUpsert)
                 .contains("INSERT INTO ais_inv_ods.wind_companyfinancial")
                 .contains("SELECT issuer_code")
                 .contains("#{financial.reportDate}")

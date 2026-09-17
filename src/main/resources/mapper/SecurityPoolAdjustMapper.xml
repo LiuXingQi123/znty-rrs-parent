@@ -278,6 +278,27 @@
            ,EBITDA_TO_DEBT = VALUES(EBITDA_TO_DEBT)
     </insert>
 
+    <!-- 仅按主体代码和报告日期更新已存在的财务指标，暂不补充新记录 -->
+    <update id="updateExistingIssuerFinancial">
+        UPDATE ais_inv_ods.wind_companyfinancial f
+        SET f.TOT_ASSETS = #{financial.totAssets}
+           ,f.SHAREHOLDER_EQUITY = #{financial.shareholderEquity}
+           ,f.DEBT_ASSETS_RATIO = #{financial.debtAssetsRatio}
+           ,f.TOT_REV = #{financial.totRev}
+           ,f.NET_PROFIT = #{financial.netProfit}
+           ,f.NET_CASH_OPER = #{financial.netCashOper}
+           ,f.NET_CASH_INV = #{financial.netCashInv}
+           ,f.GRP = #{financial.grp}
+           ,f.GENERAL_BUDGET_REV = #{financial.generalBudgetRev}
+           ,f.GENERAL_BUDGET_EXP = #{financial.generalBudgetExp}
+           ,f.ROE = #{financial.roe}
+           ,f.EBIT_INT_COV = #{financial.ebitIntCov}
+           ,f.EBITDA = #{financial.ebitda}
+           ,f.EBITDA_TO_DEBT = #{financial.ebitdaToDebt}
+        WHERE f.COMPANYCODE = #{issuerCode}
+          AND f.REPORTDATE = #{financial.reportDate}
+    </update>
+
     <!-- 根据证券代码查询证券基础信息实体 -->
     <select id="querySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT *

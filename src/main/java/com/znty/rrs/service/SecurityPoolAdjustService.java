@@ -869,8 +869,8 @@ public class SecurityPoolAdjustService {
         // ══ 第五阶段：后续处理（按 log 写证券信息快照，不改主档） ══
         postSubmitProcess(req, shared, allIds);
 
-        // 新增或更新本次编辑的发行主体财务报告
-        saveIssuerFinancial(req);
+        // 仅更新本次编辑且已存在的发行主体财务报告
+        updateExistingIssuerFinancial(req);
 
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
@@ -880,15 +880,17 @@ public class SecurityPoolAdjustService {
         return dto;
     }
 
-    /** 新增或更新本次调库提交编辑的发行主体财务报告。 */
-    private void saveIssuerFinancial(SecurityPoolAdjustSubmitReq req) {
+    /** 仅更新本次调库提交编辑且已存在的发行主体财务报告。 */
+    private void updateExistingIssuerFinancial(SecurityPoolAdjustSubmitReq req) {
         IssuerFinancialDto financial = req.getIssuerFinancial();
-        if (financial == null) {
+        SecurityInfoBo securityInfo = req.getSecurityInfo();
+        if (financial == null || securityInfo == null || securityInfo.getIssuerCode() == null
+                || securityInfo.getIssuerCode().trim().isEmpty()) {
             return;
         }
         // 校验报告日期格式及允许的报告期
         validateFinancialReportDate(financial.getReportDate());
-        securityPoolAdjustMapper.saveIssuerFinancial(req.getSecurityCode(), financial);
+        securityPoolAdjustMapper.updateExistingIssuerFinancial(securityInfo.getIssuerCode(), financial);
     }
 
     /** 校验财务报告日期为 yyyyMMdd 且属于四个标准报告期。 */
