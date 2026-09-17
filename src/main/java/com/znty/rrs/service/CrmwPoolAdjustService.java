@@ -25,6 +25,7 @@ import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.util.AdjustStepHandlerExcludeUtil;
+import com.znty.rrs.common.util.CreditBondRemainTermUtil;
 import com.znty.rrs.common.util.MarketCodeMatchUtil;
 
 import com.github.pagehelper.PageHelper;
@@ -2150,7 +2151,7 @@ public class CrmwPoolAdjustService {
      * 白名单流程命中判断入口。
      *
      * <p>伪代码口径：
-     * 1. 剩余期限 <= 3 年；
+     * 1. 证券期限 <= 3 年（解析 date_exists_str）；
      * 2. 排除永续债、私募债、ABS 债；
      * 3. 债券类型属于债券类；
      * 4. 债券主体在白名单配置池中；
@@ -2162,16 +2163,14 @@ public class CrmwPoolAdjustService {
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
         SecurityInfoBo sec = shared.getSecurityInfo();
 
-        // 条件1：剩余期限 ≤ 3 年（date_exists 天）
-        BigDecimal remainDays = sec.getDateExists();
-        if (remainDays == null) {
-            unmatchReasons.add("剩余期限无法解析，date_exists 为空");
-        } else if (remainDays.compareTo(BigDecimal.ZERO) < 0) {
-            unmatchReasons.add("剩余期限已小于 0 天");
-        } else if (remainDays.compareTo(new BigDecimal("1095")) <= 0) {
-            matchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，未超过 3 年");
+        // 条件1：从 date_exists_str 解析证券期限并判断是否不超过 3 年
+        BigDecimal remainYears = CreditBondRemainTermUtil.parseRemainTermYears(sec.getDateExistsStr());
+        if (remainYears == null) {
+            unmatchReasons.add("证券期限无法解析，date_exists_str 为空或格式不正确");
+        } else if (remainYears.compareTo(new BigDecimal("3")) <= 0) {
+            matchReasons.add("证券期限为 " + sec.getDateExistsStr() + "，未超过 3 年");
         } else {
-            unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，超过 3 年");
+            unmatchReasons.add("证券期限为 " + sec.getDateExistsStr() + "，超过 3 年");
         }
 
         // 条件2：排除永续债、私募债、ABS 债
@@ -2340,14 +2339,13 @@ public class CrmwPoolAdjustService {
     }
 
     /**
-     * 格式化剩余期限展示文本（date_exists 天数）。
+     * 格式化剩余期限展示文本（date_exists 原始天数，不换算成年）。
      */
     private String formatRemainDays(BigDecimal remainDays) {
         if (remainDays == null) {
             return "";
         }
-        return remainDays.stripTrailingZeros().toPlainString()
-                + " 天（约 " + String.format("%.2f", remainDays.doubleValue() / 365.0D) + " 年）";
+        return remainDays.stripTrailingZeros().toPlainString() + " 天";
     }
 
     /**

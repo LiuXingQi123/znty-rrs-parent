@@ -152,18 +152,18 @@ public class RuleDemoScriptTest {
                         "matrixBestLevel", 1L, "targetPoolLevel", 2L, "targetPoolName", "二级库"));
     }
 
-    /** 当前白名单池未配置时固定不命中，对齐 isWhitelistFlowMatched */
+    /** 白名单期限使用 date_exists_str 解析后的年数，且当前白名单池未配置时固定不命中 */
     @Test
-    public void whitelistUnconfiguredNeverMatches() throws Exception {
+    public void whitelistUsesDateExistsStrYearsAndUnconfiguredNeverMatches() throws Exception {
         String script = ENTRY
                 + "unmatch = \"\";\n"
-                + "if (remainDays == null || remainDays == \"\") {\n"
-                + "    unmatch = unmatch + \"剩余期限无法解析，date_exists 为空;\";\n"
+                + "if (dateExistsStrYears == null || dateExistsStrYears == \"\") {\n"
+                + "    unmatch = unmatch + \"剩余期限无法解析，date_exists_str 为空或格式不正确;\";\n"
                 + "} else {\n"
-                + "    if (remainDays < 0) {\n"
-                + "        unmatch = unmatch + \"剩余期限已小于 0 天;\";\n"
+                + "    if (dateExistsStrYears < 0) {\n"
+                + "        unmatch = unmatch + \"剩余期限已小于 0 年;\";\n"
                 + "    } else {\n"
-                + "        if (remainDays > 1095) {\n"
+                + "        if (dateExistsStrYears > 3) {\n"
                 + "            unmatch = unmatch + \"剩余期限超过 3 年;\";\n"
                 + "        }\n"
                 + "    }\n"
@@ -187,12 +187,22 @@ public class RuleDemoScriptTest {
         assertEquals("未命中:白名单池未配置，主体在白名单池条件不成立;", run(script,
                 "securityCode", "138026.SH", "targetPoolId", "1",
                 "securityExists", "是", "poolExists", "是",
-                "remainDays", 800L, "isAbs", "否", "isBond", "是",
+                "dateExistsStrYears", 2.5D, "isAbs", "否", "isBond", "是",
                 "whitelistPoolConfigured", "否", "isGuaranteed", "否"));
         assertEquals("未命中:债券为 ABS 债，不符合白名单条件;", run(script,
                 "securityCode", "138026.SH", "targetPoolId", "1",
                 "securityExists", "是", "poolExists", "是",
-                "remainDays", 800L, "isAbs", "是", "isBond", "是",
+                "dateExistsStrYears", 2.5D, "isAbs", "是", "isBond", "是",
+                "whitelistPoolConfigured", "是", "isGuaranteed", "否"));
+        assertEquals("命中白名单", run(script,
+                "securityCode", "138026.SH", "targetPoolId", "1",
+                "securityExists", "是", "poolExists", "是",
+                "dateExistsStrYears", 3L, "isAbs", "否", "isBond", "是",
+                "whitelistPoolConfigured", "是", "isGuaranteed", "否"));
+        assertEquals("未命中:剩余期限超过 3 年;", run(script,
+                "securityCode", "138026.SH", "targetPoolId", "1",
+                "securityExists", "是", "poolExists", "是",
+                "dateExistsStrYears", 3.01D, "isAbs", "否", "isBond", "是",
                 "whitelistPoolConfigured", "是", "isGuaranteed", "否"));
     }
 

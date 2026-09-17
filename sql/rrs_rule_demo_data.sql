@@ -1084,7 +1084,7 @@ if ((isAbs == "是" || isAbs == "1" || isAbs == 1)) {
 }
 return result;
 ','active',0,NOW(),NOW()),
-(39,'流程-白名单命中','[resolveAdjustFlowOptions] isWhitelistFlowMatched。当前 WHITELIST_POOL_IDS 空集，运行时固定不命中。','flow_match','if (securityCode == null || securityCode == "") {
+(39,'流程-白名单命中','[resolveAdjustFlowOptions] isWhitelistFlowMatched。期限年数由 date_exists_str 解析；当前 WHITELIST_POOL_IDS 空集，运行时固定不命中。','flow_match','if (securityCode == null || securityCode == "") {
     return "证券代码不能为空";
 }
 if (targetPoolId == null || targetPoolId == "") {
@@ -1097,13 +1097,13 @@ if (poolExists == "否") {
     return "目标投资池不存在";
 }
 unmatch = "";
-if (remainDays == null || remainDays == "") {
-    unmatch = unmatch + "剩余期限无法解析，date_exists 为空;";
+if (dateExistsStrYears == null || dateExistsStrYears == "") {
+    unmatch = unmatch + "剩余期限无法解析，date_exists_str 为空或格式不正确;";
 } else {
-    if (remainDays < 0) {
-        unmatch = unmatch + "剩余期限已小于 0 天;";
+    if (dateExistsStrYears < 0) {
+        unmatch = unmatch + "剩余期限已小于 0 年;";
     } else {
-        if (remainDays > 1095) {
+        if (dateExistsStrYears > 3) {
             unmatch = unmatch + "剩余期限超过 3 年;";
         }
     }
@@ -1514,7 +1514,7 @@ INSERT INTO `rule_param` (id, rule_id, param_name, param_label, param_type, requ
 (268,39,'targetPoolId','目标投资池ID','string',1,2,NOW(),NOW()),
 (269,39,'securityExists','证券是否存在','select',1,3,NOW(),NOW()),
 (270,39,'poolExists','目标池是否存在','select',1,4,NOW(),NOW()),
-(271,39,'remainDays','剩余期限天','number',1,5,NOW(),NOW()),
+(271,39,'dateExistsStrYears','证券期限年数（由date_exists_str解析）','number',1,5,NOW(),NOW()),
 (272,39,'isPerpetual','是否永续','select',1,6,NOW(),NOW()),
 (273,39,'isAbs','是否ABS','select',1,7,NOW(),NOW()),
 (274,39,'isPrivate','是否私募','select',1,8,NOW(),NOW()),
@@ -2710,7 +2710,7 @@ INSERT INTO `rule_test_case_param` (id, case_id, param_name, param_label_snapsho
 (647,82,'targetPoolId','目标投资池ID','string','1',NOW(),NOW()),
 (648,82,'securityExists','证券是否存在','select','是',NOW(),NOW()),
 (649,82,'poolExists','目标池是否存在','select','是',NOW(),NOW()),
-(650,82,'remainDays','剩余期限天','number','800',NOW(),NOW()),
+(650,82,'dateExistsStrYears','证券期限年数（由date_exists_str解析）','number','2.5',NOW(),NOW()),
 (651,82,'isPerpetual','是否永续','select','否',NOW(),NOW()),
 (652,82,'isAbs','是否ABS','select','否',NOW(),NOW()),
 (653,82,'isPrivate','是否私募','select','否',NOW(),NOW()),
@@ -2722,7 +2722,7 @@ INSERT INTO `rule_test_case_param` (id, case_id, param_name, param_label_snapsho
 (659,83,'targetPoolId','目标投资池ID','string','1',NOW(),NOW()),
 (660,83,'securityExists','证券是否存在','select','是',NOW(),NOW()),
 (661,83,'poolExists','目标池是否存在','select','是',NOW(),NOW()),
-(662,83,'remainDays','剩余期限天','number','800',NOW(),NOW()),
+(662,83,'dateExistsStrYears','证券期限年数（由date_exists_str解析）','number','2.5',NOW(),NOW()),
 (663,83,'isPerpetual','是否永续','select','否',NOW(),NOW()),
 (664,83,'isAbs','是否ABS','select','否',NOW(),NOW()),
 (665,83,'isPrivate','是否私募','select','否',NOW(),NOW()),
@@ -2734,7 +2734,7 @@ INSERT INTO `rule_test_case_param` (id, case_id, param_name, param_label_snapsho
 (671,84,'targetPoolId','目标投资池ID','string','1',NOW(),NOW()),
 (672,84,'securityExists','证券是否存在','select','是',NOW(),NOW()),
 (673,84,'poolExists','目标池是否存在','select','是',NOW(),NOW()),
-(674,84,'remainDays','剩余期限天','number','800',NOW(),NOW()),
+(674,84,'dateExistsStrYears','证券期限年数（由date_exists_str解析）','number','2.5',NOW(),NOW()),
 (675,84,'isPerpetual','是否永续','select','否',NOW(),NOW()),
 (676,84,'isAbs','是否ABS','select','是',NOW(),NOW()),
 (677,84,'isPrivate','是否私募','select','否',NOW(),NOW()),
@@ -2813,4 +2813,3 @@ INSERT INTO `rule_test_case_param` (id, case_id, param_name, param_label_snapsho
 (750,97,'issuerCode','主体代码','string','C1000001',NOW(),NOW()),
 (751,97,'issuerRating','主体外评','select','AAA',NOW(),NOW()),
 (752,97,'alreadyInTargetPool','是否已在目标池','select','否',NOW(),NOW());
-

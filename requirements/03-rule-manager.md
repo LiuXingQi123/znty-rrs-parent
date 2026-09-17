@@ -283,7 +283,7 @@ rule_preset_option_set 1──N rule_preset_option_item（独立，仅作选项�
 - 调库类规则脚本开头对齐 `validateCheckAdjustReq` / `loadSharedData`：证券代码空 → `证券代码不能为空`；调库项/目标池 ID 空 → `调库项不能为空`；`securityExists=否` → `证券不存在`；`poolExists=否` → `目标投资池不存在`。未填任何参数不得返回「通过」。
 - 布尔条件同时认 `是` / `1` / 数值 1，对齐 Java `lock_flag==1` 等整型字段，便于后续 `executeRule` 传入上下文。
 - 主体债入库失败文案对齐 `CreditBondSpecialInboundRule.describeRange`（如 `目标池「二级库」不在特殊债调整后的允许范围内（仅 1 级）`）。
-- 白名单规则按当前 `WHITELIST_POOL_IDS` 空集：未配置时固定不命中。
+- 白名单规则期限参数使用 `dateExistsStrYears`（由 `date_exists_str` 解析为年，兼容“月/个月”“天/日”），按 `≤3` 年判断，不再使用剩余天数阈值；当前 `WHITELIST_POOL_IDS` 空集，未配置时固定不命中。
 - 自动入池按 `CompanyOuterRatingAaMinusAutoInService`：外评 AA- 及以下（含 A+）才入，AAA/AA/AA+ 不入。
 - 规则脚本保存后可立即执行，并可查看完整执行日志。
 - number 参数按 BigDecimal 精确解析，含小数点→Double，否则→Long。

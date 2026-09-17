@@ -36,7 +36,8 @@ public class SecurityPoolQueryServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
         SecurityPoolQueryDto row = new SecurityPoolQueryDto();
         row.setSecurityShortName("测试债券"); row.setSecurityCode("100001"); row.setTargetPoolId(2L);
-        row.setDateExists(new BigDecimal("365")); row.setSecurityStatus("active"); row.setAbsFlag(1);
+        row.setDateExists(new BigDecimal("9999")); row.setDateExistsStr("1年");
+        row.setSecurityStatus("active"); row.setAbsFlag(1);
         row.setEntryTime(new Date());
         when(queryMapper.querySecurityPoolPage(org.mockito.Matchers.any(SecurityPoolQueryReq.class)))
                 .thenReturn(Arrays.asList(row));

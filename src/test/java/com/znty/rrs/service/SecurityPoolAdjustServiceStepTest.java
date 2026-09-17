@@ -848,8 +848,8 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
-        // date_exists 天数 > 5*365 → GT_5
-        sec.setDateExists(new BigDecimal("1826"));
+        // date_exists_str 解析后大于 5 年 → GT_5
+        sec.setDateExistsStr("5年1天");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
@@ -881,8 +881,8 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("4");
-        // date_exists 天数 > 5 年，与 GT_5 档匹配
-        sec.setDateExists(new BigDecimal("1826"));
+        // date_exists_str 解析后大于 5 年，与 GT_5 档匹配
+        sec.setDateExistsStr("5年1天");
         // 池名映射（允许池 2/3 + 目标池 5）
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         InvestmentPoolBo p2 = new InvestmentPoolBo(); p2.setId(2L); p2.setPoolName("一级库"); poolMap.put(2L, p2);
@@ -919,7 +919,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
@@ -1036,8 +1036,8 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
-        // 2 年：LE_1（≤1）与 GT_5（>5）之间缺口
-        sec.setDateExists(new BigDecimal("730"));
+        // date_exists_str 为 2 年：LE_1（≤1）与 GT_5（>5）之间缺口
+        sec.setDateExistsStr("2年");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
@@ -1071,8 +1071,8 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setSecuritySource("temporary");
-        // date_exists 天数 > 5 年，与 GT_5 档匹配
-        sec.setDateExists(new BigDecimal("1826"));
+        // date_exists_str 解析后大于 5 年，与 GT_5 档匹配
+        sec.setDateExistsStr("5年1天");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
@@ -1120,7 +1120,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setYxFlag(1);
         sec.setInnerIssuerRating("1");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
         gt5.setMinTermYear(new BigDecimal("5"));
@@ -1173,7 +1173,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setIssueType("私募债");
         sec.setInnerIssuerRating("1");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
         gt5.setMinTermYear(new BigDecimal("5"));
@@ -1220,7 +1220,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setCjFlag(1);
         sec.setInnerIssuerRating("1");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
         gt5.setMinTermYear(new BigDecimal("5"));
@@ -1347,7 +1347,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("2");
-        sec.setDateExists(new BigDecimal("730"));
+        sec.setDateExistsStr("2年");
         when(adjustMapper.querySecurityBoByCode("ORD.IB")).thenReturn(sec);
         CreditBondTermBucketBo gt1 = new CreditBondTermBucketBo();
         gt1.setBucketCode("GT_1_LE_3");
@@ -1378,7 +1378,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setIssueType("私募");
         sec.setInnerIssuerRating("2");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         when(adjustMapper.querySecurityBoByCode("PPB.IB")).thenReturn(sec);
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
@@ -1407,7 +1407,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setIssueType("私募");
         sec.setInnerIssuerRating("2");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         when(adjustMapper.querySecurityBoByCode("PPB2.IB")).thenReturn(sec);
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
@@ -1436,7 +1436,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setIssueType("私募");
         sec.setInnerIssuerRating("1");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         when(adjustMapper.querySecurityBoByCode("PPB1.IB")).thenReturn(sec);
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
@@ -1469,7 +1469,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setYxFlag(1);
         sec.setGuarantFlag(1);
         sec.setInnerIssuerRating("2");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         when(adjustMapper.querySecurityBoByCode("OVLP.IB")).thenReturn(sec);
         CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
         gt5.setBucketCode("GT_5");
@@ -1544,7 +1544,7 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
         sec.setYxFlag(1);
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(level1);
         ctx.setSecurityInfo(sec);
@@ -1575,7 +1575,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(level1);
         ctx.setSecurityInfo(sec);
@@ -1613,7 +1613,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
         sec.setInnerIssuerRating("1");
-        sec.setDateExists(new BigDecimal("1826"));
+        sec.setDateExistsStr("5年1天");
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
         poolMap.put(2L, level1);
         poolMap.put(6L, level5);
@@ -2857,21 +2857,37 @@ public class SecurityPoolAdjustServiceStepTest {
 
     // ===== 白名单流程 5 条件判断测试（isWhitelistFlowMatched，开关恢复后复用）=====
 
-    /** 验证白名单条件1：剩余期限超过3年时不命中。 */
+    /** 验证白名单条件1：date_exists_str 解析后超过3年时不命中。 */
     @Test
-    public void isWhitelistFlowMatchedShouldFailWhenRemainDaysOver3Years() {
+    public void isWhitelistFlowMatchedShouldFailWhenDateExistsStrOver3Years() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        // 1096 天 > 3 年
-        AdjustSharedData shared = buildWhitelistShared(1096, 0, 0, "公募", "bond", 0);
+        // date_exists_str 解析后大于 3 年
+        AdjustSharedData shared = buildWhitelistShared("3年1天", 0, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
                 new AdjustCheckReq(), shared, matchReasons, unmatchReasons);
         assertThat(result).isFalse();
         assertTrue(unmatchReasons.stream().anyMatch(s -> s.contains("超过 3 年")));
+    }
+
+    /** 验证白名单条件1：date_exists_str 恰好3年时期限条件命中。 */
+    @Test
+    public void isWhitelistFlowMatchedShouldMatchTermWhenDateExistsStrEquals3Years() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
+        AdjustSharedData shared = buildWhitelistShared("3年", 0, 0, "公募", "bond", 0);
+        List<String> matchReasons = new ArrayList<>();
+        List<String> unmatchReasons = new ArrayList<>();
+        ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
+                new AdjustCheckReq(), shared, matchReasons, unmatchReasons);
+        assertTrue(matchReasons.stream().anyMatch(s -> s.contains("未超过 3 年")));
+        assertThat(unmatchReasons.stream().anyMatch(s -> s.contains("超过 3 年"))).isFalse();
     }
 
     /** 验证白名单条件2：永续债时不命中。 */
@@ -2881,7 +2897,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared(500, 1, 0, "公募", "bond", 0);
+        AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 1, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -2897,7 +2913,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared(500, 0, 1, "公募", "bond", 0);
+        AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 1, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -2913,7 +2929,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("stock")).thenReturn("stock");
-        AdjustSharedData shared = buildWhitelistShared(500, 0, 0, "公募", "stock", 0);
+        AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "stock", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -2929,7 +2945,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared(500, 0, 0, "公募", "bond", 1);
+        AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "bond", 1);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -2945,7 +2961,7 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
-        AdjustSharedData shared = buildWhitelistShared(500, 0, 0, "公募", "bond", 0);
+        AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isWhitelistFlowMatched",
@@ -3063,13 +3079,15 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).isFalse();
     }
 
-    /** 构建白名单测试共享数据（remainDays 对应 date_exists 天数）。 */
-    private AdjustSharedData buildWhitelistShared(Integer remainDays, int yxFlag, int absFlag,
+    /** 构建白名单测试共享数据（remainTermText 对应 date_exists_str）。 */
+    private AdjustSharedData buildWhitelistShared(String remainTermText, int yxFlag, int absFlag,
                                                   String issueType, String securityType, int guarantFlag) {
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
-        if (remainDays != null) {
-            sec.setDateExists(BigDecimal.valueOf(remainDays.longValue()));
+        // 故意给出冲突的总天数，验证白名单年口径只读取 date_exists_str
+        sec.setDateExists(new BigDecimal("9999"));
+        if (remainTermText != null) {
+            sec.setDateExistsStr(remainTermText);
         }
         sec.setYxFlag(yxFlag);
         sec.setAbsFlag(absFlag);

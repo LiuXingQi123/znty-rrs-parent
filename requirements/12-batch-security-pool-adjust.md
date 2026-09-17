@@ -52,7 +52,7 @@
   "securityCode": null, "securityShortName": null, "marketCodes": null, "bondYesFlags": null,
   "pageIndex": 1, "pageSize": 20 }
 ```
-返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（含证券基础信息及 ABS/担保/永续/次级/私募/含权原始字段；`dateExists` 剩余期限为**天**，列表前端 ÷365 展示为年）。候选表按证券池调整页样式展示六个「是/否」Tag。
+返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（含证券基础信息及 ABS/担保/永续/次级/私募/含权原始字段；`dateExists` 为剩余期限天数，`dateExistsStr` 为直接展示并供年口径判断解析的证券期限文本）。候选表按证券池调整页样式展示六个「是/否」Tag。
 候选证券固定排除 `security_type IN ('crmw','company')` 的 CRMW 凭证和公司主体，避免混入证券池批量调整。
 
 > 选择页 `batch_security_pool_adjust_select.html` 的筛选条件与查询接口一致（路径同为 `querySecurityPage`），区别仅在独立屏布局与 mock 报告数据。
@@ -169,7 +169,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 **调入校验规则顺序**（与单笔 `checkCommonIn` + 类型特有一致）：
 
-池锁定 → 品种 → 市场 → pending → 已在目标池 → 容量 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突 → 弹性禁投(in_soft_restrict，警告) → 全局禁止池 → **行业限制（已注释）** → 开放日 →（债券）到期 → 主体内评矩阵（期限口径同 [04]/[23]：普通债 `date_exists` 天÷365；含权回售用年字段、赎回用 `date_exists` 天÷365；非 ABS 非担保债使用债务主体内评，非 ABS 担保债取债务主体与所选担保人内评较优值；ABS 直接使用自选权益人〔优先〕或普通权益人内评；私募、永续、次级、重点观察名单及特殊债降档规则与单券调库一致；可转债/可交换/CRMW 不适用 1～5；期限为空默认最长档继续走矩阵；校验和提交阶段均重查所选主体及最新 `total_score`） /（股票）退市 → 评级限制（空实现）/（基金）评分（仅 check）。
+池锁定 → 品种 → 市场 → pending → 已在目标池 → 容量 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突 → 弹性禁投(in_soft_restrict，警告) → 全局禁止池 → **行业限制（已注释）** → 开放日 →（债券）到期 → 主体内评矩阵（期限口径同 [04]/[23]：普通债及含权赎回侧解析 `date_exists_str`，含权回售侧用年字段，两侧都有取更短；不再用 `date_exists` 总天数÷365；非 ABS 非担保债使用债务主体内评，非 ABS 担保债取债务主体与所选担保人内评较优值；ABS 直接使用自选权益人〔优先〕或普通权益人内评；私募、永续、次级、重点观察名单及特殊债降档规则与单券调库一致；可转债/可交换/CRMW 不适用 1～5；期限无法解析时默认最长档继续走矩阵；校验和提交阶段均重查所选主体及最新 `total_score`） /（股票）退市 → 评级限制（空实现）/（基金）评分（仅 check）。
 
 批量页面对所有证券统一查询 `115004000=担保人`、`115203000=差额支付承诺人`、`115202000=债务主体`、`115201000=原始权益人` 四类有最新内评的关系主体。四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。非 ABS 页面展示为担保人，ABS 展示为权益人，并可从 `t_inv_company` 分页选择自选权益人；自选弹窗与单笔调库一致，单选列位于序号列左侧。ABS 的“担保人主体内评分”自选优先，否则显示普通权益人内评。展开项为“名称 + 类型标签 + 内评”，收起后为“名称（类型）”。
 

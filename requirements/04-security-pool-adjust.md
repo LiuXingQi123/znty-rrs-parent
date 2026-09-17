@@ -71,7 +71,7 @@
 | 当期利率(%) | `couponRate` | 等宽字体 + 琥珀色 |
 | 起息日期 | `carryDate` | 居中 |
 | 到期日 | `maturityDate` | 居中 |
-| 证券期限 | `dateExistsStr` | 库字段 `date_exists_str`（VARCHAR(20)，展示串如「3年6天」「3年6个月3天」）；列表与证券基本信息区只读展示。原「剩余期限(天)」`dateExists`/`date_exists` 仍保留（基本信息区 `v-if=false` 隐藏；`el-descriptions-item` 对 `v-show` 无效，业务校验/矩阵仍用天数）：普通债 `date_exists`÷365；含权回售用年字段、赎回用 `date_exists`÷365；`date_call_exists` 仅展示/落库、不参与匹配。**为空时默认最长档（>5 / `GT_5`）继续走矩阵，不跳过**。含权债剩余期限 `dateInrightExists`、赎回行权剩余期限 `dateCallExists`、回购剩余期限 `dateRepurchaseExists` 单位是**年** |
+| 证券期限 | `dateExistsStr` | 库字段 `date_exists_str`（VARCHAR(20)，展示串如「3年6天」「3年6个月3天」）；列表与证券基本信息区只读展示。凡需换算成“年”的判断均解析此字段，兼容「月/个月」「天/日」写法：年原值保留、月÷12、日÷365，不再用 `date_exists` 总天数÷365。普通债及含权债赎回侧均用 `date_exists_str`；含权债回售侧使用已经是年单位的 `date_inright_exists` / `date_repurchase_exists`，两侧都有时取更短；`date_call_exists` 仅展示/落库、不参与匹配。**期限无法解析时默认最长档（>5 / `GT_5`）继续走矩阵，不跳过**。原「剩余期限(天)」`dateExists`/`date_exists` 仍保留，仅供简易流程按原始天数直接比较；基本信息区以 `v-if=false` 隐藏。 |
 | 证券评级 | `ratingBond` | `el-tag type=success`，有值才显示 |
 | 主体评级 | `ratingBondissuer` | 空值空白 |
 | 主体内评分档 | `innerIssuerRating` | `el-tag`，空值空白 |
@@ -298,7 +298,7 @@
 - **调入·非信用债大库**（`poolType != 'credit_bond'`）：默认调入流程（`inFlowId/inFlowKey`），`normalInbound`。
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单、简易、默认调入，推荐优先级 白名单 > 简易 > 默认。
-  - 白名单条件顺序：剩余期限≤3 年（`date_exists` 天）→ 非永续/私募/ABS → 债券类 → 主体在白名单池（**`WHITELIST_POOL_IDS` 当前 emptySet，本条件固定不成立**）→ 非担保债。
+  - 白名单条件顺序：解析 `date_exists_str` 后的剩余期限≤3 年 → 非永续/私募/ABS → 债券类 → 主体在白名单池（**`WHITELIST_POOL_IDS` 当前 emptySet，本条件固定不成立**）→ 非担保债。`date_exists_str` 为空或格式不正确时不命中白名单。
   - 简易条件顺序：目标池为信用债一/二/三级库（`innerSort 1~3`）→ 剩余期限可解析（`date_exists`）→ 剩余期限 ≤ 同主体在目标池最大剩余期限 → 该主体 180 天内以非简易流程入过目标池（`queryIssuerHasNonSimpleInboundWithinDays`：按 `ip_pool_status` 审批通过入库记录判定，**已出库软删仍计**，不要求 `is_deleted=0`）→ 主体/展望未下调或下调时担保人未下调（**已注释**，RatingDowngradeChecker 仍计算保留）。
 
 ### 3.7 后端 addAdjustLog / submitAdjustLog 完整逻辑
@@ -432,7 +432,7 @@
 
 > 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
 
-详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingSubjectList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留，校验/矩阵仍用）；`date_exists_str` 证券期限（展示串，页面只读）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
+详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingSubjectList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留，仅供简易流程按原始天数直接比较）；`date_exists_str` 证券期限（页面只读，同时供需要年口径的矩阵和白名单判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
 

@@ -512,7 +512,7 @@ public class SecurityPoolAdjustService {
             // 正式券无内评：去掉分级库
             return excludeGradedBondPools(pools);
         }
-        // 按含权口径取剩余期限年（date_exists 天÷365，含权/回购已是年），匹配期限档
+        // 按含权口径取剩余期限年（date_exists_str 解析，含权/回购已是年），匹配期限档
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(securityInfo));
         List<Long> allowedPoolIds = null;
         Integer bestAllowedSort = null;
@@ -2441,7 +2441,7 @@ public class SecurityPoolAdjustService {
      * 白名单流程命中判断入口。
      *
      * <p>伪代码口径：
-     * 1. 剩余期限 <= 3 年（取 date_exists 天数）；
+     * 1. 证券期限 <= 3 年（解析 date_exists_str）；
      * 2. 排除永续债、私募债、ABS 债；
      * 3. 债券类型属于债券类；
      * 4. 债券主体在白名单配置池中；
@@ -2455,16 +2455,14 @@ public class SecurityPoolAdjustService {
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
         SecurityInfoBo sec = shared.getSecurityInfo();
 
-        // 条件1：剩余期限 ≤ 3 年（rrs_securityinfo.date_exists，天）
-        BigDecimal remainDays = sec.getDateExists();
-        if (remainDays == null) {
-            unmatchReasons.add("剩余期限无法解析，date_exists 为空");
-        } else if (remainDays.compareTo(BigDecimal.ZERO) < 0) {
-            unmatchReasons.add("剩余期限已小于 0 天");
-        } else if (remainDays.compareTo(new BigDecimal("1095")) <= 0) {
-            matchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，未超过 3 年");
+        // 条件1：从 date_exists_str 解析证券期限并判断是否不超过 3 年
+        BigDecimal remainYears = CreditBondRemainTermUtil.parseRemainTermYears(sec.getDateExistsStr());
+        if (remainYears == null) {
+            unmatchReasons.add("证券期限无法解析，date_exists_str 为空或格式不正确");
+        } else if (remainYears.compareTo(new BigDecimal("3")) <= 0) {
+            matchReasons.add("证券期限为 " + sec.getDateExistsStr() + "，未超过 3 年");
         } else {
-            unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays) + "，超过 3 年");
+            unmatchReasons.add("证券期限为 " + sec.getDateExistsStr() + "，超过 3 年");
         }
 
         // 条件2：排除永续债、私募债、ABS 债
@@ -2650,14 +2648,13 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 格式化剩余期限展示文本（date_exists 天数）。
+     * 格式化剩余期限展示文本（date_exists 原始天数，不换算成年）。
      */
     private String formatRemainDays(BigDecimal remainDays) {
         if (remainDays == null) {
             return "";
         }
-        return remainDays.stripTrailingZeros().toPlainString()
-                + " 天（约 " + String.format("%.2f", remainDays.doubleValue() / 365.0D) + " 年）";
+        return remainDays.stripTrailingZeros().toPlainString() + " 天";
     }
 
     /**
@@ -2942,7 +2939,7 @@ public class SecurityPoolAdjustService {
             return CreditBondSpecialInboundRule.isAbs(sec)
                     ? "未配置权益人内评分档" : "未配置主体内评分档";
         }
-        // 含权口径取剩余期限年（date_exists 天÷365，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
+        // 含权口径取剩余期限年（date_exists_str 解析，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));
         if (bucketCode == null) {
             return "无法匹配债券期限档";
@@ -2982,7 +2979,7 @@ public class SecurityPoolAdjustService {
      * 按剩余期限（年）匹配信用债期限分组编码。
      *
      * <p>遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
-     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（date_exists 天÷365，含权/回购已是年）。
+     * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（date_exists_str 解析，含权/回购已是年）。
      *
      * @param remainTermYears 剩余期限年数；null 时按最长档（期限>5）兜底
      * @return 期限档编码；无可用档或年数落不进任何档时返回 null

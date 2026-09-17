@@ -11,43 +11,50 @@ import java.util.Collections;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 剩余期限换算：date_exists 是天，含权/赎回行权/回购剩余期限是年。
+ * 证券期限解析：date_exists_str 提供年、月、日，含权/回购剩余期限字段本身是年。
  */
 public class CreditBondRemainTermUtilTest {
 
     @Test
-    public void shouldReturnNullWhenDateExistsMissing() {
+    public void shouldReturnNullWhenDateExistsStrMissing() {
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(null)).isNull();
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(new SecurityInfoBo())).isNull();
-        assertThat(CreditBondRemainTermUtil.daysToYears((BigDecimal) null)).isNull();
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears(null)).isNull();
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("")).isNull();
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("未知")).isNull();
     }
 
     @Test
-    public void shouldConvertDaysToYearsBy365() {
-        // 365 天 = 1 年
-        assertThat(CreditBondRemainTermUtil.daysToYears(new BigDecimal("365")))
-                .isEqualByComparingTo("1");
-        // 1095 天 = 3 年
-        assertThat(CreditBondRemainTermUtil.daysToYears(new BigDecimal("1095")))
-                .isEqualByComparingTo("3");
-        // 1826 天 > 5 年（5*365=1825）
-        assertThat(CreditBondRemainTermUtil.daysToYears(new BigDecimal("1826")))
-                .isGreaterThan(new BigDecimal("5"));
-        // 支持小数天
-        assertThat(CreditBondRemainTermUtil.daysToYears(new BigDecimal("182.5")))
-                .isEqualByComparingTo(new BigDecimal("0.5"));
+    public void shouldParseSupportedDateExistsStrFormats() {
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("3年6天"))
+                .isGreaterThan(new BigDecimal("3"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("3年6个月3天"))
+                .isGreaterThan(new BigDecimal("3.5"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("3年6月3日"))
+                .isEqualByComparingTo(CreditBondRemainTermUtil.parseRemainTermYears("3年6个月3天"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("3年6月3天"))
+                .isEqualByComparingTo(CreditBondRemainTermUtil.parseRemainTermYears("3年6个月3天"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("3年6个月3日"))
+                .isEqualByComparingTo(CreditBondRemainTermUtil.parseRemainTermYears("3年6个月3天"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("6个月3天"))
+                .isGreaterThan(new BigDecimal("0.5"))
+                .isLessThan(new BigDecimal("1"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("6月3日"))
+                .isEqualByComparingTo(CreditBondRemainTermUtil.parseRemainTermYears("6个月3天"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("6天"))
+                .isGreaterThan(BigDecimal.ZERO)
+                .isLessThan(new BigDecimal("1"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears("6日"))
+                .isEqualByComparingTo(CreditBondRemainTermUtil.parseRemainTermYears("6天"));
+        assertThat(CreditBondRemainTermUtil.parseRemainTermYears(" 3年 6个月 3天 "))
+                .isEqualByComparingTo(CreditBondRemainTermUtil.parseRemainTermYears("3年6个月3天"));
     }
 
     @Test
-    public void shouldTreatNegativeDaysAsZero() {
-        assertThat(CreditBondRemainTermUtil.daysToYears(new BigDecimal("-10")))
-                .isEqualByComparingTo(BigDecimal.ZERO);
-    }
-
-    @Test
-    public void shouldReadDateExistsFromSecurity() {
+    public void shouldReadDateExistsStrInsteadOfDateExistsFromSecurity() {
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setDateExists(new BigDecimal("730"));
+        sec.setDateExists(new BigDecimal("9999"));
+        sec.setDateExistsStr("2年");
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
                 .isEqualByComparingTo("2");
     }
@@ -56,8 +63,8 @@ public class CreditBondRemainTermUtilTest {
     public void inrightShouldUsePutYearsWhenShorterThanMaturity() {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setInrightFlag(1);
-        // date_exists 1825 天 ≈ 5 年；含权剩余期限 1 年（已是年，不再 ÷365）
-        sec.setDateExists(new BigDecimal("1825"));
+        // date_exists_str 为 5 年；含权剩余期限 1 年（已是年）
+        sec.setDateExistsStr("5年");
         sec.setDateInrightExists(new BigDecimal("1"));
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
                 .isEqualByComparingTo("1");
@@ -67,7 +74,7 @@ public class CreditBondRemainTermUtilTest {
     public void inrightShouldNotTreatInrightYearsAsDays() {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setInrightFlag(1);
-        sec.setDateExists(new BigDecimal("1825"));
+        sec.setDateExistsStr("5年");
         sec.setDateInrightExists(new BigDecimal("2"));
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
                 .isEqualByComparingTo("2");
@@ -77,17 +84,18 @@ public class CreditBondRemainTermUtilTest {
     public void inrightShouldFallbackToRepurchaseYears() {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setInrightFlag(1);
-        sec.setDateExists(new BigDecimal("1825"));
+        sec.setDateExistsStr("5年");
         sec.setDateRepurchaseExists(new BigDecimal("1.5"));
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
                 .isEqualByComparingTo("1.5");
     }
 
     @Test
-    public void inrightCallOnlyShouldUseMaturityDays() {
+    public void inrightCallOnlyShouldUseDateExistsStr() {
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setInrightFlag(1);
-        sec.setDateExists(new BigDecimal("730"));
+        sec.setDateExists(new BigDecimal("9999"));
+        sec.setDateExistsStr("2年");
         assertThat(CreditBondRemainTermUtil.resolveRemainTermYears(sec))
                 .isEqualByComparingTo("2");
     }

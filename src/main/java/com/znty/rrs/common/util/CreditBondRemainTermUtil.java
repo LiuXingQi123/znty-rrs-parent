@@ -6,19 +6,28 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * 信用债剩余期限，换算为年供期限档匹配。
+ * 信用债期限解析与期限档匹配工具。
  *
- * <p>单位：{@code date_exists} 是天；含权债剩余期限、赎回行权剩余期限、回购剩余期限是年。
- * 普通债把 {@code date_exists} ÷365。含权债回售用已是年的行权期限
+ * <p>普通债和赎回口径从 {@code date_exists_str} 解析年、月、日，不使用
+ * {@code date_exists} 天数换算。含权债回售使用已是年的行权期限
  * （{@code dateInrightExists} / {@code dateRepurchaseExists}），
- * 赎回把 {@code date_exists} ÷365，两者都有取更短。不做起止日推算。</p>
+ * 回售与赎回期限都有时取更短。</p>
  */
 public final class CreditBondRemainTermUtil {
 
-    /** 年换算基准天数（仅用于 date_exists） */
+    /** 每年月份数 */
+    private static final BigDecimal MONTHS_PER_YEAR = new BigDecimal("12");
+    /** 每年天数，仅用于 date_exists_str 中不足一年的“天”部分 */
     private static final BigDecimal DAYS_PER_YEAR = new BigDecimal("365");
+    /** 期限计算保留位数 */
+    private static final int TERM_SCALE = 10;
+    /** 证券期限格式：年、月（“月”或“个月”）、日（“天”或“日”）均为可选，但至少应包含一项 */
+    private static final Pattern TERM_PATTERN = Pattern.compile(
+            "^(?:(\\d+(?:\\.\\d+)?)年)?(?:(\\d+(?:\\.\\d+)?)个?月)?(?:(\\d+(?:\\.\\d+)?)[天日])?$");
 
     /** 工具类禁止实例化 */
     private CreditBondRemainTermUtil() {
@@ -27,9 +36,9 @@ public final class CreditBondRemainTermUtil {
     /**
      * 取证券剩余期限年数，供 {@code matchTermBucket} 使用。
      *
-     * <p>普通债：{@code dateExists}（天）÷365。
+     * <p>普通债：解析 {@code dateExistsStr} 中的年、月、天。
      * 含权债：回售按 {@code dateInrightExists}/{@code dateRepurchaseExists}（年）；
-     * 赎回按 {@code dateExists}（天÷365）；两者都有取更短。</p>
+     * 赎回按 {@code dateExistsStr}；两者都有取更短。</p>
      *
      * @param sec 证券主数据
      * @return 剩余期限年数；无法解析时返回 null（由 {@link #matchTermBucket} 按最长档兜底）
@@ -41,8 +50,8 @@ public final class CreditBondRemainTermUtil {
         if (CreditBondSpecialInboundRule.isInright(sec)) {
             // 回售行权期限已经是年，不再 ÷365
             BigDecimal putYears = firstYears(sec.getDateInrightExists(), sec.getDateRepurchaseExists());
-            // 赎回按到期剩余期限：date_exists 是天
-            BigDecimal callYears = daysToYears(sec.getDateExists());
+            // 赎回按 date_exists_str 解析到期剩余期限
+            BigDecimal callYears = parseRemainTermYears(sec.getDateExistsStr());
             if (putYears != null && callYears != null) {
                 return putYears.min(callYears);
             }
@@ -51,20 +60,35 @@ public final class CreditBondRemainTermUtil {
             }
             return callYears;
         }
-        return daysToYears(sec.getDateExists());
+        return parseRemainTermYears(sec.getDateExistsStr());
     }
 
     /**
-     * 取到期剩余期限天数（仅 {@code date_exists}，单位天）。
+     * 将证券期限文本解析为年数。
      *
-     * @param sec 证券主数据
-     * @return 天数；无法解析时返回 null
+     * <p>支持“3年6个月3天”“3年6月3日”“6个月3天”“6月3日”“6天”“6日”等格式。
+     * 年部分直接保留，月部分按 12 个月折算，天部分只折算文本中的不足一年部分，
+     * 不再使用 {@code date_exists} 总天数除以 365。</p>
+     *
+     * @param termText 证券期限文本
+     * @return 期限年数；为空或格式不正确时返回 null
      */
-    public static BigDecimal resolveRemainTermDays(SecurityInfoBo sec) {
-        if (sec == null) {
+    public static BigDecimal parseRemainTermYears(String termText) {
+        if (termText == null || termText.trim().isEmpty()) {
             return null;
         }
-        return sec.getDateExists();
+        String normalized = termText.replaceAll("\\s+", "");
+        Matcher matcher = TERM_PATTERN.matcher(normalized);
+        if (!matcher.matches()
+                || (matcher.group(1) == null && matcher.group(2) == null && matcher.group(3) == null)) {
+            return null;
+        }
+        BigDecimal years = parseNumber(matcher.group(1));
+        BigDecimal months = parseNumber(matcher.group(2));
+        BigDecimal days = parseNumber(matcher.group(3));
+        return years
+                .add(months.divide(MONTHS_PER_YEAR, TERM_SCALE, RoundingMode.HALF_UP))
+                .add(days.divide(DAYS_PER_YEAR, TERM_SCALE, RoundingMode.HALF_UP));
     }
 
     /**
@@ -97,32 +121,9 @@ public final class CreditBondRemainTermUtil {
         return years;
     }
 
-    /**
-     * 剩余期限天数 → 年（保留 6 位小数，便于落入 term_bucket 区间边界）。
-     *
-     * @param remainDays 剩余期限天数（可为 0；负值按 0 处理）
-     * @return 年数；入参 null 时返回 null
-     */
-    public static BigDecimal daysToYears(BigDecimal remainDays) {
-        if (remainDays == null) {
-            return null;
-        }
-        BigDecimal days = remainDays.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : remainDays;
-        return days.divide(DAYS_PER_YEAR, 6, RoundingMode.HALF_UP);
-    }
-
-    /**
-     * 兼容 Integer 入参（测试或过渡调用）。
-     *
-     * @param remainDays 剩余期限天数
-     * @return 年数；入参 null 时返回 null
-     */
-    public static BigDecimal daysToYears(Integer remainDays) {
-        if (remainDays == null) {
-            return null;
-        }
-        // 转成 BigDecimal 后走统一换算
-        return daysToYears(BigDecimal.valueOf(remainDays.longValue()));
+    /** 将可空数字文本转换为 BigDecimal。 */
+    private static BigDecimal parseNumber(String value) {
+        return value == null ? BigDecimal.ZERO : new BigDecimal(value);
     }
 
     /**

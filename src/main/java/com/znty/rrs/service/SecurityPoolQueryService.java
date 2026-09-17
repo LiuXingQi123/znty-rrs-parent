@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.BondStatus;
+import com.znty.rrs.common.util.CreditBondRemainTermUtil;
 import com.alibaba.excel.EasyExcel;
 import com.alibaba.excel.ExcelWriter;
 import com.alibaba.excel.write.metadata.WriteSheet;
@@ -108,7 +109,7 @@ public class SecurityPoolQueryService {
             target.setIssueDate(source.getIssueDate());
             target.setCarryDate(source.getCarryDate());
             target.setMaturityDate(source.getMaturityDate());
-            target.setRemainingTermYears(formatRemainingTermYears(source.getDateExists()));
+            target.setRemainingTermYears(formatRemainingTermYears(source.getDateExistsStr()));
             target.setSecurityStatusLabel(statusLabel(source.getSecurityStatus()));
             target.setDelistDate(source.getDelistDate());
             target.setRepurchaseDate(source.getRepurchaseDate());
@@ -128,9 +129,11 @@ public class SecurityPoolQueryService {
         return value == null ? "" : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(value);
     }
 
-    /** 将剩余天数换算为页面相同的年数。 */
-    private String formatRemainingTermYears(BigDecimal days) {
-        return days == null ? "" : days.divide(new BigDecimal("365"), 4, RoundingMode.HALF_UP).toPlainString();
+    /** 从证券期限文本解析并格式化年数。 */
+    private String formatRemainingTermYears(String termText) {
+        // 使用 date_exists_str 解析期限，避免将 date_exists 总天数直接除以 365
+        BigDecimal years = CreditBondRemainTermUtil.parseRemainTermYears(termText);
+        return years == null ? "" : years.setScale(4, RoundingMode.HALF_UP).toPlainString();
     }
 
     /** 转换证券状态中文名称。 */
