@@ -65,10 +65,20 @@ public class ScheduledTaskDemoDataTest {
             descriptionCount++;
             String taskCode = descriptionMatcher.group(1);
             String description = descriptionMatcher.group(2);
+            assertThat(description.length()).as(taskCode + " 的任务说明不能超过 500 字").isLessThanOrEqualTo(500);
             if ("company_not_in_pool_bond_auto_out".equals(taskCode)) {
                 assertThat(description).contains("默认关闭调度");
             } else {
                 assertThat(description).doesNotContain("默认关闭调度");
+            }
+            if ("company_outer_rating_not_aa_minus_auto_out".equals(taskCode)) {
+                assertThat(description).contains("AA-及以下不出池")
+                        .contains("空评级/近一年无认可外评不出池");
+            }
+            if ("company_outer_rating_aa_minus_auto_in".equals(taskCode)) {
+                assertThat(description).contains("AA-及以下因评级入池")
+                        .contains("空评级/近一年无认可外评不因评级入池")
+                        .contains("命中禁止库 15 或重点观察 23 时仍按相应条件入池");
             }
         }
         assertThat(descriptionCount).isEqualTo(configs.size());

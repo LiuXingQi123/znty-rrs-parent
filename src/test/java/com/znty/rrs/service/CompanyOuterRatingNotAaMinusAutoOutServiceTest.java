@@ -48,7 +48,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
                 .contains("不从扫描目标池自动出库")
                 .contains("不再默认拦禁投池")
                 .contains("禁止库 15")
-                .contains("无认可外评不自动出池");
+                .contains("AA-及以下不出池")
+                .contains("空评级/近一年无认可外评不出池");
     }
 
     /** 未配置有效外部评级机构时应阻断本轮自动出池。 */

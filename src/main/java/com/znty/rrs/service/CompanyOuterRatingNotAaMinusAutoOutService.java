@@ -74,6 +74,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds 省略或 <code>[]</code>：不追加额外拦截（条款（一）（三）已在扫描中排除 15/23）\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：已在目标池，近一年存在认可外评，且不在 15、不在 23、孰低外评不属于 AA-及以下时，自动调出主体\n"
+                    + "评级临界：AA-及以下不出池；AA及以上在其他条件均不命中时可出池；空评级/近一年无认可外评不出池\n"
                     + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低；无认可外评不自动出池\n"
                     + "联动处理：主体成功出池后，本任务内自写 outSamePoolBonds 同批调出同池旗下债（不复用人工 syncCompanyBonds）\n"
                     + "限制规则：主体命中调出限制池时跳过该主体；旗下债命中时阻断主体联动并回滚本轮任务\n"

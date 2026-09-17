@@ -140,6 +140,8 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .contains("17（黑名单质押库）")
                 .contains("公司信用债禁止库 15")
                 .contains("重点观察名单 23")
+                .contains("AA-及以下因评级入池")
+                .contains("空评级/近一年无认可外评不因评级入池")
                 .contains("配置表中的有效机构")
                 .contains("不复用人工 syncCompanyBonds");
     }
