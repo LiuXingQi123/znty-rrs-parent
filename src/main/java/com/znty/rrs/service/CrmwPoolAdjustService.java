@@ -34,6 +34,7 @@ import com.znty.rrs.common.PageResult;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
+import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckContext;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
@@ -55,6 +56,7 @@ import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustReq;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustSubmitReq;
 import com.znty.rrs.entity.crmwpooladjust.SecurityPoolStatusDto;
 import com.znty.rrs.entity.crmwpooladjust.PoolStatusDto;
+import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
@@ -124,6 +126,10 @@ public class CrmwPoolAdjustService {
     /** CRMW池调整数据访问组件 */
     @Resource
     private CrmwPoolAdjustMapper crmwPoolAdjustMapper;
+
+    /** 发行主体财务数据访问组件 */
+    @Resource
+    private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
     /** 投资池数据访问组件 */
     @Resource
@@ -569,12 +575,26 @@ public class CrmwPoolAdjustService {
         // ══ 第五阶段：后续处理（按 log 写 CRMW 证券信息快照，不改主档） ══
         postSubmitProcess(req, shared, allIds);
 
+        // 仅更新本次编辑且已存在的发行主体财务报告
+        updateExistingIssuerFinancial(req);
+
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
         dto.setSecurityCode(req.getSecurityCode());
         dto.setSubmitCount(allIds.size());
         dto.setLogIds(allIds);
         return dto;
+    }
+
+    /** 仅更新本次调库提交编辑且已存在的发行主体财务报告。 */
+    private void updateExistingIssuerFinancial(CrmwPoolAdjustSubmitReq req) {
+        IssuerFinancialDto financial = req.getIssuerFinancial();
+        SecurityInfoBo securityInfo = req.getSecurityInfo();
+        if (financial == null || financial.getReportDate() == null || securityInfo == null
+                || securityInfo.getIssuerCode() == null || securityInfo.getIssuerCode().trim().isEmpty()) {
+            return;
+        }
+        securityPoolAdjustMapper.updateExistingIssuerFinancial(securityInfo.getIssuerCode(), financial);
     }
 
     // ═══════════════════════════════════════════════════════════

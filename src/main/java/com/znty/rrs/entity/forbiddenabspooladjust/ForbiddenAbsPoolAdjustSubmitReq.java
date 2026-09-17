@@ -2,6 +2,7 @@ package com.znty.rrs.entity.forbiddenabspooladjust;
 
 
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import lombok.Data;
 
 import java.util.List;
@@ -44,6 +45,9 @@ public class ForbiddenAbsPoolAdjustSubmitReq {
 
     /** 证券基础信息 */
     private SecurityInfoBo securityInfo;
+
+    /** 本次提交编辑的发行主体财务数据 */
+    private IssuerFinancialDto issuerFinancial;
 
     /** 当前选择的担保人 Wind 主体代码 */
     private String guarantorCode;
