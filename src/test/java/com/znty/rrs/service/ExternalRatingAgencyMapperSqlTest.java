@@ -24,6 +24,16 @@ public class ExternalRatingAgencyMapperSqlTest {
         assertParameterizedQueries("WindRatingMapper.xml", Arrays.asList("queryLatestRating"));
     }
 
+    /** 自动出池查询应排除近一年无认可外评的主体。 */
+    @Test
+    public void autoOutRatingQuery_ShouldExcludeCompanyWithoutEffectiveRating() throws Exception {
+        String xml = readMapper("AutoAdjustMapper.xml");
+        String select = selectBlock(xml, "queryCompanyByNotLowOuterRatingInPool");
+
+        assertThat(select).contains("AND e.b_info_creditrating IS NOT NULL")
+                .doesNotContain("e.b_info_creditrating IS NULL");
+    }
+
     /** 配置查询应只返回未删除、非空机构并按数值编码升序。 */
     @Test
     public void agencyQuery_ShouldFilterAndSortActiveCodes() throws Exception {

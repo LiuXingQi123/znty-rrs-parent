@@ -38,7 +38,7 @@ import java.util.Map;
  * 外评非 AA- 及以下主体自动出池任务
  * <p>
  * 对应老系统 {@code AdjustRuleOutAA}。现按质押券黑名单管理办法：
- * 已在目标池且（一）（二）（三）均不满足才出池。近一年无认可外评按（二）不满足处理。
+ * 已在目标池、近一年存在认可外评，且（一）（二）（三）均不满足才出池。无认可外评不自动出池。
  * Demo 目标池为黑名单质押库 17，limitPoolIds 为空数组。adjust_type=自动调整，不走审批。
  * </p>
  */
@@ -64,7 +64,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     private static final String PARAM_HELP =
             "参数格式：须填写 JSON 对象，例如 <code>{\"poolIds\":[17],\"limitPoolIds\":[]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（目标池 + 空拦截）：<code>{\"poolIds\":[17],\"limitPoolIds\":[]}</code>\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：已在 17（黑名单质押库），且不在禁止库 15、不在重点观察 23、近一年孰低外评也不属于 AA-及以下的主体，自动调出 17\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：已在 17（黑名单质押库），近一年存在认可外评，且不在禁止库 15、不在重点观察 23、孰低外评不属于 AA-及以下的主体，自动调出 17\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（仅目标池）：<code>{\"poolIds\":[17]}</code>；省略 limitPoolIds 与填写 <code>[]</code> 相同，不再默认拦禁投池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：与 Demo 相同，从 17（黑名单质押库）按（一）（二）（三）均不满足的规则出库\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（目标池 + 额外拦截）：<code>{\"poolIds\":[17],\"limitPoolIds\":[16]}</code>\n"
@@ -73,8 +73,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds（禁止出池拦截池）：可选；Demo 为 <code>[]</code>。主体当前已在这些池中的任一池时，不从扫描目标池自动出库\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "limitPoolIds 省略或 <code>[]</code>：不追加额外拦截（条款（一）（三）已在扫描中排除 15/23）\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
-                    + "处理规则：已在目标池，且不在 15、不在 23、近一年认可外评孰低不属于 AA-及以下（含无认可外评）时，自动调出主体\n"
-                    + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低；无认可外评按条件（二）不满足处理\n"
+                    + "处理规则：已在目标池，近一年存在认可外评，且不在 15、不在 23、孰低外评不属于 AA-及以下时，自动调出主体\n"
+                    + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低；无认可外评不自动出池\n"
                     + "联动处理：主体成功出池后，本任务内自写 outSamePoolBonds 同批调出同池旗下债（不复用人工 syncCompanyBonds）\n"
                     + "限制规则：主体命中调出限制池时跳过该主体；旗下债命中时阻断主体联动并回滚本轮任务\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
@@ -182,7 +182,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         List<Long> limitPoolIds = resolveLimitPoolIds(paramJson);
         infoDetail(detail, "额外拦截池 limitPoolIds=" + limitPoolIds);
         infoDetail(detail, "扫描条件：ip_pool_status.is_deleted=0、audit_status=20、security_type=company、"
-                + "target_pool_id IN " + poolIds + "；近一年认可外评孰低不属于AA-及以下或无认可外评，"
+                + "target_pool_id IN " + poolIds + "；近一年存在认可外评且孰低不属于AA-及以下，"
                 + "且禁止库15/近一年AA-及以下/重点观察23三个条件均不满足；额外拦截池=" + limitPoolIds);
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
@@ -198,7 +198,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
             // 解析目标池的调出限制池
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
-            // 条款（二）反面：已在目标池且近一年孰低不属于 AA-及以下（含无认可外评）
+            // 条款（二）反面：已在目标池、近一年存在认可外评且孰低不属于 AA-及以下
             List<ScheduledAdjustCandidateDto> companies = autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
                     poolId, limitPoolIds, agencyCodes);
             // 使用统一规则筛出三个条件全部不满足的主体

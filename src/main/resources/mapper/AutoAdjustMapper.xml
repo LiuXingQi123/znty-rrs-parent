@@ -339,8 +339,8 @@
     </select>
 
     <!--
-      条款（二）反面：已在目标池、近一年孰低不属于 AA-及以下。
-      无认可外评按条款（二）不满足返回；条款（一）（三）由 Java 按在池名单排除。
+      条款（二）反面：已在目标池、近一年存在认可外评且孰低不属于 AA-及以下。
+      无认可外评不参与自动出池；条款（一）（三）由 Java 按在池名单排除。
       limitPoolIds 为额外拦截；空则不加这段。
     -->
     <select id="queryCompanyByNotLowOuterRatingInPool"
@@ -425,15 +425,15 @@
           AND ips.security_type = 'company'
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND (e.b_info_creditrating IS NULL
-               OR e.b_info_creditrating NOT IN (
-                   'AA-', 'A+', 'A', 'A-'
-                   ,'BBB+', 'BBB', 'BBB-'
-                   ,'BB+', 'BB', 'BB-'
-                   ,'B+', 'B', 'B-'
-                   ,'CCC', 'CC', 'C'
-                   ,'D'
-               ))
+          AND e.b_info_creditrating IS NOT NULL
+          AND e.b_info_creditrating NOT IN (
+              'AA-', 'A+', 'A', 'A-'
+              ,'BBB+', 'BBB', 'BBB-'
+              ,'BB+', 'BB', 'BB-'
+              ,'B+', 'B', 'B-'
+              ,'CCC', 'CC', 'C'
+              ,'D'
+          )
         <if test="limitPoolIds != null and limitPoolIds.size() &gt; 0">
           AND NOT EXISTS (
               SELECT 1
