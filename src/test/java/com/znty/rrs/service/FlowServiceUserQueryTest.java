@@ -18,8 +18,8 @@ import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,7 +58,7 @@ public class FlowServiceUserQueryTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getId()).isEqualTo(10L);
         assertThat(result.get(0).getUserName()).isEqualTo("研究员2");
-        verify(flowMapper).queryUserList(eq(Arrays.asList(1L, 2L)), isNull(String.class));
+        verify(flowMapper).queryUserList(eq(Arrays.asList(1L, 2L)), isNull());
     }
 
     /** 验证 initiator 节点不能同时配置 submit 和 resubmit 出边。 */

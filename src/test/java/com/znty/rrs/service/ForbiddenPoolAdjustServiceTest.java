@@ -37,9 +37,9 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyListOf;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -215,7 +215,7 @@ public class ForbiddenPoolAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
         InvestmentPoolBo forbiddenPool = buildPool(15L, "债券禁止库", "forbidden");
         forbiddenPool.setMaxCapacity(1000L);
-        when(poolMapper.queryPoolByIdsList(anyListOf(Long.class)))
+        when(poolMapper.queryPoolByIdsList(anyList()))
                 .thenReturn(Arrays.asList(
                         forbiddenPool,
                         buildPool(16L, "观察池", "observe"),
@@ -253,7 +253,7 @@ public class ForbiddenPoolAdjustServiceTest {
         when(mapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
                 buildRelation(15L, "in_mutex", 3L),
                 buildRelation(3L, "in_restrict", 15L)));
-        when(poolMapper.queryPoolByIdsList(anyListOf(Long.class)))
+        when(poolMapper.queryPoolByIdsList(anyList()))
                 .thenReturn(Collections.singletonList(buildPool(3L, "二级库", "credit_bond")));
         when(mapper.querySecurityCurrentPoolIdList("B002")).thenReturn(Arrays.asList(2L, 3L, 15L));
         when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);

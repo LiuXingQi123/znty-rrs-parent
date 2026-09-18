@@ -23,8 +23,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyListOf;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,7 +51,7 @@ public class BatchCrmwPoolAdjustServiceTest {
         crmwRow.setPoolId(18L);
         crmwRow.setTypeCode("crmw");
         crmwRow.setCount(2);
-        when(mapper.queryPoolCurrentCountByTypeList(anyListOf(Long.class)))
+        when(mapper.queryPoolCurrentCountByTypeList(anyList()))
                 .thenReturn(Collections.singletonList(crmwRow));
 
         ReflectionTestUtils.invokeMethod(service, "fillPoolCurrentCount", poolList);

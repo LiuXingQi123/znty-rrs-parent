@@ -27,11 +27,11 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyListOf;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doAnswer;
 import org.mockito.ArgumentCaptor;
@@ -100,7 +100,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         bondRow.setPoolId(11L);
         bondRow.setTypeCode("bond");
         bondRow.setCount(3);
-        when(mapper.queryPoolCurrentCountByTypeList(anyListOf(Long.class)))
+        when(mapper.queryPoolCurrentCountByTypeList(anyList()))
                 .thenReturn(Arrays.asList(bondRow, companyRow));
 
         ReflectionTestUtils.invokeMethod(service, "fillPoolCurrentCount", poolList);
@@ -207,7 +207,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(mapper.queryEnabledLeafPoolCount(11L)).thenReturn(1);
         SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
         when(attachmentService.createSubmissionFiles(
-                anyListOf(MultipartFile.class), eq("1")))
+                anyList(), eq("1")))
                 .thenReturn(submissionFiles);
         when(adjustMapper.querySecurityBoByCode(anyString()))
                 .thenReturn(new SecurityInfoBo());
@@ -270,7 +270,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
         SysAttachmentService.SubmissionFiles submissionFiles = mock(SysAttachmentService.SubmissionFiles.class);
         when(attachmentService.createSubmissionFiles(
-                anyListOf(MultipartFile.class), eq("1")))
+                anyList(), eq("1")))
                 .thenReturn(submissionFiles);
         when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(new SecurityInfoBo());
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(

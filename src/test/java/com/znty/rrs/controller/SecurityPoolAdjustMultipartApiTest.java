@@ -13,10 +13,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.fileUpload;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -51,7 +51,7 @@ public class SecurityPoolAdjustMultipartApiTest {
                 "files", "信评报告.pdf", "application/pdf",
                 "report".getBytes(StandardCharsets.UTF_8));
 
-        mockMvc.perform(fileUpload("/api/v1/securityPoolAdjust/addAdjustLogWithFiles")
+        mockMvc.perform(multipart("/api/v1/securityPoolAdjust/addAdjustLogWithFiles")
                         .file(request)
                         .file(file))
                 .andExpect(status().isOk())

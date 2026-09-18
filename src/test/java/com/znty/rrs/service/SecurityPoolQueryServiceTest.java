@@ -39,7 +39,7 @@ public class SecurityPoolQueryServiceTest {
         row.setDateExists(new BigDecimal("9999")); row.setDateExistsStr("1年");
         row.setSecurityStatus("active"); row.setAbsFlag(1);
         row.setEntryTime(new Date());
-        when(queryMapper.querySecurityPoolPage(org.mockito.Matchers.any(SecurityPoolQueryReq.class)))
+        when(queryMapper.querySecurityPoolPage(org.mockito.ArgumentMatchers.any(SecurityPoolQueryReq.class)))
                 .thenReturn(Arrays.asList(row));
         when(investmentPoolService.queryPoolFullNameMap()).thenReturn(Collections.singletonMap(2L, "一级池/二级池"));
 

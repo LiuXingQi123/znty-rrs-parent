@@ -32,7 +32,7 @@ public abstract class ControllerApiTestSupport {
     /** 发送 JSON POST 请求 */
     protected ResultActions postJson(MockMvc mockMvc, String path, String body) throws Exception {
         return mockMvc.perform(post(path)
-                .contentType(MediaType.APPLICATION_JSON_UTF8)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }
 }

@@ -1,6 +1,6 @@
 # 后端开发规范（CLAUDE.md）
 
-> 适用项目：Spring Boot 1.x 后端项目（`znty-rrs-parent`）  
+> 适用项目：Spring Boot 2.7.x 后端项目（`znty-rrs-parent`）  
 > 说明：本目录 `CLAUDE.md` 与 `AGENTS.md` 内容同步（仅文件名不同），修改时须两边同时更新。
 
 > 仓库级总览（业务模块表、调库三链路、`audit_status` 状态机、常用命令、前端页面 ↔ 需求 ↔ 测试对照表）见上级 `../CLAUDE.md` / `../AGENTS.md`；数据库表设计与 SQL 生成规范见本目录 `CLAUDE_mysql.md` / `AGENTS_mysql.md`（与根目录同名文件应保持同步）。本文件聚焦后端编码约定与本工程内需跨多文件才能厘清的架构要点，不重复上级文档已有内容。
@@ -52,12 +52,12 @@
 
 | 技术 | 版本 |
 |------|------|
-| Spring Boot | 1.5.9.RELEASE |
+| Spring Boot | 2.7.18 |
 | Java | 1.8 |
 | Maven | — |
-| MyBatis（mybatis-spring-boot-starter） | 1.2.0 |
-| MySQL（mysql-connector-java） | 8.0.28 |
-| PageHelper | 4.0.0 |
+| MyBatis（mybatis-spring-boot-starter） | 2.3.2 |
+| MySQL（mysql-connector-j） | 由 Spring Boot 管理 |
+| PageHelper（pagehelper-spring-boot-starter） | 1.4.7 |
 | H2 | 2.3.232（test） |
 | Lombok | 1.18.38 |
 | QLExpress | 3.3.4 |

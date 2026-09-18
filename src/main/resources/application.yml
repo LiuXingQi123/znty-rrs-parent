@@ -11,8 +11,8 @@ spring:
     username: root
     password: MTIzNDU2
 
-  # HTTP 文件上传配置
-  http:
+  # HTTP 文件上传配置（Boot 2.x 使用 spring.servlet.multipart）
+  servlet:
     multipart:
       # 单个文件最大 50MB
       max-file-size: 50MB
@@ -34,6 +34,18 @@ mybatis:
   # 开启驼峰命名映射：数据库字段 user_name 自动映射为 Java 属性 userName
   configuration:
     map-underscore-to-camel-case: true
+
+# PageHelper 分页插件（由 pagehelper-spring-boot-starter 自动装配）
+pagehelper:
+  helper-dialect: mysql
+  # 页码合理化：超出范围时自动修正到首页或末页
+  reasonable: true
+  support-methods-arguments: true
+  # 将 RowBounds 的 offset 参数当作页码使用
+  offset-as-page-num: true
+  # 使用 RowBounds 分页时同时执行 count 查询
+  row-bounds-with-count: true
+
 
 # 日志配置
 logging:

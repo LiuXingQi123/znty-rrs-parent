@@ -1,7 +1,7 @@
 package com.znty.rrs.common.config;
 
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.context.config.ConfigFileApplicationListener;
+import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor;
 import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -41,6 +41,7 @@ public class Base64DataSourcePasswordEnvironmentPostProcessor implements Environ
 
     @Override
     public int getOrder() {
-        return ConfigFileApplicationListener.DEFAULT_ORDER + 1;
+        // Boot 2.4+：配置文件加载由 ConfigDataEnvironmentPostProcessor 负责
+        return ConfigDataEnvironmentPostProcessor.ORDER + 1;
     }
 }

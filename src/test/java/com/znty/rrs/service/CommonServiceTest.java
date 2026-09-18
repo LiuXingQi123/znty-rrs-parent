@@ -13,7 +13,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -54,7 +54,7 @@ public class CommonServiceTest {
         req.setSecurityCodes(Arrays.asList(" ", null));
 
         assertThat(service.queryGuarantorGradeList(req)).isEmpty();
-        verifyZeroInteractions(mapper);
+        verifyNoInteractions(mapper);
     }
 
     /** 验证符合主体类型但暂无评分的担保人仍会返回 */
