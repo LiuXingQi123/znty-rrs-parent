@@ -62,7 +62,8 @@ public class SecurityPoolQueryServiceTest {
             assertThat(workbook.getSheetAt(0).getSheetConditionalFormatting().getNumConditionalFormattings()).isEqualTo(6);
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(0).getStringCellValue()).isEqualTo("测试债券");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(4).getStringCellValue()).isEqualTo("一级池/二级池");
-            assertThat(workbook.getSheetAt(0).getRow(1).getCell(12).getStringCellValue()).isEqualTo("1.0000");
+            assertThat(workbook.getSheetAt(0).getRow(0).getCell(12).getStringCellValue()).isEqualTo("证券期限");
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(12).getStringCellValue()).isEqualTo("1年");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(13).getStringCellValue()).isEqualTo("存续");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(16).getStringCellValue()).isEqualTo("是");
         }

@@ -79,7 +79,7 @@ this.loadList();                  // 列表数据
 
 ### 3.1 导出当前查询结果
 
-点击页面“导出”按钮调用 `POST /api/v1/securityPoolQuery/exportSecurityPoolExcel`，请求参数与列表查询相同但不传分页参数；后端复用列表 SQL 全量查询全部命中记录并回填投资池全路径。Excel 基于 `src/main/resources/xlsx/security_pool_query_export_template.xlsx` 填充：第一行为楷体字段表头，第二行起为数据，字段顺序与页面展示一致（不含序号、收藏操作列），返回 `CommonFileDto`（Base64）由前端调用 `downloadBase64File` 下载。
+点击页面“导出”按钮调用 `POST /api/v1/securityPoolQuery/exportSecurityPoolExcel`，请求参数与列表查询相同但不传分页参数；后端复用列表 SQL 全量查询全部命中记录并回填投资池全路径。Excel 基于 `src/main/resources/xlsx/security_pool_query_export_template.xlsx` 填充：第一行为楷体字段表头，第二行起为数据，字段顺序与页面展示一致（不含序号、收藏操作列；「证券期限」导出 `dateExistsStr` 展示串，不换算为年数），返回 `CommonFileDto`（Base64）由前端调用 `downloadBase64File` 下载。
 
 ---
 

@@ -31,8 +31,8 @@ public class SecurityPoolQueryExportDto {
     private String carryDate;
     /** 到期日 */
     private String maturityDate;
-    /** 剩余期限（年） */
-    private String remainingTermYears;
+    /** 证券期限（与页面 dateExistsStr 一致） */
+    private String dateExistsStr;
     /** 证券状态 */
     private String securityStatusLabel;
     /** 退市日期 */
