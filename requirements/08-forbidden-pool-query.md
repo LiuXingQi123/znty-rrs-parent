@@ -56,6 +56,10 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 - 后端 `ForbiddenPoolQueryService.queryForbiddenPoolPage`：`PageHelper.startPage` 分页；`queryForbiddenPoolPage` SQL；`fillPoolFullName`（用投资池全路径名覆盖 `targetPoolName`）；返回 `PageResult`。
 - 返回 `PageResult<ForbiddenPoolQueryDto>`（`id, securityShortName, securityCode, issuer, adjusterName, securityType, securityTypeName, targetPoolName, targetPoolId, adjustLogId(状态表 adjust_log_id，非本行 id), adjustBatchNo, entryTime, maturityDate, delistDate, repurchaseDate`）。
 
+### 2.2.1 导出当前查询结果
+
+点击「导出」调用 `POST /api/v1/forbiddenPoolQuery/exportForbiddenPoolExcel`，筛选条件与列表相同但不传分页；仍按 VIEWABLE 权限过滤。Excel 列与页面一致（不含序号）；「证券状态」后端按到期日派生存续/到期，对齐前端 `getBondStatus`。
+
 ### 2.3 表格列渲染
 
 | 列 | prop/渲染 | 说明 |

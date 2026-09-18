@@ -29,5 +29,7 @@ public class CompanyPoolQueryApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldSupportCompanyPoolQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/companyPoolQuery/queryCompanyPoolPage", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/companyPoolQuery/exportCompanyPoolExcel",
+                "{\"currentUserId\":\"1\",\"companyCode\":\"C10001\"}");
     }
 }

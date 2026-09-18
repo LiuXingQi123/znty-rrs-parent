@@ -59,10 +59,16 @@ public class SecurityPoolQueryService {
         return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
-    /** 按当前筛选条件生成证券池查询 Excel。 */
+    /**
+     * 按当前筛选条件生成证券池查询 Excel。
+     *
+     * @param req 与列表查询相同的筛选条件（可不传分页）
+     * @return 可下载的 Excel 文件
+     */
     public CommonFileDto exportSecurityPoolExcel(SecurityPoolQueryReq req) {
+        // 复用列表 SQL 全量查询命中记录
         List<SecurityPoolQueryDto> list = securityPoolQueryMapper.querySecurityPoolPage(req);
-        // 回填投资池完整路径，保证与页面展示一致。
+        // 回填投资池完整路径，保证与页面展示一致
         fillPoolFullName(list);
         try (InputStream template = SecurityPoolQueryService.class.getResourceAsStream(
                 "/xlsx/security_pool_query_export_template.xlsx");
@@ -73,6 +79,7 @@ public class SecurityPoolQueryService {
             ExcelWriter writer = EasyExcel.write(outputStream).withTemplate(template).build();
             try {
                 WriteSheet sheet = EasyExcel.writerSheet(0).build();
+                // 转换为导出行并填充模板
                 writer.fill(new FillWrapper("data", buildExportRows(list)), sheet);
             } finally {
                 writer.finish();

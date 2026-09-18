@@ -56,6 +56,7 @@
 ### 2.2 查询接口
 
 - 路径：`POST /api/v1/companyPoolQuery/queryCompanyPoolPage`
+- 导出：`POST /api/v1/companyPoolQuery/exportCompanyPoolExcel`（同筛选、不分页；列与页面一致）
 - 请求体（`CompanyPoolQueryReq`）：
   ```json
   { "poolIds": [2,3] | null, "companyCode": "C100" | null, "companyName": "交投" | null,

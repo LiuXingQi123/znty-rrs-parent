@@ -53,6 +53,7 @@
 ### 2.2 查询接口
 
 - 路径：`POST /api/v1/forbiddenPoolHistory/queryForbiddenPoolHistoryPage`
+- 导出：`POST /api/v1/forbiddenPoolHistory/exportForbiddenPoolHistoryExcel`（同筛选、不分页；列与页面一致，审核状态转中文）
 - 请求体：
   ```json
   { "companyCode", "companyName", "securityCode", "securityShortName",

@@ -2,6 +2,7 @@ package com.znty.rrs.controller;
 
 import com.znty.rrs.common.ApiResponse;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.entity.commonfile.CommonFileDto;
 import com.znty.rrs.entity.companypool.CompanyPoolQueryDto;
 import com.znty.rrs.entity.companypool.CompanyPoolQueryReq;
 import com.znty.rrs.service.CompanyPoolQueryService;
@@ -33,6 +34,15 @@ public class CompanyPoolQueryController {
     @PostMapping("/queryCompanyPoolPage")
     public ApiResponse<PageResult<CompanyPoolQueryDto>> queryCompanyPoolPage(@RequestBody CompanyPoolQueryReq req) {
         return ApiResponse.success(companyPoolQueryService.queryCompanyPoolPage(req));
+    }
+
+    /**
+     * 按当前查询条件导出主体池列表。
+     * <p>筛选条件与列表一致，不传分页时导出全部命中记录。</p>
+     */
+    @PostMapping("/exportCompanyPoolExcel")
+    public ApiResponse<CommonFileDto> exportCompanyPoolExcel(@RequestBody CompanyPoolQueryReq req) {
+        return ApiResponse.success(companyPoolQueryService.exportCompanyPoolExcel(req));
     }
 
 }

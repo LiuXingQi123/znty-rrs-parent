@@ -2,6 +2,7 @@ package com.znty.rrs.controller;
 
 import com.znty.rrs.common.ApiResponse;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.entity.commonfile.CommonFileDto;
 import com.znty.rrs.entity.securitypooladjusthistory.SecurityPoolAdjustHistoryDto;
 import com.znty.rrs.entity.securitypooladjusthistory.SecurityPoolAdjustHistoryReq;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
@@ -37,6 +38,16 @@ public class SecurityPoolAdjustHistoryController {
     public ApiResponse<PageResult<SecurityPoolAdjustHistoryDto>> querySecurityPoolAdjustHistoryPage(
             @RequestBody SecurityPoolAdjustHistoryReq req) {
         return ApiResponse.success(securityPoolAdjustHistoryService.querySecurityPoolAdjustHistoryPage(req));
+    }
+
+    /**
+     * 按当前查询条件导出证券池调整历史。
+     * <p>筛选条件与列表一致，不传分页时导出全部命中记录。</p>
+     */
+    @PostMapping("/exportSecurityPoolAdjustHistoryExcel")
+    public ApiResponse<CommonFileDto> exportSecurityPoolAdjustHistoryExcel(
+            @RequestBody SecurityPoolAdjustHistoryReq req) {
+        return ApiResponse.success(securityPoolAdjustHistoryService.exportSecurityPoolAdjustHistoryExcel(req));
     }
 
     /**

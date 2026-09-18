@@ -28,5 +28,7 @@ public class ForbiddenPoolHistoryApiTest extends ControllerApiTestSupport {
     public void shouldSupportForbiddenPoolHistoryQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolHistory/queryForbiddenPoolHistoryPage",
                 "{\"companyCode\":\"C10005\",\"companyName\":\"演示主体\",\"categoryType\":\"company\"}");
+        assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolHistory/exportForbiddenPoolHistoryExcel",
+                "{\"currentUserId\":\"1\",\"companyCode\":\"C10005\"}");
     }
 }

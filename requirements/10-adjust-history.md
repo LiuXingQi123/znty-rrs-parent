@@ -58,6 +58,10 @@
 
 返回 `PageResult<SecurityPoolAdjustHistoryDto>`，取 `records` / `total`。
 
+### 3.1 导出当前查询结果
+
+点击「导出」调用 `POST /api/v1/securityPoolAdjustHistory/exportSecurityPoolAdjustHistoryExcel`，参数与列表筛选相同但不传分页；后端复用列表 SQL 全量查询并回填投资池全路径，Excel 字段顺序与页面表格一致（不含序号），审核状态/是否类转中文后下载。
+
 ---
 
 ## 4. 表格列与渲染

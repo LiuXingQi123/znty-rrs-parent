@@ -31,5 +31,7 @@ public class ForbiddenPoolQueryApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolQuery/queryForbiddenPoolPage",
                 "{\"categoryType\":\"bond\",\"securityStatus\":\"active\",\"entryTimeStart\":\"2026-07-01\",\"entryTimeEnd\":\"2026-07-10\"}");
         assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolQuery/querySecurityTypeList", "{}");
+        assertPostSuccess(mockMvc, "/api/v1/forbiddenPoolQuery/exportForbiddenPoolExcel",
+                "{\"currentUserId\":\"1\",\"securityCode\":\"100001\"}");
     }
 }

@@ -2,6 +2,7 @@ package com.znty.rrs.controller;
 
 import com.znty.rrs.common.ApiResponse;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.entity.commonfile.CommonFileDto;
 import com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryDto;
 import com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryReq;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
@@ -35,6 +36,15 @@ public class ForbiddenPoolQueryController {
     @PostMapping("/queryForbiddenPoolPage")
     public ApiResponse<PageResult<ForbiddenPoolQueryDto>> queryForbiddenPoolPage(@RequestBody ForbiddenPoolQueryReq req) {
         return ApiResponse.success(forbiddenPoolQueryService.queryForbiddenPoolPage(req));
+    }
+
+    /**
+     * 按当前查询条件导出禁投池列表。
+     * <p>筛选条件与列表一致，不传分页时导出全部命中记录。</p>
+     */
+    @PostMapping("/exportForbiddenPoolExcel")
+    public ApiResponse<CommonFileDto> exportForbiddenPoolExcel(@RequestBody ForbiddenPoolQueryReq req) {
+        return ApiResponse.success(forbiddenPoolQueryService.exportForbiddenPoolExcel(req));
     }
 
     /**
