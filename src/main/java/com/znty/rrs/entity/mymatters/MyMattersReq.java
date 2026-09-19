@@ -34,7 +34,7 @@ public class MyMattersReq extends PageRequest {
     /** 审核状态 */
     private String auditStatus;
 
-    /** 步骤状态：pending=待处理 / completed=已完成 */
+    /** 步骤状态：pending=待处理 / completed=已完成（仅 queryMyMattersPage 使用） */
     private String stepStatus;
 
     /** 发起人姓名关键词 */

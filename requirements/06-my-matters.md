@@ -8,9 +8,9 @@
 
 ## 1. 页面概览与初始化
 
-根容器 `#my_matters`，标题「我的事宜」。`mounted` 调用 `loadFlowOptions()`、`loadAlertOpenCount()` 与 `reloadCurrentTab()`。页面带 `el-tabs`：`待处理(pending)` / `已完成(completed)` / `分级规则提醒(gradeRuleAlert)`，`activeTab` 默认 `'pending'`（URL `?tab=gradeRuleAlert` 可直达提醒页签），切换触发 `handleTabClick` 重置页码并按页签加载。
+根容器 `#my_matters`，标题「我的事宜」。`mounted` 调用 `loadFlowOptions()` 与 `loadAllTabsOnEnter()`。页面带 `el-tabs`：`待处理(pending)` / `已完成(completed)` / `我发起的(initiated)` / `分级规则提醒(gradeRuleAlert)`，`activeTab` 默认 `'pending'`（URL `?tab=gradeRuleAlert` / `?tab=initiated` 可直达对应页签），切换触发 `handleTabClick` 重置页码并按页签加载。
 
-顶部统计徽章随页签变化：审批页签为「共 N 条待处理/已完成事宜」，提醒页签为「共 N 条分级规则提醒」。三个 Tab 标题旁均标注条数（大于 0 时显示）：待处理 / 已完成查审批总量，分级规则提醒查待处理提醒数。
+顶部统计徽章随页签变化：审批页签为「共 N 条待处理/已完成/我发起的事宜」，提醒页签为「共 N 条分级规则提醒」。四个 Tab 标题旁均标注条数：待处理 / 已完成 / 我发起的查审批总量，分级规则提醒查提醒总量。
 
 ---
 
@@ -24,7 +24,7 @@
 | `startDateRange` | `null` | 日期范围 | 开始日期（步骤激活时间） |
 | `processDescription` | `''` | 文本输入 | 流程描述关键词，回车查询 |
 | `auditStatus` | `''` | 下拉 | 调整状态（8 码） |
-| `initiatorName` | `''` | 文本输入 | 发起人 |
+| `initiatorName` | `''` | 文本输入 | 发起人（「我发起的」页签隐藏该筛选项） |
 | `currentUserId` | `RrsAuth.getCurrentUser().userId` | — | 前端取登录用户；后端 `'1'` 或 `10000–10100` 视为管理员 |
 
 `auditStatusOptions`：7 码（`-1/00/11/20/21/32/99`），同 dict.js `DICT_AUDIT_STATUS`。无投资池树、无证券类型筛选。
@@ -52,12 +52,18 @@
 | `startDateStart` / `startDateEnd` | `startDateRange[0/1]` | 直接取日期串 |
 | `processDescription` | 表单 | 空串转 null |
 | `auditStatus` | 下拉 | 空串转 null |
-| `stepStatus` | `activeTab` | `pending` 或 `completed`，决定待处理/已完成 |
-| `initiatorName` | 表单 | 空串转 null |
+| `stepStatus` | `activeTab` | 仅待处理/已完成：`pending` / `completed` |
+| `initiatorName` | 表单 | 空串转 null（待处理/已完成） |
 | `currentUserId` | `RrsAuth.getCurrentUser().userId` | 必传；后端 `'1'` 或 `10000–10100` 视为管理员 |
 | `pageIndex` / `pageSize` | 分页 | — |
 
 返回 `PageResult<MyMattersDto>`，取 `records`/`total`。
+
+### 3.3 我发起的列表 `loadInitiatedList`
+
+- 路径：`POST /api/v1/myMatters/queryMyInitiatedMattersPage`（**独立接口**，不复用 `queryMyMattersPage`）
+- 请求体字段与列表筛选相同（`flowIds` / 证券 / 开始日期 / 流程描述 / 审核状态 / `currentUserId` / 分页），**不传** `stepStatus`、`initiatorName`
+- 后端按 `al.adjuster_id = currentUserId` 过滤，取每条申请最新步骤；含流程中与已结束
 
 ---
 
@@ -73,7 +79,7 @@
 | 调整状态 | `auditStatus` | `el-tag` + `auditStatusLabel`/`auditStatusType` |
 | 发起人 | `initiatorName` | 来自 `al.adjuster_name` |
 | 开始时间 | `startTime` | `moment(startTime).format('YYYY-MM-DD HH:mm')`，步骤激活时间 |
-| 操作 | — | `fixed="right"`：待处理页签→「处理」按钮（primary）；已完成页签→「查看」按钮 |
+| 操作 | — | `fixed="right"`：待处理页签→「处理」按钮（primary）；已完成 / 我发起的→「查看」按钮 |
 
 `stepStatusLabel`：`pending`→待处理 / `approve`→通过 / `reject`→驳回 / `submit`→提交 / `auto_process`→自动处理 / `canceled`→已撤回。
 `stepStatusType`：`pending`→warning / `approve`→success / `reject`→danger / `submit`→primary / `auto_process`/`canceled`→info。
@@ -86,14 +92,14 @@
 `openMatterPage(row)`：工作台内走 `RrsWorkbench.openDetailTab`，按场景+证券/主体+批次新开页签，同键复用；「我的事宜」列表 iframe 不跳走。脱离工作台时仍 `location.href`。**若公司工作台不兼容新开 Tab，此处可还原为 `location.href` + 详情页 `history.back()`**（见 [README](README.md)「跳转层可回退」）。
 - 场景：`pool_type=crmw` → CRMW；`category_type=company` 且（`pool_type` 为 forbidden/observe/blacklist/restricted，或目标池 15/16/17/23）→ 禁投主体；否则证券。
 - **待处理** → 对应 `*_approve.html?entryMode=process`，页签标题为「简称 审核」。
-- **已完成** → 对应 `*_detail.html?entryMode=view`，页签标题为「简称 详情」。
+- **已完成 / 我发起的** → 对应 `*_detail.html?entryMode=view`，页签标题为「简称 详情」。
 - 审核/详情页「返回」关闭当前动态页签，回到「我的事宜」并重新拉取列表与角标。
 
 分页参数同前（pageIndex=1, pageSize=20, page-sizes=[10,20,50,100]）。
 
 ### 5.1 分级规则提醒页签
 
-独立表格，不混入待处理/已完成。接口仍是 `POST /api/v1/gradeRuleAlert/queryAlertPage` 与 `editAlertProcessed`，后端流程不变。
+独立表格，不混入待处理/已完成/我发起的。接口仍是 `POST /api/v1/gradeRuleAlert/queryAlertPage` 与 `editAlertProcessed`，后端流程不变。
 
 - 列：证券代码/简称、发行主体、当前分级库、特殊类型、不符合原因、状态、扫描时间。
 - 「去调库」工作台内新开「证券池调整」页签（`security_pool_adjust.html?securityCode=`），不覆盖事宜页。
@@ -106,7 +112,8 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `myMatters/queryMyMattersPage` | flowIds, startDateStart, startDateEnd, processDescription, auditStatus, stepStatus(pending\|completed), initiatorName, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>`（含 flowName, stepName, processDescription, stepStatus, adjustLogId, targetPoolId, adjustBatchNo, securityCode, securityShortName, crmwScode, businessScene） | 我的事宜分页列表（待处理/已完成） |
+| `myMatters/queryMyMattersPage` | flowIds, startDateStart, startDateEnd, processDescription, auditStatus, stepStatus(pending\|completed), initiatorName, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>` | 我的事宜分页列表（待处理/已完成） |
+| `myMatters/queryMyInitiatedMattersPage` | flowIds, startDateStart, startDateEnd, processDescription, auditStatus, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>` | 我发起的事宜分页列表（独立接口） |
 | `myMatters/queryFlowOptionList` | `{currentUserId}` | `List<FlowOptionDto>`（flowId/flowKey/flowName/description） | 我的事宜流程名称下拉 |
 | `gradeRuleAlert/queryAlertPage` | securityCode, alertStatus, pageIndex, pageSize | `PageResult<GradeRuleAlertDto>` | 分级规则提醒页签列表（后端原接口，未改） |
 | `gradeRuleAlert/editAlertProcessed` | id, currentUserId, currentUserName | 更新后的待办 | 标记已处理，不改池 |
@@ -128,26 +135,21 @@
 
 ### 7.2 可见数据范围控制
 
-- **我的事宜**：`al.is_deleted=0`；待处理页签只取最新步骤 `step_status='pending'` 的记录；已完成页签追加 `NOT EXISTS(... step_status='pending' ...)` 确保批次无 pending 步骤。
-- **用户隔离**：非管理员要求该调库记录下存在 `handler_id = currentUserId` 的步骤（即只显示自己参与过的）；`currentUserId` 为空时 `AND 1=0` 强制返回空，防止全量泄露。
+- **我的事宜**：`al.is_deleted=0`；待处理页签只取最新步骤 `step_status='pending'` 的记录；已完成页签追加 `NOT EXISTS(... step_status='pending' ...)` 确保批次无 pending 步骤；我发起的按 `al.adjuster_id = currentUserId` 过滤（含流程中与已结束）。
+- **用户隔离**：
+  - 待处理 / 已完成：非管理员要求该调库记录下存在 `handler_id = currentUserId` 的步骤；管理员可看全部。
+  - 我发起的：一律按发起人 `adjuster_id` 过滤（管理员也只看自己发起的）。
+  - `currentUserId` 为空时 `AND 1=0` 强制返回空，防止全量泄露。
 
 ### 7.3 后端查询逻辑要点（`MyMattersMapper.xml`）
 
 - **主表**：`ip_adjust_log al`
-- **核心子查询**（`<choose>` 按 stepStatus 分支）：
-  - `pending`：`INNER JOIN (SELECT adjust_log_id, MAX(id) AS step_id FROM ip_adjust_step WHERE step_status='pending' [AND handler_id=#{currentUserId} 当非管理员] GROUP BY adjust_log_id) latest` —— 取每条调库记录的最新 pending 步骤
-  - `completed`：`INNER JOIN (SELECT adjust_log_id, MAX(id) AS step_id FROM ip_adjust_step GROUP BY adjust_log_id) latest` —— 取每条记录的最新步骤（不限状态）
-  - 再 `INNER JOIN ip_adjust_step s ON s.id=latest.step_id` 取该步骤详情
-- **流程关联**：`LEFT JOIN wf_flow_node n ON n.id=s.flow_node_id` → `LEFT JOIN wf_flow_definition f ON f.id=n.flow_id AND f.is_deleted=0`（LEFT JOIN，流程可能缺失）
-- **WHERE**：
-  - `al.is_deleted=0`
-  - 用户隔离（非管理员）：`AND EXISTS(SELECT 1 FROM ip_adjust_step us WHERE us.adjust_log_id=al.id AND us.handler_id=#{currentUserId})`
-  - `currentUserId` 为空时：`AND 1=0`（强制返回空）
-  - `flowIds` → `f.id IN (...)`
-  - `startDateStart`/`startDateEnd` → `s.start_time >= CONCAT(#{x},' 00:00:00')` / `<= CONCAT(#{x},' 23:59:59')`
-  - `processDescription` → 对 `CONCAT(adjuster_name,' 将 ',security_short_name,' ',adjust_mode,' ',target_pool_name,' 的审批申请')` 整体 `LIKE`
-  - `auditStatus` → `al.audit_status =`
-  - `completed` 额外：`AND NOT EXISTS(SELECT 1 FROM ip_adjust_step ps WHERE ps.step_status='pending' AND ps.adjust_batch_no=al.adjust_batch_no)`
+- **核心子查询**（`queryMyMattersPage` 按 stepStatus 分支）：
+  - `pending`：取每条调库记录的最新 pending 步骤（非管理员再限 `handler_id`）
+  - `completed`：取每条记录的最新步骤（不限状态），并要求同批次无 pending
+- **我发起的**（独立 SQL `queryMyInitiatedMattersPage`）：取每条记录最新步骤；`WHERE al.adjuster_id=#{currentUserId}`（管理员也只看自己发起的）
+- **流程关联**：`LEFT JOIN wf_flow_node` → `LEFT JOIN wf_flow_definition`
+- **WHERE 公共筛选**：`flowIds` / 证券 / 开始日期 / 流程描述 / `auditStatus`；`currentUserId` 为空时 `AND 1=0`
   - `initiatorName` → `al.adjuster_name LIKE`
 - **GROUP BY**：`s.adjust_log_id`（去重，避免一条调库记录多条步骤导致重复）
 - **SELECT 计算列**：`processDescription` 由 CONCAT 生成；`flowName`=f.name、`stepName`=s.node_label、`initiatorName`=al.adjuster_name

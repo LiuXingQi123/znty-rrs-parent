@@ -28,7 +28,10 @@ public class MyMattersService {
     private InvestmentPoolService investmentPoolService;
 
     /**
-     * 分页查询我的事宜列表。
+     * 分页查询我的事宜列表（待处理 / 已完成）。
+     *
+     * @param req 筛选与分页参数
+     * @return 分页结果
      */
     public PageResult<MyMattersDto> queryMyMattersPage(MyMattersReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
@@ -40,7 +43,25 @@ public class MyMattersService {
     }
 
     /**
+     * 分页查询我发起的事宜列表。
+     *
+     * @param req 筛选与分页参数（按 currentUserId 作为发起人过滤）
+     * @return 分页结果
+     */
+    public PageResult<MyMattersDto> queryMyInitiatedMattersPage(MyMattersReq req) {
+        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
+        List<MyMattersDto> list = myMattersMapper.queryMyInitiatedMattersPage(req);
+        // 将流程描述中的目标池叶子名称替换为全路径
+        replacePoolNameWithFullPath(list);
+        PageInfo<MyMattersDto> pageInfo = new PageInfo<>(list);
+        return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /**
      * 查询当前用户事宜中出现过的流程下拉选项。
+     *
+     * @param req 含 currentUserId
+     * @return 流程下拉选项
      */
     public List<FlowOptionDto> queryFlowOptionList(MyMattersReq req) {
         return myMattersMapper.queryFlowOptionList(req);

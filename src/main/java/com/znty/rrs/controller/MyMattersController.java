@@ -25,10 +25,19 @@ public class MyMattersController {
     @Resource
     private MyMattersService myMattersService;
 
-    /** 分页查询我的事宜列表 */
+    /** 分页查询我的事宜列表（待处理 / 已完成） */
     @PostMapping("/queryMyMattersPage")
     public ApiResponse<PageResult<MyMattersDto>> queryMyMattersPage(@RequestBody MyMattersReq req) {
         return ApiResponse.success(myMattersService.queryMyMattersPage(req));
+    }
+
+    /**
+     * 分页查询我发起的事宜列表。
+     * <p>按当前用户作为发起人过滤，含流程中与已结束记录。</p>
+     */
+    @PostMapping("/queryMyInitiatedMattersPage")
+    public ApiResponse<PageResult<MyMattersDto>> queryMyInitiatedMattersPage(@RequestBody MyMattersReq req) {
+        return ApiResponse.success(myMattersService.queryMyInitiatedMattersPage(req));
     }
 
     /** 查询我的事宜流程名称下拉选项 */

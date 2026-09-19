@@ -13,8 +13,11 @@ import java.util.List;
 @Mapper
 public interface MyMattersMapper {
 
-    /** 分页查询我的事宜列表 */
+    /** 分页查询我的事宜列表（待处理 / 已完成） */
     List<MyMattersDto> queryMyMattersPage(MyMattersReq req);
+
+    /** 分页查询我发起的事宜列表 */
+    List<MyMattersDto> queryMyInitiatedMattersPage(MyMattersReq req);
 
     /** 查询我的事宜流程名称下拉选项 */
     List<FlowOptionDto> queryFlowOptionList(MyMattersReq req);

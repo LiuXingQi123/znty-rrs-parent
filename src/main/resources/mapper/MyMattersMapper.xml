@@ -4,7 +4,7 @@
 <mapper namespace="com.znty.rrs.mapper.MyMattersMapper">
     <!-- 我的事宜 mapper，对应调库记录、调库步骤和流程定义表，提供当前用户相关流程事项查询功能 -->
 
-    <!-- 分页查询我的事宜列表 -->
+    <!-- 分页查询我的事宜列表（待处理 / 已完成） -->
     <select id="queryMyMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
         SELECT s.id
                ,s.adjust_log_id
@@ -46,6 +46,7 @@
         INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
                                          AND dst.is_deleted = 0
         <choose>
+            <!-- 待处理：取当前用户待办步骤中最新一条 -->
             <when test="stepStatus == 'pending'">
                 INNER JOIN (
                     SELECT adjust_log_id
@@ -63,6 +64,7 @@
                     GROUP BY adjust_log_id
                 ) latest ON latest.adjust_log_id = al.id
             </when>
+            <!-- 已完成：取该调库记录最新步骤（不限状态） -->
             <otherwise>
                 INNER JOIN (
                     SELECT adjust_log_id
@@ -77,6 +79,7 @@
         LEFT JOIN wf_flow_definition f ON f.id = n.flow_id AND f.is_deleted = 0
         <where>
             al.is_deleted = 0
+            <!-- 非管理员只看自己参与过的流程 -->
             <if test="currentUserId != null and currentUserId != '' and !@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)">
                 AND EXISTS (
                     SELECT 1
@@ -84,6 +87,9 @@
                     WHERE us.adjust_log_id = al.id
                       AND us.handler_id = #{currentUserId}
                 )
+            </if>
+            <if test="currentUserId == null or currentUserId == ''">
+                AND 1 = 0
             </if>
             <if test="flowIds != null and flowIds.size() > 0">
                 AND f.id IN
@@ -128,6 +134,103 @@
             </if>
             <if test="initiatorName != null and initiatorName != ''">
                 AND al.adjuster_name LIKE CONCAT('%', #{initiatorName}, '%')
+            </if>
+        </where>
+        GROUP BY s.adjust_log_id
+        ORDER BY s.id DESC
+    </select>
+
+    <!-- 分页查询我发起的事宜列表（按发起人过滤，含流程中与已结束） -->
+    <select id="queryMyInitiatedMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
+        SELECT s.id
+               ,s.adjust_log_id
+               ,al.security_code
+               ,al.security_short_name
+               ,al.crmw_scode
+               ,al.target_pool_id
+               ,al.target_pool_name
+               ,al.adjust_batch_no
+               ,s.id AS stepId
+               ,f.name AS flowName
+               ,s.node_label AS stepName
+               -- 主体禁投：先看 pool_type，旧数据无类型时再用 15/16/17/23 兜底
+               ,CASE WHEN al.pool_type = 'crmw'
+                     THEN 'crmwAdjust'
+                     WHEN dst.category_type = 'company'
+                          AND (
+                              al.pool_type IN ('forbidden', 'observe', 'blacklist', 'restricted')
+                              OR al.target_pool_id IN (15, 16, 17, 23)
+                          )
+                     THEN 'forbiddenCompanyAdjust'
+                     ELSE 'securityAdjust'
+                END AS businessScene
+               ,al.audit_status
+               ,s.step_status
+               ,CONCAT(
+                    COALESCE(al.adjuster_name, ''),
+                    ' 将 ',
+                    COALESCE(al.security_short_name, ''),
+                    ' ',
+                    COALESCE(al.adjust_mode, ''),
+                    ' ',
+                    COALESCE(al.target_pool_name, ''),
+                    ' 的审批申请'
+                ) AS processDescription
+               ,al.adjuster_name AS initiatorName
+               ,s.start_time
+        FROM ip_adjust_log al
+        INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
+                                         AND dst.is_deleted = 0
+        INNER JOIN (
+            SELECT adjust_log_id
+                   ,MAX(id) AS step_id
+            FROM ip_adjust_step
+            GROUP BY adjust_log_id
+        ) latest ON latest.adjust_log_id = al.id
+        INNER JOIN ip_adjust_step s ON s.id = latest.step_id
+        LEFT JOIN wf_flow_node n ON n.id = s.flow_node_id
+        LEFT JOIN wf_flow_definition f ON f.id = n.flow_id AND f.is_deleted = 0
+        <where>
+            al.is_deleted = 0
+            <!-- 按发起人过滤（管理员也只看自己发起的） -->
+            <if test="currentUserId != null and currentUserId != ''">
+                AND al.adjuster_id = #{currentUserId}
+            </if>
+            <if test="currentUserId == null or currentUserId == ''">
+                AND 1 = 0
+            </if>
+            <if test="flowIds != null and flowIds.size() > 0">
+                AND f.id IN
+                <foreach collection="flowIds" item="flowId" open="(" separator="," close=")">
+                    #{flowId}
+                </foreach>
+            </if>
+            <if test="securityCode != null and securityCode != ''">
+                AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="securityShortName != null and securityShortName != ''">
+                AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')
+            </if>
+            <if test="startDateStart != null and startDateStart != ''">
+                AND s.start_time &gt;= CONCAT(#{startDateStart}, ' 00:00:00')
+            </if>
+            <if test="startDateEnd != null and startDateEnd != ''">
+                AND s.start_time &lt;= CONCAT(#{startDateEnd}, ' 23:59:59')
+            </if>
+            <if test="processDescription != null and processDescription != ''">
+                AND CONCAT(
+                        COALESCE(al.adjuster_name, ''),
+                        ' 将 ',
+                        COALESCE(al.security_short_name, ''),
+                        ' ',
+                        COALESCE(al.adjust_mode, ''),
+                        ' ',
+                        COALESCE(al.target_pool_name, ''),
+                        ' 的审批申请'
+                    ) LIKE CONCAT('%', #{processDescription}, '%')
+            </if>
+            <if test="auditStatus != null and auditStatus != ''">
+                AND al.audit_status = #{auditStatus}
             </if>
         </where>
         GROUP BY s.adjust_log_id

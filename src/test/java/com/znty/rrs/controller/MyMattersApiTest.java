@@ -46,5 +46,7 @@ public class MyMattersApiTest extends ControllerApiTestSupport {
         assertThat(req.getSecurityShortName()).isEqualTo("某电力");
 
         assertPostSuccess(mockMvc, "/api/v1/myMatters/queryFlowOptionList", "{\"currentUserId\":\"1\"}");
+        assertPostSuccess(mockMvc, "/api/v1/myMatters/queryMyInitiatedMattersPage",
+                "{\"currentUserId\":\"2\",\"pageIndex\":1,\"pageSize\":20}");
     }
 }
