@@ -42,6 +42,14 @@
                 ) AS processDescription
                ,al.adjuster_name AS initiatorName
                ,s.start_time
+               ,CASE WHEN TIMESTAMPDIFF(MINUTE, s.start_time, NOW()) &lt; 60
+                     THEN CONCAT(TIMESTAMPDIFF(MINUTE, s.start_time, NOW()), '分钟前')
+                     WHEN TIMESTAMPDIFF(HOUR, s.start_time, NOW()) &lt; 24
+                     THEN CONCAT(TIMESTAMPDIFF(HOUR, s.start_time, NOW()), '小时前')
+                     WHEN TIMESTAMPDIFF(DAY, s.start_time, NOW()) &lt; 30
+                     THEN CONCAT(TIMESTAMPDIFF(DAY, s.start_time, NOW()), '天前')
+                     ELSE CONCAT(TIMESTAMPDIFF(MONTH, s.start_time, NOW()), '个月前')
+                END AS showDate
         FROM ip_adjust_log al
         INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
                                          AND dst.is_deleted = 0

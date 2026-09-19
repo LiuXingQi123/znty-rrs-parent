@@ -62,4 +62,7 @@ public class MyMattersDto {
     /** 开始时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date startTime;
+
+    /** 展示时间 */
+    private String showDate;
 }
