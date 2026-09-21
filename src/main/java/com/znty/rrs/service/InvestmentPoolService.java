@@ -355,16 +355,16 @@ public class InvestmentPoolService {
         }
         // 解析经办人 ID
         String operatorId = getOperatorId(req);
-        // 创建信用债大库(new)顶级节点，并追加一级~五级子库
-        InvestmentPoolBo credit = addSeedPool(null, "credit_bond_root", "信用债大库(new)", PoolType.CREDIT_BOND.getCode(), 1, 1, 1, operatorId);
+        // 创建信用债大库(new)顶级节点，并追加一级~五级子库（完整 Demo 中 outer_sort=9）
+        InvestmentPoolBo credit = addSeedPool(null, "credit_bond_root", "信用债大库(new)", PoolType.CREDIT_BOND.getCode(), 1, 9, 1, operatorId);
         // 新增固定层级池
         addLevelPools(credit.getId(), PoolType.CREDIT_BOND.getCode(), operatorId);
-        // 转债库（outer_sort=2）
-        addSeedPool(null, "convertible_bond_root", "转债库", PoolType.CONVERTIBLE_BOND.getCode(), 1, 2, 1, operatorId);
-        // 境外债（outer_sort=3）
-        addSeedPool(null, "offshore_bond_root", "境外债", PoolType.OFFSHORE_BOND.getCode(), 1, 3, 1, operatorId);
-        // CRMW库（仅根池，无子集，outer_sort=9）
-        addSeedPool(null, "crmw_root", "CRMW库", PoolType.CRMW.getCode(), 1, 9, 1, operatorId);
+        // 转债库（完整 Demo 中 outer_sort=10；本接口仅作空库兜底，不以专户/权益树为主路径）
+        addSeedPool(null, "convertible_bond_root", "转债库", PoolType.CONVERTIBLE_BOND.getCode(), 1, 10, 1, operatorId);
+        // 境外债（完整 Demo 中 outer_sort=11）
+        addSeedPool(null, "offshore_bond_root", "境外债", PoolType.OFFSHORE_BOND.getCode(), 1, 11, 1, operatorId);
+        // CRMW库（仅根池，无子集，完整 Demo 中 outer_sort=17）
+        addSeedPool(null, "crmw_root", "CRMW库", PoolType.CRMW.getCode(), 1, 17, 1, operatorId);
         return queryPoolList(req);
     }
 

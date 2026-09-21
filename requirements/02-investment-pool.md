@@ -288,7 +288,7 @@
 
 ### 6.7 种子数据初始化
 
-`addSeedPoolList` 幂等：`queryPoolTotalCount > 0` 直接返回现有列表。首次初始化创建信用债大库+一~五级库、境外债库、转债库、CRMW 根池（不以专户种子为主路径）。该接口前端未调用（依赖 SQL 脚本预置数据），供首次部署/测试手动调用。
+`addSeedPoolList` 幂等：`queryPoolTotalCount > 0` 直接返回现有列表。首次初始化仅创建信用债大库+一~五级库、境外债库、转债库、CRMW 根池。完整树（含公司股票库、转债产品库、股票产品库 A/H 股、公司港股库、公司基金库、基金产品库、专户债券产品库）以 `sql/rrs_pool_init_demo_data.sql` 为准；转债产品库 `outer_sort=7`、专户债券产品库 `outer_sort=8`，依次紧挨信用债大库(new)（`outer_sort=9`）之上。该接口前端未调用，供首次部署/测试手动调用。
 
 ## 7. 验收标准
 
