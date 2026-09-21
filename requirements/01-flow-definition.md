@@ -311,4 +311,4 @@
 - Service：`FlowService.java`（`queryFlowPage`、`addFlow`、`editFlowDraft`、`editFlowToPublished`、`validateBeforePublish`、`syncNormalized`、`editFlowStatus`、`queryFlowVersionList/Detail`）
 - Mapper：`FlowMapper.xml`
 - 实体：`FlowReq`、`DesignerReq`、`FlowDto`、`VersionDto`、`CanvasNodeDto`、`CanvasEdgeDto`、`RoleDto`、`UserDto`、`NodeApprovalConfigBo`、`NodeApprovalHandlerBo`、`EdgeCondRuleBo`
-- SQL：`sql/rrs_flow_definition_schema.sql`、`sql/rrs_flow_definition_demo_data.sql`
+- SQL：`sql/rrs_flow_definition_schema.sql`、`sql/rrs_flow_definition_demo_data.sql`（Demo 含债券 12 + 股票 6 + 基金 6 + 主体禁止库 2，股票/基金为债券一般/快速/批量入出库的同构副本，`category`/`flow_key` 分别为 `stock`/`fund`）
