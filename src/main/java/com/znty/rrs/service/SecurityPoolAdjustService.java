@@ -4550,7 +4550,7 @@ public class SecurityPoolAdjustService {
                              null, null, null, null, now);
             return;
         }
-        // 排除本批次已参与人员，保证同一人不能出现在多个环节
+        // 只排除本批次真正审核过的人，待办和抢占跳过的人仍可进入下一节点
         handlers = excludeParticipatedHandlers(adjustLogId, adjustBatchNo, handlers);
         for (HandlerTarget handler : handlers) {
             // 插入单条步骤记录到 ip_adjust_step
@@ -4560,7 +4560,7 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 排除本批次已参与处理人；配置非空但剔光时抛业务异常。
+     * 排除本批次真正审核过的人；配置非空但剔光时抛业务异常。
      */
     private List<HandlerTarget> excludeParticipatedHandlers(Long adjustLogId, String adjustBatchNo,
                                                             List<HandlerTarget> handlers) {

@@ -476,7 +476,11 @@ public class SecurityPoolAdjustFlowServiceTest {
 
         IpAdjustStepBo submitStep = buildPendingStep(1L, "2", "研究员1");
         submitStep.setStepStatus("submit");
-        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Arrays.asList(submitStep, step));
+        submitStep.setProcessAction("submit");
+        IpAdjustStepBo processed = buildPendingStep(10L, "3", "研究员2");
+        processed.setStepStatus("approve");
+        processed.setProcessAction("approve");
+        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Arrays.asList(submitStep, processed));
 
         service.submitAdjustAudit(req);
 
@@ -487,7 +491,7 @@ public class SecurityPoolAdjustFlowServiceTest {
         assertThat(captor.getValue().getStepStatus()).isEqualTo("pending");
     }
 
-    /** 下一审批节点配置人全部已参与时抛业务异常且不落步骤。 */
+    /** 下一审批节点配置人全部已真正审核过时抛业务异常且不落步骤。 */
     @Test
     public void submitAdjustAuditShouldRejectWhenNoAvailableHandlerAfterExclude() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
@@ -509,7 +513,10 @@ public class SecurityPoolAdjustFlowServiceTest {
         NodeApprovalHandlerBo onlyParticipated = buildApprovalHandler(301L, 201L, 3L, "研究员2");
         mockFlowAdvance(flowMapper, currentNode, nextNode, edge, nextConfig,
                 Collections.singletonList(onlyParticipated));
-        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Collections.singletonList(step));
+        IpAdjustStepBo processed = buildPendingStep(10L, "3", "研究员2");
+        processed.setStepStatus("approve");
+        processed.setProcessAction("approve");
+        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Collections.singletonList(processed));
 
         try {
             service.submitAdjustAudit(req);
@@ -520,6 +527,44 @@ public class SecurityPoolAdjustFlowServiceTest {
             return;
         }
         throw new AssertionError("下一节点无可用审批人时应抛出业务异常");
+    }
+
+    /** 抢占跳过的人仍可作为下一节点审批人。 */
+    @Test
+    public void submitAdjustAuditShouldKeepSkippedHandlerForNextNode() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        SecurityPoolAdjustFlowService service = buildService(mapper, flowMapper);
+
+        IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
+        step.setApprovalStrategy("preempt");
+        step.setNodeLabel("部门负责人审核");
+        SecurityPoolAdjustAuditReq req = buildReq(10L, "3", "研究员2", "同意");
+        when(mapper.queryAdjustStepById(10L)).thenReturn(step);
+        when(mapper.editAdjustStepProcess(10L, "approve", "approve", "同意")).thenReturn(1);
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(buildLog("00", "2")));
+
+        FlowNodeBo currentNode = buildFlowNode(10103L, "n3", "approval", "部门负责人审核");
+        FlowNodeBo nextNode = buildFlowNode(10104L, "n4", "approval", "风控负责人审核");
+        FlowEdgeBo edge = buildFlowEdge(10103L, 10104L, "approve");
+        NodeApprovalConfigBo nextConfig = buildApprovalConfig(201L, 10104L, "preempt");
+        mockFlowAdvance(flowMapper, currentNode, nextNode, edge, nextConfig,
+                Collections.singletonList(buildApprovalHandler(301L, 201L, 4L, "研究员3")));
+
+        IpAdjustStepBo processed = buildPendingStep(10L, "3", "研究员2");
+        processed.setStepStatus("approve");
+        processed.setProcessAction("approve");
+        IpAdjustStepBo skipped = buildPendingStep(11L, "4", "研究员3");
+        skipped.setStepStatus("approve");
+        skipped.setProcessAction("skipped");
+        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Arrays.asList(processed, skipped));
+
+        service.submitAdjustAudit(req);
+
+        ArgumentCaptor<IpAdjustStepBo> captor = ArgumentCaptor.forClass(IpAdjustStepBo.class);
+        verify(mapper, times(1)).addAdjustStep(captor.capture());
+        assertThat(captor.getValue().getHandlerId()).isEqualTo("4");
+        assertThat(captor.getValue().getStepStatus()).isEqualTo("pending");
     }
 
     /** 评级联动改判：改判池在矩阵允许列表内时，应更新日志目标池并落地到改判池。 */

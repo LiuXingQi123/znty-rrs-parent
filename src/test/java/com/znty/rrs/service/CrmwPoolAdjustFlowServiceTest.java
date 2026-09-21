@@ -233,7 +233,10 @@ public class CrmwPoolAdjustFlowServiceTest {
         NodeApprovalHandlerBo availableHandler = buildApprovalHandler(302L, 201L, 4L, "研究员3");
         mockFlowAdvance(flowMapper, currentNode, nextNode, edge, nextConfig,
                 Arrays.asList(participatedHandler, availableHandler));
-        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Collections.singletonList(step));
+        IpAdjustStepBo processed = buildPendingStep(10L, "3", "研究员2");
+        processed.setStepStatus("approve");
+        processed.setProcessAction("approve");
+        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Collections.singletonList(processed));
 
         service.submitAdjustAudit(req);
 
@@ -244,7 +247,7 @@ public class CrmwPoolAdjustFlowServiceTest {
         assertThat(captor.getValue().getStepStatus()).isEqualTo("pending");
     }
 
-    /** 下一审批节点配置人全部已参与时抛业务异常且不落步骤。 */
+    /** 下一审批节点配置人全部已真正审核过时抛业务异常且不落步骤。 */
     @Test
     public void submitAdjustAuditShouldRejectWhenNoAvailableHandlerAfterExclude() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
@@ -266,7 +269,10 @@ public class CrmwPoolAdjustFlowServiceTest {
         NodeApprovalHandlerBo onlyParticipated = buildApprovalHandler(301L, 201L, 3L, "研究员2");
         mockFlowAdvance(flowMapper, currentNode, nextNode, edge, nextConfig,
                 Collections.singletonList(onlyParticipated));
-        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Collections.singletonList(step));
+        IpAdjustStepBo processed = buildPendingStep(10L, "3", "研究员2");
+        processed.setStepStatus("approve");
+        processed.setProcessAction("approve");
+        when(mapper.queryAdjustStepByBatchList(1L, "BATCH001")).thenReturn(Collections.singletonList(processed));
 
         try {
             service.submitAdjustAudit(req);

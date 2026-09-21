@@ -1,5 +1,6 @@
 package com.znty.rrs.common.util;
 
+import com.znty.rrs.common.enums.ProcessAction;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 
 import java.util.ArrayList;
@@ -11,7 +12,8 @@ import java.util.function.Function;
 
 /**
  * 调库流程步骤处理人排除工具。
- * <p>同一批次中已出现过的 handler_id 不得再进入后续人工/自动步骤。</p>
+ * <p>同一批次中已实际处理过的 handler_id 不得再进入后续人工/自动步骤；
+ * 待处理、抢占跳过、系统自动处理不算已参与。</p>
  */
 public final class AdjustStepHandlerExcludeUtil {
 
@@ -22,7 +24,8 @@ public final class AdjustStepHandlerExcludeUtil {
     }
 
     /**
-     * 从本批次已有步骤中收集已参与处理人 ID（handler_id 非空）。
+     * 从本批次已有步骤中收集已实际处理过的 handler_id。
+     * <p>仅统计 submit/approve/reject；pending、skipped、auto_process 不占用后续环节。</p>
      *
      * @param existingSteps 本批次已有步骤
      * @return 已参与处理人 ID 集合
@@ -33,7 +36,7 @@ public final class AdjustStepHandlerExcludeUtil {
             return result;
         }
         for (IpAdjustStepBo step : existingSteps) {
-            if (step == null || step.getHandlerId() == null) {
+            if (step == null || step.getHandlerId() == null || !isActualParticipation(step)) {
                 continue;
             }
             String handlerId = step.getHandlerId().trim();
@@ -42,6 +45,19 @@ public final class AdjustStepHandlerExcludeUtil {
             }
         }
         return result;
+    }
+
+    /**
+     * 是否真正审核过：只看 process_action 是否为 submit/approve/reject。
+     */
+    public static boolean isActualParticipation(IpAdjustStepBo step) {
+        if (step == null || step.getProcessAction() == null) {
+            return false;
+        }
+        String action = step.getProcessAction().trim();
+        return ProcessAction.SUBMIT.getCode().equals(action)
+                || ProcessAction.APPROVE.getCode().equals(action)
+                || ProcessAction.REJECT.getCode().equals(action);
     }
 
     /**

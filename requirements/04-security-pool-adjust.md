@@ -340,7 +340,7 @@
 
 **⑤ 后续处理** `postSubmitProcess`：若 `req.securityInfo` 非空，`buildMergedSecurityInfo` 用主档 + 前端传入字段合并后，按本次提交产生的**每个** `logId` 各 `INSERT` 一行 `ip_adjust_security_snapshot`（本笔调库证券信息留痕）。**不**再 UPDATE `rrs_securityinfo`（主档仍为全站真相源）。
 
-**`createInitialSteps`**（懒创建）：start（auto_process）→ 若下一节点是发起人节点则自动 submit 并继续 → 若是审批节点则 `createPendingSteps`（按处理人展开为多条 pending 记录，并排除本批次已出现过的 `handler_id`，含刚写入的发起人；剔光则报错）返回 false → 若是 end 则 auto_process 并返回 true。
+**`createInitialSteps`**（懒创建）：start（auto_process）→ 若下一节点是发起人节点则自动 submit 并继续 → 若是审批节点则 `createPendingSteps`（按处理人展开为多条 pending 记录，并排除本批次真正审核过的 `handler_id`，含刚写入的发起人；pending/skipped/auto_process 不算已参与；剔光则报错）返回 false → 若是 end 则 auto_process 并返回 true。
 
 ### 3.8 涉及的数据库表与写入
 
