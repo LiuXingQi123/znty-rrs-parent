@@ -26,6 +26,12 @@ spring:
 
 server:
   port: 18090
+  # HTTP Servlet 编码：强制响应使用 UTF-8，避免中文乱码
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force-response: true
 
 # MyBatis ORM 框架配置
 mybatis:
