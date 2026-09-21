@@ -309,7 +309,7 @@
     <!-- 证券池调库相关评级主体：担保人、权益人均查询四类关系主体 -->
     <select id="queryRelatedRatingSubjectList"
             resultType="com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto">
-        <!-- 从 Wind 债券发行主体关系表读取当前证券的四类候选，并按关系优先级去重。 -->
+        <!-- 从 Wind 债券发行主体关系表读取当前证券的四类候选；同一主体兼多类关系时按类型分别返回。 -->
         WITH source_subject AS (
             SELECT issuer.s_info_windcode AS security_code
                    ,issuer.s_info_compcode AS company_code
@@ -322,13 +322,8 @@
                         WHEN 115201000 THEN 4
                     END AS relation_sort_no
                    ,ROW_NUMBER() OVER (
-                       PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode
-                       ORDER BY CASE issuer.s_info_typecode
-                                    WHEN 115004000 THEN 1
-                                    WHEN 115203000 THEN 2
-                                    WHEN 115202000 THEN 3
-                                    WHEN 115201000 THEN 4
-                                END ASC
+                       PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode
+                       ORDER BY issuer.opdate DESC
                    ) AS row_num
             FROM ais_inv_ods.wind_cbondissuer issuer
             WHERE issuer.s_info_windcode = #{securityCode}
@@ -336,7 +331,7 @@
               AND issuer.s_info_compcode != ''
               AND issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
         )
-        <!-- 每个主体仅保留优先级最高的一类有效关系。 -->
+        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行。 -->
         ,eligible_subject AS (
             SELECT security_code
                    ,company_code

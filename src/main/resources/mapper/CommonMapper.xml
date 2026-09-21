@@ -63,7 +63,7 @@
 
     <!-- 批量查询证券的四类关系主体及其最新内评；同一代码存在多条评分时按 ts 取最新记录 -->
     <select id="queryGuarantorGradeList" resultType="com.znty.rrs.entity.common.GuarantorGradeDto">
-        <!-- 从 Wind 债券发行主体关系表读取四类候选，并按关系优先级对同证券、同主体去重。 -->
+        <!-- 从 Wind 债券发行主体关系表读取四类候选；同一主体兼多类关系时按类型分别返回。 -->
         WITH source_guarantor AS (
             SELECT issuer.s_info_windcode AS security_code
                    ,issuer.s_info_compcode AS windcode
@@ -76,13 +76,8 @@
                         WHEN 115201000 THEN 4
                     END AS guarantor_sort_no
                    ,ROW_NUMBER() OVER (
-                       PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode
-                       ORDER BY CASE issuer.s_info_typecode
-                                    WHEN 115004000 THEN 1
-                                    WHEN 115203000 THEN 2
-                                    WHEN 115202000 THEN 3
-                                    WHEN 115201000 THEN 4
-                                END ASC
+                       PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode
+                       ORDER BY issuer.opdate DESC
                    ) AS row_num
             FROM ais_inv_ods.wind_cbondissuer issuer
             WHERE issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
@@ -93,7 +88,7 @@
                   #{securityCode}
               </foreach>
         )
-        <!-- 每个证券和主体仅保留优先级最高的一类有效关系。 -->
+        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行。 -->
         ,eligible_guarantor AS (
             SELECT security_code
                    ,windcode
