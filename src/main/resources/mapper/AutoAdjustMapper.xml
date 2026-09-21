@@ -81,7 +81,7 @@
     <!--
       主体下新债自动入池候选（对齐老系统 AutoAdjustInNewBondToLimitPoolJob）：
       1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池
-      2) 旗下 bond 大类未到期、尚未在 targetPoolId
+      2) 旗下 bond 大类未退市、未到期、尚未在 targetPoolId
       3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
       4) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
     -->
@@ -97,6 +97,7 @@
                                          AND dst.category_type = 'bond'
         WHERE bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
+          AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
@@ -141,7 +142,7 @@
     <!--
       主体下债券同池自动入库（对应老系统 IP_RULE type=0「主体下债券自动入库」）：
       1) 主体已在 poolId 且 company 大类、audit_status=20
-      2) 旗下 bond 大类未到期（含到期当天，对齐老 enddate &gt;= sysdate）、尚未在同一 poolId
+      2) 旗下 bond 大类未退市、未到期（含到期当天，对齐老 enddate &gt;= sysdate）、尚未在同一 poolId
       3) 池 market_codes 为空/[] 不限制市场；否则债市场须命中池配置（对齐 ip_investmarket）
       4) 不排除临时代码已更新（与 Job 版 queryCompanyNewBondForAutoIn 区分）
       5) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
@@ -160,6 +161,7 @@
                                         AND IFNULL(p.is_deleted, 0) = 0
         WHERE bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
+          AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
@@ -461,7 +463,7 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- 外评入池后同批跟进：主体旗下尚未在同一目标池的未到期债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
+    <!-- 外评入池后同批跟进：主体旗下尚未在同一目标池的未退市、未到期债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyBondNotInSamePoolForAutoIn"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT bond.wind_code AS security_code
@@ -474,6 +476,7 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE bond.issuer_code = #{companyCode}
+          AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
@@ -495,7 +498,7 @@
         ORDER BY bond.wind_code ASC
     </select>
 
-    <!-- 外评出池后顺带调出：主体旗下已在同一目标池的债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
+    <!-- 外评出池后顺带调出：主体旗下已在同一目标池的未退市债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyBondInSamePoolForAutoOut"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT bond.wind_code AS security_code
@@ -510,6 +513,7 @@
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
         WHERE bond.issuer_code = #{companyCode}
+          AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
@@ -547,7 +551,7 @@
                  ,ips.security_code ASC
     </select>
 
-    <!-- 主体不在指定池时，将其旗下已在债券池的债调出。
+    <!-- 主体不在指定池时，将其旗下已在债券池的未退市债调出。
          当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制。 -->
     <select id="queryBondInPoolWhenCompanyNotIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT bond.wind_code AS security_code
@@ -563,6 +567,7 @@
         WHERE ips.target_pool_id = #{bondPoolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
+          AND bond.security_status != 'D'
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
         </if>

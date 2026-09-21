@@ -35,7 +35,7 @@ import java.util.Map;
  * 主体下债券自动入库任务（同池）
  * <p>
  * 对应老系统 IP_RULE type=0「主体下债券自动入库」：主体已在目标池 → 旗下 bond 大类、
- * 未到期（含到期当天）、尚未在<strong>同一池</strong>的债券自动入池；尊重池 market_codes（空不限制）；
+ * 未退市、未到期（含到期当天）、尚未在<strong>同一池</strong>的债券自动入池；尊重池 market_codes（空不限制）；
  * 不排除临时代码已更新记录。与 {@link CompanyNewBondAutoInService}
  * （对应 AutoAdjustInNewBondToLimitPoolJob，可跨池、排除临时代码）区分。
  * </p>
@@ -64,12 +64,12 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、17（黑名单质押库）内的主体，将其旗下符合条件的债券补充调入主体所在的同一池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体所在池 + 债券入池目标池）：可选；与投资池「关系配置 → 自动调入规则」中绑定本任务的池取并集后扫描\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
-                    + "处理规则：主体已在目标池时，将其旗下未到期（含到期当天）且未在同一池的债券自动入池\n"
+                    + "处理规则：主体已在目标池时，将其旗下未退市、未到期（含到期当天）且未在同一池的债券自动入池\n"
                     + "17 特别规则：扫描黑名单质押库时再次校验主体三条件，三个条件均不满足则不补债\n"
                     + "市场规则：目标池 market_codes 为空或 [] 时不限制；有配置时债券须命中允许市场\n"
                     + "限制规则：债券已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "关系调出：入池成功后，按目标池调入互斥关系及反向调入限制关系自动调出债券原所在池并记录日志\n"
-                    + "范围说明：不排除已更新临时代码、ABS、CRMW；跨池场景请使用“在池主体旗下债券自动入池”任务\n"
+                    + "范围说明：排除退市债；不排除已更新临时代码、ABS、CRMW；跨池场景请使用“在池主体旗下债券自动入池”任务\n"
                     + "CRMW 说明：CRMW 证券跟随主体进入普通目标池时写 ip_pool_status，不写 CRMW 组合状态表\n"
                     + "参数格式错误时，本轮任务失败";
 
@@ -142,7 +142,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "目标池列表 poolIds=" + poolIds + "（主体与债同一池）");
         infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、rrs_securityinfo.issuer_code非空、"
-                + "maturity_date为空或>=今日；发行主体已在目标池 " + poolIds
+                + "security_status!=D、maturity_date为空或>=今日；发行主体已在目标池 " + poolIds
                 + " 生效、债券未在同池生效，并满足目标池 market_codes");
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();

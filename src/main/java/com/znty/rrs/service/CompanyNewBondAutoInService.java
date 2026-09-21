@@ -32,8 +32,8 @@ import java.util.Map;
 /**
  * 在池主体旗下债券自动入池任务实现
  * <p>
- * 扫描「主体已在指定池」的发行主体，将其旗下未到期、尚未在目标池的债券自动入池
- * （仅排除临时代码已更新为正式代码的记录，不排除 ABS / CRMW）；adjust_type=自动调整，不走审批。
+ * 扫描「主体已在指定池」的发行主体，将其旗下未退市、未到期、尚未在目标池的债券自动入池
+ * （另排除临时代码已更新为正式代码的记录，不排除 ABS / CRMW）；adjust_type=自动调整，不走审批。
  * 对应老系统 AutoAdjustInNewBondToLimitPoolJob。名称/cron/启停/扩展参数由库表维护。
  * 同池-only、带 market_codes 的 IP_RULE「主体下债券自动入库」见
  * {@link CompanySamePoolBondAutoInService}。
@@ -77,8 +77,8 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "bondTargetPoolId（债券入池目标池）：上述主体旗下符合条件的债券将自动写入该池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调入规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
                     + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
-                    + "处理规则：主体已在主体池且生效时，将其旗下未到期且未在债券目标池的债券自动入池\n"
-                    + "类型范围：普通债、ABS、CRMW 均处理；仅排除已更新正式代码的临时代码\n"
+                    + "处理规则：主体已在主体池且生效时，将其旗下未退市、未到期且未在债券目标池的债券自动入池\n"
+                    + "类型范围：普通债、ABS、CRMW 均处理；排除退市债和已更新正式代码的临时代码\n"
                     + "CRMW 说明：CRMW 证券跟随主体进入普通目标池时写 ip_pool_status，不写 CRMW 组合状态表\n"
                     + "关系调出：入池成功后，按目标池调入互斥关系及反向调入限制关系自动调出债券原所在池并记录日志\n"
                     + "范围说明：不检查调入限制池，也不按目标池 market_codes 过滤；需要同池市场/限制校验时请使用“主体下债券自动入库”任务\n"

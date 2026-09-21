@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 主体不在指定池时，将其旗下已在债券池的债自动调出。
+ * 主体不在指定池时，将其旗下已在债券池的未退市债自动调出。
  * <p>
  * 对应老 {@code AutoAdjustInLimitPoolToNewBondJob}（独立 Job，不走 AdjustPoolByRule，
  * 因此不看调入/调出限制池）。老配置 AUTOPOOLID_BPMP 为「债券池-主体池」。
@@ -63,8 +63,8 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "companyPoolId（主体应在池）：用于检查债券发行主体是否仍在该池；主体不在该池时，债券才出库\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调出规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
                     + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
-                    + "处理规则：债券已在债券池、发行主体不在对应主体池时，将该债券自动调出\n"
-                    + "类型范围：普通债、ABS、CRMW 均处理\n"
+                    + "处理规则：未退市债券已在债券池、发行主体不在对应主体池时，将该债券自动调出\n"
+                    + "类型范围：排除退市债；普通债、ABS、CRMW 均处理\n"
                     + "CRMW 说明：仅调出 CRMW 证券在普通池的 ip_pool_status，不操作 CRMW 组合状态表\n"
                     + "范围说明：不检查调出限制池；仅软删除成功才写日志并计入影响条数\n"
                     + "参数格式错误时，本轮任务失败";

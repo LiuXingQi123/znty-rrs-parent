@@ -68,7 +68,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     + "评级临界：AA-及以下因评级入池；AA及以上不因评级入池；空评级/近一年无认可外评不因评级入池，但命中禁止库 15 或重点观察 23 时仍按相应条件入池\n"
                     + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低，一年以前忽略；近一年无认可外评不因（二）入库\n"
                     + "限制规则：主体已在目标池配置的调入限制池时，跳过该条记录\n"
-                    + "联动处理：主体成功入池后，本任务内自写逻辑同批调入该主体旗下未到期债券（不复用人工 syncCompanyBonds）；"
+                    + "联动处理：主体成功入池后，本任务内自写逻辑同批调入该主体旗下未退市、未到期债券（不复用人工 syncCompanyBonds）；"
                     + "债命中调入限制池则跳过该债；入池后按互斥/反向限制从债当前所在池自动调出\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
@@ -236,7 +236,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     throw new BizException("主体[" + company.getSecurityCode()
                             + "]写入池状态失败（可能并发已入池）");
                 }
-                // 主体入池成功后，本任务内自写逻辑同批调入旗下未到期债（不复用人工 syncCompanyBonds）
+                // 主体入池成功后，本任务内自写逻辑同批调入旗下未退市、未到期债（不复用人工 syncCompanyBonds）
                 poolBondCount += inSamePoolBonds(company, pool, allRelations, poolMap, detail);
                 poolCount++;
             }
@@ -420,7 +420,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 将主体旗下尚未在同一目标池的未到期债券一并调入，并处理互斥/反向限制出池。
+     * 将主体旗下尚未在同一目标池的未退市、未到期债券一并调入，并处理互斥/反向限制出池。
      *
      * <p>批次号、提交时间、调整原因、目标池 ID 均从已落库的主体日志读取，避免参数过多。
      *

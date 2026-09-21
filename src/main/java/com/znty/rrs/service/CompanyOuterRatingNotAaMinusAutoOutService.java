@@ -76,7 +76,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     + "处理规则：已在目标池，近一年存在认可外评，且不在 15、不在 23、孰低外评不属于 AA-及以下时，自动调出主体\n"
                     + "评级临界：AA-及以下不出池；AA及以上在其他条件均不命中时可出池；空评级/近一年无认可外评不出池\n"
                     + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低；无认可外评不自动出池\n"
-                    + "联动处理：主体成功出池后，本任务内自写 outSamePoolBonds 同批调出同池旗下债（不复用人工 syncCompanyBonds）\n"
+                    + "联动处理：主体成功出池后，本任务内自写 outSamePoolBonds 同批调出同池旗下未退市债（不复用人工 syncCompanyBonds）\n"
                     + "限制规则：主体命中调出限制池时跳过该主体；旗下债命中时阻断主体联动并回滚本轮任务\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
@@ -338,7 +338,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     }
 
     /**
-     * 将命中主体旗下已在同一目标池的债券一并调出。
+     * 将命中主体旗下已在同一目标池的未退市债券一并调出。
      *
      * @param companyCode        主体代码
      * @param pool               目标池
@@ -353,7 +353,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     private int outSamePoolBonds(String companyCode, InvestmentPoolBo pool, Long poolId,
                                  String batchNo, Date submitTime, List<Long> outRestrictPoolIds,
                                  TaskDetailLog detail, String companyReason) {
-        // 查询该主体旗下已在同一目标池的债券
+        // 查询该主体旗下已在同一目标池的未退市债券
         List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(
                 companyCode, poolId, CompanyBondSyncPolicy.currentTypeScope());
         if (bonds == null || bonds.isEmpty()) {

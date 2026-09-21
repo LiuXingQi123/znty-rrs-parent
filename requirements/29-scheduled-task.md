@@ -45,11 +45,11 @@
 | `bond_security_type_change` | 债券类型变更 | `0 0 22 * * ?` | 每天 22:00 执行。无需参数；以 `rrs_securityinfo.security_type` 为准，同步普通池、CRMW 池标的证券及当前关联调库日志中的债券类型 |
 | `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`poolIds` 可选，默认 `[15]`（15（债券禁止库）），与投资池关系配置绑定本任务的池取并集；扫描已生效债券、股票，到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
 | `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`poolIds` 可选，默认 `[18]`（18（CRMW库）），与关系配置绑定池取并集；扫描已生效 CRMW 组合，凭证到期日早于昨天（T-2）时自动调出，命中调出限制池则跳过 |
-| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 10 23 * * ?` | 每天 23:10 执行。`poolIds` 可选，默认 `[17]`（17（黑名单质押库）），与关系配置绑定池取并集；`limitPoolIds` Demo 为 `[]`。已在目标池、近一年存在认可外评，且不满足（一）禁止库 15 /（二）近一年孰低 AA-及以下 /（三）重点观察 23 时出主体；无认可外评不自动出池。成功后同批出符合范围的旗下债 |
-| `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 15 23 * * ?` | 每天 23:15 执行。`poolIds` 可选，默认 `[17]`（17（黑名单质押库）），与关系配置绑定池取并集。尚未在目标池且满足（一）当前在禁止库 15、（二）近一年认可外评孰低为 AA-及以下、（三）当前在重点观察 23 之一则自动入池。认可机构由 `dict_external_rating_agency` 控制；命中调入限制池则跳过 |
-| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 20 23 * * ?` | 每天 23:20 执行。`poolIds` 可选，默认 `[15,17]`；主体已在该池时，旗下未到期（含当天）且未在同一池的债券自动入池；扫描17时再次校验主体三条件；范围含普通债、ABS、CRMW |
-| `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 */10 * * * ?` | 每 10 分钟执行一次。`poolIds` / `poolId` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定主体池至债券目标池的跨池映射；仅排除已更新临时代码，普通债、ABS、CRMW 均参与；入池后按互斥/反向限制关系自动调出原池并记日志 |
-| `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池(默认关闭) | `0 0 0 * * ?` | 每天 00:00 执行，建议按需手动执行。`poolIds` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定债券池与主体池映射；债在债券池、主体不在主体池时出债，普通债、ABS、CRMW 均参与 |
+| `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池 | `0 10 23 * * ?` | 每天 23:10 执行。`poolIds` 可选，默认 `[17]`（17（黑名单质押库）），与关系配置绑定池取并集；`limitPoolIds` Demo 为 `[]`。已在目标池、近一年存在认可外评，且不满足（一）禁止库 15 /（二）近一年孰低 AA-及以下 /（三）重点观察 23 时出主体；无认可外评不自动出池。成功后同批调出未退市且符合范围的旗下债 |
+| `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池 | `0 15 23 * * ?` | 每天 23:15 执行。`poolIds` 可选，默认 `[17]`（17（黑名单质押库）），与关系配置绑定池取并集。尚未在目标池且满足（一）当前在禁止库 15、（二）近一年认可外评孰低为 AA-及以下、（三）当前在重点观察 23 之一则自动入池，并同批调入未退市且符合范围的旗下债。认可机构由 `dict_external_rating_agency` 控制；命中调入限制池则跳过 |
+| `company_same_pool_bond_auto_in` | 主体下债券自动入库 | `0 20 23 * * ?` | 每天 23:20 执行。`poolIds` 可选，默认 `[15,17]`；主体已在该池时，旗下未退市、未到期（含当天）且未在同一池的债券自动入池；扫描17时再次校验主体三条件；范围含普通债、ABS、CRMW |
+| `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池 | `0 */10 * * * ?` | 每 10 分钟执行一次。`poolIds` / `poolId` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定主体池至债券目标池的跨池映射；排除退市债和已更新临时代码，普通债、ABS、CRMW 均参与；入池后按互斥/反向限制关系自动调出原池并记日志 |
+| `company_not_in_pool_bond_auto_out` | 主体不在池债券自动出池(默认关闭) | `0 0 0 * * ?` | 每天 00:00 执行，建议按需手动执行。`poolIds` 指定同池，默认 `[15]`（15（债券禁止库））；`mappings` 指定债券池与主体池映射；未退市债在债券池、主体不在主体池时出债，普通债、ABS、CRMW 均参与 |
 | `bond_grade_inconformity_alert` | 不符合主体债入库规则提醒 | `0 0 1 * * ?` | 每天 01:00 执行。无需参数；扫描不符合当前主体债入库规则的在池信用债，生成待办供人工处理，不自动出池；摘要区分**本轮命中** / **本轮失效** / **仍待处理** |
 | `hs_pool_full_excel_export` | 恒生池全量数据导出（不含已到期） | `0 10 1 * * ?` | 每天 01:10 执行；`poolIds` 可限制叶子池，省略时导出全部叶子池；默认生成空池 Sheet；导出当前已生效的非主体证券及 CRMW，普通证券排除已到期数据，CRMW 不校验到期日 |
 | `hs_pool_full_including_expired_excel_export` | 恒生池全量数据导出（含已到期） | `0 20 1 * * ?` | 每天 01:20 执行；参数与不含已到期全量任务一致；普通证券不校验到期日，包含仍在池的已到期数据，CRMW 同样不校验到期日 |
@@ -238,7 +238,7 @@
 4. 数据源同 7.3：近一年（日历年）配置表中的有效机构多评级取孰低；一年以前忽略。认可机构由 `dict_external_rating_agency` 控制。
 5. 评级临界：`AA-` 及以下不出池；`AA` 及以上在其他条件均不命中时可出池；空评级/近一年无认可外评不出池。
 6. `limitPoolIds`：额外拦截池；主体已在这些池则不出。Demo 为 `[]`；省略或 `[]` 均不追加额外拦截（15/23 已由条款排除）。
-7. 主体出池成功后，**本任务内自写** `outSamePoolBonds` 同批调出同池旗下未到期（含当天）`bond` 大类（含普通债、ABS、CRMW），**不复用**人工 `syncCompanyBonds`；调整原因如 `外评非AA-及以下主体自动出池（近一年孰低外评：AAA）`。目标池不限于 15/17。
+7. 主体出池成功后，**本任务内自写** `outSamePoolBonds` 同批调出同池旗下未退市、未到期（含当天）的 `bond` 大类（`security_status!='D'`，含普通债、ABS、CRMW），**不复用**人工 `syncCompanyBonds`；调整原因如 `外评非AA-及以下主体自动出池（近一年孰低外评：AAA）`。目标池不限于 15/17。
 8. 调出限制池（关系 12 / `out_restrict`）：主体命中时跳过该主体；旗下债命中时阻断主体联动，本轮事务整体回滚。
 9. 最近执行结果同时展示主体出池数、旗下债券出池数，并按目标池列出主体和债券数量。
 
@@ -254,7 +254,7 @@
 6. （三）当前已在重点观察名单 23，且尚未在目标池。本期不含观察池 16。
 7. 尚未在目标池 `audit_status=20` 的主体 → 写自动调整入池日志 + `ip_pool_status`（`security_type=company`）；调整原因按命中条款拼接，如 `外评AA-及以下主体自动入池（近一年孰低外评：AA-）`。
 8. 调入限制池（关系 11 / `in_restrict`）阻断。
-9. 主体入池成功后，**本任务内自写**同批调入旗下未到期（含当天）`bond` 大类（含普通债、ABS、CRMW），**不复用**人工 `syncCompanyBonds`；债命中调入限制池则跳过该债；入池后按互斥/反向限制从债当前所在池自动调出；任一写入失败整批回滚。目标池不限于 15/17。
+9. 主体入池成功后，**本任务内自写**同批调入旗下未退市、未到期（含当天）的 `bond` 大类（`security_status!='D'`，含普通债、ABS、CRMW），**不复用**人工 `syncCompanyBonds`；债命中调入限制池则跳过该债；入池后按互斥/反向限制从债当前所在池自动调出；任一写入失败整批回滚。目标池不限于 15/17。
 10. 最近执行结果同时展示主体入池数、旗下债券入池数，并按目标池列出主体和债券数量。
 
 ### 7.4 `company_same_pool_bond_auto_in`（23:20）
@@ -262,7 +262,7 @@
 对应老 IP_RULE type=0「主体下债券自动入库」：
 
 1. 扩展参数仅 `poolIds`：默认 `[15,17]`，每个 ID 既是主体所在池也是债写入池（无 mappings）。
-2. 主体 `category_type=company` 且 `audit_status=20` 在池 → 旗下 `bond` 大类未到期（`maturity_date` 为空或 **≥ 今天**）、未在本池 → 自动入。  
+2. 主体 `category_type=company` 且 `audit_status=20` 在池 → 旗下 `bond` 大类未退市（`security_status!='D'`）、未到期（`maturity_date` 为空或 **≥ 今天**）、未在本池 → 自动入。
 3. 市场：池 `market_codes` 为空/`[]` 不限制；否则债须命中 SSE/SZSE/CIBM/BSE/OTHER/JWCW。  
 4. **不**排除临时代码已更新，范围含普通债、ABS、CRMW；扫描17时再次校验主体三条件，均不满足则不补债。
 5. 调入限制池（关系 11）阻断。  
@@ -274,8 +274,8 @@
 对应老 `AutoAdjustInNewBondToLimitPoolJob`：
 
 1. `poolIds` 同池，或 `mappings`（`companyInPoolId` → `bondTargetPoolId`）跨池。
-2. 主体已在主体池 → 旗下债未到期（**不含**当天，`maturity_date > 今天`）、未在**目标池** → 自动入。
-3. 仅排除临时代码已更新；普通债、ABS、CRMW 均参与；**不看**限制池。
+2. 主体已在主体池 → 旗下债未退市（`security_status!='D'`）、未到期（**不含**当天，`maturity_date > 今天`）、未在**目标池** → 自动入。
+3. 另排除临时代码已更新；普通债、ABS、CRMW 均参与；**不看**限制池。
 4. 「已在池」看写入目标池（老 Job 误写成主体池，跨池会错；新系统按目标池，属有意修正）。
 5. 入池成功后按目标池的 `in_mutex` 与反向 `in_restrict` 配置，从债券当前实际所在池自动调出并生成 `adjust_type='互斥调整'` 的同批调出日志，对齐老 Job 调用的 `JdbcAdjustPoolUtils.adjustInPool`。
 6. 最近执行结果展示实际入池总数，并按“主体所在池 → 债券写入池”列出入池数量。
@@ -284,20 +284,20 @@
 
 | 任务 | 对应老系统 | 池关系 | 到期当天 | 主要过滤 |
 |------|------------|--------|----------|----------|
-| `company_same_pool_bond_auto_in` | IP_RULE type=0 | **仅同池** `poolIds` | **可入** | `market_codes`；不排除临时代码 / ABS / CRMW；看限制池；入池后处理互斥/反向限制池 |
-| `company_inpool_bond_auto_in` | `AutoAdjustInNewBondToLimitPoolJob` | 同池或跨池 `mappings` | **不入** | 仅排除已更新临时代码；不排除 ABS / CRMW；不看限制池；入池后处理互斥/反向限制池 |
+| `company_same_pool_bond_auto_in` | IP_RULE type=0 | **仅同池** `poolIds` | **可入** | 排除退市；`market_codes`；不排除临时代码 / ABS / CRMW；看限制池；入池后处理互斥/反向限制池 |
+| `company_inpool_bond_auto_in` | `AutoAdjustInNewBondToLimitPoolJob` | 同池或跨池 `mappings` | **不入** | 排除退市及已更新临时代码；不排除 ABS / CRMW；不看限制池；入池后处理互斥/反向限制池 |
 
 ### 7.6 `company_not_in_pool_bond_auto_out`（00:00，默认关闭）
 
 对应老 `AutoAdjustInLimitPoolToNewBondJob`（Quartz 默认不启用）：
 
-1. 债已在 `bondPoolId`，发行主体不在 `companyPoolId` → 从债券池调出。
+1. 未退市债已在 `bondPoolId`，发行主体不在 `companyPoolId` → 从债券池调出。
 2. 普通债、ABS、CRMW 均参与，不按债券子类型排除。
 3. 独立 Job 口径，**不看**调入/调出限制池。
 4. Demo 默认 `schedule_enabled=0`。
 5. 最近执行结果展示实际出池总数，并按“债券池 ← 主体池”列出出池数量。
 
-> 所有“主体旗下债券跟随主体入池/出池”链路统一包含普通债、ABS、CRMW。外评入/出池任务的跟债逻辑写在各自定时任务内，**不复用**人工 `syncCompanyBonds`。CRMW 证券跟随主体进入普通风险池时写 `ip_pool_status`；专门的 CRMW 组合池仍必须通过“凭证 + 标的证券”链路写 `ip_pool_status_crmw`，上述主体联动任务遇到 `pool_type='crmw'` 的目标池或来源池时跳过。若后续需排除 ABS 或特定 `security_type`，统一通过 `CompanyBondTypeScopeBo` 传递，不在各 Mapper SQL 中重新硬编码。
+> 所有“主体旗下债券跟随主体入池/出池”链路统一排除 `security_status='D'` 的退市债，并包含普通债、ABS、CRMW；上市中 `L`、待上市 `N`、未知 `U` 均可参与。外评入/出池任务的跟债逻辑写在各自定时任务内，**不复用**人工 `syncCompanyBonds`。CRMW 证券跟随主体进入普通风险池时写 `ip_pool_status`；专门的 CRMW 组合池仍必须通过“凭证 + 标的证券”链路写 `ip_pool_status_crmw`，上述主体联动任务遇到 `pool_type='crmw'` 的目标池或来源池时跳过。若后续需排除 ABS 或特定 `security_type`，统一通过 `CompanyBondTypeScopeBo` 传递，不在各 Mapper SQL 中重新硬编码。
 
 ### 7.7 `bond_grade_inconformity_alert`（01:00）
 

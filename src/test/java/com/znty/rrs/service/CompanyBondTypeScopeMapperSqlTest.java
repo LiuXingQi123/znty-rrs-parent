@@ -11,16 +11,17 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 主体旗下债券候选 SQL 类型范围测试。 */
+/** 主体旗下债券候选 SQL 范围测试。 */
 public class CompanyBondTypeScopeMapperSqlTest {
 
-    /** 验证所有主体联动候选都使用统一范围参数，不再硬编码排除 ABS 或 CRMW。 */
+    /** 验证所有主体联动候选统一排除退市债，并使用相同债券类型范围参数。 */
     @Test
-    public void companyBondQueriesShouldUseUnifiedTypeScope() throws Exception {
+    public void companyBondQueriesShouldUseUnifiedCandidateScope() throws Exception {
         // 分别校验定时任务与人工主体调库的全部候选查询
         assertMapperQueries("AutoAdjustMapper.xml", Arrays.asList(
                 "queryCompanyNewBondForAutoIn",
                 "queryCompanyBondSamePoolForAutoIn",
+                "queryCompanyBondNotInSamePoolForAutoIn",
                 "queryCompanyBondInSamePoolForAutoOut",
                 "queryBondInPoolWhenCompanyNotIn"));
         assertMapperQueries("ForbiddenPoolAdjustMapper.xml", Arrays.asList(
@@ -65,6 +66,7 @@ public class CompanyBondTypeScopeMapperSqlTest {
         for (String queryId : queryIds) {
             // 只截取当前 select，避免其他非主体联动查询的过滤条件干扰断言
             String select = selectBlock(xml, queryId);
+            assertThat(select).contains("bond.security_status != 'D'");
             assertThat(select).contains("bondTypeScope.excludeAbs");
             assertThat(select).contains("bondTypeScope.excludedSecurityTypes");
             assertThat(select).doesNotContain("COALESCE(bond.abs_flag, 0) != 1");
