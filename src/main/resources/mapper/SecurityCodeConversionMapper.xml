@@ -1,0 +1,1586 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.SecurityCodeConversionMapper">
+
+    <!-- 按代码顺序锁定并查询临时及正式证券主数据 -->
+    <select id="querySecurityInfoListForUpdate"
+            resultType="com.znty.rrs.entity.bo.SecurityCodeConversionBo">
+        SELECT wind_code
+               ,full_name
+               ,short_name
+               ,wind_code_sh
+               ,wind_code_sz
+               ,wind_code_nib
+               ,wind_code_bj
+               ,wind_code_nbc
+               ,security_type
+        FROM rrs_securityinfo
+        WHERE wind_code IN
+        <foreach collection="securityCodeList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        ORDER BY wind_code ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 查询正式证券类型所属大类 -->
+    <select id="querySecurityCategoryType" resultType="string">
+        SELECT category_type
+        FROM dict_security_type
+        WHERE security_type = #{securityType}
+          AND is_deleted = 0
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <!-- 锁定并查询仍由原临时代码管理流程负责的登记记录 -->
+    <select id="queryActiveTempSecurityRegistrationIdListForUpdate" resultType="long">
+        SELECT id
+        FROM rrs_temp_security_code
+        WHERE temp_security_code = #{tempSecurityCode}
+          AND status = 'temporary'
+          AND is_deleted = 0
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 统计代码转换后会形成重复业务对象的在途调库日志 -->
+    <select id="queryPendingAdjustLogConflictCount" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_adjust_log source_row
+        INNER JOIN ip_adjust_log formal_row
+                ON formal_row.id != source_row.id
+               AND formal_row.is_deleted = 0
+               AND formal_row.audit_status IN ('00', '11')
+               AND formal_row.target_pool_id &lt;=> source_row.target_pool_id
+               AND formal_row.adjust_mode &lt;=> source_row.adjust_mode
+               AND formal_row.pool_type &lt;=> source_row.pool_type
+               AND formal_row.security_code &lt;=> CASE
+                    WHEN source_row.security_code = #{tempSecurityCode} THEN #{securityCode}
+                    ELSE source_row.security_code
+                END
+               AND formal_row.security_type &lt;=> CASE
+                    WHEN source_row.security_code = #{tempSecurityCode} THEN #{securityType}
+                    ELSE source_row.security_type
+                END
+               AND formal_row.crmw_scode &lt;=> CASE
+                    WHEN source_row.crmw_scode = #{tempSecurityCode} THEN #{securityCode}
+                    ELSE source_row.crmw_scode
+                END
+               AND formal_row.crmw_stype &lt;=> CASE
+                    WHEN source_row.crmw_scode = #{tempSecurityCode} THEN #{securityType}
+                    ELSE source_row.crmw_stype
+                END
+        WHERE source_row.is_deleted = 0
+          AND source_row.audit_status IN ('00', '11')
+          AND (
+              source_row.security_code = #{tempSecurityCode}
+              OR source_row.crmw_scode = #{tempSecurityCode}
+          )
+    </select>
+
+    <!-- 锁定并查询受代码转换影响且尚未成功提交的导入批次 -->
+    <select id="queryAffectedImportBatchIdListForUpdate" resultType="long">
+        SELECT batch_row.id
+        FROM sys_imp_tmp batch_row
+        WHERE batch_row.is_deleted = 0
+          AND COALESCE(batch_row.save_rslt, '0') NOT IN ('1', '3')
+          AND (
+              (
+                  batch_row.template_code = 'security_pool_import'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM sys_imp_tmp_detl detail_row
+                      WHERE detail_row.imp_id = batch_row.imp_id
+                        AND detail_row.is_deleted = 0
+                        AND detail_row.fld001 = #{tempSecurityCode}
+                  )
+              )
+              OR (
+                  batch_row.template_code = 'crmw_pool_import'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM sys_imp_tmp_detl detail_row
+                      WHERE detail_row.imp_id = batch_row.imp_id
+                        AND detail_row.is_deleted = 0
+                        AND (
+                            detail_row.fld001 = #{tempSecurityCode}
+                            OR detail_row.fld004 = #{tempSecurityCode}
+                        )
+                  )
+              )
+          )
+        ORDER BY batch_row.id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 锁定并查询受影响批次的全部有效导入明细 -->
+    <select id="queryAffectedImportDetailIdListForUpdate" resultType="long">
+        SELECT detail_row.id
+        FROM sys_imp_tmp_detl detail_row
+        INNER JOIN sys_imp_tmp batch_row ON batch_row.imp_id = detail_row.imp_id
+        WHERE batch_row.id IN
+        <foreach collection="batchIdList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND detail_row.is_deleted = 0
+        ORDER BY detail_row.id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 作废受代码转换影响批次的全部导入明细 -->
+    <update id="deleteAffectedImportDetailListSoft">
+        UPDATE sys_imp_tmp_detl detail_row
+        INNER JOIN sys_imp_tmp batch_row ON batch_row.imp_id = detail_row.imp_id
+        SET detail_row.save_rslt = '3'
+           ,detail_row.save_dscr = '证券临时代码已转正式，原导入批次已失效'
+           ,detail_row.is_deleted = 1
+           ,detail_row.updt_time = #{updateTime}
+        WHERE batch_row.id IN
+        <foreach collection="batchIdList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND detail_row.is_deleted = 0
+    </update>
+
+    <!-- 作废受代码转换影响且仍未成功提交的导入批次 -->
+    <update id="deleteAffectedImportBatchListSoft">
+        UPDATE sys_imp_tmp
+        SET save_rslt = '3'
+           ,save_dscr = '证券临时代码已转正式，原导入批次已失效'
+           ,result_json = NULL
+           ,is_deleted = 1
+           ,updt_time = #{updateTime}
+        WHERE id IN
+        <foreach collection="batchIdList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND is_deleted = 0
+          AND COALESCE(save_rslt, '0') NOT IN ('1', '3')
+    </update>
+
+    <!-- 锁定并查询在途调库日志证券引用主键 -->
+    <select id="queryPendingAdjustLogSecurityReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_log
+        WHERE is_deleted = 0
+          AND security_code = #{tempSecurityCode}
+          AND audit_status IN ('00', '11')
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 锁定并查询在途普通调库证券快照引用主键 -->
+    <select id="queryPendingSecuritySnapshotReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_security_snapshot
+        WHERE is_deleted = 0
+          AND adjust_log_id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND wind_code = #{bo.tempSecurityCode}
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 锁定并查询在途 CRMW 调库标的证券快照引用主键 -->
+    <select id="queryPendingCrmwSecuritySnapshotReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_security_snapshot_crmw
+        WHERE is_deleted = 0
+          AND adjust_log_id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND wind_code = #{bo.tempSecurityCode}
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 替换仍在途的调库日志证券引用 -->
+    <update id="editAdjustLogSecurityReference">
+        UPDATE ip_adjust_log
+        SET security_code = #{bo.securityCode}
+           ,security_short_name = #{bo.shortName}
+           ,security_type = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND is_deleted = 0
+          AND security_code = #{bo.tempSecurityCode}
+          AND audit_status IN ('00', '11')
+    </update>
+
+    <!-- 替换在途普通调库证券快照引用 -->
+    <update id="editPendingSecuritySnapshotReference">
+        UPDATE ip_adjust_security_snapshot
+        SET wind_code = #{bo.securityCode}
+           ,full_name = #{bo.fullName}
+           ,short_name = #{bo.shortName}
+           ,wind_code_sh = #{bo.windCodeSh}
+           ,wind_code_sz = #{bo.windCodeSz}
+           ,wind_code_nib = #{bo.windCodeNib}
+           ,wind_code_bj = #{bo.windCodeBj}
+           ,wind_code_nbc = #{bo.windCodeNbc}
+           ,security_type = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND is_deleted = 0
+          AND wind_code = #{bo.tempSecurityCode}
+    </update>
+
+    <!-- 替换在途 CRMW 调库标的证券快照引用 -->
+    <update id="editPendingCrmwSecuritySnapshotReference">
+        UPDATE ip_adjust_security_snapshot_crmw
+        SET wind_code = #{bo.securityCode}
+           ,full_name = #{bo.fullName}
+           ,short_name = #{bo.shortName}
+           ,wind_code_sh = #{bo.windCodeSh}
+           ,wind_code_sz = #{bo.windCodeSz}
+           ,wind_code_nib = #{bo.windCodeNib}
+           ,wind_code_bj = #{bo.windCodeBj}
+           ,wind_code_nbc = #{bo.windCodeNbc}
+           ,security_type = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND is_deleted = 0
+          AND wind_code = #{bo.tempSecurityCode}
+    </update>
+
+    <!-- 锁定并查询在途调库日志 CRMW 凭证引用主键 -->
+    <select id="queryPendingAdjustLogCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_log
+        WHERE is_deleted = 0
+          AND crmw_scode = #{tempSecurityCode}
+          AND audit_status IN ('00', '11')
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 锁定并查询在途 CRMW 凭证快照引用主键 -->
+    <select id="queryPendingCrmwSnapshotReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_security_snapshot_crmw
+        WHERE is_deleted = 0
+          AND adjust_log_id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND crmw_scode = #{bo.tempSecurityCode}
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 替换仍在途的调库日志 CRMW 凭证引用 -->
+    <update id="editAdjustLogCrmwReference">
+        UPDATE ip_adjust_log
+        SET crmw_name = #{bo.shortName}
+           ,crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND is_deleted = 0
+          AND crmw_scode = #{bo.tempSecurityCode}
+          AND audit_status IN ('00', '11')
+    </update>
+
+    <!-- 替换在途 CRMW 凭证快照引用 -->
+    <update id="editPendingCrmwSnapshotReference">
+        UPDATE ip_adjust_security_snapshot_crmw
+        SET crmw_name = #{bo.shortName}
+           ,crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND is_deleted = 0
+          AND crmw_scode = #{bo.tempSecurityCode}
+    </update>
+
+    <!-- 锁定并查询有效普通池状态 -->
+    <select id="queryActivePoolStatusList"
+            resultType="com.znty.rrs.entity.bo.SecurityCodeConversionBo">
+        SELECT id
+               ,security_code
+               ,security_short_name
+               ,security_type
+               ,crmw_name
+               ,crmw_scode
+               ,crmw_mktcode
+               ,crmw_stype
+               ,adjust_type
+               ,adjust_mode
+               ,adjust_batch_no
+               ,adjust_log_id
+               ,target_pool_id
+               ,target_pool_name
+               ,pool_type
+               ,audit_status
+               ,adjuster_id
+               ,adjuster_name
+               ,adjust_reason
+               ,adjust_advice
+               ,submit_time
+               ,audit_time
+               ,entry_time
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM ip_pool_status
+        WHERE is_deleted = 0
+          AND security_code = #{tempSecurityCode}
+          AND audit_status = '20'
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 锁定并统计正式证券在指定普通池的有效状态 -->
+    <select id="queryActivePoolStatusCount" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_pool_status
+        WHERE is_deleted = 0
+          AND security_code = #{securityCode}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+        FOR UPDATE
+    </select>
+
+    <!-- 软删除指定有效普通池状态 -->
+    <update id="deletePoolStatusSoftById">
+        UPDATE ip_pool_status
+        SET is_deleted = 1
+           ,updt_time = #{updateTime}
+        WHERE id = #{id}
+          AND is_deleted = 0
+          AND audit_status = '20'
+    </update>
+
+    <!-- 新增代码转换产生的调库日志 -->
+    <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_log (
+            security_code
+            ,security_short_name
+            ,security_type
+            ,crmw_name
+            ,crmw_scode
+            ,crmw_mktcode
+            ,crmw_stype
+            ,adjust_type
+            ,adjust_mode
+            ,adjust_batch_no
+            ,target_pool_id
+            ,target_pool_name
+            ,pool_type
+            ,audit_status
+            ,adjuster_id
+            ,adjuster_name
+            ,adjust_reason
+            ,adjust_advice
+            ,submit_time
+            ,audit_time
+            ,entry_time
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        ) VALUES (
+            #{securityCode}
+            ,#{securityShortName}
+            ,#{securityType}
+            ,#{crmwName}
+            ,#{crmwScode}
+            ,#{crmwMktcode}
+            ,#{crmwStype}
+            ,#{adjustType}
+            ,#{adjustMode}
+            ,#{adjustBatchNo}
+            ,#{targetPoolId}
+            ,#{targetPoolName}
+            ,#{poolType}
+            ,#{auditStatus}
+            ,#{adjusterId}
+            ,#{adjusterName}
+            ,#{adjustReason}
+            ,#{adjustAdvice}
+            ,COALESCE(#{submitTime}, NOW())
+            ,#{auditTime}
+            ,#{entryTime}
+            ,0
+            ,NOW()
+            ,NOW()
+        )
+    </insert>
+
+    <!-- 从原普通调库快照复制代码转换快照，formal=true 时替换正式证券身份字段 -->
+    <insert id="addSecuritySnapshotFromSource">
+        INSERT INTO ip_adjust_security_snapshot (
+            adjust_log_id
+            ,submitter_id
+            ,submit_time
+            ,wind_code
+            ,full_name
+            ,short_name
+            ,issuer
+            ,issuer_code
+            ,wind_code_nib
+            ,wind_code_sh
+            ,wind_code_sz
+            ,wind_code_bj
+            ,issue_amountplan
+            ,coupon_rate
+            ,date_inright_exists
+            ,carry_date
+            ,maturity_date
+            ,info_pledge_ratio
+            ,rating_bond_agency
+            ,rating_bond
+            ,rating_bondissuer
+            ,rating_outlook
+            ,guarantor
+            ,guarantor_id
+            ,agency_name
+            ,inner_issuer_rating
+            ,security_type
+            ,sec_typename
+            ,date_call_exists
+            ,inner_guarantor_rating
+            ,date_exists
+            ,date_exists_str
+            ,fund_use
+            ,prompt_reason
+            ,analysis
+            ,wind_code_nbc
+            ,term_year
+            ,term_day
+            ,maturityembedded_desc
+            ,comp_type
+            ,issue_amountact
+            ,date_repurchase_exists
+            ,abs_flag
+            ,guarant_flag
+            ,guarant_type
+            ,rating_bondissuer_agency
+            ,agency_nameid
+            ,bond_biz_type
+            ,abs_originator_name
+            ,abs_share_ratio
+            ,expected_maturity_date
+            ,legal_maturity_date
+            ,abs_report_org
+            ,abs_custodian
+            ,company_selector
+            ,extra_ind_1
+            ,extra_ind_2
+            ,extra_ind_3
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        )
+        SELECT #{targetAdjustLogId}
+               ,#{submitterId}
+               ,#{updateTime}
+               ,CASE WHEN #{formal} = 1 THEN #{bo.securityCode} ELSE source_row.wind_code END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.fullName} ELSE source_row.full_name END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
+               ,source_row.issuer
+               ,source_row.issuer_code
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNib} ELSE source_row.wind_code_nib END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSh} ELSE source_row.wind_code_sh END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSz} ELSE source_row.wind_code_sz END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeBj} ELSE source_row.wind_code_bj END
+               ,source_row.issue_amountplan
+               ,source_row.coupon_rate
+               ,source_row.date_inright_exists
+               ,source_row.carry_date
+               ,source_row.maturity_date
+               ,source_row.info_pledge_ratio
+               ,source_row.rating_bond_agency
+               ,source_row.rating_bond
+               ,source_row.rating_bondissuer
+               ,source_row.rating_outlook
+               ,source_row.guarantor
+               ,source_row.guarantor_id
+               ,source_row.agency_name
+               ,source_row.inner_issuer_rating
+               ,CASE WHEN #{formal} = 1 THEN #{bo.securityType} ELSE source_row.security_type END
+               ,source_row.sec_typename
+               ,source_row.date_call_exists
+               ,source_row.inner_guarantor_rating
+               ,source_row.date_exists
+               ,source_row.date_exists_str
+               ,source_row.fund_use
+               ,source_row.prompt_reason
+               ,source_row.analysis
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNbc} ELSE source_row.wind_code_nbc END
+               ,source_row.term_year
+               ,source_row.term_day
+               ,source_row.maturityembedded_desc
+               ,source_row.comp_type
+               ,source_row.issue_amountact
+               ,source_row.date_repurchase_exists
+               ,source_row.abs_flag
+               ,source_row.guarant_flag
+               ,source_row.guarant_type
+               ,source_row.rating_bondissuer_agency
+               ,source_row.agency_nameid
+               ,source_row.bond_biz_type
+               ,source_row.abs_originator_name
+               ,source_row.abs_share_ratio
+               ,source_row.expected_maturity_date
+               ,source_row.legal_maturity_date
+               ,source_row.abs_report_org
+               ,source_row.abs_custodian
+               ,source_row.company_selector
+               ,source_row.extra_ind_1
+               ,source_row.extra_ind_2
+               ,source_row.extra_ind_3
+               ,0
+               ,#{updateTime}
+               ,#{updateTime}
+        FROM ip_adjust_security_snapshot source_row
+        WHERE source_row.adjust_log_id = #{sourceAdjustLogId}
+          AND source_row.is_deleted = 0
+        ORDER BY source_row.id DESC
+        LIMIT 1
+    </insert>
+
+    <!-- 原普通调库快照不存在时，从临时证券主数据补建代码转换快照 -->
+    <insert id="addSecuritySnapshotFromMaster">
+        INSERT INTO ip_adjust_security_snapshot (
+            adjust_log_id
+            ,submitter_id
+            ,submit_time
+            ,wind_code
+            ,full_name
+            ,short_name
+            ,issuer
+            ,issuer_code
+            ,wind_code_nib
+            ,wind_code_sh
+            ,wind_code_sz
+            ,wind_code_bj
+            ,issue_amountplan
+            ,coupon_rate
+            ,date_inright_exists
+            ,carry_date
+            ,maturity_date
+            ,info_pledge_ratio
+            ,rating_bond_agency
+            ,rating_bond
+            ,rating_bondissuer
+            ,rating_outlook
+            ,guarantor
+            ,guarantor_id
+            ,agency_name
+            ,inner_issuer_rating
+            ,security_type
+            ,sec_typename
+            ,date_call_exists
+            ,inner_guarantor_rating
+            ,date_exists
+            ,date_exists_str
+            ,fund_use
+            ,prompt_reason
+            ,analysis
+            ,wind_code_nbc
+            ,term_year
+            ,term_day
+            ,maturityembedded_desc
+            ,comp_type
+            ,issue_amountact
+            ,date_repurchase_exists
+            ,abs_flag
+            ,guarant_flag
+            ,guarant_type
+            ,rating_bondissuer_agency
+            ,agency_nameid
+            ,bond_biz_type
+            ,abs_originator_name
+            ,abs_share_ratio
+            ,expected_maturity_date
+            ,legal_maturity_date
+            ,abs_report_org
+            ,abs_custodian
+            ,company_selector
+            ,extra_ind_1
+            ,extra_ind_2
+            ,extra_ind_3
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        )
+        SELECT #{targetAdjustLogId}
+               ,#{submitterId}
+               ,#{updateTime}
+               ,CASE WHEN #{formal} = 1 THEN #{bo.securityCode} ELSE source_row.wind_code END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.fullName} ELSE source_row.full_name END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
+               ,source_row.issuer
+               ,source_row.issuer_code
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNib} ELSE source_row.wind_code_nib END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSh} ELSE source_row.wind_code_sh END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSz} ELSE source_row.wind_code_sz END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeBj} ELSE source_row.wind_code_bj END
+               ,source_row.issue_amountplan
+               ,source_row.coupon_rate
+               ,source_row.date_inright_exists
+               ,source_row.carry_date
+               ,source_row.maturity_date
+               ,source_row.info_pledge_ratio
+               ,source_row.rating_bond_agency
+               ,source_row.rating_bond
+               ,source_row.rating_bondissuer
+               ,source_row.rating_outlook
+               ,source_row.guarantor
+               ,source_row.guarantor_id
+               ,source_row.agency_name
+               ,source_row.inner_issuer_rating
+               ,CASE WHEN #{formal} = 1 THEN #{bo.securityType} ELSE source_row.security_type END
+               ,source_row.sec_typename
+               ,source_row.date_call_exists
+               ,source_row.inner_guarantor_rating
+               ,source_row.date_exists
+               ,source_row.date_exists_str
+               ,source_row.fund_use
+               ,source_row.prompt_reason
+               ,source_row.analysis
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNbc} ELSE source_row.wind_code_nbc END
+               ,source_row.term_year
+               ,source_row.term_day
+               ,source_row.maturityembedded_desc
+               ,source_row.comp_type
+               ,source_row.issue_amountact
+               ,source_row.date_repurchase_exists
+               ,source_row.abs_flag
+               ,source_row.guarant_flag
+               ,source_row.guarant_type
+               ,source_row.rating_bondissuer_agency
+               ,source_row.agency_nameid
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,0
+               ,#{updateTime}
+               ,#{updateTime}
+        FROM rrs_securityinfo source_row
+        WHERE source_row.wind_code = #{bo.tempSecurityCode}
+        LIMIT 1
+    </insert>
+
+    <!-- 新增代码转换产生的普通池状态 -->
+    <insert id="addPoolStatus" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_pool_status (
+            security_code
+            ,security_short_name
+            ,security_type
+            ,crmw_name
+            ,crmw_scode
+            ,crmw_mktcode
+            ,crmw_stype
+            ,adjust_type
+            ,adjust_mode
+            ,adjust_batch_no
+            ,adjust_log_id
+            ,target_pool_id
+            ,target_pool_name
+            ,pool_type
+            ,audit_status
+            ,adjuster_id
+            ,adjuster_name
+            ,adjust_reason
+            ,adjust_advice
+            ,submit_time
+            ,audit_time
+            ,entry_time
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        ) VALUES (
+            #{securityCode}
+            ,#{securityShortName}
+            ,#{securityType}
+            ,#{crmwName}
+            ,#{crmwScode}
+            ,#{crmwMktcode}
+            ,#{crmwStype}
+            ,#{adjustType}
+            ,#{adjustMode}
+            ,#{adjustBatchNo}
+            ,#{adjustLogId}
+            ,#{targetPoolId}
+            ,#{targetPoolName}
+            ,#{poolType}
+            ,#{auditStatus}
+            ,#{adjusterId}
+            ,#{adjusterName}
+            ,#{adjustReason}
+            ,#{adjustAdvice}
+            ,COALESCE(#{submitTime}, NOW())
+            ,#{auditTime}
+            ,#{entryTime}
+            ,0
+            ,#{crteTime}
+            ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 锁定并查询普通池当前状态中的 CRMW 凭证引用主键 -->
+    <select id="queryPoolStatusCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_pool_status
+        WHERE is_deleted = 0
+          AND crmw_scode = #{tempSecurityCode}
+          AND audit_status = '20'
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 替换普通池当前状态中的 CRMW 凭证引用 -->
+    <update id="editPoolStatusCrmwReference">
+        UPDATE ip_pool_status
+        SET crmw_name = #{bo.shortName}
+           ,crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND is_deleted = 0
+          AND crmw_scode = #{bo.tempSecurityCode}
+          AND audit_status = '20'
+    </update>
+
+    <!-- 锁定并查询 CRMW 池有效状态 -->
+    <select id="queryActiveCrmwPoolStatusList"
+            resultType="com.znty.rrs.entity.bo.SecurityCodeConversionBo">
+        SELECT id
+               ,security_code
+               ,security_short_name
+               ,security_type
+               ,crmw_name
+               ,crmw_scode
+               ,crmw_mktcode
+               ,crmw_stype
+               ,adjust_type
+               ,adjust_mode
+               ,adjust_batch_no
+               ,adjust_log_id
+               ,target_pool_id
+               ,target_pool_name
+               ,pool_type
+               ,audit_status
+               ,adjuster_id
+               ,adjuster_name
+               ,adjust_reason
+               ,adjust_advice
+               ,submit_time
+               ,audit_time
+               ,entry_time
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM ip_pool_status_crmw
+        WHERE is_deleted = 0
+          AND security_code = #{tempSecurityCode}
+          AND audit_status = '20'
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 锁定并统计正式证券在指定 CRMW 池组合的有效状态 -->
+    <select id="queryActiveCrmwPoolStatusCount" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_pool_status_crmw
+        WHERE is_deleted = 0
+          AND security_code = #{securityCode}
+          AND crmw_scode &lt;=> #{crmwScode}
+          AND crmw_stype &lt;=> #{crmwStype}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+        FOR UPDATE
+    </select>
+
+    <!-- 软删除指定有效 CRMW 池状态 -->
+    <update id="deleteCrmwPoolStatusSoftById">
+        UPDATE ip_pool_status_crmw
+        SET is_deleted = 1
+           ,updt_time = #{updateTime}
+        WHERE id = #{id}
+          AND is_deleted = 0
+          AND audit_status = '20'
+    </update>
+
+    <!-- 新增代码转换产生的 CRMW 池状态 -->
+    <insert id="addCrmwPoolStatus" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_pool_status_crmw (
+            security_code
+            ,security_short_name
+            ,security_type
+            ,crmw_name
+            ,crmw_scode
+            ,crmw_mktcode
+            ,crmw_stype
+            ,adjust_type
+            ,adjust_mode
+            ,adjust_batch_no
+            ,adjust_log_id
+            ,target_pool_id
+            ,target_pool_name
+            ,pool_type
+            ,audit_status
+            ,adjuster_id
+            ,adjuster_name
+            ,adjust_reason
+            ,adjust_advice
+            ,submit_time
+            ,audit_time
+            ,entry_time
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        ) VALUES (
+            #{securityCode}
+            ,#{securityShortName}
+            ,#{securityType}
+            ,#{crmwName}
+            ,#{crmwScode}
+            ,#{crmwMktcode}
+            ,#{crmwStype}
+            ,#{adjustType}
+            ,#{adjustMode}
+            ,#{adjustBatchNo}
+            ,#{adjustLogId}
+            ,#{targetPoolId}
+            ,#{targetPoolName}
+            ,#{poolType}
+            ,#{auditStatus}
+            ,#{adjusterId}
+            ,#{adjusterName}
+            ,#{adjustReason}
+            ,#{adjustAdvice}
+            ,#{submitTime}
+            ,#{auditTime}
+            ,#{entryTime}
+            ,0
+            ,#{crteTime}
+            ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 从原 CRMW 调库快照复制代码转换快照，formal=true 时替换正式证券身份字段 -->
+    <insert id="addCrmwSecuritySnapshotFromSource">
+        INSERT INTO ip_adjust_security_snapshot_crmw (
+            adjust_log_id
+            ,submitter_id
+            ,submit_time
+            ,crmw_name
+            ,crmw_scode
+            ,crmw_mktcode
+            ,crmw_stype
+            ,wind_code
+            ,full_name
+            ,short_name
+            ,issuer
+            ,issuer_code
+            ,wind_code_nib
+            ,wind_code_sh
+            ,wind_code_sz
+            ,wind_code_bj
+            ,issue_amountplan
+            ,coupon_rate
+            ,date_inright_exists
+            ,carry_date
+            ,maturity_date
+            ,info_pledge_ratio
+            ,rating_bond_agency
+            ,rating_bond
+            ,rating_bondissuer
+            ,rating_outlook
+            ,guarantor
+            ,guarantor_id
+            ,agency_name
+            ,inner_issuer_rating
+            ,security_type
+            ,sec_typename
+            ,date_call_exists
+            ,inner_guarantor_rating
+            ,date_exists
+            ,date_exists_str
+            ,fund_use
+            ,prompt_reason
+            ,analysis
+            ,wind_code_nbc
+            ,term_year
+            ,term_day
+            ,maturityembedded_desc
+            ,comp_type
+            ,issue_amountact
+            ,date_repurchase_exists
+            ,abs_flag
+            ,guarant_flag
+            ,guarant_type
+            ,rating_bondissuer_agency
+            ,agency_nameid
+            ,bond_biz_type
+            ,abs_originator_name
+            ,abs_share_ratio
+            ,expected_maturity_date
+            ,legal_maturity_date
+            ,abs_report_org
+            ,abs_custodian
+            ,company_selector
+            ,extra_ind_1
+            ,extra_ind_2
+            ,extra_ind_3
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        )
+        SELECT #{targetAdjustLogId}
+               ,#{submitterId}
+               ,#{updateTime}
+               ,CASE
+                    WHEN #{formal} = 1 AND source_row.crmw_scode = #{bo.tempSecurityCode}
+                        THEN #{bo.shortName}
+                    ELSE source_row.crmw_name
+                END
+               ,CASE
+                    WHEN #{formal} = 1 AND source_row.crmw_scode = #{bo.tempSecurityCode}
+                        THEN #{bo.securityCode}
+                    ELSE source_row.crmw_scode
+                END
+               ,CASE
+                    WHEN #{formal} = 1 AND source_row.crmw_scode = #{bo.tempSecurityCode}
+                        THEN #{bo.securityMarket}
+                    ELSE source_row.crmw_mktcode
+                END
+               ,CASE
+                    WHEN #{formal} = 1 AND source_row.crmw_scode = #{bo.tempSecurityCode}
+                        THEN #{bo.securityType}
+                    ELSE source_row.crmw_stype
+                END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.securityCode} ELSE source_row.wind_code END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.fullName} ELSE source_row.full_name END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
+               ,source_row.issuer
+               ,source_row.issuer_code
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNib} ELSE source_row.wind_code_nib END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSh} ELSE source_row.wind_code_sh END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSz} ELSE source_row.wind_code_sz END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeBj} ELSE source_row.wind_code_bj END
+               ,source_row.issue_amountplan
+               ,source_row.coupon_rate
+               ,source_row.date_inright_exists
+               ,source_row.carry_date
+               ,source_row.maturity_date
+               ,source_row.info_pledge_ratio
+               ,source_row.rating_bond_agency
+               ,source_row.rating_bond
+               ,source_row.rating_bondissuer
+               ,source_row.rating_outlook
+               ,source_row.guarantor
+               ,source_row.guarantor_id
+               ,source_row.agency_name
+               ,source_row.inner_issuer_rating
+               ,CASE WHEN #{formal} = 1 THEN #{bo.securityType} ELSE source_row.security_type END
+               ,source_row.sec_typename
+               ,source_row.date_call_exists
+               ,source_row.inner_guarantor_rating
+               ,source_row.date_exists
+               ,source_row.date_exists_str
+               ,source_row.fund_use
+               ,source_row.prompt_reason
+               ,source_row.analysis
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNbc} ELSE source_row.wind_code_nbc END
+               ,source_row.term_year
+               ,source_row.term_day
+               ,source_row.maturityembedded_desc
+               ,source_row.comp_type
+               ,source_row.issue_amountact
+               ,source_row.date_repurchase_exists
+               ,source_row.abs_flag
+               ,source_row.guarant_flag
+               ,source_row.guarant_type
+               ,source_row.rating_bondissuer_agency
+               ,source_row.agency_nameid
+               ,source_row.bond_biz_type
+               ,source_row.abs_originator_name
+               ,source_row.abs_share_ratio
+               ,source_row.expected_maturity_date
+               ,source_row.legal_maturity_date
+               ,source_row.abs_report_org
+               ,source_row.abs_custodian
+               ,source_row.company_selector
+               ,source_row.extra_ind_1
+               ,source_row.extra_ind_2
+               ,source_row.extra_ind_3
+               ,0
+               ,#{updateTime}
+               ,#{updateTime}
+        FROM ip_adjust_security_snapshot_crmw source_row
+        WHERE source_row.adjust_log_id = #{sourceAdjustLogId}
+          AND source_row.is_deleted = 0
+        ORDER BY source_row.id DESC
+        LIMIT 1
+    </insert>
+
+    <!-- 原 CRMW 调库快照不存在时，从临时证券主数据补建代码转换快照 -->
+    <insert id="addCrmwSecuritySnapshotFromMaster">
+        INSERT INTO ip_adjust_security_snapshot_crmw (
+            adjust_log_id
+            ,submitter_id
+            ,submit_time
+            ,crmw_name
+            ,crmw_scode
+            ,crmw_mktcode
+            ,crmw_stype
+            ,wind_code
+            ,full_name
+            ,short_name
+            ,issuer
+            ,issuer_code
+            ,wind_code_nib
+            ,wind_code_sh
+            ,wind_code_sz
+            ,wind_code_bj
+            ,issue_amountplan
+            ,coupon_rate
+            ,date_inright_exists
+            ,carry_date
+            ,maturity_date
+            ,info_pledge_ratio
+            ,rating_bond_agency
+            ,rating_bond
+            ,rating_bondissuer
+            ,rating_outlook
+            ,guarantor
+            ,guarantor_id
+            ,agency_name
+            ,inner_issuer_rating
+            ,security_type
+            ,sec_typename
+            ,date_call_exists
+            ,inner_guarantor_rating
+            ,date_exists
+            ,date_exists_str
+            ,fund_use
+            ,prompt_reason
+            ,analysis
+            ,wind_code_nbc
+            ,term_year
+            ,term_day
+            ,maturityembedded_desc
+            ,comp_type
+            ,issue_amountact
+            ,date_repurchase_exists
+            ,abs_flag
+            ,guarant_flag
+            ,guarant_type
+            ,rating_bondissuer_agency
+            ,agency_nameid
+            ,bond_biz_type
+            ,abs_originator_name
+            ,abs_share_ratio
+            ,expected_maturity_date
+            ,legal_maturity_date
+            ,abs_report_org
+            ,abs_custodian
+            ,company_selector
+            ,extra_ind_1
+            ,extra_ind_2
+            ,extra_ind_3
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        )
+        SELECT #{targetAdjustLogId}
+               ,#{submitterId}
+               ,#{updateTime}
+               ,CASE
+                    WHEN #{formal} = 1 AND #{poolStatus.crmwScode} = #{bo.tempSecurityCode}
+                        THEN #{bo.shortName}
+                    ELSE #{poolStatus.crmwName}
+                END
+               ,CASE
+                    WHEN #{formal} = 1 AND #{poolStatus.crmwScode} = #{bo.tempSecurityCode}
+                        THEN #{bo.securityCode}
+                    ELSE #{poolStatus.crmwScode}
+                END
+               ,CASE
+                    WHEN #{formal} = 1 AND #{poolStatus.crmwScode} = #{bo.tempSecurityCode}
+                        THEN #{bo.securityMarket}
+                    ELSE #{poolStatus.crmwMktcode}
+                END
+               ,CASE
+                    WHEN #{formal} = 1 AND #{poolStatus.crmwScode} = #{bo.tempSecurityCode}
+                        THEN #{bo.securityType}
+                    ELSE #{poolStatus.crmwStype}
+                END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.securityCode} ELSE source_row.wind_code END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.fullName} ELSE source_row.full_name END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
+               ,source_row.issuer
+               ,source_row.issuer_code
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNib} ELSE source_row.wind_code_nib END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSh} ELSE source_row.wind_code_sh END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSz} ELSE source_row.wind_code_sz END
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeBj} ELSE source_row.wind_code_bj END
+               ,source_row.issue_amountplan
+               ,source_row.coupon_rate
+               ,source_row.date_inright_exists
+               ,source_row.carry_date
+               ,source_row.maturity_date
+               ,source_row.info_pledge_ratio
+               ,source_row.rating_bond_agency
+               ,source_row.rating_bond
+               ,source_row.rating_bondissuer
+               ,source_row.rating_outlook
+               ,source_row.guarantor
+               ,source_row.guarantor_id
+               ,source_row.agency_name
+               ,source_row.inner_issuer_rating
+               ,CASE WHEN #{formal} = 1 THEN #{bo.securityType} ELSE source_row.security_type END
+               ,source_row.sec_typename
+               ,source_row.date_call_exists
+               ,source_row.inner_guarantor_rating
+               ,source_row.date_exists
+               ,source_row.date_exists_str
+               ,source_row.fund_use
+               ,source_row.prompt_reason
+               ,source_row.analysis
+               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNbc} ELSE source_row.wind_code_nbc END
+               ,source_row.term_year
+               ,source_row.term_day
+               ,source_row.maturityembedded_desc
+               ,source_row.comp_type
+               ,source_row.issue_amountact
+               ,source_row.date_repurchase_exists
+               ,source_row.abs_flag
+               ,source_row.guarant_flag
+               ,source_row.guarant_type
+               ,source_row.rating_bondissuer_agency
+               ,source_row.agency_nameid
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,NULL
+               ,0
+               ,#{updateTime}
+               ,#{updateTime}
+        FROM rrs_securityinfo source_row
+        WHERE source_row.wind_code = #{bo.tempSecurityCode}
+        LIMIT 1
+    </insert>
+
+    <!-- 锁定并查询原入池日志的有效附件主键 -->
+    <select id="queryActiveAttachmentIdListForUpdate" resultType="long">
+        SELECT id
+        FROM sys_attachment
+        WHERE table_name = 'ip_adjust_log'
+          AND main_id = #{adjustLogId}
+          AND is_deleted = 0
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 将原入池日志附件关联复制到正式代码调入日志，物理文件保持不变 -->
+    <insert id="addFormalInAttachmentList">
+        INSERT INTO sys_attachment (
+            table_name
+            ,main_id
+            ,attachment_category
+            ,file_type
+            ,original_file_name
+            ,new_file_name
+            ,file_size
+            ,content_type
+            ,full_url
+            ,file_name
+            ,uploader_id
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        )
+        SELECT 'ip_adjust_log'
+               ,#{targetAdjustLogId}
+               ,source_row.attachment_category
+               ,source_row.file_type
+               ,source_row.original_file_name
+               ,source_row.new_file_name
+               ,source_row.file_size
+               ,source_row.content_type
+               ,source_row.full_url
+               ,source_row.file_name
+               ,source_row.uploader_id
+               ,0
+               ,#{updateTime}
+               ,#{updateTime}
+        FROM sys_attachment source_row
+        WHERE source_row.table_name = 'ip_adjust_log'
+          AND source_row.main_id = #{sourceAdjustLogId}
+          AND source_row.is_deleted = 0
+        ORDER BY source_row.id ASC
+    </insert>
+
+    <!-- 锁定并查询 CRMW 池当前状态中的 CRMW 凭证引用主键 -->
+    <select id="queryCrmwPoolStatusCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_pool_status_crmw
+        WHERE is_deleted = 0
+          AND crmw_scode = #{tempSecurityCode}
+          AND audit_status = '20'
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 合并并替换 CRMW 池当前状态中的 CRMW 凭证引用，正式组合已存在时软删除旧组合 -->
+    <update id="editCrmwPoolStatusCrmwReference">
+        UPDATE ip_pool_status_crmw source_row
+        LEFT JOIN ip_pool_status_crmw formal_row
+               ON formal_row.security_code &lt;=> source_row.security_code
+              AND formal_row.crmw_scode = #{bo.securityCode}
+              AND formal_row.crmw_stype = #{bo.securityType}
+              AND formal_row.target_pool_id &lt;=> source_row.target_pool_id
+              AND formal_row.audit_status = '20'
+              AND formal_row.is_deleted = 0
+              AND formal_row.id != source_row.id
+        LEFT JOIN ip_pool_status_crmw earlier_row
+               ON earlier_row.security_code &lt;=> source_row.security_code
+              AND earlier_row.crmw_scode = #{bo.tempSecurityCode}
+              AND earlier_row.target_pool_id &lt;=> source_row.target_pool_id
+              AND earlier_row.audit_status = '20'
+              AND earlier_row.is_deleted = 0
+              AND earlier_row.id &lt; source_row.id
+        SET source_row.crmw_name = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{bo.shortName}
+                ELSE source_row.crmw_name
+            END
+           ,source_row.crmw_scode = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{bo.securityCode}
+                ELSE source_row.crmw_scode
+            END
+           ,source_row.crmw_mktcode = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{bo.securityMarket}
+                ELSE source_row.crmw_mktcode
+            END
+           ,source_row.crmw_stype = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{bo.securityType}
+                ELSE source_row.crmw_stype
+            END
+           ,source_row.is_deleted = CASE
+                WHEN formal_row.id IS NOT NULL OR earlier_row.id IS NOT NULL THEN 1
+                ELSE source_row.is_deleted
+            END
+           ,source_row.updt_time = #{bo.updateTime}
+        WHERE source_row.id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          AND source_row.is_deleted = 0
+          AND source_row.crmw_scode = #{bo.tempSecurityCode}
+          AND source_row.audit_status = '20'
+    </update>
+
+    <!-- 锁定并查询仍有效的个人收藏临时代码引用主键 -->
+    <select id="queryActiveMySecurityPoolReferenceIdList" resultType="long">
+        SELECT id
+        FROM my_security_pool
+        WHERE security_code = #{tempSecurityCode}
+          AND status = 'use'
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 合并并替换个人收藏引用，同一用户已有正式代码收藏时失效旧收藏 -->
+    <update id="editActiveMySecurityPoolReference">
+        UPDATE my_security_pool source_row
+        LEFT JOIN my_security_pool formal_row
+               ON formal_row.user_id &lt;=> source_row.user_id
+              AND formal_row.security_code = #{securityCode}
+              AND formal_row.status = 'use'
+              AND formal_row.id != source_row.id
+        LEFT JOIN my_security_pool earlier_row
+               ON earlier_row.user_id &lt;=> source_row.user_id
+              AND earlier_row.security_code = #{tempSecurityCode}
+              AND earlier_row.status = 'use'
+              AND earlier_row.id &lt; source_row.id
+        SET source_row.security_code = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{securityCode}
+                ELSE source_row.security_code
+            END
+           ,source_row.security_type = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{securityType}
+                ELSE source_row.security_type
+            END
+           ,source_row.market = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{securityMarket}
+                ELSE source_row.market
+            END
+           ,source_row.status = CASE
+                WHEN formal_row.id IS NOT NULL OR earlier_row.id IS NOT NULL THEN 'del'
+                ELSE 'use'
+            END
+           ,source_row.update_time = #{updateTime}
+        WHERE source_row.security_code = #{tempSecurityCode}
+          AND source_row.status = 'use'
+    </update>
+
+    <!-- 锁定并查询未删除内部报告中的临时代码引用主键 -->
+    <select id="queryActiveInReportReferenceIdList" resultType="long">
+        SELECT id
+        FROM rrs_report_in
+        WHERE security_code = #{tempSecurityCode}
+          AND is_deleted = 0
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 替换未删除内部报告中的证券代码和类型 -->
+    <update id="editActiveInReportReference">
+        UPDATE rrs_report_in
+        SET security_code = #{securityCode}
+           ,security_type = #{securityType}
+           ,updt_time = #{updateTime}
+        WHERE security_code = #{tempSecurityCode}
+          AND is_deleted = 0
+    </update>
+
+    <!-- 锁定并查询未删除外部报告中的临时代码引用主键 -->
+    <select id="queryActiveOutReportReferenceIdList" resultType="long">
+        SELECT id
+        FROM rrs_report_out
+        WHERE security_code = #{tempSecurityCode}
+          AND is_deleted = 0
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 替换未删除外部报告中的证券代码和类型 -->
+    <update id="editActiveOutReportReference">
+        UPDATE rrs_report_out
+        SET security_code = #{securityCode}
+           ,security_type = #{securityType}
+           ,updt_time = #{updateTime}
+        WHERE security_code = #{tempSecurityCode}
+          AND is_deleted = 0
+    </update>
+
+    <!-- 锁定并查询待处理评级提醒中的临时代码引用主键 -->
+    <select id="queryOpenGradeRuleAlertReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_grade_rule_alert
+        WHERE security_code = #{tempSecurityCode}
+          AND alert_status = '00'
+          AND is_deleted = 0
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 合并并替换待处理评级提醒，同池已有正式代码待办时失效旧待办 -->
+    <update id="editOpenGradeRuleAlertReference">
+        UPDATE ip_grade_rule_alert source_row
+        LEFT JOIN ip_grade_rule_alert formal_row
+               ON formal_row.current_pool_id &lt;=> source_row.current_pool_id
+              AND formal_row.security_code = #{securityCode}
+              AND formal_row.alert_status = '00'
+              AND formal_row.is_deleted = 0
+              AND formal_row.id != source_row.id
+        LEFT JOIN ip_grade_rule_alert earlier_row
+               ON earlier_row.current_pool_id &lt;=> source_row.current_pool_id
+              AND earlier_row.security_code = #{tempSecurityCode}
+              AND earlier_row.alert_status = '00'
+              AND earlier_row.is_deleted = 0
+              AND earlier_row.id &lt; source_row.id
+        SET source_row.security_code = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{securityCode}
+                ELSE source_row.security_code
+            END
+           ,source_row.security_short_name = CASE
+                WHEN formal_row.id IS NULL AND earlier_row.id IS NULL THEN #{shortName}
+                ELSE source_row.security_short_name
+            END
+           ,source_row.alert_status = CASE
+                WHEN formal_row.id IS NOT NULL OR earlier_row.id IS NOT NULL THEN '99'
+                ELSE '00'
+            END
+           ,source_row.updt_time = #{updateTime}
+        WHERE source_row.security_code = #{tempSecurityCode}
+          AND source_row.alert_status = '00'
+          AND source_row.is_deleted = 0
+    </update>
+
+    <!-- 统计仍引用临时代码的运行态记录 -->
+    <select id="queryRuntimeReferenceCount" resultType="int">
+        SELECT COALESCE(SUM(ref_count), 0) AS refCount
+        FROM (
+            SELECT COUNT(1) AS ref_count
+            FROM ip_adjust_log
+            WHERE is_deleted = 0
+              AND security_code = #{tempSecurityCode}
+              AND audit_status IN ('00', '11')
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_adjust_log
+            WHERE is_deleted = 0
+              AND crmw_scode = #{tempSecurityCode}
+              AND audit_status IN ('00', '11')
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_adjust_security_snapshot snapshot_row
+            INNER JOIN ip_adjust_log adjust_log ON adjust_log.id = snapshot_row.adjust_log_id
+                                             AND adjust_log.is_deleted = 0
+                                             AND adjust_log.audit_status IN ('00', '11')
+            WHERE snapshot_row.is_deleted = 0
+              AND snapshot_row.wind_code = #{tempSecurityCode}
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_adjust_security_snapshot_crmw snapshot_row
+            INNER JOIN ip_adjust_log adjust_log ON adjust_log.id = snapshot_row.adjust_log_id
+                                             AND adjust_log.is_deleted = 0
+                                             AND adjust_log.audit_status IN ('00', '11')
+            WHERE snapshot_row.is_deleted = 0
+              AND snapshot_row.wind_code = #{tempSecurityCode}
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_adjust_security_snapshot_crmw snapshot_row
+            INNER JOIN ip_adjust_log adjust_log ON adjust_log.id = snapshot_row.adjust_log_id
+                                             AND adjust_log.is_deleted = 0
+                                             AND adjust_log.audit_status IN ('00', '11')
+            WHERE snapshot_row.is_deleted = 0
+              AND snapshot_row.crmw_scode = #{tempSecurityCode}
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_pool_status
+            WHERE is_deleted = 0
+              AND security_code = #{tempSecurityCode}
+              AND audit_status = '20'
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_pool_status
+            WHERE is_deleted = 0
+              AND crmw_scode = #{tempSecurityCode}
+              AND audit_status = '20'
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_pool_status_crmw
+            WHERE is_deleted = 0
+              AND security_code = #{tempSecurityCode}
+              AND audit_status = '20'
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_pool_status_crmw
+            WHERE is_deleted = 0
+              AND crmw_scode = #{tempSecurityCode}
+              AND audit_status = '20'
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM my_security_pool
+            WHERE security_code = #{tempSecurityCode}
+              AND status = 'use'
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM rrs_report_in
+            WHERE security_code = #{tempSecurityCode}
+              AND is_deleted = 0
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM rrs_report_out
+            WHERE security_code = #{tempSecurityCode}
+              AND is_deleted = 0
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM ip_grade_rule_alert
+            WHERE security_code = #{tempSecurityCode}
+              AND alert_status = '00'
+              AND is_deleted = 0
+            UNION ALL
+            SELECT COUNT(1) AS ref_count
+            FROM sys_imp_tmp batch_row
+            INNER JOIN sys_imp_tmp_detl detail_row ON detail_row.imp_id = batch_row.imp_id
+                                                   AND detail_row.is_deleted = 0
+            WHERE batch_row.is_deleted = 0
+              AND COALESCE(batch_row.save_rslt, '0') NOT IN ('1', '3')
+              AND (
+                  (
+                      batch_row.template_code = 'security_pool_import'
+                      AND detail_row.fld001 = #{tempSecurityCode}
+                  )
+                  OR (
+                      batch_row.template_code = 'crmw_pool_import'
+                      AND (
+                          detail_row.fld001 = #{tempSecurityCode}
+                          OR detail_row.fld004 = #{tempSecurityCode}
+                      )
+                  )
+              )
+        ) runtime_refs
+    </select>
+
+    <!-- 新增证券代码转换日志 -->
+    <insert id="addSecurityCodeConversionLog">
+        INSERT INTO rrs_temp_security_code_update_log (
+            temp_security_name
+            ,temp_security_code
+            ,temp_security_market
+            ,temp_security_type
+            ,security_name
+            ,security_code
+            ,security_market
+            ,security_type
+            ,replace_table_name
+            ,replace_record_id
+            ,replace_status
+            ,replace_time
+            ,crte_time
+        ) VALUES (
+            #{tempSecurityName}
+            ,#{tempSecurityCode}
+            ,#{tempSecurityMarket}
+            ,#{tempSecurityType}
+            ,#{securityName}
+            ,#{securityCode}
+            ,#{securityMarket}
+            ,#{securityType}
+            ,#{replaceTableName}
+            ,#{replaceRecordId}
+            ,#{replaceStatus}
+            ,#{updateTime}
+            ,#{updateTime}
+        )
+    </insert>
+</mapper>
