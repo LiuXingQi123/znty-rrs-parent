@@ -42,7 +42,8 @@ this.loadList();                  // 列表数据
 
 ### 2.2 初始化接口 1 — 投资池树
 
-- 路径：`POST /api/v1/common/queryPoolTreeList`，请求体 `{}`
+- 路径：`POST /api/v1/common/queryPoolTreeList`，请求体 `{ includeVarietyCodes: ['bond'] }`
+- 只返回投资品种包含债券的池，并保留其上级；树默认收起，搜索时展开匹配节点
 - 返回 `PoolTreeDto` 列表（`{id, parentId, poolName, poolFullName}`）
 - 后端 `CommonMapper.xml`：用 MySQL 8 递归 CTE `WITH RECURSIVE pool_tree` 拼接 `pool_full_name`（父路径 + '/' + 子名），按 `sort_path`（outer_sort/inner_sort 拼接）排序
 - 前端 `buildPoolTree` 将扁平列表转为嵌套树，并为每个节点挂 `fullPath`；`treeProps.disabled` 使父节点（有 children）不可勾选
@@ -146,7 +147,7 @@ this.loadList();                  // 列表数据
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树（含全路径） |
+| `common/queryPoolTreeList` | `{ includeVarietyCodes: ['bond'] }` | `List<{id, parentId, poolName, poolFullName, poolCode, varietyCodes}>` | 投资品种包含债券的投资池树（含上级与全路径），默认收起 |
 | `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, bondYesFlags, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo、证券特征等） | 证券池分页查询（仅 audit_status='20'；`category_type=bond`，含 crmw 跟债记录） |
 | `securityPoolQuery/exportSecurityPoolExcel` | 与分页查询相同，但不传 pageIndex/pageSize | `CommonFileDto`（Base64 `.xlsx`） | 按当前筛选条件导出全部命中记录，字段与页面表格一致 |
 | `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：债券大类，含 crmw） |

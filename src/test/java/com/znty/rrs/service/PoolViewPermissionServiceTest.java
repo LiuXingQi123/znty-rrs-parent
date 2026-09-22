@@ -67,6 +67,72 @@ public class PoolViewPermissionServiceTest {
         assertThat(result).extracting(PoolTreeDto::getId).containsExactly(1L, 15L);
     }
 
+    /** 投资品种过滤保留包含债券的节点及其祖先，去掉纯股票节点。 */
+    @Test
+    public void queryPoolTreeListShouldKeepBondVarietyAncestors() {
+        CommonMapper mapper = mock(CommonMapper.class);
+        CommonService service = new CommonService();
+        ReflectionTestUtils.setField(service, "commonMapper", mapper);
+        CommonReq req = new CommonReq();
+        req.setIncludeVarietyCodes(Collections.singletonList("bond"));
+        PoolTreeDto root = node(1L, null);
+        root.setVarietyCodes("[\"stock\"]");
+        PoolTreeDto bond = node(2L, 1L);
+        bond.setVarietyCodes("[\"bond\",\"company\"]");
+        PoolTreeDto stock = node(3L, 1L);
+        stock.setVarietyCodes("[\"stock\"]");
+        when(mapper.queryPoolTreeList(req)).thenReturn(Arrays.asList(root, bond, stock));
+
+        List<PoolTreeDto> result = service.queryPoolTreeList(req);
+
+        assertThat(result).extracting(PoolTreeDto::getId).containsExactly(1L, 2L);
+    }
+
+    /** 指定投资池编码时只保留这些池。 */
+    @Test
+    public void queryPoolTreeListShouldKeepRequestedPoolCodes() {
+        CommonMapper mapper = mock(CommonMapper.class);
+        CommonService service = new CommonService();
+        ReflectionTestUtils.setField(service, "commonMapper", mapper);
+        CommonReq req = new CommonReq();
+        req.setIncludePoolCodes(Arrays.asList("forbidden_root", "observe_root"));
+        PoolTreeDto forbidden = node(15L, null);
+        forbidden.setPoolCode("forbidden_root");
+        PoolTreeDto observe = node(16L, null);
+        observe.setPoolCode("observe_root");
+        PoolTreeDto credit = node(1L, null);
+        credit.setPoolCode("credit_bond_root");
+        when(mapper.queryPoolTreeList(req)).thenReturn(Arrays.asList(forbidden, observe, credit));
+
+        List<PoolTreeDto> result = service.queryPoolTreeList(req);
+
+        assertThat(result).extracting(PoolTreeDto::getId).containsExactly(15L, 16L);
+    }
+
+    /** 管理员不按权限裁剪时，仍按指定投资池编码收窄。 */
+    @Test
+    public void queryPoolTreeListShouldStillFilterPoolCodesForAdministrator() {
+        CommonMapper mapper = mock(CommonMapper.class);
+        InvestmentPoolService poolService = mock(InvestmentPoolService.class);
+        CommonService service = new CommonService();
+        ReflectionTestUtils.setField(service, "commonMapper", mapper);
+        ReflectionTestUtils.setField(service, "investmentPoolService", poolService);
+        CommonReq req = new CommonReq();
+        req.setCurrentUserId("1");
+        req.setPermissionType(PermissionType.VIEWABLE.getCode());
+        req.setIncludePoolCodes(Collections.singletonList("forbidden_root"));
+        PoolTreeDto forbidden = node(15L, null);
+        forbidden.setPoolCode("forbidden_root");
+        PoolTreeDto credit = node(1L, null);
+        credit.setPoolCode("credit_bond_root");
+        when(mapper.queryPoolTreeList(req)).thenReturn(Arrays.asList(forbidden, credit));
+        when(poolService.queryPermittedPoolIdsByUser("1", PermissionType.VIEWABLE.getCode())).thenReturn(null);
+
+        List<PoolTreeDto> result = service.queryPoolTreeList(req);
+
+        assertThat(result).extracting(PoolTreeDto::getId).containsExactly(15L);
+    }
+
     /** 构建权限记录。 */
     private PoolPermissionBo permission(Long poolId, String handlerType, Long handlerId) {
         PoolPermissionBo permission = new PoolPermissionBo();

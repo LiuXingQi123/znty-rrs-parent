@@ -1702,11 +1702,10 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
-        when(mapper.queryPoolList()).thenReturn(Arrays.asList(
-                // 构建投资池测试数据
-                buildPool(1L, null, "根库"),
-                // 构建投资池测试数据
-                buildPool(2L, 1L, "一级库")));
+        InvestmentPoolBo rootPool = buildPool(1L, null, "根库");
+        InvestmentPoolBo levelOnePool = buildPool(2L, 1L, "一级库");
+        levelOnePool.setVarietyCodes("[\"bond\"]");
+        when(mapper.queryPoolList()).thenReturn(Arrays.asList(rootPool, levelOnePool));
         when(mapper.queryMutexRelationList()).thenReturn(Collections.emptyList());
         PoolDto poolCount = new PoolDto();
         poolCount.setId(2L);
@@ -1722,6 +1721,32 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result).extracting(PoolDto::getCurrentCount).containsExactly(0, 3);
         verify(mapper, never()).queryPermissionListByType(anyString());
         verify(mapper, never()).queryUserRoleIdList(anyLong());
+    }
+
+    /** 选池只保留投资品种包含债券的池，并带上其祖先。 */
+    @Test
+    public void queryAdjustPoolListShouldKeepBondVarietyAndAncestors() {
+        InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        InvestmentPoolBo root = buildPool(1L, null, "根库");
+        root.setVarietyCodes("[\"stock\"]");
+        InvestmentPoolBo bondPool = buildPool(2L, 1L, "债券库");
+        bondPool.setVarietyCodes("[\"bond\"]");
+        InvestmentPoolBo stockPool = buildPool(3L, 1L, "股票库");
+        stockPool.setVarietyCodes("[\"stock\"]");
+        when(mapper.queryPoolList()).thenReturn(Arrays.asList(root, bondPool, stockPool));
+        when(mapper.queryMutexRelationList()).thenReturn(Collections.emptyList());
+        when(adjustMapper.queryPoolCurrentCountList()).thenReturn(Collections.<PoolDto>emptyList());
+
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setCurrentUserId("1");
+
+        List<PoolDto> result = service.queryAdjustPoolList(req);
+
+        assertThat(result).extracting(PoolDto::getId).containsExactly(1L, 2L);
     }
 
     /** 验证 filterAdjustablePoolsByUserShouldKeepAncestors 测试场景。 */

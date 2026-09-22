@@ -11,6 +11,8 @@
                    ,parent_id
                    ,pool_name
                    ,pool_type
+                   ,pool_code
+                   ,variety_codes
                    ,CAST(pool_name AS CHAR(2000)) AS pool_full_name
                    ,CAST(LPAD(COALESCE(outer_sort, 0), 10, '0') AS CHAR(2000)) AS sort_path
             FROM ip_investment_pool
@@ -33,6 +35,8 @@
                    ,child.parent_id
                    ,child.pool_name
                    ,child.pool_type
+                   ,child.pool_code
+                   ,child.variety_codes
                    ,CONCAT(parent.pool_full_name, '/', child.pool_name) AS pool_full_name
                    ,CONCAT(parent.sort_path, '/', LPAD(COALESCE(child.inner_sort, 0), 10, '0')) AS sort_path
             FROM ip_investment_pool child
@@ -56,6 +60,8 @@
                ,pool_name
                ,pool_full_name
                ,pool_type
+               ,pool_code
+               ,variety_codes
         FROM pool_tree
         ORDER BY sort_path ASC
                  ,id ASC

@@ -51,7 +51,7 @@
 | 调整人（文本输入） | `adjusterName` | 模糊，回车查询 |
 | 查询 / 重置 | — | 查询重置页码为 1；重置清空全部条件并清树勾选 |
 
-投资池树加载：`loadPoolTree()` → `POST /api/v1/common/queryPoolTreeList`（body `{}`）→ 扁平节点列表 `{id, parentId, poolName, poolFullName}`，前端 `buildPoolTree` 按 `parentId` 组装嵌套树，每节点计算 `fullPath`。`handlePoolTreeConfirm` 合并 `getCheckedKeys()` 与 `getHalfCheckedKeys()` 一并放入 `poolIds`。
+投资池树加载：`loadPoolTree()` → `POST /api/v1/common/queryPoolTreeList`（body 含 `permissionType=viewable` 与 `includePoolCodes`：`forbidden_root` 债券禁止库、`observe_root` 观察池、`pledge_blacklist_root` 黑名单质押库、`key_watch_list_root` 重点观察名单）→ 扁平节点列表，前端 `buildPoolTree` 按 `parentId` 组装嵌套树，每节点计算 `fullPath`。树默认收起。`handlePoolTreeConfirm` 合并 `getCheckedKeys()` 与 `getHalfCheckedKeys()` 一并放入 `poolIds`。
 
 ### 2.2 查询接口
 
@@ -87,7 +87,7 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `common/queryPoolTreeList` | `{}` | `List<PoolTreeDto>{id, parentId, poolName, poolFullName}` | 投资池树（含全路径） |
+| `common/queryPoolTreeList` | `permissionType=viewable`，`includePoolCodes` 为四个风险池编码 | `List<PoolTreeDto>{id, parentId, poolName, poolFullName, poolCode}` | 仅债券禁止库、观察池、黑名单质押库、重点观察名单（含上级），默认收起 |
 | `companyPoolQuery/queryCompanyPoolPage` | poolIds, companyCode, entryTimeStart, entryTimeEnd, adjusterName, pageIndex, pageSize | `PageResult<CompanyPoolQueryDto>` | 主体池分页查询（仅 audit_status='20' 且 category_type='company'） |
 
 > 路径均带前缀 `/api/v1/`。

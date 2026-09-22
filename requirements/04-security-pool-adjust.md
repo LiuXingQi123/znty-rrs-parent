@@ -138,7 +138,7 @@
 ### 3.1 用户操作步骤
 
 **步骤 1（选池，`adjustStep===1`）**：
-- 左右双栏：左「可调入库」（绿色），右「可调出库」（红色），均为树表格（`row-key="id"`），仅叶子节点可选。可调入库默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出库仍默认全部展开。
+- 左右双栏：左「可调入库」（绿色），右「可调出库」（红色），均为树表格（`row-key="id"`），仅叶子节点可选。可调入库、可调出库默认全部收起。选池结果只保留 `variety_codes` 包含 `bond` 的池，并保留这些池的上级。
 - 每个叶子行展示：投资池名称、上限数量（`maxCapacity`）、现有数量（`currentCount`）、信评报告列（选择报告 + 上传附件）、其他材料列（同上）。
 - 固定在页面可视区底部的操作栏展示「取消」「下一步」按钮，页面内容区预留底部空间；`disabled` 当 `selectedInPools.length===0 && selectedOutPools.length===0`。
 
@@ -365,7 +365,7 @@
 | `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
 | `queryRelatedRatingSubjectList` | securityCode | `List<RelatedRatingSubjectDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
 | `querySelfSelectedRightsHolderPage` | companyCode?, companyName?, pageIndex, pageSize | `PageResult<SelfSelectedRightsHolderDto>` | 从 `ais_inv_analysis.t_inv_company` 分页查询自选权益人，关联最新内评 |
-| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。三个主体编码均由后端重查校验 |
+| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。排除 CRMW 后只保留投资品种包含债券的池及其上级。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。三个主体编码均由后端重查校验 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |

@@ -412,6 +412,11 @@ public class SecurityPoolAdjustService {
         if (allPools.isEmpty()) {
             return new ArrayList<>();
         }
+        // 只保留投资品种包含债券的池，父级没有债券品种时仍保留，便于展开到下级
+        allPools = retainPoolsContainingVariety(allPools, CategoryType.BOND.getCode());
+        if (allPools.isEmpty()) {
+            return new ArrayList<>();
+        }
         // 调入方向额外：releaseRules=false 时，信用债大库池需满足主体债入库矩阵才显示可调
         if ("in".equalsIgnoreCase(req.getAdjustDirection())) {
             allPools = filterInboundByGradeRule(allPools, req);
@@ -603,6 +608,48 @@ public class SecurityPoolAdjustService {
         for (InvestmentPoolBo p : pools) {
             if (!isCreditBondPool(p)) {
                 result.add(p);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 保留投资品种包含指定大类的池，并补齐这些池的祖先节点。
+     *
+     * @param pools 待过滤的投资池
+     * @param varietyCode 投资品种编码，如 bond
+     * @return 命中品种的池及其祖先
+     */
+    private List<InvestmentPoolBo> retainPoolsContainingVariety(List<InvestmentPoolBo> pools, String varietyCode) {
+        if (pools == null || pools.isEmpty() || varietyCode == null || varietyCode.trim().isEmpty()) {
+            return pools == null ? new ArrayList<InvestmentPoolBo>() : pools;
+        }
+        // variety_codes 是 JSON 数组，带引号匹配，避免 bond 命中其他编码的子串
+        String token = "\"" + varietyCode.trim() + "\"";
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<Long, InvestmentPoolBo>();
+        Set<Long> matchedIds = new HashSet<Long>();
+        for (InvestmentPoolBo pool : pools) {
+            if (pool == null || pool.getId() == null) {
+                continue;
+            }
+            poolMap.put(pool.getId(), pool);
+            if (pool.getVarietyCodes() != null && pool.getVarietyCodes().contains(token)) {
+                matchedIds.add(pool.getId());
+            }
+        }
+        // 父级自己可以不含该品种，只要下级命中就留下，选池树才还能展开
+        Set<Long> retainedIds = new HashSet<Long>();
+        for (Long poolId : matchedIds) {
+            InvestmentPoolBo current = poolMap.get(poolId);
+            while (current != null && retainedIds.add(current.getId())) {
+                current = poolMap.get(current.getParentId());
+            }
+        }
+        // 按原列表顺序输出，保持投资池既有排序
+        List<InvestmentPoolBo> result = new ArrayList<InvestmentPoolBo>();
+        for (InvestmentPoolBo pool : pools) {
+            if (pool != null && retainedIds.contains(pool.getId())) {
+                result.add(pool);
             }
         }
         return result;

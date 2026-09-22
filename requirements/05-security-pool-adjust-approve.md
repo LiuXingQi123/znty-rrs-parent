@@ -126,7 +126,7 @@
 
 证券基本信息下方只读展示“发行主体最近三年及一期财务数据”：复用 `queryIssuerFinancialList`，支持城投债/产业债展示口径切换，前三列为最近三个有数据年份的最新报告，第四列重复展示当前最新一期；仅切换展示口径，不提供报告期选择和编辑能力。
 
-可调入池树默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出池树仍默认全部展开。
+可调入池树默认仅展开「信用债大库(new)」，其他根节点默认收起；可调出池树仍默认全部展开。选池接口与申请页相同，只保留投资品种包含债券的池及其上级。
 
 随后串行调用：
 - `loadLogAttachments(adjustLogList)` — 收集并去重全部日志 ID，一次调用 `POST /api/v1/attachments/queryAttachmentList {adjustLogIds}`，按返回的 `mainId` 与 `attachmentCategory` 分组为 `attachmentFiles`（信评报告）/`materialFiles`（其他材料）。

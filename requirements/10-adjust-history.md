@@ -35,7 +35,7 @@
 - `-1` 无效调整 / `00` 流程中（待审批/审批中） / `11` 驳回待修改 / `20` 审批通过 / `21` 审批驳回 / `32` O32自动审批 / `99` 发起人已撤回
 
 **初始化接口**：
-- 投资池树：`POST /api/v1/common/queryPoolTreeList`（同前）
+- 投资池树：`POST /api/v1/common/queryPoolTreeList`，请求体 `{ includeVarietyCodes: ['bond'] }`，只保留投资品种包含债券的池及其上级，树默认收起
 - 证券类型：`POST /api/v1/securityPoolAdjustHistory/querySecurityTypeList`（注意路径前缀是 `securityPoolAdjustHistory`），后端 SQL：内连 `dict_security_type` 且 `category_type='bond'`，`al.is_deleted=0 AND al.security_type IS NOT NULL`（**不限定 audit_status**；含 crmw 跟债记录，主体不进本下拉）
 
 ---
@@ -104,7 +104,7 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `common/queryPoolTreeList` | `{}` | `List<{id, parentId, poolName, poolFullName}>` | 投资池树 |
+| `common/queryPoolTreeList` | `{ includeVarietyCodes: ['bond'] }` | `List<{id, parentId, poolName, poolFullName}>` | 投资品种包含债券的投资池树，默认收起 |
 | `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, bondYesFlags, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 id、adjustLogId、targetPoolPath、adjustBatchNo、auditStatus、证券特征等） | 调库历史分页（含所有状态；`category_type=bond`，含 crmw 跟债记录，不按 pool_type 排除禁投） |
 | `securityPoolAdjustHistory/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：债券大类，含 crmw；不限 audit_status） |
 

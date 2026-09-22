@@ -22,4 +22,10 @@ public class PoolTreeDto {
 
     /** 投资池类型 */
     private String poolType;
+
+    /** 投资池编码 */
+    private String poolCode;
+
+    /** 投资品种编码 JSON 数组 */
+    private String varietyCodes;
 }

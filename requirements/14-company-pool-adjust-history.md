@@ -51,7 +51,7 @@
 | 调整状态 | `auditStatus` | 下拉 8 项 |
 | 查询 / 重置 | — | — |
 
-投资池树逻辑与主体池查询页**几乎完全相同**，但有一处差异：`handlePoolTreeConfirm` **只取 `getCheckedKeys()`，不合并 `getHalfCheckedKeys()`**（因父节点 disabled，半选本就不该出现，行为上等价，但写法更严格）。
+投资池树与主体池查询页相同：只查债券禁止库、观察池、黑名单质押库、重点观察名单（`includePoolCodes` 四个编码），并套 `permissionType=viewable`，树默认收起。差异：`handlePoolTreeConfirm` **只取 `getCheckedKeys()`，不合并 `getHalfCheckedKeys()`**（因父节点 disabled，半选本就不该出现，行为上等价，但写法更严格）。
 
 审批状态字典（页面内联，与 `dict.js DICT_AUDIT_STATUS` 一致）：`-1/00/11/20/21/32/99`。染色：`20/10/32`→success、`21/-1`→danger、`00/11`→warning、`99`→info。
 
@@ -92,7 +92,7 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `common/queryPoolTreeList` | `{}` | `List<PoolTreeDto>` | 投资池树 |
+| `common/queryPoolTreeList` | `permissionType=viewable`，`includePoolCodes` 为四个风险池编码 | `List<PoolTreeDto>` | 仅债券禁止库、观察池、黑名单质押库、重点观察名单，默认收起 |
 | `companyPoolAdjustHistory/queryCompanyPoolAdjustHistoryPage` | poolIds, companyCode, companyName, adjustTimeStart, adjustTimeEnd, adjusterName, adjustMode, auditStatus, pageIndex, pageSize | `PageResult<CompanyPoolAdjustHistoryDto>` | 主体池调库历史分页（含所有状态，category_type='company'） |
 
 > 路径均带前缀 `/api/v1/`。
