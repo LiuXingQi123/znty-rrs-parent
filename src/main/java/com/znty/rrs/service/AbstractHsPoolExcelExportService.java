@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.znty.rrs.common.enums.HsMarketCode;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.commonfile.CommonFileDto;
 import com.znty.rrs.entity.schedule.HsPoolExportPoolDto;
@@ -470,7 +471,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         int startIndex = rowIndex;
         Set<String> seen = new HashSet<>();
         for (HsPoolExportRowDto row : rows) {
-            // 将证券各市场代码展开为独立市场行，市场转换规则本轮保持不变。
+            // 将证券各市场代码展开为独立恒生市场编码行。
             List<String[]> marketRows = markets(row);
             for (String[] market : marketRows) {
                 if (deduplicate && !seen.add(market[0] + "|" + market[1])) {
@@ -488,7 +489,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 将证券各市场代码展开为市场名称与证券代码组合。
+     * 将证券各市场代码展开为恒生市场编码与无后缀证券代码组合。
      *
      * @param row 证券原始行
      * @return 市场拆分行
@@ -496,15 +497,15 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     private List<String[]> markets(HsPoolExportRowDto row) {
         List<String[]> result = new ArrayList<>();
         // 添加沪市证券代码。
-        addMarket(result, "上海证券交易所", row.getWindCodeSh());
+        addMarket(result, HsMarketCode.SHANGHAI_STOCK_EXCHANGE, row.getWindCodeSh());
         // 添加深市证券代码。
-        addMarket(result, "深圳证券交易所", row.getWindCodeSz());
+        addMarket(result, HsMarketCode.SHENZHEN_STOCK_EXCHANGE, row.getWindCodeSz());
         // 添加银行间市场证券代码。
-        addMarket(result, "银行间市场", row.getWindCodeNib());
+        addMarket(result, HsMarketCode.INTERBANK_MARKET, row.getWindCodeNib());
         // 添加北交所证券代码。
-        addMarket(result, "北京证券交易所", row.getWindCodeBj());
+        addMarket(result, HsMarketCode.BEIJING_STOCK_EXCHANGE, row.getWindCodeBj());
         // 添加其他市场证券代码。
-        addMarket(result, "其他", row.getWindCodeNbc());
+        addMarket(result, HsMarketCode.OTHER_QDII_MARKET, row.getWindCodeNbc());
         return result;
     }
 
@@ -512,13 +513,29 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
      * 添加非空市场代码。
      *
      * @param markets 市场拆分行集合
-     * @param marketName 投资市场名称
+     * @param marketCode 恒生市场编码
      * @param code 证券代码
      */
-    private void addMarket(List<String[]> markets, String marketName, String code) {
+    private void addMarket(List<String[]> markets, HsMarketCode marketCode, String code) {
         if (StringUtils.hasText(code)) {
-            markets.add(new String[]{marketName, code.trim()});
+            // 去掉 Wind 证券代码中的市场后缀。
+            String securityCode = removeSecurityCodeSuffix(code);
+            if (StringUtils.hasText(securityCode)) {
+                markets.add(new String[]{marketCode.getCode(), securityCode});
+            }
         }
+    }
+
+    /**
+     * 去掉证券代码首个点号及其后的市场后缀。
+     *
+     * @param code 原始证券代码
+     * @return 无市场后缀的证券代码
+     */
+    private String removeSecurityCodeSuffix(String code) {
+        String securityCode = code.trim();
+        int suffixIndex = securityCode.indexOf('.');
+        return suffixIndex < 0 ? securityCode : securityCode.substring(0, suffixIndex);
     }
 
     /**

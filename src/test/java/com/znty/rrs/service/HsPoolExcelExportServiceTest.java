@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.enums.HsMarketCode;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.commonfile.CommonFileDto;
 import com.znty.rrs.entity.schedule.HsPoolExportPoolDto;
@@ -70,8 +71,10 @@ public class HsPoolExcelExportServiceTest {
                 assertThat(workbook.getSheet("恒生债池").getRow(0).getCell(2).getStringCellValue()).isEqualTo("操作类型");
                 assertThat(workbook.getSheet("恒生债池").getColumnWidth(0)).isEqualTo(25 * 256);
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(0).getStringCellValue()).isEqualTo("测试债");
-                assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(1).getStringCellValue()).isEqualTo("110001.IB");
-                assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(3).getStringCellValue()).isEqualTo("上海证券交易所");
+                assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(1).getStringCellValue()).isEqualTo("110001");
+                assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(3).getStringCellValue()).isEqualTo("1");
+                assertThat(workbook.getSheet("恒生债池").getRow(2).getCell(1).getStringCellValue()).isEqualTo("112001");
+                assertThat(workbook.getSheet("恒生债池").getRow(2).getCell(3).getStringCellValue()).isEqualTo("4");
                 assertThat(workbook.getSheet("恒生空池").getLastRowNum()).isZero();
             }
         } finally {
@@ -138,6 +141,8 @@ public class HsPoolExcelExportServiceTest {
             String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
             try (XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(filePath))) {
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(2).getStringCellValue()).isEqualTo("删除");
+                assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(1).getStringCellValue()).isEqualTo("110001");
+                assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(3).getStringCellValue()).isEqualTo("1");
             }
         } finally {
             deleteDirectory(outputDir);
@@ -304,7 +309,11 @@ public class HsPoolExcelExportServiceTest {
             inject(service, exportMapper, taskMapper, outputDir);
             when(exportMapper.queryExportPoolList(Collections.singletonList(15L)))
                     .thenReturn(Collections.singletonList(pool(15L, "恒生债池")));
-            when(exportMapper.queryFullExportRowList(15L, false)).thenReturn(Collections.singletonList(row()));
+            HsPoolExportRowDto exportRow = row();
+            exportRow.setWindCodeSz("220001.SZ");
+            exportRow.setWindCodeBj("830001.BJ");
+            exportRow.setWindCodeNbc("US0001.N");
+            when(exportMapper.queryFullExportRowList(15L, false)).thenReturn(Collections.singletonList(exportRow));
             Date endTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2026-08-31 10:30:00");
 
             CommonFileDto file = service.exportManual(Collections.singletonList(15L), null, endTime);
@@ -317,7 +326,13 @@ public class HsPoolExcelExportServiceTest {
             try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
                 assertThat(workbook.getSheet("恒生债池").getRow(0).getCell(0).getStringCellValue())
                         .isEqualTo("证券名称");
-                assertThat(workbook.getSheet("恒生债池").getLastRowNum()).isEqualTo(2);
+                assertThat(workbook.getSheet("恒生债池").getLastRowNum()).isEqualTo(5);
+                assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(3).getStringCellValue()).isEqualTo("1");
+                assertThat(workbook.getSheet("恒生债池").getRow(2).getCell(3).getStringCellValue()).isEqualTo("2");
+                assertThat(workbook.getSheet("恒生债池").getRow(3).getCell(3).getStringCellValue()).isEqualTo("4");
+                assertThat(workbook.getSheet("恒生债池").getRow(4).getCell(3).getStringCellValue()).isEqualTo("6");
+                assertThat(workbook.getSheet("恒生债池").getRow(5).getCell(1).getStringCellValue()).isEqualTo("US0001");
+                assertThat(workbook.getSheet("恒生债池").getRow(5).getCell(3).getStringCellValue()).isEqualTo("99999");
             }
             try (Stream<Path> paths = Files.list(outputDir)) {
                 assertThat(paths.count()).isZero();
@@ -342,6 +357,15 @@ public class HsPoolExcelExportServiceTest {
         assertThat(mapperXml.substring(ordinaryBlockStart, crmwBlockStart))
                 .contains("<if test=\"!includeExpired\">", "maturity_date");
         assertThat(mapperXml.substring(crmwBlockStart, crmwBlockEnd)).doesNotContain("maturity_date");
+    }
+
+    /** 验证恒生市场编码与外部市场定义一致。 */
+    @Test
+    public void hsMarketCodeShouldMatchExternalDefinition() {
+        assertThat(Arrays.stream(HsMarketCode.values()).map(HsMarketCode::getCode))
+                .containsExactly("0", "1", "2", "3", "4", "5", "6", "250", "400", "10200", "10300",
+                        "10400", "10500", "10600", "10700", "10800", "10900", "11000", "20100", "20200",
+                        "20300", "30100", "50100", "99999");
     }
 
     /** 注入任务测试依赖。 */
