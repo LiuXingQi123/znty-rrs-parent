@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.FundPoolAdjustHistoryMapper">
+    <!-- 基金池调整历史 mapper：查询基金专用调库日志，覆盖全部审核状态。 -->
+
+    <!-- 分页查询基金池调整历史；基金类型、名称字段及软删除口径沿用基金业务定义。 -->
+    <select id="queryFundPoolAdjustHistoryPage" resultType="com.znty.rrs.entity.fundpooladjusthistory.FundPoolAdjustHistoryDto">
+        SELECT al.id
+               ,al.fund_code
+               ,COALESCE(al.fund_name, al.fund_short_name) AS fundName
+               ,al.security_type
+               ,dst.security_type_name
+               ,al.adjust_type
+               ,al.adjust_mode
+               ,al.target_pool_id
+               ,p.pool_name AS targetPoolPath
+               ,al.adjust_batch_no
+               ,al.audit_status
+               ,al.adjuster_name
+               ,al.submit_time
+        FROM ip_adjust_log_fund al
+        LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id
+                                      AND p.is_deleted = 0
+        INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
+                                         AND dst.category_type = 'fund'
+                                         AND dst.is_deleted = 0
+        <where>
+            <!-- 仅查询逻辑删除标记为 0 的基金调整日志。 -->
+            al.is_deleted = 0
+            <if test="poolIds != null and poolIds.size() > 0">
+                AND al.target_pool_id IN
+                <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+                    #{poolId}
+                </foreach>
+            </if>
+            <if test="fundCode != null and fundCode != ''">
+                AND al.fund_code LIKE CONCAT('%', #{fundCode}, '%')
+            </if>
+            <if test="fundName != null and fundName != ''">
+                AND (al.fund_name LIKE CONCAT('%', #{fundName}, '%')
+                    OR al.fund_short_name LIKE CONCAT('%', #{fundName}, '%'))
+            </if>
+            <if test="securityType != null and securityType != ''">
+                AND al.security_type = #{securityType}
+            </if>
+            <if test="adjustTimeStart != null and adjustTimeStart != ''">
+                AND al.submit_time >= #{adjustTimeStart}
+            </if>
+            <if test="adjustTimeEnd != null and adjustTimeEnd != ''">
+                AND al.submit_time &lt;= CONCAT(#{adjustTimeEnd}, ' 23:59:59')
+            </if>
+            <if test="adjusterName != null and adjusterName != ''">
+                AND al.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
+            </if>
+            <if test="adjustMode != null and adjustMode != ''">
+                AND al.adjust_mode = #{adjustMode}
+            </if>
+            <if test="auditStatus != null and auditStatus != ''">
+                AND al.audit_status = #{auditStatus}
+            </if>
+        </where>
+        ORDER BY al.submit_time DESC
+                 ,al.adjust_batch_no DESC
+                 ,al.id DESC
+    </select>
+
+    <!-- 查询调整历史中出现的基金类型。 -->
+    <select id="queryFundTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
+        SELECT DISTINCT al.security_type
+                       ,dst.security_type_name
+        FROM ip_adjust_log_fund al
+        INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
+                                         AND dst.category_type = 'fund'
+                                         AND dst.is_deleted = 0
+        WHERE al.is_deleted = 0
+          AND al.security_type IS NOT NULL
+        ORDER BY dst.sort_order ASC
+                 ,al.security_type ASC
+    </select>
+</mapper>

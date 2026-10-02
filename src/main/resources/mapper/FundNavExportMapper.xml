@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.FundNavExportMapper">
+    <!-- 分页查询未删除的基金基础信息及市场编码。 -->
+    <select id="queryFundNavFundPage" resultType="com.znty.rrs.entity.fundnavexport.FundNavFundDto">
+        SELECT id
+               ,fund_name
+               ,fund_code
+               ,market_code
+        FROM rrs_fundinfo
+        <where>
+            is_deleted = 0
+            <if test="fundName != null and fundName != ''">
+                AND (fund_name LIKE CONCAT('%', #{fundName}, '%')
+                    OR fund_short_name LIKE CONCAT('%', #{fundName}, '%'))
+            </if>
+            <if test="fundCode != null and fundCode != ''">
+                AND fund_code LIKE CONCAT('%', #{fundCode}, '%')
+            </if>
+            <if test="marketCodes != null and marketCodes.size() > 0">
+                AND market_code IN
+                <foreach collection="marketCodes" item="marketCode" open="(" separator="," close=")">
+                    #{marketCode}
+                </foreach>
+            </if>
+        </where>
+        ORDER BY fund_name ASC
+                 ,fund_code ASC
+                 ,id ASC
+    </select>
+
+    <!-- 查询导出选择中仍有效的基金基础信息。 -->
+    <select id="querySelectedFundList" resultType="com.znty.rrs.entity.fundnavexport.FundNavFundDto">
+        SELECT id
+               ,fund_name
+               ,fund_code
+               ,market_code
+        FROM rrs_fundinfo
+        <where>
+            is_deleted = 0
+            AND fund_code IN
+            <foreach collection="fundCodes" item="fundCode" open="(" separator="," close=")">
+                #{fundCode}
+            </foreach>
+        </where>
+        ORDER BY fund_name ASC
+                 ,fund_code ASC
+                 ,id ASC
+    </select>
+
+    <!-- 查询所选基金在指定交易日期范围内的有效单位净值。 -->
+    <select id="queryFundNavRecords" resultType="com.znty.rrs.entity.fundnavexport.FundNavRecordDto">
+        SELECT nav.fund_code
+               ,nav.trade_date
+               ,nav.unit_nav
+        FROM rrs_fund_nav nav
+        INNER JOIN rrs_fundinfo fi ON fi.fund_code = nav.fund_code
+                                  AND fi.is_deleted = 0
+        <where>
+            nav.is_deleted = 0
+            AND nav.fund_code IN
+            <foreach collection="fundCodes" item="fundCode" open="(" separator="," close=")">
+                #{fundCode}
+            </foreach>
+            AND nav.trade_date >= #{navDateStart}
+            AND nav.trade_date &lt;= #{navDateEnd}
+        </where>
+        ORDER BY nav.fund_code ASC
+                 ,nav.trade_date ASC
+                 ,nav.id ASC
+    </select>
+</mapper>

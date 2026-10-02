@@ -1,0 +1,476 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.FundPoolAdjustMapper">
+    <!-- 基金池调整独立 mapper：不读写债券调库运行表 -->
+
+    <!-- 分页查询未删除且未终止的基金基础信息 -->
+    <select id="queryFundPage" resultType="com.znty.rrs.entity.fundpooladjust.FundInfoDto">
+        SELECT fi.fund_code
+               ,fi.fund_name
+               ,fi.fund_short_name
+               ,fi.security_type
+               ,dst.security_type_name
+               ,fi.security_status
+               ,fi.market_code
+               ,fi.currency_code
+               ,fi.latest_nav
+               ,fi.establishment_date
+               ,fi.fund_manager_names
+               ,fi.fund_administrator
+               ,fi.fund_custodian
+               ,fi.accumulated_nav
+               ,fi.investment_style
+               ,fi.trade_price
+               ,fi.issue_scale
+               ,fi.latest_scale
+               ,fi.data_date
+        FROM rrs_fundinfo fi
+        INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                         AND dst.category_type = 'fund'
+                                         AND dst.is_deleted = 0
+        <where>
+            AND fi.is_deleted = 0
+            AND fi.security_status != 'D'
+            <if test="fundCode != null and fundCode != ''">
+                AND fi.fund_code LIKE CONCAT('%', #{fundCode}, '%')
+            </if>
+            <if test="fundShortName != null and fundShortName != ''">
+                AND fi.fund_short_name LIKE CONCAT('%', #{fundShortName}, '%')
+            </if>
+            <if test="securityType != null and securityType != ''">
+                AND fi.security_type = #{securityType}
+            </if>
+            <if test="fundAdministrator != null and fundAdministrator != ''">
+                AND fi.fund_administrator LIKE CONCAT('%', #{fundAdministrator}, '%')
+            </if>
+        </where>
+        ORDER BY fi.fund_code ASC
+    </select>
+
+    <!-- 查询有效基金对应的产品类型及字典名称 -->
+    <select id="queryFundTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
+        SELECT DISTINCT fi.security_type
+                       ,dst.security_type_name
+        FROM rrs_fundinfo fi
+        INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                         AND dst.category_type = 'fund'
+                                         AND dst.is_deleted = 0
+        WHERE fi.is_deleted = 0
+          AND fi.security_status != 'D'
+        ORDER BY dst.sort_order ASC
+                 ,fi.security_type ASC
+    </select>
+
+    <!-- 按基金代码读取未删除的基金基础信息 -->
+    <select id="queryFundByCode" resultType="com.znty.rrs.entity.bo.FundInfoBo">
+        SELECT fi.*
+               ,dst.security_type_name
+        FROM rrs_fundinfo fi
+        LEFT JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                        AND dst.is_deleted = 0
+        WHERE fi.fund_code = #{fundCode}
+          AND fi.is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 查询基金当前有效的已审批通过池状态 -->
+    <select id="queryFundPoolStatusList" resultType="com.znty.rrs.entity.fundpooladjust.FundPoolStatusDto">
+        SELECT ips.id
+               ,ips.target_pool_id
+               ,ips.target_pool_name AS poolName
+               ,ips.pool_type
+               ,ips.entry_time
+        FROM ip_pool_status_fund ips
+        WHERE ips.fund_code = #{fundCode}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+        ORDER BY ips.entry_time DESC
+                 ,ips.id DESC
+    </select>
+
+    <!-- 查询基金当前所在的有效投资池 ID -->
+    <select id="queryFundCurrentPoolIdList" resultType="java.lang.Long">
+        SELECT DISTINCT target_pool_id
+        FROM ip_pool_status_fund
+        WHERE fund_code = #{fundCode}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询基金调库记录；未指定批次时仅返回未结束流程 -->
+    <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.FundAdjustLogBo">
+        SELECT al.*
+               ,fd.name AS flowName
+        FROM ip_adjust_log_fund al
+        LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
+        <where>
+            AND al.fund_code = #{fundCode}
+            AND al.is_deleted = 0
+            <if test="adjustBatchNo != null and adjustBatchNo != ''">
+                AND al.adjust_batch_no = #{adjustBatchNo}
+            </if>
+            <if test="adjustBatchNo == null or adjustBatchNo == ''">
+                AND al.audit_status NOT IN ('-1', '20', '21', '99')
+            </if>
+        </where>
+        ORDER BY al.submit_time DESC, al.id DESC
+    </select>
+
+    <!-- 查询指定批次或记录的全部基金审批步骤 -->
+    <select id="queryAdjustStepList" resultType="com.znty.rrs.entity.bo.FundAdjustStepBo">
+        SELECT step.*
+        FROM ip_adjust_step_fund step
+        <where>
+            <if test="adjustBatchNo != null and adjustBatchNo != ''">
+                AND step.adjust_batch_no = #{adjustBatchNo}
+            </if>
+            <if test="adjustBatchNo == null or adjustBatchNo == ''">
+                AND step.adjust_log_id = #{adjustLogId}
+            </if>
+        </where>
+        ORDER BY step.sort_order ASC, step.start_time ASC, step.id ASC
+    </select>
+
+    <!-- 查询指定批次或调库记录的审批步骤，批次号优先 -->
+    <select id="queryAdjustStepByBatchList" resultType="com.znty.rrs.entity.bo.FundAdjustStepBo">
+        SELECT step.*
+        FROM ip_adjust_step_fund step
+        <where>
+            <choose>
+                <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                    step.adjust_batch_no = #{adjustBatchNo}
+                </when>
+                <otherwise>
+                    step.adjust_log_id = #{adjustLogId}
+                </otherwise>
+            </choose>
+        </where>
+        ORDER BY step.sort_order ASC, step.start_time ASC, step.id ASC
+    </select>
+
+    <!-- 按步骤 ID 查询基金调库审批步骤 -->
+    <select id="queryAdjustStepById" resultType="com.znty.rrs.entity.bo.FundAdjustStepBo">
+        SELECT *
+        FROM ip_adjust_step_fund
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <!-- 管理员本人同时是处理人时优先定位到自己的待办步骤 -->
+    <select id="queryPendingStepByHandler" resultType="com.znty.rrs.entity.bo.FundAdjustStepBo">
+        SELECT *
+        FROM ip_adjust_step_fund
+        WHERE adjust_log_id = #{adjustLogId}
+          AND adjust_batch_no = #{adjustBatchNo}
+          AND flow_node_id = #{flowNodeId}
+          AND handler_id = #{handlerId}
+          AND step_status = 'pending'
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <!-- 查询批次调库日志 -->
+    <select id="queryAdjustLogListForAudit" resultType="com.znty.rrs.entity.bo.FundAdjustLogBo">
+        SELECT *
+        FROM ip_adjust_log_fund
+        WHERE adjust_batch_no = #{adjustBatchNo}
+          AND is_deleted = 0
+        ORDER BY id ASC
+    </select>
+
+    <!-- 查询当前节点剩余待处理步骤数 -->
+    <select id="queryPendingStepCountByNode" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_adjust_step_fund
+        WHERE adjust_log_id = #{adjustLogId}
+          AND adjust_batch_no = #{adjustBatchNo}
+          AND flow_node_id = #{flowNodeId}
+          AND step_status = 'pending'
+    </select>
+
+    <!-- 乐观更新待处理步骤 -->
+    <update id="editAdjustStepProcess">
+        UPDATE ip_adjust_step_fund
+        SET step_status = #{stepStatus}
+           ,process_action = #{processAction}
+           ,process_comment = #{processComment}
+           ,process_time = NOW()
+           ,updt_time = NOW()
+        WHERE id = #{id}
+          AND step_status = 'pending'
+    </update>
+
+    <!-- 将抢占审批节点的其他步骤标记为跳过 -->
+    <update id="editOtherPendingStepSkipped">
+        UPDATE ip_adjust_step_fund
+        SET step_status = #{stepStatus}
+           ,process_action = 'skipped'
+           ,process_time = NOW()
+           ,updt_time = NOW()
+        WHERE adjust_log_id = #{adjustLogId}
+          AND adjust_batch_no = #{adjustBatchNo}
+          AND flow_node_id = #{flowNodeId}
+          AND step_status = 'pending'
+          AND id != #{id}
+    </update>
+
+    <!-- 更新批次基金调库审核状态 -->
+    <update id="editAdjustLogAuditStatus">
+        UPDATE ip_adjust_log_fund
+        SET audit_status = #{auditStatus}
+           ,audit_time = NOW()
+           ,updt_time = NOW()
+        WHERE adjust_batch_no = #{adjustBatchNo}
+          AND is_deleted = 0
+          AND audit_status IN ('00', '11')
+    </update>
+
+    <!-- 审批通过后新增基金当前池状态 -->
+    <insert id="addFundPoolStatus">
+        INSERT INTO ip_pool_status_fund (
+            fund_code
+           ,fund_name
+           ,fund_short_name
+           ,security_type
+           ,fund_score
+           ,fund_investment_type
+           ,need_risk_leader_approval
+           ,adjust_type
+           ,adjust_mode
+           ,adjust_batch_no
+           ,adjust_log_id
+           ,target_pool_id
+           ,target_pool_name
+           ,pool_type
+           ,flow_id
+           ,flow_key
+           ,flow_type
+           ,audit_status
+           ,adjuster_id
+           ,adjuster_name
+           ,adjust_reason
+           ,adjust_advice
+           ,submit_time
+           ,audit_time
+           ,entry_time
+           ,is_deleted
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{fundCode}
+           ,#{fundName}
+           ,#{fundShortName}
+           ,#{securityType}
+           ,#{fundScore}
+           ,#{fundInvestmentType}
+           ,#{needRiskLeaderApproval}
+           ,#{adjustType}
+           ,#{adjustMode}
+           ,#{adjustBatchNo}
+           ,#{id}
+           ,#{targetPoolId}
+           ,#{targetPoolName}
+           ,#{poolType}
+           ,#{flowId}
+           ,#{flowKey}
+           ,#{flowType}
+           ,'20'
+           ,#{adjusterId}
+           ,#{adjusterName}
+           ,#{adjustReason}
+           ,#{adjustAdvice}
+           ,#{submitTime}
+           ,NOW()
+           ,NOW()
+           ,0
+           ,NOW()
+           ,NOW()
+        )
+    </insert>
+
+    <!-- 调出审批通过后逻辑删除基金目标池状态 -->
+    <update id="deleteFundPoolStatus">
+        UPDATE ip_pool_status_fund
+        SET is_deleted = 1
+           ,updt_time = NOW()
+        WHERE fund_code = #{fundCode}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </update>
+
+    <!-- 查询基金最近一次进入目标投资池的时间 -->
+    <select id="queryFundPoolEntryTime" resultType="java.util.Date">
+        SELECT COALESCE(entry_time, audit_time, crte_time)
+        FROM ip_pool_status_fund
+        WHERE fund_code = #{fundCode}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 统计各投资池当前有效基金数量 -->
+    <select id="queryPoolCurrentCountList" resultType="com.znty.rrs.entity.fundpooladjust.FundPoolDto">
+        SELECT target_pool_id AS id
+               ,COUNT(DISTINCT fund_code) AS currentCount
+        FROM ip_pool_status_fund
+        WHERE audit_status = '20'
+          AND is_deleted = 0
+        GROUP BY target_pool_id
+    </select>
+
+    <!-- 统计指定投资池当前有效基金数量 -->
+    <select id="queryPoolCurrentCount" resultType="int">
+        SELECT COUNT(DISTINCT fund_code)
+        FROM ip_pool_status_fund
+        WHERE target_pool_id = #{poolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询未删除的投资池关联规则 -->
+    <select id="queryAllPoolRelationList" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
+        SELECT pool_id
+               ,relation_type
+               ,relation_pool_id
+        FROM ip_pool_relation
+        WHERE is_deleted = 0
+    </select>
+
+    <!-- 判断目标投资池在指定日期是否开放调整 -->
+    <select id="queryPoolInOpenDay" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_open_day
+        WHERE pool_id = #{poolId}
+          AND begin_date &lt;= #{today}
+          AND end_date >= #{today}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 判断基金在目标池是否存在待审批流程，可排除指定批次 -->
+    <select id="queryFundHasPendingProcess" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_adjust_log_fund al
+        INNER JOIN ip_adjust_step_fund step ON step.adjust_batch_no = al.adjust_batch_no
+        WHERE al.fund_code = #{fundCode}
+          AND al.target_pool_id = #{targetPoolId}
+          AND al.audit_status IN ('00', '11')
+          AND al.is_deleted = 0
+          AND step.step_status = 'pending'
+        <if test="excludedBatchNo != null and excludedBatchNo != ''">
+            AND al.adjust_batch_no != #{excludedBatchNo}
+        </if>
+    </select>
+
+    <!-- 判断同一调整人是否在三十秒内重复提交同方向调库 -->
+    <select id="queryRecentDuplicate" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_adjust_log_fund
+        WHERE fund_code = #{fundCode}
+          AND target_pool_id = #{targetPoolId}
+          AND adjust_mode = #{adjustMode}
+          AND adjuster_id = #{adjusterId}
+          AND submit_time >= DATE_SUB(NOW(), INTERVAL 30 SECOND)
+          AND is_deleted = 0
+    </select>
+
+    <!-- 新增基金调库申请日志并返回生成的记录 ID -->
+    <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_log_fund (
+            fund_code
+           ,fund_name
+           ,fund_short_name
+           ,security_type
+           ,fund_score
+           ,fund_investment_type
+           ,need_risk_leader_approval
+           ,adjust_type
+           ,adjust_mode
+           ,adjust_batch_no
+           ,target_pool_id
+           ,target_pool_name
+           ,pool_type
+           ,flow_id
+           ,flow_key
+           ,flow_type
+           ,audit_status
+           ,adjuster_id
+           ,adjuster_name
+           ,adjust_reason
+           ,adjust_advice
+           ,submit_time
+           ,is_deleted
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{fundCode}
+           ,#{fundName}
+           ,#{fundShortName}
+           ,#{securityType}
+           ,#{fundScore}
+           ,#{fundInvestmentType}
+           ,#{needRiskLeaderApproval}
+           ,#{adjustType}
+           ,#{adjustMode}
+           ,#{adjustBatchNo}
+           ,#{targetPoolId}
+           ,#{targetPoolName}
+           ,#{poolType}
+           ,#{flowId}
+           ,#{flowKey}
+           ,#{flowType}
+           ,#{auditStatus}
+           ,#{adjusterId}
+           ,#{adjusterName}
+           ,#{adjustReason}
+           ,#{adjustAdvice}
+           ,#{submitTime}
+           ,0
+           ,NOW()
+           ,NOW()
+        )
+    </insert>
+
+    <!-- 新增基金调库流程步骤并返回生成的步骤 ID -->
+    <insert id="addAdjustStep" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_step_fund (
+            adjust_log_id
+           ,adjust_batch_no
+           ,flow_node_id
+           ,node_code
+           ,node_label
+           ,node_type
+           ,approval_strategy
+           ,sort_order
+           ,step_status
+           ,handler_id
+           ,handler_name
+           ,process_action
+           ,process_comment
+           ,start_time
+           ,process_time
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{adjustLogId}
+           ,#{adjustBatchNo}
+           ,#{flowNodeId}
+           ,#{nodeCode}
+           ,#{nodeLabel}
+           ,#{nodeType}
+           ,#{approvalStrategy}
+           ,#{sortOrder}
+           ,#{stepStatus}
+           ,#{handlerId}
+           ,#{handlerName}
+           ,#{processAction}
+           ,#{processComment}
+           ,#{startTime}
+           ,#{processTime}
+           ,NOW()
+           ,NOW()
+        )
+    </insert>
+</mapper>

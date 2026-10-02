@@ -17,11 +17,28 @@ public enum AttachmentCategory {
     /** 内部报告库附件 */
     REPORT_IN("report_in"),
     /** 外部报告库附件 */
-    REPORT_OUT("report_out");
+    REPORT_OUT("report_out"),
+    /** 基金手工上传报告 */
+    FUND_REPORT_HAND("fund_report_hand"),
+    /** 基金内部报告库报告 */
+    FUND_REPORT_IN("fund_report_in"),
+    /** 基金外部报告库报告 */
+    FUND_REPORT_OUT("fund_report_out"),
+    /** 基金手工上传其他材料 */
+    FUND_MATERIAL_HAND("fund_material_hand"),
+    /** 基金内部报告库其他材料 */
+    FUND_MATERIAL_IN("fund_material_in"),
+    /** 基金外部报告库其他材料 */
+    FUND_MATERIAL_OUT("fund_material_out");
 
     /** 枚举 code 值 */
     private final String code;
 
+    /**
+     * 保存附件分类编码。
+     *
+     * @param code 附件分类编码
+     */
     AttachmentCategory(String code) {
         this.code = code;
     }

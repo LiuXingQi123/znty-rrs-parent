@@ -75,7 +75,9 @@ public class SysAttachmentService {
     @Value("${rrs.attachment.storage-path:D:/uploads/znty_rrs}")
     private String storagePath;
 
-    /** 初始化附件存储目录 */
+    /**
+     * 初始化附件存储目录。
+     */
     @PostConstruct
     public void initializeStorage() {
         // 默认 Windows 路径在 Linux 上运行时自动切换为 Linux 路径（环境变量覆盖时不切换）
@@ -84,15 +86,22 @@ public class SysAttachmentService {
             storagePath = "/app/uploads/znty_rrs";
         }
         try {
-            // 获取正式文件目录
+            // 创建正式文件目录，供后续附件保存使用
             Files.createDirectories(resolveFileRoot());
         } catch (IOException e) {
             throw new IllegalStateException("初始化附件存储目录失败：" + storagePath, e);
         }
     }
 
-    /** 创建本次提交的文件上下文（无前端原始文件名列表） */
+    /**
+     * 创建本次提交的文件上下文（无前端原始文件名列表）。
+     *
+     * @param files 本次提交的文件列表
+     * @param uploaderId 上传人 ID
+     * @return 本次提交的文件上下文
+     */
     public SubmissionFiles createSubmissionFiles(List<MultipartFile> files, String uploaderId) {
+        // 复用支持前端原始文件名的提交入口
         return createSubmissionFiles(files, uploaderId, null);
     }
 
@@ -102,6 +111,11 @@ public class SysAttachmentService {
      * {@code originalFileNameList} 与 {@code files} 同序；公司环境 multipart 中文名可能乱码，
      * 优先用前端显式传入的原始名落库。
      * </p>
+     *
+     * @param files 本次提交的文件列表
+     * @param uploaderId 上传人 ID
+     * @param originalFileNameList 与文件列表同序的前端原始文件名
+     * @return 本次提交的文件上下文
      */
     public SubmissionFiles createSubmissionFiles(List<MultipartFile> files, String uploaderId,
                                                  List<String> originalFileNameList) {
@@ -109,6 +123,7 @@ public class SysAttachmentService {
             throw new BizException("上传人 ID 不能为空");
         }
         List<MultipartFile> fileList = files == null ? new ArrayList<MultipartFile>() : files;
+        // 核对前端原始文件名与本次提交文件的数量
         List<String> nameList = normalizeOriginalFileNameList(originalFileNameList, fileList.size());
         for (int i = 0; i < fileList.size(); i++) {
             // 校验单个提交文件（优先用前端原始名）
@@ -120,6 +135,9 @@ public class SysAttachmentService {
     /**
      * 解析前端 FormData 字段 {@code originalFileNameListJson}（JSON 数组字符串）。
      * 空/空白返回 null；非法 JSON 抛业务异常。
+     *
+     * @param originalFileNameListJson 前端传入的原始文件名 JSON 数组
+     * @return 原始文件名列表
      */
     public List<String> parseOriginalFileNameListJson(String originalFileNameListJson) {
         if (originalFileNameListJson == null || originalFileNameListJson.trim().isEmpty()) {
@@ -137,32 +155,60 @@ public class SysAttachmentService {
 
     /**
      * 解析单文件上传的原始文件名（Excel 导入等）：优先取列表首项，否则回退 multipart 文件名。
+     *
+     * @param file 单文件上传内容
+     * @param originalFileNameList 前端传入的原始文件名列表
+     * @return 解析后的原始文件名
      */
     public String resolveUploadOriginalFileName(MultipartFile file, List<String> originalFileNameList) {
         List<String> nameList = originalFileNameList;
         if (nameList != null && nameList.size() != 1 && file != null && !file.isEmpty()) {
             throw new BizException("原始文件名列表数量须与上传文件数量一致");
         }
+        // 取得前端原始文件名，缺失时回退到 multipart 文件名
         return resolveOriginalFileName(file, nameList, 0);
     }
 
-    /** 将本次提交文件绑定到调库日志 */
+    /**
+     * 将本次提交文件绑定到证券调库日志。
+     *
+     * @param adjustLogId 证券调库日志 ID
+     * @param fileIndexes 本次提交文件的索引
+     * @param attachmentCategory 附件分类编码
+     * @param submissionFiles 本次提交文件上下文
+     */
     public void bindAttachments(Long adjustLogId, List<Integer> fileIndexes,
+                                String attachmentCategory, SubmissionFiles submissionFiles) {
+        // 使用证券调库日志表绑定原有附件提交入口
+        bindAttachments(ADJUST_LOG_TABLE, adjustLogId, fileIndexes, attachmentCategory, submissionFiles);
+    }
+
+    /**
+     * 将本次提交文件绑定到指定业务表记录。
+     *
+     * @param tableName 附件关联的业务表名
+     * @param mainId 业务记录 ID
+     * @param fileIndexes 本次提交文件的索引
+     * @param attachmentCategory 附件分类编码
+     * @param submissionFiles 本次提交文件上下文
+     */
+    public void bindAttachments(String tableName, Long mainId, List<Integer> fileIndexes,
                                 String attachmentCategory, SubmissionFiles submissionFiles) {
         if (fileIndexes == null || fileIndexes.isEmpty()) {
             return;
         }
-        if (adjustLogId == null) {
-            throw new BizException("绑定附件失败：调库日志 ID 不能为空");
+        if (tableName == null || tableName.trim().isEmpty() || mainId == null) {
+            throw new BizException("绑定附件失败：关联表名和业务记录 ID 不能为空");
         }
         if (submissionFiles == null) {
             throw new BizException("绑定附件失败：提交文件上下文不能为空");
         }
         for (Integer fileIndex : new LinkedHashSet<>(fileIndexes)) {
-            StoredFile storedFile = submissionFiles.resolveStoredFile(fileIndex, attachmentCategory, adjustLogId);
+            // 按文件下标保存提交文件，并取得当前业务记录对应的存储信息
+            StoredFile storedFile = submissionFiles.resolveStoredFile(fileIndex, attachmentCategory, mainId);
             SysAttachmentBo bo = new SysAttachmentBo();
-            bo.setTableName(ADJUST_LOG_TABLE);
-            bo.setMainId(adjustLogId);
+            bo.setTableName(tableName.trim());
+            bo.setMainId(mainId);
             bo.setAttachmentCategory(attachmentCategory);
             bo.setFileType(storedFile.fileType);
             bo.setOriginalFileName(storedFile.originalFileName);
@@ -172,18 +218,41 @@ public class SysAttachmentService {
             bo.setFullUrl("/api/v1/attachments/downloadAttachment");
             bo.setFileName(storedFile.relativeFileName);
             bo.setUploaderId(submissionFiles.uploaderId);
+            // 将文件信息绑定到指定业务记录
             sysAttachmentMapper.addAttachment(bo);
         }
     }
 
-    /** 将报告库附件复制绑定到调库日志 */
+    /**
+     * 将报告库附件复制绑定到证券调库日志。
+     *
+     * @param adjustLogId 证券调库日志 ID
+     * @param sourceAttachmentIds 报告库来源附件 ID
+     * @param attachmentPurpose 报告或其他材料用途
+     * @param uploaderId 上传人 ID
+     */
     public void copyReportAttachments(Long adjustLogId, List<Long> sourceAttachmentIds, String attachmentPurpose,
                                       String uploaderId) {
+        // 使用证券调库日志表绑定原有报告库复制入口
+        copyReportAttachments(ADJUST_LOG_TABLE, adjustLogId, sourceAttachmentIds, attachmentPurpose, uploaderId);
+    }
+
+    /**
+     * 将报告库附件复制绑定到指定业务表记录。
+     *
+     * @param tableName 附件关联的业务表名
+     * @param mainId 业务记录 ID
+     * @param sourceAttachmentIds 报告库来源附件 ID
+     * @param attachmentPurpose 报告或其他材料用途
+     * @param uploaderId 上传人 ID
+     */
+    public void copyReportAttachments(String tableName, Long mainId, List<Long> sourceAttachmentIds,
+                                      String attachmentPurpose, String uploaderId) {
         if (sourceAttachmentIds == null || sourceAttachmentIds.isEmpty()) {
             return;
         }
-        if (adjustLogId == null) {
-            throw new BizException("复制报告附件失败：调库日志 ID 不能为空");
+        if (tableName == null || tableName.trim().isEmpty() || mainId == null) {
+            throw new BizException("复制报告附件失败：关联表名和业务记录 ID 不能为空");
         }
         if (!AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose) && !AttachmentPurpose.MATERIAL.getCode().equals(attachmentPurpose)) {
             throw new BizException("复制报告附件失败：附件分类不合法");
@@ -198,10 +267,11 @@ public class SysAttachmentService {
             // 校验复制来源必须为报告库附件
             validateReportSourceAttachment(source);
             // 根据报告库来源解析落库分类
-            String attachmentCategory = resolveAdjustLogReportCategory(source, attachmentPurpose);
+            String attachmentCategory = resolveAdjustLogReportCategory(
+                    source, attachmentPurpose, "ip_adjust_log_fund".equals(tableName.trim()));
             SysAttachmentBo bo = new SysAttachmentBo();
-            bo.setTableName(ADJUST_LOG_TABLE);
-            bo.setMainId(adjustLogId);
+            bo.setTableName(tableName.trim());
+            bo.setMainId(mainId);
             bo.setAttachmentCategory(attachmentCategory);
             bo.setFileType(source.getFileType());
             bo.setOriginalFileName(source.getOriginalFileName());
@@ -211,12 +281,13 @@ public class SysAttachmentService {
             bo.setFullUrl("/api/v1/attachments/downloadAttachment");
             bo.setFileName(source.getFileName());
             bo.setUploaderId(uploaderId);
+            // 复用报告库物理文件并保存当前业务记录的附件关联
             sysAttachmentMapper.addAttachment(bo);
         }
     }
 
     /**
-     * 校验信评报告来源附件真实存在且与报告限制匹配。
+     * 校验报告库来源附件真实存在且与报告限制匹配，适用于债券信评报告和基金报告。
      *
      * @param sourceAttachmentIds 报告库附件 ID 列表
      * @param internalRequired    是否必须来自内部报告库
@@ -241,7 +312,12 @@ public class SysAttachmentService {
         }
     }
 
-    /** 逻辑删除指定调库日志下的附件 */
+    /**
+     * 逻辑删除指定调库日志下的附件。
+     *
+     * @param adjustLogId 调库日志 ID
+     * @param attachmentIds 待删除的附件 ID 列表
+     */
     public void deleteAdjustLogAttachments(Long adjustLogId, List<Long> attachmentIds) {
         if (attachmentIds == null || attachmentIds.isEmpty()) {
             return;
@@ -256,28 +332,34 @@ public class SysAttachmentService {
             throw new BizException("删除附件失败：存在无效附件 ID");
         }
         for (SysAttachmentBo attachment : attachments) {
+            // 校验待删除附件属于指定调库记录
             if (!ADJUST_LOG_TABLE.equals(attachment.getTableName())
                     || !adjustLogId.equals(attachment.getMainId())) {
                 throw new BizException("删除附件失败：附件不属于当前调库记录，附件 ID：" + attachment.getId());
             }
         }
+        // 确认全部指定附件均已逻辑删除
         int updated = sysAttachmentMapper.deleteAttachmentByIdsList(adjustLogId, distinctIds);
         if (updated != distinctIds.size()) {
             throw new BizException("删除附件失败：附件状态已变化，请刷新后重试");
         }
     }
 
-    /** 按单个或多个调库日志 ID 查询附件列表 */
+    /**
+     * 按单个或多个调库日志 ID 查询附件列表。
+     *
+     * @param req 单个或多个调库日志 ID
+     */
     public List<SysAttachmentDto> queryAttachmentList(SysAttachmentReq req) {
         LinkedHashSet<Long> adjustLogIds = new LinkedHashSet<>();
-        if (req != null && req.getAdjustLogIds() != null) {
+        if (req.getAdjustLogIds() != null) {
             for (Long adjustLogId : req.getAdjustLogIds()) {
                 if (adjustLogId != null) {
                     adjustLogIds.add(adjustLogId);
                 }
             }
         }
-        if (req != null && req.getAdjustLogId() != null) {
+        if (req.getAdjustLogId() != null) {
             adjustLogIds.add(req.getAdjustLogId());
         }
         if (adjustLogIds.isEmpty()) {
@@ -313,6 +395,7 @@ public class SysAttachmentService {
             throw new BizException("绑定报告附件失败：内部报告 ID 不能为空");
         }
         for (SysAttachmentBo source : sources) {
+            // 复制附件元数据，使内部报告复用已保存的物理文件
             SysAttachmentBo bo = new SysAttachmentBo();
             bo.setTableName("rrs_report_in");
             bo.setMainId(reportId);
@@ -329,7 +412,12 @@ public class SysAttachmentService {
         }
     }
 
-    /** 下载附件 */
+    /**
+     * 下载附件。
+     *
+     * @param req 包含附件 ID 的下载请求
+     * @return 附件下载内容
+     */
     public DownloadFile downloadAttachment(SysAttachmentReq req) {
         Long id = req.getId();
         if (id == null) {
@@ -339,14 +427,15 @@ public class SysAttachmentService {
         if (attachment == null) {
             throw new BizException("附件不存在或已删除，附件 ID：" + id);
         }
-        // 获取附件存储根目录
+        // 根据附件相对路径定位存储文件
         Path filePath = resolveStorageRoot().resolve(attachment.getFileName()).normalize();
-        // 获取附件存储根目录
+        // 校验下载文件路径位于附件存储根目录内
         validatePathInRoot(filePath, resolveStorageRoot());
         if (!Files.isRegularFile(filePath)) {
             throw new BizException("附件文件不存在，附件 ID：" + id);
         }
 
+        // 读取物理文件并返回原始文件名、类型和内容
         try {
             byte[] content = Files.readAllBytes(filePath);
             String contentType = attachment.getContentType() == null || attachment.getContentType().isEmpty()
@@ -358,7 +447,12 @@ public class SysAttachmentService {
         }
     }
 
-    /** 校验提交文件（使用已解析的原始文件名） */
+    /**
+     * 校验提交文件及已解析的原始文件名。
+     *
+     * @param file 提交的文件
+     * @param originalFileName 已解析的原始文件名
+     */
     private void validateFile(MultipartFile file, String originalFileName) {
         if (file == null || file.isEmpty()) {
             throw new BizException("提交附件不能为空");
@@ -366,11 +460,16 @@ public class SysAttachmentService {
         if (originalFileName == null || originalFileName.trim().isEmpty()) {
             throw new BizException("上传文件名称不能为空");
         }
+        // 校验原始文件名的扩展名是否属于支持的文件类型
         resolveFileType(Paths.get(originalFileName).getFileName().toString());
     }
 
     /**
      * 规范化前端原始文件名列表：null 表示未传；非 null 时数量必须与文件数一致。
+     *
+     * @param originalFileNameList 前端传入的原始文件名列表
+     * @param fileCount 本次提交的文件数量
+     * @return 规范化后的原始文件名列表
      */
     private List<String> normalizeOriginalFileNameList(List<String> originalFileNameList, int fileCount) {
         if (originalFileNameList == null) {
@@ -384,6 +483,11 @@ public class SysAttachmentService {
 
     /**
      * 按下标取原始文件名：列表有效值优先，否则回退 multipart 自带文件名。
+     *
+     * @param file 提交的文件
+     * @param originalFileNameList 与文件列表同序的前端原始文件名
+     * @param index 当前文件在提交列表中的下标
+     * @return 解析后的原始文件名，不存在时返回 null
      */
     private String resolveOriginalFileName(MultipartFile file, List<String> originalFileNameList, int index) {
         if (originalFileNameList != null && index >= 0 && index < originalFileNameList.size()) {
@@ -402,7 +506,11 @@ public class SysAttachmentService {
         return Paths.get(multipartName).getFileName().toString();
     }
 
-    /** 校验复制来源必须为报告库附件 */
+    /**
+     * 校验复制来源必须为报告库附件。
+     *
+     * @param attachment 待复制的来源附件
+     */
     private void validateReportSourceAttachment(SysAttachmentBo attachment) {
         String tableName = attachment.getTableName();
         boolean inReport = "rrs_report_in".equals(tableName)
@@ -414,16 +522,37 @@ public class SysAttachmentService {
         }
     }
 
-    /** 根据报告库来源和调库附件用途解析落库分类 */
-    private String resolveAdjustLogReportCategory(SysAttachmentBo source, String attachmentPurpose) {
+    /**
+     * 根据报告库来源和调库附件用途解析落库分类。
+     *
+     * @param source 报告库来源附件
+     * @param attachmentPurpose 报告或其他材料用途
+     * @param fundAdjust 是否绑定到基金调库日志
+     * @return 调库报告附件分类编码
+     */
+    private String resolveAdjustLogReportCategory(SysAttachmentBo source, String attachmentPurpose,
+                                                  boolean fundAdjust) {
         boolean inReport = "rrs_report_in".equals(source.getTableName());
+        if (fundAdjust) {
+            if (AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose)) {
+                return inReport ? AttachmentCategory.FUND_REPORT_IN.getCode()
+                        : AttachmentCategory.FUND_REPORT_OUT.getCode();
+            }
+            return inReport ? AttachmentCategory.FUND_MATERIAL_IN.getCode()
+                    : AttachmentCategory.FUND_MATERIAL_OUT.getCode();
+        }
         if (AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose)) {
             return inReport ? AttachmentCategory.CREDIT_REPORT_IN.getCode() : AttachmentCategory.CREDIT_REPORT_OUT.getCode();
         }
         return inReport ? AttachmentCategory.MATERIAL_IN.getCode() : AttachmentCategory.MATERIAL_OUT.getCode();
     }
 
-    /** 解析并校验文件类型 */
+    /**
+     * 解析并校验文件类型。
+     *
+     * @param fileName 待校验的原始文件名
+     * @return 校验通过的文件扩展名
+     */
     private String resolveFileType(String fileName) {
         int dotIndex = fileName.lastIndexOf('.');
         if (dotIndex <= 0 || dotIndex == fileName.length() - 1) {
@@ -436,7 +565,15 @@ public class SysAttachmentService {
         return fileType;
     }
 
-    /** 保存提交文件并返回存储信息 */
+    /**
+     * 保存提交文件并返回存储信息。
+     *
+     * @param file 提交的文件
+     * @param originalFileName 已解析的原始文件名
+     * @param attachmentCategory 附件分类编码
+     * @param adjustLogId 关联的调库记录 ID
+     * @return 保存后的文件存储信息
+     */
     private StoredFile storeFile(MultipartFile file, String originalFileName,
                                  String attachmentCategory, Long adjustLogId) {
         if (originalFileName == null || originalFileName.trim().isEmpty()) {
@@ -479,7 +616,14 @@ public class SysAttachmentService {
         return storedFile;
     }
 
-    /** 生成不覆盖已有文件的附件名称 */
+    /**
+     * 生成不覆盖已有文件的附件名称。
+     *
+     * @param targetDirectory 文件保存目录
+     * @param fileNamePrefix 新文件名的固定前缀
+     * @param fileType 文件扩展名
+     * @return 不冲突的附件文件名
+     */
     private String resolveAvailableFileName(Path targetDirectory, String fileNamePrefix, String fileType) {
         String newFileName = fileNamePrefix + "." + fileType;
         int sequence = 2;
@@ -490,15 +634,25 @@ public class SysAttachmentService {
         return newFileName;
     }
 
-    /** 注册事务回滚后的文件清理 */
+    /**
+     * 注册事务回滚后的文件清理。
+     *
+     * @param filePath 本次新保存的物理文件路径
+     */
     private void deleteFileAfterRollback(final Path filePath) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronizationAdapter() {
+            /**
+             * 事务回滚后清理本次新保存的物理文件。
+             *
+             * @param status 事务完成状态
+             */
             @Override
             public void afterCompletion(int status) {
                 if (status == STATUS_ROLLED_BACK) {
+                    // 删除事务回滚后不再关联业务记录的物理文件
                     deleteQuietly(filePath);
                 }
             }
@@ -510,27 +664,45 @@ public class SysAttachmentService {
         return Paths.get(storagePath).toAbsolutePath().normalize();
     }
 
-    /** 获取正式文件目录 */
+    /**
+     * 获取正式文件目录。
+     *
+     * @return 正式文件存储目录
+     */
     private Path resolveFileRoot() {
         // 获取附件存储根目录
         return resolveStorageRoot();
     }
 
-    /** 转换为统一的相对路径 */
+    /**
+     * 转换为统一的相对路径。
+     *
+     * @param path 待转换的物理文件路径
+     * @return 相对于存储根目录的路径
+     */
     private String toRelativePath(Path path) {
-        // 获取附件存储根目录
+        // 以附件存储根目录为基准生成相对路径
         return resolveStorageRoot().relativize(path.toAbsolutePath().normalize())
                 .toString().replace('\\', '/');
     }
 
-    /** 校验目标路径位于指定根目录内 */
+    /**
+     * 校验目标路径位于指定根目录内。
+     *
+     * @param path 待校验的目标路径
+     * @param root 允许访问的根目录
+     */
     private void validatePathInRoot(Path path, Path root) {
         if (!path.toAbsolutePath().normalize().startsWith(root.toAbsolutePath().normalize())) {
             throw new BizException("附件路径不合法");
         }
     }
 
-    /** 安静删除文件 */
+    /**
+     * 安静删除文件，清理失败时保留文件供人工排查。
+     *
+     * @param path 待删除的物理文件路径
+     */
     private void deleteQuietly(Path path) {
         try {
             Files.deleteIfExists(path);
@@ -568,13 +740,26 @@ public class SysAttachmentService {
         /** 已保存文件缓存，同一日志、分类和文件下标只保存一次 */
         private final Map<String, StoredFile> storedFileMap = new HashMap<>();
 
+        /**
+         * 保存本次提交文件及上传人信息。
+         *
+         * @param files 本次提交的文件列表
+         * @param uploaderId 上传人 ID
+         * @param originalFileNameList 与文件列表同序的前端原始文件名
+         */
         SubmissionFiles(List<MultipartFile> files, String uploaderId, List<String> originalFileNameList) {
             this.files = files;
             this.uploaderId = uploaderId;
             this.originalFileNameList = originalFileNameList;
         }
 
-        /** 按下标获取并保存文件 */
+        /**
+         * 按下标获取并保存文件，同一记录和分类下复用已保存结果。
+         *
+         * @param fileIndex 文件在本次提交列表中的下标
+         * @param attachmentCategory 附件分类编码
+         * @param adjustLogId 关联的调库记录 ID
+         */
         StoredFile resolveStoredFile(Integer fileIndex, String attachmentCategory, Long adjustLogId) {
             if (fileIndex == null || fileIndex < 0 || fileIndex >= files.size()) {
                 throw new BizException("附件文件下标不合法：" + fileIndex);
@@ -583,6 +768,7 @@ public class SysAttachmentService {
             StoredFile storedFile = storedFileMap.get(storedFileKey);
             if (storedFile == null) {
                 MultipartFile file = files.get(fileIndex);
+                // 优先解析前端传入的原始文件名
                 String originalFileName = resolveOriginalFileName(file, originalFileNameList, fileIndex);
                 // 保存提交文件并返回存储信息
                 storedFile = storeFile(file, originalFileName, attachmentCategory, adjustLogId);

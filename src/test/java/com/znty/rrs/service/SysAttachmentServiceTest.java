@@ -161,6 +161,24 @@ public class SysAttachmentServiceTest {
         assertThat(captor.getValue().getAttachmentCategory()).isEqualTo(AttachmentCategory.MATERIAL_OUT.getCode());
     }
 
+    /** 验证基金报告通过兼容重载关联基金调库表且不改变债券默认关联表 */
+    @Test
+    public void copyReportAttachments_FundAdjust_UsesFundTableAndCategory() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        SysAttachmentService service = buildService(mapper);
+        SysAttachmentBo source = buildAttachment(7L, "rrs_report_in", 20L, "report_in");
+        when(mapper.queryAttachmentListByIds(Collections.singletonList(7L))).thenReturn(Collections.singletonList(source));
+
+        service.copyReportAttachments("ip_adjust_log_fund", 88L, Collections.singletonList(7L),
+                AttachmentPurpose.CREDIT_REPORT.getCode(), "1");
+
+        ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
+        verify(mapper).addAttachment(captor.capture());
+        assertThat(captor.getValue().getTableName()).isEqualTo("ip_adjust_log_fund");
+        assertThat(captor.getValue().getAttachmentCategory())
+                .isEqualTo(AttachmentCategory.FUND_REPORT_IN.getCode());
+    }
+
     /** 验证非报告库分类不能作为复制来源 */
     @Test
     public void copyReportAttachments_InvalidReportCategory_ThrowsBizException() throws Exception {

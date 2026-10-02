@@ -1,6 +1,6 @@
 # 智慧风控平台功能需求说明
 
-本目录按前端业务页面整理需求，当前覆盖 32 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
+本目录按前端业务页面整理需求，当前覆盖 37 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
 
 | 序号 | 功能 | 前端页面 | 需求文档 | 接口测试 |
 |---|---|---|---|---|
@@ -36,6 +36,11 @@
 | 30 | 恒生格式手动导出 | `hs_pool_manual_export.html` | [30-hs-pool-manual-export.md](30-hs-pool-manual-export.md) | `HsPoolManualExportServiceTest` |
 | 31 | CRMW池批量调整（批量调入/调出） | `batch_crmw_pool_adjust.html` | [31-batch-crmw-pool-adjust.md](31-batch-crmw-pool-adjust.md) | `BatchCrmwPoolAdjustApiTest` / `BatchCrmwPoolAdjustServiceTest` |
 | 32 | CRMW池 Excel 导入 | `crmw_pool_excel_import.html` | [32-crmw-pool-excel-import.md](32-crmw-pool-excel-import.md) | `CrmwPoolExcelImportServiceTest` / `CrmwPoolExcelImportApiTest` / `CommonFileServiceTest` |
+| 33 | 基金池调整申请（调入/调出） | `fund_pool_adjust.html` | [33-fund-pool-adjust.md](33-fund-pool-adjust.md) | `FundPoolAdjustApiTest` / `FundPoolAdjustServiceTest` |
+| 34 | 基金池查询 | `fund_pool_query.html` | [34-fund-pool-query.md](34-fund-pool-query.md) | `FundPoolQueryApiTest` / `FundPoolQueryServiceTest` |
+| 35 | 基金池调整历史 | `fund_pool_adjust_history.html` | [35-fund-pool-adjust-history.md](35-fund-pool-adjust-history.md) | `FundPoolAdjustHistoryApiTest` / `FundPoolAdjustHistoryServiceTest` |
+| 36 | 基金池调库审核与详情 | `fund_pool_adjust_approve.html` / `fund_pool_adjust_detail.html` | [36-fund-pool-adjust-approve-detail.md](36-fund-pool-adjust-approve-detail.md) | 待补充 |
+| 37 | 基金净值导出 | `fund_nav_export.html` | [37-fund-nav-export.md](37-fund-nav-export.md) | — |
 
 ## 调库业务全链路索引
 
@@ -53,6 +58,10 @@
 - **禁投池调整 · ABS债（债级，独立接口）**：[26](26-forbidden-abs-pool-adjust.md) 与 [15] 同页 Tab「ABS债」→ 仅 `abs_flag=1` → 目标池仅债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23) → `/api/v1/forbiddenAbsPoolAdjust/*` 校验提交；**不**同步主体下其他债；非直通审批复用证券池审核页（`securityAdjust`）。
 - **主体池视角**：[09](09-company-pool-query.md) 当前在池的主体、[14](14-company-pool-adjust-history.md) 主体调库流水（`category_type='company'` 过滤，主体作为伪证券入池/调库）。
 - **CRMW 池链路（凭证级，独立状态表 `ip_pool_status_crmw`）**：[18](18-crmw-pool-query.md) 当前在 CRMW 池的凭证（`audit_status='20'`）、[19](19-crmw-pool-adjust.md) 选 CRMW 凭证 + 标的证券 → 校验 → `addCrmwAdjustLogWithFiles` 提交（批次号 `CRMW` 前缀）、[31](31-batch-crmw-pool-adjust.md) 选 CRMW 叶子池 → 批量勾选凭证+标的组合 → 编排层逐组合 `checkCrmwAdjust` / `submitAdjustLog`（不注入 batch 流程）、[32](32-crmw-pool-excel-import.md) Excel 导入凭证+标的组合（目标池在页面选择，模板仅 CRMW代码/证券代码）→ 逐组合 `checkCrmwAdjust` / `submitAdjustLog`（`adjust_type=Excel导入`，不注入 batch 流程）、[20](20-crmw-pool-adjust-approve.md) `submitAdjustAudit` 审批流转落地 `ip_pool_status_crmw`、[21](21-crmw-pool-adjust-detail.md) 凭证调库只读 / 首次提交（修改节点重提在 [20]）、[22](22-crmw-pool-adjust-history.md) CRMW 调库流水（`pool_type='crmw'` 过滤，所有状态）。
+- **基金池申请链路（基金级，独立运行表）**：[33](33-fund-pool-adjust.md) 基金检索 → 只读基础信息 → 选基金池 → 通用基金规则校验 → 一般流程提交；写 `ip_adjust_log_fund` / `ip_adjust_step_fund`，批次号使用 `FUND` 前缀。审核、详情和最终落池见 [36](36-fund-pool-adjust-approve-detail.md)。
+- **基金池查询（基金级当前状态）**：[34](34-fund-pool-query.md) 查询 `ip_pool_status_fund` 中审批通过的记录，关联基金基础信息并回填投资池全路径；支持按池、基金、类型、入池时间和调整人筛选及 Excel 导出。
+- **基金池调整历史（基金级全状态流水）**：[35](35-fund-pool-adjust-history.md) 查询 `ip_adjust_log_fund` 中未删除的全部审核状态记录，支持按池、基金、类型、提交时间、人员、方向和状态筛选及 Excel 导出。
+- **基金净值导出**：[37](37-fund-nav-export.md) 按 `rrs_fundinfo` 查询基金基础信息，勾选基金并选择日期范围后，从 `rrs_fund_nav` 导出逐日单位净值；每只基金单独一个工作表。
 - **基础配置**：[01](01-flow-definition.md) 审批流程定义（设计器/节点/版本）、[02](02-investment-pool.md) 投资池树/关系/流程/权限维护、[03](03-rule-manager.md) QLExpress 风控规则与测试用例、[23](23-credit-bond-grade-rule.md) 信用债期限×主体内评分档→投资池准入矩阵、[24](24-temp-security-code.md) 临时代码录入/更新正式证券/取消发行、[25](25-pool-open-day.md) 投资池开放日区间维护（`ip_pool_open_day`，配合池级 `open_day_adjust`）、[29](29-scheduled-task.md) 定时任务可视化管理（`sys_scheduled_task` 启停/cron/手动执行/执行历史；**新增任务须评估执行顺序**，见该文档 4.1 / 4.2）。
 
 > **三类调库同构说明**：证券池调库（[04]/[05]/[11]）、禁投池调整（[15]/[16]/[17]，主体级）、CRMW 池调库（[19]/[20]/[21]，凭证级）在校验规则、流程快照、审批流转、`audit_status` 状态枚举上完全同构。差异：①操作对象分别为证券 / 主体 / CRMW 凭证+标的证券；②落地表分别为 `ip_pool_status`（`pool_type` 区分）/ `ip_pool_status`（主体级；债券禁止库15与黑名单质押库17另由 `syncCompanyBonds` 同步旗下 `security_status!='D'` 且到期日为空或大于等于当天的 bond 大类债券，含普通债、ABS、crmw；17按主体三个条件统一判定）/ `ip_pool_status_crmw`（独立表，`pool_type='crmw'`）；③批次号前缀 `BOND` / `COMP` / `CRMW`。另：创建 `ip_adjust_step` 人工 pending 时须排除本批次真正审核过（submit/approve/reject）的处理人（同一人不能跨环节；发起人/修改节点回退除外；pending/skipped/auto_process 不算已参与；剔光报错）；O32/系统自动步骤同样排除，剔光则写空处理人 `auto_process`。

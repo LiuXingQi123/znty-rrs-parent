@@ -69,7 +69,10 @@ public class ScriptToolService {
     private static final String TASK_INIT_EXTERNAL_IMPORT_SCHEMA = "INIT_EXTERNAL_IMPORT_SCHEMA";
     /** 初始化外部导入表 Demo 数据任务编码 */
     private static final String TASK_INIT_EXTERNAL_IMPORT_DEMO = "INIT_EXTERNAL_IMPORT_DEMO";
-    /** 已从主库批量任务排除的外部导入表示例（当前为证券主数据表） */
+    /** 初始化基金专属表建表任务编码 */
+    private static final String TASK_INIT_FUND_SCHEMA = "INIT_FUND_SCHEMA";
+    /** 初始化基金专属 Demo 数据任务编码 */
+    private static final String TASK_INIT_FUND_DEMO = "INIT_FUND_DEMO";
     /** 清空选中表数据任务编码 */
     private static final String TASK_CLEAR_SELECTED_TABLES = "CLEAR_SELECTED_TABLES";
     /** 清空选中表确认文本 */
@@ -664,7 +667,7 @@ public class ScriptToolService {
      * 获取任务配置。
      */
     private ScriptTaskDto requireTask(ScriptToolReq req) {
-        if (req == null || !StringUtils.hasText(req.getTaskCode())) {
+        if (!StringUtils.hasText(req.getTaskCode())) {
             throw new BizException("脚本任务编码不能为空");
         }
         // 构建任务白名单
@@ -679,7 +682,7 @@ public class ScriptToolService {
      * 校验确认文本。
      */
     private void validateConfirmText(ScriptToolReq req, ScriptTaskDto task) {
-        String confirmText = req == null ? null : req.getConfirmText();
+        String confirmText = req.getConfirmText();
         if (!task.getConfirmText().equals(confirmText)) {
             throw new BizException("确认文本不正确，请输入：" + task.getConfirmText());
         }
@@ -689,7 +692,7 @@ public class ScriptToolService {
      * 校验固定确认文本。
      */
     private void validateFixedConfirmText(ScriptToolReq req, String expectedConfirmText) {
-        String confirmText = req == null ? null : req.getConfirmText();
+        String confirmText = req.getConfirmText();
         if (!expectedConfirmText.equals(confirmText)) {
             throw new BizException("确认文本不正确，请输入：" + expectedConfirmText);
         }
@@ -699,7 +702,7 @@ public class ScriptToolService {
      * 获取模块重置任务配置。
      */
     private ScriptModuleTaskDto requireModuleTask(ScriptToolReq req) {
-        if (req == null || !StringUtils.hasText(req.getModuleCode())) {
+        if (!StringUtils.hasText(req.getModuleCode())) {
             throw new BizException("模块编码不能为空");
         }
         // 构建模块级重置任务白名单
@@ -714,7 +717,7 @@ public class ScriptToolService {
      * 获取 Demo 场景配置。
      */
     private ScriptDemoSceneDto requireDemoScene(ScriptToolReq req) {
-        if (req == null || !StringUtils.hasText(req.getSceneCode())) {
+        if (!StringUtils.hasText(req.getSceneCode())) {
             throw new BizException("Demo 场景编码不能为空");
         }
         // 构建 Demo 场景白名单
@@ -732,8 +735,8 @@ public class ScriptToolService {
         ScriptExecuteResultDto result = new ScriptExecuteResultDto();
         result.setTaskCode(taskCode);
         result.setTaskName(taskName);
-        result.setCurrentUserId(req == null ? null : req.getCurrentUserId());
-        result.setCurrentUserName(req == null ? null : req.getCurrentUserName());
+        result.setCurrentUserId(req.getCurrentUserId());
+        result.setCurrentUserName(req.getCurrentUserName());
         result.setStartTime(new Date());
         result.setExecutedItems(new ArrayList<String>());
         return result;
@@ -749,9 +752,12 @@ public class ScriptToolService {
 
     /**
      * 校验自定义清空表请求。
+     *
+     * @param req 数据表清理请求
+     * @param expectedConfirmText 预期的确认文本
      */
     private void validateSelectedTableReq(ScriptToolReq req, String expectedConfirmText) {
-        if (req == null || !expectedConfirmText.equals(req.getConfirmText())) {
+        if (!expectedConfirmText.equals(req.getConfirmText())) {
             throw new BizException("确认文本不正确，请输入：" + expectedConfirmText);
         }
         if (req.getTableKeys() == null || req.getTableKeys().isEmpty()) {
@@ -768,15 +774,18 @@ public class ScriptToolService {
 
     /**
      * 执行具体任务。
+     *
+     * @param taskCode 待执行的任务编码
+     * @param executedItems 已执行脚本的记录列表
      */
     private void executeTask(String taskCode, List<String> executedItems) throws Exception {
         if (TASK_INIT_SCHEMA.equals(taskCode)) {
-            // 执行主库建表脚本（排除 AIS 库与外部导入表）
+            // 执行主库建表脚本（排除 AIS 库、外部导入表与基金专属表）
             executeSqlFiles(queryRrsSchemaFiles(), executedItems);
             return;
         }
         if (TASK_INIT_DEMO.equals(taskCode)) {
-            // 执行主库 Demo 数据脚本（排除 AIS 库与外部导入表）
+            // 执行主库 Demo 数据脚本（排除 AIS 库、外部导入表与基金专属表）
             executeSqlFiles(queryRrsDemoFiles(), executedItems);
             return;
         }
@@ -790,6 +799,16 @@ public class ScriptToolService {
             executeSqlFiles(queryExternalImportDemoFiles(), executedItems);
             return;
         }
+        if (TASK_INIT_FUND_SCHEMA.equals(taskCode)) {
+            // 单独执行基金专属建表脚本
+            executeSqlFiles(queryFundSchemaFiles(), executedItems);
+            return;
+        }
+        if (TASK_INIT_FUND_DEMO.equals(taskCode)) {
+            // 单独执行基金专属 Demo 脚本
+            executeSqlFiles(queryFundDemoFiles(), executedItems);
+            return;
+        }
         if (TASK_INIT_AIS_SCHEMA.equals(taskCode)) {
             // 执行 AIS 库建表脚本
             executeSqlFiles(queryAisSchemaFiles(), executedItems);
@@ -801,9 +820,9 @@ public class ScriptToolService {
             return;
         }
         if (TASK_RESET_ALL.equals(taskCode)) {
-            // 先执行主库建表脚本（排除 AIS 库与外部导入表）
+            // 先执行主库建表脚本（排除 AIS 库、外部导入表与基金专属表）
             executeSqlFiles(queryRrsSchemaFiles(), executedItems);
-            // 再执行主库 Demo 数据脚本（排除 AIS 库与外部导入表）
+            // 再执行主库 Demo 数据脚本（排除 AIS 库、外部导入表与基金专属表）
             executeSqlFiles(queryRrsDemoFiles(), executedItems);
             return;
         }
@@ -817,6 +836,9 @@ public class ScriptToolService {
 
     /**
      * 执行 SQL 文件列表。
+     *
+     * @param fileNames 按执行顺序排列的脚本文件名
+     * @param executedItems 已执行脚本的记录列表
      */
     private void executeSqlFiles(List<String> fileNames, List<String> executedItems) throws Exception {
         // 解析 SQL 文件目录
@@ -1710,6 +1732,10 @@ public class ScriptToolService {
 
     /**
      * 拼接字符串列表。
+     *
+     * @param values 待拼接的字符串列表
+     * @param separator 字符串分隔符
+     * @return 拼接后的字符串
      */
     private String joinStrings(List<String> values, String separator) {
         StringBuilder builder = new StringBuilder();
@@ -1722,38 +1748,54 @@ public class ScriptToolService {
 
     /**
      * 解析脚本所属模块编码。
+     *
+     * @param fileName 待识别的脚本文件名或相对路径
+     * @return 脚本文件对应的模块编码
      */
     private String resolveModuleCode(String fileName) {
-        if (fileName.startsWith("ais_inv_analysis")) return "ais-analysis";
-        if (fileName.startsWith("ais_inv_ods")) return "ais-ods";
-        if (fileName.startsWith("rrs_dict")) return "dict";
-        if (fileName.startsWith("rrs_external_import")) return "external-import";
-        if (fileName.startsWith("rrs_security_pool_adjust")) return "security-adjust";
-        if (fileName.startsWith("rrs_flow_definition")) return "flow-definition";
-        if (fileName.startsWith("rrs_rule")) return "rule-config";
-        if (fileName.startsWith("rrs_pool_init")) return "pool-config";
-        if (fileName.startsWith("rrs_crmw_pool_status")) return "crmw-status";
-        if (fileName.startsWith("rrs_sys_attachment")) return "attachment-report";
-        if (fileName.startsWith("rrs_my_security_pool")) return "my-security-pool";
-        if (fileName.startsWith("rrs_credit_bond_grade_rule")) return "credit-bond-grade";
-        if (fileName.startsWith("rrs_temp_security_code")) return "temp-security-code";
-        if (fileName.startsWith("rrs_import_temp")) return "import-temp";
-        if (fileName.startsWith("rrs_adjust_snapshot")) return "adjust-snapshot";
-        if (fileName.startsWith("rrs_script_tool")) return "script-tool";
-        if (fileName.startsWith("rrs_scheduled_task")) return "scheduled-task";
-        if (fileName.startsWith("rrs_grade_rule_alert")) return "grade-rule-alert";
+        String baseName = new File(fileName).getName();
+        if (baseName.startsWith("ais_inv_analysis")) return "ais-analysis";
+        if (baseName.startsWith("ais_inv_ods")) return "ais-ods";
+        if (baseName.startsWith("rrs_dict")) return "dict";
+        if (baseName.startsWith("rrs_external_import")) return "external-import";
+        if (baseName.startsWith("rrs_fundinfo")) return "fund-info";
+        if (baseName.startsWith("rrs_temp_fund_code")) return "temp-fund-code";
+        if (baseName.startsWith("rrs_fund_nav")) return "fund-nav";
+        if (baseName.startsWith("rrs_fund_pool_adjust")) return "fund-adjust";
+        if (baseName.startsWith("rrs_security_pool_adjust")) return "security-adjust";
+        if (baseName.startsWith("rrs_flow_definition")) return "flow-definition";
+        if (baseName.startsWith("rrs_rule")) return "rule-config";
+        if (baseName.startsWith("rrs_pool_init")) return "pool-config";
+        if (baseName.startsWith("rrs_crmw_pool_status")) return "crmw-status";
+        if (baseName.startsWith("rrs_sys_attachment")) return "attachment-report";
+        if (baseName.startsWith("rrs_my_security_pool")) return "my-security-pool";
+        if (baseName.startsWith("rrs_credit_bond_grade_rule")) return "credit-bond-grade";
+        if (baseName.startsWith("rrs_temp_security_code")) return "temp-security-code";
+        if (baseName.startsWith("rrs_import_temp")) return "import-temp";
+        if (baseName.startsWith("rrs_adjust_snapshot")) return "adjust-snapshot";
+        if (baseName.startsWith("rrs_script_tool")) return "script-tool";
+        if (baseName.startsWith("rrs_scheduled_task")) return "scheduled-task";
+        if (baseName.startsWith("rrs_grade_rule_alert")) return "grade-rule-alert";
         return "unknown";
     }
 
     /**
      * 解析脚本所属模块名称。
+     *
+     * @param fileName 待识别的脚本文件名或相对路径
+     * @return 脚本文件对应的模块名称
      */
     private String resolveModuleName(String fileName) {
+        // 先按脚本文件名确定模块编码
         String moduleCode = resolveModuleCode(fileName);
         if ("ais-analysis".equals(moduleCode)) return "AIS 投资分析库";
         if ("ais-ods".equals(moduleCode)) return "AIS 投资 ODS 库";
         if ("dict".equals(moduleCode)) return "字典数据";
         if ("external-import".equals(moduleCode)) return "外部导入表";
+        if ("fund-info".equals(moduleCode)) return "基金基础信息";
+        if ("temp-fund-code".equals(moduleCode)) return "基金临时代码";
+        if ("fund-nav".equals(moduleCode)) return "基金净值数据";
+        if ("fund-adjust".equals(moduleCode)) return "基金调库数据";
         if ("security-adjust".equals(moduleCode)) return "证券调库演示数据";
         if ("flow-definition".equals(moduleCode)) return "流程定义";
         if ("rule-config".equals(moduleCode)) return "规则配置";
@@ -1773,16 +1815,26 @@ public class ScriptToolService {
 
     /**
      * 查询模块级重置任务白名单。
+     *
+     * @return 模块编码与任务信息映射
      */
     private Map<String, ScriptModuleTaskDto> queryModuleTaskMap() {
         Map<String, ScriptModuleTaskDto> taskMap = new LinkedHashMap<>();
         addModuleTask(taskMap, "dict", "字典数据", "重置证券类型等基础字典数据。", "medium", "rrs_dict_demo_data.sql");
         addModuleTask(taskMap, "external-import", "外部导入表", "重置外部导入表演示数据（当前含 rrs_securityinfo）。", "danger", "rrs_external_import_demo_data.sql");
+        // 登记基金基础信息演示数据的独立重置入口
+        addModuleTask(taskMap, "fund-info", "基金基础信息", "单独重置基金基础信息演示数据，不影响债券证券主数据。", "medium", "fund/rrs_fundinfo_demo_data.sql");
+        addModuleTask(taskMap, "temp-fund-code", "基金临时代码", "清空基金临时代码表。", "medium", "fund/rrs_temp_fund_code_demo_data.sql");
+        // 登记基金逐日净值演示数据的独立重置入口
+        addModuleTask(taskMap, "fund-nav", "基金净值数据", "单独重置基金逐日净值演示数据，不影响基金基础信息和债券证券主数据。", "medium", "fund/rrs_fund_nav_demo_data.sql");
+        // 登记基金调库运行表演示数据的独立重置入口
+        addModuleTask(taskMap, "fund-adjust", "基金调库数据", "单独重置基金调库日志、审批步骤和当前池状态。", "danger", "fund/rrs_fund_pool_adjust_demo_data.sql");
         addModuleTask(taskMap, "security-adjust", "证券调库演示数据", "重置调库日志、池状态和流程步骤演示数据（不含外部导入表）。", "danger", "rrs_security_pool_adjust_demo_data.sql");
         addModuleTask(taskMap, "flow-definition", "流程定义", "重置流程定义、版本、节点、连线和审批处理人配置。", "danger", "rrs_flow_definition_demo_data.sql");
         addModuleTask(taskMap, "rule-config", "规则配置", "重置规则分类、规则定义、参数、测试用例和测试运行日志。", "danger", "rrs_rule_demo_data.sql");
         addModuleTask(taskMap, "pool-config", "投资池配置", "重置投资池、池关系、自动规则、权限及开放日等配置演示数据。", "danger", "rrs_pool_init_demo_data.sql");
         addModuleTask(taskMap, "crmw-status", "CRMW 当前池", "重置 CRMW 当前池状态演示数据。", "medium", "rrs_crmw_pool_status_demo_data.sql");
+        // 登记基金调库也复用的系统附件与报告库演示数据重置入口
         addModuleTask(taskMap, "attachment-report", "附件与报告", "重置系统附件、入池报告和出池报告演示数据。", "medium", "rrs_sys_attachment_demo_data.sql");
         addModuleTask(taskMap, "my-security-pool", "我的证券池", "重置我的证券池演示数据。", "medium", "rrs_my_security_pool_demo_data.sql");
         addModuleTask(taskMap, "credit-bond-grade", "信用债评级规则", "重置信用债主体内评分档和评级准入规则。", "medium", "rrs_credit_bond_grade_rule_demo_data.sql");
@@ -1796,6 +1848,13 @@ public class ScriptToolService {
 
     /**
      * 加入模块重置任务。
+     *
+     * @param taskMap 模块任务索引
+     * @param moduleCode 模块编码
+     * @param moduleName 模块显示名称
+     * @param description 模块重置说明
+     * @param riskLevel 操作风险级别
+     * @param demoFileName 模块演示脚本文件名
      */
     private void addModuleTask(Map<String, ScriptModuleTaskDto> taskMap, String moduleCode, String moduleName,
                                String description, String riskLevel, String demoFileName) {
@@ -1806,12 +1865,15 @@ public class ScriptToolService {
         task.setRiskLevel(riskLevel);
         task.setConfirmText(CONFIRM_RESET_MODULE);
         task.setDemoFileName(demoFileName);
+        // 从模块演示脚本提取重置任务影响的表
         task.setAffectedTables(queryDemoFileAffectedTables(demoFileName));
         taskMap.put(moduleCode, task);
     }
 
     /**
      * 查询 Demo 文件影响表。
+     *
+     * @param demoFileName 待解析的演示脚本文件名
      */
     private List<String> queryDemoFileAffectedTables(String demoFileName) {
         File sqlDir;
@@ -2173,6 +2235,8 @@ public class ScriptToolService {
 
     /**
      * 查询建表脚本执行顺序。
+     *
+     * @return 数据库结构脚本清单
      */
     private List<String> querySchemaFiles() {
         return Arrays.asList(
@@ -2180,6 +2244,10 @@ public class ScriptToolService {
                 "ais_inv_ods_schema.sql",
                 "rrs_dict_schema.sql",
                 "rrs_external_import_schema.sql",
+                "fund/rrs_fundinfo_schema.sql",
+                "fund/rrs_temp_fund_code_schema.sql",
+                "fund/rrs_fund_nav_schema.sql",
+                "fund/rrs_fund_pool_adjust_schema.sql",
                 "rrs_security_pool_adjust_schema.sql",
                 "rrs_flow_definition_schema.sql",
                 "rrs_pool_init_schema.sql",
@@ -2199,6 +2267,8 @@ public class ScriptToolService {
 
     /**
      * 查询 Demo 数据脚本执行顺序。
+     *
+     * @return 演示数据脚本清单
      */
     private List<String> queryDemoFiles() {
         return Arrays.asList(
@@ -2206,6 +2276,10 @@ public class ScriptToolService {
                 "ais_inv_ods_demo_data.sql",
                 "rrs_dict_demo_data.sql",
                 "rrs_external_import_demo_data.sql",
+                "fund/rrs_fundinfo_demo_data.sql",
+                "fund/rrs_temp_fund_code_demo_data.sql",
+                "fund/rrs_fund_nav_demo_data.sql",
+                "fund/rrs_fund_pool_adjust_demo_data.sql",
                 "rrs_security_pool_adjust_demo_data.sql",
                 "rrs_flow_definition_demo_data.sql",
                 "rrs_rule_demo_data.sql",
@@ -2250,48 +2324,100 @@ public class ScriptToolService {
 
     /**
      * 查询外部导入表 Demo 脚本（当前含 rrs_securityinfo，后续可追加同类表）。
+     *
+     * @return 外部导入演示数据脚本清单
      */
     private List<String> queryExternalImportDemoFiles() {
         return Arrays.asList("rrs_external_import_demo_data.sql");
     }
 
     /**
-     * 查询主库建表脚本，排除 AIS 库与外部导入表。
+     * 查询基金专属建表脚本。
+     *
+     * @return 基金专属建表脚本清单
+     */
+    private List<String> queryFundSchemaFiles() {
+        return Arrays.asList(
+                "fund/rrs_fundinfo_schema.sql",
+                "fund/rrs_temp_fund_code_schema.sql",
+                "fund/rrs_fund_nav_schema.sql",
+                "fund/rrs_fund_pool_adjust_schema.sql"
+        );
+    }
+
+    /**
+     * 查询基金专属 Demo 脚本。
+     *
+     * @return 基金专属 Demo 脚本清单
+     */
+    private List<String> queryFundDemoFiles() {
+        return Arrays.asList(
+                "fund/rrs_fundinfo_demo_data.sql",
+                "fund/rrs_temp_fund_code_demo_data.sql",
+                "fund/rrs_fund_nav_demo_data.sql",
+                "fund/rrs_fund_pool_adjust_demo_data.sql"
+        );
+    }
+
+    /**
+     * 查询主库建表脚本，排除 AIS 库、外部导入表与基金专属表。
+     *
+     * @return 主业务库结构脚本清单
      */
     private List<String> queryRrsSchemaFiles() {
+        // 取得全部建表脚本作为主库脚本筛选基础
         List<String> files = new ArrayList<>(querySchemaFiles());
+        // 排除需独立初始化的 AIS 库建表脚本
         files.removeAll(queryAisSchemaFiles());
+        // 排除需独立初始化的外部导入表建表脚本
         files.removeAll(queryExternalImportSchemaFiles());
+        // 排除需独立初始化的基金专属建表脚本
+        files.removeAll(queryFundSchemaFiles());
         return files;
     }
 
     /**
-     * 查询主库 Demo 数据脚本，排除 AIS 库与外部导入表。
+     * 查询主库 Demo 数据脚本，排除 AIS 库、外部导入表与基金专属表。
+     *
+     * @return 主业务库演示数据脚本清单
      */
     private List<String> queryRrsDemoFiles() {
+        // 取得全部演示脚本作为主库脚本筛选基础
         List<String> files = new ArrayList<>(queryDemoFiles());
+        // 排除需独立初始化的 AIS 库演示脚本
         files.removeAll(queryAisDemoFiles());
+        // 排除需独立初始化的外部导入表演示脚本
         files.removeAll(queryExternalImportDemoFiles());
+        // 排除需独立初始化的基金专属演示脚本
+        files.removeAll(queryFundDemoFiles());
         return files;
     }
 
     /**
      * 主库批量任务（INIT_SCHEMA / INIT_DEMO / RESET_ALL）不执行的脚本清单，供前端「已排除」展示。
-     * <p>含 AIS 分析库/ODS 的 schema 与 demo，以及外部导入表脚本；须用独立任务入口执行。</p>
+     * <p>含 AIS 分析库/ODS 的 schema 与 demo、外部导入表及基金专属脚本；须用独立任务入口执行。</p>
+     *
+     * @return 初始化批次中排除的脚本项目清单
      */
     private List<String> queryRrsBatchExcludedItems() {
         List<String> excluded = new ArrayList<>();
-        // AIS 库建表与演示数据（含用户角色库与 Wind ODS）
+        // 汇总独立初始化的 AIS 库建表脚本
         excluded.addAll(queryAisSchemaFiles());
+        // 汇总独立初始化的 AIS 库演示脚本
         excluded.addAll(queryAisDemoFiles());
-        // 外部导入表（当前含 rrs_securityinfo）
+        // 汇总独立初始化的外部导入表建表脚本
         excluded.addAll(queryExternalImportSchemaFiles());
+        // 汇总独立初始化的外部导入表演示脚本
         excluded.addAll(queryExternalImportDemoFiles());
+        // 汇总与债券运行表分离的基金专属建表脚本
+        excluded.addAll(queryFundSchemaFiles());
+        // 汇总与债券运行表分离的基金专属演示脚本
+        excluded.addAll(queryFundDemoFiles());
         return excluded;
     }
 
     /**
-     * 查询调库运行态清空表。
+     * 查询证券与 CRMW 调库运行态清空表，基金调库表由基金专属任务管理。
      */
     private List<String> queryAdjustFlowRuntimeTables() {
         return Arrays.asList(
@@ -2325,9 +2451,12 @@ public class ScriptToolService {
 
     /**
      * 查询可清空表分组。
+     *
+     * @return 可清空的数据表分组列表
      */
     private List<ScriptTableGroupDto> queryClearTableGroups() {
         List<ScriptTableGroupDto> groups = new ArrayList<>();
+        // 将证券与 CRMW 调库运行表以及共享附件表归入可清空表分组
         groups.add(buildTableGroup("security-adjust", "证券池调库运行表", "znty_rrs", Arrays.asList(
                 buildTable("znty_rrs", "ip_adjust_step", "调库审批步骤"),
                 buildTable("znty_rrs", "ip_adjust_log", "调库申请日志"),
@@ -2335,8 +2464,11 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "ip_pool_status_crmw", "CRMW 当前池状态"),
                 buildTable("znty_rrs", "ip_adjust_security_snapshot", "证券调库信息快照"),
                 buildTable("znty_rrs", "ip_adjust_security_snapshot_crmw", "CRMW 调库信息快照"),
+                // 登记基金调库复用的系统附件表
                 buildTable("znty_rrs", "sys_attachment", "系统附件"),
+                // 登记基金调库可引用的内部报告库表
                 buildTable("znty_rrs", "rrs_report_in", "入池报告"),
+                // 登记基金调库可引用的外部报告库表
                 buildTable("znty_rrs", "rrs_report_out", "出池报告"),
                 buildTable("znty_rrs", "sys_imp_tmp", "通用导入临时主表"),
                 buildTable("znty_rrs", "sys_imp_tmp_detl", "通用导入临时明细")
@@ -2345,6 +2477,23 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "rrs_securityinfo", "证券主数据"),
                 buildTable("znty_rrs", "rrs_temp_security_code", "临时代码"),
                 buildTable("znty_rrs", "rrs_temp_security_code_update_log", "临时代码替换日志")
+        )));
+        // 将基金基础信息与逐日净值表归入独立的可清空表分组
+        groups.add(buildTableGroup("fund-info", "基金基础信息", "znty_rrs", Arrays.asList(
+                // 登记基金基础信息表
+                buildTable("znty_rrs", "rrs_fundinfo", "基金基础信息"),
+                buildTable("znty_rrs", "rrs_temp_fund_code", "基金临时代码"),
+                // 登记基金逐日净值表
+                buildTable("znty_rrs", "rrs_fund_nav", "基金逐日净值")
+        )));
+        // 将基金调库运行表归入独立的可清空表分组
+        groups.add(buildTableGroup("fund-adjust", "基金调库数据", "znty_rrs", Arrays.asList(
+                // 登记基金调库审批步骤表
+                buildTable("znty_rrs", "ip_adjust_step_fund", "基金调库审批步骤"),
+                // 登记基金调库日志表
+                buildTable("znty_rrs", "ip_adjust_log_fund", "基金调库记录"),
+                // 登记基金当前池状态表
+                buildTable("znty_rrs", "ip_pool_status_fund", "基金当前池状态")
         )));
         groups.add(buildTableGroup("pool-config", "投资池配置", "znty_rrs", Arrays.asList(
                 buildTable("znty_rrs", "ip_pool_permission_evt", "投资池权限事件"),
@@ -2429,6 +2578,12 @@ public class ScriptToolService {
 
     /**
      * 构建可清空表分组。
+     *
+     * @param groupCode 分组编码
+     * @param groupName 分组显示名称
+     * @param databaseName 所属数据库名称
+     * @param tables 分组中的可清空表
+     * @return 清空数据表分组信息
      */
     private ScriptTableGroupDto buildTableGroup(String groupCode, String groupName, String databaseName, List<ScriptTableDto> tables) {
         ScriptTableGroupDto group = new ScriptTableGroupDto();
@@ -2441,6 +2596,10 @@ public class ScriptToolService {
 
     /**
      * 构建可清空表信息。
+     *
+     * @param databaseName 所属数据库名称
+     * @param tableName 表名
+     * @param tableDesc 表用途说明
      */
     private ScriptTableDto buildTable(String databaseName, String tableName, String tableDesc) {
         ScriptTableDto table = new ScriptTableDto();
@@ -2453,39 +2612,48 @@ public class ScriptToolService {
 
     /**
      * 构建任务白名单。
+     *
+     * @return 任务编码与任务信息映射
      */
     private Map<String, ScriptTaskDto> queryTaskMap() {
         Map<String, ScriptTaskDto> taskMap = new LinkedHashMap<>();
-        // 主库批量任务统一展示已排除脚本（AIS + 外部导入），前端「已排除」芯片与说明对应
+        // 主库批量任务统一展示已排除脚本（AIS + 外部导入 + 基金），前端「已排除」芯片与说明对应
         List<String> rrsBatchExcludedItems = queryRrsBatchExcludedItems();
-        // 完整重建置首：前端通栏展示
+        // 登记主库非基金脚本的重建任务并置于任务列表首位
         addTask(taskMap, TASK_RESET_ALL, "重建完整演示环境",
                 "先执行主库 schema 再执行 demo，仅 znty_rrs 业务库。"
                         + "不执行 AIS：ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql（及对应 schema）；"
-                        + "不执行外部导入：rrs_external_import_*。请改用「初始化 AIS」「初始化外部导入表」任务。",
+                        + "不执行外部导入：rrs_external_import_*；不执行基金：fund/*。"
+                        + "请改用对应的独立初始化任务。",
                 "danger", "RESET_ALL",
                 "重建主库表结构并重置演示数据。"
                         + "不含 AIS 库（ais_inv_analysis / ais_inv_ods 的 schema 与 demo，含用户角色与 Wind 主体/评级）"
-                        + "与外部导入表（rrs_securityinfo 等）。",
+                        + "、外部导入表（rrs_securityinfo 等）及 fund/ 下基金专属表。",
+                // 合并排除基金专属脚本后的主库建表与演示脚本清单
                 mergeList(queryRrsSchemaFiles(), queryRrsDemoFiles()),
+                // 统计主库建表脚本覆盖的表数量
                 countTablesInFiles(queryRrsSchemaFiles(), "schema"), rrsBatchExcludedItems);
-        // 加入建表初始化任务（排除 AIS 与外部导入表）
+        // 加入建表初始化任务（排除 AIS、外部导入表与基金专属表）
         addTask(taskMap, TASK_INIT_SCHEMA, "初始化建表脚本",
                 "按固定顺序执行主库 schema 重建表结构。"
                         + "已排除 AIS 建表（ais_inv_analysis_schema.sql、ais_inv_ods_schema.sql）"
-                        + "与外部导入建表（rrs_external_import_schema.sql），请用独立任务执行。",
+                        + "、外部导入建表（rrs_external_import_schema.sql）与 fund/ 下基金建表脚本，"
+                        + "请用独立任务执行。",
                 "high", "INIT_SCHEMA",
                 "会 DROP 并重新 CREATE 主库相关表，原表数据清空。"
-                        + "不含 AIS 库表结构与外部导入表，需单独初始化。",
+                        + "不含 AIS 库表结构、外部导入表与基金专属表，需单独初始化。",
+                // 读取主库建表脚本并统计表数量
                 queryRrsSchemaFiles(), countTablesInFiles(queryRrsSchemaFiles(), "schema"), rrsBatchExcludedItems);
-        // 加入 Demo 数据初始化任务（排除 AIS 与外部导入表）
+        // 加入 Demo 数据初始化任务（排除 AIS、外部导入表与基金专属表）
         addTask(taskMap, TASK_INIT_DEMO, "初始化 Demo 数据",
                 "按固定顺序执行主库 demo。"
                         + "已排除 AIS 演示数据（ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql）"
-                        + "与外部导入 demo（rrs_external_import_demo_data.sql），请用独立任务执行。",
+                        + "、外部导入 demo（rrs_external_import_demo_data.sql）与 fund/ 下基金 demo，"
+                        + "请用独立任务执行。",
                 "medium", "INIT_DEMO",
                 "按脚本 TRUNCATE 逻辑重置主库演示数据。"
-                        + "不含 AIS 库 demo（用户/角色、Wind ODS）与外部导入表演示数据。",
+                        + "不含 AIS 库 demo（用户/角色、Wind ODS）、外部导入表与基金专属演示数据。",
+                // 读取主库演示脚本并统计表数量
                 queryRrsDemoFiles(), countTablesInFiles(queryRrsDemoFiles(), "demo"), rrsBatchExcludedItems);
         // 标注仅建结构、未灌 demo 数据的表（导入临时表等运行态表），供前端「未灌数据」区域展示
         taskMap.get(TASK_INIT_DEMO).setUnseededTables(queryUnseededDemoTables());
@@ -2503,6 +2671,20 @@ public class ScriptToolService {
                 "会 TRUNCATE 后重新写入外部导入表演示数据。",
                 queryExternalImportDemoFiles(),
                 countTablesInFiles(queryExternalImportDemoFiles(), "demo"), null);
+        // 加入基金专属表建表任务
+        addTask(taskMap, TASK_INIT_FUND_SCHEMA, "初始化基金专属表建表",
+                "依次执行 fund/ 下基金基础信息、临时代码、逐日净值和基金调库建表脚本，与债券运行表分离。",
+                "high", "INIT_FUND_SCHEMA",
+                "会重建基金基础信息、临时代码、逐日净值及三张基金调库运行表，原基金数据会被清空。",
+                // 读取基金建表脚本并统计基金表数量
+                queryFundSchemaFiles(), countTablesInFiles(queryFundSchemaFiles(), "schema"), null);
+        // 加入基金专属 Demo 任务
+        addTask(taskMap, TASK_INIT_FUND_DEMO, "初始化基金专属 Demo",
+                "依次重置基金基础信息、临时代码空表、逐日净值和基金调库演示数据，不影响 rrs_securityinfo 等债券数据。",
+                "medium", "INIT_FUND_DEMO",
+                "会清空基金临时代码表，并重置基金基础信息、逐日净值及基金调库运行表演示数据。",
+                // 读取基金演示脚本并统计覆盖的表数量
+                queryFundDemoFiles(), countTablesInFiles(queryFundDemoFiles(), "demo"), null);
         // 加入 AIS 库建表任务
         addTask(taskMap, TASK_INIT_AIS_SCHEMA, "初始化 AIS 建表脚本",
                 "执行 ais_inv_analysis 与 ais_inv_ods 两个 AIS 库的建表脚本。",
@@ -2515,7 +2697,7 @@ public class ScriptToolService {
                 "high", "INIT_AIS_DEMO",
                 "会重置 AIS 投资分析与 ODS 库演示数据。",
                 queryAisDemoFiles(), countTablesInFiles(queryAisDemoFiles(), "demo"), null);
-        // 加入调库运行态清空任务
+        // 登记证券与 CRMW 调库运行态清空任务，基金表不在此清单
         List<String> clearTables = queryAdjustFlowRuntimeTables();
         addTask(taskMap, TASK_CLEAR_ADJUST_FLOW, "清空调库流程数据",
                 "只清空调库申请、步骤、当前池状态、调库信息快照、附件、报告和 Excel 导入临时表等运行态数据。",
@@ -2528,6 +2710,10 @@ public class ScriptToolService {
     /**
      * 收集脚本实际受影响表（去重）。
      * <p>schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数。</p>
+     *
+     * @param fileNames 待统计的脚本文件名列表
+     * @param scriptType 建表或演示脚本类型
+     * @return 脚本影响的表名集合
      */
     private Set<String> collectTablesInFiles(List<String> fileNames, String scriptType) {
         Set<String> tableSet = new LinkedHashSet<>();
@@ -2578,14 +2764,21 @@ public class ScriptToolService {
     /**
      * 统计脚本实际受影响表数量（去重）。
      * <p>schema：仅统计 CREATE TABLE；demo：统计 TRUNCATE / INSERT 目标表。不是脚本文件个数。</p>
+     *
+     * @param fileNames 待统计的脚本文件名列表
+     * @param scriptType 建表或演示脚本类型
+     * @return 脚本影响的表数量
      */
     private int countTablesInFiles(List<String> fileNames, String scriptType) {
+        // 汇总脚本影响的去重表集合后统计数量
         return collectTablesInFiles(fileNames, scriptType).size();
     }
 
     /**
      * 主库 schema 建了结构但 demo 未灌数据的表。
      * <p>导入临时表等运行态表只建结构、不预置 demo 数据，需在页面单独标注，避免与受影响表数量混淆。</p>
+     *
+     * @return 未灌入演示数据的表名列表
      */
     private List<String> queryUnseededDemoTables() {
         // 收集主库 schema 建表表集与 demo 写入表集，取差集
@@ -2598,6 +2791,17 @@ public class ScriptToolService {
 
     /**
      * 加入任务配置。
+     *
+     * @param taskMap 任务配置索引
+     * @param taskCode 任务编码
+     * @param taskName 任务显示名称
+     * @param description 任务说明
+     * @param riskLevel 操作风险级别
+     * @param confirmText 执行前确认文本
+     * @param affectScope 影响范围说明
+     * @param items 待执行脚本列表
+     * @param tableCount 影响表数量
+     * @param excludedItems 本任务排除的脚本列表
      */
     private void addTask(Map<String, ScriptTaskDto> taskMap, String taskCode, String taskName, String description,
                          String riskLevel, String confirmText, String affectScope, List<String> items,

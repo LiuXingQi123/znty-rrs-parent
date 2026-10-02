@@ -40,6 +40,11 @@ public class ScriptToolServiceTest {
         Map<?, ?> healthTables = ReflectionTestUtils.invokeMethod(service, "queryClearTableMap");
 
         assertTrue(tables.containsKey("znty_rrs.rrs_securityinfo"));
+        assertTrue(tables.containsKey("znty_rrs.rrs_fundinfo"));
+        assertTrue(tables.containsKey("znty_rrs.rrs_fund_nav"));
+        assertTrue(tables.containsKey("znty_rrs.ip_adjust_log_fund"));
+        assertTrue(tables.containsKey("znty_rrs.ip_adjust_step_fund"));
+        assertTrue(tables.containsKey("znty_rrs.ip_pool_status_fund"));
         assertTrue(tables.containsKey("znty_rrs.dict_external_rating_agency"));
         assertTrue(tables.containsKey("znty_rrs.rrs_temp_security_code"));
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_log"));
@@ -68,19 +73,28 @@ public class ScriptToolServiceTest {
 
         File sqlDir = new File("sql");
         assertTrue("sql 目录应存在: " + sqlDir.getAbsolutePath(), sqlDir.isDirectory());
-        File[] files = sqlDir.listFiles((dir, name) -> name != null && name.endsWith(".sql"));
-        assertTrue(files != null && files.length > 0);
-        for (File file : files) {
-            assertTrue("未注册到 ScriptTool 白名单: " + file.getName(), registered.contains(file.getName()));
+        Set<String> sqlFiles = new HashSet<>();
+        collectSqlRelativePaths(sqlDir, sqlDir, sqlFiles);
+        assertTrue(!sqlFiles.isEmpty());
+        for (String sqlFile : sqlFiles) {
+            assertTrue("未注册到 ScriptTool 白名单: " + sqlFile, registered.contains(sqlFile));
         }
         assertTrue(schemaFiles.contains("rrs_adjust_snapshot_schema.sql"));
         assertTrue(schemaFiles.contains("rrs_grade_rule_alert_schema.sql"));
         assertTrue(schemaFiles.contains("rrs_scheduled_task_schema.sql"));
+        assertTrue(schemaFiles.contains("fund/rrs_fundinfo_schema.sql"));
+        assertTrue(schemaFiles.contains("fund/rrs_fund_nav_schema.sql"));
+        assertTrue(schemaFiles.contains("fund/rrs_fund_pool_adjust_schema.sql"));
+        assertTrue(demoFiles.contains("fund/rrs_fundinfo_demo_data.sql"));
+        assertTrue(demoFiles.contains("fund/rrs_fund_nav_demo_data.sql"));
+        assertTrue(demoFiles.contains("fund/rrs_fund_pool_adjust_demo_data.sql"));
+        assertFalse(new File("sql/rrs_fundinfo_schema.sql").exists());
+        assertFalse(new File("sql/rrs_fundinfo_demo_data.sql").exists());
     }
 
-    /** 验证主库批量任务排除外部导入表，且 AIS/外部导入拆为独立任务。 */
+    /** 验证主库批量任务排除外部导入表与基金表，且分别拆为独立任务。 */
     @Test
-    public void shouldExcludeExternalImportAndSplitAisTasks() {
+    public void shouldExcludeIndependentDataAndSplitTasks() {
         ScriptToolService service = new ScriptToolService();
         ReflectionTestUtils.setField(service, "sqlPath", "sql");
 
@@ -91,6 +105,8 @@ public class ScriptToolServiceTest {
         Object resetAll = taskMap.get("RESET_ALL");
         Object externalImportSchema = taskMap.get("INIT_EXTERNAL_IMPORT_SCHEMA");
         Object externalImportDemo = taskMap.get("INIT_EXTERNAL_IMPORT_DEMO");
+        Object fundSchema = taskMap.get("INIT_FUND_SCHEMA");
+        Object fundDemo = taskMap.get("INIT_FUND_DEMO");
         Object aisSchema = taskMap.get("INIT_AIS_SCHEMA");
         Object aisDemo = taskMap.get("INIT_AIS_DEMO");
         Object clearFlow = taskMap.get("CLEAR_ADJUST_FLOW");
@@ -100,6 +116,8 @@ public class ScriptToolServiceTest {
         assertTrue(resetAll != null);
         assertTrue(externalImportSchema != null);
         assertTrue(externalImportDemo != null);
+        assertTrue(fundSchema != null);
+        assertTrue(fundDemo != null);
         assertTrue(aisSchema != null);
         assertTrue(aisDemo != null);
         assertTrue(clearFlow != null);
@@ -118,31 +136,57 @@ public class ScriptToolServiceTest {
         List<String> excluded = (List<String>) ReflectionTestUtils.getField(initSchema, "excludedItems");
         @SuppressWarnings("unchecked")
         List<String> externalSchemaItems = (List<String>) ReflectionTestUtils.getField(externalImportSchema, "items");
+        @SuppressWarnings("unchecked")
+        List<String> fundSchemaItems = (List<String>) ReflectionTestUtils.getField(fundSchema, "items");
+        @SuppressWarnings("unchecked")
+        List<String> fundDemoItems = (List<String>) ReflectionTestUtils.getField(fundDemo, "items");
         Integer schemaTableCount = (Integer) ReflectionTestUtils.getField(initSchema, "tableCount");
         Integer clearTableCount = (Integer) ReflectionTestUtils.getField(clearFlow, "tableCount");
         Integer externalImportTableCount = (Integer) ReflectionTestUtils.getField(externalImportSchema, "tableCount");
+        Integer fundSchemaTableCount = (Integer) ReflectionTestUtils.getField(fundSchema, "tableCount");
+        Integer fundDemoTableCount = (Integer) ReflectionTestUtils.getField(fundDemo, "tableCount");
         @SuppressWarnings("unchecked")
         List<String> unseededTables = (List<String>) ReflectionTestUtils.getField(initDemo, "unseededTables");
         @SuppressWarnings("unchecked")
         List<String> clearItems = (List<String>) ReflectionTestUtils.getField(clearFlow, "items");
 
         assertTrue(!schemaItems.contains("rrs_external_import_schema.sql"));
+        assertTrue(!schemaItems.contains("fund/rrs_fundinfo_schema.sql"));
+        assertTrue(!schemaItems.contains("fund/rrs_fund_nav_schema.sql"));
+        assertTrue(!schemaItems.contains("fund/rrs_fund_pool_adjust_schema.sql"));
         assertTrue(!demoItems.contains("rrs_external_import_demo_data.sql"));
+        assertTrue(!demoItems.contains("fund/rrs_fundinfo_demo_data.sql"));
+        assertTrue(!demoItems.contains("fund/rrs_fund_nav_demo_data.sql"));
+        assertTrue(!demoItems.contains("fund/rrs_fund_pool_adjust_demo_data.sql"));
         assertTrue(!demoItems.contains("ais_inv_analysis_demo_data.sql"));
         assertTrue(!demoItems.contains("ais_inv_ods_demo_data.sql"));
         assertTrue(!resetItems.contains("rrs_external_import_schema.sql"));
         assertTrue(!resetItems.contains("rrs_external_import_demo_data.sql"));
+        assertTrue(!resetItems.contains("fund/rrs_fundinfo_schema.sql"));
+        assertTrue(!resetItems.contains("fund/rrs_fund_nav_schema.sql"));
+        assertTrue(!resetItems.contains("fund/rrs_fund_pool_adjust_schema.sql"));
+        assertTrue(!resetItems.contains("fund/rrs_fundinfo_demo_data.sql"));
+        assertTrue(!resetItems.contains("fund/rrs_fund_nav_demo_data.sql"));
+        assertTrue(!resetItems.contains("fund/rrs_fund_pool_adjust_demo_data.sql"));
         assertTrue(!resetItems.contains("ais_inv_analysis_demo_data.sql"));
         assertTrue(!resetItems.contains("ais_inv_ods_demo_data.sql"));
         assertTrue(schemaItems.contains("rrs_adjust_snapshot_schema.sql"));
         assertTrue(externalSchemaItems.contains("rrs_external_import_schema.sql"));
-        // 主库批量任务「已排除」须标出 AIS 与外部导入脚本，便于页面展示
+        assertEquals(Arrays.asList("fund/rrs_fundinfo_schema.sql", "fund/rrs_fund_nav_schema.sql", "fund/rrs_fund_pool_adjust_schema.sql"), fundSchemaItems);
+        assertEquals(Arrays.asList("fund/rrs_fundinfo_demo_data.sql", "fund/rrs_fund_nav_demo_data.sql", "fund/rrs_fund_pool_adjust_demo_data.sql"), fundDemoItems);
+        // 主库批量任务「已排除」须标出 AIS、外部导入与基金脚本，便于页面展示
         assertTrue(excluded.contains("ais_inv_analysis_demo_data.sql"));
         assertTrue(excluded.contains("ais_inv_ods_demo_data.sql"));
         assertTrue(excluded.contains("ais_inv_analysis_schema.sql"));
         assertTrue(excluded.contains("ais_inv_ods_schema.sql"));
         assertTrue(excluded.contains("rrs_external_import_schema.sql"));
         assertTrue(excluded.contains("rrs_external_import_demo_data.sql"));
+        assertTrue(excluded.contains("fund/rrs_fundinfo_schema.sql"));
+        assertTrue(excluded.contains("fund/rrs_fund_nav_schema.sql"));
+        assertTrue(excluded.contains("fund/rrs_fund_pool_adjust_schema.sql"));
+        assertTrue(excluded.contains("fund/rrs_fundinfo_demo_data.sql"));
+        assertTrue(excluded.contains("fund/rrs_fund_nav_demo_data.sql"));
+        assertTrue(excluded.contains("fund/rrs_fund_pool_adjust_demo_data.sql"));
         @SuppressWarnings("unchecked")
         List<String> resetExcluded = (List<String>) ReflectionTestUtils.getField(resetAll, "excludedItems");
         assertTrue(resetExcluded.contains("ais_inv_analysis_demo_data.sql"));
@@ -150,9 +194,14 @@ public class ScriptToolServiceTest {
         // 表数/文件数随脚本增减变化，只断言与清单动态一致，避免硬编码漂移
         assertTrue(schemaTableCount != null && schemaTableCount > 0);
         assertEquals(Integer.valueOf(1), externalImportTableCount);
+        assertEquals(Integer.valueOf(5), fundSchemaTableCount);
+        assertEquals(Integer.valueOf(5), fundDemoTableCount);
         assertEquals(Integer.valueOf(clearItems.size()), clearTableCount);
         assertTrue(clearItems.contains("ip_adjust_security_snapshot"));
         assertTrue(clearItems.contains("ip_adjust_security_snapshot_crmw"));
+        assertTrue(!clearItems.contains("ip_adjust_log_fund"));
+        assertTrue(!clearItems.contains("ip_adjust_step_fund"));
+        assertTrue(!clearItems.contains("ip_pool_status_fund"));
         assertEquals(schemaItems.size(), ((List<?>) ReflectionTestUtils.invokeMethod(service, "queryRrsSchemaFiles")).size());
         // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的表（导入临时表 + 快照等）
         assertTrue(unseededTables.contains("sys_imp_tmp"));
@@ -197,6 +246,16 @@ public class ScriptToolServiceTest {
         assertEquals("Excel 导入临时表", ReflectionTestUtils.invokeMethod(service, "resolveModuleName", "rrs_import_temp_schema.sql"));
         assertEquals("adjust-snapshot", ReflectionTestUtils.invokeMethod(service, "resolveModuleCode", "rrs_adjust_snapshot_schema.sql"));
         assertEquals("调库信息快照", ReflectionTestUtils.invokeMethod(service, "resolveModuleName", "rrs_adjust_snapshot_schema.sql"));
+        assertEquals("fund-info", ReflectionTestUtils.invokeMethod(service, "resolveModuleCode", "fund/rrs_fundinfo_schema.sql"));
+        assertEquals("基金基础信息", ReflectionTestUtils.invokeMethod(service, "resolveModuleName", "fund/rrs_fundinfo_demo_data.sql"));
+        assertEquals("fund-nav", ReflectionTestUtils.invokeMethod(service, "resolveModuleCode", "fund/rrs_fund_nav_schema.sql"));
+        assertEquals("基金净值数据", ReflectionTestUtils.invokeMethod(service, "resolveModuleName", "fund/rrs_fund_nav_demo_data.sql"));
+        assertEquals("fund-adjust", ReflectionTestUtils.invokeMethod(service, "resolveModuleCode", "fund/rrs_fund_pool_adjust_schema.sql"));
+        assertEquals("基金调库数据", ReflectionTestUtils.invokeMethod(service, "resolveModuleName", "fund/rrs_fund_pool_adjust_demo_data.sql"));
+        Map<?, ?> moduleTaskMap = ReflectionTestUtils.invokeMethod(service, "queryModuleTaskMap");
+        assertTrue(moduleTaskMap.containsKey("fund-info"));
+        assertTrue(moduleTaskMap.containsKey("fund-nav"));
+        assertTrue(moduleTaskMap.containsKey("fund-adjust"));
     }
 
     /** 验证关闭开关后写操作被拒绝。 */
@@ -238,5 +297,21 @@ public class ScriptToolServiceTest {
         verify(statement, never()).execute("INSERT INTO `rrs_securityinfo` (`wind_code`) VALUES ('TMP001')");
         assertEquals(Collections.singletonList(
                 "rrs_security_pool_adjust_demo_data.sql -> znty_rrs.ip_adjust_log"), executedItems);
+    }
+
+    /** 递归收集 sql/ 目录下的 SQL 相对路径，并统一使用正斜杠。 */
+    private static void collectSqlRelativePaths(File root, File current, Set<String> result) {
+        File[] files = current.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (file.isDirectory()) {
+                collectSqlRelativePaths(root, file, result);
+            } else if (file.getName().endsWith(".sql")) {
+                String relativePath = root.toPath().relativize(file.toPath()).toString();
+                result.add(relativePath.replace(File.separatorChar, '/'));
+            }
+        }
     }
 }
