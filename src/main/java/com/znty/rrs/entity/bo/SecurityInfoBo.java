@@ -9,6 +9,8 @@ import java.util.Date;
  */
 @Data
 public class SecurityInfoBo {
+    /** 国际证券识别码（ISIN） */
+    private String isinCode;
     /** 关联代码 */
     private String windCode;
     /** 证券全称 */
@@ -193,4 +195,8 @@ public class SecurityInfoBo {
     private String secIdNbc;
     /** 北交所证券id */
     private String secIdBj;
+    /** 标准条款判定：1=条款合格 / 0=条款不合格 / null=未判定 */
+    private Integer stdClauseFlag;
+    /** 标准信用债标识：1=标准信用债 / 0=非标准信用债 / null=未判定 */
+    private Integer stdCreditFlag;
 }

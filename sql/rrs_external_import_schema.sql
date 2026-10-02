@@ -25,6 +25,7 @@ CREATE TABLE `rrs_securityinfo`
     -- ==========================================
     -- 基础及标识信息
     -- ==========================================
+    `isin_code`                  varchar(100)    DEFAULT NULL COMMENT '国际证券识别码（ISIN）',
     `wind_code`                  varchar(100)    NOT NULL COMMENT '关联代码',
     `full_name`                  varchar(300)    DEFAULT NULL COMMENT '证券全称',
     `issue_announcement`         varchar(10)     DEFAULT NULL COMMENT '公告日期',
@@ -145,6 +146,8 @@ CREATE TABLE `rrs_securityinfo`
     `sec_id_nib`                 varchar(100)    DEFAULT NULL COMMENT '银行间证券id',
     `sec_id_nbc`                 varchar(100)    DEFAULT NULL COMMENT '其他证券id',
     `sec_id_bj`                  varchar(100)    DEFAULT NULL COMMENT '北交所证券id',
+    `std_clause_flag`            int             DEFAULT NULL COMMENT '标准条款判定：1=条款合格 / 0=条款不合格 / NULL=未判定',
+    `std_credit_flag`            int             DEFAULT NULL COMMENT '标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定',
 
     PRIMARY KEY (`wind_code`)
 ) ENGINE = InnoDB

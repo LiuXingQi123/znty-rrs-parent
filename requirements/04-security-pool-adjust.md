@@ -432,6 +432,43 @@
 
 > 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
 
+`isin_code`（国际证券识别码）为 `VARCHAR(100) DEFAULT NULL`，位于 `wind_code` 前，对应 `SecurityInfoBo.isinCode`（`String`）。Demo 的全部 45 条记录（含临时代码）均在原始 `INSERT` 中填写不同的 12 位模拟 ISIN：使用 `CNDEMO` 前缀、5 位顺序号和 1 位校验位；仅用于演示，不是真实证券登记编号。存量表缺少此字段时，一次性执行：
+
+```sql
+ALTER TABLE `znty_rrs`.`rrs_securityinfo`
+    ADD COLUMN `isin_code` VARCHAR(100) DEFAULT NULL
+        COMMENT '国际证券识别码（ISIN）' FIRST;
+```
+
+主档新增两个外部导入标识，均为 `INT DEFAULT NULL`，由 `SecurityInfoBo` 的 `Integer` 字段承接并保留原始值：
+
+| 数据库字段 | 返回字段 | 含义 |
+|---|---|---|
+| `std_clause_flag` | `stdClauseFlag` | 标准条款判定：1=条款合格 / 0=条款不合格 / NULL=未判定 |
+| `std_credit_flag` | `stdCreditFlag` | 标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定 |
+
+仅 `std_credit_flag=1` 表示标准信用债，`0` 与 `NULL` 保持原值。当前新增字段不参与调库校验或页面展示。
+
+Demo 在原始 `INSERT` 中为全部 45 条证券显式填写标识，设置以下演示场景（不是系统按类型自动判定的规则，也不按评级高低判定）：
+
+| 演示样本 | `std_clause_flag` | `std_credit_flag` |
+|---|---|---|
+| XYB001～XYB003、普通公司债、中票、短融、担保债 | 1 | 1 |
+| 私募债、定向工具 | 1 | 0 |
+| 永续债、次级债、含权债及 XYB004 条款不合格样本 | 0 | 0 |
+| ABS、资产证券化、CRMW、存单、国债、Govt债、可转债 | NULL | 0 |
+| XYB005 未判定信用债、Corp债、临时代码 | NULL | NULL |
+
+存量表缺少这两个字段时，一次性执行以下增量 SQL；不要通过含 `DROP TABLE` 的完整建表脚本升级存量库：
+
+```sql
+ALTER TABLE `znty_rrs`.`rrs_securityinfo`
+    ADD COLUMN `std_clause_flag` INT DEFAULT NULL
+        COMMENT '标准条款判定：1=条款合格 / 0=条款不合格 / NULL=未判定',
+    ADD COLUMN `std_credit_flag` INT DEFAULT NULL
+        COMMENT '标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定';
+```
+
 详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingSubjectList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留，仅供简易流程按原始天数直接比较）；`date_exists_str` 证券期限（页面只读，同时供需要年口径的矩阵和白名单判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
