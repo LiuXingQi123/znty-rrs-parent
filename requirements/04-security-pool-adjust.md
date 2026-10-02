@@ -121,15 +121,17 @@
 
 - 路径：`POST /api/v1/securityPoolAdjust/queryIssuerFinancialList`
 - 请求体：`{ securityCode }`
-- 数据源：证券主档 `rrs_securityinfo.issuer_code` 关联 `ais_inv_ods.wind_companyfinancial.COMPANYCODE`。主查询按主体和年份分组，选取数据库中最近 3 个有数据年份，每个年份只返回 `REPORTDATE` 最大的一条并按日期升序；年份无需连续，例如仅有 2021、2022、2024、2025 年数据时返回 2022、2024、2025 年。
-- 指定报告期查询：`POST /api/v1/securityPoolAdjust/queryIssuerFinancialByReportDate`，请求体 `{ securityCode, reportDate }`；第四列下拉改变后实时查询对应记录，不存在时以空值进入新增编辑状态。
-- 页面位置：详情页“证券基本信息”下方。前三列展示上述 3 条年度最新记录，列头同时显示年份和报告类型且始终只读；第四列默认展示全部记录中最新的一条，步骤 1 可编辑。进入步骤 2 后锁定当前债券分类和第四列报告日期，隐藏分类与报告期控件并整体只读，返回步骤 1 后恢复编辑。
-- 时间口径：第四列下拉固定按当前自然年及前 2 年生成“一季报 / 半年报 / 三季报 / 年报”共 12 个选项，并按年份分组展示；组顺序为当前年到最早年份，组内顺序为年报、三季报、半年报、一季报。标准日期后缀分别为 `0331 / 0630 / 0930 / 1231`。城投债和产业债分别维护选中的报告日期及编辑缓存；首次进入仍默认选中数据库已有数据中报告日期最新的一条。
+- 数据源：证券主档 `rrs_securityinfo.issuer_code` 关联 `ais_inv_ods.wind_companyfinancial.COMPANYCODE`。按中国标准时间的当前自然年确定四期：默认前三列为前三年年报，第四列为数据库最新一期；最新一期恰好为上一年年报，或主体完全没有财报时，显示前四年年报。缺失期保留报告日期，指标为空，不以季报或其他年份替代。
+- 默认四期查询保持 `List<IssuerFinancialDto>` 返回形式和列顺序；例：2026 年最新为半年报时返回 2023/2024/2025 年报和 2026 半年报；最新为 2025 年报或完全没有财报时返回 2022/2023/2024/2025 年报。
+- 指定报告期查询：`POST /api/v1/securityPoolAdjust/queryIssuerFinancialByReportDate`，请求体 `{ securityCode, reportDate }`；切换列头报告类型时查询对应记录，不存在时保留空值并允许补录。
+- 页面位置：证券基本信息下方。步骤一四列全部可编辑，每列年份固定，独立提供年报、三季报、半年报、一季报下拉；默认前三列年报。原右上角统一报告期下拉改为“保存”按钮。步骤二隐藏编辑控件并只读，返回步骤一恢复编辑。
+- 缓存口径：按报告日期共享财报数据；城投债/产业债仅切换指标行，共同指标保持一致，切换报告类型或指标分类不丢失编辑。标准日期后缀为 `1231 / 0930 / 0630 / 0331`。
 - 城投债指标顺序：总资产、所有者权益、资产负债率、营业收入、净利润、经营性净现金流、投资性净现金流、地区生产总值、一般预算收入、一般预算支出。
 - 产业债指标顺序：总资产、所有者权益、净资产收益率、营业收入、EBITDA 利息保护倍数、资产负债比率、EBITDA、经营性净现金流、净利润、总债务/EBITDA。
 - 单位口径：数据库绝对金额字段直接以亿元存储；前端不做单位换算或小数位补齐，金额、比例和倍数均直接展示数据库返回值，编辑值也按用户输入原样展示，空值保持空白。
 - 地域信息：`wind_companyfinancial.PROVINCE`、`CITY` 分别保存主体所在省份和城市；同一主体不同报告期的地域信息保持一致，当前财务指标区域暂不展示这两个字段。
-- 提交保存：最终提交参数携带当前债券分类第四列的完整财务记录。调库日志、证券快照与附件保存成功后，在同一事务内按 `COMPANYCODE + REPORTDATE` 写入 `wind_companyfinancial`；对应报告日期不存在则新增，存在则更新。前三列只读记录不回写。
+- 独立保存：右上角“保存”和“下一步”均保存本次编辑过的全部报告期及城投债/产业债指标，包含切换后未显示的修改。下一步先完成页面必填检查，再保存财报、执行调库校验、进入步骤二；保存失败保留编辑并停留原页，调库校验失败不撤销已保存财报。最终提交不再携带或回写财报。
+- 保存接口：`POST /api/v1/securityPoolAdjust/saveIssuerFinancialList`，请求体 `{ securityCode, records: [{ reportDate, totAssets, ...完整14项指标 }] }`，返回已保存记录列表。指标允许数字或数字字符串，清空传 `null`。服务端根据证券代码从主档取得发行主体，在独立事务内按 `COMPANYCODE + REPORTDATE` 新增或更新；每个已修改报告期覆盖完整14项页面指标，前端从共享缓存一并发送两类指标；已有地域及其他非页面指标保留，未编辑空期不新增。任一记录写入失败则整批回滚。
 
 ---
 
@@ -363,6 +365,9 @@
 | `querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
 | `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：仅 bond，排除 crmw 及已删除态） |
 | `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
+| `queryIssuerFinancialList` | securityCode | `List<IssuerFinancialDto>` | 四期报告，缺失期保留日期和空指标 |
+| `queryIssuerFinancialByReportDate` | securityCode, reportDate | `IssuerFinancialDto` | 精确查询指定报告期，不存在返回 null |
+| `saveIssuerFinancialList` | securityCode, records[{reportDate,...完整14项指标}] | `List<IssuerFinancialDto>` | 独立事务批量覆盖本次已修改报告期的完整指标 |
 | `queryRelatedRatingSubjectList` | securityCode | `List<RelatedRatingSubjectDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
 | `querySelfSelectedRightsHolderPage` | companyCode?, companyName?, pageIndex, pageSize | `PageResult<SelfSelectedRightsHolderDto>` | 从 `ais_inv_analysis.t_inv_company` 分页查询自选权益人，关联最新内评 |
 | `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。排除 CRMW 后只保留投资品种包含债券的池及其上级。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。三个主体编码均由后端重查校验 |

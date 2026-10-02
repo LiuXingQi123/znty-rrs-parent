@@ -58,7 +58,6 @@ import com.znty.rrs.entity.forbiddenabspooladjust.ForbiddenAbsPoolAdjustReq;
 import com.znty.rrs.entity.forbiddenabspooladjust.ForbiddenAbsPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolStatusDto;
 import com.znty.rrs.entity.securitypooladjust.PoolStatusDto;
-import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
@@ -725,9 +724,6 @@ public class ForbiddenAbsPoolAdjustService {
         // ══ 第五阶段：后续处理 ══
         postSubmitProcess(req, shared);
 
-        // 仅更新本次编辑且已存在的发行主体财务报告
-        updateExistingIssuerFinancial(req);
-
         // 组装返回结果
         ForbiddenAbsPoolAdjustSubmitDto dto = new ForbiddenAbsPoolAdjustSubmitDto();
         dto.setSecurityCode(req.getSecurityCode());
@@ -736,17 +732,6 @@ public class ForbiddenAbsPoolAdjustService {
         dto.setSubmitCount(allIds.size());
         dto.setLogIds(allIds);
         return dto;
-    }
-
-    /** 仅更新本次调库提交编辑且已存在的发行主体财务报告。 */
-    private void updateExistingIssuerFinancial(ForbiddenAbsPoolAdjustSubmitReq req) {
-        IssuerFinancialDto financial = req.getIssuerFinancial();
-        SecurityInfoBo securityInfo = req.getSecurityInfo();
-        if (financial == null || financial.getReportDate() == null || securityInfo == null
-                || securityInfo.getIssuerCode() == null || securityInfo.getIssuerCode().trim().isEmpty()) {
-            return;
-        }
-        securityPoolAdjustMapper.updateExistingIssuerFinancial(securityInfo.getIssuerCode(), financial);
     }
 
     // ═══════════════════════════════════════════════════════════

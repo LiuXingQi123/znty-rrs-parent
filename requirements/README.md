@@ -7,7 +7,7 @@
 | 01 | 流程定义 | `flow_definition.html` | [01-flow-definition.md](01-flow-definition.md) | `FlowDefinitionApiTest` |
 | 02 | 投资池维护 | `investment_pool.html` | [02-investment-pool.md](02-investment-pool.md) | `InvestmentPoolApiTest` |
 | 03 | 规则管理中心 | `rule_manager.html` | [03-rule-manager.md](03-rule-manager.md) | `RuleManagerApiTest` |
-| 04 | 证券池调库申请（调入/调出） | `security_pool_adjust.html` | [04-security-pool-adjust.md](04-security-pool-adjust.md) | `SecurityPoolAdjustApiTest` |
+| 04 | 证券池调库申请（调入/调出） | `security_pool_adjust.html` | [04-security-pool-adjust.md](04-security-pool-adjust.md) | `SecurityPoolAdjustApiTest` / `SecurityPoolAdjustFinancialPersistenceTest` / `SecurityPoolAdjustFinancialMapperSqlTest` |
 | 05 | 证券池调库审核（审批流转） | `security_pool_adjust_approve.html` | [05-security-pool-adjust-approve.md](05-security-pool-adjust-approve.md) | `SecurityPoolAdjustApproveApiTest` |
 | 06 | 我的事宜 | `my_matters.html` | [06-my-matters.md](06-my-matters.md) | `MyMattersApiTest` |
 | 07 | 证券池查询 | `security_pool_query.html` | [07-security-pool-query.md](07-security-pool-query.md) | `SecurityPoolQueryApiTest` |
@@ -82,4 +82,5 @@
 
 - 当前 `controller` 目录下的 MockMvc 测试覆盖页面实际路由、请求体反序列化和统一响应结构。
 - Service 现有单元测试覆盖调库步骤推进、人员权限和流程处理逻辑。
+- 财报四期与批量保存测试：`SecurityPoolAdjustFinancialPersistenceTest` 使用 H2 和实际 Mapper/事务代理覆盖缺失报告、新增、整期指标覆盖、非页面字段保留与批量回滚。H2 2.3.232 需要 Java 11 以上运行时，JDK 8 下该集成测试明确跳过；建议使用本机 JDK 17 执行 `mvn "-Dtest=SecurityPoolAdjustFinancial*Test,SecurityPoolAdjustApiTest" test`，工程源码目标仍为 Java 8。
 - 数据库集成测试应使用 Demo SQL 初始化后执行，重点验证跨表引用、事务回滚和状态一致性。

@@ -42,20 +42,20 @@ public interface SecurityPoolAdjustMapper {
     /** 根据证券代码查询证券详情 */
     SecurityInfoDetailDto querySecurityDetail(@Param("securityCode") String securityCode);
 
-    /** 查询证券发行主体最近三个有数据年份各自最新的财务指标 */
-    List<IssuerFinancialDto> queryIssuerFinancialList(@Param("securityCode") String securityCode);
+    /** 查询证券发行主体的最新财报日期 */
+    Long queryLatestIssuerFinancialReportDate(@Param("securityCode") String securityCode);
+
+    /** 精确查询指定的四期财报，不以其他报告替代缺失记录 */
+    List<IssuerFinancialDto> queryIssuerFinancialList(@Param("securityCode") String securityCode,
+                                                     @Param("reportDates") List<Long> reportDates);
 
     /** 查询证券发行主体指定报告日期的财务指标 */
     IssuerFinancialDto queryIssuerFinancialByReportDate(@Param("securityCode") String securityCode,
                                                         @Param("reportDate") Long reportDate);
 
-    /** 新增或更新证券发行主体指定报告日期的财务指标 */
-    int saveIssuerFinancial(@Param("securityCode") String securityCode,
+    /** 按报告期新增或覆盖完整财务指标 */
+    int saveIssuerFinancial(@Param("issuerCode") String issuerCode,
                             @Param("financial") IssuerFinancialDto financial);
-
-    /** 仅更新已存在的证券发行主体指定报告日期财务指标 */
-    int updateExistingIssuerFinancial(@Param("issuerCode") String issuerCode,
-                                      @Param("financial") IssuerFinancialDto financial);
 
     /** 根据证券代码查询证券基础信息实体 */
     SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);

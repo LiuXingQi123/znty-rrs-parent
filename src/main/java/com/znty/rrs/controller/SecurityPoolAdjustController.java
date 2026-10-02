@@ -15,6 +15,7 @@ import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.IpAdjustStepDto;
 import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
+import com.znty.rrs.entity.securitypooladjust.IssuerFinancialSaveReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolStatusDto;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
@@ -76,7 +77,7 @@ public class SecurityPoolAdjustController {
         return ApiResponse.success(securityPoolAdjustService.querySecurityDetail(req));
     }
 
-    /** 查询发行主体最近三个有数据年份各自最新的财务指标 */
+    /** 查询发行主体默认四期财务指标，缺失报告期保留空值 */
     @PostMapping("/queryIssuerFinancialList")
     public ApiResponse<List<IssuerFinancialDto>> queryIssuerFinancialList(@RequestBody SecurityPoolAdjustReq req) {
         return ApiResponse.success(securityPoolAdjustService.queryIssuerFinancialList(req));
@@ -87,6 +88,13 @@ public class SecurityPoolAdjustController {
     public ApiResponse<IssuerFinancialDto> queryIssuerFinancialByReportDate(
             @RequestBody SecurityPoolAdjustReq req) {
         return ApiResponse.success(securityPoolAdjustService.queryIssuerFinancialByReportDate(req));
+    }
+
+    /** 按报告期批量新增或覆盖发行主体财务指标，独立于调库提交。 */
+    @PostMapping("/saveIssuerFinancialList")
+    public ApiResponse<List<IssuerFinancialDto>> saveIssuerFinancialList(
+            @RequestBody IssuerFinancialSaveReq req) {
+        return ApiResponse.success(securityPoolAdjustService.saveIssuerFinancialList(req));
     }
 
     /**

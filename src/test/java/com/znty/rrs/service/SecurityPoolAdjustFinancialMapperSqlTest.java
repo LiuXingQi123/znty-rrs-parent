@@ -12,43 +12,37 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 证券池调库发行主体财务 Mapper SQL 口径测试。 */
 public class SecurityPoolAdjustFinancialMapperSqlTest {
 
-    /** 最近三年查询应按有数据年份分组并取每年最新报告。 */
+    /** 四期查询精确匹配报告日期，缺失年报不得用季报替代。 */
     @Test
-    public void financialListShouldUseLatestReportOfThreeDataYears() throws Exception {
+    public void financialListShouldQueryExactReportDates() throws Exception {
         String select = mapperBlock("select", "queryIssuerFinancialList");
 
         assertThat(select)
-                .contains("PARTITION BY FLOOR(f.REPORTDATE / 10000)")
-                .contains("ORDER BY f.REPORTDATE DESC")
-                .contains("WHERE year_row_no = 1")
-                .contains("LIMIT 3")
-                .contains("ORDER BY REPORTDATE ASC")
-                .doesNotContain("- 3");
+                .contains("f.REPORTDATE IN")
+                .contains("collection=\"reportDates\"")
+                .contains("ORDER BY f.REPORTDATE ASC")
+                .doesNotContain("ROW_NUMBER()", "LIMIT 3");
     }
 
-    /** 第四列切换应精确查询报告日期，提交仅更新已有主体报告；旧新增逻辑须保留。 */
+    /** 报告切换精确查询，批量保存覆盖完整指标。 */
     @Test
-    public void editableFinancialReportShouldSupportExactQueryAndUpdateExistingOnly() throws Exception {
+    public void editableFinancialReportShouldOverwriteCompleteMetrics() throws Exception {
         String select = mapperBlock("select", "queryIssuerFinancialByReportDate");
-        String update = mapperBlock("update", "updateExistingIssuerFinancial");
-        String legacyUpsert = mapperBlock("insert", "saveIssuerFinancial");
+        String upsert = mapperBlock("insert", "saveIssuerFinancial");
 
         assertThat(select)
                 .contains("f.REPORTDATE = #{reportDate}")
                 .contains("si.issuer_code = f.COMPANYCODE");
-        assertThat(update)
-                .contains("UPDATE ais_inv_ods.wind_companyfinancial f")
-                .contains("f.COMPANYCODE = #{issuerCode}")
-                .contains("f.REPORTDATE = #{financial.reportDate}")
-                .contains("f.TOT_ASSETS = #{financial.totAssets}")
-                .doesNotContain("INSERT INTO")
-                .doesNotContain("rrs_securityinfo");
-        assertThat(legacyUpsert)
+        assertThat(upsert)
                 .contains("INSERT INTO ais_inv_ods.wind_companyfinancial")
-                .contains("SELECT issuer_code")
+                .contains("#{issuerCode}")
                 .contains("#{financial.reportDate}")
                 .contains("ON DUPLICATE KEY UPDATE")
-                .contains("TOT_ASSETS = VALUES(TOT_ASSETS)");
+                .contains("TOT_ASSETS = VALUES(TOT_ASSETS)")
+                .contains("ROE = VALUES(ROE)")
+                .contains("GRP = VALUES(GRP)")
+                .contains("EBITDA_TO_DEBT = VALUES(EBITDA_TO_DEBT)")
+                .doesNotContain("${", "FROM rrs_securityinfo", "changedFields", "<if");
     }
 
     /** 读取并截取指定 Mapper 标签。 */

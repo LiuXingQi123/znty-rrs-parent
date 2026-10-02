@@ -68,6 +68,7 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.securitypooladjust.IpAdjustStepDto;
 import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
+import com.znty.rrs.entity.securitypooladjust.IssuerFinancialSaveReq;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.securitypooladjust.LastCreditReportDto;
@@ -87,6 +88,7 @@ import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -237,16 +239,93 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 查询发行主体最近三个有数据年份各自最新的财务指标
+     * 查询默认四期财务指标，固定年报缺失时保留空白列。
      *
-     * @param req 需携带证券代码
-     * @return 最近三个有数据年份的财务指标，按报告日期升序
+     * 执行顺序：
+     * 1. 检查证券代码是否为空，并去掉首尾空格。
+     * 2. 通过证券代码关联发行主体，查询最大的 REPORTDATE；有最新报告日期时校验其格式。
+     * 3. 按 Asia/Shanghai 时区获取当前自然年，计算上一年年报日期。
+     * 4. 确定四个报告日期：最新一期为上一年年报或完全没有财报时，取前四年年报；
+     *    其他情况取前三年年报，再追加数据库最新一期。
+     * 5. 精确查询这四个报告日期的指标，并按确定的四列顺序组装结果；缺失期补充仅含报告日期、
+     *    指标全部为 null 的记录。补充记录只用于页面展示，不写入数据库。
+     *
+     * @param req 携带证券代码的查询请求
+     * @return 按默认四列顺序返回的四条财报记录，缺失期保留日期和空指标
      */
     public List<IssuerFinancialDto> queryIssuerFinancialList(SecurityPoolAdjustReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        return securityPoolAdjustMapper.queryIssuerFinancialList(req.getSecurityCode());
+        String securityCode = req.getSecurityCode().trim();
+        Long latestDate = securityPoolAdjustMapper.queryLatestIssuerFinancialReportDate(securityCode);
+        if (latestDate != null) {
+            // 检查源数据报告期，避免错误日期进入四列表头
+            validateFinancialReportDate(latestDate);
+        }
+        int year = LocalDate.now(ZoneId.of("Asia/Shanghai")).getYear();
+        long previousAnnual = (year - 1) * 10000L + 1231;
+        List<Long> dates = new ArrayList<>();
+        boolean fourAnnuals = latestDate == null || latestDate == previousAnnual;
+        for (int offset = fourAnnuals ? 4 : 3; offset >= 1; offset--) {
+            dates.add((year - offset) * 10000L + 1231);
+        }
+        if (!fourAnnuals) dates.add(latestDate);
+        List<IssuerFinancialDto> source = securityPoolAdjustMapper.queryIssuerFinancialList(securityCode, dates);
+        Map<Long, IssuerFinancialDto> byDate = source.stream().collect(
+                Collectors.toMap(IssuerFinancialDto::getReportDate, item -> item));
+        List<IssuerFinancialDto> result = new ArrayList<>();
+        for (Long date : dates) {
+            IssuerFinancialDto record = byDate.get(date);
+            if (record == null) {
+                record = new IssuerFinancialDto();
+                record.setReportDate(date);
+            }
+            result.add(record);
+        }
+        return result;
+    }
+
+    /** 独立批量保存财报；任一记录写入失败时全部回滚。 */
+    @Transactional(rollbackFor = Exception.class)
+    public List<IssuerFinancialDto> saveIssuerFinancialList(IssuerFinancialSaveReq req) {
+        if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
+            throw new BizException("证券代码不能为空");
+        }
+        if (req.getRecords() == null) throw new BizException("财报修改列表不能为空");
+        String securityCode = req.getSecurityCode().trim();
+        SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
+        if (security == null || security.getIssuerCode() == null || security.getIssuerCode().trim().isEmpty()) {
+            throw new BizException("证券不存在或未配置发行主体：" + securityCode);
+        }
+        Set<Long> dates = new HashSet<>();
+        for (IssuerFinancialDto financial : req.getRecords()) {
+            if (financial == null) throw new BizException("财报记录不能为空");
+            // 批量预校验全部报告期，保证错误请求不会写入部分记录
+            validateFinancialReportDate(financial.getReportDate());
+            if (!dates.add(financial.getReportDate())) throw new BizException("报告期不能重复");
+        }
+        List<IssuerFinancialDto> saved = new ArrayList<>();
+        for (IssuerFinancialDto financial : req.getRecords()) {
+            boolean hasValue = Arrays.asList(financial.getTotAssets(), financial.getShareholderEquity(),
+                    financial.getDebtAssetsRatio(), financial.getTotRev(), financial.getNetProfit(),
+                    financial.getNetCashOper(), financial.getNetCashInv(), financial.getGrp(),
+                    financial.getGeneralBudgetRev(), financial.getGeneralBudgetExp(), financial.getRoe(),
+                    financial.getEbitIntCov(), financial.getEbitda(), financial.getEbitdaToDebt())
+                    .stream().anyMatch(Objects::nonNull);
+            if (!hasValue && securityPoolAdjustMapper.queryIssuerFinancialByReportDate(
+                    securityCode, financial.getReportDate()) == null) {
+                // 空白报告没有可保存的指标，不创建仅含主体和日期的记录
+                IssuerFinancialDto empty = new IssuerFinancialDto();
+                empty.setReportDate(financial.getReportDate());
+                saved.add(empty);
+                continue;
+            }
+            securityPoolAdjustMapper.saveIssuerFinancial(security.getIssuerCode(), financial);
+            saved.add(securityPoolAdjustMapper.queryIssuerFinancialByReportDate(
+                    securityCode, financial.getReportDate()));
+        }
+        return saved;
     }
 
     /**
@@ -916,9 +995,6 @@ public class SecurityPoolAdjustService {
         // ══ 第五阶段：后续处理（按 log 写证券信息快照，不改主档） ══
         postSubmitProcess(req, shared, allIds);
 
-        // 仅更新本次编辑且已存在的发行主体财务报告
-        updateExistingIssuerFinancial(req);
-
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
         dto.setSecurityCode(req.getSecurityCode());
@@ -927,26 +1003,13 @@ public class SecurityPoolAdjustService {
         return dto;
     }
 
-    /** 仅更新本次调库提交编辑且已存在的发行主体财务报告。 */
-    private void updateExistingIssuerFinancial(SecurityPoolAdjustSubmitReq req) {
-        IssuerFinancialDto financial = req.getIssuerFinancial();
-        SecurityInfoBo securityInfo = req.getSecurityInfo();
-        if (financial == null || securityInfo == null || securityInfo.getIssuerCode() == null
-                || securityInfo.getIssuerCode().trim().isEmpty()) {
-            return;
-        }
-        // 校验报告日期格式及允许的报告期
-        validateFinancialReportDate(financial.getReportDate());
-        securityPoolAdjustMapper.updateExistingIssuerFinancial(securityInfo.getIssuerCode(), financial);
-    }
-
     /** 校验财务报告日期为 yyyyMMdd 且属于四个标准报告期。 */
     private void validateFinancialReportDate(Long reportDate) {
         if (reportDate == null) {
             throw new BizException("财务报告日期不能为空");
         }
         String value = String.valueOf(reportDate);
-        if (value.length() != 8) {
+        if (value.length() != 8 || !value.matches("[1-9][0-9]{7}")) {
             throw new BizException("财务报告日期格式不正确");
         }
         String suffix = value.substring(4);
