@@ -6,7 +6,7 @@
     <!-- ═══════════ 导入临时主表 sys_imp_tmp ═══════════ -->
 
     <!-- 新增导入批次 -->
-    <insert id="insertBatch" useGeneratedKeys="true" keyProperty="id">
+    <insert id="addBatch" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO sys_imp_tmp (
             imp_id, biz_type, template_code, file_name, file_size, file_path, option_json
             , total_count, pass_count, fail_count, chk_rslt, chk_dscr
@@ -27,7 +27,7 @@
     </insert>
 
     <!-- 按业务批次号查询有效批次 -->
-    <select id="queryByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpBo">
+    <select id="queryBatchByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpBo">
         SELECT id, imp_id, biz_type, template_code, file_name, file_size, file_path, option_json
              , total_count, pass_count, fail_count, chk_rslt, chk_dscr
              , save_rslt, save_dscr, imp_time, opter_id, opter_name, result_json
@@ -40,8 +40,17 @@
         LIMIT 1
     </select>
 
+    <!-- 锁定导入批次，串行处理主体修改、校验、提交和取消 -->
+    <select id="queryBatchIdForUpdate" resultType="java.lang.Long">
+        SELECT id
+        FROM sys_imp_tmp
+        WHERE imp_id = #{impId}
+          AND is_deleted = 0
+        FOR UPDATE
+    </select>
+
     <!-- 更新批次校验结果与计数 -->
-    <update id="updateBatchCheckResult">
+    <update id="editBatchCheckResult">
         UPDATE sys_imp_tmp
         SET pass_count = #{passCount}
           , fail_count = #{failCount}
@@ -54,7 +63,7 @@
     </update>
 
     <!-- 更新批次保存结果 -->
-    <update id="updateBatchSaveResult">
+    <update id="editBatchSaveResult">
         UPDATE sys_imp_tmp
         SET save_rslt = #{saveRslt}
           , save_dscr = #{saveDscr}
@@ -77,7 +86,7 @@
     <!-- ═══════════ 导入临时明细表 sys_imp_tmp_detl ═══════════ -->
 
     <!-- 批量新增导入明细 -->
-    <insert id="insertItemList">
+    <insert id="addItemList">
         INSERT INTO sys_imp_tmp_detl (
             imp_detl_id, imp_id, row_no, chk_rslt, chk_dscr, save_rslt, save_dscr
             , imp_time, opter_id, ref_id
@@ -101,8 +110,8 @@
         </foreach>
     </insert>
 
-    <!-- 按条件查询明细列表（配合 PageHelper） -->
-    <select id="queryItemList" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
+    <!-- 分页查询导入明细（配合 PageHelper） -->
+    <select id="queryItemPage" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
         SELECT id, imp_detl_id, imp_id, row_no, chk_rslt, chk_dscr, save_rslt, save_dscr
              , imp_time, opter_id, ref_id
              , fld001, fld002, fld003, fld004, fld005, fld006, fld007, fld008, fld009, fld010
@@ -124,7 +133,7 @@
     </select>
 
     <!-- 查询批次下全部有效明细 -->
-    <select id="queryAllByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
+    <select id="queryBatchItemList" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
         SELECT id, imp_detl_id, imp_id, row_no, chk_rslt, chk_dscr, save_rslt, save_dscr
              , imp_time, opter_id, ref_id
              , fld001, fld002, fld003, fld004, fld005, fld006, fld007, fld008, fld009, fld010
@@ -137,20 +146,56 @@
         ORDER BY row_no ASC, id ASC
     </select>
 
-    <!-- 更新单条明细校验结果 -->
-    <update id="updateItemCheckResult">
+    <!-- 按明细 ID 查询本批有效导入行 -->
+    <select id="queryItemById" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
+        SELECT *
+        FROM sys_imp_tmp_detl
+        WHERE imp_id = #{impId}
+          AND id = #{itemId}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 更新当前导入行的页面主体选择 -->
+    <update id="editRatingCompany">
+        UPDATE sys_imp_tmp_detl
+        SET fld011 = #{fld011}
+          , fld012 = #{fld012}
+          , fld013 = #{fld013}
+          , fld014 = #{fld014}
+          , updt_time = #{updtTime}
+        WHERE imp_id = #{impId}
+          AND id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <!-- 整批校验包含联动、互斥和清空项，修改主体后整批重新校验 -->
+    <update id="editItemCheckResultByImpId">
+        UPDATE sys_imp_tmp_detl
+        SET chk_rslt = '0'
+          , chk_dscr = NULL
+          , updt_time = #{updtTime}
+        WHERE imp_id = #{impId}
+          AND is_deleted = 0
+    </update>
+
+    <!-- 更新单条明细校验结果及已复核的主体选择 -->
+    <update id="editItemCheckResult">
         UPDATE sys_imp_tmp_detl
         SET chk_rslt = #{chkRslt}
           , chk_dscr = #{chkDscr}
           , fld009 = #{fld009}
           , fld010 = #{fld010}
+          , fld011 = #{fld011}
+          , fld012 = #{fld012}
+          , fld013 = #{fld013}
+          , fld014 = #{fld014}
           , updt_time = #{updtTime}
         WHERE id = #{id}
           AND is_deleted = 0
     </update>
 
     <!-- 更新单条明细保存结果 -->
-    <update id="updateItemSaveResult">
+    <update id="editItemSaveResult">
         UPDATE sys_imp_tmp_detl
         SET save_rslt = #{saveRslt}
           , save_dscr = #{saveDscr}
@@ -170,7 +215,7 @@
     </update>
 
     <!-- 统计指定校验结果数量 -->
-    <select id="countByChkRslt" resultType="int">
+    <select id="queryItemCountByCheckResult" resultType="int">
         SELECT COUNT(1)
         FROM sys_imp_tmp_detl
         WHERE imp_id = #{impId}

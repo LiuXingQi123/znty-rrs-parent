@@ -19,6 +19,7 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
+import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitReq;
@@ -30,9 +31,11 @@ import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
-import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
+import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.SecurityPoolExcelImportMapper;
@@ -105,6 +108,9 @@ public class SecurityPoolExcelImportService {
     /** 证券调库数据访问（在途流程查询等） */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+    /** 关联主体批量查询（与批量调整可选证券使用同一排序） */
+    @Resource
+    private CommonMapper commonMapper;
     /** 证券调库完整校验/提交（批量调库内部亦委托该服务） */
     @Resource
     private SecurityPoolAdjustService securityPoolAdjustService;
@@ -214,6 +220,10 @@ public class SecurityPoolExcelImportService {
             }
             items.add(item);
         }
+        if (IMPORT_TYPE_SECURITY.equals(importType)) {
+            // 仅上传时默认选择首个关联主体，后续分页和校验保留业务的选择
+            initializeRatingCompanies(items);
+        }
         batch.setTotalCount(items.size());
         int preFailCount = 0;
         for (SysImpTmpDetlBo item : items) {
@@ -224,11 +234,11 @@ public class SecurityPoolExcelImportService {
         batch.setFailCount(preFailCount);
         batch.setPassCount(0);
 
-        securityPoolExcelImportMapper.insertBatch(batch);
+        securityPoolExcelImportMapper.addBatch(batch);
         int batchSize = 200;
         for (int i = 0; i < items.size(); i += batchSize) {
             int end = Math.min(i + batchSize, items.size());
-            securityPoolExcelImportMapper.insertItemList(items.subList(i, end));
+            securityPoolExcelImportMapper.addItemList(items.subList(i, end));
         }
 
         SecurityPoolExcelImportReq pageReq = new SecurityPoolExcelImportReq();
@@ -258,9 +268,9 @@ public class SecurityPoolExcelImportService {
             throw new BizException("导入批次号不能为空");
         }
         // 校验批次存在
-        requireBatch(req.getImpId());
+        SysImpTmpBo batch = requireBatch(req.getImpId());
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<SysImpTmpDetlBo> list = securityPoolExcelImportMapper.queryItemList(
+        List<SysImpTmpDetlBo> list = securityPoolExcelImportMapper.queryItemPage(
                 req.getImpId().trim(), trimToNull(req.getChkRslt()), trimToNull(req.getKeyword()));
         PageInfo<SysImpTmpDetlBo> pageInfo = new PageInfo<>(list);
         List<SecurityPoolExcelImportItemDto> records = new ArrayList<>();
@@ -268,7 +278,136 @@ public class SecurityPoolExcelImportService {
             // 明细 Bo 转 DTO
             records.add(toItemDto(bo));
         }
+        if (IMPORT_TYPE_SECURITY.equals(parseImportType(batch.getOptionJson(), batch.getBizType()))) {
+            // 为当前页补齐关联候选、自选权益人和内评展示数据
+            fillRatingCompanyOptions(records);
+        }
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+    }
+
+    /** 批量读取关联候选，仅首次上传时默认选择第一条。 */
+    private void initializeRatingCompanies(List<SysImpTmpDetlBo> items) {
+        List<String> securityCodes = items.stream().map(SysImpTmpDetlBo::getFld001)
+                .filter(code -> !isBlank(code)).map(String::trim).distinct().collect(Collectors.toList());
+        if (securityCodes.isEmpty()) {
+            return;
+        }
+        Map<String, GuarantorGradeDto> firstCompanies = new HashMap<>();
+        for (GuarantorGradeDto company : commonMapper.queryGuarantorGradeList(securityCodes)) {
+            if (!isBlank(company.getWindcode())) {
+                firstCompanies.putIfAbsent(company.getSecurityCode(), company);
+            }
+        }
+        for (SysImpTmpDetlBo item : items) {
+            GuarantorGradeDto company = firstCompanies.get(trimToEmpty(item.getFld001()));
+            if (company != null) {
+                item.setFld011(company.getWindcode());
+                item.setFld012(company.getWindname());
+            }
+        }
+    }
+
+    /** 补齐页面选择候选及最新内评，同一页相同证券只查询一次。 */
+    private void fillRatingCompanyOptions(List<SecurityPoolExcelImportItemDto> records) {
+        Map<String, SecurityInfoBo> securityInfoMap = new HashMap<>();
+        Map<String, List<RelatedRatingCompanyDto>> relatedMap = new HashMap<>();
+        Map<String, SelfSelectedRightsHolderDto> selfMap = new HashMap<>();
+        for (SecurityPoolExcelImportItemDto dto : records) {
+            // 使用证券代码关联候选，不使用 Excel 填写的名称匹配主体
+            String code = trimToEmpty(dto.getSecurityCode());
+            if (!securityInfoMap.containsKey(code)) {
+                SecurityInfoBo info = securityPoolAdjustMapper.querySecurityBoByCode(code);
+                securityInfoMap.put(code, info);
+                List<RelatedRatingCompanyDto> related = info == null ? Collections.emptyList()
+                        : securityPoolAdjustMapper.queryRelatedRatingCompanyList(code);
+                relatedMap.put(code, related == null ? Collections.emptyList() : related);
+            }
+            SecurityInfoBo info = securityInfoMap.get(code);
+            if (info != null) {
+                dto.setSecurityType(info.getSecurityType());
+                dto.setAbsFlag(info.getAbsFlag());
+            }
+            List<RelatedRatingCompanyDto> related = relatedMap.get(code);
+            dto.setRelatedRatingCompanies(related);
+            for (RelatedRatingCompanyDto company : related) {
+                if (trimToEmpty(dto.getRelatedCompanyCode()).equals(company.getCompanyCode())) {
+                    dto.setRatingCompanyInnerRating(company.getInnerRating());
+                    break;
+                }
+            }
+            if (!isBlank(dto.getSelfSelectedRightsHolderCode())) {
+                String selfCode = dto.getSelfSelectedRightsHolderCode();
+                if (!selfMap.containsKey(selfCode)) {
+                    selfMap.put(selfCode, securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(selfCode));
+                }
+                SelfSelectedRightsHolderDto self = selfMap.get(selfCode);
+                if (self != null) {
+                    dto.setSelfSelectedRightsHolder(self);
+                }
+                dto.setRatingCompanyInnerRating(self == null ? null : self.getInnerRating());
+            }
+        }
+    }
+
+    /**
+     * 保存当前导入行的权益人/担保人选择，并使本批旧校验结果失效。
+     *
+     * 执行顺序：
+     * 1. 检查请求、导入明细 ID 和当前用户 ID 是否为空。
+     * 2. 锁定导入批次，确认批次尚未提交且属于证券导入，避免与校验、提交等操作交叉执行。
+     * 3. 按批次号和明细 ID 查询有效导入行，确认该明细属于当前批次。
+     * 4. 规范化关联主体及自选权益人代码，空字符串转为 null；复核候选资格并由服务端回填名称，
+     *    编辑时允许暂不选择主体。
+     * 5. 仅更新当前行的主体选择，其他相同证券代码的导入行保留各自选择。
+     * 6. 清空本批所有行的旧校验结果及批次校验快照，清除校验结果筛选并补齐有效页码，回查任务和明细。
+     *
+     * @param req 携带批次号、明细 ID、主体选择和分页条件的修改请求
+     * @return 保存后的批次任务及当前页明细，主体修改后须重新校验
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SecurityPoolExcelImportDto editRatingCompany(SecurityPoolExcelImportReq req) {
+        if (req == null || req.getItemId() == null || isBlank(req.getCurrentUserId())) {
+            throw new BizException("导入明细 ID 和当前用户 ID 不能为空");
+        }
+        // 锁定批次，避免修改与校验、提交同时执行
+        SysImpTmpBo batch = requireBatchForUpdate(req.getImpId());
+        if ("1".equals(batch.getSaveRslt())) {
+            throw new BizException("该批次已提交，不能修改主体选择");
+        }
+        // 仅证券导入使用担保人和权益人选择
+        if (!IMPORT_TYPE_SECURITY.equals(parseImportType(batch.getOptionJson(), batch.getBizType()))) {
+            throw new BizException("主体导入不支持修改担保人或权益人");
+        }
+        SysImpTmpDetlBo selection = securityPoolExcelImportMapper.queryItemById(batch.getImpId(), req.getItemId());
+        if (selection == null) {
+            throw new BizException("导入明细不存在或不属于当前批次");
+        }
+        // 空字符串允许清除关联主体或自选权益人
+        selection.setFld011(trimToNull(req.getRelatedCompanyCode()));
+        selection.setFld013(trimToNull(req.getSelfSelectedRightsHolderCode()));
+        // 复核候选资格并从服务端回填名称，允许编辑时暂不选择主体
+        if (resolveImportedRatingCompany(selection, false) == null) {
+            throw new BizException("证券不存在或已失效，不能选择评级主体");
+        }
+        Date now = new Date();
+        selection.setUpdtTime(now);
+        if (securityPoolExcelImportMapper.editRatingCompany(selection) == 0) {
+            throw new BizException("导入明细不存在或不属于当前批次");
+        }
+        securityPoolExcelImportMapper.editItemCheckResultByImpId(batch.getImpId(), now);
+        batch.setPassCount(0);
+        batch.setFailCount(0);
+        batch.setChkRslt("0");
+        batch.setChkDscr("主体选择已更新，请重新校验");
+        batch.setResultJson(null);
+        batch.setUpdtTime(now);
+        securityPoolExcelImportMapper.editBatchCheckResult(batch);
+        req.setChkRslt(null);
+        if (req.getPageIndex() <= 0) {
+            req.setPageIndex(1);
+        }
+        // 回查持久化的选择及已清空的校验结果
+        return queryTask(req);
     }
 
     /** 取消导入批次（逻辑删除主表与明细） */
@@ -277,8 +416,8 @@ public class SecurityPoolExcelImportService {
         if (req == null || req.getImpId() == null || req.getImpId().trim().isEmpty()) {
             throw new BizException("导入批次号不能为空");
         }
-        // 加载导入批次
-        SysImpTmpBo batch = requireBatch(req.getImpId());
+        // 锁定导入批次，避免取消与校验、修改或提交同时执行
+        SysImpTmpBo batch = requireBatchForUpdate(req.getImpId());
         if ("1".equals(batch.getSaveRslt())) {
             throw new BizException("该批次已提交，不能取消");
         }
@@ -299,14 +438,14 @@ public class SecurityPoolExcelImportService {
         if (req == null || req.getImpId() == null || req.getImpId().trim().isEmpty()) {
             throw new BizException("导入批次号不能为空");
         }
-        // 加载导入批次
-        SysImpTmpBo batch = requireBatch(req.getImpId());
+        // 锁定批次，校验使用完整且稳定的主体选择
+        SysImpTmpBo batch = requireBatchForUpdate(req.getImpId());
         if ("1".equals(batch.getSaveRslt())) {
             throw new BizException("该批次已提交，不能再次校验");
         }
         String opterId = req.getCurrentUserId() != null && !req.getCurrentUserId().trim().isEmpty()
                 ? req.getCurrentUserId().trim() : batch.getOpterId();
-        List<SysImpTmpDetlBo> items = securityPoolExcelImportMapper.queryAllByImpId(batch.getImpId());
+        List<SysImpTmpDetlBo> items = securityPoolExcelImportMapper.queryBatchItemList(batch.getImpId());
         if (items.isEmpty()) {
             throw new BizException("导入明细为空");
         }
@@ -370,7 +509,7 @@ public class SecurityPoolExcelImportService {
         // 序列化调库校验结果写入主表
         batch.setResultJson(buildCheckResultJson(checkItems, checkPass, checkFail, allowLinkMutex, importType));
         batch.setUpdtTime(now);
-        securityPoolExcelImportMapper.updateBatchCheckResult(batch);
+        securityPoolExcelImportMapper.editBatchCheckResult(batch);
 
         SecurityPoolExcelImportReq pageReq = new SecurityPoolExcelImportReq();
         pageReq.setImpId(batch.getImpId());
@@ -385,6 +524,23 @@ public class SecurityPoolExcelImportService {
      * <p>每行 Excel 对应「一券 + 一目标池 + 方向」→ 调用
      * {@link SecurityPoolAdjustService#checkAdjust}（批量内部也是此路径），
      * 再注入目标池批量流程候选；未勾选联动互斥时仅保留手工项。</p>
+     *
+     * 执行顺序：
+     * 1. 确定调入/调出方向，并初始化本次校验结果和父子池名称查询缓存。
+     * 2. 逐行检查证券代码、父池和子池名称，解析启用叶子池并检查导入权限；前置失败时回写原因。
+     * 3. 使用本行已保存的权益人/担保人或 ABS 自选权益人构建单券校验请求，复核主体资格后执行
+     *    完整调库校验；业务校验异常按当前行失败处理。
+     * 4. 根据联动互斥选项保留完整展开结果或仅保留手工项，再映射来源明细、主体信息和流程候选。
+     * 5. 以手工主项判断本行是否通过，通过时补齐缺失的证券简称并回写通过状态；失败时汇总原因，
+     *    同时禁止该行的联动、互斥和关联项单独提交。
+     * 6. 返回所有行的校验结果，各行独立使用主体选择，不检查相同证券代码的跨行选择是否一致。
+     *
+     * @param items 本批有效导入明细，每行包含一只证券、一个目标池及独立主体选择
+     * @param inbound 是否调入，false 表示调出
+     * @param allowLinkMutex 是否保留联动、互斥和关联展开项
+     * @param opterId 执行导入校验的用户 ID
+     * @param now 回写行级校验结果使用的统一时间
+     * @return 各导入行的手工主项及按选项保留的展开结果，包含通过状态、失败原因和流程候选
      */
     private List<SecurityPoolExcelImportCheckItemDto> checkSecurityImport(
             List<SysImpTmpDetlBo> items, boolean inbound, boolean allowLinkMutex,
@@ -441,8 +597,6 @@ public class SecurityPoolExcelImportService {
             AdjustCheckReq checkReq = new AdjustCheckReq();
             checkReq.setSecurityCode(code);
             checkReq.setSecurityShortName(trimToNull(item.getFld002()));
-            // 为 Excel 导入补齐默认评级主体，保证 ABS 与非 ABS 均可复用完整单券校验
-            applyDefaultRatingSubject(checkReq);
             AdjustCheckReq.CheckItem checkItem = new AdjustCheckReq.CheckItem();
             checkItem.setTargetPoolId(pool.getId());
             checkItem.setTargetPoolName(pool.getPoolName());
@@ -452,6 +606,8 @@ public class SecurityPoolExcelImportService {
 
             AdjustCheckDto checkDto;
             try {
+                // 复核并使用页面保存的权益人或担保人，不覆盖手动选择
+                applyImportedRatingCompany(checkReq, item);
                 checkDto = securityPoolAdjustService.checkAdjust(checkReq);
             } catch (BizException e) {
                 List<String> reasons = Collections.singletonList(e.getMessage());
@@ -500,11 +656,18 @@ public class SecurityPoolExcelImportService {
             } else {
                 List<String> failReasons = new ArrayList<>();
                 for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
+                    if (item.getId() == null || !item.getId().equals(ci.getSourceItemId())) {
+                        continue;
+                    }
                     // 汇总本行手工主项的失败原因
-                    if (item.getId() != null && item.getId().equals(ci.getSourceItemId())
-                            && isManualTag(ci.getItemTag()) && !ci.isCanAdjust()
+                    if (isManualTag(ci.getItemTag()) && !ci.isCanAdjust()
                             && ci.getFailReasons() != null) {
                         failReasons.addAll(ci.getFailReasons());
+                    }
+                    // 失败行的展开项不单独提交，避免阻断其他通过行
+                    if (ci.isCanAdjust()) {
+                        ci.setCanAdjust(false);
+                        ci.setFailReasons(Collections.singletonList("来源导入行未通过校验，不提交该行的联动、互斥或关联项"));
                     }
                 }
                 if (failReasons.isEmpty()) {
@@ -515,7 +678,7 @@ public class SecurityPoolExcelImportService {
                 continue;
             }
             item.setUpdtTime(now);
-            securityPoolExcelImportMapper.updateItemCheckResult(item);
+            securityPoolExcelImportMapper.editItemCheckResult(item);
         }
         return checkItems;
     }
@@ -631,7 +794,7 @@ public class SecurityPoolExcelImportService {
                 item.setChkRslt("1");
                 item.setChkDscr("校验通过");
                 item.setUpdtTime(now);
-                securityPoolExcelImportMapper.updateItemCheckResult(item);
+                securityPoolExcelImportMapper.editItemCheckResult(item);
             } else {
                 List<String> failReasons = new ArrayList<>();
                 for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
@@ -658,16 +821,30 @@ public class SecurityPoolExcelImportService {
 
     /**
      * 按校验结果提交。证券走证券池调库提交；主体走禁投池主体提交。
+     *
+     * 执行顺序：
+     * 1. 检查批次号并锁定批次，拒绝重复提交及未校验、主体修改后尚未重新校验的批次。
+     * 2. 从请求或批次快照筛选可提交项，确定经办人，并用请求中的非空原因和意见更新本次提交参数。
+     * 3. 拆分清空出库项与导入项，将无来源明细 ID 且来源代码匹配清空主项的展开项一并归入清空出库。
+     * 4. 先提交清空出库，再按导入类型提交主体或证券；证券按来源明细分组使用各行保存的主体选择。
+     * 5. 根据已提交的 Excel 手工主项回写对应明细保存状态，更新批次快照和批次提交结果。
+     * 6. 回查批次任务，附加本次汇总的调库日志 ID 和批次号列表后返回；业务异常由事务整体回滚。
+     *
+     * @param req 携带批次号、经办人、原因意见及可提交校验项的提交请求
+     * @return 提交后的批次任务及调库记录信息
      */
     @Transactional(rollbackFor = Exception.class)
     public SecurityPoolExcelImportDto submitImport(SecurityPoolExcelImportReq req) {
         if (req == null || req.getImpId() == null || req.getImpId().trim().isEmpty()) {
             throw new BizException("导入批次号不能为空");
         }
-        // 加载导入批次
-        SysImpTmpBo batch = requireBatch(req.getImpId());
+        // 锁定批次，禁止提交与主体修改交叉执行
+        SysImpTmpBo batch = requireBatchForUpdate(req.getImpId());
         if ("1".equals(batch.getSaveRslt())) {
             throw new BizException("该批次已提交，请勿重复提交");
+        }
+        if ("0".equals(batch.getChkRslt()) || isBlank(batch.getResultJson())) {
+            throw new BizException("请先校验，修改主体选择后需要重新校验");
         }
         // 筛选可提交的校验结果
         List<SecurityPoolExcelImportCheckItemDto> checkItems = filterSubmittableCheckItems(req, batch);
@@ -696,9 +873,17 @@ public class SecurityPoolExcelImportService {
         // 拆分清空出库项与 Excel 导入项
         List<SecurityPoolExcelImportCheckItemDto> clearItems = new ArrayList<>();
         List<SecurityPoolExcelImportCheckItemDto> excelItems = new ArrayList<>();
+        Set<String> clearSourceCodes = new HashSet<>();
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
-            // 拆分：清空出库项 vs Excel 导入项
+            // 清空主项和它的展开项没有来源导入明细 ID
             if (isClearTag(ci.getItemTag())) {
+                clearSourceCodes.add(ci.getSourceSecurityCode());
+            }
+        }
+        for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
+            // 清空主项及同一来源的联动、互斥、关联项一起提交出库
+            if (isClearTag(ci.getItemTag()) || (ci.getSourceItemId() == null
+                    && clearSourceCodes.contains(ci.getSourceSecurityCode()))) {
                 clearItems.add(ci);
             } else {
                 excelItems.add(ci);
@@ -723,7 +908,7 @@ public class SecurityPoolExcelImportService {
         // 回写导入明细保存状态
         Date now = new Date();
         Map<Long, SysImpTmpDetlBo> sourceMap = new HashMap<>();
-        for (SysImpTmpDetlBo bo : securityPoolExcelImportMapper.queryAllByImpId(batch.getImpId())) {
+        for (SysImpTmpDetlBo bo : securityPoolExcelImportMapper.queryBatchItemList(batch.getImpId())) {
             sourceMap.put(bo.getId(), bo);
         }
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
@@ -738,7 +923,7 @@ public class SecurityPoolExcelImportService {
             source.setSaveRslt("1");
             source.setSaveDscr("提交成功");
             source.setUpdtTime(now);
-            securityPoolExcelImportMapper.updateItemSaveResult(source);
+            securityPoolExcelImportMapper.editItemSaveResult(source);
         }
 
         String adjustBatchNo = batchNos.isEmpty() ? null : batchNos.get(0);
@@ -758,27 +943,48 @@ public class SecurityPoolExcelImportService {
         batch.setSaveDscr("提交成功，共 " + logIds.size() + " 条调库记录"
                 + (adjustBatchNo != null ? "，批次号 " + adjustBatchNo : ""));
         batch.setUpdtTime(now);
-        securityPoolExcelImportMapper.updateBatchSaveResult(batch);
+        securityPoolExcelImportMapper.editBatchSaveResult(batch);
 
         // 主表转任务 DTO
-        SecurityPoolExcelImportDto dto = toTaskDto(securityPoolExcelImportMapper.queryByImpId(batch.getImpId()));
+        SecurityPoolExcelImportDto dto = toTaskDto(securityPoolExcelImportMapper.queryBatchByImpId(batch.getImpId()));
         dto.setAdjustBatchNoList(batchNos);
         dto.setLogIds(logIds);
         return dto;
     }
 
     /**
-     * 证券提交：按主券分组，逐组调用 {@link SecurityPoolAdjustService#addAdjustLog}
-     * （与批量调库 addSingleAdjustLog 同路径）。
+     * 证券提交：按来源导入行分组，各行独立使用已保存的评级主体。
+     * 主项及其联动、互斥、关联项共用该行选择，整批复用证券调库提交步骤。
+     *
+     * 执行顺序：
+     * 1. 查询当前批次的有效明细并按 ID 建立索引，后续主体选择读取这些持久化明细。
+     * 2. 按 sourceItemId 分组校验项；缺少来源明细 ID 时拒绝提交，相同证券代码的不同导入行分别分组。
+     * 3. 为每组确定主项，确认来源行已通过校验，并复核来源证券及手工主项目标池与明细一致。
+     * 4. 构建该行提交请求，填写经办人、原因和意见，再次复核并应用本行保存的权益人/担保人选择。
+     * 5. 逐项检查目标池和导入权限，携带各项的方向、标签、分组键及所选流程组装调库明细。
+     * 6. 调用整批提交入口，先完成所有行的前置检查，再按行执行提交和快照保存，汇总调库日志 ID。
+     *
+     * @param checkItems 已筛选为可提交的证券导入校验项，包含主项及展开项
+     * @param batch 当前锁定的导入批次
+     * @param opterId 经办人 ID
+     * @param opterName 经办人名称
+     * @param batchNos 批次号汇总容器，当前证券分支不向其中追加批次号
+     * @return 各来源导入行产生的全部调库日志 ID
      */
     private List<Long> submitSecurityImport(List<SecurityPoolExcelImportCheckItemDto> checkItems,
                                             SysImpTmpBo batch, String opterId, String opterName,
                                             List<String> batchNos) {
-        // 按 sourceSecurityCode（缺省 securityCode）分组，关联/联动/互斥同批提交
-        Map<String, List<SecurityPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
+        Map<Long, SysImpTmpDetlBo> sourceItems = new HashMap<>();
+        for (SysImpTmpDetlBo source : securityPoolExcelImportMapper.queryBatchItemList(batch.getImpId())) {
+            sourceItems.put(source.getId(), source);
+        }
+        // 按来源明细 ID 分组，同码不同池的导入行不合并主体选择
+        Map<Long, List<SecurityPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
-            String groupKey = !isBlank(ci.getSourceSecurityCode())
-                    ? ci.getSourceSecurityCode() : ci.getSecurityCode();
+            Long groupKey = ci.getSourceItemId();
+            if (groupKey == null) {
+                throw new BizException("校验结果缺少来源导入明细，请重新校验");
+            }
             List<SecurityPoolExcelImportCheckItemDto> list = groupMap.get(groupKey);
             if (list == null) {
                 list = new ArrayList<>();
@@ -787,14 +993,28 @@ public class SecurityPoolExcelImportService {
             list.add(ci);
         }
 
-        List<Long> allLogIds = new ArrayList<>();
-        for (Map.Entry<String, List<SecurityPoolExcelImportCheckItemDto>> entry : groupMap.entrySet()) {
+        List<SecurityPoolAdjustSubmitReq> submitRequests = new ArrayList<>();
+        for (Map.Entry<Long, List<SecurityPoolExcelImportCheckItemDto>> entry : groupMap.entrySet()) {
             List<SecurityPoolExcelImportCheckItemDto> group = entry.getValue();
             // 同组优先取手工主项
             SecurityPoolExcelImportCheckItemDto primary = resolvePrimaryItem(group);
+            SysImpTmpDetlBo source = sourceItems.get(entry.getKey());
+            if (source == null || !"1".equals(source.getChkRslt())) {
+                throw new BizException("导入明细未通过校验，请重新校验");
+            }
+            String securityCode = trimToEmpty(source.getFld001());
+            for (SecurityPoolExcelImportCheckItemDto ci : group) {
+                // 复核校验结果的来源证券，主体选择只读取本批持久化明细
+                if (!securityCode.equals(trimToEmpty(ci.getSourceSecurityCode()))
+                        || (isManualTag(ci.getItemTag())
+                        && (!securityCode.equals(trimToEmpty(ci.getSecurityCode()))
+                        || !String.valueOf(ci.getTargetPoolId()).equals(source.getFld009())))) {
+                    throw new BizException("校验结果与来源导入明细不一致，请重新校验");
+                }
+            }
 
             SecurityPoolAdjustSubmitReq submitReq = new SecurityPoolAdjustSubmitReq();
-            submitReq.setSecurityCode(entry.getKey());
+            submitReq.setSecurityCode(securityCode);
             submitReq.setSecurityShortName(primary.getSecurityShortName());
             submitReq.setSecurityType(primary.getSecurityType());
             submitReq.setAdjustType(ADJUST_TYPE_EXCEL);
@@ -802,8 +1022,8 @@ public class SecurityPoolExcelImportService {
             submitReq.setAdjustAdvice(batch.getFld003());
             submitReq.setAdjusterId(opterId);
             submitReq.setAdjusterName(opterName);
-            // 与校验阶段使用同一默认评级主体，保证提交阶段口径一致
-            applyDefaultRatingSubject(submitReq);
+            // 使用临时明细中已校验的主体选择，提交前再次复核关联或自选主体
+            applyImportedRatingCompany(submitReq, source);
 
             List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
             for (SecurityPoolExcelImportCheckItemDto ci : group) {
@@ -830,8 +1050,12 @@ public class SecurityPoolExcelImportService {
                 submitItems.add(si);
             }
             submitReq.setItems(submitItems);
-
-            AdjustSubmitDto submitDto = securityPoolAdjustService.addAdjustLog(submitReq);
+            submitRequests.add(submitReq);
+        }
+        // 整批先复核已有流程，再逐行使用独立的主体选择落库
+        List<AdjustSubmitDto> submitResults = securityPoolAdjustService.addExcelImportAdjustLogList(submitRequests);
+        List<Long> allLogIds = new ArrayList<>();
+        for (AdjustSubmitDto submitDto : submitResults) {
             if (submitDto != null && submitDto.getLogIds() != null) {
                 allLogIds.addAll(submitDto.getLogIds());
             }
@@ -1034,7 +1258,7 @@ public class SecurityPoolExcelImportService {
                 checkReq.setSecurityShortName(shortName);
                 checkReq.setSecurityType(securityType);
                 // 清空出库同样复用完整单券校验，补齐默认评级主体
-                applyDefaultRatingSubject(checkReq);
+                applyDefaultRatingCompany(checkReq);
                 AdjustCheckReq.CheckItem checkItem = new AdjustCheckReq.CheckItem();
                 checkItem.setTargetPoolId(pool.getId());
                 checkItem.setTargetPoolName(pool.getPoolName());
@@ -1204,7 +1428,7 @@ public class SecurityPoolExcelImportService {
                 submitReq.setAdjusterId(opterId);
                 submitReq.setAdjusterName(opterName);
                 // 清空出库提交与校验阶段使用同一默认评级主体
-                applyDefaultRatingSubject(submitReq);
+                applyDefaultRatingCompany(submitReq);
                 List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
                 for (SecurityPoolExcelImportCheckItemDto ci : group) {
                     // 校验 Excel 导入权限
@@ -1244,6 +1468,21 @@ public class SecurityPoolExcelImportService {
 
     /**
      * 映射证券校验结果，并对可调整手工项注入目标池「批量」流程（对齐批量 buildBatchCheckResult）。
+     *
+     * 执行顺序：
+     * 1. 存在来源导入行时填写明细 ID、行号及有效主体信息，ABS 自选权益人优先于关联主体展示。
+     * 2. 映射证券、来源证券、目标池、方向和项目标签，缺少证券代码时使用本次校验的来源证券代码。
+     * 3. 用来源证券代码、来源明细 ID 和原校验分组键构造新分组键，区分同码不同导入行；清空出库项
+     *    无来源明细，因此保留不含明细 ID 的分组形式。
+     * 4. 复制可调整状态和失败原因，生成调整类型及可调整项的调整说明。
+     * 5. 映射原有流程候选，对可调整手工项补充目标池批量调入/调出流程，并默认选择推荐或首个可选流程。
+     *
+     * @param sourceItem 来源导入行，自动生成的清空出库项为 null
+     * @param ri 完整单券校验返回的一条结果
+     * @param excelCode 本次校验的来源证券代码，作为缺失代码的回填值
+     * @param excelPool 本次校验的目标池，用于注入批量流程候选
+     * @param direction 调整方向，in 表示调入，out 表示调出
+     * @return 带来源行、主体展示信息、独立分组键及流程候选的导入校验结果
      */
     private SecurityPoolExcelImportCheckItemDto mapSecurityCheckResult(
             SysImpTmpDetlBo sourceItem, AdjustCheckDto.CheckResultItem ri,
@@ -1252,6 +1491,10 @@ public class SecurityPoolExcelImportService {
         if (sourceItem != null) {
             dto.setSourceItemId(sourceItem.getId());
             dto.setSourceRowNo(sourceItem.getRowNo());
+            dto.setRatingCompanyCode(isBlank(sourceItem.getFld013())
+                    ? sourceItem.getFld011() : sourceItem.getFld013());
+            dto.setRatingCompanyName(isBlank(sourceItem.getFld013())
+                    ? sourceItem.getFld012() : sourceItem.getFld014());
         }
         String securityCode = !isBlank(ri.getSecurityCode()) ? ri.getSecurityCode() : excelCode;
         String sourceCode = !isBlank(ri.getSourceSecurityCode()) ? ri.getSourceSecurityCode() : excelCode;
@@ -1264,9 +1507,10 @@ public class SecurityPoolExcelImportService {
         dto.setPoolType(ri.getPoolType());
         dto.setAdjustMode(ri.getAdjustMode());
         dto.setItemTag(isBlank(ri.getItemTag()) ? ItemType.MANUAL.getCode() : ri.getItemTag());
-        // 与批量一致：分组键以主券为前缀
+        // 来源行独立分组，联动、互斥和关联项沿用该行的分组键
         String gk = ri.getAdjustGroupKey();
-        dto.setAdjustGroupKey(sourceCode + "_" + (gk == null ? "" : gk));
+        dto.setAdjustGroupKey(sourceCode + "_" + (sourceItem == null ? "" : sourceItem.getId() + "_")
+                + (gk == null ? "" : gk));
         dto.setCanAdjust(ri.isCanAdjust());
         dto.setFailReasons(ri.getFailReasons() == null ? new ArrayList<>() : new ArrayList<>(ri.getFailReasons()));
         // 解析调整类型中文
@@ -1462,71 +1706,160 @@ public class SecurityPoolExcelImportService {
     }
 
     /**
-     * 为 Excel 导入校验请求补齐默认评级主体。
+     * 为清空目标池自动生成的出库校验请求补齐默认评级主体。
      *
-     * <p>关联主体查询已按关系优先级、同类型最新内评排序；导入页无逐券选择控件时，
-     * 直接取首条。ABS 写入权益人，非 ABS 写入担保人；无候选时保留单券服务的原有拦截。</p>
+     * <p>清空出库成员没有对应 Excel 填写行，沿用按关系优先级和最新内评排序的首条主体。
+     * ABS 写入权益人，非 ABS 写入担保人；Excel 导入行使用页面选择的主体。</p>
      *
      * @param req 单券校验请求
      */
-    private void applyDefaultRatingSubject(AdjustCheckReq req) {
+    private void applyDefaultRatingCompany(AdjustCheckReq req) {
         if (req == null || isBlank(req.getSecurityCode())) {
             return;
         }
-        DefaultRatingSubject subject = queryDefaultRatingSubject(req.getSecurityCode());
-        if (subject == null) {
+        // 查询自动出库证券的默认关联主体
+        RatingCompany company = queryDefaultRatingCompany(req.getSecurityCode());
+        if (company == null) {
             return;
         }
-        if (subject.abs) {
-            req.setRightsHolderCode(subject.companyCode);
+        if (company.abs) {
+            req.setRightsHolderCode(company.companyCode);
         } else {
-            req.setGuarantorCode(subject.companyCode);
+            req.setGuarantorCode(company.companyCode);
         }
     }
 
     /**
-     * 为 Excel 导入提交请求补齐默认评级主体。
+     * 为清空目标池自动生成的出库提交请求补齐默认评级主体。
      *
      * @param req 单券提交请求
      */
-    private void applyDefaultRatingSubject(SecurityPoolAdjustSubmitReq req) {
+    private void applyDefaultRatingCompany(SecurityPoolAdjustSubmitReq req) {
         if (req == null || isBlank(req.getSecurityCode())) {
             return;
         }
-        DefaultRatingSubject subject = queryDefaultRatingSubject(req.getSecurityCode());
-        if (subject == null) {
+        // 查询自动出库证券的默认关联主体
+        RatingCompany company = queryDefaultRatingCompany(req.getSecurityCode());
+        if (company == null) {
             return;
         }
-        if (subject.abs) {
-            req.setRightsHolderCode(subject.companyCode);
+        if (company.abs) {
+            req.setRightsHolderCode(company.companyCode);
         } else {
-            req.setGuarantorCode(subject.companyCode);
+            req.setGuarantorCode(company.companyCode);
         }
     }
 
     /** 查询证券首个关联评级主体及其在当前证券类型下的角色。 */
-    private DefaultRatingSubject queryDefaultRatingSubject(String securityCode) {
+    private RatingCompany queryDefaultRatingCompany(String securityCode) {
         SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(securityCode.trim());
         if (securityInfo == null) {
             return null;
         }
-        List<RelatedRatingSubjectDto> subjects =
-                securityPoolAdjustMapper.queryRelatedRatingSubjectList(securityCode.trim());
-        if (subjects == null || subjects.isEmpty() || isBlank(subjects.get(0).getCompanyCode())) {
+        List<RelatedRatingCompanyDto> companies =
+                securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityCode.trim());
+        if (companies == null || companies.isEmpty() || isBlank(companies.get(0).getCompanyCode())) {
             return null;
         }
-        DefaultRatingSubject subject = new DefaultRatingSubject();
-        subject.abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
-        subject.companyCode = subjects.get(0).getCompanyCode();
-        return subject;
+        RatingCompany company = new RatingCompany();
+        company.abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
+        company.companyCode = companies.get(0).getCompanyCode();
+        return company;
     }
 
-    /** Excel 导入默认评级主体。 */
-    private static class DefaultRatingSubject {
+    /** Excel 导入使用的评级主体。 */
+    private static class RatingCompany {
         /** 是否 ABS 证券。 */
         private boolean abs;
-        /** 默认关联主体编码。 */
+        /** 评级主体编码。 */
         private String companyCode;
+        /** 页面选择的关联担保人或权益人编码。 */
+        private String relatedCompanyCode;
+        /** 页面选择的 ABS 自选权益人编码。 */
+        private String selfSelectedRightsHolderCode;
+    }
+
+    /** 将页面持久化的主体选择传入单券校验。 */
+    private void applyImportedRatingCompany(AdjustCheckReq req, SysImpTmpDetlBo item) {
+        // 复核页面选择并回填服务端标准名称
+        RatingCompany company = resolveImportedRatingCompany(item, true);
+        if (company == null) {
+            return;
+        }
+        if (company.abs) {
+            req.setRightsHolderCode(company.relatedCompanyCode);
+            req.setSelfSelectedRightsHolderCode(company.selfSelectedRightsHolderCode);
+        } else {
+            req.setGuarantorCode(company.companyCode);
+        }
+    }
+
+    /** 将页面持久化的主体选择传入单券提交。 */
+    private void applyImportedRatingCompany(SecurityPoolAdjustSubmitReq req, SysImpTmpDetlBo item) {
+        // 提交阶段重新复核关联或自选主体，禁止改用接口默认主体
+        RatingCompany company = resolveImportedRatingCompany(item, true);
+        if (company == null) {
+            return;
+        }
+        if (company.abs) {
+            req.setRightsHolderCode(company.relatedCompanyCode);
+            req.setSelfSelectedRightsHolderCode(company.selfSelectedRightsHolderCode);
+        } else {
+            req.setGuarantorCode(company.companyCode);
+        }
+    }
+
+    /** 复核页面选择的代码，ABS 自选权益人与关联权益人分别保存。 */
+    private RatingCompany resolveImportedRatingCompany(SysImpTmpDetlBo item, boolean requireSelection) {
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(trimToEmpty(item.getFld001()));
+        if (securityInfo == null) {
+            return null;
+        }
+        boolean abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
+        List<RelatedRatingCompanyDto> companies =
+                securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityInfo.getWindCode());
+        String code = trimToEmpty(item.getFld011());
+        String selfCode = trimToEmpty(item.getFld013());
+        RelatedRatingCompanyDto selected = null;
+        if (companies != null) {
+            for (RelatedRatingCompanyDto company : companies) {
+                if (isBlank(company.getCompanyCode())) {
+                    continue;
+                }
+                if (code.equals(company.getCompanyCode())) {
+                    selected = company;
+                    break;
+                }
+            }
+        }
+        if (!code.isEmpty() && selected == null) {
+            throw new BizException("所选担保人/权益人不属于当前证券，请重新选择");
+        }
+        SelfSelectedRightsHolderDto selfSelected = null;
+        if (!selfCode.isEmpty()) {
+            if (!abs) {
+                throw new BizException("仅 ABS 证券支持自选权益人");
+            }
+            selfSelected = securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(selfCode);
+            if (selfSelected == null) {
+                throw new BizException("所选自选权益人不存在或已失效，请重新选择");
+            }
+        }
+        boolean hasRelated = companies != null
+                && companies.stream().anyMatch(company -> !isBlank(company.getCompanyCode()));
+        if (requireSelection && selected == null && selfSelected == null && (abs || hasRelated)) {
+            throw new BizException(abs ? "请选择权益人或自选权益人" : "请选择担保人/权益人");
+        }
+        item.setFld011(selected == null ? null : selected.getCompanyCode());
+        item.setFld012(selected == null ? null : selected.getCompanyName());
+        item.setFld013(selfSelected == null ? null : selfSelected.getCompanyCode());
+        item.setFld014(selfSelected == null ? null : selfSelected.getCompanyName());
+        RatingCompany result = new RatingCompany();
+        result.abs = abs;
+        result.relatedCompanyCode = item.getFld011();
+        result.selfSelectedRightsHolderCode = item.getFld013();
+        result.companyCode = selfSelected == null ? item.getFld011() : item.getFld013();
+        return result;
     }
 
     /** 将证券调库流程候选项映射为导入页流程 DTO */
@@ -1608,7 +1941,7 @@ public class SecurityPoolExcelImportService {
         // 拼接失败原因
         item.setChkDscr(joinReasons(reasons));
         item.setUpdtTime(now);
-        securityPoolExcelImportMapper.updateItemCheckResult(item);
+        securityPoolExcelImportMapper.editItemCheckResult(item);
     }
 
     /** 构建前置失败的手工校验结果项（不调用下游调库校验） */
@@ -1619,6 +1952,10 @@ public class SecurityPoolExcelImportService {
         if (sourceItem != null) {
             dto.setSourceItemId(sourceItem.getId());
             dto.setSourceRowNo(sourceItem.getRowNo());
+            dto.setRatingCompanyCode(isBlank(sourceItem.getFld013())
+                    ? sourceItem.getFld011() : sourceItem.getFld013());
+            dto.setRatingCompanyName(isBlank(sourceItem.getFld013())
+                    ? sourceItem.getFld012() : sourceItem.getFld014());
         }
         dto.setSecurityCode(code);
         dto.setSecurityShortName(shortName);
@@ -1817,7 +2154,7 @@ public class SecurityPoolExcelImportService {
 
     /**
      * 将 Excel 行按导入类型写入通用字段槽
-     * <p>表头与模板一致：证券=父池/子池/证券名称/证券代码；主体=父池/子池/主体名称/主体代码。</p>
+     * <p>证券/主体模板均为四列；评级主体在上传后由页面选择。</p>
      */
     private void fillFromExcelRow(SysImpTmpDetlBo item, Map<String, String> row, String importType) {
         // 按表头读取父池名称
@@ -1891,12 +2228,24 @@ public class SecurityPoolExcelImportService {
         return direction;
     }
 
+    /** 锁定批次，串行执行主体选择修改、校验、提交和取消。 */
+    private SysImpTmpBo requireBatchForUpdate(String impId) {
+        if (isBlank(impId)) {
+            throw new BizException("导入批次号不能为空");
+        }
+        if (securityPoolExcelImportMapper.queryBatchIdForUpdate(impId.trim()) == null) {
+            throw new BizException("导入批次不存在或已取消");
+        }
+        // 读取已锁定的批次信息
+        return requireBatch(impId);
+    }
+
     /** 按批次号加载导入批次，不存在则抛业务异常 */
     private SysImpTmpBo requireBatch(String impId) {
         if (impId == null || impId.trim().isEmpty()) {
             throw new BizException("导入批次号不能为空");
         }
-        SysImpTmpBo batch = securityPoolExcelImportMapper.queryByImpId(impId.trim());
+        SysImpTmpBo batch = securityPoolExcelImportMapper.queryBatchByImpId(impId.trim());
         if (batch == null) {
             throw new BizException("导入批次不存在或已取消");
         }
@@ -1939,7 +2288,7 @@ public class SecurityPoolExcelImportService {
         dto.setTotalCount(batch.getTotalCount());
         dto.setPassCount(batch.getPassCount() == null ? 0 : batch.getPassCount());
         dto.setFailCount(batch.getFailCount() == null ? 0 : batch.getFailCount());
-        int pending = securityPoolExcelImportMapper.countByChkRslt(batch.getImpId(), "0");
+        int pending = securityPoolExcelImportMapper.queryItemCountByCheckResult(batch.getImpId(), "0");
         dto.setPendingCount(pending);
         dto.setChkRslt(batch.getChkRslt());
         dto.setChkDscr(batch.getChkDscr());
@@ -2031,6 +2380,17 @@ public class SecurityPoolExcelImportService {
         dto.setSecurityName(bo.getFld002());
         dto.setParentPoolName(bo.getFld003());
         dto.setChildPoolName(bo.getFld004());
+        dto.setRelatedCompanyCode(bo.getFld011());
+        dto.setRelatedCompanyName(bo.getFld012());
+        dto.setSelfSelectedRightsHolderCode(bo.getFld013());
+        if (!isBlank(bo.getFld013())) {
+            SelfSelectedRightsHolderDto self = new SelfSelectedRightsHolderDto();
+            self.setCompanyCode(bo.getFld013());
+            self.setCompanyName(bo.getFld014());
+            dto.setSelfSelectedRightsHolder(self);
+        }
+        dto.setRatingCompanyCode(isBlank(bo.getFld013()) ? bo.getFld011() : bo.getFld013());
+        dto.setRatingCompanyName(isBlank(bo.getFld013()) ? bo.getFld012() : bo.getFld014());
         if (!isBlank(bo.getFld009())) {
             try {
                 dto.setResolvedPoolId(Long.valueOf(bo.getFld009().trim()));

@@ -49,15 +49,15 @@ public class CrmwPoolAdjustServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("BOND001");
-        when(securityPoolAdjustService.applySelectedRatingSubject(
+        when(securityPoolAdjustService.applySelectedRatingCompany(
                 securityInfo, "C10008", null, null, false)).thenAnswer(invocation -> {
                     securityInfo.setGuarantor("测试担保人");
                     securityInfo.setGuarantorId("C10008");
                     securityInfo.setInnerGuarantorRating("1");
-                    return new SecurityPoolAdjustService.SelectedRatingSubjectData();
+                    return new SecurityPoolAdjustService.SelectedRatingCompanyData();
                 });
 
-        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, "C10008", null, null, false);
 
         assertThat(securityInfo.getGuarantor()).isEqualTo("测试担保人");
@@ -73,12 +73,12 @@ public class CrmwPoolAdjustServiceTest {
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("BOND001");
-        when(securityPoolAdjustService.applySelectedRatingSubject(
+        when(securityPoolAdjustService.applySelectedRatingCompany(
                 securityInfo, "C10007", null, null, false))
                 .thenThrow(new BizException("所选担保人不属于当前证券"));
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
-                service, "applySelectedRatingSubject", securityInfo, "C10007", null, null, false))
+                service, "applySelectedRatingCompany", securityInfo, "C10007", null, null, false))
                 .isInstanceOf(BizException.class)
                 .hasMessage("所选担保人不属于当前证券");
     }

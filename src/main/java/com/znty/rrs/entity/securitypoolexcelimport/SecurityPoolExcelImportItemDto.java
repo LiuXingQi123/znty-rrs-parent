@@ -1,6 +1,10 @@
 package com.znty.rrs.entity.securitypoolexcelimport;
 
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * 证券/主体 Excel 导入明细展示（对齐模板列）
@@ -22,6 +26,26 @@ public class SecurityPoolExcelImportItemDto {
     private String securityName;
     /** 证券/主体代码 */
     private String securityCode;
+    /** 本次采用的权益人/担保人主体代码 */
+    private String ratingCompanyCode;
+    /** 本次采用的权益人/担保人名称 */
+    private String ratingCompanyName;
+    /** 证券类型 */
+    private String securityType;
+    /** 是否 ABS，来自证券主数据 */
+    private Integer absFlag;
+    /** 当前证券的四类关联主体候选 */
+    private List<RelatedRatingCompanyDto> relatedRatingCompanies;
+    /** 页面选中的关联主体代码 */
+    private String relatedCompanyCode;
+    /** 页面选中的关联主体名称 */
+    private String relatedCompanyName;
+    /** 页面选中的 ABS 自选权益人代码 */
+    private String selfSelectedRightsHolderCode;
+    /** 页面选中的 ABS 自选权益人及其最新内评 */
+    private SelfSelectedRightsHolderDto selfSelectedRightsHolder;
+    /** 最终采用主体的最新内评 */
+    private String ratingCompanyInnerRating;
     /** 市场类型 */
     private String marketType;
     /** 证券品种 */

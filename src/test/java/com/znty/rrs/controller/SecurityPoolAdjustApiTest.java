@@ -36,7 +36,7 @@ public class SecurityPoolAdjustApiTest extends ControllerApiTestSupport {
                 "{\"securityCode\":\"100001\",\"reportDate\":20251231}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/saveIssuerFinancialList",
                 "{\"securityCode\":\"100001\",\"records\":[{\"reportDate\":20251231,\"totAssets\":\"32.480712\"}]}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryRelatedRatingSubjectList", "{\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryRelatedRatingCompanyList", "{\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySelfSelectedRightsHolderPage", "{\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustPoolList", "{\"securityCode\":\"100001\",\"adjustDirection\":\"in\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityPoolStatus", "{\"securityCode\":\"100001\"}");

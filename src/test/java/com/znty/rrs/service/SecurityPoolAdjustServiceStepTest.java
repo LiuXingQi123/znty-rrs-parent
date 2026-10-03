@@ -29,7 +29,7 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
-import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
 import java.lang.reflect.Constructor;
@@ -66,19 +66,19 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 符合主体类型但暂无评分的担保人允许参与调库，评分保持为空。 */
     @Test
-    public void applySelectedRatingSubjectShouldKeepEligibleGuarantorWithoutGrade() {
+    public void applySelectedRatingCompanyShouldKeepEligibleGuarantorWithoutGrade() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("DBB002.IB");
-        RelatedRatingSubjectDto guarantor = new RelatedRatingSubjectDto();
+        RelatedRatingCompanyDto guarantor = new RelatedRatingCompanyDto();
         guarantor.setCompanyCode("C10008");
         guarantor.setCompanyName("测试担保人");
-        when(mapper.queryRelatedRatingSubjectList("DBB002.IB"))
+        when(mapper.queryRelatedRatingCompanyList("DBB002.IB"))
                 .thenReturn(Collections.singletonList(guarantor));
 
-        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, "C10008", null, null, false);
 
         assertThat(securityInfo.getGuarantor()).isEqualTo("测试担保人");
@@ -88,16 +88,16 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 主体类型不符合要求的担保人即使存在于原始逗号串中也不得参与调库。 */
     @Test
-    public void applySelectedRatingSubjectShouldRejectIneligibleGuarantor() {
+    public void applySelectedRatingCompanyShouldRejectIneligibleGuarantor() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("DBB002.IB");
-        when(mapper.queryRelatedRatingSubjectList("DBB002.IB")).thenReturn(Collections.emptyList());
+        when(mapper.queryRelatedRatingCompanyList("DBB002.IB")).thenReturn(Collections.emptyList());
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
-                service, "applySelectedRatingSubject", securityInfo, "C10007", null, null, false))
+                service, "applySelectedRatingCompany", securityInfo, "C10007", null, null, false))
                 .isInstanceOf(BizException.class)
                 .hasMessage("所选担保人不属于当前证券");
     }
@@ -112,7 +112,7 @@ public class SecurityPoolAdjustServiceStepTest {
         securityInfo.setWindCode("ABS001.IB");
         securityInfo.setAbsFlag(1);
         securityInfo.setInnerIssuerRating("1");
-        RelatedRatingSubjectDto related = new RelatedRatingSubjectDto();
+        RelatedRatingCompanyDto related = new RelatedRatingCompanyDto();
         related.setCompanyCode("C10001");
         related.setCompanyName("普通权益人");
         related.setInnerRating("3");
@@ -120,11 +120,11 @@ public class SecurityPoolAdjustServiceStepTest {
         selfSelected.setCompanyCode("C20001");
         selfSelected.setCompanyName("自选权益人");
         selfSelected.setInnerRating("2");
-        when(mapper.queryRelatedRatingSubjectList("ABS001.IB"))
+        when(mapper.queryRelatedRatingCompanyList("ABS001.IB"))
                 .thenReturn(Collections.singletonList(related));
         when(mapper.querySelfSelectedRightsHolderByCode("C20001")).thenReturn(selfSelected);
 
-        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, null, "C10001", "C20001", true);
 
         assertThat(securityInfo.getGuarantor()).isEqualTo("自选权益人");
@@ -135,21 +135,21 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** ABS 未选择普通权益人和自选权益人时默认使用关联主体接口返回的首条。 */
     @Test
-    public void absShouldDefaultToFirstRelatedSubjectWhenNoSelection() {
+    public void absShouldDefaultToFirstRelatedCompanyWhenNoSelection() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("ABS001.IB");
         securityInfo.setAbsFlag(1);
-        RelatedRatingSubjectDto firstSubject = new RelatedRatingSubjectDto();
-        firstSubject.setCompanyCode("C10001");
-        firstSubject.setCompanyName("接口首条主体");
-        firstSubject.setInnerRating("3");
-        when(mapper.queryRelatedRatingSubjectList("ABS001.IB"))
-                .thenReturn(Collections.singletonList(firstSubject));
+        RelatedRatingCompanyDto firstCompany = new RelatedRatingCompanyDto();
+        firstCompany.setCompanyCode("C10001");
+        firstCompany.setCompanyName("接口首条主体");
+        firstCompany.setInnerRating("3");
+        when(mapper.queryRelatedRatingCompanyList("ABS001.IB"))
+                .thenReturn(Collections.singletonList(firstCompany));
 
-        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, null, null, null, true);
 
         assertThat(securityInfo.getGuarantorId()).isEqualTo("C10001");
@@ -158,16 +158,16 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** ABS 无关联评级主体时，后端仍返回明确的主体选择失败原因。 */
     @Test
-    public void absShouldRequireRightsHolderWhenNoRelatedSubjectExists() {
+    public void absShouldRequireRightsHolderWhenNoRelatedCompanyExists() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("ABS001.IB");
         securityInfo.setAbsFlag(1);
-        when(mapper.queryRelatedRatingSubjectList("ABS001.IB")).thenReturn(Collections.emptyList());
+        when(mapper.queryRelatedRatingCompanyList("ABS001.IB")).thenReturn(Collections.emptyList());
 
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, null, null, null, true))
                 .isInstanceOf(BizException.class)
                 .hasMessage("请选择权益人或自选权益人");
@@ -175,19 +175,19 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 非 ABS 未选择担保人时默认使用关联主体接口返回的首条。 */
     @Test
-    public void nonAbsShouldDefaultToFirstRelatedSubjectWhenNoSelection() {
+    public void nonAbsShouldDefaultToFirstRelatedCompanyWhenNoSelection() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("BOND001.IB");
-        RelatedRatingSubjectDto firstSubject = new RelatedRatingSubjectDto();
-        firstSubject.setCompanyCode("C20001");
-        firstSubject.setCompanyName("接口首条主体");
-        when(mapper.queryRelatedRatingSubjectList("BOND001.IB"))
-                .thenReturn(Collections.singletonList(firstSubject));
+        RelatedRatingCompanyDto firstCompany = new RelatedRatingCompanyDto();
+        firstCompany.setCompanyCode("C20001");
+        firstCompany.setCompanyName("接口首条主体");
+        when(mapper.queryRelatedRatingCompanyList("BOND001.IB"))
+                .thenReturn(Collections.singletonList(firstCompany));
 
-        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, null, null, null, false);
 
         assertThat(securityInfo.getGuarantorId()).isEqualTo("C20001");
@@ -270,19 +270,19 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo absSecurity = new SecurityInfoBo();
         absSecurity.setWindCode("ABS001.IB");
         absSecurity.setAbsFlag(1);
-        RelatedRatingSubjectDto related = new RelatedRatingSubjectDto();
+        RelatedRatingCompanyDto related = new RelatedRatingCompanyDto();
         related.setCompanyCode("C10001");
         related.setCompanyName("普通权益人");
         SelfSelectedRightsHolderDto selfSelected = new SelfSelectedRightsHolderDto();
         selfSelected.setCompanyCode("C20001");
         selfSelected.setCompanyName("自选权益人");
         selfSelected.setInnerRating("1");
-        when(mapper.queryRelatedRatingSubjectList("ABS001.IB"))
+        when(mapper.queryRelatedRatingCompanyList("ABS001.IB"))
                 .thenReturn(Collections.singletonList(related));
         when(mapper.querySelfSelectedRightsHolderByCode("C20001")).thenReturn(selfSelected);
-        Object selected = ReflectionTestUtils.invokeMethod(service, "applySelectedRatingSubject",
+        Object selected = ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 absSecurity, null, "C10001", "C20001", true);
-        ReflectionTestUtils.setField(shared, "selectedRatingSubject", selected);
+        ReflectionTestUtils.setField(shared, "selectedRatingCompany", selected);
 
         ReflectionTestUtils.invokeMethod(service, "postSubmitProcess", req, shared,
                 Collections.singletonList(100L));

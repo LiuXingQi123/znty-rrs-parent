@@ -10,13 +10,13 @@ import java.nio.file.Paths;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** 证券池调库相关主体 Mapper SQL 口径测试。 */
-public class SecurityPoolAdjustRelatedSubjectMapperSqlTest {
+public class SecurityPoolAdjustRelatedCompanyMapperSqlTest {
 
     /** 担保人、权益人下拉均应查询当前证券的四类关系主体。 */
     @Test
-    public void relatedSubjectQueryShouldUseFourRelationTypesForAllBonds() throws Exception {
+    public void relatedCompanyQueryShouldUseFourRelationTypesForAllBonds() throws Exception {
         String xml = readMapper();
-        String select = selectBlock(xml, "queryRelatedRatingSubjectList");
+        String select = selectBlock(xml, "queryRelatedRatingCompanyList");
 
         assertThat(select)
                 .contains("issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)")
@@ -37,7 +37,7 @@ public class SecurityPoolAdjustRelatedSubjectMapperSqlTest {
 
     /** 批量调库共用查询同样应对所有证券返回四类关系主体。 */
     @Test
-    public void commonRelatedSubjectQueryShouldUseFourRelationTypesForAllBonds() throws Exception {
+    public void commonRelatedCompanyQueryShouldUseFourRelationTypesForAllBonds() throws Exception {
         Path path = Paths.get("src", "main", "resources", "mapper", "CommonMapper.xml");
         String xml = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
         String select = selectBlock(xml, "queryGuarantorGradeList");

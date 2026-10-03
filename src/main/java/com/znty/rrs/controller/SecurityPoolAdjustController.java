@@ -18,7 +18,7 @@ import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import com.znty.rrs.entity.securitypooladjust.IssuerFinancialSaveReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolStatusDto;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
-import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderReq;
 import com.znty.rrs.service.SecurityPoolAdjustService;
@@ -100,10 +100,10 @@ public class SecurityPoolAdjustController {
     /**
      * 查询证券池调库页面担保人、权益人下拉共用的四类关系主体及其最新内评
      */
-    @PostMapping("/queryRelatedRatingSubjectList")
-    public ApiResponse<List<RelatedRatingSubjectDto>> queryRelatedRatingSubjectList(
+    @PostMapping("/queryRelatedRatingCompanyList")
+    public ApiResponse<List<RelatedRatingCompanyDto>> queryRelatedRatingCompanyList(
             @RequestBody SecurityPoolAdjustReq req) {
-        return ApiResponse.success(securityPoolAdjustService.queryRelatedRatingSubjectList(req));
+        return ApiResponse.success(securityPoolAdjustService.queryRelatedRatingCompanyList(req));
     }
 
     /**

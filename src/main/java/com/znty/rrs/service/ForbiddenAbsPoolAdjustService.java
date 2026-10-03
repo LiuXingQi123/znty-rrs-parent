@@ -939,7 +939,7 @@ public class ForbiddenAbsPoolAdjustService {
             throw new BizException("证券不存在");
         }
         // ABS 按证券池调库口径校验权益人，自选权益人优先
-        securityPoolAdjustService.applySelectedRatingSubject(securityInfo, null, req.getRightsHolderCode(),
+        securityPoolAdjustService.applySelectedRatingCompany(securityInfo, null, req.getRightsHolderCode(),
                 req.getSelfSelectedRightsHolderCode(), true);
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
@@ -1638,7 +1638,7 @@ public class ForbiddenAbsPoolAdjustService {
             throw new BizException("证券不存在");
         }
         // ABS 按证券池调库口径校验权益人，自选权益人优先
-        securityPoolAdjustService.applySelectedRatingSubject(securityInfo, null, req.getRightsHolderCode(),
+        securityPoolAdjustService.applySelectedRatingCompany(securityInfo, null, req.getRightsHolderCode(),
                 req.getSelfSelectedRightsHolderCode(), true);
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情

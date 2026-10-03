@@ -100,7 +100,7 @@
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `queryRelatedRatingSubjectList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115202000/115201000` 四类关系主体；主体内评左关联，无内评主体仍返回，内评字段为空；同一主体兼多类关系时按类型分别返回（例如既是原始权益人又是差额支付承诺人则占两行），仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
+| `queryRelatedRatingCompanyList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115202000/115201000` 四类关系主体；主体内评左关联，无内评主体仍返回，内评字段为空；同一主体兼多类关系时按类型分别返回（例如既是原始权益人又是差额支付承诺人则占两行），仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
 | `querySelfSelectedRightsHolderPage` | `{ companyCode, companyName, pageIndex, pageSize }` | ABS 自选权益人分页；从 `ais_inv_analysis.t_inv_company` 以 `wind_code` 查询全市场主体，编码/名称模糊查询，关联最新主体内评，名称使用 `full_name` 优先、`short_names` 兜底，默认每页 20 条，可切换 10/20/30/50 条 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode }` | 可调入池 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
@@ -311,6 +311,7 @@
 |------|------|
 | `addAdjustLog(req)` / `addAdjustLog(req, files)` | 单券页面与 Controller 入口：自建 `SubmissionFiles` 与 `new BatchNoContext()` 后转调 `submitAdjustLog` |
 | `submitAdjustLog(req, submissionFiles, batchNoContext)` | 实际五阶段落库；批量/存量整批共享附件与批次号时直接调用 |
+| `addExcelImportAdjustLogList(requests)` | Excel 导入内部调用，先检查整批已有在途流程，再按导入行复用提交步骤；各行可使用不同评级主体，并分别保存证券快照 |
 | `isDirectAdjustFlow(flowId, flowKey)` | 对外直通判断（解析流程后与内部 `isDirectFlow` 同口径），供批量整批预检 |
 | `recheckBeforeFinalApproval(logList)` | 直通/终审前锁池动态复核（容量、在池、限制等） |
 
@@ -368,7 +369,7 @@
 | `queryIssuerFinancialList` | securityCode | `List<IssuerFinancialDto>` | 四期报告，缺失期保留日期和空指标 |
 | `queryIssuerFinancialByReportDate` | securityCode, reportDate | `IssuerFinancialDto` | 精确查询指定报告期，不存在返回 null |
 | `saveIssuerFinancialList` | securityCode, records[{reportDate,...完整14项指标}] | `List<IssuerFinancialDto>` | 独立事务批量覆盖本次已修改报告期的完整指标 |
-| `queryRelatedRatingSubjectList` | securityCode | `List<RelatedRatingSubjectDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
+| `queryRelatedRatingCompanyList` | securityCode | `List<RelatedRatingCompanyDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
 | `querySelfSelectedRightsHolderPage` | companyCode?, companyName?, pageIndex, pageSize | `PageResult<SelfSelectedRightsHolderDto>` | 从 `ais_inv_analysis.t_inv_company` 分页查询自选权益人，关联最新内评 |
 | `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。排除 CRMW 后只保留投资品种包含债券的池及其上级。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。三个主体编码均由后端重查校验 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
@@ -474,7 +475,7 @@ ALTER TABLE `znty_rrs`.`rrs_securityinfo`
         COMMENT '标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定';
 ```
 
-详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingSubjectList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留，仅供简易流程按原始天数直接比较）；`date_exists_str` 证券期限（页面只读，同时供需要年口径的矩阵和白名单判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
+详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingCompanyList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留，仅供简易流程按原始天数直接比较）；`date_exists_str` 证券期限（页面只读，同时供需要年口径的矩阵和白名单判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
 

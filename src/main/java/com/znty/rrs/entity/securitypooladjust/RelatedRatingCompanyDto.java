@@ -9,7 +9,7 @@ import java.util.Date;
  * 证券池调库相关评级主体 DTO。
  */
 @Data
-public class RelatedRatingSubjectDto {
+public class RelatedRatingCompanyDto {
 
     /** 所属证券 Wind 代码 */
     private String securityCode;

@@ -25,6 +25,10 @@ public class SecurityPoolExcelImportCheckItemDto {
     private String securityType;
     /** 触发主代码（关联码项时=主券/主体代码） */
     private String sourceSecurityCode;
+    /** 来源导入行选择的权益人/担保人主体代码 */
+    private String ratingCompanyCode;
+    /** 来源导入行选择的权益人/担保人名称 */
+    private String ratingCompanyName;
     /** 目标池 ID */
     private Long targetPoolId;
     /** 目标池名称（前端列：投资池名称） */

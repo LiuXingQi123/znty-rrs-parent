@@ -60,6 +60,15 @@ public class SecurityPoolExcelImportController {
     }
 
     /**
+     * 修改证券导入明细的页面评级主体选择
+     */
+    @PostMapping("/editRatingCompany")
+    public ApiResponse<SecurityPoolExcelImportDto> editRatingCompany(@RequestBody SecurityPoolExcelImportReq req) {
+        // 保存同一证券各导入行的评级主体，并清除旧校验结果
+        return ApiResponse.success(securityPoolExcelImportService.editRatingCompany(req));
+    }
+
+    /**
      * 校验导入明细（证券/主体分支）
      */
     @PostMapping("/checkImport")

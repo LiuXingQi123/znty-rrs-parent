@@ -39,4 +39,10 @@ public class SecurityPoolExcelImportReq extends PageRequest {
     private String chkRslt;
     /** 证券代码关键字 */
     private String keyword;
+    /** 修改评级主体的导入明细 ID */
+    private Long itemId;
+    /** 页面选中的关联担保人或权益人代码，空字符串表示清除 */
+    private String relatedCompanyCode;
+    /** 页面选中的 ABS 自选权益人代码，空字符串表示清除 */
+    private String selfSelectedRightsHolderCode;
 }

@@ -783,11 +783,11 @@ public class CrmwPoolAdjustService {
             throw new BizException("调库对象不能是 CRMW 凭证");
         }
         // 按证券池调库口径校验并回填担保人 / 权益人 / 自选权益人
-        SecurityPoolAdjustService.SelectedRatingSubjectData selectedRatingSubject =
-                applySelectedRatingSubject(securityInfo, req.getGuarantorCode(),
+        SecurityPoolAdjustService.SelectedRatingCompanyData selectedRatingCompany =
+                applySelectedRatingCompany(securityInfo, req.getGuarantorCode(),
                         req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode(), true);
-        req.setAbsOriginatorName(selectedRatingSubject.getRightsHolderName());
-        req.setCompanySelector(selectedRatingSubject.getSelfSelectedRightsHolderName());
+        req.setAbsOriginatorName(selectedRatingCompany.getRightsHolderName());
+        req.setCompanySelector(selectedRatingCompany.getSelfSelectedRightsHolderName());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1631,7 +1631,7 @@ public class CrmwPoolAdjustService {
             throw new BizException("调库对象不能是 CRMW 凭证");
         }
         // 校验口径与证券池调库页面一致
-        applySelectedRatingSubject(securityInfo, req.getGuarantorCode(),
+        applySelectedRatingCompany(securityInfo, req.getGuarantorCode(),
                 req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode(), true);
         SecurityInfoBo crmwInfo = crmwPoolAdjustMapper.querySecurityBoByCode(req.getCrmwScode());
         if (crmwInfo == null || !CRMW_SECURITY_TYPE.equals(crmwInfo.getSecurityType())) {
@@ -1693,10 +1693,10 @@ public class CrmwPoolAdjustService {
     }
 
     /** 复用证券池调库的评级主体校验与回填逻辑。 */
-    private SecurityPoolAdjustService.SelectedRatingSubjectData applySelectedRatingSubject(
+    private SecurityPoolAdjustService.SelectedRatingCompanyData applySelectedRatingCompany(
             SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
             String selfSelectedRightsHolderCode, boolean requireAbsSelection) {
-        return securityPoolAdjustService.applySelectedRatingSubject(securityInfo, guarantorCode,
+        return securityPoolAdjustService.applySelectedRatingCompany(securityInfo, guarantorCode,
                 rightsHolderCode, selfSelectedRightsHolderCode, requireAbsSelection);
     }
 

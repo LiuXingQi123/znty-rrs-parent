@@ -9,7 +9,7 @@ import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
-import com.znty.rrs.entity.securitypooladjust.RelatedRatingSubjectDto;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -81,7 +81,7 @@ public class SecurityPoolExcelImportServiceTest {
         SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP1");
         batch.setSaveRslt("1");
-        when(importMapper.queryByImpId("IMP1")).thenReturn(batch);
+        when(importMapper.queryBatchByImpId("IMP1")).thenReturn(batch);
 
         SecurityPoolExcelImportReq req = new SecurityPoolExcelImportReq();
         req.setImpId("IMP1");
@@ -102,7 +102,7 @@ public class SecurityPoolExcelImportServiceTest {
         batch.setFailCount(1);
         batch.setSaveRslt("0");
         batch.setResultJson(null);
-        when(importMapper.queryByImpId("IMP2")).thenReturn(batch);
+        when(importMapper.queryBatchByImpId("IMP2")).thenReturn(batch);
 
         SecurityPoolExcelImportReq req = new SecurityPoolExcelImportReq();
         req.setImpId("IMP2");
@@ -125,7 +125,7 @@ public class SecurityPoolExcelImportServiceTest {
         batch.setOpterId("1");
         batch.setOptionJson("{\"clearTarget\":false,\"allowLinkMutex\":false,\"importType\":\"security\"}");
         batch.setBizType("security_pool_excel");
-        when(importMapper.queryByImpId("IMP3")).thenReturn(batch);
+        when(importMapper.queryBatchByImpId("IMP3")).thenReturn(batch);
 
         SysImpTmpDetlBo item = new SysImpTmpDetlBo();
         item.setId(10L);
@@ -137,7 +137,7 @@ public class SecurityPoolExcelImportServiceTest {
         item.setChkRslt("0");
         List<SysImpTmpDetlBo> items = new ArrayList<>();
         items.add(item);
-        when(importMapper.queryAllByImpId("IMP3")).thenReturn(items);
+        when(importMapper.queryBatchItemList("IMP3")).thenReturn(items);
 
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(5L);
@@ -165,7 +165,7 @@ public class SecurityPoolExcelImportServiceTest {
         checkDto.setItems(Collections.singletonList(ri));
         when(securityPoolAdjustService.checkAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
 
-        when(importMapper.countByChkRslt(eq("IMP3"), eq("0"))).thenReturn(0);
+        when(importMapper.queryItemCountByCheckResult(eq("IMP3"), eq("0"))).thenReturn(0);
         batch.setPassCount(1);
         batch.setFailCount(0);
         batch.setChkRslt("1");
@@ -176,29 +176,29 @@ public class SecurityPoolExcelImportServiceTest {
         req.setCurrentUserId("1");
         req.setPageIndex(1);
         req.setPageSize(20);
-        when(importMapper.queryItemList(anyString(), any(), any()))
+        when(importMapper.queryItemPage(anyString(), any(), any()))
                 .thenReturn(Collections.<SysImpTmpDetlBo>emptyList());
 
         SecurityPoolExcelImportDto dto = service.checkImport(req);
         assertNotNull(dto);
         verify(securityPoolAdjustService).checkAdjust(any(AdjustCheckReq.class));
-        verify(importMapper).updateItemCheckResult(any(SysImpTmpDetlBo.class));
-        verify(importMapper).updateBatchCheckResult(any(SysImpTmpBo.class));
+        verify(importMapper).editItemCheckResult(any(SysImpTmpDetlBo.class));
+        verify(importMapper).editBatchCheckResult(any(SysImpTmpBo.class));
         verify(forbiddenPoolAdjustService, never()).checkCompanyAdjust(any());
     }
 
     /** Excel 导入应按证券类型默认选择首个关联评级主体。 */
     @Test
-    public void applyDefaultRatingSubject_ShouldFillAbsRightsHolderAndNonAbsGuarantor() {
+    public void applyDefaultRatingCompany_ShouldFillAbsRightsHolderAndNonAbsGuarantor() {
         SecurityInfoBo absSecurity = new SecurityInfoBo();
         absSecurity.setAbsFlag(1);
         when(securityPoolAdjustMapper.querySecurityBoByCode("ABS001.IB")).thenReturn(absSecurity);
-        when(securityPoolAdjustMapper.queryRelatedRatingSubjectList("ABS001.IB"))
-                .thenReturn(buildRelatedSubjects("RIGHTS_FIRST", "RIGHTS_SECOND"));
+        when(securityPoolAdjustMapper.queryRelatedRatingCompanyList("ABS001.IB"))
+                .thenReturn(buildRelatedCompanies("RIGHTS_FIRST", "RIGHTS_SECOND"));
 
         AdjustCheckReq absReq = new AdjustCheckReq();
         absReq.setSecurityCode("ABS001.IB");
-        ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingSubject", absReq);
+        ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingCompany", absReq);
 
         assertEquals("RIGHTS_FIRST", absReq.getRightsHolderCode());
         assertEquals(null, absReq.getGuarantorCode());
@@ -206,32 +206,32 @@ public class SecurityPoolExcelImportServiceTest {
         SecurityInfoBo normalSecurity = new SecurityInfoBo();
         normalSecurity.setAbsFlag(0);
         when(securityPoolAdjustMapper.querySecurityBoByCode("BOND001.IB")).thenReturn(normalSecurity);
-        when(securityPoolAdjustMapper.queryRelatedRatingSubjectList("BOND001.IB"))
-                .thenReturn(buildRelatedSubjects("GUARANTOR_FIRST", "GUARANTOR_SECOND"));
+        when(securityPoolAdjustMapper.queryRelatedRatingCompanyList("BOND001.IB"))
+                .thenReturn(buildRelatedCompanies("GUARANTOR_FIRST", "GUARANTOR_SECOND"));
 
         SecurityPoolAdjustSubmitReq normalReq = new SecurityPoolAdjustSubmitReq();
         normalReq.setSecurityCode("BOND001.IB");
-        ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingSubject", normalReq);
+        ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingCompany", normalReq);
 
         assertEquals("GUARANTOR_FIRST", normalReq.getGuarantorCode());
         assertEquals(null, normalReq.getRightsHolderCode());
     }
 
     /** 构造已按关联主体接口顺序返回的测试数据。 */
-    private List<RelatedRatingSubjectDto> buildRelatedSubjects(String firstCode, String secondCode) {
-        RelatedRatingSubjectDto first = new RelatedRatingSubjectDto();
+    private List<RelatedRatingCompanyDto> buildRelatedCompanies(String firstCode, String secondCode) {
+        RelatedRatingCompanyDto first = new RelatedRatingCompanyDto();
         first.setCompanyCode(firstCode);
-        RelatedRatingSubjectDto second = new RelatedRatingSubjectDto();
+        RelatedRatingCompanyDto second = new RelatedRatingCompanyDto();
         second.setCompanyCode(secondCode);
-        List<RelatedRatingSubjectDto> subjects = new ArrayList<>();
-        subjects.add(first);
-        subjects.add(second);
-        return subjects;
+        List<RelatedRatingCompanyDto> companies = new ArrayList<>();
+        companies.add(first);
+        companies.add(second);
+        return companies;
     }
 
     @Test
     public void queryTask_NotFound_Throws() {
-        when(importMapper.queryByImpId("NOPE")).thenReturn(null);
+        when(importMapper.queryBatchByImpId("NOPE")).thenReturn(null);
         SecurityPoolExcelImportReq req = new SecurityPoolExcelImportReq();
         req.setImpId("NOPE");
         try {

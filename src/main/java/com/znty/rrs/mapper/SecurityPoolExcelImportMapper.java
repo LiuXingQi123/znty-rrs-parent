@@ -7,6 +7,7 @@ import com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -21,22 +22,25 @@ public interface SecurityPoolExcelImportMapper {
     /**
      * 新增导入批次
      */
-    int insertBatch(SysImpTmpBo bo);
+    int addBatch(SysImpTmpBo bo);
 
     /**
      * 按业务批次号查询有效批次
      */
-    SysImpTmpBo queryByImpId(@Param("impId") String impId);
+    SysImpTmpBo queryBatchByImpId(@Param("impId") String impId);
+
+    /** 锁定导入批次，串行处理主体修改、校验、提交和取消 */
+    Long queryBatchIdForUpdate(@Param("impId") String impId);
 
     /**
      * 更新批次校验结果与计数
      */
-    int updateBatchCheckResult(SysImpTmpBo bo);
+    int editBatchCheckResult(SysImpTmpBo bo);
 
     /**
      * 更新批次保存结果
      */
-    int updateBatchSaveResult(SysImpTmpBo bo);
+    int editBatchSaveResult(SysImpTmpBo bo);
 
     /**
      * 逻辑删除批次
@@ -48,29 +52,38 @@ public interface SecurityPoolExcelImportMapper {
     /**
      * 批量新增明细
      */
-    int insertItemList(@Param("list") List<SysImpTmpDetlBo> list);
+    int addItemList(@Param("list") List<SysImpTmpDetlBo> list);
 
     /**
-     * 按条件查询明细列表（配合 PageHelper）
+     * 分页查询导入明细（配合 PageHelper）
      */
-    List<SysImpTmpDetlBo> queryItemList(@Param("impId") String impId,
+    List<SysImpTmpDetlBo> queryItemPage(@Param("impId") String impId,
                                         @Param("chkRslt") String chkRslt,
                                         @Param("keyword") String keyword);
 
     /**
      * 查询批次下全部有效明细
      */
-    List<SysImpTmpDetlBo> queryAllByImpId(@Param("impId") String impId);
+    List<SysImpTmpDetlBo> queryBatchItemList(@Param("impId") String impId);
+
+    /** 按明细 ID 查询本批有效导入行 */
+    SysImpTmpDetlBo queryItemById(@Param("impId") String impId, @Param("itemId") Long itemId);
 
     /**
      * 更新单条明细校验结果
      */
-    int updateItemCheckResult(SysImpTmpDetlBo bo);
+    int editItemCheckResult(SysImpTmpDetlBo bo);
+
+    /** 更新当前导入行的关联主体和 ABS 自选权益人 */
+    int editRatingCompany(SysImpTmpDetlBo bo);
+
+    /** 主体选择变更后清空本批全部行的旧校验结果 */
+    int editItemCheckResultByImpId(@Param("impId") String impId, @Param("updtTime") Date updtTime);
 
     /**
      * 更新单条明细保存结果
      */
-    int updateItemSaveResult(SysImpTmpDetlBo bo);
+    int editItemSaveResult(SysImpTmpDetlBo bo);
 
     /**
      * 逻辑删除批次下全部明细
@@ -80,7 +93,7 @@ public interface SecurityPoolExcelImportMapper {
     /**
      * 统计指定校验结果数量
      */
-    int countByChkRslt(@Param("impId") String impId, @Param("chkRslt") String chkRslt);
+    int queryItemCountByCheckResult(@Param("impId") String impId, @Param("chkRslt") String chkRslt);
 
     // ─────────── 目标池 ───────────
 
