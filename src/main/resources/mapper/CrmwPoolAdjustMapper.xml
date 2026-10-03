@@ -840,6 +840,30 @@
         ORDER BY id ASC
     </select>
 
+    <!-- 更新驳回待修改批次的调整原因和意见，未传字段保持原值 -->
+    <update id="editAdjustLogReasonAdvice">
+        UPDATE ip_adjust_log
+        SET updt_time = NOW()
+        <if test="adjustReason != null">
+           ,adjust_reason = #{adjustReason}
+        </if>
+        <if test="adjustAdvice != null">
+           ,adjust_advice = #{adjustAdvice}
+        </if>
+        <where>
+            is_deleted = 0
+            AND audit_status = '11'
+            <choose>
+                <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                    AND adjust_batch_no = #{adjustBatchNo}
+                </when>
+                <otherwise>
+                    AND id = #{adjustLogId}
+                </otherwise>
+            </choose>
+        </where>
+    </update>
+
     <!-- 更新指定批次或调库记录的审核状态 -->
     <update id="editAdjustLogAuditStatus">
         UPDATE ip_adjust_log

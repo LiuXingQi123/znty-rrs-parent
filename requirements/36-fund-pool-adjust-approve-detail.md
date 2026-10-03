@@ -29,6 +29,8 @@
 
 审核请求字段：`adjustLogId`、`adjustBatchNo`、`stepId`、`processAction`（`approve` / `reject`）、`processComment`、`handlerId`、`handlerName`。
 
+审核请求还支持可选的 `adjustReason` / `adjustAdvice`：仅驳回待修改（`11`）且当前用户有 `pending` 的 `initiator` 待办时可编辑，重新提交 `approve` 时发送，终止流程不发送。后端根据流程的 `resubmit` 路由确认修改节点，校验同批全部日志为 `11`、当前用户为原发起人或管理员，仅更新当前待办所属批次的 `ip_adjust_log_fund`。未传字段保持原值，空字符串允许清空，每项最多 1000 字，核对条件更新数量；文本保存与步骤流转处于同一事务，失败整体回滚。
+
 ## 状态与落库
 
 - 审核步骤写入 `ip_adjust_step_fund`，日志状态写入 `ip_adjust_log_fund`。

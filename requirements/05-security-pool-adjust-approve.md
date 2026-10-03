@@ -175,6 +175,8 @@
 
 ### 2.6 submitAdjustAudit 方法
 
+原因和建议从当前活跃流程记录优先回填，避免全部历史记录的首条覆盖当前批次。仅在 process 模式、当前记录为 `auditStatus='11'`、且当前用户有 `pending` 的 `initiator` 待办时可编辑；重新提交 `approve` 时携带 `adjustReason` / `adjustAdvice`，终止流程不携带。
+
 1. 防重入检查 `auditSubmitLoading`
 2. 若 `currentPendingStep` 为空提示「暂无需要当前用户处理的流程步骤」
 3. 若 `auditAction==='reject'` 且意见为空，提示「驳回时处理意见不能为空」（修改节点显示「终止流程时处理意见不能为空」）
@@ -206,6 +208,8 @@
 | `processComment` | String | 处理意见，reject 时必填 |
 | `handlerId` | String | 当前处理人 ID |
 | `handlerName` | String | 当前处理人名称 |
+| `adjustReason` | String | 修改节点重新提交的调整原因；null/未传保持原值，空字符串清空 |
+| `adjustAdvice` | String | 修改节点重新提交的调整意见；null/未传保持原值，空字符串清空 |
 | `attachmentChanges` | List<AttachmentChange> | 修改节点提交时携带的附件变更 |
 
 `AttachmentChange` 子结构：`adjustLogId / creditReportFileIndexes / materialFileIndexes / creditReportSourceAttachmentIds / materialSourceAttachmentIds / deleteAttachmentIds`。
@@ -245,6 +249,8 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 5. `validateSubmitterCannotProcess`：管理员、发起/修改语义节点跳过；否则查同批次所有调库记录，若当前处理人 ID 等于任一记录的 `adjusterId`，抛「发起人不能参与后续流程操作」。
 
 #### 阶段 2：修改节点附件变更（仅 modify 节点 approve）
+
+附件处理前执行 `applyReasonAdviceChangesForModifySubmit`：仅 `approve && isModifyStep(step)` 且当前待办所属批次全部日志为 `11` 时允许保存原因/意见，普通用户必须为原发起人，管理员沿用代办权限。按待办的批次号/日志 ID 更新 `ip_adjust_log.adjust_reason/adjust_advice`，不使用请求中的批次扩大范围；未传字段保持原值，空字符串允许清空，每项最多 1000 字；条件更新数量须等于同批日志数。文本、附件与步骤流转同一事务，失败整体回滚，不落池状态。
 
 `applyAttachmentChangesForModifySubmit`：
 - 仅当 `processAction==='approve'` 且 `isModifyStep(step)` 才允许附件变更（否则抛「仅驳回待修改提交时允许修改附件」）。

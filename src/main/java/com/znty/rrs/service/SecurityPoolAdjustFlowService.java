@@ -132,6 +132,9 @@ public class SecurityPoolAdjustFlowService {
         // 校验发起人不能参与后续流程操作
         validateSubmitterCannotProcess(req, step);
 
+        // 驳回待修改重新提交时保存本批次的调整原因和意见
+        applyReasonAdviceChangesForModifySubmit(req, step);
+
         List<String> originalFileNameList =
                 sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
         // 驳回待修改提交时保存调库记录附件变更
@@ -217,6 +220,46 @@ public class SecurityPoolAdjustFlowService {
             if (log != null && req.getHandlerId().equals(log.getAdjusterId())) {
                 throw new BizException("发起人不能参与后续流程操作");
             }
+        }
+    }
+
+    /**
+     * 驳回待修改重新提交时，保存当前步骤所属批次的调整原因和意见。
+     *
+     * @param req 审批请求，未传的文本字段保持原值
+     * @param step 已校验权限的待处理步骤
+     */
+    private void applyReasonAdviceChangesForModifySubmit(SecurityPoolAdjustAuditReq req, IpAdjustStepBo step) {
+        if (req.getAdjustReason() == null && req.getAdjustAdvice() == null) {
+            return;
+        }
+        // 通过流程语义校验当前操作属于修改后的重新提交
+        if (!ProcessAction.APPROVE.getCode().equals(req.getProcessAction()) || !isModifyStep(step)) {
+            throw new BizException("仅驳回待修改提交时允许修改调整原因和意见");
+        }
+        if ((req.getAdjustReason() != null && req.getAdjustReason().length() > 1000)
+                || (req.getAdjustAdvice() != null && req.getAdjustAdvice().length() > 1000)) {
+            throw new BizException("调整原因和意见均不能超过1000字");
+        }
+        List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogListForAudit(
+                step.getAdjustLogId(), step.getAdjustBatchNo());
+        if (logs.isEmpty()) {
+            throw new BizException("当前调库批次记录不存在");
+        }
+        for (IpAdjustLogBo log : logs) {
+            if (!AuditStatus.REJECT_MODIFY.getCode().equals(log.getAuditStatus())) {
+                throw new BizException("调库记录不处于驳回待修改状态，调库记录 ID：" + log.getId());
+            }
+            // 普通处理人必须是当前批次的原发起人，管理员沿用代办权限
+            if (!isAdminOperator(req) && (!hasText(req.getHandlerId())
+                    || !req.getHandlerId().equals(log.getAdjusterId()))) {
+                throw new BizException("仅发起人可修改调整原因和意见，调库记录 ID：" + log.getId());
+            }
+        }
+        int updated = securityPoolAdjustMapper.editAdjustLogReasonAdvice(
+                step.getAdjustLogId(), step.getAdjustBatchNo(), req.getAdjustReason(), req.getAdjustAdvice());
+        if (updated != logs.size()) {
+            throw new BizException("调库申请状态已发生变化，请刷新后重试");
         }
     }
 

@@ -57,6 +57,8 @@
 5. `validateSubmitterCannotProcess`：管理员、发起/修改语义节点跳过；否则查同批次所有调库记录，若 `handlerId` 等于任一记录 `adjusterId`→`"发起人不能参与后续流程操作"`。
 
 **阶段2 修改节点附件变更**（`applyAttachmentChangesForModifySubmit`）
+附件处理前执行 `applyReasonAdviceChangesForModifySubmit` 保存可选的 `adjustReason` / `adjustAdvice`：校验 `approve`、修改节点路由、当前待办所属批次全部日志为 `11`、当前用户为原发起人或管理员；只更新待办所属批次的 `ip_adjust_log`，未传字段保持原值，空字符串允许清空，每项最多 1000 字，并核对更新数量。文本、附件与步骤流转同一事务，失败整体回滚，不修改 CRMW 当前池状态。
+
 - 仅 `processAction==='approve'` 且 `isModifyStep(step)` 才允许（否则`"仅驳回待修改提交时允许修改附件"`）。
 - 校验每条 `AttachmentChange.adjustLogId` 属于当前批次。
 - `deleteAdjustLogAttachments` / `bindAttachments`（credit_report_hand/material_hand）/ `copyReportAttachments`。
@@ -94,6 +96,7 @@
 
 ### 3.2 前端提交逻辑
 
+- 原因和建议优先从当前活跃流程记录回填；仅 process 模式、记录为 `11` 且当前用户有 `pending` 的 `initiator` 待办时可编辑。重新提交 `approve` 时 payload 携带 `adjustReason` / `adjustAdvice`，终止流程不携带；JSON 与 multipart 的 `request` 都支持这两个可选字段。
 - `isModifyAuditStage`：`activeLog.auditStatus === '11'` 或 当前 pending 步骤 `nodeLabel` 含「修改」。
 - `approveActionLabel`：修改节点显示「提交」，其他显示「通过」。
 - `rejectActionLabel`：修改节点显示「终止流程」，其他显示「驳回」。
@@ -105,7 +108,7 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `crmwPoolAdjustFlow/submitAdjustAudit`（application/json） | `CrmwPoolAdjustAuditReq`：stepId, adjustLogId, adjustBatchNo, processAction(approve\|reject), processComment, handlerId, handlerName, attachmentChanges? | `CrmwPoolAdjustAuditDto` | 提交审批处理意见（无附件变更） |
+| `crmwPoolAdjustFlow/submitAdjustAudit`（application/json） | `CrmwPoolAdjustAuditReq`：stepId, adjustLogId, adjustBatchNo, processAction(approve\|reject), processComment, handlerId, handlerName, adjustReason?, adjustAdvice?, attachmentChanges? | `CrmwPoolAdjustAuditDto` | 提交审批处理意见（无附件变更） |
 | `crmwPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `CrmwPoolAdjustAuditDto` | 修改节点提交时同时上传附件变更 |
 
 > 上下文查询接口（`querySecurityDetail`/`queryCrmwDetail`/`queryCrmwAdjustPoolList`/`queryCrmwPoolStatus`/`queryCrmwAdjustLogList`/`queryCrmwAdjustStepList`）复用 `CrmwPoolAdjustController`，见 [19] 接口清单。

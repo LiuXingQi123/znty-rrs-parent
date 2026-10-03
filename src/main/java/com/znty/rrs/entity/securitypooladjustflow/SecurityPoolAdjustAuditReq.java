@@ -25,6 +25,12 @@ public class SecurityPoolAdjustAuditReq {
     /** 处理意见 */
     private String processComment;
 
+    /** 调整原因，仅驳回待修改重新提交时使用；null 表示不修改 */
+    private String adjustReason;
+
+    /** 调整意见，仅驳回待修改重新提交时使用；空字符串可清空 */
+    private String adjustAdvice;
+
     /** 当前处理人 ID */
     private String handlerId;
 

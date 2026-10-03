@@ -168,6 +168,12 @@ public interface CrmwPoolAdjustMapper {
     List<IpAdjustLogBo> queryAdjustLogListForAudit(@Param("adjustLogId") Long adjustLogId,
                                                    @Param("adjustBatchNo") String adjustBatchNo);
 
+    /** 更新驳回待修改批次的调整原因和意见，未传字段保持原值 */
+    int editAdjustLogReasonAdvice(@Param("adjustLogId") Long adjustLogId,
+                                  @Param("adjustBatchNo") String adjustBatchNo,
+                                  @Param("adjustReason") String adjustReason,
+                                  @Param("adjustAdvice") String adjustAdvice);
+
     /** 更新指定批次或调库记录的审核状态 */
     int editAdjustLogAuditStatus(@Param("adjustLogId") Long adjustLogId,
                                  @Param("adjustBatchNo") String adjustBatchNo,

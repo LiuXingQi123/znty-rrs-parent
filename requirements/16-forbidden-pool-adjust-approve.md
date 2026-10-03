@@ -56,6 +56,8 @@
 
 ### 3.3 `submitAdjustAudit` 前端方法
 
+原因和建议优先从当前活跃流程记录回填；仅 process 模式、记录为 `11` 且当前用户有 `pending` 的 `initiator` 待办时可编辑。重新提交 `approve` 时 payload 额外携带 `adjustReason` / `adjustAdvice`；终止流程不携带。
+
 1. 防重入 `auditSubmitLoading`。
 2. `currentPendingStep` 为空提示。
 3. `auditAction==='reject'` 且意见空提示（修改阶段「终止流程时处理意见不能为空」）。
@@ -78,6 +80,8 @@
 - `validateSubmitterCannotProcess`：管理员/发起-修改语义节点跳过；否则查同批次所有记录（`queryAdjustLogListForAudit`），若当前处理人 ID 等于任一记录 `adjusterId` 抛「发起人不能参与后续流程操作」。
 
 **阶段 2：修改节点附件变更** `applyAttachmentChangesForModifySubmit`：仅 `approve && isModifyStep` 允许（否则抛「仅驳回待修改提交时允许修改附件」）；校验每条 `AttachmentChange.adjustLogId` 属于当前批次；`deleteAdjustLogAttachments`/`bindAttachments`(credit_report_hand/material_hand)/`copyReportAttachments`。
+
+附件处理前执行 `applyReasonAdviceChangesForModifySubmit` 保存可选的 `adjustReason` / `adjustAdvice`：校验 `approve`、修改节点路由、同批日志全部为 `11`、当前用户为原发起人或管理员；按当前待办所属批次条件更新 `ip_adjust_log`，未传字段保持原值，空字符串允许清空，每项最多 1000 字，并核对更新数量。文本、附件与流转同一事务，失败整体回滚，不修改当前池状态。
 
 **阶段 3：处理当前步骤并推进** `processAdjustAudit`
 - `buildProcessComment`：管理员代办他人步骤追加「（由管理员操作）」。
@@ -132,7 +136,7 @@ finishAdjustBatch(step):
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `forbiddenPoolAdjustFlow/submitAdjustAudit`（application/json） | `SecurityPoolAdjustAuditReq`：stepId, adjustLogId, adjustBatchNo, processAction(approve\|reject), processComment, handlerId, handlerName, attachmentChanges? | `SecurityPoolAdjustAuditDto` | 提交审批处理意见（纯文本，复用 security-pool 请求/返回结构） |
+| `forbiddenPoolAdjustFlow/submitAdjustAudit`（application/json） | `SecurityPoolAdjustAuditReq`：stepId, adjustLogId, adjustBatchNo, processAction(approve\|reject), processComment, handlerId, handlerName, adjustReason?, adjustAdvice?, attachmentChanges? | `SecurityPoolAdjustAuditDto` | 提交审批处理意见（纯文本，复用 security-pool 请求/返回结构） |
 | `forbiddenPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `SecurityPoolAdjustAuditDto` | 修改节点提交时同时上传附件变更（multipart 入口；JSON 入口为 `submitAdjustAudit`） |
 | `forbiddenPoolAdjust/queryCompanyPage` | 同 [15] | `PageResult<ForbiddenPoolAdjustDto>` | 列表页主体检索 |
 | `forbiddenPoolAdjust/queryCompanyDetail` | companyCode | `ForbiddenPoolAdjustDto` | 主体详情 |

@@ -159,6 +159,18 @@ public interface FundPoolAdjustMapper {
                                  @Param("auditStatus") String auditStatus);
 
     /**
+     * 更新驳回待修改批次的调整原因和意见。
+     *
+     * @param adjustBatchNo 当前待办所属批次号
+     * @param adjustReason 调整原因，null 表示不修改
+     * @param adjustAdvice 调整意见，null 表示不修改
+     * @return 更新记录数
+     */
+    int editAdjustLogReasonAdvice(@Param("adjustBatchNo") String adjustBatchNo,
+                                  @Param("adjustReason") String adjustReason,
+                                  @Param("adjustAdvice") String adjustAdvice);
+
+    /**
      * 查询批次调整日志。
      *
      * @param adjustBatchNo 调库批次号

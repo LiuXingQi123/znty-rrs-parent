@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -34,6 +35,27 @@ import static org.mockito.Mockito.when;
 
 /** CrmwPoolAdjustFlowServiceTest 测试类。 */
 public class CrmwPoolAdjustFlowServiceTest {
+
+    /** 普通审批节点不得修改申请人的调整原因和意见。 */
+    @Test
+    public void submitAdjustAuditShouldRejectReasonAdviceChangesAtApprovalStep() {
+        CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
+        FlowMapper flowMapper = mock(FlowMapper.class);
+        // 构建审批服务与当前用户的正常审批待办
+        CrmwPoolAdjustFlowService service = buildService(mapper, flowMapper);
+        IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
+        CrmwPoolAdjustAuditReq req = buildReq(10L, "3", "研究员2", "同意");
+        req.setAdjustReason("审批人尝试修改原因");
+        when(mapper.queryAdjustStepById(10L)).thenReturn(step);
+        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001"))
+                .thenReturn(Collections.singletonList(buildLog("00", "2")));
+
+        assertThatThrownBy(() -> service.submitAdjustAudit(req))
+                .isInstanceOf(BizException.class)
+                .hasMessage("仅驳回待修改提交时允许修改调整原因和意见");
+        verify(mapper, never()).editAdjustLogReasonAdvice(any(), any(), any(), any());
+        verify(mapper, never()).editAdjustStepProcess(any(), any(), any(), any());
+    }
 
     /** 验证 submitAdjustAuditShouldUseAdminOwnPendingStepWhenAdminIsHandler 测试场景。 */
     @Test
@@ -298,6 +320,9 @@ public class CrmwPoolAdjustFlowServiceTest {
         step.setApprovalStrategy("initiator");
         // 构建发起人审批请求测试数据
         CrmwPoolAdjustAuditReq req = buildReq(10L, "2", "研究员1", "已修改");
+        req.setAdjustReason("补充后的调整原因");
+        req.setAdjustAdvice("");
+        when(mapper.editAdjustLogReasonAdvice(1L, "BATCH001", "补充后的调整原因", "")).thenReturn(1);
         when(mapper.queryAdjustStepById(10L)).thenReturn(step);
         when(mapper.editAdjustStepProcess(10L, "submit", "submit", "已修改")).thenReturn(1);
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
@@ -317,6 +342,8 @@ public class CrmwPoolAdjustFlowServiceTest {
         when(flowMapper.queryApprovalHandlerListByVersionId(1L)).thenReturn(Collections.emptyList());
 
         service.submitAdjustAudit(req);
+
+        verify(mapper).editAdjustLogReasonAdvice(1L, "BATCH001", "补充后的调整原因", "");
 
         verify(mapper).editAdjustStepProcess(10L, "submit", "submit", "已修改");
     }

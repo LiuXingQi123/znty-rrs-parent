@@ -74,8 +74,52 @@ public class FundPoolAdjustFlowService {
         if (currentNode == null) {
             throw new BizException("审批流程节点不存在");
         }
+        // 驳回待修改重新提交时保存本批次的调整原因和意见
+        applyReasonAdviceChangesForModifySubmit(req, step, snapshot, currentNode);
         // 处理当前步骤并按流程配置推进
         return processAdjustAudit(req, step, snapshot, currentNode);
+    }
+
+    /**
+     * 驳回待修改重新提交时，保存当前步骤所属批次的调整原因和意见。
+     *
+     * @param req 审批请求，未传的文本字段保持原值
+     * @param step 已校验权限的待处理步骤
+     * @param snapshot 当前流程版本快照
+     * @param currentNode 当前处理节点
+     */
+    private void applyReasonAdviceChangesForModifySubmit(FundPoolAdjustAuditReq req, FundAdjustStepBo step,
+                                                          FlowSnapshot snapshot, FlowNodeBo currentNode) {
+        if (req.getAdjustReason() == null && req.getAdjustAdvice() == null) {
+            return;
+        }
+        // 通过流程语义校验当前操作属于修改后的重新提交
+        if (!ProcessAction.APPROVE.getCode().equals(req.getProcessAction())
+                || !isModifyNode(snapshot, currentNode, snapshot.configMap.get(currentNode.getId()))) {
+            throw new BizException("仅驳回待修改提交时允许修改调整原因和意见");
+        }
+        if ((req.getAdjustReason() != null && req.getAdjustReason().length() > 1000)
+                || (req.getAdjustAdvice() != null && req.getAdjustAdvice().length() > 1000)) {
+            throw new BizException("调整原因和意见均不能超过1000字");
+        }
+        // 查询当前待办所属批次，避免请求中的批次号扩大修改范围
+        List<FundAdjustLogBo> logs = queryBatchLogs(step);
+        if (logs.isEmpty()) {
+            throw new BizException("当前调库批次记录不存在");
+        }
+        for (FundAdjustLogBo log : logs) {
+            if (!AuditStatus.REJECT_MODIFY.getCode().equals(log.getAuditStatus())) {
+                throw new BizException("调库记录不处于驳回待修改状态，调库记录 ID：" + log.getId());
+            }
+            if (!AdminUserIdUtil.isAdminUser(req.getHandlerId()) && !req.getHandlerId().equals(log.getAdjusterId())) {
+                throw new BizException("仅发起人可修改调整原因和意见，调库记录 ID：" + log.getId());
+            }
+        }
+        int updated = fundPoolAdjustMapper.editAdjustLogReasonAdvice(
+                step.getAdjustBatchNo(), req.getAdjustReason(), req.getAdjustAdvice());
+        if (updated != logs.size()) {
+            throw new BizException("调库申请状态已发生变化，请刷新后重试");
+        }
     }
 
     /**
