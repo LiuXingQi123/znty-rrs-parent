@@ -164,36 +164,38 @@
 3. 否则若当前用户是管理员（ID 为 `'1'` 或 `10000–10100`），返回第一条 pending
 4. 否则返回 null（页面显示「暂无需要当前用户处理的流程步骤」）
 
-### 2.5 通过 / 驳回 / 撤回 按钮
+### 2.5 通过 / 驳回 / 终止流程 按钮
 
-审核审批区按钮：
-- `el-radio-group v-model="auditAction"` 两个 radio button：`approve`（文案 `approveActionLabel`：修改节点显示「提交」、其他显示「通过」）和 `reject`（文案 `rejectActionLabel`：修改节点显示「终止流程」、其他显示「驳回」）
-- `el-input type="textarea" v-model="auditComment"` 处理意见
-- 提交按钮 `<el-button @click="submitAdjustAudit">`
+「审核审批」标题右侧同行显示「当前步骤：步骤名称」，复用「流程名称」的 `el-tag size="mini" type="info"` 标签样式（仅存在 `currentPendingStep` 时）；内容区全宽展示 `el-input type="textarea" v-model="auditComment"` 处理意见，去掉处理结果/审核结果单选项。底部操作栏保留导出 PDF、返回，并提供两个操作按钮：
+- 正向主按钮调用 `submitAdjustAudit('approve')`，文案 `approveActionLabel`：修改阶段「提交」，其他阶段「通过」。
+- 负向危险描边按钮调用 `submitAdjustAudit('reject')`，文案 `rejectActionLabel`：修改阶段「终止流程」，其他阶段「驳回」。
+- 驳回/终止流程要求处理意见且二次确认；取消确认不提交。处理期间两个操作按钮禁用，仅本次点击按钮显示 loading。
+- 评级联动改判池在可用场景下保留选择入口，仅正向按钮提交 `redirectPoolId`。
 
-> ⚠️ 页面**没有独立的「撤回」按钮**。「撤回」通过在修改节点（`auditStatus='11'`）上选择 `reject`（前端文案「终止流程」）实现，后端在 `isModifyNode + reject` 命中 `isTerminalByCurrentNode`，将日志置为 `99`（发起人已撤回）。
+修改阶段点击「终止流程」并确认后，后端在 `isModifyNode + reject` 命中 `isTerminalByCurrentNode`，将日志置为 `99`（发起人已撤回）。
 
 ### 2.6 submitAdjustAudit 方法
 
 原因和建议从当前活跃流程记录优先回填，避免全部历史记录的首条覆盖当前批次。仅在 process 模式、当前记录为 `auditStatus='11'`、且当前用户有 `pending` 的 `initiator` 待办时可编辑；重新提交 `approve` 时携带 `adjustReason` / `adjustAdvice`，终止流程不携带。
 
-1. 防重入检查 `auditSubmitLoading`
+1. 接收按钮传入的 `processAction`（仅 `approve/reject`），防重入检查 `auditSubmitLoading`
 2. 若 `currentPendingStep` 为空提示「暂无需要当前用户处理的流程步骤」
-3. 若 `auditAction==='reject'` 且意见为空，提示「驳回时处理意见不能为空」（修改节点显示「终止流程时处理意见不能为空」）
-4. 构造 payload：
+3. 若 `processAction==='reject'` 且意见为空，提示「驳回时处理意见不能为空」（修改节点显示「终止流程时处理意见不能为空」）
+4. 将本次按钮动作记入 `auditAction` 并进入 loading；负向操作先二次确认，取消或关闭确认框时不提交。
+5. 构造 payload：
    ```js
    {
      adjustLogId, adjustBatchNo,
      stepId: step.id,
-     processAction: this.auditAction,   // 'approve' | 'reject'
+     processAction,   // 按钮传入的 'approve' | 'reject'
      processComment: this.auditComment,
      handlerId: this.currentLoginUserId,
      handlerName: this.currentLoginUserName
    }
    ```
-5. 若 `shouldSubmitAuditAttachments()` 为 true（即 `isProcessMode && isModifyAuditStage && auditAction==='approve' && currentPendingStep`），调用 `buildAuditAttachmentChanges` 收集每条调库记录的 `creditReportFileIndexes/materialFileIndexes/creditReportSourceAttachmentIds/materialSourceAttachmentIds/deleteAttachmentIds`，组装为 `payload.attachmentChanges`，调 `submitAdjustAuditMultipart`：用 `FormData` 同时提交 `request`（JSON Blob）和 `files` 数组到 `POST /api/v1/securityPoolAdjustFlow/submitAdjustAuditWithFiles`（consumes=multipart/form-data，multipart 入口路径与 JSON 入口 `submitAdjustAudit` 不同）
-6. 否则直接调 `POST /api/v1/securityPoolAdjustFlow/submitAdjustAudit`（consumes=application/json）
-7. 成功后 `$message.success(result.message)`，重置 `auditAction='approve'`/`auditComment=''`，再次调 `loadDetailData(securityCode)` 刷新
+6. 若 `shouldSubmitAuditAttachments()` 为 true（即 `isProcessMode && isModifyAuditStage && auditAction==='approve' && currentPendingStep`），调用 `buildAuditAttachmentChanges` 收集每条调库记录的 `creditReportFileIndexes/materialFileIndexes/creditReportSourceAttachmentIds/materialSourceAttachmentIds/deleteAttachmentIds`，组装为 `payload.attachmentChanges`，调 `submitAdjustAuditMultipart`：用 `FormData` 同时提交 `request`（JSON Blob）和 `files` 数组到 `POST /api/v1/securityPoolAdjustFlow/submitAdjustAuditWithFiles`（consumes=multipart/form-data，multipart 入口路径与 JSON 入口 `submitAdjustAudit` 不同）
+7. 否则直接调 `POST /api/v1/securityPoolAdjustFlow/submitAdjustAudit`（consumes=application/json）
+8. 成功后 `$message.success(result.message)`，清空 `auditComment` 并刷新详情；`finally` 结束 loading、重置 `auditAction='approve'`。
 
 ### 2.7 请求 / 返回结构
 

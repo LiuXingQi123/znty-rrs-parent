@@ -49,22 +49,22 @@
 
 `activeAdjustLog.auditStatus === '11'` **或** `currentPendingStep.nodeLabel` 含「修改」。
 
-- `auditResultTitle`：修改阶段「处理结果」，否则「审核结果」。
+- 「审核审批」标题右侧同行显示「当前步骤：步骤名称」，复用「流程名称」的 `el-tag size="mini" type="info"` 标签样式（仅存在 `currentPendingStep` 时）；内容区全宽展示处理意见，去掉处理结果/审核结果单选项；操作方向由底部按钮直接决定。
 - `approveActionLabel`：修改阶段「提交」，否则「通过」。
 - `rejectActionLabel`：修改阶段「终止流程」，否则「驳回」。
-- `auditSubmitButtonText`：非修改阶段「提交」；修改阶段 reject→「终止流程」，approve→「提交」。
+- 正向主按钮调用 `submitAdjustAudit('approve')`，负向危险描边按钮调用 `submitAdjustAudit('reject')`；驳回/终止流程须填写意见并二次确认，取消确认不提交。处理期间两个操作按钮禁用，仅本次点击按钮显示 loading。
 
 ### 3.3 `submitAdjustAudit` 前端方法
 
 原因和建议优先从当前活跃流程记录回填；仅 process 模式、记录为 `11` 且当前用户有 `pending` 的 `initiator` 待办时可编辑。重新提交 `approve` 时 payload 额外携带 `adjustReason` / `adjustAdvice`；终止流程不携带。
 
-1. 防重入 `auditSubmitLoading`。
+1. 接收按钮传入的 `processAction`（仅 `approve/reject`），防重入 `auditSubmitLoading`。
 2. `currentPendingStep` 为空提示。
-3. `auditAction==='reject'` 且意见空提示（修改阶段「终止流程时处理意见不能为空」）。
-4. payload：`{ adjustLogId, adjustBatchNo, stepId: step.id, processAction: auditAction, processComment: auditComment, handlerId, handlerName }`。
+3. `processAction==='reject'` 且意见空提示（修改阶段「终止流程时处理意见不能为空」）；将本次按钮动作记入 `auditAction` 并进入 loading，负向操作先二次确认。
+4. payload：`{ adjustLogId, adjustBatchNo, stepId: step.id, processAction, processComment: auditComment, handlerId, handlerName }`。
 5. 若 `shouldSubmitAuditAttachments()`（`isProcessMode && isModifyAuditStage && auditAction==='approve' && currentPendingStep`）为 true，`buildAuditAttachmentChanges` 收集每条调库记录的 `{ adjustLogId, creditReportFileIndexes, materialFileIndexes, creditReportSourceAttachmentIds, materialSourceAttachmentIds, deleteAttachmentIds }` → `payload.attachmentChanges`，调 `submitAdjustAuditMultipart`（FormData：`request` JSON Blob + `files`）→ `POST /api/v1/forbiddenPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart）。
 6. 否则 `POST /api/v1/forbiddenPoolAdjustFlow/submitAdjustAudit`（JSON）。
-7. 成功 `$message.success(result.message)`，重置 `auditAction='approve'`/`auditComment=''`，`loadDetailData(companyCode)` 刷新。
+7. 成功 `$message.success(result.message)`，清空 `auditComment`，`loadDetailData(companyCode)` 刷新；`finally` 结束 loading、重置 `auditAction='approve'`。
 
 ### 3.4 后端 Controller
 

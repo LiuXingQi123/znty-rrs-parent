@@ -96,6 +96,8 @@
 
 ### 3.2 前端提交逻辑
 
+- 「审核审批」标题右侧同行显示「当前步骤：步骤名称」，复用「流程名称」的 `el-tag size="mini" type="info"` 标签样式（仅存在 `currentPendingStep` 时）；内容区全宽展示处理意见，去掉处理结果/审核结果单选项。底部正向主按钮调用 `submitAdjustAudit('approve')`，负向危险描边按钮调用 `submitAdjustAudit('reject')`；修改阶段为「提交/终止流程」，普通审核阶段为「通过/驳回」。
+- `submitAdjustAudit(processAction)` 接收并校验按钮传入的动作；驳回/终止流程须填写处理意见且二次确认，取消确认不提交。处理期间两个操作按钮禁用，仅本次点击按钮显示 loading；`finally` 结束 loading 并重置 `auditAction='approve'`。
 - 原因和建议优先从当前活跃流程记录回填；仅 process 模式、记录为 `11` 且当前用户有 `pending` 的 `initiator` 待办时可编辑。重新提交 `approve` 时 payload 携带 `adjustReason` / `adjustAdvice`，终止流程不携带；JSON 与 multipart 的 `request` 都支持这两个可选字段。
 - `isModifyAuditStage`：`activeLog.auditStatus === '11'` 或 当前 pending 步骤 `nodeLabel` 含「修改」。
 - `approveActionLabel`：修改节点显示「提交」，其他显示「通过」。
