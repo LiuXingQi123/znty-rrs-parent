@@ -410,7 +410,6 @@ public class CrmwPoolAdjustFlowServiceTest {
         CrmwPoolAdjustFlowService service = buildService(mapper, attachmentService);
         CrmwPoolAdjustService adjustService = (CrmwPoolAdjustService) ReflectionTestUtils.getField(
                 service, "crmwPoolAdjustService");
-        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         IpAdjustLogBo log = buildLog(1L, "00", "16");
@@ -418,7 +417,6 @@ public class CrmwPoolAdjustFlowServiceTest {
         log.setCrmwScode("CRMW24001.IB");
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
         when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
-        when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
 
@@ -434,7 +432,6 @@ public class CrmwPoolAdjustFlowServiceTest {
         CrmwPoolAdjustFlowService service = buildService(mapper, attachmentService);
         CrmwPoolAdjustService adjustService = (CrmwPoolAdjustService) ReflectionTestUtils.getField(
                 service, "crmwPoolAdjustService");
-        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         IpAdjustLogBo log = buildLog(1L, "00", "16");
@@ -447,7 +444,6 @@ public class CrmwPoolAdjustFlowServiceTest {
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
         when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
         when(mapper.deletePoolStatusSoft("100001", "CRMW24002.IB", "crmw", 22L)).thenReturn(1);
-        when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
 
@@ -472,7 +468,6 @@ public class CrmwPoolAdjustFlowServiceTest {
         ReflectionTestUtils.setField(service, "crmwPoolAdjustService", mock(CrmwPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
-        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         return service;
     }
@@ -484,7 +479,6 @@ public class CrmwPoolAdjustFlowServiceTest {
         ReflectionTestUtils.setField(service, "crmwPoolAdjustService", mock(CrmwPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
-        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         return service;
     }

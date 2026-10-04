@@ -286,6 +286,7 @@ public class SecurityPoolAdjustFlowServiceTest {
         FlowMapper flowMapper = mock(FlowMapper.class);
         // 构建流程审批服务实例测试数据
         SecurityPoolAdjustFlowService service = new SecurityPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
@@ -342,6 +343,7 @@ public class SecurityPoolAdjustFlowServiceTest {
     /** 构建流程审批服务实例测试数据。 */
     private SecurityPoolAdjustFlowService buildService(SecurityPoolAdjustMapper mapper, SysAttachmentService attachmentService) {
         SecurityPoolAdjustFlowService service = new SecurityPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "flowMapper", mock(FlowMapper.class));
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
@@ -351,6 +353,7 @@ public class SecurityPoolAdjustFlowServiceTest {
     /** 构建流程审批服务实例测试数据。 */
     private SecurityPoolAdjustFlowService buildService(SecurityPoolAdjustMapper mapper, FlowMapper flowMapper) {
         SecurityPoolAdjustFlowService service = new SecurityPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
@@ -602,7 +605,6 @@ public class SecurityPoolAdjustFlowServiceTest {
         SecurityPoolAdjustFlowService service = buildService(mapper, attachmentService);
         SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
-        ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
 
         IpAdjustStepBo step = buildPendingStep(10L, "1", "管理员");
         IpAdjustLogBo log = buildLog(1L, "00", "1");
@@ -616,8 +618,6 @@ public class SecurityPoolAdjustFlowServiceTest {
         redirectPool.setPoolName("一级库");
         when(securityPoolAdjustService.queryRedirectPoolOptions("S001")).thenReturn(Collections.singletonList(redirectPool));
         when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
-        // 无手工信评报告附件，跳过 generateInternalReportsOnFinish
-        when(attachmentService.queryHandCreditReportAttachments(1L)).thenReturn(Collections.emptyList());
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step, 20L);
 

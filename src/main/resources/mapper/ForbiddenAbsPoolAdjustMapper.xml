@@ -532,7 +532,7 @@
         LIMIT 1
     </select>
 
-    <!-- 调库日志下首个信评报告附件（内部库、外部库优先，再选手工信评附件） -->
+    <!-- 调库日志下首选信评报告附件（手工、内部库、外部库依次优先，同类附件按 ID 降序） -->
     <select id="queryFirstCreditReportAttachment" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
         SELECT id
                ,table_name
@@ -555,12 +555,12 @@
           AND is_deleted = 0
           AND attachment_category IN ('credit_report_in', 'credit_report_out', 'credit_report_hand')
         ORDER BY CASE attachment_category
-                     WHEN 'credit_report_in' THEN 1
-                     WHEN 'credit_report_out' THEN 2
                      WHEN 'credit_report_hand' THEN 3
-                     ELSE 9
-                 END ASC
-                 ,id ASC
+                     WHEN 'credit_report_in' THEN 2
+                     WHEN 'credit_report_out' THEN 1
+                     ELSE 0
+                 END DESC
+                 ,id DESC
         LIMIT 1
     </select>
 

@@ -71,6 +71,7 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
         InvestmentPoolService poolService = mock(InvestmentPoolService.class);
         ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
         ForbiddenPoolAdjustService adjustService = mock(ForbiddenPoolAdjustService.class);
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService", adjustService);
@@ -80,8 +81,6 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         when(mapper.queryAdjustLogListForAudit(10L, "COMPANY202606281001"))
                 .thenReturn(Collections.singletonList(companyLog));
         when(mapper.editActiveAdjustLogAuditStatus(10L, "COMPANY202606281001", "20")).thenReturn(1);
-        when(poolService.queryPoolFullNameMap()).thenReturn(Collections.<Long, String>emptyMap());
-        when(attachmentService.queryHandCreditReportAttachments(10L)).thenReturn(Collections.emptyList());
         IpAdjustStepBo step = new IpAdjustStepBo();
         step.setAdjustLogId(10L);
         step.setAdjustBatchNo("COMPANY202606281001");
@@ -180,6 +179,7 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
         InvestmentPoolService poolService = mock(InvestmentPoolService.class);
         ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
@@ -227,6 +227,7 @@ public class ForbiddenPoolAdjustFlowServiceTest {
     /** 构建流程审批服务实例测试数据。 */
     private ForbiddenPoolAdjustFlowService buildService(ForbiddenPoolAdjustMapper mapper, FlowMapper flowMapper) {
         ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService", mock(ForbiddenPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);

@@ -311,7 +311,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 3. 逐条按 `adjustMode` 处理：
    - `调入` → `addPoolStatus` 向 `ip_pool_status` 插入生效记录（audit_status='20'）。
    - `调出` → `deletePoolStatusSoft` 将 `ip_pool_status` 中该证券在该池的 `audit_status='20'` 记录 `is_deleted=1`。
-4. `generateInternalReportsOnFinish`：对每条调库记录查手工上传信评报告附件，若有则新建一条 `rrs_report_in` 内部报告记录并复制附件，标题格式「证券全称 + 调入/调出 + 投资池全路径 + 报告」。
+4. `ReportService.addInternalReportsOnFinish`：对每条调库记录查手工上传信评报告附件，若有则新建一条 `rrs_report_in` 内部报告记录并复制全部手工信评附件（`report_in`），标题格式「证券全称 + 调入/调出 + 投资池全路径 + 报告」，来源为 `data_source=uploaded`。正常审批与简易直通、初始步骤自动结束的落池记录共用此方法；与落池处于同一事务。
 
 ### 3.4 驳回 / 撤回对池状态的影响
 
@@ -502,7 +502,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 | 动作 | 是否影响 ip_pool_status | 说明 |
 |---|---|---|
 | 提交调库（非直通） | 否 | 仅写 ip_adjust_log + ip_adjust_step |
-| 提交调库（直通） | 是 | 同事务写 ip_pool_status（调入插入 / 调出软删除） |
+| 提交调库（直通） | 是 | 同事务写 ip_pool_status（调入插入 / 调出软删除）；有手工信评附件时生成内部报告及库附件 |
 | 复核通过 / 复核驳回 / 修改重新提交 | 否 | 仅更新 audit_status 与 step |
 | 审批通过（finishAdjustBatch） | 是 | 同事务写 ip_pool_status + 生成内部报告 |
 | 审批驳回 / 修改节点终止 | 否 | 流程结束，池状态保持原样 |

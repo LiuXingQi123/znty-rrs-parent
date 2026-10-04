@@ -2,6 +2,7 @@ package com.znty.rrs.mapper;
 
 import com.znty.rrs.entity.report.ReportDto;
 import com.znty.rrs.entity.bo.ReportInBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.report.ReportReq;
 import com.znty.rrs.entity.sysattachment.SysAttachmentDto;
 import org.apache.ibatis.annotations.Mapper;
@@ -34,6 +35,20 @@ public interface ReportMapper {
      * 按外部报告 ID 批量查询报告附件
      */
     List<SysAttachmentDto> queryOutReportAttachmentList(@Param("reportIds") List<Long> reportIds);
+
+    /**
+     * 查询报告生成所需的证券基础信息。
+     *
+     * @param securityCode 证券 Wind 代码（CRMW 使用标的证券代码）
+     */
+    SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
+
+    /**
+     * 查询报告类型映射所需的证券大类。
+     *
+     * @param securityType 证券类型代码
+     */
+    String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);
 
     /**
      * 新增内部报告记录，回填主键 ID

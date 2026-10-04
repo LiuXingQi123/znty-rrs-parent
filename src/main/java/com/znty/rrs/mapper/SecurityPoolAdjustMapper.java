@@ -169,7 +169,7 @@ public interface SecurityPoolAdjustMapper {
     Long queryLastInboundLogIdWithCreditReportByIssuer(@Param("securityCode") String securityCode);
 
     /**
-     * 查询调库日志下首个信评报告附件（优先内部/外部库复制件，再手工上传）
+     * 查询调库日志下首选信评报告附件（手工、内部库、外部库依次优先，同类附件按 ID 降序）
      */
     SysAttachmentBo queryFirstCreditReportAttachment(@Param("adjustLogId") Long adjustLogId);
 

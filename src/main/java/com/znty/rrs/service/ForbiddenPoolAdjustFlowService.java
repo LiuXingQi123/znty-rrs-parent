@@ -1,8 +1,6 @@
 package com.znty.rrs.service;
 
-import com.znty.rrs.common.enums.CategoryType;
 
-import com.znty.rrs.common.enums.ReportType;
 
 import com.znty.rrs.common.enums.HandlerType;
 
@@ -34,12 +32,9 @@ import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
-import com.znty.rrs.entity.bo.ReportInBo;
 import com.znty.rrs.entity.bo.RoleBo;
-import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjustflow.SecurityPoolAdjustAuditDto;
 import com.znty.rrs.entity.securitypooladjustflow.SecurityPoolAdjustAuditReq;
-import com.znty.rrs.entity.bo.SysAttachmentBo;
 import com.znty.rrs.entity.bo.UserBo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,7 +77,7 @@ public class ForbiddenPoolAdjustFlowService {
     @Resource
     private TempSecurityCodeMapper tempSecurityCodeMapper;
 
-    /** 投资池服务，用于查询投资池全路径名称 */
+    /** 投资池服务，用于校验目标池的报告限制 */
     @Resource
     private InvestmentPoolService investmentPoolService;
 
@@ -556,88 +551,7 @@ public class ForbiddenPoolAdjustFlowService {
         // 使用主体调库统一落池与旗下债券同步保护
         forbiddenPoolAdjustService.applyPoolStatusChanges(logList);
         // 审批通过结束后，将手工上传的信评报告沉淀为内部报告
-        generateInternalReportsOnFinish(logList);
-    }
-
-    /**
-     * 审批通过结束后，逐条调库记录将手工上传的信评报告附件沉淀为内部报告库记录。
-     * 每条调库记录生成 1 条 rrs_report_in，其下所有手工上传信评报告附件复制为该报告的 report_in 附件。
-     * 无手工上传信评报告附件的调库记录跳过。
-     *
-     * @param logList 同批次调库记录列表
-     */
-    private void generateInternalReportsOnFinish(List<IpAdjustLogBo> logList) {
-        if (logList == null || logList.isEmpty()) {
-            return;
-        }
-        // 整批只查一次投资池全路径映射
-        Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
-        for (IpAdjustLogBo log : logList) {
-            // 查询该调库记录下手工上传的信评报告附件
-            List<SysAttachmentBo> handAttachments = sysAttachmentService.queryHandCreditReportAttachments(log.getId());
-            if (handAttachments == null || handAttachments.isEmpty()) {
-                continue;
-            }
-            // 查询证券基础信息，取证券全称与主体编码
-            SecurityInfoBo securityInfo = forbiddenPoolAdjustMapper.querySecurityBoByCode(log.getSecurityCode());
-            // 查询证券所属大类，用于映射报告类型
-            String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(log.getSecurityType());
-            // 组装报告标题：证券全称 + 调入/调出 + 投资池全路径名称 + 报告
-            String securityFullName = securityInfo != null && securityInfo.getFullName() != null
-                    ? securityInfo.getFullName() : log.getSecurityShortName();
-            String poolFullName = poolFullNameMap.get(log.getTargetPoolId());
-            if (poolFullName == null || poolFullName.isEmpty()) {
-                poolFullName = log.getTargetPoolName();
-            }
-            String reportTitle = securityFullName + log.getAdjustMode() + poolFullName + "报告";
-            // 构建内部报告记录
-            ReportInBo reportInBo = new ReportInBo();
-            reportInBo.setAuthorName(log.getAdjusterName());
-            reportInBo.setReportTitle(reportTitle);
-            reportInBo.setReportType(resolveReportType(categoryType, log.getAdjustMode()));
-            reportInBo.setSecurityCode(log.getSecurityCode());
-            reportInBo.setCompanyCode(CategoryType.COMPANY.getCode().equals(categoryType)
-                    ? log.getSecurityCode() : (securityInfo != null ? securityInfo.getIssuerCode() : null));
-            reportInBo.setSecurityType(resolveReportSecurityType(categoryType));
-            reportInBo.setDataSource("uploaded");
-            // 写入内部报告并回填主键 ID
-            Long reportId = reportService.addInReport(reportInBo);
-            // 将手工上传信评报告附件复制为该内部报告的附件
-            sysAttachmentService.bindReportFileAttachments(reportId, handAttachments);
-        }
-    }
-
-    /**
-     * 根据证券大类与调入/调出方向映射内部报告类型。
-     *
-     * @param categoryType 证券大类（bond/fund/stock/company 等）
-     * @param adjustMode   调整方向（调入/调出）
-     */
-    private String resolveReportType(String categoryType, String adjustMode) {
-        boolean outbound = AdjustMode.OUT.getCode().equals(adjustMode);
-        if (CategoryType.BOND.getCode().equals(categoryType)) {
-            return outbound ? ReportType.BOND_OUT_REPORT.getCode() : ReportType.BOND_IN_REPORT.getCode();
-        }
-        if (CategoryType.FUND.getCode().equals(categoryType)) {
-            return outbound ? ReportType.FUND_OUT_REPORT.getCode() : ReportType.FUND_IN_REPORT.getCode();
-        }
-        if (CategoryType.STOCK.getCode().equals(categoryType)) {
-            return outbound ? ReportType.STOCK_OUT_REPORT.getCode() : ReportType.STOCK_IN_REPORT.getCode();
-        }
-        return ReportType.OTHER_REPORT.getCode();
-    }
-
-    /**
-     * 根据证券大类映射内部报告证券类型，未匹配归为其他。
-     *
-     * @param categoryType 证券大类（bond/fund/stock/company 等）
-     */
-    private String resolveReportSecurityType(String categoryType) {
-        if (CategoryType.BOND.getCode().equals(categoryType) || CategoryType.FUND.getCode().equals(categoryType)
-                || CategoryType.STOCK.getCode().equals(categoryType) || CategoryType.COMPANY.getCode().equals(categoryType)) {
-            return categoryType;
-        }
-        return "other";
+        reportService.addInternalReportsOnFinish(logList);
     }
 
     /**

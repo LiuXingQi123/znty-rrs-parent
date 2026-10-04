@@ -163,6 +163,10 @@ public class ForbiddenPoolAdjustService {
     @Resource
     private SysAttachmentService sysAttachmentService;
 
+    /** 报告库服务，用于调库完成后统一生成内部报告 */
+    @Resource
+    private ReportService reportService;
+
     /** 评级下调判定组件（主体/展望/担保人评级下调判断，查 wind_cbondissuerrating） */
     @Resource
     private RatingDowngradeChecker ratingDowngradeChecker;
@@ -2717,6 +2721,8 @@ public class ForbiddenPoolAdjustService {
         recheckBeforeFinalApproval(directApplyLogs);
         // 将主体和符合条件的旗下债券统一应用到当前池状态
         applyPoolStatusChanges(directApplyLogs);
+        // 直通落池成功后，将手工信评附件沉淀为内部报告
+        reportService.addInternalReportsOnFinish(directApplyLogs);
     }
 
     /**

@@ -116,12 +116,12 @@ finishAdjustBatch(step):
     if log.adjustMode == '调入': addPoolStatus(log)
     elif log.adjustMode == '调出': deletePoolStatusSoft(log.securityCode, log.targetPoolId)
     syncCompanyBonds(log)                       // ★ 债券禁止库或黑名单质押库：同步旗下有效债券
-  generateInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 rrs_report_in
+  ReportService.addInternalReportsOnFinish(logList)      // 手工信评报告附件沉淀为 rrs_report_in
 ```
 
 `syncCompanyBonds`（走 `applyPoolStatusChanges`）：目标池为债券禁止库15或黑名单质押库17且 `categoryType==='company'` 时触发；调入用 `queryCompanyInboundBondForAutoList`（未退市 + 未到期含当天 + 未在池 + bond 大类，含普通债、ABS、crmw），调出用 `queryCompanyOutboundBondForAutoList`（未退市 + 未到期含当天 + 当前在池）；仅排除 `security_status='D'`，`L`/`N`/`U` 均参与；`maturity_date` 按 `yyyyMMdd` 与 `DATE_FORMAT(CURDATE(), '%Y%m%d')` 比较；`buildCompanyBondAutoLog`（`adjustType='自动调整'`、`auditStatus='20'`）→ `addAdjustLog` → 调入 `addPoolStatus` / 调出 `deletePoolStatusSoft`。主体调入目标池后，再合并目标池的 `in_mutex` 与反向指向目标池的 `in_restrict` 配置，只将符合相同范围的债券从当前实际所在的关系池自动调出，并为每个实际调出的池生成一条 `adjustType='互斥调整'`、已通过的调出日志。主体调整15/23后重新判定17：任一条件成立则主体及旗下债在17保留或进入，三个条件全部不成立才调出17。
 
-`generateInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `rrs_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
+`ReportService.addInternalReportsOnFinish`：对每条调库记录查手工信评报告附件（`queryHandCreditReportAttachments`），有则新建 `rrs_report_in`（标题「证券全称+调入/调出+投资池全路径+报告」，`reportType` 按大类+方向映射 bond_in/out_report 等），复制附件。`companyCode` 字段在 `categoryType==='company'` 时取 `log.securityCode`（即主体代码）。
 
 ### 3.7 驳回/撤回对池状态影响
 
@@ -161,7 +161,7 @@ finishAdjustBatch(step):
 | `ip_adjust_step` | UPDATE（`editAdjustStepProcess` 乐观锁 / `editOtherPendingStepSkipped`）/ INSERT（`addAdjustStep` 创建下一步 pending / 终止分支 auto_process） | id, step_status, process_action, process_comment, process_time |
 | `ip_adjust_log` | UPDATE（`editAdjustLogAuditStatus` 按 adjustBatchNo 批量更新 `audit_status`+`audit_time`）；INSERT（旗下债券同步入/出禁止库及从互斥/受限池自动调出的记录） | adjust_batch_no, audit_status, adjust_type(自动调整/互斥调整), adjust_mode, target_pool_id |
 | `ip_pool_status` | INSERT（调入生效）/ UPDATE 软删（调出生效） | security_code, target_pool_id, pool_type, audit_status='20', is_deleted |
-| `rrs_report_in` | INSERT（`generateInternalReportsOnFinish` 审批通过后沉淀手工信评报告） | report_title, report_type, security_code, company_code, data_source='uploaded' |
+| `rrs_report_in` | INSERT（`ReportService.addInternalReportsOnFinish` 审批通过后沉淀手工信评报告） | report_title, report_type, security_code, company_code, data_source='uploaded' |
 | `wf_flow_*` | 只读（构建 FlowSnapshot） | 流程定义/版本/节点/连线/审批配置/处理人/角色 |
 | `sys_attachment` | 绑定/复制附件 | adjustLogId, attachment_category |
 
@@ -211,7 +211,7 @@ finishAdjustBatch(step):
 | Service | `SecurityPoolAdjustFlowService` | `ForbiddenPoolAdjustFlowService`（**完整复制** security-pool flow 逻辑，操作 `forbiddenPoolAdjustMapper`） |
 | 请求/返回实体 | `SecurityPoolAdjustAuditReq/Dto` | **直接复用** `SecurityPoolAdjustAuditReq/Dto`（无 forbidden 专属审批实体） |
 | 详情加载接口 | `querySecurityDetail`/`querySecurityPoolStatus`/`queryAdjustLogList` | `queryCompanyDetail`/`queryCompanyPoolStatus`/`queryAdjustLogList`（companyCode 维度） |
-| `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `generateInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后，目标池为**债券禁止库15或黑名单质押库17**时再 `syncCompanyBonds(log)`：`security_status!='D'` 且到期日为空或大于等于当天的旗下 bond 大类债券（含普通债、ABS、crmw）同步入库写 `adjust_type='自动调整'`；从互斥/受限池调出写 `adjust_type='互斥调整'`；17按主体三个条件统一判定 |
+| `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `ReportService.addInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后，目标池为**债券禁止库15或黑名单质押库17**时再 `syncCompanyBonds(log)`：`security_status!='D'` 且到期日为空或大于等于当天的旗下 bond 大类债券（含普通债、ABS、crmw）同步入库写 `adjust_type='自动调整'`；从互斥/受限池调出写 `adjust_type='互斥调整'`；17按主体三个条件统一判定 |
 | 前端入口参数 | `securityCode` | `companyCode` |
 | 审批策略/节点语义识别/管理员代办 | — | **完全相同**（管理员 ID 为 `'1'` 或 `10000–10100`） |
 
@@ -232,7 +232,8 @@ finishAdjustBatch(step):
 - 前端：`znty-rrs-ui/forbidden_pool_adjust_approve.html`（`initStandaloneReviewPage`、`restoreStandaloneAdjustDraft`、`currentPendingStep`、`isModifyAuditStage`、`submitAdjustAudit`、`submitAdjustAuditMultipart`、`buildAuditAttachmentChanges`、`flowStepSpanMethod`/`getFlowStepRowClass`）、`css/forbidden_pool_adjust_approve.css`
 - 前端待办入口：`znty-rrs-ui/pages/my_matters.html`（`openMatterPage`：`businessScene=forbiddenCompanyAdjust` 时拼 `companyCode` 等，工作台 `openDetailTab`；pending→`process`→approve.html，completed→`view`→detail.html）
 - Controller：`ForbiddenPoolAdjustFlowController.java`（`@RequestMapping("/api/v1/forbiddenPoolAdjustFlow")`，2 端点）
-- Service：`ForbiddenPoolAdjustFlowService.java`（`submitAdjustAudit`/`validateAuditReq`/`resolveActualProcessStep`/`validatePendingStep`/`validateSubmitterCannotProcess`/`applyAttachmentChangesForModifySubmit`/`processAdjustAudit`/`resolveProcessingNodeAuditStatus`/`advanceToNextAvailableStep`/`createTerminalEndStep`/`finishAdjustBatch`/`syncCompanyBonds`/`buildCompanyBondAutoLog`/`generateInternalReportsOnFinish`/`resolveReportType`/`buildFlowSnapshot`，复用 `AdminUserIdUtil`）
+- Service：`ForbiddenPoolAdjustFlowService.java`（`submitAdjustAudit`/`validateAuditReq`/`resolveActualProcessStep`/`validatePendingStep`/`validateSubmitterCannotProcess`/`applyAttachmentChangesForModifySubmit`/`processAdjustAudit`/`resolveProcessingNodeAuditStatus`/`advanceToNextAvailableStep`/`createTerminalEndStep`/`finishAdjustBatch`/`syncCompanyBonds`/`buildCompanyBondAutoLog`/`buildFlowSnapshot`，复用 `AdminUserIdUtil`）
+- 内部报告生成统一委托 `ReportService.addInternalReportsOnFinish`；正常终审、简易直通及初始步骤自动结束的记录均在落池成功后调用，与落池处于同一事务。每条有 `credit_report_hand` 的记录生成一份 `rrs_report_in`（`data_source=uploaded`），全部手工信评附件绑定为 `report_in`；其他材料及库引用附件不生成新报告。
 - Mapper：复用 `ForbiddenPoolAdjustMapper.java` / `.xml`（审批用 `queryAdjustStepById`/`editAdjustStepProcess`/`editOtherPendingStepSkipped`/`queryPendingStepCountByNode`/`queryAdjustLogListForAudit`/`editAdjustLogAuditStatus`/`addAdjustStep`/`addPoolStatus`/`deletePoolStatusSoft`/`queryCompanyBondForAutoList`/`querySecurityCurrentPoolIdList`/`querySecurityBoByCode`/`queryCategoryTypeBySecurityType`）
 - 复用实体：`entity/securitypooladjustflow/SecurityPoolAdjustAuditReq/Dto`、`entity/bo/`（`IpAdjustStepBo`/`IpAdjustLogBo`/`FlowSnapshot`/`FlowNodeBo`/`FlowEdgeBo`/`NodeApprovalConfigBo`/`NodeApprovalHandlerBo`/`SysAttachmentBo`/`ReportInBo`/`SecurityInfoBo`）
 - SQL：同 [15]（`rrs_external_import_schema.sql` + `rrs_security_pool_adjust_schema.sql` + `rrs_flow_definition_schema.sql`）

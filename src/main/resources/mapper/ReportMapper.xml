@@ -116,6 +116,22 @@
                  ,id ASC
     </select>
 
+    <!-- 查询报告生成所需的证券基础信息 -->
+    <select id="querySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT *
+        FROM rrs_securityinfo
+        WHERE wind_code = #{securityCode}
+    </select>
+
+    <!-- 查询报告类型映射所需的证券大类 -->
+    <select id="queryCategoryTypeBySecurityType" resultType="string">
+        SELECT category_type
+        FROM dict_security_type
+        WHERE security_type = #{securityType}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
     <!-- 新增内部报告记录 -->
     <insert id="addInReport" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO rrs_report_in (

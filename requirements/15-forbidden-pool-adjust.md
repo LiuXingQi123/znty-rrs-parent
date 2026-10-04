@@ -253,6 +253,7 @@ syncCompanyBondsOnDirect(companyLog):
 ### 6.2 流转条件（申请阶段）
 
 - 直通流程（无流程 或 `isDirectFlow`）→ `audit_status='20'`，直接写/删 `ip_pool_status` + `syncCompanyBondsOnDirect`。
+- **完成后的内部报告生成**：直通、无流程即时生效及初始步骤自动结束的记录，均在最终复核及落池成功后调用 `ReportService.addInternalReportsOnFinish`，与正常终审共用一套实现。每条有 `credit_report_hand` 的调库记录生成一份 `rrs_report_in`（`data_source=uploaded`），全部手工信评附件绑定为 `rrs_report_in + report_in`；其他材料及库引用附件不生成新报告。报告、附件与落池处于同一事务，失败整体回滚。 主体报告的 `companyCode` 取 `log.securityCode`；债券报告取证券发行主体代码。
 - 非直通流程 → `audit_status='00'`，`createInitialSteps` 创建 pending 步骤（展开处理人时排除本批次已出现的 `handler_id`，与 [04]/[05] 同构）；若初始即到 end 则升级 `'20'` 并落地 + 同步债券。
 
 后续审批推进见 [16-forbidden-pool-adjust-approve.md](16-forbidden-pool-adjust-approve.md)。

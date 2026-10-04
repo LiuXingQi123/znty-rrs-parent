@@ -202,6 +202,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
         ReflectionTestUtils.setField(securityPoolAdjustService, "sysAttachmentService", attachmentService);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
 
         when(mapper.queryEnabledLeafPoolCount(11L)).thenReturn(1);
@@ -265,6 +266,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
         ReflectionTestUtils.setField(securityPoolAdjustService, "sysAttachmentService", attachmentService);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
 
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);

@@ -157,6 +157,9 @@ public class SecurityPoolAdjustService {
     /** 系统附件业务服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+    /** 报告库服务，用于直通落池成功后统一生成内部报告 */
+    @Resource
+    private ReportService reportService;
     /** 白名单调入流程 Key */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
 
@@ -425,7 +428,7 @@ public class SecurityPoolAdjustService {
         if (adjustLogId == null) {
             return null;
         }
-        // 内部库、外部库信评附件优先，再选手工信评附件
+        // 优先手工信评附件，其次内部库、外部库，同类附件取 ID 最大的一份
         SysAttachmentBo logAttachment = securityPoolAdjustMapper.queryFirstCreditReportAttachment(adjustLogId);
         if (logAttachment == null || logAttachment.getFileName() == null || logAttachment.getFileName().isEmpty()) {
             return null;
@@ -3488,6 +3491,8 @@ public class SecurityPoolAdjustService {
         recheckBeforeFinalApproval(logList);
         // 将复核通过的直通调库日志统一应用到当前池状态
         applyPoolStatusChanges(logList);
+        // 直通完成后复用正常审批通过的内部报告生成逻辑
+        reportService.addInternalReportsOnFinish(logList);
     }
 
     /**

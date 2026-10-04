@@ -152,7 +152,7 @@
 - `openReportDialog(poolId, column)` 打开报告弹窗（column=`'credit'`/`'material'`）。
 - 弹窗含「内部报告」（`/api/v1/reports/queryInReportPage`）与「外部报告」（`/api/v1/reports/queryOutReportPage`）两个 Tab，支持按标题/证券编码/报告类型/撰写日期范围筛选 + 分页。
 - **打开弹窗时默认将当前证券编码（`bondDetail.windCode`）写入内/外报告筛选条件 `securityCode` 并自动查询**；用户仍可清空或改写后重新查询。
-- **选池阶段自动回填最近信评报告**：加载可调入/可调出库后调用 `POST /api/v1/securityPoolAdjust/queryLastCreditReport`。查数顺序为 **当前券 → 同主体**；条件为近 6 个月、审批通过、调入、日志挂有 `credit_report_in` / `credit_report_out` / `credit_report_hand` 信评附件，其他材料不参与回填。同一日志内保持内部库、外部库优先，再取手工信评附件；手工信评附件通过相同 `file_name` 反查 `rrs_report_in` 的 `report_in` 库附件，返回报告库附件 ID 供再次提交。选定历史记录后，若查不到有效报告或库附件则不回填，不再尝试更早记录。报告库分类仍为 `report_in`，原有/新增报告由 `data_source` 区分。仅预填到 **信用债大库下 1～5 级**（`pool_code` 常量写死：`credit_bond_level_1`…`credit_bond_level_5`，禁止库等不在名单内不回填）；**可删除**；不按当前目标池过滤历史。
+- **选池阶段自动回填最近信评报告**：加载可调入/可调出库后调用 `POST /api/v1/securityPoolAdjust/queryLastCreditReport`。查数顺序为 **当前券 → 同主体**；条件为近 6 个月、审批通过、调入、日志挂有 `credit_report_in` / `credit_report_out` / `credit_report_hand` 信评附件，其他材料不参与回填。同一日志内按手工信评附件、内部库、外部库的顺序选择，分别赋值 3/2/1 并使用 `CASE ... END DESC`，同类附件按 `id DESC` 取 ID 最大的一份；手工信评附件通过相同 `file_name` 反查 `rrs_report_in` 的 `report_in` 库附件，返回报告库附件 ID 供再次提交。选定历史记录后，若查不到有效报告或库附件则不回填，不再尝试更早记录。报告库分类仍为 `report_in`，原有/新增报告由 `data_source` 区分。仅预填到 **信用债大库下 1～5 级**（`pool_code` 常量写死：`credit_bond_level_1`…`credit_bond_level_5`，禁止库等不在名单内不回填）；**可删除**；不按当前目标池过滤历史。
 - `el-upload` `auto-upload=false` 仅在前端暂存 File 对象到 `attachmentFiles[poolId]` / `materialFiles[poolId]`。
 - `handleConfirmReportDialog` 把选中报告写入 `creditReportSelections[poolId]` / `otherMaterialSelections[poolId]`，并同步到 `adjustReviewList`。
 
@@ -314,6 +314,7 @@
 | `addExcelImportAdjustLogList(requests)` | Excel 导入内部调用，先检查整批已有在途流程，再按导入行复用提交步骤；各行可使用不同评级主体，并分别保存证券快照 |
 | `isDirectAdjustFlow(flowId, flowKey)` | 对外直通判断（解析流程后与内部 `isDirectFlow` 同口径），供批量整批预检 |
 | `recheckBeforeFinalApproval(logList)` | 直通/终审前锁池动态复核（容量、在池、限制等） |
+| `ReportService.addInternalReportsOnFinish(logList)` | 简易直通/终审落池成功后，将手工信评附件生成内部报告 |
 
 入口 `addAdjustLog(req, files)` → `submitAdjustLog`，`@Transactional(rollbackFor=Exception.class)`，分五阶段：
 
@@ -338,6 +339,7 @@
 - `isDirect = noFlow || isDirectFlow(snapshot)`。
 - **直通**：`buildAdjustLog` → `auditStatus='20'` → `addAdjustLog`（写 `ip_adjust_log`）→ `bindSubmitAttachments`（绑定附件）→ 手工项且有快照则 `createInitialSteps`（写前 3 步）→ `addPoolStatus`（写 `ip_pool_status`，`audit_status='20'` 即时生效）。
 - **非直通**：`buildAdjustLog` → `auditStatus='00'` → `addAdjustLog` → `bindSubmitAttachments` → 手工项则 `createInitialSteps`（返回 true 表示流程已走完 end，则升 `'20'` 并 `addPoolStatus`）。
+- **完成后的内部报告生成**：简易直通、无流程即时生效、初始步骤自动走到 end 的记录，均在最终复核及落池成功后调用 `ReportService.addInternalReportsOnFinish`，与正常人工审批通过共用一套逻辑。每条调库记录若有 `credit_report_hand`，生成一份 `rrs_report_in`（`data_source=uploaded`），该记录下全部手工信评附件复制为 `rrs_report_in + report_in` 库附件；其他材料及内部/外部库引用附件不生成新报告。报告与附件写入和落池处于同一事务，任一步失败整体回滚。
 
 **④ 调出处理** `executeOutboundSubmit`：逻辑对称，先按目标池 `out_report_restriction` 跑 `checkReportRequired`（对应老项目 `rschDocOutMode`，语义同调入 none/any/internal），生效操作为 `deletePoolStatusSoft`（软删除 `ip_pool_status` 中该证券在目标池的 `audit_status='20'` 记录，`is_deleted=1`）。
 

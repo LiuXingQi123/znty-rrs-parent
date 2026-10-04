@@ -145,6 +145,10 @@ public class CrmwPoolAdjustService {
     /** 系统附件业务服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+
+    /** 报告库服务，用于调库完成后统一生成内部报告 */
+    @Resource
+    private ReportService reportService;
     /** 白名单调入流程 Key */
     private static final String FLOW_KEY_WHITELIST_INBOUND = "bond:whitelist-inbound";
     /** 是否启用白名单调入流程；当前业务未启用，恢复时改为 true。 */
@@ -2534,6 +2538,8 @@ public class CrmwPoolAdjustService {
         recheckBeforeFinalApproval(logList);
         // 将复核通过的直通日志统一应用到当前池状态
         applyPoolStatusChanges(logList);
+        // 直通落池成功后，将手工信评附件沉淀为内部报告
+        reportService.addInternalReportsOnFinish(logList);
     }
 
     /**

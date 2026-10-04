@@ -91,7 +91,7 @@
 
 公共：`/api/v1/attachments/*`、`/api/v1/reports/*`。
 
-信评回填只查询近 6 个月审批通过的调入日志，附件分类限定 `credit_report_in` / `credit_report_out` / `credit_report_hand`。同一日志内按内部库、外部库、手工信评附件的顺序选择；手工信评附件通过相同 `file_name` 反查 `rrs_report_in` 的 `report_in` 库附件，返回报告库附件 ID 供再次提交。选定历史记录后，若查不到有效报告或库附件则不回填，不再尝试更早记录；其他材料的手工上传不回填。报告库分类仍为 `report_in`，原有/新增报告由 `data_source` 区分。
+信评回填只查询近 6 个月审批通过的调入日志，附件分类限定 `credit_report_in` / `credit_report_out` / `credit_report_hand`。同一日志内按手工信评附件、内部库、外部库的顺序选择，分别赋值 3/2/1 并使用 `CASE ... END DESC`，同类附件按 `id DESC` 取 ID 最大的一份；手工信评附件通过相同 `file_name` 反查 `rrs_report_in` 的 `report_in` 库附件，返回报告库附件 ID 供再次提交。选定历史记录后，若查不到有效报告或库附件则不回填，不再尝试更早记录；其他材料的手工上传不回填。报告库分类仍为 `report_in`，原有/新增报告由 `data_source` 区分。
 
 ### 请求/响应实体（独立包）
 
@@ -110,8 +110,8 @@
 1. **ABS 识别**：`COALESCE(abs_flag,0)=1`；详情/校验/提交均 `validateAbsSecurity`，否则「非 ABS 债不允许在此调整」。  
 2. **目标池**：手工项 `targetPoolId ∈ {15,16,17,23}`（债券禁止库、观察池、黑名单质押库、重点观察名单），否则「ABS禁投池调整手工目标池仅允许债券禁止库(15)、观察池(16)、黑名单质押库(17)、重点观察名单(23)」。  
 3. **落表**：`ip_adjust_log` / `ip_adjust_step` / `ip_pool_status`（`audit_status` 状态机与同构链路一致）；批次号前缀 `BOND`。  
-4. **禁止**：调用 `syncCompanyBonds*`；调用 `SecurityPoolAdjustService` / `ForbiddenPoolAdjustService` 业务入口。  
-5. **直通**：即时写/软删池状态；**非直通**：`00` 进审批。
+4. **禁止**：调用 `syncCompanyBonds*`；调用 `SecurityPoolAdjustService` / `ForbiddenPoolAdjustService` 调库业务入口；内部报告生成复用 `ReportService.addInternalReportsOnFinish` 公共方法。
+5. **直通**：即时写/软删池状态，落池成功后按正常审批口径将手工信评附件生成内部报告；**非直通**：`00` 进审批。每条有 `credit_report_hand` 的调库记录生成一份 `rrs_report_in`（`data_source=uploaded`），全部手工信评附件绑定为 `report_in`；其他材料和库引用附件不生成新报告，与落池同事务，失败整体回滚。
 6. **黑名单质押库17**：单只 ABS 调入时发行主体须命中三个条件之一；调出时须三个条件全部不满足。该条件为必要条件，不替代原有池锁定、容量、限制和互斥校验。
 
 ---
