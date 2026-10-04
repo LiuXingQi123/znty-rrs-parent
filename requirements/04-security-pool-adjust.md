@@ -117,6 +117,8 @@
 5. 由 `inPools`/`outPools` 的 `inMutexPoolIds`/`outMutexPoolIds` 构建 `inMutexMap`/`outMutexMap`（前端互斥校验用）。
 6. `loadLogAttachments` 加载调库记录附件，`loadFlowSteps` 加载当前活跃流程步骤。
 
+同主体证券统一按 `rrs_securityinfo.issuer_code` 的代码相等关联，适用于主体所在池、目标池最大剩余期限、近半年报告豁免、同主体信评回填及 180 天非简易入池记录；复用本服务的批量调库和 Excel 导入采用相同口径。名称不同但代码相同仍属同主体，名称相同但代码不同不关联。`issuer` 继续用于展示和名称模糊查询。
+
 ### 2.7 发行主体最近三年及一期财务数据
 
 - 路径：`POST /api/v1/securityPoolAdjust/queryIssuerFinancialList`

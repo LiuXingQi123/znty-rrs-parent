@@ -93,6 +93,8 @@
 
 信评回填只查询近 6 个月审批通过的调入日志，附件分类限定 `credit_report_in` / `credit_report_out` / `credit_report_hand`。同一日志内按手工信评附件、内部库、外部库的顺序选择，分别赋值 3/2/1 并使用 `CASE ... END DESC`，同类附件按 `id DESC` 取 ID 最大的一份；手工信评附件通过相同 `file_name` 反查 `rrs_report_in` 的 `report_in` 库附件，返回报告库附件 ID 供再次提交。选定历史记录后，若查不到有效报告或库附件则不回填，不再尝试更早记录；其他材料的手工上传不回填。报告库分类仍为 `report_in`，原有/新增报告由 `data_source` 区分。
 
+ABS 同主体证券统一按 `rrs_securityinfo.issuer_code` 关联，涵盖主体所在池、近半年报告豁免和同主体信评回填，以及保留的简易流程最大剩余期限、指定天数非简易入池查询。名称不同但代码相同仍关联，名称相同但代码不同不关联；`issuer` 保留名称展示和筛选用途。
+
 ### 请求/响应实体（独立包）
 
 `com.znty.rrs.entity.forbiddenabspooladjust`：

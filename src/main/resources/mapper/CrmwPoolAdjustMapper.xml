@@ -174,8 +174,8 @@
         INNER JOIN rrs_securityinfo sb ON ips.security_code = sb.wind_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        WHERE sb.issuer = (
-            SELECT issuer FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1
+        WHERE sb.issuer_code = (
+            SELECT issuer_code FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1
         )
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -399,8 +399,8 @@
         SELECT MAX(si.date_exists)
         FROM ip_pool_status_crmw ips
         INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
-        WHERE si.issuer = (
-            SELECT issuer
+        WHERE si.issuer_code = (
+            SELECT issuer_code
             FROM rrs_securityinfo
             WHERE wind_code = #{securityCode}
             LIMIT 1
@@ -421,7 +421,7 @@
           AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
           AND l.security_code IN (
               SELECT si.wind_code FROM rrs_securityinfo si
-              WHERE si.issuer = (SELECT issuer FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1)
+              WHERE si.issuer_code = (SELECT issuer_code FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1)
           )
           AND EXISTS (
               SELECT 1

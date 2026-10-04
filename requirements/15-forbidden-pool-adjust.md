@@ -230,6 +230,8 @@ syncCompanyBondsOnDirect(companyLog):
 
 主体信息读取 `ais_inv_ods.wind_cbondissuer`，不按 `used` 过滤，以 `s_info_compcode` 作为主体代码。**该表不是主体唯一：业务粒度是债券 Wind 代码 + 主体代码**，查询主体列表/详情/JOIN 补名称时必须对 `s_info_compcode` 去重；该表不修改、不与 `rrs_securityinfo` 主体记录关联。旗下债券仍由 `rrs_securityinfo` 的债券行读取，以 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type='company'`。
 
+服务中保留的证券主体所在池查询 `queryIssuerPoolStatusList` 和简易流程最大剩余期限查询 `queryIssuerTargetPoolMaxRemainDays` 同样按 `rrs_securityinfo.issuer_code` 关联，不再按发行人名称判断同主体。
+
 ### 5.5 `ip_investment_pool` / `ip_pool_relation`
 
 禁投池模块仅暴露债券禁止库(15)/观察池(16)/黑名单质押库(17)/重点观察名单(23)；`ip_pool_relation` 的 `relation_type` 含 source/in_restrict/out_restrict/in_linked/out_linked/in_mutex/out_mutex/in_soft_restrict/out_soft_restrict。主体调入债券禁止库后的债券自动调出同时读取 `pool_id=15 AND relation_type='in_mutex'`，以及 `relation_pool_id=15 AND relation_type='in_restrict'` 两个方向的配置。
