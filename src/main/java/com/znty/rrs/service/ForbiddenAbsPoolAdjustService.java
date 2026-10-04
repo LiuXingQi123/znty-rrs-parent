@@ -235,9 +235,9 @@ public class ForbiddenAbsPoolAdjustService {
     /**
      * 查询近 6 个月最近一条可回填的信评报告（对齐老系统 getLastReprotDocs）。
      *
-     * <p>查询顺序：当前券 → 同主体；仅审批通过调入且日志挂有内部/外部库信评附件；
-     * 反查报告库附件后供前端预填。前端门禁仅对 {@link CreditBondPoolCodes} 中 1～5 级库回填
-     * （对齐老 COMMON.polidEnum 白名单；禁止库等不在名单内不回填）。
+     * <p>查询顺序：当前券 → 同主体；仅审批通过调入且日志挂有内部/外部库信评附件，
+     * 或手工信评附件；
+     * 反查报告库附件后供禁投 ABS 选池页面预填。
      *
      * @param req 需携带 securityCode
      * @return 无可回填报告时返回 null
@@ -256,14 +256,15 @@ public class ForbiddenAbsPoolAdjustService {
         if (adjustLogId == null) {
             return null;
         }
-        // 取该日志下首个内部/外部信评附件（不回填手工上传，对齐老 docType 仅 1/2）
+        // 内部库、外部库信评附件优先，再选手工信评附件
         SysAttachmentBo logAttachment = forbiddenAbsPoolAdjustMapper.queryFirstCreditReportAttachment(adjustLogId);
         if (logAttachment == null || logAttachment.getFileName() == null || logAttachment.getFileName().isEmpty()) {
             return null;
         }
-        boolean internal = "credit_report_in".equals(logAttachment.getAttachmentCategory());
+        boolean internal = AttachmentCategory.CREDIT_REPORT_IN.getCode().equals(logAttachment.getAttachmentCategory())
+                || AttachmentCategory.CREDIT_REPORT_HAND.getCode().equals(logAttachment.getAttachmentCategory());
         String tableName = internal ? "rrs_report_in" : "rrs_report_out";
-        String category = internal ? "report_in" : "report_out";
+        String category = internal ? AttachmentCategory.REPORT_IN.getCode() : AttachmentCategory.REPORT_OUT.getCode();
         // 复制绑定时复用 file_name，可反查报告库原附件供提交校验
         SysAttachmentBo libraryAttachment = forbiddenAbsPoolAdjustMapper.queryReportLibraryAttachmentByFileName(
                 logAttachment.getFileName(), tableName, category);

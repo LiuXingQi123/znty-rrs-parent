@@ -771,7 +771,7 @@
               WHERE a.table_name = 'ip_adjust_log'
                 AND a.main_id = l.id
                 AND a.is_deleted = 0
-                AND a.attachment_category IN ('credit_report_in', 'credit_report_out')
+                AND a.attachment_category IN ('credit_report_in', 'credit_report_out', 'credit_report_hand')
           )
         ORDER BY l.crte_time DESC
                  ,l.id DESC
@@ -804,14 +804,14 @@
               WHERE a.table_name = 'ip_adjust_log'
                 AND a.main_id = l.id
                 AND a.is_deleted = 0
-                AND a.attachment_category IN ('credit_report_in', 'credit_report_out')
+                AND a.attachment_category IN ('credit_report_in', 'credit_report_out', 'credit_report_hand')
           )
         ORDER BY l.crte_time DESC
                  ,l.id DESC
         LIMIT 1
     </select>
 
-    <!-- 调库日志下首个信评报告附件（内部优先、其次外部，对齐老 relaDocs.get(0) 且仅 docType 1/2） -->
+    <!-- 调库日志下首个信评报告附件（内部库、外部库优先，再选手工信评附件） -->
     <select id="queryFirstCreditReportAttachment" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
         SELECT id
                ,table_name
@@ -832,10 +832,11 @@
         WHERE table_name = 'ip_adjust_log'
           AND main_id = #{adjustLogId}
           AND is_deleted = 0
-          AND attachment_category IN ('credit_report_in', 'credit_report_out')
+          AND attachment_category IN ('credit_report_in', 'credit_report_out', 'credit_report_hand')
         ORDER BY CASE attachment_category
                      WHEN 'credit_report_in' THEN 1
                      WHEN 'credit_report_out' THEN 2
+                     WHEN 'credit_report_hand' THEN 3
                      ELSE 9
                  END ASC
                  ,id ASC

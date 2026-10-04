@@ -87,9 +87,11 @@
 | `addAdjustLog` / `addAdjustLogWithFiles` | 提交（前端主入口 multipart） |
 | `queryAdjustLogList` | 调库记录 |
 | `queryAdjustStepList` | 步骤 |
-| `queryLastCreditReport` | 近 6 个月信评回填（可选；禁止库池通常不在信用债 1～5 级白名单） |
+| `queryLastCreditReport` | 近 6 个月信评回填（当前券优先，再查同主体；包含手工信评附件） |
 
 公共：`/api/v1/attachments/*`、`/api/v1/reports/*`。
+
+信评回填只查询近 6 个月审批通过的调入日志，附件分类限定 `credit_report_in` / `credit_report_out` / `credit_report_hand`。同一日志内按内部库、外部库、手工信评附件的顺序选择；手工信评附件通过相同 `file_name` 反查 `rrs_report_in` 的 `report_in` 库附件，返回报告库附件 ID 供再次提交。选定历史记录后，若查不到有效报告或库附件则不回填，不再尝试更早记录；其他材料的手工上传不回填。报告库分类仍为 `report_in`，原有/新增报告由 `data_source` 区分。
 
 ### 请求/响应实体（独立包）
 

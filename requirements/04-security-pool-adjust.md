@@ -152,7 +152,7 @@
 - `openReportDialog(poolId, column)` 打开报告弹窗（column=`'credit'`/`'material'`）。
 - 弹窗含「内部报告」（`/api/v1/reports/queryInReportPage`）与「外部报告」（`/api/v1/reports/queryOutReportPage`）两个 Tab，支持按标题/证券编码/报告类型/撰写日期范围筛选 + 分页。
 - **打开弹窗时默认将当前证券编码（`bondDetail.windCode`）写入内/外报告筛选条件 `securityCode` 并自动查询**；用户仍可清空或改写后重新查询。
-- **选池阶段自动回填最近信评报告**（对齐老 `getLastReprotDocs`）：加载可调入/可调出库后调用 `POST /api/v1/securityPoolAdjust/queryLastCreditReport`。查数顺序为 **当前券 → 同主体**；条件为近 6 个月、审批通过、调入、日志挂有内部/外部库信评附件；反查报告库附件后，仅预填到 **信用债大库下 1～5 级**（`pool_code` 常量写死：`credit_bond_level_1`…`credit_bond_level_5`，对齐老 `polidEnum` 白名单；禁止库等不在名单内不回填）；**可删除**；不按当前目标池过滤历史。
+- **选池阶段自动回填最近信评报告**：加载可调入/可调出库后调用 `POST /api/v1/securityPoolAdjust/queryLastCreditReport`。查数顺序为 **当前券 → 同主体**；条件为近 6 个月、审批通过、调入、日志挂有 `credit_report_in` / `credit_report_out` / `credit_report_hand` 信评附件，其他材料不参与回填。同一日志内保持内部库、外部库优先，再取手工信评附件；手工信评附件通过相同 `file_name` 反查 `rrs_report_in` 的 `report_in` 库附件，返回报告库附件 ID 供再次提交。选定历史记录后，若查不到有效报告或库附件则不回填，不再尝试更早记录。报告库分类仍为 `report_in`，原有/新增报告由 `data_source` 区分。仅预填到 **信用债大库下 1～5 级**（`pool_code` 常量写死：`credit_bond_level_1`…`credit_bond_level_5`，禁止库等不在名单内不回填）；**可删除**；不按当前目标池过滤历史。
 - `el-upload` `auto-upload=false` 仅在前端暂存 File 对象到 `attachmentFiles[poolId]` / `materialFiles[poolId]`。
 - `handleConfirmReportDialog` 把选中报告写入 `creditReportSelections[poolId]` / `otherMaterialSelections[poolId]`，并同步到 `adjustReviewList`。
 
