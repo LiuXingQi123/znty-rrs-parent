@@ -10,7 +10,6 @@ import com.znty.rrs.common.enums.ProcessAction;
 import com.znty.rrs.common.enums.StepStatus;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.ApprovalStrategy;
-import com.znty.rrs.common.enums.AdjustMode;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;

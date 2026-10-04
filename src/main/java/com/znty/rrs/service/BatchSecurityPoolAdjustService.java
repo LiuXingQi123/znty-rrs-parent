@@ -17,7 +17,6 @@ import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
-import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
