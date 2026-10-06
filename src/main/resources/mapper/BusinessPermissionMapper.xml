@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.BusinessPermissionMapper">
+    <!-- 页面业务入口名单在 SQL 中配置；每个业务只返回一条，不递归角色层级 -->
+    <select id="queryBusinessDomainList" resultType="com.znty.rrs.entity.mymatters.BusinessDomainDto">
+        <!-- 债券入口：用户 1 或启用的直属角色 1～6、10 -->
+        SELECT 'bond' AS business_domain
+        WHERE #{userId} IN (1)
+           OR EXISTS (
+               SELECT 1
+               FROM ais_inv_analysis.t_sys_user_role ur
+               INNER JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
+               WHERE ur.user_id = #{userId}
+                 AND ur.role_id IN (1, 2, 3, 4, 5, 6, 10)
+           )
+
+        UNION ALL
+
+        <!-- 基金入口：用户 1、3 或启用的直属角色 7～10 -->
+        SELECT 'fund' AS business_domain
+        WHERE #{userId} IN (1, 3)
+           OR EXISTS (
+               SELECT 1
+               FROM ais_inv_analysis.t_sys_user_role ur
+               INNER JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
+               WHERE ur.user_id = #{userId}
+                 AND ur.role_id IN (7, 8, 9, 10)
+           )
+        <!-- 股票尚未接入，接入时在此补充股票入口查询 -->
+        ORDER BY business_domain
+    </select>
+</mapper>

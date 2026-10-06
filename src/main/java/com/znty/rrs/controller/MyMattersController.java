@@ -4,6 +4,7 @@ import com.znty.rrs.common.ApiResponse;
 import com.znty.rrs.common.PageResult;
 import com.znty.rrs.entity.flow.FlowOptionDto;
 import com.znty.rrs.entity.mymatters.MyMattersDto;
+import com.znty.rrs.entity.mymatters.BusinessDomainDto;
 import com.znty.rrs.entity.mymatters.MyMattersReq;
 import com.znty.rrs.service.MyMattersService;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +39,12 @@ public class MyMattersController {
     @PostMapping("/queryMyInitiatedMattersPage")
     public ApiResponse<PageResult<MyMattersDto>> queryMyInitiatedMattersPage(@RequestBody MyMattersReq req) {
         return ApiResponse.success(myMattersService.queryMyInitiatedMattersPage(req));
+    }
+
+    /** 查询当前用户可显示的已接入业务入口 */
+    @PostMapping("/queryBusinessDomainList")
+    public ApiResponse<List<BusinessDomainDto>> queryBusinessDomainList(@RequestBody MyMattersReq req) {
+        return ApiResponse.success(myMattersService.queryBusinessDomainList(req));
     }
 
     /** 查询我的事宜流程名称下拉选项 */

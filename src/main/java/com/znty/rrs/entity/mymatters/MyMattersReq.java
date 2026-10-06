@@ -13,6 +13,9 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = false)
 public class MyMattersReq extends PageRequest {
 
+    /** 必传业务编码：bond / fund；stock 预留 */
+    private String businessDomain;
+
     /** 流程 ID 列表，多选筛选 */
     private List<Long> flowIds;
 
@@ -40,6 +43,6 @@ public class MyMattersReq extends PageRequest {
     /** 发起人姓名关键词 */
     private String initiatorName;
 
-    /** 当前用户 ID，1 视为管理员 */
+    /** 当前演示用户 ID，用于本人事项筛选及原管理员 ID 判断 */
     private String currentUserId;
 }

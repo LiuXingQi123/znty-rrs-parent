@@ -1,98 +1,85 @@
 package com.znty.rrs.service;
 
-import com.github.pagehelper.PageHelper;
-import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
-import com.znty.rrs.mapper.MyMattersMapper;
+import com.znty.rrs.common.enums.BusinessDomain;
 import com.znty.rrs.entity.flow.FlowOptionDto;
+import com.znty.rrs.entity.mymatters.BusinessDomainDto;
 import com.znty.rrs.entity.mymatters.MyMattersDto;
 import com.znty.rrs.entity.mymatters.MyMattersReq;
+import com.znty.rrs.exception.BizException;
+import com.znty.rrs.mapper.BusinessPermissionMapper;
 import org.springframework.stereotype.Service;
-
 import javax.annotation.Resource;
 import java.util.List;
-import java.util.Map;
 
-/**
- * 我的事宜服务，负责查询当前用户相关的流程事项。
- */
+/** 我的事宜统一入口，查询可显示业务并分派至独立业务查询服务 */
 @Service
 public class MyMattersService {
-
-    /** 我的事项数据访问组件 */
+    /** 页面业务入口查询组件 */
     @Resource
-    private MyMattersMapper myMattersMapper;
-
-    /** 投资池服务，用于获取池全路径映射 */
+    private BusinessPermissionMapper businessPermissionMapper;
+    /** 债券事宜查询服务 */
     @Resource
-    private InvestmentPoolService investmentPoolService;
+    private BondMyMattersService bondMyMattersService;
+    /** 基金事宜查询服务 */
+    @Resource
+    private FundMyMattersService fundMyMattersService;
 
-    /**
-     * 分页查询我的事宜列表（待处理 / 已完成）。
-     *
-     * @param req 筛选与分页参数
-     * @return 分页结果
-     */
+    /** 查询当前用户可显示的业务入口，仅供页面初始化使用 */
+    public List<BusinessDomainDto> queryBusinessDomainList(MyMattersReq req) {
+        // 校验当前用户 ID 并查询固定业务入口名单
+        return businessPermissionMapper.queryBusinessDomainList(requireUserId(req.getCurrentUserId()));
+    }
+
+    /** 查询当前业务待处理或已完成事项 */
     public PageResult<MyMattersDto> queryMyMattersPage(MyMattersReq req) {
-        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<MyMattersDto> list = myMattersMapper.queryMyMattersPage(req);
-        // 将流程描述中的目标池叶子名称替换为全路径
-        replacePoolNameWithFullPath(list);
-        PageInfo<MyMattersDto> pageInfo = new PageInfo<>(list);
-        return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+        // 校验业务编码及当前用户参数
+        validateBusinessRequest(req);
+        if (!"pending".equals(req.getStepStatus()) && !"completed".equals(req.getStepStatus())) {
+            throw new BizException("步骤状态只能为 pending 或 completed");
+        }
+        return BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
+                ? bondMyMattersService.queryMyMattersPage(req) : fundMyMattersService.queryMyMattersPage(req);
     }
 
-    /**
-     * 分页查询我发起的事宜列表。
-     *
-     * @param req 筛选与分页参数（按 currentUserId 作为发起人过滤）
-     * @return 分页结果
-     */
+    /** 查询本人发起的当前业务事项，管理员同样只查询本人 */
     public PageResult<MyMattersDto> queryMyInitiatedMattersPage(MyMattersReq req) {
-        PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<MyMattersDto> list = myMattersMapper.queryMyInitiatedMattersPage(req);
-        // 将流程描述中的目标池叶子名称替换为全路径
-        replacePoolNameWithFullPath(list);
-        PageInfo<MyMattersDto> pageInfo = new PageInfo<>(list);
-        return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
+        // 校验业务编码及当前用户参数
+        validateBusinessRequest(req);
+        return BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
+                ? bondMyMattersService.queryMyInitiatedMattersPage(req) : fundMyMattersService.queryMyInitiatedMattersPage(req);
     }
 
-    /**
-     * 查询当前用户事宜中出现过的流程下拉选项。
-     *
-     * @param req 含 currentUserId
-     * @return 流程下拉选项
-     */
+    /** 查询当前业务可见事项涉及的流程选项 */
     public List<FlowOptionDto> queryFlowOptionList(MyMattersReq req) {
-        return myMattersMapper.queryFlowOptionList(req);
+        // 校验业务编码及当前用户参数
+        validateBusinessRequest(req);
+        return BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
+                ? bondMyMattersService.queryFlowOptionList(req) : fundMyMattersService.queryFlowOptionList(req);
     }
 
-    /**
-     * 将流程描述中的目标池叶子名称替换为全路径名称。
-     * 例如："管理员 将 23某基建PRN001 调入 二级库 的审批申请"
-     *    → "管理员 将 23某基建PRN001 调入 信用债大库/二级库 的审批申请"
-     */
-    private void replacePoolNameWithFullPath(List<MyMattersDto> list) {
-        if (list.isEmpty()) {
-            return;
+    /** 验证必传且已接入的业务编码以及当前用户 ID */
+    private void validateBusinessRequest(MyMattersReq req) {
+        if (req.getBusinessDomain() == null || req.getBusinessDomain().trim().isEmpty()) {
+            throw new BizException("业务编码 businessDomain 不能为空");
         }
-        // 获取池 ID → 全路径名称映射
-        Map<Long, String> fullNameMap = investmentPoolService.queryPoolFullNameMap();
-        if (fullNameMap.isEmpty()) {
-            return;
+        if (!BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
+                && !BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())) {
+            throw new BizException("业务未接入或编码无效：" + req.getBusinessDomain());
         }
-        for (MyMattersDto dto : list) {
-            if (dto.getTargetPoolId() == null || dto.getTargetPoolName() == null) {
-                continue;
-            }
-            String fullName = fullNameMap.get(dto.getTargetPoolId());
-            if (fullName == null || fullName.equals(dto.getTargetPoolName())) {
-                continue;
-            }
-            // 将描述中的叶子名称替换为全路径
-            dto.setProcessDescription(
-                dto.getProcessDescription().replace(dto.getTargetPoolName(), fullName)
-            );
+        // 校验查询本人事项所需的当前用户 ID
+        requireUserId(req.getCurrentUserId());
+    }
+
+    /** 校验当前演示用户 ID */
+    private Long requireUserId(String userId) {
+        if (userId == null || !userId.matches("[1-9][0-9]*")) {
+            throw new BizException("当前用户 ID 无效");
+        }
+        try {
+            return Long.valueOf(userId);
+        } catch (NumberFormatException e) {
+            throw new BizException("当前用户 ID 无效");
         }
     }
 }

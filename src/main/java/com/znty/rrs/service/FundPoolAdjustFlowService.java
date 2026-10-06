@@ -176,8 +176,8 @@ public class FundPoolAdjustFlowService {
         if (!StepStatus.PENDING.getCode().equals(step.getStepStatus())) {
             throw new BizException("当前流程步骤已处理，请刷新后重试");
         }
-        // 已指定处理人的步骤只允许本人或管理员处理
-        if (hasText(step.getHandlerId()) && !step.getHandlerId().equals(req.getHandlerId())
+        // 普通用户仅可处理本人步骤，管理员可接管其他或未分配步骤
+        if ((!hasText(step.getHandlerId()) || !step.getHandlerId().equals(req.getHandlerId()))
                 && !AdminUserIdUtil.isAdminUser(req.getHandlerId())) {
             throw new BizException("当前用户不是该步骤处理人");
         }

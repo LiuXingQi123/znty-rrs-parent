@@ -94,10 +94,11 @@ public class SysAttachmentServiceTest {
         SysAttachmentService service = buildService(mapper);
         SysAttachmentReq req = new SysAttachmentReq();
         req.setAdjustLogId(88L);
+        req.setBusinessDomain("bond");
 
         service.queryAttachmentList(req);
 
-        verify(mapper).queryAttachmentList(Collections.singletonList(88L));
+        verify(mapper).queryAttachmentList("ip_adjust_log", Collections.singletonList(88L));
     }
 
     /** 验证批量调库日志 ID 会去重并一次查询 */
@@ -107,10 +108,11 @@ public class SysAttachmentServiceTest {
         SysAttachmentService service = buildService(mapper);
         SysAttachmentReq req = new SysAttachmentReq();
         req.setAdjustLogIds(Arrays.asList(88L, 99L, 88L, null));
+        req.setBusinessDomain("bond");
 
         service.queryAttachmentList(req);
 
-        verify(mapper).queryAttachmentList(Arrays.asList(88L, 99L));
+        verify(mapper).queryAttachmentList("ip_adjust_log", Arrays.asList(88L, 99L));
     }
 
     /** 验证未提供调库日志 ID 时拒绝查询 */

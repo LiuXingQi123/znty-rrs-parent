@@ -48,9 +48,9 @@ public class ForbiddenPoolAdjustFlowServiceTest {
         verify(mapper, never()).editAdjustStepProcess(any(), any(), any(), any());
     }
 
-    /** 验证预留管理员用户可以代办禁投池审批步骤。 */
+    /** 验证显式授予债券管理权的用户可以代办禁投池审批步骤。 */
     @Test
-    public void isAdminOperatorShouldRecognizeReservedAdminUserId() {
+    public void isAdminOperatorShouldRecognizeExplicitlyGrantedManagement() {
         ForbiddenPoolAdjustFlowService service = new ForbiddenPoolAdjustFlowService();
         SecurityPoolAdjustAuditReq req = new SecurityPoolAdjustAuditReq();
         req.setHandlerId("10100");

@@ -161,7 +161,7 @@
 计算属性 `currentPendingStep`：
 1. 从 `flowStepList` 过滤 `stepStatus==='pending'` 的行
 2. 优先返回 `handlerId === currentLoginUserId` 的步骤
-3. 否则若当前用户是管理员（ID 为 `'1'` 或 `10000–10100`），返回第一条 pending
+3. 否则若当前用户是管理员（用户 ID 为 1 或整数 10000～10100），返回第一条 pending
 4. 否则返回 null（页面显示「暂无需要当前用户处理的流程步骤」）
 
 ### 2.5 通过 / 驳回 / 终止流程 按钮
@@ -246,8 +246,8 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
 1. `validateAuditReq`：`stepId` 不能为空；`processAction` 必须是 `approve` 或 `reject`；`reject` 时 `processComment` 必填。
 2. `queryAdjustStepById(stepId)` 查出当前 step。
-3. `resolveActualProcessStep`：若当前操作人是管理员（`handlerId` 为 `'1'` 或 `10000–10100`）且 step 不属于自己，则用 `queryPendingStepByHandler` 找到当前节点中管理员自己的 pending 步骤优先处理；普通用户直接返回原 step。
-4. `validatePendingStep`：step 不存在抛「流程步骤不存在」；step.stepStatus 必须为 `pending`，否则抛「当前流程步骤已处理，请刷新后重试」；若 step.handlerId 有值且不等于 req.handlerId 且非管理员，抛「当前用户不是该步骤处理人」；反查回填 `adjustBatchNo`/`adjustLogId`。
+3. `resolveActualProcessStep`：若当前操作人是管理员（由 `AdminUserIdUtil` 识别）且 step 不属于自己，则用 `queryPendingStepByHandler` 找到当前节点中管理员自己的 pending 步骤优先处理；普通用户直接返回原 step。
+4. `validatePendingStep`：step 不存在抛「流程步骤不存在」；step.stepStatus 必须为 `pending`，否则抛「当前流程步骤已处理，请刷新后重试」；若非管理员且（step.handlerId 为空或不等于 req.handlerId），抛「当前用户不是该步骤处理人」；反查回填 `adjustBatchNo`/`adjustLogId`。
 5. `validateSubmitterCannotProcess`：管理员、发起/修改语义节点跳过；否则查同批次所有调库记录，若当前处理人 ID 等于任一记录的 `adjusterId`，抛「发起人不能参与后续流程操作」。
 
 #### 阶段 2：修改节点附件变更（仅 modify 节点 approve）
@@ -323,13 +323,13 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
 ### 3.5 管理员代办逻辑
 
-- 管理员 ID 为 `'1'`，或闭区间 `10000–10100`（`AdminUserIdUtil.isAdminUser`）。
+- 接管资格由 `AdminUserIdUtil` 统一识别：用户 ID 为 1 或整数 10000～10100 时为管理员。
 - `resolveActualProcessStep`：管理员处理他人节点时优先定位自己的 pending 步骤。
 - `validatePendingStep`：管理员可处理任意 handlerId 的步骤。
 - `validateSubmitterCannotProcess`：管理员跳过「发起人不能处理后续」校验。
 - `buildProcessComment`：管理员代办他人步骤时意见追加「（由管理员操作）」。
-- 前端 `currentLoginUserId` 为 `'1'` 或 `10000–10100` 时，`isAdminUser()` 返回 true，`currentPendingStep` 计算时若自己无 pending 步骤则取第一条 pending。
-- 我的事宜查询时管理员 ID 不带 `handler_id` 过滤，管理员可见全部待办。
+- 前端 `isAdminUser()` 按相同用户 ID 范围判断；`currentPendingStep` 若管理员自己无 pending 步骤则取第一条 pending。
+- 我的事宜对管理员放宽处理人范围；我发起的仍限本人。
 
 ### 3.6 事务范围
 
@@ -345,7 +345,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 
 `my_matters.html` 用 `el-tabs` 切换三个页签：`待处理(pending)` / `已完成(completed)` / `分级规则提醒(gradeRuleAlert)`。前两个走 `POST /api/v1/myMatters/queryMyMattersPage`（`stepStatus` 由页签决定）；第三个走独立 `gradeRuleAlert` 接口，**不**与审批 SQL 混排。
 
-`currentUserId` 前端取 `RrsAuth.getCurrentUser().userId`。后端 ID 为 `'1'` 或 `10000–10100` 时视为管理员（不带 `handler_id` 过滤）。
+`currentUserId` 前端取 `RrsAuth.getCurrentUser().userId`。后端通过 `AdminUserIdUtil` 识别管理员（用户 ID 为 1 或整数 10000～10100，不带 `handler_id` 过滤）。
 
 后端 `MyMattersMapper.xml` 核心 SQL（待处理/已完成）：
 - 待处理 tab：INNER JOIN 子查询取每个 `adjust_log_id` 的 `MAX(step_id)` 且 `step_status='pending'`，非管理员额外加 `handler_id = currentUserId` 过滤。
@@ -532,3 +532,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 - Mapper：`SecurityPoolAdjustMapper.xml`、`MyMattersMapper.xml`
 - 实体：`SecurityPoolAdjustAuditReq`、`SecurityPoolAdjustAuditDto`、`IpAdjustStepBo`、`IpAdjustLogBo`、`FlowSnapshot`、`FlowNodeBo`、`FlowEdgeBo`、`NodeApprovalConfigBo`、`NodeApprovalHandlerBo`
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_flow_definition_schema.sql`、`sql/rrs_flow_definition_demo_data.sql`
+
+## 业务入口与处理范围
+
+我的事宜的用户/角色名单仅控制新页面初次加载时的业务入口显示；本业务查询、详情、步骤、附件和审批不校验该名单。后端通过 `AdminUserIdUtil` 统一识别管理员（用户 ID 为 1 或整数 10000～10100）：普通用户仅处理本人待办，不能处理他人或无处理人的步骤；管理员可接管待办，优先处理本人步骤。原状态、会签、驳回修改及池查看、调整、导入权限保留。详见 [我的事宜](06-my-matters.md)。

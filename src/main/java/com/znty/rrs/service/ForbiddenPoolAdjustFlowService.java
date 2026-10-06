@@ -182,7 +182,7 @@ public class ForbiddenPoolAdjustFlowService {
             throw new BizException("当前流程步骤已处理，请刷新后重试");
         }
         // 判断当前处理人是否可处理该步骤
-        if (hasText(step.getHandlerId()) && !step.getHandlerId().equals(req.getHandlerId()) && !isAdminOperator(req)) {
+        if ((!hasText(step.getHandlerId()) || !step.getHandlerId().equals(req.getHandlerId())) && !isAdminOperator(req)) {
             throw new BizException("当前用户不是该步骤处理人");
         }
         // 补齐调库批次号

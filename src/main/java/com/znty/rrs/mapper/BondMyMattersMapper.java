@@ -11,7 +11,7 @@ import java.util.List;
  * 我的事宜数据访问接口。
  */
 @Mapper
-public interface MyMattersMapper {
+public interface BondMyMattersMapper {
 
     /** 分页查询我的事宜列表（待处理 / 已完成） */
     List<MyMattersDto> queryMyMattersPage(MyMattersReq req);

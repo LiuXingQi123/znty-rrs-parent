@@ -17,7 +17,7 @@ public interface SysAttachmentMapper {
     int addAttachment(SysAttachmentBo bo);
 
     /** 按调库日志 ID 列表查询附件列表 */
-    List<SysAttachmentDto> queryAttachmentList(@Param("adjustLogIds") List<Long> adjustLogIds);
+    List<SysAttachmentDto> queryAttachmentList(@Param("tableName") String tableName, @Param("adjustLogIds") List<Long> adjustLogIds);
 
     /** 按附件 ID 查询附件 */
     SysAttachmentBo queryAttachmentById(@Param("id") Long id);

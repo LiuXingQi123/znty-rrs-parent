@@ -50,7 +50,7 @@
                ,content_type
                ,full_url
         FROM sys_attachment
-        WHERE table_name = 'ip_adjust_log'
+        WHERE table_name = #{tableName}
           AND main_id IN
           <foreach collection="adjustLogIds" item="adjustLogId" open="(" separator="," close=")">
               #{adjustLogId}

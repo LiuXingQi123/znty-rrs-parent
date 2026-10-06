@@ -52,12 +52,12 @@
 **阶段1 参数与步骤校验**
 1. `validateAuditReq`：`stepId` 非空；`processAction` 必须是 `ProcessAction.APPROVE`/`REJECT`；`reject` 时 `processComment` 必填。
 2. `queryAdjustStepById(stepId)` 查当前 step。
-3. `resolveActualProcessStep`：管理员（`handlerId` 为 `'1'` 或 `10000–10100`）且 step 不属于自己时，用 `queryPendingStepByHandler` 找管理员自己的 pending 步骤优先处理。
-4. `validatePendingStep`：step 不存在→`"流程步骤不存在"`；`stepStatus` 必须 `pending`→否则`"当前流程步骤已处理，请刷新后重试"`；`handlerId` 有值且不等于 req 且非管理员→`"当前用户不是该步骤处理人"`；反查回填 `adjustBatchNo`/`adjustLogId`。
+3. `resolveActualProcessStep`：管理员（由 `AdminUserIdUtil` 识别）且 step 不属于自己时，用 `queryPendingStepByHandler` 找管理员自己的 pending 步骤优先处理。
+4. `validatePendingStep`：step 不存在→`"流程步骤不存在"`；`stepStatus` 必须 `pending`→否则`"当前流程步骤已处理，请刷新后重试"`；非管理员且（`handlerId` 为空或不等于 req.handlerId）→`"当前用户不是该步骤处理人"`；反查回填 `adjustBatchNo`/`adjustLogId`。
 5. `validateSubmitterCannotProcess`：管理员、发起/修改语义节点跳过；否则查同批次所有调库记录，若 `handlerId` 等于任一记录 `adjusterId`→`"发起人不能参与后续流程操作"`。
 
 **阶段2 修改节点附件变更**（`applyAttachmentChangesForModifySubmit`）
-附件处理前执行 `applyReasonAdviceChangesForModifySubmit` 保存可选的 `adjustReason` / `adjustAdvice`：校验 `approve`、修改节点路由、当前待办所属批次全部日志为 `11`、当前用户为原发起人或管理员；只更新待办所属批次的 `ip_adjust_log`，未传字段保持原值，空字符串允许清空，每项最多 1000 字，并核对更新数量。文本、附件与步骤流转同一事务，失败整体回滚，不修改 CRMW 当前池状态。
+附件处理前执行 `applyReasonAdviceChangesForModifySubmit` 保存可选的 `adjustReason` / `adjustAdvice`：校验 `approve`、修改节点路由、当前待办所属批次全部日志为 `11`、当前用户为原发起人或管理员（由 `AdminUserIdUtil` 识别）；只更新待办所属批次的 `ip_adjust_log`，未传字段保持原值，空字符串允许清空，每项最多 1000 字，并核对更新数量。文本、附件与步骤流转同一事务，失败整体回滚，不修改 CRMW 当前池状态。
 
 - 仅 `processAction==='approve'` 且 `isModifyStep(step)` 才允许（否则`"仅驳回待修改提交时允许修改附件"`）。
 - 校验每条 `AttachmentChange.adjustLogId` 属于当前批次。
@@ -176,3 +176,7 @@
 - 实体：`entity/crmwpooladjustflow/CrmwPoolAdjustAuditReq.java`（含 `AttachmentChange` 内部类）、`CrmwPoolAdjustAuditDto.java`
 - SQL：`sql/rrs_crmw_pool_status_schema.sql`、`sql/rrs_flow_definition_schema.sql`
 - 测试：`CrmwPoolAdjustFlowApiTest.java`、`CrmwPoolAdjustFlowServiceTest.java`
+
+## 业务入口与处理范围
+
+我的事宜的用户/角色名单仅控制新页面初次加载时的业务入口显示；本业务查询、详情、步骤、附件和审批不校验该名单。后端通过 `AdminUserIdUtil` 统一识别管理员（用户 ID 为 1 或整数 10000～10100）：普通用户仅处理本人待办，不能处理他人或无处理人的步骤；管理员可接管待办，优先处理本人步骤。原状态、会签、驳回修改及池查看、调整、导入权限保留。详见 [我的事宜](06-my-matters.md)。

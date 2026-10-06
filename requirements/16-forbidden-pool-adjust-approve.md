@@ -42,7 +42,7 @@
 
 1. `flowStepList.filter(stepStatus==='pending')`。
 2. 优先返回 `handlerId === currentLoginUserId` 的步骤。
-3. 否则若 `isAdminUser()`（ID 为 `'1'` 或 `10000–10100`）返回第一条 pending。
+3. 否则若 `isAdminUser()`（用户 ID 为 1 或整数 10000～10100）返回第一条 pending。
 4. 否则 null（页面显示「暂无需要当前用户处理的流程步骤」）。
 
 ### 3.2 驳回待修改阶段识别（`isModifyAuditStage`）
@@ -75,13 +75,13 @@
 **阶段 1：参数与步骤校验**
 - `validateAuditReq`：`stepId` 非空；`processAction` ∈ {approve, reject}；reject 时 `processComment` 必填。
 - `queryAdjustStepById(stepId)`。
-- `resolveActualProcessStep`：管理员（`handlerId` 为 `'1'` 或 `10000–10100`）且 step 不属自己时，`queryPendingStepByHandler` 定位管理员自己的 pending 步骤。
-- `validatePendingStep`：step null 抛「流程步骤不存在」；`stepStatus` 必须 `pending` 否则「当前流程步骤已处理，请刷新后重试」；`handlerId` 有值且不等 req.handlerId 且非管理员抛「当前用户不是该步骤处理人」；反查回填 `adjustBatchNo`/`adjustLogId`。
+- `resolveActualProcessStep`：管理员（由 `AdminUserIdUtil` 识别）且 step 不属自己时，`queryPendingStepByHandler` 定位管理员自己的 pending 步骤。
+- `validatePendingStep`：step null 抛「流程步骤不存在」；`stepStatus` 必须 `pending` 否则「当前流程步骤已处理，请刷新后重试」；非管理员且（`handlerId` 为空或不等 req.handlerId）抛「当前用户不是该步骤处理人」；反查回填 `adjustBatchNo`/`adjustLogId`。
 - `validateSubmitterCannotProcess`：管理员/发起-修改语义节点跳过；否则查同批次所有记录（`queryAdjustLogListForAudit`），若当前处理人 ID 等于任一记录 `adjusterId` 抛「发起人不能参与后续流程操作」。
 
 **阶段 2：修改节点附件变更** `applyAttachmentChangesForModifySubmit`：仅 `approve && isModifyStep` 允许（否则抛「仅驳回待修改提交时允许修改附件」）；校验每条 `AttachmentChange.adjustLogId` 属于当前批次；`deleteAdjustLogAttachments`/`bindAttachments`(credit_report_hand/material_hand)/`copyReportAttachments`。
 
-附件处理前执行 `applyReasonAdviceChangesForModifySubmit` 保存可选的 `adjustReason` / `adjustAdvice`：校验 `approve`、修改节点路由、同批日志全部为 `11`、当前用户为原发起人或管理员；按当前待办所属批次条件更新 `ip_adjust_log`，未传字段保持原值，空字符串允许清空，每项最多 1000 字，并核对更新数量。文本、附件与流转同一事务，失败整体回滚，不修改当前池状态。
+附件处理前执行 `applyReasonAdviceChangesForModifySubmit` 保存可选的 `adjustReason` / `adjustAdvice`：校验 `approve`、修改节点路由、同批日志全部为 `11`、当前用户为原发起人或管理员（由 `AdminUserIdUtil` 识别）；按当前待办所属批次条件更新 `ip_adjust_log`，未传字段保持原值，空字符串允许清空，每项最多 1000 字，并核对更新数量。文本、附件与流转同一事务，失败整体回滚，不修改当前池状态。
 
 **阶段 3：处理当前步骤并推进** `processAdjustAudit`
 - `buildProcessComment`：管理员代办他人步骤追加「（由管理员操作）」。
@@ -213,7 +213,7 @@ finishAdjustBatch(step):
 | 详情加载接口 | `querySecurityDetail`/`querySecurityPoolStatus`/`queryAdjustLogList` | `queryCompanyDetail`/`queryCompanyPoolStatus`/`queryAdjustLogList`（companyCode 维度） |
 | `finishAdjustBatch` 落地 | 仅落地单只证券 `ip_pool_status` + `ReportService.addInternalReportsOnFinish` | 落地主体 `ip_pool_status` 后，目标池为**债券禁止库15或黑名单质押库17**时再 `syncCompanyBonds(log)`：`security_status!='D'` 且到期日为空或大于等于当天的旗下 bond 大类债券（含普通债、ABS、crmw）同步入库写 `adjust_type='自动调整'`；从互斥/受限池调出写 `adjust_type='互斥调整'`；17按主体三个条件统一判定 |
 | 前端入口参数 | `securityCode` | `companyCode` |
-| 审批策略/节点语义识别/管理员代办 | — | **完全相同**（管理员 ID 为 `'1'` 或 `10000–10100`） |
+| 审批策略/节点语义识别/管理员代办 | — | **完全相同**（管理员用户 ID 为 1 或整数 10000～10100） |
 
 ---
 
@@ -232,9 +232,13 @@ finishAdjustBatch(step):
 - 前端：`znty-rrs-ui/forbidden_pool_adjust_approve.html`（`initStandaloneReviewPage`、`restoreStandaloneAdjustDraft`、`currentPendingStep`、`isModifyAuditStage`、`submitAdjustAudit`、`submitAdjustAuditMultipart`、`buildAuditAttachmentChanges`、`flowStepSpanMethod`/`getFlowStepRowClass`）、`css/forbidden_pool_adjust_approve.css`
 - 前端待办入口：`znty-rrs-ui/pages/my_matters.html`（`openMatterPage`：`businessScene=forbiddenCompanyAdjust` 时拼 `companyCode` 等，工作台 `openDetailTab`；pending→`process`→approve.html，completed→`view`→detail.html）
 - Controller：`ForbiddenPoolAdjustFlowController.java`（`@RequestMapping("/api/v1/forbiddenPoolAdjustFlow")`，2 端点）
-- Service：`ForbiddenPoolAdjustFlowService.java`（`submitAdjustAudit`/`validateAuditReq`/`resolveActualProcessStep`/`validatePendingStep`/`validateSubmitterCannotProcess`/`applyAttachmentChangesForModifySubmit`/`processAdjustAudit`/`resolveProcessingNodeAuditStatus`/`advanceToNextAvailableStep`/`createTerminalEndStep`/`finishAdjustBatch`/`syncCompanyBonds`/`buildCompanyBondAutoLog`/`buildFlowSnapshot`，复用 `AdminUserIdUtil`）
+- Service：`ForbiddenPoolAdjustFlowService.java`（`submitAdjustAudit`/`validateAuditReq`/`resolveActualProcessStep`/`validatePendingStep`/`validateSubmitterCannotProcess`/`applyAttachmentChangesForModifySubmit`/`processAdjustAudit`/`resolveProcessingNodeAuditStatus`/`advanceToNextAvailableStep`/`createTerminalEndStep`/`finishAdjustBatch`/`syncCompanyBonds`/`buildCompanyBondAutoLog`/`buildFlowSnapshot`，管理员识别使用 `AdminUserIdUtil`）
 - 内部报告生成统一委托 `ReportService.addInternalReportsOnFinish`；正常终审、简易直通及初始步骤自动结束的记录均在落池成功后调用，与落池处于同一事务。每条有 `credit_report_hand` 的记录生成一份 `rrs_report_in`（`data_source=uploaded`），全部手工信评附件绑定为 `report_in`；其他材料及库引用附件不生成新报告。
 - Mapper：复用 `ForbiddenPoolAdjustMapper.java` / `.xml`（审批用 `queryAdjustStepById`/`editAdjustStepProcess`/`editOtherPendingStepSkipped`/`queryPendingStepCountByNode`/`queryAdjustLogListForAudit`/`editAdjustLogAuditStatus`/`addAdjustStep`/`addPoolStatus`/`deletePoolStatusSoft`/`queryCompanyBondForAutoList`/`querySecurityCurrentPoolIdList`/`querySecurityBoByCode`/`queryCategoryTypeBySecurityType`）
 - 复用实体：`entity/securitypooladjustflow/SecurityPoolAdjustAuditReq/Dto`、`entity/bo/`（`IpAdjustStepBo`/`IpAdjustLogBo`/`FlowSnapshot`/`FlowNodeBo`/`FlowEdgeBo`/`NodeApprovalConfigBo`/`NodeApprovalHandlerBo`/`SysAttachmentBo`/`ReportInBo`/`SecurityInfoBo`）
 - SQL：同 [15]（`rrs_external_import_schema.sql` + `rrs_security_pool_adjust_schema.sql` + `rrs_flow_definition_schema.sql`）
 - 测试：`ForbiddenPoolAdjustFlowServiceTest.java`
+
+## 业务入口与处理范围
+
+我的事宜的用户/角色名单仅控制新页面初次加载时的业务入口显示；本业务查询、详情、步骤、附件和审批不校验该名单。后端通过 `AdminUserIdUtil` 统一识别管理员（用户 ID 为 1 或整数 10000～10100）：普通用户仅处理本人待办，不能处理他人或无处理人的步骤；管理员可接管待办，优先处理本人步骤。原状态、会签、驳回修改及池查看、调整、导入权限保留。详见 [我的事宜](06-my-matters.md)。

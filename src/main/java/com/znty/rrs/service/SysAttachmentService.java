@@ -1,5 +1,7 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.enums.BusinessDomain;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AttachmentPurpose;
@@ -365,7 +367,14 @@ public class SysAttachmentService {
         if (adjustLogIds.isEmpty()) {
             throw new BizException("调库日志 ID 不能为空");
         }
-        return sysAttachmentMapper.queryAttachmentList(new ArrayList<>(adjustLogIds));
+        // 业务编码仅用于选择独立的附件关联表。
+        if (!BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
+                && !BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())) {
+            throw new BizException("业务未接入或编码无效：" + req.getBusinessDomain());
+        }
+        String tableName = BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
+                ? "ip_adjust_log" : "ip_adjust_log_fund";
+        return sysAttachmentMapper.queryAttachmentList(tableName, new ArrayList<>(adjustLogIds));
     }
 
     /**

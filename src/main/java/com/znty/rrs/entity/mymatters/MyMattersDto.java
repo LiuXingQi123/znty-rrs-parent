@@ -11,6 +11,21 @@ import java.util.Date;
 @Data
 public class MyMattersDto {
 
+    /** 业务编码 */
+    private String businessDomain;
+
+    /** 统一摘要中的业务对象代码 */
+    private String objectCode;
+
+    /** 统一摘要中的业务对象名称 */
+    private String objectName;
+
+    /** 基金代码，仅基金业务用于定位 */
+    private String fundCode;
+
+    /** 基金简称 */
+    private String fundShortName;
+
     /** 步骤 ID，作为列表主键 */
     private Long id;
 
@@ -47,7 +62,7 @@ public class MyMattersDto {
     /** 流程描述 */
     private String processDescription;
 
-    /** 业务场景：crmwAdjust=CRMW池调整 / forbiddenCompanyAdjust=禁投池主体调整 / securityAdjust=证券池调整 */
+    /** 业务场景：crmwAdjust=CRMW池调整 / forbiddenCompanyAdjust=禁投池主体调整 / securityAdjust=证券池调整 / fundAdjust=基金池调整 */
     private String businessScene;
 
     /** 审核状态 */

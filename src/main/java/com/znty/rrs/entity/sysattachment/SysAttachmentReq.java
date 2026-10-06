@@ -10,6 +10,9 @@ import java.util.List;
 @Data
 public class SysAttachmentReq {
 
+    /** 业务编码，列表查询必传 */
+    private String businessDomain;
+
     /** 附件 ID */
     private Long id;
 

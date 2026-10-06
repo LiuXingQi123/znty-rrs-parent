@@ -109,7 +109,8 @@
             <if test="adjustBatchNo != null and adjustBatchNo != ''">
                 AND al.adjust_batch_no = #{adjustBatchNo}
             </if>
-            <if test="adjustBatchNo == null or adjustBatchNo == ''">
+            <if test="adjustLogId != null and (adjustBatchNo == null or adjustBatchNo == '')">AND al.id = #{adjustLogId}</if>
+            <if test="adjustLogId == null and (adjustBatchNo == null or adjustBatchNo == '')">
                 AND al.audit_status NOT IN ('-1', '20', '21', '99')
             </if>
         </where>

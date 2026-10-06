@@ -1,185 +1,93 @@
-# 我的事宜需求说明
+# 我的事宜：业务隔离与入口显示
 
-> 前端页面：`my_matters.html`
-> 后端前缀：`/api/v1/myMatters`
-> 角色定位：登录用户集中查看与本人相关的待办、已办及流程事项，按流程、状态和时间筛选后进入对应业务详情（审核页 / 只读详情页）。另有独立页签「分级规则提醒」，复用 `gradeRuleAlert` 接口，不与审批列表混排。
+## 1. 入口与范围
 
----
+页面 `pages/my_matters.html`，接口前缀 `/api/v1/myMatters`。页面先查询可显示的业务入口，事项查询按所选业务调用独立查询模块。
 
-## 1. 页面概览与初始化
-
-根容器 `#my_matters`，标题「我的事宜」。`mounted` 调用 `loadFlowOptions()` 与 `loadAllTabsOnEnter()`。页面带 `el-tabs`：`待处理(pending)` / `已完成(completed)` / `我发起的(initiated)` / `分级规则提醒(gradeRuleAlert)`，`activeTab` 默认 `'pending'`（URL `?tab=gradeRuleAlert` / `?tab=initiated` 可直达对应页签），切换触发 `handleTabClick` 重置页码并按页签加载。
-
-顶部统计徽章随页签变化：审批页签为「共 N 条待处理/已完成/我发起的事宜」，提醒页签为「共 N 条分级规则提醒」。四个 Tab 标题旁均标注条数：待处理 / 已完成 / 我发起的查审批总量，分级规则提醒查提醒总量。
-
----
-
-## 2. 筛选项
-
-`searchForm`：
-
-| 字段 | 默认值 | 控件 | 说明 |
+| 业务 | 查询服务 / Mapper | 运行表 | 场景 |
 |---|---|---|---|
-| `flowIds` | `[]` | 多选下拉（collapse-tags） | 流程名称 |
-| `startDateRange` | `null` | 日期范围 | 开始日期（步骤激活时间） |
-| `processDescription` | `''` | 文本输入 | 流程描述关键词，回车查询 |
-| `auditStatus` | `''` | 下拉 | 调整状态（8 码） |
-| `initiatorName` | `''` | 文本输入 | 发起人（「我发起的」页签隐藏该筛选项） |
-| `currentUserId` | `RrsAuth.getCurrentUser().userId` | — | 前端取登录用户；后端 `'1'` 或 `10000–10100` 视为管理员 |
+| `bond` 债券 | `BondMyMattersService` / `BondMyMattersMapper.xml` | `ip_adjust_log`、`ip_adjust_step` | `securityAdjust`、`forbiddenCompanyAdjust`、`crmwAdjust` |
+| `fund` 基金 | `FundMyMattersService` / `FundMyMattersMapper.xml` | `ip_adjust_log_fund`、`ip_adjust_step_fund` | `fundAdjust` |
+| `stock` 股票 | 编码预留，尚未接入 | 后续独立定义 | 后续注册 |
 
-`auditStatusOptions`：7 码（`-1/00/11/20/21/32/99`），同 dict.js `DICT_AUDIT_STATUS`。无投资池树、无证券类型筛选。
+不按角色名选择 SQL，不将各业务合并为大 SQL。用户和角色名单只决定页面显示哪些业务入口，当前业务决定查询模块。投资池查看、调整或导入权限独立。
 
-提醒页签单独用 `alertSearchForm`：`securityCode`、`alertStatus`（默认 `00` 待处理），不共用审批筛选项。
+## 2. 业务入口显示
 
----
+`MyMattersService` 直接调用 `BusinessPermissionMapper.queryBusinessDomainList(Long)`，由现有 Mapper XML 的固定用户/角色名单返回 `BusinessDomainDto`，仅含 `businessDomain`。
 
-## 3. 查询接口
+| 固定入口对象 | 显示业务 |
+|---|---|
+| 用户 1 | bond / fund |
+| 用户 3 | fund |
+| 角色 1～6 | bond |
+| 角色 7～9 | fund |
+| 角色 10 | bond / fund |
 
-### 3.1 流程下拉 `loadFlowOptions`
+- 用户直接配置与直接所属启用角色的业务取并集并去重。角色来自 `ais_inv_analysis.t_sys_user_role` 与 `t_sys_role.enable=1`，不继承父子角色。
+- 入口仅在新页面 `mounted` 时查询一次；返回工作台页签、切换业务、查询和分页只刷新数据，不重新查询入口。
+- 固定名单不会为保留管理员 ID 自动添加入口；无匹配名单的 `10000–10100` 用户不显示业务入口。
+- 后端事项分页、流程下拉、详情、步骤、附件、审批和提醒不校验入口名单。业务缺失、未知业务或未接入股票仍返回明确业务错误。
+- 事项范围与审批接管沿用 `AdminUserIdUtil`：用户 ID `1` 或整数闭区间 `10000–10100` 为管理员；普通用户仅处理本人待办，不能处理他人或无处理人的步骤。管理员同时有自己的待办时优先处理本人待办，沿用现有代办意见标识。
+- 原会签、抢占、审批状态、驳回修改、发起人回避和事务校验保留。
 
-- 路径：`POST /api/v1/myMatters/queryFlowOptionList`，请求体 `{currentUserId}`
-- 返回 `List<FlowOptionDto>`（`{flowId, flowKey, flowName, description}`）
-- 后端 `MyMattersMapper.xml`：`SELECT DISTINCT f.id AS flowId, f.flow_key, f.name AS flowName, f.description FROM ip_adjust_log al INNER JOIN (max step 子查询) INNER JOIN ip_adjust_step s INNER JOIN wf_flow_node n INNER JOIN wf_flow_definition f ... WHERE al.is_deleted=0 [AND 当前用户参与过滤] ORDER BY f.name ASC, f.id ASC`
+首版仍使用纯前端演示登录和请求中的 `currentUserId` / `handlerId`，用于演示验证。正式环境必须改为可信的后端登录上下文，不能信任客户端提交的用户身份。
 
-### 3.2 列表查询 `loadList`
+## 3. 各状态范围
 
-- 路径：`POST /api/v1/myMatters/queryMyMattersPage`
-- 请求体：
-
-| 字段 | 来源 | 说明 |
+| 页签 | 普通用户 | 管理员 |
 |---|---|---|
-| `flowIds` | 多选 | 空数组转 null |
-| `startDateStart` / `startDateEnd` | `startDateRange[0/1]` | 直接取日期串 |
-| `processDescription` | 表单 | 空串转 null |
-| `auditStatus` | 下拉 | 空串转 null |
-| `stepStatus` | `activeTab` | 仅待处理/已完成：`pending` / `completed` |
-| `initiatorName` | 表单 | 空串转 null（待处理/已完成） |
-| `currentUserId` | `RrsAuth.getCurrentUser().userId` | 必传；后端 `'1'` 或 `10000–10100` 视为管理员 |
-| `pageIndex` / `pageSize` | 分页 | — |
+| 待处理 pending | 当前步骤处理人是本人，取该申请最新本人 pending 步骤 | 该业务全部待处理事项 |
+| 已完成 completed | 本人参与且整个批次不存在 pending，取最新步骤 | 该业务全部已结束事项 |
+| 我发起的 initiated | `adjuster_id=currentUserId`，含进行中及结束 | 同样只查本人发起 |
 
-返回 `PageResult<MyMattersDto>`，取 `records`/`total`。
+流程下拉只取该业务可见的本人发起/参与事项涉及的有效流程；管理员可取该业务全部事项的流程。不同业务独立 SQL、筛选和分页。
 
-### 3.3 我发起的列表 `loadInitiatedList`
+## 4. 接口
 
-- 路径：`POST /api/v1/myMatters/queryMyInitiatedMattersPage`（**独立接口**，不复用 `queryMyMattersPage`）
-- 请求体字段与列表筛选相同（`flowIds` / 证券 / 开始日期 / 流程描述 / 审核状态 / `currentUserId` / 分页），**不传** `stepStatus`、`initiatorName`
-- 后端按 `al.adjuster_id = currentUserId` 过滤，取每条申请最新步骤；含流程中与已结束
+以下均为 POST，路径带 `/api/v1/`。
 
----
-
-## 4. 表格列与状态展示
-
-| 列 | prop/字段 | 渲染逻辑 |
+| 路径 | 必传字段 | 返回 |
 |---|---|---|
-| 序号 | `$index` | 同前 |
-| 流程名称 | `flowName` | tooltip |
-| 步骤名称 | `stepName` | tooltip，来自 `s.node_label` |
-| 流程描述 | `processDescription` | `desc-link` 点击打开事宜页，后端 CONCAT 生成 |
-| 步骤状态 | `stepStatus` | `el-tag` + `stepStatusLabel`/`stepStatusType` |
-| 调整状态 | `auditStatus` | `el-tag` + `auditStatusLabel`/`auditStatusType` |
-| 发起人 | `initiatorName` | 来自 `al.adjuster_name` |
-| 开始时间 | `startTime` | `moment(startTime).format('YYYY-MM-DD HH:mm')`，步骤激活时间 |
-| 操作 | — | `fixed="right"`：待处理页签→「处理」按钮（primary）；已完成 / 我发起的→「查看」按钮 |
+| `myMatters/queryBusinessDomainList` | currentUserId | `[{businessDomain}]`，固定 bond→fund 顺序，只返回已接入且符合显示名单的业务 |
+| `myMatters/queryMyMattersPage` | businessDomain,currentUserId,stepStatus(pending/completed) | `PageResult<MyMattersDto>` |
+| `myMatters/queryMyInitiatedMattersPage` | businessDomain,currentUserId | `PageResult<MyMattersDto>` |
+| `myMatters/queryFlowOptionList` | businessDomain,currentUserId | `List<FlowOptionDto>` |
 
-`stepStatusLabel`：`pending`→待处理 / `approve`→通过 / `reject`→驳回 / `submit`→提交 / `auto_process`→自动处理 / `canceled`→已撤回。
-`stepStatusType`：`pending`→warning / `approve`→success / `reject`→danger / `submit`→primary / `auto_process`/`canceled`→info。
-`auditStatusLabel`/`auditStatusType` 同其他页（`20/10/32`→success，`-1/21`→danger，`11/00`→warning，`99`→info）。
+分页与我发起的支持 `flowIds`、`securityCode`、`securityShortName`、`startDateStart/End`、`processDescription`、`auditStatus`、`pageIndex/pageSize`；待处理/已完成还支持 `initiatorName`。兼容原请求字段名称，基金 Mapper 将代码/名称筛选映射为基金列。
 
----
+列表摘要包含 `businessDomain`、`businessScene`、`objectCode/objectName`、`adjustLogId`、`adjustBatchNo`、`stepId`、目标池、流程名称、步骤名称、步骤/审核状态、流程描述、发起人及开始时间；保留各业务定位字段 `securityCode` / `crmwScode` / `fundCode` 等。
 
-## 5. 跳转审核 / 详情
+各业务审批由原业务审批服务执行；不新增通用审批 SQL。附件查询必须带业务编码，后端只选择固定的债券/基金日志表；附件读取与下载保留记录、文件和路径校验，不增加独立业务授权检查。
 
-`openMatterPage(row)`：工作台内走 `RrsWorkbench.openDetailTab`，按场景+证券/主体+批次新开页签，同键复用；「我的事宜」列表 iframe 不跳走。脱离工作台时仍 `location.href`。**若公司工作台不兼容新开 Tab，此处可还原为 `location.href` + 详情页 `history.back()`**（见 [README](README.md)「跳转层可回退」）。
-- 场景：`pool_type=crmw` → CRMW；`category_type=company` 且（`pool_type` 为 forbidden/observe/blacklist/restricted，或目标池 15/16/17/23）→ 禁投主体；否则证券。
-- **待处理** → 对应 `*_approve.html?entryMode=process`，页签标题为「简称 审核」。
-- **已完成 / 我发起的** → 对应 `*_detail.html?entryMode=view`，页签标题为「简称 详情」。
-- 审核/详情页「返回」关闭当前动态页签，回到「我的事宜」并重新拉取列表与角标。
+## 5. 页面与导航
 
-分页参数同前（pageIndex=1, pageSize=20, page-sizes=[10,20,50,100]）。
+- 页面顶部债券/基金业务 Tabs，下面保留待处理、已完成、我发起的；只有债券显示分级规则提醒。
+- 新页面 mounted 时查询一次业务选项，默认选第一个显示业务；无业务入口时显示空状态。返回事项页只刷新当前业务的列表、流程选项和角标。
+- 切换业务清空筛选、流程选项、列表及角标，重置分页并加载新业务。代码/名称标签随业务切换。
+- 异步请求使用业务、视图版本及列表请求序号判定归属。旧响应、旧错误和债券→基金→债券的旧请求不能更新新视图。
+- 进入页面或切换业务时：当前状态加载完整列表，其他状态以 pageSize=1 取 total；查询与状态切换只刷新当前状态及角标。基金不请求债券提醒。
+- 场景路由映射打开原有审核/详情页；基金进入 `fund_pool_adjust_approve.html` / `fund_pool_adjust_detail.html`，独立携带 fundCode 参数。
+- 审核/详情页不查询业务入口。审核页优先展示本人待办，无本人待办时管理员（ID 为 1 或整数 10000～10100）展示首个待办，其他人返回 null 并禁用审批操作。后端提交沿用相同管理员口径和数据库实际步骤的处理资格校验。
+- 待处理打开审核页（entryMode=process），已完成/我发起的打开只读详情（entryMode=view）。工作台页签键包含业务代码和场景、记录/批次，防止不同表相同 ID 混用；无工作台时回退 location.href。
+- 债券保留证券、禁投主体、CRMW 路由；禁投 ABS 债仍走证券路由。
+- 默认分页 1/20，page-sizes=[10,20,50,100]，保持原有日期、状态 Tag、池全路径和表格布局。
 
-### 5.1 分级规则提醒页签
+### 分级规则提醒
 
-独立表格，不混入待处理/已完成/我发起的。接口仍是 `POST /api/v1/gradeRuleAlert/queryAlertPage` 与 `editAlertProcessed`，后端流程不变。
+继续使用 `gradeRuleAlert/queryAlertPage` 与 `editAlertProcessed`，不检查业务入口名单。提醒保持共享口径，不按事项处理人过滤，不混进审批 SQL。「去调库」新开证券池调整页；标记处理只更新提醒，不改池。旧 `grade_rule_alert.html` 仍重定向本页 `?tab=gradeRuleAlert`。
 
-- 列：证券代码/简称、发行主体、当前分级库、特殊类型、不符合原因、状态、扫描时间。
-- 「去调库」工作台内新开「证券池调整」页签（`security_pool_adjust.html?securityCode=`），不覆盖事宜页。
-- 「标记已处理」仅 `alert_status=00`，确认后调用 `editAlertProcessed`，不改池。
-- `pages/grade_rule_alert.html` 仅重定向到本页 `?tab=gradeRuleAlert`，左侧不再单列菜单。
+## 6. SQL 名单维护
 
----
+- 用户/角色固定入口名单只在 `BusinessPermissionMapper.xml/queryBusinessDomainList` 中维护；修改 XML 后重新部署生效。
+- 每次真正加载我的事宜页面时重新查询 AIS 的直接所属启用角色。角色停用或移除用户的角色关联后，下次真正加载页面更新入口显示；用户直接配置不随角色移除消失，其他有效角色来源同样保留。
+- 股票尚未接入，SQL 只保留扩展注释。后续新增独立查询模块、列表场景和页面路由后，再扩展固定入口名单与已接入业务选项；不将股票查询合入债券/基金 Mapper。
 
-## 6. 接口清单
+首版不新增权限维护页面。
 
-| 路径 | 请求体字段 | 返回结构 | 用途 |
-|---|---|---|---|
-| `myMatters/queryMyMattersPage` | flowIds, startDateStart, startDateEnd, processDescription, auditStatus, stepStatus(pending\|completed), initiatorName, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>` | 我的事宜分页列表（待处理/已完成） |
-| `myMatters/queryMyInitiatedMattersPage` | flowIds, startDateStart, startDateEnd, processDescription, auditStatus, currentUserId, pageIndex, pageSize | `PageResult<MyMattersDto>` | 我发起的事宜分页列表（独立接口） |
-| `myMatters/queryFlowOptionList` | `{currentUserId}` | `List<FlowOptionDto>`（flowId/flowKey/flowName/description） | 我的事宜流程名称下拉 |
-| `gradeRuleAlert/queryAlertPage` | securityCode, alertStatus, pageIndex, pageSize | `PageResult<GradeRuleAlertDto>` | 分级规则提醒页签列表（后端原接口，未改） |
-| `gradeRuleAlert/editAlertProcessed` | id, currentUserId, currentUserName | 更新后的待办 | 标记已处理，不改池 |
+## 7. 验证
 
-> 路径均带前缀 `/api/v1/`。
-
----
-
-## 7. 关键数据库表与查询逻辑
-
-### 7.1 涉及的表
-
-| 表名 | 用途 | 关键字段 |
-|---|---|---|
-| `ip_adjust_log` | 证券池调库记录（主表） | id, security_code, security_short_name, adjust_mode, target_pool_name, adjust_batch_no, audit_status, adjuster_id, adjuster_name, is_deleted |
-| `ip_adjust_step` | 调库流程步骤记录 | id, adjust_log_id, adjust_batch_no, flow_node_id, node_label, node_type, step_status, handler_id, handler_name, start_time, process_time |
-| `wf_flow_node` / `wf_flow_definition` | 流程节点/定义 | id, flow_id, flow_key, name, description, is_deleted |
-| `ip_grade_rule_alert` | 分级规则提醒（仅提醒页签查询，不进审批 SQL） | id, security_code, current_pool_id, fail_reason, alert_status(00/20/99) |
-
-### 7.2 可见数据范围控制
-
-- **我的事宜**：`al.is_deleted=0`；待处理页签只取最新步骤 `step_status='pending'` 的记录；已完成页签追加 `NOT EXISTS(... step_status='pending' ...)` 确保批次无 pending 步骤；我发起的按 `al.adjuster_id = currentUserId` 过滤（含流程中与已结束）。
-- **用户隔离**：
-  - 待处理 / 已完成：非管理员要求该调库记录下存在 `handler_id = currentUserId` 的步骤；管理员可看全部。
-  - 我发起的：一律按发起人 `adjuster_id` 过滤（管理员也只看自己发起的）。
-  - `currentUserId` 为空时 `AND 1=0` 强制返回空，防止全量泄露。
-
-### 7.3 后端查询逻辑要点（`MyMattersMapper.xml`）
-
-- **主表**：`ip_adjust_log al`
-- **核心子查询**（`queryMyMattersPage` 按 stepStatus 分支）：
-  - `pending`：取每条调库记录的最新 pending 步骤（非管理员再限 `handler_id`）
-  - `completed`：取每条记录的最新步骤（不限状态），并要求同批次无 pending
-- **我发起的**（独立 SQL `queryMyInitiatedMattersPage`）：取每条记录最新步骤；`WHERE al.adjuster_id=#{currentUserId}`（管理员也只看自己发起的）
-- **流程关联**：`LEFT JOIN wf_flow_node` → `LEFT JOIN wf_flow_definition`
-- **WHERE 公共筛选**：`flowIds` / 证券 / 开始日期 / 流程描述 / `auditStatus`；`currentUserId` 为空时 `AND 1=0`
-  - `initiatorName` → `al.adjuster_name LIKE`
-- **GROUP BY**：`s.adjust_log_id`（去重，避免一条调库记录多条步骤导致重复）
-- **SELECT 计算列**：`processDescription` 由 CONCAT 生成；`flowName`=f.name、`stepName`=s.node_label、`initiatorName`=al.adjuster_name
-- **排序**：`s.id DESC`
-- **Service 后处理**（`MyMattersService.replacePoolNameWithFullPath`）：用全路径映射将 `processDescription` 中的叶子池名替换为全路径（如「二级库」→「信用债大库/二级库」）
-
-### 7.4 管理员穿透
-
-`currentUserId='1'` 或位于闭区间 `10000–10100` 时被视为管理员：不追加 `handler_id` 过滤，可见全部事宜。
-
----
-
-## 8. 关键校验
-
-- 必须按当前用户隔离事项，普通用户不可看到他人待办；管理员可见全部。
-- 流程筛选项仅返回当前用户事项涉及的有效流程。
-- 待办与步骤 pending 状态一致，已办不能再次处理。
-
-## 9. 验收标准
-
-- 分页、组合筛选和清空筛选行为正确。
-- 跳转时携带足够的调整记录、批次和步骤标识。
-- `MyMattersApiTest` 覆盖事项分页与流程筛选接口。
-- 提醒页签复用 `gradeRuleAlert` 接口；当前无独立 `GradeRuleAlertApiTest`（任务扫描见 [29](29-scheduled-task.md) `GradeRuleAlertService`）。
-
-## 10. 关键源码索引
-
-- 前端：`znty-rrs-ui/pages/my_matters.html`（含分级规则提醒页签）、`znty-rrs-ui/js/api.js`（`RrsWorkbench`）、`znty-rrs-ui/docs/dict.js`
-- Controller：`MyMattersController.java`；提醒页签复用 `GradeRuleAlertController`（接口未改）
-- Service：`MyMattersService.java`、`InvestmentPoolService.java`、`GradeRuleAlertService.java`
-- Mapper：`MyMattersMapper.xml`、`GradeRuleAlertMapper.xml`
-- 实体：`MyMattersDto`、`MyMattersReq`、`FlowOptionDto`、`GradeRuleAlertDto`、`GradeRuleAlertReq`
-- SQL：`sql/rrs_security_pool_adjust_schema.sql`（ip_adjust_log / ip_adjust_step）、`sql/rrs_flow_definition_schema.sql`、`sql/rrs_grade_rule_alert_schema.sql` + `rrs_grade_rule_alert_demo_data.sql`（`ip_grade_rule_alert`）
+- `MyMattersMapperSqlTest`：真实 MyBatis + H2 执行业务入口与事项 SQL，覆盖固定用户/多角色并集、禁用角色、入口不隐式扩展管理员 ID、普通用户与旧管理员范围、独立待办/已办/我发起、同批次结束、业务筛选和流程选项。
+- `MyMattersServiceTest`：入口直接查询、业务必传、独立业务分派，事项分页/我发起/流程下拉不再次读取入口名单。
+- 各业务 FlowService 原有回归用例保留会签、抢占、旧管理员代办及驳回修改验证。
+- 前端 `node --test tests/my_matters.test.js`：脚本语法、业务重置、快速切换、旧响应与旧错误、角标、路由页签键、入口每页面一次查询、返回页签只刷新数据、附件业务透传、详情不读取入口和待办步骤定位。
