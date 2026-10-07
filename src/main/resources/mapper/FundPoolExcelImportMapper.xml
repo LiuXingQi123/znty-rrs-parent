@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.FundPoolExcelImportMapper">
+    <!-- 新增基金导入批次，参数及清空三字段存入通用业务槽 -->
+    <insert id="addBatch" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_imp_tmp (
+            imp_id
+            ,biz_type
+            ,template_code
+            ,file_name
+            ,file_size
+            ,option_json
+            ,total_count
+            ,pass_count
+            ,fail_count
+            ,chk_rslt
+            ,save_rslt
+            ,imp_time
+            ,opter_id
+            ,opter_name
+            ,fld001
+            ,fld011
+            ,fld012
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        ) VALUES (
+            #{impId}
+            ,#{bizType}
+            ,#{templateCode}
+            ,#{fileName}
+            ,#{fileSize}
+            ,#{optionJson}
+            ,#{totalCount}
+            ,#{passCount}
+            ,#{failCount}
+            ,#{chkRslt}
+            ,#{saveRslt}
+            ,#{impTime}
+            ,#{opterId}
+            ,#{opterName}
+            ,#{fld001}
+            ,#{fld011}
+            ,#{fld012}
+            ,#{isDeleted}
+            ,#{crteTime}
+            ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 仅查询有效基金业务批次 -->
+    <select id="queryBatchByImpId" resultType="com.znty.rrs.entity.bo.SysImpTmpBo">
+        SELECT * FROM sys_imp_tmp
+        WHERE imp_id = #{impId} AND biz_type = 'fund_pool_excel' AND is_deleted = 0
+    </select>
+
+    <!-- 校验、提交和取消共用同一批次行锁 -->
+    <select id="queryBatchIdForUpdate" resultType="java.lang.Long">
+        SELECT id FROM sys_imp_tmp
+        WHERE imp_id = #{impId} AND biz_type = 'fund_pool_excel' AND is_deleted = 0
+        FOR UPDATE
+    </select>
+
+    <!-- 更新批次校验计数及服务器快照 -->
+    <update id="editBatchCheckResult">
+        UPDATE sys_imp_tmp
+        SET pass_count = #{passCount}
+            ,fail_count = #{failCount}
+            ,chk_rslt = #{chkRslt}
+            ,chk_dscr = #{chkDscr}
+            ,result_json = #{resultJson}
+            ,updt_time = #{updtTime}
+        WHERE imp_id = #{impId} AND biz_type = 'fund_pool_excel' AND is_deleted = 0
+    </update>
+
+    <!-- 保存基金导入提交结果和最终原因建议 -->
+    <update id="editBatchSaveResult">
+        UPDATE sys_imp_tmp
+        SET save_rslt = #{saveRslt}
+            ,save_dscr = #{saveDscr}
+            ,result_json = #{resultJson}
+            ,fld011 = #{fld011}
+            ,fld012 = #{fld012}
+            ,updt_time = #{updtTime}
+        WHERE imp_id = #{impId} AND biz_type = 'fund_pool_excel' AND is_deleted = 0
+    </update>
+
+    <!-- 仅取消未提交的基金批次 -->
+    <update id="deleteBatchSoft">
+        UPDATE sys_imp_tmp
+        SET is_deleted = 1
+            ,save_rslt = '3'
+            ,updt_time = NOW()
+        WHERE imp_id = #{impId} AND biz_type = 'fund_pool_excel' AND is_deleted = 0 AND save_rslt != '1'
+    </update>
+
+    <!-- 批量新增七列原始基金明细 -->
+    <insert id="addItemList">
+        INSERT INTO sys_imp_tmp_detl (
+            imp_detl_id
+            ,imp_id
+            ,row_no
+            ,chk_rslt
+            ,chk_dscr
+            ,save_rslt
+            ,imp_time
+            ,opter_id
+            ,fld001
+            ,fld002
+            ,fld003
+            ,fld004
+            ,fld005
+            ,fld006
+            ,fld007
+            ,is_deleted
+            ,crte_time
+            ,updt_time
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.impDetlId}
+             ,#{item.impId}
+             ,#{item.rowNo}
+             ,#{item.chkRslt}
+             ,#{item.chkDscr}
+             ,#{item.saveRslt}
+             ,#{item.impTime}
+             ,#{item.opterId}
+             ,#{item.fld001}
+             ,#{item.fld002}
+             ,#{item.fld003}
+             ,#{item.fld004}
+             ,#{item.fld005}
+             ,#{item.fld006}
+             ,#{item.fld007}
+             ,#{item.isDeleted}
+             ,#{item.crteTime}
+             ,#{item.updtTime})
+        </foreach>
+    </insert>
+
+    <!-- 分页查询本基金批次明细 -->
+    <select id="queryItemPage" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
+        SELECT detail.* FROM sys_imp_tmp_detl detail
+        INNER JOIN sys_imp_tmp batch ON batch.imp_id = detail.imp_id
+        <where>
+            detail.imp_id = #{impId} AND detail.is_deleted = 0
+            AND batch.biz_type = 'fund_pool_excel' AND batch.is_deleted = 0
+            <if test="chkRslt != null and chkRslt != ''">AND detail.chk_rslt = #{chkRslt}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (detail.fld001 LIKE CONCAT('%', #{keyword}, '%')
+                     OR detail.fld002 LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY detail.row_no ASC
+            ,detail.id ASC
+    </select>
+
+    <!-- 查询基金批次全部有效来源行 -->
+    <select id="queryBatchItemList" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
+        SELECT detail.* FROM sys_imp_tmp_detl detail
+        INNER JOIN sys_imp_tmp batch ON batch.imp_id = detail.imp_id
+        WHERE detail.imp_id = #{impId} AND detail.is_deleted = 0
+            AND batch.biz_type = 'fund_pool_excel' AND batch.is_deleted = 0
+        ORDER BY detail.row_no ASC
+            ,detail.id ASC
+    </select>
+
+    <!-- 保存行级校验、解析池及主档基金名称，不改原始三字段 -->
+    <update id="editItemCheckResult">
+        UPDATE sys_imp_tmp_detl
+        SET chk_rslt = #{chkRslt}
+            ,chk_dscr = #{chkDscr}
+            ,fld002 = #{fld002}
+            ,fld009 = #{fld009}
+            ,fld010 = #{fld010}
+            ,updt_time = #{updtTime}
+        WHERE id = #{id} AND imp_id = #{impId} AND is_deleted = 0
+    </update>
+
+    <!-- 保存已提交来源行状态 -->
+    <update id="editItemSaveResult">
+        UPDATE sys_imp_tmp_detl
+        SET save_rslt = #{saveRslt}
+            ,save_dscr = #{saveDscr}
+            ,updt_time = #{updtTime}
+        WHERE id = #{id} AND imp_id = #{impId} AND is_deleted = 0
+    </update>
+
+    <!-- 取消当前批次原始明细 -->
+    <update id="deleteItemsByImpIdSoft">
+        UPDATE sys_imp_tmp_detl
+        SET is_deleted = 1
+            ,updt_time = NOW()
+        WHERE imp_id = #{impId} AND is_deleted = 0
+    </update>
+
+    <!-- 按父子池名称解析支持基金的启用叶子池，多匹配不得静默择一 -->
+    <select id="queryEnabledLeafPoolList" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
+        SELECT child.* FROM ip_investment_pool child
+        INNER JOIN ip_investment_pool parent ON parent.id = child.parent_id AND parent.is_deleted = 0
+        WHERE child.is_deleted = 0 AND child.status = 'enabled'
+            AND child.variety_codes LIKE '%"fund"%'
+            AND parent.pool_name = #{parentPoolName} AND child.pool_name = #{childPoolName}
+            AND NOT EXISTS (
+                SELECT 1 FROM ip_investment_pool descendant
+                WHERE descendant.parent_id = child.id AND descendant.is_deleted = 0
+                    AND descendant.status = 'enabled'
+            )
+    </select>
+
+    <!-- 查询仅来自基金专属池状态表的清空差集成员 -->
+    <select id="queryPoolMemberList" resultType="com.znty.rrs.entity.bo.FundInfoBo">
+        SELECT status.fund_code
+            ,fund.fund_name
+            ,fund.fund_short_name
+            ,fund.security_type
+        FROM ip_pool_status_fund status
+        LEFT JOIN rrs_fundinfo fund ON fund.fund_code = status.fund_code AND fund.is_deleted = 0
+        WHERE status.target_pool_id = #{poolId} AND status.audit_status = '20' AND status.is_deleted = 0
+        ORDER BY status.fund_code ASC
+    </select>
+</mapper>

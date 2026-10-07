@@ -322,6 +322,73 @@ public class FundPoolAdjustService {
     }
 
     /**
+     * 校验 Excel 导入调整项，补充调整权限和无报告附件入口的限制。
+     *
+     * @param req 基金代码及本次导入的目标池调整项
+     * @param adjusterId 当前导入用户 ID
+     * @return 基金完整校验结果及一般审批流程候选
+     */
+    public FundAdjustCheckDto checkExcelImportAdjust(FundAdjustCheckReq req, String adjusterId) {
+        FundAdjustCheckDto dto = checkAdjust(req);
+        Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
+                .filter(pool -> pool.getId() != null)
+                .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
+        // 查询当前导入用户的调整权限，管理员沿用单笔申请的权限口径
+        Set<Long> adjustablePoolIds = ADMIN_USER_ID.equals(adjusterId)
+                ? poolMap.keySet() : queryAdjustablePoolIds(parseUserId(adjusterId));
+        for (FundAdjustCheckDto.CheckResultItem result : dto.getItems()) {
+            List<String> failures = new ArrayList<>(result.getFailReasons());
+            InvestmentPoolBo pool = poolMap.get(result.getTargetPoolId());
+            if (pool != null && !adjustablePoolIds.contains(pool.getId())) {
+                failures.add("当前用户没有投资池调整权限：" + pool.getPoolName());
+            }
+            if (pool != null && ITEM_MANUAL.equals(result.getItemTag())) {
+                FundPoolAdjustSubmitReq.AdjustItem reportItem = new FundPoolAdjustSubmitReq.AdjustItem();
+                reportItem.setItemTag(ITEM_MANUAL);
+                reportItem.setAdjustMode(result.getAdjustMode());
+                try {
+                    // 用无附件的主项复核报告要求，关系项维持单笔申请的报告规则
+                    validateReportRestriction(reportItem, pool);
+                } catch (BizException exception) {
+                    failures.add(exception.getMessage() + "；Excel 导入暂不支持报告附件，请通过基金池单笔调库提交");
+                }
+            }
+            result.setFailReasons(failures);
+            result.setCanAdjust(failures.isEmpty());
+            for (FundAdjustCheckDto.FlowOption option : result.getFlowOptions()) {
+                option.setSelectable(option.isSelectable() && failures.isEmpty());
+            }
+        }
+        return dto;
+    }
+
+    /**
+     * 原子提交 Excel 导入的来源分组，全部完成复核后才写入基金审批申请。
+     *
+     * @param requests 已由导入模块按持久化快照构建的来源分组请求
+     * @return 按来源分组返回的基金调库提交结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<FundAdjustSubmitDto> addExcelImportAdjustLogList(List<FundPoolAdjustSubmitReq> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new BizException("至少提交一个基金 Excel 导入分组");
+        }
+        // 在任何申请写入之前识别跨来源分组的同基金同目标池冲突
+        validateExcelImportRequests(requests);
+        List<PreparedSubmit> preparedRequests = new ArrayList<>();
+        for (FundPoolAdjustSubmitReq req : requests) {
+            // 先复核全部分组，防止本批新写入待办影响后续分组的校验
+            preparedRequests.add(prepareSubmit(req));
+        }
+        List<FundAdjustSubmitDto> results = new ArrayList<>();
+        for (PreparedSubmit prepared : preparedRequests) {
+            // 复用单笔基金申请的日志、流程快照及初始步骤写入
+            results.add(submitPrepared(prepared, null));
+        }
+        return results;
+    }
+
+    /**
      * 提交不含本地文件的基金调库申请。
      *
      * @param req 基金调库申请及调整明细
@@ -360,6 +427,19 @@ public class FundPoolAdjustService {
      */
     private FundAdjustSubmitDto addAdjustLogInternal(FundPoolAdjustSubmitReq req,
                                                       SysAttachmentService.SubmissionFiles submissionFiles) {
+        // 完成全部基金、权限、目标池、报告及流程复核并固定写入上下文
+        PreparedSubmit prepared = prepareSubmit(req);
+        // 将已通过复核的单笔申请写入基金专属运行表
+        return submitPrepared(prepared, submissionFiles);
+    }
+
+    /**
+     * 复核基金申请并固定主档、投资池与一般流程快照，不写运行表。
+     *
+     * @param req 待提交基金申请
+     * @return 全部复核通过的提交上下文
+     */
+    private PreparedSubmit prepareSubmit(FundPoolAdjustSubmitReq req) {
         // 校验调库申请的提交级必填字段
         validateSubmitRequest(req);
         // 确认申请中的基金仍处于可调库状态
@@ -379,28 +459,57 @@ public class FundPoolAdjustService {
                 manualByGroup.put(requireGroupKey(item), item);
             }
         }
+        Map<String, FlowSnapshot> snapshotByGroup = new HashMap<>();
+        for (FundPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            // 确认每条关系项均关联本请求中的手工主项
+            String groupKey = requireGroupKey(item);
+            FundPoolAdjustSubmitReq.AdjustItem manual = manualByGroup.get(groupKey);
+            if (manual == null) {
+                throw new BizException("每个调库分组必须包含一条手工调整项");
+            }
+            if (!snapshotByGroup.containsKey(groupKey)) {
+                // 在写入前固定来源组使用的已发布一般流程快照
+                FlowSnapshot snapshot = buildFlowSnapshot(manual.getFlowId());
+                if (snapshot == null) {
+                    // 读取主项目标池以定位流程不可用的业务错误
+                    InvestmentPoolBo pool = requirePool(poolMap, manual.getTargetPoolId());
+                    throw new BizException("目标投资池的一般审批流程未发布或不可用：" + pool.getPoolName());
+                }
+                // 确认流程具备起始节点，避免后续写入阶段才发现配置残缺
+                if (findNode(snapshot.nodes, NodeType.START.getCode()) == null) {
+                    throw new BizException("一般审批流程缺少开始节点");
+                }
+                snapshotByGroup.put(groupKey, snapshot);
+            }
+        }
+        return new PreparedSubmit(req, fund, poolMap, manualByGroup, snapshotByGroup);
+    }
+
+    /**
+     * 使用已复核上下文保存基金日志、审批快照、初始步骤和附件。
+     *
+     * @param prepared 已完成全部复核的基金申请
+     * @param submissionFiles 已校验的上传文件上下文，可为空
+     * @return 基金调库提交结果
+     */
+    private FundAdjustSubmitDto submitPrepared(PreparedSubmit prepared,
+                                               SysAttachmentService.SubmissionFiles submissionFiles) {
+        FundPoolAdjustSubmitReq req = prepared.req;
         Map<String, String> batchByGroup = new HashMap<>();
         List<Long> logIds = new ArrayList<>();
         LinkedHashSet<String> batchNos = new LinkedHashSet<>();
         for (FundPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             // 校验当前明细的分组标识以关联手工调整项
             String groupKey = requireGroupKey(item);
-            FundPoolAdjustSubmitReq.AdjustItem manual = manualByGroup.get(groupKey);
-            if (manual == null) {
-                throw new BizException("每个调库分组必须包含一条手工调整项");
-            }
+            FundPoolAdjustSubmitReq.AdjustItem manual = prepared.manualByGroup.get(groupKey);
             // 为同一分组复用批次号，首次出现时生成新批次号
             String batchNo = batchByGroup.computeIfAbsent(groupKey, key -> generateBatchNo());
             batchNos.add(batchNo);
-            // 读取并确认当前明细的目标投资池
-            InvestmentPoolBo pool = requirePool(poolMap, item.getTargetPoolId());
-            // 固定手工调整项对应的已发布审批流程快照
-            FlowSnapshot snapshot = buildFlowSnapshot(manual.getFlowId());
-            if (snapshot == null) {
-                throw new BizException("目标投资池的一般审批流程未发布或不可用：" + pool.getPoolName());
-            }
+            InvestmentPoolBo pool = prepared.poolMap.get(item.getTargetPoolId());
+            FlowSnapshot snapshot = prepared.snapshotByGroup.get(groupKey);
             // 依据基金和流程快照生成当前调整项日志
-            FundAdjustLogBo log = buildAdjustLog(req, fund, item, manual, pool, poolMap, batchNo, snapshot);
+            FundAdjustLogBo log = buildAdjustLog(req, prepared.fund, item, manual, pool,
+                    prepared.poolMap, batchNo, snapshot);
             fundPoolAdjustMapper.addAdjustLog(log);
             logIds.add(log.getId());
             // 将上传及来源附件绑定到当前调库日志
@@ -414,6 +523,50 @@ public class FundPoolAdjustService {
         dto.setAdjustLogIds(logIds);
         dto.setAdjustBatchNos(new ArrayList<>(batchNos));
         return dto;
+    }
+
+    /**
+     * 校验 Excel 内部整批入口的请求边界与跨来源分组冲突。
+     *
+     * @param requests 按 Excel 来源分组构造的提交请求
+     */
+    private void validateExcelImportRequests(List<FundPoolAdjustSubmitReq> requests) {
+        Map<String, String> sourceByFundPool = new HashMap<>();
+        for (int index = 0; index < requests.size(); index++) {
+            FundPoolAdjustSubmitReq req = requests.get(index);
+            if (req == null) {
+                throw new BizException("基金 Excel 导入第 " + (index + 1) + " 个来源分组为空");
+            }
+            // 校验每个来源分组的必填字段，确保后续冲突检查可明确定位
+            validateSubmitRequest(req);
+            if (req.getFundCode() == null || req.getFundCode().trim().isEmpty()) {
+                throw new BizException("基金代码不能为空");
+            }
+            Set<String> requestPoolKeys = new HashSet<>();
+            for (FundPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+                if (item == null || item.getTargetPoolId() == null) {
+                    throw new BizException("基金 Excel 导入第 " + (index + 1) + " 个来源分组的目标池不能为空");
+                }
+                if ((item.getReportFileIndexes() != null && !item.getReportFileIndexes().isEmpty())
+                        || (item.getMaterialFileIndexes() != null && !item.getMaterialFileIndexes().isEmpty())
+                        || (item.getReportSourceAttachmentIds() != null && !item.getReportSourceAttachmentIds().isEmpty())
+                        || (item.getMaterialSourceAttachmentIds() != null && !item.getMaterialSourceAttachmentIds().isEmpty())) {
+                    throw new BizException("Excel 导入暂不支持报告或材料附件，请通过基金池单笔调库提交");
+                }
+                // 读取来源组标识，为批内冲突提供可追踪定位
+                String groupKey = requireGroupKey(item);
+                String key = req.getFundCode().trim() + "|" + item.getTargetPoolId();
+                if (requestPoolKeys.add(key)) {
+                    String source = "第 " + (index + 1) + " 个来源分组（" + groupKey + "）";
+                    String previousSource = sourceByFundPool.putIfAbsent(key, source);
+                    if (previousSource != null) {
+                        throw new BizException("基金 Excel 导入来源分组冲突：基金 " + req.getFundCode().trim()
+                                + "，目标池 ID " + item.getTargetPoolId() + "，" + previousSource + "与" + source
+                                + "重复调整同一目标池（含相反方向）");
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -1412,6 +1565,39 @@ public class FundPoolAdjustService {
             return "互斥调整";
         }
         return requested == null || requested.trim().isEmpty() ? "手工调整" : requested.trim();
+    }
+
+    /** 写入前已完成复核的基金申请上下文 */
+    private static class PreparedSubmit {
+        /** 来源分组的申请字段与明细 */
+        private final FundPoolAdjustSubmitReq req;
+        /** 当前基金主档 */
+        private final FundInfoBo fund;
+        /** 当前投资池映射 */
+        private final Map<Long, InvestmentPoolBo> poolMap;
+        /** 来源组手工主项 */
+        private final Map<String, FundPoolAdjustSubmitReq.AdjustItem> manualByGroup;
+        /** 来源组已发布流程快照 */
+        private final Map<String, FlowSnapshot> snapshotByGroup;
+
+        /**
+         * 保存已复核的主档、目标池与一般流程快照。
+         *
+         * @param req 来源分组申请
+         * @param fund 当前基金主档
+         * @param poolMap 当前投资池映射
+         * @param manualByGroup 各来源组的手工主项
+         * @param snapshotByGroup 各来源组的一般流程快照
+         */
+        PreparedSubmit(FundPoolAdjustSubmitReq req, FundInfoBo fund, Map<Long, InvestmentPoolBo> poolMap,
+                       Map<String, FundPoolAdjustSubmitReq.AdjustItem> manualByGroup,
+                       Map<String, FlowSnapshot> snapshotByGroup) {
+            this.req = req;
+            this.fund = fund;
+            this.poolMap = poolMap;
+            this.manualByGroup = manualByGroup;
+            this.snapshotByGroup = snapshotByGroup;
+        }
     }
 
     /** 已发布流程快照 */

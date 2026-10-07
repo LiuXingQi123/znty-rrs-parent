@@ -12,11 +12,14 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Excel 导入解析工具（首 sheet，首行为表头）
@@ -32,8 +35,25 @@ public final class ExcelImportHelper {
 
     /**
      * 解析上传 Excel：返回每行「表头 → 单元格文本」映射，并附带 Excel 物理行号（1-based）键 __rowNo
+     *
+     * @param file 上传的 Excel 文件
+     * @param maxRows 非空数据行上限
      */
     public static List<Map<String, String>> parseFirstSheet(MultipartFile file, int maxRows) {
+        // 普通导入继续读取单元格显示文本
+        return parseFirstSheet(file, maxRows, Collections.emptySet());
+    }
+
+    /**
+     * 解析首表，并为指定业务数字列保留实际数值，避免显示格式静默舍入。
+     *
+     * @param file 上传文件
+     * @param maxRows 非空数据行上限
+     * @param numericValueHeaders 需读取实际数字值的列名
+     * @return 带物理行号的原始行值
+     */
+    public static List<Map<String, String>> parseFirstSheet(MultipartFile file, int maxRows,
+                                                          Set<String> numericValueHeaders) {
         if (file == null || file.isEmpty()) {
             throw new BizException("上传文件不能为空");
         }
@@ -75,7 +95,8 @@ public final class ExcelImportHelper {
                     if (header == null || header.isEmpty()) {
                         continue;
                     }
-                    String value = trimCell(row.getCell(c));
+                    // 指定数字列不使用可能四舍五入的单元格显示格式
+                    String value = readCellValue(row.getCell(c), numericValueHeaders.contains(header));
                     map.put(header, value);
                     if (value != null && !value.isEmpty()) {
                         allEmpty = false;
@@ -99,6 +120,20 @@ public final class ExcelImportHelper {
         } catch (Exception e) {
             throw new BizException("解析 Excel 失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 业务数字列读取实际数值，其余列沿用显示文本以保留代码格式。
+     *
+     * @param cell 待读取的单元格，可为空
+     * @param preserveNumericValue 业务数字列是否读取实际数值以避免显示格式舍入
+     */
+    private static String readCellValue(Cell cell, boolean preserveNumericValue) {
+        if (preserveNumericValue && cell != null && cell.getCellType() == CellType.NUMERIC) {
+            return BigDecimal.valueOf(cell.getNumericCellValue()).stripTrailingZeros().toPlainString();
+        }
+        // 文本、空值和公式继续采用既有读取规则
+        return trimCell(cell);
     }
 
     /** 读取单元格为文本 */

@@ -94,8 +94,9 @@ public class SecurityPoolExcelImportServiceTest {
         verify(importMapper, never()).deleteItemsByImpIdSoft(anyString());
     }
 
+    /** 缺少服务器校验快照时拒绝证券 Excel 导入提交。 */
     @Test
-    public void submitImport_WhenNoCheckItems_Throws() {
+    public void submitImport_WhenCheckSnapshotMissing_Throws() {
         SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP2");
         batch.setChkRslt("2");
@@ -112,7 +113,7 @@ public class SecurityPoolExcelImportServiceTest {
             service.submitImport(req);
             fail();
         } catch (BizException e) {
-            assertEquals("没有可提交的校验结果，请先校验", e.getMessage());
+            assertEquals("请先校验，修改主体选择后需要重新校验", e.getMessage());
         }
     }
 

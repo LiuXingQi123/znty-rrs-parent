@@ -41,6 +41,7 @@
 | 35 | 基金池调整历史 | `fund_pool_adjust_history.html` | [35-fund-pool-adjust-history.md](35-fund-pool-adjust-history.md) | `FundPoolAdjustHistoryApiTest` / `FundPoolAdjustHistoryServiceTest` |
 | 36 | 基金池调库审核与详情 | `fund_pool_adjust_approve.html` / `fund_pool_adjust_detail.html` | [36-fund-pool-adjust-approve-detail.md](36-fund-pool-adjust-approve-detail.md) | 待补充 |
 | 37 | 基金净值导出 | `fund_nav_export.html` | [37-fund-nav-export.md](37-fund-nav-export.md) | — |
+| 38 | 基金池 Excel 导入 | `fund_pool_excel_import.html` | [38-fund-pool-excel-import.md](38-fund-pool-excel-import.md) | `FundPoolExcelImportServiceTest` / `FundPoolExcelImportApiTest` / `FundPoolExcelImportPersistenceTest` / `CommonFileServiceTest` |
 
 ## 调库业务全链路索引
 
@@ -62,6 +63,7 @@
 - **基金池查询（基金级当前状态）**：[34](34-fund-pool-query.md) 查询 `ip_pool_status_fund` 中审批通过的记录，关联基金基础信息并回填投资池全路径；支持按池、基金、类型、入池时间和调整人筛选及 Excel 导出。
 - **基金池调整历史（基金级全状态流水）**：[35](35-fund-pool-adjust-history.md) 查询 `ip_adjust_log_fund` 中未删除的全部审核状态记录，支持按池、基金、类型、提交时间、人员、方向和状态筛选及 Excel 导出。
 - **基金净值导出**：[37](37-fund-nav-export.md) 按 `rrs_fundinfo` 查询基金基础信息，勾选基金并选择日期范围后，从 `rrs_fund_nav` 导出逐日单位净值；每只基金单独一个工作表。
+- **基金池 Excel 导入**：[38](38-fund-pool-excel-import.md) 七列模板 → 通用临时表预览 → 基金完整校验和清空差集 → 独立来源整批提交；按服务器快照选择一般流程，继续基金专属审批链路。
 - **基础配置**：[01](01-flow-definition.md) 审批流程定义（设计器/节点/版本）、[02](02-investment-pool.md) 投资池树/关系/流程/权限维护、[03](03-rule-manager.md) QLExpress 风控规则与测试用例、[23](23-credit-bond-grade-rule.md) 信用债期限×主体内评分档→投资池准入矩阵、[24](24-temp-security-code.md) 临时代码录入/更新正式证券/取消发行、[25](25-pool-open-day.md) 投资池开放日区间维护（`ip_pool_open_day`，配合池级 `open_day_adjust`）、[29](29-scheduled-task.md) 定时任务可视化管理（`sys_scheduled_task` 启停/cron/手动执行/执行历史；**新增任务须评估执行顺序**，见该文档 4.1 / 4.2）。
 
 > **三类调库同构说明**：证券池调库（[04]/[05]/[11]）、禁投池调整（[15]/[16]/[17]，主体级）、CRMW 池调库（[19]/[20]/[21]，凭证级）在校验规则、流程快照、审批流转、`audit_status` 状态枚举上完全同构。差异：①操作对象分别为证券 / 主体 / CRMW 凭证+标的证券；②落地表分别为 `ip_pool_status`（`pool_type` 区分）/ `ip_pool_status`（主体级；债券禁止库15与黑名单质押库17另由 `syncCompanyBonds` 同步旗下 `security_status!='D'` 且到期日为空或大于等于当天的 bond 大类债券，含普通债、ABS、crmw；17按主体三个条件统一判定）/ `ip_pool_status_crmw`（独立表，`pool_type='crmw'`）；③批次号前缀 `BOND` / `COMP` / `CRMW`。另：创建 `ip_adjust_step` 人工 pending 时须排除本批次真正审核过（submit/approve/reject）的处理人（同一人不能跨环节；发起人/修改节点回退除外；pending/skipped/auto_process 不算已参与；剔光报错）；O32/系统自动步骤同样排除，剔光则写空处理人 `auto_process`。

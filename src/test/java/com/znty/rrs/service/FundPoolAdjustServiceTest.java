@@ -39,15 +39,17 @@ public class FundPoolAdjustServiceTest {
         ReflectionTestUtils.invokeMethod(service, "validateSubmitRequest", req);
     }
 
-    /** 验证风管领导审批字段允许空值、0、1并拒绝其他值 */
+    /** 验证风管领导审批字段必填，允许 0、1 并拒绝其他值 */
     @Test
     public void validateSubmitRequestShouldValidateRiskLeaderFlag() {
         FundPoolAdjustService service = new FundPoolAdjustService();
         // 构造基础提交请求，验证风管领导审批标记
         FundPoolAdjustSubmitReq req = validSubmitReq();
         req.setNeedRiskLeaderApproval(null);
-        // 调用提交校验，确认审批标记允许为空
-        ReflectionTestUtils.invokeMethod(service, "validateSubmitRequest", req);
+        // 调用提交校验，确认审批标记缺失时返回业务错误
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "validateSubmitRequest", req))
+                .isInstanceOf(BizException.class)
+                .hasMessage("请选择风管领导审批");
 
         req.setNeedRiskLeaderApproval(0);
         // 调用提交校验，确认审批标记允许为 0
@@ -59,7 +61,7 @@ public class FundPoolAdjustServiceTest {
         // 调用提交校验，确认审批标记为其他值时返回业务错误
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "validateSubmitRequest", req))
                 .isInstanceOf(BizException.class)
-                .hasMessage("是否需要风管领导审批仅允许为空、0 或 1");
+                .hasMessage("风管领导审批仅允许为 0 或 1");
     }
 
     /** 验证基金审核入口拒绝缺少步骤 ID 或非法动作的请求。 */
@@ -83,6 +85,7 @@ public class FundPoolAdjustServiceTest {
         FundPoolAdjustSubmitReq req = new FundPoolAdjustSubmitReq();
         req.setFundScore(new BigDecimal("8.5"));
         req.setFundInvestmentType("stock");
+        req.setNeedRiskLeaderApproval(0);
         req.setAdjusterId("1");
         req.setItems(Collections.singletonList(new FundPoolAdjustSubmitReq.AdjustItem()));
         return req;
