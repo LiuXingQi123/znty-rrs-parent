@@ -10,6 +10,7 @@ import com.znty.rrs.entity.bo.FundAdjustLogBo;
 import com.znty.rrs.entity.bo.FundAdjustStepBo;
 import com.znty.rrs.entity.bo.FundInfoBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
@@ -25,14 +26,25 @@ import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.FundPoolAdjustMapper;
 import com.znty.rrs.mapper.FundPoolExcelImportMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
+import com.znty.rrs.mapper.TempFundCodeMapper;
 import java.math.BigDecimal;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.After;
 import org.junit.Before;
@@ -40,6 +52,8 @@ import org.junit.Assume;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -50,6 +64,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -78,6 +94,8 @@ public class FundPoolAdjustExcelSubmitServiceTest {
     private FlowMapper flowMapper;
     /** 附件服务 */
     private SysAttachmentService attachmentService;
+    /** 有效基金临时代码登记数据访问组件 */
+    private TempFundCodeMapper tempFundCodeMapper;
     /** 基金主档 */
     private FundInfoBo fund;
     /** 无报告限制的第一个投资池 */
@@ -93,11 +111,14 @@ public class FundPoolAdjustExcelSubmitServiceTest {
         poolMapper = mock(InvestmentPoolMapper.class);
         flowMapper = mock(FlowMapper.class);
         attachmentService = mock(SysAttachmentService.class);
+        tempFundCodeMapper = mock(TempFundCodeMapper.class);
         ReflectionTestUtils.setField(service, "fundPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
+        ReflectionTestUtils.setField(service, "tempFundCodeMapper", tempFundCodeMapper);
         fund = new FundInfoBo();
+        fund.setId(1L);
         fund.setFundCode("FUND001.SH");
         fund.setFundName("主档基金全称");
         fund.setFundShortName("主档基金简称");
@@ -109,6 +130,7 @@ public class FundPoolAdjustExcelSubmitServiceTest {
         // 构造同一基金另一来源组使用的目标池
         secondPool = buildPool(20L, "第二基金池");
         when(mapper.queryFundByCode("FUND001.SH")).thenReturn(fund);
+        when(mapper.queryFundListForUpdate(anyList())).thenReturn(Collections.singletonList(fund));
         when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(firstPool, secondPool));
         when(mapper.queryFundCurrentPoolIdList("FUND001.SH")).thenReturn(Collections.emptyList());
         when(mapper.queryAllPoolRelationList()).thenReturn(Collections.emptyList());
@@ -445,10 +467,131 @@ public class FundPoolAdjustExcelSubmitServiceTest {
         verify(mapper, never()).addAdjustLog(any());
     }
 
+    /** 锁查询返回已终止主档时，不能使用普通查询中的旧存续状态写申请。 */
+    @Test
+    public void submitShouldRejectDisabledLockedMasterBeforeAnyWrites() {
+        FundInfoBo disabled = new FundInfoBo();
+        disabled.setId(1L);
+        disabled.setFundCode(fund.getFundCode());
+        disabled.setSecurityStatus("D");
+        when(mapper.queryFundListForUpdate(anyList())).thenReturn(Collections.singletonList(disabled));
+        // 构造仍持有旧校验结果的单笔和 Excel 请求
+        FundPoolAdjustSubmitReq req = buildSubmitRequest(10L, "excel-row-2");
+
+        assertThatThrownBy(() -> service.addExcelImportAdjustLogList(Collections.singletonList(req)))
+                .isInstanceOf(BizException.class).hasMessage("已终止或退市基金不能发起调库");
+        assertThatThrownBy(() -> service.addAdjustLog(req))
+                .isInstanceOf(BizException.class).hasMessage("已终止或退市基金不能发起调库");
+
+        verify(mapper, never()).queryFundByCode(anyString());
+        verify(mapper, never()).addAdjustLog(any());
+        verify(mapper, never()).addAdjustStep(any());
+    }
+
+    /** 多基金来源组一次获取全部主档锁，再按当前主档完成复核和写入。 */
+    @Test
+    public void excelSubmitShouldLockAllFundMastersBeforeBusinessChecks() {
+        FundInfoBo other = new FundInfoBo();
+        other.setId(2L);
+        other.setFundCode("FUND002.SH");
+        other.setFundName("另一基金");
+        other.setFundShortName("另一基金");
+        other.setSecurityType(fund.getSecurityType());
+        other.setMarketCode(fund.getMarketCode());
+        other.setSecurityStatus("L");
+        when(mapper.queryFundListForUpdate(anyList())).thenReturn(Arrays.asList(fund, other));
+        // 构造两只基金的独立来源请求，输入顺序与主档顺序相反
+        FundPoolAdjustSubmitReq first = buildSubmitRequest(10L, "excel-row-2");
+        first.setFundCode(other.getFundCode());
+        // 构造另一基金请求以核对整批一次锁定
+        FundPoolAdjustSubmitReq second = buildSubmitRequest(20L, "excel-row-3");
+
+        service.addExcelImportAdjustLogList(Arrays.asList(first, second));
+
+        InOrder order = inOrder(mapper);
+        order.verify(mapper).queryFundListForUpdate(Arrays.asList("FUND001.SH", "FUND002.SH"));
+        order.verify(mapper).queryFundCurrentPoolIdList("FUND002.SH");
+        order.verify(mapper).queryFundCurrentPoolIdList("FUND001.SH");
+        order.verify(mapper).addAdjustLog(argThat(log -> "FUND002.SH".equals(log.getFundCode())));
+        verify(mapper, times(1)).queryFundListForUpdate(anyList());
+    }
+
+    /** 有效临时代码的首个 O32 审批节点创建人工待办，不能自动通过。 */
+    @Test
+    public void temporaryFundShouldCreateInitialManualO32Step() {
+        when(tempFundCodeMapper.queryTemporaryCodeCountByFundCode(fund.getFundCode())).thenReturn(1);
+        // 配置 O32 后仍有普通人工节点的正式版本流程
+        configureO32Flow("o32", false);
+        // 构造有效临时代码的单笔申请
+        FundPoolAdjustSubmitReq req = buildSubmitRequest(10L, "temporary-group");
+
+        service.addAdjustLog(req);
+
+        ArgumentCaptor<FundAdjustStepBo> steps = ArgumentCaptor.forClass(FundAdjustStepBo.class);
+        verify(mapper, times(2)).addAdjustStep(steps.capture());
+        assertThat(steps.getAllValues().get(1).getFlowNodeId()).isEqualTo(1002L);
+        assertThat(steps.getAllValues().get(1).getApprovalStrategy()).isEqualTo("o32");
+        assertThat(steps.getAllValues().get(1).getStepStatus()).isEqualTo("pending");
+        verify(mapper, never()).addFundPoolStatus(any());
+    }
+
+    /** 正式基金的 O32 节点保持自动处理，后续人工节点仍创建待办。 */
+    @Test
+    public void officialFundShouldKeepInitialO32AutomaticBehavior() {
+        // 配置 O32 与普通人工节点，验证正式基金旧行为
+        configureO32Flow("o32", false);
+        // 构造正式基金的单笔申请
+        FundPoolAdjustSubmitReq req = buildSubmitRequest(10L, "official-group");
+
+        service.addAdjustLog(req);
+
+        ArgumentCaptor<FundAdjustStepBo> steps = ArgumentCaptor.forClass(FundAdjustStepBo.class);
+        verify(mapper, times(3)).addAdjustStep(steps.capture());
+        assertThat(steps.getAllValues().get(1).getStepStatus()).isEqualTo("auto_process");
+        assertThat(steps.getAllValues().get(2).getFlowNodeId()).isEqualTo(1003L);
+        assertThat(steps.getAllValues().get(2).getStepStatus()).isEqualTo("pending");
+    }
+
+    /** 临时代码仅改变 O32，普通 auto 节点仍然自动处理。 */
+    @Test
+    public void temporaryFundShouldKeepAutoStrategyAutomatic() {
+        when(tempFundCodeMapper.queryTemporaryCodeCountByFundCode(fund.getFundCode())).thenReturn(1);
+        // 配置 auto 后接人工节点，避免将所有自动策略误改成人工
+        configureO32Flow("auto", false);
+        // 构造有效临时代码的申请
+        FundPoolAdjustSubmitReq req = buildSubmitRequest(10L, "temporary-auto");
+
+        service.addAdjustLog(req);
+
+        ArgumentCaptor<FundAdjustStepBo> steps = ArgumentCaptor.forClass(FundAdjustStepBo.class);
+        verify(mapper, times(3)).addAdjustStep(steps.capture());
+        assertThat(steps.getAllValues().get(1).getStepStatus()).isEqualTo("auto_process");
+        assertThat(steps.getAllValues().get(2).getStepStatus()).isEqualTo("pending");
+    }
+
+    /** 只有 O32 审批的流程对临时代码是人工流程，对正式基金仍不可用。 */
+    @Test
+    public void onlyO32FlowShouldBeUsableOnlyForTemporaryFund() {
+        // 配置只有 O32 审批的流程版本
+        configureO32Flow("o32", true);
+        // 构造同一流程下的正式基金申请
+        FundPoolAdjustSubmitReq req = buildSubmitRequest(10L, "only-o32");
+        assertThatThrownBy(() -> service.addAdjustLog(req))
+                .isInstanceOf(BizException.class).hasMessageContaining("未配置已发布的一般审批流程");
+        verify(mapper, never()).addAdjustLog(any());
+
+        when(tempFundCodeMapper.queryTemporaryCodeCountByFundCode(fund.getFundCode())).thenReturn(1);
+        service.addAdjustLog(req);
+        ArgumentCaptor<FundAdjustStepBo> steps = ArgumentCaptor.forClass(FundAdjustStepBo.class);
+        verify(mapper, times(2)).addAdjustStep(steps.capture());
+        assertThat(steps.getAllValues().get(1).getStepStatus()).isEqualTo("pending");
+    }
+
     /** 校验和提交均重新读取基金主档，主档不存在时不得继续。 */
     @Test
     public void bothExcelEntrypointsShouldRequireCurrentFundMaster() {
         when(mapper.queryFundByCode("FUND001.SH")).thenReturn(null);
+        when(mapper.queryFundListForUpdate(anyList())).thenReturn(Collections.emptyList());
         // 构造同一不存在基金的校验及提交请求
         FundAdjustCheckReq check = buildCheckRequest(10L, AdjustMode.IN.getCode());
         // 构造提交入口需要重新读取主档的来源组
@@ -492,6 +635,156 @@ public class FundPoolAdjustExcelSubmitServiceTest {
         assertThatThrownBy(() -> service.addExcelImportAdjustLogList(Collections.singletonList(req)))
                 .isInstanceOf(BizException.class).hasMessage("每个调库分组必须包含一条手工调整项");
         verify(mapper, never()).addAdjustLog(any());
+    }
+
+    /** 提交等待共同主档锁时并发转正禁用旧码，锁后必须读取 D 并在任何写入前失败。 */
+    @Test
+    public void excelSubmitShouldReadDisabledMasterAfterConcurrentLockWait() throws Exception {
+        String javaVersion = System.getProperty("java.specification.version");
+        int major = Integer.parseInt(javaVersion.startsWith("1.") ? javaVersion.substring(2) : javaVersion);
+        Assume.assumeTrue("H2 2.3.232 并发持久化测试需 Java 11 以上运行时", major >= 11);
+        EmbeddedDatabase database = new EmbeddedDatabaseBuilder().generateUniqueName(true)
+                .setType(EmbeddedDatabaseType.H2).build();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch masterLocked = new CountDownLatch(1);
+        CountDownLatch submitLockStarted = new CountDownLatch(1);
+        CountDownLatch finishConversion = new CountDownLatch(1);
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(database);
+            jdbc.execute("CREATE TABLE test_fund_master (id BIGINT PRIMARY KEY, fund_code VARCHAR(100), security_status VARCHAR(1))");
+            jdbc.update("INSERT INTO test_fund_master VALUES (1, ?, 'L')", fund.getFundCode());
+            DataSourceTransactionManager manager = new DataSourceTransactionManager(database);
+            TransactionTemplate conversion = new TransactionTemplate(manager);
+            when(mapper.queryFundListForUpdate(anyList())).thenAnswer(invocation -> {
+                submitLockStarted.countDown();
+                return jdbc.query("SELECT id,fund_code,security_status FROM test_fund_master WHERE fund_code = ? ORDER BY id FOR UPDATE",
+                        (result, rowIndex) -> {
+                            FundInfoBo current = new FundInfoBo();
+                            current.setId(result.getLong("id"));
+                            current.setFundCode(result.getString("fund_code"));
+                            current.setSecurityStatus(result.getString("security_status"));
+                            return current;
+                        }, fund.getFundCode());
+            });
+            TransactionInterceptor interceptor = new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource());
+            ProxyFactory factory = new ProxyFactory(service);
+            factory.setProxyTargetClass(true);
+            factory.addAdvice(interceptor);
+            FundPoolAdjustService transactional = (FundPoolAdjustService) factory.getProxy();
+            Future<?> converting = executor.submit(() -> conversion.execute(status -> {
+                jdbc.queryForList("SELECT id FROM test_fund_master WHERE id = 1 FOR UPDATE");
+                masterLocked.countDown();
+                try {
+                    if (!finishConversion.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("并发提交未按时进入主档锁查询");
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(exception);
+                }
+                jdbc.update("UPDATE test_fund_master SET security_status = 'D' WHERE id = 1");
+                return null;
+            }));
+            assertThat(masterLocked.await(5, TimeUnit.SECONDS)).isTrue();
+            // 构造在转正前已取得旧校验结果的 Excel 来源组
+            FundPoolAdjustSubmitReq req = buildSubmitRequest(10L, "excel-before-conversion");
+            Future<?> submitting = executor.submit(() -> transactional.addExcelImportAdjustLogList(Collections.singletonList(req)));
+            assertThat(submitLockStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            finishConversion.countDown();
+            converting.get(5, TimeUnit.SECONDS);
+
+            assertThatThrownBy(() -> submitting.get(5, TimeUnit.SECONDS))
+                    .hasRootCauseMessage("已终止或退市基金不能发起调库");
+            verify(mapper, never()).queryFundByCode(anyString());
+            verify(mapper, never()).addAdjustLog(any());
+            verify(mapper, never()).addAdjustStep(any());
+        } finally {
+            finishConversion.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+            database.shutdown();
+        }
+    }
+
+    /** 主档锁清除真实 SqlSession 的锁前缓存，等待后重新查询日志和步骤必须读取已提交的新值。 */
+    @Test
+    public void masterLockShouldClearCachedLogsAndStepsAfterConcurrentWait() throws Exception {
+        String javaVersion = System.getProperty("java.specification.version");
+        int major = Integer.parseInt(javaVersion.startsWith("1.") ? javaVersion.substring(2) : javaVersion);
+        Assume.assumeTrue("H2 2.3.232 并发持久化测试需 Java 11 以上运行时", major >= 11);
+        EmbeddedDatabase database = new EmbeddedDatabaseBuilder().generateUniqueName(true)
+                .setType(EmbeddedDatabaseType.H2).build();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch masterLocked = new CountDownLatch(1);
+        CountDownLatch readerLockStarted = new CountDownLatch(1);
+        CountDownLatch finishMutation = new CountDownLatch(1);
+        try {
+            JdbcTemplate jdbc = new JdbcTemplate(database);
+            jdbc.execute("CREATE TABLE rrs_fundinfo (id BIGINT PRIMARY KEY,fund_code VARCHAR(100)"
+                    + ",security_status VARCHAR(1),is_deleted INT)");
+            jdbc.execute("CREATE TABLE ip_adjust_log_fund (id BIGINT PRIMARY KEY,fund_code VARCHAR(100)"
+                    + ",adjust_batch_no VARCHAR(64),audit_status VARCHAR(4),is_deleted INT)");
+            jdbc.execute("CREATE TABLE ip_adjust_step_fund (id BIGINT PRIMARY KEY,step_status VARCHAR(16))");
+            jdbc.update("INSERT INTO rrs_fundinfo VALUES (1,'TMP001','L',0)");
+            jdbc.update("INSERT INTO ip_adjust_log_fund VALUES (1,'TMP001','FUND-CACHE','00',0)");
+            jdbc.update("INSERT INTO ip_adjust_step_fund VALUES (1,'pending')");
+            Configuration configuration = new Configuration();
+            configuration.setMapUnderscoreToCamelCase(true);
+            configuration.setEnvironment(new Environment("cache-test", new SpringManagedTransactionFactory(), database));
+            try (InputStream xml = getClass().getResourceAsStream("/mapper/FundPoolAdjustMapper.xml")) {
+                new XMLMapperBuilder(xml, configuration, "FundPoolAdjustMapper.xml", configuration.getSqlFragments()).parse();
+            }
+            SqlSessionTemplate session = new SqlSessionTemplate(new SqlSessionFactoryBuilder().build(configuration));
+            FundPoolAdjustMapper realMapper = session.getMapper(FundPoolAdjustMapper.class);
+            DataSourceTransactionManager manager = new DataSourceTransactionManager(database);
+            TransactionTemplate mutation = new TransactionTemplate(manager);
+            mutation.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+            TransactionTemplate reading = new TransactionTemplate(manager);
+            reading.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+            Future<?> mutating = executor.submit(() -> mutation.execute(status -> {
+                jdbc.queryForList("SELECT id FROM rrs_fundinfo WHERE id=1 FOR UPDATE");
+                masterLocked.countDown();
+                try {
+                    if (!finishMutation.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("缓存复核事务未按时进入主档锁查询");
+                    }
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(exception);
+                }
+                jdbc.update("UPDATE rrs_fundinfo SET security_status='D' WHERE id=1");
+                jdbc.update("UPDATE ip_adjust_log_fund SET fund_code='FORMAL001' WHERE id=1");
+                jdbc.update("UPDATE ip_adjust_step_fund SET step_status='approve' WHERE id=1");
+                return null;
+            }));
+            assertThat(masterLocked.await(5, TimeUnit.SECONDS)).isTrue();
+            Future<?> rereading = executor.submit(() -> reading.execute(status -> {
+                List<FundAdjustLogBo> oldLogs = realMapper.queryAdjustLogListForAudit("FUND-CACHE");
+                FundAdjustStepBo oldStep = realMapper.queryAdjustStepById(1L);
+                assertThat(oldLogs.get(0).getFundCode()).isEqualTo("TMP001");
+                assertThat(oldStep.getStepStatus()).isEqualTo("pending");
+                // 确认同一事务中的重复查询已由真实 SESSION 一级缓存提供旧对象
+                assertThat(realMapper.queryAdjustLogListForAudit("FUND-CACHE")).isSameAs(oldLogs);
+                assertThat(realMapper.queryAdjustStepById(1L)).isSameAs(oldStep);
+                readerLockStarted.countDown();
+                List<FundInfoBo> lockedFunds = realMapper.queryFundListForUpdate(Collections.singletonList("TMP001"));
+                assertThat(lockedFunds.get(0).getSecurityStatus()).isEqualTo("D");
+                // 共同锁语句清缓存后，日志和步骤复核必须重新查库而不能复用锁前结果
+                assertThat(realMapper.queryAdjustLogListForAudit("FUND-CACHE").get(0).getFundCode())
+                        .isEqualTo("FORMAL001");
+                assertThat(realMapper.queryAdjustStepById(1L).getStepStatus()).isEqualTo("approve");
+                return null;
+            }));
+            assertThat(readerLockStarted.await(5, TimeUnit.SECONDS)).isTrue();
+            finishMutation.countDown();
+            mutating.get(5, TimeUnit.SECONDS);
+            rereading.get(5, TimeUnit.SECONDS);
+        } finally {
+            finishMutation.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+            database.shutdown();
+        }
     }
 
     /** 后续组的步骤持久化异常时，真实数据库事务回滚前面全部日志和步骤。 */
@@ -564,6 +857,42 @@ public class FundPoolAdjustExcelSubmitServiceTest {
         pool.setInReportRestriction("none");
         pool.setOutReportRestriction("none");
         return pool;
+    }
+
+    /**
+     * 配置自动策略节点后接普通人工节点的流程，或只有自动策略审批的流程。
+     *
+     * @param strategy 待核对的 o32 或 auto 审批策略
+     * @param onlyStrategy 是否只保留该策略的审批节点
+     */
+    private void configureO32Flow(String strategy, boolean onlyStrategy) {
+        FlowNodeBo start = new FlowNodeBo();
+        start.setId(1001L);
+        start.setNodeType("start");
+        FlowNodeBo o32 = new FlowNodeBo();
+        o32.setId(1002L);
+        o32.setNodeType("approval");
+        o32.setLabel("O32 审批");
+        FlowNodeBo manual = new FlowNodeBo();
+        manual.setId(1003L);
+        manual.setNodeType("approval");
+        FlowNodeBo end = new FlowNodeBo();
+        end.setId(1004L);
+        end.setNodeType("end");
+        FlowEdgeBo first = new FlowEdgeBo();
+        first.setFromNodeId(start.getId());
+        first.setToNodeId(o32.getId());
+        FlowEdgeBo second = new FlowEdgeBo();
+        second.setFromNodeId(o32.getId());
+        second.setToNodeId(onlyStrategy ? end.getId() : manual.getId());
+        NodeApprovalConfigBo config = new NodeApprovalConfigBo();
+        config.setId(2002L);
+        config.setNodeId(o32.getId());
+        config.setApprovalStrategy(strategy);
+        when(flowMapper.queryFlowNodeListByVersionId(1000L)).thenReturn(onlyStrategy
+                ? Arrays.asList(start, o32, end) : Arrays.asList(start, o32, manual, end));
+        when(flowMapper.queryFlowEdgeListByVersionId(1000L)).thenReturn(Arrays.asList(first, second));
+        when(flowMapper.queryApprovalConfigListByVersionId(1000L)).thenReturn(Collections.singletonList(config));
     }
 
     /** 配置已发布并包含实际人工审批节点的一般流程快照。 */

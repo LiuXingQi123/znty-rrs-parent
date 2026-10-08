@@ -1824,7 +1824,8 @@ public class ScriptToolService {
         addModuleTask(taskMap, "external-import", "外部导入表", "重置外部导入表演示数据（当前含 rrs_securityinfo）。", "danger", "rrs_external_import_demo_data.sql");
         // 登记基金基础信息演示数据的独立重置入口
         addModuleTask(taskMap, "fund-info", "基金基础信息", "单独重置基金基础信息演示数据，不影响债券证券主数据。", "medium", "fund/rrs_fundinfo_demo_data.sql");
-        addModuleTask(taskMap, "temp-fund-code", "基金临时代码", "清空基金临时代码表。", "medium", "fund/rrs_temp_fund_code_demo_data.sql");
+        // 登记临时基金登记、操作审计和替换日志的独立清空入口
+        addModuleTask(taskMap, "temp-fund-code", "基金临时代码", "清空基金临时代码登记、操作审计和替换日志。", "medium", "fund/rrs_temp_fund_code_demo_data.sql");
         // 登记基金逐日净值演示数据的独立重置入口
         addModuleTask(taskMap, "fund-nav", "基金净值数据", "单独重置基金逐日净值演示数据，不影响基金基础信息和债券证券主数据。", "medium", "fund/rrs_fund_nav_demo_data.sql");
         // 登记基金调库运行表演示数据的独立重置入口
@@ -2417,7 +2418,8 @@ public class ScriptToolService {
     }
 
     /**
-     * 查询证券与 CRMW 调库运行态清空表，基金调库表由基金专属任务管理。
+     * 查询调库运行态清空表，基金调库主运行表由基金专属任务管理。
+     * <p>临时基金替换日志属于运行态记录，登记及操作审计不随本任务清空。</p>
      */
     private List<String> queryAdjustFlowRuntimeTables() {
         return Arrays.asList(
@@ -2430,6 +2432,7 @@ public class ScriptToolService {
                 "sys_attachment",
                 "rrs_report_in",
                 "rrs_report_out",
+                "rrs_temp_fund_code_update_log",
                 "sys_imp_tmp",
                 "sys_imp_tmp_detl"
         );
@@ -2483,6 +2486,10 @@ public class ScriptToolService {
                 // 登记基金基础信息表
                 buildTable("znty_rrs", "rrs_fundinfo", "基金基础信息"),
                 buildTable("znty_rrs", "rrs_temp_fund_code", "基金临时代码"),
+                // 登记基金临时代码操作审计表
+                buildTable("znty_rrs", "rrs_temp_fund_code_evt", "基金临时代码操作审计"),
+                // 登记临时基金转正时的逐记录替换日志
+                buildTable("znty_rrs", "rrs_temp_fund_code_update_log", "临时基金代码替换日志"),
                 // 登记基金逐日净值表
                 buildTable("znty_rrs", "rrs_fund_nav", "基金逐日净值")
         )));
@@ -2697,10 +2704,10 @@ public class ScriptToolService {
                 "high", "INIT_AIS_DEMO",
                 "会重置 AIS 投资分析与 ODS 库演示数据。",
                 queryAisDemoFiles(), countTablesInFiles(queryAisDemoFiles(), "demo"), null);
-        // 登记证券与 CRMW 调库运行态清空任务，基金表不在此清单
+        // 登记调库运行态清空任务，基金主运行表仍由基金专属任务管理
         List<String> clearTables = queryAdjustFlowRuntimeTables();
         addTask(taskMap, TASK_CLEAR_ADJUST_FLOW, "清空调库流程数据",
-                "只清空调库申请、步骤、当前池状态、调库信息快照、附件、报告和 Excel 导入临时表等运行态数据。",
+                "只清空调库申请、步骤、当前池状态、调库信息快照、附件、报告、临时基金替换日志和 Excel 导入临时表等运行态数据。",
                 "danger", "CLEAR_ADJUST_FLOW",
                 "不清空证券主数据、投资池、流程定义、规则和字典配置。",
                 clearTables, clearTables.size(), null);

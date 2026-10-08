@@ -47,6 +47,9 @@ public class ScriptToolServiceTest {
         assertTrue(tables.containsKey("znty_rrs.ip_pool_status_fund"));
         assertTrue(tables.containsKey("znty_rrs.dict_external_rating_agency"));
         assertTrue(tables.containsKey("znty_rrs.rrs_temp_security_code"));
+        assertTrue(tables.containsKey("znty_rrs.rrs_temp_fund_code"));
+        assertTrue(tables.containsKey("znty_rrs.rrs_temp_fund_code_evt"));
+        assertTrue(tables.containsKey("znty_rrs.rrs_temp_fund_code_update_log"));
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_log"));
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_security_snapshot"));
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_security_snapshot_crmw"));
@@ -85,6 +88,10 @@ public class ScriptToolServiceTest {
         assertTrue(schemaFiles.contains("fund/rrs_fundinfo_schema.sql"));
         assertTrue(schemaFiles.contains("fund/rrs_fund_nav_schema.sql"));
         assertTrue(schemaFiles.contains("fund/rrs_fund_pool_adjust_schema.sql"));
+        assertTrue(schemaFiles.contains("fund/rrs_temp_fund_code_schema.sql"));
+        // 仅保留完整建表和演示脚本，不再注册动态字段升级文件
+        assertFalse(registered.contains("fund/rrs_temp_fund_code_upgrade.sql"));
+        assertFalse(new File("sql/fund/rrs_temp_fund_code_upgrade.sql").exists());
         assertTrue(demoFiles.contains("fund/rrs_fundinfo_demo_data.sql"));
         assertTrue(demoFiles.contains("fund/rrs_fund_nav_demo_data.sql"));
         assertTrue(demoFiles.contains("fund/rrs_fund_pool_adjust_demo_data.sql"));
@@ -172,8 +179,15 @@ public class ScriptToolServiceTest {
         assertTrue(!resetItems.contains("ais_inv_ods_demo_data.sql"));
         assertTrue(schemaItems.contains("rrs_adjust_snapshot_schema.sql"));
         assertTrue(externalSchemaItems.contains("rrs_external_import_schema.sql"));
-        assertEquals(Arrays.asList("fund/rrs_fundinfo_schema.sql", "fund/rrs_fund_nav_schema.sql", "fund/rrs_fund_pool_adjust_schema.sql"), fundSchemaItems);
-        assertEquals(Arrays.asList("fund/rrs_fundinfo_demo_data.sql", "fund/rrs_fund_nav_demo_data.sql", "fund/rrs_fund_pool_adjust_demo_data.sql"), fundDemoItems);
+        assertEquals(Arrays.asList("fund/rrs_fundinfo_schema.sql", "fund/rrs_temp_fund_code_schema.sql",
+                "fund/rrs_fund_nav_schema.sql", "fund/rrs_fund_pool_adjust_schema.sql"), fundSchemaItems);
+        assertEquals(Arrays.asList("fund/rrs_fundinfo_demo_data.sql", "fund/rrs_temp_fund_code_demo_data.sql",
+                "fund/rrs_fund_nav_demo_data.sql", "fund/rrs_fund_pool_adjust_demo_data.sql"), fundDemoItems);
+        // 已移除的动态字段升级文件不属于初始化任务或已排除清单
+        assertFalse(fundSchemaItems.contains("fund/rrs_temp_fund_code_upgrade.sql"));
+        assertFalse(schemaItems.contains("fund/rrs_temp_fund_code_upgrade.sql"));
+        assertFalse(resetItems.contains("fund/rrs_temp_fund_code_upgrade.sql"));
+        assertFalse(excluded.contains("fund/rrs_temp_fund_code_upgrade.sql"));
         // 主库批量任务「已排除」须标出 AIS、外部导入与基金脚本，便于页面展示
         assertTrue(excluded.contains("ais_inv_analysis_demo_data.sql"));
         assertTrue(excluded.contains("ais_inv_ods_demo_data.sql"));
@@ -194,14 +208,17 @@ public class ScriptToolServiceTest {
         // 表数/文件数随脚本增减变化，只断言与清单动态一致，避免硬编码漂移
         assertTrue(schemaTableCount != null && schemaTableCount > 0);
         assertEquals(Integer.valueOf(1), externalImportTableCount);
-        assertEquals(Integer.valueOf(5), fundSchemaTableCount);
-        assertEquals(Integer.valueOf(5), fundDemoTableCount);
+        assertEquals(Integer.valueOf(8), fundSchemaTableCount);
+        assertEquals(Integer.valueOf(8), fundDemoTableCount);
         assertEquals(Integer.valueOf(clearItems.size()), clearTableCount);
         assertTrue(clearItems.contains("ip_adjust_security_snapshot"));
         assertTrue(clearItems.contains("ip_adjust_security_snapshot_crmw"));
         assertTrue(!clearItems.contains("ip_adjust_log_fund"));
         assertTrue(!clearItems.contains("ip_adjust_step_fund"));
         assertTrue(!clearItems.contains("ip_pool_status_fund"));
+        assertTrue(clearItems.contains("rrs_temp_fund_code_update_log"));
+        assertFalse(clearItems.contains("rrs_temp_fund_code"));
+        assertFalse(clearItems.contains("rrs_temp_fund_code_evt"));
         assertEquals(schemaItems.size(), ((List<?>) ReflectionTestUtils.invokeMethod(service, "queryRrsSchemaFiles")).size());
         // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的表（导入临时表 + 快照等）
         assertTrue(unseededTables.contains("sys_imp_tmp"));
@@ -256,6 +273,14 @@ public class ScriptToolServiceTest {
         assertTrue(moduleTaskMap.containsKey("fund-info"));
         assertTrue(moduleTaskMap.containsKey("fund-nav"));
         assertTrue(moduleTaskMap.containsKey("fund-adjust"));
+        assertTrue(moduleTaskMap.containsKey("temp-fund-code"));
+        // 完整建表脚本与演示脚本均归属普通临时代码模块
+        assertEquals("temp-fund-code", ReflectionTestUtils.invokeMethod(service,
+                "resolveModuleCode", "fund/rrs_temp_fund_code_schema.sql"));
+        assertEquals("基金临时代码", ReflectionTestUtils.invokeMethod(service,
+                "resolveModuleName", "fund/rrs_temp_fund_code_demo_data.sql"));
+        // 移除动态升级后不再向脚本工具暴露独立升级入口
+        assertFalse(moduleTaskMap.containsKey("temp-fund-code-upgrade"));
     }
 
     /** 验证关闭开关后写操作被拒绝。 */

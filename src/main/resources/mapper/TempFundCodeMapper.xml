@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.TempFundCodeMapper">
+
+    <!-- 登记列表包含软删除记录；状态和来源筛选由用户决定 -->
+    <select id="queryTempFundCodePage" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto">
+        SELECT t.*
+              ,td.security_type_name AS temp_security_type_name
+              ,fd.security_type_name
+        FROM rrs_temp_fund_code t
+        LEFT JOIN dict_security_type td ON td.security_type = t.temp_security_type AND td.is_deleted = 0
+        LEFT JOIN dict_security_type fd ON fd.security_type = t.security_type AND fd.is_deleted = 0
+        <where>
+            <if test="tempFundCode != null and tempFundCode != ''">
+                AND t.temp_fund_code LIKE CONCAT('%', #{tempFundCode}, '%')
+            </if>
+            <if test="tempFundShortName != null and tempFundShortName != ''">
+                AND t.temp_fund_short_name LIKE CONCAT('%', #{tempFundShortName}, '%')
+            </if>
+            <if test="statusList != null and statusList.size() > 0">
+                AND t.status IN
+                <foreach collection="statusList" item="value" open="(" separator="," close=")">#{value}</foreach>
+            </if>
+            <if test="oprtSourceList != null and oprtSourceList.size() > 0">
+                AND t.oprt_source IN
+                <foreach collection="oprtSourceList" item="value" open="(" separator="," close=")">#{value}</foreach>
+            </if>
+        </where>
+        ORDER BY CASE t.status WHEN 'temporary' THEN 0 WHEN 'updated' THEN 1 WHEN 'cancelled' THEN 2 ELSE 3 END
+                ,t.update_time DESC
+                ,t.crte_time DESC
+                ,t.id DESC
+    </select>
+
+    <!-- 新增选项只查询基金大类，不依赖主档当前已有的基金品种 -->
+    <select id="queryFundTypeList" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto$TypeOption">
+        SELECT security_type
+              ,security_type_name
+        FROM dict_security_type
+        WHERE category_type = 'fund' AND is_deleted = 0
+        ORDER BY id
+    </select>
+
+    <!-- 新增登记锁定已有基金字典行，事务提交前串行完成重复代码检查和主档写入 -->
+    <select id="queryFundTypeListForUpdate" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto$TypeOption">
+        SELECT security_type
+              ,security_type_name
+        FROM dict_security_type
+        WHERE category_type = 'fund' AND is_deleted = 0
+        ORDER BY id FOR UPDATE
+    </select>
+
+    <!-- 正式基金来源允许为空，排除所有 temporary 占位和无效基金产品类型 -->
+    <select id="queryFormalFundOptionList" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto$FormalFundOption">
+        SELECT fi.fund_code
+              ,fi.fund_name
+              ,fi.fund_short_name
+              ,fi.market_code
+              ,fi.security_type
+              ,dst.security_type_name
+        FROM rrs_fundinfo fi
+        INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                         AND dst.category_type = 'fund' AND dst.is_deleted = 0
+        <where>
+            fi.is_deleted = 0
+            AND fi.security_status != 'D'
+            AND (fi.source_system IS NULL OR fi.source_system != 'temporary')
+            <if test="fundKeyword != null and fundKeyword != ''">
+                AND (fi.fund_code LIKE CONCAT('%', #{fundKeyword}, '%')
+                    OR fi.fund_name LIKE CONCAT('%', #{fundKeyword}, '%')
+                    OR fi.fund_short_name LIKE CONCAT('%', #{fundKeyword}, '%'))
+            </if>
+        </where>
+        ORDER BY fi.updt_time DESC
+                ,fi.fund_code
+        LIMIT 50
+    </select>
+
+    <!-- 转正只接受正式代码，其余信息从有效主档和基金字典读取 -->
+    <select id="queryFormalFundByCode" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto$FormalFundOption">
+        SELECT fi.fund_code
+              ,fi.fund_name
+              ,fi.fund_short_name
+              ,fi.market_code
+              ,fi.security_type
+              ,dst.security_type_name
+        FROM rrs_fundinfo fi
+        INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                         AND dst.category_type = 'fund' AND dst.is_deleted = 0
+        WHERE fi.fund_code = #{fundCode}
+          AND fi.is_deleted = 0
+          AND fi.security_status != 'D'
+          AND (fi.source_system IS NULL OR fi.source_system != 'temporary')
+    </select>
+
+    <!-- 返回未删除登记和数据库产品类型名称 -->
+    <select id="queryTempFundCodeDetail" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto">
+        SELECT t.*
+              ,td.security_type_name AS temp_security_type_name
+              ,fd.security_type_name
+        FROM rrs_temp_fund_code t
+        LEFT JOIN dict_security_type td ON td.security_type = t.temp_security_type AND td.is_deleted = 0
+        LEFT JOIN dict_security_type fd ON fd.security_type = t.security_type AND fd.is_deleted = 0
+        WHERE t.id = #{id} AND t.is_deleted = 0
+    </select>
+
+    <!-- 在锁主档之前仅确定登记所引用的临时代码 -->
+    <select id="queryTempFundCodeById" resultType="com.znty.rrs.entity.bo.TempFundCodeBo">
+        SELECT * FROM rrs_temp_fund_code WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <!-- 主档锁之后锁定登记，以当前读校验状态 -->
+    <select id="queryTempFundCodeByIdForUpdate" resultType="com.znty.rrs.entity.bo.TempFundCodeBo">
+        SELECT * FROM rrs_temp_fund_code WHERE id = #{id} AND is_deleted = 0 FOR UPDATE
+    </select>
+
+    <!-- 同码占位不能覆盖主档，已删除主档的代码也保留占用 -->
+    <select id="queryFundCodeReferenceIdListForUpdate" resultType="java.lang.Long">
+        SELECT id FROM rrs_fundinfo WHERE fund_code = #{fundCode} ORDER BY id FOR UPDATE
+    </select>
+
+    <!-- 取消和转正后的登记仍占用临时代码 -->
+    <select id="queryTempFundCodeCount" resultType="int">
+        SELECT COUNT(*) FROM rrs_temp_fund_code WHERE temp_fund_code = #{fundCode} AND is_deleted = 0
+    </select>
+
+    <!-- O32 只将有效临时登记视为临时代码 -->
+    <select id="queryTemporaryCodeCountByFundCode" resultType="int">
+        SELECT COUNT(*) FROM rrs_temp_fund_code
+        WHERE temp_fund_code = #{fundCode} AND status = 'temporary' AND is_deleted = 0
+    </select>
+
+    <!-- 人工新增登记，正式信息尚未填写 -->
+    <insert id="addTempFundCode" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rrs_temp_fund_code (
+            temp_fund_code
+           ,temp_fund_short_name
+           ,temp_security_type
+           ,temp_market_code
+           ,fund_code
+           ,fund_name
+           ,fund_short_name
+           ,market_code
+           ,security_type
+           ,update_time
+           ,status
+           ,is_deleted
+           ,oprt_source
+           ,memo
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{tempFundCode}
+           ,#{tempFundShortName}
+           ,#{tempSecurityType}
+           ,#{tempMarketCode}
+           ,#{fundCode}
+           ,#{fundName}
+           ,#{fundShortName}
+           ,#{marketCode}
+           ,#{securityType}
+           ,#{updateTime}
+           ,#{status}
+           ,#{isDeleted}
+           ,#{oprtSource}
+           ,#{memo}
+           ,#{crteTime}
+           ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 占位主档全称使用简称，来源为 temporary、状态为 L（存续或上市中）；不补未知日期和管理人 -->
+    <insert id="addTempFundInfo">
+        INSERT INTO rrs_fundinfo (
+            fund_code
+           ,fund_name
+           ,fund_short_name
+           ,security_type
+           ,market_code
+           ,security_status
+           ,source_system
+           ,is_deleted
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{tempFundCode}
+           ,#{tempFundShortName}
+           ,#{tempFundShortName}
+           ,#{tempSecurityType}
+           ,#{tempMarketCode}
+           ,'L'
+           ,'temporary'
+           ,0
+           ,#{crteTime}
+           ,#{updtTime}
+        )
+    </insert>
+
+    <!-- 状态条件阻断重复转正、取消和删除 -->
+    <update id="editTempFundCodeState">
+        UPDATE rrs_temp_fund_code
+        SET fund_code = #{fundCode}
+           ,fund_name = #{fundName}
+           ,fund_short_name = #{fundShortName}
+           ,market_code = #{marketCode}
+           ,security_type = #{securityType}
+           ,update_time = #{updateTime}
+           ,status = #{status}
+           ,is_deleted = #{isDeleted}
+           ,oprt_source = #{oprtSource}
+           ,updt_time = #{updtTime}
+        WHERE id = #{id} AND status = 'temporary' AND is_deleted = 0
+    </update>
+
+    <!-- 转正和取消只禁用原占位主档，不改正式主档或基金日期 -->
+    <update id="editTempFundInfoToDisabled">
+        UPDATE rrs_fundinfo SET security_status = 'D'
+                              ,updt_time = #{now}
+        WHERE fund_code = #{fundCode} AND source_system = 'temporary' AND is_deleted = 0
+    </update>
+
+    <!-- 从变更后的登记保存全字段审计快照，包括软删除操作 -->
+    <insert id="addTempFundCodeEvent">
+        INSERT INTO rrs_temp_fund_code_evt (
+            id
+           ,temp_fund_code
+           ,temp_fund_short_name
+           ,temp_security_type
+           ,temp_market_code
+           ,fund_code
+           ,fund_name
+           ,fund_short_name
+           ,market_code
+           ,security_type
+           ,update_time
+           ,status
+           ,is_deleted
+           ,oprt_source
+           ,memo
+           ,crte_time
+           ,updt_time
+           ,opter_id
+           ,opt_time
+           ,oprt_type
+        )
+        SELECT t.id
+              ,t.temp_fund_code
+              ,t.temp_fund_short_name
+              ,t.temp_security_type
+              ,t.temp_market_code
+              ,t.fund_code
+              ,t.fund_name
+              ,t.fund_short_name
+              ,t.market_code
+              ,t.security_type
+              ,t.update_time
+              ,t.status
+              ,t.is_deleted
+              ,t.oprt_source
+              ,t.memo
+              ,t.crte_time
+              ,t.updt_time
+              ,#{operatorId}
+              ,#{now}
+              ,#{oprtType}
+        FROM rrs_temp_fund_code t WHERE t.id = #{id}
+    </insert>
+
+    <!-- 所有未删除基金业务引用阻止删除，已结束日志仍属于引用 -->
+    <select id="queryCoreReferenceCount" resultType="int">
+        SELECT (SELECT COUNT(*) FROM ip_adjust_log_fund WHERE fund_code = #{fundCode} AND is_deleted = 0)
+             + (SELECT COUNT(*) FROM ip_pool_status_fund WHERE fund_code = #{fundCode} AND is_deleted = 0) AS ref_count
+    </select>
+
+    <!-- 只锁定在途日志，终态历史不替换 -->
+    <select id="queryPendingAdjustLogListForUpdate" resultType="com.znty.rrs.entity.bo.FundAdjustLogBo">
+        SELECT * FROM ip_adjust_log_fund
+        WHERE fund_code = #{fundCode} AND is_deleted = 0 AND audit_status IN ('00', '11')
+        ORDER BY id FOR UPDATE
+    </select>
+
+    <!-- 在途仅修改四个主档字段，三个基金调库参数和所有审批关联保持原值 -->
+    <update id="editPendingFundReference">
+        UPDATE ip_adjust_log_fund
+        SET fund_code = #{bo.fundCode}
+           ,fund_name = #{bo.fundName}
+           ,fund_short_name = #{bo.fundShortName}
+           ,security_type = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE fund_code = #{bo.tempFundCode} AND is_deleted = 0 AND audit_status IN ('00', '11')
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+    <!-- 池状态保存原入池业务信息，原日志 ID 用于继承附件关联 -->
+    <select id="queryActivePoolStatusListForUpdate" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto$PoolStatusReference">
+        SELECT ps.*
+              ,ps.id AS pool_status_id
+              ,ps.adjust_log_id AS source_adjust_log_id
+        FROM ip_pool_status_fund ps
+        WHERE ps.fund_code = #{fundCode} AND ps.audit_status = '20' AND ps.is_deleted = 0
+        ORDER BY ps.id FOR UPDATE
+    </select>
+
+    <!-- 同池已有正式基金时保留其原记录，不覆盖评分等参数 -->
+    <select id="queryFormalPoolStatusCount" resultType="int">
+        SELECT COUNT(*) FROM ip_pool_status_fund
+        WHERE fund_code = #{fundCode} AND target_pool_id = #{poolId}
+          AND audit_status = '20' AND is_deleted = 0
+    </select>
+
+    <!-- 只软删除本次锁定的原临时在池记录 -->
+    <update id="deleteTempPoolStatusById">
+        UPDATE ip_pool_status_fund SET is_deleted = 1
+                                     ,updt_time = #{now}
+        WHERE id = #{id} AND audit_status = '20' AND is_deleted = 0
+    </update>
+
+    <!-- 成功替换明细与登记、调库日志处于同一事务 -->
+    <insert id="addTempFundCodeUpdateLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO rrs_temp_fund_code_update_log (
+            temp_code_id
+           ,temp_fund_code
+           ,temp_fund_short_name
+           ,temp_market_code
+           ,temp_security_type
+           ,fund_code
+           ,fund_name
+           ,fund_short_name
+           ,market_code
+           ,security_type
+           ,replace_table_name
+           ,replace_record_id
+           ,replace_status
+           ,replace_time
+           ,operator_id
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{tempCodeId}
+           ,#{tempFundCode}
+           ,#{tempFundShortName}
+           ,#{tempMarketCode}
+           ,#{tempSecurityType}
+           ,#{fundCode}
+           ,#{fundName}
+           ,#{fundShortName}
+           ,#{marketCode}
+           ,#{securityType}
+           ,#{replaceTableName}
+           ,#{replaceRecordId}
+           ,#{replaceStatus}
+           ,#{replaceTime}
+           ,#{operatorId}
+           ,#{crteTime}
+           ,#{updtTime}
+        )
+    </insert>
+</mapper>

@@ -43,6 +43,15 @@ public interface FundPoolAdjustMapper {
     FundInfoBo queryFundByCode(@Param("fundCode") String fundCode);
 
     /**
+     * 按主键顺序锁定基金主档并读取最新状态，供调库及临时代码变更共用。
+     * <p>清除当前 SqlSession 的查询缓存，保证锁后日志及步骤复核不复用锁前结果。</p>
+     *
+     * @param fundCodes 需要锁定的非空基金代码列表
+     * @return 按主键升序排列的当前基金主档
+     */
+    List<FundInfoBo> queryFundListForUpdate(@Param("fundCodes") List<String> fundCodes);
+
+    /**
      * 查询基金当前所在池。
      *
      * @param fundCode 基金代码

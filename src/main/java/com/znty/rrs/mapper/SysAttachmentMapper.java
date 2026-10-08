@@ -1,6 +1,7 @@
 package com.znty.rrs.mapper;
 
 import com.znty.rrs.entity.bo.SysAttachmentBo;
+import com.znty.rrs.entity.bo.FundAdjustLogBo;
 import com.znty.rrs.entity.sysattachment.SysAttachmentDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -30,4 +31,20 @@ public interface SysAttachmentMapper {
 
     /** 查询指定调库记录下手工上传的信评报告附件 */
     List<SysAttachmentBo> queryHandCreditReportAttachments(@Param("adjustLogId") Long adjustLogId);
+
+    /**
+     * 读取未删除的基金调库日志，仅用于受控附件继承校验。
+     *
+     * @param adjustLogId 基金调库日志 ID
+     * @return 基金调库日志，不存在时返回 null
+     */
+    FundAdjustLogBo queryFundAdjustLogById(@Param("adjustLogId") Long adjustLogId);
+
+    /**
+     * 查询基金日志的全部有效附件，保留原始分类供服务校验。
+     *
+     * @param adjustLogId 来源基金调库日志 ID
+     * @return 来源日志下的有效附件关联
+     */
+    List<SysAttachmentBo> queryFundAdjustAttachmentList(@Param("adjustLogId") Long adjustLogId);
 }

@@ -73,6 +73,19 @@
         LIMIT 1
     </select>
 
+    <!-- 按主键顺序锁定基金主档并清除锁前的 SqlSession 缓存，确保锁后复核日志和步骤使用当前状态 -->
+    <select id="queryFundListForUpdate" resultType="com.znty.rrs.entity.bo.FundInfoBo" flushCache="true">
+        SELECT *
+        FROM rrs_fundinfo
+        WHERE is_deleted = 0
+          AND fund_code IN
+        <foreach collection="fundCodes" item="fundCode" open="(" separator="," close=")">
+            #{fundCode}
+        </foreach>
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
     <!-- 查询基金当前有效的已审批通过池状态 -->
     <select id="queryFundPoolStatusList" resultType="com.znty.rrs.entity.fundpooladjust.FundPoolStatusDto">
         SELECT ips.id
@@ -419,6 +432,7 @@
            ,adjust_reason
            ,adjust_advice
            ,submit_time
+           ,audit_time
            ,is_deleted
            ,crte_time
            ,updt_time
@@ -445,6 +459,8 @@
            ,#{adjustReason}
            ,#{adjustAdvice}
            ,#{submitTime}
+            <!-- 临时代码在池转换直接写入已通过日志时同步审批时间，待审批申请保持为空 -->
+           ,CASE WHEN #{auditStatus} = '20' THEN NOW() ELSE NULL END
            ,0
            ,NOW()
            ,NOW()

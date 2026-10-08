@@ -6,16 +6,19 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
+import com.znty.rrs.common.enums.AuditStatus;
 
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.SysAttachmentMapper;
 import com.znty.rrs.entity.bo.SysAttachmentBo;
+import com.znty.rrs.entity.bo.FundAdjustLogBo;
 import com.znty.rrs.entity.sysattachment.SysAttachmentDto;
 import com.znty.rrs.entity.sysattachment.SysAttachmentReq;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationAdapter;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
@@ -48,6 +51,13 @@ public class SysAttachmentService {
 
     /** 调库日志表名称 */
     private static final String ADJUST_LOG_TABLE = "ip_adjust_log";
+    /** 基金调库日志关联表 */
+    private static final String FUND_ADJUST_LOG_TABLE = "ip_adjust_log_fund";
+    /** 基金日志允许继承的报告和材料附件分类 */
+    private static final Set<String> FUND_ATTACHMENT_CATEGORIES = new HashSet<>(Arrays.asList(
+            AttachmentCategory.FUND_REPORT_HAND.getCode(), AttachmentCategory.FUND_REPORT_IN.getCode(),
+            AttachmentCategory.FUND_REPORT_OUT.getCode(), AttachmentCategory.FUND_MATERIAL_HAND.getCode(),
+            AttachmentCategory.FUND_MATERIAL_IN.getCode(), AttachmentCategory.FUND_MATERIAL_OUT.getCode()));
 
     /** 内部报告库附件分类 */
     private static final String CATEGORY_REPORT_IN = "report_in";
@@ -285,6 +295,61 @@ public class SysAttachmentService {
             bo.setUploaderId(uploaderId);
             // 复用报告库物理文件并保存当前业务记录的附件关联
             sysAttachmentMapper.addAttachment(bo);
+        }
+    }
+
+    /**
+     * 供临时基金转正的后端流程继承同池已通过日志的附件关联，保留原分类并复用物理文件。
+     *
+     * @param sourceLogId 原已在池记录对应的基金调库日志 ID
+     * @param targetLogId 本次代码替换生成的已通过基金调库日志 ID
+     * @param operatorId 执行代码替换的经办人 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void copyFundAdjustAttachments(Long sourceLogId, Long targetLogId, String operatorId) {
+        // 限定不同日志之间的关联复制，并校验登记复制操作的经办人
+        if (sourceLogId == null || targetLogId == null || sourceLogId <= 0 || targetLogId <= 0
+                || sourceLogId.equals(targetLogId)) {
+            throw new BizException("基金附件继承失败：来源和目标日志 ID 必须为不同的有效 ID");
+        }
+        if (operatorId == null || operatorId.trim().isEmpty()) {
+            throw new BizException("基金附件继承失败：经办人 ID 不能为空");
+        }
+        // 从后端日志核实来源和目标属于同池且均已通过审批
+        FundAdjustLogBo sourceLog = sysAttachmentMapper.queryFundAdjustLogById(sourceLogId);
+        FundAdjustLogBo targetLog = sysAttachmentMapper.queryFundAdjustLogById(targetLogId);
+        if (sourceLog == null || targetLog == null || sourceLog.getTargetPoolId() == null
+                || !sourceLog.getTargetPoolId().equals(targetLog.getTargetPoolId())
+                || !AuditStatus.APPROVED.getCode().equals(sourceLog.getAuditStatus())
+                || !AuditStatus.APPROVED.getCode().equals(targetLog.getAuditStatus())) {
+            throw new BizException("基金附件继承失败：来源和目标必须是同一投资池的已通过基金日志");
+        }
+        // 先校验全部来源关联和分类，防止部分复制或静默丢弃非法附件
+        List<SysAttachmentBo> attachments = sysAttachmentMapper.queryFundAdjustAttachmentList(sourceLogId);
+        for (SysAttachmentBo source : attachments) {
+            if (!FUND_ADJUST_LOG_TABLE.equals(source.getTableName()) || !sourceLogId.equals(source.getMainId())
+                    || !FUND_ATTACHMENT_CATEGORIES.contains(source.getAttachmentCategory())
+                    || source.getFileName() == null || source.getFileName().trim().isEmpty()) {
+                throw new BizException("基金附件继承失败：来源附件关联、分类或物理文件标识无效，附件 ID：" + source.getId());
+            }
+        }
+        // 只新增目标日志的附件关联，沿用原文件标识、路径及分类
+        for (SysAttachmentBo source : attachments) {
+            SysAttachmentBo copied = new SysAttachmentBo();
+            copied.setTableName(FUND_ADJUST_LOG_TABLE);
+            copied.setMainId(targetLogId);
+            copied.setAttachmentCategory(source.getAttachmentCategory());
+            copied.setFileType(source.getFileType());
+            copied.setOriginalFileName(source.getOriginalFileName());
+            copied.setNewFileName(source.getNewFileName());
+            copied.setFileSize(source.getFileSize());
+            copied.setContentType(source.getContentType());
+            copied.setFullUrl(source.getFullUrl());
+            copied.setFileName(source.getFileName());
+            copied.setUploaderId(operatorId.trim());
+            if (sysAttachmentMapper.addAttachment(copied) != 1) {
+                throw new BizException("基金附件继承失败：附件关联写入失败");
+            }
         }
     }
 

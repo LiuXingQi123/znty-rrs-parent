@@ -311,6 +311,34 @@ public class FundPoolExcelImportServiceTest {
         assertEquals("0", rows.get(0).getSaveRslt());
     }
 
+    /** 旧码主档被禁用后的提交失败应提示重传，并保留原始行及旧快照。 */
+    @Test
+    public void disabledFundSubmitShouldSuggestReuploadWithoutChangingOriginalRowsOrSnapshot() {
+        // 构造已经通过校验的临时代码来源行
+        rows.add(row(1L, "TEMP001", 10L, "50", "stock", "0"));
+        // 保存转正或取消前的完整服务器校验快照
+        service.checkImport(request());
+        String snapshot = batch.getResultJson();
+        when(adjustService.addExcelImportAdjustLogList(anyList()))
+                .thenThrow(new BizException("已终止或退市基金不能发起调库"));
+        // 构造仍尝试提交旧快照的请求
+        FundPoolExcelImportReq req = request();
+
+        try {
+            service.submitImport(req);
+            fail("已禁用的基金代码不能提交旧快照");
+        } catch (BizException exception) {
+            assertTrue(exception.getMessage().contains("临时代码已转正/取消"));
+            assertTrue(exception.getMessage().contains("重置并重新上传"));
+        }
+
+        assertEquals("TEMP001", rows.get(0).getFld001());
+        assertEquals(snapshot, batch.getResultJson());
+        assertEquals("0", batch.getSaveRslt());
+        verify(mapper, never()).editBatchSaveResult(any());
+        verify(mapper, never()).editItemSaveResult(any());
+    }
+
     /** 同基金不同目标池及不同三字段保留为独立来源请求。 */
     @Test
     public void submissionShouldKeepDifferentRowMetadataAndIgnoreClientBusinessValues() {

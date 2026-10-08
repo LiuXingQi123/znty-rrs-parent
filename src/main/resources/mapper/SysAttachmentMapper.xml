@@ -118,4 +118,21 @@
         ORDER BY id ASC
     </select>
 
+    <!-- 受控附件继承只允许存在且未删除的基金调库日志 -->
+    <select id="queryFundAdjustLogById" resultType="com.znty.rrs.entity.bo.FundAdjustLogBo">
+        SELECT *
+        FROM ip_adjust_log_fund
+        WHERE id = #{adjustLogId}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询基金日志全部有效附件，不静默过滤错误分类 -->
+    <select id="queryFundAdjustAttachmentList" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
+        SELECT *
+        FROM sys_attachment
+        WHERE table_name = 'ip_adjust_log_fund'
+          AND main_id = #{adjustLogId}
+          AND is_deleted = 0
+        ORDER BY id ASC
+    </select>
 </mapper>

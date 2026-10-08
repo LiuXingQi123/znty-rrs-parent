@@ -12,6 +12,7 @@ import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.FundAdjustLogBo;
 import com.znty.rrs.entity.bo.FundAdjustStepBo;
+import com.znty.rrs.entity.bo.FundInfoBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.bo.RoleBo;
@@ -21,6 +22,7 @@ import com.znty.rrs.entity.fundpooladjust.FundPoolAdjustAuditReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.FundPoolAdjustMapper;
+import com.znty.rrs.mapper.TempFundCodeMapper;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -32,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 基金池调库审批流程服务，负责审核步骤处理与流程流转。 */
@@ -46,6 +49,9 @@ public class FundPoolAdjustFlowService {
     /** 基金调库业务校验与当前池落地服务 */
     @Resource
     private FundPoolAdjustService fundPoolAdjustService;
+    /** 基金临时代码登记组件，用于 O32 人工审批判断 */
+    @Resource
+    private TempFundCodeMapper tempFundCodeMapper;
 
     /**
      * 提交基金调库审批处理意见并按流程配置推进。
@@ -53,7 +59,7 @@ public class FundPoolAdjustFlowService {
      * @param req 当前步骤、处理人及审批动作
      * @return 审批后的批次状态与流程流转结果
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public FundPoolAdjustAuditDto submitAdjustAudit(FundPoolAdjustAuditReq req) {
         // 校验审批提交参数
         validateAuditReq(req);
@@ -61,6 +67,11 @@ public class FundPoolAdjustFlowService {
         // 管理员同时是处理人时定位其本人的待办步骤
         step = resolveActualProcessStep(req, step);
         // 校验步骤状态和当前处理人
+        validatePendingStep(req, step);
+        // 在任何步骤或日志更新前锁定主档，并复核锁等待期间是否发生代码替换
+        lockCurrentBatchFund(step);
+        step = fundPoolAdjustMapper.queryAdjustStepById(step.getId());
+        // 主档锁等待结束后再次确认当前步骤仍待处理且处理人正确
         validatePendingStep(req, step);
         // 阻止发起人处理后续审批步骤
         validateSubmitterCannotProcess(req, step);
@@ -370,6 +381,13 @@ public class FundPoolAdjustFlowService {
             if (NodeType.APPROVAL.getCode().equals(nextNode.getNodeType())) {
                 // 根据节点配置区分自动审批与人工待办
                 if (isAutoApprovalNode(config)) {
+                    // 有效临时代码的 O32 节点按债券口径转为人工审批
+                    if (ApprovalStrategy.O32.getCode().equals(config.getApprovalStrategy()) && isTemporaryCode(step)) {
+                        // 为临时代码的 O32 节点创建人工待办并停止自动推进
+                        createPendingSteps(step, nextNode, config, snapshot);
+                        result.nextStepCreated = true;
+                        return result;
+                    }
                     // 为自动审批节点记录已处理步骤
                     createAutoProcessSteps(step, nextNode, config, snapshot);
                 } else {
@@ -745,6 +763,43 @@ public class FundPoolAdjustFlowService {
      */
     private List<FundAdjustLogBo> queryBatchLogs(FundAdjustStepBo step) {
         return fundPoolAdjustMapper.queryAdjustLogListForAudit(step.getAdjustBatchNo());
+    }
+
+    /**
+     * 在写审批步骤和日志前锁定主档，再确认批次代码未在锁等待期间被替换。
+     *
+     * @param step 已确认有效的当前待办步骤
+     */
+    private void lockCurrentBatchFund(FundAdjustStepBo step) {
+        // 从当前待办所属批次读取待锁定的基金代码
+        List<FundAdjustLogBo> logs = queryBatchLogs(step);
+        if (logs.isEmpty() || logs.get(0).getFundCode() == null || logs.get(0).getFundCode().trim().isEmpty()) {
+            throw new BizException("基金调库批次记录不存在或基金代码缺失");
+        }
+        String fundCode = logs.get(0).getFundCode();
+        // 与临时代码转正共用主档锁；锁定查询同时清除锁前的 SqlSession 缓存
+        List<FundInfoBo> funds = fundPoolAdjustMapper.queryFundListForUpdate(Collections.singletonList(fundCode));
+        if (funds.size() != 1) {
+            throw new BizException("基金主档不存在、已删除或代码重复，请刷新后重试");
+        }
+        // 以 READ_COMMITTED 和已清除的查询缓存读取最新批次，拒绝代码已变化的审批请求
+        List<FundAdjustLogBo> currentLogs = queryBatchLogs(step);
+        if (currentLogs.isEmpty() || currentLogs.stream().anyMatch(log -> !fundCode.equals(log.getFundCode()))) {
+            throw new BizException("基金调库批次代码已发生变化，请刷新后重试");
+        }
+    }
+
+    /**
+     * 判断当前批次是否仍使用有效的基金临时代码。
+     *
+     * @param step 当前审批步骤，用于定位批次基金
+     * @return 是否为有效临时代码登记
+     */
+    private boolean isTemporaryCode(FundAdjustStepBo step) {
+        // 从当前批次读取基金代码以检查有效临时代码登记
+        FundAdjustLogBo log = queryFirstBatchLog(step);
+        return log != null && log.getFundCode() != null
+                && tempFundCodeMapper.queryTemporaryCodeCountByFundCode(log.getFundCode()) > 0;
     }
 
     /**

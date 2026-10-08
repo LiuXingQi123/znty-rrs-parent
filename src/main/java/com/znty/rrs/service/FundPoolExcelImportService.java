@@ -46,6 +46,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import javax.annotation.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -272,7 +273,7 @@ public class FundPoolExcelImportService {
      *
      * @param req 批次号、已有候选流程选择及提交说明
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public FundPoolExcelImportDto submitImport(FundPoolExcelImportReq req) {
         // 原因建议使用 TEXT 业务槽，仍限制用户输入长度
         validateReasonAdvice(req);
@@ -294,7 +295,17 @@ public class FundPoolExcelImportService {
         if (requests.isEmpty()) {
             throw new BizException("没有可提交的校验结果");
         }
-        List<FundAdjustSubmitDto> results = fundPoolAdjustService.addExcelImportAdjustLogList(requests);
+        List<FundAdjustSubmitDto> results;
+        try {
+            // 在任何日志写入前整批锁定主档并复核，避免继续使用已转正或取消的临时代码
+            results = fundPoolAdjustService.addExcelImportAdjustLogList(requests);
+        } catch (BizException exception) {
+            // 主档已不可用时要求重建导入批次，保留原始行及校验快照
+            if ("已终止或退市基金不能发起调库".equals(exception.getMessage())) {
+                throw new BizException("基金代码已不可用（已终止、退市或临时代码已转正/取消），请重置并重新上传");
+            }
+            throw exception;
+        }
         List<Long> logIds = new ArrayList<>();
         List<String> batchNos = new ArrayList<>();
         for (FundAdjustSubmitDto result : results) {

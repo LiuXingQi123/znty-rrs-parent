@@ -43,6 +43,7 @@ import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.FundPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
+import com.znty.rrs.mapper.TempFundCodeMapper;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -57,11 +58,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import javax.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -98,6 +102,9 @@ public class FundPoolAdjustService {
     /** 附件公共服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+    /** 基金临时代码登记数据访问组件，用于 O32 人工处理判断 */
+    @Resource
+    private TempFundCodeMapper tempFundCodeMapper;
 
     /**
      * 分页查询有效基金。
@@ -243,8 +250,10 @@ public class FundPoolAdjustService {
             throw new BizException("基金调库批次记录不存在");
         }
         FundAdjustLogBo firstLog = logs.get(0);
-        // 确认待落池批次对应的基金仍可发起调库
-        FundInfoBo fund = requireFund(firstLog.getFundCode(), true);
+        // 锁定待落池基金主档，与临时代码变更串行处理
+        Map<String, FundInfoBo> lockedFunds = lockFundList(Collections.singletonList(firstLog.getFundCode()));
+        // 使用已锁定的当前主档复核基金状态
+        FundInfoBo fund = requireLockedFund(firstLog.getFundCode(), lockedFunds);
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .filter(pool -> pool.getId() != null)
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
@@ -368,17 +377,20 @@ public class FundPoolAdjustService {
      * @param requests 已由导入模块按持久化快照构建的来源分组请求
      * @return 按来源分组返回的基金调库提交结果
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public List<FundAdjustSubmitDto> addExcelImportAdjustLogList(List<FundPoolAdjustSubmitReq> requests) {
         if (requests == null || requests.isEmpty()) {
             throw new BizException("至少提交一个基金 Excel 导入分组");
         }
         // 在任何申请写入之前识别跨来源分组的同基金同目标池冲突
         validateExcelImportRequests(requests);
+        // 一次按主档主键顺序锁定整批基金，再读取最新业务状态
+        Map<String, FundInfoBo> lockedFunds = lockFundList(requests.stream()
+                .map(FundPoolAdjustSubmitReq::getFundCode).collect(Collectors.toList()));
         List<PreparedSubmit> preparedRequests = new ArrayList<>();
         for (FundPoolAdjustSubmitReq req : requests) {
             // 先复核全部分组，防止本批新写入待办影响后续分组的校验
-            preparedRequests.add(prepareSubmit(req));
+            preparedRequests.add(prepareSubmit(req, lockedFunds));
         }
         List<FundAdjustSubmitDto> results = new ArrayList<>();
         for (PreparedSubmit prepared : preparedRequests) {
@@ -394,7 +406,7 @@ public class FundPoolAdjustService {
      * @param req 基金调库申请及调整明细
      * @return 基金调库申请提交结果
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public FundAdjustSubmitDto addAdjustLog(FundPoolAdjustSubmitReq req) {
         // 按无本地上传文件的方式保存基金调库申请
         return addAdjustLogInternal(req, null);
@@ -408,7 +420,7 @@ public class FundPoolAdjustService {
      * @param originalFileNameListJson 前端提供的原始文件名列表
      * @return 基金调库申请提交结果
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public FundAdjustSubmitDto addAdjustLog(FundPoolAdjustSubmitReq req, List<MultipartFile> files,
                                              String originalFileNameListJson) {
         List<String> names = sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
@@ -427,8 +439,12 @@ public class FundPoolAdjustService {
      */
     private FundAdjustSubmitDto addAdjustLogInternal(FundPoolAdjustSubmitReq req,
                                                       SysAttachmentService.SubmissionFiles submissionFiles) {
+        // 先校验提交级必填字段，避免无效请求获取主档锁
+        validateSubmitRequest(req);
+        // 与临时代码变更共用主档锁，在任何基金日志或步骤写入前取得
+        Map<String, FundInfoBo> lockedFunds = lockFundList(Collections.singletonList(req.getFundCode()));
         // 完成全部基金、权限、目标池、报告及流程复核并固定写入上下文
-        PreparedSubmit prepared = prepareSubmit(req);
+        PreparedSubmit prepared = prepareSubmit(req, lockedFunds);
         // 将已通过复核的单笔申请写入基金专属运行表
         return submitPrepared(prepared, submissionFiles);
     }
@@ -437,13 +453,14 @@ public class FundPoolAdjustService {
      * 复核基金申请并固定主档、投资池与一般流程快照，不写运行表。
      *
      * @param req 待提交基金申请
+     * @param lockedFunds 按主档主键顺序取得锁后的当前基金信息
      * @return 全部复核通过的提交上下文
      */
-    private PreparedSubmit prepareSubmit(FundPoolAdjustSubmitReq req) {
+    private PreparedSubmit prepareSubmit(FundPoolAdjustSubmitReq req, Map<String, FundInfoBo> lockedFunds) {
         // 校验调库申请的提交级必填字段
         validateSubmitRequest(req);
         // 确认申请中的基金仍处于可调库状态
-        FundInfoBo fund = requireFund(req.getFundCode(), true);
+        FundInfoBo fund = requireLockedFund(req.getFundCode(), lockedFunds);
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .filter(pool -> pool.getId() != null)
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
@@ -469,7 +486,7 @@ public class FundPoolAdjustService {
             }
             if (!snapshotByGroup.containsKey(groupKey)) {
                 // 在写入前固定来源组使用的已发布一般流程快照
-                FlowSnapshot snapshot = buildFlowSnapshot(manual.getFlowId());
+                FlowSnapshot snapshot = buildFlowSnapshot(manual.getFlowId(), fund.getFundCode());
                 if (snapshot == null) {
                     // 读取主项目标池以定位流程不可用的业务错误
                     InvestmentPoolBo pool = requirePool(poolMap, manual.getTargetPoolId());
@@ -636,7 +653,7 @@ public class FundPoolAdjustService {
             FundPoolAdjustSubmitReq.AdjustItem manual = ITEM_MANUAL.equals(item.getItemTag()) ? item : null;
             if (manual != null) {
                 // 确认手工调整项使用目标池配置的一般流程
-                validateNormalFlow(manual, pool);
+                validateNormalFlow(manual, pool, fund.getFundCode());
             }
             // 校验目标池对基金报告附件的要求
             validateReportRestriction(item, pool);
@@ -648,8 +665,9 @@ public class FundPoolAdjustService {
      *
      * @param item 手工调整项及其选择的流程
      * @param pool 目标投资池的流程配置
+     * @param fundCode 当前基金代码，用于临时代码的 O32 人工节点判断
      */
-    private void validateNormalFlow(FundPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool) {
+    private void validateNormalFlow(FundPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String fundCode) {
         Long expectedId = AdjustMode.IN.getCode().equals(item.getAdjustMode())
                 ? pool.getInFlowId() : pool.getOutFlowId();
         String expectedKey = AdjustMode.IN.getCode().equals(item.getAdjustMode())
@@ -662,7 +680,7 @@ public class FundPoolAdjustService {
             throw new BizException("只能选择目标投资池配置的一般审批流程：" + pool.getPoolName());
         }
         // 确认目标池的一般流程已发布且包含人工审批节点
-        if (buildFlowSnapshot(expectedId) == null) {
+        if (buildFlowSnapshot(expectedId, fundCode) == null) {
             throw new BizException("目标投资池的一般审批流程未发布：" + pool.getPoolName());
         }
     }
@@ -741,7 +759,7 @@ public class FundPoolAdjustService {
         result.setWarnings(resolveSoftRelationWarnings(poolId, adjustMode, currentPoolIds, poolMap, relations));
         result.setCanAdjust(failures.isEmpty());
         // 为可选择的目标池生成一般流程候选项
-        result.setFlowOptions(buildNormalFlowOptions(pool, adjustMode, failures));
+        result.setFlowOptions(buildNormalFlowOptions(fund, pool, adjustMode, failures));
         resultMap.put(key, result);
     }
 
@@ -899,7 +917,7 @@ public class FundPoolAdjustService {
         if (validateFlow) {
             Long flowId = AdjustMode.IN.getCode().equals(adjustMode) ? pool.getInFlowId() : pool.getOutFlowId();
             // 确认目标池配置了已发布且含人工审批的流程
-            if (flowId == null || buildFlowSnapshot(flowId) == null) {
+            if (flowId == null || buildFlowSnapshot(flowId, fund.getFundCode()) == null) {
                 failures.add("目标投资池未配置已发布的一般审批流程");
             }
         }
@@ -969,12 +987,13 @@ public class FundPoolAdjustService {
     /**
      * 构建目标池唯一的一般流程候选。
      *
+     * @param fund 当前基金主档
      * @param pool 目标投资池
      * @param adjustMode 调入或调出方向
      * @param failures 已发现的调库阻断原因
      * @return 一般流程候选项列表
      */
-    private List<FundAdjustCheckDto.FlowOption> buildNormalFlowOptions(InvestmentPoolBo pool, String adjustMode,
+    private List<FundAdjustCheckDto.FlowOption> buildNormalFlowOptions(FundInfoBo fund, InvestmentPoolBo pool, String adjustMode,
                                                                        List<String> failures) {
         if (pool == null) {
             return Collections.emptyList();
@@ -983,7 +1002,7 @@ public class FundPoolAdjustService {
         String flowKey = AdjustMode.IN.getCode().equals(adjustMode) ? pool.getInFlowKey() : pool.getOutFlowKey();
         String flowName = AdjustMode.IN.getCode().equals(adjustMode) ? pool.getInFlowName() : pool.getOutFlowName();
         // 仅为已发布且可用的一般流程生成候选项
-        if (flowId == null || buildFlowSnapshot(flowId) == null) {
+        if (flowId == null || buildFlowSnapshot(flowId, fund.getFundCode()) == null) {
             return Collections.emptyList();
         }
         FundAdjustCheckDto.FlowOption option = new FundAdjustCheckDto.FlowOption();
@@ -1094,9 +1113,10 @@ public class FundPoolAdjustService {
      * 构建已发布流程快照。
      *
      * @param flowId 一般审批流程定义 ID
+     * @param fundCode 当前基金代码，用于判断 O32 是否需人工处理
      * @return 已发布流程快照
      */
-    private FlowSnapshot buildFlowSnapshot(Long flowId) {
+    private FlowSnapshot buildFlowSnapshot(Long flowId, String fundCode) {
         if (flowId == null) {
             return null;
         }
@@ -1127,6 +1147,8 @@ public class FundPoolAdjustService {
             handlerMap.computeIfAbsent(handler.getApprovalConfigId(), key -> new ArrayList<>()).add(handler);
         }
         FlowSnapshot snapshot = new FlowSnapshot(definition, nodes, edges, configMap, handlerMap);
+        // 将当前有效临时代码状态带入快照，供 O32 节点按人工方式处理
+        snapshot.temporaryFund = tempFundCodeMapper.queryTemporaryCodeCountByFundCode(fundCode) > 0;
         // 确认流程包含实际人工审批节点后返回快照
         return hasManualApprovalNode(snapshot) ? snapshot : null;
     }
@@ -1144,7 +1166,7 @@ public class FundPoolAdjustService {
             }
             NodeApprovalConfigBo config = snapshot.configMap.get(node.getId());
             // 判断审批节点是否由系统自动处理
-            boolean autoNode = isSystemAutoApproval(config);
+            boolean autoNode = isSystemAutoApproval(config, snapshot.temporaryFund);
             // 识别通过提交连线流转的发起人节点
             boolean submitNode = config != null
                     && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())
@@ -1160,11 +1182,12 @@ public class FundPoolAdjustService {
      * 判断基金调库审批节点是否由系统自动通过。
      *
      * @param config 当前节点的审批配置
+     * @param temporaryFund 当前基金是否为有效临时代码
      * @return 是否由系统自动通过
      */
-    private boolean isSystemAutoApproval(NodeApprovalConfigBo config) {
+    private boolean isSystemAutoApproval(NodeApprovalConfigBo config, boolean temporaryFund) {
         return config != null && (ApprovalStrategy.AUTO.getCode().equals(config.getApprovalStrategy())
-                || ApprovalStrategy.O32.getCode().equals(config.getApprovalStrategy()));
+                || (ApprovalStrategy.O32.getCode().equals(config.getApprovalStrategy()) && !temporaryFund));
     }
 
     /**
@@ -1202,7 +1225,7 @@ public class FundPoolAdjustService {
             }
             // 判断非审批节点或系统自动审批节点是否可直接跳过
             if (!NodeType.APPROVAL.getCode().equals(current.getNodeType())
-                    || isSystemAutoApproval(config)) {
+                    || isSystemAutoApproval(config, snapshot.temporaryFund)) {
                 // 为无需人工处理的节点记录自动完成步骤
                 insertStep(logId, batchNo, current, config, StepStatus.AUTO_PROCESS.getCode(),
                         null, null, ProcessAction.AUTO_PROCESS.getCode(), new Date());
@@ -1464,6 +1487,49 @@ public class FundPoolAdjustService {
     }
 
     /**
+     * 按主档主键顺序取得整批基金锁，并保持代码大小写与数据库匹配口径一致。
+     *
+     * @param fundCodes 本次写入涉及的基金代码
+     * @return 以代码索引的已锁定当前基金主档
+     */
+    private Map<String, FundInfoBo> lockFundList(List<String> fundCodes) {
+        Set<String> distinctCodes = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (String fundCode : fundCodes) {
+            if (fundCode == null || fundCode.trim().isEmpty()) {
+                throw new BizException("基金代码不能为空");
+            }
+            distinctCodes.add(fundCode.trim());
+        }
+        // 通过主档行锁串行处理业务变更，并清除锁前的 MyBatis 查询缓存
+        List<FundInfoBo> funds = fundPoolAdjustMapper.queryFundListForUpdate(new ArrayList<>(distinctCodes));
+        Map<String, FundInfoBo> lockedFunds = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (FundInfoBo fund : funds) {
+            if (lockedFunds.put(fund.getFundCode(), fund) != null) {
+                throw new BizException("基金主档代码存在重复，请先处理数据，基金代码：" + fund.getFundCode());
+            }
+        }
+        return lockedFunds;
+    }
+
+    /**
+     * 使用已锁定的当前主档校验基金可调整状态。
+     *
+     * @param fundCode 待提交或终审的基金代码
+     * @param lockedFunds 当前事务已锁定的基金主档
+     * @return 可继续调库的当前基金主档
+     */
+    private FundInfoBo requireLockedFund(String fundCode, Map<String, FundInfoBo> lockedFunds) {
+        FundInfoBo fund = lockedFunds.get(fundCode.trim());
+        if (fund == null) {
+            throw new BizException("基金不存在或已删除");
+        }
+        if ("D".equals(fund.getSecurityStatus())) {
+            throw new BizException("已终止或退市基金不能发起调库");
+        }
+        return fund;
+    }
+
+    /**
      * 读取并校验基金。
      *
      * @param fundCode 基金代码
@@ -1612,6 +1678,8 @@ public class FundPoolAdjustService {
         private final Map<Long, NodeApprovalConfigBo> configMap;
         /** 审批处理人 */
         private final Map<Long, List<NodeApprovalHandlerBo>> handlerMap;
+        /** 当前基金的有效临时代码标记，决定 O32 节点是否转人工 */
+        private boolean temporaryFund;
 
         /**
          * 保存流程定义、节点、连线及审批配置快照。
