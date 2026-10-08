@@ -384,20 +384,114 @@ public class FundPoolAdjustService {
         }
         // 在任何申请写入之前识别跨来源分组的同基金同目标池冲突
         validateExcelImportRequests(requests);
+        // 沿用多单统一锁定、全部复核后再写入的原子提交路径
+        return submitAdjustLogList(requests, null, false);
+    }
+
+    /**
+     * 原子提交基金批量申请，支持整批共用附件及完整关系项复核。
+     *
+     * @param requests 每只基金独立的单笔申请
+     * @param submissionFiles 整批共用的上传文件上下文
+     * @return 每只基金的独立批次和日志 ID
+     */
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
+    public List<FundAdjustSubmitDto> addBatchAdjustLogList(List<FundPoolAdjustSubmitReq> requests,
+                                                         SysAttachmentService.SubmissionFiles submissionFiles) {
+        if (requests == null || requests.isEmpty()) {
+            throw new BizException("至少提交一组基金批量调整申请");
+        }
+        Set<String> fundCodes = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (FundPoolAdjustSubmitReq req : requests) {
+            if (req == null || req.getFundCode() == null || req.getFundCode().trim().isEmpty()) {
+                throw new BizException("基金批量调整的基金代码不能为空");
+            }
+            if (!fundCodes.add(req.getFundCode().trim())) {
+                throw new BizException("基金批量调整存在重复基金：" + req.getFundCode());
+            }
+            // 在取得主档锁前校验单笔必填字段
+            validateSubmitRequest(req);
+            if (submissionFiles == null) {
+                for (FundPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+                    if (item != null && ((item.getReportFileIndexes() != null && !item.getReportFileIndexes().isEmpty())
+                            || (item.getMaterialFileIndexes() != null && !item.getMaterialFileIndexes().isEmpty()))) {
+                        throw new BizException("基金批量申请包含本地文件索引，请通过 multipart 同时上传对应文件");
+                    }
+                }
+            }
+        }
+        // 批量页面必须提交每只基金完整的主项和关系项
+        return submitAdjustLogList(requests, submissionFiles, true);
+    }
+
+    /** 统一锁定基金并在全部复核通过后按单笔规则写入多单申请。 */
+    private List<FundAdjustSubmitDto> submitAdjustLogList(List<FundPoolAdjustSubmitReq> requests,
+                                                         SysAttachmentService.SubmissionFiles submissionFiles,
+                                                         boolean requireCompleteRelations) {
         // 一次按主档主键顺序锁定整批基金，再读取最新业务状态
         Map<String, FundInfoBo> lockedFunds = lockFundList(requests.stream()
                 .map(FundPoolAdjustSubmitReq::getFundCode).collect(Collectors.toList()));
         List<PreparedSubmit> preparedRequests = new ArrayList<>();
         for (FundPoolAdjustSubmitReq req : requests) {
+            if (requireCompleteRelations) {
+                // 在主档锁内重新展开关系，拒绝遗漏、增补或伪造的关系明细
+                validateBatchRelationItems(req, requireLockedFund(req.getFundCode(), lockedFunds));
+            }
             // 先复核全部分组，防止本批新写入待办影响后续分组的校验
             preparedRequests.add(prepareSubmit(req, lockedFunds));
         }
         List<FundAdjustSubmitDto> results = new ArrayList<>();
         for (PreparedSubmit prepared : preparedRequests) {
             // 复用单笔基金申请的日志、流程快照及初始步骤写入
-            results.add(submitPrepared(prepared, null));
+            results.add(submitPrepared(prepared, submissionFiles));
         }
         return results;
+    }
+
+    /** 批量页面按当前关系重新展开主项，核对分组、池、方向及来源标签。 */
+    private void validateBatchRelationItems(FundPoolAdjustSubmitReq req, FundInfoBo fund) {
+        Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
+                .filter(pool -> pool.getId() != null)
+                .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
+        Set<Long> currentPoolIds = new HashSet<>(fundPoolAdjustMapper.queryFundCurrentPoolIdList(fund.getFundCode()));
+        List<PoolRelationBo> relations = fundPoolAdjustMapper.queryAllPoolRelationList();
+        LinkedHashMap<String, FundAdjustCheckDto.CheckResultItem> expected = new LinkedHashMap<>();
+        int manualCount = 0;
+        Set<String> actualKeys = new HashSet<>();
+        for (FundPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if (item == null || item.getTargetPoolId() == null) {
+                throw new BizException("基金调库明细的目标池不能为空：" + fund.getFundCode());
+            }
+            // 取得完整分组标识，避免关系项跨组或缺少来源标签
+            String groupKey = requireGroupKey(item);
+            String actualKey = groupKey + "|" + item.getTargetPoolId() + "|"
+                    + item.getAdjustMode() + "|" + item.getItemTag();
+            if (!actualKeys.add(actualKey)) {
+                throw new BizException("基金批量调库存在重复明细：" + fund.getFundCode());
+            }
+            if (ITEM_MANUAL.equals(item.getItemTag())) {
+                manualCount++;
+                // 按最新目标池和基金所在池重新生成主项
+                addCheckResult(expected, fund, item.getTargetPoolId(), item.getAdjustMode(), ITEM_MANUAL,
+                        groupKey, poolMap, currentPoolIds, relations);
+                FundAdjustCheckReq.CheckItem manual = new FundAdjustCheckReq.CheckItem();
+                manual.setTargetPoolId(item.getTargetPoolId());
+                manual.setAdjustMode(item.getAdjustMode());
+                // 关系项包含相反方向互斥调整，不按主项方向截断
+                expandRelationItems(expected, fund, manual, groupKey, poolMap, currentPoolIds, relations);
+            }
+        }
+        if (manualCount != 1) {
+            throw new BizException("基金批量每组必须包含一条手工调整项：" + fund.getFundCode());
+        }
+        Set<String> expectedKeys = new HashSet<>();
+        for (FundAdjustCheckDto.CheckResultItem item : expected.values()) {
+            expectedKeys.add(item.getAdjustGroupKey() + "|" + item.getTargetPoolId() + "|"
+                    + item.getAdjustMode() + "|" + item.getItemTag());
+        }
+        if (!actualKeys.equals(expectedKeys)) {
+            throw new BizException("基金调库主项、联动或互斥明细与最新关系不一致，请重新校验：" + fund.getFundCode());
+        }
     }
 
     /**

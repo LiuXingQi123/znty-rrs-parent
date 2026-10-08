@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.BatchFundPoolAdjustMapper">
+    <!-- 分页查询支持基金的启用叶子投资池，数量仅统计基金独立池状态 -->
+    <select id="queryPoolPage" resultType="com.znty.rrs.entity.batchfundpooladjust.BatchFundPoolDto">
+        SELECT p.id
+               ,p.pool_name
+               ,p.pool_type
+               ,p.market_codes
+               ,p.variety_codes
+               ,p.description
+               ,p.max_capacity
+               ,(SELECT COUNT(DISTINCT ps.fund_code)
+                 FROM ip_pool_status_fund ps
+                 WHERE ps.target_pool_id = p.id
+                   AND ps.audit_status = '20'
+                   AND ps.is_deleted = 0) AS current_count
+        FROM ip_investment_pool p
+        <where>
+            AND p.status = 'enabled'
+            AND p.is_deleted = 0
+            AND JSON_CONTAINS(p.variety_codes, '"fund"')
+            AND NOT EXISTS (
+                SELECT 1
+                FROM ip_investment_pool child
+                WHERE child.parent_id = p.id
+                  AND child.status = 'enabled'
+                  AND child.is_deleted = 0
+            )
+            <if test="poolIds != null and poolIds.size() > 0">
+                AND p.id IN
+                <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+                    #{poolId}
+                </foreach>
+            </if>
+        </where>
+        ORDER BY p.outer_sort ASC
+                 ,p.inner_sort ASC
+                 ,p.id ASC
+    </select>
+
+    <!-- 候选基金沿用单笔主档字段，调入查不在池基金，调出查有效在池基金 -->
+    <select id="queryFundPage" resultType="com.znty.rrs.entity.fundpooladjust.FundInfoDto">
+        SELECT fi.fund_code
+               ,fi.fund_name
+               ,fi.fund_short_name
+               ,fi.security_type
+               ,dst.security_type_name
+               ,fi.security_status
+               ,fi.market_code
+               ,fi.currency_code
+               ,fi.latest_nav
+               ,fi.establishment_date
+               ,fi.fund_manager_names
+               ,fi.fund_administrator
+               ,fi.fund_custodian
+               ,fi.accumulated_nav
+               ,fi.investment_style
+               ,fi.trade_price
+               ,fi.issue_scale
+               ,fi.latest_scale
+               ,fi.data_date
+               ,fi.updt_time
+        FROM rrs_fundinfo fi
+        INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                         AND dst.category_type = 'fund'
+                                         AND dst.is_deleted = 0
+        <where>
+            AND fi.is_deleted = 0
+            AND fi.security_status != 'D'
+            <if test="direction == 'in'">
+                AND NOT EXISTS (
+                    SELECT 1 FROM ip_pool_status_fund ps
+                    WHERE ps.fund_code = fi.fund_code
+                      AND ps.target_pool_id = #{poolId}
+                      AND ps.audit_status = '20'
+                      AND ps.is_deleted = 0
+                )
+            </if>
+            <if test="direction == 'out'">
+                AND EXISTS (
+                    SELECT 1 FROM ip_pool_status_fund ps
+                    WHERE ps.fund_code = fi.fund_code
+                      AND ps.target_pool_id = #{poolId}
+                      AND ps.audit_status = '20'
+                      AND ps.is_deleted = 0
+                )
+            </if>
+            <if test="fundCode != null and fundCode != ''">
+                AND fi.fund_code LIKE CONCAT('%', #{fundCode}, '%')
+            </if>
+            <if test="fundShortName != null and fundShortName != ''">
+                AND fi.fund_short_name LIKE CONCAT('%', #{fundShortName}, '%')
+            </if>
+            <if test="securityType != null and securityType != ''">
+                AND fi.security_type = #{securityType}
+            </if>
+            <if test="fundAdministrator != null and fundAdministrator != ''">
+                AND fi.fund_administrator LIKE CONCAT('%', #{fundAdministrator}, '%')
+            </if>
+        </where>
+        ORDER BY fi.fund_code ASC
+    </select>
+
+    <!-- 校验批量主项只调整启用、支持基金的叶子投资池 -->
+    <select id="queryEnabledFundLeafPoolCount" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_investment_pool p
+        WHERE p.id = #{poolId}
+          AND p.status = 'enabled'
+          AND p.is_deleted = 0
+          AND JSON_CONTAINS(p.variety_codes, '"fund"')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_investment_pool child
+              WHERE child.parent_id = p.id
+                AND child.status = 'enabled'
+                AND child.is_deleted = 0
+          )
+    </select>
+</mapper>

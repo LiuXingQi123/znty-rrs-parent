@@ -1,6 +1,6 @@
 # 智慧风控平台功能需求说明
 
-本目录按前端业务页面整理需求，当前覆盖 39 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
+本目录按前端业务页面整理需求，当前覆盖 40 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
 
 | 序号 | 功能 | 前端页面 | 需求文档 | 接口测试 |
 |---|---|---|---|---|
@@ -43,6 +43,7 @@
 | 37 | 基金净值导出 | `fund_nav_export.html` | [37-fund-nav-export.md](37-fund-nav-export.md) | — |
 | 38 | 基金池 Excel 导入 | `fund_pool_excel_import.html` | [38-fund-pool-excel-import.md](38-fund-pool-excel-import.md) | `FundPoolExcelImportServiceTest` / `FundPoolExcelImportApiTest` / `FundPoolExcelImportPersistenceTest` / `CommonFileServiceTest` |
 | 39 | 基金临时代码管理 | `temp_fund_code.html` | [39-temp-fund-code.md](39-temp-fund-code.md) | `TempFundCodeApiTest` / `TempFundCodeServiceTest` / `TempFundCodePersistenceTest` |
+| 40 | 基金池批量调整（批量调入/调出） | `batch_fund_pool_adjust.html` | [40-batch-fund-pool-adjust.md](40-batch-fund-pool-adjust.md) | `BatchFundPoolAdjustApiTest` / `BatchFundPoolAdjustServiceTest` / `BatchFundPoolAdjustMapperTest` |
 
 ## 调库业务全链路索引
 
@@ -61,6 +62,7 @@
 - **主体池视角**：[09](09-company-pool-query.md) 当前在池的主体、[14](14-company-pool-adjust-history.md) 主体调库流水（`category_type='company'` 过滤，主体作为伪证券入池/调库）。
 - **CRMW 池链路（凭证级，独立状态表 `ip_pool_status_crmw`）**：[18](18-crmw-pool-query.md) 当前在 CRMW 池的凭证（`audit_status='20'`）、[19](19-crmw-pool-adjust.md) 选 CRMW 凭证 + 标的证券 → 校验 → `addCrmwAdjustLogWithFiles` 提交（批次号 `CRMW` 前缀）、[31](31-batch-crmw-pool-adjust.md) 选 CRMW 叶子池 → 批量勾选凭证+标的组合 → 编排层逐组合 `checkCrmwAdjust` / `submitAdjustLog`（不注入 batch 流程）、[32](32-crmw-pool-excel-import.md) Excel 导入凭证+标的组合（目标池在页面选择，模板仅 CRMW代码/证券代码）→ 逐组合 `checkCrmwAdjust` / `submitAdjustLog`（`adjust_type=Excel导入`，不注入 batch 流程）、[20](20-crmw-pool-adjust-approve.md) `submitAdjustAudit` 审批流转落地 `ip_pool_status_crmw`、[21](21-crmw-pool-adjust-detail.md) 凭证调库只读 / 首次提交（修改节点重提在 [20]）、[22](22-crmw-pool-adjust-history.md) CRMW 调库流水（`pool_type='crmw'` 过滤，所有状态）。
 - **基金池申请链路（基金级，独立运行表）**：[33](33-fund-pool-adjust.md) 基金检索 → 只读基础信息 → 选基金池 → 通用基金规则校验 → 一般流程提交；写 `ip_adjust_log_fund` / `ip_adjust_step_fund`，批次号使用 `FUND` 前缀。审核、详情和最终落池见 [36](36-fund-pool-adjust-approve-detail.md)。
+- **基金池批量调整**：[40](40-batch-fund-pool-adjust.md) 选基金叶子池 → 跨页勾选基金与共享材料 → 逐基金复用单笔完整校验 → 整批统一填写评分、基金类型、分管领导审批并选择一般流程提交；每只基金的主项及关系项共用独立 `FUND` 批次号，提交失败整批回滚，继续基金专属审批链路。
 - **基金池查询（基金级当前状态）**：[34](34-fund-pool-query.md) 查询 `ip_pool_status_fund` 中审批通过的记录，关联基金基础信息并回填投资池全路径；支持按池、基金、类型、入池时间和调整人筛选及 Excel 导出。
 - **基金池调整历史（基金级全状态流水）**：[35](35-fund-pool-adjust-history.md) 查询 `ip_adjust_log_fund` 中未删除的全部审核状态记录，支持按池、基金、类型、提交时间、人员、方向和状态筛选及 Excel 导出。
 - **基金净值导出**：[37](37-fund-nav-export.md) 按 `rrs_fundinfo` 查询基金基础信息，勾选基金并选择日期范围后，从 `rrs_fund_nav` 导出逐日单位净值；每只基金单独一个工作表。

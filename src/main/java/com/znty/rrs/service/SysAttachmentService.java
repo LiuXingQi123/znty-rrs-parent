@@ -145,6 +145,22 @@ public class SysAttachmentService {
     }
 
     /**
+     * 创建整批共享物理文件的提交上下文，各业务记录仍独立绑定附件。
+     *
+     * @param files 本次提交的文件列表
+     * @param uploaderId 上传人 ID
+     * @param originalFileNameList 与文件列表同序的前端原始文件名
+     * @return 跨业务记录复用物理文件的提交上下文
+     */
+    public SubmissionFiles createSharedSubmissionFiles(List<MultipartFile> files, String uploaderId,
+                                                       List<String> originalFileNameList) {
+        // 复用普通提交的文件类型、上传人和原始文件名校验
+        SubmissionFiles submissionFiles = createSubmissionFiles(files, uploaderId, originalFileNameList);
+        submissionFiles.shareAcrossRecords = true;
+        return submissionFiles;
+    }
+
+    /**
      * 解析前端 FormData 字段 {@code originalFileNameListJson}（JSON 数组字符串）。
      * 空/空白返回 null；非法 JSON 抛业务异常。
      *
@@ -811,7 +827,9 @@ public class SysAttachmentService {
         private final String uploaderId;
         /** 与 files 同序的前端原始文件名（可为 null） */
         private final List<String> originalFileNameList;
-        /** 已保存文件缓存，同一日志、分类和文件下标只保存一次 */
+        /** 是否跨业务记录及分类共享本次提交的物理文件 */
+        private boolean shareAcrossRecords;
+        /** 已保存文件缓存，共享模式按下标复用，否则按日志、分类和下标复用 */
         private final Map<String, StoredFile> storedFileMap = new HashMap<>();
 
         /**
@@ -828,7 +846,7 @@ public class SysAttachmentService {
         }
 
         /**
-         * 按下标获取并保存文件，同一记录和分类下复用已保存结果。
+         * 按下标获取并保存文件，根据提交模式复用同一记录或整批的已保存结果。
          *
          * @param fileIndex 文件在本次提交列表中的下标
          * @param attachmentCategory 附件分类编码
@@ -838,7 +856,8 @@ public class SysAttachmentService {
             if (fileIndex == null || fileIndex < 0 || fileIndex >= files.size()) {
                 throw new BizException("附件文件下标不合法：" + fileIndex);
             }
-            String storedFileKey = fileIndex + "|" + attachmentCategory + "|" + adjustLogId;
+            String storedFileKey = shareAcrossRecords ? fileIndex.toString()
+                    : fileIndex + "|" + attachmentCategory + "|" + adjustLogId;
             StoredFile storedFile = storedFileMap.get(storedFileKey);
             if (storedFile == null) {
                 MultipartFile file = files.get(fileIndex);

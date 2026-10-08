@@ -14,12 +14,17 @@ import org.junit.rules.TemporaryFolder;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -60,6 +65,88 @@ public class SysAttachmentServiceTest {
         assertThat(attachment.getNewFileName()).matches("credit_report_hand_\\d{14}_88\\.pdf");
         assertThat(attachment.getFileName()).matches("\\d{8}/credit_report_hand_\\d{14}_88\\.pdf");
         assertThat(attachment.getFileName()).endsWith("/" + attachment.getNewFileName());
+    }
+
+    /** 整批共享同一物理文件，独立保留基金日志归属、附件分类与中文原名。 */
+    @Test
+    public void bindSharedAttachmentsShouldStoreOneFileAcrossLogsAndCategories() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        // 使用真实附件存储验证文件复用
+        SysAttachmentService service = buildService(mapper);
+        MockMultipartFile file = new MockMultipartFile("files", "report.pdf", "application/pdf",
+                "report".getBytes(StandardCharsets.UTF_8));
+        SysAttachmentService.SubmissionFiles submissionFiles = service.createSharedSubmissionFiles(
+                Collections.singletonList(file), "1", Collections.singletonList("基金研究报告.pdf"));
+
+        service.bindAttachments("ip_adjust_log_fund", 88L, Collections.singletonList(0),
+                AttachmentCategory.FUND_REPORT_HAND.getCode(), submissionFiles);
+        service.bindAttachments("ip_adjust_log_fund", 99L, Collections.singletonList(0),
+                AttachmentCategory.FUND_MATERIAL_HAND.getCode(), submissionFiles);
+
+        ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
+        verify(mapper, times(2)).addAttachment(captor.capture());
+        List<SysAttachmentBo> attachments = captor.getAllValues();
+        assertThat(attachments).extracting(SysAttachmentBo::getMainId).containsExactly(88L, 99L);
+        assertThat(attachments).extracting(SysAttachmentBo::getAttachmentCategory)
+                .containsExactly("fund_report_hand", "fund_material_hand");
+        assertThat(attachments).extracting(SysAttachmentBo::getOriginalFileName)
+                .containsOnly("基金研究报告.pdf");
+        assertThat(attachments.get(0).getFileName()).isEqualTo(attachments.get(1).getFileName());
+        // 核对本次提交的物理文件只保存一次
+        assertThat(countStoredFiles()).isEqualTo(1);
+    }
+
+    /** 普通附件上下文继续按不同业务记录分别存储，保持单笔入口兼容。 */
+    @Test
+    public void bindRegularAttachmentsShouldKeepSeparateFilesForDifferentLogs() throws Exception {
+        SysAttachmentMapper mapper = mock(SysAttachmentMapper.class);
+        // 构造普通单笔附件提交上下文
+        SysAttachmentService service = buildService(mapper);
+        MockMultipartFile file = new MockMultipartFile("files", "报告.pdf", "application/pdf",
+                "report".getBytes(StandardCharsets.UTF_8));
+        SysAttachmentService.SubmissionFiles submissionFiles = service.createSubmissionFiles(
+                Collections.singletonList(file), "1");
+
+        service.bindAttachments("ip_adjust_log_fund", 88L, Collections.singletonList(0),
+                AttachmentCategory.FUND_REPORT_HAND.getCode(), submissionFiles);
+        service.bindAttachments("ip_adjust_log_fund", 99L, Collections.singletonList(0),
+                AttachmentCategory.FUND_REPORT_HAND.getCode(), submissionFiles);
+
+        ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
+        verify(mapper, times(2)).addAttachment(captor.capture());
+        assertThat(captor.getAllValues().get(0).getFileName())
+                .isNotEqualTo(captor.getAllValues().get(1).getFileName());
+        // 核对原入口仍为两个日志分别保存文件
+        assertThat(countStoredFiles()).isEqualTo(2);
+    }
+
+    /** 共享文件只注册一次回滚清理，整批失败时不留下物理文件。 */
+    @Test
+    public void bindSharedAttachmentsShouldDeleteFileOnTransactionRollback() throws Exception {
+        // 构造真实附件服务以验证事务回滚清理
+        SysAttachmentService service = buildService(mock(SysAttachmentMapper.class));
+        MockMultipartFile file = new MockMultipartFile("files", "报告.pdf", "application/pdf",
+                "report".getBytes(StandardCharsets.UTF_8));
+        SysAttachmentService.SubmissionFiles submissionFiles = service.createSharedSubmissionFiles(
+                Collections.singletonList(file), "1", null);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.bindAttachments("ip_adjust_log_fund", 88L, Collections.singletonList(0),
+                    AttachmentCategory.FUND_REPORT_HAND.getCode(), submissionFiles);
+            service.bindAttachments("ip_adjust_log_fund", 99L, Collections.singletonList(0),
+                    AttachmentCategory.FUND_REPORT_HAND.getCode(), submissionFiles);
+            List<TransactionSynchronization> synchronizations =
+                    TransactionSynchronizationManager.getSynchronizations();
+            assertThat(synchronizations).hasSize(1);
+            // 验证回滚前只有一份物理文件
+            assertThat(countStoredFiles()).isEqualTo(1);
+            synchronizations.get(0).afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+            // 验证回滚后清理本次共享物理文件
+            assertThat(countStoredFiles()).isZero();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     /** 验证非法文件下标被拒绝 */
@@ -401,6 +488,13 @@ public class SysAttachmentServiceTest {
         target.setAuditStatus("20");
         when(mapper.queryFundAdjustLogById(10L)).thenReturn(source);
         when(mapper.queryFundAdjustLogById(20L)).thenReturn(target);
+    }
+
+    /** 统计测试临时存储目录中的物理文件。 */
+    private long countStoredFiles() throws Exception {
+        try (Stream<Path> paths = Files.walk(temporaryFolder.getRoot().toPath())) {
+            return paths.filter(Files::isRegularFile).count();
+        }
     }
 
     /** 构建附件服务 */
