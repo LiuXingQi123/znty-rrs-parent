@@ -71,7 +71,7 @@
 | 当期利率(%) | `couponRate` | 等宽字体 + 琥珀色 |
 | 起息日期 | `carryDate` | 居中 |
 | 到期日 | `maturityDate` | 居中 |
-| 证券期限 | `dateExistsStr` | 库字段 `date_exists_str`（VARCHAR(20)，展示串如「3年6天」「3年6个月3天」）；列表与证券基本信息区只读展示。凡需换算成“年”的判断均解析此字段，兼容「月/个月」「天/日」写法：年原值保留、月÷12、日÷365，不再用 `date_exists` 总天数÷365。普通债及含权债赎回侧均用 `date_exists_str`；含权债回售侧使用已经是年单位的 `date_inright_exists` / `date_repurchase_exists`，两侧都有时取更短；`date_call_exists` 仅展示/落库、不参与匹配。**期限无法解析时默认最长档（>5 / `GT_5`）继续走矩阵，不跳过**。原「剩余期限(天)」`dateExists`/`date_exists` 仍保留，仅供简易流程按原始天数直接比较；基本信息区以 `v-if=false` 隐藏。 |
+| 证券期限 | `dateExistsStr` | 库字段 `date_exists_str`（VARCHAR(20)，展示串如「3年6天」「3年6个月3天」）；列表与证券基本信息区只读展示。凡需换算成“年”的判断均解析此字段，兼容「月/个月」「天/日」写法：年原值保留、月÷12、日÷365，不再用 `date_exists` 总天数÷365。普通债及含权债赎回侧均用 `date_exists_str`；含权债回售侧使用已经是年单位的 `date_inright_exists` / `date_repurchase_exists`，两侧都有时取更短；`date_call_exists` 仅展示/落库、不参与匹配。**期限无法解析时默认最长档（>5 / `GT_5`）继续走矩阵，不跳过**；简易流程中明确要求期限≤1年或≤5年的场景，无法解析则不满足。原「剩余期限(天)」`dateExists`/`date_exists` 仍保留在数据及快照中，基本信息区以 `v-if=false` 隐藏，不再参与简易流程期限比较。 |
 | 证券评级 | `ratingBond` | `el-tag type=success`，有值才显示 |
 | 主体评级 | `ratingBondissuer` | 空值空白 |
 | 主体内评分档 | `innerIssuerRating` | `el-tag`，空值空白 |
@@ -117,7 +117,7 @@
 5. 由 `inPools`/`outPools` 的 `inMutexPoolIds`/`outMutexPoolIds` 构建 `inMutexMap`/`outMutexMap`（前端互斥校验用）。
 6. `loadLogAttachments` 加载调库记录附件，`loadFlowSteps` 加载当前活跃流程步骤。
 
-同主体证券统一按 `rrs_securityinfo.issuer_code` 的代码相等关联，适用于主体所在池、目标池最大剩余期限、近半年报告豁免、同主体信评回填及 180 天非简易入池记录；复用本服务的批量调库和 Excel 导入采用相同口径。名称不同但代码相同仍属同主体，名称相同但代码不同不关联。`issuer` 继续用于展示和名称模糊查询。
+同主体证券统一按 `rrs_securityinfo.issuer_code` 的代码相等关联，适用于主体所在池、近半年报告豁免、同主体信评回填及简易流程近180天的一般信用债入库经历与报告库查询；复用本服务的批量调库和 Excel 导入采用相同口径。简易流程要求发行人代码非空。名称不同但代码相同仍属同主体，名称相同但代码不同不关联。`issuer` 继续用于展示和名称模糊查询。
 
 ### 2.7 发行主体最近三年及一期财务数据
 
@@ -303,7 +303,36 @@
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单、简易、默认调入，推荐优先级 白名单 > 简易 > 默认。
   - 白名单条件顺序：解析 `date_exists_str` 后的剩余期限≤3 年 → 非永续/私募/ABS → 债券类 → 主体在白名单池（**`WHITELIST_POOL_IDS` 当前 emptySet，本条件固定不成立**）→ 非担保债。`date_exists_str` 为空或格式不正确时不命中白名单。
-  - 简易条件顺序：目标池为信用债一/二/三级库（`innerSort 1~3`）→ 剩余期限可解析（`date_exists`）→ 剩余期限 ≤ 同主体在目标池最大剩余期限 → 该主体 180 天内以非简易流程入过目标池（`queryIssuerHasNonSimpleInboundWithinDays`：按 `ip_pool_status` 审批通过入库记录判定，**已出库软删仍计**，不要求 `is_deleted=0`）→ 主体/展望未下调或下调时担保人未下调（**已注释**，RatingDowngradeChecker 仍计算保留）。
+  - 简易条件顺序：按当前信用债矩阵及特殊债入库规则计算完整允许层级，**唯一且为一/二/三级库，并与本次目标层级一致** → 同发行人债券近180天曾以**非简易入库流程**成功进入信用债大库任意层级 → 满足下述对应债券类型要求 → 同发行人报告库中有近180天的有效信评报告。全部满足后，`simpleInbound` 可选并优先推荐，仍可改选默认调入流程。
+
+#### 简易入库的具体口径
+
+**必要条件：**
+
+1. 按当前矩阵与特殊债准入规则计算信用债大库 **1～5级的完整允许层级集合**，不能只看本次勾选的池或仅筛一至三级后判断唯一；集合只能有一个层级，该层级必须为1～3，且等于目标池 `innerSort`。普通校验未通过的项、非手工调入项及已在信用债大库的证券不进入简易分支；放开规则不免除简易自身的条件。
+2. `queryIssuerHasNonSimpleCreditBondInboundWithinDays(securityCode, 180)` 按非空 `issuer_code` 查同发行人债券的历史 `ip_pool_status`：`pool_type=credit_bond`、`adjust_mode=调入`、`flow_type` 非空且不为 `simpleInbound`、`audit_status=20`，`entry_time` 在近180天内。**不要求历史层级与当前目标层级相同，已出池软删记录仍计入**。这里的一般入库流程指非简易流程，包含标准调入、特殊调入、升库、降库、白名单和批量调入等；简易流程及流程类型为空的记录不计入。简易条件中的“半年”统一为180天。
+
+**债券类型要求：**下调一级指在《标准信用债入库规则》对应的最佳准入层级基础上，层级数字增加1；“至少一级”允许更低等级，但仍须同时满足允许层级唯一的必要条件。
+
+| 债券类型 | 主体内评 | 简易流程额外要求 |
+|---|---|---|
+| 永续债 | 1档 | 在标准信用债规则基准上**恰好下调一级** |
+| 永续债 | 其他档 | 在标准信用债规则基准上**至少下调一级** |
+| 次级债 | 1档 | **仅可调入一级库** |
+| 次级债 | 2-、2、2+档 | 在标准信用债规则基准上**恰好下调一级**；其中2-档期限还须**≤5年** |
+| 次级债 | 其他档 | 在标准信用债规则基准上**至少下调一级** |
+| 标准信用债 | 3档 | 债券期限须**≤1年** |
+| 标准信用债 | 其他档 | 无额外期限要求，仍须满足全部必要条件和报告条件 |
+
+未列举的其他债券类型不增加上述附加要求，仍须通过普通入库校验，并满足唯一准入层级、非简易入库经历及报告条件。期限统一复用现有证券期限解析及含权债期限工具：普通债解析 `date_exists_str` 为年，含权债按现有回售/赎回侧口径取值，不使用旧 `date_exists` 天数。明确要求≤1年/≤5年时，空值、无效文本或负数不视为满足。
+
+**标准信用债采用独立方法判断：**公开发行；不涉及永续、回售、赎回、递延付息等特殊条款；无担保、内部分层、差额补足等增信措施；偿付不依赖特定资产；违约风险仅由发行主体信用资质决定；且未在内评系统观察或重点观察名单中。资产支持证券、私募债、永续债、担保债、含权债等不属于标准信用债。该业务定义由上游维护 `std_credit_flag`；本服务的独立方法 `isStandardCreditBond` **仅判断 `std_credit_flag == 1`**，`0`、`NULL` 均不认定标准信用债，不叠加 `std_clause_flag` 或其他标志判断。
+
+**报告条件：**`queryIssuerHasRecentCreditReportWithinDays(securityCode, 180)` 查询内部/外部报告库（`rrs_report_in` / `rrs_report_out`）：报告 `company_code` 直接匹配当前券非空 `issuer_code`，未删除，`report_type` 为 `bond_in_report` 或 `bond_out_report`，报告 `crte_time` 在近180天内，并有对应未删除的报告附件（`sys_attachment.table_name=rrs_report_in/rrs_report_out`、`attachment_category=report_in/report_out`）。报告库没有独立报告日期或状态字段，时间以 `crte_time` 为准；其他报告类型、无附件、软删报告或软删附件均不计，缺失 `company_code` 时不按报告证券代码回退关联。**不要求关联历史调入记录，也不要求报告与非简易入库经历属于同一笔业务**。简易流程不复用“半年调入日志带报告”的提交报告豁免条件，两者各自判断。
+
+旧简易流程的“本券剩余天数≤同主体目标池最大剩余天数”“同目标池180天内非简易入池”及原主体/展望/担保人评级下调条件不再参与简易命中。
+
+简易资格仅在“下一步”的 `checkAdjust` 阶段判定，正式提交时不重新核验简易资格。最终落池仍沿用锁池后的动态校验子集，不再次判断简易资格。
 
 ### 3.7 后端 addAdjustLog / submitAdjustLog 完整逻辑
 
@@ -324,6 +353,7 @@
 
 **② 参数初始化** `loadSubmitSharedData`：
 - 取证券、全量池 Map、`currentPoolIds`、`poolRelationMap`、证券级标志。
+- 简易资格沿用“下一步”的校验结果，提交阶段不重新判断准入层级、180天非简易入库经历、报告库信评报告和类型附加条件。
 - 收集 `items` 中所有 `flowId`/`flowKey`，`resolveFlowIdFromItem` 解析（flowId 优先，否则用 flowKey 查活跃流程），为每个唯一流程 `buildFlowSnapshot`（定义+活跃版本+节点+连线+审批配置+处理人）。
 - 创建 `BatchNoContext`（批次号时间片 `yyyyMMddHHmmss` + 调入/调出/无流程三个序号）。
 
@@ -457,7 +487,7 @@ ALTER TABLE `znty_rrs`.`rrs_securityinfo`
 | `std_clause_flag` | `stdClauseFlag` | 标准条款判定：1=条款合格 / 0=条款不合格 / NULL=未判定 |
 | `std_credit_flag` | `stdCreditFlag` | 标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定 |
 
-仅 `std_credit_flag=1` 表示标准信用债，`0` 与 `NULL` 保持原值。当前新增字段不参与调库校验或页面展示。
+独立方法 `isStandardCreditBond` 仅以 `std_credit_flag=1` 认定标准信用债，`0` 与 `NULL` 不认定，原值保持不变；标准信用债的完整业务定义由上游维护。`std_clause_flag` 和其他特殊标志不参与该方法。两字段不新增页面展示。
 
 Demo 在原始 `INSERT` 中为全部 45 条证券显式填写标识，设置以下演示场景（不是系统按类型自动判定的规则，也不按评级高低判定）：
 
@@ -479,7 +509,7 @@ ALTER TABLE `znty_rrs`.`rrs_securityinfo`
         COMMENT '标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定';
 ```
 
-详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingCompanyList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留，仅供简易流程按原始天数直接比较）；`date_exists_str` 证券期限（页面只读，同时供需要年口径的矩阵和白名单判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
+详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingCompanyList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留在数据及快照中，不再用于简易流程）；`date_exists_str` 证券期限（页面只读，同时供矩阵、白名单和简易流程的年口径判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
 

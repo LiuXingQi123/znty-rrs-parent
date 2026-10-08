@@ -100,6 +100,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
@@ -134,6 +135,8 @@ public class SecurityPoolAdjustService {
     private static final String ADMIN_USER_ID = "1";
     /** 短时间重复提交判定窗口（秒） */
     private static final int DUPLICATE_SUBMIT_WINDOW_SECONDS = 30;
+    /** 简易入库所需的一般入库历史与信评报告窗口（天） */
+    private static final int SIMPLE_INBOUND_HISTORY_DAYS = 180;
     /** 证券池调库数据访问组件 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
@@ -1025,7 +1028,7 @@ public class SecurityPoolAdjustService {
      * 2. 检查短时间内是否存在相同调库申请，防止重复提交。
      * 3. 加载证券主档并复核所选评级主体，同时读取投资池、当前池状态、池关系和所选流程快照。
      * 4. 检查本次涉及的顶级池组是否已有活动流程。
-     * 5. 复核调入所需的互斥调出项是否完整且可执行，返回已准备的提交上下文；本阶段不创建新流程。
+     * 5. 复核调入所需的互斥调出项是否完整且可执行；本阶段不创建新流程。
      *
      * @param req 单个来源证券的调库提交请求，包含主体选择和调库明细
      * @param batchNoContext 本次提交使用的批次号上下文，可由整批共享
@@ -2716,70 +2719,204 @@ public class SecurityPoolAdjustService {
     /**
      * 简易流程命中判断入口。
      *
-     * <p>伪代码口径：
-     * 1. 目标池须为信用债大库一/二/三级库；
-     * 2. 剩余期限可解析（date_exists 天数）；
-     * 3. 剩余期限不超过同主体在目标池已有债券的最大剩余期限（MAX date_exists）；
-     * 4. 该主体180天内以一般流程入过目标池；
-     * 5. 主体评级和展望评级未下调，或下调时担保人评级未下调。</p>
-     *
-     * <p>评级下调标识由 RatingDowngradeChecker 查 wind_cbondissuerrating 真实判定：主体评级比较 b_info_creditrating 与 b_info_precreditrating，展望读 rrs_securityinfo.rating_outlook 是否负面，担保人按前端选中代码查 wind。</p>
+     * <p>以下四项必须全部满足，逐项记录命中或不命中的原因：</p>
+     * <ol>
+     *   <li>当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内。</li>
+     *   <li>同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库。</li>
+     *   <li>同发行人报告库中有近180天的有效信评报告。</li>
+     *   <li>满足永续债、次级债和标准信用债各自的附加要求。</li>
+     * </ol>
+     * <p>唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响。</p>
      */
     private boolean isSimpleInboundFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,
             List<String> matchReasons, List<String> unmatchReasons) {
 
+        SecurityInfoBo security = shared.getSecurityInfo();
+        // 1. 唯一准入层级：完整一至五级只能允许一个层级，且该层级和目标池须满足一至三级要求
+        // 简易流程只能用于信用债一至三级库
         if (isCreditBondLevelOneToThree(targetPool)) {
             matchReasons.add("目标池属于信用债大库一、二、三级库");
         } else {
             unmatchReasons.add("目标池不是信用债大库一、二、三级库");
         }
 
-        BigDecimal remainDays = shared.getSecurityInfo().getDateExists();
-        if (remainDays == null) {
-            unmatchReasons.add("剩余期限无法解析，date_exists 为空");
-        }
-
-        if (remainDays != null && remainDays.compareTo(BigDecimal.ZERO) >= 0) {
-            BigDecimal issuerPoolMaxRemainDays = securityPoolAdjustMapper.queryIssuerTargetPoolMaxRemainDays(
-                    req.getSecurityCode(), targetPool.getId());
-            if (issuerPoolMaxRemainDays == null) {
-                matchReasons.add("目标池暂无同主体有效债券，不受在池最大期限限制");
-            } else if (remainDays.compareTo(issuerPoolMaxRemainDays) <= 0) {
-                matchReasons.add("剩余期限为 " + formatRemainDays(remainDays)
-                        + "，未超过同主体在池最大期限 " + formatRemainDays(issuerPoolMaxRemainDays));
-            } else {
-                unmatchReasons.add("剩余期限为 " + formatRemainDays(remainDays)
-                        + "，超过同主体在池最大期限 " + formatRemainDays(issuerPoolMaxRemainDays));
+        // 读取标准矩阵结果，保留特殊债降级前的基准层级
+        String gradeCode = resolveMatrixGradeCode(security);
+        List<Long> matrixPoolIds = Collections.emptyList();
+        if (gradeCode != null) {
+            // 简易资格沿用当前入库规则的年期限口径
+            String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(security));
+            if (bucketCode != null) {
+                matrixPoolIds = creditBondGradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(gradeCode, bucketCode);
             }
         }
+        // 先按特殊债及观察名单展开全部一至五级，再判断是否唯一
+        Integer standardBestSort = resolveBestAllowedSort(matrixPoolIds, shared.getPoolMap());
+        Set<Integer> allowedLevels = resolveSimpleInboundAllowedLevels(shared, matrixPoolIds, standardBestSort);
+        if (allowedLevels.size() == 1) {
+            Integer onlyLevel = allowedLevels.iterator().next();
+            // 同一层级可能存在多个池，目标池本身也必须在实际准入范围内
+            boolean targetAllowed = isSimpleInboundTargetAllowed(shared, matrixPoolIds, standardBestSort, targetPool);
+            if (onlyLevel <= 3 && targetAllowed && onlyLevel.equals(targetPool.getInnerSort())) {
+                matchReasons.add("当前入库规则仅允许调入信用债" + onlyLevel + "级库");
+            } else {
+                unmatchReasons.add("当前唯一可入层级须为一至三级库，且与目标池一致");
+            }
+        } else if (allowedLevels.isEmpty()) {
+            unmatchReasons.add("当前入库规则未匹配可入层级库");
+        } else {
+            unmatchReasons.add("当前入库规则允许多个层级库（" + allowedLevels + "），不满足唯一层级条件");
+        }
 
-        // 条件4：180天内该主体+目标池有非简易入库记录（简易流程前提条件，新需求180天）
-        boolean hasNonSimpleInbound = securityPoolAdjustMapper.queryIssuerHasNonSimpleInboundWithinDays(
-                req.getSecurityCode(), targetPool.getId(), 180);
+        // 2. 非简易入库经历：同发行人近180天以简易之外的流程审批通过入库，包含升库、降库等
+        // 已出池的历史仍计入，不要求与本次目标池同层级
+        boolean hasNonSimpleInbound = securityPoolAdjustMapper.queryIssuerHasNonSimpleCreditBondInboundWithinDays(
+                req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS);
         if (hasNonSimpleInbound) {
-            matchReasons.add("该主体180天内以一般流程入过目标池，满足简易流程前提条件");
+            matchReasons.add("同发行人半年内以非简易入库流程进入过信用债大库");
         } else {
-            unmatchReasons.add("该主体180天内未以一般流程入过目标池，不满足简易流程前提条件");
+            unmatchReasons.add("同发行人半年内未以非简易入库流程进入信用债大库");
         }
 
-        // 条件5：主体评级和展望评级未下调，或下调时担保人评级未下调（暂时注释，不需要此校验；评级取值仍在 shared 中计算保留）
-        /*
-        boolean issuerOrOutlookDowngraded = shared.isIssuerRatingDowngraded() || shared.isOutlookRatingDowngraded();
-        if (!issuerOrOutlookDowngraded) {
-            matchReasons.add("主体评级和展望评级未下调");
+        // 3. 有效信评报告：同发行人内部或外部报告库中近180天的债券信评报告，须有有效库附件
+        // 时间按报告创建时间计算，不要求关联上面的一般入库记录
+        if (securityPoolAdjustMapper.queryIssuerHasRecentCreditReportWithinDays(
+                req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS)) {
+            matchReasons.add("同发行人报告库中有180天内的有效信评报告");
         } else {
-            if (!hasGuarantor(shared.getSecurityInfo())) {
-                unmatchReasons.add("主体评级或展望评级已下调，且无担保人评级可补充判断");
-            } else if (shared.isGuarantorRatingDowngraded()) {
-                unmatchReasons.add("主体评级或展望评级已下调，且担保人评级也已下调");
-            } else {
-                matchReasons.add("主体评级或展望评级已下调，但担保人评级未下调");
+            unmatchReasons.add("同发行人报告库中没有180天内的有效信评报告");
+        }
+
+        // 4. 债券类型要求：分别检查永续债、次级债和标准信用债，多个标志同时存在时全部检查
+        int failureCount = unmatchReasons.size();
+        // 增加对应类型未满足的原因，未增加失败原因时记录本项命中
+        checkSimpleInboundSpecialConditions(shared, standardBestSort,
+                targetPool != null ? targetPool.getInnerSort() : null, unmatchReasons);
+        if (failureCount == unmatchReasons.size()) {
+            matchReasons.add("满足债券类型对应的简易入库附加条件");
+        }
+        return unmatchReasons.isEmpty();
+    }
+
+    /** 根据完整准入规则计算一至五级可入层级，避免只看目标池造成唯一性误判。 */
+    private Set<Integer> resolveSimpleInboundAllowedLevels(
+            AdjustSharedData shared, List<Long> matrixPoolIds, Integer standardBestSort) {
+        Set<Integer> levels = new TreeSet<>();
+        SecurityInfoBo security = shared.getSecurityInfo();
+        // 1. 无标准矩阵结果或属于分级库排除类型时，不存在可入层级
+        if (matrixPoolIds == null || matrixPoolIds.isEmpty() || shared.getPoolMap() == null
+                || CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(security)) {
+            return levels;
+        }
+        // 2. 在标准最佳档位基础上应用特殊债及观察名单规则，确定实际准入起始层级
+        boolean inObserve = shared.isSecurityInObservePool() || shared.isIssuerInObservePool();
+        boolean inRestricted = shared.isSecurityInRestrictedPool() || shared.isIssuerInRestrictedPool();
+        CreditBondSpecialInboundRule.GradedInboundMode mode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(security, inObserve);
+        Integer startSort = mode.resolveStartSort(standardBestSort);
+        // 重点观察名单按当前所在层级执行既有准入限制
+        Integer currentSort = resolveCurrentGradedSort(shared.getCurrentPoolIds(), shared.getPoolMap());
+        // 3. 遍历全部分级库并按层级去重，不能只筛一至三级或只看本次勾选池
+        for (InvestmentPoolBo pool : shared.getPoolMap().values()) {
+            if (!CreditBondSpecialInboundRule.isGradedLevelPool(pool)) {
+                continue;
+            }
+            // 保留当前准入规则对重点观察名单的处理
+            if (checkRestrictedForSecurityAdjust(security, inRestricted, currentSort, pool.getInnerSort()) != null) {
+                continue;
+            }
+            // 按矩阵或特殊债调整后的范围收集完整层级
+            if (isLeafAllowedByGradeRule(pool, matrixPoolIds, mode, startSort, shared.getPoolMap())) {
+                levels.add(pool.getInnerSort());
             }
         }
-        */
+        return levels;
+    }
 
-        return unmatchReasons.isEmpty();
+    /** 目标池须为规则实际允许的分级库，不能仅凭与另一个允许池同档认定可入。 */
+    private boolean isSimpleInboundTargetAllowed(
+            AdjustSharedData shared, List<Long> matrixPoolIds, Integer standardBestSort, InvestmentPoolBo targetPool) {
+        if (!CreditBondSpecialInboundRule.isGradedLevelPool(targetPool)) {
+            return false;
+        }
+        boolean inObserve = shared.isSecurityInObservePool() || shared.isIssuerInObservePool();
+        CreditBondSpecialInboundRule.GradedInboundMode mode =
+                CreditBondSpecialInboundRule.resolveGradedInboundMode(shared.getSecurityInfo(), inObserve);
+        // 按与完整准入集合相同的档位规则核对目标池
+        return isLeafAllowedByGradeRule(targetPool, matrixPoolIds, mode,
+                mode.resolveStartSort(standardBestSort), shared.getPoolMap());
+    }
+
+    /**
+     * 简易条件4：检查特殊债档位要求，以及次级债和标准信用债的期限上限。
+     *
+     * @param standardBestSort 特殊债调整前的标准矩阵最佳层级，层级数字增加1表示下调一级
+     * @param targetSort 本次目标层级
+     */
+    private void checkSimpleInboundSpecialConditions(
+            AdjustSharedData shared, Integer standardBestSort, Integer targetSort, List<String> failures) {
+        SecurityInfoBo security = shared.getSecurityInfo();
+        // 特殊债要求只看发债主体内评，不用担保人内评替代
+        String issuerGrade = normalizeGradeCode(security.getInnerIssuerRating());
+        BigDecimal remainYears = CreditBondRemainTermUtil.resolveRemainTermYears(security);
+
+        // 4.1 永续债：内评1档恰好下调一级，其他档位至少下调一级
+        if (CreditBondSpecialInboundRule.isPerpetual(security)) {
+            boolean levelMatched = false;
+            if (standardBestSort != null && targetSort != null) {
+                if ("1".equals(issuerGrade)) {
+                    levelMatched = targetSort == standardBestSort + 1;
+                } else {
+                    levelMatched = targetSort >= standardBestSort + 1;
+                }
+            }
+            if (!levelMatched) {
+                failures.add("永续债内评1档须按标准入库等级下调一级，其余须至少下调一级");
+            }
+        }
+
+        // 4.2 次级债：先检查目标档位，再检查内评2-档的五年期限上限
+        if (CreditBondSpecialInboundRule.isSubordinated(security)) {
+            boolean gradeTwoBand = "2+".equals(issuerGrade) || "2".equals(issuerGrade) || "2-".equals(issuerGrade);
+            boolean levelMatched;
+            if ("1".equals(issuerGrade)) {
+                // 内评1档直接要求一级库，不按标准矩阵最佳档位下调
+                levelMatched = Integer.valueOf(1).equals(targetSort);
+            } else if (standardBestSort == null || targetSort == null) {
+                levelMatched = false;
+            } else if (gradeTwoBand) {
+                // 内评2+/2/2-档恰好下调一级
+                levelMatched = targetSort == standardBestSort + 1;
+            } else {
+                // 其余档位至少下调一级
+                levelMatched = targetSort >= standardBestSort + 1;
+            }
+            if (!levelMatched) {
+                failures.add("次级债内评1档须调入一级库，2+/2/2-须下调一级，其余须至少下调一级");
+            }
+            // 内评2-档还须期限不超过5年；等于5年可通过，空值或负数不通过
+            if ("2-".equals(issuerGrade)
+                    && (remainYears == null || remainYears.signum() < 0
+                    || remainYears.compareTo(BigDecimal.valueOf(5)) > 0)) {
+                failures.add("内评2-档的次级债期限须在5年及以内");
+            }
+        }
+
+        // 4.3 标准信用债：独立按std_credit_flag判定，内评3档才增加一年期限限制
+        // 等于1年可通过，空值或负数不通过；其他内评不增加此期限限制
+        if (isStandardCreditBond(security) && "3".equals(issuerGrade)
+                && (remainYears == null || remainYears.signum() < 0
+                || remainYears.compareTo(BigDecimal.ONE) > 0)) {
+            failures.add("内评3档的标准信用债期限须在1年及以内");
+        }
+    }
+
+    /**
+     * 独立判断标准信用债，完整业务定义由上游维护，只有std_credit_flag=1时认定为标准。
+     */
+    private boolean isStandardCreditBond(SecurityInfoBo security) {
+        return security != null && Integer.valueOf(1).equals(security.getStdCreditFlag());
     }
 
     /**

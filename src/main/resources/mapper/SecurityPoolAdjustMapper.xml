@@ -902,6 +902,72 @@
         LIMIT 1
     </select>
 
+    <!-- 查询指定天数内同发行人债券以非简易流程进入过信用债大库；含升降库，不限目标层级，已出池软删记录仍计 -->
+    <select id="queryIssuerHasNonSimpleCreditBondInboundWithinDays" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                         AND dst.category_type = 'bond'
+                                         AND dst.is_deleted = 0
+        WHERE si.issuer_code = (
+            SELECT issuer_code
+            FROM rrs_securityinfo
+            WHERE wind_code = #{securityCode}
+            LIMIT 1
+        )
+          AND si.issuer_code IS NOT NULL
+          AND si.issuer_code != ''
+          AND ips.pool_type = 'credit_bond'
+          AND ips.adjust_mode = '调入'
+          AND ips.flow_type IS NOT NULL
+          AND ips.flow_type != ''
+          AND ips.flow_type != 'simpleInbound'
+          AND ips.audit_status = '20'
+          AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND ips.entry_time &lt;= NOW()
+    </select>
+
+    <!-- 查询指定天数内同发行人报告库中的有效信评报告；报告主体代码必须明确，内部/外部报告均须有对应有效附件 -->
+    <select id="queryIssuerHasRecentCreditReportWithinDays" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM (
+            SELECT id
+                   ,company_code
+                   ,report_type
+                   ,crte_time
+                   ,is_deleted
+                   ,'rrs_report_in' AS table_name
+                   ,'report_in' AS attachment_category
+            FROM rrs_report_in
+            UNION ALL
+            SELECT id
+                   ,company_code
+                   ,report_type
+                   ,crte_time
+                   ,is_deleted
+                   ,'rrs_report_out' AS table_name
+                   ,'report_out' AS attachment_category
+            FROM rrs_report_out
+        ) report
+        INNER JOIN rrs_securityinfo si ON si.wind_code = #{securityCode}
+                                     AND si.issuer_code IS NOT NULL
+                                     AND si.issuer_code != ''
+        WHERE report.company_code = si.issuer_code
+          AND report.is_deleted = 0
+          AND report.report_type IN ('bond_in_report', 'bond_out_report')
+          AND report.crte_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND report.crte_time &lt;= NOW()
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = report.table_name
+                AND a.main_id = report.id
+                AND a.attachment_category = report.attachment_category
+                AND a.is_deleted = 0
+          )
+    </select>
+
     <!-- 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天；按曾入过判定，出库软删后仍计，不限制 is_deleted=0） -->
     <select id="queryIssuerHasNonSimpleInboundWithinDays" resultType="boolean">
         SELECT COUNT(1) > 0

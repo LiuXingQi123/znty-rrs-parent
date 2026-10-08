@@ -187,6 +187,14 @@ public interface SecurityPoolAdjustMapper {
     /** 按主键查询外部报告简要信息 */
     ReportDto queryOutReportById(@Param("id") Long id);
 
+    /** 查询指定天数内同发行人债券以非简易流程进入过信用债大库（含升降库，已出池历史仍计） */
+    boolean queryIssuerHasNonSimpleCreditBondInboundWithinDays(@Param("securityCode") String securityCode,
+                                                              @Param("days") int days);
+
+    /** 查询指定天数内同发行人报告库中有有效债券信评报告及附件 */
+    boolean queryIssuerHasRecentCreditReportWithinDays(@Param("securityCode") String securityCode,
+                                                      @Param("days") int days);
+
     /** 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） */
     boolean queryIssuerHasNonSimpleInboundWithinDays(@Param("securityCode") String securityCode,
                                                       @Param("targetPoolId") Long targetPoolId,

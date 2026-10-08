@@ -2997,22 +2997,40 @@ public class SecurityPoolAdjustServiceStepTest {
         assertTrue(matchReasons.stream().anyMatch(s -> s.contains("非永续债")));
     }
 
-    /** 验证简易流程：date_exists 可解析且无同主体最大期限时，期限条件命中（第⑤评级条件当前代码已注释不参与判定）。 */
+    /** 验证简易流程：标准券唯一准入一级库，且同主体180天内有非简易入库和信评报告记录时命中。 */
     @Test
-    public void isSimpleInboundFlowMatchedShouldPassWhenDateExistsAndNoMaxRemain() {
+    public void isSimpleInboundFlowMatchedShouldPassWithUniqueLevelAndRecentReport() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        // 构建唯一的信用债一级库目标
         InvestmentPoolBo targetPool = buildPool(2L, 1L, "一级库");
         targetPool.setPoolType("credit_bond");
         targetPool.setInnerSort(1);
+        targetPool.setPoolLevel(2);
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setDateExists(new BigDecimal("500"));
+        sec.setWindCode("110010123");
+        sec.setSecurityType("bond");
+        sec.setIssueType("公募");
+        sec.setInnerIssuerRating("1");
+        sec.setDateExistsStr("2年");
+        sec.setStdCreditFlag(1);
+        sec.setStdClauseFlag(1);
         shared.setSecurityInfo(sec);
-        when(mapper.queryIssuerTargetPoolMaxRemainDays(any(String.class), any(Long.class))).thenReturn(null);
-        when(mapper.queryIssuerHasNonSimpleInboundWithinDays(any(String.class), any(Long.class), any(Integer.class)))
-                .thenReturn(true);
+        shared.setPoolMap(Collections.singletonMap(targetPool.getId(), targetPool));
+        shared.setCurrentPoolIds(Collections.emptySet());
+        CreditBondTermBucketBo bucket = new CreditBondTermBucketBo();
+        bucket.setBucketCode("ALL");
+        bucket.setMinTermYear(BigDecimal.ZERO);
+        bucket.setMinInclusive(1);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(bucket));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("1", "ALL"))
+                .thenReturn(Collections.singletonList(targetPool.getId()));
+        when(mapper.queryIssuerHasNonSimpleCreditBondInboundWithinDays("110010123", 180)).thenReturn(true);
+        when(mapper.queryIssuerHasRecentCreditReportWithinDays("110010123", 180)).thenReturn(true);
         AdjustCheckReq req = new AdjustCheckReq();
         req.setSecurityCode("110010123");
         List<String> matchReasons = new ArrayList<>();
@@ -3020,7 +3038,7 @@ public class SecurityPoolAdjustServiceStepTest {
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isSimpleInboundFlowMatched",
                 req, shared, targetPool, matchReasons, unmatchReasons);
         assertThat(result).isTrue();
-        assertTrue(matchReasons.stream().anyMatch(s -> s.contains("不受在池最大期限限制")));
+        assertThat(matchReasons).isNotEmpty();
         assertTrue(unmatchReasons.isEmpty());
     }
 

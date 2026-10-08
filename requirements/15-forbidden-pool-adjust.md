@@ -230,7 +230,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 主体信息读取 `ais_inv_ods.wind_cbondissuer`，不按 `used` 过滤，以 `s_info_compcode` 作为主体代码。**该表不是主体唯一：业务粒度是债券 Wind 代码 + 主体代码**，查询主体列表/详情/JOIN 补名称时必须对 `s_info_compcode` 去重；该表不修改、不与 `rrs_securityinfo` 主体记录关联。旗下债券仍由 `rrs_securityinfo` 的债券行读取，以 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type='company'`。
 
-服务中保留的证券主体所在池查询 `queryIssuerPoolStatusList` 和简易流程最大剩余期限查询 `queryIssuerTargetPoolMaxRemainDays` 同样按 `rrs_securityinfo.issuer_code` 关联，不再按发行人名称判断同主体。
+服务中保留的证券主体所在池查询 `queryIssuerPoolStatusList` 和最大剩余期限查询 `queryIssuerTargetPoolMaxRemainDays` 同样按 `rrs_securityinfo.issuer_code` 关联，不再按发行人名称判断同主体；最大期限比较已不参与证券池新简易流程，禁投池本身仍不启用简易流程。
 
 ### 5.5 `ip_investment_pool` / `ip_pool_relation`
 
