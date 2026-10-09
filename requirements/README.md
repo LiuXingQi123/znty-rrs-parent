@@ -1,6 +1,6 @@
 # 智慧风控平台功能需求说明
 
-本目录按前端业务页面整理需求，当前覆盖 40 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
+本目录按前端业务页面整理需求，当前覆盖 44 个功能。接口统一使用 `POST`，返回 `ApiResponse<T>`；成功时 `success=true`、`message=success`。
 
 | 序号 | 功能 | 前端页面 | 需求文档 | 接口测试 |
 |---|---|---|---|---|
@@ -74,6 +74,17 @@
 
 核心状态枚举（`ip_adjust_log.audit_status`，三类调库通用）：`-1`无效 / `00`流程中（待审批/审批中） / `11`驳回待修改 / `20`审批通过 / `21`审批驳回 / `32`O32自动审批 / `99`发起人已撤回。仅 `20` 落地池状态。
 
+## 股票业务链路
+
+| 页面 | 需求 | 核心模块 | 测试 |
+|---|---|---|---|
+| 股票池调整 | [41](41-stock-pool-adjust.md) | StockPoolAdjust | StockPoolIntegrationTest / StockPoolApiTest |
+| 股票池查询 | [42](42-stock-pool-query.md) | StockPoolQuery | StockPoolIntegrationTest / StockPoolApiTest |
+| 股票池调整历史 | [43](43-stock-pool-adjust-history.md) | StockPoolAdjustHistory | StockPoolIntegrationTest / StockPoolApiTest |
+| 股票审核/详情 | [44](44-stock-pool-adjust-approve-detail.md) | StockPoolAdjustFlow / StockMyMatters | StockPoolIntegrationTest / MyMattersMapperSqlTest |
+
+股票独立运行表、STOCK 批次、一般/快速流程及整组落池；SQL 和工具任务见 [股票脚本说明](../sql/stock/README.md)。前端 Node 测试见 tests/stock_pool.test.js / tests/my_matters.test.js。
+
 ## 通用业务约束
 
 - 所有分页查询均支持 `pageIndex`、`pageSize`，空筛选条件表示查询全部可见数据。
@@ -93,4 +104,4 @@
 
 ### 我的事宜业务入口维护
 
-债券、基金事宜按业务隔离，用户/角色入口名单固定在 `BusinessPermissionMapper.xml/queryBusinessDomainList` 的 SQL 中，修改后重新部署。入口仅在新页面 mounted 时查询一次启用的直接所属角色，不继承父子角色；角色变化在下次真正加载页面时更新显示，返回页签只刷新数据。各业务后端不校验入口名单，事项范围和审批接管沿用 `AdminUserIdUtil` 的旧管理员 ID 规则。固定名单、维护方式与股票扩展说明见 [06 我的事宜](06-my-matters.md)。当前演示身份需在正式环境替换为可信后端登录上下文。
+债券、基金、股票事宜按业务隔离，用户/角色入口名单固定在 `BusinessPermissionMapper.xml/queryBusinessDomainList` 的 SQL 中，修改后重新部署。入口仅在新页面 mounted 时查询一次启用的直接所属角色，不继承父子角色；角色变化在下次真正加载页面时更新显示，返回页签只刷新数据。各业务后端不校验入口名单，事项范围和审批接管沿用 `AdminUserIdUtil` 的旧管理员 ID 规则。固定名单、维护方式与股票扩展说明见 [06 我的事宜](06-my-matters.md)。当前演示身份需在正式环境替换为可信后端登录上下文。

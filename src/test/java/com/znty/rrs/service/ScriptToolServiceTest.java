@@ -73,6 +73,13 @@ public class ScriptToolServiceTest {
         registered.addAll(schemaFiles);
         registered.addAll(demoFiles);
         registered.addAll(excluded);
+        // 股票仅保留完整建表和 Demo，不提供旧数据迁移脚本。
+        assertFalse(registered.contains("stock/rrs_stock_pool_market_migration.sql"));
+        assertFalse(new File("sql/stock/rrs_stock_pool_market_migration.sql").exists());
+        assertTrue(schemaFiles.contains("stock/rrs_stockinfo_schema.sql"));
+        assertTrue(schemaFiles.contains("stock/rrs_stock_pool_adjust_schema.sql"));
+        assertTrue(demoFiles.contains("stock/rrs_stockinfo_demo_data.sql"));
+        assertTrue(demoFiles.contains("stock/rrs_stock_pool_adjust_demo_data.sql"));
 
         File sqlDir = new File("sql");
         assertTrue("sql 目录应存在: " + sqlDir.getAbsolutePath(), sqlDir.isDirectory());
@@ -128,6 +135,7 @@ public class ScriptToolServiceTest {
         assertTrue(aisSchema != null);
         assertTrue(aisDemo != null);
         assertTrue(clearFlow != null);
+        assertFalse(taskMap.containsKey("MIGRATE_STOCK_HK_MARKET"));
         assertTrue(taskMap.get("INIT_AIS") == null);
         assertTrue(taskMap.get("INIT_SECURITYINFO_SCHEMA") == null);
         // 完整重建任务排在列表首位，便于前端通栏展示

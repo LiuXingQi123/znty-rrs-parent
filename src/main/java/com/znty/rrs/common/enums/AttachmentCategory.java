@@ -29,7 +29,19 @@ public enum AttachmentCategory {
     /** 基金内部报告库其他材料 */
     FUND_MATERIAL_IN("fund_material_in"),
     /** 基金外部报告库其他材料 */
-    FUND_MATERIAL_OUT("fund_material_out");
+    FUND_MATERIAL_OUT("fund_material_out"),
+    /** 股票手工上传报告 */
+    STOCK_REPORT_HAND("stock_report_hand"),
+    /** 股票内部报告库报告 */
+    STOCK_REPORT_IN("stock_report_in"),
+    /** 股票外部报告库报告 */
+    STOCK_REPORT_OUT("stock_report_out"),
+    /** 股票手工上传材料 */
+    STOCK_MATERIAL_HAND("stock_material_hand"),
+    /** 股票内部报告库材料 */
+    STOCK_MATERIAL_IN("stock_material_in"),
+    /** 股票外部报告库材料 */
+    STOCK_MATERIAL_OUT("stock_material_out");
 
     /** 枚举 code 值 */
     private final String code;

@@ -73,6 +73,12 @@ public class ScriptToolService {
     private static final String TASK_INIT_FUND_SCHEMA = "INIT_FUND_SCHEMA";
     /** 初始化基金专属 Demo 数据任务编码 */
     private static final String TASK_INIT_FUND_DEMO = "INIT_FUND_DEMO";
+    /** 股票专属建表任务 */
+    private static final String TASK_INIT_STOCK_SCHEMA = "INIT_STOCK_SCHEMA";
+    /** 股票专属演示数据任务 */
+    private static final String TASK_INIT_STOCK_DEMO = "INIT_STOCK_DEMO";
+    /** 股票调库运行态清空任务 */
+    private static final String TASK_CLEAR_STOCK_ADJUST_FLOW = "CLEAR_STOCK_ADJUST_FLOW";
     /** 清空选中表数据任务编码 */
     private static final String TASK_CLEAR_SELECTED_TABLES = "CLEAR_SELECTED_TABLES";
     /** 清空选中表确认文本 */
@@ -780,12 +786,12 @@ public class ScriptToolService {
      */
     private void executeTask(String taskCode, List<String> executedItems) throws Exception {
         if (TASK_INIT_SCHEMA.equals(taskCode)) {
-            // 执行主库建表脚本（排除 AIS 库、外部导入表与基金专属表）
+            // 执行主库建表脚本（排除 AIS 库、外部导入表与基金/股票专属表）
             executeSqlFiles(queryRrsSchemaFiles(), executedItems);
             return;
         }
         if (TASK_INIT_DEMO.equals(taskCode)) {
-            // 执行主库 Demo 数据脚本（排除 AIS 库、外部导入表与基金专属表）
+            // 执行主库 Demo 数据脚本（排除 AIS 库、外部导入表与基金/股票专属表）
             executeSqlFiles(queryRrsDemoFiles(), executedItems);
             return;
         }
@@ -809,6 +815,21 @@ public class ScriptToolService {
             executeSqlFiles(queryFundDemoFiles(), executedItems);
             return;
         }
+        if (TASK_INIT_STOCK_SCHEMA.equals(taskCode)) {
+            // 独立重建股票基础与运行表，脚本只清理股票日志附件关联
+            executeSqlFiles(queryStockSchemaFiles(), executedItems);
+            return;
+        }
+        if (TASK_INIT_STOCK_DEMO.equals(taskCode)) {
+            // 独立重置股票数据，自选幂等追加，不执行公共池/流程/附件脚本
+            executeSqlFiles(queryStockDemoFiles(), executedItems);
+            return;
+        }
+        if (TASK_CLEAR_STOCK_ADJUST_FLOW.equals(taskCode)) {
+            // 只清空股票运行表及其附件关联
+            clearStockAdjustFlowData(executedItems);
+            return;
+        }
         if (TASK_INIT_AIS_SCHEMA.equals(taskCode)) {
             // 执行 AIS 库建表脚本
             executeSqlFiles(queryAisSchemaFiles(), executedItems);
@@ -820,9 +841,9 @@ public class ScriptToolService {
             return;
         }
         if (TASK_RESET_ALL.equals(taskCode)) {
-            // 先执行主库建表脚本（排除 AIS 库、外部导入表与基金专属表）
+            // 先执行主库建表脚本（排除 AIS 库、外部导入表与基金/股票专属表）
             executeSqlFiles(queryRrsSchemaFiles(), executedItems);
-            // 再执行主库 Demo 数据脚本（排除 AIS 库、外部导入表与基金专属表）
+            // 再执行主库 Demo 数据脚本（排除 AIS 库、外部导入表与基金/股票专属表）
             executeSqlFiles(queryRrsDemoFiles(), executedItems);
             return;
         }
@@ -867,6 +888,25 @@ public class ScriptToolService {
         }
     }
 
+    /** 仅解除股票日志附件关联，保留公共报告与物理文件。 */
+    private void deleteStockAdjustAttachmentBindings(Statement stmt, List<String> executedItems) throws Exception {
+        stmt.execute("DELETE FROM `znty_rrs`.`sys_attachment` WHERE `table_name` = 'ip_adjust_log_stock'");
+        executedItems.add("sys_attachment(table_name=ip_adjust_log_stock)");
+    }
+
+    /** 独立清空股票调库运行表。 */
+    private void clearStockAdjustFlowData(List<String> executedItems) throws Exception {
+        try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
+            stmt.execute("USE `znty_rrs`");
+            // 在日志 ID 被复用前解除旧附件关联
+            deleteStockAdjustAttachmentBindings(stmt, executedItems);
+            for (String table : queryStockAdjustFlowRuntimeTables()) {
+                stmt.execute("TRUNCATE TABLE `" + table + "`");
+                executedItems.add(table);
+            }
+        }
+    }
+
     /**
      * 清空调库运行态数据。
      */
@@ -890,6 +930,10 @@ public class ScriptToolService {
         // 构建可清空表白名单索引
         Map<String, ScriptTableDto> tableMap = queryClearTableMap();
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
+            if (selectedKeySet.contains("znty_rrs.ip_adjust_log_stock")) {
+                // 自定义重置股票日志时同样解除旧附件，避免 ID 复用误关联
+                deleteStockAdjustAttachmentBindings(stmt, executedItems);
+            }
             for (Map.Entry<String, ScriptTableDto> entry : tableMap.entrySet()) {
                 if (selectedKeySet.contains(entry.getKey())) {
                     ScriptTableDto table = entry.getValue();
@@ -1094,6 +1138,10 @@ public class ScriptToolService {
             String sqlText = new String(Files.readAllBytes(sqlFile.toPath()), StandardCharsets.UTF_8);
             // 解析脚本内可执行语句
             fillScriptFileStatementInfo(dto, splitSqlStatements(sqlText));
+            if (fileName.startsWith("stock/rrs_stock_pool_adjust")) {
+                // 股票日志脚本只删除本模块附件绑定，不清空公共附件表
+                dto.getAffectedTables().add("sys_attachment(table_name=ip_adjust_log_stock)");
+            }
         } catch (Exception e) {
             dto.setExists(false);
         }
@@ -1762,6 +1810,8 @@ public class ScriptToolService {
         if (baseName.startsWith("rrs_temp_fund_code")) return "temp-fund-code";
         if (baseName.startsWith("rrs_fund_nav")) return "fund-nav";
         if (baseName.startsWith("rrs_fund_pool_adjust")) return "fund-adjust";
+        if (baseName.startsWith("rrs_stockinfo")) return "stock-info";
+        if (baseName.startsWith("rrs_stock_pool_adjust")) return "stock-adjust";
         if (baseName.startsWith("rrs_security_pool_adjust")) return "security-adjust";
         if (baseName.startsWith("rrs_flow_definition")) return "flow-definition";
         if (baseName.startsWith("rrs_rule")) return "rule-config";
@@ -1796,6 +1846,8 @@ public class ScriptToolService {
         if ("temp-fund-code".equals(moduleCode)) return "基金临时代码";
         if ("fund-nav".equals(moduleCode)) return "基金净值数据";
         if ("fund-adjust".equals(moduleCode)) return "基金调库数据";
+        if ("stock-info".equals(moduleCode)) return "股票基础信息";
+        if ("stock-adjust".equals(moduleCode)) return "股票调库数据";
         if ("security-adjust".equals(moduleCode)) return "证券调库演示数据";
         if ("flow-definition".equals(moduleCode)) return "流程定义";
         if ("rule-config".equals(moduleCode)) return "规则配置";
@@ -1830,6 +1882,10 @@ public class ScriptToolService {
         addModuleTask(taskMap, "fund-nav", "基金净值数据", "单独重置基金逐日净值演示数据，不影响基金基础信息和债券证券主数据。", "medium", "fund/rrs_fund_nav_demo_data.sql");
         // 登记基金调库运行表演示数据的独立重置入口
         addModuleTask(taskMap, "fund-adjust", "基金调库数据", "单独重置基金调库日志、审批步骤和当前池状态。", "danger", "fund/rrs_fund_pool_adjust_demo_data.sql");
+        // 股票数据独立重置，迁移任务不提供模块重置入口
+        addModuleTask(taskMap, "stock-info", "股票基础信息", "重置股票主档、研究评级历史和多人分管关系。", "medium", "stock/rrs_stockinfo_demo_data.sql");
+        // 运行表重置只解除股票附件关联，收藏仅幂等追加
+        addModuleTask(taskMap, "stock-adjust", "股票调库数据", "重置股票日志、步骤、当前池状态，解除股票日志附件关联并幂等追加股票自选。", "danger", "stock/rrs_stock_pool_adjust_demo_data.sql");
         addModuleTask(taskMap, "security-adjust", "证券调库演示数据", "重置调库日志、池状态和流程步骤演示数据（不含外部导入表）。", "danger", "rrs_security_pool_adjust_demo_data.sql");
         addModuleTask(taskMap, "flow-definition", "流程定义", "重置流程定义、版本、节点、连线和审批处理人配置。", "danger", "rrs_flow_definition_demo_data.sql");
         addModuleTask(taskMap, "rule-config", "规则配置", "重置规则分类、规则定义、参数、测试用例和测试运行日志。", "danger", "rrs_rule_demo_data.sql");
@@ -2249,6 +2305,8 @@ public class ScriptToolService {
                 "fund/rrs_temp_fund_code_schema.sql",
                 "fund/rrs_fund_nav_schema.sql",
                 "fund/rrs_fund_pool_adjust_schema.sql",
+                "stock/rrs_stockinfo_schema.sql",
+                "stock/rrs_stock_pool_adjust_schema.sql",
                 "rrs_security_pool_adjust_schema.sql",
                 "rrs_flow_definition_schema.sql",
                 "rrs_pool_init_schema.sql",
@@ -2281,6 +2339,8 @@ public class ScriptToolService {
                 "fund/rrs_temp_fund_code_demo_data.sql",
                 "fund/rrs_fund_nav_demo_data.sql",
                 "fund/rrs_fund_pool_adjust_demo_data.sql",
+                "stock/rrs_stockinfo_demo_data.sql",
+                "stock/rrs_stock_pool_adjust_demo_data.sql",
                 "rrs_security_pool_adjust_demo_data.sql",
                 "rrs_flow_definition_demo_data.sql",
                 "rrs_rule_demo_data.sql",
@@ -2360,8 +2420,23 @@ public class ScriptToolService {
         );
     }
 
+    /** 股票独立建表顺序：基础数据先于调库运行表。 */
+    private List<String> queryStockSchemaFiles() {
+        return Arrays.asList("stock/rrs_stockinfo_schema.sql", "stock/rrs_stock_pool_adjust_schema.sql");
+    }
+
+    /** 股票独立演示顺序：基础、评级、分管先于调库与自选。 */
+    private List<String> queryStockDemoFiles() {
+        return Arrays.asList("stock/rrs_stockinfo_demo_data.sql", "stock/rrs_stock_pool_adjust_demo_data.sql");
+    }
+
+    /** 股票运行态表，不含公共附件、报告或其他资产运行表。 */
+    private List<String> queryStockAdjustFlowRuntimeTables() {
+        return Arrays.asList("ip_adjust_step_stock", "ip_pool_status_stock", "ip_adjust_log_stock");
+    }
+
     /**
-     * 查询主库建表脚本，排除 AIS 库、外部导入表与基金专属表。
+     * 查询主库建表脚本，排除 AIS 库、外部导入表与基金/股票专属表。
      *
      * @return 主业务库结构脚本清单
      */
@@ -2374,11 +2449,13 @@ public class ScriptToolService {
         files.removeAll(queryExternalImportSchemaFiles());
         // 排除需独立初始化的基金专属建表脚本
         files.removeAll(queryFundSchemaFiles());
+        // 股票专属结构仅由独立任务重建
+        files.removeAll(queryStockSchemaFiles());
         return files;
     }
 
     /**
-     * 查询主库 Demo 数据脚本，排除 AIS 库、外部导入表与基金专属表。
+     * 查询主库 Demo 数据脚本，排除 AIS 库、外部导入表与基金/股票专属表。
      *
      * @return 主业务库演示数据脚本清单
      */
@@ -2391,6 +2468,8 @@ public class ScriptToolService {
         files.removeAll(queryExternalImportDemoFiles());
         // 排除需独立初始化的基金专属演示脚本
         files.removeAll(queryFundDemoFiles());
+        // 股票演示数据仅由独立任务重置
+        files.removeAll(queryStockDemoFiles());
         return files;
     }
 
@@ -2414,6 +2493,10 @@ public class ScriptToolService {
         excluded.addAll(queryFundSchemaFiles());
         // 汇总与债券运行表分离的基金专属演示脚本
         excluded.addAll(queryFundDemoFiles());
+        // 股票结构和演示均不跟随公共批次执行
+        excluded.addAll(queryStockSchemaFiles());
+        // 展示股票独立演示批次
+        excluded.addAll(queryStockDemoFiles());
         return excluded;
     }
 
@@ -2501,6 +2584,18 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "ip_adjust_log_fund", "基金调库记录"),
                 // 登记基金当前池状态表
                 buildTable("znty_rrs", "ip_pool_status_fund", "基金当前池状态")
+        )));
+        // 股票基础与调库运行表独立分组，不参与公共调库清空任务
+        groups.add(buildTableGroup("stock-info", "股票基础信息", "znty_rrs", Arrays.asList(
+                buildTable("znty_rrs", "rrs_stockinfo", "股票基础信息"),
+                buildTable("znty_rrs", "rrs_stock_rating", "股票研究评级历史"),
+                buildTable("znty_rrs", "rrs_stock_manager", "股票多人分管关系")
+        )));
+        // 登记股票日志、步骤与当前状态
+        groups.add(buildTableGroup("stock-adjust", "股票调库数据", "znty_rrs", Arrays.asList(
+                buildTable("znty_rrs", "ip_adjust_step_stock", "股票调库审批步骤"),
+                buildTable("znty_rrs", "ip_pool_status_stock", "股票当前池状态"),
+                buildTable("znty_rrs", "ip_adjust_log_stock", "股票调库日志")
         )));
         groups.add(buildTableGroup("pool-config", "投资池配置", "znty_rrs", Arrays.asList(
                 buildTable("znty_rrs", "ip_pool_permission_evt", "投资池权限事件"),
@@ -2630,12 +2725,12 @@ public class ScriptToolService {
         addTask(taskMap, TASK_RESET_ALL, "重建完整演示环境",
                 "先执行主库 schema 再执行 demo，仅 znty_rrs 业务库。"
                         + "不执行 AIS：ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql（及对应 schema）；"
-                        + "不执行外部导入：rrs_external_import_*；不执行基金：fund/*。"
+                        + "不执行外部导入：rrs_external_import_*；不执行基金/股票：fund/*、stock/*。"
                         + "请改用对应的独立初始化任务。",
                 "danger", "RESET_ALL",
                 "重建主库表结构并重置演示数据。"
                         + "不含 AIS 库（ais_inv_analysis / ais_inv_ods 的 schema 与 demo，含用户角色与 Wind 主体/评级）"
-                        + "、外部导入表（rrs_securityinfo 等）及 fund/ 下基金专属表。",
+                        + "、外部导入表（rrs_securityinfo 等）及 fund/、stock/ 下基金/股票专属表与独立迁移。",
                 // 合并排除基金专属脚本后的主库建表与演示脚本清单
                 mergeList(queryRrsSchemaFiles(), queryRrsDemoFiles()),
                 // 统计主库建表脚本覆盖的表数量
@@ -2644,7 +2739,7 @@ public class ScriptToolService {
         addTask(taskMap, TASK_INIT_SCHEMA, "初始化建表脚本",
                 "按固定顺序执行主库 schema 重建表结构。"
                         + "已排除 AIS 建表（ais_inv_analysis_schema.sql、ais_inv_ods_schema.sql）"
-                        + "、外部导入建表（rrs_external_import_schema.sql）与 fund/ 下基金建表脚本，"
+                        + "、外部导入建表（rrs_external_import_schema.sql）与 fund/、stock/ 下基金/股票建表脚本，"
                         + "请用独立任务执行。",
                 "high", "INIT_SCHEMA",
                 "会 DROP 并重新 CREATE 主库相关表，原表数据清空。"
@@ -2655,7 +2750,7 @@ public class ScriptToolService {
         addTask(taskMap, TASK_INIT_DEMO, "初始化 Demo 数据",
                 "按固定顺序执行主库 demo。"
                         + "已排除 AIS 演示数据（ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql）"
-                        + "、外部导入 demo（rrs_external_import_demo_data.sql）与 fund/ 下基金 demo，"
+                        + "、外部导入 demo（rrs_external_import_demo_data.sql）与 fund/、stock/ 下基金/股票 demo，"
                         + "请用独立任务执行。",
                 "medium", "INIT_DEMO",
                 "按脚本 TRUNCATE 逻辑重置主库演示数据。"
@@ -2692,6 +2787,24 @@ public class ScriptToolService {
                 "会清空基金临时代码表，并重置基金基础信息、逐日净值及基金调库运行表演示数据。",
                 // 读取基金演示脚本并统计覆盖的表数量
                 queryFundDemoFiles(), countTablesInFiles(queryFundDemoFiles(), "demo"), null);
+        // 股票初始化与公共配置分离，防止覆盖债券、基金和既有用户数据
+        addTask(taskMap, TASK_INIT_STOCK_SCHEMA, "初始化股票专属表建表",
+                "独立重建股票主档、评级历史、多人分管及三张股票调库运行表；须先具备公共池、流程和附件表。",
+                "high", TASK_INIT_STOCK_SCHEMA,
+                "清空六张股票表及股票日志附件关联，保留其他资产数据、公共报告与物理附件。",
+                queryStockSchemaFiles(), countTablesInFiles(queryStockSchemaFiles(), "schema"), null);
+        // 股票 Demo 只对本模块运行表及绑定执行重置，自选数据幂等追加
+        addTask(taskMap, TASK_INIT_STOCK_DEMO, "初始化股票专属 Demo",
+                "依次重置股票基础、评级、分管和调库样本，复用现有公共池与115～118流程。",
+                "medium", TASK_INIT_STOCK_DEMO,
+                "重置六张股票表，解除股票日志附件关联；股票自选仅幂等追加，不重置公共收藏。",
+                queryStockDemoFiles(), 8, null);
+        // 独立清空股票运行态，范围包括股票日志附件绑定
+        addTask(taskMap, TASK_CLEAR_STOCK_ADJUST_FLOW, "清空股票调库运行态",
+                "清空股票调库日志、审批步骤和当前池状态，并解除股票日志附件关联。",
+                "danger", TASK_CLEAR_STOCK_ADJUST_FLOW,
+                "保留股票基础信息、评级、分管、自选、其他资产运行表、公共报告和物理文件。",
+                mergeList(queryStockAdjustFlowRuntimeTables(), Arrays.asList("sys_attachment(table_name=ip_adjust_log_stock)")), 4, null);
         // 加入 AIS 库建表任务
         addTask(taskMap, TASK_INIT_AIS_SCHEMA, "初始化 AIS 建表脚本",
                 "执行 ais_inv_analysis 与 ais_inv_ods 两个 AIS 库的建表脚本。",

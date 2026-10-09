@@ -25,6 +25,10 @@ public class MyMattersService {
     @Resource
     private FundMyMattersService fundMyMattersService;
 
+    /** 股票事宜查询服务 */
+    @Resource
+    private StockMyMattersService stockMyMattersService;
+
     /** 查询当前用户可显示的业务入口，仅供页面初始化使用 */
     public List<BusinessDomainDto> queryBusinessDomainList(MyMattersReq req) {
         // 校验当前用户 ID 并查询固定业务入口名单
@@ -38,24 +42,39 @@ public class MyMattersService {
         if (!"pending".equals(req.getStepStatus()) && !"completed".equals(req.getStepStatus())) {
             throw new BizException("步骤状态只能为 pending 或 completed");
         }
-        return BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
-                ? bondMyMattersService.queryMyMattersPage(req) : fundMyMattersService.queryMyMattersPage(req);
+        if (BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())) {
+            return bondMyMattersService.queryMyMattersPage(req);
+        }
+        if (BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())) {
+            return fundMyMattersService.queryMyMattersPage(req);
+        }
+        return stockMyMattersService.queryMyMattersPage(req);
     }
 
     /** 查询本人发起的当前业务事项，管理员同样只查询本人 */
     public PageResult<MyMattersDto> queryMyInitiatedMattersPage(MyMattersReq req) {
         // 校验业务编码及当前用户参数
         validateBusinessRequest(req);
-        return BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
-                ? bondMyMattersService.queryMyInitiatedMattersPage(req) : fundMyMattersService.queryMyInitiatedMattersPage(req);
+        if (BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())) {
+            return bondMyMattersService.queryMyInitiatedMattersPage(req);
+        }
+        if (BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())) {
+            return fundMyMattersService.queryMyInitiatedMattersPage(req);
+        }
+        return stockMyMattersService.queryMyInitiatedMattersPage(req);
     }
 
     /** 查询当前业务可见事项涉及的流程选项 */
     public List<FlowOptionDto> queryFlowOptionList(MyMattersReq req) {
         // 校验业务编码及当前用户参数
         validateBusinessRequest(req);
-        return BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
-                ? bondMyMattersService.queryFlowOptionList(req) : fundMyMattersService.queryFlowOptionList(req);
+        if (BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())) {
+            return bondMyMattersService.queryFlowOptionList(req);
+        }
+        if (BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())) {
+            return fundMyMattersService.queryFlowOptionList(req);
+        }
+        return stockMyMattersService.queryFlowOptionList(req);
     }
 
     /** 验证必传且已接入的业务编码以及当前用户 ID */
@@ -64,7 +83,8 @@ public class MyMattersService {
             throw new BizException("业务编码 businessDomain 不能为空");
         }
         if (!BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
-                && !BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())) {
+                && !BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())
+                && !BusinessDomain.STOCK.getCode().equals(req.getBusinessDomain())) {
             throw new BizException("业务未接入或编码无效：" + req.getBusinessDomain());
         }
         // 校验查询本人事项所需的当前用户 ID

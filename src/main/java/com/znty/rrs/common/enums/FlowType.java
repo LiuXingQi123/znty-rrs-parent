@@ -6,6 +6,10 @@ public enum FlowType {
     WHITELIST_INBOUND("whitelistInbound"),
     /** 简易调入 */
     SIMPLE_INBOUND("simpleInbound"),
+    /** 股票快速调入（投资池 simple_in 配置） */
+    FAST_INBOUND("fastInbound"),
+    /** 股票快速调出（投资池 simple_out 配置） */
+    FAST_OUTBOUND("fastOutbound"),
     /** 默认调入 */
     NORMAL_INBOUND("normalInbound"),
     /** 特殊审批 */

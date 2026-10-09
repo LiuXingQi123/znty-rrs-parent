@@ -29,6 +29,24 @@ public interface SysAttachmentMapper {
     /** 逻辑删除指定调库日志下的附件 */
     int deleteAttachmentByIdsList(@Param("adjustLogId") Long adjustLogId, @Param("ids") List<Long> ids);
 
+    /** 核实报告附件对应未删除的当前股票研究报告。 */
+    int queryMatchingStockReportSourceCount(@Param("tableName") String tableName, @Param("reportId") Long reportId,
+                                          @Param("stockCode") String stockCode);
+
+    /** 查询股票日志附件，终审再次核对报告限制。 */
+    List<SysAttachmentBo> queryStockAdjustAttachmentList(@Param("adjustLogId") Long adjustLogId);
+
+    /** 核实继承文件仍有当前股票的有效原始报告来源。 */
+    int queryMatchingStockBoundReportCount(@Param("fileName") String fileName, @Param("stockCode") String stockCode,
+                                         @Param("internalOnly") boolean internalOnly);
+
+    /** 按业务表及日志范围逻辑删除附件。 */
+    int deleteBusinessAttachmentByIdsList(@Param("tableName") String tableName, @Param("adjustLogId") Long adjustLogId,
+                                         @Param("ids") List<Long> ids);
+
+    /** 查询股票日志的手工报告附件。 */
+    List<SysAttachmentBo> queryHandStockReportAttachments(@Param("adjustLogId") Long adjustLogId);
+
     /** 查询指定调库记录下手工上传的信评报告附件 */
     List<SysAttachmentBo> queryHandCreditReportAttachments(@Param("adjustLogId") Long adjustLogId);
 

@@ -53,6 +53,8 @@ public class SysAttachmentService {
     private static final String ADJUST_LOG_TABLE = "ip_adjust_log";
     /** 基金调库日志关联表 */
     private static final String FUND_ADJUST_LOG_TABLE = "ip_adjust_log_fund";
+    /** 股票调库日志关联表 */
+    private static final String STOCK_ADJUST_LOG_TABLE = "ip_adjust_log_stock";
     /** 基金日志允许继承的报告和材料附件分类 */
     private static final Set<String> FUND_ATTACHMENT_CATEGORIES = new HashSet<>(Arrays.asList(
             AttachmentCategory.FUND_REPORT_HAND.getCode(), AttachmentCategory.FUND_REPORT_IN.getCode(),
@@ -228,6 +230,15 @@ public class SysAttachmentService {
         if (tableName == null || tableName.trim().isEmpty() || mainId == null) {
             throw new BizException("绑定附件失败：关联表名和业务记录 ID 不能为空");
         }
+        // 限定业务表，防止附件关联到其他模块。
+        validateAdjustTable(tableName.trim());
+        String reportHand = STOCK_ADJUST_LOG_TABLE.equals(tableName.trim()) ? AttachmentCategory.STOCK_REPORT_HAND.getCode()
+                : (FUND_ADJUST_LOG_TABLE.equals(tableName.trim()) ? AttachmentCategory.FUND_REPORT_HAND.getCode() : AttachmentCategory.CREDIT_REPORT_HAND.getCode());
+        String materialHand = STOCK_ADJUST_LOG_TABLE.equals(tableName.trim()) ? AttachmentCategory.STOCK_MATERIAL_HAND.getCode()
+                : (FUND_ADJUST_LOG_TABLE.equals(tableName.trim()) ? AttachmentCategory.FUND_MATERIAL_HAND.getCode() : AttachmentCategory.MATERIAL_HAND.getCode());
+        if (!reportHand.equals(attachmentCategory) && !materialHand.equals(attachmentCategory)) {
+            throw new BizException("绑定附件失败：附件分类与业务不匹配");
+        }
         if (submissionFiles == null) {
             throw new BizException("绑定附件失败：提交文件上下文不能为空");
         }
@@ -282,6 +293,8 @@ public class SysAttachmentService {
         if (tableName == null || tableName.trim().isEmpty() || mainId == null) {
             throw new BizException("复制报告附件失败：关联表名和业务记录 ID 不能为空");
         }
+        // 限定业务表，防止附件关联到其他模块。
+        validateAdjustTable(tableName.trim());
         if (!AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose) && !AttachmentPurpose.MATERIAL.getCode().equals(attachmentPurpose)) {
             throw new BizException("复制报告附件失败：附件分类不合法");
         }
@@ -296,7 +309,7 @@ public class SysAttachmentService {
             validateReportSourceAttachment(source);
             // 根据报告库来源解析落库分类
             String attachmentCategory = resolveAdjustLogReportCategory(
-                    source, attachmentPurpose, "ip_adjust_log_fund".equals(tableName.trim()));
+                    source, attachmentPurpose, tableName.trim());
             SysAttachmentBo bo = new SysAttachmentBo();
             bo.setTableName(tableName.trim());
             bo.setMainId(mainId);
@@ -428,6 +441,82 @@ public class SysAttachmentService {
         }
     }
 
+    /** 核实选择的股票研究报告来源，报告必须属于当前股票。 */
+    public void validateStockReportSources(List<Long> ids, String stockCode, boolean internalOnly) {
+        if (ids == null || ids.isEmpty()) { return; }
+        validateCreditReportSources(ids, internalOnly);
+        List<SysAttachmentBo> sources = sysAttachmentMapper.queryAttachmentListByIds(new ArrayList<>(new LinkedHashSet<>(ids)));
+        for (SysAttachmentBo source : sources) {
+            if (sysAttachmentMapper.queryMatchingStockReportSourceCount(source.getTableName(), source.getMainId(), stockCode) != 1) {
+                throw new BizException("股票报告与当前股票不匹配或报告已删除，附件 ID：" + source.getId());
+            }
+        }
+    }
+
+    /** 终审或修改后复核已绑定报告，避免删除报告后仍满足报告限制。 */
+    public void validateStockBoundReports(Long logId, String stockCode, String restriction) {
+        if (restriction != null && !"none".equals(restriction) && !"any".equals(restriction) && !"internal".equals(restriction)) {
+            throw new BizException("股票池报告限制配置无效：" + restriction);
+        }
+        boolean hasReport = false;
+        boolean hasInternal = false;
+        for (SysAttachmentBo attachment : sysAttachmentMapper.queryStockAdjustAttachmentList(logId)) {
+            String category = attachment.getAttachmentCategory();
+            if (AttachmentCategory.STOCK_REPORT_HAND.getCode().equals(category)) {
+                hasReport = true;
+            } else if (AttachmentCategory.STOCK_REPORT_IN.getCode().equals(category)
+                    || AttachmentCategory.STOCK_REPORT_OUT.getCode().equals(category)) {
+                boolean internal = AttachmentCategory.STOCK_REPORT_IN.getCode().equals(category);
+                if (sysAttachmentMapper.queryMatchingStockBoundReportCount(attachment.getFileName(), stockCode, internal) == 0) {
+                    throw new BizException("股票日志报告来源已失效或股票归属不一致，附件 ID：" + attachment.getId());
+                }
+                hasReport = true;
+                hasInternal |= internal;
+            }
+        }
+        if (("any".equals(restriction) && !hasReport) || ("internal".equals(restriction) && !hasInternal)) {
+            throw new BizException("股票日志报告不符合投资池报告限制，调整日志 ID：" + logId);
+        }
+    }
+
+    /** 删除明确业务表中的附件，禁止不同业务同编号日志之间交叉操作。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteAdjustLogAttachments(String tableName, Long adjustLogId, List<Long> attachmentIds) {
+        // 校验关联表；原债券入口保留原 Mapper 方法。
+        validateAdjustTable(tableName);
+        if (ADJUST_LOG_TABLE.equals(tableName)) {
+            deleteAdjustLogAttachments(adjustLogId, attachmentIds);
+            return;
+        }
+        if (attachmentIds == null || attachmentIds.isEmpty()) { return; }
+        if (adjustLogId == null || adjustLogId <= 0) { throw new BizException("删除附件失败：调库日志 ID 无效"); }
+        List<Long> ids = new ArrayList<>(new LinkedHashSet<>(attachmentIds));
+        List<SysAttachmentBo> attachments = sysAttachmentMapper.queryAttachmentListByIds(ids);
+        if (attachments == null || attachments.size() != ids.size()) { throw new BizException("删除附件失败：存在无效附件 ID"); }
+        for (SysAttachmentBo attachment : attachments) {
+            if (!tableName.equals(attachment.getTableName()) || !adjustLogId.equals(attachment.getMainId())) {
+                throw new BizException("删除附件失败：附件不属于当前业务调库记录");
+            }
+        }
+        if (sysAttachmentMapper.deleteBusinessAttachmentByIdsList(tableName, adjustLogId, ids) != ids.size()) {
+            throw new BizException("删除附件失败：附件状态已变化，请刷新后重试");
+        }
+    }
+
+    /** 查询股票日志手工报告，完整限定业务表和附件分类。 */
+    public List<SysAttachmentBo> queryHandStockReportAttachments(Long adjustLogId) {
+        if (adjustLogId == null) { throw new BizException("调库日志 ID 不能为空"); }
+        return sysAttachmentMapper.queryHandStockReportAttachments(adjustLogId);
+    }
+
+    /** 附件只能绑定已接入的三类调整业务表。 */
+    private void validateAdjustTable(String tableName) {
+        if (!ADJUST_LOG_TABLE.equals(tableName) && !FUND_ADJUST_LOG_TABLE.equals(tableName)
+                && !STOCK_ADJUST_LOG_TABLE.equals(tableName)) {
+            throw new BizException("附件关联业务表无效");
+        }
+    }
+
     /**
      * 按单个或多个调库日志 ID 查询附件列表。
      *
@@ -450,11 +539,13 @@ public class SysAttachmentService {
         }
         // 业务编码仅用于选择独立的附件关联表。
         if (!BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
-                && !BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())) {
+                && !BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())
+                && !BusinessDomain.STOCK.getCode().equals(req.getBusinessDomain())) {
             throw new BizException("业务未接入或编码无效：" + req.getBusinessDomain());
         }
         String tableName = BusinessDomain.BOND.getCode().equals(req.getBusinessDomain())
-                ? "ip_adjust_log" : "ip_adjust_log_fund";
+                ? ADJUST_LOG_TABLE : (BusinessDomain.FUND.getCode().equals(req.getBusinessDomain())
+                ? FUND_ADJUST_LOG_TABLE : STOCK_ADJUST_LOG_TABLE);
         return sysAttachmentMapper.queryAttachmentList(tableName, new ArrayList<>(adjustLogIds));
     }
 
@@ -617,13 +708,19 @@ public class SysAttachmentService {
      *
      * @param source 报告库来源附件
      * @param attachmentPurpose 报告或其他材料用途
-     * @param fundAdjust 是否绑定到基金调库日志
+     * @param tableName 已校验的业务关联表
      * @return 调库报告附件分类编码
      */
     private String resolveAdjustLogReportCategory(SysAttachmentBo source, String attachmentPurpose,
-                                                  boolean fundAdjust) {
+                                                  String tableName) {
         boolean inReport = "rrs_report_in".equals(source.getTableName());
-        if (fundAdjust) {
+        if (STOCK_ADJUST_LOG_TABLE.equals(tableName)) {
+            if (AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose)) {
+                return inReport ? AttachmentCategory.STOCK_REPORT_IN.getCode() : AttachmentCategory.STOCK_REPORT_OUT.getCode();
+            }
+            return inReport ? AttachmentCategory.STOCK_MATERIAL_IN.getCode() : AttachmentCategory.STOCK_MATERIAL_OUT.getCode();
+        }
+        if (FUND_ADJUST_LOG_TABLE.equals(tableName)) {
             if (AttachmentPurpose.CREDIT_REPORT.getCode().equals(attachmentPurpose)) {
                 return inReport ? AttachmentCategory.FUND_REPORT_IN.getCode()
                         : AttachmentCategory.FUND_REPORT_OUT.getCode();

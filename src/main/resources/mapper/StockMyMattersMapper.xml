@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.StockMyMattersMapper">
+    <!-- 我的事宜 mapper，对应调库记录、调库步骤和流程定义表，提供当前用户相关流程事项查询功能 -->
+
+    <!-- 分页查询我的事宜列表（待处理 / 已完成） -->
+    <select id="queryMyMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
+        <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
+        SELECT s.id
+               ,'stock' AS businessDomain
+               ,al.stock_code AS objectCode
+               ,al.stock_short_name AS objectName
+               ,s.adjust_log_id
+               ,al.stock_code
+               ,al.stock_short_name
+               ,al.target_pool_id
+               ,al.target_pool_name
+               ,al.adjust_batch_no
+               ,s.id AS stepId
+               ,f.name AS flowName
+               ,s.node_label AS stepName
+               ,'stockAdjust' AS businessScene
+               ,al.audit_status
+               ,s.step_status
+               ,CONCAT(
+                    COALESCE(al.adjuster_name, ''),
+                    ' 将 ',
+                    COALESCE(al.stock_short_name, ''),
+                    ' ',
+                    COALESCE(al.adjust_mode, ''),
+                    ' ',
+                    COALESCE(al.target_pool_name, ''),
+                    ' 的审批申请'
+                ) AS processDescription
+               ,al.adjuster_name AS initiatorName
+               ,s.start_time
+               ,CASE WHEN TIMESTAMPDIFF(MINUTE, s.start_time, NOW()) &lt; 60
+                     THEN CONCAT(TIMESTAMPDIFF(MINUTE, s.start_time, NOW()), '分钟前')
+                     WHEN TIMESTAMPDIFF(HOUR, s.start_time, NOW()) &lt; 24
+                     THEN CONCAT(TIMESTAMPDIFF(HOUR, s.start_time, NOW()), '小时前')
+                     WHEN TIMESTAMPDIFF(DAY, s.start_time, NOW()) &lt; 30
+                     THEN CONCAT(TIMESTAMPDIFF(DAY, s.start_time, NOW()), '天前')
+                     ELSE CONCAT(TIMESTAMPDIFF(MONTH, s.start_time, NOW()), '个月前')
+                END AS showDate
+        FROM ip_adjust_log_stock al
+        <choose>
+            <!-- 待处理：取当前用户待办步骤中最新一条 -->
+            <when test="stepStatus == 'pending'">
+                INNER JOIN (
+                    SELECT adjust_log_id
+                           ,MAX(id) AS step_id
+                    FROM ip_adjust_step_stock
+                    <where>
+                        step_status = 'pending'
+                        <if test="!adminUser">
+                            AND handler_id = #{currentUserId}
+                        </if>
+                        <if test="currentUserId == null or currentUserId == ''">
+                            AND 1 = 0
+                        </if>
+                    </where>
+                    GROUP BY adjust_log_id
+                ) latest ON latest.adjust_log_id = al.id
+            </when>
+            <!-- 已完成：取该调库记录最新步骤（不限状态） -->
+            <otherwise>
+                INNER JOIN (
+                    SELECT adjust_log_id
+                           ,MAX(id) AS step_id
+                    FROM ip_adjust_step_stock
+                    GROUP BY adjust_log_id
+                ) latest ON latest.adjust_log_id = al.id
+            </otherwise>
+        </choose>
+        INNER JOIN ip_adjust_step_stock s ON s.id = latest.step_id
+        LEFT JOIN wf_flow_node n ON n.id = s.flow_node_id
+        LEFT JOIN wf_flow_definition f ON f.id = al.flow_id AND f.is_deleted = 0
+        <where>
+            al.is_deleted = 0
+            <!-- 非管理员只看自己参与过的流程 -->
+            <if test="!adminUser">
+                AND EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step_stock us
+                    WHERE us.adjust_log_id = al.id
+                      AND us.handler_id = #{currentUserId}
+                )
+            </if>
+            <if test="currentUserId == null or currentUserId == ''">
+                AND 1 = 0
+            </if>
+            <if test="flowIds != null and flowIds.size() > 0">
+                AND f.id IN
+                <foreach collection="flowIds" item="flowId" open="(" separator="," close=")">
+                    #{flowId}
+                </foreach>
+            </if>
+            <if test="securityCode != null and securityCode != ''">
+                AND al.stock_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="securityShortName != null and securityShortName != ''">
+                AND al.stock_short_name LIKE CONCAT('%', #{securityShortName}, '%')
+            </if>
+            <if test="startDateStart != null and startDateStart != ''">
+                AND s.start_time &gt;= CONCAT(#{startDateStart}, ' 00:00:00')
+            </if>
+            <if test="startDateEnd != null and startDateEnd != ''">
+                AND s.start_time &lt;= CONCAT(#{startDateEnd}, ' 23:59:59')
+            </if>
+            <if test="processDescription != null and processDescription != ''">
+                AND CONCAT(
+                        COALESCE(al.adjuster_name, ''),
+                        ' 将 ',
+                        COALESCE(al.stock_short_name, ''),
+                        ' ',
+                        COALESCE(al.adjust_mode, ''),
+                        ' ',
+                        COALESCE(al.target_pool_name, ''),
+                        ' 的审批申请'
+                    ) LIKE CONCAT('%', #{processDescription}, '%')
+            </if>
+            <if test="auditStatus != null and auditStatus != ''">
+                AND al.audit_status = #{auditStatus}
+            </if>
+            <if test="stepStatus == 'completed'">
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step_stock ps
+                    WHERE ps.step_status = 'pending'
+                      AND ps.adjust_batch_no = al.adjust_batch_no
+                )
+            </if>
+            <if test="initiatorName != null and initiatorName != ''">
+                AND al.adjuster_name LIKE CONCAT('%', #{initiatorName}, '%')
+            </if>
+        </where>
+        ORDER BY s.id DESC
+    </select>
+
+    <!-- 分页查询我发起的事宜列表（按发起人过滤，含流程中与已结束） -->
+    <select id="queryMyInitiatedMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
+        SELECT s.id
+               ,'stock' AS businessDomain
+               ,al.stock_code AS objectCode
+               ,al.stock_short_name AS objectName
+               ,s.adjust_log_id
+               ,al.stock_code
+               ,al.stock_short_name
+               ,al.target_pool_id
+               ,al.target_pool_name
+               ,al.adjust_batch_no
+               ,s.id AS stepId
+               ,f.name AS flowName
+               ,s.node_label AS stepName
+               ,'stockAdjust' AS businessScene
+               ,al.audit_status
+               ,s.step_status
+               ,CONCAT(
+                    COALESCE(al.adjuster_name, ''),
+                    ' 将 ',
+                    COALESCE(al.stock_short_name, ''),
+                    ' ',
+                    COALESCE(al.adjust_mode, ''),
+                    ' ',
+                    COALESCE(al.target_pool_name, ''),
+                    ' 的审批申请'
+                ) AS processDescription
+               ,al.adjuster_name AS initiatorName
+               ,s.start_time
+        FROM ip_adjust_log_stock al
+        INNER JOIN (
+            SELECT adjust_log_id
+                   ,MAX(id) AS step_id
+            FROM ip_adjust_step_stock
+            GROUP BY adjust_log_id
+        ) latest ON latest.adjust_log_id = al.id
+        INNER JOIN ip_adjust_step_stock s ON s.id = latest.step_id
+        LEFT JOIN wf_flow_node n ON n.id = s.flow_node_id
+        LEFT JOIN wf_flow_definition f ON f.id = al.flow_id AND f.is_deleted = 0
+        <where>
+            al.is_deleted = 0
+            <!-- 按发起人过滤（管理员也只看自己发起的） -->
+            <if test="currentUserId != null and currentUserId != ''">
+                AND al.adjuster_id = #{currentUserId}
+            </if>
+            <if test="currentUserId == null or currentUserId == ''">
+                AND 1 = 0
+            </if>
+            <if test="flowIds != null and flowIds.size() > 0">
+                AND f.id IN
+                <foreach collection="flowIds" item="flowId" open="(" separator="," close=")">
+                    #{flowId}
+                </foreach>
+            </if>
+            <if test="securityCode != null and securityCode != ''">
+                AND al.stock_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="securityShortName != null and securityShortName != ''">
+                AND al.stock_short_name LIKE CONCAT('%', #{securityShortName}, '%')
+            </if>
+            <if test="startDateStart != null and startDateStart != ''">
+                AND s.start_time &gt;= CONCAT(#{startDateStart}, ' 00:00:00')
+            </if>
+            <if test="startDateEnd != null and startDateEnd != ''">
+                AND s.start_time &lt;= CONCAT(#{startDateEnd}, ' 23:59:59')
+            </if>
+            <if test="processDescription != null and processDescription != ''">
+                AND CONCAT(
+                        COALESCE(al.adjuster_name, ''),
+                        ' 将 ',
+                        COALESCE(al.stock_short_name, ''),
+                        ' ',
+                        COALESCE(al.adjust_mode, ''),
+                        ' ',
+                        COALESCE(al.target_pool_name, ''),
+                        ' 的审批申请'
+                    ) LIKE CONCAT('%', #{processDescription}, '%')
+            </if>
+            <if test="auditStatus != null and auditStatus != ''">
+                AND al.audit_status = #{auditStatus}
+            </if>
+        </where>
+        ORDER BY s.id DESC
+    </select>
+
+    <!-- 查询我的事宜流程名称下拉选项 -->
+    <select id="queryFlowOptionList" resultType="com.znty.rrs.entity.flow.FlowOptionDto">
+        <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
+        SELECT DISTINCT f.id AS flowId
+                       ,f.flow_key
+                       ,f.name AS flowName
+                       ,f.description
+        FROM ip_adjust_log_stock al
+        INNER JOIN (
+            SELECT adjust_log_id
+                   ,MAX(id) AS step_id
+            FROM ip_adjust_step_stock
+            GROUP BY adjust_log_id
+        ) latest ON latest.adjust_log_id = al.id
+        INNER JOIN ip_adjust_step_stock s ON s.id = latest.step_id
+        INNER JOIN wf_flow_node n ON n.id = s.flow_node_id
+        INNER JOIN wf_flow_definition f ON f.id = al.flow_id AND f.is_deleted = 0
+        <where>
+            al.is_deleted = 0
+            <if test="!adminUser">
+                AND (al.adjuster_id = #{currentUserId} OR EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step_stock us
+                    WHERE us.adjust_log_id = al.id
+                      AND us.handler_id = #{currentUserId}
+                ))
+            </if>
+            <if test="currentUserId == null or currentUserId == ''">
+                AND 1 = 0
+            </if>
+        </where>
+        ORDER BY f.name ASC
+                 ,f.id ASC
+    </select>
+</mapper>

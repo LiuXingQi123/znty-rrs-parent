@@ -1,0 +1,553 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.StockPoolAdjustMapper">
+    <!-- 股票池调整独立 mapper：不读写债券调库运行表 -->
+
+    <!-- 分页查询未删除且未终止的股票基础信息 -->
+    <select id="queryStockPage" resultType="com.znty.rrs.entity.stockpooladjust.StockInfoDto">
+        SELECT fi.*
+               ,dst.security_type_name
+               ,(
+                   SELECT sr.rating_code
+                   FROM rrs_stock_rating sr
+                   WHERE sr.stock_code = fi.stock_code
+                     AND sr.is_deleted = 0
+                   ORDER BY sr.rating_date DESC
+                            ,sr.id DESC
+                   LIMIT 1
+                ) latest_rating
+               ,(
+                   SELECT sr.rating_code
+                   FROM rrs_stock_rating sr
+                   WHERE sr.stock_code = fi.stock_code
+                     AND sr.is_deleted = 0
+                   ORDER BY sr.rating_date DESC
+                            ,sr.id DESC
+                   LIMIT 1 OFFSET 1
+                ) previous_rating
+        FROM rrs_stockinfo fi
+        INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                         AND dst.category_type = 'stock'
+                                         AND dst.is_deleted = 0
+        <where>
+            AND fi.is_deleted = 0
+            AND fi.security_status = 'L'
+            <if test="stockCode != null and stockCode != ''">
+                AND fi.stock_code LIKE CONCAT('%', #{stockCode}, '%')
+            </if>
+            <if test="stockShortName != null and stockShortName != ''">
+                AND fi.stock_short_name LIKE CONCAT('%', #{stockShortName}, '%')
+            </if>
+            <if test="stockName != null and stockName != ''">
+                AND (
+                    fi.stock_name LIKE CONCAT('%', #{stockName}, '%')
+                    OR fi.stock_short_name LIKE CONCAT('%', #{stockName}, '%')
+                )
+            </if>
+            <if test="industryCode != null and industryCode != ''">
+                AND fi.industry_code = #{industryCode}
+            </if>
+            <if test="marketCode != null and marketCode != ''">
+                AND fi.market_code = #{marketCode}
+            </if>
+            <if test="securityType != null and securityType != ''">
+                AND fi.security_type = #{securityType}
+            </if>
+        </where>
+        ORDER BY fi.stock_code ASC
+    </select>
+
+    <!-- 查询有效股票对应的产品类型及字典名称 -->
+    <select id="queryStockTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
+        SELECT DISTINCT fi.security_type
+                       ,dst.security_type_name
+        FROM rrs_stockinfo fi
+        INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                         AND dst.category_type = 'stock'
+                                         AND dst.is_deleted = 0
+        WHERE fi.is_deleted = 0
+          AND fi.security_status = 'L'
+        ORDER BY dst.sort_order ASC
+                 ,fi.security_type ASC
+    </select>
+
+    <!-- 按股票代码读取未删除的股票基础信息 -->
+    <select id="queryStockByCode" resultType="com.znty.rrs.entity.bo.StockInfoBo">
+        SELECT fi.*
+               ,dst.security_type_name
+               ,(
+                   SELECT sr.rating_code
+                   FROM rrs_stock_rating sr
+                   WHERE sr.stock_code = fi.stock_code
+                     AND sr.is_deleted = 0
+                   ORDER BY sr.rating_date DESC
+                            ,sr.id DESC
+                   LIMIT 1
+                ) latest_rating
+               ,(
+                   SELECT sr.rating_code
+                   FROM rrs_stock_rating sr
+                   WHERE sr.stock_code = fi.stock_code
+                     AND sr.is_deleted = 0
+                   ORDER BY sr.rating_date DESC
+                            ,sr.id DESC
+                   LIMIT 1 OFFSET 1
+                ) previous_rating
+        FROM rrs_stockinfo fi
+        INNER JOIN dict_security_type dst ON dst.security_type = fi.security_type
+                                        AND dst.category_type = 'stock'
+                                        AND dst.is_deleted = 0
+        WHERE fi.stock_code = #{stockCode}
+          AND fi.is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <!-- 按主键顺序锁定股票主档并清除锁前的 SqlSession 缓存，确保锁后复核日志和步骤使用当前状态 -->
+    <select id="queryStockListForUpdate" resultType="com.znty.rrs.entity.bo.StockInfoBo" flushCache="true">
+        SELECT *
+        FROM rrs_stockinfo
+        WHERE is_deleted = 0
+          AND stock_code IN
+        <foreach collection="stockCodes" item="stockCode" open="(" separator="," close=")">
+            #{stockCode}
+        </foreach>
+        ORDER BY id ASC
+        FOR UPDATE
+    </select>
+
+    <!-- 查询股票当前有效的已审批通过池状态 -->
+    <select id="queryStockPoolStatusList" resultType="com.znty.rrs.entity.stockpooladjust.StockPoolStatusDto">
+        SELECT ips.id
+               ,ips.target_pool_id
+               ,ips.target_pool_name AS poolName
+               ,ips.pool_type
+               ,ips.entry_time
+        FROM ip_pool_status_stock ips
+        WHERE ips.stock_code = #{stockCode}
+          AND ips.audit_status = '20'
+          AND ips.is_deleted = 0
+        ORDER BY ips.entry_time DESC
+                 ,ips.id DESC
+    </select>
+
+    <!-- 查询股票当前所在的有效投资池 ID -->
+    <select id="queryStockCurrentPoolIdList" resultType="java.lang.Long">
+        SELECT DISTINCT target_pool_id
+        FROM ip_pool_status_stock
+        WHERE stock_code = #{stockCode}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询股票调库记录；未指定批次时仅返回未结束流程 -->
+    <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.StockAdjustLogBo">
+        SELECT al.*
+               ,fd.name AS flowName
+        FROM ip_adjust_log_stock al
+        LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
+        <where>
+            AND al.stock_code = #{stockCode}
+            AND al.is_deleted = 0
+            <if test="adjustBatchNo != null and adjustBatchNo != ''">
+                AND al.adjust_batch_no = #{adjustBatchNo}
+            </if>
+            <if test="adjustLogId != null and (adjustBatchNo == null or adjustBatchNo == '')">
+                AND al.id = #{adjustLogId}
+            </if>
+            <if test="adjustLogId == null and (adjustBatchNo == null or adjustBatchNo == '')">
+                AND al.audit_status NOT IN ('-1', '20', '21', '99')
+            </if>
+        </where>
+        ORDER BY al.submit_time DESC
+                 ,al.id DESC
+    </select>
+
+    <!-- 查询指定批次或记录的全部股票审批步骤 -->
+    <select id="queryAdjustStepList" resultType="com.znty.rrs.entity.bo.StockAdjustStepBo">
+        SELECT step.*
+        FROM ip_adjust_step_stock step
+        <where>
+            <if test="adjustBatchNo != null and adjustBatchNo != ''">
+                AND step.adjust_batch_no = #{adjustBatchNo}
+            </if>
+            <if test="adjustBatchNo == null or adjustBatchNo == ''">
+                AND step.adjust_log_id = #{adjustLogId}
+            </if>
+        </where>
+        ORDER BY step.sort_order ASC
+                 ,step.start_time ASC
+                 ,step.id ASC
+    </select>
+
+    <!-- 查询指定批次或调库记录的审批步骤，批次号优先 -->
+    <select id="queryAdjustStepByBatchList" resultType="com.znty.rrs.entity.bo.StockAdjustStepBo">
+        SELECT step.*
+        FROM ip_adjust_step_stock step
+        <where>
+            <choose>
+                <when test="adjustBatchNo != null and adjustBatchNo != ''">
+                    step.adjust_batch_no = #{adjustBatchNo}
+                </when>
+                <otherwise>
+                    step.adjust_log_id = #{adjustLogId}
+                </otherwise>
+            </choose>
+        </where>
+        ORDER BY step.sort_order ASC
+                 ,step.start_time ASC
+                 ,step.id ASC
+    </select>
+
+    <!-- 按步骤 ID 查询股票调库审批步骤 -->
+    <select id="queryAdjustStepById" resultType="com.znty.rrs.entity.bo.StockAdjustStepBo">
+        SELECT *
+        FROM ip_adjust_step_stock
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <!-- 管理员本人同时是处理人时优先定位到自己的待办步骤 -->
+    <select id="queryPendingStepByHandler" resultType="com.znty.rrs.entity.bo.StockAdjustStepBo">
+        SELECT *
+        FROM ip_adjust_step_stock
+        WHERE adjust_log_id = #{adjustLogId}
+          AND adjust_batch_no = #{adjustBatchNo}
+          AND flow_node_id = #{flowNodeId}
+          AND handler_id = #{handlerId}
+          AND step_status = 'pending'
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <!-- 查询批次调库日志 -->
+    <select id="queryAdjustLogListForAudit" resultType="com.znty.rrs.entity.bo.StockAdjustLogBo">
+        SELECT *
+        FROM ip_adjust_log_stock
+        WHERE adjust_batch_no = #{adjustBatchNo}
+          AND is_deleted = 0
+        ORDER BY id ASC
+    </select>
+
+    <!-- 查询当前节点剩余待处理步骤数 -->
+    <select id="queryPendingStepCountByNode" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_adjust_step_stock
+        WHERE adjust_log_id = #{adjustLogId}
+          AND adjust_batch_no = #{adjustBatchNo}
+          AND flow_node_id = #{flowNodeId}
+          AND step_status = 'pending'
+    </select>
+
+    <!-- 乐观更新待处理步骤 -->
+    <update id="editAdjustStepProcess">
+        UPDATE ip_adjust_step_stock
+        SET step_status = #{stepStatus}
+           ,process_action = #{processAction}
+           ,process_comment = #{processComment}
+           ,process_time = NOW()
+           ,updt_time = NOW()
+        WHERE id = #{id}
+          AND step_status = 'pending'
+    </update>
+
+    <!-- 将抢占审批节点的其他步骤标记为跳过 -->
+    <update id="editOtherPendingStepSkipped">
+        UPDATE ip_adjust_step_stock
+        SET step_status = #{stepStatus}
+           ,process_action = 'skipped'
+           ,process_time = NOW()
+           ,updt_time = NOW()
+        WHERE adjust_log_id = #{adjustLogId}
+          AND adjust_batch_no = #{adjustBatchNo}
+          AND flow_node_id = #{flowNodeId}
+          AND step_status = 'pending'
+          AND id != #{id}
+    </update>
+
+    <!-- 更新驳回待修改批次的调整原因和意见，未传字段保持原值 -->
+    <update id="editAdjustLogReasonAdvice">
+        UPDATE ip_adjust_log_stock
+        SET updt_time = NOW()
+        <if test="adjustReason != null">
+           ,adjust_reason = #{adjustReason}
+        </if>
+        <if test="adjustAdvice != null">
+           ,adjust_advice = #{adjustAdvice}
+        </if>
+        <where>
+            is_deleted = 0
+            AND audit_status = '11'
+            AND adjust_batch_no = #{adjustBatchNo}
+        </where>
+    </update>
+
+    <!-- 更新批次股票调库审核状态 -->
+    <update id="editAdjustLogAuditStatus">
+        UPDATE ip_adjust_log_stock
+        SET audit_status = #{auditStatus}
+           ,audit_time = NOW()
+           ,updt_time = NOW()
+        WHERE adjust_batch_no = #{adjustBatchNo}
+          AND is_deleted = 0
+          AND audit_status IN ('00', '11')
+    </update>
+
+    <!-- 审批通过后新增股票当前池状态 -->
+    <insert id="addStockPoolStatus">
+        INSERT INTO ip_pool_status_stock (
+            stock_code
+           ,stock_name
+           ,stock_short_name
+           ,security_type
+           ,adjust_type
+           ,adjust_mode
+           ,adjust_batch_no
+           ,adjust_log_id
+           ,target_pool_id
+           ,target_pool_name
+           ,pool_type
+           ,flow_id
+           ,flow_key
+           ,flow_type
+           ,audit_status
+           ,adjuster_id
+           ,adjuster_name
+           ,adjust_reason
+           ,adjust_advice
+           ,submit_time
+           ,audit_time
+           ,entry_time
+           ,is_deleted
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{stockCode}
+           ,#{stockName}
+           ,#{stockShortName}
+           ,#{securityType}
+           ,#{adjustType}
+           ,#{adjustMode}
+           ,#{adjustBatchNo}
+           ,#{id}
+           ,#{targetPoolId}
+           ,#{targetPoolName}
+           ,#{poolType}
+           ,#{flowId}
+           ,#{flowKey}
+           ,#{flowType}
+           ,'20'
+           ,#{adjusterId}
+           ,#{adjusterName}
+           ,#{adjustReason}
+           ,#{adjustAdvice}
+           ,#{submitTime}
+           ,NOW()
+           ,NOW()
+           ,0
+           ,NOW()
+           ,NOW()
+        )
+    </insert>
+
+    <!-- 调出审批通过后逻辑删除股票目标池状态 -->
+    <update id="deleteStockPoolStatus">
+        UPDATE ip_pool_status_stock
+        SET is_deleted = 1
+           ,updt_time = NOW()
+        WHERE stock_code = #{stockCode}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </update>
+
+    <!-- 查询股票最近一次进入目标投资池的时间 -->
+    <select id="queryStockPoolEntryTime" resultType="java.util.Date">
+        SELECT entry_time
+        FROM ip_pool_status_stock
+        WHERE stock_code = #{stockCode}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 统计各投资池当前有效股票数量 -->
+    <select id="queryPoolCurrentCountList" resultType="com.znty.rrs.entity.stockpooladjust.StockPoolDto">
+        SELECT target_pool_id AS id
+               ,COUNT(DISTINCT stock_code) AS currentCount
+        FROM ip_pool_status_stock
+        WHERE audit_status = '20'
+          AND is_deleted = 0
+        GROUP BY target_pool_id
+    </select>
+
+    <!-- 统计指定投资池当前有效股票数量 -->
+    <select id="queryPoolCurrentCount" resultType="int">
+        SELECT COUNT(DISTINCT stock_code)
+        FROM ip_pool_status_stock
+        WHERE target_pool_id = #{poolId}
+          AND audit_status = '20'
+          AND is_deleted = 0
+    </select>
+
+    <!-- 查询未删除的投资池关联规则 -->
+    <select id="queryAllPoolRelationList" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
+        SELECT pool_id
+               ,relation_type
+               ,relation_pool_id
+        FROM ip_pool_relation
+        WHERE is_deleted = 0
+    </select>
+
+    <!-- 判断目标投资池在指定日期是否开放调整 -->
+    <select id="queryPoolInOpenDay" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_pool_open_day
+        WHERE pool_id = #{poolId}
+          AND begin_date &lt;= #{today}
+          AND end_date >= #{today}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 判断股票在目标池是否存在待审批流程，可排除指定批次 -->
+    <select id="queryStockHasPendingProcess" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_adjust_log_stock al
+        INNER JOIN ip_adjust_step_stock step ON step.adjust_batch_no = al.adjust_batch_no
+        WHERE al.stock_code = #{stockCode}
+          AND al.target_pool_id = #{targetPoolId}
+          AND al.audit_status IN ('00', '11')
+          AND al.is_deleted = 0
+          AND step.step_status = 'pending'
+        <if test="excludedBatchNo != null and excludedBatchNo != ''">
+            AND al.adjust_batch_no != #{excludedBatchNo}
+        </if>
+    </select>
+
+    <!-- 判断同一调整人是否在三十秒内重复提交同方向调库 -->
+    <select id="queryRecentDuplicate" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_adjust_log_stock
+        WHERE stock_code = #{stockCode}
+          AND target_pool_id = #{targetPoolId}
+          AND adjust_mode = #{adjustMode}
+          AND adjuster_id = #{adjusterId}
+          AND submit_time &gt;= #{recentSince}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 新增股票调库申请日志并返回生成的记录 ID -->
+    <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_log_stock (
+            stock_code
+           ,stock_name
+           ,stock_short_name
+           ,security_type
+           ,industry_code
+           ,industry_name
+           ,latest_rating
+           ,previous_rating
+           ,adjust_type
+           ,adjust_mode
+           ,adjust_batch_no
+           ,target_pool_id
+           ,target_pool_name
+           ,pool_type
+           ,flow_id
+           ,flow_key
+           ,flow_type
+           ,audit_status
+           ,adjuster_id
+           ,adjuster_name
+           ,adjust_reason
+           ,adjust_advice
+           ,submit_time
+           ,audit_time
+           ,is_deleted
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{stockCode}
+           ,#{stockName}
+           ,#{stockShortName}
+           ,#{securityType}
+           ,#{industryCode}
+           ,#{industryName}
+           ,#{latestRating}
+           ,#{previousRating}
+           ,#{adjustType}
+           ,#{adjustMode}
+           ,#{adjustBatchNo}
+           ,#{targetPoolId}
+           ,#{targetPoolName}
+           ,#{poolType}
+           ,#{flowId}
+           ,#{flowKey}
+           ,#{flowType}
+           ,#{auditStatus}
+           ,#{adjusterId}
+           ,#{adjusterName}
+           ,#{adjustReason}
+           ,#{adjustAdvice}
+           ,#{submitTime}
+            <!-- 临时代码在池转换直接写入已通过日志时同步审批时间，待审批申请保持为空 -->
+           ,CASE WHEN #{auditStatus} = '20' THEN NOW() ELSE NULL END
+           ,0
+           ,NOW()
+           ,NOW()
+        )
+    </insert>
+
+    <!-- 新增股票调库流程步骤并返回生成的步骤 ID -->
+    <insert id="addAdjustStep" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_adjust_step_stock (
+            adjust_log_id
+           ,adjust_batch_no
+           ,flow_node_id
+           ,node_code
+           ,node_label
+           ,node_type
+           ,approval_strategy
+           ,sort_order
+           ,step_status
+           ,handler_id
+           ,handler_name
+           ,process_action
+           ,process_comment
+           ,start_time
+           ,process_time
+           ,crte_time
+           ,updt_time
+        ) VALUES (
+            #{adjustLogId}
+           ,#{adjustBatchNo}
+           ,#{flowNodeId}
+           ,#{nodeCode}
+           ,#{nodeLabel}
+           ,#{nodeType}
+           ,#{approvalStrategy}
+           ,#{sortOrder}
+           ,#{stepStatus}
+           ,#{handlerId}
+           ,#{handlerName}
+           ,#{processAction}
+           ,#{processComment}
+           ,#{startTime}
+           ,#{processTime}
+           ,NOW()
+           ,NOW()
+        )
+    </insert>
+    <!-- 行业选项来自实际未删除的股票主档。 -->
+    <select id="queryIndustryList" resultType="com.znty.rrs.entity.stockpooladjusthistory.StockIndustryOptionDto">
+        SELECT DISTINCT industry_code
+            ,industry_name
+        FROM rrs_stockinfo
+        WHERE is_deleted = 0
+          AND industry_code IS NOT NULL
+          AND industry_code != ''
+        ORDER BY industry_code
+                 ,industry_name
+    </select>
+</mapper>

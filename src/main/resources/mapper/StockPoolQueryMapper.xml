@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.znty.rrs.mapper.StockPoolQueryMapper">
+    <!-- 多池保留各自状态行，分管及自选仅作为存在性过滤，不放大分页结果。 -->
+    <select id="queryStockPoolPage" resultType="com.znty.rrs.entity.stockpoolquery.StockPoolQueryDto">
+        SELECT ps.id
+            ,ps.stock_code
+            ,si.stock_name
+            ,si.stock_short_name
+            ,si.industry_code
+            ,si.industry_name
+            ,ratings.latest_rating
+            ,ratings.previous_rating
+            ,ps.target_pool_id
+            ,p.pool_name target_pool_name
+            ,ps.adjuster_name
+            ,ps.entry_time
+            ,ps.adjust_log_id
+            ,ps.adjust_batch_no
+            ,si.security_type
+            ,si.market_code
+            ,si.previous_close_price
+            ,si.high_price
+            ,si.low_price
+            ,si.average_price
+            ,si.turnover_rate
+            ,si.trade_volume
+            ,si.trade_market_value
+            ,si.total_shares
+            ,si.total_market_value
+            ,si.circulating_a_shares
+            ,si.a_share_market_value
+            ,(
+                SELECT MIN(ms.id)
+                FROM my_security_pool ms
+                WHERE ms.security_code = ps.stock_code
+                  AND ms.user_id = #{currentUserId}
+                  AND ms.security_type = si.security_type
+                  AND ms.market = si.market_code
+                  AND ms.status = 'use'
+             ) my_stock_pool_id
+        FROM ip_pool_status_stock ps
+        INNER JOIN rrs_stockinfo si ON si.stock_code = ps.stock_code AND si.is_deleted = 0
+        INNER JOIN dict_security_type st ON st.security_type = si.security_type AND st.category_type = 'stock' AND st.is_deleted = 0
+        LEFT JOIN ip_investment_pool p ON p.id = ps.target_pool_id AND p.is_deleted = 0
+        LEFT JOIN (
+            SELECT ranked.stock_code
+                ,MAX(CASE WHEN ranked.rating_order = 1 THEN ranked.rating_code END) latest_rating
+                ,MAX(CASE WHEN ranked.rating_order = 2 THEN ranked.rating_code END) previous_rating
+            FROM (
+                SELECT stock_code
+                    ,rating_code
+                    ,ROW_NUMBER() OVER (PARTITION BY stock_code ORDER BY rating_date DESC, id DESC) rating_order
+                FROM rrs_stock_rating
+                WHERE is_deleted = 0
+            ) ranked
+            WHERE ranked.rating_order &lt;= 2
+            GROUP BY ranked.stock_code
+        ) ratings ON ratings.stock_code = ps.stock_code
+        WHERE ps.is_deleted = 0
+          AND ps.audit_status = '20'
+        <if test="poolIds != null and poolIds.size() > 0">
+            AND ps.target_pool_id IN
+            <foreach collection="poolIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="stockCode != null and stockCode != ''">
+            AND ps.stock_code LIKE CONCAT('%', #{stockCode}, '%')
+        </if>
+        <if test="entryTimeStart != null and entryTimeStart != ''">
+            AND ps.entry_time &gt;= #{entryTimeStart}
+        </if>
+        <if test="entryTimeEndExclusive != null">
+            AND ps.entry_time &lt; #{entryTimeEndExclusive}
+        </if>
+        <if test="adjusterName != null and adjusterName != ''">
+            AND ps.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
+        </if>
+        <if test="myManagedStocks == true">
+            AND EXISTS (
+                SELECT 1
+                FROM rrs_stock_manager sm
+                WHERE sm.stock_code = ps.stock_code
+                  AND sm.user_id = #{currentUserId}
+                  AND sm.is_deleted = 0
+            )
+        </if>
+        <if test="myStocks == true">
+            AND EXISTS (
+                SELECT 1
+                FROM my_security_pool ms
+                WHERE ms.security_code = ps.stock_code
+                  AND ms.user_id = #{currentUserId}
+                  AND ms.status = 'use'
+                  AND ms.security_type = si.security_type
+                  AND ms.market = si.market_code
+            )
+        </if>
+        ORDER BY ps.entry_time DESC
+                 ,ps.id DESC
+    </select>
+    <!-- 查询及锁定收藏主行；表类型由真实股票字典核实。 -->
+    <select id="queryStockForFavorite" resultType="com.znty.rrs.entity.bo.MySecurityPoolBo">
+        SELECT si.stock_code security_code
+            ,si.security_type
+            ,si.market_code market
+        FROM rrs_stockinfo si
+        INNER JOIN dict_security_type st ON st.security_type = si.security_type AND st.category_type = 'stock' AND st.is_deleted = 0
+        WHERE si.stock_code = #{stockCode}
+          AND si.is_deleted = 0
+        FOR UPDATE
+    </select>
+    <!-- 查询本人有效股票自选代码，按真实股票品种和市场隔离。 -->
+    <select id="queryFavoritedCodeList" resultType="java.lang.String">
+        SELECT DISTINCT ms.security_code
+        FROM my_security_pool ms
+        INNER JOIN rrs_stockinfo si ON si.stock_code = ms.security_code AND si.is_deleted = 0
+            AND si.security_type = ms.security_type AND si.market_code = ms.market
+        INNER JOIN dict_security_type st ON st.security_type = si.security_type AND st.category_type = 'stock' AND st.is_deleted = 0
+        WHERE ms.user_id = #{userId}
+          AND ms.status = 'use'
+        ORDER BY ms.security_code
+    </select>
+    <update id="deleteStockFromMyPool">
+        UPDATE my_security_pool
+        SET status = 'del'
+            ,update_time = NOW()
+        WHERE user_id = #{userId}
+          AND security_code = #{stockCode}
+          AND security_type = #{securityType}
+          AND market = #{market}
+          AND status = 'use'
+    </update>
+</mapper>

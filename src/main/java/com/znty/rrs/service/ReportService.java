@@ -7,6 +7,9 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.CategoryType;
 import com.znty.rrs.common.enums.ReportType;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.StockAdjustLogBo;
+import com.znty.rrs.common.enums.AuditStatus;
+import com.znty.rrs.exception.BizException;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysAttachmentBo;
 import com.znty.rrs.mapper.ReportMapper;
@@ -155,6 +158,36 @@ public class ReportService {
             Long reportId = addInReport(reportInBo);
             // 将手工上传信评报告附件复制为该内部报告的附件
             sysAttachmentService.bindReportFileAttachments(reportId, handAttachments);
+        }
+    }
+
+    /** 股票整组终审落池后，按各日志的手工报告附件生成内部股票报告。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void addInternalStockReportsOnFinish(List<StockAdjustLogBo> logList) {
+        if (logList == null || logList.isEmpty()) { return; }
+        Map<Long, String> paths = null;
+        for (StockAdjustLogBo log : logList) {
+            if (!AuditStatus.APPROVED.getCode().equals(log.getAuditStatus())) {
+                throw new BizException("股票报告沉淀失败：调整尚未审批通过");
+            }
+            List<SysAttachmentBo> attachments = sysAttachmentService.queryHandStockReportAttachments(log.getId());
+            if (attachments == null || attachments.isEmpty()) { continue; }
+            if (paths == null) { paths = investmentPoolService.queryPoolFullNameMap(); }
+            String path = paths.get(log.getTargetPoolId());
+            if (path == null || log.getStockName() == null) {
+                throw new BizException("股票报告沉淀失败：投资池或股票名称无效");
+            }
+            ReportInBo report = new ReportInBo();
+            report.setAuthorName(log.getAdjusterName());
+            report.setReportTitle(log.getStockName() + log.getAdjustMode() + path + "报告");
+            // 复用已有股票报告方向及类型字典。
+            report.setReportType(resolveReportType(CategoryType.STOCK.getCode(), log.getAdjustMode()));
+            report.setSecurityCode(log.getStockCode());
+            report.setSecurityType(CategoryType.STOCK.getCode());
+            report.setDataSource("uploaded");
+            Long reportId = addInReport(report);
+            if (reportId == null) { throw new BizException("股票报告沉淀失败：内部报告写入失败"); }
+            sysAttachmentService.bindReportFileAttachments(reportId, attachments);
         }
     }
 

@@ -135,4 +135,51 @@
           AND is_deleted = 0
         ORDER BY id ASC
     </select>
+    <!-- 业务表通过服务白名单校验，SQL 同时限定表、日志和附件 ID。 -->
+    <update id="deleteBusinessAttachmentByIdsList">
+        UPDATE sys_attachment
+        SET is_deleted = 1
+            ,updt_time = NOW()
+        WHERE table_name = #{tableName} AND main_id = #{adjustLogId} AND is_deleted = 0
+          AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+    <select id="queryHandStockReportAttachments" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
+        SELECT *
+        FROM sys_attachment
+        WHERE table_name = 'ip_adjust_log_stock' AND main_id = #{adjustLogId}
+          AND attachment_category = 'stock_report_hand' AND is_deleted = 0
+        ORDER BY id ASC
+    </select>
+    <!-- 表名为值参数，由 choose 选择固定报告表，禁止任意表拼接。 -->
+    <select id="queryMatchingStockReportSourceCount" resultType="int">
+        SELECT COUNT(1)
+        <choose>
+            <when test="tableName == 'rrs_report_in'">FROM rrs_report_in</when>
+            <otherwise>FROM rrs_report_out</otherwise>
+        </choose>
+        WHERE id = #{reportId} AND security_code = #{stockCode} AND security_type = 'stock' AND is_deleted = 0
+    </select>
+    <!-- 读取股票调库关联，防止同日志 ID 混入其他业务附件。 -->
+    <select id="queryStockAdjustAttachmentList" resultType="com.znty.rrs.entity.bo.SysAttachmentBo">
+        SELECT * FROM sys_attachment
+        WHERE table_name = 'ip_adjust_log_stock' AND main_id = #{adjustLogId} AND is_deleted = 0
+        ORDER BY id ASC
+    </select>
+    <!-- 复制关联使用原物理文件，复核时按合法源报告及股票归属追踪。 -->
+    <select id="queryMatchingStockBoundReportCount" resultType="int">
+        SELECT COUNT(1)
+        FROM sys_attachment a
+        WHERE a.file_name = #{fileName} AND a.is_deleted = 0
+          AND (
+            (a.table_name = 'rrs_report_in' AND a.attachment_category = 'report_in'
+             AND EXISTS (SELECT 1 FROM rrs_report_in ri WHERE ri.id = a.main_id AND ri.is_deleted = 0
+                         AND ri.security_code = #{stockCode} AND ri.security_type = 'stock'))
+            <if test="internalOnly == false">
+            OR (a.table_name = 'rrs_report_out' AND a.attachment_category = 'report_out'
+                AND EXISTS (SELECT 1 FROM rrs_report_out ro WHERE ro.id = a.main_id AND ro.is_deleted = 0
+                            AND ro.security_code = #{stockCode} AND ro.security_type = 'stock'))
+            </if>
+          )
+    </select>
 </mapper>

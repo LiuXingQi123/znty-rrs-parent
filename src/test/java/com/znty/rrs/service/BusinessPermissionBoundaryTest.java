@@ -166,7 +166,7 @@ public class BusinessPermissionBoundaryTest {
         }
     }
 
-    /** 附件只按明确业务编码分表，未接入的股票业务仍明确拒绝。 */
+    /** 附件只按明确业务编码分表，股票相同日志 ID 不读债券或基金附件。 */
     @Test public void attachmentReadsShouldRouteByBusinessWithoutRequiringGrant() {
         SysAttachmentMapper attachments = mock(SysAttachmentMapper.class);
         SysAttachmentService service = new SysAttachmentService();
@@ -180,6 +180,9 @@ public class BusinessPermissionBoundaryTest {
         service.queryAttachmentList(req);
         verify(attachments).queryAttachmentList("ip_adjust_log_fund", Arrays.asList(1L, 2L));
         req.setBusinessDomain("stock");
+        service.queryAttachmentList(req);
+        verify(attachments).queryAttachmentList("ip_adjust_log_stock", Arrays.asList(1L, 2L));
+        req.setBusinessDomain("unknown");
         assertThatThrownBy(() -> service.queryAttachmentList(req)).hasMessageContaining("业务未接入或编码无效");
     }
 

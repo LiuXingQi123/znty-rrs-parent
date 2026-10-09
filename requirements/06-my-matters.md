@@ -8,7 +8,7 @@
 |---|---|---|---|
 | `bond` 债券 | `BondMyMattersService` / `BondMyMattersMapper.xml` | `ip_adjust_log`、`ip_adjust_step` | `securityAdjust`、`forbiddenCompanyAdjust`、`crmwAdjust` |
 | `fund` 基金 | `FundMyMattersService` / `FundMyMattersMapper.xml` | `ip_adjust_log_fund`、`ip_adjust_step_fund` | `fundAdjust` |
-| `stock` 股票 | 编码预留，尚未接入 | 后续独立定义 | 后续注册 |
+| `stock` 股票 | `StockMyMattersService` / `StockMyMattersMapper.xml` | `ip_adjust_log_stock`、`ip_adjust_step_stock` | `stockAdjust` |
 
 不按角色名选择 SQL，不将各业务合并为大 SQL。用户和角色名单只决定页面显示哪些业务入口，当前业务决定查询模块。投资池查看、调整或导入权限独立。
 
@@ -18,16 +18,18 @@
 
 | 固定入口对象 | 显示业务 |
 |---|---|
-| 用户 1 | bond / fund |
+| 用户 1 | bond / fund / stock |
+| 用户 5 | stock |
 | 用户 3 | fund |
 | 角色 1～6 | bond |
 | 角色 7～9 | fund |
-| 角色 10 | bond / fund |
+| 角色 10 | bond / fund / stock |
+| 角色 2、3、7、8、9 | stock（与原业务取并集） |
 
 - 用户直接配置与直接所属启用角色的业务取并集并去重。角色来自 `ais_inv_analysis.t_sys_user_role` 与 `t_sys_role.enable=1`，不继承父子角色。
 - 入口仅在新页面 `mounted` 时查询一次；返回工作台页签、切换业务、查询和分页只刷新数据，不重新查询入口。
 - 固定名单不会为保留管理员 ID 自动添加入口；无匹配名单的 `10000–10100` 用户不显示业务入口。
-- 后端事项分页、流程下拉、详情、步骤、附件、审批和提醒不校验入口名单。业务缺失、未知业务或未接入股票仍返回明确业务错误。
+- 后端事项分页、流程下拉、详情、步骤、附件、审批和提醒不校验入口名单。业务缺失或未知业务仍返回明确业务错误。
 - 事项范围与审批接管沿用 `AdminUserIdUtil`：用户 ID `1` 或整数闭区间 `10000–10100` 为管理员；普通用户仅处理本人待办，不能处理他人或无处理人的步骤。管理员同时有自己的待办时优先处理本人待办，沿用现有代办意见标识。
 - 原会签、抢占、审批状态、驳回修改、发起人回避和事务校验保留。
 
@@ -49,25 +51,25 @@
 
 | 路径 | 必传字段 | 返回 |
 |---|---|---|
-| `myMatters/queryBusinessDomainList` | currentUserId | `[{businessDomain}]`，固定 bond→fund 顺序，只返回已接入且符合显示名单的业务 |
+| `myMatters/queryBusinessDomainList` | currentUserId | `[{businessDomain}]`，固定 bond→fund→stock 顺序，只返回已接入且符合显示名单的业务 |
 | `myMatters/queryMyMattersPage` | businessDomain,currentUserId,stepStatus(pending/completed) | `PageResult<MyMattersDto>` |
 | `myMatters/queryMyInitiatedMattersPage` | businessDomain,currentUserId | `PageResult<MyMattersDto>` |
 | `myMatters/queryFlowOptionList` | businessDomain,currentUserId | `List<FlowOptionDto>` |
 
-分页与我发起的支持 `flowIds`、`securityCode`、`securityShortName`、`startDateStart/End`、`processDescription`、`auditStatus`、`pageIndex/pageSize`；待处理/已完成还支持 `initiatorName`。兼容原请求字段名称，基金 Mapper 将代码/名称筛选映射为基金列。
+分页与我发起的支持 `flowIds`、`securityCode`、`securityShortName`、`startDateStart/End`、`processDescription`、`auditStatus`、`pageIndex/pageSize`；待处理/已完成还支持 `initiatorName`。兼容原请求字段名称，基金/股票 Mapper 将代码/名称筛选映射为各自主档列。
 
-列表摘要包含 `businessDomain`、`businessScene`、`objectCode/objectName`、`adjustLogId`、`adjustBatchNo`、`stepId`、目标池、流程名称、步骤名称、步骤/审核状态、流程描述、发起人及开始时间；保留各业务定位字段 `securityCode` / `crmwScode` / `fundCode` 等。
+列表摘要包含 `businessDomain`、`businessScene`、`objectCode/objectName`、`adjustLogId`、`adjustBatchNo`、`stepId`、目标池、流程名称、步骤名称、步骤/审核状态、流程描述、发起人及开始时间；保留各业务定位字段 `securityCode` / `crmwScode` / `fundCode` / `stockCode` 等。
 
-各业务审批由原业务审批服务执行；不新增通用审批 SQL。附件查询必须带业务编码，后端只选择固定的债券/基金日志表；附件读取与下载保留记录、文件和路径校验，不增加独立业务授权检查。
+各业务审批由原业务审批服务执行；不新增通用审批 SQL。附件查询必须带业务编码，后端只选择固定的债券/基金/股票日志表；附件读取与下载保留记录、文件和路径校验，不增加独立业务授权检查。
 
 ## 5. 页面与导航
 
-- 仅有一个业务入口时自动使用该业务，隐藏顶部业务 Tabs 且不留占位；有多个入口时显示债券/基金业务 Tabs，默认选择第一个并允许切换；无入口时保留空状态。下方保留待处理、已完成、我发起的；只有债券显示分级规则提醒。
+- 仅有一个业务入口时自动使用该业务，隐藏顶部业务 Tabs 且不留占位；有多个入口时显示债券/基金/股票业务 Tabs，默认选择第一个并允许切换；无入口时保留空状态。下方保留待处理、已完成、我发起的；只有债券显示分级规则提醒。
 - 新页面 mounted 时查询一次业务选项，默认选第一个显示业务；无业务入口时显示空状态。返回事项页只刷新当前业务的列表、流程选项和角标。
 - 切换业务清空筛选、流程选项、列表及角标，重置分页并加载新业务。代码/名称标签随业务切换。
 - 异步请求使用业务、视图版本及列表请求序号判定归属。旧响应、旧错误和债券→基金→债券的旧请求不能更新新视图。
-- 进入页面或切换业务时：当前状态加载完整列表，其他状态以 pageSize=1 取 total；查询与状态切换只刷新当前状态及角标。基金不请求债券提醒。
-- 场景路由映射打开原有审核/详情页；基金进入 `fund_pool_adjust_approve.html` / `fund_pool_adjust_detail.html`，独立携带 fundCode 参数。
+- 进入页面或切换业务时：当前状态加载完整列表，其他状态以 pageSize=1 取 total；查询与状态切换只刷新当前状态及角标。基金和股票不请求债券提醒。
+- 场景路由映射打开原有审核/详情页；基金进入 `fund_pool_adjust_approve.html` / `fund_pool_adjust_detail.html`，独立携带 fundCode 参数；股票进入 stock_pool_adjust_approve.html / stock_pool_adjust_detail.html，独立携带 stockCode 参数。
 - 审核/详情页不查询业务入口。审核页优先展示本人待办，无本人待办时管理员（ID 为 1 或整数 10000～10100）展示首个待办，其他人返回 null 并禁用审批操作。后端提交沿用相同管理员口径和数据库实际步骤的处理资格校验。
 - 待处理打开审核页（entryMode=process），已完成/我发起的打开只读详情（entryMode=view）。工作台页签键包含业务代码和场景、记录/批次，防止不同表相同 ID 混用；无工作台时回退 location.href。
 - 债券保留证券、禁投主体、CRMW 路由；禁投 ABS 债仍走证券路由。
@@ -81,7 +83,7 @@
 
 - 用户/角色固定入口名单只在 `BusinessPermissionMapper.xml/queryBusinessDomainList` 中维护；修改 XML 后重新部署生效。
 - 每次真正加载我的事宜页面时重新查询 AIS 的直接所属启用角色。角色停用或移除用户的角色关联后，下次真正加载页面更新入口显示；用户直接配置不随角色移除消失，其他有效角色来源同样保留。
-- 股票尚未接入，SQL 只保留扩展注释。后续新增独立查询模块、列表场景和页面路由后，再扩展固定入口名单与已接入业务选项；不将股票查询合入债券/基金 Mapper。
+- 股票已接入独立查询模块、stockAdjust 场景和审核/详情路由；入口按用户 1、5 和角色 2、3、7、8、9、10 返回，不将股票查询合入债券/基金 Mapper。
 
 首版不新增权限维护页面。
 

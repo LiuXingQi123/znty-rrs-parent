@@ -24,6 +24,9 @@ public class MyMattersServiceTest {
     /** 基金事项查询 */
     private FundMyMattersService fund;
 
+    /** 股票事项查询 */
+    private StockMyMattersService stock;
+
     /** 初始化独立的入口和领域查询组件。 */
     @Before
     public void setUp() {
@@ -31,9 +34,11 @@ public class MyMattersServiceTest {
         entries = mock(BusinessPermissionMapper.class);
         bond = mock(BondMyMattersService.class);
         fund = mock(FundMyMattersService.class);
+        stock = mock(StockMyMattersService.class);
         ReflectionTestUtils.setField(service, "businessPermissionMapper", entries);
         ReflectionTestUtils.setField(service, "bondMyMattersService", bond);
         ReflectionTestUtils.setField(service, "fundMyMattersService", fund);
+        ReflectionTestUtils.setField(service, "stockMyMattersService", stock);
     }
 
     /** 只有进入页面查询选项时才读取当前用户入口。 */
@@ -48,7 +53,7 @@ public class MyMattersServiceTest {
         MyMattersReq req = request("fund", "2");
         assertThat(service.queryBusinessDomainList(req)).isSameAs(domains);
         verify(entries).queryBusinessDomainList(2L);
-        verifyNoInteractions(bond, fund);
+        verifyNoInteractions(bond, fund, stock);
     }
 
     /** 无可见入口也不阻止合法领域请求，事项和角标查询不重复读取入口。 */
@@ -70,19 +75,26 @@ public class MyMattersServiceTest {
         verify(bond).queryMyMattersPage(bondReq);
         verify(bond).queryMyInitiatedMattersPage(bondReq);
         verify(bond).queryFlowOptionList(bondReq);
+        MyMattersReq stockReq = request("stock", "5");
+        service.queryMyMattersPage(stockReq);
+        service.queryMyInitiatedMattersPage(stockReq);
+        service.queryFlowOptionList(stockReq);
+        verify(stock).queryMyMattersPage(stockReq);
+        verify(stock).queryMyInitiatedMattersPage(stockReq);
+        verify(stock).queryFlowOptionList(stockReq);
         verifyNoInteractions(entries);
     }
 
-    /** 缺少业务或未接入的股票及未知业务必须明确拒绝。 */
+    /** 缺少业务或未知业务必须明确拒绝。 */
     @Test public void shouldRejectMissingOrUnsupportedBusinessDomain() {
-        for (String domain : new String[]{null, "", " ", "stock", "unknown"}) {
+        for (String domain : new String[]{null, "", " ", "unknown"}) {
             // 构造错误业务参数，验证全部领域查询均拒绝分派
             MyMattersReq req = request(domain, "2");
             assertThatThrownBy(() -> service.queryMyMattersPage(req)).isInstanceOf(BizException.class);
             assertThatThrownBy(() -> service.queryMyInitiatedMattersPage(req)).isInstanceOf(BizException.class);
             assertThatThrownBy(() -> service.queryFlowOptionList(req)).isInstanceOf(BizException.class);
         }
-        verifyNoInteractions(entries, bond, fund);
+        verifyNoInteractions(entries, bond, fund, stock);
     }
 
     /** 入口及事项接口均要求合法的正整数用户主键。 */
@@ -95,7 +107,7 @@ public class MyMattersServiceTest {
             assertThatThrownBy(() -> service.queryMyInitiatedMattersPage(req)).isInstanceOf(BizException.class);
             assertThatThrownBy(() -> service.queryFlowOptionList(req)).isInstanceOf(BizException.class);
         }
-        verifyNoInteractions(entries, bond, fund);
+        verifyNoInteractions(entries, bond, fund, stock);
     }
 
     /** 待处理或已完成之外的列表状态不能进入领域查询。 */
@@ -106,7 +118,7 @@ public class MyMattersServiceTest {
             req.setStepStatus(status);
             assertThatThrownBy(() -> service.queryMyMattersPage(req)).isInstanceOf(BizException.class);
         }
-        verifyNoInteractions(entries, bond, fund);
+        verifyNoInteractions(entries, bond, fund, stock);
     }
 
     /** 构造指定业务和用户的待处理查询请求。 */

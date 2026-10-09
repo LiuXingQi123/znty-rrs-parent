@@ -26,6 +26,12 @@ public class MyMattersDto {
     /** 基金简称 */
     private String fundShortName;
 
+    /** 股票代码，仅股票业务用于定位 */
+    private String stockCode;
+
+    /** 股票简称 */
+    private String stockShortName;
+
     /** 步骤 ID，作为列表主键 */
     private Long id;
 
@@ -62,7 +68,7 @@ public class MyMattersDto {
     /** 流程描述 */
     private String processDescription;
 
-    /** 业务场景：crmwAdjust=CRMW池调整 / forbiddenCompanyAdjust=禁投池主体调整 / securityAdjust=证券池调整 / fundAdjust=基金池调整 */
+    /** 业务场景：crmwAdjust=CRMW池调整 / forbiddenCompanyAdjust=禁投池主体调整 / securityAdjust=证券池调整 / fundAdjust=基金池调整 / stockAdjust=股票池调整 */
     private String businessScene;
 
     /** 审核状态 */

@@ -26,7 +26,18 @@
                WHERE ur.user_id = #{userId}
                  AND ur.role_id IN (7, 8, 9, 10)
            )
-        <!-- 股票尚未接入，接入时在此补充股票入口查询 -->
+        UNION ALL
+
+        <!-- 股票入口：演示审批用户 1、5 或启用的直属角色 2、3、7、8、9、10 -->
+        SELECT 'stock' AS business_domain
+        WHERE #{userId} IN (1, 5)
+           OR EXISTS (
+               SELECT 1
+               FROM ais_inv_analysis.t_sys_user_role ur
+               INNER JOIN ais_inv_analysis.t_sys_role r ON r.id = ur.role_id AND r.enable = 1
+               WHERE ur.user_id = #{userId}
+                 AND ur.role_id IN (2, 3, 7, 8, 9, 10)
+           )
         ORDER BY business_domain
     </select>
 </mapper>
