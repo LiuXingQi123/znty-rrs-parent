@@ -283,8 +283,8 @@ public class StockPoolAdjustService {
             if (!failures.isEmpty()) {
                 throw new BizException(pool.getPoolName() + "：" + String.join("；", failures));
             }
-            // 关系项继承主项流程；只对手工主项强制报告，已绑定来源均须有效。
-            String restriction = "手工调整".equals(log.getAdjustType())
+            // 关系项继承主项流程；单笔和批量手工主项均强制报告，已绑定来源须有效。
+            String restriction = ("手工调整".equals(log.getAdjustType()) || "手动批量调整".equals(log.getAdjustType()))
                     ? (AdjustMode.IN.getCode().equals(log.getAdjustMode()) ? pool.getInReportRestriction() : pool.getOutReportRestriction()) : "none";
             sysAttachmentService.validateStockBoundReports(log.getId(), stock.getStockCode(), restriction);
         }
@@ -487,6 +487,105 @@ public class StockPoolAdjustService {
     }
 
     /**
+     * 原子提交股票批量申请，全部股票和目标池锁定并复核后才写入。
+     *
+     * @param requests 各股票完整的手工及关系项申请
+     * @param submissionFiles 整批共用的物理上传文件上下文
+     * @return 各股票独立的批次及调库日志 ID
+     */
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
+    public List<StockAdjustSubmitDto> addBatchAdjustLogList(List<StockPoolAdjustSubmitReq> requests,
+                                                           SysAttachmentService.SubmissionFiles submissionFiles) {
+        if (requests == null || requests.isEmpty()) {
+            throw new BizException("至少提交一组股票批量调整申请");
+        }
+        Set<String> codes = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (StockPoolAdjustSubmitReq req : requests) {
+            if (req == null || req.getStockCode() == null || req.getStockCode().trim().isEmpty()) {
+                throw new BizException("股票批量调整的股票代码不能为空");
+            }
+            if (!codes.add(req.getStockCode().trim())) {
+                throw new BizException("股票批量调整存在重复股票：" + req.getStockCode());
+            }
+            // 批量渠道由服务端赋值，单笔公开入口仍只接收手工调整
+            req.setAdjustType("手动批量调整");
+            // 在取得主档锁前确认每只股票提交字段合法
+            validateSubmitRequest(req, true);
+            int manualCount = 0;
+            for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+                if (ITEM_MANUAL.equals(item.getItemTag())) {
+                    manualCount++;
+                    String expectedType = AdjustMode.IN.getCode().equals(item.getAdjustMode())
+                            ? FlowType.NORMAL_INBOUND.getCode() : FlowType.NORMAL_OUTBOUND.getCode();
+                    if (!expectedType.equals(item.getFlowType())) {
+                        throw new BizException("股票批量调整只能使用一般审批流程：" + req.getStockCode());
+                    }
+                } else if (item.getFlowType() != null
+                        && !FlowType.NORMAL_INBOUND.getCode().equals(item.getFlowType())
+                        && !FlowType.NORMAL_OUTBOUND.getCode().equals(item.getFlowType())) {
+                    throw new BizException("股票批量关系项不能使用快速或批量审批流程：" + req.getStockCode());
+                }
+                if (submissionFiles == null && ((item.getReportFileIndexes() != null && !item.getReportFileIndexes().isEmpty())
+                        || (item.getMaterialFileIndexes() != null && !item.getMaterialFileIndexes().isEmpty()))) {
+                    throw new BizException("股票批量申请包含本地文件索引，请通过 multipart 同时上传对应文件");
+                }
+                // 在任何日志写入前复核上传索引与材料来源，保持全批预检无副作用
+                sysAttachmentService.validateSubmissionFileIndexes(submissionFiles, item.getReportFileIndexes());
+                sysAttachmentService.validateSubmissionFileIndexes(submissionFiles, item.getMaterialFileIndexes());
+                sysAttachmentService.validateCreditReportSources(item.getMaterialSourceAttachmentIds(), false);
+            }
+            if (manualCount != 1) {
+                throw new BizException("股票批量每组必须包含且仅包含一条手工调整项：" + req.getStockCode());
+            }
+        }
+        // 保证整批本地文件和其他材料共享，同股票研究来源覆盖完整关系组
+        validateBatchSharedMaterials(requests);
+        // 一次按主档主键顺序锁定整批股票
+        Map<String, StockInfoBo> lockedStocks = lockStockList(new ArrayList<>(codes));
+        // 在逐组复核前按全批目标池 ID 升序统一锁定，避免跨组锁顺序不同
+        lockTargetPools(requests.stream().flatMap(req -> req.getItems().stream())
+                .map(StockPoolAdjustSubmitReq.AdjustItem::getTargetPoolId).collect(Collectors.toList()));
+        List<PreparedSubmit> preparedRequests = new ArrayList<>();
+        for (StockPoolAdjustSubmitReq req : requests) {
+            // 先完成所有分组的股票、关系、权限、报告和一般流程复核
+            preparedRequests.add(prepareSubmit(req, lockedStocks, true));
+        }
+        List<StockAdjustSubmitDto> results = new ArrayList<>();
+        for (PreparedSubmit prepared : preparedRequests) {
+            // 复用股票单笔日志、流程快照、步骤及附件保存行为
+            results.add(submitPrepared(prepared, submissionFiles));
+        }
+        return results;
+    }
+
+    /** 校验批量共享材料和股票分组引用一致，避免关系项材料缺失或串组。 */
+    private void validateBatchSharedMaterials(List<StockPoolAdjustSubmitReq> requests) {
+        StockPoolAdjustSubmitReq.AdjustItem shared = requests.get(0).getItems().get(0);
+        for (StockPoolAdjustSubmitReq req : requests) {
+            StockPoolAdjustSubmitReq.AdjustItem stockMaterial = req.getItems().get(0);
+            for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+                // 按集合比较整批本地上传和其他材料，允许引用顺序不同
+                if (!sameAttachmentSelections(shared.getReportFileIndexes(), item.getReportFileIndexes())
+                        || !sameAttachmentSelections(shared.getMaterialFileIndexes(), item.getMaterialFileIndexes())
+                        || !sameAttachmentSelections(shared.getMaterialSourceAttachmentIds(), item.getMaterialSourceAttachmentIds())) {
+                    throw new BizException("股票批量申请的本地文件和其他材料必须整批共享：" + req.getStockCode());
+                }
+                // 研究报告来源只在对应股票内共享，不允许遗漏同组关系项
+                if (!sameAttachmentSelections(stockMaterial.getReportSourceAttachmentIds(), item.getReportSourceAttachmentIds())) {
+                    throw new BizException("同一股票完整调库分组的研究报告引用必须一致：" + req.getStockCode());
+                }
+            }
+        }
+    }
+
+    /** 空列表与未选择同义，附件来源及索引继续沿用公共服务的去重口径。 */
+    private <T> boolean sameAttachmentSelections(List<T> left, List<T> right) {
+        Set<T> leftSet = left == null ? Collections.emptySet() : new HashSet<>(left);
+        Set<T> rightSet = right == null ? Collections.emptySet() : new HashSet<>(right);
+        return leftSet.equals(rightSet);
+    }
+
+    /**
      * 提交股票调库日志与初始步骤。
      *
      * @param req 股票调库申请及调整明细
@@ -518,8 +617,15 @@ public class StockPoolAdjustService {
      * @return 全部复核通过的提交上下文
      */
     private PreparedSubmit prepareSubmit(StockPoolAdjustSubmitReq req, Map<String, StockInfoBo> lockedStocks) {
+        // 单笔仍沿用仅手工申请的字段约束
+        return prepareSubmit(req, lockedStocks, false);
+    }
+
+    /** 按单笔或服务端批量渠道完成相同业务复核，不写运行表。 */
+    private PreparedSubmit prepareSubmit(StockPoolAdjustSubmitReq req, Map<String, StockInfoBo> lockedStocks,
+                                         boolean batch) {
         // 校验调库申请的提交级必填字段
-        validateSubmitRequest(req);
+        validateSubmitRequest(req, batch);
         // 确认申请中的股票仍处于可调库状态
         StockInfoBo stock = requireLockedStock(req.getStockCode(), lockedStocks);
         // 主档锁后按投资池 ID 升序锁定容量与成员状态
@@ -617,6 +723,12 @@ public class StockPoolAdjustService {
      * @param req 待提交的股票调库申请
      */
     private void validateSubmitRequest(StockPoolAdjustSubmitReq req) {
+        // 单笔公开入口不接受客户端伪造的批量渠道
+        validateSubmitRequest(req, false);
+    }
+
+    /** 校验单笔字段，批量渠道仅由多单编排入口授予。 */
+    private void validateSubmitRequest(StockPoolAdjustSubmitReq req, boolean batch) {
         if (req == null || req.getStockCode() == null || req.getStockCode().trim().isEmpty()) {
             throw new BizException("股票代码不能为空");
         }
@@ -631,7 +743,8 @@ public class StockPoolAdjustService {
             throw new BizException("调整原因和意见均不能超过1000字");
         }
         StockQueryFilterHelper.requireUserId(req.getAdjusterId());
-        if (req.getAdjustType() != null && !req.getAdjustType().trim().isEmpty() && !"手工调整".equals(req.getAdjustType())) {
+        if (req.getAdjustType() != null && !req.getAdjustType().trim().isEmpty()
+                && !"手工调整".equals(req.getAdjustType()) && !(batch && "手动批量调整".equals(req.getAdjustType()))) {
             throw new BizException("股票首版只支持手工申请，联动与互斥类型由系统生成");
         }
         Set<String> manualGroups = new HashSet<>();

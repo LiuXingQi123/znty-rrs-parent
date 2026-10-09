@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.BatchStockPoolAdjustMapper">
+    <!-- 分页查询支持股票的启用叶子池，数量仅统计股票独立池状态 -->
+    <select id="queryPoolPage" resultType="com.znty.rrs.entity.batchstockpooladjust.BatchStockPoolDto">
+        SELECT p.id
+               ,p.pool_name
+               ,p.pool_type
+               ,p.market_codes
+               ,p.variety_codes
+               ,p.description
+               ,p.max_capacity
+               ,(SELECT COUNT(DISTINCT ps.stock_code)
+                 FROM ip_pool_status_stock ps
+                 WHERE ps.target_pool_id = p.id
+                   AND ps.audit_status = '20'
+                   AND ps.is_deleted = 0) AS current_count
+        FROM ip_investment_pool p
+        <where>
+            AND p.status = 'enabled'
+            AND p.is_deleted = 0
+            AND JSON_CONTAINS(p.variety_codes, '"stock"')
+            AND NOT EXISTS (
+                SELECT 1
+                FROM ip_investment_pool child
+                WHERE child.parent_id = p.id
+                  AND child.status = 'enabled'
+                  AND child.is_deleted = 0
+            )
+            <if test="poolIds != null and poolIds.size() > 0">
+                AND p.id IN
+                <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+                    #{poolId}
+                </foreach>
+            </if>
+        </where>
+        ORDER BY p.outer_sort ASC
+                 ,p.inner_sort ASC
+                 ,p.id ASC
+    </select>
+
+    <!-- 股票候选使用单笔主档与评级口径，方向按独立有效池成员过滤 -->
+    <select id="queryStockPage" resultType="com.znty.rrs.entity.stockpooladjust.StockInfoDto">
+        SELECT si.*
+               ,dst.security_type_name
+               ,(SELECT sr.rating_code
+                 FROM rrs_stock_rating sr
+                 WHERE sr.stock_code = si.stock_code
+                   AND sr.is_deleted = 0
+                 ORDER BY sr.rating_date DESC
+                          ,sr.id DESC
+                 LIMIT 1) AS latest_rating
+               ,(SELECT sr.rating_code
+                 FROM rrs_stock_rating sr
+                 WHERE sr.stock_code = si.stock_code
+                   AND sr.is_deleted = 0
+                 ORDER BY sr.rating_date DESC
+                          ,sr.id DESC
+                 LIMIT 1 OFFSET 1) AS previous_rating
+        FROM rrs_stockinfo si
+        INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
+                                         AND dst.category_type = 'stock'
+                                         AND dst.is_deleted = 0
+        <where>
+            AND si.is_deleted = 0
+            AND si.security_status = 'L'
+            AND si.market_code IN ('SSE', 'SZSE', 'HKEX')
+            AND (si.delist_date IS NULL OR si.delist_date &gt; NOW())
+            <if test="direction == 'in'">
+                AND NOT EXISTS (
+                    SELECT 1 FROM ip_pool_status_stock ps
+                    WHERE ps.stock_code = si.stock_code
+                      AND ps.target_pool_id = #{poolId}
+                      AND ps.audit_status = '20'
+                      AND ps.is_deleted = 0
+                )
+            </if>
+            <if test="direction == 'out'">
+                AND EXISTS (
+                    SELECT 1 FROM ip_pool_status_stock ps
+                    WHERE ps.stock_code = si.stock_code
+                      AND ps.target_pool_id = #{poolId}
+                      AND ps.audit_status = '20'
+                      AND ps.is_deleted = 0
+                )
+            </if>
+            <if test="stockCode != null and stockCode != ''">
+                AND si.stock_code LIKE CONCAT('%', #{stockCode}, '%')
+            </if>
+            <if test="stockName != null and stockName != ''">
+                AND (si.stock_name LIKE CONCAT('%', #{stockName}, '%')
+                     OR si.stock_short_name LIKE CONCAT('%', #{stockName}, '%'))
+            </if>
+            <if test="stockShortName != null and stockShortName != ''">
+                AND si.stock_short_name LIKE CONCAT('%', #{stockShortName}, '%')
+            </if>
+            <if test="industryCode != null and industryCode != ''">
+                AND si.industry_code = #{industryCode}
+            </if>
+            <if test="marketCode != null and marketCode != ''">
+                AND si.market_code = #{marketCode}
+            </if>
+            <if test="securityType != null and securityType != ''">
+                AND si.security_type = #{securityType}
+            </if>
+        </where>
+        ORDER BY si.stock_code ASC
+    </select>
+
+    <!-- 确认批量主项只调整启用且支持股票的叶子投资池 -->
+    <select id="queryEnabledStockLeafPoolCount" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_investment_pool p
+        WHERE p.id = #{poolId}
+          AND p.status = 'enabled'
+          AND p.is_deleted = 0
+          AND JSON_CONTAINS(p.variety_codes, '"stock"')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_investment_pool child
+              WHERE child.parent_id = p.id
+                AND child.status = 'enabled'
+                AND child.is_deleted = 0
+          )
+    </select>
+</mapper>

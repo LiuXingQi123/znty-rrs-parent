@@ -163,6 +163,26 @@ public class SysAttachmentService {
     }
 
     /**
+     * 在写业务日志前校验上传索引，只读取上下文，不保存物理文件。
+     *
+     * @param submissionFiles 本次提交的上传上下文，可为空
+     * @param fileIndexes 待绑定的本次上传文件下标
+     */
+    public void validateSubmissionFileIndexes(SubmissionFiles submissionFiles, List<Integer> fileIndexes) {
+        if (fileIndexes == null || fileIndexes.isEmpty()) {
+            return;
+        }
+        if (submissionFiles == null) {
+            throw new BizException("本地文件索引必须通过 multipart 同时上传对应文件");
+        }
+        for (Integer fileIndex : fileIndexes) {
+            if (fileIndex == null || fileIndex < 0 || fileIndex >= submissionFiles.files.size()) {
+                throw new BizException("附件文件下标不合法：" + fileIndex);
+            }
+        }
+    }
+
+    /**
      * 解析前端 FormData 字段 {@code originalFileNameListJson}（JSON 数组字符串）。
      * 空/空白返回 null；非法 JSON 抛业务异常。
      *

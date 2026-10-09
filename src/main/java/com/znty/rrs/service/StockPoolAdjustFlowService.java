@@ -160,7 +160,7 @@ public class StockPoolAdjustFlowService {
         for (StockAdjustLogBo log : logs) {
             InvestmentPoolBo pool = pools.get(log.getTargetPoolId());
             if (pool == null) { throw new BizException("目标投资池不存在或已删除"); }
-            String restriction = "手工调整".equals(log.getAdjustType())
+            String restriction = ("手工调整".equals(log.getAdjustType()) || "手动批量调整".equals(log.getAdjustType()))
                     ? ("调入".equals(log.getAdjustMode()) ? pool.getInReportRestriction() : pool.getOutReportRestriction()) : "none";
             sysAttachmentService.validateStockBoundReports(log.getId(), log.getStockCode(), restriction);
         }
