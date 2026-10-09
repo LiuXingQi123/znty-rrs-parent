@@ -45,6 +45,7 @@
 | 39 | 基金临时代码管理 | `temp_fund_code.html` | [39-temp-fund-code.md](39-temp-fund-code.md) | `TempFundCodeApiTest` / `TempFundCodeServiceTest` / `TempFundCodePersistenceTest` |
 | 40 | 基金池批量调整（批量调入/调出） | `batch_fund_pool_adjust.html` | [40-batch-fund-pool-adjust.md](40-batch-fund-pool-adjust.md) | `BatchFundPoolAdjustApiTest` / `BatchFundPoolAdjustServiceTest` / `BatchFundPoolAdjustMapperTest` |
 | 45 | 股票池批量调整（批量调入/调出） | `batch_stock_pool_adjust.html` | [45-batch-stock-pool-adjust.md](45-batch-stock-pool-adjust.md) | `BatchStockPoolAdjustApiTest` / `BatchStockPoolAdjustServiceTest` / `BatchStockPoolAdjustMapperTest` |
+| 46 | 股票池 Excel 导入 | `stock_pool_excel_import.html` | [46-stock-pool-excel-import.md](46-stock-pool-excel-import.md) | `StockPoolExcelImportServiceTest` / `StockPoolExcelImportApiTest` / `StockPoolExcelImportPersistenceTest` / `StockPoolAdjustExcelSubmitServiceTest` / `CommonFileServiceTest` |
 
 ## 调库业务全链路索引
 
@@ -81,11 +82,12 @@
 |---|---|---|---|
 | 股票池调整 | [41](41-stock-pool-adjust.md) | StockPoolAdjust | StockPoolIntegrationTest / StockPoolApiTest |
 | 股票池批量调整 | [45](45-batch-stock-pool-adjust.md) | BatchStockPoolAdjust / StockPoolAdjust | BatchStockPoolAdjustApiTest / BatchStockPoolAdjustServiceTest / BatchStockPoolAdjustMapperTest / StockPoolIntegrationTest |
+| 股票池 Excel 导入 | [46](46-stock-pool-excel-import.md) | StockPoolExcelImport / StockPoolAdjust | StockPoolExcelImportServiceTest / StockPoolExcelImportApiTest / StockPoolExcelImportPersistenceTest / StockPoolAdjustExcelSubmitServiceTest |
 | 股票池查询 | [42](42-stock-pool-query.md) | StockPoolQuery | StockPoolIntegrationTest / StockPoolApiTest |
 | 股票池调整历史 | [43](43-stock-pool-adjust-history.md) | StockPoolAdjustHistory | StockPoolIntegrationTest / StockPoolApiTest |
 | 股票审核/详情 | [44](44-stock-pool-adjust-approve-detail.md) | StockPoolAdjustFlow / StockMyMatters | StockPoolIntegrationTest / MyMattersMapperSqlTest |
 
-股票独立运行表、STOCK 批次及整组落池；单笔提供一般/快速流程，批量仅一般流程、每只股票独立批次且提交失败整批回滚。SQL 和工具任务见 [股票脚本说明](../sql/stock/README.md)。前端 Node 测试见 tests/stock_pool.test.js / tests/batch_stock_pool_adjust.test.js / tests/my_matters.test.js。
+股票独立运行表、STOCK 批次及整组落池；单笔提供一般/快速流程，批量仅一般流程、每只股票独立批次且提交失败整批回滚。SQL 和工具任务见 [股票脚本说明](../sql/stock/README.md)。股票Excel导入见 [46](46-stock-pool-excel-import.md)，四列模板、仅人工一般流程，按来源整批事务写入。前端 Node 测试见 tests/stock_pool_excel_import.test.js / tests/stock_pool.test.js / tests/batch_stock_pool_adjust.test.js / tests/my_matters.test.js。
 
 ## 通用业务约束
 

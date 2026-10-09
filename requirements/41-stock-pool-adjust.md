@@ -33,3 +33,5 @@
 统一 ApiResponse；分页为 PageResult。附件分类 stock_report_hand / stock_report_in / stock_report_out，只绑定 `ip_adjust_log_stock`；复制报告校验报告存在、股票代码一致和股票品种，终审再次检查，审批通过后按债券方式沉淀内部报告。
 
 数据脚本见 sql/stock/README.md；审核见 [44](44-stock-pool-adjust-approve-detail.md)。测试：StockPoolIntegrationTest、StockPoolApiTest、前端 tests/stock_pool.test.js。
+
+股票池 Excel 导入为独立模块，四列模板与一般人工流程见 [46 股票池 Excel 导入](46-stock-pool-excel-import.md)。

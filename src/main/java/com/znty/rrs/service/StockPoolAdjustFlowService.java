@@ -35,6 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -124,7 +125,20 @@ public class StockPoolAdjustFlowService {
     /** 在修改节点核验业务、日志及附件所属范围，逐条处理附件变更。 */
     private void applyAttachmentChanges(StockPoolAdjustAuditReq req, StockAdjustStepBo step, FlowSnapshot snapshot,
                                          FlowNodeBo node, SysAttachmentService.SubmissionFiles submission) {
-        if (req.getAttachmentChanges() == null || req.getAttachmentChanges().isEmpty()) { return; }
+        if (req.getAttachmentChanges() == null || req.getAttachmentChanges().isEmpty()) {
+            if (ProcessAction.APPROVE.getCode().equals(req.getProcessAction())
+                    && isModifyNode(snapshot, node, snapshot.configMap.get(node.getId()))) {
+                // Excel 没有初始报告入口，未修改附件时仍复核最新报告要求
+                List<StockAdjustLogBo> excelLogs = queryBatchLogs(step).stream()
+                        .filter(log -> "Excel导入".equals(log.getAdjustType()) || "Excel清空".equals(log.getAdjustType()))
+                        .collect(Collectors.toList());
+                if (!excelLogs.isEmpty()) {
+                    // 无附件变更也不能绕过池配置变化后的报告检查
+                    validateBoundReports(excelLogs);
+                }
+            }
+            return;
+        }
         // 附件和原因修改的授权阶段相同，不能用于驳回或一般审批。
         if (!ProcessAction.APPROVE.getCode().equals(req.getProcessAction())
                 || !isModifyNode(snapshot, node, snapshot.configMap.get(node.getId()))) {
@@ -155,12 +169,19 @@ public class StockPoolAdjustFlowService {
             item.setMaterialSourceAttachmentIds(change.getMaterialSourceAttachmentIds());
             stockPoolAdjustService.bindAttachments(log.getId(), item, submission, req.getHandlerId());
         }
+        // 附件变更完成后按最新目标池配置检查报告
+        validateBoundReports(logs);
+    }
+
+    /** 复核主项报告要求，关系项继续继承主项审批。 */
+    private void validateBoundReports(List<StockAdjustLogBo> logs) {
         Map<Long, InvestmentPoolBo> pools = new HashMap<>();
         for (InvestmentPoolBo pool : investmentPoolMapper.queryPoolList()) { pools.put(pool.getId(), pool); }
         for (StockAdjustLogBo log : logs) {
             InvestmentPoolBo pool = pools.get(log.getTargetPoolId());
             if (pool == null) { throw new BizException("目标投资池不存在或已删除"); }
-            String restriction = ("手工调整".equals(log.getAdjustType()) || "手动批量调整".equals(log.getAdjustType()))
+            String restriction = ("手工调整".equals(log.getAdjustType()) || "手动批量调整".equals(log.getAdjustType())
+                    || "Excel导入".equals(log.getAdjustType()) || "Excel清空".equals(log.getAdjustType()))
                     ? ("调入".equals(log.getAdjustMode()) ? pool.getInReportRestriction() : pool.getOutReportRestriction()) : "none";
             sysAttachmentService.validateStockBoundReports(log.getId(), log.getStockCode(), restriction);
         }

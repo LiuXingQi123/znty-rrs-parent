@@ -60,6 +60,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -284,7 +285,8 @@ public class StockPoolAdjustService {
                 throw new BizException(pool.getPoolName() + "：" + String.join("；", failures));
             }
             // 关系项继承主项流程；单笔和批量手工主项均强制报告，已绑定来源须有效。
-            String restriction = ("手工调整".equals(log.getAdjustType()) || "手动批量调整".equals(log.getAdjustType()))
+            String restriction = ("手工调整".equals(log.getAdjustType()) || "手动批量调整".equals(log.getAdjustType())
+                    || "Excel导入".equals(log.getAdjustType()) || "Excel清空".equals(log.getAdjustType()))
                     ? (AdjustMode.IN.getCode().equals(log.getAdjustMode()) ? pool.getInReportRestriction() : pool.getOutReportRestriction()) : "none";
             sysAttachmentService.validateStockBoundReports(log.getId(), stock.getStockCode(), restriction);
         }
@@ -456,6 +458,179 @@ public class StockPoolAdjustService {
         return dto;
     }
 
+    /** 校验 Excel 来源行，复用股票规则并限定双权限、无报告及人工一般流程。 */
+    public StockAdjustCheckDto checkExcelImportAdjust(StockAdjustCheckReq req, String adjusterId) {
+        if (req == null) { throw new BizException("股票导入校验请求不能为空"); }
+        req.setCurrentUserId(adjusterId);
+        // 复用单笔准入、调整权限及关系展开
+        StockAdjustCheckDto result = checkAdjust(req);
+        // 读取最新股票信息以固定流程候选
+        StockInfoBo stock = requireStock(req.getStockCode(), true);
+        Map<Long, InvestmentPoolBo> pools = investmentPoolMapper.queryPoolList().stream()
+                .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
+        for (StockAdjustCheckDto.CheckResultItem item : result.getItems()) {
+            List<String> failures = new ArrayList<>(item.getFailReasons());
+            // 关系项使用实际目标池，不采信客户端名称
+            InvestmentPoolBo pool = requirePool(pools, item.getTargetPoolId());
+            try {
+                // 每个实际目标池均要求 Excel 导入权限
+                validateExcelImportPermission(adjusterId, pool.getId());
+                if (ITEM_MANUAL.equals(item.getItemTag())) {
+                    StockPoolAdjustSubmitReq.AdjustItem report = new StockPoolAdjustSubmitReq.AdjustItem();
+                    report.setItemTag(ITEM_MANUAL);
+                    report.setAdjustMode(item.getAdjustMode());
+                    // 没有报告入口仍完整校验目标池报告限制
+                    validateReportRestriction(report, pool, stock.getStockCode());
+                }
+            } catch (BizException exception) {
+                failures.add(exception.getMessage());
+            }
+            boolean inbound = AdjustMode.IN.getCode().equals(item.getAdjustMode());
+            Long flowId = inbound ? pool.getInFlowId() : pool.getOutFlowId();
+            String flowKey = inbound ? pool.getInFlowKey() : pool.getOutFlowKey();
+            String type = inbound ? FlowType.NORMAL_INBOUND.getCode() : FlowType.NORMAL_OUTBOUND.getCode();
+            List<StockAdjustCheckDto.FlowOption> options = new ArrayList<>();
+            // 快速配置不参与 Excel 可行性判断
+            addFlowOption(options, stock, flowId, flowKey, type, true, failures);
+            try {
+                // 排除未发布、错误 Key 和没有人工待办的一般流程
+                requireExcelFlow(flowId, flowKey, stock.getStockCode());
+            } catch (BizException exception) {
+                failures.add(exception.getMessage());
+            }
+            item.setFailReasons(failures);
+            item.setCanAdjust(failures.isEmpty());
+            for (StockAdjustCheckDto.FlowOption option : options) {
+                option.setSelectable(option.isSelectable() && failures.isEmpty());
+                if (!failures.isEmpty()) { option.setUnmatchReasons(new ArrayList<>(failures)); }
+            }
+            item.setFlowOptions(options);
+        }
+        return result;
+    }
+
+    /** 原子提交服务器导入来源组，关系开关只由持久化 optionJson 提供。 */
+    @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
+    public List<StockAdjustSubmitDto> addExcelImportAdjustLogList(List<StockPoolAdjustSubmitReq> requests,
+                                                                boolean allowLinkMutex) {
+        if (requests == null || requests.isEmpty()) { throw new BizException("至少提交一个股票 Excel 导入分组"); }
+        Set<String> targets = new HashSet<>();
+        for (StockPoolAdjustSubmitReq req : requests) {
+            // 写入前校验专属渠道类型与必填字段
+            validateSubmitRequest(req, false, true);
+            for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+                if (!targets.add(req.getStockCode() + "|" + item.getTargetPoolId())) {
+                    throw new BizException("不同来源组不能调整相同股票和投资池");
+                }
+                if ((item.getReportFileIndexes() != null && !item.getReportFileIndexes().isEmpty())
+                        || (item.getMaterialFileIndexes() != null && !item.getMaterialFileIndexes().isEmpty())
+                        || (item.getReportSourceAttachmentIds() != null && !item.getReportSourceAttachmentIds().isEmpty())
+                        || (item.getMaterialSourceAttachmentIds() != null && !item.getMaterialSourceAttachmentIds().isEmpty())) {
+                    throw new BizException("股票 Excel 导入不支持报告或材料附件");
+                }
+            }
+        }
+        // 整批主档按主键统一锁定，不允许边写边校验
+        Map<String, StockInfoBo> stocks = lockStockList(requests.stream()
+                .map(StockPoolAdjustSubmitReq::getStockCode).collect(Collectors.toList()));
+        // 目标池统一按 ID 升序锁定，避免来源组顺序造成交叉锁
+        lockTargetPools(requests.stream().flatMap(req -> req.getItems().stream())
+                .map(StockPoolAdjustSubmitReq.AdjustItem::getTargetPoolId).collect(Collectors.toList()));
+        List<PreparedSubmit> prepared = new ArrayList<>();
+        for (StockPoolAdjustSubmitReq req : requests) {
+            // 重算最新可提交集合，拒绝漏传、伪造或失效关系项
+            validateExcelRelations(req, allowLinkMutex);
+            // 全部请求复核完成前不写日志、步骤或池状态
+            prepared.add(prepareSubmit(req, stocks, false, true));
+        }
+        List<StockAdjustSubmitDto> results = new ArrayList<>();
+        for (PreparedSubmit item : prepared) {
+            // Excel 不允许初始步骤直达结束并自动落池
+            results.add(submitPrepared(item, null, true));
+        }
+        return results;
+    }
+
+    /** 核对本来源有效关系集合，失败关系不额外阻断成功主项。 */
+    private void validateExcelRelations(StockPoolAdjustSubmitReq req, boolean allowRelations) {
+        List<StockPoolAdjustSubmitReq.AdjustItem> manual = req.getItems().stream()
+                .filter(item -> ITEM_MANUAL.equals(item.getItemTag())).collect(Collectors.toList());
+        if (manual.size() != 1) { throw new BizException("股票 Excel 每个来源组必须恰有一条主项"); }
+        StockPoolAdjustSubmitReq.AdjustItem primary = manual.get(0);
+        StockAdjustCheckReq check = new StockAdjustCheckReq();
+        check.setStockCode(req.getStockCode());
+        StockAdjustCheckReq.CheckItem source = new StockAdjustCheckReq.CheckItem();
+        source.setTargetPoolId(primary.getTargetPoolId());
+        source.setAdjustMode(primary.getAdjustMode());
+        check.setItems(Collections.singletonList(source));
+        // 主档锁内重新复核双权限、报告和一般流程
+        StockAdjustCheckDto result = checkExcelImportAdjust(check, req.getAdjusterId());
+        StockAdjustCheckDto.CheckResultItem main = result.getItems().stream()
+                .filter(item -> ITEM_MANUAL.equals(item.getItemTag())).findFirst()
+                .orElseThrow(() -> new BizException("股票导入复核缺少主项"));
+        if (!main.isCanAdjust()) { throw new BizException(String.join("；", main.getFailReasons())); }
+        Map<String, StockAdjustCheckDto.CheckResultItem> expected = result.getItems().stream()
+                .filter(item -> item.isCanAdjust() && (allowRelations || ITEM_MANUAL.equals(item.getItemTag())))
+                .collect(Collectors.toMap(item -> item.getTargetPoolId() + "|" + item.getAdjustMode() + "|" + item.getItemTag(), item -> item));
+        Set<String> actual = new HashSet<>();
+        // 服务端来源主项决定全组标识
+        String group = requireGroupKey(primary);
+        for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            String key = item.getTargetPoolId() + "|" + item.getAdjustMode() + "|" + item.getItemTag();
+            if (!group.equals(item.getAdjustGroupKey()) || !expected.containsKey(key) || !actual.add(key)) {
+                throw new BizException("股票导入关系项已变化或来源不符，请重新校验");
+            }
+        }
+        if (actual.size() != expected.size()) { throw new BizException("股票导入有效关系项已变化，请重新校验"); }
+        boolean allowed = main.getFlowOptions().stream().anyMatch(option -> option.isSelectable()
+                && Objects.equals(option.getFlowId(), primary.getFlowId())
+                && Objects.equals(option.getFlowKey(), primary.getFlowKey())
+                && Objects.equals(option.getFlowType(), primary.getFlowType()));
+        if (!allowed) { throw new BizException("股票 Excel 只能使用目标池一般审批流程"); }
+    }
+
+    /** 统一校验 Excel 人员或角色权限，管理员沿用既有口径。 */
+    void validateExcelImportPermission(String userId, Long poolId) {
+        if (AdminUserIdUtil.isAdminUser(userId)) { return; }
+        // 校验操作人并读取实际角色
+        Long id = parseUserId(userId);
+        Set<Long> roles = new HashSet<>(investmentPoolMapper.queryUserRoleIdList(id));
+        for (PoolPermissionBo permission : investmentPoolMapper.queryPermissionListByType(PermissionType.EXCEL_IMPORTABLE.getCode())) {
+            if (poolId.equals(permission.getPoolId()) && permission.getHandlerId() != null
+                    && ((HandlerType.USER.getCode().equals(permission.getHandlerType()) && id.equals(permission.getHandlerId()))
+                    || (HandlerType.ROLE.getCode().equals(permission.getHandlerType()) && roles.contains(permission.getHandlerId())))) {
+                return;
+            }
+        }
+        throw new BizException("当前用户无权对投资池[" + poolId + "]进行 Excel 导入");
+    }
+
+    /** 检查 Excel 发布版本及人工审批，单笔快速路径不受影响。 */
+    private FlowSnapshot requireExcelFlow(Long id, String key, String stockCode) {
+        // 复用既有股票快照，不改变单笔的快照可用规则
+        FlowSnapshot snapshot = buildFlowSnapshot(id, stockCode);
+        if (snapshot == null || key == null || !key.equals(snapshot.definition.getFlowKey())) {
+            throw new BizException("目标池一般审批流程未配置、未发布或配置不完整");
+        }
+        // 从开始节点复核实际审批路径
+        FlowNodeBo node = findNode(snapshot.nodes, NodeType.START.getCode());
+        Set<Long> visited = new HashSet<>();
+        while (node != null && node.getId() != null && visited.add(node.getId())) {
+            // 沿实际提交路由查找人工待办，孤立或仅驳回可达节点不算初始审批
+            node = findNextNode(snapshot, node);
+            if (node == null || NodeType.END.getCode().equals(node.getNodeType())) { break; }
+            if (!NodeType.APPROVAL.getCode().equals(node.getNodeType())) { continue; }
+            NodeApprovalConfigBo config = snapshot.configMap.get(node.getId());
+            // 自动和 O32 节点不算人工待办
+            boolean auto = isSystemAutoApproval(config);
+            // 发起人提交节点不算实际审批
+            boolean submit = config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())
+                    && hasOutgoingRouteAction(snapshot, node, ProcessAction.SUBMIT.getCode());
+            if (!auto && !submit) { return snapshot; }
+        }
+        throw new BizException("股票 Excel 一般流程必须包含实际人工审批节点");
+    }
+
     /**
      * 提交不含本地文件的股票调库申请。
      *
@@ -624,8 +799,15 @@ public class StockPoolAdjustService {
     /** 按单笔或服务端批量渠道完成相同业务复核，不写运行表。 */
     private PreparedSubmit prepareSubmit(StockPoolAdjustSubmitReq req, Map<String, StockInfoBo> lockedStocks,
                                          boolean batch) {
+        // 单笔与手选批量保留完整关系规则
+        return prepareSubmit(req, lockedStocks, batch, false);
+    }
+
+    /** Excel 按服务器有效关系集合复核，其余渠道保留原约束。 */
+    private PreparedSubmit prepareSubmit(StockPoolAdjustSubmitReq req, Map<String, StockInfoBo> lockedStocks,
+                                         boolean batch, boolean excelImport) {
         // 校验调库申请的提交级必填字段
-        validateSubmitRequest(req, batch);
+        validateSubmitRequest(req, batch, excelImport);
         // 确认申请中的股票仍处于可调库状态
         StockInfoBo stock = requireLockedStock(req.getStockCode(), lockedStocks);
         // 主档锁后按投资池 ID 升序锁定容量与成员状态
@@ -637,8 +819,10 @@ public class StockPoolAdjustService {
         List<PoolRelationBo> relations = stockPoolAdjustMapper.queryAllPoolRelationList();
         // 根据最新股票、池和关系数据校验全部提交明细
         validateSubmitItems(req, stock, poolMap, currentPoolIds, relations);
-        // 复核关系展开与分组来源，禁止漏传或伪造联动、互斥项
-        validateSubmittedRelations(req, stock, poolMap, currentPoolIds, relations);
+        if (!excelImport) {
+            // Excel 已按固定关系选项复核，其他渠道必须提交完整展开项
+            validateSubmittedRelations(req, stock, poolMap, currentPoolIds, relations);
+        }
 
         Map<String, StockPoolAdjustSubmitReq.AdjustItem> manualByGroup = new HashMap<>();
         for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
@@ -657,7 +841,9 @@ public class StockPoolAdjustService {
             }
             if (!snapshotByGroup.containsKey(groupKey)) {
                 // 在写入前固定来源组使用的已发布一般流程快照
-                FlowSnapshot snapshot = buildFlowSnapshot(manual.getFlowId(), stock.getStockCode());
+                FlowSnapshot snapshot = excelImport
+                        ? requireExcelFlow(manual.getFlowId(), manual.getFlowKey(), stock.getStockCode())
+                        : buildFlowSnapshot(manual.getFlowId(), stock.getStockCode());
                 if (snapshot == null) {
                     // 读取主项目标池以定位流程不可用的业务错误
                     InvestmentPoolBo pool = requirePool(poolMap, manual.getTargetPoolId());
@@ -682,6 +868,14 @@ public class StockPoolAdjustService {
      */
     private StockAdjustSubmitDto submitPrepared(PreparedSubmit prepared,
                                                SysAttachmentService.SubmissionFiles submissionFiles) {
+        // 保留单笔和手选批量的快速审批行为
+        return submitPrepared(prepared, submissionFiles, false);
+    }
+
+    /** 保存已复核请求，Excel 到结束节点时整批回滚。 */
+    private StockAdjustSubmitDto submitPrepared(PreparedSubmit prepared,
+                                               SysAttachmentService.SubmissionFiles submissionFiles,
+                                               boolean excelImport) {
         StockPoolAdjustSubmitReq req = prepared.req;
         Map<String, String> batchByGroup = new LinkedHashMap<>();
         Map<String, StockAdjustLogBo> primaryByGroup = new LinkedHashMap<>();
@@ -707,6 +901,7 @@ public class StockPoolAdjustService {
             boolean finished = createInitialSteps(log.getId(), log.getAdjustBatchNo(),
                     prepared.snapshotByGroup.get(entry.getKey()), req.getAdjusterId(), req.getAdjusterName());
             if (finished) {
+                if (excelImport) { throw new BizException("股票 Excel 申请必须进入人工审批，不能直接结束"); }
                 // 无待办快速流程已到结束节点，原子终审并落整组投资池
                 finishApprovedBatch(log.getAdjustBatchNo());
             }
@@ -729,6 +924,12 @@ public class StockPoolAdjustService {
 
     /** 校验单笔字段，批量渠道仅由多单编排入口授予。 */
     private void validateSubmitRequest(StockPoolAdjustSubmitReq req, boolean batch) {
+        // 原渠道不接纳 Excel 专属类型
+        validateSubmitRequest(req, batch, false);
+    }
+
+    /** 校验服务端渠道授予的类型与来源，不能由公开单笔请求改变渠道。 */
+    private void validateSubmitRequest(StockPoolAdjustSubmitReq req, boolean batch, boolean excelImport) {
         if (req == null || req.getStockCode() == null || req.getStockCode().trim().isEmpty()) {
             throw new BizException("股票代码不能为空");
         }
@@ -743,7 +944,10 @@ public class StockPoolAdjustService {
             throw new BizException("调整原因和意见均不能超过1000字");
         }
         StockQueryFilterHelper.requireUserId(req.getAdjusterId());
-        if (req.getAdjustType() != null && !req.getAdjustType().trim().isEmpty()
+        if (excelImport && !"Excel导入".equals(req.getAdjustType()) && !"Excel清空".equals(req.getAdjustType())) {
+            throw new BizException("股票 Excel 主项类型必须为 Excel导入 或 Excel清空");
+        }
+        if (!excelImport && req.getAdjustType() != null && !req.getAdjustType().trim().isEmpty()
                 && !"手工调整".equals(req.getAdjustType()) && !(batch && "手动批量调整".equals(req.getAdjustType()))) {
             throw new BizException("股票首版只支持手工申请，联动与互斥类型由系统生成");
         }

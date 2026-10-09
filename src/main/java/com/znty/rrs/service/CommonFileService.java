@@ -32,6 +32,7 @@ public class CommonFileService {
         map.put("company_pool_import", "xlsx/company_pool_import.xlsx");
         map.put("crmw_pool_import", "xlsx/crmw_pool_import.xlsx");
         map.put("fund_pool_import", "xlsx/fund_pool_import.xlsx");
+        map.put("stock_pool_import", "xlsx/stock_pool_import.xlsx");
         TEMPLATE_PATH_MAP = Collections.unmodifiableMap(map);
     }
 
