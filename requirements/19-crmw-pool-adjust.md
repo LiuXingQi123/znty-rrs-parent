@@ -4,6 +4,11 @@
 > 后端前缀：`/api/v1/crmwPoolAdjust`
 > 角色定位：业务人员先选择一个 CRMW 凭证，再选择可绑定的债券类标的证券（`category_type='bond'` 且不能是 CRMW 凭证），在权限范围内发起 CRMW 池的调入或调出申请。逻辑与证券池调库（[04]）同构，差异见第 7 节。
 
+
+### 证券市场与历史展示
+
+证券主档仅保留当前 `wind_code`，独立外部 `sec_id` 位于主档末尾。市场经统一服务读取 Wind `S_INFO_EXCHMARKET`（IB→CIBM），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind 非空 ISIN 关联同券代码；空 ISIN 不关联，同市场多个代码完整展示。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
+
 ---
 
 ## 1. 页面概览

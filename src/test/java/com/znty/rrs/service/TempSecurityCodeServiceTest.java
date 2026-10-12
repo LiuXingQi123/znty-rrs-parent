@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -304,6 +305,9 @@ public class TempSecurityCodeServiceTest {
     private TempSecurityCodeService buildService(TempSecurityCodeMapper mapper,
                                                  SecurityPoolAdjustMapper adjustMapper) {
         TempSecurityCodeService service = new TempSecurityCodeService();
+        SecurityMarketService markets = mock(SecurityMarketService.class);
+        when(markets.queryMarketCode(anyString())).thenReturn("CIBM");
+        ReflectionTestUtils.setField(service, "securityMarketService", markets);
         ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         return service;

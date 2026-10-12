@@ -36,7 +36,9 @@ public final class StockQueryFilterHelper {
 
     /** 严格解析非空自然日参数。 */
     private static LocalDate parseDate(String value) {
-        if (value == null || value.isEmpty()) { return null; }
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
         try {
             if (!value.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) {
                 throw new DateTimeParseException("日期格式无效", value, 0);
@@ -49,14 +51,22 @@ public final class StockQueryFilterHelper {
 
     /** 导出评级中文文案；未知编码明确报错。 */
     public static String ratingLabel(String code) {
-        if (code == null || code.isEmpty()) { return ""; }
+        if (code == null || code.isEmpty()) {
+            return "";
+        }
         switch (code) {
-            case "buy": return "买入";
-            case "overweight": return "增持";
-            case "neutral": return "中性";
-            case "underweight": return "减持";
-            case "sell": return "卖出";
-            default: throw new BizException("股票评级编码无效：" + code);
+            case "buy":
+                return "买入";
+            case "overweight":
+                return "增持";
+            case "neutral":
+                return "中性";
+            case "underweight":
+                return "减持";
+            case "sell":
+                return "卖出";
+            default:
+                throw new BizException("股票评级编码无效：" + code);
         }
     }
 }

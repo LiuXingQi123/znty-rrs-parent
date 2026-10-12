@@ -55,6 +55,10 @@ public class CrmwPoolExcelImportServiceTest {
     @Before
     public void setUp() {
         service = new CrmwPoolExcelImportService();
+        SecurityMarketService marketService = mock(SecurityMarketService.class);
+        when(marketService.queryMarketCode("CRMW001.IB")).thenReturn("CIBM");
+        when(marketService.queryMarketCode("XYB001.IB")).thenReturn("SSE");
+        ReflectionTestUtils.setField(service, "securityMarketService", marketService);
         importMapper = mock(CrmwPoolExcelImportMapper.class);
         investmentPoolMapper = mock(InvestmentPoolMapper.class);
         crmwPoolAdjustService = mock(CrmwPoolAdjustService.class);
@@ -172,7 +176,6 @@ public class CrmwPoolExcelImportServiceTest {
         crmw.setWindCode("CRMW001.IB");
         crmw.setFullName("测试凭证");
         crmw.setSecurityType("crmw");
-        crmw.setWindCodeNib("CRMW001.IB");
         when(importMapper.querySecurityImportInfoByCode("CRMW001.IB")).thenReturn(crmw);
 
         SecurityInfoDetailDto security = new SecurityInfoDetailDto();
@@ -181,7 +184,6 @@ public class CrmwPoolExcelImportServiceTest {
         security.setShortName("测试债");
         security.setSecurityType("bond");
         security.setSecurityTypeName("债券");
-        security.setWindCodeSh("110001.SH");
         when(importMapper.querySecurityImportInfoByCode("110001.SH")).thenReturn(security);
 
         AdjustCheckDto.CheckResultItem ri = new AdjustCheckDto.CheckResultItem();

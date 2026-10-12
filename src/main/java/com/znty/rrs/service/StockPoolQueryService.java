@@ -121,10 +121,14 @@ public class StockPoolQueryService {
 
     /** 为页面和导出填充投资池完整路径。 */
     private void fillPoolFullName(List<StockPoolQueryDto> list) {
-        if (list.isEmpty()) { return; }
+        if (list.isEmpty()) {
+            return;
+        }
         Map<Long, String> names = investmentPoolService.queryPoolFullNameMap();
         for (StockPoolQueryDto row : list) {
-            if (names.get(row.getTargetPoolId()) != null) { row.setTargetPoolName(names.get(row.getTargetPoolId())); }
+            if (names.get(row.getTargetPoolId()) != null) {
+                row.setTargetPoolName(names.get(row.getTargetPoolId()));
+            }
         }
     }
 }

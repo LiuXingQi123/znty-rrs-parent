@@ -42,6 +42,10 @@ import java.util.Set;
 
 /** 恒生池 Excel 定时导出公共实现。 */
 public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTask {
+    /** 统一证券市场查询组件。 */
+    @Resource
+    private SecurityMarketService securityMarketService;
+
     /** JSON 参数解析组件。 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     /** Excel 固定表头，与老系统恒生定时导出格式一致。 */
@@ -237,10 +241,18 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
      * @return 待导出数据
      */
     private List<HsPoolExportRowDto> queryRows(Long poolId, Date windowStart, Date endTime) {
-        if (!isIncrement()) {
-            return hsPoolExcelExportMapper.queryFullExportRowList(poolId, includeExpiredForFullExport());
+        List<HsPoolExportRowDto> rows = !isIncrement()
+                ? hsPoolExcelExportMapper.queryFullExportRowList(poolId, includeExpiredForFullExport())
+                : hsPoolExcelExportMapper.queryIncrementExportRowList(poolId, windowStart, endTime);
+        List<String> codes = new ArrayList<>();
+        for (HsPoolExportRowDto row : rows) {
+            codes.add(row.getSecurityCode());
         }
-        return hsPoolExcelExportMapper.queryIncrementExportRowList(poolId, windowStart, endTime);
+        Map<String, String> markets = securityMarketService.queryMarketCodeMap(codes);
+        for (HsPoolExportRowDto row : rows) {
+            row.setMarketCode(markets.get(row.getSecurityCode()));
+        }
+        return rows;
     }
 
     /**
@@ -471,7 +483,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         int startIndex = rowIndex;
         Set<String> seen = new HashSet<>();
         for (HsPoolExportRowDto row : rows) {
-            // 将证券各市场代码展开为独立恒生市场编码行。
+            // 按当前记录所属市场生成恒生行。
             List<String[]> marketRows = markets(row);
             for (String[] market : marketRows) {
                 if (deduplicate && !seen.add(market[0] + "|" + market[1])) {
@@ -489,23 +501,45 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 将证券各市场代码展开为恒生市场编码与无后缀证券代码组合。
+     * 将当前证券代码转换为恒生市场编码与无后缀代码组合。
      *
      * @param row 证券原始行
      * @return 市场拆分行
      */
     private List<String[]> markets(HsPoolExportRowDto row) {
         List<String[]> result = new ArrayList<>();
-        // 添加沪市证券代码。
-        addMarket(result, HsMarketCode.SHANGHAI_STOCK_EXCHANGE, row.getWindCodeSh());
-        // 添加深市证券代码。
-        addMarket(result, HsMarketCode.SHENZHEN_STOCK_EXCHANGE, row.getWindCodeSz());
-        // 添加银行间市场证券代码。
-        addMarket(result, HsMarketCode.INTERBANK_MARKET, row.getWindCodeNib());
-        // 添加北交所证券代码。
-        addMarket(result, HsMarketCode.BEIJING_STOCK_EXCHANGE, row.getWindCodeBj());
-        // 添加其他市场证券代码。
-        addMarket(result, HsMarketCode.OTHER_QDII_MARKET, row.getWindCodeNbc());
+        HsMarketCode hsMarket;
+        switch (row.getMarketCode()) {
+            case "SSE":
+                hsMarket = HsMarketCode.SHANGHAI_STOCK_EXCHANGE;
+                break;
+            case "SZSE":
+                hsMarket = HsMarketCode.SHENZHEN_STOCK_EXCHANGE;
+                break;
+            case "CIBM":
+                hsMarket = HsMarketCode.INTERBANK_MARKET;
+                break;
+            case "BSE":
+                hsMarket = HsMarketCode.BEIJING_STOCK_EXCHANGE;
+                break;
+            case "HKEX":
+                hsMarket = HsMarketCode.HONG_KONG_STOCK_EXCHANGE;
+                break;
+            case "OTC":
+                hsMarket = HsMarketCode.OTC_MARKET;
+                break;
+            case "JWCW":
+                hsMarket = HsMarketCode.JWCW_MARKET;
+                break;
+            case "QDII":
+            case "OTHER":
+                hsMarket = HsMarketCode.OTHER_QDII_MARKET;
+                break;
+            default:
+                throw new BizException("恒生导出不支持市场：" + row.getSecurityCode() + "，" + row.getMarketCode());
+        }
+        // 按当前记录唯一市场写出代码
+        addMarket(result, hsMarket, row.getSecurityCode());
         return result;
     }
 

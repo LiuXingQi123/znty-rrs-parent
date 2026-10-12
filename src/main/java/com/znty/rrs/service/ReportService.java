@@ -164,15 +164,21 @@ public class ReportService {
     /** 股票整组终审落池后，按各日志的手工报告附件生成内部股票报告。 */
     @Transactional(rollbackFor = Exception.class)
     public void addInternalStockReportsOnFinish(List<StockAdjustLogBo> logList) {
-        if (logList == null || logList.isEmpty()) { return; }
+        if (logList == null || logList.isEmpty()) {
+            return;
+        }
         Map<Long, String> paths = null;
         for (StockAdjustLogBo log : logList) {
             if (!AuditStatus.APPROVED.getCode().equals(log.getAuditStatus())) {
                 throw new BizException("股票报告沉淀失败：调整尚未审批通过");
             }
             List<SysAttachmentBo> attachments = sysAttachmentService.queryHandStockReportAttachments(log.getId());
-            if (attachments == null || attachments.isEmpty()) { continue; }
-            if (paths == null) { paths = investmentPoolService.queryPoolFullNameMap(); }
+            if (attachments == null || attachments.isEmpty()) {
+                continue;
+            }
+            if (paths == null) {
+                paths = investmentPoolService.queryPoolFullNameMap();
+            }
             String path = paths.get(log.getTargetPoolId());
             if (path == null || log.getStockName() == null) {
                 throw new BizException("股票报告沉淀失败：投资池或股票名称无效");
@@ -186,7 +192,9 @@ public class ReportService {
             report.setSecurityType(CategoryType.STOCK.getCode());
             report.setDataSource("uploaded");
             Long reportId = addInReport(report);
-            if (reportId == null) { throw new BizException("股票报告沉淀失败：内部报告写入失败"); }
+            if (reportId == null) {
+                throw new BizException("股票报告沉淀失败：内部报告写入失败");
+            }
             sysAttachmentService.bindReportFileAttachments(reportId, attachments);
         }
     }

@@ -82,13 +82,6 @@
         SELECT si.wind_code AS securityCode
                ,si.short_name AS securityShortName
                ,si.security_type
-               ,CONCAT_WS(','
-                   ,IF(si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '', 'SSE', NULL)
-                   ,IF(si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '', 'SZSE', NULL)
-                   ,IF(si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '', 'CIBM', NULL)
-                   ,IF(si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '', 'BSE', NULL)
-                   ,IF(si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '', 'OTHER', NULL)
-                ) AS marketCodeText
                ,si.issuer
                ,si.rating_bond
                ,si.rating_bondissuer
@@ -138,15 +131,32 @@
             <if test="marketCodes != null and marketCodes.size() > 0">
                 AND (
                     <foreach collection="marketCodes" item="marketCode" separator=" OR ">
-                        <choose>
-                            <when test="marketCode == 'SSE'">si.wind_code_sh IS NOT NULL AND si.wind_code_sh != ''</when>
-                            <when test="marketCode == 'SZSE'">si.wind_code_sz IS NOT NULL AND si.wind_code_sz != ''</when>
-                            <when test="marketCode == 'CIBM'">si.wind_code_nib IS NOT NULL AND si.wind_code_nib != ''</when>
-                            <when test="marketCode == 'BSE'">si.wind_code_bj IS NOT NULL AND si.wind_code_bj != ''</when>
-                            <when test="marketCode == 'OTHER'">si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != ''</when>
-                            <when test="marketCode == 'COMPANY'">si.security_type = 'company'</when>
-                            <otherwise>1 = 0</otherwise>
-                        </choose>
+                        (
+                            (
+                                si.security_source = 'temporary'
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM rrs_temp_security_code t
+                                    WHERE t.temp_security_code = si.wind_code
+                                      AND t.temp_security_market = #{marketCode}
+                                )
+                            )
+                            OR (
+                                (
+                                    si.security_source IS NULL
+                                    OR si.security_source != 'temporary'
+                                )
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM ais_inv_ods.wind_windcustomcode w
+                                    WHERE w.S_INFO_WINDCODE = si.wind_code
+                                      AND CASE
+                                          WHEN TRIM(w.S_INFO_EXCHMARKET) = 'IB' THEN 'CIBM'
+                                          ELSE TRIM(w.S_INFO_EXCHMARKET)
+                                      END = #{marketCode}
+                                )
+                            )
+                        )
                     </foreach>
                 )
             </if>

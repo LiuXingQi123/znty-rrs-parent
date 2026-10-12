@@ -20,7 +20,9 @@ public enum StockRating {
     /** 判断配置是否使用合法股票评级编码 */
     public static boolean isValid(String code) {
         for (StockRating rating : values()) {
-            if (rating.code.equals(code)) { return true; }
+            if (rating.code.equals(code)) {
+                return true;
+            }
         }
         return false;
     }

@@ -236,7 +236,9 @@ public class StockPoolAdjustService {
      * @return 股票调库审批步骤列表
      */
     public List<StockAdjustStepBo> queryAdjustStepList(StockPoolAdjustReq req) {
-        if (req == null) { throw new BizException("查询请求不能为空"); }
+        if (req == null) {
+            throw new BizException("查询请求不能为空");
+        }
         if (req.getAdjustLogId() == null
                 && (req.getAdjustBatchNo() == null || req.getAdjustBatchNo().trim().isEmpty())) {
             throw new BizException("调库记录 ID 或批次号不能为空");
@@ -299,7 +301,9 @@ public class StockPoolAdjustService {
      */
     public void applyPoolStatusChanges(List<StockAdjustLogBo> logs) {
         for (StockAdjustLogBo log : logs) {
-            if (!AuditStatus.APPROVED.getCode().equals(log.getAuditStatus())) { throw new BizException("只有终审通过的股票记录允许落池"); }
+            if (!AuditStatus.APPROVED.getCode().equals(log.getAuditStatus())) {
+                throw new BizException("只有终审通过的股票记录允许落池");
+            }
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 // 调入时新增股票当前池状态
                 if (stockPoolAdjustMapper.addStockPoolStatus(log) == 0) {
@@ -324,7 +328,9 @@ public class StockPoolAdjustService {
         if (stockPoolAdjustMapper.editAdjustLogAuditStatus(batchNo, AuditStatus.APPROVED.getCode()) != logs.size()) {
             throw new BizException("股票调库申请状态已发生变化，请刷新后重试");
         }
-        for (StockAdjustLogBo log : logs) { log.setAuditStatus(AuditStatus.APPROVED.getCode()); }
+        for (StockAdjustLogBo log : logs) {
+            log.setAuditStatus(AuditStatus.APPROVED.getCode());
+        }
         // 仅终审通过记录允许应用到池状态
         applyPoolStatusChanges(logs);
         reportService.addInternalStockReportsOnFinish(logs);
@@ -345,11 +351,15 @@ public class StockPoolAdjustService {
                 && !pool.getIndustryCode().trim().equals(stock.getIndustryName())) {
             failures.add("股票行业不符合投资池行业限制");
         }
-        if (pool.getGradeAstrict() == null || pool.getGradeAstrict().trim().isEmpty()) { return; }
+        if (pool.getGradeAstrict() == null || pool.getGradeAstrict().trim().isEmpty()) {
+            return;
+        }
         Set<String> allowed = new HashSet<>();
         for (String value : pool.getGradeAstrict().split(",", -1)) {
             String rating = value.trim();
-            if (!StockRating.isValid(rating)) { throw new BizException("股票池评级准入配置不合法：" + value); }
+            if (!StockRating.isValid(rating)) {
+                throw new BizException("股票池评级准入配置不合法：" + value);
+            }
             allowed.add(rating);
         }
         if (stock.getLatestRating() == null || !allowed.contains(stock.getLatestRating())) {
@@ -390,7 +400,9 @@ public class StockPoolAdjustService {
                 .forEach(item -> sourcePoolIds.add(item.getTargetPoolId()));
         LinkedHashMap<String, StockAdjustCheckDto.CheckResultItem> expected = new LinkedHashMap<>();
         for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
-            if (!ITEM_MANUAL.equals(item.getItemTag())) { continue; }
+            if (!ITEM_MANUAL.equals(item.getItemTag())) {
+                continue;
+            }
             String group = requireGroupKey(item);
             // 根据手工主项重算关系项，与前端传回明细逐条对照
             addCheckResult(expected, stock, item.getTargetPoolId(), item.getAdjustMode(), ITEM_MANUAL,
@@ -400,7 +412,9 @@ public class StockPoolAdjustService {
             manual.setAdjustMode(item.getAdjustMode());
             expandRelationItems(expected, stock, manual, group, poolMap, currentPoolIds, relations, sourcePoolIds);
         }
-        if (expected.size() != req.getItems().size()) { throw new BizException("联动或互斥调整项已变化，请重新校验"); }
+        if (expected.size() != req.getItems().size()) {
+            throw new BizException("联动或互斥调整项已变化，请重新校验");
+        }
         for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             // 目标池、方向、来源标签与组均须保持服务端校验结果
             StockAdjustCheckDto.CheckResultItem expectedItem = expected.get(itemKey(item.getTargetPoolId(), item.getAdjustMode()));
@@ -438,7 +452,9 @@ public class StockPoolAdjustService {
                 : queryAdjustablePoolIds(parseUserId(currentUserId));
         int groupIndex = 1;
         for (StockAdjustCheckReq.CheckItem item : req.getItems()) {
-            if (item == null || item.getTargetPoolId() == null) { throw new BizException("目标投资池不能为空"); }
+            if (item == null || item.getTargetPoolId() == null) {
+                throw new BizException("目标投资池不能为空");
+            }
             String groupKey = "stock-group-" + groupIndex++;
             // 校验并记录手工选择的目标池调整项
             addCheckResult(resultMap, stock, item.getTargetPoolId(), item.getAdjustMode(), ITEM_MANUAL,
@@ -450,7 +466,9 @@ public class StockPoolAdjustService {
             if (!allowed.contains(item.getTargetPoolId())) {
                 item.getFailReasons().add("当前用户没有投资池调整权限");
                 item.setCanAdjust(false);
-                for (StockAdjustCheckDto.FlowOption option : item.getFlowOptions()) { option.setSelectable(false); }
+                for (StockAdjustCheckDto.FlowOption option : item.getFlowOptions()) {
+                    option.setSelectable(false);
+                }
             }
         }
         StockAdjustCheckDto dto = new StockAdjustCheckDto();
@@ -460,7 +478,9 @@ public class StockPoolAdjustService {
 
     /** 校验 Excel 来源行，复用股票规则并限定双权限、无报告及人工一般流程。 */
     public StockAdjustCheckDto checkExcelImportAdjust(StockAdjustCheckReq req, String adjusterId) {
-        if (req == null) { throw new BizException("股票导入校验请求不能为空"); }
+        if (req == null) {
+            throw new BizException("股票导入校验请求不能为空");
+        }
         req.setCurrentUserId(adjusterId);
         // 复用单笔准入、调整权限及关系展开
         StockAdjustCheckDto result = checkAdjust(req);
@@ -502,7 +522,9 @@ public class StockPoolAdjustService {
             item.setCanAdjust(failures.isEmpty());
             for (StockAdjustCheckDto.FlowOption option : options) {
                 option.setSelectable(option.isSelectable() && failures.isEmpty());
-                if (!failures.isEmpty()) { option.setUnmatchReasons(new ArrayList<>(failures)); }
+                if (!failures.isEmpty()) {
+                    option.setUnmatchReasons(new ArrayList<>(failures));
+                }
             }
             item.setFlowOptions(options);
         }
@@ -513,7 +535,9 @@ public class StockPoolAdjustService {
     @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public List<StockAdjustSubmitDto> addExcelImportAdjustLogList(List<StockPoolAdjustSubmitReq> requests,
                                                                 boolean allowLinkMutex) {
-        if (requests == null || requests.isEmpty()) { throw new BizException("至少提交一个股票 Excel 导入分组"); }
+        if (requests == null || requests.isEmpty()) {
+            throw new BizException("至少提交一个股票 Excel 导入分组");
+        }
         Set<String> targets = new HashSet<>();
         for (StockPoolAdjustSubmitReq req : requests) {
             // 写入前校验专属渠道类型与必填字段
@@ -555,7 +579,9 @@ public class StockPoolAdjustService {
     private void validateExcelRelations(StockPoolAdjustSubmitReq req, boolean allowRelations) {
         List<StockPoolAdjustSubmitReq.AdjustItem> manual = req.getItems().stream()
                 .filter(item -> ITEM_MANUAL.equals(item.getItemTag())).collect(Collectors.toList());
-        if (manual.size() != 1) { throw new BizException("股票 Excel 每个来源组必须恰有一条主项"); }
+        if (manual.size() != 1) {
+            throw new BizException("股票 Excel 每个来源组必须恰有一条主项");
+        }
         StockPoolAdjustSubmitReq.AdjustItem primary = manual.get(0);
         StockAdjustCheckReq check = new StockAdjustCheckReq();
         check.setStockCode(req.getStockCode());
@@ -568,7 +594,9 @@ public class StockPoolAdjustService {
         StockAdjustCheckDto.CheckResultItem main = result.getItems().stream()
                 .filter(item -> ITEM_MANUAL.equals(item.getItemTag())).findFirst()
                 .orElseThrow(() -> new BizException("股票导入复核缺少主项"));
-        if (!main.isCanAdjust()) { throw new BizException(String.join("；", main.getFailReasons())); }
+        if (!main.isCanAdjust()) {
+            throw new BizException(String.join("；", main.getFailReasons()));
+        }
         Map<String, StockAdjustCheckDto.CheckResultItem> expected = result.getItems().stream()
                 .filter(item -> item.isCanAdjust() && (allowRelations || ITEM_MANUAL.equals(item.getItemTag())))
                 .collect(Collectors.toMap(item -> item.getTargetPoolId() + "|" + item.getAdjustMode() + "|" + item.getItemTag(), item -> item));
@@ -581,17 +609,23 @@ public class StockPoolAdjustService {
                 throw new BizException("股票导入关系项已变化或来源不符，请重新校验");
             }
         }
-        if (actual.size() != expected.size()) { throw new BizException("股票导入有效关系项已变化，请重新校验"); }
+        if (actual.size() != expected.size()) {
+            throw new BizException("股票导入有效关系项已变化，请重新校验");
+        }
         boolean allowed = main.getFlowOptions().stream().anyMatch(option -> option.isSelectable()
                 && Objects.equals(option.getFlowId(), primary.getFlowId())
                 && Objects.equals(option.getFlowKey(), primary.getFlowKey())
                 && Objects.equals(option.getFlowType(), primary.getFlowType()));
-        if (!allowed) { throw new BizException("股票 Excel 只能使用目标池一般审批流程"); }
+        if (!allowed) {
+            throw new BizException("股票 Excel 只能使用目标池一般审批流程");
+        }
     }
 
     /** 统一校验 Excel 人员或角色权限，管理员沿用既有口径。 */
     void validateExcelImportPermission(String userId, Long poolId) {
-        if (AdminUserIdUtil.isAdminUser(userId)) { return; }
+        if (AdminUserIdUtil.isAdminUser(userId)) {
+            return;
+        }
         // 校验操作人并读取实际角色
         Long id = parseUserId(userId);
         Set<Long> roles = new HashSet<>(investmentPoolMapper.queryUserRoleIdList(id));
@@ -618,15 +652,21 @@ public class StockPoolAdjustService {
         while (node != null && node.getId() != null && visited.add(node.getId())) {
             // 沿实际提交路由查找人工待办，孤立或仅驳回可达节点不算初始审批
             node = findNextNode(snapshot, node);
-            if (node == null || NodeType.END.getCode().equals(node.getNodeType())) { break; }
-            if (!NodeType.APPROVAL.getCode().equals(node.getNodeType())) { continue; }
+            if (node == null || NodeType.END.getCode().equals(node.getNodeType())) {
+                break;
+            }
+            if (!NodeType.APPROVAL.getCode().equals(node.getNodeType())) {
+                continue;
+            }
             NodeApprovalConfigBo config = snapshot.configMap.get(node.getId());
             // 自动和 O32 节点不算人工待办
             boolean auto = isSystemAutoApproval(config);
             // 发起人提交节点不算实际审批
             boolean submit = config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())
                     && hasOutgoingRouteAction(snapshot, node, ProcessAction.SUBMIT.getCode());
-            if (!auto && !submit) { return snapshot; }
+            if (!auto && !submit) {
+                return snapshot;
+            }
         }
         throw new BizException("股票 Excel 一般流程必须包含实际人工审批节点");
     }
@@ -893,7 +933,9 @@ public class StockPoolAdjustService {
             logIds.add(log.getId());
             // 上传附件与报告引用均绑定到具体调整记录
             bindAttachments(log.getId(), item, submissionFiles, req.getAdjusterId());
-            if (ITEM_MANUAL.equals(item.getItemTag())) { primaryByGroup.put(groupKey, log); }
+            if (ITEM_MANUAL.equals(item.getItemTag())) {
+                primaryByGroup.put(groupKey, log);
+            }
         }
         for (Map.Entry<String, StockAdjustLogBo> entry : primaryByGroup.entrySet()) {
             StockAdjustLogBo log = entry.getValue();
@@ -901,7 +943,9 @@ public class StockPoolAdjustService {
             boolean finished = createInitialSteps(log.getId(), log.getAdjustBatchNo(),
                     prepared.snapshotByGroup.get(entry.getKey()), req.getAdjusterId(), req.getAdjusterName());
             if (finished) {
-                if (excelImport) { throw new BizException("股票 Excel 申请必须进入人工审批，不能直接结束"); }
+                if (excelImport) {
+                    throw new BizException("股票 Excel 申请必须进入人工审批，不能直接结束");
+                }
                 // 无待办快速流程已到结束节点，原子终审并落整组投资池
                 finishApprovedBatch(log.getAdjustBatchNo());
             }
@@ -1058,7 +1102,9 @@ public class StockPoolAdjustService {
         }
         // 即使目标池不要求报告，已选择的研究报告也必须属于当前股票。
         sysAttachmentService.validateStockReportSources(item.getReportSourceAttachmentIds(), stockCode, "internal".equals(restriction));
-        if (!ITEM_MANUAL.equals(item.getItemTag()) || restriction == null || "none".equals(restriction)) { return; }
+        if (!ITEM_MANUAL.equals(item.getItemTag()) || restriction == null || "none".equals(restriction)) {
+            return;
+        }
         boolean hasManual = item.getReportFileIndexes() != null && !item.getReportFileIndexes().isEmpty();
         boolean hasSource = item.getReportSourceAttachmentIds() != null && !item.getReportSourceAttachmentIds().isEmpty();
         if ((!hasManual && !hasSource) || ("internal".equals(restriction) && !hasSource)) {
@@ -1305,7 +1351,9 @@ public class StockPoolAdjustService {
         boolean hasSource = false;
         boolean matchesSource = false;
         for (PoolRelationBo relation : relations) {
-            if (!poolId.equals(relation.getPoolId())) { continue; }
+            if (!poolId.equals(relation.getPoolId())) {
+                continue;
+            }
             if (RelationType.SOURCE.getCode().equals(relation.getRelationType())) {
                 hasSource = true;
                 matchesSource |= sourcePoolIds.contains(relation.getRelationPoolId());
@@ -1364,7 +1412,9 @@ public class StockPoolAdjustService {
      */
     private List<StockAdjustCheckDto.FlowOption> buildNormalFlowOptions(StockInfoBo stock, InvestmentPoolBo pool,
                                                                        String adjustMode, List<String> failures) {
-        if (pool == null) { return Collections.emptyList(); }
+        if (pool == null) {
+            return Collections.emptyList();
+        }
         boolean inbound = AdjustMode.IN.getCode().equals(adjustMode);
         List<StockAdjustCheckDto.FlowOption> options = new ArrayList<>();
         // 一般流程置于首位且默认推荐，快速流程由用户显式选择
@@ -1435,9 +1485,13 @@ public class StockPoolAdjustService {
         List<String> names = new ArrayList<>();
         Set<Long> visited = new HashSet<>();
         while (poolId != null) {
-            if (!visited.add(poolId)) { throw new BizException("投资池层级存在循环"); }
+            if (!visited.add(poolId)) {
+                throw new BizException("投资池层级存在循环");
+            }
             InvestmentPoolBo pool = poolMap.get(poolId);
-            if (pool == null) { throw new BizException("投资池父级配置不存在"); }
+            if (pool == null) {
+                throw new BizException("投资池父级配置不存在");
+            }
             names.add(pool.getPoolName() == null ? "" : pool.getPoolName());
             poolId = pool.getParentId();
         }
@@ -1508,9 +1562,13 @@ public class StockPoolAdjustService {
         }
         FlowSnapshot snapshot = new FlowSnapshot(definition, nodes, edges, configMap, handlerMap);
         // 确认开始、结束及审批配置完整后返回快照
-        if (findNode(nodes, NodeType.START.getCode()) == null || findNode(nodes, NodeType.END.getCode()) == null) { return null; }
+        if (findNode(nodes, NodeType.START.getCode()) == null || findNode(nodes, NodeType.END.getCode()) == null) {
+            return null;
+        }
         for (FlowNodeBo node : nodes) {
-            if (NodeType.APPROVAL.getCode().equals(node.getNodeType()) && !configMap.containsKey(node.getId())) { return null; }
+            if (NodeType.APPROVAL.getCode().equals(node.getNodeType()) && !configMap.containsKey(node.getId())) {
+                return null;
+            }
         }
         return snapshot;
     }
@@ -1539,14 +1597,18 @@ public class StockPoolAdjustService {
                                     String adjusterId, String adjusterName) {
         // 创建开始步骤，并沿所选流程推进至第一个人工待办或结束
         FlowNodeBo current = findNode(snapshot.nodes, NodeType.START.getCode());
-        if (current == null) { throw new BizException("审批流程缺少开始节点"); }
+        if (current == null) {
+            throw new BizException("审批流程缺少开始节点");
+        }
         insertStep(logId, batchNo, current, null, StepStatus.AUTO_PROCESS.getCode(),
                 null, null, ProcessAction.AUTO_PROCESS.getCode(), new Date());
         Set<Long> visited = new HashSet<>();
         while (current != null && current.getId() != null && visited.add(current.getId())) {
             // 根据发起人提交或普通通过动作选取确定的前向连线
             current = findNextNode(snapshot, current);
-            if (current == null) { throw new BizException("审批流程无法到达后续节点"); }
+            if (current == null) {
+                throw new BizException("审批流程无法到达后续节点");
+            }
             NodeApprovalConfigBo config = snapshot.configMap.get(current.getId());
             if (NodeType.END.getCode().equals(current.getNodeType())) {
                 insertStep(logId, batchNo, current, config, StepStatus.AUTO_PROCESS.getCode(),
@@ -1568,7 +1630,9 @@ public class StockPoolAdjustService {
             List<HandlerTarget> handlers = resolveHandlers(config, snapshot).stream()
                     .filter(handler -> AdminUserIdUtil.isAdminUser(handler.id) || !adjusterId.equals(handler.id))
                     .collect(Collectors.toList());
-            if (handlers.isEmpty()) { throw new BizException("审批节点无可用处理人：" + current.getLabel()); }
+            if (handlers.isEmpty()) {
+                throw new BizException("审批节点无可用处理人：" + current.getLabel());
+            }
             for (HandlerTarget handler : handlers) {
                 insertStep(logId, batchNo, current, config, StepStatus.PENDING.getCode(), handler.id, handler.name, null, null);
             }
@@ -1696,9 +1760,13 @@ public class StockPoolAdjustService {
             throw new BizException("审批流程连线路由不唯一：" + current.getLabel());
         }
         FlowEdgeBo edge = matched.isEmpty() ? (outgoing.isEmpty() ? null : outgoing.get(0)) : matched.get(0);
-        if (edge == null) { return null; }
+        if (edge == null) {
+            return null;
+        }
         for (FlowNodeBo node : snapshot.nodes) {
-            if (node.getId().equals(edge.getToNodeId())) { return node; }
+            if (node.getId().equals(edge.getToNodeId())) {
+                return node;
+            }
         }
         throw new BizException("审批流程连线目标节点不存在");
     }
@@ -1832,7 +1900,9 @@ public class StockPoolAdjustService {
         Map<String, StockInfoBo> lockedStocks = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         for (StockInfoBo stock : stocks) {
             StockInfoBo latest = stockPoolAdjustMapper.queryStockByCode(stock.getStockCode());
-            if (latest == null) { throw new BizException("股票主档不存在或已删除"); }
+            if (latest == null) {
+                throw new BizException("股票主档不存在或已删除");
+            }
             if (lockedStocks.put(stock.getStockCode(), latest) != null) {
                 throw new BizException("股票主档代码存在重复，请先处理数据，股票代码：" + stock.getStockCode());
             }
@@ -1856,7 +1926,9 @@ public class StockPoolAdjustService {
                 && !stock.getDelistDate().after(new Date()))) {
             throw new BizException("已终止或退市股票不能发起调库");
         }
-        if (!isSupportedMarket(stock.getMarketCode())) { throw new BizException("股票市场仅支持 SSE、SZSE、HKEX"); }
+        if (!isSupportedMarket(stock.getMarketCode())) {
+            throw new BizException("股票市场仅支持 SSE、SZSE、HKEX");
+        }
         return stock;
     }
 

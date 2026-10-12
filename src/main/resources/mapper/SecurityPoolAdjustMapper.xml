@@ -1061,11 +1061,6 @@
            ,full_name = #{securityInfo.fullName}
            ,issue_announcement = #{securityInfo.issueAnnouncement}
            ,short_name = #{securityInfo.shortName}
-           ,wind_code_sh = #{securityInfo.windCodeSh}
-           ,wind_code_sz = #{securityInfo.windCodeSz}
-           ,wind_code_nib = #{securityInfo.windCodeNib}
-           ,wind_code_bj = #{securityInfo.windCodeBj}
-           ,wind_code_nbc = #{securityInfo.windCodeNbc}
            ,security_type = #{securityInfo.securityType}
            ,term_year = #{securityInfo.termYear}
            ,term_day = #{securityInfo.termDay}
@@ -1142,11 +1137,6 @@
            ,guarant_flag = #{securityInfo.guarantFlag}
            ,guarant_type = #{securityInfo.guarantType}
            ,abs_flag = #{securityInfo.absFlag}
-           ,sec_id_sh = #{securityInfo.secIdSh}
-           ,sec_id_sz = #{securityInfo.secIdSz}
-           ,sec_id_nib = #{securityInfo.secIdNib}
-           ,sec_id_nbc = #{securityInfo.secIdNbc}
-           ,sec_id_bj = #{securityInfo.secIdBj}
         WHERE wind_code = #{securityCode}
     </update>
 
@@ -1494,10 +1484,6 @@
            ,short_name
            ,issuer
            ,issuer_code
-           ,wind_code_nib
-           ,wind_code_sh
-           ,wind_code_sz
-           ,wind_code_bj
            ,issue_amountplan
            ,coupon_rate
            ,date_inright_exists
@@ -1521,7 +1507,6 @@
            ,fund_use
            ,prompt_reason
            ,analysis
-           ,wind_code_nbc
            ,term_year
            ,term_day
            ,maturityembedded_desc
@@ -1556,10 +1541,6 @@
            ,#{shortName}
            ,#{issuer}
            ,#{issuerCode}
-           ,#{windCodeNib}
-           ,#{windCodeSh}
-           ,#{windCodeSz}
-           ,#{windCodeBj}
            ,#{issueAmountplan}
            ,#{couponRate}
            ,#{dateInrightExists}
@@ -1583,7 +1564,6 @@
            ,#{fundUse}
            ,#{promptReason}
            ,#{analysis}
-           ,#{windCodeNbc}
            ,#{termYear}
            ,#{termDay}
            ,#{maturityembeddedDesc}
@@ -1620,10 +1600,6 @@
                ,snap.short_name
                ,snap.issuer
                ,snap.issuer_code
-               ,snap.wind_code_nib
-               ,snap.wind_code_sh
-               ,snap.wind_code_sz
-               ,snap.wind_code_bj
                ,snap.issue_amountplan
                ,snap.coupon_rate
                ,snap.date_inright_exists
@@ -1647,7 +1623,6 @@
                ,snap.fund_use
                ,snap.prompt_reason
                ,snap.analysis
-               ,snap.wind_code_nbc
                ,snap.term_year
                ,snap.term_day
                ,snap.maturityembedded_desc
@@ -1678,10 +1653,6 @@
                ,snap.short_name
                ,snap.issuer
                ,snap.issuer_code
-               ,snap.wind_code_nib
-               ,snap.wind_code_sh
-               ,snap.wind_code_sz
-               ,snap.wind_code_bj
                ,snap.issue_amountplan
                ,snap.coupon_rate
                ,snap.date_inright_exists
@@ -1705,7 +1676,6 @@
                ,snap.fund_use
                ,snap.prompt_reason
                ,snap.analysis
-               ,snap.wind_code_nbc
                ,snap.term_year
                ,snap.term_day
                ,snap.maturityembedded_desc

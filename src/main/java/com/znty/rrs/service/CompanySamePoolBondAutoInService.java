@@ -25,6 +25,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -91,6 +92,9 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     /** 黑名单质押库三条件统一判定 */
     @Resource
     private PledgeBlacklistRuleService pledgeBlacklistRuleService;
+    /** 当前证券市场唯一映射校验组件。 */
+    @Resource
+    private SecurityMarketService securityMarketService;
 
     @Override
     public String getTaskCode() {
@@ -169,6 +173,12 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待入库同池债券");
                 continue;
             }
+            List<String> windCodes = new ArrayList<>();
+            for (ScheduledAdjustCandidateDto bond : bondList) {
+                windCodes.add(bond.getSecurityCode());
+            }
+            // SQL 按当前市场筛选后，再批量检查唯一映射，重复源数据不能直接自动落池
+            securityMarketService.queryMarketCodeMap(windCodes);
             int poolCount = 0;
             for (ScheduledAdjustCandidateDto bond : bondList) {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {

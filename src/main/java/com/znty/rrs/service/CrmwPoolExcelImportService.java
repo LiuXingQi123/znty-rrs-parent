@@ -11,7 +11,6 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.FlowType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.enums.ItemType;
-import com.znty.rrs.common.enums.MarketCode;
 import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.util.ExcelImportHelper;
@@ -60,6 +59,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Service
 public class CrmwPoolExcelImportService {
+
+    /** 统一证券市场查询组件。 */
+    @Resource
+    private SecurityMarketService securityMarketService;
 
     /** 导入批次业务类型 */
     private static final String BIZ_TYPE = "crmw_pool_excel";
@@ -743,6 +746,9 @@ public class CrmwPoolExcelImportService {
             return cache.get(key);
         }
         SecurityInfoDetailDto info = crmwPoolExcelImportMapper.querySecurityImportInfoByCode(key);
+        if (info != null) {
+            info.setMarketCode(securityMarketService.queryMarketCode(key));
+        }
         cache.put(key, info);
         return info;
     }
@@ -758,28 +764,12 @@ public class CrmwPoolExcelImportService {
         return trimToNull(info.getShortName());
     }
 
-    /** 按 Wind 市场字段推导市场编码列表 */
+    /** 读取当前 Wind 代码的唯一市场编码 */
     private String resolveMarketCodes(SecurityInfoDetailDto info) {
         if (info == null) {
             return null;
         }
-        List<String> codes = new ArrayList<>();
-        if (!isBlank(info.getWindCodeSh())) {
-            codes.add(MarketCode.SSE.getCode());
-        }
-        if (!isBlank(info.getWindCodeSz())) {
-            codes.add(MarketCode.SZSE.getCode());
-        }
-        if (!isBlank(info.getWindCodeNib())) {
-            codes.add(MarketCode.CIBM.getCode());
-        }
-        if (!isBlank(info.getWindCodeBj())) {
-            codes.add(MarketCode.BSE.getCode());
-        }
-        if (!isBlank(info.getWindCodeNbc())) {
-            codes.add(MarketCode.OTHER.getCode());
-        }
-        return codes.isEmpty() ? null : String.join(",", codes);
+        return info.getMarketCode();
     }
 
     /** 解析标的简称 */

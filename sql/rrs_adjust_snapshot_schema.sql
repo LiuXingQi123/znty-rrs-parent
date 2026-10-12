@@ -41,10 +41,6 @@ CREATE TABLE `ip_adjust_security_snapshot`
     `short_name`                 VARCHAR(100)   DEFAULT NULL COMMENT '证券简称',
     `issuer`                     VARCHAR(100)   DEFAULT NULL COMMENT '发行人',
     `issuer_code`                VARCHAR(20)    DEFAULT NULL COMMENT '发行人代码',
-    `wind_code_nib`              VARCHAR(100)   DEFAULT NULL COMMENT '银行间市场代码',
-    `wind_code_sh`               VARCHAR(100)   DEFAULT NULL COMMENT '沪市证券代码',
-    `wind_code_sz`               VARCHAR(100)   DEFAULT NULL COMMENT '深市证券代码',
-    `wind_code_bj`               VARCHAR(100)   DEFAULT NULL COMMENT '北交所代码',
     `issue_amountplan`           DECIMAL(10, 0) DEFAULT NULL COMMENT '发行规模(亿元)',
     `coupon_rate`                VARCHAR(100)   DEFAULT NULL COMMENT '票面利率(%)',
     `date_inright_exists`        DECIMAL(10, 4) DEFAULT NULL COMMENT '含权债剩余期限-最新（年）',
@@ -70,7 +66,6 @@ CREATE TABLE `ip_adjust_security_snapshot`
     `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字',
 
     -- ========== 预留：与 rrs_securityinfo 对应的仍用同名同类型 ==========
-    `wind_code_nbc`              VARCHAR(100)   DEFAULT NULL COMMENT '其他',
     `term_year`                  DECIMAL(10, 4) DEFAULT NULL COMMENT '证券期限(年)',
     `term_day`                   DECIMAL(10, 4) DEFAULT NULL COMMENT '证券期限(天)',
     `maturityembedded_desc`      VARCHAR(255)   DEFAULT NULL COMMENT '含权期限说明',
@@ -131,10 +126,6 @@ CREATE TABLE `ip_adjust_security_snapshot_crmw`
     `short_name`                 VARCHAR(100)   DEFAULT NULL COMMENT '证券简称',
     `issuer`                     VARCHAR(100)   DEFAULT NULL COMMENT '发行人',
     `issuer_code`                VARCHAR(20)    DEFAULT NULL COMMENT '发行人代码',
-    `wind_code_nib`              VARCHAR(100)   DEFAULT NULL COMMENT '银行间市场代码',
-    `wind_code_sh`               VARCHAR(100)   DEFAULT NULL COMMENT '沪市证券代码',
-    `wind_code_sz`               VARCHAR(100)   DEFAULT NULL COMMENT '深市证券代码',
-    `wind_code_bj`               VARCHAR(100)   DEFAULT NULL COMMENT '北交所代码',
     `issue_amountplan`           DECIMAL(10, 0) DEFAULT NULL COMMENT '发行规模(亿元)',
     `coupon_rate`                VARCHAR(100)   DEFAULT NULL COMMENT '票面利率(%)',
     `date_inright_exists`        DECIMAL(10, 4) DEFAULT NULL COMMENT '含权债剩余期限-最新（年）',
@@ -160,7 +151,6 @@ CREATE TABLE `ip_adjust_security_snapshot_crmw`
     `analysis`                   LONGTEXT       DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字',
 
     -- ========== 预留：与 rrs_securityinfo 对应的仍用同名同类型 ==========
-    `wind_code_nbc`              VARCHAR(100)   DEFAULT NULL COMMENT '其他',
     `term_year`                  DECIMAL(10, 4) DEFAULT NULL COMMENT '证券期限(年)',
     `term_day`                   DECIMAL(10, 4) DEFAULT NULL COMMENT '证券期限(天)',
     `maturityembedded_desc`      VARCHAR(255)   DEFAULT NULL COMMENT '含权期限说明',

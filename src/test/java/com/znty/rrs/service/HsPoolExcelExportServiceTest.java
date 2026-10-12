@@ -24,6 +24,9 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +40,7 @@ import static org.mockito.Mockito.when;
 /** 恒生池 Excel 导出任务单元测试。 */
 public class HsPoolExcelExportServiceTest {
 
-    /** 验证全量导出按叶子池建 Sheet、使用五列表头、拆分市场并生成备份。 */
+    /** 验证全量导出按叶子池建 Sheet、使用五列表头、按实际代码市场生成备份。 */
     @Test
     public void fullExportShouldCreateSheetsSplitMarketsAndBackupFile() throws Exception {
         HsPoolExcelExportMapper exportMapper = mock(HsPoolExcelExportMapper.class);
@@ -58,7 +61,7 @@ public class HsPoolExcelExportServiceTest {
             ScheduledTaskResult result = service.execute();
 
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getAffectedCount()).isEqualTo(2);
+            assertThat(result.getAffectedCount()).isEqualTo(1);
             String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
             assertThat(Paths.get(filePath).isAbsolute()).isTrue();
             assertThat(Paths.get(filePath).getFileName().toString()).startsWith("hs_pool_full_");
@@ -73,8 +76,7 @@ public class HsPoolExcelExportServiceTest {
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(0).getStringCellValue()).isEqualTo("测试债");
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(1).getStringCellValue()).isEqualTo("110001");
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(3).getStringCellValue()).isEqualTo("1");
-                assertThat(workbook.getSheet("恒生债池").getRow(2).getCell(1).getStringCellValue()).isEqualTo("112001");
-                assertThat(workbook.getSheet("恒生债池").getRow(2).getCell(3).getStringCellValue()).isEqualTo("4");
+                assertThat(workbook.getSheet("恒生债池").getLastRowNum()).isEqualTo(1);
                 assertThat(workbook.getSheet("恒生空池").getLastRowNum()).isZero();
             }
         } finally {
@@ -199,8 +201,7 @@ public class HsPoolExcelExportServiceTest {
             when(exportMapper.queryFullExportRowList(1L, false)).thenReturn(Collections.singletonList(row()));
             HsPoolExportRowDto secondRow = row();
             secondRow.setSecurityShortName("测试债二");
-            secondRow.setWindCodeSh("110002.SH");
-            secondRow.setWindCodeNib("112002.IB");
+            secondRow.setSecurityCode("110002.SH");
             when(exportMapper.queryFullExportRowList(2L, false)).thenReturn(Collections.singletonList(secondRow));
 
             ScheduledTaskResult result = service.execute();
@@ -210,7 +211,7 @@ public class HsPoolExcelExportServiceTest {
             String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
             try (XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(filePath))) {
                 assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
-                assertThat(workbook.getSheet("恒生债池").getLastRowNum()).isEqualTo(4);
+                assertThat(workbook.getSheet("恒生债池").getLastRowNum()).isEqualTo(2);
             }
         } finally {
             deleteDirectory(outputDir);
@@ -310,10 +311,11 @@ public class HsPoolExcelExportServiceTest {
             when(exportMapper.queryExportPoolList(Collections.singletonList(15L)))
                     .thenReturn(Collections.singletonList(pool(15L, "恒生债池")));
             HsPoolExportRowDto exportRow = row();
-            exportRow.setWindCodeSz("220001.SZ");
-            exportRow.setWindCodeBj("830001.BJ");
-            exportRow.setWindCodeNbc("US0001.N");
-            when(exportMapper.queryFullExportRowList(15L, false)).thenReturn(Collections.singletonList(exportRow));
+            HsPoolExportRowDto sz = row(); sz.setSecurityCode("220001.SZ");
+            HsPoolExportRowDto ib = row(); ib.setSecurityCode("112001.IB");
+            HsPoolExportRowDto bj = row(); bj.setSecurityCode("830001.BJ");
+            HsPoolExportRowDto other = row(); other.setSecurityCode("US0001.N");
+            when(exportMapper.queryFullExportRowList(15L, false)).thenReturn(Arrays.asList(exportRow, sz, ib, bj, other));
             Date endTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2026-08-31 10:30:00");
 
             CommonFileDto file = service.exportManual(Collections.singletonList(15L), null, endTime);
@@ -371,6 +373,17 @@ public class HsPoolExcelExportServiceTest {
     /** 注入任务测试依赖。 */
     private void inject(AbstractHsPoolExcelExportService service, HsPoolExcelExportMapper exportMapper,
                         ScheduledTaskMapper taskMapper, Path outputDir) {
+        SecurityMarketService markets = mock(SecurityMarketService.class);
+        when(markets.queryMarketCodeMap(org.mockito.ArgumentMatchers.anyList())).thenAnswer(invocation -> {
+            Map<String, String> values = new HashMap<>();
+            for (String code : (List<String>) invocation.getArgument(0)) {
+                String market = "112001.IB".equals(code) ? "CIBM" : "220001.SZ".equals(code) ? "SZSE"
+                        : "830001.BJ".equals(code) ? "BSE" : "US0001.N".equals(code) ? "OTHER" : "SSE";
+                values.put(code, market);
+            }
+            return values;
+        });
+        ReflectionTestUtils.setField(service, "securityMarketService", markets);
         ReflectionTestUtils.setField(service, "hsPoolExcelExportMapper", exportMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
         ReflectionTestUtils.setField(service, "defaultOutputDir", outputDir.toString());
@@ -394,12 +407,11 @@ public class HsPoolExcelExportServiceTest {
         return pool;
     }
 
-    /** 构造同时拥有沪市和银行间市场代码的证券。 */
+    /** 构造一条实际沪市在池证券。 */
     private HsPoolExportRowDto row() {
         HsPoolExportRowDto row = new HsPoolExportRowDto();
         row.setSecurityShortName("测试债");
-        row.setWindCodeSh("110001.IB");
-        row.setWindCodeNib("112001.IB");
+        row.setSecurityCode("110001.SH");
         return row;
     }
 

@@ -30,6 +30,8 @@
 
 跨页多选键：`crmwScode|securityCode`。
 
+市场仅展示和筛选标的当前代码的唯一市场：通过 `wind_code` 精确关联 Wind `S_INFO_WINDCODE`，读取 `S_INFO_EXCHMARKET`（IB→CIBM）；临时代码取登记市场。候选 SQL 使用 EXISTS 筛选，当前页批量补充市场，避免关联表造成重复分页和逐行查询。缺失、重复、不支持的市场映射报出具体代码，同券其他市场不能使当前代码通过池的市场限制。
+
 ---
 
 ## 3. 校验与提交

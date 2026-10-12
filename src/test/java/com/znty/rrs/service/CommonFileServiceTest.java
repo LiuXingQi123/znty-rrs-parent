@@ -88,7 +88,9 @@ public class CommonFileServiceTest {
         try (Workbook book = new XSSFWorkbook(new ByteArrayInputStream(Base64.getDecoder().decode(dto.getContentBase64())))) {
             String[] headers = {"父池名称", "子池名称", "股票名称", "股票代码"};
             assertEquals(4, book.getSheetAt(0).getRow(0).getLastCellNum());
-            for (int column = 0; column < 4; column++) { assertEquals(headers[column], book.getSheetAt(0).getRow(0).getCell(column).getStringCellValue()); }
+            for (int column = 0; column < 4; column++) {
+                assertEquals(headers[column], book.getSheetAt(0).getRow(0).getCell(column).getStringCellValue());
+            }
             assertEquals("@", book.getSheetAt(0).getRow(1).getCell(3).getCellStyle().getDataFormatString());
             assertEquals("填写说明", book.getSheetAt(1).getSheetName());
         }

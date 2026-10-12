@@ -4,6 +4,11 @@
 > 后端前缀：`/api/v1/securityPoolAdjust`（查询/校验/提交）、`/api/v1/securityPoolAdjustFlow`（修改节点重新提交）
 > 角色定位：申请人、审批人和审计人员查看单只证券及其调库批次的完整业务上下文（池状态、历史记录、流程步骤），并可对未终结流程执行后续动作。
 
+
+### 证券市场与历史展示
+
+证券主档仅保留当前 `wind_code`，独立外部 `sec_id` 位于主档末尾。市场经统一服务读取 Wind `S_INFO_EXCHMARKET`（IB→CIBM），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind 非空 ISIN 关联同券代码；空 ISIN 不关联，同市场多个代码完整展示。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
+
 ---
 
 ## 0. 重要现状说明（与"修改节点重新提交"的真实归属）

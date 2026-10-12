@@ -273,15 +273,22 @@ public class StockPoolIntegrationTest {
         ExecutorService workers=Executors.newFixedThreadPool(4);
         try {
             List<Future<Long>> results=new ArrayList<>();
-            for(int i=0;i<8;i++) results.add(workers.submit(() -> queries.addStockToMyPool(favorite("600001.SH","2")).getId()));
-            Set<Long> ids=new HashSet<>(); for(Future<Long> result:results) ids.add(result.get(15,TimeUnit.SECONDS));
+            for (int i = 0; i < 8; i++) {
+                results.add(workers.submit(() -> queries.addStockToMyPool(favorite("600001.SH","2")).getId()));
+            }
+            Set<Long> ids = new HashSet<>();
+            for (Future<Long> result : results) {
+                ids.add(result.get(15,TimeUnit.SECONDS));
+            }
             assertThat(ids).hasSize(1); assertThat(count("my_security_pool")).isEqualTo(1);
             queries.addStockToMyPool(favorite("600001.SH","3"));
             queries.deleteStockFromMyPool(favorite("600001.SH","2"));
             queries.deleteStockFromMyPool(favorite("600001.SH","2"));
             assertThat(queries.queryFavoritedCodeList(favorite(null,"2"))).isEmpty();
             assertThat(queries.queryFavoritedCodeList(favorite(null,"3"))).containsExactly("600001.SH");
-        } finally { workers.shutdownNow(); }
+        } finally {
+            workers.shutdownNow();
+        }
     }
 
     /** 非空评级准入在提交和终审检查，未知编码配置不能默认放行。 */
@@ -306,16 +313,31 @@ public class StockPoolIntegrationTest {
         ExecutorService workers=Executors.newFixedThreadPool(2); CountDownLatch ready=new CountDownLatch(2),start=new CountDownLatch(1);
         try {
             List<Future<Boolean>> results=new ArrayList<>();
-            for(StockPoolAdjustAuditReq req:Arrays.asList(ar,br)) results.add(workers.submit(() -> {
-                ready.countDown(); start.await();
-                try { audit.submitAdjustAudit(req); return true; }
-                catch(BizException ex) { assertThat(ex.getMessage()).contains("容量已满"); return false; }
-            }));
+            for (StockPoolAdjustAuditReq req : Arrays.asList(ar,br)) {
+                results.add(workers.submit(() -> {
+                    ready.countDown();
+                    start.await();
+                    try {
+                        audit.submitAdjustAudit(req);
+                        return true;
+                    } catch (BizException ex) {
+                        assertThat(ex.getMessage()).contains("容量已满");
+                        return false;
+                    }
+                }));
+            }
             assertThat(ready.await(10,TimeUnit.SECONDS)).isTrue(); start.countDown();
-            int completed=0; for(Future<Boolean> result:results) if(result.get(15,TimeUnit.SECONDS)) completed++;
+            int completed = 0;
+            for (Future<Boolean> result : results) {
+                if (result.get(15,TimeUnit.SECONDS)) {
+                    completed++;
+                }
+            }
             assertThat(completed).isEqualTo(1); assertThat(count("ip_pool_status_stock")).isEqualTo(1);
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_step_stock WHERE step_status='pending'",Integer.class)).isEqualTo(1);
-        } finally { workers.shutdownNow(); }
+        } finally {
+            workers.shutdownNow();
+        }
     }
 
     /** 会签要等待全部处理人；未授权人员、伪造步骤上下文和发起人不能处理普通节点。 */
@@ -480,7 +502,9 @@ public class StockPoolIntegrationTest {
     @Test public void batchSecondStockPreparationFailureShouldPerformZeroWrites() throws Exception {
         // 先取得两只有效股票的完整申请，再模拟第二只股票退市。
         BatchStockAdjustReq request = batchRequest("600001.SH", "600002.SH");
-        for (BatchStockAdjustReq.AdjustItem row : request.getItems()) { row.setReportFileIndexes(Collections.singletonList(0)); }
+        for (BatchStockAdjustReq.AdjustItem row : request.getItems()) {
+            row.setReportFileIndexes(Collections.singletonList(0));
+        }
         sql("UPDATE rrs_stockinfo SET security_status='D' WHERE stock_code='600002.SH'");
         // 观察真实 Mapper 写入调用，区分预检零写入与写后事务回滚。
         StockPoolAdjustMapper observed = observeAdjustments();
@@ -499,7 +523,9 @@ public class StockPoolIntegrationTest {
     @Test public void batchLaterStockWriteFailureShouldRollbackAllRecordsAndSharedFile() throws Exception {
         // 两只股票共享报告，第一只完成日志、附件及初始步骤保存。
         BatchStockAdjustReq request = batchRequest("600001.SH", "600002.SH");
-        for (BatchStockAdjustReq.AdjustItem row : request.getItems()) { row.setReportFileIndexes(Collections.singletonList(0)); }
+        for (BatchStockAdjustReq.AdjustItem row : request.getItems()) {
+            row.setReportFileIndexes(Collections.singletonList(0));
+        }
         // 委托真实 Mapper，仅在第二只股票写入时模拟持久化错误。
         StockPoolAdjustMapper observed = observeAdjustments();
         boolean[] firstStockWasStored = {false};
@@ -590,7 +616,9 @@ public class StockPoolIntegrationTest {
         // 两只股票使用同一份本地报告满足目标池 any 要求。
         sql("UPDATE ip_investment_pool SET in_report_restriction='any' WHERE id=1");
         BatchStockAdjustReq request = batchRequest("600001.SH", "600002.SH");
-        for (BatchStockAdjustReq.AdjustItem row : request.getItems()) { row.setReportFileIndexes(Collections.singletonList(0)); }
+        for (BatchStockAdjustReq.AdjustItem row : request.getItems()) {
+            row.setReportFileIndexes(Collections.singletonList(0));
+        }
         MockMultipartFile file = new MockMultipartFile("files", "report.pdf", "application/pdf", new byte[]{1});
         batches.addAdjustLog(request, Collections.singletonList(file), "[\"股票报告.pdf\"]");
         // 模拟第二只股票的已绑定报告被逻辑删除。
@@ -736,8 +764,9 @@ public class StockPoolIntegrationTest {
         List<FlowNodeBo> nodes=new ArrayList<>(); List<FlowEdgeBo> edges=new ArrayList<>(); List<NodeApprovalConfigBo> configs=new ArrayList<>();
         long base=id*10; nodes.add(node(base+1,id,"start","开始")); nodes.add(node(base+2,id,"approval","发起")); nodes.add(node(base+5,id,"end","结束"));
         configs.add(config(base+2,"initiator")); edges.add(edge(base+1,base+2,"auto"));
-        if(fast) { edges.add(edge(base+2,base+5,"submit")); }
-        else {
+        if (fast) {
+            edges.add(edge(base+2,base+5,"submit"));
+        } else {
             nodes.add(node(base+3,id,"approval","审核")); nodes.add(node(base+4,id,"approval","修改"));
             configs.add(config(base+3,strategy)); configs.add(config(base+4,"initiator"));
             edges.add(edge(base+2,base+3,"submit")); edges.add(edge(base+3,base+5,"approve")); edges.add(edge(base+3,base+4,"reject"));
@@ -748,7 +777,9 @@ public class StockPoolIntegrationTest {
         when(flows.queryFlowNodeListByVersionId(id)).thenReturn(nodes); when(flows.queryFlowEdgeListByVersionId(id)).thenReturn(edges);
         when(flows.queryApprovalConfigListByVersionId(id)).thenReturn(configs);
         when(flows.queryApprovalHandlerListByVersionId(id)).thenAnswer(call -> new ArrayList<>(handlers));
-        for(FlowNodeBo node:nodes) when(flows.queryFlowNodeById(node.getId())).thenReturn(node);
+        for (FlowNodeBo node : nodes) {
+            when(flows.queryFlowNodeById(node.getId())).thenReturn(node);
+        }
     }
 
     /** 创建流程节点。 */
@@ -768,7 +799,11 @@ public class StockPoolIntegrationTest {
         BatchStockAdjustReq request = new BatchStockAdjustReq(); request.setCurrentUserId("1"); request.setPoolId(1L); request.setDirection("in");
         request.setAdjusterId("1"); request.setAdjusterName("管理员"); request.setAdjustReason("批量调整原因");
         List<BatchStockAdjustReq.StockItem> stocks = new ArrayList<>();
-        for (String code : codes) { BatchStockAdjustReq.StockItem stock = new BatchStockAdjustReq.StockItem(); stock.setStockCode(code); stocks.add(stock); }
+        for (String code : codes) {
+            BatchStockAdjustReq.StockItem stock = new BatchStockAdjustReq.StockItem();
+            stock.setStockCode(code);
+            stocks.add(stock);
+        }
         request.setStocks(stocks);
         List<BatchStockAdjustReq.AdjustItem> items = new ArrayList<>();
         for (StockAdjustCheckDto.CheckResultItem row : batches.checkAdjust(request).getItems()) {
@@ -819,7 +854,11 @@ public class StockPoolIntegrationTest {
     /** 查询固定测试表行数。 */
     private int count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM "+table,Integer.class); }
     /** 在 H2 执行固定测试数据准备。 */
-    private void sql(String... commands) { for(String command:commands) jdbc.execute(command); }
+    private void sql(String... commands) {
+        for (String command : commands) {
+            jdbc.execute(command);
+        }
+    }
     /** 打开服务实际导出的 Excel。 */
     private XSSFWorkbook workbook(CommonFileDto file) throws Exception { return new XSSFWorkbook(new ByteArrayInputStream(Base64.getDecoder().decode(file.getContentBase64()))); }
     /** 使用服务注解创建真正事务代理。 */

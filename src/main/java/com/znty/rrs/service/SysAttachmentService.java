@@ -463,7 +463,9 @@ public class SysAttachmentService {
 
     /** 核实选择的股票研究报告来源，报告必须属于当前股票。 */
     public void validateStockReportSources(List<Long> ids, String stockCode, boolean internalOnly) {
-        if (ids == null || ids.isEmpty()) { return; }
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
         validateCreditReportSources(ids, internalOnly);
         List<SysAttachmentBo> sources = sysAttachmentMapper.queryAttachmentListByIds(new ArrayList<>(new LinkedHashSet<>(ids)));
         for (SysAttachmentBo source : sources) {
@@ -508,11 +510,17 @@ public class SysAttachmentService {
             deleteAdjustLogAttachments(adjustLogId, attachmentIds);
             return;
         }
-        if (attachmentIds == null || attachmentIds.isEmpty()) { return; }
-        if (adjustLogId == null || adjustLogId <= 0) { throw new BizException("删除附件失败：调库日志 ID 无效"); }
+        if (attachmentIds == null || attachmentIds.isEmpty()) {
+            return;
+        }
+        if (adjustLogId == null || adjustLogId <= 0) {
+            throw new BizException("删除附件失败：调库日志 ID 无效");
+        }
         List<Long> ids = new ArrayList<>(new LinkedHashSet<>(attachmentIds));
         List<SysAttachmentBo> attachments = sysAttachmentMapper.queryAttachmentListByIds(ids);
-        if (attachments == null || attachments.size() != ids.size()) { throw new BizException("删除附件失败：存在无效附件 ID"); }
+        if (attachments == null || attachments.size() != ids.size()) {
+            throw new BizException("删除附件失败：存在无效附件 ID");
+        }
         for (SysAttachmentBo attachment : attachments) {
             if (!tableName.equals(attachment.getTableName()) || !adjustLogId.equals(attachment.getMainId())) {
                 throw new BizException("删除附件失败：附件不属于当前业务调库记录");
@@ -525,7 +533,9 @@ public class SysAttachmentService {
 
     /** 查询股票日志手工报告，完整限定业务表和附件分类。 */
     public List<SysAttachmentBo> queryHandStockReportAttachments(Long adjustLogId) {
-        if (adjustLogId == null) { throw new BizException("调库日志 ID 不能为空"); }
+        if (adjustLogId == null) {
+            throw new BizException("调库日志 ID 不能为空");
+        }
         return sysAttachmentMapper.queryHandStockReportAttachments(adjustLogId);
     }
 

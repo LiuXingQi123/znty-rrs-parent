@@ -61,20 +61,10 @@ public class SecurityCodeConversionBo {
     /** 主档证券简称 */
     private String shortName;
 
-    /** 主档沪市证券代码 */
-    private String windCodeSh;
 
-    /** 主档深市证券代码 */
-    private String windCodeSz;
 
-    /** 主档银行间市场代码 */
-    private String windCodeNib;
 
-    /** 主档北交所代码 */
-    private String windCodeBj;
 
-    /** 主档其他市场代码 */
-    private String windCodeNbc;
 
     /** 池状态证券简称 */
     private String securityShortName;

@@ -46,6 +46,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
+        ReflectionTestUtils.setField(service, "securityMarketService", mock(SecurityMarketService.class));
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -133,6 +134,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         PledgeBlacklistRuleService ruleService = mock(PledgeBlacklistRuleService.class);
         CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
+        ReflectionTestUtils.setField(service, "securityMarketService", mock(SecurityMarketService.class));
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -191,6 +193,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
+        ReflectionTestUtils.setField(service, "securityMarketService", mock(SecurityMarketService.class));
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
@@ -212,6 +215,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
+        ReflectionTestUtils.setField(service, "securityMarketService", mock(SecurityMarketService.class));
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -241,6 +245,7 @@ public class CompanySamePoolBondAutoInServiceTest {
     @Test
     public void parsePoolIds_ShouldAcceptJsonArray() {
         CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
+        ReflectionTestUtils.setField(service, "securityMarketService", mock(SecurityMarketService.class));
         List<Long> ids = service.parsePoolIds("{\"poolIds\":[15,16]}");
         assertThat(ids).containsExactly(15L, 16L);
         assertThatThrownBy(() -> service.parsePoolIds("{}")).isInstanceOf(BizException.class);

@@ -110,7 +110,9 @@ public class BatchStockPoolAdjustServiceTest {
     public void checkShouldIsolateFailedStocksAndCompleteRelationGroups() {
         doAnswer(call -> {
             StockAdjustCheckReq req = call.getArgument(0);
-            if ("600001.SH".equals(req.getStockCode())) { throw new BizException("股票已退市"); }
+            if ("600001.SH".equals(req.getStockCode())) {
+                throw new BizException("股票已退市");
+            }
             StockAdjustCheckDto dto = new StockAdjustCheckDto();
             // 同一股票的失败联动项必须连同主项隔离
             dto.setItems(Arrays.asList(row(req.getStockCode(), 10L, "manual", "调入", true),

@@ -19,16 +19,6 @@ public class SecurityInfoBo {
     private String issueAnnouncement;
     /** 证券简称 */
     private String shortName;
-    /** 沪市证券代码 */
-    private String windCodeSh;
-    /** 深市证券代码 */
-    private String windCodeSz;
-    /** 银行间市场代码 */
-    private String windCodeNib;
-    /** 北交所代码 */
-    private String windCodeBj;
-    /** 其他 */
-    private String windCodeNbc;
     /** 证券类型编码 */
     private String securityType;
     /** 证券期限(年) */
@@ -185,18 +175,10 @@ public class SecurityInfoBo {
     private String guarantType;
     /** 是否 ABS */
     private Integer absFlag;
-    /** 沪市证券id */
-    private String secIdSh;
-    /** 深市证券id */
-    private String secIdSz;
-    /** 银行间证券id */
-    private String secIdNib;
-    /** 其他证券id */
-    private String secIdNbc;
-    /** 北交所证券id */
-    private String secIdBj;
     /** 标准条款判定：1=条款合格 / 0=条款不合格 / null=未判定 */
     private Integer stdClauseFlag;
     /** 标准信用债标识：1=标准信用债 / 0=非标准信用债 / null=未判定 */
     private Integer stdCreditFlag;
+    /** 外部独立证券 ID。 */
+    private String secId;
 }

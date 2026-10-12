@@ -1,6 +1,19 @@
 package com.znty.rrs.service;
 
 import org.junit.Assume;
+import com.znty.rrs.mapper.SecurityMarketMapper;
+import com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper;
+import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
+import com.znty.rrs.entity.common.SecurityMarketDto;
+import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.springframework.test.util.ReflectionTestUtils;
+import java.io.InputStream;
+import java.util.Arrays;
 import org.junit.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -18,6 +31,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Wind 跨市场证券代码表结构与演示数据关联测试。 */
 public class WindCustomCodeDemoDataTest {
@@ -46,6 +60,18 @@ public class WindCustomCodeDemoDataTest {
                 "S_INFO_TYPECODE BIGINT", "S_INFO_MIN_PRICE_CHG_UNIT DOUBLE", "S_INFO_LOT_SIZE FLOAT",
                 "S_INFO_ENAME VARCHAR(200)", "TRADING_HOURS_CODE VARCHAR(10)", "S_INFO_SECTYPEBCODE BIGINT",
                 "S_INFO_SECTYPESCODE BIGINT", "S_INFO_PINYIN VARCHAR(40)", "OPDATE DATE", "OPMODE VARCHAR(1)");
+    }
+
+    /** 主档独立 ID 位于末尾，主档和两张快照都不保留旧市场列。 */
+    @Test
+    public void securitySchemaShouldUseIndependentIdAndRemoveSnapshotMarketColumns() throws Exception {
+        String master = extractStatement(readSql("rrs_external_import_schema.sql"), "CREATE TABLE", "rrs_securityinfo");
+        assertThat(master).doesNotContain("wind_code_sh", "wind_code_sz", "wind_code_nib", "wind_code_nbc", "wind_code_bj",
+                "sec_id_sh", "sec_id_sz", "sec_id_nib", "sec_id_nbc", "sec_id_bj");
+        assertThat(master.substring(master.indexOf("`sec_id`"))).contains("varchar(100)", "DEFAULT NULL", "证券 ID");
+        assertThat(master.substring(master.indexOf("`sec_id`") + 8, master.indexOf("PRIMARY KEY"))).doesNotContain("`");
+        String snapshots = readSql("rrs_adjust_snapshot_schema.sql");
+        assertThat(snapshots).doesNotContain("wind_code_sh", "wind_code_sz", "wind_code_nib", "wind_code_nbc", "wind_code_bj");
     }
 
     /** 在 H2 执行真实 DDL 和 Demo，验证跨库关联、市场代码及重复初始化。 */
@@ -85,7 +111,7 @@ public class WindCustomCodeDemoDataTest {
                     ScriptUtils.executeSqlScript(connection, new ByteArrayResource(insert.getBytes(StandardCharsets.UTF_8)));
                 }
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode", Integer.class))
-                        .isEqualTo(10);
+                        .isEqualTo(49);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
                         + " LEFT JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = w.S_INFO_WINDCODE"
                         + " WHERE s.wind_code IS NULL OR s.isin_code <> w.S_INFO_ISINCODE"
@@ -95,20 +121,59 @@ public class WindCustomCodeDemoDataTest {
                         + " WHERE S_INFO_ISINCODE IS NOT NULL GROUP BY S_INFO_ISINCODE"
                         + " HAVING COUNT(*) = 3 AND COUNT(DISTINCT EXCHMARKET) = 3", String.class))
                         .containsExactlyInAnyOrder("CNDEMO000293", "CNDEMO000301", "CNDEMO000319");
-                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
-                        + " JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = w.S_INFO_WINDCODE"
-                        + " WHERE w.S_INFO_SECURITIESTYPES = 'Q' AND ("
-                        + " s.wind_code_sh IS NULL OR s.wind_code_sz IS NULL OR s.wind_code_nib IS NULL"
-                        + " OR (w.EXCHMARKET = 'SSE' AND (s.wind_code_sh <> s.wind_code OR s.sec_id_sh <> w.S_INFO_ASHARECODE))"
-                        + " OR (w.EXCHMARKET = 'SZSE' AND (s.wind_code_sz <> s.wind_code OR s.sec_id_sz <> w.S_INFO_ASHARECODE))"
-                        + " OR (w.EXCHMARKET = 'IB' AND (s.wind_code_nib <> s.wind_code OR s.sec_id_nib <> w.S_INFO_ASHARECODE)))",
-                        Integer.class)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE sec_id IS NULL", Integer.class)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(51);
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND isin_code IS NULL", Integer.class)).isEqualTo(2);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
                         + " LEFT JOIN ais_inv_ods.wind_cbondissuer i ON i.s_info_windcode = w.S_INFO_WINDCODE"
                         + " AND i.s_info_compcode = w.S_INFO_COMPCODE WHERE i.object_id IS NULL", Integer.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode"
                         + " WHERE S_INFO_ISINCODE = 'CNDEMO000426' AND S_INFO_SECURITIESTYPES = 'K'", Integer.class))
                         .isEqualTo(1);
+            }
+            connection.setSchema("znty_rrs");
+            connection.createStatement().execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(100))");
+            connection.createStatement().execute("INSERT INTO rrs_temp_security_code VALUES ('TMP001.IB', 'CIBM'), ('TMP003.IB', 'CIBM')");
+            ds.setUrl(ds.getUrl() + ";SCHEMA=znty_rrs");
+            Configuration config = new Configuration(new Environment("test", new JdbcTransactionFactory(), ds));
+            config.setMapUnderscoreToCamelCase(true);
+            try (InputStream xml = Files.newInputStream(Paths.get("src/main/resources/mapper/SecurityMarketMapper.xml"))) {
+                new XMLMapperBuilder(xml, config, "SecurityMarketMapper.xml", config.getSqlFragments()).parse();
+            }
+            try (InputStream xml = Files.newInputStream(Paths.get("src/main/resources/mapper/BatchSecurityPoolAdjustMapper.xml"))) {
+                new XMLMapperBuilder(xml, config, "BatchSecurityPoolAdjustMapper.xml", config.getSqlFragments()).parse();
+            }
+            try (SqlSession session = new SqlSessionFactoryBuilder().build(config).openSession()) {
+                SecurityMarketService service = new SecurityMarketService();
+                ReflectionTestUtils.setField(service, "securityMarketMapper", session.getMapper(SecurityMarketMapper.class));
+                for (List<String> group : Arrays.asList(Arrays.asList("XYB001.IB", "198101.SH", "128101.SZ"),
+                        Arrays.asList("XYB002.IB", "198102.SH", "128102.SZ"), Arrays.asList("XYB003.IB", "198103.SH", "128103.SZ"))) {
+                    for (String code : group) {
+                        List<String> expected = new ArrayList<>(group); expected.remove(code);
+                        assertThat(service.queryRelatedMarketCodes(code)).extracting(SecurityMarketDto::getWindCode)
+                                .containsExactlyInAnyOrderElementsOf(expected);
+                    }
+                }
+                assertThat(service.queryMarketCode("XYB001.IB")).isEqualTo("CIBM");
+                assertThat(service.queryMarketCode("198101.SH")).isEqualTo("SSE");
+                assertThat(service.queryMarketCode("CORP001.IB")).isEqualTo("OTHER");
+                assertThat(service.queryRelatedMarketCodes("TMP001.IB")).isEmpty();
+                assertThat(service.queryRelatedMarketCodes("TMP003.IB")).isEmpty();
+                assertThat(service.queryRelatedMarketCodes("CB001.SH")).isEmpty();
+                connection.createStatement().execute("INSERT INTO ais_inv_ods.wind_windcustomcode (OBJECT_ID, S_INFO_WINDCODE, S_INFO_EXCHMARKET, S_INFO_ISINCODE) VALUES ('EMPTY1', 'EMPTY1.SH', 'SSE', ''), ('EMPTY2', 'EMPTY2.SH', 'SSE', ''), ('BLANK1', 'BLANK1.SH', 'SSE', '   '), ('BLANK2', 'BLANK2.SH', 'SSE', '   ')");
+                for (String code : Arrays.asList("EMPTY1.SH", "EMPTY2.SH", "BLANK1.SH", "BLANK2.SH")) {
+                    assertThat(service.queryRelatedMarketCodes(code)).isEmpty();
+                }
+                BatchSecurityPoolAdjustMapper batch = session.getMapper(BatchSecurityPoolAdjustMapper.class);
+                BatchSecurityPoolAdjustReq filter = new BatchSecurityPoolAdjustReq();
+                filter.setMarketCodes(Arrays.asList("SSE")); filter.setSecurityCode("XYB001.IB");
+                assertThat(batch.querySecurityPage(filter)).isEmpty();
+                filter.setSecurityCode("198101.SH");
+                assertThat(batch.querySecurityPage(filter)).hasSize(1);
+                connection.createStatement().execute("INSERT INTO ais_inv_ods.wind_windcustomcode (OBJECT_ID, S_INFO_WINDCODE, S_INFO_EXCHMARKET, S_INFO_ISINCODE) VALUES ('DUP', '198101.SH', 'SSE', 'CNDEMO000293')");
+                session.clearCache();
+                assertThat(batch.querySecurityPage(filter)).hasSize(1);
+                assertThatThrownBy(() -> service.queryMarketCode("198101.SH")).hasMessageContaining("重复").hasMessageContaining("198101.SH");
             }
         }
     }

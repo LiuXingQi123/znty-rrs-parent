@@ -27,6 +27,7 @@ import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
@@ -464,13 +465,14 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        SecurityMarketService markets = mock(SecurityMarketService.class);
+        ReflectionTestUtils.setField(service, "securityMarketService", markets);
         // 目标池仅允许 SSE（沪市），证券仅在深市
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         pool.setPoolName("沪市池");
         pool.setMarketCodes("[\"SSE\"]");
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setWindCodeSz("123.SZ");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
         ctx.setTargetPool(pool);
@@ -3149,11 +3151,17 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityInfoBo main = new SecurityInfoBo();
         main.setWindCode("101.IB");
-        main.setWindCodeSh("101.SH");
-        main.setWindCodeSz("101.SZ");
-        main.setWindCodeNib("101.IB"); // 与主码相同，应跳过
-        main.setWindCodeBj("");
-        main.setWindCodeNbc(null);
+        SecurityMarketService markets = mock(SecurityMarketService.class);
+        ReflectionTestUtils.setField(service, "securityMarketService", markets);
+        List<SecurityMarketDto> related = new ArrayList<>();
+        SecurityMarketDto related0 = new SecurityMarketDto();
+        related0.setWindCode("101.SH");
+        related.add(related0);
+        SecurityMarketDto related1 = new SecurityMarketDto();
+        related1.setWindCode("101.SZ");
+        related.add(related1);
+        when(markets.queryRelatedMarketCodes("101.IB")).thenReturn(related);
+
 
         @SuppressWarnings("unchecked")
         List<String> codes = ReflectionTestUtils.invokeMethod(service, "resolveRelatedSecurityCodes", main);
@@ -3170,10 +3178,19 @@ public class SecurityPoolAdjustServiceStepTest {
 
         SecurityInfoBo main = new SecurityInfoBo();
         main.setWindCode("101.IB");
+        SecurityMarketService markets = mock(SecurityMarketService.class);
+        ReflectionTestUtils.setField(service, "securityMarketService", markets);
+        List<SecurityMarketDto> related = new ArrayList<>();
+        SecurityMarketDto related0 = new SecurityMarketDto();
+        related0.setWindCode("101.SH");
+        related.add(related0);
+        SecurityMarketDto related1 = new SecurityMarketDto();
+        related1.setWindCode("MISSING.SZ");
+        related.add(related1);
+        when(markets.queryRelatedMarketCodes("101.IB")).thenReturn(related);
+
         main.setShortName("主券");
         main.setSecurityType("mtn");
-        main.setWindCodeSh("101.SH");
-        main.setWindCodeSz("MISSING.SZ");
 
         SecurityInfoBo relatedSh = new SecurityInfoBo();
         relatedSh.setWindCode("101.SH");

@@ -146,3 +146,7 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 - `ExcelImportHelper`（POI）
 - 模板：`classpath:xlsx/security_pool_import.xlsx`、`company_pool_import.xlsx`
 - 前端：`pages/security_pool_excel_import.html`、`css/security_pool_excel_import.css`
+
+## 当前市场口径
+
+市场按当前 Wind 代码在 `wind_windcustomcode.S_INFO_EXCHMARKET` 的唯一映射校验，IB→CIBM；临时代码使用登记表市场。关联券其他市场不使当前代码通过市场限制。批量候选用 EXISTS 筛选，展示按当前页批量查询唯一市场，避免关联连接重复分页或逐行市场查询。CRMW 导入复用证券主档缓存，同一代码的市场只查询一次。缺失、重复或不支持的映射报出具体代码。

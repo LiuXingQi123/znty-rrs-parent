@@ -768,11 +768,6 @@
            ,full_name = #{securityInfo.fullName}
            ,issue_announcement = #{securityInfo.issueAnnouncement}
            ,short_name = #{securityInfo.shortName}
-           ,wind_code_sh = #{securityInfo.windCodeSh}
-           ,wind_code_sz = #{securityInfo.windCodeSz}
-           ,wind_code_nib = #{securityInfo.windCodeNib}
-           ,wind_code_bj = #{securityInfo.windCodeBj}
-           ,wind_code_nbc = #{securityInfo.windCodeNbc}
            ,security_type = #{securityInfo.securityType}
            ,term_year = #{securityInfo.termYear}
            ,term_day = #{securityInfo.termDay}
@@ -849,11 +844,6 @@
            ,guarant_flag = #{securityInfo.guarantFlag}
            ,guarant_type = #{securityInfo.guarantType}
            ,abs_flag = #{securityInfo.absFlag}
-           ,sec_id_sh = #{securityInfo.secIdSh}
-           ,sec_id_sz = #{securityInfo.secIdSz}
-           ,sec_id_nib = #{securityInfo.secIdNib}
-           ,sec_id_nbc = #{securityInfo.secIdNbc}
-           ,sec_id_bj = #{securityInfo.secIdBj}
         WHERE wind_code = #{securityCode}
     </update>
 

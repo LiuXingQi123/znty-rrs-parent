@@ -329,6 +329,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         // 批量校验已委托单笔 SecurityPoolAdjustService，需同步注入相同 mock
         SecurityPoolAdjustService securityPoolAdjustService = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(securityPoolAdjustService, "securityMarketService", mock(SecurityMarketService.class));
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);

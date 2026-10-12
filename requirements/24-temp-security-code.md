@@ -65,7 +65,7 @@
 
 1. `validateUpdateReq`（仅 id + 正式证券代码必填）→ `queryOperableTempSecurityCode`（必须 `temporary`）
 2. 正式证券从主数据选券校验（`queryFormalSecurityByCode`，排除 temporary 占位）；正式码不能等于临时码
-3. 临时字段只读（用库内原值）；正式字段以主数据结果为准
+3. 临时字段只读（用库内原值）；正式名称、类型以主数据结果为准，市场经统一服务查询当前正式 Wind 代码的唯一映射；不覆盖正式主档的独立 `sec_id`
 4. **先写主表** `status=updated`（`WHERE id AND is_deleted=0 AND status='temporary'`，影响行数必须为 1）；再改调库/池状态。避免替换 SQL 的 `id` 绑定把主表更新冲成 0 行后仍返回成功
 5. **业务分叉**（`convertTempSecurityBusinessData`）：
    - **在途调库日志**（`ip_adjust_log.audit_status in ('00','11')`，对齐老 `approvestatus=10`）：仅 UPDATE 证券/CRMW 代码字段 → 正式码；写 `rrs_temp_security_code_update_log`；**不**生成出/入库业务单
@@ -171,7 +171,7 @@
 - **更新校验** `validateUpdateReq`：同新增全部临时字段校验 + `validateIdReq`（id 必填）+ 唯一性排除自身 `queryTempSecurityCodeCount(tempSecurityCode, id)` + 正式证券字段 `securityName`/`securityCode`/`securityMarket`/`securityType` 必填 + `validateMarket(securityMarket)` + `validateSecurityType(securityType)`。
 - **取消发行/删除校验**：`validateIdReq`（id 必填）；取消发行额外要求 `temporary` 状态；删除仅要求存在且未删。
 - **主体快照** `resolveCompanyName`：`fullName` 优先，其次 `shortName`，两者皆空抛「发行主体缺少名称，companyId=...」。
-- **`rrs_securityinfo` 占位写入**：以 `securityCode` 为 `wind_code` 主键判定。市场→wind_code 列映射：`SSE→wind_code_sh`、`SZSE→wind_code_sz`、`CIBM→wind_code_nib`、`BSE→wind_code_bj`、`OTC/QDII/OTHER/COMPANY→wind_code_nbc`（其余列置 NULL）。`issuer` 取 `tempCompanyNameSnapshot`，`issuer_code` 取 `tempCompanyCode`。表单发行/到期以 `yyyyMMdd` 写入 `firstissue_date`/`maturity_date`；起息、止息、`date_exists` 未知不写。**`security_status` 固定 `'L'`**（上市中；枚举见 `SecurityStatus`；不写则为 NULL，证券池调整 `!= 'D'` 查不到；外部无状态数据应落 `'U'`）。`create_time`/`ts` 取新增时间。转正时正式主数据已存在则不再覆盖。
+- **`rrs_securityinfo` 占位写入**：以 `securityCode` 为 `wind_code` 主键判定。市场只保存在登记表 `temp_security_market`，占位主档不写市场代码列，`isin_code` 和未知的独立 `sec_id` 保持 NULL；临时代码不写 ODS。同券关联不使用空 ISIN。`issuer` 取 `tempCompanyNameSnapshot`，`issuer_code` 取 `tempCompanyCode`。表单发行/到期以 `yyyyMMdd` 写入 `firstissue_date`/`maturity_date`；起息、止息、`date_exists` 未知不写。**`security_status` 固定 `'L'`**（上市中；枚举见 `SecurityStatus`；不写则为 NULL，证券池调整 `!= 'D'` 查不到；外部无状态数据应落 `'U'`）。`create_time`/`ts` 取新增时间。转正时正式主数据已存在则不再覆盖。
 - **事务**：`addTempSecurityCode`/`editTempSecurityCodeToUpdated`/`editTempSecurityCodeToCancelled`/`deleteTempSecurityCode` 均 `@Transactional(rollbackFor = Exception.class)`。
 - **前端校验** `addRules`/`updateRules`：与后端必填项对齐（`required:true`）；日期 `value-format="yyyy-MM-dd"`；`openUpdateDialog` 回显时正式证券字段缺省取临时字段（`securityName: row.securityName || row.tempSecurityName || ''` 等）。
 
@@ -203,3 +203,7 @@
 - 实体：`entity/tempsecuritycode/TempSecurityCodeDto.java`（含 `CompanyOption`/`SecurityTypeOption`/`OptionBundle`）、`entity/tempsecuritycode/TempSecurityCodeReq.java`；`entity/bo/TempSecurityCodeBo.java`
 - 枚举：`common/enums/TempStatus.java`、`common/enums/TempOprtSource.java`、`common/enums/MarketCode.java`
 - SQL：`sql/rrs_temp_security_code_schema.sql`、`sql/rrs_temp_security_code_demo_data.sql`；关联 `sql/rrs_external_import_schema.sql`（`rrs_securityinfo` upsert）、`sql/rrs_dict_schema.sql`（`dict_security_type`）
+
+## 证券代码转换组件参数
+
+独立 `SecurityCodeConversionService` 仍未接入人工转正流程，保持 `Propagation.MANDATORY` 事务边界；请求移除五个旧市场代码参数，新增必填 `tempSecurityMarket` 明确提供临时市场。快照替换只修改实际证券标识及原有业务字段，不再保存市场代码列。

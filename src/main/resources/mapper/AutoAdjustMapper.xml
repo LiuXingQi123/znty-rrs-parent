@@ -196,21 +196,38 @@
               OR p.market_codes = ''
               OR p.market_codes = '[]'
               OR (
-                  (JSON_CONTAINS(p.market_codes, '"SSE"')
-                      AND bond.wind_code_sh IS NOT NULL AND bond.wind_code_sh != '')
-                  OR (JSON_CONTAINS(p.market_codes, '"SZSE"')
-                      AND bond.wind_code_sz IS NOT NULL AND bond.wind_code_sz != '')
-                  OR (JSON_CONTAINS(p.market_codes, '"CIBM"')
-                      AND bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib != '')
-                  OR (JSON_CONTAINS(p.market_codes, '"BSE"')
-                      AND bond.wind_code_bj IS NOT NULL AND bond.wind_code_bj != '')
-                  OR (JSON_CONTAINS(p.market_codes, '"OTHER"')
-                      AND bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc != '')
-                  OR (JSON_CONTAINS(p.market_codes, '"JWCW"')
-                      AND (
-                          (bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib != '')
-                          OR (bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc != '')
-                      ))
+                  (
+                      bond.security_source = 'temporary'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM rrs_temp_security_code t
+                          WHERE t.temp_security_code = bond.wind_code
+                            AND JSON_CONTAINS(
+                                p.market_codes
+                                ,JSON_QUOTE(t.temp_security_market)
+                            )
+                      )
+                  )
+                  OR (
+                      (
+                          bond.security_source IS NULL
+                          OR bond.security_source != 'temporary'
+                      )
+                      AND EXISTS (
+                          SELECT 1
+                          FROM ais_inv_ods.wind_windcustomcode w
+                          WHERE w.S_INFO_WINDCODE = bond.wind_code
+                            AND JSON_CONTAINS(
+                                p.market_codes
+                                ,JSON_QUOTE(
+                                    CASE
+                                        WHEN TRIM(w.S_INFO_EXCHMARKET) = 'IB' THEN 'CIBM'
+                                        ELSE TRIM(w.S_INFO_EXCHMARKET)
+                                    END
+                                )
+                            )
+                      )
+                  )
               )
           )
         ORDER BY bond.wind_code ASC

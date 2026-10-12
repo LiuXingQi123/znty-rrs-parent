@@ -70,13 +70,6 @@
                ,si.issue_type
                ,si.inner_class
                ,si.inright_flag
-               ,CONCAT_WS(','
-                   ,IF(si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '', 'SSE', NULL)
-                   ,IF(si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '', 'SZSE', NULL)
-                   ,IF(si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '', 'CIBM', NULL)
-                   ,IF(si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '', 'BSE', NULL)
-                   ,IF(si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '', 'OTHER', NULL)
-                ) AS marketCodeText
                ,ips.crmw_name
                ,ips.crmw_scode
                ,ips.crmw_stype
@@ -111,15 +104,32 @@
             <if test="marketCodes != null and marketCodes.size() > 0">
                 AND (
                     <foreach collection="marketCodes" item="marketCode" separator=" OR ">
-                        <choose>
-                            <when test="marketCode == 'SSE'">si.wind_code_sh IS NOT NULL AND si.wind_code_sh != ''</when>
-                            <when test="marketCode == 'SZSE'">si.wind_code_sz IS NOT NULL AND si.wind_code_sz != ''</when>
-                            <when test="marketCode == 'CIBM'">si.wind_code_nib IS NOT NULL AND si.wind_code_nib != ''</when>
-                            <when test="marketCode == 'BSE'">si.wind_code_bj IS NOT NULL AND si.wind_code_bj != ''</when>
-                            <when test="marketCode == 'OTHER'">si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != ''</when>
-                            <when test="marketCode == 'COMPANY'">si.security_type = 'company'</when>
-                            <otherwise>1 = 0</otherwise>
-                        </choose>
+                        (
+                            (
+                                si.security_source = 'temporary'
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM rrs_temp_security_code t
+                                    WHERE t.temp_security_code = si.wind_code
+                                      AND t.temp_security_market = #{marketCode}
+                                )
+                            )
+                            OR (
+                                (
+                                    si.security_source IS NULL
+                                    OR si.security_source != 'temporary'
+                                )
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM ais_inv_ods.wind_windcustomcode w
+                                    WHERE w.S_INFO_WINDCODE = si.wind_code
+                                      AND CASE
+                                          WHEN TRIM(w.S_INFO_EXCHMARKET) = 'IB' THEN 'CIBM'
+                                          ELSE TRIM(w.S_INFO_EXCHMARKET)
+                                      END = #{marketCode}
+                                )
+                            )
+                        )
                     </foreach>
                 )
             </if>
@@ -158,13 +168,6 @@
                ,bond.issue_type
                ,bond.inner_class
                ,bond.inright_flag
-               ,CONCAT_WS(','
-                   ,IF(bond.wind_code_sh IS NOT NULL AND bond.wind_code_sh != '', 'SSE', NULL)
-                   ,IF(bond.wind_code_sz IS NOT NULL AND bond.wind_code_sz != '', 'SZSE', NULL)
-                   ,IF(bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib != '', 'CIBM', NULL)
-                   ,IF(bond.wind_code_bj IS NOT NULL AND bond.wind_code_bj != '', 'BSE', NULL)
-                   ,IF(bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc != '', 'OTHER', NULL)
-                ) AS marketCodeText
                ,crmw.short_name AS crmwName
                ,crmw.wind_code AS crmwScode
                ,'crmw' AS crmwStype
@@ -210,15 +213,32 @@
             <if test="marketCodes != null and marketCodes.size() > 0">
                 AND (
                     <foreach collection="marketCodes" item="marketCode" separator=" OR ">
-                        <choose>
-                            <when test="marketCode == 'SSE'">bond.wind_code_sh IS NOT NULL AND bond.wind_code_sh != ''</when>
-                            <when test="marketCode == 'SZSE'">bond.wind_code_sz IS NOT NULL AND bond.wind_code_sz != ''</when>
-                            <when test="marketCode == 'CIBM'">bond.wind_code_nib IS NOT NULL AND bond.wind_code_nib != ''</when>
-                            <when test="marketCode == 'BSE'">bond.wind_code_bj IS NOT NULL AND bond.wind_code_bj != ''</when>
-                            <when test="marketCode == 'OTHER'">bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc != ''</when>
-                            <when test="marketCode == 'COMPANY'">bond.security_type = 'company'</when>
-                            <otherwise>1 = 0</otherwise>
-                        </choose>
+                        (
+                            (
+                                si.security_source = 'temporary'
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM rrs_temp_security_code t
+                                    WHERE t.temp_security_code = si.wind_code
+                                      AND t.temp_security_market = #{marketCode}
+                                )
+                            )
+                            OR (
+                                (
+                                    si.security_source IS NULL
+                                    OR si.security_source != 'temporary'
+                                )
+                                AND EXISTS (
+                                    SELECT 1
+                                    FROM ais_inv_ods.wind_windcustomcode w
+                                    WHERE w.S_INFO_WINDCODE = si.wind_code
+                                      AND CASE
+                                          WHEN TRIM(w.S_INFO_EXCHMARKET) = 'IB' THEN 'CIBM'
+                                          ELSE TRIM(w.S_INFO_EXCHMARKET)
+                                      END = #{marketCode}
+                                )
+                            )
+                        )
                     </foreach>
                 )
             </if>

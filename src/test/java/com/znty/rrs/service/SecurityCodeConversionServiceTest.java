@@ -49,7 +49,7 @@ public class SecurityCodeConversionServiceTest {
         assertThat(captor.getValue().getSecurityCode()).isEqualTo("102600001.IB");
         assertThat(captor.getValue().getFullName()).isEqualTo("某集团2026年度第一期中期票据");
         assertThat(captor.getValue().getShortName()).isEqualTo("26某集团MTN001");
-        assertThat(captor.getValue().getWindCodeNib()).isEqualTo("102600001.IB");
+        assertThat(captor.getValue().getSecurityCode()).isEqualTo("102600001.IB");
         assertThat(captor.getValue().getReplaceTableName()).isEqualTo("rrs_securityinfo");
         assertThat(captor.getValue().getReplaceRecordId()).isNull();
         // 独立流程不负责修改证券主档
@@ -372,7 +372,6 @@ public class SecurityCodeConversionServiceTest {
         bo.setWindCode("TMP-EXT-001");
         bo.setFullName("某集团临时中票");
         bo.setShortName("临时中票");
-        bo.setWindCodeNib("TMP-EXT-001");
         bo.setSecurityType("mtn");
         return bo;
     }
@@ -401,6 +400,7 @@ public class SecurityCodeConversionServiceTest {
     private SecurityCodeConversionReq buildReq() {
         SecurityCodeConversionReq req = new SecurityCodeConversionReq();
         req.setTempSecurityCode("TMP-EXT-001");
+        req.setTempSecurityMarket("CIBM");
         req.setSecurityCode("102600001.IB");
         req.setSecurityName("26某集团MTN001");
         req.setSecurityFullName("某集团2026年度第一期中期票据");

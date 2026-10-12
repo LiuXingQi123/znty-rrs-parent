@@ -472,13 +472,15 @@
 
 > 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
 
-`isin_code`（国际证券识别码）为 `VARCHAR(100) DEFAULT NULL`，位于 `wind_code` 前，对应 `SecurityInfoBo.isinCode`（`String`）。Demo 的全部 45 条记录（含临时代码）均在原始 `INSERT` 中填写不同的 12 位模拟 ISIN：使用 `CNDEMO` 前缀、5 位顺序号和 1 位校验位；仅用于演示，不是真实证券登记编号。存量表缺少此字段时，一次性执行：
+`isin_code`（国际证券识别码）为 `VARCHAR(100) DEFAULT NULL`，位于 `wind_code` 前。主档按市场代码逐条存储，`wind_code` 仍为业务键；删除原有五个市场代码列及五个市场证券 ID 列，末尾新增 `sec_id VARCHAR(100) DEFAULT NULL COMMENT '证券 ID'`。`sec_id` 是外部独立证券 ID，不映射 Wind 的 OBJECT_ID 或 S_INFO_ASHARECODE，表单编辑和临时转正不覆盖正式证券 ID。
 
-```sql
-ALTER TABLE `znty_rrs`.`rrs_securityinfo`
-    ADD COLUMN `isin_code` VARCHAR(100) DEFAULT NULL
-        COMMENT '国际证券识别码（ISIN）' FIRST;
-```
+正式证券由当前 `wind_code` 精确关联 `ais_inv_ods.wind_windcustomcode.S_INFO_WINDCODE`。当前市场读取 `S_INFO_EXCHMARKET`，`IB` 映射为系统 `CIBM`；缺失、不支持或同一代码重复映射时明确报出代码，禁止按代码后缀推断。临时代码只读取登记表 `temp_security_market`，不向 ODS 写占位记录。
+
+同券关联固定为当前 Wind 代码 → 当前 Wind 记录的非空 `S_INFO_ISINCODE` → 同 ISIN 的其他代码，去重、排除自身、不递归。不按主档名称、主体或空 ISIN 推断。详情新增只读 `marketCode` 与 `relatedMarketCodes: [{ windCode, marketCode }]`，同市场多个代码完整展示；提交不包含旧市场字段。
+
+普通证券及 ABS 扩批后每个代码独立校验市场、重复项、在池状态及容量，保留原主项、联动、互斥、审批和批次规则。证券/CRMW 快照不再存市场列；历史详情读取当前关联代码，其余业务字段按提交快照回显。
+
+Demo 共 51 条主档，49 条正式证券均有 Wind 映射，两个临时代码 ISIN 为 NULL；交投、城投、能源三组各含 IB/SH/SZ 三条记录，同组共用非空 ISIN，不同券不复用；每条主档具有独立 `SEC_DEMO_` 模拟 ID。只更新原始建表与 INSERT，不提供存量升级脚本，不自动执行数据库写入。
 
 主档新增两个外部导入标识，均为 `INT DEFAULT NULL`，由 `SecurityInfoBo` 的 `Integer` 字段承接并保留原始值：
 
@@ -489,7 +491,7 @@ ALTER TABLE `znty_rrs`.`rrs_securityinfo`
 
 独立方法 `isStandardCreditBond` 仅以 `std_credit_flag=1` 认定标准信用债，`0` 与 `NULL` 不认定，原值保持不变；标准信用债的完整业务定义由上游维护。`std_clause_flag` 和其他特殊标志不参与该方法。两字段不新增页面展示。
 
-Demo 在原始 `INSERT` 中为全部 45 条证券显式填写标识，设置以下演示场景（不是系统按类型自动判定的规则，也不按评级高低判定）：
+Demo 在原始 `INSERT` 中为全部 51 条证券显式填写标识，设置以下演示场景（不是系统按类型自动判定的规则，也不按评级高低判定）：
 
 | 演示样本 | `std_clause_flag` | `std_credit_flag` |
 |---|---|---|
@@ -563,7 +565,7 @@ ALTER TABLE `znty_rrs`.`rrs_securityinfo`
 |---|---|---|---|
 | 池锁定 | `LockFlag=1` 禁止调入 | 已有 `inCheckPoolLocked` | 基本一致 |
 | 投资品种 | 池配置 numeric `ptype`，证券类型映射后校验 | 已有 `variety_codes` JSON + `categoryType` | 迁移时需确保 numeric `ptype` 和新 code 映射准确 |
-| 投资市场 | 池配置 numeric `mktcode` | 已有 `market_codes` JSON，按 `wind_code_sh/sz/nib` 推导 | 多市场证券可能比老系统更宽松，需确认是否接受 |
+| 投资市场 | 池配置 numeric `mktcode` | `market_codes` JSON 仅匹配当前 Wind 代码所属市场 | 同券其他市场项独立校验，不放宽当前代码 |
 | 正在审批中 | 按证券 + 市场 + 类型 + `poolGroupId` 判断，部分批量场景可用批次排除 | 按 `security_code` + pending step 判断 | 新系统可能更严格，同一证券任意池有 pending 都会拦截 |
 | 已在目标池 | 已在池则不可重复调入 | 已有 | 基本一致 |
 | 来源池限制 | 当前已在来源池，或本次同批勾选调入来源池 | 已补齐：当前已在来源池或 `requestInPoolIds` 包含来源池均通过 | 已对齐老系统选择阶段口径 |

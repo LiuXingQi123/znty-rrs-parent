@@ -51,6 +51,10 @@ import java.util.stream.Collectors;
 @Service
 public class BatchCrmwPoolAdjustService {
 
+    /** 统一证券市场查询组件。 */
+    @Resource
+    private SecurityMarketService securityMarketService;
+
     /** 短时间重复提交判定窗口（秒） */
     private static final int DUPLICATE_SUBMIT_WINDOW_SECONDS = 30;
     /** 管理员用户 ID */
@@ -694,12 +698,15 @@ public class BatchCrmwPoolAdjustService {
      * 填充候选组合市场编码与凭证类型
      */
     private void fillCandidateFields(List<BatchCrmwCandidateDto> list) {
+        List<String> codes = new ArrayList<>();
         for (BatchCrmwCandidateDto dto : list) {
-            if (dto.getMarketCodeText() == null || dto.getMarketCodeText().isEmpty()) {
-                dto.setMarketCodes(new ArrayList<>());
-            } else {
-                dto.setMarketCodes(Arrays.asList(dto.getMarketCodeText().split(",")));
-            }
+            codes.add(dto.getSecurityCode());
+        }
+        Map<String, String> markets = securityMarketService.queryMarketCodeMap(codes);
+        for (BatchCrmwCandidateDto dto : list) {
+            String market = markets.get(dto.getSecurityCode());
+            dto.setMarketCodeText(market);
+            dto.setMarketCodes(Collections.singletonList(market));
             dto.setCrmwStype(resolveCrmwStype(dto.getCrmwStype()));
         }
     }

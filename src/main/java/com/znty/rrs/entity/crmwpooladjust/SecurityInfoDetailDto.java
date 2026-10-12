@@ -3,6 +3,8 @@ package com.znty.rrs.entity.crmwpooladjust;
 
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import lombok.Data;
+import com.znty.rrs.entity.common.SecurityMarketDto;
+import java.util.List;
 import lombok.EqualsAndHashCode;
 
 /**
@@ -20,4 +22,8 @@ public class SecurityInfoDetailDto extends SecurityInfoBo {
 
     /** ABS 自选权益人名称 */
     private String companySelector;
+    /** 当前代码所属市场。 */
+    private String marketCode;
+    /** 当前 Wind 同券关联代码，只读。 */
+    private List<SecurityMarketDto> relatedMarketCodes;
 }

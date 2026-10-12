@@ -19,7 +19,9 @@ public class PageRequest {
 
     /** 获取合法每页条数，最大不超过 100 条，防止单次查询数据量过大。 */
     public int getPageSize() {
-        if (pageSize == null || pageSize < 1) return 20;
+        if (pageSize == null || pageSize < 1) {
+            return 20;
+        }
         return Math.min(pageSize, 100); // 硬限制最大 100 条，保护数据库性能
     }
 }

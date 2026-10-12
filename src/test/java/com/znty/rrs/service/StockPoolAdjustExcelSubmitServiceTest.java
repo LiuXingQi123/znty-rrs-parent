@@ -263,7 +263,9 @@ public class StockPoolAdjustExcelSubmitServiceTest {
         StockPoolAdjustMapper observed = observeAdjustments();
         doAnswer(call -> {
             StockAdjustLogBo log = call.getArgument(0);
-            if ("600002.SH".equals(log.getStockCode())) { throw new IllegalStateException("模拟后续来源写入失败"); }
+            if ("600002.SH".equals(log.getStockCode())) {
+                throw new IllegalStateException("模拟后续来源写入失败");
+            }
             return adjustments.addAdjustLog(log);
         }).when(observed).addAdjustLog(any());
         assertThatThrownBy(() -> imports.submitImport(req)).isInstanceOf(IllegalStateException.class);
@@ -438,11 +440,15 @@ public class StockPoolAdjustExcelSubmitServiceTest {
         try (XSSFWorkbook book = new XSSFWorkbook(); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
             book.createSheet("股票导入").createRow(0);
             String[] headers = {"父池名称", "子池名称", "股票名称", "股票代码"};
-            for (int index = 0; index < 4; index++) { book.getSheetAt(0).getRow(0).createCell(index).setCellValue(headers[index]); }
+            for (int index = 0; index < 4; index++) {
+                book.getSheetAt(0).getRow(0).createCell(index).setCellValue(headers[index]);
+            }
             for (int row = 0; row < codes.length; row++) {
                 book.getSheetAt(0).createRow(row + 1);
                 String[] values = {"股票库", "股票池" + (row + 1), "名单名称", codes[row]};
-                for (int column = 0; column < 4; column++) { book.getSheetAt(0).getRow(row + 1).createCell(column).setCellValue(values[column]); }
+                for (int column = 0; column < 4; column++) {
+                    book.getSheetAt(0).getRow(row + 1).createCell(column).setCellValue(values[column]);
+                }
             }
             book.write(bytes);
             req.setImpId(imports.uploadExcel(req, new MockMultipartFile("file", "股票.xlsx", "application/octet-stream", bytes.toByteArray()), null).getImpId());
@@ -457,8 +463,9 @@ public class StockPoolAdjustExcelSubmitServiceTest {
         List<FlowNodeBo> nodes=new ArrayList<>(); List<FlowEdgeBo> edges=new ArrayList<>(); List<NodeApprovalConfigBo> configs=new ArrayList<>();
         long base=id*10; nodes.add(node(base+1,id,"start","开始")); nodes.add(node(base+2,id,"approval","发起")); nodes.add(node(base+5,id,"end","结束"));
         configs.add(config(base+2,"initiator")); edges.add(edge(base+1,base+2,"auto"));
-        if(fast) { edges.add(edge(base+2,base+5,"submit")); }
-        else {
+        if (fast) {
+            edges.add(edge(base+2,base+5,"submit"));
+        } else {
             nodes.add(node(base+3,id,"approval","审核")); nodes.add(node(base+4,id,"approval","修改"));
             configs.add(config(base+3,strategy)); configs.add(config(base+4,"initiator"));
             edges.add(edge(base+2,base+3,"submit")); edges.add(edge(base+3,base+5,"approve")); edges.add(edge(base+3,base+4,"reject"));
@@ -469,7 +476,9 @@ public class StockPoolAdjustExcelSubmitServiceTest {
         when(flows.queryFlowNodeListByVersionId(id)).thenReturn(nodes); when(flows.queryFlowEdgeListByVersionId(id)).thenReturn(edges);
         when(flows.queryApprovalConfigListByVersionId(id)).thenReturn(configs);
         when(flows.queryApprovalHandlerListByVersionId(id)).thenAnswer(call -> new ArrayList<>(handlers));
-        for(FlowNodeBo node:nodes) when(flows.queryFlowNodeById(node.getId())).thenReturn(node);
+        for (FlowNodeBo node : nodes) {
+            when(flows.queryFlowNodeById(node.getId())).thenReturn(node);
+        }
     }
 
     /** 创建流程节点。 */
@@ -506,7 +515,11 @@ public class StockPoolAdjustExcelSubmitServiceTest {
     /** 查询固定测试表行数。 */
     private int count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM "+table,Integer.class); }
     /** 在 H2 执行固定测试数据准备。 */
-    private void sql(String... commands) { for(String command:commands) jdbc.execute(command); }
+    private void sql(String... commands) {
+        for (String command : commands) {
+            jdbc.execute(command);
+        }
+    }
     /** 使用服务注解创建真正事务代理。 */
     @SuppressWarnings("unchecked") private <T> T transactional(T target) { ProxyFactory proxy=new ProxyFactory(target);proxy.setProxyTargetClass(true);proxy.addAdvice(new TransactionInterceptor(transactions,new AnnotationTransactionAttributeSource()));return (T)proxy.getProxy(); }
 }

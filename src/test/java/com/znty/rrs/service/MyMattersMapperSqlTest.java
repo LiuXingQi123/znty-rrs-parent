@@ -81,7 +81,12 @@ public class MyMattersMapperSqlTest {
     }
 
     /** 关闭当前测试的数据库会话。 */
-    @After public void tearDown() { if (session != null) session.close(); }
+    @After
+    public void tearDown() {
+        if (session != null) {
+            session.close();
+        }
+    }
 
     /** 多角色和重复关联只返回一份业务选项，禁用和非直属角色不产生入口。 */
     @Test public void unionShouldDeduplicateAndRespectEffectiveDirectRoles() throws Exception {
@@ -304,7 +309,9 @@ public class MyMattersMapperSqlTest {
     private void sql(String... statements) throws Exception {
         Connection connection=session.getConnection();
         try (Statement statement=connection.createStatement()) {
-            for (String sql : statements) statement.execute(sql);
+            for (String sql : statements) {
+                statement.execute(sql);
+            }
         }
     }
 }

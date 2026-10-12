@@ -80,7 +80,9 @@ public class StockPoolAdjustFlowService {
     @Transactional(rollbackFor = Exception.class, isolation = Isolation.READ_COMMITTED)
     public StockPoolAdjustAuditDto submitAdjustAudit(StockPoolAdjustAuditReq req, List<MultipartFile> files,
                                                     String originalFileNameListJson) {
-        if (req == null) { throw new BizException("审核请求不能为空"); }
+        if (req == null) {
+            throw new BizException("审核请求不能为空");
+        }
         List<String> names = sysAttachmentService.parseOriginalFileNameListJson(originalFileNameListJson);
         SysAttachmentService.SubmissionFiles submission = sysAttachmentService.createSubmissionFiles(files, req.getHandlerId(), names);
         // 复用同一个审批事务，绑定发生在推进步骤之前。
@@ -176,10 +178,14 @@ public class StockPoolAdjustFlowService {
     /** 复核主项报告要求，关系项继续继承主项审批。 */
     private void validateBoundReports(List<StockAdjustLogBo> logs) {
         Map<Long, InvestmentPoolBo> pools = new HashMap<>();
-        for (InvestmentPoolBo pool : investmentPoolMapper.queryPoolList()) { pools.put(pool.getId(), pool); }
+        for (InvestmentPoolBo pool : investmentPoolMapper.queryPoolList()) {
+            pools.put(pool.getId(), pool);
+        }
         for (StockAdjustLogBo log : logs) {
             InvestmentPoolBo pool = pools.get(log.getTargetPoolId());
-            if (pool == null) { throw new BizException("目标投资池不存在或已删除"); }
+            if (pool == null) {
+                throw new BizException("目标投资池不存在或已删除");
+            }
             String restriction = ("手工调整".equals(log.getAdjustType()) || "手动批量调整".equals(log.getAdjustType())
                     || "Excel导入".equals(log.getAdjustType()) || "Excel清空".equals(log.getAdjustType()))
                     ? ("调入".equals(log.getAdjustMode()) ? pool.getInReportRestriction() : pool.getOutReportRestriction()) : "none";
@@ -801,7 +807,9 @@ public class StockPoolAdjustFlowService {
                 matchedNode = nextNode;
             }
         }
-        if (matchedNode != null) { return matchedNode; }
+        if (matchedNode != null) {
+            return matchedNode;
+        }
         throw new BizException("流程配置异常：节点[" + currentNode.getLabel() + "]缺少匹配审批动作的下一步连线");
     }
 

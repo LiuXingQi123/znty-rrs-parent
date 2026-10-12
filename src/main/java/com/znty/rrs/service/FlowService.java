@@ -252,10 +252,18 @@ public class FlowService {
         }
         def.setFlowKey(newFlowKey);
 
-        if (req.getName() != null) def.setName(req.getName().trim());
-        if (req.getCategory() != null) def.setCategory(req.getCategory());
-        if (req.getDescription() != null) def.setDescription(req.getDescription());
-        if (req.getRemark() != null) def.setRemark(req.getRemark());
+        if (req.getName() != null) {
+            def.setName(req.getName().trim());
+        }
+        if (req.getCategory() != null) {
+            def.setCategory(req.getCategory());
+        }
+        if (req.getDescription() != null) {
+            def.setDescription(req.getDescription());
+        }
+        if (req.getRemark() != null) {
+            def.setRemark(req.getRemark());
+        }
         Date now = new Date();
         def.setUpdatedBy(operatorId);
         def.setUpdtTime(now);
@@ -1163,7 +1171,9 @@ public class FlowService {
 
     /** 序列化对象为 JSON。 */
     private String toJson(Object obj) {
-        if (obj == null) return null;
+        if (obj == null) {
+            return null;
+        }
         try {
             return om.writeValueAsString(obj);
         } catch (JsonProcessingException e) {
@@ -1173,7 +1183,9 @@ public class FlowService {
 
     /** 安全解析 JSON。 */
     private Object parseJsonSafe(String json) {
-        if (json == null || json.trim().isEmpty()) return Collections.emptyList();
+        if (json == null || json.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
         try {
             return om.readTree(json);
         } catch (Exception e) {

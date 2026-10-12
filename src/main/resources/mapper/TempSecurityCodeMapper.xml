@@ -201,14 +201,6 @@
     <select id="queryFormalSecurityOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
         SELECT si.wind_code AS securityCode
                ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
-               ,CASE
-                    WHEN si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '' THEN 'SSE'
-                    WHEN si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '' THEN 'SZSE'
-                    WHEN si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '' THEN 'CIBM'
-                    WHEN si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '' THEN 'BSE'
-                    WHEN si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '' THEN 'OTHER'
-                    ELSE NULL
-                END AS securityMarket
                ,si.security_type
                ,dst.security_type_name
         FROM rrs_securityinfo si
@@ -236,14 +228,6 @@
     <select id="queryFormalSecurityByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
         SELECT si.wind_code AS securityCode
                ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
-               ,CASE
-                    WHEN si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '' THEN 'SSE'
-                    WHEN si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '' THEN 'SZSE'
-                    WHEN si.wind_code_nib IS NOT NULL AND si.wind_code_nib != '' THEN 'CIBM'
-                    WHEN si.wind_code_bj IS NOT NULL AND si.wind_code_bj != '' THEN 'BSE'
-                    WHEN si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '' THEN 'OTHER'
-                    ELSE NULL
-                END AS securityMarket
                ,si.security_type
                ,dst.security_type_name
         FROM rrs_securityinfo si
@@ -291,11 +275,6 @@
             wind_code
             ,full_name
             ,short_name
-            ,wind_code_sh
-            ,wind_code_sz
-            ,wind_code_nib
-            ,wind_code_bj
-            ,wind_code_nbc
             ,security_type
             ,issuer
             ,issuer_code
@@ -309,11 +288,6 @@
             #{securityCode}
             ,#{securityName}
             ,#{securityName}
-            ,CASE WHEN #{securityMarket} = 'SSE' THEN #{securityCode} ELSE NULL END
-            ,CASE WHEN #{securityMarket} = 'SZSE' THEN #{securityCode} ELSE NULL END
-            ,CASE WHEN #{securityMarket} = 'CIBM' THEN #{securityCode} ELSE NULL END
-            ,CASE WHEN #{securityMarket} = 'BSE' THEN #{securityCode} ELSE NULL END
-            ,CASE WHEN #{securityMarket} IN ('OTC', 'QDII', 'OTHER', 'COMPANY') THEN #{securityCode} ELSE NULL END
             ,#{securityType}
             ,#{tempCompanyNameSnapshot}
             ,#{tempCompanyCode}
@@ -331,11 +305,6 @@
         UPDATE rrs_securityinfo
         SET full_name = #{securityName}
            ,short_name = #{securityName}
-           ,wind_code_sh = CASE WHEN #{securityMarket} = 'SSE' THEN #{securityCode} ELSE NULL END
-           ,wind_code_sz = CASE WHEN #{securityMarket} = 'SZSE' THEN #{securityCode} ELSE NULL END
-           ,wind_code_nib = CASE WHEN #{securityMarket} = 'CIBM' THEN #{securityCode} ELSE NULL END
-           ,wind_code_bj = CASE WHEN #{securityMarket} = 'BSE' THEN #{securityCode} ELSE NULL END
-           ,wind_code_nbc = CASE WHEN #{securityMarket} IN ('OTC', 'QDII', 'OTHER', 'COMPANY') THEN #{securityCode} ELSE NULL END
            ,security_type = #{securityType}
            ,issuer = #{tempCompanyNameSnapshot}
            ,firstissue_date = DATE_FORMAT(#{tempIssueDate}, '%Y%m%d')

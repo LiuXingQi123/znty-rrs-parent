@@ -87,8 +87,12 @@ public class BatchStockPoolAdjustMapperTest {
     /** 关闭测试会话和内存数据库。 */
     @After
     public void tearDown() {
-        if (session != null) { session.close(); }
-        if (database != null) { database.shutdown(); }
+        if (session != null) {
+            session.close();
+        }
+        if (database != null) {
+            database.shutdown();
+        }
     }
 
     /** 调入候选排除在池、退市、删除、未上市、非股票及不支持市场。 */
@@ -163,11 +167,15 @@ public class BatchStockPoolAdjustMapperTest {
 
     /** 为 H2 提供数组包含函数以执行真实 MySQL JSON 筛选表达式。 */
     public static boolean jsonContains(String document, String candidate) throws IOException {
-        if (document == null || candidate == null) { return false; }
+        if (document == null || candidate == null) {
+            return false;
+        }
         ObjectMapper json = new ObjectMapper();
         JsonNode target = json.readTree(candidate);
         for (JsonNode node : json.readTree(document)) {
-            if (node.equals(target)) { return true; }
+            if (node.equals(target)) {
+                return true;
+            }
         }
         return false;
     }

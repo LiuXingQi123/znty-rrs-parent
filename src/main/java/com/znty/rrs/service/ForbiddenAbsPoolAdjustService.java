@@ -27,7 +27,7 @@ import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.util.AdjustStepHandlerExcludeUtil;
 import com.znty.rrs.common.util.CreditBondRemainTermUtil;
 import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
-import com.znty.rrs.common.util.MarketCodeMatchUtil;
+import com.znty.rrs.entity.common.SecurityMarketDto;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -120,6 +120,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ForbiddenAbsPoolAdjustService {
+    /** 统一证券市场及同券查询组件。 */
+    @Resource
+    private SecurityMarketService securityMarketService;
 
     /** 管理员用户 ID */
     private static final String ADMIN_USER_ID = "1";
@@ -232,6 +235,11 @@ public class ForbiddenAbsPoolAdjustService {
         validateAbsSecurity(req.getSecurityCode());
         // 回填证券品种大类（dict_security_type.category_type），供前端按类型差异化展示（如基金评分输入）
         dto.setCategoryType(forbiddenAbsPoolAdjustMapper.queryCategoryTypeBySecurityType(dto.getSecurityType()));
+        // 关联市场实时读取 Wind，历史快照仍保留其余业务字段
+        if (!"company".equals(dto.getSecurityType())) {
+            dto.setMarketCode(securityMarketService.queryMarketCode(dto.getWindCode()));
+            dto.setRelatedMarketCodes(securityMarketService.queryRelatedMarketCodes(dto.getWindCode()));
+        }
         return dto;
     }
 
@@ -846,7 +854,9 @@ public class ForbiddenAbsPoolAdjustService {
         }
         List<IpAdjustLogBo> recentLogs = forbiddenAbsPoolAdjustMapper.queryRecentManualAdjustLogList(
                 req.getSecurityCode(), req.getAdjusterId(), DUPLICATE_SUBMIT_WINDOW_SECONDS);
-        if (recentLogs == null || recentLogs.isEmpty()) return;
+        if (recentLogs == null || recentLogs.isEmpty()) {
+            return;
+        }
         List<String> requestKeys = manualItems.stream().map(item -> item.getTargetPoolId() + "|"
                 + item.getAdjustMode() + "|" + item.getFlowId() + "|" + emptyToNull(item.getFlowKey()))
                 .sorted().collect(Collectors.toList());
@@ -1423,10 +1433,6 @@ public class ForbiddenAbsPoolAdjustService {
         current.setShortName(changedField.getShortName());
         current.setWindCode(changedField.getWindCode());
         current.setIssuer(changedField.getIssuer());
-        current.setWindCodeNib(changedField.getWindCodeNib());
-        current.setWindCodeSh(changedField.getWindCodeSh());
-        current.setWindCodeSz(changedField.getWindCodeSz());
-        current.setWindCodeBj(changedField.getWindCodeBj());
         current.setIssueAmountplan(changedField.getIssueAmountplan());
         current.setCouponRate(changedField.getCouponRate());
         current.setMaturityembeddedDesc(changedField.getMaturityembeddedDesc());
@@ -1584,7 +1590,7 @@ public class ForbiddenAbsPoolAdjustService {
         resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys));
 
         // ══ 第四点五阶段：多市场关联码扩批（itemTag=related） ══
-        // 回填主券证券信息，并按 wind_code_sh/sz/nib/bj/nbc 展开同池同向关联项
+        // 回填主券证券信息，并按 Wind 非空 ISIN 展开同池同向关联项
         expandRelatedMarketCodeItems(req, shared, resultItems);
 
         // ══ 第五阶段：流程类型判断 ══
@@ -3593,17 +3599,17 @@ public class ForbiddenAbsPoolAdjustService {
     /**
      * 规则：投资市场（market_codes）
      *
-     * <p>目标池配置了投资市场时，证券所在市场须至少有一个在配置内。
+     * <p>目标池配置了投资市场时，当前证券代码所属市场须在配置内。
      * 市场 code 统一见 {@link com.znty.rrs.common.enums.MarketCode}，
-     * 推导规则见 {@link com.znty.rrs.common.util.MarketCodeMatchUtil}。
+     * 市场由统一 SecurityMarketService 权威查询。
      */
     private String inCheckMarket(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool == null || pool.getMarketCodes() == null || pool.getMarketCodes().isEmpty()) {
             return null;
         }
-        // 证券任一可推导市场落在池配置内即可
-        if (!MarketCodeMatchUtil.matchesPoolMarkets(pool.getMarketCodes(), ctx.getSecurityInfo())) {
+        // 仅比较当前证券代码所属市场
+        if (!securityMarketService.matchesPoolMarkets(pool.getMarketCodes(), ctx.getSecurityInfo())) {
             return "证券不在本池投资市场范围内";
         }
         return null;
@@ -4446,26 +4452,15 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 从主券 market 代码字段解析关联证券代码列表（已带后缀、去自身、去重，不递归）。
+     * 从 Wind 同 ISIN 记录解析关联证券代码列表（已带后缀、去自身、去重，不递归）。
      */
     private List<String> resolveRelatedSecurityCodes(SecurityInfoBo main) {
         List<String> codes = new ArrayList<>();
         if (main == null) {
             return codes;
         }
-        String mainCode = main.getWindCode() == null ? "" : main.getWindCode().trim();
-        Set<String> seen = new HashSet<>();
-        for (String raw : Arrays.asList(
-                main.getWindCodeSh(), main.getWindCodeSz(), main.getWindCodeNib(),
-                main.getWindCodeBj(), main.getWindCodeNbc())) {
-            if (raw == null) {
-                continue;
-            }
-            String code = raw.trim();
-            if (code.isEmpty() || code.equals(mainCode) || !seen.add(code)) {
-                continue;
-            }
-            codes.add(code);
+        for (SecurityMarketDto related : securityMarketService.queryRelatedMarketCodes(main.getWindCode())) {
+            codes.add(related.getWindCode());
         }
         return codes;
     }
@@ -4504,7 +4499,7 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 多市场关联码扩批：对主结果中的 manual/linkage/mutex 项，按主券市场代码字段展开 related 项。
+     * 多市场关联码扩批：对主结果中的 manual/linkage/mutex 项，按 Wind 同 ISIN 记录展开 related 项。
      *
      * <p>关联码独立校验已在池/不在池/pending/容量等；同池同批调入累计 projected 占用容量。
      */

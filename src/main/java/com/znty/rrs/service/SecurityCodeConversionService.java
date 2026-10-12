@@ -610,7 +610,7 @@ public class SecurityCodeConversionService {
         // 解析临时证券展示名称
         bo.setTempSecurityName(resolveSecurityName(tempSecurity));
         // 解析临时证券市场
-        bo.setTempSecurityMarket(resolveSecurityMarket(tempSecurity));
+        bo.setTempSecurityMarket(req.getTempSecurityMarket().trim());
         bo.setTempSecurityType(tempSecurity.getSecurityType());
         // 解析正式证券全称和简称，兼容调用方只提供 securityName
         bo.setFullName(resolveFormalFullName(req));
@@ -620,13 +620,6 @@ public class SecurityCodeConversionService {
         bo.setWindCode(bo.getSecurityCode());
         bo.setSecurityMarket(req.getSecurityMarket().trim());
         bo.setSecurityType(req.getSecurityType().trim());
-        bo.setWindCodeSh(trimToNull(req.getWindCodeSh()));
-        bo.setWindCodeSz(trimToNull(req.getWindCodeSz()));
-        bo.setWindCodeNib(trimToNull(req.getWindCodeNib()));
-        bo.setWindCodeBj(trimToNull(req.getWindCodeBj()));
-        bo.setWindCodeNbc(trimToNull(req.getWindCodeNbc()));
-        // 正式市场对应代码未显式提供时，使用正式关联代码补齐
-        applyCanonicalMarketCode(bo);
         bo.setOprtSource(req.getOprtSource().trim());
         bo.setReplaceStatus("success");
         bo.setUpdateTime(new Date());
@@ -649,29 +642,6 @@ public class SecurityCodeConversionService {
         return req.getSecurityName().trim();
     }
 
-    /** 补齐正式证券所属市场对应的代码列。 */
-    private void applyCanonicalMarketCode(SecurityCodeConversionBo bo) {
-        if (MarketCode.SSE.getCode().equals(bo.getSecurityMarket()) && bo.getWindCodeSh() == null) {
-            bo.setWindCodeSh(bo.getSecurityCode());
-        } else if (MarketCode.SZSE.getCode().equals(bo.getSecurityMarket())
-                && bo.getWindCodeSz() == null) {
-            bo.setWindCodeSz(bo.getSecurityCode());
-        } else if (MarketCode.CIBM.getCode().equals(bo.getSecurityMarket())
-                && bo.getWindCodeNib() == null) {
-            bo.setWindCodeNib(bo.getSecurityCode());
-        } else if (MarketCode.BSE.getCode().equals(bo.getSecurityMarket())
-                && bo.getWindCodeBj() == null) {
-            bo.setWindCodeBj(bo.getSecurityCode());
-        } else if (bo.getWindCodeNbc() == null) {
-            bo.setWindCodeNbc(bo.getSecurityCode());
-        }
-    }
-
-    /** 去除字符串首尾空白并把空字符串转换为 null。 */
-    private String trimToNull(String value) {
-        return hasText(value) ? value.trim() : null;
-    }
-
     /** 解析证券展示名称。 */
     private String resolveSecurityName(SecurityCodeConversionBo security) {
         // 优先使用证券简称
@@ -683,31 +653,6 @@ public class SecurityCodeConversionService {
             return security.getFullName().trim();
         }
         return security.getWindCode();
-    }
-
-    /** 根据证券主数据解析市场。 */
-    private String resolveSecurityMarket(SecurityCodeConversionBo security) {
-        // 判断沪市证券代码
-        if (hasText(security.getWindCodeSh())) {
-            return MarketCode.SSE.getCode();
-        }
-        // 判断深市证券代码
-        if (hasText(security.getWindCodeSz())) {
-            return MarketCode.SZSE.getCode();
-        }
-        // 判断银行间市场代码
-        if (hasText(security.getWindCodeNib())) {
-            return MarketCode.CIBM.getCode();
-        }
-        // 判断北交所代码
-        if (hasText(security.getWindCodeBj())) {
-            return MarketCode.BSE.getCode();
-        }
-        // 判断其他市场代码
-        if (hasText(security.getWindCodeNbc())) {
-            return MarketCode.OTHER.getCode();
-        }
-        return MarketCode.UNKNOWN.getCode();
     }
 
     /** 校验转换请求。 */
@@ -722,6 +667,12 @@ public class SecurityCodeConversionService {
         if (!hasText(req.getSecurityName())
                 && (!hasText(req.getSecurityFullName()) || !hasText(req.getSecurityShortName()))) {
             throw new BizException("正式证券名称不能为空，须提供 securityName，或同时提供全称和简称");
+        }
+        // 校验明确提供的临时市场
+        validateRequired(req.getTempSecurityMarket(), "临时证券市场不能为空");
+        if (!MarketCode.isValid(req.getTempSecurityMarket().trim())
+                || MarketCode.UNKNOWN.getCode().equals(req.getTempSecurityMarket().trim())) {
+            throw new BizException("临时证券市场不合法，tempSecurityMarket=" + req.getTempSecurityMarket());
         }
         // 校验正式市场
         validateRequired(req.getSecurityMarket(), "正式证券市场不能为空");

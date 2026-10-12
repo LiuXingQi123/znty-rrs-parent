@@ -27,7 +27,6 @@ import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.util.AdjustStepHandlerExcludeUtil;
 import com.znty.rrs.common.util.CreditBondRemainTermUtil;
-import com.znty.rrs.common.util.MarketCodeMatchUtil;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -118,6 +117,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ForbiddenPoolAdjustService {
+    /** 统一证券市场及同券查询组件。 */
+    @Resource
+    private SecurityMarketService securityMarketService;
 
     /** 短时间重复提交判定窗口（秒） */
     private static final int DUPLICATE_SUBMIT_WINDOW_SECONDS = 30;
@@ -614,6 +616,11 @@ public class ForbiddenPoolAdjustService {
         if (dto == null) {
             throw new BizException(404, "证券不存在");
         }
+        // 关联市场实时读取 Wind，历史快照仍保留其余业务字段
+        if (!"company".equals(dto.getSecurityType())) {
+            dto.setMarketCode(securityMarketService.queryMarketCode(dto.getWindCode()));
+            dto.setRelatedMarketCodes(securityMarketService.queryRelatedMarketCodes(dto.getWindCode()));
+        }
         return dto;
     }
 
@@ -962,7 +969,9 @@ public class ForbiddenPoolAdjustService {
                 .filter(this::isManualSubmitItem).collect(Collectors.toList());
         List<IpAdjustLogBo> recentLogs = forbiddenPoolAdjustMapper.queryRecentManualAdjustLogList(
                 req.getSecurityCode(), req.getAdjusterId(), DUPLICATE_SUBMIT_WINDOW_SECONDS);
-        if (manualItems.isEmpty() || recentLogs == null || recentLogs.isEmpty()) return;
+        if (manualItems.isEmpty() || recentLogs == null || recentLogs.isEmpty()) {
+            return;
+        }
         List<String> requestKeys = manualItems.stream().map(item -> item.getTargetPoolId() + "|"
                 + item.getAdjustMode() + "|" + item.getFlowId() + "|" + normalizeText(item.getFlowKey()))
                 .sorted().collect(Collectors.toList());
@@ -995,7 +1004,9 @@ public class ForbiddenPoolAdjustService {
         if (poolIds != null) {
             for (Long poolId : poolIds) {
                 Long rootId = resolveRootPoolId(poolId, poolMap);
-                if (rootId != null) result.add(rootId);
+                if (rootId != null) {
+                    result.add(rootId);
+                }
             }
         }
         return result;
@@ -1007,7 +1018,9 @@ public class ForbiddenPoolAdjustService {
         Set<Long> visited = new HashSet<>();
         while (currentId != null && visited.add(currentId)) {
             InvestmentPoolBo pool = poolMap.get(currentId);
-            if (pool == null || pool.getParentId() == null) return currentId;
+            if (pool == null || pool.getParentId() == null) {
+                return currentId;
+            }
             currentId = pool.getParentId();
         }
         return currentId;
@@ -1569,10 +1582,6 @@ public class ForbiddenPoolAdjustService {
         current.setShortName(changedField.getShortName());
         current.setWindCode(changedField.getWindCode());
         current.setIssuer(changedField.getIssuer());
-        current.setWindCodeNib(changedField.getWindCodeNib());
-        current.setWindCodeSh(changedField.getWindCodeSh());
-        current.setWindCodeSz(changedField.getWindCodeSz());
-        current.setWindCodeBj(changedField.getWindCodeBj());
         current.setIssueAmountplan(changedField.getIssueAmountplan());
         current.setCouponRate(changedField.getCouponRate());
         current.setMaturityembeddedDesc(changedField.getMaturityembeddedDesc());
@@ -2632,7 +2641,9 @@ public class ForbiddenPoolAdjustService {
 
     /** 最终审批通过前按当前业务状态复核主体调库项。 */
     public void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList) {
-        if (logList == null || logList.isEmpty()) return;
+        if (logList == null || logList.isEmpty()) {
+            return;
+        }
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p));
         List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
@@ -2663,7 +2674,9 @@ public class ForbiddenPoolAdjustService {
                 throwFinalRecheckFailure(log, "目标投资池不存在或已停用");
             }
             SecurityInfoBo security = queryAdjustSecurityInfo(log.getSecurityCode(), log.getSecurityType());
-            if (security == null) throwFinalRecheckFailure(log, "调整对象不存在");
+            if (security == null) {
+                throwFinalRecheckFailure(log, "调整对象不存在");
+            }
             String categoryType = forbiddenPoolAdjustMapper
                     .queryCategoryTypeBySecurityType(security.getSecurityType());
             AdjustCheckContext ctx = new AdjustCheckContext();
@@ -2708,7 +2721,9 @@ public class ForbiddenPoolAdjustService {
                 failure = pledgeBlacklistRuleService.validate(log.getSecurityCode(), log.getAdjustMode(),
                         projectedInPoolIds, projectedOutPoolIds);
             }
-            if (failure != null) throwFinalRecheckFailure(log, failure);
+            if (failure != null) {
+                throwFinalRecheckFailure(log, failure);
+            }
         }
     }
 
@@ -2919,7 +2934,11 @@ public class ForbiddenPoolAdjustService {
 
     /** 返回第一个最终审批复核失败原因。 */
     private String firstFinalFailure(String... failures) {
-        for (String failure : failures) if (failure != null && !failure.isEmpty()) return failure;
+        for (String failure : failures) {
+            if (failure != null && !failure.isEmpty()) {
+                return failure;
+            }
+        }
         return null;
     }
 
@@ -3487,16 +3506,16 @@ public class ForbiddenPoolAdjustService {
     /**
      * 规则：投资市场（market_codes）
      *
-     * <p>目标池配置了投资市场时，证券所在市场须至少有一个在配置内。
-     * 市场 code 统一见 MarketCode，推导见 MarketCodeMatchUtil。
+     * <p>目标池配置了投资市场时，当前证券代码所属市场须在配置内。
+     * 市场 code 统一见 MarketCode，当前市场由 SecurityMarketService 查询。
      */
     private String inCheckMarket(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool == null || pool.getMarketCodes() == null || pool.getMarketCodes().isEmpty()) {
             return null;
         }
-        // 证券任一可推导市场落在池配置内即可
-        if (!MarketCodeMatchUtil.matchesPoolMarkets(
+        // 仅比较当前证券代码所属市场
+        if (!securityMarketService.matchesPoolMarkets(
                 pool.getMarketCodes(), ctx.getSecurityInfo())) {
             return "证券不在本池投资市场范围内";
         }

@@ -22,6 +22,8 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.UUID;
 import javax.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,10 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class TempSecurityCodeService {
+
+    /** 统一证券市场查询组件。 */
+    @Resource
+    private SecurityMarketService securityMarketService;
 
     /** 转正时临时出库原因（对齐老系统「债券临时代码调出」） */
     private static final String REASON_TEMP_OUT = "债券临时代码调出";
@@ -126,7 +132,16 @@ public class TempSecurityCodeService {
             req = new TempSecurityCodeReq();
         }
         // 查询正式证券远程选项
-        return tempSecurityCodeMapper.queryFormalSecurityOptionList(req);
+        List<TempSecurityCodeDto.FormalSecurityOption> options = tempSecurityCodeMapper.queryFormalSecurityOptionList(req);
+        List<String> codes = new ArrayList<>();
+        for (TempSecurityCodeDto.FormalSecurityOption option : options) {
+            codes.add(option.getSecurityCode());
+        }
+        Map<String, String> markets = securityMarketService.queryMarketCodeMap(codes);
+        for (TempSecurityCodeDto.FormalSecurityOption option : options) {
+            option.setSecurityMarket(markets.get(option.getSecurityCode()));
+        }
+        return options;
     }
 
     /**
@@ -334,6 +349,7 @@ public class TempSecurityCodeService {
         if (formalSecurity.getSecurityType() == null || formalSecurity.getSecurityType().trim().isEmpty()) {
             throw new BizException("正式证券缺少证券类型，securityCode=" + securityCode);
         }
+        formalSecurity.setSecurityMarket(securityMarketService.queryMarketCode(formalSecurity.getSecurityCode()));
         return formalSecurity;
     }
 

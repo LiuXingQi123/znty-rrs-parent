@@ -41,14 +41,6 @@ public class AdjustSecuritySnapshotCrmwBo {
     private String issuer;
     /** 发行人代码 */
     private String issuerCode;
-    /** 银行间市场代码 */
-    private String windCodeNib;
-    /** 沪市证券代码 */
-    private String windCodeSh;
-    /** 深市证券代码 */
-    private String windCodeSz;
-    /** 北交所代码 */
-    private String windCodeBj;
     /** 发行规模(亿元) */
     private BigDecimal issueAmountplan;
     /** 票面利率(%) */
@@ -96,8 +88,6 @@ public class AdjustSecuritySnapshotCrmwBo {
     /** 证券分析 */
     private String analysis;
 
-    /** 其他市场代码 */
-    private String windCodeNbc;
     /** 证券期限(年) */
     private BigDecimal termYear;
     /** 证券期限(天) */

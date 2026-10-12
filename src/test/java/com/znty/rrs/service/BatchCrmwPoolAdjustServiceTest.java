@@ -396,12 +396,16 @@ public class BatchCrmwPoolAdjustServiceTest {
 
     /** 验证填充市场编码 */
     @Test
-    public void fillCandidateFieldsShouldSplitMarketText() {
+    public void fillCandidateFieldsShouldUseCurrentMarket() {
         BatchCrmwPoolAdjustService service = new BatchCrmwPoolAdjustService();
+        SecurityMarketService markets = mock(SecurityMarketService.class);
+        ReflectionTestUtils.setField(service, "securityMarketService", markets);
+        when(markets.queryMarketCodeMap(Collections.singletonList("XYB001.IB")))
+                .thenReturn(Collections.singletonMap("XYB001.IB", "CIBM"));
         BatchCrmwCandidateDto dto = new BatchCrmwCandidateDto();
-        dto.setMarketCodeText("SSE,CIBM");
+        dto.setSecurityCode("XYB001.IB");
         ReflectionTestUtils.invokeMethod(service, "fillCandidateFields", Collections.singletonList(dto));
-        assertThat(dto.getMarketCodes()).containsExactly("SSE", "CIBM");
+        assertThat(dto.getMarketCodes()).containsExactly("CIBM");
         assertThat(dto.getCrmwStype()).isEqualTo("crmw");
     }
 }

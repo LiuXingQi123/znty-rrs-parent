@@ -30,11 +30,6 @@ CREATE TABLE `rrs_securityinfo`
     `full_name`                  varchar(300)    DEFAULT NULL COMMENT '证券全称',
     `issue_announcement`         varchar(10)     DEFAULT NULL COMMENT '公告日期',
     `short_name`                 varchar(100)    DEFAULT NULL COMMENT '证券简称',
-    `wind_code_sh`              varchar(100)    DEFAULT NULL COMMENT '沪市证券代码',
-    `wind_code_sz`              varchar(100)    DEFAULT NULL COMMENT '深市证券代码',
-    `wind_code_nib`             varchar(100)    DEFAULT NULL COMMENT '银行间市场代码',
-    `wind_code_bj`              varchar(100)    DEFAULT NULL COMMENT '北交所代码',
-    `wind_code_nbc`             varchar(100)    DEFAULT NULL COMMENT '其他',
     `security_type`              varchar(32)     DEFAULT NULL COMMENT '证券类型编码，关联 dict_security_type.security_type',
     `term_year`                  decimal(10, 4)  DEFAULT NULL COMMENT '证券期限(年)',
     `term_day`                   decimal(10, 4)  DEFAULT NULL COMMENT '证券期限(天)',
@@ -141,13 +136,10 @@ CREATE TABLE `rrs_securityinfo`
     `guarant_flag`               int             DEFAULT NULL COMMENT '是否担保',
     `guarant_type`               varchar(100)    DEFAULT NULL COMMENT '担保类型',
     `abs_flag`                   int             DEFAULT NULL COMMENT '是否 ABS',
-    `sec_id_sh`                  varchar(100)    DEFAULT NULL COMMENT '沪市证券id',
-    `sec_id_sz`                  varchar(100)    DEFAULT NULL COMMENT '深市证券id',
-    `sec_id_nib`                 varchar(100)    DEFAULT NULL COMMENT '银行间证券id',
-    `sec_id_nbc`                 varchar(100)    DEFAULT NULL COMMENT '其他证券id',
-    `sec_id_bj`                  varchar(100)    DEFAULT NULL COMMENT '北交所证券id',
     `std_clause_flag`            int             DEFAULT NULL COMMENT '标准条款判定：1=条款合格 / 0=条款不合格 / NULL=未判定',
     `std_credit_flag`            int             DEFAULT NULL COMMENT '标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定',
+
+    `sec_id`                     varchar(100)    DEFAULT NULL COMMENT '证券 ID',
 
     PRIMARY KEY (`wind_code`)
 ) ENGINE = InnoDB

@@ -26,7 +26,6 @@ import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.util.AdjustStepHandlerExcludeUtil;
 import com.znty.rrs.common.util.CreditBondRemainTermUtil;
-import com.znty.rrs.common.util.MarketCodeMatchUtil;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -114,6 +113,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class CrmwPoolAdjustService {
+    /** 统一证券市场及同券查询组件。 */
+    @Resource
+    private SecurityMarketService securityMarketService;
 
     /** 短时间重复提交判定窗口（秒） */
     private static final int DUPLICATE_SUBMIT_WINDOW_SECONDS = 30;
@@ -221,6 +223,8 @@ public class CrmwPoolAdjustService {
         if (!CRMW_SECURITY_TYPE.equals(dto.getSecurityType())) {
             throw new BizException("所选证券不是 CRMW 凭证");
         }
+        dto.setMarketCode(securityMarketService.queryMarketCode(dto.getWindCode()));
+        dto.setRelatedMarketCodes(securityMarketService.queryRelatedMarketCodes(dto.getWindCode()));
         return dto;
     }
 
@@ -257,6 +261,11 @@ public class CrmwPoolAdjustService {
         }
         if (CRMW_SECURITY_TYPE.equals(dto.getSecurityType())) {
             throw new BizException("标的证券不能是 CRMW 凭证");
+        }
+        // 关联市场实时读取 Wind，历史快照仍保留其余业务字段
+        if (!"company".equals(dto.getSecurityType())) {
+            dto.setMarketCode(securityMarketService.queryMarketCode(dto.getWindCode()));
+            dto.setRelatedMarketCodes(securityMarketService.queryRelatedMarketCodes(dto.getWindCode()));
         }
         return dto;
     }
@@ -703,7 +712,9 @@ public class CrmwPoolAdjustService {
         List<IpAdjustLogBo> recentLogs = crmwPoolAdjustMapper.queryRecentManualAdjustLogList(
                 req.getSecurityCode(), req.getCrmwScode(), req.getCrmwStype(),
                 req.getAdjusterId(), DUPLICATE_SUBMIT_WINDOW_SECONDS);
-        if (manualItems.isEmpty() || recentLogs == null || recentLogs.isEmpty()) return;
+        if (manualItems.isEmpty() || recentLogs == null || recentLogs.isEmpty()) {
+            return;
+        }
         List<String> requestKeys = manualItems.stream().map(item -> item.getTargetPoolId() + "|"
                 + item.getAdjustMode() + "|" + item.getFlowId() + "|" + normalizeText(item.getFlowKey()))
                 .sorted().collect(Collectors.toList());
@@ -736,7 +747,9 @@ public class CrmwPoolAdjustService {
         if (poolIds != null) {
             for (Long poolId : poolIds) {
                 Long rootId = resolveRootPoolId(poolId, poolMap);
-                if (rootId != null) result.add(rootId);
+                if (rootId != null) {
+                    result.add(rootId);
+                }
             }
         }
         return result;
@@ -748,7 +761,9 @@ public class CrmwPoolAdjustService {
         Set<Long> visited = new HashSet<>();
         while (currentId != null && visited.add(currentId)) {
             InvestmentPoolBo pool = poolMap.get(currentId);
-            if (pool == null || pool.getParentId() == null) return currentId;
+            if (pool == null || pool.getParentId() == null) {
+                return currentId;
+            }
             currentId = pool.getParentId();
         }
         return currentId;
@@ -1412,10 +1427,6 @@ public class CrmwPoolAdjustService {
         current.setShortName(changedField.getShortName());
         current.setWindCode(changedField.getWindCode());
         current.setIssuer(changedField.getIssuer());
-        current.setWindCodeNib(changedField.getWindCodeNib());
-        current.setWindCodeSh(changedField.getWindCodeSh());
-        current.setWindCodeSz(changedField.getWindCodeSz());
-        current.setWindCodeBj(changedField.getWindCodeBj());
         current.setIssueAmountplan(changedField.getIssueAmountplan());
         current.setCouponRate(changedField.getCouponRate());
         current.setMaturityembeddedDesc(changedField.getMaturityembeddedDesc());
@@ -2476,7 +2487,9 @@ public class CrmwPoolAdjustService {
 
     /** 最终审批通过前按当前业务状态复核 CRMW 调库项。 */
     public void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList) {
-        if (logList == null || logList.isEmpty()) return;
+        if (logList == null || logList.isEmpty()) {
+            return;
+        }
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p));
         List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
@@ -2495,7 +2508,9 @@ public class CrmwPoolAdjustService {
                 throwFinalRecheckFailure(log, "目标投资池不存在或已停用");
             }
             SecurityInfoBo security = crmwPoolAdjustMapper.querySecurityBoByCode(log.getSecurityCode());
-            if (security == null) throwFinalRecheckFailure(log, "标的证券不存在");
+            if (security == null) {
+                throwFinalRecheckFailure(log, "标的证券不存在");
+            }
             AdjustCheckContext ctx = new AdjustCheckContext();
             ctx.setSecurityInfo(security);
             ctx.setTargetPool(pool);
@@ -2515,7 +2530,9 @@ public class CrmwPoolAdjustService {
                 int increment = inboundIncrements.getOrDefault(pool.getId(), 0);
                 int currentCount = crmwPoolAdjustMapper.queryPoolCurrentCount(pool.getId());
                 if (failure == null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
-                        && currentCount + increment >= pool.getMaxCapacity()) failure = "目标投资池容量已满";
+                        && currentCount + increment >= pool.getMaxCapacity()) {
+                    failure = "目标投资池容量已满";
+                }
                 inboundIncrements.put(pool.getId(), increment + 1);
             } else {
                 boolean comboInPool = crmwPoolAdjustMapper.queryCrmwComboInPool(log.getCrmwScode(),
@@ -2525,7 +2542,9 @@ public class CrmwPoolAdjustService {
                 failure = !comboInPool ? "信用缓释凭证与标的证券组合已不在目标池" : firstFinalFailure(
                         outCheckPoolLocked(ctx), outCheckRestrictPool(ctx), outCheckFrozenPeriod(ctx));
             }
-            if (failure != null) throwFinalRecheckFailure(log, failure);
+            if (failure != null) {
+                throwFinalRecheckFailure(log, failure);
+            }
         }
     }
 
@@ -2569,7 +2588,11 @@ public class CrmwPoolAdjustService {
 
     /** 返回第一个最终审批复核失败原因。 */
     private String firstFinalFailure(String... failures) {
-        for (String failure : failures) if (failure != null && !failure.isEmpty()) return failure;
+        for (String failure : failures) {
+            if (failure != null && !failure.isEmpty()) {
+                return failure;
+            }
+        }
         return null;
     }
 
@@ -3104,16 +3127,16 @@ public class CrmwPoolAdjustService {
     /**
      * 规则：投资市场（market_codes）
      *
-     * <p>目标池配置了投资市场时，证券所在市场须至少有一个在配置内。
-     * 市场 code 统一见 MarketCode，推导见 MarketCodeMatchUtil。
+     * <p>目标池配置了投资市场时，当前证券代码所属市场须在配置内。
+     * 市场 code 统一见 MarketCode，当前市场由 SecurityMarketService 查询。
      */
     private String inCheckMarket(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
         if (pool == null || pool.getMarketCodes() == null || pool.getMarketCodes().isEmpty()) {
             return null;
         }
-        // 证券任一可推导市场落在池配置内即可
-        if (!MarketCodeMatchUtil.matchesPoolMarkets(
+        // 仅比较当前证券代码所属市场
+        if (!securityMarketService.matchesPoolMarkets(
                 pool.getMarketCodes(), ctx.getSecurityInfo())) {
             return "证券不在本池投资市场范围内";
         }

@@ -10,11 +10,6 @@
         SELECT wind_code
                ,full_name
                ,short_name
-               ,wind_code_sh
-               ,wind_code_sz
-               ,wind_code_nib
-               ,wind_code_bj
-               ,wind_code_nbc
                ,security_type
         FROM rrs_securityinfo
         WHERE wind_code IN
@@ -222,11 +217,6 @@
         SET wind_code = #{bo.securityCode}
            ,full_name = #{bo.fullName}
            ,short_name = #{bo.shortName}
-           ,wind_code_sh = #{bo.windCodeSh}
-           ,wind_code_sz = #{bo.windCodeSz}
-           ,wind_code_nib = #{bo.windCodeNib}
-           ,wind_code_bj = #{bo.windCodeBj}
-           ,wind_code_nbc = #{bo.windCodeNbc}
            ,security_type = #{bo.securityType}
            ,updt_time = #{bo.updateTime}
         WHERE id IN
@@ -243,11 +233,6 @@
         SET wind_code = #{bo.securityCode}
            ,full_name = #{bo.fullName}
            ,short_name = #{bo.shortName}
-           ,wind_code_sh = #{bo.windCodeSh}
-           ,wind_code_sz = #{bo.windCodeSz}
-           ,wind_code_nib = #{bo.windCodeNib}
-           ,wind_code_bj = #{bo.windCodeBj}
-           ,wind_code_nbc = #{bo.windCodeNbc}
            ,security_type = #{bo.securityType}
            ,updt_time = #{bo.updateTime}
         WHERE id IN
@@ -440,10 +425,6 @@
             ,short_name
             ,issuer
             ,issuer_code
-            ,wind_code_nib
-            ,wind_code_sh
-            ,wind_code_sz
-            ,wind_code_bj
             ,issue_amountplan
             ,coupon_rate
             ,date_inright_exists
@@ -467,7 +448,6 @@
             ,fund_use
             ,prompt_reason
             ,analysis
-            ,wind_code_nbc
             ,term_year
             ,term_day
             ,maturityembedded_desc
@@ -502,10 +482,6 @@
                ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
                ,source_row.issuer
                ,source_row.issuer_code
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNib} ELSE source_row.wind_code_nib END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSh} ELSE source_row.wind_code_sh END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSz} ELSE source_row.wind_code_sz END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeBj} ELSE source_row.wind_code_bj END
                ,source_row.issue_amountplan
                ,source_row.coupon_rate
                ,source_row.date_inright_exists
@@ -529,7 +505,6 @@
                ,source_row.fund_use
                ,source_row.prompt_reason
                ,source_row.analysis
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNbc} ELSE source_row.wind_code_nbc END
                ,source_row.term_year
                ,source_row.term_day
                ,source_row.maturityembedded_desc
@@ -573,10 +548,6 @@
             ,short_name
             ,issuer
             ,issuer_code
-            ,wind_code_nib
-            ,wind_code_sh
-            ,wind_code_sz
-            ,wind_code_bj
             ,issue_amountplan
             ,coupon_rate
             ,date_inright_exists
@@ -600,7 +571,6 @@
             ,fund_use
             ,prompt_reason
             ,analysis
-            ,wind_code_nbc
             ,term_year
             ,term_day
             ,maturityembedded_desc
@@ -635,10 +605,6 @@
                ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
                ,source_row.issuer
                ,source_row.issuer_code
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNib} ELSE source_row.wind_code_nib END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSh} ELSE source_row.wind_code_sh END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSz} ELSE source_row.wind_code_sz END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeBj} ELSE source_row.wind_code_bj END
                ,source_row.issue_amountplan
                ,source_row.coupon_rate
                ,source_row.date_inright_exists
@@ -662,7 +628,6 @@
                ,source_row.fund_use
                ,source_row.prompt_reason
                ,source_row.analysis
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNbc} ELSE source_row.wind_code_nbc END
                ,source_row.term_year
                ,source_row.term_day
                ,source_row.maturityembedded_desc
@@ -910,10 +875,6 @@
             ,short_name
             ,issuer
             ,issuer_code
-            ,wind_code_nib
-            ,wind_code_sh
-            ,wind_code_sz
-            ,wind_code_bj
             ,issue_amountplan
             ,coupon_rate
             ,date_inright_exists
@@ -937,7 +898,6 @@
             ,fund_use
             ,prompt_reason
             ,analysis
-            ,wind_code_nbc
             ,term_year
             ,term_day
             ,maturityembedded_desc
@@ -992,10 +952,6 @@
                ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
                ,source_row.issuer
                ,source_row.issuer_code
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNib} ELSE source_row.wind_code_nib END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSh} ELSE source_row.wind_code_sh END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSz} ELSE source_row.wind_code_sz END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeBj} ELSE source_row.wind_code_bj END
                ,source_row.issue_amountplan
                ,source_row.coupon_rate
                ,source_row.date_inright_exists
@@ -1019,7 +975,6 @@
                ,source_row.fund_use
                ,source_row.prompt_reason
                ,source_row.analysis
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNbc} ELSE source_row.wind_code_nbc END
                ,source_row.term_year
                ,source_row.term_day
                ,source_row.maturityembedded_desc
@@ -1067,10 +1022,6 @@
             ,short_name
             ,issuer
             ,issuer_code
-            ,wind_code_nib
-            ,wind_code_sh
-            ,wind_code_sz
-            ,wind_code_bj
             ,issue_amountplan
             ,coupon_rate
             ,date_inright_exists
@@ -1094,7 +1045,6 @@
             ,fund_use
             ,prompt_reason
             ,analysis
-            ,wind_code_nbc
             ,term_year
             ,term_day
             ,maturityembedded_desc
@@ -1149,10 +1099,6 @@
                ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
                ,source_row.issuer
                ,source_row.issuer_code
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNib} ELSE source_row.wind_code_nib END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSh} ELSE source_row.wind_code_sh END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeSz} ELSE source_row.wind_code_sz END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeBj} ELSE source_row.wind_code_bj END
                ,source_row.issue_amountplan
                ,source_row.coupon_rate
                ,source_row.date_inright_exists
@@ -1176,7 +1122,6 @@
                ,source_row.fund_use
                ,source_row.prompt_reason
                ,source_row.analysis
-               ,CASE WHEN #{formal} = 1 THEN #{bo.windCodeNbc} ELSE source_row.wind_code_nbc END
                ,source_row.term_year
                ,source_row.term_day
                ,source_row.maturityembedded_desc

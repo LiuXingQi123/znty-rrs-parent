@@ -288,7 +288,9 @@ public class ScriptToolService {
         if (tableNames != null && !tableNames.isEmpty()) {
             sql.append(" AND TABLE_NAME IN (");
             for (int i = 0; i < tableNames.size(); i++) {
-                if (i > 0) sql.append(",");
+                if (i > 0) {
+                    sql.append(",");
+                }
                 sql.append("'").append(tableNames.get(i)).append("'");
             }
             sql.append(")");
@@ -1396,8 +1398,12 @@ public class ScriptToolService {
                 inSingleQuote = !inSingleQuote;
             }
             if (!inSingleQuote) {
-                if (ch == '(') parenthesesDepth++;
-                if (ch == ')') parenthesesDepth--;
+                if (ch == '(') {
+                    parenthesesDepth++;
+                }
+                if (ch == ')') {
+                    parenthesesDepth--;
+                }
                 if (ch == ',' && parenthesesDepth == 0) {
                     definitions.add(current.toString());
                     current.setLength(0);
@@ -1746,9 +1752,15 @@ public class ScriptToolService {
         int failedCount = 0;
         long issueCount = 0L;
         for (ScriptInspectionItemDto item : inspection.getItems()) {
-            if (STATUS_SUCCESS.equals(item.getStatus())) successCount++;
-            if (STATUS_WARNING.equals(item.getStatus())) warningCount++;
-            if (STATUS_FAILED.equals(item.getStatus())) failedCount++;
+            if (STATUS_SUCCESS.equals(item.getStatus())) {
+                successCount++;
+            }
+            if (STATUS_WARNING.equals(item.getStatus())) {
+                warningCount++;
+            }
+            if (STATUS_FAILED.equals(item.getStatus())) {
+                failedCount++;
+            }
             issueCount += item.getIssueCount() == null ? 0L : item.getIssueCount();
         }
         inspection.setTotalCount(inspection.getItems().size());
@@ -1806,7 +1818,9 @@ public class ScriptToolService {
     private String joinStrings(List<String> values, String separator) {
         StringBuilder builder = new StringBuilder();
         for (String value : values) {
-            if (builder.length() > 0) builder.append(separator);
+            if (builder.length() > 0) {
+                builder.append(separator);
+            }
             builder.append(value);
         }
         return builder.toString();
@@ -1820,30 +1834,78 @@ public class ScriptToolService {
      */
     private String resolveModuleCode(String fileName) {
         String baseName = new File(fileName).getName();
-        if (baseName.startsWith("ais_inv_analysis")) return "ais-analysis";
-        if (baseName.startsWith("ais_inv_ods")) return "ais-ods";
-        if (baseName.startsWith("rrs_dict")) return "dict";
-        if (baseName.startsWith("rrs_external_import")) return "external-import";
-        if (baseName.startsWith("rrs_fundinfo")) return "fund-info";
-        if (baseName.startsWith("rrs_temp_fund_code")) return "temp-fund-code";
-        if (baseName.startsWith("rrs_fund_nav")) return "fund-nav";
-        if (baseName.startsWith("rrs_fund_pool_adjust")) return "fund-adjust";
-        if (baseName.startsWith("rrs_stockinfo")) return "stock-info";
-        if (baseName.startsWith("rrs_stock_pool_adjust")) return "stock-adjust";
-        if (baseName.startsWith("rrs_security_pool_adjust")) return "security-adjust";
-        if (baseName.startsWith("rrs_flow_definition")) return "flow-definition";
-        if (baseName.startsWith("rrs_rule")) return "rule-config";
-        if (baseName.startsWith("rrs_pool_init")) return "pool-config";
-        if (baseName.startsWith("rrs_crmw_pool_status")) return "crmw-status";
-        if (baseName.startsWith("rrs_sys_attachment")) return "attachment-report";
-        if (baseName.startsWith("rrs_my_security_pool")) return "my-security-pool";
-        if (baseName.startsWith("rrs_credit_bond_grade_rule")) return "credit-bond-grade";
-        if (baseName.startsWith("rrs_temp_security_code")) return "temp-security-code";
-        if (baseName.startsWith("rrs_import_temp")) return "import-temp";
-        if (baseName.startsWith("rrs_adjust_snapshot")) return "adjust-snapshot";
-        if (baseName.startsWith("rrs_script_tool")) return "script-tool";
-        if (baseName.startsWith("rrs_scheduled_task")) return "scheduled-task";
-        if (baseName.startsWith("rrs_grade_rule_alert")) return "grade-rule-alert";
+        if (baseName.startsWith("ais_inv_analysis")) {
+            return "ais-analysis";
+        }
+        if (baseName.startsWith("ais_inv_ods")) {
+            return "ais-ods";
+        }
+        if (baseName.startsWith("rrs_dict")) {
+            return "dict";
+        }
+        if (baseName.startsWith("rrs_external_import")) {
+            return "external-import";
+        }
+        if (baseName.startsWith("rrs_fundinfo")) {
+            return "fund-info";
+        }
+        if (baseName.startsWith("rrs_temp_fund_code")) {
+            return "temp-fund-code";
+        }
+        if (baseName.startsWith("rrs_fund_nav")) {
+            return "fund-nav";
+        }
+        if (baseName.startsWith("rrs_fund_pool_adjust")) {
+            return "fund-adjust";
+        }
+        if (baseName.startsWith("rrs_stockinfo")) {
+            return "stock-info";
+        }
+        if (baseName.startsWith("rrs_stock_pool_adjust")) {
+            return "stock-adjust";
+        }
+        if (baseName.startsWith("rrs_security_pool_adjust")) {
+            return "security-adjust";
+        }
+        if (baseName.startsWith("rrs_flow_definition")) {
+            return "flow-definition";
+        }
+        if (baseName.startsWith("rrs_rule")) {
+            return "rule-config";
+        }
+        if (baseName.startsWith("rrs_pool_init")) {
+            return "pool-config";
+        }
+        if (baseName.startsWith("rrs_crmw_pool_status")) {
+            return "crmw-status";
+        }
+        if (baseName.startsWith("rrs_sys_attachment")) {
+            return "attachment-report";
+        }
+        if (baseName.startsWith("rrs_my_security_pool")) {
+            return "my-security-pool";
+        }
+        if (baseName.startsWith("rrs_credit_bond_grade_rule")) {
+            return "credit-bond-grade";
+        }
+        if (baseName.startsWith("rrs_temp_security_code")) {
+            return "temp-security-code";
+        }
+        if (baseName.startsWith("rrs_import_temp")) {
+            return "import-temp";
+        }
+        if (baseName.startsWith("rrs_adjust_snapshot")) {
+            return "adjust-snapshot";
+        }
+        if (baseName.startsWith("rrs_script_tool")) {
+            return "script-tool";
+        }
+        if (baseName.startsWith("rrs_scheduled_task")) {
+            return "scheduled-task";
+        }
+        if (baseName.startsWith("rrs_grade_rule_alert")) {
+            return "grade-rule-alert";
+        }
         return "unknown";
     }
 
@@ -1856,30 +1918,78 @@ public class ScriptToolService {
     private String resolveModuleName(String fileName) {
         // 先按脚本文件名确定模块编码
         String moduleCode = resolveModuleCode(fileName);
-        if ("ais-analysis".equals(moduleCode)) return "AIS 投资分析库";
-        if ("ais-ods".equals(moduleCode)) return "AIS 投资 ODS 库";
-        if ("dict".equals(moduleCode)) return "字典数据";
-        if ("external-import".equals(moduleCode)) return "外部导入表";
-        if ("fund-info".equals(moduleCode)) return "基金基础信息";
-        if ("temp-fund-code".equals(moduleCode)) return "基金临时代码";
-        if ("fund-nav".equals(moduleCode)) return "基金净值数据";
-        if ("fund-adjust".equals(moduleCode)) return "基金调库数据";
-        if ("stock-info".equals(moduleCode)) return "股票基础信息";
-        if ("stock-adjust".equals(moduleCode)) return "股票调库数据";
-        if ("security-adjust".equals(moduleCode)) return "证券调库演示数据";
-        if ("flow-definition".equals(moduleCode)) return "流程定义";
-        if ("rule-config".equals(moduleCode)) return "规则配置";
-        if ("pool-config".equals(moduleCode)) return "投资池配置";
-        if ("crmw-status".equals(moduleCode)) return "CRMW 当前池";
-        if ("attachment-report".equals(moduleCode)) return "附件与报告";
-        if ("my-security-pool".equals(moduleCode)) return "我的证券池";
-        if ("credit-bond-grade".equals(moduleCode)) return "信用债评级规则";
-        if ("temp-security-code".equals(moduleCode)) return "临时代码";
-        if ("import-temp".equals(moduleCode)) return "Excel 导入临时表";
-        if ("adjust-snapshot".equals(moduleCode)) return "调库信息快照";
-        if ("script-tool".equals(moduleCode)) return "脚本工具审计";
-        if ("scheduled-task".equals(moduleCode)) return "定时任务配置";
-        if ("grade-rule-alert".equals(moduleCode)) return "不符合分级规则提醒";
+        if ("ais-analysis".equals(moduleCode)) {
+            return "AIS 投资分析库";
+        }
+        if ("ais-ods".equals(moduleCode)) {
+            return "AIS 投资 ODS 库";
+        }
+        if ("dict".equals(moduleCode)) {
+            return "字典数据";
+        }
+        if ("external-import".equals(moduleCode)) {
+            return "外部导入表";
+        }
+        if ("fund-info".equals(moduleCode)) {
+            return "基金基础信息";
+        }
+        if ("temp-fund-code".equals(moduleCode)) {
+            return "基金临时代码";
+        }
+        if ("fund-nav".equals(moduleCode)) {
+            return "基金净值数据";
+        }
+        if ("fund-adjust".equals(moduleCode)) {
+            return "基金调库数据";
+        }
+        if ("stock-info".equals(moduleCode)) {
+            return "股票基础信息";
+        }
+        if ("stock-adjust".equals(moduleCode)) {
+            return "股票调库数据";
+        }
+        if ("security-adjust".equals(moduleCode)) {
+            return "证券调库演示数据";
+        }
+        if ("flow-definition".equals(moduleCode)) {
+            return "流程定义";
+        }
+        if ("rule-config".equals(moduleCode)) {
+            return "规则配置";
+        }
+        if ("pool-config".equals(moduleCode)) {
+            return "投资池配置";
+        }
+        if ("crmw-status".equals(moduleCode)) {
+            return "CRMW 当前池";
+        }
+        if ("attachment-report".equals(moduleCode)) {
+            return "附件与报告";
+        }
+        if ("my-security-pool".equals(moduleCode)) {
+            return "我的证券池";
+        }
+        if ("credit-bond-grade".equals(moduleCode)) {
+            return "信用债评级规则";
+        }
+        if ("temp-security-code".equals(moduleCode)) {
+            return "临时代码";
+        }
+        if ("import-temp".equals(moduleCode)) {
+            return "Excel 导入临时表";
+        }
+        if ("adjust-snapshot".equals(moduleCode)) {
+            return "调库信息快照";
+        }
+        if ("script-tool".equals(moduleCode)) {
+            return "脚本工具审计";
+        }
+        if ("scheduled-task".equals(moduleCode)) {
+            return "定时任务配置";
+        }
+        if ("grade-rule-alert".equals(moduleCode)) {
+            return "不符合分级规则提醒";
+        }
         return "未识别模块";
     }
 
