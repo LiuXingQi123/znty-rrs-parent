@@ -227,7 +227,7 @@ public class ScriptToolService {
                 "t_sys_user_role", "t_sys_user_role_evt")));
         // AIS 投资 ODS 库：仅统计本地已有表
         groups.add(buildRowCountGroup("ais_inv_ods", "AIS 投资 ODS 库", Arrays.asList(
-                "wind_cbondissuer", "wind_cbondissuerrating")));
+                "wind_cbondissuer", "wind_cbondissuerrating", "wind_windcustomcode")));
         return groups;
     }
 
@@ -1899,7 +1899,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "scheduled-task", "定时任务配置", "重置定时任务配置与执行历史演示数据。", "medium", "rrs_scheduled_task_demo_data.sql");
         addModuleTask(taskMap, "grade-rule-alert", "不符合分级规则提醒", "重置不符合主体债入库规则提醒待办。", "medium", "rrs_grade_rule_alert_demo_data.sql");
         addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体评级、担保人内评、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
-        addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 债券发行人主体与评级表演示数据。", "danger", "ais_inv_ods_demo_data.sql");
+        addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 债券发行人主体、评级、公司财务指标与跨市场证券代码演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;
     }
 
@@ -2673,7 +2673,8 @@ public class ScriptToolService {
         groups.add(buildTableGroup("ais-ods", "AIS 投资 ODS 库", "ais_inv_ods", Arrays.asList(
                 buildTable("ais_inv_ods", "wind_cbondissuer", "Wind 中国债券发行主体信息表"),
                 buildTable("ais_inv_ods", "wind_cbondissuerrating", "Wind 中国债券发行主体信用评级表"),
-                buildTable("ais_inv_ods", "wind_companyfinancial", "Wind 公司财务指标表")
+                buildTable("ais_inv_ods", "wind_companyfinancial", "Wind 公司财务指标表"),
+                buildTable("ais_inv_ods", "wind_windcustomcode", "Wind 跨市场证券代码关联表")
         )));
         return groups;
     }

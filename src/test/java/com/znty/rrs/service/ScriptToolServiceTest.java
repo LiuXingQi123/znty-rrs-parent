@@ -40,6 +40,7 @@ public class ScriptToolServiceTest {
         Map<?, ?> healthTables = ReflectionTestUtils.invokeMethod(service, "queryClearTableMap");
 
         assertTrue(tables.containsKey("znty_rrs.rrs_securityinfo"));
+        assertTrue(tables.containsKey("ais_inv_ods.wind_windcustomcode"));
         assertTrue(tables.containsKey("znty_rrs.rrs_fundinfo"));
         assertTrue(tables.containsKey("znty_rrs.rrs_fund_nav"));
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_log_fund"));

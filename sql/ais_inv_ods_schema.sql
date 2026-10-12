@@ -1,5 +1,5 @@
 -- ============================================================
--- AIS 投资 ODS 库 - Wind 债券发行人、评级与公司财务指标表建表脚本
+-- AIS 投资 ODS 库 - Wind 债券发行人、评级、公司财务指标与跨市场证券代码表建表脚本
 -- MySQL version: 8.0.33
 -- 说明：表结构与公司原有 wind_cbondissuer / wind_cbondissuerrating 表保持一致
 -- ============================================================
@@ -12,6 +12,7 @@ SET NAMES utf8mb4;
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
 DROP TABLE IF EXISTS `wind_companyfinancial`;
+DROP TABLE IF EXISTS `wind_windcustomcode`;
 DROP TABLE IF EXISTS `wind_cbondissuerrating`;
 DROP TABLE IF EXISTS `wind_cbondissuer`;
 
@@ -74,6 +75,46 @@ CREATE TABLE `wind_cbondissuerrating` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = 'Wind 中国债券发行主体信用评级表';
+
+-- ----------------------------------------------------------------------------
+-- 创建 Wind 跨市场证券代码关联表
+-- 外部源结构按截图保留 28 列的名称、类型与顺序，不追加业务主键或时间字段。
+-- S_INFO_WINDCODE 对齐 znty_rrs.rrs_securityinfo.wind_code；相同非空 ISIN 表示同券。
+-- ----------------------------------------------------------------------------
+CREATE TABLE `wind_windcustomcode` (
+    `OBJECT_ID`                  VARCHAR(100) NOT NULL     COMMENT '对象 ID',
+    `S_INFO_WINDCODE`            VARCHAR(40)  DEFAULT NULL COMMENT 'Wind 证券代码，对齐 rrs_securityinfo.wind_code',
+    `S_INFO_ASHARECODE`          VARCHAR(10)  DEFAULT NULL COMMENT 'Wind 内部证券代码',
+    `S_INFO_COMPCODE`            VARCHAR(10)  DEFAULT NULL COMMENT '发行主体代码',
+    `S_INFO_SECURITIESTYPES`     VARCHAR(10)  DEFAULT NULL COMMENT '证券类型，截图样本：Q=企债 / K=可转换债券',
+    `S_INFO_SECTYPENAME`         VARCHAR(100) DEFAULT NULL COMMENT '证券类型名称',
+    `S_INFO_COUNTRYNAME`         VARCHAR(100) DEFAULT NULL COMMENT '国家名称',
+    `S_INFO_COUNTRYCODE`         VARCHAR(10)  DEFAULT NULL COMMENT '国家代码，如 CN',
+    `S_INFO_EXCHMARKETNAME`      VARCHAR(40)  DEFAULT NULL COMMENT '交易市场名称',
+    `S_INFO_EXCHMARKET`          VARCHAR(10)  DEFAULT NULL COMMENT '交易市场代码，Demo：IB=银行间 / SSE=上海 / SZSE=深圳',
+    `CRNCY_NAME`                VARCHAR(40)  DEFAULT NULL COMMENT '币种名称',
+    `CRNCY_CODE`                VARCHAR(10)  DEFAULT NULL COMMENT '币种代码，如 CNY',
+    `S_INFO_ISINCODE`           VARCHAR(40)  DEFAULT NULL COMMENT '国际证券识别码，相同非空值表示同一只券，NULL 不作为关联依据',
+    `S_INFO_CODE`               VARCHAR(40)  DEFAULT NULL COMMENT '市场证券代码，不含 Wind 市场后缀',
+    `S_INFO_NAME`               VARCHAR(200) DEFAULT NULL COMMENT '证券名称',
+    `EXCHMARKET`                VARCHAR(10)  DEFAULT NULL COMMENT '交易市场代码',
+    `SECURITY_STATUS`           BIGINT       DEFAULT NULL COMMENT 'Wind 证券状态原始编码',
+    `S_INFO_ORG_CODE`           VARCHAR(20)  DEFAULT NULL COMMENT '机构代码',
+    `S_INFO_TYPECODE`           BIGINT       DEFAULT NULL COMMENT '证券类型编码',
+    `S_INFO_MIN_PRICE_CHG_UNIT` DOUBLE       DEFAULT NULL COMMENT '最小价格变动单位',
+    `S_INFO_LOT_SIZE`           FLOAT        DEFAULT NULL COMMENT '最小交易单位',
+    `S_INFO_ENAME`              VARCHAR(200) DEFAULT NULL COMMENT '证券英文名称',
+    `TRADING_HOURS_CODE`        VARCHAR(10)  DEFAULT NULL COMMENT '交易时间代码',
+    `S_INFO_SECTYPEBCODE`       BIGINT       DEFAULT NULL COMMENT '证券大类编码',
+    `S_INFO_SECTYPESCODE`       BIGINT       DEFAULT NULL COMMENT '证券小类编码',
+    `S_INFO_PINYIN`             VARCHAR(40)  DEFAULT NULL COMMENT '证券名称拼音缩写',
+    `OPDATE`                    DATE         DEFAULT NULL COMMENT '操作日期',
+    `OPMODE`                    VARCHAR(1)   DEFAULT NULL COMMENT '操作模式：0=新增 / 1=修改 / 2=删除',
+    PRIMARY KEY (`OBJECT_ID`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci
+  COMMENT = 'Wind 跨市场证券代码关联表';
 
 -- ----------------------------------------------------------------------------
 -- 创建 Wind 公司财务指标表
