@@ -189,7 +189,7 @@ public class PledgeBlacklistDailyIncrementReminderService implements RrsSchedule
         for (BondReminderDto row : rows) {
             // 将可空字段和审核时间格式化为可读文本
             detail.line("提醒候选：池=" + row.getTargetPoolName()
-                    + "，证券=" + row.getSecurityShortName() + "(" + row.getSecurityCode() + ")"
+                    + "，证券=" + row.getSecurityShortName() + "(" + row.getIsinCode() + ")"
                     + "，主体=" + nullToEmpty(row.getIssuerName())
                     + "，方向=" + nullToEmpty(row.getAdjustMode())
                     + "，审核时间=" + formatTime(row.getAuditTime()));

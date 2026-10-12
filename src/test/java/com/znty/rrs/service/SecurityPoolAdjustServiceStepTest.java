@@ -70,8 +70,15 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("DBB002.IB");
+        securityInfo.setIsinCode("DBB002.IB");
         RelatedRatingCompanyDto guarantor = new RelatedRatingCompanyDto();
         guarantor.setCompanyCode("C10008");
         guarantor.setCompanyName("测试担保人");
@@ -92,8 +99,15 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("DBB002.IB");
+        securityInfo.setIsinCode("DBB002.IB");
         when(mapper.queryRelatedRatingCompanyList("DBB002.IB")).thenReturn(Collections.emptyList());
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(
@@ -108,8 +122,15 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("ABS001.IB");
+        securityInfo.setIsinCode("ABS001.IB");
         securityInfo.setAbsFlag(1);
         securityInfo.setInnerIssuerRating("1");
         RelatedRatingCompanyDto related = new RelatedRatingCompanyDto();
@@ -139,8 +160,15 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("ABS001.IB");
+        securityInfo.setIsinCode("ABS001.IB");
         securityInfo.setAbsFlag(1);
         RelatedRatingCompanyDto firstCompany = new RelatedRatingCompanyDto();
         firstCompany.setCompanyCode("C10001");
@@ -162,8 +190,15 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("ABS001.IB");
+        securityInfo.setIsinCode("ABS001.IB");
         securityInfo.setAbsFlag(1);
         when(mapper.queryRelatedRatingCompanyList("ABS001.IB")).thenReturn(Collections.emptyList());
 
@@ -179,8 +214,15 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("BOND001.IB");
+        securityInfo.setIsinCode("BOND001.IB");
         RelatedRatingCompanyDto firstCompany = new RelatedRatingCompanyDto();
         firstCompany.setCompanyCode("C20001");
         firstCompany.setCompanyName("接口首条主体");
@@ -250,15 +292,22 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
 
         SecurityInfoBo master = new SecurityInfoBo();
-        master.setWindCode("110010123");
+        master.setIsinCode("110010123");
         when(mapper.querySecurityBoByCode("110010123")).thenReturn(master);
 
         SecurityInfoBo frontendInfo = new SecurityInfoBo();
         frontendInfo.setInnerGuarantorRating("前端旧评分");
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
-        req.setSecurityCode("110010123");
+        req.setIsinCode("110010123");
         req.setAdjusterId("1");
         req.setSecurityInfo(frontendInfo);
 
@@ -268,7 +317,7 @@ public class SecurityPoolAdjustServiceStepTest {
         serverInfo.setGuarantorId("C10008");
         serverInfo.setInnerGuarantorRating("1");
         SecurityInfoBo absSecurity = new SecurityInfoBo();
-        absSecurity.setWindCode("ABS001.IB");
+        absSecurity.setIsinCode("ABS001.IB");
         absSecurity.setAbsFlag(1);
         RelatedRatingCompanyDto related = new RelatedRatingCompanyDto();
         related.setCompanyCode("C10001");
@@ -307,12 +356,19 @@ public class SecurityPoolAdjustServiceStepTest {
         InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
 
         IpAdjustLogBo log = new IpAdjustLogBo();
         log.setId(10L);
-        log.setSecurityCode("110010123");
+        log.setIsinCode("110010123");
         log.setSecurityShortName("测试债");
         log.setTargetPoolId(3L);
         log.setFlowName("信用债入库审批流程");
@@ -321,13 +377,13 @@ public class SecurityPoolAdjustServiceStepTest {
         when(investmentPoolService.queryPoolFullNameMap()).thenReturn(Collections.singletonMap(3L, "信用债大库/二级库"));
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("110010123");
+        req.setIsinCode("110010123");
 
         List<AdjustLogDto> result = service.queryAdjustLogList(req);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getFlowName()).isEqualTo("信用债入库审批流程");
-        assertThat(result.get(0).getSecurityCode()).isEqualTo("110010123");
+        assertThat(result.get(0).getIsinCode()).isEqualTo("110010123");
         assertThat(result.get(0).getFlowType()).isEqualTo("normalInbound");
     }
 
@@ -338,11 +394,18 @@ public class SecurityPoolAdjustServiceStepTest {
         InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
 
         IpAdjustLogBo manual = new IpAdjustLogBo();
         manual.setId(1L);
-        manual.setSecurityCode("101.IB");
+        manual.setIsinCode("101.IB");
         manual.setAdjustType("手工调整");
         manual.setAdjustBatchNo("BATCH_REL");
         manual.setTargetPoolId(2L);
@@ -351,11 +414,11 @@ public class SecurityPoolAdjustServiceStepTest {
                 .thenReturn(Collections.singletonMap(2L, "信用债大库/一级库"));
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("101.IB");
+        req.setIsinCode("101.IB");
         List<AdjustLogDto> result = service.queryAdjustLogList(req);
 
         assertThat(result).hasSize(1);
-        assertThat(result).extracting(AdjustLogDto::getSecurityCode).containsExactly("101.IB");
+        assertThat(result).extracting(AdjustLogDto::getIsinCode).containsExactly("101.IB");
         verify(mapper).queryAdjustLogList("101.IB", null);
     }
 
@@ -365,6 +428,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(new SecurityInfoBo());
         ctx.setHasPendingProcess(true);
@@ -385,6 +455,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         // 构建已锁定目标池
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -436,6 +513,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         // 目标池仅允许 bond，证券品种为 fund
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -464,6 +548,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         // 目标池仅允许 SSE（沪市），证券仅在深市
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -545,7 +636,7 @@ public class SecurityPoolAdjustServiceStepTest {
         poolMap.put(1L, targetPool);
         poolMap.put(2L, sourcePool);
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setWindCode("110010123");
+        sec.setIsinCode("110010123");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
         ctx.setTargetPool(targetPool);
@@ -561,6 +652,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         SecurityInfoBo sec = new SecurityInfoBo();
@@ -586,6 +684,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         SecurityInfoBo sec = new SecurityInfoBo();
@@ -611,10 +716,17 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setWindCode("110010123");
+        sec.setIsinCode("110010123");
         when(mapper.querySecurityInForbiddenPool("110010123")).thenReturn(true);
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
@@ -636,11 +748,18 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         pool.setGradeAstrict("1,2");
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setWindCode("110010123");
+        sec.setIsinCode("110010123");
         sec.setRatingBond("A");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
@@ -663,11 +782,18 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         pool.setGradeAstrict("1,2");
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setWindCode("600000.SH");
+        sec.setIsinCode("600000.SH");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
         ctx.setTargetPool(pool);
@@ -790,6 +916,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         pool.setOpenDayAdjust(1);
@@ -807,6 +940,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         pool.setOpenDayAdjust(1);
@@ -824,6 +964,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
         AdjustCheckContext ctx = new AdjustCheckContext();
@@ -840,6 +987,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
@@ -873,6 +1027,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo targetPool = new InvestmentPoolBo();
         targetPool.setId(5L);
@@ -911,6 +1072,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
@@ -941,13 +1109,20 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.querySecurityInForbiddenPool(any(String.class))).thenReturn(false);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
         pool.setPoolName("一级库");
         pool.setLockFlag(1);
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setWindCode("101.IB");
+        sec.setIsinCode("101.IB");
         sec.setSecurityType("corporate_bond");
         // 到期日早于今日
         sec.setMaturityDate("20200101");
@@ -972,6 +1147,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
@@ -993,6 +1175,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
@@ -1028,6 +1217,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
@@ -1063,6 +1259,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
@@ -1096,6 +1299,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level1 = new InvestmentPoolBo();
         level1.setId(2L);
@@ -1155,6 +1365,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level1 = new InvestmentPoolBo();
         level1.setId(2L);
@@ -1202,6 +1419,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level1 = new InvestmentPoolBo();
         level1.setId(2L);
@@ -1271,7 +1495,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(adjustMapper.queryIssuerInObservePool("NO_GRADE.IB")).thenReturn(false);
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("NO_GRADE.IB");
+        req.setIsinCode("NO_GRADE.IB");
         req.setReleaseRules(false);
 
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
@@ -1325,7 +1549,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 .thenReturn(Collections.singletonList(11L));
 
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("NO_TERM.IB");
+        req.setIsinCode("NO_TERM.IB");
         req.setReleaseRules(false);
 
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
@@ -1359,7 +1583,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("2", "GT_1_LE_3"))
                 .thenReturn(Arrays.asList(12L, 13L));
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("ORD.IB");
+        req.setIsinCode("ORD.IB");
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
                 service, "filterInboundByGradeRule", pools, req);
         assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(10L, 12L, 13L, 20L, 21L);
@@ -1388,7 +1612,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("2", "GT_5"))
                 .thenReturn(Collections.singletonList(11L));
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("PPB.IB");
+        req.setIsinCode("PPB.IB");
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
                 service, "filterInboundByGradeRule", pools, req);
         assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(10L, 12L, 13L, 14L, 15L, 20L, 21L);
@@ -1417,7 +1641,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("2", "GT_5"))
                 .thenReturn(Arrays.asList(12L, 13L, 14L, 15L));
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("PPB2.IB");
+        req.setIsinCode("PPB2.IB");
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
                 service, "filterInboundByGradeRule", pools, req);
         assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(10L, 13L, 14L, 15L, 20L, 21L);
@@ -1446,7 +1670,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("1", "GT_5"))
                 .thenReturn(Collections.singletonList(11L));
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("PPB1.IB");
+        req.setIsinCode("PPB1.IB");
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
                 service, "filterInboundByGradeRule", pools, req);
         assertThat(result).extracting(InvestmentPoolBo::getId)
@@ -1479,7 +1703,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket("2", "GT_5"))
                 .thenReturn(Arrays.asList(12L, 13L));
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("OVLP.IB");
+        req.setIsinCode("OVLP.IB");
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
                 service, "filterInboundByGradeRule", pools, req);
         assertThat(result).extracting(InvestmentPoolBo::getId)
@@ -1500,7 +1724,7 @@ public class SecurityPoolAdjustServiceStepTest {
         conv.setInnerIssuerRating("1");
         when(adjustMapper.querySecurityBoByCode("CB.SH")).thenReturn(conv);
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
-        req.setSecurityCode("CB.SH");
+        req.setIsinCode("CB.SH");
         List<InvestmentPoolBo> result = ReflectionTestUtils.invokeMethod(
                 service, "filterInboundByGradeRule", pools, req);
         assertThat(result).extracting(InvestmentPoolBo::getId).containsExactly(20L, 21L);
@@ -1514,6 +1738,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
@@ -1788,6 +2019,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
         // 构建流程节点测试数据
@@ -1827,6 +2065,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
         // 构建流程节点测试数据
@@ -1871,6 +2116,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
 
         // 构建流程节点测试数据
         FlowNodeBo start = buildNode(1L, "n1", "start", 1);
@@ -1920,6 +2172,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
 
         // 构建流程节点测试数据
         FlowNodeBo start = buildNode(1L, "n1", "start", 1);
@@ -1959,6 +2218,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
@@ -1967,7 +2233,7 @@ public class SecurityPoolAdjustServiceStepTest {
         }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
 
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
-        req.setSecurityCode("S001");
+        req.setIsinCode("S001");
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
@@ -2005,6 +2271,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
@@ -2013,7 +2286,7 @@ public class SecurityPoolAdjustServiceStepTest {
         }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
 
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
-        req.setSecurityCode("S001");
+        req.setIsinCode("S001");
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
@@ -2127,10 +2400,17 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
-        req.setSecurityCode("S001");
+        req.setIsinCode("S001");
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
@@ -2169,10 +2449,17 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
-        req.setSecurityCode("S001");
+        req.setIsinCode("S001");
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
@@ -2211,6 +2498,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
@@ -2271,6 +2565,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
             IpAdjustLogBo bo = (IpAdjustLogBo) invocation.getArguments()[0];
@@ -2293,7 +2594,7 @@ public class SecurityPoolAdjustServiceStepTest {
         snapshotMap.put(111L, snapshot);
 
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
-        req.setSecurityCode("S001");
+        req.setIsinCode("S001");
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
@@ -2496,6 +2797,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryPoolCurrentCount(any(Long.class))).thenReturn(1);
 
         InvestmentPoolBo targetPool = buildPool(2L, 1L, "一级库");
@@ -2556,6 +2864,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryPoolCurrentCount(any(Long.class))).thenReturn(1);
 
         InvestmentPoolBo rootPool = buildPool(1L, null, "信用债大库");
@@ -2733,9 +3048,9 @@ public class SecurityPoolAdjustServiceStepTest {
     }
 
     /** 构建直通调入提交请求。 */
-    private SecurityPoolAdjustSubmitReq buildDirectInboundSubmitReq(String securityCode, String groupKey) {
+    private SecurityPoolAdjustSubmitReq buildDirectInboundSubmitReq(String isinCode, String groupKey) {
         SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
-        req.setSecurityCode(securityCode);
+        req.setIsinCode(isinCode);
         req.setSecurityShortName("test");
         req.setSecurityType("bond");
         req.setAdjustType("manual");
@@ -2853,6 +3168,13 @@ public class SecurityPoolAdjustServiceStepTest {
         FlowMapper flowMapper = mock(FlowMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
 
         InvestmentPoolBo targetPool = buildPool(2L, null, "信用债大库/一级库");
@@ -2869,7 +3191,7 @@ public class SecurityPoolAdjustServiceStepTest {
         shared.setCurrentPoolIds(Collections.<Long>emptySet());
         shared.setPoolRelationMap(Collections.<Long, Map<String, List<Long>>>emptyMap());
         AdjustCheckReq req = new AdjustCheckReq();
-        req.setSecurityCode("TEST001.IB");
+        req.setIsinCode("TEST001.IB");
 
         List<AdjustCheckDto.FlowOption> options = ReflectionTestUtils.invokeMethod(
                 service, "resolveAdjustFlowOptionsForItem", req, shared, buildManualInboundItem(2L));
@@ -2888,6 +3210,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         // date_exists_str 解析后大于 3 年
         AdjustSharedData shared = buildWhitelistShared("3年1天", 0, 0, "公募", "bond", 0);
@@ -2905,6 +3234,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("3年", 0, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
@@ -2921,6 +3257,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 1, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
@@ -2937,6 +3280,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 1, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
@@ -2953,6 +3303,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryCategoryTypeBySecurityType("stock")).thenReturn("stock");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "stock", 0);
         List<String> matchReasons = new ArrayList<>();
@@ -2969,6 +3326,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "bond", 1);
         List<String> matchReasons = new ArrayList<>();
@@ -2985,6 +3349,13 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "bond", 0);
         List<String> matchReasons = new ArrayList<>();
@@ -3004,6 +3375,13 @@ public class SecurityPoolAdjustServiceStepTest {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         // 构建唯一的信用债一级库目标
         InvestmentPoolBo targetPool = buildPool(2L, 1L, "一级库");
@@ -3012,7 +3390,7 @@ public class SecurityPoolAdjustServiceStepTest {
         targetPool.setPoolLevel(2);
         AdjustSharedData shared = new AdjustSharedData();
         SecurityInfoBo sec = new SecurityInfoBo();
-        sec.setWindCode("110010123");
+        sec.setIsinCode("110010123");
         sec.setSecurityType("bond");
         sec.setIssueType("公募");
         sec.setInnerIssuerRating("1");
@@ -3032,7 +3410,7 @@ public class SecurityPoolAdjustServiceStepTest {
         when(mapper.queryIssuerHasNonSimpleCreditBondInboundWithinDays("110010123", 180)).thenReturn(true);
         when(mapper.queryIssuerHasRecentCreditReportWithinDays("110010123", 180)).thenReturn(true);
         AdjustCheckReq req = new AdjustCheckReq();
-        req.setSecurityCode("110010123");
+        req.setIsinCode("110010123");
         List<String> matchReasons = new ArrayList<>();
         List<String> unmatchReasons = new ArrayList<>();
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isSimpleInboundFlowMatched",
@@ -3070,11 +3448,19 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityBoByCode(anyString())).thenAnswer(invocation -> {
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setIsinCode(invocation.getArgument(0));
+            master.setSecurityType("bond");
+            master.setShortName("test");
+            return master;
+        });
         IpAdjustLogBo log = new IpAdjustLogBo();
         log.setId(1L);
-        log.setSecurityCode("S001");
+        log.setIsinCode("S001");
         log.setAdjustMode("调入");
         log.setTargetPoolName("一级库");
+        when(mapper.queryEffectiveMarketSnapshot(log)).thenReturn(log);
         when(mapper.addPoolStatus(log)).thenReturn(0);
 
         assertThatThrownBy(() -> service.applyPoolStatusChanges(Collections.singletonList(log)))
@@ -3143,108 +3529,30 @@ public class SecurityPoolAdjustServiceStepTest {
 
     // ===== 多市场关联码（itemTag=related）=====
 
-    /** 关联码解析：带后缀、去自身、去重。 */
+    /** 五码共享一个身份，不再按市场码扩展出独立调库项。 */
     @Test
-    public void resolveRelatedSecurityCodesShouldSkipSelfAndEmpty() {
+    public void fillSecurityIdentityItemsShouldKeepOneBondWithAllMarketCodes() {
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
-        SecurityInfoBo main = new SecurityInfoBo();
-        main.setWindCode("101.IB");
-        main.setWindCodeSh("101.SH");
-        main.setWindCodeSz("101.SZ");
-        main.setWindCodeNib("101.IB"); // 与主码相同，应跳过
-        main.setWindCodeBj("");
-        main.setWindCodeNbc(null);
-
-        @SuppressWarnings("unchecked")
-        List<String> codes = ReflectionTestUtils.invokeMethod(service, "resolveRelatedSecurityCodes", main);
-        assertThat(codes).containsExactly("101.SH", "101.SZ");
-    }
-
-    /** 校验扩批：主券调入后为关联码生成 related 项；不存在主数据的关联码标记失败。 */
-    @Test
-    public void expandRelatedMarketCodeItemsShouldAddRelatedRows() {
-        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
-        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
-        ReflectionTestUtils.setField(service, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
-
-        SecurityInfoBo main = new SecurityInfoBo();
-        main.setWindCode("101.IB");
-        main.setShortName("主券");
-        main.setSecurityType("mtn");
-        main.setWindCodeSh("101.SH");
-        main.setWindCodeSz("MISSING.SZ");
-
-        SecurityInfoBo relatedSh = new SecurityInfoBo();
-        relatedSh.setWindCode("101.SH");
-        relatedSh.setShortName("沪市券");
-        relatedSh.setSecurityType("mtn");
-
-        when(mapper.querySecurityBoByCode("101.SH")).thenReturn(relatedSh);
-        when(mapper.querySecurityBoByCode("MISSING.SZ")).thenReturn(null);
-        when(mapper.querySecurityCurrentPoolIdList("101.SH")).thenReturn(Collections.emptyList());
-        when(mapper.querySecurityHasPendingProcess("101.SH")).thenReturn(false);
-        when(mapper.querySecurityPendingProcessNodeLabel("101.SH")).thenReturn(null);
-        when(mapper.queryPendingManualTargetPoolIdList("101.SH", null)).thenReturn(Collections.emptyList());
-        when(mapper.querySecurityInObservePool("101.SH")).thenReturn(false);
-        when(mapper.queryIssuerInObservePool("101.SH")).thenReturn(false);
-        when(mapper.querySecurityInForbiddenPool("101.SH")).thenReturn(false);
-        when(mapper.queryPoolCurrentCount(2L)).thenReturn(0);
-        when(mapper.queryCategoryTypeBySecurityType("mtn")).thenReturn("bond");
-
-        InvestmentPoolBo pool = buildPool(2L, 1L, "一级库");
-        pool.setPoolType("credit_bond");
-        pool.setVarietyCodes("[\"bond\"]");
-        pool.setMaxCapacity(null);
-        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
-        poolMap.put(1L, buildPool(1L, null, "信用债大库"));
-        poolMap.put(2L, pool);
-
+        SecurityInfoBo master = new SecurityInfoBo();
+        master.setIsinCode("CN001");
+        master.setWindCodeSh("101.SH");
+        master.setWindCodeSz("101.SZ");
+        master.setWindCodeNib("101.IB");
         AdjustSharedData shared = new AdjustSharedData();
-        shared.setSecurityInfo(main);
-        shared.setPoolMap(poolMap);
-        shared.setCurrentPoolIds(Collections.emptySet());
-        shared.setPoolRelationMap(Collections.emptyMap());
-        shared.setPendingPoolGroupIds(Collections.emptySet());
-        shared.setRequestInPoolIds(Collections.singleton(2L));
-        shared.setRequestOutPoolIds(Collections.emptySet());
-
-        AdjustCheckDto.CheckResultItem manual = new AdjustCheckDto.CheckResultItem();
-        manual.setTargetPoolId(2L);
-        manual.setPoolName("信用债大库/一级库");
-        manual.setPoolType("credit_bond");
-        manual.setAdjustMode("调入");
-        manual.setItemTag("manual");
-        manual.setAdjustGroupKey("manual_2_调入");
-        manual.setCanAdjust(true);
-        manual.setFailReasons(new ArrayList<>());
-        List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>();
-        resultItems.add(manual);
-
+        shared.setSecurityInfo(master);
         AdjustCheckReq req = new AdjustCheckReq();
-        req.setSecurityCode("101.IB");
-        req.setItems(Collections.singletonList(new AdjustCheckReq.CheckItem()));
-
-        ReflectionTestUtils.invokeMethod(service, "expandRelatedMarketCodeItems", req, shared, resultItems);
-
-        assertThat(resultItems).hasSize(3);
-        assertThat(resultItems.get(0).getSecurityCode()).isEqualTo("101.IB");
-        assertThat(resultItems.get(0).getItemTag()).isEqualTo("manual");
-
-        AdjustCheckDto.CheckResultItem relatedOk = resultItems.get(1);
-        assertThat(relatedOk.getItemTag()).isEqualTo("related");
-        assertThat(relatedOk.getSecurityCode()).isEqualTo("101.SH");
-        assertThat(relatedOk.getSecurityShortName()).isEqualTo("沪市券");
-        assertThat(relatedOk.getSourceSecurityCode()).isEqualTo("101.IB");
-        assertThat(relatedOk.getAdjustGroupKey()).isEqualTo("manual_2_调入");
-        assertThat(relatedOk.getTargetPoolId()).isEqualTo(2L);
-        assertThat(relatedOk.getAdjustMode()).isEqualTo("调入");
-        // 存在主数据的关联码会走完整校验；此处只断言已生成独立 related 项
-        assertThat(relatedOk.getFailReasons()).isNotNull();
-
-        AdjustCheckDto.CheckResultItem relatedMissing = resultItems.get(2);
-        assertThat(relatedMissing.getSecurityCode()).isEqualTo("MISSING.SZ");
-        assertThat(relatedMissing.isCanAdjust()).isFalse();
-        assertThat(relatedMissing.getFailReasons().get(0)).contains("在系统中不存在");
+        req.setIsinCode("CN001");
+        AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+        item.setTargetPoolId(2L);
+        item.setItemTag("manual");
+        List<AdjustCheckDto.CheckResultItem> items = new ArrayList<>();
+        items.add(item);
+        ReflectionTestUtils.invokeMethod(service, "fillSecurityIdentityItems", req, shared, items);
+        assertThat(items).hasSize(1);
+        assertThat(item.getIsinCode()).isEqualTo("CN001");
+        assertThat(item.getWindCodeSh()).isEqualTo("101.SH");
+        assertThat(item.getWindCodeSz()).isEqualTo("101.SZ");
+        assertThat(item.getWindCodeNib()).isEqualTo("101.IB");
+        assertThat(item.getItemTag()).isEqualTo("manual");
     }
 }

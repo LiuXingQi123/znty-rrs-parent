@@ -38,13 +38,29 @@ public class MyMattersDto {
     /** 调库记录 ID */
     private Long adjustLogId;
 
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
+    private String isinCode;
+    /** 沪市证券代码 */
+    private String windCodeSh;
+    /** 深市证券代码 */
+    private String windCodeSz;
+    /** 银行间证券代码 */
+    private String windCodeNib;
+    /** 北交所证券代码 */
+    private String windCodeBj;
+    /** 其他市场证券代码 */
+    private String windCodeNbc;
+    /** 业务对象类型，主体代码保持原义 */
+    private String securityType;
     /** 证券代码 */
     private String securityCode;
 
     /** 证券名称 */
     private String securityShortName;
 
-    /** CRMW代码 */
+    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
+    private String crmwIsinCode;
+    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
     private String crmwScode;
 
     /** 目标投资池 ID */
@@ -73,6 +89,9 @@ public class MyMattersDto {
 
     /** 审核状态 */
     private String auditStatus;
+
+    /** 当前用户是否存在可处理的有效待办，供事项按钮和导航使用 */
+    private Boolean canProcess;
 
     /** 步骤状态 */
     private String stepStatus;

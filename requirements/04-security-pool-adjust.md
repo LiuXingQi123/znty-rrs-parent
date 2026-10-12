@@ -1,5 +1,16 @@
 # 证券池调库申请（调入 / 调出）需求说明
 
+## 证券身份与市场代码（当前接口契约）
+
+- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
+- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
+- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
+- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
+- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
+- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
+- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
+
+
 > 前端页面：`security_pool_adjust.html`（列表 + 详情两视图）
 > 后端前缀：`/api/v1/securityPoolAdjust`
 > 角色定位：研究员 / 业务人员检索证券 → 查看池状态 → 在权限范围内发起调入或调出申请，提交前完成关系、权限与风控校验。
@@ -22,7 +33,7 @@
 
 详情页内部再通过 `adjustStep`（1=选池，2=校验确认）控制步骤切换。
 
-**初始化**（`created`）：调用 `loadSecurityTypeOptions()` 加载证券类型下拉，再调用 `applyUrlSecurityOrList()`：URL 带 `securityCode` 时写入筛选并进入该券详情（事宜「去调库」、查询/历史点代码等入口）；无参数则 `loadList()` 只加载列表。
+**初始化**（`created`）：调用 `loadSecurityTypeOptions()` 加载证券类型下拉，再调用 `applyUrlSecurityOrList()`：URL 带 `isinCode` 时写入筛选并进入该券详情（事宜「去调库」、查询/历史点代码等入口）；无参数则 `loadList()` 只加载列表。
 
 **apiPost 封装**：页面内置方法，返回 `{ success, data, message }`，`!json.success` 弹错并抛异常；附件下载接口返回 Base64 字符串后由前端还原为 Blob。
 
@@ -34,20 +45,20 @@
 
 | 控件 | 绑定字段 | 说明 |
 |---|---|---|
-| 文本输入 | `securityCode` | 证券代码，回车查询 |
+| 文本输入 | `securityKeyword` | 证券代码，匹配五码，回车查询 |
 | 文本输入 | `securityShortName` | 证券简称，回车查询 |
 | 下拉 | `securityType` | 证券类型，精确匹配；选项来自 `querySecurityTypeList` |
 | 文本输入 | `issuer` | 发行人，回车查询 |
 
 - **查询** `handleSearch()`：重置 `pageIndex=1` 后调 `loadList()`。
 - **重置** `handleReset()`：清空四字段、`pageIndex=1`、`loadList()`。
-- **初始化**（`created`）：`loadSecurityTypeOptions()` + `applyUrlSecurityOrList()`（有 `securityCode` 进详情，否则 `loadList()`）。
+- **初始化**（`created`）：`loadSecurityTypeOptions()` + `applyUrlSecurityOrList()`（有 `isinCode` 进详情，否则 `loadList()`）。
 
 ### 2.2 loadList → 接口
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
-- 请求体：`{ securityCode, securityShortName, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。
+- 请求体：`{ securityKeyword, securityShortName, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按五码 OR / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.2.1 证券类型下拉 `querySecurityTypeList`
@@ -92,20 +103,20 @@
 ### 2.5 进入详情页 `handleAdjust(row)`
 
 - 从 URL 读取可选参数 `targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`（支持从其他入口带参跳入）。
-- `currentPage = 'detail'`，调用 `loadDetailData(row.windCode || row.securityCode)`。
+- `currentPage = 'detail'`，调用 `loadDetailData(row.windCode || row.isinCode)`。
 
 ### 2.6 详情页初始化（并发加载）
 
-`loadDetailData(securityCode)` 先调用 `querySecurityDetail` 取得证券基本信息，再调用调库专用相关主体接口；若相关主体只有一个，非 ABS 自动作为担保人、ABS 自动作为权益人。随后并发加载池列表、池状态和调库记录：
+`loadDetailData(isinCode)` 先调用 `querySecurityDetail` 取得证券基本信息，再调用调库专用相关主体接口；若相关主体只有一个，非 ABS 自动作为担保人、ABS 自动作为权益人。随后并发加载池列表、池状态和调库记录：
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `queryRelatedRatingCompanyList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115202000/115201000` 四类关系主体；主体内评左关联，无内评主体仍返回，内评字段为空；同一主体兼多类关系时按类型分别返回（例如既是原始权益人又是差额支付承诺人则占两行），仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
+| `queryRelatedRatingCompanyList` | `{ isinCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115202000/115201000` 四类关系主体；主体内评左关联，无内评主体仍返回，内评字段为空；同一主体兼多类关系时按类型分别返回（例如既是原始权益人又是差额支付承诺人则占两行），仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
 | `querySelfSelectedRightsHolderPage` | `{ companyCode, companyName, pageIndex, pageSize }` | ABS 自选权益人分页；从 `ais_inv_analysis.t_inv_company` 以 `wind_code` 查询全市场主体，编码/名称模糊查询，关联最新主体内评，名称使用 `full_name` 优先、`short_names` 兜底，默认每页 20 条，可切换 10/20/30/50 条 |
-| `queryAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode }` | 可调入池 |
-| `queryAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
-| `querySecurityPoolStatus` | `{ securityCode }` | 当前所在池 + 主体所在池 |
-| `queryAdjustLogList` | `{ securityCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
+| `queryAdjustPoolList` | `{ isinCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode }` | 可调入池 |
+| `queryAdjustPoolList` | `{ isinCode, adjustDirection:'out', currentUserId }` | 可调出池 |
+| `querySecurityPoolStatus` | `{ isinCode }` | 当前所在池 + 主体所在池 |
+| `queryAdjustLogList` | `{ isinCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
 
 非 ABS 和 ABS 都使用上述四类关系主体：页面分别展示为“担保人”和“权益人”。页面首次加载时按接口顺序默认选中第一条，用户可改选；用户在页面清空选择时，前端阻止进入下一步。后端对接口直调或遗漏参数同样直接取关联评级主体接口返回的第 1 条（不按关系类型二次筛选）：ABS 写入权益人，非 ABS 写入担保人；无关联主体时 ABS 仍返回“请选择权益人或自选权益人”。ABS 还可从全市场主体选择自选权益人，自选存在时优先于普通权益人，清除后回退普通权益人。任一选择变化均重新查询可调入池并清空原有调入选择，不缓存查询结果、不重新查询最近信评报告。
 
@@ -122,10 +133,10 @@
 ### 2.7 发行主体最近三年及一期财务数据
 
 - 路径：`POST /api/v1/securityPoolAdjust/queryIssuerFinancialList`
-- 请求体：`{ securityCode }`
+- 请求体：`{ isinCode }`
 - 数据源：证券主档 `rrs_securityinfo.issuer_code` 关联 `ais_inv_ods.wind_companyfinancial.COMPANYCODE`。按中国标准时间的当前自然年确定四期：默认前三列为前三年年报，第四列为数据库最新一期；最新一期恰好为上一年年报，或主体完全没有财报时，显示前四年年报。缺失期保留报告日期，指标为空，不以季报或其他年份替代。
 - 默认四期查询保持 `List<IssuerFinancialDto>` 返回形式和列顺序；例：2026 年最新为半年报时返回 2023/2024/2025 年报和 2026 半年报；最新为 2025 年报或完全没有财报时返回 2022/2023/2024/2025 年报。
-- 指定报告期查询：`POST /api/v1/securityPoolAdjust/queryIssuerFinancialByReportDate`，请求体 `{ securityCode, reportDate }`；切换列头报告类型时查询对应记录，不存在时保留空值并允许补录。
+- 指定报告期查询：`POST /api/v1/securityPoolAdjust/queryIssuerFinancialByReportDate`，请求体 `{ isinCode, reportDate }`；切换列头报告类型时查询对应记录，不存在时保留空值并允许补录。
 - 页面位置：证券基本信息下方。步骤一四列全部可编辑，每列年份固定，独立提供年报、三季报、半年报、一季报下拉；默认前三列年报。原右上角统一报告期下拉改为“保存”按钮。步骤二隐藏编辑控件并只读，返回步骤一恢复编辑。
 - 缓存口径：按报告日期共享财报数据；城投债/产业债仅切换指标行，共同指标保持一致，切换报告类型或指标分类不丢失编辑。标准日期后缀为 `1231 / 0930 / 0630 / 0331`。
 - 城投债指标顺序：总资产、所有者权益、资产负债率、营业收入、净利润、经营性净现金流、投资性净现金流、地区生产总值、一般预算收入、一般预算支出。
@@ -133,7 +144,7 @@
 - 单位口径：数据库绝对金额字段直接以亿元存储；前端不做单位换算或小数位补齐，金额、比例和倍数均直接展示数据库返回值，编辑值也按用户输入原样展示，空值保持空白。
 - 地域信息：`wind_companyfinancial.PROVINCE`、`CITY` 分别保存主体所在省份和城市；同一主体不同报告期的地域信息保持一致，当前财务指标区域暂不展示这两个字段。
 - 独立保存：右上角“保存”和“下一步”均保存本次编辑过的全部报告期及城投债/产业债指标，包含切换后未显示的修改。下一步先完成页面必填检查，再保存财报、执行调库校验、进入步骤二；保存失败保留编辑并停留原页，调库校验失败不撤销已保存财报。最终提交不再携带或回写财报。
-- 保存接口：`POST /api/v1/securityPoolAdjust/saveIssuerFinancialList`，请求体 `{ securityCode, records: [{ reportDate, totAssets, ...完整14项指标 }] }`，返回已保存记录列表。指标允许数字或数字字符串，清空传 `null`。服务端根据证券代码从主档取得发行主体，在独立事务内按 `COMPANYCODE + REPORTDATE` 新增或更新；每个已修改报告期覆盖完整14项页面指标，前端从共享缓存一并发送两类指标；已有地域及其他非页面指标保留，未编辑空期不新增。任一记录写入失败则整批回滚。
+- 保存接口：`POST /api/v1/securityPoolAdjust/saveIssuerFinancialList`，请求体 `{ isinCode, records: [{ reportDate, totAssets, ...完整14项指标 }] }`，返回已保存记录列表。指标允许数字或数字字符串，清空传 `null`。服务端根据证券代码从主档取得发行主体，在独立事务内按 `COMPANYCODE + REPORTDATE` 新增或更新；每个已修改报告期覆盖完整14项页面指标，前端从共享缓存一并发送两类指标；已有地域及其他非页面指标保留，未编辑空期不新增。任一记录写入失败则整批回滚。
 
 ---
 
@@ -153,7 +164,7 @@
 **信评报告 / 其他材料选择**：
 - `openReportDialog(poolId, column)` 打开报告弹窗（column=`'credit'`/`'material'`）。
 - 弹窗含「内部报告」（`/api/v1/reports/queryInReportPage`）与「外部报告」（`/api/v1/reports/queryOutReportPage`）两个 Tab，支持按标题/证券编码/报告类型/撰写日期范围筛选 + 分页。
-- **打开弹窗时默认将当前证券编码（`bondDetail.windCode`）写入内/外报告筛选条件 `securityCode` 并自动查询**；用户仍可清空或改写后重新查询。
+- **打开弹窗时默认将当前证券编码（`bondDetail.windCode`）写入内/外报告筛选条件 `isinCode` 并自动查询**；用户仍可清空或改写后重新查询。
 - **选池阶段自动回填最近信评报告**：加载可调入/可调出库后调用 `POST /api/v1/securityPoolAdjust/queryLastCreditReport`。查数顺序为 **当前券 → 同主体**；条件为近 6 个月、审批通过、调入、日志挂有 `credit_report_in` / `credit_report_out` / `credit_report_hand` 信评附件，其他材料不参与回填。同一日志内按手工信评附件、内部库、外部库的顺序选择，分别赋值 3/2/1 并使用 `CASE ... END DESC`，同类附件按 `id DESC` 取 ID 最大的一份；手工信评附件通过相同 `file_name` 反查 `rrs_report_in` 的 `report_in` 库附件，返回报告库附件 ID 供再次提交。选定历史记录后，若查不到有效报告或库附件则不回填，不再尝试更早记录。报告库分类仍为 `report_in`，原有/新增报告由 `data_source` 区分。仅预填到 **信用债大库下 1～5 级**（`pool_code` 常量写死：`credit_bond_level_1`…`credit_bond_level_5`，禁止库等不在名单内不回填）；**可删除**；不按当前目标池过滤历史。
 - `el-upload` `auto-upload=false` 仅在前端暂存 File 对象到 `attachmentFiles[poolId]` / `materialFiles[poolId]`。
 - `handleConfirmReportDialog` 把选中报告写入 `creditReportSelections[poolId]` / `otherMaterialSelections[poolId]`，并同步到 `adjustReviewList`。
@@ -169,7 +180,7 @@
    - 组装 `items`：调入池 `{ targetPoolId, targetPoolName, poolType, adjustMode:'调入' }`，调出池 `adjustMode:'调出'`。
    - 调 `POST /api/v1/securityPoolAdjust/checkAdjust`，请求体：
      ```
-     { securityCode, securityShortName, securityType,
+     { isinCode, securityShortName, securityType,
        items: [{ targetPoolId, targetPoolName, poolType, adjustMode }] }
      ```
    - 用 `adjustCheckSeq` 序号防止旧请求覆盖新结果。
@@ -190,7 +201,7 @@
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| securityCode | String | 证券代码 |
+| isinCode | String | 证券代码 |
 | securityShortName | String | 证券简称 |
 | securityType | String | 证券类型 |
 | adjustType | String | 调整类型（前端固定传 `'手工调整'`） |
@@ -203,7 +214,7 @@
 
 `AdjustItem` 字段：`targetPoolId/targetPoolName/poolType`、`adjustMode`、`itemTag`（manual=手工 / linkage=联动 / mutex=互斥）、`adjustGroupKey`（手工项及其触发的联动/互斥项共用）、`flowId/flowKey/flowType`、`adjustmentNote`、`creditReportFileIndexes/materialFileIndexes`、`creditReportSourceAttachmentIds/materialSourceAttachmentIds`。
 
-返回 `AdjustSubmitDto`：`{ securityCode, submitCount, logIds:[...] }`。
+返回 `AdjustSubmitDto`：`{ isinCode, submitCount, logIds:[...] }`。
 
 ### 3.4 checkAdjust 返回结构（`AdjustCheckDto`）
 
@@ -221,7 +232,7 @@
 
 入口 `SecurityPoolAdjustService.checkAdjust`，分五阶段：
 
-**① 前置校验** `validateCheckAdjustReq`：`securityCode` 非空、`items` 非空，否则抛 `BizException`。
+**① 前置校验** `validateCheckAdjustReq`：`isinCode` 非空、`items` 非空，否则抛 `BizException`。
 
 **② 参数初始化** `loadSharedData`：
 - `querySecurityBoByCode` 取证券（null 抛「证券不存在」）。
@@ -310,7 +321,7 @@
 **必要条件：**
 
 1. 按当前矩阵与特殊债准入规则计算信用债大库 **1～5级的完整允许层级集合**，不能只看本次勾选的池或仅筛一至三级后判断唯一；集合只能有一个层级，该层级必须为1～3，且等于目标池 `innerSort`。普通校验未通过的项、非手工调入项及已在信用债大库的证券不进入简易分支；放开规则不免除简易自身的条件。
-2. `queryIssuerHasNonSimpleCreditBondInboundWithinDays(securityCode, 180)` 按非空 `issuer_code` 查同发行人债券的历史 `ip_pool_status`：`pool_type=credit_bond`、`adjust_mode=调入`、`flow_type` 非空且不为 `simpleInbound`、`audit_status=20`，`entry_time` 在近180天内。**不要求历史层级与当前目标层级相同，已出池软删记录仍计入**。这里的一般入库流程指非简易流程，包含标准调入、特殊调入、升库、降库、白名单和批量调入等；简易流程及流程类型为空的记录不计入。简易条件中的“半年”统一为180天。
+2. `queryIssuerHasNonSimpleCreditBondInboundWithinDays(isinCode, 180)` 按非空 `issuer_code` 查同发行人债券的历史 `ip_pool_status`：`pool_type=credit_bond`、`adjust_mode=调入`、`flow_type` 非空且不为 `simpleInbound`、`audit_status=20`，`entry_time` 在近180天内。**不要求历史层级与当前目标层级相同，已出池软删记录仍计入**。这里的一般入库流程指非简易流程，包含标准调入、特殊调入、升库、降库、白名单和批量调入等；简易流程及流程类型为空的记录不计入。简易条件中的“半年”统一为180天。
 
 **债券类型要求：**下调一级指在《标准信用债入库规则》对应的最佳准入层级基础上，层级数字增加1；“至少一级”允许更低等级，但仍须同时满足允许层级唯一的必要条件。
 
@@ -328,7 +339,7 @@
 
 **标准信用债采用独立方法判断：**公开发行；不涉及永续、回售、赎回、递延付息等特殊条款；无担保、内部分层、差额补足等增信措施；偿付不依赖特定资产；违约风险仅由发行主体信用资质决定；且未在内评系统观察或重点观察名单中。资产支持证券、私募债、永续债、担保债、含权债等不属于标准信用债。该业务定义由上游维护 `std_credit_flag`；本服务的独立方法 `isStandardCreditBond` **仅判断 `std_credit_flag == 1`**，`0`、`NULL` 均不认定标准信用债，不叠加 `std_clause_flag` 或其他标志判断。
 
-**报告条件：**`queryIssuerHasRecentCreditReportWithinDays(securityCode, 180)` 查询内部/外部报告库（`rrs_report_in` / `rrs_report_out`）：报告 `company_code` 直接匹配当前券非空 `issuer_code`，未删除，`report_type` 为 `bond_in_report` 或 `bond_out_report`，报告 `crte_time` 在近180天内，并有对应未删除的报告附件（`sys_attachment.table_name=rrs_report_in/rrs_report_out`、`attachment_category=report_in/report_out`）。报告库没有独立报告日期或状态字段，时间以 `crte_time` 为准；其他报告类型、无附件、软删报告或软删附件均不计，缺失 `company_code` 时不按报告证券代码回退关联。**不要求关联历史调入记录，也不要求报告与非简易入库经历属于同一笔业务**。简易流程不复用“半年调入日志带报告”的提交报告豁免条件，两者各自判断。
+**报告条件：**`queryIssuerHasRecentCreditReportWithinDays(isinCode, 180)` 查询内部/外部报告库（`rrs_report_in` / `rrs_report_out`）：报告 `company_code` 直接匹配当前券非空 `issuer_code`，未删除，`report_type` 为 `bond_in_report` 或 `bond_out_report`，报告 `crte_time` 在近180天内，并有对应未删除的报告附件（`sys_attachment.table_name=rrs_report_in/rrs_report_out`、`attachment_category=report_in/report_out`）。报告库没有独立报告日期或状态字段，时间以 `crte_time` 为准；其他报告类型、无附件、软删报告或软删附件均不计，缺失 `company_code` 时不按报告证券代码回退关联。**不要求关联历史调入记录，也不要求报告与非简易入库经历属于同一笔业务**。简易流程不复用“半年调入日志带报告”的提交报告豁免条件，两者各自判断。
 
 旧简易流程的“本券剩余天数≤同主体目标池最大剩余天数”“同目标池180天内非简易入池”及原主体/展望/担保人评级下调条件不再参与简易命中。
 
@@ -349,7 +360,7 @@
 
 入口 `addAdjustLog(req, files)` → `submitAdjustLog`，`@Transactional(rollbackFor=Exception.class)`，分五阶段：
 
-**① 前置校验** `validateSubmitReq`：`securityCode` 非空、`items` 非空、每项 `adjustMode` 与 `targetPoolId` 非空。
+**① 前置校验** `validateSubmitReq`：`isinCode` 非空、`items` 非空、每项 `adjustMode` 与 `targetPoolId` 非空。
 
 **② 参数初始化** `loadSubmitSharedData`：
 - 取证券、全量池 Map、`currentPoolIds`、`poolRelationMap`、证券级标志。
@@ -397,24 +408,24 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
+| `querySecurityPage` | isinCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
 | `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：仅 bond，排除 crmw 及已删除态） |
-| `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
-| `queryIssuerFinancialList` | securityCode | `List<IssuerFinancialDto>` | 四期报告，缺失期保留日期和空指标 |
-| `queryIssuerFinancialByReportDate` | securityCode, reportDate | `IssuerFinancialDto` | 精确查询指定报告期，不存在返回 null |
-| `saveIssuerFinancialList` | securityCode, records[{reportDate,...完整14项指标}] | `List<IssuerFinancialDto>` | 独立事务批量覆盖本次已修改报告期的完整指标 |
-| `queryRelatedRatingCompanyList` | securityCode | `List<RelatedRatingCompanyDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
+| `querySecurityDetail` | isinCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
+| `queryIssuerFinancialList` | isinCode | `List<IssuerFinancialDto>` | 四期报告，缺失期保留日期和空指标 |
+| `queryIssuerFinancialByReportDate` | isinCode, reportDate | `IssuerFinancialDto` | 精确查询指定报告期，不存在返回 null |
+| `saveIssuerFinancialList` | isinCode, records[{reportDate,...完整14项指标}] | `List<IssuerFinancialDto>` | 独立事务批量覆盖本次已修改报告期的完整指标 |
+| `queryRelatedRatingCompanyList` | isinCode | `List<RelatedRatingCompanyDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
 | `querySelfSelectedRightsHolderPage` | companyCode?, companyName?, pageIndex, pageSize | `PageResult<SelfSelectedRightsHolderDto>` | 从 `ais_inv_analysis.t_inv_company` 分页查询自选权益人，关联最新内评 |
-| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。排除 CRMW 后只保留投资品种包含债券的池及其上级。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。三个主体编码均由后端重查校验 |
-| `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
-| `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
+| `queryAdjustPoolList` | isinCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。排除 CRMW 后只保留投资品种包含债券的池及其上级。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。三个主体编码均由后端重查校验 |
+| `querySecurityPoolStatus` | isinCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
+| `checkAdjust` | isinCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
 | `addAdjustLogWithFiles`（multipart） | `request`=JSON + `files`=MultipartFile[] + `originalFileNameListJson`=JSON 数组字符串（可选，与 files 同序） | `AdjustSubmitDto` | 提交调库申请（带附件，multipart 入口；JSON 无附件入口为 `addAdjustLog`）。公司环境优先用 `originalFileNameListJson` 落库原始中文名 |
-| `queryAdjustLogList` | securityCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录 |
+| `queryAdjustLogList` | isinCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录 |
 | `queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表 |
 | `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
-| `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 内部报告分页 |
+| `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, isinCode, reportType, crteTimeStart/End | PageResult | 内部报告分页 |
 | `reports/queryOutReportPage` | 同上 | PageResult | 外部报告分页 |
 
 > 路径均带前缀 `/api/v1/`；`attachments`、`reports` 前缀独立。
@@ -472,13 +483,7 @@
 
 > 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
 
-`isin_code`（国际证券识别码）为 `VARCHAR(100) DEFAULT NULL`，位于 `wind_code` 前，对应 `SecurityInfoBo.isinCode`（`String`）。Demo 的全部 45 条记录（含临时代码）均在原始 `INSERT` 中填写不同的 12 位模拟 ISIN：使用 `CNDEMO` 前缀、5 位顺序号和 1 位校验位；仅用于演示，不是真实证券登记编号。存量表缺少此字段时，一次性执行：
-
-```sql
-ALTER TABLE `znty_rrs`.`rrs_securityinfo`
-    ADD COLUMN `isin_code` VARCHAR(100) DEFAULT NULL
-        COMMENT '国际证券识别码（ISIN）' FIRST;
-```
+`isin_code` 为 `VARCHAR(100) NOT NULL` 主键，对应 `SecurityInfoBo.isinCode`。正式 Demo 使用带校验位的 12 位 `CNDEMO` 模拟 ISIN，临时券使用 `TEMP:临时代码`。外部主档及业务 Demo 按重建顺序初始化，不提供存量 ALTER 迁移脚本。五码仅用于搜索、展示和外部对接，不能替代证券身份。
 
 主档新增两个外部导入标识，均为 `INT DEFAULT NULL`，由 `SecurityInfoBo` 的 `Integer` 字段承接并保留原始值：
 

@@ -86,7 +86,7 @@ public interface SecurityCodeConversionMapper {
 
     /** 查询正式证券是否已在指定普通池 */
     int queryActivePoolStatusCount(
-            @Param("securityCode") String securityCode,
+            @Param("isinCode") String isinCode,
             @Param("targetPoolId") Long targetPoolId);
 
     /** 软删除指定普通池状态 */
@@ -155,8 +155,8 @@ public interface SecurityCodeConversionMapper {
 
     /** 查询正式证券是否已在指定 CRMW 池组合 */
     int queryActiveCrmwPoolStatusCount(
-            @Param("securityCode") String securityCode,
-            @Param("crmwScode") String crmwScode,
+            @Param("isinCode") String isinCode,
+            @Param("crmwIsinCode") String crmwIsinCode,
             @Param("crmwStype") String crmwStype,
             @Param("targetPoolId") Long targetPoolId);
 

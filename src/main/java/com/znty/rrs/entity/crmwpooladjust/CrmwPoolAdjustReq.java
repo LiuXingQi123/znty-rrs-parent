@@ -12,6 +12,10 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class CrmwPoolAdjustReq extends PageRequest {
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
+    private String isinCode;
+    /** 证券代码关键词，匹配五码 */
+    private String securityKeyword;
     /** 证券代码（模糊搜索） */
     private String securityCode;
     /** 证券简称（模糊搜索） */
@@ -23,7 +27,9 @@ public class CrmwPoolAdjustReq extends PageRequest {
      * abs / guarant / yx / cj / private / inright
      */
     private List<String> bondYesFlags;
-    /** CRMW 凭证代码 */
+    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
+    private String crmwIsinCode;
+    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
     private String crmwScode;
     /** CRMW 证券类型 */
     private String crmwStype;

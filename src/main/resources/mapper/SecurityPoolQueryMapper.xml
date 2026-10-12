@@ -6,7 +6,7 @@
     <!-- 分页查询证券池中的证券列表 -->
     <select id="querySecurityPoolPage" resultType="com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryDto">
         SELECT ips.id
-               ,ips.security_code
+               ,ips.isin_code
                ,ips.security_short_name
                ,ips.adjuster_name
                ,ips.entry_time
@@ -17,6 +17,12 @@
                ,ips.security_type
                ,dst.security_type_name
                ,mbp.id AS mySecurityPoolId
+               ,bi.wind_code_sh
+               ,bi.wind_code_sz
+               ,bi.wind_code_nib
+               ,bi.wind_code_bj
+               ,bi.wind_code_nbc
+               ,bi.security_source
                ,bi.coupon_rate
                ,bi.issuer
                ,bi.full_name
@@ -42,12 +48,12 @@
         FROM ip_pool_status ips
         LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id
                                       AND p.is_deleted = 0
-        LEFT JOIN rrs_securityinfo bi ON ips.security_code = bi.wind_code
+        LEFT JOIN rrs_securityinfo bi ON ips.isin_code = bi.isin_code
         INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         LEFT JOIN my_security_pool mbp
-            ON ips.security_code = mbp.security_code
+            ON ips.isin_code = mbp.isin_code
             AND mbp.user_id = #{currentUserId}
             AND mbp.status = 'use'
         <where>
@@ -69,8 +75,12 @@
                     #{pid}
                 </foreach>
             </if>
-            <if test="securityCode != null and securityCode != ''">
-                AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
+            <if test="securityKeyword != null and securityKeyword != ''">
+                AND (bi.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR bi.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR bi.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR bi.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR bi.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND ips.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')

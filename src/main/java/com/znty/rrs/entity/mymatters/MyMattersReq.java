@@ -19,6 +19,20 @@ public class MyMattersReq extends PageRequest {
     /** 流程 ID 列表，多选筛选 */
     private List<Long> flowIds;
 
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
+    private String isinCode;
+    /** 沪市证券代码 */
+    private String windCodeSh;
+    /** 深市证券代码 */
+    private String windCodeSz;
+    /** 银行间证券代码 */
+    private String windCodeNib;
+    /** 北交所证券代码 */
+    private String windCodeBj;
+    /** 其他市场证券代码 */
+    private String windCodeNbc;
+    /** 证券代码关键词，匹配五码 */
+    private String securityKeyword;
     /** 证券编码关键词 */
     private String securityCode;
 

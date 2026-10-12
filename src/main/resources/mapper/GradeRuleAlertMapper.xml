@@ -5,7 +5,7 @@
 
     <!-- 查询已在信用债 1～5 级叶子且生效的债券（对齐老 polidEnum，不含境外债） -->
     <select id="queryGradedBondInPoolList" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
-        SELECT ips.security_code
+        SELECT ips.isin_code
               ,ips.security_short_name
               ,si.issuer_code
               ,si.issuer issuer_name
@@ -15,7 +15,7 @@
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        LEFT JOIN rrs_securityinfo si ON si.isin_code = ips.isin_code
         WHERE ips.is_deleted = 0
           AND ips.audit_status = '20'
           AND p.pool_type = 'credit_bond'
@@ -25,8 +25,8 @@
 
     <!-- 按条件分页查询待办 -->
     <select id="queryAlertPage" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
-        SELECT id
-              ,security_code
+        SELECT alert.id
+              ,isin_code
               ,security_short_name
               ,issuer_code
               ,issuer_name
@@ -42,11 +42,17 @@
               ,deal_time
               ,crte_time
               ,updt_time
-        FROM ip_grade_rule_alert
+              ,(SELECT master.wind_code_sh FROM rrs_securityinfo master WHERE master.isin_code = alert.isin_code) AS wind_code_sh
+              ,(SELECT master.wind_code_sz FROM rrs_securityinfo master WHERE master.isin_code = alert.isin_code) AS wind_code_sz
+              ,(SELECT master.wind_code_nib FROM rrs_securityinfo master WHERE master.isin_code = alert.isin_code) AS wind_code_nib
+              ,(SELECT master.wind_code_bj FROM rrs_securityinfo master WHERE master.isin_code = alert.isin_code) AS wind_code_bj
+              ,(SELECT master.wind_code_nbc FROM rrs_securityinfo master WHERE master.isin_code = alert.isin_code) AS wind_code_nbc
+
+        FROM ip_grade_rule_alert alert
         <where>
             AND is_deleted = 0
-            <if test="securityCode != null and securityCode != ''">
-                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+            <if test="securityKeyword != null and securityKeyword != ''">
+                AND EXISTS (SELECT 1 FROM rrs_securityinfo master WHERE master.isin_code = alert.isin_code AND (master.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%') OR master.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%') OR master.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%') OR master.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%') OR master.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%')))
             </if>
             <if test="alertStatus != null and alertStatus != ''">
                 AND alert_status = #{alertStatus}
@@ -59,13 +65,13 @@
     <!-- 查询同一证券+当前池的待处理待办 -->
     <select id="queryOpenAlert" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
-              ,security_code
+              ,isin_code
               ,current_pool_id
               ,alert_status
         FROM ip_grade_rule_alert
         WHERE is_deleted = 0
           AND alert_status = '00'
-          AND security_code = #{securityCode}
+          AND isin_code = #{isinCode}
           AND current_pool_id = #{currentPoolId}
         ORDER BY id DESC
         LIMIT 1
@@ -74,7 +80,7 @@
     <!-- 按主键查询待办 -->
     <select id="queryAlertById" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
         SELECT id
-              ,security_code
+              ,isin_code
               ,security_short_name
               ,issuer_code
               ,issuer_name
@@ -104,7 +110,7 @@
     <!-- 新增待办 -->
     <insert id="addAlert" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO ip_grade_rule_alert (
-            security_code
+            isin_code
            ,security_short_name
            ,issuer_code
            ,issuer_name
@@ -119,7 +125,7 @@
            ,crte_time
            ,updt_time
         ) VALUES (
-            #{securityCode}
+            #{isinCode}
            ,#{securityShortName}
            ,#{issuerCode}
            ,#{issuerName}

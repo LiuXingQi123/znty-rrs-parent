@@ -1,6 +1,7 @@
 package com.znty.rrs.entity.securitypoolexcelimport;
 
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,12 +12,31 @@ import java.util.List;
 @Data
 public class SecurityPoolExcelImportCheckItemDto {
 
+    /** 证券与主体使用各自明确的关联键 */
+    @JsonIgnore
+    public String getObjectCode() { return "company".equals(securityType) ? securityCode : isinCode; }
+
     /** 来源导入明细 ID */
     private Long sourceItemId;
     /** 来源 Excel 行号 */
     private Integer sourceRowNo;
     /** 分组键（同组手工+联动+互斥） */
     private String adjustGroupKey;
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
+    private String isinCode;
+
+    /** 证券来源 */
+    private String securitySource;
+    /** 沪市证券代码 */
+    private String windCodeSh;
+    /** 深市证券代码 */
+    private String windCodeSz;
+    /** 银行间证券代码 */
+    private String windCodeNib;
+    /** 北交所证券代码 */
+    private String windCodeBj;
+    /** 其他市场证券代码 */
+    private String windCodeNbc;
     /** 证券/主体代码 */
     private String securityCode;
     /** 证券/主体简称 */

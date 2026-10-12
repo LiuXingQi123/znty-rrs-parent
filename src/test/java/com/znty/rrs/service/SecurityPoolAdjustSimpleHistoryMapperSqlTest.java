@@ -45,9 +45,9 @@ public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
         dataSource.setUrl("jdbc:h2:mem:simple_history_" + UUID.randomUUID()
                 + ";MODE=MySQL;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1");
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(40), issuer_code VARCHAR(40))");
+        jdbc.execute("CREATE TABLE rrs_securityinfo (isin_code VARCHAR(40), issuer_code VARCHAR(40))");
         jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(40), category_type VARCHAR(40), is_deleted INT)");
-        jdbc.execute("CREATE TABLE ip_pool_status (security_code VARCHAR(40), security_type VARCHAR(40),"
+        jdbc.execute("CREATE TABLE ip_pool_status (isin_code VARCHAR(40), security_type VARCHAR(40),"
                 + "target_pool_id BIGINT, pool_type VARCHAR(40), adjust_mode VARCHAR(20), flow_type VARCHAR(40),"
                 + "audit_status VARCHAR(10), entry_time TIMESTAMP, is_deleted INT)");
         jdbc.update("INSERT INTO rrs_securityinfo VALUES ('CURRENT','C001'),('SAME_ISSUER','C001'),"
@@ -200,15 +200,15 @@ public class SecurityPoolAdjustSimpleHistoryMapperSqlTest {
     }
 
     /** 写入一条审批通过的一般债券历史，其他测试条件在各场景中独立调整。 */
-    private void insertHistory(String securityCode, String flowType, String entryTime) {
+    private void insertHistory(String isinCode, String flowType, String entryTime) {
         jdbc.update("INSERT INTO ip_pool_status VALUES (?, 'company_bond', 2, 'credit_bond',"
-                + "'调入', ?, '20', ?, 0)", securityCode, flowType, Timestamp.valueOf(entryTime));
+                + "'调入', ?, '20', ?, 0)", isinCode, flowType, Timestamp.valueOf(entryTime));
     }
 
     /** 执行真实 XML 的完整 BoundSql，仅翻译 MySQL 日期函数并固定测试当前时间。 */
-    private boolean hasHistory(String securityCode, int days) {
+    private boolean hasHistory(String isinCode, int days) {
         Map<String, Object> parameters = new HashMap<>();
-        parameters.put("securityCode", securityCode);
+        parameters.put("isinCode", isinCode);
         parameters.put("days", days);
         BoundSql boundSql = historyStatement.getBoundSql(parameters);
         String sql = boundSql.getSql();

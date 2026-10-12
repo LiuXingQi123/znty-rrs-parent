@@ -40,6 +40,10 @@ import java.util.Map;
 @Service
 public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
 
+    /** 共用证券事件代码快照 */
+    @Resource
+    private SecurityPoolAdjustService securityPoolAdjustService;
+
     /** 任务编码 */
     public static final String TASK_CODE = "company_not_in_pool_bond_auto_out";
 
@@ -156,12 +160,12 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
             }
             int pairCount = 0;
             for (ScheduledAdjustCandidateDto bond : bonds) {
-                if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+                if (bond == null || !StringUtils.hasText(bond.getObjectCode())) {
                     continue;
                 }
-                int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(bond.getSecurityCode(), bondPoolId);
+                int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(bond.getObjectCode(), bondPoolId);
                 if (deleted == 0) {
-                    warnDetail(detail, "债券[" + bond.getSecurityCode() + "]软删失败（可能并发已出池），跳过");
+                    warnDetail(detail, "债券[" + bond.getObjectCode() + "]软删失败（可能并发已出池），跳过");
                     continue;
                 }
                 bond.setAdjustType("自动调整");
@@ -178,10 +182,11 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 bond.setAdjustReason(reason);
                 // 按实际债券和目标池生成自动调库批次号
                 String batchNo = batchNoContext.resolveBondBatchNo(
-                        bond.getSecurityCode(), bondPoolId, AdjustMode.OUT.getCode());
+                        bond.getObjectCode(), bondPoolId, AdjustMode.OUT.getCode());
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 securityPoolAdjustMapper.addAdjustLog(bond);
+                securityPoolAdjustService.saveEffectiveMarketSnapshot(bond);
                 pairCount++;
             }
             summary.addMapping(bondPoolId, bondPool.getPoolName(), companyPoolId,

@@ -7,6 +7,7 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
+import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustSharedData;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustReq;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustSubmitReq;
@@ -30,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,9 +48,10 @@ public class CrmwPoolAdjustServiceTest {
     public void applySelectedGuarantorGradeShouldUseLatestGrade() {
         SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("BOND001");
+        securityInfo.setIsinCode("BOND001");
         when(securityPoolAdjustService.applySelectedRatingCompany(
                 securityInfo, "C10008", null, null, false)).thenAnswer(invocation -> {
                     securityInfo.setGuarantor("测试担保人");
@@ -70,9 +73,10 @@ public class CrmwPoolAdjustServiceTest {
     public void applySelectedGuarantorGradeShouldRejectIneligibleGuarantor() {
         SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("BOND001");
+        securityInfo.setIsinCode("BOND001");
         when(securityPoolAdjustService.applySelectedRatingCompany(
                 securityInfo, "C10007", null, null, false))
                 .thenThrow(new BizException("所选担保人不属于当前证券"));
@@ -88,16 +92,21 @@ public class CrmwPoolAdjustServiceTest {
     public void postSubmitProcessShouldUseSelectedGuarantorFromSharedData() throws Exception {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         SecurityInfoBo master = new SecurityInfoBo();
-        master.setWindCode("BOND001");
+        master.setIsinCode("BOND001");
         when(mapper.querySecurityBoByCode("BOND001")).thenReturn(master);
+        SecurityInfoBo credential = new SecurityInfoBo();
+        credential.setIsinCode("CRMW001");
+        credential.setWindCodeNib("CRMW001.IB");
+        when(mapper.querySecurityBoByCode("CRMW001")).thenReturn(credential);
 
         SecurityInfoBo frontendInfo = new SecurityInfoBo();
         frontendInfo.setInnerGuarantorRating("前端旧评分");
         CrmwPoolAdjustSubmitReq req = new CrmwPoolAdjustSubmitReq();
-        req.setSecurityCode("BOND001");
-        req.setCrmwScode("CRMW001");
+        req.setIsinCode("BOND001");
+        req.setCrmwIsinCode("CRMW001");
         req.setCrmwStype("crmw");
         req.setAdjusterId("1");
         req.setSecurityInfo(frontendInfo);
@@ -141,11 +150,12 @@ public class CrmwPoolAdjustServiceTest {
     public void queryCrmwPoolStatusShouldUseCompleteCombinationKey() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         CrmwPoolAdjustReq req = new CrmwPoolAdjustReq();
-        req.setSecurityCode("BOND001");
-        req.setCrmwScode("CRMW001");
+        req.setIsinCode("BOND001");
+        req.setCrmwIsinCode("CRMW001");
         req.setCrmwStype("crmw");
         when(mapper.querySecurityPoolStatusList("BOND001", "CRMW001", "crmw"))
                 .thenReturn(Collections.emptyList());
@@ -160,6 +170,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         CrmwPoolAdjustSubmitReq.AdjustItem item = new CrmwPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(10L);
@@ -178,6 +189,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void checkReportRequiredShouldPassWhenInternalAndHasSourceAttachment() {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         CrmwPoolAdjustSubmitReq.AdjustItem item = new CrmwPoolAdjustSubmitReq.AdjustItem();
         item.setCreditReportSourceAttachmentIds(Collections.singletonList(1L));
@@ -193,6 +205,7 @@ public class CrmwPoolAdjustServiceTest {
     public void checkCrmwInboundCombinationShouldFailWhenComboAlreadyInPool() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 组合已在池
         when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(true);
@@ -211,6 +224,7 @@ public class CrmwPoolAdjustServiceTest {
     public void checkCrmwInboundCombinationShouldPassWhenSameCrmwDifferentBond() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 本组合不在池（即使同凭证其它标的已在池）
         when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(false);
@@ -222,6 +236,7 @@ public class CrmwPoolAdjustServiceTest {
     public void checkCrmwOutboundCombinationShouldFailWhenComboNotInPool() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 组合不在池
         when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(false);
@@ -239,6 +254,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void mergeSecurityInfoShouldKeepNonEditableFields() {
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         SecurityInfoBo current = new SecurityInfoBo();
         current.setShortName("原简称");
         current.setDateRepurchaseExists(new BigDecimal("1.0000"));
@@ -262,10 +278,11 @@ public class CrmwPoolAdjustServiceTest {
     public void applyPoolStatusChangesShouldFailWhenInboundInsertCountUnexpected() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         IpAdjustLogBo log = new IpAdjustLogBo();
         log.setId(1L);
-        log.setCrmwScode("CRMW001");
+        log.setCrmwIsinCode("CRMW001");
         log.setAdjustMode("调入");
         log.setTargetPoolName("CRMW池");
         when(mapper.addPoolStatus(log)).thenReturn(0);
@@ -280,6 +297,7 @@ public class CrmwPoolAdjustServiceTest {
     public void checkCrmwOutboundCombinationShouldPassWhenComboInPool() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 组合在池，应通过
         when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(true);
@@ -291,6 +309,7 @@ public class CrmwPoolAdjustServiceTest {
     public void crmwAdjustShouldResolveSpecialInboundFlow() {
         FlowMapper flowMapper = mock(FlowMapper.class);
         CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
@@ -307,8 +326,8 @@ public class CrmwPoolAdjustServiceTest {
     /** 构建 CRMW 调库提交请求（含凭证与标的证券）。 */
     private CrmwPoolAdjustSubmitReq buildCrmwReq() {
         CrmwPoolAdjustSubmitReq req = new CrmwPoolAdjustSubmitReq();
-        req.setSecurityCode("220205");
-        req.setCrmwScode("012345");
+        req.setIsinCode("220205");
+        req.setCrmwIsinCode("012345");
         req.setCrmwStype("crmw");
         return req;
     }
@@ -355,4 +374,21 @@ public class CrmwPoolAdjustServiceTest {
         flow.setName(name);
         return flow;
     }
+    /** 历史凭证返回当时银行间码，禁止当前主档覆盖历史快照。 */
+    @Test
+    public void crmwHistoryShouldUseCredentialSnapshotAndValidateIsin() {
+        CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
+        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
+        SecurityInfoDetailDto snapshot = new SecurityInfoDetailDto();
+        snapshot.setIsinCode("CNCRMW001"); snapshot.setWindCodeNib("OLD-CRMW.IB");
+        when(mapper.queryCrmwSnapshotDetailByAdjustLogId(88L)).thenReturn(snapshot);
+        CrmwPoolAdjustReq req = new CrmwPoolAdjustReq();
+        req.setIsinCode("CNCRMW001"); req.setAdjustLogId(88L);
+        assertThat(service.queryCrmwDetail(req).getWindCodeNib()).isEqualTo("OLD-CRMW.IB");
+        verify(mapper, never()).querySecurityDetail(anyString());
+        req.setIsinCode("OTHER-ISIN");
+        assertThatThrownBy(() -> service.queryCrmwDetail(req)).hasMessageContaining("ISIN不一致");
+    }
+
 }

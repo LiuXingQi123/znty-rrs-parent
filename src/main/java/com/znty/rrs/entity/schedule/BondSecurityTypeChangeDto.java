@@ -14,6 +14,8 @@ public class BondSecurityTypeChangeDto {
     /** 当前关联调库日志主键 */
     private Long adjustLogId;
 
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
+    private String isinCode;
     /** 证券代码 */
     private String securityCode;
 

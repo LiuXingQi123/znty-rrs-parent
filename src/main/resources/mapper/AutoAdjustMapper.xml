@@ -61,11 +61,12 @@
          大类对齐老 ptype=4000 或 2000：仅债、股；CRMW 走独立任务 crmw_expired_auto_out -->
     <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
+               ,ips.isin_code
                ,ips.security_short_name
                ,ips.security_type
                ,si.maturity_date
         FROM ip_pool_status ips
-        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN rrs_securityinfo si ON si.isin_code = ips.isin_code
         INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type IN ('bond', 'stock')
@@ -86,7 +87,7 @@
       4) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
     -->
     <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT bond.wind_code AS security_code
+        SELECT bond.isin_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
                ,bond.issuer_code
@@ -122,7 +123,7 @@
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status bps
-              WHERE bps.security_code = bond.wind_code
+              WHERE bps.isin_code = bond.isin_code
                 AND bps.target_pool_id = #{targetPoolId}
                 AND bps.audit_status = '20'
                 AND bps.is_deleted = 0
@@ -130,13 +131,13 @@
           AND NOT EXISTS (
               SELECT 1
               FROM rrs_temp_security_code ts
-              WHERE ts.temp_security_code = bond.wind_code
-                AND ts.security_code IS NOT NULL
-                AND ts.security_code != ''
+              WHERE CONCAT('TEMP:', ts.temp_security_code) = bond.isin_code
+                AND ts.isin_code IS NOT NULL
+                AND ts.isin_code != ''
                 AND IFNULL(ts.is_deleted, 0) = 0
                 AND ts.status = 'updated'
           )
-        ORDER BY bond.wind_code ASC
+        ORDER BY bond.isin_code ASC
     </select>
 
     <!--
@@ -148,7 +149,7 @@
       5) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
     -->
     <select id="queryCompanyBondSamePoolForAutoIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT bond.wind_code AS security_code
+        SELECT bond.isin_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
                ,bond.issuer_code
@@ -186,7 +187,7 @@
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status bps
-              WHERE bps.security_code = bond.wind_code
+              WHERE bps.isin_code = bond.isin_code
                 AND bps.target_pool_id = #{poolId}
                 AND bps.audit_status = '20'
                 AND bps.is_deleted = 0
@@ -213,13 +214,14 @@
                       ))
               )
           )
-        ORDER BY bond.wind_code ASC
+        ORDER BY bond.isin_code ASC
     </select>
 
     <!-- 条款（一）（三）共用：当前已在来源池、尚未在目标池的主体。 -->
     <select id="queryCompanyInPoolNotInTarget"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
+               ,ips.isin_code
                ,MAX(ips.security_short_name) AS security_short_name
                ,'company' AS security_type
         FROM ip_pool_status ips
@@ -417,6 +419,7 @@
         )
         <!-- 已在目标池且孰低不属于 AA-及以下，或近一年无认可外评的主体。 -->
         SELECT ips.security_code
+               ,ips.isin_code
                ,COALESCE(NULLIF(e.s_info_compname, ''), NULLIF(ips.security_short_name, ''), ips.security_code)
                    AS security_short_name
                ,'company' AS security_type
@@ -466,7 +469,7 @@
     <!-- 外评入池后同批跟进：主体旗下尚未在同一目标池的未退市、未到期债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyBondNotInSamePoolForAutoIn"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT bond.wind_code AS security_code
+        SELECT bond.isin_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
                ,bond.issuer_code
@@ -490,25 +493,25 @@
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status ips
-              WHERE ips.security_code = bond.wind_code
+              WHERE ips.isin_code = bond.isin_code
                 AND ips.target_pool_id = #{poolId}
                 AND ips.audit_status = '20'
                 AND ips.is_deleted = 0
           )
-        ORDER BY bond.wind_code ASC
+        ORDER BY bond.isin_code ASC
     </select>
 
     <!-- 外评出池后顺带调出：主体旗下已在同一目标池的未退市债券；当前不排除 ABS / CRMW，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyBondInSamePoolForAutoOut"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT bond.wind_code AS security_code
+        SELECT bond.isin_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
-        INNER JOIN ip_pool_status ips ON ips.security_code = bond.wind_code
+        INNER JOIN ip_pool_status ips ON ips.isin_code = bond.isin_code
                                      AND ips.target_pool_id = #{poolId}
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
@@ -524,21 +527,23 @@
               #{securityType}
           </foreach>
         </if>
-        ORDER BY bond.wind_code ASC
+        ORDER BY bond.isin_code ASC
     </select>
 
     <!-- CRMW 到期自动出池：凭证到期日早于昨天（T-2），对齐 AdjustRuleCrmwDueOutPool + AdjustRuleByExpired -->
     <select id="queryCrmwPoolByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
+               ,ips.isin_code
                ,ips.security_short_name
                ,ips.security_type
                ,ips.crmw_name
+               ,ips.crmw_isin_code
                ,ips.crmw_scode
                ,ips.crmw_mktcode
                ,ips.crmw_stype
                ,crmw.maturity_date
         FROM ip_pool_status_crmw ips
-        INNER JOIN rrs_securityinfo crmw ON crmw.wind_code = ips.crmw_scode
+        INNER JOIN rrs_securityinfo crmw ON crmw.isin_code = ips.crmw_isin_code
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -554,13 +559,13 @@
     <!-- 主体不在指定池时，将其旗下已在债券池的未退市债调出。
          当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制。 -->
     <select id="queryBondInPoolWhenCompanyNotIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT bond.wind_code AS security_code
+        SELECT bond.isin_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
                ,bond.issuer_code
                ,bond.issuer AS issuer_name
         FROM ip_pool_status ips
-        INNER JOIN rrs_securityinfo bond ON bond.wind_code = ips.security_code
+        INNER JOIN rrs_securityinfo bond ON bond.isin_code = ips.isin_code
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
@@ -590,7 +595,7 @@
                 AND cps.audit_status = '20'
                 AND cps.is_deleted = 0
           )
-        ORDER BY bond.wind_code ASC
+        ORDER BY bond.isin_code ASC
     </select>
 
 </mapper>

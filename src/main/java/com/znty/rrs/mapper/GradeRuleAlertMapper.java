@@ -33,7 +33,7 @@ public interface GradeRuleAlertMapper {
      * @param currentPoolId  当前池
      * @return 待办
      */
-    IpGradeRuleAlertBo queryOpenAlert(@Param("securityCode") String securityCode,
+    IpGradeRuleAlertBo queryOpenAlert(@Param("isinCode") String isinCode,
                                       @Param("currentPoolId") Long currentPoolId);
 
     /**

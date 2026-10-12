@@ -34,7 +34,7 @@ public class TempSecurityCodeReq extends PageRequest {
     private String tempCompanyCode;
     /** 发行主体远程搜索关键字（名称/代码模糊，最多返回 50 条） */
     private String companyKeyword;
-    /** 正式证券远程搜索关键字（代码/名称模糊，最多返回 50 条） */
+    /** 证券代码关键词，匹配五码 */
     private String securityKeyword;
     /** 临时发行日期 */
     @JsonFormat(pattern = "yyyy-MM-dd", timezone = "GMT+8")
@@ -44,6 +44,8 @@ public class TempSecurityCodeReq extends PageRequest {
     private Date tempMaturityDate;
     /** 正式证券名称 */
     private String securityName;
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
+    private String isinCode;
     /** 正式证券代码 */
     private String securityCode;
     /** 正式证券市场 */

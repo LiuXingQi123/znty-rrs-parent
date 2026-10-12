@@ -77,6 +77,9 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     private AutoAdjustMapper autoAdjustMapper;
     /** 证券池调库落地 Mapper */
     @Resource
+    private SecurityPoolAdjustService securityPoolAdjustService;
+
+    @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
     /** 投资池查询 Mapper */
     @Resource
@@ -191,21 +194,21 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             int poolCount = 0;
             int poolBondCount = 0;
             for (ScheduledAdjustCandidateDto company : companies) {
-                if (company == null || !StringUtils.hasText(company.getSecurityCode())) {
+                if (company == null || !StringUtils.hasText(company.getObjectCode())) {
                     continue;
                 }
                 if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId)
-                        && !pledgeBlacklistRuleService.evaluate(company.getSecurityCode()).shouldBeInBlacklist()) {
+                        && !pledgeBlacklistRuleService.evaluate(company.getObjectCode()).shouldBeInBlacklist()) {
                     // 记录候选状态变化后的跳过原因
-                    warnDetail(detail, "主体[" + company.getSecurityCode()
+                    warnDetail(detail, "主体[" + company.getObjectCode()
                             + "]已不再命中黑名单质押库三个条件，跳过");
                     continue;
                 }
                 // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
                 if (AutoAdjustRestrictHelper.isInAnyPool(
-                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(company.getSecurityCode()),
+                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(company.getObjectCode()),
                         inRestrictPoolIds)) {
-                    warnDetail(detail, "主体[" + company.getSecurityCode() + "]当前在调入限制池中，跳过");
+                    warnDetail(detail, "主体[" + company.getObjectCode() + "]当前在调入限制池中，跳过");
                     continue;
                 }
                 company.setSecurityType("company");
@@ -222,18 +225,20 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 company.setAdjustReason(reason);
                 // 按主体和目标池生成自动调库批次号
                 String batchNo = batchNoContext.resolveCompanyBatchNo(
-                        company.getSecurityCode(), poolId, AdjustMode.IN.getCode());
+                        company.getObjectCode(), poolId, AdjustMode.IN.getCode());
                 company.setAdjustBatchNo(batchNo);
                 company.setSubmitTime(submitTime);
                 // 写自动入池日志
                 if (securityPoolAdjustMapper.addAdjustLog(company) != 1) {
-                    throw new BizException("主体[" + company.getSecurityCode() + "]自动调入日志写入失败");
+                    throw new BizException("主体[" + company.getObjectCode() + "]自动调入日志写入失败");
                 }
+            // 保存审批生效时的市场代码。
+            securityPoolAdjustService.saveEffectiveMarketSnapshot(company);
                 company.setAdjustLogId(company.getId());
                 // 写入在池状态
                 int inserted = securityPoolAdjustMapper.addPoolStatus(company);
                 if (inserted != 1) {
-                    throw new BizException("主体[" + company.getSecurityCode()
+                    throw new BizException("主体[" + company.getObjectCode()
                             + "]写入池状态失败（可能并发已入池）");
                 }
                 // 主体入池成功后，本任务内自写逻辑同批调入旗下未退市、未到期债（不复用人工 syncCompanyBonds）
@@ -350,17 +355,17 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             return;
         }
         for (ScheduledAdjustCandidateDto row : rows) {
-            if (row == null || !StringUtils.hasText(row.getSecurityCode())) {
+            if (row == null || !StringUtils.hasText(row.getObjectCode())) {
                 continue;
             }
-            ScheduledAdjustCandidateDto exist = merged.get(row.getSecurityCode());
+            ScheduledAdjustCandidateDto exist = merged.get(row.getObjectCode());
             if (exist == null) {
                 exist = row;
                 exist.setSecurityType("company");
                 exist.setInForbiddenPool(0);
                 exist.setInLowOuterRating(0);
                 exist.setInRestrictedPool(0);
-                merged.put(row.getSecurityCode(), exist);
+                merged.put(row.getObjectCode(), exist);
             } else if (!StringUtils.hasText(exist.getOuterRating())
                     && StringUtils.hasText(row.getOuterRating())) {
                 exist.setOuterRating(row.getOuterRating());
@@ -435,11 +440,11 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                                 List<PoolRelationBo> allRelations, Map<Long, InvestmentPoolBo> poolMap,
                                 TaskDetailLog detail) {
         if (companyLog == null || pool == null || companyLog.getTargetPoolId() == null
-                || !StringUtils.hasText(companyLog.getSecurityCode())) {
+                || !StringUtils.hasText(companyLog.getObjectCode())) {
             return 0;
         }
         Long poolId = companyLog.getTargetPoolId();
-        String companyCode = companyLog.getSecurityCode();
+        String companyCode = companyLog.getObjectCode();
         // 历史口径（对齐人工 syncCompanyBonds）：仅债券禁止库(15)、黑名单质押库(17)同步旗下债；
         // 观察池(16)/重点观察名单(23)只落主体。当前外评自动入池任务要求目标池均可跟债，故先注释；
         // 若后续需恢复限制，取消下方注释即可。
@@ -465,25 +470,27 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         String bondReason = (companyLog.getAdjustReason() == null ? REASON : companyLog.getAdjustReason())
                 + "（同池旗下债）";
         for (ScheduledAdjustCandidateDto bond : bonds) {
-            if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+            if (bond == null || !StringUtils.hasText(bond.getObjectCode())) {
                 continue;
             }
             List<Long> currentPoolIds = securityPoolAdjustMapper
-                    .querySecurityCurrentPoolIdList(bond.getSecurityCode());
+                    .querySecurityCurrentPoolIdList(bond.getObjectCode());
             // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
             if (AutoAdjustRestrictHelper.isInAnyPool(currentPoolIds, inRestrictPoolIds)) {
-                warnDetail(detail, "债券[" + bond.getSecurityCode() + "]当前在调入限制池中，跳过");
+                warnDetail(detail, "债券[" + bond.getObjectCode() + "]当前在调入限制池中，跳过");
                 continue;
             }
             // 回填自动入池日志公共字段（与主体同批次）
             fillAutoInBondLog(bond, companyLog, pool, bondReason);
             if (securityPoolAdjustMapper.addAdjustLog(bond) != 1) {
-                throw new BizException("债券[" + bond.getSecurityCode() + "]自动调入日志写入失败");
+                throw new BizException("债券[" + bond.getObjectCode() + "]自动调入日志写入失败");
             }
+            // 保存审批生效时的市场代码。
+            securityPoolAdjustService.saveEffectiveMarketSnapshot(bond);
             bond.setAdjustLogId(bond.getId());
             int inserted = securityPoolAdjustMapper.addPoolStatus(bond);
             if (inserted != 1) {
-                throw new BizException("债券[" + bond.getSecurityCode()
+                throw new BizException("债券[" + bond.getObjectCode()
                         + "]写入池状态失败（可能并发已入池）");
             }
             bondCount++;
@@ -491,7 +498,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
                     bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
             if (autoOutCount > 0) {
-                infoDetail(detail, "债券[" + bond.getSecurityCode() + "]自动调出关系池 "
+                infoDetail(detail, "债券[" + bond.getObjectCode() + "]自动调出关系池 "
                         + autoOutCount + " 个");
             }
         }

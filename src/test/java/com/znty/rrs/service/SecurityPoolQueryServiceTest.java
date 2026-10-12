@@ -35,7 +35,7 @@ public class SecurityPoolQueryServiceTest {
         ReflectionTestUtils.setField(service, "mySecurityPoolMapper", mock(MySecurityPoolMapper.class));
         ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
         SecurityPoolQueryDto row = new SecurityPoolQueryDto();
-        row.setSecurityShortName("测试债券"); row.setSecurityCode("100001"); row.setTargetPoolId(2L);
+        row.setSecurityShortName("测试债券"); row.setIsinCode("100001"); row.setTargetPoolId(2L);
         row.setDateExists(new BigDecimal("9999")); row.setDateExistsStr("1年");
         row.setSecurityStatus("active"); row.setAbsFlag(1);
         row.setEntryTime(new Date());

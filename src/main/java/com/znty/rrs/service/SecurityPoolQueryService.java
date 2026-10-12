@@ -12,6 +12,7 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
 import com.znty.rrs.mapper.SecurityPoolQueryMapper;
+import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.MySecurityPoolMapper;
 import com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryDto;
 import com.znty.rrs.entity.securitypoolquery.SecurityPoolQueryReq;
@@ -40,6 +41,10 @@ public class SecurityPoolQueryService {
     /** 证券池查询数据访问组件 */
     @Resource
     private SecurityPoolQueryMapper securityPoolQueryMapper;
+
+    /** 证券身份校验 */
+    @Resource
+    private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
     /** 我的证券池数据访问组件 */
     @Resource
@@ -102,7 +107,13 @@ public class SecurityPoolQueryService {
         for (SecurityPoolQueryDto source : list) {
             SecurityPoolQueryExportDto target = new SecurityPoolQueryExportDto();
             target.setSecurityShortName(source.getSecurityShortName());
-            target.setSecurityCode(source.getSecurityCode());
+            target.setIsinCode(source.getIsinCode());
+            target.setWindCodeSh(source.getWindCodeSh());
+            target.setWindCodeSz(source.getWindCodeSz());
+            target.setWindCodeNib(source.getWindCodeNib());
+            target.setWindCodeBj(source.getWindCodeBj());
+            target.setWindCodeNbc(source.getWindCodeNbc());
+
             target.setAdjusterName(source.getAdjusterName());
             target.setEntryTime(formatDateTime(source.getEntryTime()));
             target.setTargetPoolName(source.getTargetPoolName());
@@ -184,13 +195,15 @@ public class SecurityPoolQueryService {
 
     /** 添加证券到我的证券池（幂等：若已收藏则直接返回已有记录，不重复插入） */
     public MySecurityPoolBo addSecurityToMyPool(MySecurityPoolReq req) {
+        // 服务端核验身份，旧市场码请求明确报错。
+        validateFavoriteIdentity(req);
         // 先查询是否已收藏，避免重复写入
-        MySecurityPoolBo existing = mySecurityPoolMapper.queryByUserAndCode(req.getUserId(), req.getSecurityCode());
+        MySecurityPoolBo existing = mySecurityPoolMapper.queryByUserAndIsin(req.getUserId(), req.getIsinCode());
         if (existing != null) {
             return existing;
         }
         MySecurityPoolBo bo = new MySecurityPoolBo();
-        bo.setSecurityCode(req.getSecurityCode());
+        bo.setIsinCode(req.getIsinCode());
         bo.setSecurityType(req.getSecurityType());
         bo.setMarket(req.getMarket());
         bo.setUserId(req.getUserId());
@@ -200,17 +213,29 @@ public class SecurityPoolQueryService {
 
     /** 从我的证券池移除（证券不在收藏中时静默返回 null，不抛异常） */
     public MySecurityPoolBo deleteSecurityFromMyPool(MySecurityPoolReq req) {
+        // 服务端核验身份。
+        validateFavoriteIdentity(req);
         // 删除前查询确认存在，并保留记录用于返回给前端展示
-        MySecurityPoolBo existing = mySecurityPoolMapper.queryByUserAndCode(req.getUserId(), req.getSecurityCode());
+        MySecurityPoolBo existing = mySecurityPoolMapper.queryByUserAndIsin(req.getUserId(), req.getIsinCode());
         if (existing != null) {
-            mySecurityPoolMapper.deleteSecurityFromMyPool(req.getUserId(), req.getSecurityCode());
+            mySecurityPoolMapper.deleteSecurityFromMyPoolByIsin(req.getUserId(), req.getIsinCode());
         }
         return existing;
     }
 
     /** 批量查询用户已收藏的证券代码 */
     public List<String> queryFavoritedCodeList(MySecurityPoolReq req) {
-        return mySecurityPoolMapper.queryFavoritedCodeList(req.getUserId());
+        return mySecurityPoolMapper.queryFavoritedIsinList(req.getUserId());
     }
 
+
+    /** 收藏必须使用主档存在的证券身份。 */
+    private void validateFavoriteIdentity(MySecurityPoolReq req) {
+        if (req == null || req.getIsinCode() == null || req.getIsinCode().trim().isEmpty()) {
+            throw new BizException("isinCode不能为空，请刷新页面后重试");
+        }
+        if (securityPoolAdjustMapper.querySecurityBoByCode(req.getIsinCode()) == null) {
+            throw new BizException("证券不存在");
+        }
+    }
 }

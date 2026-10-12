@@ -37,7 +37,7 @@ public class SecurityPoolAdjustHistoryExportServiceTest {
         row.setAdjusterName("管理员");
         row.setSubmitTime(new Date());
         row.setSecurityShortName("测试债");
-        row.setSecurityCode("100001");
+        row.setIsinCode("100001");
         row.setSecurityTypeName("信用债");
         row.setIssuer("测试主体");
         row.setAdjustType("手工调整");

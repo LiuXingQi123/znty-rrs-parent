@@ -523,7 +523,7 @@ public class SecurityPoolAdjustFlowService {
         // 评级联动改判：调入审批通过时，审核人可改判到主体债入库矩阵允许的其它层级池（上调/降库）
         InvestmentPoolBo redirectPool = null;
         if (redirectPoolId != null) {
-            String securityCode = logList.get(0).getSecurityCode();
+            String securityCode = logList.get(0).getIsinCode();
             // 查矩阵允许池列表（含校验：改判池须在列表内）
             List<InvestmentPoolBo> allowedPools = securityPoolAdjustService.queryRedirectPoolOptions(securityCode);
             for (InvestmentPoolBo p : allowedPools) {
@@ -898,11 +898,10 @@ public class SecurityPoolAdjustFlowService {
      * 判断当前调库的证券是否临时代码。
      */
     private boolean isTemporaryCode(IpAdjustStepBo step) {
-        IpAdjustLogBo log = queryFirstAdjustLog(step);
-        if (log == null || log.getSecurityCode() == null) {
-            return false;
-        }
-        return tempSecurityCodeMapper.queryTemporaryCodeCountBySecurityCode(log.getSecurityCode()) > 0;
+        IpAdjustLogBo log = securityPoolAdjustMapper.queryAdjustLogListForAudit(step.getAdjustLogId(), null)
+                .stream().findFirst().orElse(null);
+        return log != null && ((log.getIsinCode() != null && log.getIsinCode().startsWith("TEMP:"))
+                || (log.getCrmwIsinCode() != null && log.getCrmwIsinCode().startsWith("TEMP:")));
     }
 
     /**

@@ -8,7 +8,12 @@
     <select id="querySecurityPoolAdjustHistoryPage" resultType="com.znty.rrs.entity.securitypooladjusthistory.SecurityPoolAdjustHistoryDto">
         SELECT al.id
                ,al.id AS adjustLogId
-               ,al.security_code
+               ,al.isin_code
+               ,al.wind_code_sh
+               ,al.wind_code_sz
+               ,al.wind_code_nib
+               ,al.wind_code_bj
+               ,al.wind_code_nbc
                ,al.security_short_name
                ,al.security_type
                ,dst.security_type_name
@@ -32,7 +37,7 @@
                ,al.submit_time
         FROM ip_adjust_log al
         LEFT JOIN ip_investment_pool p  ON p.id  = al.target_pool_id AND p.is_deleted  = 0
-        LEFT JOIN rrs_securityinfo sb  ON sb.wind_code = al.security_code
+        LEFT JOIN rrs_securityinfo sb  ON sb.isin_code = al.isin_code
         INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
@@ -45,8 +50,12 @@
                     #{id}
                 </foreach>
             </if>
-            <if test="securityCode != null and securityCode != ''">
-                AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')
+            <if test="securityKeyword != null and securityKeyword != ''">
+                AND (al.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR al.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR al.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR al.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR al.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')

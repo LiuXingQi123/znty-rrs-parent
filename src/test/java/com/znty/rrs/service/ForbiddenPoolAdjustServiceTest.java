@@ -19,6 +19,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckContext;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
+import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.ForbiddenPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -37,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -49,6 +51,38 @@ import static org.mockito.Mockito.when;
 
 /** 禁投池主体调整服务测试。 */
 public class ForbiddenPoolAdjustServiceTest {
+
+    /** 主体日志查询经过真实请求转换后，仍使用主体代码并保留批次及日志定位参数。 */
+    @Test
+    public void queryCompanyAdjustLogListShouldUseCompanyCode() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        ForbiddenPoolAdjustReq req = new ForbiddenPoolAdjustReq();
+        req.setCompanyCode("C10001");
+        req.setAdjustBatchNo("COMP-TEST");
+        req.setAdjustLogId(12L);
+        when(mapper.queryAdjustLogList("C10001", "COMP-TEST", 12L))
+                .thenReturn(Collections.emptyList());
+
+        assertThat(service.queryCompanyAdjustLogList(req)).isEmpty();
+
+        verify(mapper).queryAdjustLogList("C10001", "COMP-TEST", 12L);
+    }
+
+    /** 证券请求仅提供旧代码时仍须拒绝，不能将主体修复扩展为旧码回退。 */
+    @Test
+    public void querySecurityDetailShouldRejectLegacyCodeWithoutIsin() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityType("company_bond");
+        req.setSecurityCode("102400001.IB");
+
+        assertThatThrownBy(() -> service.querySecurityDetail(req))
+                .isInstanceOf(BizException.class).hasMessage("证券代码不能为空");
+
+        verify(mapper, never()).querySecurityDetail(any());
+    }
 
     /** 验证主体详情通过一次汇总查询回填旗下债券数量。 */
     @Test
@@ -78,7 +112,7 @@ public class ForbiddenPoolAdjustServiceTest {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
         ForbiddenPoolAdjustService service = buildService(mapper);
         SecurityInfoBo company = new SecurityInfoBo();
-        company.setWindCode("C10001");
+        company.setCompanyCode("C10001");
         company.setSecurityType("company");
         when(mapper.queryCompanySecurityBoByCode("C10001")).thenReturn(company);
 
@@ -96,7 +130,7 @@ public class ForbiddenPoolAdjustServiceTest {
         ForbiddenPoolAdjustService service = buildService(mapper);
         ForbiddenPoolAdjustSubmitReq req = new ForbiddenPoolAdjustSubmitReq();
         ForbiddenPoolAdjustSubmitReq.AdjustItem source = new ForbiddenPoolAdjustSubmitReq.AdjustItem();
-        source.setSecurityCode("B002");
+        source.setIsinCode("B002");
         source.setSecurityShortName("测试债券");
         source.setSecurityType("company_bond");
         req.setItems(Collections.singletonList(source));
@@ -107,7 +141,7 @@ public class ForbiddenPoolAdjustServiceTest {
 
         assertThat(result.getSecurityType()).isEqualTo("company");
         assertThat(result.getSecurityCode()).isEqualTo("C10001");
-        assertThat(result.getItems().get(0).getSecurityCode()).isEqualTo("B002");
+        assertThat(result.getItems().get(0).getIsinCode()).isEqualTo("B002");
         assertThat(result.getItems().get(0).getSecurityShortName()).isEqualTo("测试债券");
         assertThat(result.getItems().get(0).getSecurityType()).isEqualTo("company_bond");
     }
@@ -121,7 +155,7 @@ public class ForbiddenPoolAdjustServiceTest {
         req.setSecurityShortName("测试主体");
         req.setSecurityType("company");
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
-        item.setSecurityCode("B002");
+        item.setIsinCode("B002");
         item.setSecurityShortName("测试债券");
         item.setSecurityType("company_bond");
         item.setTargetPoolId(3L);
@@ -131,7 +165,7 @@ public class ForbiddenPoolAdjustServiceTest {
         IpAdjustLogBo log = ReflectionTestUtils.invokeMethod(
                 service, "buildAdjustLog", req, item, null, null);
 
-        assertThat(log.getSecurityCode()).isEqualTo("B002");
+        assertThat(log.getIsinCode()).isEqualTo("B002");
         assertThat(log.getSecurityShortName()).isEqualTo("测试债券");
         assertThat(log.getSecurityType()).isEqualTo("company_bond");
         assertThat(log.getAdjustType()).isEqualTo("互斥调整");
@@ -176,7 +210,7 @@ public class ForbiddenPoolAdjustServiceTest {
         when(mapper.querySecurityCurrentPoolIdList("B002")).thenReturn(Collections.singletonList(3L));
 
         IpAdjustLogBo log = new IpAdjustLogBo();
-        log.setSecurityCode("B002");
+        log.setIsinCode("B002");
         log.setSecurityType("company_bond");
         log.setAdjustMode("调出");
         log.setTargetPoolId(3L);
@@ -281,10 +315,10 @@ public class ForbiddenPoolAdjustServiceTest {
         verify(mapper, times(2)).addAdjustLog(captor.capture());
         IpAdjustLogBo inboundLog = captor.getAllValues().get(0);
         IpAdjustLogBo outboundLog = captor.getAllValues().get(1);
-        assertThat(inboundLog.getSecurityCode()).isEqualTo("B002");
+        assertThat(inboundLog.getIsinCode()).isEqualTo("B002");
         assertThat(inboundLog.getAdjustType()).isEqualTo("自动调整");
         assertThat(inboundLog.getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
-        assertThat(outboundLog.getSecurityCode()).isEqualTo("B002");
+        assertThat(outboundLog.getIsinCode()).isEqualTo("B002");
         assertThat(outboundLog.getAdjustType()).isEqualTo("互斥调整");
         assertThat(outboundLog.getAdjustMode()).isEqualTo("调出");
         assertThat(outboundLog.getTargetPoolId()).isEqualTo(3L);
@@ -347,7 +381,12 @@ public class ForbiddenPoolAdjustServiceTest {
                 buildRelation(15L, "in_mutex", 3L),
                 buildRelation(3L, "in_restrict", 15L)));
         ForbiddenPoolAdjustDto.CompanyBond bond = new ForbiddenPoolAdjustDto.CompanyBond();
-        bond.setWindCode("B002");
+        bond.setIsinCode("B002");
+        bond.setWindCodeSh("184901.SH");
+        bond.setWindCodeSz("149901.SZ");
+        bond.setWindCodeNib("102480001.IB");
+        bond.setWindCodeBj("830001.BJ");
+        bond.setWindCodeNbc("XS2400000001");
         bond.setShortName("测试债券");
         bond.setSecurityType("company_bond");
         bond.setTargetPoolId(3L);
@@ -370,7 +409,13 @@ public class ForbiddenPoolAdjustServiceTest {
 
         assertThat(result.getItems()).hasSize(2);
         AdjustCheckDto.CheckResultItem mutexItem = result.getItems().get(1);
-        assertThat(mutexItem.getSecurityCode()).isEqualTo("B002");
+        assertThat(mutexItem.getIsinCode()).isEqualTo("B002");
+        assertThat(mutexItem.getWindCodeSh()).isEqualTo("184901.SH");
+        assertThat(mutexItem.getWindCodeSz()).isEqualTo("149901.SZ");
+        assertThat(mutexItem.getWindCodeNib()).isEqualTo("102480001.IB");
+        assertThat(mutexItem.getWindCodeBj()).isEqualTo("830001.BJ");
+        assertThat(mutexItem.getWindCodeNbc()).isEqualTo("XS2400000001");
+        assertThat(manual.getWindCodeNib()).isNull();
         assertThat(mutexItem.getSecurityShortName()).isEqualTo("测试债券");
         assertThat(mutexItem.getSecurityType()).isEqualTo("company_bond");
         assertThat(mutexItem.getTargetPoolId()).isEqualTo(3L);
@@ -433,7 +478,7 @@ public class ForbiddenPoolAdjustServiceTest {
         pool.setVarietyCodes("[\"bond\"]");
         pool.setMarketCodes("[\"SSE\"]");
         SecurityInfoBo company = new SecurityInfoBo();
-        company.setWindCode("C10001");
+        company.setCompanyCode("C10001");
         company.setSecurityType("company");
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(company);
@@ -455,6 +500,7 @@ public class ForbiddenPoolAdjustServiceTest {
     @Test
     public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
         ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, "禁投池", "forbidden");
         try {
@@ -486,6 +532,7 @@ public class ForbiddenPoolAdjustServiceTest {
     /** 构建服务并注入公共依赖。 */
     private ForbiddenPoolAdjustService buildService(ForbiddenPoolAdjustMapper mapper) {
         ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
@@ -508,6 +555,7 @@ public class ForbiddenPoolAdjustServiceTest {
     @Test
     public void isDirectFlowShouldAcceptInitiatorThenAutoChain() throws Exception {
         ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         FlowNodeBo start = buildFlowNode(1L, "start");
         FlowNodeBo initiator = buildFlowNode(2L, "approval");
         FlowNodeBo auto1 = buildFlowNode(3L, "approval");
@@ -539,6 +587,7 @@ public class ForbiddenPoolAdjustServiceTest {
     @Test
     public void isDirectFlowShouldRejectHumanPreemptNode() throws Exception {
         ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ReflectionTestUtils.setField(service, "securityPoolAdjustService", mock(SecurityPoolAdjustService.class));
         FlowNodeBo start = buildFlowNode(1L, "start");
         FlowNodeBo initiator = buildFlowNode(2L, "approval");
         FlowNodeBo human = buildFlowNode(3L, "approval");
@@ -590,7 +639,9 @@ public class ForbiddenPoolAdjustServiceTest {
         companyOutbound.setAdjustMode("调出");
         companyOutbound.setItemTag("mutex");
         SecurityPoolAdjustSubmitReq.AdjustItem bondOutbound = new SecurityPoolAdjustSubmitReq.AdjustItem();
-        bondOutbound.setSecurityCode(thirdLevelSecurityCode);
+        bondOutbound.setIsinCode(thirdLevelSecurityCode);
+        bondOutbound.setSecurityType("C10001".equals(thirdLevelSecurityCode) ? "company" : "company_bond");
+        if ("C10001".equals(thirdLevelSecurityCode)) { bondOutbound.setSecurityCode(thirdLevelSecurityCode); }
         bondOutbound.setTargetPoolId(4L);
         bondOutbound.setAdjustMode("调出");
         bondOutbound.setItemTag("mutex");
@@ -601,7 +652,7 @@ public class ForbiddenPoolAdjustServiceTest {
     /** 构造提交阶段共享数据：禁投池调入要求主体从一级库调出，一级库与三级库互斥。 */
     private Object buildSubmitSharedData() throws Exception {
         SecurityInfoBo company = new SecurityInfoBo();
-        company.setWindCode("C10001");
+        company.setCompanyCode("C10001");
         company.setSecurityType("company");
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         poolMap.put(15L, buildPool(15L, "债券禁止库", "forbidden"));
@@ -680,7 +731,7 @@ public class ForbiddenPoolAdjustServiceTest {
     /** 构建债券数据。 */
     private SecurityInfoBo buildBond(String windCode) {
         SecurityInfoBo bond = new SecurityInfoBo();
-        bond.setWindCode(windCode);
+        bond.setIsinCode(windCode);
         bond.setShortName(windCode + "简称");
         bond.setSecurityType("company_bond");
         return bond;

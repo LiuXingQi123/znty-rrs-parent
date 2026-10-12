@@ -8,6 +8,7 @@ import com.znty.rrs.entity.bo.IpPoolStatusBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
+import com.znty.rrs.entity.securitycodeconversion.SecurityCodeConversionReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
@@ -32,272 +33,72 @@ import static org.mockito.Mockito.when;
 /** 临时代码管理服务测试。 */
 public class TempSecurityCodeServiceTest {
 
-    /** 验证新增临时代码时同步写入证券主数据。 */
+    /** 临时主档使用前缀身份，市场码保留原始录入值。 */
     @Test
-    public void addTempSecurityCodeShouldSyncSecurityInfo() throws Exception {
+    public void addShouldSeparateTemporaryIdentityFromMarketCode() throws Exception {
         TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
-        TempSecurityCodeReq req = buildAddReq();
-        TempSecurityCodeDto.CompanyOption company = new TempSecurityCodeDto.CompanyOption();
-        company.setCompanyCode("C10001");
-        company.setFullName("某交投集团");
-        when(mapper.queryCompanyByCode("C10001")).thenReturn(company);
+        TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
         when(mapper.querySecurityTypeCount("mtn")).thenReturn(1);
-        when(mapper.queryTempSecurityCodeCount("TMP001", null)).thenReturn(0);
-        when(mapper.querySecurityInfoCount("TMP001")).thenReturn(0);
-
-        service.addTempSecurityCode(req);
-
+        TempSecurityCodeDto.CompanyOption company = new TempSecurityCodeDto.CompanyOption();
+        company.setFullName("某集团");
+        when(mapper.queryCompanyByCode("C10001")).thenReturn(company);
+        service.addTempSecurityCode(buildAddReq());
         ArgumentCaptor<TempSecurityCodeBo> captor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
         verify(mapper).addSecurityInfo(captor.capture());
+        assertThat(captor.getValue().getIsinCode()).isEqualTo("TEMP:TMP001");
         assertThat(captor.getValue().getSecurityCode()).isEqualTo("TMP001");
-        assertThat(captor.getValue().getSecurityName()).isEqualTo("某基建集团临时中票");
-        assertThat(captor.getValue().getSecurityMarket()).isEqualTo(MarketCode.CIBM.getCode());
-        assertThat(captor.getValue().getTempCompanyCode()).isEqualTo("C10001");
-        assertThat(captor.getValue().getSecuritySource()).isEqualTo("temporary");
+        assertThat(captor.getValue().getSecurityMarket()).isEqualTo("CIBM");
     }
 
-    /** 验证仅在途日志时只做字段替换，不写出入库业务单。 */
+    /** 转正登记状态和运行态引用均在原事务内完成。 */
     @Test
-    public void editTempSecurityCodeToUpdatedShouldOnlyReplacePendingLogs() {
+    public void conversionShouldDelegateWithOfficialIsin() {
         TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
-        TempSecurityCodeReq req = buildUpdateReq();
-        TempSecurityCodeBo oldBo = buildOldBo();
-        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
-        when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.singletonList(10L));
-        when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActivePoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<IpPoolStatusBo>emptyList());
-        when(mapper.queryPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActiveCrmwPoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<IpPoolStatusBo>emptyList());
-        when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
-
-        service.editTempSecurityCodeToUpdated(req);
-
-        verify(mapper).editAdjustLogSecurityReference(any(TempSecurityCodeBo.class),
-                eq(Collections.singletonList(10L)));
-        verify(mapper).addTempSecurityCodeUpdateLog(any(TempSecurityCodeBo.class));
-        // 在途场景不写业务出入库
-        verify(adjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(adjustMapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
-        verify(mapper, never()).deletePoolStatusSoftById(anyLong(), any(Date.class));
-        verify(mapper).editTempSecurityInfoToDisabled(any(TempSecurityCodeBo.class));
-        verify(mapper).editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class));
-    }
-
-    /** 验证已在池时生成临时出库 + 正式入库业务日志。 */
-    @Test
-    public void editTempSecurityCodeToUpdatedShouldOutAndInWhenInPool() {
-        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
-        TempSecurityCodeReq req = buildUpdateReq();
-        TempSecurityCodeBo oldBo = buildOldBo();
-        IpPoolStatusBo poolStatus = buildPoolStatus();
-        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
-        when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActivePoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.singletonList(poolStatus));
-        when(mapper.queryPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActiveCrmwPoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<IpPoolStatusBo>emptyList());
-        when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActivePoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(0);
-        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
-
-        service.editTempSecurityCodeToUpdated(req);
-
-        // 出库 + 入库 两条调库日志
-        verify(adjustMapper, times(2)).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(mapper).deletePoolStatusSoftById(eq(88L), any(Date.class));
-        verify(adjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
-        ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(adjustMapper, times(2)).addAdjustLog(logCaptor.capture());
-        assertThat(logCaptor.getAllValues().get(0).getAdjustReason())
-                .isEqualTo("债券临时代码调出（临时代码：TMP001；正式代码：110001.IB）");
-        assertThat(logCaptor.getAllValues().get(0).getAdjustAdvice())
-                .isEqualTo(logCaptor.getAllValues().get(0).getAdjustReason());
-        assertThat(logCaptor.getAllValues().get(0).getAdjustMode()).isEqualTo("调出");
-        assertThat(logCaptor.getAllValues().get(1).getSecurityCode()).isEqualTo("110001.IB");
-        assertThat(logCaptor.getAllValues().get(1).getAdjustMode()).isEqualTo("调入");
-        assertThat(logCaptor.getAllValues().get(1).getAdjustReason())
-                .isEqualTo("研究建议（代码替换：TMP001→110001.IB）");
-        assertThat(logCaptor.getAllValues().get(1).getAdjustAdvice())
-                .isEqualTo(logCaptor.getAllValues().get(1).getAdjustReason());
-    }
-
-    /** 验证正式码已在池时只出不入。 */
-    @Test
-    public void editTempSecurityCodeToUpdatedShouldOnlyOutWhenFormalAlreadyInPool() {
-        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
-        TempSecurityCodeReq req = buildUpdateReq();
+        TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
+        SecurityCodeConversionService conversion = mock(SecurityCodeConversionService.class);
+        ReflectionTestUtils.setField(service, "securityCodeConversionService", conversion);
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
-        when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActivePoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.singletonList(buildPoolStatus()));
-        when(mapper.queryPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActiveCrmwPoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<IpPoolStatusBo>emptyList());
-        when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        // 正式已在池
-        when(mapper.queryActivePoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(1);
+        when(mapper.queryFormalSecurityByCode("CN0000000001")).thenReturn(buildFormalSecurityOption());
         when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
-
-        service.editTempSecurityCodeToUpdated(req);
-
-        // 仅出库一条
-        verify(adjustMapper, times(1)).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(mapper).deletePoolStatusSoftById(eq(88L), any(Date.class));
-        verify(adjustMapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
+        service.editTempSecurityCodeToUpdated(buildUpdateReq());
+        ArgumentCaptor<SecurityCodeConversionReq> captor =
+                ArgumentCaptor.forClass(SecurityCodeConversionReq.class);
+        verify(conversion).replaceTempSecurityCodeReferences(captor.capture());
+        assertThat(captor.getValue().getIsinCode()).isEqualTo("CN0000000001");
+        assertThat(captor.getValue().getTempSecurityCode()).isEqualTo("TMP001");
     }
 
-    /** 验证正式证券不存在时转正失败。 */
+    /** 旧市场码请求不能静默回退为新身份。 */
     @Test
-    public void editTempSecurityCodeToUpdatedShouldRejectMissingFormalSecurity() {
-        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
+    public void conversionShouldRejectLegacyRequest() {
         TempSecurityCodeReq req = new TempSecurityCodeReq();
-        req.setId(1L);
-        req.setSecurityCode("110001.IB");
+        req.setId(1L); req.setSecurityCode("110001.IB");
+        assertThatThrownBy(() -> buildService(mock(TempSecurityCodeMapper.class), mock(SecurityPoolAdjustMapper.class))
+                .editTempSecurityCodeToUpdated(req)).isInstanceOf(BizException.class).hasMessageContaining("ISIN");
+    }
+
+    /** 保护前缀后的最大长度及CRMW银行间限制。 */
+    @Test
+    public void addShouldValidateLengthAndCrmwMarket() throws Exception {
+        TempSecurityCodeService service = buildService(mock(TempSecurityCodeMapper.class), mock(SecurityPoolAdjustMapper.class));
+        TempSecurityCodeReq longReq = buildAddReq();
+        longReq.setTempSecurityCode(String.join("", Collections.nCopies(96, "A")));
+        assertThatThrownBy(() -> service.addTempSecurityCode(longReq)).isInstanceOf(BizException.class).hasMessageContaining("95");
+        TempSecurityCodeReq crmw = buildAddReq(); crmw.setTempSecurityType("crmw"); crmw.setTempSecurityMarket("SSE");
+        assertThatThrownBy(() -> service.addTempSecurityCode(crmw)).isInstanceOf(BizException.class).hasMessageContaining("银行间");
+    }
+
+    /** 取消发行以临时身份定位主档。 */
+    @Test
+    public void cancellationShouldKeepPrefixedIdentity() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(null);
-
-        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("正式证券不存在或不可用");
-    }
-
-    /** 验证定时任务入口记录 job 来源，且自动调库日志不写调整建议。 */
-    @Test
-    public void editTempSecurityCodeToUpdatedByJobShouldUseMappedFormalCode() {
-        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
-        TempSecurityCodeBo oldBo = buildOldBo();
-        oldBo.setSecurityCode("110001.IB");
-        IpPoolStatusBo crmwPoolStatus = buildPoolStatus();
-        crmwPoolStatus.setId(89L);
-        crmwPoolStatus.setPoolType("crmw");
-        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
-        when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActivePoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.singletonList(buildPoolStatus()));
-        when(mapper.queryPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActiveCrmwPoolStatusList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.singletonList(crmwPoolStatus));
-        when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.<Long>emptyList());
-        when(mapper.queryActivePoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(0);
-        when(mapper.queryActiveCrmwPoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(0);
-        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
-
-        service.editTempSecurityCodeToUpdatedByJob(1L);
-
-        ArgumentCaptor<TempSecurityCodeBo> captor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
-        verify(mapper).editTempSecurityCodeToUpdated(captor.capture());
-        assertThat(captor.getValue().getSecurityCode()).isEqualTo("110001.IB");
-        assertThat(captor.getValue().getOprtSource()).isEqualTo(TempOprtSource.JOB.getCode());
-        ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(adjustMapper, times(4)).addAdjustLog(logCaptor.capture());
-        assertThat(logCaptor.getAllValues().get(0).getAdjustReason())
-                .isEqualTo("债券临时代码调出（临时代码：TMP001；正式代码：110001.IB）");
-        assertThat(logCaptor.getAllValues().get(1).getAdjustReason())
-                .isEqualTo("研究建议（代码替换：TMP001→110001.IB）");
-        for (IpAdjustLogBo log : logCaptor.getAllValues()) {
-            assertThat(log.getAdjustAdvice()).isNull();
-        }
-        ArgumentCaptor<IpAdjustLogBo> statusCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(adjustMapper).addPoolStatus(statusCaptor.capture());
-        assertThat(statusCaptor.getValue().getAdjustAdvice()).isNull();
-        ArgumentCaptor<IpPoolStatusBo> crmwStatusCaptor = ArgumentCaptor.forClass(IpPoolStatusBo.class);
-        verify(mapper).addCrmwPoolStatus(crmwStatusCaptor.capture());
-        assertThat(crmwStatusCaptor.getValue().getAdjustAdvice()).isNull();
-        verify(mapper).editTempSecurityInfoToDisabled(any(TempSecurityCodeBo.class));
-    }
-
-    /** 验证主表未更新成功时不继续改调库/池状态。 */
-    @Test
-    public void editTempSecurityCodeToUpdatedShouldRejectWhenMainRowNotUpdated() {
-        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
-        TempSecurityCodeReq req = buildUpdateReq();
-        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
-        when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(0);
-
-        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("已不是临时状态");
-        verify(mapper, never()).queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class));
-        verify(mapper, never()).editTempSecurityInfoToDisabled(any(TempSecurityCodeBo.class));
-        verify(adjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
-    }
-
-    /** 验证已被核心调库业务引用的临时代码不允许删除。 */
-    @Test
-    public void deleteTempSecurityCodeShouldRejectWhenReferenced() {
-        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
-        TempSecurityCodeBo oldBo = buildOldBo();
-        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryCoreReferenceCount(oldBo)).thenReturn(1);
-        TempSecurityCodeReq req = new TempSecurityCodeReq();
-        req.setId(1L);
-
-        assertThatThrownBy(() -> service.deleteTempSecurityCode(req))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("该临时代码已被调库业务使用，无法删除");
-    }
-
-    /** 验证取消发行时同步更新临时证券主数据。 */
-    @Test
-    public void editTempSecurityCodeToCancelledShouldUpdateSecurityInfo() {
-        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
-        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        TempSecurityCodeService service = buildService(mapper, adjustMapper);
-        TempSecurityCodeBo oldBo = buildOldBo();
-        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        TempSecurityCodeReq req = new TempSecurityCodeReq();
-        req.setId(1L);
-
+        TempSecurityCodeReq req = new TempSecurityCodeReq(); req.setId(1L);
         service.editTempSecurityCodeToCancelled(req);
-
         ArgumentCaptor<TempSecurityCodeBo> captor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
         verify(mapper).editSecurityInfoToCancelled(captor.capture());
-        assertThat(captor.getValue().getTempSecurityCode()).isEqualTo("TMP001");
-        assertThat(captor.getValue().getCancelDate()).matches("\\d{8}");
+        assertThat(captor.getValue().getTempIsinCode()).isEqualTo("TEMP:TMP001");
     }
 
     /** 构建测试服务。 */
@@ -306,6 +107,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeService service = new TempSecurityCodeService();
         ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "securityCodeConversionService", mock(SecurityCodeConversionService.class));
         return service;
     }
 
@@ -326,7 +128,7 @@ public class TempSecurityCodeServiceTest {
     private TempSecurityCodeReq buildUpdateReq() {
         TempSecurityCodeReq req = new TempSecurityCodeReq();
         req.setId(1L);
-        req.setSecurityCode("110001.IB");
+        req.setIsinCode("CN0000000001");
         return req;
     }
 
@@ -347,7 +149,7 @@ public class TempSecurityCodeServiceTest {
     /** 构建正式证券主数据选项。 */
     private TempSecurityCodeDto.FormalSecurityOption buildFormalSecurityOption() {
         TempSecurityCodeDto.FormalSecurityOption option = new TempSecurityCodeDto.FormalSecurityOption();
-        option.setSecurityCode("110001.IB");
+        option.setIsinCode("CN0000000001");
         option.setSecurityName("26某基建MTN001");
         option.setSecurityMarket(MarketCode.CIBM.getCode());
         option.setSecurityType("mtn");

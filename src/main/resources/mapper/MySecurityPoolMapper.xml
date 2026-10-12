@@ -5,7 +5,8 @@
 
     <!-- 添加证券到我的证券池 -->
     <insert id="addSecurityToMyPool" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO my_security_pool (security_code
+        INSERT INTO my_security_pool (isin_code
+                                     ,security_code
                                      ,security_type
                                      ,market
                                      ,user_id
@@ -13,7 +14,8 @@
                                      ,remark
                                      ,create_time
                                      ,update_time)
-        VALUES (#{securityCode}
+        VALUES (#{isinCode}
+               ,#{securityCode}
                ,#{securityType}
                ,#{market}
                ,#{userId}
@@ -59,4 +61,19 @@
           AND status = 'use'
     </select>
 
+    <select id="queryByUserAndIsin" resultType="com.znty.rrs.entity.bo.MySecurityPoolBo">
+        SELECT * FROM my_security_pool
+        WHERE user_id = #{userId} AND isin_code = #{isinCode} AND status = 'use'
+        LIMIT 1
+    </select>
+
+    <update id="deleteSecurityFromMyPoolByIsin">
+        UPDATE my_security_pool SET status = 'del', update_time = NOW()
+        WHERE user_id = #{userId} AND isin_code = #{isinCode} AND status = 'use'
+    </update>
+
+    <select id="queryFavoritedIsinList" resultType="java.lang.String">
+        SELECT DISTINCT isin_code FROM my_security_pool
+        WHERE user_id = #{userId} AND status = 'use' AND isin_code IS NOT NULL
+    </select>
 </mapper>

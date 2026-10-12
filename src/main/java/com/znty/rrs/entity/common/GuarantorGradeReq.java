@@ -11,5 +11,5 @@ import java.util.List;
 public class GuarantorGradeReq {
 
     /** Wind 证券代码列表 */
-    private List<String> securityCodes;
+    private List<String> isinCodes;
 }

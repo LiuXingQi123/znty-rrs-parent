@@ -35,14 +35,14 @@ public class SecurityPoolQueryApiTest extends ControllerApiTestSupport {
                 "{\"poolIds\":[2,3],\"securityStatus\":\"active\",\"bondYesFlags\":[\"cj\",\"inright\"],\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityTypeList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/querySecurityStatusList", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/exportSecurityPoolExcel", "{\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/exportSecurityPoolExcel", "{\"isinCode\":\"100001\"}");
     }
 
     /** 验证 shouldSupportMyPoolFavorites 测试场景。 */
     @Test
     public void shouldSupportMyPoolFavorites() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/addSecurityToMyPool", "{\"userId\":\"1\",\"securityCode\":\"100001\"}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/deleteSecurityFromMyPool", "{\"userId\":\"1\",\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/addSecurityToMyPool", "{\"userId\":\"1\",\"isinCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/deleteSecurityFromMyPool", "{\"userId\":\"1\",\"isinCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolQuery/queryFavoritedCodeList", "{\"userId\":\"1\"}");
     }
 }

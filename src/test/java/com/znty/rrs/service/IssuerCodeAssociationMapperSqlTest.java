@@ -77,20 +77,20 @@ public class IssuerCodeAssociationMapperSqlTest {
         String select = xml.substring(start, end);
         // 截取真实关联条件及紧随其后的过滤条件，避开各业务查询的日期函数和池状态条件。
         Matcher matcher = Pattern.compile("WHERE (sb|si)\\.issuer(?:_code)?\\s*=\\s*\\("
-                + "\\s*SELECT issuer(?:_code)?\\s+FROM rrs_securityinfo\\s+WHERE wind_code = "
-                + "#\\{securityCode}\\s+LIMIT 1\\s*\\)"
+                + "\\s*SELECT issuer(?:_code)?\\s+FROM rrs_securityinfo\\s+WHERE isin_code = "
+                + "#\\{(?:securityCode|isinCode)}\\s+LIMIT 1\\s*\\)"
                 + "(?:\\s+AND \\1\\.issuer(?:_code)? (?:IS NOT NULL|!= ''))*",
                 Pattern.DOTALL).matcher(select);
         assertThat(matcher.find()).as(queryId + " 应有同主体关联条件").isTrue();
         alias = matcher.group(1);
-        association = matcher.group().replace("#{securityCode}", "?");
+        association = matcher.group().replace("#{securityCode}", "?").replace("#{isinCode}", "?");
 
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.h2.Driver");
         dataSource.setUrl("jdbc:h2:mem:issuer_" + UUID.randomUUID()
                 + ";MODE=MySQL;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1");
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(40), issuer VARCHAR(100), issuer_code VARCHAR(40))");
+        jdbc.execute("CREATE TABLE rrs_securityinfo (isin_code VARCHAR(40), issuer VARCHAR(100), issuer_code VARCHAR(40))");
         jdbc.update("INSERT INTO rrs_securityinfo VALUES "
                 + "('CURRENT', '同名发行人', 'C001'), ('RENAMED', '发行人新名称', 'C001'),"
                 + "('SAME_NAME', '同名发行人', 'C002'), ('NULL_A', '同名发行人', NULL),"
@@ -131,7 +131,7 @@ public class IssuerCodeAssociationMapperSqlTest {
 
     /** 对最小证券数据集执行 Mapper 原有的主体关联条件。 */
     private List<String> associatedCodes(String securityCode) {
-        return jdbc.queryForList("SELECT " + alias + ".wind_code FROM rrs_securityinfo " + alias
+        return jdbc.queryForList("SELECT " + alias + ".isin_code FROM rrs_securityinfo " + alias
                 + " " + association, String.class, securityCode);
     }
 }

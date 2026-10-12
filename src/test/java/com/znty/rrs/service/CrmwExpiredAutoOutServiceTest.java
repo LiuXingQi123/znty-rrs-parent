@@ -58,7 +58,9 @@ public class CrmwExpiredAutoOutServiceTest {
 
         ScheduledAdjustCandidateDto item = new ScheduledAdjustCandidateDto();
         item.setSecurityCode("B001");
+        item.setIsinCode("B001");
         item.setCrmwScode("CRMW001");
+        item.setCrmwIsinCode("CRMW001");
         item.setCrmwStype("crmw");
         item.setMaturityDate("20260831");
         when(autoAdjustMapper.queryCrmwPoolByExpired(18L)).thenReturn(Collections.singletonList(item));
@@ -106,7 +108,9 @@ public class CrmwExpiredAutoOutServiceTest {
         when(crmwPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
         ScheduledAdjustCandidateDto item = new ScheduledAdjustCandidateDto();
         item.setSecurityCode("B001");
+        item.setIsinCode("B001");
         item.setCrmwScode("CRMW001");
+        item.setCrmwIsinCode("CRMW001");
         item.setCrmwStype("crmw");
         when(autoAdjustMapper.queryCrmwPoolByExpired(18L)).thenReturn(Collections.singletonList(item));
         when(crmwPoolAdjustMapper.deletePoolStatusSoft("B001", "CRMW001", "crmw", 18L)).thenReturn(0);

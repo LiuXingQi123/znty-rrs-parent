@@ -2,6 +2,8 @@
 -- znty-rrs 证券池调库相关表 - 建库建表脚本
 -- MySQL version: 8.0.33
 -- 说明：调库日志 / 池状态 / 流程步骤（不含外部导入表，见 rrs_external_import_schema.sql）
+-- 债券按 isin_code 关联主档；CRMW 按 crmw_isin_code + isin_code + target_pool_id 标识组合。
+-- 主体、独立基金及股票仍使用原 security_code 语义，证券关联键留空。
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -16,11 +18,13 @@ DROP TABLE IF EXISTS `ip_adjust_log`;
 CREATE TABLE `ip_adjust_log`
 (
     `id`               BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `isin_code`            VARCHAR(100) DEFAULT NULL COMMENT '证券关联键：正式券为真实ISIN / 临时券为TEMP:临时代码；CRMW时为标的证券',
     `security_code`        VARCHAR(32)  DEFAULT NULL COMMENT '证券代码',
     `security_short_name`  VARCHAR(128) DEFAULT NULL COMMENT '证券简称',
     `security_type`        VARCHAR(32)  DEFAULT NULL COMMENT '证券类型编码，关联 dict_security_type.security_type',
     `crmw_name`            VARCHAR(128) DEFAULT NULL COMMENT 'CRMW名称',
-    `crmw_scode`           VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 证券代码',
+    `crmw_isin_code`       VARCHAR(100) DEFAULT NULL COMMENT 'CRMW凭证关联键：正式凭证为真实ISIN / 临时凭证为TEMP:临时代码',
+    `crmw_scode`           VARCHAR(100) DEFAULT NULL COMMENT 'CRMW凭证银行间代码快照，不作为关联身份；临时凭证为登记代码',
     `crmw_mktcode`         VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 市场代码',
     `crmw_stype`           VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 证券类型',
     `adjust_type`      VARCHAR(32)  DEFAULT NULL COMMENT '调整类型：手工调整/联动调整/互斥调整/关联调整/自动调整/Excel导入/手动批量调整',
@@ -40,6 +44,11 @@ CREATE TABLE `ip_adjust_log`
     `submit_time`      DATETIME     DEFAULT NULL COMMENT '提交时间',
     `audit_time`       DATETIME     DEFAULT NULL COMMENT '审核时间',
     `entry_time`       DATETIME     DEFAULT NULL COMMENT '入池时间',
+    `wind_code_sh`     VARCHAR(100) DEFAULT NULL COMMENT '生效时沪市证券代码快照；CRMW时为标的证券',
+    `wind_code_sz`     VARCHAR(100) DEFAULT NULL COMMENT '生效时深市证券代码快照；CRMW时为标的证券',
+    `wind_code_nib`    VARCHAR(100) DEFAULT NULL COMMENT '生效时银行间证券代码快照；CRMW时为标的证券',
+    `wind_code_bj`     VARCHAR(100) DEFAULT NULL COMMENT '生效时北交所证券代码快照；CRMW时为标的证券',
+    `wind_code_nbc`    VARCHAR(100) DEFAULT NULL COMMENT '生效时其他市场证券代码快照；CRMW时为标的证券',
     `is_deleted`       TINYINT(1)   DEFAULT NULL            COMMENT '逻辑删除标志：0=正常 / 1=已删除',
     `crte_time`        DATETIME     DEFAULT NULL COMMENT '创建时间',
     `updt_time`        DATETIME     DEFAULT NULL COMMENT '修改时间',
@@ -57,11 +66,13 @@ DROP TABLE IF EXISTS `ip_pool_status`;
 CREATE TABLE `ip_pool_status`
 (
     `id`               BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `isin_code`            VARCHAR(100) DEFAULT NULL COMMENT '证券关联键：正式券为真实ISIN / 临时券为TEMP:临时代码；CRMW时为标的证券',
     `security_code`        VARCHAR(32)  DEFAULT NULL COMMENT '证券代码',
     `security_short_name`  VARCHAR(128) DEFAULT NULL COMMENT '证券简称',
     `security_type`        VARCHAR(32)  DEFAULT NULL COMMENT '证券类型编码，关联 dict_security_type.security_type',
     `crmw_name`            VARCHAR(128) DEFAULT NULL COMMENT 'CRMW名称',
-    `crmw_scode`           VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 证券代码',
+    `crmw_isin_code`       VARCHAR(100) DEFAULT NULL COMMENT 'CRMW凭证关联键：正式凭证为真实ISIN / 临时凭证为TEMP:临时代码',
+    `crmw_scode`           VARCHAR(100) DEFAULT NULL COMMENT 'CRMW凭证银行间代码快照，不作为关联身份；临时凭证为登记代码',
     `crmw_mktcode`         VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 市场代码',
     `crmw_stype`           VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 证券类型',
     `adjust_type`      VARCHAR(32)  DEFAULT NULL COMMENT '调整类型：手工调整/联动调整/互斥调整/关联调整/自动调整/Excel导入/手动批量调整',

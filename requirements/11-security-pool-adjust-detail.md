@@ -1,5 +1,17 @@
 # 证券池调库详情需求说明
 
+## 证券身份与市场代码（当前接口契约）
+
+- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
+- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
+- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
+- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
+- 调库记录展示日志保存的市场代码快照，不随当前主档代码变化；CRMW 凭证展示银行间代码快照，ISIN 仅用于身份关联。
+- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
+- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
+- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
+
+
 > 前端页面：`security_pool_adjust_detail.html`（列表 + 详情两视图）
 > 后端前缀：`/api/v1/securityPoolAdjust`（查询/校验/提交）、`/api/v1/securityPoolAdjustFlow`（修改节点重新提交）
 > 角色定位：申请人、审批人和审计人员查看单只证券及其调库批次的完整业务上下文（池状态、历史记录、流程步骤），并可对未终结流程执行后续动作。
@@ -46,13 +58,13 @@
 ### 1.2 初始化加载接口（并发）
 
 `created` 设 baseURL，调 `initStandaloneDetailPage`：
-1. 从 URL 取 `securityCode`/`windCode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`；`adjustStep=1`。
-2. 调 `loadDetailData(securityCode)`，用 `Promise.all` **并发**5 个接口：
-   - `querySecurityDetail` `{ securityCode }` → 证券基本信息
-   - `queryAdjustPoolList` `{ securityCode, adjustDirection:'in', currentUserId }` → 可调入池
-   - `queryAdjustPoolList` `{ securityCode, adjustDirection:'out', currentUserId }` → 可调出池
-   - `querySecurityPoolStatus` `{ securityCode }` → 当前所在池（证券+主体）
-   - `queryAdjustLogList` `{ securityCode, adjustBatchNo }` → 调库记录
+1. 从 URL 取 `isinCode`/`windCode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`；`adjustStep=1`。
+2. 调 `loadDetailData(isinCode)`，用 `Promise.all` **并发**5 个接口：
+   - `querySecurityDetail` `{ isinCode }` → 证券基本信息
+   - `queryAdjustPoolList` `{ isinCode, adjustDirection:'in', currentUserId }` → 可调入池
+   - `queryAdjustPoolList` `{ isinCode, adjustDirection:'out', currentUserId }` → 可调出池
+   - `querySecurityPoolStatus` `{ isinCode }` → 当前所在池（证券+主体）
+   - `queryAdjustLogList` `{ isinCode, adjustBatchNo }` → 调库记录
 3. 并发完成后**串行**：组装调入/调出树（`buildPoolTree`）、过滤已在池、构建互斥映射、`loadLogAttachments`（加载每条记录附件）、`loadFlowSteps`（加载流程步骤）。
 
 ---
@@ -105,7 +117,7 @@
 `adjustLogList` 来自 `queryAdjustLogList`。列：序号/投资池名称（`poolPath` 全路径）/调整类型（`adjustType`）/调整方向（`adjustMode` 调入绿/调出红 tag）/审批流程（`flowType` tag + `flowName`）/信评报告/其他材料/调整说明（`adjustmentNote`）/审核状态（`auditStatus`，`getStatusStyle`+`auditStatusLabel`）。
 
 - 信评报告/其他材料列：展示已绑定附件（`row.attachmentFiles`/`materialFiles`，`loadLogAttachments` 按 category 拆分：`credit_report_*`/`material_*`），点击下载（`downloadAttachment`）。adjust 模式下额外显示「选择报告/上传附件」按钮。
-- SQL：按 `securityCode`，若传 `adjustBatchNo` 则按批次过滤；否则**排除终态** `audit_status NOT IN ('-1','20','21','99')`，即只展示进行中的记录。`ORDER BY crte_time DESC`。
+- SQL：按 `isinCode`，若传 `adjustBatchNo` 则按批次过滤；否则**排除终态** `audit_status NOT IN ('-1','20','21','99')`，即只展示进行中的记录。`ORDER BY crte_time DESC`。
 
 ### 3.4 流程步骤表（section-flow-status，仅 view 模式）
 
@@ -119,7 +131,7 @@
 
 - 调库记录附件：`loadLogAttachments` 收集并去重全部日志 ID，一次调用 `/api/v1/attachments/queryAttachmentList { adjustLogIds }`，按返回的 `mainId` 和 `attachmentCategory` 拆为信评报告（`credit_report_hand/in/out`）与其他材料（`material_hand/in/out`）。
 - 下载：`downloadAttachment` `POST /api/v1/attachments/downloadAttachment { id }` 返回 `ApiResponse<String>`（Base64），前端解码为 Blob 后 `URL.createObjectURL` + `<a download>`。本地待提交文件用 `downloadLocalFile`。
-- 信评报告选择弹窗：内/外报告 Tab，分页查询 `/api/v1/reports/queryInReportPage`、`/api/v1/reports/queryOutReportPage`，支持标题/证券编码/类型/撰写日期筛选，选中后回填到 `creditReportSelections`/`otherMaterialSelections`。打开弹窗时默认带上当前证券编码（`bondDetail.windCode`）作为 `securityCode` 查询条件。
+- 信评报告选择弹窗：内/外报告 Tab，分页查询 `/api/v1/reports/queryInReportPage`、`/api/v1/reports/queryOutReportPage`，支持标题/证券编码/类型/撰写日期筛选，选中后回填到 `creditReportSelections`/`otherMaterialSelections`。打开弹窗时默认带上当前证券编码（`bondDetail.windCode`）作为 `isinCode` 查询条件。
 
 ---
 
@@ -131,8 +143,8 @@
 
 1. **允许提交的状态**：无显式状态判断；只要用户在步骤1选了池即可。后端 `checkAdjust` 会前置校验「证券是否已到期」和「是否存在进行中的调库流程」（`preCheckPendingProcess`，有 pending 步骤则拒绝），从而间接阻止对已有进行中流程的证券再次提交。
 2. **调用顺序**：
-   - 步骤1→步骤2：`goToStep2` 调 `checkAdjust`（`POST /api/v1/securityPoolAdjust/checkAdjust`），请求体 `{ securityCode, securityShortName, securityType, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`。
-   - 步骤2→提交：`handleSubmit`→`confirmFlowSelection`→`submitAdjustLog` 调 `addAdjustLogWithFiles`（`POST /api/v1/securityPoolAdjust/addAdjustLogWithFiles`，multipart）。请求体 `payload`：`securityCode/securityShortName/securityType/adjustType:'手工调整'/adjustReason/adjustAdvice/securityInfo(全量字段)/adjusterId/adjusterName/items:[{targetPoolId,targetPoolName,poolType,adjustMode,itemTag,adjustGroupKey,flowId,flowKey,flowType,adjustmentNote,creditReportFileIndexes,materialFileIndexes}]`，附件通过 `files` 字段追加，下标由 `collectSubmitFiles` 回填。
+   - 步骤1→步骤2：`goToStep2` 调 `checkAdjust`（`POST /api/v1/securityPoolAdjust/checkAdjust`），请求体 `{ isinCode, securityShortName, securityType, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`。
+   - 步骤2→提交：`handleSubmit`→`confirmFlowSelection`→`submitAdjustLog` 调 `addAdjustLogWithFiles`（`POST /api/v1/securityPoolAdjust/addAdjustLogWithFiles`，multipart）。请求体 `payload`：`isinCode/securityShortName/securityType/adjustType:'手工调整'/adjustReason/adjustAdvice/securityInfo(全量字段)/adjusterId/adjusterName/items:[{targetPoolId,targetPoolName,poolType,adjustMode,itemTag,adjustGroupKey,flowId,flowKey,flowType,adjustmentNote,creditReportFileIndexes,materialFileIndexes}]`，附件通过 `files` 字段追加，下标由 `collectSubmitFiles` 回填。
 3. **与首次申请差异**：无——详情页 adjust 模式即首次申请本身。
 
 ### 4.2 真正的「修改节点重新提交」（approve.html，audit_status='11'）
@@ -151,13 +163,13 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `securityPoolAdjust/querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 列表页分页查询证券 |
+| `securityPoolAdjust/querySecurityPage` | isinCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 列表页分页查询证券 |
 | `securityPoolAdjust/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 列表页证券类型下拉 |
-| `securityPoolAdjust/querySecurityDetail` | securityCode | `SecurityInfoDetailDto`（29+证券字段） | 详情页顶部证券基本信息 |
-| `securityPoolAdjust/queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId | `List<PoolDto>`（含互斥关系，树由前端组装） | 可调入/调出投资池 |
-| `securityPoolAdjust/querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools + issuerCurrentPools） | 当前证券所在池 + 主体所在池 |
-| `securityPoolAdjust/queryAdjustLogList` | securityCode, adjustBatchNo? | `List<AdjustLogDto>` | 调库记录（无批次时排除终态） |
-| `securityPoolAdjust/checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 调库可行性预校验 + 流程候选 |
+| `securityPoolAdjust/querySecurityDetail` | isinCode | `SecurityInfoDetailDto`（29+证券字段） | 详情页顶部证券基本信息 |
+| `securityPoolAdjust/queryAdjustPoolList` | isinCode, adjustDirection(in/out), currentUserId | `List<PoolDto>`（含互斥关系，树由前端组装） | 可调入/调出投资池 |
+| `securityPoolAdjust/querySecurityPoolStatus` | isinCode | `SecurityPoolStatusDto`（securityCurrentPools + issuerCurrentPools） | 当前证券所在池 + 主体所在池 |
+| `securityPoolAdjust/queryAdjustLogList` | isinCode, adjustBatchNo? | `List<AdjustLogDto>` | 调库记录（无批次时排除终态） |
+| `securityPoolAdjust/checkAdjust` | isinCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 调库可行性预校验 + 流程候选 |
 | `securityPoolAdjust/addAdjustLog`（application/json） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件，新建记录，状态 00/20） |
 | `securityPoolAdjust/addAdjustLogWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `AdjustSubmitDto` | 提交调库申请（带附件，新建记录，状态 00/20） |
 | `securityPoolAdjust/queryAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表（批次号优先） |
@@ -165,7 +177,7 @@
 | `securityPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `SecurityPoolAdjustAuditDto` | 审批/修改节点重新提交（带附件变更，approve.html 用） |
 | `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
-| `reports/queryInReportPage` / `queryOutReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 信评报告弹窗内/外报告查询 |
+| `reports/queryInReportPage` / `queryOutReportPage` | pageIndex, pageSize, reportTitle, isinCode, reportType, crteTimeStart/End | PageResult | 信评报告弹窗内/外报告查询 |
 
 > 路径均带前缀 `/api/v1/`。
 

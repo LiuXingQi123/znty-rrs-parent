@@ -347,16 +347,15 @@ public class HsPoolExcelExportServiceTest {
     public void fullExportSqlShouldNotFilterCrmwMaturityDate() throws Exception {
         Path mapperPath = Paths.get("src/main/resources/mapper/HsPoolExcelExportMapper.xml");
         String mapperXml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
-        int ordinaryBlockStart = mapperXml.indexOf("<!-- 普通证券当前状态");
-        int crmwBlockStart = mapperXml.indexOf("<!-- CRMW 当前状态");
-        int crmwBlockEnd = mapperXml.indexOf(") export_row", crmwBlockStart);
-
+        int ordinaryBlockStart = mapperXml.indexOf("<select id=\"queryFullExportRowList\"");
+        int crmwBlockStart = mapperXml.indexOf("UNION ALL", ordinaryBlockStart);
+        int crmwBlockEnd = mapperXml.indexOf("</select>", crmwBlockStart);
         assertThat(ordinaryBlockStart).isGreaterThanOrEqualTo(0);
-        assertThat(crmwBlockStart).isGreaterThanOrEqualTo(0);
-        assertThat(crmwBlockEnd).isGreaterThan(crmwBlockStart);
+        assertThat(crmwBlockStart).isGreaterThan(ordinaryBlockStart);
         assertThat(mapperXml.substring(ordinaryBlockStart, crmwBlockStart))
-                .contains("<if test=\"!includeExpired\">", "maturity_date");
-        assertThat(mapperXml.substring(crmwBlockStart, crmwBlockEnd)).doesNotContain("maturity_date");
+                .contains("<if test=\"!includeExpired\">", "maturity_date", "si.isin_code = ips.isin_code");
+        assertThat(mapperXml.substring(crmwBlockStart, crmwBlockEnd))
+                .contains("crmw_isin_code", "wind_code_nib").doesNotContain("maturity_date");
     }
 
     /** 验证恒生市场编码与外部市场定义一致。 */

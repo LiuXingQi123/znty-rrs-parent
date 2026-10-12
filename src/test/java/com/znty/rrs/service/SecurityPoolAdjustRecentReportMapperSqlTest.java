@@ -45,7 +45,7 @@ public class SecurityPoolAdjustRecentReportMapperSqlTest {
         dataSource.setUrl("jdbc:h2:mem:simple_report_" + UUID.randomUUID()
                 + ";MODE=MySQL;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1");
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(40), issuer_code VARCHAR(40))");
+        jdbc.execute("CREATE TABLE rrs_securityinfo (isin_code VARCHAR(40), issuer_code VARCHAR(40))");
         for (String tableName : new String[]{"rrs_report_in", "rrs_report_out"}) {
             jdbc.execute("CREATE TABLE " + tableName + " (id BIGINT, company_code VARCHAR(40),"
                     + "security_code VARCHAR(40), report_type VARCHAR(40), crte_time TIMESTAMP, is_deleted INT)");
@@ -194,9 +194,9 @@ public class SecurityPoolAdjustRecentReportMapperSqlTest {
     }
 
     /** 执行真实 XML 的完整 BoundSql，仅翻译日期函数以适配 H2。 */
-    private boolean hasReport(String securityCode, int days) {
+    private boolean hasReport(String isinCode, int days) {
         Map<String, Object> parameters = new HashMap<>();
-        parameters.put("securityCode", securityCode);
+        parameters.put("isinCode", isinCode);
         parameters.put("days", days);
         BoundSql boundSql = reportStatement.getBoundSql(parameters);
         String sql = boundSql.getSql();

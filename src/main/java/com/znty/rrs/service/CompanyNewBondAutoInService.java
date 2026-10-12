@@ -43,6 +43,10 @@ import java.util.Map;
 @Service
 public class CompanyNewBondAutoInService implements RrsScheduledTask {
 
+    /** 共用证券事件代码快照 */
+    @Resource
+    private SecurityPoolAdjustService securityPoolAdjustService;
+
     /** 任务编码（与库表 task_code 绑定） */
     public static final String TASK_CODE = "company_inpool_bond_auto_in";
 
@@ -192,7 +196,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             int pairCount = 0;
             for (ScheduledAdjustCandidateDto bond : bondList) {
                 List<Long> currentPoolIds = securityPoolAdjustMapper
-                        .querySecurityCurrentPoolIdList(bond.getSecurityCode());
+                        .querySecurityCurrentPoolIdList(bond.getObjectCode());
                 bond.setAdjustType("自动调整");
                 bond.setAdjustMode(AdjustMode.IN.getCode());
                 bond.setTargetPoolId(bondTargetPoolId);
@@ -207,16 +211,17 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 bond.setAdjustReason(reason);
                 // 按实际债券和目标池生成自动调库批次号
                 String batchNo = batchNoContext.resolveBondBatchNo(
-                        bond.getSecurityCode(), bondTargetPoolId, AdjustMode.IN.getCode());
+                        bond.getObjectCode(), bondTargetPoolId, AdjustMode.IN.getCode());
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 // 写自动调入日志
                 securityPoolAdjustMapper.addAdjustLog(bond);
+                securityPoolAdjustService.saveEffectiveMarketSnapshot(bond);
                 bond.setAdjustLogId(bond.getId());
                 // 写入在池状态
                 int inserted = securityPoolAdjustMapper.addPoolStatus(bond);
                 if (inserted != 1) {
-                    warnDetail(detail, "债券[" + bond.getSecurityCode() + "]写入池状态失败（可能并发已入池），跳过");
+                    warnDetail(detail, "债券[" + bond.getObjectCode() + "]写入池状态失败（可能并发已入池），跳过");
                     continue;
                 }
                 pairCount++;
@@ -224,7 +229,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
                         bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
                 if (autoOutCount > 0) {
-                    infoDetail(detail, "债券[" + bond.getSecurityCode() + "]自动调出关系池 "
+                    infoDetail(detail, "债券[" + bond.getObjectCode() + "]自动调出关系池 "
                             + autoOutCount + " 个");
                 }
             }

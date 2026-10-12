@@ -28,5 +28,5 @@ public interface CommonMapper {
      * @param securityCodes Wind 证券代码列表
      * @return 担保债返回担保人类型，ABS 返回四类相关主体及其最新内评结果
      */
-    List<GuarantorGradeDto> queryGuarantorGradeList(@Param("securityCodes") List<String> securityCodes);
+    List<GuarantorGradeDto> queryGuarantorGradeList(@Param("isinCodes") List<String> isinCodes);
 }

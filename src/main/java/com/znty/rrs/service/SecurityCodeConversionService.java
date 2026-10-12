@@ -22,15 +22,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 证券代码转换服务。
- * <p>在证券主数据把临时代码替换为正式代码前，统一迁移仍在运行的业务引用并保留历史审计。</p>
+ * <p>在选定已存在的正式ISIN后，统一迁移仍在运行的业务引用并保留历史审计。</p>
  * <p>本服务拥有独立 Mapper 与完整迁移流程，不调用现有临时代码管理、调库或附件 Service，
- * 也不接入现有业务调用链。</p>
+ * 由临时代码转正流程在同一事务中调用。</p>
  */
 @Service
 public class SecurityCodeConversionService {
 
     /** 调库运行态字段允许的最大证券代码长度 */
-    private static final int RUNTIME_SECURITY_CODE_MAX_LENGTH = 32;
+    private static final int RUNTIME_SECURITY_CODE_MAX_LENGTH = 100;
 
     /** 转正时临时出库原因 */
     private static final String REASON_TEMP_OUT = "债券临时代码调出";
@@ -63,29 +63,32 @@ public class SecurityCodeConversionService {
         // 校验转换请求
         validateConversionReq(req);
         String tempSecurityCode = req.getTempSecurityCode().trim();
-        String securityCode = req.getSecurityCode().trim();
+        String securityCode = req.getIsinCode().trim();
         // 按代码顺序锁定临时及正式证券主数据，避免并发转换按不同顺序取锁
         List<SecurityCodeConversionBo> securityInfoList = securityCodeConversionMapper
-                .querySecurityInfoListForUpdate(Arrays.asList(tempSecurityCode, securityCode));
+                .querySecurityInfoListForUpdate(Arrays.asList("TEMP:" + tempSecurityCode, securityCode));
         if (securityInfoList == null) {
             securityInfoList = Collections.emptyList();
         }
         // 从锁定结果中定位临时证券主数据
-        SecurityCodeConversionBo tempSecurity = findSecurityInfo(securityInfoList, tempSecurityCode);
+        SecurityCodeConversionBo tempSecurity = findSecurityInfo(securityInfoList, "TEMP:" + tempSecurityCode);
         if (tempSecurity == null) {
             throw new BizException("临时证券主数据不存在，tempSecurityCode=" + req.getTempSecurityCode());
         }
-        // 正式证券主数据必须由调用方在本方法成功后写入，当前存在会导致主键覆盖语义不明确
+        // 正式主档必须已经存在；转换只切换业务引用
         SecurityCodeConversionBo formalSecurity = findSecurityInfo(securityInfoList, securityCode);
-        if (formalSecurity != null) {
-            throw new BizException("正式证券主数据已存在，禁止覆盖或合并，securityCode=" + securityCode);
+        if (formalSecurity == null || securityCode.startsWith("TEMP:")) {
+            throw new BizException("请选择已存在的正式证券ISIN，isinCode=" + securityCode);
         }
         // 校验正式证券类型仍属于债券大类
-        validateFormalSecurityType(req.getSecurityType().trim());
+        validateFormalSecurityType(formalSecurity.getSecurityType());
+        if ("crmw".equals(tempSecurity.getSecurityType()) != "crmw".equals(formalSecurity.getSecurityType())) {
+            throw new BizException("临时证券与正式证券必须同为CRMW凭证或同为标的债券");
+        }
         // 阻止与原临时代码管理流程同时处理同一条记录
         validateNoActiveTempRegistration(tempSecurityCode);
         // 构建全部迁移 SQL 共用的参数
-        SecurityCodeConversionBo replaceBo = buildReplaceBo(tempSecurity, req);
+        SecurityCodeConversionBo replaceBo = buildReplaceBo(tempSecurity, formalSecurity, req);
         // 转换前校验正式码不会与在途业务单形成同一逻辑对象
         validateNoPendingAdjustConflict(replaceBo);
         // 先记录主档代码映射摘要，确保零业务引用时仍有转换留痕
@@ -114,8 +117,8 @@ public class SecurityCodeConversionService {
     private SecurityCodeConversionBo findSecurityInfo(List<SecurityCodeConversionBo> securityInfoList,
                                                        String securityCode) {
         for (SecurityCodeConversionBo securityInfo : securityInfoList) {
-            if (securityInfo.getWindCode() != null
-                    && securityCode.equalsIgnoreCase(securityInfo.getWindCode().trim())) {
+            if (securityInfo.getIsinCode() != null
+                    && securityCode.equalsIgnoreCase(securityInfo.getIsinCode().trim())) {
                 return securityInfo;
             }
         }
@@ -146,7 +149,7 @@ public class SecurityCodeConversionService {
         int conflictCount = securityCodeConversionMapper.queryPendingAdjustLogConflictCount(replaceBo);
         if (conflictCount > 0) {
             throw new BizException("正式代码已存在相同池、方向及证券组合的在途调库记录，securityCode="
-                    + replaceBo.getSecurityCode() + "，conflictCount=" + conflictCount);
+                    + replaceBo.getIsinCode() + "，conflictCount=" + conflictCount);
         }
     }
 
@@ -352,16 +355,16 @@ public class SecurityCodeConversionService {
 
         int formalCount;
         if (crmwPool) {
-            boolean replaceCrmwReference = replaceBo.getTempSecurityCode().equals(
-                    poolStatus.getCrmwScode());
+            boolean replaceCrmwReference = replaceBo.getTempIsinCode().equals(
+                    poolStatus.getCrmwIsinCode());
             formalCount = securityCodeConversionMapper.queryActiveCrmwPoolStatusCount(
-                    replaceBo.getSecurityCode(),
-                    replaceCrmwReference ? replaceBo.getSecurityCode() : poolStatus.getCrmwScode(),
+                    replaceBo.getTempIsinCode().equals(poolStatus.getIsinCode()) ? replaceBo.getIsinCode() : poolStatus.getIsinCode(),
+                    replaceCrmwReference ? replaceBo.getIsinCode() : poolStatus.getCrmwIsinCode(),
                     replaceCrmwReference ? replaceBo.getSecurityType() : poolStatus.getCrmwStype(),
                     poolStatus.getTargetPoolId());
         } else {
             formalCount = securityCodeConversionMapper.queryActivePoolStatusCount(
-                    replaceBo.getSecurityCode(), poolStatus.getTargetPoolId());
+                    replaceBo.getIsinCode(), poolStatus.getTargetPoolId());
         }
         if (formalCount > 0) {
             return;
@@ -471,10 +474,16 @@ public class SecurityCodeConversionService {
                                                  Date now,
                                                  String conversionBatchNo) {
         SecurityCodeConversionBo log = new SecurityCodeConversionBo();
-        log.setSecurityCode(poolStatus.getSecurityCode());
+        log.setIsinCode(poolStatus.getIsinCode());
+        log.setWindCodeSh(poolStatus.getWindCodeSh());
+        log.setWindCodeSz(poolStatus.getWindCodeSz());
+        log.setWindCodeNib(poolStatus.getWindCodeNib());
+        log.setWindCodeBj(poolStatus.getWindCodeBj());
+        log.setWindCodeNbc(poolStatus.getWindCodeNbc());
         log.setSecurityShortName(poolStatus.getSecurityShortName());
         log.setSecurityType(poolStatus.getSecurityType());
         log.setCrmwName(poolStatus.getCrmwName());
+        log.setCrmwIsinCode(poolStatus.getCrmwIsinCode());
         log.setCrmwScode(poolStatus.getCrmwScode());
         log.setCrmwMktcode(poolStatus.getCrmwMktcode());
         log.setCrmwStype(poolStatus.getCrmwStype());
@@ -489,8 +498,8 @@ public class SecurityCodeConversionService {
         log.setAdjusterName(SYSTEM_ADJUSTER_NAME);
         // 组装临时代码调出原因
         String reason = appendReasonDetails(REASON_TEMP_OUT,
-                "临时代码：" + poolStatus.getSecurityCode(),
-                "正式代码：" + replaceBo.getSecurityCode());
+                "临时代码：" + poolStatus.getIsinCode(),
+                "正式代码：" + replaceBo.getIsinCode());
         log.setAdjustReason(reason);
         if (!TempOprtSource.JOB.getCode().equals(replaceBo.getOprtSource())) {
             log.setAdjustAdvice(reason);
@@ -506,13 +515,20 @@ public class SecurityCodeConversionService {
                                                   Date now,
                                                   String conversionBatchNo) {
         SecurityCodeConversionBo log = new SecurityCodeConversionBo();
-        log.setSecurityCode(replaceBo.getSecurityCode());
-        log.setSecurityShortName(replaceBo.getShortName());
-        log.setSecurityType(replaceBo.getSecurityType());
-        boolean replaceCrmwReference = replaceBo.getTempSecurityCode().equals(
-                poolStatus.getCrmwScode());
+        boolean replaceUnderlying = replaceBo.getTempIsinCode().equals(poolStatus.getIsinCode());
+        log.setIsinCode(replaceUnderlying ? replaceBo.getIsinCode() : poolStatus.getIsinCode());
+        log.setWindCodeSh(replaceUnderlying ? replaceBo.getWindCodeSh() : poolStatus.getWindCodeSh());
+        log.setWindCodeSz(replaceUnderlying ? replaceBo.getWindCodeSz() : poolStatus.getWindCodeSz());
+        log.setWindCodeNib(replaceUnderlying ? replaceBo.getWindCodeNib() : poolStatus.getWindCodeNib());
+        log.setWindCodeBj(replaceUnderlying ? replaceBo.getWindCodeBj() : poolStatus.getWindCodeBj());
+        log.setWindCodeNbc(replaceUnderlying ? replaceBo.getWindCodeNbc() : poolStatus.getWindCodeNbc());
+        log.setSecurityShortName(replaceUnderlying ? replaceBo.getShortName() : poolStatus.getSecurityShortName());
+        log.setSecurityType(replaceUnderlying ? replaceBo.getSecurityType() : poolStatus.getSecurityType());
+        boolean replaceCrmwReference = replaceBo.getTempIsinCode().equals(
+                poolStatus.getCrmwIsinCode());
         log.setCrmwName(replaceCrmwReference ? replaceBo.getShortName() : poolStatus.getCrmwName());
-        log.setCrmwScode(replaceCrmwReference ? replaceBo.getSecurityCode() : poolStatus.getCrmwScode());
+        log.setCrmwIsinCode(replaceCrmwReference ? replaceBo.getIsinCode() : poolStatus.getCrmwIsinCode());
+        log.setCrmwScode(replaceCrmwReference ? replaceBo.getWindCodeNib() : poolStatus.getCrmwScode());
         log.setCrmwMktcode(replaceCrmwReference
                 ? replaceBo.getSecurityMarket() : poolStatus.getCrmwMktcode());
         log.setCrmwStype(replaceCrmwReference
@@ -546,10 +562,11 @@ public class SecurityCodeConversionService {
                                                  SecurityCodeConversionBo inLog,
                                                  Date now) {
         SecurityCodeConversionBo status = new SecurityCodeConversionBo();
-        status.setSecurityCode(replaceBo.getSecurityCode());
-        status.setSecurityShortName(replaceBo.getShortName());
-        status.setSecurityType(replaceBo.getSecurityType());
+        status.setIsinCode(inLog.getIsinCode());
+        status.setSecurityShortName(inLog.getSecurityShortName());
+        status.setSecurityType(inLog.getSecurityType());
         status.setCrmwName(inLog.getCrmwName());
+        status.setCrmwIsinCode(inLog.getCrmwIsinCode());
         status.setCrmwScode(inLog.getCrmwScode());
         status.setCrmwMktcode(inLog.getCrmwMktcode());
         status.setCrmwStype(inLog.getCrmwStype());
@@ -587,7 +604,7 @@ public class SecurityCodeConversionService {
                 ? REASON_FORMAL_IN : poolStatus.getAdjustReason().trim();
         // 在原原因后补充代码映射
         return appendReasonDetails(baseReason,
-                "代码替换：" + poolStatus.getSecurityCode() + "→" + replaceBo.getSecurityCode());
+                "代码替换：" + poolStatus.getIsinCode() + "→" + replaceBo.getIsinCode());
     }
 
     /** 在业务原因后追加全角括号明细。 */
@@ -604,29 +621,25 @@ public class SecurityCodeConversionService {
 
     /** 构建迁移及替换日志公共参数。 */
     private SecurityCodeConversionBo buildReplaceBo(SecurityCodeConversionBo tempSecurity,
-                                               SecurityCodeConversionReq req) {
+                                                   SecurityCodeConversionBo formalSecurity,
+                                                   SecurityCodeConversionReq req) {
         SecurityCodeConversionBo bo = new SecurityCodeConversionBo();
         bo.setTempSecurityCode(req.getTempSecurityCode().trim());
-        // 解析临时证券展示名称
+        // 展示与市场代码均从锁定的主档读取，客户端不能覆盖身份及基础资料
         bo.setTempSecurityName(resolveSecurityName(tempSecurity));
-        // 解析临时证券市场
         bo.setTempSecurityMarket(resolveSecurityMarket(tempSecurity));
         bo.setTempSecurityType(tempSecurity.getSecurityType());
-        // 解析正式证券全称和简称，兼容调用方只提供 securityName
-        bo.setFullName(resolveFormalFullName(req));
-        bo.setShortName(resolveFormalShortName(req));
-        bo.setSecurityName(bo.getShortName());
-        bo.setSecurityCode(req.getSecurityCode().trim());
-        bo.setWindCode(bo.getSecurityCode());
-        bo.setSecurityMarket(req.getSecurityMarket().trim());
-        bo.setSecurityType(req.getSecurityType().trim());
-        bo.setWindCodeSh(trimToNull(req.getWindCodeSh()));
-        bo.setWindCodeSz(trimToNull(req.getWindCodeSz()));
-        bo.setWindCodeNib(trimToNull(req.getWindCodeNib()));
-        bo.setWindCodeBj(trimToNull(req.getWindCodeBj()));
-        bo.setWindCodeNbc(trimToNull(req.getWindCodeNbc()));
-        // 正式市场对应代码未显式提供时，使用正式关联代码补齐
-        applyCanonicalMarketCode(bo);
+        bo.setIsinCode(formalSecurity.getIsinCode());
+        bo.setFullName(formalSecurity.getFullName());
+        bo.setShortName(formalSecurity.getShortName());
+        bo.setSecurityName(resolveSecurityName(formalSecurity));
+        bo.setSecurityMarket(resolveSecurityMarket(formalSecurity));
+        bo.setSecurityType(formalSecurity.getSecurityType());
+        bo.setWindCodeSh(formalSecurity.getWindCodeSh());
+        bo.setWindCodeSz(formalSecurity.getWindCodeSz());
+        bo.setWindCodeNib(formalSecurity.getWindCodeNib());
+        bo.setWindCodeBj(formalSecurity.getWindCodeBj());
+        bo.setWindCodeNbc(formalSecurity.getWindCodeNbc());
         bo.setOprtSource(req.getOprtSource().trim());
         bo.setReplaceStatus("success");
         bo.setUpdateTime(new Date());
@@ -634,38 +647,13 @@ public class SecurityCodeConversionService {
     }
 
     /** 解析正式证券全称。 */
-    private String resolveFormalFullName(SecurityCodeConversionReq req) {
-        if (hasText(req.getSecurityFullName())) {
-            return req.getSecurityFullName().trim();
-        }
-        return req.getSecurityName().trim();
-    }
+
 
     /** 解析正式证券简称。 */
-    private String resolveFormalShortName(SecurityCodeConversionReq req) {
-        if (hasText(req.getSecurityShortName())) {
-            return req.getSecurityShortName().trim();
-        }
-        return req.getSecurityName().trim();
-    }
+
 
     /** 补齐正式证券所属市场对应的代码列。 */
-    private void applyCanonicalMarketCode(SecurityCodeConversionBo bo) {
-        if (MarketCode.SSE.getCode().equals(bo.getSecurityMarket()) && bo.getWindCodeSh() == null) {
-            bo.setWindCodeSh(bo.getSecurityCode());
-        } else if (MarketCode.SZSE.getCode().equals(bo.getSecurityMarket())
-                && bo.getWindCodeSz() == null) {
-            bo.setWindCodeSz(bo.getSecurityCode());
-        } else if (MarketCode.CIBM.getCode().equals(bo.getSecurityMarket())
-                && bo.getWindCodeNib() == null) {
-            bo.setWindCodeNib(bo.getSecurityCode());
-        } else if (MarketCode.BSE.getCode().equals(bo.getSecurityMarket())
-                && bo.getWindCodeBj() == null) {
-            bo.setWindCodeBj(bo.getSecurityCode());
-        } else if (bo.getWindCodeNbc() == null) {
-            bo.setWindCodeNbc(bo.getSecurityCode());
-        }
-    }
+
 
     /** 去除字符串首尾空白并把空字符串转换为 null。 */
     private String trimToNull(String value) {
@@ -682,7 +670,7 @@ public class SecurityCodeConversionService {
         if (hasText(security.getFullName())) {
             return security.getFullName().trim();
         }
-        return security.getWindCode();
+        return security.getIsinCode();
     }
 
     /** 根据证券主数据解析市场。 */
@@ -712,39 +700,16 @@ public class SecurityCodeConversionService {
 
     /** 校验转换请求。 */
     private void validateConversionReq(SecurityCodeConversionReq req) {
-        if (req == null) {
-            throw new BizException("证券代码转换请求不能为空");
-        }
-        // 校验临时代码
+        if (req == null) { throw new BizException("证券转换请求不能为空"); }
+        // 原始临时代码与正式ISIN必须分别提供，不接受旧市场码身份
         validateRequired(req.getTempSecurityCode(), "临时证券代码不能为空");
-        // 校验正式代码
-        validateRequired(req.getSecurityCode(), "正式证券代码不能为空");
-        if (!hasText(req.getSecurityName())
-                && (!hasText(req.getSecurityFullName()) || !hasText(req.getSecurityShortName()))) {
-            throw new BizException("正式证券名称不能为空，须提供 securityName，或同时提供全称和简称");
-        }
-        // 校验正式市场
-        validateRequired(req.getSecurityMarket(), "正式证券市场不能为空");
-        // 校验正式类型
-        validateRequired(req.getSecurityType(), "正式证券类型不能为空");
-        // 校验操作来源
+        validateRequired(req.getIsinCode(), "正式证券isinCode不能为空");
         validateRequired(req.getOprtSource(), "操作来源不能为空");
-        if (req.getTempSecurityCode().trim().equalsIgnoreCase(req.getSecurityCode().trim())) {
-            throw new BizException("正式证券代码不能与临时代码相同");
+        if (req.getTempSecurityCode().trim().length() > 95 || req.getIsinCode().trim().length() > 100) {
+            throw new BizException("证券身份长度超限");
         }
-        if (req.getTempSecurityCode().trim().length() > RUNTIME_SECURITY_CODE_MAX_LENGTH
-                || req.getSecurityCode().trim().length() > RUNTIME_SECURITY_CODE_MAX_LENGTH) {
-            throw new BizException("证券代码长度不能超过 " + RUNTIME_SECURITY_CODE_MAX_LENGTH + " 位");
-        }
-        if (!MarketCode.isValid(req.getSecurityMarket().trim())) {
-            throw new BizException("正式证券市场不合法，securityMarket=" + req.getSecurityMarket());
-        }
-        if (MarketCode.COMPANY.getCode().equals(req.getSecurityMarket().trim())) {
-            throw new BizException("债券正式证券市场不能为主体市场");
-        }
-        // 校验操作来源枚举
         if (!isValidOprtSource(req.getOprtSource().trim())) {
-            throw new BizException("操作来源不合法，oprtSource=" + req.getOprtSource());
+            throw new BizException("操作来源不合法");
         }
     }
 

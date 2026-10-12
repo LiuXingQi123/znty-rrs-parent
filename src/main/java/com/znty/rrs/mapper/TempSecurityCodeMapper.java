@@ -46,7 +46,7 @@ public interface TempSecurityCodeMapper {
     List<TempSecurityCodeDto.FormalSecurityOption> queryFormalSecurityOptionList(TempSecurityCodeReq req);
 
     /** 根据正式证券代码查询正式证券选项 */
-    TempSecurityCodeDto.FormalSecurityOption queryFormalSecurityByCode(@Param("securityCode") String securityCode);
+    TempSecurityCodeDto.FormalSecurityOption queryFormalSecurityByCode(@Param("isinCode") String isinCode);
 
     /** 查询证券类型选项 */
     List<TempSecurityCodeDto.SecurityTypeOption> querySecurityTypeList();
@@ -85,38 +85,26 @@ public interface TempSecurityCodeMapper {
     int queryCoreReferenceCount(TempSecurityCodeBo bo);
 
     /** 查询在途调库日志证券引用 ID（audit_status in 00/11） */
-    List<Long> queryPendingAdjustLogSecurityReferenceIdList(TempSecurityCodeBo bo);
 
     /** 查询有效在池状态列表（临时证券） */
-    List<IpPoolStatusBo> queryActivePoolStatusList(TempSecurityCodeBo bo);
 
     /** 查询正式证券是否已在指定池 */
-    int queryActivePoolStatusCount(@Param("securityCode") String securityCode,
-                                   @Param("securityType") String securityType,
-                                   @Param("targetPoolId") Long targetPoolId);
 
     /** 按主键软删除池状态 */
     void deletePoolStatusSoftById(@Param("id") Long id, @Param("updateTime") Date updateTime);
 
     /** 查询在途调库日志 CRMW 引用 ID 列表 */
-    List<Long> queryPendingAdjustLogCrmwReferenceIdList(TempSecurityCodeBo bo);
 
     /** 查询当前池状态 CRMW 引用 ID 列表 */
-    List<Long> queryPoolStatusCrmwReferenceIdList(TempSecurityCodeBo bo);
 
     /** 查询 CRMW 池有效在池状态（security 为临时码） */
-    List<IpPoolStatusBo> queryActiveCrmwPoolStatusList(TempSecurityCodeBo bo);
 
     /** 查询正式证券是否已在 CRMW 池 */
-    int queryActiveCrmwPoolStatusCount(@Param("securityCode") String securityCode,
-                                       @Param("securityType") String securityType,
-                                       @Param("targetPoolId") Long targetPoolId);
 
     /** 按主键软删除 CRMW 池状态 */
     void deleteCrmwPoolStatusSoftById(@Param("id") Long id, @Param("updateTime") Date updateTime);
 
     /** 查询 CRMW 池状态 CRMW 引用 ID 列表 */
-    List<Long> queryCrmwPoolStatusCrmwReferenceIdList(TempSecurityCodeBo bo);
 
     /** 批量替换在途调库日志证券引用 */
     void editAdjustLogSecurityReference(@Param("bo") TempSecurityCodeBo bo, @Param("idList") List<Long> idList);

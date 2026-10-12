@@ -1,6 +1,7 @@
 package com.znty.rrs.entity.securitypooladjust;
 
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.List;
 
@@ -31,8 +32,28 @@ public class AdjustCheckDto {
     @Data
     public static class CheckResultItem {
 
+        /** 沪市证券代码 */
+        private String windCodeSh;
+        /** 深市证券代码 */
+        private String windCodeSz;
+        /** 银行间证券代码 */
+        private String windCodeNib;
+        /** 北交所证券代码 */
+        private String windCodeBj;
+        /** 其他市场证券代码 */
+        private String windCodeNbc;
+        /** 证券来源：official=正式 / temporary=临时 / temp_converted=已转正 */
+        private String securitySource;
+        /** 证券身份：正式ISIN / TEMP:临时代码 */
+        private String isinCode;
+
+        /** 内部调库对象身份，主体与证券显式区分 */
+        @JsonIgnore
+        public String getObjectCode() {
+            return "company".equals(securityType) ? securityCode : isinCode;
+        }
         /** 证券代码（主券或关联码） */
-        private String securityCode;
+    private String securityCode;
 
         /** 证券简称 */
         private String securityShortName;

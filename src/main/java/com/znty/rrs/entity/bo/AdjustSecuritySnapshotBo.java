@@ -22,8 +22,8 @@ public class AdjustSecuritySnapshotBo {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date submitTime;
 
-    /** 关联代码 */
-    private String windCode;
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
+    private String isinCode;
     /** 证券全称 */
     private String fullName;
     /** 证券简称 */
@@ -32,13 +32,13 @@ public class AdjustSecuritySnapshotBo {
     private String issuer;
     /** 发行人代码 */
     private String issuerCode;
-    /** 银行间市场代码 */
+    /** 银行间证券代码 */
     private String windCodeNib;
     /** 沪市证券代码 */
     private String windCodeSh;
     /** 深市证券代码 */
     private String windCodeSz;
-    /** 北交所代码 */
+    /** 北交所证券代码 */
     private String windCodeBj;
     /** 发行规模(亿元) */
     private BigDecimal issueAmountplan;
@@ -87,7 +87,7 @@ public class AdjustSecuritySnapshotBo {
     /** 证券分析 */
     private String analysis;
 
-    /** 其他市场代码 */
+    /** 其他市场证券代码 */
     private String windCodeNbc;
     /** 证券期限(年) */
     private BigDecimal termYear;

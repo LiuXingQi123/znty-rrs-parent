@@ -8,12 +8,12 @@
             resultType="com.znty.rrs.entity.schedule.BondSecurityTypeChangeDto">
         SELECT ips.id pool_status_id
               ,ips.adjust_log_id
-              ,ips.security_code
+              ,ips.isin_code
               ,ips.security_short_name
               ,ips.security_type old_security_type
               ,si.security_type new_security_type
         FROM ip_pool_status ips
-        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN rrs_securityinfo si ON si.isin_code = ips.isin_code
         INNER JOIN dict_security_type old_type ON old_type.security_type = ips.security_type
                                                 AND old_type.category_type = 'bond'
                                                 AND old_type.is_deleted = 0
@@ -31,12 +31,12 @@
             resultType="com.znty.rrs.entity.schedule.BondSecurityTypeChangeDto">
         SELECT ips.id pool_status_id
               ,ips.adjust_log_id
-              ,ips.security_code
+              ,ips.isin_code
               ,ips.security_short_name
               ,ips.security_type old_security_type
               ,si.security_type new_security_type
         FROM ip_pool_status_crmw ips
-        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN rrs_securityinfo si ON si.isin_code = ips.isin_code
         INNER JOIN dict_security_type old_type ON old_type.security_type = ips.security_type
                                                 AND old_type.category_type = 'bond'
                                                 AND old_type.is_deleted = 0

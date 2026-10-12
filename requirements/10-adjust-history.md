@@ -1,5 +1,16 @@
 # 证券池调整历史需求说明
 
+## 证券身份与市场代码（当前接口契约）
+
+- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
+- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
+- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
+- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
+- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
+- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
+- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
+
+
 > 前端页面：`security_pool_adjust_history.html`
 > 后端前缀：`/api/v1/securityPoolAdjustHistory`、`/api/v1/common`
 > 角色定位：风控、合规和审计人员查询证券调入、调出及审批结果，按时间和业务维度追溯历史操作。
@@ -19,7 +30,7 @@
 | 字段 | 默认值 | 控件 | 说明 |
 |---|---|---|---|
 | `poolIds` | `[]` | 投资池树多选 | 同查询页 |
-| `securityCode` / `securityShortName` | `''` | 文本输入 | 回车触发查询 |
+| `isinCode` / `securityShortName` | `''` | 文本输入 | 回车触发查询 |
 | `securityType` | `''` | 下拉 | 动态加载 |
 | `adjustTimeRange` | `null` | 日期范围 | 调整时间（提交时间） |
 | `adjusterName` / `issuer` | `''` | 文本输入 | |
@@ -47,7 +58,7 @@
 | 字段 | 来源 | 空值处理 |
 |---|---|---|
 | `poolIds` | 树多选 | 空数组转 null |
-| `securityCode` / `securityShortName` / `securityType` | 表单 | 空串转 null |
+| `isinCode` / `securityShortName` / `securityType` | 表单 | 空串转 null |
 | `adjustTimeStart` / `adjustTimeEnd` | `adjustTimeRange[0/1]` | 直接取日期串（无时分秒补全，后端对 End 拼 ` 23:59:59`） |
 | `adjusterName` / `issuer` | 表单 | 空串转 null |
 | `bondYesFlags` | 是否特征多选 | 空数组转 null；多选按 AND |
@@ -72,7 +83,7 @@
 | 调整人 | `adjusterName` | 空则空 |
 | 提交日期 | `submitTime` | `moment(submitTime).format('YYYY-MM-DD HH:mm')`，空则空 |
 | 证券简称 | `securityShortName` | `desc-link` 点击跳转详情 |
-| 证券代码 | `securityCode` | `desc-link` 点击跳转 |
+| 证券代码 | `isinCode` | `desc-link` 点击跳转 |
 | 证券类型 | `securityTypeName` | `el-tag type="info"`，空则空 |
 | 发行主体名称 | `issuer` | tooltip |
 | 是否ABS/担保/永续/次级/私募/含权 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
@@ -94,7 +105,7 @@
 
 ## 5. 跳转调库详情
 
-`openSecurityAdjustDetail(row)`：拼 `securityCode`/`targetPoolId`/`adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, true)`：优先 `adjustLogId`，可回退本行 `id`，二者同为 `ip_adjust_log.id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含代码 + 记录 ID + 批次），本页 iframe 不跳走；脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。目标页 `getUrlParam` 读上述参数，`entryMode !== 'adjust'` 时为只读详情模式。
+`openSecurityAdjustDetail(row)`：拼 `isinCode`/`targetPoolId`/`adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, true)`：优先 `adjustLogId`，可回退本行 `id`，二者同为 `ip_adjust_log.id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含代码 + 记录 ID + 批次），本页 iframe 不跳走；脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。目标页 `getUrlParam` 读上述参数，`entryMode !== 'adjust'` 时为只读详情模式。
 
 分页参数同证券池查询页（pageIndex=1, pageSize=20, page-sizes=[10,20,50,100]）。
 
@@ -105,7 +116,7 @@
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{ includeVarietyCodes: ['bond'] }` | `List<{id, parentId, poolName, poolFullName}>` | 投资品种包含债券的投资池树，默认收起 |
-| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, securityCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, bondYesFlags, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 id、adjustLogId、targetPoolPath、adjustBatchNo、auditStatus、证券特征等） | 调库历史分页（含所有状态；`category_type=bond`，含 crmw 跟债记录，不按 pool_type 排除禁投） |
+| `securityPoolAdjustHistory/querySecurityPoolAdjustHistoryPage` | poolIds, isinCode, securityShortName, securityType, adjustTimeStart, adjustTimeEnd, adjusterName, issuer, bondYesFlags, adjustMode, auditStatus, myBonds, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolAdjustHistoryDto>`（含 id、adjustLogId、targetPoolPath、adjustBatchNo、auditStatus、证券特征等） | 调库历史分页（含所有状态；`category_type=bond`，含 crmw 跟债记录，不按 pool_type 排除禁投） |
 | `securityPoolAdjustHistory/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：债券大类，含 crmw；不限 audit_status） |
 
 > 路径均带前缀 `/api/v1/`。
@@ -120,7 +131,7 @@
 |---|---|---|
 | `ip_adjust_log` | 证券池调库记录（主表） | id, security_code, security_short_name, security_type, adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name, pool_type, flow_id, audit_status, adjuster_id, adjuster_name, adjust_reason, submit_time, entry_time, is_deleted |
 | `ip_investment_pool` | 投资池定义（树/全路径/名称） | id, parent_id, pool_name, pool_type, outer_sort, inner_sort, status, is_deleted |
-| `rrs_securityinfo` | 证券基础信息 | wind_code, issuer, full_name, maturity_date |
+| `rrs_securityinfo` | 证券基础信息 | isin_code、五码、issuer、full_name、maturity_date |
 | `dict_security_type` | 证券类型字典 | security_type, security_type_name, sort_order, is_deleted |
 
 ### 7.2 可见数据范围控制
@@ -132,7 +143,7 @@
 - **主表**：`ip_adjust_log al`
 - **JOIN**：
   - `LEFT JOIN ip_investment_pool p ON p.id=al.target_pool_id AND p.is_deleted=0`（带删除过滤，与证券池查询不同）
-  - `LEFT JOIN rrs_securityinfo sb ON sb.wind_code=al.security_code`
+  - `LEFT JOIN rrs_securityinfo sb ON sb.isin_code=al.isin_code`
   - `INNER JOIN dict_security_type dst ON dst.security_type=al.security_type AND dst.is_deleted=0 AND dst.category_type='bond'`（仅债券大类，与证券池调整列表同口径；主体归主体历史）
 - **WHERE**：`al.is_deleted=0`（债券大类，含 crmw 跟债记录；不限 audit_status，含全量历史；禁投/观察/黑名单/重点观察目标池的债券记录可查；**不再** `pool_type NOT IN ('crmw','forbidden')`）
   - 预留的 `securityStatus` 筛选按 `yyyyMMdd` 格式比较 `maturity_date` 与 `DATE_FORMAT(NOW(), '%Y%m%d')`

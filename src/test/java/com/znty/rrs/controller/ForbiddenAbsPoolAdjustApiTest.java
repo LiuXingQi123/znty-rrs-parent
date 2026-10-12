@@ -31,11 +31,11 @@ public class ForbiddenAbsPoolAdjustApiTest extends ControllerApiTestSupport {
     public void shouldSupportAbsSecurityQueryAndPoolStatus() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/forbiddenAbsPoolAdjust/querySecurityPage", "{}");
         assertPostSuccess(mockMvc, "/api/v1/forbiddenAbsPoolAdjust/querySecurityDetail",
-                "{\"securityCode\":\"108008901.IB\"}");
+                "{\"isinCode\":\"108008901.IB\"}");
         assertPostSuccess(mockMvc, "/api/v1/forbiddenAbsPoolAdjust/querySecurityPoolStatus",
-                "{\"securityCode\":\"108008901.IB\"}");
+                "{\"isinCode\":\"108008901.IB\"}");
         assertPostSuccess(mockMvc, "/api/v1/forbiddenAbsPoolAdjust/queryAdjustPoolList",
-                "{\"securityCode\":\"108008901.IB\",\"adjustDirection\":\"in\"}");
+                "{\"isinCode\":\"108008901.IB\",\"adjustDirection\":\"in\"}");
     }
 
     /** 验证校验、提交、记录接口 */
@@ -46,6 +46,6 @@ public class ForbiddenAbsPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/forbiddenAbsPoolAdjust/queryAdjustLogList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/forbiddenAbsPoolAdjust/queryAdjustStepList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/forbiddenAbsPoolAdjust/queryLastCreditReport",
-                "{\"securityCode\":\"108008901.IB\"}");
+                "{\"isinCode\":\"108008901.IB\"}");
     }
 }

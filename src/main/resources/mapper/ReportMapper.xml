@@ -9,13 +9,33 @@
                ,author_name
                ,report_title
                ,report_type
+               ,(SELECT si.wind_code_sh FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_in.isin_code) AS wind_code_sh
+               ,(SELECT si.wind_code_sz FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_in.isin_code) AS wind_code_sz
+               ,(SELECT si.wind_code_nib FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_in.isin_code) AS wind_code_nib
+               ,(SELECT si.wind_code_bj FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_in.isin_code) AS wind_code_bj
+               ,(SELECT si.wind_code_nbc FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_in.isin_code) AS wind_code_nbc
+               ,isin_code
                ,security_code
+            ,isin_code
                ,company_code
                ,security_type
                ,data_source
                ,crte_time
         FROM rrs_report_in
         <where>
+            <if test="isinCode != null and isinCode != ''">
+                AND isin_code = #{isinCode}
+            </if>
+            <if test="securityKeyword != null and securityKeyword != ''">
+                AND EXISTS (
+                    SELECT 1 FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_in.isin_code
+                      AND (si.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
+                           OR si.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
+                           OR si.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
+                           OR si.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
+                           OR si.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+                )
+            </if>
             is_deleted = 0
             <if test="reportTitle != null and reportTitle != ''">
                 AND report_title LIKE CONCAT('%', #{reportTitle}, '%')
@@ -44,13 +64,33 @@
                ,source_org_name
                ,report_title
                ,report_type
+               ,(SELECT si.wind_code_sh FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_out.isin_code) AS wind_code_sh
+               ,(SELECT si.wind_code_sz FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_out.isin_code) AS wind_code_sz
+               ,(SELECT si.wind_code_nib FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_out.isin_code) AS wind_code_nib
+               ,(SELECT si.wind_code_bj FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_out.isin_code) AS wind_code_bj
+               ,(SELECT si.wind_code_nbc FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_out.isin_code) AS wind_code_nbc
+               ,isin_code
                ,security_code
+            ,isin_code
                ,company_code
                ,security_type
                ,data_source
                ,crte_time
         FROM rrs_report_out
         <where>
+            <if test="isinCode != null and isinCode != ''">
+                AND isin_code = #{isinCode}
+            </if>
+            <if test="securityKeyword != null and securityKeyword != ''">
+                AND EXISTS (
+                    SELECT 1 FROM rrs_securityinfo si WHERE si.isin_code = rrs_report_out.isin_code
+                      AND (si.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
+                           OR si.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
+                           OR si.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
+                           OR si.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
+                           OR si.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+                )
+            </if>
             is_deleted = 0
             <if test="reportTitle != null and reportTitle != ''">
                 AND report_title LIKE CONCAT('%', #{reportTitle}, '%')
@@ -120,7 +160,7 @@
     <select id="querySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT *
         FROM rrs_securityinfo
-        WHERE wind_code = #{securityCode}
+        WHERE isin_code = #{securityCode}
     </select>
 
     <!-- 查询报告类型映射所需的证券大类 -->
@@ -139,6 +179,7 @@
             ,report_title
             ,report_type
             ,security_code
+            ,isin_code
             ,company_code
             ,security_type
             ,data_source
@@ -150,6 +191,7 @@
             ,#{reportTitle}
             ,#{reportType}
             ,#{securityCode}
+            ,#{isinCode}
             ,#{companyCode}
             ,#{securityType}
             ,#{dataSource}

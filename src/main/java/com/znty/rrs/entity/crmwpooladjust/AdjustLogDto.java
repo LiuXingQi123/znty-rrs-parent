@@ -17,7 +17,9 @@ public class AdjustLogDto {
     /** 调库批次号 */
     private String adjustBatchNo;
 
-    /** CRMW 凭证代码 */
+    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
+    private String crmwIsinCode;
+    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
     private String crmwScode;
 
     /** CRMW 凭证名称 */

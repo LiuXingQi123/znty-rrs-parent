@@ -1,5 +1,16 @@
 # CRMW 池批量调整（批量调入 / 批量调出）需求说明
 
+## 证券身份与市场代码（当前接口契约）
+
+- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
+- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
+- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
+- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
+- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
+- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
+- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
+
+
 > 前端页面：`batch_crmw_pool_adjust.html`
 > 后端前缀：`/api/v1/batchCrmwPoolAdjust`
 > 角色定位：业务人员选定一个 CRMW 叶子池与方向后，批量勾选多条「凭证 + 标的」组合一次性发起调入/调出申请。
@@ -28,7 +39,7 @@
 
 候选表默认 10 条/页，支持按标的证券的是否特征（ABS/担保/永续/次级/私募/含权）多选筛选，勾选即筛「是」、多选 AND。列包含证券名称、证券代码、市场、CRMW名称、CRMW代码、发行人、证券评级、主体评级、主体内评分档、是否ABS/担保/永续/次级/私募/含权、到期日期、剩余期限(年)、担保人/权益人、自选权益人、担保人主体内评分。关系主体按 `115004000`、`115203000`、`115202000`、`115201000` 映射为 1‑4 升序，其中 `115202000=债务主体`，页面默认选中第一条。
 
-跨页多选键：`crmwScode|securityCode`。
+跨页多选键：`crmwScode|isinCode`。
 
 ---
 
@@ -40,7 +51,7 @@
 - CRMW 单笔 `AdjustCheckReq` 和 `CrmwPoolAdjustSubmitReq` 均接收 `guarantorCode`、`rightsHolderCode`、`selfSelectedRightsHolderCode`；批量编排层按标的类型透传实际选中的评级主体。ABS 自选权益人优先，两者均未选时阻断。目标池仍不是信用债大库，不走主体债矩阵；`releaseRules=yes` 仅在提交时把说明追加到调整意见/调整说明，**不改变**单笔校验结果。
 - `addAdjustLog` 按组合分组后委托 `submitAdjustLog`，整批共享附件与 `BatchNoContext`。
 - 手工项 `adjustType=手动批量调整`；批次号前缀仍为 `CRMW`。
-- 整批一个事务；约 30 秒防重复键含 `crmwScode`。
+- 整批一个事务；约 30 秒防重复键含 `crmwIsinCode`。
 - 存在直通项时 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`。
 - **不注入** batchIn/batchOut。
 - 候选查询与证券池批量的有意差异：证券池仍是一个 `querySecurityPage` + `direction`；CRMW 拆成 `queryInboundCandidatePage` / `queryOutboundCandidatePage`，查询请求体不带 `direction`。

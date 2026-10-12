@@ -130,7 +130,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
                 detail.line("WARN", "池状态已变化，跳过：表="
                         + (crmwPool ? "ip_pool_status_crmw" : "ip_pool_status")
                         + "，poolStatusId=" + row.getPoolStatusId()
-                        + "，证券=" + row.getSecurityCode()
+                        + "，证券=" + row.getIsinCode()
                         + "，待变更类型=" + row.getOldSecurityType() + " → " + row.getNewSecurityType());
                 continue;
             }
@@ -148,7 +148,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
             detail.line("同步成功：表=" + (crmwPool ? "ip_pool_status_crmw" : "ip_pool_status")
                     + "，poolStatusId=" + row.getPoolStatusId()
                     + "，adjustLogId=" + row.getAdjustLogId()
-                    + "，证券=" + row.getSecurityCode()
+                    + "，证券=" + row.getIsinCode()
                     + "，类型=" + row.getOldSecurityType() + " → " + row.getNewSecurityType());
         }
         return count;

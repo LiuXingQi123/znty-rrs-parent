@@ -220,7 +220,7 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         }
         for (BondReminderDto row : rows) {
             // 将可空主体字段格式化为可读文本
-            detail.line("提醒候选：债券=" + row.getSecurityShortName() + "(" + row.getSecurityCode() + ")"
+            detail.line("提醒候选：债券=" + row.getSecurityShortName() + "(" + row.getIsinCode() + ")"
                     + "，发行主体=" + nullToEmpty(row.getIssuerName())
                     + "(" + nullToEmpty(row.getIssuerCode()) + ")"
                     + "，债券所在池=" + row.getTargetPoolName());

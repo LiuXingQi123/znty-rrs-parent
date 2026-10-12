@@ -46,7 +46,7 @@ public class SecurityCodeConversionServiceTest {
                 SecurityCodeConversionBo.class);
         verify(mapper).addSecurityCodeConversionLog(captor.capture());
         assertThat(captor.getValue().getTempSecurityCode()).isEqualTo("TMP-EXT-001");
-        assertThat(captor.getValue().getSecurityCode()).isEqualTo("102600001.IB");
+        assertThat(captor.getValue().getIsinCode()).isEqualTo("CN202600001");
         assertThat(captor.getValue().getFullName()).isEqualTo("某集团2026年度第一期中期票据");
         assertThat(captor.getValue().getShortName()).isEqualTo("26某集团MTN001");
         assertThat(captor.getValue().getWindCodeNib()).isEqualTo("102600001.IB");
@@ -103,7 +103,7 @@ public class SecurityCodeConversionServiceTest {
         when(mapper.queryActivePoolStatusList(any(SecurityCodeConversionBo.class)))
                 .thenReturn(Collections.singletonList(buildPoolStatus()));
         when(mapper.deletePoolStatusSoftById(eq(81L), any(Date.class))).thenReturn(1);
-        when(mapper.queryActivePoolStatusCount("102600001.IB", 100L)).thenReturn(0);
+        when(mapper.queryActivePoolStatusCount("CN202600001", 100L)).thenReturn(0);
         AtomicLong logId = new AtomicLong(1000L);
         when(mapper.addAdjustLog(any(SecurityCodeConversionBo.class))).thenAnswer(invocation -> {
             SecurityCodeConversionBo log = invocation.getArgument(0);
@@ -122,7 +122,7 @@ public class SecurityCodeConversionServiceTest {
 
         verify(mapper, times(2)).addAdjustLog(any(SecurityCodeConversionBo.class));
         verify(mapper).deletePoolStatusSoftById(eq(81L), any(Date.class));
-        verify(mapper).queryActivePoolStatusCount("102600001.IB", 100L);
+        verify(mapper).queryActivePoolStatusCount("CN202600001", 100L);
         verify(mapper).addPoolStatus(any(SecurityCodeConversionBo.class));
         verify(mapper, times(2)).addSecuritySnapshotFromSource(
                 any(), any(), any(), anyBoolean(), any(), any());
@@ -148,6 +148,7 @@ public class SecurityCodeConversionServiceTest {
         SecurityCodeConversionBo poolStatus = buildPoolStatus();
         poolStatus.setId(82L);
         poolStatus.setPoolType("crmw");
+        poolStatus.setCrmwIsinCode("TEMP:TMP-EXT-001");
         poolStatus.setCrmwScode("TMP-EXT-001");
         poolStatus.setCrmwStype("mtn");
         // 准备一条当前有效 CRMW 池状态
@@ -157,7 +158,7 @@ public class SecurityCodeConversionServiceTest {
                 .thenReturn(Collections.singletonList(poolStatus));
         when(mapper.deleteCrmwPoolStatusSoftById(eq(82L), any(Date.class))).thenReturn(1);
         when(mapper.queryActiveCrmwPoolStatusCount(
-                "102600001.IB", "102600001.IB", "mtn", 100L)).thenReturn(1);
+                "CN202600001", "CN202600001", "mtn", 100L)).thenReturn(1);
         when(mapper.addAdjustLog(any(SecurityCodeConversionBo.class))).thenAnswer(invocation -> {
             SecurityCodeConversionBo log = invocation.getArgument(0);
             log.setId(1000L);
@@ -169,7 +170,7 @@ public class SecurityCodeConversionServiceTest {
         service.replaceTempSecurityCodeReferences(buildReq());
 
         verify(mapper).queryActiveCrmwPoolStatusCount(
-                "102600001.IB", "102600001.IB", "mtn", 100L);
+                "CN202600001", "CN202600001", "mtn", 100L);
         // 正式组合已存在时只执行临时代码出池
         verify(mapper, times(1)).addAdjustLog(any(SecurityCodeConversionBo.class));
         verify(mapper, never()).addCrmwPoolStatus(any(SecurityCodeConversionBo.class));
@@ -190,22 +191,16 @@ public class SecurityCodeConversionServiceTest {
                 any(SecurityCodeConversionBo.class));
     }
 
-    /** 验证正式证券主数据已存在时拒绝执行覆盖式转换。 */
+    /** 正式目标必须已经由上游写入主档。 */
     @Test
-    public void replaceReferencesShouldRejectExistingFormalSecurityInfo() {
+    public void replaceReferencesShouldRejectMissingFormalSecurityInfo() {
         SecurityCodeConversionMapper mapper = mock(SecurityCodeConversionMapper.class);
         SecurityCodeConversionService service = buildService(mapper);
-        SecurityCodeConversionBo formalSecurity = new SecurityCodeConversionBo();
-        formalSecurity.setWindCode("102600001.IB");
-        when(mapper.querySecurityInfoListForUpdate(any())).thenReturn(
-                Arrays.asList(buildTempSecurityInfo(), formalSecurity));
-
+        when(mapper.querySecurityInfoListForUpdate(any()))
+                .thenReturn(Collections.singletonList(buildTempSecurityInfo()));
         assertThatThrownBy(() -> service.replaceTempSecurityCodeReferences(buildReq()))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("正式证券主数据已存在");
-
-        verify(mapper, never()).addSecurityCodeConversionLog(
-                any(SecurityCodeConversionBo.class));
+                .isInstanceOf(BizException.class).hasMessageContaining("请选择已存在的正式证券ISIN");
+        verify(mapper, never()).addSecurityCodeConversionLog(any(SecurityCodeConversionBo.class));
     }
 
     /** 验证原临时代码管理流程仍持有有效登记时拒绝重复转换。 */
@@ -262,7 +257,7 @@ public class SecurityCodeConversionServiceTest {
         when(mapper.queryActivePoolStatusList(any(SecurityCodeConversionBo.class)))
                 .thenReturn(Collections.singletonList(buildPoolStatus()));
         when(mapper.deletePoolStatusSoftById(eq(81L), any(Date.class))).thenReturn(1);
-        when(mapper.queryActivePoolStatusCount("102600001.IB", 100L)).thenReturn(0);
+        when(mapper.queryActivePoolStatusCount("CN202600001", 100L)).thenReturn(0);
         AtomicLong logId = new AtomicLong(3000L);
         when(mapper.addAdjustLog(any(SecurityCodeConversionBo.class))).thenAnswer(invocation -> {
             SecurityCodeConversionBo log = invocation.getArgument(0);
@@ -320,6 +315,29 @@ public class SecurityCodeConversionServiceTest {
         assertThat(transactional.rollbackFor()).contains(Exception.class);
     }
 
+    /** 凭证转正时保留另一只标的券的身份和市场代码。 */
+    @Test
+    public void credentialConversionShouldPreserveUnderlyingIdentity() {
+        SecurityCodeConversionBo pool = buildPoolStatus();
+        pool.setIsinCode("CNUNDERLYING001");
+        pool.setWindCodeSh("600001.SH");
+        pool.setWindCodeNib("102400001.IB");
+        pool.setCrmwIsinCode("TEMP:TMP-EXT-001");
+        pool.setCrmwScode("TMP-EXT-001");
+        SecurityCodeConversionBo formal = buildFormalSecurityInfo();
+        formal.setTempSecurityCode("TMP-EXT-001");
+        formal.setSecurityType("crmw");
+        formal.setWindCodeNib("CRMW001.IB");
+        SecurityCodeConversionBo result = ReflectionTestUtils.invokeMethod(
+                buildService(mock(SecurityCodeConversionMapper.class)), "buildFormalInAdjustLog",
+                pool, formal, new Date(), "CRMWTEST");
+        assertThat(result.getIsinCode()).isEqualTo("CNUNDERLYING001");
+        assertThat(result.getWindCodeSh()).isEqualTo("600001.SH");
+        assertThat(result.getWindCodeNib()).isEqualTo("102400001.IB");
+        assertThat(result.getCrmwIsinCode()).isEqualTo("CN202600001");
+        assertThat(result.getCrmwScode()).isEqualTo("CRMW001.IB");
+    }
+
     /** 构建待测服务。 */
     private SecurityCodeConversionService buildService(SecurityCodeConversionMapper mapper) {
         SecurityCodeConversionService service = new SecurityCodeConversionService();
@@ -360,16 +378,16 @@ public class SecurityCodeConversionServiceTest {
         when(mapper.addSecurityCodeConversionLog(any(SecurityCodeConversionBo.class))).thenReturn(1);
     }
 
-    /** 准备仅存在临时码、正式码尚未写入的证券主数据。 */
+    /** 准备临时及已存在的正式证券主数据。 */
     private void stubSecurityMaster(SecurityCodeConversionMapper mapper) {
         when(mapper.querySecurityInfoListForUpdate(any()))
-                .thenReturn(Collections.singletonList(buildTempSecurityInfo()));
+                .thenReturn(Arrays.asList(buildTempSecurityInfo(), buildFormalSecurityInfo()));
     }
 
     /** 构建外部导入的临时证券主数据。 */
     private SecurityCodeConversionBo buildTempSecurityInfo() {
         SecurityCodeConversionBo bo = new SecurityCodeConversionBo();
-        bo.setWindCode("TMP-EXT-001");
+        bo.setIsinCode("TEMP:TMP-EXT-001");
         bo.setFullName("某集团临时中票");
         bo.setShortName("临时中票");
         bo.setWindCodeNib("TMP-EXT-001");
@@ -377,11 +395,22 @@ public class SecurityCodeConversionServiceTest {
         return bo;
     }
 
+    /** 构建已存在的正式证券。 */
+    private SecurityCodeConversionBo buildFormalSecurityInfo() {
+        SecurityCodeConversionBo bo = new SecurityCodeConversionBo();
+        bo.setIsinCode("CN202600001");
+        bo.setFullName("某集团2026年度第一期中期票据");
+        bo.setShortName("26某集团MTN001");
+        bo.setSecurityType("mtn");
+        bo.setWindCodeNib("102600001.IB");
+        return bo;
+    }
+
     /** 构建当前有效池状态。 */
     private SecurityCodeConversionBo buildPoolStatus() {
         SecurityCodeConversionBo bo = new SecurityCodeConversionBo();
         bo.setId(81L);
-        bo.setSecurityCode("TMP-EXT-001");
+        bo.setIsinCode("TEMP:TMP-EXT-001");
         bo.setSecurityShortName("临时中票");
         bo.setSecurityType("mtn");
         bo.setAdjustType("手工调整");
@@ -401,7 +430,7 @@ public class SecurityCodeConversionServiceTest {
     private SecurityCodeConversionReq buildReq() {
         SecurityCodeConversionReq req = new SecurityCodeConversionReq();
         req.setTempSecurityCode("TMP-EXT-001");
-        req.setSecurityCode("102600001.IB");
+        req.setIsinCode("CN202600001");
         req.setSecurityName("26某集团MTN001");
         req.setSecurityFullName("某集团2026年度第一期中期票据");
         req.setSecurityShortName("26某集团MTN001");

@@ -228,11 +228,11 @@ public class ScriptToolServiceTest {
         assertFalse(clearItems.contains("rrs_temp_fund_code"));
         assertFalse(clearItems.contains("rrs_temp_fund_code_evt"));
         assertEquals(schemaItems.size(), ((List<?>) ReflectionTestUtils.invokeMethod(service, "queryRrsSchemaFiles")).size());
-        // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的表（导入临时表 + 快照等）
+        // 导入临时表保持空白，证券和 CRMW 快照已随调库 Demo 初始化。
         assertTrue(unseededTables.contains("sys_imp_tmp"));
         assertTrue(unseededTables.contains("sys_imp_tmp_detl"));
-        assertTrue(unseededTables.contains("ip_adjust_security_snapshot"));
-        assertTrue(unseededTables.contains("ip_adjust_security_snapshot_crmw"));
+        assertFalse(unseededTables.contains("ip_adjust_security_snapshot"));
+        assertFalse(unseededTables.contains("ip_adjust_security_snapshot_crmw"));
         assertTrue(unseededTables.size() >= 2);
     }
 

@@ -34,6 +34,7 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
     public void execute_ShouldOutBondWhenCompanyNotInPool() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyNotInPoolBondAutoOutService service = new CompanyNotInPoolBondAutoOutService();
@@ -55,6 +56,7 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
 
         ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("B001");
+        bond.setIsinCode("B001");
         bond.setSecurityShortName("某债");
         bond.setIssuerCode("C001");
         bond.setIssuerName("测试集团");

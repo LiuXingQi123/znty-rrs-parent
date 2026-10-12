@@ -74,6 +74,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void execute_ShouldAutoOutCompanyWithHighOuterRating() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
@@ -99,6 +100,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
         ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setSecurityCode("C90001");
+        company.setIsinCode("C90001");
         company.setSecurityShortName("某高评级公司");
         company.setSecurityType("company");
         company.setOuterRating("AAA");
@@ -164,6 +166,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void execute_ShouldSkipWhenNoCandidate() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
@@ -201,6 +204,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void execute_ShouldSkipOutWhenCompanyStillInForbiddenPool() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
@@ -224,6 +228,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
         ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setSecurityCode("C90001");
+        company.setIsinCode("C90001");
         company.setOuterRating("AAA");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
                 eq(17L), any(List.class), any(List.class)))
@@ -243,6 +248,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void execute_ShouldOutSamePoolBondsAfterCompanyOut() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
@@ -267,10 +273,12 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
         ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setSecurityCode("C90001");
+        company.setIsinCode("C90001");
         company.setSecurityType("company");
         company.setOuterRating("AA");
         ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("B001");
+        bond.setIsinCode("B001");
         bond.setSecurityShortName("某债");
         bond.setSecurityType("corporate_bond");
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
@@ -309,12 +317,14 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void outSamePoolBonds_ShouldFailWhenBondIsOutRestricted() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
 
         ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("B001");
+        bond.setIsinCode("B001");
         when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C001"), eq(17L),
                 any(CompanyBondTypeScopeBo.class)))
                 .thenReturn(Collections.singletonList(bond));

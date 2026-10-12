@@ -6,6 +6,9 @@
 --   2. 当前包含：rrs_securityinfo（证券主数据）；后续同类表在本文件追加
 --   3. 与 rrs_security_pool_adjust_schema.sql 等业务脚本解耦，独立维护
 --   4. 不随「初始化建表脚本 / 重建完整演示环境」主库批量任务执行，需单独触发
+--   5. 证券统一以 isin_code 为主键：正式券使用真实 ISIN，临时券使用 TEMP:临时代码。
+--      五个市场代码仅用于搜索、展示及外部对接；临时券按登记市场填入对应代码列。
+--      CRMW 凭证仅 wind_code_nib 有值，其余四个市场代码列留空。
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -25,8 +28,7 @@ CREATE TABLE `rrs_securityinfo`
     -- ==========================================
     -- 基础及标识信息
     -- ==========================================
-    `isin_code`                  varchar(100)    DEFAULT NULL COMMENT '国际证券识别码（ISIN）',
-    `wind_code`                  varchar(100)    NOT NULL COMMENT '关联代码',
+    `isin_code`                  varchar(100)    NOT NULL COMMENT '证券唯一关联键：正式券为真实ISIN / 临时券为TEMP:临时代码',
     `full_name`                  varchar(300)    DEFAULT NULL COMMENT '证券全称',
     `issue_announcement`         varchar(10)     DEFAULT NULL COMMENT '公告日期',
     `short_name`                 varchar(100)    DEFAULT NULL COMMENT '证券简称',
@@ -149,7 +151,7 @@ CREATE TABLE `rrs_securityinfo`
     `std_clause_flag`            int             DEFAULT NULL COMMENT '标准条款判定：1=条款合格 / 0=条款不合格 / NULL=未判定',
     `std_credit_flag`            int             DEFAULT NULL COMMENT '标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定',
 
-    PRIMARY KEY (`wind_code`)
+    PRIMARY KEY (`isin_code`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci

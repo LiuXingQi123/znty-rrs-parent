@@ -82,6 +82,12 @@ public class ForbiddenPoolHistoryService {
             target.setSubmitTime(QueryListExportHelper.formatDateTime(source.getSubmitTime()));
             target.setSecurityShortName(source.getSecurityShortName());
             target.setSecurityCode(source.getSecurityCode());
+            target.setIsinCode(source.getIsinCode());
+            target.setWindCodeSh(source.getWindCodeSh());
+            target.setWindCodeSz(source.getWindCodeSz());
+            target.setWindCodeNib(source.getWindCodeNib());
+            target.setWindCodeBj(source.getWindCodeBj());
+            target.setWindCodeNbc(source.getWindCodeNbc());
             target.setIssuer(source.getIssuer());
             target.setAdjustType(source.getAdjustType());
             target.setAdjustMode(source.getAdjustMode());

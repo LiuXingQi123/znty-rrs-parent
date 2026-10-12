@@ -51,7 +51,7 @@ public class SecurityPoolAdjustFinancialPersistenceTest {
         ds.setUrl("jdbc:h2:mem:financial_" + UUID.randomUUID() + ";MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false");
         jdbc = new JdbcTemplate(ds);
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
-        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(40) PRIMARY KEY, issuer_code VARCHAR(40))");
+        jdbc.execute("CREATE TABLE rrs_securityinfo (isin_code VARCHAR(40) PRIMARY KEY, issuer_code VARCHAR(40))");
         jdbc.update("INSERT INTO rrs_securityinfo VALUES ('B001','C001'),('B002','C002')");
         jdbc.execute("CREATE TABLE ais_inv_ods.wind_companyfinancial (COMPANYCODE VARCHAR(40), REPORTDATE BIGINT,"
                 + "TOT_ASSETS DECIMAL(22,6) CHECK(TOT_ASSETS >= 0), SHAREHOLDER_EQUITY DECIMAL(22,6),"
@@ -161,9 +161,9 @@ public class SecurityPoolAdjustFinancialPersistenceTest {
     @Test
     public void shouldResolveIssuerFromMaster() {
         IssuerFinancialSaveReq req = request(change(20251231L,"1"));
-        req.setSecurityCode("unknown");
+        req.setIsinCode("unknown");
         assertThatThrownBy(() -> service.saveIssuerFinancialList(req)).isInstanceOf(BizException.class);
-        req.setSecurityCode("B002"); service.saveIssuerFinancialList(req);
+        req.setIsinCode("B002"); service.saveIssuerFinancialList(req);
         assertThat(jdbc.queryForObject("SELECT COMPANYCODE FROM ais_inv_ods.wind_companyfinancial",String.class)).isEqualTo("C002");
     }
 
@@ -173,7 +173,7 @@ public class SecurityPoolAdjustFinancialPersistenceTest {
     }
     /** 获取默认四期。 */
     private List<IssuerFinancialDto> queryDefault() {
-        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq(); req.setSecurityCode("B001");
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq(); req.setIsinCode("B001");
         return service.queryIssuerFinancialList(req);
     }
     /** 获取财报记录数量。 */
@@ -182,7 +182,7 @@ public class SecurityPoolAdjustFinancialPersistenceTest {
     }
     /** 组装批量请求。 */
     private IssuerFinancialSaveReq request(IssuerFinancialDto... changes) {
-        IssuerFinancialSaveReq req = new IssuerFinancialSaveReq(); req.setSecurityCode("B001"); req.setRecords(Arrays.asList(changes)); return req;
+        IssuerFinancialSaveReq req = new IssuerFinancialSaveReq(); req.setIsinCode("B001"); req.setRecords(Arrays.asList(changes)); return req;
     }
     /** 组装单个报告期的完整指标。 */
     private IssuerFinancialDto change(Long date,String assets) {

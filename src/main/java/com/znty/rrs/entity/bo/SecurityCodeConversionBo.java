@@ -10,6 +10,12 @@ import lombok.Data;
 @Data
 public class SecurityCodeConversionBo {
 
+    /** 临时券在证券主档及业务引用中的统一身份 */
+    public String getTempIsinCode() {
+        return tempSecurityCode == null ? null : "TEMP:" + tempSecurityCode;
+    }
+
+
     /** 记录主键 */
     private Long id;
 
@@ -52,8 +58,8 @@ public class SecurityCodeConversionBo {
     /** 统一更新时间 */
     private Date updateTime;
 
-    /** 主档关联代码 */
-    private String windCode;
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
+    private String isinCode;
 
     /** 主档证券全称 */
     private String fullName;
@@ -61,19 +67,19 @@ public class SecurityCodeConversionBo {
     /** 主档证券简称 */
     private String shortName;
 
-    /** 主档沪市证券代码 */
+    /** 沪市证券代码 */
     private String windCodeSh;
 
-    /** 主档深市证券代码 */
+    /** 深市证券代码 */
     private String windCodeSz;
 
-    /** 主档银行间市场代码 */
+    /** 银行间证券代码 */
     private String windCodeNib;
 
-    /** 主档北交所代码 */
+    /** 北交所证券代码 */
     private String windCodeBj;
 
-    /** 主档其他市场代码 */
+    /** 其他市场证券代码 */
     private String windCodeNbc;
 
     /** 池状态证券简称 */
@@ -82,7 +88,9 @@ public class SecurityCodeConversionBo {
     /** CRMW 名称 */
     private String crmwName;
 
-    /** CRMW 证券代码 */
+    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
+    private String crmwIsinCode;
+    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
     private String crmwScode;
 
     /** CRMW 市场代码 */

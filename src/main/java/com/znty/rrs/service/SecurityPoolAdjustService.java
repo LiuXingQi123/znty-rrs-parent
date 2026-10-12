@@ -199,7 +199,7 @@ public class SecurityPoolAdjustService {
     public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<SecurityInfoDto> records = securityPoolAdjustMapper.querySecurityPage(
-                req.getSecurityCode(), req.getSecurityShortName(), req.getSecurityType(), req.getIssuer(),
+                req.getSecurityKeyword(), req.getSecurityShortName(), req.getSecurityType(), req.getIssuer(),
                 req.getBondYesFlags());
         PageInfo<SecurityInfoDto> pageInfo = new PageInfo<>(records);
 
@@ -219,22 +219,25 @@ public class SecurityPoolAdjustService {
      * @param req 需携带 securityCode
      */
     public SecurityInfoDetailDto querySecurityDetail(SecurityPoolAdjustReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        if (req.getIsinCode() == null || req.getIsinCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
         SecurityInfoDetailDto dto = null;
         // ① 有调库日志：该笔提交快照整包回显（审批/详情精确留痕）
         if (req.getAdjustLogId() != null) {
             dto = securityPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(req.getAdjustLogId());
+            if (dto != null && dto.getIsinCode() != null && !req.getIsinCode().equals(dto.getIsinCode())) {
+                throw new BizException("调库快照与证券ISIN不一致");
+            }
         }
         // ② 无 log 或该 log 无快照：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终跟主档）
         if (dto == null) {
-            SecurityInfoDetailDto master = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityCode());
+            SecurityInfoDetailDto master = securityPoolAdjustMapper.querySecurityDetail(req.getIsinCode());
             if (master == null) {
                 throw new BizException(404, "证券不存在");
             }
             SecurityInfoDetailDto latestSnapshot =
-                    securityPoolAdjustMapper.queryLatestSecuritySnapshotDetailByWindCode(req.getSecurityCode());
+                    securityPoolAdjustMapper.queryLatestSecuritySnapshotDetailByIsinCode(req.getIsinCode());
             // 有历史快照时仅覆盖表单可编辑业务字段，避免只读标识与主档不一致
             overlayEditableFieldsFromSnapshot(master, latestSnapshot);
             dto = master;
@@ -260,10 +263,10 @@ public class SecurityPoolAdjustService {
      * @return 按默认四列顺序返回的四条财报记录，缺失期保留日期和空指标
      */
     public List<IssuerFinancialDto> queryIssuerFinancialList(SecurityPoolAdjustReq req) {
-        if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
+        if (req == null || req.getIsinCode() == null || req.getIsinCode().trim().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        String securityCode = req.getSecurityCode().trim();
+        String securityCode = req.getIsinCode().trim();
         Long latestDate = securityPoolAdjustMapper.queryLatestIssuerFinancialReportDate(securityCode);
         if (latestDate != null) {
             // 检查源数据报告期，避免错误日期进入四列表头
@@ -295,11 +298,11 @@ public class SecurityPoolAdjustService {
     /** 独立批量保存财报；任一记录写入失败时全部回滚。 */
     @Transactional(rollbackFor = Exception.class)
     public List<IssuerFinancialDto> saveIssuerFinancialList(IssuerFinancialSaveReq req) {
-        if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
+        if (req == null || req.getIsinCode() == null || req.getIsinCode().trim().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
         if (req.getRecords() == null) throw new BizException("财报修改列表不能为空");
-        String securityCode = req.getSecurityCode().trim();
+        String securityCode = req.getIsinCode().trim();
         SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
         if (security == null || security.getIssuerCode() == null || security.getIssuerCode().trim().isEmpty()) {
             throw new BizException("证券不存在或未配置发行主体：" + securityCode);
@@ -341,23 +344,23 @@ public class SecurityPoolAdjustService {
      * @return 对应报告期财务指标，不存在时返回空
      */
     public IssuerFinancialDto queryIssuerFinancialByReportDate(SecurityPoolAdjustReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        if (req.getIsinCode() == null || req.getIsinCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
         // 校验报告日期格式及允许的报告期
         validateFinancialReportDate(req.getReportDate());
         return securityPoolAdjustMapper.queryIssuerFinancialByReportDate(
-                req.getSecurityCode(), req.getReportDate());
+                req.getIsinCode(), req.getReportDate());
     }
 
     /**
      * 查询证券池调库页面担保人、权益人下拉共用的四类关系主体候选。
      */
     public List<RelatedRatingCompanyDto> queryRelatedRatingCompanyList(SecurityPoolAdjustReq req) {
-        if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
+        if (req == null || req.getIsinCode() == null || req.getIsinCode().trim().isEmpty()) {
             return new ArrayList<>();
         }
-        return securityPoolAdjustMapper.queryRelatedRatingCompanyList(req.getSecurityCode().trim());
+        return securityPoolAdjustMapper.queryRelatedRatingCompanyList(req.getIsinCode().trim());
     }
 
     /**
@@ -418,10 +421,10 @@ public class SecurityPoolAdjustService {
      * @return 无可回填报告时返回 null
      */
     public LastCreditReportDto queryLastCreditReport(SecurityPoolAdjustReq req) {
-        if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
+        if (req == null || req.getIsinCode() == null || req.getIsinCode().trim().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        String securityCode = req.getSecurityCode().trim();
+        String securityCode = req.getIsinCode().trim();
         // 先按当前券查近 6 个月最近一条有信评报告的审批通过调入日志
         Long adjustLogId = securityPoolAdjustMapper.queryLastInboundLogIdWithCreditReportBySecurity(securityCode);
         // 券维度无记录时，按同主体兜底（对齐老 findInvestPoolAdjustHistoryByScodeOrCompancode 主体分支）
@@ -553,7 +556,7 @@ public class SecurityPoolAdjustService {
             return pools;
         }
         // releaseRules=true 或无证券代码：不卡矩阵
-        if (req.isReleaseRules() || req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        if (req.isReleaseRules() || req.getIsinCode() == null || req.getIsinCode().isEmpty()) {
             return pools;
         }
         boolean hasGradedPool = false;
@@ -567,7 +570,7 @@ public class SecurityPoolAdjustService {
         if (!hasGradedPool) {
             return pools;
         }
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getIsinCode());
         if (securityInfo == null) {
             return pools;
         }
@@ -579,11 +582,11 @@ public class SecurityPoolAdjustService {
             return excludeGradedBondPools(pools);
         }
         // 证券自身或发行主体任一在重点观察名单，即走重点观察名单禁新增规则
-        boolean inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode())
-                || securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode());
+        boolean inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getIsinCode())
+                || securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getIsinCode());
         // 当前已在池，用于重点观察名单判断是否「新增入库」
         Set<Long> currentPoolIds = new HashSet<Long>();
-        List<Long> currentIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
+        List<Long> currentIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getIsinCode());
         if (currentIdList != null) {
             currentPoolIds.addAll(currentIdList);
         }
@@ -614,8 +617,8 @@ public class SecurityPoolAdjustService {
             bestAllowedSort = resolveBestAllowedSort(allowedPoolIds, poolMap);
         }
         // ABS 按担保人内评选口径；私募/永续/次级按发债主体内评；担保债或已在观察池从最好档开到五级；普通债只留矩阵点名的池
-        boolean inObserve = securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
-                || securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode());
+        boolean inObserve = securityPoolAdjustMapper.querySecurityInObservePool(req.getIsinCode())
+                || securityPoolAdjustMapper.queryIssuerInObservePool(req.getIsinCode());
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
                 CreditBondSpecialInboundRule.resolveGradedInboundMode(securityInfo, inObserve);
         Integer startSort = inboundMode.resolveStartSort(bestAllowedSort);
@@ -845,12 +848,12 @@ public class SecurityPoolAdjustService {
      * @param req 需携带 securityCode
      */
     public SecurityPoolStatusDto querySecurityPoolStatus(SecurityPoolAdjustReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        if (req.getIsinCode() == null || req.getIsinCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
         SecurityPoolStatusDto dto = new SecurityPoolStatusDto();
-        List<PoolStatusDto> securityCurrentPools = securityPoolAdjustMapper.querySecurityPoolStatusList(req.getSecurityCode());
-        List<PoolStatusDto> issuerCurrentPools = securityPoolAdjustMapper.queryIssuerPoolStatusList(req.getSecurityCode());
+        List<PoolStatusDto> securityCurrentPools = securityPoolAdjustMapper.querySecurityPoolStatusList(req.getIsinCode());
+        List<PoolStatusDto> issuerCurrentPools = securityPoolAdjustMapper.queryIssuerPoolStatusList(req.getIsinCode());
         // 加载投资池全路径名称映射
         Map<Long, String> poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
         // 填充当前所在池的全路径名称
@@ -1094,7 +1097,7 @@ public class SecurityPoolAdjustService {
 
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
-        dto.setSecurityCode(req.getSecurityCode());
+        dto.setIsinCode(req.getIsinCode());
         dto.setSubmitCount(allIds.size());
         dto.setLogIds(allIds);
         return dto;
@@ -1128,7 +1131,7 @@ public class SecurityPoolAdjustService {
      * @param req 调库提交请求
      */
     private void validateSubmitReq(SecurityPoolAdjustSubmitReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        if (req.getIsinCode() == null || req.getIsinCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
         if (req.getItems() == null || req.getItems().isEmpty()) {
@@ -1216,7 +1219,7 @@ public class SecurityPoolAdjustService {
             return;
         }
         List<IpAdjustLogBo> recentLogs = securityPoolAdjustMapper.queryRecentManualAdjustLogList(
-                req.getSecurityCode(), req.getAdjusterId(), DUPLICATE_SUBMIT_WINDOW_SECONDS);
+                req.getIsinCode(), req.getAdjusterId(), DUPLICATE_SUBMIT_WINDOW_SECONDS);
         if (recentLogs == null || recentLogs.isEmpty()) return;
         List<String> requestKeys = manualItems.stream().map(item -> item.getTargetPoolId() + "|"
                 + item.getAdjustMode() + "|" + item.getFlowId() + "|" + emptyToNull(item.getFlowKey()))
@@ -1309,7 +1312,7 @@ public class SecurityPoolAdjustService {
      */
     private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req, BatchNoContext batchNoContext) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getIsinCode());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
@@ -1326,7 +1329,7 @@ public class SecurityPoolAdjustService {
         }
 
         // 证券当前有效入池 ID 集合（audit_status='20' 表示已生效）
-        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
+        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getIsinCode());
         Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList);
 
         // 全量投资池关系配置，构建三层嵌套 Map
@@ -1358,9 +1361,9 @@ public class SecurityPoolAdjustService {
                 poolMap,
                 currentPoolIds,
                 poolRelationMap,
-                securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
-                securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
-                securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
+                securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getIsinCode()),
+                securityPoolAdjustMapper.querySecurityInObservePool(req.getIsinCode()),
+                securityPoolAdjustMapper.queryIssuerInObservePool(req.getIsinCode()),
                 flowSnapshotMap,
                 batchNoContext,
                 selectedRatingCompany
@@ -1766,7 +1769,7 @@ public class SecurityPoolAdjustService {
             return;
         }
         // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
-        SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo());
+        SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getIsinCode(), req.getSecurityInfo());
         // 担保人名称、代码和内评均使用提交阶段校验后的所选担保人，避免快照保留主档旧值
         mergedSecurityInfo.setGuarantor(shared.securityInfo.getGuarantor());
         mergedSecurityInfo.setGuarantorId(shared.securityInfo.getGuarantorId());
@@ -1841,12 +1844,7 @@ public class SecurityPoolAdjustService {
     private void mergeSecurityInfo(SecurityInfoBo current, SecurityInfoBo changedField) {
         current.setFullName(changedField.getFullName());
         current.setShortName(changedField.getShortName());
-        current.setWindCode(changedField.getWindCode());
         current.setIssuer(changedField.getIssuer());
-        current.setWindCodeNib(changedField.getWindCodeNib());
-        current.setWindCodeSh(changedField.getWindCodeSh());
-        current.setWindCodeSz(changedField.getWindCodeSz());
-        current.setWindCodeBj(changedField.getWindCodeBj());
         current.setIssueAmountplan(changedField.getIssueAmountplan());
         current.setCouponRate(changedField.getCouponRate());
         current.setMaturityembeddedDesc(changedField.getMaturityembeddedDesc());
@@ -1881,11 +1879,11 @@ public class SecurityPoolAdjustService {
      * @param req securityCode 必填；adjustBatchNo 仅供流程定位，本查询不使用
      */
     public List<AdjustLogDto> queryAdjustLogList(SecurityPoolAdjustReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        if (req.getIsinCode() == null || req.getIsinCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
         List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogList(
-                req.getSecurityCode(), req.getAdjustBatchNo());
+                req.getIsinCode(), req.getAdjustBatchNo());
         if (logs.isEmpty()) {
             return new ArrayList<>();
         }
@@ -1897,8 +1895,13 @@ public class SecurityPoolAdjustService {
         for (IpAdjustLogBo log : logs) {
             AdjustLogDto dto = new AdjustLogDto();
             dto.setId(log.getId());
-            // 回填证券代码，便于前端展示关联调整行
-            dto.setSecurityCode(log.getSecurityCode());
+            // 回填证券身份及当时的市场代码，供调库记录展示
+            dto.setIsinCode(log.getIsinCode());
+            dto.setWindCodeSh(log.getWindCodeSh());
+            dto.setWindCodeSz(log.getWindCodeSz());
+            dto.setWindCodeNib(log.getWindCodeNib());
+            dto.setWindCodeBj(log.getWindCodeBj());
+            dto.setWindCodeNbc(log.getWindCodeNbc());
             dto.setSecurityShortName(log.getSecurityShortName());
             dto.setSecurityType(log.getSecurityType());
             dto.setAdjustBatchNo(log.getAdjustBatchNo());
@@ -1997,7 +2000,7 @@ public class SecurityPoolAdjustService {
 
         // ══ 第四点五阶段：多市场关联码扩批（itemTag=related） ══
         // 回填主券证券信息，并按 wind_code_sh/sz/nib/bj/nbc 展开同池同向关联项
-        expandRelatedMarketCodeItems(req, shared, resultItems);
+        fillSecurityIdentityItems(req, shared, resultItems);
 
         // ══ 第五阶段：流程类型判断 ══
         List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
@@ -2029,7 +2032,7 @@ public class SecurityPoolAdjustService {
      * @param req 调库校验请求
      */
     private void validateCheckAdjustReq(AdjustCheckReq req) {
-        if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
+        if (req.getIsinCode() == null || req.getIsinCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
         if (req.getItems() == null || req.getItems().isEmpty()) {
@@ -2049,7 +2052,7 @@ public class SecurityPoolAdjustService {
      */
     private AdjustSharedData loadSharedData(AdjustCheckReq req) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getIsinCode());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
@@ -2065,7 +2068,7 @@ public class SecurityPoolAdjustService {
         }
 
         // 证券当前有效入池 ID 集合（audit_status='20' 表示已生效）
-        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
+        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getIsinCode());
         Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList);
 
         // 全量投资池关系配置，构建三层嵌套 Map（poolId → relationType → 关联池列表）
@@ -2089,15 +2092,15 @@ public class SecurityPoolAdjustService {
         shared.setPoolMap(poolMap);
         shared.setCurrentPoolIds(currentPoolIds);
         shared.setPoolRelationMap(poolRelationMap);
-        shared.setHasPendingProcess(securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()));
-        shared.setPendingProcessNodeLabel(securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getSecurityCode()));
+        shared.setHasPendingProcess(securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getIsinCode()));
+        shared.setPendingProcessNodeLabel(securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(req.getIsinCode()));
         shared.setPendingPoolGroupIds(resolvePoolGroupIds(
-                securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(req.getSecurityCode(), null), poolMap));
+                securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(req.getIsinCode(), null), poolMap));
         // 观察池：证券或主体已在观察池则不得高于矩阵最好档；重点观察名单：禁新增，已在库只能去五级
-        shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
-        shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode()));
-        shared.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode()));
+        shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getIsinCode()));
+        shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getIsinCode()));
+        shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getIsinCode()));
+        shared.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getIsinCode()));
         // 评级下调三标志：非 ABS 担保债才按所选担保人代码判断担保人评级下调
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
@@ -2129,7 +2132,7 @@ public class SecurityPoolAdjustService {
             SelfSelectedRightsHolderDto selfSelected = null;
             if (rightsHolderCode != null && !rightsHolderCode.trim().isEmpty()) {
                 rightsHolder = findRelatedRatingCompany(
-                        securityInfo.getWindCode(), rightsHolderCode.trim(), "所选权益人不属于当前证券");
+                        securityInfo.getIsinCode(), rightsHolderCode.trim(), "所选权益人不属于当前证券");
                 result.rightsHolderName = rightsHolder.getCompanyName();
             }
             if (selfSelectedRightsHolderCode != null && !selfSelectedRightsHolderCode.trim().isEmpty()) {
@@ -2142,7 +2145,7 @@ public class SecurityPoolAdjustService {
             }
             if (rightsHolder == null && selfSelected == null) {
                 // 前端未传选择时，直接采用关联评级主体接口返回的首条，不按关系类型二次筛选
-                rightsHolder = queryFirstRelatedRatingCompany(securityInfo.getWindCode());
+                rightsHolder = queryFirstRelatedRatingCompany(securityInfo.getIsinCode());
                 if (rightsHolder != null) {
                     result.rightsHolderName = rightsHolder.getCompanyName();
                 }
@@ -2162,10 +2165,10 @@ public class SecurityPoolAdjustService {
         RelatedRatingCompanyDto guarantor = null;
         if (guarantorCode != null && !guarantorCode.trim().isEmpty()) {
             guarantor = findRelatedRatingCompany(
-                    securityInfo.getWindCode(), guarantorCode.trim(), "所选担保人不属于当前证券");
+                    securityInfo.getIsinCode(), guarantorCode.trim(), "所选担保人不属于当前证券");
         } else {
             // 前端未传选择时，直接采用关联评级主体接口返回的首条，不按关系类型二次筛选
-            guarantor = queryFirstRelatedRatingCompany(securityInfo.getWindCode());
+            guarantor = queryFirstRelatedRatingCompany(securityInfo.getIsinCode());
         }
         if (guarantor != null) {
             fillSelectedRatingCompany(securityInfo, guarantor.getCompanyCode(),
@@ -2772,7 +2775,7 @@ public class SecurityPoolAdjustService {
         // 2. 非简易入库经历：同发行人近180天以简易之外的流程审批通过入库，包含升库、降库等
         // 已出池的历史仍计入，不要求与本次目标池同层级
         boolean hasNonSimpleInbound = securityPoolAdjustMapper.queryIssuerHasNonSimpleCreditBondInboundWithinDays(
-                req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS);
+                req.getIsinCode(), SIMPLE_INBOUND_HISTORY_DAYS);
         if (hasNonSimpleInbound) {
             matchReasons.add("同发行人半年内以非简易入库流程进入过信用债大库");
         } else {
@@ -2782,7 +2785,7 @@ public class SecurityPoolAdjustService {
         // 3. 有效信评报告：同发行人内部或外部报告库中近180天的债券信评报告，须有有效库附件
         // 时间按报告创建时间计算，不要求关联上面的一般入库记录
         if (securityPoolAdjustMapper.queryIssuerHasRecentCreditReportWithinDays(
-                req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS)) {
+                req.getIsinCode(), SIMPLE_INBOUND_HISTORY_DAYS)) {
             matchReasons.add("同发行人报告库中有180天内的有效信评报告");
         } else {
             unmatchReasons.add("同发行人报告库中没有180天内的有效信评报告");
@@ -3574,12 +3577,12 @@ public class SecurityPoolAdjustService {
                     || (pool.getIsDeleted() != null && pool.getIsDeleted() == 1)) {
                 throwApprovalRecheckFailure(log, "目标投资池不存在或已停用");
             }
-            SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(log.getSecurityCode());
+            SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(log.getIsinCode());
             if (security == null) {
                 throwApprovalRecheckFailure(log, "证券不存在");
             }
             Set<Long> currentPoolIds = new HashSet<>(
-                    securityPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getSecurityCode()));
+                    securityPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getIsinCode()));
             AdjustCheckContext ctx = new AdjustCheckContext();
             ctx.setSecurityInfo(security);
             ctx.setTargetPool(pool);
@@ -3601,7 +3604,7 @@ public class SecurityPoolAdjustService {
                 inboundIncrements.put(pool.getId(), increment + 1);
             } else {
                 ctx.setTargetPoolEntryTime(securityPoolAdjustMapper.queryPoolEntryTime(
-                        log.getSecurityCode(), pool.getId()));
+                        log.getIsinCode(), pool.getId()));
                 failure = firstFailure(outCheckPoolLocked(ctx), outCheckSecurityNotInPool(ctx),
                         outCheckRestrictPool(ctx), outCheckFrozenPeriod(ctx));
             }
@@ -3637,21 +3640,38 @@ public class SecurityPoolAdjustService {
      *
      * @param logList 已通过最终复核的调库日志集合
      */
+    /** 审批生效、主体同步及自动调库共用事件快照规则。 */
+    public void saveEffectiveMarketSnapshot(IpAdjustLogBo log) {
+        if (log == null || log.getIsinCode() == null || log.getId() == null) { return; }
+        // 出库查询原入池日志；不能使用当前主档代码替代历史代码
+        IpAdjustLogBo snapshot = securityPoolAdjustMapper.queryEffectiveMarketSnapshot(log);
+        if (snapshot == null) { throw new BizException("证券生效代码快照不存在，isinCode=" + log.getIsinCode()); }
+        log.setWindCodeSh(snapshot.getWindCodeSh());
+        log.setWindCodeSz(snapshot.getWindCodeSz());
+        log.setWindCodeNib(snapshot.getWindCodeNib());
+        log.setWindCodeBj(snapshot.getWindCodeBj());
+        log.setWindCodeNbc(snapshot.getWindCodeNbc());
+        log.setCrmwScode(snapshot.getCrmwScode());
+        securityPoolAdjustMapper.editEffectiveMarketSnapshot(log);
+    }
+
     public void applyPoolStatusChanges(List<IpAdjustLogBo> logList) {
         for (IpAdjustLogBo log : logList) {
+            // 落池前保存同一证券的市场代码快照
+            saveEffectiveMarketSnapshot(log);
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 log.setAuditStatus(AuditStatus.APPROVED.getCode());
                 log.setAdjustLogId(log.getId());
                 int inserted = securityPoolAdjustMapper.addPoolStatus(log);
                 if (inserted != 1) {
-                    throw new BizException("证券[" + log.getSecurityCode() + "]调入投资池["
+                    throw new BizException("证券[" + log.getIsinCode() + "]调入投资池["
                             + log.getTargetPoolName() + "]失败：入池状态写入异常");
                 }
             } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
                 int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(
-                        log.getSecurityCode(), log.getTargetPoolId());
+                        log.getIsinCode(), log.getTargetPoolId());
                 if (deleted == 0) {
-                    throw new BizException("证券[" + log.getSecurityCode() + "]已不在投资池["
+                    throw new BizException("证券[" + log.getIsinCode() + "]已不在投资池["
                             + log.getTargetPoolName() + "]，调出失败");
                 }
             }
@@ -3670,7 +3690,7 @@ public class SecurityPoolAdjustService {
 
     /** 抛出包含调库项上下文的最终审批复核异常。 */
     private void throwApprovalRecheckFailure(IpAdjustLogBo log, String reason) {
-        throw new BizException("证券[" + log.getSecurityCode() + "]" + log.getAdjustMode()
+        throw new BizException("证券[" + log.getIsinCode() + "]" + log.getAdjustMode()
                 + "投资池[" + log.getTargetPoolName() + "]失败：" + reason);
     }
 
@@ -3706,13 +3726,13 @@ public class SecurityPoolAdjustService {
         Integer bestAllowedSort = resolveBestAllowedSort(matrixIds, poolMap);
         // 改判候选项：证券自身或发行主体已在重点观察名单
         boolean inRestricted = false;
-        if (sec.getWindCode() != null) {
-            inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(sec.getWindCode())
-                    || securityPoolAdjustMapper.queryIssuerInRestrictedPool(sec.getWindCode());
+        if (sec.getIsinCode() != null) {
+            inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(sec.getIsinCode())
+                    || securityPoolAdjustMapper.queryIssuerInRestrictedPool(sec.getIsinCode());
         }
         Set<Long> currentPoolIds = new HashSet<Long>();
-        if (sec.getWindCode() != null) {
-            List<Long> currentIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(sec.getWindCode());
+        if (sec.getIsinCode() != null) {
+            List<Long> currentIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(sec.getIsinCode());
             if (currentIdList != null) {
                 currentPoolIds.addAll(currentIdList);
             }
@@ -3720,9 +3740,9 @@ public class SecurityPoolAdjustService {
         Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
         // 改判候选项用同一套档位规则（含观察池）
         boolean inObserve = false;
-        if (sec.getWindCode() != null) {
-            inObserve = securityPoolAdjustMapper.querySecurityInObservePool(sec.getWindCode())
-                    || securityPoolAdjustMapper.queryIssuerInObservePool(sec.getWindCode());
+        if (sec.getIsinCode() != null) {
+            inObserve = securityPoolAdjustMapper.querySecurityInObservePool(sec.getIsinCode())
+                    || securityPoolAdjustMapper.queryIssuerInObservePool(sec.getIsinCode());
         }
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
                 CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, inObserve);
@@ -4347,7 +4367,7 @@ public class SecurityPoolAdjustService {
      * 对应老项目 Forbiddenlastpoolid 配置。
      */
     private String inCheckForbiddenPool(AdjustCheckContext ctx) {
-        if (securityPoolAdjustMapper.querySecurityInForbiddenPool(ctx.getSecurityInfo().getWindCode())) {
+        if (securityPoolAdjustMapper.querySecurityInForbiddenPool(ctx.getSecurityInfo().getIsinCode())) {
             return "证券当前在禁止池中";
         }
         return null;
@@ -4509,7 +4529,7 @@ public class SecurityPoolAdjustService {
         // 调出时查询证券在目标池的入池时间，用于冻结期校验（调入时不需要）
         if (AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
             ctx.setTargetPoolEntryTime(securityPoolAdjustMapper.queryPoolEntryTime(
-                    shared.getSecurityInfo().getWindCode(), item.getTargetPoolId()));
+                    shared.getSecurityInfo().getIsinCode(), item.getTargetPoolId()));
         }
         // 查证券品种大类，用于类型特有校验路由（dict_security_type.category_type）
         ctx.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(
@@ -5102,11 +5122,24 @@ public class SecurityPoolAdjustService {
                 }
             }
         }
-        bo.setSecurityCode(securityCode);
+        bo.setIsinCode(securityCode);
         bo.setSecurityShortName(securityShortName);
         bo.setSecurityType(securityType);
+        // 从服务端主档回填身份及市场代码，不采用前端可编辑数据。
+        SecurityInfoBo identityMaster = securityPoolAdjustMapper.querySecurityBoByCode(bo.getIsinCode());
+        if (identityMaster == null) {
+            throw new BizException("证券不存在，isinCode=" + bo.getIsinCode());
+        }
+        bo.setSecurityShortName(identityMaster.getShortName());
+        bo.setSecurityType(identityMaster.getSecurityType());
+        bo.setWindCodeSh(identityMaster.getWindCodeSh());
+        bo.setWindCodeSz(identityMaster.getWindCodeSz());
+        bo.setWindCodeNib(identityMaster.getWindCodeNib());
+        bo.setWindCodeBj(identityMaster.getWindCodeBj());
+        bo.setWindCodeNbc(identityMaster.getWindCodeNbc());
+
         bo.setCrmwName(req.getCrmwName());
-        bo.setCrmwScode(req.getCrmwScode());
+        bo.setCrmwIsinCode(req.getCrmwIsinCode());
         bo.setCrmwMktcode(req.getCrmwMktcode());
         bo.setCrmwStype(req.getCrmwStype());
         // 根据调库项来源确定落表调整类型
@@ -5170,194 +5203,42 @@ public class SecurityPoolAdjustService {
      */
     private String resolveItemSecurityCode(SecurityPoolAdjustSubmitReq req,
                                            SecurityPoolAdjustSubmitReq.AdjustItem item) {
-        if (item != null && item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()) {
-            return item.getSecurityCode();
+        if (item != null && item.getIsinCode() != null && !item.getIsinCode().isEmpty()) {
+            return item.getIsinCode();
         }
-        return req.getSecurityCode();
+        return req.getIsinCode();
     }
 
     /**
      * 从主券 market 代码字段解析关联证券代码列表（已带后缀、去自身、去重，不递归）。
      */
-    private List<String> resolveRelatedSecurityCodes(SecurityInfoBo main) {
-        List<String> codes = new ArrayList<>();
-        if (main == null) {
-            return codes;
-        }
-        String mainCode = main.getWindCode() == null ? "" : main.getWindCode().trim();
-        Set<String> seen = new HashSet<>();
-        for (String raw : Arrays.asList(
-                main.getWindCodeSh(), main.getWindCodeSz(), main.getWindCodeNib(),
-                main.getWindCodeBj(), main.getWindCodeNbc())) {
-            if (raw == null) {
-                continue;
-            }
-            String code = raw.trim();
-            if (code.isEmpty() || code.equals(mainCode) || !seen.add(code)) {
-                continue;
-            }
-            codes.add(code);
-        }
-        return codes;
-    }
+
 
     /**
      * 按关联证券代码加载校验共享数据（复用主请求的池关系/请求池集合）。
      */
-    private AdjustSharedData loadSharedDataForSecurity(String securityCode, SecurityInfoBo securityInfo,
-                                                       AdjustSharedData mainShared, AdjustCheckReq mainReq) {
-        AdjustSharedData shared = new AdjustSharedData();
-        // 多市场代码属于同一证券，沿用主券已完成防伪校验的最终评级主体
-        if (securityInfo != null && mainShared.getSecurityInfo() != null) {
-            securityInfo.setGuarantor(mainShared.getSecurityInfo().getGuarantor());
-            securityInfo.setGuarantorId(mainShared.getSecurityInfo().getGuarantorId());
-            securityInfo.setInnerGuarantorRating(mainShared.getSecurityInfo().getInnerGuarantorRating());
-        }
-        shared.setSecurityInfo(securityInfo);
-        shared.setPoolMap(mainShared.getPoolMap());
-        shared.setCurrentPoolIds(new HashSet<>(
-                securityPoolAdjustMapper.querySecurityCurrentPoolIdList(securityCode)));
-        shared.setPoolRelationMap(mainShared.getPoolRelationMap());
-        shared.setHasPendingProcess(securityPoolAdjustMapper.querySecurityHasPendingProcess(securityCode));
-        shared.setPendingProcessNodeLabel(
-                securityPoolAdjustMapper.querySecurityPendingProcessNodeLabel(securityCode));
-        shared.setPendingPoolGroupIds(resolvePoolGroupIds(
-                securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(securityCode, null),
-                mainShared.getPoolMap()));
-        // 观察池：证券或主体已在观察池则不得高于矩阵最好档；重点观察名单：禁新增，已在库只能去五级
-        shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(securityCode));
-        shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(securityCode));
-        shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(securityCode));
-        shared.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(securityCode));
-        // 评级下调标志按关联券自身主体信息判定
-        shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
-        shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
-        String guarantorCode = CreditBondSpecialInboundRule.isGuaranteed(securityInfo)
-                && !CreditBondSpecialInboundRule.isAbs(securityInfo) ? mainReq.getGuarantorCode() : null;
-        shared.setGuarantorRatingDowngraded(
-                ratingDowngradeChecker.isGuarantorDowngraded(guarantorCode));
-        shared.setRequestInPoolIds(mainShared.getRequestInPoolIds());
-        shared.setRequestOutPoolIds(mainShared.getRequestOutPoolIds());
-        shared.setFundRate(mainReq.getFundRate());
-        return shared;
-    }
+
 
     /**
-     * 多市场关联码扩批：对主结果中的 manual/linkage/mutex 项，按主券市场代码字段展开 related 项。
+     * 同一ISIN只生成一份调库项，五码作为展示及事件快照。
      *
-     * <p>关联码独立校验已在池/不在池/pending/容量等；同池同批调入累计 projected 占用容量。
+     * <p>已在池、在途与容量均按同一ISIN计算。
      */
-    private void expandRelatedMarketCodeItems(AdjustCheckReq req, AdjustSharedData mainShared,
+    private void fillSecurityIdentityItems(AdjustCheckReq req, AdjustSharedData mainShared,
                                               List<AdjustCheckDto.CheckResultItem> resultItems) {
-        SecurityInfoBo mainSec = mainShared.getSecurityInfo();
-        if (mainSec == null || resultItems == null || resultItems.isEmpty()) {
-            return;
-        }
-        // 回填主券证券信息到已有结果项
+        SecurityInfoBo security = mainShared.getSecurityInfo();
         for (AdjustCheckDto.CheckResultItem item : resultItems) {
-            if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
-                item.setSecurityCode(mainSec.getWindCode());
-                item.setSecurityShortName(mainSec.getShortName());
-                item.setSecurityType(mainSec.getSecurityType());
-                item.setSourceSecurityCode(mainSec.getWindCode());
-            }
+            item.setIsinCode(security.getIsinCode());
+            item.setSecurityShortName(security.getShortName());
+            item.setSecurityType(security.getSecurityType());
+            item.setSourceSecurityCode(security.getIsinCode());
+            item.setWindCodeSh(security.getWindCodeSh());
+            item.setWindCodeSz(security.getWindCodeSz());
+            item.setWindCodeNib(security.getWindCodeNib());
+            item.setWindCodeBj(security.getWindCodeBj());
+            item.setWindCodeNbc(security.getWindCodeNbc());
+            item.setSecuritySource(security.getSecuritySource());
         }
-
-        List<String> relatedCodes = resolveRelatedSecurityCodes(mainSec);
-        if (relatedCodes.isEmpty()) {
-            return;
-        }
-
-        // 仅对主券母项扩批（manual/linkage/mutex）
-        List<AdjustCheckDto.CheckResultItem> motherItems = new ArrayList<>();
-        Map<String, AdjustCheckDto.CheckResultItem> manualByGroup = new HashMap<>();
-        for (AdjustCheckDto.CheckResultItem item : resultItems) {
-            String tag = item.getItemTag();
-            if (ItemType.MANUAL.getCode().equals(tag)
-                    || ItemType.LINKAGE.getCode().equals(tag)
-                    || ItemType.MUTEX.getCode().equals(tag)) {
-                motherItems.add(item);
-            }
-            if (ItemType.MANUAL.getCode().equals(tag)) {
-                manualByGroup.put(item.getAdjustGroupKey(), item);
-            }
-        }
-        if (motherItems.isEmpty()) {
-            return;
-        }
-
-        // 已通过的调入项占用 projected 容量，避免主+关联同池全部通过却超容
-        Map<Long, Integer> projectedInbound = new HashMap<>();
-        Set<String> coveredKeys = new HashSet<>();
-        for (AdjustCheckDto.CheckResultItem item : resultItems) {
-            if (item.getSecurityCode() != null) {
-                coveredKeys.add(item.getSecurityCode() + "_" + item.getTargetPoolId() + "_" + item.getAdjustMode());
-            }
-            if (item.isCanAdjust() && AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
-                projectedInbound.merge(item.getTargetPoolId(), 1, Integer::sum);
-            }
-        }
-
-        List<AdjustCheckDto.CheckResultItem> relatedResults = new ArrayList<>();
-        for (String relatedCode : relatedCodes) {
-            SecurityInfoBo relatedSec = securityPoolAdjustMapper.querySecurityBoByCode(relatedCode);
-            AdjustSharedData relatedShared = relatedSec == null ? null
-                    : loadSharedDataForSecurity(relatedCode, relatedSec, mainShared, req);
-
-            for (AdjustCheckDto.CheckResultItem mother : motherItems) {
-                String dedupeKey = relatedCode + "_" + mother.getTargetPoolId() + "_" + mother.getAdjustMode();
-                if (!coveredKeys.add(dedupeKey)) {
-                    continue;
-                }
-
-                AdjustCheckDto.CheckResultItem relatedItem = new AdjustCheckDto.CheckResultItem();
-                relatedItem.setTargetPoolId(mother.getTargetPoolId());
-                relatedItem.setPoolName(mother.getPoolName());
-                relatedItem.setPoolType(mother.getPoolType());
-                relatedItem.setAdjustMode(mother.getAdjustMode());
-                relatedItem.setItemTag(ItemType.RELATED.getCode());
-                relatedItem.setAdjustGroupKey(mother.getAdjustGroupKey());
-                relatedItem.setSecurityCode(relatedCode);
-                relatedItem.setSourceSecurityCode(mainSec.getWindCode());
-
-                if (relatedSec == null || relatedShared == null) {
-                    relatedItem.setCanAdjust(false);
-                    relatedItem.setFailReasons(Collections.singletonList(
-                            "关联证券代码" + relatedCode + "在系统中不存在"));
-                } else {
-                    relatedItem.setSecurityShortName(relatedSec.getShortName());
-                    relatedItem.setSecurityType(relatedSec.getSecurityType());
-                    int baseCount = securityPoolAdjustMapper.queryPoolCurrentCount(mother.getTargetPoolId());
-                    // 调入时把本批已通过项计入有效持仓，再跑容量校验
-                    int effectiveCount = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
-                            ? baseCount + projectedInbound.getOrDefault(mother.getTargetPoolId(), 0)
-                            : baseCount;
-
-                    AdjustCheckReq.CheckItem fakeItem = new AdjustCheckReq.CheckItem();
-                    fakeItem.setTargetPoolId(mother.getTargetPoolId());
-                    fakeItem.setAdjustMode(mother.getAdjustMode());
-                    fakeItem.setPoolType(mother.getPoolType());
-                    // 构建关联券校验上下文
-                    AdjustCheckContext ctx = buildCheckContext(fakeItem, effectiveCount, relatedShared);
-                    List<String> failures = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
-                            ? checkInConditions(ctx) : checkOutConditions(ctx);
-                    relatedItem.setCanAdjust(failures.isEmpty());
-                    relatedItem.setFailReasons(failures);
-                    relatedItem.setWarnings(ctx.getWarnings());
-                    if (relatedItem.isCanAdjust() && AdjustMode.IN.getCode().equals(mother.getAdjustMode())) {
-                        projectedInbound.merge(mother.getTargetPoolId(), 1, Integer::sum);
-                    }
-                }
-
-                AdjustCheckDto.CheckResultItem manualItem = manualByGroup.get(mother.getAdjustGroupKey());
-                if (manualItem != null) {
-                    // 同组手工项失败时阻断关联项
-                    inheritManualItemFailure(relatedItem, manualItem);
-                }
-                relatedResults.add(relatedItem);
-            }
-        }
-        resultItems.addAll(relatedResults);
     }
 
     /** 构建投资池全路径名称 */

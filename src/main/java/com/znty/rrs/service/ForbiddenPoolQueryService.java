@@ -80,6 +80,12 @@ public class ForbiddenPoolQueryService {
             ForbiddenPoolQueryExportDto target = new ForbiddenPoolQueryExportDto();
             target.setSecurityShortName(source.getSecurityShortName());
             target.setSecurityCode(source.getSecurityCode());
+            target.setIsinCode(source.getIsinCode());
+            target.setWindCodeSh(source.getWindCodeSh());
+            target.setWindCodeSz(source.getWindCodeSz());
+            target.setWindCodeNib(source.getWindCodeNib());
+            target.setWindCodeBj(source.getWindCodeBj());
+            target.setWindCodeNbc(source.getWindCodeNbc());
             target.setIssuer(source.getIssuer());
             target.setAdjusterName(source.getAdjusterName());
             target.setSecurityTypeName(source.getSecurityTypeName());

@@ -1,6 +1,7 @@
 package com.znty.rrs.entity.bo;
 
 import lombok.Data;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.math.BigDecimal;
 import java.util.Date;
 
@@ -9,10 +10,17 @@ import java.util.Date;
  */
 @Data
 public class SecurityInfoBo {
-    /** 国际证券识别码（ISIN） */
+    /** 主体查询专用编码，债券不使用 */
+    private String companyCode;
+
+    /** 内部规则使用的业务对象身份，主体与证券显式区分 */
+    @JsonIgnore
+    public String getObjectCode() {
+        return "company".equals(securityType) ? companyCode : isinCode;
+    }
+
+    /** 证券身份：正式ISIN / TEMP:临时代码 */
     private String isinCode;
-    /** 关联代码 */
-    private String windCode;
     /** 证券全称 */
     private String fullName;
     /** 公告日期 */
@@ -23,11 +31,11 @@ public class SecurityInfoBo {
     private String windCodeSh;
     /** 深市证券代码 */
     private String windCodeSz;
-    /** 银行间市场代码 */
+    /** 银行间证券代码 */
     private String windCodeNib;
-    /** 北交所代码 */
+    /** 北交所证券代码 */
     private String windCodeBj;
-    /** 其他 */
+    /** 其他市场证券代码 */
     private String windCodeNbc;
     /** 证券类型编码 */
     private String securityType;
@@ -159,7 +167,7 @@ public class SecurityInfoBo {
     private String agencyNameid;
     /** 证券状态：L=上市中 / N=待上市 / D=退市 / U=未知（对应 SecurityStatus；勿与 BondStatus 存续/到期混淆） */
     private String securityStatus;
-    /** 证券来源 */
+    /** 证券来源：official=正式 / temporary=临时 / temp_converted=已转正 */
     private String securitySource;
     /** 下一个行权日 */
     private String dateNext;

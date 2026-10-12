@@ -43,6 +43,7 @@ public class CompanySamePoolBondAutoInServiceTest {
     public void execute_ShouldAutoInBondSamePool() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
@@ -73,6 +74,7 @@ public class CompanySamePoolBondAutoInServiceTest {
 
         ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("112008001.IB");
+        bond.setIsinCode("112008001.IB");
         bond.setSecurityShortName("测试债");
         bond.setSecurityType("mtn");
         bond.setIssuerCode("C001");
@@ -129,6 +131,7 @@ public class CompanySamePoolBondAutoInServiceTest {
     public void execute_ShouldGatePool17ByIssuerConditions() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         PledgeBlacklistRuleService ruleService = mock(PledgeBlacklistRuleService.class);
@@ -153,9 +156,11 @@ public class CompanySamePoolBondAutoInServiceTest {
 
         ScheduledAdjustCandidateDto matchedBond = new ScheduledAdjustCandidateDto();
         matchedBond.setSecurityCode("B001");
+        matchedBond.setIsinCode("B001");
         matchedBond.setSecurityType("corporate_bond");
         ScheduledAdjustCandidateDto unmatchedBond = new ScheduledAdjustCandidateDto();
         unmatchedBond.setSecurityCode("B002");
+        unmatchedBond.setIsinCode("B002");
         unmatchedBond.setSecurityType("corporate_bond");
         when(autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(
                 eq(PledgeBlacklistRuleService.BLACKLIST_POOL_ID), any(CompanyBondTypeScopeBo.class)))
@@ -209,6 +214,7 @@ public class CompanySamePoolBondAutoInServiceTest {
     public void execute_ShouldSkipWhenNoCandidate() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();

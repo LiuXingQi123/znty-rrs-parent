@@ -29,14 +29,14 @@ public class CommonServiceTest {
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         List<String> normalizedCodes = Arrays.asList("DBB001.IB", "DBB002.IB");
         GuarantorGradeDto grade = new GuarantorGradeDto();
-        grade.setSecurityCode("DBB001.IB");
+        grade.setIsinCode("DBB001.IB");
         grade.setWindcode("C10010");
         grade.setGuarantorTypeCode(115004000L);
         grade.setTotalScore("1");
         when(mapper.queryGuarantorGradeList(normalizedCodes)).thenReturn(Collections.singletonList(grade));
 
         GuarantorGradeReq req = new GuarantorGradeReq();
-        req.setSecurityCodes(Arrays.asList(" DBB001.IB ", "", null, "DBB002.IB", "DBB001.IB"));
+        req.setIsinCodes(Arrays.asList(" DBB001.IB ", "", null, "DBB002.IB", "DBB001.IB"));
         List<GuarantorGradeDto> result = service.queryGuarantorGradeList(req);
 
         assertThat(result).containsExactly(grade);
@@ -51,7 +51,7 @@ public class CommonServiceTest {
         CommonService service = new CommonService();
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         GuarantorGradeReq req = new GuarantorGradeReq();
-        req.setSecurityCodes(Arrays.asList(" ", null));
+        req.setIsinCodes(Arrays.asList(" ", null));
 
         assertThat(service.queryGuarantorGradeList(req)).isEmpty();
         verifyNoInteractions(mapper);

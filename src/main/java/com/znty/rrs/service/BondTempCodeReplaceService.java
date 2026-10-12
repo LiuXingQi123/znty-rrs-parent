@@ -63,7 +63,7 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
         TaskDetailLog detail = new TaskDetailLog();
         detail.line("任务开始：【" + TASK_NAME + "】");
         detail.line("扫描条件：rrs_temp_security_code.is_deleted=0、status=temporary、"
-                + "security_code IS NOT NULL 且 TRIM 后非空");
+                + "isin_code IS NOT NULL 且 TRIM 后非空");
         try {
             List<TempSecurityCodeBo> sourceList = tempSecurityCodeMapper.queryJobReadyTempSecurityCodeList();
             List<TempSecurityCodeBo> rows = sourceList == null
@@ -78,13 +78,13 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
                     successCount++;
                     detail.line("替换成功：记录ID=" + row.getId()
                             + "，临时代码=" + row.getTempSecurityCode()
-                            + "，正式代码=" + row.getSecurityCode());
+                            + "，正式ISIN=" + row.getIsinCode());
                 } catch (Exception e) {
                     failureCount++;
                     log.error("临时代码定时替换失败，id={}", row.getId(), e);
                     detail.line("ERROR", "替换失败：记录ID=" + row.getId()
                             + "，临时代码=" + row.getTempSecurityCode()
-                            + "，正式代码=" + row.getSecurityCode()
+                            + "，正式ISIN=" + row.getIsinCode()
                             + "，原因=" + e.getMessage());
                 }
             }

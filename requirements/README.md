@@ -105,7 +105,12 @@
 - Service 现有单元测试覆盖调库步骤推进、人员权限和流程处理逻辑。
 - 财报四期与批量保存测试：`SecurityPoolAdjustFinancialPersistenceTest` 使用 H2 和实际 Mapper/事务代理覆盖缺失报告、新增、整期指标覆盖、非页面字段保留与批量回滚。H2 2.3.232 需要 Java 11 以上运行时，JDK 8 下该集成测试明确跳过；建议使用本机 JDK 17 执行 `mvn "-Dtest=SecurityPoolAdjustFinancial*Test,SecurityPoolAdjustApiTest" test`，工程源码目标仍为 Java 8。
 - 数据库集成测试应使用 Demo SQL 初始化后执行，重点验证跨表引用、事务回滚和状态一致性。
+- 全量 Demo 加载与数据检查见 [Demo 数据检查说明](demo-data-audit.md)，回归测试为 `DemoDataIntegrityTest`（H2，仅在 Java 11 以上运行）。
 
 ### 我的事宜业务入口维护
 
 债券、基金、股票事宜按业务隔离，用户/角色入口名单固定在 `BusinessPermissionMapper.xml/queryBusinessDomainList` 的 SQL 中，修改后重新部署。入口仅在新页面 mounted 时查询一次启用的直接所属角色，不继承父子角色；角色变化在下次真正加载页面时更新显示，返回页签只刷新数据。各业务后端不校验入口名单，事项范围和审批接管沿用 `AdminUserIdUtil` 的旧管理员 ID 规则。固定名单、维护方式与股票扩展说明见 [06 我的事宜](06-my-matters.md)。当前演示身份需在正式环境替换为可信后端登录上下文。
+
+## ISIN 版本 Demo 重建顺序
+
+本版本不迁移存量池状态、在途流程与历史。部署时先停止后端和调度，再先执行外部主档 schema／Demo，后执行债券业务 schema／Demo 与运行态样本。`RESET_ALL` 排除外部主档，不能单独使用它完成重建。完成后再同步启动前后端。此处仅记录操作顺序；开发验证只使用 H2，没有执行实际数据库脚本。

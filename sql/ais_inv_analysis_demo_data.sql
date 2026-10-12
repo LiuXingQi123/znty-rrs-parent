@@ -201,7 +201,12 @@ INSERT INTO `t_sys_role` (
 (7, '权益部',      1, NOW(), 'ROLE_EQUITY',         '权益部门',       NULL, NULL),
 (8, '行业研究组',  1, NOW(), 'ROLE_INDUSTRY',       '行业研究小组',   7,    NULL),
 (9, '量化部',      1, NOW(), 'ROLE_QUANT',          '量化部门',       NULL, NULL),
-(10, '风险管理部', 1, NOW(), 'ROLE_RISK',           '风险管理部门',   NULL, NULL);
+(10, '风险管理部', 1, NOW(), 'ROLE_RISK',           '风险管理部门',   NULL, NULL),
+(11, '投资决策委员会', 1, NOW(), 'ROLE_INVEST_COMMITTEE', '审批流程演示角色', NULL, NULL),
+(12, '研究总监', 1, NOW(), 'ROLE_RESEARCH_DIRECTOR', '审批流程演示角色', NULL, NULL),
+(13, '基金经理', 1, NOW(), 'ROLE_FUND_MANAGER', '审批流程演示角色', NULL, NULL),
+(14, 'O32系统自动审批', 1, NOW(), 'ROLE_O32', '审批流程演示角色', NULL, NULL),
+(15, '管理员', 1, NOW(), 'ROLE_ADMIN', '系统管理员角色', NULL, NULL);
 
 -- 用户
 INSERT INTO `t_sys_user` (
@@ -262,4 +267,8 @@ INSERT INTO `t_sys_user_role` (
 (18, 8,  13, NOW()),
 (19, 9,  14, NOW()),
 (20, 9,  15, NOW()),
-(21, 10, 16, NOW());
+(21, 10, 16, NOW()),
+(22, 11, 16, NOW()),
+(23, 12, 4, NOW()),
+(24, 13, 7, NOW()),
+(25, 15, 1, NOW());

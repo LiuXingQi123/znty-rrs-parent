@@ -3,6 +3,19 @@
 <mapper namespace="com.znty.rrs.mapper.CrmwPoolAdjustMapper">
     <!-- CRMW池调整 mapper，对应表：rrs_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status_crmw（CRMW池状态）、ip_pool_status（通用池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
 
+    <!-- 历史凭证展示使用业务快照，不随当前主档市场码变化。 -->
+    <select id="queryCrmwSnapshotDetailByAdjustLogId" resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto">
+        SELECT crmw_name AS short_name
+               ,crmw_isin_code AS isin_code
+               ,crmw_scode AS wind_code_nib
+               ,crmw_stype AS security_type
+        FROM ip_adjust_security_snapshot_crmw
+        WHERE adjust_log_id = #{adjustLogId}
+          AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
     <!-- 分页查询 CRMW 凭证列表 -->
     <select id="queryCrmwPage" resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDto">
         SELECT si.*
@@ -12,8 +25,12 @@
         <where>
             AND si.security_type = 'crmw'
             AND si.security_status != 'D'
-            <if test="securityCode != null and securityCode != ''">
-                AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
+            <if test="securityKeyword != null and securityKeyword != ''">
+                AND (si.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')
@@ -23,7 +40,7 @@
             </if>
         </where>
         ORDER BY si.ts DESC
-                 ,si.wind_code DESC
+                 ,si.isin_code DESC
     </select>
 
     <!-- 分页查询可绑定债券列表 -->
@@ -37,8 +54,12 @@
         <where>
             AND si.security_type != 'crmw'
             AND si.security_status != 'D'
-            <if test="securityCode != null and securityCode != ''">
-                AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
+            <if test="securityKeyword != null and securityKeyword != ''">
+                AND (si.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
+                     OR si.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')
@@ -66,7 +87,7 @@
             </if>
         </where>
         ORDER BY si.ts DESC
-                 ,si.wind_code DESC
+                 ,si.isin_code DESC
     </select>
 
     <!-- 查询证券详情 -->
@@ -75,22 +96,28 @@
                ,dst.security_type_name
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
-        WHERE si.wind_code = #{securityCode}
+        WHERE si.isin_code = #{isinCode}
     </select>
 
     <!-- 根据证券代码查询证券基础信息实体 -->
     <select id="querySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT *
         FROM rrs_securityinfo
-        WHERE wind_code = #{securityCode}
+        WHERE isin_code = #{isinCode}
     </select>
 
     <!-- 新增调库记录 -->
     <insert id="addAdjustLog" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO ip_adjust_log (security_code
+        INSERT INTO ip_adjust_log (isin_code
+                                  ,wind_code_sh
+                                  ,wind_code_sz
+                                  ,wind_code_nib
+                                  ,wind_code_bj
+                                  ,wind_code_nbc
                                   ,security_short_name
                                   ,security_type
                                   ,crmw_name
+                                  ,crmw_isin_code
                                   ,crmw_scode
                                   ,crmw_stype
                                   ,adjust_type
@@ -111,10 +138,16 @@
                                   ,is_deleted
                                   ,crte_time
                                   ,updt_time)
-        VALUES (#{securityCode}
+        VALUES (#{isinCode}
+               ,#{windCodeSh}
+               ,#{windCodeSz}
+               ,#{windCodeNib}
+               ,#{windCodeBj}
+               ,#{windCodeNbc}
                ,#{securityShortName}
                ,#{securityType}
                ,#{crmwName}
+               ,#{crmwIsinCode}
                ,#{crmwScode}
                ,#{crmwStype}
                ,#{adjustType}
@@ -148,8 +181,8 @@
         FROM ip_pool_status_crmw ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        WHERE ips.security_code = #{securityCode}
-          AND ips.crmw_scode = #{crmwScode}
+        WHERE ips.isin_code = #{isinCode}
+          AND ips.crmw_isin_code = #{crmwIsinCode}
           AND ips.crmw_stype = #{crmwStype}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -169,13 +202,13 @@
                ,ips.pool_type
                ,MAX(ips.adjust_batch_no) AS adjustBatchNo
                ,DATE_FORMAT(MIN(ips.entry_time), '%Y-%m-%d') AS entryDate
-               ,COUNT(DISTINCT ips.security_code) AS bondCount
+               ,COUNT(DISTINCT ips.isin_code) AS bondCount
         FROM ip_pool_status_crmw ips
-        INNER JOIN rrs_securityinfo sb ON ips.security_code = sb.wind_code
+        INNER JOIN rrs_securityinfo sb ON ips.isin_code = sb.isin_code
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
         WHERE sb.issuer_code = (
-            SELECT issuer_code FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1
+            SELECT issuer_code FROM rrs_securityinfo WHERE isin_code = #{isinCode} LIMIT 1
         )
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -195,10 +228,11 @@
     <!-- CRMW 调库记录列表：固定按标的证券和凭证组合键查询全部历史；批次仅用于流程定位。 -->
     <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
-               ,al.security_code
+               ,al.isin_code
                ,al.security_short_name
                ,al.security_type
                ,al.crmw_name
+               ,al.crmw_isin_code
                ,al.crmw_scode
                ,al.crmw_mktcode
                ,al.crmw_stype
@@ -222,8 +256,8 @@
                ,al.entry_time
         FROM ip_adjust_log al
         LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
-        WHERE al.security_code = #{securityCode}
-          AND al.crmw_scode = #{crmwScode}
+        WHERE al.isin_code = #{isinCode}
+          AND al.crmw_isin_code = #{crmwIsinCode}
           AND al.crmw_stype = #{crmwStype}
           AND al.is_deleted = 0
           AND al.pool_type = 'crmw'
@@ -245,8 +279,8 @@
     <select id="querySecurityCurrentPoolIdList" resultType="java.lang.Long">
         SELECT DISTINCT target_pool_id
         FROM ip_pool_status_crmw
-        WHERE security_code = #{securityCode}
-          AND crmw_scode = #{crmwScode}
+        WHERE isin_code = #{isinCode}
+          AND crmw_isin_code = #{crmwIsinCode}
           AND crmw_stype = #{crmwStype}
           AND audit_status = '20'
           AND is_deleted = 0
@@ -255,11 +289,11 @@
 
     <!-- 查询操作人近期有效的手工 CRMW 调库记录 -->
     <select id="queryRecentManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
-        SELECT id, security_code, crmw_scode, adjust_type, adjust_mode, adjust_batch_no, target_pool_id,
+        SELECT id, isin_code, crmw_isin_code, adjust_type, adjust_mode, adjust_batch_no, target_pool_id,
                flow_id, flow_key, audit_status, adjuster_id, adjust_reason, adjust_advice, submit_time
         FROM ip_adjust_log
-        WHERE security_code = #{securityCode}
-          AND crmw_scode = #{crmwScode}
+        WHERE isin_code = #{isinCode}
+          AND crmw_isin_code = #{crmwIsinCode}
           AND crmw_stype = #{crmwStype}
           AND adjuster_id = #{adjusterId}
           AND adjust_type = '手工调整'
@@ -275,8 +309,8 @@
         FROM ip_adjust_log manual_log
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = manual_log.adjust_batch_no
         INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual_log.adjust_batch_no
-        WHERE manual_log.security_code = #{securityCode}
-          AND manual_log.crmw_scode = #{crmwScode}
+        WHERE manual_log.isin_code = #{isinCode}
+          AND manual_log.crmw_isin_code = #{crmwIsinCode}
           AND manual_log.crmw_stype = #{crmwStype}
           AND manual_log.adjust_type = '手工调整'
           AND manual_log.audit_status IN ('00', '11')
@@ -304,8 +338,8 @@
         SELECT COALESCE(ips.entry_time, al.audit_time, ips.crte_time)
         FROM ip_pool_status_crmw ips
         INNER JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
-        WHERE ips.security_code = #{securityCode}
-          AND ips.crmw_scode = #{crmwScode}
+        WHERE ips.isin_code = #{isinCode}
+          AND ips.crmw_isin_code = #{crmwIsinCode}
           AND ips.crmw_stype = #{crmwStype}
           AND ips.target_pool_id = #{targetPoolId}
           AND ips.audit_status = '20'
@@ -329,7 +363,7 @@
         SELECT COUNT(1) > 0
         FROM ip_adjust_log al
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
-        WHERE al.security_code = #{securityCode}
+        WHERE al.isin_code = #{isinCode}
           AND al.pool_type = 'crmw'
           AND al.is_deleted = 0
           AND s.step_status = 'pending'
@@ -340,7 +374,7 @@
         SELECT s.node_label
         FROM ip_adjust_log al
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
-        WHERE al.security_code = #{securityCode}
+        WHERE al.isin_code = #{isinCode}
           AND al.pool_type = 'crmw'
           AND al.is_deleted = 0
           AND s.step_status = 'pending'
@@ -357,7 +391,7 @@
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        WHERE ips.security_code = #{securityCode}
+        WHERE ips.isin_code = #{isinCode}
           AND p.pool_type = 'observe'
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -369,7 +403,7 @@
         FROM ip_pool_status ips
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
-        WHERE ips.security_code = #{securityCode}
+        WHERE ips.isin_code = #{isinCode}
           AND p.pool_type IN ('forbidden')
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -384,7 +418,7 @@
         WHERE ips.security_code = (
             SELECT si.issuer_code
             FROM rrs_securityinfo si
-            WHERE si.wind_code = #{securityCode}
+            WHERE si.isin_code = #{isinCode}
               AND si.issuer_code IS NOT NULL
               AND si.issuer_code != ''
             LIMIT 1
@@ -398,11 +432,11 @@
     <select id="queryIssuerTargetPoolMaxRemainDays" resultType="java.math.BigDecimal">
         SELECT MAX(si.date_exists)
         FROM ip_pool_status_crmw ips
-        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN rrs_securityinfo si ON si.isin_code = ips.isin_code
         WHERE si.issuer_code = (
             SELECT issuer_code
             FROM rrs_securityinfo
-            WHERE wind_code = #{securityCode}
+            WHERE isin_code = #{isinCode}
             LIMIT 1
         )
           AND ips.target_pool_id = #{targetPoolId}
@@ -419,9 +453,9 @@
           AND l.adjust_mode = '调入'
           AND l.is_deleted = 0
           AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-          AND l.security_code IN (
-              SELECT si.wind_code FROM rrs_securityinfo si
-              WHERE si.issuer_code = (SELECT issuer_code FROM rrs_securityinfo WHERE wind_code = #{securityCode} LIMIT 1)
+          AND l.isin_code IN (
+              SELECT si.isin_code FROM rrs_securityinfo si
+              WHERE si.issuer_code = (SELECT issuer_code FROM rrs_securityinfo WHERE isin_code = #{isinCode} LIMIT 1)
           )
           AND EXISTS (
               SELECT 1
@@ -435,10 +469,11 @@
 
     <!-- 新增入池状态记录（直通流程：start→end 跳过审批，直接写入已生效状态） -->
     <insert id="addPoolStatus">
-        INSERT INTO ip_pool_status_crmw (security_code
+        INSERT INTO ip_pool_status_crmw (isin_code
                                   ,security_short_name
                                   ,security_type
                                   ,crmw_name
+                                  ,crmw_isin_code
                                   ,crmw_scode
                                   ,crmw_stype
                                   ,adjust_type
@@ -461,10 +496,11 @@
                                   ,is_deleted
                                   ,crte_time
                                   ,updt_time)
-        VALUES (#{securityCode}
+        VALUES (#{isinCode}
                ,#{securityShortName}
                ,#{securityType}
                ,#{crmwName}
+               ,#{crmwIsinCode}
                ,#{crmwScode}
                ,#{crmwStype}
                ,#{adjustType}
@@ -494,8 +530,8 @@
         UPDATE ip_pool_status_crmw
         SET is_deleted = 1
            ,updt_time = NOW()
-        WHERE security_code = #{securityCode}
-          AND crmw_scode = #{crmwScode}
+        WHERE isin_code = #{isinCode}
+          AND crmw_isin_code = #{crmwIsinCode}
           AND crmw_stype = #{crmwStype}
           AND target_pool_id = #{targetPoolId}
           AND audit_status = '20'
@@ -506,15 +542,9 @@
     <!-- 更新调库详情页传入的证券基础信息字段 -->
     <update id="editSecurityInfoForAdjust">
         UPDATE rrs_securityinfo
-        SET wind_code = #{securityInfo.windCode}
-           ,full_name = #{securityInfo.fullName}
+        SET full_name = #{securityInfo.fullName}
            ,issue_announcement = #{securityInfo.issueAnnouncement}
            ,short_name = #{securityInfo.shortName}
-           ,wind_code_sh = #{securityInfo.windCodeSh}
-           ,wind_code_sz = #{securityInfo.windCodeSz}
-           ,wind_code_nib = #{securityInfo.windCodeNib}
-           ,wind_code_bj = #{securityInfo.windCodeBj}
-           ,wind_code_nbc = #{securityInfo.windCodeNbc}
            ,security_type = #{securityInfo.securityType}
            ,term_year = #{securityInfo.termYear}
            ,term_day = #{securityInfo.termDay}
@@ -596,7 +626,7 @@
            ,sec_id_nib = #{securityInfo.secIdNib}
            ,sec_id_nbc = #{securityInfo.secIdNbc}
            ,sec_id_bj = #{securityInfo.secIdBj}
-        WHERE wind_code = #{securityCode}
+        WHERE isin_code = #{isinCode}
     </update>
 
     <!-- 新增流程步骤记录 -->
@@ -801,10 +831,11 @@
     <select id="queryAdjustLogListForAudit" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT id
                ,security_code
+               ,isin_code
                ,security_short_name
                ,security_type
                ,crmw_name
-               ,crmw_scode
+               ,crmw_isin_code
                ,crmw_mktcode
                ,crmw_stype
                ,adjust_type
@@ -917,9 +948,9 @@
     <select id="queryCrmwComboInPool" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status_crmw
-        WHERE crmw_scode = #{crmwScode}
+        WHERE crmw_isin_code = #{crmwIsinCode}
           AND crmw_stype = #{crmwStype}
-          AND security_code = #{securityCode}
+          AND isin_code = #{isinCode}
           AND target_pool_id = #{targetPoolId}
           AND audit_status = '20'
           AND is_deleted = 0
@@ -942,10 +973,11 @@
            ,submitter_id
            ,submit_time
            ,crmw_name
+           ,crmw_isin_code
            ,crmw_scode
            ,crmw_mktcode
            ,crmw_stype
-           ,wind_code
+           ,isin_code
            ,full_name
            ,short_name
            ,issuer
@@ -1008,10 +1040,11 @@
            ,#{submitterId}
            ,#{submitTime}
            ,#{crmwName}
+           ,#{crmwIsinCode}
            ,#{crmwScode}
            ,#{crmwMktcode}
            ,#{crmwStype}
-           ,#{windCode}
+           ,#{isinCode}
            ,#{fullName}
            ,#{shortName}
            ,#{issuer}
@@ -1075,7 +1108,7 @@
     <!-- 按调库日志 ID 查询 CRMW 调库证券信息快照详情 -->
     <select id="querySecuritySnapshotDetailByAdjustLogId"
             resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto">
-        SELECT snap.wind_code
+        SELECT snap.isin_code
                ,snap.full_name
                ,snap.short_name
                ,snap.issuer
@@ -1131,9 +1164,9 @@
     </select>
 
     <!-- 按标的证券代码查询最新一条有效 CRMW 调库证券信息快照详情 -->
-    <select id="queryLatestSecuritySnapshotDetailByWindCode"
+    <select id="queryLatestSecuritySnapshotDetailByIsinCode"
             resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto">
-        SELECT snap.wind_code
+        SELECT snap.isin_code
                ,snap.full_name
                ,snap.short_name
                ,snap.issuer
@@ -1182,7 +1215,7 @@
                ,dst.security_type_name
         FROM ip_adjust_security_snapshot_crmw snap
         LEFT JOIN dict_security_type dst ON dst.security_type = snap.security_type AND dst.is_deleted = 0
-        WHERE snap.wind_code = #{windCode}
+        WHERE snap.isin_code = #{isinCode}
           AND IFNULL(snap.is_deleted, 0) = 0
         ORDER BY snap.submit_time DESC
                  ,snap.id DESC

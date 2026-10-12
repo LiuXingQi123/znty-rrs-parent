@@ -38,6 +38,10 @@ import java.util.Map;
 @Service
 public class CrmwExpiredAutoOutService implements RrsScheduledTask {
 
+    /** 共用证券事件代码快照 */
+    @Resource
+    private SecurityPoolAdjustService securityPoolAdjustService;
+
     /** 任务编码 */
     public static final String TASK_CODE = "crmw_expired_auto_out";
 
@@ -130,20 +134,20 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
             }
             int poolCount = 0;
             for (ScheduledAdjustCandidateDto item : expiredList) {
-                if (item == null || !StringUtils.hasText(item.getCrmwScode())) {
+                if (item == null || !StringUtils.hasText(item.getCrmwIsinCode())) {
                     continue;
                 }
                 if (AutoAdjustRestrictHelper.isInAnyPool(
                         crmwPoolAdjustMapper.querySecurityCurrentPoolIdList(
-                                item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype()),
+                                item.getObjectCode(), item.getCrmwIsinCode(), item.getCrmwStype()),
                         outRestrictPoolIds)) {
-                    warnDetail(detail, "CRMW[" + item.getCrmwScode() + "]当前在调出限制池中，跳过");
+                    warnDetail(detail, "CRMW[" + item.getCrmwIsinCode() + "]当前在调出限制池中，跳过");
                     continue;
                 }
                 int deleted = crmwPoolAdjustMapper.deletePoolStatusSoft(
-                        item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype(), poolId);
+                        item.getObjectCode(), item.getCrmwIsinCode(), item.getCrmwStype(), poolId);
                 if (deleted == 0) {
-                    warnDetail(detail, "CRMW[" + item.getCrmwScode() + "/" + item.getSecurityCode()
+                    warnDetail(detail, "CRMW[" + item.getCrmwIsinCode() + "/" + item.getObjectCode()
                             + "]软删失败（可能并发已出池），跳过");
                     continue;
                 }
@@ -161,10 +165,11 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                 item.setAdjustReason(reason);
                 // 按 CRMW 凭证和标的证券组合生成自动调库批次号
                 String batchNo = batchNoContext.resolveCrmwBatchNo(
-                        item.getCrmwScode(), item.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
+                        item.getCrmwIsinCode(), item.getObjectCode(), poolId, AdjustMode.OUT.getCode());
                 item.setAdjustBatchNo(batchNo);
                 item.setSubmitTime(submitTime);
                 crmwPoolAdjustMapper.addAdjustLog(item);
+                securityPoolAdjustService.saveEffectiveMarketSnapshot(item);
                 poolCount++;
             }
             summary.addPool(poolId, pool.getPoolName(), poolCount);

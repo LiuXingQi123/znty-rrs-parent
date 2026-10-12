@@ -1,5 +1,16 @@
 # CRMW池调整历史查询需求说明
 
+## 证券身份与市场代码（当前接口契约）
+
+- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
+- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
+- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
+- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
+- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
+- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
+- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
+
+
 > 前端页面：`crmw_pool_adjust_history.html`
 > 后端前缀：`/api/v1/crmwPoolAdjustHistory`
 > 角色定位：查询 CRMW 池调库流水（`ip_adjust_log` 以 `pool_type='crmw'` 过滤），返回**所有状态**（含 `20/21/99/-1` 终态）的调库记录，可点击跳转详情。
@@ -73,13 +84,13 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 | CRMW名称 | `crmwName` | `desc-link` 可点击 → `openCrmwAdjustDetail(row)` |
 | CRMW代码 | `crmwScode` | 同上 |
 | 证券名称 | `securityShortName` | 同上 |
-| 证券代码 | `securityCode` | 同上 |
+| 证券代码 | `isinCode` | 同上 |
 | 调整类型 | `adjustType` | `el-tag`（`adjustTypeTagType`：手工 info / 联动 warning / 互斥 danger） |
 | 调整方向 | `adjustMode` | `el-tag`（调入 success / 调出 danger） |
 | 投资池名称 | `targetPoolName` | 全路径名 |
 | 审核状态 | `auditStatus` | `el-tag`（`auditStatusType`：20/10/32→success；21/-1→danger；00/11→warning；99→info） |
 
-**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, true)`：优先 `adjustLogId`，可回退 `id`，二者同为 `ip_adjust_log.id`）/`adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含 `crmwScode` + `securityCode` + 记录 ID + 批次），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
+**跳转**：`openCrmwAdjustDetail(row)` 拼 `isinCode/crmwScode/targetPoolId/adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, true)`：优先 `adjustLogId`，可回退 `id`，二者同为 `ip_adjust_log.id`）/`adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含 `crmwScode` + `isinCode` + 记录 ID + 批次），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
 
 ---
 

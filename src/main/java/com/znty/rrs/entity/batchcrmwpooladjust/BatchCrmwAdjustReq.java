@@ -58,8 +58,12 @@ public class BatchCrmwAdjustReq {
     @Data
     public static class SecurityItem {
 
+        /** 证券身份：正式ISIN / TEMP:临时代码 */
+        private String isinCode;
+        /** 证券代码关键词，匹配五码 */
+        private String securityKeyword;
         /** 标的证券代码 */
-        private String securityCode;
+    private String securityCode;
 
         /** 标的证券简称 */
         private String securityShortName;
@@ -70,8 +74,12 @@ public class BatchCrmwAdjustReq {
         /** CRMW 凭证名称 */
         private String crmwName;
 
-        /** CRMW 凭证代码 */
-        private String crmwScode;
+        /** CRMW银行间代码关键词 */
+        private String crmwKeyword;
+        /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
+        private String crmwIsinCode;
+        /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
+    private String crmwScode;
 
         /** CRMW 证券类型 */
         private String crmwStype;
@@ -92,7 +100,10 @@ public class BatchCrmwAdjustReq {
     @Data
     public static class AdjustItem {
 
-        /** 标的证券代码 */
+        /** 证券身份：正式ISIN / TEMP:临时代码 */
+        private String isinCode;
+        /** 证券代码关键词，匹配五码 */
+        private String securityKeyword;
         private String securityCode;
 
         /** 标的证券简称 */
@@ -113,7 +124,10 @@ public class BatchCrmwAdjustReq {
         /** CRMW 凭证名称 */
         private String crmwName;
 
-        /** CRMW 凭证代码 */
+        /** CRMW银行间代码关键词 */
+        private String crmwKeyword;
+        /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
+        private String crmwIsinCode;
         private String crmwScode;
 
         /** CRMW 证券类型 */

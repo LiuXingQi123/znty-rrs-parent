@@ -77,8 +77,8 @@ public class SecurityPoolAdjustFlowServiceTest {
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         // 构建调库日志测试数据
         IpAdjustLogBo tempLog = buildLog("00");
-        tempLog.setSecurityCode("S001");
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(tempLog));
+        tempLog.setIsinCode("TEMP:S001");
+        when(mapper.queryAdjustLogListForAudit(1L, null)).thenReturn(Collections.singletonList(tempLog));
 
         service.submitAdjustAudit(req);
 
@@ -102,8 +102,8 @@ public class SecurityPoolAdjustFlowServiceTest {
         when(mapper.queryPendingStepCountByNode(1L, "BATCH001", 10103L)).thenReturn(1);
         // 构建调库日志测试数据
         IpAdjustLogBo tempLog = buildLog("00");
-        tempLog.setSecurityCode("S001");
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(tempLog));
+        tempLog.setIsinCode("S001");
+        when(mapper.queryAdjustLogListForAudit(1L, null)).thenReturn(Collections.singletonList(tempLog));
 
         service.submitAdjustAudit(req);
 
@@ -608,7 +608,7 @@ public class SecurityPoolAdjustFlowServiceTest {
 
         IpAdjustStepBo step = buildPendingStep(10L, "1", "管理员");
         IpAdjustLogBo log = buildLog(1L, "00", "1");
-        log.setSecurityCode("S001");
+        log.setIsinCode("S001");
         log.setAdjustMode("调入");
         log.setTargetPoolId(10L);
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
@@ -641,7 +641,7 @@ public class SecurityPoolAdjustFlowServiceTest {
 
         IpAdjustStepBo step = buildPendingStep(10L, "1", "管理员");
         IpAdjustLogBo log = buildLog(1L, "00", "1");
-        log.setSecurityCode("S001");
+        log.setIsinCode("S001");
         log.setAdjustMode("调入");
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
         // 改判池不在矩阵允许列表内
@@ -720,8 +720,8 @@ public class SecurityPoolAdjustFlowServiceTest {
         ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", tempMapper);
         IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
         IpAdjustLogBo tempLog = buildLog("00");
-        tempLog.setSecurityCode("S001");
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(tempLog));
+        tempLog.setIsinCode("TEMP:S001");
+        when(mapper.queryAdjustLogListForAudit(1L, null)).thenReturn(Collections.singletonList(tempLog));
         when(tempMapper.queryTemporaryCodeCountBySecurityCode("S001")).thenReturn(1);
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isTemporaryCode", step);
         assertThat(result).isTrue();
@@ -736,8 +736,8 @@ public class SecurityPoolAdjustFlowServiceTest {
         ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", tempMapper);
         IpAdjustStepBo step = buildPendingStep(10L, "3", "研究员2");
         IpAdjustLogBo tempLog = buildLog("00");
-        tempLog.setSecurityCode("S001");
-        when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(tempLog));
+        tempLog.setIsinCode("S001");
+        when(mapper.queryAdjustLogListForAudit(1L, null)).thenReturn(Collections.singletonList(tempLog));
         when(tempMapper.queryTemporaryCodeCountBySecurityCode("S001")).thenReturn(0);
         Boolean result = ReflectionTestUtils.invokeMethod(service, "isTemporaryCode", step);
         assertThat(result).isFalse();

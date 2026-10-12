@@ -11,9 +11,15 @@
                ,al.adjuster_name
                ,al.submit_time
                ,al.crmw_name
+               ,al.crmw_isin_code
                ,al.crmw_scode
                ,al.security_short_name
-               ,al.security_code
+               ,al.isin_code
+               ,al.wind_code_sh
+               ,al.wind_code_sz
+               ,al.wind_code_nib
+               ,al.wind_code_bj
+               ,al.wind_code_nbc
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
@@ -25,8 +31,8 @@
         <where>
             al.is_deleted = 0
             AND al.pool_type = 'crmw'
-            <if test="crmwScode != null and crmwScode != ''">
-                AND al.crmw_scode LIKE CONCAT('%', #{crmwScode}, '%')
+            <if test="crmwKeyword != null and crmwKeyword != ''">
+                AND al.crmw_scode LIKE CONCAT('%', #{crmwKeyword}, '%')
             </if>
             <if test="crmwName != null and crmwName != ''">
                 AND al.crmw_name LIKE CONCAT('%', #{crmwName}, '%')

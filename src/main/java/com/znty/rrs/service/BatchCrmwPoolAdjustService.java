@@ -253,11 +253,11 @@ public class BatchCrmwPoolAdjustService {
         List<IpAdjustLogBo> logs = new ArrayList<>();
         for (BatchCrmwAdjustReq.AdjustItem item : req.getItems()) {
             IpAdjustLogBo log = new IpAdjustLogBo();
-            log.setSecurityCode(item.getSecurityCode());
+            log.setIsinCode(item.getIsinCode());
             log.setSecurityShortName(item.getSecurityShortName());
             log.setSecurityType(item.getSecurityType());
             log.setCrmwName(item.getCrmwName());
-            log.setCrmwScode(item.getCrmwScode());
+            log.setCrmwIsinCode(item.getCrmwIsinCode());
             log.setCrmwStype(resolveCrmwStype(item.getCrmwStype()));
             log.setAdjustMode(item.getAdjustMode());
             log.setTargetPoolId(item.getTargetPoolId());
@@ -290,14 +290,14 @@ public class BatchCrmwPoolAdjustService {
 
     /** 构造批量请求手工项防重复比较键。 */
     private String buildBatchDuplicateItemKey(BatchCrmwAdjustReq.AdjustItem item) {
-        return resolveCrmwScode(item.getCrmwScode()) + "|" + item.getSecurityCode() + "|"
+        return resolveCrmwScode(item.getCrmwIsinCode()) + "|" + item.getIsinCode() + "|"
                 + item.getTargetPoolId() + "|" + item.getAdjustMode()
                 + "|" + item.getFlowId() + "|" + normalizeDuplicateText(item.getFlowKey());
     }
 
     /** 构造历史批量手工日志防重复比较键。 */
     private String buildBatchDuplicateItemKey(IpAdjustLogBo log) {
-        return resolveCrmwScode(log.getCrmwScode()) + "|" + log.getSecurityCode() + "|"
+        return resolveCrmwScode(log.getCrmwIsinCode()) + "|" + log.getIsinCode() + "|"
                 + log.getTargetPoolId() + "|" + log.getAdjustMode()
                 + "|" + log.getFlowId() + "|" + normalizeDuplicateText(log.getFlowKey());
     }
@@ -341,10 +341,10 @@ public class BatchCrmwPoolAdjustService {
             throw new BizException("目标投资池不存在、未启用、不是叶子池或不是 CRMW 池");
         }
         for (BatchCrmwAdjustReq.SecurityItem security : req.getSecurities()) {
-            if (security.getSecurityCode() == null || security.getSecurityCode().isEmpty()) {
+            if (security.getIsinCode() == null || security.getIsinCode().isEmpty()) {
                 throw new BizException("已选证券代码不能为空");
             }
-            if (security.getCrmwScode() == null || security.getCrmwScode().isEmpty()) {
+            if (security.getCrmwIsinCode() == null || security.getCrmwIsinCode().isEmpty()) {
                 throw new BizException("已选 CRMW 凭证代码不能为空");
             }
         }
@@ -374,10 +374,10 @@ public class BatchCrmwPoolAdjustService {
         // 解析批量调库中文方向
         String adjustMode = resolveAdjustMode(req);
         for (BatchCrmwAdjustReq.AdjustItem item : req.getItems()) {
-            if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
+            if (item.getIsinCode() == null || item.getIsinCode().isEmpty()) {
                 throw new BizException("调库明细证券代码不能为空");
             }
-            if (item.getCrmwScode() == null || item.getCrmwScode().isEmpty()) {
+            if (item.getCrmwIsinCode() == null || item.getCrmwIsinCode().isEmpty()) {
                 throw new BizException("调库明细 CRMW 凭证代码不能为空");
             }
             if (!AdjustMode.IN.getCode().equals(item.getAdjustMode()) && !AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
@@ -442,11 +442,11 @@ public class BatchCrmwPoolAdjustService {
         item.setAdjustMode(resolveAdjustMode(req));
 
         AdjustCheckReq checkReq = new AdjustCheckReq();
-        checkReq.setSecurityCode(security.getSecurityCode());
+        checkReq.setIsinCode(security.getIsinCode());
         checkReq.setSecurityShortName(security.getSecurityShortName());
         checkReq.setSecurityType(security.getSecurityType());
         checkReq.setCrmwName(security.getCrmwName());
-        checkReq.setCrmwScode(security.getCrmwScode());
+        checkReq.setCrmwIsinCode(security.getCrmwIsinCode());
         checkReq.setCrmwStype(resolveCrmwStype(security.getCrmwStype()));
         checkReq.setGuarantorCode(security.getGuarantorCode());
         checkReq.setRightsHolderCode(security.getRightsHolderCode());
@@ -466,14 +466,14 @@ public class BatchCrmwPoolAdjustService {
             AdjustCheckDto.CheckResultItem item) {
         BatchCrmwAdjustDto.CheckResultItem result = new BatchCrmwAdjustDto.CheckResultItem();
         // 关联扩批项优先用单笔结果中的代码，主项回退选中组合
-        String securityCode = item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()
-                ? item.getSecurityCode() : security.getSecurityCode();
+        String securityCode = item.getIsinCode() != null && !item.getIsinCode().isEmpty()
+                ? item.getIsinCode() : security.getIsinCode();
         String securityShortName = item.getSecurityShortName() != null && !item.getSecurityShortName().isEmpty()
                 ? item.getSecurityShortName() : security.getSecurityShortName();
         String securityType = item.getSecurityType() != null && !item.getSecurityType().isEmpty()
                 ? item.getSecurityType() : security.getSecurityType();
-        String crmwScode = item.getCrmwScode() != null && !item.getCrmwScode().isEmpty()
-                ? item.getCrmwScode() : security.getCrmwScode();
+        String crmwScode = item.getCrmwIsinCode() != null && !item.getCrmwIsinCode().isEmpty()
+                ? item.getCrmwIsinCode() : security.getCrmwIsinCode();
         String crmwName = item.getCrmwName() != null && !item.getCrmwName().isEmpty()
                 ? item.getCrmwName() : security.getCrmwName();
         String crmwStype = item.getCrmwStype() != null && !item.getCrmwStype().isEmpty()
@@ -481,11 +481,18 @@ public class BatchCrmwPoolAdjustService {
         String sourceSecurityCode = item.getSourceSecurityCode() != null && !item.getSourceSecurityCode().isEmpty()
                 ? item.getSourceSecurityCode()
                 : buildCombinationKey(crmwScode, securityCode);
-        result.setSecurityCode(securityCode);
+        result.setIsinCode(securityCode);
+        result.setWindCodeSh(item.getWindCodeSh());
+        result.setWindCodeSz(item.getWindCodeSz());
+        result.setWindCodeNib(item.getWindCodeNib());
+        result.setWindCodeBj(item.getWindCodeBj());
+        result.setWindCodeNbc(item.getWindCodeNbc());
+        result.setSecuritySource(item.getSecuritySource());
         result.setSecurityShortName(securityShortName);
         result.setSecurityType(securityType);
         result.setCrmwName(crmwName);
-        result.setCrmwScode(crmwScode);
+        result.setCrmwIsinCode(crmwScode);
+        result.setCrmwScode(item.getCrmwScode());
         result.setCrmwStype(resolveCrmwStype(crmwStype));
         result.setSourceSecurityCode(sourceSecurityCode);
         result.setTargetPoolId(item.getTargetPoolId());
@@ -513,11 +520,11 @@ public class BatchCrmwPoolAdjustService {
         // 请求级组合取触发主项（manual 项优先）
         BatchCrmwAdjustReq.AdjustItem primary = resolveBatchPrimaryItem(items);
         CrmwPoolAdjustSubmitReq submitReq = new CrmwPoolAdjustSubmitReq();
-        submitReq.setSecurityCode(primary.getSecurityCode());
+        submitReq.setIsinCode(primary.getIsinCode());
         submitReq.setSecurityShortName(primary.getSecurityShortName());
         submitReq.setSecurityType(primary.getSecurityType());
         submitReq.setCrmwName(primary.getCrmwName());
-        submitReq.setCrmwScode(primary.getCrmwScode());
+        submitReq.setCrmwIsinCode(primary.getCrmwIsinCode());
         submitReq.setCrmwStype(resolveCrmwStype(primary.getCrmwStype()));
         submitReq.setGuarantorCode(primary.getGuarantorCode());
         submitReq.setRightsHolderCode(primary.getRightsHolderCode());
@@ -584,7 +591,7 @@ public class BatchCrmwPoolAdjustService {
         if (item.getSourceSecurityCode() != null && !item.getSourceSecurityCode().isEmpty()) {
             return item.getSourceSecurityCode();
         }
-        return buildCombinationKey(item.getCrmwScode(), item.getSecurityCode());
+        return buildCombinationKey(item.getCrmwIsinCode(), item.getIsinCode());
     }
 
     /**

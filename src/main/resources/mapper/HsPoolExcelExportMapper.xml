@@ -42,126 +42,61 @@
         ORDER BY p.id ASC
     </select>
 
-    <!-- 合并普通池状态与独立 CRMW 状态：普通证券按任务参数决定是否排除已到期数据，CRMW 按老系统口径不校验到期日 -->
+    <!-- 正式证券按全部有值市场码展开；CRMW凭证仅银行间。 -->
     <select id="queryFullExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
-        SELECT export_row.securityShortName
-               ,export_row.wind_code_sh
-               ,export_row.wind_code_sz
-               ,export_row.wind_code_nib
-               ,export_row.wind_code_bj
-               ,export_row.wind_code_nbc
-               ,export_row.operationType
-        FROM (
-            <!-- 普通证券当前状态：排除主体；含 ip_pool_status 中的 crmw 凭证跟债记录 -->
-            SELECT si.short_name AS securityShortName
-                   ,si.wind_code_sh
-                   ,si.wind_code_sz
-                   ,si.wind_code_nib
-                   ,si.wind_code_bj
-                   ,si.wind_code_nbc
-                   ,'' AS operationType
-            FROM ip_pool_status ips
-            INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
-            INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
-                                                 AND dst.is_deleted = 0
-            WHERE ips.target_pool_id = #{poolId}
-              AND ips.is_deleted = 0
-              AND ips.audit_status = '20'
-              AND dst.category_type != 'company'
-              <if test="!includeExpired">
-                  AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
-              </if>
-            UNION ALL
-            <!-- CRMW 当前状态：导出凭证本身，主数据缺失时使用状态表凭证代码和名称兜底 -->
-            SELECT COALESCE(crmw_si.short_name, ips.crmw_name) AS securityShortName
-                   ,crmw_si.wind_code_sh
-                   ,crmw_si.wind_code_sz
-                   ,CASE
-                        WHEN crmw_si.wind_code_sh IS NULL
-                             AND crmw_si.wind_code_sz IS NULL
-                             AND crmw_si.wind_code_nib IS NULL
-                             AND crmw_si.wind_code_bj IS NULL
-                             AND crmw_si.wind_code_nbc IS NULL
-                            THEN ips.crmw_scode
-                        ELSE crmw_si.wind_code_nib
-                    END AS wind_code_nib
-                   ,crmw_si.wind_code_bj
-                   ,crmw_si.wind_code_nbc
-                   ,'' AS operationType
-            FROM ip_pool_status_crmw ips
-            LEFT JOIN rrs_securityinfo crmw_si ON crmw_si.wind_code = ips.crmw_scode
-            WHERE ips.target_pool_id = #{poolId}
-              AND ips.is_deleted = 0
-              AND ips.audit_status = '20'
-        ) export_row
-        ORDER BY export_row.securityShortName ASC
+        SELECT si.short_name AS securityShortName
+               ,si.wind_code_sh
+               ,si.wind_code_sz
+               ,si.wind_code_nib
+               ,si.wind_code_bj
+               ,si.wind_code_nbc
+               ,'' AS operationType
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo si ON si.isin_code = ips.isin_code
+        WHERE ips.target_pool_id = #{poolId} AND ips.is_deleted = 0 AND ips.audit_status = '20'
+          AND si.isin_code NOT LIKE 'TEMP:%'
+        <if test="!includeExpired">
+            AND (si.maturity_date IS NULL OR TRIM(si.maturity_date) = '' OR si.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
+        </if>
+        UNION ALL
+        SELECT si.short_name AS securityShortName
+               ,NULL AS wind_code_sh
+               ,NULL AS wind_code_sz
+               ,si.wind_code_nib
+               ,NULL AS wind_code_bj
+               ,NULL AS wind_code_nbc
+               ,'' AS operationType
+        FROM ip_pool_status_crmw ips
+        INNER JOIN rrs_securityinfo si ON si.isin_code = ips.crmw_isin_code
+        WHERE ips.target_pool_id = #{poolId} AND ips.is_deleted = 0 AND ips.audit_status = '20'
+          AND si.isin_code NOT LIKE 'TEMP:%' AND si.security_type = 'crmw'
     </select>
 
-    <!-- 合并普通调库日志与 CRMW 调库日志，查询时间窗口内审批通过的调入、调出事件 -->
+    <!-- 删除使用原入库生效事件快照，不能使用当前主档代码或将ISIN误当市场码。 -->
     <select id="queryIncrementExportRowList" resultType="com.znty.rrs.entity.schedule.HsPoolExportRowDto">
-        SELECT export_row.securityShortName
-               ,export_row.wind_code_sh
-               ,export_row.wind_code_sz
-               ,export_row.wind_code_nib
-               ,export_row.wind_code_bj
-               ,export_row.wind_code_nbc
-               ,export_row.operationType
-        FROM (
-            <!-- 普通证券增量：含 ip_pool_status 中 crmw 跟债日志；不校验当前仍在池，调出事件保留为删除记录 -->
-            SELECT COALESCE(si.short_name, al.security_short_name) AS securityShortName
-                   ,si.wind_code_sh
-                   ,si.wind_code_sz
-                   ,CASE
-                        WHEN si.wind_code_sh IS NULL
-                             AND si.wind_code_sz IS NULL
-                             AND si.wind_code_nib IS NULL
-                             AND si.wind_code_bj IS NULL
-                             AND si.wind_code_nbc IS NULL
-                            THEN al.security_code
-                        ELSE si.wind_code_nib
-                    END AS wind_code_nib
-                   ,si.wind_code_bj
-                   ,si.wind_code_nbc
-                   ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
-            FROM ip_adjust_log al
-            LEFT JOIN rrs_securityinfo si ON si.wind_code = al.security_code
-            INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
-                                                 AND dst.is_deleted = 0
-            WHERE al.target_pool_id = #{poolId}
-              AND al.is_deleted = 0
-              AND al.audit_status = '20'
-              AND al.adjust_mode IN ('调入', '调出')
-              AND al.audit_time &gt; #{startTime}
-              AND al.audit_time &lt;= #{endTime}
-              AND dst.category_type != 'company'
-            UNION ALL
-            <!-- CRMW 增量：同一调库日志按凭证信息生成调入或删除记录 -->
-            SELECT COALESCE(crmw_si.short_name, al.crmw_name) AS securityShortName
-                   ,crmw_si.wind_code_sh
-                   ,crmw_si.wind_code_sz
-                   ,CASE
-                        WHEN crmw_si.wind_code_sh IS NULL
-                             AND crmw_si.wind_code_sz IS NULL
-                             AND crmw_si.wind_code_nib IS NULL
-                             AND crmw_si.wind_code_bj IS NULL
-                             AND crmw_si.wind_code_nbc IS NULL
-                            THEN al.crmw_scode
-                        ELSE crmw_si.wind_code_nib
-                    END AS wind_code_nib
-                   ,crmw_si.wind_code_bj
-                   ,crmw_si.wind_code_nbc
-                   ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
-            FROM ip_adjust_log al
-            LEFT JOIN rrs_securityinfo crmw_si ON crmw_si.wind_code = al.crmw_scode
-            WHERE al.target_pool_id = #{poolId}
-              AND al.is_deleted = 0
-              AND al.audit_status = '20'
-              AND al.adjust_mode IN ('调入', '调出')
-              AND al.audit_time &gt; #{startTime}
-              AND al.audit_time &lt;= #{endTime}
-              AND al.crmw_scode IS NOT NULL
-              AND TRIM(al.crmw_scode) != ''
-        ) export_row
-        ORDER BY export_row.securityShortName ASC
+        SELECT al.security_short_name AS securityShortName
+               ,al.wind_code_sh
+               ,al.wind_code_sz
+               ,al.wind_code_nib
+               ,al.wind_code_bj
+               ,al.wind_code_nbc
+               ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
+        FROM ip_adjust_log al
+        WHERE al.target_pool_id = #{poolId} AND al.is_deleted = 0 AND al.audit_status = '20'
+          AND al.adjust_mode IN ('调入', '调出') AND al.audit_time &gt; #{startTime} AND al.audit_time &lt;= #{endTime}
+          AND al.isin_code IS NOT NULL AND al.isin_code NOT LIKE 'TEMP:%'
+          AND (al.pool_type IS NULL OR al.pool_type != 'crmw')
+        UNION ALL
+        SELECT al.crmw_name AS securityShortName
+               ,NULL AS wind_code_sh
+               ,NULL AS wind_code_sz
+               ,al.crmw_scode AS wind_code_nib
+               ,NULL AS wind_code_bj
+               ,NULL AS wind_code_nbc
+               ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
+        FROM ip_adjust_log al
+        WHERE al.target_pool_id = #{poolId} AND al.is_deleted = 0 AND al.audit_status = '20'
+          AND al.adjust_mode IN ('调入', '调出') AND al.audit_time &gt; #{startTime} AND al.audit_time &lt;= #{endTime}
+          AND al.crmw_isin_code IS NOT NULL AND al.crmw_isin_code NOT LIKE 'TEMP:%'
     </select>
 </mapper>

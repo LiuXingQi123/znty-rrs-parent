@@ -29,8 +29,18 @@ import java.util.List;
 @Mapper
 public interface SecurityPoolAdjustMapper {
 
+    /** 生效事件使用当时代码，出库使用原入库事件代码 */
+    IpAdjustLogBo queryEffectiveMarketSnapshot(IpAdjustLogBo log);
+
+    /** 写入生效事件代码快照 */
+    int editEffectiveMarketSnapshot(IpAdjustLogBo log);
+
+
+    /** 精确解析任一市场代码，返回全部匹配以拒绝歧义 */
+    List<SecurityInfoBo> querySecurityByMarketCodeList(@Param("marketCode") String marketCode);
+
     /** 分页查询证券列表 */
-    List<SecurityInfoDto> querySecurityPage(@Param("securityCode") String securityCode,
+    List<SecurityInfoDto> querySecurityPage(@Param("securityKeyword") String securityKeyword,
                                            @Param("securityShortName") String securityShortName,
                                            @Param("securityType") String securityType,
                                            @Param("issuer") String issuer,
@@ -40,17 +50,17 @@ public interface SecurityPoolAdjustMapper {
     List<SecurityTypeOptionDto> querySecurityTypeList();
 
     /** 根据证券代码查询证券详情 */
-    SecurityInfoDetailDto querySecurityDetail(@Param("securityCode") String securityCode);
+    SecurityInfoDetailDto querySecurityDetail(@Param("isinCode") String isinCode);
 
     /** 查询证券发行主体的最新财报日期 */
-    Long queryLatestIssuerFinancialReportDate(@Param("securityCode") String securityCode);
+    Long queryLatestIssuerFinancialReportDate(@Param("isinCode") String isinCode);
 
     /** 精确查询指定的四期财报，不以其他报告替代缺失记录 */
-    List<IssuerFinancialDto> queryIssuerFinancialList(@Param("securityCode") String securityCode,
+    List<IssuerFinancialDto> queryIssuerFinancialList(@Param("isinCode") String isinCode,
                                                      @Param("reportDates") List<Long> reportDates);
 
     /** 查询证券发行主体指定报告日期的财务指标 */
-    IssuerFinancialDto queryIssuerFinancialByReportDate(@Param("securityCode") String securityCode,
+    IssuerFinancialDto queryIssuerFinancialByReportDate(@Param("isinCode") String isinCode,
                                                         @Param("reportDate") Long reportDate);
 
     /** 按报告期新增或覆盖完整财务指标 */
@@ -58,11 +68,11 @@ public interface SecurityPoolAdjustMapper {
                             @Param("financial") IssuerFinancialDto financial);
 
     /** 根据证券代码查询证券基础信息实体 */
-    SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
+    SecurityInfoBo querySecurityBoByCode(@Param("isinCode") String isinCode);
 
     /** 查询证券池调库页面担保人、权益人下拉共用的四类关系主体候选 */
     List<RelatedRatingCompanyDto> queryRelatedRatingCompanyList(
-            @Param("securityCode") String securityCode);
+            @Param("isinCode") String isinCode);
 
     /** 分页查询全市场自选权益人候选 */
     List<SelfSelectedRightsHolderDto> querySelfSelectedRightsHolderPage(
@@ -80,18 +90,18 @@ public interface SecurityPoolAdjustMapper {
     int addPoolStatus(IpAdjustLogBo bo);
 
     /** 软删除入池状态（直通调出流程，将目标池中有效记录标记为已删除） */
-    int deletePoolStatusSoft(@Param("securityCode") String securityCode,
+    int deletePoolStatusSoft(@Param("isinCode") String isinCode,
                              @Param("targetPoolId") Long targetPoolId);
 
     /** 更新调库详情页传入的证券基础信息字段 */
     int editSecurityInfoForAdjust(SecurityPoolAdjustSubmitReq req);
 
     /** 根据证券代码和可选目标池查询调库记录列表 */
-    List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
+    List<IpAdjustLogBo> queryAdjustLogList(@Param("isinCode") String isinCode,
                                            @Param("adjustBatchNo") String adjustBatchNo);
 
     /** 查询操作人近期有效的手工调库记录，用于防止短时间重复提交 */
-    List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("securityCode") String securityCode,
+    List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("isinCode") String isinCode,
                                                        @Param("adjusterId") String adjusterId,
                                                        @Param("seconds") int seconds);
 
@@ -100,27 +110,27 @@ public interface SecurityPoolAdjustMapper {
                                                             @Param("seconds") int seconds);
 
     /** 查询证券活动流程涉及的手工调库目标池 ID */
-    List<Long> queryPendingManualTargetPoolIdList(@Param("securityCode") String securityCode,
+    List<Long> queryPendingManualTargetPoolIdList(@Param("isinCode") String isinCode,
                                                   @Param("excludeBatchNo") String excludeBatchNo);
 
     /** 查询当前证券所在池列表 */
-    List<PoolStatusDto> querySecurityPoolStatusList(@Param("securityCode") String securityCode);
+    List<PoolStatusDto> querySecurityPoolStatusList(@Param("isinCode") String isinCode);
 
     /** 查询当前证券主体（发行人）所在池列表 */
-    List<PoolStatusDto> queryIssuerPoolStatusList(@Param("securityCode") String securityCode);
+    List<PoolStatusDto> queryIssuerPoolStatusList(@Param("isinCode") String isinCode);
 
     /** 查询证券当前有效所在池 ID 列表（audit_status=20） */
-    List<Long> querySecurityCurrentPoolIdList(@Param("securityCode") String securityCode);
+    List<Long> querySecurityCurrentPoolIdList(@Param("isinCode") String isinCode);
 
     /** 查询目标投资池当前有效证券数量 */
     int queryPoolCurrentCount(@Param("poolId") Long poolId);
 
     /** 查询证券在目标池的入池时间（audit_status=20），用于调出冻结期校验 */
-    Date queryPoolEntryTime(@Param("securityCode") String securityCode,
+    Date queryPoolEntryTime(@Param("isinCode") String isinCode,
                                       @Param("targetPoolId") Long targetPoolId);
 
     /** 查询证券是否在全局禁投池（forbidden，audit_status=20），用于调入禁投池校验 */
-    boolean querySecurityInForbiddenPool(@Param("securityCode") String securityCode);
+    boolean querySecurityInForbiddenPool(@Param("isinCode") String isinCode);
 
     /** 查询指定日期是否在目标池的开放区间内（ip_pool_open_day，open_day_adjust=1 时用） */
     boolean queryPoolInOpenDay(@Param("poolId") Long poolId, @Param("today") String today);
@@ -132,41 +142,41 @@ public interface SecurityPoolAdjustMapper {
     List<PoolRelationBo> queryAllPoolRelationList();
 
     /** 查询证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
-    boolean querySecurityHasPendingProcess(@Param("securityCode") String securityCode);
+    boolean querySecurityHasPendingProcess(@Param("isinCode") String isinCode);
 
     /** 查询证券当前进行中流程所在步骤名称 */
-    String querySecurityPendingProcessNodeLabel(@Param("securityCode") String securityCode);
+    String querySecurityPendingProcessNodeLabel(@Param("isinCode") String isinCode);
 
     /** 查询当前证券是否在观察池（pool_type='observe'，audit_status='20'） */
-    boolean querySecurityInObservePool(@Param("securityCode") String securityCode);
+    boolean querySecurityInObservePool(@Param("isinCode") String isinCode);
 
     /** 查询证券发行主体是否在观察池（主体级 ip_pool_status.security_code = issuer_code） */
-    boolean queryIssuerInObservePool(@Param("securityCode") String securityCode);
+    boolean queryIssuerInObservePool(@Param("isinCode") String isinCode);
 
     /** 查询当前证券是否在重点观察名单（pool_type='restricted'，audit_status='20'） */
-    boolean querySecurityInRestrictedPool(@Param("securityCode") String securityCode);
+    boolean querySecurityInRestrictedPool(@Param("isinCode") String isinCode);
 
     /** 查询证券发行主体是否在重点观察名单（主体级 ip_pool_status.security_code = issuer_code） */
-    boolean queryIssuerInRestrictedPool(@Param("securityCode") String securityCode);
+    boolean queryIssuerInRestrictedPool(@Param("isinCode") String isinCode);
 
     /** 查询同主体在目标池中已有债券的最大剩余期限天数（date_exists） */
-    BigDecimal queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
+    BigDecimal queryIssuerTargetPoolMaxRemainDays(@Param("isinCode") String isinCode,
                                                @Param("targetPoolId") Long targetPoolId);
 
     /** 查询6个月内同主体有审批通过调入记录且真实关联有效信评报告 */
-    boolean queryHasRecentInboundWithReport(@Param("securityCode") String securityCode);
+    boolean queryHasRecentInboundWithReport(@Param("isinCode") String isinCode);
 
     /**
      * 查询近6个月当前券最近一条「审批通过+调入+挂有信评报告」的调库日志 ID
      * （对齐老系统 findInvestPoolAdjustHistoryByScodeOrCompancode 券维度）
      */
-    Long queryLastInboundLogIdWithCreditReportBySecurity(@Param("securityCode") String securityCode);
+    Long queryLastInboundLogIdWithCreditReportBySecurity(@Param("isinCode") String isinCode);
 
     /**
      * 查询近6个月同主体最近一条「审批通过+调入+挂有信评报告」的调库日志 ID
      * （对齐老系统主体兜底；不含当前券时的其他主体债）
      */
-    Long queryLastInboundLogIdWithCreditReportByIssuer(@Param("securityCode") String securityCode);
+    Long queryLastInboundLogIdWithCreditReportByIssuer(@Param("isinCode") String isinCode);
 
     /**
      * 查询调库日志下首选信评报告附件（手工、内部库、外部库依次优先，同类附件按 ID 降序）
@@ -188,15 +198,15 @@ public interface SecurityPoolAdjustMapper {
     ReportDto queryOutReportById(@Param("id") Long id);
 
     /** 查询指定天数内同发行人债券以非简易流程进入过信用债大库（含升降库，已出池历史仍计） */
-    boolean queryIssuerHasNonSimpleCreditBondInboundWithinDays(@Param("securityCode") String securityCode,
+    boolean queryIssuerHasNonSimpleCreditBondInboundWithinDays(@Param("isinCode") String isinCode,
                                                               @Param("days") int days);
 
     /** 查询指定天数内同发行人报告库中有有效债券信评报告及附件 */
-    boolean queryIssuerHasRecentCreditReportWithinDays(@Param("securityCode") String securityCode,
+    boolean queryIssuerHasRecentCreditReportWithinDays(@Param("isinCode") String isinCode,
                                                       @Param("days") int days);
 
     /** 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） */
-    boolean queryIssuerHasNonSimpleInboundWithinDays(@Param("securityCode") String securityCode,
+    boolean queryIssuerHasNonSimpleInboundWithinDays(@Param("isinCode") String isinCode,
                                                       @Param("targetPoolId") Long targetPoolId,
                                                       @Param("days") int days);
 
@@ -272,5 +282,5 @@ public interface SecurityPoolAdjustMapper {
     SecurityInfoDetailDto querySecuritySnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId);
 
     /** 按证券代码查询最新一条有效证券信息快照详情（对齐老 getFinIndByScode） */
-    SecurityInfoDetailDto queryLatestSecuritySnapshotDetailByWindCode(@Param("windCode") String windCode);
+    SecurityInfoDetailDto queryLatestSecuritySnapshotDetailByIsinCode(@Param("isinCode") String isinCode);
 }

@@ -1,5 +1,16 @@
 # CRMW池查询需求说明
 
+## 证券身份与市场代码（当前接口契约）
+
+- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
+- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
+- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
+- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
+- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
+- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
+- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
+
+
 > 前端页面：`crmw_pool_query.html`
 > 后端前缀：`/api/v1/crmwPoolQuery`
 > 角色定位：查询当前在 CRMW 池（信用风险缓释工具池）中已生效（`audit_status='20'`）的凭证记录，支持按 CRMW 代码/名称、入池时间、调整人筛选，并可点击跳转详情。
@@ -66,12 +77,12 @@ ORDER BY ips.entry_time DESC, ips.id DESC
 | CRMW名称 | `crmwName` | `desc-link` 可点击 → `openCrmwAdjustDetail(row)` |
 | CRMW代码 | `crmwScode` | 同上 |
 | 证券名称 | `securityShortName` | 同上 |
-| 证券代码 | `securityCode` | 同上 |
+| 证券代码 | `isinCode` | 同上 |
 | 调整人 | `adjusterName` | 直接显示 |
 | 入池时间 | `entryTime` | `moment(entryTime).format('YYYY-MM-DD HH:mm')`，空则空 |
 | 投资池名称 | `targetPoolName` | 全路径名 |
 
-**跳转**：`openCrmwAdjustDetail(row)` 拼 `securityCode/crmwScode/targetPoolId/adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, false)`，状态表 `adjust_log_id`）/`adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含 `crmwScode` + `securityCode` + 记录 ID + 批次，否则同凭证不同标的会串页签），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
+**跳转**：`openCrmwAdjustDetail(row)` 拼 `isinCode/crmwScode/targetPoolId/adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, false)`，状态表 `adjust_log_id`）/`adjustBatchNo/entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含 `crmwScode` + `isinCode` + 记录 ID + 批次，否则同凭证不同标的会串页签），进 `crmw_pool_adjust_detail.html`；脱离工作台回退 `location.href`。
 
 ---
 

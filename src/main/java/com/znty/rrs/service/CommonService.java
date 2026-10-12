@@ -171,11 +171,11 @@ public class CommonService {
      * @return 担保人、差额支付承诺人、权益相关主体、原始权益人；仅含有最新内评的主体
      */
     public List<GuarantorGradeDto> queryGuarantorGradeList(GuarantorGradeReq req) {
-        if (req == null || req.getSecurityCodes() == null || req.getSecurityCodes().isEmpty()) {
+        if (req == null || req.getIsinCodes() == null || req.getIsinCodes().isEmpty()) {
             return new ArrayList<>();
         }
         Set<String> normalizedCodes = new LinkedHashSet<>();
-        for (String securityCode : req.getSecurityCodes()) {
+        for (String securityCode : req.getIsinCodes()) {
             if (securityCode != null && !securityCode.trim().isEmpty()) {
                 normalizedCodes.add(securityCode.trim());
             }

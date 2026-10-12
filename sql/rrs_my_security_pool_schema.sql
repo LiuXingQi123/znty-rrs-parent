@@ -19,6 +19,7 @@ DROP TABLE IF EXISTS `my_security_pool`;
 CREATE TABLE `my_security_pool`
 (
     `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `isin_code`     VARCHAR(100) DEFAULT NULL COMMENT '债券关联键：正式券为真实ISIN / 临时券为TEMP:临时代码；主体、独立基金及股票留空',
     `security_code` VARCHAR(32)  DEFAULT NULL COMMENT '证券代码',
     `security_type` VARCHAR(32)  DEFAULT NULL COMMENT '证券类型：股票/证券/基金/公司...',
     `market`        VARCHAR(32)  DEFAULT NULL COMMENT '证券市场：上交所/深交所/银行间/北交所...',

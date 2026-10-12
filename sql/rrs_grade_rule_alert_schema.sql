@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS `ip_grade_rule_alert`;
 
 CREATE TABLE `ip_grade_rule_alert` (
     `id`                   BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `isin_code`            VARCHAR(100)  DEFAULT NULL            COMMENT '证券关联键：正式券为真实ISIN / 临时券为TEMP:临时代码',
     `security_code`        VARCHAR(64)   DEFAULT NULL            COMMENT '证券代码',
     `security_short_name`  VARCHAR(128)  DEFAULT NULL            COMMENT '证券简称',
     `issuer_code`          VARCHAR(64)   DEFAULT NULL            COMMENT '发行主体代码',
@@ -39,6 +40,7 @@ CREATE TABLE `ip_grade_rule_alert` (
 CREATE TABLE `ip_grade_rule_alert_evt` (
     `evt_id`               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
     `id`                   BIGINT        DEFAULT NULL            COMMENT '主键 ID',
+    `isin_code`            VARCHAR(100)  DEFAULT NULL            COMMENT '证券关联键：正式券为真实ISIN / 临时券为TEMP:临时代码',
     `security_code`        VARCHAR(64)   DEFAULT NULL            COMMENT '证券代码',
     `security_short_name`  VARCHAR(128)  DEFAULT NULL            COMMENT '证券简称',
     `issuer_code`          VARCHAR(64)   DEFAULT NULL            COMMENT '发行主体代码',
