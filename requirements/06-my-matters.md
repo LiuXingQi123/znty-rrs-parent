@@ -60,6 +60,8 @@
 
 列表摘要包含 `businessDomain`、`businessScene`、`objectCode/objectName`、`adjustLogId`、`adjustBatchNo`、`stepId`、目标池、流程名称、步骤名称、步骤/审核状态、流程描述、发起人及开始时间；保留各业务定位字段 `securityCode` / `crmwScode` / `fundCode` / `stockCode` 等。
 
+列表同时返回布尔字段 `canProcess`，供操作按钮和流程描述链接统一决定入口。审核状态为 `00` 或 `11` 且在审核页查询的批次范围内存在实际可处理的 `pending` 步骤时为 true：普通用户须为步骤处理人；若同时为发起人，还须是 `approval_strategy=initiator` 且审批节点存在 `submit/resubmit` 出边的发起提交/修改语义节点（基金、股票同时校验节点审批配置）。管理员沿用既有代办规则。会签时不依赖列表最新步骤是否属于本人；没有本人待办、仅曾参与或申请终态时为 false。
+
 各业务审批由原业务审批服务执行；不新增通用审批 SQL。附件查询必须带业务编码，后端只选择固定的债券/基金/股票日志表；附件读取与下载保留记录、文件和路径校验，不增加独立业务授权检查。
 
 ## 5. 页面与导航
@@ -71,7 +73,7 @@
 - 进入页面或切换业务时：当前状态加载完整列表，其他状态以 pageSize=1 取 total；查询与状态切换只刷新当前状态及角标。基金和股票不请求债券提醒。
 - 场景路由映射打开原有审核/详情页；基金进入 `fund_pool_adjust_approve.html` / `fund_pool_adjust_detail.html`，独立携带 fundCode 参数；股票进入 stock_pool_adjust_approve.html / stock_pool_adjust_detail.html，独立携带 stockCode 参数。
 - 审核/详情页不查询业务入口。审核页优先展示本人待办，无本人待办时管理员（ID 为 1 或整数 10000～10100）展示首个待办，其他人返回 null 并禁用审批操作。后端提交沿用相同管理员口径和数据库实际步骤的处理资格校验。
-- 待处理打开审核页（entryMode=process），已完成/我发起的打开只读详情（entryMode=view）。工作台页签键包含业务代码和场景、记录/批次，防止不同表相同 ID 混用；无工作台时回退 location.href。
+- 所有事项 Tab 的操作按钮与流程描述链接统一按 `canProcess` 判断：true 显示「处理」并打开审核页（entryMode=process），false 显示「查看」并打开只读详情（entryMode=view）。「我发起的」处于流程中并不自动获得处理资格；轮到本人提交/修改或管理员可代办时才显示「处理」。最终提交仍由原审批服务重查资格。工作台页签键包含业务代码和场景、记录/批次，防止不同表相同 ID 混用；无工作台时回退 location.href。
 - 债券保留证券、禁投主体、CRMW 路由；禁投 ABS 债仍走证券路由。
 - 默认分页 1/20，page-sizes=[10,20,50,100]，保持原有日期、状态 Tag、池全路径和表格布局。
 

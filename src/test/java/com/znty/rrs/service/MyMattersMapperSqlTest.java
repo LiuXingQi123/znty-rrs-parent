@@ -58,22 +58,24 @@ public class MyMattersMapperSqlTest {
                 "CREATE TABLE ais_inv_analysis.t_sys_user_role(user_id BIGINT, role_id BIGINT)",
                 "CREATE TABLE ais_inv_analysis.t_sys_role(id BIGINT PRIMARY KEY, enable INT, parent_id BIGINT)",
                 "CREATE TABLE wf_flow_definition(id BIGINT PRIMARY KEY, flow_key VARCHAR(20), name VARCHAR(40), description VARCHAR(40), is_deleted INT)",
-                "CREATE TABLE wf_flow_node(id BIGINT PRIMARY KEY, flow_id BIGINT)",
+                "CREATE TABLE wf_flow_node(id BIGINT PRIMARY KEY, flow_id BIGINT, version_id BIGINT, node_type VARCHAR(20))",
+                "CREATE TABLE wf_flow_edge(id BIGINT PRIMARY KEY, version_id BIGINT, from_node_id BIGINT, route_action VARCHAR(20))",
+                "CREATE TABLE wf_node_approval_config(node_id BIGINT, approval_strategy VARCHAR(20))",
                 "CREATE TABLE dict_security_type(security_type VARCHAR(20), category_type VARCHAR(20), is_deleted INT)",
                 "INSERT INTO wf_flow_definition VALUES(1,'bond','债券流程','债券',0),(2,'fund','基金流程','基金',0),(3,'stock','股票流程','股票',0)",
-                "INSERT INTO wf_flow_node VALUES(1,1),(2,2),(3,3)",
+                "INSERT INTO wf_flow_node VALUES(1,1,1,'approval'),(2,2,2,'approval'),(3,3,3,'approval')",
                 "INSERT INTO dict_security_type VALUES('bond','bond',0)",
                 "INSERT INTO ais_inv_analysis.t_sys_role VALUES(1,1,10),(7,1,NULL),(9,0,NULL),(10,1,NULL),(99,1,7)",
                 "INSERT INTO ais_inv_analysis.t_sys_user_role VALUES(2,1),(2,7),(2,7),(4,10),(5,9),(6,99)");
         for (String suffix : new String[]{"", "_fund", "_stock"}) {
             // 创建当前业务独立的日志和步骤表
             sql("CREATE TABLE ip_adjust_log" + suffix + "(id BIGINT PRIMARY KEY, security_code VARCHAR(40), security_short_name VARCHAR(40), security_type VARCHAR(20), crmw_scode VARCHAR(40), fund_code VARCHAR(40), fund_short_name VARCHAR(40), stock_code VARCHAR(40), stock_short_name VARCHAR(40), target_pool_id BIGINT, target_pool_name VARCHAR(40), adjust_batch_no VARCHAR(40), audit_status VARCHAR(10), adjuster_id VARCHAR(20), adjuster_name VARCHAR(40), adjust_mode VARCHAR(10), pool_type VARCHAR(20), flow_id BIGINT, is_deleted INT)",
-                "CREATE TABLE ip_adjust_step" + suffix + "(id BIGINT PRIMARY KEY, adjust_log_id BIGINT, adjust_batch_no VARCHAR(40), flow_node_id BIGINT, node_label VARCHAR(40), step_status VARCHAR(20), handler_id VARCHAR(20), start_time TIMESTAMP)");
+                "CREATE TABLE ip_adjust_step" + suffix + "(id BIGINT PRIMARY KEY, adjust_log_id BIGINT, adjust_batch_no VARCHAR(40), flow_node_id BIGINT, node_label VARCHAR(40), step_status VARCHAR(20), handler_id VARCHAR(20), start_time TIMESTAMP, approval_strategy VARCHAR(20))");
             for (int id=1; id<=4; id++) {
                 int flow = suffix.isEmpty() ? 1 : suffix.equals("_fund") ? 2 : 3;
                 // 插入本人和其他人的待处理、已完成及发起记录
                 sql("INSERT INTO ip_adjust_log" + suffix + " VALUES(" + id + ",'B" + id + "','债券" + id + "','bond',NULL,'F" + id + "','基金" + id + "','S" + id + "','股票" + id + "',1,'池','batch" + id + "','00','" + (id==3 ? "2" : "9") + "','发起人','in','bond'," + flow + ",0)",
-                    "INSERT INTO ip_adjust_step" + suffix + " VALUES(" + id + "," + id + ",'batch" + id + "'," + flow + ",'审核','" + (id>=3 ? "approve" : "pending") + "','" + (id==1 || id==3 ? "2" : "9") + "',CURRENT_TIMESTAMP)");
+                    "INSERT INTO ip_adjust_step" + suffix + " VALUES(" + id + "," + id + ",'batch" + id + "'," + flow + ",'审核','" + (id>=3 ? "approve" : "pending") + "','" + (id==1 || id==3 ? "2" : "9") + "',CURRENT_TIMESTAMP,'all')");
             }
         }
     }
@@ -160,7 +162,7 @@ public class MyMattersMapperSqlTest {
     /** 已完成按整批结束判断，检索和流程选项始终使用当前业务数据。 */
     @Test public void completedShouldWaitForWholeBatchAndFiltersShouldStayInDomain() throws Exception {
         // 构造同批次未结束步骤，验证已完成列表不能提前显示
-        sql("INSERT INTO ip_adjust_step_fund VALUES(99,4,'batch3',2,'会签','pending','9',CURRENT_TIMESTAMP)");
+        sql("INSERT INTO ip_adjust_step_fund VALUES(99,4,'batch3',2,'会签','pending','9',CURRENT_TIMESTAMP,'all')");
         // 构造本人已完成基金事项查询
         MyMattersReq req=request("fund","completed","2");
         assertThat(rows("fund","queryMyMattersPage",req)).isEmpty();
@@ -213,6 +215,79 @@ public class MyMattersMapperSqlTest {
             Page<MyMattersDto> second = PageHelper.startPage(2, 1);
             assertThat(rows(domain, "queryMyMattersPage", req)).extracting("adjustLogId").containsExactly(1L);
             assertThat(second.getTotal()).isEqualTo(2);
+        }
+    }
+
+    /** 处理资格来自本人实际待办，不因流程中或曾经参与而自动获得。 */
+    @Test public void processingEligibilityShouldUseActualPendingSteps() {
+        for (String domain : new String[]{"bond", "fund", "stock"}) {
+            // 查询本人待办，普通审批人可以处理他人发起的申请
+            MyMattersReq req = request(domain, "pending", "2");
+            assertThat(rows(domain, "queryMyMattersPage", req)).extracting("canProcess").containsExactly(true);
+            req.setStepStatus("completed");
+            // 曾经处理或发起但已经没有待办，只允许查看
+            assertThat(rows(domain, "queryMyMattersPage", req)).extracting("canProcess").containsExactly(false);
+            assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("canProcess").containsExactly(false);
+        }
+    }
+
+    /** 我发起的按发起人回避、提交/修改路由、会签待办和终态共同判断。 */
+    @Test public void initiatedEligibilityShouldRespectSemanticNodesAndTerminalStatus() throws Exception {
+        // 创建真实提交/修改语义节点；普通审批节点不具备发起人处理语义
+        sql("INSERT INTO wf_flow_node VALUES(10,1,10,'approval'),(11,1,10,'approval')",
+                "INSERT INTO wf_flow_edge VALUES(10,10,10,'resubmit'),(11,10,11,'submit')",
+                "INSERT INTO wf_node_approval_config VALUES(10,'initiator'),(11,'initiator')");
+        for (String domain : new String[]{"bond", "fund", "stock"}) {
+            String suffix = domain.equals("bond") ? "" : "_" + domain;
+            // 本人发起且仍在流程中，但本人不能审批自己的后续节点，也不能处理他人待办
+            sql("UPDATE ip_adjust_log" + suffix + " SET adjuster_id='2' WHERE id IN (1,2)");
+            // 构造本人发起事项请求
+            MyMattersReq req = request(domain, null, "2");
+            assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("canProcess")
+                    .containsExactly(false, false, false);
+            // 会签最新步骤属于别人，本人仍有驳回修改待办，应该可以处理
+            sql("UPDATE ip_adjust_log" + suffix + " SET audit_status='11' WHERE id=1",
+                    "INSERT INTO ip_adjust_step" + suffix + " VALUES(101,1,'batch1',10,'修改','pending','2',CURRENT_TIMESTAMP,'initiator')",
+                    "INSERT INTO ip_adjust_step" + suffix + " VALUES(102,1,'batch1',10,'修改','pending','9',CURRENT_TIMESTAMP,'initiator')");
+            assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("adjustLogId", "stepId", "canProcess")
+                    .contains(tuple(1L, 102L, true));
+            // 发起提交节点允许本人处理
+            sql("INSERT INTO ip_adjust_step" + suffix + " VALUES(103,2,'batch2',11,'提交','pending','2',CURRENT_TIMESTAMP,'initiator')");
+            assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("adjustLogId", "canProcess")
+                    .contains(tuple(2L, true));
+            // 处理资格按同批次查询，代表记录上的本人待办已结束时也能识别批内其他记录的本人待办
+            sql("UPDATE ip_adjust_step" + suffix + " SET step_status='approve' WHERE id=101",
+                    "INSERT INTO ip_adjust_step" + suffix + " VALUES(104,2,'batch1',10,'修改','pending','2',CURRENT_TIMESTAMP,'initiator')");
+            assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("adjustLogId", "canProcess")
+                    .contains(tuple(1L, true));
+            // 全部本人待办完成后仅可查看，其他会签人仍有待办也不授予处理资格
+            sql("UPDATE ip_adjust_step" + suffix + " SET step_status='approve' WHERE handler_id='2'");
+            assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("canProcess")
+                    .containsOnly(false);
+            // 即使残留待办，终态及 O32 预留状态也不得显示人工处理入口
+            sql("UPDATE ip_adjust_step" + suffix + " SET step_status='pending' WHERE id=101");
+            for (String status : new String[]{"20", "21", "99", "-1", "32"}) {
+                sql("UPDATE ip_adjust_log" + suffix + " SET audit_status='" + status + "' WHERE id=1");
+                assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("adjustLogId", "canProcess")
+                        .contains(tuple(1L, false));
+            }
+        }
+    }
+
+    /** 管理员沿用原 ID 区间代办他人或无人待办，普通发起人无待办时只读。 */
+    @Test public void initiatedEligibilityShouldRespectAdminBoundaries() throws Exception {
+        for (String domain : new String[]{"bond", "fund", "stock"}) {
+            String suffix = domain.equals("bond") ? "" : "_" + domain;
+            // 验证没有处理人的待办仅管理员可接管
+            sql("UPDATE ip_adjust_step" + suffix + " SET handler_id=NULL WHERE id=2");
+            for (String userId : new String[]{"1", "10000", "10100", "9999", "10101", "2"}) {
+                sql("UPDATE ip_adjust_log" + suffix + " SET adjuster_id='" + userId + "' WHERE id=2");
+                // 按本人发起范围查询并验证处理资格不受入口角色扩张
+                MyMattersReq req = request(domain, null, userId);
+                boolean admin = userId.equals("1") || userId.equals("10000") || userId.equals("10100");
+                assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("adjustLogId", "canProcess")
+                        .contains(tuple(2L, admin));
+            }
         }
     }
 

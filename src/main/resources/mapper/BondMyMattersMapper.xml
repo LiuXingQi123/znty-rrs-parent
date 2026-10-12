@@ -34,6 +34,37 @@
                 END AS businessScene
                ,al.audit_status
                ,s.step_status
+               <!-- 处理资格独立于展示步骤：按审核页的批次范围查本人待办，管理员允许代办 -->
+               ,CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step ps
+                    WHERE ps.step_status = 'pending'
+                      AND (
+                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != ''
+                           AND ps.adjust_batch_no = al.adjust_batch_no)
+                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '')
+                              AND ps.adjust_log_id = al.id)
+                      )
+                      <if test="!adminUser">
+                          AND ps.handler_id = #{currentUserId}
+                          <!-- 发起人只能处理提交/修改语义节点，不能审批自己的后续节点 -->
+                          AND (
+                              al.adjuster_id != #{currentUserId}
+                              OR (
+                                  ps.approval_strategy = 'initiator'
+                                  AND EXISTS (
+                                      SELECT 1
+                                      FROM wf_flow_node pn
+                                      INNER JOIN wf_flow_edge pe ON pe.from_node_id = pn.id
+                                                               AND pe.version_id = pn.version_id
+                                      WHERE pn.id = ps.flow_node_id
+                                        AND pn.node_type = 'approval'
+                                        AND pe.route_action IN ('submit', 'resubmit')
+                                  )
+                              )
+                          )
+                      </if>
+                ) THEN 1 ELSE 0 END AS canProcess
                ,CONCAT(
                     COALESCE(al.adjuster_name, ''),
                     ' 将 ',
@@ -154,6 +185,7 @@
 
     <!-- 分页查询我发起的事宜列表（按发起人过滤，含流程中与已结束） -->
     <select id="queryMyInitiatedMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
+        <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
         SELECT s.id
                ,'bond' AS businessDomain
                ,al.security_code AS objectCode
@@ -181,6 +213,37 @@
                 END AS businessScene
                ,al.audit_status
                ,s.step_status
+               <!-- 处理资格独立于展示步骤：按审核页的批次范围查本人待办，管理员允许代办 -->
+               ,CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
+                    SELECT 1
+                    FROM ip_adjust_step ps
+                    WHERE ps.step_status = 'pending'
+                      AND (
+                          (al.adjust_batch_no IS NOT NULL AND al.adjust_batch_no != ''
+                           AND ps.adjust_batch_no = al.adjust_batch_no)
+                          OR ((al.adjust_batch_no IS NULL OR al.adjust_batch_no = '')
+                              AND ps.adjust_log_id = al.id)
+                      )
+                      <if test="!adminUser">
+                          AND ps.handler_id = #{currentUserId}
+                          <!-- 发起人只能处理提交/修改语义节点，不能审批自己的后续节点 -->
+                          AND (
+                              al.adjuster_id != #{currentUserId}
+                              OR (
+                                  ps.approval_strategy = 'initiator'
+                                  AND EXISTS (
+                                      SELECT 1
+                                      FROM wf_flow_node pn
+                                      INNER JOIN wf_flow_edge pe ON pe.from_node_id = pn.id
+                                                               AND pe.version_id = pn.version_id
+                                      WHERE pn.id = ps.flow_node_id
+                                        AND pn.node_type = 'approval'
+                                        AND pe.route_action IN ('submit', 'resubmit')
+                                  )
+                              )
+                          )
+                      </if>
+                ) THEN 1 ELSE 0 END AS canProcess
                ,CONCAT(
                     COALESCE(al.adjuster_name, ''),
                     ' 将 ',

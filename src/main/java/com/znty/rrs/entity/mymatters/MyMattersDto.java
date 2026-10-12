@@ -77,6 +77,9 @@ public class MyMattersDto {
     /** 步骤状态 */
     private String stepStatus;
 
+    /** 当前用户是否具有该申请的待办处理资格 */
+    private Boolean canProcess;
+
     /** 发起人 */
     private String initiatorName;
 
