@@ -223,17 +223,6 @@ public class CrmwPoolExcelImportService {
             }
             items.add(item);
         }
-        Map<String, Integer> combinations = new HashMap<>();
-        for (SysImpTmpDetlBo item : items) {
-            String key = item.getFld016() + "|" + item.getFld015();
-            combinations.put(key, combinations.getOrDefault(key, 0) + 1);
-        }
-        for (SysImpTmpDetlBo item : items) {
-            if (!isBlank(item.getFld015()) && !isBlank(item.getFld016())
-                    && combinations.get(item.getFld016() + "|" + item.getFld015()) > 1) {
-                item.setChkRslt("2"); item.setChkDscr("Excel内同一凭证ISIN、标的ISIN组合重复");
-            }
-        }
         batch.setTotalCount(items.size());
         int preFailCount = 0;
         for (SysImpTmpDetlBo item : items) {
@@ -334,10 +323,6 @@ public class CrmwPoolExcelImportService {
 
         for (SysImpTmpDetlBo item : items) {
             List<String> preReasons = new ArrayList<>();
-            if (items.stream().filter(other -> trimToEmpty(other.getFld015()).equals(trimToEmpty(item.getFld015()))
-                    && trimToEmpty(other.getFld016()).equals(trimToEmpty(item.getFld016()))).count() > 1) {
-                preReasons.add("Excel内同一凭证ISIN、标的ISIN组合重复");
-            }
             String crmwScode = trimToEmpty(item.getFld001());
             String securityCode = trimToEmpty(item.getFld004());
             if (crmwScode.isEmpty()) {
@@ -361,11 +346,11 @@ public class CrmwPoolExcelImportService {
             }
 
             AdjustCheckReq checkReq = new AdjustCheckReq();
-            checkReq.setIsinCode(item.getFld015());
+            checkReq.setSecurityCode(securityCode);
             checkReq.setSecurityShortName(resolveShortName(item.getFld005(), securityCode, infoCache));
             checkReq.setSecurityType(trimToNull(item.getFld006()));
             checkReq.setCrmwName(trimToNull(item.getFld002()));
-            checkReq.setCrmwIsinCode(item.getFld016());
+            checkReq.setCrmwScode(crmwScode);
             checkReq.setCrmwStype(resolveCrmwStype(item.getFld008()));
             AdjustCheckReq.CheckItem checkItem = new AdjustCheckReq.CheckItem();
             checkItem.setTargetPoolId(pool.getId());
@@ -496,7 +481,7 @@ public class CrmwPoolExcelImportService {
         for (CrmwPoolExcelImportCheckItemDto ci : checkItems) {
             String groupKey = !isBlank(ci.getSourceSecurityCode())
                     ? ci.getSourceSecurityCode()
-                    : buildCombinationKey(ci.getCrmwIsinCode(), ci.getIsinCode());
+                    : buildCombinationKey(ci.getCrmwScode(), ci.getSecurityCode());
             List<CrmwPoolExcelImportCheckItemDto> list = groupMap.get(groupKey);
             if (list == null) {
                 list = new ArrayList<>();
@@ -562,11 +547,11 @@ public class CrmwPoolExcelImportService {
                                                    InvestmentPoolBo pool) {
         CrmwPoolExcelImportCheckItemDto primary = resolvePrimaryItem(group);
         CrmwPoolAdjustSubmitReq submitReq = new CrmwPoolAdjustSubmitReq();
-        submitReq.setIsinCode(primary.getIsinCode());
+        submitReq.setSecurityCode(primary.getSecurityCode());
         submitReq.setSecurityShortName(primary.getSecurityShortName());
         submitReq.setSecurityType(primary.getSecurityType());
         submitReq.setCrmwName(primary.getCrmwName());
-        submitReq.setCrmwIsinCode(primary.getCrmwIsinCode());
+        submitReq.setCrmwScode(primary.getCrmwScode());
         submitReq.setCrmwStype(resolveCrmwStype(primary.getCrmwStype()));
         submitReq.setAdjustType(ADJUST_TYPE_EXCEL);
         submitReq.setAdjustReason(batch.getFld002());
@@ -614,11 +599,11 @@ public class CrmwPoolExcelImportService {
         List<IpAdjustLogBo> logs = new ArrayList<>();
         for (CrmwPoolExcelImportCheckItemDto item : checkItems) {
             IpAdjustLogBo log = new IpAdjustLogBo();
-            log.setIsinCode(item.getIsinCode());
+            log.setSecurityCode(item.getSecurityCode());
             log.setSecurityShortName(item.getSecurityShortName());
             log.setSecurityType(item.getSecurityType());
             log.setCrmwName(item.getCrmwName());
-            log.setCrmwIsinCode(item.getCrmwIsinCode());
+            log.setCrmwScode(item.getCrmwScode());
             log.setCrmwStype(resolveCrmwStype(item.getCrmwStype()));
             log.setAdjustMode(item.getAdjustMode());
             log.setTargetPoolId(item.getTargetPoolId());
@@ -638,13 +623,13 @@ public class CrmwPoolExcelImportService {
             dto.setSourceItemId(sourceItem.getId());
             dto.setSourceRowNo(sourceItem.getRowNo());
         }
-        String crmwScode = !isBlank(ri.getCrmwIsinCode()) ? ri.getCrmwIsinCode() : trimToEmpty(sourceItem.getFld016());
-        String securityCode = !isBlank(ri.getIsinCode()) ? ri.getIsinCode() : trimToEmpty(sourceItem.getFld015());
+        String crmwScode = !isBlank(ri.getCrmwScode()) ? ri.getCrmwScode() : trimToEmpty(sourceItem.getFld001());
+        String securityCode = !isBlank(ri.getSecurityCode()) ? ri.getSecurityCode() : trimToEmpty(sourceItem.getFld004());
         String sourceKey = !isBlank(ri.getSourceSecurityCode())
                 ? ri.getSourceSecurityCode()
                 : buildCombinationKey(crmwScode, securityCode);
-        dto.setCrmwIsinCode(crmwScode);
-        dto.setIsinCode(securityCode);
+        dto.setCrmwScode(crmwScode);
+        dto.setSecurityCode(securityCode);
         dto.setSourceSecurityCode(sourceKey);
         dto.setCrmwStype(resolveCrmwStype(ri.getCrmwStype() != null ? ri.getCrmwStype() : sourceItem.getFld008()));
         dto.setSecurityType(ri.getSecurityType() != null ? ri.getSecurityType() : sourceItem.getFld006());
@@ -683,7 +668,7 @@ public class CrmwPoolExcelImportService {
     /** 展开项代码变化时按主数据补齐名称/市场/类型 */
     private void fillMappedDisplay(CrmwPoolExcelImportCheckItemDto dto,
                                    Map<String, SecurityInfoDetailDto> infoCache) {
-        SecurityInfoDetailDto crmw = findSecurityByIsin(dto.getCrmwIsinCode(), infoCache);
+        SecurityInfoDetailDto crmw = lookupSecurity(dto.getCrmwScode(), infoCache);
         if (crmw != null) {
             if (isBlank(dto.getCrmwName())) {
                 dto.setCrmwName(resolveDisplayName(crmw));
@@ -692,7 +677,7 @@ public class CrmwPoolExcelImportService {
                 dto.setCrmwMarket(resolveMarketCodes(crmw));
             }
         }
-        SecurityInfoDetailDto security = findSecurityByIsin(dto.getIsinCode(), infoCache);
+        SecurityInfoDetailDto security = lookupSecurity(dto.getSecurityCode(), infoCache);
         if (security != null) {
             if (isBlank(dto.getSecurityName())) {
                 dto.setSecurityName(resolveDisplayName(security));
@@ -712,24 +697,16 @@ public class CrmwPoolExcelImportService {
         }
     }
 
-    /** 已解析的组合使用ISIN在本批主档缓存中定位。 */
-    private SecurityInfoDetailDto findSecurityByIsin(String isin, Map<String, SecurityInfoDetailDto> cache) {
-        return cache.values().stream().filter(info -> info != null && isin != null && isin.equals(info.getIsinCode()))
-                .findFirst().orElse(null);
-    }
-
     /** 回填导入行的凭证/标的展示字段 */
     private void fillSecurityDisplay(SysImpTmpDetlBo item, Map<String, SecurityInfoDetailDto> infoCache) {
         SecurityInfoDetailDto crmw = lookupSecurity(item.getFld001(), infoCache);
         if (crmw != null) {
-            item.setFld016(crmw.getIsinCode());
             item.setFld002(resolveDisplayName(crmw));
             item.setFld003(resolveMarketCodes(crmw));
             item.setFld008(resolveCrmwStype(crmw.getSecurityType()));
         }
         SecurityInfoDetailDto security = lookupSecurity(item.getFld004(), infoCache);
         if (security != null) {
-            item.setFld015(security.getIsinCode());
             item.setFld005(resolveDisplayName(security));
             item.setFld006(security.getSecurityType());
             item.setFld007(resolveMarketCodes(security));
@@ -765,9 +742,7 @@ public class CrmwPoolExcelImportService {
         if (cache.containsKey(key)) {
             return cache.get(key);
         }
-        List<SecurityInfoDetailDto> matches = crmwPoolExcelImportMapper.querySecurityImportInfoByCode(key);
-        if (matches != null && matches.size() > 1) { throw new BizException("市场代码存在歧义：" + key); }
-        SecurityInfoDetailDto info = matches == null || matches.isEmpty() ? null : matches.get(0);
+        SecurityInfoDetailDto info = crmwPoolExcelImportMapper.querySecurityImportInfoByCode(key);
         cache.put(key, info);
         return info;
     }
@@ -831,10 +806,10 @@ public class CrmwPoolExcelImportService {
         if (sourceItem != null) {
             dto.setSourceItemId(sourceItem.getId());
             dto.setSourceRowNo(sourceItem.getRowNo());
-            dto.setCrmwIsinCode(sourceItem.getFld016());
+            dto.setCrmwScode(sourceItem.getFld001());
             dto.setCrmwName(sourceItem.getFld002());
             dto.setCrmwMarket(sourceItem.getFld003());
-            dto.setIsinCode(sourceItem.getFld015());
+            dto.setSecurityCode(sourceItem.getFld004());
             dto.setSecurityName(sourceItem.getFld005());
             dto.setSecurityType(sourceItem.getFld006());
             dto.setSecurityMarket(sourceItem.getFld007());
@@ -923,7 +898,7 @@ public class CrmwPoolExcelImportService {
         }
         for (CrmwPoolExcelImportCheckItemDto ci : source) {
             if (ci != null && ci.isCanAdjust()
-                    && !isBlank(ci.getIsinCode()) && !isBlank(ci.getCrmwIsinCode())
+                    && !isBlank(ci.getSecurityCode()) && !isBlank(ci.getCrmwScode())
                     && ci.getTargetPoolId() != null) {
                 result.add(ci);
             }
@@ -1186,17 +1161,9 @@ public class CrmwPoolExcelImportService {
             if (arr == null || !arr.isArray()) {
                 return null;
             }
-            List<CrmwPoolExcelImportCheckItemDto> items = objectMapper.convertValue(arr,
+            return objectMapper.convertValue(arr,
                     new TypeReference<List<CrmwPoolExcelImportCheckItemDto>>() {
                     });
-            for (CrmwPoolExcelImportCheckItemDto item : items) {
-                if (item.isCanAdjust() && (isBlank(item.getIsinCode()) || isBlank(item.getCrmwIsinCode()))) {
-                    throw new BizException("旧证券身份校验草稿已失效，请重新上传Excel");
-                }
-            }
-            return items;
-        } catch (BizException e) {
-            throw e;
         } catch (Exception e) {
             return null;
         }
@@ -1209,20 +1176,9 @@ public class CrmwPoolExcelImportService {
         dto.setImpDetlId(bo.getImpDetlId());
         dto.setRowNo(bo.getRowNo());
         dto.setCrmwScode(bo.getFld001());
-        dto.setCrmwIsinCode(bo.getFld016());
         dto.setCrmwName(bo.getFld002());
         dto.setCrmwMarket(bo.getFld003());
         dto.setSecurityCode(bo.getFld004());
-        dto.setIsinCode(bo.getFld015());
-        SecurityInfoDetailDto master = lookupSecurity(bo.getFld004(), new HashMap<>());
-        if (master != null) {
-            dto.setWindCodeSh(master.getWindCodeSh());
-            dto.setWindCodeSz(master.getWindCodeSz());
-            dto.setWindCodeNib(master.getWindCodeNib());
-            dto.setWindCodeBj(master.getWindCodeBj());
-            dto.setWindCodeNbc(master.getWindCodeNbc());
-            dto.setSecuritySource(master.getSecuritySource());
-        }
         dto.setSecurityName(bo.getFld005());
         dto.setSecurityType(bo.getFld006());
         dto.setSecurityMarket(bo.getFld007());

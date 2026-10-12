@@ -10,10 +10,6 @@ import java.util.List;
 @Data
 public class AdjustCheckReq {
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
-    /** 证券代码关键词，匹配五码 */
-    private String securityKeyword;
     /** 证券代码 */
     private String securityCode;
 
@@ -26,9 +22,7 @@ public class AdjustCheckReq {
     /** CRMW 凭证名称 */
     private String crmwName;
 
-    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
-    private String crmwIsinCode;
-    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
+    /** CRMW 凭证代码 */
     private String crmwScode;
 
     /** CRMW 证券类型 */

@@ -14,8 +14,6 @@ public class IpPoolStatusBo {
     /** 主键 ID */
     private Long id;
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
     /** 证券代码 */
     private String securityCode;
 
@@ -28,9 +26,7 @@ public class IpPoolStatusBo {
     /** CRMW名称 */
     private String crmwName;
 
-    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
-    private String crmwIsinCode;
-    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
+    /** CRMW 证券代码 */
     private String crmwScode;
 
     /** CRMW 市场代码 */

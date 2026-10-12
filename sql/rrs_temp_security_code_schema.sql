@@ -2,7 +2,6 @@
 -- znty-rrs 临时代码管理表 - 建表脚本
 -- MySQL version: 8.0.28
 -- 说明：维护临时证券代码、正式证券代码更新及取消发行状态
--- 临时券在 rrs_securityinfo 中以 TEMP:临时代码 关联；本文件 isin_code 仅记录转正目标的真实 ISIN。
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -16,7 +15,7 @@ CREATE TABLE `rrs_temp_security_code`
 (
     `id`                         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `temp_security_name`         VARCHAR(200) DEFAULT NULL            COMMENT '临时证券名称',
-    `temp_security_code`         VARCHAR(100) DEFAULT NULL            COMMENT '临时证券代码，拼接TEMP:作为主档关联键时最长95字符',
+    `temp_security_code`         VARCHAR(100) DEFAULT NULL            COMMENT '临时证券代码',
     `temp_security_market`       VARCHAR(32)  DEFAULT NULL            COMMENT '临时证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他',
     `temp_security_type`         VARCHAR(64)  DEFAULT NULL            COMMENT '临时证券类型编码，关联 dict_security_type.security_type',
     `temp_mitigation_code`       VARCHAR(100) DEFAULT NULL            COMMENT '临时缓释凭证代码',
@@ -25,7 +24,6 @@ CREATE TABLE `rrs_temp_security_code`
     `temp_issue_date`            DATE         DEFAULT NULL            COMMENT '临时发行日期',
     `temp_maturity_date`         DATE         DEFAULT NULL            COMMENT '临时到期日期',
     `security_name`              VARCHAR(200) DEFAULT NULL            COMMENT '正式证券名称',
-    `isin_code`                  VARCHAR(100) DEFAULT NULL            COMMENT '转正目标证券真实ISIN，未转正时为空',
     `security_code`              VARCHAR(100) DEFAULT NULL            COMMENT '正式证券代码',
     `security_market`            VARCHAR(32)  DEFAULT NULL            COMMENT '正式证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他',
     `security_type`              VARCHAR(64)  DEFAULT NULL            COMMENT '正式证券类型编码，关联 dict_security_type.security_type',
@@ -43,11 +41,10 @@ CREATE TABLE `rrs_temp_security_code_update_log`
 (
     `id`                 BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `temp_security_name` VARCHAR(200) DEFAULT NULL            COMMENT '临时证券名称',
-    `temp_security_code` VARCHAR(100) DEFAULT NULL            COMMENT '临时证券代码，拼接TEMP:作为主档关联键时最长95字符',
+    `temp_security_code` VARCHAR(100) DEFAULT NULL            COMMENT '临时证券代码',
     `temp_security_market` VARCHAR(32) DEFAULT NULL           COMMENT '临时证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他',
     `temp_security_type` VARCHAR(64)  DEFAULT NULL            COMMENT '临时证券类型编码，关联 dict_security_type.security_type',
     `security_name`     VARCHAR(200) DEFAULT NULL            COMMENT '正式证券名称',
-    `isin_code`         VARCHAR(100) DEFAULT NULL            COMMENT '转正目标证券真实ISIN',
     `security_code`     VARCHAR(100) DEFAULT NULL            COMMENT '正式证券代码',
     `security_market`   VARCHAR(32)  DEFAULT NULL            COMMENT '正式证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他',
     `security_type`     VARCHAR(64)  DEFAULT NULL            COMMENT '正式证券类型编码，关联 dict_security_type.security_type',

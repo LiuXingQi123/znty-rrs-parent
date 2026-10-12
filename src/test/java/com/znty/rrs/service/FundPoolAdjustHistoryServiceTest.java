@@ -54,13 +54,13 @@ public class FundPoolAdjustHistoryServiceTest {
         try (XSSFWorkbook workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(Base64.getDecoder().decode(file.getContentBase64())))) {
             assertThat(workbook.getSheetAt(0).getRow(0).getCell(0).getStringCellValue()).isEqualTo("调整人");
-            assertThat(workbook.getSheetAt(0).getRow(0).getCell(8).getStringCellValue()).isEqualTo("审核状态");
+            assertThat(workbook.getSheetAt(0).getRow(0).getCell(7).getStringCellValue()).isEqualTo("审核状态");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(2).getStringCellValue()).isEqualTo("测试基金");
-            assertThat(workbook.getSheetAt(0).getRow(1).getCell(7).getStringCellValue())
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(6).getStringCellValue())
                     .isEqualTo("基金池/基础基金池");
-            assertThat(workbook.getSheetAt(0).getRow(1).getCell(8).getStringCellValue()).isEqualTo("审批通过");
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(7).getStringCellValue()).isEqualTo("审批通过");
             // 格式与证券池调整历史模板一致：楷体、带底色表头、20 磅行高和 15 字符列宽。
-            for (int columnIndex = 0; columnIndex < 9; columnIndex++) {
+            for (int columnIndex = 0; columnIndex < 8; columnIndex++) {
                 CellStyle headerStyle = workbook.getSheetAt(0).getRow(0).getCell(columnIndex).getCellStyle();
                 CellStyle dataStyle = workbook.getSheetAt(0).getRow(1).getCell(columnIndex).getCellStyle();
                 assertThat(workbook.getFontAt(headerStyle.getFontIndex()).getFontName()).isEqualTo("楷体");

@@ -58,33 +58,24 @@ public class MyMattersMapperSqlTest {
                 "CREATE TABLE ais_inv_analysis.t_sys_user_role(user_id BIGINT, role_id BIGINT)",
                 "CREATE TABLE ais_inv_analysis.t_sys_role(id BIGINT PRIMARY KEY, enable INT, parent_id BIGINT)",
                 "CREATE TABLE wf_flow_definition(id BIGINT PRIMARY KEY, flow_key VARCHAR(20), name VARCHAR(40), description VARCHAR(40), is_deleted INT)",
-                "CREATE TABLE wf_flow_node(id BIGINT PRIMARY KEY, flow_id BIGINT, version_id BIGINT, node_type VARCHAR(20))",
-                "CREATE TABLE wf_flow_edge(from_node_id BIGINT, version_id BIGINT, route_action VARCHAR(20))",
+                "CREATE TABLE wf_flow_node(id BIGINT PRIMARY KEY, flow_id BIGINT)",
                 "CREATE TABLE dict_security_type(security_type VARCHAR(20), category_type VARCHAR(20), is_deleted INT)",
                 "INSERT INTO wf_flow_definition VALUES(1,'bond','债券流程','债券',0),(2,'fund','基金流程','基金',0),(3,'stock','股票流程','股票',0)",
-                "INSERT INTO wf_flow_node VALUES(1,1,1,'approval'),(2,2,2,'approval'),(3,3,3,'approval')",
+                "INSERT INTO wf_flow_node VALUES(1,1),(2,2),(3,3)",
                 "INSERT INTO dict_security_type VALUES('bond','bond',0)",
                 "INSERT INTO ais_inv_analysis.t_sys_role VALUES(1,1,10),(7,1,NULL),(9,0,NULL),(10,1,NULL),(99,1,7)",
                 "INSERT INTO ais_inv_analysis.t_sys_user_role VALUES(2,1),(2,7),(2,7),(4,10),(5,9),(6,99)");
         for (String suffix : new String[]{"", "_fund", "_stock"}) {
             // 创建当前业务独立的日志和步骤表
             sql("CREATE TABLE ip_adjust_log" + suffix + "(id BIGINT PRIMARY KEY, security_code VARCHAR(40), security_short_name VARCHAR(40), security_type VARCHAR(20), crmw_scode VARCHAR(40), fund_code VARCHAR(40), fund_short_name VARCHAR(40), stock_code VARCHAR(40), stock_short_name VARCHAR(40), target_pool_id BIGINT, target_pool_name VARCHAR(40), adjust_batch_no VARCHAR(40), audit_status VARCHAR(10), adjuster_id VARCHAR(20), adjuster_name VARCHAR(40), adjust_mode VARCHAR(10), pool_type VARCHAR(20), flow_id BIGINT, is_deleted INT)",
-                "CREATE TABLE ip_adjust_step" + suffix + "(id BIGINT PRIMARY KEY, adjust_log_id BIGINT, adjust_batch_no VARCHAR(40), flow_node_id BIGINT, node_label VARCHAR(40), step_status VARCHAR(20), handler_id VARCHAR(20), start_time TIMESTAMP, approval_strategy VARCHAR(20))");
+                "CREATE TABLE ip_adjust_step" + suffix + "(id BIGINT PRIMARY KEY, adjust_log_id BIGINT, adjust_batch_no VARCHAR(40), flow_node_id BIGINT, node_label VARCHAR(40), step_status VARCHAR(20), handler_id VARCHAR(20), start_time TIMESTAMP)");
             for (int id=1; id<=4; id++) {
                 int flow = suffix.isEmpty() ? 1 : suffix.equals("_fund") ? 2 : 3;
                 // 插入本人和其他人的待处理、已完成及发起记录
                 sql("INSERT INTO ip_adjust_log" + suffix + " VALUES(" + id + ",'B" + id + "','债券" + id + "','bond',NULL,'F" + id + "','基金" + id + "','S" + id + "','股票" + id + "',1,'池','batch" + id + "','00','" + (id==3 ? "2" : "9") + "','发起人','in','bond'," + flow + ",0)",
-                    "INSERT INTO ip_adjust_step" + suffix + " VALUES(" + id + "," + id + ",'batch" + id + "'," + flow + ",'审核','" + (id>=3 ? "approve" : "pending") + "','" + (id==1 || id==3 ? "2" : "9") + "',CURRENT_TIMESTAMP,NULL)");
+                    "INSERT INTO ip_adjust_step" + suffix + " VALUES(" + id + "," + id + ",'batch" + id + "'," + flow + ",'审核','" + (id>=3 ? "approve" : "pending") + "','" + (id==1 || id==3 ? "2" : "9") + "',CURRENT_TIMESTAMP)");
             }
         }
-        sql("ALTER TABLE ip_adjust_log ADD isin_code VARCHAR(100)",
-            "ALTER TABLE ip_adjust_log ADD crmw_isin_code VARCHAR(100)",
-            "ALTER TABLE ip_adjust_log ADD wind_code_sh VARCHAR(100)",
-            "ALTER TABLE ip_adjust_log ADD wind_code_sz VARCHAR(100)",
-            "ALTER TABLE ip_adjust_log ADD wind_code_nib VARCHAR(100)",
-            "ALTER TABLE ip_adjust_log ADD wind_code_bj VARCHAR(100)",
-            "ALTER TABLE ip_adjust_log ADD wind_code_nbc VARCHAR(100)",
-            "UPDATE ip_adjust_log SET isin_code=security_code, wind_code_nib=security_code, security_code=NULL");
     }
 
     /** 关闭当前测试的数据库会话。 */
@@ -169,7 +160,7 @@ public class MyMattersMapperSqlTest {
     /** 已完成按整批结束判断，检索和流程选项始终使用当前业务数据。 */
     @Test public void completedShouldWaitForWholeBatchAndFiltersShouldStayInDomain() throws Exception {
         // 构造同批次未结束步骤，验证已完成列表不能提前显示
-        sql("INSERT INTO ip_adjust_step_fund VALUES(99,4,'batch3',2,'会签','pending','9',CURRENT_TIMESTAMP,NULL)");
+        sql("INSERT INTO ip_adjust_step_fund VALUES(99,4,'batch3',2,'会签','pending','9',CURRENT_TIMESTAMP)");
         // 构造本人已完成基金事项查询
         MyMattersReq req=request("fund","completed","2");
         assertThat(rows("fund","queryMyMattersPage",req)).isEmpty();
@@ -222,64 +213,6 @@ public class MyMattersMapperSqlTest {
             Page<MyMattersDto> second = PageHelper.startPage(2, 1);
             assertThat(rows(domain, "queryMyMattersPage", req)).extracting("adjustLogId").containsExactly(1L);
             assertThat(second.getTotal()).isEqualTo(2);
-        }
-    }
-
-    /** 普通发起人的修改待办可处理，会签最新步骤不决定本人实际处理资格。 */
-    @Test public void initiatedActionsShouldUseActualPendingStepsAndSubmitterAvoidance() throws Exception {
-        for (String domain : new String[]{"bond", "fund", "stock"}) {
-            String suffix = domain.equals("bond") ? "" : "_" + domain;
-            int flow = domain.equals("bond") ? 1 : domain.equals("fund") ? 2 : 3;
-            // 模拟本人发起后错误分配给本人的普通审批，仍须遵守发起人回避。
-            sql("UPDATE ip_adjust_log" + suffix + " SET adjuster_id='2' WHERE id IN (1,2,3,4)",
-                "UPDATE ip_adjust_log" + suffix + " SET audit_status='11' WHERE id=3",
-                "UPDATE ip_adjust_log" + suffix + " SET audit_status='20' WHERE id=4",
-                "UPDATE ip_adjust_step" + suffix + " SET step_status='pending', approval_strategy='initiator' WHERE id=3",
-                "UPDATE ip_adjust_step" + suffix + " SET step_status='pending', handler_id='2' WHERE id=4");
-            // 构造本人发起查询；只有 initiator 标记而没有提交/重提路由也不能绕过回避。
-            MyMattersReq req = request(domain, null, "2");
-            assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("canProcess")
-                    .containsOnly(false);
-            sql("INSERT INTO wf_flow_edge VALUES(" + flow + "," + flow + ",'resubmit')",
-                "INSERT INTO ip_adjust_step" + suffix + " VALUES(99,3,'batch3'," + flow + ",'会签','approve','9',CURRENT_TIMESTAMP,NULL)");
-            // 最新步骤已通过，本人较早的修改步骤仍待处理；他人待办和终态只能查看。
-            assertThat(rows(domain, "queryMyInitiatedMattersPage", req))
-                    .extracting("adjustLogId", "stepStatus", "canProcess")
-                    .containsExactly(tuple(3L, "approve", true), tuple(4L, "pending", false),
-                            tuple(2L, "pending", false), tuple(1L, "pending", false));
-            sql("UPDATE ip_adjust_step" + suffix + " SET step_status='submit' WHERE id=3");
-            assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("canProcess")
-                    .containsOnly(false);
-            // 非发起人本人的普通待办仍可处理，不能因收紧发起人入口而回归。
-            sql("UPDATE ip_adjust_log" + suffix + " SET adjuster_id='9' WHERE id=1");
-            req.setStepStatus("pending");
-            assertThat(rows(domain, "queryMyMattersPage", req)).filteredOn("adjustLogId", 1L)
-                    .extracting("canProcess").containsExactly(true);
-        }
-    }
-
-    /** 管理员本人发起的有效待办可接管，无处理人待办及终态按原权限区分。 */
-    @Test public void initiatedActionsShouldRespectAdminBoundsAndTerminalStates() throws Exception {
-        for (String domain : new String[]{"bond", "fund", "stock"}) {
-            String suffix = domain.equals("bond") ? "" : "_" + domain;
-            for (String userId : new String[]{"1", "10000", "10100", "9999", "10101"}) {
-                sql("UPDATE ip_adjust_log" + suffix + " SET adjuster_id='" + userId + "'",
-                    "UPDATE ip_adjust_step" + suffix + " SET handler_id=NULL WHERE id=2");
-                // 同时验证两个管理员边界及边界外普通用户。
-                MyMattersReq req = request(domain, null, userId);
-                boolean admin = userId.equals("1") || userId.equals("10000") || userId.equals("10100");
-                assertThat(rows(domain, "queryMyInitiatedMattersPage", req))
-                        .extracting("adjustLogId", "canProcess")
-                        .containsExactly(tuple(4L, false), tuple(3L, false), tuple(2L, admin), tuple(1L, admin));
-            }
-            sql("UPDATE ip_adjust_log" + suffix + " SET adjuster_id='1'");
-            for (String status : new String[]{"20", "21", "99", "-1", "32"}) {
-                sql("UPDATE ip_adjust_log" + suffix + " SET audit_status='" + status + "'");
-                // 终态即使残留 pending 数据也不提供处理入口。
-                MyMattersReq req = request(domain, null, "1");
-                assertThat(rows(domain, "queryMyInitiatedMattersPage", req)).extracting("canProcess")
-                        .containsOnly(false);
-            }
         }
     }
 

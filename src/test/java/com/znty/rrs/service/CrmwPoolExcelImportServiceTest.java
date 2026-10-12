@@ -169,20 +169,20 @@ public class CrmwPoolExcelImportServiceTest {
         when(importMapper.queryEnabledLeafCrmwPoolById(18L)).thenReturn(pool);
 
         SecurityInfoDetailDto crmw = new SecurityInfoDetailDto();
-        crmw.setIsinCode("CRMW001.IB");
+        crmw.setWindCode("CRMW001.IB");
         crmw.setFullName("测试凭证");
         crmw.setSecurityType("crmw");
         crmw.setWindCodeNib("CRMW001.IB");
-        when(importMapper.querySecurityImportInfoByCode("CRMW001.IB")).thenReturn(Collections.singletonList(crmw));
+        when(importMapper.querySecurityImportInfoByCode("CRMW001.IB")).thenReturn(crmw);
 
         SecurityInfoDetailDto security = new SecurityInfoDetailDto();
-        security.setIsinCode("110001.SH");
+        security.setWindCode("110001.SH");
         security.setFullName("测试债");
         security.setShortName("测试债");
         security.setSecurityType("bond");
         security.setSecurityTypeName("债券");
         security.setWindCodeSh("110001.SH");
-        when(importMapper.querySecurityImportInfoByCode("110001.SH")).thenReturn(Collections.singletonList(security));
+        when(importMapper.querySecurityImportInfoByCode("110001.SH")).thenReturn(security);
 
         AdjustCheckDto.CheckResultItem ri = new AdjustCheckDto.CheckResultItem();
         ri.setSecurityCode("110001.SH");

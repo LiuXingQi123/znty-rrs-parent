@@ -34,7 +34,7 @@
 - 危险操作需前端回传与 `taskCode` 一致的 `confirmText` 二次确认
 - SQL 文件有固定执行顺序（schema 先于 demo），改 `sql/` 目录文件名时**必须同步** `ScriptToolService` 内的白名单
 - 数据初始化任务：`INIT_SCHEMA` / `INIT_DEMO` / `RESET_ALL` 仅主库业务脚本（排除 AIS 与外部导入表）；外部导入表走 `INIT_EXTERNAL_IMPORT_SCHEMA` / `INIT_EXTERNAL_IMPORT_DEMO`；AIS 走 `INIT_AIS_SCHEMA` / `INIT_AIS_DEMO`
-- 调库信息快照：`rrs_adjust_snapshot_schema.sql`（`ip_adjust_security_snapshot` / `_crmw`）须注册进 schema 清单、可清空组与 `CLEAR_ADJUST_FLOW`；Demo 分别随证券调库和 CRMW 池状态脚本初始化。
+- 调库信息快照：`rrs_adjust_snapshot_schema.sql`（`ip_adjust_security_snapshot` / `_crmw`）须注册进 schema 清单、可清空组与 `CLEAR_ADJUST_FLOW`（无 demo 灌数，属 unseeded）
 - 写操作审计：`rrs_script_tool_schema.sql` → `sys_script_tool_run_log`；执行类接口结束后尽力落库；`queryScriptToolRunLogList` 供前端「执行审计」页
 - 配置项：`rrs.script.sql-path`（默认 `sql`，相对 `user.dir`）；`rrs.script.enabled`（默认 `true`，生产请设 `false` 或 `RRS_SCRIPT_ENABLED=false`，写操作全部拒绝；前端工作台可整组隐藏脚本工具菜单）
 
@@ -290,5 +290,3 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 - 修改中文注释、SQL 注释、演示数据中文文案后，必须扫描典型乱码特征，例如 `瀹`、`鐎`、`閰`、`鍙`、`鏉`、`涓`、`�`、`???`。
 - 如发现乱码，优先从 Git 中恢复原始可读内容，再重新做最小范围业务修改；不要继续在乱码文本上猜测替换。
 - 用脚本处理中文文件时，显式指定 `encoding='utf-8-sig'` 读取、`encoding='utf-8'` 写入，并避免经过会改变编码的控制台管道。
-
-> 证券身份规则：外部主档 `rrs_securityinfo` 以 `isin_code` 为非空主键（真实 ISIN 或 `TEMP:临时代码`），属于自增 ID 规范的明确例外；细则见同步维护的 `AGENTS_mysql.md` / `CLAUDE_mysql.md`。

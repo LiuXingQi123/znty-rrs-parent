@@ -78,13 +78,7 @@ public class SecurityPoolAdjustHistoryService {
             // 提交时间格式与页面一致
             target.setSubmitTime(QueryListExportHelper.formatDateTime(source.getSubmitTime()));
             target.setSecurityShortName(source.getSecurityShortName());
-            target.setIsinCode(source.getIsinCode());
-            target.setWindCodeSh(source.getWindCodeSh());
-            target.setWindCodeSz(source.getWindCodeSz());
-            target.setWindCodeNib(source.getWindCodeNib());
-            target.setWindCodeBj(source.getWindCodeBj());
-            target.setWindCodeNbc(source.getWindCodeNbc());
-
+            target.setSecurityCode(source.getSecurityCode());
             target.setSecurityTypeName(source.getSecurityTypeName());
             target.setIssuer(source.getIssuer());
             target.setAdjustType(source.getAdjustType());

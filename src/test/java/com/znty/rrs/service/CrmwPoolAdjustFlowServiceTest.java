@@ -414,14 +414,14 @@ public class CrmwPoolAdjustFlowServiceTest {
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         IpAdjustLogBo log = buildLog(1L, "00", "16");
         log.setAdjustMode("调入");
-        log.setCrmwIsinCode("CRMW24001.IB");
+        log.setCrmwScode("CRMW24001.IB");
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
         when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step);
 
         verify(adjustService).applyPoolStatusChanges(Collections.singletonList(log));
-        assertThat(log.getCrmwIsinCode()).isEqualTo("CRMW24001.IB");
+        assertThat(log.getCrmwScode()).isEqualTo("CRMW24001.IB");
     }
 
     /** 验证最终通过时CRMW调出仅软删除当前凭证与标的证券组合。 */
@@ -436,8 +436,8 @@ public class CrmwPoolAdjustFlowServiceTest {
         IpAdjustStepBo step = buildPendingStep(10L, "2", "研究员1");
         IpAdjustLogBo log = buildLog(1L, "00", "16");
         log.setAdjustMode("调出");
-        log.setIsinCode("100001");
-        log.setCrmwIsinCode("CRMW24002.IB");
+        log.setSecurityCode("100001");
+        log.setCrmwScode("CRMW24002.IB");
         log.setCrmwMktcode("IB");
         log.setCrmwStype("crmw");
         log.setTargetPoolId(22L);

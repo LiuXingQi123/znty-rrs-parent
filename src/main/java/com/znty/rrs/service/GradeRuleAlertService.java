@@ -99,12 +99,12 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         // 失效比较使用秒级时间字符串，与 DATETIME 精度对齐
         String scanTimeText = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(scanTime);
         for (IpGradeRuleAlertBo row : inPoolList) {
-            if (row.getIsinCode() == null || row.getCurrentPoolId() == null) {
+            if (row.getSecurityCode() == null || row.getCurrentPoolId() == null) {
                 continue;
             }
             // 按当前所在分级库复核主体债入库规则
             String fail = securityPoolAdjustService.evaluateGradedInboundForPool(
-                    row.getIsinCode(), row.getCurrentPoolId());
+                    row.getSecurityCode(), row.getCurrentPoolId());
             if (fail == null || fail.isEmpty()) {
                 continue;
             }
@@ -190,10 +190,10 @@ public class GradeRuleAlertService implements RrsScheduledTask {
      */
     private void upsertOpenAlert(IpGradeRuleAlertBo row, String fail, Date scanTime) {
         // 查询是否已有同券同池待处理待办
-        IpGradeRuleAlertBo open = gradeRuleAlertMapper.queryOpenAlert(row.getIsinCode(), row.getCurrentPoolId());
+        IpGradeRuleAlertBo open = gradeRuleAlertMapper.queryOpenAlert(row.getSecurityCode(), row.getCurrentPoolId());
         // 拼特殊类型说明
-        SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(row.getIsinCode());
-        String specialDesc = buildSpecialTypeDesc(sec, row.getIsinCode());
+        SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(row.getSecurityCode());
+        String specialDesc = buildSpecialTypeDesc(sec, row.getSecurityCode());
         if (open == null) {
             row.setFailReason(fail);
             row.setSpecialTypeDesc(specialDesc);

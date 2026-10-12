@@ -68,7 +68,7 @@
                     WHEN dst.category_type IS NOT NULL AND dst.category_type != '' THEN dst.category_type
                     ELSE 'unknown'
                 END AS typeCode
-               ,COUNT(DISTINCT ips.isin_code) AS count
+               ,COUNT(DISTINCT ips.security_code) AS count
         FROM ip_pool_status ips
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                         AND dst.is_deleted = 0
@@ -89,7 +89,7 @@
 
     <!-- 分页查询候选证券：方向过滤 + 发行主体等条件；仅调入按来源池过滤。 -->
     <select id="querySecurityPage" resultType="com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchCandidateDto">
-        SELECT si.isin_code
+        SELECT si.wind_code AS securityCode
                ,si.short_name AS securityShortName
                ,si.security_type
                ,si.abs_flag
@@ -123,7 +123,7 @@
                 AND NOT EXISTS (
                     SELECT 1
                     FROM ip_pool_status ips
-                    WHERE ips.isin_code = si.isin_code
+                    WHERE ips.security_code = si.wind_code
                       AND ips.target_pool_id = #{poolId}
                       AND ips.audit_status = '20'
                       AND ips.is_deleted = 0
@@ -133,7 +133,7 @@
                 AND EXISTS (
                     SELECT 1
                     FROM ip_pool_status ips
-                    WHERE ips.isin_code = si.isin_code
+                    WHERE ips.security_code = si.wind_code
                       AND ips.target_pool_id = #{poolId}
                       AND ips.audit_status = '20'
                       AND ips.is_deleted = 0
@@ -144,7 +144,7 @@
                 AND EXISTS (
                         SELECT 1
                         FROM ip_pool_status src
-                        WHERE src.isin_code = si.isin_code
+                        WHERE src.security_code = si.wind_code
                           AND src.audit_status = '20'
                           AND src.is_deleted = 0
                           AND src.target_pool_id IN
@@ -153,12 +153,8 @@
                         </foreach>
                 )
             </if>
-            <if test="securityKeyword != null and securityKeyword != ''">
-                AND (si.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR si.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR si.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR si.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR si.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+            <if test="securityCode != null and securityCode != ''">
+                AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')

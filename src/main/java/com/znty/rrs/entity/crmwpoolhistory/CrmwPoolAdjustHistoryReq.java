@@ -11,11 +11,7 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class CrmwPoolAdjustHistoryReq extends PageRequest {
 
-    /** CRMW银行间代码关键词 */
-    private String crmwKeyword;
-    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
-    private String crmwIsinCode;
-    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
+    /** CRMW代码（模糊搜索） */
     private String crmwScode;
 
     /** CRMW名称（模糊搜索） */

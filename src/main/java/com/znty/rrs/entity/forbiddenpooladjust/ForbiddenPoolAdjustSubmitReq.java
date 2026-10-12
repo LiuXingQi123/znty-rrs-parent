@@ -34,10 +34,8 @@ public class ForbiddenPoolAdjustSubmitReq {
      */
     @Data
     public static class AdjustItem {
-        /** 证券身份：正式ISIN / TEMP:临时代码 */
-        private String isinCode;
         /** 调整对象代码（空则回退主体代码） */
-    private String securityCode;
+        private String securityCode;
         /** 调整对象简称 */
         private String securityShortName;
         /** 调整对象证券类型 */

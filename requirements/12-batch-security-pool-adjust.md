@@ -1,16 +1,5 @@
 # 证券池批量调整（批量调入 / 批量调出）需求说明
 
-## 证券身份与市场代码（当前接口契约）
-
-- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
-- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
-- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
-- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
-- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
-- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
-- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
-
-
 > 前端页面：`batch_security_pool_adjust.html`（主页面，自包含两步式工作台）、`batch_security_pool_adjust_select.html`（独立选择屏，**当前未与主页打通**）
 > 后端前缀：`/api/v1/batchSecurityPoolAdjust`
 > 角色定位：业务人员选定一个目标投资池与方向后，批量勾选多只证券一次性发起调入/调出申请。
@@ -52,7 +41,7 @@
 
 | 控件 | 字段 | 说明 |
 |---|---|---|
-| 文本输入 | `isinCode` | 证券代码 |
+| 文本输入 | `securityCode` | 证券代码 |
 | 文本输入 | `securityShortName` | 证券简称 |
 | 多选 | `marketCodes` | 市场（SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他） |
 | 多选 | `bondYesFlags` | 是否特征：ABS/担保/永续/次级/私募/含权；勾选即筛「是」，多选 AND |
@@ -60,7 +49,7 @@
 查询接口：`POST /api/v1/batchSecurityPoolAdjust/querySecurityPage`（`loadSecurityList`），请求体：
 ```json
 { "currentUserId": "1", "poolId": <Long>, "direction": "in|out",
-  "isinCode": null, "securityShortName": null, "marketCodes": null, "bondYesFlags": null,
+  "securityCode": null, "securityShortName": null, "marketCodes": null, "bondYesFlags": null,
   "pageIndex": 1, "pageSize": 20 }
 ```
 返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（含证券基础信息及 ABS/担保/永续/次级/私募/含权原始字段；`dateExists` 为剩余期限天数，`dateExistsStr` 为直接展示并供年口径判断解析的证券期限文本）。候选表按证券池调整页样式展示六个「是/否」Tag。
@@ -75,7 +64,7 @@
 
 ### 2.3 跨页多选机制
 
-- 表格 `type="selection"` + `row-key="isinCode"` + `:reserve-selection="true"`，但实际**未依赖** reserve-selection，而是用 `selectedSecurityMap`（`{isinCode: row}`）做跨页缓存。
+- 表格 `type="selection"` + `row-key="securityCode"` + `:reserve-selection="true"`，但实际**未依赖** reserve-selection，而是用 `selectedSecurityMap`（`{securityCode: row}`）做跨页缓存。
 - `handleSecuritySelectionChange(selection)`：每次当前页勾选变化，把当前页未勾选的从 map 删除、勾选的写入 map。
 - `restoreCurrentPageSelection()`：翻页数据回来后按 map 恢复当前页勾选状态（`toggleRowSelection`），用 `selectionSyncing` 标记避免回调死循环。
 - 移除单只 `removeSelectedSecurity`、清空 `clearSelectedSecurities`。
@@ -104,12 +93,12 @@
 POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 {
   currentUserId, direction, poolId, poolName, poolType,
-  securities: [{ isinCode, securityShortName, securityType }, ...]
+  securities: [{ securityCode, securityShortName, securityType }, ...]
 }
 ```
 
 **后端处理**（`BatchSecurityPoolAdjustService.checkAdjust`）：
-1. `validateAdjustCheckReq`：poolId 非空、direction ∈ {in,out}、securities 非空、每只证券 isinCode 非空、目标池为启用叶子池（`queryEnabledLeafPoolCount`）。
+1. `validateAdjustCheckReq`：poolId 非空、direction ∈ {in,out}、securities 非空、每只证券 securityCode 非空、目标池为启用叶子池（`queryEnabledLeafPoolCount`）。
 2. `validateAdjustPoolPermission`：管理员(1)放行；否则校验当前用户对 poolId 拥有 adjustable 权限。
 3. `resolveAdjustMode`：`in→调入`、`out→调出`。
 4. **逐只证券循环**：对每个 `SecurityItem` 构造单证券校验请求 `buildSingleCheckReq`（目标池=当前 poolId，方向=中文），调用**单笔调库服务** `securityPoolAdjustService.checkAdjust(singleReq)`。
@@ -120,7 +109,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 **返回结构** `BatchSecurityInboundAdjustDto`：
 ```json
 { "items": [
-  { isinCode, securityShortName, securityType, targetPoolId, poolName, poolType,
+  { securityCode, securityShortName, securityType, targetPoolId, poolName, poolType,
     adjustMode, itemTag, adjustGroupKey, canAdjust, failReasons:[...], flowOptions:[...] }
 ] }
 ```
@@ -142,7 +131,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
      currentUserId, direction, adjusterId, adjusterName,
      poolId, poolName, poolType, adjustReason, adjustAdvice,
      items: [  // 仅 valid 且 direction 匹配的行
-       { isinCode, securityShortName, securityType,
+       { securityCode, securityShortName, securityType,
          targetPoolId, targetPoolName, poolType, adjustMode, itemTag, adjustGroupKey,
          flowId, flowKey, flowType, adjustmentNote,
          creditReportFileIndexes, materialFileIndexes,
@@ -156,11 +145,11 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 **后端 `addAdjustLog(req, files)`**（编排层；落库委托单券）：
 1. `@Transactional(rollbackFor = Exception.class)`——**整个批量提交是一个事务**。
-2. `validateAdjustSubmitReq`：poolId/direction/items/adjusterId/adjusterName 非空；目标池为启用叶子池；每条 item 的 isinCode 非空、手工项 `adjustMode` 必须等于本次方向、`targetPoolId` 非空。**不强制**每条都带 `flowId`/`flowKey`（无流程或直通流程允许空，与单券一致；前端可提交行仍会尽量选 recommended）。
+2. `validateAdjustSubmitReq`：poolId/direction/items/adjusterId/adjusterName 非空；目标池为启用叶子池；每条 item 的 securityCode 非空、手工项 `adjustMode` 必须等于本次方向、`targetPoolId` 非空。**不强制**每条都带 `flowId`/`flowKey`（无流程或直通流程允许空，与单券一致；前端可提交行仍会尽量选 recommended）。
 3. `validateAdjustPoolPermission`：权限校验同校验阶段。
 4. **整批防重复** `checkRecentBatchDuplicateSubmit`：约 30 秒窗口内，比较调整人最近一次「手动批量」手工项集合键（证券|目标池|方向|flowId|flowKey）与原因/意见文本，相同则拒绝。
 5. **直通预检** `needsWholeBatchDirectRecheck`：任一手工项经 `securityPoolAdjustService.isDirectAdjustFlow(flowId, flowKey)` 判定为直通时，提交前调用 `recheckBeforeFinalApproval`（锁池 + 容量/在池/限制等动态复核），整批共用一次。
-6. **按触发主券分组**：`resolveBatchSubmitGroupKey`（`sourceSecurityCode` 优先，否则 `isinCode`），保证 related 关联码与主券同组提交、共享批次与流程步骤。
+6. **按触发主券分组**：`resolveBatchSubmitGroupKey`（`sourceSecurityCode` 优先，否则 `securityCode`），保证 related 关联码与主券同组提交、共享批次与流程步骤。
 7. `sysAttachmentService.createSubmissionFiles(files, adjusterId)`：multipart 包成 `SubmissionFiles`，**整批共用一份物理文件**。
 8. `new SecurityPoolAdjustService.BatchNoContext()`：创建**批次号上下文**（`batchTimeText` yyyyMMddHHmmss + inbound/outbound/noFlow 序号），**整批共用**，多证券序号连续。
 9. **逐组循环**：`buildSingleSubmitReq`（请求级证券取组内 manual 主券；`adjustType="手动批量调整"`；透传整批 reason/advice/adjuster 与每条明细的 flow/附件下标）→ 调用**单笔落库入口** `securityPoolAdjustService.submitAdjustLog(singleReq, submissionFiles, batchNoContext)`（非页面用的 `addAdjustLog`：后者自建附件上下文，批量需共享已创建的 `SubmissionFiles`/`BatchNoContext`）。
@@ -172,7 +161,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 批量校验**完全复用**单笔 `SecurityPoolAdjustService.checkAdjust`，其内部四阶段：
 
-1. **前置校验**（`validateCheckAdjustReq`）：isinCode/items 非空。
+1. **前置校验**（`validateCheckAdjustReq`）：securityCode/items 非空。
 2. **参数初始化**（`loadSharedData`）：一次性查证券基础信息（兼存在性校验）、全量投资池 Map、证券当前有效入池 ID 集（audit_status='20'）、全量池关系三层 Map、证券级标志（是否有进行中流程 + 当前节点名、证券/主体是否在观察池、证券/主体是否在重点观察名单）、本次请求调入/调出目标池 ID 集。
 3. **调入校验**（`executeInAdjustCheck`）：对每个手工调入项执行 `checkInConditions`，并按池关系自动追加联动调入项（`in_linked`/linkage）、互斥配套调出项（`in_mutex`/mutex）；自动项与手工项失败状态联动。
 4. **调出校验**（`executeOutAdjustCheck`）：对每个手工调出项执行 `checkOutConditions`，追加联动调出项（`out_linked`）。
@@ -227,11 +216,11 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{ excludePoolTypes: ['crmw'], includeVarietyCodes: ['bond'] }` | `List<PoolTreeDto>` | 主页面投资池筛选树，默认收起，只含投资品种包含债券的池及其上级 |
 | `batchSecurityPoolAdjust/queryPoolPage` | currentUserId, poolIds, pageIndex, pageSize | `PageResult<BatchSecurityPoolDto>`（records:[id/poolName/poolFullName/poolType/marketCodes/varietyCodes/description/maxCapacity/currentCount], total） | 分页查询当前用户可调整的启用叶子投资池；**排除 CRMW，且 `variety_codes` 包含 `bond`**；候选证券另按 `security_type NOT IN ('crmw','company')` |
-| `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), isinCode, securityShortName, marketCodes, bondYesFlags, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券；特征多选按 AND |
-| `batchSecurityPoolAdjust/checkAdjust` | `BatchSecurityInboundAdjustReq`: currentUserId, direction, poolId, poolName, poolType, securities:[{isinCode,securityShortName,securityType}] | `BatchSecurityInboundAdjustDto`（items:[{...,canAdjust,failReasons,flowOptions}]） | 批量调库下一步校验 |
+| `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), securityCode, securityShortName, marketCodes, bondYesFlags, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券；特征多选按 AND |
+| `batchSecurityPoolAdjust/checkAdjust` | `BatchSecurityInboundAdjustReq`: currentUserId, direction, poolId, poolName, poolType, securities:[{securityCode,securityShortName,securityType}] | `BatchSecurityInboundAdjustDto`（items:[{...,canAdjust,failReasons,flowOptions}]） | 批量调库下一步校验 |
 | `batchSecurityPoolAdjust/addAdjustLog`（JSON） | `BatchSecurityInboundAdjustReq`（含 items:[{...,flowId/flowKey/flowType,creditReportFileIndexes,...}]） | `BatchSecurityInboundAdjustDto`（securityCount, submitCount, logIds） | 批量提交调库申请（无附件） |
 | `batchSecurityPoolAdjust/addAdjustLogWithFiles`（multipart） | `request`=JSON Blob + `files`=MultipartFile[] | 同上 | 批量提交调库申请及附件（前端实际用此入口；JSON 无附件入口为 `addAdjustLog`） |
-| `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, isinCode, reportType, crteTimeStart/End | PageResult | 报告弹窗内部报告查询 |
+| `reports/queryInReportPage` | pageIndex, pageSize, reportTitle, securityCode, reportType, crteTimeStart/End | PageResult | 报告弹窗内部报告查询 |
 | `reports/queryOutReportPage` | 同上 | 同上 | 报告弹窗外部报告查询 |
 | `attachments/downloadAttachment` | `{id}` | `ApiResponse<String>`（Base64） | 下载报告库附件 |
 

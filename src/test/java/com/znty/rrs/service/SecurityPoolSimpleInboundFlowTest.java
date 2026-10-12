@@ -408,7 +408,7 @@ public class SecurityPoolSimpleInboundFlowTest {
         ReflectionTestUtils.setField(fixture.service, "securityPoolAdjustMapper", fixture.mapper);
         ReflectionTestUtils.setField(fixture.service, "creditBondGradeRuleMapper", fixture.gradeRuleMapper);
         fixture.security = new SecurityInfoBo();
-        fixture.security.setIsinCode("SIMPLE001.IB");
+        fixture.security.setWindCode("SIMPLE001.IB");
         fixture.security.setSecurityType("bond");
         fixture.security.setIssueType("公募");
         fixture.security.setInnerIssuerRating(issuerGrade);
@@ -490,7 +490,7 @@ public class SecurityPoolSimpleInboundFlowTest {
         /** 按指定目标层级调用简易流程实际判断入口。 */
         private boolean matches(int targetLevel) {
             AdjustCheckReq req = new AdjustCheckReq();
-            req.setIsinCode(security.getIsinCode());
+            req.setSecurityCode(security.getWindCode());
             Boolean result = ReflectionTestUtils.invokeMethod(service, "isSimpleInboundFlowMatched",
                     req, shared, shared.getPoolMap().get((long) targetLevel + 1), matchReasons, unmatchReasons);
             return Boolean.TRUE.equals(result);
@@ -507,12 +507,12 @@ public class SecurityPoolSimpleInboundFlowTest {
             InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
             ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
             when(poolMapper.queryPoolList()).thenReturn(new ArrayList<>(shared.getPoolMap().values()));
-            when(mapper.querySecurityBoByCode(security.getIsinCode())).thenReturn(security);
-            when(mapper.querySecurityCurrentPoolIdList(security.getIsinCode()))
+            when(mapper.querySecurityBoByCode(security.getWindCode())).thenReturn(security);
+            when(mapper.querySecurityCurrentPoolIdList(security.getWindCode()))
                     .thenReturn(new ArrayList<>(shared.getCurrentPoolIds()));
 
             SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
-            req.setIsinCode(security.getIsinCode());
+            req.setSecurityCode(security.getWindCode());
             SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
             item.setItemTag("manual");
             item.setAdjustMode("调入");

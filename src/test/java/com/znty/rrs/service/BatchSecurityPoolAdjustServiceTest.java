@@ -55,7 +55,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         req.setPoolType("credit_bond");
 
         BatchSecurityInboundAdjustReq.SecurityItem security = new BatchSecurityInboundAdjustReq.SecurityItem();
-        security.setIsinCode("ABS001");
+        security.setSecurityCode("ABS001");
         security.setSecurityShortName("测试ABS");
         security.setSecurityType("abs");
         security.setRightsHolderCode("RIGHTS001");
@@ -66,7 +66,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(checkReq.getSelfSelectedRightsHolderCode()).isEqualTo("SELF001");
 
         BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
-        item.setIsinCode("ABS001");
+        item.setSecurityCode("ABS001");
         item.setSecurityShortName("测试ABS");
         item.setSecurityType("abs");
         item.setRightsHolderCode("RIGHTS001");
@@ -157,7 +157,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         req.setAdjusterName("管理员");
 
         BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
-        item.setIsinCode("102002345");
+        item.setSecurityCode("102002345");
         item.setSecurityShortName("23某城投债");
         item.setSecurityType("company_bond");
         item.setTargetPoolId(11L);
@@ -340,7 +340,7 @@ public class BatchSecurityPoolAdjustServiceTest {
 
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setIsinCode("106006789");
+        securityInfo.setWindCode("106006789");
         securityInfo.setShortName("测试债");
         securityInfo.setSecurityType("mtn");
         when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(securityInfo);
@@ -376,7 +376,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(dto.getItems()).hasSize(2);
         assertThat(dto.getItems()).extracting(BatchSecurityInboundAdjustDto.CheckResultItem::getItemTag)
                 .containsExactly("manual", "mutex");
-        assertThat(dto.getItems().get(1).getIsinCode()).isEqualTo("106006789");
+        assertThat(dto.getItems().get(1).getSecurityCode()).isEqualTo("106006789");
         assertThat(dto.getItems().get(1).getTargetPoolId()).isEqualTo(2L);
         assertThat(dto.getItems().get(1).getPoolName()).isEqualTo("信用债大库/一级库");
         assertThat(dto.getItems().get(1).getAdjustMode()).isEqualTo("调出");
@@ -388,7 +388,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     public void buildBatchCheckResultShouldPassThroughSingleFlowOptions() {
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         BatchSecurityInboundAdjustReq.SecurityItem security = new BatchSecurityInboundAdjustReq.SecurityItem();
-        security.setIsinCode("S001");
+        security.setSecurityCode("S001");
         security.setSecurityShortName("测试债");
         security.setSecurityType("company_bond");
 
@@ -402,7 +402,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         simple.setSelectable(true);
 
         AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
-        item.setIsinCode("S001");
+        item.setSecurityCode("S001");
         item.setSecurityShortName("测试债");
         item.setSecurityType("company_bond");
         item.setTargetPoolId(11L);
@@ -432,7 +432,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         IpAdjustLogBo history = new IpAdjustLogBo();
-        history.setIsinCode("S001");
+        history.setSecurityCode("S001");
         history.setTargetPoolId(11L);
         history.setAdjustMode("调入");
         history.setFlowId(1L);
@@ -471,22 +471,22 @@ public class BatchSecurityPoolAdjustServiceTest {
     }
 
     /** 构建批量提交明细。 */
-    private BatchSecurityInboundAdjustReq.AdjustItem buildBatchSubmitItem(String isinCode) {
+    private BatchSecurityInboundAdjustReq.AdjustItem buildBatchSubmitItem(String securityCode) {
         BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
-        item.setIsinCode(isinCode);
+        item.setSecurityCode(securityCode);
         item.setSecurityShortName("测试证券");
         item.setSecurityType("company_bond");
         item.setTargetPoolId(11L);
         item.setAdjustMode("调入");
         item.setFlowId(1L);
-        item.setAdjustGroupKey(isinCode + "_manual_11_调入");
+        item.setAdjustGroupKey(securityCode + "_manual_11_调入");
         return item;
     }
 
     /** 构建批量防重复历史日志。 */
-    private IpAdjustLogBo buildBatchHistoryLog(String isinCode) {
+    private IpAdjustLogBo buildBatchHistoryLog(String securityCode) {
         IpAdjustLogBo log = new IpAdjustLogBo();
-        log.setIsinCode(isinCode);
+        log.setSecurityCode(securityCode);
         log.setTargetPoolId(11L);
         log.setAdjustMode("调入");
         log.setFlowId(1L);
@@ -495,10 +495,10 @@ public class BatchSecurityPoolAdjustServiceTest {
 
     /** 构建指定属性的批量提交明细。 */
     private BatchSecurityInboundAdjustReq.AdjustItem buildBatchSubmitItem(
-            String isinCode, Long targetPoolId, String targetPoolName,
+            String securityCode, Long targetPoolId, String targetPoolName,
             String adjustMode, String itemTag, String adjustGroupKey) {
         BatchSecurityInboundAdjustReq.AdjustItem item = new BatchSecurityInboundAdjustReq.AdjustItem();
-        item.setIsinCode(isinCode);
+        item.setSecurityCode(securityCode);
         item.setSecurityShortName("22某电力MTN001");
         item.setSecurityType("mtn");
         item.setTargetPoolId(targetPoolId);
@@ -512,9 +512,9 @@ public class BatchSecurityPoolAdjustServiceTest {
     }
 
     /** 构建批量校验证券。 */
-    private BatchSecurityInboundAdjustReq.SecurityItem buildSecurityItem(String isinCode) {
+    private BatchSecurityInboundAdjustReq.SecurityItem buildSecurityItem(String securityCode) {
         BatchSecurityInboundAdjustReq.SecurityItem item = new BatchSecurityInboundAdjustReq.SecurityItem();
-        item.setIsinCode(isinCode);
+        item.setSecurityCode(securityCode);
         item.setSecurityShortName("22某电力MTN001");
         item.setSecurityType("mtn");
         return item;

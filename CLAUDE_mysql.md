@@ -71,10 +71,6 @@ AIS 库将库名换成 `ais_inv_analysis` / `ais_inv_ods` 即可。
 | 类型 | `BIGINT NOT NULL AUTO_INCREMENT` |
 | 注释 | `'主键 ID'` |
 
-### 外部证券主档的明确例外
-
-`rrs_securityinfo` 不设自增证券 ID，使用 `isin_code VARCHAR(100) NOT NULL` 作为唯一主键。正式券保存真实 ISIN，临时券保存 `TEMP:临时代码`（临时代码不超过 95 字符）。删除 Wind 总码，保留五码及 `security_source`。普通基础信息编辑不能修改 ISIN；修正 ISIN 须专项处理所有业务引用。不增加二级索引、外键或身份联合视图。其余表继续遵循本规范的自增主键规则。
-
 ### 非空与默认值约束
 
 - 除主键外，所有字段统一允许为 `NULL`（即 `DEFAULT NULL`）

@@ -130,7 +130,7 @@ public class ReportService {
                 poolFullNameMap = investmentPoolService.queryPoolFullNameMap();
             }
             // 查询证券基础信息，取证券全称与主体编码
-            SecurityInfoBo securityInfo = reportMapper.querySecurityBoByCode(log.getObjectCode());
+            SecurityInfoBo securityInfo = reportMapper.querySecurityBoByCode(log.getSecurityCode());
             // 查询证券所属大类，用于映射报告类型
             String categoryType = reportMapper.queryCategoryTypeBySecurityType(log.getSecurityType());
             // 组装报告标题：证券全称 + 调入/调出 + 投资池全路径名称 + 报告
@@ -148,10 +148,9 @@ public class ReportService {
             // 按证券大类和调整方向确定报告类型
             reportInBo.setReportType(resolveReportType(categoryType, log.getAdjustMode()));
             reportInBo.setSecurityCode(log.getSecurityCode());
-            reportInBo.setIsinCode(log.getIsinCode());
             // 主体调库直接使用主体代码，证券及 CRMW 使用证券发行主体代码
             reportInBo.setCompanyCode(CategoryType.COMPANY.getCode().equals(categoryType)
-                    ? log.getObjectCode() : (securityInfo != null ? securityInfo.getIssuerCode() : null));
+                    ? log.getSecurityCode() : (securityInfo != null ? securityInfo.getIssuerCode() : null));
             // 按证券大类确定内部报告的证券类型
             reportInBo.setSecurityType(resolveReportSecurityType(categoryType));
             reportInBo.setDataSource("uploaded");

@@ -1,17 +1,5 @@
 # CRMW池调库审核（审批流转）需求说明
 
-## 证券身份与市场代码（当前接口契约）
-
-- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
-- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
-- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
-- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
-- 调库记录展示日志保存的市场代码快照，不随当前主档代码变化；CRMW 凭证展示银行间代码快照，ISIN 仅用于身份关联。
-- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
-- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
-- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
-
-
 > 前端页面：`crmw_pool_adjust_approve.html`
 > 后端前缀：`/api/v1/crmwPoolAdjustFlow`（审批处理）+ `/api/v1/crmwPoolAdjust`（详情/校验，复用 [19] 接口）
 > 角色定位：审核 / 审批人对 CRMW 池调库申请进行复核、驳回、修改重提、审批通过或驳回，最终通过才落地 `ip_pool_status_crmw`。流转逻辑与证券池调库审批（[05]）同构。
@@ -26,9 +14,9 @@
 
 **入口模式 `entryMode`**：`process`（我的事宜处理，默认）/ `next`（下一步校验确认）。
 
-**初始化**（`created`）：`this.initStandaloneReviewPage()`。从 URL 取 `isinCode`/`windCode`、`crmwScode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`（`'next'` 或默认 `'process'`）；`adjustStep=2`；`loadDetailData(isinCode)` + `restoreStandaloneAdjustDraft`（从 sessionStorage 恢复草稿）。默认登录用户取 `RrsAuth`。顶部「返回」先 `closeActiveTab()`，失败再回页内列表；禁止 `history.back()`。
+**初始化**（`created`）：`this.initStandaloneReviewPage()`。从 URL 取 `securityCode`/`windCode`、`crmwScode`、`targetPoolId`、`adjustLogId`/`adjust_log_id`、`adjustBatchNo`/`adjust_batch_no`、`entryMode`（`'next'` 或默认 `'process'`）；`adjustStep=2`；`loadDetailData(securityCode)` + `restoreStandaloneAdjustDraft`（从 sessionStorage 恢复草稿）。默认登录用户取 `RrsAuth`。顶部「返回」先 `closeActiveTab()`，失败再回页内列表；禁止 `history.back()`。
 
-> 审批页 URL 必带 `crmwScode`：`initStandaloneReviewPage` 校验 `isinCode && crmwScode`，否则提示「缺少证券或CRMW信息」。
+> 审批页 URL 必带 `crmwScode`：`initStandaloneReviewPage` 校验 `securityCode && crmwScode`，否则提示「缺少证券或CRMW信息」。
 
 ---
 
@@ -42,12 +30,12 @@
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `querySecurityDetail` | `{ isinCode }` | 标的证券详情 → `bondDetail` |
-| `queryCrmwDetail` | `{ isinCode: selectedCrmwCode }` | CRMW 凭证详情 → `crmwDetail` |
-| `queryCrmwAdjustPoolList` | `{ isinCode, adjustDirection:'in', currentUserId }` | 可调入池 |
-| `queryCrmwAdjustPoolList` | `{ isinCode, adjustDirection:'out', currentUserId }` | 可调出池 |
-| `queryCrmwPoolStatus` | `{ isinCode }` | 当前证券/主体所在池 |
-| `queryCrmwAdjustLogList` | `{ isinCode, adjustBatchNo }` | 调库记录（无批次仅返回未终结流程） |
+| `querySecurityDetail` | `{ securityCode }` | 标的证券详情 → `bondDetail` |
+| `queryCrmwDetail` | `{ securityCode: selectedCrmwCode }` | CRMW 凭证详情 → `crmwDetail` |
+| `queryCrmwAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId }` | 可调入池 |
+| `queryCrmwAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
+| `queryCrmwPoolStatus` | `{ securityCode }` | 当前证券/主体所在池 |
+| `queryCrmwAdjustLogList` | `{ securityCode, adjustBatchNo }` | 调库记录（无批次仅返回未终结流程） |
 
 随后串行：构建调入/调出树、互斥映射、`loadLogAttachments`（收集并去重全部日志 ID，一次调用 `/api/v1/attachments/queryAttachmentList`，按 `mainId` 回填）、`loadFlowSteps`（逐个调 `queryCrmwAdjustStepList`，找含 `stepStatus==='pending'` 的记录作为 `activeAdjustLog`）。
 
@@ -164,7 +152,7 @@
 
 - **无独立 FlowMapper**：`CrmwPoolAdjustFlowService` 复用 `CrmwPoolAdjustMapper` 的所有步骤/日志/池状态操作（方法名与证券池 `SecurityPoolAdjustMapper` 一致）。
 - **finishAdjustBatch 落地 `ip_pool_status_crmw`**：而非 `ip_pool_status`；`deletePoolStatusSoft` SQL 带 `AND pool_type='crmw'`。
-- **审批页 URL 必带 `crmwScode`**：`initStandaloneReviewPage` 校验 `isinCode && crmwScode`。
+- **审批页 URL 必带 `crmwScode`**：`initStandaloneReviewPage` 校验 `securityCode && crmwScode`。
 - 其余流转逻辑（会签/抢占/发起人/自动审批/终止分支/管理员代办/内部报告生成）与证券池审批完全一致。
 
 ---

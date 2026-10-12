@@ -73,18 +73,8 @@ public class ForbiddenPoolAdjustDto {
      */
     @Data
     public static class CompanyBond {
-        /** 证券身份：正式ISIN / TEMP:临时代码 */
-        private String isinCode;
-        /** 沪市证券代码 */
-        private String windCodeSh;
-        /** 深市证券代码 */
-        private String windCodeSz;
-        /** 银行间证券代码 */
-        private String windCodeNib;
-        /** 北交所证券代码 */
-        private String windCodeBj;
-        /** 其他市场证券代码 */
-        private String windCodeNbc;
+        /** 证券代码 */
+        private String windCode;
         /** 证券简称 */
         private String shortName;
         /** 证券全称 */

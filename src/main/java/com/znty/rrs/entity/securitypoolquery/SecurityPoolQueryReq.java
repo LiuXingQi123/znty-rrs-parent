@@ -14,10 +14,6 @@ import java.util.List;
 public class SecurityPoolQueryReq extends PageRequest {
     /** 证券池树选中节点ID列表 */
     private List<Long> poolIds;
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
-    /** 证券代码关键词，匹配五码 */
-    private String securityKeyword;
     /** 证券代码（模糊搜索） */
     private String securityCode;
     /** 证券简称（模糊搜索） */

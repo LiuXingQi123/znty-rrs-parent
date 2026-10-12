@@ -38,7 +38,6 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
     public void execute_ShouldAutoInCompanyWithLowOuterRating() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
@@ -67,7 +66,6 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
 
         ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
         company.setSecurityCode("C90005");
-        company.setIsinCode("C90005");
         company.setSecurityShortName("某地产公司");
         company.setSecurityType("company");
         company.setOuterRating("AA-");
@@ -84,17 +82,14 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
 
         ScheduledAdjustCandidateDto bond1 = new ScheduledAdjustCandidateDto();
         bond1.setSecurityCode("BOND001.IB");
-        bond1.setIsinCode("BOND001.IB");
         bond1.setSecurityShortName("债1");
         bond1.setSecurityType("credit_bond");
         ScheduledAdjustCandidateDto bond2 = new ScheduledAdjustCandidateDto();
         bond2.setSecurityCode("BOND002.IB");
-        bond2.setIsinCode("BOND002.IB");
         bond2.setSecurityShortName("债2");
         bond2.setSecurityType("credit_bond");
         ScheduledAdjustCandidateDto bond3 = new ScheduledAdjustCandidateDto();
         bond3.setSecurityCode("BOND003.IB");
-        bond3.setIsinCode("BOND003.IB");
         bond3.setSecurityShortName("债3");
         bond3.setSecurityType("abs");
         when(autoAdjustMapper.queryCompanyBondNotInSamePoolForAutoIn(

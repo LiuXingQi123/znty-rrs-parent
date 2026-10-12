@@ -72,7 +72,7 @@ public class PledgeBlacklistEntryPointTest {
         context.setRequestInPoolIds(requestInPoolIds);
         context.setRequestOutPoolIds(requestOutPoolIds);
         SecurityInfoBo security = new SecurityInfoBo();
-        security.setIsinCode(company ? "C001" : "B001");
+        security.setWindCode(company ? "C001" : "B001");
         security.setIssuerCode("C001");
         context.setSecurityInfo(security);
 

@@ -3,7 +3,6 @@ package com.znty.rrs.entity.securitypooladjust;
 
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import lombok.Data;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.List;
 
@@ -13,16 +12,6 @@ import java.util.List;
 @Data
 public class SecurityPoolAdjustSubmitReq {
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
-
-    /** 内部调库对象身份，主体与证券显式区分 */
-    @JsonIgnore
-    public String getObjectCode() {
-        return "company".equals(securityType) ? securityCode : isinCode;
-    }
-    /** 证券代码关键词，匹配五码 */
-    private String securityKeyword;
     /** 证券代码 */
     private String securityCode;
 
@@ -35,9 +24,7 @@ public class SecurityPoolAdjustSubmitReq {
     /** CRMW名称 */
     private String crmwName;
 
-    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
-    private String crmwIsinCode;
-    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
+    /** CRMW 证券代码 */
     private String crmwScode;
 
     /** CRMW 市场代码 */
@@ -82,16 +69,7 @@ public class SecurityPoolAdjustSubmitReq {
     @Data
     public static class AdjustItem {
 
-        /** 证券身份：正式ISIN / TEMP:临时代码 */
-        private String isinCode;
-
-        /** 内部调库对象身份，主体与证券显式区分 */
-        @JsonIgnore
-        public String getObjectCode() {
-            return "company".equals(securityType) ? securityCode : isinCode;
-        }
-        /** 证券代码关键词，匹配五码 */
-        private String securityKeyword;
+        /** 证券代码（主券或关联码；空则回退请求级 securityCode） */
         private String securityCode;
 
         /** 证券简称 */

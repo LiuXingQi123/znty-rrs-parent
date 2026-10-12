@@ -18,7 +18,6 @@
                ,t.temp_issue_date
                ,t.temp_maturity_date
                ,t.security_name
-               ,t.isin_code
                ,t.security_code
                ,t.security_market
                ,t.security_type
@@ -80,7 +79,6 @@
                ,temp_issue_date
                ,temp_maturity_date
                ,security_name
-               ,isin_code
                ,security_code
                ,security_market
                ,security_type
@@ -110,7 +108,6 @@
                ,t.temp_issue_date
                ,t.temp_maturity_date
                ,t.security_name
-               ,t.isin_code
                ,t.security_code
                ,t.security_market
                ,t.security_type
@@ -135,13 +132,12 @@
         SELECT id
               ,temp_security_code
               ,temp_security_name
-              ,isin_code
               ,security_code
         FROM rrs_temp_security_code
         WHERE is_deleted = 0
           AND status = 'temporary'
-          AND isin_code IS NOT NULL
-          AND TRIM(isin_code) != ''
+          AND security_code IS NOT NULL
+          AND TRIM(security_code) != ''
         ORDER BY id ASC
     </select>
 
@@ -164,7 +160,7 @@
         FROM rrs_temp_security_code
         WHERE is_deleted = 0
           AND status = 'temporary'
-          AND CONCAT('TEMP:', temp_security_code) = #{securityCode}
+          AND temp_security_code = #{securityCode}
     </select>
 
     <!--
@@ -203,13 +199,8 @@
 
     <!-- 按关键字远程查询正式证券（对齐老系统债券选券：代码/名称模糊，排除临时代码占位与退市，最多 50 条） -->
     <select id="queryFormalSecurityOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
-        SELECT si.isin_code
-               ,si.wind_code_sh
-               ,si.wind_code_sz
-               ,si.wind_code_nib
-               ,si.wind_code_bj
-               ,si.wind_code_nbc
-               ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.isin_code) AS securityName
+        SELECT si.wind_code AS securityCode
+               ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
                ,CASE
                     WHEN si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '' THEN 'SSE'
                     WHEN si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '' THEN 'SZSE'
@@ -226,35 +217,25 @@
         <where>
             AND si.security_status != 'D'
             AND si.security_source != 'temporary'
-            AND si.security_type != 'company'
-          AND si.isin_code NOT LIKE 'TEMP:%'
+            AND si.security_type NOT IN ('crmw', 'company')
             <if test="securityKeyword != null and securityKeyword != ''">
-                AND (si.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR si.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR si.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR si.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR si.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%')
+                AND (si.wind_code LIKE CONCAT('%', #{securityKeyword}, '%')
                      OR si.short_name LIKE CONCAT('%', #{securityKeyword}, '%')
                      OR si.full_name LIKE CONCAT('%', #{securityKeyword}, '%'))
             </if>
-            <if test="isinCode != null and isinCode != ''">
-                AND si.isin_code = #{isinCode}
+            <if test="securityCode != null and securityCode != ''">
+                AND si.wind_code = #{securityCode}
             </if>
         </where>
         ORDER BY si.ts DESC
-                 ,si.isin_code DESC
+                 ,si.wind_code DESC
         LIMIT 50
     </select>
 
     <!-- 根据正式证券代码查询正式证券（转正校验用） -->
     <select id="queryFormalSecurityByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$FormalSecurityOption">
-        SELECT si.isin_code
-               ,si.wind_code_sh
-               ,si.wind_code_sz
-               ,si.wind_code_nib
-               ,si.wind_code_bj
-               ,si.wind_code_nbc
-               ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.isin_code) AS securityName
+        SELECT si.wind_code AS securityCode
+               ,COALESCE(NULLIF(si.short_name, ''), si.full_name, si.wind_code) AS securityName
                ,CASE
                     WHEN si.wind_code_sh IS NOT NULL AND si.wind_code_sh != '' THEN 'SSE'
                     WHEN si.wind_code_sz IS NOT NULL AND si.wind_code_sz != '' THEN 'SZSE'
@@ -268,11 +249,10 @@
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
                                         AND dst.is_deleted = 0
-        WHERE si.isin_code = #{isinCode}
+        WHERE si.wind_code = #{securityCode}
           AND si.security_status != 'D'
           AND si.security_source != 'temporary'
-          AND si.security_type != 'company'
-          AND si.isin_code NOT LIKE 'TEMP:%'
+          AND si.security_type NOT IN ('crmw', 'company')
         LIMIT 1
     </select>
 
@@ -302,13 +282,13 @@
     <select id="querySecurityInfoCount" resultType="int">
         SELECT COUNT(1)
         FROM rrs_securityinfo
-        WHERE isin_code = #{securityCode}
+        WHERE wind_code = #{securityCode}
     </select>
 
     <!-- 新增临时代码占位证券：须写明确 security_status（占位用 L；来源无状态用 U），否则 != 'D' 会因 NULL 三值逻辑滤行 -->
     <insert id="addSecurityInfo">
         INSERT INTO rrs_securityinfo (
-            isin_code
+            wind_code
             ,full_name
             ,short_name
             ,wind_code_sh
@@ -326,7 +306,7 @@
             ,create_time
             ,ts
         ) VALUES (
-            #{isinCode}
+            #{securityCode}
             ,#{securityName}
             ,#{securityName}
             ,CASE WHEN #{securityMarket} = 'SSE' THEN #{securityCode} ELSE NULL END
@@ -361,7 +341,7 @@
            ,firstissue_date = DATE_FORMAT(#{tempIssueDate}, '%Y%m%d')
            ,maturity_date = DATE_FORMAT(#{tempMaturityDate}, '%Y%m%d')
            ,ts = #{updateTime}
-        WHERE isin_code = #{securityCode}
+        WHERE wind_code = #{securityCode}
     </update>
 
     <!-- 取消发行时更新临时证券主数据 -->
@@ -371,7 +351,7 @@
            ,end_date = #{cancelDate}
            ,security_status = 'D'
            ,ts = #{updateTime}
-        WHERE isin_code = #{tempIsinCode}
+        WHERE wind_code = #{tempSecurityCode}
     </update>
 
     <!-- 转正式时禁用临时证券主数据 -->
@@ -379,7 +359,7 @@
         UPDATE rrs_securityinfo
         SET security_status = 'D'
            ,ts = #{updateTime}
-        WHERE isin_code = #{tempIsinCode}
+        WHERE wind_code = #{tempSecurityCode}
           AND security_source = 'temporary'
     </update>
 
@@ -433,7 +413,6 @@
            ,temp_issue_date = #{bo.tempIssueDate}
            ,temp_maturity_date = #{bo.tempMaturityDate}
            ,security_name = #{bo.securityName}
-           ,isin_code = #{bo.isinCode}
            ,security_code = #{bo.securityCode}
            ,security_market = #{bo.securityMarket}
            ,security_type = #{bo.securityType}
@@ -476,71 +455,246 @@
             SELECT COUNT(1) AS ref_count
             FROM ip_adjust_log
             WHERE is_deleted = 0
-              AND isin_code = #{tempIsinCode}
+              AND security_code = #{tempSecurityCode}
               AND security_type = #{tempSecurityType}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status
             WHERE is_deleted = 0
-              AND isin_code = #{tempIsinCode}
+              AND security_code = #{tempSecurityCode}
               AND security_type = #{tempSecurityType}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_adjust_log
             WHERE is_deleted = 0
-              AND crmw_isin_code = #{tempIsinCode}
+              AND crmw_scode = #{tempSecurityCode}
               AND crmw_stype = #{tempSecurityType}
               AND crmw_mktcode = #{tempSecurityMarket}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status
             WHERE is_deleted = 0
-              AND crmw_isin_code = #{tempIsinCode}
+              AND crmw_scode = #{tempSecurityCode}
               AND crmw_stype = #{tempSecurityType}
               AND crmw_mktcode = #{tempSecurityMarket}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status_crmw
             WHERE is_deleted = 0
-              AND isin_code = #{tempIsinCode}
+              AND security_code = #{tempSecurityCode}
               AND security_type = #{tempSecurityType}
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status_crmw
             WHERE is_deleted = 0
-              AND crmw_isin_code = #{tempIsinCode}
+              AND crmw_scode = #{tempSecurityCode}
               AND crmw_stype = #{tempSecurityType}
               AND crmw_mktcode = #{tempSecurityMarket}
         ) refs
     </select>
 
     <!-- 查询在途调库日志证券引用 ID（对齐老系统 approvestatus=10，仅流程中字段替换） -->
+    <select id="queryPendingAdjustLogSecurityReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_log
+        WHERE is_deleted = 0
+          AND security_code = #{tempSecurityCode}
+          AND security_type = #{tempSecurityType}
+          AND audit_status IN ('00', '11')
+    </select>
 
     <!-- 查询有效在池状态（临时证券，audit_status=20） -->
+    <select id="queryActivePoolStatusList" resultType="com.znty.rrs.entity.bo.IpPoolStatusBo">
+        SELECT id
+               ,security_code
+               ,security_short_name
+               ,security_type
+               ,crmw_name
+               ,crmw_scode
+               ,crmw_mktcode
+               ,crmw_stype
+               ,adjust_type
+               ,adjust_mode
+               ,adjust_batch_no
+               ,adjust_log_id
+               ,target_pool_id
+               ,target_pool_name
+               ,pool_type
+               ,audit_status
+               ,adjuster_id
+               ,adjuster_name
+               ,adjust_reason
+               ,adjust_advice
+               ,submit_time
+               ,audit_time
+               ,entry_time
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM ip_pool_status
+        WHERE is_deleted = 0
+          AND security_code = #{tempSecurityCode}
+          AND security_type = #{tempSecurityType}
+          AND audit_status = '20'
+    </select>
 
     <!-- 查询正式证券是否已在指定池（audit_status=20） -->
+    <select id="queryActivePoolStatusCount" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_pool_status
+        WHERE is_deleted = 0
+          AND security_code = #{securityCode}
+          AND security_type = #{securityType}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+    </select>
 
     <!-- 按主键软删除池状态 -->
+    <update id="deletePoolStatusSoftById">
+        UPDATE ip_pool_status
+        SET is_deleted = 1
+           ,updt_time = #{updateTime}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
 
     <!-- 查询在途调库日志 CRMW 引用 ID 列表 -->
+    <select id="queryPendingAdjustLogCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_adjust_log
+        WHERE is_deleted = 0
+          AND crmw_scode = #{tempSecurityCode}
+          AND crmw_stype = #{tempSecurityType}
+          AND crmw_mktcode = #{tempSecurityMarket}
+          AND audit_status IN ('00', '11')
+    </select>
 
     <!-- 查询当前池状态 CRMW 引用 ID 列表（仅改 CRMW 字段，不出/入库） -->
+    <select id="queryPoolStatusCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_pool_status
+        WHERE is_deleted = 0
+          AND crmw_scode = #{tempSecurityCode}
+          AND crmw_stype = #{tempSecurityType}
+          AND crmw_mktcode = #{tempSecurityMarket}
+    </select>
 
     <!-- 查询 CRMW 池有效在池状态（security 为临时码） -->
+    <select id="queryActiveCrmwPoolStatusList" resultType="com.znty.rrs.entity.bo.IpPoolStatusBo">
+        SELECT id
+               ,security_code
+               ,security_short_name
+               ,security_type
+               ,crmw_name
+               ,crmw_scode
+               ,crmw_mktcode
+               ,crmw_stype
+               ,adjust_type
+               ,adjust_mode
+               ,adjust_batch_no
+               ,adjust_log_id
+               ,target_pool_id
+               ,target_pool_name
+               ,pool_type
+               ,audit_status
+               ,adjuster_id
+               ,adjuster_name
+               ,adjust_reason
+               ,adjust_advice
+               ,submit_time
+               ,audit_time
+               ,entry_time
+               ,is_deleted
+               ,crte_time
+               ,updt_time
+        FROM ip_pool_status_crmw
+        WHERE is_deleted = 0
+          AND security_code = #{tempSecurityCode}
+          AND security_type = #{tempSecurityType}
+          AND audit_status = '20'
+    </select>
 
     <!-- 查询正式证券是否已在 CRMW 池 -->
+    <select id="queryActiveCrmwPoolStatusCount" resultType="int">
+        SELECT COUNT(1)
+        FROM ip_pool_status_crmw
+        WHERE is_deleted = 0
+          AND security_code = #{securityCode}
+          AND security_type = #{securityType}
+          AND target_pool_id = #{targetPoolId}
+          AND audit_status = '20'
+    </select>
 
     <!-- 按主键软删除 CRMW 池状态 -->
+    <update id="deleteCrmwPoolStatusSoftById">
+        UPDATE ip_pool_status_crmw
+        SET is_deleted = 1
+           ,updt_time = #{updateTime}
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
 
     <!-- 查询 CRMW 池状态上 CRMW 字段引用（仅字段替换） -->
+    <select id="queryCrmwPoolStatusCrmwReferenceIdList" resultType="long">
+        SELECT id
+        FROM ip_pool_status_crmw
+        WHERE is_deleted = 0
+          AND crmw_scode = #{tempSecurityCode}
+          AND crmw_stype = #{tempSecurityType}
+          AND crmw_mktcode = #{tempSecurityMarket}
+    </select>
 
     <!-- 批量替换在途调库日志证券引用 -->
+    <update id="editAdjustLogSecurityReference">
+        UPDATE ip_adjust_log
+        SET security_code = #{bo.securityCode}
+           ,security_short_name = #{bo.securityName}
+           ,security_type = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </update>
 
     <!-- 批量替换在途调库日志 CRMW 引用 -->
+    <update id="editAdjustLogCrmwReference">
+        UPDATE ip_adjust_log
+        SET crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </update>
 
     <!-- 批量替换当前池状态 CRMW 引用（对齐老系统 findInvestPoolStatusLC，只改字段） -->
+    <update id="editPoolStatusCrmwReference">
+        UPDATE ip_pool_status
+        SET crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </update>
 
     <!-- 批量替换 CRMW 池状态 CRMW 引用 -->
+    <update id="editCrmwPoolStatusCrmwReference">
+        UPDATE ip_pool_status_crmw
+        SET crmw_scode = #{bo.securityCode}
+           ,crmw_mktcode = #{bo.securityMarket}
+           ,crmw_stype = #{bo.securityType}
+           ,updt_time = #{bo.updateTime}
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </update>
 
     <!-- 新增 CRMW 池状态（正式入库） -->
     <insert id="addCrmwPoolStatus" useGeneratedKeys="true" keyProperty="id">

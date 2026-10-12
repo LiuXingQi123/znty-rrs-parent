@@ -9,12 +9,11 @@
 --      命名对齐 ip_pool_status / ip_pool_status_crmw。
 --   3. 快照不是 rrs_securityinfo 全量拷贝；与 rrs 语义对应的字段列名/类型/注释与那边一致。
 --   4. 仅存在于快照侧的扩展/预留字段可使用本表自有命名。
---   5. CRMW 表在证券快照字段基础上，增加凭证关联键 crmw_isin_code，及与运行态表
---      一致的凭证快照：crmw_name / crmw_scode / crmw_mktcode / crmw_stype。
---      凭证仅保留银行间代码 crmw_scode；标的保留全部五码，代码均使用提交时快照。
+--   5. CRMW 表在证券快照字段基础上，增加与 ip_adjust_log / ip_pool_status_crmw
+--      一致的凭证四元组：crmw_name / crmw_scode / crmw_mktcode / crmw_stype
 --      （标的证券字段仍用 rrs 同名列，凭证侧用 crmw_*，与运行态表一致）。
 --   6. 一期不建 _evt；多期财报另表。
---   7. 字段顺序：快照关联键 →（CRMW 表：凭证关联键及快照）→ 调库详情已用字段
+--   7. 字段顺序：快照关联键 →（CRMW 表：凭证四元组）→ 调库详情已用字段
 --      → 预留字段 → is_deleted / crte_time / updt_time 固定置尾。
 --   8. 已注册 ScriptTool：INIT_SCHEMA / RESET_ALL / 结构差异 / 表清空 / CLEAR_ADJUST_FLOW。
 -- ============================================================
@@ -37,7 +36,7 @@ CREATE TABLE `ip_adjust_security_snapshot`
     `submit_time`                DATETIME       DEFAULT NULL COMMENT '本条快照提交时间',
 
     -- ========== 调库详情页已用字段（与 rrs_securityinfo 对应的用同名同类型） ==========
-    `isin_code`                  VARCHAR(100)   DEFAULT NULL COMMENT '证券关联键快照：正式券为真实ISIN / 临时券为TEMP:临时代码',
+    `wind_code`                  VARCHAR(100)   DEFAULT NULL COMMENT '关联代码',
     `full_name`                  VARCHAR(300)   DEFAULT NULL COMMENT '证券全称',
     `short_name`                 VARCHAR(100)   DEFAULT NULL COMMENT '证券简称',
     `issuer`                     VARCHAR(100)   DEFAULT NULL COMMENT '发行人',
@@ -108,7 +107,7 @@ CREATE TABLE `ip_adjust_security_snapshot`
   COMMENT = '调库证券信息快照表';
 
 -- ============================================================================
--- 2. CRMW 调库证券信息快照表（CRMW 池调库，与表 1 同构 + 凭证关联键及快照）
+-- 2. CRMW 调库证券信息快照表（CRMW 池调库，与表 1 同构 + 凭证四元组）
 -- ============================================================================
 DROP TABLE IF EXISTS `ip_adjust_security_snapshot_crmw`;
 
@@ -122,13 +121,12 @@ CREATE TABLE `ip_adjust_security_snapshot_crmw`
 
     -- ========== CRMW 凭证（与 ip_adjust_log / ip_pool_status_crmw 一致） ==========
     `crmw_name`                  VARCHAR(128)   DEFAULT NULL COMMENT 'CRMW名称',
-    `crmw_isin_code`             VARCHAR(100)   DEFAULT NULL COMMENT 'CRMW凭证关联键快照：正式凭证为真实ISIN / 临时凭证为TEMP:临时代码',
-    `crmw_scode`                 VARCHAR(100)   DEFAULT NULL COMMENT 'CRMW凭证银行间代码快照，不作为关联身份；临时凭证为登记代码',
+    `crmw_scode`                 VARCHAR(32)    DEFAULT NULL COMMENT 'CRMW 证券代码',
     `crmw_mktcode`               VARCHAR(32)    DEFAULT NULL COMMENT 'CRMW 市场代码',
     `crmw_stype`                 VARCHAR(32)    DEFAULT NULL COMMENT 'CRMW 证券类型',
 
     -- ========== 标的证券：调库详情页已用字段（与 rrs_securityinfo 对应的用同名同类型） ==========
-    `isin_code`                  VARCHAR(100)   DEFAULT NULL COMMENT '标的证券关联键快照：正式券为真实ISIN / 临时券为TEMP:临时代码',
+    `wind_code`                  VARCHAR(100)   DEFAULT NULL COMMENT '关联代码',
     `full_name`                  VARCHAR(300)   DEFAULT NULL COMMENT '证券全称',
     `short_name`                 VARCHAR(100)   DEFAULT NULL COMMENT '证券简称',
     `issuer`                     VARCHAR(100)   DEFAULT NULL COMMENT '发行人',

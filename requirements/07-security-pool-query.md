@@ -1,16 +1,5 @@
 # 证券池查询需求说明
 
-## 证券身份与市场代码（当前接口契约）
-
-- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
-- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
-- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
-- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
-- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
-- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
-- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
-
-
 > 前端页面：`security_pool_query.html`
 > 后端前缀：`/api/v1/securityPoolQuery`、`/api/v1/common`
 > 角色定位：投资和风控人员按投资池、证券类型及状态查询当前有效证券池，并维护个人关注的「我的证券池」收藏。
@@ -40,7 +29,7 @@ this.loadList();                  // 列表数据
 | 字段 | 默认值 | 控件 | 说明 |
 |---|---|---|---|
 | `poolIds` | `[]` | 投资池树多选弹层 | 叶子节点可选，父节点禁止勾选 |
-| `isinCode` | `''` | 文本输入 | 证券代码，回车触发查询 |
+| `securityCode` | `''` | 文本输入 | 证券代码，回车触发查询 |
 | `securityShortName` | `''` | 文本输入 | 证券简称 |
 | `securityType` | `''` | 下拉 | 动态加载 |
 | `securityStatus` | `'active'` | 下拉 | 默认存续 |
@@ -79,7 +68,7 @@ this.loadList();                  // 列表数据
 | 字段 | 来源 | 空值处理 |
 |---|---|---|
 | `poolIds` | `searchForm.poolIds` | 空数组转 `null` |
-| `isinCode` / `securityShortName` / `securityType` / `securityStatus` / `adjusterName` / `issuer` | 表单 | 空串转 `null` |
+| `securityCode` / `securityShortName` / `securityType` / `securityStatus` / `adjusterName` / `issuer` | 表单 | 空串转 `null` |
 | `bondYesFlags` | 是否特征多选 | 空数组转 `null`；多选按 AND |
 | `entryTimeStart` | `entryTimeRange[0]` + ` 00:00:00` | 无则 `null` |
 | `entryTimeEnd` | `entryTimeRange[1]` + ` 23:59:59` | 无则 `null` |
@@ -103,7 +92,7 @@ this.loadList();                  // 列表数据
 |---|---|---|
 | 序号 | `$index` | `(pageIndex-1)*pageSize + $index + 1` |
 | 证券简称 | `securityShortName` | `desc-link` 可点击 → `openSecurityAdjustDetail(row)`，空值显示空 |
-| 证券代码 | `isinCode` | 同上 |
+| 证券代码 | `securityCode` | 同上 |
 | 调整人 | `adjusterName` | 直接显示 |
 | 入池时间 | `entryTime` | `moment(entryTime).format('YYYY-MM-DD HH:mm')`，空则空 |
 | 投资池名称 | `targetPoolName` | tooltip，由后端 `fillPoolFullName` 填充全路径 |
@@ -125,7 +114,7 @@ this.loadList();                  // 列表数据
 
 ### 4.1 跳转详情
 
-`openSecurityAdjustDetail(row)`：拼 `isinCode`/`targetPoolId`/`adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, false)`，状态表 `adjust_log_id`，非本行状态主键 `id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含代码 + 记录 ID + 批次），同键复用；本页 iframe 不跳走。脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。
+`openSecurityAdjustDetail(row)`：拼 `securityCode`/`targetPoolId`/`adjustLogId`（`RrsWorkbench.resolveAdjustLogId(row, false)`，状态表 `adjust_log_id`，非本行状态主键 `id`）/`adjustBatchNo`/`entryMode=view`。工作台内 `RrsWorkbench.openDetailTab`（键含代码 + 记录 ID + 批次），同键复用；本页 iframe 不跳走。脱离工作台回退 `location.href` 到 `security_pool_adjust_detail.html`。
 
 ---
 
@@ -136,11 +125,11 @@ this.loadList();                  // 列表数据
 判断已收藏：`isFavorited(row) { return row.mySecurityPoolId != null; }`
 
 **切换收藏 `toggleFavorite`**：
-- **已收藏 → 取消**：先 `$confirm('该证券已在我的证券池列表中，确认移除？')`，确认后调 `POST /api/v1/securityPoolQuery/deleteSecurityFromMyPool`，请求体 `{isinCode, userId}`；成功后前端乐观更新 `row.mySecurityPoolId = null`，提示「已从我的证券池移除」。
-- **未收藏 → 添加**：调 `POST /api/v1/securityPoolQuery/addSecurityToMyPool`，请求体 `{isinCode, securityType: row.securityType || '证券', market: '', userId}`；成功后乐观更新 `row.mySecurityPoolId = 1`，提示「已添加到我的证券池」。
+- **已收藏 → 取消**：先 `$confirm('该证券已在我的证券池列表中，确认移除？')`，确认后调 `POST /api/v1/securityPoolQuery/deleteSecurityFromMyPool`，请求体 `{securityCode, userId}`；成功后前端乐观更新 `row.mySecurityPoolId = null`，提示「已从我的证券池移除」。
+- **未收藏 → 添加**：调 `POST /api/v1/securityPoolQuery/addSecurityToMyPool`，请求体 `{securityCode, securityType: row.securityType || '证券', market: '', userId}`；成功后乐观更新 `row.mySecurityPoolId = 1`，提示「已添加到我的证券池」。
 
 **后端实现**：
-- `addSecurityToMyPool` 幂等：先 `queryByUserAndCode(userId, isinCode)` 查是否已收藏，存在则直接返回已有记录不重复插入；否则构建 `MySecurityPoolBo` 插入（`status='use'`）。
+- `addSecurityToMyPool` 幂等：先 `queryByUserAndCode(userId, securityCode)` 查是否已收藏，存在则直接返回已有记录不重复插入；否则构建 `MySecurityPoolBo` 插入（`status='use'`）。
 - `deleteSecurityFromMyPool` 软删除：先查询确认存在，存在则 `UPDATE my_security_pool SET status='del' WHERE user_id AND security_code AND status='use'`，不存在静默返回 null。
 - `queryFavoritedCodeList`（Controller 暴露但本页未用）：`SELECT security_code FROM my_security_pool WHERE user_id AND status='use'`。
 
@@ -159,12 +148,12 @@ this.loadList();                  // 列表数据
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{ includeVarietyCodes: ['bond'] }` | `List<{id, parentId, poolName, poolFullName, poolCode, varietyCodes}>` | 投资品种包含债券的投资池树（含上级与全路径），默认收起 |
-| `securityPoolQuery/querySecurityPoolPage` | poolIds, isinCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, bondYesFlags, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo、证券特征等） | 证券池分页查询（仅 audit_status='20'；`category_type=bond`，含 crmw 跟债记录） |
+| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, bondYesFlags, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo、证券特征等） | 证券池分页查询（仅 audit_status='20'；`category_type=bond`，含 crmw 跟债记录） |
 | `securityPoolQuery/exportSecurityPoolExcel` | 与分页查询相同，但不传 pageIndex/pageSize | `CommonFileDto`（Base64 `.xlsx`） | 按当前筛选条件导出全部命中记录，字段与页面表格一致 |
 | `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：债券大类，含 crmw） |
 | `securityPoolQuery/querySecurityStatusList` | `{}` | `List<String>` = `['active','matured']` | 证券状态下拉（前端未调用，硬编码） |
-| `securityPoolQuery/addSecurityToMyPool` | `{isinCode, securityType, market, userId}` | `MySecurityPoolBo` | 添加收藏（幂等） |
-| `securityPoolQuery/deleteSecurityFromMyPool` | `{isinCode, userId}` | `MySecurityPoolBo`（不存在返回 null） | 取消收藏（软删除 status='del'） |
+| `securityPoolQuery/addSecurityToMyPool` | `{securityCode, securityType, market, userId}` | `MySecurityPoolBo` | 添加收藏（幂等） |
+| `securityPoolQuery/deleteSecurityFromMyPool` | `{securityCode, userId}` | `MySecurityPoolBo`（不存在返回 null） | 取消收藏（软删除 status='del'） |
 | `securityPoolQuery/queryFavoritedCodeList` | `{userId}` | `List<String>` | 批量查已收藏代码（Controller 暴露，前端未用） |
 
 > 路径均带前缀 `/api/v1/`。
@@ -179,7 +168,7 @@ this.loadList();                  // 列表数据
 |---|---|---|
 | `ip_pool_status` | 投资池当前状态（主表） | id, security_code, security_short_name, security_type, target_pool_id, target_pool_name, adjust_batch_no, audit_status, adjuster_name, entry_time, is_deleted |
 | `ip_investment_pool` | 投资池定义（树/全路径/名称） | id, parent_id, pool_code, pool_name, pool_type, pool_level, outer_sort, inner_sort, status, is_deleted |
-| `rrs_securityinfo` | 证券基础信息（利率/发行主体/到期日等） | isin_code, wind_code_sh, wind_code_sz, wind_code_nib, wind_code_bj, wind_code_nbc, issuer, full_name, coupon_rate, firstissue_date, carry_date, maturity_date, delist_date, repurchase_date |
+| `rrs_securityinfo` | 证券基础信息（利率/发行主体/到期日等） | wind_code, issuer, full_name, coupon_rate, firstissue_date, carry_date, maturity_date, delist_date, repurchase_date |
 | `dict_security_type` | 证券类型字典 | security_type, security_type_name, category_type, sort_order, is_deleted |
 | `my_security_pool` | 用户自选证券（收藏） | id, security_code, security_type, market, user_id, status(use/del), create_time, update_time |
 
@@ -193,13 +182,13 @@ this.loadList();                  // 列表数据
 - **主表**：`ip_pool_status ips`
 - **JOIN**：
   - `LEFT JOIN ip_investment_pool p ON ips.target_pool_id = p.id`（取池名称，注意此 JOIN 未带 `p.is_deleted=0`）
-  - `LEFT JOIN rrs_securityinfo bi ON ips.isin_code = bi.isin_code`（取证券基础信息）
+  - `LEFT JOIN rrs_securityinfo bi ON ips.security_code = bi.wind_code`（取证券基础信息）
   - `INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted=0 AND dst.category_type='bond'`（仅债券大类；取证券类型名称）
   - `LEFT JOIN my_security_pool mbp ON ips.security_code = mbp.security_code AND mbp.user_id=#{currentUserId} AND mbp.status='use'`（取收藏 ID，用户隔离）
 - **WHERE 条件构造**：固定 `ips.is_deleted=0 AND ips.audit_status='20'`（债券大类，含 crmw 跟债记录；主体不进本页）；动态条件用 `<if>`：
   - `securityStatus='active'` → `bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')`；`'matured'` → `bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d')`
   - `poolIds` → `ips.target_pool_id IN (...)` foreach
-  - `isinCode`/`securityShortName`/`adjusterName` → `LIKE CONCAT('%', #{x}, '%')`
+  - `securityCode`/`securityShortName`/`adjusterName` → `LIKE CONCAT('%', #{x}, '%')`
   - `securityType` → `=`
   - `entryTimeStart`/`entryTimeEnd` → `>=` / `<=`
   - `issuer` → `bi.issuer LIKE`

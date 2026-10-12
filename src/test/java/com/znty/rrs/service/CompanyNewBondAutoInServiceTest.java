@@ -39,7 +39,6 @@ public class CompanyNewBondAutoInServiceTest {
     public void executeShouldInsertNewBonds() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
@@ -69,7 +68,6 @@ public class CompanyNewBondAutoInServiceTest {
 
         ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("BOND001.IB");
-        bond.setIsinCode("BOND001.IB");
         bond.setSecurityShortName("测试新债");
         bond.setSecurityType("mtn");
         bond.setIssuerCode("C001");
@@ -123,7 +121,6 @@ public class CompanyNewBondAutoInServiceTest {
     public void executeShouldFailWhenParamJsonEmpty() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
@@ -184,7 +181,6 @@ public class CompanyNewBondAutoInServiceTest {
     public void executeShouldContinueWhenPoolStatusInsertFails() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
@@ -206,12 +202,10 @@ public class CompanyNewBondAutoInServiceTest {
 
         ScheduledAdjustCandidateDto bond1 = new ScheduledAdjustCandidateDto();
         bond1.setSecurityCode("B1");
-        bond1.setIsinCode("B1");
         bond1.setSecurityShortName("债1");
         bond1.setSecurityType("mtn");
         ScheduledAdjustCandidateDto bond2 = new ScheduledAdjustCandidateDto();
         bond2.setSecurityCode("B2");
-        bond2.setIsinCode("B2");
         bond2.setSecurityShortName("债2");
         bond2.setSecurityType("mtn");
         when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L),

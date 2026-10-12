@@ -65,29 +65,18 @@ final class AutoAdjustRelationHelper {
             }
             InvestmentPoolBo outPool = poolMap.get(outPoolId);
             if (outPool == null) {
-                throw new BizException("债券[" + inboundLog.getIsinCode()
+                throw new BizException("债券[" + inboundLog.getSecurityCode()
                         + "]自动调出池配置不存在，请检查投资池关系配置");
             }
-            int deleted = mapper.deletePoolStatusSoft(inboundLog.getIsinCode(), outPoolId);
+            int deleted = mapper.deletePoolStatusSoft(inboundLog.getSecurityCode(), outPoolId);
             if (deleted == 0) {
                 continue;
             }
             // 仅在实际删除池状态后记录自动调出，避免并发场景产生虚假日志
             IpAdjustLogBo autoOutLog = buildAutoOutLog(inboundLog, outPool);
             if (mapper.addAdjustLog(autoOutLog) != 1) {
-                throw new BizException("债券[" + inboundLog.getIsinCode() + "]自动调出日志写入失败");
+                throw new BizException("债券[" + inboundLog.getSecurityCode() + "]自动调出日志写入失败");
             }
-            // 使用原入池事件的代码，保留当前主档变更前的外部删除目标。
-            IpAdjustLogBo snapshot = mapper.queryEffectiveMarketSnapshot(autoOutLog);
-            if (snapshot == null) {
-                throw new BizException("自动调出证券的原入池代码快照不存在");
-            }
-            autoOutLog.setWindCodeSh(snapshot.getWindCodeSh());
-            autoOutLog.setWindCodeSz(snapshot.getWindCodeSz());
-            autoOutLog.setWindCodeNib(snapshot.getWindCodeNib());
-            autoOutLog.setWindCodeBj(snapshot.getWindCodeBj());
-            autoOutLog.setWindCodeNbc(snapshot.getWindCodeNbc());
-            mapper.editEffectiveMarketSnapshot(autoOutLog);
             count++;
         }
         return count;
@@ -96,7 +85,7 @@ final class AutoAdjustRelationHelper {
     /** 基于自动调入日志构建同批次的关系池调出日志。 */
     private static IpAdjustLogBo buildAutoOutLog(IpAdjustLogBo inboundLog, InvestmentPoolBo outPool) {
         IpAdjustLogBo autoOutLog = new IpAdjustLogBo();
-        autoOutLog.setIsinCode(inboundLog.getIsinCode());
+        autoOutLog.setSecurityCode(inboundLog.getSecurityCode());
         autoOutLog.setSecurityShortName(inboundLog.getSecurityShortName());
         autoOutLog.setSecurityType(inboundLog.getSecurityType());
         autoOutLog.setAdjustType("互斥调整");

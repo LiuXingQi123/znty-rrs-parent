@@ -78,9 +78,6 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     private AutoAdjustMapper autoAdjustMapper;
     /** 调库落地 */
     @Resource
-    private SecurityPoolAdjustService securityPoolAdjustService;
-
-    @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
     /** 投资池 */
     @Resource
@@ -174,27 +171,27 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
             }
             int poolCount = 0;
             for (ScheduledAdjustCandidateDto bond : bondList) {
-                if (bond == null || !StringUtils.hasText(bond.getObjectCode())) {
+                if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     continue;
                 }
                 if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId)) {
                     SecurityInfoBo security = securityPoolAdjustMapper
-                            .querySecurityBoByCode(bond.getObjectCode());
+                            .querySecurityBoByCode(bond.getSecurityCode());
                     String companyCode = security == null ? null : security.getIssuerCode();
                     if (companyCode == null
                             || !pledgeBlacklistRuleService.evaluate(companyCode).shouldBeInBlacklist()) {
                         // 记录未命中黑名单质押库条件的跳过原因
-                        warnDetail(detail, "债券[" + bond.getObjectCode()
+                        warnDetail(detail, "债券[" + bond.getSecurityCode()
                                 + "]发行主体未命中黑名单质押库三个条件，跳过");
                         continue;
                     }
                 }
                 List<Long> currentPoolIds = securityPoolAdjustMapper
-                        .querySecurityCurrentPoolIdList(bond.getObjectCode());
+                        .querySecurityCurrentPoolIdList(bond.getSecurityCode());
                 // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
                 if (AutoAdjustRestrictHelper.isInAnyPool(
                         currentPoolIds, inRestrictPoolIds)) {
-                    warnDetail(detail, "债券[" + bond.getObjectCode() + "]当前在调入限制池中，跳过");
+                    warnDetail(detail, "债券[" + bond.getSecurityCode() + "]当前在调入限制池中，跳过");
                     continue;
                 }
                 bond.setAdjustType("自动调整");
@@ -211,20 +208,18 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 bond.setAdjustReason(reason);
                 // 按实际债券和目标池生成自动调库批次号
                 String batchNo = batchNoContext.resolveBondBatchNo(
-                        bond.getObjectCode(), poolId, AdjustMode.IN.getCode());
+                        bond.getSecurityCode(), poolId, AdjustMode.IN.getCode());
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 // 写自动入池日志
                 if (securityPoolAdjustMapper.addAdjustLog(bond) != 1) {
-                    throw new BizException("债券[" + bond.getObjectCode() + "]自动调入日志写入失败");
+                    throw new BizException("债券[" + bond.getSecurityCode() + "]自动调入日志写入失败");
                 }
-            // 保存审批生效时的市场代码。
-            securityPoolAdjustService.saveEffectiveMarketSnapshot(bond);
                 bond.setAdjustLogId(bond.getId());
                 // 写入在池状态
                 int inserted = securityPoolAdjustMapper.addPoolStatus(bond);
                 if (inserted != 1) {
-                    throw new BizException("债券[" + bond.getObjectCode()
+                    throw new BizException("债券[" + bond.getSecurityCode()
                             + "]写入池状态失败（可能并发已入池）");
                 }
                 poolCount++;
@@ -232,7 +227,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
                         bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
                 if (autoOutCount > 0) {
-                    infoDetail(detail, "债券[" + bond.getObjectCode() + "]自动调出关系池 "
+                    infoDetail(detail, "债券[" + bond.getSecurityCode() + "]自动调出关系池 "
                             + autoOutCount + " 个");
                 }
             }

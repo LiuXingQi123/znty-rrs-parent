@@ -513,6 +513,7 @@
                ,dst.security_type_name
         FROM rrs_securityinfo si
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type AND dst.is_deleted = 0
-        WHERE (si.wind_code_sh = #{marketCode} OR si.wind_code_sz = #{marketCode} OR si.wind_code_nib = #{marketCode} OR si.wind_code_bj = #{marketCode} OR si.wind_code_nbc = #{marketCode})
+        WHERE si.wind_code = #{securityCode}
+        LIMIT 1
     </select>
 </mapper>

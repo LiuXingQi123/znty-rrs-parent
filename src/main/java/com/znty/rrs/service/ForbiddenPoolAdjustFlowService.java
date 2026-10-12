@@ -890,10 +890,11 @@ public class ForbiddenPoolAdjustFlowService {
      * 判断当前调库的证券是否临时代码。
      */
     private boolean isTemporaryCode(IpAdjustStepBo step) {
-        IpAdjustLogBo log = forbiddenPoolAdjustMapper.queryAdjustLogListForAudit(step.getAdjustLogId(), null)
-                .stream().findFirst().orElse(null);
-        return log != null && ((log.getIsinCode() != null && log.getIsinCode().startsWith("TEMP:"))
-                || (log.getCrmwIsinCode() != null && log.getCrmwIsinCode().startsWith("TEMP:")));
+        IpAdjustLogBo log = queryFirstAdjustLog(step);
+        if (log == null || log.getSecurityCode() == null) {
+            return false;
+        }
+        return tempSecurityCodeMapper.queryTemporaryCodeCountBySecurityCode(log.getSecurityCode()) > 0;
     }
 
     /**

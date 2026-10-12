@@ -9,12 +9,6 @@ import lombok.Data;
 @Data
 public class TempSecurityCodeBo {
 
-    /** 临时券在证券主档及业务引用中的统一身份 */
-    public String getTempIsinCode() {
-        return tempSecurityCode == null ? null : "TEMP:" + tempSecurityCode;
-    }
-
-
     /** 主键 ID */
     private Long id;
     /** 临时证券名称 */
@@ -37,15 +31,13 @@ public class TempSecurityCodeBo {
     private Date tempMaturityDate;
     /** 正式证券名称 */
     private String securityName;
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
     /** 正式证券代码 */
     private String securityCode;
     /** 正式证券市场 */
     private String securityMarket;
     /** 正式证券类型 */
     private String securityType;
-    /** 证券来源：official=正式 / temporary=临时 / temp_converted=已转正 */
+    /** 证券来源 */
     private String securitySource;
     /** 业务更新时间 */
     private Date updateTime;

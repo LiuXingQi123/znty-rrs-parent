@@ -61,7 +61,7 @@ public class BatchCrmwPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchCrmwPoolAdjust/checkAdjust",
-                "{\"currentUserId\":\"1\",\"direction\":\"in\",\"poolId\":18,\"securities\":[{\"isinCode\":\"MTN001.IB\",\"crmwIsinCode\":\"CRMW001.IB\"}]}");
+                "{\"currentUserId\":\"1\",\"direction\":\"in\",\"poolId\":18,\"securities\":[{\"securityCode\":\"MTN001.IB\",\"crmwScode\":\"CRMW001.IB\"}]}");
     }
 
     /** 验证批量调库下一步校验接口支持调出 */
@@ -70,7 +70,7 @@ public class BatchCrmwPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchCrmwPoolAdjust/checkAdjust",
-                "{\"currentUserId\":\"1\",\"direction\":\"out\",\"poolId\":18,\"securities\":[{\"isinCode\":\"MTN001.IB\",\"crmwIsinCode\":\"CRMW001.IB\"}]}");
+                "{\"currentUserId\":\"1\",\"direction\":\"out\",\"poolId\":18,\"securities\":[{\"securityCode\":\"MTN001.IB\",\"crmwScode\":\"CRMW001.IB\"}]}");
     }
 
     /** 验证批量调库提交接口支持调入 */
@@ -79,7 +79,7 @@ public class BatchCrmwPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchCrmwPoolAdjust/addAdjustLog",
-                "{\"currentUserId\":\"1\",\"direction\":\"in\",\"adjusterId\":\"1\",\"adjusterName\":\"管理员\",\"poolId\":18,\"items\":[{\"isinCode\":\"MTN001.IB\",\"crmwIsinCode\":\"CRMW001.IB\",\"targetPoolId\":18,\"adjustMode\":\"调入\",\"flowId\":1}]}");
+                "{\"currentUserId\":\"1\",\"direction\":\"in\",\"adjusterId\":\"1\",\"adjusterName\":\"管理员\",\"poolId\":18,\"items\":[{\"securityCode\":\"MTN001.IB\",\"crmwScode\":\"CRMW001.IB\",\"targetPoolId\":18,\"adjustMode\":\"调入\",\"flowId\":1}]}");
     }
 
     /** 验证批量调库提交接口支持调出 */
@@ -88,6 +88,6 @@ public class BatchCrmwPoolAdjustApiTest extends ControllerApiTestSupport {
         assertPostSuccess(
                 mockMvc,
                 "/api/v1/batchCrmwPoolAdjust/addAdjustLog",
-                "{\"currentUserId\":\"1\",\"direction\":\"out\",\"adjusterId\":\"1\",\"adjusterName\":\"管理员\",\"poolId\":18,\"items\":[{\"isinCode\":\"MTN001.IB\",\"crmwIsinCode\":\"CRMW001.IB\",\"targetPoolId\":18,\"adjustMode\":\"调出\",\"flowId\":1}]}");
+                "{\"currentUserId\":\"1\",\"direction\":\"out\",\"adjusterId\":\"1\",\"adjusterName\":\"管理员\",\"poolId\":18,\"items\":[{\"securityCode\":\"MTN001.IB\",\"crmwScode\":\"CRMW001.IB\",\"targetPoolId\":18,\"adjustMode\":\"调出\",\"flowId\":1}]}");
     }
 }

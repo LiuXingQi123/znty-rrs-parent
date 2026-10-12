@@ -10,12 +10,6 @@
     <select id="queryForbiddenPoolPage" resultType="com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryDto">
         SELECT ips.id
                ,ips.security_code
-               ,ips.isin_code
-               ,bi.wind_code_sh
-               ,bi.wind_code_sz
-               ,bi.wind_code_nib
-               ,bi.wind_code_bj
-               ,bi.wind_code_nbc
                ,ips.security_short_name
                ,ips.adjuster_name
                ,ips.entry_time
@@ -34,7 +28,7 @@
         INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                        AND p.is_deleted = 0
                                        AND p.pool_type = 'forbidden'
-        LEFT JOIN rrs_securityinfo bi ON bi.isin_code = ips.isin_code
+        LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
         LEFT JOIN (
             SELECT s_info_compcode
@@ -55,8 +49,8 @@
                     #{poolId}
                 </foreach>
             </if>
-            <if test="securityKeyword != null and securityKeyword != ''">
-                AND (ips.security_code LIKE CONCAT('%', #{securityKeyword}, '%') OR bi.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%') OR bi.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%') OR bi.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%') OR bi.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%') OR bi.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+            <if test="securityCode != null and securityCode != ''">
+                AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND ips.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')

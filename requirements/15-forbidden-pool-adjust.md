@@ -1,16 +1,5 @@
 # 禁投池调整申请（主体级 调入/调出）需求说明
 
-## 证券身份与市场代码（当前接口契约）
-
-- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
-- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
-- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
-- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
-- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
-- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
-- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
-
-
 > 前端页面：`forbidden_pool_adjust.html`（列表 Tab「主体」+ 主体详情两视图；同页另有 Tab「ABS债」，见 [26-forbidden-abs-pool-adjust.md](26-forbidden-abs-pool-adjust.md)）
 > 后端前缀：`/api/v1/forbiddenPoolAdjust`（主体；ABS 走独立前缀 `/api/v1/forbiddenAbsPoolAdjust`）
 > 角色定位：研究员 / 业务人员检索发行主体 → 查看主体及其旗下债券当前所在风险池 → 在权限范围内发起禁投池 / 观察池 / 黑名单质押库 / 重点观察名单的调入或调出申请。目标池为「债券禁止库(15)」或「黑名单质押库(17)」且主体生效（`audit_status=20`）时，自动同步旗下未退市、未到期债券（`security_status!='D'`，bond 大类，**含普通债、ABS、crmw**，到期日等于当天参与）。17 的主体及债券状态统一由 15 在池、近一年认可外评孰低 AA-及以下、23 在池三个条件决定。主体基础信息只读自 `ais_inv_ods.wind_cbondissuer`，不再按 `used` 过滤，以 `s_info_compcode` 作为主体代码；不关联 `rrs_securityinfo` 的主体记录。
@@ -82,7 +71,7 @@
 ### 2.7 当前所在池两个子块
 
 - **当前主体所在池**（`companyCurrentPools`）：SQL `ip_pool_status ips INNER JOIN dict_security_type ... category_type='company' INNER JOIN ip_investment_pool p`，`WHERE ips.security_code=#{companyCode} AND ips.audit_status='20' AND ips.is_deleted=0`，`ORDER BY entry_time DESC, id DESC`。
-- **当前主体旗下债券所在池**（`companyBondCurrentPools`）：主数据 `category_type='bond'`（**含 crmw，不排除**）中已在池记录：普通池读 `ip_pool_status.isin_code=isin_code`，CRMW 池读 `ip_pool_status_crmw.crmw_isin_code=isin_code`；`GROUP BY target_pool_id`，`bondCount` 为该池在池数。点「查看债券」→ `queryCompanyBondList`（同一两表口径 + 指定 `targetPoolId`），明细条数等于该行 `bondCount`。
+- **当前主体旗下债券所在池**（`companyBondCurrentPools`）：主数据 `category_type='bond'`（**含 crmw，不排除**）中已在池记录：普通池读 `ip_pool_status.security_code=wind_code`，CRMW 池读 `ip_pool_status_crmw.crmw_scode=wind_code`；`GROUP BY target_pool_id`，`bondCount` 为该池在池数。点「查看债券」→ `queryCompanyBondList`（同一两表口径 + 指定 `targetPoolId`），明细条数等于该行 `bondCount`。
 - 池名通过 `investmentPoolService.queryPoolFullNameMap()` 填全路径。
 
 ---
@@ -194,7 +183,7 @@ syncCompanyBondsOnDirect(companyLog):
 | `ip_pool_status` | INSERT（调入生效）/ UPDATE 软删（调出生效） | security_code, adjust_log_id, target_pool_id, pool_type, **audit_status='20'**, entry_time, is_deleted |
 | `ip_adjust_step` | INSERT（初始 3 步 + 审批时按需创建） | adjust_log_id, adjust_batch_no, flow_node_id, node_type, approval_strategy, **step_status**(pending/auto_process/submit), handler_id/name |
 | `ais_inv_ods.wind_cbondissuer` | 跨库只读有效主体基础信息 | s_info_compcode, s_info_compname, s_info_compind_name1~4, s_info_comptype, s_info_compregaddress, is_fin_inst, used |
-| `rrs_securityinfo` | 仅读取旗下债券，按 `issuer_code=companyCode` 关联；同步候选排除 `security_status='D'` | isin_code, wind_code_sh, wind_code_sz, wind_code_nib, wind_code_bj, wind_code_nbc, short_name, full_name, security_type, security_status, issuer_code |
+| `rrs_securityinfo` | 仅读取旗下债券，按 `issuer_code=companyCode` 关联；同步候选排除 `security_status='D'` | wind_code, short_name, full_name, security_type, security_status, issuer_code |
 | `sys_attachment` | 绑定/复制附件 | adjustLogId, attachment_category(credit_report_hand/material_hand) |
 | `wf_flow_*` | 只读（构建流程快照） | — |
 

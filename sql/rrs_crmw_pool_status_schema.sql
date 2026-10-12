@@ -2,7 +2,6 @@
 -- znty-rrs CRMW投资池当前状态表 - 建库建表脚本
 -- MySQL version: 8.0.33
 -- 说明：首次部署执行，创建CRMW投资池当前状态表
--- CRMW 组合身份为 crmw_isin_code + isin_code + target_pool_id，凭证仅有银行间代码。
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -20,13 +19,11 @@ DROP TABLE IF EXISTS `ip_pool_status_crmw`;
 CREATE TABLE `ip_pool_status_crmw`
 (
     `id`                  BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-    `isin_code`           VARCHAR(100) DEFAULT NULL COMMENT '标的证券关联键：正式券为真实ISIN / 临时券为TEMP:临时代码',
     `security_code`       VARCHAR(32)  DEFAULT NULL COMMENT '证券代码',
     `security_short_name` VARCHAR(128) DEFAULT NULL COMMENT '证券简称',
     `security_type`       VARCHAR(32)  DEFAULT NULL COMMENT '证券类型编码，关联 dict_security_type.security_type',
     `crmw_name`           VARCHAR(128) DEFAULT NULL COMMENT 'CRMW名称',
-    `crmw_isin_code`      VARCHAR(100) DEFAULT NULL COMMENT 'CRMW凭证关联键：正式凭证为真实ISIN / 临时凭证为TEMP:临时代码',
-    `crmw_scode`          VARCHAR(100) DEFAULT NULL COMMENT 'CRMW凭证银行间代码快照，不作为关联身份；临时凭证为登记代码',
+    `crmw_scode`          VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 证券代码',
     `crmw_mktcode`        VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 市场代码',
     `crmw_stype`          VARCHAR(32)  DEFAULT NULL COMMENT 'CRMW 证券类型',
     `adjust_type`         VARCHAR(32)  DEFAULT NULL COMMENT '调整类型：手工调整/联动调整/互斥调整/关联调整/自动调整/Excel导入/手动批量调整',

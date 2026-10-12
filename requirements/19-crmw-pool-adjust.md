@@ -1,16 +1,5 @@
 # CRMW池调库申请（调入/调出）需求说明
 
-## 证券身份与市场代码（当前接口契约）
-
-- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
-- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
-- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
-- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
-- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
-- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
-- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
-
-
 > 前端页面：`crmw_pool_adjust.html`（列表 + 详情两视图）
 > 后端前缀：`/api/v1/crmwPoolAdjust`
 > 角色定位：业务人员先选择一个 CRMW 凭证，再选择可绑定的债券类标的证券（`category_type='bond'` 且不能是 CRMW 凭证），在权限范围内发起 CRMW 池的调入或调出申请。逻辑与证券池调库（[04]）同构，差异见第 7 节。
@@ -24,7 +13,7 @@
 - **list 页**：CRMW 凭证 section（单选 radio + 分页表格）+ 可绑定证券搜索区 + 可绑定证券分页表格。
 - **detail 页**：返回按钮 + 证券基本信息（字段与顺序同 [04]/[11]；非 ABS 展示担保人，ABS 展示权益人和自选权益人，关系主体默认选中第一条，自选优先联动“担保人主体内评分”；`115202000` 展示为“债务主体”；「剩余期限(天)」`date_exists` 隐藏保留，只读「证券期限」展示 `date_exists_str`；含权/赎回行权/回购剩余期限 **年**）+ 发行主体最近三年及一期财务数据（步骤 1 四列可编辑、各列独立切换同年报告类型，步骤 2 只读）+ CRMW 基本信息（只读）+ 当前所在池 + 调库操作卡（步骤 1 选池 / 步骤 2 校验确认）+ 流程选择弹窗 + 信评报告选择弹窗。
 
-**初始化**（`created`）：`this.applyUrlCrmwOrList()`。URL 带 `crmwScode`/`isinCode` 时选中凭证并进入该标的调库（查询/历史/事宜入口）；无参数则并发 `loadCrmwList()` + `loadList()`。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。默认用户取 `RrsAuth`。详情「返回」先 `closeActiveTab()`，失败再回页内列表。
+**初始化**（`created`）：`this.applyUrlCrmwOrList()`。URL 带 `crmwScode`/`securityCode` 时选中凭证并进入该标的调库（查询/历史/事宜入口）；无参数则并发 `loadCrmwList()` + `loadList()`。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。默认用户取 `RrsAuth`。详情「返回」先 `closeActiveTab()`，失败再回页内列表。
 
 ---
 
@@ -42,17 +31,17 @@
 
 | 字段 | 控件 | 匹配 |
 |---|---|---|
-| `securityKeyword` | el-input | 凭证市场代码模糊匹配（CRMW 仅 `wind_code_nib` 有值） |
+| `securityCode` | el-input | 模糊（`wind_code`） |
 | `securityShortName` | el-input | 模糊（`short_name`） |
 | `issuer` | el-input | 模糊 |
 
-- 接口：`POST /api/v1/crmwPoolAdjust/queryCrmwPage`，请求体 `{ isinCode, securityShortName, issuer, pageIndex, pageSize }`，返回 `PageResult<SecurityInfoDto>`。
-- SQL（`queryCrmwPage`）：`FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type='crmw'`，按 `wind_code_nib`/`short_name`/`issuer` 模糊，`ORDER BY si.ts DESC, si.isin_code DESC`。
+- 接口：`POST /api/v1/crmwPoolAdjust/queryCrmwPage`，请求体 `{ securityCode, securityShortName, issuer, pageIndex, pageSize }`，返回 `PageResult<SecurityInfoDto>`。
+- SQL（`queryCrmwPage`）：`FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type='crmw'`，按 `wind_code`/`short_name`/`issuer` 模糊，`ORDER BY si.ts DESC, si.wind_code DESC`。
 - 分页：`crmwPagination: {pageIndex:1, pageSize:5, total:0}`，`page-sizes=[5,10,20,50]`。
 
 ### 2.2 可绑定证券列表（`searchForm`）
 
-字段：`isinCode`/`securityShortName`/`issuer`，以及是否特征多选 `bondYesFlags`（顺序与证券池调整一致：ABS / 担保 / 永续 / 次级 / 私募 / 含权；勾选即筛「是」，多选 AND）。
+字段：`securityCode`/`securityShortName`/`issuer`，以及是否特征多选 `bondYesFlags`（顺序与证券池调整一致：ABS / 担保 / 永续 / 次级 / 私募 / 含权；勾选即筛「是」，多选 AND）。
 
 - 接口：`POST /api/v1/crmwPoolAdjust/queryBindableSecurityPage`，返回 `PageResult<SecurityInfoDto>`。
 - SQL（`queryBindableSecurityPage`）：`INNER JOIN dict_security_type dst ... AND dst.category_type='bond'` 限定债券大类，再通过 `WHERE si.security_type != 'crmw'` 排除 CRMW 凭证；未维护有效债券类型字典的证券不会进入候选。`bondYesFlags` 条件口径同 [04]（`abs` 为 `absFlag=1` 或类型 `abs`，`private` 为发行方式/内部分类含「私募」）。
@@ -61,21 +50,21 @@
 
 ### 2.3 CRMW 凭证选择（`handleCrmwSelect`）
 
-单选 radio 选中 CRMW 凭证后调 `POST /api/v1/crmwPoolAdjust/queryCrmwDetail { isinCode }` → `crmwDetail`。后端 `queryCrmwDetail`：查 `querySecurityDetail(isinCode)`，null → `BizException(404,"CRMW凭证不存在")`，`securityType != 'crmw'` → `BizException("所选证券不是 CRMW 凭证")`。
+单选 radio 选中 CRMW 凭证后调 `POST /api/v1/crmwPoolAdjust/queryCrmwDetail { securityCode }` → `crmwDetail`。后端 `queryCrmwDetail`：查 `querySecurityDetail(securityCode)`，null → `BizException(404,"CRMW凭证不存在")`，`securityType != 'crmw'` → `BizException("所选证券不是 CRMW 凭证")`。
 
 ### 2.4 进入详情页（`handleAdjust`）
 
-校验 `selectedCrmw.windCode` 非空，否则 `$message.warning('请先选择一个CRMW凭证')`；读 URL 参数 `targetPoolId/adjustLogId/adjustBatchNo`；`currentPage='detail'`，调 `loadDetailData(isinCode)`。
+校验 `selectedCrmw.windCode` 非空，否则 `$message.warning('请先选择一个CRMW凭证')`；读 URL 参数 `targetPoolId/adjustLogId/adjustBatchNo`；`currentPage='detail'`，调 `loadDetailData(securityCode)`。
 
 ### 2.5 详情页初始化（`loadDetailData`，`Promise.all` 并发 5 接口）
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `querySecurityDetail` | `{ isinCode }` | 标的证券基本信息 → `bondDetail` |
-| `queryCrmwAdjustPoolList` | `{ isinCode, adjustDirection:'in', currentUserId }` | 可调入池 |
-| `queryCrmwAdjustPoolList` | `{ isinCode, adjustDirection:'out', currentUserId }` | 可调出池 |
-| `queryCrmwPoolStatus` | `{ isinCode }` | 当前证券所在池 + 主体所在池 |
-| `queryCrmwAdjustLogList` | `{ isinCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
+| `querySecurityDetail` | `{ securityCode }` | 标的证券基本信息 → `bondDetail` |
+| `queryCrmwAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId }` | 可调入池 |
+| `queryCrmwAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
+| `queryCrmwPoolStatus` | `{ securityCode }` | 当前证券所在池 + 主体所在池 |
+| `queryCrmwAdjustLogList` | `{ securityCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
 
 随后串行：构建 `currentSecurityPoolIds`、过滤调出池（仅保留证券已在其中的池及父节点）、过滤调入池（排除证券已在其中的叶子节点）、`buildPoolTree`、构建 `inMutexMap`/`outMutexMap`、`loadLogAttachments`、`loadFlowSteps`。
 
@@ -93,13 +82,13 @@
 
 **前端互斥校验**：`handleInPoolSelect`/`handleOutPoolSelect` 检查 `inMutexMap`/`outMutexMap`，冲突弹 warning 并取消勾选。
 
-**信评报告 / 其他材料**：`openReportDialog(poolId,'credit'|'material')` 打开弹窗，含内部报告 Tab（`/api/v1/reports/queryInReportPage`）与外部报告 Tab（`/api/v1/reports/queryOutReportPage`），支持筛选 + 分页；`el-upload auto-upload=false` 暂存 File。**打开弹窗时默认将当前标的证券编码（`bondDetail.windCode`）写入筛选条件 `isinCode` 并自动查询**。
+**信评报告 / 其他材料**：`openReportDialog(poolId,'credit'|'material')` 打开弹窗，含内部报告 Tab（`/api/v1/reports/queryInReportPage`）与外部报告 Tab（`/api/v1/reports/queryOutReportPage`），支持筛选 + 分页；`el-upload auto-upload=false` 暂存 File。**打开弹窗时默认将当前标的证券编码（`bondDetail.windCode`）写入筛选条件 `securityCode` 并自动查询**。
 
 **步骤 2（校验确认）**：显示「调库校验结果」表格（`adjustReviewList`）与「原因和建议」区。
 
 ### 3.2 接口调用顺序
 
-1. **`goToStep2()`**：`syncSelectedPoolsFromTables()` 规范化；有担保人候选但尚未选择时提示并阻断；组装 `items`（调入 `adjustMode:'调入'`，调出 `adjustMode:'调出'`）；调 `POST /api/v1/crmwPoolAdjust/checkCrmwAdjust`，请求体 `AdjustCheckReq`：`{ isinCode, securityShortName, securityType, guarantorCode, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`；用 `adjustCheckSeq` 防旧请求覆盖；返回 `AdjustCheckDto` 映射为 `adjustReviewList`，`adjustStep=2`。
+1. **`goToStep2()`**：`syncSelectedPoolsFromTables()` 规范化；有担保人候选但尚未选择时提示并阻断；组装 `items`（调入 `adjustMode:'调入'`，调出 `adjustMode:'调出'`）；调 `POST /api/v1/crmwPoolAdjust/checkCrmwAdjust`，请求体 `AdjustCheckReq`：`{ securityCode, securityShortName, securityType, guarantorCode, items:[{targetPoolId,targetPoolName,poolType,adjustMode}] }`；用 `adjustCheckSeq` 防旧请求覆盖；返回 `AdjustCheckDto` 映射为 `adjustReviewList`，`adjustStep=2`。
 
 2. **`handleSubmit()`**：校验 `validCount>0` 且 `allValidRowsHaveFlow`；打开流程选择弹窗，为每条 `validManualAdjustReviewList` 选流程，`confirmFlowSelection()` → `submitAdjustLog()`。
 
@@ -109,9 +98,9 @@
 
 入口 `CrmwPoolAdjustService.checkCrmwAdjust(AdjustCheckReq)`，五阶段：
 
-1. **前置校验** `validateCheckAdjustReq`：`isinCode` 非空、`items` 非空、每项 `poolType` 必须 `PoolType.CRMW.getCode()`（`'crmw'`），否则 `BizException("CRMW池调整仅支持选择 CRMW库")`。
+1. **前置校验** `validateCheckAdjustReq`：`securityCode` 非空、`items` 非空、每项 `poolType` 必须 `PoolType.CRMW.getCode()`（`'crmw'`），否则 `BizException("CRMW池调整仅支持选择 CRMW库")`。
 2. **参数初始化** `loadSharedData`：校验 `guarantorCode` 属于当前证券允许的 Wind 担保关系，并以 AIS 最新评分覆盖本次业务对象的担保人名称、代码和内评分；未选择时不参与担保人评级下调判断。
-   - `querySecurityBoByCode(isinCode)`：null → `"证券不存在"`；`securityType=='crmw'` → `"调库对象不能是 CRMW 凭证"`。
+   - `querySecurityBoByCode(securityCode)`：null → `"证券不存在"`；`securityType=='crmw'` → `"调库对象不能是 CRMW 凭证"`。
    - 全量 `investmentPoolMapper.queryPoolList()` → `poolMap`；`validateCheckTargetPools` 校验目标池均为 CRMW 池。
    - `querySecurityCurrentPoolIdList`（`ip_pool_status_crmw` 中 `audit_status='20' AND pool_type='crmw'`）→ `currentPoolIds`。
    - `queryAllPoolRelationList`（`ip_pool_relation`）→ 三层嵌套 `poolRelationMap`。
@@ -130,7 +119,7 @@
 
 入口 `addCrmwAdjustLog(req, files)`，`@Transactional(rollbackFor=Exception.class)`，五阶段：
 
-1. **前置校验** `validateSubmitReq`：`isinCode/crmwScode/crmwName` 非空、`crmwStype` 必须 `'crmw'`（否则 `"CRMW证券类型必须为 crmw"`）、`items` 非空、每项 `adjustMode/targetPoolId` 非空、`poolType` 必须 CRMW（否则 `"CRMW池调整仅支持选择 CRMW库"`）。
+1. **前置校验** `validateSubmitReq`：`securityCode/crmwScode/crmwName` 非空、`crmwStype` 必须 `'crmw'`（否则 `"CRMW证券类型必须为 crmw"`）、`items` 非空、每项 `adjustMode/targetPoolId` 非空、`poolType` 必须 CRMW（否则 `"CRMW池调整仅支持选择 CRMW库"`）。
 2. **参数初始化** `loadSubmitSharedData`：取证券（null→"证券不存在"；`securityType=='crmw'`→"调库对象不能是 CRMW 凭证"）、全量池 Map、`validateSubmitTargetPools` 校验目标池均为 CRMW、`currentPoolIds`（`ip_pool_status_crmw` `audit_status='20'`）、`poolRelationMap`、证券级标志；为每个唯一 flowId `buildFlowSnapshot`；`BatchNoContext`。
 3. **调入处理** `executeInboundSubmit`，对每个调入项：
    - **报告必填校验** `checkReportRequired`（按 `in_report_restriction` none/any/internal）+ **CRMW组合校验** `checkCrmwInboundCombination`：组合已在池（`queryCrmwComboInPool` 查 `ip_pool_status_crmw` 同凭证+标的+目标池 `audit_status='20'`；同一凭证绑定其它标的不算重复）/ 凭证审批中（`queryCrmwPendingWorkflow` 查 `ip_adjust_log`+`ip_adjust_step` 同凭证 pending 步骤），不通过抛 `BizException` 中断。对应老项目 7 参 `checkCrmwInPool` 组合键；「池必填凭证」已在 `validateSubmitReq` 强制（CRMW 提交必带 `crmwScode`）。
@@ -154,16 +143,16 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `queryCrmwPage` | isinCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询 CRMW 凭证列表（`security_type='crmw'`） |
-| `queryBindableSecurityPage` | isinCode, securityShortName, issuer, bondYesFlags?, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询可绑定债券（仅 bond，排除 crmw；可选是否特征多选） |
-| `queryCrmwDetail` | isinCode | `SecurityInfoDetailDto` | CRMW 凭证详情（必须 `security_type='crmw'`） |
-| `querySecurityDetail` | isinCode | `SecurityInfoDetailDto` | 标的证券详情（不能是 crmw） |
-| `queryCrmwAdjustPoolList` | isinCode, adjustDirection, currentUserId, targetPoolId | `List<PoolDto>` | 可调入/调出 CRMW 投资池列表（含互斥关系） |
-| `queryCrmwPoolStatus` | isinCode | `SecurityPoolStatusDto` | 证券/主体当前所在 CRMW 池 |
-| `checkCrmwAdjust` | isinCode, securityShortName, securityType, guarantorCode, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 调库可行性预校验 + 流程候选；所选担保人后端复核 |
+| `queryCrmwPage` | securityCode, securityShortName, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询 CRMW 凭证列表（`security_type='crmw'`） |
+| `queryBindableSecurityPage` | securityCode, securityShortName, issuer, bondYesFlags?, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询可绑定债券（仅 bond，排除 crmw；可选是否特征多选） |
+| `queryCrmwDetail` | securityCode | `SecurityInfoDetailDto` | CRMW 凭证详情（必须 `security_type='crmw'`） |
+| `querySecurityDetail` | securityCode | `SecurityInfoDetailDto` | 标的证券详情（不能是 crmw） |
+| `queryCrmwAdjustPoolList` | securityCode, adjustDirection, currentUserId, targetPoolId | `List<PoolDto>` | 可调入/调出 CRMW 投资池列表（含互斥关系） |
+| `queryCrmwPoolStatus` | securityCode | `SecurityPoolStatusDto` | 证券/主体当前所在 CRMW 池 |
+| `checkCrmwAdjust` | securityCode, securityShortName, securityType, guarantorCode, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 调库可行性预校验 + 流程候选；所选担保人后端复核 |
 | `addCrmwAdjustLog`（application/json） | `CrmwPoolAdjustSubmitReq`（含 guarantorCode） | `AdjustSubmitDto` | 提交调库申请（无附件）；快照保存所选担保人及 AIS 最新内评分 |
 | `addCrmwAdjustLogWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `AdjustSubmitDto` | 提交调库申请（带附件，**前端实际调用入口**） |
-| `queryCrmwAdjustLogList` | isinCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录（无批次仅返回未终结流程） |
+| `queryCrmwAdjustLogList` | securityCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录（无批次仅返回未终结流程） |
 | `queryCrmwAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 同批次流程步骤列表 |
 | `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
@@ -210,7 +199,7 @@
 ### 6.2 流转条件（申请阶段）
 
 - 直通流程（无流程 或 `isDirectFlow`）→ `audit_status='20'`，直接写/删 `ip_pool_status_crmw`。
-- **完成后的内部报告生成**：直通、无流程即时生效及初始步骤自动结束的记录，均在最终复核及落池成功后调用 `ReportService.addInternalReportsOnFinish`，与正常终审共用一套实现。每条有 `credit_report_hand` 的调库记录生成一份 `rrs_report_in`（`data_source=uploaded`），全部手工信评附件绑定为 `rrs_report_in + report_in`；其他材料及库引用附件不生成新报告。报告、附件与落池处于同一事务，失败整体回滚。 CRMW 报告继续使用日志中的标的证券 `isinCode`，`companyCode` 取标的证券发行主体代码。
+- **完成后的内部报告生成**：直通、无流程即时生效及初始步骤自动结束的记录，均在最终复核及落池成功后调用 `ReportService.addInternalReportsOnFinish`，与正常终审共用一套实现。每条有 `credit_report_hand` 的调库记录生成一份 `rrs_report_in`（`data_source=uploaded`），全部手工信评附件绑定为 `rrs_report_in + report_in`；其他材料及库引用附件不生成新报告。报告、附件与落池处于同一事务，失败整体回滚。 CRMW 报告继续使用日志中的标的证券 `securityCode`，`companyCode` 取标的证券发行主体代码。
 - 非直通流程 → `audit_status='00'`，`createInitialSteps` 创建 pending 步骤（展开处理人时排除本批次已出现的 `handler_id`，与 [04]/[05] 同构）；若初始即到 end 则升级 `'20'` 并落地。
 
 后续审批推进见 [20-crmw-pool-adjust-approve.md](20-crmw-pool-adjust-approve.md)。

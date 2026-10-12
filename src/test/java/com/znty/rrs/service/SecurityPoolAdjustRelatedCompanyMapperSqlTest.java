@@ -24,7 +24,7 @@ public class SecurityPoolAdjustRelatedCompanyMapperSqlTest {
                 .contains("WHEN 115203000 THEN 2")
                 .contains("WHEN 115202000 THEN 3")
                 .contains("WHEN 115201000 THEN 4")
-                .contains("PARTITION BY issuer.s_info_compcode, issuer.s_info_typecode")
+                .contains("PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode")
                 .contains("LEFT JOIN ranked_grade")
                 .doesNotContain("grade.total_score IS NOT NULL")
                 .contains("ORDER BY eligible.relation_sort_no ASC")
@@ -48,10 +48,10 @@ public class SecurityPoolAdjustRelatedCompanyMapperSqlTest {
                 .contains("WHEN 115203000 THEN 2")
                 .contains("WHEN 115202000 THEN 3")
                 .contains("WHEN 115201000 THEN 4")
-                .contains("PARTITION BY master.isin_code, issuer.s_info_compcode, issuer.s_info_typecode")
+                .contains("PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode")
                 .contains("LEFT JOIN ranked_grade")
                 .doesNotContain("grade.total_score IS NOT NULL")
-                .contains("ORDER BY eligible.isin_code ASC")
+                .contains("ORDER BY eligible.security_code ASC")
                 .contains(",eligible.guarantor_sort_no ASC")
                 .contains(",grade.ts DESC")
                 .doesNotContain("每个证券和主体仅保留优先级最高")
@@ -98,7 +98,7 @@ public class SecurityPoolAdjustRelatedCompanyMapperSqlTest {
 
         for (String queryId : new String[]{
                 "querySecuritySnapshotDetailByAdjustLogId",
-                "queryLatestSecuritySnapshotDetailByIsinCode"}) {
+                "queryLatestSecuritySnapshotDetailByWindCode"}) {
             assertThat(selectBlock(xml, queryId))
                     .contains("snap.abs_originator_name")
                     .contains("snap.company_selector")

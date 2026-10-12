@@ -23,8 +23,6 @@ public class ReportInBo {
     /** 报告类型：bond_in_report=债券入库报告 / bond_out_report=债券出库报告 / fund_in_report=基金入库报告 / fund_out_report=基金出库报告 / stock_in_report=股票入库报告 / stock_out_report=股票出库报告 / other_report=其他报告 */
     private String reportType;
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
     /** 证券编码 */
     private String securityCode;
 

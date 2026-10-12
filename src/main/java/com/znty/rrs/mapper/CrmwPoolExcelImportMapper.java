@@ -92,5 +92,5 @@ public interface CrmwPoolExcelImportMapper {
     /**
      * 按 Wind 代码查询证券主数据（含类型名称）
      */
-    List<SecurityInfoDetailDto> querySecurityImportInfoByCode(@Param("marketCode") String marketCode);
+    SecurityInfoDetailDto querySecurityImportInfoByCode(@Param("securityCode") String securityCode);
 }

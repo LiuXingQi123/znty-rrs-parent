@@ -24,17 +24,15 @@ public class AdjustSecuritySnapshotCrmwBo {
 
     /** CRMW名称 */
     private String crmwName;
-    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
-    private String crmwIsinCode;
-    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
+    /** CRMW 证券代码 */
     private String crmwScode;
     /** CRMW 市场代码 */
     private String crmwMktcode;
     /** CRMW 证券类型 */
     private String crmwStype;
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
+    /** 关联代码（标的证券） */
+    private String windCode;
     /** 证券全称 */
     private String fullName;
     /** 证券简称 */
@@ -43,13 +41,13 @@ public class AdjustSecuritySnapshotCrmwBo {
     private String issuer;
     /** 发行人代码 */
     private String issuerCode;
-    /** 银行间证券代码 */
+    /** 银行间市场代码 */
     private String windCodeNib;
     /** 沪市证券代码 */
     private String windCodeSh;
     /** 深市证券代码 */
     private String windCodeSz;
-    /** 北交所证券代码 */
+    /** 北交所代码 */
     private String windCodeBj;
     /** 发行规模(亿元) */
     private BigDecimal issueAmountplan;
@@ -98,7 +96,7 @@ public class AdjustSecuritySnapshotCrmwBo {
     /** 证券分析 */
     private String analysis;
 
-    /** 其他市场证券代码 */
+    /** 其他市场代码 */
     private String windCodeNbc;
     /** 证券期限(年) */
     private BigDecimal termYear;

@@ -23,8 +23,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Date;
-import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportCheckItemDto;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -134,12 +132,6 @@ public class SecurityPoolExcelImportServiceTest {
         item.setId(10L);
         item.setImpId("IMP3");
         item.setFld001("110001.SH");
-        item.setFld015("CN001");
-        SecurityInfoBo master = new SecurityInfoBo();
-        master.setIsinCode("CN001");
-        master.setWindCodeSh("110001.SH");
-        when(securityPoolAdjustMapper.querySecurityByMarketCodeList("110001.SH"))
-                .thenReturn(Collections.singletonList(master));
         item.setFld002("测试债");
         item.setFld003("信用债大库");
         item.setFld004("一级库");
@@ -157,10 +149,10 @@ public class SecurityPoolExcelImportServiceTest {
                 .thenReturn(pool);
 
         AdjustCheckDto.CheckResultItem ri = new AdjustCheckDto.CheckResultItem();
-        ri.setIsinCode("CN001");
+        ri.setSecurityCode("110001.SH");
         ri.setSecurityShortName("测试债");
         ri.setSecurityType("bond");
-        ri.setSourceSecurityCode("CN001");
+        ri.setSourceSecurityCode("110001.SH");
         ri.setTargetPoolId(5L);
         ri.setPoolName("信用债大库/一级库");
         ri.setPoolType("credit_bond");
@@ -206,7 +198,7 @@ public class SecurityPoolExcelImportServiceTest {
                 .thenReturn(buildRelatedCompanies("RIGHTS_FIRST", "RIGHTS_SECOND"));
 
         AdjustCheckReq absReq = new AdjustCheckReq();
-        absReq.setIsinCode("ABS001.IB");
+        absReq.setSecurityCode("ABS001.IB");
         ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingCompany", absReq);
 
         assertEquals("RIGHTS_FIRST", absReq.getRightsHolderCode());
@@ -219,7 +211,7 @@ public class SecurityPoolExcelImportServiceTest {
                 .thenReturn(buildRelatedCompanies("GUARANTOR_FIRST", "GUARANTOR_SECOND"));
 
         SecurityPoolAdjustSubmitReq normalReq = new SecurityPoolAdjustSubmitReq();
-        normalReq.setIsinCode("BOND001.IB");
+        normalReq.setSecurityCode("BOND001.IB");
         ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingCompany", normalReq);
 
         assertEquals("GUARANTOR_FIRST", normalReq.getGuarantorCode());
@@ -250,33 +242,4 @@ public class SecurityPoolExcelImportServiceTest {
             assertEquals("导入批次不存在或已取消", e.getMessage());
         }
     }
-    /** 同一只券的沪市码和银行间码导入同池时，两行都报重复。 */
-    @Test
-    public void crossMarketRowsShouldBothFailForSameIdentityAndPool() {
-        SecurityInfoBo master = new SecurityInfoBo();
-        master.setIsinCode("CNMULTIMARKET001");
-        when(securityPoolAdjustMapper.querySecurityByMarketCodeList("123456.SH"))
-                .thenReturn(Collections.singletonList(master));
-        when(securityPoolAdjustMapper.querySecurityByMarketCodeList("102400001.IB"))
-                .thenReturn(Collections.singletonList(master));
-        InvestmentPoolBo pool = new InvestmentPoolBo();
-        pool.setId(5L); pool.setPoolName("一级库"); pool.setPoolType("credit_bond");
-        when(importMapper.queryEnabledLeafPoolByParentAndChildName("信用债大库", "一级库"))
-                .thenReturn(pool);
-        List<SysImpTmpDetlBo> rows = new ArrayList<>();
-        for (String code : new String[] {"123456.SH", "102400001.IB"}) {
-            SysImpTmpDetlBo row = new SysImpTmpDetlBo();
-            row.setFld001(code); row.setFld003("信用债大库"); row.setFld004("一级库");
-            rows.add(row);
-        }
-        List<SecurityPoolExcelImportCheckItemDto> results = ReflectionTestUtils.invokeMethod(
-                service, "checkSecurityImport", rows, true, false, "1", new Date());
-        assertEquals(2, results.size());
-        for (SecurityPoolExcelImportCheckItemDto result : results) {
-            assertEquals(false, result.isCanAdjust());
-            assertEquals(true, result.getFailReasons().toString().contains("同一ISIN"));
-        }
-        verify(securityPoolAdjustService, never()).checkAdjust(any());
-    }
-
 }

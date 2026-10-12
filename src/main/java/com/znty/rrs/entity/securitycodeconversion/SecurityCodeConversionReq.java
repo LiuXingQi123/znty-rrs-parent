@@ -11,8 +11,6 @@ public class SecurityCodeConversionReq {
     /** 待替换的临时证券代码 */
     private String tempSecurityCode;
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
     /** 正式证券代码 */
     private String securityCode;
 
@@ -31,19 +29,19 @@ public class SecurityCodeConversionReq {
     /** 正式证券类型 */
     private String securityType;
 
-    /** 沪市证券代码 */
+    /** 正式证券沪市代码 */
     private String windCodeSh;
 
-    /** 深市证券代码 */
+    /** 正式证券深市代码 */
     private String windCodeSz;
 
-    /** 银行间证券代码 */
+    /** 正式证券银行间市场代码 */
     private String windCodeNib;
 
-    /** 北交所证券代码 */
+    /** 正式证券北交所代码 */
     private String windCodeBj;
 
-    /** 其他市场证券代码 */
+    /** 正式证券其他市场代码 */
     private String windCodeNbc;
 
     /** 操作来源：manual=人工 / job=定时任务 / other=其他 */

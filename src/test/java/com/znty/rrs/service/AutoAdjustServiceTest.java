@@ -41,7 +41,6 @@ public class AutoAdjustServiceTest {
     public void autoOutExpiredShouldDeleteExpiredSecurities() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
@@ -62,7 +61,6 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
         ScheduledAdjustCandidateDto expired = new ScheduledAdjustCandidateDto();
         expired.setSecurityCode("S001");
-        expired.setIsinCode("S001");
         expired.setSecurityShortName("测试债");
         expired.setSecurityType("corporate_bond");
         expired.setMaturityDate("20260901");
@@ -98,7 +96,6 @@ public class AutoAdjustServiceTest {
     public void autoOutExpiredShouldSeparateBatchBySecurityCode() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
@@ -119,10 +116,8 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         ScheduledAdjustCandidateDto first = new ScheduledAdjustCandidateDto();
         first.setSecurityCode("S001");
-        first.setIsinCode("S001");
         ScheduledAdjustCandidateDto second = new ScheduledAdjustCandidateDto();
         second.setSecurityCode("S002");
-        second.setIsinCode("S002");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(first, second));
         when(securityPoolAdjustMapper.queryAllPoolRelationList())
                 .thenReturn(Collections.<PoolRelationBo>emptyList());
@@ -143,7 +138,6 @@ public class AutoAdjustServiceTest {
     public void autoOutExpiredShouldFailWhenParamJsonEmpty() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
@@ -166,7 +160,6 @@ public class AutoAdjustServiceTest {
     public void autoOutExpiredShouldFailWhenJsonInvalid() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
@@ -192,7 +185,6 @@ public class AutoAdjustServiceTest {
     public void autoOutExpiredShouldSkipWhenSoftDeleteMisses() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
@@ -212,7 +204,6 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
         ScheduledAdjustCandidateDto expired = new ScheduledAdjustCandidateDto();
         expired.setSecurityCode("S001");
-        expired.setIsinCode("S001");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
         when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(0);
@@ -228,7 +219,6 @@ public class AutoAdjustServiceTest {
     public void autoOutExpiredShouldSkipWhenInOutRestrictPool() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
@@ -248,7 +238,6 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
         ScheduledAdjustCandidateDto expired = new ScheduledAdjustCandidateDto();
         expired.setSecurityCode("S001");
-        expired.setIsinCode("S001");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
         PoolRelationBo restrict = new PoolRelationBo();
         restrict.setPoolId(10L);
@@ -282,7 +271,6 @@ public class AutoAdjustServiceTest {
     public void autoOutExpiredShouldScanBoundPoolWhenParamEmpty() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();
@@ -302,7 +290,6 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
         ScheduledAdjustCandidateDto expired = new ScheduledAdjustCandidateDto();
         expired.setSecurityCode("S001");
-        expired.setIsinCode("S001");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
         when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(1);
@@ -318,7 +305,6 @@ public class AutoAdjustServiceTest {
     public void autoOutExpiredShouldUnionParamAndBoundPools() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        when(securityPoolAdjustMapper.queryEffectiveMarketSnapshot(any(IpAdjustLogBo.class))).thenAnswer(invocation -> invocation.getArgument(0));
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustService service = new AutoAdjustService();

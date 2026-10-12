@@ -165,7 +165,7 @@ public class BatchSecurityPoolAdjustService {
         List<IpAdjustLogBo> logs = new ArrayList<>();
         for (BatchSecurityInboundAdjustReq.AdjustItem item : req.getItems()) {
             IpAdjustLogBo log = new IpAdjustLogBo();
-            log.setIsinCode(item.getIsinCode());
+            log.setSecurityCode(item.getSecurityCode());
             log.setSecurityShortName(item.getSecurityShortName());
             log.setSecurityType(item.getSecurityType());
             log.setAdjustMode(item.getAdjustMode());
@@ -199,13 +199,13 @@ public class BatchSecurityPoolAdjustService {
 
     /** 构造批量请求手工项防重复比较键。 */
     private String buildBatchDuplicateItemKey(BatchSecurityInboundAdjustReq.AdjustItem item) {
-        return item.getIsinCode() + "|" + item.getTargetPoolId() + "|" + item.getAdjustMode()
+        return item.getSecurityCode() + "|" + item.getTargetPoolId() + "|" + item.getAdjustMode()
                 + "|" + item.getFlowId() + "|" + normalizeDuplicateText(item.getFlowKey());
     }
 
     /** 构造历史批量手工日志防重复比较键。 */
     private String buildBatchDuplicateItemKey(IpAdjustLogBo log) {
-        return log.getIsinCode() + "|" + log.getTargetPoolId() + "|" + log.getAdjustMode()
+        return log.getSecurityCode() + "|" + log.getTargetPoolId() + "|" + log.getAdjustMode()
                 + "|" + log.getFlowId() + "|" + normalizeDuplicateText(log.getFlowKey());
     }
 
@@ -322,7 +322,7 @@ public class BatchSecurityPoolAdjustService {
             throw new BizException("目标投资池不存在、未启用或不是叶子池");
         }
         for (BatchSecurityInboundAdjustReq.SecurityItem security : req.getSecurities()) {
-            if (security.getIsinCode() == null || security.getIsinCode().isEmpty()) {
+            if (security.getSecurityCode() == null || security.getSecurityCode().isEmpty()) {
                 throw new BizException("已选证券代码不能为空");
             }
         }
@@ -352,7 +352,7 @@ public class BatchSecurityPoolAdjustService {
         // 解析批量调库中文方向
         String adjustMode = resolveAdjustMode(req);
         for (BatchSecurityInboundAdjustReq.AdjustItem item : req.getItems()) {
-            if (item.getIsinCode() == null || item.getIsinCode().isEmpty()) {
+            if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
                 throw new BizException("调库明细证券代码不能为空");
             }
             if (!AdjustMode.IN.getCode().equals(item.getAdjustMode()) && !AdjustMode.OUT.getCode().equals(item.getAdjustMode())) {
@@ -417,7 +417,7 @@ public class BatchSecurityPoolAdjustService {
         item.setAdjustMode(resolveAdjustMode(req));
 
         AdjustCheckReq checkReq = new AdjustCheckReq();
-        checkReq.setIsinCode(security.getIsinCode());
+        checkReq.setSecurityCode(security.getSecurityCode());
         checkReq.setSecurityShortName(security.getSecurityShortName());
         checkReq.setSecurityType(security.getSecurityType());
         // 透传前端选中的担保人、普通权益人和自选权益人代码
@@ -440,21 +440,15 @@ public class BatchSecurityPoolAdjustService {
             AdjustCheckDto.CheckResultItem item) {
         BatchSecurityInboundAdjustDto.CheckResultItem result = new BatchSecurityInboundAdjustDto.CheckResultItem();
         // 关联码项使用校验结果中的证券代码，主券项回退选中券
-        String securityCode = item.getIsinCode() != null && !item.getIsinCode().isEmpty()
-                ? item.getIsinCode() : security.getIsinCode();
+        String securityCode = item.getSecurityCode() != null && !item.getSecurityCode().isEmpty()
+                ? item.getSecurityCode() : security.getSecurityCode();
         String securityShortName = item.getSecurityShortName() != null && !item.getSecurityShortName().isEmpty()
                 ? item.getSecurityShortName() : security.getSecurityShortName();
         String securityType = item.getSecurityType() != null && !item.getSecurityType().isEmpty()
                 ? item.getSecurityType() : security.getSecurityType();
         String sourceSecurityCode = item.getSourceSecurityCode() != null && !item.getSourceSecurityCode().isEmpty()
-                ? item.getSourceSecurityCode() : security.getIsinCode();
-        result.setIsinCode(securityCode);
-        result.setWindCodeSh(item.getWindCodeSh());
-        result.setWindCodeSz(item.getWindCodeSz());
-        result.setWindCodeNib(item.getWindCodeNib());
-        result.setWindCodeBj(item.getWindCodeBj());
-        result.setWindCodeNbc(item.getWindCodeNbc());
-        result.setSecuritySource(item.getSecuritySource());
+                ? item.getSourceSecurityCode() : security.getSecurityCode();
+        result.setSecurityCode(securityCode);
         result.setSecurityShortName(securityShortName);
         result.setSecurityType(securityType);
         result.setSourceSecurityCode(sourceSecurityCode);
@@ -482,7 +476,7 @@ public class BatchSecurityPoolAdjustService {
         // 请求级证券取触发主券（manual 项优先，否则 sourceSecurityCode / 首条）
         BatchSecurityInboundAdjustReq.AdjustItem primary = resolveBatchPrimaryItem(items);
         SecurityPoolAdjustSubmitReq submitReq = new SecurityPoolAdjustSubmitReq();
-        submitReq.setIsinCode(resolveBatchSubmitGroupKey(primary));
+        submitReq.setSecurityCode(resolveBatchSubmitGroupKey(primary));
         submitReq.setSecurityShortName(primary.getSecurityShortName());
         submitReq.setSecurityType(primary.getSecurityType());
         submitReq.setGuarantorCode(primary.getGuarantorCode());
@@ -490,14 +484,14 @@ public class BatchSecurityPoolAdjustService {
         submitReq.setSelfSelectedRightsHolderCode(primary.getSelfSelectedRightsHolderCode());
         // 若 primary 是 related，主券简称可能不对，回查主券主数据
         if (ItemType.RELATED.getCode().equals(primary.getItemTag())) {
-            SecurityInfoBo primarySec = securityPoolAdjustMapper.querySecurityBoByCode(submitReq.getIsinCode());
+            SecurityInfoBo primarySec = securityPoolAdjustMapper.querySecurityBoByCode(submitReq.getSecurityCode());
             if (primarySec != null) {
                 submitReq.setSecurityShortName(primarySec.getShortName());
                 submitReq.setSecurityType(primarySec.getSecurityType());
             }
         }
         submitReq.setCrmwName(primary.getCrmwName());
-        submitReq.setCrmwIsinCode(primary.getCrmwIsinCode());
+        submitReq.setCrmwScode(primary.getCrmwScode());
         submitReq.setCrmwMktcode(primary.getCrmwMktcode());
         submitReq.setCrmwStype(primary.getCrmwStype());
         submitReq.setAdjustType("手动批量调整");
@@ -510,7 +504,7 @@ public class BatchSecurityPoolAdjustService {
         for (BatchSecurityInboundAdjustReq.AdjustItem item : items) {
             SecurityPoolAdjustSubmitReq.AdjustItem submitItem = new SecurityPoolAdjustSubmitReq.AdjustItem();
             // 每条明细带真实证券代码（关联码独立落 log）
-            submitItem.setIsinCode(item.getIsinCode());
+            submitItem.setSecurityCode(item.getSecurityCode());
             submitItem.setSecurityShortName(item.getSecurityShortName());
             submitItem.setSecurityType(item.getSecurityType());
             submitItem.setTargetPoolId(item.getTargetPoolId());
@@ -565,7 +559,7 @@ public class BatchSecurityPoolAdjustService {
         if (item.getSourceSecurityCode() != null && !item.getSourceSecurityCode().isEmpty()) {
             return item.getSourceSecurityCode();
         }
-        return item.getIsinCode();
+        return item.getSecurityCode();
     }
 
     /**

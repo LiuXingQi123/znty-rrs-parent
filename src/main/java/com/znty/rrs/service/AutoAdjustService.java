@@ -42,10 +42,6 @@ import java.util.Map;
 @Service
 public class AutoAdjustService implements RrsScheduledTask {
 
-    /** 共用证券事件代码快照 */
-    @Resource
-    private SecurityPoolAdjustService securityPoolAdjustService;
-
     /** 任务编码（与库表 task_code 绑定） */
     public static final String TASK_CODE = "security_expired_auto_out";
 
@@ -179,20 +175,20 @@ public class AutoAdjustService implements RrsScheduledTask {
             }
             int poolCount = 0;
             for (ScheduledAdjustCandidateDto sec : expiredList) {
-                if (sec == null || !StringUtils.hasText(sec.getObjectCode())) {
+                if (sec == null || !StringUtils.hasText(sec.getSecurityCode())) {
                     continue;
                 }
                 // 对齐老 AdjustPoolByRule.checkSecurityOutPoolRelation（关系 12 / 调出限制池）
                 if (AutoAdjustRestrictHelper.isInAnyPool(
-                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(sec.getObjectCode()),
+                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(sec.getSecurityCode()),
                         outRestrictPoolIds)) {
-                    warnDetail(detail, "证券[" + sec.getObjectCode() + "]当前在调出限制池中，跳过");
+                    warnDetail(detail, "证券[" + sec.getSecurityCode() + "]当前在调出限制池中，跳过");
                     continue;
                 }
                 // 先软删，未删到则视为已不在池，不写日志、不计数
-                int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(sec.getObjectCode(), poolId);
+                int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(sec.getSecurityCode(), poolId);
                 if (deleted == 0) {
-                    warnDetail(detail, "证券[" + sec.getObjectCode() + "]软删池状态失败（可能并发已出池），跳过");
+                    warnDetail(detail, "证券[" + sec.getSecurityCode() + "]软删池状态失败（可能并发已出池），跳过");
                     continue;
                 }
                 sec.setAdjustType("自动调整");
@@ -209,12 +205,11 @@ public class AutoAdjustService implements RrsScheduledTask {
                 sec.setAdjustReason(reason);
                 // 按实际证券和目标池生成自动调库批次号
                 String batchNo = batchNoContext.resolveBondBatchNo(
-                        sec.getObjectCode(), poolId, AdjustMode.OUT.getCode());
+                        sec.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
                 sec.setAdjustBatchNo(batchNo);
                 sec.setSubmitTime(submitTime);
                 // 软删成功后再写自动调出日志
                 securityPoolAdjustMapper.addAdjustLog(sec);
-                securityPoolAdjustService.saveEffectiveMarketSnapshot(sec);
                 poolCount++;
             }
             summary.addPool(poolId, pool.getPoolName(), poolCount);

@@ -30,16 +30,16 @@ public class SecurityPoolAdjustApiTest extends ControllerApiTestSupport {
     public void shouldSupportSecuritySelectionAndDetail() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityPage", "{}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityTypeList", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityDetail", "{\"isinCode\":\"100001\"}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryIssuerFinancialList", "{\"isinCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityDetail", "{\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryIssuerFinancialList", "{\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryIssuerFinancialByReportDate",
-                "{\"isinCode\":\"100001\",\"reportDate\":20251231}");
+                "{\"securityCode\":\"100001\",\"reportDate\":20251231}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/saveIssuerFinancialList",
-                "{\"isinCode\":\"100001\",\"records\":[{\"reportDate\":20251231,\"totAssets\":\"32.480712\"}]}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryRelatedRatingCompanyList", "{\"isinCode\":\"100001\"}");
+                "{\"securityCode\":\"100001\",\"records\":[{\"reportDate\":20251231,\"totAssets\":\"32.480712\"}]}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryRelatedRatingCompanyList", "{\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySelfSelectedRightsHolderPage", "{\"pageIndex\":1,\"pageSize\":20}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustPoolList", "{\"isinCode\":\"100001\",\"adjustDirection\":\"in\"}");
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityPoolStatus", "{\"isinCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustPoolList", "{\"securityCode\":\"100001\",\"adjustDirection\":\"in\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/querySecurityPoolStatus", "{\"securityCode\":\"100001\"}");
     }
 
     /** 验证 shouldSupportAdjustValidationAndSubmission 测试场景。 */
@@ -52,7 +52,7 @@ public class SecurityPoolAdjustApiTest extends ControllerApiTestSupport {
     /** 验证 shouldSupportAdjustTrace 测试场景。 */
     @Test
     public void shouldSupportAdjustTrace() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustLogList", "{\"isinCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustLogList", "{\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjust/queryAdjustStepList", "{\"adjustLogId\":1,\"adjustBatchNo\":\"BATCH001\"}");
     }
 }

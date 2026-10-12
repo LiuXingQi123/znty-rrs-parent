@@ -17,7 +17,7 @@ public class AdjustLogHistoryMapperSqlTest {
     public void adjustLogQueriesShouldUseObjectIdentityAndSubmissionTimeOrder() throws Exception {
         String securityQuery = executableSelect("SecurityPoolAdjustMapper.xml", "queryAdjustLogList");
         assertThat(securityQuery)
-                .contains("AND al.isin_code = #{isinCode}")
+                .contains("AND al.security_code = #{securityCode}")
                 .contains("ORDER BY al.submit_time DESC")
                 .contains(",al.id DESC")
                 .doesNotContain("adjust_batch_no = #{adjustBatchNo}")
@@ -34,8 +34,8 @@ public class AdjustLogHistoryMapperSqlTest {
 
         String crmwQuery = executableSelect("CrmwPoolAdjustMapper.xml", "queryAdjustLogList");
         assertThat(crmwQuery)
-                .contains("WHERE al.isin_code = #{isinCode}")
-                .contains("AND al.crmw_isin_code = #{crmwIsinCode}")
+                .contains("WHERE al.security_code = #{securityCode}")
+                .contains("AND al.crmw_scode = #{crmwScode}")
                 .contains("AND al.crmw_stype = #{crmwStype}")
                 .contains("AND al.pool_type = 'crmw'")
                 .contains("ORDER BY al.submit_time DESC")

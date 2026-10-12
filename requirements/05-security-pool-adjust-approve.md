@@ -1,17 +1,5 @@
 # 证券池调库审核 / 审批流转需求说明
 
-## 证券身份与市场代码（当前接口契约）
-
-- `rrs_securityinfo.isin_code` 为非空主键；正式券使用真实 ISIN，临时券使用 `TEMP:临时代码`。不再提供 `wind_code` 总码，也不增加 `security_ref_type`。
-- 调库、池状态、收藏、报告、提醒及批量缓存按 `isinCode` 识别整券；同券同池只占一份容量，同券不同市场码不能绕过已在池和在途检查。主体、独立基金、股票继续使用原业务代码。
-- 证券代码搜索传 `securityKeyword`，后端在括号内对 `wind_code_sh`、`wind_code_sz`、`wind_code_nib`、`wind_code_bj`、`wind_code_nbc` 做 OR 模糊筛选。任一市场符合目标池配置即可整券入池，全部有值代码同步生效、同步出池；仅审批通过 `20` 落池。
-- 页面“证券代码”保留一列，通过各页面 `new Vue` 内的方法与 Element UI 插槽按沪、深、银行间、北、其他顺序换行展示全部有值代码，仅显示代码本身、不加市场名前缀；空值不占位，长码可折行；可点击代码与证券简称使用相同链接样式，普通代码继承表格文字样式。点击任一码打开同一 ISIN；临时券明确标示临时来源。无公共证券代码脚本或自定义组件。
-- 调库记录展示日志保存的市场代码快照，不随当前主档代码变化；CRMW 凭证展示银行间代码快照，ISIN 仅用于身份关联。
-- CRMW 凭证只使用银行间编码。`crmwIsinCode` 标识凭证、`isinCode` 标识标的，两者与目标池组成业务组合；`crmwScode` / `crmw_scode` 只作银行间代码快照，不作身份。
-- POST 路径及响应包装不变。旧代码身份请求明确失败；旧 URL、导入校验草稿须重新选择或重新上传。不能使用状态行 `id` 代替证券身份；日志 ID、附件 ID 仍各有其用途。
-- 通用证券 Excel 导出分别提供 ISIN 与五码列；历史及打印读取业务快照。恒生按实际市场码展开，增量删除沿用原入池事件代码，不能输出 ISIN 或临时代码作为正式银行间代码。
-
-
 > 前端页面：`security_pool_adjust_approve.html`（审核页）、`security_pool_adjust_detail.html`（详情页，结构同审核页但 `entryMode='view'/'adjust'`，无审批操作）、`my_matters.html`（待办入口）
 > 后端前缀：`/api/v1/securityPoolAdjustFlow`（审批）、`/api/v1/securityPoolAdjust`（上下文查询）、`/api/v1/myMatters`（待办）
 > 角色定位：审批处理人查看调库业务上下文与流程步骤，对当前待办执行通过/驳回/撤回，系统按流程配置推进下一节点并更新最终状态。
@@ -121,8 +109,8 @@
 
 ### 2.1 入口模式
 
-- 审核页面 `security_pool_adjust_approve.html`，`entryMode` 取值 `process`（我的事宜处理）/`next`（下一步校验确认）；URL 携带 `isinCode/targetPoolId/adjustLogId/adjustBatchNo/entryMode`。
-- 页面初始化在 `created()`，调用 `initStandaloneReviewPage` → `loadDetailData(isinCode)` + `restoreStandaloneAdjustDraft`。
+- 审核页面 `security_pool_adjust_approve.html`，`entryMode` 取值 `process`（我的事宜处理）/`next`（下一步校验确认）；URL 携带 `securityCode/targetPoolId/adjustLogId/adjustBatchNo/entryMode`。
+- 页面初始化在 `created()`，调用 `initStandaloneReviewPage` → `loadDetailData(securityCode)` + `restoreStandaloneAdjustDraft`。
 
 ### 2.2 初始化加载的接口
 
@@ -132,7 +120,7 @@
 2. `POST /api/v1/securityPoolAdjust/queryAdjustPoolList {adjustDirection:'in'}` — 可调入池树
 3. `POST /api/v1/securityPoolAdjust/queryAdjustPoolList {adjustDirection:'out'}` — 可调出池树
 4. `POST /api/v1/securityPoolAdjust/querySecurityPoolStatus` — 当前证券/主体所在池
-5. `POST /api/v1/securityPoolAdjust/queryAdjustLogList {isinCode, adjustBatchNo}` — 调库记录列表（按批次过滤；若不传批次，后端只返回未终结流程的记录：`audit_status NOT IN ('-1','20','21','99')`）
+5. `POST /api/v1/securityPoolAdjust/queryAdjustLogList {securityCode, adjustBatchNo}` — 调库记录列表（按批次过滤；若不传批次，后端只返回未终结流程的记录：`audit_status NOT IN ('-1','20','21','99')`）
 
 证券基本信息字段和顺序与申请页一致：非 ABS 展示当笔快照中的担保人；ABS 展示普通权益人和自选权益人；两类证券均展示“担保人主体内评分”，ABS 对应提交时最终生效的自选权益人（优先）或普通权益人内评。
 
@@ -363,7 +351,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 - 待处理 tab：INNER JOIN 子查询取每个 `adjust_log_id` 的 `MAX(step_id)` 且 `step_status='pending'`，非管理员额外加 `handler_id = currentUserId` 过滤。
 - 已完成 tab：取每个调库记录的最新步骤，并要求该批次无 pending 步骤（`NOT EXISTS(... step_status='pending' ...)`）。
 - 全局过滤：非管理员要求该调库记录下存在 `handler_id = currentUserId` 的步骤（只显示自己参与过的）；`currentUserId` 为空时 `AND 1=0` 强制返回空。
-- 返回字段含 `stepId`（即 `s.id`）、`flowName`、`stepName`（nodeLabel）、`processDescription`、`auditStatus`、`stepStatus`、`initiatorName`、`startTime`，以及跳转所需 `isinCode`/`securityShortName`/`crmwScode`/`businessScene`/`adjustLogId`/`targetPoolId`/`adjustBatchNo`。
+- 返回字段含 `stepId`（即 `s.id`）、`flowName`、`stepName`（nodeLabel）、`processDescription`、`auditStatus`、`stepStatus`、`initiatorName`、`startTime`，以及跳转所需 `securityCode`/`securityShortName`/`crmwScode`/`businessScene`/`adjustLogId`/`targetPoolId`/`adjustBatchNo`。
 
 `MyMattersService.replacePoolNameWithFullPath` 后处理将描述中的「目标池叶子名称」替换为「全路径名称」。
 
@@ -374,7 +362,7 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 ### 4.3 跳转审核页
 
 `openMatterPage(row)`：工作台内走 `RrsWorkbench.openDetailTab`，按 `businessScene` + 证券/主体/凭证 + 批次新开页签，同键复用；「我的事宜」列表 iframe 不跳走。脱离工作台时仍 `location.href`。
-- 拼 URL 参数：`isinCode`（主体场景为 `companyCode`）/ `crmwScode`（CRMW）/ `targetPoolId` / `adjustLogId` / `adjustBatchNo` / `entryMode`。
+- 拼 URL 参数：`securityCode`（主体场景为 `companyCode`）/ `crmwScode`（CRMW）/ `targetPoolId` / `adjustLogId` / `adjustBatchNo` / `entryMode`。
 - `entryMode`：pending tab → `'process'`（证券进 `security_pool_adjust_approve.html`，主体进 `forbidden_pool_adjust_approve.html`，CRMW 进 `crmw_pool_adjust_approve.html`）；completed tab → `'view'`（对应 `*_detail.html`）。
 - 本审核页「返回」先 `closeActiveTab()`（仅动态页签关闭成功），否则回页内列表。禁止 `history.back()`。
 
@@ -388,14 +376,14 @@ Service 入口 `submitAdjustAudit(req, files)` 标注 `@Transactional(rollbackFo
 |---|---|---|---|
 | `securityPoolAdjustFlow/submitAdjustAudit`（application/json） | `SecurityPoolAdjustAuditReq`：stepId/adjustLogId/adjustBatchNo/processAction(approve\|reject)/processComment/handlerId/handlerName | `SecurityPoolAdjustAuditDto` | 提交审批处理意见，纯文本场景 |
 | `securityPoolAdjustFlow/submitAdjustAuditWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | 同上 | 修改节点提交时同时上传附件变更（multipart 入口；JSON 入口为 `submitAdjustAudit`） |
-| `securityPoolAdjust/querySecurityPage` | isinCode/securityShortName/securityType/issuer + 分页 | `PageResult<SecurityInfoDto>` | 列表页证券检索 |
+| `securityPoolAdjust/querySecurityPage` | securityCode/securityShortName/securityType/issuer + 分页 | `PageResult<SecurityInfoDto>` | 列表页证券检索 |
 | `securityPoolAdjust/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 列表页证券类型下拉 |
-| `securityPoolAdjust/querySecurityDetail` | isinCode，可选 adjustLogId | `SecurityInfoDetailDto` | 有 log：该笔快照；无 log：主档 + 最新快照可编辑字段 |
-| `securityPoolAdjust/queryAdjustPoolList` | isinCode/adjustDirection(in\|out)/currentUserId | `List<PoolDto>` | 可调入/调出投资池树（含互斥关系） |
-| `securityPoolAdjust/querySecurityPoolStatus` | isinCode | `SecurityPoolStatusDto` | 当前证券/主体所在池 |
-| `securityPoolAdjust/queryAdjustLogList` | isinCode/adjustBatchNo | `List<AdjustLogDto>` | 调库记录列表（按批次过滤；不传批次仅返回未终结流程） |
+| `securityPoolAdjust/querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | 有 log：该笔快照；无 log：主档 + 最新快照可编辑字段 |
+| `securityPoolAdjust/queryAdjustPoolList` | securityCode/adjustDirection(in\|out)/currentUserId | `List<PoolDto>` | 可调入/调出投资池树（含互斥关系） |
+| `securityPoolAdjust/querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto` | 当前证券/主体所在池 |
+| `securityPoolAdjust/queryAdjustLogList` | securityCode/adjustBatchNo | `List<AdjustLogDto>` | 调库记录列表（按批次过滤；不传批次仅返回未终结流程） |
 | `securityPoolAdjust/queryAdjustStepList` | adjustLogId/adjustBatchNo | `List<IpAdjustStepDto>` | 同批次流程步骤列表 |
-| `securityPoolAdjust/checkAdjust` | isinCode/items[{targetPoolId,adjustMode,poolType}] | `AdjustCheckDto` | 调库可行性校验 + 推荐流程 |
+| `securityPoolAdjust/checkAdjust` | securityCode/items[{targetPoolId,adjustMode,poolType}] | `AdjustCheckDto` | 调库可行性校验 + 推荐流程 |
 | `securityPoolAdjust/addAdjustLog`（application/json） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
 | `securityPoolAdjust/addAdjustLogWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `AdjustSubmitDto` | 提交调库申请（带附件，含直通流程即时入池） |
 | `myMatters/queryMyMattersPage` | flowIds/startDateStart/startDateEnd/processDescription/auditStatus/stepStatus(pending\|completed)/initiatorName/currentUserId + 分页 | `PageResult<MyMattersDto>` | 我的事宜分页列表 |

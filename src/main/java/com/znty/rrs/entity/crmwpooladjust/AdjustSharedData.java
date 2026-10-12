@@ -22,9 +22,7 @@ public class AdjustSharedData {
 
     /** 证券基础信息（来自 rrs_securityinfo） */
     private SecurityInfoBo securityInfo;
-    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
-    private String crmwIsinCode;
-    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
+    /** CRMW 凭证代码 */
     private String crmwScode;
     /** CRMW 证券类型 */
     private String crmwStype;

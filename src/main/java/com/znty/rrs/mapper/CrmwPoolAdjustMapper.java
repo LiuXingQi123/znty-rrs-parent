@@ -23,26 +23,22 @@ import java.util.List;
 @Mapper
 public interface CrmwPoolAdjustMapper {
 
-    /** 按业务日志读取凭证当时的ISIN及银行间代码。 */
-    SecurityInfoDetailDto queryCrmwSnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId);
-
-
     /** 分页查询 CRMW 凭证列表 */
-    List<SecurityInfoDto> queryCrmwPage(@Param("securityKeyword") String securityKeyword,
+    List<SecurityInfoDto> queryCrmwPage(@Param("securityCode") String securityCode,
                                         @Param("securityShortName") String securityShortName,
                                         @Param("issuer") String issuer);
 
     /** 分页查询可绑定证券列表 */
-    List<SecurityInfoDto> queryBindableSecurityPage(@Param("securityKeyword") String securityKeyword,
+    List<SecurityInfoDto> queryBindableSecurityPage(@Param("securityCode") String securityCode,
                                                     @Param("securityShortName") String securityShortName,
                                                     @Param("issuer") String issuer,
                                                     @Param("bondYesFlags") List<String> bondYesFlags);
 
     /** 根据证券代码查询证券详情 */
-    SecurityInfoDetailDto querySecurityDetail(@Param("isinCode") String isinCode);
+    SecurityInfoDetailDto querySecurityDetail(@Param("securityCode") String securityCode);
 
     /** 根据证券代码查询证券基础信息实体 */
-    SecurityInfoBo querySecurityBoByCode(@Param("isinCode") String isinCode);
+    SecurityInfoBo querySecurityBoByCode(@Param("securityCode") String securityCode);
 
     /** 新增调库记录（非直通流程，audit_status='00' 流程中） */
     int addAdjustLog(IpAdjustLogBo bo);
@@ -51,8 +47,8 @@ public interface CrmwPoolAdjustMapper {
     int addPoolStatus(IpAdjustLogBo bo);
 
     /** 软删除指定凭证与标的证券组合的入池状态（直通调出流程） */
-    int deletePoolStatusSoft(@Param("isinCode") String isinCode,
-                             @Param("crmwIsinCode") String crmwIsinCode,
+    int deletePoolStatusSoft(@Param("securityCode") String securityCode,
+                             @Param("crmwScode") String crmwScode,
                              @Param("crmwStype") String crmwStype,
                              @Param("targetPoolId") Long targetPoolId);
 
@@ -60,48 +56,48 @@ public interface CrmwPoolAdjustMapper {
     int editSecurityInfoForAdjust(CrmwPoolAdjustSubmitReq req);
 
     /** 根据证券代码和可选目标池查询调库记录列表 */
-    List<IpAdjustLogBo> queryAdjustLogList(@Param("isinCode") String isinCode,
-                                           @Param("crmwIsinCode") String crmwIsinCode,
+    List<IpAdjustLogBo> queryAdjustLogList(@Param("securityCode") String securityCode,
+                                           @Param("crmwScode") String crmwScode,
                                            @Param("crmwStype") String crmwStype,
                                            @Param("adjustBatchNo") String adjustBatchNo);
 
     /** 查询操作人近期有效的手工 CRMW 调库记录 */
-    List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("isinCode") String isinCode,
-                                                       @Param("crmwIsinCode") String crmwIsinCode,
+    List<IpAdjustLogBo> queryRecentManualAdjustLogList(@Param("securityCode") String securityCode,
+                                                       @Param("crmwScode") String crmwScode,
                                                        @Param("crmwStype") String crmwStype,
                                                        @Param("adjusterId") String adjusterId,
                                                        @Param("seconds") int seconds);
 
     /** 查询 CRMW 组合活动流程涉及的手工调库目标池 ID */
-    List<Long> queryPendingManualTargetPoolIdList(@Param("isinCode") String isinCode,
-                                                  @Param("crmwIsinCode") String crmwIsinCode,
+    List<Long> queryPendingManualTargetPoolIdList(@Param("securityCode") String securityCode,
+                                                  @Param("crmwScode") String crmwScode,
                                                   @Param("crmwStype") String crmwStype,
                                                   @Param("excludeBatchNo") String excludeBatchNo);
 
     /** 查询当前证券所在池列表 */
-    List<PoolStatusDto> querySecurityPoolStatusList(@Param("isinCode") String isinCode,
-                                                     @Param("crmwIsinCode") String crmwIsinCode,
+    List<PoolStatusDto> querySecurityPoolStatusList(@Param("securityCode") String securityCode,
+                                                     @Param("crmwScode") String crmwScode,
                                                      @Param("crmwStype") String crmwStype);
 
     /** 查询当前证券主体（发行人）所在池列表 */
-    List<PoolStatusDto> queryIssuerPoolStatusList(@Param("isinCode") String isinCode);
+    List<PoolStatusDto> queryIssuerPoolStatusList(@Param("securityCode") String securityCode);
 
     /** 查询证券当前有效所在池 ID 列表（audit_status=20） */
-    List<Long> querySecurityCurrentPoolIdList(@Param("isinCode") String isinCode,
-                                              @Param("crmwIsinCode") String crmwIsinCode,
+    List<Long> querySecurityCurrentPoolIdList(@Param("securityCode") String securityCode,
+                                              @Param("crmwScode") String crmwScode,
                                               @Param("crmwStype") String crmwStype);
 
     /** 查询目标投资池当前有效证券数量 */
     int queryPoolCurrentCount(@Param("poolId") Long poolId);
 
     /** 查询 CRMW 凭证与标的组合的实际入池时间。 */
-    Date queryCrmwPoolEntryTime(@Param("isinCode") String isinCode,
-                                          @Param("crmwIsinCode") String crmwIsinCode,
+    Date queryCrmwPoolEntryTime(@Param("securityCode") String securityCode,
+                                          @Param("crmwScode") String crmwScode,
                                           @Param("crmwStype") String crmwStype,
                                           @Param("targetPoolId") Long targetPoolId);
 
     /** 查询证券是否在全局禁投池（forbidden，audit_status=20），用于调入禁投池校验 */
-    boolean querySecurityInForbiddenPool(@Param("isinCode") String isinCode);
+    boolean querySecurityInForbiddenPool(@Param("securityCode") String securityCode);
 
     /** 查询指定日期是否在目标池的开放区间内（ip_pool_open_day，open_day_adjust=1 时用） */
     boolean queryPoolInOpenDay(@Param("poolId") Long poolId, @Param("today") String today);
@@ -113,23 +109,23 @@ public interface CrmwPoolAdjustMapper {
     List<PoolRelationBo> queryAllPoolRelationList();
 
     /** 查询证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
-    boolean querySecurityHasPendingProcess(@Param("isinCode") String isinCode);
+    boolean querySecurityHasPendingProcess(@Param("securityCode") String securityCode);
 
     /** 查询证券当前进行中流程所在步骤名称 */
-    String querySecurityPendingProcessNodeLabel(@Param("isinCode") String isinCode);
+    String querySecurityPendingProcessNodeLabel(@Param("securityCode") String securityCode);
 
     /** 查询当前证券是否在观察池（pool_type='observe'，audit_status='20'） */
-    boolean querySecurityInObservePool(@Param("isinCode") String isinCode);
+    boolean querySecurityInObservePool(@Param("securityCode") String securityCode);
 
     /** 查询证券发行主体是否在观察池（主体级 ip_pool_status.security_code = issuer_code） */
-    boolean queryIssuerInObservePool(@Param("isinCode") String isinCode);
+    boolean queryIssuerInObservePool(@Param("securityCode") String securityCode);
 
     /** 查询同主体在目标池中已有债券的最大剩余期限天数（date_exists） */
-    BigDecimal queryIssuerTargetPoolMaxRemainDays(@Param("isinCode") String isinCode,
+    BigDecimal queryIssuerTargetPoolMaxRemainDays(@Param("securityCode") String securityCode,
                                                @Param("targetPoolId") Long targetPoolId);
 
     /** 查询6个月内同主体有审批通过调入记录（对齐老系统 bondfileflag，6个月） */
-    boolean queryHasRecentInboundWithReport(@Param("isinCode") String isinCode);
+    boolean queryHasRecentInboundWithReport(@Param("securityCode") String securityCode);
 
     /** 新增流程步骤记录 */
     int addAdjustStep(IpAdjustStepBo bo);
@@ -192,9 +188,9 @@ public interface CrmwPoolAdjustMapper {
     String queryCategoryTypeBySecurityType(@Param("securityType") String securityType);
 
     /** 查询 CRMW 凭证与标的证券组合是否在目标池（audit_status=20），用于调入/调出「组合在池」校验 */
-    boolean queryCrmwComboInPool(@Param("crmwIsinCode") String crmwIsinCode,
+    boolean queryCrmwComboInPool(@Param("crmwScode") String crmwScode,
                                  @Param("crmwStype") String crmwStype,
-                                 @Param("isinCode") String isinCode,
+                                 @Param("securityCode") String securityCode,
                                  @Param("targetPoolId") Long targetPoolId);
 
     /** 新增 CRMW 调库证券信息快照 */
@@ -204,5 +200,5 @@ public interface CrmwPoolAdjustMapper {
     SecurityInfoDetailDto querySecuritySnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId);
 
     /** 按标的证券代码查询最新一条有效 CRMW 调库证券信息快照详情 */
-    SecurityInfoDetailDto queryLatestSecuritySnapshotDetailByIsinCode(@Param("isinCode") String isinCode);
+    SecurityInfoDetailDto queryLatestSecuritySnapshotDetailByWindCode(@Param("windCode") String windCode);
 }

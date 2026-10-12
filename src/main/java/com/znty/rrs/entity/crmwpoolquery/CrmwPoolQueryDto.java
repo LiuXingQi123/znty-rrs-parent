@@ -23,28 +23,12 @@ public class CrmwPoolQueryDto {
     /** CRMW名称 */
     private String crmwName;
 
-    /** CRMW凭证身份：正式ISIN / TEMP:临时代码 */
-    private String crmwIsinCode;
-    /** CRMW银行间代码快照，关联身份使用crmwIsinCode */
+    /** CRMW代码 */
     private String crmwScode;
 
     /** 证券名称 */
     private String securityShortName;
 
-    /** 沪市证券代码 */
-    private String windCodeSh;
-    /** 深市证券代码 */
-    private String windCodeSz;
-    /** 银行间证券代码 */
-    private String windCodeNib;
-    /** 北交所证券代码 */
-    private String windCodeBj;
-    /** 其他市场证券代码 */
-    private String windCodeNbc;
-    /** 证券来源：official=正式 / temporary=临时 / temp_converted=已转正 */
-    private String securitySource;
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
     /** 证券代码 */
     private String securityCode;
 

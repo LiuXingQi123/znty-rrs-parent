@@ -3,7 +3,6 @@ package com.znty.rrs.entity.securitypoolexcelimport;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import lombok.Data;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.List;
 
@@ -12,10 +11,6 @@ import java.util.List;
  */
 @Data
 public class SecurityPoolExcelImportItemDto {
-
-    /** 证券与主体使用各自明确的关联键 */
-    @JsonIgnore
-    public String getObjectCode() { return "company".equals(securityType) ? securityCode : isinCode; }
 
     /** 明细主键 */
     private Long id;
@@ -29,21 +24,6 @@ public class SecurityPoolExcelImportItemDto {
     private String childPoolName;
     /** 证券/主体名称 */
     private String securityName;
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
-
-    /** 证券来源：official=正式 / temporary=临时 / temp_converted=已转正 */
-    private String securitySource;
-    /** 沪市证券代码 */
-    private String windCodeSh;
-    /** 深市证券代码 */
-    private String windCodeSz;
-    /** 银行间证券代码 */
-    private String windCodeNib;
-    /** 北交所证券代码 */
-    private String windCodeBj;
-    /** 其他市场证券代码 */
-    private String windCodeNbc;
     /** 证券/主体代码 */
     private String securityCode;
     /** 本次采用的权益人/担保人主体代码 */

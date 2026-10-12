@@ -10,8 +10,8 @@ import java.util.Date;
 @Data
 public class GuarantorGradeDto {
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
+    /** 所属证券 Wind 代码 */
+    private String securityCode;
 
     /** Wind 主体代码 */
     private String windcode;

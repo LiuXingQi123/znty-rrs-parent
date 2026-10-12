@@ -13,18 +13,6 @@ public class IpGradeRuleAlertBo {
     /** 主键 ID */
     private Long id;
 
-    /** 沪市证券代码 */
-    private String windCodeSh;
-    /** 深市证券代码 */
-    private String windCodeSz;
-    /** 银行间证券代码 */
-    private String windCodeNib;
-    /** 北交所证券代码 */
-    private String windCodeBj;
-    /** 其他市场证券代码 */
-    private String windCodeNbc;
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
     /** 证券代码 */
     private String securityCode;
 

@@ -23,31 +23,6 @@
                ,'fundAdjust' AS businessScene
                ,al.audit_status
                ,s.step_status
-               <!-- 依据实际待办判断操作资格，不使用用于展示的最新步骤状态 -->
-               ,CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
-                    SELECT 1
-                    FROM ip_adjust_step_fund ps
-                    WHERE ps.adjust_log_id = al.id
-                      AND ps.step_status = 'pending'
-                    <if test="!adminUser">
-                      AND ps.handler_id = #{currentUserId}
-                      AND (
-                          al.adjuster_id &lt;&gt; #{currentUserId}
-                          OR (
-                              ps.approval_strategy = 'initiator'
-                              AND EXISTS (
-                                  SELECT 1
-                                  FROM wf_flow_node pn
-                                  INNER JOIN wf_flow_edge pe ON pe.from_node_id = pn.id
-                                                           AND pe.version_id = pn.version_id
-                                  WHERE pn.id = ps.flow_node_id
-                                    AND pn.node_type = 'approval'
-                                    AND pe.route_action IN ('submit', 'resubmit')
-                              )
-                          )
-                      )
-                    </if>
-                ) THEN 1 ELSE 0 END AS can_process
                ,CONCAT(
                     COALESCE(al.adjuster_name, ''),
                     ' 将 ',
@@ -166,7 +141,6 @@
 
     <!-- 分页查询我发起的事宜列表（按发起人过滤，含流程中与已结束） -->
     <select id="queryMyInitiatedMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
-        <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
         SELECT s.id
                ,'fund' AS businessDomain
                ,al.fund_code AS objectCode
@@ -183,31 +157,6 @@
                ,'fundAdjust' AS businessScene
                ,al.audit_status
                ,s.step_status
-               <!-- 依据实际待办判断操作资格，不使用用于展示的最新步骤状态 -->
-               ,CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
-                    SELECT 1
-                    FROM ip_adjust_step_fund ps
-                    WHERE ps.adjust_log_id = al.id
-                      AND ps.step_status = 'pending'
-                    <if test="!adminUser">
-                      AND ps.handler_id = #{currentUserId}
-                      AND (
-                          al.adjuster_id &lt;&gt; #{currentUserId}
-                          OR (
-                              ps.approval_strategy = 'initiator'
-                              AND EXISTS (
-                                  SELECT 1
-                                  FROM wf_flow_node pn
-                                  INNER JOIN wf_flow_edge pe ON pe.from_node_id = pn.id
-                                                           AND pe.version_id = pn.version_id
-                                  WHERE pn.id = ps.flow_node_id
-                                    AND pn.node_type = 'approval'
-                                    AND pe.route_action IN ('submit', 'resubmit')
-                              )
-                          )
-                      )
-                    </if>
-                ) THEN 1 ELSE 0 END AS can_process
                ,CONCAT(
                     COALESCE(al.adjuster_name, ''),
                     ' 将 ',

@@ -13,25 +13,48 @@ TRUNCATE TABLE `rrs_report_out`;
 TRUNCATE TABLE `rrs_report_in`;
 TRUNCATE TABLE `sys_attachment`;
 
-INSERT INTO `rrs_report_in` (`author_name`, `report_title`, `report_type`, `isin_code`, `security_code`, `company_code`, `security_type`, `data_source`, `is_deleted`, `crte_time`, `updt_time`) VALUES
-('张明远', '交投中票入库分析报告', 'bond_in_report', 'CNDEMO000384', NULL, 'C10001', 'mtn', 'uploaded', 0, '2026-05-08 09:00:00', '2026-05-08 09:00:00'),
-('李思涵', '交投信用债入库报告', 'bond_in_report', 'CNDEMO000293', NULL, 'C10001', 'credit_bond', 'uploaded', 0, '2026-05-12 14:20:00', '2026-05-12 14:20:00'),
-('王建强', '某资ABS二级库跟踪报告', 'bond_in_report', 'CNDEMO000012', NULL, 'C10008', 'abs', 'uploaded', 0, '2026-05-15 11:15:00', '2026-05-15 11:15:00'),
-('赵晓峰', '能源公司债入库报告', 'bond_in_report', 'CNDEMO000376', NULL, 'C10003', 'company_bond', 'uploaded', 0, '2026-05-22 15:10:00', '2026-05-22 15:10:00'),
-('陈雨欣', '地产短融风险跟踪报告', 'bond_out_report', 'CNDEMO000434', NULL, 'C10005', 'cp', 'migrated', 0, '2026-05-25 13:35:00', '2026-05-25 13:35:00'),
-('刘志伟', '科技可转债跟踪报告', 'bond_in_report', 'CNDEMO000426', NULL, 'C10007', 'convertible_bond', 'uploaded', 0, '2026-05-27 10:00:00', '2026-05-27 10:00:00'),
-('周明华', '交投集团主体信用风险专项报告', 'other_report', NULL, 'C10001', 'C10001', 'company', 'migrated', 0, '2026-05-29 13:30:00', '2026-05-29 13:30:00'),
-('测试用户', '已删除内部报告测试数据', 'other_report', 'CNDEMO000384', NULL, 'C10001', 'mtn', 'uploaded', 1, '2026-06-15 09:00:00', '2026-06-15 09:00:00');
+INSERT INTO `rrs_report_in` (
+    `author_name`
+    ,`report_title`
+    ,`report_type`
+    ,`security_code`
+    ,`company_code`
+    ,`security_type`
+    ,`data_source`
+    ,`is_deleted`
+    ,`crte_time`
+    ,`updt_time`
+) VALUES
+('张明远', '交投中票入库分析报告', 'bond_in_report', 'MTN001.IB', 'C10001', 'mtn', 'uploaded', 0, '2026-05-08 09:00:00', '2026-05-08 09:00:00'),
+('李思涵', '交投信用债入库报告', 'bond_in_report', 'XYB001.IB', 'C10001', 'credit_bond', 'uploaded', 0, '2026-05-12 14:20:00', '2026-05-12 14:20:00'),
+('王建强', '某资ABS二级库跟踪报告', 'bond_in_report', '108008901.IB', 'C10008', 'abs', 'uploaded', 0, '2026-05-15 11:15:00', '2026-05-15 11:15:00'),
+('赵晓峰', '能源公司债入库报告', 'bond_in_report', 'GSB001.SH', 'C10003', 'company_bond', 'uploaded', 0, '2026-05-22 15:10:00', '2026-05-22 15:10:00'),
+('陈雨欣', '地产短融风险跟踪报告', 'bond_out_report', 'CP001.IB', 'C10005', 'cp', 'migrated', 0, '2026-05-25 13:35:00', '2026-05-25 13:35:00'),
+('刘志伟', '科技可转债跟踪报告', 'bond_in_report', 'CB001.SH', 'C10007', 'convertible_bond', 'uploaded', 0, '2026-05-27 10:00:00', '2026-05-27 10:00:00'),
+('周明华', '交投集团主体信用风险专项报告', 'other_report', 'C10001', 'C10001', 'company', 'migrated', 0, '2026-05-29 13:30:00', '2026-05-29 13:30:00'),
+('测试用户', '已删除内部报告测试数据', 'other_report', 'MTN001.IB', 'C10001', 'mtn', 'uploaded', 1, '2026-06-15 09:00:00', '2026-06-15 09:00:00');
 
-INSERT INTO `rrs_report_out` (`author_name`, `source_org_name`, `report_title`, `report_type`, `isin_code`, `security_code`, `company_code`, `security_type`, `data_source`, `is_deleted`, `crte_time`, `updt_time`) VALUES
-('中金证券', '中金证券', '交投中票外部跟踪报告', 'bond_in_report', 'CNDEMO000384', NULL, 'C10001', 'mtn', 'migrated', 0, '2026-05-28 10:05:00', '2026-05-28 10:05:00'),
-('中信证券', '中信证券', '交投信用债外部入库报告', 'bond_in_report', 'CNDEMO000293', NULL, 'C10001', 'credit_bond', 'migrated', 0, '2026-06-01 09:25:00', '2026-06-01 09:25:00'),
-('华泰证券', '华泰证券', '交通基础设施主体研究报告', 'other_report', NULL, 'C10001', 'C10001', 'company', 'uploaded', 0, '2026-06-03 14:00:00', '2026-06-03 14:00:00'),
-('联合资信', '联合资信', '某资ABS信用跟踪报告', 'bond_in_report', 'CNDEMO000012', NULL, 'C10008', 'abs', 'uploaded', 0, '2026-06-05 16:30:00', '2026-06-05 16:30:00'),
-('标准普尔', '标准普尔', '地产公司主体风险评估报告', 'other_report', NULL, 'C10005', 'C10005', 'company', 'migrated', 0, '2026-06-08 11:20:00', '2026-06-08 11:20:00'),
-('招商证券', '招商证券', '科技可转债外部研究报告', 'bond_in_report', 'CNDEMO000426', NULL, 'C10007', 'convertible_bond', 'uploaded', 0, '2026-06-10 15:45:00', '2026-06-10 15:45:00'),
-('申万宏源', '申万宏源', '国贸资产证券化配置报告', 'bond_in_report', 'CNDEMO000129', NULL, 'C10009', 'abs_all', 'migrated', 0, '2026-06-12 10:50:00', '2026-06-12 10:50:00'),
-('测试机构', '测试机构', '已删除外部报告测试数据', 'other_report', 'CNDEMO000384', NULL, 'C10001', 'mtn', 'uploaded', 1, '2026-06-15 09:00:00', '2026-06-15 09:00:00');
+INSERT INTO `rrs_report_out` (
+    `author_name`
+    ,`source_org_name`
+    ,`report_title`
+    ,`report_type`
+    ,`security_code`
+    ,`company_code`
+    ,`security_type`
+    ,`data_source`
+    ,`is_deleted`
+    ,`crte_time`
+    ,`updt_time`
+) VALUES
+('中金证券', '中金证券', '交投中票外部跟踪报告', 'bond_in_report', 'MTN001.IB', 'C10001', 'mtn', 'migrated', 0, '2026-05-28 10:05:00', '2026-05-28 10:05:00'),
+('中信证券', '中信证券', '交投信用债外部入库报告', 'bond_in_report', 'XYB001.IB', 'C10001', 'credit_bond', 'migrated', 0, '2026-06-01 09:25:00', '2026-06-01 09:25:00'),
+('华泰证券', '华泰证券', '交通基础设施主体研究报告', 'other_report', 'C10001', 'C10001', 'company', 'uploaded', 0, '2026-06-03 14:00:00', '2026-06-03 14:00:00'),
+('联合资信', '联合资信', '某资ABS信用跟踪报告', 'bond_in_report', '108008901.IB', 'C10008', 'abs', 'uploaded', 0, '2026-06-05 16:30:00', '2026-06-05 16:30:00'),
+('标准普尔', '标准普尔', '地产公司主体风险评估报告', 'other_report', 'C10005', 'C10005', 'company', 'migrated', 0, '2026-06-08 11:20:00', '2026-06-08 11:20:00'),
+('招商证券', '招商证券', '科技可转债外部研究报告', 'bond_in_report', 'CB001.SH', 'C10007', 'convertible_bond', 'uploaded', 0, '2026-06-10 15:45:00', '2026-06-10 15:45:00'),
+('申万宏源', '申万宏源', '国贸资产证券化配置报告', 'bond_in_report', 'ABN002.IB', 'C10009', 'abs_all', 'migrated', 0, '2026-06-12 10:50:00', '2026-06-12 10:50:00'),
+('测试机构', '测试机构', '已删除外部报告测试数据', 'other_report', 'MTN001.IB', 'C10001', 'mtn', 'uploaded', 1, '2026-06-15 09:00:00', '2026-06-15 09:00:00');
 
 INSERT INTO `sys_attachment` (
     `table_name`

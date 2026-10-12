@@ -9,29 +9,22 @@
                ,ips.adjust_log_id
                ,ips.adjust_batch_no
                ,ips.crmw_name
-               ,ips.crmw_isin_code
                ,ips.crmw_scode
                ,ips.security_short_name
-               ,ips.isin_code
-               ,security_master.wind_code_sh
-               ,security_master.wind_code_sz
-               ,security_master.wind_code_nib
-               ,security_master.wind_code_bj
-               ,security_master.wind_code_nbc
+               ,ips.security_code
                ,ips.adjuster_name
                ,ips.entry_time
                ,ips.target_pool_id
                ,p.pool_name AS target_pool_name
         FROM ip_pool_status_crmw ips
-        LEFT JOIN rrs_securityinfo security_master ON security_master.isin_code = ips.isin_code
         LEFT JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                       AND p.is_deleted = 0
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
             AND ips.pool_type = 'crmw'
-            <if test="crmwKeyword != null and crmwKeyword != ''">
-                AND ips.crmw_scode LIKE CONCAT('%', #{crmwKeyword}, '%')
+            <if test="crmwScode != null and crmwScode != ''">
+                AND ips.crmw_scode LIKE CONCAT('%', #{crmwScode}, '%')
             </if>
             <if test="crmwName != null and crmwName != ''">
                 AND ips.crmw_name LIKE CONCAT('%', #{crmwName}, '%')

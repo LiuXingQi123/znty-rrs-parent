@@ -60,7 +60,7 @@
 
     <!-- 分页查询目标池可调出候选组合（当前在池组合） -->
     <select id="queryOutboundCandidatePage" resultType="com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwCandidateDto">
-        SELECT si.isin_code
+        SELECT si.wind_code AS securityCode
                ,si.short_name AS securityShortName
                ,si.security_type
                ,si.abs_flag
@@ -78,7 +78,6 @@
                    ,IF(si.wind_code_nbc IS NOT NULL AND si.wind_code_nbc != '', 'OTHER', NULL)
                 ) AS marketCodeText
                ,ips.crmw_name
-               ,ips.crmw_isin_code
                ,ips.crmw_scode
                ,ips.crmw_stype
                ,si.issuer
@@ -91,24 +90,20 @@
                ,si.guarantor
                ,si.guarantor_id
         FROM ip_pool_status_crmw ips
-        LEFT JOIN rrs_securityinfo si ON si.isin_code = ips.isin_code
+        LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         <where>
             AND ips.target_pool_id = #{poolId}
             AND ips.audit_status = '20'
             AND ips.is_deleted = 0
             AND ips.pool_type = 'crmw'
-            <if test="securityKeyword != null and securityKeyword != ''">
-                AND (ips.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR ips.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR ips.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR ips.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR ips.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+            <if test="securityCode != null and securityCode != ''">
+                AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
-            <if test="crmwKeyword != null and crmwKeyword != ''">
-                AND ips.crmw_scode LIKE CONCAT('%', #{crmwKeyword}, '%')
+            <if test="crmwScode != null and crmwScode != ''">
+                AND ips.crmw_scode LIKE CONCAT('%', #{crmwScode}, '%')
             </if>
             <if test="crmwName != null and crmwName != ''">
                 AND ips.crmw_name LIKE CONCAT('%', #{crmwName}, '%')
@@ -147,13 +142,13 @@
                 AND COALESCE(si.cj_flag, 0) = 1
             </if>
         </where>
-        ORDER BY ips.crmw_isin_code ASC
-                 ,ips.isin_code ASC
+        ORDER BY ips.crmw_scode ASC
+                 ,ips.security_code ASC
     </select>
 
     <!-- 分页查询目标池可调入候选组合（凭证×标的，且该组合尚未在目标池） -->
     <select id="queryInboundCandidatePage" resultType="com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwCandidateDto">
-        SELECT bond.isin_code
+        SELECT bond.wind_code AS securityCode
                ,bond.short_name AS securityShortName
                ,bond.security_type
                ,bond.abs_flag
@@ -171,8 +166,7 @@
                    ,IF(bond.wind_code_nbc IS NOT NULL AND bond.wind_code_nbc != '', 'OTHER', NULL)
                 ) AS marketCodeText
                ,crmw.short_name AS crmwName
-               ,crmw.isin_code AS crmwIsinCode
-               ,crmw.wind_code_nib AS crmwScode
+               ,crmw.wind_code AS crmwScode
                ,'crmw' AS crmwStype
                ,bond.issuer
                ,bond.rating_bond
@@ -193,26 +187,22 @@
             AND NOT EXISTS (
                 SELECT 1
                 FROM ip_pool_status_crmw ips
-                WHERE ips.isin_code = bond.isin_code
-                  AND ips.crmw_isin_code = crmw.isin_code
+                WHERE ips.security_code = bond.wind_code
+                  AND ips.crmw_scode = crmw.wind_code
                   AND ips.crmw_stype = 'crmw'
                   AND ips.target_pool_id = #{poolId}
                   AND ips.audit_status = '20'
                   AND ips.is_deleted = 0
                   AND ips.pool_type = 'crmw'
             )
-            <if test="securityKeyword != null and securityKeyword != ''">
-                AND (bond.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR bond.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR bond.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR bond.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%')
-                     OR bond.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+            <if test="securityCode != null and securityCode != ''">
+                AND bond.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND bond.short_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
-            <if test="crmwKeyword != null and crmwKeyword != ''">
-                AND crmw.wind_code_nib LIKE CONCAT('%', #{crmwKeyword}, '%')
+            <if test="crmwScode != null and crmwScode != ''">
+                AND crmw.wind_code LIKE CONCAT('%', #{crmwScode}, '%')
             </if>
             <if test="crmwName != null and crmwName != ''">
                 AND crmw.short_name LIKE CONCAT('%', #{crmwName}, '%')
@@ -251,8 +241,8 @@
                 AND COALESCE(bond.cj_flag, 0) = 1
             </if>
         </where>
-        ORDER BY crmw.isin_code ASC
-                 ,bond.isin_code ASC
+        ORDER BY crmw.wind_code ASC
+                 ,bond.wind_code ASC
     </select>
 
     <!-- 查询指定投资池是否为启用叶子 CRMW 池 -->
@@ -275,13 +265,7 @@
     <!-- 查询操作人最近一次 CRMW 批量提交的全部手工调库记录 -->
     <select id="queryRecentBatchManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
-               ,al.isin_code
-               ,al.wind_code_sh
-               ,al.wind_code_sz
-               ,al.wind_code_nib
-               ,al.wind_code_bj
-               ,al.wind_code_nbc
-               ,al.crmw_isin_code
+               ,al.security_code
                ,al.crmw_scode
                ,al.crmw_stype
                ,al.adjust_type
@@ -320,8 +304,8 @@
           AND al.pool_type = 'crmw'
           AND al.audit_status NOT IN ('-1', '99')
           AND al.is_deleted = 0
-        ORDER BY al.crmw_isin_code ASC
-                 ,al.isin_code ASC
+        ORDER BY al.crmw_scode ASC
+                 ,al.security_code ASC
                  ,al.target_pool_id ASC
                  ,al.id ASC
     </select>

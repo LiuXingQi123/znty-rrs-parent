@@ -13,8 +13,6 @@ public class BondReminderDto {
     /** 调库日志或池状态主键 */
     private Long recordId;
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
     /** 证券代码 */
     private String securityCode;
 

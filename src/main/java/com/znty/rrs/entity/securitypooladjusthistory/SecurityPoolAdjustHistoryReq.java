@@ -16,10 +16,6 @@ public class SecurityPoolAdjustHistoryReq extends PageRequest {
     /** 投资池 ID 列表（树多选） */
     private List<Long> poolIds;
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
-    /** 证券代码关键词，匹配五码 */
-    private String securityKeyword;
     /** 证券代码（模糊） */
     private String securityCode;
 

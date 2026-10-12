@@ -38,11 +38,11 @@ public class CrmwPoolAdjustFlowApiTest extends ControllerApiTestSupport {
     @Test
     public void shouldSupportApprovalContextQuery() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryBindableSecurityPage", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwDetail", "{\"isinCode\":\"CRMW24001.IB\"}");
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/querySecurityDetail", "{\"isinCode\":\"100001\"}");
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustPoolList", "{\"isinCode\":\"100001\",\"adjustDirection\":\"in\"}");
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwPoolStatus", "{\"isinCode\":\"100001\"}");
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustLogList", "{\"isinCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwDetail", "{\"securityCode\":\"CRMW24001.IB\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/querySecurityDetail", "{\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustPoolList", "{\"securityCode\":\"100001\",\"adjustDirection\":\"in\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwPoolStatus", "{\"securityCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustLogList", "{\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustStepList", "{\"adjustLogId\":1,\"adjustBatchNo\":\"BATCH001\"}");
     }
 

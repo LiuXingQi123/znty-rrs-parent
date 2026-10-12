@@ -14,16 +14,9 @@
                ,al.submit_time
                ,al.security_short_name
                ,al.security_code
-               ,al.isin_code
-               ,al.wind_code_sh
-               ,al.wind_code_sz
-               ,al.wind_code_nib
-               ,al.wind_code_bj
-               ,al.wind_code_nbc
                ,al.adjust_batch_no
                ,dst.category_type
                ,COALESCE(wci.s_info_compname, bi.issuer, al.security_short_name) AS issuer
-               ,al.security_type
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
@@ -34,7 +27,7 @@
                                        AND p.pool_type = 'forbidden'
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type
                                         AND dst.is_deleted = 0
-        LEFT JOIN rrs_securityinfo bi ON bi.isin_code = al.isin_code
+        LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
         LEFT JOIN (
             SELECT s_info_compcode
                    ,MAX(s_info_compname) AS s_info_compname
@@ -60,8 +53,8 @@
             <if test="companyName != null and companyName != ''">
                 AND COALESCE(wci.s_info_compname, bi.issuer) LIKE CONCAT('%', #{companyName}, '%')
             </if>
-            <if test="securityKeyword != null and securityKeyword != ''">
-                AND (al.security_code LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+            <if test="securityCode != null and securityCode != ''">
+                AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')

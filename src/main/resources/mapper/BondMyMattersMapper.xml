@@ -9,19 +9,11 @@
         <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
         SELECT s.id
                ,'bond' AS businessDomain
-               ,CASE WHEN al.security_type = 'company' THEN al.security_code ELSE al.isin_code END AS objectCode
+               ,al.security_code AS objectCode
                ,al.security_short_name AS objectName
                ,s.adjust_log_id
                ,al.security_code
-               ,al.isin_code
-               ,al.wind_code_sh
-               ,al.wind_code_sz
-               ,al.wind_code_nib
-               ,al.wind_code_bj
-               ,al.wind_code_nbc
                ,al.security_short_name
-               ,al.security_type
-               ,al.crmw_isin_code
                ,al.crmw_scode
                ,al.target_pool_id
                ,al.target_pool_name
@@ -42,31 +34,6 @@
                 END AS businessScene
                ,al.audit_status
                ,s.step_status
-               <!-- 依据实际待办判断操作资格，不使用用于展示的最新步骤状态 -->
-               ,CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
-                    SELECT 1
-                    FROM ip_adjust_step ps
-                    WHERE ps.adjust_log_id = al.id
-                      AND ps.step_status = 'pending'
-                    <if test="!adminUser">
-                      AND ps.handler_id = #{currentUserId}
-                      AND (
-                          al.adjuster_id &lt;&gt; #{currentUserId}
-                          OR (
-                              ps.approval_strategy = 'initiator'
-                              AND EXISTS (
-                                  SELECT 1
-                                  FROM wf_flow_node pn
-                                  INNER JOIN wf_flow_edge pe ON pe.from_node_id = pn.id
-                                                           AND pe.version_id = pn.version_id
-                                  WHERE pn.id = ps.flow_node_id
-                                    AND pn.node_type = 'approval'
-                                    AND pe.route_action IN ('submit', 'resubmit')
-                              )
-                          )
-                      )
-                    </if>
-                ) THEN 1 ELSE 0 END AS can_process
                ,CONCAT(
                     COALESCE(al.adjuster_name, ''),
                     ' 将 ',
@@ -142,8 +109,8 @@
                     #{flowId}
                 </foreach>
             </if>
-            <if test="securityKeyword != null and securityKeyword != ''">
-                AND (al.security_code LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+            <if test="securityCode != null and securityCode != ''">
+                AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')
@@ -187,22 +154,13 @@
 
     <!-- 分页查询我发起的事宜列表（按发起人过滤，含流程中与已结束） -->
     <select id="queryMyInitiatedMattersPage" resultType="com.znty.rrs.entity.mymatters.MyMattersDto">
-        <bind name="adminUser" value="@com.znty.rrs.common.util.AdminUserIdUtil@isAdminUser(currentUserId)"/>
         SELECT s.id
                ,'bond' AS businessDomain
-               ,CASE WHEN al.security_type = 'company' THEN al.security_code ELSE al.isin_code END AS objectCode
+               ,al.security_code AS objectCode
                ,al.security_short_name AS objectName
                ,s.adjust_log_id
                ,al.security_code
-               ,al.isin_code
-               ,al.wind_code_sh
-               ,al.wind_code_sz
-               ,al.wind_code_nib
-               ,al.wind_code_bj
-               ,al.wind_code_nbc
                ,al.security_short_name
-               ,al.security_type
-               ,al.crmw_isin_code
                ,al.crmw_scode
                ,al.target_pool_id
                ,al.target_pool_name
@@ -223,31 +181,6 @@
                 END AS businessScene
                ,al.audit_status
                ,s.step_status
-               <!-- 依据实际待办判断操作资格，不使用用于展示的最新步骤状态 -->
-               ,CASE WHEN al.audit_status IN ('00', '11') AND EXISTS (
-                    SELECT 1
-                    FROM ip_adjust_step ps
-                    WHERE ps.adjust_log_id = al.id
-                      AND ps.step_status = 'pending'
-                    <if test="!adminUser">
-                      AND ps.handler_id = #{currentUserId}
-                      AND (
-                          al.adjuster_id &lt;&gt; #{currentUserId}
-                          OR (
-                              ps.approval_strategy = 'initiator'
-                              AND EXISTS (
-                                  SELECT 1
-                                  FROM wf_flow_node pn
-                                  INNER JOIN wf_flow_edge pe ON pe.from_node_id = pn.id
-                                                           AND pe.version_id = pn.version_id
-                                  WHERE pn.id = ps.flow_node_id
-                                    AND pn.node_type = 'approval'
-                                    AND pe.route_action IN ('submit', 'resubmit')
-                              )
-                          )
-                      )
-                    </if>
-                ) THEN 1 ELSE 0 END AS can_process
                ,CONCAT(
                     COALESCE(al.adjuster_name, ''),
                     ' 将 ',
@@ -287,8 +220,8 @@
                     #{flowId}
                 </foreach>
             </if>
-            <if test="securityKeyword != null and securityKeyword != ''">
-                AND (al.security_code LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_sh LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_sz LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_nib LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_bj LIKE CONCAT('%', #{securityKeyword}, '%') OR al.wind_code_nbc LIKE CONCAT('%', #{securityKeyword}, '%'))
+            <if test="securityCode != null and securityCode != ''">
+                AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')

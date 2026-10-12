@@ -30,15 +30,15 @@ public class CrmwPoolAdjustApiTest extends ControllerApiTestSupport {
     public void shouldSupportCrmwAndSecuritySelection() throws Exception {
         assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwPage", "{}");
         assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryBindableSecurityPage", "{}");
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwDetail", "{\"isinCode\":\"CRMW24001.IB\"}");
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/querySecurityDetail", "{\"isinCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwDetail", "{\"securityCode\":\"CRMW24001.IB\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/querySecurityDetail", "{\"securityCode\":\"100001\"}");
     }
 
     /** 验证 CRMW 调整选择、校验与提交接口。 */
     @Test
     public void shouldSupportCrmwAdjustValidationAndSubmission() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustPoolList", "{\"isinCode\":\"100001\",\"adjustDirection\":\"in\"}");
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwPoolStatus", "{\"isinCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustPoolList", "{\"securityCode\":\"100001\",\"adjustDirection\":\"in\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwPoolStatus", "{\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/checkCrmwAdjust", "{}");
         assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/addCrmwAdjustLog", "{}");
     }
@@ -46,7 +46,7 @@ public class CrmwPoolAdjustApiTest extends ControllerApiTestSupport {
     /** 验证 CRMW 调整追踪接口。 */
     @Test
     public void shouldSupportCrmwAdjustTrace() throws Exception {
-        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustLogList", "{\"isinCode\":\"100001\"}");
+        assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustLogList", "{\"securityCode\":\"100001\"}");
         assertPostSuccess(mockMvc, "/api/v1/crmwPoolAdjust/queryCrmwAdjustStepList", "{\"adjustLogId\":1,\"adjustBatchNo\":\"CRMW202606130001\"}");
     }
 }

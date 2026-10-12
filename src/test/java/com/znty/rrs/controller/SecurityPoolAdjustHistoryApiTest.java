@@ -36,6 +36,6 @@ public class SecurityPoolAdjustHistoryApiTest extends ControllerApiTestSupport {
                 "{\"poolIds\":[2,3],\"bondYesFlags\":[\"abs\",\"private\"],\"pageIndex\":1,\"pageSize\":20}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjustHistory/querySecurityTypeList", "{}");
         assertPostSuccess(mockMvc, "/api/v1/securityPoolAdjustHistory/exportSecurityPoolAdjustHistoryExcel",
-                "{\"isinCode\":\"100001\"}");
+                "{\"securityCode\":\"100001\"}");
     }
 }

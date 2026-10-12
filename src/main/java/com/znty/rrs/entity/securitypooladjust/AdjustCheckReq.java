@@ -1,7 +1,6 @@
 package com.znty.rrs.entity.securitypooladjust;
 
 import lombok.Data;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.util.List;
 
@@ -11,16 +10,6 @@ import java.util.List;
 @Data
 public class AdjustCheckReq {
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
-
-    /** 内部调库对象身份，主体与证券显式区分 */
-    @JsonIgnore
-    public String getObjectCode() {
-        return "company".equals(securityType) ? securityCode : isinCode;
-    }
-    /** 证券代码关键词，匹配五码 */
-    private String securityKeyword;
     /** 证券代码 */
     private String securityCode;
 

@@ -26,18 +26,6 @@ public class ReportDto {
     /** 报告类型编码 */
     private String reportType;
 
-    /** 证券身份：正式ISIN / TEMP:临时代码 */
-    private String isinCode;
-    /** 沪市证券代码 */
-    private String windCodeSh;
-    /** 深市证券代码 */
-    private String windCodeSz;
-    /** 银行间证券代码 */
-    private String windCodeNib;
-    /** 北交所证券代码 */
-    private String windCodeBj;
-    /** 其他市场证券代码 */
-    private String windCodeNbc;
     /** 证券编码 */
     private String securityCode;
 

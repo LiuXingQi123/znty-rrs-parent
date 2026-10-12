@@ -14,7 +14,6 @@ import com.znty.rrs.entity.bo.IpPoolStatusBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
-import com.znty.rrs.entity.securitycodeconversion.SecurityCodeConversionReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
@@ -52,10 +51,6 @@ public class TempSecurityCodeService {
     /** 证券池调库数据访问组件（复用写调库日志/池状态） */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
-
-    /** 统一切换运行态引用及快照 */
-    @Resource
-    private SecurityCodeConversionService securityCodeConversionService;
 
     /**
      * 分页查询临时代码列表
@@ -151,8 +146,8 @@ public class TempSecurityCodeService {
         // 查询并校验临时代码当前状态
         TempSecurityCodeBo oldBo = queryOperableTempSecurityCode(req.getId());
         // 校验正式证券存在且非临时代码占位
-        TempSecurityCodeDto.FormalSecurityOption formalSecurity = queryRequiredFormalSecurity(req.getIsinCode());
-        if (formalSecurity.getIsinCode().equals(oldBo.getTempIsinCode())) {
+        TempSecurityCodeDto.FormalSecurityOption formalSecurity = queryRequiredFormalSecurity(req.getSecurityCode());
+        if (formalSecurity.getSecurityCode().equals(oldBo.getTempSecurityCode())) {
             throw new BizException("正式证券代码不能与临时代码相同");
         }
         // 使用人工来源执行统一转正分叉
@@ -174,8 +169,8 @@ public class TempSecurityCodeService {
         TempSecurityCodeBo oldBo = queryOperableTempSecurityCode(id);
         // 使用外部数据预先写入的正式证券代码查询权威主数据
         TempSecurityCodeDto.FormalSecurityOption formalSecurity =
-                queryRequiredFormalSecurity(oldBo.getIsinCode());
-        if (formalSecurity.getIsinCode().equals(oldBo.getTempIsinCode())) {
+                queryRequiredFormalSecurity(oldBo.getSecurityCode());
+        if (formalSecurity.getSecurityCode().equals(oldBo.getTempSecurityCode())) {
             throw new BizException("正式证券代码不能与临时代码相同，id=" + id);
         }
         // 使用定时任务来源执行统一转正分叉
@@ -204,7 +199,7 @@ public class TempSecurityCodeService {
         bo.setTempMaturityDate(oldBo.getTempMaturityDate());
         // 正式证券字段：以主数据查询结果为准（名称/代码/市场/类型）
         bo.setSecurityName(formalSecurity.getSecurityName());
-        bo.setIsinCode(formalSecurity.getIsinCode());
+        bo.setSecurityCode(formalSecurity.getSecurityCode());
         bo.setSecurityMarket(formalSecurity.getSecurityMarket());
         bo.setSecurityType(formalSecurity.getSecurityType());
         bo.setUpdateTime(now);
@@ -291,13 +286,6 @@ public class TempSecurityCodeService {
         validateRequired(req.getTempSecurityName(), "临时证券名称不能为空");
         // 校验临时证券代码必填
         validateRequired(req.getTempSecurityCode(), "临时证券代码不能为空");
-        req.setTempSecurityCode(req.getTempSecurityCode().trim());
-        if (req.getTempSecurityCode().length() > 95) {
-            throw new BizException("临时代码不能超过95位");
-        }
-        if ("crmw".equals(req.getTempSecurityType()) && !MarketCode.CIBM.getCode().equals(req.getTempSecurityMarket())) {
-            throw new BizException("CRMW凭证只能登记银行间市场");
-        }
         // 校验临时证券市场必填
         validateRequired(req.getTempSecurityMarket(), "临时证券市场不能为空");
         // 校验临时证券类型必填
@@ -331,7 +319,7 @@ public class TempSecurityCodeService {
         // 校验主键 ID
         validateIdReq(req);
         // 校验正式证券代码必填（名称/市场/类型由主数据带出）
-        validateRequired(req.getIsinCode(), "请选择正式证券ISIN");
+        validateRequired(req.getSecurityCode(), "请选择正式证券");
     }
 
     /**
@@ -413,14 +401,13 @@ public class TempSecurityCodeService {
      * 同步新增临时代码证券主数据
      */
     private void addTempSecurityInfo(TempSecurityCodeBo sourceBo) {
-        int count = tempSecurityCodeMapper.querySecurityInfoCount(sourceBo.getTempIsinCode());
+        int count = tempSecurityCodeMapper.querySecurityInfoCount(sourceBo.getTempSecurityCode());
         if (count > 0) {
             throw new BizException("临时证券代码已存在于证券主数据，tempSecurityCode=" + sourceBo.getTempSecurityCode());
         }
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setSecurityName(sourceBo.getTempSecurityName());
         bo.setSecurityCode(sourceBo.getTempSecurityCode());
-        bo.setIsinCode(sourceBo.getTempIsinCode());
         bo.setSecurityMarket(sourceBo.getTempSecurityMarket());
         bo.setSecurityType(sourceBo.getTempSecurityType());
         bo.setTempCompanyCode(sourceBo.getTempCompanyCode());
@@ -447,12 +434,58 @@ public class TempSecurityCodeService {
      * <p>在途日志只改字段；已在池做出/入业务日志；CRMW 字段仅替换。
      */
     private void convertTempSecurityBusinessData(TempSecurityCodeBo oldBo, TempSecurityCodeBo newBo) {
-        SecurityCodeConversionReq conversion = new SecurityCodeConversionReq();
-        conversion.setTempSecurityCode(oldBo.getTempSecurityCode());
-        conversion.setIsinCode(newBo.getIsinCode());
-        conversion.setOprtSource(newBo.getOprtSource());
-        // 登记状态与所有运行态引用在同一事务内切换
-        securityCodeConversionService.replaceTempSecurityCodeReferences(conversion);
+        // 构建替换/日志公共参数
+        TempSecurityCodeBo replaceBo = buildReplaceBo(oldBo, newBo);
+
+        // 情况 A：在途调库日志证券引用 — 仅字段替换
+        List<Long> pendingLogIds = tempSecurityCodeMapper.queryPendingAdjustLogSecurityReferenceIdList(replaceBo);
+        if (!pendingLogIds.isEmpty()) {
+            tempSecurityCodeMapper.editAdjustLogSecurityReference(replaceBo, pendingLogIds);
+            // 记录在途调库日志替换
+            addReplaceLogList(replaceBo, "ip_adjust_log", pendingLogIds);
+        }
+
+        // 情况 A-CRMW：在途调库日志 CRMW 字段 — 仅字段替换
+        List<Long> pendingCrmwLogIds = tempSecurityCodeMapper.queryPendingAdjustLogCrmwReferenceIdList(replaceBo);
+        if (!pendingCrmwLogIds.isEmpty()) {
+            tempSecurityCodeMapper.editAdjustLogCrmwReference(replaceBo, pendingCrmwLogIds);
+            // 记录在途 CRMW 日志替换
+            addReplaceLogList(replaceBo, "ip_adjust_log.crmw", pendingCrmwLogIds);
+        }
+
+        // 情况 B：已在池 — 临时出库 +（条件）正式入库
+        List<IpPoolStatusBo> poolStatusList = tempSecurityCodeMapper.queryActivePoolStatusList(replaceBo);
+        if (poolStatusList != null) {
+            for (IpPoolStatusBo poolStatus : poolStatusList) {
+                // 单池执行出/入
+                convertOnePoolStatus(poolStatus, replaceBo, false);
+            }
+        }
+
+        // 情况 C：池状态上 CRMW 指向临时码 — 仅字段替换
+        List<Long> poolCrmwIds = tempSecurityCodeMapper.queryPoolStatusCrmwReferenceIdList(replaceBo);
+        if (!poolCrmwIds.isEmpty()) {
+            tempSecurityCodeMapper.editPoolStatusCrmwReference(replaceBo, poolCrmwIds);
+            // 记录池状态 CRMW 字段替换
+            addReplaceLogList(replaceBo, "ip_pool_status.crmw", poolCrmwIds);
+        }
+
+        // CRMW 独立池表：security 为临时码 — 按在池出/入
+        List<IpPoolStatusBo> crmwPoolList = tempSecurityCodeMapper.queryActiveCrmwPoolStatusList(replaceBo);
+        if (crmwPoolList != null) {
+            for (IpPoolStatusBo poolStatus : crmwPoolList) {
+                // CRMW 池单条出/入
+                convertOnePoolStatus(poolStatus, replaceBo, true);
+            }
+        }
+
+        // CRMW 独立池表：crmw 字段指向临时码 — 仅字段替换
+        List<Long> crmwPoolCrmwIds = tempSecurityCodeMapper.queryCrmwPoolStatusCrmwReferenceIdList(replaceBo);
+        if (!crmwPoolCrmwIds.isEmpty()) {
+            tempSecurityCodeMapper.editCrmwPoolStatusCrmwReference(replaceBo, crmwPoolCrmwIds);
+            // 记录 CRMW 池 CRMW 字段替换
+            addReplaceLogList(replaceBo, "ip_pool_status_crmw.crmw", crmwPoolCrmwIds);
+        }
     }
 
     /**
@@ -460,35 +493,189 @@ public class TempSecurityCodeService {
      *
      * @param crmwPool true 时写 ip_pool_status_crmw，否则写 ip_pool_status
      */
+    private void convertOnePoolStatus(IpPoolStatusBo poolStatus, TempSecurityCodeBo replaceBo, boolean crmwPool) {
+        Date now = replaceBo.getUpdateTime();
+        // ① 写临时出库调库日志（直通通过）
+        IpAdjustLogBo outLog = buildTempOutAdjustLog(poolStatus, replaceBo, now);
+        securityPoolAdjustMapper.addAdjustLog(outLog);
 
+        // ② 软删临时在池记录
+        if (crmwPool) {
+            tempSecurityCodeMapper.deleteCrmwPoolStatusSoftById(poolStatus.getId(), now);
+        } else {
+            tempSecurityCodeMapper.deletePoolStatusSoftById(poolStatus.getId(), now);
+        }
+        // 记录池状态替换日志
+        addReplaceLogList(replaceBo, crmwPool ? "ip_pool_status_crmw" : "ip_pool_status",
+                Collections.singletonList(poolStatus.getId()));
+
+        // ③ 正式码已在该池则不再入库
+        int formalCount = crmwPool
+                ? tempSecurityCodeMapper.queryActiveCrmwPoolStatusCount(
+                        replaceBo.getSecurityCode(), replaceBo.getSecurityType(), poolStatus.getTargetPoolId())
+                : tempSecurityCodeMapper.queryActivePoolStatusCount(
+                        replaceBo.getSecurityCode(), replaceBo.getSecurityType(), poolStatus.getTargetPoolId());
+        if (formalCount > 0) {
+            return;
+        }
+
+        // ④ 写正式入库调库日志（继承原原因/调整人等）
+        IpAdjustLogBo inLog = buildFormalInAdjustLog(poolStatus, replaceBo, now);
+        securityPoolAdjustMapper.addAdjustLog(inLog);
+
+        // ⑤ 新建正式在池状态（关联刚写入的入库日志）
+        if (crmwPool) {
+            IpPoolStatusBo newStatus = buildFormalPoolStatus(poolStatus, replaceBo, inLog.getId(), now);
+            tempSecurityCodeMapper.addCrmwPoolStatus(newStatus);
+        } else {
+            // addPoolStatus 以 IpAdjustLogBo 入参写 ip_pool_status，adjustLogId 指向入库日志
+            inLog.setAdjustLogId(inLog.getId());
+            securityPoolAdjustMapper.addPoolStatus(inLog);
+        }
+    }
 
     /**
      * 构建临时出库调库日志
      */
-
+    private IpAdjustLogBo buildTempOutAdjustLog(IpPoolStatusBo poolStatus,
+                                                TempSecurityCodeBo replaceBo, Date now) {
+        IpAdjustLogBo log = new IpAdjustLogBo();
+        log.setSecurityCode(poolStatus.getSecurityCode());
+        log.setSecurityShortName(poolStatus.getSecurityShortName());
+        log.setSecurityType(poolStatus.getSecurityType());
+        log.setCrmwName(poolStatus.getCrmwName());
+        log.setCrmwScode(poolStatus.getCrmwScode());
+        log.setCrmwMktcode(poolStatus.getCrmwMktcode());
+        log.setCrmwStype(poolStatus.getCrmwStype());
+        log.setAdjustType(ADJUST_TYPE_TEMP_OUT);
+        log.setAdjustMode(AdjustMode.OUT.getCode());
+        log.setAdjustBatchNo(UUID.randomUUID().toString().replace("-", ""));
+        log.setTargetPoolId(poolStatus.getTargetPoolId());
+        log.setTargetPoolName(poolStatus.getTargetPoolName());
+        log.setPoolType(poolStatus.getPoolType());
+        log.setAuditStatus(AuditStatus.APPROVED.getCode());
+        log.setAdjusterId(SYSTEM_ADJUSTER_ID);
+        log.setAdjusterName(SYSTEM_ADJUSTER_NAME);
+        String reason = ScheduledAdjustLogHelper.appendDetails(REASON_TEMP_OUT,
+                "临时代码：" + poolStatus.getSecurityCode(),
+                "正式代码：" + replaceBo.getSecurityCode());
+        log.setAdjustReason(reason);
+        // 定时任务自动生成记录时调整建议保持为空，人工转正仍沿用原建议
+        if (!TempOprtSource.JOB.getCode().equals(replaceBo.getOprtSource())) {
+            log.setAdjustAdvice(reason);
+        }
+        log.setSubmitTime(now);
+        return log;
+    }
 
     /**
      * 构建正式入库调库日志（继承原池状态业务字段）
      */
-
+    private IpAdjustLogBo buildFormalInAdjustLog(IpPoolStatusBo poolStatus, TempSecurityCodeBo replaceBo, Date now) {
+        IpAdjustLogBo log = new IpAdjustLogBo();
+        log.setSecurityCode(replaceBo.getSecurityCode());
+        log.setSecurityShortName(replaceBo.getSecurityName());
+        log.setSecurityType(replaceBo.getSecurityType());
+        log.setCrmwName(poolStatus.getCrmwName());
+        log.setCrmwScode(poolStatus.getCrmwScode());
+        log.setCrmwMktcode(poolStatus.getCrmwMktcode());
+        log.setCrmwStype(poolStatus.getCrmwStype());
+        log.setAdjustType(poolStatus.getAdjustType());
+        log.setAdjustMode(AdjustMode.IN.getCode());
+        log.setAdjustBatchNo(UUID.randomUUID().toString().replace("-", ""));
+        log.setTargetPoolId(poolStatus.getTargetPoolId());
+        log.setTargetPoolName(poolStatus.getTargetPoolName());
+        log.setPoolType(poolStatus.getPoolType());
+        log.setAuditStatus(AuditStatus.APPROVED.getCode());
+        // 调整人/原因继承原在池记录
+        log.setAdjusterId(poolStatus.getAdjusterId() != null ? poolStatus.getAdjusterId() : SYSTEM_ADJUSTER_ID);
+        log.setAdjusterName(poolStatus.getAdjusterName() != null ? poolStatus.getAdjusterName() : SYSTEM_ADJUSTER_NAME);
+        String reason = buildFormalInReason(poolStatus, replaceBo);
+        log.setAdjustReason(reason);
+        // 定时任务自动生成记录时调整建议保持为空，人工转正仍沿用原建议
+        if (!TempOprtSource.JOB.getCode().equals(replaceBo.getOprtSource())) {
+            log.setAdjustAdvice(reason);
+        }
+        log.setSubmitTime(now);
+        return log;
+    }
 
     /**
      * 构建正式在池状态（CRMW 池表用）
      */
-
+    private IpPoolStatusBo buildFormalPoolStatus(IpPoolStatusBo oldStatus, TempSecurityCodeBo replaceBo,
+                                                 Long adjustLogId, Date now) {
+        IpPoolStatusBo status = new IpPoolStatusBo();
+        status.setSecurityCode(replaceBo.getSecurityCode());
+        status.setSecurityShortName(replaceBo.getSecurityName());
+        status.setSecurityType(replaceBo.getSecurityType());
+        status.setCrmwName(oldStatus.getCrmwName());
+        status.setCrmwScode(oldStatus.getCrmwScode());
+        status.setCrmwMktcode(oldStatus.getCrmwMktcode());
+        status.setCrmwStype(oldStatus.getCrmwStype());
+        status.setAdjustType(oldStatus.getAdjustType());
+        status.setAdjustMode(AdjustMode.IN.getCode());
+        status.setAdjustBatchNo(UUID.randomUUID().toString().replace("-", ""));
+        status.setAdjustLogId(adjustLogId);
+        status.setTargetPoolId(oldStatus.getTargetPoolId());
+        status.setTargetPoolName(oldStatus.getTargetPoolName());
+        status.setPoolType(oldStatus.getPoolType());
+        status.setAuditStatus(AuditStatus.APPROVED.getCode());
+        status.setAdjusterId(oldStatus.getAdjusterId() != null ? oldStatus.getAdjusterId() : SYSTEM_ADJUSTER_ID);
+        status.setAdjusterName(oldStatus.getAdjusterName() != null ? oldStatus.getAdjusterName() : SYSTEM_ADJUSTER_NAME);
+        String reason = buildFormalInReason(oldStatus, replaceBo);
+        status.setAdjustReason(reason);
+        // 定时任务自动生成池状态时调整建议保持为空，人工转正仍沿用原建议
+        if (!TempOprtSource.JOB.getCode().equals(replaceBo.getOprtSource())) {
+            status.setAdjustAdvice(reason);
+        }
+        status.setSubmitTime(now);
+        status.setEntryTime(now);
+        status.setIsDeleted(0);
+        status.setCrteTime(now);
+        status.setUpdtTime(now);
+        return status;
+    }
 
     /** 在原在池原因后补充临时代码转正式代码的判断信息。 */
-
+    private String buildFormalInReason(IpPoolStatusBo poolStatus, TempSecurityCodeBo replaceBo) {
+        String baseReason = poolStatus.getAdjustReason() == null
+                || poolStatus.getAdjustReason().trim().isEmpty()
+                ? REASON_FORMAL_IN : poolStatus.getAdjustReason().trim();
+        return ScheduledAdjustLogHelper.appendDetails(baseReason,
+                "代码替换：" + poolStatus.getSecurityCode() + "→" + replaceBo.getSecurityCode());
+    }
 
     /**
      * 构建临时代码替换参数
      */
-
+    private TempSecurityCodeBo buildReplaceBo(TempSecurityCodeBo oldBo, TempSecurityCodeBo newBo) {
+        TempSecurityCodeBo bo = new TempSecurityCodeBo();
+        bo.setTempSecurityName(oldBo.getTempSecurityName());
+        bo.setTempSecurityCode(oldBo.getTempSecurityCode());
+        bo.setTempSecurityMarket(oldBo.getTempSecurityMarket());
+        bo.setTempSecurityType(oldBo.getTempSecurityType());
+        bo.setSecurityName(newBo.getSecurityName());
+        bo.setSecurityCode(newBo.getSecurityCode());
+        bo.setSecurityMarket(newBo.getSecurityMarket());
+        bo.setSecurityType(newBo.getSecurityType());
+        bo.setUpdateTime(newBo.getUpdateTime());
+        // 向后续日志构建传递人工或定时任务来源
+        bo.setOprtSource(newBo.getOprtSource());
+        bo.setReplaceStatus("success");
+        return bo;
+    }
 
     /**
      * 批量写入替换日志
      */
-
+    private void addReplaceLogList(TempSecurityCodeBo replaceBo, String tableName, List<Long> recordIds) {
+        for (Long recordId : recordIds) {
+            replaceBo.setReplaceTableName(tableName);
+            replaceBo.setReplaceRecordId(recordId);
+            tempSecurityCodeMapper.addTempSecurityCodeUpdateLog(replaceBo);
+        }
+    }
 
     /**
      * 校验临时代码未被核心调库业务引用
