@@ -34,6 +34,7 @@
 - 危险操作需前端回传与 `taskCode` 一致的 `confirmText` 二次确认
 - SQL 文件有固定执行顺序（schema 先于 demo），改 `sql/` 目录文件名时**必须同步** `ScriptToolService` 内的白名单
 - 数据初始化任务：`INIT_SCHEMA` / `INIT_DEMO` / `RESET_ALL` 仅主库业务脚本（排除 AIS 与外部导入表）；外部导入表走 `INIT_EXTERNAL_IMPORT_SCHEMA` / `INIT_EXTERNAL_IMPORT_DEMO`；AIS 走 `INIT_AIS_SCHEMA` / `INIT_AIS_DEMO`
+- 分类批量初始化：`INIT_BOND_SCHEMA` / `INIT_BOND_DEMO` 包含通用业务与外部证券基础信息，排除 AIS、基金和股票专属脚本；基金/股票沿用各自独立任务。`INIT_ALL_SCHEMA` / `INIT_ALL_DEMO` 覆盖三个库全部注册脚本，公共脚本先于基金和股票，避免股票附件表缺失或自选数据被覆盖；不改变旧批次范围。
 - 调库信息快照：`rrs_adjust_snapshot_schema.sql`（`ip_adjust_security_snapshot` / `_crmw`）须注册进 schema 清单、可清空组与 `CLEAR_ADJUST_FLOW`（无 demo 灌数，属 unseeded）
 - 写操作审计：`rrs_script_tool_schema.sql` → `sys_script_tool_run_log`；执行类接口结束后尽力落库；`queryScriptToolRunLogList` 供前端「执行审计」页
 - 配置项：`rrs.script.sql-path`（默认 `sql`，相对 `user.dir`）；`rrs.script.enabled`（默认 `true`，生产请设 `false` 或 `RRS_SCRIPT_ENABLED=false`，写操作全部拒绝；前端工作台可整组隐藏脚本工具菜单）

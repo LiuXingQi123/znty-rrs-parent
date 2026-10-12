@@ -47,6 +47,17 @@
 | 45 | 股票池批量调整（批量调入/调出） | `batch_stock_pool_adjust.html` | [45-batch-stock-pool-adjust.md](45-batch-stock-pool-adjust.md) | `BatchStockPoolAdjustApiTest` / `BatchStockPoolAdjustServiceTest` / `BatchStockPoolAdjustMapperTest` |
 | 46 | 股票池 Excel 导入 | `stock_pool_excel_import.html` | [46-stock-pool-excel-import.md](46-stock-pool-excel-import.md) | `StockPoolExcelImportServiceTest` / `StockPoolExcelImportApiTest` / `StockPoolExcelImportPersistenceTest` / `StockPoolAdjustExcelSubmitServiceTest` / `CommonFileServiceTest` |
 
+## 脚本工具数据初始化
+
+- 前端入口：`docs/script_tool.html`，操作说明：`docs/module-tables-index.html#script-tool-initialization`。
+- 以债券、基金、股票、全部四个 Tab 展示；同模块建表语句在左、Demo 数据在右，维护任务独立分区。
+- 债券批量新增 `INIT_BOND_SCHEMA / INIT_BOND_DEMO`：通用业务、债券/主体/CRMW 和外部证券基础信息；不执行 AIS、基金/股票专属脚本，公共池、流程、附件、自选等共享数据会重置。
+- 基金和股票复用 `INIT_FUND_SCHEMA / INIT_FUND_DEMO`、`INIT_STOCK_SCHEMA / INIT_STOCK_DEMO`，保留独立资产范围；要求公共池、流程、用户等配置已初始化，股票还要求附件与自选表已存在。
+- 全库新增 `INIT_ALL_SCHEMA / INIT_ALL_DEMO`：覆盖 `znty_rrs`、`ais_inv_analysis`、`ais_inv_ods` 的全部已注册脚本，先执行公共脚本，再执行基金和股票专属脚本。空库先全库建表，再全库 Demo；不处理项目白名单之外的表。
+- 旧 `INIT_SCHEMA / INIT_DEMO / RESET_ALL` 执行范围不变，旧重建任务显示名称改为「重建通用业务演示环境」，避免与全库初始化混淆。
+- 沿用 POST `/api/v1/scriptTool/queryScriptTaskList`、`executeScriptTask`；后者入参为 `taskCode / confirmText / currentUserId / currentUserName`，仍需任务专属确认文本，保留禁用开关、执行互斥、结果和审计。
+- 验证：`ScriptToolServiceTest` / `ScriptToolApiTest`，前端 `tests/script_tool.test.js`。测试使用模拟数据库连接，不执行真实初始化。
+
 ## 调库业务全链路索引
 
 调库是本平台的核心业务，涉及申请、批量、审核、查询多条链路，文档间相互引用：

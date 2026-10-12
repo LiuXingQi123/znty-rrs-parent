@@ -57,6 +57,14 @@ public class ScriptToolService {
     private static final String TASK_INIT_SCHEMA = "INIT_SCHEMA";
     /** 初始化 Demo 数据任务编码 */
     private static final String TASK_INIT_DEMO = "INIT_DEMO";
+    /** 债券及公共业务建表任务编码 */
+    private static final String TASK_INIT_BOND_SCHEMA = "INIT_BOND_SCHEMA";
+    /** 债券及公共业务演示数据任务编码 */
+    private static final String TASK_INIT_BOND_DEMO = "INIT_BOND_DEMO";
+    /** 全库建表任务编码 */
+    private static final String TASK_INIT_ALL_SCHEMA = "INIT_ALL_SCHEMA";
+    /** 全库演示数据任务编码 */
+    private static final String TASK_INIT_ALL_DEMO = "INIT_ALL_DEMO";
     /** 重建完整演示环境任务编码 */
     private static final String TASK_RESET_ALL = "RESET_ALL";
     /** 清空调库运行态数据任务编码 */
@@ -785,6 +793,16 @@ public class ScriptToolService {
      * @param executedItems 已执行脚本的记录列表
      */
     private void executeTask(String taskCode, List<String> executedItems) throws Exception {
+        if (TASK_INIT_BOND_SCHEMA.equals(taskCode) || TASK_INIT_ALL_SCHEMA.equals(taskCode)) {
+            // 按分类执行建表白名单，公共依赖先于基金和股票专属表
+            executeSqlFiles(queryInitializationFiles(true, TASK_INIT_ALL_SCHEMA.equals(taskCode)), executedItems);
+            return;
+        }
+        if (TASK_INIT_BOND_DEMO.equals(taskCode) || TASK_INIT_ALL_DEMO.equals(taskCode)) {
+            // 按分类执行演示白名单，公共自选和附件数据先于股票演示数据
+            executeSqlFiles(queryInitializationFiles(false, TASK_INIT_ALL_DEMO.equals(taskCode)), executedItems);
+            return;
+        }
         if (TASK_INIT_SCHEMA.equals(taskCode)) {
             // 执行主库建表脚本（排除 AIS 库、外部导入表与基金/股票专属表）
             executeSqlFiles(queryRrsSchemaFiles(), executedItems);
@@ -2430,6 +2448,33 @@ public class ScriptToolService {
         return Arrays.asList("stock/rrs_stockinfo_demo_data.sql", "stock/rrs_stock_pool_adjust_demo_data.sql");
     }
 
+    /**
+     * 查询债券或全库批量初始化脚本，先公共业务、后基金与股票。
+     * <p>债券批次包含外部证券基础信息，不重置 AIS、基金和股票专属表；全库覆盖所有注册脚本。</p>
+     *
+     * @param schema 是否为建表脚本
+     * @param all 是否覆盖全部资产及 AIS 库
+     * @return 按依赖排序的脚本白名单
+     */
+    private List<String> queryInitializationFiles(boolean schema, boolean all) {
+        // 从全量注册清单取得脚本，避免另建白名单遗漏模块
+        List<String> files = new ArrayList<>(schema ? querySchemaFiles() : queryDemoFiles());
+        // 取得需要在公共脚本之后执行的基金脚本
+        List<String> fundFiles = schema ? queryFundSchemaFiles() : queryFundDemoFiles();
+        // 股票建表依赖附件表，Demo 依赖公共池、流程与自选表
+        List<String> stockFiles = schema ? queryStockSchemaFiles() : queryStockDemoFiles();
+        files.removeAll(fundFiles);
+        files.removeAll(stockFiles);
+        if (all) {
+            files.addAll(fundFiles);
+            files.addAll(stockFiles);
+        } else {
+            // 债券批次沿用 AIS 独立初始化边界
+            files.removeAll(schema ? queryAisSchemaFiles() : queryAisDemoFiles());
+        }
+        return files;
+    }
+
     /** 股票运行态表，不含公共附件、报告或其他资产运行表。 */
     private List<String> queryStockAdjustFlowRuntimeTables() {
         return Arrays.asList("ip_adjust_step_stock", "ip_pool_status_stock", "ip_adjust_log_stock");
@@ -2723,7 +2768,7 @@ public class ScriptToolService {
         // 主库批量任务统一展示已排除脚本（AIS + 外部导入 + 基金），前端「已排除」芯片与说明对应
         List<String> rrsBatchExcludedItems = queryRrsBatchExcludedItems();
         // 登记主库非基金脚本的重建任务并置于任务列表首位
-        addTask(taskMap, TASK_RESET_ALL, "重建完整演示环境",
+        addTask(taskMap, TASK_RESET_ALL, "重建通用业务演示环境",
                 "先执行主库 schema 再执行 demo，仅 znty_rrs 业务库。"
                         + "不执行 AIS：ais_inv_analysis_demo_data.sql、ais_inv_ods_demo_data.sql（及对应 schema）；"
                         + "不执行外部导入：rrs_external_import_*；不执行基金/股票：fund/*、stock/*。"
@@ -2825,7 +2870,38 @@ public class ScriptToolService {
                 "danger", "CLEAR_ADJUST_FLOW",
                 "不清空证券主数据、投资池、流程定义、规则和字典配置。",
                 clearTables, clearTables.size(), null);
+        // 登记包含外部证券基础信息的债券批量初始化入口
+        addInitializationTaskPair(taskMap, "BOND", "债券", false);
+        // 登记覆盖主库、AIS 分析库和 ODS 本地演示表的全库入口
+        addInitializationTaskPair(taskMap, "ALL", "全库", true);
         return taskMap;
+    }
+
+    /** 登记一组左右对应的建表与 Demo 批量任务。 */
+    private void addInitializationTaskPair(Map<String, ScriptTaskDto> taskMap, String code, String name, boolean all) {
+        // 建表与演示任务复用同一分类范围和依赖排序
+        List<String> schemaFiles = queryInitializationFiles(true, all);
+        // 取得对应的演示脚本清单
+        List<String> demoFiles = queryInitializationFiles(false, all);
+        String scope = all
+                ? "覆盖 znty_rrs、ais_inv_analysis、ais_inv_ods 已注册脚本，含债券、基金、股票、公共配置和外部基础信息；仅管理项目白名单表。"
+                : "覆盖债券、CRMW、禁投主体、公共业务配置及外部证券基础信息；不执行 AIS、基金和股票专属脚本。公共池、流程、附件及自选也会重置。";
+        // 统计建表范围并登记高风险任务
+        addTask(taskMap, "INIT_" + code + "_SCHEMA", "初始化" + name + "建表语句",
+                "按依赖顺序执行建表脚本。" + scope, "high", "INIT_" + code + "_SCHEMA",
+                "会 DROP 并重新 CREATE 对应表，原表数据清空。" + scope,
+                schemaFiles, countTablesInFiles(schemaFiles, "schema"), null);
+        // 统计演示范围并登记对应的数据重置任务
+        addTask(taskMap, "INIT_" + code + "_DEMO", "初始化" + name + " Demo 数据",
+                "请先执行左侧对应建表任务，再执行本任务。公共数据先于基金、股票演示数据。" + scope,
+                all ? "high" : "medium", "INIT_" + code + "_DEMO",
+                "按脚本清空并重置演示数据。" + scope,
+                demoFiles, countTablesInFiles(demoFiles, "demo"), null);
+        // 对比同组建表与演示范围，标注不预置数据的运行态和审计表
+        Set<String> unseeded = collectTablesInFiles(schemaFiles, "schema");
+        // 扣除对应演示脚本涉及的表
+        unseeded.removeAll(collectTablesInFiles(demoFiles, "demo"));
+        taskMap.get("INIT_" + code + "_DEMO").setUnseededTables(new ArrayList<>(unseeded));
     }
 
     /**

@@ -1,12 +1,17 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.entity.scripttool.ScriptToolReq;
+import com.znty.rrs.entity.scripttool.ScriptTaskDto;
+import com.znty.rrs.entity.scripttool.ScriptExecuteResultDto;
 import com.znty.rrs.exception.BizException;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.File;
 import java.sql.Statement;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import javax.sql.DataSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -18,15 +23,94 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
 
 /**
  * 脚本工具服务测试。
  */
 public class ScriptToolServiceTest {
+
+    /** 验证分类批次覆盖范围与依赖顺序，全库不得遗漏或重复脚本。 */
+    @Test
+    public void shouldExposeBondAndFullDatabaseInitializationPairs() {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+        List<ScriptTaskDto> tasks = service.queryScriptTaskList(new ScriptToolReq());
+        for (String type : Arrays.asList("SCHEMA", "DEMO")) {
+            ScriptTaskDto all = tasks.stream().filter(task -> ("INIT_ALL_" + type).equals(task.getTaskCode())).findFirst().get();
+            ScriptTaskDto bond = tasks.stream().filter(task -> ("INIT_BOND_" + type).equals(task.getTaskCode())).findFirst().get();
+            List<?> registered = ReflectionTestUtils.invokeMethod(service,
+                    "SCHEMA".equals(type) ? "querySchemaFiles" : "queryDemoFiles");
+            assertEquals(new HashSet<>(registered), new HashSet<>(all.getItems()));
+            assertEquals(registered.size(), all.getItems().size());
+            String suffix = "SCHEMA".equals(type) ? "schema.sql" : "demo_data.sql";
+            assertTrue(bond.getItems().contains("rrs_external_import_" + suffix));
+            assertTrue(bond.getItems().contains("rrs_security_pool_adjust_" + suffix));
+            assertTrue(bond.getItems().stream().noneMatch(file -> file.startsWith("ais_") || file.startsWith("fund/") || file.startsWith("stock/")));
+            assertEquals(all.getTaskCode(), all.getConfirmText());
+            assertEquals(bond.getTaskCode(), bond.getConfirmText());
+            assertTrue(all.getTableCount() > bond.getTableCount());
+            // 公共附件表先于股票建表中的附件清理，公共自选数据先于股票自选追加
+            assertTrue(all.getItems().indexOf("rrs_sys_attachment_" + suffix)
+                    < all.getItems().indexOf("stock/rrs_stock_pool_adjust_" + suffix));
+            assertTrue(all.getItems().indexOf("rrs_my_security_pool_" + suffix)
+                    < all.getItems().indexOf("stock/rrs_stock_pool_adjust_" + suffix));
+            assertTrue(all.getItems().indexOf("rrs_pool_init_" + suffix)
+                    < all.getItems().indexOf("fund/rrs_fund_pool_adjust_" + suffix));
+        }
+    }
+
+    /** 使用模拟连接执行实际白名单文件，验证展示清单与执行结果完全一致。 */
+    @Test
+    public void shouldExecuteNewInitializationTasksInAdvertisedOrder() throws Exception {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+        DataSource source = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        when(source.getConnection()).thenReturn(connection);
+        when(connection.createStatement()).thenReturn(statement);
+        when(connection.prepareStatement(anyString())).thenReturn(mock(PreparedStatement.class));
+        ReflectionTestUtils.setField(service, "dataSource", source);
+        List<ScriptTaskDto> tasks = service.queryScriptTaskList(new ScriptToolReq());
+        for (String code : Arrays.asList("INIT_BOND_SCHEMA", "INIT_BOND_DEMO", "INIT_ALL_SCHEMA", "INIT_ALL_DEMO")) {
+            ScriptTaskDto task = tasks.stream().filter(item -> code.equals(item.getTaskCode())).findFirst().get();
+            ScriptToolReq req = new ScriptToolReq();
+            req.setTaskCode(code);
+            req.setConfirmText(code);
+            ScriptExecuteResultDto result = service.executeScriptTask(req);
+            assertEquals(result.getErrorMessage(), "success", result.getStatus());
+            assertEquals(task.getItems(), result.getExecutedItems());
+        }
+        verify(statement, atLeastOnce()).execute(anyString());
+    }
+
+    /** 新增批量任务也必须验证各自确认文本，错误确认不得获取数据库连接。 */
+    @Test
+    public void shouldRejectWrongConfirmationForNewInitializationTasks() throws Exception {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+        DataSource source = mock(DataSource.class);
+        ReflectionTestUtils.setField(service, "dataSource", source);
+        for (String code : Arrays.asList("INIT_BOND_SCHEMA", "INIT_BOND_DEMO", "INIT_ALL_SCHEMA", "INIT_ALL_DEMO")) {
+            ScriptToolReq req = new ScriptToolReq();
+            req.setTaskCode(code);
+            req.setConfirmText("INIT_SCHEMA");
+            try {
+                service.executeScriptTask(req);
+                fail("必须使用当前任务的确认文本");
+            } catch (BizException e) {
+                assertTrue(e.getMessage().contains("确认文本不正确"));
+            }
+        }
+        verify(source, never()).getConnection();
+    }
 
     /** 验证结构差异检查能够解析项目关键表，且与可清空表白名单一致。 */
     @Test
