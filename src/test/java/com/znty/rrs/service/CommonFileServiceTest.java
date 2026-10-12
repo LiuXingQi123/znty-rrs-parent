@@ -8,12 +8,24 @@ import java.io.ByteArrayInputStream;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.Test;
 import org.springframework.mock.web.MockMultipartFile;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -111,6 +123,65 @@ public class CommonFileServiceTest {
             fail();
         } catch (BizException e) {
             assertTrue(e.getMessage().contains("未知模板编码"));
+        }
+    }
+
+    /** 验证五类下载模板及说明页遵守统一样式，预留输入行保留代码文本格式。 */
+    @Test
+    public void downloadTemplatesShouldFollowExcelStyleGuidelines() throws Exception {
+        String[] templateCodes = {"security_pool_import", "company_pool_import", "crmw_pool_import",
+                "fund_pool_import", "stock_pool_import"};
+        for (String templateCode : templateCodes) {
+            CommonFileReq req = new CommonFileReq();
+            req.setTemplateCode(templateCode);
+            CommonFileDto dto = service.downloadTemplate(req);
+            byte[] bytes = Base64.getDecoder().decode(dto.getContentBase64());
+            try (Workbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+                for (Sheet sheet : workbook) {
+                    assertTrue(sheet.isDisplayGridlines());
+                    assertEquals(0, sheet.getNumMergedRegions());
+                    assertNull(sheet.getPaneInformation());
+                    Row header = sheet.getRow(0);
+                    int columnCount = 0;
+                    while (columnCount < header.getLastCellNum() && header.getCell(columnCount) != null
+                            && !header.getCell(columnCount).getStringCellValue().isEmpty()) {
+                        columnCount++;
+                    }
+                    assertTrue(columnCount > 0);
+                    int[] rowIndexes = {0, 1, sheet.getLastRowNum()};
+                    for (int rowIndex : rowIndexes) {
+                        Row row = sheet.getRow(rowIndex);
+                        assertNotNull(row);
+                        assertEquals(20.0F, row.getHeightInPoints(), 0.0F);
+                        for (int column = 0; column < columnCount; column++) {
+                            Cell cell = row.getCell(column);
+                            assertNotNull(cell);
+                            CellStyle style = cell.getCellStyle();
+                            Font font = workbook.getFontAt(style.getFontIndex());
+                            assertEquals("楷体", font.getFontName());
+                            assertEquals(11, font.getFontHeightInPoints());
+                            assertEquals(rowIndex == 0, font.getBold());
+                            assertEquals(18 * 256, sheet.getColumnWidth(column));
+                            assertEquals(VerticalAlignment.CENTER, style.getVerticalAlignment());
+                            assertEquals(HorizontalAlignment.GENERAL, style.getAlignment());
+                            assertTrue(!style.getWrapText());
+                            assertEquals(BorderStyle.NONE, style.getBorderTop());
+                            assertEquals(BorderStyle.NONE, style.getBorderBottom());
+                            assertEquals(BorderStyle.NONE, style.getBorderLeft());
+                            assertEquals(BorderStyle.NONE, style.getBorderRight());
+                            if (rowIndex == 0) {
+                                assertEquals(FillPatternType.SOLID_FOREGROUND, style.getFillPattern());
+                                assertArrayEquals(new byte[] {(byte) 0x99, (byte) 0xCC, (byte) 0xFF},
+                                        ((XSSFCellStyle) style).getFillForegroundXSSFColor().getRGB());
+                            } else {
+                                assertEquals(FillPatternType.NO_FILL, style.getFillPattern());
+                                String name = header.getCell(column).getStringCellValue();
+                                assertEquals(name.endsWith("代码") ? "@" : "General", style.getDataFormatString());
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
