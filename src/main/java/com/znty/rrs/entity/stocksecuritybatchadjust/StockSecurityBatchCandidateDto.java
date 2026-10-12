@@ -63,7 +63,7 @@ public class StockSecurityBatchCandidateDto {
     /** 主体评级 */
     private String ratingBondissuer;
 
-    /** 主体内评分档 */
+    /** 主体内评分 */
     private String innerIssuerRating;
 
     /** 担保人（名称，多担保人逗号分隔） */

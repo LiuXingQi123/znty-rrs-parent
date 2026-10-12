@@ -4,7 +4,7 @@
 -- 前提：需先执行 ais_inv_analysis_schema.sql 完成建表
 -- 说明：10 个主体 C10001～C10010
 --       t_inv_company / t_inv_grade_result / v_inv_grade_result 一一对应，
---       保证调库相关主体、自选权益人下拉每个主体都有内评分档可展示
+--       保证调库相关主体、自选权益人下拉每个主体都有内评分可展示
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `ais_inv_analysis` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;

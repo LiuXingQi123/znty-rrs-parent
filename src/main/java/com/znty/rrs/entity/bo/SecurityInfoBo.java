@@ -159,7 +159,7 @@ public class SecurityInfoBo {
     private BigDecimal par;
     /** 质押比率(%) */
     private BigDecimal infoPledgeRatio;
-    /** 主体内评分档 */
+    /** 主体内评分 */
     private String innerIssuerRating;
     /** 担保人主体内评分 */
     private String innerGuarantorRating;

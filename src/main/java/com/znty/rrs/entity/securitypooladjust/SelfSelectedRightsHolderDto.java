@@ -17,7 +17,7 @@ public class SelfSelectedRightsHolderDto {
     /** 主体名称 */
     private String companyName;
 
-    /** 最新主体内评分档 */
+    /** 最新主体内评分 */
     private String innerRating;
 
     /** 内评更新时间 */

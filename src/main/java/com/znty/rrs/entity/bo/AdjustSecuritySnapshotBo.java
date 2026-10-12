@@ -58,7 +58,7 @@ public class AdjustSecuritySnapshotBo {
     private String guarantorId;
     /** 主承销商 */
     private String agencyName;
-    /** 主体内评分档 */
+    /** 主体内评分 */
     private String innerIssuerRating;
     /** 证券类型编码 */
     private String securityType;

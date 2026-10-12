@@ -67,7 +67,7 @@
 | 剩余期限(年) | `dateExists` | 天÷365，四位小数 |
 | 证券评级 | `ratingBond` | `el-tag type=success` |
 | 主体评级 | `ratingBondissuer` | 空值空白 |
-| 主体内评分档 | `innerIssuerRating` | `el-tag` |
+| 主体内评分 | `innerIssuerRating` | `el-tag` |
 | 是否担保 | `guarantFlag` | `===1` 为是 |
 | 是否含权 | `inrightFlag` | `===1` 为是 |
 | 是否永续 | `yxFlag` | `===1` 为是 |

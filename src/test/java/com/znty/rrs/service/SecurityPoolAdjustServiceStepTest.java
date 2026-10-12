@@ -967,7 +967,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failures.size()).isGreaterThanOrEqualTo(2);
     }
 
-    /** 主体债入库规则：未配置主体内评分档时应返回失败原因。 */
+    /** 主体债入库规则：主体无内评分时应返回失败原因。 */
     @Test
     public void inCheckMainGradeRuleShouldFailWhenNoGrade() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
@@ -980,12 +980,12 @@ public class SecurityPoolAdjustServiceStepTest {
         pool.setPoolType("credit_bond");
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
-        // 未配置主体内评分档
+        // 主体无内评分
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setTargetPool(pool);
         ctx.setSecurityInfo(sec);
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
-        assertThat(failure).isEqualTo("未配置主体内评分档");
+        assertThat(failure).isEqualTo("主体无内评分");
     }
 
     /** 主体债入库规则：剩余期限为空时按最长档 GT_5 继续走矩阵，不跳过。 */
@@ -1267,7 +1267,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
         SecurityInfoBo sec = new SecurityInfoBo();
         sec.setSecurityType("corporate_bond");
-        // 无主体内评分档
+        // 主体无内评分
         when(adjustMapper.querySecurityBoByCode("NO_GRADE.IB")).thenReturn(sec);
         when(adjustMapper.querySecurityInObservePool("NO_GRADE.IB")).thenReturn(false);
         when(adjustMapper.queryIssuerInObservePool("NO_GRADE.IB")).thenReturn(false);

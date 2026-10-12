@@ -112,7 +112,7 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 
 - 每行 Excel → 一券 + 一目标池 + 方向，调用完整证券调库校验（含联动/互斥/关联码/流程候选）
 - 上传按与批量调整相同的关系优先级及最新内评排序，批量查询默认首条主体。页面通过代码保存选择，名称由服务端回填；不按 Excel 名称解析，不自动把无效关联选择转换为自选角色。
-- ABS 关联权益人写入 `rightsHolderCode`，全市场自选权益人写入 `selfSelectedRightsHolderCode`，两者分别保存且自选优先评级；非 ABS 写入 `guarantorCode`。每次校验/提交重新复核候选资格，复用完整单券调库规则计算可调入池。
+- ABS 关联权益人写入 `rightsHolderCode`，全市场自选权益人写入 `selfSelectedRightsHolderCode`，两者分别保存且自选优先评级；非 ABS 写入 `guarantorCode`。每次校验/提交重新复核候选资格，复用完整单券调库规则计算可调入池。ABS 最终采用的权益人（自选优先）无内评时，调入信用债分级库的校验提示“所选权益人无内评分”，与单券调整一致。
 - 修改、校验、提交、取消均锁定同一批次，避免交叉执行。主体修改后清空本批行级校验及 `result_json`，即使客户端回传旧 `checkItems` 也不能绕过重新校验。
 - 提交从本批已通过校验的持久化明细读取各行选择，按 `sourceItemId` 分组。同一证券的不同导入行允许选择不同主体，不校验跨行选择一致性；本行的主项、联动、互斥和关联项共用该行选择及流程。先统一复核已有在途流程，再逐行落库，避免同批新建流程阻断后续行；每组调库日志保存本行所选主体的证券快照。
 - 明细返回 `relatedCompanyCode/relatedCompanyName`、`relatedRatingCompanies`、`selfSelectedRightsHolderCode/selfSelectedRightsHolder`、`securityType/absFlag` 及有效 `ratingCompanyCode/ratingCompanyName/ratingCompanyInnerRating`。校验结果展示有效主体名称/代码；联动、互斥、关联项展示来源导入行选择。首先清空目标池自动生成的出库成员不来源于 Excel 行，仍沿用原有默认主体逻辑。

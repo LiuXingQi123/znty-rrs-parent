@@ -3294,7 +3294,7 @@ public class SecurityPoolAdjustService {
         String gradeCode = resolveMatrixGradeCode(sec);
         if (gradeCode == null) {
             return CreditBondSpecialInboundRule.isAbs(sec)
-                    ? "未配置权益人内评分档" : "未配置主体内评分档";
+                    ? "所选权益人无内评分" : "主体无内评分";
         }
         // 含权口径取剩余期限年（date_exists_str 解析，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));

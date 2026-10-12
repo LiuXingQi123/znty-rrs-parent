@@ -42,7 +42,7 @@ public class BatchSecurityCandidateDto {
     /** 主体评级 */
     private String ratingBondissuer;
 
-    /** 主体内评分档 */
+    /** 主体内评分 */
     private String innerIssuerRating;
 
     /** 是否 ABS：1=是 / 0=否 */

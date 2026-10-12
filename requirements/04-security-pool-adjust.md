@@ -74,7 +74,7 @@
 | 证券期限 | `dateExistsStr` | 库字段 `date_exists_str`（VARCHAR(20)，展示串如「3年6天」「3年6个月3天」）；列表与证券基本信息区只读展示。凡需换算成“年”的判断均解析此字段，兼容「月/个月」「天/日」写法：年原值保留、月÷12、日÷365，不再用 `date_exists` 总天数÷365。普通债及含权债赎回侧均用 `date_exists_str`；含权债回售侧使用已经是年单位的 `date_inright_exists` / `date_repurchase_exists`，两侧都有时取更短；`date_call_exists` 仅展示/落库、不参与匹配。**期限无法解析时默认最长档（>5 / `GT_5`）继续走矩阵，不跳过**；简易流程中明确要求期限≤1年或≤5年的场景，无法解析则不满足。原「剩余期限(天)」`dateExists`/`date_exists` 仍保留在数据及快照中，基本信息区以 `v-if=false` 隐藏，不再参与简易流程期限比较。 |
 | 证券评级 | `ratingBond` | `el-tag type=success`，有值才显示 |
 | 主体评级 | `ratingBondissuer` | 空值空白 |
-| 主体内评分档 | `innerIssuerRating` | `el-tag`，空值空白 |
+| 主体内评分 | `innerIssuerRating` | `el-tag`，空值空白 |
 | 是否担保 | `guarantFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
 | 是否含权 | `inrightFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
 | 是否永续 | `yxFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
@@ -257,7 +257,7 @@
 
 | 类型 | 规则方法 | 失败原因 |
 |---|---|---|
-| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池不在矩阵/特殊债下调后允许范围内；**未配置主体内评分档**（ABS 为“未配置权益人内评分档”）；**无法匹配债券期限档**；**可转债、可交换债、信用风险缓释工具不适用信用债分级库**。矩阵内评来源：非 ABS 非担保债只用债务主体内评；非 ABS 担保债取债务主体与页面所选担保人内评较优值；ABS 直接使用自选权益人（优先）或普通权益人内评，不与债务主体/担保人孰高。特殊债降档、期限档和观察池规则保持不变。ABS 权益人内评不作为强担保评级，不触发重点观察名单强担保豁免。`releaseRules` 仍跳过矩阵。 |
+| 债券 bond | `inCheckBondMaturity` / `inCheckMainGradeRule` | 失败文案为检查项表述（可多条并存）：债券已到期；主体债入库矩阵未配置允许池；目标池不在矩阵/特殊债下调后允许范围内；**主体无内评分**（ABS 为“所选权益人无内评分”）；**无法匹配债券期限档**；**可转债、可交换债、信用风险缓释工具不适用信用债分级库**。矩阵内评来源：非 ABS 非担保债只用债务主体内评；非 ABS 担保债取债务主体与页面所选担保人内评较优值；ABS 直接使用自选权益人（优先）或普通权益人内评，不与债务主体/担保人孰高。特殊债降档、期限档和观察池规则保持不变。ABS 权益人内评不作为强担保评级，不触发重点观察名单强担保豁免。`releaseRules` 仍跳过矩阵。 |
 | 股票 stock | `inCheckStockDelist` / `inCheckGradeAstrict` | 股票已退市（`delist_date` 早于今日）；`grade_astrict` 入口仍调用但**方法恒 return null**（未接 StockResearch/investrank，空实现不拦截） |
 | 基金 fund | `inCheckFundRate` | 基金池的评分，必须在{expr}（仅 **checkAdjust** 按请求 `fundRate` 校验；**正式提交不携带 fundRate、不再次校验**） |
 | 主体 company | —（主体不校验到期，暂无） | |

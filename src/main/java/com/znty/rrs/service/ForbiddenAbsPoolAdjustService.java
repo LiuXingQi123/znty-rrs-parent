@@ -2601,7 +2601,7 @@ public class ForbiddenAbsPoolAdjustService {
         // 临时代码默认档 4，担保债取孰高
         String gradeCode = resolveMatrixGradeCode(sec);
         if (gradeCode == null) {
-            return "未配置主体内评分档";
+            return "主体无内评分";
         }
         // 含权口径取剩余期限年（date_exists_str 解析，含权/回购已是年）；算不出期限时按最长档继续走矩阵，不跳过
         String bucketCode = matchTermBucket(CreditBondRemainTermUtil.resolveRemainTermYears(sec));

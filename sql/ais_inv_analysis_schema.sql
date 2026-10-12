@@ -86,7 +86,7 @@ CREATE TABLE `v_inv_grade_result`
 (
     `windcode`    VARCHAR(100)  DEFAULT NULL COMMENT 'Wind 主体代码',
     `windname`    VARCHAR(1000) DEFAULT NULL COMMENT 'Wind 主体名称',
-    `total_score` VARCHAR(50)   DEFAULT NULL COMMENT '主体内评分档',
+    `total_score` VARCHAR(50)   DEFAULT NULL COMMENT '主体内评分',
     `ts`          TIMESTAMP     DEFAULT NULL COMMENT '更新时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='担保人内评结果表';
 

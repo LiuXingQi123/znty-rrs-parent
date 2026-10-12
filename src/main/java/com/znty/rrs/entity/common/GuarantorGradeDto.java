@@ -22,7 +22,7 @@ public class GuarantorGradeDto {
     /** Wind 担保人类型编码 */
     private Long guarantorTypeCode;
 
-    /** 主体内评分档 */
+    /** 主体内评分 */
     private String totalScore;
 
     /** 更新时间 */

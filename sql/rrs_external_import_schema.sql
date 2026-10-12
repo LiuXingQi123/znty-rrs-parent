@@ -128,7 +128,7 @@ CREATE TABLE `rrs_securityinfo`
     -- 扩展字段
     -- ==========================================
     `info_pledge_ratio`          decimal(10, 4)  DEFAULT NULL COMMENT '质押比率(%)',
-    `inner_issuer_rating`        varchar(50)     DEFAULT NULL COMMENT '主体内评分档',
+    `inner_issuer_rating`        varchar(50)     DEFAULT NULL COMMENT '主体内评分',
     `inner_guarantor_rating`     varchar(50)     DEFAULT NULL COMMENT '担保人主体内评分',
     `prompt_reason`              longtext        DEFAULT NULL COMMENT '观察事项',
     `analysis`                   longtext        DEFAULT NULL COMMENT '证券分析，最大输入长度 5000 字',

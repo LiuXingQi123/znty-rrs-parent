@@ -603,7 +603,7 @@ if ((gradeCode == null || gradeCode == "") && (isTempCode == "是" || isTempCode
     gradeCode = "4";
 }
 if (gradeCode == null || gradeCode == "") {
-    return "未配置主体内评分档";
+    return "主体无内评分";
 }
 if (matchedBucket == null || matchedBucket == "") {
     return "无法匹配债券期限档";
@@ -730,7 +730,7 @@ if (securityType == "convertible_bond" || securityType == "exchangeable_bond" ||
 }
 return "通过";
 ','active',0,NOW(),NOW()),
-(29,'矩阵-未配置内评档','[inCheckMainGradeRule] 正式证券无内评禁止入信用债 1～5；临时代码默认档 4。','grade_matrix','if (securityCode == null || securityCode == "") {
+(29,'矩阵-主体无内评分','[inCheckMainGradeRule] 正式证券无内评禁止入信用债 1～5；临时代码默认档 4。','grade_matrix','if (securityCode == null || securityCode == "") {
     return "证券代码不能为空";
 }
 if (targetPoolId == null || targetPoolId == "") {
@@ -746,7 +746,7 @@ if ((isTempCode == "是" || isTempCode == "1" || isTempCode == 1)) {
     return "通过";
 }
 if (innerIssuerRating == null || innerIssuerRating == "") {
-    return "未配置主体内评分档";
+    return "主体无内评分";
 }
 return "通过";
 ','active',0,NOW(),NOW()),
@@ -2019,13 +2019,13 @@ INSERT INTO `rule_test_case` (id, case_name, rule_id, rule_name_snapshot, last_r
 (55,'普通债矩阵允许池通过',27,'调入-主体债入库矩阵','pass','通过',NOW(),NOW(),NOW()),
 (56,'放开规则跳过矩阵',27,'调入-主体债入库矩阵','pass','通过',NOW(),NOW(),NOW()),
 (57,'可转债不能进分级库',27,'调入-主体债入库矩阵','fail','可转债、可交换债、信用风险缓释工具不适用信用债分级库',NOW(),NOW(),NOW()),
-(58,'正式证券无内评',27,'调入-主体债入库矩阵','fail','未配置主体内评分档',NOW(),NOW(),NOW()),
+(58,'正式证券无内评',27,'调入-主体债入库矩阵','fail','主体无内评分',NOW(),NOW(),NOW()),
 (59,'ABS1档进二级库',27,'调入-主体债入库矩阵','fail','目标池「二级库」不在特殊债调整后的允许范围内（仅 1 级）',NOW(),NOW(),NOW()),
 (60,'ABS1档进一级库',27,'调入-主体债入库矩阵','pass','通过',NOW(),NOW(),NOW()),
 (61,'中票可进分级库',28,'矩阵-可转债CRMW排除','pass','通过',NOW(),NOW(),NOW()),
 (62,'可转债排除',28,'矩阵-可转债CRMW排除','fail','可转债、可交换债、信用风险缓释工具不适用信用债分级库',NOW(),NOW(),NOW()),
-(63,'已配置内评',29,'矩阵-未配置内评档','pass','通过',NOW(),NOW(),NOW()),
-(64,'正式证券无内评分项',29,'矩阵-未配置内评档','fail','未配置主体内评分档',NOW(),NOW(),NOW()),
+(63,'主体有内评分',29,'矩阵-主体无内评分','pass','通过',NOW(),NOW(),NOW()),
+(64,'正式证券无内评分',29,'矩阵-主体无内评分','fail','主体无内评分',NOW(),NOW(),NOW()),
 (65,'匹配到GT_5',30,'矩阵-期限档匹配','pass','通过',NOW(),NOW(),NOW()),
 (66,'已配置允许池',31,'矩阵-允许池配置','pass','通过',NOW(),NOW(),NOW()),
 (67,'未配置允许池',31,'矩阵-允许池配置','fail','主体债入库矩阵未配置允许池',NOW(),NOW(),NOW()),
