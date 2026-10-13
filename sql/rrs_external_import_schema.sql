@@ -26,7 +26,6 @@ CREATE TABLE `rrs_securityinfo`
     -- ==========================================
     -- 基础及标识信息
     -- ==========================================
-    `isin_code`                  varchar(100)    DEFAULT NULL COMMENT '国际证券识别码（ISIN）',
     `wind_code`                  varchar(100)    NOT NULL COMMENT '关联代码',
     `full_name`                  varchar(300)    DEFAULT NULL COMMENT '证券全称',
     `issue_announcement`         varchar(10)     DEFAULT NULL COMMENT '公告日期',

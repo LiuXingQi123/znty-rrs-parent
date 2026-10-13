@@ -114,7 +114,7 @@ public class WindCustomCodeDemoDataTest {
                         .isEqualTo(49);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
                         + " LEFT JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = w.S_INFO_WINDCODE"
-                        + " WHERE s.wind_code IS NULL OR s.isin_code <> w.S_INFO_ISINCODE"
+                        + " WHERE s.wind_code IS NULL"
                         + " OR s.issuer_code <> w.S_INFO_COMPCODE OR s.short_name <> w.S_INFO_NAME"
                         + " OR s.crncy_code <> w.CRNCY_CODE", Integer.class)).isZero();
                 assertThat(jdbc.queryForList("SELECT S_INFO_ISINCODE FROM ais_inv_ods.wind_windcustomcode"
@@ -123,7 +123,7 @@ public class WindCustomCodeDemoDataTest {
                         .containsExactlyInAnyOrder("CNDEMO000293", "CNDEMO000301", "CNDEMO000319");
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE sec_id IS NULL", Integer.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(51);
-                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND isin_code IS NULL", Integer.class)).isEqualTo(2);
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary'", Integer.class)).isEqualTo(2);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
                         + " LEFT JOIN ais_inv_ods.wind_cbondissuer i ON i.s_info_windcode = w.S_INFO_WINDCODE"
                         + " AND i.s_info_compcode = w.S_INFO_COMPCODE WHERE i.object_id IS NULL", Integer.class)).isZero();

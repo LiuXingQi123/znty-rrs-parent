@@ -477,7 +477,7 @@
 
 > 建表与 Demo 归属外部导入脚本 `sql/rrs_external_import_schema.sql` / `sql/rrs_external_import_demo_data.sql`，不在 `rrs_security_pool_adjust_*` 中。
 
-`isin_code`（国际证券识别码）为 `VARCHAR(100) DEFAULT NULL`，位于 `wind_code` 前。主档按市场代码逐条存储，`wind_code` 仍为业务键；删除原有五个市场代码列及五个市场证券 ID 列，末尾新增 `sec_id VARCHAR(100) DEFAULT NULL COMMENT '证券 ID'`。`sec_id` 是外部独立证券 ID，不映射 Wind 的 OBJECT_ID 或 S_INFO_ASHARECODE，表单编辑和临时转正不覆盖正式证券 ID。
+主档按市场代码逐条存储，`wind_code` 为业务键；不在主档重复保存 ISIN，同券关系从 Wind `S_INFO_ISINCODE` 实时读取。删除原有五个市场代码列及五个市场证券 ID 列，末尾新增 `sec_id VARCHAR(100) DEFAULT NULL COMMENT '证券 ID'`。`sec_id` 是外部独立证券 ID，不映射 Wind 的 OBJECT_ID 或 S_INFO_ASHARECODE，表单编辑和临时转正不覆盖正式证券 ID。
 
 正式证券由当前 `wind_code` 精确关联 `ais_inv_ods.wind_windcustomcode.S_INFO_WINDCODE`。当前市场读取 `S_INFO_EXCHMARKET`，`IB` 映射为系统 `CIBM`；缺失、不支持或同一代码重复映射时明确报出代码，禁止按代码后缀推断。临时代码只读取登记表 `temp_security_market`，不向 ODS 写占位记录。
 

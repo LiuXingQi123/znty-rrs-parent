@@ -171,7 +171,7 @@
 - **更新校验** `validateUpdateReq`：同新增全部临时字段校验 + `validateIdReq`（id 必填）+ 唯一性排除自身 `queryTempSecurityCodeCount(tempSecurityCode, id)` + 正式证券字段 `securityName`/`securityCode`/`securityMarket`/`securityType` 必填 + `validateMarket(securityMarket)` + `validateSecurityType(securityType)`。
 - **取消发行/删除校验**：`validateIdReq`（id 必填）；取消发行额外要求 `temporary` 状态；删除仅要求存在且未删。
 - **主体快照** `resolveCompanyName`：`fullName` 优先，其次 `shortName`，两者皆空抛「发行主体缺少名称，companyId=...」。
-- **`rrs_securityinfo` 占位写入**：以 `securityCode` 为 `wind_code` 主键判定。市场只保存在登记表 `temp_security_market`，占位主档不写市场代码列，`isin_code` 和未知的独立 `sec_id` 保持 NULL；临时代码不写 ODS。同券关联不使用空 ISIN。`issuer` 取 `tempCompanyNameSnapshot`，`issuer_code` 取 `tempCompanyCode`。表单发行/到期以 `yyyyMMdd` 写入 `firstissue_date`/`maturity_date`；起息、止息、`date_exists` 未知不写。**`security_status` 固定 `'L'`**（上市中；枚举见 `SecurityStatus`；不写则为 NULL，证券池调整 `!= 'D'` 查不到；外部无状态数据应落 `'U'`）。`create_time`/`ts` 取新增时间。转正时正式主数据已存在则不再覆盖。
+- **`rrs_securityinfo` 占位写入**：以 `securityCode` 为 `wind_code` 主键判定。市场只保存在登记表 `temp_security_market`，占位主档不写市场代码列，未知的独立 `sec_id` 保持 NULL；临时代码不写 ODS，也不参与 Wind ISIN 同券关联。`issuer` 取 `tempCompanyNameSnapshot`，`issuer_code` 取 `tempCompanyCode`。表单发行/到期以 `yyyyMMdd` 写入 `firstissue_date`/`maturity_date`；起息、止息、`date_exists` 未知不写。**`security_status` 固定 `'L'`**（上市中；枚举见 `SecurityStatus`；不写则为 NULL，证券池调整 `!= 'D'` 查不到；外部无状态数据应落 `'U'`）。`create_time`/`ts` 取新增时间。转正时正式主数据已存在则不再覆盖。
 - **事务**：`addTempSecurityCode`/`editTempSecurityCodeToUpdated`/`editTempSecurityCodeToCancelled`/`deleteTempSecurityCode` 均 `@Transactional(rollbackFor = Exception.class)`。
 - **前端校验** `addRules`/`updateRules`：与后端必填项对齐（`required:true`）；日期 `value-format="yyyy-MM-dd"`；`openUpdateDialog` 回显时正式证券字段缺省取临时字段（`securityName: row.securityName || row.tempSecurityName || ''` 等）。
 

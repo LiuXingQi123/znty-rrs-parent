@@ -9,8 +9,6 @@ import java.util.Date;
  */
 @Data
 public class SecurityInfoBo {
-    /** 国际证券识别码（ISIN） */
-    private String isinCode;
     /** 关联代码 */
     private String windCode;
     /** 证券全称 */
