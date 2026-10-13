@@ -140,6 +140,7 @@ CREATE TABLE `rrs_securityinfo`
     `std_credit_flag`            int             DEFAULT NULL COMMENT '标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定',
 
     `sec_id`                     varchar(100)    DEFAULT NULL COMMENT '证券 ID',
+    `exchmarket`                 varchar(10)     DEFAULT NULL COMMENT '交易市场代码',
 
     PRIMARY KEY (`wind_code`)
 ) ENGINE = InnoDB

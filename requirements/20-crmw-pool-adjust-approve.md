@@ -7,7 +7,7 @@
 
 ### 证券市场与历史展示
 
-证券主档仅保留当前 `wind_code`，独立外部 `sec_id` 位于主档末尾。市场经统一服务读取 Wind `S_INFO_EXCHMARKET`（IB→CIBM），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind 非空 ISIN 关联同券代码；空 ISIN 不关联，同市场多个代码完整展示。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
+证券主档仅保留当前 `wind_code`，主档保留独立外部 `sec_id`，末尾追加 `exchmarket VARCHAR(10) DEFAULT NULL`，与 Wind `EXCHMARKET` 原值一致。市场经统一服务直接读取 `rrs_securityinfo.exchmarket`（IB→CIBM），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind 非空 ISIN 关联同券代码；空 ISIN 不关联，同市场多个代码完整展示。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
 
 ---
 
