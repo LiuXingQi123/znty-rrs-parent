@@ -48,7 +48,7 @@
 ### 2.3 详情区渲染
 
 详情区用表单 + 卡片网格（非 el-table）：
-- **基础配置**字段：`poolName`（必填）、`poolCode`（必填，`el-select` filterable + allow-create；**选项前端写死**为 Demo 标准编码列表，下拉展示「左侧 code / 右侧中文名」，也可手输新编码）、**`poolType`（必填可改，分组下拉；仅更新当前节点不级联子树）**、`hsPoolName`、`marketCodes`（含 SSE/SZSE/CIBM/BSE/COMPANY/OTC/QDII/JWCW/UNKNOWN/OTHER）、`varietyCodes`（bond/stock/fund/company/index/warrant/trust 等，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
+- **基础配置**字段：`poolName`（必填）、`poolCode`（必填，`el-select` filterable + allow-create；**选项前端写死**为 Demo 标准编码列表，下拉展示「左侧 code / 右侧中文名」，也可手输新编码）、**`poolType`（必填可改，分组下拉；仅更新当前节点不级联子树）**、`hsPoolName`、`marketCodes`（含 SSE/SZSE/CIBM/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER）、`varietyCodes`（bond/stock/fund/company/index/warrant/trust 等，默认 `['bond']`）、`maxCapacity`、`lockFlag`（0=未锁定/1=锁定）、`frozenPeriodIn`（调入冻结天数，空或 0 表示不限制）、`outerSort`、`innerSort`、`inReportRestriction`/`outReportRestriction`（none/any/internal）、`description`。
 - **审批流程**：6 项（inFlowId/outFlowId/simpleInFlowId/simpleOutFlowId/batchInFlowId/batchOutFlowId），下拉来自 `flowOptions`（含「不需要审批」占位），绑定值为 `String(flowId)`。
 - **关系配置**：9 张卡片，每张右上角显示已选数量，下方 chip 列表显示「父路径 › 池名」面包屑。
 - **状态**：详情页 `pool-header` 显示启用徽章 + **类型 tag**（`getPoolTypeName(poolType)`）。
@@ -107,6 +107,7 @@
 - 请求体：`{id, poolName, poolCode, marketCodes, varietyCodes, hsPoolName, inFlow, outFlow, simpleInFlow, simpleOutFlow, batchInFlow, batchOutFlow, inReportRestriction, outReportRestriction, maxCapacity, outerSort, innerSort, description, operatorId}`（流程字段为完整 `FlowOptionDto`）
 - 后端 `editPoolConfig`（`@Transactional`）：校验 id、池存在；`buildPoolForEdit` set 指定字段（含 **`poolCode`** 唯一性校验排除自身、**`poolType` 必填可改**；**不更新 status、poolLevel、parentId**）；`applyFlow` 对 6 流程逐个 `normalizeFlow`（flowId 为 null 时清空）；`editPoolConfig` UPDATE（含 `pool_type`）；`addPoolEvent(UPDATE)`。
 - 流程字段存储为快照（flowId/flowKey/flowName 三列），避免流程改名后历史池配置失真。
+- 投资市场 `marketCodes` 保存前逐项按 `MarketCode.isValid()` 校验，合法值为 `SSE/SZSE/CIBM/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`。非法编码、大小写或空格不一致、空字符串及 `null` 元素均拒绝保存，错误包含数组下标与原值；不写配置及修改事件。未传列表或传空列表仍保存为 `[]`，保留既有空配置语义。
 
 ### 3.4 删除投资池节点
 

@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.znty.rrs.common.enums.EventType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.investmentpool.InvestmentPoolReq;
 import com.znty.rrs.exception.BizException;
@@ -10,18 +11,23 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 投资池锁池与冻结期配置测试。 */
+/** 投资池市场、锁池与冻结期配置测试。 */
 public class InvestmentPoolServiceTest {
 
     /** 验证锁池和冻结期能够保存，并在锁池值缺失时按未锁定处理。 */
@@ -113,6 +119,81 @@ public class InvestmentPoolServiceTest {
 
         assertThat(saved.get().getLockFlag()).isEqualTo(1);
         assertThat(saved.get().getFrozenPeriodIn()).isEqualTo(15);
+    }
+
+    /** 验证全部合法市场均可保存，包含主体、未知及香港交易所。 */
+    @Test
+    public void editPoolConfigShouldSaveAllSupportedMarkets() throws Exception {
+        InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
+        // 构建服务并模拟已有池及详情依赖
+        InvestmentPoolService service = buildService(mapper);
+        when(mapper.queryPoolById(1L)).thenReturn(pool(1L));
+        // 模拟保存后的详情查询依赖
+        mockDetailLists(mapper, 1L);
+        // 构建合法的基础配置请求
+        InvestmentPoolReq req = marketConfigReq();
+        List<String> markets = Arrays.asList("SSE", "SZSE", "CIBM", "BSE", "COMPANY", "OTC",
+                "HKEX", "QDII", "JWCW", "UNKNOWN", "OTHER");
+        req.setMarketCodes(markets);
+
+        service.editPoolConfig(req);
+
+        ArgumentCaptor<InvestmentPoolBo> captor = ArgumentCaptor.forClass(InvestmentPoolBo.class);
+        verify(mapper).editPoolConfig(captor.capture());
+        assertThat(captor.getValue().getMarketCodes()).isEqualTo(new ObjectMapper().writeValueAsString(markets));
+        verify(mapper).addPoolEvent(1L, "system", EventType.UPDATE.getCode());
+    }
+
+    /** 验证未传及空市场列表仍按空配置保存。 */
+    @Test
+    public void editPoolConfigShouldSaveEmptyMarketConfiguration() {
+        InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
+        // 构建被测服务
+        InvestmentPoolService service = buildService(mapper);
+        when(mapper.queryPoolById(1L)).thenReturn(pool(1L));
+        // 模拟保存后的详情查询依赖
+        mockDetailLists(mapper, 1L);
+        // 构建未传市场列表的请求
+        InvestmentPoolReq req = marketConfigReq();
+
+        service.editPoolConfig(req);
+        req.setMarketCodes(Collections.emptyList());
+        service.editPoolConfig(req);
+
+        ArgumentCaptor<InvestmentPoolBo> captor = ArgumentCaptor.forClass(InvestmentPoolBo.class);
+        verify(mapper, times(2)).editPoolConfig(captor.capture());
+        assertThat(captor.getAllValues()).extracting(InvestmentPoolBo::getMarketCodes).containsExactly("[]", "[]");
+    }
+
+    /** 验证任意位置的非法市场均阻断保存及审计写入，不自动修正大小写或空格。 */
+    @Test
+    public void editPoolConfigShouldRejectInvalidMarketEntriesWithoutWriting() {
+        InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
+        // 构建被测服务
+        InvestmentPoolService service = buildService(mapper);
+        when(mapper.queryPoolById(1L)).thenReturn(pool(1L));
+        // 构建基础配置请求
+        InvestmentPoolReq req = marketConfigReq();
+        for (String invalid : Arrays.asList("ABC", "IB", "sse", "SSE ", " SSE", "", " ", null)) {
+            for (int index = 0; index < 2; index++) {
+                req.setMarketCodes(index == 0 ? Arrays.asList(invalid, "SSE") : Arrays.asList("SSE", invalid));
+                assertThatThrownBy(() -> service.editPoolConfig(req))
+                        .isInstanceOf(BizException.class)
+                        .hasMessage("投资市场编码不合法：marketCodes[" + index + "]=" + invalid);
+            }
+        }
+        verify(mapper, never()).editPoolConfig(any(InvestmentPoolBo.class));
+        verify(mapper, never()).addPoolEvent(anyLong(), anyString(), anyString());
+    }
+
+    /** 构建市场校验测试的合法基础配置请求。 */
+    private InvestmentPoolReq marketConfigReq() {
+        InvestmentPoolReq req = new InvestmentPoolReq();
+        req.setId(1L);
+        req.setPoolName("信用债一级库");
+        req.setPoolCode("credit_bond_level_1");
+        req.setPoolType("credit_bond");
+        return req;
     }
 
     /** 构建被测服务。 */

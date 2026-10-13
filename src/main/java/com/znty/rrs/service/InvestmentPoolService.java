@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.PoolType;
+import com.znty.rrs.common.enums.MarketCode;
 
 import com.znty.rrs.common.enums.EventType;
 
@@ -680,6 +681,8 @@ public class InvestmentPoolService {
             throw new BizException("投资池类型不能为空");
         }
         pool.setPoolType(req.getPoolType().trim());
+        // 校验投资市场编码，阻止非法配置写入
+        validateMarketCodes(req.getMarketCodes());
         // 序列化业务数据为 JSON
         pool.setMarketCodes(toJson(req.getMarketCodes()));
         // 序列化业务数据为 JSON
@@ -697,6 +700,19 @@ public class InvestmentPoolService {
         pool.setDescription(req.getDescription());
         pool.setUpdtTime(new Date());
         return pool;
+    }
+
+    /** 校验投资市场编码列表；未传或空列表沿用空配置。 */
+    private void validateMarketCodes(List<String> marketCodes) {
+        if (marketCodes == null) {
+            return;
+        }
+        for (int i = 0; i < marketCodes.size(); i++) {
+            String market = marketCodes.get(i);
+            if (!MarketCode.isValid(market)) {
+                throw new BizException("投资市场编码不合法：marketCodes[" + i + "]=" + market);
+            }
+        }
     }
 
     /**
