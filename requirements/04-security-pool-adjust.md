@@ -485,7 +485,7 @@
 
 普通证券及 ABS 扩批后每个代码独立校验市场、重复项、在池状态及容量，保留原主项、联动、互斥、审批和批次规则。证券/CRMW 快照不再存市场列；历史详情读取当前关联代码，其余业务字段按提交快照回显。
 
-Demo 共 51 条主档，49 条正式证券均有 Wind 映射，两个临时代码 ISIN 为 NULL；交投、城投、能源三组各含 IB/SH/SZ 三条记录，同组共用非空 ISIN，不同券不复用；每条主档具有独立 `SEC_DEMO_` 模拟 ID。只更新原始建表与 INSERT，不单独提供存量升级脚本文件（存量表缺列时按本节末尾的增量 SQL 一次性升级），不自动执行数据库写入。
+Demo 共 51 条主档，49 条正式证券均有 Wind 映射，两个临时代码 ISIN 为 NULL；交投、城投、能源三组各含 IB/SH/SZ 三条记录，同组共用非空 ISIN，不同券不复用；每条主档具有独立 `SEC_DEMO_` 模拟 ID。字段定义直接维护在原始 `CREATE TABLE` 中，Demo 列和值直接维护在原始 `INSERT` 中；存量迁移仅在用户明确要求时另行处理，不自动执行数据库写入。
 
 主档新增两个外部导入标识，均为 `INT DEFAULT NULL`，由 `SecurityInfoBo` 的 `Integer` 字段承接并保留原始值：
 
@@ -505,45 +505,6 @@ Demo 在原始 `INSERT` 中为全部 51 条证券显式填写标识，设置以�
 | 永续债、次级债、含权债及 XYB004 条款不合格样本 | 0 | 0 |
 | ABS、资产证券化、CRMW、存单、国债、Govt债、可转债 | NULL | 0 |
 | XYB005 未判定信用债、Corp债、临时代码 | NULL | NULL |
-
-存量表缺少 `exchmarket` 与上述两个标识字段时，一次性执行以下增量 SQL；不要通过含 `DROP TABLE` 的完整建表脚本升级存量库：
-
-```sql
-ALTER TABLE `znty_rrs`.`rrs_securityinfo`
-    ADD COLUMN `exchmarket` VARCHAR(10) DEFAULT NULL
-        COMMENT '交易市场代码',
-    ADD COLUMN `std_clause_flag` INT DEFAULT NULL
-        COMMENT '标准条款判定：1=条款合格 / 0=条款不合格 / NULL=未判定',
-    ADD COLUMN `std_credit_flag` INT DEFAULT NULL
-        COMMENT '标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定';
-
--- exchmarket 回填：正式证券按 wind_code 对齐 ais_inv_ods.wind_windcustomcode.S_INFO_WINDCODE 写入 EXCHMARKET 原值；
--- 源表同一代码存在多个不同 EXCHMARKET 时不回填，留待单独治理；临时代码保持 NULL
-UPDATE `znty_rrs`.`rrs_securityinfo` si
-    JOIN (
-        SELECT `S_INFO_WINDCODE` AS wind_code
-              ,MIN(`EXCHMARKET`) AS exchmarket
-        FROM `ais_inv_ods`.`wind_windcustomcode`
-        WHERE `S_INFO_WINDCODE` IS NOT NULL
-          AND `EXCHMARKET` IS NOT NULL
-          AND `EXCHMARKET` <> ''
-        GROUP BY `S_INFO_WINDCODE`
-        HAVING COUNT(DISTINCT `EXCHMARKET`) = 1
-    ) w
-        ON si.`wind_code` = w.wind_code
-SET si.`exchmarket` = w.exchmarket
-WHERE COALESCE(si.`security_source`, '') <> 'temporary'
-  AND si.`exchmarket` IS NULL;
-
--- 回填后核查：仍为空的正式证券（Wind 无记录 / EXCHMARKET 为空 / 同一代码多个不同市场）必须按代码单独治理
-SELECT si.`wind_code`
-      ,si.`security_source`
-FROM `znty_rrs`.`rrs_securityinfo` si
-WHERE COALESCE(si.`security_source`, '') <> 'temporary'
-  AND si.`exchmarket` IS NULL;
-```
-
-`exchmarket` 是正式证券市场的唯一来源，存量库不回填会让批量调库、存量批量调整、CRMW 批量调库与自动调库的市场筛选、统一市场查询、临时代码转正一并失败：`SecurityMarketService` 对空值直接抛「证券缺少市场映射」，市场筛选 SQL 的 `exchmarket = #{marketCode}` 在三值逻辑下命中 0 行，临时代码转正因查不到唯一市场被阻断。回填取 Wind `EXCHMARKET` 原值（不取 `S_INFO_EXCHMARKET`），`IB` 由业务侧统一映射为 `CIBM`；只回填唯一映射，Wind 无记录、`EXCHMARKET` 为空或同一代码出现多个不同市场的正式证券保持 NULL，由核查 SQL 列出后按代码单独治理，不得按代码后缀推断。
 
 详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingCompanyList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留在数据及快照中，不再用于简易流程）；`date_exists_str` 证券期限（页面只读，同时供矩阵、白名单和简易流程的年口径判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
