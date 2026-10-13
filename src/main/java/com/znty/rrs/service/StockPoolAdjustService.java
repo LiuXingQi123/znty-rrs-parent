@@ -276,6 +276,7 @@ public class StockPoolAdjustService {
             }
             // 确认本条调库记录的目标投资池仍然存在
             InvestmentPoolBo pool = requirePool(poolMap, log.getTargetPoolId());
+            // 重新解析调整人并查询池权限，防止审批期间权限变化后仍落池。
             if (!AdminUserIdUtil.isAdminUser(log.getAdjusterId())
                     && !queryAdjustablePoolIds(parseUserId(log.getAdjusterId())).contains(pool.getId())) {
                 throw new BizException("调整人已无目标投资池调整权限：" + pool.getPoolName());
@@ -403,6 +404,7 @@ public class StockPoolAdjustService {
             if (!ITEM_MANUAL.equals(item.getItemTag())) {
                 continue;
             }
+            // 读取手工主项的分组标识，以便重算同组关系项。
             String group = requireGroupKey(item);
             // 根据手工主项重算关系项，与前端传回明细逐条对照
             addCheckResult(expected, stock, item.getTargetPoolId(), item.getAdjustMode(), ITEM_MANUAL,
@@ -410,6 +412,7 @@ public class StockPoolAdjustService {
             StockAdjustCheckReq.CheckItem manual = new StockAdjustCheckReq.CheckItem();
             manual.setTargetPoolId(item.getTargetPoolId());
             manual.setAdjustMode(item.getAdjustMode());
+            // 按当前配置展开该手工主项的联动和互斥明细。
             expandRelationItems(expected, stock, manual, group, poolMap, currentPoolIds, relations, sourcePoolIds);
         }
         if (expected.size() != req.getItems().size()) {
@@ -418,6 +421,7 @@ public class StockPoolAdjustService {
         for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             // 目标池、方向、来源标签与组均须保持服务端校验结果
             StockAdjustCheckDto.CheckResultItem expectedItem = expected.get(itemKey(item.getTargetPoolId(), item.getAdjustMode()));
+            // 核实分组标识与当前规则重算出的关系项一致。
             if (expectedItem == null || !item.getItemTag().equals(expectedItem.getItemTag())
                     || !requireGroupKey(item).equals(expectedItem.getAdjustGroupKey())) {
                 throw new BizException("联动或互斥调整项不符合当前配置，请重新校验");
@@ -448,6 +452,7 @@ public class StockPoolAdjustService {
         req.getItems().stream().filter(item -> item != null && AdjustMode.IN.getCode().equals(item.getAdjustMode()))
                 .forEach(item -> sourcePoolIds.add(item.getTargetPoolId()));
         String currentUserId = StockQueryFilterHelper.requireUserId(req.getCurrentUserId());
+        // 普通用户解析真实用户 ID 后查询可调整池，管理员沿用全池范围。
         Set<Long> allowed = AdminUserIdUtil.isAdminUser(currentUserId) ? poolMap.keySet()
                 : queryAdjustablePoolIds(parseUserId(currentUserId));
         int groupIndex = 1;
@@ -923,7 +928,9 @@ public class StockPoolAdjustService {
         for (StockPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             // 先保存整组日志与附件，避免快速流程终审漏掉后续关系项
             String groupKey = requireGroupKey(item);
+            // 同组首次保存时生成独立股票调库批次号，后续关系项共用。
             String batchNo = batchByGroup.computeIfAbsent(groupKey, key -> generateBatchNo());
+            // 汇总股票主档、主项及流程快照，构建当前调库日志。
             StockAdjustLogBo log = buildAdjustLog(req, prepared.stock, item, prepared.manualByGroup.get(groupKey),
                     prepared.poolMap.get(item.getTargetPoolId()), prepared.poolMap, batchNo,
                     prepared.snapshotByGroup.get(groupKey));
@@ -1280,8 +1287,8 @@ public class StockPoolAdjustService {
         if (pool.getMarketCodes() == null || !pool.getMarketCodes().contains(marketToken)) {
             failures.add("股票市场不在投资池允许范围内");
         }
-        // 调入时复核行业及股票最新评级准入
         if (AdjustMode.IN.getCode().equals(adjustMode)) {
+            // 按目标池配置校验股票行业和最新有效评级。
             validateStockAdmission(failures, stock, pool);
         }
         // 对照当前池状态判断调入或调出方向是否仍然有效
@@ -1327,8 +1334,8 @@ public class StockPoolAdjustService {
         }
         if (validateFlow) {
             Long flowId = AdjustMode.IN.getCode().equals(adjustMode) ? pool.getInFlowId() : pool.getOutFlowId();
-            // 确认目标池配置了已发布且含人工审批的流程
             Long fastId = AdjustMode.IN.getCode().equals(adjustMode) ? pool.getSimpleInFlowId() : pool.getSimpleOutFlowId();
+            // 分别读取一般和快速流程快照，至少一个已发布且可用才允许调整。
             if (buildFlowSnapshot(flowId, stock.getStockCode()) == null
                     && buildFlowSnapshot(fastId, stock.getStockCode()) == null) {
                 failures.add("目标投资池未配置已发布的一般或快速审批流程");
@@ -1421,6 +1428,7 @@ public class StockPoolAdjustService {
         addFlowOption(options, stock, inbound ? pool.getInFlowId() : pool.getOutFlowId(),
                 inbound ? pool.getInFlowKey() : pool.getOutFlowKey(), inbound ? FlowType.NORMAL_INBOUND.getCode() : FlowType.NORMAL_OUTBOUND.getCode(),
                 true, failures);
+        // 追加快速流程候选，保留用户显式选择且不默认推荐。
         addFlowOption(options, stock, inbound ? pool.getSimpleInFlowId() : pool.getSimpleOutFlowId(),
                 inbound ? pool.getSimpleInFlowKey() : pool.getSimpleOutFlowKey(), inbound ? FlowType.FAST_INBOUND.getCode() : FlowType.FAST_OUTBOUND.getCode(),
                 false, failures);
@@ -1600,6 +1608,7 @@ public class StockPoolAdjustService {
         if (current == null) {
             throw new BizException("审批流程缺少开始节点");
         }
+        // 保存开始节点的自动处理记录，作为本次流程的起点。
         insertStep(logId, batchNo, current, null, StepStatus.AUTO_PROCESS.getCode(),
                 null, null, ProcessAction.AUTO_PROCESS.getCode(), new Date());
         Set<Long> visited = new HashSet<>();
@@ -1611,17 +1620,22 @@ public class StockPoolAdjustService {
             }
             NodeApprovalConfigBo config = snapshot.configMap.get(current.getId());
             if (NodeType.END.getCode().equals(current.getNodeType())) {
+                // 保存结束节点记录，并通知调用方本流程已结束。
                 insertStep(logId, batchNo, current, config, StepStatus.AUTO_PROCESS.getCode(),
                         null, null, ProcessAction.AUTO_PROCESS.getCode(), new Date());
                 return true;
             }
+            // 识别无需人工处理的节点和系统自动审批配置。
             if (!NodeType.APPROVAL.getCode().equals(current.getNodeType()) || isSystemAutoApproval(config)) {
+                // 保存自动处理记录后继续寻找下一个待办节点。
                 insertStep(logId, batchNo, current, config, StepStatus.AUTO_PROCESS.getCode(),
                         null, null, ProcessAction.AUTO_PROCESS.getCode(), new Date());
                 continue;
             }
+            // 根据发起人策略与提交连线识别初次申请的提交节点。
             if (config != null && ApprovalStrategy.INITIATOR.getCode().equals(config.getApprovalStrategy())
                     && hasOutgoingRouteAction(snapshot, current, ProcessAction.SUBMIT.getCode())) {
+                // 记录发起人已提交，避免把初次提交创建为人工待办。
                 insertStep(logId, batchNo, current, config, StepStatus.SUBMIT.getCode(),
                         adjusterId, adjusterName, ProcessAction.SUBMIT.getCode(), new Date());
                 continue;
@@ -1634,6 +1648,7 @@ public class StockPoolAdjustService {
                 throw new BizException("审批节点无可用处理人：" + current.getLabel());
             }
             for (HandlerTarget handler : handlers) {
+                // 为每位有效处理人创建首个人工审批待办。
                 insertStep(logId, batchNo, current, config, StepStatus.PENDING.getCode(), handler.id, handler.name, null, null);
             }
             return false;
@@ -1926,6 +1941,7 @@ public class StockPoolAdjustService {
                 && !stock.getDelistDate().after(new Date()))) {
             throw new BizException("已终止或退市股票不能发起调库");
         }
+        // 通过统一市场白名单检查锁定主档是否仍支持股票调库。
         if (!isSupportedMarket(stock.getMarketCode())) {
             throw new BizException("股票市场仅支持 SSE、SZSE、HKEX");
         }
@@ -1951,6 +1967,7 @@ public class StockPoolAdjustService {
                 && !stock.getDelistDate().after(new Date())))) {
             throw new BizException("已终止或退市股票不能发起调库");
         }
+        // 发起调库时限制市场范围，详情查询仍可读取非活动股票。
         if (requireActive && !isSupportedMarket(stock.getMarketCode())) {
             throw new BizException("股票市场仅支持 SSE、SZSE、HKEX");
         }

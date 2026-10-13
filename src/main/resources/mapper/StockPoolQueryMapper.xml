@@ -123,6 +123,7 @@
           AND ms.status = 'use'
         ORDER BY ms.security_code
     </select>
+    <!-- 按用户、股票品种和市场停用本人有效自选记录，保留历史数据。 -->
     <update id="deleteStockFromMyPool">
         UPDATE my_security_pool
         SET status = 'del'

@@ -14,12 +14,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 我的事宜服务，负责查询当前用户相关的流程事项。
+ * 股票我的事宜服务，负责查询当前用户相关的股票调库流程事项。
  */
 @Service
 public class StockMyMattersService {
 
-    /** 我的事项数据访问组件 */
+    /** 股票我的事宜数据访问组件 */
     @Resource
     private StockMyMattersMapper myMattersMapper;
 
@@ -68,9 +68,9 @@ public class StockMyMattersService {
     }
 
     /**
-     * 将流程描述中的目标池叶子名称替换为全路径名称。
-     * 例如："管理员 将 23某基建PRN001 调入 二级库 的审批申请"
-     *    → "管理员 将 23某基建PRN001 调入 信用债大库/二级库 的审批申请"
+     * 将股票调库事项描述中的目标池叶子名称替换为全路径名称。
+     *
+     * @param list 当前页股票流程事项
      */
     private void replacePoolNameWithFullPath(List<MyMattersDto> list) {
         if (list.isEmpty()) {

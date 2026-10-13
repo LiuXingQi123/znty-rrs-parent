@@ -25,8 +25,9 @@ public final class StockQueryFilterHelper {
 
     /** 校验日期范围并计算包含截止自然日的排他边界。 */
     public static LocalDateTime endExclusive(String start, String end) {
-        // 严格解析两个日期，拒绝无效或颠倒的范围。
+        // 严格解析开始日期，拒绝无效自然日。
         LocalDate startDate = parseDate(start);
+        // 严格解析结束日期，随后校验范围先后顺序。
         LocalDate endDate = parseDate(end);
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new BizException("开始日期不能晚于结束日期");

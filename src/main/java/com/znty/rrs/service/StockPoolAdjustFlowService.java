@@ -128,6 +128,7 @@ public class StockPoolAdjustFlowService {
     private void applyAttachmentChanges(StockPoolAdjustAuditReq req, StockAdjustStepBo step, FlowSnapshot snapshot,
                                          FlowNodeBo node, SysAttachmentService.SubmissionFiles submission) {
         if (req.getAttachmentChanges() == null || req.getAttachmentChanges().isEmpty()) {
+            // 无附件变更时也识别修改节点，保证重新提交仍复核报告要求。
             if (ProcessAction.APPROVE.getCode().equals(req.getProcessAction())
                     && isModifyNode(snapshot, node, snapshot.configMap.get(node.getId()))) {
                 // Excel 没有初始报告入口，未修改附件时仍复核最新报告要求
@@ -294,6 +295,7 @@ public class StockPoolAdjustFlowService {
                 && !AdminUserIdUtil.isAdminUser(req.getHandlerId())) {
             throw new BizException("当前用户不是该步骤处理人");
         }
+        // 仅在传入有效批次号时核对批次，并核对日志与实际步骤的关联。
         if ((hasText(req.getAdjustBatchNo()) && !req.getAdjustBatchNo().equals(step.getAdjustBatchNo()))
                 || (req.getAdjustLogId() != null && !req.getAdjustLogId().equals(step.getAdjustLogId()))) {
             throw new BizException("审核上下文与当前步骤不一致");
