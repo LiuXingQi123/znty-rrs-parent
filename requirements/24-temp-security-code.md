@@ -132,7 +132,7 @@
 操作来源枚举（`oprt_source`，注释「manual=人工 / job=定时任务 / other=其他」）：
 - `TempOprtSource.MANUAL("manual")` / `JOB("job")` / `OTHER("other")`
 
-市场枚举 `MarketCode`：`SSE`=上海证券交易所 / `SZSE`=深圳证券交易所 / `CIBM`=银行间市场 / `BSE`=北京证券交易所 / `COMPANY`=主体 / `OTC`=场外市场 / `QDII`=其他QDII市场 / `OTHER`=其他（前端 `marketOptions` 同此 8 项）。
+市场枚举 `MarketCode`：`SSE`=上海证券交易所 / `SZSE`=深圳证券交易所 / `CIBM`=银行间市场 / `BSE`=北京证券交易所 / `COMPANY`=主体 / `OTC`=场外市场 / `HKEX`=香港交易所 / `QDII`=其他QDII市场 / `JWCW`=JWCW市场 / `UNKNOWN`=未知 / `OTHER`=其他（前端 `marketOptions` 与 `docs/dict.js` 同此 11 项）。
 
 ```
             addTempSecurityCode
@@ -165,7 +165,7 @@
   - `tempSecurityName`/`tempSecurityCode`/`tempSecurityMarket`/`tempSecurityType` 必填（`validateRequired` 空白串判定）
   - `tempCompanyCode` 非空（「发行主体不能为空」）
   - `tempIssueDate`/`tempMaturityDate` 必填，且 `tempMaturityDate.after(tempIssueDate)`（「到期日期必须晚于发行日期」）
-  - `validateMarket(tempSecurityMarket)`：白名单 `{SSE, SZSE, CIBM, BSE, COMPANY, OTC, QDII, OTHER}`，否则「临时证券市场不合法，market=...」
+  - `validateMarket(tempSecurityMarket)`：使用 `MarketCode.isValid` 校验上述 11 项市场编码，否则「临时证券市场不合法，market=...」
   - `validateSecurityType`：`querySecurityTypeCount > 0`，否则「证券类型不存在或已删除，securityType=...」
   - 唯一性：`queryTempSecurityCodeCount(tempSecurityCode, null) > 0` → 「临时证券代码已存在，tempSecurityCode=...」（查 `is_deleted=0`）
 - **更新校验** `validateUpdateReq`：同新增全部临时字段校验 + `validateIdReq`（id 必填）+ 唯一性排除自身 `queryTempSecurityCodeCount(tempSecurityCode, id)` + 正式证券字段 `securityName`/`securityCode`/`securityMarket`/`securityType` 必填 + `validateMarket(securityMarket)` + `validateSecurityType(securityType)`。

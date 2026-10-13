@@ -372,7 +372,7 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 校验证券市场（仅允许 MarketCode 标准 8 码）
+     * 校验证券市场（仅允许 MarketCode 标准 11 码）
      */
     private void validateMarket(String market, String message) {
         if (!MarketCode.isValid(market)) {
