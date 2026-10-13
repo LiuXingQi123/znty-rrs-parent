@@ -8,11 +8,18 @@ CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE u
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
+-- 清空我的证券池
 TRUNCATE TABLE `my_security_pool`;
 
+-- ----------------------------------------------------------------------------
+-- 我的证券池样例（17 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `my_security_pool` (
-    `security_code`, `security_type`, `market`, `user_id`, `status`, `remark`,
-    `create_time`, `update_time`
+    `security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`,
+    `update_time`
 ) VALUES
 ('MTN001.IB', 'mtn', '银行间', '1', 'use', '交投中票，已进入信用债三级库', '2026-05-10 09:30:00', '2026-05-10 09:30:00'),
 ('XYB001.IB', 'credit_bond', '银行间', '1', 'use', '交投信用债，已进入信用债一级库', '2026-05-28 10:00:00', '2026-05-28 10:00:00'),

@@ -7,39 +7,25 @@
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
+-- 清空基金调库审批步骤记录表
 TRUNCATE TABLE `ip_adjust_step_fund`;
+-- 清空基金当前池状态表
 TRUNCATE TABLE `ip_pool_status_fund`;
+-- 清空基金调库记录表
 TRUNCATE TABLE `ip_adjust_log_fund`;
 
+-- ----------------------------------------------------------------------------
+-- 基金调库记录样例（6 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `ip_adjust_log_fund` (
-    `id`
-    ,`fund_code`
-    ,`fund_name`
-    ,`fund_short_name`
-    ,`security_type`
-    ,`fund_score`
-    ,`fund_investment_type`
-    ,`need_risk_leader_approval`
-    ,`adjust_type`
-    ,`adjust_mode`
-    ,`adjust_batch_no`
-    ,`target_pool_id`
-    ,`target_pool_name`
-    ,`pool_type`
-    ,`flow_id`
-    ,`flow_key`
-    ,`flow_type`
-    ,`audit_status`
-    ,`adjuster_id`
-    ,`adjuster_name`
-    ,`adjust_reason`
-    ,`adjust_advice`
-    ,`submit_time`
-    ,`audit_time`
-    ,`entry_time`
-    ,`is_deleted`
-    ,`crte_time`
-    ,`updt_time`
+    `id`, `fund_code`, `fund_name`, `fund_short_name`, `security_type`, `fund_score`,
+    `fund_investment_type`, `need_risk_leader_approval`, `adjust_type`, `adjust_mode`,
+    `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`,
+    `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+    `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
 (910001, 'FUND001.SH', '沪深300交易型开放式指数基金', '沪深300ETF', 'etf_fund', 8.2500, 'stock', 1, '手工调整', '调入', 'FUND-20260922-001', 145, '母公司基础基金池', 'fund', 121, 'fund:normal-inbound', 'normalInbound', '00', '2', '研究员1', '纳入基础基金池观察与管理', NULL, NOW(), NULL, NULL, 0, NOW(), NOW()),
 (910002, 'FUND002.SZ', '成长主题上市开放式基金', '成长LOF', 'lof_fund', 8.8000, 'equity_hybrid', 0, '手工调整', '调入', 'FUND-20260922-002', 146, '母公司核心基金池', 'fund', 121, 'fund:normal-inbound', 'normalInbound', '20', '2', '研究员1', '基金长期表现稳定，申请调入核心基金池', '审批通过', DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), 0, NOW(), NOW()),
@@ -48,58 +34,26 @@ INSERT INTO `ip_adjust_log_fund` (
 (910005, 'FUND001.SH', '沪深300交易型开放式指数基金', '沪深300ETF', 'etf_fund', 8.2500, 'stock', NULL, '手工调整', '调入', 'FUND-20260922-005', 153, '中证500ETF发起式联接基础基金库', 'fund', 121, 'fund:normal-inbound', 'normalInbound', '99', '2', '研究员1', '申请纳入产品基础基金库', '发起人主动撤回', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NULL, 0, NOW(), NOW()),
 (910006, 'FUND002.SZ', '成长主题上市开放式基金', '成长LOF', 'lof_fund', 8.8000, 'equity_hybrid', 0, '手工调整', '调出', 'FUND-20260922-006', 145, '母公司基础基金池', 'fund', 122, 'fund:normal-outbound', 'normalOutbound', '20', '2', '研究员1', '投资策略调整，申请调出基础基金池', '审批通过并完成调出', DATE_SUB(NOW(), INTERVAL 3 DAY), NOW(), NULL, 0, NOW(), NOW());
 
+-- ----------------------------------------------------------------------------
+-- 基金当前池状态样例（1 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `ip_pool_status_fund` (
-    `id`
-    ,`fund_code`
-    ,`fund_name`
-    ,`fund_short_name`
-    ,`security_type`
-    ,`fund_score`
-    ,`fund_investment_type`
-    ,`need_risk_leader_approval`
-    ,`adjust_type`
-    ,`adjust_mode`
-    ,`adjust_batch_no`
-    ,`adjust_log_id`
-    ,`target_pool_id`
-    ,`target_pool_name`
-    ,`pool_type`
-    ,`flow_id`
-    ,`flow_key`
-    ,`flow_type`
-    ,`audit_status`
-    ,`adjuster_id`
-    ,`adjuster_name`
-    ,`adjust_reason`
-    ,`adjust_advice`
-    ,`submit_time`
-    ,`audit_time`
-    ,`entry_time`
-    ,`is_deleted`
-    ,`crte_time`
-    ,`updt_time`
+    `id`, `fund_code`, `fund_name`, `fund_short_name`, `security_type`, `fund_score`,
+    `fund_investment_type`, `need_risk_leader_approval`, `adjust_type`, `adjust_mode`,
+    `adjust_batch_no`, `adjust_log_id`, `target_pool_id`, `target_pool_name`, `pool_type`,
+    `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`,
+    `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`,
+    `crte_time`, `updt_time`
 ) VALUES
 (911001, 'FUND002.SZ', '成长主题上市开放式基金', '成长LOF', 'lof_fund', 8.8000, 'equity_hybrid', 0, '手工调整', '调入', 'FUND-20260922-002', 910002, 146, '母公司核心基金池', 'fund', 121, 'fund:normal-inbound', 'normalInbound', '20', '2', '研究员1', '基金长期表现稳定，申请调入核心基金池', '审批通过', DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), 0, NOW(), NOW());
 
+-- ----------------------------------------------------------------------------
+-- 基金调库审批步骤记录样例（15 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `ip_adjust_step_fund` (
-    `id`
-    ,`adjust_log_id`
-    ,`adjust_batch_no`
-    ,`flow_node_id`
-    ,`node_code`
-    ,`node_label`
-    ,`node_type`
-    ,`approval_strategy`
-    ,`sort_order`
-    ,`step_status`
-    ,`handler_id`
-    ,`handler_name`
-    ,`process_action`
-    ,`process_comment`
-    ,`start_time`
-    ,`process_time`
-    ,`crte_time`
-    ,`updt_time`
+    `id`, `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`,
+    `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
 ) VALUES
 (912001, 910001, 'FUND-20260922-001', 12102, 'n102', '研究员A发起', 'approval', 'initiator', 1, 'submit', '2', '研究员1', 'submit', '提交基金调库申请', NOW(), NOW(), NOW(), NOW()),
 (912002, 910001, 'FUND-20260922-001', 12103, 'n103', '研究员B复核', 'approval', 'preempt', 2, 'pending', '5', '研究员4', NULL, NULL, NOW(), NULL, NOW(), NOW()),

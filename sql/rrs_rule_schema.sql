@@ -11,15 +11,25 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除测试执行日志表
 DROP TABLE IF EXISTS `rule_test_run_log`;
+-- 删除测试执行记录表
 DROP TABLE IF EXISTS `rule_test_run`;
+-- 删除测试用例参数值表
 DROP TABLE IF EXISTS `rule_test_case_param`;
+-- 删除规则测试用例表
 DROP TABLE IF EXISTS `rule_test_case`;
+-- 删除规则参数选项表
 DROP TABLE IF EXISTS `rule_param_option`;
+-- 删除规则参数表
 DROP TABLE IF EXISTS `rule_param`;
+-- 删除规则定义表
 DROP TABLE IF EXISTS `rule_definition`;
+-- 删除参数预设选项明细表
 DROP TABLE IF EXISTS `rule_preset_option_item`;
+-- 删除参数预设选项集表
 DROP TABLE IF EXISTS `rule_preset_option_set`;
+-- 删除规则分类表
 DROP TABLE IF EXISTS `rule_category`;
 
 -- ----------------------------------------------------------------------------

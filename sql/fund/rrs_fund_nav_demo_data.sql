@@ -7,23 +7,19 @@
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
+-- 清空基金逐日净值表
 TRUNCATE TABLE `rrs_fund_nav`;
 
+-- ----------------------------------------------------------------------------
+-- 基金逐日净值样例（4 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `rrs_fund_nav` (
-    `fund_code`
-    ,`trade_date`
-    ,`announcement_date`
-    ,`currency_code`
-    ,`unit_nav`
-    ,`unit_nav_growth_rate`
-    ,`accumulated_nav`
-    ,`daily_ten_thousand_income`
-    ,`seven_day_annualized_yield`
-    ,`source_system`
-    ,`memo`
-    ,`is_deleted`
-    ,`crte_time`
-    ,`updt_time`
+    `fund_code`, `trade_date`, `announcement_date`, `currency_code`, `unit_nav`,
+    `unit_nav_growth_rate`, `accumulated_nav`, `daily_ten_thousand_income`,
+    `seven_day_annualized_yield`, `source_system`, `memo`, `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
 ('FUND001.SH', '2026-09-18', '2026-09-21', 'CNY', 4.200000, 0.250000, 4.834400, NULL, NULL, 'DEMO', '普通净值型基金历史净值演示数据', 0, NOW(), NOW()),
 ('FUND001.SH', '2026-09-21', '2026-09-22', 'CNY', 4.215600, 0.371429, 4.850000, NULL, NULL, 'DEMO', '普通净值型基金历史净值演示数据', 0, NOW(), NOW()),

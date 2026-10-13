@@ -11,19 +11,29 @@ USE `znty_rrs`;
 SET NAMES utf8mb4;
 
 -- ----------------------------------------------------------------------------
--- 2. 删除旧表（若存在）
+-- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除投资池权限配置表（操作审计）
 DROP TABLE IF EXISTS `ip_pool_permission_evt`;
+-- 删除投资池自动调入调出定时任务绑定表（操作审计）
 DROP TABLE IF EXISTS `ip_pool_auto_rule_evt`;
+-- 删除投资池关系配置表（操作审计）
 DROP TABLE IF EXISTS `ip_pool_relation_evt`;
+-- 删除投资池主表（操作审计）
 DROP TABLE IF EXISTS `ip_investment_pool_evt`;
+-- 删除投资池权限配置表
 DROP TABLE IF EXISTS `ip_pool_permission`;
+-- 删除投资池自动调入调出定时任务绑定表
 DROP TABLE IF EXISTS `ip_pool_auto_rule`;
+-- 删除投资池关系配置表
 DROP TABLE IF EXISTS `ip_pool_relation`;
+-- 删除投资池主表
 DROP TABLE IF EXISTS `ip_investment_pool`;
+-- 删除投资池开放日配置表（open_day_adjust=1 的池按此表 begin_date~end_date 区间校验调库日期）
+DROP TABLE IF EXISTS `ip_pool_open_day`;
 
 -- ----------------------------------------------------------------------------
--- 3. 创建主表
+-- 1. 投资池主表
 -- ----------------------------------------------------------------------------
 CREATE TABLE `ip_investment_pool` (
     `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
@@ -76,6 +86,9 @@ CREATE TABLE `ip_investment_pool` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池主表';
 
+-- ----------------------------------------------------------------------------
+-- 2. 投资池关系配置表
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_pool_relation` (
     `id`                 BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `pool_id`            BIGINT       DEFAULT NULL            COMMENT '投资池 ID，关联 ip_investment_pool.id',
@@ -93,6 +106,9 @@ CREATE TABLE `ip_pool_relation` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池关系配置表';
 
+-- ----------------------------------------------------------------------------
+-- 3. 投资池自动调入调出定时任务绑定表
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_pool_auto_rule` (
     `id`         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `pool_id`    BIGINT       DEFAULT NULL            COMMENT '投资池 ID，关联 ip_investment_pool.id',
@@ -109,6 +125,9 @@ CREATE TABLE `ip_pool_auto_rule` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池自动调入调出定时任务绑定表';
 
+-- ----------------------------------------------------------------------------
+-- 4. 投资池权限配置表
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_pool_permission` (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `pool_id`         BIGINT       DEFAULT NULL            COMMENT '投资池 ID，关联 ip_investment_pool.id',
@@ -126,7 +145,7 @@ CREATE TABLE `ip_pool_permission` (
   COMMENT = '投资池权限配置表';
 
 -- ----------------------------------------------------------------------------
--- 4. 创建事件表
+-- 5. 投资池主表（操作审计）
 -- ----------------------------------------------------------------------------
 CREATE TABLE `ip_investment_pool_evt` (
     `evt_id`                BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
@@ -183,6 +202,9 @@ CREATE TABLE `ip_investment_pool_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池主表（操作审计）';
 
+-- ----------------------------------------------------------------------------
+-- 6. 投资池关系配置表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_pool_relation_evt` (
     `evt_id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
     `id`                 BIGINT       DEFAULT NULL            COMMENT '主键 ID',
@@ -204,6 +226,9 @@ CREATE TABLE `ip_pool_relation_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池关系配置表（操作审计）';
 
+-- ----------------------------------------------------------------------------
+-- 7. 投资池自动调入调出定时任务绑定表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_pool_auto_rule_evt` (
     `evt_id`     BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
     `id`         BIGINT       DEFAULT NULL            COMMENT '主键 ID',
@@ -224,6 +249,9 @@ CREATE TABLE `ip_pool_auto_rule_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池自动调入调出定时任务绑定表（操作审计）';
 
+-- ----------------------------------------------------------------------------
+-- 8. 投资池权限配置表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_pool_permission_evt` (
     `evt_id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
     `id`              BIGINT       DEFAULT NULL            COMMENT '主键 ID',
@@ -244,8 +272,10 @@ CREATE TABLE `ip_pool_permission_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '投资池权限配置表（操作审计）';
 
+-- ----------------------------------------------------------------------------
+-- 9. 投资池开放日配置表（open_day_adjust=1 的池按此表 begin_date~end_date 区间校验调库日期）
 -- 开放日配置表（open_day_adjust=1 的池按此表 begin_date~end_date 区间校验调库日期）
-DROP TABLE IF EXISTS `ip_pool_open_day`;
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_pool_open_day`
 (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',

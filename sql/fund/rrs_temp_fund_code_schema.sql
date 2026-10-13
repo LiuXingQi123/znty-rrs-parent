@@ -13,12 +13,20 @@ CREATE DATABASE IF NOT EXISTS `znty_rrs`
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
--- 删除旧表：先删除登记审计及替换明细，再删除登记主表。
+-- ----------------------------------------------------------------------------
+-- 删除旧表（若存在）
+-- ----------------------------------------------------------------------------
+-- 删除基金临时代码表（操作审计）
 DROP TABLE IF EXISTS `rrs_temp_fund_code_evt`;
+-- 删除临时基金代码替换日志
 DROP TABLE IF EXISTS `rrs_temp_fund_code_update_log`;
+-- 删除基金临时代码表
 DROP TABLE IF EXISTS `rrs_temp_fund_code`;
 
+-- ----------------------------------------------------------------------------
+-- 1. 基金临时代码表
 -- 创建登记主表。
+-- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `rrs_temp_fund_code` (
     `id`                   BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `temp_fund_code`       VARCHAR(100) DEFAULT NULL COMMENT '临时基金代码',
@@ -43,7 +51,10 @@ CREATE TABLE IF NOT EXISTS `rrs_temp_fund_code` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '基金临时代码表';
 
+-- ----------------------------------------------------------------------------
+-- 2. 基金临时代码表（操作审计）
 -- 保存登记记录的完整变更快照，删除为业务软删除。
+-- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `rrs_temp_fund_code_evt` (
     `evt_id`               BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
     `id`                   BIGINT       DEFAULT NULL COMMENT '主键 ID',
@@ -72,7 +83,10 @@ CREATE TABLE IF NOT EXISTS `rrs_temp_fund_code_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '基金临时代码表（操作审计）';
 
+-- ----------------------------------------------------------------------------
+-- 3. 临时基金代码替换日志
 -- 按实际被替换的基金业务记录记录成功结果，异常随业务事务整体回滚。
+-- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `rrs_temp_fund_code_update_log` (
     `id`                   BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `temp_code_id`         BIGINT       DEFAULT NULL COMMENT '临时基金登记记录 ID',

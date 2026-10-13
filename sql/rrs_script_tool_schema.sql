@@ -10,8 +10,15 @@ CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE u
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 删除旧表（若存在）
+-- ----------------------------------------------------------------------------
+-- 删除脚本工具写操作执行审计
 DROP TABLE IF EXISTS `sys_script_tool_run_log`;
 
+-- ----------------------------------------------------------------------------
+-- 1. 脚本工具写操作执行审计
+-- ----------------------------------------------------------------------------
 CREATE TABLE `sys_script_tool_run_log`
 (
     `id`                 BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键 ID',

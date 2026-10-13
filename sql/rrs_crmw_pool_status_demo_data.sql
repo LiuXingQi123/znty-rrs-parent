@@ -7,15 +7,20 @@
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
+-- 清空CRMW投资池当前状态表
 TRUNCATE TABLE `ip_pool_status_crmw`;
 
+-- ----------------------------------------------------------------------------
+-- CRMW投资池当前状态样例（1 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `ip_pool_status_crmw` (
-    `security_code`, `security_short_name`, `security_type`,
-    `crmw_name`, `crmw_scode`, `crmw_mktcode`, `crmw_stype`,
-    `adjust_type`, `adjust_mode`, `adjust_batch_no`, `adjust_log_id`,
-    `target_pool_id`, `target_pool_name`, `pool_type`,
-    `flow_id`, `flow_key`, `flow_type`,
-    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`,
-    `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`
+    `security_code`, `security_short_name`, `security_type`, `crmw_name`, `crmw_scode`,
+    `crmw_mktcode`, `crmw_stype`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `adjust_log_id`,
+    `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`,
+    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `submit_time`, `audit_time`,
+    `entry_time`, `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
 ('MTN001.IB', '24交投MTN', 'mtn', '某CRMW凭证A', 'CRMW001.IB', 'CIBM', 'crmw', '手工调整', '调入', 'CRMW20260301001', 7, 18, 'CRMW库', 'crmw', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', 'CRMW调入CRMW库', '2026-03-01 09:00:00', '2026-03-01 14:00:00', '2026-03-01 14:00:00', 0, NOW(), NOW());

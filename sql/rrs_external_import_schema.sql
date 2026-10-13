@@ -15,6 +15,7 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除证券信息表
 DROP TABLE IF EXISTS `rrs_securityinfo`;
 
 -- ----------------------------------------------------------------------------
@@ -146,21 +147,3 @@ CREATE TABLE `rrs_securityinfo`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
     COMMENT = '证券信息表';
-
--- 存量库一次性修补（可重复执行）：空/NULL 记为未知，避免 security_status != 'D' 因三值逻辑滤行
-ALTER TABLE `rrs_securityinfo`
-    MODIFY COLUMN `security_status` varchar(1) DEFAULT NULL
-        COMMENT '证券状态：L=上市中 / N=待上市 / D=退市 / U=未知';
-
-ALTER TABLE `rrs_securityinfo`
-    MODIFY COLUMN `prompt_reason` longtext DEFAULT NULL
-        COMMENT '观察事项';
-
-ALTER TABLE `rrs_securityinfo`
-    MODIFY COLUMN `analysis` longtext DEFAULT NULL
-        COMMENT '证券分析，最大输入长度 5000 字';
-
-UPDATE `rrs_securityinfo`
-SET `security_status` = 'U'
-WHERE `security_status` IS NULL
-   OR `security_status` = '';

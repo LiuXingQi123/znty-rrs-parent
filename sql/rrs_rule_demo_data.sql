@@ -9,18 +9,36 @@ CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE u
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
+-- 清空测试执行日志表
 TRUNCATE TABLE `rule_test_run_log`;
+-- 清空测试执行记录表
 TRUNCATE TABLE `rule_test_run`;
+-- 清空测试用例参数值表
 TRUNCATE TABLE `rule_test_case_param`;
+-- 清空规则测试用例表
 TRUNCATE TABLE `rule_test_case`;
+-- 清空规则参数选项表
 TRUNCATE TABLE `rule_param_option`;
+-- 清空规则参数表
 TRUNCATE TABLE `rule_param`;
+-- 清空规则定义表
 TRUNCATE TABLE `rule_definition`;
+-- 清空参数预设选项明细表
 TRUNCATE TABLE `rule_preset_option_item`;
+-- 清空参数预设选项集表
 TRUNCATE TABLE `rule_preset_option_set`;
+-- 清空规则分类表
 TRUNCATE TABLE `rule_category`;
 
-INSERT INTO `rule_category` (id, category_code, category_name, sort_no, enabled, crte_time, updt_time) VALUES
+-- ----------------------------------------------------------------------------
+-- 规则分类样例（10 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rule_category` (
+    id, category_code, category_name, sort_no, enabled, crte_time, updt_time
+) VALUES
 (1,'adjust_in','调入通用校验',10,1,NOW(),NOW()),
 (2,'adjust_out','调出通用校验',20,1,NOW(),NOW()),
 (3,'bond','债券特有校验',30,1,NOW(),NOW()),
@@ -32,7 +50,12 @@ INSERT INTO `rule_category` (id, category_code, category_name, sort_no, enabled,
 (9,'auto_adjust','自动调库',90,1,NOW(),NOW()),
 (10,'other','其他',99,1,NOW(),NOW());
 
-INSERT INTO `rule_preset_option_set` (id, set_name, sort_no, enabled, crte_time, updt_time) VALUES
+-- ----------------------------------------------------------------------------
+-- 参数预设选项集样例（10 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rule_preset_option_set` (
+    id, set_name, sort_no, enabled, crte_time, updt_time
+) VALUES
 (1,'是否/布尔',10,1,NOW(),NOW()),
 (2,'主体内评分档',20,1,NOW(),NOW()),
 (3,'证券类型',30,1,NOW(),NOW()),
@@ -44,1206 +67,113 @@ INSERT INTO `rule_preset_option_set` (id, set_name, sort_no, enabled, crte_time,
 (9,'品种大类',90,1,NOW(),NOW()),
 (10,'交易场所',100,1,NOW(),NOW());
 
-INSERT INTO `rule_preset_option_item` (set_id, option_value, option_label, sort_no, crte_time, updt_time) VALUES
-(1,'是','是',1,NOW(),NOW()),(1,'否','否',2,NOW(),NOW()),
-(2,'1','1',1,NOW(),NOW()),(2,'2+','2+',2,NOW(),NOW()),(2,'2','2',3,NOW(),NOW()),(2,'2-','2-',4,NOW(),NOW()),
-(2,'3+','3+',5,NOW(),NOW()),(2,'3','3',6,NOW(),NOW()),(2,'3-','3-',7,NOW(),NOW()),(2,'4','4',8,NOW(),NOW()),
-(3,'abs','资产支持证券',1,NOW(),NOW()),(3,'convertible_bond','可转债',2,NOW(),NOW()),
-(3,'exchangeable_bond','可交换公司债券',3,NOW(),NOW()),(3,'detachable_convertible_bond','可分离转债存债',4,NOW(),NOW()),
-(3,'crmw','信用风险缓释凭证',5,NOW(),NOW()),(3,'corporate_bond','企业债',6,NOW(),NOW()),(3,'mtn','中期票据',7,NOW(),NOW()),
-(4,'1','一级库',1,NOW(),NOW()),(4,'2','二级库',2,NOW(),NOW()),(4,'3','三级库',3,NOW(),NOW()),
-(4,'4','四级库',4,NOW(),NOW()),(4,'5','五级库',5,NOW(),NOW()),
-(5,'abs','ABS',1,NOW(),NOW()),(5,'private','私募',2,NOW(),NOW()),(5,'subordinated','次级',3,NOW(),NOW()),
-(5,'perpetual','永续',4,NOW(),NOW()),(5,'guaranteed','担保',5,NOW(),NOW()),
-(6,'调入','调入',1,NOW(),NOW()),(6,'调出','调出',2,NOW(),NOW()),
-(7,'00','流程中',1,NOW(),NOW()),(7,'20','审批通过',2,NOW(),NOW()),(7,'21','审批驳回',3,NOW(),NOW()),
-(8,'none','不限制',1,NOW(),NOW()),(8,'any','任意研究报告',2,NOW(),NOW()),(8,'internal','内部研究报告',3,NOW(),NOW()),
-(9,'bond','债券',1,NOW(),NOW()),(9,'stock','股票',2,NOW(),NOW()),(9,'fund','基金',3,NOW(),NOW()),(9,'company','主体',4,NOW(),NOW()),
-(10,'SSE','上交所',1,NOW(),NOW()),(10,'SZSE','深交所',2,NOW(),NOW()),(10,'CIBM','银行间',3,NOW(),NOW()),(10,'BSE','北交所',4,NOW(),NOW());
+-- ----------------------------------------------------------------------------
+-- 参数预设选项明细样例（43 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rule_preset_option_item` (
+    set_id, option_value, option_label, sort_no, crte_time, updt_time
+) VALUES
+(1,'是','是',1,NOW(),NOW()),
+(1,'否','否',2,NOW(),NOW()),
+(2,'1','1',1,NOW(),NOW()),
+(2,'2+','2+',2,NOW(),NOW()),
+(2,'2','2',3,NOW(),NOW()),
+(2,'2-','2-',4,NOW(),NOW()),
+(2,'3+','3+',5,NOW(),NOW()),
+(2,'3','3',6,NOW(),NOW()),
+(2,'3-','3-',7,NOW(),NOW()),
+(2,'4','4',8,NOW(),NOW()),
+(3,'abs','资产支持证券',1,NOW(),NOW()),
+(3,'convertible_bond','可转债',2,NOW(),NOW()),
+(3,'exchangeable_bond','可交换公司债券',3,NOW(),NOW()),
+(3,'detachable_convertible_bond','可分离转债存债',4,NOW(),NOW()),
+(3,'crmw','信用风险缓释凭证',5,NOW(),NOW()),
+(3,'corporate_bond','企业债',6,NOW(),NOW()),
+(3,'mtn','中期票据',7,NOW(),NOW()),
+(4,'1','一级库',1,NOW(),NOW()),
+(4,'2','二级库',2,NOW(),NOW()),
+(4,'3','三级库',3,NOW(),NOW()),
+(4,'4','四级库',4,NOW(),NOW()),
+(4,'5','五级库',5,NOW(),NOW()),
+(5,'abs','ABS',1,NOW(),NOW()),
+(5,'private','私募',2,NOW(),NOW()),
+(5,'subordinated','次级',3,NOW(),NOW()),
+(5,'perpetual','永续',4,NOW(),NOW()),
+(5,'guaranteed','担保',5,NOW(),NOW()),
+(6,'调入','调入',1,NOW(),NOW()),
+(6,'调出','调出',2,NOW(),NOW()),
+(7,'00','流程中',1,NOW(),NOW()),
+(7,'20','审批通过',2,NOW(),NOW()),
+(7,'21','审批驳回',3,NOW(),NOW()),
+(8,'none','不限制',1,NOW(),NOW()),
+(8,'any','任意研究报告',2,NOW(),NOW()),
+(8,'internal','内部研究报告',3,NOW(),NOW()),
+(9,'bond','债券',1,NOW(),NOW()),
+(9,'stock','股票',2,NOW(),NOW()),
+(9,'fund','基金',3,NOW(),NOW()),
+(9,'company','主体',4,NOW(),NOW()),
+(10,'SSE','上交所',1,NOW(),NOW()),
+(10,'SZSE','深交所',2,NOW(),NOW()),
+(10,'CIBM','银行间',3,NOW(),NOW()),
+(10,'BSE','北交所',4,NOW(),NOW());
 
-INSERT INTO `rule_definition` (id, rule_name, description, category_code, script, status, deleted_flag, crte_time, updt_time) VALUES
-(1,'调入-池锁定','[checkCommonIn] inCheckPoolLocked。目标池 lock_flag=1 禁止调入。空证券/空调库项与 checkAdjust 前置一致，不返回通过。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((lockFlag == "是" || lockFlag == "1" || lockFlag == 1)) {
-    return "目标投资池已锁定";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(2,'调入-投资品种','[checkCommonIn] inCheckVariety。池 variety_codes JSON 须包含带引号的品种大类；空配置不限制。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (varietyCodes == null || varietyCodes == "" || varietyCodes == "[]") {
-    return "通过";
-}
-if (categoryType == null || categoryType == "") {
-    return "证券不在本池投资品种范围内";
-}
-token = "\\"" + categoryType + "\\"";
-if (varietyCodes.indexOf(token) >= 0) {
-    return "通过";
-}
-return "证券不在本池投资品种范围内";
-','active',0,NOW(),NOW()),
-(3,'调入-投资市场','[checkCommonIn] inCheckMarket。池 market_codes JSON 含带引号的市场编码；空或空数组不限制。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (marketCodes == null || marketCodes == "" || marketCodes == "[]") {
-    return "通过";
-}
-if (securityMarkets == null || securityMarkets == "") {
-    return "证券不在本池投资市场范围内";
-}
-token = "\\"" + securityMarkets + "\\"";
-if (marketCodes.indexOf(token) >= 0) {
-    return "通过";
-}
-return "证券不在本池投资市场范围内";
-','active',0,NOW(),NOW()),
-(4,'调入-进行中流程','[checkCommonIn/checkCommonOut] preCheckPendingProcess。存在 pending 步骤则禁止再次调库。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(hasPendingProcess == "是" || hasPendingProcess == "1" || hasPendingProcess == 1)) {
-    return "通过";
-}
-if (pendingNodeLabel != null && pendingNodeLabel != "") {
-    return "证券存在进行中的调库流程（当前节点：" + pendingNodeLabel + "）";
-}
-return "证券存在进行中的调库流程";
-','active',0,NOW(),NOW()),
-(5,'调入-已在目标池','[checkCommonIn] inCheckSecurityAlreadyInPool。audit_status=20 的有效在池记录视为已在池。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((alreadyInTargetPool == "是" || alreadyInTargetPool == "1" || alreadyInTargetPool == 1)) {
-    return "证券已在目标投资池中";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(6,'调入-持仓上限','[checkCommonIn] inCheckPoolCapacity。maxCapacity 空或 0 不限制。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (maxCapacity == null || maxCapacity == "" || maxCapacity <= 0) {
-    return "通过";
-}
-if (currentCount >= maxCapacity) {
-    return "目标投资池已达持仓上限（" + maxCapacity + "）";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(7,'调入-来源池限制','[checkCommonIn] inCheckSourcePool。配置了 source 时，须已在来源池或本批同时调入来源池。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(hasSourceLimit == "是" || hasSourceLimit == "1" || hasSourceLimit == 1)) {
-    return "通过";
-}
-if ((inSourcePool == "是" || inSourcePool == "1" || inSourcePool == 1)) {
-    return "通过";
-}
-return "目标池配置了来源池限制，证券须先在以下池中：" + sourcePoolNames;
-','active',0,NOW(),NOW()),
-(8,'调入-限制池','[checkCommonIn] inCheckRestrictPool / checkBlockedByPools。文案：证券当前在调入限制池中：','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((inRestrictPool == "是" || inRestrictPool == "1" || inRestrictPool == 1)) {
-    return "证券当前在调入限制池中：" + restrictPoolNames;
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(9,'调入-互斥冲突','[checkCommonIn] inCheckMutexConflict。本批同时勾选 in_mutex 互斥池则双方失败。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((hasMutexConflict == "是" || hasMutexConflict == "1" || hasMutexConflict == 1)) {
-    return "与以下互斥池不可同时调入：" + mutexPoolNames;
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(10,'调入-弹性禁投','[checkCommonIn] inCheckElasticPool。in_soft_restrict 仅警告不阻断；返回文案与 Java 相同，不加警告前缀。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((inSoftRestrictPool == "是" || inSoftRestrictPool == "1" || inSoftRestrictPool == 1)) {
-    return "证券当前在调入弹性禁投池中：" + softRestrictPoolNames;
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(11,'调入-全局禁止池','[checkCommonIn] inCheckForbiddenPool。证券在 pool_type=forbidden 且审批通过的池中，不能调入其他池。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((inForbiddenPool == "是" || inForbiddenPool == "1" || inForbiddenPool == 1)) {
-    return "证券当前在禁止池中";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(12,'调入-开放日','[checkCommonIn] inCheckOpenDay。open_day_adjust=1 时当日须落在 ip_pool_open_day 区间。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(openDayAdjust == "是" || openDayAdjust == "1" || openDayAdjust == 1)) {
-    return "通过";
-}
-if ((inOpenDay == "是" || inOpenDay == "1" || inOpenDay == 1)) {
-    return "通过";
-}
-return "当前不在本池开放日内";
-','active',0,NOW(),NOW()),
-(13,'调入-行业限制','[checkCommonIn] inCheckIndustry。代码已注释不执行；保留 Demo 供后续启用。industry_exponent!=0 或证券行业空则跳过。','adjust_in','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(hasIndustryLimit == "是" || hasIndustryLimit == "1" || hasIndustryLimit == 1)) {
-    return "通过";
-}
-if (industryExponent != null && industryExponent != "" && industryExponent != 0) {
-    return "通过";
-}
-if (securityIndustry == null || securityIndustry == "") {
-    return "通过";
-}
-if (securityIndustry == poolIndustry) {
-    return "通过";
-}
-return "证券行业与目标池行业配置不一致";
-','disabled',0,NOW(),NOW()),
-(14,'调出-池锁定','[checkCommonOut] outCheckPoolLocked。目标池 lock_flag=1 禁止调出。','adjust_out','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((lockFlag == "是" || lockFlag == "1" || lockFlag == 1)) {
-    return "目标投资池已锁定";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(15,'调出-未在目标池','[checkCommonOut] outCheckSecurityNotInPool。不在池中无法调出；空在池集合视为不在池，失败而非通过。','adjust_out','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((alreadyInTargetPool == "是" || alreadyInTargetPool == "1" || alreadyInTargetPool == 1)) {
-    return "通过";
-}
-return "证券当前不在目标投资池中";
-','active',0,NOW(),NOW()),
-(16,'调出-冻结期','[checkCommonOut] outCheckFrozenPeriod。entry_time + frozen_period_in 天内不可调出；无入池时间则失败。','adjust_out','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (frozenPeriodIn == null || frozenPeriodIn == "" || frozenPeriodIn <= 0) {
-    return "通过";
-}
-if (!(hasEntryTime == "是" || hasEntryTime == "1" || hasEntryTime == 1)) {
-    return "证券入池生效时间缺失";
-}
-if ((stillFrozen == "是" || stillFrozen == "1" || stillFrozen == 1)) {
-    return "证券仍在目标投资池冻结期内";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(17,'调出-限制池','[checkCommonOut] outCheckRestrictPool。证券在 out_restrict 池中则禁止调出。','adjust_out','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((inOutRestrictPool == "是" || inOutRestrictPool == "1" || inOutRestrictPool == 1)) {
-    return "证券当前在调出限制池中：" + restrictPoolNames;
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(18,'调出-互斥池','[checkCommonOut] outCheckMutexPool。证券在 out_mutex 池中则禁止从目标池调出。','adjust_out','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((inOutMutexPool == "是" || inOutMutexPool == "1" || inOutMutexPool == 1)) {
-    return "证券当前在调出互斥池中：" + mutexPoolNames;
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(19,'调出-互斥冲突','[checkCommonOut] outCheckMutexConflict。本批同时对 in_mutex 互斥池调出则失败。','adjust_out','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((hasMutexConflict == "是" || hasMutexConflict == "1" || hasMutexConflict == 1)) {
-    return "与以下互斥池不可同时调出：" + mutexPoolNames;
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(20,'调出-弹性禁投','[checkCommonOut] outCheckElasticPool。out_soft_restrict 警告不阻断；文案与 Java 相同。','adjust_out','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((inSoftRestrictPool == "是" || inSoftRestrictPool == "1" || inSoftRestrictPool == 1)) {
-    return "证券当前在调出弹性禁投池中：" + softRestrictPoolNames;
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(21,'调出-开放日','[checkCommonOut] outCheckOpenDay。与调入同一开放日区间。','adjust_out','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(openDayAdjust == "是" || openDayAdjust == "1" || openDayAdjust == 1)) {
-    return "通过";
-}
-if ((inOpenDay == "是" || inOpenDay == "1" || inOpenDay == 1)) {
-    return "通过";
-}
-return "当前不在本池开放日内";
-','active',0,NOW(),NOW()),
-(22,'债券到期-调入','[checkBondIn] inCheckBondMaturity。maturity_date 早于今日禁止调入；空到期日不拦截。','bond','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (maturityDate == null || maturityDate == "") {
-    return "通过";
-}
-if (maturityDate < today) {
-    return "债券已到期";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(23,'债券到期-调出','[checkBondOut] outCheckBondMaturity。到期日早于今日禁止调出。','bond','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (maturityDate == null || maturityDate == "") {
-    return "通过";
-}
-if (maturityDate < today) {
-    return "债券已到期";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(24,'股票退市-调入','[checkStockIn] inCheckStockDelist。delist_date 早于今日禁止调入；空摘牌日不拦截。','stock','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (delistDate == null || delistDate == "") {
-    return "通过";
-}
-if (delistDate < today) {
-    return "股票已退市";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(25,'股票评级限制','[checkStockIn] inCheckGradeAstrict。尚未接入 StockResearch/investrank，配置了也跳过。','stock','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-return "通过";
-','disabled',0,NOW(),NOW()),
-(26,'基金评分限制','[checkFundIn] inCheckFundRate。池配置了表达式且未传 fundRate 则失败，文案对齐 Java。','fund','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (fundRateLimit == null || fundRateLimit == "") {
-    return "通过";
-}
-rate = fundRateLimit.replace(" ", "");
-msg = poolName + "的评分，必须在" + rate.replace("#rate", "基金评分");
-if (fundRate == null || fundRate == "") {
-    return msg;
-}
-if (minRate != null && minRate != "" && fundRate < minRate) {
-    return msg;
-}
-if (maxRate != null && maxRate != "" && fundRate > maxRate) {
-    return msg;
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(27,'调入-主体债入库矩阵','[checkBondIn] inCheckMainGradeRule 全文。releaseRules/非分级库跳过；可转债CRMW排除；重点观察名单；内评/期限/允许池；特殊债 describeRange。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((releaseRules == "是" || releaseRules == "1" || releaseRules == 1)) {
-    return "通过";
-}
-if (!(isGradedBondPool == "是" || isGradedBondPool == "1" || isGradedBondPool == 1)) {
-    return "通过";
-}
-if (securityType == "convertible_bond" || securityType == "exchangeable_bond" || securityType == "detachable_convertible_bond" || securityType == "crmw") {
-    return "可转债、可交换债、信用风险缓释工具不适用信用债分级库";
-}
-if ((inRestricted == "是" || inRestricted == "1" || inRestricted == 1) && !(hasStrongGuarantee == "是" || hasStrongGuarantee == "1" || hasStrongGuarantee == 1)) {
-    notInGraded = (currentGradedSort == null || currentGradedSort == "" || currentGradedSort == 0);
-    if (notInGraded) {
-        return "重点观察名单原则上不得新增入库信用债分级库";
-    }
-    if (currentGradedSort <= 4 && targetPoolLevel != 5) {
-        return "重点观察名单已在库债券只能调入五级库或调出";
-    }
-    if (currentGradedSort == 5 && targetPoolLevel < 5) {
-        return "重点观察名单已在五级库，不可上调";
-    }
-}
-gradeCode = innerIssuerRating;
-if ((gradeCode == null || gradeCode == "") && (isTempCode == "是" || isTempCode == "1" || isTempCode == 1)) {
-    gradeCode = "4";
-}
-if (gradeCode == null || gradeCode == "") {
-    return "主体无内评分";
-}
-if (matchedBucket == null || matchedBucket == "") {
-    return "无法匹配债券期限档";
-}
-if (!(hasAllowedPools == "是" || hasAllowedPools == "1" || hasAllowedPools == 1)) {
-    return "主体债入库矩阵未配置允许池";
-}
-memo = "";
-if ((isPrivate == "是" || isPrivate == "1" || isPrivate == 1)) {
-    memo = "private";
-}
-if ((isSubordinated == "是" || isSubordinated == "1" || isSubordinated == 1)) {
-    memo = "subordinated";
-}
-if ((isPerpetual == "是" || isPerpetual == "1" || isPerpetual == 1)) {
-    memo = "perpetual";
-}
-if ((isGuaranteed == "是" || isGuaranteed == "1" || isGuaranteed == 1)) {
-    memo = "guaranteed";
-}
-mode = "EXACT_MATRIX";
-startSort = 0;
-exactSort = 0;
-if ((isAbs == "是" || isAbs == "1" || isAbs == 1)) {
-    if (innerGuarantorRating == "1") {
-        mode = "LEVEL_ONE_ONLY";
-        startSort = 1;
-        exactSort = 1;
-    } else {
-        mode = "DOWNGRADE_CEILING";
-        startSort = matrixBestLevel + 1;
-        exactSort = 0;
-    }
-} else {
-    if (memo == "private") {
-        if (innerIssuerRating == "1") {
-            mode = "LEVEL_ONE_ONLY";
-            startSort = 1;
-            exactSort = 1;
-        } else {
-            mode = "DOWNGRADE_CEILING";
-            startSort = matrixBestLevel + 1;
-            exactSort = 0;
-        }
-    } else {
-        if (memo == "perpetual") {
-            if (innerIssuerRating == "1") {
-                mode = "DOWNGRADE_EXACT";
-                startSort = matrixBestLevel + 1;
-                exactSort = 1;
-            } else {
-                mode = "DOWNGRADE_CEILING";
-                startSort = matrixBestLevel + 1;
-                exactSort = 0;
-            }
-        } else {
-            if (memo == "subordinated") {
-                if (innerIssuerRating == "1") {
-                    mode = "LEVEL_ONE_ONLY";
-                    startSort = 1;
-                    exactSort = 1;
-                } else {
-                    if (innerIssuerRating == "2+" || innerIssuerRating == "2" || innerIssuerRating == "2-") {
-                        mode = "DOWNGRADE_EXACT";
-                        startSort = matrixBestLevel + 1;
-                        exactSort = 1;
-                    } else {
-                        mode = "DOWNGRADE_CEILING";
-                        startSort = matrixBestLevel + 1;
-                        exactSort = 0;
-                    }
-                }
-            } else {
-                if (memo == "guaranteed" || (inObserve == "是" || inObserve == "1" || inObserve == 1)) {
-                    mode = "BEST_AND_WORSE";
-                    startSort = matrixBestLevel;
-                    exactSort = 0;
-                }
-            }
-        }
-    }
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (mode == "EXACT_MATRIX") {
-    if ((targetInAllowedPools == "是" || targetInAllowedPools == "1" || targetInAllowedPools == 1)) {
-        return "通过";
-    }
-    return "目标池「" + poolName + "」不在入库矩阵允许范围内（允许：" + allowedPoolNames + "）";
-}
-if (exactSort == 1) {
-    if (targetPoolLevel == startSort) {
-        return "通过";
-    }
-    return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";
-}
-if (targetPoolLevel >= startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";
-','active',0,NOW(),NOW()),
-(28,'矩阵-可转债CRMW排除','[inCheckMainGradeRule] 可转债/可交换/可分离转债/CRMW 不能进信用债 1～5。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (securityType == "convertible_bond" || securityType == "exchangeable_bond" || securityType == "detachable_convertible_bond" || securityType == "crmw") {
-    return "可转债、可交换债、信用风险缓释工具不适用信用债分级库";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(29,'矩阵-主体无内评分','[inCheckMainGradeRule] 正式证券无内评禁止入信用债 1～5；临时代码默认档 4。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if ((isTempCode == "是" || isTempCode == "1" || isTempCode == 1)) {
-    return "通过";
-}
-if (innerIssuerRating == null || innerIssuerRating == "") {
-    return "主体无内评分";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(30,'矩阵-期限档匹配','[inCheckMainGradeRule] 普通债 date_exists 天÷365；含权回售用年字段；空则默认最长档，匹配不到才失败。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (matchedBucket == null || matchedBucket == "") {
-    return "无法匹配债券期限档";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(31,'矩阵-允许池配置','[inCheckMainGradeRule] 内评档×期限档查不到允许池则失败。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(hasAllowedPools == "是" || hasAllowedPools == "1" || hasAllowedPools == 1)) {
-    return "主体债入库矩阵未配置允许池";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(32,'矩阵-ABS校验','[CreditBondSpecialInboundRule] ABS 担保人内评 1 档只能一级库（仅 1 级），否则至少下调一级。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(isAbs == "是" || isAbs == "1" || isAbs == 1)) {
-    return "通过";
-}
-if (innerGuarantorRating == "1") {
-    startSort = 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel == startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";
-}
-startSort = matrixBestLevel + 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel >= startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";
-','active',0,NOW(),NOW()),
-(33,'矩阵-私募债校验','[inCheckMainGradeRule] 覆盖后仍是私募：主体内评 1 档只能一级库，否则至少下调一级。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(isPrivate == "是" || isPrivate == "1" || isPrivate == 1)) {
-    return "通过";
-}
-if (innerIssuerRating == "1") {
-    startSort = 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel == startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";
-}
-startSort = matrixBestLevel + 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel >= startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";
-','active',0,NOW(),NOW()),
-(34,'矩阵-永续债校验','[inCheckMainGradeRule] 主体内评 1 档下调一级且只留该档；否则至少下调一级。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(isPerpetual == "是" || isPerpetual == "1" || isPerpetual == 1)) {
-    return "通过";
-}
-if (innerIssuerRating == "1") {
-    startSort = matrixBestLevel + 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel == startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";
-}
-startSort = matrixBestLevel + 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel >= startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";
-','active',0,NOW(),NOW()),
-(35,'矩阵-次级债校验','[inCheckMainGradeRule] 1 档只能一级库；2+/2/2- 下调一级只留该档；其余至少下调一级。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(isSubordinated == "是" || isSubordinated == "1" || isSubordinated == 1)) {
-    return "通过";
-}
-if (innerIssuerRating == "1") {
-    startSort = 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel == startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";
-}
-if (innerIssuerRating == "2+" || innerIssuerRating == "2" || innerIssuerRating == "2-") {
-    startSort = matrixBestLevel + 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel == startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";
-}
-startSort = matrixBestLevel + 1;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel >= startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";
-','active',0,NOW(),NOW()),
-(36,'矩阵-担保债观察池','[inCheckMainGradeRule] 担保或观察池：不得高于矩阵最好档，从该档开到五级。永续+担保按担保。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(isGuaranteed == "是" || isGuaranteed == "1" || isGuaranteed == 1) && !(inObserve == "是" || inObserve == "1" || inObserve == 1)) {
-    return "通过";
-}
-startSort = matrixBestLevel;
-poolName = targetPoolName;
-if (poolName == null || poolName == "") {
-    poolName = targetPoolId;
-}
-if (startSort < 1) {
-    startSort = 1;
-}
-if (startSort > 5) {
-    startSort = 5;
-}
-if (targetPoolLevel >= startSort) {
-    return "通过";
-}
-return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";
-','active',0,NOW(),NOW()),
-(37,'矩阵-重点观察名单','[CreditBondSpecialInboundRule.checkRestricted] 未在库不得新增；已在 1～4 只能五级；强担保豁免。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(inRestricted == "是" || inRestricted == "1" || inRestricted == 1)) {
-    return "通过";
-}
-if ((hasStrongGuarantee == "是" || hasStrongGuarantee == "1" || hasStrongGuarantee == 1)) {
-    return "通过";
-}
-notInGraded = (currentGradedSort == null || currentGradedSort == "" || currentGradedSort == 0);
-if (notInGraded) {
-    return "重点观察名单原则上不得新增入库信用债分级库";
-}
-if (currentGradedSort <= 4 && targetPoolLevel != 5) {
-    return "重点观察名单已在库债券只能调入五级库或调出";
-}
-if (currentGradedSort == 5 && targetPoolLevel < 5) {
-    return "重点观察名单已在五级库，不可上调";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(38,'矩阵-特殊债类型覆盖','[CreditBondSpecialInboundRule.resolveExclusiveMemo] 私募→次级→永续→担保；ABS 始终优先。','grade_matrix','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-result = "ordinary";
-if ((isPrivate == "是" || isPrivate == "1" || isPrivate == 1)) {
-    result = "private";
-}
-if ((isSubordinated == "是" || isSubordinated == "1" || isSubordinated == 1)) {
-    result = "subordinated";
-}
-if ((isPerpetual == "是" || isPerpetual == "1" || isPerpetual == 1)) {
-    result = "perpetual";
-}
-if ((isGuaranteed == "是" || isGuaranteed == "1" || isGuaranteed == 1)) {
-    result = "guaranteed";
-}
-if ((isAbs == "是" || isAbs == "1" || isAbs == 1)) {
-    return "abs";
-}
-return result;
-','active',0,NOW(),NOW()),
-(39,'流程-白名单命中','[resolveAdjustFlowOptions] isWhitelistFlowMatched。期限年数由 date_exists_str 解析；当前 WHITELIST_POOL_IDS 空集，运行时固定不命中。','flow_match','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-unmatch = "";
-if (dateExistsStrYears == null || dateExistsStrYears == "") {
-    unmatch = unmatch + "剩余期限无法解析，date_exists_str 为空或格式不正确;";
-} else {
-    if (dateExistsStrYears < 0) {
-        unmatch = unmatch + "剩余期限已小于 0 年;";
-    } else {
-        if (dateExistsStrYears > 3) {
-            unmatch = unmatch + "剩余期限超过 3 年;";
-        }
-    }
-}
-if ((isPerpetual == "是" || isPerpetual == "1" || isPerpetual == 1)) {
-    unmatch = unmatch + "债券为永续债，不符合白名单条件;";
-} else {
-    if ((isAbs == "是" || isAbs == "1" || isAbs == 1)) {
-        unmatch = unmatch + "债券为 ABS 债，不符合白名单条件;";
-    } else {
-        if ((isPrivate == "是" || isPrivate == "1" || isPrivate == 1)) {
-            unmatch = unmatch + "债券为私募债，不符合白名单条件;";
-        }
-    }
-}
-if (!(isBond == "是" || isBond == "1" || isBond == 1)) {
-    unmatch = unmatch + "债券类型不属于债券类;";
-}
-if (!(whitelistPoolConfigured == "是" || whitelistPoolConfigured == "1" || whitelistPoolConfigured == 1)) {
-    unmatch = unmatch + "白名单池未配置，主体在白名单池条件不成立;";
-} else {
-    if (!(inWhitelistPool == "是" || inWhitelistPool == "1" || inWhitelistPool == 1)) {
-        unmatch = unmatch + "主体不在白名单池;";
-    }
-}
-if ((isGuaranteed == "是" || isGuaranteed == "1" || isGuaranteed == 1)) {
-    unmatch = unmatch + "债券为担保债，不符合白名单条件;";
-}
-if (unmatch == "") {
-    return "命中白名单";
-}
-return "未命中:" + unmatch;
-','active',0,NOW(),NOW()),
-(40,'流程-简易命中','[resolveAdjustFlowOptions] isSimpleInboundFlowMatched。一至三级库、期限、180天一般入库。','flow_match','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-unmatch = "";
-if (targetInnerSort < 1 || targetInnerSort > 3) {
-    unmatch = unmatch + "目标池不是信用债大库一、二、三级库;";
-}
-if (!(remainDaysParseable == "是" || remainDaysParseable == "1" || remainDaysParseable == 1)) {
-    unmatch = unmatch + "剩余期限无法解析，date_exists 为空;";
-}
-if ((remainDaysParseable == "是" || remainDaysParseable == "1" || remainDaysParseable == 1) && !(remainNotExceedIssuerMax == "是" || remainNotExceedIssuerMax == "1" || remainNotExceedIssuerMax == 1) && (hasIssuerMaxRemain == "是" || hasIssuerMaxRemain == "1" || hasIssuerMaxRemain == 1)) {
-    unmatch = unmatch + "剩余期限超过同主体在池最大期限;";
-}
-if (!(hasNonSimpleInbound180 == "是" || hasNonSimpleInbound180 == "1" || hasNonSimpleInbound180 == 1)) {
-    unmatch = unmatch + "该主体180天内未以一般流程入过目标池，不满足简易流程前提条件;";
-}
-if (unmatch == "") {
-    return "命中简易流程";
-}
-return "未命中:" + unmatch;
-','active',0,NOW(),NOW()),
-(41,'流程-信用债升降级','[resolveCreditBondAdjustFlowType] 已在信用债大库时按 inner_sort 比较：目标更小=upgradeInbound。','flow_match','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (!(alreadyInCreditBond == "是" || alreadyInCreditBond == "1" || alreadyInCreditBond == 1)) {
-    return "不适用";
-}
-if (targetInnerSort < currentInnerSort) {
-    return "upgradeInbound";
-}
-if (targetInnerSort > currentInnerSort) {
-    return "downgradeInbound";
-}
-return "normalInbound";
-','active',0,NOW(),NOW()),
-(42,'提交-研究报告必填','[submitAdjustLog] checkReportRequired。none/空不限制；any 任意报告；internal 必须内部报告库。','submit','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (targetPoolId == null || targetPoolId == "") {
-    return "调库项不能为空";
-}
-if (securityExists == "否") {
-    return "证券不存在";
-}
-if (poolExists == "否") {
-    return "目标投资池不存在";
-}
-if (reportRestriction == null || reportRestriction == "" || reportRestriction == "none") {
-    return "通过";
-}
-if ((hasRecentInboundReport == "是" || hasRecentInboundReport == "1" || hasRecentInboundReport == 1)) {
-    return "通过";
-}
-if (!(hasAnyReport == "是" || hasAnyReport == "1" || hasAnyReport == 1)) {
-    return "目标池[" + poolName + "]要求研究报告，请上传或选择报告";
-}
-if (reportRestriction == "internal" && !(hasInternalReport == "是" || hasInternalReport == "1" || hasInternalReport == 1)) {
-    return "目标池[" + poolName + "]要求内部研究报告，请从内部报告库选择";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(43,'自动-到期出池','[AutoAdjustService] 到期日早于昨天（T-2）自动出池，原因与 Java 一致：证券到期自动调出。','auto_adjust','if (securityCode == null || securityCode == "") {
-    return "证券代码不能为空";
-}
-if (maturityDate == null || maturityDate == "") {
-    return "通过";
-}
-if (maturityDate < yesterday) {
-    return "证券到期自动调出";
-}
-return "通过";
-','active',0,NOW(),NOW()),
-(44,'自动-主体外评AA-入池','[CompanyOuterRatingAaMinusAutoInService] 外评落在 AA-/A/BBB… 名单且尚未在目标池则自动入池。','auto_adjust','if (issuerCode == null || issuerCode == "") {
-    return "主体代码不能为空";
-}
-if (issuerRating == null || issuerRating == "") {
-    return "主体外评不能为空";
-}
-if ((alreadyInTargetPool == "是" || alreadyInTargetPool == "1" || alreadyInTargetPool == 1)) {
-    return "通过";
-}
-lowList = ",AA-,A+,A,A-,BBB+,BBB,BBB-,BB+,BB,BB-,B+,B,B-,CCC,CC,C,";
-if (lowList.indexOf("," + issuerRating + ",") >= 0) {
-    return "外评AA-及以下主体自动入池";
-}
-return "通过";
-','active',0,NOW(),NOW());
+-- ----------------------------------------------------------------------------
+-- 规则定义样例（44 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rule_definition` (
+    id, rule_name, description, category_code, script, status, deleted_flag, crte_time, updt_time
+) VALUES
+(1,'调入-池锁定','[checkCommonIn] inCheckPoolLocked。目标池 lock_flag=1 禁止调入。空证券/空调库项与 checkAdjust 前置一致，不返回通过。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((lockFlag == "是" || lockFlag == "1" || lockFlag == 1)) {\n    return "目标投资池已锁定";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(2,'调入-投资品种','[checkCommonIn] inCheckVariety。池 variety_codes JSON 须包含带引号的品种大类；空配置不限制。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (varietyCodes == null || varietyCodes == "" || varietyCodes == "[]") {\n    return "通过";\n}\nif (categoryType == null || categoryType == "") {\n    return "证券不在本池投资品种范围内";\n}\ntoken = "\\"" + categoryType + "\\"";\nif (varietyCodes.indexOf(token) >= 0) {\n    return "通过";\n}\nreturn "证券不在本池投资品种范围内";\n','active',0,NOW(),NOW()),
+(3,'调入-投资市场','[checkCommonIn] inCheckMarket。池 market_codes JSON 含带引号的市场编码；空或空数组不限制。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (marketCodes == null || marketCodes == "" || marketCodes == "[]") {\n    return "通过";\n}\nif (securityMarkets == null || securityMarkets == "") {\n    return "证券不在本池投资市场范围内";\n}\ntoken = "\\"" + securityMarkets + "\\"";\nif (marketCodes.indexOf(token) >= 0) {\n    return "通过";\n}\nreturn "证券不在本池投资市场范围内";\n','active',0,NOW(),NOW()),
+(4,'调入-进行中流程','[checkCommonIn/checkCommonOut] preCheckPendingProcess。存在 pending 步骤则禁止再次调库。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(hasPendingProcess == "是" || hasPendingProcess == "1" || hasPendingProcess == 1)) {\n    return "通过";\n}\nif (pendingNodeLabel != null && pendingNodeLabel != "") {\n    return "证券存在进行中的调库流程（当前节点：" + pendingNodeLabel + "）";\n}\nreturn "证券存在进行中的调库流程";\n','active',0,NOW(),NOW()),
+(5,'调入-已在目标池','[checkCommonIn] inCheckSecurityAlreadyInPool。audit_status=20 的有效在池记录视为已在池。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((alreadyInTargetPool == "是" || alreadyInTargetPool == "1" || alreadyInTargetPool == 1)) {\n    return "证券已在目标投资池中";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(6,'调入-持仓上限','[checkCommonIn] inCheckPoolCapacity。maxCapacity 空或 0 不限制。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (maxCapacity == null || maxCapacity == "" || maxCapacity <= 0) {\n    return "通过";\n}\nif (currentCount >= maxCapacity) {\n    return "目标投资池已达持仓上限（" + maxCapacity + "）";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(7,'调入-来源池限制','[checkCommonIn] inCheckSourcePool。配置了 source 时，须已在来源池或本批同时调入来源池。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(hasSourceLimit == "是" || hasSourceLimit == "1" || hasSourceLimit == 1)) {\n    return "通过";\n}\nif ((inSourcePool == "是" || inSourcePool == "1" || inSourcePool == 1)) {\n    return "通过";\n}\nreturn "目标池配置了来源池限制，证券须先在以下池中：" + sourcePoolNames;\n','active',0,NOW(),NOW()),
+(8,'调入-限制池','[checkCommonIn] inCheckRestrictPool / checkBlockedByPools。文案：证券当前在调入限制池中：','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((inRestrictPool == "是" || inRestrictPool == "1" || inRestrictPool == 1)) {\n    return "证券当前在调入限制池中：" + restrictPoolNames;\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(9,'调入-互斥冲突','[checkCommonIn] inCheckMutexConflict。本批同时勾选 in_mutex 互斥池则双方失败。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((hasMutexConflict == "是" || hasMutexConflict == "1" || hasMutexConflict == 1)) {\n    return "与以下互斥池不可同时调入：" + mutexPoolNames;\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(10,'调入-弹性禁投','[checkCommonIn] inCheckElasticPool。in_soft_restrict 仅警告不阻断；返回文案与 Java 相同，不加警告前缀。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((inSoftRestrictPool == "是" || inSoftRestrictPool == "1" || inSoftRestrictPool == 1)) {\n    return "证券当前在调入弹性禁投池中：" + softRestrictPoolNames;\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(11,'调入-全局禁止池','[checkCommonIn] inCheckForbiddenPool。证券在 pool_type=forbidden 且审批通过的池中，不能调入其他池。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((inForbiddenPool == "是" || inForbiddenPool == "1" || inForbiddenPool == 1)) {\n    return "证券当前在禁止池中";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(12,'调入-开放日','[checkCommonIn] inCheckOpenDay。open_day_adjust=1 时当日须落在 ip_pool_open_day 区间。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(openDayAdjust == "是" || openDayAdjust == "1" || openDayAdjust == 1)) {\n    return "通过";\n}\nif ((inOpenDay == "是" || inOpenDay == "1" || inOpenDay == 1)) {\n    return "通过";\n}\nreturn "当前不在本池开放日内";\n','active',0,NOW(),NOW()),
+(13,'调入-行业限制','[checkCommonIn] inCheckIndustry。代码已注释不执行；保留 Demo 供后续启用。industry_exponent!=0 或证券行业空则跳过。','adjust_in','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(hasIndustryLimit == "是" || hasIndustryLimit == "1" || hasIndustryLimit == 1)) {\n    return "通过";\n}\nif (industryExponent != null && industryExponent != "" && industryExponent != 0) {\n    return "通过";\n}\nif (securityIndustry == null || securityIndustry == "") {\n    return "通过";\n}\nif (securityIndustry == poolIndustry) {\n    return "通过";\n}\nreturn "证券行业与目标池行业配置不一致";\n','disabled',0,NOW(),NOW()),
+(14,'调出-池锁定','[checkCommonOut] outCheckPoolLocked。目标池 lock_flag=1 禁止调出。','adjust_out','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((lockFlag == "是" || lockFlag == "1" || lockFlag == 1)) {\n    return "目标投资池已锁定";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(15,'调出-未在目标池','[checkCommonOut] outCheckSecurityNotInPool。不在池中无法调出；空在池集合视为不在池，失败而非通过。','adjust_out','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((alreadyInTargetPool == "是" || alreadyInTargetPool == "1" || alreadyInTargetPool == 1)) {\n    return "通过";\n}\nreturn "证券当前不在目标投资池中";\n','active',0,NOW(),NOW()),
+(16,'调出-冻结期','[checkCommonOut] outCheckFrozenPeriod。entry_time + frozen_period_in 天内不可调出；无入池时间则失败。','adjust_out','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (frozenPeriodIn == null || frozenPeriodIn == "" || frozenPeriodIn <= 0) {\n    return "通过";\n}\nif (!(hasEntryTime == "是" || hasEntryTime == "1" || hasEntryTime == 1)) {\n    return "证券入池生效时间缺失";\n}\nif ((stillFrozen == "是" || stillFrozen == "1" || stillFrozen == 1)) {\n    return "证券仍在目标投资池冻结期内";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(17,'调出-限制池','[checkCommonOut] outCheckRestrictPool。证券在 out_restrict 池中则禁止调出。','adjust_out','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((inOutRestrictPool == "是" || inOutRestrictPool == "1" || inOutRestrictPool == 1)) {\n    return "证券当前在调出限制池中：" + restrictPoolNames;\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(18,'调出-互斥池','[checkCommonOut] outCheckMutexPool。证券在 out_mutex 池中则禁止从目标池调出。','adjust_out','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((inOutMutexPool == "是" || inOutMutexPool == "1" || inOutMutexPool == 1)) {\n    return "证券当前在调出互斥池中：" + mutexPoolNames;\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(19,'调出-互斥冲突','[checkCommonOut] outCheckMutexConflict。本批同时对 in_mutex 互斥池调出则失败。','adjust_out','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((hasMutexConflict == "是" || hasMutexConflict == "1" || hasMutexConflict == 1)) {\n    return "与以下互斥池不可同时调出：" + mutexPoolNames;\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(20,'调出-弹性禁投','[checkCommonOut] outCheckElasticPool。out_soft_restrict 警告不阻断；文案与 Java 相同。','adjust_out','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((inSoftRestrictPool == "是" || inSoftRestrictPool == "1" || inSoftRestrictPool == 1)) {\n    return "证券当前在调出弹性禁投池中：" + softRestrictPoolNames;\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(21,'调出-开放日','[checkCommonOut] outCheckOpenDay。与调入同一开放日区间。','adjust_out','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(openDayAdjust == "是" || openDayAdjust == "1" || openDayAdjust == 1)) {\n    return "通过";\n}\nif ((inOpenDay == "是" || inOpenDay == "1" || inOpenDay == 1)) {\n    return "通过";\n}\nreturn "当前不在本池开放日内";\n','active',0,NOW(),NOW()),
+(22,'债券到期-调入','[checkBondIn] inCheckBondMaturity。maturity_date 早于今日禁止调入；空到期日不拦截。','bond','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (maturityDate == null || maturityDate == "") {\n    return "通过";\n}\nif (maturityDate < today) {\n    return "债券已到期";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(23,'债券到期-调出','[checkBondOut] outCheckBondMaturity。到期日早于今日禁止调出。','bond','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (maturityDate == null || maturityDate == "") {\n    return "通过";\n}\nif (maturityDate < today) {\n    return "债券已到期";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(24,'股票退市-调入','[checkStockIn] inCheckStockDelist。delist_date 早于今日禁止调入；空摘牌日不拦截。','stock','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (delistDate == null || delistDate == "") {\n    return "通过";\n}\nif (delistDate < today) {\n    return "股票已退市";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(25,'股票评级限制','[checkStockIn] inCheckGradeAstrict。尚未接入 StockResearch/investrank，配置了也跳过。','stock','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nreturn "通过";\n','disabled',0,NOW(),NOW()),
+(26,'基金评分限制','[checkFundIn] inCheckFundRate。池配置了表达式且未传 fundRate 则失败，文案对齐 Java。','fund','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (fundRateLimit == null || fundRateLimit == "") {\n    return "通过";\n}\nrate = fundRateLimit.replace(" ", "");\nmsg = poolName + "的评分，必须在" + rate.replace("#rate", "基金评分");\nif (fundRate == null || fundRate == "") {\n    return msg;\n}\nif (minRate != null && minRate != "" && fundRate < minRate) {\n    return msg;\n}\nif (maxRate != null && maxRate != "" && fundRate > maxRate) {\n    return msg;\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(27,'调入-主体债入库矩阵','[checkBondIn] inCheckMainGradeRule 全文。releaseRules/非分级库跳过；可转债CRMW排除；重点观察名单；内评/期限/允许池；特殊债 describeRange。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((releaseRules == "是" || releaseRules == "1" || releaseRules == 1)) {\n    return "通过";\n}\nif (!(isGradedBondPool == "是" || isGradedBondPool == "1" || isGradedBondPool == 1)) {\n    return "通过";\n}\nif (securityType == "convertible_bond" || securityType == "exchangeable_bond" || securityType == "detachable_convertible_bond" || securityType == "crmw") {\n    return "可转债、可交换债、信用风险缓释工具不适用信用债分级库";\n}\nif ((inRestricted == "是" || inRestricted == "1" || inRestricted == 1) && !(hasStrongGuarantee == "是" || hasStrongGuarantee == "1" || hasStrongGuarantee == 1)) {\n    notInGraded = (currentGradedSort == null || currentGradedSort == "" || currentGradedSort == 0);\n    if (notInGraded) {\n        return "重点观察名单原则上不得新增入库信用债分级库";\n    }\n    if (currentGradedSort <= 4 && targetPoolLevel != 5) {\n        return "重点观察名单已在库债券只能调入五级库或调出";\n    }\n    if (currentGradedSort == 5 && targetPoolLevel < 5) {\n        return "重点观察名单已在五级库，不可上调";\n    }\n}\ngradeCode = innerIssuerRating;\nif ((gradeCode == null || gradeCode == "") && (isTempCode == "是" || isTempCode == "1" || isTempCode == 1)) {\n    gradeCode = "4";\n}\nif (gradeCode == null || gradeCode == "") {\n    return "主体无内评分";\n}\nif (matchedBucket == null || matchedBucket == "") {\n    return "无法匹配债券期限档";\n}\nif (!(hasAllowedPools == "是" || hasAllowedPools == "1" || hasAllowedPools == 1)) {\n    return "主体债入库矩阵未配置允许池";\n}\nmemo = "";\nif ((isPrivate == "是" || isPrivate == "1" || isPrivate == 1)) {\n    memo = "private";\n}\nif ((isSubordinated == "是" || isSubordinated == "1" || isSubordinated == 1)) {\n    memo = "subordinated";\n}\nif ((isPerpetual == "是" || isPerpetual == "1" || isPerpetual == 1)) {\n    memo = "perpetual";\n}\nif ((isGuaranteed == "是" || isGuaranteed == "1" || isGuaranteed == 1)) {\n    memo = "guaranteed";\n}\nmode = "EXACT_MATRIX";\nstartSort = 0;\nexactSort = 0;\nif ((isAbs == "是" || isAbs == "1" || isAbs == 1)) {\n    if (innerGuarantorRating == "1") {\n        mode = "LEVEL_ONE_ONLY";\n        startSort = 1;\n        exactSort = 1;\n    } else {\n        mode = "DOWNGRADE_CEILING";\n        startSort = matrixBestLevel + 1;\n        exactSort = 0;\n    }\n} else {\n    if (memo == "private") {\n        if (innerIssuerRating == "1") {\n            mode = "LEVEL_ONE_ONLY";\n            startSort = 1;\n            exactSort = 1;\n        } else {\n            mode = "DOWNGRADE_CEILING";\n            startSort = matrixBestLevel + 1;\n            exactSort = 0;\n        }\n    } else {\n        if (memo == "perpetual") {\n            if (innerIssuerRating == "1") {\n                mode = "DOWNGRADE_EXACT";\n                startSort = matrixBestLevel + 1;\n                exactSort = 1;\n            } else {\n                mode = "DOWNGRADE_CEILING";\n                startSort = matrixBestLevel + 1;\n                exactSort = 0;\n            }\n        } else {\n            if (memo == "subordinated") {\n                if (innerIssuerRating == "1") {\n                    mode = "LEVEL_ONE_ONLY";\n                    startSort = 1;\n                    exactSort = 1;\n                } else {\n                    if (innerIssuerRating == "2+" || innerIssuerRating == "2" || innerIssuerRating == "2-") {\n                        mode = "DOWNGRADE_EXACT";\n                        startSort = matrixBestLevel + 1;\n                        exactSort = 1;\n                    } else {\n                        mode = "DOWNGRADE_CEILING";\n                        startSort = matrixBestLevel + 1;\n                        exactSort = 0;\n                    }\n                }\n            } else {\n                if (memo == "guaranteed" || (inObserve == "是" || inObserve == "1" || inObserve == 1)) {\n                    mode = "BEST_AND_WORSE";\n                    startSort = matrixBestLevel;\n                    exactSort = 0;\n                }\n            }\n        }\n    }\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (mode == "EXACT_MATRIX") {\n    if ((targetInAllowedPools == "是" || targetInAllowedPools == "1" || targetInAllowedPools == 1)) {\n        return "通过";\n    }\n    return "目标池「" + poolName + "」不在入库矩阵允许范围内（允许：" + allowedPoolNames + "）";\n}\nif (exactSort == 1) {\n    if (targetPoolLevel == startSort) {\n        return "通过";\n    }\n    return "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";\n}\nif (targetPoolLevel >= startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";\n','active',0,NOW(),NOW()),
+(28,'矩阵-可转债CRMW排除','[inCheckMainGradeRule] 可转债/可交换/可分离转债/CRMW 不能进信用债 1～5。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (securityType == "convertible_bond" || securityType == "exchangeable_bond" || securityType == "detachable_convertible_bond" || securityType == "crmw") {\n    return "可转债、可交换债、信用风险缓释工具不适用信用债分级库";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(29,'矩阵-主体无内评分','[inCheckMainGradeRule] 正式证券无内评禁止入信用债 1～5；临时代码默认档 4。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif ((isTempCode == "是" || isTempCode == "1" || isTempCode == 1)) {\n    return "通过";\n}\nif (innerIssuerRating == null || innerIssuerRating == "") {\n    return "主体无内评分";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(30,'矩阵-期限档匹配','[inCheckMainGradeRule] 普通债 date_exists 天÷365；含权回售用年字段；空则默认最长档，匹配不到才失败。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (matchedBucket == null || matchedBucket == "") {\n    return "无法匹配债券期限档";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(31,'矩阵-允许池配置','[inCheckMainGradeRule] 内评档×期限档查不到允许池则失败。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(hasAllowedPools == "是" || hasAllowedPools == "1" || hasAllowedPools == 1)) {\n    return "主体债入库矩阵未配置允许池";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(32,'矩阵-ABS校验','[CreditBondSpecialInboundRule] ABS 担保人内评 1 档只能一级库（仅 1 级），否则至少下调一级。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(isAbs == "是" || isAbs == "1" || isAbs == 1)) {\n    return "通过";\n}\nif (innerGuarantorRating == "1") {\n    startSort = 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel == startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";\n}\nstartSort = matrixBestLevel + 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel >= startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";\n','active',0,NOW(),NOW()),
+(33,'矩阵-私募债校验','[inCheckMainGradeRule] 覆盖后仍是私募：主体内评 1 档只能一级库，否则至少下调一级。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(isPrivate == "是" || isPrivate == "1" || isPrivate == 1)) {\n    return "通过";\n}\nif (innerIssuerRating == "1") {\n    startSort = 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel == startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";\n}\nstartSort = matrixBestLevel + 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel >= startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";\n','active',0,NOW(),NOW()),
+(34,'矩阵-永续债校验','[inCheckMainGradeRule] 主体内评 1 档下调一级且只留该档；否则至少下调一级。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(isPerpetual == "是" || isPerpetual == "1" || isPerpetual == 1)) {\n    return "通过";\n}\nif (innerIssuerRating == "1") {\n    startSort = matrixBestLevel + 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel == startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";\n}\nstartSort = matrixBestLevel + 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel >= startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";\n','active',0,NOW(),NOW()),
+(35,'矩阵-次级债校验','[inCheckMainGradeRule] 1 档只能一级库；2+/2/2- 下调一级只留该档；其余至少下调一级。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(isSubordinated == "是" || isSubordinated == "1" || isSubordinated == 1)) {\n    return "通过";\n}\nif (innerIssuerRating == "1") {\n    startSort = 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel == startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";\n}\nif (innerIssuerRating == "2+" || innerIssuerRating == "2" || innerIssuerRating == "2-") {\n    startSort = matrixBestLevel + 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel == startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级）";\n}\nstartSort = matrixBestLevel + 1;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel >= startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";\n','active',0,NOW(),NOW()),
+(36,'矩阵-担保债观察池','[inCheckMainGradeRule] 担保或观察池：不得高于矩阵最好档，从该档开到五级。永续+担保按担保。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(isGuaranteed == "是" || isGuaranteed == "1" || isGuaranteed == 1) && !(inObserve == "是" || inObserve == "1" || inObserve == 1)) {\n    return "通过";\n}\nstartSort = matrixBestLevel;\npoolName = targetPoolName;\nif (poolName == null || poolName == "") {\n    poolName = targetPoolId;\n}\nif (startSort < 1) {\n    startSort = 1;\n}\nif (startSort > 5) {\n    startSort = 5;\n}\nif (targetPoolLevel >= startSort) {\n    return "通过";\n}\nreturn "目标池「" + poolName + "」不在特殊债调整后的允许范围内（仅 " + startSort + " 级及更差）";\n','active',0,NOW(),NOW()),
+(37,'矩阵-重点观察名单','[CreditBondSpecialInboundRule.checkRestricted] 未在库不得新增；已在 1～4 只能五级；强担保豁免。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(inRestricted == "是" || inRestricted == "1" || inRestricted == 1)) {\n    return "通过";\n}\nif ((hasStrongGuarantee == "是" || hasStrongGuarantee == "1" || hasStrongGuarantee == 1)) {\n    return "通过";\n}\nnotInGraded = (currentGradedSort == null || currentGradedSort == "" || currentGradedSort == 0);\nif (notInGraded) {\n    return "重点观察名单原则上不得新增入库信用债分级库";\n}\nif (currentGradedSort <= 4 && targetPoolLevel != 5) {\n    return "重点观察名单已在库债券只能调入五级库或调出";\n}\nif (currentGradedSort == 5 && targetPoolLevel < 5) {\n    return "重点观察名单已在五级库，不可上调";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(38,'矩阵-特殊债类型覆盖','[CreditBondSpecialInboundRule.resolveExclusiveMemo] 私募→次级→永续→担保；ABS 始终优先。','grade_matrix','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nresult = "ordinary";\nif ((isPrivate == "是" || isPrivate == "1" || isPrivate == 1)) {\n    result = "private";\n}\nif ((isSubordinated == "是" || isSubordinated == "1" || isSubordinated == 1)) {\n    result = "subordinated";\n}\nif ((isPerpetual == "是" || isPerpetual == "1" || isPerpetual == 1)) {\n    result = "perpetual";\n}\nif ((isGuaranteed == "是" || isGuaranteed == "1" || isGuaranteed == 1)) {\n    result = "guaranteed";\n}\nif ((isAbs == "是" || isAbs == "1" || isAbs == 1)) {\n    return "abs";\n}\nreturn result;\n','active',0,NOW(),NOW()),
+(39,'流程-白名单命中','[resolveAdjustFlowOptions] isWhitelistFlowMatched。期限年数由 date_exists_str 解析；当前 WHITELIST_POOL_IDS 空集，运行时固定不命中。','flow_match','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nunmatch = "";\nif (dateExistsStrYears == null || dateExistsStrYears == "") {\n    unmatch = unmatch + "剩余期限无法解析，date_exists_str 为空或格式不正确;";\n} else {\n    if (dateExistsStrYears < 0) {\n        unmatch = unmatch + "剩余期限已小于 0 年;";\n    } else {\n        if (dateExistsStrYears > 3) {\n            unmatch = unmatch + "剩余期限超过 3 年;";\n        }\n    }\n}\nif ((isPerpetual == "是" || isPerpetual == "1" || isPerpetual == 1)) {\n    unmatch = unmatch + "债券为永续债，不符合白名单条件;";\n} else {\n    if ((isAbs == "是" || isAbs == "1" || isAbs == 1)) {\n        unmatch = unmatch + "债券为 ABS 债，不符合白名单条件;";\n    } else {\n        if ((isPrivate == "是" || isPrivate == "1" || isPrivate == 1)) {\n            unmatch = unmatch + "债券为私募债，不符合白名单条件;";\n        }\n    }\n}\nif (!(isBond == "是" || isBond == "1" || isBond == 1)) {\n    unmatch = unmatch + "债券类型不属于债券类;";\n}\nif (!(whitelistPoolConfigured == "是" || whitelistPoolConfigured == "1" || whitelistPoolConfigured == 1)) {\n    unmatch = unmatch + "白名单池未配置，主体在白名单池条件不成立;";\n} else {\n    if (!(inWhitelistPool == "是" || inWhitelistPool == "1" || inWhitelistPool == 1)) {\n        unmatch = unmatch + "主体不在白名单池;";\n    }\n}\nif ((isGuaranteed == "是" || isGuaranteed == "1" || isGuaranteed == 1)) {\n    unmatch = unmatch + "债券为担保债，不符合白名单条件;";\n}\nif (unmatch == "") {\n    return "命中白名单";\n}\nreturn "未命中:" + unmatch;\n','active',0,NOW(),NOW()),
+(40,'流程-简易命中','[resolveAdjustFlowOptions] isSimpleInboundFlowMatched。一至三级库、期限、180天一般入库。','flow_match','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nunmatch = "";\nif (targetInnerSort < 1 || targetInnerSort > 3) {\n    unmatch = unmatch + "目标池不是信用债大库一、二、三级库;";\n}\nif (!(remainDaysParseable == "是" || remainDaysParseable == "1" || remainDaysParseable == 1)) {\n    unmatch = unmatch + "剩余期限无法解析，date_exists 为空;";\n}\nif ((remainDaysParseable == "是" || remainDaysParseable == "1" || remainDaysParseable == 1) && !(remainNotExceedIssuerMax == "是" || remainNotExceedIssuerMax == "1" || remainNotExceedIssuerMax == 1) && (hasIssuerMaxRemain == "是" || hasIssuerMaxRemain == "1" || hasIssuerMaxRemain == 1)) {\n    unmatch = unmatch + "剩余期限超过同主体在池最大期限;";\n}\nif (!(hasNonSimpleInbound180 == "是" || hasNonSimpleInbound180 == "1" || hasNonSimpleInbound180 == 1)) {\n    unmatch = unmatch + "该主体180天内未以一般流程入过目标池，不满足简易流程前提条件;";\n}\nif (unmatch == "") {\n    return "命中简易流程";\n}\nreturn "未命中:" + unmatch;\n','active',0,NOW(),NOW()),
+(41,'流程-信用债升降级','[resolveCreditBondAdjustFlowType] 已在信用债大库时按 inner_sort 比较：目标更小=upgradeInbound。','flow_match','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(alreadyInCreditBond == "是" || alreadyInCreditBond == "1" || alreadyInCreditBond == 1)) {\n    return "不适用";\n}\nif (targetInnerSort < currentInnerSort) {\n    return "upgradeInbound";\n}\nif (targetInnerSort > currentInnerSort) {\n    return "downgradeInbound";\n}\nreturn "normalInbound";\n','active',0,NOW(),NOW()),
+(42,'提交-研究报告必填','[submitAdjustLog] checkReportRequired。none/空不限制；any 任意报告；internal 必须内部报告库。','submit','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (reportRestriction == null || reportRestriction == "" || reportRestriction == "none") {\n    return "通过";\n}\nif ((hasRecentInboundReport == "是" || hasRecentInboundReport == "1" || hasRecentInboundReport == 1)) {\n    return "通过";\n}\nif (!(hasAnyReport == "是" || hasAnyReport == "1" || hasAnyReport == 1)) {\n    return "目标池[" + poolName + "]要求研究报告，请上传或选择报告";\n}\nif (reportRestriction == "internal" && !(hasInternalReport == "是" || hasInternalReport == "1" || hasInternalReport == 1)) {\n    return "目标池[" + poolName + "]要求内部研究报告，请从内部报告库选择";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(43,'自动-到期出池','[AutoAdjustService] 到期日早于昨天（T-2）自动出池，原因与 Java 一致：证券到期自动调出。','auto_adjust','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (maturityDate == null || maturityDate == "") {\n    return "通过";\n}\nif (maturityDate < yesterday) {\n    return "证券到期自动调出";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(44,'自动-主体外评AA-入池','[CompanyOuterRatingAaMinusAutoInService] 外评落在 AA-/A/BBB… 名单且尚未在目标池则自动入池。','auto_adjust','if (issuerCode == null || issuerCode == "") {\n    return "主体代码不能为空";\n}\nif (issuerRating == null || issuerRating == "") {\n    return "主体外评不能为空";\n}\nif ((alreadyInTargetPool == "是" || alreadyInTargetPool == "1" || alreadyInTargetPool == 1)) {\n    return "通过";\n}\nlowList = ",AA-,A+,A,A-,BBB+,BBB,BBB-,BB+,BB,BB-,B+,B,B-,CCC,CC,C,";\nif (lowList.indexOf("," + issuerRating + ",") >= 0) {\n    return "外评AA-及以下主体自动入池";\n}\nreturn "通过";\n','active',0,NOW(),NOW());
 
-INSERT INTO `rule_param` (id, rule_id, param_name, param_label, param_type, required, sort_no, crte_time, updt_time) VALUES
+-- ----------------------------------------------------------------------------
+-- 规则参数样例（309 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rule_param` (
+    id, rule_id, param_name, param_label, param_type, required, sort_no, crte_time, updt_time
+) VALUES
 (1,1,'securityCode','证券代码','string',1,1,NOW(),NOW()),
 (2,1,'targetPoolId','目标投资池ID','string',1,2,NOW(),NOW()),
 (3,1,'securityExists','证券是否存在','select',1,3,NOW(),NOW()),
@@ -1554,7 +484,12 @@ INSERT INTO `rule_param` (id, rule_id, param_name, param_label, param_type, requ
 (308,44,'issuerRating','主体外评','select',1,2,NOW(),NOW()),
 (309,44,'alreadyInTargetPool','是否已在目标池','select',1,3,NOW(),NOW());
 
-INSERT INTO `rule_param_option` (param_id, option_value, option_label, sort_no, crte_time, updt_time) VALUES
+-- ----------------------------------------------------------------------------
+-- 规则参数选项样例（405 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rule_param_option` (
+    param_id, option_value, option_label, sort_no, crte_time, updt_time
+) VALUES
 (3,'是','是',1,NOW(),NOW()),
 (3,'否','否',2,NOW(),NOW()),
 (4,'是','是',1,NOW(),NOW()),
@@ -1961,7 +896,13 @@ INSERT INTO `rule_param_option` (param_id, option_value, option_label, sort_no, 
 (309,'是','是',1,NOW(),NOW()),
 (309,'否','否',2,NOW(),NOW());
 
-INSERT INTO `rule_test_case` (id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time, updt_time) VALUES
+-- ----------------------------------------------------------------------------
+-- 规则测试用例样例（97 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rule_test_case` (
+    id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time,
+    updt_time
+) VALUES
 (1,'未填写证券代码',1,'调入-池锁定','fail','证券代码不能为空',NOW(),NOW(),NOW()),
 (2,'证券不存在',1,'调入-池锁定','fail','证券不存在',NOW(),NOW(),NOW()),
 (3,'目标池不存在',1,'调入-池锁定','fail','目标投资池不存在',NOW(),NOW(),NOW()),
@@ -2060,7 +1001,13 @@ INSERT INTO `rule_test_case` (id, case_name, rule_id, rule_name_snapshot, last_r
 (96,'A+应入池',44,'自动-主体外评AA-入池','pass','外评AA-及以下主体自动入池',NOW(),NOW(),NOW()),
 (97,'AAA不自动入',44,'自动-主体外评AA-入池','pass','通过',NOW(),NOW(),NOW());
 
-INSERT INTO `rule_test_case_param` (id, case_id, param_name, param_label_snapshot, param_type_snapshot, param_value, crte_time, updt_time) VALUES
+-- ----------------------------------------------------------------------------
+-- 测试用例参数值样例（752 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rule_test_case_param` (
+    id, case_id, param_name, param_label_snapshot, param_type_snapshot, param_value, crte_time,
+    updt_time
+) VALUES
 (1,1,'securityCode','证券代码','string','',NOW(),NOW()),
 (2,1,'targetPoolId','目标投资池ID','string','',NOW(),NOW()),
 (3,1,'securityExists','证券是否存在','select','',NOW(),NOW()),

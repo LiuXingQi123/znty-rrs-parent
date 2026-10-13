@@ -16,35 +16,56 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除连线条件规则事件表（操作审计）
 DROP TABLE IF EXISTS `wf_edge_cond_rule_evt`;
+-- 删除连线条件规则表，一条连线可配置多条规则，规则间逻辑以 wf_flow_edge.cond_logic 连接
 DROP TABLE IF EXISTS `wf_edge_cond_rule`;
+-- 删除流程连线事件表（操作审计）
 DROP TABLE IF EXISTS `wf_flow_edge_evt`;
+-- 删除流程连线表，记录节点间的有向边
 DROP TABLE IF EXISTS `wf_flow_edge`;
+-- 删除条件节点配置事件表（操作审计）
 DROP TABLE IF EXISTS `wf_node_condition_config_evt`;
+-- 删除条件节点专属配置表（condition 类型）
 DROP TABLE IF EXISTS `wf_node_condition_config`;
+-- 删除消息通知节点配置事件表（操作审计）
 DROP TABLE IF EXISTS `wf_node_notify_config_evt`;
+-- 删除消息通知节点专属配置表（notify 类型）
 DROP TABLE IF EXISTS `wf_node_notify_config`;
+-- 删除自动执行节点配置事件表（操作审计）
 DROP TABLE IF EXISTS `wf_node_auto_config_evt`;
+-- 删除自动执行节点任务配置表（auto 类型，一节点多任务）
 DROP TABLE IF EXISTS `wf_node_auto_config`;
+-- 删除审批节点处理人明细事件表（操作审计）
 DROP TABLE IF EXISTS `wf_node_approval_handler_evt`;
+-- 删除审批节点处理人明细表，支持角色和人员混选
 DROP TABLE IF EXISTS `wf_node_approval_handler`;
+-- 删除审批节点配置事件表（操作审计）
 DROP TABLE IF EXISTS `wf_node_approval_config_evt`;
+-- 删除审批节点专属配置表（approval 类型）
 DROP TABLE IF EXISTS `wf_node_approval_config`;
+-- 删除流程节点事件表（操作审计）
 DROP TABLE IF EXISTS `wf_flow_node_evt`;
+-- 删除流程节点表，对应画布中每个节点（通用字段）
 DROP TABLE IF EXISTS `wf_flow_node`;
+-- 删除流程版本事件表（操作审计）
 DROP TABLE IF EXISTS `wf_flow_version_evt`;
+-- 删除流程版本表，每次发布生成一条记录，含画布快照
 DROP TABLE IF EXISTS `wf_flow_version`;
+-- 删除流程定义事件表（操作审计）
 DROP TABLE IF EXISTS `wf_flow_definition_evt`;
+-- 删除流程定义主表
 DROP TABLE IF EXISTS `wf_flow_definition`;
+-- 删除业务角色字典事件表（操作审计）
 DROP TABLE IF EXISTS `wf_role_dict_evt`;
+-- 删除业务角色字典表，维护审批人/通知人的角色选项
 DROP TABLE IF EXISTS `wf_role_dict`;
 
-
--- ============================================================================
+-- ----------------------------------------------------------------------------
 -- 1. 流程定义主表
 --    对应前端：tableData 列表、createForm 新建弹窗、editInfoForm 编辑弹窗
 --    版本号不在本表冗余，由 wf_flow_version 聚合查询（SELECT MAX(ver_num)）
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_flow_definition` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `name`        VARCHAR(128) DEFAULT NULL             COMMENT '流程名称，如：信用债入库审批',
@@ -64,6 +85,9 @@ CREATE TABLE `wf_flow_definition` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程定义主表';
 
+-- ----------------------------------------------------------------------------
+-- 2. 流程定义事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_flow_definition_evt` (
     `evt_id`      BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`          BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -88,12 +112,11 @@ CREATE TABLE `wf_flow_definition_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程定义事件表（操作审计）';
 
-
--- ============================================================================
--- 2. 流程版本表
+-- ----------------------------------------------------------------------------
+-- 3. 流程版本表，每次发布生成一条记录，含画布快照
 --    对应前端：historyRows 历史弹窗、publishNote 发布备注、版本快照
 --    每次发布产生一条新版本记录，节点/连线 JSON 随版本归档
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_flow_version` (
     `id`             BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `flow_id`        BIGINT       DEFAULT NULL             COMMENT '关联流程定义 ID（wf_flow_definition.id）',
@@ -117,6 +140,9 @@ CREATE TABLE `wf_flow_version` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程版本表，每次发布生成一条记录，含画布快照';
 
+-- ----------------------------------------------------------------------------
+-- 4. 流程版本事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_flow_version_evt` (
     `evt_id`         BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`             BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -145,13 +171,12 @@ CREATE TABLE `wf_flow_version_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程版本事件表（操作审计）';
 
-
--- ============================================================================
--- 3. 流程节点表
+-- ----------------------------------------------------------------------------
+-- 5. 流程节点表，对应画布中每个节点（通用字段）
 --    对应前端：nodes 数组
 --    节点类型：start=开始 / end=结束 / approval=审批 / condition=条件
 --              auto=自动执行 / notify=消息通知
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_flow_node` (
     `id`         BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `version_id` BIGINT       DEFAULT NULL             COMMENT '关联流程版本 ID（wf_flow_version.id）',
@@ -172,6 +197,9 @@ CREATE TABLE `wf_flow_node` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程节点表，对应画布中每个节点（通用字段）';
 
+-- ----------------------------------------------------------------------------
+-- 6. 流程节点事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_flow_node_evt` (
     `evt_id`     BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`         BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -197,11 +225,10 @@ CREATE TABLE `wf_flow_node_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程节点事件表（操作审计）';
 
-
--- ============================================================================
--- 4. 审批节点配置表（approval 专属）
+-- ----------------------------------------------------------------------------
+-- 7. 审批节点专属配置表（approval 类型）
 --    对应前端：selNode.approvalStrategy / approvalRemark
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_approval_config` (
     `id`                BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `node_id`           BIGINT       DEFAULT NULL             COMMENT '关联节点 ID（wf_flow_node.id）',
@@ -215,6 +242,9 @@ CREATE TABLE `wf_node_approval_config` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '审批节点专属配置表（approval 类型）';
 
+-- ----------------------------------------------------------------------------
+-- 8. 审批节点配置事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_approval_config_evt` (
     `evt_id`            BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`                BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -233,6 +263,9 @@ CREATE TABLE `wf_node_approval_config_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '审批节点配置事件表（操作审计）';
 
+-- ----------------------------------------------------------------------------
+-- 9. 审批节点处理人明细表，支持角色和人员混选
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_approval_handler` (
     `id`                 BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `approval_config_id` BIGINT       DEFAULT NULL             COMMENT '关联审批节点配置 ID（wf_node_approval_config.id）',
@@ -248,6 +281,9 @@ CREATE TABLE `wf_node_approval_handler` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '审批节点处理人明细表，支持角色和人员混选';
 
+-- ----------------------------------------------------------------------------
+-- 10. 审批节点处理人明细事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_approval_handler_evt` (
     `evt_id`             BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`                 BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -268,14 +304,13 @@ CREATE TABLE `wf_node_approval_handler_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '审批节点处理人明细事件表（操作审计）';
 
-
--- ============================================================================
--- 5. 自动执行节点配置表（auto 专属）
+-- ----------------------------------------------------------------------------
+-- 11. 自动执行节点任务配置表（auto 类型，一节点多任务）
 --    对应前端：selNode.autoTasks（数组）、autoRemark
 --    一个节点可配置多个自动任务，按 task_seq 顺序执行
 --    【已知问题】auto_remark 是节点级属性，但存储在每个任务行上，存在冗余
 --              修改备注需要更新该节点下所有行
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_auto_config` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `node_id`     BIGINT       DEFAULT NULL             COMMENT '关联节点 ID（wf_flow_node.id）',
@@ -290,6 +325,9 @@ CREATE TABLE `wf_node_auto_config` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '自动执行节点任务配置表（auto 类型，一节点多任务）';
 
+-- ----------------------------------------------------------------------------
+-- 12. 自动执行节点配置事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_auto_config_evt` (
     `evt_id`      BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`          BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -309,12 +347,11 @@ CREATE TABLE `wf_node_auto_config_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '自动执行节点配置事件表（操作审计）';
 
-
--- ============================================================================
--- 6. 消息通知节点配置表（notify 专属）
+-- ----------------------------------------------------------------------------
+-- 13. 消息通知节点专属配置表（notify 类型）
 --    对应前端：selNode.notifyChannels / notifyTarget / notifyPersons
 --             notifyTpl / notifyRemark
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_notify_config` (
     `id`              BIGINT        NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `node_id`         BIGINT        DEFAULT NULL             COMMENT '关联节点 ID（wf_flow_node.id）',
@@ -331,6 +368,9 @@ CREATE TABLE `wf_node_notify_config` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '消息通知节点专属配置表（notify 类型）';
 
+-- ----------------------------------------------------------------------------
+-- 14. 消息通知节点配置事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_notify_config_evt` (
     `evt_id`          BIGINT        NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`              BIGINT        DEFAULT NULL             COMMENT '主键 ID',
@@ -352,14 +392,13 @@ CREATE TABLE `wf_node_notify_config_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '消息通知节点配置事件表（操作审计）';
 
-
--- ============================================================================
--- 7. 条件节点配置表（condition 专属）
+-- ----------------------------------------------------------------------------
+-- 15. 条件节点专属配置表（condition 类型）
 --    对应前端：selNode.conditionRemark
 --    注：分支条件逻辑在连线表（wf_flow_edge + wf_edge_cond_rule）中维护
 --    【已知问题】本表仅含一个备注字段 + 时间戳，性价比低
 --              可考虑将 remark 上收至 wf_flow_node 加通用列
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_condition_config` (
     `id`               BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `node_id`          BIGINT       DEFAULT NULL             COMMENT '关联节点 ID（wf_flow_node.id）',
@@ -372,6 +411,9 @@ CREATE TABLE `wf_node_condition_config` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '条件节点专属配置表（condition 类型）';
 
+-- ----------------------------------------------------------------------------
+-- 16. 条件节点配置事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_node_condition_config_evt` (
     `evt_id`           BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`               BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -389,13 +431,12 @@ CREATE TABLE `wf_node_condition_config_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '条件节点配置事件表（操作审计）';
 
-
--- ============================================================================
--- 8. 流程连线表
+-- ----------------------------------------------------------------------------
+-- 17. 流程连线表，记录节点间的有向边
 --    对应前端：edges 数组，含连线的起止节点、标签、条件规则、备注
 --    from_node_id / to_node_id 关联 wf_flow_node.id（BIGINT 代理键）
 --    edge_id 保留前端业务标识（如 e102），仅用于画布还原
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_flow_edge` (
     `id`           BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `version_id`   BIGINT       DEFAULT NULL             COMMENT '关联流程版本 ID（wf_flow_version.id）',
@@ -415,6 +456,9 @@ CREATE TABLE `wf_flow_edge` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程连线表，记录节点间的有向边';
 
+-- ----------------------------------------------------------------------------
+-- 18. 流程连线事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_flow_edge_evt` (
     `evt_id`       BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`           BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -439,16 +483,15 @@ CREATE TABLE `wf_flow_edge_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '流程连线事件表（操作审计）';
 
-
--- ============================================================================
--- 9. 连线条件规则表
+-- ----------------------------------------------------------------------------
+-- 19. 连线条件规则表，一条连线可配置多条规则，规则间逻辑以 wf_flow_edge.cond_logic 连接
 --    对应前端：condRules 数组（每条规则含 field / op / val）
 --    条件字段分组：
 --      [审批结果] auditStatus=审核状态 / auditComment=审核意见
 --      [业务标志] isDebtSimple=债大库简易流程 / isWhitelist=白名单流程
 --                 isSimple=简易流程 / isRestricted=禁止库标的 / isLargeAmount=大额交易
 --      [流程变量] applyAmount=申请金额 / creditRating=标的评级 / investType=投资类型
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_edge_cond_rule` (
     `id`         BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `edge_id`    BIGINT       DEFAULT NULL             COMMENT '关联连线 ID（wf_flow_edge.id）',
@@ -464,6 +507,9 @@ CREATE TABLE `wf_edge_cond_rule` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '连线条件规则表，一条连线可配置多条规则，规则间逻辑以 wf_flow_edge.cond_logic 连接';
 
+-- ----------------------------------------------------------------------------
+-- 20. 连线条件规则事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_edge_cond_rule_evt` (
     `evt_id`     BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`         BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -484,13 +530,12 @@ CREATE TABLE `wf_edge_cond_rule_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '连线条件规则事件表（操作审计）';
 
-
--- ============================================================================
--- 10. 业务角色字典表
+-- ----------------------------------------------------------------------------
+-- 21. 业务角色字典表，维护审批人/通知人的角色选项
 --     对应前端：审批处理人 / 通知对象 下拉选项
 --     角色编码：fund-manager / trader / risk-officer / compliance
 --               invest-director / admin
--- ============================================================================
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_role_dict` (
     `id`         BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
     `role_code`  VARCHAR(64)  DEFAULT NULL             COMMENT '角色编码，如：fund-manager',
@@ -505,6 +550,9 @@ CREATE TABLE `wf_role_dict` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '业务角色字典表，维护审批人/通知人的角色选项';
 
+-- ----------------------------------------------------------------------------
+-- 22. 业务角色字典事件表（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `wf_role_dict_evt` (
     `evt_id`     BIGINT       NOT NULL AUTO_INCREMENT  COMMENT '事件主键 ID',
     `id`         BIGINT       DEFAULT NULL             COMMENT '主键 ID',
@@ -524,17 +572,18 @@ CREATE TABLE `wf_role_dict_evt` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '业务角色字典事件表（操作审计）';
 
-
--- ============================================================================
+-- ----------------------------------------------------------------------------
 -- 初始化：角色字典种子数据
--- ============================================================================
-INSERT INTO `wf_role_dict` (`role_code`, `role_name`, `sort_order`, `is_active`, `crte_time`, `updt_time`) VALUES
-    ('fund-manager',    '投资经理',   1, 1, NOW(), NOW()),
-    ('trader',          '交易员',     2, 1, NOW(), NOW()),
-    ('risk-officer',    '风控专员',   3, 1, NOW(), NOW()),
-    ('compliance',      '合规专员',   4, 1, NOW(), NOW()),
-    ('invest-director', '投资总监',   5, 1, NOW(), NOW()),
-    ('admin',           '系统管理员', 6, 1, NOW(), NOW());
+-- ----------------------------------------------------------------------------
+INSERT INTO `wf_role_dict` (
+    `role_code`, `role_name`, `sort_order`, `is_active`, `crte_time`, `updt_time`
+) VALUES
+('fund-manager', '投资经理', 1, 1, NOW(), NOW()),
+('trader', '交易员', 2, 1, NOW(), NOW()),
+('risk-officer', '风控专员', 3, 1, NOW(), NOW()),
+('compliance', '合规专员', 4, 1, NOW(), NOW()),
+('invest-director', '投资总监', 5, 1, NOW(), NOW()),
+('admin', '系统管理员', 6, 1, NOW(), NOW());
 
 
 

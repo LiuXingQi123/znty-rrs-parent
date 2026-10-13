@@ -9,14 +9,17 @@ USE `znty_rrs`;
 SET NAMES utf8mb4;
 
 -- ----------------------------------------------------------------------------
--- 1. 删除旧表（若存在）
+-- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除信用债期限主体内评分档投资池关系表
 DROP TABLE IF EXISTS `credit_bond_pool_grade_rule`;
+-- 删除信用债主体内评分档字典表
 DROP TABLE IF EXISTS `credit_bond_inner_rating_grade`;
+-- 删除信用债期限分组配置表
 DROP TABLE IF EXISTS `credit_bond_term_bucket`;
 
 -- ----------------------------------------------------------------------------
--- 2. 创建主表
+-- 1. 信用债期限分组配置表
 -- ----------------------------------------------------------------------------
 CREATE TABLE `credit_bond_term_bucket` (
     `id`               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
@@ -37,6 +40,9 @@ CREATE TABLE `credit_bond_term_bucket` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '信用债期限分组配置表';
 
+-- ----------------------------------------------------------------------------
+-- 2. 信用债主体内评分档字典表
+-- ----------------------------------------------------------------------------
 CREATE TABLE `credit_bond_inner_rating_grade` (
     `id`          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `grade_code`  VARCHAR(32) DEFAULT NULL            COMMENT '主体内评分档编码，如：1、2+、2、2-、3+、3、3-、4',
@@ -51,6 +57,9 @@ CREATE TABLE `credit_bond_inner_rating_grade` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '信用债主体内评分档字典表';
 
+-- ----------------------------------------------------------------------------
+-- 3. 信用债期限主体内评分档投资池关系表
+-- ----------------------------------------------------------------------------
 CREATE TABLE `credit_bond_pool_grade_rule` (
     `id`                    BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `term_bucket_id`        BIGINT       DEFAULT NULL            COMMENT '期限分组 ID，关联 credit_bond_term_bucket.id',

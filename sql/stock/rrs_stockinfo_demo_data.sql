@@ -6,44 +6,28 @@
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
--- 本脚本只清空三张股票基础表；自选在调库 Demo 中按用户+代码幂等追加。
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
+-- 清空股票多人分管关联表
 TRUNCATE TABLE `rrs_stock_manager`;
+-- 清空股票研究评级历史表
 TRUNCATE TABLE `rrs_stock_rating`;
+-- 清空股票基础信息表
 TRUNCATE TABLE `rrs_stockinfo`;
 
-INSERT INTO `rrs_stockinfo`
-(
-    `id`
-    ,`stock_code`
-    ,`stock_name`
-    ,`stock_short_name`
-    ,`industry_code`
-    ,`industry_name`
-    ,`security_type`
-    ,`security_status`
-    ,`market_code`
-    ,`currency_code`
-    ,`list_date`
-    ,`delist_date`
-    ,`previous_close_price`
-    ,`high_price`
-    ,`low_price`
-    ,`average_price`
-    ,`turnover_rate`
-    ,`trade_volume`
-    ,`trade_market_value`
-    ,`total_shares`
-    ,`total_market_value`
-    ,`circulating_a_shares`
-    ,`a_share_market_value`
-    ,`data_date`
-    ,`source_system`
-    ,`memo`
-    ,`is_deleted`
-    ,`crte_time`
-    ,`updt_time`
-)
-VALUES
+-- ----------------------------------------------------------------------------
+-- 股票基础信息样例（14 条）
+-- 本脚本只清空三张股票基础表；自选在调库 Demo 中按用户+代码幂等追加。
+-- ----------------------------------------------------------------------------
+INSERT INTO `rrs_stockinfo` (
+    `id`, `stock_code`, `stock_name`, `stock_short_name`, `industry_code`, `industry_name`,
+    `security_type`, `security_status`, `market_code`, `currency_code`, `list_date`, `delist_date`,
+    `previous_close_price`, `high_price`, `low_price`, `average_price`, `turnover_rate`,
+    `trade_volume`, `trade_market_value`, `total_shares`, `total_market_value`,
+    `circulating_a_shares`, `a_share_market_value`, `data_date`, `source_system`, `memo`,
+    `is_deleted`, `crte_time`, `updt_time`
+) VALUES
 (1, 'STOCK001.SH', '晨曦林业股份有限公司', '晨曦林业', 'A02', '林业', 'a_share', 'L', 'SSE', 'CNY', '2020-01-01', NULL, 11, 12, 10, 11.25, 1.35, 15100, 2100, 101, 1300, 81, 1100, '2026-10-08', 'DEMO', '股票独立演示数据', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
 (2, 'STOCK002.SZ', '海蓝渔业股份有限公司', '海蓝渔业', 'A04', '渔业', 'a_share', 'L', 'SZSE', 'CNY', '2020-01-01', NULL, 12, 13, 11, 12.25, 1.45, 15200, 2200, 102, 1400, 82, 1200, '2026-10-08', 'DEMO', '股票独立演示数据', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
 (3, 'STOCK003.SH', '远景科技股份有限公司', '远景科技', 'I65', '软件和信息技术服务业', 'a_share', 'L', 'SSE', 'CNY', '2020-01-01', NULL, 13, 14, 12, 13.25, 1.55, 15300, 2300, 103, 1500, 83, 1300, '2026-10-08', 'DEMO', '股票独立演示数据', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
@@ -59,19 +43,13 @@ VALUES
 (13, 'STOCK013.SZ', '零成交工业股份有限公司', '零成交工业', 'C35', '专用设备制造业', 'a_share', 'L', 'SZSE', 'CNY', '2020-01-01', NULL, 23, 24, 22, 23.25, 0, 0, 0, 113, 2500, 93, 2300, '2026-10-08', 'DEMO', '股票独立演示数据', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
 (14, 'STOCK014.SH', '缺行情林业股份有限公司', '缺行情林业', 'A02', '林业', 'a_share', 'L', 'SSE', 'CNY', '2020-01-01', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-08', 'DEMO', '股票独立演示数据', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00');
 
-INSERT INTO `rrs_stock_rating`
-(
-    `id`
-    ,`stock_code`
-    ,`rating_code`
-    ,`rating_date`
-    ,`researcher_id`
-    ,`remark`
-    ,`is_deleted`
-    ,`crte_time`
-    ,`updt_time`
-)
-VALUES
+-- ----------------------------------------------------------------------------
+-- 股票研究评级历史样例（24 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rrs_stock_rating` (
+    `id`, `stock_code`, `rating_code`, `rating_date`, `researcher_id`, `remark`, `is_deleted`,
+    `crte_time`, `updt_time`
+) VALUES
 (1, 'STOCK001.SH', 'neutral', '2026-09-25 09:00:00', '2', '演示研究评级', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
 (2, 'STOCK001.SH', 'overweight', '2026-09-26 09:00:00', '2', '演示研究评级', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
 (3, 'STOCK001.SH', 'buy', '2026-09-27 09:00:00', '2', '演示研究评级', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
@@ -97,16 +75,12 @@ VALUES
 (23, 'STOCK013.SZ', 'neutral', '2026-09-25 09:00:00', '2', '演示研究评级', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
 (24, 'STOCK001.SH', 'sell', '2026-10-01 09:00:00', '5', '逻辑删除的评级不参与最新两次计算', 1, '2026-10-08 09:00:00', '2026-10-08 09:00:00');
 
-INSERT INTO `rrs_stock_manager`
-(
-    `id`
-    ,`stock_code`
-    ,`user_id`
-    ,`is_deleted`
-    ,`crte_time`
-    ,`updt_time`
-)
-VALUES
+-- ----------------------------------------------------------------------------
+-- 股票多人分管关联样例（16 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `rrs_stock_manager` (
+    `id`, `stock_code`, `user_id`, `is_deleted`, `crte_time`, `updt_time`
+) VALUES
 (1, 'STOCK001.SH', '2', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
 (2, 'STOCK002.SZ', '5', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),
 (3, 'STOCK003.SH', '2', 0, '2026-10-08 09:00:00', '2026-10-08 09:00:00'),

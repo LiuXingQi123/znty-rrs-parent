@@ -11,11 +11,17 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除主体评级结果表
 DROP TABLE IF EXISTS `t_inv_grade_result`;
+-- 删除担保人内评结果表
 DROP TABLE IF EXISTS `v_inv_grade_result`;
+-- 删除主体基础信息表
 DROP TABLE IF EXISTS `t_inv_company`;
+-- 删除用户角色关联表
 DROP TABLE IF EXISTS `t_sys_user_role`;
+-- 删除用户表
 DROP TABLE IF EXISTS `t_sys_user`;
+-- 删除角色/部门表
 DROP TABLE IF EXISTS `t_sys_role`;
 
 -- ----------------------------------------------------------------------------

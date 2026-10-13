@@ -22,11 +22,17 @@ CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE u
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
--- ============================================================================
--- 1. 调库证券信息快照表（证券池调库）
--- ============================================================================
+-- ----------------------------------------------------------------------------
+-- 删除旧表（若存在）
+-- ----------------------------------------------------------------------------
+-- 删除调库证券信息快照表
 DROP TABLE IF EXISTS `ip_adjust_security_snapshot`;
+-- 删除CRMW调库证券信息快照表
+DROP TABLE IF EXISTS `ip_adjust_security_snapshot_crmw`;
 
+-- ----------------------------------------------------------------------------
+-- 1. 调库证券信息快照表（证券池调库）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_adjust_security_snapshot`
 (
     -- ========== 快照关联（本表专有） ==========
@@ -101,11 +107,9 @@ CREATE TABLE `ip_adjust_security_snapshot`
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '调库证券信息快照表';
 
--- ============================================================================
+-- ----------------------------------------------------------------------------
 -- 2. CRMW 调库证券信息快照表（CRMW 池调库，与表 1 同构 + 凭证四元组）
--- ============================================================================
-DROP TABLE IF EXISTS `ip_adjust_security_snapshot_crmw`;
-
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_adjust_security_snapshot_crmw`
 (
     -- ========== 快照关联（本表专有） ==========
@@ -185,16 +189,3 @@ CREATE TABLE `ip_adjust_security_snapshot_crmw`
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = 'CRMW调库证券信息快照表';
-
--- 已建库升级时仅执行本节；不需要重建快照表，也不会修改已存文本内容。
-ALTER TABLE `ip_adjust_security_snapshot`
-    MODIFY COLUMN `prompt_reason` LONGTEXT DEFAULT NULL
-        COMMENT '观察事项',
-    MODIFY COLUMN `analysis` LONGTEXT DEFAULT NULL
-        COMMENT '证券分析，最大输入长度 5000 字';
-
-ALTER TABLE `ip_adjust_security_snapshot_crmw`
-    MODIFY COLUMN `prompt_reason` LONGTEXT DEFAULT NULL
-        COMMENT '观察事项',
-    MODIFY COLUMN `analysis` LONGTEXT DEFAULT NULL
-        COMMENT '证券分析，最大输入长度 5000 字';

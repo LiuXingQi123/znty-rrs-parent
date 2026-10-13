@@ -8,11 +8,20 @@ CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE u
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 删除旧表（若存在）
+-- ----------------------------------------------------------------------------
+-- 删除定时任务执行历史
 DROP TABLE IF EXISTS `sys_scheduled_task_run_log`;
+-- 删除定时任务配置（操作审计）
 DROP TABLE IF EXISTS `sys_scheduled_task_evt`;
+-- 删除定时任务配置
 DROP TABLE IF EXISTS `sys_scheduled_task`;
 
+-- ----------------------------------------------------------------------------
+-- 1. 定时任务配置
 -- 定时任务配置主表（每个 task_code 一条；只认库表，启动时不再按代码种子写库）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `sys_scheduled_task`
 (
     `id`                   BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
@@ -34,7 +43,10 @@ CREATE TABLE `sys_scheduled_task`
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='定时任务配置';
 
+-- ----------------------------------------------------------------------------
+-- 2. 定时任务配置（操作审计）
 -- 定时任务配置操作审计
+-- ----------------------------------------------------------------------------
 CREATE TABLE `sys_scheduled_task_evt`
 (
     `evt_id`               BIGINT       NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
@@ -60,7 +72,10 @@ CREATE TABLE `sys_scheduled_task_evt`
     PRIMARY KEY (`evt_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='定时任务配置（操作审计）';
 
+-- ----------------------------------------------------------------------------
+-- 3. 定时任务执行历史
 -- 定时任务执行历史（页面可视化）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `sys_scheduled_task_run_log`
 (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',

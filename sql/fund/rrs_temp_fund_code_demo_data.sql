@@ -8,6 +8,12 @@
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
+-- 清空基金临时代码表（操作审计）
 TRUNCATE TABLE `rrs_temp_fund_code_evt`;
+-- 清空临时基金代码替换日志
 TRUNCATE TABLE `rrs_temp_fund_code_update_log`;
+-- 清空基金临时代码表
 TRUNCATE TABLE `rrs_temp_fund_code`;

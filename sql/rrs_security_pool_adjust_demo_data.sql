@@ -11,16 +11,25 @@
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
+-- 清空证券池调库记录表
 TRUNCATE TABLE `ip_adjust_log`;
+-- 清空投资池当前状态表
 TRUNCATE TABLE `ip_pool_status`;
+-- 清空证券池调库-流程步骤记录表
 TRUNCATE TABLE `ip_adjust_step`;
 
+-- ----------------------------------------------------------------------------
+-- 投资池当前状态样例（17 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `ip_pool_status` (
     `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`,
     `adjust_batch_no`, `adjust_log_id`, `target_pool_id`, `target_pool_name`, `pool_type`,
-    `flow_id`, `flow_key`, `flow_type`,
-    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`,
-    `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`
+    `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`,
+    `adjust_reason`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`,
+    `updt_time`
 ) VALUES
 ('MTN001.IB', '24交投MTN', 'mtn', '手工调整', '调入', 'BOND20260301001', 1, 4, '三级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '20', '1', '管理员', '交投中票调入三级库', '2026-03-01 09:00:00', '2026-03-01 14:00:00', '2026-03-01 14:00:00', 0, NOW(), NOW()),
 ('XYB001.IB', '24交投信用', 'credit_bond', '手工调整', '调入', 'BOND20260302001', 2, 2, '一级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '20', '1', '管理员', '交投信用债调入一级库', '2026-03-02 09:00:00', '2026-03-02 14:00:00', '2026-03-02 14:00:00', 0, NOW(), NOW()),
@@ -40,14 +49,15 @@ INSERT INTO `ip_pool_status` (
 ('DBB002.IB', '24地产担保', 'company_bond', '自动调整', '调入', 'COMP20260312001', 19, 17, '黑名单质押库', 'blacklist', 113, 'company:forbidden-inbound', 'normalInbound', '20', '1', '管理员', '主体入池后同步旗下债券', '2026-03-12 09:00:00', '2026-03-12 14:00:00', '2026-03-12 14:00:00', 0, NOW(), NOW()),
 ('CP001.IB', '24地产CP', 'cp', '自动调整', '调入', 'COMP20260312001', 20, 17, '黑名单质押库', 'blacklist', 113, 'company:forbidden-inbound', 'normalInbound', '20', '1', '管理员', '主体入池后同步旗下债券', '2026-03-12 09:00:00', '2026-03-12 14:00:00', '2026-03-12 14:00:00', 0, NOW(), NOW());
 
+-- ----------------------------------------------------------------------------
+-- 证券池调库记录样例（20 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `ip_adjust_log` (
-    `id`, `security_code`, `security_short_name`, `security_type`,
-    `crmw_name`, `crmw_scode`, `crmw_mktcode`, `crmw_stype`,
-    `adjust_type`, `adjust_mode`,
-    `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`,
-    `flow_id`, `flow_key`, `flow_type`,
-    `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`,
-    `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`
+    `id`, `security_code`, `security_short_name`, `security_type`, `crmw_name`, `crmw_scode`,
+    `crmw_mktcode`, `crmw_stype`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`,
+    `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`,
+    `adjuster_id`, `adjuster_name`, `adjust_reason`, `submit_time`, `audit_time`, `entry_time`,
+    `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
 (1, 'MTN001.IB', '24交投MTN', 'mtn', NULL, NULL, NULL, NULL, '手工调整', '调入', 'BOND20260301001', 4, '三级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '20', '1', '管理员', '交投中票调入三级库', '2026-03-01 09:00:00', '2026-03-01 14:00:00', '2026-03-01 14:00:00', 0, NOW(), NOW()),
 (2, 'XYB001.IB', '24交投信用', 'credit_bond', NULL, NULL, NULL, NULL, '手工调整', '调入', 'BOND20260302001', 2, '一级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '20', '1', '管理员', '交投信用债调入一级库', '2026-03-02 09:00:00', '2026-03-02 14:00:00', '2026-03-02 14:00:00', 0, NOW(), NOW()),
@@ -70,10 +80,13 @@ INSERT INTO `ip_adjust_log` (
 (19, 'DBB002.IB', '24地产担保', 'company_bond', NULL, NULL, NULL, NULL, '自动调整', '调入', 'COMP20260312001', 17, '黑名单质押库', 'blacklist', 113, 'company:forbidden-inbound', 'normalInbound', '20', '1', '管理员', '主体入池后同步旗下债券', '2026-03-12 09:00:00', '2026-03-12 14:00:00', '2026-03-12 14:00:00', 0, NOW(), NOW()),
 (20, 'CP001.IB', '24地产CP', 'cp', NULL, NULL, NULL, NULL, '自动调整', '调入', 'COMP20260312001', 17, '黑名单质押库', 'blacklist', 113, 'company:forbidden-inbound', 'normalInbound', '20', '1', '管理员', '主体入池后同步旗下债券', '2026-03-12 09:00:00', '2026-03-12 14:00:00', '2026-03-12 14:00:00', 0, NOW(), NOW());
 
+-- ----------------------------------------------------------------------------
+-- 证券池调库-流程步骤记录样例（36 条）
+-- ----------------------------------------------------------------------------
 INSERT INTO `ip_adjust_step` (
     `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`,
-    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`,
-    `start_time`, `process_time`, `crte_time`, `updt_time`
+    `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `start_time`, `process_time`, `crte_time`, `updt_time`
 ) VALUES
 (1, 'BOND20260301001', 10101, 'n101', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', '2026-03-01 09:00:00', '2026-03-01 09:00:00', NOW(), NOW()),
 (1, 'BOND20260301001', 10102, 'n102', '研究员A发起', 'approval', 'initiator', 2, 'submit', '1', '管理员', 'submit', '2026-03-01 09:00:00', '2026-03-01 09:00:00', NOW(), NOW()),

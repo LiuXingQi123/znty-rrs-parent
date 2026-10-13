@@ -6,47 +6,31 @@
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 清空业务表
+-- ----------------------------------------------------------------------------
 -- 前置：公共池/流程/AIS用户已初始化，股票基础 Demo 已执行。
 -- 一般115/116、快速117/118；只审批通过的调入记录保留当前池状态。
 -- 仅移除股票日志附件关联，禁止清空公共报告库及其他资产自选记录。
+-- 清理系统附件关联表（按原有条件）
 DELETE FROM `sys_attachment` WHERE `table_name` = 'ip_adjust_log_stock';
+-- 清空股票调库审批步骤记录表
 TRUNCATE TABLE `ip_adjust_step_stock`;
+-- 清空股票当前池状态表
 TRUNCATE TABLE `ip_pool_status_stock`;
+-- 清空股票调库记录表
 TRUNCATE TABLE `ip_adjust_log_stock`;
 
-INSERT INTO `ip_adjust_log_stock`
-(
-    `id`
-    ,`stock_code`
-    ,`stock_name`
-    ,`stock_short_name`
-    ,`security_type`
-    ,`industry_code`
-    ,`industry_name`
-    ,`latest_rating`
-    ,`previous_rating`
-    ,`adjust_type`
-    ,`adjust_mode`
-    ,`adjust_batch_no`
-    ,`target_pool_id`
-    ,`target_pool_name`
-    ,`pool_type`
-    ,`flow_id`
-    ,`flow_key`
-    ,`flow_type`
-    ,`audit_status`
-    ,`adjuster_id`
-    ,`adjuster_name`
-    ,`adjust_reason`
-    ,`adjust_advice`
-    ,`submit_time`
-    ,`audit_time`
-    ,`entry_time`
-    ,`is_deleted`
-    ,`crte_time`
-    ,`updt_time`
-)
-VALUES
+-- ----------------------------------------------------------------------------
+-- 股票调库记录样例（23 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `ip_adjust_log_stock` (
+    `id`, `stock_code`, `stock_name`, `stock_short_name`, `security_type`, `industry_code`,
+    `industry_name`, `latest_rating`, `previous_rating`, `adjust_type`, `adjust_mode`,
+    `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`,
+    `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`,
+    `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`
+) VALUES
 (1, 'STOCK001.SH', '晨曦林业股份有限公司', '晨曦林业', 'a_share', 'A02', '林业', 'buy', 'overweight', '手工调整', '调入', 'STOCK_DEMO_001', 106, '基础库', 'stock', 115, 'stock:normal-inbound', 'normalInbound', '20', '2', '研究员1', '独立股票调库演示：20', '演示研究意见', '2026-10-01 10:00:00', '2026-10-01 10:00:00', '2026-10-01 10:00:00', 0, '2026-10-01 10:00:00', '2026-10-01 10:00:00'),
 (2, 'STOCK002.SZ', '海蓝渔业股份有限公司', '海蓝渔业', 'a_share', 'A04', '渔业', 'overweight', 'buy', '手工调整', '调入', 'STOCK_DEMO_002', 106, '基础库', 'stock', 117, 'stock:fast-inbound', 'fastInbound', '20', '5', '研究员4', '独立股票调库演示：20', '演示研究意见', '2026-10-01 11:00:00', '2026-10-01 11:00:00', '2026-10-01 11:00:00', 0, '2026-10-01 11:00:00', '2026-10-01 11:00:00'),
 (3, 'STOCK003.SH', '远景科技股份有限公司', '远景科技', 'a_share', 'I65', '软件和信息技术服务业', 'neutral', 'overweight', '手工调整', '调入', 'STOCK_DEMO_003', 107, '关注库', 'stock', 115, 'stock:normal-inbound', 'normalInbound', '20', '2', '研究员1', '独立股票调库演示：20', '演示研究意见', '2026-10-01 12:00:00', '2026-10-01 12:00:00', '2026-10-01 12:00:00', 0, '2026-10-01 12:00:00', '2026-10-01 12:00:00'),
@@ -71,28 +55,14 @@ VALUES
 (22, 'STOCK010.SH', '安宁能源股份有限公司', '安宁能源', 'a_share', 'D44', '电力、热力生产和供应业', 'buy', 'buy', '手工调整', '调出', 'STOCK_DEMO_022', 109, '核心库', 'stock', 116, 'stock:normal-outbound', 'normalOutbound', '21', '5', '研究员4', '独立股票调库演示：21', '演示研究意见', '2026-10-03 15:00:00', '2026-10-03 15:00:00', NULL, 0, '2026-10-03 15:00:00', '2026-10-03 15:00:00'),
 (23, 'STOCK009.HK', '海岳工业控股有限公司', '海岳工业', 'hk_share', 'C35', '专用设备制造业', 'neutral', 'buy', '手工调整', '调出', 'STOCK_DEMO_023', 121, '制造业', 'stock_product', 116, 'stock:normal-outbound', 'normalOutbound', '20', '2', '研究员1', '独立股票调库演示：20', '演示研究意见', '2026-10-03 16:00:00', '2026-10-03 16:00:00', NULL, 0, '2026-10-03 16:00:00', '2026-10-03 16:00:00');
 
-INSERT INTO `ip_adjust_step_stock`
-(
-    `id`
-    ,`adjust_log_id`
-    ,`adjust_batch_no`
-    ,`flow_node_id`
-    ,`node_code`
-    ,`node_label`
-    ,`node_type`
-    ,`approval_strategy`
-    ,`sort_order`
-    ,`step_status`
-    ,`handler_id`
-    ,`handler_name`
-    ,`process_action`
-    ,`process_comment`
-    ,`start_time`
-    ,`process_time`
-    ,`crte_time`
-    ,`updt_time`
-)
-VALUES
+-- ----------------------------------------------------------------------------
+-- 股票调库审批步骤记录样例（56 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `ip_adjust_step_stock` (
+    `id`, `adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`,
+    `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`,
+    `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`
+) VALUES
 (1, 1, 'STOCK_DEMO_001', 11502, 'n102', '研究员A发起', 'approval', 'initiator', 2, 'submit', '2', '研究员1', 'submit', '发起人提交', '2026-10-01 10:00:00', '2026-10-01 10:00:00', '2026-10-01 10:00:00', '2026-10-01 10:00:00'),
 (2, 1, 'STOCK_DEMO_001', 11503, 'n103', '研究员B复核', 'approval', 'preempt', 3, 'approve', '5', '研究员4', 'approve', '复核通过', '2026-10-01 10:00:00', '2026-10-01 10:00:00', '2026-10-01 10:00:00', '2026-10-01 10:00:00'),
 (3, 1, 'STOCK_DEMO_001', 11505, 'n105', '研究总监审批', 'approval', 'preempt', 5, 'approve', '17', '研究总监1', 'approve', '总监审批通过', '2026-10-01 10:00:00', '2026-10-01 10:00:00', '2026-10-01 10:00:00', '2026-10-01 10:00:00'),
@@ -150,40 +120,17 @@ VALUES
 (55, 23, 'STOCK_DEMO_023', 11605, 'n105', '研究总监审批', 'approval', 'preempt', 5, 'approve', '17', '研究总监1', 'approve', '总监审批通过', '2026-10-03 16:00:00', '2026-10-03 16:00:00', '2026-10-03 16:00:00', '2026-10-03 16:00:00'),
 (56, 23, 'STOCK_DEMO_023', 11606, 'n106', 'O32自动审批', 'approval', 'o32', 6, 'auto_process', NULL, NULL, 'auto_process', '自动审批完成', '2026-10-03 16:00:00', '2026-10-03 16:00:00', '2026-10-03 16:00:00', '2026-10-03 16:00:00');
 
-INSERT INTO `ip_pool_status_stock`
-(
-    `id`
-    ,`stock_code`
-    ,`stock_name`
-    ,`stock_short_name`
-    ,`security_type`
-    ,`industry_code`
-    ,`industry_name`
-    ,`latest_rating`
-    ,`previous_rating`
-    ,`adjust_type`
-    ,`adjust_mode`
-    ,`adjust_batch_no`
-    ,`adjust_log_id`
-    ,`target_pool_id`
-    ,`target_pool_name`
-    ,`pool_type`
-    ,`flow_id`
-    ,`flow_key`
-    ,`flow_type`
-    ,`audit_status`
-    ,`adjuster_id`
-    ,`adjuster_name`
-    ,`adjust_reason`
-    ,`adjust_advice`
-    ,`submit_time`
-    ,`audit_time`
-    ,`entry_time`
-    ,`is_deleted`
-    ,`crte_time`
-    ,`updt_time`
-)
-VALUES
+-- ----------------------------------------------------------------------------
+-- 股票当前池状态样例（12 条）
+-- ----------------------------------------------------------------------------
+INSERT INTO `ip_pool_status_stock` (
+    `id`, `stock_code`, `stock_name`, `stock_short_name`, `security_type`, `industry_code`,
+    `industry_name`, `latest_rating`, `previous_rating`, `adjust_type`, `adjust_mode`,
+    `adjust_batch_no`, `adjust_log_id`, `target_pool_id`, `target_pool_name`, `pool_type`,
+    `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`,
+    `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`,
+    `crte_time`, `updt_time`
+) VALUES
 (1, 'STOCK001.SH', '晨曦林业股份有限公司', '晨曦林业', 'a_share', 'A02', '林业', 'buy', 'overweight', '手工调整', '调入', 'STOCK_DEMO_001', 1, 106, '基础库', 'stock', 115, 'stock:normal-inbound', 'normalInbound', '20', '2', '研究员1', '独立股票调库演示：20', '演示研究意见', '2026-10-01 10:00:00', '2026-10-01 10:00:00', '2026-10-01 10:00:00', 0, '2026-10-01 10:00:00', '2026-10-01 10:00:00'),
 (2, 'STOCK002.SZ', '海蓝渔业股份有限公司', '海蓝渔业', 'a_share', 'A04', '渔业', 'overweight', 'buy', '手工调整', '调入', 'STOCK_DEMO_002', 2, 106, '基础库', 'stock', 117, 'stock:fast-inbound', 'fastInbound', '20', '5', '研究员4', '独立股票调库演示：20', '演示研究意见', '2026-10-01 11:00:00', '2026-10-01 11:00:00', '2026-10-01 11:00:00', 0, '2026-10-01 11:00:00', '2026-10-01 11:00:00'),
 (3, 'STOCK003.SH', '远景科技股份有限公司', '远景科技', 'a_share', 'I65', '软件和信息技术服务业', 'neutral', 'overweight', '手工调整', '调入', 'STOCK_DEMO_003', 3, 107, '关注库', 'stock', 115, 'stock:normal-inbound', 'normalInbound', '20', '2', '研究员1', '独立股票调库演示：20', '演示研究意见', '2026-10-01 12:00:00', '2026-10-01 12:00:00', '2026-10-01 12:00:00', 0, '2026-10-01 12:00:00', '2026-10-01 12:00:00'),
@@ -197,9 +144,14 @@ VALUES
 (11, 'STOCK013.SZ', '零成交工业股份有限公司', '零成交工业', 'a_share', 'C35', '专用设备制造业', 'neutral', NULL, '手工调整', '调入', 'STOCK_DEMO_013', 13, 106, '基础库', 'stock', 117, 'stock:fast-inbound', 'fastInbound', '20', '2', '研究员1', '独立股票调库演示：20', '演示研究意见', '2026-10-02 14:00:00', '2026-10-02 14:00:00', '2026-10-02 14:00:00', 0, '2026-10-02 14:00:00', '2026-10-02 14:00:00'),
 (12, 'STOCK014.SH', '缺行情林业股份有限公司', '缺行情林业', 'a_share', 'A02', '林业', NULL, NULL, '手工调整', '调入', 'STOCK_DEMO_014', 14, 107, '关注库', 'stock', 117, 'stock:fast-inbound', 'fastInbound', '20', '5', '研究员4', '独立股票调库演示：20', '演示研究意见', '2026-10-02 15:00:00', '2026-10-02 15:00:00', '2026-10-02 15:00:00', 0, '2026-10-02 15:00:00', '2026-10-02 15:00:00');
 
+-- ----------------------------------------------------------------------------
+-- 我的证券池样例
 -- 自选仅幂等追加当前股票，不清空或覆盖现有证券/基金收藏。
-INSERT INTO `my_security_pool`
-(`security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`, `update_time`)
+-- ----------------------------------------------------------------------------
+INSERT INTO `my_security_pool` (
+    `security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`,
+    `update_time`
+)
 SELECT 'STOCK001.SH', 'a_share', 'SSE', '2', 'use', '股票自选演示', NOW(), NOW()
 WHERE NOT EXISTS
 (
@@ -207,9 +159,14 @@ WHERE NOT EXISTS
     WHERE `security_code` = 'STOCK001.SH' AND `user_id` = '2' AND `status` = 'use'
 );
 
+-- ----------------------------------------------------------------------------
+-- 我的证券池样例
 -- 自选仅幂等追加当前股票，不清空或覆盖现有证券/基金收藏。
-INSERT INTO `my_security_pool`
-(`security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`, `update_time`)
+-- ----------------------------------------------------------------------------
+INSERT INTO `my_security_pool` (
+    `security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`,
+    `update_time`
+)
 SELECT 'STOCK003.SH', 'a_share', 'SSE', '2', 'use', '股票自选演示', NOW(), NOW()
 WHERE NOT EXISTS
 (
@@ -217,9 +174,14 @@ WHERE NOT EXISTS
     WHERE `security_code` = 'STOCK003.SH' AND `user_id` = '2' AND `status` = 'use'
 );
 
+-- ----------------------------------------------------------------------------
+-- 我的证券池样例
 -- 自选仅幂等追加当前股票，不清空或覆盖现有证券/基金收藏。
-INSERT INTO `my_security_pool`
-(`security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`, `update_time`)
+-- ----------------------------------------------------------------------------
+INSERT INTO `my_security_pool` (
+    `security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`,
+    `update_time`
+)
 SELECT 'STOCK005.HK', 'hk_share', 'HKEX', '2', 'use', '股票自选演示', NOW(), NOW()
 WHERE NOT EXISTS
 (
@@ -227,9 +189,14 @@ WHERE NOT EXISTS
     WHERE `security_code` = 'STOCK005.HK' AND `user_id` = '2' AND `status` = 'use'
 );
 
+-- ----------------------------------------------------------------------------
+-- 我的证券池样例
 -- 自选仅幂等追加当前股票，不清空或覆盖现有证券/基金收藏。
-INSERT INTO `my_security_pool`
-(`security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`, `update_time`)
+-- ----------------------------------------------------------------------------
+INSERT INTO `my_security_pool` (
+    `security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`,
+    `update_time`
+)
 SELECT 'STOCK002.SZ', 'a_share', 'SZSE', '5', 'use', '股票自选演示', NOW(), NOW()
 WHERE NOT EXISTS
 (
@@ -237,9 +204,14 @@ WHERE NOT EXISTS
     WHERE `security_code` = 'STOCK002.SZ' AND `user_id` = '5' AND `status` = 'use'
 );
 
+-- ----------------------------------------------------------------------------
+-- 我的证券池样例
 -- 自选仅幂等追加当前股票，不清空或覆盖现有证券/基金收藏。
-INSERT INTO `my_security_pool`
-(`security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`, `update_time`)
+-- ----------------------------------------------------------------------------
+INSERT INTO `my_security_pool` (
+    `security_code`, `security_type`, `market`, `user_id`, `status`, `remark`, `create_time`,
+    `update_time`
+)
 SELECT 'STOCK006.HK', 'hk_share', 'HKEX', '5', 'use', '股票自选演示', NOW(), NOW()
 WHERE NOT EXISTS
 (

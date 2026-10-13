@@ -8,9 +8,17 @@ CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE u
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 删除旧表（若存在）
+-- ----------------------------------------------------------------------------
+-- 删除临时代码表
 DROP TABLE IF EXISTS `rrs_temp_security_code`;
+-- 删除临时代码替换日志表
 DROP TABLE IF EXISTS `rrs_temp_security_code_update_log`;
 
+-- ----------------------------------------------------------------------------
+-- 1. 临时代码表
+-- ----------------------------------------------------------------------------
 CREATE TABLE `rrs_temp_security_code`
 (
     `id`                         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
@@ -37,6 +45,9 @@ CREATE TABLE `rrs_temp_security_code`
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='临时代码表';
 
+-- ----------------------------------------------------------------------------
+-- 2. 临时代码替换日志表
+-- ----------------------------------------------------------------------------
 CREATE TABLE `rrs_temp_security_code_update_log`
 (
     `id`                 BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',

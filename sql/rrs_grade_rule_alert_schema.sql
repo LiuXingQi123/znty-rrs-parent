@@ -8,9 +8,17 @@ CREATE DATABASE IF NOT EXISTS `znty_rrs` DEFAULT CHARACTER SET utf8mb4 COLLATE u
 USE `znty_rrs`;
 SET NAMES utf8mb4;
 
+-- ----------------------------------------------------------------------------
+-- 删除旧表（若存在）
+-- ----------------------------------------------------------------------------
+-- 删除不符合主体债入库规则提醒待办（操作审计）
 DROP TABLE IF EXISTS `ip_grade_rule_alert_evt`;
+-- 删除不符合主体债入库规则提醒待办
 DROP TABLE IF EXISTS `ip_grade_rule_alert`;
 
+-- ----------------------------------------------------------------------------
+-- 1. 不符合主体债入库规则提醒待办
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_grade_rule_alert` (
     `id`                   BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `security_code`        VARCHAR(64)   DEFAULT NULL            COMMENT '证券代码',
@@ -36,6 +44,9 @@ CREATE TABLE `ip_grade_rule_alert` (
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '不符合主体债入库规则提醒待办';
 
+-- ----------------------------------------------------------------------------
+-- 2. 不符合主体债入库规则提醒待办（操作审计）
+-- ----------------------------------------------------------------------------
 CREATE TABLE `ip_grade_rule_alert_evt` (
     `evt_id`               BIGINT        NOT NULL AUTO_INCREMENT COMMENT '事件主键 ID',
     `id`                   BIGINT        DEFAULT NULL            COMMENT '主键 ID',

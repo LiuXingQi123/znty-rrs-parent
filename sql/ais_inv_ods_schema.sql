@@ -11,12 +11,17 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除Wind 公司财务指标表
 DROP TABLE IF EXISTS `wind_companyfinancial`;
+-- 删除Wind 跨市场证券代码关联表
 DROP TABLE IF EXISTS `wind_windcustomcode`;
+-- 删除Wind 中国债券发行主体信用评级表
 DROP TABLE IF EXISTS `wind_cbondissuerrating`;
+-- 删除Wind 中国债券发行主体信息表（债券+主体粒度，同主体可多行；外部 ODS 表一般不自建二级索引）
 DROP TABLE IF EXISTS `wind_cbondissuer`;
 
 -- ----------------------------------------------------------------------------
+-- 1. Wind 中国债券发行主体信息表（债券+主体粒度，同主体可多行；外部 ODS 表一般不自建二级索引）
 -- 创建 Wind 债券发行人主体表
 -- 粒度说明：本表为「债券 + 主体」维度（s_info_windcode + s_info_compcode），
 -- 同一 s_info_compcode 可对应多只债券多行，业务按主体查询时必须对 s_info_compcode 去重。
@@ -52,6 +57,7 @@ CREATE TABLE `wind_cbondissuer` (
   COMMENT = 'Wind 中国债券发行主体信息表（债券+主体粒度，同主体可多行；外部 ODS 表一般不自建二级索引）';
 
 -- ----------------------------------------------------------------------------
+-- 2. Wind 中国债券发行主体信用评级表
 -- 创建 Wind 债券发行人评级表
 -- ----------------------------------------------------------------------------
 CREATE TABLE `wind_cbondissuerrating` (
@@ -77,6 +83,7 @@ CREATE TABLE `wind_cbondissuerrating` (
   COMMENT = 'Wind 中国债券发行主体信用评级表';
 
 -- ----------------------------------------------------------------------------
+-- 3. Wind 跨市场证券代码关联表
 -- 创建 Wind 跨市场证券代码关联表
 -- 外部源结构按截图保留 28 列的名称、类型与顺序，不追加业务主键或时间字段。
 -- S_INFO_WINDCODE 对齐 znty_rrs.rrs_securityinfo.wind_code；相同非空 ISIN 表示同券。
@@ -117,6 +124,7 @@ CREATE TABLE `wind_windcustomcode` (
   COMMENT = 'Wind 跨市场证券代码关联表';
 
 -- ----------------------------------------------------------------------------
+-- 4. Wind 公司财务指标表
 -- 创建 Wind 公司财务指标表
 -- 粒度说明：本表以公司编码与报告日期为联合主键；COMPANYCODE 对齐发行主体代码
 --           （与 wind_cbondissuer.s_info_compcode / Demo 主体 C10001～C10010 一致）；
