@@ -201,8 +201,15 @@ INSERT INTO `t_sys_role` (
 (7, '权益部',      1, NOW(), 'ROLE_EQUITY',         '权益部门',       NULL, NULL),
 (8, '行业研究组',  1, NOW(), 'ROLE_INDUSTRY',       '行业研究小组',   7,    NULL),
 (9, '量化部',      1, NOW(), 'ROLE_QUANT',          '量化部门',       NULL, NULL),
-(10, '风险管理部', 1, NOW(), 'ROLE_RISK',           '风险管理部门',   NULL, NULL);
+(10, '风险管理部', 1, NOW(), 'ROLE_RISK',           '风险管理部门',   NULL, NULL),
+(11, '研究总监', 1, NOW(), 'ROLE_RESEARCH_DIRECTOR', '研究总监', 1, NULL),
+(12, 'O32系统自动审批', 1, NOW(), 'ROLE_O32_SYSTEM', 'O32系统自动审批', NULL, NULL),
+(13, '投资决策委员会', 1, NOW(), 'ROLE_INVEST_COMMITTEE', '投资决策委员会', NULL, NULL),
+(14, '基金经理', 1, NOW(), 'ROLE_FUND_MANAGER', '基金经理', NULL, NULL),
+(15, '系统管理员', 1, NOW(), 'ROLE_SYSTEM_ADMIN', '系统管理，不参与业务审批', NULL, NULL);
 
+-- 管理员仅属于系统管理员；研究总监 1～3 同时承担 O32 临时代码人工审批。
+-- 信用研究、研究总监、O32、投委会、基金经理角色均至少关联 3 名有效人员。
 -- 用户
 INSERT INTO `t_sys_user` (
     `id`
@@ -234,7 +241,10 @@ INSERT INTO `t_sys_user` (
 (13,   13,   '权益3',   'quanyi3',          'equity3',              NOW(), 0, '123456', NULL, 'ORG_EQUITY',   NULL, NULL, 'quanyi3@example.com'),
 (14,   14,   '量化1',   'lianghua1',        'quant1',               NOW(), 0, '123456', NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua1@example.com'),
 (15,   15,   '量化2',   'lianghua2',        'quant2',               NOW(), 0, '123456', NULL, 'ORG_QUANT',    NULL, NULL, 'lianghua2@example.com'),
-(16,   16,   '风控经理', 'fengkongjingli',   'risk_manager',         NOW(), 0, '123456', NULL, 'ORG_RISK',     NULL, NULL, 'fengkongjingli@example.com');
+(16,   16,   '风控经理', 'fengkongjingli',   'risk_manager',         NOW(), 0, '123456', NULL, 'ORG_RISK',     NULL, NULL, 'fengkongjingli@example.com'),
+(17, 17, '研究总监1', 'yanjiuzongjian1', 'research_director1', NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'research_director1@example.com'),
+(18, 18, '研究总监2', 'yanjiuzongjian2', 'research_director2', NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'research_director2@example.com'),
+(19, 19, '研究总监3', 'yanjiuzongjian3', 'research_director3', NOW(), 0, NULL, NULL, 'ORG_RESEARCH', NULL, NULL, 'research_director3@example.com');
 
 INSERT INTO `t_sys_user_role` (
     `id`
@@ -262,4 +272,17 @@ INSERT INTO `t_sys_user_role` (
 (18, 8,  13, NOW()),
 (19, 9,  14, NOW()),
 (20, 9,  15, NOW()),
-(21, 10, 16, NOW());
+(21, 10, 16, NOW()),
+(22, 11, 17, NOW()),
+(23, 12, 17, NOW()),
+(24, 13, 7, NOW()),
+(25, 14, 7, NOW()),
+(26, 15, 1, NOW()),
+(27, 11, 18, NOW()),
+(28, 11, 19, NOW()),
+(29, 12, 18, NOW()),
+(30, 12, 19, NOW()),
+(31, 13, 11, NOW()),
+(32, 13, 16, NOW()),
+(33, 14, 8, NOW()),
+(34, 14, 9, NOW());
