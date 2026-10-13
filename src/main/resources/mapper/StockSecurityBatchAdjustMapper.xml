@@ -99,6 +99,7 @@
                ,si.issue_type
                ,si.inner_class
                ,si.inright_flag
+               ,si.std_credit_flag
                ,si.issuer
                ,si.rating_bond
                ,si.rating_bondissuer
@@ -195,6 +196,9 @@
             </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
                 AND COALESCE(si.inright_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('stdCredit')">
+                AND si.std_credit_flag = 1
             </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
                 AND COALESCE(si.yx_flag, 0) = 1

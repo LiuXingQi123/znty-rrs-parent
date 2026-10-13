@@ -51,4 +51,6 @@ public class SecurityPoolQueryExportDto {
     private String privateLabel;
     /** 是否含权 */
     private String inrightLabel;
+    /** 是否标准信用债 */
+    private String stdCreditLabel;
 }

@@ -22,7 +22,7 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private String issuer;
     /**
      * 是否特征多选（勾选即筛「是」，多选 AND）：
-     * guarant / inright / yx / private / abs / cj
+     * guarant / inright / yx / private / abs / cj / stdCredit（标准信用债）
      */
     private List<String> bondYesFlags;
     /** 调库方向：in=可调入库 / out=可调出库 */

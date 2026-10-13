@@ -32,7 +32,7 @@ public class SecurityPoolQueryReq extends PageRequest {
     private String issuer;
     /**
      * 是否特征多选（勾选即筛「是」，多选 AND）：
-     * guarant / inright / yx / private / abs / cj
+     * guarant / inright / yx / private / abs / cj / stdCredit（标准信用债）
      */
     private List<String> bondYesFlags;
     /** 我的证券 */

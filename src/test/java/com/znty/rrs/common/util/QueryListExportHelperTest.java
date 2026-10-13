@@ -9,6 +9,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class QueryListExportHelperTest {
 
+    /** 数值标志统一先转布尔值，再转换为是否文字。 */
+    @Test
+    public void yesNoShouldConvertFlagsThroughBooleanValues() {
+        assertThat(QueryListExportHelper.yesNo(QueryListExportHelper.isOne(1))).isEqualTo("是");
+        assertThat(QueryListExportHelper.yesNo(QueryListExportHelper.isOne(0))).isEqualTo("否");
+        assertThat(QueryListExportHelper.yesNo(QueryListExportHelper.isOne(null))).isEqualTo("否");
+    }
+
     /** 审核状态码转中文。 */
     @Test
     public void auditStatusLabelShouldMapKnownCodes() {

@@ -9,6 +9,9 @@
 
 证券主档仅保留当前 `wind_code`，独立外部 `sec_id` 位于主档末尾。市场经统一服务读取 Wind `S_INFO_EXCHMARKET`（IB→CIBM），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind 非空 ISIN 关联同券代码；空 ISIN 不关联，同市场多个代码完整展示。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
 
+
+“是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。
+
 ---
 
 ## 1. 页面概览
@@ -46,11 +49,11 @@
 
 ### 2.2 可绑定证券列表（`searchForm`）
 
-字段：`securityCode`/`securityShortName`/`issuer`，以及是否特征多选 `bondYesFlags`（顺序与证券池调整一致：ABS / 担保 / 永续 / 次级 / 私募 / 含权；勾选即筛「是」，多选 AND）。
+字段：`securityCode`/`securityShortName`/`issuer`，以及是否特征多选 `bondYesFlags`（顺序与证券池调整一致：ABS / 担保 / 永续 / 次级 / 私募 / 含权 / 标准信用债；勾选即筛「是」，多选 AND）。
 
 - 接口：`POST /api/v1/crmwPoolAdjust/queryBindableSecurityPage`，返回 `PageResult<SecurityInfoDto>`。
 - SQL（`queryBindableSecurityPage`）：`INNER JOIN dict_security_type dst ... AND dst.category_type='bond'` 限定债券大类，再通过 `WHERE si.security_type != 'crmw'` 排除 CRMW 凭证；未维护有效债券类型字典的证券不会进入候选。`bondYesFlags` 条件口径同 [04]（`abs` 为 `absFlag=1` 或类型 `abs`，`private` 为发行方式/内部分类含「私募」）。
-- 表格在操作列前展示是否 ABS/担保/永续/次级/私募/含权（是/否 Tag）。
+- 表格在操作列前展示是否 ABS/担保/永续/次级/私募/含权/标准信用债（是/否 Tag）。
 - 分页：`pagination: {pageIndex:1, pageSize:5, total:0}`，`page-sizes=[5,10,20,50,100]`。
 
 ### 2.3 CRMW 凭证选择（`handleCrmwSelect`）

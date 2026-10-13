@@ -4,6 +4,9 @@
 > 后端前缀：`/api/v1/securityPoolQuery`、`/api/v1/common`
 > 角色定位：投资和风控人员按投资池、证券类型及状态查询当前有效证券池，并维护个人关注的「我的证券池」收藏。
 
+
+“是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。证券池查询和证券池调整历史的 Excel 导出同步追加该列，是否类值统一先转布尔值再显示“是/否”。
+
 ---
 
 ## 1. 页面概览与初始化
@@ -36,7 +39,7 @@ this.loadList();                  // 列表数据
 | `entryTimeRange` | `null` | 日期范围 | 入池时间 |
 | `adjusterName` | `''` | 文本输入 | 调整人 |
 | `issuer` | `''` | 文本输入 | 发行主体名称 |
-| `bondYesFlags` | `[]` | 是否特征多选 | 可选 ABS/担保/永续/次级/私募/含权；勾选即筛「是」，多选 AND |
+| `bondYesFlags` | `[]` | 是否特征多选 | 可选 ABS/担保/永续/次级/私募/含权/标准信用债；勾选即筛「是」，多选 AND |
 | `mySecurities` | `false` | 复选框 | 仅看我的证券，change 即触发查询 |
 | `currentUserId` | `'1'` | — | TODO：对接实际登录用户 |
 
@@ -104,7 +107,7 @@ this.loadList();                  // 列表数据
 | 起息日 | `carryDate` | 居中 |
 | 到期日 | `maturityDate` | 居中 |
 | 证券期限 | `dateExistsStr` | 库字段 `date_exists_str`（展示串）；列表只读展示，空则空。原 `dateExists`/`date_exists`（天）仍保留供业务校验，列表不再展示 |
-| 是否ABS/担保/永续/次级/私募/含权 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
+| 是否ABS/担保/永续/次级/私募/含权/标准信用债 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
 | 证券状态 | `securityStatus` | `active`→绿色「存续」；`matured`→琥珀「到期」；其他空 |
 | 退市日期 | `delistDate` | 居中 |
 | 行权日期（回售） | `repurchaseDate` | 居中 |
@@ -192,7 +195,7 @@ this.loadList();                  // 列表数据
   - `securityType` → `=`
   - `entryTimeStart`/`entryTimeEnd` → `>=` / `<=`
   - `issuer` → `bi.issuer LIKE`
-  - `bondYesFlags` → 对 `guarant_flag/inright_flag/yx_flag/cj_flag`、私募文案、ABS 标志逐项追加条件，多选 AND
+  - `bondYesFlags` → 对 `guarant_flag/inright_flag/yx_flag/cj_flag/std_credit_flag`、私募文案、ABS 标志逐项追加条件，多选 AND
   - `mySecurities==true` → `mbp.id IS NOT NULL`
 - **SELECT 计算列**：证券状态 `CASE WHEN maturity_date IS NULL OR '' THEN NULL WHEN >= DATE_FORMAT(CURDATE(), '%Y%m%d') THEN 'active' ELSE 'matured' END AS securityStatus`；`mySecurityPoolId` 直接取 `mbp.id`
 - **排序**：`entry_time DESC, id DESC`

@@ -20,7 +20,7 @@ public class CrmwPoolAdjustReq extends PageRequest {
     private String issuer;
     /**
      * 是否特征多选（勾选即筛「是」，多选 AND；可绑定证券列表使用）：
-     * abs / guarant / yx / cj / private / inright
+     * abs / guarant / yx / cj / private / inright / stdCredit（标准信用债）
      */
     private List<String> bondYesFlags;
     /** CRMW 凭证代码 */

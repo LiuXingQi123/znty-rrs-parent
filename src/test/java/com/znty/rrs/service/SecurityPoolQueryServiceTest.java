@@ -38,9 +38,13 @@ public class SecurityPoolQueryServiceTest {
         row.setSecurityShortName("测试债券"); row.setSecurityCode("100001"); row.setTargetPoolId(2L);
         row.setDateExists(new BigDecimal("9999")); row.setDateExistsStr("1年");
         row.setSecurityStatus("active"); row.setAbsFlag(1);
+        row.setStdCreditFlag(1);
+        SecurityPoolQueryDto nonStandard = new SecurityPoolQueryDto();
+        nonStandard.setStdCreditFlag(0);
+        SecurityPoolQueryDto undetermined = new SecurityPoolQueryDto();
         row.setEntryTime(new Date());
         when(queryMapper.querySecurityPoolPage(org.mockito.ArgumentMatchers.any(SecurityPoolQueryReq.class)))
-                .thenReturn(Arrays.asList(row));
+                .thenReturn(Arrays.asList(row, nonStandard, undetermined));
         when(investmentPoolService.queryPoolFullNameMap()).thenReturn(Collections.singletonMap(2L, "一级池/二级池"));
 
         CommonFileDto file = service.exportSecurityPoolExcel(new SecurityPoolQueryReq());
@@ -59,13 +63,18 @@ public class SecurityPoolQueryServiceTest {
             assertThat(workbook.getSheetAt(0).getRow(0).getCell(0).getCellStyle().getBorderBottom()).isEqualTo(BorderStyle.NONE);
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(0).getCellStyle().getBorderBottom()).isEqualTo(BorderStyle.NONE);
             assertThat(workbook.getSheetAt(0).isDisplayGridlines()).isTrue();
-            assertThat(workbook.getSheetAt(0).getSheetConditionalFormatting().getNumConditionalFormattings()).isEqualTo(6);
+            assertThat(workbook.getSheetAt(0).getSheetConditionalFormatting().getNumConditionalFormattings()).isEqualTo(7);
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(0).getStringCellValue()).isEqualTo("测试债券");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(4).getStringCellValue()).isEqualTo("一级池/二级池");
             assertThat(workbook.getSheetAt(0).getRow(0).getCell(12).getStringCellValue()).isEqualTo("证券期限");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(12).getStringCellValue()).isEqualTo("1年");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(13).getStringCellValue()).isEqualTo("存续");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(16).getStringCellValue()).isEqualTo("是");
+            assertThat(workbook.getSheetAt(0).getRow(0).getCell(22).getStringCellValue()).isEqualTo("是否标准信用债");
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(22).getStringCellValue()).isEqualTo("是");
+            assertThat(workbook.getSheetAt(0).getRow(2).getCell(22).getStringCellValue()).isEqualTo("否");
+            assertThat(workbook.getSheetAt(0).getRow(3).getCell(22).getStringCellValue()).isEqualTo("否");
+            assertThat(workbook.getSheetAt(0).getColumnWidth(22)).isEqualTo(18 * 256);
         }
     }
 }

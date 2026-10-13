@@ -42,6 +42,8 @@ public class StockSecurityBatchCandidateDto {
 
     /** 是否含权：1=是 / 0=否 */
     private Integer inrightFlag;
+    /** 是否标准信用债：1=是 / 0=否 / null=未判定 */
+    private Integer stdCreditFlag;
 
     /**
      * 市场编码列表：

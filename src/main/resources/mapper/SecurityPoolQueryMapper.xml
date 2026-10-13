@@ -32,6 +32,7 @@
                ,bi.issue_type
                ,bi.inner_class
                ,bi.inright_flag
+               ,bi.std_credit_flag
                ,CASE
                     WHEN bi.maturity_date IS NULL OR bi.maturity_date = '' THEN NULL
                     WHEN bi.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d') THEN 'active'
@@ -95,6 +96,9 @@
             </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
                 AND COALESCE(bi.inright_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('stdCredit')">
+                AND bi.std_credit_flag = 1
             </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
                 AND COALESCE(bi.yx_flag, 0) = 1

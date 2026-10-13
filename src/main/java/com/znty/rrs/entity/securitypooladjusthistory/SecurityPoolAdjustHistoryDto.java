@@ -52,6 +52,8 @@ public class SecurityPoolAdjustHistoryDto {
 
     /** 是否含权：1=是 / 0=否 */
     private Integer inrightFlag;
+    /** 是否标准信用债：1=是 / 0=否 / null=未判定 */
+    private Integer stdCreditFlag;
 
     /** 调整类型（手工调整/联动调整/...） */
     private String adjustType;

@@ -4,6 +4,9 @@
 > 后端前缀：`/api/v1/securityPoolAdjustHistory`、`/api/v1/common`
 > 角色定位：风控、合规和审计人员查询证券调入、调出及审批结果，按时间和业务维度追溯历史操作。
 
+
+“是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。证券池查询和证券池调整历史的 Excel 导出同步追加该列，是否类值统一先转布尔值再显示“是/否”。
+
 ---
 
 ## 1. 页面概览与初始化
@@ -23,7 +26,7 @@
 | `securityType` | `''` | 下拉 | 动态加载 |
 | `adjustTimeRange` | `null` | 日期范围 | 调整时间（提交时间） |
 | `adjusterName` / `issuer` | `''` | 文本输入 | |
-| `bondYesFlags` | `[]` | 是否特征多选 | 可选 ABS/担保/永续/次级/私募/含权；勾选即筛「是」，多选 AND |
+| `bondYesFlags` | `[]` | 是否特征多选 | 可选 ABS/担保/永续/次级/私募/含权/标准信用债；勾选即筛「是」，多选 AND |
 | `adjustMode` | `''` | 下拉 | 调入/调出 |
 | `auditStatus` | `''` | 下拉 | 8 种审核状态 |
 | `myBonds` | `false` | 复选框 | 我的调整，change 即查询 |
@@ -75,7 +78,7 @@
 | 证券代码 | `securityCode` | `desc-link` 点击跳转 |
 | 证券类型 | `securityTypeName` | `el-tag type="info"`，空则空 |
 | 发行主体名称 | `issuer` | tooltip |
-| 是否ABS/担保/永续/次级/私募/含权 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
+| 是否ABS/担保/永续/次级/私募/含权/标准信用债 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
 | 调整类型 | `adjustType` | 直接显示（手工调整/联动调整/互斥调整/关联调整/Excel导入/Excel清空/手动批量调整） |
 | 调整方向 | `adjustMode` | `调入`→绿色 `el-tag--success`；`调出`→红色 `el-tag--danger`；其他空 |
 | 调整原因 | `adjustReason` | tooltip |

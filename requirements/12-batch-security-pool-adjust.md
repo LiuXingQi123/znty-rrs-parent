@@ -4,6 +4,9 @@
 > 后端前缀：`/api/v1/batchSecurityPoolAdjust`
 > 角色定位：业务人员选定一个目标投资池与方向后，批量勾选多只证券一次性发起调入/调出申请。
 
+
+“是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。
+
 ---
 
 ## 0. 重要现状说明（两个页面的关系）
@@ -44,7 +47,7 @@
 | 文本输入 | `securityCode` | 证券代码 |
 | 文本输入 | `securityShortName` | 证券简称 |
 | 多选 | `marketCodes` | 市场（SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他） |
-| 多选 | `bondYesFlags` | 是否特征：ABS/担保/永续/次级/私募/含权；勾选即筛「是」，多选 AND |
+| 多选 | `bondYesFlags` | 是否特征：ABS/担保/永续/次级/私募/含权/标准信用债；勾选即筛「是」，多选 AND |
 
 查询接口：`POST /api/v1/batchSecurityPoolAdjust/querySecurityPage`（`loadSecurityList`），请求体：
 ```json
@@ -52,7 +55,7 @@
   "securityCode": null, "securityShortName": null, "marketCodes": null, "bondYesFlags": null,
   "pageIndex": 1, "pageSize": 20 }
 ```
-返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（含证券基础信息及 ABS/担保/永续/次级/私募/含权原始字段；`dateExists` 为剩余期限天数，`dateExistsStr` 为直接展示并供年口径判断解析的证券期限文本）。候选表按证券池调整页样式展示六个「是/否」Tag。
+返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（含证券基础信息及 ABS/担保/永续/次级/私募/含权/标准信用债原始字段；`dateExists` 为剩余期限天数，`dateExistsStr` 为直接展示并供年口径判断解析的证券期限文本）。候选表按证券池调整页样式展示六个「是/否」Tag。
 候选证券固定排除 `security_type IN ('crmw','company')` 的 CRMW 凭证和公司主体，避免混入证券池批量调整。
 
 > 选择页 `batch_security_pool_adjust_select.html` 的筛选条件与查询接口一致（路径同为 `querySecurityPage`），区别仅在独立屏布局与 mock 报告数据。

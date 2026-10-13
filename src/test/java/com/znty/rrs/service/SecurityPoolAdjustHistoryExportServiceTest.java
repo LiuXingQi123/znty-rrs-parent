@@ -47,8 +47,12 @@ public class SecurityPoolAdjustHistoryExportServiceTest {
         row.setAuditStatus("20");
         row.setAbsFlag(1);
         row.setGuarantFlag(0);
+        row.setStdCreditFlag(1);
+        SecurityPoolAdjustHistoryDto nonStandard = new SecurityPoolAdjustHistoryDto();
+        nonStandard.setStdCreditFlag(0);
+        SecurityPoolAdjustHistoryDto undetermined = new SecurityPoolAdjustHistoryDto();
         when(mapper.querySecurityPoolAdjustHistoryPage(any(SecurityPoolAdjustHistoryReq.class)))
-                .thenReturn(Arrays.asList(row));
+                .thenReturn(Arrays.asList(row, nonStandard, undetermined));
         when(investmentPoolService.queryPoolFullNameMap())
                 .thenReturn(Collections.singletonMap(2L, "一级池/二级池"));
 
@@ -57,11 +61,15 @@ public class SecurityPoolAdjustHistoryExportServiceTest {
         try (XSSFWorkbook workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(Base64.getDecoder().decode(file.getContentBase64())))) {
             assertThat(workbook.getSheetAt(0).getRow(0).getCell(0).getStringCellValue()).isEqualTo("调整人");
-            // 是否ABS~是否含权：6 组条件格式（与证券池查询模板一致）
+            // 是否ABS~是否标准信用债：7 组条件格式（与证券池查询模板一致）
             assertThat(workbook.getSheetAt(0).getSheetConditionalFormatting().getNumConditionalFormattings())
-                    .isEqualTo(6);
+                    .isEqualTo(7);
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(11).getStringCellValue()).isEqualTo("是");
             assertThat(workbook.getSheetAt(0).getRow(1).getCell(12).getStringCellValue()).isEqualTo("否");
+            assertThat(workbook.getSheetAt(0).getRow(0).getCell(17).getStringCellValue()).isEqualTo("是否标准信用债");
+            assertThat(workbook.getSheetAt(0).getRow(1).getCell(17).getStringCellValue()).isEqualTo("是");
+            assertThat(workbook.getSheetAt(0).getRow(2).getCell(17).getStringCellValue()).isEqualTo("否");
+            assertThat(workbook.getSheetAt(0).getRow(3).getCell(17).getStringCellValue()).isEqualTo("否");
         }
     }
 }

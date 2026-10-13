@@ -97,6 +97,7 @@ public class SecurityPoolAdjustHistoryService {
                     QueryListExportHelper.containsPrivate(source.getIssueType())
                             || QueryListExportHelper.containsPrivate(source.getInnerClass())));
             target.setInrightLabel(QueryListExportHelper.yesNo(QueryListExportHelper.isOne(source.getInrightFlag())));
+            target.setStdCreditLabel(QueryListExportHelper.yesNo(QueryListExportHelper.isOne(source.getStdCreditFlag())));
             result.add(target);
         }
         return result;

@@ -20,6 +20,7 @@
                ,sb.issue_type
                ,sb.inner_class
                ,sb.inright_flag
+               ,sb.std_credit_flag
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
@@ -79,6 +80,9 @@
             </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
                 AND COALESCE(sb.inright_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('stdCredit')">
+                AND sb.std_credit_flag = 1
             </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
                 AND COALESCE(sb.yx_flag, 0) = 1

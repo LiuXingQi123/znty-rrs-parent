@@ -11,6 +11,9 @@
 | **证券类型** | `security_type` | 候选证券/主体/凭证列表 | 主列表与批量候选：`NOT IN ('crmw','company')`，**不用** `pool_type` |
 | **投资池类型** | `pool_type` | 可选投资池、链路隔离、禁止/观察/信用债规则 | 选池：入/出均排除 `crmw`；禁投/观察不排；硬逻辑仍认 forbidden/observe/credit_bond |
 
+
+“是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。
+
 ---
 
 ## 1. 页面概览
@@ -38,16 +41,17 @@
 | 文本输入 | `securityShortName` | 证券简称，回车查询 |
 | 下拉 | `securityType` | 证券类型，精确匹配；选项来自 `querySecurityTypeList` |
 | 文本输入 | `issuer` | 发行人，回车查询 |
+| 多选 | `bondYesFlags` | 是否特征，含标准信用债；勾选即筛「是」，多选 AND |
 
 - **查询** `handleSearch()`：重置 `pageIndex=1` 后调 `loadList()`。
-- **重置** `handleReset()`：清空四字段、`pageIndex=1`、`loadList()`。
+- **重置** `handleReset()`：清空四个文本/类型字段及特征多选、`pageIndex=1`、`loadList()`。
 - **初始化**（`created`）：`loadSecurityTypeOptions()` + `applyUrlSecurityOrList()`（有 `securityCode` 进详情，否则 `loadList()`）。
 
 ### 2.2 loadList → 接口
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
 - 请求体：`{ securityCode, securityShortName, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`/`stdCredit`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.2.1 证券类型下拉 `querySecurityTypeList`
@@ -81,6 +85,7 @@
 | 是否私募 | `issueType` / `innerClass` | 前端对齐 `CreditBondSpecialInboundRule.isPrivateBond`：发行方式或内部分类含「私募」为是 |
 | 是否ABS | `absFlag` / `securityType` | 前端对齐 `isAbs`：`absFlag=1` 或证券类型为 `abs` 为是（`abs_all` 资产证券化不算） |
 | 是否次级 | `cjFlag` | 前端判定：`===1` 为是；`el-tag` 展示「是/否」 |
+| 是否标准信用债 | `stdCreditFlag` | 1=是，其他值（含 NULL）为否；是/否 Tag |
 | 操作 | — | 「调库」按钮 → `handleAdjust(row)` |
 
 > 是否类字段由前端统一判定并展示「是/否」Tag（是=`success`，否=`info`），后端仍返回原始 flag / 文案，不做中文映射。仅主列表展示，详情页「证券基本信息」不增加这些字段。
@@ -489,7 +494,7 @@ Demo 共 51 条主档，49 条正式证券均有 Wind 映射，两个临时代�
 | `std_clause_flag` | `stdClauseFlag` | 标准条款判定：1=条款合格 / 0=条款不合格 / NULL=未判定 |
 | `std_credit_flag` | `stdCreditFlag` | 标准信用债标识：1=标准信用债 / 0=非标准信用债 / NULL=未判定 |
 
-独立方法 `isStandardCreditBond` 仅以 `std_credit_flag=1` 认定标准信用债，`0` 与 `NULL` 不认定，原值保持不变；标准信用债的完整业务定义由上游维护。`std_clause_flag` 和其他特殊标志不参与该方法。两字段不新增页面展示。
+独立方法 `isStandardCreditBond` 仅以 `std_credit_flag=1` 认定标准信用债，`0` 与 `NULL` 不认定，原值保持不变；标准信用债的完整业务定义由上游维护。`std_clause_flag` 和其他特殊标志不参与该方法。标准条款字段不新增页面展示；标准信用债字段在列表展示，并支持“是否特征”筛选。
 
 Demo 在原始 `INSERT` 中为全部 51 条证券显式填写标识，设置以下演示场景（不是系统按类型自动判定的规则，也不按评级高低判定）：
 

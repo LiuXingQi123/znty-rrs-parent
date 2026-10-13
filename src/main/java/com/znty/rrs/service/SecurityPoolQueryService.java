@@ -124,6 +124,7 @@ public class SecurityPoolQueryService {
             target.setCjLabel(yesNo(isOne(source.getCjFlag())));
             target.setPrivateLabel(yesNo(containsPrivate(source.getIssueType()) || containsPrivate(source.getInnerClass())));
             target.setInrightLabel(yesNo(isOne(source.getInrightFlag())));
+            target.setStdCreditLabel(yesNo(isOne(source.getStdCreditFlag())));
             result.add(target);
         }
         return result;

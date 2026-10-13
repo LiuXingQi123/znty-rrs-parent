@@ -70,6 +70,7 @@
                ,si.issue_type
                ,si.inner_class
                ,si.inright_flag
+               ,si.std_credit_flag
                ,ips.crmw_name
                ,ips.crmw_scode
                ,ips.crmw_stype
@@ -139,6 +140,9 @@
             <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
                 AND COALESCE(si.inright_flag, 0) = 1
             </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('stdCredit')">
+                AND si.std_credit_flag = 1
+            </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
                 AND COALESCE(si.yx_flag, 0) = 1
             </if>
@@ -168,6 +172,7 @@
                ,bond.issue_type
                ,bond.inner_class
                ,bond.inright_flag
+               ,bond.std_credit_flag
                ,crmw.short_name AS crmwName
                ,crmw.wind_code AS crmwScode
                ,'crmw' AS crmwStype
@@ -247,6 +252,9 @@
             </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('inright')">
                 AND COALESCE(bond.inright_flag, 0) = 1
+            </if>
+            <if test="bondYesFlags != null and bondYesFlags.contains('stdCredit')">
+                AND bond.std_credit_flag = 1
             </if>
             <if test="bondYesFlags != null and bondYesFlags.contains('yx')">
                 AND COALESCE(bond.yx_flag, 0) = 1

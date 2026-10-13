@@ -68,6 +68,8 @@ public class SecurityPoolQueryDto {
     private String innerClass;
     /** 是否含权：1=是 / 0=否 */
     private Integer inrightFlag;
+    /** 是否标准信用债：1=是 / 0=否 / null=未判定 */
+    private Integer stdCreditFlag;
     /** 证券状态：active=存续 / matured=到期 */
     private String securityStatus;
     /** 退市日期 */
