@@ -553,11 +553,11 @@ public class SecurityPoolAdjustService {
      *
      * <p>正式证券无内评去掉分级库；临时代码默认档 4。期限为空默认最长档继续走矩阵，不跳过。
      * 可转债 / 可交换债 / CRMW 去掉信用债 1～5。
-     * ABS：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级。
+     * ABS：所选权益人内评（自选权益人优先）1 档只能调入一级库，缺少内评或非 1 档至少下调一级。
      * 私募：发债主体内评 1 档只能调入一级库，其余至少下调一级。
      * 永续：发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级。
      * 次级：发债主体内评 1 档只能调入一级库，2+/2/2- 下调一级（只留那一档），其余至少下调一级。
-     * 私募/永续/次级「1 档」只看发债主体内评；ABS「1 档」只看担保人内评。担保债（覆盖永续等），或证券/主体已在观察池：不得高于矩阵最好档，从该档开到五级。普通债只保留矩阵单元格。
+     * 私募/永续/次级「1 档」只看发债主体内评；ABS「1 档」只看所选权益人内评（自选权益人优先，复用 innerGuarantorRating）。担保债（覆盖永续等），或证券/主体已在观察池：不得高于矩阵最好档，从该档开到五级。普通债只保留矩阵单元格。
      * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只留五级。含权只改期限。releaseRules 跳过矩阵。
      *
      * @param pools 待过滤的投资池列表
@@ -629,7 +629,7 @@ public class SecurityPoolAdjustService {
             // 从矩阵允许池算出标准最好档
             bestAllowedSort = resolveBestAllowedSort(allowedPoolIds, poolMap);
         }
-        // ABS 按担保人内评选口径；私募/永续/次级按发债主体内评；担保债或已在观察池从最好档开到五级；普通债只留矩阵点名的池
+        // ABS 按所选权益人内评（自选权益人优先）选口径；私募/永续/次级按发债主体内评；担保债或已在观察池从最好档开到五级；普通债只留矩阵点名的池
         boolean inObserve = securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
                 || securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode());
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
@@ -1785,7 +1785,7 @@ public class SecurityPoolAdjustService {
         }
         // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
         SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo());
-        // 担保人名称、代码和内评均使用提交阶段校验后的所选担保人，避免快照保留主档旧值
+        // 名称、代码和内评使用提交阶段校验后的评级主体：非 ABS 为担保人，ABS 为权益人或优先使用的自选权益人
         mergedSecurityInfo.setGuarantor(shared.securityInfo.getGuarantor());
         mergedSecurityInfo.setGuarantorId(shared.securityInfo.getGuarantorId());
         mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
@@ -3251,7 +3251,7 @@ public class SecurityPoolAdjustService {
      *
      * <p>调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表。
      * 担保债取主体与担保人内评孰高后再查矩阵；
-     * ABS：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级；
+     * ABS：所选权益人内评（自选权益人优先，复用 innerGuarantorRating）1 档只能调入一级库，缺少内评或非 1 档至少下调一级；
      * 私募发债主体内评 1 档只能调入一级库，其余至少下调一级；
      * 永续发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级；
      * 次级发债主体内评 1 档只能调入一级库，2+/2/2- 下调一级（只留那一档），其余至少下调一级。

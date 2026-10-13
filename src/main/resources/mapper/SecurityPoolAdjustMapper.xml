@@ -968,7 +968,9 @@
           )
     </select>
 
-    <!-- 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天；按曾入过判定，出库软删后仍计，不限制 is_deleted=0） -->
+    <!-- 旧口径：查询指定天数内同主体、同目标池的非简易入库记录，已出池软删历史仍计。
+         当前证券池简易匹配不调用此查询，改用 queryIssuerHasNonSimpleCreditBondInboundWithinDays，
+         按同发行人信用债大库任意层级的非简易入库经历判断，不限定历史目标层级。 -->
     <select id="queryIssuerHasNonSimpleInboundWithinDays" resultType="boolean">
         SELECT COUNT(1) > 0
         FROM ip_pool_status ips

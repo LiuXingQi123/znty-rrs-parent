@@ -195,7 +195,11 @@ public interface SecurityPoolAdjustMapper {
     boolean queryIssuerHasRecentCreditReportWithinDays(@Param("securityCode") String securityCode,
                                                       @Param("days") int days);
 
-    /** 查询指定天数内同主体+目标池有非简易入库记录（简易流程前提条件，新需求180天） */
+    /**
+     * 旧口径：查询指定天数内同主体、同目标池的非简易入库记录。
+     * 当前证券池简易匹配不调用此方法，改用
+     * {@link #queryIssuerHasNonSimpleCreditBondInboundWithinDays(String, int)}，不限定历史目标层级。
+     */
     boolean queryIssuerHasNonSimpleInboundWithinDays(@Param("securityCode") String securityCode,
                                                       @Param("targetPoolId") Long targetPoolId,
                                                       @Param("days") int days);

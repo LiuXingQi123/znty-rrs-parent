@@ -11,13 +11,14 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
  * ABS（{@code absFlag=1} 或证券类型 {@code abs}）不看标签，始终走特殊债；{@code abs_all} 不算 ABS。</p>
  *
  * <p>特殊债口径（私募/永续/次级的「1 档」只看<strong>发债主体内评</strong> {@code innerIssuerRating}；
- * ABS 的「1 档」只看<strong>页面所选担保人内评</strong> {@code innerGuarantorRating}，无担保人则不是 1 档）：
+ * ABS 的「1 档」只看<strong>传入的评级主体内评</strong> {@code innerGuarantorRating}，缺少内评则不是 1 档；
+ * 证券池调库中该字段复用为所选权益人内评，自选权益人优先）：
  * <ul>
  *   <li>只能调入一级库：仅一级。</li>
  *   <li>下调一级：矩阵最好档再降一档，且只留那一档（最好已是五级则仍是五级）。</li>
  *   <li>至少下调一级：从「矩阵最好档再降一档」起一直开到五级（最好 1 则 2～5）。</li>
  * </ul>
- * ABS：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级。
+ * ABS：传入的评级主体内评 1 档只能调入一级库，缺少内评或非 1 档至少下调一级。
  * 私募：发债主体内评 1 档只能调入一级库，其余至少下调一级。
  * 永续：发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级。
  * 次级：发债主体内评 1 档只能调入一级库；2+/2/2- 下调一级（只留那一档）；其余至少下调一级。</p>
@@ -280,7 +281,7 @@ public final class CreditBondSpecialInboundRule {
 
     /**
      * 解析准入方式。顺序：特殊债（ABS 或私募/次级/永续）→ 担保债或已在观察池 → 普通债只认矩阵点名的池。
-     * 私募/永续/次级「1 档 / 2+/2/2-」只看发债主体内评；ABS「1 档」只看担保人内评（无担保人则不是 1 档）。
+     * 私募/永续/次级「1 档 / 2+/2/2-」只看发债主体内评；ABS「1 档」只看传入的 innerGuarantorRating（证券池调库为权益人内评，自选优先；缺少内评则不是 1 档）。
      * 重点观察名单不在这里，见 {@link #checkRestricted}。
      *
      * @param sec       证券主数据
@@ -290,7 +291,7 @@ public final class CreditBondSpecialInboundRule {
     public static GradedInboundMode resolveGradedInboundMode(SecurityInfoBo sec, boolean inObserve) {
         boolean issuerOne = isIssuerGradeOne(sec);
         if (isAbs(sec)) {
-            // ABS：1 档看页面所选担保人内评；无担保人或非 1 档走至少下调一级
+            // ABS：1 档看传入的评级主体内评；缺少内评或非 1 档走至少下调一级
             return isGuarantorGradeOne(sec) ? GradedInboundMode.LEVEL_ONE_ONLY : GradedInboundMode.DOWNGRADE_CEILING;
         }
         String memo = resolveExclusiveMemo(sec);
@@ -411,10 +412,11 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 页面所选担保人内评是否为 1 档。只看 {@code innerGuarantorRating}；无担保人返回 false。
+     * ABS 评级主体内评是否为 1 档。只看复用字段 {@code innerGuarantorRating}，缺少内评返回 false。
+     * 证券池调库传入所选权益人或优先使用的自选权益人内评，不检查担保人是否存在。
      *
      * @param sec 证券主数据
-     * @return true=担保人内评 1 档
+     * @return true=传入的 ABS 评级主体内评为 1 档
      */
     private static boolean isGuarantorGradeOne(SecurityInfoBo sec) {
         return sec != null && isGradeOne(sec.getInnerGuarantorRating());
