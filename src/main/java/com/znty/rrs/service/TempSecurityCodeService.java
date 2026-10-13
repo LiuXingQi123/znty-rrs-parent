@@ -35,6 +35,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TempSecurityCodeService {
 
+    /** 临时证券 ID 前缀 */
+    private static final String TEMP_SEC_ID_PREFIX = "TEMP_";
+
     /** 统一证券市场查询组件。 */
     @Resource
     private SecurityMarketService securityMarketService;
@@ -103,6 +106,7 @@ public class TempSecurityCodeService {
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setTempSecurityName(req.getTempSecurityName());
         bo.setTempSecurityCode(req.getTempSecurityCode());
+        bo.setSecId(TEMP_SEC_ID_PREFIX + req.getTempSecurityCode());
         bo.setTempSecurityMarket(req.getTempSecurityMarket());
         bo.setTempSecurityType(req.getTempSecurityType());
         bo.setTempMitigationCode(req.getTempMitigationCode());
@@ -424,6 +428,7 @@ public class TempSecurityCodeService {
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setSecurityName(sourceBo.getTempSecurityName());
         bo.setSecurityCode(sourceBo.getTempSecurityCode());
+        bo.setSecId(sourceBo.getSecId());
         bo.setSecurityMarket(sourceBo.getTempSecurityMarket());
         bo.setSecurityType(sourceBo.getTempSecurityType());
         bo.setTempCompanyCode(sourceBo.getTempCompanyCode());

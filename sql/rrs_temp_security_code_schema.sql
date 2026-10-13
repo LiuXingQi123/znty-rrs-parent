@@ -1,6 +1,6 @@
 -- ============================================================
 -- znty-rrs 临时代码管理表 - 建表脚本
--- MySQL version: 8.0.28
+-- MySQL version: 8.0.33
 -- 说明：维护临时证券代码、正式证券代码更新及取消发行状态
 -- ============================================================
 
@@ -22,6 +22,7 @@ DROP TABLE IF EXISTS `rrs_temp_security_code_update_log`;
 CREATE TABLE `rrs_temp_security_code`
 (
     `id`                         BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `sec_id`                     VARCHAR(100) DEFAULT NULL            COMMENT '证券 ID',
     `temp_security_name`         VARCHAR(200) DEFAULT NULL            COMMENT '临时证券名称',
     `temp_security_code`         VARCHAR(100) DEFAULT NULL            COMMENT '临时证券代码',
     `temp_security_market`       VARCHAR(32)  DEFAULT NULL            COMMENT '临时证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他',

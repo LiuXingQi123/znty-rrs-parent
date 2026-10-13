@@ -273,6 +273,7 @@
     <insert id="addSecurityInfo">
         INSERT INTO rrs_securityinfo (
             wind_code
+            ,sec_id
             ,full_name
             ,short_name
             ,security_type
@@ -286,6 +287,7 @@
             ,ts
         ) VALUES (
             #{securityCode}
+            ,#{secId}
             ,#{securityName}
             ,#{securityName}
             ,#{securityType}
@@ -336,6 +338,7 @@
     <insert id="addTempSecurityCode" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO rrs_temp_security_code (
             temp_security_name
+            ,sec_id
             ,temp_security_code
             ,temp_security_market
             ,temp_security_type
@@ -352,6 +355,7 @@
             ,updt_time
         ) VALUES (
             #{tempSecurityName}
+            ,#{secId}
             ,#{tempSecurityCode}
             ,#{tempSecurityMarket}
             ,#{tempSecurityType}

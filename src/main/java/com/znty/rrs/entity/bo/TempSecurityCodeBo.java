@@ -11,6 +11,8 @@ public class TempSecurityCodeBo {
 
     /** 主键 ID */
     private Long id;
+    /** 证券 ID，新增时生成后保持固定 */
+    private String secId;
     /** 临时证券名称 */
     private String tempSecurityName;
     /** 临时证券代码 */

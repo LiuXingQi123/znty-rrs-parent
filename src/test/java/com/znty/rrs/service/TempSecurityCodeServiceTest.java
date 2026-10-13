@@ -53,6 +53,10 @@ public class TempSecurityCodeServiceTest {
         ArgumentCaptor<TempSecurityCodeBo> captor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
         verify(mapper).addSecurityInfo(captor.capture());
         assertThat(captor.getValue().getSecurityCode()).isEqualTo("TMP001");
+        assertThat(captor.getValue().getSecId()).isEqualTo("TEMP_TMP001");
+        ArgumentCaptor<TempSecurityCodeBo> tempCaptor = ArgumentCaptor.forClass(TempSecurityCodeBo.class);
+        verify(mapper).addTempSecurityCode(tempCaptor.capture());
+        assertThat(tempCaptor.getValue().getSecId()).isEqualTo(captor.getValue().getSecId());
         assertThat(captor.getValue().getSecurityName()).isEqualTo("某基建集团临时中票");
         assertThat(captor.getValue().getSecurityMarket()).isEqualTo(MarketCode.CIBM.getCode());
         assertThat(captor.getValue().getTempCompanyCode()).isEqualTo("C10001");
