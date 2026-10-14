@@ -149,3 +149,12 @@ ABS 同主体证券统一按 `rrs_securityinfo.issuer_code` 关联，涵盖主�
 - [ ] ABS 独立调入17须主体命中三条件之一，独立调出17须三个条件全部不满足
 - [ ] 非直通可在我的事宜进入证券池审核页  
 - [ ] ApiTest 通过  
+
+
+## 证券主档差异提示
+
+ABS 申请视图 `absDetail` 的基本信息区复用 `js/security_master_diff.js` 与 `css/security_master_diff.css`，独立调用 `POST /api/v1/securityPoolAdjust/querySecurityMasterDetail`（`{ securityCode }` → `SecurityInfoDetailDto`）只读查询当前证券主档。仅用于显示差异，不调用证券池调库业务入口，不改变 ABS 原有详情取数、编辑权限、校验、提交及审批。ABS 申请目前直接读取主档，编辑后的页面值也参与对比；其历史详情及审核复用证券池页面，已接入相同提示。
+
+与主档不同的字段标签以橙色突出，悬停或键盘聚焦显示页面值、主档值和本次读取时间；空值显示“（空）”，日期格式与数字小数位差异按相同内容处理，零值与空值不同。权益人内评分按现有控件 `selectedGuarantorRating` 比较；普通/自选权益人名称与市场关联代码不参与比较。提示不覆盖表单，不进入提交参数，不改变规则依据。
+
+只在 ABS 视图请求主档，主体详情及列表不请求；换券、返回列表、切回主体和销毁时取消旧结果。读取失败显示“主档对比数据暂不可用”，原操作继续。主档值为本次读取结果，不保证上游实时同步。公共开关 `window.RrsSecurityMasterDiff.enabled` 的定义设为 `false` 并刷新页面，可统一关闭所有接入页面的请求与提示；打印/PDF 保持原有外观。

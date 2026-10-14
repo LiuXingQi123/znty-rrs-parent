@@ -77,6 +77,12 @@ public class SecurityPoolAdjustController {
         return ApiResponse.success(securityPoolAdjustService.querySecurityDetail(req));
     }
 
+    /** 查询当前证券主档，仅供页面差异提示，不合并调库快照。 */
+    @PostMapping("/querySecurityMasterDetail")
+    public ApiResponse<SecurityInfoDetailDto> querySecurityMasterDetail(@RequestBody SecurityPoolAdjustReq req) {
+        return ApiResponse.success(securityPoolAdjustService.querySecurityMasterDetail(req));
+    }
+
     /** 查询发行主体默认四期财务指标，缺失报告期保留空值 */
     @PostMapping("/queryIssuerFinancialList")
     public ApiResponse<List<IssuerFinancialDto>> queryIssuerFinancialList(@RequestBody SecurityPoolAdjustReq req) {

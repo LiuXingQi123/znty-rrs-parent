@@ -225,3 +225,14 @@
 - Service：`SecurityPoolAdjustService.java`（查询/校验/提交/`createInitialSteps`）、`SecurityPoolAdjustFlowService.java`（修改节点重新提交/`resolveProcessingNodeAuditStatus`/`applyAttachmentChangesForModifySubmit`）
 - Mapper：`SecurityPoolAdjustMapper.xml`
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（调库运行态表）
+
+
+## 证券主档差异提示
+
+证券池调库申请、详情、审核保留既有取数、快照、编辑权限、选池、校验与提交行为，仅附加当前主档对比。独立调用 `POST /api/v1/securityPoolAdjust/querySecurityMasterDetail`，入参 `{ securityCode }`，返回 `SecurityInfoDetailDto`，直接读取 `rrs_securityinfo` 及证券类型字典，不合并快照、不写数据库。
+
+主档维护且基本信息区展示的字段与页面当前值不同时，标签以橙色轻度突出，悬停或键盘聚焦显示页面值、主档值和本次数据读取时间；空值提示“（空）”。数字 `1`/`1.00`、日期 `yyyyMMdd`/`yyyy-MM-dd` 按同值处理，零值与空值不同。普通编辑实时更新标记，不额外请求主档。市场关联代码、ABS 普通/自选权益人名称不参与比较；调库页担保人和内评分按现有控件实际显示值比较。
+
+读取失败或主档缺失时显示“主档对比数据暂不可用”，不影响原操作，不将其视为无差异。换券、同券重新加载、返回列表及销毁时，旧对比响应不得回写。主档值为本次查询结果，不代表上游已实时同步；提示不改变规则实际使用的数据。
+
+公共实现为 `js/security_master_diff.js` 与 `css/security_master_diff.css`。将 `window.RrsSecurityMasterDiff.enabled` 的定义设为 `false` 并刷新页面，可统一停止所有接入页面的额外请求、样式和提示。打印及导出 PDF 保持原有外观。

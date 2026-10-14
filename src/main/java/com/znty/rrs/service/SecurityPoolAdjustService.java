@@ -252,6 +252,18 @@ public class SecurityPoolAdjustService {
         return dto;
     }
 
+    /** 查询当前证券主档，独立于历史快照和调库规则，仅供只读对比。 */
+    public SecurityInfoDetailDto querySecurityMasterDetail(SecurityPoolAdjustReq req) {
+        if (req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
+            throw new BizException("证券代码不能为空");
+        }
+        SecurityInfoDetailDto master = securityPoolAdjustMapper.querySecurityDetail(req.getSecurityCode().trim());
+        if (master == null) {
+            throw new BizException(404, "证券主档不存在：" + req.getSecurityCode());
+        }
+        return master;
+    }
+
     /**
      * 查询默认四期财务指标，固定年报缺失时保留空白列。
      *
