@@ -47,7 +47,7 @@ public class SecuritySnapshotMarketIntegrationTest {
         }
         jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(32), security_type_name VARCHAR(100), category_type VARCHAR(32), is_deleted INT)");
         jdbc.execute("INSERT INTO dict_security_type VALUES ('mtn', '中期票据', 'bond', 0)");
-        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(100), security_source VARCHAR(32), exchmarket VARCHAR(10))");
+        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(100), security_source VARCHAR(32), market VARCHAR(10))");
         jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('A.IB', 'official', 'IB'), ('B.SH', 'official', 'SSE'), ('C.SZ', 'official', 'SZSE')");
         jdbc.execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(32))");
         jdbc.execute("CREATE SCHEMA ais_inv_ods");

@@ -12,7 +12,7 @@
 --      普通信用债、公司债、中票、短融、担保债=1/1；私募债和定向工具=1/0
 --      永续、次级、含权及 XYB004 条款不合格样本=0/0；ABS、CRMW、存单、国债、Govt债、可转债=NULL/0
 --      XYB005 未判定信用债、Corp债及临时代码=NULL/NULL；不按评级高低判定是否标准
---   exchmarket 与 Wind EXCHMARKET 原值一致；临时代码不写该列，使用登记市场。
+--   market 与 Wind EXCHMARKET 原值一致；临时代码不写该列，使用登记市场。
 --   6. 跨市场补充：XYB001/XYB002/XYB003 各 3 个市场代码（IB/SH/SZ），新增 6 行；
 --      同券识别由 Wind S_INFO_ISINCODE 负责，同组主档共用 issuer_code、证券条款
 -- ============================================================
@@ -41,7 +41,7 @@ INSERT INTO `rrs_securityinfo` (
     `corporate_bond_flag`, `payadvanced_flag`, `chooseright_flag`, `inright_flag`, `incbonds_flag`,
     `inner_class`, `cj_flag`, `yx_flag`, `dy_flag`, `abs_flag`, `rating_bond_agency`,
     `rating_bondissuer_agency`, `security_source`, `create_time`, `ts`, `std_clause_flag`,
-    `std_credit_flag`, `sec_id`, `exchmarket`
+    `std_credit_flag`, `sec_id`, `market`
 ) VALUES
 ('108008901.IB', '24某资ABS01', '24资ABS01', 'abs', 1, 365.0000, 365.0000, '1年', NULL, NULL, NULL, '20290318', '20290318', 'L', 'AMC', '资产管理', 'AAA', 'AAA', '稳定', '1', NULL, 0, NULL, NULL, NULL, '某资产管理公司', 'C10008', '20240318', '20240315', '20240318', '20290318', '3.5', '1.0', '固定利率', '年付', 1, 'CNY', 10, 100, 0, '固息', '资产支持证券', '资产管理公司', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 0, 'ABS', 0, 0, 0, 1, '中诚信', '中诚信', 'official', NOW(), NOW(), NULL, 0, 'SEC_DEMO_0001', 'IB'),
 ('108008902.IB', '24某资ABS02', '24资ABS02', 'abs', 2, 730.0000, 730.0000, '2年', NULL, NULL, NULL, '20290318', '20290318', 'L', 'AMC', '资产管理', 'AAA', 'AAA', '稳定', '1', NULL, 0, NULL, NULL, NULL, '某资产管理公司', 'C10008', '20240318', '20240315', '20240318', '20290318', '3.5', '1.0', '固定利率', '年付', 1, 'CNY', 10, 100, 0, '固息', '资产支持证券', '资产管理公司', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 0, 'ABS', 0, 0, 0, 1, '中诚信', '中诚信', 'official', NOW(), NOW(), NULL, 0, 'SEC_DEMO_0002', 'IB'),

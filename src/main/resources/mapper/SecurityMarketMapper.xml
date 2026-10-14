@@ -5,7 +5,7 @@
     <select id="queryMarketMappingList" resultType="com.znty.rrs.entity.common.SecurityMarketMappingDto">
         SELECT requested.wind_code
                ,CASE WHEN si.security_source = 'temporary' THEN t.temp_security_market
-                     ELSE si.exchmarket END AS rawMarketCode
+                     ELSE si.market END AS rawMarketCode
                ,si.security_source
         FROM (
             <foreach collection="windCodes" item="code" separator=" UNION ALL ">

@@ -263,7 +263,7 @@
 
 1. 扩展参数仅 `poolIds`：默认 `[15,17]`，每个 ID 既是主体所在池也是债写入池（无 mappings）。
 2. 主体 `category_type=company` 且 `audit_status=20` 在池 → 旗下 `bond` 大类未退市（`security_status!='D'`）、未到期（`maturity_date` 为空或 **≥ 今天**）、未在本池 → 自动入。
-3. 市场：池 `market_codes` 为空/`[]` 不限制；否则仅按当前 Wind 代码的唯一市场匹配（主档 exchmarket 与 Wind EXCHMARKET 一致，IB→CIBM，临时代码取登记市场），不通过同券其他市场放宽限制。
+3. 市场：池 `market_codes` 为空/`[]` 不限制；否则仅按当前 Wind 代码的唯一市场匹配（主档 market 与 Wind EXCHMARKET 一致，IB→CIBM，临时代码取登记市场），不通过同券其他市场放宽限制。
 4. **不**排除临时代码已更新，范围含普通债、ABS、CRMW；扫描17时再次校验主体三条件，均不满足则不补债。
 5. 调入限制池（关系 11）阻断。  
 6. 入池成功后，合并目标池的 `in_mutex` 与反向指向目标池的 `in_restrict`，仅从债券当前实际所在池自动调出；同一池去重并生成 `adjust_type='互斥调整'`、`adjust_mode='调出'` 的同批日志。
@@ -334,4 +334,4 @@
 5. 候选包含债券、发行主体、债券所在池，写入任务过程日志。
 6. 当前 `ScheduledReminderDeliveryService` 明确返回 `delivered=false`，不执行外部发送；后续通知实现可直接消费已经组装的 `ScheduledReminderMessageDto.items`。
 
-恒生导出共用统一市场查询，正式证券直接读取主档 `exchmarket`（与 Wind `EXCHMARKET` 一致，IB→CIBM），临时代码读取登记市场；按实际状态/日志代码批量查询所属市场，不按同 ISIN 扩行；映射缺失、重复或不支持时报告具体代码。保留现有表头、恒生编码、去市场后缀和时间窗口规则。
+恒生导出共用统一市场查询，正式证券直接读取主档 `market`（与 Wind `EXCHMARKET` 一致，IB→CIBM），临时代码读取登记市场；按实际状态/日志代码批量查询所属市场，不按同 ISIN 扩行；映射缺失、重复或不支持时报告具体代码。保留现有表头、恒生编码、去市场后缀和时间窗口规则。

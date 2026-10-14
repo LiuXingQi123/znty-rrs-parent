@@ -148,8 +148,8 @@
                                     OR si.security_source != 'temporary'
                                 )
                                 AND CASE
-                                    WHEN TRIM(si.exchmarket) = 'IB' THEN 'CIBM'
-                                    ELSE TRIM(si.exchmarket)
+                                    WHEN TRIM(si.market) = 'IB' THEN 'CIBM'
+                                    ELSE TRIM(si.market)
                                 END = #{marketCode}
                             )
                         )

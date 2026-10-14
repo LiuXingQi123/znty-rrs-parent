@@ -180,5 +180,5 @@ public class SecurityInfoBo {
     /** 外部独立证券 ID。 */
     private String secId;
     /** 交易市场代码，与 Wind EXCHMARKET 一致。 */
-    private String exchmarket;
+    private String market;
 }

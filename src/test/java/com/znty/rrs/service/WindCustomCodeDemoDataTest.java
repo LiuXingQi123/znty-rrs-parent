@@ -73,9 +73,9 @@ public class WindCustomCodeDemoDataTest {
         assertThat(master).doesNotContain("wind_code_sh", "wind_code_sz", "wind_code_nib", "wind_code_nbc", "wind_code_bj",
                 "sec_id_sh", "sec_id_sz", "sec_id_nib", "sec_id_nbc", "sec_id_bj");
         assertThat(master.substring(master.indexOf("`sec_id`"))).contains("varchar(100)", "DEFAULT NULL", "证券 ID");
-        assertThat(master.indexOf("`exchmarket`")).isGreaterThan(master.indexOf("`sec_id`"));
-        assertThat(master.substring(master.indexOf("`exchmarket`"))).contains("varchar(10)", "DEFAULT NULL", "交易市场代码");
-        assertThat(master.substring(master.indexOf("`exchmarket`") + 12, master.indexOf("PRIMARY KEY"))).doesNotContain("`");
+        assertThat(master.indexOf("`market`")).isGreaterThan(master.indexOf("`sec_id`"));
+        assertThat(master.substring(master.indexOf("`market`"))).contains("varchar(10)", "DEFAULT NULL", "交易市场代码");
+        assertThat(master.substring(master.indexOf("`market`") + "`market`".length(), master.indexOf("PRIMARY KEY"))).doesNotContain("`");
         String snapshots = readSql("rrs_adjust_snapshot_schema.sql");
         assertThat(snapshots).doesNotContain("wind_code_sh", "wind_code_sz", "wind_code_nib", "wind_code_nbc", "wind_code_bj");
     }
@@ -122,8 +122,8 @@ public class WindCustomCodeDemoDataTest {
                         + " LEFT JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = w.S_INFO_WINDCODE"
                         + " WHERE s.wind_code IS NULL"
                         + " OR s.issuer_code <> w.S_INFO_COMPCODE OR s.short_name <> w.S_INFO_NAME"
-                        + " OR s.crncy_code <> w.CRNCY_CODE OR s.exchmarket IS NULL"
-                        + " OR s.exchmarket <> w.EXCHMARKET", Integer.class)).isZero();
+                        + " OR s.crncy_code <> w.CRNCY_CODE OR s.market IS NULL"
+                        + " OR s.market <> w.EXCHMARKET", Integer.class)).isZero();
                 assertThat(jdbc.queryForList("SELECT S_INFO_ISINCODE FROM ais_inv_ods.wind_windcustomcode"
                         + " WHERE S_INFO_ISINCODE IS NOT NULL GROUP BY S_INFO_ISINCODE"
                         + " HAVING COUNT(*) = 3 AND COUNT(DISTINCT EXCHMARKET) = 3", String.class))
@@ -131,7 +131,7 @@ public class WindCustomCodeDemoDataTest {
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE sec_id IS NULL", Integer.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(51);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary'", Integer.class)).isEqualTo(2);
-                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND exchmarket IS NOT NULL", Integer.class)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND market IS NOT NULL", Integer.class)).isZero();
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
                         + " LEFT JOIN ais_inv_ods.wind_cbondissuer i ON i.s_info_windcode = w.S_INFO_WINDCODE"
                         + " AND i.s_info_compcode = w.S_INFO_COMPCODE WHERE i.object_id IS NULL", Integer.class)).isZero();
@@ -176,7 +176,7 @@ public class WindCustomCodeDemoDataTest {
                 assertThat(service.queryRelatedMarketCodes("TMP003.IB")).isEmpty();
                 assertThat(service.queryRelatedMarketCodes("CB001.SH")).isEmpty();
                 connection.createStatement().execute("INSERT INTO ais_inv_ods.wind_windcustomcode (OBJECT_ID, S_INFO_WINDCODE, S_INFO_EXCHMARKET, S_INFO_ISINCODE) VALUES ('EMPTY1', 'EMPTY1.SH', 'SSE', ''), ('EMPTY2', 'EMPTY2.SH', 'SSE', ''), ('BLANK1', 'BLANK1.SH', 'SSE', '   '), ('BLANK2', 'BLANK2.SH', 'SSE', '   ')");
-                connection.createStatement().execute("INSERT INTO rrs_securityinfo (wind_code, security_source, exchmarket) VALUES ('EMPTY1.SH', 'official', 'SSE'), ('EMPTY2.SH', 'official', 'SSE'), ('BLANK1.SH', 'official', 'SSE'), ('BLANK2.SH', 'official', 'SSE')");
+                connection.createStatement().execute("INSERT INTO rrs_securityinfo (wind_code, security_source, market) VALUES ('EMPTY1.SH', 'official', 'SSE'), ('EMPTY2.SH', 'official', 'SSE'), ('BLANK1.SH', 'official', 'SSE'), ('BLANK2.SH', 'official', 'SSE')");
                 for (String code : Arrays.asList("EMPTY1.SH", "EMPTY2.SH", "BLANK1.SH", "BLANK2.SH")) {
                     assertThat(service.queryRelatedMarketCodes(code)).isEmpty();
                 }
@@ -216,7 +216,7 @@ public class WindCustomCodeDemoDataTest {
                 crmwFilter.setMarketCodes(Arrays.asList("CIBM"));
                 assertThat(crmwMapper.queryOutboundCandidatePage(crmwFilter)).hasSize(1);
                 // 本地字段缺失时必须报错，不回退查询 Wind 或推断代码后缀
-                connection.createStatement().execute("UPDATE rrs_securityinfo SET exchmarket = NULL WHERE wind_code = '198101.SH'");
+                connection.createStatement().execute("UPDATE rrs_securityinfo SET market = NULL WHERE wind_code = '198101.SH'");
                 session.clearCache();
                 assertThatThrownBy(() -> service.queryMarketCode("198101.SH")).hasMessageContaining("缺少").hasMessageContaining("198101.SH");
             }

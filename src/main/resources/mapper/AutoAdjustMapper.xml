@@ -217,8 +217,8 @@
                           p.market_codes
                           ,JSON_QUOTE(
                               CASE
-                                  WHEN TRIM(bond.exchmarket) = 'IB' THEN 'CIBM'
-                                  ELSE TRIM(bond.exchmarket)
+                                  WHEN TRIM(bond.market) = 'IB' THEN 'CIBM'
+                                  ELSE TRIM(bond.market)
                               END
                           )
                       )
