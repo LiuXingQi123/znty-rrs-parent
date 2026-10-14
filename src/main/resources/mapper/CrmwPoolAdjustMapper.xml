@@ -195,7 +195,7 @@
                  ,ips.pool_type
     </select>
 
-    <!-- CRMW 调库记录列表：固定按标的证券和凭证组合键查询全部历史；批次仅用于流程定位。 -->
+    <!-- CRMW 调库记录列表：按标的与凭证组合查询全部历史及同批关联项；不按传入批次过滤。 -->
     <select id="queryAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT al.id
                ,al.security_code
@@ -225,7 +225,16 @@
                ,al.entry_time
         FROM ip_adjust_log al
         LEFT JOIN wf_flow_definition fd ON fd.id = al.flow_id
-        WHERE al.security_code = #{securityCode}
+        WHERE (al.security_code = #{securityCode}
+               OR EXISTS (
+                   SELECT 1 FROM ip_adjust_log member_log
+                   WHERE member_log.adjust_batch_no = al.adjust_batch_no
+                     AND member_log.security_code = #{securityCode}
+                     AND member_log.crmw_scode = #{crmwScode}
+                     AND member_log.crmw_stype = #{crmwStype}
+                     AND member_log.pool_type = 'crmw'
+                     AND member_log.is_deleted = 0
+               ))
           AND al.crmw_scode = #{crmwScode}
           AND al.crmw_stype = #{crmwStype}
           AND al.is_deleted = 0
@@ -272,7 +281,7 @@
         ORDER BY submit_time DESC, id DESC
     </select>
 
-    <!-- 查询 CRMW 组合活动流程同批全部手工、联动和互斥项涉及的目标池 ID -->
+    <!-- 按批次任一组合定位活动流程，关联码与主项共同占用池组 -->
     <select id="queryPendingManualTargetPoolIdList" resultType="java.lang.Long">
         SELECT DISTINCT occupied.target_pool_id
         FROM ip_adjust_log manual_log
@@ -281,7 +290,6 @@
         WHERE manual_log.security_code = #{securityCode}
           AND manual_log.crmw_scode = #{crmwScode}
           AND manual_log.crmw_stype = #{crmwStype}
-          AND manual_log.adjust_type = '手工调整'
           AND manual_log.audit_status IN ('00', '11')
           AND manual_log.is_deleted = 0
           AND s.step_status = 'pending'

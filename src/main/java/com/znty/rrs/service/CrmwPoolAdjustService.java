@@ -48,6 +48,7 @@ import com.znty.rrs.entity.flow.FlowOptionParam;
 import com.znty.rrs.entity.bo.FlowVersionBo;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.common.SecurityMarketDto;
 import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDto;
@@ -731,12 +732,22 @@ public class CrmwPoolAdjustService {
 
     /** 检查正式提交涉及的顶级池组是否已有活动流程。 */
     private void checkSubmitPendingPoolGroups(CrmwPoolAdjustSubmitReq req, Map<Long, InvestmentPoolBo> poolMap) {
-        Set<Long> pendingGroups = resolvePoolGroupIds(crmwPoolAdjustMapper.queryPendingManualTargetPoolIdList(
-                req.getSecurityCode(), req.getCrmwScode(), req.getCrmwStype(), null), poolMap);
+        Map<String, Set<Long>> pendingByCode = new HashMap<>();
         for (CrmwPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            // 使用实际标的代码检查同一凭证下的活动流程
+            String securityCode = resolveItemSecurityCode(req, item);
+            Set<Long> pendingGroups = pendingByCode.get(securityCode);
+            if (pendingGroups == null) {
+                // 归并该组合全部活动批次占用的顶级池组
+                pendingGroups = resolvePoolGroupIds(crmwPoolAdjustMapper.queryPendingManualTargetPoolIdList(
+                        securityCode, req.getCrmwScode(), req.getCrmwStype(), null), poolMap);
+                pendingByCode.put(securityCode, pendingGroups);
+            }
+            // 定位当前目标池所属池组
             Long groupId = resolveRootPoolId(item.getTargetPoolId(), poolMap);
             if (groupId != null && pendingGroups.contains(groupId)) {
-                throw new BizException("CRMW 组合在目标投资池组存在进行中的调库流程，请等待流程结束后再发起调库");
+                throw new BizException("CRMW 组合[" + req.getCrmwScode() + "/" + securityCode
+                        + "]在目标投资池组存在进行中的调库流程，请等待流程结束后再发起调库");
             }
         }
     }
@@ -1135,9 +1146,9 @@ public class CrmwPoolAdjustService {
         String crmwScode = req.getCrmwScode();
         // 组合已在池：同一凭证+标的已在目标池，不可重复调入
         if (crmwPoolAdjustMapper.queryCrmwComboInPool(crmwScode, req.getCrmwStype(),
-                req.getSecurityCode(), item.getTargetPoolId())) {
+                resolveItemSecurityCode(req, item), item.getTargetPoolId())) {
             throw new BizException("信用缓释凭证代码（" + crmwScode + "）和债券代码（"
-                    + req.getSecurityCode() + "）组合已经在池！");
+                    + resolveItemSecurityCode(req, item) + "）组合已经在池！");
         }
     }
 
@@ -1151,8 +1162,8 @@ public class CrmwPoolAdjustService {
         String crmwScode = req.getCrmwScode();
         // 组合在池：CRMW 凭证 + 标的证券组合须在目标池，否则不可调出
         if (!crmwPoolAdjustMapper.queryCrmwComboInPool(crmwScode, req.getCrmwStype(),
-                req.getSecurityCode(), item.getTargetPoolId())) {
-            throw new BizException("信用缓释凭证代码（" + crmwScode + "）和债券代码（" + req.getSecurityCode() + "）组合不在池！");
+                resolveItemSecurityCode(req, item), item.getTargetPoolId())) {
+            throw new BizException("信用缓释凭证代码（" + crmwScode + "）和债券代码（" + resolveItemSecurityCode(req, item) + "）组合不在池！");
         }
     }
 
@@ -1188,7 +1199,11 @@ public class CrmwPoolAdjustService {
             }
             // 报告必填校验（按池 in_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null, req.getSecurityCode());
+            // 关联码项由同组手工项承担报告要求，与证券池调库一致
+            if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
+                checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null,
+                        resolveItemSecurityCode(req, item));
+            }
             // CRMW组合校验（凭证已在池，提交阶段轻量校验）
             checkCrmwInboundCombination(req, item);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
@@ -1209,6 +1224,7 @@ public class CrmwPoolAdjustService {
                 logBo.setAuditStatus(AuditStatus.APPROVED.getCode());
                 crmwPoolAdjustMapper.addAdjustLog(logBo);
                 generatedIds.add(logBo.getId());
+                shared.submittedLogs.put(logBo.getId(), logBo);
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(logBo.getId(), item, submissionFiles, req.getAdjusterId());
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
@@ -1228,6 +1244,7 @@ public class CrmwPoolAdjustService {
                 bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());
                 crmwPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                shared.submittedLogs.put(bo.getId(), bo);
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
@@ -1279,7 +1296,11 @@ public class CrmwPoolAdjustService {
             }
             // 报告必填校验（按池 out_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null, req.getSecurityCode());
+            // 关联码项由同组手工项承担报告要求，与证券池调库一致
+            if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
+                checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null,
+                        resolveItemSecurityCode(req, item));
+            }
             // CRMW组合校验（组合在池，提交阶段校验）
             checkCrmwOutboundCombination(req, item);
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
@@ -1300,6 +1321,7 @@ public class CrmwPoolAdjustService {
                 bo.setAuditStatus(AuditStatus.APPROVED.getCode());
                 crmwPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                shared.submittedLogs.put(bo.getId(), bo);
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
                 // 有流程定义的直通流程仍记录开始、发起、结束步骤
@@ -1318,6 +1340,7 @@ public class CrmwPoolAdjustService {
                 bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());
                 crmwPoolAdjustMapper.addAdjustLog(bo);
                 generatedIds.add(bo.getId());
+                shared.submittedLogs.put(bo.getId(), bo);
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
                 // 手工项创建初始流程步骤，联动/互斥项共用同批次流程状态
@@ -1357,13 +1380,14 @@ public class CrmwPoolAdjustService {
         mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
         req.setSecurityInfo(mergedSecurityInfo);
         // 按调库日志落 CRMW 证券信息快照
-        saveAdjustSecuritySnapshotsCrmw(req, logIds);
+        saveAdjustSecuritySnapshotsCrmw(req, logIds, shared);
     }
 
     /**
      * 为本次提交的每个调库日志写入 CRMW 证券信息快照。
      */
-    private void saveAdjustSecuritySnapshotsCrmw(CrmwPoolAdjustSubmitReq req, List<Long> logIds) {
+    private void saveAdjustSecuritySnapshotsCrmw(CrmwPoolAdjustSubmitReq req, List<Long> logIds,
+                                                SubmitSharedData shared) {
         if (logIds == null || logIds.isEmpty() || req.getSecurityInfo() == null) {
             return;
         }
@@ -1374,6 +1398,12 @@ public class CrmwPoolAdjustService {
             }
             // 从合并后的标的证券信息拷贝同名字段，并补齐 CRMW 凭证四元组与快照关联字段
             AdjustSecuritySnapshotCrmwBo snapshot = buildAdjustSecuritySnapshotCrmw(req, logId, now);
+            IpAdjustLogBo log = shared.submittedLogs.get(logId);
+            if (log != null) {
+                snapshot.setWindCode(log.getSecurityCode());
+                snapshot.setShortName(log.getSecurityShortName());
+                snapshot.setSecurityType(log.getSecurityType());
+            }
             crmwPoolAdjustMapper.addAdjustSecuritySnapshotCrmw(snapshot);
         }
     }
@@ -1456,7 +1486,7 @@ public class CrmwPoolAdjustService {
     /**
      * 查询 CRMW 调库记录列表（全量，不分页）。
      *
-     * <p>按标的证券与 CRMW 凭证组合键返回全部调库历史（含终态），不以调库批次号过滤。
+     * <p>按标的证券与 CRMW 凭证组合键返回全部历史及同批关联项（含终态），不以传入批次号过滤。
      *
      * @param req 需携带 securityCode、crmwScode、crmwStype；adjustBatchNo 仅供流程定位，本查询不使用
      */
@@ -1481,6 +1511,8 @@ public class CrmwPoolAdjustService {
             AdjustLogDto dto = new AdjustLogDto();
             dto.setId(log.getId());
             dto.setAdjustBatchNo(log.getAdjustBatchNo());
+            dto.setSecurityCode(log.getSecurityCode());
+            dto.setSecurityShortName(log.getSecurityShortName());
             dto.setCrmwScode(log.getCrmwScode());
             dto.setCrmwName(log.getCrmwName());
             dto.setPoolPath(poolFullNameMap.get(log.getTargetPoolId()));
@@ -1577,6 +1609,9 @@ public class CrmwPoolAdjustService {
 
         // 回填凭证+标的身份，供批量编排层按单笔结果透传（对齐证券池 checkAdjust）
         fillCheckResultIdentity(req, shared, resultItems);
+
+        // 按标的债券同 ISIN 代码扩批，凭证代码保持不变
+        expandRelatedMarketCodeItems(req, shared, resultItems);
 
         // ══ 第五阶段：流程类型判断 ══
         List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
@@ -3886,9 +3921,18 @@ public class CrmwPoolAdjustService {
                                          CrmwPoolAdjustSubmitReq.AdjustItem flowSource,
                                          SubmitSharedData shared) {
         IpAdjustLogBo bo = new IpAdjustLogBo();
-        bo.setSecurityCode(req.getSecurityCode());
-        bo.setSecurityShortName(req.getSecurityShortName());
-        bo.setSecurityType(req.getSecurityType());
+        // 关联码按自身主档保存身份，避免日志及最终落池回写成主券代码
+        String securityCode = resolveItemSecurityCode(req, item);
+        SecurityInfoBo securityInfo = shared.securityInfo;
+        if (!securityCode.equals(req.getSecurityCode())) {
+            securityInfo = crmwPoolAdjustMapper.querySecurityBoByCode(securityCode);
+            if (securityInfo == null || CRMW_SECURITY_TYPE.equals(securityInfo.getSecurityType())) {
+                throw new BizException("关联标的证券不存在或类型不正确：" + securityCode);
+            }
+        }
+        bo.setSecurityCode(securityCode);
+        bo.setSecurityShortName(securityInfo.getShortName());
+        bo.setSecurityType(securityInfo.getSecurityType());
         bo.setCrmwName(req.getCrmwName());
         bo.setCrmwScode(req.getCrmwScode());
         bo.setCrmwStype(req.getCrmwStype());
@@ -3942,7 +3986,159 @@ public class CrmwPoolAdjustService {
         if (ItemType.LINKAGE.getCode().equals(item.getItemTag())) {
             return "联动调整";
         }
+        if (ItemType.RELATED.getCode().equals(item.getItemTag())) {
+            return "关联调整";
+        }
         return req.getAdjustType();
+    }
+
+    /** 按标的关联码加载组合状态，沿用主券已校验的评级主体和本次选池集合。 */
+    private AdjustSharedData loadSharedDataForSecurity(String securityCode, SecurityInfoBo securityInfo,
+                                                       AdjustSharedData mainShared, AdjustCheckReq mainReq) {
+        AdjustSharedData shared = new AdjustSharedData();
+        securityInfo.setGuarantor(mainShared.getSecurityInfo().getGuarantor());
+        securityInfo.setGuarantorId(mainShared.getSecurityInfo().getGuarantorId());
+        securityInfo.setInnerGuarantorRating(mainShared.getSecurityInfo().getInnerGuarantorRating());
+        shared.setSecurityInfo(securityInfo);
+        shared.setCrmwScode(mainShared.getCrmwScode());
+        shared.setCrmwStype(mainShared.getCrmwStype());
+        shared.setPoolMap(mainShared.getPoolMap());
+        shared.setCurrentPoolIds(new HashSet<>(crmwPoolAdjustMapper.querySecurityCurrentPoolIdList(
+                securityCode, shared.getCrmwScode(), shared.getCrmwStype())));
+        shared.setPoolRelationMap(mainShared.getPoolRelationMap());
+        shared.setPendingProcessNodeLabel(crmwPoolAdjustMapper.querySecurityPendingProcessNodeLabel(securityCode));
+        // 关联码同样按凭证与标的组合检查当前池组的活动流程
+        shared.setPendingPoolGroupIds(resolvePoolGroupIds(crmwPoolAdjustMapper.queryPendingManualTargetPoolIdList(
+                securityCode, shared.getCrmwScode(), shared.getCrmwStype(), null), mainShared.getPoolMap()));
+        shared.setSecurityInObservePool(crmwPoolAdjustMapper.querySecurityInObservePool(securityCode));
+        shared.setIssuerInObservePool(crmwPoolAdjustMapper.queryIssuerInObservePool(securityCode));
+        shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
+        shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
+        shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(mainReq.getGuarantorCode()));
+        shared.setRequestInPoolIds(mainShared.getRequestInPoolIds());
+        shared.setRequestOutPoolIds(mainShared.getRequestOutPoolIds());
+        return shared;
+    }
+
+    /** 解析实际标的代码；旧请求未传明细代码时使用主券代码。 */
+    private String resolveItemSecurityCode(CrmwPoolAdjustSubmitReq req, CrmwPoolAdjustSubmitReq.AdjustItem item) {
+        return item.getSecurityCode() == null || item.getSecurityCode().isEmpty()
+                ? req.getSecurityCode() : item.getSecurityCode();
+    }
+
+    /**
+     * 多市场关联码扩批：对主结果中的 manual/linkage/mutex 项，按 Wind 同 ISIN 记录展开 related 项。
+     *
+     * <p>关联码独立校验已在池/不在池/pending/容量等；同池同批调入累计 projected 占用容量。
+     */
+    private void expandRelatedMarketCodeItems(AdjustCheckReq req, AdjustSharedData mainShared,
+                                              List<AdjustCheckDto.CheckResultItem> resultItems) {
+        SecurityInfoBo mainSec = mainShared.getSecurityInfo();
+        if (mainSec == null || resultItems == null || resultItems.isEmpty()) {
+            return;
+        }
+        List<String> relatedCodes = new ArrayList<>();
+        for (SecurityMarketDto related : securityMarketService.queryRelatedMarketCodes(mainSec.getWindCode())) {
+            relatedCodes.add(related.getWindCode());
+        }
+        if (relatedCodes.isEmpty()) {
+            return;
+        }
+
+        // 仅对主券母项扩批（manual/linkage/mutex）
+        List<AdjustCheckDto.CheckResultItem> motherItems = new ArrayList<>();
+        Map<String, AdjustCheckDto.CheckResultItem> manualByGroup = new HashMap<>();
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            String tag = item.getItemTag();
+            if (ItemType.MANUAL.getCode().equals(tag)
+                    || ItemType.LINKAGE.getCode().equals(tag)
+                    || ItemType.MUTEX.getCode().equals(tag)) {
+                motherItems.add(item);
+            }
+            if (ItemType.MANUAL.getCode().equals(tag)) {
+                manualByGroup.put(item.getAdjustGroupKey(), item);
+            }
+        }
+        if (motherItems.isEmpty()) {
+            return;
+        }
+
+        // 已通过的调入项占用 projected 容量，避免主+关联同池全部通过却超容
+        Map<Long, Integer> projectedInbound = new HashMap<>();
+        Set<String> coveredKeys = new HashSet<>();
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            if (item.getSecurityCode() != null) {
+                coveredKeys.add(item.getSecurityCode() + "_" + item.getTargetPoolId() + "_" + item.getAdjustMode());
+            }
+            if (item.isCanAdjust() && AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
+                projectedInbound.merge(item.getTargetPoolId(), 1, Integer::sum);
+            }
+        }
+
+        List<AdjustCheckDto.CheckResultItem> relatedResults = new ArrayList<>();
+        for (String relatedCode : relatedCodes) {
+            SecurityInfoBo relatedSec = crmwPoolAdjustMapper.querySecurityBoByCode(relatedCode);
+            // 按关联标的与原凭证组合加载独立在池状态及校验标志
+            AdjustSharedData relatedShared = relatedSec == null ? null
+                    : loadSharedDataForSecurity(relatedCode, relatedSec, mainShared, req);
+
+            for (AdjustCheckDto.CheckResultItem mother : motherItems) {
+                String dedupeKey = relatedCode + "_" + mother.getTargetPoolId() + "_" + mother.getAdjustMode();
+                if (!coveredKeys.add(dedupeKey)) {
+                    continue;
+                }
+
+                AdjustCheckDto.CheckResultItem relatedItem = new AdjustCheckDto.CheckResultItem();
+                relatedItem.setTargetPoolId(mother.getTargetPoolId());
+                relatedItem.setPoolName(mother.getPoolName());
+                relatedItem.setPoolType(mother.getPoolType());
+                relatedItem.setAdjustMode(mother.getAdjustMode());
+                relatedItem.setItemTag(ItemType.RELATED.getCode());
+                relatedItem.setAdjustGroupKey(mother.getAdjustGroupKey());
+                relatedItem.setSecurityCode(relatedCode);
+                relatedItem.setSourceSecurityCode(mainShared.getCrmwScode() + "|" + mainSec.getWindCode());
+                relatedItem.setCrmwScode(mainShared.getCrmwScode());
+                relatedItem.setCrmwStype(mainShared.getCrmwStype());
+                relatedItem.setCrmwName(req.getCrmwName());
+
+                if (relatedSec == null || relatedShared == null) {
+                    relatedItem.setCanAdjust(false);
+                    relatedItem.setFailReasons(Collections.singletonList(
+                            "关联证券代码" + relatedCode + "在系统中不存在"));
+                } else {
+                    relatedItem.setSecurityShortName(relatedSec.getShortName());
+                    relatedItem.setSecurityType(relatedSec.getSecurityType());
+                    int baseCount = crmwPoolAdjustMapper.queryPoolCurrentCount(mother.getTargetPoolId());
+                    // 调入时把本批已通过项计入有效持仓，再跑容量校验
+                    int effectiveCount = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
+                            ? baseCount + projectedInbound.getOrDefault(mother.getTargetPoolId(), 0)
+                            : baseCount;
+
+                    AdjustCheckReq.CheckItem fakeItem = new AdjustCheckReq.CheckItem();
+                    fakeItem.setTargetPoolId(mother.getTargetPoolId());
+                    fakeItem.setAdjustMode(mother.getAdjustMode());
+                    fakeItem.setPoolType(mother.getPoolType());
+                    // 构建关联券校验上下文
+                    AdjustCheckContext ctx = buildCheckContext(fakeItem, effectiveCount, relatedShared);
+                    List<String> failures = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
+                            ? checkInConditions(ctx) : checkOutConditions(ctx);
+                    relatedItem.setCanAdjust(failures.isEmpty());
+                    relatedItem.setFailReasons(failures);
+                    relatedItem.setWarnings(ctx.getWarnings());
+                    if (relatedItem.isCanAdjust() && AdjustMode.IN.getCode().equals(mother.getAdjustMode())) {
+                        projectedInbound.merge(mother.getTargetPoolId(), 1, Integer::sum);
+                    }
+                }
+
+                AdjustCheckDto.CheckResultItem manualItem = manualByGroup.get(mother.getAdjustGroupKey());
+                if (manualItem != null) {
+                    // 同组手工项失败时阻断关联项
+                    inheritManualItemFailure(relatedItem, manualItem);
+                }
+                relatedResults.add(relatedItem);
+            }
+        }
+        resultItems.addAll(relatedResults);
     }
 
     /** 构建投资池全路径名称 */
@@ -4062,6 +4258,9 @@ public class CrmwPoolAdjustService {
 
         /** 调库分组批次号索引（adjustGroupKey → adjustBatchNo），用于联动/互斥记录复用 */
         final Map<String, String> adjustBatchNoMap = new HashMap<>();
+
+        /** 本次生成的日志，供快照使用实际标的身份 */
+        final Map<Long, IpAdjustLogBo> submittedLogs = new HashMap<>();
 
         SubmitSharedData(SecurityInfoBo securityInfo,
                          Map<Long, InvestmentPoolBo> poolMap,

@@ -17,6 +17,12 @@ public class AdjustLogDto {
     /** 调库批次号 */
     private String adjustBatchNo;
 
+    /** 实际标的证券代码 */
+    private String securityCode;
+
+    /** 实际标的证券简称 */
+    private String securityShortName;
+
     /** CRMW 凭证代码 */
     private String crmwScode;
 

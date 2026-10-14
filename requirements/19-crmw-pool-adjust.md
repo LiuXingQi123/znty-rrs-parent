@@ -14,6 +14,16 @@
 
 ---
 
+## 标的债券一券多码调库
+
+- CRMW 凭证本身为单一代码，不存在多市场扩批；仅将其绑定标的债券按 Wind 非空 `S_INFO_ISINCODE` 展开同券代码，排除自身、去重、不递归，空 ISIN 和临时代码不关联。
+- `checkCrmwAdjust` 在手工、联动、互斥项生成后追加 `itemTag=related` 的关联调整项。每个实际代码独立校验市场、凭证+标的组合在池状态、活动池组、冻结期和原调库规则；同池调入累计主项及已通过关联项的容量。主项失败阻断同组关联项；关联码失败单独展示，沿用证券池仅提交通过项的规则。
+- 关联项保持同一个 `crmwScode/crmwStype`，`sourceSecurityCode` 为触发主组合键 `crmwScode|securityCode`，共用原主项的 `adjustGroupKey`、流程与 CRMW 批次号，仅手工项创建流程步骤；关联项的报告要求由同组手工项承担。
+- 提交 `items[]` 新增 `securityCode/securityShortName/securityType`，记录、快照与最终落池使用实际标的身份。未传明细代码的旧单组合请求继续使用请求级主券代码。直通即时生效，人工审批仅最终 `20` 同批落池；出池精确匹配原凭证、实际标的和目标池，保留其他凭证的组合。
+- 批量及 Excel 导入透传实际代码；同批显式选择多个同券代码时按凭证+标的+目标池+方向去重，手工主项优先。Excel 关联项的全称、市场、类型来自自身主档。
+- 活动流程通过同批任一组合定位，关联码审批中不能在相同池组重复申请。`queryCrmwAdjustLogList` 返回当前组合全部历史及同批关联项，不按请求批次或终态过滤；返回项增加 `securityCode/securityShortName`，申请校验表和审核/详情记录表展示实际标的代码与名称。
+- 自动到期调出继续逐条扫描实际在池组合，不再二次按 ISIN 扩批；本次不调整定时任务规则，不迁移历史数据，不变更表结构。
+
 ## 1. 页面概览
 
 单 Vue 实例（`el: '#crmw_pool_adjust'`），`currentPage` 在 `'list'`/`'detail'` 两视图间切换：
@@ -72,7 +82,7 @@
 | `queryCrmwAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId }` | 可调入池 |
 | `queryCrmwAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
 | `queryCrmwPoolStatus` | `{ securityCode }` | 当前证券所在池 + 主体所在池 |
-| `queryCrmwAdjustLogList` | `{ securityCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
+| `queryCrmwAdjustLogList` | `{ securityCode, crmwScode, crmwStype, adjustBatchNo }` | 当前组合全部历史及同批关联项（含终态） |
 
 随后串行：构建 `currentSecurityPoolIds`、过滤调出池（仅保留证券已在其中的池及父节点）、过滤调入池（排除证券已在其中的叶子节点）、`buildPoolTree`、构建 `inMutexMap`/`outMutexMap`、`loadLogAttachments`、`loadFlowSteps`。
 
@@ -160,7 +170,7 @@
 | `checkCrmwAdjust` | securityCode, securityShortName, securityType, guarantorCode, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 调库可行性预校验 + 流程候选；所选担保人后端复核 |
 | `addCrmwAdjustLog`（application/json） | `CrmwPoolAdjustSubmitReq`（含 guarantorCode） | `AdjustSubmitDto` | 提交调库申请（无附件）；快照保存所选担保人及 AIS 最新内评分 |
 | `addCrmwAdjustLogWithFiles`（multipart/form-data） | `request`(JSON Blob) + `files`(MultipartFile[]) | `AdjustSubmitDto` | 提交调库申请（带附件，**前端实际调用入口**） |
-| `queryCrmwAdjustLogList` | securityCode, adjustBatchNo | `List<AdjustLogDto>` | 历史调库记录（无批次仅返回未终结流程） |
+| `queryCrmwAdjustLogList` | securityCode, adjustBatchNo | `List<AdjustLogDto>` | 组合全部历史及同批关联项 |
 | `queryCrmwAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 同批次流程步骤列表 |
 | `attachments/queryAttachmentList` | adjustLogIds[]（兼容 adjustLogId） | 附件列表（含 mainId） | 批量加载调库记录附件，单页一次请求 |
 | `attachments/downloadAttachment` | id | `ApiResponse<String>`（Base64） | 下载附件 |
@@ -243,7 +253,7 @@
 - Mapper：`CrmwPoolAdjustMapper.java` / `resources/mapper/CrmwPoolAdjustMapper.xml`
 - 实体：`entity/crmwpooladjust/`（`CrmwPoolAdjustReq`、`CrmwPoolAdjustSubmitReq`、`AdjustCheckReq`、`AdjustCheckDto`、`AdjustSubmitDto`、`AdjustLogDto`、`PoolDto`、`SecurityInfoDto`、`SecurityInfoDetailDto`、`SecurityPoolStatusDto`、`IpAdjustStepDto` 等）
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_crmw_pool_status_schema.sql`、`sql/rrs_security_pool_adjust_schema.sql`（`ip_adjust_log`）、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）
-- 测试：`CrmwPoolAdjustApiTest.java`
+- 测试：`CrmwPoolAdjustApiTest.java`、`CrmwRelatedMarketAdjustTest.java`、`CrmwRelatedEntryPointTest.java`、`CrmwRelatedMarketMapperTest.java`（H2 测试运行时需 Java 11 以上）
 
 
 ## 标的证券主档差异提示

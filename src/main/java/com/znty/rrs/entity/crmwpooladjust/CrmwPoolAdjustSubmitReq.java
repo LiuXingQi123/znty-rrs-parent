@@ -72,6 +72,15 @@ public class CrmwPoolAdjustSubmitReq {
     @Data
     public static class AdjustItem {
 
+        /** 实际标的证券代码；未传时使用请求级主券代码 */
+        private String securityCode;
+
+        /** 实际标的证券简称 */
+        private String securityShortName;
+
+        /** 实际标的证券类型 */
+        private String securityType;
+
         /** 目标投资池 ID */
         private Long targetPoolId;
 
@@ -84,10 +93,10 @@ public class CrmwPoolAdjustSubmitReq {
         /** 调整模式：调入/调出 */
         private String adjustMode;
 
-        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 */
+        /** 调整项来源：manual=手工 / linkage=联动 / mutex=互斥 / related=关联 */
         private String itemTag;
 
-        /** 调库分组 Key：手工项及其触发的联动/互斥项共用 */
+        /** 调库分组 Key：手工项及其触发的联动/互斥/关联项共用 */
         private String adjustGroupKey;
 
         /** 本次选择的流程 ID */

@@ -46,6 +46,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -403,6 +404,18 @@ public class CrmwPoolExcelImportService {
             }
         }
 
+        // 不同 Excel 主行可能展开同一组合，显式手工行优先，避免重复生成调库日志
+        Map<String, CrmwPoolExcelImportCheckItemDto> uniqueItems = new LinkedHashMap<>();
+        for (CrmwPoolExcelImportCheckItemDto ci : checkItems) {
+            String key = ci.getCrmwScode() + "|" + ci.getSecurityCode() + "|"
+                    + ci.getTargetPoolId() + "|" + ci.getAdjustMode();
+            CrmwPoolExcelImportCheckItemDto existing = uniqueItems.get(key);
+            // 判断当前项是否由 Excel 主行显式发起
+            if (existing == null || isManualTag(ci.getItemTag())) {
+                uniqueItems.put(key, ci);
+            }
+        }
+        checkItems = new ArrayList<>(uniqueItems.values());
         int pass = 0;
         int fail = 0;
         for (SysImpTmpDetlBo item : items) {
@@ -568,6 +581,9 @@ public class CrmwPoolExcelImportService {
                 throw new BizException("校验结果数据不完整，请重新校验");
             }
             CrmwPoolAdjustSubmitReq.AdjustItem si = new CrmwPoolAdjustSubmitReq.AdjustItem();
+            si.setSecurityCode(ci.getSecurityCode());
+            si.setSecurityShortName(ci.getSecurityShortName());
+            si.setSecurityType(ci.getSecurityType());
             si.setTargetPoolId(ci.getTargetPoolId());
             si.setTargetPoolName(!isBlank(ci.getTargetPoolName()) ? ci.getTargetPoolName() : pool.getPoolName());
             si.setPoolType(PoolType.CRMW.getCode());
@@ -642,7 +658,12 @@ public class CrmwPoolExcelImportService {
         dto.setCrmwMarket(sourceItem.getFld003());
         dto.setSecurityMarket(sourceItem.getFld007());
         dto.setSecurityTypeName(sourceItem.getFld011());
-        // 展开项代码变化时按主数据补齐展示字段
+        // 展开项代码变化时按自身主档补齐展示字段，避免沿用源行的市场
+        if (!Objects.equals(dto.getSecurityCode(), sourceItem.getFld004())) {
+            dto.setSecurityName(null);
+            dto.setSecurityMarket(null);
+            dto.setSecurityTypeName(null);
+        }
         fillMappedDisplay(dto, infoCache);
         dto.setTargetPoolId(ri.getTargetPoolId() != null ? ri.getTargetPoolId() : pool.getId());
         dto.setTargetPoolName(!isBlank(ri.getPoolName()) ? ri.getPoolName() : pool.getPoolName());

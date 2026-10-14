@@ -11,6 +11,16 @@
 
 ---
 
+## 标的债券一券多码调库
+
+- CRMW 凭证本身为单一代码，不存在多市场扩批；仅将其绑定标的债券按 Wind 非空 `S_INFO_ISINCODE` 展开同券代码，排除自身、去重、不递归，空 ISIN 和临时代码不关联。
+- `checkCrmwAdjust` 在手工、联动、互斥项生成后追加 `itemTag=related` 的关联调整项。每个实际代码独立校验市场、凭证+标的组合在池状态、活动池组、冻结期和原调库规则；同池调入累计主项及已通过关联项的容量。主项失败阻断同组关联项；关联码失败单独展示，沿用证券池仅提交通过项的规则。
+- 关联项保持同一个 `crmwScode/crmwStype`，`sourceSecurityCode` 为触发主组合键 `crmwScode|securityCode`，共用原主项的 `adjustGroupKey`、流程与 CRMW 批次号，仅手工项创建流程步骤；关联项的报告要求由同组手工项承担。
+- 提交 `items[]` 新增 `securityCode/securityShortName/securityType`，记录、快照与最终落池使用实际标的身份。未传明细代码的旧单组合请求继续使用请求级主券代码。直通即时生效，人工审批仅最终 `20` 同批落池；出池精确匹配原凭证、实际标的和目标池，保留其他凭证的组合。
+- 批量及 Excel 导入透传实际代码；同批显式选择多个同券代码时按凭证+标的+目标池+方向去重，手工主项优先。Excel 关联项的全称、市场、类型来自自身主档。
+- 活动流程通过同批任一组合定位，关联码审批中不能在相同池组重复申请。`queryCrmwAdjustLogList` 返回当前组合全部历史及同批关联项，不按请求批次或终态过滤；返回项增加 `securityCode/securityShortName`，申请校验表和审核/详情记录表展示实际标的代码与名称。
+- 自动到期调出继续逐条扫描实际在池组合，不再二次按 ISIN 扩批；本次不调整定时任务规则，不迁移历史数据，不变更表结构。
+
 ## 1. 页面概览
 
 单 Vue 实例（`el: '#crmw_pool_adjust_detail'`），`currentPage='detail'`（默认详情页）。
@@ -69,7 +79,7 @@
 | `crmwPoolAdjust/queryCrmwDetail` | securityCode | `SecurityInfoDetailDto` | CRMW 凭证详情 |
 | `crmwPoolAdjust/queryCrmwAdjustPoolList` | securityCode, adjustDirection, currentUserId | `List<PoolDto>` | 可调入/调出池 |
 | `crmwPoolAdjust/queryCrmwPoolStatus` | securityCode | `SecurityPoolStatusDto` | 当前证券/主体所在池 |
-| `crmwPoolAdjust/queryCrmwAdjustLogList` | securityCode, adjustBatchNo? | `List<AdjustLogDto>` | 调库记录（无批次时排除终态） |
+| `crmwPoolAdjust/queryCrmwAdjustLogList` | securityCode, adjustBatchNo? | `List<AdjustLogDto>` | 组合全部历史及同批关联项 |
 | `crmwPoolAdjust/queryCrmwAdjustStepList` | adjustLogId, adjustBatchNo | `List<IpAdjustStepDto>` | 流程步骤列表 |
 | `crmwPoolAdjust/checkCrmwAdjust` | `AdjustCheckReq`（含 guarantorCode） | `AdjustCheckDto` | adjust 模式校验确认，后端复核所选担保人 |
 | `crmwPoolAdjust/addCrmwAdjustLog`（JSON）/ `addCrmwAdjustLogWithFiles`（multipart） | `CrmwPoolAdjustSubmitReq`（含 guarantorCode） | `AdjustSubmitDto` | adjust 模式首次提交，快照保存所选担保人及最新内评分 |
@@ -89,7 +99,7 @@ view 模式纯读：`ip_pool_status_crmw`（查询当前池）、`ip_adjust_log`
 
 ## 6. 状态流转
 
-详情页 view 模式只读展示各状态记录；adjust 模式提交时状态变迁同 [19]（直通→`20`，非直通→`00`）。`audit_status` 枚举与全站一致（`-1/00/11/20/21/32/99`）。`queryCrmwAdjustLogList` 无批次参数时排除终态 `-1/20/21/99`，仅展示进行中（`00/11/32`）记录。
+详情页 view 模式只读展示各状态记录；adjust 模式提交时状态变迁同 [19]（直通→`20`，非直通→`00`）。`audit_status` 枚举与全站一致（`-1/00/11/20/21/32/99`）。`queryCrmwAdjustLogList` 返回组合全部历史及同批关联项，包含终态记录。
 
 ---
 
@@ -106,7 +116,7 @@ view 模式纯读：`ip_pool_status_crmw`（查询当前池）、`ip_adjust_log`
 
 - view 模式纯只读，无任何提交/审批入口；终态与进行中记录均能展示。
 - adjust 模式提交走 `addCrmwAdjustLogWithFiles`，新建记录初始 `00`/`20`，不更新已有 `11` 记录。
-- `queryCrmwAdjustLogList` 无批次参数时仅返回未终结流程记录。
+- `queryCrmwAdjustLogList` 返回当前组合全部历史及同批关联项，包含终态，不按传入批次过滤。
 - CRMW 基本信息区块正确展示。
 
 ## 9. 关键源码索引

@@ -158,6 +158,17 @@ public class BatchCrmwPoolAdjustService {
                 dto.getItems().add(buildBatchCheckResult(security, item));
             }
         }
+        // 多个主组合可能展开出同一组合，保留显式手工项，避免重复落池
+        Map<String, BatchCrmwAdjustDto.CheckResultItem> uniqueItems = new LinkedHashMap<>();
+        for (BatchCrmwAdjustDto.CheckResultItem item : dto.getItems()) {
+            String key = item.getCrmwScode() + "|" + item.getSecurityCode() + "|"
+                    + item.getTargetPoolId() + "|" + item.getAdjustMode();
+            BatchCrmwAdjustDto.CheckResultItem existing = uniqueItems.get(key);
+            if (existing == null || ItemType.MANUAL.getCode().equals(item.getItemTag())) {
+                uniqueItems.put(key, item);
+            }
+        }
+        dto.setItems(new ArrayList<>(uniqueItems.values()));
         return dto;
     }
 
@@ -535,6 +546,9 @@ public class BatchCrmwPoolAdjustService {
         List<CrmwPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
         for (BatchCrmwAdjustReq.AdjustItem item : items) {
             CrmwPoolAdjustSubmitReq.AdjustItem submitItem = new CrmwPoolAdjustSubmitReq.AdjustItem();
+            submitItem.setSecurityCode(item.getSecurityCode());
+            submitItem.setSecurityShortName(item.getSecurityShortName());
+            submitItem.setSecurityType(item.getSecurityType());
             submitItem.setTargetPoolId(item.getTargetPoolId());
             submitItem.setTargetPoolName(item.getTargetPoolName());
             submitItem.setPoolType(item.getPoolType() == null || item.getPoolType().isEmpty()
