@@ -244,3 +244,12 @@
 - 实体：`entity/crmwpooladjust/`（`CrmwPoolAdjustReq`、`CrmwPoolAdjustSubmitReq`、`AdjustCheckReq`、`AdjustCheckDto`、`AdjustSubmitDto`、`AdjustLogDto`、`PoolDto`、`SecurityInfoDto`、`SecurityInfoDetailDto`、`SecurityPoolStatusDto`、`IpAdjustStepDto` 等）
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_crmw_pool_status_schema.sql`、`sql/rrs_security_pool_adjust_schema.sql`（`ip_adjust_log`）、`sql/rrs_pool_init_schema.sql`（`ip_pool_relation`）
 - 测试：`CrmwPoolAdjustApiTest.java`
+
+
+## 标的证券主档差异提示
+
+CRMW 申请、详情、审核的证券基本信息区保留既有快照回显、编辑权限、选池、校验与提交行为，复用 `js/security_master_diff.js` 和 `css/security_master_diff.css`。独立调用 `POST /api/v1/securityPoolAdjust/querySecurityMasterDetail`（入参 `{ securityCode: 标的证券代码 }`，返回 `SecurityInfoDetailDto`）只读查询当前主档，不传凭证代码或申请 ID，不合并快照、不写数据库。
+
+与主档不同的字段标签以橙色轻度突出，悬停或键盘聚焦显示页面值、主档值和本次读取时间；空值提示“（空）”。日期格式及数字小数位按业务值比较，零值与空值不同。编辑即时更新标记，不重新请求。申请/详情调整模式的担保人名称、内评分取当前选择控件；详情只读模式及审核取原页面快照值。ABS 权益人/自选权益人名称和市场关联代码不参与比较。
+
+CRMW 凭证基本信息由 `queryCrmwDetail` 直接读取主档，保持原逻辑，不重复增加对比请求。对比失败显示“主档对比数据暂不可用”，不阻断原操作；换券、同券重载、返回列表和销毁时旧响应不得回写。公共开关 `window.RrsSecurityMasterDiff.enabled` 的定义设为 `false` 并刷新页面，即可关闭所有接入页面的附加请求、样式和提示；打印/PDF 保持原有外观。主档值是本次查询结果，不保证上游实时同步，也不改变规则实际使用的数据。
