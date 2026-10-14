@@ -16,6 +16,9 @@ import java.util.List;
 @Mapper
 public interface ReportMapper {
 
+    /** 按来源与主键精确查询报告 */
+    ReportDto queryReportDetail(ReportReq req);
+
     /**
      * 分页查询内部报告库列表
      */

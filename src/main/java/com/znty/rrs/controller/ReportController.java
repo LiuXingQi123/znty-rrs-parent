@@ -23,6 +23,12 @@ public class ReportController {
     @Resource
     private ReportService reportService;
 
+    /** 查询一份报告的完整信息与附件 */
+    @PostMapping("/queryReportDetail")
+    public ApiResponse<ReportDto> queryReportDetail(@RequestBody ReportReq req) {
+        return ApiResponse.success(reportService.queryReportDetail(req));
+    }
+
     /**
      * 分页查询内部报告列表
      */

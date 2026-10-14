@@ -23,6 +23,9 @@ public class SysAttachmentBo {
     /** 业务附件分类 */
     private String attachmentCategory;
 
+    /** 报告库来源附件 ID；手工上传及报告库原件为空 */
+    private Long sourceAttachmentId;
+
     /** 文件类型 */
     private String fileType;
 

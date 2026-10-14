@@ -45,6 +45,21 @@ public class ReportService {
     @Resource
     private InvestmentPoolService investmentPoolService;
 
+    /** 按来源与主键查询报告，完整返回该报告的所有有效附件。 */
+    public ReportDto queryReportDetail(ReportReq req) {
+        if (req == null || req.getReportId() == null || req.getReportId() <= 0
+                || !("internal".equals(req.getSource()) || "external".equals(req.getSource()))) {
+            throw new BizException("报告详情查询失败：必须提供有效的报告 ID 和来源 internal/external");
+        }
+        ReportDto report = reportMapper.queryReportDetail(req);
+        if (report == null) {
+            throw new BizException("报告不存在或已删除，来源：" + req.getSource() + "，报告 ID：" + req.getReportId());
+        }
+        // 一次读取该报告的全部附件，不以调库关联文件数量限制详情。
+        fillReportAttachments(Collections.singletonList(report), "internal".equals(req.getSource()));
+        return report;
+    }
+
     /** 分页查询内部报告库列表 */
     public PageResult<ReportDto> queryInReportPage(ReportReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());

@@ -2415,7 +2415,7 @@ public class ScriptToolService {
      * 允许不注册进 schema/demo 白名单的 sql 文件（只读工具脚本等）。
      */
     private List<String> querySqlFilesExcludedFromRegistration() {
-        return Arrays.asList("tool_table_row_counts.sql");
+        return Arrays.asList("tool_table_row_counts.sql", "tool_report_source_upgrade.sql");
     }
 
     /**

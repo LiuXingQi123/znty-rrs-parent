@@ -27,6 +27,7 @@ CREATE TABLE `sys_attachment`
     `id`                  BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `table_name`          VARCHAR(64)  DEFAULT NULL            COMMENT '关联表名称',
     `main_id`             BIGINT       DEFAULT NULL            COMMENT '关联主键 ID',
+    `source_attachment_id` BIGINT      DEFAULT NULL            COMMENT '报告库来源附件 ID，手工上传及报告库原件为空',
     `attachment_category` VARCHAR(32)  DEFAULT NULL            COMMENT '业务附件分类：credit_report_hand=债券信评报告手工 / credit_report_in=债券信评报告内部 / credit_report_out=债券信评报告外部 / material_hand=债券其他材料手工 / material_in=债券其他材料内部 / material_out=债券其他材料外部 / fund_report_hand=基金报告手工 / fund_report_in=基金报告内部 / fund_report_out=基金报告外部 / fund_material_hand=基金其他材料手工 / fund_material_in=基金其他材料内部 / fund_material_out=基金其他材料外部 / report_in=内部报告 / report_out=外部报告',
     `file_type`           VARCHAR(16)  DEFAULT NULL            COMMENT '附件类型：xls=xls文件 / xlsx=xlsx文件 / pdf=pdf文件 / doc=doc文件 / docx=docx文件 / json=json文件',
     `original_file_name`  VARCHAR(255) DEFAULT NULL            COMMENT '用户上传的原始文件名称',

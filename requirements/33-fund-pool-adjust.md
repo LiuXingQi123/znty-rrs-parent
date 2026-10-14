@@ -66,3 +66,12 @@
 ## 7. 临时代码后续操作
 
 临时基金转正仅替换在途 `00/11` 基金日志，既有步骤、批次和审批责任保留；正式基金同池有在途申请时仍允许替换，由后续审批按当前状态校验。已在池成员按正式代码去重，不迁移终态历史或已提交 Excel 快照。取消发行允许已有引用并置临时主档 `D`，原流程、池状态保留，最终审批按既有状态校验处理。完整人工登记、转正、取消和删除规则见 [39 基金临时代码管理](39-temp-fund-code.md)。
+
+
+## 报告与手工文件统一交互
+
+报告库引用按 `sourceReportSource + sourceReportId` 聚合为一份报告入口，不直接铺开报告下的 PDF。点击报告标题在工作台新页签打开 `pages/report_detail.html`，展示元信息及该报告全部有效附件，逐个下载；手工上传文件仍点击直接下载。此规则用于申请、批量、审核与详情的报告/其他材料栏。最近信评报告自动回填携带完整附件列表；修改节点移除报告会删除本日志、本材料栏的全部关联。
+
+`sys_attachment.source_attachment_id` 保存复制来源的报告库附件 ID，附件查询返回 `sourceAttachmentId/sourceReportId/sourceReportSource/sourceReportTitle`；基金代码转正继承关联时保留该来源。新增 `POST /api/v1/reports/queryReportDetail { reportId, source: internal|external }`，非法来源、无效 ID、不存在或已删除报告明确失败。
+
+新环境通过更新后的原始附件 schema 初始化；存量升级使用 `sql/tool_report_source_upgrade.sql`（不加入初始化/重置执行）。仅修复唯一可定位来源，未定位项明确输出供核对，运行时不猜测归属。前端完整说明见 `docs/report-materials.html`。

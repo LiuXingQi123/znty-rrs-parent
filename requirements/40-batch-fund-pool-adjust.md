@@ -78,3 +78,12 @@ multipart 原始文件名数组与文件顺序一致，保留中文文件名；�
 - 工作台 iframe 检查两步页面、报告弹窗、返回与刷新，候选分页和末尾内容均不被固定底栏遮挡。
 
 建议验证命令：`mvn "-Dtest=BatchFundPoolAdjust*Test" test` → `mvn "-Dtest=FundPoolAdjust*Test,FundPoolExcelImport*Test" test`；前端执行 `node --test tests/batch_fund_pool_adjust.test.js tests/fund_pool_excel_import.test.js`。
+
+
+## 报告与手工文件统一交互
+
+报告库引用按 `sourceReportSource + sourceReportId` 聚合为一份报告入口，不直接铺开报告下的 PDF。点击报告标题在工作台新页签打开 `pages/report_detail.html`，展示元信息及该报告全部有效附件，逐个下载；手工上传文件仍点击直接下载。此规则用于申请、批量、审核与详情的报告/其他材料栏。最近信评报告自动回填携带完整附件列表；修改节点移除报告会删除本日志、本材料栏的全部关联。
+
+`sys_attachment.source_attachment_id` 保存复制来源的报告库附件 ID，附件查询返回 `sourceAttachmentId/sourceReportId/sourceReportSource/sourceReportTitle`；基金代码转正继承关联时保留该来源。新增 `POST /api/v1/reports/queryReportDetail { reportId, source: internal|external }`，非法来源、无效 ID、不存在或已删除报告明确失败。
+
+新环境通过更新后的原始附件 schema 初始化；存量升级使用 `sql/tool_report_source_upgrade.sql`（不加入初始化/重置执行）。仅修复唯一可定位来源，未定位项明确输出供核对，运行时不猜测归属。前端完整说明见 `docs/report-materials.html`。

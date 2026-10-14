@@ -3,6 +3,26 @@
 <mapper namespace="com.znty.rrs.mapper.ReportMapper">
     <!-- 报告库 mapper，对应表：rrs_report_in / rrs_report_out，提供内部 / 外部报告分页查询功能 -->
 
+    <!-- 按来源与主键读取报告；来源由服务层严格校验，表名不使用字符串拼接 -->
+    <select id="queryReportDetail" resultType="com.znty.rrs.entity.report.ReportDto">
+        SELECT id
+               ,author_name
+               ,report_title
+               ,report_type
+               ,security_code
+               ,company_code
+               ,security_type
+               ,data_source
+               ,crte_time
+               <if test="source == 'external'">,source_org_name</if>
+        <choose>
+            <when test="source == 'internal'">FROM rrs_report_in</when>
+            <otherwise>FROM rrs_report_out</otherwise>
+        </choose>
+        WHERE id = #{reportId}
+          AND is_deleted = 0
+    </select>
+
     <!-- 分页查询内部报告库列表 -->
     <select id="queryInReportPage" resultType="com.znty.rrs.entity.report.ReportDto">
         SELECT id

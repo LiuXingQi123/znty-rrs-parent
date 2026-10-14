@@ -253,3 +253,12 @@ CRMW 申请、详情、审核的证券基本信息区保留既有快照回显、
 与主档不同的字段标签以橙色轻度突出，悬停或键盘聚焦显示页面值、主档值和本次读取时间；空值提示“（空）”。日期格式及数字小数位按业务值比较，零值与空值不同。编辑即时更新标记，不重新请求。申请/详情调整模式的担保人名称、内评分取当前选择控件；详情只读模式及审核取原页面快照值。ABS 权益人/自选权益人名称和市场关联代码不参与比较。
 
 CRMW 凭证基本信息由 `queryCrmwDetail` 直接读取主档，保持原逻辑，不重复增加对比请求。对比失败显示“主档对比数据暂不可用”，不阻断原操作；换券、同券重载、返回列表和销毁时旧响应不得回写。公共开关 `window.RrsSecurityMasterDiff.enabled` 的定义设为 `false` 并刷新页面，即可关闭所有接入页面的附加请求、样式和提示；打印/PDF 保持原有外观。主档值是本次查询结果，不保证上游实时同步，也不改变规则实际使用的数据。
+
+
+## 报告与手工文件统一交互
+
+报告库引用按 `sourceReportSource + sourceReportId` 聚合为一份报告入口，不直接铺开报告下的 PDF。点击报告标题在工作台新页签打开 `pages/report_detail.html`，展示元信息及该报告全部有效附件，逐个下载；手工上传文件仍点击直接下载。此规则用于申请、批量、审核与详情的报告/其他材料栏。最近信评报告自动回填携带完整附件列表；修改节点移除报告会删除本日志、本材料栏的全部关联。
+
+`sys_attachment.source_attachment_id` 保存复制来源的报告库附件 ID，附件查询返回 `sourceAttachmentId/sourceReportId/sourceReportSource/sourceReportTitle`；基金代码转正继承关联时保留该来源。新增 `POST /api/v1/reports/queryReportDetail { reportId, source: internal|external }`，非法来源、无效 ID、不存在或已删除报告明确失败。
+
+新环境通过更新后的原始附件 schema 初始化；存量升级使用 `sql/tool_report_source_upgrade.sql`（不加入初始化/重置执行）。仅修复唯一可定位来源，未定位项明确输出供核对，运行时不猜测归属。前端完整说明见 `docs/report-materials.html`。

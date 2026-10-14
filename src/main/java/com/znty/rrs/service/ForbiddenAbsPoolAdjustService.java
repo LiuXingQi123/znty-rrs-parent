@@ -67,7 +67,7 @@ import com.znty.rrs.entity.securitypooladjust.LastCreditReportDto;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.bo.SysAttachmentBo;
 import com.znty.rrs.entity.report.ReportDto;
-import com.znty.rrs.entity.sysattachment.SysAttachmentDto;
+import com.znty.rrs.entity.report.ReportReq;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.RoleBo;
@@ -282,27 +282,17 @@ public class ForbiddenAbsPoolAdjustService {
         if (libraryAttachment == null || libraryAttachment.getMainId() == null) {
             return null;
         }
-        ReportDto report = internal
-                ? forbiddenAbsPoolAdjustMapper.queryInReportById(libraryAttachment.getMainId())
-                : forbiddenAbsPoolAdjustMapper.queryOutReportById(libraryAttachment.getMainId());
-        if (report == null || report.getId() == null) {
-            return null;
-        }
+        ReportReq reportReq = new ReportReq();
+        reportReq.setReportId(libraryAttachment.getMainId());
+        reportReq.setSource(internal ? "internal" : "external");
+        // 定位到报告后读取完整附件，避免自动回填只携带一个 PDF。
+        ReportDto report = reportService.queryReportDetail(reportReq);
         LastCreditReportDto dto = new LastCreditReportDto();
         dto.setId(report.getId());
         dto.setTitle(report.getReportTitle());
         dto.setReportType(report.getReportType());
         dto.setSource(internal ? "internal" : "external");
-        SysAttachmentDto attachmentDto = new SysAttachmentDto();
-        attachmentDto.setId(libraryAttachment.getId());
-        attachmentDto.setMainId(libraryAttachment.getMainId());
-        attachmentDto.setAttachmentCategory(libraryAttachment.getAttachmentCategory());
-        attachmentDto.setOriginalFileName(libraryAttachment.getOriginalFileName());
-        attachmentDto.setFileType(libraryAttachment.getFileType());
-        attachmentDto.setFileSize(libraryAttachment.getFileSize());
-        attachmentDto.setContentType(libraryAttachment.getContentType());
-        attachmentDto.setFullUrl(libraryAttachment.getFullUrl());
-        dto.setAttachments(Collections.singletonList(attachmentDto));
+        dto.setAttachments(report.getAttachments());
         return dto;
     }
 

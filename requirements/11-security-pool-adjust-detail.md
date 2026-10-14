@@ -109,7 +109,7 @@
 
 `adjustLogList` 来自 `queryAdjustLogList`。列：序号/投资池名称（`poolPath` 全路径）/调整类型（`adjustType`）/调整方向（`adjustMode` 调入绿/调出红 tag）/审批流程（`flowType` tag + `flowName`）/信评报告/其他材料/调整说明（`adjustmentNote`）/审核状态（`auditStatus`，`getStatusStyle`+`auditStatusLabel`）。
 
-- 信评报告/其他材料列：展示已绑定附件（`row.attachmentFiles`/`materialFiles`，`loadLogAttachments` 按 category 拆分：`credit_report_*`/`material_*`），点击下载（`downloadAttachment`）。adjust 模式下额外显示「选择报告/上传附件」按钮。
+- 信评报告/其他材料列：`row.attachmentFiles`/`materialFiles` 由 `loadLogAttachments` 按 category 拆分；公共组件将库引用按来源与报告 ID 聚合，点击标题打开报告详情页签，手工文件点击下载（`downloadAttachment`）。adjust 模式下额外显示「选择报告/上传附件」按钮。
 - SQL：按 `securityCode`，若传 `adjustBatchNo` 则按批次过滤；否则**排除终态** `audit_status NOT IN ('-1','20','21','99')`，即只展示进行中的记录。`ORDER BY crte_time DESC`。
 
 ### 3.4 流程步骤表（section-flow-status，仅 view 模式）
@@ -236,3 +236,12 @@
 读取失败或主档缺失时显示“主档对比数据暂不可用”，不影响原操作，不将其视为无差异。换券、同券重新加载、返回列表及销毁时，旧对比响应不得回写。主档值为本次查询结果，不代表上游已实时同步；提示不改变规则实际使用的数据。
 
 公共实现为 `js/security_master_diff.js` 与 `css/security_master_diff.css`。将 `window.RrsSecurityMasterDiff.enabled` 的定义设为 `false` 并刷新页面，可统一停止所有接入页面的额外请求、样式和提示。打印及导出 PDF 保持原有外观。
+
+
+## 报告与手工文件统一交互
+
+报告库引用按 `sourceReportSource + sourceReportId` 聚合为一份报告入口，不直接铺开报告下的 PDF。点击报告标题在工作台新页签打开 `pages/report_detail.html`，展示元信息及该报告全部有效附件，逐个下载；手工上传文件仍点击直接下载。此规则用于申请、批量、审核与详情的报告/其他材料栏。最近信评报告自动回填携带完整附件列表；修改节点移除报告会删除本日志、本材料栏的全部关联。
+
+`sys_attachment.source_attachment_id` 保存复制来源的报告库附件 ID，附件查询返回 `sourceAttachmentId/sourceReportId/sourceReportSource/sourceReportTitle`；基金代码转正继承关联时保留该来源。新增 `POST /api/v1/reports/queryReportDetail { reportId, source: internal|external }`，非法来源、无效 ID、不存在或已删除报告明确失败。
+
+新环境通过更新后的原始附件 schema 初始化；存量升级使用 `sql/tool_report_source_upgrade.sql`（不加入初始化/重置执行）。仅修复唯一可定位来源，未定位项明确输出供核对，运行时不猜测归属。前端完整说明见 `docs/report-materials.html`。

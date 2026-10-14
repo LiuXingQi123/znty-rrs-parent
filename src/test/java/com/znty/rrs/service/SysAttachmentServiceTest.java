@@ -238,6 +238,7 @@ public class SysAttachmentServiceTest {
         assertThat(attachment.getAttachmentCategory()).isEqualTo(AttachmentCategory.CREDIT_REPORT_IN.getCode());
         assertThat(attachment.getOriginalFileName()).isEqualTo("报告附件.pdf");
         assertThat(attachment.getFileName()).isEqualTo("20260601/report.pdf");
+        assertThat(attachment.getSourceAttachmentId()).isEqualTo(7L);
     }
 
     /** 验证外部报告库附件可以复制绑定为调库日志其他材料附件 */
@@ -254,6 +255,7 @@ public class SysAttachmentServiceTest {
         ArgumentCaptor<SysAttachmentBo> captor = ArgumentCaptor.forClass(SysAttachmentBo.class);
         verify(mapper).addAttachment(captor.capture());
         assertThat(captor.getValue().getAttachmentCategory()).isEqualTo(AttachmentCategory.MATERIAL_OUT.getCode());
+        assertThat(captor.getValue().getSourceAttachmentId()).isEqualTo(7L);
     }
 
     /** 验证基金报告通过兼容重载关联基金调库表且不改变债券默认关联表 */
@@ -370,7 +372,9 @@ public class SysAttachmentServiceTest {
                 "fund_material_hand", "fund_material_in", "fund_material_out");
         for (String category : categories) {
             // 构造每一种允许继承的基金报告或材料附件
-            sources.add(buildAttachment((long) sources.size() + 1, "ip_adjust_log_fund", 10L, category));
+            SysAttachmentBo source = buildAttachment((long) sources.size() + 1, "ip_adjust_log_fund", 10L, category);
+            source.setSourceAttachmentId(category.endsWith("_hand") ? null : 100L + sources.size());
+            sources.add(source);
         }
         when(mapper.queryFundAdjustAttachmentList(10L)).thenReturn(sources);
         when(mapper.addAttachment(any())).thenReturn(1);
@@ -384,6 +388,8 @@ public class SysAttachmentServiceTest {
         assertThat(copied.getAllValues()).extracting(SysAttachmentBo::getMainId).containsOnly(20L);
         assertThat(copied.getAllValues()).extracting(SysAttachmentBo::getFileName).containsOnly("20260601/report.pdf");
         assertThat(copied.getAllValues()).extracting(SysAttachmentBo::getUploaderId).containsOnly("2");
+        assertThat(copied.getAllValues()).extracting(SysAttachmentBo::getSourceAttachmentId)
+                .containsExactly(null, 101L, 102L, null, 104L, 105L);
         assertThat(copied.getAllValues().get(0).getNewFileName()).isEqualTo(sources.get(0).getNewFileName());
         assertThat(copied.getAllValues().get(0).getFullUrl()).isEqualTo(sources.get(0).getFullUrl());
         assertThat(copied.getAllValues().get(0).getOriginalFileName()).isEqualTo(sources.get(0).getOriginalFileName());

@@ -11,6 +11,12 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class ReportReq extends PageRequest {
 
+    /** 报告 ID，详情查询必填 */
+    private Long reportId;
+
+    /** 报告来源：internal / external，详情查询必填 */
+    private String source;
+
     /** 报告标题关键字 */
     private String reportTitle;
 

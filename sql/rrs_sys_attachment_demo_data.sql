@@ -69,7 +69,7 @@ INSERT INTO `sys_attachment` (
 ('ip_adjust_log', 7, 'material_hand', 'pdf', 'material_crmw001.pdf', 'material_20260301093000_7.pdf', 409600, 'application/pdf', '/api/v1/attachments/downloadAttachment', '20260301/material_20260301093000_7.pdf', '1', 0, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
--- 系统附件关联样例（14 条）
+-- 系统附件关联样例（15 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `sys_attachment` (
     `table_name`, `main_id`, `attachment_category`, `file_type`, `original_file_name`,
@@ -89,4 +89,5 @@ INSERT INTO `sys_attachment` (
 ('rrs_report_out', 4, 'report_out', 'pdf', '某资ABS信用跟踪报告.pdf', 'report_file_out_20260605163000_4.pdf', 2150400, 'application/pdf', '/api/v1/attachments/downloadAttachment', '20260605/report_file_out_20260605163000_4.pdf', '1', 0, NOW(), NOW()),
 ('rrs_report_out', 5, 'report_out', 'pdf', '地产公司主体风险评估报告.pdf', 'report_file_out_20260608112000_5.pdf', 1843200, 'application/pdf', '/api/v1/attachments/downloadAttachment', '20260608/report_file_out_20260608112000_5.pdf', '1', 0, NOW(), NOW()),
 ('rrs_report_out', 6, 'report_out', 'pdf', '科技可转债外部研究报告.pdf', 'report_file_out_20260610154500_6.pdf', 1761280, 'application/pdf', '/api/v1/attachments/downloadAttachment', '20260610/report_file_out_20260610154500_6.pdf', '1', 0, NOW(), NOW()),
+('rrs_report_in', 2, 'report_in', 'pdf', '交投信用债补充分析.pdf', 'report_file_in_20260512142000_2_supplement.pdf', 102400, 'application/pdf', '/api/v1/attachments/downloadAttachment', '20260512/report_file_in_20260512142000_2_supplement.pdf', '1', 0, NOW(), NOW()),
 ('rrs_report_out', 7, 'report_out', 'pdf', '国贸ABN配置报告.pdf', 'report_file_out_20260612105000_7.pdf', 1515520, 'application/pdf', '/api/v1/attachments/downloadAttachment', '20260612/report_file_out_20260612105000_7.pdf', '1', 0, NOW(), NOW());

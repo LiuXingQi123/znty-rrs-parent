@@ -5,6 +5,7 @@ import com.znty.rrs.common.PageResult;
 import com.znty.rrs.entity.report.ReportDto;
 import com.znty.rrs.entity.report.ReportReq;
 import com.znty.rrs.entity.sysattachment.SysAttachmentDto;
+import com.znty.rrs.exception.BizException;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -14,6 +15,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +24,48 @@ import static org.mockito.Mockito.when;
  * 报告库查询服务测试
  */
 public class ReportServiceTest {
+
+    /** 详情通过明确来源与 ID 取数，返回同报告的全部附件。 */
+    @Test
+    public void queryDetailShouldReturnAllAttachmentsAndKeepSourcesSeparate() {
+        ReportMapper mapper = mock(ReportMapper.class);
+        ReportService service = new ReportService();
+        ReflectionTestUtils.setField(service, "reportMapper", mapper);
+        for (String source : Arrays.asList("internal", "external")) {
+            ReportReq req = new ReportReq();
+            req.setReportId(20L);
+            req.setSource(source);
+            ReportDto report = new ReportDto();
+            report.setId(20L);
+            SysAttachmentDto first = new SysAttachmentDto();
+            first.setId(1L);
+            first.setMainId(20L);
+            SysAttachmentDto second = new SysAttachmentDto();
+            second.setId(2L);
+            second.setMainId(20L);
+            when(mapper.queryReportDetail(req)).thenReturn(report);
+            if ("internal".equals(source)) {
+                when(mapper.queryInReportAttachmentList(Collections.singletonList(20L))).thenReturn(Arrays.asList(first, second));
+            } else {
+                when(mapper.queryOutReportAttachmentList(Collections.singletonList(20L))).thenReturn(Arrays.asList(first, second));
+            }
+            assertThat(service.queryReportDetail(req).getAttachments()).extracting(SysAttachmentDto::getId).containsExactly(1L, 2L);
+        }
+    }
+
+    /** 非法来源、缺失主键与不存在的报告必须明确失败。 */
+    @Test
+    public void queryDetailShouldRejectInvalidIdentityOrMissingReport() {
+        ReportService service = new ReportService();
+        ReflectionTestUtils.setField(service, "reportMapper", mock(ReportMapper.class));
+        ReportReq req = new ReportReq();
+        assertThatThrownBy(() -> service.queryReportDetail(req)).isInstanceOf(BizException.class);
+        req.setReportId(20L);
+        req.setSource("unexpected");
+        assertThatThrownBy(() -> service.queryReportDetail(req)).hasMessageContaining("internal/external");
+        req.setSource("internal");
+        assertThatThrownBy(() -> service.queryReportDetail(req)).hasMessageContaining("不存在或已删除").hasMessageContaining("20");
+    }
 
     /** 验证内部报告分页查询会向数据访问层传递筛选条件 */
     @Test

@@ -59,6 +59,26 @@ public class ReportApiTest extends ControllerApiTestSupport {
         assertPostSuccess(mockMvc, "/api/v1/reports/queryOutReportPage", "{}");
     }
 
+    /** 报告详情接口完整返回两个附件并传递明确身份。 */
+    @Test
+    public void shouldQueryReportDetailWithAllAttachments() throws Exception {
+        ReportDto report = new ReportDto();
+        report.setId(20L);
+        SysAttachmentDto first = new SysAttachmentDto();
+        first.setId(1L);
+        SysAttachmentDto second = new SysAttachmentDto();
+        second.setId(2L);
+        report.setAttachments(Arrays.asList(first, second));
+        when(reportService.queryReportDetail(any(ReportReq.class))).thenReturn(report);
+        postJson(mockMvc, "/api/v1/reports/queryReportDetail", "{\"reportId\":20,\"source\":\"external\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.attachments.length()").value(2));
+        ArgumentCaptor<ReportReq> captor = ArgumentCaptor.forClass(ReportReq.class);
+        verify(reportService).queryReportDetail(captor.capture());
+        assertThat(captor.getValue().getReportId()).isEqualTo(20L);
+        assertThat(captor.getValue().getSource()).isEqualTo("external");
+    }
+
     /** 验证筛选条件可以传递到服务层 */
     @Test
     public void shouldPassReportFiltersToService() throws Exception {

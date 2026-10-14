@@ -10,6 +10,7 @@
             table_name
             ,main_id
             ,attachment_category
+            ,source_attachment_id
             ,file_type
             ,original_file_name
             ,new_file_name
@@ -25,6 +26,7 @@
             #{tableName}
             ,#{mainId}
             ,#{attachmentCategory}
+            ,#{sourceAttachmentId}
             ,#{fileType}
             ,#{originalFileName}
             ,#{newFileName}
@@ -41,23 +43,32 @@
 
     <!-- 按调库日志 ID 列表查询附件列表 -->
     <select id="queryAttachmentList" resultType="com.znty.rrs.entity.sysattachment.SysAttachmentDto">
-        SELECT id
-               ,main_id
-               ,attachment_category
-               ,original_file_name
-               ,file_type
-               ,file_size
-               ,content_type
-               ,full_url
-        FROM sys_attachment
-        WHERE table_name = #{tableName}
-          AND main_id IN
+        SELECT a.id
+               ,a.main_id
+               ,a.attachment_category
+               ,a.original_file_name
+               ,a.file_type
+               ,a.file_size
+               ,a.content_type
+               ,a.full_url
+               ,a.source_attachment_id
+               ,s.main_id AS source_report_id
+               ,CASE s.table_name WHEN 'rrs_report_in' THEN 'internal'
+                    WHEN 'rrs_report_out' THEN 'external' END AS source_report_source
+               ,CASE s.table_name WHEN 'rrs_report_in' THEN ri.report_title
+                    WHEN 'rrs_report_out' THEN ro.report_title END AS source_report_title
+        FROM sys_attachment a
+        LEFT JOIN sys_attachment s ON s.id = a.source_attachment_id
+        LEFT JOIN rrs_report_in ri ON s.table_name = 'rrs_report_in' AND ri.id = s.main_id
+        LEFT JOIN rrs_report_out ro ON s.table_name = 'rrs_report_out' AND ro.id = s.main_id
+        WHERE a.table_name = #{tableName}
+          AND a.main_id IN
           <foreach collection="adjustLogIds" item="adjustLogId" open="(" separator="," close=")">
               #{adjustLogId}
           </foreach>
-          AND is_deleted = 0
-        ORDER BY main_id ASC
-                 ,id ASC
+          AND a.is_deleted = 0
+        ORDER BY a.main_id ASC
+                 ,a.id ASC
     </select>
 
     <!-- 按附件 ID 查询附件 -->

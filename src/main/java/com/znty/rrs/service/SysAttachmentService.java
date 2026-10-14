@@ -335,6 +335,7 @@ public class SysAttachmentService {
             bo.setMainId(mainId);
             bo.setAttachmentCategory(attachmentCategory);
             bo.setFileType(source.getFileType());
+            bo.setSourceAttachmentId(source.getId());
             bo.setOriginalFileName(source.getOriginalFileName());
             bo.setNewFileName(source.getNewFileName());
             bo.setFileSize(source.getFileSize());
@@ -388,6 +389,7 @@ public class SysAttachmentService {
             copied.setTableName(FUND_ADJUST_LOG_TABLE);
             copied.setMainId(targetLogId);
             copied.setAttachmentCategory(source.getAttachmentCategory());
+            copied.setSourceAttachmentId(source.getSourceAttachmentId());
             copied.setFileType(source.getFileType());
             copied.setOriginalFileName(source.getOriginalFileName());
             copied.setNewFileName(source.getNewFileName());
