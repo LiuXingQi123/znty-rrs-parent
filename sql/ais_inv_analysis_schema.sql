@@ -1,7 +1,9 @@
 -- ============================================================
 -- AIS 投资分析库 - 建库建表脚本
 -- MySQL version: 8.0.33
--- 说明：创建主体评级、担保人内评结果、角色、用户及用户角色关联表
+-- 说明：创建主体评级、担保人内评结果、角色、用户、用户角色关联、资源及权限表
+-- 用途：t_sys_resource、t_sys_permission 两张表及其数据目前仅用于迁移
+-- 结构：沿用外部系统既有字段，不追加本项目通用的 crte_time / updt_time 字段
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `ais_inv_analysis` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -23,6 +25,10 @@ DROP TABLE IF EXISTS `t_sys_user_role`;
 DROP TABLE IF EXISTS `t_sys_user`;
 -- 删除角色/部门表
 DROP TABLE IF EXISTS `t_sys_role`;
+-- 删除权限表
+DROP TABLE IF EXISTS `t_sys_permission`;
+-- 删除资源表
+DROP TABLE IF EXISTS `t_sys_resource`;
 
 -- ----------------------------------------------------------------------------
 -- 1. 主体基础信息表
@@ -150,3 +156,40 @@ CREATE TABLE `t_sys_user_role` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '用户角色关联表';
+
+-- ----------------------------------------------------------------------------
+-- 7. 资源表
+-- 说明：本表及其数据目前仅用于迁移
+-- ----------------------------------------------------------------------------
+CREATE TABLE `t_sys_resource` (
+    `id`        BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `name`      VARCHAR(50)  DEFAULT NULL            COMMENT '资源名称',
+    `url`       VARCHAR(100) DEFAULT NULL            COMMENT '资源地址',
+    `tree_code` VARCHAR(50)  DEFAULT NULL            COMMENT '资源树编码',
+    `enable`    INT          DEFAULT NULL            COMMENT '是否启用：1=启用 / 0=禁用',
+    `type`      VARCHAR(50)  DEFAULT NULL            COMMENT '资源类型',
+    `parent_id` BIGINT       DEFAULT NULL            COMMENT '父级资源 ID，关联 t_sys_resource.id',
+    `ico`       VARCHAR(50)  DEFAULT NULL            COMMENT '资源图标',
+    `hidden`    INT          DEFAULT NULL            COMMENT '是否隐藏：1=隐藏 / 0=显示',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci
+  COMMENT = '资源表（目前仅用于迁移）';
+
+-- ----------------------------------------------------------------------------
+-- 8. 权限表
+-- 说明：本表及其数据目前仅用于迁移
+-- ----------------------------------------------------------------------------
+CREATE TABLE `t_sys_permission` (
+    `id`          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `resource_id` BIGINT      DEFAULT NULL            COMMENT '资源 ID，关联 t_sys_resource.id',
+    `tree_code`   VARCHAR(50) DEFAULT NULL            COMMENT '权限树编码',
+    `code`        VARCHAR(50) DEFAULT NULL            COMMENT '权限编码',
+    `name`        VARCHAR(50) DEFAULT NULL            COMMENT '权限名称',
+    `ts`          TIMESTAMP   DEFAULT NULL            COMMENT '时间戳',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci
+  COMMENT = '权限表（目前仅用于迁移）';

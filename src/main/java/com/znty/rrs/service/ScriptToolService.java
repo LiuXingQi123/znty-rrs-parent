@@ -2823,7 +2823,9 @@ public class ScriptToolService {
                 buildTable("ais_inv_analysis", "t_inv_company", "投资分析主体"),
                 buildTable("ais_inv_analysis", "t_sys_user_role", "用户角色关系"),
                 buildTable("ais_inv_analysis", "t_sys_user", "用户"),
-                buildTable("ais_inv_analysis", "t_sys_role", "角色")
+                buildTable("ais_inv_analysis", "t_sys_role", "角色"),
+                buildTable("ais_inv_analysis", "t_sys_permission", "权限"),
+                buildTable("ais_inv_analysis", "t_sys_resource", "资源")
         )));
         groups.add(buildTableGroup("ais-ods", "AIS 投资 ODS 库", "ais_inv_ods", Arrays.asList(
                 buildTable("ais_inv_ods", "wind_cbondissuer", "Wind 中国债券发行主体信息表"),
