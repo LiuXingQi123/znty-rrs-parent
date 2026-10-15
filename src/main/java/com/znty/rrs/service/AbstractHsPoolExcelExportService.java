@@ -516,7 +516,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
             case "SZSE":
                 hsMarket = HsMarketCode.SHENZHEN_STOCK_EXCHANGE;
                 break;
-            case "CIBM":
+            case "NIB":
                 hsMarket = HsMarketCode.INTERBANK_MARKET;
                 break;
             case "BSE":

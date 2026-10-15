@@ -33,11 +33,12 @@ public class SecurityMarketServiceTest {
     /** 同券沪市代码不能使银行间代码通过仅沪市的池。 */
     @Test
     public void shouldValidateOnlyCurrentMarket() {
-        when(mapper.queryMarketMappingList(anyList())).thenReturn(Collections.singletonList(mapping("A.IB", "IB")));
+        when(mapper.queryMarketMappingList(anyList())).thenReturn(Collections.singletonList(mapping("A.IB", "NIB")));
         SecurityInfoBo security = new SecurityInfoBo();
         security.setWindCode("A.IB");
+        assertThat(service.queryMarketCode("A.IB")).isEqualTo("NIB");
         assertThat(service.matchesPoolMarkets("[\"SSE\"]", security)).isFalse();
-        assertThat(service.matchesPoolMarkets("[\"CIBM\"]", security)).isTrue();
+        assertThat(service.matchesPoolMarkets("[\"NIB\"]", security)).isTrue();
     }
 
     /** 不用代码后缀推断市场，源数据错误包含代码。 */
@@ -51,13 +52,23 @@ public class SecurityMarketServiceTest {
         assertThatThrownBy(() -> service.queryMarketCode("A.SH")).hasMessageContaining("重复").hasMessageContaining("A.SH");
     }
 
-    /** 临时登记市场按标准码校验，不套用外部 IB 编码。 */
+    /** 银行间只接受 NIB，不将旧编码静默转换为合法市场。 */
+    @Test
+    public void shouldRejectLegacyInterbankCodes() {
+        for (String legacy : Arrays.asList("CIBM", "IB")) {
+            when(mapper.queryMarketMappingList(anyList())).thenReturn(Collections.singletonList(mapping("A.IB", legacy)));
+            assertThatThrownBy(() -> service.queryMarketCode("A.IB"))
+                    .isInstanceOf(BizException.class).hasMessageContaining("A.IB").hasMessageContaining(legacy);
+        }
+    }
+
+    /** 临时登记市场与正式证券统一使用 NIB。 */
     @Test
     public void shouldReadExplicitTemporaryMarket() {
-        SecurityMarketMappingDto temp = mapping("TMP.SH", "CIBM");
+        SecurityMarketMappingDto temp = mapping("TMP.SH", "NIB");
         temp.setSecuritySource("temporary");
         when(mapper.queryMarketMappingList(anyList())).thenReturn(Collections.singletonList(temp));
-        assertThat(service.queryMarketCode("TMP.SH")).isEqualTo("CIBM");
+        assertThat(service.queryMarketCode("TMP.SH")).isEqualTo("NIB");
     }
 
     /** 构造一行外部映射。 */

@@ -132,7 +132,7 @@ public class InvestmentPoolServiceTest {
         mockDetailLists(mapper, 1L);
         // 构建合法的基础配置请求
         InvestmentPoolReq req = marketConfigReq();
-        List<String> markets = Arrays.asList("SSE", "SZSE", "CIBM", "BSE", "COMPANY", "OTC",
+        List<String> markets = Arrays.asList("SSE", "SZSE", "NIB", "BSE", "COMPANY", "OTC",
                 "HKEX", "QDII", "JWCW", "UNKNOWN", "OTHER");
         req.setMarketCodes(markets);
 
@@ -174,7 +174,7 @@ public class InvestmentPoolServiceTest {
         when(mapper.queryPoolById(1L)).thenReturn(pool(1L));
         // 构建基础配置请求
         InvestmentPoolReq req = marketConfigReq();
-        for (String invalid : Arrays.asList("ABC", "IB", "sse", "SSE ", " SSE", "", " ", null)) {
+        for (String invalid : Arrays.asList("ABC", "IB", "CIBM", "nib", "NIB ", " NIB", "sse", "SSE ", " SSE", "", " ", null)) {
             for (int index = 0; index < 2; index++) {
                 req.setMarketCodes(index == 0 ? Arrays.asList(invalid, "SSE") : Arrays.asList("SSE", invalid));
                 assertThatThrownBy(() -> service.editPoolConfig(req))

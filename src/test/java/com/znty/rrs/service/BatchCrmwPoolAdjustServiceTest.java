@@ -401,11 +401,11 @@ public class BatchCrmwPoolAdjustServiceTest {
         SecurityMarketService markets = mock(SecurityMarketService.class);
         ReflectionTestUtils.setField(service, "securityMarketService", markets);
         when(markets.queryMarketCodeMap(Collections.singletonList("XYB001.IB")))
-                .thenReturn(Collections.singletonMap("XYB001.IB", "CIBM"));
+                .thenReturn(Collections.singletonMap("XYB001.IB", "NIB"));
         BatchCrmwCandidateDto dto = new BatchCrmwCandidateDto();
         dto.setSecurityCode("XYB001.IB");
         ReflectionTestUtils.invokeMethod(service, "fillCandidateFields", Collections.singletonList(dto));
-        assertThat(dto.getMarketCodes()).containsExactly("CIBM");
+        assertThat(dto.getMarketCodes()).containsExactly("NIB");
         assertThat(dto.getCrmwStype()).isEqualTo("crmw");
     }
 }

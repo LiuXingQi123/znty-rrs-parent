@@ -28,9 +28,9 @@ INSERT INTO `rrs_temp_security_code` (
     `temp_maturity_date`, `security_name`, `security_code`, `security_market`, `security_type`,
     `update_time`, `status`, `is_deleted`, `oprt_source`, `memo`, `crte_time`, `updt_time`
 ) VALUES
-(1, 'TEMP_TMP001.IB', '某交投临时中票', 'TMP001.IB', 'CIBM', 'mtn', NULL, 'C10001', '某交投集团', '2026-07-01', '2031-07-01', NULL, NULL, NULL, NULL, NULL, 'temporary', 0, 'manual', NULL, NOW(), NOW()),
-(2, 'TEMP_TMP002.IB', '某国贸临时资产证券化', 'TMP002.IB', 'CIBM', 'abs_all', NULL, 'C10009', '某国贸公司', '2024-03-15', '2029-03-18', '25国贸资产证券化01', 'ABN002.IB', 'CIBM', 'abs_all', '2026-06-26 10:30:00', 'updated', 0, 'manual', NULL, NOW(), NOW()),
-(3, 'TEMP_TMP003.IB', '某能源临时金融债', 'TMP003.IB', 'CIBM', 'financial_bond', NULL, 'C10003', '某能源集团', '2026-08-01', '2029-08-01', NULL, NULL, NULL, NULL, '2026-06-26 11:10:00', 'cancelled', 0, 'manual', NULL, NOW(), NOW());
+(1, 'TEMP_TMP001.IB', '某交投临时中票', 'TMP001.IB', 'NIB', 'mtn', NULL, 'C10001', '某交投集团', '2026-07-01', '2031-07-01', NULL, NULL, NULL, NULL, NULL, 'temporary', 0, 'manual', NULL, NOW(), NOW()),
+(2, 'TEMP_TMP002.IB', '某国贸临时资产证券化', 'TMP002.IB', 'NIB', 'abs_all', NULL, 'C10009', '某国贸公司', '2024-03-15', '2029-03-18', '25国贸资产证券化01', 'ABN002.IB', 'NIB', 'abs_all', '2026-06-26 10:30:00', 'updated', 0, 'manual', NULL, NOW(), NOW()),
+(3, 'TEMP_TMP003.IB', '某能源临时金融债', 'TMP003.IB', 'NIB', 'financial_bond', NULL, 'C10003', '某能源集团', '2026-08-01', '2029-08-01', NULL, NULL, NULL, NULL, '2026-06-26 11:10:00', 'cancelled', 0, 'manual', NULL, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
 -- 临时代码替换日志样例（1 条）
@@ -40,4 +40,4 @@ INSERT INTO `rrs_temp_security_code_update_log` (
     `security_name`, `security_code`, `security_market`, `security_type`, `replace_table_name`,
     `replace_record_id`, `replace_status`, `replace_time`, `crte_time`
 ) VALUES
-('某国贸临时资产证券化', 'TMP002.IB', 'CIBM', 'abs_all', '25国贸资产证券化01', 'ABN002.IB', 'CIBM', 'abs_all', 'rrs_securityinfo', NULL, 'success', '2026-06-26 10:30:00', NOW());
+('某国贸临时资产证券化', 'TMP002.IB', 'NIB', 'abs_all', '25国贸资产证券化01', 'ABN002.IB', 'NIB', 'abs_all', 'rrs_securityinfo', NULL, 'success', '2026-06-26 10:30:00', NOW());

@@ -85,7 +85,7 @@ public class TempSecurityCodePersistenceTest {
         SqlSessionTemplate session = new SqlSessionTemplate(new SqlSessionFactoryBuilder().build(config));
         mapper = session.getMapper(TempSecurityCodeMapper.class);
         SecurityMarketService markets = mock(SecurityMarketService.class);
-        when(markets.queryMarketCode("FORMAL.IB")).thenReturn("CIBM");
+        when(markets.queryMarketCode("FORMAL.IB")).thenReturn("NIB");
         TempSecurityCodeService target = new TempSecurityCodeService();
         ReflectionTestUtils.setField(target, "tempSecurityCodeMapper", mapper);
         ReflectionTestUtils.setField(target, "securityMarketService", markets);
@@ -234,7 +234,7 @@ public class TempSecurityCodePersistenceTest {
         TempSecurityCodeReq req = new TempSecurityCodeReq();
         req.setTempSecurityCode(code);
         req.setTempSecurityName("测试临时证券");
-        req.setTempSecurityMarket("CIBM");
+        req.setTempSecurityMarket("NIB");
         req.setTempSecurityType("mtn");
         req.setTempCompanyCode("C10001");
         SimpleDateFormat dates = new SimpleDateFormat("yyyy-MM-dd");

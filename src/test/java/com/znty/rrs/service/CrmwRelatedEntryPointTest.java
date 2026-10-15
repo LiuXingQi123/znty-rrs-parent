@@ -126,7 +126,7 @@ public class CrmwRelatedEntryPointTest {
         source.setFld001("C.IB");
         source.setFld004("A.IB");
         source.setFld005("银行间名称");
-        source.setFld007("CIBM");
+        source.setFld007("NIB");
         source.setFld011("旧类型名");
         AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
         item.setSecurityCode("A.SH");

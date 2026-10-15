@@ -102,7 +102,7 @@ public class TempSecurityCodeDto {
         private String securityCode;
         /** 证券名称（优先简称） */
         private String securityName;
-        /** 证券市场（SSE/SZSE/CIBM/BSE/OTHER 等） */
+        /** 证券市场（SSE/SZSE/NIB/BSE/OTHER 等） */
         private String securityMarket;
         /** 证券类型编码 */
         private String securityType;

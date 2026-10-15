@@ -54,9 +54,6 @@ public class SecurityMarketService {
                     throw new BizException("证券缺少市场映射：" + code);
                 }
                 String market = raw.trim();
-                if (!"temporary".equals(mapping.getSecuritySource()) && "IB".equals(market)) {
-                    market = MarketCode.CIBM.getCode();
-                }
                 if (!MarketCode.isValid(market) || MarketCode.UNKNOWN.getCode().equals(market)
                         || MarketCode.COMPANY.getCode().equals(market)) {
                     throw new BizException("证券市场不受支持：" + code + "，市场=" + raw);

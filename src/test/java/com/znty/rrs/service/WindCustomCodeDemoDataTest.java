@@ -141,7 +141,7 @@ public class WindCustomCodeDemoDataTest {
             }
             connection.setSchema("znty_rrs");
             connection.createStatement().execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(100))");
-            connection.createStatement().execute("INSERT INTO rrs_temp_security_code VALUES ('TMP001.IB', 'CIBM'), ('TMP003.IB', 'CIBM')");
+            connection.createStatement().execute("INSERT INTO rrs_temp_security_code VALUES ('TMP001.IB', 'NIB'), ('TMP003.IB', 'NIB')");
             connection.createStatement().execute("CREATE TABLE ip_pool_status_crmw (security_code VARCHAR(100), crmw_scode VARCHAR(100), crmw_name VARCHAR(100), crmw_stype VARCHAR(32), target_pool_id BIGINT, audit_status VARCHAR(2), is_deleted INT, pool_type VARCHAR(32))");
             connection.createStatement().execute("INSERT INTO ip_pool_status_crmw VALUES ('198101.SH', 'CRMW001.IB', 'CRMW-A', 'crmw', 1, '20', 0, 'crmw'), ('XYB001.IB', 'CRMW001.IB', 'CRMW-A', 'crmw', 1, '20', 0, 'crmw')");
             ds.setUrl(ds.getUrl() + ";SCHEMA=znty_rrs");
@@ -169,7 +169,7 @@ public class WindCustomCodeDemoDataTest {
                                 .containsExactlyInAnyOrderElementsOf(expected);
                     }
                 }
-                assertThat(service.queryMarketCode("XYB001.IB")).isEqualTo("CIBM");
+                assertThat(service.queryMarketCode("XYB001.IB")).isEqualTo("NIB");
                 assertThat(service.queryMarketCode("198101.SH")).isEqualTo("SSE");
                 assertThat(service.queryMarketCode("CORP001.IB")).isEqualTo("OTHER");
                 assertThat(service.queryRelatedMarketCodes("TMP001.IB")).isEmpty();
@@ -195,14 +195,16 @@ public class WindCustomCodeDemoDataTest {
                 connection.createStatement().execute("DELETE FROM ais_inv_ods.wind_windcustomcode WHERE S_INFO_WINDCODE = 'XYB001.IB'");
                 session.clearCache();
                 assertThat(service.queryMarketCode("198101.SH")).isEqualTo("SSE");
-                assertThat(service.queryMarketCode("XYB001.IB")).isEqualTo("CIBM");
+                assertThat(service.queryMarketCode("XYB001.IB")).isEqualTo("NIB");
                 assertThat(batch.querySecurityPage(filter)).hasSize(1);
-                filter.setSecurityCode("XYB001.IB"); filter.setMarketCodes(Arrays.asList("CIBM"));
+                filter.setSecurityCode("XYB001.IB"); filter.setMarketCodes(Arrays.asList("NIB"));
                 assertThat(batch.querySecurityPage(filter)).hasSize(1);
                 filter.setSecurityCode("TMP001.IB");
                 assertThat(batch.querySecurityPage(filter)).hasSize(1);
                 StockSecurityBatchAdjustReq stockFilter = new StockSecurityBatchAdjustReq();
                 stockFilter.setSecurityCode("198101.SH"); stockFilter.setMarketCodes(Arrays.asList("SSE"));
+                assertThat(session.getMapper(StockSecurityBatchAdjustMapper.class).querySecurityPage(stockFilter)).hasSize(1);
+                stockFilter.setSecurityCode("XYB001.IB"); stockFilter.setMarketCodes(Arrays.asList("NIB"));
                 assertThat(session.getMapper(StockSecurityBatchAdjustMapper.class).querySecurityPage(stockFilter)).hasSize(1);
                 BatchCrmwPoolAdjustReq crmwFilter = new BatchCrmwPoolAdjustReq();
                 crmwFilter.setPoolId(2L); crmwFilter.setCrmwScode("CRMW001.IB");
@@ -213,8 +215,10 @@ public class WindCustomCodeDemoDataTest {
                 assertThat(crmwMapper.queryOutboundCandidatePage(crmwFilter)).hasSize(1);
                 crmwFilter.setSecurityCode("XYB001.IB");
                 assertThat(crmwMapper.queryOutboundCandidatePage(crmwFilter)).isEmpty();
-                crmwFilter.setMarketCodes(Arrays.asList("CIBM"));
+                crmwFilter.setMarketCodes(Arrays.asList("NIB"));
                 assertThat(crmwMapper.queryOutboundCandidatePage(crmwFilter)).hasSize(1);
+                crmwFilter.setPoolId(2L);
+                assertThat(crmwMapper.queryInboundCandidatePage(crmwFilter)).hasSize(1);
                 // 本地字段缺失时必须报错，不回退查询 Wind 或推断代码后缀
                 connection.createStatement().execute("UPDATE rrs_securityinfo SET market = NULL WHERE wind_code = '198101.SH'");
                 session.clearCache();

@@ -479,7 +479,7 @@
 
 主档按市场代码逐条存储，`wind_code` 为业务键；不在主档重复保存 ISIN，同券关系从 Wind `S_INFO_ISINCODE` 实时读取。删除原有五个市场代码列及五个市场证券 ID 列，保留 `sec_id VARCHAR(100) DEFAULT NULL COMMENT '证券 ID'`，其后在表末尾追加 `market VARCHAR(10) DEFAULT NULL COMMENT '交易市场代码'`。`sec_id` 是外部独立证券 ID，不映射 Wind 的 OBJECT_ID 或 S_INFO_ASHARECODE，表单编辑和临时转正不覆盖正式证券 ID。
 
-正式证券当前市场直接读取 `rrs_securityinfo.market`。外部导入按 `wind_code = ais_inv_ods.wind_windcustomcode.S_INFO_WINDCODE` 同步 `EXCHMARKET` 原值，不读取 `S_INFO_EXCHMARKET`，不在业务查询时回退到 Wind，`IB` 映射为系统 `CIBM`；缺失、不支持或同一代码重复映射时明确报出代码，禁止按代码后缀推断。临时代码只读取登记表 `temp_security_market`，不向 ODS 写占位记录。
+正式证券当前市场直接读取 `rrs_securityinfo.market`。外部导入按 `wind_code = ais_inv_ods.wind_windcustomcode.S_INFO_WINDCODE` 同步 `EXCHMARKET` 原值，不读取 `S_INFO_EXCHMARKET`，不在业务查询时回退到 Wind，银行间市场统一使用 `NIB`；缺失、不支持或同一代码重复映射时明确报出代码，禁止按代码后缀推断。临时代码只读取登记表 `temp_security_market`，不向 ODS 写占位记录。
 
 同券关联固定为当前 Wind 代码 → 当前 Wind 记录的非空 `S_INFO_ISINCODE` → 同 ISIN 的其他代码，去重、排除自身、不递归。不按主档名称、主体或空 ISIN 推断。详情新增只读 `marketCode` 与 `relatedMarketCodes: [{ windCode, marketCode }]`，同市场多个代码完整展示；提交不包含旧市场字段。
 

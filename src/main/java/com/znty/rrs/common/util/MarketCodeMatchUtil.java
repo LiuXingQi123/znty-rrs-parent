@@ -15,7 +15,7 @@ public final class MarketCodeMatchUtil {
      * <p>池 {@code marketCodesJson} 为空时视为不限制，返回 true。
      * 证券当前市场 code 出现在 JSON 字符串中（形如 {@code "SSE"}）即通过。</p>
      *
-     * @param marketCodesJson 池 market_codes JSON 原文，如 {@code ["SSE","CIBM"]}
+     * @param marketCodesJson 池 market_codes JSON 原文，如 {@code ["SSE","NIB"]}
      * @param marketCode      当前证券所属市场
      * @return true 表示可入该市场配置
      */

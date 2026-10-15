@@ -400,12 +400,12 @@ public class SecurityCodeConversionServiceTest {
     private SecurityCodeConversionReq buildReq() {
         SecurityCodeConversionReq req = new SecurityCodeConversionReq();
         req.setTempSecurityCode("TMP-EXT-001");
-        req.setTempSecurityMarket("CIBM");
+        req.setTempSecurityMarket("NIB");
         req.setSecurityCode("102600001.IB");
         req.setSecurityName("26某集团MTN001");
         req.setSecurityFullName("某集团2026年度第一期中期票据");
         req.setSecurityShortName("26某集团MTN001");
-        req.setSecurityMarket(MarketCode.CIBM.getCode());
+        req.setSecurityMarket(MarketCode.NIB.getCode());
         req.setSecurityType("mtn");
         req.setOprtSource(TempOprtSource.OTHER.getCode());
         return req;

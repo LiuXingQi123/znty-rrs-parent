@@ -56,7 +56,7 @@ public class CrmwPoolExcelImportServiceTest {
     public void setUp() {
         service = new CrmwPoolExcelImportService();
         SecurityMarketService marketService = mock(SecurityMarketService.class);
-        when(marketService.queryMarketCode("CRMW001.IB")).thenReturn("CIBM");
+        when(marketService.queryMarketCode("CRMW001.IB")).thenReturn("NIB");
         when(marketService.queryMarketCode("XYB001.IB")).thenReturn("SSE");
         ReflectionTestUtils.setField(service, "securityMarketService", marketService);
         importMapper = mock(CrmwPoolExcelImportMapper.class);

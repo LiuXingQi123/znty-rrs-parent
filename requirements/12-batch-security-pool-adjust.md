@@ -46,7 +46,7 @@
 |---|---|---|
 | 文本输入 | `securityCode` | 证券代码 |
 | 文本输入 | `securityShortName` | 证券简称 |
-| 多选 | `marketCodes` | 市场（SSE=上海证券交易所 / SZSE=深圳证券交易所 / CIBM=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他） |
+| 多选 | `marketCodes` | 市场（SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他） |
 | 多选 | `bondYesFlags` | 是否特征：ABS/担保/永续/次级/私募/含权/标准信用债；勾选即筛「是」，多选 AND |
 
 查询接口：`POST /api/v1/batchSecurityPoolAdjust/querySecurityPage`（`loadSecurityList`），请求体：
@@ -311,7 +311,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 ## 当前市场口径
 
-市场按当前代码在 `rrs_securityinfo.market` 的本地市场值校验（外部导入与 Wind `EXCHMARKET` 保持一致），IB→CIBM；临时代码使用登记表市场。关联券其他市场不使当前代码通过市场限制。批量候选直接按主档市场筛选，临时代码用登记表 EXISTS 筛选，展示按当前页批量查询唯一市场，避免关联连接重复分页或逐行市场查询。CRMW 导入复用证券主档缓存，同一代码的市场只查询一次。缺失、重复或不支持的映射报出具体代码。
+市场按当前代码在 `rrs_securityinfo.market` 的本地市场值校验（外部导入与 Wind `EXCHMARKET` 保持一致），银行间使用 NIB；临时代码使用登记表市场。关联券其他市场不使当前代码通过市场限制。批量候选直接按主档市场筛选，临时代码用登记表 EXISTS 筛选，展示按当前页批量查询唯一市场，避免关联连接重复分页或逐行市场查询。CRMW 导入复用证券主档缓存，同一代码的市场只查询一次。缺失、重复或不支持的映射报出具体代码。
 
 
 ## 报告与手工文件统一交互

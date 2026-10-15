@@ -215,12 +215,7 @@
                       )
                       AND JSON_CONTAINS(
                           p.market_codes
-                          ,JSON_QUOTE(
-                              CASE
-                                  WHEN TRIM(bond.market) = 'IB' THEN 'CIBM'
-                                  ELSE TRIM(bond.market)
-                              END
-                          )
+                          ,JSON_QUOTE(TRIM(bond.market))
                       )
                   )
               )

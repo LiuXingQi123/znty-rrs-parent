@@ -138,7 +138,7 @@
 操作来源枚举（`oprt_source`，注释「manual=人工 / job=定时任务 / other=其他」）：
 - `TempOprtSource.MANUAL("manual")` / `JOB("job")` / `OTHER("other")`
 
-市场枚举 `MarketCode`：`SSE`=上海证券交易所 / `SZSE`=深圳证券交易所 / `CIBM`=银行间市场 / `BSE`=北京证券交易所 / `COMPANY`=主体 / `OTC`=场外市场 / `HKEX`=香港交易所 / `QDII`=其他QDII市场 / `JWCW`=JWCW市场 / `UNKNOWN`=未知 / `OTHER`=其他（前端 `marketOptions` 与 `docs/dict.js` 同此 11 项）。
+市场枚举 `MarketCode`：`SSE`=上海证券交易所 / `SZSE`=深圳证券交易所 / `NIB`=银行间市场 / `BSE`=北京证券交易所 / `COMPANY`=主体 / `OTC`=场外市场 / `HKEX`=香港交易所 / `QDII`=其他QDII市场 / `JWCW`=JWCW市场 / `UNKNOWN`=未知 / `OTHER`=其他（前端 `marketOptions` 与 `docs/dict.js` 同此 11 项）。
 
 ```
             addTempSecurityCode

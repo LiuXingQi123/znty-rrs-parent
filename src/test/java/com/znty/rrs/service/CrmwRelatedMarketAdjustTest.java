@@ -162,7 +162,7 @@ public class CrmwRelatedMarketAdjustTest {
     /** 每个代码使用自身市场，并独立检查组合是否已在池。 */
     @Test
     public void checkShouldUseEachCodesMarketAndPoolStatus() {
-        pool.setMarketCodes("[\"CIBM\"]");
+        pool.setMarketCodes("[\"NIB\"]");
         when(markets.matchesPoolMarkets(anyString(), any()))
                 .thenAnswer(call -> "A.IB".equals(((SecurityInfoBo) call.getArgument(1)).getWindCode()));
         when(mapper.querySecurityCurrentPoolIdList("A.SZ", "C.IB", "crmw"))

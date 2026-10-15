@@ -48,7 +48,7 @@ public class SecuritySnapshotMarketIntegrationTest {
         jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(32), security_type_name VARCHAR(100), category_type VARCHAR(32), is_deleted INT)");
         jdbc.execute("INSERT INTO dict_security_type VALUES ('mtn', '中期票据', 'bond', 0)");
         jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(100), security_source VARCHAR(32), market VARCHAR(10))");
-        jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('A.IB', 'official', 'IB'), ('B.SH', 'official', 'SSE'), ('C.SZ', 'official', 'SZSE')");
+        jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('A.IB', 'official', 'NIB'), ('B.SH', 'official', 'SSE'), ('C.SZ', 'official', 'SZSE')");
         jdbc.execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(32))");
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
         jdbc.execute("CREATE TABLE ais_inv_ods.wind_windcustomcode (S_INFO_WINDCODE VARCHAR(100), S_INFO_EXCHMARKET VARCHAR(10), S_INFO_ISINCODE VARCHAR(40))");
@@ -86,7 +86,7 @@ public class SecuritySnapshotMarketIntegrationTest {
             session.clearCache();
             SecurityInfoDetailDto history = service.querySecurityDetail(req);
             assertThat(history.getRelatedMarketCodes()).extracting("windCode").containsExactly("C.SZ");
-            assertThat(history.getMarketCode()).isEqualTo("CIBM");
+            assertThat(history.getMarketCode()).isEqualTo("NIB");
             assertThat(history.getShortName()).isEqualTo("提交时简称");
             assertThat(history.getAnalysis()).isEqualTo("提交时分析");
             CrmwPoolAdjustService crmwService = new CrmwPoolAdjustService();

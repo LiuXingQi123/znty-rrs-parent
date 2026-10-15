@@ -377,7 +377,7 @@ public class HsPoolExcelExportServiceTest {
         when(markets.queryMarketCodeMap(org.mockito.ArgumentMatchers.anyList())).thenAnswer(invocation -> {
             Map<String, String> values = new HashMap<>();
             for (String code : (List<String>) invocation.getArgument(0)) {
-                String market = "112001.IB".equals(code) ? "CIBM" : "220001.SZ".equals(code) ? "SZSE"
+                String market = "112001.IB".equals(code) ? "NIB" : "220001.SZ".equals(code) ? "SZSE"
                         : "830001.BJ".equals(code) ? "BSE" : "US0001.N".equals(code) ? "OTHER" : "SSE";
                 values.put(code, market);
             }

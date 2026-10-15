@@ -58,7 +58,7 @@ public class TempSecurityCodeServiceTest {
         verify(mapper).addTempSecurityCode(tempCaptor.capture());
         assertThat(tempCaptor.getValue().getSecId()).isEqualTo(captor.getValue().getSecId());
         assertThat(captor.getValue().getSecurityName()).isEqualTo("某基建集团临时中票");
-        assertThat(captor.getValue().getSecurityMarket()).isEqualTo(MarketCode.CIBM.getCode());
+        assertThat(captor.getValue().getSecurityMarket()).isEqualTo(MarketCode.NIB.getCode());
         assertThat(captor.getValue().getTempCompanyCode()).isEqualTo("C10001");
         assertThat(captor.getValue().getSecuritySource()).isEqualTo("temporary");
     }
@@ -310,7 +310,7 @@ public class TempSecurityCodeServiceTest {
                                                  SecurityPoolAdjustMapper adjustMapper) {
         TempSecurityCodeService service = new TempSecurityCodeService();
         SecurityMarketService markets = mock(SecurityMarketService.class);
-        when(markets.queryMarketCode(anyString())).thenReturn("CIBM");
+        when(markets.queryMarketCode(anyString())).thenReturn("NIB");
         ReflectionTestUtils.setField(service, "securityMarketService", markets);
         ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
@@ -322,7 +322,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeReq req = new TempSecurityCodeReq();
         req.setTempSecurityName("某基建集团临时中票");
         req.setTempSecurityCode("TMP001");
-        req.setTempSecurityMarket(MarketCode.CIBM.getCode());
+        req.setTempSecurityMarket(MarketCode.NIB.getCode());
         req.setTempSecurityType("mtn");
         req.setTempCompanyCode("C10001");
         req.setTempIssueDate(parseDate("2026-07-01"));
@@ -344,7 +344,7 @@ public class TempSecurityCodeServiceTest {
         bo.setId(1L);
         bo.setTempSecurityName("某基建集团临时中票");
         bo.setTempSecurityCode("TMP001");
-        bo.setTempSecurityMarket(MarketCode.CIBM.getCode());
+        bo.setTempSecurityMarket(MarketCode.NIB.getCode());
         bo.setTempSecurityType("mtn");
         bo.setTempCompanyCode("C10001");
         bo.setTempCompanyNameSnapshot("某基础设施建设投资集团有限公司");
@@ -357,7 +357,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeDto.FormalSecurityOption option = new TempSecurityCodeDto.FormalSecurityOption();
         option.setSecurityCode("110001.IB");
         option.setSecurityName("26某基建MTN001");
-        option.setSecurityMarket(MarketCode.CIBM.getCode());
+        option.setSecurityMarket(MarketCode.NIB.getCode());
         option.setSecurityType("mtn");
         option.setSecurityTypeName("中期票据");
         return option;

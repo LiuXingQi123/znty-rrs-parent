@@ -23,4 +23,4 @@ INSERT INTO `ip_pool_status_crmw` (
     `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `submit_time`, `audit_time`,
     `entry_time`, `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
-('MTN001.IB', '24交投MTN', 'mtn', '某CRMW凭证A', 'CRMW001.IB', 'CIBM', 'crmw', '手工调整', '调入', 'CRMW20260301001', 7, 18, 'CRMW库', 'crmw', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', 'CRMW调入CRMW库', '2026-03-01 09:00:00', '2026-03-01 14:00:00', '2026-03-01 14:00:00', 0, NOW(), NOW());
+('MTN001.IB', '24交投MTN', 'mtn', '某CRMW凭证A', 'CRMW001.IB', 'NIB', 'crmw', '手工调整', '调入', 'CRMW20260301001', 7, 18, 'CRMW库', 'crmw', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', 'CRMW调入CRMW库', '2026-03-01 09:00:00', '2026-03-01 14:00:00', '2026-03-01 14:00:00', 0, NOW(), NOW());

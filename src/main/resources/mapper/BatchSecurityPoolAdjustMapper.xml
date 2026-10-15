@@ -147,10 +147,7 @@
                                     si.security_source IS NULL
                                     OR si.security_source != 'temporary'
                                 )
-                                AND CASE
-                                    WHEN TRIM(si.market) = 'IB' THEN 'CIBM'
-                                    ELSE TRIM(si.market)
-                                END = #{marketCode}
+                                AND TRIM(si.market) = #{marketCode}
                             )
                         )
                     </foreach>
