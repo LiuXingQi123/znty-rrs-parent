@@ -21,7 +21,7 @@ public class BondMyMattersService {
 
     /** 我的事项数据访问组件 */
     @Resource
-    private BondMyMattersMapper myMattersMapper;
+    private BondMyMattersMapper bondMyMattersMapper;
 
     /** 投资池服务，用于获取池全路径映射 */
     @Resource
@@ -35,7 +35,7 @@ public class BondMyMattersService {
      */
     public PageResult<MyMattersDto> queryMyMattersPage(MyMattersReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<MyMattersDto> list = myMattersMapper.queryMyMattersPage(req);
+        List<MyMattersDto> list = bondMyMattersMapper.queryMyMattersPage(req);
         // 将流程描述中的目标池叶子名称替换为全路径
         replacePoolNameWithFullPath(list);
         PageInfo<MyMattersDto> pageInfo = new PageInfo<>(list);
@@ -50,7 +50,7 @@ public class BondMyMattersService {
      */
     public PageResult<MyMattersDto> queryMyInitiatedMattersPage(MyMattersReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<MyMattersDto> list = myMattersMapper.queryMyInitiatedMattersPage(req);
+        List<MyMattersDto> list = bondMyMattersMapper.queryMyInitiatedMattersPage(req);
         // 将流程描述中的目标池叶子名称替换为全路径
         replacePoolNameWithFullPath(list);
         PageInfo<MyMattersDto> pageInfo = new PageInfo<>(list);
@@ -64,7 +64,7 @@ public class BondMyMattersService {
      * @return 流程下拉选项
      */
     public List<FlowOptionDto> queryFlowOptionList(MyMattersReq req) {
-        return myMattersMapper.queryFlowOptionList(req);
+        return bondMyMattersMapper.queryFlowOptionList(req);
     }
 
     /**

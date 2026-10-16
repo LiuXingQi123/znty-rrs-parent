@@ -179,7 +179,7 @@ public class StockPoolIntegrationTest {
         ReflectionTestUtils.setField(history,"stockPoolAdjustHistoryMapper",session.getMapper(StockPoolAdjustHistoryMapper.class));
         ReflectionTestUtils.setField(history,"investmentPoolService",paths);
         matters = new StockMyMattersService();
-        ReflectionTestUtils.setField(matters,"myMattersMapper",session.getMapper(StockMyMattersMapper.class));
+        ReflectionTestUtils.setField(matters,"stockMyMattersMapper",session.getMapper(StockMyMattersMapper.class));
         ReflectionTestUtils.setField(matters,"investmentPoolService",paths);
     }
 
