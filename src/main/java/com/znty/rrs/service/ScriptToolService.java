@@ -2996,7 +2996,7 @@ public class ScriptToolService {
         // 取得对应的演示脚本清单
         List<String> demoFiles = queryInitializationFiles(false, all);
         String scope = all
-                ? "覆盖 znty_rrs、ais_inv_analysis、ais_inv_ods 已注册脚本，含债券、基金、股票、公共配置和外部基础信息；仅管理项目白名单表。"
+                ? "用于本地全量环境，覆盖 sql/（含 fund/、stock/）全部建表和 Demo 脚本，包含 znty_rrs、ais_inv_analysis、ais_inv_ods 三个库及 AIS 用户角色、Wind 基础数据；查询和存量迁移工具脚本不参与初始化。"
                 : "覆盖债券、CRMW、禁投主体、公共业务配置及外部证券基础信息；不执行 AIS、基金和股票专属脚本。公共池、流程、附件及自选也会重置。";
         // 统计建表范围并登记高风险任务
         addTask(taskMap, "INIT_" + code + "_SCHEMA", "初始化" + name + "建表语句",

@@ -66,6 +66,36 @@ public class ScriptToolServiceTest {
         }
     }
 
+    /** 直接对照本地 SQL 目录，验证全库任务包含 AIS 及资产子目录的全部初始化脚本。 */
+    @Test
+    public void shouldIncludeEveryLocalInitializationScriptInFullDatabaseTasks() {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+        List<ScriptTaskDto> tasks = service.queryScriptTaskList(new ScriptToolReq());
+        File sqlDir = new File("sql");
+        Set<String> sqlFiles = new HashSet<>();
+        // 递归读取磁盘文件，避免仅用注册清单自身证明全量覆盖。
+        collectSqlRelativePaths(sqlDir, sqlDir, sqlFiles);
+        assertFalse(sqlFiles.isEmpty());
+        for (String type : Arrays.asList("SCHEMA", "DEMO")) {
+            String suffix = "SCHEMA".equals(type) ? "_schema.sql" : "_demo_data.sql";
+            Set<String> expected = new HashSet<>();
+            for (String file : sqlFiles) {
+                if (file.endsWith(suffix)) {
+                    expected.add(file);
+                }
+            }
+            ScriptTaskDto all = tasks.stream().filter(task -> ("INIT_ALL_" + type).equals(task.getTaskCode())).findFirst().get();
+            assertEquals(expected, new HashSet<>(all.getItems()));
+            assertEquals(expected.size(), all.getItems().size());
+            assertTrue(all.getItems().contains("ais_inv_analysis" + suffix));
+            assertTrue(all.getItems().contains("ais_inv_ods" + suffix));
+            assertTrue(all.getItems().stream().anyMatch(file -> file.startsWith("fund/")));
+            assertTrue(all.getItems().stream().anyMatch(file -> file.startsWith("stock/")));
+            assertTrue(all.getExcludedItems() == null || all.getExcludedItems().isEmpty());
+        }
+    }
+
     /** 使用模拟连接执行实际白名单文件，验证展示清单与执行结果完全一致。 */
     @Test
     public void shouldExecuteNewInitializationTasksInAdvertisedOrder() throws Exception {
