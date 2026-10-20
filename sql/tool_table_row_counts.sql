@@ -54,6 +54,7 @@ WHERE TABLE_SCHEMA = 'ais_inv_analysis'
   AND TABLE_TYPE = 'BASE TABLE'
   AND TABLE_NAME IN (
       't_inv_company',
+      'company_observer_view',
       't_inv_grade_result',
       't_sys_role',
       't_sys_role_evt',

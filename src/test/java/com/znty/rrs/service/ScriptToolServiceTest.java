@@ -171,6 +171,7 @@ public class ScriptToolServiceTest {
         assertTrue(tables.containsKey("ais_inv_ods.wind_windcustomcode"));
         assertTrue(tables.containsKey("ais_inv_analysis.t_sys_resource"));
         assertTrue(tables.containsKey("ais_inv_analysis.t_sys_permission"));
+        assertTrue(tables.containsKey("ais_inv_analysis.company_observer_view"));
         assertTrue(tables.containsKey("znty_rrs.rrs_fundinfo"));
         assertTrue(tables.containsKey("znty_rrs.rrs_fund_nav"));
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_log_fund"));

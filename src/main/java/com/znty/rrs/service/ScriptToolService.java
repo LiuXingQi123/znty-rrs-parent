@@ -229,7 +229,7 @@ public class ScriptToolService {
         groups.add(buildRowCountGroup("znty_rrs", "主业务库", null));
         // AIS 投资分析库：仅统计本地已有表（公司库表多，显式指定）
         groups.add(buildRowCountGroup("ais_inv_analysis", "AIS 投资分析库", Arrays.asList(
-                "t_inv_company", "t_inv_grade_result", "v_inv_grade_result",
+                "t_inv_company", "t_inv_grade_result", "v_inv_grade_result", "company_observer_view",
                 "t_sys_role", "t_sys_role_evt",
                 "t_sys_user", "t_sys_user_evt",
                 "t_sys_user_role", "t_sys_user_role_evt")));
@@ -2026,7 +2026,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "temp-security-code", "临时代码", "重置临时代码管理演示数据。", "medium", "rrs_temp_security_code_demo_data.sql");
         addModuleTask(taskMap, "scheduled-task", "定时任务配置", "重置定时任务配置与执行历史演示数据。", "medium", "rrs_scheduled_task_demo_data.sql");
         addModuleTask(taskMap, "grade-rule-alert", "不符合分级规则提醒", "重置不符合主体债入库规则提醒待办。", "medium", "rrs_grade_rule_alert_demo_data.sql");
-        addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体评级、担保人内评、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
+        addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体观察名单、主体评级、担保人内评、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
         addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 债券发行人主体、评级、公司财务指标与跨市场证券代码演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;
     }
@@ -2829,6 +2829,7 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "sys_script_tool_run_log", "脚本工具写操作审计")
         )));
         groups.add(buildTableGroup("ais-analysis", "AIS 投资分析库", "ais_inv_analysis", Arrays.asList(
+                buildTable("ais_inv_analysis", "company_observer_view", "主体观察名单"),
                 buildTable("ais_inv_analysis", "v_inv_grade_result", "担保人内评结果"),
                 buildTable("ais_inv_analysis", "t_inv_grade_result", "主体评级结果"),
                 buildTable("ais_inv_analysis", "t_inv_company", "投资分析主体"),

@@ -1,9 +1,9 @@
 -- ============================================================
 -- AIS 投资分析库 - 建库建表脚本
 -- MySQL version: 8.0.33
--- 说明：创建主体评级、担保人内评结果、角色、用户、用户角色关联、资源及权限表
+-- 说明：创建主体观察名单、主体评级、担保人内评结果、角色、用户、用户角色关联、资源及权限表
 -- 用途：t_sys_resource、t_sys_permission 两张表及其数据目前仅用于迁移
--- 结构：沿用外部系统既有字段，不追加本项目通用的 crte_time / updt_time 字段
+-- 结构：既有外部表沿用原字段；新增主体观察名单表包含 crte_time / updt_time
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `ais_inv_analysis` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -19,6 +19,8 @@ DROP TABLE IF EXISTS `t_inv_grade_result`;
 DROP TABLE IF EXISTS `v_inv_grade_result`;
 -- 删除主体基础信息表
 DROP TABLE IF EXISTS `t_inv_company`;
+-- 删除主体观察名单表
+DROP TABLE IF EXISTS `company_observer_view`;
 -- 删除用户角色关联表
 DROP TABLE IF EXISTS `t_sys_user_role`;
 -- 删除用户表
@@ -193,3 +195,20 @@ CREATE TABLE `t_sys_permission` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = '权限表（目前仅用于迁移）';
+
+-- ----------------------------------------------------------------------------
+-- 9. 主体观察名单表
+-- ----------------------------------------------------------------------------
+CREATE TABLE `company_observer_view` (
+    `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `company_id`    BIGINT       DEFAULT NULL COMMENT '主体 ID，对应 t_inv_company.id',
+    `company_code`  VARCHAR(100) DEFAULT NULL COMMENT '主体编码，对应 t_inv_company.wind_code 及发行人编码',
+    `observer_type` VARCHAR(100) DEFAULT NULL COMMENT '观察者类型：1=空 / 2=观察 / 3=重点观察',
+    `isHo`          VARCHAR(1)   DEFAULT NULL COMMENT '是否总行',
+    `crte_time`     DATETIME     DEFAULT NULL COMMENT '创建时间',
+    `updt_time`     DATETIME     DEFAULT NULL COMMENT '修改时间',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_0900_ai_ci
+  COMMENT = '主体观察名单表';

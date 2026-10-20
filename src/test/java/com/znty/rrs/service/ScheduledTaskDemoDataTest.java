@@ -35,6 +35,7 @@ public class ScheduledTaskDemoDataTest {
                 new TaskConfig("bond_grade_inconformity_alert", "不符合主体债入库规则提醒", "0 0 1 * * ?"),
                 new TaskConfig("hs_pool_full_excel_export", "恒生池全量数据导出（不含已到期）", "0 10 1 * * ?"),
                 new TaskConfig("hs_pool_full_including_expired_excel_export", "恒生池全量数据导出（含已到期）", "0 20 1 * * ?"),
+                new TaskConfig("company_observer_pool_sync", "主体观察名单同步", "0 0 6 * * ?"),
                 new TaskConfig("pledge_blacklist_daily_increment_reminder", "质押黑名单库每日增量提醒", "0 0 9 * * ?"),
                 new TaskConfig("bond_issuer_not_in_company_pool_reminder", "主体库内债券主体不在池债邮件提醒", "0 0 9 * * ?"),
                 new TaskConfig("hs_pool_increment_excel_export", "恒生池增量数据导出", "0 */6 * * * ?"),
@@ -84,12 +85,24 @@ public class ScheduledTaskDemoDataTest {
         assertThat(descriptionCount).isEqualTo(configs.size());
     }
 
+    /** 默认观察池映射放在可编辑的任务参数内，不依赖执行实现中的固定池ID。 */
+    @Test
+    public void observerTaskShouldProvideDefaultPoolMappingsInParameters() throws Exception {
+        String sql = new String(Files.readAllBytes(Paths.get("sql", "rrs_scheduled_task_demo_data.sql")),
+                StandardCharsets.UTF_8);
+        String row = Arrays.stream(sql.split("\\R"))
+                .filter(line -> line.startsWith("(17, 'company_observer_pool_sync'"))
+                .findFirst().orElse("");
+        assertThat(row).contains("'0 0 6 * * ?', 0, '{\"observePoolId\":16,\"keyObservePoolId\":23}'");
+    }
+
     /** 校验全部 Demo 定时任务的执行实现均输出扫描条件。 */
     @Test
     public void everyScheduledTaskShouldWriteScanCondition() throws Exception {
         Map<String, String> taskSources = new LinkedHashMap<String, String>();
         taskSources.put("bond_temp_code_replace", "BondTempCodeReplaceService.java");
         taskSources.put("bond_security_type_change", "BondSecurityTypeChangeService.java");
+        taskSources.put("company_observer_pool_sync", "CompanyObserverPoolSyncService.java");
         taskSources.put("security_expired_auto_out", "AutoAdjustService.java");
         taskSources.put("crmw_expired_auto_out", "CrmwExpiredAutoOutService.java");
         taskSources.put("company_outer_rating_not_aa_minus_auto_out",
@@ -109,7 +122,7 @@ public class ScheduledTaskDemoDataTest {
         taskSources.put("hs_pool_increment_excel_export", "AbstractHsPoolExcelExportService.java");
         taskSources.put("wind_code_sync", "WindCodeSyncService.java");
 
-        assertThat(taskSources).hasSize(16);
+        assertThat(taskSources).hasSize(17);
         for (Map.Entry<String, String> entry : taskSources.entrySet()) {
             String source = new String(Files.readAllBytes(Paths.get("src", "main", "java", "com", "znty",
                     "rrs", "service", entry.getValue())), StandardCharsets.UTF_8);
