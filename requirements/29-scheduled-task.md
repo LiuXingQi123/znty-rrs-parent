@@ -219,7 +219,7 @@
 
 ### 主体观察名单同步 `company_observer_pool_sync`（06:00）
 
-1. 数据来源：查询 `ais_inv_analysis.company_observer_view` 主体观察名单表。`company_id BIGINT` 对应 `t_inv_company.id`，`company_code VARCHAR(100)` 对应 `t_inv_company.wind_code` 及债券 `issuer_code`，`observer_type VARCHAR(100)` 为 `1=空 / 2=观察 / 3=重点观察`。表包含 `id`、`crte_time`、`updt_time`，已接入AIS初始化、清空和表统计。
+1. 数据来源：查询 `ais_inv_analysis.company_observer_view` 主体观察名单表。`company_id BIGINT` 对应 `t_inv_company.id`，`company_code VARCHAR(100)` 对应 `t_inv_company.wind_code` 及债券 `issuer_code`，`observer_type VARCHAR(100)` 为 `1=空 / 2=观察 / 3=重点观察`。表仅保留 `company_id`、`company_code`、`observer_type`、`isHo`，无主键及创建、修改时间字段；已接入AIS初始化、清空和表统计。
 2. 目标池配置：扩展参数 `observePoolId` 对应2观察，`keyObservePoolId` 对应3重点观察，默认 `{"observePoolId":16,"keyObservePoolId":23}`。每轮读取页面保存的参数；省略字段或设为NULL表示不管理该类池，至少配置一类，且两类目标池不能相同。已有空参数任务须填写并保存参数。
 3. 参数及主体信息校验：池ID须为Long范围内的正整数，目标池须已启用、未删除且非CRMW组合池；参数为空、字段错误或目标池不可用时任务失败。名单中每个主体须唯一，主体ID、编码须与 `t_inv_company` 一致，名称非空，观察类型有效。
 4. 查询范围：合并观察名单主体、配置目标池内主体及在池债券的发行主体，包含人工入池的主体。修改配置后只管理当前配置的目标池，旧目标池不会自动清理；关系池仍按实际配置处理。空名单会使配置目标池内主体及旗下债券出池，应在AIS名单刷新完整后执行。

@@ -58,13 +58,13 @@ INSERT INTO `t_inv_company` (
 -- 主体观察名单样例（包含空、观察、重点观察）
 -- ----------------------------------------------------------------------------
 INSERT INTO `company_observer_view` (
-    `company_id`, `company_code`, `observer_type`, `isHo`, `crte_time`, `updt_time`
+    `company_id`, `company_code`, `observer_type`, `isHo`
 ) VALUES
-(1, 'C10001', '1', NULL, NOW(), NOW()),
-(2, 'C10002', '2', NULL, NOW(), NOW()),
-(4, 'C10004', '2', NULL, NOW(), NOW()),
-(5, 'C10005', '3', NULL, NOW(), NOW()),
-(7, 'C10007', '3', NULL, NOW(), NOW());
+(1, 'C10001', '1', NULL),
+(2, 'C10002', '2', NULL),
+(4, 'C10004', '2', NULL),
+(5, 'C10005', '3', NULL),
+(7, 'C10007', '3', NULL);
 
 -- ----------------------------------------------------------------------------
 -- 主体评级结果样例（与主体 1:1）

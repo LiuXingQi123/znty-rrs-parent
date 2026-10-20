@@ -274,7 +274,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     private Map<String, CompanyObserverDto> queryValidatedObservers() {
         Map<String, CompanyObserverDto> result = new LinkedHashMap<>();
         for (CompanyObserverDto observer : companyObserverMapper.queryCompanyObserverList()) {
-            String location = "观察名单记录[" + observer.getId() + "]主体[" + observer.getCompanyCode() + "]";
+            String location = "观察名单主体ID[" + observer.getCompanyId() + "]主体[" + observer.getCompanyCode() + "]";
             // 1. 校验主体ID、主体编码和主体名称
             if (observer.getCompanyId() == null || !StringUtils.hasText(observer.getCompanyCode())
                     || !observer.getCompanyCode().equals(observer.getMasterCompanyCode())

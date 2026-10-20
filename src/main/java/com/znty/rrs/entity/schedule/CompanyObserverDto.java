@@ -5,8 +5,6 @@ import lombok.Data;
 /** 主体观察名单与 AIS 主体主数据关联结果。 */
 @Data
 public class CompanyObserverDto {
-    /** 观察名单记录 ID */
-    private Long id;
     /** AIS 主体主键 */
     private Long companyId;
     /** Wind 主体代码及发行人编码 */

@@ -576,7 +576,6 @@ public class CompanyObserverPoolSyncServiceTest {
     /** 构造一条有效的 AIS 名单记录。 */
     static CompanyObserverDto observer(String code, String type) {
         CompanyObserverDto row = new CompanyObserverDto();
-        row.setId(1L);
         row.setCompanyId(1L);
         row.setCompanyCode(code);
         row.setMasterCompanyCode(code);

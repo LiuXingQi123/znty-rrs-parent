@@ -294,6 +294,23 @@ public class CompanyObserverPoolSyncPersistenceTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log", Integer.class)).isEqualTo(10);
     }
 
+    /** 实际演示数据可写入仅有四个来源字段的观察名单，并通过实际 Mapper 查询。 */
+    @Test
+    public void shouldLoadObserverDemoWithoutSyntheticColumns() throws Exception {
+        String sql = new String(Files.readAllBytes(Paths.get("sql", "ais_inv_analysis_demo_data.sql")), StandardCharsets.UTF_8);
+        int start = sql.indexOf("INSERT INTO `company_observer_view`");
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        int end = sql.indexOf(";", start);
+        assertThat(end).isGreaterThan(start);
+        jdbc.execute("DELETE FROM ais_inv_analysis.company_observer_view");
+        jdbc.execute(sql.substring(start, end).replace("INSERT INTO `company_observer_view`",
+                "INSERT INTO ais_inv_analysis.`company_observer_view`"));
+        assertThat(sourceMapper.queryCompanyObserverList()).extracting(CompanyObserverDto::getCompanyId)
+                .containsExactly(1L, 2L, 4L, 5L, 7L);
+        assertThat(sourceMapper.queryCompanyObserverList()).extracting(CompanyObserverDto::getObserverType)
+                .containsExactly("1", "2", "2", "3", "3");
+    }
+
     /** 查询全量观察名单，主体信息未匹配时任务失败。 */
     @Test
     public void shouldReadEveryIsHoValueAndRetainInvalidMasterMapping() {
@@ -303,7 +320,7 @@ public class CompanyObserverPoolSyncPersistenceTest {
         assertThat(sourceMapper.queryCompanyObserverList().get(1).getMasterCompanyCode()).isNull();
         ScheduledTaskResult result = service.execute();
         assertThat(result.isSuccess()).isFalse();
-        assertThat(result.getMessage()).contains("C2", "主数据不匹配");
+        assertThat(result.getMessage()).contains("主体ID[2]", "C2", "主数据不匹配");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log", Integer.class)).isZero();
     }
 

@@ -200,14 +200,10 @@ CREATE TABLE `t_sys_permission` (
 -- 9. 主体观察名单表
 -- ----------------------------------------------------------------------------
 CREATE TABLE `company_observer_view` (
-    `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `company_id`    BIGINT       DEFAULT NULL COMMENT '主体 ID，对应 t_inv_company.id',
     `company_code`  VARCHAR(100) DEFAULT NULL COMMENT '主体编码，对应 t_inv_company.wind_code 及发行人编码',
     `observer_type` VARCHAR(100) DEFAULT NULL COMMENT '观察者类型：1=空 / 2=观察 / 3=重点观察',
-    `isHo`          VARCHAR(1)   DEFAULT NULL COMMENT '是否总行',
-    `crte_time`     DATETIME     DEFAULT NULL COMMENT '创建时间',
-    `updt_time`     DATETIME     DEFAULT NULL COMMENT '修改时间',
-    PRIMARY KEY (`id`)
+    `isHo`          VARCHAR(1)   DEFAULT NULL COMMENT '是否总行'
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci

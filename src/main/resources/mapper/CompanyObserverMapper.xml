@@ -4,8 +4,7 @@
     <!-- 查询观察名单及主体信息 -->
     <select id="queryCompanyObserverList" resultType="com.znty.rrs.entity.schedule.CompanyObserverDto">
         <!-- 1. 查询观察名单中的主体ID、主体编码和观察类型 -->
-        SELECT o.id
-               ,o.company_id
+        SELECT o.company_id
                ,o.company_code
                ,o.observer_type
                ,c.wind_code AS master_company_code
@@ -13,7 +12,8 @@
         FROM ais_inv_analysis.company_observer_view o
         <!-- 2. 查询主体编码和名称，供主体信息校验使用 -->
         LEFT JOIN ais_inv_analysis.t_inv_company c ON c.id = o.company_id
-        ORDER BY o.id
+        ORDER BY o.company_id
+                 ,o.company_code
     </select>
 
     <!-- 查询目标池内主体及在池债券的发行主体 -->
