@@ -29,8 +29,10 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"
                     + "扫描条件：rrs_temp_security_code.status=temporary，且 security_code 已由外部数据补齐\n"
                     + "正式数据：按 security_code 查询 rrs_securityinfo，名称、市场、类型均以正式主数据为准\n"
-                    + "处理规则：在途日志只改码；已在池执行临时码出池，并在正式码未在同池时调入\n"
-                    + "CRMW范围：同时处理证券字段和 CRMW 字段引用，来源记录为 oprt_source=job\n"
+                    + "处理规则：普通池及CRMW标的按同券全部市场代码整组转换；流程中沿用原审批，已在池临时码退出后正式组统一进入\n"
+                    + "业务校验：信用债大库独立在途、市场与池关系；不重查容量、池启停和业务锁定\n"
+                    + "转换保障：主数据有效、相关池整组状态一致、写入成功；任一失败回滚本条映射\n"
+                    + "CRMW范围：同凭证下逐标的市场代码处理，凭证自身不扩展；即时调库记录调整人为系统，来源为 oprt_source=job\n"
                     + "任务边界：本任务独立于 wind_code_sync，不调用也不修改该空壳任务";
 
     /** 临时代码 Mapper */

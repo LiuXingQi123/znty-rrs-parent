@@ -5,14 +5,19 @@ import com.znty.rrs.common.enums.TempOprtSource;
 import com.znty.rrs.common.enums.TempStatus;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpPoolStatusBo;
+import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
+import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import java.text.SimpleDateFormat;
 import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,6 +34,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doAnswer;
 
 /** 临时代码管理服务测试。 */
 public class TempSecurityCodeServiceTest {
@@ -63,7 +69,7 @@ public class TempSecurityCodeServiceTest {
         assertThat(captor.getValue().getSecuritySource()).isEqualTo("temporary");
     }
 
-    /** 验证仅在途日志时只做字段替换，不写出入库业务单。 */
+    /** 验证 CRMW 仅有流程中申请时换码并补快照，不立即出入池。 */
     @Test
     public void editTempSecurityCodeToUpdatedShouldOnlyReplacePendingLogs() {
         TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
@@ -73,8 +79,19 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeBo oldBo = buildOldBo();
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
         when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
-        when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
-                .thenReturn(Collections.singletonList(10L));
+        IpAdjustLogBo pending = new IpAdjustLogBo();
+        pending.setId(10L);
+        pending.setSecurityCode("TMP001");
+        pending.setSecurityType("mtn");
+        pending.setTargetPoolId(200L);
+        pending.setPoolType("crmw");
+        pending.setCrmwScode("K.IB");
+        pending.setCrmwStype("crmw");
+        pending.setAuditStatus("00");
+        pending.setAdjustMode("调入");
+        pending.setAdjustBatchNo("ORIGINAL");
+        when(mapper.queryCrmwPendingLogList(any(TempSecurityCodeBo.class)))
+                .thenReturn(Collections.singletonList(pending));
         when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
         when(mapper.queryActivePoolStatusList(any(TempSecurityCodeBo.class)))
@@ -89,8 +106,7 @@ public class TempSecurityCodeServiceTest {
 
         service.editTempSecurityCodeToUpdated(req);
 
-        verify(mapper).editAdjustLogSecurityReference(any(TempSecurityCodeBo.class),
-                eq(Collections.singletonList(10L)));
+        verify(mapper).editConversionPendingLog(any(IpAdjustLogBo.class), eq("TMP001"));
         verify(mapper).addTempSecurityCodeUpdateLog(any(TempSecurityCodeBo.class));
         // 在途场景不写业务出入库
         verify(adjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
@@ -130,7 +146,7 @@ public class TempSecurityCodeServiceTest {
 
         // 出库 + 入库 两条调库日志
         verify(adjustMapper, times(2)).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(mapper).deletePoolStatusSoftById(eq(88L), any(Date.class));
+        verify(mapper).deleteOrdinaryPoolStatusForConversion(eq(88L), any(Date.class));
         verify(adjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(adjustMapper, times(2)).addAdjustLog(logCaptor.capture());
@@ -142,7 +158,7 @@ public class TempSecurityCodeServiceTest {
         assertThat(logCaptor.getAllValues().get(1).getSecurityCode()).isEqualTo("110001.IB");
         assertThat(logCaptor.getAllValues().get(1).getAdjustMode()).isEqualTo("调入");
         assertThat(logCaptor.getAllValues().get(1).getAdjustReason())
-                .isEqualTo("研究建议（代码替换：TMP001→110001.IB）");
+                .isEqualTo("研究建议（代码替换：TMP001→110001.IB；本条正式代码：110001.IB）");
         assertThat(logCaptor.getAllValues().get(1).getAdjustAdvice())
                 .isEqualTo(logCaptor.getAllValues().get(1).getAdjustReason());
     }
@@ -169,14 +185,16 @@ public class TempSecurityCodeServiceTest {
         when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
         // 正式已在池
-        when(mapper.queryActivePoolStatusCount("110001.IB", "mtn", 100L)).thenReturn(1);
+        IpPoolStatusBo formalStatus = buildPoolStatus();
+        formalStatus.setSecurityCode("110001.IB");
+        when(mapper.queryFormalGroupPoolStatusList(any())).thenReturn(Collections.singletonList(formalStatus));
         when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(1);
 
         service.editTempSecurityCodeToUpdated(req);
 
         // 仅出库一条
         verify(adjustMapper, times(1)).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(mapper).deletePoolStatusSoftById(eq(88L), any(Date.class));
+        verify(mapper).deleteOrdinaryPoolStatusForConversion(eq(88L), any(Date.class));
         verify(adjustMapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
     }
 
@@ -208,6 +226,9 @@ public class TempSecurityCodeServiceTest {
         IpPoolStatusBo crmwPoolStatus = buildPoolStatus();
         crmwPoolStatus.setId(89L);
         crmwPoolStatus.setPoolType("crmw");
+        crmwPoolStatus.setTargetPoolId(200L);
+        crmwPoolStatus.setCrmwScode("K.IB");
+        crmwPoolStatus.setCrmwStype("crmw");
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
         when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
         when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
@@ -237,15 +258,19 @@ public class TempSecurityCodeServiceTest {
         assertThat(logCaptor.getAllValues().get(0).getAdjustReason())
                 .isEqualTo("债券临时代码调出（临时代码：TMP001；正式代码：110001.IB）");
         assertThat(logCaptor.getAllValues().get(1).getAdjustReason())
-                .isEqualTo("研究建议（代码替换：TMP001→110001.IB）");
+                .isEqualTo("研究建议（代码替换：TMP001→110001.IB；本条正式代码：110001.IB）");
         for (IpAdjustLogBo log : logCaptor.getAllValues()) {
             assertThat(log.getAdjustAdvice()).isNull();
+            assertThat(log.getAdjusterId()).isEqualTo("0");
+            assertThat(log.getAdjusterName()).isEqualTo("系统");
         }
         ArgumentCaptor<IpAdjustLogBo> statusCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(adjustMapper).addPoolStatus(statusCaptor.capture());
         assertThat(statusCaptor.getValue().getAdjustAdvice()).isNull();
-        ArgumentCaptor<IpPoolStatusBo> crmwStatusCaptor = ArgumentCaptor.forClass(IpPoolStatusBo.class);
-        verify(mapper).addCrmwPoolStatus(crmwStatusCaptor.capture());
+        CrmwPoolAdjustMapper crmwMapper = (CrmwPoolAdjustMapper) ReflectionTestUtils.getField(
+                ReflectionTestUtils.getField(service, "businessConverter"), "crmwPoolAdjustMapper");
+        ArgumentCaptor<IpAdjustLogBo> crmwStatusCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
+        verify(crmwMapper).addPoolStatus(crmwStatusCaptor.capture());
         assertThat(crmwStatusCaptor.getValue().getAdjustAdvice()).isNull();
         verify(mapper).editTempSecurityInfoToDisabled(any(TempSecurityCodeBo.class));
     }
@@ -313,7 +338,40 @@ public class TempSecurityCodeServiceTest {
         when(markets.queryMarketCode(anyString())).thenReturn("NIB");
         ReflectionTestUtils.setField(service, "securityMarketService", markets);
         ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", mapper);
-        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        when(mapper.queryOrdinaryConversionPoolIdList(any())).thenReturn(new ArrayList<>(Collections.singletonList(100L)));
+        when(mapper.deleteOrdinaryPoolStatusForConversion(anyLong(), any(Date.class))).thenReturn(1);
+        when(mapper.deleteCrmwPoolStatusSoftById(anyLong(), any(Date.class))).thenReturn(1);
+        when(mapper.editConversionPendingLog(any(), anyString())).thenReturn(1);
+        when(adjustMapper.addPoolStatus(any())).thenReturn(1);
+        when(adjustMapper.addAdjustSecuritySnapshot(any())).thenReturn(1);
+        doAnswer(call -> {
+            IpAdjustLogBo log = call.getArgument(0);
+            log.setId(1000L);
+            return 1;
+        }).when(adjustMapper).addAdjustLog(any());
+        SecurityInfoBo member = new SecurityInfoBo();
+        member.setWindCode("110001.IB");
+        member.setShortName("26某基建MTN001");
+        member.setSecurityType("mtn");
+        member.setSecurityStatus("L");
+        member.setSecuritySource("official");
+        when(adjustMapper.querySecurityBoByCode("110001.IB")).thenReturn(member);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(100L);
+        pool.setStatus("enabled");
+        InvestmentPoolBo crmwPool = new InvestmentPoolBo();
+        crmwPool.setId(200L);
+        crmwPool.setPoolType("crmw");
+        when(mapper.queryConversionPoolList(any())).thenReturn(Arrays.asList(pool, crmwPool));
+        TempSecurityCodeBusinessConverter converter = new TempSecurityCodeBusinessConverter();
+        ReflectionTestUtils.setField(converter, "tempSecurityCodeMapper", mapper);
+        ReflectionTestUtils.setField(converter, "securityPoolAdjustMapper", adjustMapper);
+        CrmwPoolAdjustMapper crmwMapper = mock(CrmwPoolAdjustMapper.class);
+        when(crmwMapper.addPoolStatus(any())).thenReturn(1);
+        when(crmwMapper.addAdjustSecuritySnapshotCrmw(any())).thenReturn(1);
+        ReflectionTestUtils.setField(converter, "crmwPoolAdjustMapper", crmwMapper);
+        ReflectionTestUtils.setField(converter, "securityMarketService", markets);
+        ReflectionTestUtils.setField(service, "businessConverter", converter);
         return service;
     }
 

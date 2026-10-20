@@ -106,27 +106,27 @@ import java.util.stream.Collectors;
 /**
  * 证券池调库业务逻辑
  *
- * <p>核心功能：
- * <ul>
- *   <li>证券/投资池查询：证券列表分页、证券详情、可调投资池列表、当前入池状态</li>
- *   <li>调库申请提交：写入调库记录，初始状态为"流程中"</li>
- *   <li>调库可行性校验（checkAdjust）：对用户选择的每个调库项执行三层校验，
- *       并根据投资池关系配置自动生成联动/互斥项追加校验</li>
- * </ul>
+ * 核心功能：
  *
- * <p>校验结构：
- * <ul>
- *   <li>调入校验（checkInConditions）：前置规则（到期、流程进行中）+ 调入方向规则
- *       （重复入池、容量上限、来源池、限制池、互斥冲突、弹性禁投池）</li>
- *   <li>调出校验（checkOutConditions）：前置规则（到期、流程进行中）+ 调出方向规则
- *       （未入池、限制池、互斥池、互斥冲突、弹性禁投池）</li>
- * </ul>
+ *   - 证券/投资池查询：证券列表分页、证券详情、可调投资池列表、当前入池状态
+ *   - 调库申请提交：写入调库记录，初始状态为"流程中"
+ *   - 调库可行性校验（checkAdjust）：对用户选择的每个调库项执行三层校验，
+ *       并根据投资池关系配置自动生成联动/互斥项追加校验
  *
- * <p>自动生成项规则：
- * <ul>
- *   <li>联动池（linkage）：调入/调出某池时，其配置的联动池需同步调入/调出，由系统自动附加</li>
- *   <li>互斥池（mutex）：调入某池时，若证券当前已在该池的互斥池中，系统自动附加对互斥池的调出项</li>
- * </ul>
+ *
+ * 校验结构：
+ *
+ *   - 调入校验（checkInConditions）：前置规则（到期、流程进行中）+ 调入方向规则
+ *       （重复入池、容量上限、来源池、限制池、互斥冲突、弹性禁投池）
+ *   - 调出校验（checkOutConditions）：前置规则（到期、流程进行中）+ 调出方向规则
+ *       （未入池、限制池、互斥池、互斥冲突、弹性禁投池）
+ *
+ *
+ * 自动生成项规则：
+ *
+ *   - 联动池（linkage）：调入/调出某池时，其配置的联动池需同步调入/调出，由系统自动附加
+ *   - 互斥池（mutex）：调入某池时，若证券当前已在该池的互斥池中，系统自动附加对互斥池的调出项
+ *
  */
 @Service
 public class SecurityPoolAdjustService {
@@ -404,7 +404,7 @@ public class SecurityPoolAdjustService {
     /**
      * 将快照中的「可编辑业务字段」覆盖到主档详情上；标识类字段保持主档不变。
      *
-     * <p>对齐：再次调库带出上次提交的利率/用途/分析等，同时全称/代码/发行人等只读字段始终跟主档。
+     * 对齐：再次调库带出上次提交的利率/用途/分析等，同时全称/代码/发行人等只读字段始终跟主档。
      */
     private void overlayEditableFieldsFromSnapshot(SecurityInfoDetailDto master, SecurityInfoDetailDto snapshot) {
         if (master == null || snapshot == null) {
@@ -437,7 +437,7 @@ public class SecurityPoolAdjustService {
     /**
      * 查询近 6 个月最近一条可回填的信评报告（对齐老系统 getLastReprotDocs）。
      *
-     * <p>查询顺序：当前券 → 同主体；仅审批通过调入且日志挂有内部/外部库信评附件，
+     * 查询顺序：当前券 → 同主体；仅审批通过调入且日志挂有内部/外部库信评附件，
      * 或手工信评附件；
      * 反查报告库附件后供前端预填。前端门禁仅对 {@link CreditBondPoolCodes} 中 1～5 级库回填
      * （对齐老 COMMON.polidEnum 白名单；禁止库等不在名单内不回填）。
@@ -553,7 +553,7 @@ public class SecurityPoolAdjustService {
     /**
      * 选池阶段按主体内评矩阵过滤信用债 1～5 级（境外债不走这套规则）。
      *
-     * <p>正式证券无内评去掉分级库；临时代码默认档 4。期限为空默认最长档继续走矩阵，不跳过。
+     * 正式证券无内评去掉分级库；临时代码默认档 4。期限为空默认最长档继续走矩阵，不跳过。
      * 可转债 / 可交换债 / CRMW 去掉信用债 1～5。
      * ABS：所选权益人内评（自选权益人优先）1 档只能调入一级库，缺少内评或非 1 档至少下调一级。
      * 私募：发债主体内评 1 档只能调入一级库，其余至少下调一级。
@@ -762,7 +762,7 @@ public class SecurityPoolAdjustService {
 
     /**
      * 从投资池列表中排除 CRMW 类型池（pool_type=crmw）。
-     * <p>注意：这是「池域」过滤，与候选证券排除 security_type=crmw/company 是不同维度。
+     * 注意：这是「池域」过滤，与候选证券排除 security_type=crmw/company 是不同维度。
      */
     private List<InvestmentPoolBo> filterOutCrmwPools(List<InvestmentPoolBo> pools) {
         if (pools == null || pools.isEmpty()) {
@@ -900,20 +900,20 @@ public class SecurityPoolAdjustService {
     /**
      * 提交调库申请（五阶段流程）
      *
-     * <p>分五个阶段顺序执行：
-     * <ol>
-     *   <li><b>前置校验</b>：校验请求入参合法性，不通过直接抛异常</li>
-     *   <li><b>参数初始化</b>：集中执行所有 DB 查询，构建 {@link SubmitSharedData}，
-     *       包含证券信息、投资池索引、池关系映射、各流程的快照数据</li>
-     *   <li><b>调入处理</b>：遍历全部调入方向的调库项，逐项判断是否直通流程，
+     * 分五个阶段顺序执行：
+     *
+     *   1. 前置校验：校验请求入参合法性，不通过直接抛异常
+     *   2. 参数初始化：集中执行所有 DB 查询，构建 {@link SubmitSharedData}，
+     *       包含证券信息、投资池索引、池关系映射、各流程的快照数据
+     *   3. 调入处理：遍历全部调入方向的调库项，逐项判断是否直通流程，
      *       直通则写入 ip_adjust_log（audit_status='20'），待全部方向处理完后统一复核并写入 ip_pool_status；
      *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
-     *       则升级为 audit_status='20' 并写入 ip_pool_status</li>
-     *   <li><b>调出处理</b>：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'），待统一复核后软删除 ip_pool_status；
+     *       则升级为 audit_status='20' 并写入 ip_pool_status
+     *   4. 调出处理：遍历全部调出方向的调库项，直通则写入 ip_adjust_log（audit_status='20'），待统一复核后软删除 ip_pool_status；
      *       非直通则写入 ip_adjust_log（audit_status='00'），若初始流程步骤懒创建时即走到结束节点，
-     *       则升级为 audit_status='20' 并软删除 ip_pool_status</li>
-     *   <li><b>后续处理</b>：合并证券信息后按 log 写入 ip_adjust_security_snapshot（不修改 rrs_securityinfo）</li>
-     * </ol>
+     *       则升级为 audit_status='20' 并软删除 ip_pool_status
+     *   5. 后续处理：合并证券信息后按 log 写入 ip_adjust_security_snapshot（不修改 rrs_securityinfo）
+     *
      *
      * @param req 调库申请，包含证券信息及一个或多个调库项（手工项须携带 flowId 或 flowKey，无流程时走直通）
      * @return 提交结果，包含生成的记录 ID 列表
@@ -948,11 +948,11 @@ public class SecurityPoolAdjustService {
     /**
      * 判断指定流程是否为直通（无人工审批节点）。
      *
-     * <p><b>说明</b>：单券提交路径内部直接使用 {@link #isDirectFlow(FlowSnapshot)}，
+     * 说明：单券提交路径内部直接使用 {@link #isDirectFlow(FlowSnapshot)}，
      * 本方法不在本类其它业务步骤中调用；主要供「证券池批量调整」在整批提交前做直通预检
      * （{@code needsWholeBatchDirectRecheck}），复用与单券一致的直通判定口径，避免批量侧再拷贝流程快照逻辑。
      *
-     * <p>判定规则：flowId 与 flowKey 均为空时按「无审批直通」处理；仅有 key 时解析活跃流程定义再判断；
+     * 判定规则：flowId 与 flowKey 均为空时按「无审批直通」处理；仅有 key 时解析活跃流程定义再判断；
      * 解析不到定义时返回 false（按非直通走后续提交校验）。
      *
      * @param flowId  流程定义 ID，可为 null
@@ -979,7 +979,7 @@ public class SecurityPoolAdjustService {
     /**
      * 提交调库申请核心实现。
      *
-     * <p>与 {@link #addAdjustLog(SecurityPoolAdjustSubmitReq, List)} 的区别：
+     * 与 {@link #addAdjustLog(SecurityPoolAdjustSubmitReq, List)} 的区别：
      * 调用方自行提供 {@link SysAttachmentService.SubmissionFiles} 与 {@link BatchNoContext}，
      * 供证券池批量调整按证券循环提交时整批共享附件与批次号序号。
      *
@@ -1001,8 +1001,8 @@ public class SecurityPoolAdjustService {
     /**
      * 按 Excel 导入行批量提交，各行独立使用所选评级主体并保存证券快照。
      *
-     * <p>在创建任何新流程前统一检查已有在途流程，避免同码多行相互阻断。
-     * 后续各行复用单券提交步骤，动态池状态及容量仍按原规则复核。</p>
+     * 在创建任何新流程前统一检查已有在途流程，避免同码多行相互阻断。
+     * 后续各行复用单券提交步骤，动态池状态及容量仍按原规则复核。
      *
      * 执行顺序：
      * 1. 请求列表为空时返回空结果，否则创建整批共享的批次号上下文。
@@ -1140,7 +1140,7 @@ public class SecurityPoolAdjustService {
     /**
      * 第一阶段：前置校验
      *
-     * <p>对请求入参进行合法性检查，均为内存操作，不涉及任何 DB 查询。
+     * 对请求入参进行合法性检查，均为内存操作，不涉及任何 DB 查询。
      * 任意一项不通过则直接抛出异常，终止后续流程。
      *
      * @param req 调库提交请求
@@ -1165,7 +1165,7 @@ public class SecurityPoolAdjustService {
     /**
      * 提交时校验：调入目标池若要求配套互斥调出，请求中必须包含对应调出项且调出校验通过。
      *
-     * <p>防止前端只提交可调入项、丢弃失败的互斥调出项，造成双池。
+     * 防止前端只提交可调入项、丢弃失败的互斥调出项，造成双池。
      */
     private void validateRequiredMutexOutboundOnSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
         Set<Long> requestOutPoolIds = new HashSet<>();
@@ -1312,7 +1312,7 @@ public class SecurityPoolAdjustService {
     /**
      * 第二阶段：参数初始化
      *
-     * <p>集中执行本次提交所需的全部 DB 查询，构建 {@link SubmitSharedData}。
+     * 集中执行本次提交所需的全部 DB 查询，构建 {@link SubmitSharedData}。
      * 包括证券基础信息、投资池索引、池关系映射、以及每个唯一流程的快照（定义+版本+节点+连线）。
      * 第三、四阶段直接从 shared 中读取数据，无需重复查库。
      *
@@ -1390,7 +1390,7 @@ public class SecurityPoolAdjustService {
     /**
      * 从调库项的 flowId 或 flowKey 解析出流程定义 ID。
      *
-     * <p>优先使用 flowId（直接匹配），否则用 flowKey 查 DB 获取。
+     * 优先使用 flowId（直接匹配），否则用 flowKey 查 DB 获取。
      *
      * @param item 调库项
      * @return 流程定义 ID，解析失败返回 null
@@ -1472,7 +1472,7 @@ public class SecurityPoolAdjustService {
     /**
      * 为指定流程 ID 构建运行时快照（定义 + 活跃版本 + 节点索引 + 连线列表）。
      *
-     * <p>节点按 DB ID 建立索引，供遍历连线时快速查找目标节点。
+     * 节点按 DB ID 建立索引，供遍历连线时快速查找目标节点。
      *
      * @param flowId 流程定义 ID
      * @return FlowSnapshot，若流程不存在或无活跃版本则返回 null
@@ -1530,7 +1530,7 @@ public class SecurityPoolAdjustService {
     /**
      * 判断流程是否为直通流程（开始后无需人工待办即可到结束节点）。
      *
-     * <p>与 createInitialSteps 自动完成范围对齐：start/end/auto 节点、initiator、approval_strategy=auto
+     * 与 createInitialSteps 自动完成范围对齐：start/end/auto 节点、initiator、approval_strategy=auto
      * 可无人工到达 end；主路径存在 preempt/all 等人工审批则为非直通。
      * 例：债券特殊策略入库（发起人→多层 auto→结束）应判为直通。
      *
@@ -1607,7 +1607,7 @@ public class SecurityPoolAdjustService {
     /**
      * 第三阶段：调入处理
      *
-     * <p>遍历请求中全部调入方向的调库项，逐项判断流程是否为直通（start→end），
+     * 遍历请求中全部调入方向的调库项，逐项判断流程是否为直通（start→end），
      * 决定写入已生效调库记录并加入统一落池集合，还是写入待审批调库记录。
      *
      * @param req    调库提交请求
@@ -1692,7 +1692,7 @@ public class SecurityPoolAdjustService {
     /**
      * 第四阶段：调出处理
      *
-     * <p>遍历请求中全部调出方向的调库项，逐项判断流程是否为直通（start→end），
+     * 遍历请求中全部调出方向的调库项，逐项判断流程是否为直通（start→end），
      * 决定写入已生效调库记录并加入统一落池集合，还是写入待审批调库记录。
      *
      * @param req    调库提交请求
@@ -1774,8 +1774,8 @@ public class SecurityPoolAdjustService {
     /**
      * 第五阶段：后续处理
      *
-     * <p>合并主档与前端可编辑字段后，仅按本次提交的每个调库日志 ID 写入证券信息快照；
-     * <b>不修改</b>主档 {@code rrs_securityinfo}（主档仍为全站真相源，调库页改动只作本笔留痕）。
+     * 合并主档与前端可编辑字段后，仅按本次提交的每个调库日志 ID 写入证券信息快照；
+     * 不修改主档 {@code rrs_securityinfo}（主档仍为全站真相源，调库页改动只作本笔留痕）。
      *
      * @param req    调库提交请求
      * @param shared 本次提交的共享数据
@@ -1839,7 +1839,7 @@ public class SecurityPoolAdjustService {
     /**
      * 构建证券基础信息全量更新参数。
      *
-     * <p>前端只需要传入可能变更的字段；这里先加载数据库当前完整快照，
+     * 前端只需要传入可能变更的字段；这里先加载数据库当前完整快照，
      * 再用前端传入字段覆盖同名字段。若前端显式传入 null，也会覆盖为 null，用于清空字段。
      *
      * @param securityCode 证券代码
@@ -1892,7 +1892,7 @@ public class SecurityPoolAdjustService {
     /**
      * 查询调库记录列表（全量，不分页）。
      *
-     * <p>按证券代码返回全部调库历史（含终态），不以调库批次号过滤。
+     * 按证券代码返回全部调库历史（含终态），不以调库批次号过滤。
      *
      * @param req securityCode 必填；adjustBatchNo 仅供流程定位，本查询不使用
      */
@@ -1974,16 +1974,16 @@ public class SecurityPoolAdjustService {
     /**
      * 校验证券调库可行性（核心入口）
      *
-     * <p>分四个阶段顺序执行：
-     * <ol>
-     *   <li><b>前置校验</b>：对请求入参做合法性检查，无 DB 操作，不通过直接抛异常</li>
-     *   <li><b>参数初始化</b>：集中执行所有 DB 查询，将本次调用所需数据封装为
-     *       {@link AdjustSharedData}，后续阶段直接读取，不再单独查库</li>
-     *   <li><b>调入校验</b>：处理全部调入方向的手动项（含前置规则 + 调入规则），
-     *       并根据池关系自动追加联动调入项、互斥配套调出项</li>
-     *   <li><b>调出校验</b>：处理全部调出方向的手动项（含前置规则 + 调出规则），
-     *       并根据池关系自动追加联动调出项（已被第三阶段覆盖的自动项跳过，不重复生成）</li>
-     * </ol>
+     * 分四个阶段顺序执行：
+     *
+     *   1. 前置校验：对请求入参做合法性检查，无 DB 操作，不通过直接抛异常
+     *   2. 参数初始化：集中执行所有 DB 查询，将本次调用所需数据封装为
+     *       {@link AdjustSharedData}，后续阶段直接读取，不再单独查库
+     *   3. 调入校验：处理全部调入方向的手动项（含前置规则 + 调入规则），
+     *       并根据池关系自动追加联动调入项、互斥配套调出项
+     *   4. 调出校验：处理全部调出方向的手动项（含前置规则 + 调出规则），
+     *       并根据池关系自动追加联动调出项（已被第三阶段覆盖的自动项跳过，不重复生成）
+     *
      *
      * @param req 包含证券代码和一个或多个用户选择的调库项
      * @return 包含手动项和自动项的完整校验结果列表
@@ -2039,7 +2039,7 @@ public class SecurityPoolAdjustService {
     /**
      * 第一阶段：前置校验
      *
-     * <p>对请求入参进行合法性检查，均为内存操作，不涉及任何 DB 查询。
+     * 对请求入参进行合法性检查，均为内存操作，不涉及任何 DB 查询。
      * 任意一项不通过则直接抛出异常，终止后续流程。
      *
      * @param req 调库校验请求
@@ -2056,7 +2056,7 @@ public class SecurityPoolAdjustService {
     /**
      * 第二阶段：参数初始化
      *
-     * <p>集中执行本次校验所需的全部 DB 查询，构建 {@link AdjustSharedData}。
+     * 集中执行本次校验所需的全部 DB 查询，构建 {@link AdjustSharedData}。
      * 第三、四阶段直接从 shared 中读取数据，无需重复查库。
      * 证券存在性校验也在此阶段完成（查到 null 则抛异常）。
      *
@@ -2232,13 +2232,13 @@ public class SecurityPoolAdjustService {
     /**
      * 第三阶段：调入校验
      *
-     * <p>遍历请求中全部调入方向的手动项，逐项执行前置校验 + 调入校验，
+     * 遍历请求中全部调入方向的手动项，逐项执行前置校验 + 调入校验，
      * 并根据目标池的关系配置自动追加以下两类附加项：
-     * <ul>
-     *   <li><b>联动调入项（linkage）</b>：目标池配置的联动池（in_linked）需同步调入</li>
-     *   <li><b>互斥配套调出项（mutex）</b>：若证券当前已在目标池的互斥池（in_mutex）中，
-     *       需同步调出该互斥池，两池不可同时持有</li>
-     * </ul>
+     *
+     *   - 联动调入项（linkage）：目标池配置的联动池（in_linked）需同步调入
+     *   - 互斥配套调出项（mutex）：若证券当前已在目标池的互斥池（in_mutex）中，
+     *       需同步调出该互斥池，两池不可同时持有
+     *
      *
      * @param req         调库校验请求
      * @param shared      本次校验的共享数据
@@ -2327,13 +2327,13 @@ public class SecurityPoolAdjustService {
     /**
      * 第四阶段：调出校验
      *
-     * <p>遍历请求中全部调出方向的手动项，逐项执行前置校验 + 调出校验，
+     * 遍历请求中全部调出方向的手动项，逐项执行前置校验 + 调出校验，
      * 并根据目标池的关系配置自动追加以下附加项：
-     * <ul>
-     *   <li><b>联动调出项（linkage）</b>：目标池配置的联动池（out_linked）需同步调出</li>
-     * </ul>
      *
-     * <p>注意：第三阶段由互斥关系生成的调出项已加入 coveredKeys，
+     *   - 联动调出项（linkage）：目标池配置的联动池（out_linked）需同步调出
+     *
+     *
+     * 注意：第三阶段由互斥关系生成的调出项已加入 coveredKeys，
      * 若调出方向的手动项恰好与之重叠，以手动项为准（手动项在 coveredKeys 初始化时已注册，
      * 不会被跳过）；联动调出自动项若已被覆盖则跳过。
      *
@@ -2397,9 +2397,9 @@ public class SecurityPoolAdjustService {
     /**
      * 第五阶段：判断本次调库可选择的审批流程。
      *
-     * <p>调出时直接使用目标投资池配置的标准调出流程。调入时：信用债已在库返回上调/下调单流程，
+     * 调出时直接使用目标投资池配置的标准调出流程。调入时：信用债已在库返回上调/下调单流程，
      * 信用债未在库返回简易/默认调入候选；白名单流程开关开启时才额外返回白名单候选。
-     * 白名单和简易规则按伪代码保留入口，不改表结构。</p>
+     * 白名单和简易规则按伪代码保留入口，不改表结构。
      *
      * @param req         调库校验请求
      * @param shared      本次校验的共享数据
@@ -2588,7 +2588,7 @@ public class SecurityPoolAdjustService {
     /**
      * 命中调入互斥池特殊审批时构建特殊流程候选项。
      *
-     * <p>信用债大库（pool_type=credit_bond）默认排除：互斥场景仍走白名单/简易/升降级/默认调入，
+     * 信用债大库（pool_type=credit_bond）默认排除：互斥场景仍走白名单/简易/升降级/默认调入，
      * 不强制覆盖为 bond:special-inbound。
      */
     private AdjustCheckDto.FlowOption resolveSpecialInboundFlowOption(InvestmentPoolBo targetPool,
@@ -2665,16 +2665,16 @@ public class SecurityPoolAdjustService {
     /**
      * 白名单流程命中判断入口。
      *
-     * <p>伪代码口径：
+     * 伪代码口径：
      * 1. 证券期限 <= 3 年（解析 date_exists_str）；
      * 2. 排除永续债、私募债、ABS 债；
      * 3. 债券类型属于债券类；
      * 4. 债券主体在白名单配置池中；
-     * 5. 债券不是担保债。</p>
+     * 5. 债券不是担保债。
      *
-     * <p>TODO 当前版本不新增白名单配置表、不修改表结构，因此仅保留入口并返回未命中。
+     * TODO 当前版本不新增白名单配置表、不修改表结构，因此仅保留入口并返回未命中。
      * 老系统实际使用 WHITEPOOLID_XYJJ 指定的主体白名单池，并排除永续债、私募债、ABS、次级债，
-     * 满足剩余期限不超过 3 年后由用户确认是否选择白名单流程。</p>
+     * 满足剩余期限不超过 3 年后由用户确认是否选择白名单流程。
      */
     private boolean isWhitelistFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, List<String> matchReasons, List<String> unmatchReasons) {
@@ -2735,14 +2735,14 @@ public class SecurityPoolAdjustService {
     /**
      * 简易流程命中判断入口。
      *
-     * <p>以下四项必须全部满足，逐项记录命中或不命中的原因：</p>
-     * <ol>
-     *   <li>当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内。</li>
-     *   <li>同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库。</li>
-     *   <li>同发行人报告库中有近180天的有效信评报告。</li>
-     *   <li>满足永续债、次级债和标准信用债各自的附加要求。</li>
-     * </ol>
-     * <p>唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响。</p>
+     * 以下四项必须全部满足，逐项记录命中或不命中的原因：
+     *
+     *   1. 当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内。
+     *   2. 同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库。
+     *   3. 同发行人报告库中有近180天的有效信评报告。
+     *   4. 满足永续债、次级债和标准信用债各自的附加要求。
+     *
+     * 唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响。
      */
     private boolean isSimpleInboundFlowMatched(
             AdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,
@@ -2938,8 +2938,8 @@ public class SecurityPoolAdjustService {
     /**
      * 判断信用债在库调整流程是上调还是下调。
      *
-     * <p>同一父级下，目标池 innerSort 小于当前所在池为升库，大于当前所在池为降库；
-     * 未找到同父级当前池时返回 null，由调用方走目标池标准调入流程。</p>
+     * 同一父级下，目标池 innerSort 小于当前所在池为升库，大于当前所在池为降库；
+     * 未找到同父级当前池时返回 null，由调用方走目标池标准调入流程。
      */
     private String resolveCreditBondAdjustFlowType(InvestmentPoolBo targetPool, AdjustSharedData shared) {
         if (targetPool == null || targetPool.getParentId() == null || targetPool.getInnerSort() == null) {
@@ -3113,7 +3113,7 @@ public class SecurityPoolAdjustService {
     /**
      * 使用目标池配置构建流程候选项。
      *
-     * <p>调用方需先将 {@code configuredFlowName} 与 {@code fallbackFlowName} 决议为最终的
+     * 调用方需先将 {@code configuredFlowName} 与 {@code fallbackFlowName} 决议为最终的
      * {@code flowName} 后传入 {@link FlowOptionParam}。
      */
     private AdjustCheckDto.FlowOption buildPoolFlowOption(FlowOptionParam p) {
@@ -3171,7 +3171,7 @@ public class SecurityPoolAdjustService {
     /**
      * 调入校验：通用校验 + 类型特有校验
      *
-     * <p>先执行 checkCommonIn（通用：池锁定/品种/市场/pending/重复入池/容量/来源/限制/互斥/弹性），
+     * 先执行 checkCommonIn（通用：池锁定/品种/市场/pending/重复入池/容量/来源/限制/互斥/弹性），
      * 再按 categoryType 路由类型特有校验（债券到期 checkBondIn / 股票退市 checkStockIn 等）。
      *
      * @param ctx 调库校验上下文
@@ -3200,7 +3200,7 @@ public class SecurityPoolAdjustService {
     /**
      * 通用调入校验（所有类型都走）
      *
-     * <p>含池锁定、品种、市场、pending流程、重复入池、容量、来源池、限制池、互斥、弹性禁投。
+     * 含池锁定、品种、市场、pending流程、重复入池、容量、来源池、限制池、互斥、弹性禁投。
      * 不含证券到期（已拆到类型特有：债券到期 checkBondIn / 股票退市 checkStockIn）。
      */
     private List<String> checkCommonIn(AdjustCheckContext ctx) {
@@ -3237,7 +3237,7 @@ public class SecurityPoolAdjustService {
     /**
      * 债券类型特有调入校验
      *
-     * <p>含债券到期校验（maturity_date 早于今日则禁止调入）。
+     * 含债券到期校验（maturity_date 早于今日则禁止调入）。
      */
     private List<String> checkBondIn(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
@@ -3251,7 +3251,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：主体债入库规则（credit_bond_pool_grade_rule 矩阵）
      *
-     * <p>调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表。
+     * 调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表。
      * 担保债取主体与担保人内评孰高后再查矩阵；
      * ABS：所选权益人内评（自选权益人优先，复用 innerGuarantorRating）1 档只能调入一级库，缺少内评或非 1 档至少下调一级；
      * 私募发债主体内评 1 档只能调入一级库，其余至少下调一级；
@@ -3337,7 +3337,7 @@ public class SecurityPoolAdjustService {
     /**
      * 按剩余期限（年）匹配信用债期限分组编码。
      *
-     * <p>遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
+     * 遍历启用的 credit_bond_term_bucket，按 min_term_year/max_term_year + inclusive 标志判定区间归属。
      * 入参为 {@link CreditBondRemainTermUtil#resolveRemainTermYears}（date_exists_str 解析，含权/回购已是年）。
      *
      * @param remainTermYears 剩余期限年数；null 时按最长档（期限>5）兜底
@@ -3351,7 +3351,7 @@ public class SecurityPoolAdjustService {
     /**
      * 取两个主体内评分档中评级较高者（sort_no 较小者；担保债按主体与担保人孰高）。
      *
-     * <p>评分档未命中字典时保持主体评级档不变。
+     * 评分档未命中字典时保持主体评级档不变。
      *
      * @param gradeCode1 主体内评档
      * @param gradeCode2 担保人内评档
@@ -3505,7 +3505,7 @@ public class SecurityPoolAdjustService {
     /**
      * 校验改判目标池是否符合主体债入库矩阵（评级联动，调入审批改判用）。
      *
-     * <p>按债券的主体内评分档 × 期限档查 credit_bond_pool_grade_rule 矩阵得允许池列表，
+     * 按债券的主体内评分档 × 期限档查 credit_bond_pool_grade_rule 矩阵得允许池列表，
      * 改判池须在列表内。复用 inCheckMainGradeRule 的矩阵查询逻辑。
      *
      * @param securityCode    证券代码
@@ -3805,7 +3805,7 @@ public class SecurityPoolAdjustService {
     /**
      * 股票类型特有调入校验
      *
-     * <p>含股票退市校验（delist_date 早于今日则禁止调入）。
+     * 含股票退市校验（delist_date 早于今日则禁止调入）。
      */
     private List<String> checkStockIn(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
@@ -3820,7 +3820,7 @@ public class SecurityPoolAdjustService {
     /**
      * 基金类型特有调入校验
      *
-     * <p>含基金评分校验（fund_rate_limit）：池配置评分限制表达式时，校验请求传入的 fundRate 是否满足。
+     * 含基金评分校验（fund_rate_limit）：池配置评分限制表达式时，校验请求传入的 fundRate 是否满足。
      * 对应老项目 checkInPool:1092-1120。
      */
     private List<String> checkFundIn(AdjustCheckContext ctx) {
@@ -3833,7 +3833,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：基金评分（fund_rate_limit）
      *
-     * <p>池配置了基金评分限制表达式（如 3<=#rate<=8）时，调入校验请求传入的 fundRate 是否满足。
+     * 池配置了基金评分限制表达式（如 3<=#rate<=8）时，调入校验请求传入的 fundRate 是否满足。
      * #rate 为基金评分占位。表达式支持 <=#rate / <#rate（下限）、#rate<= / #rate<（上限）及组合，
      * 各条件须同时满足。fundRate 为空或解析失败则校验失败。
      * 对应老项目 checkInPool:1092-1120。仅调入校验（老代码 checkOutPool 无）。
@@ -3901,7 +3901,7 @@ public class SecurityPoolAdjustService {
     /**
      * 调出校验：通用校验 + 类型特有校验
      *
-     * <p>先执行 checkCommonOut（通用：池锁定/pending/不在池/冻结期/限制/互斥/弹性），
+     * 先执行 checkCommonOut（通用：池锁定/pending/不在池/冻结期/限制/互斥/弹性），
      * 再按 categoryType 路由类型特有校验（债券到期 checkBondOut / 股票退市 checkStockOut 等）。
      *
      * @param ctx 调库校验上下文
@@ -3950,7 +3950,7 @@ public class SecurityPoolAdjustService {
     /**
      * 通用调出校验（所有类型都走）
      *
-     * <p>含池锁定、pending流程、不在池、冻结期、限制池、互斥、弹性禁投。
+     * 含池锁定、pending流程、不在池、冻结期、限制池、互斥、弹性禁投。
      * 不含证券到期（已拆到类型特有：债券到期 checkBondOut / 股票退市 checkStockOut）。
      */
     private List<String> checkCommonOut(AdjustCheckContext ctx) {
@@ -3979,7 +3979,7 @@ public class SecurityPoolAdjustService {
     /**
      * 债券类型特有调出校验
      *
-     * <p>含债券到期校验（maturity_date 早于今日则禁止调出）。
+     * 含债券到期校验（maturity_date 早于今日则禁止调出）。
      */
     private List<String> checkBondOut(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
@@ -3991,7 +3991,7 @@ public class SecurityPoolAdjustService {
     /**
      * 股票类型特有调出校验
      *
-     * <p>含股票退市校验（delist_date 早于今日则禁止调出）。
+     * 含股票退市校验（delist_date 早于今日则禁止调出）。
      */
     private List<String> checkStockOut(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
@@ -4017,7 +4017,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：债券到期（maturity_date）
      *
-     * <p>债券到期日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）。
+     * 债券到期日早于今日则禁止调入。对应老项目 checkInPool:544（ptype=4000 债券分支）。
      */
     private String inCheckBondMaturity(AdjustCheckContext ctx) {
         String maturityDate = ctx.getSecurityInfo().getMaturityDate();
@@ -4033,7 +4033,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：股票退市（delist_date）
      *
-     * <p>股票摘牌日早于今日则禁止调入。对应老项目 checkInPool:956（ptype=2000 股票分支）。
+     * 股票摘牌日早于今日则禁止调入。对应老项目 checkInPool:956（ptype=2000 股票分支）。
      */
     private String inCheckStockDelist(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
@@ -4049,7 +4049,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：债券到期（maturity_date，调出）
      *
-     * <p>债券到期日早于今日则禁止调出。对应老项目 checkOutPool 到期校验。
+     * 债券到期日早于今日则禁止调出。对应老项目 checkOutPool 到期校验。
      */
     private String outCheckBondMaturity(AdjustCheckContext ctx) {
         String maturityDate = ctx.getSecurityInfo().getMaturityDate();
@@ -4065,7 +4065,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：股票退市（delist_date，调出）
      *
-     * <p>股票摘牌日早于今日则禁止调出。对应老项目 checkOutPool 退市校验。
+     * 股票摘牌日早于今日则禁止调出。对应老项目 checkOutPool 退市校验。
      */
     private String outCheckStockDelist(AdjustCheckContext ctx) {
         String delistDate = ctx.getSecurityInfo().getDelistDate();
@@ -4081,7 +4081,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：证券是否存在进行中的调库流程
      *
-     * <p>存在 pending 流程步骤的调库记录视为进行中，
+     * 存在 pending 流程步骤的调库记录视为进行中，
      * 需等待该流程终结后方可再次发起调库，避免并发操作导致入池状态混乱。
      */
     private String preCheckPendingProcess(AdjustCheckContext ctx) {
@@ -4102,7 +4102,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：证券是否已在目标池中
      *
-     * <p>以 ip_pool_status 中 audit_status='20' 的有效记录为准，重复调入无实际意义。
+     * 以 ip_pool_status 中 audit_status='20' 的有效记录为准，重复调入无实际意义。
      */
     private String inCheckSecurityAlreadyInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
@@ -4115,7 +4115,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：目标池是否已达持仓上限
      *
-     * <p>maxCapacity 为 null 或 0 时表示不限制数量；
+     * maxCapacity 为 null 或 0 时表示不限制数量；
      * 当前有效证券数量（poolCurrentCount）≥ 上限时拒绝调入。
      */
     private String inCheckPoolCapacity(AdjustCheckContext ctx) {
@@ -4130,7 +4130,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：来源池限制
      *
-     * <p>若目标池配置了来源池（source），则证券必须当前已在其中至少一个来源池中，
+     * 若目标池配置了来源池（source），则证券必须当前已在其中至少一个来源池中，
      * 或本次请求同时调入至少一个来源池，满足"从低级库向高级库晋升"等分层调库规则。
      * 未配置来源池时不做限制。
      */
@@ -4154,7 +4154,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：调入限制池（in_restrict）
      *
-     * <p>证券当前在配置的限制池中，则不允许调入目标池。
+     * 证券当前在配置的限制池中，则不允许调入目标池。
      */
     private String inCheckRestrictPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
@@ -4164,7 +4164,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：调入弹性禁投池（in_soft_restrict）
      *
-     * <p>弹性禁投池与硬性限制池的校验逻辑相同，但语义上表示"柔性"限制，
+     * 弹性禁投池与硬性限制池的校验逻辑相同，但语义上表示"柔性"限制，
      * 业务层面可由特定角色绕过（绕过逻辑在审批流程中处理，此处只做初步拦截）。
      */
     private String inCheckElasticPool(AdjustCheckContext ctx) {
@@ -4175,7 +4175,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：同一请求中同时勾选了互斥调入项
      *
-     * <p>若目标池配置了互斥池（in_mutex），且本次请求中同时存在对这些互斥池的调入操作，
+     * 若目标池配置了互斥池（in_mutex），且本次请求中同时存在对这些互斥池的调入操作，
      * 则两者不可并存，均应失败。例如：信用债大库/一级库与专户产品/一级库互斥，
      * 不可同时勾选"调入信用债大库/一级库"和"调入专户产品/一级库"。
      */
@@ -4201,7 +4201,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：证券是否不在目标池中
      *
-     * <p>不在池中则无法调出，属于基础前置判断，避免操作无效数据。
+     * 不在池中则无法调出，属于基础前置判断，避免操作无效数据。
      */
     private String outCheckSecurityNotInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
@@ -4214,7 +4214,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：调出限制池（out_restrict）
      *
-     * <p>证券当前在配置的限制池中，则不允许从目标池调出。
+     * 证券当前在配置的限制池中，则不允许从目标池调出。
      */
     private String outCheckRestrictPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
@@ -4224,7 +4224,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：调出互斥池（out_mutex）
      *
-     * <p>证券当前在配置的互斥池中，则不允许从目标池调出。
+     * 证券当前在配置的互斥池中，则不允许从目标池调出。
      * 注意：此处校验的是"调出方向的互斥"，与调入互斥池（in_mutex）含义不同：
      * in_mutex 用于在第三阶段自动生成配套调出项；out_mutex 用于阻止调出操作本身。
      */
@@ -4236,7 +4236,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：调出弹性禁投池（out_soft_restrict）
      *
-     * <p>证券当前在配置的弹性禁投池中，则不允许从目标池调出。
+     * 证券当前在配置的弹性禁投池中，则不允许从目标池调出。
      */
     private String outCheckElasticPool(AdjustCheckContext ctx) {
         // 通用阻断校验：检查证券是否在指定关系类型的池中
@@ -4246,7 +4246,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：同一请求中同时勾选了互斥调出项
      *
-     * <p>若目标池配置了互斥池（in_mutex），且本次请求中同时存在对这些互斥池的调出操作，
+     * 若目标池配置了互斥池（in_mutex），且本次请求中同时存在对这些互斥池的调出操作，
      * 则两者不可并存，均应失败。互斥池对代表"不可同时持有"，
      * 因此也不应在同一批次中同时对两池执行调出操作。
      */
@@ -4268,7 +4268,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：目标池已锁定（lock_flag=1）
      *
-     * <p>池被锁定后不可调入，属于最硬的池级拦截，优先于其他调入校验执行。
+     * 池被锁定后不可调入，属于最硬的池级拦截，优先于其他调入校验执行。
      */
     private String inCheckPoolLocked(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -4281,7 +4281,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：目标池已锁定（lock_flag=1）
      *
-     * <p>池被锁定后不可调出，属于最硬的池级拦截，优先于其他调出校验执行。
+     * 池被锁定后不可调出，属于最硬的池级拦截，优先于其他调出校验执行。
      */
     private String outCheckPoolLocked(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -4294,7 +4294,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：调出冻结期（frozen_period_in）
      *
-     * <p>目标池配置了调入冻结期天数时，证券入池后 N 天内不可调出。
+     * 目标池配置了调入冻结期天数时，证券入池后 N 天内不可调出。
      * 以 ip_pool_status.entry_time（audit_status=20）为入池时间基准，
      * entry_time + frozenPeriodIn 天 > 当前时间则视为仍在冻结期。
      */
@@ -4320,7 +4320,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：投资品种（variety_codes）
      *
-     * <p>目标池配置了投资品种时，证券品种（categoryType）须在配置内。
+     * 目标池配置了投资品种时，证券品种（categoryType）须在配置内。
      * categoryType 由 dict_security_type 表按 securityType 查询得到（大类见 CategoryType / 演示数据）。
      */
     private String inCheckVariety(AdjustCheckContext ctx) {
@@ -4340,7 +4340,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：投资市场（market_codes）
      *
-     * <p>目标池配置了投资市场时，当前证券代码所属市场须在配置内。
+     * 目标池配置了投资市场时，当前证券代码所属市场须在配置内。
      * 市场 code 统一见 {@link com.znty.rrs.common.enums.MarketCode}，
      * 市场由统一 SecurityMarketService 权威查询。
      */
@@ -4359,7 +4359,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：全局禁止池（forbidden 禁投池）
      *
-     * <p>证券当前在禁投池中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
+     * 证券当前在禁投池中则不能调入任何其他池（全局禁止，区别于池间 in_restrict）。
      * 对应老项目 Forbiddenlastpoolid 配置。
      */
     private String inCheckForbiddenPool(AdjustCheckContext ctx) {
@@ -4372,7 +4372,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：股票入池评级限制（grade_astrict）
      *
-     * <p>老系统该字段对应“股票入池评级限制”，评级来源为 StockResearch/investrank
+     * 老系统该字段对应“股票入池评级限制”，评级来源为 StockResearch/investrank
      * （买入、增持、中性、卖出等），不是债券 ratingBond。当前项目尚未接入股票研究评级来源，
      * 因此仅保留股票分支入口，配置了 grade_astrict 时先跳过，不对债券评级做误拦截。
      */
@@ -4388,7 +4388,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：行业限制（industry_code / industry_exponent）
      *
-     * <p>目标池配置了行业限制时，调入校验证券行业是否匹配：
+     * 目标池配置了行业限制时，调入校验证券行业是否匹配：
      * 池 industry_code 非空且 industry_exponent=0（非行业指数模式）时，证券 industry_name 须等于池配置值。
      * 对应老项目 checkInPool:485（industryPartition.industrycode 比对 pool.IndustryCode），
      * TODO 投资池当前配置的是农业、城投、电力等业务行业值，尚未完成与证券行业数据的可靠映射；
@@ -4419,7 +4419,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：开放日（open_day_adjust，调入侧）
      *
-     * <p>目标池启用开放日校验（open_day_adjust=1）时，调入校验当日是否落在 ip_pool_open_day 的开放区间内。
+     * 目标池启用开放日校验（open_day_adjust=1）时，调入校验当日是否落在 ip_pool_open_day 的开放区间内。
      * 对应老项目 checkInPool:479（isInPoolOpenDay）。
      */
     private String inCheckOpenDay(AdjustCheckContext ctx) {
@@ -4437,7 +4437,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：开放日（open_day_adjust，调出侧）
      *
-     * <p>目标池启用开放日校验时，调出校验当日是否落在开放区间内。对应老项目 checkOutPool:139。
+     * 目标池启用开放日校验时，调出校验当日是否落在开放区间内。对应老项目 checkOutPool:139。
      */
     private String outCheckOpenDay(AdjustCheckContext ctx) {
         InvestmentPoolBo pool = ctx.getTargetPool();
@@ -4454,7 +4454,7 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：报告必填（in_report_restriction / out_report_restriction）
      *
-     * <p>目标池配置了报告限制时，提交时校验报告附件：
+     * 目标池配置了报告限制时，提交时校验报告附件：
      * none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告。
      * 对应老项目 rschDocMode 报告校验。在 addAdjustLog 提交阶段校验（checkAdjust 阶段无报告信息）。
      */
@@ -4490,7 +4490,7 @@ public class SecurityPoolAdjustService {
     /**
      * 构建单个调库项的校验上下文（{@link AdjustCheckContext}）
      *
-     * <p>负责将"本次校验共享数据"与"当次调库项的目标池信息"合并填充到上下文中，
+     * 负责将"本次校验共享数据"与"当次调库项的目标池信息"合并填充到上下文中，
      * 供三层校验方法直接读取，无需再逐级传参。
      *
      * @param item             当前调库项（目标池 ID、调整方向等）
@@ -4540,11 +4540,11 @@ public class SecurityPoolAdjustService {
     /**
      * 构建自动生成的联动/互斥调整项校验结果
      *
-     * <p>与手动项校验流程完全相同，区别在于：
-     * <ul>
-     *   <li>targetPoolId 来自池关系配置，由系统自动推导，非用户选择</li>
-     *   <li>itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式</li>
-     * </ul>
+     * 与手动项校验流程完全相同，区别在于：
+     *
+     *   - targetPoolId 来自池关系配置，由系统自动推导，非用户选择
+     *   - itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
+     *
      *
      * @param targetPoolId 自动生成项的目标池 ID
      * @param adjustMode   调整方向（AdjustMode.IN.getCode()或AdjustMode.OUT.getCode()）
@@ -4601,7 +4601,7 @@ public class SecurityPoolAdjustService {
     /**
      * 互斥配套调出失败时，反阻断同组手工调入，避免只入目标池导致双池。
      *
-     * <p>仅处理 itemTag=mutex 的配套调出；联动失败不反绑手工项。
+     * 仅处理 itemTag=mutex 的配套调出；联动失败不反绑手工项。
      */
     private void propagateMutexFailureToManual(AdjustCheckDto.CheckResultItem manualItem,
                                                List<AdjustCheckDto.CheckResultItem> groupMutexItems) {
@@ -4688,7 +4688,7 @@ public class SecurityPoolAdjustService {
     /**
      * 构建全量投资池关系 Map
      *
-     * <p>结构：poolId → relationType → 关联池 ID 列表，三层嵌套以支持快速按（池ID + 关系类型）查询。
+     * 结构：poolId → relationType → 关联池 ID 列表，三层嵌套以支持快速按（池ID + 关系类型）查询。
      *
      * @param relations 从数据库查出的原始关系记录列表
      */
@@ -4774,7 +4774,7 @@ public class SecurityPoolAdjustService {
     /**
      * 为新建的调库记录创建初始流程步骤（懒创建）
      *
-     * <p>仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理），
+     * 仅创建前 3 步：开始节点→提交人节点→下一审批节点（待处理），
      * 后续节点在审批动作执行时按需创建，因为流程走向不确定（可能通过也可能驳回）。
      *
      * @param adjustLogId  调库记录 ID
@@ -4975,7 +4975,7 @@ public class SecurityPoolAdjustService {
     /**
      * 沿流程主路径查找下一节点
      *
-     * <p>从当前节点出发，遍历所有出边（连线），排除指向已访问节点的边，
+     * 从当前节点出发，遍历所有出边（连线），排除指向已访问节点的边，
      * 优先选择非 reject 的主路径连线，
      * 返回目标节点。
      *
@@ -5143,6 +5143,10 @@ public class SecurityPoolAdjustService {
         if (shared != null && shared.batchNoContext != null) {
             bo.setSubmitTime(shared.batchNoContext.submitTime);
         }
+        if (ItemType.RELATED.getCode().equals(item.getItemTag())) {
+            // 与临时代码转正共用关联记录构建，保留同组流程和批次信息
+            return RelatedMarketAdjustHelper.buildRelatedLog(bo, securityCode, securityShortName, securityType);
+        }
         return bo;
     }
 
@@ -5176,7 +5180,7 @@ public class SecurityPoolAdjustService {
             return "联动调整";
         }
         if (ItemType.RELATED.getCode().equals(item.getItemTag())) {
-            return "关联调整";
+            return RelatedMarketAdjustHelper.ADJUST_TYPE;
         }
         return req.getAdjustType();
     }
@@ -5250,7 +5254,7 @@ public class SecurityPoolAdjustService {
     /**
      * 多市场关联码扩批：对主结果中的 manual/linkage/mutex 项，按 Wind 同 ISIN 记录展开 related 项。
      *
-     * <p>关联码独立校验已在池/不在池/pending/容量等；同池同批调入累计 projected 占用容量。
+     * 关联码独立校验已在池/不在池/pending/容量等；同池同批调入累计 projected 占用容量。
      */
     private void expandRelatedMarketCodeItems(AdjustCheckReq req, AdjustSharedData mainShared,
                                               List<AdjustCheckDto.CheckResultItem> resultItems) {
@@ -5387,7 +5391,7 @@ public class SecurityPoolAdjustService {
     /**
      * 单个流程的运行时快照，聚合流程定义、活跃版本、节点索引和连线列表。
      *
-     * <p>用于 {@link #isDirectFlow(FlowSnapshot)} 方法快速判断流程是否为直通（start→end）模式，
+     * 用于 {@link #isDirectFlow(FlowSnapshot)} 方法快速判断流程是否为直通（start→end）模式，
      * 避免在第三/四阶段逐项重复查询流程定义、版本、节点和连线。
      */
     private static class FlowSnapshot {
@@ -5441,15 +5445,15 @@ public class SecurityPoolAdjustService {
     /**
      * 本次调库提交（addAdjustLog）的共享数据载体
      *
-     * <p>addAdjustLog 每次调用需要加载多项证券/池/流程的基础数据，这些数据在整个调用过程中保持不变。
+     * addAdjustLog 每次调用需要加载多项证券/池/流程的基础数据，这些数据在整个调用过程中保持不变。
      * 将其封装为此类后，第三、四阶段的处理方法只需接收一个 shared 参数即可获取所需数据，
      * 避免逐级传递大量参数。
      *
-     * <p>与 {@link AdjustSharedData} 的区别：
-     * <ul>
-     *   <li>不包含 requestInPoolIds / requestOutPoolIds（提交阶段无需互斥冲突校验）</li>
-     *   <li>新增 flowSnapshotMap，包含每个引用流程的快照数据</li>
-     * </ul>
+     * 与 {@link AdjustSharedData} 的区别：
+     *
+     *   - 不包含 requestInPoolIds / requestOutPoolIds（提交阶段无需互斥冲突校验）
+     *   - 新增 flowSnapshotMap，包含每个引用流程的快照数据
+     *
      */
     private static class SubmitSharedData {
 
@@ -5529,7 +5533,7 @@ public class SecurityPoolAdjustService {
 
     /**
      * 批次号生成上下文。
-     * <p>同一请求内共用 submitTime，保证大批量落库时历史列表按时间+批次能同组相邻。
+     * 同一请求内共用 submitTime，保证大批量落库时历史列表按时间+批次能同组相邻。
      */
     static class BatchNoContext {
 
