@@ -13,6 +13,7 @@ import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
+import com.znty.rrs.schedule.TaskDetailLog;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -35,6 +36,37 @@ import static org.mockito.Mockito.when;
  * 外评非 AA- 及以下主体自动出池任务单元测试
  */
 public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
+
+    /** 自动主体出池同样不按目标池 ID 限制，旗下债券使用主体批次调出同一池。 */
+    @Test
+    public void outboundBondsShouldFollowEveryCompanyPool() {
+        for (Long poolId : new Long[]{16L, 23L, 999L}) {
+            AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
+            SecurityPoolAdjustMapper statusMapper = mock(SecurityPoolAdjustMapper.class);
+            CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+            ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
+            ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", statusMapper);
+            InvestmentPoolBo pool = new InvestmentPoolBo();
+            pool.setId(poolId);
+            pool.setPoolName("目标池");
+            ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
+            bond.setSecurityCode("B001");
+            bond.setSecurityType("abs");
+            when(mapper.queryCompanyBondInSamePoolForAutoOut(eq("C001"), eq(poolId),
+                    any(CompanyBondTypeScopeBo.class))).thenReturn(Collections.singletonList(bond));
+            when(statusMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
+            when(statusMapper.deletePoolStatusSoft("B001", poolId)).thenReturn(1);
+
+            Integer count = ReflectionTestUtils.invokeMethod(service, "outSamePoolBonds", "C001", pool, poolId,
+                    "COMP_TEST", new Date(), Collections.emptyList(), new TaskDetailLog(), "主体出池");
+
+            assertThat(count).isEqualTo(1);
+            assertThat(bond.getAdjustMode()).isEqualTo("调出");
+            assertThat(bond.getTargetPoolId()).isEqualTo(poolId);
+            assertThat(bond.getAdjustBatchNo()).isEqualTo("COMP_TEST");
+            verify(statusMapper).deletePoolStatusSoft("B001", poolId);
+        }
+    }
 
     /** 验证参数说明包含默认池与额外拦截参数。 */
     @Test

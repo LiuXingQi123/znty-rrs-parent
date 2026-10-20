@@ -20,7 +20,7 @@ public final class CompanyBondSyncPolicy {
     /**
      * 获取当前主体旗下债券类型范围。
      *
-     * <p>当前口径：不排除任何 bond 子类型，普通债、ABS、CRMW 都跟随主体入/出池。
+     * <p>当前口径：不排除任何 bond 子类型，普通债、ABS、CRMW 都跟随主体入/出同一目标池，不按池 ID 限制。
      * CRMW 凭证作为旗下债写入 {@code ip_pool_status}；凭证+标的进 CRMW 库仍走专用链路写 {@code ip_pool_status_crmw}。</p>
      *
      * <p>后续若要改排除范围，只改本方法返回值，例如：</p>

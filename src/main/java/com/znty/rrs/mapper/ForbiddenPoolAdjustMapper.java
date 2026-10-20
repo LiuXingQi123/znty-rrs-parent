@@ -49,7 +49,7 @@ public interface ForbiddenPoolAdjustMapper {
             @Param("targetPoolId") Long targetPoolId);
 
     /**
-     * 查询主体调入15/17时需同步的未到期（含当天）旗下债券。
+     * 查询主体调入任意目标池时需同步的未到期（含当天）旗下债券。
      *
      * @param companyCode 发行主体代码
      * @param targetPoolId 目标池 ID
@@ -61,7 +61,7 @@ public interface ForbiddenPoolAdjustMapper {
                                                             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
-     * 查询主体调入债券禁止库时，需要从关系池互斥调出的旗下债券。
+     * 查询主体调入任意目标池时，需要从关系池互斥调出的旗下债券。
      *
      * @param companyCode 发行主体代码
      * @param targetPoolId 调入目标池 ID
@@ -76,7 +76,7 @@ public interface ForbiddenPoolAdjustMapper {
             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
-     * 查询主体调出15/17时需同步的未到期（含当天）且当前在池旗下债券。
+     * 查询主体调出任意目标池时需同步的未到期（含当天）且当前在池旗下债券。
      *
      * @param companyCode 发行主体代码
      * @param targetPoolId 目标池 ID

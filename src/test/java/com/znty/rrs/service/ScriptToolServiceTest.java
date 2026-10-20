@@ -36,6 +36,20 @@ import static org.mockito.ArgumentMatchers.anyString;
  */
 public class ScriptToolServiceTest {
 
+    /** 主体审批通过演示场景包含旗下债券日志、范围筛选和同批池状态。 */
+    @Test
+    public void approvedCompanySceneShouldIncludeBondStates() {
+        ScriptToolService service = new ScriptToolService();
+        List<String> statements = ReflectionTestUtils.invokeMethod(service, "buildForbiddenCompanyApprovedScene");
+        String sql = String.join("\n", statements);
+        assertTrue(sql.contains("SELECT bond.wind_code, bond.short_name, bond.security_type"));
+        assertTrue(sql.contains("dst.category_type = 'bond'"));
+        assertTrue(sql.contains("bond.security_status != 'D'"));
+        assertTrue(sql.contains("bond.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')"));
+        assertTrue(sql.contains("AND NOT EXISTS (SELECT 1 FROM ip_pool_status ips"));
+        assertTrue(sql.contains("SELECT security_code, security_short_name, security_type, adjust_type, adjust_mode, id, adjust_batch_no"));
+    }
+
     /** 验证分类批次覆盖范围与依赖顺序，全库不得遗漏或重复脚本。 */
     @Test
     public void shouldExposeBondAndFullDatabaseInitializationPairs() {

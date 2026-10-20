@@ -76,7 +76,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "companyInPoolId（主体所在池）：主体必须已在该池内，才扫描其旗下债券\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "bondTargetPoolId（债券入池目标池）：上述主体旗下符合条件的债券将自动写入该池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调入规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
-                    + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
+                    + "扫描范围：所有已有生效主体的普通池自动追加同池映射，再与参数及关系绑定池取并集；并集为空时本轮失败\n"
                     + "处理规则：主体已在主体池且生效时，将其旗下未退市、未到期且未在债券目标池的债券自动入池\n"
                     + "类型范围：普通债、ABS、CRMW 均处理；排除退市债和已更新正式代码的临时代码\n"
                     + "CRMW 说明：CRMW 证券跟随主体进入普通目标池时写 ip_pool_status，不写 CRMW 组合状态表\n"
@@ -155,8 +155,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
         // 解析为 [主体所在池ID, 债券写入池ID] 列表（非法则抛业务异常）
+        List<long[]> mappings = new ArrayList<>(parseParamMappings(paramJson, taskName));
+        // 所有已有主体的普通池都补齐同池债券，保留显式配置的跨池映射
+        for (Long poolId : autoAdjustMapper.queryCompanyCurrentPoolIds()) {
+            mappings.add(new long[]{poolId, poolId});
+        }
         List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
-                parseParamMappings(paramJson, taskName), TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
+                mappings, TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
         infoDetail(detail, "有效映射组数 " + pairList.size());
         infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、rrs_securityinfo.issuer_code非空、"
                 + "maturity_date为空或>今日；发行主体已在映射主体池生效、债券未在映射目标池生效，"

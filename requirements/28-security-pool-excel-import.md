@@ -108,6 +108,8 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 | 证券 | `SecurityPoolAdjustService.checkAdjust`（与批量内部 `checkSingleAdjust` 同路径） | `SecurityPoolAdjustService.addAdjustLog` |
 | 主体 | `ForbiddenPoolAdjustService.checkCompanyAdjust` | `ForbiddenPoolAdjustService.addCompanyAdjustLog` |
 
+主体导入和“首先清空目标池”的主体出库均复用主体落池链路：主体出入任意目标池，符合范围的旗下债券同方向出入同一池，日志共用主体批次；仅审批通过（或直通生效）才落地，失败整批回滚。
+
 ### 4.1 证券导入
 
 - 每行 Excel → 一券 + 一目标池 + 方向，调用完整证券调库校验（含联动/互斥/关联码/流程候选）
@@ -126,6 +128,7 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 ### 4.2 主体导入
 
 - 每行 Excel → 一主体 + 一目标池 + 方向，调用禁投池主体完整校验
+- 校验结果的主体代码、简称和类型由主体主数据统一回填，覆盖可调整和不可调整的手工项以及主体联动项；旗下债券互斥项保留债券自身代码、简称和类型。简称列空值留白，不使用主体代码代替简称。重新校验会更新本批保存的校验快照。
 - 联动/互斥同样受「允许联动与互斥」选项过滤
 - 无流程候选时注入标准入/出库（缺省回退批量配置）
 - 提交：按主体分组调用 `addCompanyAdjustLog`（含审批通过后旗下债券同步等既有逻辑）

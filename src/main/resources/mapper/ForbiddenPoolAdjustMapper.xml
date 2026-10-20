@@ -222,7 +222,7 @@
         ORDER BY t.wind_code ASC
     </select>
 
-    <!-- 查询主体调入15/17时需同步的未退市、未到期（含当天）旗下债券；当前含 ABS/crmw，类型范围由 bondTypeScope 控制 -->
+    <!-- 查询主体调入任意目标池时需同步的未退市、未到期（含当天）旗下债券；当前含 ABS/crmw，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyInboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond
@@ -252,7 +252,7 @@
         ORDER BY bond.wind_code ASC
     </select>
 
-    <!-- 查询主体调入债券禁止库后，将从互斥池或反向调入限制池自动调出的未退市旗下债券；类型范围由 bondTypeScope 控制 -->
+    <!-- 查询主体调入任意目标池后，将从互斥池或反向调入限制池自动调出的未退市旗下债券；类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyBondMutexOutList"
             resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBond">
         SELECT DISTINCT bond.wind_code
@@ -293,7 +293,7 @@
         ORDER BY bond.wind_code ASC, ips.target_pool_id ASC
     </select>
 
-    <!-- 查询主体调出15/17时需同步的未退市、未到期（含当天）且当前在池旗下债券；当前含 ABS/crmw，类型范围由 bondTypeScope 控制 -->
+    <!-- 查询主体调出任意目标池时需同步的未退市、未到期（含当天）且当前在池旗下债券；当前含 ABS/crmw，类型范围由 bondTypeScope 控制 -->
     <select id="queryCompanyOutboundBondForAutoList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT bond.*
         FROM rrs_securityinfo bond

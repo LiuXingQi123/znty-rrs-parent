@@ -19,6 +19,9 @@ import java.util.List;
 @Mapper
 public interface AutoAdjustMapper {
 
+    /** 查询所有已有生效主体的普通池，供补债任务自动覆盖同池债券。 */
+    List<Long> queryCompanyCurrentPoolIds();
+
     /**
      * 查询主体当前是否已在指定池生效。
      *

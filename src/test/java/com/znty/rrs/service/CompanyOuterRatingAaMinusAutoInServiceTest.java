@@ -4,6 +4,9 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
+import com.znty.rrs.entity.bo.PoolRelationBo;
+import com.znty.rrs.schedule.TaskDetailLog;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -21,6 +24,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -32,6 +36,44 @@ import static org.mockito.Mockito.when;
  * 外评 AA- 及以下主体自动入池任务单元测试
  */
 public class CompanyOuterRatingAaMinusAutoInServiceTest {
+
+    /** 外评主体进入任意普通池时均跟债；债券受限时抛异常交由事务整体回滚。 */
+    @Test
+    public void bondsShouldFollowEveryPoolAndRejectRestrictedBond() {
+        for (Long poolId : Arrays.asList(16L, 23L, 999L)) {
+            AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
+            SecurityPoolAdjustMapper statusMapper = mock(SecurityPoolAdjustMapper.class);
+            CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
+            ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
+            ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", statusMapper);
+            InvestmentPoolBo pool = new InvestmentPoolBo();
+            pool.setId(poolId);
+            pool.setPoolType("observe");
+            IpAdjustLogBo company = new IpAdjustLogBo();
+            company.setSecurityCode("C001");
+            company.setTargetPoolId(poolId);
+            company.setAdjustBatchNo("COMP_TEST");
+            ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
+            bond.setSecurityCode("B001");
+            when(mapper.queryCompanyBondNotInSamePoolForAutoIn(eq("C001"), eq(poolId),
+                    any(CompanyBondTypeScopeBo.class))).thenReturn(Collections.singletonList(bond));
+            when(statusMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
+            when(statusMapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
+            Integer count = ReflectionTestUtils.invokeMethod(service, "inSamePoolBonds", company, pool,
+                    Collections.emptyList(), Collections.singletonMap(poolId, pool), new TaskDetailLog());
+            assertThat(count).isEqualTo(1);
+            assertThat(bond.getTargetPoolId()).isEqualTo(poolId);
+            assertThat(bond.getAdjustBatchNo()).isEqualTo("COMP_TEST");
+            PoolRelationBo restrict = new PoolRelationBo();
+            restrict.setPoolId(poolId);
+            restrict.setRelationType("in_restrict");
+            restrict.setRelationPoolId(3L);
+            when(statusMapper.querySecurityCurrentPoolIdList("B001")).thenReturn(Collections.singletonList(3L));
+            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "inSamePoolBonds", company, pool,
+                    Collections.singletonList(restrict), Collections.singletonMap(poolId, pool), new TaskDetailLog()))
+                    .isInstanceOf(BizException.class).hasMessageContaining("不能联动调入主体");
+        }
+    }
 
     /** 验证低外评主体自动调入并同步旗下债券。 */
     @Test

@@ -69,7 +69,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低，一年以前忽略；近一年无认可外评不因（二）入库\n"
                     + "限制规则：主体已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "联动处理：主体成功入池后，本任务内自写逻辑同批调入该主体旗下未退市、未到期债券（不复用人工 syncCompanyBonds）；"
-                    + "债命中调入限制池则跳过该债；入池后按互斥/反向限制从债当前所在池自动调出\n"
+                    + "债命中调入限制池则阻断主体入池并整批回滚；入池后按互斥/反向限制从债当前所在池自动调出\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
@@ -440,25 +440,16 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         }
         Long poolId = companyLog.getTargetPoolId();
         String companyCode = companyLog.getSecurityCode();
-        // 历史口径（对齐人工 syncCompanyBonds）：仅债券禁止库(15)、黑名单质押库(17)同步旗下债；
-        // 观察池(16)/重点观察名单(23)只落主体。当前外评自动入池任务要求目标池均可跟债，故先注释；
-        // 若后续需恢复限制，取消下方注释即可。
-        // if (!Long.valueOf(AutoAdjustRestrictHelper.COMPANY_FORBIDDEN_POOL_ID).equals(poolId)
-        //         && !PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId)) {
-        //     return 0;
-        // }
-        // CRMW 组合池不能写普通池状态，跳过跟债
+        // CRMW 组合池不能写普通池状态，阻断主体调整以保持主体和债券一致
         if (CompanyBondSyncPolicy.isCrmwCombinationPool(pool)) {
-            warnDetail(detail, "池[" + pool.getPoolName() + "](" + poolId
-                    + ")为 CRMW 组合池，主体旗下证券不能通过普通池状态写入，跳过跟债");
-            return 0;
+            throw new BizException("CRMW 组合池不支持主体及旗下债券同池调整");
         }
         List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryCompanyBondNotInSamePoolForAutoIn(
                 companyCode, poolId, CompanyBondSyncPolicy.currentTypeScope());
         if (bonds == null || bonds.isEmpty()) {
             return 0;
         }
-        // 解析目标池调入限制池，债命中则跳过
+        // 解析目标池调入限制池，债券无法跟随时阻断主体入池并回滚
         List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                 poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
         int bondCount = 0;
@@ -472,8 +463,8 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     .querySecurityCurrentPoolIdList(bond.getSecurityCode());
             // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
             if (AutoAdjustRestrictHelper.isInAnyPool(currentPoolIds, inRestrictPoolIds)) {
-                warnDetail(detail, "债券[" + bond.getSecurityCode() + "]当前在调入限制池中，跳过");
-                continue;
+                throw new BizException("债券[" + bond.getSecurityCode()
+                        + "]当前在调入限制池中，不能联动调入主体");
             }
             // 回填自动入池日志公共字段（与主体同批次）
             fillAutoInBondLog(bond, companyLog, pool, bondReason);

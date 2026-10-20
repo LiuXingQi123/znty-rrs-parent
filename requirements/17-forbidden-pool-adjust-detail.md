@@ -89,7 +89,7 @@
 
 ## 5. 关键数据库表
 
-view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip_investment_pool`/`ip_adjust_log`/`wf_flow_definition`/`ip_adjust_step`/`sys_attachment`。adjust 模式提交时写 `ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`/`sys_attachment`，与 [15] 完全一致（含 `syncCompanyBondsOnDirect`，其中 `maturity_date` 按 `yyyyMMdd` 与数据库当前日比较）。
+view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip_investment_pool`/`ip_adjust_log`/`wf_flow_definition`/`ip_adjust_step`/`sys_attachment`。adjust 模式提交时写 `ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`/`sys_attachment`，与 [15] 完全一致（含所有主体目标池入/出方向的旗下债券同步，直通与审批均复用 `applyPoolStatusChanges`，其中 `maturity_date` 按 `yyyyMMdd` 与数据库当前日比较）。
 
 ---
 

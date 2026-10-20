@@ -38,6 +38,33 @@ import static org.mockito.Mockito.when;
  */
 public class CompanySamePoolBondAutoInServiceTest {
 
+    /** 未显式配置扫描池时，观察池、重点观察名单及新增主体池自动参与补债。 */
+    @Test
+    public void executeShouldDiscoverAllCurrentCompanyPools() {
+        AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        CompanySamePoolBondAutoInService service = new CompanySamePoolBondAutoInService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mock(ScheduledTaskMapper.class));
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
+        AutoAdjustTestSupport.bindPoolScope(service, mapper);
+        when(mapper.queryCompanyCurrentPoolIds()).thenReturn(Arrays.asList(16L, 23L, 999L));
+        InvestmentPoolBo observe = new InvestmentPoolBo();
+        observe.setId(16L);
+        InvestmentPoolBo watch = new InvestmentPoolBo();
+        watch.setId(23L);
+        InvestmentPoolBo custom = new InvestmentPoolBo();
+        custom.setId(999L);
+        when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(observe, watch, custom));
+
+        assertThat(service.execute().isSuccess()).isTrue();
+
+        for (Long poolId : Arrays.asList(16L, 23L, 999L)) {
+            verify(mapper).queryCompanyBondSamePoolForAutoIn(eq(poolId), any(CompanyBondTypeScopeBo.class));
+        }
+    }
+
     /** 验证主体在同池时自动调入债券并处理互斥池。 */
     @Test
     public void execute_ShouldAutoInBondSamePool() {

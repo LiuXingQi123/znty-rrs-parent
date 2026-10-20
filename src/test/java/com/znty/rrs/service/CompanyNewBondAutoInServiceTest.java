@@ -35,6 +35,30 @@ import static org.mockito.Mockito.when;
  */
 public class CompanyNewBondAutoInServiceTest {
 
+    /** 高频补债任务自动追加所有现有主体所在池的同池映射。 */
+    @Test
+    public void executeShouldDiscoverCurrentCompanyPoolsWithoutMappings() {
+        AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mock(ScheduledTaskMapper.class));
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
+        AutoAdjustTestSupport.bindPoolScope(service, mapper);
+        InvestmentPoolBo observe = new InvestmentPoolBo();
+        observe.setId(16L);
+        InvestmentPoolBo watch = new InvestmentPoolBo();
+        watch.setId(23L);
+        when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(observe, watch));
+        when(mapper.queryCompanyCurrentPoolIds()).thenReturn(Arrays.asList(16L, 23L));
+
+        assertThat(service.execute().isSuccess()).isTrue();
+
+        verify(mapper).queryCompanyNewBondForAutoIn(eq(16L), eq(16L), any(CompanyBondTypeScopeBo.class));
+        verify(mapper).queryCompanyNewBondForAutoIn(eq(23L), eq(23L), any(CompanyBondTypeScopeBo.class));
+    }
+
     @Test
     public void executeShouldInsertNewBonds() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);

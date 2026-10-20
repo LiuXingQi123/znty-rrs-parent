@@ -64,7 +64,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,17]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、17（黑名单质押库）内的主体，将其旗下符合条件的债券补充调入主体所在的同一池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（主体所在池 + 债券入池目标池）：可选；与投资池「关系配置 → 自动调入规则」中绑定本任务的池取并集后扫描\n"
-                    + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
+                    + "扫描范围：所有已有生效主体的普通池自动参与；再与扩展参数 poolIds、关系绑定池取并集；并集为空时本轮失败\n"
                     + "处理规则：主体已在目标池时，将其旗下未退市、未到期（含到期当天）且未在同一池的债券自动入池\n"
                     + "17 特别规则：扫描黑名单质押库时再次校验主体三条件，三个条件均不满足则不补债\n"
                     + "市场规则：目标池 market_codes 为空或 [] 时不限制；有配置时债券须命中允许市场\n"
@@ -307,7 +307,16 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
         String paramJson = (conf != null && StringUtils.hasText(conf.getParamJson()))
                 ? conf.getParamJson().trim() : null;
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
-        return poolScopeHelper.resolveUnionPoolIds(paramJson, TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
+        // 现有主体所在池自动参与补债，参数与任务绑定仍可追加扫描池
+        List<Long> poolIds = AutoAdjustPoolScopeHelper.unionPoolIds(
+                AutoAdjustPoolScopeHelper.parseOptionalPoolIds(paramJson),
+                poolScopeHelper.queryBoundPoolIds(TASK_CODE, RuleType.AUTO_IN.getCode()));
+        poolIds = AutoAdjustPoolScopeHelper.unionPoolIds(poolIds, autoAdjustMapper.queryCompanyCurrentPoolIds());
+        if (poolIds.isEmpty()) {
+            throw new BizException(AutoAdjustPoolScopeHelper.EMPTY_POOL_SCOPE_MESSAGE);
+        }
+        infoDetail(detail, "扫描池（参数、关系绑定及已有主体所在池）=" + poolIds);
+        return poolIds;
     }
 
     /**
