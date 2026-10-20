@@ -183,9 +183,9 @@
                ,f.GENERAL_BUDGET_REV
                ,f.GENERAL_BUDGET_EXP
                ,f.ROE
-               ,f.EBIT_INT_COV
+               ,f.EXP_TO_EBITDA
                ,f.EBITDA
-               ,f.EBITDA_TO_DEBT
+               ,f.DEBT_TO_EBITDA
         FROM ais_inv_ods.wind_companyfinancial f
         INNER JOIN rrs_securityinfo si ON si.issuer_code = f.COMPANYCODE
         WHERE si.wind_code = #{securityCode}
@@ -211,9 +211,9 @@
                ,f.GENERAL_BUDGET_REV
                ,f.GENERAL_BUDGET_EXP
                ,f.ROE
-               ,f.EBIT_INT_COV
+               ,f.EXP_TO_EBITDA
                ,f.EBITDA
-               ,f.EBITDA_TO_DEBT
+               ,f.DEBT_TO_EBITDA
         FROM ais_inv_ods.wind_companyfinancial f
         INNER JOIN rrs_securityinfo si ON si.issuer_code = f.COMPANYCODE
         WHERE si.wind_code = #{securityCode}
@@ -236,9 +236,9 @@
            ,GENERAL_BUDGET_REV
            ,GENERAL_BUDGET_EXP
            ,ROE
-           ,EBIT_INT_COV
+           ,EXP_TO_EBITDA
            ,EBITDA
-           ,EBITDA_TO_DEBT
+           ,DEBT_TO_EBITDA
         ) VALUES (
             #{issuerCode}
            ,#{financial.reportDate}
@@ -253,9 +253,9 @@
            ,#{financial.generalBudgetRev,jdbcType=DECIMAL}
            ,#{financial.generalBudgetExp,jdbcType=DECIMAL}
            ,#{financial.roe,jdbcType=DECIMAL}
-           ,#{financial.ebitIntCov,jdbcType=DECIMAL}
+           ,#{financial.expToEbitda,jdbcType=DECIMAL}
            ,#{financial.ebitda,jdbcType=DECIMAL}
-           ,#{financial.ebitdaToDebt,jdbcType=DECIMAL}
+           ,#{financial.debtToEbitda,jdbcType=DECIMAL}
         )
         ON DUPLICATE KEY UPDATE
             TOT_ASSETS = VALUES(TOT_ASSETS)
@@ -269,9 +269,9 @@
            ,GENERAL_BUDGET_REV = VALUES(GENERAL_BUDGET_REV)
            ,GENERAL_BUDGET_EXP = VALUES(GENERAL_BUDGET_EXP)
            ,ROE = VALUES(ROE)
-           ,EBIT_INT_COV = VALUES(EBIT_INT_COV)
+           ,EXP_TO_EBITDA = VALUES(EXP_TO_EBITDA)
            ,EBITDA = VALUES(EBITDA)
-           ,EBITDA_TO_DEBT = VALUES(EBITDA_TO_DEBT)
+           ,DEBT_TO_EBITDA = VALUES(DEBT_TO_EBITDA)
     </insert>
 
     <!-- 根据证券代码查询证券基础信息实体 -->

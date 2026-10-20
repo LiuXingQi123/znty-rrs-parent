@@ -21,6 +21,8 @@ public class SecurityPoolAdjustFinancialMapperSqlTest {
                 .contains("f.REPORTDATE IN")
                 .contains("collection=\"reportDates\"")
                 .contains("ORDER BY f.REPORTDATE ASC")
+                .contains("f.DEBT_TO_EBITDA", "f.EXP_TO_EBITDA")
+                .doesNotContain("f.DEBT_TO_EBITDA AS", "f.EXP_TO_EBITDA AS")
                 .doesNotContain("ROW_NUMBER()", "LIMIT 3");
     }
 
@@ -32,6 +34,8 @@ public class SecurityPoolAdjustFinancialMapperSqlTest {
 
         assertThat(select)
                 .contains("f.REPORTDATE = #{reportDate}")
+                .contains("f.DEBT_TO_EBITDA", "f.EXP_TO_EBITDA")
+                .doesNotContain("f.DEBT_TO_EBITDA AS", "f.EXP_TO_EBITDA AS")
                 .contains("si.issuer_code = f.COMPANYCODE");
         assertThat(upsert)
                 .contains("INSERT INTO ais_inv_ods.wind_companyfinancial")
@@ -41,7 +45,9 @@ public class SecurityPoolAdjustFinancialMapperSqlTest {
                 .contains("TOT_ASSETS = VALUES(TOT_ASSETS)")
                 .contains("ROE = VALUES(ROE)")
                 .contains("GRP = VALUES(GRP)")
-                .contains("EBITDA_TO_DEBT = VALUES(EBITDA_TO_DEBT)")
+                .contains("DEBT_TO_EBITDA = VALUES(DEBT_TO_EBITDA)")
+                .contains("EXP_TO_EBITDA = VALUES(EXP_TO_EBITDA)")
+                .doesNotContain("EBITDA_TO_DEBT", "EBIT_INT_COV")
                 .doesNotContain("${", "FROM rrs_securityinfo", "changedFields", "<if");
     }
 

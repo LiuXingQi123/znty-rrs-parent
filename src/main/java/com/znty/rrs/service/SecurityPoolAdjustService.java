@@ -345,7 +345,7 @@ public class SecurityPoolAdjustService {
                     financial.getDebtAssetsRatio(), financial.getTotRev(), financial.getNetProfit(),
                     financial.getNetCashOper(), financial.getNetCashInv(), financial.getGrp(),
                     financial.getGeneralBudgetRev(), financial.getGeneralBudgetExp(), financial.getRoe(),
-                    financial.getEbitIntCov(), financial.getEbitda(), financial.getEbitdaToDebt())
+                    financial.getExpToEbitda(), financial.getEbitda(), financial.getDebtToEbitda())
                     .stream().anyMatch(Objects::nonNull);
             if (!hasValue && securityPoolAdjustMapper.queryIssuerFinancialByReportDate(
                     securityCode, financial.getReportDate()) == null) {

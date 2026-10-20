@@ -59,6 +59,7 @@ public class SecurityPoolAdjustFinancialPersistenceTest {
                 + "NET_CASH_OPER DECIMAL(22,6), NET_CASH_INV DECIMAL(22,6), GRP DECIMAL(22,6),"
                 + "GENERAL_BUDGET_REV DECIMAL(22,6), GENERAL_BUDGET_EXP DECIMAL(22,6), ROE DECIMAL(22,6),"
                 + "EBIT_INT_COV DECIMAL(22,6), EBITDA DECIMAL(22,6), EBITDA_TO_DEBT DECIMAL(22,6),"
+                + "EXP_TO_EBITDA DECIMAL(22,6), DEBT_TO_EBITDA DECIMAL(22,6),"
                 + "PROVINCE VARCHAR(40), CITY VARCHAR(40), PRIMARY KEY(COMPANYCODE,REPORTDATE))");
         Configuration config = new Configuration();
         config.setMapUnderscoreToCamelCase(true);
@@ -165,6 +166,73 @@ public class SecurityPoolAdjustFinancialPersistenceTest {
         assertThatThrownBy(() -> service.saveIssuerFinancialList(req)).isInstanceOf(BizException.class);
         req.setSecurityCode("B002"); service.saveIssuerFinancialList(req);
         assertThat(jdbc.queryForObject("SELECT COMPANYCODE FROM ais_inv_ods.wind_companyfinancial",String.class)).isEqualTo("C002");
+    }
+
+    /** 两种查询均直接读取指定倍数列，旧指标列取值不同也不能混用。 */
+    @Test
+    public void shouldReadDebtAndInterestCoverageFromSpecifiedColumns() {
+        Long date = reportDate(-1, 1231);
+        jdbc.update("INSERT INTO ais_inv_ods.wind_companyfinancial"
+                + " (COMPANYCODE,REPORTDATE,DEBT_TO_EBITDA,EXP_TO_EBITDA,EBITDA_TO_DEBT,EBIT_INT_COV)"
+                + " VALUES ('C001',?,6.25,3.5,0.16,99)", date);
+        IssuerFinancialDto exact = mapper.queryIssuerFinancialByReportDate("B001", date);
+        assertThat(exact.getDebtToEbitda()).isEqualByComparingTo("6.25");
+        assertThat(exact.getExpToEbitda()).isEqualByComparingTo("3.5");
+        // 校验默认四期查询与指定报告期查询使用相同取值口径
+        IssuerFinancialDto latest = queryDefault().get(3);
+        assertThat(latest.getDebtToEbitda()).isEqualByComparingTo("6.25");
+        assertThat(latest.getExpToEbitda()).isEqualByComparingTo("3.5");
+    }
+
+    /** 指定倍数列为空时保持空值，不从其他财务指标补值。 */
+    @Test
+    public void shouldKeepNullRatiosWithoutFallingBackToOtherColumns() {
+        Long date = reportDate(-1, 1231);
+        jdbc.update("INSERT INTO ais_inv_ods.wind_companyfinancial"
+                + " (COMPANYCODE,REPORTDATE,EBITDA_TO_DEBT,EBIT_INT_COV) VALUES ('C001',?,0.16,99)", date);
+        IssuerFinancialDto exact = mapper.queryIssuerFinancialByReportDate("B001", date);
+        assertThat(exact.getDebtToEbitda()).isNull();
+        assertThat(exact.getExpToEbitda()).isNull();
+        // 校验默认四期查询同样保留指定来源列的空值
+        IssuerFinancialDto latest = queryDefault().get(3);
+        assertThat(latest.getDebtToEbitda()).isNull();
+        assertThat(latest.getExpToEbitda()).isNull();
+    }
+
+    /** 新增、覆盖及清空均写入指定倍数列，其他指标列保持原值。 */
+    @Test
+    public void shouldSaveAndClearSpecifiedRatioColumns() {
+        // 构造仅编辑两个倍数指标的财报，验证无其他指标时仍可新增
+        IssuerFinancialDto edit = change(20251231L, null);
+        edit.setDebtToEbitda(new BigDecimal("6.25"));
+        edit.setExpToEbitda(new BigDecimal("3.5"));
+        // 通过实际保存服务验证新增列映射
+        IssuerFinancialDto saved = service.saveIssuerFinancialList(request(edit)).get(0);
+        assertThat(saved.getDebtToEbitda()).isEqualByComparingTo("6.25");
+        assertThat(saved.getExpToEbitda()).isEqualByComparingTo("3.5");
+        assertThat(jdbc.queryForObject("SELECT DEBT_TO_EBITDA FROM ais_inv_ods.wind_companyfinancial", BigDecimal.class))
+                .isEqualByComparingTo("6.25");
+        assertThat(jdbc.queryForObject("SELECT EXP_TO_EBITDA FROM ais_inv_ods.wind_companyfinancial", BigDecimal.class))
+                .isEqualByComparingTo("3.5");
+        jdbc.update("UPDATE ais_inv_ods.wind_companyfinancial SET EBITDA_TO_DEBT=0.16,EBIT_INT_COV=99");
+        edit.setDebtToEbitda(new BigDecimal("8"));
+        edit.setExpToEbitda(new BigDecimal("4"));
+        // 验证已有报告的两个倍数均可更新
+        saved = service.saveIssuerFinancialList(request(edit)).get(0);
+        assertThat(saved.getDebtToEbitda()).isEqualByComparingTo("8");
+        assertThat(saved.getExpToEbitda()).isEqualByComparingTo("4");
+        edit.setDebtToEbitda(null);
+        edit.setExpToEbitda(null);
+        // 验证清空写入指定列且不会影响其他财务指标
+        saved = service.saveIssuerFinancialList(request(edit)).get(0);
+        assertThat(saved.getDebtToEbitda()).isNull();
+        assertThat(saved.getExpToEbitda()).isNull();
+        assertThat(jdbc.queryForObject("SELECT DEBT_TO_EBITDA FROM ais_inv_ods.wind_companyfinancial", BigDecimal.class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT EXP_TO_EBITDA FROM ais_inv_ods.wind_companyfinancial", BigDecimal.class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT EBITDA_TO_DEBT FROM ais_inv_ods.wind_companyfinancial", BigDecimal.class))
+                .isEqualByComparingTo("0.16");
+        assertThat(jdbc.queryForObject("SELECT EBIT_INT_COV FROM ais_inv_ods.wind_companyfinancial", BigDecimal.class))
+                .isEqualByComparingTo("99");
     }
 
     /** 建立某期总资产源数据。 */

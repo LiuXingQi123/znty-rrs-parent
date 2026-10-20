@@ -46,12 +46,12 @@ public class IssuerFinancialDto {
     /** 净资产收益率（%） */
     private BigDecimal roe;
 
-    /** EBITDA 利息保障倍数 */
-    private BigDecimal ebitIntCov;
+    /** EBITDA 利息保护倍数，对应 EXP_TO_EBITDA */
+    private BigDecimal expToEbitda;
 
     /** EBITDA（亿元） */
     private BigDecimal ebitda;
 
-    /** 总债务/EBITDA */
-    private BigDecimal ebitdaToDebt;
+    /** 总债务/EBITDA，对应 DEBT_TO_EBITDA */
+    private BigDecimal debtToEbitda;
 }
