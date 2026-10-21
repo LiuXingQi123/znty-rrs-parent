@@ -8,6 +8,7 @@
 --       担保债 DBB001/DBB002/DBB003：各至少 2 条担保人类型记录（115004000），用于多担保人下拉
 --       ABS 债（abs_flag=1）：各至少 2 条相关主体记录（115004000/115203000/115202000/115201000）
 --       其中 108008901.IB 覆盖四类各 1 条，其余 ABS 至少覆盖两类
+--       Wind 换码样例共 8 条；日期按上海时间动态生成，关联主档须先初始化 rrs_external_import_demo_data.sql。
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `ais_inv_ods` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -25,6 +26,31 @@ TRUNCATE TABLE `wind_cbondissuerrating`;
 TRUNCATE TABLE `wind_companyfinancial`;
 -- 清空Wind 跨市场证券代码关联表
 TRUNCATE TABLE `wind_windcustomcode`;
+-- 清空Wind 中国债券 Wind 代码变更表
+TRUNCATE TABLE `wind_cbondchangewindcode`;
+
+-- ----------------------------------------------------------------------------
+-- Wind 中国债券 Wind 代码变更样例（8 条）
+-- 编码仅变化数字部分的最后一位，市场后缀保持不变；新码避开现有证券主档。
+-- 正常换码：108008901.IB→108008906.IB；198101.SH→198106.SH；128101.SZ→128106.SZ。
+-- 连续换码：XYB001.IB→XYB006.IB（昨天）→XYB007.IB（今天），两条事件沿用同一 SEC_ID。
+-- 以上四只旧码主档的 SEC_ID 与 rrs_external_import_demo_data.sql、wind_windcustomcode 对齐。
+-- 缺失主档：S9999999 应特别提示并跳过；旧新码相同、前天历史记录不进入本轮候选。
+-- 日期以内联表达式按上海时间生成，支持脚本工具只初始化本表，无需先执行会话变量。
+-- 完整 Demo 初始化后，昨天至今天窗口候选 6 条：5 条正常换码事件、1 条缺失主档事件。
+-- ----------------------------------------------------------------------------
+INSERT INTO `wind_cbondchangewindcode` (
+    `OBJECT_ID`, `S_INFO_WINDCODE`, `S_INFO_OLDWINDCODE`, `S_INFO_NEWWINDCODE`, `CHANGE_DATE`,
+    `SEC_ID`, `OPDATE`, `OPMODE`
+) VALUES
+('WCH_DEMO_001', '108008906.IB', '108008901.IB', '108008906.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001011', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_002', 'XYB006.IB', 'XYB001.IB', 'XYB006.IB', DATE_FORMAT(TIMESTAMPADD(DAY, -1, TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP())), '%Y%m%d'), 'S9001003', DATE_FORMAT(TIMESTAMPADD(DAY, -1, TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP())), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_003', 'XYB007.IB', 'XYB006.IB', 'XYB007.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001003', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_004', '198106.SH', '198101.SH', '198106.SH', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001001', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_005', '128106.SZ', '128101.SZ', '128106.SZ', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001002', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_006', 'WCDMISS002.IB', 'WCDMISS001.IB', 'WCDMISS002.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9999999', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_007', '108008901.IB', '108008901.IB', '108008901.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001011', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_008', 'XYB001.IB', 'XYB000.IB', 'XYB001.IB', DATE_FORMAT(TIMESTAMPADD(DAY, -2, TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP())), '%Y%m%d'), 'S9001003', DATE_FORMAT(TIMESTAMPADD(DAY, -2, TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP())), '%Y-%m-%d %H:%i:%s'), '0');
 
 -- ----------------------------------------------------------------------------
 -- Wind 中国债券发行主体信息表（债券+主体粒度，同主体可多行；外部 ODS 表一般不自建二级索引）样例（71 条）

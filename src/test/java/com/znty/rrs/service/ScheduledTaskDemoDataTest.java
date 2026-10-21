@@ -39,7 +39,7 @@ public class ScheduledTaskDemoDataTest {
                 new TaskConfig("pledge_blacklist_daily_increment_reminder", "质押黑名单库每日增量提醒", "0 0 9 * * ?"),
                 new TaskConfig("bond_issuer_not_in_company_pool_reminder", "主体库内债券主体不在池债邮件提醒", "0 0 9 * * ?"),
                 new TaskConfig("hs_pool_increment_excel_export", "恒生池增量数据导出", "0 */6 * * * ?"),
-                new TaskConfig("wind_code_sync", "Wind代码变更同步", "0 */10 * * * ?")
+                new TaskConfig("wind_code_sync", "Wind代码变更同步", "0 2/10 * * * ?")
         );
 
         int previousIndex = -1;

@@ -72,7 +72,21 @@ public class TempSecurityCodeBusinessConverter {
     /** 查询当前在池状态和流程中申请，生成并校验普通池整组转换计划。 */
     @Transactional(propagation = Propagation.MANDATORY)
     public ConversionPlan prepareOrdinaryPoolConversion(TempSecurityCodeBo mapping) {
+        // 原临时转正继续按同券全部市场代码转换。
+        return prepareConversion(mapping, false);
+    }
+
+    /** Wind 按唯一 SEC_ID 对应的本次代码转换，不扩展其他市场。 */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ConversionPlan prepareWindCodeConversion(TempSecurityCodeBo mapping) {
+        // 与原转正共用校验和写入，仅限制目标代码范围。
+        return prepareConversion(mapping, true);
+    }
+
+    /** 按指定代码范围准备共享转换计划。 */
+    private ConversionPlan prepareConversion(TempSecurityCodeBo mapping, boolean singleCode) {
         ConversionPlan plan = new ConversionPlan();
+        plan.singleCode = singleCode;
         // 1. 查询临时代码已在池、流程中申请涉及的普通池 ID
         List<Long> poolIds = tempSecurityCodeMapper.queryOrdinaryConversionPoolIdList(mapping);
         if (poolIds.isEmpty()) {
@@ -111,8 +125,10 @@ public class TempSecurityCodeBusinessConverter {
     private List<String> loadFormalGroup(ConversionPlan plan, String selectedCode) {
         Set<String> codes = new LinkedHashSet<>();
         codes.add(selectedCode);
-        for (SecurityMarketDto related : securityMarketService.queryRelatedMarketCodes(selectedCode)) {
-            codes.add(related.getWindCode());
+        if (!plan.singleCode) {
+            for (SecurityMarketDto related : securityMarketService.queryRelatedMarketCodes(selectedCode)) {
+                codes.add(related.getWindCode());
+            }
         }
         for (String code : codes) {
             SecurityInfoBo member = securityPoolAdjustMapper.querySecurityBoByCode(code);
@@ -493,6 +509,7 @@ public class TempSecurityCodeBusinessConverter {
         if (group == null) {
             group = new ConversionPlan();
             group.crmw = true;
+            group.singleCode = plan.singleCode;
             group.crmwScode = code;
             group.crmwStype = type;
             group.active = new ArrayList<>();
@@ -515,7 +532,7 @@ public class TempSecurityCodeBusinessConverter {
             out.setId(null);
             out.setAdjustLogId(null);
             out.setAdjustMode(AdjustMode.OUT.getCode());
-            out.setAdjustType(ADJUST_TYPE_TEMP_OUT);
+            out.setAdjustType(plan.singleCode ? "Wind代码变更调出" : ADJUST_TYPE_TEMP_OUT);
             out.setAdjusterId(SYSTEM_ADJUSTER_ID);
             out.setAdjusterName(SYSTEM_ADJUSTER_NAME);
             out.setAdjustBatchNo(plan.batchNo);
@@ -523,8 +540,9 @@ public class TempSecurityCodeBusinessConverter {
             out.setFlowKey(null);
             out.setFlowType(null);
             out.setSubmitTime(mapping.getUpdateTime());
-            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(REASON_TEMP_OUT,
-                    "临时代码：" + mapping.getTempSecurityCode(), "正式代码：" + mapping.getSecurityCode()));
+            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.singleCode ? "Wind代码变更调出" : REASON_TEMP_OUT,
+                    (plan.singleCode ? "旧代码：" : "临时代码：") + mapping.getTempSecurityCode(),
+                    (plan.singleCode ? "新代码：" : "正式代码：") + mapping.getSecurityCode()));
             out.setAdjustAdvice(TempOprtSource.JOB.getCode().equals(mapping.getOprtSource()) ? null : out.getAdjustReason());
             if (securityPoolAdjustMapper.addAdjustLog(out) != 1) {
                 throw new BizException("临时代码调出日志写入失败，投资池：" + active.getTargetPoolName());
@@ -552,6 +570,7 @@ public class TempSecurityCodeBusinessConverter {
                 in.setSecurityCode(member.getWindCode());
                 in.setSecurityShortName(member.getShortName());
                 in.setSecurityType(member.getSecurityType());
+                in.setAdjustMode(AdjustMode.IN.getCode());
                 if (!mapping.getSecurityCode().equals(member.getWindCode())) {
                     // 复用普通证券调库的关联记录构建
                     in = RelatedMarketAdjustHelper.buildRelatedLog(in, member.getWindCode(), member.getShortName(), member.getSecurityType());
@@ -848,6 +867,8 @@ public class TempSecurityCodeBusinessConverter {
 
     /** 临时代码转正计划：保存普通池业务，以及按凭证分别校验的 CRMW 计划。 */
     public static final class ConversionPlan {
+        /** Wind 身份更名仅转换事件指定的新代码。 */
+        private boolean singleCode;
         /** 当前计划是否为单个 CRMW 凭证的标的转换。 */
         private boolean crmw;
         /** 当前分组的 CRMW 凭证代码。 */

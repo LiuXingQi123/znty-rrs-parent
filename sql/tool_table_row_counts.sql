@@ -84,7 +84,8 @@ WHERE TABLE_SCHEMA = 'ais_inv_ods'
   AND TABLE_NAME IN (
       'wind_cbondissuer',
       'wind_cbondissuerrating',
-      'wind_windcustomcode'
+      'wind_windcustomcode',
+      'wind_cbondchangewindcode'
   );
 SET @sql = IFNULL(@sql, 'SELECT NULL AS `表名称`, 0 AS `数据条数` WHERE 1 = 0');
 SET @sql = CONCAT(@sql, ' ORDER BY `数据条数` DESC');

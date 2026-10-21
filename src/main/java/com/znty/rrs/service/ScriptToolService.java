@@ -235,7 +235,7 @@ public class ScriptToolService {
                 "t_sys_user_role", "t_sys_user_role_evt")));
         // AIS 投资 ODS 库：仅统计本地已有表
         groups.add(buildRowCountGroup("ais_inv_ods", "AIS 投资 ODS 库", Arrays.asList(
-                "wind_cbondissuer", "wind_cbondissuerrating", "wind_windcustomcode")));
+                "wind_cbondissuer", "wind_cbondissuerrating", "wind_windcustomcode", "wind_cbondchangewindcode")));
         return groups;
     }
 
@@ -2843,7 +2843,8 @@ public class ScriptToolService {
                 buildTable("ais_inv_ods", "wind_cbondissuer", "Wind 中国债券发行主体信息表"),
                 buildTable("ais_inv_ods", "wind_cbondissuerrating", "Wind 中国债券发行主体信用评级表"),
                 buildTable("ais_inv_ods", "wind_companyfinancial", "Wind 公司财务指标表"),
-                buildTable("ais_inv_ods", "wind_windcustomcode", "Wind 跨市场证券代码关联表")
+                buildTable("ais_inv_ods", "wind_windcustomcode", "Wind 跨市场证券代码关联表"),
+                buildTable("ais_inv_ods", "wind_cbondchangewindcode", "Wind 中国债券 Wind 代码变更表")
         )));
         return groups;
     }

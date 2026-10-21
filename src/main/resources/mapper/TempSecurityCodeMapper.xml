@@ -69,6 +69,7 @@
     <!-- 根据 ID 查询临时代码 -->
     <select id="queryTempSecurityCodeById" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
         SELECT id
+               ,sec_id
                ,temp_security_name
                ,temp_security_code
                ,temp_security_market
@@ -392,6 +393,7 @@
            ,update_time = #{bo.updateTime}
            ,status = #{bo.status}
            ,oprt_source = #{bo.oprtSource}
+           ,memo = #{bo.memo}
            ,updt_time = #{bo.updtTime}
         WHERE id = #{bo.id}
           AND is_deleted = 0

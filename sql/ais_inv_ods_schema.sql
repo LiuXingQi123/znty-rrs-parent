@@ -1,5 +1,5 @@
 -- ============================================================
--- AIS 投资 ODS 库 - Wind 债券发行人、评级、公司财务指标与跨市场证券代码表建表脚本
+-- AIS 投资 ODS 库 - Wind 债券发行人、评级、公司财务指标、跨市场证券代码与代码变更表建表脚本
 -- MySQL version: 8.0.33
 -- 说明：表结构与公司原有 wind_cbondissuer / wind_cbondissuerrating 表保持一致
 -- ============================================================
@@ -11,6 +11,8 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除Wind 中国债券 Wind 代码变更表
+DROP TABLE IF EXISTS `wind_cbondchangewindcode`;
 -- 删除Wind 公司财务指标表
 DROP TABLE IF EXISTS `wind_companyfinancial`;
 -- 删除Wind 跨市场证券代码关联表
@@ -206,3 +208,22 @@ CREATE TABLE `wind_companyfinancial` (
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_0900_ai_ci
   COMMENT = 'Wind 公司财务指标表';
+
+-- ----------------------------------------------------------------------------
+-- 5. Wind 中国债券 Wind 代码变更表
+-- 按截图保留字段名称、顺序、类型及非空约束，不额外增加字段或主键。
+-- CHANGE_DATE 按用户补充使用 8 位字符串日期 yyyyMMdd。
+-- ----------------------------------------------------------------------------
+CREATE TABLE `wind_cbondchangewindcode` (
+    `OBJECT_ID`          VARCHAR(100) NOT NULL     COMMENT '对象 ID',
+    `S_INFO_WINDCODE`    VARCHAR(40)  DEFAULT NULL COMMENT 'Wind 证券代码',
+    `S_INFO_OLDWINDCODE` VARCHAR(40)  DEFAULT NULL COMMENT '变更前 Wind 证券代码',
+    `S_INFO_NEWWINDCODE` VARCHAR(40)  DEFAULT NULL COMMENT '变更后 Wind 证券代码',
+    `CHANGE_DATE`        VARCHAR(8)   DEFAULT NULL COMMENT '变更日期，yyyyMMdd（8 位字符串）',
+    `SEC_ID`             VARCHAR(10)  DEFAULT NULL COMMENT '证券 ID',
+    `OPDATE`             VARCHAR(20)  DEFAULT NULL COMMENT '操作日期',
+    `OPMODE`             VARCHAR(1)   DEFAULT NULL COMMENT '操作模式'
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8
+  COLLATE = utf8_general_ci
+  COMMENT = 'Wind 中国债券 Wind 代码变更表';

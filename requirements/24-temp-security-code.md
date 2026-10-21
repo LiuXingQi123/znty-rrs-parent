@@ -124,7 +124,7 @@
 | `rrs_temp_security_code_update_log`（日志表） | 替换日志 | 记录临时代码、正式代码、被替换表名、被替换记录 ID、替换状态、替换时间 |
 | `dict_security_type`（只读+校验） | 证券类型字典 | `security_type, security_type_name, category_type(bond/stock/fund/company), category_type_name, sort_order, is_deleted`；`querySecurityTypeList` 过滤 `category_type != 'company'`，`querySecurityTypeCount` 校验类型存在 |
 | `ais_inv_ods.wind_cbondissuer`（跨库只读） | 发行主体 | `s_info_compcode, s_info_compname, used`；`queryCompanyOptionList`/`queryCompanyByCode` 读取时不按 `used` 过滤，`LIMIT 50` |
-| `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始正式证券 / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、不写市场列 `market`（市场仅存登记表 `temp_security_market`）、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 将表单发行/到期日格式化为 `yyyyMMdd`（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中；上市状态枚举 `SecurityStatus`：`L`/`N`/`D`/`U`，勿留 NULL，否则调库列表 `!= 'D'` 查不到；来源无状态用 `U`）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
+| `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始数据（可能含临时代码） / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、不写市场列 `market`（市场仅存登记表 `temp_security_market`）、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 将表单发行/到期日格式化为 `yyyyMMdd`（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中；上市状态枚举 `SecurityStatus`：`L`/`N`/`D`/`U`，勿留 NULL，否则调库列表 `!= 'D'` 查不到；来源无状态用 `U`）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
 
 ---
 
@@ -220,3 +220,8 @@
 ## 证券代码转换组件参数
 
 独立 `SecurityCodeConversionService` 仍未接入人工转正流程，保持 `Propagation.MANDATORY` 事务边界；请求移除五个旧市场代码参数，新增必填 `tempSecurityMarket` 明确提供临时市场。快照替换只修改实际证券标识及原有业务字段，不再保存市场代码列。
+
+
+## Wind 事件复用转换
+
+`wind_code_sync` 按唯一 SEC_ID 在原主档上更名，并使用本模块单码转换入口；具体四类分支与事务见需求 29 的“Wind代码变更同步”。official 保持来源并补任务登记；temporary 复用原登记、主档来源转为 temp_converted；temp_converted 新增本次登记保留历史；无主档特别提示后跳过。任务只补登记、不创建占位主档、不修改真实证券 ID。登记备注保留原内容并保存完成事件标记；人工转正和债券临时代码任务继续使用原 ISIN 整组方式，不受单码模式影响。Wind 入口会按 SEC_ID 匹配主档，构成上述“证券 ID 不参与业务判断”的专项例外。

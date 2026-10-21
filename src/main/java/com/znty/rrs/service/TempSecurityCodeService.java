@@ -3,16 +3,24 @@ package com.znty.rrs.service;
 import com.znty.rrs.common.enums.MarketCode;
 import com.znty.rrs.common.enums.TempStatus;
 import com.znty.rrs.common.enums.TempOprtSource;
+import com.znty.rrs.common.enums.WindCodeChangeResult;
 
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.schedule.WindCodeChangeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
+import com.znty.rrs.mapper.WindCodeSyncMapper;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -42,6 +50,10 @@ public class TempSecurityCodeService {
     /** 临时代码管理数据访问组件 */
     @Resource
     private TempSecurityCodeMapper tempSecurityCodeMapper;
+
+    /** Wind 事件、主档及转换登记访问组件。 */
+    @Resource
+    private WindCodeSyncMapper windCodeSyncMapper;
 
     /**
      * 分页查询临时代码列表
@@ -179,16 +191,155 @@ public class TempSecurityCodeService {
         return editTempSecurityCodeToUpdated(oldBo, formalSecurity, TempOprtSource.JOB.getCode());
     }
 
-    /**
-     * 按指定来源执行临时代码转正，人工与定时任务共用同一套业务分叉。
-     */
+    /** 单条 Wind 换码独立事务，原地更新主档并复用普通池、CRMW 和在途申请转换。 */
+    @Transactional(rollbackFor = Exception.class)
+    public WindCodeChangeResult editWindCodeChangeByJob(WindCodeChangeDto change) {
+        if (change == null) {
+            throw new BizException("Wind 变更事件不能为空");
+        }
+        // 校验身份及八位日期，避免错误事件改动主档。
+        validateRequired(change.getObjectId(), "Wind 事件 OBJECT_ID 不能为空");
+        // SEC_ID 是唯一主档定位依据，禁止空值查询。
+        validateRequired(change.getSecId(), "Wind 事件 SEC_ID 不能为空");
+        // 明确原证券身份。
+        validateRequired(change.getOldWindCode(), "Wind 旧代码不能为空");
+        // 明确目标证券身份。
+        validateRequired(change.getNewWindCode(), "Wind 新代码不能为空");
+        // 严格校验变更日期，登记日期可为空但事件日期不可为空。
+        parseWindDate(change.getChangeDate(), true);
+        if (change.getOldWindCode().equals(change.getNewWindCode())) {
+            throw new BizException("Wind 新旧代码不能相同");
+        }
+        String eventKey = "[wind_code_sync:" + change.getSecId() + ":" + change.getObjectId()
+                + ":" + change.getOldWindCode() + ":" + change.getNewWindCode() + ":" + change.getChangeDate() + "]";
+        SecurityInfoBo master = windCodeSyncMapper.querySecurityBySecIdForUpdate(change.getSecId());
+        if (master == null) {
+            return WindCodeChangeResult.MISSING_MASTER;
+        }
+        if (windCodeSyncMapper.queryCompletedWindCodeChangeCount(eventKey) > 0) {
+            return WindCodeChangeResult.ALREADY_COMPLETED;
+        }
+        if (!change.getOldWindCode().equals(master.getWindCode())) {
+            throw new BizException("Wind 旧代码与当前主档不一致，SEC_ID=" + change.getSecId()
+                    + "，事件旧码=" + change.getOldWindCode() + "，当前代码=" + master.getWindCode());
+        }
+        String source = master.getSecuritySource();
+        if (!"official".equals(source) && !"temporary".equals(source) && !"temp_converted".equals(source)) {
+            throw new BizException("证券来源不支持 Wind 换码，security_source=" + source);
+        }
+        // 登记复用和新码主数据查询都需要明确证券类型。
+        validateRequired(master.getSecurityType(), "Wind 旧主档缺少证券类型");
+        if (tempSecurityCodeMapper.querySecurityInfoCount(change.getNewWindCode()) != 0) {
+            throw new BizException("Wind 新代码已存在，违反换码数据约束，securityCode=" + change.getNewWindCode());
+        }
+        if ("temp_converted".equals(source)
+                && windCodeSyncMapper.queryConvertedRegistrationList(change.getOldWindCode()).isEmpty()) {
+            throw new BizException("已转正主档缺少对应历史登记，securityCode=" + master.getWindCode());
+        }
+        String market = securityMarketService.queryMarketCode(master.getWindCode());
+        Date now = new Date();
+        // 原临时记录复用；其他来源只补登记，不新增占位主档。
+        TempSecurityCodeBo registration = prepareWindRegistration(change, master, market, now, eventKey);
+        String newSource = "temporary".equals(source) ? "temp_converted" : source;
+        if (windCodeSyncMapper.editSecurityWindCode(change, source, newSource, market, now) != 1) {
+            throw new BizException("Wind 主档更名失败，SEC_ID=" + change.getSecId());
+        }
+        // 新码此时已由原主档原地更名生成，继续执行既有主数据及市场校验。
+        TempSecurityCodeDto.FormalSecurityOption formal = queryRequiredFormalSecurity(change.getNewWindCode());
+        // 单码模式复用完整转换事务，不扩展其他市场，也不禁用已更名的主档。
+        editTempSecurityCodeToUpdated(registration, formal, TempOprtSource.JOB.getCode(), true);
+        return WindCodeChangeResult.UPDATED;
+    }
+
+    /** 准备 Wind 转换登记，同时保存事件完成标记；任何后续失败均随外层事务回滚。 */
+    private TempSecurityCodeBo prepareWindRegistration(WindCodeChangeDto change, SecurityInfoBo master,
+                                                       String market, Date now, String eventKey) {
+        List<TempSecurityCodeBo> registrations = windCodeSyncMapper.queryOldCodeRegistrationList(change.getOldWindCode());
+        if (registrations.size() > 1) {
+            throw new BizException("Wind 旧代码存在多条有效登记，securityCode=" + change.getOldWindCode());
+        }
+        TempSecurityCodeBo registration;
+        if (registrations.isEmpty()) {
+            if ("temporary".equals(master.getSecuritySource())) {
+                throw new BizException("临时占位主档缺少有效登记，securityCode=" + master.getWindCode());
+            }
+            registration = new TempSecurityCodeBo();
+            registration.setSecId(master.getSecId());
+            registration.setTempSecurityCode(master.getWindCode());
+            registration.setTempSecurityName(master.getShortName() == null ? master.getFullName() : master.getShortName());
+            // 缺少名称或类型时明确报错，不使用代码或默认类型补值。
+            validateRequired(registration.getTempSecurityName(), "Wind 旧主档缺少证券名称");
+            registration.setTempSecurityMarket(market);
+            registration.setTempSecurityType(master.getSecurityType());
+            registration.setTempCompanyCode(master.getIssuerCode());
+            registration.setTempCompanyNameSnapshot(master.getIssuer());
+            // 按真实主档日期建立登记，缺省日期保持空。
+            registration.setTempIssueDate(parseWindDate(master.getFirstissueDate(), false));
+            // 到期日期同样严格解析，禁止猜测日期格式。
+            registration.setTempMaturityDate(parseWindDate(master.getMaturityDate(), false));
+            registration.setStatus(TempStatus.TEMPORARY.getCode());
+            registration.setOprtSource(TempOprtSource.JOB.getCode());
+            registration.setIsDeleted(0);
+            registration.setCrteTime(now);
+            registration.setUpdtTime(now);
+            registration.setMemo(eventKey);
+            tempSecurityCodeMapper.addTempSecurityCode(registration);
+            if (registration.getId() == null) {
+                throw new BizException("Wind 转换登记新增失败");
+            }
+        } else {
+            registration = registrations.get(0);
+            if (!TempStatus.TEMPORARY.getCode().equals(registration.getStatus())) {
+                throw new BizException("Wind 旧代码登记不是待转换状态，id=" + registration.getId());
+            }
+            if (registration.getSecurityCode() != null && !registration.getSecurityCode().trim().isEmpty()
+                    && !change.getNewWindCode().equals(registration.getSecurityCode())) {
+                throw new BizException("Wind 目标代码与原登记冲突，id=" + registration.getId());
+            }
+            if (!master.getSecurityType().equals(registration.getTempSecurityType())
+                    || !market.equals(registration.getTempSecurityMarket())) {
+                throw new BizException("Wind 主档与原登记的类型或市场不一致，id=" + registration.getId());
+            }
+            registration.setMemo(registration.getMemo() == null ? eventKey : registration.getMemo() + "\n" + eventKey);
+        }
+        if (registration.getMemo().length() > 500) {
+            throw new BizException("Wind 事件标记与原登记备注合计超过 500 字符，id=" + registration.getId());
+        }
+        return registration;
+    }
+
+    /** 严格解析 yyyyMMdd 字符串；事件日期必填，主档日期缺省则保留空。 */
+    private Date parseWindDate(String value, boolean required) {
+        if (!required && value == null) {
+            return null;
+        }
+        try {
+            if (value == null || !value.matches("\\d{8}")) {
+                throw new BizException("日期必须为八位 yyyyMMdd，value=" + value);
+            }
+            return Date.from(LocalDate.parse(value, DateTimeFormatter.BASIC_ISO_DATE)
+                    .atStartOfDay(ZoneId.of("Asia/Shanghai")).toInstant());
+        } catch (DateTimeParseException e) {
+            throw new BizException("无效的 yyyyMMdd 日期，value=" + value);
+        }
+    }
+
+    /** 按指定来源执行原有同券整组转正。 */
     private TempSecurityCodeDto editTempSecurityCodeToUpdated(
             TempSecurityCodeBo oldBo,
             TempSecurityCodeDto.FormalSecurityOption formalSecurity,
             String oprtSource) {
+        // 原人工和债券临时代码任务继续使用同券整组模式。
+        return editTempSecurityCodeToUpdated(oldBo, formalSecurity, oprtSource, false);
+    }
+
+    /** Wind 使用单码模式，其余入口保留原整组与占位禁用行为。 */
+    private TempSecurityCodeDto editTempSecurityCodeToUpdated(TempSecurityCodeBo oldBo,
+            TempSecurityCodeDto.FormalSecurityOption formalSecurity, String oprtSource, boolean windCodeChange) {
         Date now = new Date();
         TempSecurityCodeBo bo = new TempSecurityCodeBo();
         bo.setId(oldBo.getId());
+        bo.setMemo(oldBo.getMemo());
         // 临时证券字段：转正时不可改，一律使用库内原值
         bo.setTempSecurityName(oldBo.getTempSecurityName());
         bo.setTempSecurityCode(oldBo.getTempSecurityCode());
@@ -211,9 +362,12 @@ public class TempSecurityCodeService {
         bo.setUpdtTime(now);
         Long tempCodeId = oldBo.getId();
         // 统一初始化、校验并执行普通池和 CRMW 转换，校验通过后才写入转正状态
-        convertTempSecurityBusinessData(oldBo, bo);
+        convertTempSecurityBusinessData(oldBo, bo, windCodeChange);
         // 禁用原临时代码占位证券主数据
-        disableTempSecurityInfo(oldBo, now);
+        if (!windCodeChange) {
+            // 原转正仍禁用临时占位；Wind 主档已经原地更名，不再禁用。
+            disableTempSecurityInfo(oldBo, now);
+        }
         // 查询更新后的临时代码详情
         return queryTempSecurityCodeDetail(tempCodeId);
     }
@@ -446,12 +600,14 @@ public class TempSecurityCodeService {
      * @param oldBo 转正前的临时代码登记信息
      * @param newBo 本次选中的正式证券及操作来源
      */
-    private void convertTempSecurityBusinessData(TempSecurityCodeBo oldBo, TempSecurityCodeBo newBo) {
+    private void convertTempSecurityBusinessData(TempSecurityCodeBo oldBo, TempSecurityCodeBo newBo, boolean windCodeChange) {
         // 1. 初始化数据：准备临时代码、选中正式代码、操作时间及人工/定时来源
         TempSecurityCodeBo replaceBo = buildReplaceBo(oldBo, newBo);
 
         // 2. 校验：准备普通池和 CRMW 整组计划，检查流程中冲突、市场、池关系及数据一致性
-        TempSecurityCodeBusinessConverter.ConversionPlan conversionPlan = businessConverter.prepareOrdinaryPoolConversion(replaceBo);
+        TempSecurityCodeBusinessConverter.ConversionPlan conversionPlan = windCodeChange
+                ? businessConverter.prepareWindCodeConversion(replaceBo)
+                : businessConverter.prepareOrdinaryPoolConversion(replaceBo);
         // 同步准备 CRMW 标的整组计划，全部校验通过后再开始写入转正状态
         businessConverter.prepareCrmwConversion(replaceBo, conversionPlan);
         // 校验通过后先更新转正登记；登记参数与替换审计参数分开，避免审计插入回填覆盖登记 ID

@@ -57,9 +57,9 @@
 | `pledge_blacklist_daily_increment_reminder` | 质押黑名单库每日增量提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 默认 `[17]`；按上次成功执行时间水位扫描审批通过的债券、主体调入调出流水。当前仅生成候选与过程日志，通知通道待接入 |
 | `bond_issuer_not_in_company_pool_reminder` | 主体库内债券主体不在池债邮件提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 支持同池，`mappings` 支持债券池与主体池跨池映射；扫描发行主体不在对应主体池的在池债券，排除 CRMW。当前仅生成候选与过程日志，通知通道待接入 |
 | `hs_pool_increment_excel_export` | 恒生池增量数据导出 | `0 */6 * * * ?` | 每 6 分钟执行一次；首次从 `initialStartTime` 开始，后续从上次成功执行开始时间继续；导出窗口内审批通过的调入和调出，调出标记“删除”；交易日过滤暂未启用 |
-| `wind_code_sync` | Wind代码变更同步 | `0 */10 * * * ?` | 每 10 分钟执行一次。无需参数；当前为空壳，仅验证立即执行与调度挂载；**无池状态依赖**，可与自动调库并行。本次债券临时代码替换使用独立任务，不复用该编码 |
+| `wind_code_sync` | Wind代码变更同步 | `0 2/10 * * * ?` | 每小时第 2/12/22/32/42/52 分钟执行；按唯一 SEC_ID 原地更名主档，按四类来源准备登记，复用单码业务转换；修改普通池、CRMW及在途申请，须与其他调库错开 |
 
-> Demo 行与 id 按上表顺序排列，且全部 `schedule_enabled=0`（默认关闭）。Demo **cron** 须与下方「执行顺序」一致；新增或改 cron 时必须先读第 4.1 节。`wind_code_sync` 与三项恒生池 Excel 导出任务均不改池状态，不受 4.1 顺序表约束。
+> Demo 行与 id 按上表顺序排列，且全部 `schedule_enabled=0`（默认关闭）。Demo **cron** 须与下方「执行顺序」一致；新增或改 cron 时必须先读第 4.1 节。三项恒生池 Excel 导出任务不改池状态；Wind 换码会修改池状态，Demo 与其他调库错开，已有数据库配置须在页面自行调整，不由程序自动覆盖。
 
 ## 2. 表结构
 
@@ -116,7 +116,7 @@
 | 12 | 次日 09:00 | `pledge_blacklist_daily_increment_reminder` | 依赖前序调库流水稳定后再汇总增量；只读，不改池 |
 | 13 | 次日 09:00 | `bond_issuer_not_in_company_pool_reminder` | 在所有主体/债券自动调库完成后检查最终不一致；只读，不改池 |
 
-另：`wind_code_sync`（每 10 分钟，`0 */10 * * * ?`）仍为空壳且**不读写池状态**，不插入上表顺序；债券临时代码替换由独立的 `bond_temp_code_replace` 完成。按本次业务确认，`company_inpool_bond_auto_in` 也采用每 10 分钟执行，会在 23:00 / 23:10 / 23:20 与固定任务同秒触发；两个 09:00 提醒任务均为只读，可并行执行。不同 taskCode 没有全局锁，启用前需确认数据库负载和并发执行可接受。
+另：`wind_code_sync` 使用 `0 2/10 * * * ?`，会修改主档、普通池、CRMW及在途申请；与每 10 分钟整点和每 5 分钟任务错开，22:42 在临时代码替换 22:40 之后、23:00 到期扫描之前。任务不是编排器，错开不保证前序已完成，启用时仍须按实际耗时留足间隔。`bond_temp_code_replace` 保留独立任务和原 cron；`company_inpool_bond_auto_in` 仍每 10 分钟执行。不同 taskCode 没有全局锁；同一证券更名由主档行锁、登记条件更新和事务保护。
 
 违反顺序的典型后果：
 
@@ -159,7 +159,7 @@
 ## 7. 代码索引
 
 - 编排：`ScheduledTaskService`、`DynamicTaskScheduler`、`RrsScheduledTask`  
-- 业务：`BondTempCodeReplaceService`、`BondSecurityTypeChangeService`、`PledgeBlacklistDailyIncrementReminderService`、`BondIssuerNotInCompanyPoolReminderService`、`ScheduledReminderDeliveryService`（通知占位）、`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`ScheduledAdjustBatchNoContext`（自动调库批次分组）、`AutoAdjustPoolScopeHelper`（参数 poolIds ∪ 关系配置绑定池）、`GradeRuleAlertService`、`WindCodeSyncService`（空壳）、`HsPoolFullExcelExportService`、`HsPoolFullIncludingExpiredExcelExportService`、`HsPoolIncrementExcelExportService`
+- 业务：`BondTempCodeReplaceService`、`BondSecurityTypeChangeService`、`PledgeBlacklistDailyIncrementReminderService`、`BondIssuerNotInCompanyPoolReminderService`、`ScheduledReminderDeliveryService`（通知占位）、`AutoAdjustService`、`CrmwExpiredAutoOutService`、`CompanyOuterRatingNotAaMinusAutoOutService`、`CompanyOuterRatingAaMinusAutoInService`、`CompanySamePoolBondAutoInService`、`CompanyNewBondAutoInService`、`CompanyNotInPoolBondAutoOutService`、`ScheduledAdjustBatchNoContext`（自动调库批次分组）、`AutoAdjustPoolScopeHelper`（参数 poolIds ∪ 关系配置绑定池）、`GradeRuleAlertService`、`WindCodeSyncService`（Wind 单码换码）、`HsPoolFullExcelExportService`、`HsPoolFullIncludingExpiredExcelExportService`、`HsPoolIncrementExcelExportService`
 - Mapper：`ScheduledTaskMapper` / `.xml`、`BondSecurityMaintenanceMapper` / `.xml`、`BondReminderMapper` / `.xml`、`TempSecurityCodeMapper` / `.xml`、`AutoAdjustMapper`、`GradeRuleAlertMapper` / `.xml`、`HsPoolExcelExportMapper` / `.xml`
 - Controller：`ScheduledTaskController`；提醒查询/处理另见 `GradeRuleAlertController`（`/api/v1/gradeRuleAlert`）  
 - SQL：`rrs_scheduled_task_schema.sql`、`rrs_scheduled_task_demo_data.sql`、`rrs_grade_rule_alert_schema.sql`、`rrs_grade_rule_alert_demo_data.sql`  
@@ -205,7 +205,7 @@
    - 调整原因及失败提示中的投资池显示名称，不展示池 ID；复用已有名称，不额外拼接层级全名，与人工更新口径一致。历史日志不改写。
 4. 成功后主表状态置 `updated`、`oprt_source='job'`，禁用临时代码占位主数据，并写 `rrs_temp_security_code_update_log`。
 5. 每条映射独立事务；失败记录保持 `temporary` 供下次重试，任务摘要列出成功/失败数。
-6. 与 `wind_code_sync` 完全独立，不调用、不修改该空壳任务。
+6. 与 `wind_code_sync` 使用独立任务及扫描入口，共用转换组件；本任务仍使用同券整组模式，Wind 换码仅处理事件指定代码。
 
 ### 债券类型变更 `bond_security_type_change`（22:00）
 
@@ -370,3 +370,20 @@
 6. 当前 `ScheduledReminderDeliveryService` 明确返回 `delivered=false`，不执行外部发送；后续通知实现可直接消费已经组装的 `ScheduledReminderMessageDto.items`。
 
 恒生导出共用统一市场查询，正式证券直接读取主档 `market`（与 Wind `EXCHMARKET` 一致，银行间使用 NIB），临时代码读取登记市场；按实际状态/日志代码批量查询所属市场，不按同 ISIN 扩行；映射缺失、重复或不支持时报告具体代码。保留现有表头、恒生编码、去市场后缀和时间窗口规则。
+
+
+## Wind代码变更同步 wind_code_sync
+
+- 数据源：`ais_inv_ods.wind_cbondchangewindcode`；上海日期的昨天至今天，`CHANGE_DATE` 为八位 `yyyyMMdd`，且旧码不等于新码。窗口采用日期重叠，不宣称精确过去 24 小时。
+- 一条 `SEC_ID` 唯一对应一条主档；每个市场的证券 ID 独立。首次处理时新码必定不在 `rrs_securityinfo`；按 SEC_ID 锁主档，核对当前旧码，再原地更新 `wind_code`，保留真实 ID 和其他业务字段。
+- 四类处理：`official` 只补任务登记并保留来源；`temporary` 复用未删除、temporary 状态的原登记，主档改为 `temp_converted` 并写入原登记的明确市场；主档缺失特别提示、跳过且不补数据；`temp_converted` 要有转正历史，新增本次旧新码登记、保留原登记。
+- 任务登记仅补 `rrs_temp_security_code`，不调用页面新增入口、不创建 TEMP_ 占位主档。已有待处理登记的目标码不得与事件冲突，取消、删除或来源与登记不一致时明确失败。
+- 主档更名后使用既有正式主数据及市场校验；复用 `TempSecurityCodeBusinessConverter` 的单码入口。普通池、同凭证下 CRMW 标的分别处理：当前状态旧码退出、新码进入；在途申请更新身份与快照，沿用原批次、发起人、状态和步骤；历史终态不改写。即时日志操作人为系统、audit_status=20、adjust_advice=NULL。无当前状态或在途业务不生成调库流水。
+- 新码不扩展其他市场的 ISIN 关联组；人工转正和 `bond_temp_code_replace` 仍沿用原整组规则。共享转换明确为新码写入“调入”方向，避免原 CRMW 状态缺少方向时生成无方向流水。
+- 每条事件通过 `TempSecurityCodeService.editWindCodeChangeByJob` 独立事务提交；主档、登记、流水、池状态和快照任一步失败全部回滚。登记备注保留原备注并追加 `[wind_code_sync:SEC_ID:OBJECT_ID:旧码:新码:日期]`，同事务成功后用于事件去重；备注超过字段长度明确报错，不截断。
+- 同一证券按旧新码链执行连续变更，循环或当前旧码不匹配时明确失败；同一证券前置失败后不执行后续事件，其他证券继续。已完成事件在主档继续更名后仍通过登记标记去重，不能把主档回退到旧代码。
+- 过程日志区分成功、主档缺失跳过、重复跳过、失败；缺失提示包含 SEC_ID、旧新码、日期。失败项在日期窗口内重扫，超出窗口需核查并专项补执行；不修改 AIS 源结构，不自动补主档或 ID 映射。
+- 人工新增 ID 当前为 `TEMP_临时代码`，未与 Wind 真实 SEC_ID 建立对应时按主档缺失处理，不按名称或代码猜测证券身份。
+- Demo：先初始化 `rrs_external_import_demo_data.sql` 的证券主档，再初始化 `ais_inv_ods_demo_data.sql`。后者包含 8 条 Wind 换码记录，日期按上海时间动态生成：3 条银行间/沪市/深市正常换码、2 条同一证券跨昨天和今天的连续换码、1 条主档缺失、1 条旧新码相同、1 条前天历史记录。默认窗口候选 6 条，其中 5 条正常换码事件、1 条缺失主档事件；同码和历史样例被过滤。四只关联主档使用与 Wind 示例一致、不超过 10 位的 SEC_ID。再次执行任务验证完成事件去重；重新初始化本表仅重置 ODS 事件，重新演示完整换码应同时恢复主档及临时代码/调库运行态 Demo。
+- 测试：`WindCodeSyncServiceTest` 验证扫描窗口、特别提示、变更链和失败隔离；`TempSecurityCodePersistenceTest` 使用生产 DDL、Mapper 和 Spring 事务验证四类来源、池及在途转换、事件去重和失败回滚（H2 测试使用 JDK 17）。
+- Demo 编码仅变化数字部分最后一位，市场后缀保持不变：`108008901.IB→108008906.IB`、`198101.SH→198106.SH`、`128101.SZ→128106.SZ`；连续换码为 `XYB001.IB→XYB006.IB→XYB007.IB`，新码均避开现有主档。

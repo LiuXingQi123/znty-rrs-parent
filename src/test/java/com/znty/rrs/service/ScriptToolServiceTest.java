@@ -169,6 +169,7 @@ public class ScriptToolServiceTest {
 
         assertTrue(tables.containsKey("znty_rrs.rrs_securityinfo"));
         assertTrue(tables.containsKey("ais_inv_ods.wind_windcustomcode"));
+        assertTrue(tables.containsKey("ais_inv_ods.wind_cbondchangewindcode"));
         assertTrue(tables.containsKey("ais_inv_analysis.t_sys_resource"));
         assertTrue(tables.containsKey("ais_inv_analysis.t_sys_permission"));
         assertTrue(tables.containsKey("ais_inv_analysis.company_observer_view"));
@@ -186,6 +187,31 @@ public class ScriptToolServiceTest {
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_security_snapshot"));
         assertTrue(tables.containsKey("znty_rrs.ip_adjust_security_snapshot_crmw"));
         assertEquals(tables.keySet(), healthTables.keySet());
+    }
+
+    /** Wind 代码变更表严格保留截图的八列，变更日期按用户补充为八位字符串。 */
+    @Test
+    public void shouldPreserveWindCodeChangeSourceSchema() {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+        // 从实际注册脚本读取表定义，防止公共字段规则污染外部源结构。
+        Map<?, ?> tables = ReflectionTestUtils.invokeMethod(service, "queryExpectedSchemaTables");
+        Object table = tables.get("ais_inv_ods.wind_cbondchangewindcode");
+        Map<?, ?> columns = (Map<?, ?>) ReflectionTestUtils.getField(table, "columns");
+        assertEquals(Arrays.asList("object_id", "s_info_windcode", "s_info_oldwindcode",
+                "s_info_newwindcode", "change_date", "sec_id", "opdate", "opmode"),
+                new ArrayList<>(columns.keySet()));
+        assertEquals("varchar(100)|NO|", columns.get("object_id"));
+        assertEquals("varchar(40)|YES|", columns.get("s_info_windcode"));
+        assertEquals("varchar(40)|YES|", columns.get("s_info_oldwindcode"));
+        assertEquals("varchar(40)|YES|", columns.get("s_info_newwindcode"));
+        assertEquals("varchar(8)|YES|", columns.get("change_date"));
+        assertEquals("varchar(10)|YES|", columns.get("sec_id"));
+        assertEquals("varchar(20)|YES|", columns.get("opdate"));
+        assertEquals("varchar(1)|YES|", columns.get("opmode"));
+        assertTrue(((Map<?, ?>) ReflectionTestUtils.getField(table, "indexes")).isEmpty());
+        assertEquals("innodb", ReflectionTestUtils.getField(table, "engine"));
+        assertEquals("utf8_general_ci", ReflectionTestUtils.getField(table, "collation"));
     }
 
     /** 验证 sql/ 目录业务脚本均已注册到 schema/demo 白名单（排除只读工具脚本）。 */

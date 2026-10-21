@@ -8,6 +8,9 @@ import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
+import com.znty.rrs.mapper.WindCodeSyncMapper;
+import com.znty.rrs.entity.schedule.WindCodeChangeDto;
+import com.znty.rrs.common.enums.WindCodeChangeResult;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
@@ -24,6 +27,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -63,6 +71,9 @@ public class TempSecurityCodePersistenceTest {
     /** 真实 CRMW 池状态及快照 Mapper。 */
     private CrmwPoolAdjustMapper crmwMapper;
 
+    /** 真实 Wind 事件与主档 Mapper。 */
+    private WindCodeSyncMapper windMapper;
+
     /** 创建生产表结构及真实 Mapper，市场查询使用固定正式证券的市场。 */
     @Before
     public void setUp() throws Exception {
@@ -94,7 +105,7 @@ public class TempSecurityCodePersistenceTest {
         config.setMapUnderscoreToCamelCase(true);
         config.addInterceptor(new PageInterceptor());
         config.setEnvironment(new Environment("test", new SpringManagedTransactionFactory(), source));
-        for (String name : Arrays.asList("TempSecurityCodeMapper", "SecurityPoolAdjustMapper", "CrmwPoolAdjustMapper")) {
+        for (String name : Arrays.asList("TempSecurityCodeMapper", "SecurityPoolAdjustMapper", "CrmwPoolAdjustMapper", "WindCodeSyncMapper")) {
             try (InputStream xml = getClass().getResourceAsStream("/mapper/" + name + ".xml")) {
                 new XMLMapperBuilder(xml, config, name + ".xml", config.getSqlFragments()).parse();
             }
@@ -107,6 +118,8 @@ public class TempSecurityCodePersistenceTest {
         TempSecurityCodeService target = new TempSecurityCodeService();
         ReflectionTestUtils.setField(target, "tempSecurityCodeMapper", mapper);
         ReflectionTestUtils.setField(target, "securityMarketService", markets);
+        windMapper = session.getMapper(WindCodeSyncMapper.class);
+        ReflectionTestUtils.setField(target, "windCodeSyncMapper", windMapper);
         TempSecurityCodeBusinessConverter converter = new TempSecurityCodeBusinessConverter();
         ReflectionTestUtils.setField(converter, "tempSecurityCodeMapper", mapper);
         ReflectionTestUtils.setField(converter, "securityPoolAdjustMapper", adjustMapper);
@@ -128,6 +141,218 @@ public class TempSecurityCodePersistenceTest {
         if (jdbc != null) {
             jdbc.execute("SET DB_CLOSE_DELAY 0");
         }
+    }
+
+    /** official 主档原地更名，只补登记，重复事件与连续更名均不重复写入。 */
+    @Test
+    public void windOfficialShouldRenameOnceAndPreserveIdentityAcrossChain() {
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        when(markets.queryMarketCode("FINAL.IB")).thenReturn("NIB");
+        WindCodeChangeDto first = windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB");
+        assertThat(service.editWindCodeChangeByJob(first)).isEqualTo(WindCodeChangeResult.UPDATED);
+        assertThat(service.editWindCodeChangeByJob(first)).isEqualTo(WindCodeChangeResult.ALREADY_COMPLETED);
+        assertThat(service.editWindCodeChangeByJob(windChange("E2", "OFFICIAL_ID", "NEW.IB", "FINAL.IB")))
+                .isEqualTo(WindCodeChangeResult.UPDATED);
+        assertThat(service.editWindCodeChangeByJob(first)).isEqualTo(WindCodeChangeResult.ALREADY_COMPLETED);
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'", String.class))
+                .isEqualTo("FINAL.IB");
+        assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'", String.class))
+                .isEqualTo("official");
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE status='updated' AND oprt_source='job'"))
+                .isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+    }
+
+    /** temporary 复用原人工登记，原备注及登记证券 ID 保留，新主档正常可用。 */
+    @Test
+    public void windTemporaryShouldReuseRegistrationAndConvertSource() throws Exception {
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        jdbc.update("UPDATE rrs_securityinfo SET sec_id='REAL_ID' WHERE wind_code='001.IB'");
+        jdbc.update("UPDATE rrs_temp_security_code SET memo='原始备注' WHERE id=?", temp.getId());
+        when(markets.queryMarketCode("001.IB")).thenReturn("NIB");
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        assertThat(service.editWindCodeChangeByJob(windChange("E1", "REAL_ID", "001.IB", "NEW.IB")))
+                .isEqualTo(WindCodeChangeResult.UPDATED);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isEqualTo(1);
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("updated");
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getMemo()).startsWith("原始备注\n[wind_code_sync:");
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getSecId()).isEqualTo("TEMP_001.IB");
+        assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE sec_id='REAL_ID'", String.class))
+                .isEqualTo("temp_converted");
+        assertThat(jdbc.queryForObject("SELECT market FROM rrs_securityinfo WHERE sec_id='REAL_ID'", String.class)).isEqualTo("NIB");
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE sec_id='REAL_ID'", String.class)).isEqualTo("L");
+    }
+
+    /** 主档缺失只返回跳过结果，不补登记、主档或池流水。 */
+    @Test
+    public void windMissingMasterShouldNotWriteAnything() {
+        assertThat(service.editWindCodeChangeByJob(windChange("E1", "MISSING", "OLD.IB", "NEW.IB")))
+                .isEqualTo(WindCodeChangeResult.MISSING_MASTER);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+    }
+
+    /** temp_converted 新增本次登记，原临时码及历史目标不回退、不覆盖。 */
+    @Test
+    public void windConvertedShouldKeepPreviousRegistration() {
+        jdbc.update("UPDATE rrs_securityinfo SET security_source='temp_converted' WHERE wind_code='FORMAL.IB'");
+        jdbc.update("INSERT INTO rrs_temp_security_code(temp_security_code,security_code,status,is_deleted,oprt_source)"
+                + " VALUES('ORIGINAL_TMP','FORMAL.IB','updated',0,'manual')");
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB"));
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='ORIGINAL_TMP'"
+                + " AND security_code='FORMAL.IB' AND status='updated' AND oprt_source='manual'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='FORMAL.IB'"
+                + " AND security_code='NEW.IB' AND status='updated' AND oprt_source='job'")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE wind_code='NEW.IB'", String.class))
+                .isEqualTo("temp_converted");
+    }
+
+    /** 单码换码迁移普通池、CRMW 标的和原在途申请，不扩展已有同券其他市场。 */
+    @Test
+    public void windShouldConvertBothPoolKindsAndKeepPendingApproval() {
+        // 建立同券其他市场，确认 Wind 入口不会扩展或重调它们。
+        setupGroup();
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        // 配置普通池并建立原状态、调出申请。
+        addPool(100L, "[]", 10);
+        // 原正式码和另一市场代码均已在池。
+        addActive("FORMAL.IB", 100L);
+        // 其他市场持仓必须保持原状。
+        addActive("FORMAL.SH", 100L);
+        // 保留原审批身份和状态。
+        IpAdjustLogBo pending = addPending("FORMAL.IB", 100L, "调出", "11");
+        // 同时建立 CRMW 标的持仓。
+        addCrmwPool(200L, "[]");
+        // 两个凭证各自持有同一个标的，均应独立转换。
+        addCrmwState("FORMAL.IB", "K.IB", 200L);
+        // 不能因另一凭证持有新码而省略本凭证入池。
+        addCrmwState("FORMAL.IB", "K2.IB", 200L);
+        service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB"));
+        assertThat(activeCodes(100L)).containsExactly("FORMAL.SH", "NEW.IB");
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw WHERE security_code='NEW.IB' AND is_deleted=0")).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='FORMAL.IB' AND adjust_mode='调出'"
+                + " AND audit_status='20' AND adjuster_id='0' AND adjust_advice IS NULL")).isEqualTo(3);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='NEW.IB' AND adjust_mode='调入'"
+                + " AND audit_status='20' AND adjuster_id='0' AND adjust_advice IS NULL")).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT security_code FROM ip_adjust_log WHERE id=?", String.class, pending.getId()))
+                .isEqualTo("NEW.IB");
+        assertThat(jdbc.queryForObject("SELECT audit_status FROM ip_adjust_log WHERE id=?", String.class, pending.getId()))
+                .isEqualTo("11");
+        assertThat(jdbc.queryForObject("SELECT flow_id FROM ip_adjust_log WHERE id=?", Long.class, pending.getId())).isEqualTo(9L);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE wind_code='NEW.IB'")).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw WHERE wind_code='NEW.IB'")).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='FORMAL.IB' AND adjust_batch_no='HISTORY'"))
+                .isEqualTo(1);
+    }
+
+    /** 实际写入失败后主档、登记、调库流水和软删池状态全部回滚。 */
+    @Test
+    public void windShouldRollbackMasterAndBusinessWritesOnAuditFailure() {
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        // 建立原在池状态，使失败发生在已写出库流水及软删之后。
+        addPool(100L, "[]", 10);
+        // 生成原持仓及历史日志。
+        addActive("FORMAL.IB", 100L);
+        jdbc.execute("ALTER TABLE rrs_temp_security_code_update_log ADD CONSTRAINT reject_wind_audit CHECK(replace_status <> 'success')");
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB")))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(activeCodes(100L)).containsExactly("FORMAL.IB");
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='FORMAL.IB' AND sec_id='OFFICIAL_ID'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
+    }
+
+    /** 无效日期及登记缺失必须明确拒绝，不能部分更名或补造人工登记。 */
+    @Test
+    public void windShouldRejectInvalidDateAndMissingTemporaryRegistration() {
+        WindCodeChangeDto invalid = windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB");
+        invalid.setChangeDate("20260230");
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(invalid)).hasMessageContaining("无效");
+        jdbc.update("UPDATE rrs_securityinfo SET security_source='temporary' WHERE wind_code='FORMAL.IB'");
+        when(markets.queryMarketCode("FORMAL.IB")).thenReturn("NIB");
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB")))
+                .hasMessageContaining("缺少有效登记");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
+    }
+
+    /** 使用生产 ODS 定义及真实 SQL 验证日期边界、相同代码过滤和结果映射。 */
+    @Test
+    public void windScannerShouldUseEightDigitDateWindow() throws Exception {
+        String ddl = new String(Files.readAllBytes(Paths.get("sql/ais_inv_ods_schema.sql")), StandardCharsets.UTF_8);
+        Matcher create = Pattern.compile("CREATE TABLE `wind_cbondchangewindcode`.*?;", Pattern.DOTALL).matcher(ddl);
+        assertThat(create.find()).isTrue();
+        jdbc.execute(create.group().replaceFirst("(?s)\\)\\s*ENGINE.*$", ")")
+                .replace("CREATE TABLE `wind_cbondchangewindcode`", "CREATE TABLE ais_inv_ods.`wind_cbondchangewindcode`"));
+        for (String date : Arrays.asList("20261018", "20261019", "20261020", "20261021")) {
+            jdbc.update("INSERT INTO ais_inv_ods.wind_cbondchangewindcode(OBJECT_ID,SEC_ID,S_INFO_OLDWINDCODE,S_INFO_NEWWINDCODE,CHANGE_DATE)"
+                    + " VALUES(?,?,?,?,?)", date, "ID", "A.IB", "B.IB", date);
+        }
+        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondchangewindcode(OBJECT_ID,S_INFO_OLDWINDCODE,S_INFO_NEWWINDCODE,CHANGE_DATE)"
+                + " VALUES('SAME','A.IB','A.IB','20261020')");
+        assertThat(windMapper.queryRecentWindCodeChangeList("20261019", "20261020"))
+                .extracting(WindCodeChangeDto::getChangeDate).containsExactly("20261019", "20261020");
+        assertThat(windMapper.queryRecentWindCodeChangeList("20261019", "20261020").get(0).getOldWindCode()).isEqualTo("A.IB");
+    }
+
+    /** 并发执行同一事件由主档行锁串行化，只生成一次登记和出入库流水。 */
+    @Test
+    public void windConcurrentRetriesShouldCommitOnlyOnce() throws Exception {
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        // 建立可检验实际流水数量的原持仓。
+        addPool(100L, "[]", 10);
+        // 使用真实 Mapper 建立历史状态。
+        addActive("FORMAL.IB", 100L);
+        // 两个线程通过真实事务代理处理同一事件。
+        WindCodeChangeDto event = windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB");
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Future<WindCodeChangeResult> first = executor.submit(() -> {
+                start.await();
+                return service.editWindCodeChangeByJob(event);
+            });
+            Future<WindCodeChangeResult> second = executor.submit(() -> {
+                start.await();
+                return service.editWindCodeChangeByJob(event);
+            });
+            start.countDown();
+            assertThat(Arrays.asList(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(WindCodeChangeResult.UPDATED, WindCodeChangeResult.ALREADY_COMPLETED);
+        } finally {
+            executor.shutdownNow();
+        }
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjuster_id='0'")).isEqualTo(2);
+        assertThat(activeCodes(100L)).containsExactly("NEW.IB");
+    }
+
+    /** 登记目标冲突或转正历史缺失时不覆盖原登记、不更名主档。 */
+    @Test
+    public void windShouldRejectConflictingRegistrationAndMissingConversionHistory() {
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        jdbc.update("INSERT INTO rrs_temp_security_code(temp_security_code,temp_security_type,temp_security_market,security_code,status,is_deleted)"
+                + " VALUES('FORMAL.IB','mtn','NIB','OTHER.IB','temporary',0)");
+        // 构造与已确定目标冲突的 Wind 事件。
+        WindCodeChangeDto event = windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB");
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(event)).hasMessageContaining("目标代码与原登记冲突");
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='FORMAL.IB'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE security_code='OTHER.IB' AND status='temporary'")).isEqualTo(1);
+        jdbc.update("UPDATE rrs_securityinfo SET security_source='temp_converted' WHERE wind_code='FORMAL.IB'");
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(event)).hasMessageContaining("缺少对应历史登记");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+    }
+
+    /** 构造具有稳定事件 ID 的 Wind 变更。 */
+    private WindCodeChangeDto windChange(String eventId, String secId, String oldCode, String newCode) {
+        WindCodeChangeDto change = new WindCodeChangeDto();
+        change.setObjectId(eventId);
+        change.setSecId(secId);
+        change.setOldWindCode(oldCode);
+        change.setNewWindCode(newCode);
+        change.setChangeDate("20261021");
+        return change;
     }
 
     /** 新增额外写入双表 ID，原证券代码和接口返回字段保持不变。 */

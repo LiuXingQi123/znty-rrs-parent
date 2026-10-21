@@ -45,6 +45,7 @@
 - `sql/` 下按模块成对存放 `rrs_<模块>_schema.sql`（建表）+ `rrs_<模块>_demo_data.sql`（演示数据）
 - **外部导入表**（当前含 `rrs_securityinfo`）：`rrs_external_import_schema.sql` / `rrs_external_import_demo_data.sql`，与调库运行态脚本解耦，不随主库批量初始化执行
 - AIS 库：`ais_inv_analysis_*`、`ais_inv_ods_*` 前缀
+- AIS 表的表名、字段名及结构严格沿用用户对应截图与明确补充要求；除非用户主动要求，禁止额外补充任何字段（含 `id`、创建时间、修改时间），亦不擅自增加主键、索引或事件表；优先适用 mysql 专项规范中的「AIS 外部源表例外」。
 - 建表 / 写 SQL 前先查本目录 `CLAUDE_mysql.md` / `AGENTS_mysql.md`（数据库表设计规范，二者同步；与根目录同名文件应一并更新）
 
 ---

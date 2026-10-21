@@ -50,6 +50,15 @@ AIS 库将库名换成 `ais_inv_analysis` / `ais_inv_ods` 即可。
 
 ## 二、基础规范
 
+### AIS 外部源表例外（优先适用）
+
+- `ais_inv_analysis` / `ais_inv_ods` 的相关表，以用户提供的对应截图及明确补充要求为准，严格保留表名称、字段名称（含大小写）、字段顺序、类型、长度及截图可确认的约束和表选项。
+- **除非用户主动要求，禁止额外补充任何字段**，包括 `id`、`crte_time`、`updt_time` 及审计字段；不得因下文通用规则擅自增加自增主键、索引或事件表。
+- 下文关于统一字符集、排序规则、主键、非空约束及主表时间字段的规则，在与 AIS 截图或用户明确要求冲突时不适用；截图未明确的结构不得自行推断添加。
+- 用户明确补充要求优先于截图。例如 `ais_inv_ods.wind_cbondchangewindcode.CHANGE_DATE` 为 `VARCHAR(8)`，存储 `yyyyMMdd` 格式的 8 位字符串日期。
+
+以下为通用规则；AIS 外部源表优先适用上述例外。
+
 - **存储引擎**：统一 `InnoDB`（`ENGINE = InnoDB`）
 - **字符集**：`utf8mb4`（`DEFAULT CHARSET = utf8mb4`）
 - **排序规则**：`utf8mb4_0900_ai_ci`（`COLLATE = utf8mb4_0900_ai_ci`）

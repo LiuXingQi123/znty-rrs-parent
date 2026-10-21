@@ -33,7 +33,7 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
                     + "业务校验：信用债大库独立在途、市场与池关系；不重查容量、池启停和业务锁定\n"
                     + "转换保障：主数据有效、相关池整组状态一致、写入成功；任一失败回滚本条映射\n"
                     + "CRMW范围：同凭证下逐标的市场代码处理，凭证自身不扩展；即时调库记录调整人为系统，来源为 oprt_source=job\n"
-                    + "任务边界：本任务独立于 wind_code_sync，不调用也不修改该空壳任务";
+                    + "任务边界：本任务独立于 wind_code_sync，分别扫描登记映射和 Wind 事件，共用业务转换组件";
 
     /** 临时代码 Mapper */
     @Resource

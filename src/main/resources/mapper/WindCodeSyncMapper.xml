@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.WindCodeSyncMapper">
+    <!-- 日期按八位 yyyyMMdd 字符串比较；保留异常身份字段供服务明确报错。 -->
+    <select id="queryRecentWindCodeChangeList" resultType="com.znty.rrs.entity.schedule.WindCodeChangeDto">
+        SELECT OBJECT_ID
+              ,SEC_ID
+              ,S_INFO_OLDWINDCODE AS oldWindCode
+              ,S_INFO_NEWWINDCODE AS newWindCode
+              ,CHANGE_DATE
+        FROM ais_inv_ods.wind_cbondchangewindcode
+        WHERE CHANGE_DATE &gt;= #{startDate}
+          AND CHANGE_DATE &lt;= #{endDate}
+          AND S_INFO_OLDWINDCODE != S_INFO_NEWWINDCODE
+        ORDER BY CHANGE_DATE
+                ,OPDATE
+                ,OBJECT_ID
+    </select>
+
+    <!-- 不使用 LIMIT 1；SEC_ID 唯一性被破坏时由 MyBatis 显式报错。 -->
+    <select id="querySecurityBySecIdForUpdate" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT * FROM rrs_securityinfo WHERE sec_id = #{secId} FOR UPDATE
+    </select>
+
+    <!-- 旧码登记与人工转正的状态条件更新共用同一行锁。 -->
+    <select id="queryOldCodeRegistrationList" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
+        SELECT * FROM rrs_temp_security_code
+        WHERE temp_security_code = #{oldCode} AND is_deleted = 0
+        ORDER BY id FOR UPDATE
+    </select>
+
+    <!-- 历史转正登记只读，不重置其状态或原始临时代码。 -->
+    <select id="queryConvertedRegistrationList" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
+        SELECT * FROM rrs_temp_security_code
+        WHERE security_code = #{oldCode} AND status = 'updated' AND is_deleted = 0
+        ORDER BY id FOR UPDATE
+    </select>
+
+    <!-- 完成标记与主档、业务转换同一事务提交；不在 AIS 表增加处理字段。 -->
+    <select id="queryCompletedWindCodeChangeCount" resultType="int">
+        SELECT COUNT(1) FROM rrs_temp_security_code
+        WHERE status = 'updated' AND oprt_source = 'job'
+          AND LOCATE(#{eventKey}, memo) &gt; 0
+    </select>
+
+    <!-- 临时占位转正时使用已核实的登记市场，其他来源保留原市场。 -->
+    <update id="editSecurityWindCode">
+        UPDATE rrs_securityinfo
+        SET wind_code = #{change.newWindCode}
+           ,security_source = #{newSource}
+           ,market = CASE WHEN #{oldSource} = 'temporary' THEN #{market} ELSE market END
+           ,ts = #{updateTime}
+        WHERE sec_id = #{change.secId}
+          AND wind_code = #{change.oldWindCode}
+          AND security_source = #{oldSource}
+    </update>
+</mapper>
