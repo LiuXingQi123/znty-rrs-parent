@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.common.enums.AdjustType;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.TempOprtSource;
@@ -39,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 1. 准备并校验普通池转换计划，检查信用债独立流程中申请、市场和池关系。
  * 2. 普通池处理：按六种情况执行当前在池状态和流程中申请的整组转换。
  * 3. CRMW 处理：同一凭证下，按标的债券的全部市场代码处理流程中申请和已在池记录。
+ * Wind 换码复用这些步骤，只处理这条变更指定的新代码。
  */
 @Service
 public class TempSecurityCodeBusinessConverter {
@@ -65,54 +67,70 @@ public class TempSecurityCodeBusinessConverter {
     /** CRMW 池状态及证券快照写入组件。 */
     @Resource
     private CrmwPoolAdjustMapper crmwPoolAdjustMapper;
-    /** 同券及当前代码市场权威查询组件。 */
+    /** 同券及当前代码市场查询组件。 */
     @Resource
     private SecurityMarketService securityMarketService;
 
-    /** 查询当前在池状态和流程中申请，生成并校验普通池整组转换计划。 */
+    /**
+     * 查出临时代码在普通池里的记录，检查正式券在各市场的代码能否接着使用。
+     *
+     * @param mapping 临时代码、目标正式代码、操作来源及更新时间
+     * @return 旧代码的在池记录、待审批申请、新代码的证券信息和检查结果
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public ConversionPlan prepareOrdinaryPoolConversion(TempSecurityCodeBo mapping) {
         // 原临时转正继续按同券全部市场代码转换。
         return prepareConversion(mapping, false);
     }
 
-    /** Wind 按唯一 SEC_ID 对应的本次代码转换，不扩展其他市场。 */
+    /**
+     * 查出旧代码在普通池里的记录，检查这次 Wind 提供的新代码能否入池。
+     *
+     * @param mapping 事件旧码、新码、操作来源及更新时间
+     * @return 旧代码的在池记录、待审批申请、新代码的证券信息和检查结果
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public ConversionPlan prepareWindCodeConversion(TempSecurityCodeBo mapping) {
-        // 与原转正共用校验和写入，仅限制目标代码范围。
+        // 使用单码范围查询并校验原业务，后续转换方法再执行写入。
         return prepareConversion(mapping, true);
     }
 
-    /** 按指定代码范围准备共享转换计划。 */
+    /**
+     * 查出旧代码在哪些普通池里、有哪些申请还没审批完，再检查新代码的市场和池限制。
+     *
+     * @param mapping 本次旧新代码映射及操作信息
+     * @param singleCode true 仅处理目标新码；false 同时处理目标正式券的其他市场代码
+     * @return 查出的记录和检查结果；旧代码没用在普通池时返回空列表，后面再检查 CRMW
+     */
     private ConversionPlan prepareConversion(TempSecurityCodeBo mapping, boolean singleCode) {
         ConversionPlan plan = new ConversionPlan();
         plan.singleCode = singleCode;
-        // 1. 查询临时代码已在池、流程中申请涉及的普通池 ID
+        // 1. 查出旧代码已入池、或还在审批中的申请所涉及的普通池。
         List<Long> poolIds = tempSecurityCodeMapper.queryOrdinaryConversionPoolIdList(mapping);
         if (poolIds.isEmpty()) {
             return plan;
         }
-        // 1.1 查询临时代码当前已在池的记录，供后续执行临时码出池、正式码入池
+        // 1.1 查出旧代码现在在哪些池里，后面把旧代码调出、新代码调入。
         plan.active = tempSecurityCodeMapper.queryActivePoolStatusList(mapping);
-        // 1.2 查询临时代码流程中的调入/调出申请，供后续换码并补其他市场关联申请
+        // 1.2 查出旧代码还在审批中的调入、调出申请，后面改成新代码，继续原来的审批。
         plan.pending = tempSecurityCodeMapper.queryOrdinaryPendingLogList(mapping);
         if (plan.active.isEmpty() && plan.pending.isEmpty()) {
             return plan;
         }
-        // 2. 查询选中正式码及同券其他市场代码，检查主数据是否可用，并保存各代码的市场
+        // 2. 查新代码的证券信息和市场；临时转正还要查同一只券在其他市场的代码。
         List<String> codes = loadFormalGroup(plan, mapping.getSecurityCode());
-        // 2.1 查询目标池配置，供第5步判断正式代码的市场是否符合目标池
+        // 2.1 查投资池配置，后面检查新代码的市场是否允许进入这些池。
         Map<Long, InvestmentPoolBo> pools = new HashMap<>();
         for (InvestmentPoolBo pool : tempSecurityCodeMapper.queryConversionPoolList(poolIds)) {
             pools.put(pool.getId(), pool);
         }
-        // 2.2 查询池关系，供后续确定相关池范围和检查来源、限制及互斥关系
+        // 2.2 查池与池之间的来源、限制和互斥配置，后面据此判断能不能调库。
         List<PoolRelationBo> relations = securityPoolAdjustMapper.queryAllPoolRelationList();
-        // 3. 校验正式代码组在相关池中是否整组在池、是否重复在池，并记录已整组在池的池 ID
+        // 3. 检查新代码是否已经在这些池里，记下已经在池的情况，避免重复调入。
         readExistingGroupState(plan, codes, poolIds, relations);
-        // 4. 信用债流程中申请校验：正式代码组在信用债大库及各级库已有00/11申请时，拒绝转正
+        // 4. 新代码在信用债大库及各级库已有 00/11 申请时，先报错，避免同时处理两份申请。
         validateCreditBondPending(codes);
-        // 5. 校验调入/调出与在池状态是否一致、正式代码市场是否符合目标池、池关系是否冲突
+        // 5. 检查调入调出是否符合实际在池情况、市场是否允许，以及是否违反池关系配置。
         validateConversionPlan(plan, pools, relations);
         return plan;
     }
@@ -121,6 +139,11 @@ public class TempSecurityCodeBusinessConverter {
      * 2. 查询选中正式码及同券其他市场代码，逐码检查主数据是否可用，保存主数据和市场。
      * 例如选中 A，查到同券 B、C，则为后续整组换码准备 A、B、C 的信息。
      * 此处查询市场；是否符合目标池允许的市场，在第5步校验。
+     * Wind 换码只查询 selectedCode，不查询其他市场代码。
+     *
+     * @param plan 存放查出的证券信息和市场；singleCode 决定要不要查其他市场代码
+     * @param selectedCode 临时转正选中的正式码，或 Wind 事件指定的新码
+     * @return 本次实际处理的目标代码列表，首项为 selectedCode
      */
     private List<String> loadFormalGroup(ConversionPlan plan, String selectedCode) {
         Set<String> codes = new LinkedHashSet<>();
@@ -295,6 +318,7 @@ public class TempSecurityCodeBusinessConverter {
                     // 加载互斥池配置，并从本批调入申请保留发起人、状态、审批信息和快照来源
                     validateMutexPool(plan, pools, poolId);
                     for (IpAdjustLogBo original : plan.pending) {
+                        // 仅为本批调入申请确实配置的互斥池补充调出记录。
                         if (batch.equals(original.getAdjustBatchNo()) && inPools.contains(original.getTargetPoolId())
                                 && AdjustMode.IN.getCode().equals(original.getAdjustMode())
                                 && hasInMutexRelation(original.getTargetPoolId(), poolId, relations)) {
@@ -329,7 +353,7 @@ public class TempSecurityCodeBusinessConverter {
         }
     }
 
-    /** 查出目标池主动配置的调入互斥池，仅对已有持仓安排配套调出，不反向推断关系。 */
+    /** 查出目标池主动配置的调入互斥池，仅对已有在池记录安排配套调出，不反向推断关系。 */
     private Set<Long> findMutexOutPools(Set<Long> inboundPools, Set<Long> currentPools,
                                         List<PoolRelationBo> relations) {
         Set<Long> result = new LinkedHashSet<>();
@@ -426,6 +450,9 @@ public class TempSecurityCodeBusinessConverter {
     /**
      * 6. 执行整组转换：先处理当前状态，再迁移原流程中申请；由调用方事务保证原子性。
      * 情况①无普通池业务时两个阶段均为空；情况⑤同时执行两个阶段，不能提前审批调出。
+     *
+     * @param plan 前面已经检查过的普通池和 CRMW 记录
+     * @param mapping 本次旧新代码映射、操作来源及更新时间
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void convertOrdinaryPoolBusinessData(ConversionPlan plan, TempSecurityCodeBo mapping) {
@@ -437,7 +464,13 @@ public class TempSecurityCodeBusinessConverter {
         convertPendingLogs(plan, mapping);
     }
 
-    /** 准备 CRMW 标的整组转换计划，同一凭证单独核对在池状态、申请、市场和池关系。 */
+    /**
+     * 查出哪些 CRMW 凭证用到了旧代码，逐个检查它们的在池记录和待审批申请。
+     * 每个凭证分开检查和处理，避免把不同凭证下的记录混在一起。
+     *
+     * @param mapping 旧标的代码、目标代码及本次操作信息
+     * @param plan 前面查出的数据，这里继续放入各 CRMW 凭证的记录和检查结果
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void prepareCrmwConversion(TempSecurityCodeBo mapping, ConversionPlan plan) {
         // 1. 查询临时标的已在池和流程中的 CRMW 记录；没有业务时不扩展标的代码
@@ -458,7 +491,7 @@ public class TempSecurityCodeBusinessConverter {
         }
         // 3. 按凭证分组，避免同一标的在不同凭证下相互去重或覆盖申请
         for (IpPoolStatusBo state : active) {
-            // 为当前凭证建立独立计划并保留临时标的在池记录
+            // 当前凭证单独放一份数据，记下旧标的在哪些池里。
             crmwPlanForCredential(plan, state.getCrmwScode(), state.getCrmwStype()).active.add(state);
         }
         for (IpAdjustLogBo log : pending) {
@@ -499,7 +532,7 @@ public class TempSecurityCodeBusinessConverter {
         }
     }
 
-    /** 为同一凭证创建独立转换计划，复用正式代码组与本次即时转换批次。 */
+    /** 同一个 CRMW 凭证用一份数据，放入要换的新代码和本次批次号。 */
     private ConversionPlan crmwPlanForCredential(ConversionPlan plan, String code, String type) {
         if (code == null || code.trim().isEmpty() || !"crmw".equals(type)) {
             throw new BizException("CRMW凭证信息不完整，crmwScode=" + code + "，crmwStype=" + type);
@@ -522,7 +555,13 @@ public class TempSecurityCodeBusinessConverter {
         return group;
     }
 
-    /** 6.1 处理已在池的记录：临时代码出库、正式代码组入库，已完整在池时仅清理临时代码。 */
+    /**
+     * 6.1 处理已在池的记录：临时代码出库、正式代码组入库，已完整在池时仅清理临时代码。
+     * 新代码已经全部在池时，只调出旧代码；普通池写 ip_pool_status，CRMW 写 ip_pool_status_crmw。
+     *
+     * @param plan 这次要处理的普通池记录，或某个 CRMW 凭证下的记录
+     * @param mapping 旧新代码映射、操作来源及更新时间
+     */
     private void convertActiveStates(ConversionPlan plan, TempSecurityCodeBo mapping) {
         // 6.1.1 先执行正式代码组的互斥配套调出，再执行临时码出库和正式码入库，同一事务提交
         convertActiveMutexOut(plan, mapping);
@@ -532,7 +571,7 @@ public class TempSecurityCodeBusinessConverter {
             out.setId(null);
             out.setAdjustLogId(null);
             out.setAdjustMode(AdjustMode.OUT.getCode());
-            out.setAdjustType(plan.singleCode ? "Wind代码变更调出" : ADJUST_TYPE_TEMP_OUT);
+            out.setAdjustType(plan.singleCode ? AdjustType.WIND_CODE_CHANGE_OUT.getCode() : ADJUST_TYPE_TEMP_OUT);
             out.setAdjusterId(SYSTEM_ADJUSTER_ID);
             out.setAdjusterName(SYSTEM_ADJUSTER_NAME);
             out.setAdjustBatchNo(plan.batchNo);
@@ -540,7 +579,7 @@ public class TempSecurityCodeBusinessConverter {
             out.setFlowKey(null);
             out.setFlowType(null);
             out.setSubmitTime(mapping.getUpdateTime());
-            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.singleCode ? "Wind代码变更调出" : REASON_TEMP_OUT,
+            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.singleCode ? AdjustType.WIND_CODE_CHANGE_OUT.getCode() : REASON_TEMP_OUT,
                     (plan.singleCode ? "旧代码：" : "临时代码：") + mapping.getTempSecurityCode(),
                     (plan.singleCode ? "新代码：" : "正式代码：") + mapping.getSecurityCode()));
             out.setAdjustAdvice(TempOprtSource.JOB.getCode().equals(mapping.getOprtSource()) ? null : out.getAdjustReason());
@@ -553,7 +592,7 @@ public class TempSecurityCodeBusinessConverter {
             if (deleted != 1) {
                 throw new BizException("临时代码在池状态已变化，投资池：" + active.getTargetPoolName());
             }
-            // 记录实际失效的临时池状态
+            // 保存旧码在池状态失效的替换日志。
             addAudit(mapping, plan.crmw ? "ip_pool_status_crmw" : "ip_pool_status", active.getId());
             if (plan.existingPools.contains(active.getTargetPoolId())) {
                 continue;
@@ -602,13 +641,19 @@ public class TempSecurityCodeBusinessConverter {
                     // 普通池新日志独立保存证券快照
                     saveSnapshot(in, source, member, false, mapping);
                 }
-                // 审计中正式代码使用本条实际市场代码
+                // 替换日志写这条实际使用的新代码。
                 addMemberAudit(mapping, member, "ip_adjust_log", in.getId());
             }
         }
     }
 
-    /** 6.2 处理流程中的申请：临时代码替换成正式代码，联动调整同券其他市场代码，沿用原审批。 */
+    /**
+     * 6.2 处理流程中的申请：临时代码替换成正式代码，联动调整同券其他市场代码，沿用原审批。
+     * 临时转正需要时补充同券其他市场申请；Wind 换码只更新本次指定代码。
+     *
+     * @param plan 这次要改的待审批申请，以及新代码的证券信息
+     * @param mapping 旧新代码映射、操作来源及更新时间
+     */
     private void convertPendingLogs(ConversionPlan plan, TempSecurityCodeBo mapping) {
         for (IpAdjustLogBo original : plan.pending) {
             AdjustSecuritySnapshotBo source = plan.snapshots.get(original.getId());
@@ -642,15 +687,15 @@ public class TempSecurityCodeBusinessConverter {
                     // 普通池原位更新主项快照，其余代码保存独立快照
                     saveSnapshot(log, source, member, selected, mapping);
                 }
-                // 每个市场代码独立记录替换审计
+                // 每个市场代码独立记录替换日志
                 addMemberAudit(mapping, member, "ip_adjust_log", log.getId());
             }
         }
-        // 6.2.1 补本次转正新增的互斥配套调出，原互斥池持仓继续保留到审批通过
+        // 6.2.1 补本次转正新增的互斥配套调出，原互斥池在池记录继续保留到审批通过
         convertPendingMutexOut(plan, mapping);
     }
 
-    /** 已在池转换的互斥配套调出：整组即时生效，逐代码保存系统调库日志、快照及审计。 */
+    /** 把新代码从互斥池调出，每个代码分别保存调库记录、快照和替换日志。 */
     private void convertActiveMutexOut(ConversionPlan plan, TempSecurityCodeBo mapping) {
         for (IpPoolStatusBo state : plan.activeMutexOut) {
             IpAdjustLogBo out = new IpAdjustLogBo();
@@ -693,9 +738,9 @@ public class TempSecurityCodeBusinessConverter {
                         // 普通池互斥调出记录独立快照
                         saveSnapshot(out, source, member, false, mapping);
                     }
-                    // 逐市场记录实际失效的持仓与新增调出日志
+                    // 逐市场记录实际失效的在池记录与新增调出日志
                     addMemberAudit(mapping, member, plan.crmw ? "ip_pool_status_crmw" : "ip_pool_status", state.getId());
-                    // 保留互斥配套调出的新增日志审计
+                    // 保留互斥配套调出的新增日志的替换记录
                     addMemberAudit(mapping, member, "ip_adjust_log", out.getId());
                     break;
                 }
@@ -730,13 +775,13 @@ public class TempSecurityCodeBusinessConverter {
                     // 快照来源仍是原申请 ID，避免关联项误用新日志 ID
                     saveSnapshot(out, plan.snapshots.get(source.getId()), member, false, mapping);
                 }
-                // 每条互斥配套调出独立记录替换审计
+                // 每条互斥配套调出独立记录替换日志
                 addMemberAudit(mapping, member, "ip_adjust_log", out.getId());
             }
         }
     }
 
-    /** 7. 保存本次实际证券身份，来源快照中的业务填写信息保持不变。 */
+    /** 7. 保存本次实际证券代码和名称，来源快照中的业务填写信息保持不变。 */
     private void saveSnapshot(IpAdjustLogBo log, AdjustSecuritySnapshotBo source, SecurityInfoBo member,
                               boolean replace, TempSecurityCodeBo mapping) {
         AdjustSecuritySnapshotBo snapshot = new AdjustSecuritySnapshotBo();
@@ -771,7 +816,7 @@ public class TempSecurityCodeBusinessConverter {
         audit.setSecurityName(member.getShortName());
         audit.setSecurityType(member.getSecurityType());
         audit.setSecurityMarket(securityMarketService.queryMarketCode(member.getWindCode()));
-        // 沿用现有替换日志结构保存逐记录审计
+        // 调用日志保存方法，记下本次改了哪条数据。
         addAudit(audit, table, id);
     }
 
@@ -786,15 +831,16 @@ public class TempSecurityCodeBusinessConverter {
     /**
      * 7. CRMW 整组转换：与普通池一致，先处理当前状态，再迁移流程中申请。
      * 每个凭证分别处理六种情况，逐码记录并沿用原审批；由调用方事务保证原子性。
+     *
+     * @param plan 前面按 CRMW 凭证分开查出并检查过的记录
+     * @param mapping 本次旧新代码映射、操作来源及更新时间
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void convertCrmwBusinessData(ConversionPlan plan, TempSecurityCodeBo mapping) {
         for (ConversionPlan group : plan.crmwPlans.values()) {
             // 7.1 处理已在池的记录：同凭证下临时标的出库、正式代码组入库，记录日志、快照和审计
-            // 对应情况③/④/⑤/⑥；正式代码组已完整在池时，仅临时标的出库，避免重复入库
             convertActiveStates(group, mapping);
             // 7.2 处理流程中的申请：临时标的替换成正式代码，联动调整同券不同市场的其他代码
-            // 对应情况②/⑤；补同凭证关联日志和快照、记录替换审计，沿用原批次与审批
             convertPendingLogs(group, mapping);
         }
         // 7.3 保留旧的凭证字段替换，仅处理 crmw_* 字段匹配临时代码的记录
@@ -806,19 +852,19 @@ public class TempSecurityCodeBusinessConverter {
         List<Long> pendingIds = tempSecurityCodeMapper.queryPendingAdjustLogCrmwReferenceIdList(mapping);
         if (!pendingIds.isEmpty()) {
             tempSecurityCodeMapper.editAdjustLogCrmwReference(mapping, pendingIds);
-            // 保存流程中记录凭证字段的替换审计
+            // 保存流程中记录凭证字段的替换日志
             addReplaceLogList(mapping, "ip_adjust_log.crmw", pendingIds);
         }
         List<Long> poolIds = tempSecurityCodeMapper.queryPoolStatusCrmwReferenceIdList(mapping);
         if (!poolIds.isEmpty()) {
             tempSecurityCodeMapper.editPoolStatusCrmwReference(mapping, poolIds);
-            // 保存普通池当前记录凭证字段的替换审计
+            // 保存普通池当前记录凭证字段的替换日志
             addReplaceLogList(mapping, "ip_pool_status.crmw", poolIds);
         }
         List<Long> crmwIds = tempSecurityCodeMapper.queryCrmwPoolStatusCrmwReferenceIdList(mapping);
         if (!crmwIds.isEmpty()) {
             tempSecurityCodeMapper.editCrmwPoolStatusCrmwReference(mapping, crmwIds);
-            // 保存 CRMW 池当前记录凭证字段的替换审计
+            // 保存 CRMW 池当前记录凭证字段的替换日志
             addReplaceLogList(mapping, "ip_pool_status_crmw.crmw", crmwIds);
         }
     }
@@ -865,35 +911,35 @@ public class TempSecurityCodeBusinessConverter {
         }
     }
 
-    /** 临时代码转正计划：保存普通池业务，以及按凭证分别校验的 CRMW 计划。 */
+    /** 放本次要用的在池记录、待审批申请、新代码的证券信息和检查结果；CRMW 按凭证分开保存。 */
     public static final class ConversionPlan {
-        /** Wind 身份更名仅转换事件指定的新代码。 */
+        /** 是否只处理 Wind 这条变更指定的新代码。 */
         private boolean singleCode;
-        /** 当前计划是否为单个 CRMW 凭证的标的转换。 */
+        /** 这些记录是否属于某个 CRMW 凭证的标的债券。 */
         private boolean crmw;
         /** 当前分组的 CRMW 凭证代码。 */
         private String crmwScode;
         /** 当前分组的 CRMW 凭证类型。 */
         private String crmwStype;
-        /** 每个凭证各自的在池及流程中转换计划。 */
+        /** 每个 CRMW 凭证要改的在池记录和待审批申请。 */
         private final Map<String, ConversionPlan> crmwPlans = new LinkedHashMap<>();
         /** CRMW 原流程中业务快照，使用独立快照表。 */
         private final Map<Long, AdjustSecuritySnapshotCrmwBo> crmwSnapshots = new HashMap<>();
-        /** 当前计划对应的原临时证券在池记录。 */
+        /** 本次旧代码的当前在池记录。 */
         private List<IpPoolStatusBo> active = Collections.emptyList();
-        /** 当前计划对应的原临时证券流程中申请。 */
+        /** 本次旧代码尚未完成审批的调入、调出申请。 */
         private List<IpAdjustLogBo> pending = Collections.emptyList();
-        /** 本次正式证券组，首项为用户选择的代码。 */
+        /** 目标证券主档；临时转正包含同券市场代码，Wind 换码仅包含事件新码。 */
         private final List<SecurityInfoBo> members = new ArrayList<>();
-        /** 每个正式代码的权威市场。 */
+        /** 每个新代码所属的市场。 */
         private final Map<String, String> markets = new HashMap<>();
-        /** 当前计划中原先已完整持有正式组的池。 */
+        /** 新代码及其同券代码已经全部在池的投资池。 */
         private final Set<Long> existingPools = new HashSet<>();
-        /** 正式代码组原持仓，供互斥配套调出逐码使用。 */
+        /** 新代码及其同券代码原来的在池记录，后面从互斥池调出时要用。 */
         private final Map<Long, List<IpPoolStatusBo>> existingStates = new HashMap<>();
-        /** 已在池转换需即时调出的正式代码组持仓。 */
+        /** 这次需要直接从互斥池调出的在池记录。 */
         private final List<IpPoolStatusBo> activeMutexOut = new ArrayList<>();
-        /** 流程中转换需追加的互斥调出模板，ID 保留原调入申请作为快照来源。 */
+        /** 这次要补的互斥调出申请；ID 暂放原调入申请 ID，方便找到原快照。 */
         private final List<IpAdjustLogBo> pendingMutexOut = new ArrayList<>();
         /** 原普通池流程中业务快照。 */
         private final Map<Long, AdjustSecuritySnapshotBo> snapshots = new HashMap<>();

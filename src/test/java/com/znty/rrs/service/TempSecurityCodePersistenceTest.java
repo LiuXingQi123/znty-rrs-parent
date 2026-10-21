@@ -164,6 +164,25 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
     }
 
+    /** OBJECT_ID 为 NULL 或空字符串时仍能换码，再次处理同一变更时跳过。 */
+    @Test
+    public void windShouldAllowMissingObjectIdAndStillSkipCompletedChanges() {
+        when(markets.queryMarketCode("NO_ID.IB")).thenReturn("NIB");
+        when(markets.queryMarketCode("EMPTY_ID.IB")).thenReturn("NIB");
+        // 第一条没有 OBJECT_ID，先把原代码改成 NO_ID.IB。
+        WindCodeChangeDto first = windChange(null, "OFFICIAL_ID", "FORMAL.IB", "NO_ID.IB");
+        // 第二条 OBJECT_ID 为空字符串，继续把 NO_ID.IB 改成 EMPTY_ID.IB。
+        WindCodeChangeDto second = windChange("", "OFFICIAL_ID", "NO_ID.IB", "EMPTY_ID.IB");
+        assertThat(service.editWindCodeChangeByJob(first)).isEqualTo(WindCodeChangeResult.UPDATED);
+        assertThat(service.editWindCodeChangeByJob(second)).isEqualTo(WindCodeChangeResult.UPDATED);
+        assertThat(service.editWindCodeChangeByJob(first)).isEqualTo(WindCodeChangeResult.ALREADY_COMPLETED);
+        assertThat(service.editWindCodeChangeByJob(second)).isEqualTo(WindCodeChangeResult.ALREADY_COMPLETED);
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'", String.class))
+                .isEqualTo("EMPTY_ID.IB");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE status='updated' AND oprt_source='job'"))
+                .isEqualTo(2);
+    }
+
     /** temporary 复用原人工登记，原备注及登记证券 ID 保留，新主档正常可用。 */
     @Test
     public void windTemporaryShouldReuseRegistrationAndConvertSource() throws Exception {
@@ -189,6 +208,36 @@ public class TempSecurityCodePersistenceTest {
     public void windMissingMasterShouldNotWriteAnything() {
         assertThat(service.editWindCodeChangeByJob(windChange("E1", "MISSING", "OLD.IB", "NEW.IB")))
                 .isEqualTo(WindCodeChangeResult.MISSING_MASTER);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+    }
+
+    /** SEC_ID 对应主档存在但旧码已不存在时，只跳过，连已有待转正登记也不修改。 */
+    @Test
+    public void windMissingOldCodeShouldNotWriteAnything() {
+        jdbc.update("INSERT INTO rrs_temp_security_code(temp_security_code,security_code,status,is_deleted,oprt_source,memo)"
+                + " VALUES('ABSENT.IB',NULL,'temporary',0,'manual','原登记备注')");
+        assertThat(service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "ABSENT.IB", "NEW.IB")))
+                .isEqualTo(WindCodeChangeResult.MISSING_OLD_CODE);
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'", String.class))
+                .isEqualTo("FORMAL.IB");
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='ABSENT.IB'"
+                + " AND security_code IS NULL AND status='temporary' AND oprt_source='manual' AND memo='原登记备注'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw")).isZero();
+    }
+
+    /** 旧码确实存在但属于另一 SEC_ID 时，保留身份冲突校验，不更新其他证券。 */
+    @Test
+    public void windOldCodeOwnedByAnotherSecurityShouldStillFail() {
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,sec_id,security_source) VALUES('OTHER.IB','OTHER_ID','official')");
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "OTHER.IB", "NEW.IB")))
+                .hasMessageContaining("旧代码与当前主档不一致");
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code IN ('FORMAL.IB','OTHER.IB')")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
     }
@@ -233,7 +282,7 @@ public class TempSecurityCodePersistenceTest {
         assertThat(activeCodes(100L)).containsExactly("FORMAL.SH", "NEW.IB");
         assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw WHERE security_code='NEW.IB' AND is_deleted=0")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='FORMAL.IB' AND adjust_mode='调出'"
-                + " AND audit_status='20' AND adjuster_id='0' AND adjust_advice IS NULL")).isEqualTo(3);
+                + " AND adjust_type='Wind代码变更调出' AND audit_status='20' AND adjuster_id='0' AND adjust_advice IS NULL")).isEqualTo(3);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='NEW.IB' AND adjust_mode='调入'"
                 + " AND audit_status='20' AND adjuster_id='0' AND adjust_advice IS NULL")).isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT security_code FROM ip_adjust_log WHERE id=?", String.class, pending.getId()))
@@ -273,7 +322,7 @@ public class TempSecurityCodePersistenceTest {
         jdbc.update("UPDATE rrs_securityinfo SET security_source='temporary' WHERE wind_code='FORMAL.IB'");
         when(markets.queryMarketCode("FORMAL.IB")).thenReturn("NIB");
         assertThatThrownBy(() -> service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB")))
-                .hasMessageContaining("缺少有效登记");
+                .hasMessageContaining("没有对应记录");
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
     }
 
@@ -336,11 +385,11 @@ public class TempSecurityCodePersistenceTest {
                 + " VALUES('FORMAL.IB','mtn','NIB','OTHER.IB','temporary',0)");
         // 构造与已确定目标冲突的 Wind 事件。
         WindCodeChangeDto event = windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB");
-        assertThatThrownBy(() -> service.editWindCodeChangeByJob(event)).hasMessageContaining("目标代码与原登记冲突");
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(event)).hasMessageContaining("新代码不一致");
         assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='FORMAL.IB'")).isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE security_code='OTHER.IB' AND status='temporary'")).isEqualTo(1);
         jdbc.update("UPDATE rrs_securityinfo SET security_source='temp_converted' WHERE wind_code='FORMAL.IB'");
-        assertThatThrownBy(() -> service.editWindCodeChangeByJob(event)).hasMessageContaining("缺少对应历史登记");
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(event)).hasMessageContaining("没有之前转正的记录");
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
     }
 
@@ -366,6 +415,22 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo("TEMP_001.IB");
         assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_securityinfo WHERE wind_code='001.IB'", String.class))
                 .isEqualTo("TEMP_001.IB");
+    }
+
+    /** 新增临时代码时，三个常用市场都同步写入临时代码表和证券表。 */
+    @Test
+    public void addShouldPersistSelectedMarketInBothTables() throws Exception {
+        String[][] securities = {{"MARKET.IB", "NIB"}, {"MARKET.SH", "SSE"}, {"MARKET.SZ", "SZSE"}};
+        for (String[] security : securities) {
+            TempSecurityCodeReq req = addReq(security[0]);
+            req.setTempSecurityMarket(security[1]);
+            TempSecurityCodeDto added = service.addTempSecurityCode(req);
+            assertThat(added.getTempSecurityMarket()).isEqualTo(security[1]);
+            assertThat(jdbc.queryForObject("SELECT temp_security_market FROM rrs_temp_security_code WHERE id=?",
+                    String.class, added.getId())).isEqualTo(security[1]);
+            assertThat(jdbc.queryForObject("SELECT market FROM rrs_securityinfo WHERE wind_code=?",
+                    String.class, security[0])).isEqualTo(security[1]);
+        }
     }
 
     /** 实际占位 INSERT 失败时，已经插入的登记记录由事务回滚。 */

@@ -117,21 +117,28 @@ public class WindCustomCodeDemoDataTest {
                     ScriptUtils.executeSqlScript(connection, new ByteArrayResource(insert.getBytes(StandardCharsets.UTF_8)));
                 }
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode", Integer.class))
-                        .isEqualTo(49);
-                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
-                        + " LEFT JOIN znty_rrs.rrs_securityinfo s ON s.wind_code = w.S_INFO_WINDCODE"
-                        + " WHERE s.wind_code IS NULL"
+                        .isEqualTo(52);
+                assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT S_INFO_WINDCODE) FROM ais_inv_ods.wind_windcustomcode", Integer.class))
+                        .isEqualTo(52);
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo s"
+                        + " LEFT JOIN ais_inv_ods.wind_windcustomcode w ON w.S_INFO_WINDCODE = s.wind_code"
+                        + " WHERE w.S_INFO_WINDCODE IS NULL"
                         + " OR s.issuer_code <> w.S_INFO_COMPCODE OR s.short_name <> w.S_INFO_NAME"
-                        + " OR s.crncy_code <> w.CRNCY_CODE OR s.market IS NULL"
-                        + " OR s.market <> w.EXCHMARKET", Integer.class)).isZero();
+                        + " OR s.crncy_code <> w.CRNCY_CODE"
+                        + " OR s.market IS NULL OR s.market <> w.EXCHMARKET", Integer.class)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM (SELECT S_INFO_ISINCODE, EXCHMARKET"
+                        + " FROM ais_inv_ods.wind_windcustomcode WHERE S_INFO_ISINCODE IS NOT NULL AND TRIM(S_INFO_ISINCODE) <> ''"
+                        + " GROUP BY S_INFO_ISINCODE, EXCHMARKET HAVING COUNT(*) > 1) duplicated_market", Integer.class)).isZero();
+                assertThat(jdbc.queryForList("SELECT S_INFO_WINDCODE FROM ais_inv_ods.wind_windcustomcode WHERE S_INFO_ISINCODE IS NULL", String.class))
+                        .containsExactlyInAnyOrder("TMP001.IB", "TMP003.IB", "WCTMP001.IB");
                 assertThat(jdbc.queryForList("SELECT S_INFO_ISINCODE FROM ais_inv_ods.wind_windcustomcode"
                         + " WHERE S_INFO_ISINCODE IS NOT NULL GROUP BY S_INFO_ISINCODE"
                         + " HAVING COUNT(*) = 3 AND COUNT(DISTINCT EXCHMARKET) = 3", String.class))
                         .containsExactlyInAnyOrder("CNDEMO000293", "CNDEMO000301", "CNDEMO000319");
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE sec_id IS NULL", Integer.class)).isZero();
-                assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(51);
-                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary'", Integer.class)).isEqualTo(2);
-                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND market IS NOT NULL", Integer.class)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(52);
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary'", Integer.class)).isEqualTo(3);
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND market = 'NIB'", Integer.class)).isEqualTo(3);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
                         + " LEFT JOIN ais_inv_ods.wind_cbondissuer i ON i.s_info_windcode = w.S_INFO_WINDCODE"
                         + " AND i.s_info_compcode = w.S_INFO_COMPCODE WHERE i.object_id IS NULL", Integer.class)).isZero();
@@ -141,7 +148,7 @@ public class WindCustomCodeDemoDataTest {
             }
             connection.setSchema("znty_rrs");
             connection.createStatement().execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(100))");
-            connection.createStatement().execute("INSERT INTO rrs_temp_security_code VALUES ('TMP001.IB', 'NIB'), ('TMP003.IB', 'NIB')");
+            connection.createStatement().execute("INSERT INTO rrs_temp_security_code VALUES ('TMP001.IB', 'NIB'), ('TMP003.IB', 'NIB'), ('WCTMP001.IB', 'NIB')");
             connection.createStatement().execute("CREATE TABLE ip_pool_status_crmw (security_code VARCHAR(100), crmw_scode VARCHAR(100), crmw_name VARCHAR(100), crmw_stype VARCHAR(32), target_pool_id BIGINT, audit_status VARCHAR(2), is_deleted INT, pool_type VARCHAR(32))");
             connection.createStatement().execute("INSERT INTO ip_pool_status_crmw VALUES ('198101.SH', 'CRMW001.IB', 'CRMW-A', 'crmw', 1, '20', 0, 'crmw'), ('XYB001.IB', 'CRMW001.IB', 'CRMW-A', 'crmw', 1, '20', 0, 'crmw')");
             ds.setUrl(ds.getUrl() + ";SCHEMA=znty_rrs");
@@ -174,6 +181,8 @@ public class WindCustomCodeDemoDataTest {
                 assertThat(service.queryMarketCode("CORP001.IB")).isEqualTo("OTHER");
                 assertThat(service.queryRelatedMarketCodes("TMP001.IB")).isEmpty();
                 assertThat(service.queryRelatedMarketCodes("TMP003.IB")).isEmpty();
+                assertThat(service.queryMarketCode("WCTMP001.IB")).isEqualTo("NIB");
+                assertThat(service.queryRelatedMarketCodes("WCTMP001.IB")).isEmpty();
                 assertThat(service.queryRelatedMarketCodes("CB001.SH")).isEmpty();
                 connection.createStatement().execute("INSERT INTO ais_inv_ods.wind_windcustomcode (OBJECT_ID, S_INFO_WINDCODE, S_INFO_EXCHMARKET, S_INFO_ISINCODE) VALUES ('EMPTY1', 'EMPTY1.SH', 'SSE', ''), ('EMPTY2', 'EMPTY2.SH', 'SSE', ''), ('BLANK1', 'BLANK1.SH', 'SSE', '   '), ('BLANK2', 'BLANK2.SH', 'SSE', '   ')");
                 connection.createStatement().execute("INSERT INTO rrs_securityinfo (wind_code, security_source, market) VALUES ('EMPTY1.SH', 'official', 'SSE'), ('EMPTY2.SH', 'official', 'SSE'), ('BLANK1.SH', 'official', 'SSE'), ('BLANK2.SH', 'official', 'SSE')");
@@ -200,7 +209,8 @@ public class WindCustomCodeDemoDataTest {
                 filter.setSecurityCode("XYB001.IB"); filter.setMarketCodes(Arrays.asList("NIB"));
                 assertThat(batch.querySecurityPage(filter)).hasSize(1);
                 filter.setSecurityCode("TMP001.IB");
-                assertThat(batch.querySecurityPage(filter)).hasSize(1);
+                assertThat(batch.querySecurityPage(filter)).extracting(candidate -> candidate.getSecurityCode())
+                        .containsExactlyInAnyOrder("TMP001.IB", "WCTMP001.IB");
                 StockSecurityBatchAdjustReq stockFilter = new StockSecurityBatchAdjustReq();
                 stockFilter.setSecurityCode("198101.SH"); stockFilter.setMarketCodes(Arrays.asList("SSE"));
                 assertThat(session.getMapper(StockSecurityBatchAdjustMapper.class).querySecurityPage(stockFilter)).hasSize(1);

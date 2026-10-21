@@ -278,6 +278,7 @@
             ,full_name
             ,short_name
             ,security_type
+            ,market
             ,issuer
             ,issuer_code
             ,firstissue_date
@@ -292,6 +293,7 @@
             ,#{securityName}
             ,#{securityName}
             ,#{securityType}
+            ,#{securityMarket}
             ,#{tempCompanyNameSnapshot}
             ,#{tempCompanyCode}
             ,DATE_FORMAT(#{tempIssueDate}, '%Y%m%d')

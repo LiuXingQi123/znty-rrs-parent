@@ -482,11 +482,11 @@
 
 正式证券当前市场直接读取 `rrs_securityinfo.market`。外部导入按 `wind_code = ais_inv_ods.wind_windcustomcode.S_INFO_WINDCODE` 同步 `EXCHMARKET` 原值，不读取 `S_INFO_EXCHMARKET`，不在业务查询时回退到 Wind，银行间市场统一使用 `NIB`；缺失、不支持或同一代码重复映射时明确报出代码，禁止按代码后缀推断。临时代码只读取登记表 `temp_security_market`，不向 ODS 写占位记录。
 
-同券关联固定为当前 Wind 代码 → 当前 Wind 记录的非空 `S_INFO_ISINCODE` → 同 ISIN 的其他代码，去重、排除自身、不递归。不按主档名称、主体或空 ISIN 推断。详情新增只读 `marketCode` 与 `relatedMarketCodes: [{ windCode, marketCode }]`，同市场多个代码完整展示；提交不包含旧市场字段。
+同券关联固定为当前 Wind 代码 → 当前 Wind 记录的非空 `S_INFO_ISINCODE` → 同 ISIN 的其他代码，去重、排除自身、不递归。用户明确：相同且非空的 ISIN 表示同一只券的不同市场代码，Demo 同一非空 ISIN 内不得出现重复市场；不同券不得因名称、主体或市场相同而复用 ISIN，空 ISIN 不关联。详情新增只读 `marketCode` 与 `relatedMarketCodes: [{ windCode, marketCode }]`，完整展示同券各市场代码；提交不包含旧市场字段。
 
 普通证券及 ABS 扩批后每个代码独立校验市场、重复项、在池状态及容量，保留原主项、联动、互斥、审批和批次规则。证券/CRMW 快照不再存市场列；历史详情读取当前关联代码，其余业务字段按提交快照回显。
 
-Demo 共 51 条主档，49 条正式证券均有 Wind 映射，两个临时代码 ISIN 为 NULL；交投、城投、能源三组各含 IB/SH/SZ 三条记录，同组共用非空 ISIN，不同券不复用；每条主档具有独立 `SEC_DEMO_` 模拟 ID。字段定义直接维护在原始 `CREATE TABLE` 中，Demo 列和值直接维护在原始 `INSERT` 中；存量迁移仅在用户明确要求时另行处理，不自动执行数据库写入。
+Demo 共 52 条主档，所有 `wind_code` 均须在 `ais_inv_ods.wind_windcustomcode.S_INFO_WINDCODE` 中有对应记录，包含 TMP001.IB、TMP003.IB、WCTMP001.IB 三条临时代码，不得只覆盖正式证券。三条临时代码的 Wind ISIN 预置为 NULL；交投、城投、能源三组各含 NIB/SSE/SZSE 三个不同市场代码，同组共用非空 ISIN，不同券不复用。各主档 SEC_ID 独立唯一，不以 ISIN 合并主档身份；Wind 换码样例使用不超过 10 位的模拟 ID。Demo 预置外部源记录，不改变临时代码新增入口的写入范围。字段定义直接维护在原始 `CREATE TABLE` 中，Demo 列和值直接维护在原始 `INSERT` 中；存量迁移仅在用户明确要求时另行处理，不自动执行数据库写入。
 
 主档新增两个外部导入标识，均为 `INT DEFAULT NULL`，由 `SecurityInfoBo` 的 `Integer` 字段承接并保留原始值：
 
@@ -497,7 +497,7 @@ Demo 共 51 条主档，49 条正式证券均有 Wind 映射，两个临时代�
 
 独立方法 `isStandardCreditBond` 仅以 `std_credit_flag=1` 认定标准信用债，`0` 与 `NULL` 不认定，原值保持不变；标准信用债的完整业务定义由上游维护。`std_clause_flag` 和其他特殊标志不参与该方法。标准条款字段不新增页面展示；标准信用债字段在列表展示，并支持“是否特征”筛选。
 
-Demo 在原始 `INSERT` 中为全部 51 条证券显式填写标识，设置以下演示场景（不是系统按类型自动判定的规则，也不按评级高低判定）：
+Demo 在原始 `INSERT` 中为全部 52 条证券显式填写标识，设置以下演示场景（不是系统按类型自动判定的规则，也不按评级高低判定）：
 
 | 演示样本 | `std_clause_flag` | `std_credit_flag` |
 |---|---|---|

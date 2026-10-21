@@ -8,7 +8,7 @@
 --       担保债 DBB001/DBB002/DBB003：各至少 2 条担保人类型记录（115004000），用于多担保人下拉
 --       ABS 债（abs_flag=1）：各至少 2 条相关主体记录（115004000/115203000/115202000/115201000）
 --       其中 108008901.IB 覆盖四类各 1 条，其余 ABS 至少覆盖两类
---       Wind 换码样例共 8 条；日期按上海时间动态生成，关联主档须先初始化 rrs_external_import_demo_data.sql。
+--       Wind 换码样例共 13 条；日期按上海时间动态生成，配套主档、临时代码登记及调库运行态须一并初始化，详见定时任务需求文档。
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS `ais_inv_ods` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -30,14 +30,18 @@ TRUNCATE TABLE `wind_windcustomcode`;
 TRUNCATE TABLE `wind_cbondchangewindcode`;
 
 -- ----------------------------------------------------------------------------
--- Wind 中国债券 Wind 代码变更样例（8 条）
+-- Wind 中国债券 Wind 代码变更样例（13 条）
 -- 编码仅变化数字部分的最后一位，市场后缀保持不变；新码避开现有证券主档。
 -- 正常换码：108008901.IB→108008906.IB；198101.SH→198106.SH；128101.SZ→128106.SZ。
 -- 连续换码：XYB001.IB→XYB006.IB（昨天）→XYB007.IB（今天），两条事件沿用同一 SEC_ID。
 -- 以上四只旧码主档的 SEC_ID 与 rrs_external_import_demo_data.sql、wind_windcustomcode 对齐。
 -- 缺失主档：S9999999 应特别提示并跳过；旧新码相同、前天历史记录不进入本轮候选。
 -- 日期以内联表达式按上海时间生成，支持脚本工具只初始化本表，无需先执行会话变量。
--- 完整 Demo 初始化后，昨天至今天窗口候选 6 条：5 条正常换码事件、1 条缺失主档事件。
+-- temporary：WCTMP001.IB→WCTMP006.IB，复用待转正登记，主档来源改为 temp_converted。
+-- temp_converted：ABN002.IB→ABN007.IB，新增本次登记，保留 TMP002.IB→ABN002.IB 历史。
+-- 普通池 + CRMW 标的：MTN001.IB→MTN006.IB；在途审批：GSB001.SH→GSB006.SH。
+-- 旧码缺失：S9001046 主档为 PPN001.IB，事件旧码 PPN000.IB 不存在，只特别提示并跳过。
+-- 完整 Demo 初始化后，窗口候选 11 条：9 条成功、1 条缺失主档、1 条旧码缺失；再次执行重复跳过 9 条。
 -- ----------------------------------------------------------------------------
 INSERT INTO `wind_cbondchangewindcode` (
     `OBJECT_ID`, `S_INFO_WINDCODE`, `S_INFO_OLDWINDCODE`, `S_INFO_NEWWINDCODE`, `CHANGE_DATE`,
@@ -50,10 +54,15 @@ INSERT INTO `wind_cbondchangewindcode` (
 ('WCH_DEMO_005', '128106.SZ', '128101.SZ', '128106.SZ', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001002', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
 ('WCH_DEMO_006', 'WCDMISS002.IB', 'WCDMISS001.IB', 'WCDMISS002.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9999999', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
 ('WCH_DEMO_007', '108008901.IB', '108008901.IB', '108008901.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001011', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
-('WCH_DEMO_008', 'XYB001.IB', 'XYB000.IB', 'XYB001.IB', DATE_FORMAT(TIMESTAMPADD(DAY, -2, TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP())), '%Y%m%d'), 'S9001003', DATE_FORMAT(TIMESTAMPADD(DAY, -2, TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP())), '%Y-%m-%d %H:%i:%s'), '0');
+('WCH_DEMO_008', 'XYB001.IB', 'XYB000.IB', 'XYB001.IB', DATE_FORMAT(TIMESTAMPADD(DAY, -2, TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP())), '%Y%m%d'), 'S9001003', DATE_FORMAT(TIMESTAMPADD(DAY, -2, TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP())), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_009', 'WCTMP006.IB', 'WCTMP001.IB', 'WCTMP006.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001050', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_010', 'ABN007.IB', 'ABN002.IB', 'ABN007.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001022', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_011', 'MTN006.IB', 'MTN001.IB', 'MTN006.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001045', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_012', 'GSB006.SH', 'GSB001.SH', 'GSB006.SH', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001044', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0'),
+('WCH_DEMO_013', 'PPN006.IB', 'PPN000.IB', 'PPN006.IB', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y%m%d'), 'S9001046', DATE_FORMAT(TIMESTAMPADD(HOUR, 8, UTC_TIMESTAMP()), '%Y-%m-%d %H:%i:%s'), '0');
 
 -- ----------------------------------------------------------------------------
--- Wind 中国债券发行主体信息表（债券+主体粒度，同主体可多行；外部 ODS 表一般不自建二级索引）样例（71 条）
+-- Wind 中国债券发行主体信息表（债券+主体粒度，同主体可多行；外部 ODS 表一般不自建二级索引）样例（72 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `wind_cbondissuer` (
     `object_id`, `s_info_windcode`, `s_info_compname`, `s_info_compcode`, `used`,
@@ -107,6 +116,7 @@ INSERT INTO `wind_cbondissuer` (
 ('42', 'CB001.SH', '某科技公司', 'C10007', 1, '4500000000', '信息技术', '4501000000', '软件服务', '4501010000', '软件开发', '4501010010', '应用软件', '北京市海淀区', '民营企业', 1, '20240530', NULL, NULL, 0, 4501010010, '2026-07-10', '0'),
 ('43', 'CP001.IB', '某地产公司', 'C10005', 1, '7000000000', '房地产', '7001000000', '房地产开发', '7001010000', '住宅开发', '7001010010', '住宅开发经营', '广东省深圳市', '民营企业', 1, '20240530', NULL, NULL, 0, 7001010010, '2026-07-10', '0'),
 ('44', 'TMP001.IB', '某交投集团', 'C10001', 1, '4800000000', '交通运输', '4801000000', '交通基础设施', '4801010000', '公路运输', '4801010010', '高速公路', '某省南京市', '国有企业', 0, '20240530', NULL, '地方国有企业', 0, 4801010010, '2026-07-10', '0'),
+('WCC_ISSUER_007', 'WCTMP001.IB', '某交投集团', 'C10001', 1, '4800000000', '交通运输', '4801000000', '交通基础设施', '4801010000', '公路运输', '4801010010', '高速公路', '某省南京市', '国有企业', 0, '20240530', NULL, '地方国有企业', 0, 4801010010, '2026-07-10', '0'),
 ('45', 'TMP003.IB', '某能源集团', 'C10003', 1, '2100000000', '能源', '2101000000', '煤炭', '2101010000', '煤炭开采', '2101010010', '煤炭开采和洗选', '某省太原市', '国有企业', 0, '20240530', NULL, '地方国有企业', 0, 2101010010, '2026-07-10', '0'),
 -- ===== 担保债：各至少 2 条 115004000（多担保人下拉；内评见 ais_inv_analysis.v_inv_grade_result） =====
 ('46', 'DBB001.IB', '某金融公司', 'C10010', 1, '4000000000', '金融', '4002000000', '其他金融', '4002010000', '金融服务', '4002010010', '综合金融服务', '北京市西城区', '金融机构', 0, '20240530', NULL, '中央国有企业', 1, 115004000, '2026-07-10', '0'),
@@ -282,9 +292,10 @@ INSERT INTO `wind_companyfinancial` (
 ('C10010', 20260630, 1.374, 1.154, 4.25, 85.8824, 117, 1262, 0.71, 59, 3430732628.2, -295, 94, 86, 0.92, 198, 32, 4.6, 1.8, 0.63, 79.0, 585, 1.07, 327, 2.73, 7, 4.2, 31, 3.99, 4.83, 3.23, 29.2, 22, NULL, 386, 0.73, 2.1, 0.15, 0, 0.225, 34, 1, 0.73, 8.2, 1.25, 78.0, 0.52294383, 45.743101709, 0.73, 4.03, 2.05, 0.385932546, 4.25, 19.623790633, 0.70597417, 27.7968, 1.651669045, -0.914862034, 0.428813941, 12.7051465, '2026-09-16 10:00:00', NULL, NULL, NULL, 10.063482376, '北京市', '北京市');
 
 -- ----------------------------------------------------------------------------
--- 跨市场证券代码：覆盖全部 49 条正式证券，其中 3 组信用债各 3 个市场，临时代码不写入 Wind。
+-- 跨市场证券代码：覆盖全部 52 条主档代码，包含 49 条正式证券及 3 条临时代码。
 -- OBJECT_ID 为简洁 Demo 编号；所有证券代码、ISIN 与状态/类型编码仅用于模拟。
--- 同券复用非空 S_INFO_ISINCODE；S_INFO_WINDCODE 与主体关系和 rrs_securityinfo 对齐。
+-- 相同且非空的 S_INFO_ISINCODE 表示同券不同市场代码；每组内 EXCHMARKET 各不相同。
+-- 三条临时代码的 ISIN 为空，不借用其他证券 ISIN；S_INFO_WINDCODE 与主档、主体关系对齐。
 -- 与外部导入 Demo 均须初始化；两份脚本各自独立，不依赖跨库 SELECT 生成数据。
 -- 银行间交易时间及信用债小类编码未提供原始字典，保持 NULL。
 -- ----------------------------------------------------------------------------
@@ -345,4 +356,7 @@ INSERT INTO `wind_windcustomcode` (
 ('WCC_DEMO_046', 'PPN001.IB', 'S9001046', 'C10002', 'Q', '企债', '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO000392', 'PPN001', '24城投PPN', 'NIB', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
 ('WCC_DEMO_047', 'CORP001.IB', 'S9001047', 'C10007', 'Q', '企债', '中国', 'CN', '其他', 'OTHER', '人民币元', 'CNY', 'CNDEMO000400', 'CORP001', '24科技Corp', 'OTHER', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
 ('WCC_DEMO_048', 'GOVT001.IB', 'S9001048', 'C10001', 'Q', '企债', '中国', 'CN', '其他', 'OTHER', '人民币元', 'CNY', 'CNDEMO000418', 'GOVT001', '24交投Govt', 'OTHER', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
-('WCC_DEMO_049', 'CP001.IB', 'S9001049', 'C10005', 'Q', '企债', '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO000434', 'CP001', '24地产CP', 'NIB', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0');
+('WCC_DEMO_049', 'CP001.IB', 'S9001049', 'C10005', 'Q', '企债', '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO000434', 'CP001', '24地产CP', 'NIB', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
+('WCC_DEMO_050', 'TMP001.IB', NULL, 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'TMP001', '交投临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
+('WCC_DEMO_051', 'TMP003.IB', NULL, 'C10003', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'TMP003', '能源临时金融', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
+('WCC_DEMO_052', 'WCTMP001.IB', NULL, 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'WCTMP001', '换码临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0');
