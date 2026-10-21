@@ -3,6 +3,7 @@ package com.znty.rrs.service;
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.IpPoolStatusBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.schedule.CompanyObserverDto;
@@ -21,7 +22,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -31,6 +31,8 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -564,6 +566,57 @@ public class CompanyObserverPoolSyncServiceTest {
         assertThat(repeated.getDetailLog()).doesNotContain("旗下债券：投资池=");
     }
 
+    /** 超过一批的主体及债券仅按编码分批预读，业务循环不再触发逐项查询。 */
+    @Test
+    public void shouldBoundReadQueriesByBatchCountInsteadOfItemCount() {
+        Fixture f = new Fixture();
+        for (int index = 0; index < 1001; index++) {
+            String companyCode = "BULK_C" + index;
+            f.observers.add(observer(companyCode, "2"));
+            f.bonds.put(companyCode, Arrays.asList(item("BULK_A" + index, "mtn"), item("BULK_B" + index, "abs")));
+        }
+        ScheduledTaskResult result = f.service.execute();
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(3003);
+        verify(f.sourceMapper, times(2)).queryObserverBondList(anyList(), any(CompanyBondTypeScopeBo.class));
+        verify(f.sourceMapper, times(4)).queryObserverPoolStatusList(anyList());
+        verify(f.statusMapper, never()).querySecurityCurrentPoolIdList(anyString());
+        verifyNoInteractions(f.bondMapper);
+        assertThat(result.getDetailLog()).contains("债券查询2次，池状态查询4次");
+    }
+
+    /** 互斥调出后后续限制校验应看到实时内存状态，不能沿用预读时的旧状态。 */
+    @Test
+    public void shouldRefreshStateBetweenMultipleMutexOutboundsWithoutQueries() {
+        Fixture f = new Fixture();
+        f.observers.add(observer("C1", "3"));
+        f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
+        f.states.put("C1", new LinkedHashSet<>(Arrays.asList(98L, 99L)));
+        f.states.put("B1", new LinkedHashSet<>(Arrays.asList(98L, 99L)));
+        when(f.poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"),
+                pool(98L, "other"), pool(99L, "other")));
+        when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
+                relation(23L, 97L, "in_mutex"), relation(23L, 98L, "in_mutex"), relation(23L, 99L, "in_mutex"),
+                relation(99L, 98L, "out_restrict")));
+        ScheduledTaskResult result = f.service.execute();
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(6);
+        assertThat(f.states.get("C1")).containsExactly(23L);
+        assertThat(f.states.get("B1")).containsExactly(23L);
+        verify(f.sourceMapper).queryObserverBondList(anyList(), any(CompanyBondTypeScopeBo.class));
+        verify(f.sourceMapper).queryObserverPoolStatusList(anyList());
+        verify(f.statusMapper, never()).querySecurityCurrentPoolIdList(anyString());
+    }
+
+    /** 无观察主体及在池主体时不生成空 IN 查询。 */
+    @Test
+    public void shouldSkipBatchQueriesWhenNoCompaniesNeedProcessing() {
+        Fixture f = new Fixture();
+        assertThat(f.service.execute().getAffectedCount()).isZero();
+        verify(f.sourceMapper, never()).queryObserverBondList(anyList(), any(CompanyBondTypeScopeBo.class));
+        verify(f.sourceMapper, never()).queryObserverPoolStatusList(anyList());
+    }
+
     /** 构造一条池关系。 */
     static PoolRelationBo relation(Long sourcePoolId, Long targetPoolId, String type) {
         PoolRelationBo relation = new PoolRelationBo();
@@ -634,7 +687,6 @@ public class CompanyObserverPoolSyncServiceTest {
         /** 注入依赖，并让候选查询和状态写入共享同一份状态。 */
         Fixture() {
             ReflectionTestUtils.setField(service, "companyObserverMapper", sourceMapper);
-            ReflectionTestUtils.setField(service, "autoAdjustMapper", bondMapper);
             ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", statusMapper);
             ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
             ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
@@ -643,8 +695,30 @@ public class CompanyObserverPoolSyncServiceTest {
             when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"), pool(17L, "blacklist")));
             when(sourceMapper.queryCompanyObserverList()).thenReturn(observers);
             when(sourceMapper.queryCurrentCompanyList(anyList())).thenReturn(currentCompanies);
-            when(statusMapper.querySecurityCurrentPoolIdList(anyString())).thenAnswer(call ->
-                    new ArrayList<>(states.getOrDefault(call.getArgument(0), Collections.emptySet())));
+            when(sourceMapper.queryObserverBondList(anyList(), any(CompanyBondTypeScopeBo.class))).thenAnswer(call -> {
+                List<ScheduledAdjustCandidateDto> result = new ArrayList<>();
+                List<String> companyCodes = call.getArgument(0);
+                for (String companyCode : companyCodes) {
+                    for (ScheduledAdjustCandidateDto bond : bonds.getOrDefault(companyCode, Collections.emptyList())) {
+                        bond.setIssuerCode(companyCode);
+                        result.add(bond);
+                    }
+                }
+                return result;
+            });
+            when(sourceMapper.queryObserverPoolStatusList(anyList())).thenAnswer(call -> {
+                List<IpPoolStatusBo> result = new ArrayList<>();
+                List<String> codes = call.getArgument(0);
+                for (String code : codes) {
+                    for (Long poolId : states.getOrDefault(code, Collections.emptySet())) {
+                        IpPoolStatusBo row = new IpPoolStatusBo();
+                        row.setSecurityCode(code);
+                        row.setTargetPoolId(poolId);
+                        result.add(row);
+                    }
+                }
+                return result;
+            });
             when(statusMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(call -> {
                 IpAdjustLogBo row = call.getArgument(0);
                 row.setId((long) logs.size() + 1);
@@ -657,14 +731,6 @@ public class CompanyObserverPoolSyncServiceTest {
             });
             when(statusMapper.deletePoolStatusSoft(anyString(), anyLong())).thenAnswer(call ->
                     states.getOrDefault(call.getArgument(0), Collections.emptySet()).remove(call.getArgument(1)) ? 1 : 0);
-            when(bondMapper.queryCompanyBondNotInSamePoolForAutoIn(anyString(), anyLong(), any(CompanyBondTypeScopeBo.class)))
-                    .thenAnswer(call -> bonds.getOrDefault(call.getArgument(0), Collections.emptyList()).stream()
-                            .filter(row -> !states.getOrDefault(row.getSecurityCode(), Collections.emptySet()).contains(call.getArgument(1)))
-                            .collect(Collectors.toList()));
-            when(bondMapper.queryCompanyBondInSamePoolForAutoOut(anyString(), anyLong(), any(CompanyBondTypeScopeBo.class)))
-                    .thenAnswer(call -> bonds.getOrDefault(call.getArgument(0), Collections.emptyList()).stream()
-                            .filter(row -> states.getOrDefault(row.getSecurityCode(), Collections.emptySet()).contains(call.getArgument(1)))
-                            .collect(Collectors.toList()));
         }
     }
 }

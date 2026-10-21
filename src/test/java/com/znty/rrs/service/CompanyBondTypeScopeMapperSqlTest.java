@@ -28,6 +28,8 @@ public class CompanyBondTypeScopeMapperSqlTest {
                 "queryCompanyInboundBondForAutoList",
                 "queryCompanyBondMutexOutList",
                 "queryCompanyOutboundBondForAutoList"));
+        // 观察名单使用批量候选查询，债券范围仍与其他主体联动链路保持一致
+        assertMapperQueries("CompanyObserverMapper.xml", Arrays.asList("queryObserverBondList"));
     }
 
     /** 验证主体详情债券数量与实际联动范围一致，CRMW 也参与统计。 */

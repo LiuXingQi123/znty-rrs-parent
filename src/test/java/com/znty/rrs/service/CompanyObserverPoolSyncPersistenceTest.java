@@ -2,7 +2,6 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.schedule.CompanyObserverDto;
-import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.CompanyObserverMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -12,12 +11,20 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
+import java.sql.Connection;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.executor.statement.StatementHandler;
 import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.plugin.Interceptor;
+import org.apache.ibatis.plugin.Intercepts;
+import org.apache.ibatis.plugin.Invocation;
+import org.apache.ibatis.plugin.Signature;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.junit.Assume;
@@ -49,6 +56,8 @@ public class CompanyObserverPoolSyncPersistenceTest {
     private InvestmentPoolMapper poolMapper;
     /** 模拟前端保存的任务扩展参数 */
     private SysScheduledTaskBo task;
+    /** JDBC 实际准备的 SELECT，排除一级缓存命中对查询次数判断的影响 */
+    private final List<String> selectSql = new ArrayList<>();
 
     /** 建立独立 H2 库，加载实际 XML，并通过真实事务代理执行任务。 */
     @Before
@@ -84,6 +93,7 @@ public class CompanyObserverPoolSyncPersistenceTest {
 
         Configuration configuration = new Configuration(new Environment("test", new SpringManagedTransactionFactory(), ds));
         configuration.setMapUnderscoreToCamelCase(true);
+        configuration.addInterceptor(new SelectCounter(selectSql));
         for (String name : new String[]{"CompanyObserverMapper.xml", "AutoAdjustMapper.xml", "SecurityPoolAdjustMapper.xml"}) {
             String resource = "mapper/" + name;
             try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
@@ -96,7 +106,6 @@ public class CompanyObserverPoolSyncPersistenceTest {
         poolMapper = fixture.poolMapper;
         task = fixture.task;
         ReflectionTestUtils.setField(fixture.service, "companyObserverMapper", sourceMapper);
-        ReflectionTestUtils.setField(fixture.service, "autoAdjustMapper", session.getMapper(AutoAdjustMapper.class));
         ReflectionTestUtils.setField(fixture.service, "securityPoolAdjustMapper", session.getMapper(SecurityPoolAdjustMapper.class));
         ProxyFactory proxy = new ProxyFactory(fixture.service);
         proxy.setProxyTargetClass(true);
@@ -322,6 +331,57 @@ public class CompanyObserverPoolSyncPersistenceTest {
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getMessage()).contains("主体ID[2]", "C2", "主数据不匹配");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log", Integer.class)).isZero();
+    }
+
+    /** 扩大主体和债券数量并启用联动后，数据库仍仅执行初始化及批量预读 SELECT。 */
+    @Test
+    public void shouldKeepJdbcSelectCountStableWithMoreCompaniesAndLinkedPools() {
+        List<Object[]> companies = new ArrayList<>();
+        List<Object[]> observers = new ArrayList<>();
+        List<Object[]> bonds = new ArrayList<>();
+        for (int index = 2; index <= 41; index++) {
+            String companyCode = "C" + index;
+            companies.add(new Object[]{index, companyCode, "主体" + index});
+            observers.add(new Object[]{index, companyCode});
+            bonds.add(new Object[]{"LOAD_B" + index, companyCode});
+        }
+        jdbc.batchUpdate("INSERT INTO ais_inv_analysis.t_inv_company VALUES (?,?,?)", companies);
+        jdbc.batchUpdate("INSERT INTO ais_inv_analysis.company_observer_view (company_id,company_code,observer_type,isHo)"
+                + " VALUES (?,?,'3','0')", observers);
+        jdbc.batchUpdate("INSERT INTO rrs_securityinfo VALUES (?,'批量债券','mtn',?,'发行主体','L',NULL,0)", bonds);
+        jdbc.update("INSERT INTO ip_pool_relation VALUES (23,'in_linked',17,0), (23,'out_linked',17,0)");
+        selectSql.clear();
+        ScheduledTaskResult result = service.execute();
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(165);
+        // 任务和投资池配置由桩提供，真实查询仅名单、当前主体、关系、债券批次、状态批次各一次。
+        assertThat(selectSql).hasSize(5);
+        assertThat(result.getDetailLog()).contains("债券查询1次，池状态查询1次");
+        selectSql.clear();
+        assertThat(service.execute().getAffectedCount()).isZero();
+        assertThat(selectSql).hasSize(5);
+    }
+
+    /** 在 JDBC 准备语句时计数，避免只统计 Mapper 调用而误把缓存命中当作数据库查询。 */
+    @Intercepts(@Signature(type = StatementHandler.class, method = "prepare", args = {Connection.class, Integer.class}))
+    private static class SelectCounter implements Interceptor {
+        /** 本测试实际执行的查询列表 */
+        private final List<String> queries;
+
+        /** 绑定当前测试的查询记录。 */
+        private SelectCounter(List<String> queries) {
+            this.queries = queries;
+        }
+
+        /** 记录实际准备的 SELECT，写操作保持原样执行。 */
+        @Override
+        public Object intercept(Invocation invocation) throws Throwable {
+            String sql = ((StatementHandler) invocation.getTarget()).getBoundSql().getSql().trim();
+            if (sql.startsWith("SELECT")) {
+                queries.add(sql);
+            }
+            return invocation.proceed();
+        }
     }
 
     /** 从生产脚本提取单张表的列定义，移除 MySQL ENGINE/CHARSET/COLLATE 表选项。 */
