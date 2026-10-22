@@ -11,9 +11,13 @@ import org.apache.ibatis.annotations.Param;
 /** Wind 代码变更扫描、主档更新及转换登记查询。 */
 @Mapper
 public interface WindCodeSyncMapper {
-    /** 扫描日期窗口内旧新代码不同的变更事件。 */
-    List<WindCodeChangeDto> queryRecentWindCodeChangeList(@Param("startDate") String startDate,
-                                                        @Param("endDate") String endDate);
+    /**
+     * 按数据库时间和扫描天数查询变更，同一 SEC_ID 只保留 CHANGE_DATE 最新的记录。
+     *
+     * @param scanDays 页面扩展参数指定的扫描天数，正整数
+     * @return 扫描范围内的最新变更记录
+     */
+    List<WindCodeChangeDto> queryRecentWindCodeChangeList(@Param("scanDays") int scanDays);
 
     /** 按唯一 SEC_ID 锁定当前主档，序列化同一证券的变更。 */
     SecurityInfoBo querySecurityBySecIdForUpdate(@Param("secId") String secId);

@@ -194,7 +194,7 @@ public class TempSecurityCodeService {
     /**
      * 按 SEC_ID 找到证券，把证券表里的旧代码改成新代码，再改相关的调库记录。
      * 证券表、临时代码记录、普通池和 CRMW 一起改；任何一步失败，这条换码的修改全部撤销。
-     * 找不到证券、旧代码不存在、这条变更已经处理过时，分别返回对应的跳过结果。
+     * 找不到证券、主档已经是最新代码、这条变更已经处理过时，分别返回对应的跳过结果。
      *
      * @param change 变更记录，包含事件 ID、SEC_ID、旧新代码和八位变更日期
      * @return 本条记录的换码成功或跳过结果；校验、写入失败时抛出异常并回滚
@@ -207,7 +207,7 @@ public class TempSecurityCodeService {
         }
         // 1.1 检查 SEC_ID，后面靠它找到要换码的证券。
         validateRequired(change.getSecId(), "Wind 事件 SEC_ID 不能为空");
-        // 1.2 检查旧代码，后面要和证券表中的代码核对。
+        // 1.2 检查变更记录中的旧代码，后面写入本条变更的标记。
         validateRequired(change.getOldWindCode(), "Wind 旧代码不能为空");
         // 1.3 检查新代码，后面要把证券信息和调库记录改成这个代码。
         validateRequired(change.getNewWindCode(), "Wind 新代码不能为空");
@@ -216,9 +216,9 @@ public class TempSecurityCodeService {
         if (change.getOldWindCode().equals(change.getNewWindCode())) {
             throw new BizException("Wind 新旧代码不能相同");
         }
-        // 2、给这条变更生成一个标记，保存到备注中，下次用来判断是否处理过。
-        String eventKey = "[wind_code_sync:" + change.getSecId() + ":" + change.getObjectId()
-                + ":" + change.getOldWindCode() + ":" + change.getNewWindCode() + ":" + change.getChangeDate() + "]";
+        // 2、用 SEC_ID、变更记录旧代码、新代码和日期生成标记，下次用来判断是否处理过。
+        String eventKey = "[wind_code_sync:" + change.getSecId() + ":" + change.getOldWindCode()
+                + ":" + change.getNewWindCode() + ":" + change.getChangeDate() + "]";
         // 3、按 SEC_ID 查出并锁定证券，防止同时修改；找不到就返回跳过。
         SecurityInfoBo master = windCodeSyncMapper.querySecurityBySecIdForUpdate(change.getSecId());
         if (master == null) {
@@ -228,16 +228,19 @@ public class TempSecurityCodeService {
         if (windCodeSyncMapper.queryCompletedWindCodeChangeCount(eventKey) > 0) {
             return WindCodeChangeResult.ALREADY_COMPLETED;
         }
-        // 5、核对这只券现在的代码，应该与变更记录中的旧代码一致。
-        if (!change.getOldWindCode().equals(master.getWindCode())) {
-            // 5.1 旧代码在证券表里已经找不到，就跳过这条变更。
-            if (tempSecurityCodeMapper.querySecurityInfoCount(change.getOldWindCode()) == 0) {
-                return WindCodeChangeResult.MISSING_OLD_CODE;
-            }
-            // 5.2 旧代码还在，但属于另一条证券，就报错，避免改错证券。
-            throw new BizException("Wind 旧代码与当前主档不一致，SEC_ID=" + change.getSecId()
-                    + "，事件旧码=" + change.getOldWindCode() + "，当前代码=" + master.getWindCode());
+        // 5、主档已经是最新代码时直接跳过，不重复生成出入库记录。
+        if (change.getNewWindCode().equals(master.getWindCode())) {
+            return WindCodeChangeResult.ALREADY_CURRENT;
         }
+        // 5.1 检查主档当前代码，实际出库和临时代码记录都使用这个代码。
+        validateRequired(master.getWindCode(), "证券主档缺少代码，SEC_ID=" + change.getSecId());
+        WindCodeChangeDto masterChange = new WindCodeChangeDto();
+        masterChange.setObjectId(change.getObjectId());
+        masterChange.setSecId(change.getSecId());
+        masterChange.setWindCode(change.getWindCode());
+        masterChange.setOldWindCode(master.getWindCode());
+        masterChange.setNewWindCode(change.getNewWindCode());
+        masterChange.setChangeDate(change.getChangeDate());
         // 6、检查证券来源、证券类型，以及新代码是否已经存在。
         String source = master.getSecuritySource();
         if (!"official".equals(source) && !"temporary".equals(source) && !"temp_converted".equals(source)) {
@@ -250,17 +253,17 @@ public class TempSecurityCodeService {
         }
         // 6.2 来源是 temp_converted 时，临时代码表中应该保留着之前转正的记录。
         if ("temp_converted".equals(source)
-                && windCodeSyncMapper.queryConvertedRegistrationList(change.getOldWindCode()).isEmpty()) {
+                && windCodeSyncMapper.queryConvertedRegistrationList(master.getWindCode()).isEmpty()) {
             throw new BizException("已转正证券在临时代码表中没有之前转正的记录，securityCode=" + master.getWindCode());
         }
         // 7、查出旧代码的市场，准备本次修改时间。
         String market = securityMarketService.queryMarketCode(master.getWindCode());
         Date now = new Date();
         // 8、查旧代码有没有临时代码记录，有就继续用，没有就按旧证券信息新增。
-        TempSecurityCodeBo registration = prepareWindRegistration(change, master, market, now, eventKey);
+        TempSecurityCodeBo registration = prepareWindRegistration(masterChange, master, market, now, eventKey);
         // 9、把证券表中的旧代码改成新代码；temporary 改为 temp_converted，其他来源保持原样。
         String newSource = "temporary".equals(source) ? "temp_converted" : source;
-        if (windCodeSyncMapper.editSecurityWindCode(change, source, newSource, market, now) != 1) {
+        if (windCodeSyncMapper.editSecurityWindCode(masterChange, source, newSource, market, now) != 1) {
             throw new BizException("Wind 主档更名失败，SEC_ID=" + change.getSecId());
         }
         // 10、查出换码后的证券信息和市场，供后面更新调库记录使用。

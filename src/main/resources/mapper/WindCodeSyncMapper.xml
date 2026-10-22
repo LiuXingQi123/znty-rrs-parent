@@ -1,20 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.WindCodeSyncMapper">
-    <!-- 日期按八位 yyyyMMdd 字符串比较；保留异常身份字段供服务明确报错。 -->
+    <!-- 按扩展参数指定的天数使用数据库时间过滤；同一 SEC_ID 只保留 CHANGE_DATE 最新的记录。 -->
     <select id="queryRecentWindCodeChangeList" resultType="com.znty.rrs.entity.schedule.WindCodeChangeDto">
-        SELECT OBJECT_ID
-              ,SEC_ID
-              ,S_INFO_OLDWINDCODE AS oldWindCode
-              ,S_INFO_NEWWINDCODE AS newWindCode
-              ,CHANGE_DATE
-        FROM ais_inv_ods.wind_cbondchangewindcode
-        WHERE CHANGE_DATE &gt;= #{startDate}
-          AND CHANGE_DATE &lt;= #{endDate}
-          AND S_INFO_OLDWINDCODE != S_INFO_NEWWINDCODE
-        ORDER BY CHANGE_DATE
-                ,OPDATE
-                ,OBJECT_ID
+        SELECT c.OBJECT_ID
+              ,c.SEC_ID
+              ,c.S_INFO_WINDCODE AS windCode
+              ,c.S_INFO_OLDWINDCODE AS oldWindCode
+              ,c.S_INFO_NEWWINDCODE AS newWindCode
+              ,c.CHANGE_DATE
+        FROM ais_inv_ods.wind_cbondchangewindcode c
+        WHERE c.CHANGE_DATE >= DATE_FORMAT(TIMESTAMPADD(DAY, -#{scanDays}, NOW()), '%Y%m%d')
+          AND c.S_INFO_OLDWINDCODE != c.S_INFO_NEWWINDCODE
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ais_inv_ods.wind_cbondchangewindcode newer
+              WHERE newer.SEC_ID = c.SEC_ID
+                AND newer.CHANGE_DATE > c.CHANGE_DATE
+          )
+        ORDER BY c.CHANGE_DATE
+                ,c.SEC_ID
     </select>
 
     <!-- 不使用 LIMIT 1；SEC_ID 唯一性被破坏时由 MyBatis 显式报错。 -->
@@ -40,7 +45,7 @@
     <select id="queryCompletedWindCodeChangeCount" resultType="int">
         SELECT COUNT(1) FROM rrs_temp_security_code
         WHERE status = 'updated' AND oprt_source = 'job'
-          AND LOCATE(#{eventKey}, memo) &gt; 0
+          AND LOCATE(#{eventKey}, memo) > 0
     </select>
 
     <!-- 临时占位转正时使用已核实的登记市场，其他来源保留原市场。 -->

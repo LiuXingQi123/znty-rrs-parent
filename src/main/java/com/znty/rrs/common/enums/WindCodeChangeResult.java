@@ -8,8 +8,8 @@ public enum WindCodeChangeResult {
     /** 按 SEC_ID 未找到证券主档，特别提示并跳过，不写入业务数据、不计失败。 */
     MISSING_MASTER,
 
-    /** SEC_ID 对应主档存在，但事件旧码在主档全表中不存在，特别提示并跳过、不计失败。 */
-    MISSING_OLD_CODE,
+    /** 主档当前代码已经是最新代码，无需换码，不新增临时代码记录或调库记录。 */
+    ALREADY_CURRENT,
 
     /** 已有本事件的成功处理标记，按重复事件跳过，不再次换码或生成业务记录。 */
     ALREADY_COMPLETED

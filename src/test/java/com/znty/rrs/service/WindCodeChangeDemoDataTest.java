@@ -6,15 +6,14 @@ import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
 import com.znty.rrs.mapper.SecurityMarketMapper;
+import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -70,6 +69,10 @@ public class WindCodeChangeDemoDataTest {
                 + WindCodeChangeDemoDataTest.class.getName() + ".utcTimestamp'");
         jdbc.execute("CREATE ALIAS DATE_FORMAT FOR '"
                 + WindCodeChangeDemoDataTest.class.getName() + ".formatDate'");
+        // 模拟页面保存的扫描参数，任务通过实际 Mapper 读取。
+        createTable(jdbc, "rrs_scheduled_task_schema.sql", "sys_scheduled_task", "sys_scheduled_task");
+        jdbc.update("INSERT INTO sys_scheduled_task(task_code,param_json,is_deleted) VALUES(?,?,0)",
+                WindCodeSyncService.TASK_CODE, "{\"scanDays\":1}");
         // 使用生产列定义，保留 ODS 的 SEC_ID 长度约束。
         createTable(jdbc, "rrs_external_import_schema.sql", "rrs_securityinfo", "rrs_securityinfo");
         // 建立真实的 Wind 身份参考表。
@@ -90,7 +93,7 @@ public class WindCodeChangeDemoDataTest {
         }
     }
 
-    /** 验证重复初始化、上海日期窗口、真实证券身份、连续换码及过滤样例。 */
+    /** 验证重复初始化、数据库日期窗口、同券最新记录及历史过滤样例。 */
     @Test
     public void demoShouldProvideUsableChangesWithinCurrentWindow() throws Exception {
         Configuration config = new Configuration(new Environment("demo", new JdbcTransactionFactory(), source));
@@ -98,9 +101,8 @@ public class WindCodeChangeDemoDataTest {
         try (InputStream xml = getClass().getResourceAsStream("/mapper/WindCodeSyncMapper.xml")) {
             new XMLMapperBuilder(xml, config, "WindCodeSyncMapper.xml", config.getSqlFragments()).parse();
         }
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
-        String from = today.minusDays(1).format(DateTimeFormatter.BASIC_ISO_DATE);
-        String to = today.format(DateTimeFormatter.BASIC_ISO_DATE);
+        String from = jdbc.queryForObject("SELECT DATE_FORMAT(NOW() - INTERVAL '1' DAY, '%Y%m%d')", String.class);
+        String to = jdbc.queryForObject("SELECT DATE_FORMAT(NOW(), '%Y%m%d')", String.class);
         for (int run = 0; run < 2; run++) {
             // 每次使用原始清空和 INSERT 语句，验证单表初始化不依赖额外会话变量。
             resetDemo(jdbc, "rrs_external_import_demo_data.sql", "rrs_securityinfo", "rrs_securityinfo");
@@ -114,9 +116,9 @@ public class WindCodeChangeDemoDataTest {
                     .isEqualTo(13);
             try (SqlSession session = new SqlSessionFactoryBuilder().build(config).openSession(true)) {
                 WindCodeSyncMapper mapper = session.getMapper(WindCodeSyncMapper.class);
-                List<WindCodeChangeDto> candidates = mapper.queryRecentWindCodeChangeList(from, to);
-                assertThat(candidates).extracting(WindCodeChangeDto::getObjectId).containsExactly(
-                        "WCH_DEMO_002", "WCH_DEMO_001", "WCH_DEMO_003", "WCH_DEMO_004", "WCH_DEMO_005", "WCH_DEMO_006",
+                List<WindCodeChangeDto> candidates = mapper.queryRecentWindCodeChangeList(1);
+                assertThat(candidates).extracting(WindCodeChangeDto::getObjectId).containsExactlyInAnyOrder(
+                        "WCH_DEMO_001", "WCH_DEMO_003", "WCH_DEMO_004", "WCH_DEMO_005", "WCH_DEMO_006",
                         "WCH_DEMO_009", "WCH_DEMO_010", "WCH_DEMO_011", "WCH_DEMO_012", "WCH_DEMO_013");
                 for (WindCodeChangeDto change : candidates) {
                     assertThat(change.getChangeDate()).matches("\\d{8}");
@@ -133,9 +135,11 @@ public class WindCodeChangeDemoDataTest {
                         assertThat(mapper.querySecurityBySecIdForUpdate(change.getSecId())).isNotNull();
                     }
                 }
-                assertThat(candidates.get(0).getChangeDate()).isEqualTo(from);
-                assertThat(candidates.get(0).getNewWindCode()).isEqualTo(candidates.get(2).getOldWindCode());
-                assertThat(candidates.get(0).getSecId()).isEqualTo(candidates.get(2).getSecId());
+                assertThat(candidates).extracting(WindCodeChangeDto::getChangeDate).containsOnly(to);
+                assertThat(candidates).filteredOn(change -> "S9001003".equals(change.getSecId()))
+                        .extracting(WindCodeChangeDto::getObjectId).containsExactly("WCH_DEMO_003");
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_cbondchangewindcode"
+                        + " WHERE SEC_ID='S9001003' AND S_INFO_WINDCODE='XYB007.IB'", Integer.class)).isEqualTo(2);
             }
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_cbondchangewindcode c"
                     + " JOIN rrs_securityinfo s ON s.sec_id=c.SEC_ID"
@@ -186,12 +190,18 @@ public class WindCodeChangeDemoDataTest {
         WindCodeSyncService task = createTask();
         ScheduledTaskResult first = task.execute();
         assertThat(first.isSuccess()).isTrue();
-        assertThat(first.getMessage()).as(first.getDetailLog()).isEqualTo("成功 9 条，主档缺失跳过 1 条，旧码缺失跳过 1 条，重复跳过 0 条，失败 0 条");
+        assertThat(first.getMessage()).as(first.getDetailLog()).isEqualTo("成功 9 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 0 条，失败 0 条");
         assertThat(first.getDetailLog()).contains("特别提示", "SEC_ID=S9999999").doesNotContain("[ERROR]");
-        assertThat(first.getDetailLog()).contains("特别提示：旧代码不在 rrs_securityinfo 中", "SEC_ID=S9001046", "旧代码=PPN000.IB");
+        assertThat(first.getDetailLog()).contains("换码成功：SEC_ID=S9001046", "变更记录旧代码=PPN000.IB");
         assertThat(first.getAffectedCount()).isEqualTo(9);
         assertThat(jdbc.queryForList("SELECT wind_code FROM rrs_securityinfo WHERE sec_id IN ('S9001003','S9001001','S9001002') ORDER BY sec_id", String.class))
                 .containsExactly("198106.SH", "128106.SZ", "XYB007.IB");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='XYB006.IB'", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='XYB006.IB'", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='XYB006.IB'", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT memo FROM rrs_temp_security_code WHERE temp_security_code='XYB001.IB'"
+                + " AND security_code='XYB007.IB' AND status='updated'", String.class))
+                .contains(":XYB006.IB:XYB007.IB:");
         assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE wind_code='108008906.IB'", String.class))
                 .isEqualTo("official");
         assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE sec_id='S9001050'", String.class))
@@ -214,9 +224,11 @@ public class WindCodeChangeDemoDataTest {
                 .isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='WCDMISS001.IB'", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE sec_id='S9999999'", Integer.class)).isZero();
-        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='S9001046'", String.class)).isEqualTo("PPN001.IB");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code IN ('PPN000.IB','PPN006.IB')", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='S9001046'", String.class)).isEqualTo("PPN006.IB");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='PPN000.IB'", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='PPN000.IB'", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='PPN001.IB'"
+                + " AND security_code='PPN006.IB' AND status='updated'", Integer.class)).isEqualTo(1);
         // 检查普通池与 CRMW 标的均完成旧出新入，并保留终态旧流水。
         assertPoolMove("MTN001.IB", "MTN006.IB", "ip_pool_status", 4L);
         // CRMW 凭证保持原代码，只换标的。
@@ -240,7 +252,7 @@ public class WindCodeChangeDemoDataTest {
         }
         ScheduledTaskResult second = task.execute();
         assertThat(second.isSuccess()).isTrue();
-        assertThat(second.getMessage()).as(second.getDetailLog()).isEqualTo("成功 0 条，主档缺失跳过 1 条，旧码缺失跳过 1 条，重复跳过 9 条，失败 0 条");
+        assertThat(second.getMessage()).as(second.getDetailLog()).isEqualTo("成功 0 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 9 条，失败 0 条");
         for (Map.Entry<String, Integer> entry : before.entrySet()) {
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + entry.getKey(), Integer.class)).as(entry.getKey())
                     .isEqualTo(entry.getValue());
@@ -259,7 +271,7 @@ public class WindCodeChangeDemoDataTest {
     private WindCodeSyncService createTask() throws Exception {
         Configuration config = new Configuration(new Environment("demo", new SpringManagedTransactionFactory(), source));
         config.setMapUnderscoreToCamelCase(true);
-        for (String name : Arrays.asList("WindCodeSyncMapper", "TempSecurityCodeMapper", "SecurityPoolAdjustMapper",
+        for (String name : Arrays.asList("ScheduledTaskMapper", "WindCodeSyncMapper", "TempSecurityCodeMapper", "SecurityPoolAdjustMapper",
                 "CrmwPoolAdjustMapper", "SecurityMarketMapper")) {
             try (InputStream xml = getClass().getResourceAsStream("/mapper/" + name + ".xml")) {
                 new XMLMapperBuilder(xml, config, name + ".xml", config.getSqlFragments()).parse();
@@ -282,6 +294,7 @@ public class WindCodeChangeDemoDataTest {
         proxy.setProxyTargetClass(true);
         proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source), new AnnotationTransactionAttributeSource()));
         WindCodeSyncService task = new WindCodeSyncService();
+        ReflectionTestUtils.setField(task, "scheduledTaskMapper", session.getMapper(ScheduledTaskMapper.class));
         ReflectionTestUtils.setField(task, "windCodeSyncMapper", session.getMapper(WindCodeSyncMapper.class));
         ReflectionTestUtils.setField(task, "tempSecurityCodeService", proxy.getProxy());
         return task;
