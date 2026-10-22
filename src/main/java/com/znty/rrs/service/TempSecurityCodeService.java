@@ -683,6 +683,14 @@ public class TempSecurityCodeService {
 
         // 6、按凭证更新 CRMW 标的的在池记录和待审批申请，保存快照和替换日志。
         businessConverter.convertCrmwBusinessData(conversionPlan, replaceBo);
+
+        // 7、每次成功转换都保存登记映射，无业务引用时也能追溯旧新代码。
+        replaceBo.setReplaceTableName("rrs_temp_security_code");
+        replaceBo.setReplaceRecordId(oldBo.getId());
+        if (tempSecurityCodeMapper.addTempSecurityCodeUpdateLog(replaceBo) != 1) {
+            throw new BizException("代码转换映射日志写入失败，登记ID=" + oldBo.getId()
+                    + "，旧代码=" + oldBo.getTempSecurityCode() + "，新代码=" + newBo.getSecurityCode());
+        }
     }
 
     /**

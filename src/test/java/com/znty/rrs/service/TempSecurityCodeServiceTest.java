@@ -19,6 +19,7 @@ import java.util.Collections;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -107,7 +108,7 @@ public class TempSecurityCodeServiceTest {
         service.editTempSecurityCodeToUpdated(req);
 
         verify(mapper).editConversionPendingLog(any(IpAdjustLogBo.class), eq("TMP001"));
-        verify(mapper).addTempSecurityCodeUpdateLog(any(TempSecurityCodeBo.class));
+        verify(mapper, times(2)).addTempSecurityCodeUpdateLog(any(TempSecurityCodeBo.class));
         // 在途场景不写业务出入库
         verify(adjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
         verify(adjustMapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
@@ -294,6 +295,70 @@ public class TempSecurityCodeServiceTest {
         verify(adjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
     }
 
+    /** 无业务引用时映射日志插入零行，不能继续报告转正成功。 */
+    @Test
+    public void conversionShouldRejectWhenSummaryAuditNotInserted() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        TempSecurityCodeService service = buildService(mapper, adjustMapper);
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.editTempSecurityCodeToUpdated(any())).thenReturn(1);
+        when(mapper.addTempSecurityCodeUpdateLog(any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(buildUpdateReq()))
+                .isInstanceOf(BizException.class).hasMessageContaining("映射日志写入失败", "登记ID=1");
+        verify(mapper, never()).editTempSecurityInfoToDisabled(any());
+    }
+
+    /** CRMW 凭证引用逐条留痕，使用实际表名标记和被替换记录 ID。 */
+    @Test
+    public void credentialReferencesShouldRecordEveryChangedRow() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        TempSecurityCodeService service = buildService(mapper, adjustMapper);
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.editTempSecurityCodeToUpdated(any())).thenReturn(1);
+        when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any())).thenReturn(Arrays.asList(10L, 11L));
+        when(mapper.queryPoolStatusCrmwReferenceIdList(any())).thenReturn(Collections.singletonList(88L));
+        when(mapper.queryCrmwPoolStatusCrmwReferenceIdList(any())).thenReturn(Collections.singletonList(89L));
+        List<String> auditRows = new ArrayList<>();
+        doAnswer(call -> {
+            TempSecurityCodeBo audit = call.getArgument(0);
+            auditRows.add(audit.getReplaceTableName() + ":" + audit.getReplaceRecordId());
+            assertThat(audit.getTempSecurityCode()).isEqualTo("TMP001");
+            assertThat(audit.getSecurityCode()).isEqualTo("110001.IB");
+            assertThat(audit.getReplaceStatus()).isEqualTo("success");
+            return 1;
+        }).when(mapper).addTempSecurityCodeUpdateLog(any());
+
+        service.editTempSecurityCodeToUpdated(buildUpdateReq());
+
+        assertThat(auditRows).containsExactlyInAnyOrder("ip_adjust_log.crmw:10", "ip_adjust_log.crmw:11",
+                "ip_pool_status.crmw:88", "ip_pool_status_crmw.crmw:89", "rrs_temp_security_code:1");
+        verify(mapper).editAdjustLogCrmwReference(any(), eq(Arrays.asList(10L, 11L)));
+        verify(mapper).editPoolStatusCrmwReference(any(), eq(Collections.singletonList(88L)));
+        verify(mapper).editCrmwPoolStatusCrmwReference(any(), eq(Collections.singletonList(89L)));
+    }
+
+    /** CRMW 凭证明细插入零行时应中断转换，不能只留下成功映射。 */
+    @Test
+    public void credentialConversionShouldRejectWhenDetailAuditNotInserted() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        TempSecurityCodeService service = buildService(mapper, adjustMapper);
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.editTempSecurityCodeToUpdated(any())).thenReturn(1);
+        when(mapper.queryPoolStatusCrmwReferenceIdList(any())).thenReturn(Collections.singletonList(88L));
+        when(mapper.addTempSecurityCodeUpdateLog(any())).thenReturn(0);
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(buildUpdateReq()))
+                .isInstanceOf(BizException.class).hasMessageContaining("明细日志写入失败", "ip_pool_status.crmw", "88");
+        verify(mapper, never()).editTempSecurityInfoToDisabled(any());
+    }
+
     /** 验证已被核心调库业务引用的临时代码不允许删除。 */
     @Test
     public void deleteTempSecurityCodeShouldRejectWhenReferenced() {
@@ -338,6 +403,7 @@ public class TempSecurityCodeServiceTest {
         when(markets.queryMarketCode(anyString())).thenReturn("NIB");
         ReflectionTestUtils.setField(service, "securityMarketService", markets);
         ReflectionTestUtils.setField(service, "tempSecurityCodeMapper", mapper);
+        when(mapper.addTempSecurityCodeUpdateLog(any(TempSecurityCodeBo.class))).thenReturn(1);
         when(mapper.queryOrdinaryConversionPoolIdList(any())).thenReturn(new ArrayList<>(Collections.singletonList(100L)));
         when(mapper.deleteOrdinaryPoolStatusForConversion(anyLong(), any(Date.class))).thenReturn(1);
         when(mapper.deleteCrmwPoolStatusSoftById(anyLong(), any(Date.class))).thenReturn(1);

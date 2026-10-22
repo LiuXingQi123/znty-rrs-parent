@@ -181,6 +181,6 @@ public interface TempSecurityCodeMapper {
     /** 新增 CRMW 池状态 */
     void addCrmwPoolStatus(IpPoolStatusBo bo);
 
-    /** 新增临时代码替换日志 */
-    void addTempSecurityCodeUpdateLog(TempSecurityCodeBo bo);
+    /** 新增临时代码替换日志，返回实际写入行数 */
+    int addTempSecurityCodeUpdateLog(TempSecurityCodeBo bo);
 }

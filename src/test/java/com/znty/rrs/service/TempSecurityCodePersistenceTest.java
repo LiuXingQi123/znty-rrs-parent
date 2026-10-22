@@ -14,6 +14,7 @@ import com.znty.rrs.common.enums.WindCodeChangeResult;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -162,6 +163,12 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE status='updated' AND oprt_source='job'"))
                 .isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isEqualTo(2);
+        for (Long id : jdbc.queryForList("SELECT id FROM rrs_temp_security_code", Long.class)) {
+            TempSecurityCodeBo registration = mapper.queryTempSecurityCodeById(id);
+            // 连续换码分别保存映射，重复事件不追加日志。
+            assertConversionAudit(registration.getId(), registration.getTempSecurityCode(), registration.getSecurityCode());
+        }
     }
 
     /** OBJECT_ID 为 NULL 或空字符串时仍能换码，再次处理同一变更时跳过。 */
@@ -201,6 +208,8 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo("temp_converted");
         assertThat(jdbc.queryForObject("SELECT market FROM rrs_securityinfo WHERE sec_id='REAL_ID'", String.class)).isEqualTo("NIB");
         assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE sec_id='REAL_ID'", String.class)).isEqualTo("L");
+        // Wind 临时来源沿用原登记 ID，成功映射也应关联同一条登记。
+        assertConversionAudit(temp.getId(), "001.IB", "NEW.IB");
     }
 
     /** 主档缺失只返回跳过结果，不补登记、主档或池流水。 */
@@ -210,6 +219,7 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo(WindCodeChangeResult.MISSING_MASTER);
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
     }
 
     /** SEC_ID 对应主档存在但旧码已不存在时，只跳过，连已有待转正登记也不修改。 */
@@ -240,6 +250,7 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code IN ('FORMAL.IB','OTHER.IB')")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
     }
 
     /** temp_converted 新增本次登记，原临时码及历史目标不回退、不覆盖。 */
@@ -256,6 +267,10 @@ public class TempSecurityCodePersistenceTest {
                 + " AND security_code='NEW.IB' AND status='updated' AND oprt_source='job'")).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE wind_code='NEW.IB'", String.class))
                 .isEqualTo("temp_converted");
+        Long registrationId = jdbc.queryForObject("SELECT id FROM rrs_temp_security_code"
+                + " WHERE temp_security_code='FORMAL.IB'", Long.class);
+        // 已转正来源为本次换码另记映射，不污染原临时码的登记历史。
+        assertConversionAudit(registrationId, "FORMAL.IB", "NEW.IB");
     }
 
     /** 单码换码迁移普通池、CRMW 标的和原在途申请，不扩展已有同券其他市场。 */
@@ -294,6 +309,13 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw WHERE wind_code='NEW.IB'")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='FORMAL.IB' AND adjust_batch_no='HISTORY'"))
                 .isEqualTo(1);
+        // 三条原在池记录和四条新码申请各留一条明细，另有一条转换映射；重复事件不增记。
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isEqualTo(8);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log WHERE temp_security_code='FORMAL.IB'"
+                + " AND security_code='NEW.IB' AND security_market='NIB' AND replace_status='success'"))
+                .isEqualTo(8);
+        // 明细 ID 必须能定位到实际换码的调库申请。
+        assertAdjustAuditReferences();
     }
 
     /** 实际写入失败后主档、登记、调库流水和软删池状态全部回滚。 */
@@ -469,6 +491,8 @@ public class TempSecurityCodePersistenceTest {
         assertThat(updated.getOprtSource()).isEqualTo("job");
         // 验证定时入口同样不改两类主档 ID
         assertMasterIds();
+        // 定时转正没有业务引用时也保留成功映射。
+        assertConversionAudit(added.getId(), "001.IB", "FORMAL.IB");
     }
 
     /** 取消发行及软删除仅改变状态，保留外部使用的证券 ID。 */
@@ -543,7 +567,10 @@ public class TempSecurityCodePersistenceTest {
         assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getOprtSource()).isEqualTo("manual");
         // 核对实际写入数量，避免重复记账或部分落地
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log"))
-                .isEqualTo(4);
+                .isEqualTo(5);
+        // 人工转正保留一条主映射和三个市场各自的调入明细。
+        assertConversionAudit(temp.getId(), "001.IB", "FORMAL.IB");
+        assertFormalGroupAudits(3);
         // 通过转正入口提交选中的正式代码
         assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
                 .hasMessageContaining("只有临时状态");
@@ -564,6 +591,79 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
         // 核对实际写入数量，避免重复记账或部分落地
         assertThat(count("SELECT COUNT(*) FROM ip_pool_status")).isZero();
+        // 人工更新必须保留成功映射，不依赖是否存在调库业务。
+        assertConversionAudit(temp.getId(), "001.IB", "FORMAL.IB");
+    }
+
+    /** 核对唯一成功映射关联真实登记，旧新证券资料和时间均与登记一致。 */
+    private void assertConversionAudit(Long registrationId, String oldCode, String newCode) {
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code_update_log"
+                + " WHERE replace_table_name='rrs_temp_security_code' AND replace_record_id=?",
+                Integer.class, registrationId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code_update_log l"
+                + " JOIN rrs_temp_security_code t ON t.id=l.replace_record_id"
+                + " WHERE l.replace_table_name='rrs_temp_security_code' AND t.id=?"
+                + " AND l.temp_security_code=? AND l.security_code=?"
+                + " AND l.temp_security_name=t.temp_security_name AND l.security_name=t.security_name"
+                + " AND l.temp_security_market=t.temp_security_market AND l.security_market=t.security_market"
+                + " AND l.temp_security_type=t.temp_security_type AND l.security_type=t.security_type"
+                + " AND l.replace_status='success' AND l.replace_time=t.update_time AND l.crte_time=t.update_time",
+                Integer.class, registrationId, oldCode, newCode)).isEqualTo(1);
+    }
+
+    /** 核对各市场各有一条有效明细，且日志 ID 指向实际业务申请。 */
+    private void assertFormalGroupAudits(int expectedCount) {
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log WHERE replace_table_name='ip_adjust_log'"))
+                .isEqualTo(expectedCount);
+        assertThat(jdbc.queryForList("SELECT CONCAT(security_code,':',security_market) FROM rrs_temp_security_code_update_log"
+                + " WHERE replace_table_name='ip_adjust_log' AND temp_security_code='001.IB'"
+                + " AND security_type='mtn' AND replace_status='success' AND replace_time IS NOT NULL",
+                String.class)).containsExactlyInAnyOrder("FORMAL.IB:NIB", "FORMAL.SH:SSE", "FORMAL.SZ:SZSE");
+        // 不能仅核对日志条数，还需验证被记录的申请确实存在且身份一致。
+        assertAdjustAuditReferences();
+    }
+
+    /** 替换明细必须指向同一证券身份的真实调库记录，不能误记成池状态主键。 */
+    private void assertAdjustAuditReferences() {
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log l"
+                + " LEFT JOIN ip_adjust_log a ON a.id=l.replace_record_id"
+                + " WHERE l.replace_table_name='ip_adjust_log'"
+                + " AND (a.id IS NULL OR a.security_code<>l.security_code OR a.security_type<>l.security_type)"))
+                .isZero();
+    }
+
+    /** 映射日志在业务明细之后写入，失败时登记、池状态和之前的明细均回滚。 */
+    @Test
+    public void conversionSummaryFailureShouldRollbackEarlierBusinessAudits() throws Exception {
+        setupGroup();
+        addPool(100L, "[]", 10);
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        addActive("001.IB", 100L);
+        jdbc.execute("ALTER TABLE rrs_temp_security_code_update_log ADD CONSTRAINT reject_summary"
+                + " CHECK(replace_table_name <> 'rrs_temp_security_code')");
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
+        assertThat(activeCodes(100L)).containsExactly("001.IB");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
+    }
+
+    /** Wind 无业务引用时映射日志失败，也必须回滚主档更名和新补登记。 */
+    @Test
+    public void windSummaryFailureWithoutBusinessShouldRollbackMasterAndRegistration() {
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        jdbc.execute("ALTER TABLE rrs_temp_security_code_update_log ADD CONSTRAINT reject_summary"
+                + " CHECK(replace_table_name <> 'rrs_temp_security_code')");
+
+        assertThatThrownBy(() -> service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB")))
+                .isInstanceOf(RuntimeException.class);
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='FORMAL.IB' AND sec_id='OFFICIAL_ID'"))
+                .isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
     }
 
     /** 正式组全部在池时只清理临时代码，不重复生成正式组调入记录。 */
@@ -900,7 +1000,10 @@ public class TempSecurityCodePersistenceTest {
         assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getOprtSource()).isEqualTo("job");
         // 核对实际写入数量，避免重复记账或部分落地
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log"))
-                .isEqualTo(4);
+                .isEqualTo(5);
+        // 定时转正与人工转正采用相同的逐市场日志口径。
+        assertConversionAudit(temp.getId(), "001.IB", "FORMAL.IB");
+        assertFormalGroupAudits(3);
     }
 
     /** 转正检查硬限制关系，不能因补齐其他市场而形成双池。 */
@@ -1380,6 +1483,9 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo(3);
         assertThat(count("SELECT COUNT(DISTINCT adjust_batch_no) FROM ip_adjust_log")).isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw")).isEqualTo(3);
+        // CRMW 在池转换也保留唯一映射和逐市场调入明细。
+        assertConversionAudit(temp.getId(), "001.IB", "FORMAL.IB");
+        assertFormalGroupAudits(3);
     }
 
     /** 普通池及 CRMW 同时整组迁移，原审批保留发起人，即时记录统一使用系统调整人。 */
@@ -1714,6 +1820,9 @@ public class TempSecurityCodePersistenceTest {
         assertThat(jdbc.queryForObject("SELECT wind_code FROM ip_adjust_security_snapshot_crmw WHERE id=?", String.class, snapshot.getId()))
                 .isEqualTo("FORMAL.IB");
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_step")).isZero();
+        // CRMW 在途申请逐市场写入明细，映射只记录一次。
+        assertConversionAudit(temp.getId(), "001.IB", "FORMAL.IB");
+        assertFormalGroupAudits(3);
     }
 
     /** 建立指定凭证和实际标的在 CRMW 池的当前状态。 */
@@ -1783,6 +1892,9 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo(3);
         assertThat(jdbc.queryForObject("SELECT wind_code FROM ip_adjust_security_snapshot WHERE id=?", String.class, snapshot.getId()))
                 .isEqualTo("FORMAL.IB");
+        // 普通池两种在途状态都逐市场记账，仍沿用原审批。
+        assertConversionAudit(temp.getId(), "001.IB", "FORMAL.IB");
+        assertFormalGroupAudits(3);
     }
 
     /** 建立三条独立证券主档及同券查询结果。 */

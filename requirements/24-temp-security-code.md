@@ -87,6 +87,8 @@
 
 > 正式证券主数据已存在时**不再 upsert**；历史已终态的调库日志（如 `20`）不改码，保留审计轨迹。
 
+**转换日志口径**：人工更新、`bond_temp_code_replace` 和 `wind_code_sync` 每次实际成功转换，均向 `rrs_temp_security_code_update_log` 固定写入一条旧新代码映射，`replace_table_name='rrs_temp_security_code'`、`replace_record_id` 为本次登记 ID。无在池、无在途业务时也记录该映射，不额外生成调库流水；有业务引用时继续逐条保存原有在途改码、池状态失效、正式调入及互斥配套、CRMW 凭证字段替换明细。映射和明细均校验 INSERT 影响行数为 1，写入失败与整次转换一起回滚。新增、取消发行、删除及 Wind 跳过/重复事件不新增转换日志。
+
 ### 3.3 取消发行 `editTempSecurityCodeToCancelled`（`@Transactional`）
 
 `validateIdReq` → `queryOperableTempSecurityCode(id)`（必须 `temporary`）→ 将临时代码对应 `rrs_securityinfo` 的到期/止息日期改为前一日（`yyyyMMdd`）并置 `security_status='D'` → 更新 `updateTime`/`status=CANCELLED`(`cancelled`)/`oprtSource=manual`/`updtTime` → 返回详情。不写正式证券字段。

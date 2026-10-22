@@ -825,7 +825,10 @@ public class TempSecurityCodeBusinessConverter {
         mapping.setReplaceStatus("success");
         mapping.setReplaceTableName(table);
         mapping.setReplaceRecordId(id);
-        tempSecurityCodeMapper.addTempSecurityCodeUpdateLog(mapping);
+        if (tempSecurityCodeMapper.addTempSecurityCodeUpdateLog(mapping) != 1) {
+            throw new BizException("代码转换明细日志写入失败，表=" + table + "，记录ID=" + id
+                    + "，旧代码=" + mapping.getTempSecurityCode() + "，新代码=" + mapping.getSecurityCode());
+        }
     }
 
     /**
@@ -905,9 +908,8 @@ public class TempSecurityCodeBusinessConverter {
      */
     private void addReplaceLogList(TempSecurityCodeBo replaceBo, String tableName, List<Long> recordIds) {
         for (Long recordId : recordIds) {
-            replaceBo.setReplaceTableName(tableName);
-            replaceBo.setReplaceRecordId(recordId);
-            tempSecurityCodeMapper.addTempSecurityCodeUpdateLog(replaceBo);
+            // 与普通池及 CRMW 标的共用日志写入校验，任一明细失败时整体回滚。
+            addAudit(replaceBo, tableName, recordId);
         }
     }
 
