@@ -96,6 +96,9 @@ public interface TempSecurityCodeMapper {
     /** 根据正式证券代码查询正式证券选项 */
     TempSecurityCodeDto.FormalSecurityOption queryFormalSecurityByCode(@Param("securityCode") String securityCode);
 
+    /** 查询正式证券及同券市场代码的首条调库日志，不区分审批状态、投资池或软删除标志。 */
+    IpAdjustLogBo queryFormalSecurityAdjustHistory(@Param("codes") List<String> codes);
+
     /** 查询证券类型选项 */
     List<TempSecurityCodeDto.SecurityTypeOption> querySecurityTypeList();
 

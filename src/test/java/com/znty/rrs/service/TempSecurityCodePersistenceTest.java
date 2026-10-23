@@ -26,6 +26,8 @@ import java.util.Arrays;
 import java.util.UUID;
 import java.util.Collections;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.CountDownLatch;
@@ -142,6 +144,78 @@ public class TempSecurityCodePersistenceTest {
         if (jdbc != null) {
             jdbc.execute("SET DB_CLOSE_DELAY 0");
         }
+    }
+
+    /** 任一审批状态、调整方向或软删除标志的正式代码日志，均在转正写入前拦截。 */
+    @Test
+    public void formalAdjustHistoryShouldRejectAllStatusesAndDeletedLogs() throws Exception {
+        // 临时代码没有业务引用，也必须执行正式代码历史检查。
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        // 建立一条正式证券流水，逐次改变状态、方向和软删除标志。
+        IpAdjustLogBo history = addPending("FORMAL.IB", 100L, "调入", "20");
+        for (String status : Arrays.asList("-1", "00", "11", "20", "21", "32", "99")) {
+            for (String mode : Arrays.asList("调入", "调出")) {
+                for (int deleted : Arrays.asList(0, 1)) {
+                    jdbc.update("UPDATE ip_adjust_log SET audit_status=?,adjust_mode=?,is_deleted=? WHERE id=?",
+                            status, mode, deleted, history.getId());
+                    assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
+                            .hasMessageContaining("已有调库操作记录", "FORMAL.IB", history.getId().toString());
+                    assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
+                    assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
+                    assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
+                }
+            }
+        }
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE wind_code='001.IB'", String.class))
+                .isEqualTo("L");
+    }
+
+    /** 同券其他市场在其他凭证下的 CRMW 历史也阻断，不依赖临时代码的业务引用。 */
+    @Test
+    public void relatedCrmwHistoryShouldRejectWithoutTemporaryBusiness() throws Exception {
+        // 建立三个市场的同券映射及无业务引用的临时代码。
+        setupGroup();
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        // 正式关联代码仅在另一凭证下有历史操作，且记录已软删除。
+        IpAdjustLogBo history = addPending("FORMAL.SH", 901L, "调出", "99");
+        jdbc.update("UPDATE ip_adjust_log SET pool_type='crmw',crmw_scode='OTHER.IB',is_deleted=1 WHERE id=?",
+                history.getId());
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
+                .hasMessageContaining("已有调库操作记录", "FORMAL.SH");
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
+    }
+
+    /** 新增前置判断只检查日志，只有普通池及 CRMW 池状态时仍沿用原转换流程。 */
+    @Test
+    public void formalPoolStatesWithoutAdjustHistoryShouldNotBlockIdentityConversion() throws Exception {
+        // 临时代码没有业务引用；正式代码仅有当前或历史池状态。
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        jdbc.update("INSERT INTO ip_pool_status(security_code,audit_status,is_deleted) VALUES ('FORMAL.IB','20',0)");
+        jdbc.update("INSERT INTO ip_pool_status_crmw(security_code,audit_status,is_deleted) VALUES ('FORMAL.IB','20',1)");
+
+        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
+
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("updated");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw")).isEqualTo(1);
+    }
+
+    /** Wind 属于已有证券换码，目标代码有历史时不套用临时转正的新增判断。 */
+    @Test
+    public void windCodeChangeShouldKeepExistingBehaviorWithTargetAdjustHistory() {
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+        // 建立目标新码的历史操作，不创建当前持仓或在途业务。
+        addPending("NEW.IB", 100L, "调出", "21");
+
+        assertThat(service.editWindCodeChangeByJob(windChange("E1", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB")))
+                .isEqualTo(WindCodeChangeResult.UPDATED);
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'", String.class))
+                .isEqualTo("NEW.IB");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
     }
 
     /** official 主档原地更名，只补登记，重复事件与连续更名均不重复写入。 */
@@ -740,9 +814,9 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
     }
 
-    /** 正式组全部在池时只清理临时代码，不重复生成正式组调入记录。 */
+    /** 正式组全部在池且有操作日志时，提前拒绝，不再清理临时代码。 */
     @Test
-    public void completeExistingGroupShouldOnlyRemoveTemporaryState() throws Exception {
+    public void completeExistingGroupHistoryShouldRejectConversion() throws Exception {
         // 建立同券三个市场的正式主数据和关联关系
         setupGroup();
         // 配置本场景的普通目标池及容量
@@ -757,15 +831,11 @@ public class TempSecurityCodePersistenceTest {
         addActive("FORMAL.SH", 100L);
         // 建立转换前真实的在池状态
         addActive("FORMAL.SZ", 100L);
-        // 通过转正入口提交选中的正式代码
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        // 核对数据库中的实际在池代码集合
-        assertThat(activeCodes(100L)).hasSize(3);
-        // 核对实际写入数量，避免重复记账或部分落地
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(5);
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
-    /** 不自动补修部分市场在池的数据异常，登记状态也不能改变。 */
+    /** 正式组部分在池且有操作日志时，先因历史操作拒绝且不写入。 */
     @Test
     public void partialExistingGroupShouldRejectWithoutWrites() throws Exception {
         // 建立同券三个市场的正式主数据和关联关系
@@ -778,12 +848,8 @@ public class TempSecurityCodePersistenceTest {
         addActive("001.IB", 100L);
         // 建立转换前真实的在池状态
         addActive("FORMAL.IB", 100L);
-        // 通过转正入口提交选中的正式代码
-        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
-                .hasMessageContaining("未整组在池");
-        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
-        // 核对实际写入数量，避免重复记账或部分落地
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(2);
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
     /** 在途调入共享原审批批次和快照信息，不创建池状态和审批步骤。 */
@@ -904,9 +970,9 @@ public class TempSecurityCodePersistenceTest {
         assertThat(activeCodes(100L)).containsExactly("FORMAL.IB", "FORMAL.SH", "FORMAL.SZ");
     }
 
-    /** 已完整持有正式组时，只移除T，不重跑旧持仓的市场或池关系准入。 */
+    /** 正式组已在池且有日志时，不进入原只清理临时代码的转换分支。 */
     @Test
-    public void existingGroupCleanupShouldNotRecheckInboundRules() throws Exception {
+    public void existingGroupCleanupShouldRejectFormalHistory() throws Exception {
         // 建立同券正式代码组
         setupGroup();
         // P市场配置已变化，但正式组和T仍保留当前状态
@@ -924,14 +990,8 @@ public class TempSecurityCodePersistenceTest {
             addActive(code, 101L);
         }
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(100,'in_mutex',101,0)");
-        // 只移除T，不因旧持仓配置变化阻断清理
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        // P与Q保留原正式组，不重复生成正式调入记录
-        assertThat(activeCodes(100L)).hasSize(3);
-        // 核对另一池保持原状态
-        assertThat(activeCodes(101L)).hasSize(3);
-        // 原7条记录只新增T调出一条
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(8);
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
     /** 同券关联代码缺主数据时保留错误定位，不静默跳过。 */
@@ -953,7 +1013,7 @@ public class TempSecurityCodePersistenceTest {
         assertThat(activeCodes(100L)).containsExactly("001.IB");
     }
 
-    /** 正式关联代码有独立申请时不得静默并入原流程。 */
+    /** 正式关联代码有独立申请时，在原转换检查之前拒绝且不改原流程。 */
     @Test
     public void independentPendingApplicationShouldRejectConversion() throws Exception {
         // 建立同券三个市场的正式主数据和关联关系
@@ -966,17 +1026,13 @@ public class TempSecurityCodePersistenceTest {
         addActive("001.IB", 100L);
         // 建立需要保留审批进度的原申请
         addPending("FORMAL.SH", 100L, "调入", "00");
-        // 通过转正入口提交选中的正式代码
-        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
-                .hasMessageContaining("正式代码在信用债大库存在流程中数据").hasMessageContaining("FORMAL.SH")
-                .hasMessageContaining("投资池：测试普通池").hasMessageNotContaining("poolId=");
-        // 核对数据库中的实际在池代码集合
-        assertThat(activeCodes(100L)).containsExactly("001.IB");
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
-    /** 非信用债大库的独立在途申请不阻断本次身份转换，也不被自动合并。 */
+    /** 非信用债池的正式代码申请同样阻断转正，不修改原独立流程。 */
     @Test
-    public void nonCreditPendingApplicationShouldRemainIndependent() throws Exception {
+    public void nonCreditPendingApplicationShouldRejectConversion() throws Exception {
         // 建立同券正式代码组
         setupGroup();
         // 配置本次转换目标池
@@ -991,20 +1047,13 @@ public class TempSecurityCodePersistenceTest {
         // 创建另一池的独立申请，保留其原主键和流程
         IpAdjustLogBo independent = addPending("FORMAL.SH", 101L, "调入", "00");
         jdbc.update("UPDATE ip_adjust_log SET pool_type='observe' WHERE id=?", independent.getId());
-        // 本次更新只迁移T在目标池的状态
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        // 正式组正常承接目标池
-        assertThat(activeCodes(100L)).hasSize(3);
-        assertThat(jdbc.queryForObject("SELECT security_code FROM ip_adjust_log WHERE id=?", String.class, independent.getId()))
-                .isEqualTo("FORMAL.SH");
-        // 原独立审批仍保留一条，不被扩成新的整组申请
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE target_pool_id=101 AND audit_status='00'"))
-                .isEqualTo(1);
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
-    /** 无关池的数据异常不阻断本次转换，也不在转正过程中修补无关数据。 */
+    /** 正式证券在无关池有操作日志时，也必须提前拒绝转正。 */
     @Test
-    public void unrelatedPartialPoolShouldNotBlockConversion() throws Exception {
+    public void unrelatedPoolAdjustHistoryShouldRejectConversion() throws Exception {
         // 建立同券正式代码组
         setupGroup();
         // 本次转换只涉及P
@@ -1017,12 +1066,8 @@ public class TempSecurityCodePersistenceTest {
         addActive("001.IB", 100L);
         // 无关Q的残缺数据留待单独治理
         addActive("FORMAL.IB", 101L);
-        // 本次仅转换P
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        // P整组转换完成
-        assertThat(activeCodes(100L)).hasSize(3);
-        // Q保持原样，不自动修补
-        assertThat(activeCodes(101L)).containsExactly("FORMAL.IB");
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
     /** 后续代码的真实数据库写入失败时，主状态和之前已写的日志全部回滚。 */
@@ -1105,23 +1150,23 @@ public class TempSecurityCodePersistenceTest {
         assertThat(activeCodes(101L)).containsExactly("001.IB");
     }
 
-    /** 临时码申请调入五级库，正式组已在一级库：补同批互斥调出，审批前不动持仓。 */
+    /** 临时码申请调入五级库，正式组在一级库已有日志时拒绝，保留原申请及步骤。 */
     @Test
-    public void pendingInboundShouldAppendMutexOutAndApplyTogetherOnApproval() throws Exception {
-        // 核对流程中状态的整组申请，并模拟原审批的批次落池操作
-        assertPendingMutexTransfer("00", true);
+    public void pendingInboundShouldRejectFormalMutexHistory() throws Exception {
+        // 核对流程中申请不会被新增判断后的转换分支修改。
+        assertPendingMutexHistoryRejected("00");
     }
 
-    /** 驳回待修改的原申请同样补互斥项，保留待修改状态和原审批步骤。 */
+    /** 驳回待修改的临时申请遇到正式代码已有日志时拒绝，保留原状态和审批步骤。 */
     @Test
-    public void pendingModificationShouldAppendMutexOutWithoutApproving() throws Exception {
-        // 不提前审批待修改申请
-        assertPendingMutexTransfer("11", false);
+    public void pendingModificationShouldRejectFormalMutexHistory() throws Exception {
+        // 核对驳回待修改申请同样不会进入后续转换。
+        assertPendingMutexHistoryRejected("11");
     }
 
-    /** 池关系有方向，其他池配置目标池为调入限制池时，不反向阻止本次调入。 */
+    /** 正式证券即使不受反向入池限制影响，已有日志时仍须拒绝转正。 */
     @Test
-    public void reverseInboundRestrictionShouldNotBlockConversion() throws Exception {
+    public void reverseInboundRestrictionShouldNotBypassFormalHistory() throws Exception {
         // 建立正式组当前在一级库、临时码申请调入五级库的场景
         setupGroup();
         addPool(100L, "[]", 10);
@@ -1134,16 +1179,13 @@ public class TempSecurityCodePersistenceTest {
         // 原临时代码调入申请
         addPending("001.IB", 100L, "调入", "00");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(101,'in_restrict',100,0)");
-        // 仅按目标池自身配置判断，不自动生成反向调出
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        assertThat(activeCodes(101L)).hasSize(3);
-        assertThat(activeCodes(100L)).isEmpty();
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_batch_no='ORIGINAL'")).isEqualTo(3);
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
-    /** 目标池自身的调入限制仍阻断转换，不能被当成互斥配套调出。 */
+    /** 正式证券既有日志又有入池限制时，先因操作日志拒绝且不写入。 */
     @Test
-    public void inboundRestrictionShouldStillRejectConversion() throws Exception {
+    public void inboundRestrictionShouldRejectEarlierFormalHistory() throws Exception {
         // 准备受调入限制约束的正式组
         setupGroup();
         addPool(100L, "[]", 10);
@@ -1158,18 +1200,13 @@ public class TempSecurityCodePersistenceTest {
         // 原临时申请尚未审批
         addPending("001.IB", 100L, "调入", "00");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(100,'in_restrict',101,0)");
-        // 硬限制必须拒绝，登记和原申请均不改变
-        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
-                .hasMessageContaining("池关系冲突").hasMessageContaining("投资池：五级库")
-                .hasMessageContaining("关联投资池：一级库").hasMessageNotContaining("poolId=")
-                .hasMessageNotContaining("relationPoolId=");
-        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='001.IB'")).isEqualTo(1);
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
-    /** 原批次已经带有互斥调出时，仅将原申请整组换码，不重复补调出。 */
+    /** 原批次已有正式代码调出申请时，前置检查拒绝且不改原批次。 */
     @Test
-    public void existingPendingMutexOutShouldNotBeDuplicated() throws Exception {
+    public void existingPendingMutexOutShouldRejectFormalHistory() throws Exception {
         // T与正式组均在原池，原审批已经包含转池的出入两项
         setupGroup();
         addPool(100L, "[]", 10);
@@ -1185,18 +1222,13 @@ public class TempSecurityCodePersistenceTest {
         addPending("001.IB", 100L, "调入", "00");
         addPending("001.IB", 101L, "调出", "00");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(100,'in_mutex',101,0)");
-        // 转正只需扩展原有两条申请
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_batch_no='ORIGINAL'")).isEqualTo(6);
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_batch_no='ORIGINAL' AND adjust_mode='调出'"))
-                .isEqualTo(3);
-        assertThat(activeCodes(101L)).hasSize(3);
-        assertThat(activeCodes(100L)).isEmpty();
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
-    /** 当前已在池的T转正时，正式组原互斥持仓与新入池一起生效，操作人为系统。 */
+    /** 正式证券在互斥池已有操作日志时，不执行临时调出或互斥调出。 */
     @Test
-    public void activeConversionShouldApplyMutexOutImmediately() throws Exception {
+    public void activeConversionShouldRejectFormalMutexPoolHistory() throws Exception {
         // 当前状态转换不创建新的审批申请
         setupGroup();
         addPool(100L, "[]", 10);
@@ -1211,24 +1243,13 @@ public class TempSecurityCodePersistenceTest {
         jdbc.update("UPDATE ip_pool_status SET target_pool_name='一级库' WHERE target_pool_id=101");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(100,'in_mutex',101,0)");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(100,'source',101,0)");
-        // 原池可作为来源，同时执行互斥调出
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        assertThat(activeCodes(100L)).hasSize(3);
-        assertThat(activeCodes(101L)).isEmpty();
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_batch_no<>'HISTORY' AND adjuster_id='0'"
-                + " AND audit_status='20'")).isEqualTo(7);
-        assertThat(count("SELECT COUNT(DISTINCT adjust_batch_no) FROM ip_adjust_log WHERE adjust_batch_no<>'HISTORY'"))
-                .isEqualTo(1);
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot")).isEqualTo(6);
-        assertThat(jdbc.queryForList("SELECT adjust_reason FROM ip_adjust_log WHERE target_pool_id=101"
-                + " AND adjust_mode='调出'", String.class))
-                .hasSize(3).allSatisfy(reason -> assertThat(reason)
-                        .contains("互斥配套调出池：一级库").doesNotContain("互斥配套调出池：101"));
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
-    /** 互斥配套调出池的调出限制仍须满足，不能为完成调入而绕过。 */
+    /** 正式证券既有调库历史又有互斥调出限制时，先因日志拒绝，保留全部原数据。 */
     @Test
-    public void mutexOutRestrictionShouldRejectConversion() throws Exception {
+    public void mutexOutRestrictionShouldRejectEarlierFormalHistory() throws Exception {
         // 原持仓在Q和R，P调入要出Q，但Q配置在R时不可调出
         setupGroup();
         addPool(100L, "[]", 10);
@@ -1244,16 +1265,13 @@ public class TempSecurityCodePersistenceTest {
         addPending("001.IB", 100L, "调入", "00");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(100,'in_mutex',101,0)");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(101,'out_restrict',102,0)");
-        // 配套调出受阻时整次转换失败
-        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
-                .hasMessageContaining("池关系冲突");
-        assertThat(activeCodes(101L)).hasSize(3);
-        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
-    /** 未发生互斥调出的池，其下游关系池异常不能阻断本次转换。 */
+    /** 正式代码所在池与实际互斥调出无关时，其操作日志仍阻断转正。 */
     @Test
-    public void unusedMutexPoolRelationsShouldNotBlockConversion() throws Exception {
+    public void unusedMutexPoolRelationsShouldNotBypassFormalHistory() throws Exception {
         // Q没有正式组持仓，不会生成互斥调出，R的存量异常与本次转换无关
         setupGroup();
         addPool(100L, "[]", 10);
@@ -1266,10 +1284,8 @@ public class TempSecurityCodePersistenceTest {
         addPending("001.IB", 100L, "调入", "00");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(100,'in_mutex',101,0)");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(101,'out_restrict',102,0)");
-        // 本次只换码和补其他市场申请，不生成Q调出，也不修补R
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        assertThat(activeCodes(102L)).containsExactly("FORMAL.IB");
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_batch_no='ORIGINAL'")).isEqualTo(3);
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
     /** 新增互斥调出写入中途失败时，原申请、快照、登记与所有持仓统一回滚。 */
@@ -1330,7 +1346,7 @@ public class TempSecurityCodePersistenceTest {
                         .doesNotContain("调入池：200", "互斥配套调出池：201"));
     }
 
-    /** CRMW 配套调出池已有同凭证正式标的独立流程时，也不能自动合并审批。 */
+    /** CRMW 互斥配套池存在正式代码独立申请时，前置检查拒绝且不写入。 */
     @Test
     public void crmwMutexPoolIndependentPendingShouldRejectConversion() throws Exception {
         // 原申请本来只涉及目标池，转正后新增配套调出池也需要检查流程冲突
@@ -1344,12 +1360,8 @@ public class TempSecurityCodePersistenceTest {
         independent.setAdjustMode("调出");
         independent.setAdjustBatchNo("INDEPENDENT");
         adjustMapper.addAdjustLog(independent);
-        // 保留两条原流程，整次转正失败
-        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
-                .hasMessageContaining("正式代码在CRMW库存在流程中数据");
-        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_batch_no='CRMW_MUTEX' AND security_code='001.IB'"))
-                .isEqualTo(1);
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
     /** 定时转正补互斥申请仍保留原发起人，不写调整意见。 */
@@ -1428,8 +1440,8 @@ public class TempSecurityCodePersistenceTest {
         return temp;
     }
 
-    /** 验证原批次整组互斥转池，保留发起人、业务快照、审批状态和已完成步骤。 */
-    private void assertPendingMutexTransfer(String status, boolean approve) throws Exception {
+    /** 验证正式组在互斥池已有日志时，原调入申请、步骤和业务快照保持不变。 */
+    private void assertPendingMutexHistoryRejected(String status) throws Exception {
         // P代表五级库，Q代表一级库
         setupGroup();
         addPool(100L, "[]", 10);
@@ -1453,34 +1465,8 @@ public class TempSecurityCodePersistenceTest {
                 original.getId());
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(100,'in_mutex',101,0)");
         jdbc.update("INSERT INTO ip_pool_relation(pool_id,relation_type,relation_pool_id,is_deleted) VALUES(101,'in_mutex',100,0)");
-        // 转正后原审批批次应包含3个市场调入和3个市场互斥调出
-        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        List<IpAdjustLogBo> logs = adjustMapper.queryAdjustLogListForAudit(original.getId(), "ORIGINAL");
-        assertThat(logs).hasSize(6);
-        assertThat(logs).extracting("adjusterId").containsOnly("1");
-        assertThat(logs).extracting("flowId").containsOnly(9L);
-        assertThat(logs).extracting("auditStatus").containsOnly(status);
-        assertThat(jdbc.queryForList("SELECT adjust_reason FROM ip_adjust_log WHERE adjust_batch_no='ORIGINAL'"
-                + " AND adjust_mode='调出'", String.class))
-                .hasSize(3).allSatisfy(reason -> assertThat(reason)
-                        .contains("调入池：五级库", "互斥配套调出池：一级库")
-                        .doesNotContain("调入池：100", "互斥配套调出池：101"));
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_batch_no='ORIGINAL'"
-                + " AND target_pool_id=101 AND adjust_mode='调出'")).isEqualTo(3);
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE analysis='转池原申请分析'"))
-                .isEqualTo(6);
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_step WHERE step_status='20'")).isEqualTo(1);
-        assertThat(activeCodes(100L)).isEmpty();
-        assertThat(activeCodes(101L)).hasSize(3);
-        if (approve) {
-            // 复用原审批完成时的批次更新与池状态落地入口，核对新增调出能随原批次生效
-            adjustMapper.editActiveAdjustLogAuditStatus(original.getId(), "ORIGINAL", "20");
-            SecurityPoolAdjustService poolService = new SecurityPoolAdjustService();
-            ReflectionTestUtils.setField(poolService, "securityPoolAdjustMapper", adjustMapper);
-            poolService.applyPoolStatusChanges(logs);
-            assertThat(activeCodes(100L)).hasSize(3);
-            assertThat(activeCodes(101L)).isEmpty();
-        }
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
     /** 历史已通过但不在池的记录保留原临时代码。 */
@@ -1777,7 +1763,7 @@ public class TempSecurityCodePersistenceTest {
         assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
     }
 
-    /** 同凭证同目标池的正式市场已有流程中数据时，不合并原审批。 */
+    /** 正式关联代码在 CRMW 池已有申请时，前置日志检查拒绝并保留原审批。 */
     @Test
     public void crmwFormalPendingConflictShouldRejectConversion() throws Exception {
         // 准备正式组和临时标的原业务
@@ -1794,12 +1780,8 @@ public class TempSecurityCodePersistenceTest {
         conflict.setAuditStatus("00");
         conflict.setAdjustBatchNo("INDEPENDENT");
         adjustMapper.addAdjustLog(conflict);
-        // 转正不能自动合并独立审批
-        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
-                .hasMessageContaining("CRMW库存在流程中数据").hasMessageContaining("FORMAL.SH");
-        assertThat(jdbc.queryForObject("SELECT security_code FROM ip_adjust_log WHERE id=?", String.class, pending.getId()))
-                .isEqualTo("001.IB");
-        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("temporary");
+        // 正式证券已有日志时提前拒绝，全部原业务记录保持不变。
+        assertFormalHistoryRejected(temp.getId());
     }
 
     /** CRMW 多池逐池整组转换，同次即时记录共用批次。 */
@@ -2033,6 +2015,28 @@ public class TempSecurityCodePersistenceTest {
         log.setAdjusterId("1");
         log.setAdjusterName("测试人员");
         return log;
+    }
+
+    /** 验证正式代码历史拦截后，登记、主档、日志、池状态、步骤及快照全部保持原样。 */
+    private void assertFormalHistoryRejected(Long tempId) {
+        List<String> tables = Arrays.asList("rrs_temp_security_code", "rrs_securityinfo", "ip_adjust_log",
+                "ip_pool_status", "ip_pool_status_crmw", "ip_adjust_step", "ip_adjust_security_snapshot",
+                "ip_adjust_security_snapshot_crmw", "rrs_temp_security_code_update_log");
+        List<List<Map<String, Object>>> before = new ArrayList<>();
+        for (String table : tables) {
+            before.add(jdbc.queryForList("SELECT * FROM " + table + " ORDER BY "
+                    + ("rrs_securityinfo".equals(table) ? "wind_code" : "id")));
+        }
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(tempId, "FORMAL.IB")))
+                .hasMessageContaining("已有调库操作记录", "FORMAL.");
+
+        for (int index = 0; index < tables.size(); index++) {
+            String table = tables.get(index);
+            assertThat(jdbc.queryForList("SELECT * FROM " + table + " ORDER BY "
+                    + ("rrs_securityinfo".equals(table) ? "wind_code" : "id")))
+                    .as("前置拒绝后表 %s 保持不变", table).isEqualTo(before.get(index));
+        }
     }
 
     /** 查询某池当前有效代码，验证不存在部分市场在池。 */

@@ -8,8 +8,10 @@ import com.znty.rrs.common.enums.WindCodeChangeResult;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.schedule.WindCodeChangeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
@@ -26,6 +28,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import javax.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -382,8 +386,28 @@ public class TempSecurityCodeService {
             TempSecurityCodeBo oldBo,
             TempSecurityCodeDto.FormalSecurityOption formalSecurity,
             String oprtSource) {
+        // 转正前检查正式证券及同券市场代码，已有调库日志时不进入后续转换。
+        validateFormalSecurityAdjustHistory(formalSecurity.getSecurityCode());
         // 原人工和债券临时代码任务继续使用同券整组模式。
         return editTempSecurityCodeToUpdated(oldBo, formalSecurity, oprtSource, false);
+    }
+
+    /**
+     * 正式证券及同券市场代码存在任何调库日志时，拒绝临时代码转正。
+     *
+     * @param securityCode 本次选定的正式证券代码
+     */
+    private void validateFormalSecurityAdjustHistory(String securityCode) {
+        Set<String> codes = new LinkedHashSet<>();
+        codes.add(securityCode);
+        for (SecurityMarketDto related : securityMarketService.queryRelatedMarketCodes(securityCode)) {
+            codes.add(related.getWindCode());
+        }
+        IpAdjustLogBo history = tempSecurityCodeMapper.queryFormalSecurityAdjustHistory(new ArrayList<>(codes));
+        if (history != null) {
+            throw new BizException("正式证券已有调库操作记录，不能用于临时代码转正，证券代码："
+                    + history.getSecurityCode() + "，调库记录ID：" + history.getId());
+        }
     }
 
     /**

@@ -240,6 +240,17 @@
         LIMIT 1
     </select>
 
+    <!-- 转正前检查正式代码组的调库日志，所有审批状态及软删除记录均阻断，不查询池状态 -->
+    <select id="queryFormalSecurityAdjustHistory" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT id
+               ,security_code
+        FROM ip_adjust_log
+        WHERE security_code IN
+        <foreach collection="codes" item="code" open="(" separator="," close=")">#{code}</foreach>
+        ORDER BY id
+        LIMIT 1
+    </select>
+
     <!-- 查询证券类型选项 -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$SecurityTypeOption">
         SELECT security_type

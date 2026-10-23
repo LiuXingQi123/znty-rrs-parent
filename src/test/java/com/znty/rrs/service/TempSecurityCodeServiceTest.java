@@ -8,6 +8,7 @@ import com.znty.rrs.entity.bo.IpPoolStatusBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
+import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
 import com.znty.rrs.exception.BizException;
@@ -197,6 +198,72 @@ public class TempSecurityCodeServiceTest {
         verify(adjustMapper, times(1)).addAdjustLog(any(IpAdjustLogBo.class));
         verify(mapper).deleteOrdinaryPoolStatusForConversion(eq(88L), any(Date.class));
         verify(adjustMapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
+    }
+
+    /** 正式证券已有日志时，在读取转换计划及写入任何业务记录之前拒绝更新。 */
+    @Test
+    public void manualConversionShouldRejectFormalAdjustHistoryBeforeConversion() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        TempSecurityCodeService service = buildService(mapper, adjustMapper);
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        IpAdjustLogBo history = new IpAdjustLogBo();
+        history.setId(27L);
+        history.setSecurityCode("110001.IB");
+        when(mapper.queryFormalSecurityAdjustHistory(Collections.singletonList("110001.IB"))).thenReturn(history);
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(buildUpdateReq()))
+                .isInstanceOf(BizException.class).hasMessageContaining("已有调库操作记录", "110001.IB", "27");
+        verify(mapper, never()).queryOrdinaryConversionPoolIdList(any());
+        verify(mapper, never()).editTempSecurityCodeToUpdated(any());
+        verify(mapper, never()).addTempSecurityCodeUpdateLog(any());
+        verify(mapper, never()).editTempSecurityInfoToDisabled(any());
+        verify(adjustMapper, never()).addAdjustLog(any());
+    }
+
+    /** 临时证券没有业务引用时，也检查同券其他市场代码，并对重复代码去重。 */
+    @Test
+    public void conversionShouldRejectRelatedMarketHistoryWithoutTemporaryBusiness() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        SecurityMarketService markets = (SecurityMarketService) ReflectionTestUtils.getField(service, "securityMarketService");
+        SecurityMarketDto selected = new SecurityMarketDto();
+        selected.setWindCode("110001.IB");
+        SecurityMarketDto related = new SecurityMarketDto();
+        related.setWindCode("110001.SH");
+        when(markets.queryRelatedMarketCodes("110001.IB")).thenReturn(Arrays.asList(selected, related, related));
+        IpAdjustLogBo history = new IpAdjustLogBo();
+        history.setId(28L);
+        history.setSecurityCode("110001.SH");
+        when(mapper.queryFormalSecurityAdjustHistory(Arrays.asList("110001.IB", "110001.SH"))).thenReturn(history);
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(buildUpdateReq()))
+                .isInstanceOf(BizException.class).hasMessageContaining("已有调库操作记录", "110001.SH", "28");
+        verify(mapper, never()).queryOrdinaryConversionPoolIdList(any());
+        verify(mapper, never()).editTempSecurityCodeToUpdated(any());
+    }
+
+    /** 债券临时代码定时转正与人工转正使用同一前置日志判断。 */
+    @Test
+    public void jobConversionShouldRejectFormalAdjustHistoryBeforeConversion() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
+        TempSecurityCodeBo oldBo = buildOldBo();
+        oldBo.setSecurityCode("110001.IB");
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        IpAdjustLogBo history = new IpAdjustLogBo();
+        history.setId(29L);
+        history.setSecurityCode("110001.IB");
+        when(mapper.queryFormalSecurityAdjustHistory(Collections.singletonList("110001.IB"))).thenReturn(history);
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdatedByJob(1L))
+                .isInstanceOf(BizException.class).hasMessageContaining("已有调库操作记录", "110001.IB");
+        verify(mapper, never()).queryOrdinaryConversionPoolIdList(any());
+        verify(mapper, never()).editTempSecurityCodeToUpdated(any());
     }
 
     /** 验证正式证券不存在时转正失败。 */
