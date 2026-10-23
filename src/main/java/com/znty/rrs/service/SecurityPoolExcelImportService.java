@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -1172,6 +1173,14 @@ public class SecurityPoolExcelImportService {
                 si.setAdjustmentNote(ci.getAdjustNote());
                 submitItems.add(si);
             }
+            // 复用本次校验后传入的实际代码集合，提交阶段不再查询同券关系
+            submitReq.setRelatedMarketCodes(group.stream().map(item -> item.getSecurityCode())
+                    .filter(code -> code != null && !code.equals(submitReq.getSecurityCode())).distinct()
+                    .map(code -> {
+                        SecurityMarketDto related = new SecurityMarketDto();
+                        related.setWindCode(code);
+                        return related;
+                    }).collect(Collectors.toList()));
             submitReq.setItems(submitItems);
             submitRequests.add(submitReq);
         }

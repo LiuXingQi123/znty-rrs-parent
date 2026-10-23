@@ -2,6 +2,7 @@ package com.znty.rrs.entity.forbiddenabspooladjust;
 
 
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.common.SecurityMarketDto;
 import lombok.Data;
 
 import java.util.List;
@@ -14,6 +15,9 @@ public class ForbiddenAbsPoolAdjustSubmitReq {
 
     /** 证券代码 */
     private String securityCode;
+
+    /** 前端已查询的同券关联代码，提交时直接复用，不重新查询关联关系 */
+    private List<SecurityMarketDto> relatedMarketCodes;
 
     /** 证券简称 */
     private String securityShortName;

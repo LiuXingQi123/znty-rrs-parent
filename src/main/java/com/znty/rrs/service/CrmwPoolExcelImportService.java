@@ -19,6 +19,7 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
+import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.crmwpooladjust.AdjustSubmitDto;
@@ -49,6 +50,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * CRMW 池 Excel 导入服务
@@ -596,6 +598,14 @@ public class CrmwPoolExcelImportService {
             si.setAdjustmentNote(ci.getAdjustNote());
             submitItems.add(si);
         }
+        // 复用本次校验后传入的实际代码集合，提交阶段不再查询同券关系
+        submitReq.setRelatedMarketCodes(group.stream().map(item -> item.getSecurityCode())
+                .filter(code -> code != null && !code.equals(submitReq.getSecurityCode())).distinct()
+                .map(code -> {
+                    SecurityMarketDto related = new SecurityMarketDto();
+                    related.setWindCode(code);
+                    return related;
+                }).collect(Collectors.toList()));
         submitReq.setItems(submitItems);
         return submitReq;
     }

@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.znty.rrs.common.PageResult;
@@ -527,6 +528,14 @@ public class BatchSecurityPoolAdjustService {
             submitItem.setMaterialSourceAttachmentIds(item.getMaterialSourceAttachmentIds());
             submitItems.add(submitItem);
         }
+        // 复用本次校验后传入的实际代码集合，提交阶段不再查询同券关系
+        submitReq.setRelatedMarketCodes(items.stream().map(item -> item.getSecurityCode())
+                .filter(code -> code != null && !code.equals(submitReq.getSecurityCode())).distinct()
+                .map(code -> {
+                    SecurityMarketDto related = new SecurityMarketDto();
+                    related.setWindCode(code);
+                    return related;
+                }).collect(Collectors.toList()));
         submitReq.setItems(submitItems);
         return submitReq;
     }

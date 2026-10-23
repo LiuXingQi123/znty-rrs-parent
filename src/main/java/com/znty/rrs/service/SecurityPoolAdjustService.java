@@ -1065,6 +1065,8 @@ public class SecurityPoolAdjustService {
         // ══ 第二阶段：参数初始化 ══
         // 读取证券主档并重新复核所选评级主体
         SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
+        // 同券跨市场调入必须完整提交，禁止跳过校验失败的关联券
+        validateRelatedInboundItemsOnSubmit(req);
         // 检查本次涉及的顶级池组是否已有活动流程
         checkSubmitPendingPoolGroups(req, shared.poolMap);
         // 调入须同步调出互斥池：缺失或调出不可行则整单拒绝，防止双池
@@ -1271,6 +1273,38 @@ public class SecurityPoolAdjustService {
                 throw new BizException("证券[" + securityCode + "]在投资池组["
                         + (group != null ? group.getPoolName() : groupId)
                         + "]存在进行中的调库流程，请等待流程结束后再发起调库");
+            }
+        }
+    }
+
+    /** 同券各市场代码须同池同向调入，防止客户端仅提交部分通过项。 */
+    private void validateRelatedInboundItemsOnSubmit(SecurityPoolAdjustSubmitReq req) {
+        Map<Long, Set<String>> inboundCodes = new LinkedHashMap<>();
+        for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if (AdjustMode.IN.getCode().equals(item.getAdjustMode())) {
+                // 使用明细实际代码，兼容未传明细代码的单券请求
+                inboundCodes.computeIfAbsent(item.getTargetPoolId(), key -> new HashSet<>())
+                        .add(resolveItemSecurityCode(req, item));
+            }
+        }
+        if (inboundCodes.isEmpty()) {
+            return;
+        }
+        List<SecurityMarketDto> relatedCodes = req.getRelatedMarketCodes();
+        if (relatedCodes == null || relatedCodes.isEmpty()) {
+            return;
+        }
+        Set<String> requiredCodes = new HashSet<>();
+        requiredCodes.add(req.getSecurityCode());
+        for (SecurityMarketDto related : relatedCodes) {
+            requiredCodes.add(related.getWindCode());
+        }
+        for (Map.Entry<Long, Set<String>> entry : inboundCodes.entrySet()) {
+            if (!entry.getValue().containsAll(requiredCodes)) {
+                Set<String> missingCodes = new TreeSet<>(requiredCodes);
+                missingCodes.removeAll(entry.getValue());
+                throw new BizException("同券跨市场调入必须整组提交，目标池[" + entry.getKey()
+                        + "]缺少证券：" + String.join("、", missingCodes) + "，请重新校验");
             }
         }
     }
@@ -5248,6 +5282,8 @@ public class SecurityPoolAdjustService {
         shared.setRequestInPoolIds(mainShared.getRequestInPoolIds());
         shared.setRequestOutPoolIds(mainShared.getRequestOutPoolIds());
         shared.setFundRate(mainReq.getFundRate());
+        // 同券各市场沿用本次申请的矩阵放开选择，其他规则仍逐券校验
+        shared.setReleaseRules(mainShared.isReleaseRules());
         return shared;
     }
 
@@ -5367,6 +5403,29 @@ public class SecurityPoolAdjustService {
             }
         }
         resultItems.addAll(relatedResults);
+        // 任一市场失败反向阻断整个调库组，避免只提交部分市场
+        propagateRelatedMarketFailure(resultItems);
+    }
+
+    /** 汇总跨市场失败原因后统一阻断同组，保留原始失败项的具体原因。 */
+    private void propagateRelatedMarketFailure(List<AdjustCheckDto.CheckResultItem> resultItems) {
+        Map<String, List<String>> failuresByGroup = new HashMap<>();
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            if (item.isCanAdjust()) {
+                continue;
+            }
+            List<String> failures = failuresByGroup.computeIfAbsent(item.getAdjustGroupKey(), key -> new ArrayList<>());
+            failures.add("同券跨市场证券[" + item.getSecurityCode() + "]在投资池[" + item.getPoolName()
+                    + "]" + item.getAdjustMode() + "校验未通过，整组不可调整");
+            failures.addAll(item.getFailReasons());
+        }
+        for (AdjustCheckDto.CheckResultItem item : resultItems) {
+            List<String> failures = failuresByGroup.get(item.getAdjustGroupKey());
+            if (item.isCanAdjust() && failures != null) {
+                item.setCanAdjust(false);
+                item.setFailReasons(new ArrayList<>(failures));
+            }
+        }
     }
 
     /** 构建投资池全路径名称 */
