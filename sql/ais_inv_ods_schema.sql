@@ -1,5 +1,5 @@
 -- ============================================================
--- AIS 投资 ODS 库 - Wind 债券发行人、评级、公司财务指标、跨市场证券代码与代码变更表建表脚本
+-- AIS 投资 ODS 库 - Wind 公司简介、债券发行人、评级、公司财务指标、跨市场证券代码与代码变更表建表脚本
 -- MySQL version: 8.0.33
 -- 说明：表结构与公司原有 wind_cbondissuer / wind_cbondissuerrating 表保持一致
 -- ============================================================
@@ -11,6 +11,8 @@ SET NAMES utf8mb4;
 -- ----------------------------------------------------------------------------
 -- 删除旧表（若存在）
 -- ----------------------------------------------------------------------------
+-- 删除Wind 公司简介表（全量主体）
+DROP TABLE IF EXISTS `wind_compintroduction`;
 -- 删除Wind 中国债券 Wind 代码变更表
 DROP TABLE IF EXISTS `wind_cbondchangewindcode`;
 -- 删除Wind 公司财务指标表
@@ -227,3 +229,41 @@ CREATE TABLE `wind_cbondchangewindcode` (
   DEFAULT CHARSET = utf8
   COLLATE = utf8_general_ci
   COMMENT = 'Wind 中国债券 Wind 代码变更表';
+
+-- ----------------------------------------------------------------------------
+-- 6. Wind 公司简介表（全量主体）
+-- 严格保留截图中的 26 列名称、顺序、类型及字符集，不追加字段、主键、索引或事件表。
+-- COMP_ID 为主体编码；REGISTERNUMBER 为统一社会信用代码，允许为空。
+-- 本表覆盖全部主体，不以是否发债或在池为条件；主体 Excel 匹配及调库身份校验使用本表。
+-- ----------------------------------------------------------------------------
+CREATE TABLE `wind_compintroduction` (
+    `COMP_ID`               VARCHAR(40)     DEFAULT NULL COMMENT '主体编码',
+    `COMP_NAME`             VARCHAR(200)    DEFAULT NULL COMMENT '主体全称',
+    `COMP_SNAME`            VARCHAR(100)    DEFAULT NULL COMMENT '主体简称',
+    `COMP_NAME_ENG`         VARCHAR(100)    DEFAULT NULL COMMENT '主体英文全称',
+    `COMP_SNAMEENG`         VARCHAR(100)    DEFAULT NULL COMMENT '主体英文简称',
+    `PROVINCE`              VARCHAR(30)     DEFAULT NULL COMMENT '省份',
+    `CITY`                  VARCHAR(50)     DEFAULT NULL COMMENT '城市',
+    `ADDRESS`               VARCHAR(500)    DEFAULT NULL COMMENT '注册地址',
+    `OFFICE`                VARCHAR(400)    DEFAULT NULL COMMENT '办公地址',
+    `REGISTERNUMBER`        VARCHAR(30)     DEFAULT NULL COMMENT '统一社会信用代码，允许为空',
+    `REGCAPITAL`            FLOAT           DEFAULT NULL COMMENT '注册资本，保留外部源数值口径',
+    `CURRENCYCODE`          VARCHAR(10)     DEFAULT NULL COMMENT '注册资本币种代码',
+    `FOUNDDATE`             VARCHAR(8)      DEFAULT NULL COMMENT '成立日期，yyyyMMdd',
+    `ENDDATE`               VARCHAR(8)      DEFAULT NULL COMMENT '终止日期，yyyyMMdd',
+    `COMP_TYPE`             VARCHAR(100)    DEFAULT NULL COMMENT '主体类型，保留外部源原值',
+    `COMP_PROPERTY`         VARCHAR(100)    DEFAULT NULL COMMENT '企业性质，保留外部源原值',
+    `COUNTRY`               VARCHAR(20)     DEFAULT NULL COMMENT '国家',
+    `COMPANY_TYPE`          VARCHAR(10)     DEFAULT NULL COMMENT '公司类型，保留外部源原值',
+    `S_INFO_TOTALEMPLOYEES` BIGINT UNSIGNED DEFAULT NULL COMMENT '员工总数',
+    `S_INFO_ORG_CODE`       VARCHAR(30)     DEFAULT NULL COMMENT '组织机构代码',
+    `IS_LISTED`             VARCHAR(1)      DEFAULT NULL COMMENT '是否上市，保留外部源原值',
+    `S_INFO_COMPTYPE`       VARCHAR(20)     DEFAULT NULL COMMENT '公司分类，保留外部源原值',
+    `IS_REGISTERED`         VARCHAR(1)      DEFAULT NULL COMMENT '是否注册，保留外部源原值',
+    `DISTRICT`              VARCHAR(100)    DEFAULT NULL COMMENT '所在区县',
+    `OPDATE`                DATE            DEFAULT NULL COMMENT '操作日期',
+    `OPMODE`                VARCHAR(1)      DEFAULT NULL COMMENT '操作模式，保留外部源原值'
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8
+  COLLATE = utf8_general_ci
+  COMMENT = 'Wind 公司简介表（全量主体）';

@@ -3,47 +3,46 @@
 <mapper namespace="com.znty.rrs.mapper.ForbiddenPoolAdjustMapper">
     <!-- 禁投池主体调整 mapper，提供主体查询、调库记录、池状态和审批流程数据访问 -->
 
-    <!--
-      分页查询公司主体。
-      wind_cbondissuer 约 70 万行、约 4 万主体（债券+主体粒度），外部 ODS 一般不建二级索引。
-      主体列表仅 GROUP BY s_info_compcode 去重 + MAX 取展示字段，不排序（同主体名称/行业通常一致）。
-    -->
+    <!-- 按公司简介查询全量主体，以主体代码、全称和统一社会信用代码筛选 -->
     <select id="queryCompanyPage" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
-        SELECT c.s_info_compcode AS companyCode
-               ,MAX(c.s_info_compname) AS companyShortName
-               ,MAX(c.s_info_compname) AS companyFullName
-               ,MAX(c.s_info_compind_name1) AS industryName
-               ,MAX(c.s_info_compind_name2) AS industryName2
-        FROM ais_inv_ods.wind_cbondissuer c
+        SELECT c.COMP_ID AS companyCode
+               ,c.COMP_SNAME AS companyShortName
+               ,c.COMP_NAME AS companyFullName
+               ,c.REGISTERNUMBER AS registerNumber
+               ,c.COMP_TYPE AS compType
+               ,c.COMP_PROPERTY AS compProperty
+               ,c.PROVINCE
+               ,c.CITY
+               ,c.FOUNDDATE AS foundDate
+               ,c.ADDRESS AS regAddress
+        FROM ais_inv_ods.wind_compintroduction c
         <where>
             <if test="companyCode != null and companyCode != ''">
-                AND c.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%')
+                AND c.COMP_ID LIKE CONCAT('%', #{companyCode}, '%')
             </if>
             <if test="companyFullName != null and companyFullName != ''">
-                AND c.s_info_compname LIKE CONCAT('%', #{companyFullName}, '%')
+                AND c.COMP_NAME LIKE CONCAT('%', #{companyFullName}, '%')
             </if>
-            <if test="industryName != null and industryName != ''">
-                AND (c.s_info_compind_name1 LIKE CONCAT('%', #{industryName}, '%')
-                     OR c.s_info_compind_name2 LIKE CONCAT('%', #{industryName}, '%'))
+            <if test="registerNumber != null and registerNumber != ''">
+                AND c.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')
             </if>
         </where>
-        GROUP BY c.s_info_compcode
     </select>
 
-    <!-- 查询公司主体详情：同主体多行，任取一条即可（名称/行业一致，无排序） -->
+    <!-- 由公司简介读取主体资料，不再关联旧发行人表 -->
     <select id="queryCompanyDetail" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto">
-        SELECT c.s_info_compcode AS companyCode
-               ,c.s_info_compname AS companyShortName
-               ,c.s_info_compname AS companyFullName
-               ,c.s_info_compind_name1 AS industryName
-               ,c.s_info_compind_name2 AS industryName2
-               ,c.s_info_compind_name3 AS industryName3
-               ,c.s_info_compind_name4 AS industryName4
-               ,c.s_info_comptype AS compType
-               ,c.s_info_compregaddress AS regAddress
-               ,c.is_fin_inst AS isFinInst
-        FROM ais_inv_ods.wind_cbondissuer c
-        WHERE c.s_info_compcode = #{companyCode}
+        SELECT c.COMP_ID AS companyCode
+               ,c.COMP_SNAME AS companyShortName
+               ,c.COMP_NAME AS companyFullName
+               ,c.REGISTERNUMBER AS registerNumber
+               ,c.COMP_PROPERTY AS compProperty
+               ,c.PROVINCE
+               ,c.CITY
+               ,c.FOUNDDATE AS foundDate
+               ,c.COMP_TYPE AS compType
+               ,c.ADDRESS AS regAddress
+        FROM ais_inv_ods.wind_compintroduction c
+        WHERE c.COMP_ID = #{companyCode}
         LIMIT 1
     </select>
 
@@ -54,15 +53,14 @@
         WHERE wind_code = #{securityCode}
     </select>
 
-    <!-- 根据主体代码查询禁投池调整所需的主体基础信息（同主体多行，任取一条） -->
+    <!-- 主体基础信息分别映射全称与简称，展示和提交名称由业务层取全称 -->
     <select id="queryCompanySecurityBoByCode" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
-        SELECT c.s_info_compcode AS windCode
-               ,c.s_info_compname AS fullName
-               ,c.s_info_compname AS shortName
+        SELECT c.COMP_ID AS windCode
+               ,c.COMP_NAME AS fullName
+               ,c.COMP_SNAME AS shortName
                ,'company' AS securityType
-               ,c.s_info_compind_name1 AS industryName
-        FROM ais_inv_ods.wind_cbondissuer c
-        WHERE c.s_info_compcode = #{companyCode}
+        FROM ais_inv_ods.wind_compintroduction c
+        WHERE c.COMP_ID = #{companyCode}
         LIMIT 1
     </select>
 

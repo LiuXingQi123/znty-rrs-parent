@@ -4,6 +4,7 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto;
+import com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -94,6 +95,10 @@ public interface SecurityPoolExcelImportMapper {
      * 统计指定校验结果数量
      */
     int queryItemCountByCheckResult(@Param("impId") String impId, @Param("chkRslt") String chkRslt);
+
+    /** 按非空条件集合批量匹配主体；lookupType：0=信用代码 / 1=主体代码 / 2=全称或简称。 */
+    List<CompanyImportMatchDto> queryCompanyMatchList(@Param("lookupType") int lookupType,
+                                                    @Param("values") List<String> values);
 
     // ─────────── 目标池 ───────────
 

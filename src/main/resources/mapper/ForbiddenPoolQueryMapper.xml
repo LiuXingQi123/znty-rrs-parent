@@ -5,7 +5,7 @@
 
     <!--
       分页查询禁投池证券列表。
-      wind_cbondissuer 为债券+主体粒度，JOIN 前先按 s_info_compcode 去重，避免同主体多债行膨胀。
+      公司简介按 COMP_ID 关联主体，主体名称统一展示 COMP_NAME 全称。
     -->
     <select id="queryForbiddenPoolPage" resultType="com.znty.rrs.entity.forbiddenpoolquery.ForbiddenPoolQueryDto">
         SELECT ips.id
@@ -20,7 +20,7 @@
                ,ips.security_type
                ,dst.security_type_name
                ,dst.category_type
-               ,COALESCE(wci.s_info_compname, bi.issuer, ips.security_short_name) AS issuer
+               ,COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) AS issuer
                ,bi.maturity_date
                ,bi.delist_date
                ,bi.repurchase_date
@@ -30,12 +30,7 @@
                                        AND p.pool_type = 'forbidden'
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
         LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
-        LEFT JOIN (
-            SELECT s_info_compcode
-                   ,MAX(s_info_compname) AS s_info_compname
-            FROM ais_inv_ods.wind_cbondissuer
-            GROUP BY s_info_compcode
-        ) wci ON wci.s_info_compcode = ips.security_code
+        LEFT JOIN ais_inv_ods.wind_compintroduction wci ON wci.COMP_ID = ips.security_code
              AND ips.security_type = 'company'
         <where>
             ips.is_deleted = 0
@@ -86,7 +81,7 @@
                 AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
-                AND COALESCE(wci.s_info_compname, bi.issuer, ips.security_short_name) LIKE CONCAT('%', #{issuer}, '%')
+                AND COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) LIKE CONCAT('%', #{issuer}, '%')
             </if>
         </where>
         ORDER BY ips.entry_time DESC

@@ -82,6 +82,7 @@ FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = 'ais_inv_ods'
   AND TABLE_TYPE = 'BASE TABLE'
   AND TABLE_NAME IN (
+      'wind_compintroduction',
       'wind_cbondissuer',
       'wind_cbondissuerrating',
       'wind_windcustomcode',

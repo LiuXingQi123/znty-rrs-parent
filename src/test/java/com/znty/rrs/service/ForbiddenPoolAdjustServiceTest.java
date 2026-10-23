@@ -12,6 +12,7 @@ import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
+import com.znty.rrs.entity.forbiddenpooladjust.CompanyAdjustCheckContext;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitReq;
@@ -59,7 +60,46 @@ import static org.mockito.Mockito.spy;
 /** 禁投池主体调整服务测试。 */
 public class ForbiddenPoolAdjustServiceTest {
 
-    /** 主体校验结果始终使用主体主数据简称，失败及联动项均保留身份，债券互斥项不被覆盖。 */
+    /** 批次内复用主体和公共配置，仍逐主体复核当前在池事实，单笔请求保持重新读取。 */
+    @Test
+    public void batchCompanyCheckShouldReuseMasterAndConfigurationButCheckLiveState() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        InvestmentPoolBo pool = buildPool(16L, "观察池", "observe");
+        when(poolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
+        Map<String, ForbiddenPoolAdjustDto> companies = new HashMap<>();
+        companies.put("C001", buildCompany("C001"));
+        companies.put("C002", buildCompany("C002"));
+        when(mapper.querySecurityCurrentPoolIdList("C001")).thenReturn(Collections.singletonList(16L));
+        CompanyAdjustCheckContext context = service.createCompanyCheckContext(companies);
+        for (String code : Arrays.asList("C001", "C002")) {
+            ForbiddenPoolAdjustCheckReq req = new ForbiddenPoolAdjustCheckReq();
+            req.setCompanyCode(code);
+            ForbiddenPoolAdjustCheckReq.CheckItem item = new ForbiddenPoolAdjustCheckReq.CheckItem();
+            item.setTargetPoolId(16L);
+            item.setAdjustMode("调出");
+            req.setItems(Collections.singletonList(item));
+            AdjustCheckDto result = service.checkCompanyAdjust(req, context);
+            assertThat(result.getItems().get(0).isCanAdjust()).isEqualTo("C001".equals(code));
+            assertThat(result.getItems().get(0).getSecurityShortName()).isEqualTo("某公司有限公司");
+            verify(mapper).querySecurityCurrentPoolIdList(code);
+        }
+        verify(poolMapper, times(1)).queryPoolList();
+        verify(mapper, times(1)).queryAllPoolRelationList();
+        verify(mapper, never()).queryCompanyDetail(any(String.class));
+        verify(mapper, never()).queryCompanySecurityBoByCode(any(String.class));
+        verify(mapper, never()).queryCompanyBondCountList(anyList());
+        ForbiddenPoolAdjustCheckReq single = new ForbiddenPoolAdjustCheckReq();
+        single.setCompanyCode("C001");
+        assertThatThrownBy(() -> service.checkCompanyAdjust(single)).isInstanceOf(BizException.class)
+                .hasMessageContaining("公司主体不存在");
+        verify(mapper).queryCompanyDetail("C001");
+    }
+
+    /** 主体校验结果使用主体全称，失败及联动项均保留身份，债券互斥项不被覆盖。 */
     @Test
     public void companyCheckResultsShouldCarryMasterNameInBothDirections() {
         for (String direction : Arrays.asList("调入", "调出")) {
@@ -101,7 +141,7 @@ public class ForbiddenPoolAdjustServiceTest {
 
                 for (AdjustCheckDto.CheckResultItem item : result.getItems().subList(0, 2)) {
                     assertThat(item.getSecurityCode()).isEqualTo("C10001");
-                    assertThat(item.getSecurityShortName()).isEqualTo("某公司");
+                    assertThat(item.getSecurityShortName()).isEqualTo("某公司有限公司");
                     assertThat(item.getSecurityType()).isEqualTo("company");
                     assertThat(item.getSourceSecurityCode()).isEqualTo("C10001");
                 }
@@ -746,6 +786,7 @@ public class ForbiddenPoolAdjustServiceTest {
         ForbiddenPoolAdjustDto company = new ForbiddenPoolAdjustDto();
         company.setCompanyCode(companyCode);
         company.setCompanyShortName("某公司");
+        company.setCompanyFullName("某公司有限公司");
         return company;
     }
 

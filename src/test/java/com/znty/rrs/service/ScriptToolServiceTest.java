@@ -170,6 +170,7 @@ public class ScriptToolServiceTest {
         assertTrue(tables.containsKey("znty_rrs.rrs_securityinfo"));
         assertTrue(tables.containsKey("ais_inv_ods.wind_windcustomcode"));
         assertTrue(tables.containsKey("ais_inv_ods.wind_cbondchangewindcode"));
+        assertTrue(tables.containsKey("ais_inv_ods.wind_compintroduction"));
         assertTrue(tables.containsKey("ais_inv_analysis.t_sys_resource"));
         assertTrue(tables.containsKey("ais_inv_analysis.t_sys_permission"));
         assertTrue(tables.containsKey("ais_inv_analysis.company_observer_view"));
@@ -209,6 +210,34 @@ public class ScriptToolServiceTest {
         assertEquals("varchar(10)|YES|", columns.get("sec_id"));
         assertEquals("varchar(20)|YES|", columns.get("opdate"));
         assertEquals("varchar(1)|YES|", columns.get("opmode"));
+        assertTrue(((Map<?, ?>) ReflectionTestUtils.getField(table, "indexes")).isEmpty());
+        assertEquals("innodb", ReflectionTestUtils.getField(table, "engine"));
+        assertEquals("utf8_general_ci", ReflectionTestUtils.getField(table, "collation"));
+    }
+
+    /** 公司简介表严格保留截图的 26 列、类型、顺序和可空性，不增加额外主键或字段。 */
+    @Test
+    public void shouldPreserveWindCompanyIntroductionSourceSchema() {
+        ScriptToolService service = new ScriptToolService();
+        ReflectionTestUtils.setField(service, "sqlPath", "sql");
+        // 解析真实 ODS 建表脚本，验证字段结构与截图一致
+        Map<?, ?> tables = ReflectionTestUtils.invokeMethod(service, "queryExpectedSchemaTables");
+        Object table = tables.get("ais_inv_ods.wind_compintroduction");
+        Map<?, ?> columns = (Map<?, ?>) ReflectionTestUtils.getField(table, "columns");
+        List<String> names = Arrays.asList("comp_id", "comp_name", "comp_sname", "comp_name_eng", "comp_snameeng",
+                "province", "city", "address", "office", "registernumber", "regcapital", "currencycode",
+                "founddate", "enddate", "comp_type", "comp_property", "country", "company_type",
+                "s_info_totalemployees", "s_info_org_code", "is_listed", "s_info_comptype", "is_registered",
+                "district", "opdate", "opmode");
+        List<String> types = Arrays.asList("varchar(40)", "varchar(200)", "varchar(100)", "varchar(100)", "varchar(100)",
+                "varchar(30)", "varchar(50)", "varchar(500)", "varchar(400)", "varchar(30)", "float", "varchar(10)",
+                "varchar(8)", "varchar(8)", "varchar(100)", "varchar(100)", "varchar(20)", "varchar(10)",
+                "bigintunsigned", "varchar(30)", "varchar(1)", "varchar(20)", "varchar(1)", "varchar(100)",
+                "date", "varchar(1)");
+        assertEquals(names, new ArrayList<>(columns.keySet()));
+        for (int i = 0; i < names.size(); i++) {
+            assertEquals(names.get(i), types.get(i) + "|YES|", columns.get(names.get(i)));
+        }
         assertTrue(((Map<?, ?>) ReflectionTestUtils.getField(table, "indexes")).isEmpty());
         assertEquals("innodb", ReflectionTestUtils.getField(table, "engine"));
         assertEquals("utf8_general_ci", ReflectionTestUtils.getField(table, "collation"));

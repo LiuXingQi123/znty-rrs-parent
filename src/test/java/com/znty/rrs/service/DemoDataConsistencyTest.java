@@ -67,7 +67,8 @@ public class DemoDataConsistencyTest {
                     {"znty_rrs", "rrs_crmw_pool_status", "ip_pool_status_crmw"},
                     {"znty_rrs", "rrs_external_import", "rrs_securityinfo"},
                     {"znty_rrs", "rrs_dict", "dict_security_type"},
-                    {"ais_inv_ods", "ais_inv_ods", "wind_cbondissuer"}};
+                    {"ais_inv_ods", "ais_inv_ods", "wind_cbondissuer"},
+                    {"ais_inv_ods", "ais_inv_ods", "wind_compintroduction"}};
             for (String[] table : tables) {
                 connection.setSchema(table[0]);
                 // 只移除 H2 不支持的 MySQL 表选项，其余使用真实 DDL

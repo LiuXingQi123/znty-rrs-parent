@@ -8,7 +8,7 @@
 
 ## 0. 关键现状（数据来源）
 
-**本页仅查询债券禁止库**（`pool_type='forbidden'`）。复用 `ip_pool_status`（投资池当前状态表），通过该池类型、`ips.is_deleted=0`、`ips.audit_status='20'` 查询当前已生效数据。主体级状态按 `ips.security_code=ais_inv_ods.wind_cbondissuer.s_info_compcode` 关联 Wind 主体，不按 `used` 过滤（**该表为债券+主体粒度，JOIN 前须按 `s_info_compcode` 去重**）；债券仍按 Wind 证券代码关联 `rrs_securityinfo`。
+**本页仅查询债券禁止库**（`pool_type='forbidden'`）。复用 `ip_pool_status`（投资池当前状态表），通过该池类型、`ips.is_deleted=0`、`ips.audit_status='20'` 查询当前已生效数据。主体级状态按 `ips.security_code=ais_inv_ods.wind_compintroduction.COMP_ID` 关联公司简介，名称读取 `COMP_NAME` 全称；债券仍按 Wind 证券代码关联 `rrs_securityinfo`。
 
 ---
 
@@ -40,7 +40,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 | 下拉 | `securityStatus` | 精确 | 证券状态：`active`=存续 / `matured`=到期 |
 | 日期范围 | `entryTimeRange` | 范围 | 入池日期起/止，`value-format="yyyy-MM-dd"` |
 | 文本输入 | `adjusterName` | 模糊 | 调整人 |
-| 文本输入 | `issuer` | 模糊 | 发行主体名称 |
+| 文本输入 | `issuer` | 模糊 | 发行主体全称 |
 
 ### 2.2 查询接口
 
@@ -126,7 +126,7 @@ SELECT ips.id, ips.security_code, ips.security_short_name, ips.adjuster_name,
        ips.entry_time, ips.target_pool_id, ips.adjust_batch_no,
        p.pool_name AS target_pool_name, ips.security_type,
        dst.security_type_name,
-       COALESCE(wci.s_info_compname, bi.issuer, ips.security_short_name) AS issuer,
+       COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) AS issuer,
        bi.maturity_date, bi.delist_date, bi.repurchase_date
 FROM ip_pool_status ips
 INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
@@ -134,12 +134,7 @@ INNER JOIN ip_investment_pool p ON p.id = ips.target_pool_id
                                  AND p.pool_type = 'forbidden'
 LEFT JOIN rrs_securityinfo bi ON bi.wind_code = ips.security_code
 LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND dst.is_deleted = 0
--- wind_cbondissuer 为债券+主体粒度，先按主体代码去重再 JOIN
-LEFT JOIN (
-    SELECT s_info_compcode, MAX(s_info_compname) AS s_info_compname
-    FROM ais_inv_ods.wind_cbondissuer
-    GROUP BY s_info_compcode
-) wci ON wci.s_info_compcode = ips.security_code AND ips.security_type = 'company'
+LEFT JOIN ais_inv_ods.wind_compintroduction wci ON wci.COMP_ID = ips.security_code AND ips.security_type = 'company'
 <where>
     ips.is_deleted = 0 AND ips.audit_status = '20'
     <if securityCode> AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%') </if>
@@ -152,7 +147,7 @@ LEFT JOIN (
     <if entryTimeStart> AND ips.entry_time >= #{entryTimeStart} </if>
     <if entryTimeEnd> AND ips.entry_time <= CONCAT(#{entryTimeEnd}, ' 23:59:59') </if>
     <if adjusterName> AND ips.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%') </if>
-    <if issuer> AND COALESCE(wci.s_info_compname, bi.issuer, ips.security_short_name) LIKE CONCAT('%', #{issuer}, '%') </if>
+    <if issuer> AND COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) LIKE CONCAT('%', #{issuer}, '%') </if>
 </where>
 ORDER BY ips.entry_time DESC, ips.id DESC
 ```

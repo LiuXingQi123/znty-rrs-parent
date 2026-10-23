@@ -46,7 +46,7 @@
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodeOptions`
 - 请求体：`{}`（`TempSecurityCodeReq`）
 - 后端 `queryTempSecurityCodeOptions`：`OptionBundle` 装载 `queryCompanyOptionList(req)` + `querySecurityTypeList()`。
-  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_cbondissuer`（**跨库**，不按 `used` 过滤；债券+主体粒度，**`GROUP BY s_info_compcode` 去重**），可选按 `companyKeyword` 模糊匹配名称/代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。
+  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_compintroduction`（**跨库**，`COMP_ID` 对应主体代码，`COMP_NAME` 对应全称，`COMP_SNAME` 对应简称），可选按 `companyKeyword` 模糊匹配名称/代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。
   - `querySecurityTypeList`：`FROM dict_security_type WHERE is_deleted = 0 AND category_type != 'company' ORDER BY category_type ASC, sort_order ASC, id ASC`，返回 `securityType/securityTypeName/categoryType/categoryTypeName`。
 
 ---
@@ -57,7 +57,7 @@
 
 ### 3.1 新增 `addTempSecurityCode`（`@Transactional`）
 
-`validateAddReq` → 查 `queryCompanyByCode(tempCompanyCode)` 校验主体存在（`wind_cbondissuer`）→ `resolveCompanyName`（fullName 优先，其次 shortName，否则抛「发行主体缺少名称」）→ 构造 `TempSecurityCodeBo`，`secId = "TEMP_" + tempSecurityCode`，`status = TempStatus.TEMPORARY.getCode()`（`temporary`）、`oprtSource = manual`、`isDeleted=0`、`crteTime`/`updtTime=now` → `addTempSecurityCode` INSERT（回填 id）→ 同步写入 `rrs_securityinfo`（`wind_code=tempSecurityCode`，`sec_id=secId`，名称、类型、发行主体名称+`issuer_code`、`firstissue_date`/`maturity_date` 将表单日期格式化为 `yyyyMMdd`，起息/止息/`date_exists` 未知不写，`security_status='L'` 上市中，`security_source='temporary'`；市场同时写入临时代码表 `temp_security_market` 和证券表 `market`，两处均取表单选择的市场编码）→ `queryTempSecurityCodeDetail` 返回详情。正式证券字段仍为 NULL。**必须写明确的 `security_status`**：临时代码占位写 `'L'`（上市中）；外部/特殊来源若无状态写 `'U'`（未知，`SecurityStatus.UNKNOWN`）。证券池调整列表条件是 `security_status != 'D'`，若留 `NULL`/空串，SQL 三值逻辑会把行滤掉。
+`validateAddReq` → 查 `queryCompanyByCode(tempCompanyCode)` 校验主体存在（`wind_compintroduction`）→ `resolveCompanyName`（fullName 优先，其次 shortName，否则抛「发行主体缺少名称」）→ 构造 `TempSecurityCodeBo`，`secId = "TEMP_" + tempSecurityCode`，`status = TempStatus.TEMPORARY.getCode()`（`temporary`）、`oprtSource = manual`、`isDeleted=0`、`crteTime`/`updtTime=now` → `addTempSecurityCode` INSERT（回填 id）→ 同步写入 `rrs_securityinfo`（`wind_code=tempSecurityCode`，`sec_id=secId`，名称、类型、发行主体全称+`issuer_code`、`firstissue_date`/`maturity_date` 将表单日期格式化为 `yyyyMMdd`，起息/止息/`date_exists` 未知不写，`security_status='L'` 上市中，`security_source='temporary'`；市场同时写入临时代码表 `temp_security_market` 和证券表 `market`，两处均取表单选择的市场编码）→ `queryTempSecurityCodeDetail` 返回详情。正式证券字段仍为 NULL。**必须写明确的 `security_status`**：临时代码占位写 `'L'`（上市中）；外部/特殊来源若无状态写 `'U'`（未知，`SecurityStatus.UNKNOWN`）。证券池调整列表条件是 `security_status != 'D'`，若留 `NULL`/空串，SQL 三值逻辑会把行滤掉。
 
 ### 3.2 更新为正式证券 `editTempSecurityCodeToUpdated`（`@Transactional`）
 
@@ -106,7 +106,7 @@
 | 路径 | 请求体字段 | 返回类型 | 用途 |
 |---|---|---|---|
 | `queryTempSecurityCodePage` | `tempSecurityCode?, tempSecurityName?, statusList?, oprtSourceList?, pageIndex, pageSize` | `ApiResponse<PageResult<TempSecurityCodeDto>>` | 分页查询临时代码列表；前端默认传 `oprtSourceList=['manual']` |
-| `queryTempSecurityCodeOptions` | `companyKeyword?`（远程搜索）/`tempCompanyCode?`（精确回显） | `ApiResponse<TempSecurityCodeDto.OptionBundle>` | 查下拉：发行主体（wind_cbondissuer 最多 50 条）+ 证券类型 |
+| `queryTempSecurityCodeOptions` | `companyKeyword?`（远程搜索）/`tempCompanyCode?`（精确回显） | `ApiResponse<TempSecurityCodeDto.OptionBundle>` | 查下拉：发行主体（wind_compintroduction 最多 50 条）+ 证券类型 |
 | `addTempSecurityCode` | `tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyCode, tempIssueDate, tempMaturityDate` | `ApiResponse<TempSecurityCodeDto>` | 新增临时代码（status=temporary） |
 | `editTempSecurityCodeToUpdated` | `id, tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyCode, tempIssueDate, tempMaturityDate, securityName, securityCode, securityMarket, securityType` | `ApiResponse<TempSecurityCodeDto>` | 更新为正式证券（status=updated，同步 upsert rrs_securityinfo） |
 | `editTempSecurityCodeToCancelled` | `id` | `ApiResponse<TempSecurityCodeDto>` | 取消发行（status=cancelled） |
@@ -125,7 +125,7 @@
 | `rrs_temp_security_code`（主表） | 临时代码 | `id, sec_id VARCHAR(100) DEFAULT NULL, temp_security_name, temp_security_code, temp_security_market, temp_security_type, temp_mitigation_code, temp_company_code, temp_company_name_snapshot, temp_issue_date DATE, temp_maturity_date DATE, security_name, security_code, security_market, security_type, update_time, status, is_deleted, oprt_source, memo, crte_time, updt_time`；`oprt_source`：manual=人工 / job=定时任务 / other=其他（仅记最近一次）；仅主键，无二级索引 |
 | `rrs_temp_security_code_update_log`（日志表） | 替换日志 | 记录临时代码、正式代码、被替换表名、被替换记录 ID、替换状态、替换时间 |
 | `dict_security_type`（只读+校验） | 证券类型字典 | `security_type, security_type_name, category_type(bond/stock/fund/company), category_type_name, sort_order, is_deleted`；`querySecurityTypeList` 过滤 `category_type != 'company'`，`querySecurityTypeCount` 校验类型存在 |
-| `ais_inv_ods.wind_cbondissuer`（跨库只读） | 发行主体 | `s_info_compcode, s_info_compname, used`；`queryCompanyOptionList`/`queryCompanyByCode` 读取时不按 `used` 过滤，`LIMIT 50` |
+| `ais_inv_ods.wind_compintroduction`（跨库只读） | 发行主体 | `COMP_ID, COMP_NAME, COMP_SNAME`；`queryCompanyOptionList`/`queryCompanyByCode` 读取公司简介全量主体，`LIMIT 50` |
 | `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始数据（可能含临时代码） / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、`market=securityMarket`（取表单临时市场，与 `temp_security_market` 一致）、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 将表单发行/到期日格式化为 `yyyyMMdd`（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中；上市状态枚举 `SecurityStatus`：`L`/`N`/`D`/`U`，勿留 NULL，否则调库列表 `!= 'D'` 查不到；来源无状态用 `U`）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
 
 ---
@@ -194,7 +194,7 @@
 1. **列表不过滤 `is_deleted`**：删除后记录（`is_deleted=1, status='deleted'`）仍出现在列表，但按 id 查详情返回 null。
 2. **删除返回 null**：`deleteTempSecurityCode` 服务方法 `return null`，故 `ApiResponse.success(null)`，前端 `loadList()` 刷新即可。
 3. **无审计表**：与投资池模块的 `_evt` 审计表不同，`operatorId` 字段定义但全程未用。
-4. **跨库读主体**：`queryCompanyOptionList`/`queryCompanyByCode` 读 `ais_inv_ods.wind_cbondissuer`，依赖跨库访问权限与该库 schema 稳定；前端远程搜索关键字，最多 50 条。
+4. **跨库读主体**：`queryCompanyOptionList`/`queryCompanyByCode` 读 `ais_inv_ods.wind_compintroduction`，依赖跨库访问权限与该库 schema 稳定；前端远程搜索关键字，最多 50 条。
 5. **`rrs_securityinfo` 无幂等保护**：upsert 以 `wind_code=securityCode` 判重，若多个临时代码映射到同一 `securityCode`，后到的更新会覆盖已有记录。
 6. **更新时主体变更才重查**：仅 `tempCompanyCode` 变化时重查主体并刷新快照，未变更时保留旧 `tempCompanyNameSnapshot`（即使主体名已被改名）。
 

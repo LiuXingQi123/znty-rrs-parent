@@ -23,7 +23,7 @@ public class TempSecurityCodeBo {
     private String tempSecurityType;
     /** 临时缓释凭证代码 */
     private String tempMitigationCode;
-    /** 临时关联主体代码（wind_cbondissuer.s_info_compcode） */
+    /** 临时关联主体代码（wind_compintroduction.COMP_ID） */
     private String tempCompanyCode;
     /** 临时关联主体名称快照 */
     private String tempCompanyNameSnapshot;

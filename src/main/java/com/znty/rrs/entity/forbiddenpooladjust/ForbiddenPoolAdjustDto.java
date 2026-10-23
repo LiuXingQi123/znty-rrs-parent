@@ -19,20 +19,20 @@ public class ForbiddenPoolAdjustDto {
     private String companyShortName;
     /** 主体全称 */
     private String companyFullName;
-    /** 所属行业 */
-    private String industryName;
-    /** 二级行业 */
-    private String industryName2;
-    /** 三级行业 */
-    private String industryName3;
-    /** 四级行业 */
-    private String industryName4;
+    /** 统一社会信用代码 */
+    private String registerNumber;
+    /** 企业性质 */
+    private String compProperty;
+    /** 省份 */
+    private String province;
+    /** 城市 */
+    private String city;
+    /** 成立日期，yyyyMMdd */
+    private String foundDate;
     /** 主体类型 */
     private String compType;
     /** 注册地址 */
     private String regAddress;
-    /** 是否金融机构 */
-    private Integer isFinInst;
     /** 旗下债券数量 */
     private Integer companyBondCount;
 

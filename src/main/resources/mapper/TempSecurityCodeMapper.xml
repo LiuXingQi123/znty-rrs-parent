@@ -166,35 +166,34 @@
 
     <!--
       按关键字远程查询发行主体（最多 50 条）。
-      约 70 万债行 / 4 万主体，GROUP BY s_info_compcode 去重；不排序（下拉只需候选集）。
+      读取公司简介全量主体，以 COMP_ID 关联，显示 COMP_NAME 全称。
     -->
     <select id="queryCompanyOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
-        SELECT c.s_info_compcode AS companyCode
-               ,MAX(c.s_info_compname) AS fullName
-               ,MAX(c.s_info_compname) AS shortName
-        FROM ais_inv_ods.wind_cbondissuer c
+        SELECT c.COMP_ID AS companyCode
+               ,c.COMP_NAME AS fullName
+               ,c.COMP_SNAME AS shortName
+        FROM ais_inv_ods.wind_compintroduction c
         <where>
-            AND c.s_info_compcode IS NOT NULL
-            AND c.s_info_compcode != ''
+            AND c.COMP_ID IS NOT NULL
+            AND c.COMP_ID != ''
             <if test="companyKeyword != null and companyKeyword != ''">
-                AND (c.s_info_compname LIKE CONCAT('%', #{companyKeyword}, '%')
-                     OR c.s_info_compcode LIKE CONCAT('%', #{companyKeyword}, '%'))
+                AND (c.COMP_NAME LIKE CONCAT('%', #{companyKeyword}, '%')
+                     OR c.COMP_ID LIKE CONCAT('%', #{companyKeyword}, '%'))
             </if>
             <if test="tempCompanyCode != null and tempCompanyCode != ''">
-                AND c.s_info_compcode = #{tempCompanyCode}
+                AND c.COMP_ID = #{tempCompanyCode}
             </if>
         </where>
-        GROUP BY c.s_info_compcode
         LIMIT 50
     </select>
 
-    <!-- 根据主体代码查询发行主体（同主体多行，任取一条） -->
+    <!-- 根据主体代码查询公司简介 -->
     <select id="queryCompanyByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
-        SELECT c.s_info_compcode AS companyCode
-               ,c.s_info_compname AS fullName
-               ,c.s_info_compname AS shortName
-        FROM ais_inv_ods.wind_cbondissuer c
-        WHERE c.s_info_compcode = #{companyCode}
+        SELECT c.COMP_ID AS companyCode
+               ,c.COMP_NAME AS fullName
+               ,c.COMP_SNAME AS shortName
+        FROM ais_inv_ods.wind_compintroduction c
+        WHERE c.COMP_ID = #{companyCode}
         LIMIT 1
     </select>
 

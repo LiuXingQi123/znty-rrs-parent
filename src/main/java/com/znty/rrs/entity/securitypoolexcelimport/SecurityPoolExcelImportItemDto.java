@@ -22,6 +22,8 @@ public class SecurityPoolExcelImportItemDto {
     private String parentPoolName;
     /** 子池名称 */
     private String childPoolName;
+    /** 主体模板填写的统一社会信用代码 */
+    private String unifiedSocialCreditCode;
     /** 证券/主体名称 */
     private String securityName;
     /** 证券/主体代码 */

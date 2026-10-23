@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Wind 发行主体 Mapper SQL 口径测试 */
 public class WindCbondIssuerMapperSqlTest {
 
-    /** 校验读取 wind_cbondissuer 时不再按 used=1 过滤 */
+    /** 原发行主体资料查询切换公司简介，不再依赖旧表。 */
     @Test
     public void windCbondIssuerQueriesShouldNotFilterUsed() throws Exception {
         List<String> mapperFiles = Arrays.asList(
@@ -29,10 +29,37 @@ public class WindCbondIssuerMapperSqlTest {
         for (String mapperFile : mapperFiles) {
             Path mapperPath = Paths.get("src", "main", "resources", "mapper", mapperFile);
             String xml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
-            assertThat(xml).as(mapperFile + " 应查询 wind_cbondissuer").contains("ais_inv_ods.wind_cbondissuer");
+            assertThat(xml).as(mapperFile + " 应查询公司简介")
+                    .contains("ais_inv_ods.wind_compintroduction")
+                    .doesNotContain("ais_inv_ods.wind_cbondissuer");
             assertThat(usedFilterPattern.matcher(xml).find())
                     .as(mapperFile + " 不应保留 used=1 过滤")
                     .isFalse();
+        }
+    }
+
+    /** 业务快照已有名称的查询不应新增外部主体表关联。 */
+    @Test
+    public void snapshotQueriesShouldNotJoinCompanyMaster() throws Exception {
+        for (String mapperFile : Arrays.asList("CompanyPoolQueryMapper.xml", "CompanyPoolAdjustHistoryMapper.xml")) {
+            String xml = new String(Files.readAllBytes(Paths.get("src", "main", "resources", "mapper", mapperFile)),
+                    StandardCharsets.UTF_8);
+            assertThat(xml).as(mapperFile).contains("security_short_name").doesNotContain("ais_inv_ods.");
+        }
+        String xml = new String(Files.readAllBytes(Paths.get("src", "main", "resources", "mapper",
+                "SecurityPoolExcelImportMapper.xml")), StandardCharsets.UTF_8);
+        String memberQuery = xml.substring(xml.indexOf("<select id=\"queryPoolMemberList\""));
+        assertThat(memberQuery).contains("ips.security_short_name").doesNotContain("ais_inv_ods.");
+    }
+
+    /** 证券与关系主体的关联仍由旧表提供，不增加公司简介关联。 */
+    @Test
+    public void securityRelationsShouldKeepIssuerSource() throws Exception {
+        for (String mapperFile : Arrays.asList("CommonMapper.xml", "SecurityPoolAdjustMapper.xml")) {
+            String xml = new String(Files.readAllBytes(Paths.get("src", "main", "resources", "mapper", mapperFile)),
+                    StandardCharsets.UTF_8);
+            assertThat(xml).as(mapperFile).contains("ais_inv_ods.wind_cbondissuer issuer")
+                    .doesNotContain("wind_compintroduction");
         }
     }
 

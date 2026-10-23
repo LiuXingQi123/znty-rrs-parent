@@ -65,6 +65,7 @@ import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.bo.UserBo;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
+import com.znty.rrs.entity.forbiddenpooladjust.CompanyAdjustCheckContext;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitDto;
@@ -194,7 +195,7 @@ public class ForbiddenPoolAdjustService {
 
     /**
      * 分页查询可调整的发行主体，并批量回填旗下债券数量。
-     * <p>数据源 {@code wind_cbondissuer} 为债券+主体粒度，Mapper 内已按 {@code s_info_compcode} 去重。
+     * <p>数据源为全量主体公司简介 {@code wind_compintroduction}。
      */
     public PageResult<ForbiddenPoolAdjustDto> queryCompanyPage(ForbiddenPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
@@ -316,17 +317,33 @@ public class ForbiddenPoolAdjustService {
      * 校验主体调整并生成关系配置对应的自动项。
      */
     public AdjustCheckDto checkCompanyAdjust(ForbiddenPoolAdjustCheckReq req) {
+        // 单笔入口保持实时读取，批量入口显式传入本次校验的数据
+        return checkCompanyAdjust(req, null);
+    }
+
+    /** 基于当前批量匹配结果加载一次公共配置，不缓存池状态和流程结果。 */
+    public CompanyAdjustCheckContext createCompanyCheckContext(Map<String, ForbiddenPoolAdjustDto> companies) {
+        return new CompanyAdjustCheckContext(companies, investmentPoolMapper.queryPoolList(),
+                forbiddenPoolAdjustMapper.queryAllPoolRelationList());
+    }
+
+    /** 主体批量校验复用本次匹配资料，逐项规则与单笔入口一致。 */
+    public AdjustCheckDto checkCompanyAdjust(ForbiddenPoolAdjustCheckReq req, CompanyAdjustCheckContext context) {
         // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         ForbiddenPoolAdjustReq detailReq = new ForbiddenPoolAdjustReq();
         detailReq.setCompanyCode(req.getCompanyCode());
         // 查询主体详情并校验存在
-        ForbiddenPoolAdjustDto company = queryCompanyDetail(detailReq);
+        ForbiddenPoolAdjustDto company = context == null
+                ? queryCompanyDetail(detailReq) : context.getCompanyMap().get(req.getCompanyCode());
+        if (company == null) {
+            throw new BizException(404, "公司主体不存在，companyCode=" + req.getCompanyCode());
+        }
         // 校验手工调整池 ID 合法性
         validateManualCheckPoolIds(req.getItems());
         AdjustCheckReq checkReq = new AdjustCheckReq();
         checkReq.setSecurityCode(company.getCompanyCode());
-        checkReq.setSecurityShortName(company.getCompanyShortName());
+        checkReq.setSecurityShortName(company.getCompanyFullName());
         checkReq.setSecurityType(COMPANY_SECURITY_TYPE);
         List<AdjustCheckReq.CheckItem> items = new ArrayList<>();
         for (ForbiddenPoolAdjustCheckReq.CheckItem source : req.getItems()) {
@@ -339,19 +356,19 @@ public class ForbiddenPoolAdjustService {
         }
         checkReq.setItems(items);
         // 复用本类内部的完整关系和流程校验实现
-        AdjustCheckDto result = checkAdjust(checkReq);
-        // 主体手工及联动项统一携带主数据身份，校验失败项也保留真实简称
+        AdjustCheckDto result = context == null ? checkAdjust(checkReq) : checkAdjust(checkReq, context);
+        // 主体手工及联动项统一携带主数据身份，校验失败项也保留主体全称
         for (AdjustCheckDto.CheckResultItem item : result.getItems()) {
             if (item.getSecurityCode() == null || item.getSecurityCode().trim().isEmpty()
                     || company.getCompanyCode().equals(item.getSecurityCode())) {
                 item.setSecurityCode(company.getCompanyCode());
-                item.setSecurityShortName(company.getCompanyShortName());
+                item.setSecurityShortName(company.getCompanyFullName());
                 item.setSecurityType(COMPANY_SECURITY_TYPE);
                 item.setSourceSecurityCode(company.getCompanyCode());
             }
         }
         // 追加主体调入实际目标池时，旗下债券需要执行的互斥调出项
-        appendCompanyBondMutexOutItems(company.getCompanyCode(), result);
+        appendCompanyBondMutexOutItems(company.getCompanyCode(), result, context);
         return result;
     }
 
@@ -361,6 +378,13 @@ public class ForbiddenPoolAdjustService {
      * <p>互斥项与主体手工调入项共用流程和批次，但调整对象为具体债券。
      */
     private void appendCompanyBondMutexOutItems(String companyCode, AdjustCheckDto result) {
+        // 单笔调用仍读取当前池与关系配置
+        appendCompanyBondMutexOutItems(companyCode, result, null);
+    }
+
+    /** 追加债券互斥项，批量入口使用本次公共配置，债券及池状态仍实时查询。 */
+    private void appendCompanyBondMutexOutItems(String companyCode, AdjustCheckDto result,
+                                                CompanyAdjustCheckContext context) {
         if (result == null || result.getItems() == null) {
             return;
         }
@@ -373,9 +397,11 @@ public class ForbiddenPoolAdjustService {
         if (inboundItems.isEmpty()) {
             return;
         }
-        Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
+        List<InvestmentPoolBo> pools = context == null ? investmentPoolMapper.queryPoolList() : context.getPools();
+        Map<Long, InvestmentPoolBo> poolMap = pools.stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
-        List<PoolRelationBo> relations = forbiddenPoolAdjustMapper.queryAllPoolRelationList();
+        List<PoolRelationBo> relations = context == null
+                ? forbiddenPoolAdjustMapper.queryAllPoolRelationList() : context.getRelations();
         // 收集已存在的真实调出项，避免跨目标池重复生成债券调出记录
         Set<String> outboundKeys = result.getItems().stream()
                 .filter(item -> AdjustMode.OUT.getCode().equals(item.getAdjustMode()))
@@ -573,7 +599,7 @@ public class ForbiddenPoolAdjustService {
                                                                  ForbiddenPoolAdjustDto company) {
         SecurityPoolAdjustSubmitReq target = new SecurityPoolAdjustSubmitReq();
         target.setSecurityCode(company.getCompanyCode());
-        target.setSecurityShortName(company.getCompanyShortName());
+        target.setSecurityShortName(company.getCompanyFullName());
         target.setSecurityType(COMPANY_SECURITY_TYPE);
         target.setAdjustType(req.getAdjustType());
         target.setAdjustReason(req.getAdjustReason());
@@ -1744,12 +1770,18 @@ public class ForbiddenPoolAdjustService {
      * @return 包含手动项和自动项的完整校验结果列表
      */
     public AdjustCheckDto checkAdjust(AdjustCheckReq req) {
+        // 单笔请求不复用其他调用的数据
+        return checkAdjust(req, null);
+    }
+
+    /** 执行相同的完整校验规则，按需使用当前批次公共数据。 */
+    private AdjustCheckDto checkAdjust(AdjustCheckReq req, CompanyAdjustCheckContext context) {
 
         // ══ 第一阶段：前置校验 ══
         validateCheckAdjustReq(req);
 
         // ══ 第二阶段：参数初始化 ══
-        AdjustSharedData shared = loadSharedData(req);
+        AdjustSharedData shared = loadSharedData(req, context);
 
         // 预先将全部手动选择项注册到"已覆盖"集合，确保第三、四阶段生成的自动项
         // 不会与用户手动选择的项产生重复结果（手动项优先，自动项跳过已覆盖的 key）
@@ -1814,9 +1846,23 @@ public class ForbiddenPoolAdjustService {
      * @param req 调库校验请求（需携带 securityCode）
      * @return 封装了本次校验全量共享数据的 AdjustSharedData
      */
-    private AdjustSharedData loadSharedData(AdjustCheckReq req) {
+    private AdjustSharedData loadSharedData(AdjustCheckReq req, CompanyAdjustCheckContext context) {
         // 按调整对象读取基础信息并校验存在
-        SecurityInfoBo securityInfo = queryAdjustSecurityInfo(req.getSecurityCode(), req.getSecurityType());
+        SecurityInfoBo securityInfo;
+        if (context != null && COMPANY_SECURITY_TYPE.equals(req.getSecurityType())) {
+            ForbiddenPoolAdjustDto company = context.getCompanyMap().get(req.getSecurityCode());
+            securityInfo = null;
+            if (company != null) {
+                securityInfo = new SecurityInfoBo();
+                securityInfo.setWindCode(company.getCompanyCode());
+                securityInfo.setFullName(company.getCompanyFullName());
+                securityInfo.setShortName(company.getCompanyShortName());
+                securityInfo.setSecurityType(COMPANY_SECURITY_TYPE);
+            }
+        } else {
+            // 单笔及非主体对象保持按实际代码查询
+            securityInfo = queryAdjustSecurityInfo(req.getSecurityCode(), req.getSecurityType());
+        }
         if (securityInfo == null) {
             throw new BizException(COMPANY_SECURITY_TYPE.equals(req.getSecurityType())
                     ? "公司主体不存在" : "证券不存在");
@@ -1824,7 +1870,7 @@ public class ForbiddenPoolAdjustService {
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
-        List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
+        List<InvestmentPoolBo> allPools = context == null ? investmentPoolMapper.queryPoolList() : context.getPools();
         for (InvestmentPoolBo p : allPools) {
             poolMap.put(p.getId(), p);
         }
@@ -1835,7 +1881,7 @@ public class ForbiddenPoolAdjustService {
 
         // 全量投资池关系配置，构建三层嵌套 Map（poolId → relationType → 关联池列表）
         Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(
-                forbiddenPoolAdjustMapper.queryAllPoolRelationList());
+                context == null ? forbiddenPoolAdjustMapper.queryAllPoolRelationList() : context.getRelations());
 
         // 提取本次请求中调入/调出各自涉及的目标池 ID 集合，供互斥冲突校验使用
         Set<Long> requestInPoolIds  = new HashSet<>();

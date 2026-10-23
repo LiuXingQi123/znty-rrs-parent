@@ -95,8 +95,8 @@ public class TempSecurityCodePersistenceTest {
         }
         jdbc.execute("CREATE ALIAS DATE_FORMAT FOR 'com.znty.rrs.service.TempSecurityCodePersistenceTest.formatDate'");
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
-        jdbc.execute("CREATE TABLE ais_inv_ods.wind_cbondissuer (s_info_compcode VARCHAR(32),s_info_compname VARCHAR(200))");
-        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuer VALUES ('C10001','测试发行主体')");
+        jdbc.execute("CREATE TABLE ais_inv_ods.wind_compintroduction (COMP_ID VARCHAR(40),COMP_NAME VARCHAR(200),COMP_SNAME VARCHAR(100))");
+        jdbc.update("INSERT INTO ais_inv_ods.wind_compintroduction VALUES ('C10001','测试发行主体','主体简称')");
         jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(64),security_type_name VARCHAR(100)"
                 + ",category_type VARCHAR(32),is_deleted INT)");
         jdbc.update("INSERT INTO dict_security_type VALUES ('mtn','中期票据','bond',0)");

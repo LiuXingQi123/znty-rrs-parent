@@ -21,9 +21,12 @@ import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
+import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
+import com.znty.rrs.entity.forbiddenpooladjust.CompanyAdjustCheckContext;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto;
+import com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportCheckItemDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportItemDto;
@@ -51,6 +54,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -90,6 +94,8 @@ public class SecurityPoolExcelImportService {
     private static final int MAX_FILE_BYTES = 5 * 1024 * 1024;
     /** 单次导入最大数据行数 */
     private static final int MAX_ROWS = 2000;
+    /** 主体匹配每批最大条件数，避免生成过长 SQL */
+    private static final int COMPANY_QUERY_BATCH_SIZE = 500;
 
     /** 导入批次号序号生成器 */
     private static final AtomicInteger IMP_SEQ = new AtomicInteger(0);
@@ -197,11 +203,18 @@ public class SecurityPoolExcelImportService {
             item.setUpdtTime(now);
             // 按导入类型写入字段槽
             fillFromExcelRow(item, row, importType);
-
+            items.add(item);
+        }
+        boolean company = IMPORT_TYPE_COMPANY.equals(importType);
+        // 按优先级批量查询当前上传涉及的主体，行循环只做内存匹配
+        CompanyImportLookup lookup = company ? loadCompanyImportLookup(items) : new CompanyImportLookup();
+        for (SysImpTmpDetlBo item : items) {
             List<String> preFail = new ArrayList<>();
-            boolean company = IMPORT_TYPE_COMPANY.equals(importType);
-            if (isBlank(item.getFld001())) {
-                preFail.add(company ? "主体代码为空" : "证券代码为空");
+            if (company) {
+                // 按信用代码、主体代码、主体全称顺序匹配，回填后参与重复检查
+                resolveCompanyCode(item, lookup.codeMatches, preFail);
+            } else if (isBlank(item.getFld001())) {
+                preFail.add("证券代码为空");
             }
             if (!company && isBlank(item.getFld003())) {
                 preFail.add("父池名称为空");
@@ -218,7 +231,6 @@ public class SecurityPoolExcelImportService {
                 // 拼接前置失败原因
                 item.setChkDscr(joinReasons(preFail));
             }
-            items.add(item);
         }
         if (IMPORT_TYPE_SECURITY.equals(importType)) {
             // 仅上传时默认选择首个关联主体，后续分页和校验保留业务的选择
@@ -683,6 +695,99 @@ public class SecurityPoolExcelImportService {
         return checkItems;
     }
 
+    /** 仅为上一级未命中的行批量加载下一级条件，结果和主体资料限本次调用复用。 */
+    private CompanyImportLookup loadCompanyImportLookup(List<SysImpTmpDetlBo> items) {
+        CompanyImportLookup lookup = new CompanyImportLookup();
+        for (int type = 0; type < 3; type++) {
+            Set<String> values = new LinkedHashSet<>();
+            for (SysImpTmpDetlBo item : items) {
+                // 已命中或已有歧义的高优先级条件均不继续向下查询
+                String[] conditions = companyLookupValues(item);
+                boolean resolved = false;
+                for (int earlier = 0; earlier < type; earlier++) {
+                    if (!lookup.codeMatches.getOrDefault(earlier + "|" + conditions[earlier],
+                            Collections.emptyList()).isEmpty()) {
+                        resolved = true;
+                        break;
+                    }
+                }
+                if (!resolved && !conditions[type].isEmpty()) {
+                    values.add(conditions[type]);
+                }
+            }
+            List<String> conditions = new ArrayList<>(values);
+            for (int start = 0; start < conditions.size(); start += COMPANY_QUERY_BATCH_SIZE) {
+                List<String> chunk = conditions.subList(start,
+                        Math.min(start + COMPANY_QUERY_BATCH_SIZE, conditions.size()));
+                for (String value : chunk) {
+                    lookup.codeMatches.put(type + "|" + value, new ArrayList<>());
+                }
+                List<CompanyImportMatchDto> matches = securityPoolExcelImportMapper.queryCompanyMatchList(type, chunk);
+                for (CompanyImportMatchDto match : matches) {
+                    List<String> codes = lookup.codeMatches.get(type + "|" + match.getLookupValue());
+                    if (codes == null || isBlank(match.getCompanyCode())) {
+                        continue;
+                    }
+                    if (!codes.contains(match.getCompanyCode()) && codes.size() < 2) {
+                        codes.add(match.getCompanyCode());
+                    }
+                    ForbiddenPoolAdjustDto company = new ForbiddenPoolAdjustDto();
+                    company.setCompanyCode(match.getCompanyCode());
+                    company.setCompanyFullName(match.getCompanyFullName());
+                    company.setCompanyShortName(match.getCompanyShortName());
+                    lookup.companies.putIfAbsent(match.getCompanyCode(), company);
+                }
+            }
+        }
+        return lookup;
+    }
+
+    /** 取得规范化查询条件，数组位置对应信用代码、主体代码、主体名称。 */
+    private String[] companyLookupValues(SysImpTmpDetlBo item) {
+        return new String[]{trimToEmpty(item.getFld005()), trimToEmpty(item.getFld001()), trimToEmpty(item.getFld002())};
+    }
+
+    /** 单次上传或校验的主体匹配数据，不保存到服务字段。 */
+    private static class CompanyImportLookup {
+        /** 原条件对应的最多两个不同主体代码，用于判断歧义 */
+        private final Map<String, List<String>> codeMatches = new HashMap<>();
+        /** 已查询主体资料，供当前完整校验复用 */
+        private final Map<String, ForbiddenPoolAdjustDto> companies = new HashMap<>();
+    }
+
+    /** 按优先级读取批量匹配结果；未填写或未命中时才进入下一级。 */
+    private void resolveCompanyCode(SysImpTmpDetlBo item, Map<String, List<String>> companyCache,
+                                    List<String> reasons) {
+        // 规范化各级查询条件，同批相同条件复用查询结果
+        String creditCode = trimToEmpty(item.getFld005());
+        String companyCode = trimToEmpty(item.getFld001());
+        String companyName = trimToEmpty(item.getFld002());
+        if (creditCode.isEmpty() && companyCode.isEmpty() && companyName.isEmpty()) {
+            reasons.add("统一社会信用代码、主体代码和主体全称均为空");
+            return;
+        }
+        String[] values = {creditCode, companyCode, companyName};
+        String[] labels = {"统一社会信用代码", "主体代码", "主体全称"};
+        for (int index = 0; index < values.length; index++) {
+            String value = values[index];
+            if (value.isEmpty()) {
+                continue;
+            }
+            String key = index + "|" + value;
+            List<String> codes = companyCache.getOrDefault(key, Collections.emptyList());
+            if (codes.size() > 1) {
+                reasons.add(labels[index] + "[" + value + "]匹配多个主体代码，请核对主体信息");
+                return;
+            }
+            if (!codes.isEmpty()) {
+                item.setFld001(codes.get(0));
+                return;
+            }
+        }
+        reasons.add("未找到主体：统一社会信用代码[" + creditCode + "]、主体代码[" + companyCode
+                + "]、主体全称[" + companyName + "]均未匹配");
+    }
+
     /**
      * 主体导入校验：编排对齐 {@link ForbiddenPoolAdjustService#checkCompanyAdjust}。
      * <p>每行 Excel 对应「一主体 + 一目标池 + 方向」→ 调用禁投池主体完整校验；
@@ -693,19 +798,26 @@ public class SecurityPoolExcelImportService {
             String opterId, Date now) {
         List<SecurityPoolExcelImportCheckItemDto> checkItems = new ArrayList<>();
         Map<String, InvestmentPoolBo> poolNameCache = new HashMap<>();
+        // 本次校验重新批量读取主体，复用资料不再逐行查询公司简介
+        CompanyImportLookup lookup = loadCompanyImportLookup(items);
+        CompanyAdjustCheckContext checkContext = null;
+        Map<Long, String> permissionErrors = new HashMap<>();
+        Set<String> seenKeys = new HashSet<>();
         String adjustMode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
 
         for (SysImpTmpDetlBo item : items) {
             List<String> preReasons = new ArrayList<>();
+            // 重新按优先级复核主体身份，匹配成功后继续完整调库校验
+            resolveCompanyCode(item, lookup.codeMatches, preReasons);
             String code = trimToEmpty(item.getFld001());
             String parentName = trimToEmpty(item.getFld003());
             String childName = trimToEmpty(item.getFld004());
 
-            if (code.isEmpty()) {
-                preReasons.add("主体代码为空");
-            }
             if (childName.isEmpty()) {
                 preReasons.add("子池名称为空");
+            }
+            if (!code.isEmpty() && !childName.isEmpty() && !seenKeys.add(code + "|" + childName)) {
+                preReasons.add("Excel 内相同主体代码与子池重复");
             }
 
             InvestmentPoolBo pool = null;
@@ -719,11 +831,18 @@ public class SecurityPoolExcelImportService {
                 } else {
                     item.setFld009(String.valueOf(pool.getId()));
                     item.setFld010(pool.getPoolType());
-                    try {
-                        // 校验 Excel 导入权限
-                        validateExcelImportPermission(opterId, pool.getId());
-                    } catch (BizException e) {
-                        preReasons.add(e.getMessage());
+                    if (!permissionErrors.containsKey(pool.getId())) {
+                        String error = null;
+                        try {
+                            // 同一批次相同目标池仅核验一次导入权限，拒绝结果同样复用
+                            validateExcelImportPermission(opterId, pool.getId());
+                        } catch (BizException e) {
+                            error = e.getMessage();
+                        }
+                        permissionErrors.put(pool.getId(), error);
+                    }
+                    if (permissionErrors.get(pool.getId()) != null) {
+                        preReasons.add(permissionErrors.get(pool.getId()));
                     }
                 }
             }
@@ -749,7 +868,11 @@ public class SecurityPoolExcelImportService {
 
             AdjustCheckDto checkDto;
             try {
-                checkDto = forbiddenPoolAdjustService.checkCompanyAdjust(companyReq);
+                if (checkContext == null) {
+                    // 首个进入完整校验的主体才加载当前批次公共池配置
+                    checkContext = forbiddenPoolAdjustService.createCompanyCheckContext(lookup.companies);
+                }
+                checkDto = forbiddenPoolAdjustService.checkCompanyAdjust(companyReq, checkContext);
             } catch (BizException e) {
                 List<String> reasons = Collections.singletonList(e.getMessage());
                 // 标记导入行校验失败
@@ -2154,7 +2277,7 @@ public class SecurityPoolExcelImportService {
 
     /**
      * 将 Excel 行按导入类型写入通用字段槽
-     * <p>证券/主体模板均为四列；评级主体在上传后由页面选择。</p>
+     * <p>证券模板四列、主体模板五列；证券评级主体在上传后由页面选择。</p>
      */
     private void fillFromExcelRow(SysImpTmpDetlBo item, Map<String, String> row, String importType) {
         // 按表头读取父池名称
@@ -2164,7 +2287,8 @@ public class SecurityPoolExcelImportService {
         if (IMPORT_TYPE_COMPANY.equals(importType)) {
             // 按表头读取主体代码/名称
             item.setFld001(cell(row, "主体代码"));
-            item.setFld002(cell(row, "主体名称"));
+            item.setFld002(cell(row, "主体全称"));
+            item.setFld005(cell(row, "统一社会信用代码"));
         } else {
             // 按表头读取证券代码/名称
             item.setFld001(cell(row, "证券代码"));
@@ -2380,6 +2504,7 @@ public class SecurityPoolExcelImportService {
         dto.setSecurityName(bo.getFld002());
         dto.setParentPoolName(bo.getFld003());
         dto.setChildPoolName(bo.getFld004());
+        dto.setUnifiedSocialCreditCode(bo.getFld005());
         dto.setRelatedCompanyCode(bo.getFld011());
         dto.setRelatedCompanyName(bo.getFld012());
         dto.setSelfSelectedRightsHolderCode(bo.getFld013());

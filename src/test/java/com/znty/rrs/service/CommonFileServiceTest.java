@@ -48,6 +48,28 @@ public class CommonFileServiceTest {
         assertTrue(dto.getFileSize() != null && dto.getFileSize() > 0);
     }
 
+    /** 主体模板在子池后增加信用代码列，保留示例及代码文本格式。 */
+    @Test
+    public void downloadCompanyTemplateShouldExposeCreditCodeAsThirdColumn() throws Exception {
+        CommonFileReq req = new CommonFileReq();
+        req.setTemplateCode("company_pool_import");
+        CommonFileDto dto = service.downloadTemplate(req);
+        try (Workbook book = new XSSFWorkbook(new ByteArrayInputStream(Base64.getDecoder().decode(dto.getContentBase64())))) {
+            Sheet sheet = book.getSheetAt(0);
+            String[] headers = {"父池名称", "子池名称", "统一社会信用代码", "主体全称", "主体代码"};
+            assertEquals(5, sheet.getRow(0).getLastCellNum());
+            for (int column = 0; column < headers.length; column++) {
+                assertEquals(headers[column], sheet.getRow(0).getCell(column).getStringCellValue());
+            }
+            for (int row : new int[]{1, sheet.getLastRowNum()}) {
+                assertEquals("@", sheet.getRow(row).getCell(2).getCellStyle().getDataFormatString());
+                assertEquals("@", sheet.getRow(row).getCell(4).getCellStyle().getDataFormatString());
+            }
+            assertEquals("某省交通投资集团有限公司", sheet.getRow(1).getCell(3).getStringCellValue());
+            assertEquals("C10001", sheet.getRow(1).getCell(4).getStringCellValue());
+        }
+    }
+
     /** 验证 CRMW 池导入模板可从 classpath 正常读取。 */
     @Test
     public void downloadTemplateShouldReturnCrmwPoolImportBytes() {

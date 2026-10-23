@@ -36,7 +36,7 @@
 | 控件 | v-model | 匹配方式 | 说明 |
 |---|---|---|---|
 | 文本输入 | `companyCode` | 模糊 | 主体代码，回车查询 |
-| 文本输入 | `companyName` | 模糊 | 主体名称，回车查询 |
+| 文本输入 | `companyName` | 模糊 | 主体全称，回车查询 |
 | 文本输入 | `securityCode` | 模糊 | 证券代码，回车查询 |
 | 文本输入 | `securityShortName` | 模糊 | 证券名称，回车查询 |
 | 下拉 | `categoryType` | 精确 | 对象类型：`company`=主体 / `bond`=债券；未选则全部 |
@@ -117,22 +117,17 @@
 ```sql
 SELECT al.id, al.adjuster_name, al.submit_time, al.security_short_name,
        al.security_code, al.adjust_batch_no,
-       COALESCE(wci.s_info_compname, bi.issuer, al.security_short_name) AS issuer, al.adjust_type, al.adjust_mode,
+       COALESCE(wci.COMP_NAME, bi.issuer, al.security_short_name) AS issuer, al.adjust_type, al.adjust_mode,
        al.target_pool_id, p.pool_name AS target_pool_name, al.audit_status
 FROM ip_adjust_log al
 INNER JOIN ip_investment_pool p ON p.id = al.target_pool_id
                                  AND p.pool_type = 'forbidden'
 LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
--- wind_cbondissuer 为债券+主体粒度，先按主体代码去重再 JOIN，避免同主体多债行膨胀
-LEFT JOIN (
-    SELECT s_info_compcode, MAX(s_info_compname) AS s_info_compname
-    FROM ais_inv_ods.wind_cbondissuer
-    GROUP BY s_info_compcode
-) wci ON wci.s_info_compcode = al.security_code AND al.security_type = 'company'
+LEFT JOIN ais_inv_ods.wind_compintroduction wci ON wci.COMP_ID = al.security_code AND al.security_type = 'company'
 <where>
     al.is_deleted = 0
-    <if companyCode>   AND (wci.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%') OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%')) </if>
-    <if companyName>   AND COALESCE(wci.s_info_compname, bi.issuer) LIKE CONCAT('%', #{companyName}, '%') </if>
+    <if companyCode>   AND (wci.COMP_ID LIKE CONCAT('%', #{companyCode}, '%') OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%')) </if>
+    <if companyName>   AND COALESCE(wci.COMP_NAME, bi.issuer) LIKE CONCAT('%', #{companyName}, '%') </if>
     <if securityCode>  AND al.security_code LIKE CONCAT('%', #{securityCode}, '%') </if>
     <if securityShortName> AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%') </if>
     <if categoryType=='company'> AND al.security_type = 'company' </if>
@@ -147,7 +142,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 ```
 
 特点：
-- 主体级流水通过去重后的 Wind 主体表（`s_info_compcode`/`s_info_compname`）匹配；债券流水继续通过 `rrs_securityinfo` 的 `issuer_code`/`issuer` 反查。
+- 主体级流水通过公司简介表（`COMP_ID`/`COMP_NAME`）匹配；债券流水继续通过 `rrs_securityinfo` 的 `issuer_code`/`issuer` 反查。
 - 返回 `adjustBatchNo`，历史页跳转详情时携带该批次号以加载同批次流程步骤。
 - 历史筛选日期语义为提交日期（`al.submit_time`）；页面显示“提交开始/提交结束”。
 - 对象类型筛选：`categoryType='company'` 时仅主体；`categoryType='bond'` 时仅债券；未传则不限制。
@@ -165,7 +160,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 | 主表 | `ip_pool_status`（当前状态表，快照） | `ip_adjust_log`（调库流水表） |
 | 含义 | 此刻仍在禁投池中的证券 | 所有针对禁投池的调整动作（含已调出/驳回/撤回） |
 | 池范围过滤 | `INNER JOIN ip_investment_pool p ON p.pool_type='forbidden'` | 同左 |
-| 筛选项 | 证券代码/简称/类型/对象类型/状态/调整日期/调整人/发行主体/调整状态 | 主体代码/主体名称/证券代码/证券名称/对象类型/调整日期/调整人/调整方向/调整状态 |
+| 筛选项 | 证券代码/简称/类型/对象类型/状态/调整日期/调整人/发行主体/调整状态 | 主体代码/主体全称/证券代码/证券名称/对象类型/调整日期/调整人/调整方向/调整状态 |
 | 表格列 | 含证券类型/证券状态/退市日期/行权日期 | 含调整类型/调整方向/审批状态 |
 | 证券名称/代码 | 可点击跳详情 | 可点击跳详情，主体记录跳主体详情 |
 | 接口数 | 2（分页 + 类型下拉） | 1（仅分页） |

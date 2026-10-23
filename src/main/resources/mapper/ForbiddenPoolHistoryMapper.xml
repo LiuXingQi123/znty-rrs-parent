@@ -5,7 +5,7 @@
 
     <!--
       分页查询禁投池调整历史。
-      wind_cbondissuer 为债券+主体粒度，JOIN 前先按 s_info_compcode 去重，避免同主体多债行膨胀。
+      公司简介按 COMP_ID 关联主体，主体名称统一展示 COMP_NAME 全称。
     -->
     <select id="queryForbiddenPoolHistoryPage" resultType="com.znty.rrs.entity.forbiddenpoolhistory.ForbiddenPoolHistoryDto">
         SELECT al.id
@@ -16,7 +16,7 @@
                ,al.security_code
                ,al.adjust_batch_no
                ,dst.category_type
-               ,COALESCE(wci.s_info_compname, bi.issuer, al.security_short_name) AS issuer
+               ,COALESCE(wci.COMP_NAME, bi.issuer, al.security_short_name) AS issuer
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
@@ -28,12 +28,7 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = al.security_type
                                         AND dst.is_deleted = 0
         LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
-        LEFT JOIN (
-            SELECT s_info_compcode
-                   ,MAX(s_info_compname) AS s_info_compname
-            FROM ais_inv_ods.wind_cbondissuer
-            GROUP BY s_info_compcode
-        ) wci ON wci.s_info_compcode = al.security_code
+        LEFT JOIN ais_inv_ods.wind_compintroduction wci ON wci.COMP_ID = al.security_code
              AND al.security_type = 'company'
         <where>
             al.is_deleted = 0
@@ -47,11 +42,11 @@
                 </foreach>
             </if>
             <if test="companyCode != null and companyCode != ''">
-                AND (wci.s_info_compcode LIKE CONCAT('%', #{companyCode}, '%')
+                AND (wci.COMP_ID LIKE CONCAT('%', #{companyCode}, '%')
                      OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%'))
             </if>
             <if test="companyName != null and companyName != ''">
-                AND COALESCE(wci.s_info_compname, bi.issuer) LIKE CONCAT('%', #{companyName}, '%')
+                AND COALESCE(wci.COMP_NAME, bi.issuer) LIKE CONCAT('%', #{companyName}, '%')
             </if>
             <if test="securityCode != null and securityCode != ''">
                 AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')

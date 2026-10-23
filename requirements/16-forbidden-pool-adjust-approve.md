@@ -20,6 +20,8 @@
 
 ## 2. 筛选与查询逻辑
 
+主体基本信息统一读取 `ais_inv_ods.wind_compintroduction`，展示主体全称（`COMP_NAME`）、代码、统一社会信用代码、主体类型、企业性质、省份、城市、成立日期、注册地址及旗下债券数量；不再展示旧表行业、金融机构等属性。申请名称字段使用全称，历史调库记录继续读取业务快照。
+
 ### 2.1 详情并发加载（`loadDetailData`，与 [15] 同构 5 接口）
 
 `queryCompanyDetail` / `queryAdjustPoolList`(in) / `queryAdjustPoolList`(out) / `queryCompanyPoolStatus` / `queryAdjustLogList { companyCode, adjustBatchNo }`。
