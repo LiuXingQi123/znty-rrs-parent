@@ -5,6 +5,10 @@
 > 公共模板下载：`/api/v1/commonFile/downloadTemplate`  
 > 角色定位：具备投资池 `excel_importable` 权限的用户，通过 Excel 批量发起**证券**或**主体**池调入/调出。
 
+### 同券关联市场范围
+
+同券关联市场与投资池投资市场共用 `MarketCode` 集合（`SSE/SZSE/NIB/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`），不另设白名单。先按 Wind `EXCHMARKET` 筛选主代码和关联代码，再查询本地主档；范围外代码不参与关联展示、关联校验和关联出入库，缺少主档不阻断，范围内缺少主档或市场仍报错。不按代码后缀或 `S_INFO_EXCHMARKET` 推断；目标池勾选的市场仍是逐券入池限制，不用于裁剪同券集合。证券池、ABS、CRMW、批量、Excel 及临时转正复用同一查询。
+
 ## 同券跨市场整组校验
 
 同一非空 ISIN 的主券与关联券逐码校验后，同一调库组（`adjustGroupKey`）任一项失败即整组不可调整；保留失败代码和具体原因，不允许跳过失败券而只提交其他市场。其他独立调库组不受影响。

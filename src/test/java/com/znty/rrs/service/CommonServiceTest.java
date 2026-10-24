@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.entity.common.GuarantorGradeDto;
+import com.znty.rrs.common.enums.MarketCode;
 import com.znty.rrs.entity.common.GuarantorGradeReq;
 import com.znty.rrs.mapper.CommonMapper;
 import org.junit.Test;
@@ -20,6 +21,17 @@ import static org.mockito.Mockito.when;
  * 公共查询业务服务测试
  */
 public class CommonServiceTest {
+
+    /** 页面选项和投资池保存校验共用同一市场集合，查询结果不可改写枚举。 */
+    @Test
+    public void queryMarketCodeListShouldUseSharedMarkets() {
+        CommonService service = new CommonService();
+        List<String> codes = service.queryMarketCodeList();
+        assertThat(codes).containsExactlyElementsOf(MarketCode.queryCodeList());
+        assertThat(codes).allMatch(MarketCode::isValid);
+        codes.clear();
+        assertThat(service.queryMarketCodeList()).hasSize(MarketCode.values().length);
+    }
 
     /** 验证证券代码会去空、去重后一次性筛选合格主体并查询评分 */
     @Test

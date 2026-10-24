@@ -25,6 +25,12 @@ public class CommonController {
     @Resource
     private CommonService commonService;
 
+    /** 查询投资市场共用代码，中文名称由前端映射。 */
+    @PostMapping("/queryMarketCodeList")
+    public ApiResponse<List<String>> queryMarketCodeList(@RequestBody CommonReq req) {
+        return ApiResponse.success(commonService.queryMarketCodeList());
+    }
+
     /**
      * 查询投资池树节点列表
      *

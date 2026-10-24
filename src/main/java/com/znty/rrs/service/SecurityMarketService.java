@@ -69,10 +69,10 @@ public class SecurityMarketService {
         return result;
     }
 
-    /** 按当前代码读取其他市场代码；临时代码不进入 Wind 同券关联。 */
+    /** 按共用市场集合读取同券代码；范围外代码及临时代码不进入 Wind 同券关联。 */
     public List<SecurityMarketDto> queryRelatedMarketCodes(String windCode) {
         queryMarketCode(windCode);
-        List<String> codes = securityMarketMapper.queryRelatedWindCodeList(windCode);
+        List<String> codes = securityMarketMapper.queryRelatedWindCodeList(windCode, MarketCode.queryCodeList());
         Map<String, String> markets = queryMarketCodeMap(codes);
         List<SecurityMarketDto> result = new ArrayList<>();
         for (Map.Entry<String, String> entry : markets.entrySet()) {

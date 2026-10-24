@@ -107,6 +107,7 @@
 - 请求体：`{id, poolName, poolCode, marketCodes, varietyCodes, hsPoolName, inFlow, outFlow, simpleInFlow, simpleOutFlow, batchInFlow, batchOutFlow, inReportRestriction, outReportRestriction, maxCapacity, outerSort, innerSort, description, operatorId}`（流程字段为完整 `FlowOptionDto`）
 - 后端 `editPoolConfig`（`@Transactional`）：校验 id、池存在；`buildPoolForEdit` set 指定字段（含 **`poolCode`** 唯一性校验排除自身、**`poolType` 必填可改**；**不更新 status、poolLevel、parentId**）；`applyFlow` 对 6 流程逐个 `normalizeFlow`（flowId 为 null 时清空）；`editPoolConfig` UPDATE（含 `pool_type`）；`addPoolEvent(UPDATE)`。
 - 流程字段存储为快照（flowId/flowKey/flowName 三列），避免流程改名后历史池配置失真。
+- 投资市场选项通过 `POST /api/v1/common/queryMarketCodeList`（入参 `{}`，返回代码列表）读取，与同券关联筛选及保存校验共用 `MarketCode`；前端仅映射中文名称，不单独维护可选市场范围。
 - 投资市场 `marketCodes` 保存前逐项按 `MarketCode.isValid()` 校验，合法值为 `SSE/SZSE/NIB/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`。非法编码、大小写或空格不一致、空字符串及 `null` 元素均拒绝保存，错误包含数组下标与原值；不写配置及修改事件。未传列表或传空列表仍保存为 `[]`，保留既有空配置语义。
 - 银行间统一使用 `NIB`，与 `rrs_securityinfo.market` 和临时代码登记市场一致；`CIBM`、`IB` 均非合法市场编码。证券代码的 `.IB` 后缀不变，恒生导出将 `NIB` 转为数字编码 `4`。存量池配置若仍含 `CIBM`，需改为 `NIB` 后才能匹配银行间证券；本次仅更新代码与初始化脚本，不自动迁移存量库。
 

@@ -7,7 +7,7 @@
 
 ### 证券市场与历史展示
 
-证券主档仅保留当前 `wind_code`，主档保留独立外部 `sec_id`，末尾追加 `market VARCHAR(10) DEFAULT NULL`，与 Wind `EXCHMARKET` 原值一致。市场经统一服务直接读取 `rrs_securityinfo.market`（银行间使用 NIB），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind 非空 ISIN 关联同券代码；空 ISIN 不关联，同市场多个代码完整展示。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
+证券主档仅保留当前 `wind_code`，主档保留独立外部 `sec_id`，末尾追加 `market VARCHAR(10) DEFAULT NULL`，与 Wind `EXCHMARKET` 原值一致。市场经统一服务直接读取 `rrs_securityinfo.market`（银行间使用 NIB），临时代码使用登记市场。详情返回 `marketCode`、只读 `relatedMarketCodes: [{ windCode, marketCode }]`，按 Wind 非空 ISIN 关联同券代码；空 ISIN 不关联，同市场多个代码完整展示。同券关联市场与投资池投资市场共用 `MarketCode` 集合（`SSE/SZSE/NIB/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`），不另设白名单。先按 Wind `EXCHMARKET` 筛选主代码和关联代码，再查询本地主档；范围外代码不参与关联展示、关联校验和关联出入库，缺少主档不阻断，范围内缺少主档或市场仍报错。不按代码后缀或 `S_INFO_EXCHMARKET` 推断；目标池勾选的市场仍是逐券入池限制，不用于裁剪同券集合。证券池、ABS、CRMW、批量、Excel 及临时转正复用同一查询。旧市场字段不再提交、写主档或写证券/CRMW 快照。历史详情和审批在读快照后补查当前关联关系，其他业务信息保留原快照。每条实际代码按自身市场独立校验。
 
 ---
 

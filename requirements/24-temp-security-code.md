@@ -65,11 +65,11 @@
 
 1. `validateUpdateReq`（仅 id + 正式证券代码必填）→ `queryOperableTempSecurityCode`（查询登记，必须 `temporary`）
 2. 正式证券从主数据选券校验（`queryFormalSecurityByCode`，排除 temporary 占位）；正式码不能等于临时码
-   - **转正前置判断**：人工更新与 `bond_temp_code_replace` 定时转正，在任何转换写入前检查所选正式代码及按现有非空 ISIN 关联的全部市场代码。只查询 `ip_adjust_log.security_code`；任一代码存在调整日志即报错，提示命中证券代码和调库记录 ID，不区分投资池、CRMW 凭证、调整方向、审批状态或软删除标志。无 ISIN 时只检查所选代码；临时代码本身的日志不作为正式代码历史判断依据。即使临时代码没有当前在池或在途业务，也执行该检查。不额外查询池状态或转正映射；`wind_code_sync` 换码不执行此判断。
+   - **转正前置判断**：人工更新与 `bond_temp_code_replace` 定时转正，在任何转换写入前检查所选正式代码及按现有非空 ISIN 及共用市场范围关联的全部市场代码。只查询 `ip_adjust_log.security_code`；任一代码存在调整日志即报错，提示命中证券代码和调库记录 ID，不区分投资池、CRMW 凭证、调整方向、审批状态或软删除标志。无 ISIN 时只检查所选代码；临时代码本身的日志不作为正式代码历史判断依据。即使临时代码没有当前在池或在途业务，也执行该检查。不额外查询池状态或转正映射；`wind_code_sync` 换码不执行此判断。
    - 以下转换组件及其既有分支保持不变，仅在通过上述前置判断后执行；后续分支不能绕过正式代码已有调整日志的限制。
 3. 临时字段只读（用库内原值）；正式名称、类型以主数据结果为准，市场经统一服务查询当前正式 Wind 代码的唯一映射；不覆盖正式主档的独立 `sec_id`
 4. **统一转换入口**（`convertTempSecurityBusinessData`）按四阶段组织：①初始化替换及审计参数；②由 `TempSecurityCodeBusinessConverter.prepareOrdinaryPoolConversion` 和 `prepareCrmwConversion` 分别加载、校验普通池及 CRMW 标的整组转换计划，全部通过后更新转正登记 `status=updated`（影响行数必须为 1）；③由同组件的 `convertOrdinaryPoolBusinessData` 处理普通池当前在池状态和流程中申请，覆盖六种业务情况；④由同组件的 `convertCrmwBusinessData` 在每个凭证下整组处理标的全部市场代码，保留原凭证，与普通池一致先处理当前在池状态、再迁移流程中申请，并同步 CRMW 专属快照；匹配临时代码的 `crmw_*` 凭证字段仍沿用旧替换分支。各阶段共用外层事务，任一阶段失败时整次转正回滚。
-5. **各分支规则**：生成普通池计划时复用 `SecurityMarketService.queryRelatedMarketCodes`，正式代码的非空 ISIN → 全部同券代码，去重、不递归、不按名称推断。临时占位不参与 Wind 同券查询。
+5. **各分支规则**：生成普通池计划时复用 `SecurityMarketService.queryRelatedMarketCodes`，正式代码的非空 ISIN → 共用市场范围内全部同券代码，去重、不递归、不按名称推断。同券关联市场与投资池投资市场共用 `MarketCode` 集合（`SSE/SZSE/NIB/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`），不另设白名单。先按 Wind `EXCHMARKET` 筛选主代码和关联代码，再查询本地主档；范围外代码不参与关联展示、关联校验和关联出入库，缺少主档不阻断，范围内缺少主档或市场仍报错。不按代码后缀或 `S_INFO_EXCHMARKET` 推断；目标池勾选的市场仍是逐券入池限制，不用于裁剪同券集合。证券池、ABS、CRMW、批量、Excel 及临时转正复用同一查询。临时占位不参与 Wind 同券查询。
    - **普通池在途调库日志**（`00/11`）：原位替换选中正式代码，其他市场生成「关联调整」日志及独立证券快照，沿用原审批状态、批次和已处理步骤，不独立发起流程、不提前落池。原快照业务填写信息保留，实际证券身份按各代码更新。正式代码组在信用债大库（`pool_type=credit_bond`，含各级库）存在独立在途申请时拒绝；其他池独立申请保持原样，不阻断或自动合并。原申请与转正后池状态冲突仍作为迁移数据异常拒绝。
    - **普通池已在池**（`ip_pool_status.audit_status=20`）：每个池
      1. 写「债券临时代码调出」`ip_adjust_log`（`adjust_mode=调出`，`audit_status=20`，系统操作人）

@@ -5,6 +5,10 @@
 > 公共模板下载：`/api/v1/commonFile/downloadTemplate`
 > 角色定位：具备 CRMW 投资池 `excel_importable` 权限的用户，通过 Excel 批量发起 **CRMW 凭证 + 标的证券** 组合的调入/调出。
 
+### 同券关联市场范围
+
+同券关联市场与投资池投资市场共用 `MarketCode` 集合（`SSE/SZSE/NIB/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`），不另设白名单。先按 Wind `EXCHMARKET` 筛选主代码和关联代码，再查询本地主档；范围外代码不参与关联展示、关联校验和关联出入库，缺少主档不阻断，范围内缺少主档或市场仍报错。不按代码后缀或 `S_INFO_EXCHMARKET` 推断；目标池勾选的市场仍是逐券入池限制，不用于裁剪同券集合。证券池、ABS、CRMW、批量、Excel 及临时转正复用同一查询。
+
 ---
 
 ## 标的债券一券多码调库

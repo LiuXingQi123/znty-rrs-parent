@@ -10,6 +10,7 @@ import java.util.List;
 public interface SecurityMarketMapper {
     /** 批量查询原始映射，保留重复行以便识别错误源数据。 */
     List<SecurityMarketMappingDto> queryMarketMappingList(@Param("windCodes") List<String> windCodes);
-    /** 按当前 Wind 记录的非空 ISIN 查询其他市场代码，不递归。 */
-    List<String> queryRelatedWindCodeList(@Param("windCode") String windCode);
+    /** 按非空 ISIN 和共用市场集合查询同券代码，不递归，范围内缺少主档仍保留。 */
+    List<String> queryRelatedWindCodeList(@Param("windCode") String windCode,
+                                         @Param("marketCodes") List<String> marketCodes);
 }

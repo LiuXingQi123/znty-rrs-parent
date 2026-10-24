@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.enums.MarketCode;
 import com.znty.rrs.entity.common.CommonReq;
 import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.common.GuarantorGradeReq;
@@ -29,6 +30,11 @@ public class CommonService {
     /** 投资池业务服务 */
     @Resource
     private InvestmentPoolService investmentPoolService;
+
+    /** 查询投资市场共用代码；同券关联和投资池配置校验使用同一枚举。 */
+    public List<String> queryMarketCodeList() {
+        return MarketCode.queryCodeList();
+    }
 
     /**
      * 查询投资池树节点列表

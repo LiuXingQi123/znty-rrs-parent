@@ -16,7 +16,7 @@
         LEFT JOIN rrs_temp_security_code t ON t.temp_security_code = requested.wind_code
                                               AND si.security_source = 'temporary'
     </select>
-    <!-- 空 ISIN 不参与同券关联，排除自身且去重，正式码缺少主档仍保留供业务报错 -->
+    <!-- 先按 Wind EXCHMARKET 筛选共用市场范围；空 ISIN 不关联，范围内缺主档仍保留供报错 -->
     <select id="queryRelatedWindCodeList" resultType="string">
         SELECT DISTINCT related.S_INFO_WINDCODE
         FROM ais_inv_ods.wind_windcustomcode current_code
@@ -25,6 +25,14 @@
         WHERE current_code.S_INFO_WINDCODE = #{windCode}
           AND current_code.S_INFO_ISINCODE IS NOT NULL
           AND TRIM(current_code.S_INFO_ISINCODE) != ''
+          AND current_code.EXCHMARKET IN
+          <foreach collection="marketCodes" item="marketCode" open="(" separator="," close=")">
+              #{marketCode}
+          </foreach>
+          AND related.EXCHMARKET IN
+          <foreach collection="marketCodes" item="marketCode" open="(" separator="," close=")">
+              #{marketCode}
+          </foreach>
           AND NOT EXISTS (
               SELECT 1 FROM rrs_securityinfo si
               WHERE si.wind_code = #{windCode} AND si.security_source = 'temporary'

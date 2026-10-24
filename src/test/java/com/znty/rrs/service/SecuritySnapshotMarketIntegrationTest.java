@@ -51,8 +51,8 @@ public class SecuritySnapshotMarketIntegrationTest {
         jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('A.IB', 'official', 'NIB'), ('B.SH', 'official', 'SSE'), ('C.SZ', 'official', 'SZSE')");
         jdbc.execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(32))");
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
-        jdbc.execute("CREATE TABLE ais_inv_ods.wind_windcustomcode (S_INFO_WINDCODE VARCHAR(100), S_INFO_EXCHMARKET VARCHAR(10), S_INFO_ISINCODE VARCHAR(40))");
-        jdbc.execute("INSERT INTO ais_inv_ods.wind_windcustomcode VALUES ('A.IB', 'IB', 'SAME'), ('B.SH', 'SSE', 'SAME'), ('C.SZ', 'SZSE', 'OTHER')");
+        jdbc.execute("CREATE TABLE ais_inv_ods.wind_windcustomcode (S_INFO_WINDCODE VARCHAR(100), EXCHMARKET VARCHAR(10), S_INFO_ISINCODE VARCHAR(40))");
+        jdbc.execute("INSERT INTO ais_inv_ods.wind_windcustomcode VALUES ('A.IB', 'NIB', 'SAME'), ('B.SH', 'SSE', 'SAME'), ('C.SZ', 'SZSE', 'OTHER')");
         Configuration config = new Configuration(new Environment("test", new JdbcTransactionFactory(), ds));
         config.setMapUnderscoreToCamelCase(true);
         for (String mapper : new String[]{"SecurityPoolAdjustMapper", "CrmwPoolAdjustMapper", "SecurityMarketMapper"}) {

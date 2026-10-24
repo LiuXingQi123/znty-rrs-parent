@@ -1,5 +1,8 @@
 package com.znty.rrs.common.enums;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 证券市场 / 投资市场编码（唯一权威集合）。
  * <p>池字段 {@code market_codes}、临时代码市场、批量筛选与调库校验均只使用下列 code。
@@ -45,6 +48,15 @@ public enum MarketCode {
     /** 获取 code 值 */
     public String getCode() {
         return code;
+    }
+
+    /** 查询共用市场集合，供投资池选项和 Wind 同券关联筛选使用。 */
+    public static List<String> queryCodeList() {
+        List<String> codes = new ArrayList<>();
+        for (MarketCode market : values()) {
+            codes.add(market.getCode());
+        }
+        return codes;
     }
 
     /**
