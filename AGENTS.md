@@ -80,6 +80,8 @@
 
 ## 工程分层
 
+- 依赖注入统一使用 `@Resource`（`import javax.annotation.Resource;`），不使用 `@Autowired`
+
 每个业务模块只允许创建三个类：
 
 ```
@@ -122,16 +124,45 @@ Mapper       ── 数据库操作接口，对应 XML
 
 ## 注释规范
 
-- **类**：Javadoc，说明职责
+- **表达**：使用中文大白话，简单易懂，讲清楚做什么、为什么这样做，不堆术语
+- **编号**：多步骤说明按实际执行顺序使用 `1.`、`2.`、`3.`、`4.`… 连续编号，一条说明一个步骤；方法内部的多步骤注释也按此编号，不为凑数量拆分步骤
+- **标点**：注释正文、步骤及 `@param` / `@return` 说明末尾不加句号
+- **类**：Javadoc，说明职责；Controller / Mapper 类使用单行 `/** 说明 */`
 - **字段**：`/** 字段说明 */`，**必须保留**（如 `/** 证券池批量调整数据访问组件 */` 紧邻 `private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;`），禁止以“字面翻译型注释”为由删除；判断特征：注释描述的是该字段的用途/类型/职责，与下一行字段声明直接对应
-- **方法**：Javadoc，说明用途，关键参数加 `@param`
+- **Controller / Mapper 方法**：使用单行 Javadoc，如 `/** 分页查询流程列表 */`，简洁说明接口用途或数据库操作，不展开 Service 的执行步骤
+- **Service 方法**：包括私有方法，使用下方多行 Javadoc 格式，先说明用途，再写必要的业务原因或限制，随后用「执行顺序：」列出编号步骤，最后写 `@param` / `@return`；无参数时省略 `@param`，返回 `void` 时省略 `@return`，简单方法按实际逻辑写步骤
+- **其他方法**：Javadoc，说明用途，关键参数加 `@param`
 - **方法内部**：关键步骤添加简洁单行注释；**调用其他私有方法时，必须在调用行上方添加 `//` 注释说明调用目的**（如 `// 构建白名单流程候选项`），禁止省略；该注释属于“调用目的说明”，不得当作“字面翻译型注释”误删
 - **XML**：每个 `<select>` / `<insert>` / `<update>` / `<delete>` 上方添加注释
+
+### Service 方法注释模板
+
+```java
+/**
+ * 按 Excel 导入行批量提交，每行使用各自选择的评级主体，并保存提交时的证券信息
+ *
+ * 先检查所有行是否已有未结束的流程，再创建新流程，避免同一证券代码的多行数据互相阻挡
+ * 每行沿用单只证券的提交步骤，提交时仍要重新检查池状态和容量
+ *
+ * 执行顺序：
+ * 1. 请求列表为空时返回空结果，否则准备整批共用的批次号信息
+ * 2. 创建流程前，逐行检查参数、重复提交、已有未结束流程，以及需要配套调出的互斥池记录
+ * 3. 分别保留每行的提交信息，用后端核实的证券和该行选择的主体生成证券快照
+ * 4. 准备整批共用且不含上传文件的附件信息，再按请求顺序逐行提交调库
+ * 5. 返回每行的提交结果，同一证券代码的各行使用各自选择的主体，任一行提交失败则整批事务回滚
+ *
+ * @param requests 按来源导入行分组的提交请求
+ * @return 每个导入行产生的提交结果
+ */
+```
+
+模板中的业务内容仅为示例，实际注释必须与当前方法的真实处理步骤一致
 
 ---
 
 ## Controller 规范
 
+- 类和方法使用单行 `/** 说明 */` 注释，末尾不加句号
 - 只负责接收请求和返回响应，不写业务逻辑
 - 只调用 Service，禁止直接操作 Mapper
 - 类级别 `@RequestMapping` 必须使用完整资源路径（如 `/api/v1/flows`），禁止只写 `/api/v1`
@@ -143,7 +174,7 @@ Mapper       ── 数据库操作接口，对应 XML
 @RequestMapping("/api/v1/flow")
 public class FlowController {
 
-    @Autowired
+    @Resource
     private FlowService flowService;
 
     /** 分页查询流程列表 */
@@ -164,16 +195,26 @@ public class FlowController {
 
 ## Service 规范
 
+- 每个方法按上文「Service 方法注释模板」编写多行 Javadoc，执行步骤连续编号，末尾不加句号
 - 所有业务逻辑写在 Service 中
 - 分页统一用 `PageHelper.startPage()` 开启，紧接着调用 Mapper
 
 ```java
+/**
+ * 分页查询流程列表
+ *
+ * 执行顺序：
+ * 1. 按请求中的页码和每页条数开启分页，再查询流程列表
+ * 2. 获取总条数，并将列表和分页信息一起返回
+ *
+ * @param req 流程查询条件和分页参数
+ * @return 流程列表和分页信息
+ */
 public PageResult<FlowDto> queryFlowPage(FlowReq req) {
-    // 开启分页
+    // 1. 开启分页后立即查询流程列表
     PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-    // 查询列表
     List<FlowDto> list = flowMapper.queryFlowPage(req);
-    // 获取分页信息
+    // 2. 获取总条数并返回分页结果
     PageInfo<FlowDto> pageInfo = new PageInfo<>(list);
     return new PageResult<>(list, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
 }
@@ -183,7 +224,7 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 
 ## Mapper 规范
 
-- 每个方法加 Javadoc 注释
+- 类和每个方法使用单行 `/** 说明 */` 注释，简洁说明用途，末尾不加句号
 - 只定义接口，SQL 在对应 XML 中编写
 
 ---
@@ -192,13 +233,14 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 
 ### SQL 格式
 
+- **大于号**：SQL 正文及 XML 属性（如 `<if test="count > 0">`）中的大于号直接写 `>`、`>=`，不使用 `&gt;`、`&gt;=`；小于号等仍按 XML 语法要求处理
 - 每个 SQL 标签上方添加注释
 - **复杂 SQL 的 CTE 别名分段必须加注释**：对 `WITH rated AS (...)`、`, old_pick AS (...)`、`, recent_pick AS (...)` 等有业务含义的 CTE，在定义上方使用 `<!-- ... -->` 说明该段用途、数据来源及关键筛选/聚合/排序口径；最终查询前也应说明候选筛选目标。普通字段映射或计算列的 `AS` 别名无需逐字段添加注释。
 - 禁止使用 `<sql>` + `<include>` 抽取公共片段
 - 禁止手动拼 `WHERE 1=1`，统一使用 `<where>` + `<if>`
-- **逗号前置**：`,` 写在列/字段/排序项的前面，不写在后缀行尾
-  - SELECT 列表第二列起、INSERT 列名/值、UPDATE SET 第二项起、ORDER BY 第二项起 — 都以 `,column` 开头
-  - 第一项行不加逗号，后续每行以逗号打头
+- **逗号前置**：`,` 写在列/字段/排序项的前面，逗号后加一个空格，不写在后缀行尾
+  - SELECT 列表第二列起、INSERT 列名/值、UPDATE SET 第二项起、ORDER BY 第二项起 — 都以 `, column` 开头，参数值同样写为 `, #{field}`
+  - 第一项行不加逗号，后续每行以逗号打头，逗号与后面的字段、表达式或参数之间保留一个空格
 - **禁止冗余 AS 别名**：已配置 `map-underscore-to-camel-case: true`，`column_name` 会自动映射为 `columnName`，无需 `AS columnName`
   - 仅以下情况保留 AS：① 计算表达式（COALESCE、COUNT、GROUP_CONCAT 等）② 字面量（如 `'在池' AS status`）③ 返回字段名与数据库列名不一致（如 `id AS flowId`、`b_info_issuer AS issuer`）
 - 演示/初始化 SQL 中新增测试数据字段时，应优先在原始 `INSERT INTO` 数据中补全；不要用后置 `UPDATE` 修补初始化数据，除非是明确的数据迁移脚本或用户特别要求。
@@ -207,8 +249,8 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 <!-- 分页查询流程列表 -->
 <select id="queryFlowPage" resultType="com.example.dto.FlowDto">
     SELECT d.*
-           ,COALESCE(...) AS current_ver
-           ,EXISTS(...) AS has_published_version
+           , COALESCE(...) AS current_ver
+           , EXISTS(...) AS has_published_version
     FROM wf_flow_definition d
     <where>
         <if test="flowName != null and flowName != ''">
@@ -216,19 +258,19 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
         </if>
     </where>
     ORDER BY d.updt_time DESC
-             ,d.id DESC
+             , d.id DESC
 </select>
 
 <!-- 新增记录 -->
 <insert id="addFlow" useGeneratedKeys="true" keyProperty="id">
     INSERT INTO t_flow (
         name
-        ,flow_key
-        ,create_time
+        , flow_key
+        , create_time
     ) VALUES (
         #{name}
-        ,#{flowKey}
-        ,#{crteTime}
+        , #{flowKey}
+        , #{crteTime}
     )
 </insert>
 ```
@@ -298,7 +340,7 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 | 11 | 未经确认引入新的第三方库 |
 | 12 | 类、方法、字段缺少注释 |
 | 13 | SELECT 列表中写可自动映射的 AS 别名（如 `column_name AS columnName`） |
-| 14 | SQL 逗号放行尾（统一逗号前置） |
+| 14 | SQL 逗号放行尾，或前置逗号后未保留一个空格（统一逗号前置，逗号后加一个空格） |
 | 15 | 后端做 code → name 的中文字典映射（应由前端维护） |
 | 16 | `@RequestMapping` 类级别只写 `/api/v1`（应写完整路径） |
 | 17 | URL 路径使用 kebab-case（统一 camelCase） |
