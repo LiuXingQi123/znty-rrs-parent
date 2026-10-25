@@ -42,11 +42,8 @@ public interface TempSecurityCodeMapper {
     List<IpAdjustLogBo> queryFormalGroupCrmwPendingLogList(@Param("codes") List<String> codes,
             @Param("crmwScode") String crmwScode, @Param("crmwStype") String crmwStype);
 
-    /** 查询 CRMW 标的证券快照，保留原申请填写的业务信息。 */
+    /** 查询本笔日志最新的 CRMW 标的快照，旧、新代码快照可同时保留。 */
     AdjustSecuritySnapshotCrmwBo queryCrmwConversionSnapshot(@Param("logId") Long logId);
-
-    /** 更新原 CRMW 申请快照的标的证券身份。 */
-    int editCrmwConversionSnapshotIdentity(AdjustSecuritySnapshotCrmwBo bo);
 
     /** 查询正式代码组当前全部普通池状态。 */
     List<IpPoolStatusBo> queryFormalGroupPoolStatusList(@Param("codes") List<String> codes);
@@ -60,11 +57,8 @@ public interface TempSecurityCodeMapper {
     /** 替换普通池或 CRMW 流程中主项的证券身份与原因，保留原审批信息。 */
     int editConversionPendingLog(@Param("log") IpAdjustLogBo log, @Param("tempCode") String tempCode);
 
-    /** 查询证券快照，保留本笔调库已填写的业务信息。 */
+    /** 查询本笔日志最新的证券快照，旧、新代码快照可同时保留。 */
     AdjustSecuritySnapshotBo queryConversionSnapshot(@Param("logId") Long logId);
-
-    /** 更新在途证券快照的实际证券身份。 */
-    int editConversionSnapshotIdentity(AdjustSecuritySnapshotBo bo);
 
     /** 转正时条件删除普通池当前状态并返回实际影响行数。 */
     int deleteOrdinaryPoolStatusForConversion(@Param("id") Long id, @Param("updateTime") Date updateTime);

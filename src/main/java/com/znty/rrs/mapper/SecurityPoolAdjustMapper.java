@@ -272,8 +272,9 @@ public interface SecurityPoolAdjustMapper {
     /** 新增调库证券信息快照 */
     int addAdjustSecuritySnapshot(AdjustSecuritySnapshotBo bo);
 
-    /** 按调库日志 ID 查询证券信息快照详情（含类型名称） */
-    SecurityInfoDetailDto querySecuritySnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId);
+    /** 按调库日志 ID 和证券代码查询证券信息快照详情（含类型名称） */
+    SecurityInfoDetailDto querySecuritySnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId,
+            @Param("securityCode") String securityCode);
 
     /** 按证券代码查询最新一条有效证券信息快照详情（对齐老 getFinIndByScode） */
     SecurityInfoDetailDto queryLatestSecuritySnapshotDetailByWindCode(@Param("windCode") String windCode);

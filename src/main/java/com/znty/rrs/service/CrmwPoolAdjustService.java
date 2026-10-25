@@ -242,7 +242,8 @@ public class CrmwPoolAdjustService {
         SecurityInfoDetailDto dto = null;
         // ① 有调库日志：该笔 CRMW 调库提交快照整包回显
         if (req.getAdjustLogId() != null) {
-            dto = crmwPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(req.getAdjustLogId());
+            dto = crmwPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(
+                    req.getAdjustLogId(), req.getSecurityCode());
         }
         // ② 无 log 或该 log 无快照：主档打底 + 最新 CRMW 调库快照覆盖可编辑字段
         if (dto == null) {

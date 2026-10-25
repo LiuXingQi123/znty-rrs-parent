@@ -196,8 +196,9 @@ public interface CrmwPoolAdjustMapper {
     /** 新增 CRMW 调库证券信息快照 */
     int addAdjustSecuritySnapshotCrmw(AdjustSecuritySnapshotCrmwBo bo);
 
-    /** 按调库日志 ID 查询 CRMW 调库证券信息快照详情（含类型名称） */
-    SecurityInfoDetailDto querySecuritySnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId);
+    /** 按调库日志 ID 和标的代码查询 CRMW 调库证券信息快照详情（含类型名称） */
+    SecurityInfoDetailDto querySecuritySnapshotDetailByAdjustLogId(@Param("adjustLogId") Long adjustLogId,
+            @Param("securityCode") String securityCode);
 
     /** 按标的证券代码查询最新一条有效 CRMW 调库证券信息快照详情 */
     SecurityInfoDetailDto queryLatestSecuritySnapshotDetailByWindCode(@Param("windCode") String windCode);

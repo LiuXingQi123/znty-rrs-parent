@@ -46,39 +46,18 @@ public interface SecurityCodeConversionMapper {
     /** 查询在途调库日志证券引用主键列表 */
     List<Long> queryPendingAdjustLogSecurityReferenceIdList(SecurityCodeConversionBo bo);
 
-    /** 查询在途普通调库证券快照引用主键列表 */
-    List<Long> queryPendingSecuritySnapshotReferenceIdList(
-            @Param("bo") SecurityCodeConversionBo bo, @Param("idList") List<Long> idList);
-
-    /** 查询在途 CRMW 调库标的证券快照引用主键列表 */
-    List<Long> queryPendingCrmwSecuritySnapshotReferenceIdList(
-            @Param("bo") SecurityCodeConversionBo bo, @Param("idList") List<Long> idList);
+    /** 锁定并查询改码后的在途日志，按最终证券及凭证信息生成新快照 */
+    List<SecurityCodeConversionBo> queryPendingAdjustLogListForSnapshot(@Param("idList") List<Long> idList);
 
     /** 替换在途调库日志证券引用 */
     int editAdjustLogSecurityReference(
             @Param("bo") SecurityCodeConversionBo bo, @Param("idList") List<Long> idList);
 
-    /** 替换在途普通调库证券快照引用 */
-    int editPendingSecuritySnapshotReference(
-            @Param("bo") SecurityCodeConversionBo bo, @Param("idList") List<Long> idList);
-
-    /** 替换在途 CRMW 调库标的证券快照引用 */
-    int editPendingCrmwSecuritySnapshotReference(
-            @Param("bo") SecurityCodeConversionBo bo, @Param("idList") List<Long> idList);
-
     /** 查询在途调库日志 CRMW 凭证引用主键列表 */
     List<Long> queryPendingAdjustLogCrmwReferenceIdList(SecurityCodeConversionBo bo);
 
-    /** 查询在途 CRMW 凭证快照引用主键列表 */
-    List<Long> queryPendingCrmwSnapshotReferenceIdList(
-            @Param("bo") SecurityCodeConversionBo bo, @Param("idList") List<Long> idList);
-
     /** 替换在途调库日志 CRMW 凭证引用 */
     int editAdjustLogCrmwReference(
-            @Param("bo") SecurityCodeConversionBo bo, @Param("idList") List<Long> idList);
-
-    /** 替换在途 CRMW 凭证快照引用 */
-    int editPendingCrmwSnapshotReference(
             @Param("bo") SecurityCodeConversionBo bo, @Param("idList") List<Long> idList);
 
     /** 查询有效普通池状态列表 */
@@ -104,12 +83,11 @@ public interface SecurityCodeConversionMapper {
             @Param("bo") SecurityCodeConversionBo bo,
             @Param("updateTime") Date updateTime);
 
-    /** 从临时证券主数据补建代码转换普通快照 */
+    /** 从目标证券主档新增普通快照，证券代码决定读取正式还是临时主档 */
     int addSecuritySnapshotFromMaster(
             @Param("targetAdjustLogId") Long targetAdjustLogId,
             @Param("submitterId") String submitterId,
-            @Param("formal") boolean formal,
-            @Param("bo") SecurityCodeConversionBo bo,
+            @Param("securityCode") String securityCode,
             @Param("updateTime") Date updateTime);
 
     /** 从原 CRMW 调库快照复制代码转换快照 */
@@ -121,13 +99,9 @@ public interface SecurityCodeConversionMapper {
             @Param("bo") SecurityCodeConversionBo bo,
             @Param("updateTime") Date updateTime);
 
-    /** 从临时证券主数据补建代码转换 CRMW 快照 */
+    /** 按日志中的证券代码读取主档新增 CRMW 快照，凭证字段也取本笔日志 */
     int addCrmwSecuritySnapshotFromMaster(
-            @Param("targetAdjustLogId") Long targetAdjustLogId,
-            @Param("submitterId") String submitterId,
-            @Param("formal") boolean formal,
-            @Param("bo") SecurityCodeConversionBo bo,
-            @Param("poolStatus") SecurityCodeConversionBo poolStatus,
+            @Param("log") SecurityCodeConversionBo log,
             @Param("updateTime") Date updateTime);
 
     /** 锁定并查询原入池日志的有效附件主键 */

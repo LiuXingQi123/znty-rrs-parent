@@ -4,16 +4,20 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.CategoryType;
 import com.znty.rrs.common.enums.MarketCode;
+import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.TempOprtSource;
 import com.znty.rrs.entity.bo.SecurityCodeConversionBo;
 import com.znty.rrs.entity.securitycodeconversion.SecurityCodeConversionReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.SecurityCodeConversionMapper;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -22,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 证券代码转换服务。
- * <p>在证券主数据把临时代码替换为正式代码前，统一迁移仍在运行的业务引用并保留历史审计。</p>
+ * <p>正式主档准备完成后，迁移仍在运行的业务引用，保留旧快照并新增目标代码快照。</p>
  * <p>本服务拥有独立 Mapper 与完整迁移流程，不调用现有临时代码管理、调库或附件 Service，
  * 也不接入现有业务调用链。</p>
  */
@@ -52,9 +56,8 @@ public class SecurityCodeConversionService {
     private SecurityCodeConversionMapper securityCodeConversionMapper;
 
     /**
-     * 在证券主数据更新前，将临时代码的运行态业务引用迁移到正式代码。
-     * <p>本方法强制加入调用方已有事务。调用方须在方法成功后、同一事务内更新或合并
-     * {@code rrs_securityinfo}；不得把两步拆成两个独立事务。</p>
+     * 正式证券主档准备完成后，将临时代码的运行态业务引用迁移到正式代码。
+     * <p>本方法强制加入调用方已有事务，正式主档须先准备好，临时主档仍须保留供旧码业务使用。</p>
      *
      * @param req 临时及正式证券信息
      */
@@ -75,27 +78,35 @@ public class SecurityCodeConversionService {
         if (tempSecurity == null) {
             throw new BizException("临时证券主数据不存在，tempSecurityCode=" + req.getTempSecurityCode());
         }
-        // 正式证券主数据必须由调用方在本方法成功后写入，当前存在会导致主键覆盖语义不明确
+        // 新快照必须取正式主档，不能使用临时主档或请求中的少量身份字段拼凑
         SecurityCodeConversionBo formalSecurity = findSecurityInfo(securityInfoList, securityCode);
-        if (formalSecurity != null) {
-            throw new BizException("正式证券主数据已存在，禁止覆盖或合并，securityCode=" + securityCode);
+        if (formalSecurity == null) {
+            throw new BizException("正式证券主数据不存在，请先准备正式主档，securityCode=" + securityCode);
         }
         // 校验正式证券类型仍属于债券大类
-        validateFormalSecurityType(req.getSecurityType().trim());
+        validateFormalSecurityType(formalSecurity.getSecurityType());
         // 阻止与原临时代码管理流程同时处理同一条记录
         validateNoActiveTempRegistration(tempSecurityCode);
         // 构建全部迁移 SQL 共用的参数
         SecurityCodeConversionBo replaceBo = buildReplaceBo(tempSecurity, req);
+        replaceBo.setFullName(formalSecurity.getFullName());
+        replaceBo.setShortName(formalSecurity.getShortName());
+        replaceBo.setSecurityName(formalSecurity.getShortName());
+        replaceBo.setSecurityType(formalSecurity.getSecurityType());
         // 转换前校验正式码不会与在途业务单形成同一逻辑对象
         validateNoPendingAdjustConflict(replaceBo);
         // 先记录主档代码映射摘要，确保零业务引用时仍有转换留痕
         addReplaceLog(replaceBo, "rrs_securityinfo", null);
         // 作废浏览器仍可能持有校验结果的未提交导入批次，防止旧代码再次提交
         invalidateAffectedImportDrafts(replaceBo);
-        // 替换在途调库日志及其快照中的证券引用
-        replacePendingSecurityReferences(replaceBo);
-        // 替换在途调库日志及其快照中的 CRMW 凭证引用
-        replacePendingCrmwReferences(replaceBo);
+        // 先更新证券引用，再更新凭证引用；同一日志只生成一份新快照，旧快照不改
+        Set<Long> pendingSnapshotLogIds = new LinkedHashSet<>();
+        // 更新仍在途的证券引用
+        pendingSnapshotLogIds.addAll(replacePendingSecurityReferences(replaceBo));
+        // 更新仍在途的 CRMW 凭证引用
+        pendingSnapshotLogIds.addAll(replacePendingCrmwReferences(replaceBo));
+        // 按日志最终的证券及凭证信息生成目标主档快照
+        addPendingSnapshots(replaceBo, pendingSnapshotLogIds);
         // 转换普通池当前生效状态
         convertActivePoolStatusList(replaceBo, false);
         // 替换普通池当前状态中的 CRMW 凭证引用
@@ -177,11 +188,11 @@ public class SecurityCodeConversionService {
         addReplaceLogList(replaceBo, "sys_imp_tmp", batchIds);
     }
 
-    /** 替换在途调库日志及其证券快照引用。 */
-    private void replacePendingSecurityReferences(SecurityCodeConversionBo replaceBo) {
+    /** 替换在途调库日志的证券引用，旧证券快照保持不变。 */
+    private List<Long> replacePendingSecurityReferences(SecurityCodeConversionBo replaceBo) {
         List<Long> logIds = securityCodeConversionMapper.queryPendingAdjustLogSecurityReferenceIdList(replaceBo);
         if (logIds.isEmpty()) {
-            return;
+            return logIds;
         }
         int updated = securityCodeConversionMapper.editAdjustLogSecurityReference(replaceBo, logIds);
         // 校验在途日志没有发生并发漂移
@@ -189,37 +200,14 @@ public class SecurityCodeConversionService {
         // 记录在途调库日志替换明细
         addReplaceLogList(replaceBo, "ip_adjust_log", logIds);
 
-        List<Long> snapshotIds = securityCodeConversionMapper.queryPendingSecuritySnapshotReferenceIdList(
-                replaceBo, logIds);
-        if (!snapshotIds.isEmpty()) {
-            int snapshotUpdated = securityCodeConversionMapper.editPendingSecuritySnapshotReference(
-                    replaceBo, snapshotIds);
-            // 校验普通证券快照没有发生并发漂移
-            validateUpdatedRows("ip_adjust_security_snapshot.wind_code",
-                    snapshotIds.size(), snapshotUpdated);
-            // 记录普通证券快照替换明细
-            addReplaceLogList(replaceBo, "ip_adjust_security_snapshot", snapshotIds);
-        }
-
-        List<Long> crmwSnapshotIds = securityCodeConversionMapper.queryPendingCrmwSecuritySnapshotReferenceIdList(
-                replaceBo, logIds);
-        if (!crmwSnapshotIds.isEmpty()) {
-            int crmwSnapshotUpdated = securityCodeConversionMapper.editPendingCrmwSecuritySnapshotReference(
-                    replaceBo, crmwSnapshotIds);
-            // 校验 CRMW 标的证券快照没有发生并发漂移
-            validateUpdatedRows("ip_adjust_security_snapshot_crmw.wind_code",
-                    crmwSnapshotIds.size(), crmwSnapshotUpdated);
-            // 记录 CRMW 标的证券快照替换明细
-            addReplaceLogList(replaceBo, "ip_adjust_security_snapshot_crmw.security",
-                    crmwSnapshotIds);
-        }
+        return logIds;
     }
 
-    /** 替换在途调库日志及其 CRMW 凭证快照引用。 */
-    private void replacePendingCrmwReferences(SecurityCodeConversionBo replaceBo) {
+    /** 替换在途调库日志的 CRMW 凭证引用，旧凭证快照保持不变。 */
+    private List<Long> replacePendingCrmwReferences(SecurityCodeConversionBo replaceBo) {
         List<Long> logIds = securityCodeConversionMapper.queryPendingAdjustLogCrmwReferenceIdList(replaceBo);
         if (logIds.isEmpty()) {
-            return;
+            return logIds;
         }
         int updated = securityCodeConversionMapper.editAdjustLogCrmwReference(replaceBo, logIds);
         // 校验在途 CRMW 日志没有发生并发漂移
@@ -227,16 +215,21 @@ public class SecurityCodeConversionService {
         // 记录在途 CRMW 日志替换明细
         addReplaceLogList(replaceBo, "ip_adjust_log.crmw", logIds);
 
-        List<Long> snapshotIds = securityCodeConversionMapper.queryPendingCrmwSnapshotReferenceIdList(
-                replaceBo, logIds);
-        if (!snapshotIds.isEmpty()) {
-            int snapshotUpdated = securityCodeConversionMapper.editPendingCrmwSnapshotReference(
-                    replaceBo, snapshotIds);
-            // 校验 CRMW 凭证快照没有发生并发漂移
-            validateUpdatedRows("ip_adjust_security_snapshot_crmw.crmw_scode",
-                    snapshotIds.size(), snapshotUpdated);
-            // 记录 CRMW 凭证快照替换明细
-            addReplaceLogList(replaceBo, "ip_adjust_security_snapshot_crmw.crmw", snapshotIds);
+        return logIds;
+    }
+
+    /** 按在途日志的最终身份新增主档快照；证券和凭证同时换码时也只生成一份。 */
+    private void addPendingSnapshots(SecurityCodeConversionBo replaceBo, Set<Long> logIds) {
+        if (logIds.isEmpty()) {
+            return;
+        }
+        List<SecurityCodeConversionBo> logs = securityCodeConversionMapper.queryPendingAdjustLogListForSnapshot(
+                new ArrayList<>(logIds));
+        // 所有被改码的在途日志都必须仍可读取，避免漏生成快照
+        validateUpdatedRows("ip_adjust_log.snapshot", logIds.size(), logs.size());
+        for (SecurityCodeConversionBo log : logs) {
+            // 每笔按当前证券主档新增，CRMW 凭证字段使用已经更新完成的日志值
+            addConversionSnapshot(log, replaceBo, log, PoolType.CRMW.getCode().equals(log.getPoolType()), true);
         }
     }
 
@@ -375,7 +368,7 @@ public class SecurityCodeConversionService {
         validateUpdatedRows("ip_adjust_log.formalIn", 1, inLogRows);
         // 校验调入日志已回填主键
         validateGeneratedId("ip_adjust_log.formalIn", inLog.getId());
-        // 为正式代码调入日志复制原提交快照并替换正式证券身份字段
+        // 正式代码调入直接取正式主档新增快照，不复制临时业务填写值
         addConversionSnapshot(poolStatus, replaceBo, inLog, crmwPool, true);
         // 承接原入池日志的有效附件关联，物理文件保持不变
         copyFormalInAttachments(poolStatus, replaceBo, inLog);
@@ -408,25 +401,22 @@ public class SecurityCodeConversionService {
                                        SecurityCodeConversionBo targetLog,
                                        boolean crmwPool,
                                        boolean formal) {
-        int inserted;
-        if (crmwPool) {
+        int inserted = 0;
+        if (!formal && crmwPool) {
             inserted = securityCodeConversionMapper.addCrmwSecuritySnapshotFromSource(
                     poolStatus.getAdjustLogId(), targetLog.getId(), targetLog.getAdjusterId(),
                     formal, replaceBo, replaceBo.getUpdateTime());
-            if (inserted == 0) {
-                inserted = securityCodeConversionMapper.addCrmwSecuritySnapshotFromMaster(
-                        targetLog.getId(), targetLog.getAdjusterId(), formal, replaceBo,
-                        poolStatus, replaceBo.getUpdateTime());
-            }
-        } else {
+        } else if (!formal) {
             inserted = securityCodeConversionMapper.addSecuritySnapshotFromSource(
                     poolStatus.getAdjustLogId(), targetLog.getId(), targetLog.getAdjusterId(),
                     formal, replaceBo, replaceBo.getUpdateTime());
-            if (inserted == 0) {
-                inserted = securityCodeConversionMapper.addSecuritySnapshotFromMaster(
-                        targetLog.getId(), targetLog.getAdjusterId(), formal, replaceBo,
-                        replaceBo.getUpdateTime());
-            }
+        }
+        // 正式代码始终从主档新增；临时出库仅在没有旧快照时从临时主档补建
+        if (formal || inserted == 0) {
+            inserted = crmwPool
+                    ? securityCodeConversionMapper.addCrmwSecuritySnapshotFromMaster(targetLog, replaceBo.getUpdateTime())
+                    : securityCodeConversionMapper.addSecuritySnapshotFromMaster(targetLog.getId(),
+                            targetLog.getAdjusterId(), targetLog.getSecurityCode(), replaceBo.getUpdateTime());
         }
         // 每个生成的调库日志必须恰好有一条证券快照
         validateUpdatedRows(crmwPool ? "ip_adjust_security_snapshot_crmw"

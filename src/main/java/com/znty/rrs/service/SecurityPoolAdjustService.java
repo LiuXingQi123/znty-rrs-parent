@@ -228,7 +228,8 @@ public class SecurityPoolAdjustService {
         SecurityInfoDetailDto dto = null;
         // ① 有调库日志：该笔提交快照整包回显（审批/详情精确留痕）
         if (req.getAdjustLogId() != null) {
-            dto = securityPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(req.getAdjustLogId());
+            dto = securityPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(
+                    req.getAdjustLogId(), req.getSecurityCode());
         }
         // ② 无 log 或该 log 无快照：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终跟主档）
         if (dto == null) {

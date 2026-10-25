@@ -5,6 +5,8 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInterceptor;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
+import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
+import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustReq;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
@@ -25,6 +27,7 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
@@ -1337,7 +1340,9 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo(6);
         assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw WHERE target_pool_id=200 AND is_deleted=0")).isZero();
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw WHERE crmw_scode='K.IB'"
-                + " AND analysis='互斥转池原分析'")).isEqualTo(6);
+                + " AND analysis='互斥转池原分析' AND wind_code='001.IB'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw WHERE crmw_scode='K.IB'"
+                + " AND wind_code LIKE 'FORMAL.%' AND analysis IS NULL")).isEqualTo(6);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_step")).isZero();
         assertThat(jdbc.queryForList("SELECT adjust_reason FROM ip_adjust_log WHERE adjust_batch_no='CRMW_MUTEX'"
                 + " AND adjust_mode='调出'", String.class))
@@ -1618,7 +1623,7 @@ public class TempSecurityCodePersistenceTest {
         originalSnapshot.setIsDeleted(0);
         crmwMapper.addAdjustSecuritySnapshotCrmw(originalSnapshot);
         jdbc.execute("ALTER TABLE ip_adjust_security_snapshot_crmw ADD CONSTRAINT fail_crmw_conversion"
-                + " CHECK (analysis IS NULL OR wind_code <> 'FORMAL.SZ')");
+                + " CHECK (wind_code <> 'FORMAL.SZ')");
 
         // 两类当前状态迁移完成后，在 CRMW 流程中最后一个关联市场的快照写入时失败
         assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB")))
@@ -1845,6 +1850,8 @@ public class TempSecurityCodePersistenceTest {
     private void assertCrmwPendingInbound(String status) throws Exception {
         // 准备正式组
         setupGroup();
+        // 设置正式主档与临时填写值不同的数据，验证空值、非空值及多市场差异
+        seedFormalSnapshotFields();
         // 配置目标池
         addCrmwPool(200L, "[]");
         // 登记临时债
@@ -1864,6 +1871,8 @@ public class TempSecurityCodePersistenceTest {
         snapshot.setCrmwScode("K.IB");
         snapshot.setCrmwStype("crmw");
         snapshot.setAnalysis("原CRMW申请分析");
+        snapshot.setFundUse("临时用途");
+        snapshot.setMaturityDate("20310101");
         snapshot.setIsDeleted(0);
         crmwMapper.addAdjustSecuritySnapshotCrmw(snapshot);
         // 转正补其他市场，原审批不变
@@ -1872,9 +1881,24 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_batch_no='CRMW_PENDING' AND flow_id=23"
                 + " AND adjuster_id='1' AND audit_status='" + status + "'")).isEqualTo(3);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw WHERE analysis='原CRMW申请分析'"
-                + " AND crmw_scode='K.IB' AND wind_code LIKE 'FORMAL.%'")).isEqualTo(3);
+                + " AND crmw_scode='K.IB' AND wind_code LIKE 'FORMAL.%'")).isZero();
         assertThat(jdbc.queryForObject("SELECT wind_code FROM ip_adjust_security_snapshot_crmw WHERE id=?", String.class, snapshot.getId()))
-                .isEqualTo("FORMAL.IB");
+                .isEqualTo("001.IB");
+        assertThat(crmwMapper.querySecuritySnapshotDetailByAdjustLogId(original.getId(), "001.IB").getAnalysis())
+                .isEqualTo("原CRMW申请分析");
+        assertThat(crmwMapper.querySecuritySnapshotDetailByAdjustLogId(original.getId(), "FORMAL.IB").getCouponRate())
+                .isEqualTo("3.5");
+        assertThat(mapper.queryCrmwConversionSnapshot(original.getId()).getWindCode()).isEqualTo("FORMAL.IB");
+        CrmwPoolAdjustService detailService = new CrmwPoolAdjustService();
+        ReflectionTestUtils.setField(detailService, "crmwPoolAdjustMapper", crmwMapper);
+        ReflectionTestUtils.setField(detailService, "securityMarketService", markets);
+        CrmwPoolAdjustReq detailReq = new CrmwPoolAdjustReq();
+        detailReq.setSecurityCode("FORMAL.IB");
+        assertThat(detailService.querySecurityDetail(detailReq).getCouponRate()).isEqualTo("3.5");
+        // 各正式代码分别使用自己的主档，原凭证信息不变
+        assertFormalSnapshotFields("ip_adjust_security_snapshot_crmw");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw WHERE wind_code LIKE 'FORMAL.%'"
+                + " AND crmw_scode='K.IB'")).isEqualTo(3);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_step")).isZero();
         // CRMW 在途申请逐市场写入明细，映射只记录一次。
         assertConversionAudit(temp.getId(), "001.IB", "FORMAL.IB");
@@ -1921,6 +1945,8 @@ public class TempSecurityCodePersistenceTest {
     private void assertPendingInbound(String status) throws Exception {
         // 建立尚未落池的原申请及用户已填写的业务快照
         setupGroup();
+        // 正式券的利率、到期日和分析不应被临时快照中的空值或旧值覆盖
+        seedFormalSnapshotFields();
         // 配置本场景的普通目标池及容量
         addPool(100L, "[]", 10);
         // 通过新增入口登记本场景临时代码
@@ -1931,6 +1957,8 @@ public class TempSecurityCodePersistenceTest {
         snapshot.setAdjustLogId(original.getId());
         snapshot.setWindCode("001.IB");
         snapshot.setAnalysis("原申请填写的分析");
+        snapshot.setFundUse("临时用途");
+        snapshot.setMaturityDate("20310101");
         snapshot.setIsDeleted(0);
         adjustMapper.addAdjustSecuritySnapshot(snapshot);
         // 通过转正入口提交选中的正式代码
@@ -1945,12 +1973,219 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo(3);
         // 核对实际写入数量，避免重复记账或部分落地
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE analysis='原申请填写的分析' AND wind_code LIKE 'FORMAL.%'"))
-                .isEqualTo(3);
+                .isZero();
         assertThat(jdbc.queryForObject("SELECT wind_code FROM ip_adjust_security_snapshot WHERE id=?", String.class, snapshot.getId()))
-                .isEqualTo("FORMAL.IB");
+                .isEqualTo("001.IB");
+        assertThat(adjustMapper.querySecuritySnapshotDetailByAdjustLogId(original.getId(), "001.IB").getAnalysis())
+                .isEqualTo("原申请填写的分析");
+        assertThat(adjustMapper.querySecuritySnapshotDetailByAdjustLogId(original.getId(), "FORMAL.IB").getCouponRate())
+                .isEqualTo("3.5");
+        assertThat(mapper.queryConversionSnapshot(original.getId()).getWindCode()).isEqualTo("FORMAL.IB");
+        // 各市场快照均来自对应正式主档，原临时快照仍可按代码查询
+        assertFormalSnapshotFields("ip_adjust_security_snapshot");
+        assertThat(adjustMapper.queryLatestSecuritySnapshotDetailByWindCode("001.IB").getAnalysis())
+                .isEqualTo("原申请填写的分析");
         // 普通池两种在途状态都逐市场记账，仍沿用原审批。
         assertConversionAudit(temp.getId(), "001.IB", "FORMAL.IB");
         assertFormalGroupAudits(3);
+    }
+
+    /** 人工在池信息转为正式证券时，定时入口也应使用正式主档并保留两类临时快照。 */
+    @Test
+    public void activeConversionShouldUseFormalMasterAndKeepTemporarySnapshots() throws Exception {
+        // 建立各市场有差异的正式主档及两类临时持仓
+        setupGroup();
+        seedFormalSnapshotFields();
+        addPool(100L, "[]", 10);
+        addCrmwPool(200L, "[]");
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        addActive("001.IB", 100L);
+        Long activeLogId = jdbc.queryForObject("SELECT adjust_log_id FROM ip_pool_status WHERE security_code='001.IB'", Long.class);
+        AdjustSecuritySnapshotBo temporary = new AdjustSecuritySnapshotBo();
+        temporary.setAdjustLogId(activeLogId);
+        temporary.setWindCode("001.IB");
+        temporary.setAnalysis("临时在池分析");
+        temporary.setCouponRate("1.0");
+        temporary.setIsDeleted(0);
+        adjustMapper.addAdjustSecuritySnapshot(temporary);
+        IpAdjustLogBo crmwLog = baseLog("001.IB", 200L);
+        crmwLog.setPoolType("crmw");
+        crmwLog.setCrmwScode("K.IB");
+        crmwLog.setCrmwStype("crmw");
+        crmwLog.setAuditStatus("20");
+        adjustMapper.addAdjustLog(crmwLog);
+        crmwLog.setAdjustLogId(crmwLog.getId());
+        crmwMapper.addPoolStatus(crmwLog);
+        AdjustSecuritySnapshotCrmwBo crmwTemporary = new AdjustSecuritySnapshotCrmwBo();
+        crmwTemporary.setAdjustLogId(crmwLog.getId());
+        crmwTemporary.setWindCode("001.IB");
+        crmwTemporary.setAnalysis("CRMW临时在池分析");
+        crmwTemporary.setCouponRate("1.0");
+        crmwTemporary.setIsDeleted(0);
+        crmwMapper.addAdjustSecuritySnapshotCrmw(crmwTemporary);
+        jdbc.update("UPDATE rrs_temp_security_code SET security_code='FORMAL.IB' WHERE id=?", temp.getId());
+
+        service.editTempSecurityCodeToUpdatedByJob(temp.getId());
+
+        // 新快照使用正式主档，历史临时快照内容和代码保持原样
+        assertFormalSnapshotFields("ip_adjust_security_snapshot");
+        assertFormalSnapshotFields("ip_adjust_security_snapshot_crmw");
+        assertThat(adjustMapper.queryLatestSecuritySnapshotDetailByWindCode("001.IB").getAnalysis()).isEqualTo("临时在池分析");
+        assertThat(crmwMapper.queryLatestSecuritySnapshotDetailByWindCode("001.IB").getAnalysis()).isEqualTo("CRMW临时在池分析");
+        assertThat(activeCodes(100L)).containsExactly("FORMAL.IB", "FORMAL.SH", "FORMAL.SZ");
+    }
+
+    /** 转正后正常填写的新快照仍可带出，指定申请与临时代码继续读取自己的快照。 */
+    @Test
+    public void convertedSecurityShouldReadItsLaterSnapshotWithoutChangingOriginalApplication() throws Exception {
+        // 先完成仅有在途申请的转正
+        addPool(100L, "[]", 10);
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        jdbc.update("UPDATE rrs_securityinfo SET coupon_rate='3.5' WHERE wind_code='FORMAL.IB'");
+        IpAdjustLogBo original = addPending("001.IB", 100L, "调入", "00");
+        AdjustSecuritySnapshotBo temporary = new AdjustSecuritySnapshotBo();
+        temporary.setAdjustLogId(original.getId());
+        temporary.setWindCode("001.IB");
+        temporary.setCouponRate("1.0");
+        temporary.setIsDeleted(0);
+        adjustMapper.addAdjustSecuritySnapshot(temporary);
+        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
+        SecurityPoolAdjustService detailService = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(detailService, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(detailService, "securityMarketService", markets);
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityCode("FORMAL.IB");
+        assertThat(detailService.querySecurityDetail(req).getCouponRate()).isEqualTo("3.5");
+        // 模拟正式代码后续申请提交自己的业务值
+        IpAdjustLogBo laterLog = baseLog("FORMAL.IB", 101L);
+        laterLog.setAuditStatus("20");
+        adjustMapper.addAdjustLog(laterLog);
+        AdjustSecuritySnapshotBo later = new AdjustSecuritySnapshotBo();
+        later.setAdjustLogId(laterLog.getId());
+        later.setWindCode("FORMAL.IB");
+        later.setCouponRate("4.2");
+        later.setSubmitTime(new Date(System.currentTimeMillis() + 1000));
+        later.setIsDeleted(0);
+        adjustMapper.addAdjustSecuritySnapshot(later);
+
+        assertThat(detailService.querySecurityDetail(req).getCouponRate()).isEqualTo("4.2");
+        req.setAdjustLogId(original.getId());
+        assertThat(detailService.querySecurityDetail(req).getCouponRate()).isEqualTo("3.5");
+        req.setSecurityCode("001.IB");
+        assertThat(detailService.querySecurityDetail(req).getCouponRate()).isEqualTo("1.0");
+    }
+
+    /** Wind 在途换码按目标主档新增两类快照，旧快照的代码和全部内容保持不变。 */
+    @Test
+    public void windCodeChangeShouldCreateMasterSnapshotsAndKeepOldSnapshots() {
+        jdbc.update("UPDATE rrs_securityinfo SET coupon_rate='3.5',issue_amountplan=1000,maturity_date='20351231',"
+                + "analysis='主档分析' WHERE wind_code='FORMAL.IB'");
+        // 普通池和 CRMW 原业务值与主档不同，新代码必须使用主档值
+        addPool(100L, "[]", 10);
+        // 为 CRMW 标的准备独立目标池
+        addCrmwPool(200L, "[]");
+        // 创建普通池旧代码申请及旧快照
+        IpAdjustLogBo ordinary = addPending("FORMAL.IB", 100L, "调入", "00");
+        AdjustSecuritySnapshotBo snapshot = new AdjustSecuritySnapshotBo();
+        snapshot.setAdjustLogId(ordinary.getId());
+        snapshot.setWindCode("FORMAL.IB");
+        snapshot.setCouponRate("7.0");
+        snapshot.setIsDeleted(0);
+        adjustMapper.addAdjustSecuritySnapshot(snapshot);
+        // 创建同一证券在 CRMW 凭证下的旧申请
+        IpAdjustLogBo crmw = baseLog("FORMAL.IB", 200L);
+        crmw.setPoolType("crmw");
+        crmw.setCrmwScode("K.IB");
+        crmw.setCrmwStype("crmw");
+        crmw.setAuditStatus("00");
+        crmw.setAdjustBatchNo("CRMW_WIND");
+        adjustMapper.addAdjustLog(crmw);
+        AdjustSecuritySnapshotCrmwBo crmwSnapshot = new AdjustSecuritySnapshotCrmwBo();
+        crmwSnapshot.setAdjustLogId(crmw.getId());
+        crmwSnapshot.setWindCode("FORMAL.IB");
+        crmwSnapshot.setCouponRate("8.0");
+        crmwSnapshot.setIsDeleted(0);
+        crmwMapper.addAdjustSecuritySnapshotCrmw(crmwSnapshot);
+        Map<String, Object> oldSnapshot = jdbc.queryForMap("SELECT * FROM ip_adjust_security_snapshot WHERE id=?", snapshot.getId());
+        Map<String, Object> oldCrmwSnapshot = jdbc.queryForMap("SELECT * FROM ip_adjust_security_snapshot_crmw WHERE id=?", crmwSnapshot.getId());
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+
+        // 通过真实 Wind 事务入口完成换码
+        assertThat(service.editWindCodeChangeByJob(windChange("SNAPSHOT", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB")))
+                .isEqualTo(WindCodeChangeResult.UPDATED);
+
+        assertThat(jdbc.queryForMap("SELECT * FROM ip_adjust_security_snapshot WHERE id=?", snapshot.getId())).isEqualTo(oldSnapshot);
+        assertThat(jdbc.queryForMap("SELECT * FROM ip_adjust_security_snapshot_crmw WHERE id=?", crmwSnapshot.getId())).isEqualTo(oldCrmwSnapshot);
+        assertThat(adjustMapper.querySecuritySnapshotDetailByAdjustLogId(ordinary.getId(), "NEW.IB").getCouponRate()).isEqualTo("3.5");
+        assertThat(adjustMapper.querySecuritySnapshotDetailByAdjustLogId(ordinary.getId(), "NEW.IB").getMaturityDate()).isEqualTo("20351231");
+        assertThat(crmwMapper.querySecuritySnapshotDetailByAdjustLogId(crmw.getId(), "NEW.IB").getCouponRate()).isEqualTo("3.5");
+        assertThat(crmwMapper.querySecuritySnapshotDetailByAdjustLogId(crmw.getId(), "NEW.IB").getAnalysis()).isEqualTo("主档分析");
+        assertThat(mapper.queryCrmwConversionSnapshot(crmw.getId()).getCrmwScode()).isEqualTo("K.IB");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot")).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw")).isEqualTo(2);
+        // 重扫同一事件不再新增快照
+        assertThat(service.editWindCodeChangeByJob(windChange("SNAPSHOT", "OFFICIAL_ID", "FORMAL.IB", "NEW.IB")))
+                .isEqualTo(WindCodeChangeResult.ALREADY_COMPLETED);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot")).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw")).isEqualTo(2);
+    }
+
+    /** Wind 处理临时来源的在途申请时，旧快照的空字段不能覆盖换码后的主档。 */
+    @Test
+    public void windTemporaryPendingShouldUseMasterInsteadOfEmptyOldSnapshot() throws Exception {
+        // 准备临时来源主档及已由外部数据补齐的正式信息
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        jdbc.update("UPDATE rrs_securityinfo SET sec_id='REAL_ID',coupon_rate='3.5',maturity_date='20351231' WHERE wind_code='001.IB'");
+        // 建立原临时申请和字段尚未补齐的旧快照
+        addPool(100L, "[]", 10);
+        // 沿用原审批批次，保留真实日志 ID
+        IpAdjustLogBo pending = addPending("001.IB", 100L, "调入", "00");
+        AdjustSecuritySnapshotBo snapshot = new AdjustSecuritySnapshotBo();
+        snapshot.setAdjustLogId(pending.getId());
+        snapshot.setWindCode("001.IB");
+        snapshot.setIsDeleted(0);
+        adjustMapper.addAdjustSecuritySnapshot(snapshot);
+        Map<String, Object> before = jdbc.queryForMap("SELECT * FROM ip_adjust_security_snapshot WHERE id=?", snapshot.getId());
+        when(markets.queryMarketCode("001.IB")).thenReturn("NIB");
+        when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
+
+        // Wind 入口也必须新增正式代码快照，不给原临时快照改码
+        assertThat(service.editWindCodeChangeByJob(windChange("TEMP_SNAPSHOT", "REAL_ID", "001.IB", "NEW.IB")))
+                .isEqualTo(WindCodeChangeResult.UPDATED);
+
+        assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("updated");
+        assertThat(jdbc.queryForMap("SELECT * FROM ip_adjust_security_snapshot WHERE id=?", snapshot.getId())).isEqualTo(before);
+        SecurityPoolAdjustService detailService = new SecurityPoolAdjustService();
+        ReflectionTestUtils.setField(detailService, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(detailService, "securityMarketService", markets);
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityCode("NEW.IB");
+        req.setAdjustLogId(pending.getId());
+        assertThat(detailService.querySecurityDetail(req).getCouponRate()).isEqualTo("3.5");
+        assertThat(detailService.querySecurityDetail(req).getMaturityDate()).isEqualTo("20351231");
+        req.setAdjustLogId(null);
+        assertThat(detailService.querySecurityDetail(req).getCouponRate()).isEqualTo("3.5");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE wind_code='001.IB'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE wind_code='NEW.IB'")).isEqualTo(1);
+    }
+
+    /** 设置正式主档的空值、零值、非空业务信息及逐市场利率。 */
+    private void seedFormalSnapshotFields() {
+        jdbc.update("UPDATE rrs_securityinfo SET full_name='正式全称',issuer='正式发行人',issuer_code='FORMAL_COMP',"
+                + "coupon_rate='3.5',issue_amountplan=1000,info_pledge_ratio=0,maturity_date='20351231',"
+                + "analysis='正式主档分析',fund_use=NULL WHERE wind_code LIKE 'FORMAL.%'");
+        jdbc.update("UPDATE rrs_securityinfo SET coupon_rate='4.1' WHERE wind_code='FORMAL.SZ'");
+    }
+
+    /** 核对两类快照均使用各正式市场主档，临时业务信息没有被复制。 */
+    private void assertFormalSnapshotFields(String table) {
+        assertThat(count("SELECT COUNT(*) FROM " + table + " WHERE wind_code LIKE 'FORMAL.%' AND issuer='正式发行人'"
+                + " AND issuer_code='FORMAL_COMP' AND issue_amountplan=1000 AND info_pledge_ratio=0"
+                + " AND maturity_date='20351231' AND analysis='正式主档分析' AND fund_use IS NULL")).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT coupon_rate FROM " + table + " WHERE wind_code='FORMAL.SZ'", String.class))
+                .isEqualTo("4.1");
+        assertThat(jdbc.queryForObject("SELECT coupon_rate FROM " + table + " WHERE wind_code='FORMAL.IB'", String.class))
+                .isEqualTo("3.5");
     }
 
     /** 建立三条独立证券主档及同券查询结果。 */

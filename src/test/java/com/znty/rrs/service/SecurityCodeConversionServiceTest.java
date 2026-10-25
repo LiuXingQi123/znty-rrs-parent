@@ -57,9 +57,9 @@ public class SecurityCodeConversionServiceTest {
         verify(mapper, never()).addPoolStatus(any(SecurityCodeConversionBo.class));
     }
 
-    /** 验证在途日志与关联快照一起迁移。 */
+    /** 在途日志改码后新增两类主档快照，不使用旧快照生成正式代码信息。 */
     @Test
-    public void replaceReferencesShouldUpdatePendingLogAndSnapshots() {
+    public void replaceReferencesShouldUpdatePendingLogsAndAddMasterSnapshots() {
         SecurityCodeConversionMapper mapper = mock(SecurityCodeConversionMapper.class);
         SecurityCodeConversionService service = buildService(mapper);
         // 准备在途证券引用及两类关联快照
@@ -67,29 +67,59 @@ public class SecurityCodeConversionServiceTest {
         stubSecurityMaster(mapper);
         when(mapper.queryPendingAdjustLogSecurityReferenceIdList(
                 any(SecurityCodeConversionBo.class)))
-                .thenReturn(Collections.singletonList(11L));
+                .thenReturn(Arrays.asList(11L, 12L));
         when(mapper.editAdjustLogSecurityReference(any(SecurityCodeConversionBo.class),
-                eq(Collections.singletonList(11L)))).thenReturn(1);
-        when(mapper.queryPendingSecuritySnapshotReferenceIdList(
-                any(SecurityCodeConversionBo.class), eq(Collections.singletonList(11L))))
-                .thenReturn(Collections.singletonList(21L));
-        when(mapper.editPendingSecuritySnapshotReference(any(SecurityCodeConversionBo.class),
-                eq(Collections.singletonList(21L)))).thenReturn(1);
-        when(mapper.queryPendingCrmwSecuritySnapshotReferenceIdList(
-                any(SecurityCodeConversionBo.class), eq(Collections.singletonList(11L))))
-                .thenReturn(Collections.singletonList(31L));
-        when(mapper.editPendingCrmwSecuritySnapshotReference(
-                any(SecurityCodeConversionBo.class),
-                eq(Collections.singletonList(31L)))).thenReturn(1);
+                eq(Arrays.asList(11L, 12L)))).thenReturn(2);
+        // 查询的是已经改为正式代码的最终日志信息
+        SecurityCodeConversionBo ordinary = buildPoolStatus();
+        ordinary.setId(11L);
+        ordinary.setSecurityCode("102600001.IB");
+        // 第二笔属于 CRMW 标的，凭证信息应从本笔日志传递
+        SecurityCodeConversionBo crmw = buildPoolStatus();
+        crmw.setId(12L);
+        crmw.setSecurityCode("102600001.IB");
+        crmw.setPoolType("crmw");
+        crmw.setCrmwScode("K.IB");
+        when(mapper.queryPendingAdjustLogListForSnapshot(Arrays.asList(11L, 12L)))
+                .thenReturn(Arrays.asList(ordinary, crmw));
 
         service.replaceTempSecurityCodeReferences(buildReq());
 
         verify(mapper).editAdjustLogSecurityReference(any(SecurityCodeConversionBo.class),
-                eq(Collections.singletonList(11L)));
-        verify(mapper).editPendingSecuritySnapshotReference(any(SecurityCodeConversionBo.class),
-                eq(Collections.singletonList(21L)));
-        verify(mapper).editPendingCrmwSecuritySnapshotReference(
-                any(SecurityCodeConversionBo.class), eq(Collections.singletonList(31L)));
+                eq(Arrays.asList(11L, 12L)));
+        verify(mapper).addSecuritySnapshotFromMaster(eq(11L), eq("u1"), eq("102600001.IB"), any(Date.class));
+        verify(mapper).addCrmwSecuritySnapshotFromMaster(eq(crmw), any(Date.class));
+        verify(mapper, never()).addSecuritySnapshotFromSource(any(), any(), any(), anyBoolean(), any(), any());
+        verify(mapper, never()).addCrmwSecuritySnapshotFromSource(any(), any(), any(), anyBoolean(), any(), any());
+    }
+
+    /** 同一笔日志的证券与凭证都改码时，按最终身份只新增一份快照。 */
+    @Test
+    public void replaceReferencesShouldCreateOneSnapshotForOverlappingSecurityAndCredentialChanges() {
+        SecurityCodeConversionMapper mapper = mock(SecurityCodeConversionMapper.class);
+        // 准备不涉及当前场景的空引用
+        stubEmptyRuntimeReferences(mapper);
+        // 正式主档必须先存在
+        stubSecurityMaster(mapper);
+        when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any())).thenReturn(Collections.singletonList(11L));
+        when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any())).thenReturn(Collections.singletonList(11L));
+        when(mapper.editAdjustLogSecurityReference(any(), any())).thenReturn(1);
+        when(mapper.editAdjustLogCrmwReference(any(), any())).thenReturn(1);
+        // 最终日志包含两个已经完成改码的字段
+        SecurityCodeConversionBo log = buildPoolStatus();
+        log.setId(11L);
+        log.setPoolType("crmw");
+        log.setSecurityCode("102600001.IB");
+        log.setCrmwScode("102600001.IB");
+        when(mapper.queryPendingAdjustLogListForSnapshot(Collections.singletonList(11L)))
+                .thenReturn(Collections.singletonList(log));
+
+        // 从公开入口验证去重后的真实调用次数
+        buildService(mapper).replaceTempSecurityCodeReferences(buildReq());
+
+        verify(mapper).queryPendingAdjustLogListForSnapshot(Collections.singletonList(11L));
+        verify(mapper, times(1)).addCrmwSecuritySnapshotFromMaster(eq(log), any(Date.class));
+        verify(mapper, never()).addSecuritySnapshotFromMaster(any(), any(), any(), any());
     }
 
     /** 验证普通池临时代码执行出池并以正式代码重新入池。 */
@@ -124,8 +154,9 @@ public class SecurityCodeConversionServiceTest {
         verify(mapper).deletePoolStatusSoftById(eq(81L), any(Date.class));
         verify(mapper).queryActivePoolStatusCount("102600001.IB", 100L);
         verify(mapper).addPoolStatus(any(SecurityCodeConversionBo.class));
-        verify(mapper, times(2)).addSecuritySnapshotFromSource(
+        verify(mapper, times(1)).addSecuritySnapshotFromSource(
                 any(), any(), any(), anyBoolean(), any(), any());
+        verify(mapper).addSecuritySnapshotFromMaster(eq(1001L), any(), eq("102600001.IB"), any(Date.class));
 
         ArgumentCaptor<SecurityCodeConversionBo> logCaptor = ArgumentCaptor.forClass(
                 SecurityCodeConversionBo.class);
@@ -190,19 +221,17 @@ public class SecurityCodeConversionServiceTest {
                 any(SecurityCodeConversionBo.class));
     }
 
-    /** 验证正式证券主数据已存在时拒绝执行覆盖式转换。 */
+    /** 正式主档必须先准备好，不能从临时数据拼出正式快照。 */
     @Test
-    public void replaceReferencesShouldRejectExistingFormalSecurityInfo() {
+    public void replaceReferencesShouldRejectMissingFormalSecurityInfo() {
         SecurityCodeConversionMapper mapper = mock(SecurityCodeConversionMapper.class);
         SecurityCodeConversionService service = buildService(mapper);
-        SecurityCodeConversionBo formalSecurity = new SecurityCodeConversionBo();
-        formalSecurity.setWindCode("102600001.IB");
         when(mapper.querySecurityInfoListForUpdate(any())).thenReturn(
-                Arrays.asList(buildTempSecurityInfo(), formalSecurity));
+                Collections.singletonList(buildTempSecurityInfo()));
 
         assertThatThrownBy(() -> service.replaceTempSecurityCodeReferences(buildReq()))
                 .isInstanceOf(BizException.class)
-                .hasMessageContaining("正式证券主数据已存在");
+                .hasMessageContaining("正式证券主数据不存在");
 
         verify(mapper, never()).addSecurityCodeConversionLog(
                 any(SecurityCodeConversionBo.class));
@@ -271,7 +300,7 @@ public class SecurityCodeConversionServiceTest {
         });
         when(mapper.addSecuritySnapshotFromSource(any(), any(), any(), anyBoolean(), any(), any()))
                 .thenReturn(0);
-        when(mapper.addSecuritySnapshotFromMaster(any(), any(), anyBoolean(), any(), any()))
+        when(mapper.addSecuritySnapshotFromMaster(any(), any(), any(), any()))
                 .thenReturn(1);
         when(mapper.queryActiveAttachmentIdListForUpdate(701L))
                 .thenReturn(Arrays.asList(61L, 62L));
@@ -286,7 +315,7 @@ public class SecurityCodeConversionServiceTest {
         service.replaceTempSecurityCodeReferences(buildReq());
 
         verify(mapper, times(2)).addSecuritySnapshotFromMaster(
-                any(), any(), anyBoolean(), any(), any());
+                any(), any(), any(), any());
         verify(mapper).addFormalInAttachmentList(eq(701L), eq(3001L), any(Date.class));
     }
 
@@ -329,6 +358,8 @@ public class SecurityCodeConversionServiceTest {
 
     /** 为与当前场景无关的运行态引用提供空结果。 */
     private void stubEmptyRuntimeReferences(SecurityCodeConversionMapper mapper) {
+        when(mapper.addSecuritySnapshotFromMaster(any(), any(), any(), any())).thenReturn(1);
+        when(mapper.addCrmwSecuritySnapshotFromMaster(any(), any())).thenReturn(1);
         when(mapper.querySecurityCategoryType("mtn")).thenReturn("bond");
         when(mapper.queryActiveTempSecurityRegistrationIdListForUpdate("TMP-EXT-001"))
                 .thenReturn(Collections.<Long>emptyList());
@@ -362,8 +393,13 @@ public class SecurityCodeConversionServiceTest {
 
     /** 准备仅存在临时码、正式码尚未写入的证券主数据。 */
     private void stubSecurityMaster(SecurityCodeConversionMapper mapper) {
+        SecurityCodeConversionBo formal = new SecurityCodeConversionBo();
+        formal.setWindCode("102600001.IB");
+        formal.setFullName("某集团2026年度第一期中期票据");
+        formal.setShortName("26某集团MTN001");
+        formal.setSecurityType("mtn");
         when(mapper.querySecurityInfoListForUpdate(any()))
-                .thenReturn(Collections.singletonList(buildTempSecurityInfo()));
+                .thenReturn(Arrays.asList(buildTempSecurityInfo(), formal));
     }
 
     /** 构建外部导入的临时证券主数据。 */

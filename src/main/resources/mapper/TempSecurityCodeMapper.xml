@@ -481,22 +481,13 @@
         ORDER BY id
     </select>
 
-    <!-- 查询原 CRMW 证券快照，零条时由正式主数据建立本次快照 -->
+    <!-- 查询本笔日志最新的 CRMW 证券快照；临时转正可同时保留旧、新代码快照 -->
     <select id="queryCrmwConversionSnapshot" resultType="com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo">
         SELECT * FROM ip_adjust_security_snapshot_crmw
         WHERE adjust_log_id = #{logId} AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT 1
     </select>
-
-    <!-- 更新 CRMW 原申请快照的标的身份，保留凭证及业务填写内容 -->
-    <update id="editCrmwConversionSnapshotIdentity">
-        UPDATE ip_adjust_security_snapshot_crmw
-        SET wind_code = #{windCode}
-           ,full_name = #{fullName}
-           ,short_name = #{shortName}
-           ,security_type = #{securityType}
-           ,updt_time = #{updtTime}
-        WHERE id = #{id} AND is_deleted = 0
-    </update>
 
     <!-- 正式代码组的所有普通池状态，用于整组去重及关系冲突检查 -->
     <select id="queryFormalGroupPoolStatusList" resultType="com.znty.rrs.entity.bo.IpPoolStatusBo">
@@ -535,22 +526,13 @@
           AND audit_status = #{log.auditStatus} AND is_deleted = 0
     </update>
 
-    <!-- 查询原调库快照，零条时由正式主数据建立本次快照 -->
+    <!-- 查询本笔日志最新的证券快照；临时转正可同时保留旧、新代码快照 -->
     <select id="queryConversionSnapshot" resultType="com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo">
         SELECT * FROM ip_adjust_security_snapshot
         WHERE adjust_log_id = #{logId} AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT 1
     </select>
-
-    <!-- 只更新在途快照中的身份，保留原申请填写的评级和业务分析 -->
-    <update id="editConversionSnapshotIdentity">
-        UPDATE ip_adjust_security_snapshot
-        SET wind_code = #{windCode}
-           ,full_name = #{fullName}
-           ,short_name = #{shortName}
-           ,security_type = #{securityType}
-           ,updt_time = #{updtTime}
-        WHERE id = #{id} AND is_deleted = 0
-    </update>
 
     <!-- 普通池整组转换须验证原在池状态确实被移除 -->
     <update id="deleteOrdinaryPoolStatusForConversion">

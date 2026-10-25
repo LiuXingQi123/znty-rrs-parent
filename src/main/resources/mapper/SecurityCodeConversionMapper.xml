@@ -167,34 +167,16 @@
         FOR UPDATE
     </select>
 
-    <!-- 锁定并查询在途普通调库证券快照引用主键 -->
-    <select id="queryPendingSecuritySnapshotReferenceIdList" resultType="long">
-        SELECT id
-        FROM ip_adjust_security_snapshot
-        WHERE is_deleted = 0
-          AND adjust_log_id IN
-        <foreach collection="idList" item="item" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-          AND wind_code = #{bo.tempSecurityCode}
+    <!-- 锁定改码后的在途日志，为每笔最终证券及凭证组合新增快照 -->
+    <select id="queryPendingAdjustLogListForSnapshot" resultType="com.znty.rrs.entity.bo.SecurityCodeConversionBo">
+        SELECT * FROM ip_adjust_log
+        WHERE id IN
+        <foreach collection="idList" item="item" open="(" separator="," close=")">#{item}</foreach>
+          AND is_deleted = 0
+          AND audit_status IN ('00', '11')
         ORDER BY id ASC
         FOR UPDATE
     </select>
-
-    <!-- 锁定并查询在途 CRMW 调库标的证券快照引用主键 -->
-    <select id="queryPendingCrmwSecuritySnapshotReferenceIdList" resultType="long">
-        SELECT id
-        FROM ip_adjust_security_snapshot_crmw
-        WHERE is_deleted = 0
-          AND adjust_log_id IN
-        <foreach collection="idList" item="item" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-          AND wind_code = #{bo.tempSecurityCode}
-        ORDER BY id ASC
-        FOR UPDATE
-    </select>
-
     <!-- 替换仍在途的调库日志证券引用 -->
     <update id="editAdjustLogSecurityReference">
         UPDATE ip_adjust_log
@@ -211,38 +193,6 @@
           AND audit_status IN ('00', '11')
     </update>
 
-    <!-- 替换在途普通调库证券快照引用 -->
-    <update id="editPendingSecuritySnapshotReference">
-        UPDATE ip_adjust_security_snapshot
-        SET wind_code = #{bo.securityCode}
-           ,full_name = #{bo.fullName}
-           ,short_name = #{bo.shortName}
-           ,security_type = #{bo.securityType}
-           ,updt_time = #{bo.updateTime}
-        WHERE id IN
-        <foreach collection="idList" item="item" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-          AND is_deleted = 0
-          AND wind_code = #{bo.tempSecurityCode}
-    </update>
-
-    <!-- 替换在途 CRMW 调库标的证券快照引用 -->
-    <update id="editPendingCrmwSecuritySnapshotReference">
-        UPDATE ip_adjust_security_snapshot_crmw
-        SET wind_code = #{bo.securityCode}
-           ,full_name = #{bo.fullName}
-           ,short_name = #{bo.shortName}
-           ,security_type = #{bo.securityType}
-           ,updt_time = #{bo.updateTime}
-        WHERE id IN
-        <foreach collection="idList" item="item" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-          AND is_deleted = 0
-          AND wind_code = #{bo.tempSecurityCode}
-    </update>
-
     <!-- 锁定并查询在途调库日志 CRMW 凭证引用主键 -->
     <select id="queryPendingAdjustLogCrmwReferenceIdList" resultType="long">
         SELECT id
@@ -250,20 +200,6 @@
         WHERE is_deleted = 0
           AND crmw_scode = #{tempSecurityCode}
           AND audit_status IN ('00', '11')
-        ORDER BY id ASC
-        FOR UPDATE
-    </select>
-
-    <!-- 锁定并查询在途 CRMW 凭证快照引用主键 -->
-    <select id="queryPendingCrmwSnapshotReferenceIdList" resultType="long">
-        SELECT id
-        FROM ip_adjust_security_snapshot_crmw
-        WHERE is_deleted = 0
-          AND adjust_log_id IN
-        <foreach collection="idList" item="item" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-          AND crmw_scode = #{bo.tempSecurityCode}
         ORDER BY id ASC
         FOR UPDATE
     </select>
@@ -283,22 +219,6 @@
           AND is_deleted = 0
           AND crmw_scode = #{bo.tempSecurityCode}
           AND audit_status IN ('00', '11')
-    </update>
-
-    <!-- 替换在途 CRMW 凭证快照引用 -->
-    <update id="editPendingCrmwSnapshotReference">
-        UPDATE ip_adjust_security_snapshot_crmw
-        SET crmw_name = #{bo.shortName}
-           ,crmw_scode = #{bo.securityCode}
-           ,crmw_mktcode = #{bo.securityMarket}
-           ,crmw_stype = #{bo.securityType}
-           ,updt_time = #{bo.updateTime}
-        WHERE id IN
-        <foreach collection="idList" item="item" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-          AND is_deleted = 0
-          AND crmw_scode = #{bo.tempSecurityCode}
     </update>
 
     <!-- 锁定并查询有效普通池状态 -->
@@ -537,7 +457,7 @@
         LIMIT 1
     </insert>
 
-    <!-- 原普通调库快照不存在时，从临时证券主数据补建代码转换快照 -->
+    <!-- 从指定目标证券主档新增普通快照，正式代码不继承旧快照业务值 -->
     <insert id="addSecuritySnapshotFromMaster">
         INSERT INTO ip_adjust_security_snapshot (
             adjust_log_id
@@ -600,9 +520,9 @@
         SELECT #{targetAdjustLogId}
                ,#{submitterId}
                ,#{updateTime}
-               ,CASE WHEN #{formal} = 1 THEN #{bo.securityCode} ELSE source_row.wind_code END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.fullName} ELSE source_row.full_name END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
+               ,source_row.wind_code
+               ,source_row.full_name
+               ,source_row.short_name
                ,source_row.issuer
                ,source_row.issuer_code
                ,source_row.issue_amountplan
@@ -619,7 +539,7 @@
                ,source_row.guarantor_id
                ,source_row.agency_name
                ,source_row.inner_issuer_rating
-               ,CASE WHEN #{formal} = 1 THEN #{bo.securityType} ELSE source_row.security_type END
+               ,source_row.security_type
                ,source_row.sec_typename
                ,source_row.date_call_exists
                ,source_row.inner_guarantor_rating
@@ -654,7 +574,7 @@
                ,#{updateTime}
                ,#{updateTime}
         FROM rrs_securityinfo source_row
-        WHERE source_row.wind_code = #{bo.tempSecurityCode}
+        WHERE source_row.wind_code = #{securityCode}
         LIMIT 1
     </insert>
 
@@ -1007,7 +927,7 @@
         LIMIT 1
     </insert>
 
-    <!-- 原 CRMW 调库快照不存在时，从临时证券主数据补建代码转换快照 -->
+    <!-- 从本笔日志的证券主档新增 CRMW 快照，凭证信息使用本笔日志 -->
     <insert id="addCrmwSecuritySnapshotFromMaster">
         INSERT INTO ip_adjust_security_snapshot_crmw (
             adjust_log_id
@@ -1071,32 +991,16 @@
             ,crte_time
             ,updt_time
         )
-        SELECT #{targetAdjustLogId}
-               ,#{submitterId}
+        SELECT #{log.id}
+               ,#{log.adjusterId}
                ,#{updateTime}
-               ,CASE
-                    WHEN #{formal} = 1 AND #{poolStatus.crmwScode} = #{bo.tempSecurityCode}
-                        THEN #{bo.shortName}
-                    ELSE #{poolStatus.crmwName}
-                END
-               ,CASE
-                    WHEN #{formal} = 1 AND #{poolStatus.crmwScode} = #{bo.tempSecurityCode}
-                        THEN #{bo.securityCode}
-                    ELSE #{poolStatus.crmwScode}
-                END
-               ,CASE
-                    WHEN #{formal} = 1 AND #{poolStatus.crmwScode} = #{bo.tempSecurityCode}
-                        THEN #{bo.securityMarket}
-                    ELSE #{poolStatus.crmwMktcode}
-                END
-               ,CASE
-                    WHEN #{formal} = 1 AND #{poolStatus.crmwScode} = #{bo.tempSecurityCode}
-                        THEN #{bo.securityType}
-                    ELSE #{poolStatus.crmwStype}
-                END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.securityCode} ELSE source_row.wind_code END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.fullName} ELSE source_row.full_name END
-               ,CASE WHEN #{formal} = 1 THEN #{bo.shortName} ELSE source_row.short_name END
+               ,#{log.crmwName}
+               ,#{log.crmwScode}
+               ,#{log.crmwMktcode}
+               ,#{log.crmwStype}
+               ,source_row.wind_code
+               ,source_row.full_name
+               ,source_row.short_name
                ,source_row.issuer
                ,source_row.issuer_code
                ,source_row.issue_amountplan
@@ -1113,7 +1017,7 @@
                ,source_row.guarantor_id
                ,source_row.agency_name
                ,source_row.inner_issuer_rating
-               ,CASE WHEN #{formal} = 1 THEN #{bo.securityType} ELSE source_row.security_type END
+               ,source_row.security_type
                ,source_row.sec_typename
                ,source_row.date_call_exists
                ,source_row.inner_guarantor_rating
@@ -1148,7 +1052,7 @@
                ,#{updateTime}
                ,#{updateTime}
         FROM rrs_securityinfo source_row
-        WHERE source_row.wind_code = #{bo.tempSecurityCode}
+        WHERE source_row.wind_code = #{log.securityCode}
         LIMIT 1
     </insert>
 
@@ -1410,6 +1314,7 @@
             INNER JOIN ip_adjust_log adjust_log ON adjust_log.id = snapshot_row.adjust_log_id
                                              AND adjust_log.is_deleted = 0
                                              AND adjust_log.audit_status IN ('00', '11')
+                                             AND adjust_log.security_code = snapshot_row.wind_code
             WHERE snapshot_row.is_deleted = 0
               AND snapshot_row.wind_code = #{tempSecurityCode}
             UNION ALL
@@ -1418,6 +1323,7 @@
             INNER JOIN ip_adjust_log adjust_log ON adjust_log.id = snapshot_row.adjust_log_id
                                              AND adjust_log.is_deleted = 0
                                              AND adjust_log.audit_status IN ('00', '11')
+                                             AND adjust_log.security_code = snapshot_row.wind_code
             WHERE snapshot_row.is_deleted = 0
               AND snapshot_row.wind_code = #{tempSecurityCode}
             UNION ALL
@@ -1426,8 +1332,10 @@
             INNER JOIN ip_adjust_log adjust_log ON adjust_log.id = snapshot_row.adjust_log_id
                                              AND adjust_log.is_deleted = 0
                                              AND adjust_log.audit_status IN ('00', '11')
+                                             AND adjust_log.security_code = snapshot_row.wind_code
             WHERE snapshot_row.is_deleted = 0
               AND snapshot_row.crmw_scode = #{tempSecurityCode}
+              AND adjust_log.crmw_scode = snapshot_row.crmw_scode
             UNION ALL
             SELECT COUNT(1) AS ref_count
             FROM ip_pool_status

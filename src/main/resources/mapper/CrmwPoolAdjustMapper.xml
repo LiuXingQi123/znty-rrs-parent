@@ -1063,7 +1063,7 @@
         )
     </insert>
 
-    <!-- 按调库日志 ID 查询 CRMW 调库证券信息快照详情 -->
+    <!-- 按调库日志 ID 和标的代码查询快照，区分临时转正保留的旧、新代码快照 -->
     <select id="querySecuritySnapshotDetailByAdjustLogId"
             resultType="com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto">
         SELECT snap.wind_code
@@ -1111,6 +1111,7 @@
         FROM ip_adjust_security_snapshot_crmw snap
         LEFT JOIN dict_security_type dst ON dst.security_type = snap.security_type AND dst.is_deleted = 0
         WHERE snap.adjust_log_id = #{adjustLogId}
+          AND snap.wind_code = #{securityCode}
           AND IFNULL(snap.is_deleted, 0) = 0
         ORDER BY snap.id DESC
         LIMIT 1
