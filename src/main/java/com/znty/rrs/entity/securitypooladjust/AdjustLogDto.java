@@ -26,6 +26,9 @@ public class AdjustLogDto {
     /** 调库批次号 */
     private String adjustBatchNo;
 
+    /** 投资池类型编码 */
+    private String poolType;
+
     /** 投资池路径（父级名称/名称） */
     private String poolPath;
 

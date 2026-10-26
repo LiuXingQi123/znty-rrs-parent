@@ -64,6 +64,9 @@ public interface SecurityPoolAdjustMapper {
     List<RelatedRatingCompanyDto> queryRelatedRatingCompanyList(
             @Param("securityCode") String securityCode);
 
+    /** 按入库时实际采用的评级主体代码查询最新内评，不重新选择关系主体 */
+    RelatedRatingCompanyDto queryLatestRatingCompanyByCode(@Param("companyCode") String companyCode);
+
     /** 分页查询全市场自选权益人候选 */
     List<SelfSelectedRightsHolderDto> querySelfSelectedRightsHolderPage(
             @Param("companyCode") String companyCode,
@@ -261,8 +264,8 @@ public interface SecurityPoolAdjustMapper {
                                        @Param("adjustBatchNo") String adjustBatchNo,
                                        @Param("auditStatus") String auditStatus);
 
-    /** 更新指定批次调入调库记录的目标池（评级联动改判用，仅更新 adjust_mode=调入 的记录） */
-    int editAdjustLogTargetPool(@Param("adjustBatchNo") String adjustBatchNo,
+    /** 精确更新活动信用债调入申请的改判目标池 */
+    int editAdjustLogTargetPool(@Param("adjustLogId") Long adjustLogId,
                                 @Param("targetPoolId") Long targetPoolId,
                                 @Param("targetPoolName") String targetPoolName);
 

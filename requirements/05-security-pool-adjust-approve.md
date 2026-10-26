@@ -176,6 +176,12 @@
 - 负向危险描边按钮调用 `submitAdjustAudit('reject')`，文案 `rejectActionLabel`：修改阶段「终止流程」，其他阶段「驳回」。
 - 驳回/终止流程要求处理意见且二次确认；取消确认不提交。处理期间两个操作按钮禁用，仅本次点击按钮显示 loading。
 - 评级联动改判池在可用场景下保留选择入口，仅正向按钮提交 `redirectPoolId`。
+- 当前用户有待处理步骤且当前调库记录为信用债大库调入（`poolType='credit_bond'`、`adjustMode='调入'`）时，显示「改判目标池（评级联动，可选）」。`queryAdjustLogList` 必须返回原调库记录的 `poolType` 和 `adjustMode`，供页面判断；不选择时按原目标池落地。
+- 候选池查询 `queryRedirectPoolOptions` 传入当前活跃记录的 `securityCode`、`adjustLogId`，后端精确核对申请归属、信用债调入方向及活动状态（`00/11`）。仅审批处理入口有当前用户待办时加载；历史已办和下一步确认不加载。
+- 改判候选接口通过 `poolFullName` 返回完整路径，例如「信用债大库(new)/一级库」「信用债大库(old)/一级库」。后端复用本次已加载的池数据及 `buildPoolPath` 生成，不增加路径查询 SQL；前端直接展示，不再请求投资池列表或拼接路径。原 `poolName` 仍保留末级名称供审批落库，候选范围、原池 ID 及提交值保持不变，不按同名去重。
+- ABS、担保债按本笔申请的证券快照读取单一评级主体代码，再查该主体最新内评；自选权益人同样沿用快照中实际采用的主体。主档多主体逗号串、快照旧评分、其他申请快照均不参与取分。普通债及非担保私募/永续/次级债保持发行主体评分口径。
+- 缺少快照、缺少实际主体代码或代码仍为多主体逗号串时明确报错；ABS 无最新权益人评分时提示主体代码。担保人暂无评分时仍遵循人工入库的发行主体评分规则，不回退旧担保评分。
+- 最终审批从已校验的流程步骤定位同批申请，逐条复核信用债调入记录（含关联市场证券）的允许池，不以首条记录代表整批。全部通过后才按记录 ID 精确修改目标池，配套非信用债调入及调出项保留；任一失败整笔审批回滚。候选展示后评分发生变化，以最终审批时重新读取的最新评分为准。
 
 修改阶段点击「终止流程」并确认后，后端在 `isModifyNode + reject` 命中 `isTerminalByCurrentNode`，将日志置为 `99`（发起人已撤回）。
 
@@ -217,6 +223,7 @@
 | `handlerName` | String | 当前处理人名称 |
 | `adjustReason` | String | 修改节点重新提交的调整原因；null/未传保持原值，空字符串清空 |
 | `adjustAdvice` | String | 修改节点重新提交的调整意见；null/未传保持原值，空字符串清空 |
+| `redirectPoolId` | Long | 可选改判目标池 ID，仅信用债调入正向审批提交；最终按本笔申请主体最新评分复核 |
 | `attachmentChanges` | List<AttachmentChange> | 修改节点提交时携带的附件变更 |
 
 `AttachmentChange` 子结构：`adjustLogId / creditReportFileIndexes / materialFileIndexes / creditReportSourceAttachmentIds / materialSourceAttachmentIds / deleteAttachmentIds`。

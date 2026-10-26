@@ -8,6 +8,7 @@ import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.graderulealert.GradeRuleAlertDto;
 import com.znty.rrs.entity.graderulealert.GradeRuleAlertReq;
+import com.znty.rrs.entity.graderulealert.GradeRuleAlertScanDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.GradeRuleAlertMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -50,6 +51,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"
                     + "处理范围：扫描已在信用债 1～5 级且生效的债券，不含境外债\n"
                     + "复核规则：按当前主体债入库规则复核，包括特殊债、担保债、观察池和重点观察名单\n"
+                    + "评级来源：ABS、担保债沿用当前入库快照的评级主体，按该主体查询最新内评；缺少主体信息则本轮失败并回滚\n"
                     + "本轮命中：本轮仍不符合规则，新增或刷新待办\n"
                     + "本轮失效：曾待处理但本轮已合规或不在扫描范围的待办，状态置为 99\n"
                     + "仍待处理：执行结束后 alert_status=00 的待办数量，可在“我的事宜”查看\n"
@@ -88,9 +90,9 @@ public class GradeRuleAlertService implements RrsScheduledTask {
                 + "pool_level为空或=2");
 
         // 拉取扫描样本
-        List<IpGradeRuleAlertBo> inPoolList = gradeRuleAlertMapper.queryGradedBondInPoolList();
+        List<GradeRuleAlertScanDto> inPoolList = gradeRuleAlertMapper.queryGradedBondInPoolList();
         if (inPoolList == null) {
-            inPoolList = new ArrayList<IpGradeRuleAlertBo>();
+            inPoolList = new ArrayList<GradeRuleAlertScanDto>();
         }
         detailLog.line("扫描样本（在池分级库记录）" + inPoolList.size() + " 条");
 
@@ -98,13 +100,13 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         Date scanTime = new Date();
         // 失效比较使用秒级时间字符串，与 DATETIME 精度对齐
         String scanTimeText = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(scanTime);
-        for (IpGradeRuleAlertBo row : inPoolList) {
+        for (GradeRuleAlertScanDto row : inPoolList) {
             if (row.getSecurityCode() == null || row.getCurrentPoolId() == null) {
                 continue;
             }
-            // 按当前所在分级库复核主体债入库规则
+            // 用当前在池状态的来源日志定位评级主体，再按最新内评复核
             String fail = securityPoolAdjustService.evaluateGradedInboundForPool(
-                    row.getSecurityCode(), row.getCurrentPoolId());
+                    row.getSecurityCode(), row.getCurrentPoolId(), row.getAdjustLogId());
             if (fail == null || fail.isEmpty()) {
                 continue;
             }

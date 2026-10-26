@@ -1,7 +1,7 @@
 package com.znty.rrs.controller;
 
 import com.znty.rrs.common.ApiResponse;
-import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.securitypooladjust.RedirectPoolOptionDto;
 import com.znty.rrs.common.PageResult;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
@@ -189,14 +189,10 @@ public class SecurityPoolAdjustController {
         return ApiResponse.success(securityPoolAdjustService.queryAdjustStepList(req));
     }
 
-    /**
-     * 查询主体债入库矩阵允许的改判池列表（评级联动，调入审批改判用）。
-     *
-     * <p>按证券的主体内评分档 × 期限档查 credit_bond_pool_grade_rule 矩阵得允许池列表，
-     * 供审批页改判池下拉选择。
-     */
+    /** 按本笔信用债调入申请及最新主体内评查询改判候选池 */
     @PostMapping("/queryRedirectPoolOptions")
-    public ApiResponse<List<InvestmentPoolBo>> queryRedirectPoolOptions(@RequestBody SecurityPoolAdjustReq req) {
-        return ApiResponse.success(securityPoolAdjustService.queryRedirectPoolOptions(req.getSecurityCode()));
+    public ApiResponse<List<RedirectPoolOptionDto>> queryRedirectPoolOptions(@RequestBody SecurityPoolAdjustReq req) {
+        return ApiResponse.success(securityPoolAdjustService.queryRedirectPoolOptions(
+                req.getSecurityCode(), req.getAdjustLogId()));
     }
 }

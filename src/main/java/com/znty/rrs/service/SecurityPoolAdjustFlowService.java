@@ -9,6 +9,7 @@ import com.znty.rrs.common.enums.StepStatus;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.ApprovalStrategy;
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.common.enums.PoolType;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
@@ -33,6 +34,7 @@ import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.securitypooladjustflow.SecurityPoolAdjustAuditDto;
 import com.znty.rrs.entity.securitypooladjustflow.SecurityPoolAdjustAuditReq;
+import com.znty.rrs.entity.securitypooladjust.RedirectPoolOptionDto;
 import com.znty.rrs.entity.bo.UserBo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -506,12 +508,24 @@ public class SecurityPoolAdjustFlowService {
     }
 
     /**
-     * 流程最终通过后，更新同批调库日志并落地当前池状态。
+     * 流程最终通过后，更新同批调库日志并落地当前池状态
+     *
+     * 执行顺序：
+     * 1. 从当前审批步骤查询同批调库记录
+     * 2. 有改判目标时逐条核对信用债调入申请的主体快照及最新允许池
+     * 3. 复核最终目标池业务状态，并精确更新改判记录
+     * 4. 更新审核状态、统一落池并沉淀内部报告
+     *
+     * @param step 已校验的当前审批步骤
+     * @param redirectPoolId 可选改判目标池 ID
      */
     private void finishAdjustBatch(IpAdjustStepBo step, Long redirectPoolId) {
         List<IpAdjustLogBo> logList = securityPoolAdjustMapper.queryAdjustLogListForAudit(
                 step.getAdjustLogId(), step.getAdjustBatchNo());
         if (logList.isEmpty()) {
+            if (redirectPoolId != null) {
+                throw new BizException("未找到可改判的信用债调入申请");
+            }
             int updated = securityPoolAdjustMapper.editActiveAdjustLogAuditStatus(
                     step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());
             if (updated == 0) {
@@ -522,34 +536,50 @@ public class SecurityPoolAdjustFlowService {
 
         // 评级联动改判：调入审批通过时，审核人可改判到主体债入库矩阵允许的其它层级池（上调/降库）
         InvestmentPoolBo redirectPool = null;
+        List<IpAdjustLogBo> redirectLogs = new ArrayList<>();
         if (redirectPoolId != null) {
-            String securityCode = logList.get(0).getSecurityCode();
-            // 查矩阵允许池列表（含校验：改判池须在列表内）
-            List<InvestmentPoolBo> allowedPools = securityPoolAdjustService.queryRedirectPoolOptions(securityCode);
-            for (InvestmentPoolBo p : allowedPools) {
-                if (redirectPoolId.equals(p.getId())) {
-                    redirectPool = p;
-                    break;
+            for (IpAdjustLogBo log : logList) {
+                if (!AdjustMode.IN.getCode().equals(log.getAdjustMode())
+                        || !PoolType.CREDIT_BOND.getCode().equals(log.getPoolType())) {
+                    continue;
                 }
+                // 逐条使用本笔申请的主体快照校验，关联市场证券也独立复核
+                List<RedirectPoolOptionDto> allowedPools = securityPoolAdjustService.queryRedirectPoolOptions(
+                        log.getSecurityCode(), log.getId());
+                InvestmentPoolBo matchedPool = null;
+                for (InvestmentPoolBo p : allowedPools) {
+                    if (redirectPoolId.equals(p.getId())) {
+                        matchedPool = p;
+                        break;
+                    }
+                }
+                if (matchedPool == null) {
+                    throw new BizException("证券[" + log.getSecurityCode() + "]申请[" + log.getId()
+                            + "]改判池不在主体债入库矩阵允许列表内");
+                }
+                redirectPool = matchedPool;
+                redirectLogs.add(log);
             }
             if (redirectPool == null) {
-                throw new BizException("改判池不在主体债入库矩阵允许列表内");
+                throw new BizException("未找到可改判的信用债调入申请");
             }
-            // 内存同步：调入日志的目标池改为改判池
-            for (IpAdjustLogBo log : logList) {
-                if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
-                    log.setTargetPoolId(redirectPoolId);
-                    log.setTargetPoolName(redirectPool.getPoolName());
-                }
+            // 仅修改已逐条校验的信用债调入项，保留配套调入及调出项的目标池
+            for (IpAdjustLogBo log : redirectLogs) {
+                log.setTargetPoolId(redirectPoolId);
+                log.setTargetPoolName(redirectPool.getPoolName());
             }
         }
 
         // 最终落池前复核锁池、容量、来源池、限制池、当前池状态和冻结期
         securityPoolAdjustService.recheckBeforeFinalApproval(logList);
         if (redirectPool != null) {
-            // 持久化评级联动改判目标池
-            securityPoolAdjustMapper.editAdjustLogTargetPool(
-                    step.getAdjustBatchNo(), redirectPool.getId(), redirectPool.getPoolName());
+            for (IpAdjustLogBo log : redirectLogs) {
+                int updated = securityPoolAdjustMapper.editAdjustLogTargetPool(
+                        log.getId(), redirectPool.getId(), redirectPool.getPoolName());
+                if (updated != 1) {
+                    throw new BizException("调库申请状态已发生变化，请刷新后重试");
+                }
+            }
         }
         int updated = securityPoolAdjustMapper.editActiveAdjustLogAuditStatus(
                 step.getAdjustLogId(), step.getAdjustBatchNo(), AuditStatus.APPROVED.getCode());

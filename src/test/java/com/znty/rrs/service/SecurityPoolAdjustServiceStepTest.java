@@ -1,5 +1,7 @@
 package com.znty.rrs.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
 import com.znty.rrs.common.enums.RelationType;
@@ -301,9 +303,9 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(req.getSecurityInfo().getInnerGuarantorRating()).isEqualTo("1");
     }
 
-    /** 验证调库记录应返回流程名称。 */
+    /** 验证调库记录返回流程名称及审批改判入口依赖的字段 */
     @Test
-    public void queryAdjustLogListShouldReturnFlowName() {
+    public void queryAdjustLogListShouldReturnFlowNameAndRedirectFields() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
         SecurityPoolAdjustService service = new SecurityPoolAdjustService();
@@ -316,6 +318,8 @@ public class SecurityPoolAdjustServiceStepTest {
         log.setSecurityCode("110010123");
         log.setSecurityShortName("测试债");
         log.setTargetPoolId(3L);
+        log.setPoolType("credit_bond");
+        log.setAdjustMode("调入");
         log.setFlowName("信用债入库审批流程");
         log.setFlowType("normalInbound");
         when(mapper.queryAdjustLogList("110010123", null)).thenReturn(Collections.singletonList(log));
@@ -330,6 +334,9 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(result.get(0).getFlowName()).isEqualTo("信用债入库审批流程");
         assertThat(result.get(0).getSecurityCode()).isEqualTo("110010123");
         assertThat(result.get(0).getFlowType()).isEqualTo("normalInbound");
+        JsonNode json = new ObjectMapper().valueToTree(result);
+        assertThat(json.get(0).path("poolType").asText()).isEqualTo("credit_bond");
+        assertThat(json.get(0).path("adjustMode").asText()).isEqualTo("调入");
     }
 
     /** 查询调库记录时仅应传入当前证券编码，不以批次号扩大查询范围。 */

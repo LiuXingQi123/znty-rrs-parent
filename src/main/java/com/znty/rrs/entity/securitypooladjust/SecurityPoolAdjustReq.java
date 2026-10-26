@@ -31,7 +31,7 @@ public class SecurityPoolAdjustReq extends PageRequest {
     private String currentUserId;
     /** 目标投资池 ID（从具体投资池入口查看时使用） */
     private Long targetPoolId;
-    /** 调库记录 ID（查询流程步骤时使用） */
+    /** 调库记录 ID（查询流程步骤及审批改判候选池时使用） */
     private Long adjustLogId;
     /** 财务报告日期（yyyyMMdd，按指定报告期查询时使用） */
     private Long reportDate;

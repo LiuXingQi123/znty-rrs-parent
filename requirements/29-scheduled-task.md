@@ -341,13 +341,15 @@
 对应老系统 `InconformityMaingrade2Job`。实现类 `GradeRuleAlertService`（`implements RrsScheduledTask`），**只提醒、不改池**。
 
 1. 扫已在信用债 1～5 级且 `audit_status=20` 的债券（`queryGradedBondInPoolList`；不含境外债，对齐老 polidEnum）。  
-2. 对每条调用 `SecurityPoolAdjustService.evaluateGradedInboundForPool`（含特殊债/担保债/观察池、重点观察名单）。  
+2. 扫描携带当前在池记录的 `adjust_log_id`，对每条调用 `SecurityPoolAdjustService.evaluateGradedInboundForPool`（含特殊债/担保债/观察池、重点观察名单）。ABS、非 ABS 担保债按该入库日志及证券代码精确读取快照，以 `guarantor_id` 确定入库实际采用的权益人（自选优先后的最终主体）或担保人，再从 `ais_inv_analysis.v_inv_grade_result` 按该代码取 `ts` 最新的 `total_score`；不使用主档或快照旧评分，不重选关系列表首条，不取同券其他入库记录代替。普通非担保债继续使用原主体内评口径。
 3. 仍允许则跳过；不再允许则 `upsert` `ip_grade_rule_alert`（`alert_status=00`），刷新原因与扫描时间（计入**本轮命中**）。  
 4. 本轮未再命中的待处理记录置 `99` 失效（计入**本轮失效**；含义：曾告警，现已合规或已不在扫描范围）。  
 5. 再统计 `alert_status=00` 为**仍待处理**（执行摘要与影响条数以此为准；过程日志三项分列）。失效比较参数传秒级时间字符串 `yyyy-MM-dd HH:mm:ss`。  
 6. 人工入口在「我的事宜」第三页签（[06](06-my-matters.md)）：`queryAlertPage` 列表、`editAlertProcessed` 标记已处理（不改 `ip_pool_status`）。「去调库」打开证券池调整页，由人下调或出库。  
 
-当前无独立 `GradeRuleAlertApiTest` / `GradeRuleAlertServiceTest`。
+缺少来源入库日志、精确匹配的快照或实际评级主体代码时，抛出包含证券代码、当前池及入库日志 ID 的数据异常，本轮失败并回滚，不执行旧待办失效处理；历史缺失数据须核实治理，不猜选主体。实际主体已明确但最新内评为空时，ABS 保留“所选权益人无内评分”提醒并附主体代码；非 ABS 担保债仍按人工规则使用发行主体内评参与较优值计算。矩阵、期限档与特殊债降档规则不变，不回写主档或历史快照。
+
+回归测试：`GradeRuleAlertServiceTest` 覆盖主档空值及旧评分误报、最新真实降级、同券不同池入库主体、缺失数据和旧待办失效边界；`GradeRuleAlertMapperTest` 用真实 XML 与 H2 验证来源日志映射和精确主体最新内评查询。当前无独立 `GradeRuleAlertApiTest`。
 
 ### 7.8 `pledge_blacklist_daily_increment_reminder`（09:00）
 

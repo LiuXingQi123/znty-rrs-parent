@@ -17,6 +17,7 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.securitypooladjustflow.SecurityPoolAdjustAuditReq;
+import com.znty.rrs.entity.securitypooladjust.RedirectPoolOptionDto;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -611,18 +612,21 @@ public class SecurityPoolAdjustFlowServiceTest {
         log.setSecurityCode("S001");
         log.setAdjustMode("调入");
         log.setTargetPoolId(10L);
+        log.setPoolType("credit_bond");
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
         // 改判池在矩阵允许列表内
-        InvestmentPoolBo redirectPool = new InvestmentPoolBo();
+        RedirectPoolOptionDto redirectPool = new RedirectPoolOptionDto();
         redirectPool.setId(20L);
         redirectPool.setPoolName("一级库");
-        when(securityPoolAdjustService.queryRedirectPoolOptions("S001")).thenReturn(Collections.singletonList(redirectPool));
+        redirectPool.setPoolFullName("信用债大库(new)/一级库");
+        when(securityPoolAdjustService.queryRedirectPoolOptions("S001", 1L)).thenReturn(Collections.singletonList(redirectPool));
+        when(mapper.editAdjustLogTargetPool(1L, 20L, "一级库")).thenReturn(1);
         when(mapper.editActiveAdjustLogAuditStatus(1L, "BATCH001", "20")).thenReturn(1);
 
         ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step, 20L);
 
         // 验证更新日志目标池为改判池
-        verify(mapper).editAdjustLogTargetPool("BATCH001", 20L, "一级库");
+        verify(mapper).editAdjustLogTargetPool(1L, 20L, "一级库");
         // 验证复用统一落池方法并使用改判池
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<IpAdjustLogBo>> captor = ArgumentCaptor.forClass((Class) List.class);
@@ -643,9 +647,10 @@ public class SecurityPoolAdjustFlowServiceTest {
         IpAdjustLogBo log = buildLog(1L, "00", "1");
         log.setSecurityCode("S001");
         log.setAdjustMode("调入");
+        log.setPoolType("credit_bond");
         when(mapper.queryAdjustLogListForAudit(1L, "BATCH001")).thenReturn(Collections.singletonList(log));
         // 改判池不在矩阵允许列表内
-        when(securityPoolAdjustService.queryRedirectPoolOptions("S001")).thenReturn(Collections.<InvestmentPoolBo>emptyList());
+        when(securityPoolAdjustService.queryRedirectPoolOptions("S001", 1L)).thenReturn(Collections.<RedirectPoolOptionDto>emptyList());
 
         try {
             ReflectionTestUtils.invokeMethod(service, "finishAdjustBatch", step, 99L);

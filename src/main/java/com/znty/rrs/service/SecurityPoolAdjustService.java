@@ -55,6 +55,7 @@ import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
+import com.znty.rrs.entity.securitypooladjust.RedirectPoolOptionDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
@@ -1953,6 +1954,7 @@ public class SecurityPoolAdjustService {
             dto.setSecurityShortName(log.getSecurityShortName());
             dto.setSecurityType(log.getSecurityType());
             dto.setAdjustBatchNo(log.getAdjustBatchNo());
+            dto.setPoolType(log.getPoolType());
             dto.setPoolPath(poolFullNameMap.get(log.getTargetPoolId()));
             dto.setAdjustType(log.getAdjustType());
             dto.setAdjustMode(log.getAdjustMode());
@@ -3538,46 +3540,73 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 校验改判目标池是否符合主体债入库矩阵（评级联动，调入审批改判用）。
+     * 按本笔申请的实际评级主体校验改判目标池
      *
-     * 按债券的主体内评分档 × 期限档查 credit_bond_pool_grade_rule 矩阵得允许池列表，
-     * 改判池须在列表内。复用 inCheckMainGradeRule 的矩阵查询逻辑。
+     * 执行顺序：
+     * 1. 复用候选池查询，按申请快照主体读取最新内评
+     * 2. 校验改判目标池是否在当前允许范围内
      *
      * @param securityCode    证券代码
+     * @param adjustLogId     本笔申请的调库记录 ID
      * @param redirectPoolId  改判目标池 ID
      * @throws BizException 改判池不在矩阵允许列表内或证券无评级/期限档
      */
-    public void validateRedirectPool(String securityCode, Long redirectPoolId) {
-        if (securityCode == null || securityCode.isEmpty() || redirectPoolId == null) {
+    public void validateRedirectPool(String securityCode, Long adjustLogId, Long redirectPoolId) {
+        if (redirectPoolId == null) {
             return;
         }
-        SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
-        if (sec == null) {
-            throw new BizException("证券不存在，无法校验改判池");
+        List<RedirectPoolOptionDto> allowedPools = queryRedirectPoolOptions(securityCode, adjustLogId);
+        for (InvestmentPoolBo pool : allowedPools) {
+            if (redirectPoolId.equals(pool.getId())) {
+                return;
+            }
         }
-        // 按矩阵和类型规则取可改判的分级库
-        List<Long> allowedPoolIds = queryAllowedPoolIdsForSecurity(sec);
-        if (allowedPoolIds == null || allowedPoolIds.isEmpty()) {
-            throw new BizException("该证券不符合主体债入库矩阵，无法改判");
-        }
-        if (!allowedPoolIds.contains(redirectPoolId)) {
-            throw new BizException("改判池不在主体债入库矩阵允许列表内");
-        }
+        throw new BizException("改判池不在主体债入库矩阵允许列表内");
     }
 
     /**
-     * 查询证券的主体债入库矩阵允许池列表（评级联动改判池候选项）。
+     * 查询本笔信用债调入申请允许改判的目标池
+     *
+     * 执行顺序：
+     * 1. 精确核对调库记录、证券代码、方向和流程状态
+     * 2. ABS、担保债按申请快照中的单一评级主体查询最新内评
+     * 3. 复用矩阵、特殊债及观察名单规则返回候选池
      *
      * @param securityCode 证券代码
-     * @return 允许调入的池列表（含池名），空列表表示无匹配矩阵
+     * @param adjustLogId 本笔申请的调库记录 ID
+     * @return 允许调入的池列表，含原名称及完整路径，空列表表示无匹配矩阵
      */
-    public List<InvestmentPoolBo> queryRedirectPoolOptions(String securityCode) {
-        if (securityCode == null || securityCode.isEmpty()) {
-            return new ArrayList<>();
+    public List<RedirectPoolOptionDto> queryRedirectPoolOptions(String securityCode, Long adjustLogId) {
+        if (securityCode == null || securityCode.trim().isEmpty() || adjustLogId == null) {
+            throw new BizException("查询改判池必须指定证券代码和调库记录 ID");
+        }
+        List<IpAdjustLogBo> logs = securityPoolAdjustMapper.queryAdjustLogListForAudit(adjustLogId, null);
+        if (logs.size() != 1 || !adjustLogId.equals(logs.get(0).getId())
+                || !securityCode.equals(logs.get(0).getSecurityCode())) {
+            throw new BizException("调库记录不存在或与当前证券不匹配");
+        }
+        IpAdjustLogBo log = logs.get(0);
+        if (!PoolType.CREDIT_BOND.getCode().equals(log.getPoolType())
+                || !AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
+            throw new BizException("仅信用债大库调入申请允许改判目标池");
+        }
+        if (!AuditStatus.SUBMITTED.getCode().equals(log.getAuditStatus())
+                && !AuditStatus.REJECT_MODIFY.getCode().equals(log.getAuditStatus())) {
+            throw new BizException("调库申请已结束，无法改判目标池");
         }
         SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
         if (sec == null) {
+            throw new BizException("证券不存在，无法查询改判池");
+        }
+        if (CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(sec)) {
             return new ArrayList<>();
+        }
+        // 只沿用本笔申请实际选择的主体，评分按该主体代码读取最新值
+        refreshSnapshotRatingCompany(sec, adjustLogId,
+                "证券[" + securityCode + "]调库申请[" + adjustLogId + "]");
+        if (CreditBondSpecialInboundRule.isAbs(sec)
+                && (sec.getInnerGuarantorRating() == null || sec.getInnerGuarantorRating().trim().isEmpty())) {
+            throw new BizException("所选权益人无最新内评分（评级主体：" + sec.getGuarantorId() + "）");
         }
         // 按矩阵和类型规则展开改判候选项
         List<Long> allowedPoolIds = queryAllowedPoolIdsForSecurity(sec);
@@ -3589,11 +3618,15 @@ public class SecurityPoolAdjustService {
         for (InvestmentPoolBo p : investmentPoolMapper.queryPoolList()) {
             poolMap.put(p.getId(), p);
         }
-        List<InvestmentPoolBo> result = new ArrayList<>();
+        List<RedirectPoolOptionDto> result = new ArrayList<>();
         for (Long pid : allowedPoolIds) {
             InvestmentPoolBo p = poolMap.get(pid);
             if (p != null) {
-                result.add(p);
+                RedirectPoolOptionDto option = new RedirectPoolOptionDto();
+                BeanUtils.copyProperties(p, option);
+                // 复用已加载的池数据构建展示路径，不额外查询，不改写原池名称
+                option.setPoolFullName(buildPoolPath(pid, poolMap));
+                result.add(option);
             }
         }
         return result;
@@ -3798,13 +3831,21 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 评估证券当前所在分级库是否仍符合主体债入库规则（定时扫描复用校验口径）。
+     * 评估证券当前所在分级库是否仍符合主体债入库规则
+     *
+     * ABS、担保债从当前入库快照确定评级主体，再查最新内评，不使用主档或快照中的旧评分
+     *
+     * 执行顺序：
+     * 1. 读取当前证券和投资池，定位本条在池状态对应的入库快照
+     * 2. ABS、担保债沿用快照中的评级主体代码，读取该主体最新内评
+     * 3. 查询当前在池、观察及重点观察状态，复用人工调库的矩阵和特殊债规则
      *
      * @param securityCode  证券代码
      * @param targetPoolId  当前所在分级库 ID
+     * @param adjustLogId   当前在池状态对应的入库日志 ID
      * @return 不符合原因；符合返回 null
      */
-    public String evaluateGradedInboundForPool(String securityCode, Long targetPoolId) {
+    public String evaluateGradedInboundForPool(String securityCode, Long targetPoolId, Long adjustLogId) {
         if (securityCode == null || securityCode.isEmpty() || targetPoolId == null) {
             return "证券或目标池为空";
         }
@@ -3820,6 +3861,11 @@ public class SecurityPoolAdjustService {
         if (pool == null) {
             return "目标投资池不存在";
         }
+        if (CreditBondSpecialInboundRule.isGradedLevelPool(pool)
+                && !CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(sec)) {
+            // 按本条入库快照恢复实际评级主体，并刷新到最新内评
+            refreshGradedInboundRatingCompany(sec, targetPoolId, adjustLogId);
+        }
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setSecurityInfo(sec);
         ctx.setTargetPool(pool);
@@ -3834,7 +3880,70 @@ public class SecurityPoolAdjustService {
         ctx.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(securityCode));
         ctx.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(securityCode));
         ctx.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(securityCode));
-        return inCheckMainGradeRule(ctx);
+        // 复用人工入库规则，缺少权益人最新评分时补充实际主体代码便于定位
+        String fail = inCheckMainGradeRule(ctx);
+        if ("所选权益人无内评分".equals(fail)) {
+            return fail + "（入库评级主体：" + sec.getGuarantorId() + "）";
+        }
+        return fail;
+    }
+
+    /**
+     * 从当前入库快照确定 ABS 权益人或担保人，并刷新该主体最新内评
+     *
+     * 只沿用精确入库日志及证券代码匹配的主体，不猜选关联列表首条，也不回写历史快照或证券主档
+     *
+     * 执行顺序：
+     * 1. 普通非担保债无需关系主体，保持原有主体内评口径
+     * 2. ABS、担保债校验来源日志、入库快照及实际评级主体代码，缺失时中止本轮扫描
+     * 3. 按快照主体代码查询最新内评，覆盖本次校验对象中的关系主体评分
+     *
+     * @param sec 当前证券主档
+     * @param targetPoolId 当前分级库 ID
+     * @param adjustLogId 当前在池状态对应的入库日志 ID
+     */
+    private void refreshGradedInboundRatingCompany(SecurityInfoBo sec, Long targetPoolId, Long adjustLogId) {
+        String context = "证券[" + sec.getWindCode() + "]当前池[" + targetPoolId
+                + "]入库日志[" + adjustLogId + "]";
+        // 扫描与审批复用精确快照主体和最新内评解析
+        refreshSnapshotRatingCompany(sec, adjustLogId, context);
+    }
+
+    /**
+     * 从精确调库快照恢复 ABS 权益人或担保人，并读取最新内评
+     *
+     * 执行顺序：
+     * 1. 普通非担保债保留发行主体评分口径
+     * 2. 校验精确快照及其中的单一评级主体代码
+     * 3. 查询该主体最新评分，仅回填本次内存对象
+     *
+     * @param sec 当前证券主档
+     * @param adjustLogId 快照所属调库记录 ID
+     * @param context 用于异常定位的业务上下文
+     */
+    private void refreshSnapshotRatingCompany(SecurityInfoBo sec, Long adjustLogId, String context) {
+        if (!CreditBondSpecialInboundRule.isAbs(sec) && !CreditBondSpecialInboundRule.isGuaranteed(sec)) {
+            return;
+        }
+        if (adjustLogId == null) {
+            throw new BizException(context + "缺少来源入库日志，无法确定评级主体");
+        }
+        SecurityInfoDetailDto snapshot = securityPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(
+                adjustLogId, sec.getWindCode());
+        if (snapshot == null) {
+            throw new BizException(context + "缺少入库证券快照，无法确定评级主体");
+        }
+        String companyCode = snapshot.getGuarantorId();
+        if (companyCode == null || companyCode.trim().isEmpty()) {
+            throw new BizException(context + "入库快照缺少实际评级主体代码");
+        }
+        if (companyCode.contains(",")) {
+            throw new BizException(context + "快照评级主体不是单一代码，无法确定实际选择");
+        }
+        RelatedRatingCompanyDto latest = securityPoolAdjustMapper.queryLatestRatingCompanyByCode(companyCode.trim());
+        // 保留实际主体身份，最新评分为空时不回退旧评分，由现有规则判定
+        fillSelectedRatingCompany(sec, companyCode.trim(), snapshot.getGuarantor(),
+                latest == null ? null : latest.getInnerRating());
     }
 
     /**

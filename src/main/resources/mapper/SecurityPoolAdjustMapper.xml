@@ -348,6 +348,19 @@
                  ,eligible.company_code ASC
     </select>
 
+    <!-- 按入库快照确定的主体代码读取最新内评，与人工调库采用相同评级视图及时间排序 -->
+    <select id="queryLatestRatingCompanyByCode"
+            resultType="com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto">
+        SELECT grade.windcode AS company_code
+               , grade.windname AS company_name
+               , grade.total_score AS inner_rating
+               , grade.ts AS rating_time
+        FROM ais_inv_analysis.v_inv_grade_result grade
+        WHERE grade.windcode = #{companyCode}
+        ORDER BY grade.ts DESC
+        LIMIT 1
+    </select>
+
     <!-- 全市场自选权益人：按投资分析主体表去重，并关联最新内评 -->
     <select id="querySelfSelectedRightsHolderPage"
             resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
@@ -1439,15 +1452,17 @@
           </choose>
     </update>
 
-    <!-- 更新指定批次调入调库记录的目标池（评级联动改判用，仅更新调入记录） -->
+    <!-- 精确更新活动信用债调入申请的改判目标池，保留同批配套调入和调出项 -->
     <update id="editAdjustLogTargetPool">
         UPDATE ip_adjust_log
         SET target_pool_id = #{targetPoolId}
            ,target_pool_name = #{targetPoolName}
            ,updt_time = NOW()
         WHERE is_deleted = 0
-          AND adjust_batch_no = #{adjustBatchNo}
+          AND id = #{adjustLogId}
           AND adjust_mode = '调入'
+          AND pool_type = 'credit_bond'
+          AND audit_status IN ('00', '11')
     </update>
 
     <!-- 查询全量投资池关系配置（不限关系类型） -->

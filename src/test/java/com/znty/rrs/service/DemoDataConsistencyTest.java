@@ -43,6 +43,47 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 基础 Demo 的跨表业务一致性测试，不连接或修改业务数据库。 */
 public class DemoDataConsistencyTest {
 
+    /** 主档中的担保人代码、名称和评分须按逗号位置对应，并与该主体最新内评一致 */
+    @Test
+    public void guarantorColumnsShouldMatchLatestRatingsByPosition() throws Exception {
+        // 汇总调库实际读取的每个主体最新评分，不能拿连续分数或发行主体评分代替
+        Map<String, Map<String, String>> latestRatings = new HashMap<>();
+        for (Map<String, String> grade : readRows("ais_inv_analysis_demo_data.sql", "v_inv_grade_result")) {
+            Map<String, String> previous = latestRatings.get(grade.get("windcode"));
+            if (previous == null || grade.get("ts").compareTo(previous.get("ts")) > 0) {
+                latestRatings.put(grade.get("windcode"), grade);
+            }
+        }
+        boolean hasMultipleGuarantors = false;
+        for (Map<String, String> security : readRows("rrs_external_import_demo_data.sql", "rrs_securityinfo")) {
+            String code = security.get("wind_code");
+            String idsText = security.get("guarantor_id");
+            String namesText = security.get("guarantor");
+            String ratingsText = security.get("inner_guarantor_rating");
+            if (idsText == null && namesText == null && ratingsText == null) {
+                assertThat(security.get("guarant_flag")).as("担保债 %s 必须有担保人信息", code).isNotEqualTo("1");
+                continue;
+            }
+            assertThat(idsText).as("%s 担保人代码", code).isNotBlank();
+            assertThat(namesText).as("%s 担保人名称", code).isNotBlank();
+            assertThat(ratingsText).as("%s 担保人评分", code).isNotBlank();
+            String[] ids = idsText.split(",", -1);
+            String[] names = namesText.split(",", -1);
+            String[] ratings = ratingsText.split(",", -1);
+            assertThat(names).as("%s 名称与代码数量", code).hasSize(ids.length);
+            assertThat(ratings).as("%s 评分与代码数量", code).hasSize(ids.length);
+            hasMultipleGuarantors |= ids.length > 1;
+            for (int i = 0; i < ids.length; i++) {
+                assertThat(ids[i]).as("%s 第 %s 个担保人代码", code, i + 1).isNotBlank();
+                assertThat(latestRatings).as("%s 担保人 %s 必须有内评记录", code, ids[i]).containsKey(ids[i]);
+                Map<String, String> latest = latestRatings.get(ids[i]);
+                assertThat(names[i]).as("%s 担保人 %s 的名称", code, ids[i]).isEqualTo(latest.get("windname"));
+                assertThat(ratings[i]).as("%s 担保人 %s 的最新评分", code, ids[i]).isEqualTo(latest.get("total_score"));
+            }
+        }
+        assertThat(hasMultipleGuarantors).as("Demo 应保留多担保人按位置对应的样本").isTrue();
+    }
+
     /** 在独立 H2 库执行原始建表和 INSERT 两次，校验 SQL 语法及重置后的流程关联。 */
     @Test
     public void demoInsertsShouldExecuteRepeatedly() throws Exception {

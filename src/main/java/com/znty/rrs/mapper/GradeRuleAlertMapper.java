@@ -2,6 +2,7 @@ package com.znty.rrs.mapper;
 
 import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.entity.graderulealert.GradeRuleAlertReq;
+import com.znty.rrs.entity.graderulealert.GradeRuleAlertScanDto;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -16,7 +17,7 @@ public interface GradeRuleAlertMapper {
      *
      * @return 在池记录
      */
-    List<IpGradeRuleAlertBo> queryGradedBondInPoolList();
+    List<GradeRuleAlertScanDto> queryGradedBondInPoolList();
 
     /**
      * 按条件分页查询待办
