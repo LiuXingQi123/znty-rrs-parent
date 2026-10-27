@@ -200,6 +200,48 @@ public class TempSecurityCodeServiceTest {
         verify(adjustMapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
     }
 
+    /** 已成功关联的正式代码在人工确认时直接报错，不再查询日志或执行转换 */
+    @Test
+    public void manualConversionShouldRejectAssociatedFormalCodeBeforeConversion() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        TempSecurityCodeBo associated = new TempSecurityCodeBo();
+        associated.setId(2L);
+        associated.setTempSecurityCode("TMP002");
+        when(mapper.queryAssociatedTempSecurityCode("110001.IB", 1L)).thenReturn(associated);
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(buildUpdateReq()))
+                .isInstanceOf(BizException.class).hasMessageContaining("不能重复关联", "110001.IB", "TMP002", "2");
+        verify(mapper).queryAssociatedTempSecurityCode("110001.IB", 1L);
+        verify(mapper, never()).queryFormalSecurityAdjustHistory(any());
+        verify(mapper, never()).queryOrdinaryConversionPoolIdList(any());
+        verify(mapper, never()).editTempSecurityCodeToUpdated(any());
+        verify(mapper, never()).addTempSecurityCodeUpdateLog(any());
+        verify(mapper, never()).editTempSecurityInfoToDisabled(any());
+    }
+
+    /** 定时任务不能将另一个临时代码转正到已被占用的正式代码 */
+    @Test
+    public void jobConversionShouldRejectAssociatedFormalCodeBeforeConversion() {
+        TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
+        TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
+        TempSecurityCodeBo oldBo = buildOldBo();
+        oldBo.setSecurityCode("110001.IB");
+        when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
+        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        TempSecurityCodeBo associated = new TempSecurityCodeBo();
+        associated.setId(2L);
+        associated.setTempSecurityCode("TMP002");
+        when(mapper.queryAssociatedTempSecurityCode("110001.IB", 1L)).thenReturn(associated);
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdatedByJob(1L))
+                .isInstanceOf(BizException.class).hasMessageContaining("不能重复关联", "TMP002");
+        verify(mapper, never()).queryFormalSecurityAdjustHistory(any());
+        verify(mapper, never()).editTempSecurityCodeToUpdated(any());
+    }
+
     /** 正式证券已有日志时，在读取转换计划及写入任何业务记录之前拒绝更新。 */
     @Test
     public void manualConversionShouldRejectFormalAdjustHistoryBeforeConversion() {

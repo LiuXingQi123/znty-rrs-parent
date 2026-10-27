@@ -375,7 +375,12 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 按人工或定时任务来源执行临时代码转正，包含正式证券的同券市场代码。
+     * 按人工或定时任务来源执行临时代码转正，包含正式证券的同券市场代码
+     *
+     * 执行顺序：
+     * 1. 查询正式代码是否已被其他临时代码关联
+     * 2. 检查正式证券及同券市场代码是否已有调库日志
+     * 3. 检查通过后沿用原来的整组转换逻辑
      *
      * @param oldBo 原临时代码记录
      * @param formalSecurity 已查询并校验通过的目标正式证券
@@ -386,10 +391,32 @@ public class TempSecurityCodeService {
             TempSecurityCodeBo oldBo,
             TempSecurityCodeDto.FormalSecurityOption formalSecurity,
             String oprtSource) {
-        // 转正前检查正式证券及同券市场代码，已有调库日志时不进入后续转换。
+        // 1. 查询正式代码是否已被其他临时代码关联
+        validateFormalSecurityAssociation(oldBo.getId(), formalSecurity.getSecurityCode());
+        // 2. 检查正式证券及同券市场代码，已有调库日志时不进入后续转换
         validateFormalSecurityAdjustHistory(formalSecurity.getSecurityCode());
-        // 原人工和债券临时代码任务继续使用同券整组模式。
+        // 3. 原人工和债券临时代码任务继续使用同券整组模式
         return editTempSecurityCodeToUpdated(oldBo, formalSecurity, oprtSource, false);
+    }
+
+    /**
+     * 检查正式代码是否已被其他临时代码成功关联
+     *
+     * 执行顺序：
+     * 1. 排除当前登记，普通查询同一正式代码的已更新记录
+     * 2. 已有关联时提示占用的临时代码，不执行后续转换
+     *
+     * @param tempCodeId 当前临时代码登记 ID
+     * @param securityCode 本次选定的正式证券代码
+     */
+    private void validateFormalSecurityAssociation(Long tempCodeId, String securityCode) {
+        TempSecurityCodeBo associated = tempSecurityCodeMapper.queryAssociatedTempSecurityCode(
+                securityCode, tempCodeId);
+        if (associated != null) {
+            throw new BizException("正式证券已被临时代码关联，不能重复关联，证券代码：" + securityCode
+                    + "，已关联临时代码：" + associated.getTempSecurityCode()
+                    + "，登记ID：" + associated.getId());
+        }
     }
 
     /**

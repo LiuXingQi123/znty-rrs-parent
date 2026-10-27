@@ -50,6 +50,7 @@ import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -147,6 +148,103 @@ public class TempSecurityCodePersistenceTest {
         if (jdbc != null) {
             jdbc.execute("SET DB_CLOSE_DELAY 0");
         }
+    }
+
+    /** 没有调库业务时也只能成功关联一次，第二个临时代码保持未转正状态 */
+    @Test
+    public void formalCodeWithoutAdjustLogsShouldOnlyAssociateOnce() throws Exception {
+        // 两个临时代码都没有在池或在途业务
+        TempSecurityCodeDto first = service.addTempSecurityCode(addReq("001.IB"));
+        TempSecurityCodeDto second = service.addTempSecurityCode(addReq("002.IB"));
+        service.editTempSecurityCodeToUpdated(operation(first.getId(), "FORMAL.IB"));
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(second.getId(), "FORMAL.IB")))
+                .hasMessageContaining("不能重复关联", "FORMAL.IB", "001.IB", first.getId().toString());
+
+        assertThat(mapper.queryTempSecurityCodeById(first.getId()).getStatus()).isEqualTo("updated");
+        assertThat(mapper.queryTempSecurityCodeById(second.getId()).getStatus()).isEqualTo("temporary");
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE wind_code='002.IB'", String.class))
+                .isEqualTo("L");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isEqualTo(1);
+        // 关联查询排除当前登记，不能把自己识别成其他临时代码
+        assertThat(mapper.queryAssociatedTempSecurityCode("FORMAL.IB", first.getId())).isNull();
+    }
+
+    /** 多条临时登记预填同一正式代码时，只有第一个成功的定时转正占用关联 */
+    @Test
+    public void jobConversionShouldOnlyClaimSuccessfulAssociation() throws Exception {
+        TempSecurityCodeDto first = service.addTempSecurityCode(addReq("001.IB"));
+        TempSecurityCodeDto second = service.addTempSecurityCode(addReq("002.IB"));
+        jdbc.update("UPDATE rrs_temp_security_code SET security_code='FORMAL.IB' WHERE id IN (?,?)",
+                first.getId(), second.getId());
+
+        service.editTempSecurityCodeToUpdatedByJob(first.getId());
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdatedByJob(second.getId()))
+                .hasMessageContaining("不能重复关联", "001.IB");
+        assertThat(mapper.queryTempSecurityCodeById(first.getId()).getOprtSource()).isEqualTo("job");
+        assertThat(mapper.queryTempSecurityCodeById(second.getId()).getStatus()).isEqualTo("temporary");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE status='updated' AND security_code='FORMAL.IB'"))
+                .isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+    }
+
+    /** 已更新登记即使被软删除，也不能让其他临时代码重新占用同一正式代码 */
+    @Test
+    public void softDeletedSuccessfulAssociationShouldStillBlockReuse() throws Exception {
+        TempSecurityCodeDto first = service.addTempSecurityCode(addReq("001.IB"));
+        TempSecurityCodeDto second = service.addTempSecurityCode(addReq("002.IB"));
+        service.editTempSecurityCodeToUpdated(operation(first.getId(), "FORMAL.IB"));
+        jdbc.update("UPDATE rrs_temp_security_code SET is_deleted=1 WHERE id=?", first.getId());
+
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(second.getId(), "FORMAL.IB")))
+                .hasMessageContaining("不能重复关联", "001.IB");
+        assertThat(mapper.queryTempSecurityCodeById(second.getId()).getStatus()).isEqualTo("temporary");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isEqualTo(1);
+    }
+
+    /** 同名但代码不同的正式证券不冲突，未成功转正的登记不占用关联 */
+    @Test
+    public void associationCheckShouldUseExactCodeAndSuccessfulStatus() throws Exception {
+        // 准备另一个名称相同但代码不同的正式证券
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,short_name,security_type,security_status,security_source)"
+                + " VALUES ('OTHER.IB','正式证券','mtn','L','official')");
+        when(markets.queryMarketCode("OTHER.IB")).thenReturn("NIB");
+        TempSecurityCodeDto other = service.addTempSecurityCode(addReq("OTHER_TEMP.IB"));
+        service.editTempSecurityCodeToUpdated(operation(other.getId(), "OTHER.IB"));
+        // 未转正的预填值、取消发行及删除登记均不代表关联成功
+        for (String status : Arrays.asList("temporary", "cancelled", "deleted")) {
+            jdbc.update("INSERT INTO rrs_temp_security_code(temp_security_code,security_code,status,is_deleted) VALUES (?,?,?,?)",
+                    "UNUSED_" + status, "FORMAL.IB", status, "deleted".equals(status) ? 1 : 0);
+        }
+        TempSecurityCodeDto current = service.addTempSecurityCode(addReq("001.IB"));
+
+        service.editTempSecurityCodeToUpdated(operation(current.getId(), "FORMAL.IB"));
+
+        assertThat(mapper.queryTempSecurityCodeById(current.getId()).getStatus()).isEqualTo("updated");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE status='updated' AND security_code='FORMAL.IB'"))
+                .isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
+    }
+
+    /** 转正写入失败会回滚关联，另一个临时代码之后仍可正常转正 */
+    @Test
+    public void failedConversionShouldNotOccupyFormalAssociation() throws Exception {
+        TempSecurityCodeDto first = service.addTempSecurityCode(addReq("001.IB"));
+        TempSecurityCodeDto second = service.addTempSecurityCode(addReq("002.IB"));
+        // 让第一条登记在写转换日志时失败，验证之前保存的映射也会回滚
+        jdbc.execute("ALTER TABLE rrs_temp_security_code_update_log ADD CONSTRAINT reject_first_temp"
+                + " CHECK(temp_security_code != '001.IB')");
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(first.getId(), "FORMAL.IB")))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(mapper.queryTempSecurityCodeById(first.getId()).getStatus()).isEqualTo("temporary");
+
+        service.editTempSecurityCodeToUpdated(operation(second.getId(), "FORMAL.IB"));
+
+        assertThat(mapper.queryTempSecurityCodeById(second.getId()).getStatus()).isEqualTo("updated");
+        assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isEqualTo(1);
     }
 
     /** 任一审批状态、调整方向或软删除标志的正式代码日志，均在转正写入前拦截。 */

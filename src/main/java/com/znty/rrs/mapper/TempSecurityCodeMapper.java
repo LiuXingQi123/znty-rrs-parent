@@ -90,6 +90,10 @@ public interface TempSecurityCodeMapper {
     /** 根据正式证券代码查询正式证券选项 */
     TempSecurityCodeDto.FormalSecurityOption queryFormalSecurityByCode(@Param("securityCode") String securityCode);
 
+    /** 排除当前登记，读取同一正式代码已成功关联的临时代码 */
+    TempSecurityCodeBo queryAssociatedTempSecurityCode(@Param("securityCode") String securityCode,
+            @Param("excludeId") Long excludeId);
+
     /** 查询正式证券及同券市场代码的首条调库日志，不区分审批状态、投资池或软删除标志。 */
     IpAdjustLogBo queryFormalSecurityAdjustHistory(@Param("codes") List<String> codes);
 

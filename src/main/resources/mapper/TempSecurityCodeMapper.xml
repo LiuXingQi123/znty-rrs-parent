@@ -240,6 +240,18 @@
         LIMIT 1
     </select>
 
+    <!-- 普通查询成功关联记录，排除当前登记，已更新记录软删除后也不释放关联 -->
+    <select id="queryAssociatedTempSecurityCode" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
+        SELECT id
+               , temp_security_code
+        FROM rrs_temp_security_code
+        WHERE security_code = #{securityCode}
+          AND status = 'updated'
+          AND id != #{excludeId}
+        ORDER BY id
+        LIMIT 1
+    </select>
+
     <!-- 转正前检查正式代码组的调库日志，所有审批状态及软删除记录均阻断，不查询池状态 -->
     <select id="queryFormalSecurityAdjustHistory" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT id

@@ -65,7 +65,8 @@
 
 1. `validateUpdateReq`（仅 id + 正式证券代码必填）→ `queryOperableTempSecurityCode`（查询登记，必须 `temporary`）
 2. 正式证券从主数据选券校验（`queryFormalSecurityByCode`，排除 temporary 占位）；正式码不能等于临时码
-   - **转正前置判断**：人工更新与 `bond_temp_code_replace` 定时转正，在任何转换写入前检查所选正式代码及按现有非空 ISIN 及共用市场范围关联的全部市场代码。只查询 `ip_adjust_log.security_code`；任一代码存在调整日志即报错，提示命中证券代码和调库记录 ID，不区分投资池、CRMW 凭证、调整方向、审批状态或软删除标志。无 ISIN 时只检查所选代码；临时代码本身的日志不作为正式代码历史判断依据。即使临时代码没有当前在池或在途业务，也执行该检查。不额外查询池状态或转正映射；`wind_code_sync` 换码不执行此判断。
+   - **正式代码唯一关联**：人工更新与 `bond_temp_code_replace` 定时转正按所选正式代码精确判重。普通查询 `rrs_temp_security_code` 中除本登记外 `security_code` 相同且 `status=updated` 的记录；存在即报错，提示正式代码、已关联临时代码和登记 ID。只预填正式代码但尚未成功转正、取消或删除的登记不占用关联；已更新记录即使 `is_deleted=1` 也不释放关联。没有任何调库日志也执行此检查。关联写入与转换共用原事务，后续写入失败时一起回滚。不按名称或同券 ISIN 扩大这项判重范围；Wind 换码不套用此判断，已有重复映射不自动改写。
+   - **转正前置判断**：人工更新与 `bond_temp_code_replace` 定时转正，在任何转换写入前检查所选正式代码及按现有非空 ISIN 及共用市场范围关联的全部市场代码。只查询 `ip_adjust_log.security_code`；任一代码存在调整日志即报错，提示命中证券代码和调库记录 ID，不区分投资池、CRMW 凭证、调整方向、审批状态或软删除标志。无 ISIN 时只检查所选代码；临时代码本身的日志不作为正式代码历史判断依据。即使临时代码没有当前在池或在途业务，也执行该检查。不额外查询池状态；`wind_code_sync` 换码不执行此判断。
    - 以下转换组件及其既有分支保持不变，仅在通过上述前置判断后执行；后续分支不能绕过正式代码已有调整日志的限制。
 3. 临时字段只读（用库内原值）；正式名称、类型以主数据结果为准，市场经统一服务查询当前正式 Wind 代码的唯一映射；不覆盖正式主档的独立 `sec_id`
 4. **统一转换入口**（`convertTempSecurityBusinessData`）按四阶段组织：①初始化替换及审计参数；②由 `TempSecurityCodeBusinessConverter.prepareOrdinaryPoolConversion` 和 `prepareCrmwConversion` 分别加载、校验普通池及 CRMW 标的整组转换计划，全部通过后更新转正登记 `status=updated`（影响行数必须为 1）；③由同组件的 `convertOrdinaryPoolBusinessData` 处理普通池当前在池状态和流程中申请，覆盖六种业务情况；④由同组件的 `convertCrmwBusinessData` 在每个凭证下整组处理标的全部市场代码，保留原凭证，与普通池一致先处理当前在池状态、再迁移流程中申请，并同步 CRMW 专属快照；匹配临时代码的 `crmw_*` 凭证字段仍沿用旧替换分支。各阶段共用外层事务，任一阶段失败时整次转正回滚。
@@ -213,7 +214,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 2. **删除返回 null**：`deleteTempSecurityCode` 服务方法 `return null`，故 `ApiResponse.success(null)`，前端 `loadList()` 刷新即可。
 3. **无审计表**：与投资池模块的 `_evt` 审计表不同，`operatorId` 字段定义但全程未用。
 4. **跨库读主体**：`queryCompanyOptionList`/`queryCompanyByCode` 读 `ais_inv_ods.wind_compintroduction`，依赖跨库访问权限与该库 schema 稳定；前端远程搜索关键字，最多 50 条。
-5. **`rrs_securityinfo` 无幂等保护**：upsert 以 `wind_code=securityCode` 判重，若多个临时代码映射到同一 `securityCode`，后到的更新会覆盖已有记录。
+5. **正式代码重复关联**：转正入口在转换前检查已成功关联登记，同一正式代码只允许关联一个临时代码；没有调库流水时同样拦截。正式主档保持原有资料，已有重复数据不自动清理。
 6. **更新时主体变更才重查**：仅 `tempCompanyCode` 变化时重查主体并刷新快照，未变更时保留旧 `tempCompanyNameSnapshot`（即使主体名已被改名）。
 
 ---
