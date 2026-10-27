@@ -31,6 +31,9 @@ public class BatchSecurityPoolAdjustReq extends PageRequest {
     /** 证券简称（模糊） */
     private String securityShortName;
 
+    /** 发行人名称（模糊） */
+    private String issuer;
+
     /**
      * 市场编码列表：
      * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /

@@ -57,14 +57,17 @@
 | 控件 | 字段 | 说明 |
 |---|---|---|
 | 文本输入 | `securityCode` | 证券代码 |
+| 文本输入 | `issuer` | 仅按发行人名称模糊查询，调入、调出均支持；留空不限制，与其他条件按 AND 组合 |
 | 文本输入 | `securityShortName` | 证券简称 |
 | 多选 | `marketCodes` | 市场（SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他） |
 | 多选 | `bondYesFlags` | 是否特征：ABS/担保/永续/次级/私募/含权/标准信用债；勾选即筛「是」，多选 AND |
 
+发行人输入框支持回车查询；查询时回到第一页，重置及重新进入调入/调出工作台时清空发行人条件。
+
 查询接口：`POST /api/v1/batchSecurityPoolAdjust/querySecurityPage`（`loadSecurityList`），请求体：
 ```json
 { "currentUserId": "1", "poolId": <Long>, "direction": "in|out",
-  "securityCode": null, "securityShortName": null, "marketCodes": null, "bondYesFlags": null,
+  "issuer": null, "securityCode": null, "securityShortName": null, "marketCodes": null, "bondYesFlags": null,
   "pageIndex": 1, "pageSize": 20 }
 ```
 返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（含证券基础信息及 ABS/担保/永续/次级/私募/含权/标准信用债原始字段；`dateExists` 为剩余期限天数，`dateExistsStr` 为直接展示并供年口径判断解析的证券期限文本）。候选表按证券池调整页样式展示六个「是/否」Tag。

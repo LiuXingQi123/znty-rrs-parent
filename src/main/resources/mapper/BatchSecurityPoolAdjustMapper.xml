@@ -129,6 +129,9 @@
             <if test="securityShortName != null and securityShortName != ''">
                 AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')
             </if>
+            <if test="issuer != null and issuer != ''">
+                AND si.issuer LIKE CONCAT('%', #{issuer}, '%')
+            </if>
             <if test="marketCodes != null and marketCodes.size() > 0">
                 AND (
                     <foreach collection="marketCodes" item="marketCode" separator=" OR ">
