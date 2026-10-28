@@ -132,7 +132,7 @@
 5. 由 `inPools`/`outPools` 的 `inMutexPoolIds`/`outMutexPoolIds` 构建 `inMutexMap`/`outMutexMap`（前端互斥校验用）。
 6. `loadLogAttachments` 加载调库记录附件，`loadFlowSteps` 加载当前活跃流程步骤。
 
-同主体证券统一按 `rrs_securityinfo.issuer_code` 的代码相等关联，适用于主体所在池、近半年报告豁免、同主体信评回填及简易流程近180天的一般信用债入库经历与报告库查询；复用本服务的批量调库和 Excel 导入采用相同口径。简易流程要求发行人代码非空。名称不同但代码相同仍属同主体，名称相同但代码不同不关联。`issuer` 继续用于展示和名称模糊查询。
+同主体证券统一按 `rrs_securityinfo.issuer_code` 的代码相等关联，适用于主体所在池、近半年报告豁免、同主体信评回填及简易流程近180天的一般信用债入库经历与入库业务信评附件查询；复用本服务的批量调库和 Excel 导入采用相同口径。简易流程要求发行人代码非空。名称不同但代码相同仍属同主体，名称相同但代码不同不关联。`issuer` 继续用于展示和名称模糊查询。
 
 ### 2.7 发行主体最近三年及一期财务数据
 
@@ -320,7 +320,7 @@
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单、简易、默认调入，推荐优先级 白名单 > 简易 > 默认。
   - 白名单条件顺序：解析 `date_exists_str` 后的剩余期限≤3 年 → 非永续/私募/ABS → 债券类 → 主体在白名单池（**`WHITELIST_POOL_IDS` 当前 emptySet，本条件固定不成立**）→ 非担保债。`date_exists_str` 为空或格式不正确时不命中白名单。
-  - 简易条件顺序：按当前信用债矩阵及特殊债入库规则计算完整允许层级，**唯一且为一/二/三级库，并与本次目标层级一致** → 同发行人债券近180天曾以**非简易入库流程**成功进入信用债大库任意层级 → 满足下述对应债券类型要求 → 同发行人报告库中有近180天的有效信评报告。全部满足后，`simpleInbound` 可选并优先推荐，仍可改选默认调入流程。
+  - 简易条件顺序：按当前信用债矩阵及特殊债入库规则计算完整允许层级，**唯一且为一/二/三级库，并与本次目标层级一致** → 同发行人债券近180天曾以**非简易入库流程**成功进入信用债大库任意层级 → 满足下述对应债券类型要求 → 同发行人债券近180天实际入库的已通过调入业务中有信评附件。全部满足后，`simpleInbound` 可选并优先推荐，仍可改选默认调入流程。
 
 #### 简易入库的具体口径
 
@@ -345,7 +345,7 @@
 
 **标准信用债采用独立方法判断：**公开发行；不涉及永续、回售、赎回、递延付息等特殊条款；无担保、内部分层、差额补足等增信措施；偿付不依赖特定资产；违约风险仅由发行主体信用资质决定；且未在内评系统观察或重点观察名单中。资产支持证券、私募债、永续债、担保债、含权债等不属于标准信用债。该业务定义由上游维护 `std_credit_flag`；本服务的独立方法 `isStandardCreditBond` **仅判断 `std_credit_flag == 1`**，`0`、`NULL` 均不认定标准信用债，不叠加 `std_clause_flag` 或其他标志判断。
 
-**报告条件：**`queryIssuerHasRecentCreditReportWithinDays(securityCode, 180)` 查询内部/外部报告库（`rrs_report_in` / `rrs_report_out`）：报告 `company_code` 直接匹配当前券非空 `issuer_code`，未删除，`report_type` 为 `bond_in_report` 或 `bond_out_report`，报告 `crte_time` 在近180天内，并有对应未删除的报告附件（`sys_attachment.table_name=rrs_report_in/rrs_report_out`、`attachment_category=report_in/report_out`）。报告库没有独立报告日期或状态字段，时间以 `crte_time` 为准；其他报告类型、无附件、软删报告或软删附件均不计，缺失 `company_code` 时不按报告证券代码回退关联。**不要求关联历史调入记录，也不要求报告与非简易入库经历属于同一笔业务**。简易流程不复用“半年调入日志带报告”的提交报告豁免条件，两者各自判断。
+**报告条件：**`queryIssuerHasRecentCreditReportWithinDays(securityCode, 180)` 查询同发行人债券的已通过调入业务：通过 `ip_pool_status.adjust_log_id` 关联 `ip_adjust_log`，证券发行人代码与当前券非空 `issuer_code` 相同，池状态与调库日志均为 `audit_status=20`、`adjust_mode=调入`，日志未删除。近180天统一按池状态的实际入库时间 `entry_time` 判断，包含边界、不接受未来或缺失时间，日志创建、报告创建和附件绑定时间均不参与计算。业务下存在未删除的信评附件（`sys_attachment.table_name=ip_adjust_log`、`main_id=调库日志ID`、`attachment_category=credit_report_hand/credit_report_in/credit_report_out`）即可；手工上传、内部引用和外部引用均计入，不检查原报告主体、类型或创建时间，出库业务及其他材料不计入。已出池软删的历史入库记录仍计入。**非简易信用债入库经历与信评附件条件仍独立判断，不要求来自同一笔业务；信评附件所在入库业务不额外限制流程类型或目标池类型**。简易流程不复用“半年调入日志带报告”的提交报告豁免条件，该豁免仍沿用原有6个自然月和日志创建时间口径。
 
 旧简易流程的“本券剩余天数≤同主体目标池最大剩余天数”“同目标池180天内非简易入池”及原主体/展望/担保人评级下调条件不再参与简易命中。
 
@@ -370,7 +370,7 @@
 
 **② 参数初始化** `loadSubmitSharedData`：
 - 取证券、全量池 Map、`currentPoolIds`、`poolRelationMap`、证券级标志。
-- 简易资格沿用“下一步”的校验结果，提交阶段不重新判断准入层级、180天非简易入库经历、报告库信评报告和类型附加条件。
+- 简易资格沿用“下一步”的校验结果，提交阶段不重新判断准入层级、180天非简易入库经历、入库业务信评附件和类型附加条件。
 - 收集 `items` 中所有 `flowId`/`flowKey`，`resolveFlowIdFromItem` 解析（flowId 优先，否则用 flowKey 查活跃流程），为每个唯一流程 `buildFlowSnapshot`（定义+活跃版本+节点+连线+审批配置+处理人）。
 - 创建 `BatchNoContext`（批次号时间片 `yyyyMMddHHmmss` + 调入/调出/无流程三个序号）。
 

@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
 /** 证券池简易调入流程的业务门槛与特殊债边界测试。 */
 public class SecurityPoolSimpleInboundFlowTest {
 
-    /** 180天内非简易信用债入库和报告库有效信评必须同时具备，且不再依赖剩余天数。 */
+    /** 180天内非简易信用债入库和入库业务信评附件必须同时具备，且不再依赖剩余天数 */
     @Test
     public void standardBondShouldPassWithUniqueLevelAndBothRecentPrerequisites() {
         // 构建只允许二级库的标准券
@@ -56,7 +56,7 @@ public class SecurityPoolSimpleInboundFlowTest {
         assertThat(fixture.unmatchReasons).isNotEmpty();
     }
 
-    /** 报告库中没有同发行人的有效信评报告时不能走简易流程。 */
+    /** 同发行人近期入库业务没有有效信评附件时不能走简易流程 */
     @Test
     public void shouldRejectWhenRecentCreditReportIsMissing() {
         // 构建只有非简易入库历史的标准券

@@ -194,7 +194,7 @@ public interface SecurityPoolAdjustMapper {
     boolean queryIssuerHasNonSimpleCreditBondInboundWithinDays(@Param("securityCode") String securityCode,
                                                               @Param("days") int days);
 
-    /** 查询指定天数内同发行人报告库中有有效债券信评报告及附件 */
+    /** 按实际入库时间查询同发行人已通过调入业务有未删除的信评附件，手工上传和内外部引用均计入 */
     boolean queryIssuerHasRecentCreditReportWithinDays(@Param("securityCode") String securityCode,
                                                       @Param("days") int days);
 

@@ -3165,7 +3165,7 @@ public class SecurityPoolAdjustService {
      *
      *   1. 当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内。
      *   2. 同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库。
-     *   3. 同发行人报告库中有近180天的有效信评报告。
+     *   3. 同发行人债券近180天实际入库的已通过调入业务中有信评附件。
      *   4. 满足永续债、次级债和标准信用债各自的附加要求。
      *
      * 唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响。
@@ -3221,13 +3221,13 @@ public class SecurityPoolAdjustService {
             unmatchReasons.add("同发行人半年内未以非简易入库流程进入信用债大库");
         }
 
-        // 3. 有效信评报告：同发行人内部或外部报告库中近180天的债券信评报告，须有有效库附件
-        // 时间按报告创建时间计算，不要求关联上面的一般入库记录
+        // 3. 信评附件按所属调入业务的实际入库时间计算180天，手工上传和内外部引用均计入
+        // 不检查原报告主体，不要求与上面的非简易信用债入库经历来自同一笔业务
         if (securityPoolAdjustMapper.queryIssuerHasRecentCreditReportWithinDays(
                 req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS)) {
-            matchReasons.add("同发行人报告库中有180天内的有效信评报告");
+            matchReasons.add("同发行人180天内已入库的调入业务有有效信评附件");
         } else {
-            unmatchReasons.add("同发行人报告库中没有180天内的有效信评报告");
+            unmatchReasons.add("同发行人180天内已入库的调入业务没有有效信评附件");
         }
 
         // 4. 债券类型要求：分别检查永续债、次级债和标准信用债，多个标志同时存在时全部检查
