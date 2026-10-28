@@ -6,6 +6,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import lombok.Data;
 
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -19,6 +20,12 @@ import java.util.Set;
  */
 @Data
 public class AdjustSharedData {
+
+    /** 两个批量申请入口在单笔匹配结果上追加配置的批量流程 */
+    private boolean batchFlowOptionsEnabled;
+
+    /** 已加载的关联市场校验数据，仅供本次请求复用 */
+    private Map<String, AdjustSharedData> relatedSecurityData = new HashMap<>();
 
     /** 证券基础信息（来自 rrs_securityinfo） */
     private SecurityInfoBo securityInfo;

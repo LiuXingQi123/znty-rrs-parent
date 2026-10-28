@@ -67,8 +67,11 @@ public class BatchSecurityInboundAdjustDto {
         /** 不可调整原因列表 */
         private List<String> failReasons = new ArrayList<>();
 
-        /** 当前行可选流程列表（与单券 checkAdjust 一致，不再注入批量专用流程） */
+        /** 当前行候选：单笔匹配结果加目标池配置的批量流程 */
         private List<AdjustCheckDto.FlowOption> flowOptions = new ArrayList<>();
+
+        /** 本组快速资格对应的材料豁免依据，与所选流程无关 */
+        private String materialExemptionType;
 
         /**
          * 历史字段：曾表示目标池批量流程展示名。

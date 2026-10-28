@@ -70,6 +70,9 @@ public class StockSecurityBatchAdjustDto {
         /** 当前行可选流程列表 */
         private List<AdjustCheckDto.FlowOption> flowOptions = new ArrayList<>();
 
+        /** 本组快速资格对应的材料豁免依据，与所选流程无关 */
+        private String materialExemptionType;
+
         /** 批量流程展示名称 */
         private String batchFlowName;
 

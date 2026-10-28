@@ -117,7 +117,7 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 
 | 分支 | 校验 | 提交 |
 |------|------|------|
-| 证券 | `SecurityPoolAdjustService.checkAdjust`（与批量内部 `checkSingleAdjust` 同路径） | `SecurityPoolAdjustService.addAdjustLog` |
+| 证券 | `SecurityPoolAdjustService.checkAdjust`（与单笔相同，含产品库快速资格） | `SecurityPoolAdjustService.addExcelImportAdjustLogList` |
 | 主体 | `ForbiddenPoolAdjustService.checkCompanyAdjust` | `ForbiddenPoolAdjustService.addCompanyAdjustLog` |
 
 主体导入和“首先清空目标池”的主体出库均复用主体落池链路：主体出入任意目标池，符合范围的旗下债券同方向出入同一池，日志共用主体批次；仅审批通过（或直通生效）才落地，失败整批回滚。
@@ -132,7 +132,9 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 - 明细返回 `relatedCompanyCode/relatedCompanyName`、`relatedRatingCompanies`、`selfSelectedRightsHolderCode/selfSelectedRightsHolder`、`securityType/absFlag` 及有效 `ratingCompanyCode/ratingCompanyName/ratingCompanyInnerRating`。校验结果展示有效主体全称/代码；联动、互斥、关联项展示来源导入行选择。首先清空目标池自动生成的出库成员不来源于 Excel 行，仍沿用原有默认主体逻辑。
 - **未勾选**允许联动与互斥：结果中仅保留手工项
 - **勾选**后保留完整展开项（与批量一致）
-- 可调整手工项额外注入目标池**批量**调入/调出流程为推荐（对齐批量 `injectBatchFlowOption`）
+- 可调整手工项先保留完整单笔候选（含产品库快速资格及信用债简易资格），再通过 `BatchAdjustFlowOptionHelper.appendConfiguredBatchFlow` 额外加入目标池配置的批量调入/调出流程，批量为唯一推荐；证券池批量、存量证券批量共用该方法。复用本次已加载池配置，不增加查询。
+- 仅配置批量流程 ID 或 Key 时追加，未配置不新增批量无需审批候选并保留单笔推荐。同一流程定义的快速与批量选项按类型分别保留。满足快速资格即豁免本次信评报告及其他附件，与选择快速、一般、特殊或批量流程无关；行级 materialExemptionType 随校验结果和提交明细透传，切换流程不撤去提示，同组配套项跟随主项。
+- 提交保留所选流程 ID/Key/类型，透传行级材料豁免依据，复用单笔材料规则；不再禁用产品库快速及材料豁免。批量推荐不覆盖操作员手动选择，不展示合同投资范围确认提示。
 - 校验结果「调整类型」：手工主项 **Excel导入**（不对齐单笔「手工调整」；对齐批量渠道专属命名「手动批量调整」）；联动/互斥/关联同名；清空主项 **Excel清空**
 - 某导入行主券或任一同券关联项校验失败时，该行整个调库组均不可提交，不影响其他校验通过行的提交。
 - 提交：按来源导入行构建请求，通过 `addExcelImportAdjustLogList` 复用证券调库提交步骤，手工主项 `adjust_type=Excel导入`（联动/互斥/关联由 `resolveAdjustType` 落各自类型）

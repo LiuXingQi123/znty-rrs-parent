@@ -163,6 +163,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         item.setTargetPoolId(11L);
         item.setAdjustMode("调入");
         item.setFlowId(1L);
+        item.setMaterialExemptionType("productSource");
         item.setCreditReportFileIndexes(Collections.singletonList(0));
         item.setMaterialFileIndexes(Collections.singletonList(1));
         item.setCreditReportSourceAttachmentIds(Arrays.asList(7L, 8L));
@@ -175,6 +176,7 @@ public class BatchSecurityPoolAdjustServiceTest {
                 Collections.singletonList(item));
 
         assertThat(submitReq.getSecurityType()).isEqualTo("company_bond");
+        assertThat(submitReq.getItems().get(0).getMaterialExemptionType()).isEqualTo("productSource");
         assertThat(submitReq.getItems().get(0).getCreditReportFileIndexes())
                 .containsExactly(0);
         assertThat(submitReq.getItems().get(0).getMaterialFileIndexes())
@@ -398,6 +400,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         simple.setFlowName("简易流程");
         simple.setFlowId(11L);
         simple.setFlowKey("bond:simple");
+        simple.setMaterialExemptionType("creditBondSimple");
         simple.setRecommended(true);
         simple.setMatched(true);
         simple.setSelectable(true);
@@ -414,6 +417,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         item.setAdjustGroupKey("11_in");
         item.setCanAdjust(true);
         item.setFlowOptions(new ArrayList<>(Collections.singletonList(simple)));
+        item.setMaterialExemptionType("creditBondSimple");
 
         BatchSecurityInboundAdjustDto.CheckResultItem result =
                 ReflectionTestUtils.invokeMethod(service, "buildBatchCheckResult", security, item);
@@ -422,6 +426,8 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(result.getFlowOptions()).hasSize(1);
         assertThat(result.getFlowOptions().get(0).getFlowType()).isEqualTo("simpleInbound");
         assertThat(result.getFlowOptions().get(0).getFlowId()).isEqualTo(11L);
+        assertThat(result.getFlowOptions().get(0).getMaterialExemptionType()).isEqualTo("creditBondSimple");
+        assertThat(result.getMaterialExemptionType()).isEqualTo("creditBondSimple");
         assertThat(result.getFlowOptions().get(0).isRecommended()).isTrue();
         assertThat(result.getAdjustGroupKey()).isEqualTo("S001_11_in");
     }

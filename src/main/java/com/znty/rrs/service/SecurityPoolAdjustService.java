@@ -21,11 +21,14 @@ import com.znty.rrs.common.enums.AttachmentCategory;
 
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.FlowType;
+import com.znty.rrs.common.enums.MaterialExemptionType;
 import com.znty.rrs.common.enums.PoolType;
 import com.znty.rrs.common.enums.PermissionType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.constants.CreditBondPoolCodes;
+import com.znty.rrs.common.constants.ProductInboundPoolCodes;
 import com.znty.rrs.common.util.AdjustStepHandlerExcludeUtil;
+import com.znty.rrs.common.util.BatchAdjustFlowOptionHelper;
 import com.znty.rrs.common.util.CreditBondRemainTermUtil;
 import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 import com.znty.rrs.entity.common.SecurityMarketDto;
@@ -1391,9 +1394,14 @@ public class SecurityPoolAdjustService {
 
         // 收集所有调库项中引用的唯一流程标识，批量加载流程快照
         Set<Long> uniqueFlowIds = new HashSet<>();
+        Map<String, Long> resolvedFlowIdsByKey = new HashMap<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
-            // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
-            Long resolvedId = resolveFlowIdFromItem(item);
+            // 只有 Key 的同一流程只解析一次，解析结果与快照是否存在分别保留
+            Long resolvedId = item.getFlowId() == null && resolvedFlowIdsByKey.containsKey(item.getFlowKey())
+                    ? resolvedFlowIdsByKey.get(item.getFlowKey()) : resolveFlowIdFromItem(item);
+            if (item.getFlowId() == null && emptyToNull(item.getFlowKey()) != null) {
+                resolvedFlowIdsByKey.put(item.getFlowKey(), resolvedId);
+            }
             if (resolvedId != null) {
                 uniqueFlowIds.add(resolvedId);
             }
@@ -1409,7 +1417,7 @@ public class SecurityPoolAdjustService {
             }
         }
 
-        return new SubmitSharedData(
+        SubmitSharedData shared = new SubmitSharedData(
                 securityInfo,
                 poolMap,
                 currentPoolIds,
@@ -1421,6 +1429,8 @@ public class SecurityPoolAdjustService {
                 batchNoContext,
                 selectedRatingCompany
         );
+        shared.resolvedFlowIdsByKey.putAll(resolvedFlowIdsByKey);
+        return shared;
     }
 
     /**
@@ -1440,6 +1450,96 @@ public class SecurityPoolAdjustService {
             return def != null ? def.getId() : null;
         }
         return null;
+    }
+
+    /**
+     * 从提交阶段已加载的快照中取得流程 ID，避免按 Key 再查一遍
+     *
+     * 执行顺序：
+     * 1. 有 ID 时直接使用，否则按 Key 在本次快照中查找
+     * 2. 找不到时返回空，由原提交流程处理
+     *
+     * @param item 所选流程项
+     * @param shared 本次提交数据
+     * @return 已加载的流程 ID
+     */
+    private Long resolveLoadedFlowId(SecurityPoolAdjustSubmitReq.AdjustItem item, SubmitSharedData shared) {
+        if (item.getFlowId() != null) {
+            return item.getFlowId();
+        }
+        if (item.getFlowKey() != null && !item.getFlowKey().isEmpty()) {
+            if (shared.resolvedFlowIdsByKey.containsKey(item.getFlowKey())) {
+                return shared.resolvedFlowIdsByKey.get(item.getFlowKey());
+            }
+            for (Map.Entry<Long, FlowSnapshot> entry : shared.flowSnapshotMap.entrySet()) {
+                FlowSnapshot snapshot = entry.getValue();
+                if (snapshot != null && snapshot.definition != null
+                        && item.getFlowKey().equals(snapshot.definition.getFlowKey())) {
+                    return entry.getKey();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 根据主项的快速资格判断本次材料豁免，与用户选择哪种审批流程无关
+     *
+     * 返回 true 时，调用方跳过原报告必填校验，自愿补充的报告引用仍校验有效性，材料仍正常绑定
+     * 返回 false 时继续执行原材料规则，不代表不能入库，也不代表一定要求报告
+     * 校验结果返回的材料豁免依据随主项提交，产品来源失效时要求重新校验
+     * 本方法只使用已加载数据，不新增数据库查询，不重算信用债评级矩阵、180 天入库经历或历史报告资格
+     *
+     * 示例（池 ID 为假设值）：108008901.IB 当前在信用债二级库 102，申请调入稳富1号产品池 200
+     * 校验通过产品快速资格后，主项携带 productSource，无论选择快速、一般、特殊或批量流程均免材料
+     * 所选流程的 ID、Key 和类型仍照常用于审批流转，免材料不代表免审批
+     * 同组联动、互斥和关联项跟随主项，独立调出及未获得快速资格的主项继续使用原材料规则
+     *
+     * 执行顺序：
+     * 1. 找到当前项对应的手工主项，配套项按同一 adjustGroupKey 查找
+     * 2. 独立调出不适用，调入主项继续判断校验返回的资格依据
+     * 3. 优先复用本次提交已保存的主项豁免结果，避免同组重复检查
+     * 4. 产品库资格使用已经加载的当前在库集合核对来源，信用债资格不重复查库
+     * 5. 保存本次主项的判断结果，后续同组配套项直接复用
+     *
+     * @param req 本次提交请求，包含主项和同组配套项
+     * @param item 当前正在处理的主项、联动项、互斥项或关联项
+     * @param shared 已加载的投资池、当前在库状态、流程快照及本次计算缓存
+     * @return true 表示享受快速材料豁免，false 表示继续执行原材料规则
+     */
+    private boolean isInboundMaterialExempt(SecurityPoolAdjustSubmitReq req,
+                                             SecurityPoolAdjustSubmitReq.AdjustItem item,
+                                             SubmitSharedData shared) {
+        // 1. 当前项是主项时直接使用，否则按分组找到主项，找不到会报错
+        // 例如 G1 的互斥调出项仍找到 G1 的稳富1号调入主项，不能靠配套项自己传流程类型获得豁免
+        SecurityPoolAdjustSubmitReq.AdjustItem manual = resolveManualSubmitItem(req, item);
+        // 2. 独立调出不享受入库材料豁免，配套调出仍按本组调入主项判断
+        if (!AdjustMode.IN.getCode().equals(manual.getAdjustMode())) {
+            return false;
+        }
+        // 3. 同组所有配套项以同一个主项为缓存键，判断结果只在本次提交有效
+        Boolean cached = shared.materialExemptionMap.get(manual);
+        if (cached != null) {
+            return cached;
+        }
+        // 4. 读取主项的资格依据和目标池，不根据所选流程 ID、Key 或类型决定是否免材料
+        InvestmentPoolBo pool = shared.poolMap.get(manual.getTargetPoolId());
+        String exemptionType = manual.getMaterialExemptionType();
+        boolean exempt = false;
+        if (MaterialExemptionType.PRODUCT_SOURCE.getCode().equals(exemptionType)) {
+            // 产品库：只复用当前在库集合核对来源，不将本次待申请调入算作已在库
+            if (!isProductInboundFlowMatched(pool, shared.poolMap, shared.currentPoolIds)) {
+                throw new BizException("目标池[" + (pool == null ? manual.getTargetPoolId() : pool.getPoolName())
+                        + "]快速入库来源资格已失效，请重新校验");
+            }
+            exempt = true;
+        } else if (MaterialExemptionType.CREDIT_BOND_SIMPLE.getCode().equals(exemptionType)) {
+            // 信用债：沿用校验阶段已计算的资格，不重复查询矩阵、入库经历和历史报告
+            exempt = isCreditBondPool(pool);
+        }
+        // 5. 缓存本次主项的结果，免材料不改变后续实际执行的审批流程
+        shared.materialExemptionMap.put(manual, exempt);
+        return exempt;
     }
 
     /**
@@ -1665,14 +1765,18 @@ public class SecurityPoolAdjustService {
             }
             // 报告必填校验（按池 in_report_restriction；关联码项由同组手工项承担报告，跳过）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
+            // 同组先按主项快速资格判断材料豁免，无资格时继续执行原报告要求
+            if (isInboundMaterialExempt(req, item, shared)) {
+                // 自愿补充的报告仍须来自有效报告库，不再强制内部来源
+                sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
+            } else if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
                 checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null,
                         resolveItemSecurityCode(req, item));
             }
             // 获取同组手工调库项，联动/互斥/关联项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
-            Long flowId = resolveFlowIdFromItem(manualItem);
+            Long flowId = resolveLoadedFlowId(manualItem, shared);
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
             boolean noFlow = flowId == null;
             // 获取或生成同组调库批次号
@@ -1750,14 +1854,18 @@ public class SecurityPoolAdjustService {
             }
             // 报告必填校验（按池 out_report_restriction；关联码项由同组手工项承担报告，跳过）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
-            if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
+            // 快速主项带出的互斥、联动调出一并免材料，独立调出不豁免
+            if (isInboundMaterialExempt(req, item, shared)) {
+                // 自愿补充的报告仍校验引用有效性
+                sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
+            } else if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
                 checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null,
                         resolveItemSecurityCode(req, item));
             }
             // 获取同组手工调库项，联动/互斥/关联项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
-            Long flowId = resolveFlowIdFromItem(manualItem);
+            Long flowId = resolveLoadedFlowId(manualItem, shared);
             FlowSnapshot snapshot = flowId != null ? shared.flowSnapshotMap.get(flowId) : null;
             boolean noFlow = flowId == null;
             // 获取或生成同组调库批次号
@@ -2026,12 +2134,44 @@ public class SecurityPoolAdjustService {
      * @return 包含手动项和自动项的完整校验结果列表
      */
     public AdjustCheckDto checkAdjust(AdjustCheckReq req) {
+        // 单笔与 Excel 共用完整资格匹配，Excel 在映射时追加批量候选
+        return checkAdjustInternal(req, false);
+    }
+
+    /**
+     * 两个批量申请入口复用单笔校验，并追加配置的批量流程
+     *
+     * 执行顺序：
+     * 1. 执行完整单笔资格校验
+     * 2. 使用已加载的目标池配置追加批量候选，不再查询投资池
+     *
+     * @param req 调库校验请求
+     * @return 单笔匹配与额外批量候选
+     */
+    public AdjustCheckDto checkBatchAdjust(AdjustCheckReq req) {
+        // 共用同一校验实现，仅追加批量候选
+        return checkAdjustInternal(req, true);
+    }
+
+    /**
+     * 按入口要求执行完整校验，统一匹配快速资格和材料豁免
+     *
+     * 执行顺序：
+     * 1. 校验请求并加载本次共用数据
+     * 2. 执行逐券准入与关联市场校验，再生成该入口的流程候选
+     *
+     * @param req 调库校验请求
+     * @param includeBatchFlows 是否追加目标池配置的批量流程
+     * @return 调库校验结果和流程候选
+     */
+    private AdjustCheckDto checkAdjustInternal(AdjustCheckReq req, boolean includeBatchFlows) {
 
         // ══ 第一阶段：前置校验 ══
         validateCheckAdjustReq(req);
 
         // ══ 第二阶段：参数初始化 ══
         AdjustSharedData shared = loadSharedData(req);
+        shared.setBatchFlowOptionsEnabled(includeBatchFlows);
 
         // 预先将全部手动选择项注册到"已覆盖"集合，确保第三、四阶段生成的自动项
         // 不会与用户手动选择的项产生重复结果（手动项优先，自动项跳过已覆盖的 key）
@@ -2455,6 +2595,22 @@ public class SecurityPoolAdjustService {
         for (AdjustCheckDto.CheckResultItem item : resultItems) {
             // 判断单条手工调库项可选择的审批流程
             List<AdjustCheckDto.FlowOption> itemOptions = resolveAdjustFlowOptionsForItem(req, shared, item);
+            // 使用关联市场已加载的数据核验整组快速资格，不重新查询当前池状态
+            restrictRelatedFastFlowOptions(shared, item, itemOptions);
+            item.setMaterialExemptionType(null);
+            for (AdjustCheckDto.FlowOption option : itemOptions) {
+                if (option.isSelectable() && option.getMaterialExemptionType() != null) {
+                    // 资格属于本条主项，用户之后选择一般、特殊或批量流程时仍保留
+                    item.setMaterialExemptionType(option.getMaterialExemptionType());
+                    break;
+                }
+            }
+            if (shared.isBatchFlowOptionsEnabled() && item.isCanAdjust()
+                    && ItemType.MANUAL.getCode().equals(item.getItemTag())) {
+                // 使用本次已经加载的池配置调用公共追加方法
+                itemOptions = BatchAdjustFlowOptionHelper.appendConfiguredBatchFlow(
+                        itemOptions, shared.getPoolMap().get(item.getTargetPoolId()), item.getAdjustMode());
+            }
             item.setFlowOptions(itemOptions);
             for (AdjustCheckDto.FlowOption option : itemOptions) {
                 // 生成流程候选项去重 key
@@ -2499,6 +2655,11 @@ public class SecurityPoolAdjustService {
             p.setUnmatchReasons(new ArrayList<>());
             // 构建调出流程候选项
             return Collections.singletonList(buildPoolFlowOption(p));
+        }
+
+        // 产品库来源资格独立判断，命中时优先快速，仍保留原普通或特殊流程
+        if (isProductInboundTarget(targetPool, shared.getPoolMap())) {
+            return resolveProductInboundFlowOptions(shared, targetPool);
         }
 
         // 手工调入：当前已在目标池调入互斥池时优先特殊审批（信用债大库默认排除）
@@ -2602,7 +2763,11 @@ public class SecurityPoolAdjustService {
         simpleP.setMatchReasons(simpleMatchReasons);
         simpleP.setUnmatchReasons(simpleUnmatchReasons);
         // 构建简易流程候选项
-        options.add(buildPoolFlowOption(simpleP));
+        AdjustCheckDto.FlowOption simpleOption = buildPoolFlowOption(simpleP);
+        if (simpleMatched) {
+            simpleOption.setMaterialExemptionType(MaterialExemptionType.CREDIT_BOND_SIMPLE.getCode());
+        }
+        options.add(simpleOption);
         // 默认调入流程
         String normalFlowName = resolveFlowName(targetPool.getInFlowName(), "默认调入流程");
         boolean normalNoApproval = isNoApprovalFlow(targetPool.getInFlowId(), targetPool.getInFlowKey());
@@ -2669,6 +2834,169 @@ public class SecurityPoolAdjustService {
         p.setUnmatchReasons(new ArrayList<>());
         // 构建特殊审批流程候选项
         return buildPoolFlowOption(p);
+    }
+
+    /**
+     * 按现有存量入口的根节点和启用叶子范围识别产品库
+     *
+     * 执行顺序：
+     * 1. 排除停用、删除和非叶子节点
+     * 2. 沿本次已加载的父子关系确认属于存量产品库树
+     *
+     * @param pool 目标池
+     * @param poolMap 已加载的投资池集合
+     * @return 是否属于产品库快速入库范围
+     */
+    private boolean isProductInboundTarget(InvestmentPoolBo pool, Map<Long, InvestmentPoolBo> poolMap) {
+        if (pool == null || !"enabled".equals(pool.getStatus()) || Integer.valueOf(1).equals(pool.getIsDeleted())) {
+            return false;
+        }
+        for (InvestmentPoolBo candidate : poolMap.values()) {
+            if (pool.getId().equals(candidate.getParentId()) && "enabled".equals(candidate.getStatus())
+                    && !Integer.valueOf(1).equals(candidate.getIsDeleted())) {
+                return false;
+            }
+        }
+        Long current = pool.getParentId();
+        Set<Long> visited = new HashSet<>();
+        while (current != null && visited.add(current)) {
+            InvestmentPoolBo parent = poolMap.get(current);
+            if (parent == null) {
+                return false;
+            }
+            if (ProductInboundPoolCodes.ROOT.equals(parent.getPoolCode())) {
+                return true;
+            }
+            current = parent.getParentId();
+        }
+        return false;
+    }
+
+    /**
+     * 单独判断产品库快速入库资格，只使用已经查出的当前在库集合
+     *
+     * 执行顺序：
+     * 1. 确认目标属于存量产品库范围
+     * 2. 按存量入口共用的来源编码检查当前是否有效在库
+     *
+     * @param pool 目标池
+     * @param poolMap 已加载的投资池集合
+     * @param currentPoolIds 当前已生效的在库集合，不含本次待申请项
+     * @return 是否满足产品库快速资格
+     */
+    private boolean isProductInboundFlowMatched(InvestmentPoolBo pool, Map<Long, InvestmentPoolBo> poolMap,
+                                                 Set<Long> currentPoolIds) {
+        // 复用目标范围判断，不按池名或池类型扩大范围
+        if (!isProductInboundTarget(pool, poolMap) || currentPoolIds == null) {
+            return false;
+        }
+        for (Long id : currentPoolIds) {
+            InvestmentPoolBo source = poolMap.get(id);
+            if (source != null && ProductInboundPoolCodes.SOURCES.contains(source.getPoolCode())
+                    && !Integer.valueOf(1).equals(source.getIsDeleted())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 为产品库构建快速与原流程候选，来源资格满足时优先快速
+     *
+     * 执行顺序：
+     * 1. 读取本次已经加载的当前来源状态
+     * 2. 构建 simple_in 快速候选并标记材料豁免依据
+     * 3. 保留原特殊或普通流程，未命中快速时仍推荐原流程
+     *
+     * @param shared 本次校验数据
+     * @param pool 产品库目标池
+     * @return 当前目标池的流程候选
+     */
+    private List<AdjustCheckDto.FlowOption> resolveProductInboundFlowOptions(AdjustSharedData shared,
+                                                                           InvestmentPoolBo pool) {
+        // 产品库资格独立于信用债简易的评级和历史报告条件
+        boolean matched = isProductInboundFlowMatched(pool, shared.getPoolMap(), shared.getCurrentPoolIds());
+        FlowOptionParam fast = new FlowOptionParam();
+        fast.setFlowType(FlowType.SIMPLE_INBOUND.getCode());
+        fast.setFlowName(resolveFlowName(pool.getSimpleInFlowName(), "产品库快速入库流程"));
+        fast.setFlowId(pool.getSimpleInFlowId());
+        fast.setFlowKey(pool.getSimpleInFlowKey());
+        fast.setMatched(matched);
+        fast.setSelectable(matched);
+        fast.setRecommended(matched);
+        fast.setMatchReasons(matched ? Collections.singletonList("证券当前已在产品库快速入库允许的来源库")
+                : Collections.<String>emptyList());
+        fast.setUnmatchReasons(matched ? Collections.<String>emptyList()
+                : Collections.singletonList("证券当前不在指定来源库，不能使用产品库快速入库流程"));
+        // 统一构建快速候选并返回原始依据编码，中文提示由页面展示
+        AdjustCheckDto.FlowOption fastOption = buildPoolFlowOption(fast);
+        if (matched) {
+            fastOption.setMaterialExemptionType(MaterialExemptionType.PRODUCT_SOURCE.getCode());
+        }
+        // 原特殊流程仍可选择，避免快速候选覆盖用户的普通办理路径
+        AdjustCheckDto.FlowOption original = resolveSpecialInboundFlowOption(pool, shared);
+        if (original == null) {
+            original = buildNormalInboundFlowOption(pool, "使用产品库原调入流程");
+        }
+        original.setRecommended(!matched);
+        return new ArrayList<>(Arrays.asList(fastOption, original));
+    }
+
+    /**
+     * 用关联市场已加载的数据检查快速资格，任一关联码不符则整组改荐原流程
+     *
+     * 执行顺序：
+     * 1. 仅检查有材料豁免依据且可选的快速候选
+     * 2. 逐码复用当前校验数据检查对应快速资格
+     * 3. 不满足时禁用快速候选，保留具体代码并推荐原流程
+     *
+     * @param shared 主券与关联市场的已加载数据
+     * @param item 当前主项
+     * @param options 当前流程候选
+     */
+    private void restrictRelatedFastFlowOptions(AdjustSharedData shared,
+                                                 AdjustCheckDto.CheckResultItem item,
+                                                 List<AdjustCheckDto.FlowOption> options) {
+        if (item == null) {
+            return;
+        }
+        InvestmentPoolBo pool = shared.getPoolMap().get(item.getTargetPoolId());
+        for (AdjustCheckDto.FlowOption option : options) {
+            if (!option.isSelectable() || option.getMaterialExemptionType() == null) {
+                continue;
+            }
+            List<String> failures = new ArrayList<>();
+            for (Map.Entry<String, AdjustSharedData> entry : shared.getRelatedSecurityData().entrySet()) {
+                AdjustSharedData related = entry.getValue();
+                boolean matched;
+                if (MaterialExemptionType.PRODUCT_SOURCE.getCode().equals(option.getMaterialExemptionType())) {
+                    // 关联码的当前来源状态已经在逐码准入校验时查询
+                    matched = isProductInboundFlowMatched(pool, related.getPoolMap(), related.getCurrentPoolIds());
+                } else {
+                    AdjustCheckReq relatedReq = new AdjustCheckReq();
+                    relatedReq.setSecurityCode(entry.getKey());
+                    // 简易资格在下一步按实际代码判断，提交阶段不重跑
+                    matched = isSimpleInboundFlowMatched(relatedReq, related, pool,
+                            new ArrayList<String>(), new ArrayList<String>());
+                }
+                if (!matched) {
+                    failures.add("关联代码[" + entry.getKey() + "]不满足快速入库资格");
+                }
+            }
+            if (!failures.isEmpty()) {
+                option.setMatched(false);
+                option.setSelectable(false);
+                option.setRecommended(false);
+                option.setMaterialExemptionType(null);
+                option.getUnmatchReasons().addAll(failures);
+                for (AdjustCheckDto.FlowOption original : options) {
+                    if (original.isSelectable()) {
+                        original.setRecommended(true);
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -5458,6 +5786,9 @@ public class SecurityPoolAdjustService {
             SecurityInfoBo relatedSec = securityPoolAdjustMapper.querySecurityBoByCode(relatedCode);
             AdjustSharedData relatedShared = relatedSec == null ? null
                     : loadSharedDataForSecurity(relatedCode, relatedSec, mainShared, req);
+            if (relatedShared != null) {
+                mainShared.getRelatedSecurityData().put(relatedCode, relatedShared);
+            }
 
             for (AdjustCheckDto.CheckResultItem mother : motherItems) {
                 String dedupeKey = relatedCode + "_" + mother.getTargetPoolId() + "_" + mother.getAdjustMode();
@@ -5625,6 +5956,12 @@ public class SecurityPoolAdjustService {
      *
      */
     private static class SubmitSharedData {
+
+        /** 本次提交的材料豁免缓存，以手工主项为键，同组配套项共用，与所选流程无关 */
+        final Map<SecurityPoolAdjustSubmitReq.AdjustItem, Boolean> materialExemptionMap = new HashMap<>();
+
+        /** 流程 Key 已解析的 ID，保留快照缺失时的原流程身份，避免误当成无流程 */
+        final Map<String, Long> resolvedFlowIdsByKey = new HashMap<>();
 
         /** 证券基础信息（来自 rrs_securityinfo） */
         final SecurityInfoBo securityInfo;

@@ -11,6 +11,7 @@ import com.znty.rrs.entity.forbiddenpooladjust.CompanyAdjustCheckContext;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportDto;
 import com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
+import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportCheckItemDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
@@ -580,6 +581,52 @@ public class SecurityPoolExcelImportServiceTest {
         verify(importMapper).editItemCheckResult(any(SysImpTmpDetlBo.class));
         verify(importMapper).editBatchCheckResult(any(SysImpTmpBo.class));
         verify(forbiddenPoolAdjustService, never()).checkCompanyAdjust(any(), any());
+    }
+
+    /** Excel 保留单券快速候选和豁免信息，同时默认选择配置的批量流程 */
+    @Test
+    public void mapSecurityCheckResult_ShouldRecommendBatchAndKeepFastExemption() {
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(5L);
+        pool.setBatchInFlowId(10L);
+        pool.setBatchInFlowKey("bond:batch-inbound");
+        pool.setBatchInFlowName("债券批量入库流程");
+        AdjustCheckDto.FlowOption fast = new AdjustCheckDto.FlowOption();
+        fast.setFlowId(11L);
+        fast.setFlowKey("bond:simple-inbound");
+        fast.setFlowType("simpleInbound");
+        fast.setSelectable(true);
+        fast.setRecommended(true);
+        fast.setMaterialExemptionType("productSource");
+        AdjustCheckDto.FlowOption normal = new AdjustCheckDto.FlowOption();
+        normal.setFlowType("normalInbound");
+        normal.setSelectable(true);
+        AdjustCheckDto.CheckResultItem row = new AdjustCheckDto.CheckResultItem();
+        row.setTargetPoolId(5L);
+        row.setAdjustMode("调入");
+        row.setItemTag("manual");
+        row.setCanAdjust(true);
+        row.setFlowOptions(Arrays.asList(fast, normal));
+        row.setMaterialExemptionType("productSource");
+
+        SecurityPoolExcelImportCheckItemDto result = ReflectionTestUtils.invokeMethod(service,
+                "mapSecurityCheckResult", null, row, "108008901.IB", pool, "in");
+
+        assertEquals(3, result.getFlowOptions().size());
+        assertEquals("batchInbound", result.getFlowType());
+        assertEquals("productSource", result.getMaterialExemptionType());
+        assertEquals(Long.valueOf(10L), result.getFlowId());
+        assertTrue(result.getFlowOptions().get(0).isRecommended());
+        assertEquals(null, result.getFlowOptions().get(0).getMaterialExemptionType());
+        assertEquals("productSource", result.getFlowOptions().get(1).getMaterialExemptionType());
+        assertEquals(false, result.getFlowOptions().get(1).isRecommended());
+        assertTrue(fast.isRecommended());
+        verify(investmentPoolMapper, never()).queryPoolById(any());
+
+        row.setCanAdjust(false);
+        SecurityPoolExcelImportCheckItemDto failed = ReflectionTestUtils.invokeMethod(service,
+                "mapSecurityCheckResult", null, row, "108008901.IB", pool, "in");
+        assertEquals(2, failed.getFlowOptions().size());
     }
 
     /** Excel 导入应按证券类型默认选择首个关联评级主体。 */

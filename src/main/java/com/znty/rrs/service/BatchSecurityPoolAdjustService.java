@@ -122,8 +122,8 @@ public class BatchSecurityPoolAdjustService {
     /**
      * 批量调库下一步校验。
      *
-     * <p>逐券委托单笔 {@link SecurityPoolAdjustService#checkAdjust}，流程候选与推荐规则与单券调库一致，
-     * 不再注入目标池 batchIn/batchOut 专用流程。
+     * 逐券通过 {@link SecurityPoolAdjustService#checkBatchAdjust} 复用完整单笔匹配，
+     * 再共用公共方法追加目标池配置的 batchIn/batchOut 流程并推荐
      */
     public BatchSecurityInboundAdjustDto checkAdjust(BatchSecurityInboundAdjustReq req) {
         // 校验批量调库下一步参数
@@ -437,8 +437,8 @@ public class BatchSecurityPoolAdjustService {
     /**
      * 将单笔校验结果项映射为批量结果行。
      *
-     * <p>流程候选直接透传单笔 {@code checkAdjust} 结果（白名单/简易/默认/特殊/升降级等），
-     * 与证券池单券调库一致，不做批量专用流程注入。
+     * 候选保留完整单笔匹配（白名单/简易/产品库快速/默认/特殊/升降级等），
+     * 并由公共校验入口追加目标池配置的批量流程，此处直接透传
      */
     private BatchSecurityInboundAdjustDto.CheckResultItem buildBatchCheckResult(
             BatchSecurityInboundAdjustReq.SecurityItem security,
@@ -465,6 +465,7 @@ public class BatchSecurityPoolAdjustService {
         // 分组 Key 以触发主券为前缀，便于 related 与主券同批
         result.setAdjustGroupKey(sourceSecurityCode + "_" + item.getAdjustGroupKey());
         result.setCanAdjust(item.isCanAdjust());
+        result.setMaterialExemptionType(item.getMaterialExemptionType());
         result.setFailReasons(item.getFailReasons() == null ? new ArrayList<>() : item.getFailReasons());
         // 透传单笔流程候选与推荐标识，前端默认选中 recommended 项
         result.setFlowOptions(item.getFlowOptions() == null
@@ -521,6 +522,7 @@ public class BatchSecurityPoolAdjustService {
             submitItem.setFlowId(item.getFlowId());
             submitItem.setFlowKey(item.getFlowKey());
             submitItem.setFlowType(item.getFlowType());
+            submitItem.setMaterialExemptionType(item.getMaterialExemptionType());
             submitItem.setAdjustmentNote(buildBatchAdjustmentNote(req, item));
             submitItem.setCreditReportFileIndexes(item.getCreditReportFileIndexes());
             submitItem.setMaterialFileIndexes(item.getMaterialFileIndexes());
@@ -559,7 +561,7 @@ public class BatchSecurityPoolAdjustService {
      * 执行单证券调库校验（委托单笔服务，复用联动/互斥/多市场关联码扩批）。
      */
     private AdjustCheckDto checkSingleAdjust(AdjustCheckReq req) {
-        return securityPoolAdjustService.checkAdjust(req);
+        return securityPoolAdjustService.checkBatchAdjust(req);
     }
 
     /**

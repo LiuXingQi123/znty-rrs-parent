@@ -13,6 +13,7 @@ import com.znty.rrs.common.enums.FlowType;
 import com.znty.rrs.common.enums.HandlerType;
 import com.znty.rrs.common.enums.ItemType;
 import com.znty.rrs.common.enums.PermissionType;
+import com.znty.rrs.common.util.BatchAdjustFlowOptionHelper;
 import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 import com.znty.rrs.common.util.ExcelImportHelper;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
@@ -43,6 +44,7 @@ import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.SecurityPoolExcelImportMapper;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -1170,6 +1172,7 @@ public class SecurityPoolExcelImportService {
                 si.setFlowId(ci.getFlowId());
                 si.setFlowKey(ci.getFlowKey());
                 si.setFlowType(ci.getFlowType());
+                si.setMaterialExemptionType(ci.getMaterialExemptionType());
                 si.setAdjustmentNote(ci.getAdjustNote());
                 submitItems.add(si);
             }
@@ -1644,6 +1647,7 @@ public class SecurityPoolExcelImportService {
         dto.setAdjustGroupKey(sourceCode + "_" + (sourceItem == null ? "" : sourceItem.getId() + "_")
                 + (gk == null ? "" : gk));
         dto.setCanAdjust(ri.isCanAdjust());
+        dto.setMaterialExemptionType(ri.getMaterialExemptionType());
         dto.setFailReasons(ri.getFailReasons() == null ? new ArrayList<>() : new ArrayList<>(ri.getFailReasons()));
         // 解析调整类型中文
         dto.setAdjustType(resolveAdjustTypeLabel(dto.getItemTag()));
@@ -1728,66 +1732,32 @@ public class SecurityPoolExcelImportService {
     }
 
     /**
-     * 在流程候选列表前插入目标池批量调入/调出流程（对齐批量 injectBatchFlowOption）。
+     * 转换导入页候选后共用批量流程追加方法，保留单笔快速候选及豁免信息
+     *
+     * 执行顺序：
+     * 1. 将导入页候选转换为单笔候选类型
+     * 2. 用已加载目标池配置调用公共追加方法，不查询数据库
+     * 3. 转回导入页类型，保持页面唯一键和默认选中处理
+     *
+     * @param flowOptions 单笔已经匹配的导入页流程候选
+     * @param pool 已加载的目标池
+     * @param direction 调整方向，in 或 out
      */
     private void injectBatchFlowOption(List<SecurityPoolExcelImportCheckItemDto.FlowOptionDto> flowOptions,
                                        InvestmentPoolBo pool, String direction) {
-        boolean outbound = "out".equals(direction);
-        Long flowId = outbound ? pool.getBatchOutFlowId() : pool.getBatchInFlowId();
-        String flowKey = outbound ? pool.getBatchOutFlowKey() : pool.getBatchInFlowKey();
-        String flowName = outbound ? pool.getBatchOutFlowName() : pool.getBatchInFlowName();
-        String flowType = outbound ? FlowType.BATCH_OUTBOUND.getCode() : FlowType.BATCH_INBOUND.getCode();
-        boolean direct = flowId == null && isBlank(flowKey);
-
-        // 去重：去掉与批量流程同一 id/key 的其它候选
-        if (flowOptions != null && !flowOptions.isEmpty()) {
-            List<SecurityPoolExcelImportCheckItemDto.FlowOptionDto> deduped = new ArrayList<>();
-            for (SecurityPoolExcelImportCheckItemDto.FlowOptionDto option : flowOptions) {
-                if (option == null) {
-                    continue;
-                }
-                boolean sameId = flowId != null && flowId.equals(option.getFlowId());
-                boolean sameKey = !isBlank(flowKey) && flowKey.equals(option.getFlowKey());
-                if (sameId || sameKey) {
-                    continue;
-                }
-                option.setRecommended(false);
-                deduped.add(option);
-            }
-            flowOptions.clear();
-            flowOptions.addAll(deduped);
+        List<AdjustCheckDto.FlowOption> original = new ArrayList<>();
+        for (SecurityPoolExcelImportCheckItemDto.FlowOptionDto option : flowOptions) {
+            AdjustCheckDto.FlowOption common = new AdjustCheckDto.FlowOption();
+            BeanUtils.copyProperties(option, common);
+            original.add(common);
         }
-
-        String displayName;
-        if (direct) {
-            displayName = "无需审批";
-        } else if (!isBlank(flowName)) {
-            displayName = flowName.trim();
-        } else {
-            displayName = outbound ? "批量调出流程" : "批量调入流程";
-        }
-
-        SecurityPoolExcelImportCheckItemDto.FlowOptionDto batchOption =
-                new SecurityPoolExcelImportCheckItemDto.FlowOptionDto();
-        batchOption.setFlowType(flowType);
-        batchOption.setFlowName(displayName);
-        batchOption.setFlowId(flowId);
-        batchOption.setFlowKey(flowKey);
-        batchOption.setRecommended(true);
-        batchOption.setMatched(true);
-        batchOption.setSelectable(true);
-        // 生成批量流程 optionKey
-        batchOption.setOptionKey(buildFlowOptionKey(batchOption));
-        List<String> reasons = new ArrayList<>();
-        if (direct) {
-            reasons.add("目标池未配置批量审批流程，按无需审批处理");
-        } else {
-            reasons.add(outbound ? "目标池配置的批量调出流程" : "目标池配置的批量调入流程");
-        }
-        batchOption.setMatchReasons(reasons);
-        batchOption.setUnmatchReasons(new ArrayList<>());
-        if (flowOptions != null) {
-            flowOptions.add(0, batchOption);
+        String adjustMode = "out".equals(direction) ? AdjustMode.OUT.getCode() : AdjustMode.IN.getCode();
+        List<AdjustCheckDto.FlowOption> combined = BatchAdjustFlowOptionHelper.appendConfiguredBatchFlow(
+                original, pool, adjustMode);
+        flowOptions.clear();
+        for (AdjustCheckDto.FlowOption option : combined) {
+            // 复用导入页映射，透传材料豁免并重建唯一键
+            flowOptions.add(toFlowOptionDto(option));
         }
     }
 
@@ -2008,6 +1978,7 @@ public class SecurityPoolExcelImportService {
         }
         opt.setFlowName(name);
         opt.setFlowType(fo.getFlowType());
+        opt.setMaterialExemptionType(fo.getMaterialExemptionType());
         opt.setRecommended(fo.isRecommended());
         opt.setMatched(fo.isMatched());
         opt.setSelectable(fo.isSelectable());

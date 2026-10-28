@@ -119,10 +119,10 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 1. `validateAdjustCheckReq`：poolId 非空、direction ∈ {in,out}、securities 非空、每只证券 securityCode 非空、目标池为启用叶子池（`queryEnabledLeafPoolCount`）。
 2. `validateAdjustPoolPermission`：管理员(1)放行；否则校验当前用户对 poolId 拥有 adjustable 权限。
 3. `resolveAdjustMode`：`in→调入`、`out→调出`。
-4. **逐只证券循环**：对每个 `SecurityItem` 构造单证券校验请求 `buildSingleCheckReq`（目标池=当前 poolId，方向=中文），调用**单笔调库服务** `securityPoolAdjustService.checkAdjust(singleReq)`。
+4. **逐只证券循环**：对每个 `SecurityItem` 构造单证券校验请求 `buildSingleCheckReq`（目标池=当前 poolId，方向=中文），调用**单笔调库服务** `securityPoolAdjustService.checkBatchAdjust(singleReq)`，复用完整单笔校验并追加已配置的批量候选。
 5. 单笔校验返回 `AdjustCheckDto.items`（可能含手工项 + 联动/互斥/关联码自动项），用 `buildBatchCheckResult` 转成批量结果项：
    - `adjustGroupKey` 改写为 `sourceSecurityCode + "_" + 原始groupKey`（触发主券前缀，related 与主券同批）。
-   - 透传 `canAdjust`、`failReasons`、`flowOptions`（**不注入** batchIn/Out）。
+   - 透传 `canAdjust`、`failReasons`、`flowOptions`（完整单笔候选 + 配置的 batchIn/Out，推荐批量）。
 
 **返回结构** `BatchSecurityInboundAdjustDto`：
 ```json
@@ -177,7 +177,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 ### 3.4 后端批量校验逻辑（逐条列举，与单笔异同）
 
-批量校验**完全复用**单笔 `SecurityPoolAdjustService.checkAdjust`，其内部四阶段：
+批量校验通过 `SecurityPoolAdjustService.checkBatchAdjust` 复用完整单笔校验，在生成单笔候选后追加配置的批量流程，其内部阶段：
 
 1. **前置校验**（`validateCheckAdjustReq`）：securityCode/items 非空。
 2. **参数初始化**（`loadSharedData`）：一次性查证券基础信息（兼存在性校验）、全量投资池 Map、证券当前有效入池 ID 集（audit_status='20'）、全量池关系三层 Map、证券级标志（是否有进行中流程 + 当前节点名、证券/主体是否在观察池、证券/主体是否在重点观察名单）、本次请求调入/调出目标池 ID 集。
@@ -195,9 +195,9 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 池锁定 → pending → 未入池 → 冻结期（入池时间缺失报「证券入池生效时间缺失」，与单券相同）→ 调出限制池(out_restrict) → 调出互斥池(out_mutex) → 同请求互斥冲突 → 弹性禁投(out_soft_restrict，警告) → 开放日 →（债券/股票）到期或退市。
 
-**流程展示与提交**：逐券委托单笔 `securityPoolAdjustService.checkAdjust`，流程候选与推荐规则**完全沿用单券**（白名单/简易/默认/特殊/升降级等 `resolveAdjustFlowOptions`），**不再注入**目标池 `batchIn/batchOut` 专用流程。前端默认选中 `recommended` 项，操作员可按行改选其它候选。提交时透传前端所选 `flowId/flowKey/flowType`，**不再**用批量流程回填。
+**流程展示与提交**：逐券复用单笔完整校验和匹配（白名单/信用债简易/产品库快速/默认/特殊/升降级等），再通过公共方法追加目标池配置的 `batchIn/batchOut` 专用流程并设为唯一推荐。仅配置了流程 ID 或 Key 时追加；不凭空生成批量无需审批选项。同一 ID/Key 的快速与批量候选按类型分别保留，材料豁免由主项资格决定，选批量流程也可豁免。前端默认选中 `recommended` 项，操作员可按行改选。提交透传所选 `flowId/flowKey/flowType`，不再用批量配置覆盖选择。
 
-**与单笔的异同**：校验规则与流程推荐与单笔一致（无额外批量专属流程）；区别在外层：①逐证券循环；②`adjustGroupKey` 加主券 `sourceSecurityCode_` 前缀；③互斥冲突仅单券内多目标池；④整批事务、防重复、直通预检按整批聚合。
+**与单笔的异同**：准入规则与单笔一致，候选额外追加并推荐配置的批量流程；区别在外层：①逐证券循环；②`adjustGroupKey` 加主券 `sourceSecurityCode_` 前缀；③互斥冲突仅单券内多目标池；④整批事务、防重复、直通预检按整批聚合。
 
 ### 3.5 后端批量提交逻辑
 
@@ -285,7 +285,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 | 维度 | 单笔调库（`SecurityPoolAdjustService` + `security_pool_adjust.html`） | 批量调库（`BatchSecurityPoolAdjustService` + `batch_security_pool_adjust.html`） |
 |---|---|---|
 | **入口选择** | 选一只证券 → 查可调投资池树 → 勾选一个或多个目标池 | 选一个目标池 → 查候选证券 → 勾选多只证券 |
-| **校验接口** | `checkAdjust`（单证券多目标池） | 同名 `checkAdjust`，外层**逐只证券**调 `SPA.checkAdjust`；`adjustGroupKey` 加 `sourceSecurityCode_` 前缀；透传 `flowOptions`，**不注入** batchIn/Out |
+| **校验接口** | `checkAdjust`（单证券多目标池） | 同名 `checkAdjust`，外层**逐只证券**调 `SPA.checkBatchAdjust`；`adjustGroupKey` 加 `sourceSecurityCode_` 前缀；返回单笔 `flowOptions` 并追加配置的 batchIn/Out 为推荐 |
 | **校验规则** | 四阶段 + 调入/调出规则 + 联动/互斥 + 流程候选 | **完全复用**，无批量专属规则 |
 | **提交接口** | 页面/Controller：`addAdjustLog`（内部 `submitAdjustLog`） | 批量 Controller 仍 `addAdjustLog`/`addAdjustLogWithFiles`；Service 编排后调 **`SPA.submitAdjustLog`**；`adjustType="手动批量调整"` |
 | **分组** | 单次请求内多目标池 | 按 **`sourceSecurityCode`/主券** 分组，related 与主券同组 |
@@ -319,7 +319,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 - 前端：`znty-rrs-ui/batch_security_pool_adjust.html`（主页面）、`znty-rrs-ui/batch_security_pool_adjust_select.html`（独立选择页）、`znty-rrs-ui/dict.js`
 - Controller：`BatchSecurityPoolAdjustController.java`
-- Service：`BatchSecurityPoolAdjustService.java`（编排：`checkAdjust`→`SPA.checkAdjust`，`addAdjustLog`→防重复/直通预检/分组→`SPA.submitAdjustLog`）、`SecurityPoolAdjustService.java`（`checkAdjust`/`submitAdjustLog`/`isDirectAdjustFlow`/`recheckBeforeFinalApproval`/`BatchNoContext`）、`SysAttachmentService.java`
+- Service：`BatchSecurityPoolAdjustService.java`（编排：`checkAdjust`→`SPA.checkBatchAdjust`，`addAdjustLog`→防重复/直通预检/分组→`SPA.submitAdjustLog`）、`SecurityPoolAdjustService.java`（`checkAdjust`/`checkBatchAdjust`/`submitAdjustLog`/`isDirectAdjustFlow`/`recheckBeforeFinalApproval`/`BatchNoContext`）、`SysAttachmentService.java`
 - Mapper：`BatchSecurityPoolAdjustMapper.java` / `BatchSecurityPoolAdjustMapper.xml`
 - 实体：`BatchSecurityPoolAdjustReq`、`BatchSecurityInboundAdjustReq`、`BatchSecurityInboundAdjustDto`、`BatchSecurityPoolDto`、`BatchSecurityCandidateDto`
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_pool_init_schema.sql`、`sql/rrs_sys_attachment_schema.sql`
@@ -336,3 +336,16 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 `sys_attachment.source_attachment_id` 保存复制来源的报告库附件 ID，附件查询返回 `sourceAttachmentId/sourceReportId/sourceReportSource/sourceReportTitle`；基金代码转正继承关联时保留该来源。新增 `POST /api/v1/reports/queryReportDetail { reportId, source: internal|external }`，非法来源、无效 ID、不存在或已删除报告明确失败。
 
 新环境通过更新后的原始附件 schema 初始化；存量升级使用 `sql/tool_report_source_upgrade.sql`（不加入初始化/重置执行）。仅修复唯一可定位来源，未定位项明确输出供核对，运行时不猜测归属。前端完整说明见 `docs/report-materials.html`。
+
+## 快速入库与本次材料豁免
+
+适用证券池调整（包括详情页调库和审核页下一步模式）、证券池批量调整、存量证券批量调整及证券池 Excel 导入。后三个入口保留完整单笔候选，另共用 BatchAdjustFlowOptionHelper 追加配置的批量流程并统一推荐批量；未配置时保留单笔推荐。
+
+- 信用债沿用 isSimpleInboundFlowMatched，资格在“下一步”计算，提交不重复查询矩阵、180 天入库经历或历史报告条件。资格中的历史报告要求仍保留，豁免的是本次提交材料。
+- 产品库沿用独立 isProductInboundFlowMatched：目标为 bond_product_root 子树启用叶子；当前有效在信用债一至三级、转债核心/重点或 CRMW 库之一才命中。来源编码与存量入口共用，本次待申请调入来源池不算当前在库。
+- 材料豁免按主项快速资格决定，与选择快速、一般、特殊或批量流程无关。免材料不代表免审批，提交保留所选流程 ID、Key、类型，仍由该流程决定人工审批或直接生效。
+- 行级 CheckResultItem.materialExemptionType 返回 creditBondSimple / productSource，无资格时为空；前端随主项透传，批量和 Excel 映射保持该字段。FlowOption.materialExemptionType 只记录快速候选的资格匹配信息，不再按当前选中候选决定材料规则。
+- 同组联动、互斥和关联市场项跟随主项豁免；关联码逐码判断快速资格，任一不符则整组不获得快速材料豁免。独立调出及无资格主项沿用原材料规则，混合批次逐组处理，整批事务不变。
+- 提交复用已加载的池配置和当前在库集合检查产品来源；信用债资格不重复查库，不新增校验凭证或重复资格查询。材料判断不要求所选流程等于 simple_in，也不要求其为直通流程。
+- 六个相关页面统一提示“本次免提交材料（信评报告及其他附件）”，切换流程不撤去有资格主项的提示；详情和审核页补齐批量调入/调出标签。保留现有材料入口和内容，不显示合同投资范围确认提示，不增加勾选。
+- 补充的报告引用仍检查有效性，材料绑定及完成后的报告生成沿用原逻辑；准入硬限制和落池复核保留，不改表，不改变其他调库链路。

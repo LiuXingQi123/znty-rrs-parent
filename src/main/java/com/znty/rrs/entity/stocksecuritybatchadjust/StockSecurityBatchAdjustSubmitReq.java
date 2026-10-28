@@ -134,6 +134,9 @@ public class StockSecurityBatchAdjustSubmitReq {
         /** 审批流程类型 */
         private String flowType;
 
+        /** 校验返回的材料豁免依据，不随所选流程变化 */
+        private String materialExemptionType;
+
         /** 调整说明 */
         private String adjustmentNote;
 

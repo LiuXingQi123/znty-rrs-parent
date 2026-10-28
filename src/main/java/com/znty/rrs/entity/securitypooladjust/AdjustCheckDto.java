@@ -72,6 +72,9 @@ public class AdjustCheckDto {
 
         /** 当前调库项可选流程列表 */
         private List<FlowOption> flowOptions;
+
+        /** 本组快速资格对应的材料豁免依据，与用户选择的流程无关 */
+        private String materialExemptionType;
     }
 
     /**
@@ -79,6 +82,9 @@ public class AdjustCheckDto {
      */
     @Data
     public static class FlowOption {
+
+        /** 快速候选的资格依据，实际材料豁免使用主项行级字段，与所选流程无关 */
+        private String materialExemptionType;
 
         /** 流程类型：whitelistInbound / simpleInbound / normalInbound / specialInbound / upgradeInbound / downgradeInbound / normalOutbound */
         private String flowType;

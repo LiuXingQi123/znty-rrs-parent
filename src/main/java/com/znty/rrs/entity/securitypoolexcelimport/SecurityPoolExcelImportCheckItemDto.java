@@ -49,6 +49,9 @@ public class SecurityPoolExcelImportCheckItemDto {
     private String adjustNote;
     /** 可选审批流程列表 */
     private List<FlowOptionDto> flowOptions = new ArrayList<>();
+
+    /** 本组快速资格对应的材料豁免依据，与所选流程无关 */
+    private String materialExemptionType;
     /** 前端选中的流程 optionKey */
     private String selectedFlowKey;
     /** 选中流程 ID */
@@ -67,6 +70,9 @@ public class SecurityPoolExcelImportCheckItemDto {
      */
     @Data
     public static class FlowOptionDto {
+
+        /** 快速候选返回的资格依据，提交材料规则使用行级材料豁免依据 */
+        private String materialExemptionType;
 
         /** 前端选中用唯一键（flowType_flowId_flowKey） */
         private String optionKey;
