@@ -514,6 +514,16 @@ public class SecurityPoolExcelImportServiceTest {
 
     @Test
     public void checkImport_PassWhenSecurityOkAndNotInPool() {
+        assertSecurityImportWithTips(Collections.emptyList());
+    }
+
+    @Test
+    public void checkAndSubmitShouldKeepWarningsAndAcceptOriginallyFailedSecurity() {
+        assertSecurityImportWithTips(Arrays.asList("证券当前在调入限制池中：债券禁止库", "证券当前在禁止池中"));
+    }
+
+    /** 使用真实导入编排验证来源明细、校验快照和提交参数保持一致 */
+    private void assertSecurityImportWithTips(List<String> tips) {
         SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP3");
         batch.setFld001("in");
@@ -555,11 +565,11 @@ public class SecurityPoolExcelImportServiceTest {
         ri.setItemTag("manual");
         ri.setAdjustGroupKey("5_调入");
         ri.setCanAdjust(true);
-        ri.setFailReasons(new ArrayList<>());
+        ri.setFailReasons(new ArrayList<>(tips));
         ri.setFlowOptions(new ArrayList<>());
         AdjustCheckDto checkDto = new AdjustCheckDto();
         checkDto.setItems(Collections.singletonList(ri));
-        when(securityPoolAdjustService.checkAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
+        when(securityPoolAdjustService.checkExcelAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
 
         when(importMapper.queryItemCountByCheckResult(eq("IMP3"), eq("0"))).thenReturn(0);
         batch.setPassCount(1);
@@ -577,10 +587,26 @@ public class SecurityPoolExcelImportServiceTest {
 
         SecurityPoolExcelImportDto dto = service.checkImport(req);
         assertNotNull(dto);
-        verify(securityPoolAdjustService).checkAdjust(any(AdjustCheckReq.class));
+        verify(securityPoolAdjustService).checkExcelAdjust(any(AdjustCheckReq.class));
         verify(importMapper).editItemCheckResult(any(SysImpTmpDetlBo.class));
         verify(importMapper).editBatchCheckResult(any(SysImpTmpBo.class));
         verify(forbiddenPoolAdjustService, never()).checkCompanyAdjust(any(), any());
+        assertEquals("1", item.getChkRslt());
+        assertEquals(1, dto.getCheckPassCount().intValue());
+        assertEquals(0, dto.getCheckFailCount().intValue());
+        if (!tips.isEmpty()) {
+            assertTrue(item.getChkDscr().contains("调整提示"));
+            assertEquals(tips, dto.getCheckItems().get(0).getFailReasons());
+            assertTrue(batch.getResultJson().contains("证券当前在禁止池中"));
+            req.setCurrentUserName("测试研究员");
+            service.submitImport(req);
+            ArgumentCaptor<List<SecurityPoolAdjustSubmitReq>> requests = ArgumentCaptor.forClass(List.class);
+            verify(securityPoolAdjustService).addExcelImportAdjustLogList(requests.capture());
+            assertEquals(1, requests.getValue().size());
+            assertEquals("110001.SH", requests.getValue().get(0).getSecurityCode());
+            assertEquals("Excel导入", requests.getValue().get(0).getAdjustType());
+            assertEquals(Long.valueOf(5), requests.getValue().get(0).getItems().get(0).getTargetPoolId());
+        }
     }
 
     /** Excel 保留单券快速候选和豁免信息，同时默认选择配置的批量流程 */

@@ -134,6 +134,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class SecurityPoolAdjustService {
+
+    /** Excel 证券导入主项类型，配套项通过同组批次识别来源 */
+    public static final String EXCEL_IMPORT_ADJUST_TYPE = "Excel导入";
     /** 统一证券市场及同券查询组件。 */
     @Resource
     private SecurityMarketService securityMarketService;
@@ -1064,18 +1067,24 @@ public class SecurityPoolAdjustService {
         // ══ 第一阶段：前置校验 ══
         // 校验证券代码及调库明细必填字段
         validateSubmitReq(req);
-        // 检查短时间内是否已提交相同申请
-        checkRecentDuplicateSubmit(req);
+        // 普通入口检查重复申请，Excel 已有批次防重复，原业务失败不再阻断
+        if (!EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+            checkRecentDuplicateSubmit(req);
+        }
 
         // ══ 第二阶段：参数初始化 ══
         // 读取证券主档并重新复核所选评级主体
         SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
         // 同券跨市场调入必须完整提交，禁止跳过校验失败的关联券
         validateRelatedInboundItemsOnSubmit(req);
-        // 检查本次涉及的顶级池组是否已有活动流程
-        checkSubmitPendingPoolGroups(req, shared.poolMap);
-        // 调入须同步调出互斥池：缺失或调出不可行则整单拒绝，防止双池
-        validateRequiredMutexOutboundOnSubmit(req, shared);
+        // 普通入口检查在途，Excel 在原校验中保留在途提示后放行
+        if (!EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+            checkSubmitPendingPoolGroups(req, shared.poolMap);
+        }
+        // 普通入口要求互斥调出可执行，Excel 沿用导入选项及原校验提示
+        if (!EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+            validateRequiredMutexOutboundOnSubmit(req, shared);
+        }
         return shared;
     }
 
@@ -1766,7 +1775,10 @@ public class SecurityPoolAdjustService {
             // 报告必填校验（按池 in_report_restriction；关联码项由同组手工项承担报告，跳过）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
             // 同组先按主项快速资格判断材料豁免，无资格时继续执行原报告要求
-            if (isInboundMaterialExempt(req, item, shared)) {
+            if (EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+                // Excel 的业务校验只作提示，不在提交时用报告必填要求重新阻断
+                sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
+            } else if (isInboundMaterialExempt(req, item, shared)) {
                 // 自愿补充的报告仍须来自有效报告库，不再强制内部来源
                 sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
             } else if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
@@ -1855,7 +1867,10 @@ public class SecurityPoolAdjustService {
             // 报告必填校验（按池 out_report_restriction；关联码项由同组手工项承担报告，跳过）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
             // 快速主项带出的互斥、联动调出一并免材料，独立调出不豁免
-            if (isInboundMaterialExempt(req, item, shared)) {
+            if (EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+                // Excel 配套项沿用主项的提示后放行口径，已提供的报告仍检查引用有效性
+                sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
+            } else if (isInboundMaterialExempt(req, item, shared)) {
                 // 自愿补充的报告仍校验引用有效性
                 sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
             } else if (!ItemType.RELATED.getCode().equals(item.getItemTag())) {
@@ -2135,7 +2150,7 @@ public class SecurityPoolAdjustService {
      */
     public AdjustCheckDto checkAdjust(AdjustCheckReq req) {
         // 单笔与 Excel 共用完整资格匹配，Excel 在映射时追加批量候选
-        return checkAdjustInternal(req, false);
+        return checkAdjustInternal(req, false, false);
     }
 
     /**
@@ -2150,7 +2165,47 @@ public class SecurityPoolAdjustService {
      */
     public AdjustCheckDto checkBatchAdjust(AdjustCheckReq req) {
         // 共用同一校验实现，仅追加批量候选
-        return checkAdjustInternal(req, true);
+        return checkAdjustInternal(req, true, false);
+    }
+
+    /**
+     * Excel 证券导入照常执行原校验，失败原因保留为提示，并允许可识别的整组数据提交
+     *
+     * 执行顺序：
+     * 1. 执行原单笔规则和关联市场展开，不修改任何规则方法
+     * 2. 在生成流程候选前统一放行有实际证券和目标池的组，保留所有原失败原因
+     *
+     * @param req Excel 导入行对应的单笔请求
+     * @return 可提交状态、原校验原因和完整流程候选
+     */
+    public AdjustCheckDto checkExcelAdjust(AdjustCheckReq req) {
+        // Excel 只改变校验结果的使用方式，批量候选仍由导入服务追加
+        return checkAdjustInternal(req, false, true);
+    }
+
+    /**
+     * 原规则全部执行后，统一将 Excel 业务失败作为可提交提示
+     *
+     * 执行顺序：
+     * 1. 用本次已加载数据识别没有实际证券或目标池的组，这类数据仍无法落库
+     * 2. 其余组统一允许提交，保留 failReasons 供页面显示和导入快照留存
+     *
+     * @param shared 本次已经加载的主券、关联券和投资池
+     * @param items 原规则执行后的完整结果
+     */
+    private void allowExcelImportResults(AdjustSharedData shared, List<AdjustCheckDto.CheckResultItem> items) {
+        Set<String> invalidGroups = new HashSet<>();
+        for (AdjustCheckDto.CheckResultItem item : items) {
+            boolean knownSecurity = shared.getSecurityInfo() != null
+                    && Objects.equals(item.getSecurityCode(), shared.getSecurityInfo().getWindCode());
+            knownSecurity = knownSecurity || shared.getRelatedSecurityData().containsKey(item.getSecurityCode());
+            if (!knownSecurity || !shared.getPoolMap().containsKey(item.getTargetPoolId())) {
+                invalidGroups.add(item.getAdjustGroupKey());
+            }
+        }
+        for (AdjustCheckDto.CheckResultItem item : items) {
+            item.setCanAdjust(!invalidGroups.contains(item.getAdjustGroupKey()));
+        }
     }
 
     /**
@@ -2162,9 +2217,10 @@ public class SecurityPoolAdjustService {
      *
      * @param req 调库校验请求
      * @param includeBatchFlows 是否追加目标池配置的批量流程
+     * @param excelWarningsOnly 是否将 Excel 原业务失败作为可提交的调整提示
      * @return 调库校验结果和流程候选
      */
-    private AdjustCheckDto checkAdjustInternal(AdjustCheckReq req, boolean includeBatchFlows) {
+    private AdjustCheckDto checkAdjustInternal(AdjustCheckReq req, boolean includeBatchFlows, boolean excelWarningsOnly) {
 
         // ══ 第一阶段：前置校验 ══
         validateCheckAdjustReq(req);
@@ -2191,6 +2247,11 @@ public class SecurityPoolAdjustService {
         // ══ 第四点五阶段：多市场关联码扩批（itemTag=related） ══
         // 回填主券证券信息，并按 Wind 非空 ISIN 展开同池同向关联项
         expandRelatedMarketCodeItems(req, shared, resultItems);
+
+        if (excelWarningsOnly) {
+            // 原校验已经完整执行，只在 Excel 出口改变是否允许提交，不能清空失败原因
+            allowExcelImportResults(shared, resultItems);
+        }
 
         // ══ 第五阶段：流程类型判断 ══
         List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
@@ -3969,6 +4030,8 @@ public class SecurityPoolAdjustService {
         if (logList == null || logList.isEmpty()) {
             return;
         }
+        // 配套日志保持联动、互斥、关联类型，通过同组主项批次继承 Excel 来源
+        Set<String> excelBatches = collectExcelImportBatches(logList);
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p));
         List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
@@ -3981,14 +4044,20 @@ public class SecurityPoolAdjustService {
         Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
                 securityPoolAdjustMapper.queryAllPoolRelationList());
         for (IpAdjustLogBo log : logList) {
+            boolean excelImport = EXCEL_IMPORT_ADJUST_TYPE.equals(log.getAdjustType())
+                    || (log.getAdjustBatchNo() != null && excelBatches.contains(log.getAdjustBatchNo()));
             InvestmentPoolBo pool = poolMap.get(log.getTargetPoolId());
-            if (pool == null || "enabled".equals(pool.getStatus()) == false
-                    || (pool.getIsDeleted() != null && pool.getIsDeleted() == 1)) {
+            if (pool == null || (!excelImport && (!"enabled".equals(pool.getStatus())
+                    || Integer.valueOf(1).equals(pool.getIsDeleted())))) {
                 throwApprovalRecheckFailure(log, "目标投资池不存在或已停用");
             }
             SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(log.getSecurityCode());
             if (security == null) {
                 throwApprovalRecheckFailure(log, "证券不存在");
+            }
+            if (excelImport) {
+                // Excel 已保留原规则提示，直通与人工审批最终落池均不再因业务失败阻断
+                continue;
             }
             Set<Long> currentPoolIds = new HashSet<>(
                     securityPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getSecurityCode()));
@@ -4050,8 +4119,16 @@ public class SecurityPoolAdjustService {
      * @param logList 已通过最终复核的调库日志集合
      */
     public void applyPoolStatusChanges(List<IpAdjustLogBo> logList) {
+        // 与最终复核使用同一来源口径，普通手工和批量调整不受影响
+        Set<String> excelBatches = collectExcelImportBatches(logList);
         for (IpAdjustLogBo log : logList) {
+            boolean excelImport = EXCEL_IMPORT_ADJUST_TYPE.equals(log.getAdjustType())
+                    || (log.getAdjustBatchNo() != null && excelBatches.contains(log.getAdjustBatchNo()));
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
+                if (excelImport) {
+                    // 已在目标池也允许导入时，先结束旧有效状态，避免出现两条有效在库记录
+                    securityPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
+                }
                 log.setAuditStatus(AuditStatus.APPROVED.getCode());
                 log.setAdjustLogId(log.getId());
                 int inserted = securityPoolAdjustMapper.addPoolStatus(log);
@@ -4062,12 +4139,32 @@ public class SecurityPoolAdjustService {
             } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
                 int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(
                         log.getSecurityCode(), log.getTargetPoolId());
-                if (deleted == 0) {
+                if (deleted == 0 && !excelImport) {
                     throw new BizException("证券[" + log.getSecurityCode() + "]已不在投资池["
                             + log.getTargetPoolName() + "]，调出失败");
                 }
             }
         }
+    }
+
+    /**
+     * 从本次完整调库组中识别 Excel 主项批次，让配套项沿用同一放行口径
+     *
+     * 执行顺序：
+     * 1. 仅收集 Excel 导入主项的非空批次，Excel 清空不在其中
+     * 2. 返回本次集合，不修改日志类型，也不增加数据库查询
+     *
+     * @param logs 本次直通或审批处理的完整调库组
+     * @return Excel 证券导入主项的批次集合
+     */
+    private Set<String> collectExcelImportBatches(List<IpAdjustLogBo> logs) {
+        Set<String> batches = new HashSet<>();
+        for (IpAdjustLogBo log : logs) {
+            if (EXCEL_IMPORT_ADJUST_TYPE.equals(log.getAdjustType()) && log.getAdjustBatchNo() != null) {
+                batches.add(log.getAdjustBatchNo());
+            }
+        }
+        return batches;
     }
 
     /** 返回第一个非空失败原因。 */

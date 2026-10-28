@@ -60,6 +60,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -88,7 +89,7 @@ public class SecurityPoolExcelImportService {
     /** 导入类型：主体 */
     private static final String IMPORT_TYPE_COMPANY = "company";
     /** 调库记录调整类型：Excel 行导入 */
-    private static final String ADJUST_TYPE_EXCEL = "Excel导入";
+    private static final String ADJUST_TYPE_EXCEL = SecurityPoolAdjustService.EXCEL_IMPORT_ADJUST_TYPE;
     /** 调库记录调整类型：首先清空目标池 */
     private static final String ADJUST_TYPE_CLEAR = "Excel清空";
     /** 管理员用户 ID（放行 excel_importable） */
@@ -517,7 +518,10 @@ public class SecurityPoolExcelImportService {
         boolean allOk = fail == 0 && checkFail == 0;
         batch.setChkRslt(allOk ? "1" : "2");
         if (allOk) {
-            batch.setChkDscr("全部校验通过（含调库展开项 " + checkItems.size() + " 条）");
+            long tipCount = checkItems.stream().filter(ci -> ci.getFailReasons() != null
+                    && !ci.getFailReasons().isEmpty()).count();
+            batch.setChkDscr(tipCount == 0 ? "全部校验通过（含调库展开项 " + checkItems.size() + " 条）"
+                    : "全部可调整，其中 " + tipCount + " 条存在调整提示");
         } else {
             batch.setChkDscr("导入行失败 " + fail + " 条，校验结果失败 " + checkFail + " 条");
         }
@@ -623,7 +627,7 @@ public class SecurityPoolExcelImportService {
             try {
                 // 复核并使用页面保存的权益人或担保人，不覆盖手动选择
                 applyImportedRatingCompany(checkReq, item);
-                checkDto = securityPoolAdjustService.checkAdjust(checkReq);
+                checkDto = securityPoolAdjustService.checkExcelAdjust(checkReq);
             } catch (BizException e) {
                 List<String> reasons = Collections.singletonList(e.getMessage());
                 // 标记导入行校验失败
@@ -667,7 +671,14 @@ public class SecurityPoolExcelImportService {
 
             if (manualPass) {
                 item.setChkRslt("1");
-                item.setChkDscr("校验通过");
+                // 原业务失败只作提示，来源明细按可提交保存，原因仍保存在校验快照中
+                List<String> tips = new ArrayList<>();
+                for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
+                    if (Objects.equals(item.getId(), ci.getSourceItemId()) && ci.getFailReasons() != null) {
+                        tips.addAll(ci.getFailReasons());
+                    }
+                }
+                item.setChkDscr(tips.isEmpty() ? "校验通过" : "调整提示：" + String.join("；", tips));
             } else {
                 List<String> failReasons = new ArrayList<>();
                 for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {

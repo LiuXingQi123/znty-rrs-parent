@@ -371,7 +371,7 @@ public class SecurityPoolInboundMaterialExemptionTest {
         verifyNoInteractions(f.mapper, f.flowMapper);
     }
 
-    /** 自愿补充报告仍检查有效引用，Excel 与申请入口使用同一豁免规则 */
+    /** 自愿补充报告仍检查有效引用，普通申请按资格豁免 */
     @Test
     public void voluntaryReportShouldBeValidatedAndSharedSubmitShouldExemptFastFlow() throws Exception {
         Fixture f = new Fixture();
@@ -385,6 +385,18 @@ public class SecurityPoolInboundMaterialExemptionTest {
         ReflectionTestUtils.invokeMethod(f.service, "executeInboundSubmit", f.request,
                 excelShared, null, directLogs);
         assertThat(directLogs).hasSize(1);
+    }
+
+    /** Excel 业务校验只作提示，未取得快速资格也不能被报告必填再次阻断 */
+    @Test
+    public void excelImportShouldSubmitWithoutRequiredReportOrFastQualification() throws Exception {
+        Fixture f = new Fixture();
+        f.request.setAdjustType(SecurityPoolAdjustService.EXCEL_IMPORT_ADJUST_TYPE);
+        f.manual.setMaterialExemptionType(null);
+        List<IpAdjustLogBo> directLogs = new ArrayList<>();
+        ReflectionTestUtils.invokeMethod(f.service, "executeInboundSubmit", f.request, f.submitData(), null, directLogs);
+        assertThat(directLogs).hasSize(1);
+        assertThat(directLogs.get(0).getAdjustType()).isEqualTo("Excel导入");
     }
 
     /** 构造完整的产品库、当前来源和直接生效流程，供各业务场景复用 */
