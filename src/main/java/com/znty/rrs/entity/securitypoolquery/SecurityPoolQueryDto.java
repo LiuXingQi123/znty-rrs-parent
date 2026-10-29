@@ -42,6 +42,9 @@ public class SecurityPoolQueryDto {
     private String couponRate;
     /** 发行主体名称 */
     private String issuer;
+
+    /** 主体编码 */
+    private String issuerCode;
     /** 证券全称 */
     private String fullName;
     /** 发行日期 */

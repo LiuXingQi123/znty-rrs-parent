@@ -13,6 +13,8 @@
                ,al.security_type
                ,dst.security_type_name
                ,sb.issuer
+               , sb.issuer_code
+               , sb.full_name
                ,sb.abs_flag
                ,sb.guarant_flag
                ,sb.yx_flag
@@ -71,6 +73,12 @@
             </if>
             <if test="adjusterName != null and adjusterName != ''">
                 AND al.adjuster_name LIKE CONCAT('%', #{adjusterName}, '%')
+            </if>
+            <if test="securityFullName != null and securityFullName != ''">
+                AND sb.full_name LIKE CONCAT('%', #{securityFullName}, '%')
+            </if>
+            <if test="issuerCode != null and issuerCode != ''">
+                AND sb.issuer_code LIKE CONCAT('%', #{issuerCode}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
                 AND sb.issuer LIKE CONCAT('%', #{issuer}, '%')

@@ -7,6 +7,7 @@ import com.znty.rrs.entity.bo.SysAttachmentBo;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
+import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
@@ -30,11 +31,7 @@ import java.util.List;
 public interface SecurityPoolAdjustMapper {
 
     /** 分页查询证券列表 */
-    List<SecurityInfoDto> querySecurityPage(@Param("securityCode") String securityCode,
-                                           @Param("securityShortName") String securityShortName,
-                                           @Param("securityType") String securityType,
-                                           @Param("issuer") String issuer,
-                                           @Param("bondYesFlags") List<String> bondYesFlags);
+    List<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req);
 
     /** 查询候选证券类型选项，限定债券大类并包含 CRMW，排除退市证券 */
     List<SecurityTypeOptionDto> querySecurityTypeList();

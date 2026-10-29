@@ -31,6 +31,12 @@ public class BatchSecurityPoolAdjustReq extends PageRequest {
     /** 证券简称（模糊） */
     private String securityShortName;
 
+    /** 证券全称（模糊搜索） */
+    private String securityFullName;
+
+    /** 主体编码（模糊搜索） */
+    private String issuerCode;
+
     /** 发行人名称（模糊） */
     private String issuer;
 

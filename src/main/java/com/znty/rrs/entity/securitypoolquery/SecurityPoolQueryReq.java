@@ -18,6 +18,12 @@ public class SecurityPoolQueryReq extends PageRequest {
     private String securityCode;
     /** 证券简称（模糊搜索） */
     private String securityShortName;
+
+    /** 证券全称（模糊搜索） */
+    private String securityFullName;
+
+    /** 主体编码（模糊搜索） */
+    private String issuerCode;
     /** 证券类型（精确匹配） */
     private String securityType;
     /** 证券状态：active=存续 / matured=到期 / unknown=未知到期日 */

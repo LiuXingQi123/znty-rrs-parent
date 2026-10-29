@@ -22,6 +22,13 @@
 | **投资池类型** | `pool_type` | 可选投资池、链路隔离、禁止/观察/信用债规则 | 选池：入/出均排除 `crmw`；禁投/观察不排；硬逻辑仍认 forbidden/observe/credit_bond |
 
 
+## 列表查询字段
+
+- 查询条件新增主体编码 `issuerCode`、证券全称 `securityFullName`，分别对主档 `issuer_code`、`full_name` 做包含式模糊查询；留空不限制，与既有条件按 AND 组合
+- 列表展示主体编码 `issuerCode`、证券全称 `fullName`，已有证券全称列直接保留；值为空时留白
+- 原“发行人”“发行主体全称”查询条件及对应列表列统一显示为“主体全称”，继续使用 `issuer` 字段及原有匹配规则
+- 新增条件支持回车查询，查询回到第一页，重置时清空；证券基础信息等非查询、非列表区域保持原样
+
 “是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。
 
 ---
@@ -49,20 +56,23 @@
 |---|---|---|
 | 文本输入 | `securityCode` | 证券代码，回车查询 |
 | 文本输入 | `securityShortName` | 证券简称，回车查询 |
+| 文本输入 | `securityFullName` | 证券全称，回车查询 |
+| 文本输入 | `issuerCode` | 主体编码，回车查询 |
 | 下拉 | `securityType` | 证券类型，精确匹配；选项来自 `querySecurityTypeList` |
-| 文本输入 | `issuer` | 发行人，回车查询 |
+| 文本输入 | `issuer` | 主体全称，回车查询 |
 | 多选 | `bondYesFlags` | 是否特征，含标准信用债；勾选即筛「是」，多选 AND |
 
 - **查询** `handleSearch()`：重置 `pageIndex=1` 后调 `loadList()`。
-- **重置** `handleReset()`：清空四个文本/类型字段及特征多选、`pageIndex=1`、`loadList()`。
+- **重置** `handleReset()`：清空文本/类型字段及特征多选、`pageIndex=1`、`loadList()`。
 - **初始化**（`created`）：`loadSecurityTypeOptions()` + `applyUrlSecurityOrList()`（有 `securityCode` 进详情，否则 `loadList()`）。
 
 ### 2.2 loadList → 接口
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
-- 请求体：`{ securityCode, securityShortName, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
+- 请求体：`{ securityCode, securityShortName, securityFullName, issuerCode, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
 - 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（债券大类，含 CRMW 凭证）**，主体、股票、基金由大类过滤，固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`/`stdCredit`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。CRMW 可通过本页进入普通产品库，可调入库、可调出库仍排除 `pool_type=crmw`，凭证+标的组合通过独立 CRMW 池链路办理。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
+- 参数传递：`SecurityPoolAdjustService.querySecurityPage` 将完整 `SecurityPoolAdjustReq` 传给 Mapper，证券全称和主体编码与其他筛选条件一起绑定，避免拆分参数时遗漏
 
 ### 2.2.1 证券类型下拉 `querySecurityTypeList`
 
@@ -79,7 +89,8 @@
 | 证券代码 | `windCode` | 可点击 `desc-link` → `handleAdjust(row)`；空值空白 |
 | 证券简称 | `shortName` | 可点击 |
 | 证券全称 | `fullName` | tooltip |
-| 发行人 | `issuer` | tooltip |
+| 主体编码 | `issuerCode` | tooltip |
+| 主体全称 | `issuer` | tooltip |
 | 证券类型 | `securityTypeName` | `el-tag type=info`，空值空白（后端 JOIN 出 name，前端不做 code→name） |
 | 发行总额(亿) | `issueAmountplan` | 等宽字体，非空才显示 |
 | 当期利率(%) | `couponRate` | 等宽字体 + 琥珀色 |
@@ -414,7 +425,7 @@
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `querySecurityPage` | securityCode, securityShortName, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
+| `querySecurityPage` | securityCode, securityShortName, securityFullName, issuerCode, securityType, issuer, pageIndex, pageSize | `PageResult<SecurityInfoDto>` | 分页查询证券列表 |
 | `querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：仅 bond，排除 crmw 及已删除态） |
 | `querySecurityDetail` | securityCode，可选 adjustLogId | `SecurityInfoDetailDto` | ①有 adjustLogId：该笔快照整包；②否则：主档打底 + 该券最新快照覆盖可编辑字段（标识类始终主档）；③无快照则纯主档 |
 | `queryIssuerFinancialList` | securityCode | `List<IssuerFinancialDto>` | 四期报告，缺失期保留日期和空指标 |

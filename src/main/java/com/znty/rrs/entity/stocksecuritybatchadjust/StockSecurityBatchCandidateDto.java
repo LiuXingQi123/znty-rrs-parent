@@ -59,6 +59,12 @@ public class StockSecurityBatchCandidateDto {
     /** 发行人 */
     private String issuer;
 
+    /** 主体编码 */
+    private String issuerCode;
+
+    /** 证券全称 */
+    private String fullName;
+
     /** 证券评级 */
     private String ratingBond;
 

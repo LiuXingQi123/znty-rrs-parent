@@ -6,6 +6,7 @@ import com.github.pagehelper.PageInterceptor;
 import com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwCandidateDto;
 import com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
+import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.mapper.BatchCrmwPoolAdjustMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -193,12 +194,15 @@ public class BatchCrmwPoolAdjustMapperTest {
     @Test
     public void shouldAllowCrmwInSecurityAdjustmentCandidatesAndTypes() {
         SecurityPoolAdjustMapper securityMapper = session.getMapper(SecurityPoolAdjustMapper.class);
-        assertThat(securityMapper.querySecurityPage(null, null, "crmw", null, null))
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityType("crmw");
+        assertThat(securityMapper.querySecurityPage(req))
                 .extracting(SecurityInfoDto::getWindCode)
                 .containsExactlyInAnyOrder("C1", "C2", "OUT_C", "PENDING_C");
         assertThat(securityMapper.querySecurityTypeList()).extracting(row -> row.getSecurityType())
                 .containsExactly("bond", "abs", "crmw");
-        assertThat(securityMapper.querySecurityPage(null, null, null, null, null))
+        req.setSecurityType(null);
+        assertThat(securityMapper.querySecurityPage(req))
                 .extracting(SecurityInfoDto::getWindCode)
                 .doesNotContain("COMPANY", "STOCK", "FUND", "D_B", "D_C");
     }

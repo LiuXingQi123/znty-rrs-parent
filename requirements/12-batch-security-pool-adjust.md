@@ -9,6 +9,14 @@
 同券关联市场与投资池投资市场共用 `MarketCode` 集合（`SSE/SZSE/NIB/BSE/COMPANY/OTC/HKEX/QDII/JWCW/UNKNOWN/OTHER`），不另设白名单。先按 Wind `EXCHMARKET` 筛选主代码和关联代码，再查询本地主档；范围外代码不参与关联展示、关联校验和关联出入库，缺少主档不阻断，范围内缺少主档或市场仍报错。不按代码后缀或 `S_INFO_EXCHMARKET` 推断；目标池勾选的市场仍是逐券入池限制，不用于裁剪同券集合。证券池、ABS、CRMW、批量、Excel 及临时转正复用同一查询。
 
 
+## 列表查询字段
+
+- 查询条件新增主体编码 `issuerCode`、证券全称 `securityFullName`，分别对主档 `issuer_code`、`full_name` 做包含式模糊查询；留空不限制，与既有条件按 AND 组合
+- 列表展示主体编码 `issuerCode`、证券全称 `fullName`，已有证券全称列直接保留；值为空时留白
+- 原“发行人”“发行主体全称”查询条件及对应列表列统一显示为“主体全称”，继续使用 `issuer` 字段及原有匹配规则
+- 新增条件支持回车查询，查询回到第一页，重置时清空；证券基础信息等非查询、非列表区域保持原样
+- 批量页仅修改工作台内“可选证券”区域，初始投资池列表保持原样；重新进入调入/调出时清空新增条件
+
 “是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。
 
 ## 同券跨市场整组校验
@@ -57,17 +65,19 @@
 | 控件 | 字段 | 说明 |
 |---|---|---|
 | 文本输入 | `securityCode` | 证券代码 |
-| 文本输入 | `issuer` | 仅按发行人名称模糊查询，调入、调出均支持；留空不限制，与其他条件按 AND 组合 |
+| 文本输入 | `issuer` | 主体全称，仅按名称模糊查询，调入、调出均支持；留空不限制，与其他条件按 AND 组合 |
 | 文本输入 | `securityShortName` | 证券简称 |
+| 文本输入 | `securityFullName` | 证券全称 |
+| 文本输入 | `issuerCode` | 主体编码 |
 | 多选 | `marketCodes` | 市场（SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他） |
 | 多选 | `bondYesFlags` | 是否特征：ABS/担保/永续/次级/私募/含权/标准信用债；勾选即筛「是」，多选 AND |
 
-发行人输入框支持回车查询；查询时回到第一页，重置及重新进入调入/调出工作台时清空发行人条件。
+主体全称输入框支持回车查询；查询时回到第一页，重置及重新进入调入/调出工作台时清空主体全称条件。
 
 查询接口：`POST /api/v1/batchSecurityPoolAdjust/querySecurityPage`（`loadSecurityList`），请求体：
 ```json
 { "currentUserId": "1", "poolId": <Long>, "direction": "in|out",
-  "issuer": null, "securityCode": null, "securityShortName": null, "marketCodes": null, "bondYesFlags": null,
+  "issuer": null, "securityCode": null, "securityShortName": null, "securityFullName": null, "issuerCode": null, "marketCodes": null, "bondYesFlags": null,
   "pageIndex": 1, "pageSize": 20 }
 ```
 返回 `{ records:[...], total, pageIndex, pageSize }`，`records` 为 `BatchSecurityCandidateDto`（含证券基础信息及 ABS/担保/永续/次级/私募/含权/标准信用债原始字段；`dateExists` 为剩余期限天数，`dateExistsStr` 为直接展示并供年口径判断解析的证券期限文本）。候选表按证券池调整页样式展示六个「是/否」Tag。
@@ -234,7 +244,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{ excludePoolTypes: ['crmw'], includeVarietyCodes: ['bond'] }` | `List<PoolTreeDto>` | 主页面投资池筛选树，默认收起，只含投资品种包含债券的池及其上级 |
 | `batchSecurityPoolAdjust/queryPoolPage` | currentUserId, poolIds, pageIndex, pageSize | `PageResult<BatchSecurityPoolDto>`（records:[id/poolName/poolFullName/poolType/marketCodes/varietyCodes/description/maxCapacity/currentCount], total） | 分页查询当前用户可调整的启用叶子投资池；**排除 CRMW 池，且 `variety_codes` 包含 `bond`**；候选证券包含 CRMW 凭证、排除 `security_type='company'` |
-| `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), securityCode, securityShortName, marketCodes, bondYesFlags, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券；特征多选按 AND |
+| `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), securityCode, securityShortName, securityFullName, issuerCode, marketCodes, bondYesFlags, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券；特征多选按 AND |
 | `batchSecurityPoolAdjust/checkAdjust` | `BatchSecurityInboundAdjustReq`: currentUserId, direction, poolId, poolName, poolType, securities:[{securityCode,securityShortName,securityType}] | `BatchSecurityInboundAdjustDto`（items:[{...,canAdjust,failReasons,flowOptions}]） | 批量调库下一步校验 |
 | `batchSecurityPoolAdjust/addAdjustLog`（JSON） | `BatchSecurityInboundAdjustReq`（含 items:[{...,flowId/flowKey/flowType,creditReportFileIndexes,...}]） | `BatchSecurityInboundAdjustDto`（securityCount, submitCount, logIds） | 批量提交调库申请（无附件） |
 | `batchSecurityPoolAdjust/addAdjustLogWithFiles`（multipart） | `request`=JSON Blob + `files`=MultipartFile[] | 同上 | 批量提交调库申请及附件（前端实际用此入口；JSON 无附件入口为 `addAdjustLog`） |

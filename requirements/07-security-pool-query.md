@@ -5,6 +5,14 @@
 > 角色定位：投资和风控人员按投资池、证券类型及状态查询当前有效证券池，并维护个人关注的「我的证券池」收藏。
 
 
+## 列表查询字段
+
+- 查询条件新增主体编码 `issuerCode`、证券全称 `securityFullName`，分别对主档 `issuer_code`、`full_name` 做包含式模糊查询；留空不限制，与既有条件按 AND 组合
+- 列表展示主体编码 `issuerCode`、证券全称 `fullName`，已有证券全称列直接保留；值为空时留白
+- 原“发行人”“发行主体全称”查询条件及对应列表列统一显示为“主体全称”，继续使用 `issuer` 字段及原有匹配规则
+- 新增条件支持回车查询，查询回到第一页，重置时清空；证券基础信息等非查询、非列表区域保持原样
+- 查询页与历史页的导出请求继续使用当前筛选条件，新增筛选条件一并透传；本次不调整 Excel 模板列
+
 “是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。证券池查询和证券池调整历史的 Excel 导出同步追加该列，是否类值统一先转布尔值再显示“是/否”。
 
 ---
@@ -34,11 +42,13 @@ this.loadList();                  // 列表数据
 | `poolIds` | `[]` | 投资池树多选弹层 | 叶子节点可选，父节点禁止勾选 |
 | `securityCode` | `''` | 文本输入 | 证券代码，回车触发查询 |
 | `securityShortName` | `''` | 文本输入 | 证券简称 |
+| `securityFullName` | `''` | 文本输入 | 证券全称 |
+| `issuerCode` | `''` | 文本输入 | 主体编码 |
 | `securityType` | `''` | 下拉 | 动态加载 |
 | `securityStatus` | `'active'` | 下拉 | 默认存续 |
 | `entryTimeRange` | `null` | 日期范围 | 入池时间 |
 | `adjusterName` | `''` | 文本输入 | 调整人 |
-| `issuer` | `''` | 文本输入 | 发行主体名称 |
+| `issuer` | `''` | 文本输入 | 主体全称 |
 | `bondYesFlags` | `[]` | 是否特征多选 | 可选 ABS/担保/永续/次级/私募/含权/标准信用债；勾选即筛「是」，多选 AND |
 | `mySecurities` | `false` | 复选框 | 仅看我的证券，change 即触发查询 |
 | `currentUserId` | `'1'` | — | TODO：对接实际登录用户 |
@@ -71,7 +81,7 @@ this.loadList();                  // 列表数据
 | 字段 | 来源 | 空值处理 |
 |---|---|---|
 | `poolIds` | `searchForm.poolIds` | 空数组转 `null` |
-| `securityCode` / `securityShortName` / `securityType` / `securityStatus` / `adjusterName` / `issuer` | 表单 | 空串转 `null` |
+| `securityCode` / `securityShortName` / `securityFullName` / `issuerCode` / `securityType` / `securityStatus` / `adjusterName` / `issuer` | 表单 | 空串转 `null` |
 | `bondYesFlags` | 是否特征多选 | 空数组转 `null`；多选按 AND |
 | `entryTimeStart` | `entryTimeRange[0]` + ` 00:00:00` | 无则 `null` |
 | `entryTimeEnd` | `entryTimeRange[1]` + ` 23:59:59` | 无则 `null` |
@@ -83,7 +93,7 @@ this.loadList();                  // 列表数据
 
 ### 3.1 导出当前查询结果
 
-点击页面“导出”按钮调用 `POST /api/v1/securityPoolQuery/exportSecurityPoolExcel`，请求参数与列表查询相同但不传分页参数；后端复用列表 SQL 全量查询全部命中记录并回填投资池全路径。Excel 基于 `src/main/resources/xlsx/security_pool_query_export_template.xlsx` 填充：第一行为楷体字段表头，第二行起为数据，字段顺序与页面展示一致（不含序号、收藏操作列；「证券期限」导出 `dateExistsStr` 展示串，不换算为年数），返回 `CommonFileDto`（Base64）由前端调用 `downloadBase64File` 下载。
+点击页面“导出”按钮调用 `POST /api/v1/securityPoolQuery/exportSecurityPoolExcel`，请求参数与列表查询相同但不传分页参数；后端复用列表 SQL 全量查询全部命中记录并回填投资池全路径。Excel 基于 `src/main/resources/xlsx/security_pool_query_export_template.xlsx` 填充：第一行为楷体字段表头，第二行起为数据，字段顺序沿用原有模板（不含本次新增主体编码列、序号及收藏操作列；「证券期限」导出 `dateExistsStr` 展示串，不换算为年数），返回 `CommonFileDto`（Base64）由前端调用 `downloadBase64File` 下载。
 
 ---
 
@@ -101,7 +111,8 @@ this.loadList();                  // 列表数据
 | 投资池名称 | `targetPoolName` | tooltip，由后端 `fillPoolFullName` 填充全路径 |
 | 证券类型 | `securityTypeName` | 有值显示 `el-tag type="info"`，无值显示空 |
 | 票面年利率(%) | `couponRate` | 右对齐，空则空 |
-| 发行主体名称 | `issuer` | tooltip |
+| 主体编码 | `issuerCode` | tooltip |
+| 主体全称 | `issuer` | tooltip |
 | 证券全称 | `fullName` | tooltip |
 | 发行日期 | `issueDate` | 居中 |
 | 起息日 | `carryDate` | 居中 |
@@ -151,8 +162,8 @@ this.loadList();                  // 列表数据
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
 | `common/queryPoolTreeList` | `{ includeVarietyCodes: ['bond'] }` | `List<{id, parentId, poolName, poolFullName, poolCode, varietyCodes}>` | 投资品种包含债券的投资池树（含上级与全路径），默认收起 |
-| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, bondYesFlags, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo、证券特征等） | 证券池分页查询（仅 audit_status='20'；`category_type=bond`，含 crmw 跟债记录） |
-| `securityPoolQuery/exportSecurityPoolExcel` | 与分页查询相同，但不传 pageIndex/pageSize | `CommonFileDto`（Base64 `.xlsx`） | 按当前筛选条件导出全部命中记录，字段与页面表格一致 |
+| `securityPoolQuery/querySecurityPoolPage` | poolIds, securityCode, securityShortName, securityFullName, issuerCode, securityType, securityStatus, entryTimeStart, entryTimeEnd, adjusterName, issuer, bondYesFlags, mySecurities, currentUserId, pageIndex, pageSize | `PageResult<SecurityPoolQueryDto>`（records 含 mySecurityPoolId、adjustLogId、adjustBatchNo、证券特征等） | 证券池分页查询（仅 audit_status='20'；`category_type=bond`，含 crmw 跟债记录） |
+| `securityPoolQuery/exportSecurityPoolExcel` | 与分页查询相同，但不传 pageIndex/pageSize | `CommonFileDto`（Base64 `.xlsx`） | 按当前筛选条件导出全部命中记录，字段沿用原有导出模板 |
 | `securityPoolQuery/querySecurityTypeList` | `{}` | `List<{securityType, securityTypeName}>` | 证券类型下拉（与列表同口径：债券大类，含 crmw） |
 | `securityPoolQuery/querySecurityStatusList` | `{}` | `List<String>` = `['active','matured']` | 证券状态下拉（前端未调用，硬编码） |
 | `securityPoolQuery/addSecurityToMyPool` | `{securityCode, securityType, market, userId}` | `MySecurityPoolBo` | 添加收藏（幂等） |

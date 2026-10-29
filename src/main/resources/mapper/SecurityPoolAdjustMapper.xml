@@ -22,6 +22,12 @@
             <if test="securityType != null and securityType != ''">
                 AND si.security_type = #{securityType}
             </if>
+            <if test="securityFullName != null and securityFullName != ''">
+                AND si.full_name LIKE CONCAT('%', #{securityFullName}, '%')
+            </if>
+            <if test="issuerCode != null and issuerCode != ''">
+                AND si.issuer_code LIKE CONCAT('%', #{issuerCode}, '%')
+            </if>
             <if test="issuer != null and issuer != ''">
                 AND si.issuer LIKE CONCAT('%', #{issuer}, '%')
             </if>

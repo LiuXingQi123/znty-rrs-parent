@@ -43,7 +43,7 @@ public class BatchSecurityPoolAdjustMapperTest {
         database = new EmbeddedDatabaseBuilder().generateUniqueName(true)
                 .setType(EmbeddedDatabaseType.H2).build();
         JdbcTemplate jdbc = new JdbcTemplate(database);
-        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(30), short_name VARCHAR(100), "
+        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(30), short_name VARCHAR(100), full_name VARCHAR(200), "
                 + "security_type VARCHAR(20), security_status VARCHAR(10), issuer VARCHAR(100), issuer_code VARCHAR(30), "
                 + "rating_bond VARCHAR(20), rating_bondissuer VARCHAR(20), inner_issuer_rating VARCHAR(20), "
                 + "abs_flag INT, guarant_flag INT, yx_flag INT, cj_flag INT, issue_type VARCHAR(20), inner_class VARCHAR(20), "

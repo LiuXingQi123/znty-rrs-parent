@@ -31,6 +31,12 @@ public class StockSecurityBatchAdjustReq extends PageRequest {
     /** 证券简称（模糊） */
     private String securityShortName;
 
+    /** 证券全称（模糊搜索） */
+    private String securityFullName;
+
+    /** 主体编码（模糊搜索） */
+    private String issuerCode;
+
     /**
      * 市场编码列表：
      * SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 /
@@ -50,7 +56,7 @@ public class StockSecurityBatchAdjustReq extends PageRequest {
      */
     private List<Long> sourcePoolIds;
 
-    /** 发行主体（模糊匹配 issuer / issuer_code） */
+    /** 主体全称（沿用模糊匹配 issuer / issuer_code） */
     private String issuer;
 
 }

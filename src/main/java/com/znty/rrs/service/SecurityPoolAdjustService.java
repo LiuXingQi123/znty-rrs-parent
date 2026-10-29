@@ -204,13 +204,16 @@ public class SecurityPoolAdjustService {
     /**
      * 分页查询证券列表
      *
-     * @param req 查询条件（证券代码、简称、发行人为模糊匹配；证券类型为精确匹配）
+     * 执行顺序：
+     * 1. 开启分页，将完整查询条件传给 Mapper，包含证券全称和主体编码
+     * 2. 将查询结果、总数和分页信息一起返回
+     *
+     * @param req 查询条件，证券代码、简称、全称、主体编码和主体全称为模糊匹配，证券类型为精确匹配
+     * @return 证券列表和分页信息
      */
     public PageResult<SecurityInfoDto> querySecurityPage(SecurityPoolAdjustReq req) {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
-        List<SecurityInfoDto> records = securityPoolAdjustMapper.querySecurityPage(
-                req.getSecurityCode(), req.getSecurityShortName(), req.getSecurityType(), req.getIssuer(),
-                req.getBondYesFlags());
+        List<SecurityInfoDto> records = securityPoolAdjustMapper.querySecurityPage(req);
         PageInfo<SecurityInfoDto> pageInfo = new PageInfo<>(records);
 
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());

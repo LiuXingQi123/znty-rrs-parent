@@ -32,6 +32,12 @@ public class SecurityPoolAdjustHistoryDto {
     /** 发行主体名称 */
     private String issuer;
 
+    /** 主体编码 */
+    private String issuerCode;
+
+    /** 证券全称 */
+    private String fullName;
+
     /** 是否 ABS：1=是 / 0=否 */
     private Integer absFlag;
 
