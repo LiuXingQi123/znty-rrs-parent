@@ -770,7 +770,7 @@ public class SecurityPoolAdjustService {
 
     /**
      * 从投资池列表中排除 CRMW 类型池（pool_type=crmw）。
-     * 注意：这是「池域」过滤，与候选证券排除 security_type=crmw/company 是不同维度。
+     * CRMW 凭证可作为证券调整到普通池，凭证与标的组合仍走独立 CRMW 池链路
      */
     private List<InvestmentPoolBo> filterOutCrmwPools(List<InvestmentPoolBo> pools) {
         if (pools == null || pools.isEmpty()) {

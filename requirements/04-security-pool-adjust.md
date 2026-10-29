@@ -18,7 +18,7 @@
 单笔提交携带基本信息已查询的 `relatedMarketCodes: [{ windCode, marketCode }]`；后端直接使用传入集合核对各目标池的调入明细是否带齐主券及关联券，提交阶段不再查询同券关系。批量及 Excel 入口复用本次校验结果中的实际代码集合。逐券活动流程检查继续执行。
 
 ------|------|------|------------|
-| **证券类型** | `security_type` | 候选证券/主体/凭证列表 | 主列表与批量候选：`NOT IN ('crmw','company')`，**不用** `pool_type` |
+| **证券类型** | `security_type` | 候选证券/主体/凭证列表 | 主列表限定债券大类，包含 CRMW；批量候选排除 `company`、包含 CRMW，**不用** `pool_type` |
 | **投资池类型** | `pool_type` | 可选投资池、链路隔离、禁止/观察/信用债规则 | 选池：入/出均排除 `crmw`；禁投/观察不排；硬逻辑仍认 forbidden/observe/credit_bond |
 
 
@@ -61,7 +61,7 @@
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
 - 请求体：`{ securityCode, securityShortName, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（仅债券）**，并排除 `security_type='crmw'`（演示字典中 crmw 归 bond，须单独挡；`company` 大类为 company，已被 bond 过滤），固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`/`stdCredit`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（债券大类，含 CRMW 凭证）**，主体、股票、基金由大类过滤，固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`/`stdCredit`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。CRMW 可通过本页进入普通产品库，可调入库、可调出库仍排除 `pool_type=crmw`，凭证+标的组合通过独立 CRMW 池链路办理。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 
 ### 2.2.1 证券类型下拉 `querySecurityTypeList`
@@ -69,7 +69,7 @@
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityTypeList`
 - 请求体：`{}`
 - 返回：`List<SecurityTypeOptionDto>`（`{securityType, securityTypeName}`）
-- 后端 SQL：与列表同口径，`SELECT DISTINCT si.security_type, dst.security_type_name FROM rrs_securityinfo si LEFT JOIN dict_security_type dst ... WHERE si.security_type NOT IN ('crmw','company') AND si.security_status != 'D' ORDER BY dst.sort_order ASC, si.security_type ASC`（同上，仅排除退市 `D`；`U` 未知可出现在下拉候选来源证券中）
+- 后端 SQL：与列表同口径，`INNER JOIN dict_security_type` 限定有效字典 `category_type='bond'`，`SELECT DISTINCT si.security_type, dst.security_type_name`，仅排除退市 `D`，包含 CRMW，按 `dst.sort_order ASC, si.security_type ASC` 排序；`U` 未知可出现在下拉候选来源证券中
 
 ### 2.3 表格列（列表页）
 

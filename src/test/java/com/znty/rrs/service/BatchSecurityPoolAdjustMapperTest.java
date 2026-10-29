@@ -61,7 +61,7 @@ public class BatchSecurityPoolAdjustMapperTest {
                 + "('OUT2', '其他债', 'bond', 'L', '另一发行人', 'ISSUER-B', 'SSE', 0), "
                 + "('DELISTED', '测试债', 'bond', 'D', '测试发行人甲', 'ISSUER-A', 'NIB', 1), "
                 + "('COMPANY', '测试债', 'company', 'L', '测试发行人甲', 'ISSUER-A', 'NIB', 1), "
-                + "('CRMW', '测试债', 'crmw', 'L', '测试发行人甲', 'ISSUER-A', 'NIB', 1)");
+                + "('CRMW', '测试凭证', 'crmw', 'L', '凭证发行人', 'ISSUER-C', 'NIB', 1)");
         jdbc.update("INSERT INTO ip_pool_status VALUES ('OUT1', 2, '20', 0), ('OUT2', 2, '20', 0), "
                 + "('IN1', 2, '00', 0), ('IN2', 2, '20', 1)");
         Configuration configuration = new Configuration(new Environment("batch-security-test",
@@ -93,7 +93,9 @@ public class BatchSecurityPoolAdjustMapperTest {
             for (String issuer : new String[]{null, ""}) {
                 req.setIssuer(issuer);
                 assertThat(mapper.querySecurityPage(req)).extracting(BatchSecurityCandidateDto::getSecurityCode)
-                        .containsExactlyInAnyOrder(expectedCode, "in".equals(direction) ? "IN2" : "OUT2");
+                        .containsExactlyInAnyOrder("in".equals(direction)
+                                ? new String[]{expectedCode, "IN2", "CRMW"}
+                                : new String[]{expectedCode, "OUT2"});
             }
         }
     }
@@ -115,6 +117,22 @@ public class BatchSecurityPoolAdjustMapperTest {
             req.setIssuer("另一发行人");
             assertThat(mapper.querySecurityPage(req)).isEmpty();
         }
+    }
+
+    /** CRMW 凭证可以通过证券池批量入口调入和调出普通池 */
+    @Test
+    public void shouldAllowCrmwForBothDirections() {
+        BatchSecurityPoolAdjustReq req = new BatchSecurityPoolAdjustReq();
+        req.setPoolId(2L);
+        req.setSecurityCode("CRMW");
+        req.setDirection("in");
+        assertThat(mapper.querySecurityPage(req)).extracting(BatchSecurityCandidateDto::getSecurityCode)
+                .containsExactly("CRMW");
+        new JdbcTemplate(database).update("INSERT INTO ip_pool_status VALUES ('CRMW', 2, '20', 0)");
+        session.clearCache();
+        req.setDirection("out");
+        assertThat(mapper.querySecurityPage(req)).extracting(BatchSecurityCandidateDto::getSecurityCode)
+                .containsExactly("CRMW");
     }
 
     /** 释放测试会话和数据库 */

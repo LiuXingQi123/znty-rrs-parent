@@ -152,8 +152,21 @@
                  ,ips.security_code ASC
     </select>
 
-    <!-- 分页查询目标池可调入候选组合（凭证×标的，且该组合尚未在目标池） -->
+    <!-- 分页查询债券产品库1中的凭证与债券组合，排除目标池已有组合 -->
     <select id="queryInboundCandidatePage" resultType="com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwCandidateDto">
+        <!-- 按债券产品库1编码定位根池，递归纳入未删除的下级池，不依赖池 ID 或显示名称 -->
+        WITH RECURSIVE product_pool_scope (id) AS (
+            SELECT p.id
+            FROM ip_investment_pool p
+            WHERE p.pool_code = 'bond_product1_root'
+              AND p.is_deleted = 0
+            UNION ALL
+            SELECT child.id
+            FROM ip_investment_pool child
+            INNER JOIN product_pool_scope parent ON parent.id = child.parent_id
+            WHERE child.is_deleted = 0
+        )
+        <!-- 债券和凭证各自在来源范围内即可跨子库组合，使用 EXISTS 避免多池持有造成重复分页 -->
         SELECT bond.wind_code AS securityCode
                ,bond.short_name AS securityShortName
                ,bond.security_type
@@ -178,12 +191,31 @@
                ,bond.guarantor
                ,bond.guarantor_id
         FROM rrs_securityinfo bond
-        INNER JOIN rrs_securityinfo crmw
-                ON crmw.security_type = 'crmw'
-               AND crmw.security_status != 'D'
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        CROSS JOIN rrs_securityinfo crmw
         <where>
-            AND bond.security_type NOT IN ('crmw', 'company')
+            AND bond.security_type != 'crmw'
             AND bond.security_status != 'D'
+            AND crmw.security_type = 'crmw'
+            AND crmw.security_status != 'D'
+            AND EXISTS (
+                SELECT 1
+                FROM ip_pool_status ips
+                INNER JOIN product_pool_scope p ON p.id = ips.target_pool_id
+                WHERE ips.security_code = bond.wind_code
+                  AND ips.audit_status = '20'
+                  AND ips.is_deleted = 0
+            )
+            AND EXISTS (
+                SELECT 1
+                FROM ip_pool_status ips
+                INNER JOIN product_pool_scope p ON p.id = ips.target_pool_id
+                WHERE ips.security_code = crmw.wind_code
+                  AND ips.audit_status = '20'
+                  AND ips.is_deleted = 0
+            )
             AND NOT EXISTS (
                 SELECT 1
                 FROM ip_pool_status_crmw ips

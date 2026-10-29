@@ -36,7 +36,7 @@ public interface SecurityPoolAdjustMapper {
                                            @Param("issuer") String issuer,
                                            @Param("bondYesFlags") List<String> bondYesFlags);
 
-    /** 查询候选证券中出现的证券类型选项（与列表同口径：排除 crmw/company、已删除态） */
+    /** 查询候选证券类型选项，限定债券大类并包含 CRMW，排除退市证券 */
     List<SecurityTypeOptionDto> querySecurityTypeList();
 
     /** 根据证券代码查询证券详情 */

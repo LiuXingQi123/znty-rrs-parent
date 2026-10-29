@@ -12,7 +12,6 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         <where>
-            AND si.security_type != 'crmw'
             AND si.security_status != 'D'
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
@@ -58,8 +57,7 @@
         INNER JOIN dict_security_type dst ON dst.security_type = si.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
-        WHERE si.security_type != 'crmw'
-          AND si.security_status != 'D'
+        WHERE si.security_status != 'D'
         ORDER BY dst.sort_order ASC
                  ,si.security_type ASC
     </select>

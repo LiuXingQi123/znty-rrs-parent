@@ -67,6 +67,35 @@ import static org.mockito.Mockito.when;
 /** SecurityPoolAdjustServiceStepTest 测试类。 */
 public class SecurityPoolAdjustServiceStepTest {
 
+    /** CRMW 凭证调整到普通证券池时，入出方向都不能选择 CRMW 组合池 */
+    @Test
+    public void crmwSecurityShouldOnlySelectOrdinaryPoolsForBothDirections() {
+        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        SecurityPoolAdjustMapper securityMapper = mock(SecurityPoolAdjustMapper.class);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityMapper);
+        InvestmentPoolBo productPool = new InvestmentPoolBo();
+        productPool.setId(102L);
+        productPool.setPoolType("bond_product");
+        productPool.setVarietyCodes("[\"bond\"]");
+        InvestmentPoolBo crmwPool = new InvestmentPoolBo();
+        crmwPool.setId(900L);
+        crmwPool.setPoolType("crmw");
+        crmwPool.setVarietyCodes("[\"bond\"]");
+        when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(productPool, crmwPool));
+        when(poolMapper.queryMutexRelationList()).thenReturn(Collections.emptyList());
+        when(securityMapper.queryPoolCurrentCountList()).thenReturn(Collections.emptyList());
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setCurrentUserId("1");
+        req.setSecurityCode("C1");
+        req.setSecurityType("crmw");
+        for (String direction : new String[]{"in", "out"}) {
+            req.setAdjustDirection(direction);
+            assertThat(service.queryAdjustPoolList(req)).extracting(PoolDto::getId).containsExactly(102L);
+        }
+    }
+
     /** 符合主体类型但暂无评分的担保人允许参与调库，评分保持为空。 */
     @Test
     public void applySelectedRatingCompanyShouldKeepEligibleGuarantorWithoutGrade() {

@@ -101,7 +101,7 @@
                ,si.guarantor_id
         FROM rrs_securityinfo si
         <where>
-            AND si.security_type NOT IN ('crmw', 'company')
+            AND si.security_type != 'company'
             AND si.security_status != 'D'
             <if test="direction == 'in'">
                 AND NOT EXISTS (
