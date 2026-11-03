@@ -78,6 +78,10 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     /** 证券池调库落地 Mapper */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    /** ABS 主体联动与规则提醒 */
+    @Resource
+    private AbsCompanySyncService absCompanySyncService;
     /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -459,6 +463,11 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                 continue;
             }
+            // ABS 保持唯一主体身份，存在其他依据时交由研究员处理
+            if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
+                    && !absCompanySyncService.allowScheduledSync(bond, companyCode, poolId, pool.getPoolName(), true)) {
+                continue;
+            }
             List<Long> currentPoolIds = securityPoolAdjustMapper
                     .querySecurityCurrentPoolIdList(bond.getSecurityCode());
             // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
@@ -500,7 +509,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * @param pool       目标池
      * @param reason     调整原因
      */
-    private void fillAutoInBondLog(IpAdjustLogBo bond, IpAdjustLogBo companyLog,
+    private void fillAutoInBondLog(ScheduledAdjustCandidateDto bond, IpAdjustLogBo companyLog,
                                    InvestmentPoolBo pool, String reason) {
         bond.setAdjustType("自动调整");
         bond.setAdjustMode(AdjustMode.IN.getCode());
@@ -510,7 +519,9 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         bond.setAuditStatus(AuditStatus.APPROVED.getCode());
         bond.setAdjusterId(AUTO_ADJUSTER_ID);
         bond.setAdjusterName(AUTO_ADJUSTER_NAME);
-        bond.setAdjustReason(reason);
+        bond.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(reason,
+                ScheduledAdjustLogHelper.passiveAbsIdentityDetail(bond),
+                ScheduledAdjustLogHelper.triggerCompanyDetail(bond)));
         bond.setAdjustBatchNo(companyLog.getAdjustBatchNo());
         bond.setSubmitTime(companyLog.getSubmitTime());
     }

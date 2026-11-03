@@ -29,7 +29,7 @@ public class LastCreditReportAttachmentsTest {
         SysAttachmentBo file = reportFile();
         when(mapper.queryFirstCreditReportAttachment(88L)).thenReturn(file);
         when(mapper.queryReportLibraryAttachmentByFileName("one.pdf", "rrs_report_in", "report_in")).thenReturn(file);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         // 复用报告详情的完整附件返回值。
         ReflectionTestUtils.setField(service, "reportService", reportService());
@@ -47,7 +47,7 @@ public class LastCreditReportAttachmentsTest {
         SysAttachmentBo file = reportFile();
         when(mapper.queryFirstCreditReportAttachment(88L)).thenReturn(file);
         when(mapper.queryReportLibraryAttachmentByFileName("one.pdf", "rrs_report_in", "report_in")).thenReturn(file);
-        ForbiddenAbsPoolAdjustService service = new ForbiddenAbsPoolAdjustService();
+        ForbiddenAbsPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenAbsPoolAdjustService());
         ReflectionTestUtils.setField(service, "forbiddenAbsPoolAdjustMapper", mapper);
         // 复用报告详情的完整附件返回值。
         ReflectionTestUtils.setField(service, "reportService", reportService());

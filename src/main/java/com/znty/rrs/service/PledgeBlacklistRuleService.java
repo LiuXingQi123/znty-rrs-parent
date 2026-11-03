@@ -28,6 +28,50 @@ public class PledgeBlacklistRuleService {
     private ExternalRatingAgencyService externalRatingAgencyService;
 
     /**
+     * ABS 按全部关联主体检查原有黑名单质押库硬条件
+     * 执行顺序：
+     * 1. 复用候选主体集合并逐主体执行原三条件
+     * 2. 调入要求任一命中，调出要求全部不再命中
+     * @param codes 已查询的 ABS 关联主体及本次自选代码
+     * @param adjustMode 调整方向
+     * @return 原硬条件不通过的具体原因
+     */
+    public String validateCompanies(List<String> codes, String adjustMode) {
+        return validateCompanies(codes, adjustMode,
+                Collections.<Long>emptySet(), Collections.<Long>emptySet());
+    }
+
+    /**
+     * 按本批次完成后的预期池状态校验 ABS 关联主体是否满足黑名单质押库条件
+     *
+     * 执行顺序：
+     * 1. 逐个计算关联主体在 15、23 池的预期状态
+     * 2. 调入时任一关联主体命中即可通过，调出时全部关联主体均不命中才可通过
+     *
+     * @param codes 已查询的 ABS 关联主体及本次自选代码
+     * @param adjustMode 调整方向
+     * @param inboundPoolIds 本批预计调入的主体池 ID
+     * @param outboundPoolIds 本批预计调出的主体池 ID
+     * @return 原硬条件不通过的具体原因
+     */
+    public String validateCompanies(List<String> codes, String adjustMode,
+                                    Set<Long> inboundPoolIds, Set<Long> outboundPoolIds) {
+        if (codes.isEmpty()) {
+            return "无法识别 ABS 关联主体，不能调整黑名单质押库";
+        }
+        for (String code : codes) {
+            Decision decision = evaluate(code, inboundPoolIds, outboundPoolIds);
+            if (decision.shouldBeInBlacklist()) {
+                if (AdjustMode.IN.getCode().equals(adjustMode)) {
+                    return null;
+                }
+                return "ABS 关联主体[" + code + "]仍命中黑名单质押库条件（" + decision.getMatchDescription() + "），不能调出17（黑名单质押库）";
+            }
+        }
+        return AdjustMode.IN.getCode().equals(adjustMode) ? "ABS 关联主体均未命中黑名单质押库三个条件，不能调入17（黑名单质押库）" : null;
+    }
+
+    /**
      * 按当前已生效池状态判断主体是否应在黑名单质押库。
      *
      * @param companyCode 发行主体代码

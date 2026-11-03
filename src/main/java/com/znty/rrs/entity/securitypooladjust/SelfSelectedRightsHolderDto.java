@@ -11,6 +11,12 @@ import java.util.Date;
 @Data
 public class SelfSelectedRightsHolderDto {
 
+    /** 主体最新认可外评 */
+    private String ratingBondissuer;
+
+    /** 上述外评对应机构代码 */
+    private String ratingBondissuerAgency;
+
     /** 主体编码 */
     private String companyCode;
 

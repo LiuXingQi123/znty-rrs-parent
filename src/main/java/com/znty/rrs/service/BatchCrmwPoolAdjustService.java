@@ -18,6 +18,7 @@ import com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwPoolTypeCountDto;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.crmwpooladjust.AdjustSubmitDto;
@@ -51,6 +52,10 @@ import java.util.stream.Collectors;
  */
 @Service
 public class BatchCrmwPoolAdjustService {
+
+    /** ABS 固定主体及在途身份查询 */
+    @Resource
+    private AbsIdentityService absIdentityService;
 
     /** 统一证券市场查询组件。 */
     @Resource
@@ -464,6 +469,7 @@ public class BatchCrmwPoolAdjustService {
         checkReq.setCrmwName(security.getCrmwName());
         checkReq.setCrmwScode(security.getCrmwScode());
         checkReq.setCrmwStype(resolveCrmwStype(security.getCrmwStype()));
+        checkReq.setSelectedRatingCompany(security.getSelectedRatingCompany());
         checkReq.setGuarantorCode(security.getGuarantorCode());
         checkReq.setRightsHolderCode(security.getRightsHolderCode());
         checkReq.setSelfSelectedRightsHolderCode(security.getSelfSelectedRightsHolderCode());
@@ -535,6 +541,7 @@ public class BatchCrmwPoolAdjustService {
         submitReq.setCrmwName(primary.getCrmwName());
         submitReq.setCrmwScode(primary.getCrmwScode());
         submitReq.setCrmwStype(resolveCrmwStype(primary.getCrmwStype()));
+        submitReq.setSelectedRatingCompany(primary.getSelectedRatingCompany());
         submitReq.setGuarantorCode(primary.getGuarantorCode());
         submitReq.setRightsHolderCode(primary.getRightsHolderCode());
         submitReq.setSelfSelectedRightsHolderCode(primary.getSelfSelectedRightsHolderCode());
@@ -721,6 +728,13 @@ public class BatchCrmwPoolAdjustService {
      * 填充候选组合市场编码与凭证类型
      */
     private void fillCandidateFields(List<BatchCrmwCandidateDto> list) {
+        List<String> absCodes = list.stream()
+                .filter(row -> "abs".equals(row.getSecurityType()) || Integer.valueOf(1).equals(row.getAbsFlag()))
+                .map(BatchCrmwCandidateDto::getSecurityCode).distinct().collect(Collectors.toList());
+        if (!absCodes.isEmpty()) {
+            Map<String, SecurityInfoBo> identities = absIdentityService.queryCurrentIdentities(absCodes);
+            for (BatchCrmwCandidateDto row : list) row.setAbsIdentity(identities.get(row.getSecurityCode()));
+        }
         List<String> codes = new ArrayList<>();
         for (BatchCrmwCandidateDto dto : list) {
             codes.add(dto.getSecurityCode());

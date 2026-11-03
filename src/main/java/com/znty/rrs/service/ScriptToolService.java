@@ -453,7 +453,9 @@ public class ScriptToolService {
         ScriptExecuteResultDto result = buildExecuteResult(task.getModuleCode(), task.getModuleName(), req);
         try {
             // 执行模块对应 Demo 脚本
-            executeSqlFiles(Arrays.asList(task.getDemoFileName()), result.getExecutedItems());
+            executeSqlFiles("security-adjust".equals(task.getModuleCode())
+                    ? Arrays.asList(task.getDemoFileName(), "rrs_crmw_pool_status_demo_data.sql")
+                    : Arrays.asList(task.getDemoFileName()), result.getExecutedItems());
             result.setStatus(STATUS_SUCCESS);
         } catch (Exception e) {
             result.setStatus(STATUS_FAILED);
@@ -2015,7 +2017,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "stock-info", "股票基础信息", "重置股票主档、研究评级历史和多人分管关系。", "medium", "stock/rrs_stockinfo_demo_data.sql");
         // 运行表重置只解除股票附件关联，收藏仅幂等追加
         addModuleTask(taskMap, "stock-adjust", "股票调库数据", "重置股票日志、步骤、当前池状态，解除股票日志附件关联并幂等追加股票自选。", "danger", "stock/rrs_stock_pool_adjust_demo_data.sql");
-        addModuleTask(taskMap, "security-adjust", "证券调库演示数据", "重置调库日志、池状态和流程步骤演示数据（不含外部导入表）。", "danger", "rrs_security_pool_adjust_demo_data.sql");
+        addModuleTask(taskMap, "security-adjust", "证券调库演示数据", "重置调库日志、两类池状态、流程步骤和申请快照（不含外部导入表）。", "danger", "rrs_security_pool_adjust_demo_data.sql");
         addModuleTask(taskMap, "flow-definition", "流程定义", "重置流程定义、版本、节点、连线和审批处理人配置。", "danger", "rrs_flow_definition_demo_data.sql");
         addModuleTask(taskMap, "rule-config", "规则配置", "重置规则分类、规则定义、参数、测试用例和测试运行日志。", "danger", "rrs_rule_demo_data.sql");
         addModuleTask(taskMap, "pool-config", "投资池配置", "重置投资池、池关系、自动规则、权限及开放日等配置演示数据。", "danger", "rrs_pool_init_demo_data.sql");
@@ -2052,7 +2054,12 @@ public class ScriptToolService {
         task.setConfirmText(CONFIRM_RESET_MODULE);
         task.setDemoFileName(demoFileName);
         // 从模块演示脚本提取重置任务影响的表
-        task.setAffectedTables(queryDemoFileAffectedTables(demoFileName));
+        List<String> affectedTables = new ArrayList<>(queryDemoFileAffectedTables(demoFileName));
+        if ("security-adjust".equals(moduleCode)) {
+            // 证券日志重置同时恢复引用这些日志的 CRMW 当前池
+            affectedTables.addAll(queryDemoFileAffectedTables("rrs_crmw_pool_status_demo_data.sql"));
+        }
+        task.setAffectedTables(affectedTables);
         taskMap.put(moduleCode, task);
     }
 
@@ -2082,49 +2089,49 @@ public class ScriptToolService {
         Map<String, ScriptDemoSceneDto> sceneMap = new LinkedHashMap<>();
         // —— 证券池 ——
         addDemoScene(sceneMap, "security-pending-review", "证券池待复核调库单", "security",
-                "生成 104004567.IB（23基建债）升入一级库、停留在研究员B复核节点的调库申请（flow 101 / bond:standard-upgrade）。",
+                "生成 XYB004.IB 申请升入一级库，停留在研究员B复核；快照、节点和审批人均取当前 Demo 配置。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "security-approved-history", "证券池审批通过历史", "security",
-                "生成 110010123.IB（23金融债）升入一级库并已落地 ip_pool_status 的审批通过历史。",
+                "生成 DBB003.IB 升入一级库的已通过申请，保留完整审批步骤、证券快照和池状态。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step", "znty_rrs.ip_pool_status"));
         addDemoScene(sceneMap, "security-reject-modify", "证券池驳回待修改", "security",
-                "生成 107007890.IB（24科技K）升入一级库被驳回、回到研究员A修改节点的调库申请（audit_status=11）。",
+                "生成 PPB002.IB 驳回待修改申请，当前节点为原发起人修改，audit_status=11。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "security-final-reject", "证券池终态驳回", "security",
-                "生成 102002345.IB（23城投MTN）升入二级库被终态驳回（audit_status=21），可在历史/我的事宜已办查看。",
+                "生成 PPN001.IB 升入二级库的终态驳回历史，audit_status=21，不生成在池状态。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "security-outbound-approved", "证券池调出已通过", "security",
-                "生成 106006789.IB（22电力MTN）从一级库调出并审批通过（不落池状态，仅写日志与步骤，模拟出库完成）。",
+                "生成 YXB003.IB 已完成调出历史，保留证券快照及快速出库步骤，不预写有效在池状态。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "security-withdrawn", "证券池发起人撤回", "security",
-                "生成 101901234.IB 升入一级库后发起人撤回（audit_status=99），验证已办与历史展示。",
+                "生成 HQB003.IB 已撤回申请，audit_status=99，不占用在途身份。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         // —— 禁投 / 风险池（主体 + ABS）——
         addDemoScene(sceneMap, "forbidden-company-pending", "禁投池主体待审批", "forbidden",
-                "生成 C10004（电力公司）调入债券禁止库(15)、停在研究员B复核（flow 113 / company:forbidden-inbound）。与已入禁投的 C10005 区分。",
+                "生成 C10004（某基础设施建设有限公司）调入债券禁止库15的待复核申请。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "forbidden-observe-pending", "观察池主体待审批", "forbidden",
-                "生成 C10003（能源集团）调入观察池(16)、停在研究员B复核（flow 113），用于「我的事宜」禁投主体分流。",
+                "生成 C10008（某资产管理股份有限公司）调入观察池16的待复核申请。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "forbidden-restricted-pending", "重点观察名单主体待审批", "forbidden",
-                "生成 C10004 调入重点观察名单(23)、停在研究员B复核（flow 113）。验证 pool_type=restricted / 池 ID 23 场景识别。",
+                "生成 C10009（某国际贸易集团有限公司）调入重点观察名单23的待复核申请。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "forbidden-company-approved", "禁投池主体审批通过", "forbidden",
-                "生成 C10004 调入债券禁止库(15) 并审批通过，同批落地主体及符合范围的旗下债券，可在主体池/禁投查询查看。",
+                "生成 C10006（某电力股份有限公司）审批通过，同批落地主体及旗下证券的15、17池状态与证券快照。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step", "znty_rrs.ip_pool_status"));
         addDemoScene(sceneMap, "forbidden-abs-pending", "ABS 债禁投待审批", "forbidden",
-                "生成 108008901.IB（23某资A，abs_flag=1）调入债券禁止库(15)、停在研究员B复核（flow 113），联调 ABS 禁投链路与事宜列表。",
+                "生成已在二级库的 108008901.IB 调入禁止库15的申请，快照沿用主档已生效的 C10008 主体身份。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         // —— CRMW ——
         addDemoScene(sceneMap, "crmw-pending-review", "CRMW 待处理调库单", "crmw",
-                "生成 CRMW003.IB + 标的 103003456.SH 调入 CRMW库(18)、停在研究员A节点待提交（flow 105 / bond:fast-inbound 两节点流程）。",
+                "生成 CRMW003.IB + HQB001.IB 调入 CRMW库18的一般流程申请，停在研究员B复核。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "crmw-approved-history", "CRMW 审批通过历史", "crmw",
-                "生成 CRMW004.IB + 标的 104004567.IB 调入 CRMW库并落地 ip_pool_status_crmw（audit_status=20）。",
+                "生成 CRMW004.IB + DBB001.IB 已通过组合，凭证市场、标的快照、完整步骤和组合池状态保持一致。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step", "znty_rrs.ip_pool_status_crmw"));
         // —— 分级规则提醒 ——
         addDemoScene(sceneMap, "grade-rule-alert-pending", "分级规则不符待办", "alert",
-                "生成 108008901.IB（ABS 在二级库）的不符合分级规则提醒待办（alert_status=00），可在「我的事宜」第三页签查看。",
+                "为 108008901.IB 的当前二级库记录生成一条人工复核提醒，使用实际主体身份，不修改评级或矩阵规则。",
                 Arrays.asList("znty_rrs.ip_grade_rule_alert"));
         return sceneMap;
     }
@@ -2141,8 +2148,14 @@ public class ScriptToolService {
         scene.setDescription(description);
         scene.setRiskLevel("medium");
         scene.setConfirmText(CONFIRM_GENERATE_DEMO_SCENE);
-        scene.setAffectedTables(affectedTables);
-        scene.setDependencies(Arrays.asList("znty_rrs.rrs_securityinfo", "znty_rrs.ip_investment_pool", "znty_rrs.wf_flow_version"));
+        List<String> tables = new ArrayList<>(affectedTables);
+        if (!"alert".equals(sceneCategory)) {
+            tables.add("znty_rrs.ip_adjust_security_snapshot");
+            tables.add("znty_rrs.ip_adjust_security_snapshot_crmw");
+        }
+        scene.setAffectedTables(tables);
+        scene.setDependencies(Arrays.asList("znty_rrs.rrs_securityinfo", "znty_rrs.ip_investment_pool", "znty_rrs.wf_flow_version",
+                "ais_inv_analysis.t_sys_user", "ais_inv_ods.wind_compintroduction"));
         sceneMap.put(sceneCode, scene);
     }
 
@@ -2174,252 +2187,269 @@ public class ScriptToolService {
     private void executeDemoSceneSql(String sceneCode, List<String> executedItems) throws Exception {
         List<String> statements = buildDemoSceneStatements(sceneCode);
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
-            stmt.execute("USE `znty_rrs`");
-            for (String sql : statements) {
-                stmt.execute(sql);
+            conn.setAutoCommit(false);
+            try {
+                stmt.execute("USE `znty_rrs`");
+                for (String sql : statements) {
+                    int affected = stmt.executeUpdate(sql);
+                    if (sql.startsWith("INSERT INTO ip_adjust_log /* demo-primary */") && affected != 1) {
+                        throw new BizException("场景[" + sceneCode + "]主数据不完整，请先初始化配套 Demo 数据");
+                    }
+                }
+                conn.commit();
+            } catch (Exception ex) {
+                conn.rollback();
+                throw ex;
             }
         }
         executedItems.add(sceneCode);
     }
 
     /**
-     * 构建 Demo 场景 SQL 语句。
+     * 按固定白名单生成场景，每个场景使用独立对象和批次，允许同时生成
+     *
+     * 执行顺序：
+     * 1. 选择当前 Demo 中真实存在的证券、主体、目标池和流程
+     * 2. 使用主数据构建日志、步骤、池状态及逐笔快照
+     *
+     * @param sceneCode 场景白名单编码
+     * @return 按依赖顺序执行的场景语句
      */
     private List<String> buildDemoSceneStatements(String sceneCode) {
-        if ("security-pending-review".equals(sceneCode)) {
-            return buildSecurityPendingReviewScene();
-        }
-        if ("security-approved-history".equals(sceneCode)) {
-            return buildSecurityApprovedHistoryScene();
-        }
-        if ("security-reject-modify".equals(sceneCode)) {
-            return buildSecurityRejectModifyScene();
-        }
-        if ("security-final-reject".equals(sceneCode)) {
-            return buildSecurityFinalRejectScene();
-        }
-        if ("security-outbound-approved".equals(sceneCode)) {
-            return buildSecurityOutboundApprovedScene();
-        }
-        if ("security-withdrawn".equals(sceneCode)) {
-            return buildSecurityWithdrawnScene();
-        }
-        if ("forbidden-company-pending".equals(sceneCode)) {
-            return buildForbiddenCompanyPendingScene();
-        }
-        if ("forbidden-observe-pending".equals(sceneCode)) {
-            return buildForbiddenObservePendingScene();
-        }
-        if ("forbidden-restricted-pending".equals(sceneCode)) {
-            return buildForbiddenRestrictedPendingScene();
-        }
-        if ("forbidden-company-approved".equals(sceneCode)) {
-            return buildForbiddenCompanyApprovedScene();
-        }
-        if ("forbidden-abs-pending".equals(sceneCode)) {
-            return buildForbiddenAbsPendingScene();
-        }
-        if ("crmw-pending-review".equals(sceneCode)) {
-            return buildCrmwPendingReviewScene();
-        }
-        if ("crmw-approved-history".equals(sceneCode)) {
-            return buildCrmwApprovedHistoryScene();
-        }
+        // 生成与现有二级库 ABS 对应的规则提醒
         if ("grade-rule-alert-pending".equals(sceneCode)) {
             return buildGradeRuleAlertPendingScene();
         }
-        throw new BizException("不支持的 Demo 场景：" + sceneCode);
+        // 日志使用正常自增 ID，后续语句按场景批次定位，避免抢占其他申请的 ID
+        switch (sceneCode) {
+            case "security-pending-review":
+                return buildAdjustmentDemoScene(sceneCode, "XYB004.IB", false, 2, 101, "00", "调入", null);
+            case "security-approved-history":
+                return buildAdjustmentDemoScene(sceneCode, "DBB003.IB", false, 2, 101, "20", "调入", null);
+            case "security-reject-modify":
+                return buildAdjustmentDemoScene(sceneCode, "PPB002.IB", false, 2, 101, "11", "调入", null);
+            case "security-final-reject":
+                return buildAdjustmentDemoScene(sceneCode, "PPN001.IB", false, 3, 101, "21", "调入", null);
+            case "security-outbound-approved":
+                return buildAdjustmentDemoScene(sceneCode, "YXB003.IB", false, 2, 106, "20", "调出", null);
+            case "security-withdrawn":
+                return buildAdjustmentDemoScene(sceneCode, "HQB003.IB", false, 2, 101, "99", "调入", null);
+            case "forbidden-company-pending":
+                return buildAdjustmentDemoScene(sceneCode, "C10004", true, 15, 113, "00", "调入", null);
+            case "forbidden-observe-pending":
+                return buildAdjustmentDemoScene(sceneCode, "C10008", true, 16, 113, "00", "调入", null);
+            case "forbidden-restricted-pending":
+                return buildAdjustmentDemoScene(sceneCode, "C10009", true, 23, 113, "00", "调入", null);
+            case "forbidden-company-approved":
+                return buildAdjustmentDemoScene(sceneCode, "C10006", true, 15, 113, "20", "调入", null);
+            case "forbidden-abs-pending":
+                return buildAdjustmentDemoScene(sceneCode, "108008901.IB", false, 15, 113, "00", "调入", null);
+            case "crmw-pending-review":
+                return buildAdjustmentDemoScene(sceneCode, "HQB001.IB", false, 18, 103, "00", "调入", "CRMW003.IB");
+            case "crmw-approved-history":
+                return buildAdjustmentDemoScene(sceneCode, "DBB001.IB", false, 18, 105, "20", "调入", "CRMW004.IB");
+            default:
+                throw new BizException("不支持的 Demo 场景：" + sceneCode);
+        }
     }
 
     /**
-     * 构建证券池待复核场景。
-     * <p>样本：104004567.IB 已在二级库，申请升入一级库，停在研究员B复核。
+     * 用真实主数据生成一组调库场景，字段名称和审批候选不另造一套
+     *
+     * 执行顺序：
+     * 1. 清理本场景旧批次，并按主数据、目标池和流程生成主申请
+     * 2. 为已通过调入生成池状态，主体禁止库样本同时生成 17 和旗下证券
+     * 3. 按流程定义生成真实步骤，并为每条证券申请生成相应快照
+     *
+     * @param sceneCode 固定场景编码
+     * @param objectCode 主体或证券代码
+     * @param company 是否主体申请
+     * @param poolId 目标池
+     * @param flowId 流程定义
+     * @param status 审核状态
+     * @param mode 调整方向
+     * @param crmwCode CRMW 凭证代码，普通申请为空
+     * @return 场景 SQL
      */
-    private List<String> buildSecurityPendingReviewScene() {
-        String batchNo = "SCENE_SECURITY_PENDING_REVIEW";
+    private List<String> buildAdjustmentDemoScene(String sceneCode, String objectCode, boolean company,
+                                                  long poolId, long flowId, String status, String mode, String crmwCode) {
+        String batchNo = (company ? "COMP" : crmwCode == null ? "BOND" : "CRMW") + "_DEMO_" + sceneCode.replace('-', '_');
+        // 仅清理本场景生成的数据，保留其他场景和基础样本
         List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900001, '104004567.IB', '23基建债', 'company_bond', '手工调整', '调入', '" + batchNo + "', 2, '一级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '00', '2', '研究员1', '脚本工具生成：证券池待复核调库单', NULL, NOW(), NULL, NULL, 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900001, '" + batchNo + "', 10101, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW()), (900001, '" + batchNo + "', 10102, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '2', '研究员1', 'submit', '脚本工具生成待复核场景', NOW(), NOW(), NOW(), NOW()), (900001, '" + batchNo + "', 10103, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'pending', '3', '研究员2', NULL, NULL, NOW(), NULL, NOW(), NOW())");
+        String objectColumns = company ? "s.COMP_ID, s.COMP_NAME, 'company'" : "s.wind_code, s.short_name, s.security_type";
+        String objectTable = company ? "ais_inv_ods.wind_compintroduction" : "rrs_securityinfo";
+        String objectKey = company ? "s.COMP_ID" : "s.wind_code";
+        String crmwColumns = crmwCode == null ? "NULL, NULL, NULL, NULL" : "c.full_name, c.wind_code, c.market, c.security_type";
+        String crmwJoin = crmwCode == null ? "" : " INNER JOIN rrs_securityinfo c ON c.wind_code = '" + crmwCode + "' AND c.security_type = 'crmw'";
+        String auditTime = "20".equals(status) || "21".equals(status) ? "NOW()" : "NULL";
+        String entryTime = "20".equals(status) && "调入".equals(mode) ? "NOW()" : "NULL";
+        String flowType = "调出".equals(mode) ? "normalOutbound" : flowId == 101 ? "upgradeInbound" : "normalInbound";
+        statements.add("INSERT INTO ip_adjust_log /* demo-primary */ (security_code, security_short_name, security_type, crmw_name, crmw_scode, crmw_mktcode, crmw_stype, "
+                + "adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name, pool_type, flow_id, flow_key, flow_type, audit_status, "
+                + "adjuster_id, adjuster_name, adjust_reason, submit_time, audit_time, entry_time, is_deleted, crte_time, updt_time) "
+                + "SELECT " + objectColumns + ", " + crmwColumns + ", '手工调整', '" + mode + "', '" + batchNo + "', "
+                + "p.id, p.pool_name, p.pool_type, f.id, f.flow_key, '" + flowType + "', '" + status + "', '2', u.name, '脚本工具生成：" + sceneCode + "', "
+                + "TIMESTAMPADD(DAY, -2, NOW()), " + auditTime + ", " + entryTime + ", 0, NOW(), NOW() "
+                + "FROM " + objectTable + " s INNER JOIN ip_investment_pool p ON p.id = " + poolId
+                + " INNER JOIN wf_flow_definition f ON f.id = " + flowId + " INNER JOIN ais_inv_analysis.t_sys_user u ON u.id = 2" + crmwJoin
+                + " WHERE " + objectKey + " = '" + objectCode + "'");
+        if (company && "20".equals(status)) {
+            // 主体入禁止库时，主体及旗下已确定身份证券共用批次同步进入 15 和 17
+            statements.add("INSERT INTO ip_adjust_log (security_code, security_short_name, security_type, adjust_type, adjust_mode, adjust_batch_no, "
+                    + "target_pool_id, target_pool_name, pool_type, flow_id, flow_key, flow_type, audit_status, adjuster_id, adjuster_name, adjust_reason, "
+                    + "submit_time, audit_time, entry_time, is_deleted, crte_time, updt_time) "
+                    + "SELECT source.security_code, source.security_short_name, source.security_type, '联动调整', '调入', l.adjust_batch_no, "
+                    + "p.id, p.pool_name, p.pool_type, l.flow_id, l.flow_key, l.flow_type, '20', l.adjuster_id, l.adjuster_name, '主体入禁止库，同批联动证券及黑名单质押库', "
+                    + "l.submit_time, l.audit_time, l.entry_time, 0, NOW(), NOW() "
+                    + "FROM ip_adjust_log l INNER JOIN (SELECT COMP_ID AS security_code, COMP_NAME AS security_short_name, 'company' AS security_type "
+                    + "FROM ais_inv_ods.wind_compintroduction WHERE COMP_ID = '" + objectCode + "' UNION ALL "
+                    + "SELECT s.wind_code, s.short_name, s.security_type FROM rrs_securityinfo s INNER JOIN dict_security_type d "
+                    + "ON d.security_type = s.security_type AND d.category_type = 'bond' AND d.is_deleted = 0 "
+                    + "WHERE s.issuer_code = '" + objectCode + "' AND s.security_status != 'D' "
+                    + "AND (s.maturity_date IS NULL OR s.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d'))) source ON 1 = 1 "
+                    + "INNER JOIN ip_investment_pool p ON p.id IN (15, 17) WHERE l.adjust_batch_no = '" + batchNo + "' AND l.adjust_type = '手工调整'"
+                    + " AND NOT (source.security_code = l.security_code AND p.id = l.target_pool_id) "
+                    + "AND NOT EXISTS (SELECT 1 FROM ip_pool_status ps WHERE ps.security_code = source.security_code AND ps.target_pool_id = p.id "
+                    + "AND ps.audit_status = '20' AND ps.is_deleted = 0)");
+        }
+        if ("20".equals(status) && "调入".equals(mode)) {
+            // 池状态直接复制本批已通过日志，保证对象、池和批次逐项对应
+            String table = crmwCode == null ? "ip_pool_status" : "ip_pool_status_crmw";
+            String crmwFields = crmwCode == null ? "" : ", crmw_name, crmw_scode, crmw_mktcode, crmw_stype";
+            String crmwValues = crmwCode == null ? "" : ", l.crmw_name, l.crmw_scode, l.crmw_mktcode, l.crmw_stype";
+            statements.add("INSERT INTO " + table + " (security_code, security_short_name, security_type" + crmwFields
+                    + ", adjust_type, adjust_mode, adjust_batch_no, adjust_log_id, target_pool_id, target_pool_name, pool_type, flow_id, flow_key, flow_type, "
+                    + "audit_status, adjuster_id, adjuster_name, adjust_reason, submit_time, audit_time, entry_time, is_deleted, crte_time, updt_time) "
+                    + "SELECT l.security_code, l.security_short_name, l.security_type" + crmwValues
+                    + ", l.adjust_type, l.adjust_mode, l.adjust_batch_no, l.id, l.target_pool_id, l.target_pool_name, l.pool_type, l.flow_id, l.flow_key, l.flow_type, "
+                    + "l.audit_status, l.adjuster_id, l.adjuster_name, l.adjust_reason, l.submit_time, l.audit_time, l.entry_time, 0, NOW(), NOW() "
+                    + "FROM ip_adjust_log l WHERE l.adjust_batch_no = '" + batchNo + "' AND NOT EXISTS (SELECT 1 FROM " + table
+                    + " ps WHERE ps.security_code = l.security_code AND ps.target_pool_id = l.target_pool_id AND ps.audit_status = '20' AND ps.is_deleted = 0"
+                    + (crmwCode == null ? "" : " AND ps.crmw_scode = l.crmw_scode AND ps.crmw_stype = l.crmw_stype") + ")");
+        }
+        // 生成主项实际经过的流程步骤，联动项按同一批次读取这些步骤
+        statements.add(buildDemoStepInsert(batchNo, status, flowId));
+        // 每笔证券申请都保留自身快照，ABS 在途身份与当前已生效主体保持一致
+        statements.addAll(buildDemoSnapshotInserts(batchNo));
         return statements;
     }
 
     /**
-     * 构建证券池审批通过历史场景。
+     * 从流程节点和审批配置生成步骤，避免节点代码、审批策略或人员名称过期
+     *
+     * 执行顺序：
+     * 1. 按终态或当前待处理节点选出真实经过的节点
+     * 2. 从节点配置和真实用户生成步骤状态、处理人和处理时间
+     *
+     * @param batchNo 本次场景批次
+     * @param status 申请审核状态
+     * @param flowId 流程 ID
+     * @return 步骤插入语句
      */
-    private List<String> buildSecurityApprovedHistoryScene() {
-        String batchNo = "SCENE_SECURITY_APPROVED_HISTORY";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900002, '110010123.IB', '23金融债', 'company_bond', '手工调整', '调入', '" + batchNo + "', 2, '一级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '20', '1', '管理员', '脚本工具生成：证券池审批通过历史', '审批通过，场景数据已落地', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_log_id`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES ('110010123.IB', '23金融债', 'company_bond', '手工调整', '调入', 900002, '" + batchNo + "', 2, '一级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '20', '1', '管理员', '脚本工具生成：证券池审批通过历史', '审批通过，场景数据已落地', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900002, '" + batchNo + "', 10101, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), NOW(), NOW()), (900002, '" + batchNo + "', 10102, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '1', '管理员', 'submit', '脚本工具生成审批通过历史', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), NOW(), NOW()), (900002, '" + batchNo + "', 10103, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'approve', '3', '研究员2', 'approve', '复核通过', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900002, '" + batchNo + "', 10107, 'n7', '结束', 'end', NULL, 7, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW())");
+    private String buildDemoStepInsert(String batchNo, String status, long flowId) {
+        String path = "20".equals(status) ? "n.node_id != 'n104'" : "21".equals(status)
+                ? "n.node_id IN ('n101','n102','n103','n105','n107')" : "11".equals(status)
+                ? "n.node_id IN ('n101','n102','n103','n104')" : "n.node_id IN ('n101','n102','n103')";
+        String state = "CASE WHEN n.node_type IN ('start','end') OR cfg.approval_strategy IN ('auto','o32') THEN 'auto_process' "
+                + "WHEN n.node_id = 'n102' THEN 'submit' "
+                + ("00".equals(status) ? "WHEN n.node_id = 'n103' THEN 'pending' " : "")
+                + ("11".equals(status) ? "WHEN n.node_id = 'n103' THEN 'reject' WHEN n.node_id = 'n104' THEN 'pending' " : "")
+                + ("21".equals(status) ? "WHEN n.node_id = 'n105' THEN 'reject' " : "")
+                + ("99".equals(status) ? "WHEN n.node_id = 'n103' THEN 'canceled' " : "")
+                + "ELSE 'approve' END";
+        String actor = "CASE WHEN n.node_type IN ('start','end') OR cfg.approval_strategy IN ('auto','o32') THEN NULL "
+                + "WHEN cfg.approval_strategy = 'initiator' THEN 2 WHEN n.node_id = 'n105' THEN 17 ELSE 3 END";
+        return "INSERT INTO ip_adjust_step (adjust_log_id, adjust_batch_no, flow_node_id, node_code, node_label, node_type, approval_strategy, sort_order, "
+                + "step_status, handler_id, handler_name, process_action, start_time, process_time, crte_time, updt_time) "
+                + "SELECT l.id, l.adjust_batch_no, n.id, n.node_id, n.label, n.node_type, cfg.approval_strategy, n.sort_order, " + state
+                + ", u.id, u.name, CASE WHEN (" + state + ") = 'pending' THEN NULL ELSE " + state + " END, "
+                + "l.submit_time, CASE WHEN (" + state + ") = 'pending' THEN NULL ELSE NOW() END, NOW(), NOW() "
+                + "FROM ip_adjust_log l INNER JOIN wf_flow_node n ON n.flow_id = l.flow_id "
+                + "LEFT JOIN wf_node_approval_config cfg ON cfg.node_id = n.id LEFT JOIN ais_inv_analysis.t_sys_user u ON u.id = (" + actor + ") "
+                + "WHERE l.adjust_batch_no = '" + batchNo + "' AND l.adjust_type = '手工调整' AND n.flow_id = " + flowId + " AND " + path + " ORDER BY n.sort_order";
+    }
+
+    /**
+     * 为场景证券保存详情快照，普通池与 CRMW 组合分别使用对应快照表
+     *
+     * 执行顺序：
+     * 1. 明确复制当前主档中详情已使用的字段
+     * 2. 按每笔日志关联快照，明确保存 ABS 或担保债本次实际选定的单一评级主体
+     *
+     * @param batchNo 本次场景批次
+     * @return 两类快照的插入语句
+     */
+    private List<String> buildDemoSnapshotInserts(String batchNo) {
+        String columns = "wind_code, full_name, short_name, issuer, issuer_code, issue_amountplan, coupon_rate, date_inright_exists, carry_date, maturity_date, "
+                + "info_pledge_ratio, rating_bond_agency, rating_bond, rating_bondissuer, rating_outlook, guarantor, guarantor_id, agency_name, inner_issuer_rating, "
+                + "security_type, sec_typename, date_call_exists, inner_guarantor_rating, date_exists, date_exists_str, fund_use, prompt_reason, analysis, "
+                + "term_year, term_day, maturityembedded_desc, comp_type, issue_amountact, date_repurchase_exists, abs_flag, guarant_flag, guarant_type, "
+                + "rating_bondissuer_agency, agency_nameid";
+        // 这些是 Demo 明确选定的担保人，不从候选列表推断；ABS 沿用首次入库后固定的主体
+        String selectedCode = "CASE WHEN s.abs_flag = 1 OR s.security_type = 'abs' THEN s.issuer_code "
+                + "WHEN s.wind_code IN ('DBB001.IB','DBB003.IB') THEN 'C10010' "
+                + "WHEN s.wind_code = 'DBB002.IB' THEN 'C10008' END";
+        String needsSelection = "(s.abs_flag = 1 OR s.security_type = 'abs' OR s.guarant_flag = 1)";
+        String values = ("s." + columns.replace(", ", ", s."))
+                .replace("s.guarantor,", "CASE WHEN " + needsSelection + " THEN selected.full_name ELSE s.guarantor END,")
+                .replace("s.guarantor_id,", "CASE WHEN " + needsSelection + " THEN selected.code ELSE s.guarantor_id END,")
+                .replace("s.inner_guarantor_rating,", "CASE WHEN " + needsSelection
+                        + " THEN (SELECT g.total_score FROM ais_inv_analysis.v_inv_grade_result g WHERE g.windcode = selected.wind_code "
+                        + "ORDER BY g.ts DESC LIMIT 1) ELSE s.inner_guarantor_rating END,");
+        List<String> statements = new ArrayList<>();
+        for (boolean crmw : new boolean[]{false, true}) {
+            String fields = crmw ? "crmw_name, crmw_scode, crmw_mktcode, crmw_stype, " : "";
+            String logValues = crmw ? "l.crmw_name, l.crmw_scode, l.crmw_mktcode, l.crmw_stype, " : "";
+            statements.add("INSERT INTO ip_adjust_security_snapshot" + (crmw ? "_crmw" : "")
+                    + " (adjust_log_id, submitter_id, submit_time, " + fields + columns + ", abs_originator_name, is_deleted, crte_time, updt_time) "
+                    + "SELECT l.id, l.adjuster_id, l.submit_time, " + logValues + values
+                    + ", CASE WHEN s.abs_flag = 1 OR s.security_type = 'abs' THEN s.issuer ELSE NULL END, 0, NOW(), NOW() "
+                    + "FROM ip_adjust_log l INNER JOIN rrs_securityinfo s ON s.wind_code = l.security_code "
+                    + "LEFT JOIN ais_inv_analysis.t_inv_company selected ON selected.code = (" + selectedCode + ") WHERE l.adjust_batch_no = '" + batchNo
+                    + "' AND l.security_type != 'company' AND " + (crmw ? "l.pool_type = 'crmw'" : "l.pool_type != 'crmw'"));
+        }
         return statements;
     }
 
     /**
-     * 构建证券池驳回待修改场景。
-     */
-    private List<String> buildSecurityRejectModifyScene() {
-        String batchNo = "SCENE_SECURITY_REJECT_MODIFY";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900003, '107007890.IB', '24科技K', 'company_bond', '手工调整', '调入', '" + batchNo + "', 2, '一级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '11', '5', '研究员4', '脚本工具生成：证券池驳回待修改', '材料不完整，请补充后重新提交', DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NULL, 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900003, '" + batchNo + "', 10101, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900003, '" + batchNo + "', 10102, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '5', '研究员4', 'submit', '提交调库申请', DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900003, '" + batchNo + "', 10103, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'reject', '3', '研究员2', 'reject', '材料不完整，驳回修改', NOW(), NOW(), NOW(), NOW()), (900003, '" + batchNo + "', 10104, 'n4', '研究员A修改', 'approval', 'initiator', 4, 'pending', '5', '研究员4', NULL, NULL, NOW(), NULL, NOW(), NOW())");
-        return statements;
-    }
-
-    /**
-     * 构建证券池终态驳回场景（audit_status=21）。
-     */
-    private List<String> buildSecurityFinalRejectScene() {
-        String batchNo = "SCENE_SECURITY_FINAL_REJECT";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900006, '102002345.IB', '23城投MTN', 'mtn', '手工调整', '调入', '" + batchNo + "', 3, '二级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '21', '2', '研究员1', '脚本工具生成：证券池终态驳回', '研究总监终态驳回，流程结束', DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NULL, 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900006, '" + batchNo + "', 10101, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY), NOW(), NOW()), (900006, '" + batchNo + "', 10102, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '2', '研究员1', 'submit', '提交升库申请', DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY), NOW(), NOW()), (900006, '" + batchNo + "', 10103, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'approve', '3', '研究员2', 'approve', '复核通过', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), NOW(), NOW()), (900006, '" + batchNo + "', 10105, 'n5', '研究总监审批', 'approval', 'preempt', 5, 'reject', '4', '研究总监', 'reject', '终态驳回', DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900006, '" + batchNo + "', 10107, 'n7', '结束', 'end', NULL, 7, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW())");
-        return statements;
-    }
-
-    /**
-     * 构建证券池调出已通过场景（仅日志+步骤，不落/不删池状态）。
-     */
-    private List<String> buildSecurityOutboundApprovedScene() {
-        String batchNo = "SCENE_SECURITY_OUTBOUND_APPROVED";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900007, '106006789.IB', '22电力MTN', 'mtn', '手工调整', '调出', '" + batchNo + "', 2, '一级库', 'credit_bond', 106, 'bond:fast-outbound', 'normalOutbound', '20', '1', '管理员', '脚本工具生成：证券池调出已通过', '快速出库完成', DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NULL, 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900007, '" + batchNo + "', 10601, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900007, '" + batchNo + "', 10602, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '1', '管理员', 'submit', '直接出库', DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW(), NOW()), (900007, '" + batchNo + "', 10603, 'n3', '结束', 'end', NULL, 3, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW())");
-        return statements;
-    }
-
-    /**
-     * 构建证券池发起人撤回场景（audit_status=99）。
-     */
-    private List<String> buildSecurityWithdrawnScene() {
-        String batchNo = "SCENE_SECURITY_WITHDRAWN";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900008, '101901234.IB', '24交投MTN001', 'mtn', '手工调整', '调入', '" + batchNo + "', 2, '一级库', 'credit_bond', 101, 'bond:standard-upgrade', 'upgradeInbound', '99', '2', '研究员1', '脚本工具生成：证券池发起人撤回', '发起人主动撤回', DATE_SUB(NOW(), INTERVAL 2 DAY), NOW(), NULL, 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900008, '" + batchNo + "', 10101, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), NOW(), NOW()), (900008, '" + batchNo + "', 10102, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '2', '研究员1', 'submit', '提交后撤回', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), NOW(), NOW()), (900008, '" + batchNo + "', 10103, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'withdraw', '2', '研究员1', 'withdraw', '发起人撤回', NOW(), NOW(), NOW(), NOW())");
-        return statements;
-    }
-
-    /**
-     * 构建禁投池主体待审批场景（flow 113 禁止库入库）。
-     */
-    private List<String> buildForbiddenCompanyPendingScene() {
-        return buildForbiddenCompanyPendingLikeScene(
-                "SCENE_FORBIDDEN_COMPANY_PENDING", 900004L,
-                "C10004", "电力公司", 15L, "债券禁止库", "forbidden",
-                "脚本工具生成：禁投池主体待审批");
-    }
-
-    /**
-     * 构建观察池主体待审批场景。
-     */
-    private List<String> buildForbiddenObservePendingScene() {
-        return buildForbiddenCompanyPendingLikeScene(
-                "SCENE_FORBIDDEN_OBSERVE_PENDING", 900009L,
-                "C10003", "能源集团", 16L, "观察池", "observe",
-                "脚本工具生成：观察池主体待审批");
-    }
-
-    /**
-     * 构建重点观察名单主体待审批场景。
-     */
-    private List<String> buildForbiddenRestrictedPendingScene() {
-        return buildForbiddenCompanyPendingLikeScene(
-                "SCENE_FORBIDDEN_RESTRICTED_PENDING", 900010L,
-                "C10004", "电力公司", 23L, "重点观察名单", "restricted",
-                "脚本工具生成：重点观察名单主体待审批");
-    }
-
-    /**
-     * 主体风险池待审批通用：flow 113 / company:forbidden-inbound，停在研究员B。
-     */
-    private List<String> buildForbiddenCompanyPendingLikeScene(String batchNo, long logId,
-                                                               String companyCode, String companyName,
-                                                               long poolId, String poolName, String poolType,
-                                                               String reason) {
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (" + logId + ", '" + companyCode + "', '" + companyName + "', 'company', '手工调整', '调入', '" + batchNo + "', " + poolId + ", '" + poolName + "', '" + poolType + "', 113, 'company:forbidden-inbound', 'normalInbound', '00', '1', '管理员', '" + reason + "', NULL, NOW(), NULL, NULL, 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (" + logId + ", '" + batchNo + "', 11301, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW()), (" + logId + ", '" + batchNo + "', 11302, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '1', '管理员', 'submit', '提交主体风险池调整', NOW(), NOW(), NOW(), NOW()), (" + logId + ", '" + batchNo + "', 11303, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'pending', '3', '研究员2', NULL, NULL, NOW(), NULL, NOW(), NOW())");
-        return statements;
-    }
-
-    /**
-     * 构建禁投池主体审批通过并落地场景。
-     */
-    private List<String> buildForbiddenCompanyApprovedScene() {
-        String batchNo = "SCENE_FORBIDDEN_COMPANY_APPROVED";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900011, 'C10004', '电力公司', 'company', '手工调整', '调入', '" + batchNo + "', 15, '债券禁止库', 'forbidden', 113, 'company:forbidden-inbound', 'normalInbound', '20', '1', '管理员', '脚本工具生成：禁投池主体审批通过', '审批通过并落地主体池状态', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_pool_status` (`security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_log_id`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES ('C10004', '电力公司', 'company', '手工调整', '调入', 900011, '" + batchNo + "', 15, '债券禁止库', 'forbidden', 113, 'company:forbidden-inbound', 'normalInbound', '20', '1', '管理员', '脚本工具生成：禁投池主体审批通过', '审批通过并落地主体池状态', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900011, '" + batchNo + "', 11301, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), NOW(), NOW()), (900011, '" + batchNo + "', 11302, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '1', '管理员', 'submit', '提交禁投主体', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), NOW(), NOW()), (900011, '" + batchNo + "', 11303, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'approve', '3', '研究员2', 'approve', '复核通过', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900011, '" + batchNo + "', 11305, 'n5', '研究总监审批', 'approval', 'preempt', 5, 'approve', '4', '研究总监', 'approve', '总监通过', DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900011, '" + batchNo + "', 11306, 'n6', '投资决策委员会审批', 'approval', 'preempt', 6, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900011, '" + batchNo + "', 11307, 'n7', '结束', 'end', NULL, 7, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW())");
-        // 主体审批通过场景同步生成符合范围的旗下债券调入日志，已在池债券不重复添加
-        statements.add("INSERT INTO ip_adjust_log (security_code, security_short_name, security_type, adjust_type, adjust_mode, adjust_batch_no, target_pool_id, target_pool_name, pool_type, audit_status, adjuster_id, adjuster_name, adjust_reason, submit_time, audit_time, entry_time, is_deleted, crte_time, updt_time) "
-                + "SELECT bond.wind_code, bond.short_name, bond.security_type, '自动调整', '调入', '" + batchNo + "', 15, '债券禁止库', 'forbidden', '20', '1', '管理员', '主体审批通过，旗下债券自动同步调整', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), 0, NOW(), NOW() "
-                + "FROM rrs_securityinfo bond INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type AND dst.category_type = 'bond' AND dst.is_deleted = 0 "
-                + "WHERE bond.issuer_code = 'C10004' AND bond.security_status != 'D' "
-                + "AND (bond.maturity_date IS NULL OR bond.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')) "
-                + "AND NOT EXISTS (SELECT 1 FROM ip_pool_status ips WHERE ips.security_code = bond.wind_code AND ips.target_pool_id = 15 AND ips.audit_status = '20' AND ips.is_deleted = 0)");
-        // 只落地本场景刚生成的债券日志，与主体共享批次并保留日志关联
-        statements.add("INSERT INTO ip_pool_status (security_code, security_short_name, security_type, adjust_type, adjust_mode, adjust_log_id, adjust_batch_no, target_pool_id, target_pool_name, pool_type, audit_status, adjuster_id, adjuster_name, adjust_reason, submit_time, audit_time, entry_time, is_deleted, crte_time, updt_time) "
-                + "SELECT security_code, security_short_name, security_type, adjust_type, adjust_mode, id, adjust_batch_no, target_pool_id, target_pool_name, pool_type, audit_status, adjuster_id, adjuster_name, adjust_reason, submit_time, audit_time, entry_time, 0, NOW(), NOW() "
-                + "FROM ip_adjust_log WHERE adjust_batch_no = '" + batchNo + "' AND adjust_type = '自动调整' AND is_deleted = 0");
-        return statements;
-    }
-
-    /**
-     * 构建 ABS 债禁投待审批场景。
-     */
-    private List<String> buildForbiddenAbsPendingScene() {
-        String batchNo = "SCENE_FORBIDDEN_ABS_PENDING";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900012, '108008901.IB', '23某资A', 'abs', '手工调整', '调入', '" + batchNo + "', 15, '债券禁止库', 'forbidden', 113, 'company:forbidden-inbound', 'normalInbound', '00', '5', '研究员4', '脚本工具生成：ABS 债禁投待审批', NULL, NOW(), NULL, NULL, 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900012, '" + batchNo + "', 11301, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW()), (900012, '" + batchNo + "', 11302, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '5', '研究员4', 'submit', '提交 ABS 禁投申请', NOW(), NOW(), NOW(), NOW()), (900012, '" + batchNo + "', 11303, 'n3', '研究员B复核', 'approval', 'preempt', 3, 'pending', '3', '研究员2', NULL, NULL, NOW(), NULL, NOW(), NOW())");
-        return statements;
-    }
-
-    /**
-     * 构建 CRMW 待处理场景（flow 105 仅两审批节点：停在研究员A 待提交）。
-     */
-    private List<String> buildCrmwPendingReviewScene() {
-        String batchNo = "SCENE_CRMW_PENDING_REVIEW";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `crmw_name`, `crmw_scode`, `crmw_stype`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900005, '103003456.SH', '24能E1', 'company_bond', '某CRMW凭证C', 'CRMW003.IB', 'crmw', '手工调整', '调入', '" + batchNo + "', 18, 'CRMW库', 'crmw', 105, 'bond:fast-inbound', 'normalInbound', '00', '5', '研究员4', '脚本工具生成：CRMW 待处理调库单', NULL, NOW(), NULL, NULL, 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900005, '" + batchNo + "', 10501, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW()), (900005, '" + batchNo + "', 10502, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'pending', '5', '研究员4', NULL, NULL, NOW(), NULL, NOW(), NOW())");
-        return statements;
-    }
-
-    /**
-     * 构建 CRMW 审批通过并落地场景。
-     */
-    private List<String> buildCrmwApprovedHistoryScene() {
-        String batchNo = "SCENE_CRMW_APPROVED_HISTORY";
-        List<String> statements = buildSceneCleanupStatements(batchNo);
-        statements.add("INSERT INTO `ip_adjust_log` (`id`, `security_code`, `security_short_name`, `security_type`, `crmw_name`, `crmw_scode`, `crmw_stype`, `adjust_type`, `adjust_mode`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `adjust_advice`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES (900013, '104004567.IB', '23基建债', 'company_bond', '某CRMW凭证D', 'CRMW004.IB', 'crmw', '手工调整', '调入', '" + batchNo + "', 18, 'CRMW库', 'crmw', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '脚本工具生成：CRMW 审批通过历史', '快速入库完成', DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW(), 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_pool_status_crmw` (`security_code`, `security_short_name`, `security_type`, `crmw_name`, `crmw_scode`, `crmw_stype`, `adjust_type`, `adjust_mode`, `adjust_log_id`, `adjust_batch_no`, `target_pool_id`, `target_pool_name`, `pool_type`, `flow_id`, `flow_key`, `flow_type`, `audit_status`, `adjuster_id`, `adjuster_name`, `adjust_reason`, `submit_time`, `audit_time`, `entry_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES ('104004567.IB', '23基建债', 'company_bond', '某CRMW凭证D', 'CRMW004.IB', 'crmw', '手工调整', '调入', 900013, '" + batchNo + "', 18, 'CRMW库', 'crmw', 105, 'bond:fast-inbound', 'normalInbound', '20', '1', '管理员', '脚本工具生成：CRMW 审批通过历史', DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW(), 0, NOW(), NOW())");
-        statements.add("INSERT INTO `ip_adjust_step` (`adjust_log_id`, `adjust_batch_no`, `flow_node_id`, `node_code`, `node_label`, `node_type`, `approval_strategy`, `sort_order`, `step_status`, `handler_id`, `handler_name`, `process_action`, `process_comment`, `start_time`, `process_time`, `crte_time`, `updt_time`) VALUES (900013, '" + batchNo + "', 10501, 'n1', '开始', 'start', NULL, 1, 'auto_process', NULL, NULL, 'auto_process', NULL, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW()), (900013, '" + batchNo + "', 10502, 'n2', '研究员A发起', 'approval', 'initiator', 2, 'submit', '1', '管理员', 'submit', '直接入库', DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), NOW(), NOW()), (900013, '" + batchNo + "', 10503, 'n3', '结束', 'end', NULL, 3, 'auto_process', NULL, NULL, 'auto_process', NULL, NOW(), NOW(), NOW(), NOW())");
-        return statements;
-    }
-
-    /**
-     * 构建分级规则不符待办场景。
+     * 为已在二级库的 ABS 生成规则提醒，不编造当前主体或套用担保人规则
+     *
+     * 执行顺序：
+     * 1. 清理本场景旧提醒
+     * 2. 使用实际在池记录和主档主体生成可处理的提醒样本
+     *
+     * @return 提醒插入语句
      */
     private List<String> buildGradeRuleAlertPendingScene() {
         List<String> statements = new ArrayList<>();
-        statements.add("DELETE FROM `ip_grade_rule_alert` WHERE `security_code` = '108008901.IB' AND `fail_reason` LIKE '脚本工具生成：%'");
-        statements.add("INSERT INTO `ip_grade_rule_alert` (`security_code`, `security_short_name`, `issuer_code`, `issuer_name`, `current_pool_id`, `current_pool_name`, `current_sort`, `fail_reason`, `special_type_desc`, `alert_status`, `last_scan_time`, `deal_user_id`, `deal_user_name`, `deal_time`, `is_deleted`, `crte_time`, `updt_time`) VALUES ('108008901.IB', '23某资A', 'C10008', '某资产管理公司', 3, '二级库', 2, '脚本工具生成：ABS 担保人内评非 1 档须至少下调一级，当前二级库已不符合入库规则', 'ABS', '00', NOW(), NULL, NULL, NULL, 0, NOW(), NOW())");
+        statements.add("DELETE FROM ip_grade_rule_alert WHERE security_code = '108008901.IB' AND fail_reason LIKE '脚本工具生成：%'");
+        statements.add("INSERT INTO ip_grade_rule_alert (security_code, security_short_name, issuer_code, issuer_name, current_pool_id, current_pool_name, "
+                + "current_sort, fail_reason, special_type_desc, alert_status, last_scan_time, is_deleted, crte_time, updt_time) "
+                + "SELECT s.wind_code, s.short_name, s.issuer_code, s.issuer, p.id, p.pool_name, p.inner_sort, "
+                + "'脚本工具生成：分级规则复核提醒，供研究员核对当前权益人内评及目标库准入条件', 'ABS', '00', NOW(), 0, NOW(), NOW() "
+                + "FROM rrs_securityinfo s INNER JOIN ip_pool_status ps ON ps.security_code = s.wind_code AND ps.target_pool_id = 3 "
+                + "AND ps.audit_status = '20' AND ps.is_deleted = 0 INNER JOIN ip_investment_pool p ON p.id = ps.target_pool_id WHERE s.wind_code = '108008901.IB'");
         return statements;
     }
 
     /**
-     * 构建场景数据清理语句（按批次号幂等清理）。
+     * 清理本场景批次的快照、步骤、池状态和日志
+     *
+     * 执行顺序：
+     * 1. 按原日志关联清理两类快照
+     * 2. 删除本批运行记录，保证重复生成不会累加
+     *
+     * @param batchNo 本场景批次
+     * @return 清理语句
      */
     private List<String> buildSceneCleanupStatements(String batchNo) {
         List<String> statements = new ArrayList<>();
-        statements.add("DELETE s FROM `ip_adjust_security_snapshot` s INNER JOIN `ip_adjust_log` l ON l.id = s.adjust_log_id WHERE l.adjust_batch_no = '" + batchNo + "'");
-        statements.add("DELETE s FROM `ip_adjust_security_snapshot_crmw` s INNER JOIN `ip_adjust_log` l ON l.id = s.adjust_log_id WHERE l.adjust_batch_no = '" + batchNo + "'");
-        statements.add("DELETE FROM `ip_adjust_step` WHERE `adjust_batch_no` = '" + batchNo + "'");
-        statements.add("DELETE FROM `ip_pool_status` WHERE `adjust_batch_no` = '" + batchNo + "'");
-        statements.add("DELETE FROM `ip_pool_status_crmw` WHERE `adjust_batch_no` = '" + batchNo + "'");
-        statements.add("DELETE FROM `ip_adjust_log` WHERE `adjust_batch_no` = '" + batchNo + "'");
+        statements.add("DELETE FROM ip_adjust_security_snapshot WHERE adjust_log_id IN (SELECT id FROM ip_adjust_log WHERE adjust_batch_no = '" + batchNo + "')");
+        statements.add("DELETE FROM ip_adjust_security_snapshot_crmw WHERE adjust_log_id IN (SELECT id FROM ip_adjust_log WHERE adjust_batch_no = '" + batchNo + "')");
+        statements.add("DELETE FROM ip_adjust_step WHERE adjust_batch_no = '" + batchNo + "'");
+        statements.add("DELETE FROM ip_pool_status WHERE adjust_batch_no = '" + batchNo + "'");
+        statements.add("DELETE FROM ip_pool_status_crmw WHERE adjust_batch_no = '" + batchNo + "'");
+        statements.add("DELETE FROM ip_adjust_log WHERE adjust_batch_no = '" + batchNo + "'");
         return statements;
     }
 
@@ -2481,10 +2511,10 @@ public class ScriptToolService {
                 "fund/rrs_fund_pool_adjust_demo_data.sql",
                 "stock/rrs_stockinfo_demo_data.sql",
                 "stock/rrs_stock_pool_adjust_demo_data.sql",
-                "rrs_security_pool_adjust_demo_data.sql",
                 "rrs_flow_definition_demo_data.sql",
                 "rrs_rule_demo_data.sql",
                 "rrs_pool_init_demo_data.sql",
+                "rrs_security_pool_adjust_demo_data.sql",
                 "rrs_crmw_pool_status_demo_data.sql",
                 "rrs_sys_attachment_demo_data.sql",
                 "rrs_my_security_pool_demo_data.sql",

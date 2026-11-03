@@ -2,6 +2,7 @@ package com.znty.rrs.entity.batchsecuritypooladjust;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -12,6 +13,9 @@ import java.util.List;
  */
 @Data
 public class BatchSecurityCandidateDto {
+
+    /** 在库或在途占用的 ABS 主体，全部出清后为空 */
+    private SecurityInfoBo absIdentity;
 
     /** 证券代码 */
     private String securityCode;

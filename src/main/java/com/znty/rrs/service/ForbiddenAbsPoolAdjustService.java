@@ -73,6 +73,7 @@ import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.bo.UserBo;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.BeanUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -148,6 +149,14 @@ public class ForbiddenAbsPoolAdjustService {
     /** 复用证券池调库的 ABS 权益人选择与防伪校验口径 */
     @Resource
     private SecurityPoolAdjustService securityPoolAdjustService;
+
+    /** ABS 唯一主体身份及审批快照 */
+    @Resource
+    private AbsIdentityService absIdentityService;
+
+    /** ABS 主体联动与规则提醒 */
+    @Resource
+    private AbsCompanySyncService absCompanySyncService;
 
     /** 投资池数据访问组件 */
     @Resource
@@ -232,13 +241,18 @@ public class ForbiddenAbsPoolAdjustService {
             throw new BizException(404, "证券不存在");
         }
         // ABS 禁投调整仅允许 abs_flag=1 的债券
-        validateAbsSecurity(req.getSecurityCode());
+        if (!Integer.valueOf(1).equals(dto.getAbsFlag())) {
+            throw new BizException("非 ABS 债不允许在此调整");
+        }
         // 回填证券品种大类（dict_security_type.category_type），供前端按类型差异化展示（如基金评分输入）
         dto.setCategoryType(forbiddenAbsPoolAdjustMapper.queryCategoryTypeBySecurityType(dto.getSecurityType()));
         // 关联市场实时读取 Wind，历史快照仍保留其余业务字段
         if (!"company".equals(dto.getSecurityType())) {
             dto.setMarketCode(securityMarketService.queryMarketCode(dto.getWindCode()));
             dto.setRelatedMarketCodes(securityMarketService.queryRelatedMarketCodes(dto.getWindCode()));
+        }
+        if (CreditBondSpecialInboundRule.isAbs(dto)) {
+            dto.setAbsIdentity(absIdentityService.queryCurrentIdentity(dto));
         }
         return dto;
     }
@@ -380,7 +394,8 @@ public class ForbiddenAbsPoolAdjustService {
         if (!hasGradedPool) {
             return pools;
         }
-        SecurityInfoBo securityInfo = forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = req.getSecurityInfo() != null && req.getSecurityInfo().getSecurityType() != null
+                ? req.getSecurityInfo() : forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
             return pools;
         }
@@ -390,7 +405,7 @@ public class ForbiddenAbsPoolAdjustService {
         }
         // 证券自身或发行主体任一在重点观察名单，即走重点观察名单禁新增规则
         boolean inRestricted = forbiddenAbsPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode())
-                || forbiddenAbsPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode());
+                || securityPoolAdjustService.queryIssuerInPoolType(securityInfo, "restricted");
         // 当前已在池，用于重点观察名单判断是否「新增入库」
         Set<Long> currentPoolIds = new HashSet<Long>();
         List<Long> currentIdList = forbiddenAbsPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
@@ -425,7 +440,7 @@ public class ForbiddenAbsPoolAdjustService {
         }
         // ABS 一律按特殊债算档（即使同时有担保）；1 档只看担保人内评
         boolean inObserve = forbiddenAbsPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
-                || forbiddenAbsPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode());
+                || securityPoolAdjustService.queryIssuerInPoolType(securityInfo, "observe");
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
                 CreditBondSpecialInboundRule.resolveGradedInboundMode(securityInfo, inObserve);
         Integer startSort = inboundMode.resolveStartSort(bestAllowedSort);
@@ -708,6 +723,16 @@ public class ForbiddenAbsPoolAdjustService {
 
         // ══ 第二阶段：参数初始化 ══
         SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
+        Set<String> identityCodes = new TreeSet<>();
+        identityCodes.add(req.getSecurityCode());
+        for (ForbiddenAbsPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if (item.getSecurityCode() != null) {
+                identityCodes.add(item.getSecurityCode());
+            }
+        }
+        for (String identityCode : identityCodes) {
+            absIdentityService.validateIdentity(identityCode, shared.securityInfo.getIssuerCode());
+        }
         // 同券跨市场调入必须完整提交，禁止跳过校验失败的关联券
         validateRelatedInboundItemsOnSubmit(req);
         // 检查本次涉及的顶级池组是否已有活动流程
@@ -722,11 +747,10 @@ public class ForbiddenAbsPoolAdjustService {
         // ══ 第四阶段：调出处理 ══
         List<Long> outboundIds = executeOutboundSubmit(req, shared, submissionFiles, directApplyLogs);
 
-        // 对本次全部直通项统一锁池、复核并落地，确保同池容量按整次申请累计
-        recheckAndApplyDirectLogs(directApplyLogs);
-
-        // ══ 第五阶段：后续处理 ══
+        // 先保存本笔主体快照，直通与人工审批使用相同数据
         postSubmitProcess(req, shared);
+        // 主档五字段仅在审核通过落池事务内更新
+        recheckAndApplyDirectLogs(directApplyLogs);
 
         // 组装返回结果
         ForbiddenAbsPoolAdjustSubmitDto dto = new ForbiddenAbsPoolAdjustSubmitDto();
@@ -754,8 +778,6 @@ public class ForbiddenAbsPoolAdjustService {
         if (req.getSecurityCode() == null || req.getSecurityCode().isEmpty()) {
             throw new BizException("证券代码不能为空");
         }
-        // ABS 禁投：仅 abs_flag=1
-        validateAbsSecurity(req.getSecurityCode());
         if (req.getItems() == null || req.getItems().isEmpty()) {
             throw new BizException("调库项不能为空");
         }
@@ -972,13 +994,17 @@ public class ForbiddenAbsPoolAdjustService {
      */
     private SubmitSharedData loadSubmitSharedData(ForbiddenAbsPoolAdjustSubmitReq req, BatchNoContext batchNoContext) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = req.getSecurityInfo() != null && req.getSecurityInfo().getSecurityType() != null
+                ? req.getSecurityInfo() : forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
+        // 直接检查本次已加载的证券，不再为 ABS 类型重复读取主档
+        validateAbsSecurity(securityInfo);
         // ABS 按证券池调库口径校验权益人，自选权益人优先
-        securityPoolAdjustService.applySelectedRatingCompany(securityInfo, null, req.getRightsHolderCode(),
-                req.getSelfSelectedRightsHolderCode(), true);
+        SecurityPoolAdjustService.SelectedRatingCompanyData selectedRatingCompany =
+                securityPoolAdjustService.applySelectedRatingCompany(securityInfo, null, req.getRightsHolderCode(),
+                        req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1015,17 +1041,19 @@ public class ForbiddenAbsPoolAdjustService {
             }
         }
 
-        return new SubmitSharedData(
+        SubmitSharedData shared = new SubmitSharedData(
                 securityInfo,
                 poolMap,
                 currentPoolIds,
                 poolRelationMap,
                 forbiddenAbsPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
                 forbiddenAbsPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
-                forbiddenAbsPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
+                securityPoolAdjustService.queryIssuerInPoolType(securityInfo, "observe"),
                 flowSnapshotMap,
                 batchNoContext
         );
+        shared.selectedRatingCompany = selectedRatingCompany;
+        return shared;
     }
 
     /**
@@ -1291,6 +1319,8 @@ public class ForbiddenAbsPoolAdjustService {
                 logBo.setAdjustBatchNo(adjustBatchNo);
                 logBo.setAuditStatus(AuditStatus.APPROVED.getCode());
                 forbiddenAbsPoolAdjustMapper.addAdjustLog(logBo);
+                // ABS 直通调入也要登记到提交日志集合，供主体快照按日志 ID 保存
+                shared.submittedLogs.put(logBo.getId(), logBo);
                 generatedIds.add(logBo.getId());
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(logBo.getId(), item, submissionFiles, req.getAdjusterId());
@@ -1310,6 +1340,7 @@ public class ForbiddenAbsPoolAdjustService {
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());
                 forbiddenAbsPoolAdjustMapper.addAdjustLog(bo);
+                shared.submittedLogs.put(bo.getId(), bo);
                 generatedIds.add(bo.getId());
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
@@ -1376,6 +1407,7 @@ public class ForbiddenAbsPoolAdjustService {
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.APPROVED.getCode());
                 forbiddenAbsPoolAdjustMapper.addAdjustLog(bo);
+                shared.submittedLogs.put(bo.getId(), bo);
                 generatedIds.add(bo.getId());
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
@@ -1394,6 +1426,7 @@ public class ForbiddenAbsPoolAdjustService {
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());
                 forbiddenAbsPoolAdjustMapper.addAdjustLog(bo);
+                shared.submittedLogs.put(bo.getId(), bo);
                 generatedIds.add(bo.getId());
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
@@ -1421,12 +1454,24 @@ public class ForbiddenAbsPoolAdjustService {
      * @param shared 本次提交的共享数据
      */
     private void postSubmitProcess(ForbiddenAbsPoolAdjustSubmitReq req, SubmitSharedData shared) {
-        if (req.getSecurityInfo() == null) {
-            return;
-        }
-        // 合并数据库当前完整快照与前端传入的变更字段
-        req.setSecurityInfo(buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo()));
-        // 同步更新证券基础信息表中本次传入的字段
+        SecurityInfoBo merged = req.getSecurityInfo() == null ? shared.securityInfo
+                : buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo(), shared.securityInfo);
+        // 主体身份八个字段统一取本次校验后的共享值，供申请快照逐笔保存；
+        // 主档对应列已在 editSecurityInfoForAdjust 中排除，审批通过时由 AbsIdentityMapper.editApprovedIdentity 写入
+        merged.setIssuer(shared.securityInfo.getIssuer());
+        merged.setIssuerCode(shared.securityInfo.getIssuerCode());
+        merged.setRatingBondissuer(shared.securityInfo.getRatingBondissuer());
+        merged.setRatingBondissuerAgency(shared.securityInfo.getRatingBondissuerAgency());
+        merged.setInnerIssuerRating(shared.securityInfo.getInnerIssuerRating());
+        merged.setGuarantor(shared.securityInfo.getGuarantor());
+        merged.setGuarantorId(shared.securityInfo.getGuarantorId());
+        merged.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
+        req.setSecurityInfo(merged);
+        // 按每个实际代码保存申请，后续不依赖前端回传名称或评级
+        absIdentityService.saveSnapshots(merged, shared.submittedLogs, req.getAdjusterId(),
+                shared.selectedRatingCompany.getRightsHolderName(),
+                shared.selectedRatingCompany.getSelfSelectedRightsHolderName());
+        // 仅维护其他基本信息；主体身份八个字段（issuer 五字段 + guarantor 三字段）全部由审批通过时统一更新
         forbiddenAbsPoolAdjustMapper.editSecurityInfoForAdjust(req);
     }
 
@@ -1440,11 +1485,26 @@ public class ForbiddenAbsPoolAdjustService {
      * @param changedField 前端传入的变更字段
      */
     private SecurityInfoBo buildMergedSecurityInfo(String securityCode, SecurityInfoBo changedField) {
-        SecurityInfoBo current = forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(securityCode);
-        if (current == null) {
-            throw new BizException("证券不存在");
-        }
-        // 使用前端本次可编辑字段覆盖数据库当前实体
+        // 独立调用没有共享主档时读取一次，再交给统一合并方法
+        return buildMergedSecurityInfo(securityCode, changedField, null);
+    }
+
+    /**
+     * 使用本次已有证券信息构建申请快照，避免保存时重新查询主档
+     * 执行顺序：
+     * 1. 优先取本次共享数据，没有共享数据的独立调用才读取主档
+     * 2. 复制已有信息并覆盖页面编辑字段，不修改共享对象
+     * @param securityCode 证券代码
+     * @param changedField 页面编辑字段
+     * @param loaded 本次已加载的证券信息
+     * @return 本次完整快照
+     */
+    private SecurityInfoBo buildMergedSecurityInfo(String securityCode, SecurityInfoBo changedField, SecurityInfoBo loaded) {
+        SecurityInfoBo source = loaded == null ? forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(securityCode) : loaded;
+        if (source == null) throw new BizException("证券不存在");
+        SecurityInfoBo current = new SecurityInfoBo();
+        BeanUtils.copyProperties(source, current);
+        // 复用本次已加载数据覆盖页面编辑值
         mergeSecurityInfo(current, changedField);
         return current;
     }
@@ -1590,7 +1650,6 @@ public class ForbiddenAbsPoolAdjustService {
         // ══ 第一阶段：前置校验 ══
         validateCheckAdjustReq(req);
         // ABS 禁投：仅 abs_flag=1，手工目标池仅 15/16/17
-        validateAbsSecurity(req.getSecurityCode());
         for (ForbiddenAbsPoolAdjustCheckReq.CheckItem item : req.getItems()) {
             validateAllowedManualPoolId(item.getTargetPoolId());
         }
@@ -1616,6 +1675,9 @@ public class ForbiddenAbsPoolAdjustService {
         // ══ 第四点五阶段：多市场关联码扩批（itemTag=related） ══
         // 回填主券证券信息，并按 Wind 非空 ISIN 展开同池同向关联项
         expandRelatedMarketCodeItems(req, shared, resultItems);
+
+        // 身份冲突作为不可调整原因展示，Excel 提示放行不能覆盖此结果
+        absIdentityService.applyIdentityCheckFailures(shared.getSecurityInfo(), resultItems);
 
         // ══ 第五阶段：流程类型判断 ══
         List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
@@ -1667,13 +1729,16 @@ public class ForbiddenAbsPoolAdjustService {
      */
     private AdjustSharedData loadSharedData(ForbiddenAbsPoolAdjustCheckReq req) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = req.getSecurityInfo() != null && req.getSecurityInfo().getSecurityType() != null
+                ? req.getSecurityInfo() : forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
+        // 直接检查本次已加载的证券，不再为 ABS 类型重复读取主档
+        validateAbsSecurity(securityInfo);
         // ABS 按证券池调库口径校验权益人，自选权益人优先
         securityPoolAdjustService.applySelectedRatingCompany(securityInfo, null, req.getRightsHolderCode(),
-                req.getSelfSelectedRightsHolderCode(), true);
+                req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1713,9 +1778,9 @@ public class ForbiddenAbsPoolAdjustService {
                 forbiddenAbsPoolAdjustMapper.queryPendingManualTargetPoolIdList(req.getSecurityCode(), null), poolMap));
         // 观察池：证券或主体已在观察池则不得高于矩阵最好档；重点观察名单：禁新增，已在库只能去五级
         shared.setSecurityInObservePool(forbiddenAbsPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
-        shared.setIssuerInObservePool(forbiddenAbsPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
+        shared.setIssuerInObservePool(securityPoolAdjustService.queryIssuerInPoolType(securityInfo, "observe"));
         shared.setSecurityInRestrictedPool(forbiddenAbsPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode()));
-        shared.setIssuerInRestrictedPool(forbiddenAbsPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode()));
+        shared.setIssuerInRestrictedPool(securityPoolAdjustService.queryIssuerInPoolType(securityInfo, "restricted"));
         // 评级下调三标志：主体/展望按发行人评级判定，担保人按前端选中代码判定（查 wind_cbondissuerrating）
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
@@ -2248,6 +2313,11 @@ public class ForbiddenAbsPoolAdjustService {
             ForbiddenAbsPoolAdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,
             List<String> matchReasons, List<String> unmatchReasons) {
 
+        // ABS 只能走一般入库流程，不提供快速入库候选
+        if (CreditBondSpecialInboundRule.isAbs(shared.getSecurityInfo())) {
+            unmatchReasons.add("ABS 不适用快速入库流程");
+            return false;
+        }
         if (isCreditBondLevelOneToThree(targetPool)) {
             matchReasons.add("目标池属于信用债大库一、二、三级库");
         } else {
@@ -2893,6 +2963,9 @@ public class ForbiddenAbsPoolAdjustService {
      * @param logList 同批次调库记录
      */
     public void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList) {
+        // ABS 身份校验覆盖所有目标池
+        absIdentityService.validateApprovalIdentities(logList);
+
         if (logList == null || logList.isEmpty()) {
             return;
         }
@@ -2907,6 +2980,16 @@ public class ForbiddenAbsPoolAdjustService {
         Map<Long, Integer> inboundIncrements = new HashMap<>();
         Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
                 forbiddenAbsPoolAdjustMapper.queryAllPoolRelationList());
+        Set<Long> projectedInPoolIds = logList.stream()
+                .filter(log -> AdjustMode.IN.getCode().equals(log.getAdjustMode()))
+                .map(IpAdjustLogBo::getTargetPoolId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> projectedOutPoolIds = logList.stream()
+                .filter(log -> AdjustMode.OUT.getCode().equals(log.getAdjustMode()))
+                .map(IpAdjustLogBo::getTargetPoolId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         for (IpAdjustLogBo log : logList) {
             InvestmentPoolBo pool = poolMap.get(log.getTargetPoolId());
             if (pool == null || "enabled".equals(pool.getStatus()) == false
@@ -2917,6 +3000,9 @@ public class ForbiddenAbsPoolAdjustService {
             if (security == null) {
                 throwApprovalRecheckFailure(log, "证券不存在");
             }
+            if (log.getId() != null && CreditBondSpecialInboundRule.isAbs(security)) {
+                absIdentityService.restoreSnapshotSelection(security, log, false);
+            }
             Set<Long> currentPoolIds = new HashSet<>(
                     forbiddenAbsPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getSecurityCode()));
             AdjustCheckContext ctx = new AdjustCheckContext();
@@ -2926,6 +3012,8 @@ public class ForbiddenAbsPoolAdjustService {
             ctx.setCurrentPoolIds(currentPoolIds);
             ctx.setTargetPoolRelations(relationMap.getOrDefault(pool.getId(), Collections.emptyMap()));
             ctx.setCategoryType(forbiddenAbsPoolAdjustMapper.queryCategoryTypeBySecurityType(security.getSecurityType()));
+            ctx.setRequestInPoolIds(projectedInPoolIds);
+            ctx.setRequestOutPoolIds(projectedOutPoolIds);
             String failure;
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 failure = firstFailure(inCheckPoolLocked(ctx), inCheckSecurityAlreadyInPool(ctx),
@@ -2945,8 +3033,8 @@ public class ForbiddenAbsPoolAdjustService {
                         outCheckRestrictPool(ctx), outCheckFrozenPeriod(ctx));
             }
             if (failure == null && PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(pool.getId())) {
-                failure = pledgeBlacklistRuleService.validate(security.getIssuerCode(), log.getAdjustMode(),
-                        Collections.<Long>emptySet(), Collections.<Long>emptySet());
+                failure = pledgeBlacklistRuleService.validateCompanies(absIdentityService.queryRiskCompanyCodes(security),
+                        log.getAdjustMode(), projectedInPoolIds, projectedOutPoolIds);
             }
             if (failure != null) {
                 throwApprovalRecheckFailure(log, failure);
@@ -2977,6 +3065,9 @@ public class ForbiddenAbsPoolAdjustService {
      * @param logList 已通过最终复核的调库日志集合
      */
     public void applyPoolStatusChanges(List<IpAdjustLogBo> logList) {
+        // ABS 身份校验覆盖所有目标池
+        absIdentityService.approveIdentities(logList);
+
         for (IpAdjustLogBo log : logList) {
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 log.setAuditStatus(AuditStatus.APPROVED.getCode());
@@ -2994,7 +3085,10 @@ public class ForbiddenAbsPoolAdjustService {
                             + log.getTargetPoolName() + "]，调出失败");
                 }
             }
+
         }
+        // 批量保存 ABS 人工结论，不给普通债逐行增加主档查询
+        absCompanySyncService.recordManualDecisions(logList);
     }
 
     /** 返回第一个非空失败原因。 */
@@ -3047,7 +3141,7 @@ public class ForbiddenAbsPoolAdjustService {
         boolean inRestricted = false;
         if (sec.getWindCode() != null) {
             inRestricted = forbiddenAbsPoolAdjustMapper.querySecurityInRestrictedPool(sec.getWindCode())
-                    || forbiddenAbsPoolAdjustMapper.queryIssuerInRestrictedPool(sec.getWindCode());
+                    || securityPoolAdjustService.queryIssuerInPoolType(sec, "restricted");
         }
         Set<Long> currentPoolIds = new HashSet<Long>();
         if (sec.getWindCode() != null) {
@@ -3061,7 +3155,7 @@ public class ForbiddenAbsPoolAdjustService {
         boolean inObserve = false;
         if (sec.getWindCode() != null) {
             inObserve = forbiddenAbsPoolAdjustMapper.querySecurityInObservePool(sec.getWindCode())
-                    || forbiddenAbsPoolAdjustMapper.queryIssuerInObservePool(sec.getWindCode());
+                    || securityPoolAdjustService.queryIssuerInPoolType(sec, "observe");
         }
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
                 CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, inObserve);
@@ -3224,8 +3318,11 @@ public class ForbiddenAbsPoolAdjustService {
         }
         SecurityInfoBo security = ctx.getSecurityInfo();
         String companyCode = security == null ? null : security.getIssuerCode();
-        String failure = pledgeBlacklistRuleService.validate(companyCode, adjustMode,
-                Collections.<Long>emptySet(), Collections.<Long>emptySet());
+        String failure = CreditBondSpecialInboundRule.isAbs(security)
+                ? pledgeBlacklistRuleService.validateCompanies(absIdentityService.queryRiskCompanyCodes(security), adjustMode,
+                        ctx.getRequestInPoolIds(), ctx.getRequestOutPoolIds())
+                : pledgeBlacklistRuleService.validate(companyCode, adjustMode,
+                        ctx.getRequestInPoolIds(), ctx.getRequestOutPoolIds());
         // 汇总黑名单质押库校验失败原因
         addIfFailed(failures, failure);
     }
@@ -4753,6 +4850,11 @@ public class ForbiddenAbsPoolAdjustService {
      */
     private static class SubmitSharedData {
 
+        /** 本次实际调库日志 */
+        final Map<Long, IpAdjustLogBo> submittedLogs = new HashMap<>();
+        /** 后端核验的权益人选择 */
+        SecurityPoolAdjustService.SelectedRatingCompanyData selectedRatingCompany;
+
         /** 证券基础信息（来自 rrs_securityinfo） */
         final SecurityInfoBo securityInfo;
 
@@ -4827,19 +4929,14 @@ public class ForbiddenAbsPoolAdjustService {
     }
 
     /**
-     * 校验证券为 ABS 债（abs_flag=1）。
+     * 检查本次已加载的证券是否为 ABS 债
      *
-     * @param securityCode 证券代码
+     * 执行顺序：
+     * 1. 检查证券的 ABS 标志，普通证券不允许在此调整
+     * @param security 已加载的证券信息
      */
-    private void validateAbsSecurity(String securityCode) {
-        if (securityCode == null || securityCode.trim().isEmpty()) {
-            throw new BizException("证券代码不能为空");
-        }
-        SecurityInfoBo security = forbiddenAbsPoolAdjustMapper.querySecurityBoByCode(securityCode.trim());
-        if (security == null) {
-            throw new BizException(404, "证券不存在");
-        }
-        if (security.getAbsFlag() == null || security.getAbsFlag() != 1) {
+    private void validateAbsSecurity(SecurityInfoBo security) {
+        if (!Integer.valueOf(1).equals(security.getAbsFlag())) {
             throw new BizException("非 ABS 债不允许在此调整");
         }
     }

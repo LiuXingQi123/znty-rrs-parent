@@ -1,6 +1,5 @@
 package com.znty.rrs.entity.securitypooladjust;
 
-
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
 import lombok.Data;
@@ -12,6 +11,9 @@ import java.util.List;
  */
 @Data
 public class SecurityPoolAdjustSubmitReq {
+
+    /** 页面已选评级主体，直接复用名称及内外评 */
+    private RatingCompanySelectionReq selectedRatingCompany;
 
     /** 证券代码 */
     private String securityCode;

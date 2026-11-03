@@ -43,7 +43,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         for (Long poolId : Arrays.asList(16L, 23L, 999L)) {
             AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
             SecurityPoolAdjustMapper statusMapper = mock(SecurityPoolAdjustMapper.class);
-            CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
+            CompanyOuterRatingAaMinusAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingAaMinusAutoInService());
             ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
             ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", statusMapper);
             InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -82,7 +82,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
+        CompanyOuterRatingAaMinusAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingAaMinusAutoInService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -177,7 +177,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
     /** 验证参数说明包含黑名单质押库入池口径。 */
     @Test
     public void getParamHelp_ShouldDescribePledgeBlacklistInbound() {
-        CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
+        CompanyOuterRatingAaMinusAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingAaMinusAutoInService());
         assertThat(service.getParamHelp()).contains("poolIds（主体入池目标池）：可选")
                 .contains("17（黑名单质押库）")
                 .contains("公司信用债禁止库 15")
@@ -193,7 +193,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
     public void execute_ShouldFailWhenNoAgencyConfigured() {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         ExternalRatingAgencyService agencyService = mock(ExternalRatingAgencyService.class);
-        CompanyOuterRatingAaMinusAutoInService service = new CompanyOuterRatingAaMinusAutoInService();
+        CompanyOuterRatingAaMinusAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingAaMinusAutoInService());
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         ReflectionTestUtils.setField(service, "externalRatingAgencyService", agencyService);
         when(agencyService.queryRequiredAgencyCodeList())

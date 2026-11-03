@@ -68,7 +68,7 @@ public class SecurityPoolAdjustFinancialPersistenceTest {
             new XMLMapperBuilder(xml, config, "mapper/SecurityPoolAdjustMapper.xml", config.getSqlFragments()).parse();
         }
         mapper = new SqlSessionTemplate(new SqlSessionFactoryBuilder().build(config)).getMapper(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService target = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService target = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(target, "securityPoolAdjustMapper", mapper);
         ProxyFactory proxy = new ProxyFactory(target);
         proxy.setProxyTargetClass(true);

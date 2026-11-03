@@ -43,9 +43,73 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 基础 Demo 的跨表业务一致性测试，不连接或修改业务数据库。 */
 public class DemoDataConsistencyTest {
 
+    /** 从未成功的 ABS 五字段留空，曾成功入库的 ABS 永久保留主体身份 */
+    @Test
+    public void absDemoShouldMatchSuccessfulInboundHistory() throws Exception {
+        // 永久身份由成功入库历史决定，全部出库后仍不能按未在库样本清空
+        Set<String> successfulCodes = new HashSet<>();
+        for (Map<String, String> log : readRows("rrs_security_pool_adjust_demo_data.sql", "ip_adjust_log")) {
+            if ("20".equals(log.get("audit_status")) && "调入".equals(log.get("adjust_mode"))) {
+                successfulCodes.add(log.get("security_code"));
+            }
+        }
+        int checked = 0;
+        for (Map<String, String> security : readRows("rrs_external_import_demo_data.sql", "rrs_securityinfo")) {
+            if (!"abs".equals(security.get("security_type")) && !"1".equals(security.get("abs_flag"))) {
+                continue;
+            }
+            for (String field : new String[]{"issuer", "issuer_code", "rating_bondissuer",
+                    "rating_bondissuer_agency", "inner_issuer_rating"}) {
+                if (successfulCodes.contains(security.get("wind_code"))) {
+                    assertThat(security.get(field)).as("曾成功入库 ABS %s 的 %s", security.get("wind_code"), field).isNotBlank();
+                } else {
+                    assertThat(security.get(field)).as("未生效 ABS %s 的 %s", security.get("wind_code"), field).isNull();
+                }
+            }
+            checked++;
+        }
+        assertThat(checked).as("保留全部六条 ABS 样本").isEqualTo(6);
+    }
+
+    /** Demo 中同一主体代码的名称统一使用主体表全称，专用简称字段保持原样 */
+    @Test
+    public void companyNamesShouldMatchCompanyMasterData() throws Exception {
+        // 以 AIS 主体表为准，核对证券、评级、主体池和临时代码的名称
+        Map<String, Map<String, String>> companies = index(readRows("ais_inv_analysis_demo_data.sql", "t_inv_company"), "code");
+        for (String[] source : new String[][]{
+                {"rrs_external_import_demo_data.sql", "rrs_securityinfo", "issuer_code", "issuer"},
+                {"ais_inv_analysis_demo_data.sql", "v_inv_grade_result", "windcode", "windname"},
+                {"ais_inv_ods_demo_data.sql", "wind_compintroduction", "COMP_ID", "COMP_NAME"},
+                {"ais_inv_ods_demo_data.sql", "wind_cbondissuer", "s_info_compcode", "s_info_compname"},
+                {"ais_inv_ods_demo_data.sql", "wind_cbondissuerrating", "s_info_compcode", "s_info_compname"},
+                {"rrs_security_pool_adjust_demo_data.sql", "ip_pool_status", "security_code", "security_short_name"},
+                {"rrs_security_pool_adjust_demo_data.sql", "ip_adjust_log", "security_code", "security_short_name"},
+                {"rrs_temp_security_code_demo_data.sql", "rrs_temp_security_code", "temp_company_code", "temp_company_name_snapshot"}}) {
+            // 只核对主体对象，证券名称和 ODS 独有的未发债主体不属于 AIS 名称对照范围
+            for (Map<String, String> row : readRows(source[0], source[1])) {
+                String code = row.get(source[2]);
+                if ("security_code".equals(source[2]) && !"company".equals(row.get("security_type"))) {
+                    continue;
+                }
+                if ("wind_compintroduction".equals(source[1]) && !companies.containsKey(code)) {
+                    continue;
+                }
+                if (code == null) {
+                    assertThat(row.get(source[3])).as("%s 无主体代码时不应有名称", source[1]).isNull();
+                    continue;
+                }
+                assertThat(companies).as("%s 的主体代码 %s", source[1], code).containsKey(code);
+                assertThat(row.get(source[3])).as("%s 主体 %s 的名称", source[1], code)
+                        .isEqualTo(companies.get(code).get("full_name"));
+            }
+        }
+    }
+
     /** 主档中的担保人代码、名称和评分须按逗号位置对应，并与该主体最新内评一致 */
     @Test
     public void guarantorColumnsShouldMatchLatestRatingsByPosition() throws Exception {
+        // 担保人也使用主体表全称，不能仅靠两个来源同时使用相同简称通过检查
+        Map<String, Map<String, String>> companies = index(readRows("ais_inv_analysis_demo_data.sql", "t_inv_company"), "code");
         // 汇总调库实际读取的每个主体最新评分，不能拿连续分数或发行主体评分代替
         Map<String, Map<String, String>> latestRatings = new HashMap<>();
         for (Map<String, String> grade : readRows("ais_inv_analysis_demo_data.sql", "v_inv_grade_result")) {
@@ -77,6 +141,8 @@ public class DemoDataConsistencyTest {
                 assertThat(ids[i]).as("%s 第 %s 个担保人代码", code, i + 1).isNotBlank();
                 assertThat(latestRatings).as("%s 担保人 %s 必须有内评记录", code, ids[i]).containsKey(ids[i]);
                 Map<String, String> latest = latestRatings.get(ids[i]);
+                assertThat(companies).as("%s 担保人 %s 的主体记录", code, ids[i]).containsKey(ids[i]);
+                assertThat(names[i]).as("%s 担保人 %s 的主体全称", code, ids[i]).isEqualTo(companies.get(ids[i]).get("full_name"));
                 assertThat(names[i]).as("%s 担保人 %s 的名称", code, ids[i]).isEqualTo(latest.get("windname"));
                 assertThat(ratings[i]).as("%s 担保人 %s 的最新评分", code, ids[i]).isEqualTo(latest.get("total_score"));
             }

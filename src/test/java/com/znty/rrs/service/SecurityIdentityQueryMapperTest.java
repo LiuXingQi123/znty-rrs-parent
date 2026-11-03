@@ -182,7 +182,7 @@ public class SecurityIdentityQueryMapperTest {
     /** Service 必须把新增条件完整传到真实 Mapper，分页与空条件也正常工作 */
     @Test
     public void shouldBindIdentityParametersThroughMapperInterface() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", session.getMapper(SecurityPoolAdjustMapper.class));
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
         req.setPageSize(2);

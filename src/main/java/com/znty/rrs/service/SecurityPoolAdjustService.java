@@ -58,6 +58,7 @@ import org.springframework.beans.BeanUtils;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.common.SecurityTypeOptionDto;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
+import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import com.znty.rrs.entity.securitypooladjust.RedirectPoolOptionDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderReq;
@@ -137,6 +138,9 @@ public class SecurityPoolAdjustService {
 
     /** Excel 证券导入主项类型，配套项通过同组批次识别来源 */
     public static final String EXCEL_IMPORT_ADJUST_TYPE = "Excel导入";
+
+    /** Excel 清空来源，与导入共用业务提示放行规则 */
+    private static final String EXCEL_CLEAR_ADJUST_TYPE = "Excel清空";
     /** 统一证券市场及同券查询组件。 */
     @Resource
     private SecurityMarketService securityMarketService;
@@ -150,6 +154,14 @@ public class SecurityPoolAdjustService {
     /** 证券池调库数据访问组件 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    /** ABS 跨池主体身份及已查询候选复用 */
+    @Resource
+    private AbsIdentityService absIdentityService;
+
+    /** ABS 主体联动与规则提醒 */
+    @Resource
+    private AbsCompanySyncService absCompanySyncService;
 
     /** 投资池数据访问组件 */
     @Resource
@@ -236,6 +248,7 @@ public class SecurityPoolAdjustService {
             throw new BizException("证券代码不能为空");
         }
         SecurityInfoDetailDto dto = null;
+        SecurityInfoBo currentMaster = null;
         // ① 有调库日志：该笔提交快照整包回显（审批/详情精确留痕）
         if (req.getAdjustLogId() != null) {
             dto = securityPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(
@@ -250,6 +263,9 @@ public class SecurityPoolAdjustService {
             SecurityInfoDetailDto latestSnapshot =
                     securityPoolAdjustMapper.queryLatestSecuritySnapshotDetailByWindCode(req.getSecurityCode());
             // 有历史快照时仅覆盖表单可编辑业务字段，避免只读标识与主档不一致
+            // 保留已读取主档供当前身份恢复，历史表单覆盖不需要另查主档
+            currentMaster = new SecurityInfoBo();
+            BeanUtils.copyProperties(master, currentMaster);
             overlayEditableFieldsFromSnapshot(master, latestSnapshot);
             dto = master;
         }
@@ -259,6 +275,10 @@ public class SecurityPoolAdjustService {
         if (!"company".equals(dto.getSecurityType())) {
             dto.setMarketCode(securityMarketService.queryMarketCode(dto.getWindCode()));
             dto.setRelatedMarketCodes(securityMarketService.queryRelatedMarketCodes(dto.getWindCode()));
+        }
+        if (CreditBondSpecialInboundRule.isAbs(dto)) {
+            dto.setAbsIdentity(absIdentityService.queryCurrentIdentity(currentMaster == null
+                    ? securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode()) : currentMaster));
         }
         return dto;
     }
@@ -295,7 +315,18 @@ public class SecurityPoolAdjustService {
             throw new BizException("证券代码不能为空");
         }
         String securityCode = req.getSecurityCode().trim();
-        Long latestDate = securityPoolAdjustMapper.queryLatestIssuerFinancialReportDate(securityCode);
+        // 页面明确传入空主体时直接留白，不回查历史主档或财报
+        if (req.getSelectedRatingCompany() != null
+                && emptyToNull(req.getSelectedRatingCompany().getCompanyCode()) == null) {
+            return Collections.emptyList();
+        }
+        // ABS 首次入库主档尚无主体，财报使用本次已核验的选择
+        String selectedIssuer = req.getSelectedRatingCompany() == null ? emptyToNull(req.getIssuerCode())
+                : emptyToNull(req.getSelectedRatingCompany().getCompanyCode());
+        if (selectedIssuer == null) selectedIssuer = resolveFinancialIssuer(securityCode, req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode());
+        Long latestDate = selectedIssuer == null
+                ? securityPoolAdjustMapper.queryLatestIssuerFinancialReportDate(securityCode)
+                : securityPoolAdjustMapper.queryLatestFinancialDateByIssuer(selectedIssuer);
         if (latestDate != null) {
             // 检查源数据报告期，避免错误日期进入四列表头
             validateFinancialReportDate(latestDate);
@@ -310,7 +341,9 @@ public class SecurityPoolAdjustService {
         if (!fourAnnuals) {
             dates.add(latestDate);
         }
-        List<IssuerFinancialDto> source = securityPoolAdjustMapper.queryIssuerFinancialList(securityCode, dates);
+        List<IssuerFinancialDto> source = selectedIssuer == null
+                ? securityPoolAdjustMapper.queryIssuerFinancialList(securityCode, dates)
+                : securityPoolAdjustMapper.queryFinancialListByIssuer(selectedIssuer, dates);
         Map<Long, IssuerFinancialDto> byDate = source.stream().collect(
                 Collectors.toMap(IssuerFinancialDto::getReportDate, item -> item));
         List<IssuerFinancialDto> result = new ArrayList<>();
@@ -335,8 +368,21 @@ public class SecurityPoolAdjustService {
             throw new BizException("财报修改列表不能为空");
         }
         String securityCode = req.getSecurityCode().trim();
-        SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
-        if (security == null || security.getIssuerCode() == null || security.getIssuerCode().trim().isEmpty()) {
+        // 空选择不能借用主档中的历史主体保存财报
+        if (req.getSelectedRatingCompany() != null
+                && emptyToNull(req.getSelectedRatingCompany().getCompanyCode()) == null) {
+            throw new BizException("请选择权益人或自选权益人后保存财报");
+        }
+        // 直接使用页面选择；普通债未传主体时只查一次主档
+        String selectedIssuer = req.getSelectedRatingCompany() == null ? emptyToNull(req.getIssuerCode())
+                : emptyToNull(req.getSelectedRatingCompany().getCompanyCode());
+        if (selectedIssuer == null) selectedIssuer = resolveFinancialIssuer(securityCode, req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode());
+        String issuerCode = selectedIssuer;
+        if (issuerCode == null) {
+            SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
+            issuerCode = security == null ? null : security.getIssuerCode();
+        }
+        if (issuerCode == null || issuerCode.trim().isEmpty()) {
             throw new BizException("证券不存在或未配置发行主体：" + securityCode);
         }
         Set<Long> dates = new HashSet<>();
@@ -358,17 +404,17 @@ public class SecurityPoolAdjustService {
                     financial.getGeneralBudgetRev(), financial.getGeneralBudgetExp(), financial.getRoe(),
                     financial.getExpToEbitda(), financial.getEbitda(), financial.getDebtToEbitda())
                     .stream().anyMatch(Objects::nonNull);
-            if (!hasValue && securityPoolAdjustMapper.queryIssuerFinancialByReportDate(
-                    securityCode, financial.getReportDate()) == null) {
+            if (!hasValue && (selectedIssuer == null
+                    ? securityPoolAdjustMapper.queryIssuerFinancialByReportDate(securityCode, financial.getReportDate())
+                    : securityPoolAdjustMapper.queryFinancialByIssuerAndDate(selectedIssuer, financial.getReportDate())) == null) {
                 // 空白报告没有可保存的指标，不创建仅含主体和日期的记录
                 IssuerFinancialDto empty = new IssuerFinancialDto();
                 empty.setReportDate(financial.getReportDate());
                 saved.add(empty);
                 continue;
             }
-            securityPoolAdjustMapper.saveIssuerFinancial(security.getIssuerCode(), financial);
-            saved.add(securityPoolAdjustMapper.queryIssuerFinancialByReportDate(
-                    securityCode, financial.getReportDate()));
+            securityPoolAdjustMapper.saveIssuerFinancial(issuerCode, financial);
+            saved.add(financial);
         }
         return saved;
     }
@@ -385,8 +431,35 @@ public class SecurityPoolAdjustService {
         }
         // 校验报告日期格式及允许的报告期
         validateFinancialReportDate(req.getReportDate());
-        return securityPoolAdjustMapper.queryIssuerFinancialByReportDate(
-                req.getSecurityCode(), req.getReportDate());
+        // 空主体仅保留请求的报告期，指标全部留空
+        if (req.getSelectedRatingCompany() != null
+                && emptyToNull(req.getSelectedRatingCompany().getCompanyCode()) == null) {
+            IssuerFinancialDto empty = new IssuerFinancialDto();
+            empty.setReportDate(req.getReportDate());
+            return empty;
+        }
+        String selectedIssuer = req.getSelectedRatingCompany() == null ? emptyToNull(req.getIssuerCode())
+                : emptyToNull(req.getSelectedRatingCompany().getCompanyCode());
+        if (selectedIssuer == null) selectedIssuer = resolveFinancialIssuer(req.getSecurityCode(), req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode());
+        return selectedIssuer == null
+                ? securityPoolAdjustMapper.queryIssuerFinancialByReportDate(req.getSecurityCode(), req.getReportDate())
+                : securityPoolAdjustMapper.queryFinancialByIssuerAndDate(selectedIssuer, req.getReportDate());
+    }
+
+    /**
+     * 确定 ABS 当前选择的财报主体，避免审核前借用空主档或其他身份
+     * 执行顺序：
+     * 1. 未传本次选择时沿用主档查询，普通债不改变原逻辑
+     * 2. 直接取自选或普通权益人代码，不重复查询证券和评级
+     * @param securityCode 证券代码
+     * @param rightsHolderCode 普通权益人
+     * @param selfSelectedCode 自选权益人
+     * @return ABS 本次主体，未指定时为空
+     */
+    private String resolveFinancialIssuer(String securityCode, String rightsHolderCode, String selfSelectedCode) {
+        // 页面选定的自选主体优先，不再次查询主档或候选
+        String selected = emptyToNull(selfSelectedCode);
+        return selected != null ? selected : emptyToNull(rightsHolderCode);
     }
 
     /**
@@ -396,7 +469,9 @@ public class SecurityPoolAdjustService {
         if (req == null || req.getSecurityCode() == null || req.getSecurityCode().trim().isEmpty()) {
             return new ArrayList<>();
         }
-        return securityPoolAdjustMapper.queryRelatedRatingCompanyList(req.getSecurityCode().trim());
+        List<RelatedRatingCompanyDto> rows = securityPoolAdjustMapper.queryRelatedRatingCompanyList(req.getSecurityCode().trim());
+        absIdentityService.rememberRelated(req.getSecurityCode().trim(), rows);
+        return rows;
     }
 
     /**
@@ -408,6 +483,7 @@ public class SecurityPoolAdjustService {
         PageHelper.startPage(queryReq.getPageIndex(), queryReq.getPageSize());
         List<SelfSelectedRightsHolderDto> records = securityPoolAdjustMapper.querySelfSelectedRightsHolderPage(
                 emptyToNull(queryReq.getCompanyCode()), emptyToNull(queryReq.getCompanyName()));
+        absIdentityService.rememberSelf(records);
         PageInfo<SelfSelectedRightsHolderDto> pageInfo = new PageInfo<>(records);
         return new PageResult<>(records, pageInfo.getTotal(), queryReq.getPageIndex(), queryReq.getPageSize());
     }
@@ -596,20 +672,21 @@ public class SecurityPoolAdjustService {
         if (!hasGradedPool) {
             return pools;
         }
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = req.getSecurityInfo() != null && req.getSecurityInfo().getSecurityType() != null
+                ? req.getSecurityInfo() : securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
             return pools;
         }
         // 按证券类型解析本次评级主体：非 ABS 使用担保人，ABS 使用权益人或自选权益人
         applySelectedRatingCompanyInternal(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
-                req.getSelfSelectedRightsHolderCode(), false);
+                req.getSelfSelectedRightsHolderCode(), false, req.getSelectedRatingCompany());
         // 可转债 / 可交换债 / CRMW 不适用信用债 1～5，选池直接去掉
         if (CreditBondSpecialInboundRule.isExcludedFromCreditBondGradedPool(securityInfo)) {
             return excludeGradedBondPools(pools);
         }
         // 证券自身或发行主体任一在重点观察名单，即走重点观察名单禁新增规则
         boolean inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode())
-                || securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode());
+                || queryIssuerInPoolType(securityInfo, "restricted");
         // 当前已在池，用于重点观察名单判断是否「新增入库」
         Set<Long> currentPoolIds = new HashSet<Long>();
         List<Long> currentIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
@@ -644,7 +721,7 @@ public class SecurityPoolAdjustService {
         }
         // ABS 按所选权益人内评（自选权益人优先）选口径；私募/永续/次级按发债主体内评；担保债或已在观察池从最好档开到五级；普通债只留矩阵点名的池
         boolean inObserve = securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode())
-                || securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode());
+                || queryIssuerInPoolType(securityInfo, "observe");
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
                 CreditBondSpecialInboundRule.resolveGradedInboundMode(securityInfo, inObserve);
         Integer startSort = inboundMode.resolveStartSort(bestAllowedSort);
@@ -772,8 +849,12 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 从投资池列表中排除 CRMW 类型池（pool_type=crmw）。
-     * CRMW 凭证可作为证券调整到普通池，凭证与标的组合仍走独立 CRMW 池链路
+     * 从投资池列表中排除 CRMW 组合池，普通证券仍通过证券调库办理
+     *
+     * 执行顺序：
+     * 1. 保留列表中非 CRMW 组合池
+     * @param pools 待过滤的投资池
+     * @return 人工证券调库可选的投资池
      */
     private List<InvestmentPoolBo> filterOutCrmwPools(List<InvestmentPoolBo> pools) {
         if (pools == null || pools.isEmpty()) {
@@ -1020,7 +1101,7 @@ public class SecurityPoolAdjustService {
      * 2. 在创建任何新流程前，逐行执行参数、重复提交、已有在途流程和配套互斥调出的前置检查。
      * 3. 为各行保留独立的提交上下文，并将后端复核的证券和所选主体信息设置为本笔证券快照来源。
      * 4. 创建无上传文件的共享附件上下文，再按请求顺序使用各行上下文执行调库提交。
-     * 5. 返回各行提交结果；同码各行使用各自主体选择，任一行提交异常由事务整体回滚。
+     * 5. 返回各行提交结果；非 ABS 各行独立选择，ABS 同码各行必须同一主体，任一行异常整体回滚。
      *
      * @param requests 按来源导入行分组的提交请求
      * @return 每个导入行产生的提交结果
@@ -1032,9 +1113,16 @@ public class SecurityPoolAdjustService {
         }
         BatchNoContext batchNoContext = new BatchNoContext();
         List<SubmitSharedData> sharedDataList = new ArrayList<>();
+        Map<String, String> absIdentities = new HashMap<>();
         for (SecurityPoolAdjustSubmitReq req : requests) {
             // 写入新流程前检查本行既有在途流程、重复提交和配套互斥调出
             SubmitSharedData shared = prepareSubmitSharedData(req, batchNoContext);
+            if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
+                String previous = absIdentities.put(req.getSecurityCode(), shared.securityInfo.getIssuerCode());
+                if (previous != null && !previous.equals(shared.securityInfo.getIssuerCode())) {
+                    throw new BizException("同一 ABS[" + req.getSecurityCode() + "]在同批申请中选择了不同主体");
+                }
+            }
             sharedDataList.add(shared);
             // Excel 页面不编辑证券主档，本笔快照使用后端复核的证券及主体信息
             req.setSecurityInfo(shared.securityInfo);
@@ -1071,21 +1159,34 @@ public class SecurityPoolAdjustService {
         // 校验证券代码及调库明细必填字段
         validateSubmitReq(req);
         // 普通入口检查重复申请，Excel 已有批次防重复，原业务失败不再阻断
-        if (!EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+        if (!isExcelAdjustType(req.getAdjustType())) {
             checkRecentDuplicateSubmit(req);
         }
 
         // ══ 第二阶段：参数初始化 ══
-        // 读取证券主档并重新复核所选评级主体
+        // 复用页面证券信息和已选主体，准备本次共享数据
         SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
+        if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
+            Set<String> identityCodes = new TreeSet<>();
+            identityCodes.add(req.getSecurityCode());
+            for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+                if (item.getSecurityCode() != null) identityCodes.add(item.getSecurityCode());
+            }
+            for (String code : identityCodes) {
+                absIdentityService.validateIdentity(code, shared.securityInfo.getIssuerCode());
+            }
+            if (req.getSecurityInfo() == null) {
+                req.setSecurityInfo(shared.securityInfo);
+            }
+        }
         // 同券跨市场调入必须完整提交，禁止跳过校验失败的关联券
         validateRelatedInboundItemsOnSubmit(req);
         // 普通入口检查在途，Excel 在原校验中保留在途提示后放行
-        if (!EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+        if (!isExcelAdjustType(req.getAdjustType())) {
             checkSubmitPendingPoolGroups(req, shared.poolMap);
         }
         // 普通入口要求互斥调出可执行，Excel 沿用导入选项及原校验提示
-        if (!EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+        if (!isExcelAdjustType(req.getAdjustType())) {
             validateRequiredMutexOutboundOnSubmit(req, shared);
         }
         return shared;
@@ -1097,9 +1198,8 @@ public class SecurityPoolAdjustService {
      * 执行顺序：
      * 1. 提交调入项，创建对应调库记录和流程，并收集需要立即生效的直通项。
      * 2. 提交调出项，按原有规则关联同组流程和批次号，并继续收集直通项。
-     * 3. 对本次收集的直通项统一锁池，重新检查动态池状态及容量后落地池状态。
-     * 4. 合并调入和调出的调库日志 ID，使用本次复核的主体信息保存证券快照；请求未提供证券信息时
-     *    沿用原逻辑跳过快照保存。
+     * 3. 合并调入和调出的调库日志 ID，先保存本次主体快照；ABS 始终保留快照
+     * 4. 对直通项锁定复核动态池状态及容量，审核通过后保存 ABS 主档五字段并落池
      * 5. 组装证券代码、提交记录数及日志 ID 列表，返回本次提交结果。
      *
      * @param req 单个来源证券的调库提交请求
@@ -1118,9 +1218,6 @@ public class SecurityPoolAdjustService {
         // 提交调出项，并保留同组流程和批次号
         List<Long> outboundIds = executeOutboundSubmit(req, shared, submissionFiles, directApplyLogs);
 
-        // 对本次全部直通项统一锁池、复核并落地，确保同池容量按整次申请累计
-        recheckAndApplyDirectLogs(directApplyLogs);
-
         // 组装本次提交产生的全部调库日志 ID
         List<Long> allIds = new ArrayList<>(inboundIds);
         allIds.addAll(outboundIds);
@@ -1128,6 +1225,8 @@ public class SecurityPoolAdjustService {
         // ══ 第五阶段：后续处理（按 log 写证券信息快照，不改主档） ══
         // 保存本次提交使用的证券信息和评级主体
         postSubmitProcess(req, shared, allIds);
+        // 快照保存后再处理直通，主档五字段只在审核通过事务内更新
+        recheckAndApplyDirectLogs(directApplyLogs);
 
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
@@ -1380,14 +1479,15 @@ public class SecurityPoolAdjustService {
      */
     private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req, BatchNoContext batchNoContext) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = req.getSecurityInfo() != null && req.getSecurityInfo().getSecurityType() != null
+                ? req.getSecurityInfo() : securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
         // 提交时重新校验并读取最终评级主体，ABS 必须选择权益人或自选权益人
         SelectedRatingCompanyData selectedRatingCompany = applySelectedRatingCompanyInternal(
                 securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
-                req.getSelfSelectedRightsHolderCode(), true);
+                req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -1436,7 +1536,7 @@ public class SecurityPoolAdjustService {
                 poolRelationMap,
                 securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
                 securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
-                securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()),
+                queryIssuerInPoolType(securityInfo, "observe"),
                 flowSnapshotMap,
                 batchNoContext,
                 selectedRatingCompany
@@ -1778,7 +1878,7 @@ public class SecurityPoolAdjustService {
             // 报告必填校验（按池 in_report_restriction；关联码项由同组手工项承担报告，跳过）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
             // 同组先按主项快速资格判断材料豁免，无资格时继续执行原报告要求
-            if (EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+            if (isExcelAdjustType(req.getAdjustType())) {
                 // Excel 的业务校验只作提示，不在提交时用报告必填要求重新阻断
                 sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
             } else if (isInboundMaterialExempt(req, item, shared)) {
@@ -1805,6 +1905,8 @@ public class SecurityPoolAdjustService {
                 logBo.setAdjustBatchNo(adjustBatchNo);
                 logBo.setAuditStatus(AuditStatus.APPROVED.getCode());
                 securityPoolAdjustMapper.addAdjustLog(logBo);
+                // 直通调入也要登记到提交日志集合，供 ABS 主体快照按日志 ID 保存
+                shared.submittedLogs.put(logBo.getId(), logBo);
                 generatedIds.add(logBo.getId());
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(logBo.getId(), item, submissionFiles, req.getAdjusterId());
@@ -1824,6 +1926,7 @@ public class SecurityPoolAdjustService {
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());
                 securityPoolAdjustMapper.addAdjustLog(bo);
+                shared.submittedLogs.put(bo.getId(), bo);
                 generatedIds.add(bo.getId());
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
@@ -1870,7 +1973,7 @@ public class SecurityPoolAdjustService {
             // 报告必填校验（按池 out_report_restriction；关联码项由同组手工项承担报告，跳过）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
             // 快速主项带出的互斥、联动调出一并免材料，独立调出不豁免
-            if (EXCEL_IMPORT_ADJUST_TYPE.equals(req.getAdjustType())) {
+            if (isExcelAdjustType(req.getAdjustType())) {
                 // Excel 配套项沿用主项的提示后放行口径，已提供的报告仍检查引用有效性
                 sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
             } else if (isInboundMaterialExempt(req, item, shared)) {
@@ -1897,6 +2000,7 @@ public class SecurityPoolAdjustService {
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.APPROVED.getCode());
                 securityPoolAdjustMapper.addAdjustLog(bo);
+                shared.submittedLogs.put(bo.getId(), bo);
                 generatedIds.add(bo.getId());
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
@@ -1915,6 +2019,7 @@ public class SecurityPoolAdjustService {
                 bo.setAdjustBatchNo(adjustBatchNo);
                 bo.setAuditStatus(AuditStatus.SUBMITTED.getCode());
                 securityPoolAdjustMapper.addAdjustLog(bo);
+                shared.submittedLogs.put(bo.getId(), bo);
                 generatedIds.add(bo.getId());
                 // 将提交附件绑定到新建调库日志
                 bindSubmitAttachments(bo.getId(), item, submissionFiles, req.getAdjusterId());
@@ -1948,14 +2053,26 @@ public class SecurityPoolAdjustService {
             return;
         }
         // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
-        SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo());
+        SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo(), shared.securityInfo);
         // 名称、代码和内评使用提交阶段校验后的评级主体：非 ABS 为担保人，ABS 为权益人或优先使用的自选权益人
+        if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
+            mergedSecurityInfo.setIssuer(shared.securityInfo.getIssuer());
+            mergedSecurityInfo.setIssuerCode(shared.securityInfo.getIssuerCode());
+            mergedSecurityInfo.setInnerIssuerRating(shared.securityInfo.getInnerIssuerRating());
+            mergedSecurityInfo.setRatingBondissuer(shared.securityInfo.getRatingBondissuer());
+            mergedSecurityInfo.setRatingBondissuerAgency(shared.securityInfo.getRatingBondissuerAgency());
+        }
         mergedSecurityInfo.setGuarantor(shared.securityInfo.getGuarantor());
         mergedSecurityInfo.setGuarantorId(shared.securityInfo.getGuarantorId());
         mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
         req.setSecurityInfo(mergedSecurityInfo);
         // 按调库日志落证券信息快照
-        saveAdjustSecuritySnapshots(req, logIds, shared.selectedRatingCompany);
+        if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
+            absIdentityService.saveSnapshots(mergedSecurityInfo, shared.submittedLogs, req.getAdjusterId(),
+                    shared.selectedRatingCompany.rightsHolderName, shared.selectedRatingCompany.selfSelectedRightsHolderName);
+        } else {
+            saveAdjustSecuritySnapshots(req, logIds, shared.selectedRatingCompany);
+        }
     }
 
     /**
@@ -2008,11 +2125,26 @@ public class SecurityPoolAdjustService {
      * @param changedField 前端传入的变更字段
      */
     private SecurityInfoBo buildMergedSecurityInfo(String securityCode, SecurityInfoBo changedField) {
-        SecurityInfoBo current = securityPoolAdjustMapper.querySecurityBoByCode(securityCode);
-        if (current == null) {
-            throw new BizException("证券不存在");
-        }
-        // 使用前端本次可编辑字段覆盖数据库当前实体
+        // 独立调用没有共享主档时读取一次，再交给统一合并方法
+        return buildMergedSecurityInfo(securityCode, changedField, null);
+    }
+
+    /**
+     * 使用本次已有证券信息构建申请快照，避免保存时重新查询主档
+     * 执行顺序：
+     * 1. 优先取本次共享数据，没有共享数据的独立调用才读取主档
+     * 2. 复制已有信息并覆盖页面编辑字段，不修改共享对象
+     * @param securityCode 证券代码
+     * @param changedField 页面编辑字段
+     * @param loaded 本次已加载的证券信息
+     * @return 本次完整快照
+     */
+    private SecurityInfoBo buildMergedSecurityInfo(String securityCode, SecurityInfoBo changedField, SecurityInfoBo loaded) {
+        SecurityInfoBo source = loaded == null ? securityPoolAdjustMapper.querySecurityBoByCode(securityCode) : loaded;
+        if (source == null) throw new BizException("证券不存在");
+        SecurityInfoBo current = new SecurityInfoBo();
+        BeanUtils.copyProperties(source, current);
+        // 复用本次已加载数据覆盖页面编辑值
         mergeSecurityInfo(current, changedField);
         return current;
     }
@@ -2256,6 +2388,9 @@ public class SecurityPoolAdjustService {
             allowExcelImportResults(shared, resultItems);
         }
 
+        // 身份冲突作为不可调整原因展示，Excel 提示放行不能覆盖此结果
+        absIdentityService.applyIdentityCheckFailures(shared.getSecurityInfo(), resultItems);
+
         // ══ 第五阶段：流程类型判断 ══
         List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
 
@@ -2306,13 +2441,14 @@ public class SecurityPoolAdjustService {
      */
     private AdjustSharedData loadSharedData(AdjustCheckReq req) {
         // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+        SecurityInfoBo securityInfo = req.getSecurityInfo() != null && req.getSecurityInfo().getSecurityType() != null
+                ? req.getSecurityInfo() : securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
-        // 校验时重新解析最终评级主体，ABS 必须选择权益人或自选权益人
+        // 使用本次已选评级主体，ABS 必须选择权益人或自选权益人
         applySelectedRatingCompanyInternal(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
-                req.getSelfSelectedRightsHolderCode(), true);
+                req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
@@ -2352,9 +2488,9 @@ public class SecurityPoolAdjustService {
                 securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(req.getSecurityCode(), null), poolMap));
         // 观察池：证券或主体已在观察池则不得高于矩阵最好档；重点观察名单：禁新增，已在库只能去五级
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
-        shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
+        shared.setIssuerInObservePool(queryIssuerInPoolType(securityInfo, "observe"));
         shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode()));
-        shared.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(req.getSecurityCode()));
+        shared.setIssuerInRestrictedPool(queryIssuerInPoolType(securityInfo, "restricted"));
         // 评级下调三标志：非 ABS 担保债才按所选担保人代码判断担保人评级下调
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
@@ -2372,11 +2508,79 @@ public class SecurityPoolAdjustService {
     }
 
     /**
+     * ABS 复用全部权益人候选检查主体池，普通债保持单发行人查询
+     * 执行顺序：
+     * 1. ABS 使用本次已查询候选和自选代码，只重查动态池状态
+     * 2. 普通债沿用原发行主体口径
+     * @param security 本次证券
+     * @param poolType 主体池类型
+     * @return 是否命中
+     */
+    public boolean queryIssuerInPoolType(SecurityInfoBo security, String poolType) {
+        if (CreditBondSpecialInboundRule.isAbs(security)) {
+            return absIdentityService.isRelatedInPool(security, poolType);
+        }
+        return "observe".equals(poolType)
+                ? securityPoolAdjustMapper.queryIssuerInObservePool(security.getWindCode())
+                : securityPoolAdjustMapper.queryIssuerInRestrictedPool(security.getWindCode());
+    }
+
+    /**
      * 按证券类型校验并回填本次评级主体：ABS 自选权益人优先，非 ABS 使用担保人。
      */
     private SelectedRatingCompanyData applySelectedRatingCompanyInternal(
             SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
             String selfSelectedRightsHolderCode, boolean requireAbsSelection) {
+        // 原入口没有携带已选数据时按既有候选来源读取
+        return applySelectedRatingCompanyInternal(securityInfo, guarantorCode, rightsHolderCode,
+                selfSelectedRightsHolderCode, requireAbsSelection, null);
+    }
+
+    /**
+     * 直接复用页面已选主体，未携带选择对象的后台调用沿用原候选读取
+     * 执行顺序：
+     * 1. 已传主体时直接回填五字段及矩阵评分，不重复查询名称和评级
+     * 2. 未传主体对象时沿用原关系候选入口
+     * @param securityInfo 当前证券信息
+     * @param guarantorCode 担保人代码
+     * @param rightsHolderCode 普通权益人代码
+     * @param selfSelectedRightsHolderCode 自选权益人代码
+     * @param requireAbsSelection ABS 是否需要选择主体
+     * @param selected 页面已选主体
+     * @return 本次快照使用的主体名称
+     */
+    private SelectedRatingCompanyData applySelectedRatingCompanyInternal(
+            SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
+            String selfSelectedRightsHolderCode, boolean requireAbsSelection, RatingCompanySelectionReq selected) {
+        if (selected != null) {
+            SelectedRatingCompanyData result = new SelectedRatingCompanyData();
+            // 预览允许空选择，下一步和正式提交才要求主体必填
+            if (CreditBondSpecialInboundRule.isAbs(securityInfo)
+                    && emptyToNull(selected.getCompanyCode()) == null) {
+                if (requireAbsSelection) {
+                    throw new BizException("请选择权益人或自选权益人");
+                }
+                // 预览允许暂时清空，只修改本次对象，不改动已生效主档身份
+                securityInfo.setIssuer(null);
+                securityInfo.setIssuerCode(null);
+                securityInfo.setRatingBondissuer(null);
+                securityInfo.setRatingBondissuerAgency(null);
+                securityInfo.setInnerIssuerRating(null);
+                securityInfo.setGuarantor(null);
+                securityInfo.setGuarantorId(null);
+                securityInfo.setInnerGuarantorRating(null);
+                return result;
+            }
+            result.rightsHolderName = selected.getRightsHolderName();
+            result.selfSelectedRightsHolderName = selected.getSelfSelectedRightsHolderName();
+            // 直接取页面已查询的数据，空评级也保持原值为空
+            fillSelectedRatingCompany(securityInfo, selected.getCompanyCode(), selected.getCompanyName(), selected.getInnerRating());
+            if (CreditBondSpecialInboundRule.isAbs(securityInfo)) {
+                absIdentityService.applySelection(securityInfo, selected.getCompanyCode(), selected.getCompanyName(),
+                        selected.getInnerRating(), selected.getRatingBondissuer(), selected.getRatingBondissuerAgency());
+            }
+            return result;
+        }
         securityInfo.setGuarantor(null);
         securityInfo.setGuarantorId(null);
         securityInfo.setInnerGuarantorRating(null);
@@ -2390,8 +2594,14 @@ public class SecurityPoolAdjustService {
                 result.rightsHolderName = rightsHolder.getCompanyName();
             }
             if (selfSelectedRightsHolderCode != null && !selfSelectedRightsHolderCode.trim().isEmpty()) {
-                selfSelected = securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(
-                        selfSelectedRightsHolderCode.trim());
+                selfSelected = absIdentityService.findSelf(selfSelectedRightsHolderCode.trim());
+                if (selfSelected == null) {
+                    selfSelected = securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(
+                            selfSelectedRightsHolderCode.trim());
+                    if (selfSelected != null) {
+                        absIdentityService.rememberSelf(Collections.singletonList(selfSelected));
+                    }
+                }
                 if (selfSelected == null) {
                     throw new BizException("所选自选权益人不存在或已失效");
                 }
@@ -2410,9 +2620,13 @@ public class SecurityPoolAdjustService {
             if (selfSelected != null) {
                 fillSelectedRatingCompany(securityInfo, selfSelected.getCompanyCode(),
                         selfSelected.getCompanyName(), selfSelected.getInnerRating());
+                absIdentityService.applySelection(securityInfo, selfSelected.getCompanyCode(), selfSelected.getCompanyName(),
+                        selfSelected.getInnerRating(), selfSelected.getRatingBondissuer(), selfSelected.getRatingBondissuerAgency());
             } else if (rightsHolder != null) {
                 fillSelectedRatingCompany(securityInfo, rightsHolder.getCompanyCode(),
                         rightsHolder.getCompanyName(), rightsHolder.getInnerRating());
+                absIdentityService.applySelection(securityInfo, rightsHolder.getCompanyCode(), rightsHolder.getCompanyName(),
+                        rightsHolder.getInnerRating(), rightsHolder.getRatingBondissuer(), rightsHolder.getRatingBondissuerAgency());
             }
             return result;
         }
@@ -2441,10 +2655,34 @@ public class SecurityPoolAdjustService {
                 selfSelectedRightsHolderCode, requireAbsSelection);
     }
 
+    /**
+     * ABS 和 CRMW 共用页面已选主体，不为同一个主体重复查候选
+     * 执行顺序：
+     * 1. 将页面选择对象传入统一回填入口
+     * @param securityInfo 当前证券
+     * @param guarantorCode 担保人代码
+     * @param rightsHolderCode 权益人代码
+     * @param selfSelectedRightsHolderCode 自选主体代码
+     * @param requireAbsSelection 是否要求主体
+     * @param selected 页面已选主体
+     * @return 主体名称留痕数据
+     */
+    public SelectedRatingCompanyData applySelectedRatingCompany(SecurityInfoBo securityInfo,
+            String guarantorCode, String rightsHolderCode, String selfSelectedRightsHolderCode,
+            boolean requireAbsSelection, RatingCompanySelectionReq selected) {
+        // 复用页面数据回填本次主体
+        return applySelectedRatingCompanyInternal(securityInfo, guarantorCode, rightsHolderCode,
+                selfSelectedRightsHolderCode, requireAbsSelection, selected);
+    }
+
     /** 查询并校验当前证券的相关评级主体。 */
     private RelatedRatingCompanyDto findRelatedRatingCompany(
             String securityCode, String companyCode, String errorMessage) {
-        List<RelatedRatingCompanyDto> records = securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityCode);
+        List<RelatedRatingCompanyDto> records = absIdentityService.findRelated(securityCode);
+        if (records == null) {
+            records = securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityCode);
+            absIdentityService.rememberRelated(securityCode, records);
+        }
         if (records == null) {
             records = Collections.emptyList();
         }
@@ -2458,7 +2696,11 @@ public class SecurityPoolAdjustService {
 
     /** 查询关联评级主体接口返回的首条记录，不按关系类型二次筛选。 */
     private RelatedRatingCompanyDto queryFirstRelatedRatingCompany(String securityCode) {
-        List<RelatedRatingCompanyDto> records = securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityCode);
+        List<RelatedRatingCompanyDto> records = absIdentityService.findRelated(securityCode);
+        if (records == null) {
+            records = securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityCode);
+            absIdentityService.rememberRelated(securityCode, records);
+        }
         return records == null || records.isEmpty() ? null : records.get(0);
     }
 
@@ -2978,8 +3220,9 @@ public class SecurityPoolAdjustService {
      */
     private List<AdjustCheckDto.FlowOption> resolveProductInboundFlowOptions(AdjustSharedData shared,
                                                                            InvestmentPoolBo pool) {
-        // 产品库资格独立于信用债简易的评级和历史报告条件
-        boolean matched = isProductInboundFlowMatched(pool, shared.getPoolMap(), shared.getCurrentPoolIds());
+        // 产品库资格独立于信用债简易的评级和历史报告条件，ABS 只提供一般入库流程
+        boolean abs = CreditBondSpecialInboundRule.isAbs(shared.getSecurityInfo());
+        boolean matched = !abs && isProductInboundFlowMatched(pool, shared.getPoolMap(), shared.getCurrentPoolIds());
         FlowOptionParam fast = new FlowOptionParam();
         fast.setFlowType(FlowType.SIMPLE_INBOUND.getCode());
         fast.setFlowName(resolveFlowName(pool.getSimpleInFlowName(), "产品库快速入库流程"));
@@ -2991,7 +3234,8 @@ public class SecurityPoolAdjustService {
         fast.setMatchReasons(matched ? Collections.singletonList("证券当前已在产品库快速入库允许的来源库")
                 : Collections.<String>emptyList());
         fast.setUnmatchReasons(matched ? Collections.<String>emptyList()
-                : Collections.singletonList("证券当前不在指定来源库，不能使用产品库快速入库流程"));
+                : Collections.singletonList(abs ? "ABS 不适用快速入库流程"
+                : "证券当前不在指定来源库，不能使用产品库快速入库流程"));
         // 统一构建快速候选并返回原始依据编码，中文提示由页面展示
         AdjustCheckDto.FlowOption fastOption = buildPoolFlowOption(fast);
         if (matched) {
@@ -3178,6 +3422,11 @@ public class SecurityPoolAdjustService {
             List<String> matchReasons, List<String> unmatchReasons) {
 
         SecurityInfoBo security = shared.getSecurityInfo();
+        // ABS 只能走一般入库流程，不提供快速入库候选
+        if (CreditBondSpecialInboundRule.isAbs(security)) {
+            unmatchReasons.add("ABS 不适用快速入库流程");
+            return false;
+        }
         // 1. 唯一准入层级：完整一至五级只能允许一个层级，且该层级和目标池须满足一至三级要求
         // 简易流程只能用于信用债一至三级库
         if (isCreditBondLevelOneToThree(targetPool)) {
@@ -4030,11 +4279,14 @@ public class SecurityPoolAdjustService {
      * @param logList 同批次调库记录
      */
     public void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList) {
+        // 最终审批前先检查 ABS 在库和在途身份
+        absIdentityService.validateApprovalIdentities(logList);
+
         if (logList == null || logList.isEmpty()) {
             return;
         }
         // 配套日志保持联动、互斥、关联类型，通过同组主项批次继承 Excel 来源
-        Set<String> excelBatches = collectExcelImportBatches(logList);
+        Set<String> excelBatches = collectExcelAdjustBatches(logList);
         Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
                 .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p));
         List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
@@ -4046,8 +4298,18 @@ public class SecurityPoolAdjustService {
         Map<Long, Integer> inboundIncrements = new HashMap<>();
         Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
                 securityPoolAdjustMapper.queryAllPoolRelationList());
+        Set<Long> projectedInPoolIds = logList.stream()
+                .filter(log -> AdjustMode.IN.getCode().equals(log.getAdjustMode()))
+                .map(IpAdjustLogBo::getTargetPoolId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<Long> projectedOutPoolIds = logList.stream()
+                .filter(log -> AdjustMode.OUT.getCode().equals(log.getAdjustMode()))
+                .map(IpAdjustLogBo::getTargetPoolId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         for (IpAdjustLogBo log : logList) {
-            boolean excelImport = EXCEL_IMPORT_ADJUST_TYPE.equals(log.getAdjustType())
+            boolean excelImport = isExcelAdjustType(log.getAdjustType())
                     || (log.getAdjustBatchNo() != null && excelBatches.contains(log.getAdjustBatchNo()));
             InvestmentPoolBo pool = poolMap.get(log.getTargetPoolId());
             if (pool == null || (!excelImport && (!"enabled".equals(pool.getStatus())
@@ -4057,6 +4319,13 @@ public class SecurityPoolAdjustService {
             SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(log.getSecurityCode());
             if (security == null) {
                 throwApprovalRecheckFailure(log, "证券不存在");
+            }
+            if (log.getId() != null && CreditBondSpecialInboundRule.isAbs(security)) {
+                absIdentityService.restoreSnapshotSelection(security, log, false);
+            }
+            if (log.getId() == null && CreditBondSpecialInboundRule.isAbs(security)) {
+                // 批量预检没有申请主体快照，实际提交创建快照后仍执行完整最终复核
+                continue;
             }
             if (excelImport) {
                 // Excel 已保留原规则提示，直通与人工审批最终落池均不再因业务失败阻断
@@ -4071,6 +4340,8 @@ public class SecurityPoolAdjustService {
             ctx.setCurrentPoolIds(currentPoolIds);
             ctx.setTargetPoolRelations(relationMap.getOrDefault(pool.getId(), Collections.emptyMap()));
             ctx.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(security.getSecurityType()));
+            ctx.setRequestInPoolIds(projectedInPoolIds);
+            ctx.setRequestOutPoolIds(projectedOutPoolIds);
             String failure;
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 failure = firstFailure(inCheckPoolLocked(ctx), inCheckSecurityAlreadyInPool(ctx),
@@ -4090,8 +4361,11 @@ public class SecurityPoolAdjustService {
                         outCheckRestrictPool(ctx), outCheckFrozenPeriod(ctx));
             }
             if (failure == null && PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(pool.getId())) {
-                failure = pledgeBlacklistRuleService.validate(security.getIssuerCode(), log.getAdjustMode(),
-                        Collections.<Long>emptySet(), Collections.<Long>emptySet());
+                failure = CreditBondSpecialInboundRule.isAbs(security)
+                        ? pledgeBlacklistRuleService.validateCompanies(absIdentityService.queryRiskCompanyCodes(security),
+                                log.getAdjustMode(), projectedInPoolIds, projectedOutPoolIds)
+                        : pledgeBlacklistRuleService.validate(security.getIssuerCode(), log.getAdjustMode(),
+                                projectedInPoolIds, projectedOutPoolIds);
             }
             if (failure != null) {
                 throwApprovalRecheckFailure(log, failure);
@@ -4122,10 +4396,13 @@ public class SecurityPoolAdjustService {
      * @param logList 已通过最终复核的调库日志集合
      */
     public void applyPoolStatusChanges(List<IpAdjustLogBo> logList) {
+        // 全部主体一致后，在同一事务中保存通过审核的五字段
+        absIdentityService.approveIdentities(logList);
+
         // 与最终复核使用同一来源口径，普通手工和批量调整不受影响
-        Set<String> excelBatches = collectExcelImportBatches(logList);
+        Set<String> excelBatches = collectExcelAdjustBatches(logList);
         for (IpAdjustLogBo log : logList) {
-            boolean excelImport = EXCEL_IMPORT_ADJUST_TYPE.equals(log.getAdjustType())
+            boolean excelImport = isExcelAdjustType(log.getAdjustType())
                     || (log.getAdjustBatchNo() != null && excelBatches.contains(log.getAdjustBatchNo()));
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 if (excelImport) {
@@ -4147,27 +4424,42 @@ public class SecurityPoolAdjustService {
                             + log.getTargetPoolName() + "]，调出失败");
                 }
             }
+
         }
+        // 批量保存 ABS 人工结论，不给普通债逐行增加主档查询
+        absCompanySyncService.recordManualDecisions(logList);
     }
 
     /**
      * 从本次完整调库组中识别 Excel 主项批次，让配套项沿用同一放行口径
      *
      * 执行顺序：
-     * 1. 仅收集 Excel 导入主项的非空批次，Excel 清空不在其中
+     * 1. 收集 Excel 导入和清空主项的非空批次，配套项沿用同一放行口径
      * 2. 返回本次集合，不修改日志类型，也不增加数据库查询
      *
      * @param logs 本次直通或审批处理的完整调库组
-     * @return Excel 证券导入主项的批次集合
+     * @return Excel 证券导入及清空主项的批次集合
      */
-    private Set<String> collectExcelImportBatches(List<IpAdjustLogBo> logs) {
+    private Set<String> collectExcelAdjustBatches(List<IpAdjustLogBo> logs) {
         Set<String> batches = new HashSet<>();
         for (IpAdjustLogBo log : logs) {
-            if (EXCEL_IMPORT_ADJUST_TYPE.equals(log.getAdjustType()) && log.getAdjustBatchNo() != null) {
+            if (isExcelAdjustType(log.getAdjustType()) && log.getAdjustBatchNo() != null) {
                 batches.add(log.getAdjustBatchNo());
             }
         }
         return batches;
+    }
+
+    /**
+     * 识别证券 Excel 导入及清空来源，两者都仅提示业务限制
+     *
+     * 执行顺序：
+     * 1. 直接比较调整来源，不增加数据库查询
+     * @param adjustType 调整来源
+     * @return 是否为 Excel 导入或清空
+     */
+    private boolean isExcelAdjustType(String adjustType) {
+        return EXCEL_IMPORT_ADJUST_TYPE.equals(adjustType) || EXCEL_CLEAR_ADJUST_TYPE.equals(adjustType);
     }
 
     /** 返回第一个非空失败原因。 */
@@ -4220,7 +4512,7 @@ public class SecurityPoolAdjustService {
         boolean inRestricted = false;
         if (sec.getWindCode() != null) {
             inRestricted = securityPoolAdjustMapper.querySecurityInRestrictedPool(sec.getWindCode())
-                    || securityPoolAdjustMapper.queryIssuerInRestrictedPool(sec.getWindCode());
+                    || queryIssuerInPoolType(sec, "restricted");
         }
         Set<Long> currentPoolIds = new HashSet<Long>();
         if (sec.getWindCode() != null) {
@@ -4234,7 +4526,7 @@ public class SecurityPoolAdjustService {
         boolean inObserve = false;
         if (sec.getWindCode() != null) {
             inObserve = securityPoolAdjustMapper.querySecurityInObservePool(sec.getWindCode())
-                    || securityPoolAdjustMapper.queryIssuerInObservePool(sec.getWindCode());
+                    || queryIssuerInPoolType(sec, "observe");
         }
         CreditBondSpecialInboundRule.GradedInboundMode inboundMode =
                 CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, inObserve);
@@ -4305,9 +4597,9 @@ public class SecurityPoolAdjustService {
         }
         ctx.setCurrentPoolIds(currentPoolIds);
         ctx.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(securityCode));
-        ctx.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(securityCode));
+        ctx.setIssuerInObservePool(queryIssuerInPoolType(sec, "observe"));
         ctx.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(securityCode));
-        ctx.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(securityCode));
+        ctx.setIssuerInRestrictedPool(queryIssuerInPoolType(sec, "restricted"));
         // 复用人工入库规则，缺少权益人最新评分时补充实际主体代码便于定位
         String fail = inCheckMainGradeRule(ctx);
         if ("所选权益人无内评分".equals(fail)) {
@@ -4513,8 +4805,11 @@ public class SecurityPoolAdjustService {
         }
         SecurityInfoBo security = ctx.getSecurityInfo();
         String companyCode = security == null ? null : security.getIssuerCode();
-        String failure = pledgeBlacklistRuleService.validate(companyCode, adjustMode,
-                Collections.<Long>emptySet(), Collections.<Long>emptySet());
+        String failure = CreditBondSpecialInboundRule.isAbs(security)
+                ? pledgeBlacklistRuleService.validateCompanies(absIdentityService.queryRiskCompanyCodes(security), adjustMode,
+                        ctx.getRequestInPoolIds(), ctx.getRequestOutPoolIds())
+                : pledgeBlacklistRuleService.validate(companyCode, adjustMode,
+                        ctx.getRequestInPoolIds(), ctx.getRequestOutPoolIds());
         // 汇总黑名单质押库校验失败原因
         addIfFailed(failures, failure);
     }
@@ -5807,9 +6102,9 @@ public class SecurityPoolAdjustService {
                 mainShared.getPoolMap()));
         // 观察池：证券或主体已在观察池则不得高于矩阵最好档；重点观察名单：禁新增，已在库只能去五级
         shared.setSecurityInObservePool(securityPoolAdjustMapper.querySecurityInObservePool(securityCode));
-        shared.setIssuerInObservePool(securityPoolAdjustMapper.queryIssuerInObservePool(securityCode));
+        shared.setIssuerInObservePool(queryIssuerInPoolType(securityInfo, "observe"));
         shared.setSecurityInRestrictedPool(securityPoolAdjustMapper.querySecurityInRestrictedPool(securityCode));
-        shared.setIssuerInRestrictedPool(securityPoolAdjustMapper.queryIssuerInRestrictedPool(securityCode));
+        shared.setIssuerInRestrictedPool(queryIssuerInPoolType(securityInfo, "restricted"));
         // 评级下调标志按关联券自身主体信息判定
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
@@ -6056,6 +6351,9 @@ public class SecurityPoolAdjustService {
      *
      */
     private static class SubmitSharedData {
+
+        /** 本次实际证券日志，关联市场快照使用各自代码 */
+        final Map<Long, IpAdjustLogBo> submittedLogs = new HashMap<>();
 
         /** 本次提交的材料豁免缓存，以手工主项为键，同组配套项共用，与所选流程无关 */
         final Map<SecurityPoolAdjustSubmitReq.AdjustItem, Boolean> materialExemptionMap = new HashMap<>();

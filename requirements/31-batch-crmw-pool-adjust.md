@@ -39,6 +39,8 @@
 
 ## 2. 候选组合
 
+基础 Demo 配置独立根池 `bond_product1_root`（162），下设标的子库163、凭证子库164；标的 `MTN001.IB / DBB001.IB`、凭证 `CRMW001.IB / CRMW004.IB` 均有已通过日志和有效在池记录。已有 `CRMW001.IB + MTN001.IB` 组合排除后仍有可调入组合，原 `bond_product_root` 不作为该入口来源。
+
 | 方向 | 数据来源 |
 |---|---|
 | 调出 | `ip_pool_status_crmw` 当前有效组合，左连标的 `rrs_securityinfo` |
@@ -100,3 +102,9 @@
 `sys_attachment.source_attachment_id` 保存复制来源的报告库附件 ID，附件查询返回 `sourceAttachmentId/sourceReportId/sourceReportSource/sourceReportTitle`；基金代码转正继承关联时保留该来源。新增 `POST /api/v1/reports/queryReportDetail { reportId, source: internal|external }`，非法来源、无效 ID、不存在或已删除报告明确失败。
 
 新环境通过更新后的原始附件 schema 初始化；存量升级使用 `sql/tool_report_source_upgrade.sql`（不加入初始化/重置执行）。仅修复唯一可定位来源，未定位项明确输出供核对，运行时不猜测归属。前端完整说明见 `docs/report-materials.html`。
+
+## 已查询数据复用
+
+- 权益人、担保人或自选权益人候选已带回主体代码、名称、内评、认可机构最新外评及机构；选池、校验、提交通过 `selectedRatingCompany` 传递所选主体及普通/自选名称，后端直接使用，不重复查询候选或评级
+- 单券页面传递已加载的 `securityInfo`，校验、提交及快照共用；批量仍读取实际需要的完整证券信息，同批主体比较直接使用页面传入类型和主体代码，不逐项复查主档
+- 财报查询/保存直接使用已知主体代码，保存后返回本次记录，不逐期回查；当前在库、在途及同一 ABS 主体一致性仍按业务时点查询

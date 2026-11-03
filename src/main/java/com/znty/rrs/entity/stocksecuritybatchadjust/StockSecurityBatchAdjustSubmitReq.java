@@ -1,5 +1,7 @@
 package com.znty.rrs.entity.stocksecuritybatchadjust;
 
+import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
+
 import lombok.Data;
 
 import java.util.List;
@@ -58,6 +60,9 @@ public class StockSecurityBatchAdjustSubmitReq {
     @Data
     public static class SecurityItem {
 
+        /** 页面已选评级主体，校验与提交共用 */
+        private RatingCompanySelectionReq selectedRatingCompany;
+
         /** 证券代码 */
         private String securityCode;
 
@@ -82,6 +87,9 @@ public class StockSecurityBatchAdjustSubmitReq {
      */
     @Data
     public static class AdjustItem {
+
+        /** 页面已选评级主体，校验与提交共用 */
+        private RatingCompanySelectionReq selectedRatingCompany;
 
         /** 证券代码 */
         private String securityCode;

@@ -55,8 +55,17 @@
 - 基金和股票复用 `INIT_FUND_SCHEMA / INIT_FUND_DEMO`、`INIT_STOCK_SCHEMA / INIT_STOCK_DEMO`，保留独立资产范围；要求公共池、流程、用户等配置已初始化，股票还要求附件与自选表已存在。
 - 全库 `INIT_ALL_SCHEMA / INIT_ALL_DEMO` 用于本地完整环境：包含 `sql/`（含 `fund/`、`stock/`）全部建表和 Demo 脚本，覆盖 `znty_rrs`、`ais_inv_analysis`、`ais_inv_ods`，包括 AIS 用户角色与 Wind 基础数据。先执行公共脚本，再执行基金和股票专属脚本；空库先全库建表，再全库 Demo。`tool_table_row_counts.sql` 为查询工具，`tool_report_source_upgrade.sql` 为存量迁移工具，不参与初始化。
 - 旧 `INIT_SCHEMA / INIT_DEMO / RESET_ALL` 执行范围不变，旧重建任务显示名称改为「重建通用业务演示环境」，避免与全库初始化混淆。
+- Demo 按完整业务状态配套：`108008901.IB` 已在二级库，主档与审批快照均使用 `C10008`；其余 5 条从未成功入库的 ABS 主档五字段留空。在途场景只写自己的申请快照，不提前改主档身份。
+- ABS 人工申请审核通过或直通成功入库后永久固定主体，全部出库也不解除；主体联动自动入池只生成 audit_status=00 的待确认调库日志，不写入 ip_pool_status 或主档五字段，也不形成永久绑定；研究员确认主体后才转为 audit_status=20 并正式入池，成功确认后才固定身份。未选主体时财报留空，不需要为 Demo 补默认主体；CRMW 通用主档字段按实际来源保留。
+- ABS 和担保债的普通/CRMW 申请快照必须在 `guarantor / guarantor_id / inner_guarantor_rating` 保存本次实际选定的单一评级主体，不能以 `issuer_code` 代替，也不能复制主档多担保人候选列表。Demo 明确选择：`108008901.IB → C10008`，`DBB001.IB / DBB003.IB → C10010`，`DBB002.IB → C10008`；主档的多候选字段保持原样。
+- 配套主档和 AIS 已按本版初始化时，可通过「按模块重置 → 证券调库演示数据」重新生成修正后的快照及两类池状态；该操作会重置调库运行数据，不处理需要保留的存量业务记录。
+- `rrs_security_pool_adjust_demo_data.sql` 同时重置并灌入普通证券及 CRMW 申请快照；主体观察池样本同步旗下已确定主体的未到期证券。证券调库模块重置同时重置 CRMW 当前池，避免旧组合引用已清理的场景日志。
+- 投资池 Demo 保留原债券产品库，并补充 `bond_product1_root`（ID 162）及两个子库（163/164）。`MTN001.IB / DBB001.IB` 与 `CRMW001.IB / CRMW004.IB` 分别提供标的、凭证来源，支持 CRMW 批量跨子库配对。
+- 14 个场景使用当前主数据、流程节点和真实用户，按批次清理，日志使用自增 ID；已通过主体禁止库场景同时配套 15/17 和旗下证券，证券申请逐笔保存快照。场景生成整批提交，异常时回滚。
+- 配套的 Demo 池流程：观察池16、重点观察名单23的一般入/出使用113/114，快速及批量保留原配置；CRMW池18的一般、快速、批量入/出分别使用103/104、105/106、107/108，确保待审批及快速通过场景均来自池配置。
+- 更新到本版 Demo 时，已有测试环境应执行「全部」Tab 的 `INIT_ALL_DEMO`，同时对齐三库主数据和运行态；缺表时先执行 `INIT_ALL_SCHEMA`。这些任务会重置对应演示数据，不用于保留业务数据的存量修补。
 - 沿用 POST `/api/v1/scriptTool/queryScriptTaskList`、`executeScriptTask`；后者入参为 `taskCode / confirmText / currentUserId / currentUserName`，仍需任务专属确认文本，保留禁用开关、执行互斥、结果和审计。
-- 验证：`ScriptToolServiceTest` / `ScriptToolApiTest`，前端 `tests/script_tool.test.js`。测试使用模拟数据库连接，不执行真实初始化。
+- 验证：`ScriptToolServiceTest` / `ScriptToolApiTest`，前端 `tests/script_tool.test.js`；`DemoRuntimeConsistencyTest` 在独立 H2 库执行全库脚本和全部场景，实际运行分级提醒扫描，并验证重复初始化、单一评级主体快照、池状态、ABS 出清后永久绑定及首次失败不绑定，不连接业务 MySQL。
 
 ## 调库业务全链路索引
 

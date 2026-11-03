@@ -205,6 +205,25 @@ public class CompanyObserverPoolSyncServiceTest {
         }
     }
 
+    /** 在池记录发行主体编码为空时只跳过该记录，本轮继续执行并在过程日志和结果中记录。 */
+    @Test
+    public void shouldSkipInPoolRowWithMissingIssuerCode() {
+        Fixture f = new Fixture();
+        f.observers.add(observer("C1", "2"));
+        // 池内债券的发行主体编码缺失，应跳过而不是中断整轮任务
+        ScheduledAdjustCandidateDto missingIssuer = item(null, "company");
+        missingIssuer.setSecurityShortName("某某债");
+        f.currentCompanies.add(missingIssuer);
+        ScheduledTaskResult result = f.service.execute();
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getMessage()).contains("跳过发行主体编码为空记录1条（不阻断本轮）");
+        assertThat(result.getDetailLog()).contains("WARN", "跳过发行主体编码为空的在池记录 1 条（示例：某某债）",
+                "跳过发行主体编码为空记录 1 条");
+        // 主体 C1 正常调入，缺失编码的记录不产生任何写入
+        assertThat(f.states.get("C1")).containsExactly(16L);
+        assertThat(f.logs).extracting(IpAdjustLogBo::getSecurityCode).containsExactly("C1");
+    }
+
     /** 主体已经在正确池时仍补齐旗下新债，不生成重复主体日志。 */
     @Test
     public void shouldRepairMissingBondsWhenCompanyAlreadyInPool() {
@@ -660,7 +679,7 @@ public class CompanyObserverPoolSyncServiceTest {
     /** 使用状态集合模拟真实入出池，重复执行会读取上次实际写入结果。 */
     static class Fixture {
         /** 待测任务 */
-        final CompanyObserverPoolSyncService service = new CompanyObserverPoolSyncService();
+        final CompanyObserverPoolSyncService service = AbsIdentityTestSupport.withIdentity(new CompanyObserverPoolSyncService());
         /** 名单查询 */
         final CompanyObserverMapper sourceMapper = mock(CompanyObserverMapper.class);
         /** 债券查询 */
@@ -701,6 +720,7 @@ public class CompanyObserverPoolSyncServiceTest {
                 for (String companyCode : companyCodes) {
                     for (ScheduledAdjustCandidateDto bond : bonds.getOrDefault(companyCode, Collections.emptyList())) {
                         bond.setIssuerCode(companyCode);
+                        bond.setTriggerCompanyCode(companyCode);
                         result.add(bond);
                     }
                 }

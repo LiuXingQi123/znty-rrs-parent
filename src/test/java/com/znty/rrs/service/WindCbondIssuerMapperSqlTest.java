@@ -30,8 +30,18 @@ public class WindCbondIssuerMapperSqlTest {
             Path mapperPath = Paths.get("src", "main", "resources", "mapper", mapperFile);
             String xml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
             assertThat(xml).as(mapperFile + " 应查询公司简介")
-                    .contains("ais_inv_ods.wind_compintroduction")
-                    .doesNotContain("ais_inv_ods.wind_cbondissuer");
+                    .contains("ais_inv_ods.wind_compintroduction");
+            if ("ForbiddenPoolAdjustMapper.xml".equals(mapperFile)) {
+                // 主体资料继续查公司简介，ABS 旗下债关系允许查询 Wind 四类关系
+                for (String queryId : Arrays.asList("queryCompanyPage", "queryCompanyDetail")) {
+                    int start = xml.indexOf("<select id=\"" + queryId + "\"");
+                    String query = xml.substring(start, xml.indexOf("</select>", start));
+                    assertThat(query).contains("wind_compintroduction").doesNotContain("wind_cbondissuer");
+                }
+                assertThat(xml).contains("abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)");
+            } else {
+                assertThat(xml).doesNotContain("ais_inv_ods.wind_cbondissuer");
+            }
             assertThat(usedFilterPattern.matcher(xml).find())
                     .as(mapperFile + " 不应保留 used=1 过滤")
                     .isFalse();

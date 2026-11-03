@@ -64,7 +64,7 @@ public class SecurityPoolAdjustRedirectTest {
         mapper = mock(SecurityPoolAdjustMapper.class);
         gradeMapper = mock(CreditBondGradeRuleMapper.class);
         poolMapper = mock(InvestmentPoolMapper.class);
-        service = spy(new SecurityPoolAdjustService());
+        service = spy(AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService()));
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);

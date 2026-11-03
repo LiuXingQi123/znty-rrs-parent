@@ -1987,7 +1987,7 @@ public class TempSecurityCodePersistenceTest {
         assertThat(crmwMapper.querySecuritySnapshotDetailByAdjustLogId(original.getId(), "FORMAL.IB").getCouponRate())
                 .isEqualTo("3.5");
         assertThat(mapper.queryCrmwConversionSnapshot(original.getId()).getWindCode()).isEqualTo("FORMAL.IB");
-        CrmwPoolAdjustService detailService = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService detailService = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(detailService, "crmwPoolAdjustMapper", crmwMapper);
         ReflectionTestUtils.setField(detailService, "securityMarketService", markets);
         CrmwPoolAdjustReq detailReq = new CrmwPoolAdjustReq();
@@ -2148,7 +2148,7 @@ public class TempSecurityCodePersistenceTest {
         temporary.setIsDeleted(0);
         adjustMapper.addAdjustSecuritySnapshot(temporary);
         service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
-        SecurityPoolAdjustService detailService = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService detailService = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(detailService, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(detailService, "securityMarketService", markets);
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
@@ -2253,7 +2253,7 @@ public class TempSecurityCodePersistenceTest {
 
         assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getStatus()).isEqualTo("updated");
         assertThat(jdbc.queryForMap("SELECT * FROM ip_adjust_security_snapshot WHERE id=?", snapshot.getId())).isEqualTo(before);
-        SecurityPoolAdjustService detailService = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService detailService = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(detailService, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(detailService, "securityMarketService", markets);
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();

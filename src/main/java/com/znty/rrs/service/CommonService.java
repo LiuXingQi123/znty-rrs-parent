@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.MarketCode;
 import com.znty.rrs.entity.common.CommonReq;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.common.GuarantorGradeReq;
 import com.znty.rrs.mapper.CommonMapper;
@@ -26,6 +27,10 @@ public class CommonService {
     /** 公共查询数据访问组件 */
     @Resource
     private CommonMapper commonMapper;
+
+    /** ABS 候选复用 */
+    @Resource
+    private AbsIdentityService absIdentityService;
 
     /** 投资池业务服务 */
     @Resource
@@ -174,7 +179,7 @@ public class CommonService {
      * 批量查询证券的四类关系主体及其最新主体内评分。
      *
      * @param req Wind 证券代码列表
-     * @return 担保人、差额支付承诺人、权益相关主体、原始权益人；仅含有最新内评的主体
+     * @return 担保人、差额支付承诺人、权益相关主体、原始权益人，缺少评级时字段保持为空
      */
     public List<GuarantorGradeDto> queryGuarantorGradeList(GuarantorGradeReq req) {
         if (req == null || req.getSecurityCodes() == null || req.getSecurityCodes().isEmpty()) {
@@ -190,7 +195,24 @@ public class CommonService {
             return new ArrayList<>();
         }
         // 按去重后的 Wind 证券代码一次性查询四类关系主体及最新内评
-        return commonMapper.queryGuarantorGradeList(new ArrayList<>(normalizedCodes));
+        List<GuarantorGradeDto> rows = commonMapper.queryGuarantorGradeList(new ArrayList<>(normalizedCodes));
+        Map<String, List<RelatedRatingCompanyDto>> candidates = new HashMap<>();
+        for (GuarantorGradeDto row : rows) {
+            RelatedRatingCompanyDto candidate = new RelatedRatingCompanyDto();
+            candidate.setSecurityCode(row.getSecurityCode());
+            candidate.setCompanyCode(row.getWindcode());
+            candidate.setCompanyName(row.getWindname());
+            candidate.setInnerRating(row.getTotalScore());
+            candidate.setRatingTime(row.getTs());
+            candidate.setRelationTypeCode(row.getGuarantorTypeCode());
+            candidate.setRatingBondissuer(row.getRatingBondissuer());
+            candidate.setRatingBondissuerAgency(row.getRatingBondissuerAgency());
+            candidates.computeIfAbsent(row.getSecurityCode(), key -> new ArrayList<>()).add(candidate);
+        }
+        for (String code : normalizedCodes) {
+            absIdentityService.rememberRelated(code, candidates.get(code));
+        }
+        return rows;
     }
 
     /**

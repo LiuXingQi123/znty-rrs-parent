@@ -31,7 +31,7 @@ TRUNCATE TABLE `ip_investment_pool`;
 TRUNCATE TABLE `ip_pool_open_day`;
 
 -- ----------------------------------------------------------------------------
--- 投资池主样例（151 条）
+-- 投资池主样例（154 条，含独立的债券产品库1及其两个来源子库）
 -- 投资池（151 池）
 -- 审批流程说明：简易入/出=快速入/出库(105/106)；批量入/出=批量入/出库(107/108)；研报限制默认 none
 -- 特例：观察池(16)/黑名单质押库(17)/CRMW库(18)/重点观察名单(23) 的 6 个调入调出流程均绑「无需审核审批流程」(112 / bond:no-approval)
@@ -53,10 +53,10 @@ INSERT INTO `ip_investment_pool` (
     `out_flow_id`, `out_flow_key`, `out_flow_name`, `simple_in_flow_id`, `simple_in_flow_key`,
     `simple_in_flow_name`, `simple_out_flow_id`, `simple_out_flow_key`, `simple_out_flow_name`,
     `batch_in_flow_id`, `batch_in_flow_key`, `batch_in_flow_name`, `batch_out_flow_id`,
-    `batch_out_flow_key`, `batch_out_flow_name`, `in_report_restriction`, `out_report_restriction`,
-    `max_capacity`, `lock_flag`, `frozen_period_in`, `grade_astrict`, `industry_code`,
-    `industry_exponent`, `fund_rate_limit`, `open_day_adjust`, `outer_sort`, `inner_sort`, `status`,
-    `is_deleted`, `crte_time`, `updt_time`
+    `batch_out_flow_key`, `batch_out_flow_name`, `in_report_restriction`,
+    `out_report_restriction`, `max_capacity`, `lock_flag`, `frozen_period_in`, `grade_astrict`,
+    `industry_code`, `industry_exponent`, `fund_rate_limit`, `open_day_adjust`, `outer_sort`,
+    `inner_sort`, `status`, `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
 (1, NULL, 'credit_bond_root', '信用债大库(new)', 'credit_bond', 1, '["UNKNOWN","SSE","SZSE","NIB","COMPANY"]', '["bond","company"]', '信用债大库(new)根池', NULL, 103, 'bond:normal-inbound', '债券一般入库流程', 104, 'bond:normal-outbound', '债券一般出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 9, 1, 'enabled', 0, NOW(), NOW()),
 (2, 1, 'credit_bond_level_1', '一级库', 'credit_bond', 2, '["UNKNOWN","SSE","SZSE","NIB","COMPANY"]', '["bond","company"]', '信用债一级库', '公司债券一级库', 103, 'bond:normal-inbound', '债券一般入库流程', 104, 'bond:normal-outbound', '债券一般出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 9, 1, 'enabled', 0, NOW(), NOW()),
@@ -67,10 +67,10 @@ INSERT INTO `ip_investment_pool` (
 (7, NULL, 'offshore_bond_root', '境外债', 'offshore_bond', 1, '["JWCW"]', '["bond"]', '境外债根池', NULL, 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 11, 1, 'enabled', 0, NOW(), NOW()),
 (8, NULL, 'convertible_bond_root', '转债库', 'convertible_bond', 1, '["UNKNOWN","SSE","SZSE","NIB","COMPANY"]', '["bond","company"]', '转债库根池', NULL, 109, 'bond:special-inbound', '债券特殊策略入库流程', 110, 'bond:special-outbound', '债券特殊策略出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 1, 10, 1, 'enabled', 0, NOW(), NOW()),
 (15, NULL, 'forbidden_root', '债券禁止库', 'forbidden', 1, '["UNKNOWN","SSE","SZSE","NIB","COMPANY"]', '["bond","company"]', '债券禁止库', '债券禁止库新', 113, 'company:forbidden-inbound', '禁止库入库流程', 114, 'company:forbidden-outbound', '禁止库出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 16, 1, 'enabled', 0, NOW(), NOW()),
-(16, NULL, 'observe_root', '观察池', 'observe', 1, '["SSE","SZSE","NIB","COMPANY","OTC"]', '["bond","company"]', '观察池', NULL, 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 19, 1, 'enabled', 0, NOW(), NOW()),
+(16, NULL, 'observe_root', '观察池', 'observe', 1, '["SSE","SZSE","NIB","COMPANY","OTC"]', '["bond","company"]', '观察池', NULL, 113, 'company:forbidden-inbound', '禁止库入库流程', 114, 'company:forbidden-outbound', '禁止库出库流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 19, 1, 'enabled', 0, NOW(), NOW()),
 (17, NULL, 'pledge_blacklist_root', '黑名单质押库', 'blacklist', 1, '["UNKNOWN","SSE","SZSE","NIB","COMPANY"]', '["bond","company"]', '黑名单质押库', '质押黑名单库', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 15, 1, 'enabled', 0, NOW(), NOW()),
-(18, NULL, 'crmw_root', 'CRMW库', 'crmw', 1, '["UNKNOWN","SSE","SZSE","NIB","OTC"]', '["bond"]', 'CRMW库', 'CRMW大库', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 17, 1, 'enabled', 0, NOW(), NOW()),
-(23, NULL, 'key_watch_list_root', '重点观察名单', 'restricted', 1, '["SSE","SZSE","NIB","COMPANY","OTC"]', '["bond","company"]', '重点观察名单', NULL, 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 20, 1, 'enabled', 0, NOW(), NOW()),
+(18, NULL, 'crmw_root', 'CRMW库', 'crmw', 1, '["UNKNOWN","SSE","SZSE","NIB","OTC"]', '["bond"]', 'CRMW库', 'CRMW大库', 103, 'bond:normal-inbound', '债券一般入库流程', 104, 'bond:normal-outbound', '债券一般出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 17, 1, 'enabled', 0, NOW(), NOW()),
+(23, NULL, 'key_watch_list_root', '重点观察名单', 'restricted', 1, '["SSE","SZSE","NIB","COMPANY","OTC"]', '["bond","company"]', '重点观察名单', NULL, 113, 'company:forbidden-inbound', '禁止库入库流程', 114, 'company:forbidden-outbound', '禁止库出库流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 112, 'bond:no-approval', '无需审核审批流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 20, 1, 'enabled', 0, NOW(), NOW()),
 (24, 7, 'offshore_bond_level_1', '境外债一级库', 'offshore_bond', 2, '["JWCW"]', '["bond"]', '境外债一级库', NULL, 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 11, 1, 'enabled', 0, NOW(), NOW()),
 (25, 7, 'offshore_bond_level_2', '境外债二级库', 'offshore_bond', 2, '["JWCW"]', '["bond"]', '境外债二级库', NULL, 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 11, 2, 'enabled', 0, NOW(), NOW()),
 (26, 7, 'offshore_bond_level_3', '境外债三级库', 'offshore_bond', 2, '["JWCW"]', '["bond"]', '境外债三级库', NULL, 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 11, 3, 'enabled', 0, NOW(), NOW()),
@@ -208,7 +208,10 @@ INSERT INTO `ip_investment_pool` (
 (158, 156, 'quant_index_forbidden_2000', '量化和指数产品禁止库控制2000', 'fund', 3, '["SSE","SZSE","OTC","HKEX"]', '["fund"]', '量化和指数产品禁止库控制2000', '量化和指数产品禁止库控制2000', 121, 'fund:normal-inbound', '基金一般入库流程', 122, 'fund:normal-outbound', '基金一般出库流程', 123, 'fund:fast-inbound', '基金快速入库流程', 124, 'fund:fast-outbound', '基金快速出库流程', 125, 'fund:batch-inbound', '基金批量入库流程', 126, 'fund:batch-outbound', '基金批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 6, 2, 'enabled', 0, NOW(), NOW()),
 (159, 156, 'quant_index_forbidden_st', '量化和指数产品禁止库控制ST', 'fund', 3, '["SSE","SZSE","OTC","HKEX"]', '["fund"]', '量化和指数产品禁止库控制ST', '量化和指数产品禁止库控制ST', 121, 'fund:normal-inbound', '基金一般入库流程', 122, 'fund:normal-outbound', '基金一般出库流程', 123, 'fund:fast-inbound', '基金快速入库流程', 124, 'fund:fast-outbound', '基金快速出库流程', 125, 'fund:batch-inbound', '基金批量入库流程', 126, 'fund:batch-outbound', '基金批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 6, 3, 'enabled', 0, NOW(), NOW()),
 (160, 156, 'quant_index_forbidden_500', '量化和指数产品禁止库控制500', 'fund', 3, '["SSE","SZSE","OTC","HKEX"]', '["fund"]', '量化和指数产品禁止库控制500', '量化和指数产品禁止库控制500', 121, 'fund:normal-inbound', '基金一般入库流程', 122, 'fund:normal-outbound', '基金一般出库流程', 123, 'fund:fast-inbound', '基金快速入库流程', 124, 'fund:fast-outbound', '基金快速出库流程', 125, 'fund:batch-inbound', '基金批量入库流程', 126, 'fund:batch-outbound', '基金批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 6, 4, 'enabled', 0, NOW(), NOW()),
-(161, 156, 'quant_index_forbidden_1', '量化和指数产品禁止库控制1', 'fund', 3, '["SSE","SZSE","OTC","HKEX"]', '["fund"]', '量化和指数产品禁止库控制1', '量化和指数产品禁止库控制1', 121, 'fund:normal-inbound', '基金一般入库流程', 122, 'fund:normal-outbound', '基金一般出库流程', 123, 'fund:fast-inbound', '基金快速入库流程', 124, 'fund:fast-outbound', '基金快速出库流程', 125, 'fund:batch-inbound', '基金批量入库流程', 126, 'fund:batch-outbound', '基金批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 6, 5, 'enabled', 0, NOW(), NOW());
+(161, 156, 'quant_index_forbidden_1', '量化和指数产品禁止库控制1', 'fund', 3, '["SSE","SZSE","OTC","HKEX"]', '["fund"]', '量化和指数产品禁止库控制1', '量化和指数产品禁止库控制1', 121, 'fund:normal-inbound', '基金一般入库流程', 122, 'fund:normal-outbound', '基金一般出库流程', 123, 'fund:fast-inbound', '基金快速入库流程', 124, 'fund:fast-outbound', '基金快速出库流程', 125, 'fund:batch-inbound', '基金批量入库流程', 126, 'fund:batch-outbound', '基金批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 6, 5, 'enabled', 0, NOW(), NOW()),
+(162, NULL, 'bond_product1_root', '债券产品库1', 'bond_product', 1, '["UNKNOWN","SSE","SZSE","NIB","COMPANY"]', '["bond","company"]', '债券产品库1', NULL, 103, 'bond:normal-inbound', '债券一般入库流程', 104, 'bond:normal-outbound', '债券一般出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 13, 0, 'enabled', 0, NOW(), NOW()),
+(163, 162, 'bond_product1_bond', '产品库1标的证券', 'bond_product', 2, '["UNKNOWN","SSE","SZSE","NIB","COMPANY"]', '["bond","company"]', '产品库1标的证券', NULL, 103, 'bond:normal-inbound', '债券一般入库流程', 104, 'bond:normal-outbound', '债券一般出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 13, 1, 'enabled', 0, NOW(), NOW()),
+(164, 162, 'bond_product1_crmw', '产品库1凭证', 'bond_product', 2, '["UNKNOWN","SSE","SZSE","NIB","COMPANY"]', '["bond","company"]', '产品库1凭证', NULL, 103, 'bond:normal-inbound', '债券一般入库流程', 104, 'bond:normal-outbound', '债券一般出库流程', 105, 'bond:fast-inbound', '债券快速入库流程', 106, 'bond:fast-outbound', '债券快速出库流程', 107, 'bond:batch-inbound', '债券批量入库流程', 108, 'bond:batch-outbound', '债券批量出库流程', 'none', 'none', 10000, 0, 0, NULL, NULL, 0, NULL, 0, 13, 2, 'enabled', 0, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
 -- 投资池关系配置样例（186 条）
@@ -432,7 +435,7 @@ INSERT INTO `ip_pool_auto_rule` (
 (3, 17, 'auto_out', 3, 'company_outer_rating_not_aa_minus_auto_out', '外评非AA-及以下主体自动出池', 0, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
--- 投资池权限配置样例（395 条）
+-- 投资池权限配置样例（408 条，产品库1沿用同类产品池权限）
 -- ----------------------------------------------------------------------------
 INSERT INTO `ip_pool_permission` (
     `pool_id`, `permission_type`, `handler_type`, `handler_id`, `handler_name`, `is_deleted`,
@@ -832,7 +835,20 @@ INSERT INTO `ip_pool_permission` (
 (58, 'viewable', 'role', 10, '风险管理部', 0, NOW(), NOW()),
 (65, 'viewable', 'role', 10, '风险管理部', 0, NOW(), NOW()),
 (86, 'viewable', 'role', 10, '风险管理部', 0, NOW(), NOW()),
-(99, 'viewable', 'role', 10, '风险管理部', 0, NOW(), NOW());
+(99, 'viewable', 'role', 10, '风险管理部', 0, NOW(), NOW()),
+(162, 'viewable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(162, 'adjustable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(162, 'excel_importable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(162, 'viewable', 'role', 9, '量化部', 0, NOW(), NOW()),
+(162, 'viewable', 'role', 10, '风险管理部', 0, NOW(), NOW()),
+(163, 'viewable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(163, 'adjustable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(163, 'excel_importable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(163, 'adjustable', 'role', 4, '固收部', 0, NOW(), NOW()),
+(164, 'viewable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(164, 'adjustable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(164, 'excel_importable', 'user', 1, '管理员', 0, NOW(), NOW()),
+(164, 'adjustable', 'role', 4, '固收部', 0, NOW(), NOW());
 
 -- ----------------------------------------------------------------------------
 -- 投资池开放日配置表（open_day_adjust=1 的池按此表 begin_date~end_date 区间校验调库日期）样例（1 条）

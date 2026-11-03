@@ -401,7 +401,7 @@ public class SecurityPoolInboundMaterialExemptionTest {
 
     /** 构造完整的产品库、当前来源和直接生效流程，供各业务场景复用 */
     private static class Fixture {
-        final SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        final SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         final SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         final FlowMapper flowMapper = mock(FlowMapper.class);
         final SysAttachmentService attachments = mock(SysAttachmentService.class);

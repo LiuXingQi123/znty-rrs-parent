@@ -1,6 +1,8 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import org.springframework.util.StringUtils;
 
@@ -44,6 +46,44 @@ final class ScheduledAdjustLogHelper {
         }
         String issuer = issuerName != null ? issuerName : issuerCode;
         return issuer == null ? null : "发行主体：" + issuer;
+    }
+
+    /** 记录 ABS 自动联动入池时尚未确认主体的待确认状态。 */
+    static String passiveAbsIdentityDetail(ScheduledAdjustCandidateDto item) {
+        if (item == null || (!("abs".equals(item.getSecurityType())
+                || Integer.valueOf(1).equals(item.getAbsFlag())))
+                || StringUtils.hasText(item.getIssuerCode())) {
+            return null;
+        }
+        return "ABS主体身份：尚未确认";
+    }
+
+    /** 记录自动联动的触发主体代码。 */
+    static String triggerCompanyDetail(ScheduledAdjustCandidateDto item) {
+        if (item == null || !StringUtils.hasText(item.getTriggerCompanyCode())) {
+            return null;
+        }
+        return "联动触发主体：" + item.getTriggerCompanyCode().trim();
+    }
+
+    /**
+     * 生成主体联动旗下 ABS 的原因片段。
+     *
+     * <p>仅在联动对象为 ABS 且主体身份尚未确认时生效，此时需同时记录触发主体，
+     * 供研究员回溯该笔联动入池的依据；主体已确认时返回 {@code null}，由
+     * {@link #appendDetails(String, String...)} 自动跳过。
+     *
+     * @param security           被联动的证券主数据
+     * @param triggerCompanyCode 触发本次联动的主体代码
+     * @return 可直接追加的原因片段，无需追加时返回 {@code null}
+     */
+    static String absCompanySyncDetail(SecurityInfoBo security, String triggerCompanyCode) {
+        if (!CreditBondSpecialInboundRule.isAbs(security)
+                || StringUtils.hasText(security.getIssuerCode())) {
+            return null;
+        }
+        String triggerCode = trimToNull(triggerCompanyCode);
+        return triggerCode == null ? "ABS主体身份：尚未确认" : "ABS主体身份：尚未确认；联动触发主体：" + triggerCode;
     }
 
     /** 生成池判断信息，优先展示池名称，无名称时回退到池 ID。 */

@@ -77,6 +77,19 @@ public class PledgeBlacklistRuleServiceTest {
         assertThat(outbound.shouldBeInBlacklist()).isFalse();
     }
 
+    /** ABS 关联主体校验应使用本批次预计调入的 15/23 池状态。 */
+    @Test
+    public void validateCompanies_ShouldUseProjectedPoolState() {
+        when(autoAdjustMapper.queryCompanyHasLowOuterRating(any(String.class), any(List.class))).thenReturn(false);
+
+        String failure = service.validateCompanies(
+                Collections.singletonList("C006"), AdjustMode.IN.getCode(),
+                Collections.singleton(PledgeBlacklistRuleService.FORBIDDEN_POOL_ID),
+                Collections.<Long>emptySet());
+
+        assertThat(failure).isNull();
+    }
+
     /** 三个条件全部不成立时应拒绝调入。 */
     @Test
     public void validateIn_ShouldRejectWhenAllConditionsAreFalse() {

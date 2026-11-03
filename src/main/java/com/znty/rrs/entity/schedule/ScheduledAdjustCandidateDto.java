@@ -9,6 +9,12 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class ScheduledAdjustCandidateDto extends IpAdjustLogBo {
 
+    /** ABS 标志，用于自动调库共用主体身份校验 */
+    private Integer absFlag;
+
+    /** 实际触发联动的主体，与 ABS 唯一身份分开保存 */
+    private String triggerCompanyCode;
+
     /** 发行主体代码 */
     private String issuerCode;
 

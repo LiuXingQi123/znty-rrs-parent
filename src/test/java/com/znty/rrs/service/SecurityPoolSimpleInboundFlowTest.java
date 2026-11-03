@@ -402,7 +402,7 @@ public class SecurityPoolSimpleInboundFlowTest {
     /** 构建覆盖一至五级池及四个期限档的独立测试上下文。 */
     private Fixture createFixture(String issuerGrade, String termText, int... matrixLevels) {
         Fixture fixture = new Fixture();
-        fixture.service = new SecurityPoolAdjustService();
+        fixture.service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         fixture.mapper = mock(SecurityPoolAdjustMapper.class);
         fixture.gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         ReflectionTestUtils.setField(fixture.service, "securityPoolAdjustMapper", fixture.mapper);

@@ -42,6 +42,20 @@ public class CompanyBondTypeScopeMapperSqlTest {
         assertThat(select).doesNotContain("bond.security_type != 'crmw'");
     }
 
+    /** 验证主体旗下债券数量、明细和所在池汇总只按发行人编码关联，ABS 不按四类关系扩展。 */
+    @Test
+    public void companyBondDisplayQueriesShouldOnlyUseIssuerCode() throws Exception {
+        Path mapperPath = Paths.get("src", "main", "resources", "mapper", "ForbiddenPoolAdjustMapper.xml");
+        String xml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
+        // 展示口径三处保持一致，避免数量与明细对不上
+        for (String selectId : Arrays.asList(
+                "queryCompanyBondCountList", "queryCompanyBondPoolList", "queryCompanyBondList")) {
+            String select = selectBlock(xml, selectId);
+            assertThat(select).as(selectId).doesNotContain("wind_cbondissuer");
+            assertThat(select).as(selectId).contains("bond.issuer_code");
+        }
+    }
+
     /** 验证 CRMW 单笔调库的可绑定标的仅包含非 CRMW 债券。 */
     @Test
     public void crmwBindableSecurityQueryShouldOnlyIncludeBonds() throws Exception {

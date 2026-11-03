@@ -67,7 +67,7 @@
     <!--
       批量查询主体旗下债券数量（主数据口径）。
       主体旗下债券统一按 category_type=bond 统计，包含普通债、ABS、CRMW，仅排除 security_status=D。
-      company 大类本就不是 bond，不必再写。关联键为本页主体码 issuer_code；证券池按发行人名称模糊筛时需用同一主体全称对比。
+      关联键只认 rrs_securityinfo.issuer_code，ABS 不按四类关系主体扩展，与旗下债券明细、所在池汇总同一口径。
     -->
     <select id="queryCompanyBondCountList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBondCount">
         SELECT bond.issuer_code AS companyCode
@@ -108,7 +108,8 @@
     <!--
       查询主体旗下债券所在池汇总（在池口径，不排除 crmw）。
       普通池：ip_pool_status.security_code = wind_code；
-      CRMW 池：ip_pool_status_crmw.crmw_scode = wind_code（凭证本身在主数据中也有 issuer_code）。
+      CRMW 池：ip_pool_status_crmw.crmw_scode = wind_code（凭证本身在主数据中也有 issuer_code）；
+      旗下债券只按 issuer_code 关联，ABS 不按四类关系扩展，与旗下债券数量口径一致。
     -->
     <select id="queryCompanyBondPoolList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$PoolStatus">
         SELECT t.target_pool_id
@@ -166,7 +167,7 @@
                  ,t.pool_pk
     </select>
 
-    <!-- 查询主体旗下债券明细（指定池；含普通池 + CRMW 池，与汇总 bondCount 一致） -->
+    <!-- 查询主体旗下债券明细（指定池；含普通池 + CRMW 池，与汇总 bondCount 一致；只按 issuer_code 关联） -->
     <select id="queryCompanyBondList" resultType="com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto$CompanyBond">
         SELECT t.wind_code
                ,t.short_name
@@ -227,7 +228,13 @@
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
-        WHERE bond.issuer_code = #{companyCode}
+        WHERE (bond.issuer_code = #{companyCode}
+              OR ((COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs') AND EXISTS (
+                  SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
+                  WHERE abs_issuer.s_info_windcode = bond.wind_code
+                    AND abs_issuer.s_info_compcode = #{companyCode}
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
@@ -264,7 +271,13 @@
         INNER JOIN ip_pool_status ips ON ips.security_code = bond.wind_code
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
-        WHERE bond.issuer_code = #{companyCode}
+        WHERE (bond.issuer_code = #{companyCode}
+              OR ((COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs') AND EXISTS (
+                  SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
+                  WHERE abs_issuer.s_info_windcode = bond.wind_code
+                    AND abs_issuer.s_info_compcode = #{companyCode}
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
@@ -302,7 +315,13 @@
                                      AND ips.target_pool_id = #{targetPoolId}
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
-        WHERE bond.issuer_code = #{companyCode}
+        WHERE (bond.issuer_code = #{companyCode}
+              OR ((COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs') AND EXISTS (
+                  SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
+                  WHERE abs_issuer.s_info_windcode = bond.wind_code
+                    AND abs_issuer.s_info_compcode = #{companyCode}
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">

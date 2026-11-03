@@ -1,6 +1,7 @@
 package com.znty.rrs.entity.batchcrmwpooladjust;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -12,6 +13,9 @@ import java.util.List;
  */
 @Data
 public class BatchCrmwCandidateDto {
+
+    /** ABS 已固定或在途占用的主体身份 */
+    private SecurityInfoBo absIdentity;
 
     /** 标的证券代码 */
     private String securityCode;

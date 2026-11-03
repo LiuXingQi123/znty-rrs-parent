@@ -13,6 +13,7 @@
 
 - 根包 `com.znty.rrs`，子包：`controller` / `service` / `mapper` / `entity` / `common` / `exception`
 - `entity/bo`：所有与表一一对应的 `Bo` **集中存放**（不按模块拆分）
+- `Bo` 字段与对应数据库表字段一一对应，声明顺序与建表字段顺序保持一致；联表展示、计算结果等非表字段放在 `Dto`，不混入 `Bo`
 - `entity/<模块>/`：`Dto` / `Req` 按业务模块分子包（如 `entity.flow`、`entity.scripttool`、`entity.securitypooladjust`）
 - `common`：`ApiResponse` / `PageRequest` / `PageResult` + `enums/`（纯 code 风格 `getCode()`，不放中文 label；业务代码用 `枚举.XXX.getCode()` 替代字面量）
 - Mapper XML 集中在 `src/main/resources/mapper/*.xml`（**扁平命名**，不按包拆分），由 `mybatis.mapper-locations: classpath*:mapper/**/*.xml` 扫描
@@ -35,7 +36,7 @@
 - SQL 文件有固定执行顺序（schema 先于 demo），改 `sql/` 目录文件名时**必须同步** `ScriptToolService` 内的白名单
 - 数据初始化任务：`INIT_SCHEMA` / `INIT_DEMO` / `RESET_ALL` 仅主库业务脚本（排除 AIS 与外部导入表）；外部导入表走 `INIT_EXTERNAL_IMPORT_SCHEMA` / `INIT_EXTERNAL_IMPORT_DEMO`；AIS 走 `INIT_AIS_SCHEMA` / `INIT_AIS_DEMO`
 - 分类批量初始化：`INIT_BOND_SCHEMA` / `INIT_BOND_DEMO` 包含通用业务与外部证券基础信息，排除 AIS、基金和股票专属脚本；基金/股票沿用各自独立任务。`INIT_ALL_SCHEMA` / `INIT_ALL_DEMO` 覆盖三个库全部注册脚本，公共脚本先于基金和股票，避免股票附件表缺失或自选数据被覆盖；不改变旧批次范围。
-- 调库信息快照：`rrs_adjust_snapshot_schema.sql`（`ip_adjust_security_snapshot` / `_crmw`）须注册进 schema 清单、可清空组与 `CLEAR_ADJUST_FLOW`（无 demo 灌数，属 unseeded）
+- 调库信息快照：`rrs_adjust_snapshot_schema.sql`（`ip_adjust_security_snapshot` / `_crmw`）须注册进 schema 清单、可清空组与 `CLEAR_ADJUST_FLOW`；两类快照随 `rrs_security_pool_adjust_demo_data.sql` 逐笔灌入，不再属于 unseeded
 - 写操作审计：`rrs_script_tool_schema.sql` → `sys_script_tool_run_log`；执行类接口结束后尽力落库；`queryScriptToolRunLogList` 供前端「执行审计」页
 - 配置项：`rrs.script.sql-path`（默认 `sql`，相对 `user.dir`）；`rrs.script.enabled`（默认 `true`，生产请设 `false` 或 `RRS_SCRIPT_ENABLED=false`，写操作全部拒绝；前端工作台可整组隐藏脚本工具菜单）
 

@@ -58,6 +58,10 @@ import java.util.stream.Collectors;
 @Service
 public class StockSecurityBatchAdjustService {
 
+    /** ABS 当前主体占用 */
+    @Resource
+    private AbsIdentityService absIdentityService;
+
     /** 统一证券市场查询组件。 */
     @Resource
     private SecurityMarketService securityMarketService;
@@ -151,6 +155,11 @@ public class StockSecurityBatchAdjustService {
         PageHelper.startPage(req.getPageIndex(), req.getPageSize());
         List<StockSecurityBatchCandidateDto> list = stockSecurityBatchAdjustMapper.querySecurityPage(req);
         PageInfo<StockSecurityBatchCandidateDto> pageInfo = new PageInfo<>(list);
+        List<String> absCodes = list.stream()
+                .filter(row -> "abs".equals(row.getSecurityType()) || Integer.valueOf(1).equals(row.getAbsFlag()))
+                .map(StockSecurityBatchCandidateDto::getSecurityCode).distinct().collect(Collectors.toList());
+        Map<String, SecurityInfoBo> identities = absIdentityService.queryCurrentIdentities(absCodes);
+        for (StockSecurityBatchCandidateDto row : list) row.setAbsIdentity(identities.get(row.getSecurityCode()));
 
         // 将 SQL 返回的市场文本转换为市场编码列表
         fillMarketCodes(list);
@@ -170,6 +179,14 @@ public class StockSecurityBatchAdjustService {
         validateAdjustPoolPermission(req.getCurrentUserId(), req.getPoolId());
 
         StockSecurityBatchAdjustDto dto = new StockSecurityBatchAdjustDto();
+        Map<String, Set<String>> selections = new HashMap<>();
+        for (StockSecurityBatchAdjustSubmitReq.SecurityItem security : req.getSecurities()) {
+            String selected = security.getSelfSelectedRightsHolderCode();
+            if (selected == null || selected.trim().isEmpty()) selected = security.getRightsHolderCode();
+            selections.computeIfAbsent(security.getSecurityCode(), key -> new HashSet<>())
+                    .add(selected == null ? "" : selected.trim());
+        }
+        Map<String, String> identityFailures = absIdentityService.queryBatchIdentityFailures(selections);
         for (StockSecurityBatchAdjustSubmitReq.SecurityItem security : req.getSecurities()) {
             // 构建单证券调库校验请求
             AdjustCheckDto checkDto = checkSingleAdjust(buildSingleCheckReq(req, security));
@@ -177,6 +194,7 @@ public class StockSecurityBatchAdjustService {
                 continue;
             }
             for (AdjustCheckDto.CheckResultItem item : checkDto.getItems()) {
+                absIdentityService.applyCheckFailure(item, identityFailures.get(security.getSecurityCode()));
                 // 构建批量调库校验结果（透传单笔流程候选）
                 dto.getItems().add(buildBatchCheckResult(security, item));
             }
@@ -301,6 +319,13 @@ public class StockSecurityBatchAdjustService {
         }
 
         // 按触发主券分组，确保 related 与主券同次提交、共享批次与流程步骤
+        Map<String, String> absSelections = new HashMap<>();
+        for (StockSecurityBatchAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            String sourceCode = item.getSourceSecurityCode() == null || item.getSourceSecurityCode().isEmpty()
+                    ? item.getSecurityCode() : item.getSourceSecurityCode();
+            absIdentityService.validateBatchSelection(sourceCode, item.getSecurityType(), item.getRightsHolderCode(),
+                    item.getSelfSelectedRightsHolderCode(), absSelections);
+        }
         Map<String, List<StockSecurityBatchAdjustSubmitReq.AdjustItem>> itemMap = new LinkedHashMap<>();
         for (StockSecurityBatchAdjustSubmitReq.AdjustItem item : req.getItems()) {
             String groupKey = resolveBatchSubmitGroupKey(item);
@@ -520,6 +545,7 @@ public class StockSecurityBatchAdjustService {
         checkReq.setGuarantorCode(security.getGuarantorCode());
         checkReq.setRightsHolderCode(security.getRightsHolderCode());
         checkReq.setSelfSelectedRightsHolderCode(security.getSelfSelectedRightsHolderCode());
+        checkReq.setSelectedRatingCompany(security.getSelectedRatingCompany());
         checkReq.setReleaseRules("yes".equals(req.getReleaseRules()));
         checkReq.setItems(Collections.singletonList(item));
         return checkReq;
@@ -596,6 +622,7 @@ public class StockSecurityBatchAdjustService {
         submitReq.setGuarantorCode(primary.getGuarantorCode());
         submitReq.setRightsHolderCode(primary.getRightsHolderCode());
         submitReq.setSelfSelectedRightsHolderCode(primary.getSelfSelectedRightsHolderCode());
+        submitReq.setSelectedRatingCompany(primary.getSelectedRatingCompany());
 
         List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
         for (StockSecurityBatchAdjustSubmitReq.AdjustItem item : items) {

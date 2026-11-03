@@ -1,5 +1,7 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
+
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
@@ -80,6 +82,14 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     /** 调库落地 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    /** ABS 主体联动与规则提醒 */
+    @Resource
+    private AbsIdentityService absIdentityService;
+
+    /** ABS 主体联动与规则提醒 */
+    @Resource
+    private AbsCompanySyncService absCompanySyncService;
     /** 投资池 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -145,9 +155,9 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     private AutoInSummary doAutoIn(String taskName, TaskDetailLog detail) {
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "目标池列表 poolIds=" + poolIds + "（主体与债同一池）");
-        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、rrs_securityinfo.issuer_code非空、"
+        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、普通债发行主体非空、ABS按关系主体匹配、"
                 + "security_status!=D、maturity_date为空或>=今日；发行主体已在目标池 " + poolIds
-                + " 生效、债券未在同池生效，并满足目标池 market_codes");
+                + " 生效、债券未在同池生效，并满足目标池 market_codes；未确认 ABS 只生成待确认日志");
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
@@ -175,6 +185,11 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
             }
             List<String> windCodes = new ArrayList<>();
             for (ScheduledAdjustCandidateDto bond : bondList) {
+                // ABS 保持唯一主体身份，存在其他依据时交由研究员处理
+                if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
+                    && !absCompanySyncService.allowScheduledSync(bond, bond.getTriggerCompanyCode(), poolId, pool.getPoolName(), true)) {
+                    continue;
+                }
                 windCodes.add(bond.getSecurityCode());
             }
             // SQL 按当前市场筛选后，再批量检查唯一映射，重复源数据不能直接自动落池
@@ -188,8 +203,11 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                     SecurityInfoBo security = securityPoolAdjustMapper
                             .querySecurityBoByCode(bond.getSecurityCode());
                     String companyCode = security == null ? null : security.getIssuerCode();
-                    if (companyCode == null
-                            || !pledgeBlacklistRuleService.evaluate(companyCode).shouldBeInBlacklist()) {
+                    boolean matched = CreditBondSpecialInboundRule.isAbs(security)
+                            ? pledgeBlacklistRuleService.validateCompanies(absIdentityService.queryRiskCompanyCodes(security),
+                                    AdjustMode.IN.getCode()) == null
+                            : companyCode != null && pledgeBlacklistRuleService.evaluate(companyCode).shouldBeInBlacklist();
+                    if (!matched) {
                         // 记录未命中黑名单质押库条件的跳过原因
                         warnDetail(detail, "债券[" + bond.getSecurityCode()
                                 + "]发行主体未命中黑名单质押库三个条件，跳过");
@@ -214,7 +232,11 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
                 String reason = ScheduledAdjustLogHelper.appendDetails(REASON,
                         ScheduledAdjustLogHelper.issuerDetail(bond),
-                        ScheduledAdjustLogHelper.poolDetail("主体所在池", pool, poolId));
+                        ScheduledAdjustLogHelper.poolDetail("主体所在池", pool, poolId),
+                        ScheduledAdjustLogHelper.passiveAbsIdentityDetail(bond));
+                if (bond.getTriggerCompanyCode() != null) {
+                    reason = ScheduledAdjustLogHelper.appendDetails(reason, "联动触发主体：" + bond.getTriggerCompanyCode());
+                }
                 bond.setAdjustReason(reason);
                 // 按实际债券和目标池生成自动调库批次号
                 String batchNo = batchNoContext.resolveBondBatchNo(

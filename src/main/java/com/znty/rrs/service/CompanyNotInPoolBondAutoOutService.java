@@ -73,6 +73,10 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     private AutoAdjustMapper autoAdjustMapper;
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    /** ABS 主体联动与规则提醒 */
+    @Resource
+    private AbsCompanySyncService absCompanySyncService;
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
     @Resource
@@ -157,6 +161,11 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
             int pairCount = 0;
             for (ScheduledAdjustCandidateDto bond : bonds) {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+                    continue;
+                }
+                // ABS 保持唯一主体身份，存在其他依据时交由研究员处理
+                if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
+                    && !absCompanySyncService.allowScheduledSync(bond, bond.getIssuerCode(), bondPoolId, bondPool.getPoolName(), false, companyPoolId)) {
                     continue;
                 }
                 int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(bond.getSecurityCode(), bondPoolId);

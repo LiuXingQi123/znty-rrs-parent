@@ -1,5 +1,6 @@
 package com.znty.rrs.entity.batchcrmwpooladjust;
 
+import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import lombok.Data;
 
 import java.util.List;
@@ -58,6 +59,9 @@ public class BatchCrmwAdjustReq {
     @Data
     public static class SecurityItem {
 
+        /** 页面已选评级主体，直接复用名称与评级 */
+        private RatingCompanySelectionReq selectedRatingCompany;
+
         /** 标的证券代码 */
         private String securityCode;
 
@@ -91,6 +95,9 @@ public class BatchCrmwAdjustReq {
      */
     @Data
     public static class AdjustItem {
+
+        /** 页面已选评级主体，直接复用名称与评级 */
+        private RatingCompanySelectionReq selectedRatingCompany;
 
         /** 标的证券代码 */
         private String securityCode;

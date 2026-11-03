@@ -14,6 +14,9 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class SecurityInfoDetailDto extends SecurityInfoBo {
 
+    /** ABS 已成功入库固定或在途占用的主体身份 */
+    private SecurityInfoBo absIdentity;
+
     /** 证券类型名称 */
     private String securityTypeName;
 

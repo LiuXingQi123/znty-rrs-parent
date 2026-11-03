@@ -30,7 +30,7 @@ public class ScheduledTaskDemoDataTest {
                 new TaskConfig("company_outer_rating_not_aa_minus_auto_out", "外评非AA-及以下主体自动出池", "0 10 23 * * ?"),
                 new TaskConfig("company_outer_rating_aa_minus_auto_in", "外评AA-及以下主体自动入池", "0 15 23 * * ?"),
                 new TaskConfig("company_same_pool_bond_auto_in", "主体下债券自动入库", "0 20 23 * * ?"),
-                new TaskConfig("company_inpool_bond_auto_in", "在池主体旗下债券自动入池", "0 */10 * * * ?"),
+                new TaskConfig("company_inpool_bond_auto_in", "在池主体旗下债券自动入池（ABS债提醒）", "0 */10 * * * ?"),
                 new TaskConfig("company_not_in_pool_bond_auto_out", "主体不在池债券自动出池(默认关闭)", "0 0 0 * * ?"),
                 new TaskConfig("bond_grade_inconformity_alert", "不符合主体债入库规则提醒", "0 0 1 * * ?"),
                 new TaskConfig("hs_pool_full_excel_export", "恒生池全量数据导出（不含已到期）", "0 10 1 * * ?"),

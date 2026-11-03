@@ -67,7 +67,8 @@ public interface AutoAdjustMapper {
      *
      * <p>对应老系统 {@code AutoAdjustInNewBondToLimitPoolJob}：
      * 主体在 companyPoolId（category_type=company）且 bond 大类未到期、未在 targetPoolId；
-     * 仅排除已更新为正式代码的临时代码；当前 {@code bondTypeScope} 不排除 ABS / CRMW。
+     * 普通债按 issuer_code 匹配，ABS 通过四类关系主体匹配；仅排除已更新为正式代码的临时代码；
+     * 当前 {@code bondTypeScope} 不排除 ABS / CRMW，未确认 ABS 的后续落池由主体提醒处理。
      *
      * @param companyPoolId 主体所在池 ID（如债券禁止库 15）
      * @param targetPoolId  债券自动入池目标池 ID（可与主体池相同）

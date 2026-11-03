@@ -712,7 +712,11 @@
           AND is_deleted = 0
     </update>
 
-    <!-- 更新调库详情页传入的证券基础信息字段 -->
+    <!-- 更新调库详情页传入的证券基础信息字段
+         主体身份八个字段（issuer 五字段 + guarantor 三字段）一律不在此更新：
+         提交阶段选中主体只写入申请快照，主档仅由审批通过时的 AbsIdentityMapper.editApprovedIdentity 更新。
+         其中 guarantor/guarantor_id/inner_guarantor_rating 承载 ABS 权益人与内评，若在此写入会提前改动主档评级依据，
+         且出库方向未选主体时还会被清空，故与 issuer 五字段同样排除。 -->
     <update id="editSecurityInfoForAdjust">
         UPDATE rrs_securityinfo
         SET wind_code = #{securityInfo.windCode}
@@ -726,8 +730,6 @@
            ,form_desc = #{securityInfo.formDesc}
            ,sec_typename = #{securityInfo.secTypename}
            ,comp_type = #{securityInfo.compType}
-           ,issuer = #{securityInfo.issuer}
-           ,issuer_code = #{securityInfo.issuerCode}
            ,crncy_code = #{securityInfo.crncyCode}
            ,issue_amountplan = #{securityInfo.issueAmountplan}
            ,list_date = #{securityInfo.listDate}
@@ -767,17 +769,13 @@
            ,dy_flag = #{securityInfo.dyFlag}
            ,date_exists = #{securityInfo.dateExists}
            ,rating_bond = #{securityInfo.ratingBond}
-           ,rating_bondissuer = #{securityInfo.ratingBondissuer}
            ,rating_outlook = #{securityInfo.ratingOutlook}
            ,rating_bond_agency = #{securityInfo.ratingBondAgency}
-           ,rating_bondissuer_agency = #{securityInfo.ratingBondissuerAgency}
            ,rating_cnbd = #{securityInfo.ratingCnbd}
            ,inright_flag = #{securityInfo.inrightFlag}
            ,date_inright_exists = #{securityInfo.dateInrightExists}
            ,date_inright_next = #{securityInfo.dateInrightNext}
            ,issue_amountact = #{securityInfo.issueAmountact}
-           ,guarantor = #{securityInfo.guarantor}
-           ,guarantor_id = #{securityInfo.guarantorId}
            ,agency_name = #{securityInfo.agencyName}
            ,agency_nameid = #{securityInfo.agencyNameid}
            ,create_time = #{securityInfo.createTime}
@@ -787,8 +785,6 @@
            ,fund_use = #{securityInfo.fundUse}
            ,par = #{securityInfo.par}
            ,info_pledge_ratio = #{securityInfo.infoPledgeRatio}
-           ,inner_issuer_rating = #{securityInfo.innerIssuerRating}
-           ,inner_guarantor_rating = #{securityInfo.innerGuarantorRating}
            ,prompt_reason = #{securityInfo.promptReason}
            ,analysis = #{securityInfo.analysis}
            ,date_repurchase_exists = #{securityInfo.dateRepurchaseExists}

@@ -25,10 +25,10 @@ public class IpGradeRuleAlertBo {
     /** 发行主体名称 */
     private String issuerName;
 
-    /** 当前所在分级库 ID */
+    /** 当前所在投资池 ID */
     private Long currentPoolId;
 
-    /** 当前所在分级库名称 */
+    /** 当前所在投资池名称 */
     private String currentPoolName;
 
     /** 当前分级库档位 */
@@ -39,6 +39,12 @@ public class IpGradeRuleAlertBo {
 
     /** 命中的特殊类型说明 */
     private String specialTypeDesc;
+
+    /** 规则类型：grade=分级规则 / absCompanySync=ABS主体联动 */
+    private String ruleType;
+
+    /** 本次主体身份和池状态依据摘要 */
+    private String contextKey;
 
     /** 待办状态：00=待处理 / 20=已处理 / 99=已失效 */
     private String alertStatus;

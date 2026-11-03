@@ -24,21 +24,21 @@ public class PledgeBlacklistEntryPointTest {
     /** 普通债入口应按发行主体当前状态校验两个调整方向。 */
     @Test
     public void securityAdjust_ShouldValidateBothDirectionsByIssuer() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         verifyBothDirections(service, CategoryType.BOND.getCode(), false);
     }
 
     /** ABS 入口应按发行主体当前状态校验两个调整方向。 */
     @Test
     public void absAdjust_ShouldValidateBothDirectionsByIssuer() {
-        ForbiddenAbsPoolAdjustService service = new ForbiddenAbsPoolAdjustService();
+        ForbiddenAbsPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenAbsPoolAdjustService());
         verifyBothDirections(service, CategoryType.BOND.getCode(), false);
     }
 
     /** 主体入口应按本批预计状态校验两个调整方向。 */
     @Test
     public void companyAdjust_ShouldValidateBothDirectionsByCompanyCode() {
-        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ForbiddenPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenPoolAdjustService());
         verifyBothDirections(service, CategoryType.COMPANY.getCode(), true);
     }
 

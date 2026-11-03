@@ -50,6 +50,17 @@ public interface SecurityPoolAdjustMapper {
     IssuerFinancialDto queryIssuerFinancialByReportDate(@Param("securityCode") String securityCode,
                                                         @Param("reportDate") Long reportDate);
 
+    /** 按已核验的 ABS 本次主体查询最新财报日期 */
+    Long queryLatestFinancialDateByIssuer(@Param("issuerCode") String issuerCode);
+
+    /** 按已核验的 ABS 本次主体查询四期财报 */
+    List<IssuerFinancialDto> queryFinancialListByIssuer(@Param("issuerCode") String issuerCode,
+                                                       @Param("reportDates") List<Long> reportDates);
+
+    /** 按已核验的 ABS 本次主体查询指定期财报 */
+    IssuerFinancialDto queryFinancialByIssuerAndDate(@Param("issuerCode") String issuerCode,
+                                                     @Param("reportDate") Long reportDate);
+
     /** 按报告期新增或覆盖完整财务指标 */
     int saveIssuerFinancial(@Param("issuerCode") String issuerCode,
                             @Param("financial") IssuerFinancialDto financial);

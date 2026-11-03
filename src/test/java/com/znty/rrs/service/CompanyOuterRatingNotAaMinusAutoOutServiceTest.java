@@ -43,7 +43,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         for (Long poolId : new Long[]{16L, 23L, 999L}) {
             AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
             SecurityPoolAdjustMapper statusMapper = mock(SecurityPoolAdjustMapper.class);
-            CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+            CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
             ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
             ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", statusMapper);
             InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -71,7 +71,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     /** 验证参数说明包含默认池与额外拦截参数。 */
     @Test
     public void getParamHelp_ShouldDescribeDefaultPoolsAndParameters() {
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
 
         assertThat(service.getParamHelp()).contains("poolIds（主体出池目标池）：可选")
                 .contains("17（黑名单质押库）")
@@ -89,7 +89,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void execute_ShouldFailWhenNoAgencyConfigured() {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         ExternalRatingAgencyService agencyService = mock(ExternalRatingAgencyService.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         ReflectionTestUtils.setField(service, "externalRatingAgencyService", agencyService);
         when(agencyService.queryRequiredAgencyCodeList())
@@ -108,7 +108,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -174,7 +174,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void execute_ShouldFailWhenParamMissing() {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
@@ -198,7 +198,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -235,7 +235,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -277,7 +277,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -341,7 +341,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     public void outSamePoolBonds_ShouldFailWhenBondIsOutRestricted() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
 
@@ -368,7 +368,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     /** 验证未配置或配置空额外拦截池时均按不拦截处理。 */
     @Test
     public void resolveLimitPoolIds_ShouldTreatOmittedAndEmptyAsNoIntercept() {
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
 
         assertThat(service.resolveLimitPoolIds("{\"poolIds\":[17]}")).isEmpty();
         assertThat(service.resolveLimitPoolIds("{\"poolIds\":[17],\"limitPoolIds\":[]}")).isEmpty();
@@ -379,7 +379,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
     /** 验证任务参数可解析池 ID 数组。 */
     @Test
     public void parsePoolIds_ShouldAcceptJsonArray() {
-        CompanyOuterRatingNotAaMinusAutoOutService service = new CompanyOuterRatingNotAaMinusAutoOutService();
+        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
         List<Long> ids = service.parsePoolIds("{\"poolIds\":[15,16]}");
         assertThat(ids).containsExactly(15L, 16L);
         assertThatThrownBy(() -> service.parsePoolIds("{}")).isInstanceOf(BizException.class);

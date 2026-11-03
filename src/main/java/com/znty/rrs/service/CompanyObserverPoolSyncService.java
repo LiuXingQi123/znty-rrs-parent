@@ -51,6 +51,8 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     /** 批量预读编码上限，避免为每个主体、债券单独查询或生成过长的 IN 条件 */
     private static final int QUERY_BATCH_SIZE = 1000;
+    /** 过程日志中发行主体编码为空记录的示例条数上限，避免脏数据多时刷屏 */
+    private static final int MISSING_ISSUER_SAMPLE_SIZE = 5;
 
     /** AIS 观察名单查询 */
     @Resource
@@ -58,6 +60,10 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     /** 调库日志及普通池状态写入 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    /** ABS 主体联动与规则提醒 */
+    @Resource
+    private AbsCompanySyncService absCompanySyncService;
     /** 投资池配置查询 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -86,7 +92,8 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
                 + "8. 调入、调出联动池：按关系配置，同批调入、调出联动池的主体及旗下债券\n"
                 + "9. 调入、调出互斥池：调入后退出已在的调入互斥池，同批调入冲突时失败；调出时命中调出互斥池则失败\n"
                 + "10. 调入、调出弹性禁投池：命中仅记录警告；互斥产生的调出也须校验对应池的关系配置\n"
-                + "11. 执行结果：直接生效，不走审批；参数错误、名单错误、关系校验不通过或写入失败时，整轮回滚\n"
+                + "11. 执行结果：直接生效，不走审批；参数错误、名单错误、关系校验不通过或写入失败时，整轮回滚；"
+                + "观察池/重点观察名单中发行主体编码为空的记录只跳过，并在过程日志和结果中记录条数，不阻断本轮\n"
                 + "12. 执行时间及日志：默认每天06:00，调度默认关闭；记录主体调整明细及旗下债券进出池数量";
     }
 
@@ -132,11 +139,24 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         Map<String, CompanyObserverDto> observers = queryValidatedObservers();
         // 4. 合并观察名单主体、目标池内主体及在池债券的发行主体
         Map<String, ScheduledAdjustCandidateDto> companies = new LinkedHashMap<>();
+        int missingIssuerCount = 0;
+        List<String> missingIssuerSamples = new ArrayList<>();
         for (ScheduledAdjustCandidateDto company : companyObserverMapper.queryCurrentCompanyList(poolIds)) {
+            // 发行主体编码为空时只记录警告并跳过，避免单条脏数据导致整轮任务失败
             if (!StringUtils.hasText(company.getSecurityCode())) {
-                throw new BizException("观察池/重点观察名单中存在发行主体编码为空的记录");
+                missingIssuerCount++;
+                if (missingIssuerSamples.size() < MISSING_ISSUER_SAMPLE_SIZE) {
+                    missingIssuerSamples.add(StringUtils.hasText(company.getSecurityShortName())
+                            ? company.getSecurityShortName() : "名称未知");
+                }
+                continue;
             }
             companies.put(company.getSecurityCode(), company);
+        }
+        if (missingIssuerCount > 0) {
+            detail.line("WARN", "跳过发行主体编码为空的在池记录 " + missingIssuerCount + " 条"
+                    + (missingIssuerSamples.isEmpty() ? "" : "（示例：" + String.join("、", missingIssuerSamples) + "）")
+                    + "，请补齐对应债券的发行主体编码后重跑");
         }
         for (CompanyObserverDto observer : observers.values()) {
             ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
@@ -146,7 +166,8 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
             companies.put(company.getSecurityCode(), company);
         }
         detail.line("扫描完成：名单 " + observers.size() + " 个主体，合并在池主体/债券发行人后 "
-                + companies.size() + " 个主体");
+                + companies.size() + " 个主体"
+                + (missingIssuerCount > 0 ? "，跳过发行主体编码为空记录 " + missingIssuerCount + " 条" : ""));
         // 5. 查询关系池配置，准备主体批次和进出池统计
         SyncContext context = new SyncContext(pools, poolIds, securityPoolAdjustMapper.queryAllPoolRelationList(), detail);
         // 批量读取本轮全部候选债券及其所有当前所在池，后续业务循环不再查询数据库
@@ -167,7 +188,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
             }
         }
         // 7. 汇总各池的主体、旗下债券进出池数量
-        return buildSyncResult(context);
+        return buildSyncResult(context, missingIssuerCount);
     }
 
     /** 按编码分批预读本轮债券及池状态，数据仅在当前任务事务内使用。 */
@@ -180,7 +201,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
             List<String> batch = companyCodes.subList(offset, Math.min(offset + QUERY_BATCH_SIZE, companyCodes.size()));
             for (ScheduledAdjustCandidateDto bond : companyObserverMapper.queryObserverBondList(batch, typeScope)) {
                 Map<String, ScheduledAdjustCandidateDto> companyBonds = context.bondsByCompany
-                        .computeIfAbsent(bond.getIssuerCode(), key -> new LinkedHashMap<>());
+                        .computeIfAbsent(bond.getTriggerCompanyCode(), key -> new LinkedHashMap<>());
                 if (companyBonds.put(bond.getSecurityCode(), bond) == null) {
                     bondCount++;
                 }
@@ -214,7 +235,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     }
 
     /** 汇总各投资池的主体和旗下债券进出池数量。 */
-    private SyncResult buildSyncResult(SyncContext context) {
+    private SyncResult buildSyncResult(SyncContext context, int missingIssuerCount) {
         // 1. 按投资池统计主体和债券的实际进出池数量
         SyncResult result = new SyncResult();
         StringBuilder message = new StringBuilder();
@@ -228,7 +249,14 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
                     .append("/出").append(summary.companyOut).append("，债券入").append(summary.bondIn)
                     .append("/出").append(summary.bondOut).append("，关系池出").append(summary.relationOut);
         }
-        // 2. 生成本轮任务的汇总说明
+        // 2. 执行结果中标注被跳过的发行主体编码为空记录，便于回查数据
+        if (missingIssuerCount > 0) {
+            if (message.length() > 0) {
+                message.append("；");
+            }
+            message.append("跳过发行主体编码为空记录").append(missingIssuerCount).append("条（不阻断本轮）");
+        }
+        // 3. 生成本轮任务的汇总说明
         result.message = message.toString();
         return result;
     }
@@ -423,6 +451,11 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
             if (!StringUtils.hasText(bond.getSecurityCode()) || !StringUtils.hasText(bond.getSecurityType())) {
                 throw new BizException("主体[" + companyCode + "]的旗下债券候选缺少证券代码或类型");
             }
+            // ABS 多主体由实际触发主体检查，入库身份始终保持不变
+            if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
+                    && !absCompanySyncService.allowScheduledSync(bond, companyCode, pool.getId(), pool.getPoolName(), inbound)) {
+                continue;
+            }
             // 使用已预读并随本轮调库更新的池状态，避免逐只债券查询
             List<Long> bondPools = getCurrentPoolIds(bond.getSecurityCode(), context);
             context.originalPools.putIfAbsent(bond.getSecurityCode(), new ArrayList<>(bondPools));
@@ -541,7 +574,9 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         adjustLog.setAuditStatus(AuditStatus.APPROVED.getCode());
         adjustLog.setAdjusterId("0");
         adjustLog.setAdjusterName("系统");
-        adjustLog.setAdjustReason(reason);
+        adjustLog.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(reason,
+                ScheduledAdjustLogHelper.passiveAbsIdentityDetail(item),
+                ScheduledAdjustLogHelper.triggerCompanyDetail(item)));
         adjustLog.setAdjustBatchNo(batchNo);
         adjustLog.setSubmitTime(context.batches.getSubmitTime());
         if (securityPoolAdjustMapper.addAdjustLog(adjustLog) != 1) {

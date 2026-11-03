@@ -45,7 +45,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void applySelectedGuarantorGradeShouldUseLatestGrade() {
         SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("BOND001");
@@ -69,7 +69,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void applySelectedGuarantorGradeShouldRejectIneligibleGuarantor() {
         SecurityPoolAdjustService securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("BOND001");
@@ -87,7 +87,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void postSubmitProcessShouldUseSelectedGuarantorFromSharedData() throws Exception {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         SecurityInfoBo master = new SecurityInfoBo();
         master.setWindCode("BOND001");
@@ -140,7 +140,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void queryCrmwPoolStatusShouldUseCompleteCombinationKey() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         CrmwPoolAdjustReq req = new CrmwPoolAdjustReq();
@@ -159,7 +159,7 @@ public class CrmwPoolAdjustServiceTest {
     /** CRMW 链路报告必填校验：限制为 any 且无报告时应抛出异常。 */
     @Test
     public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         CrmwPoolAdjustSubmitReq.AdjustItem item = new CrmwPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(10L);
@@ -177,7 +177,7 @@ public class CrmwPoolAdjustServiceTest {
     /** CRMW 链路报告必填校验：限制为 internal 且选择了内部报告库附件时应通过。 */
     @Test
     public void checkReportRequiredShouldPassWhenInternalAndHasSourceAttachment() {
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         CrmwPoolAdjustSubmitReq.AdjustItem item = new CrmwPoolAdjustSubmitReq.AdjustItem();
         item.setCreditReportSourceAttachmentIds(Collections.singletonList(1L));
@@ -192,7 +192,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void checkCrmwInboundCombinationShouldFailWhenComboAlreadyInPool() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 组合已在池
         when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(true);
@@ -210,7 +210,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void checkCrmwInboundCombinationShouldPassWhenSameCrmwDifferentBond() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 本组合不在池（即使同凭证其它标的已在池）
         when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(false);
@@ -221,7 +221,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void checkCrmwOutboundCombinationShouldFailWhenComboNotInPool() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 组合不在池
         when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(false);
@@ -238,7 +238,7 @@ public class CrmwPoolAdjustServiceTest {
     /** CRMW 证券信息合并不应清空页面不可编辑字段。 */
     @Test
     public void mergeSecurityInfoShouldKeepNonEditableFields() {
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         SecurityInfoBo current = new SecurityInfoBo();
         current.setShortName("原简称");
         current.setDateRepurchaseExists(new BigDecimal("1.0000"));
@@ -261,7 +261,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void applyPoolStatusChangesShouldFailWhenInboundInsertCountUnexpected() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         IpAdjustLogBo log = new IpAdjustLogBo();
         log.setId(1L);
@@ -279,7 +279,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void checkCrmwOutboundCombinationShouldPassWhenComboInPool() {
         CrmwPoolAdjustMapper mapper = mock(CrmwPoolAdjustMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);
         // 组合在池，应通过
         when(mapper.queryCrmwComboInPool(anyString(), anyString(), anyString(), anyLong())).thenReturn(true);
@@ -290,7 +290,7 @@ public class CrmwPoolAdjustServiceTest {
     @Test
     public void crmwAdjustShouldResolveSpecialInboundFlow() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        CrmwPoolAdjustService service = new CrmwPoolAdjustService();
+        CrmwPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));

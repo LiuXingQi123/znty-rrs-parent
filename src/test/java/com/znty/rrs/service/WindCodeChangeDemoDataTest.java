@@ -242,8 +242,10 @@ public class WindCodeChangeDemoDataTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_pool_status WHERE security_code='GSB006.SH' AND is_deleted=0", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE adjust_log_id=8 AND wind_code='GSB006.SH'", Integer.class))
                 .isEqualTo(1);
-        // 无持仓的两类临时来源仅改主档和登记，不新增调库流水。
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code IN ('WCTMP001.IB','WCTMP006.IB','ABN002.IB','ABN007.IB')", Integer.class)).isZero();
+        // 主体同步后的待转正样本已在观察池，换码也必须按真实持仓旧出新入
+        assertPoolMove("WCTMP001.IB", "WCTMP006.IB", "ip_pool_status", 16L);
+        // 已转正且没有在池记录的资产证券化样本仍只改主档和登记
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code IN ('ABN002.IB','ABN007.IB')", Integer.class)).isZero();
         Map<String, Integer> before = new LinkedHashMap<>();
         for (String table : Arrays.asList("rrs_securityinfo", "rrs_temp_security_code", "rrs_temp_security_code_update_log",
                 "ip_adjust_log", "ip_pool_status", "ip_pool_status_crmw", "ip_adjust_step",

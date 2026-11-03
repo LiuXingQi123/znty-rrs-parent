@@ -117,7 +117,7 @@ public class SecurityRelatedMarketScopeIntegrationTest {
         assertThat(markets.queryRelatedMarketCodes("A.SH")).extracting(SecurityMarketDto::getWindCode)
                 .contains("ALIAS.BC");
         assertThat(session.getMapper(SecurityMarketMapper.class)
-                .queryRelatedWindCodeList("A.SH", new CommonService().queryMarketCodeList()))
+                .queryRelatedWindCodeList("A.SH", AbsIdentityTestSupport.withIdentity(new CommonService()).queryMarketCodeList()))
                 .contains("A.IB", "A.SZ", "ALIAS.BC").doesNotContain("A.BC");
     }
 
@@ -135,7 +135,7 @@ public class SecurityRelatedMarketScopeIntegrationTest {
     public void inboundAndOutboundShouldExpandOnlyIncludedCodes() {
         for (boolean abs : new boolean[]{false, true}) {
             for (String mode : Arrays.asList("调入", "调出")) {
-                Object service = abs ? new ForbiddenAbsPoolAdjustService() : new SecurityPoolAdjustService();
+                Object service = abs ? AbsIdentityTestSupport.withIdentity(new ForbiddenAbsPoolAdjustService()) : AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
                 Object mapper = abs ? mock(ForbiddenAbsPoolAdjustMapper.class) : mock(SecurityPoolAdjustMapper.class);
                 ReflectionTestUtils.setField(service, abs ? "forbiddenAbsPoolAdjustMapper" : "securityPoolAdjustMapper", mapper);
                 ReflectionTestUtils.setField(service, "securityMarketService", markets);

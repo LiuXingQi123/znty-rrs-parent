@@ -18,7 +18,7 @@
 单笔提交携带基本信息已查询的 `relatedMarketCodes: [{ windCode, marketCode }]`；后端直接使用传入集合核对各目标池的调入明细是否带齐主券及关联券，提交阶段不再查询同券关系。批量及 Excel 入口复用本次校验结果中的实际代码集合。逐券活动流程检查继续执行。
 
 ------|------|------|------------|
-| **证券类型** | `security_type` | 候选证券/主体/凭证列表 | 主列表限定债券大类，包含 CRMW；批量候选排除 `company`、包含 CRMW，**不用** `pool_type` |
+| **证券类型** | `security_type` | 候选证券/主体/凭证列表 | 主列表限定债券大类且排除 CRMW；批量候选排除 `company`、`crmw`，**不用** `pool_type` |
 | **投资池类型** | `pool_type` | 可选投资池、链路隔离、禁止/观察/信用债规则 | 选池：入/出均排除 `crmw`；禁投/观察不排；硬逻辑仍认 forbidden/observe/credit_bond |
 
 
@@ -70,7 +70,7 @@
 
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityPage`
 - 请求体：`{ securityCode, securityShortName, securityFullName, issuerCode, securityType, issuer, bondYesFlags, pageIndex, pageSize }`
-- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（债券大类，含 CRMW 凭证）**，主体、股票、基金由大类过滤，固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`/`stdCredit`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。与禁投池「旗下债券数量」主数据统计同口径。CRMW 可通过本页进入普通产品库，可调入库、可调出库仍排除 `pool_type=crmw`，凭证+标的组合通过独立 CRMW 池链路办理。
+- 后端：`SecurityPoolAdjustService.querySecurityPage`，`PageHelper.startPage` 分页，SQL 限定 **`dict_security_type.category_type=bond`（债券大类，排除 CRMW 凭证）**，主体、股票、基金由大类过滤，固定排除退市（`security_status != 'D'`；上市状态枚举 `SecurityStatus`：`L`上市中 / `N`待上市 / `D`退市 / `U`未知，仅排除 `D`，`L`/`N`/`U` 均可查；来源未给状态须落 `U`，勿留 `NULL`，否则三值逻辑会滤掉该行）；按 `wind_code` / `short_name` / `issuer` 模糊匹配，`securityType` 精确匹配 `si.security_type`（列表无固定 ORDER BY），INNER JOIN `dict_security_type` 取 `security_type_name`。可选 `bondYesFlags` 多选（`guarant`/`inright`/`yx`/`private`/`abs`/`cj`/`stdCredit`）：勾选即筛对应「是」，多选 AND；`private` 对齐发行方式或内部分类含「私募」，`abs` 为 `absFlag=1` 或类型 `abs`（`abs_all` 不算）。人工候选额外排除 CRMW，禁投池旗下债券统计与联动仍包含 CRMW。CRMW 凭证经主体入池旗下证券跟随或证券池 Excel 导入进入普通池，凭证+标的组合通过独立 CRMW 池链路办理。
 - 返回：`PageResult<SecurityInfoDto>`，前端取 `data.records` 与 `data.total`。
 - 参数传递：`SecurityPoolAdjustService.querySecurityPage` 将完整 `SecurityPoolAdjustReq` 传给 Mapper，证券全称和主体编码与其他筛选条件一起绑定，避免拆分参数时遗漏
 
@@ -79,7 +79,7 @@
 - 路径：`POST /api/v1/securityPoolAdjust/querySecurityTypeList`
 - 请求体：`{}`
 - 返回：`List<SecurityTypeOptionDto>`（`{securityType, securityTypeName}`）
-- 后端 SQL：与列表同口径，`INNER JOIN dict_security_type` 限定有效字典 `category_type='bond'`，`SELECT DISTINCT si.security_type, dst.security_type_name`，仅排除退市 `D`，包含 CRMW，按 `dst.sort_order ASC, si.security_type ASC` 排序；`U` 未知可出现在下拉候选来源证券中
+- 后端 SQL：与列表同口径，`INNER JOIN dict_security_type` 限定有效字典 `category_type='bond'`，`SELECT DISTINCT si.security_type, dst.security_type_name`，排除退市 `D` 和 CRMW 凭证，按 `dst.sort_order ASC, si.security_type ASC` 排序；`U` 未知可出现在下拉候选来源证券中
 
 ### 2.3 表格列（列表页）
 
@@ -433,7 +433,7 @@
 | `saveIssuerFinancialList` | securityCode, records[{reportDate,...完整14项指标}] | `List<IssuerFinancialDto>` | 独立事务批量覆盖本次已修改报告期的完整指标 |
 | `queryRelatedRatingCompanyList` | securityCode | `List<RelatedRatingCompanyDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
 | `querySelfSelectedRightsHolderPage` | companyCode?, companyName?, pageIndex, pageSize | `PageResult<SelfSelectedRightsHolderDto>` | 从 `ais_inv_analysis.t_inv_company` 分页查询自选权益人，关联最新内评 |
-| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。排除 CRMW 后只保留投资品种包含债券的池及其上级。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。三个主体编码均由后端重查校验 |
+| `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。排除 CRMW 后只保留投资品种包含债券的池及其上级。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。所选主体通过 `selectedRatingCompany` 直接传入，不重复读取名称和评级 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |
 | `checkAdjust` | securityCode, securityShortName, securityType, items[{targetPoolId,targetPoolName,poolType,adjustMode}] | `AdjustCheckDto` | 提交前可行性校验 |
 | `addAdjustLog`（JSON） | `SecurityPoolAdjustSubmitReq` | `AdjustSubmitDto` | 提交调库申请（无附件） |
@@ -529,7 +529,7 @@ Demo 在原始 `INSERT` 中为全部 52 条证券显式填写标识，设置以�
 | ABS、资产证券化、CRMW、存单、国债、Govt债、可转债 | NULL | 0 |
 | XYB005 未判定信用债、Corp债、临时代码 | NULL | NULL |
 
-详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingCompanyList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端提交时重查主体，不采信前端名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留在数据及快照中，不再用于简易流程）；`date_exists_str` 证券期限（页面只读，同时供矩阵、白名单和简易流程的年口径判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
+详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingCompanyList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端校验和提交直接使用页面传入的主体代码、名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留在数据及快照中，不再用于简易流程）；`date_exists_str` 证券期限（页面只读，同时供矩阵、白名单和简易流程的年口径判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
 
@@ -675,6 +675,7 @@ Demo 在原始 `INSERT` 中为全部 52 条证券显式填写标识，设置以�
 
 - 信用债沿用 isSimpleInboundFlowMatched，资格在“下一步”计算，提交不重复查询矩阵、180 天入库经历或历史报告条件。资格中的历史报告要求仍保留，豁免的是本次提交材料。
 - 产品库沿用独立 isProductInboundFlowMatched：目标为 bond_product_root 子树启用叶子；当前有效在信用债一至三级、转债核心/重点或 CRMW 库之一才命中。来源编码与存量入口共用，本次待申请调入来源池不算当前在库。
+- ABS 不适用快速入库：简易入库与产品库快速入库的资格对 ABS 直接判为不匹配，`matched` 与 `selectable` 同时为 false，不返回材料豁免提示；批量与 Excel 复用单笔资格，一般/特殊流程及其他材料规则不变。
 - 材料豁免按主项快速资格决定，与选择快速、一般、特殊或批量流程无关。免材料不代表免审批，提交保留所选流程 ID、Key、类型，仍由该流程决定人工审批或直接生效。
 - 行级 CheckResultItem.materialExemptionType 返回 creditBondSimple / productSource，无资格时为空；前端随主项透传，批量和 Excel 映射保持该字段。FlowOption.materialExemptionType 只记录快速候选的资格匹配信息，不再按当前选中候选决定材料规则。
 - 同组联动、互斥和关联市场项跟随主项豁免；关联码逐码判断快速资格，任一不符则整组不获得快速材料豁免。独立调出及无资格主项沿用原材料规则，混合批次逐组处理，整批事务不变。
@@ -682,3 +683,30 @@ Demo 在原始 `INSERT` 中为全部 52 条证券显式填写标识，设置以�
 - 六个相关页面统一提示“本次免提交材料（信评报告及其他附件）”，切换流程不撤去有资格主项的提示；详情和审核页补齐批量调入/调出标签。保留现有材料入口和内容，不显示合同投资范围确认提示，不增加勾选。
 - 补充的报告引用仍检查有效性，材料绑定及完成后的报告生成沿用原逻辑；准入硬限制和落池复核保留，不改表，不改变其他调库链路。
 - Excel 证券导入的后续变更见 [28-security-pool-excel-import.md](28-security-pool-excel-import.md)：原规则执行后统一作为调整提示放行，提交及落池使用相同口径；普通单笔和批量仍按本节资格及原阻断规则办理。
+
+
+## ABS 跨池唯一主体身份
+
+- 仅 ABS 使用多主体逻辑。普通权益人查询限定 `s_info_typecode IN (115004000, 115203000, 115202000, 115201000)`；全市场自选主体保持现有来源。候选一次返回名称、代码、内评、认可机构最新外评及对应机构，选择后复用已查询数据；动态池状态不缓存。
+- 同一 ABS 的所有有效在库和未结束申请（00/11）只能使用同一个主体代码。自选优先；同代码的不同关系角色或选择方式不算更换身份。该约束对单券、批量、Excel、禁投 ABS 和标的为 ABS 的 CRMW 申请均不可绕过。
+- 在途身份保存在申请快照，提交不更新主档五字段。审核通过或直通生效时，在同一事务内更新 `issuer/issuer_code/rating_bondissuer/rating_bondissuer_agency/inner_issuer_rating` 并落池；驳回、撤回不改主档。
+- 人工申请审核通过或直通成功入库后永久固定主体代码，全部出库且流程结束也不能更换。主体联动自动入池只生成 audit_status=00 的待确认调库日志，暂不写入 ip_pool_status 和主档五字段，也不形成永久绑定；研究员确认主体后才转为 audit_status=20 并正式入池，成功确认后才固定身份。此前仅有驳回或撤回且从未成功确认的申请不形成永久绑定；未结束申请仍占用本次主体。主档持续保留已确认身份，同一主体的名称和评级允许更新，历史详情保留原申请快照。
+- 主体选择和只读查询不因身份占用提前报错；已有在库/在途主体冲突，以及同一批内同一 ABS 选择不同主体，都在下一步以 `canAdjust=false`、`failReasons` 返回，展示于“调整说明”。冲突组的联动、互斥和关联市场项同时不可调整，其他独立证券继续校验。Excel 提示放行、放开规则均不可绕过；正式提交及最终审批继续强制校验主体。提交和审批通过前查询当前在库及在途身份并校验一致性，不增加数据行锁。
+- ABS 申请阶段财报查询和独立保存通过 `selectedRatingCompany` 使用本次选择；未选择时返回空财报，不回查证券代码或历史主档，无主体不允许保存。切换主体前保存原主体尚未保存的财报修改。
+- Demo 区分从未成功和曾成功身份：从未成功入库的 5 条 ABS 初始五字段为空；`108008901.IB` 首次成功主体为 `C10008`，全部出库后仍固定该代码，同券新增在途场景沿用该身份。所有证券申请逐笔配套提交快照，ABS 的 `guarantor_id` 同样明确记录实际采用的 `C10008`；担保债快照记录单一所选担保人，不复制主档多候选列表。
+- ABS 主体身份确认后只受确认主体影响：限制池、观察池、黑名单质押库校验以及主体联动的入池、出池判断均只使用主档 `issuer_code`，其他权益人的进出和所在池不再影响该 ABS；未确认身份时四类关联主体全部参与判断。
+- ABS 不提供快速入库候选：简易入库和产品库快速入库的资格计算对 ABS 直接判为不匹配，流程候选只保留一般或特殊流程；材料豁免规则不变。
+
+## CRMW 普通池入口边界
+
+仅证券池调整主列表、类型下拉及证券池批量调入/调出候选查询排除 CRMW 凭证；不按凭证类型提前返回空选池结果，也不新增校验、提交或终审拦截，通用 CRMW 字段及赋值保留。主体入池旗下证券联动和证券池 Excel 导入仍允许 CRMW 进入普通池；Excel 原业务限制仅作调整提示，不因人工入口限制而阻断。CRMW 专用批量调入仍从 `bond_product1_root`（债券产品库1）及其下级池的有效在池证券组成候选。池内数量统计和历史记录仍包含已有 CRMW。证券 Excel 清空出库也执行原校验并保留原因，仅提醒不拦截，同组配套项及最终落池口径一致；已有在途的证券仍纳入清空提示，不再直接跳过。
+
+## 已查询数据复用
+
+- 权益人、担保人或自选权益人候选已带回主体代码、名称、内评、认可机构最新外评及机构；选池、校验、提交通过 `selectedRatingCompany` 传递所选主体及普通/自选名称，后端直接使用，不重复查询候选或评级
+- 单券页面传递已加载的 `securityInfo`，校验、提交及快照共用；批量仍读取实际需要的完整证券信息，同批主体比较直接使用页面传入类型和主体代码，不逐项复查主档
+- 财报查询/保存直接使用已知主体代码，保存后返回本次记录，不逐期回查；当前在库、在途及同一 ABS 主体一致性仍按业务时点查询
+
+## 空主体预览与财报
+
+清空权益人/自选权益人只清空本次页面的五字段及财报编辑缓存，并使旧响应失效，不在选池预览阶段检查主体名称。两种选择都为空时，四期财报值留白且不可编辑、不可保存；清除自选后仍有普通权益人时使用普通权益人的财报。下一步及正式提交要求选择主体，身份冲突继续放在调整说明中显示不可调整。财报查询和保存复用 `selectedRatingCompany`；审核及历史只读页面沿用原展示口径。

@@ -38,6 +38,16 @@ public interface GradeRuleAlertMapper {
                                       @Param("currentPoolId") Long currentPoolId);
 
     /**
+     * 查询同一证券+当前池最近一条分级规则待办（含已处理和已失效）
+     *
+     * @param securityCode   证券代码
+     * @param currentPoolId  当前池
+     * @return 待办
+     */
+    IpGradeRuleAlertBo queryLatestGradeAlert(@Param("securityCode") String securityCode,
+                                             @Param("currentPoolId") Long currentPoolId);
+
+    /**
      * 新增待办
      *
      * @param bo 待办

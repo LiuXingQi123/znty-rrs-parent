@@ -49,7 +49,7 @@ public class PoolViewPermissionServiceTest {
     public void queryPoolTreeListShouldKeepAuthorizedPoolAncestors() {
         CommonMapper mapper = mock(CommonMapper.class);
         InvestmentPoolService poolService = mock(InvestmentPoolService.class);
-        CommonService service = new CommonService();
+        CommonService service = AbsIdentityTestSupport.withIdentity(new CommonService());
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolService", poolService);
         CommonReq req = new CommonReq();
@@ -71,7 +71,7 @@ public class PoolViewPermissionServiceTest {
     @Test
     public void queryPoolTreeListShouldKeepBondVarietyAncestors() {
         CommonMapper mapper = mock(CommonMapper.class);
-        CommonService service = new CommonService();
+        CommonService service = AbsIdentityTestSupport.withIdentity(new CommonService());
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         CommonReq req = new CommonReq();
         req.setIncludeVarietyCodes(Collections.singletonList("bond"));
@@ -92,7 +92,7 @@ public class PoolViewPermissionServiceTest {
     @Test
     public void queryPoolTreeListShouldKeepRequestedPoolCodes() {
         CommonMapper mapper = mock(CommonMapper.class);
-        CommonService service = new CommonService();
+        CommonService service = AbsIdentityTestSupport.withIdentity(new CommonService());
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         CommonReq req = new CommonReq();
         req.setIncludePoolCodes(Arrays.asList("forbidden_root", "observe_root"));
@@ -114,7 +114,7 @@ public class PoolViewPermissionServiceTest {
     public void queryPoolTreeListShouldStillFilterPoolCodesForAdministrator() {
         CommonMapper mapper = mock(CommonMapper.class);
         InvestmentPoolService poolService = mock(InvestmentPoolService.class);
-        CommonService service = new CommonService();
+        CommonService service = AbsIdentityTestSupport.withIdentity(new CommonService());
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolService", poolService);
         CommonReq req = new CommonReq();

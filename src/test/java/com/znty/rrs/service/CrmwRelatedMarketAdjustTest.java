@@ -62,7 +62,7 @@ public class CrmwRelatedMarketAdjustTest {
     /** 配置三市场标的主档及单一 CRMW 凭证，不连接外部数据库。 */
     @Before
     public void setUp() {
-        service = new CrmwPoolAdjustService();
+        service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         mapper = mock(CrmwPoolAdjustMapper.class);
         markets = mock(SecurityMarketService.class);
         pools = mock(InvestmentPoolMapper.class);

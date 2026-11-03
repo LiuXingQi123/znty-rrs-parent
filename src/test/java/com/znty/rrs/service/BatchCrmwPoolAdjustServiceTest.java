@@ -7,6 +7,7 @@ import com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwPoolAdjustReq;
 import com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwPoolDto;
 import com.znty.rrs.entity.batchcrmwpooladjust.BatchCrmwPoolTypeCountDto;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustSubmitReq;
@@ -33,6 +34,30 @@ import static org.mockito.Mockito.when;
  * CRMW 池批量调整服务测试
  */
 public class BatchCrmwPoolAdjustServiceTest {
+
+    /** 同一 ABS 配对多个凭证时，共用一次身份恢复并回显固定主体 */
+    @Test
+    public void repeatedUnderlyingAbsShouldShareOneIdentityLookup() {
+        BatchCrmwPoolAdjustService service = new BatchCrmwPoolAdjustService();
+        SecurityMarketService markets = mock(SecurityMarketService.class);
+        AbsIdentityService identities = mock(AbsIdentityService.class);
+        ReflectionTestUtils.setField(service, "securityMarketService", markets);
+        ReflectionTestUtils.setField(service, "absIdentityService", identities);
+        SecurityInfoBo identity = new SecurityInfoBo();
+        identity.setIssuerCode("A");
+        when(identities.queryCurrentIdentities(Collections.singletonList("ABS1")))
+                .thenReturn(Collections.singletonMap("ABS1", identity));
+        BatchCrmwCandidateDto first = new BatchCrmwCandidateDto();
+        first.setSecurityCode("ABS1");
+        first.setSecurityType("abs");
+        BatchCrmwCandidateDto second = new BatchCrmwCandidateDto();
+        second.setSecurityCode("ABS1");
+        second.setSecurityType("abs");
+        ReflectionTestUtils.invokeMethod(service, "fillCandidateFields", Arrays.asList(first, second));
+        assertThat(first.getAbsIdentity().getIssuerCode()).isEqualTo("A");
+        assertThat(second.getAbsIdentity().getIssuerCode()).isEqualTo("A");
+        verify(identities).queryCurrentIdentities(Collections.singletonList("ABS1"));
+    }
 
     /** 验证分页查询回填 CRMW 在池数量 */
     @Test

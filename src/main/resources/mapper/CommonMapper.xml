@@ -121,6 +121,29 @@
                 WHERE eligible.windcode = grade.windcode
             )
         )
+        <!-- 从认可机构读取候选主体最新一条外评，评级与机构来自同一行 -->
+        ,ranked_outer_rating AS (
+            SELECT rating.s_info_compcode
+                   , rating.b_info_creditrating
+                   , rating.b_info_creditratingagency
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY rating.s_info_compcode
+                       ORDER BY COALESCE(NULLIF(rating.ann_dt2, ''), NULLIF(rating.ann_dt, '')) DESC
+                                , rating.ann_dt DESC
+                                , rating.opdate DESC
+                                , rating.object_id DESC
+                   ) AS row_num
+            FROM ais_inv_ods.wind_cbondissuerrating rating
+            WHERE EXISTS (
+                SELECT 1 FROM dict_external_rating_agency agency
+                WHERE agency.is_deleted = 0
+                  AND agency.b_info_creditratingagency = rating.b_info_creditratingagency
+            )
+              AND EXISTS (
+                  SELECT 1 FROM eligible_guarantor candidate
+                  WHERE candidate.windcode = rating.s_info_compcode
+              )
+        )
         <!-- 返回关系主体；无内评时评分字段为空，并保持关系优先级顺序。 -->
         SELECT eligible.security_code
                ,eligible.windcode
@@ -128,9 +151,13 @@
                ,eligible.guarantor_type_code
                ,grade.total_score
                ,grade.ts
+               , outer_rating.b_info_creditrating AS rating_bondissuer
+               , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM eligible_guarantor eligible
         LEFT JOIN ranked_grade grade ON grade.windcode = eligible.windcode
                                     AND grade.row_num = 1
+        LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = eligible.windcode
+                                                   AND outer_rating.row_num = 1
         ORDER BY eligible.security_code ASC
                  ,eligible.guarantor_sort_no ASC
                  ,grade.ts DESC

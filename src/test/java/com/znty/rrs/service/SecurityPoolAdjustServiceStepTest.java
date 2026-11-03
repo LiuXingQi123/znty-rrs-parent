@@ -67,10 +67,10 @@ import static org.mockito.Mockito.when;
 /** SecurityPoolAdjustServiceStepTest 测试类。 */
 public class SecurityPoolAdjustServiceStepTest {
 
-    /** CRMW 凭证调整到普通证券池时，入出方向都不能选择 CRMW 组合池 */
+    /** CRMW 只在候选查询中过滤，通用选池仍保留普通池并排除组合池 */
     @Test
-    public void crmwSecurityShouldOnlySelectOrdinaryPoolsForBothDirections() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+    public void crmwSecurityShouldKeepGeneralPoolSelectionForBothDirections() {
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
         SecurityPoolAdjustMapper securityMapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
@@ -100,7 +100,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void applySelectedRatingCompanyShouldKeepEligibleGuarantorWithoutGrade() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("DBB002.IB");
@@ -122,7 +122,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void applySelectedRatingCompanyShouldRejectIneligibleGuarantor() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("DBB002.IB");
@@ -138,7 +138,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void absShouldPreferSelfSelectedRightsHolder() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("ABS001.IB");
@@ -169,7 +169,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void absShouldDefaultToFirstRelatedCompanyWhenNoSelection() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("ABS001.IB");
@@ -192,7 +192,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void absShouldRequireRightsHolderWhenNoRelatedCompanyExists() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("ABS001.IB");
@@ -209,7 +209,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void nonAbsShouldDefaultToFirstRelatedCompanyWhenNoSelection() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("BOND001.IB");
@@ -229,7 +229,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 非担保债即使选择关系主体，矩阵仍只使用债务主体内评。 */
     @Test
     public void nonGuaranteedBondShouldUseIssuerRatingOnly() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setGuarantFlag(0);
         securityInfo.setInnerIssuerRating("3");
@@ -242,7 +242,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 非 ABS 担保债使用债务主体与所选担保人内评较优值。 */
     @Test
     public void guaranteedBondShouldUseBetterRating() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         CreditBondInnerRatingGradeBo gradeOne = new CreditBondInnerRatingGradeBo();
@@ -265,7 +265,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** ABS 权益人一档不属于强担保，不能豁免重点观察名单新增限制。 */
     @Test
     public void absRightsHolderShouldNotTriggerStrongGuaranteeExemption() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setAbsFlag(1);
         securityInfo.setGuarantFlag(1);
@@ -280,7 +280,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void postSubmitProcessShouldUseLatestGuarantorGradeFromSharedData() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
 
         SecurityInfoBo master = new SecurityInfoBo();
@@ -337,7 +337,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void queryAdjustLogListShouldReturnFlowNameAndRedirectFields() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
@@ -373,7 +373,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void queryAdjustLogListShouldQueryCurrentSecurityHistoryOnly() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolService investmentPoolService = mock(InvestmentPoolService.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolService", investmentPoolService);
 
@@ -399,7 +399,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 验证 checkInConditionsShouldShowPendingProcessNodeLabel 测试场景。 */
     @Test
     public void checkInConditionsShouldShowPendingProcessNodeLabel() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         AdjustCheckContext ctx = new AdjustCheckContext();
@@ -419,7 +419,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 验证目标池已锁定时调入校验应失败。 */
     @Test
     public void checkInConditionsShouldFailWhenPoolLocked() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         // 构建已锁定目标池
@@ -443,7 +443,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 验证目标池配置冻结期且证券仍在冻结期内时调出校验应失败。 */
     @Test
     public void checkOutConditionsShouldFailWhenFrozen() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         // 构建配置30天冻结期的目标池
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -471,7 +471,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void checkInConditionsShouldFailWhenVarietyMismatch() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         // 目标池仅允许 bond，证券品种为 fund
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -499,7 +499,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void checkInConditionsShouldFailWhenMarketMismatch() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityMarketService markets = mock(SecurityMarketService.class);
         ReflectionTestUtils.setField(service, "securityMarketService", markets);
@@ -564,7 +564,7 @@ public class SecurityPoolAdjustServiceStepTest {
 
     /** 构建仅用于来源池限制校验的服务实例。 */
     private SecurityPoolAdjustService buildServiceWithMapper() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mock(SecurityPoolAdjustMapper.class));
         return service;
     }
@@ -596,7 +596,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 验证债券已到期时调入校验应失败（类型特有 checkBondIn）。 */
     @Test
     public void checkInConditionsShouldFailWhenBondMaturity() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -621,7 +621,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 验证股票已退市时调入校验应失败（类型特有 checkStockIn）。 */
     @Test
     public void checkInConditionsShouldFailWhenStockDelist() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -647,7 +647,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void checkInConditionsShouldFailWhenInForbiddenPool() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -668,11 +668,47 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failures).contains("证券当前在禁止池中");
     }
 
+    /** 证券池联动调入 15 或 23 时，黑名单质押库应按本批次预计状态通过三条件校验。 */
+    @Test
+    public void checkInConditionsShouldUseProjectedConditionPoolForBlacklist() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        PledgeBlacklistRuleService blacklistRuleService = mock(PledgeBlacklistRuleService.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", blacklistRuleService);
+
+        InvestmentPoolBo blacklistPool = new InvestmentPoolBo();
+        blacklistPool.setId(PledgeBlacklistRuleService.BLACKLIST_POOL_ID);
+        SecurityInfoBo security = new SecurityInfoBo();
+        security.setWindCode("BOND-BLACKLIST-001");
+        security.setIssuerCode("C-BLACKLIST-001");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(security);
+        ctx.setTargetPool(blacklistPool);
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setTargetPoolRelations(Collections.<String, List<Long>>emptyMap());
+        ctx.setPoolMap(Collections.singletonMap(blacklistPool.getId(), blacklistPool));
+        when(mapper.querySecurityInForbiddenPool(security.getWindCode())).thenReturn(false);
+
+        ctx.setRequestInPoolIds(Collections.singleton(PledgeBlacklistRuleService.FORBIDDEN_POOL_ID));
+        assertThat(service.checkInConditions(ctx)).isEmpty();
+        verify(blacklistRuleService).validate(security.getIssuerCode(), "调入",
+                Collections.singleton(PledgeBlacklistRuleService.FORBIDDEN_POOL_ID),
+                Collections.<Long>emptySet());
+
+        ctx.setRequestInPoolIds(Collections.singleton(PledgeBlacklistRuleService.KEY_WATCH_POOL_ID));
+        assertThat(service.checkInConditions(ctx)).isEmpty();
+        verify(blacklistRuleService).validate(security.getIssuerCode(), "调入",
+                Collections.singleton(PledgeBlacklistRuleService.KEY_WATCH_POOL_ID),
+                Collections.<Long>emptySet());
+    }
+
     /** 验证债券不应被股票入池评级限制误拦截。 */
     @Test
     public void checkInConditionsShouldNotFailBondWhenGradeAstrictConfigured() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -699,7 +735,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void checkInConditionsShouldSkipStockGradeAstrictWhenRatingSourceMissing() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -724,7 +760,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 行业限制校验：证券行业与池配置不符时应返回失败原因。 */
     @Test
     public void inCheckIndustryShouldFailWhenMismatch() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setIndustryCode("制造业");
         SecurityInfoBo sec = new SecurityInfoBo();
@@ -739,7 +775,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 行业限制校验：证券行业匹配时应通过。 */
     @Test
     public void inCheckIndustryShouldPassWhenMatch() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setIndustryCode("制造业");
         SecurityInfoBo sec = new SecurityInfoBo();
@@ -754,7 +790,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 行业限制校验：industry_exponent!=0（行业指数模式）时应跳过。 */
     @Test
     public void inCheckIndustryShouldSkipWhenExponentNonZero() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setIndustryCode("制造业");
         pool.setIndustryExponent(1);
@@ -770,7 +806,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 基金评分校验：未传 fundRate 时应返回失败原因。 */
     @Test
     public void inCheckFundRateShouldFailWhenFundRateMissing() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setPoolName("基金池");
         pool.setFundRateLimit("3<=#rate<=8");
@@ -784,7 +820,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 基金评分校验：fundRate 在范围内时应通过。 */
     @Test
     public void inCheckFundRateShouldPassWhenWithinRange() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setPoolName("基金池");
         pool.setFundRateLimit("3<=#rate<=8");
@@ -798,7 +834,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 基金评分校验：fundRate 超过上限时应返回失败原因。 */
     @Test
     public void inCheckFundRateShouldFailWhenAboveUpper() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setPoolName("基金池");
         pool.setFundRateLimit("3<=#rate<=8");
@@ -812,7 +848,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 基金评分校验：池未配置 fund_rate_limit 时应跳过。 */
     @Test
     public void inCheckFundRateShouldSkipWhenNoLimit() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setPoolName("基金池");
         AdjustCheckContext ctx = new AdjustCheckContext();
@@ -826,7 +862,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void inCheckOpenDayShouldFailWhenNotInOpenDay() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -843,7 +879,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void inCheckOpenDayShouldPassWhenInOpenDay() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -860,7 +896,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void inCheckOpenDayShouldSkipWhenNotEnabled() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(1L);
@@ -876,7 +912,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleShouldPassWhenTargetPoolAllowed() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -909,7 +945,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleShouldFailWhenTargetPoolNotAllowed() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo targetPool = new InvestmentPoolBo();
@@ -947,7 +983,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleShouldFailWhenAllowedPoolsEmpty() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -976,7 +1012,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 调入校验可同时收集多条失败原因（到期 + 池锁定），供前端分条展示。 */
     @Test
     public void checkInConditionsShouldCollectMultipleFailReasons() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.querySecurityInForbiddenPool(any(String.class))).thenReturn(false);
@@ -1008,7 +1044,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleShouldFailWhenNoGrade() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -1029,7 +1065,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleShouldDefaultLongestBucketWhenTermMissing() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -1064,7 +1100,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleShouldFailWhenTermDoesNotMatchAnyBucket() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -1099,7 +1135,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleShouldDefaultGrade4WhenTemporaryNoGrade() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -1132,7 +1168,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRulePerpetualIssuerGradeOneAllowsOnlyExactDowngrade() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level1 = new InvestmentPoolBo();
@@ -1191,7 +1227,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRulePrivateIssuerGradeOneAllowsOnlyLevelOne() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level1 = new InvestmentPoolBo();
@@ -1238,7 +1274,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleSubordinatedIssuerGradeOneAllowsOnlyLevelOne() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level1 = new InvestmentPoolBo();
@@ -1285,7 +1321,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void filterInboundByGradeRuleShouldExcludeCreditBondWhenNoGrade() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
 
@@ -1324,7 +1360,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void filterInboundByGradeRuleShouldDefaultLongestBucketWhenTermMissing() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
 
@@ -1378,7 +1414,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void filterInboundByGradeRuleShouldKeepExactMatrixLevelsForOrdinaryBond() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         List<InvestmentPoolBo> pools = buildCreditBondTreeWithSpecial();
@@ -1408,7 +1444,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void filterInboundByGradeRuleShouldOpenTwoToFiveWhenPrivateDowngradeFromLevelOne() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         List<InvestmentPoolBo> pools = buildCreditBondTreeWithSpecial();
@@ -1437,7 +1473,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void filterInboundByGradeRuleShouldOpenThreeToFiveWhenPrivateBestIsTwo() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         List<InvestmentPoolBo> pools = buildCreditBondTreeWithSpecial();
@@ -1466,7 +1502,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void filterInboundByGradeRuleShouldKeepOnlyLevelOneWhenPrivateGradeOne() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         List<InvestmentPoolBo> pools = buildCreditBondTreeWithSpecial();
@@ -1496,7 +1532,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void filterInboundByGradeRuleShouldFollowGuaranteeWhenOverlappingSpecialTypes() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         List<InvestmentPoolBo> pools = buildCreditBondTreeWithSpecial();
@@ -1529,7 +1565,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void filterInboundByGradeRuleShouldExcludeGradedWhenConvertibleOrCrmw() {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         List<InvestmentPoolBo> pools = buildCreditBondTreeWithSpecial();
@@ -1550,7 +1586,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void inCheckMainGradeRuleShouldSkipWhenNotCreditBondPool() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -1570,7 +1606,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void inCheckMainGradeRuleShouldRejectPerpetualIssuerGradeOneIntoLevelOne() {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level1 = new InvestmentPoolBo();
         level1.setId(2L);
@@ -1602,7 +1638,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void inCheckMainGradeRuleShouldCapObserveAtStandardBest() {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level1 = new InvestmentPoolBo();
         level1.setId(2L);
@@ -1635,7 +1671,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void inCheckMainGradeRuleShouldAllowObserveWorseThanMatrixBest() {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         InvestmentPoolBo level5 = new InvestmentPoolBo();
         level5.setId(6L);
@@ -1674,7 +1710,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 可转债调入信用债分级库应失败。 */
     @Test
     public void inCheckMainGradeRuleShouldFailWhenConvertibleTargetsGradedPool() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(2L);
         pool.setPoolType("credit_bond");
@@ -1691,7 +1727,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 已在重点观察名单原则上不得新增进入分级库。 */
     @Test
     public void inCheckMainGradeRuleShouldBlockRestrictedNewInbound() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo level1 = new InvestmentPoolBo();
         level1.setId(2L);
         level1.setPoolType("credit_bond");
@@ -1714,7 +1750,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 境外债目标池不走主体评分档套件（对齐老 polidEnum）。 */
     @Test
     public void inCheckMainGradeRuleShouldSkipWhenOffshoreBondPool() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolBo offshoreL1 = new InvestmentPoolBo();
         offshoreL1.setId(24L);
         offshoreL1.setPoolType("offshore_bond");
@@ -1737,7 +1773,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void queryAdjustPoolListShouldSkipPermissionFilterForAdmin() {
         InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         InvestmentPoolBo rootPool = buildPool(1L, null, "根库");
@@ -1766,7 +1802,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void queryAdjustPoolListShouldKeepBondVarietyAndAncestors() {
         InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         InvestmentPoolBo root = buildPool(1L, null, "根库");
@@ -1791,7 +1827,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void filterAdjustablePoolsByUserShouldKeepAncestors() {
         InvestmentPoolMapper mapper = mock(InvestmentPoolMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mapper);
         List<InvestmentPoolBo> pools = Arrays.asList(
                 // 构建投资池测试数据
@@ -1824,7 +1860,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void createInitialStepsShouldCreatePendingStepForEachPreemptHandler() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
@@ -1863,7 +1899,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void createInitialStepsShouldApproveInitiatorThenCreateConfiguredPendingSteps() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
@@ -1907,7 +1943,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void createInitialStepsShouldSkipSubmitterNodeWhenInitiatorStrategy() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
 
         // 构建流程节点测试数据
@@ -1956,7 +1992,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void createInitialStepsShouldCreatePendingWhenInitiatorHasNoSubmitRoute() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
 
         // 构建流程节点测试数据
@@ -1995,7 +2031,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void executeInboundSubmitShouldTreatMissingFlowAsDirect() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
@@ -2034,6 +2070,9 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(logCaptor.getValue().getAdjustBatchNo()).matches("BOND\\d{17}3001");
         assertThat(logCaptor.getValue().getAdjustBatchNo()).endsWith("3001");
         assertThat(directApplyLogs).containsExactly(logCaptor.getValue());
+        Map<?, ?> submittedLogs = (Map<?, ?>) ReflectionTestUtils.getField(shared, "submittedLogs");
+        assertThat(submittedLogs).hasSize(1);
+        assertThat(submittedLogs.values().iterator().next()).isSameAs(logCaptor.getValue());
         assertThat(result).containsExactly(99L);
     }
 
@@ -2041,7 +2080,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void executeOutboundSubmitShouldCreateLogWhenFlowIsDirect() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
@@ -2085,7 +2124,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 目标池为空时报告必填校验应跳过。 */
     @Test
     public void checkReportRequiredShouldSkipWhenPoolNull() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         // 池为空时直接跳过，不校验报告
         ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, null, "any", "");
@@ -2094,7 +2133,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 限制为 none 时报告必填校验应通过。 */
     @Test
     public void checkReportRequiredShouldPassWhenNone() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
         // none=不限制，无报告也应通过
@@ -2104,7 +2143,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 限制为 any 且无报告时应抛出异常。 */
     @Test
     public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
         try {
@@ -2120,7 +2159,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 限制为 any 且已上传报告文件时应通过。 */
     @Test
     public void checkReportRequiredShouldPassWhenAnyAndHasFileReport() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         item.setCreditReportFileIndexes(Collections.singletonList(0));
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
@@ -2131,7 +2170,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 限制为 internal 且仅有上传文件（非内部报告库）时应抛出异常。 */
     @Test
     public void checkReportRequiredShouldFailWhenInternalAndOnlyFile() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         item.setCreditReportFileIndexes(Collections.singletonList(0));
         InvestmentPoolBo pool = buildPool(10L, null, "报告池");
@@ -2148,7 +2187,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 限制为 internal 且选择了内部报告库附件时应通过。 */
     @Test
     public void checkReportRequiredShouldPassWhenInternalAndHasSourceAttachment() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
@@ -2163,7 +2202,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void executeInboundSubmitShouldCheckInReportRestriction() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
@@ -2205,7 +2244,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void executeOutboundSubmitShouldCheckOutReportRestriction() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
 
@@ -2247,7 +2286,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void executeInboundSubmitShouldIncreaseBatchNoWithSharedContext() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
@@ -2282,7 +2321,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void bindSubmitAttachmentsShouldBindUploadedFilesAndCopyReportSources() {
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "sysAttachmentService", attachmentService);
 
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
@@ -2307,7 +2346,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void executeInboundSubmitShouldCreateStepsWithBatchNoForWhitelistFlow() throws Exception {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         doAnswer(invocation -> {
@@ -2368,7 +2407,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void resolveAdjustFlowOptionsShouldQueryFlowByCreditBondAdjustDirection() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         FlowDefinitionBo upgradeFlow = buildFlowDefinition(101L, "bond:standard-upgrade", "债券标准升库流程");
         FlowDefinitionBo downgradeFlow = buildFlowDefinition(102L, "bond:standard-downgrade", "债券标准降库流程");
@@ -2392,7 +2431,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void resolveAdjustFlowOptionsShouldPreferSpecialInboundWhenCurrentPoolInMutex() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         FlowDefinitionBo specialFlow = buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程");
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound")).thenReturn(specialFlow);
@@ -2422,7 +2461,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void resolveAdjustFlowOptionsShouldSkipSpecialInboundForCreditBondPool() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
@@ -2452,7 +2491,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void resolveAdjustFlowOptionsShouldFallbackWhenSpecialInboundFlowMissing() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound")).thenReturn(null);
 
@@ -2475,7 +2514,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void batchAdjustShouldResolveSpecialInboundFlow() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
@@ -2495,7 +2534,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void batchAdjustShouldSkipSpecialInboundForCreditBondPool() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
@@ -2514,7 +2553,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void forbiddenAdjustShouldResolveSpecialInboundFlow() {
         FlowMapper flowMapper = mock(FlowMapper.class);
-        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ForbiddenPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenPoolAdjustService());
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
         when(flowMapper.queryActiveFlowByKey("bond:special-inbound"))
                 .thenReturn(buildFlowDefinition(109L, "bond:special-inbound", "债券特殊策略入库流程"));
@@ -2532,7 +2571,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void executeInAdjustCheckShouldBlockManualWhenMutexOutboundFails() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryPoolCurrentCount(any(Long.class))).thenReturn(1);
 
@@ -2592,7 +2631,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void executeInAdjustCheckShouldBlockMutexOutboundWhenManualInboundFails() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryPoolCurrentCount(any(Long.class))).thenReturn(1);
 
@@ -2889,7 +2928,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void resolveAdjustFlowOptionsShouldSkipWhitelistWhenDisabled() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         FlowMapper flowMapper = mock(FlowMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
 
@@ -2924,7 +2963,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void isWhitelistFlowMatchedShouldFailWhenDateExistsStrOver3Years() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         // date_exists_str 解析后大于 3 年
@@ -2941,7 +2980,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void isWhitelistFlowMatchedShouldMatchTermWhenDateExistsStrEquals3Years() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("3年", 0, 0, "公募", "bond", 0);
@@ -2957,7 +2996,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void isWhitelistFlowMatchedShouldFailWhenPerpetual() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 1, 0, "公募", "bond", 0);
@@ -2973,7 +3012,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void isWhitelistFlowMatchedShouldFailWhenAbs() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 1, "公募", "bond", 0);
@@ -2989,7 +3028,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void isWhitelistFlowMatchedShouldFailWhenNotBondCategory() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("stock")).thenReturn("stock");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "stock", 0);
@@ -3005,7 +3044,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void isWhitelistFlowMatchedShouldFailWhenGuaranteed() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "bond", 1);
@@ -3021,7 +3060,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void isWhitelistFlowMatchedShouldOnlyFailOnWhitelistPoolWhenOthersMatch() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         when(mapper.queryCategoryTypeBySecurityType("bond")).thenReturn("bond");
         AdjustSharedData shared = buildWhitelistShared("1年4个月15天", 0, 0, "公募", "bond", 0);
@@ -3040,7 +3079,7 @@ public class SecurityPoolAdjustServiceStepTest {
     public void isSimpleInboundFlowMatchedShouldPassWithUniqueLevelAndRecentReport() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
         // 构建唯一的信用债一级库目标
@@ -3083,7 +3122,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 验证证券信息合并不会清空页面不可编辑字段。 */
     @Test
     public void mergeSecurityInfoShouldKeepNonEditableFields() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityInfoBo current = new SecurityInfoBo();
         current.setShortName("原简称");
         current.setDateRepurchaseExists(new BigDecimal("1.0000"));
@@ -3106,7 +3145,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void applyPoolStatusChangesShouldFailWhenInboundInsertCountUnexpected() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         IpAdjustLogBo log = new IpAdjustLogBo();
         log.setId(1L);
@@ -3125,7 +3164,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 验证发起人节点 approval_strategy=initiator 时 isInitiatorStep 返回 true。 */
     @Test
     public void isInitiatorStepShouldReturnTrueWhenInitiatorStrategy() throws Exception {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         FlowNodeBo node = new FlowNodeBo();
         node.setId(1L);
         node.setNodeType("approval");
@@ -3144,7 +3183,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 验证 approval_strategy=preempt 时 isInitiatorStep 返回 false。 */
     @Test
     public void isInitiatorStepShouldReturnFalseWhenNotInitiator() throws Exception {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         FlowNodeBo node = new FlowNodeBo();
         node.setId(1L);
         node.setNodeType("approval");
@@ -3184,7 +3223,7 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 关联码解析：带后缀、去自身、去重。 */
     @Test
     public void resolveRelatedSecurityCodesShouldSkipSelfAndEmpty() {
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityInfoBo main = new SecurityInfoBo();
         main.setWindCode("101.IB");
         SecurityMarketService markets = mock(SecurityMarketService.class);
@@ -3208,7 +3247,7 @@ public class SecurityPoolAdjustServiceStepTest {
     @Test
     public void expandRelatedMarketCodeItemsShouldAddRelatedRows() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
 

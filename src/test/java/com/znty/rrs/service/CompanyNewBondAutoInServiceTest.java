@@ -5,11 +5,13 @@ import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
+import com.znty.rrs.mapper.AbsIdentityMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -19,10 +21,12 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -40,7 +44,7 @@ public class CompanyNewBondAutoInServiceTest {
     public void executeShouldDiscoverCurrentCompanyPoolsWithoutMappings() {
         AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
         InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
-        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        CompanyNewBondAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyNewBondAutoInService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mock(ScheduledTaskMapper.class));
@@ -65,7 +69,7 @@ public class CompanyNewBondAutoInServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        CompanyNewBondAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyNewBondAutoInService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -131,6 +135,7 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(autoOutLog.getAdjustAdvice()).isNull();
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getTaskName()).isEqualTo("在池主体旗下债券自动入池（ABS债提醒）");
         assertThat(result.getMessage()).contains("本轮共自动入池 1 条债券")
                 .contains("主体池债券禁止库(15)→债券池债券禁止库(15)：1 条债券");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
@@ -147,7 +152,7 @@ public class CompanyNewBondAutoInServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        CompanyNewBondAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyNewBondAutoInService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -163,9 +168,70 @@ public class CompanyNewBondAutoInServiceTest {
                 any(Long.class), any(Long.class), any(CompanyBondTypeScopeBo.class));
     }
 
+    /** ABS 主体未确认时只记录规则提醒统计，不计入自动入池数量。 */
+    @Test
+    public void executeShouldReportAbsRuleReminderWithoutInboundCount() {
+        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
+        AbsIdentityMapper absIdentityMapper = mock(AbsIdentityMapper.class);
+        CompanyNewBondAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyNewBondAutoInService());
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
+        ReflectionTestUtils.setField(service, "absIdentityMapper", absIdentityMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskName("在池主体旗下债券自动入池");
+        conf.setParamJson("{\"poolIds\":[15]}");
+        when(scheduledTaskMapper.queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE)).thenReturn(conf);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(15L);
+        pool.setPoolName("债券禁止库");
+        pool.setPoolType("forbidden");
+        when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+        ScheduledAdjustCandidateDto abs = new ScheduledAdjustCandidateDto();
+        abs.setSecurityCode("ABS001.IB");
+        abs.setSecurityShortName("测试ABS");
+        abs.setSecurityType("abs");
+        abs.setAbsFlag(1);
+        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L),
+                any(CompanyBondTypeScopeBo.class))).thenReturn(Collections.singletonList(abs));
+
+        AbsCompanySyncService identity = (AbsCompanySyncService) ReflectionTestUtils.getField(
+                service, "absCompanySyncService");
+        when(identity.allowScheduledSync(any(), any(), any(), any(), anyBoolean(), any()))
+                .thenReturn(false);
+        IpGradeRuleAlertBo openAlert = new IpGradeRuleAlertBo();
+        openAlert.setAlertStatus("00");
+        when(absIdentityMapper.queryLatestSyncAlert("ABS001.IB", 15L)).thenReturn(openAlert);
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(0);
+        assertThat(result.getTaskName()).isEqualTo("在池主体旗下债券自动入池（ABS债提醒）");
+        assertThat(result.getMessage()).contains("本轮共自动入池 0 条债券")
+                .contains("ABS规则提醒跳过 1 条")
+                .contains("其中待确认主体 1 条");
+        assertThat(result.getDetailLog()).contains("主体未确认").contains("跳过自动入池");
+        verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
+
+        IpGradeRuleAlertBo processedAlert = new IpGradeRuleAlertBo();
+        processedAlert.setAlertStatus("20");
+        when(absIdentityMapper.queryLatestSyncAlert("ABS001.IB", 15L)).thenReturn(processedAlert);
+        ScheduledTaskResult nextResult = service.execute();
+        assertThat(nextResult.getMessage()).doesNotContain("ABS规则提醒跳过")
+                .contains("本轮共自动入池 0 条债券");
+        assertThat(nextResult.getDetailLog()).contains("已有处理结论").doesNotContain("主体未确认");
+    }
+
     @Test
     public void parseParamMappingsShouldOnlyAcceptJson() {
-        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        CompanyNewBondAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyNewBondAutoInService());
         List<long[]> samePool = service.parseParamMappings("{\"poolIds\":[15]}");
         assertThat(samePool).hasSize(1);
         assertThat(samePool.get(0)[0]).isEqualTo(15L);
@@ -194,7 +260,7 @@ public class CompanyNewBondAutoInServiceTest {
 
     @Test
     public void getParamHelpShouldDescribeJsonContract() {
-        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        CompanyNewBondAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyNewBondAutoInService());
         assertThat(service.getParamHelp()).contains("poolIds");
         assertThat(service.getParamHelp()).contains("mappings");
         assertThat(service.getParamHelp()).contains("须填写 JSON");
@@ -207,7 +273,7 @@ public class CompanyNewBondAutoInServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        CompanyNewBondAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyNewBondAutoInService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);

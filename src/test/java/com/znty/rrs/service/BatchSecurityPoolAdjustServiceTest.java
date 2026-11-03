@@ -47,7 +47,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     /** 批量校验和提交都应透传 ABS 普通权益人与自选权益人编码。 */
     @Test
     public void batchRequestShouldPassThroughRightsHolderCodes() {
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
         req.setDirection("in");
         req.setPoolId(11L);
@@ -83,7 +83,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     @Test
     public void fillPoolCurrentCountShouldQueryCurrentPagePoolIds() {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
 
         BatchSecurityPoolDto firstPool = new BatchSecurityPoolDto();
@@ -119,7 +119,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     @Test
     public void validateSecurityPageReqShouldAllowUnknownMarketCode() {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         when(mapper.queryEnabledLeafPoolCount(11L)).thenReturn(1);
 
@@ -136,7 +136,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     /** 验证未知调整方向仍应阻止查询范围扩大 */
     @Test(expected = BizException.class)
     public void validateSecurityPageReqShouldRejectUnknownDirection() {
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
 
         BatchSecurityPoolAdjustReq req = new BatchSecurityPoolAdjustReq();
         req.setPoolId(11L);
@@ -148,7 +148,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     /** 验证批量提交转单条提交时保留证券类型 */
     @Test
     public void buildSingleSubmitReqShouldKeepSecurityType() {
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
 
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
         req.setAdjustReason("原因");
@@ -194,8 +194,8 @@ public class BatchSecurityPoolAdjustServiceTest {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
-        SecurityPoolAdjustService securityPoolAdjustService = new SecurityPoolAdjustService();
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        SecurityPoolAdjustService securityPoolAdjustService = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -258,8 +258,8 @@ public class BatchSecurityPoolAdjustServiceTest {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
-        SecurityPoolAdjustService securityPoolAdjustService = new SecurityPoolAdjustService();
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        SecurityPoolAdjustService securityPoolAdjustService = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -328,9 +328,9 @@ public class BatchSecurityPoolAdjustServiceTest {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         // 批量校验已委托单笔 SecurityPoolAdjustService，需同步注入相同 mock
-        SecurityPoolAdjustService securityPoolAdjustService = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService securityPoolAdjustService = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(securityPoolAdjustService, "securityMarketService", mock(SecurityMarketService.class));
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
@@ -389,7 +389,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     /** 验证批量校验结果透传单笔流程候选，不注入 batchIn/batchOut。 */
     @Test
     public void buildBatchCheckResultShouldPassThroughSingleFlowOptions() {
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         BatchSecurityInboundAdjustReq.SecurityItem security = new BatchSecurityInboundAdjustReq.SecurityItem();
         security.setSecurityCode("S001");
         security.setSecurityShortName("测试债");
@@ -436,7 +436,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     @Test
     public void checkRecentBatchDuplicateShouldAllowDifferentSecuritySet() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         IpAdjustLogBo history = new IpAdjustLogBo();
         history.setSecurityCode("S001");
@@ -458,7 +458,7 @@ public class BatchSecurityPoolAdjustServiceTest {
     @Test
     public void checkRecentBatchDuplicateShouldRejectSameItemsInDifferentOrder() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        BatchSecurityPoolAdjustService service = new BatchSecurityPoolAdjustService();
+        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         IpAdjustLogBo first = buildBatchHistoryLog("S001");
         IpAdjustLogBo second = buildBatchHistoryLog("S002");

@@ -96,23 +96,36 @@
 
     <!--
       主体下新债自动入池候选（对齐老系统 AutoAdjustInNewBondToLimitPoolJob）：
-      1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池
+      1) 普通债发行主体已在 companyPoolId 且为 company 大类、已生效在池；ABS 通过四类关系主体匹配
       2) 旗下 bond 大类未退市、未到期、尚未在 targetPoolId
       3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
-      4) 当前不排除 ABS / CRMW；后续如需差异化排除，统一由 bondTypeScope 控制
+      4) 当前不排除 ABS / CRMW；未确认 ABS 由主体提醒生成待确认日志，后续如需差异化排除，统一由 bondTypeScope 控制
     -->
     <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
+               ,bond.abs_flag
                ,bond.issuer_code
                ,bond.issuer AS issuer_name
+               ,(SELECT MIN(trigger_status.security_code)
+                 FROM ip_pool_status trigger_status
+                 WHERE trigger_status.security_type = 'company'
+                   AND trigger_status.target_pool_id = #{companyPoolId}
+                   AND trigger_status.audit_status = '20' AND trigger_status.is_deleted = 0
+                   AND (trigger_status.security_code = bond.issuer_code
+                        OR ((bond.abs_flag = 1 OR bond.security_type = 'abs') AND EXISTS (
+                            SELECT 1 FROM ais_inv_ods.wind_cbondissuer relation
+                            WHERE relation.s_info_windcode = bond.wind_code
+                              AND relation.s_info_compcode = trigger_status.security_code
+                              AND relation.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                        )))) AS trigger_company_code
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
-        WHERE bond.issuer_code IS NOT NULL
-          AND bond.issuer_code != ''
+        WHERE ((bond.issuer_code IS NOT NULL AND bond.issuer_code != '')
+               OR COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt; DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
@@ -130,7 +143,13 @@
               INNER JOIN dict_security_type cdst ON cdst.security_type = cps.security_type
                                                 AND cdst.is_deleted = 0
                                                 AND cdst.category_type = 'company'
-              WHERE cps.security_code = bond.issuer_code
+              WHERE (bond.issuer_code = cps.security_code
+              OR ((COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs') AND EXISTS (
+                  SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
+                  WHERE abs_issuer.s_info_windcode = bond.wind_code
+                    AND abs_issuer.s_info_compcode = cps.security_code
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              )))
                 AND cps.target_pool_id = #{companyPoolId}
                 AND cps.audit_status = '20'
                 AND cps.is_deleted = 0
@@ -167,16 +186,29 @@
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
+               ,bond.abs_flag
                ,bond.issuer_code
                ,bond.issuer AS issuer_name
+               ,(SELECT MIN(trigger_status.security_code)
+                 FROM ip_pool_status trigger_status
+                 WHERE trigger_status.security_type = 'company'
+                   AND trigger_status.target_pool_id = #{poolId}
+                   AND trigger_status.audit_status = '20' AND trigger_status.is_deleted = 0
+                   AND (trigger_status.security_code = bond.issuer_code
+                        OR ((bond.abs_flag = 1 OR bond.security_type = 'abs') AND EXISTS (
+                            SELECT 1 FROM ais_inv_ods.wind_cbondissuer relation
+                            WHERE relation.s_info_windcode = bond.wind_code
+                              AND relation.s_info_compcode = trigger_status.security_code
+                              AND relation.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                        )))) AS trigger_company_code
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         INNER JOIN ip_investment_pool p ON p.id = #{poolId}
                                         AND IFNULL(p.is_deleted, 0) = 0
-        WHERE bond.issuer_code IS NOT NULL
-          AND bond.issuer_code != ''
+        WHERE ((bond.issuer_code IS NOT NULL AND bond.issuer_code != '')
+               OR COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
@@ -194,7 +226,13 @@
               INNER JOIN dict_security_type cdst ON cdst.security_type = cps.security_type
                                                 AND cdst.is_deleted = 0
                                                 AND cdst.category_type = 'company'
-              WHERE cps.security_code = bond.issuer_code
+              WHERE (bond.issuer_code = cps.security_code
+              OR ((COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs') AND EXISTS (
+                  SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
+                  WHERE abs_issuer.s_info_windcode = bond.wind_code
+                    AND abs_issuer.s_info_compcode = cps.security_code
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              )))
                 AND cps.target_pool_id = #{poolId}
                 AND cps.audit_status = '20'
                 AND cps.is_deleted = 0
@@ -492,13 +530,20 @@
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
+               ,bond.abs_flag
                ,bond.issuer_code
                ,bond.issuer AS issuer_name
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
-        WHERE bond.issuer_code = #{companyCode}
+        WHERE (bond.issuer_code = #{companyCode}
+              OR ((COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs') AND EXISTS (
+                  SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
+                  WHERE abs_issuer.s_info_windcode = bond.wind_code
+                    AND abs_issuer.s_info_compcode = #{companyCode}
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
@@ -527,6 +572,7 @@
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
+               ,bond.abs_flag
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
@@ -535,7 +581,13 @@
                                      AND ips.target_pool_id = #{poolId}
                                      AND ips.audit_status = '20'
                                      AND ips.is_deleted = 0
-        WHERE bond.issuer_code = #{companyCode}
+        WHERE (bond.issuer_code = #{companyCode}
+              OR ((COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs') AND EXISTS (
+                  SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
+                  WHERE abs_issuer.s_info_windcode = bond.wind_code
+                    AND abs_issuer.s_info_compcode = #{companyCode}
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
@@ -580,6 +632,7 @@
         SELECT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
+               ,bond.abs_flag
                ,bond.issuer_code
                ,bond.issuer AS issuer_name
         FROM ip_pool_status ips
@@ -608,7 +661,7 @@
               INNER JOIN dict_security_type cdst ON cdst.security_type = cps.security_type
                                                 AND cdst.is_deleted = 0
                                                 AND cdst.category_type = 'company'
-              WHERE cps.security_code = bond.issuer_code
+              WHERE bond.issuer_code = cps.security_code
                 AND cps.target_pool_id = #{companyPoolId}
                 AND cps.audit_status = '20'
                 AND cps.is_deleted = 0

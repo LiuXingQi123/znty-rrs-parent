@@ -71,7 +71,7 @@
 ### 2.7 当前所在池两个子块
 
 - **当前主体所在池**（`companyCurrentPools`）：SQL `ip_pool_status ips INNER JOIN dict_security_type ... category_type='company' INNER JOIN ip_investment_pool p`，`WHERE ips.security_code=#{companyCode} AND ips.audit_status='20' AND ips.is_deleted=0`，`ORDER BY entry_time DESC, id DESC`。
-- **当前主体旗下债券所在池**（`companyBondCurrentPools`）：主数据 `category_type='bond'`（**含 crmw，不排除**）中已在池记录：普通池读 `ip_pool_status.security_code=wind_code`，CRMW 池读 `ip_pool_status_crmw.crmw_scode=wind_code`；`GROUP BY target_pool_id`，`bondCount` 为该池在池数。点「查看债券」→ `queryCompanyBondList`（同一两表口径 + 指定 `targetPoolId`），明细条数等于该行 `bondCount`。
+- **当前主体旗下债券所在池**（`companyBondCurrentPools`）：主数据 `category_type='bond'`（**含 crmw，不排除**）中已在池记录：普通池读 `ip_pool_status.security_code=wind_code`，CRMW 池读 `ip_pool_status_crmw.crmw_scode=wind_code`；`GROUP BY target_pool_id`，`bondCount` 为该池在池数。点「查看债券」→ `queryCompanyBondList`（同一两表口径 + 指定 `targetPoolId`），明细条数等于该行 `bondCount`。旗下债券数量、明细和所在池汇总统一只按 `rrs_securityinfo.issuer_code` 关联，ABS 不按担保人、差额支付承诺人、债务主体、原始权益人四类关系扩展。
 - 池名通过 `investmentPoolService.queryPoolFullNameMap()` 填全路径。
 
 ---
@@ -233,7 +233,7 @@ syncCompanyBondsOnDirect(companyLog):
 
 主体 Excel 批量校验通过当前调用的 `CompanyAdjustCheckContext` 复用已匹配主体资料、投资池配置和池关系，继续执行单笔完整规则；不跨请求缓存。池状态、在途流程等业务事实仍逐项读取，单笔调库及提交、终审复核继续读取当前主数据。
 
-主体资料统一读取 `ais_inv_ods.wind_compintroduction`，支持未发债主体，展示 `COMP_NAME` 全称。旗下债券仍由 `rrs_securityinfo` 按 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type=company`，新申请将全称写入既有名称字段；不迁移历史快照。原本直接读取业务快照的主体池查询、主体池调整历史不新增公司简介关联。仅两处证券与担保人/权益人的关系查询继续保留 `wind_cbondissuer`。
+主体资料统一读取 `ais_inv_ods.wind_compintroduction`，支持未发债主体，展示 `COMP_NAME` 全称。旗下债券仍由 `rrs_securityinfo` 按 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type=company`，新申请将全称写入既有名称字段；不迁移历史快照。原本直接读取业务快照的主体池查询、主体池调整历史不新增公司简介关联。`wind_cbondissuer` 只保留在证券池调整的担保人/权益人候选，以及主体出入池时旗下 ABS 债的自动同步、互斥调出候选（`queryCompanyInboundBondForAutoList`、`queryCompanyBondMutexOutList`、`queryCompanyOutboundBondForAutoList`）；主体旗下债券数量、明细、所在池汇总均只按 `issuer_code`，不参与四类关系扩展。
 
 服务中保留的证券主体所在池查询 `queryIssuerPoolStatusList` 和最大剩余期限查询 `queryIssuerTargetPoolMaxRemainDays` 同样按 `rrs_securityinfo.issuer_code` 关联，不再按发行人名称判断同主体；最大期限比较已不参与证券池新简易流程，禁投池本身仍不启用简易流程。
 

@@ -3,7 +3,7 @@
 <mapper namespace="com.znty.rrs.mapper.SecurityPoolAdjustMapper">
     <!-- 证券池调整 mapper，对应表：rrs_securityinfo（证券信息）、ip_adjust_log（调整记录）、ip_pool_status（证券池状态）、ip_pool_relation（投资池关系），提供证券查询、调库记录新增、池状态查询及业务规则校验功能 -->
 
-    <!-- 分页查询证券列表（仅债券大类，与禁投池「旗下债券数量」同口径） -->
+    <!-- 分页查询人工可调整的债券，排除 CRMW 凭证 -->
     <select id="querySecurityPage" resultType="com.znty.rrs.entity.securitypooladjust.SecurityInfoDto">
         SELECT si.*
                ,dst.security_type_name
@@ -13,6 +13,7 @@
                                          AND dst.category_type = 'bond'
         <where>
             AND si.security_status != 'D'
+            AND si.security_type != 'crmw'
             <if test="securityCode != null and securityCode != ''">
                 AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
             </if>
@@ -55,7 +56,7 @@
         </where>
     </select>
 
-    <!-- 查询候选证券中出现的证券类型选项（与列表同口径：仅 bond） -->
+    <!-- 查询人工候选证券的类型选项，债券大类排除 CRMW 凭证 -->
     <select id="querySecurityTypeList" resultType="com.znty.rrs.entity.common.SecurityTypeOptionDto">
         SELECT DISTINCT si.security_type
                        ,dst.security_type_name
@@ -64,6 +65,7 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE si.security_status != 'D'
+          AND si.security_type != 'crmw'
         ORDER BY dst.sort_order ASC
                  ,si.security_type ASC
     </select>
@@ -337,6 +339,29 @@
                 WHERE eligible.company_code = grade.windcode
             )
         )
+        <!-- 从认可机构读取候选主体最新一条外评，评级与机构来自同一行 -->
+        ,ranked_outer_rating AS (
+            SELECT rating.s_info_compcode
+                   , rating.b_info_creditrating
+                   , rating.b_info_creditratingagency
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY rating.s_info_compcode
+                       ORDER BY COALESCE(NULLIF(rating.ann_dt2, ''), NULLIF(rating.ann_dt, '')) DESC
+                                , rating.ann_dt DESC
+                                , rating.opdate DESC
+                                , rating.object_id DESC
+                   ) AS row_num
+            FROM ais_inv_ods.wind_cbondissuerrating rating
+            WHERE EXISTS (
+                SELECT 1 FROM dict_external_rating_agency agency
+                WHERE agency.is_deleted = 0
+                  AND agency.b_info_creditratingagency = rating.b_info_creditratingagency
+            )
+              AND EXISTS (
+                  SELECT 1 FROM eligible_company candidate
+                  WHERE candidate.company_code = rating.s_info_compcode
+              )
+        )
         <!-- 返回当前证券关系主体；无内评时评分字段为空。 -->
         SELECT eligible.security_code
                ,eligible.company_code
@@ -344,9 +369,13 @@
                ,eligible.relation_type_code
                ,grade.total_score AS inner_rating
                ,grade.ts AS rating_time
+               , outer_rating.b_info_creditrating AS rating_bondissuer
+               , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM eligible_company eligible
         LEFT JOIN ranked_grade grade ON grade.windcode = eligible.company_code
                                     AND grade.row_num = 1
+        LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = eligible.company_code
+                                                   AND outer_rating.row_num = 1
         ORDER BY eligible.relation_sort_no ASC
                  ,grade.ts DESC
                  ,eligible.company_code ASC
@@ -404,14 +433,41 @@
                 WHERE company.company_code = grade.windcode
             )
         )
+        <!-- 从认可机构读取候选主体最新一条外评，评级与机构来自同一行 -->
+        ,ranked_outer_rating AS (
+            SELECT rating.s_info_compcode
+                   , rating.b_info_creditrating
+                   , rating.b_info_creditratingagency
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY rating.s_info_compcode
+                       ORDER BY COALESCE(NULLIF(rating.ann_dt2, ''), NULLIF(rating.ann_dt, '')) DESC
+                                , rating.ann_dt DESC
+                                , rating.opdate DESC
+                                , rating.object_id DESC
+                   ) AS row_num
+            FROM ais_inv_ods.wind_cbondissuerrating rating
+            WHERE EXISTS (
+                SELECT 1 FROM dict_external_rating_agency agency
+                WHERE agency.is_deleted = 0
+                  AND agency.b_info_creditratingagency = rating.b_info_creditratingagency
+            )
+              AND EXISTS (
+                  SELECT 1 FROM source_company candidate
+                  WHERE candidate.company_code = rating.s_info_compcode
+              )
+        )
         <!-- 返回主体及其最新内评；无内评主体仍可作为自选权益人展示。 -->
         SELECT company.company_code
                ,COALESCE(grade.windname, company.company_name) AS company_name
                ,grade.total_score AS inner_rating
                ,grade.ts AS rating_time
+               , outer_rating.b_info_creditrating AS rating_bondissuer
+               , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM source_company company
         LEFT JOIN ranked_grade grade ON grade.windcode = company.company_code
                                     AND grade.row_num = 1
+        LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = company.company_code
+                                                   AND outer_rating.row_num = 1
         ORDER BY company.company_code ASC
     </select>
 
@@ -440,14 +496,41 @@
             FROM ais_inv_analysis.v_inv_grade_result grade
             WHERE grade.windcode = #{companyCode}
         )
+        <!-- 从认可机构读取候选主体最新一条外评，评级与机构来自同一行 -->
+        ,ranked_outer_rating AS (
+            SELECT rating.s_info_compcode
+                   , rating.b_info_creditrating
+                   , rating.b_info_creditratingagency
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY rating.s_info_compcode
+                       ORDER BY COALESCE(NULLIF(rating.ann_dt2, ''), NULLIF(rating.ann_dt, '')) DESC
+                                , rating.ann_dt DESC
+                                , rating.opdate DESC
+                                , rating.object_id DESC
+                   ) AS row_num
+            FROM ais_inv_ods.wind_cbondissuerrating rating
+            WHERE EXISTS (
+                SELECT 1 FROM dict_external_rating_agency agency
+                WHERE agency.is_deleted = 0
+                  AND agency.b_info_creditratingagency = rating.b_info_creditratingagency
+            )
+              AND EXISTS (
+                  SELECT 1 FROM source_company candidate
+                  WHERE candidate.company_code = rating.s_info_compcode
+              )
+        )
         <!-- 返回防伪校验后的主体及其最新内评。 -->
         SELECT company.company_code
                ,COALESCE(grade.windname, company.company_name) AS company_name
                ,grade.total_score AS inner_rating
                ,grade.ts AS rating_time
+               , outer_rating.b_info_creditrating AS rating_bondissuer
+               , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
         FROM source_company company
         LEFT JOIN ranked_grade grade ON grade.windcode = company.company_code
                                     AND grade.row_num = 1
+        LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = company.company_code
+                                                   AND outer_rating.row_num = 1
         LIMIT 1
     </select>
 
@@ -1719,4 +1802,60 @@
         LIMIT 1
     </select>
 
+    <!-- ABS 主档未通过审核时，按后端核验的本次主体读取财报 -->
+    <select id="queryLatestFinancialDateByIssuer" resultType="java.lang.Long">
+        SELECT MAX(f.REPORTDATE)
+        FROM ais_inv_ods.wind_companyfinancial f
+        WHERE f.COMPANYCODE = #{issuerCode}
+    </select>
+
+    <!-- ABS 主档未通过审核时，按后端核验的本次主体读取财报 -->
+    <select id="queryFinancialListByIssuer"
+            resultType="com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto">
+        SELECT f.REPORTDATE AS report_date
+               ,f.TOT_ASSETS
+               ,f.SHAREHOLDER_EQUITY
+               ,f.DEBT_ASSETS_RATIO
+               ,f.TOT_REV
+               ,f.NET_PROFIT
+               ,f.NET_CASH_OPER
+               ,f.NET_CASH_INV
+               ,f.GRP
+               ,f.GENERAL_BUDGET_REV
+               ,f.GENERAL_BUDGET_EXP
+               ,f.ROE
+               ,f.EXP_TO_EBITDA
+               ,f.EBITDA
+               ,f.DEBT_TO_EBITDA
+        FROM ais_inv_ods.wind_companyfinancial f
+        WHERE f.COMPANYCODE = #{issuerCode}
+          AND f.REPORTDATE IN
+        <foreach collection="reportDates" item="reportDate" open="(" separator="," close=")">
+            #{reportDate}
+        </foreach>
+        ORDER BY f.REPORTDATE ASC
+    </select>
+
+    <!-- ABS 主档未通过审核时，按后端核验的本次主体读取财报 -->
+    <select id="queryFinancialByIssuerAndDate"
+            resultType="com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto">
+        SELECT f.REPORTDATE AS report_date
+               ,f.TOT_ASSETS
+               ,f.SHAREHOLDER_EQUITY
+               ,f.DEBT_ASSETS_RATIO
+               ,f.TOT_REV
+               ,f.NET_PROFIT
+               ,f.NET_CASH_OPER
+               ,f.NET_CASH_INV
+               ,f.GRP
+               ,f.GENERAL_BUDGET_REV
+               ,f.GENERAL_BUDGET_EXP
+               ,f.ROE
+               ,f.EXP_TO_EBITDA
+               ,f.EBITDA
+               ,f.DEBT_TO_EBITDA
+        FROM ais_inv_ods.wind_companyfinancial f
+        WHERE f.COMPANYCODE = #{issuerCode}
+          AND f.REPORTDATE = #{reportDate}
+    </select>
 </mapper>

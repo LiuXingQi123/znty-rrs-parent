@@ -36,7 +36,7 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyNotInPoolBondAutoOutService service = new CompanyNotInPoolBondAutoOutService();
+        CompanyNotInPoolBondAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyNotInPoolBondAutoOutService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
@@ -86,7 +86,7 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
 
     @Test
     public void parseParamMappings_ShouldAcceptPoolIdsAndMappings() {
-        CompanyNotInPoolBondAutoOutService service = new CompanyNotInPoolBondAutoOutService();
+        CompanyNotInPoolBondAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyNotInPoolBondAutoOutService());
         assertThat(service.parseParamMappings("{\"poolIds\":[15]}")).hasSize(1);
         assertThat(service.parseParamMappings(
                 "{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":16}]}").get(0))

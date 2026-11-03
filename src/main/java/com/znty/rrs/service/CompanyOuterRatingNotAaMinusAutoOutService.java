@@ -86,6 +86,10 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     /** 证券池调库落地 Mapper */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    /** ABS 主体联动与规则提醒 */
+    @Resource
+    private AbsCompanySyncService absCompanySyncService;
     /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -363,6 +367,11 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         String bondReason = companyReason + "（同池旗下债）";
         for (ScheduledAdjustCandidateDto bond : bonds) {
             if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+                continue;
+            }
+            // ABS 保持唯一主体身份，存在其他依据时交由研究员处理
+            if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
+                    && !absCompanySyncService.allowScheduledSync(bond, companyCode, poolId, pool.getPoolName(), false)) {
                 continue;
             }
             // 对齐老 AdjustPoolByRule.checkSecurityOutPoolRelation（关系 12 / 调出限制池）

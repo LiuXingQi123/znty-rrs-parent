@@ -84,7 +84,7 @@ public class SecuritySnapshotMarketIntegrationTest {
             assertThat(crmwMapper.queryLatestSecuritySnapshotDetailByWindCode("A.IB").getShortName()).isEqualTo("CRMW提交时简称");
             SecurityMarketService markets = new SecurityMarketService();
             ReflectionTestUtils.setField(markets, "securityMarketMapper", session.getMapper(SecurityMarketMapper.class));
-            SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+            SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
             ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityMapper);
             ReflectionTestUtils.setField(service, "securityMarketService", markets);
             SecurityPoolAdjustReq req = new SecurityPoolAdjustReq(); req.setSecurityCode("A.IB"); req.setAdjustLogId(1L);
@@ -98,7 +98,7 @@ public class SecuritySnapshotMarketIntegrationTest {
             assertThat(history.getMarketCode()).isEqualTo("NIB");
             assertThat(history.getShortName()).isEqualTo("提交时简称");
             assertThat(history.getAnalysis()).isEqualTo("提交时分析");
-            CrmwPoolAdjustService crmwService = new CrmwPoolAdjustService();
+            CrmwPoolAdjustService crmwService = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
             ReflectionTestUtils.setField(crmwService, "crmwPoolAdjustMapper", crmwMapper);
             ReflectionTestUtils.setField(crmwService, "securityMarketService", markets);
             CrmwPoolAdjustReq crmwReq = new CrmwPoolAdjustReq(); crmwReq.setSecurityCode("A.IB"); crmwReq.setAdjustLogId(2L);

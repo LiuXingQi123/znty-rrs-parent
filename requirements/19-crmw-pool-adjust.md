@@ -230,6 +230,7 @@
 
 - **两步选择**：列表页先选 CRMW 凭证（radio），再选可绑定债券类标的证券；`queryBindableSecurityPage` 限定 `category_type='bond'` 并排除 `security_type='crmw'`。
 - **独立状态表**：`ip_pool_status_crmw` 使用 `crmw_scode + security_code` 标识凭证与标的组合；`crmw_mktcode` 字段仅兼容历史数据；证券池调库用 `ip_pool_status`。
+- **共用日志表**：CRMW 与普通证券调库统一使用 `ip_adjust_log`，通过 `pool_type='crmw'` 区分。ABS 在途主体校验和页面身份恢复按日志类型分别读取 `ip_adjust_security_snapshot_crmw` 或 `ip_adjust_security_snapshot`，避免跨链路错读快照。
 - **批次号前缀**：`CRMW`（证券池用 `BOND`）。
 - **校验强制 poolType**：`validateCheckAdjustReq`/`validateSubmitReq`/`validateSubmitTargetPools` 均强制 `PoolType.CRMW.getCode()='crmw'`。
 - **提交参数**：`CrmwPoolAdjustSubmitReq` 多 CRMW 元数据字段，`crmwStype` 必须为 `'crmw'`。
@@ -274,3 +275,24 @@ CRMW 凭证基本信息由 `queryCrmwDetail` 直接读取主档，保持原逻�
 `sys_attachment.source_attachment_id` 保存复制来源的报告库附件 ID，附件查询返回 `sourceAttachmentId/sourceReportId/sourceReportSource/sourceReportTitle`；基金代码转正继承关联时保留该来源。新增 `POST /api/v1/reports/queryReportDetail { reportId, source: internal|external }`，非法来源、无效 ID、不存在或已删除报告明确失败。
 
 新环境通过更新后的原始附件 schema 初始化；存量升级使用 `sql/tool_report_source_upgrade.sql`（不加入初始化/重置执行）。仅修复唯一可定位来源，未定位项明确输出供核对，运行时不猜测归属。前端完整说明见 `docs/report-materials.html`。
+
+
+## ABS 跨池唯一主体身份
+
+- 仅 ABS 使用多主体逻辑。普通权益人查询限定 `s_info_typecode IN (115004000, 115203000, 115202000, 115201000)`；全市场自选主体保持现有来源。候选一次返回名称、代码、内评、认可机构最新外评及对应机构，选择后复用已查询数据；动态池状态不缓存。
+- 同一 ABS 的所有有效在库和未结束申请（00/11）只能使用同一个主体代码。自选优先；同代码的不同关系角色或选择方式不算更换身份。该约束对单券、批量、Excel、禁投 ABS 和标的为 ABS 的 CRMW 申请均不可绕过。
+- 在途身份保存在申请快照，提交不更新主档五字段。审核通过或直通生效时，在同一事务内更新 `issuer/issuer_code/rating_bondissuer/rating_bondissuer_agency/inner_issuer_rating` 并落池；驳回、撤回不改主档。
+- 人工申请审核通过或直通成功入库后永久固定主体代码，全部出库且流程结束也不能更换。主体联动自动入池只生成 audit_status=00 的待确认调库日志，暂不写入 ip_pool_status 和主档五字段，也不形成永久绑定；研究员确认主体后才转为 audit_status=20 并正式入池，成功确认后才固定身份。此前仅有驳回或撤回且从未成功确认的申请不形成永久绑定；未结束申请仍占用本次主体。主档持续保留已确认身份，同一主体的名称和评级允许更新，历史详情保留原申请快照。
+- 主体选择和只读查询不因身份占用提前报错；已有在库/在途主体冲突，以及同一批内同一 ABS 选择不同主体，都在下一步以 `canAdjust=false`、`failReasons` 返回，展示于“调整说明”。冲突组的联动、互斥和关联市场项同时不可调整，其他独立证券继续校验。Excel 提示放行、放开规则均不可绕过；正式提交及最终审批继续强制校验主体。提交和审批通过前查询当前在库及在途身份并校验一致性，不增加数据行锁。
+- ABS 申请阶段财报查询和独立保存通过 `selectedRatingCompany` 使用本次选择；未选择时返回空财报，不回查证券代码或历史主档，无主体不允许保存。切换主体前保存原主体尚未保存的财报修改。
+- 保留现有快速流程和材料规则，不因本次改造禁用 ABS 快速资格。
+
+## 已查询数据复用
+
+- 权益人、担保人或自选权益人候选已带回主体代码、名称、内评、认可机构最新外评及机构；选池、校验、提交通过 `selectedRatingCompany` 传递所选主体及普通/自选名称，后端直接使用，不重复查询候选或评级
+- 单券页面传递已加载的 `securityInfo`，校验、提交及快照共用；批量仍读取实际需要的完整证券信息，同批主体比较直接使用页面传入类型和主体代码，不逐项复查主档
+- 财报查询/保存直接使用已知主体代码，保存后返回本次记录，不逐期回查；当前在库、在途及同一 ABS 主体一致性仍按业务时点查询
+
+## 空主体预览与财报
+
+清空权益人/自选权益人只清空本次页面的五字段及财报编辑缓存，并使旧响应失效，不在选池预览阶段检查主体名称。两种选择都为空时，四期财报值留白且不可编辑、不可保存；清除自选后仍有普通权益人时使用普通权益人的财报。下一步及正式提交要求选择主体，身份冲突继续放在调整说明中显示不可调整。财报查询和保存复用 `selectedRatingCompany`；审核及历史只读页面沿用原展示口径。

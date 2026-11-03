@@ -36,13 +36,13 @@ import static org.mockito.Mockito.*;
 public class BusinessPermissionBoundaryTest {
     /** 详情接口仅校验各自业务参数，不读取页面入口。 */
     @Test public void detailReadsShouldValidateBusinessParametersWithoutRequiringGrant() {
-        assertThatThrownBy(() -> new SecurityPoolAdjustService().querySecurityDetail(new SecurityPoolAdjustReq()))
+        assertThatThrownBy(() -> AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService()).querySecurityDetail(new SecurityPoolAdjustReq()))
                 .isInstanceOf(BizException.class).hasMessageContaining("证券代码不能为空");
-        assertThatThrownBy(() -> new ForbiddenPoolAdjustService().queryCompanyDetail(new ForbiddenPoolAdjustReq()))
+        assertThatThrownBy(() -> AbsIdentityTestSupport.withIdentity(new ForbiddenPoolAdjustService()).queryCompanyDetail(new ForbiddenPoolAdjustReq()))
                 .isInstanceOf(BizException.class).hasMessageContaining("主体代码不能为空");
-        assertThatThrownBy(() -> new ForbiddenAbsPoolAdjustService().querySecurityDetail(new ForbiddenAbsPoolAdjustReq()))
+        assertThatThrownBy(() -> AbsIdentityTestSupport.withIdentity(new ForbiddenAbsPoolAdjustService()).querySecurityDetail(new ForbiddenAbsPoolAdjustReq()))
                 .isInstanceOf(BizException.class).hasMessageContaining("证券代码不能为空");
-        assertThatThrownBy(() -> new CrmwPoolAdjustService().queryCrmwDetail(new CrmwPoolAdjustReq()))
+        assertThatThrownBy(() -> AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService()).queryCrmwDetail(new CrmwPoolAdjustReq()))
                 .isInstanceOf(BizException.class).hasMessageContaining("CRMW代码不能为空");
         assertThatThrownBy(() -> new FundPoolAdjustService().queryFundDetail(new FundPoolAdjustReq()))
                 .isInstanceOf(BizException.class).hasMessageContaining("基金代码不能为空");
@@ -80,7 +80,7 @@ public class BusinessPermissionBoundaryTest {
     /** 详情直接读取指定步骤，即使当前演示用户不是该步骤处理人。 */
     @Test public void bondStepsShouldLoadWithoutUserOrMatterAuthorization() {
         SecurityPoolAdjustMapper steps = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", steps);
         IpAdjustStepBo step = new IpAdjustStepBo();
         step.setId(7L);

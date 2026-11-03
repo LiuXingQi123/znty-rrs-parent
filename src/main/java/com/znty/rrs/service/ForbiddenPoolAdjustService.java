@@ -1,4 +1,6 @@
 package com.znty.rrs.service;
+
+import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 import com.znty.rrs.common.enums.ApprovalStrategy;
 
 import com.znty.rrs.common.enums.FlowStatus;
@@ -149,6 +151,10 @@ public class ForbiddenPoolAdjustService {
     /** 禁投池主体调整数据访问组件 */
     @Resource
     private ForbiddenPoolAdjustMapper forbiddenPoolAdjustMapper;
+
+    /** ABS 主体身份与联动提醒 */
+    @Resource
+    private AbsCompanySyncService absCompanySyncService;
 
     /** 投资池数据访问组件 */
     @Resource
@@ -2481,6 +2487,11 @@ public class ForbiddenPoolAdjustService {
             AdjustCheckReq req, AdjustSharedData shared, InvestmentPoolBo targetPool,
             List<String> matchReasons, List<String> unmatchReasons) {
 
+        // ABS 只能走一般入库流程，不提供快速入库候选
+        if (CreditBondSpecialInboundRule.isAbs(shared.getSecurityInfo())) {
+            unmatchReasons.add("ABS 不适用快速入库流程");
+            return false;
+        }
         if (isCreditBondLevelOneToThree(targetPool)) {
             matchReasons.add("目标池属于信用债大库一、二、三级库");
         } else {
@@ -2898,6 +2909,11 @@ public class ForbiddenPoolAdjustService {
                 : investmentPoolMapper.queryPoolByIdsList(new ArrayList<>(autoOutPoolIds)).stream()
                         .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
         for (SecurityInfoBo bond : bonds) {
+            // 任意目标池统一判断主体依据，B 触发时保留已确定的 A 身份
+            if (CreditBondSpecialInboundRule.isAbs(bond) && !absCompanySyncService.allowCompanySync(bond, companyLog.getSecurityCode(),
+                    companyLog.getTargetPoolId(), companyLog.getTargetPoolName(), inbound)) {
+                continue;
+            }
             // 同批显式债券调出由批次统一落池，主体同步不重复生成日志或软删
             if (!inbound && explicitOutboundKeys.contains(
                     buildSecurityPoolKey(bond.getWindCode(), companyLog.getTargetPoolId()))) {
@@ -2938,9 +2954,12 @@ public class ForbiddenPoolAdjustService {
                     autoOutLog.setTargetPoolId(outPoolId);
                     autoOutLog.setTargetPoolName(outPool.getPoolName());
                     autoOutLog.setPoolType(outPool.getPoolType());
-                    autoOutLog.setAdjustReason("主体“" + companyLog.getSecurityShortName()
+                    String autoOutReason = "主体“" + companyLog.getSecurityShortName()
                             + "”调入“" + companyLog.getTargetPoolName()
-                            + "”，旗下债券自动调出“" + outPool.getPoolName() + "”");
+                            + "”，旗下债券自动调出“" + outPool.getPoolName() + "”";
+                    autoOutReason = ScheduledAdjustLogHelper.appendDetails(autoOutReason,
+                            ScheduledAdjustLogHelper.absCompanySyncDetail(bond, companyLog.getSecurityCode()));
+                    autoOutLog.setAdjustReason(autoOutReason);
                     autoOutLog.setSubmitTime(companyLog.getSubmitTime());
                     if (forbiddenPoolAdjustMapper.addAdjustLog(autoOutLog) != 1) {
                         throw new BizException("旗下债券[" + bond.getWindCode() + "]自动调出日志写入失败");
@@ -4410,8 +4429,11 @@ public class ForbiddenPoolAdjustService {
         autoLog.setAuditStatus(AuditStatus.APPROVED.getCode());
         autoLog.setAdjusterId(companyLog.getAdjusterId());
         autoLog.setAdjusterName(companyLog.getAdjusterName());
-        autoLog.setAdjustReason("主体“" + companyLog.getSecurityShortName() + "”"
-                + companyLog.getAdjustMode() + "，旗下债券自动同步调整");
+        String reason = "主体“" + companyLog.getSecurityShortName() + "”"
+                + companyLog.getAdjustMode() + "，旗下债券自动同步调整";
+        reason = ScheduledAdjustLogHelper.appendDetails(reason,
+                ScheduledAdjustLogHelper.absCompanySyncDetail(bond, companyLog.getSecurityCode()));
+        autoLog.setAdjustReason(reason);
         autoLog.setAdjustAdvice(companyLog.getAdjustAdvice());
         return autoLog;
     }

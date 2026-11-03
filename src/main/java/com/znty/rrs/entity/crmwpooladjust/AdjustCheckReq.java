@@ -1,5 +1,9 @@
 package com.znty.rrs.entity.crmwpooladjust;
 
+import com.znty.rrs.entity.bo.SecurityInfoBo;
+
+import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
+
 import lombok.Data;
 
 import java.util.List;
@@ -9,6 +13,12 @@ import java.util.List;
  */
 @Data
 public class AdjustCheckReq {
+
+    /** 页面已加载的证券详情，直接供本次查询或校验使用 */
+    private SecurityInfoBo securityInfo;
+
+    /** 页面已选评级主体，直接复用名称及内外评 */
+    private RatingCompanySelectionReq selectedRatingCompany;
 
     /** 证券代码 */
     private String securityCode;

@@ -9,6 +9,7 @@ import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
 import com.znty.rrs.entity.forbiddenpooladjust.CompanyAdjustCheckContext;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportDto;
+import com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto;
 import com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportCheckItemDto;
@@ -20,6 +21,7 @@ import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.SecurityPoolExcelImportMapper;
+import com.znty.rrs.mapper.AbsIdentityMapper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -38,6 +40,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Date;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -61,6 +64,47 @@ import static org.mockito.Mockito.times;
  */
 public class SecurityPoolExcelImportServiceTest {
 
+    /** 清空出库与导入共用提示放行入口，保留原原因和批量流程 */
+    @Test
+    public void clearOutboundShouldUseExcelWarningCheckAndKeepReasons() {
+        PoolMemberDto member = new PoolMemberDto();
+        member.setSecurityCode("C1");
+        member.setSecurityShortName("测试凭证");
+        member.setSecurityType("crmw");
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(100L);
+        pool.setPoolName("产品库");
+        SecurityInfoBo security = new SecurityInfoBo();
+        security.setSecurityType("crmw");
+        when(securityPoolAdjustMapper.querySecurityBoByCode("C1")).thenReturn(security);
+        AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+        item.setSecurityCode("C1");
+        item.setSecurityType("crmw");
+        item.setTargetPoolId(100L);
+        item.setAdjustMode("调出");
+        item.setItemTag("manual");
+        item.setCanAdjust(true);
+        item.setFailReasons(Collections.singletonList("目标投资池已锁定"));
+        AdjustCheckDto dto = new AdjustCheckDto();
+        dto.setItems(Collections.singletonList(item));
+        when(securityPoolAdjustService.checkExcelAdjust(any())).thenReturn(dto);
+        when(investmentPoolMapper.queryPoolById(100L)).thenReturn(pool);
+        when(importMapper.queryPoolMemberList(100L, "security")).thenReturn(Collections.singletonList(member));
+        when(securityPoolAdjustMapper.querySecurityHasPendingProcess("C1")).thenReturn(true);
+        SysImpTmpDetlBo imported = new SysImpTmpDetlBo();
+        imported.setFld001("NEW");
+        imported.setFld009("100");
+        List<SecurityPoolExcelImportCheckItemDto> results = ReflectionTestUtils.invokeMethod(service,
+                "checkClearTargetOutbound", Collections.singletonList(imported), true, true, false, false, "1");
+        assertEquals(1, results.size());
+        assertTrue(results.get(0).isCanAdjust());
+        assertTrue(results.get(0).getFailReasons().contains("目标投资池已锁定"));
+        assertEquals("Excel清空", results.get(0).getAdjustType());
+        verify(securityPoolAdjustService).checkExcelAdjust(any());
+        verify(securityPoolAdjustService, never()).checkAdjust(any());
+        verify(securityPoolAdjustMapper, never()).querySecurityHasPendingProcess("C1");
+    }
+
     private SecurityPoolExcelImportService service;
     private SecurityPoolExcelImportMapper importMapper;
     private InvestmentPoolMapper investmentPoolMapper;
@@ -72,7 +116,7 @@ public class SecurityPoolExcelImportServiceTest {
 
     @Before
     public void setUp() {
-        service = new SecurityPoolExcelImportService();
+        service = AbsIdentityTestSupport.withIdentity(new SecurityPoolExcelImportService());
         importMapper = mock(SecurityPoolExcelImportMapper.class);
         investmentPoolMapper = mock(InvestmentPoolMapper.class);
         securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
@@ -520,6 +564,57 @@ public class SecurityPoolExcelImportServiceTest {
     @Test
     public void checkAndSubmitShouldKeepWarningsAndAcceptOriginallyFailedSecurity() {
         assertSecurityImportWithTips(Arrays.asList("证券当前在调入限制池中：债券禁止库", "证券当前在禁止池中"));
+    }
+
+    /** 同批 ABS 多主体全部作为不可调整行返回，其他独立证券仍通过 */
+    @Test
+    public void conflictingAbsRowsShouldReturnReasonsWithoutAbortingImportCheck() {
+        AbsIdentityService identity = new AbsIdentityService();
+        AbsIdentityMapper identities = mock(AbsIdentityMapper.class);
+        ReflectionTestUtils.setField(identity, "absIdentityMapper", identities);
+        ReflectionTestUtils.setField(service, "absIdentityService", identity);
+        SecurityInfoBo abs = new SecurityInfoBo();
+        abs.setWindCode("ABS1");
+        abs.setSecurityType("abs");
+        when(identities.queryAbsSecurityList(anyList())).thenReturn(Collections.singletonList(abs));
+        when(securityPoolAdjustMapper.querySecurityBoByCode("ABS1")).thenReturn(abs);
+        RelatedRatingCompanyDto first = new RelatedRatingCompanyDto();
+        first.setCompanyCode("A");
+        RelatedRatingCompanyDto second = new RelatedRatingCompanyDto();
+        second.setCompanyCode("B");
+        identity.rememberRelated("ABS1", Arrays.asList(first, second));
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(101L);
+        when(importMapper.queryEnabledLeafPoolByParentAndChildName("父池", "子池")).thenReturn(pool);
+        List<SysImpTmpDetlBo> rows = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            SysImpTmpDetlBo row = new SysImpTmpDetlBo();
+            row.setId((long) index + 1);
+            row.setFld001(index == 2 ? "OTHER" : "ABS1");
+            row.setFld003("父池");
+            row.setFld004("子池");
+            if (index < 2) row.setFld011(index == 0 ? "A" : "B");
+            rows.add(row);
+        }
+        when(securityPoolAdjustService.checkExcelAdjust(any())).thenAnswer(invocation -> {
+            AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+            item.setItemTag("manual");
+            item.setCanAdjust(true);
+            AdjustCheckDto result = new AdjustCheckDto();
+            result.setItems(Collections.singletonList(item));
+            return result;
+        });
+        List<SecurityPoolExcelImportCheckItemDto> result = ReflectionTestUtils.invokeMethod(service,
+                "checkSecurityImport", rows, true, false, "1", new Date());
+        assertEquals(3, result.size());
+        for (SecurityPoolExcelImportCheckItemDto item : result.subList(0, 2)) {
+            assertTrue(!item.isCanAdjust());
+            assertTrue(item.getFailReasons().get(0).contains("同批申请中选择了不同主体"));
+        }
+        assertTrue(result.get(2).isCanAdjust());
+        assertEquals("2", rows.get(0).getChkRslt());
+        assertEquals("2", rows.get(1).getChkRslt());
+        assertEquals("1", rows.get(2).getChkRslt());
     }
 
     /** 使用真实导入编排验证来源明细、校验快照和提交参数保持一致 */

@@ -7,6 +7,8 @@ import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustSharedData;
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
+import com.znty.rrs.mapper.AbsIdentityMapper;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -52,6 +54,64 @@ public class SecurityPoolExcelWarningOnlyTest {
         assertThat(excel.getItems().get(0).getFailReasons()).contains("证券当前在禁止池中");
         assertThat(excel.getItems().get(0).getFailReasons()).isEqualTo(normal.getItems().get(0).getFailReasons());
         assertThat(excel.getItems().get(0).getFlowOptions()).isNotEmpty();
+    }
+
+    /** CRMW 只限制候选列表，通用规则不额外按凭证类型拦截 */
+    @Test
+    public void crmwShouldNotAddExtraManualTypeFailures() {
+        for (String direction : Arrays.asList("调入", "调出")) {
+            Fixture f = new Fixture();
+            f.security.setSecurityType("crmw");
+            when(f.mapper.querySecurityCurrentPoolIdList("BOND.IB"))
+                    .thenReturn("调出".equals(direction) ? Collections.singletonList(100L) : Collections.emptyList());
+            AdjustCheckReq req = new AdjustCheckReq();
+            req.setSecurityCode("BOND.IB");
+            req.setSecurityInfo(f.security);
+            AdjustCheckReq.CheckItem selected = new AdjustCheckReq.CheckItem();
+            selected.setTargetPoolId(100L);
+            selected.setAdjustMode(direction);
+            req.setItems(Collections.singletonList(selected));
+            for (AdjustCheckDto result : Arrays.asList(f.service.checkAdjust(req), f.service.checkBatchAdjust(req))) {
+                assertThat(result.getItems()).isNotEmpty().allSatisfy(item ->
+                        assertThat(item.getFailReasons()).noneMatch(reason -> reason.contains("CRMW凭证不允许")));
+            }
+            f.service.recheckBeforeFinalApproval(Collections.singletonList(log("手工调整", "N1", direction)));
+        }
+    }
+
+    /** ABS 身份冲突在单券、批量及 Excel 下一步均显示为不可调整 */
+    @Test
+    public void absIdentityConflictShouldRemainHardFailureAfterExcelWarningConversion() {
+        Fixture f = new Fixture();
+        f.security.setSecurityType("abs");
+        f.security.setAbsFlag(1);
+        AbsIdentityService identity = new AbsIdentityService();
+        AbsIdentityMapper identities = mock(AbsIdentityMapper.class);
+        ReflectionTestUtils.setField(identity, "absIdentityMapper", identities);
+        ReflectionTestUtils.setField(identity, "securityPoolAdjustMapper", f.mapper);
+        ReflectionTestUtils.setField(f.service, "absIdentityService", identity);
+        when(identities.queryOccupiedIdentityCodes("BOND.IB")).thenReturn(Collections.singletonList("A"));
+        RelatedRatingCompanyDto candidate = new RelatedRatingCompanyDto();
+        candidate.setCompanyCode("B");
+        candidate.setCompanyName("主体B");
+        identity.rememberRelated("BOND.IB", Collections.singletonList(candidate));
+        AdjustCheckReq req = new AdjustCheckReq();
+        req.setSecurityCode("BOND.IB");
+        req.setRightsHolderCode("B");
+        req.setReleaseRules(true);
+        AdjustCheckReq.CheckItem selected = new AdjustCheckReq.CheckItem();
+        selected.setTargetPoolId(100L);
+        selected.setAdjustMode("调入");
+        req.setItems(Collections.singletonList(selected));
+        for (AdjustCheckDto result : Arrays.asList(f.service.checkAdjust(req), f.service.checkBatchAdjust(req),
+                f.service.checkExcelAdjust(req))) {
+            assertThat(result.getItems()).isNotEmpty().allSatisfy(item -> {
+                assertThat(item.isCanAdjust()).isFalse();
+                assertThat(item.getFailReasons()).anyMatch(reason -> reason.contains("主体[A]") && reason.contains("主体[B]"));
+                assertThat(item.getFlowOptions()).isEmpty();
+            });
+        }
+        assertThatThrownBy(() -> identity.validateIdentity("BOND.IB", "B")).isInstanceOf(BizException.class);
     }
 
     @Test
@@ -108,19 +168,21 @@ public class SecurityPoolExcelWarningOnlyTest {
 
     @Test
     public void persistedExcelBatchShouldPassFinalApprovalForManualAndCompanionItems() {
-        Fixture f = new Fixture();
-        f.pool.setLockFlag(1);
-        when(f.mapper.querySecurityInForbiddenPool("BOND.IB")).thenReturn(true);
-        List<IpAdjustLogBo> logs = Arrays.asList(log("Excel导入", "E1", "调入"), log("关联调整", "E1", "调入"));
-        f.service.recheckBeforeFinalApproval(logs);
-        verify(f.mapper, never()).querySecurityInForbiddenPool("BOND.IB");
+        for (String type : Arrays.asList("Excel导入", "Excel清空")) {
+            Fixture f = new Fixture();
+            f.pool.setLockFlag(1);
+            when(f.mapper.querySecurityInForbiddenPool("BOND.IB")).thenReturn(true);
+            List<IpAdjustLogBo> logs = Arrays.asList(log(type, "E1", "调入"), log("关联调整", "E1", "调入"));
+            f.service.recheckBeforeFinalApproval(logs);
+            verify(f.mapper, never()).querySecurityInForbiddenPool("BOND.IB");
+        }
     }
 
     @Test
-    public void normalAndExcelClearShouldStillBeBlockedByForbiddenPool() {
+    public void normalManualShouldStillBeBlockedByForbiddenPool() {
         Fixture f = new Fixture();
         when(f.mapper.querySecurityInForbiddenPool("BOND.IB")).thenReturn(true);
-        for (String type : Arrays.asList("手工调整", "手动批量调整", "Excel清空")) {
+        for (String type : Arrays.asList("手工调整", "手动批量调整")) {
             assertThatThrownBy(() -> f.service.recheckBeforeFinalApproval(Collections.singletonList(log(type, "N1", "调入"))))
                     .isInstanceOf(BizException.class).hasMessageContaining("禁止池");
         }
@@ -187,7 +249,7 @@ public class SecurityPoolExcelWarningOnlyTest {
     }
 
     private static class Fixture {
-        final SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        final SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         final SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         final InvestmentPoolMapper pools = mock(InvestmentPoolMapper.class);
         final SecurityMarketService markets = mock(SecurityMarketService.class);

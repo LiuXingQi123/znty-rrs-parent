@@ -25,7 +25,7 @@ public class CommonServiceTest {
     /** 页面选项和投资池保存校验共用同一市场集合，查询结果不可改写枚举。 */
     @Test
     public void queryMarketCodeListShouldUseSharedMarkets() {
-        CommonService service = new CommonService();
+        CommonService service = AbsIdentityTestSupport.withIdentity(new CommonService());
         List<String> codes = service.queryMarketCodeList();
         assertThat(codes).containsExactlyElementsOf(MarketCode.queryCodeList());
         assertThat(codes).allMatch(MarketCode::isValid);
@@ -37,7 +37,7 @@ public class CommonServiceTest {
     @Test
     public void queryGuarantorGradeListShouldNormalizeCodesAndQueryOnce() {
         CommonMapper mapper = mock(CommonMapper.class);
-        CommonService service = new CommonService();
+        CommonService service = AbsIdentityTestSupport.withIdentity(new CommonService());
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         List<String> normalizedCodes = Arrays.asList("DBB001.IB", "DBB002.IB");
         GuarantorGradeDto grade = new GuarantorGradeDto();
@@ -60,7 +60,7 @@ public class CommonServiceTest {
     @Test
     public void queryGuarantorGradeListShouldSkipEmptyCodes() {
         CommonMapper mapper = mock(CommonMapper.class);
-        CommonService service = new CommonService();
+        CommonService service = AbsIdentityTestSupport.withIdentity(new CommonService());
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         GuarantorGradeReq req = new GuarantorGradeReq();
         req.setSecurityCodes(Arrays.asList(" ", null));
@@ -73,7 +73,7 @@ public class CommonServiceTest {
     @Test
     public void queryGuarantorGradeShouldKeepEligibleGuarantorWithoutGrade() {
         CommonMapper mapper = mock(CommonMapper.class);
-        CommonService service = new CommonService();
+        CommonService service = AbsIdentityTestSupport.withIdentity(new CommonService());
         ReflectionTestUtils.setField(service, "commonMapper", mapper);
         GuarantorGradeDto guarantor = new GuarantorGradeDto();
         guarantor.setWindcode("C10008");

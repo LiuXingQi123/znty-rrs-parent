@@ -1,19 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.CompanyObserverMapper">
-    <!-- 查询观察名单及主体信息 -->
+    <!-- 查询观察名单及主体信息，主体信息不齐全的记录不参与本轮同步 -->
     <select id="queryCompanyObserverList" resultType="com.znty.rrs.entity.schedule.CompanyObserverDto">
-        <!-- 1. 查询观察名单中的主体ID、主体编码和观察类型 -->
-        SELECT o.company_id
+        <!-- 1. 观察名单关联主体主数据，排除主体ID、主体编码、Wind代码和全称为空的记录 -->
+        SELECT MAX(o.company_id) AS company_id
                ,o.company_code
-               ,o.observer_type
-               ,c.wind_code AS master_company_code
-               ,c.full_name AS company_name
+               ,MAX(o.observer_type) AS observer_type
+               ,MAX(c.wind_code) AS master_company_code
+               ,MAX(c.full_name) AS company_name
         FROM ais_inv_analysis.company_observer_view o
         <!-- 2. 查询主体编码和名称，供主体信息校验使用 -->
         LEFT JOIN ais_inv_analysis.t_inv_company c ON c.id = o.company_id
-        ORDER BY o.company_id
-                 ,o.company_code
+        WHERE o.company_id IS NOT NULL
+          AND o.company_code IS NOT NULL
+          AND o.company_code != ''
+          AND c.wind_code IS NOT NULL
+          AND c.wind_code != ''
+          AND c.full_name IS NOT NULL
+          AND c.full_name != ''
+        <!-- 3. 每个主体只返回一条，观察类型按 3重点观察 > 2观察 > 1空 取最强档 -->
+        GROUP BY o.company_code
     </select>
 
     <!-- 查询目标池内主体及在池债券的发行主体 -->
@@ -51,15 +58,31 @@
     </select>
     <!-- 批量预读主体旗下有效债券，统一保留主体联动的类型及到期日口径 -->
     <select id="queryObserverBondList" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT bond.wind_code AS security_code
+        <!-- 主体关系去重后再联接，B 作为触发主体而 ABS 仍保留已选 A 身份 -->
+        WITH company_refs AS (
+            SELECT wind_code AS security_code, issuer_code AS company_code FROM rrs_securityinfo
+            WHERE issuer_code IS NOT NULL AND issuer_code != ''
+            UNION
+            SELECT issuer.s_info_windcode AS security_code, issuer.s_info_compcode AS company_code
+            FROM ais_inv_ods.wind_cbondissuer issuer
+            INNER JOIN rrs_securityinfo si ON si.wind_code = issuer.s_info_windcode
+            WHERE (si.abs_flag = 1 OR si.security_type = 'abs')
+              AND issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              AND issuer.s_info_compcode IS NOT NULL AND issuer.s_info_compcode != ''
+        )
+        <!-- 一个主体和一只债仅返回一行，保留批量读取口径 -->
+        SELECT DISTINCT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
                ,bond.issuer_code
+               ,bond.abs_flag
+               ,company_ref.company_code AS trigger_company_code
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
-        WHERE bond.issuer_code IN
+        INNER JOIN company_refs company_ref ON company_ref.security_code = bond.wind_code
+        WHERE company_ref.company_code IN
         <foreach collection="companyCodes" item="companyCode" open="(" separator="," close=")">
             #{companyCode}
         </foreach>
@@ -74,7 +97,7 @@
               #{securityType}
           </foreach>
         </if>
-        ORDER BY bond.issuer_code
+        ORDER BY company_ref.company_code
                  ,bond.wind_code
     </select>
 

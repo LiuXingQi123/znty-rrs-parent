@@ -65,7 +65,7 @@ public class SecurityPoolAdjustCrossMarketTest {
     /** 建立同一证券的银行间、沪市、深市代码，目标为三级库。 */
     @Before
     public void setUp() {
-        service = abs ? new ForbiddenAbsPoolAdjustService() : new SecurityPoolAdjustService();
+        service = abs ? AbsIdentityTestSupport.withIdentity(new ForbiddenAbsPoolAdjustService()) : AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         mapper = abs ? mock(ForbiddenAbsPoolAdjustMapper.class) : mock(SecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, abs ? "forbiddenAbsPoolAdjustMapper" : "securityPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));

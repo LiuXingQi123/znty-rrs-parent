@@ -40,14 +40,15 @@ public class ScriptToolServiceTest {
     @Test
     public void approvedCompanySceneShouldIncludeBondStates() {
         ScriptToolService service = new ScriptToolService();
-        List<String> statements = ReflectionTestUtils.invokeMethod(service, "buildForbiddenCompanyApprovedScene");
+        List<String> statements = ReflectionTestUtils.invokeMethod(service, "buildDemoSceneStatements", "forbidden-company-approved");
         String sql = String.join("\n", statements);
-        assertTrue(sql.contains("SELECT bond.wind_code, bond.short_name, bond.security_type"));
-        assertTrue(sql.contains("dst.category_type = 'bond'"));
-        assertTrue(sql.contains("bond.security_status != 'D'"));
-        assertTrue(sql.contains("bond.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')"));
-        assertTrue(sql.contains("AND NOT EXISTS (SELECT 1 FROM ip_pool_status ips"));
-        assertTrue(sql.contains("SELECT security_code, security_short_name, security_type, adjust_type, adjust_mode, id, adjust_batch_no"));
+        assertTrue(sql.contains("SELECT s.wind_code, s.short_name, s.security_type"));
+        assertTrue(sql.contains("d.category_type = 'bond'"));
+        assertTrue(sql.contains("s.security_status != 'D'"));
+        assertTrue(sql.contains("s.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')"));
+        assertTrue(sql.contains("AND NOT EXISTS (SELECT 1 FROM ip_pool_status ps"));
+        assertTrue(sql.contains("p.id IN (15, 17)"));
+        assertTrue(sql.contains("INSERT INTO ip_adjust_security_snapshot"));
     }
 
     /** 验证分类批次覆盖范围与依赖顺序，全库不得遗漏或重复脚本。 */
@@ -415,11 +416,11 @@ public class ScriptToolServiceTest {
         assertFalse(clearItems.contains("rrs_temp_fund_code"));
         assertFalse(clearItems.contains("rrs_temp_fund_code_evt"));
         assertEquals(schemaItems.size(), ((List<?>) ReflectionTestUtils.invokeMethod(service, "queryRrsSchemaFiles")).size());
-        // 初始化 Demo 数据任务须标注仅建结构、未灌 demo 数据的表（导入临时表 + 快照等）
+        // 导入临时表不灌数据，申请快照随调库 Demo 一起初始化
         assertTrue(unseededTables.contains("sys_imp_tmp"));
         assertTrue(unseededTables.contains("sys_imp_tmp_detl"));
-        assertTrue(unseededTables.contains("ip_adjust_security_snapshot"));
-        assertTrue(unseededTables.contains("ip_adjust_security_snapshot_crmw"));
+        assertFalse(unseededTables.contains("ip_adjust_security_snapshot"));
+        assertFalse(unseededTables.contains("ip_adjust_security_snapshot_crmw"));
         assertTrue(unseededTables.size() >= 2);
     }
 
@@ -444,8 +445,8 @@ public class ScriptToolServiceTest {
         assertTrue(sceneMap.containsKey("grade-rule-alert-pending"));
         @SuppressWarnings("unchecked")
         List<String> forbiddenSql = (List<String>) ReflectionTestUtils.invokeMethod(service, "buildDemoSceneStatements", "forbidden-company-pending");
-        assertTrue(forbiddenSql.toString().contains("company:forbidden-inbound"));
-        assertTrue(forbiddenSql.toString().contains("11303"));
+        assertTrue(forbiddenSql.toString().contains("wf_flow_definition f ON f.id = 113"));
+        assertTrue(forbiddenSql.toString().contains("n.flow_id = 113"));
     }
 
     /** 验证模块编码/名称映射覆盖新模块。 */

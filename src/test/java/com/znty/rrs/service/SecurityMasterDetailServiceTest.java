@@ -21,7 +21,7 @@ public class SecurityMasterDetailServiceTest {
     @Test
     public void shouldReadMasterWithoutSnapshotEvenWithAdjustLogId() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
         req.setSecurityCode(" BOND1.IB ");
@@ -42,7 +42,7 @@ public class SecurityMasterDetailServiceTest {
     @Test
     public void shouldRejectMissingCodeAndMissingMaster() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        SecurityPoolAdjustService service = new SecurityPoolAdjustService();
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
         assertThatThrownBy(() -> service.querySecurityMasterDetail(req))

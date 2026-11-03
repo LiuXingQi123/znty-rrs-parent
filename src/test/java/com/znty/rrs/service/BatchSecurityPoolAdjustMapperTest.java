@@ -94,7 +94,7 @@ public class BatchSecurityPoolAdjustMapperTest {
                 req.setIssuer(issuer);
                 assertThat(mapper.querySecurityPage(req)).extracting(BatchSecurityCandidateDto::getSecurityCode)
                         .containsExactlyInAnyOrder("in".equals(direction)
-                                ? new String[]{expectedCode, "IN2", "CRMW"}
+                                ? new String[]{expectedCode, "IN2"}
                                 : new String[]{expectedCode, "OUT2"});
             }
         }
@@ -119,20 +119,18 @@ public class BatchSecurityPoolAdjustMapperTest {
         }
     }
 
-    /** CRMW 凭证可以通过证券池批量入口调入和调出普通池 */
+    /** CRMW 即使已通过联动或 Excel 在池，也不出现在人工批量调入和调出候选中 */
     @Test
-    public void shouldAllowCrmwForBothDirections() {
+    public void shouldExcludeCrmwForBothDirections() {
         BatchSecurityPoolAdjustReq req = new BatchSecurityPoolAdjustReq();
         req.setPoolId(2L);
         req.setSecurityCode("CRMW");
         req.setDirection("in");
-        assertThat(mapper.querySecurityPage(req)).extracting(BatchSecurityCandidateDto::getSecurityCode)
-                .containsExactly("CRMW");
+        assertThat(mapper.querySecurityPage(req)).isEmpty();
         new JdbcTemplate(database).update("INSERT INTO ip_pool_status VALUES ('CRMW', 2, '20', 0)");
         session.clearCache();
         req.setDirection("out");
-        assertThat(mapper.querySecurityPage(req)).extracting(BatchSecurityCandidateDto::getSecurityCode)
-                .containsExactly("CRMW");
+        assertThat(mapper.querySecurityPage(req)).isEmpty();
     }
 
     /** 释放测试会话和数据库 */

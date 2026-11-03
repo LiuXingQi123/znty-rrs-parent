@@ -42,7 +42,7 @@ public class CrmwPoolAdjustCrossMarketTest {
     /** 建立一个凭证与三个市场标的组合。 */
     @Before
     public void setUp() {
-        service = new CrmwPoolAdjustService();
+        service = AbsIdentityTestSupport.withIdentity(new CrmwPoolAdjustService());
         mapper = mock(CrmwPoolAdjustMapper.class);
         markets = mock(SecurityMarketService.class);
         ReflectionTestUtils.setField(service, "crmwPoolAdjustMapper", mapper);

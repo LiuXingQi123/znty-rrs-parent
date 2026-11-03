@@ -742,7 +742,7 @@ public class ForbiddenPoolAdjustServiceTest {
     /** 禁投池链路报告必填校验：限制为 any 且无报告时应抛出异常。 */
     @Test
     public void checkReportRequiredShouldFailWhenAnyAndNoReport() {
-        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ForbiddenPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenPoolAdjustService());
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, "禁投池", "forbidden");
         try {
@@ -773,7 +773,7 @@ public class ForbiddenPoolAdjustServiceTest {
 
     /** 构建服务并注入公共依赖。 */
     private ForbiddenPoolAdjustService buildService(ForbiddenPoolAdjustMapper mapper) {
-        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ForbiddenPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenPoolAdjustService());
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
@@ -796,7 +796,7 @@ public class ForbiddenPoolAdjustServiceTest {
      */
     @Test
     public void isDirectFlowShouldAcceptInitiatorThenAutoChain() throws Exception {
-        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ForbiddenPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenPoolAdjustService());
         FlowNodeBo start = buildFlowNode(1L, "start");
         FlowNodeBo initiator = buildFlowNode(2L, "approval");
         FlowNodeBo auto1 = buildFlowNode(3L, "approval");
@@ -827,7 +827,7 @@ public class ForbiddenPoolAdjustServiceTest {
     /** 验证主路径存在人工 preempt 节点时仍为非直通。 */
     @Test
     public void isDirectFlowShouldRejectHumanPreemptNode() throws Exception {
-        ForbiddenPoolAdjustService service = new ForbiddenPoolAdjustService();
+        ForbiddenPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenPoolAdjustService());
         FlowNodeBo start = buildFlowNode(1L, "start");
         FlowNodeBo initiator = buildFlowNode(2L, "approval");
         FlowNodeBo human = buildFlowNode(3L, "approval");

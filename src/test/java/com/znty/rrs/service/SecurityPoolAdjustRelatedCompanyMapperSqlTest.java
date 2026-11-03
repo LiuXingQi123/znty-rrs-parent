@@ -76,7 +76,7 @@ public class SecurityPoolAdjustRelatedCompanyMapperSqlTest {
                     .doesNotContain("company.code")
                     .doesNotContain("NULLIF(company.short_name, '')")
                     .doesNotContain("OR company.short_name LIKE")
-                    .doesNotContain("wind_cbondissuer");
+                    .doesNotContain("FROM ais_inv_ods.wind_cbondissuer issuer");
         }
     }
 

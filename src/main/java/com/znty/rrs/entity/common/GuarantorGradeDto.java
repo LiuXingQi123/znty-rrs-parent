@@ -10,6 +10,12 @@ import java.util.Date;
 @Data
 public class GuarantorGradeDto {
 
+    /** 主体最新认可外评 */
+    private String ratingBondissuer;
+
+    /** 上述外评对应机构代码 */
+    private String ratingBondissuerAgency;
+
     /** 所属证券 Wind 代码 */
     private String securityCode;
 

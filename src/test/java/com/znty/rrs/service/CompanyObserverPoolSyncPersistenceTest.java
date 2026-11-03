@@ -71,6 +71,8 @@ public class CompanyObserverPoolSyncPersistenceTest {
         jdbc = new JdbcTemplate(ds);
         jdbc.execute("CREATE ALIAS DATE_FORMAT FOR 'com.znty.rrs.service.CompanyObserverPoolSyncPersistenceTest.formatDate'");
         jdbc.execute("CREATE SCHEMA ais_inv_analysis");
+        jdbc.execute("CREATE SCHEMA ais_inv_ods");
+        jdbc.execute("CREATE TABLE ais_inv_ods.wind_cbondissuer (s_info_windcode VARCHAR(32), s_info_compcode VARCHAR(32), s_info_typecode BIGINT)");
         jdbc.execute("CREATE TABLE ais_inv_analysis.t_inv_company (id BIGINT PRIMARY KEY, wind_code VARCHAR(100), full_name VARCHAR(100))");
         // 直接复用生产观察名单 DDL 的字段定义，仅移除 H2 不支持的 MySQL 表选项
         createTableFromSchema("ais_inv_analysis_schema.sql", "company_observer_view");
@@ -377,7 +379,7 @@ public class CompanyObserverPoolSyncPersistenceTest {
         @Override
         public Object intercept(Invocation invocation) throws Throwable {
             String sql = ((StatementHandler) invocation.getTarget()).getBoundSql().getSql().trim();
-            if (sql.startsWith("SELECT")) {
+            if (sql.startsWith("SELECT") || sql.startsWith("WITH")) {
                 queries.add(sql);
             }
             return invocation.proceed();

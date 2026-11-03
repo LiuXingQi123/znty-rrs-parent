@@ -37,6 +37,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
+import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
@@ -118,6 +119,10 @@ public class SecurityPoolExcelImportService {
     /** 证券调库数据访问（在途流程查询等） */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    /** ABS 候选与跨池主体身份 */
+    @Resource
+    private AbsIdentityService absIdentityService;
     /** 关联主体批量查询（与批量调整可选证券使用同一排序） */
     @Resource
     private CommonMapper commonMapper;
@@ -309,9 +314,12 @@ public class SecurityPoolExcelImportService {
             return;
         }
         Map<String, GuarantorGradeDto> firstCompanies = new HashMap<>();
+        Map<String, Set<String>> allCompanies = new HashMap<>();
+        Map<String, SecurityInfoBo> currentIdentities = absIdentityService.queryCurrentIdentities(securityCodes);
         for (GuarantorGradeDto company : commonMapper.queryGuarantorGradeList(securityCodes)) {
             if (!isBlank(company.getWindcode())) {
                 firstCompanies.putIfAbsent(company.getSecurityCode(), company);
+                allCompanies.computeIfAbsent(company.getSecurityCode(), key -> new HashSet<>()).add(company.getWindcode());
             }
         }
         for (SysImpTmpDetlBo item : items) {
@@ -319,6 +327,17 @@ public class SecurityPoolExcelImportService {
             if (company != null) {
                 item.setFld011(company.getWindcode());
                 item.setFld012(company.getWindname());
+            }
+            SecurityInfoBo identity = currentIdentities.get(trimToEmpty(item.getFld001()));
+            if (identity != null) {
+                Set<String> relatedCodes = allCompanies.getOrDefault(trimToEmpty(item.getFld001()), Collections.emptySet());
+                if (relatedCodes.contains(identity.getIssuerCode())) {
+                    item.setFld011(identity.getIssuerCode());
+                    item.setFld012(identity.getIssuer());
+                } else {
+                    item.setFld013(identity.getIssuerCode());
+                    item.setFld014(identity.getIssuer());
+                }
             }
         }
     }
@@ -337,6 +356,7 @@ public class SecurityPoolExcelImportService {
                 List<RelatedRatingCompanyDto> related = info == null ? Collections.emptyList()
                         : securityPoolAdjustMapper.queryRelatedRatingCompanyList(code);
                 relatedMap.put(code, related == null ? Collections.emptyList() : related);
+                absIdentityService.rememberRelated(code, related);
             }
             SecurityInfoBo info = securityInfoMap.get(code);
             if (info != null) {
@@ -354,7 +374,9 @@ public class SecurityPoolExcelImportService {
             if (!isBlank(dto.getSelfSelectedRightsHolderCode())) {
                 String selfCode = dto.getSelfSelectedRightsHolderCode();
                 if (!selfMap.containsKey(selfCode)) {
-                    selfMap.put(selfCode, securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(selfCode));
+                    SelfSelectedRightsHolderDto selfCandidate = securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(selfCode);
+                    selfMap.put(selfCode, selfCandidate);
+                    if (selfCandidate != null) absIdentityService.rememberSelf(Collections.singletonList(selfCandidate));
                 }
                 SelfSelectedRightsHolderDto self = selfMap.get(selfCode);
                 if (self != null) {
@@ -552,7 +574,7 @@ public class SecurityPoolExcelImportService {
      * 4. 根据联动互斥选项保留完整展开结果或仅保留手工项，再映射来源明细、主体信息和流程候选。
      * 5. 以手工主项判断本行是否通过，通过时补齐缺失的证券简称并回写通过状态；失败时汇总原因，
      *    同时禁止该行的联动、互斥和关联项单独提交。
-     * 6. 返回所有行的校验结果，各行独立使用主体选择，不检查相同证券代码的跨行选择是否一致。
+     * 6. 返回所有行的校验结果，非 ABS 各行独立选择，ABS 同码不同主体作为不可调整原因返回。
      *
      * @param items 本批有效导入明细，每行包含一只证券、一个目标池及独立主体选择
      * @param inbound 是否调入，false 表示调出
@@ -564,6 +586,13 @@ public class SecurityPoolExcelImportService {
     private List<SecurityPoolExcelImportCheckItemDto> checkSecurityImport(
             List<SysImpTmpDetlBo> items, boolean inbound, boolean allowLinkMutex,
             String opterId, Date now) {
+        Map<String, Set<String>> selections = new HashMap<>();
+        for (SysImpTmpDetlBo source : items) {
+            String selected = !isBlank(source.getFld013()) ? trimToEmpty(source.getFld013()) : trimToEmpty(source.getFld011());
+            selections.computeIfAbsent(trimToEmpty(source.getFld001()), key -> new HashSet<>()).add(selected);
+        }
+        Map<String, String> identityFailures = absIdentityService.queryBatchIdentityFailures(selections);
+
         List<SecurityPoolExcelImportCheckItemDto> checkItems = new ArrayList<>();
         Map<String, InvestmentPoolBo> poolNameCache = new HashMap<>();
         String adjustMode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
@@ -640,6 +669,13 @@ public class SecurityPoolExcelImportService {
 
             List<AdjustCheckDto.CheckResultItem> resultItems =
                     checkDto.getItems() == null ? new ArrayList<>() : checkDto.getItems();
+            // 同批不同主体只阻断冲突证券，不中断其他来源行的校验
+            String identityFailure = identityFailures.get(code);
+            if (identityFailure != null) {
+                for (AdjustCheckDto.CheckResultItem resultItem : resultItems) {
+                    absIdentityService.applyCheckFailure(resultItem, identityFailure);
+                }
+            }
             // 未勾选联动与互斥：只保留手工项（批量勾选后才完整展开；Excel 用选项控制）
             if (!allowLinkMutex) {
                 List<AdjustCheckDto.CheckResultItem> manuals = new ArrayList<>();
@@ -1359,8 +1395,8 @@ public class SecurityPoolExcelImportService {
                 if (excelCodes.contains(code)) {
                     continue;
                 }
-                // 非本批编码存在在途：跳过，不纳入清空
-                if (securityPoolAdjustMapper.querySecurityHasPendingProcess(code)) {
+                // 主体导入仍跳过在途成员，证券清空由共用校验保留在途提示后放行
+                if (companyImport && securityPoolAdjustMapper.querySecurityHasPendingProcess(code)) {
                     continue;
                 }
                 // 对差集成员执行清空出库校验
@@ -1398,7 +1434,7 @@ public class SecurityPoolExcelImportService {
                 companyReq.setItems(Collections.singletonList(cItem));
                 checkDto = forbiddenPoolAdjustService.checkCompanyAdjust(companyReq);
             } else {
-                // 证券：调库调出校验（与批量同路径）
+                // 证券清空与导入共用提示放行入口，原出库原因仍保留
                 AdjustCheckReq checkReq = new AdjustCheckReq();
                 checkReq.setSecurityCode(code);
                 checkReq.setSecurityShortName(shortName);
@@ -1411,7 +1447,7 @@ public class SecurityPoolExcelImportService {
                 checkItem.setPoolType(pool.getPoolType());
                 checkItem.setAdjustMode(adjustMode);
                 checkReq.setItems(Collections.singletonList(checkItem));
-                checkDto = securityPoolAdjustService.checkAdjust(checkReq);
+                checkDto = securityPoolAdjustService.checkExcelAdjust(checkReq);
             }
         } catch (BizException e) {
             // 构建清空出库失败项
@@ -1836,7 +1872,11 @@ public class SecurityPoolExcelImportService {
             return;
         }
         if (company.abs) {
-            req.setRightsHolderCode(company.companyCode);
+            if (company.selfSelectedRightsHolderCode != null) {
+                req.setSelfSelectedRightsHolderCode(company.selfSelectedRightsHolderCode);
+            } else {
+                req.setRightsHolderCode(company.companyCode);
+            }
         } else {
             req.setGuarantorCode(company.companyCode);
         }
@@ -1857,7 +1897,11 @@ public class SecurityPoolExcelImportService {
             return;
         }
         if (company.abs) {
-            req.setRightsHolderCode(company.companyCode);
+            if (company.selfSelectedRightsHolderCode != null) {
+                req.setSelfSelectedRightsHolderCode(company.selfSelectedRightsHolderCode);
+            } else {
+                req.setRightsHolderCode(company.companyCode);
+            }
         } else {
             req.setGuarantorCode(company.companyCode);
         }
@@ -1869,8 +1913,23 @@ public class SecurityPoolExcelImportService {
         if (securityInfo == null) {
             return null;
         }
-        List<RelatedRatingCompanyDto> companies =
-                securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityCode.trim());
+        List<RelatedRatingCompanyDto> companies = absIdentityService.findRelated(securityCode.trim());
+        if (companies == null) {
+            companies = securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityCode.trim());
+            absIdentityService.rememberRelated(securityCode.trim(), companies);
+        }
+        if (CreditBondSpecialInboundRule.isAbs(securityInfo)) {
+            SecurityInfoBo identity = absIdentityService.queryCurrentIdentity(securityInfo);
+            if (identity != null) {
+                RatingCompany current = new RatingCompany();
+                current.abs = true;
+                current.companyCode = identity.getIssuerCode();
+                boolean related = companies.stream().anyMatch(row -> identity.getIssuerCode().equals(row.getCompanyCode()));
+                if (related) current.relatedCompanyCode = identity.getIssuerCode();
+                else current.selfSelectedRightsHolderCode = identity.getIssuerCode();
+                return current;
+            }
+        }
         if (companies == null || companies.isEmpty() || isBlank(companies.get(0).getCompanyCode())) {
             return null;
         }
@@ -1890,6 +1949,10 @@ public class SecurityPoolExcelImportService {
         private String relatedCompanyCode;
         /** 页面选择的 ABS 自选权益人编码。 */
         private String selfSelectedRightsHolderCode;
+        /** 本行已读取的证券信息 */
+        private SecurityInfoBo securityInfo;
+        /** 本行已经取得的主体名称与评级 */
+        private RatingCompanySelectionReq selection;
     }
 
     /** 将页面持久化的主体选择传入单券校验。 */
@@ -1899,6 +1962,8 @@ public class SecurityPoolExcelImportService {
         if (company == null) {
             return;
         }
+        req.setSecurityInfo(company.securityInfo);
+        req.setSelectedRatingCompany(company.selection);
         if (company.abs) {
             req.setRightsHolderCode(company.relatedCompanyCode);
             req.setSelfSelectedRightsHolderCode(company.selfSelectedRightsHolderCode);
@@ -1914,6 +1979,8 @@ public class SecurityPoolExcelImportService {
         if (company == null) {
             return;
         }
+        req.setSecurityInfo(company.securityInfo);
+        req.setSelectedRatingCompany(company.selection);
         if (company.abs) {
             req.setRightsHolderCode(company.relatedCompanyCode);
             req.setSelfSelectedRightsHolderCode(company.selfSelectedRightsHolderCode);
@@ -1929,8 +1996,11 @@ public class SecurityPoolExcelImportService {
             return null;
         }
         boolean abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
-        List<RelatedRatingCompanyDto> companies =
-                securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityInfo.getWindCode());
+        List<RelatedRatingCompanyDto> companies = absIdentityService.findRelated(securityInfo.getWindCode());
+        if (companies == null) {
+            companies = securityPoolAdjustMapper.queryRelatedRatingCompanyList(securityInfo.getWindCode());
+            absIdentityService.rememberRelated(securityInfo.getWindCode(), companies);
+        }
         String code = trimToEmpty(item.getFld011());
         String selfCode = trimToEmpty(item.getFld013());
         RelatedRatingCompanyDto selected = null;
@@ -1953,7 +2023,11 @@ public class SecurityPoolExcelImportService {
             if (!abs) {
                 throw new BizException("仅 ABS 证券支持自选权益人");
             }
-            selfSelected = securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(selfCode);
+            selfSelected = absIdentityService.findSelf(selfCode);
+            if (selfSelected == null) {
+                selfSelected = securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(selfCode);
+                if (selfSelected != null) absIdentityService.rememberSelf(Collections.singletonList(selfSelected));
+            }
             if (selfSelected == null) {
                 throw new BizException("所选自选权益人不存在或已失效，请重新选择");
             }
@@ -1972,6 +2046,22 @@ public class SecurityPoolExcelImportService {
         result.relatedCompanyCode = item.getFld011();
         result.selfSelectedRightsHolderCode = item.getFld013();
         result.companyCode = selfSelected == null ? item.getFld011() : item.getFld013();
+        result.securityInfo = securityInfo;
+        RatingCompanySelectionReq selection = new RatingCompanySelectionReq();
+        selection.setCompanyCode(result.companyCode);
+        selection.setCompanyName(selfSelected == null ? item.getFld012() : item.getFld014());
+        selection.setRightsHolderName(abs ? item.getFld012() : null);
+        selection.setSelfSelectedRightsHolderName(item.getFld014());
+        if (selfSelected != null) {
+            selection.setInnerRating(selfSelected.getInnerRating());
+            selection.setRatingBondissuer(selfSelected.getRatingBondissuer());
+            selection.setRatingBondissuerAgency(selfSelected.getRatingBondissuerAgency());
+        } else if (selected != null) {
+            selection.setInnerRating(selected.getInnerRating());
+            selection.setRatingBondissuer(selected.getRatingBondissuer());
+            selection.setRatingBondissuerAgency(selected.getRatingBondissuerAgency());
+        }
+        result.selection = selection;
         return result;
     }
 

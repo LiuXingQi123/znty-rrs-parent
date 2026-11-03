@@ -24,7 +24,7 @@ public class StockSecurityBatchAdjustServiceTest {
     /** 存量入口原样透传产品库快速资格与材料豁免信息 */
     @Test
     public void checkResultShouldPassThroughProductMaterialExemption() {
-        StockSecurityBatchAdjustService service = new StockSecurityBatchAdjustService();
+        StockSecurityBatchAdjustService service = AbsIdentityTestSupport.withIdentity(new StockSecurityBatchAdjustService());
         StockSecurityBatchAdjustSubmitReq.SecurityItem security = new StockSecurityBatchAdjustSubmitReq.SecurityItem();
         security.setSecurityCode("BOND.IB");
         AdjustCheckDto.FlowOption fast = new AdjustCheckDto.FlowOption();
@@ -47,7 +47,7 @@ public class StockSecurityBatchAdjustServiceTest {
     /** 存量入口提交批量流程时保留校验给出的材料资格和所选流程 */
     @Test
     public void buildSingleSubmitReqShouldKeepQualificationAndSelectedFlow() {
-        StockSecurityBatchAdjustService service = new StockSecurityBatchAdjustService();
+        StockSecurityBatchAdjustService service = AbsIdentityTestSupport.withIdentity(new StockSecurityBatchAdjustService());
         StockSecurityBatchAdjustSubmitReq request = new StockSecurityBatchAdjustSubmitReq();
         StockSecurityBatchAdjustSubmitReq.AdjustItem item = new StockSecurityBatchAdjustSubmitReq.AdjustItem();
         item.setSecurityCode("BOND.IB");
@@ -66,7 +66,7 @@ public class StockSecurityBatchAdjustServiceTest {
     @Test(expected = BizException.class)
     public void validateSecurityPageReqShouldRequireSourcePoolForInbound() {
         StockSecurityBatchAdjustMapper mapper = mock(StockSecurityBatchAdjustMapper.class);
-        StockSecurityBatchAdjustService service = new StockSecurityBatchAdjustService();
+        StockSecurityBatchAdjustService service = AbsIdentityTestSupport.withIdentity(new StockSecurityBatchAdjustService());
         ReflectionTestUtils.setField(service, "stockSecurityBatchAdjustMapper", mapper);
         when(mapper.queryEnabledLeafPoolCount(33L)).thenReturn(1);
 
@@ -80,7 +80,7 @@ public class StockSecurityBatchAdjustServiceTest {
     @Test
     public void validateSecurityPageReqShouldIgnoreSourcePoolForOutbound() {
         StockSecurityBatchAdjustMapper mapper = mock(StockSecurityBatchAdjustMapper.class);
-        StockSecurityBatchAdjustService service = new StockSecurityBatchAdjustService();
+        StockSecurityBatchAdjustService service = AbsIdentityTestSupport.withIdentity(new StockSecurityBatchAdjustService());
         ReflectionTestUtils.setField(service, "stockSecurityBatchAdjustMapper", mapper);
         when(mapper.queryEnabledLeafPoolCount(33L)).thenReturn(1);
 

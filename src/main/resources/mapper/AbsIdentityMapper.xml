@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.AbsIdentityMapper">
+
+    <!-- 只返回已确认或在途申请中的非空主体，自动联动入池的未确认身份不占用主体代码 -->
+    <select id="queryOccupiedIdentityCodes" resultType="java.lang.String">
+        SELECT si.issuer_code
+        FROM rrs_securityinfo si
+        WHERE si.wind_code = #{securityCode}
+          AND si.issuer_code IS NOT NULL
+          AND TRIM(si.issuer_code) != ''
+        UNION ALL
+        SELECT snap.issuer_code
+        FROM ip_adjust_log log
+        LEFT JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = log.id
+                                                  AND snap.wind_code = log.security_code
+                                                  AND snap.is_deleted = 0
+        WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
+          AND snap.issuer_code IS NOT NULL AND TRIM(snap.issuer_code) != ''
+          AND (log.pool_type IS NULL OR log.pool_type != 'crmw')
+        UNION ALL
+        SELECT snap.issuer_code
+        FROM ip_adjust_log log
+        LEFT JOIN ip_adjust_security_snapshot_crmw snap ON snap.adjust_log_id = log.id
+                                                       AND snap.wind_code = log.security_code
+                                                       AND snap.is_deleted = 0
+        WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
+          AND snap.issuer_code IS NOT NULL AND TRIM(snap.issuer_code) != ''
+          AND log.pool_type = 'crmw'
+    </select>
+
+    <!-- 主档已确认身份的唯一主体，只在五字段为空时视为未确认 -->
+    <select id="queryConfirmedIdentityCode" resultType="java.lang.String">
+        SELECT si.issuer_code
+        FROM rrs_securityinfo si
+        WHERE si.wind_code = #{securityCode}
+          AND si.issuer_code IS NOT NULL
+          AND TRIM(si.issuer_code) != ''
+        LIMIT 1
+    </select>
+
+    <!-- 查询已在库或在途但尚未确认主体的 ABS -->
+    <select id="queryUnconfirmedActiveOrPending" resultType="boolean">
+        SELECT (
+            EXISTS (
+                SELECT 1
+                FROM rrs_securityinfo si
+                INNER JOIN ip_pool_status ps ON ps.security_code = si.wind_code
+                                            AND ps.audit_status = '20'
+                                            AND ps.is_deleted = 0
+                WHERE si.wind_code = #{securityCode}
+                  AND (si.issuer_code IS NULL OR TRIM(si.issuer_code) = '')
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM rrs_securityinfo si
+                INNER JOIN ip_pool_status_crmw ps ON ps.security_code = si.wind_code
+                                                 AND ps.audit_status = '20'
+                                                 AND ps.is_deleted = 0
+                WHERE si.wind_code = #{securityCode}
+                  AND (si.issuer_code IS NULL OR TRIM(si.issuer_code) = '')
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM ip_adjust_log log
+                LEFT JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = log.id
+                                                          AND snap.wind_code = log.security_code
+                                                          AND snap.is_deleted = 0
+                WHERE log.security_code = #{securityCode}
+                  AND log.audit_status IN ('00', '11')
+                  AND log.is_deleted = 0
+                  AND (log.pool_type IS NULL OR log.pool_type != 'crmw')
+                  AND (snap.issuer_code IS NULL OR TRIM(snap.issuer_code) = '')
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM ip_adjust_log log
+                LEFT JOIN ip_adjust_security_snapshot_crmw snap ON snap.adjust_log_id = log.id
+                                                               AND snap.wind_code = log.security_code
+                                                               AND snap.is_deleted = 0
+                WHERE log.security_code = #{securityCode}
+                  AND log.audit_status IN ('00', '11')
+                  AND log.is_deleted = 0
+                  AND log.pool_type = 'crmw'
+                  AND (snap.issuer_code IS NULL OR TRIM(snap.issuer_code) = '')
+            )
+        )
+    </select>
+
+    <!-- 主体身份及其内外评来自同一份经后端核验的申请快照，不覆盖其他主档字段 -->
+    <update id="editApprovedIdentity">
+        UPDATE rrs_securityinfo
+        SET issuer = #{issuer}
+            , issuer_code = #{issuerCode}
+            , rating_bondissuer = #{ratingBondissuer}
+            , rating_bondissuer_agency = #{ratingBondissuerAgency}
+            , inner_issuer_rating = #{innerIssuerRating}
+            , ts = NOW()
+        WHERE wind_code = #{windCode}
+          AND (abs_flag = 1 OR security_type = 'abs')
+    </update>
+
+    <!-- CRMW 组合申请同样保留标的证券的主体身份 -->
+    <select id="queryCrmwIdentitySnapshot" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT * FROM ip_adjust_security_snapshot_crmw
+        WHERE adjust_log_id = #{adjustLogId} AND wind_code = #{securityCode} AND is_deleted = 0
+    </select>
+
+    <!-- 只筛选本批 ABS，再恢复各自被占用的主体 -->
+    <select id="queryAbsSecurityList" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT * FROM rrs_securityinfo
+        WHERE (abs_flag = 1 OR security_type = 'abs') AND wind_code IN
+        <foreach collection="securityCodes" item="securityCode" open="(" separator="," close=")">
+            #{securityCode}
+        </foreach>
+    </select>
+
+    <!-- 主档尚未更新时，页面从本笔在途快照恢复五字段 -->
+    <select id="queryPendingIdentityDetail" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT snap.wind_code
+            , snap.issuer
+            , snap.issuer_code
+            , snap.rating_bondissuer
+            , snap.rating_bondissuer_agency
+            , snap.inner_issuer_rating
+        FROM ip_adjust_log log
+        INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = log.id
+                                                   AND snap.wind_code = log.security_code AND snap.is_deleted = 0
+        WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
+          AND (log.pool_type IS NULL OR log.pool_type != 'crmw')
+        UNION ALL
+        SELECT snap.wind_code
+            , snap.issuer
+            , snap.issuer_code
+            , snap.rating_bondissuer
+            , snap.rating_bondissuer_agency
+            , snap.inner_issuer_rating
+        FROM ip_adjust_log log
+        INNER JOIN ip_adjust_security_snapshot_crmw snap ON snap.adjust_log_id = log.id
+                                                        AND snap.wind_code = log.security_code AND snap.is_deleted = 0
+        WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
+          AND log.pool_type = 'crmw'
+        LIMIT 1
+    </select>
+
+    <!-- 四类关系和所选主体使用同一集合，日志版本用于识别退出后重新进入的新一轮变化 -->
+    <select id="queryCompanyPoolContext" resultType="java.lang.String">
+        WITH companies AS (
+            SELECT issuer.s_info_compcode AS company_code
+            FROM ais_inv_ods.wind_cbondissuer issuer
+            WHERE issuer.s_info_windcode = #{securityCode}
+              AND issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              AND issuer.s_info_compcode IS NOT NULL AND issuer.s_info_compcode != ''
+            UNION
+            SELECT issuer_code FROM rrs_securityinfo
+            WHERE wind_code = #{securityCode} AND issuer_code IS NOT NULL AND issuer_code != ''
+        )
+        <!-- 每个主体只返回一行，即使该主体在关系源中兼有多个角色 -->
+        SELECT CONCAT(c.company_code, ':',
+                      CASE WHEN EXISTS (
+                          SELECT 1 FROM ip_pool_status ps
+                          WHERE ps.security_code = c.company_code AND ps.security_type = 'company'
+                            AND ps.target_pool_id = #{poolId} AND ps.audit_status = '20' AND ps.is_deleted = 0
+                      ) THEN 'in' ELSE 'out' END, ':',
+                      COALESCE((SELECT MAX(log.id) FROM ip_adjust_log log
+                                WHERE log.security_code = c.company_code AND log.security_type = 'company'
+                                  AND log.audit_status = '20'
+                                  AND log.is_deleted = 0), 0)) AS context_value
+        FROM companies c
+        ORDER BY c.company_code
+    </select>
+
+    <!-- 其他主体仍在同一实际目标池时交给研究员处理，不直接决定 ABS 出库 -->
+    <select id="queryOtherCompanyInPool" resultType="java.lang.String">
+        SELECT DISTINCT ps.security_code
+        FROM ip_pool_status ps
+        WHERE ps.security_type = 'company' AND ps.target_pool_id = #{poolId}
+          AND ps.audit_status = '20' AND ps.is_deleted = 0
+          AND (#{companyCode} IS NULL OR ps.security_code != #{companyCode})
+          AND (EXISTS (
+              SELECT 1 FROM ais_inv_ods.wind_cbondissuer issuer
+              WHERE issuer.s_info_windcode = #{securityCode}
+                AND issuer.s_info_compcode = ps.security_code
+                AND issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+          ) OR ps.security_code = (SELECT issuer_code FROM rrs_securityinfo WHERE wind_code = #{securityCode}))
+        ORDER BY ps.security_code
+    </select>
+
+    <!-- 候选和自选代码直接复用，只有当前池状态实时读取 -->
+    <select id="queryCompanyInPoolType" resultType="boolean">
+        SELECT COUNT(1) > 0 FROM ip_pool_status ps
+        INNER JOIN ip_investment_pool p ON p.id = ps.target_pool_id AND p.is_deleted = 0
+        WHERE ps.security_type = 'company' AND ps.audit_status = '20' AND ps.is_deleted = 0
+          AND p.pool_type = #{poolType}
+          AND ps.security_code IN
+        <foreach collection="companyCodes" item="companyCode" open="(" separator="," close=")">
+            #{companyCode}
+        </foreach>
+    </select>
+
+    <!-- 手工、批量和 Excel 等债级申请不因主体退出被自动解除 -->
+    <select id="queryIndependentInbound" resultType="boolean">
+        SELECT COUNT(1) > 0 FROM ip_pool_status ps
+        WHERE ps.security_code = #{securityCode} AND ps.target_pool_id = #{poolId}
+          AND ps.audit_status = '20' AND ps.is_deleted = 0
+          AND (ps.adjust_type IN ('手工调整', '手动批量调整', 'Excel导入')
+               OR (ps.adjust_type IN ('联动调整', '关联调整', '互斥调整') AND ps.adjust_batch_no LIKE 'BOND%'))
+    </select>
+
+    <!-- 已处理提醒保留相同依据下的人工结论，防止下轮自动反向调库 -->
+    <select id="queryLatestSyncAlert" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
+        SELECT * FROM ip_grade_rule_alert
+        WHERE security_code = #{securityCode} AND current_pool_id = #{poolId}
+          AND rule_type = 'absCompanySync' AND is_deleted = 0
+        ORDER BY id DESC LIMIT 1
+    </select>
+
+    <!-- 沿用我的事宜规则提醒入口，目标池不限定为信用债分级库 -->
+    <insert id="addSyncAlert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_grade_rule_alert (
+            security_code
+            , security_short_name
+            , issuer_code
+            , issuer_name
+            , current_pool_id
+            , current_pool_name
+            , fail_reason
+            , special_type_desc
+            , rule_type
+            , context_key
+            , alert_status
+            , last_scan_time
+            , is_deleted
+            , crte_time
+            , updt_time
+        ) VALUES (
+            #{securityCode}
+            , #{securityShortName}
+            , #{issuerCode}
+            , #{issuerName}
+            , #{currentPoolId}
+            , #{currentPoolName}
+            , #{failReason}
+            , 'ABS主体联动'
+            , 'absCompanySync'
+            , #{contextKey}
+            , '00'
+            , NOW()
+            , 0
+            , NOW()
+            , NOW()
+        )
+    </insert>
+
+    <!-- 相同依据刷新原提醒，避免重复写待办 -->
+    <update id="editSyncAlert">
+        UPDATE ip_grade_rule_alert
+        SET fail_reason = #{failReason}
+            , last_scan_time = NOW()
+            , updt_time = NOW()
+        WHERE id = #{id} AND alert_status = '00' AND is_deleted = 0
+    </update>
+
+    <!-- 自动联动依据已经明确时，旧待办不继续占用研究员工作台 -->
+    <update id="editSyncAlertInvalid">
+        UPDATE ip_grade_rule_alert
+        SET alert_status = '99'
+            , updt_time = NOW()
+        WHERE security_code = #{securityCode} AND current_pool_id = #{poolId}
+          AND rule_type = 'absCompanySync' AND alert_status = '00' AND is_deleted = 0
+    </update>
+
+    <!-- 处理结论绑定当前依据版本，后续主体重新进出池会产生新版本 -->
+    <update id="editSyncAlertProcessed">
+        UPDATE ip_grade_rule_alert
+        SET alert_status = '20'
+            , context_key = #{contextKey}
+            , deal_user_id = #{dealUserId}
+            , deal_user_name = #{dealUserName}
+            , deal_time = NOW()
+            , updt_time = NOW()
+        WHERE id = #{id} AND rule_type = 'absCompanySync' AND is_deleted = 0
+    </update>
+
+    <!-- 更新 ABS 提醒的主体确认或无需入库结论 -->
+    <update id="editAbsAlertDecision">
+        UPDATE ip_grade_rule_alert
+        SET issuer_code = #{issuerCode}
+            , issuer_name = #{issuerName}
+            , fail_reason = #{failReason}
+            , alert_status = '20'
+            , context_key = #{contextKey}
+            , deal_user_id = #{dealUserId}
+            , deal_user_name = #{dealUserName}
+            , deal_time = NOW()
+            , updt_time = NOW()
+        WHERE id = #{id}
+          AND rule_type = 'absCompanySync'
+          AND alert_status = '00'
+          AND is_deleted = 0
+    </update>
+
+    <!-- 查询未确认 ABS 的待确认入池日志，不混入普通审批流程 -->
+    <select id="queryPendingScheduledInboundLog"
+            resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT id
+               ,security_code
+               ,security_short_name
+               ,security_type
+               ,adjust_type
+               ,adjust_mode
+               ,adjust_batch_no
+               ,target_pool_id
+               ,target_pool_name
+               ,pool_type
+               ,flow_id
+               ,flow_key
+               ,flow_type
+               ,audit_status
+               ,adjuster_id
+               ,adjuster_name
+               ,adjust_reason
+               ,adjust_advice
+               ,submit_time
+               ,audit_time
+               ,entry_time
+        FROM ip_adjust_log
+        WHERE security_code = #{securityCode}
+          AND target_pool_id = #{poolId}
+          AND adjust_type = '自动调整'
+          AND adjust_mode = '调入'
+          AND flow_type = 'absIdentityPending'
+          AND audit_status = '00'
+          AND is_deleted = 0
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 研究员确认主体后，将待确认日志转为已通过并更新确认原因，随后由业务事务写入池状态 -->
+    <update id="editPendingScheduledInboundApproved">
+        UPDATE ip_adjust_log
+        SET adjust_reason = #{adjustReason}
+            ,audit_status = '20'
+            ,audit_time = NOW()
+            ,updt_time = NOW()
+        WHERE id = #{id}
+          AND adjust_type = '自动调整'
+          AND adjust_mode = '调入'
+          AND flow_type = 'absIdentityPending'
+          AND audit_status = '00'
+          AND is_deleted = 0
+    </update>
+
+    <!-- 研究员忽略入池时，将待确认日志置为无效 -->
+    <update id="editPendingScheduledInboundInvalid">
+        UPDATE ip_adjust_log
+        SET audit_status = '-1'
+            ,audit_time = NOW()
+            ,updt_time = NOW()
+        WHERE id = #{id}
+          AND adjust_type = '自动调整'
+          AND adjust_mode = '调入'
+          AND flow_type = 'absIdentityPending'
+          AND audit_status = '00'
+          AND is_deleted = 0
+    </update>
+
+    <!-- 回填未确认 ABS 待确认入池日志的证券简称 -->
+    <update id="editPendingScheduledInboundSecurityShortName">
+        UPDATE ip_adjust_log
+        SET security_short_name = #{securityShortName}
+            ,updt_time = NOW()
+        WHERE id = #{id}
+          AND adjust_type = '自动调整'
+          AND adjust_mode = '调入'
+          AND flow_type = 'absIdentityPending'
+          AND audit_status = '00'
+          AND is_deleted = 0
+    </update>
+
+    <!-- 兼容改造前已直接落池的旧记录，忽略自动入池时先隐藏对应调库日志 -->
+    <update id="deletePassiveInboundLog">
+        UPDATE ip_adjust_log
+        SET is_deleted = 1
+            , updt_time = NOW()
+        WHERE id IN (
+            SELECT ps.adjust_log_id
+            FROM ip_pool_status ps
+            WHERE ps.security_code = #{securityCode}
+              AND ps.target_pool_id = #{poolId}
+              AND ps.adjust_mode = '调入'
+              AND ps.audit_status = '20'
+              AND ps.is_deleted = 0
+        )
+          AND adjust_mode = '调入'
+          AND audit_status = '20'
+          AND is_deleted = 0
+          AND (security_type = 'abs' OR EXISTS (
+              SELECT 1 FROM rrs_securityinfo si
+              WHERE si.wind_code = ip_adjust_log.security_code AND si.abs_flag = 1
+          ))
+          AND adjust_type IN ('自动调整', '联动调整', '关联调整', '互斥调整')
+    </update>
+
+    <!-- 再按刚才定位的旧自动调入日志隐藏在池状态，避免误删人工状态 -->
+    <update id="deletePassiveInboundStatus">
+        UPDATE ip_pool_status
+        SET is_deleted = 1
+            , updt_time = NOW()
+        WHERE security_code = #{securityCode}
+          AND target_pool_id = #{poolId}
+          AND adjust_mode = '调入'
+          AND audit_status = '20'
+          AND is_deleted = 0
+          AND adjust_log_id IN (
+              SELECT id
+              FROM ip_adjust_log
+              WHERE security_code = #{securityCode}
+                AND adjust_mode = '调入'
+                AND audit_status = '20'
+                AND is_deleted = 1
+                AND (security_type = 'abs' OR EXISTS (
+                    SELECT 1 FROM rrs_securityinfo si
+                    WHERE si.wind_code = ip_adjust_log.security_code AND si.abs_flag = 1
+                ))
+                AND adjust_type IN ('自动调整', '联动调整', '关联调整', '互斥调整')
+          )
+    </update>
+</mapper>
