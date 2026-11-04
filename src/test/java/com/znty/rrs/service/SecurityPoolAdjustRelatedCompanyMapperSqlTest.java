@@ -19,10 +19,10 @@ public class SecurityPoolAdjustRelatedCompanyMapperSqlTest {
         String select = selectBlock(xml, "queryRelatedRatingCompanyList");
 
         assertThat(select)
-                .contains("issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)")
+                .contains("issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)")
                 .contains("WHEN 115004000 THEN 1")
                 .contains("WHEN 115203000 THEN 2")
-                .contains("WHEN 115202000 THEN 3")
+                .contains("WHEN 115200000 THEN 3")
                 .contains("WHEN 115201000 THEN 4")
                 .contains("PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode")
                 .contains("LEFT JOIN ranked_grade")
@@ -43,10 +43,10 @@ public class SecurityPoolAdjustRelatedCompanyMapperSqlTest {
         String select = selectBlock(xml, "queryGuarantorGradeList");
 
         assertThat(select)
-                .contains("issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)")
+                .contains("issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)")
                 .contains("WHEN 115004000 THEN 1")
                 .contains("WHEN 115203000 THEN 2")
-                .contains("WHEN 115202000 THEN 3")
+                .contains("WHEN 115200000 THEN 3")
                 .contains("WHEN 115201000 THEN 4")
                 .contains("PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode")
                 .contains("LEFT JOIN ranked_grade")

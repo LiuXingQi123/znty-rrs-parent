@@ -38,7 +38,7 @@ public class WindCbondIssuerMapperSqlTest {
                     String query = xml.substring(start, xml.indexOf("</select>", start));
                     assertThat(query).contains("wind_compintroduction").doesNotContain("wind_cbondissuer");
                 }
-                assertThat(xml).contains("abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)");
+                assertThat(xml).contains("abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)");
             } else {
                 assertThat(xml).doesNotContain("ais_inv_ods.wind_cbondissuer");
             }

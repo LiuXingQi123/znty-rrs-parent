@@ -149,7 +149,7 @@
             SELECT issuer.s_info_compcode AS company_code
             FROM ais_inv_ods.wind_cbondissuer issuer
             WHERE issuer.s_info_windcode = #{securityCode}
-              AND issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               AND issuer.s_info_compcode IS NOT NULL AND issuer.s_info_compcode != ''
             UNION
             SELECT issuer_code FROM rrs_securityinfo
@@ -181,7 +181,7 @@
               SELECT 1 FROM ais_inv_ods.wind_cbondissuer issuer
               WHERE issuer.s_info_windcode = #{securityCode}
                 AND issuer.s_info_compcode = ps.security_code
-                AND issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
           ) OR ps.security_code = (SELECT issuer_code FROM rrs_securityinfo WHERE wind_code = #{securityCode}))
         ORDER BY ps.security_code
     </select>

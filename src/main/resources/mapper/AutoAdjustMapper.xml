@@ -118,7 +118,7 @@
                             SELECT 1 FROM ais_inv_ods.wind_cbondissuer relation
                             WHERE relation.s_info_windcode = bond.wind_code
                               AND relation.s_info_compcode = trigger_status.security_code
-                              AND relation.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                              AND relation.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
                         )))) AS trigger_company_code
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
@@ -148,7 +148,7 @@
                   SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
                   WHERE abs_issuer.s_info_windcode = bond.wind_code
                     AND abs_issuer.s_info_compcode = cps.security_code
-                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               )))
                 AND cps.target_pool_id = #{companyPoolId}
                 AND cps.audit_status = '20'
@@ -199,7 +199,7 @@
                             SELECT 1 FROM ais_inv_ods.wind_cbondissuer relation
                             WHERE relation.s_info_windcode = bond.wind_code
                               AND relation.s_info_compcode = trigger_status.security_code
-                              AND relation.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                              AND relation.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
                         )))) AS trigger_company_code
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
@@ -231,7 +231,7 @@
                   SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
                   WHERE abs_issuer.s_info_windcode = bond.wind_code
                     AND abs_issuer.s_info_compcode = cps.security_code
-                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               )))
                 AND cps.target_pool_id = #{poolId}
                 AND cps.audit_status = '20'
@@ -542,7 +542,7 @@
                   SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
                   WHERE abs_issuer.s_info_windcode = bond.wind_code
                     AND abs_issuer.s_info_compcode = #{companyCode}
-                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
@@ -586,7 +586,7 @@
                   SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
                   WHERE abs_issuer.s_info_windcode = bond.wind_code
                     AND abs_issuer.s_info_compcode = #{companyCode}
-                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))

@@ -206,7 +206,7 @@ public class AbsIdentityMapperIntegrationTest {
     /** A、B 兼任多个角色也只返回去重主体，四类之外的关系不参与 */
     @Test
     public void relatedSubjectsShouldUseExactlyTheFourTypes() {
-        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuer VALUES ('ABS1','A','甲',115201000,NOW()),('ABS1','B','乙',115202000,NOW()),('ABS1','B','乙',115203000,NOW()),('ABS1','X','范围外',999,NOW())");
+        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuer VALUES ('ABS1','A','甲',115201000,NOW()),('ABS1','B','乙',115200000,NOW()),('ABS1','B','乙',115203000,NOW()),('ABS1','X','范围外',999,NOW())");
         jdbc.update("INSERT INTO ip_pool_status(id,security_code,security_type,target_pool_id,audit_status,is_deleted,adjust_type) VALUES(1,'B','company',101,'20',0,'手工调整'),(2,'X','company',101,'20',0,'手工调整')");
         try (SqlSession session = factory.openSession()) {
             AbsIdentityMapper mapper = session.getMapper(AbsIdentityMapper.class);
@@ -220,7 +220,7 @@ public class AbsIdentityMapperIntegrationTest {
     public void remainingRelatedCompanyShouldNotHideOutboundReminderCandidate() {
         jdbc.update("UPDATE rrs_securityinfo SET issuer_code='A',security_status='L'");
         jdbc.update("INSERT INTO dict_security_type VALUES ('company','主体','company',0)");
-        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuer VALUES ('ABS1','B','乙',115202000,NOW())");
+        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuer VALUES ('ABS1','B','乙',115200000,NOW())");
         jdbc.update("INSERT INTO ip_pool_status(id,security_code,security_type,target_pool_id,audit_status,is_deleted) VALUES(1,'ABS1','abs',101,'20',0),(2,'B','company',202,'20',0)");
         try (SqlSession session = factory.openSession()) {
             assertThat(session.getMapper(AutoAdjustMapper.class).queryBondInPoolWhenCompanyNotIn(101L, 202L, null))

@@ -233,7 +233,7 @@
                   SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
                   WHERE abs_issuer.s_info_windcode = bond.wind_code
                     AND abs_issuer.s_info_compcode = #{companyCode}
-                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
@@ -276,7 +276,7 @@
                   SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
                   WHERE abs_issuer.s_info_windcode = bond.wind_code
                     AND abs_issuer.s_info_compcode = #{companyCode}
-                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
@@ -320,7 +320,7 @@
                   SELECT 1 FROM ais_inv_ods.wind_cbondissuer abs_issuer
                   WHERE abs_issuer.s_info_windcode = bond.wind_code
                     AND abs_issuer.s_info_compcode = #{companyCode}
-                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+                    AND abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               )))
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))

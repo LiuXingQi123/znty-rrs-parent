@@ -67,7 +67,7 @@
             FROM ais_inv_ods.wind_cbondissuer issuer
             INNER JOIN rrs_securityinfo si ON si.wind_code = issuer.s_info_windcode
             WHERE (si.abs_flag = 1 OR si.security_type = 'abs')
-              AND issuer.s_info_typecode IN (115004000, 115203000, 115202000, 115201000)
+              AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
               AND issuer.s_info_compcode IS NOT NULL AND issuer.s_info_compcode != ''
         )
         <!-- 一个主体和一只债仅返回一行，保留批量读取口径 -->

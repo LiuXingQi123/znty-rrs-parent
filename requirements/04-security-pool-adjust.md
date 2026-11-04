@@ -126,7 +126,7 @@
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `queryRelatedRatingCompanyList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115202000/115201000` 四类关系主体；主体内评左关联，无内评主体仍返回，内评字段为空；同一主体兼多类关系时按类型分别返回（例如既是原始权益人又是差额支付承诺人则占两行），仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
+| `queryRelatedRatingCompanyList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115200000/115201000` 四类关系主体；主体内评左关联，无内评主体仍返回，内评字段为空；同一主体兼多类关系时按类型分别返回（例如既是原始权益人又是差额支付承诺人则占两行），仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
 | `querySelfSelectedRightsHolderPage` | `{ companyCode, companyName, pageIndex, pageSize }` | ABS 自选权益人分页；从 `ais_inv_analysis.t_inv_company` 以 `wind_code` 查询全市场主体，编码/名称模糊查询，关联最新主体内评，名称使用 `full_name` 优先、`short_names` 兜底，默认每页 20 条，可切换 10/20/30/50 条 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode }` | 可调入池 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
@@ -529,7 +529,7 @@ Demo 在原始 `INSERT` 中为全部 52 条证券显式填写标识，设置以�
 | ABS、资产证券化、CRMW、存单、国债、Govt债、可转债 | NULL | 0 |
 | XYB005 未判定信用债、Corp债、临时代码 | NULL | NULL |
 
-详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingCompanyList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115202000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端校验和提交直接使用页面传入的主体代码、名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留在数据及快照中，不再用于简易流程）；`date_exists_str` 证券期限（页面只读，同时供矩阵、白名单和简易流程的年口径判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
+详情页按 ABS 区分字段：非 ABS 展示“担保人、担保人主体内评分”，ABS 隐藏担保人并展示“权益人、自选权益人、担保人主体内评分”。ABS 的“担保人主体内评分”优先显示自选权益人内评；没有自选时显示当前权益人内评，切换权益人、确认自选或清除自选后即时刷新。两个普通下拉都通过 `queryRelatedRatingCompanyList` 查询当前证券四类关系主体：`115004000=担保人`、`115203000=差额支付承诺人`、`115200000=权益相关主体`、`115201000=原始权益人`；该查询与原公共担保人接口一致，不使用 `wind_cbondissuer.used` 过滤，主体内评左关联，无内评主体仍返回且评分为空。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。自选权益人通过 `querySelfSelectedRightsHolderPage` 从 `ais_inv_analysis.t_inv_company` 按 `wind_code` 分页查询，名称优先取 `full_name`、为空时取 `short_names`，默认每页 20 条，可切换 10/20/30/50 条，支持完整页码和跳转，并按当前页显示连续序号；单选列位于序号列左侧，主体编码和名称支持模糊查询。自选优先于普通权益人。后端校验和提交直接使用页面传入的主体代码、名称和内评。`abs_originator_name` 保存普通权益人名称，`company_selector` 保存自选权益人名称；`guarantor`、`guarantor_id`、`inner_guarantor_rating` 保存本次实际生效评级主体，兼容现有规则与快照链路。非 ABS 非担保债仍保存所选担保人，但计算不使用其内评。期限字段：`date_exists` 剩余期限（**天**，页面隐藏保留在数据及快照中，不再用于简易流程）；`date_exists_str` 证券期限（页面只读，同时供矩阵、白名单和简易流程的年口径判断解析）；`date_inright_exists` 含权债剩余期限（**年**）；`date_call_exists` 赎回行权剩余期限（**年**，仅展示/落库，不参与矩阵匹配）；`date_repurchase_exists` 回购剩余期限（**年**）。
 
 ### 5.6 `ip_investment_pool`（投资池表）
 
@@ -687,7 +687,7 @@ Demo 在原始 `INSERT` 中为全部 52 条证券显式填写标识，设置以�
 
 ## ABS 跨池唯一主体身份
 
-- 仅 ABS 使用多主体逻辑。普通权益人查询限定 `s_info_typecode IN (115004000, 115203000, 115202000, 115201000)`；全市场自选主体保持现有来源。候选一次返回名称、代码、内评、认可机构最新外评及对应机构，选择后复用已查询数据；动态池状态不缓存。
+- 仅 ABS 使用多主体逻辑。普通权益人查询限定 `s_info_typecode IN (115004000, 115203000, 115200000, 115201000)`；全市场自选主体保持现有来源。候选一次返回名称、代码、内评、认可机构最新外评及对应机构，选择后复用已查询数据；动态池状态不缓存。
 - 同一 ABS 的所有有效在库和未结束申请（00/11）只能使用同一个主体代码。自选优先；同代码的不同关系角色或选择方式不算更换身份。该约束对单券、批量、Excel、禁投 ABS 和标的为 ABS 的 CRMW 申请均不可绕过。
 - 在途身份保存在申请快照，提交不更新主档五字段。审核通过或直通生效时，在同一事务内更新 `issuer/issuer_code/rating_bondissuer/rating_bondissuer_agency/inner_issuer_rating` 并落池；驳回、撤回不改主档。
 - 人工申请审核通过或直通成功入库后永久固定主体代码，全部出库且流程结束也不能更换。主体联动自动入池只生成 audit_status=00 的待确认调库日志，暂不写入 ip_pool_status 和主档五字段，也不形成永久绑定；研究员确认主体后才转为 audit_status=20 并正式入池，成功确认后才固定身份。此前仅有驳回或撤回且从未成功确认的申请不形成永久绑定；未结束申请仍占用本次主体。主档持续保留已确认身份，同一主体的名称和评级允许更新，历史详情保留原申请快照。
