@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
 import com.znty.rrs.common.enums.RelationType;
+import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -159,8 +160,13 @@ public class SecurityPoolAdjustServiceStepTest {
         ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, null, "C10001", "C20001", true);
 
-        assertThat(securityInfo.getGuarantor()).isEqualTo("自选权益人");
-        assertThat(securityInfo.getGuarantorId()).isEqualTo("C20001");
+        // ABS 的权益人写入发行人字段，不再占用担保人字段
+        assertThat(securityInfo.getIssuer()).isEqualTo("自选权益人");
+        assertThat(securityInfo.getIssuerCode()).isEqualTo("C20001");
+        assertThat(securityInfo.getInnerIssuerRating()).isEqualTo("2");
+        assertThat(securityInfo.getGuarantor()).isNull();
+        assertThat(securityInfo.getGuarantorId()).isNull();
+        assertThat(securityInfo.getInnerGuarantorRating()).isNull();
         assertThat((String) ReflectionTestUtils.invokeMethod(service, "resolveMatrixGradeCode", securityInfo))
                 .isEqualTo("2");
     }
@@ -184,8 +190,9 @@ public class SecurityPoolAdjustServiceStepTest {
         ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, null, null, null, true);
 
-        assertThat(securityInfo.getGuarantorId()).isEqualTo("C10001");
-        assertThat(securityInfo.getGuarantor()).isEqualTo("接口首条主体");
+        assertThat(securityInfo.getIssuerCode()).isEqualTo("C10001");
+        assertThat(securityInfo.getIssuer()).isEqualTo("接口首条主体");
+        assertThat(securityInfo.getGuarantorId()).isNull();
     }
 
     /** ABS 无关联评级主体时，后端仍返回明确的主体选择失败原因。 */
@@ -265,14 +272,13 @@ public class SecurityPoolAdjustServiceStepTest {
     /** ABS 权益人一档不属于强担保，不能豁免重点观察名单新增限制。 */
     @Test
     public void absRightsHolderShouldNotTriggerStrongGuaranteeExemption() {
-        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setAbsFlag(1);
         securityInfo.setGuarantFlag(1);
+        securityInfo.setInnerIssuerRating("1");
         securityInfo.setInnerGuarantorRating("1");
 
-        assertThat((String) ReflectionTestUtils.invokeMethod(service, "checkRestrictedForSecurityAdjust",
-                securityInfo, true, null, 1))
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(securityInfo, true, null, 1))
                 .isEqualTo("重点观察名单原则上不得新增入库信用债分级库");
     }
 
@@ -315,9 +321,9 @@ public class SecurityPoolAdjustServiceStepTest {
         Object selected = ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 absSecurity, null, "C10001", "C20001", true);
         ReflectionTestUtils.setField(shared, "selectedRatingCompany", selected);
+        putSubmittedLog(shared, 100L, "110010123");
 
-        ReflectionTestUtils.invokeMethod(service, "postSubmitProcess", req, shared,
-                Collections.singletonList(100L));
+        ReflectionTestUtils.invokeMethod(service, "postSubmitProcess", req, shared);
 
         ArgumentCaptor<AdjustSecuritySnapshotBo> snapshotCaptor =
                 ArgumentCaptor.forClass(AdjustSecuritySnapshotBo.class);
@@ -330,6 +336,39 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(req.getSecurityInfo().getGuarantor()).isEqualTo("当次选择担保人");
         assertThat(req.getSecurityInfo().getGuarantorId()).isEqualTo("C10008");
         assertThat(req.getSecurityInfo().getInnerGuarantorRating()).isEqualTo("1");
+    }
+
+    /** 多市场关联码各自成日志，快照必须按各自证券代码保存，不能统一记成主码 */
+    @Test
+    public void postSubmitProcessShouldSaveSnapshotWithEachLogSecurityCode() throws Exception {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+
+        SecurityInfoBo frontendInfo = new SecurityInfoBo();
+        frontendInfo.setWindCode("A.IB");
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("A.IB");
+        req.setAdjusterId("1");
+        req.setSecurityInfo(frontendInfo);
+
+        Object shared = buildSubmitSharedData();
+        putSubmittedLog(shared, 100L, "A.IB");
+        putSubmittedLog(shared, 101L, "A.SH");
+        putSubmittedLog(shared, 102L, "A.SZ");
+
+        ReflectionTestUtils.invokeMethod(service, "postSubmitProcess", req, shared);
+
+        ArgumentCaptor<AdjustSecuritySnapshotBo> snapshotCaptor =
+                ArgumentCaptor.forClass(AdjustSecuritySnapshotBo.class);
+        verify(mapper, times(3)).addAdjustSecuritySnapshot(snapshotCaptor.capture());
+        Map<Long, String> logCodeMap = new HashMap<>();
+        for (AdjustSecuritySnapshotBo snapshot : snapshotCaptor.getAllValues()) {
+            logCodeMap.put(snapshot.getAdjustLogId(), snapshot.getWindCode());
+        }
+        assertThat(logCodeMap).containsEntry(100L, "A.IB")
+                .containsEntry(101L, "A.SH")
+                .containsEntry(102L, "A.SZ");
     }
 
     /** 验证调库记录返回流程名称及审批改判入口依赖的字段 */
@@ -2770,6 +2809,17 @@ public class SecurityPoolAdjustServiceStepTest {
     /** 构建调库提交共享数据测试数据。 */
     private Object buildSubmitSharedData() throws Exception {
         return buildSubmitSharedData(new HashMap<Long, Object>());
+    }
+
+    /** 构建提交共享数据中的一条调库记录，用于按日志写快照的校验。 */
+    @SuppressWarnings("unchecked")
+    private void putSubmittedLog(Object shared, Long logId, String securityCode) {
+        IpAdjustLogBo log = new IpAdjustLogBo();
+        log.setId(logId);
+        log.setSecurityCode(securityCode);
+        Map<Long, IpAdjustLogBo> submittedLogs =
+                (Map<Long, IpAdjustLogBo>) ReflectionTestUtils.getField(shared, "submittedLogs");
+        submittedLogs.put(logId, log);
     }
 
     /** 构建包含流程快照的调库提交共享数据测试数据。 */

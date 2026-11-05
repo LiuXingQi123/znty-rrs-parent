@@ -1456,7 +1456,7 @@ public class ForbiddenAbsPoolAdjustService {
     private void postSubmitProcess(ForbiddenAbsPoolAdjustSubmitReq req, SubmitSharedData shared) {
         SecurityInfoBo merged = req.getSecurityInfo() == null ? shared.securityInfo
                 : buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo(), shared.securityInfo);
-        // 主体身份八个字段统一取本次校验后的共享值，供申请快照逐笔保存；
+        // 主体身份取本次校验后的共享值，只落发行人五字段，担保人字段不承载 ABS 权益人；
         // 主档对应列已在 editSecurityInfoForAdjust 中排除，审批通过时由 AbsIdentityMapper.editApprovedIdentity 写入
         merged.setIssuer(shared.securityInfo.getIssuer());
         merged.setIssuerCode(shared.securityInfo.getIssuerCode());
@@ -1471,7 +1471,7 @@ public class ForbiddenAbsPoolAdjustService {
         absIdentityService.saveSnapshots(merged, shared.submittedLogs, req.getAdjusterId(),
                 shared.selectedRatingCompany.getRightsHolderName(),
                 shared.selectedRatingCompany.getSelfSelectedRightsHolderName());
-        // 仅维护其他基本信息；主体身份八个字段（issuer 五字段 + guarantor 三字段）全部由审批通过时统一更新
+        // 仅维护其他基本信息；主体身份五个字段由审批通过时统一更新
         forbiddenAbsPoolAdjustMapper.editSecurityInfoForAdjust(req);
     }
 
@@ -1781,7 +1781,7 @@ public class ForbiddenAbsPoolAdjustService {
         shared.setIssuerInObservePool(securityPoolAdjustService.queryIssuerInPoolType(securityInfo, "observe"));
         shared.setSecurityInRestrictedPool(forbiddenAbsPoolAdjustMapper.querySecurityInRestrictedPool(req.getSecurityCode()));
         shared.setIssuerInRestrictedPool(securityPoolAdjustService.queryIssuerInPoolType(securityInfo, "restricted"));
-        // 评级下调三标志：主体/展望按发行人评级判定，担保人按前端选中代码判定（查 wind_cbondissuerrating）
+        // 评级下调：主体与展望按发行人评级判定，担保人按本次所选担保人代码判定
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
         shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(req.getGuarantorCode()));

@@ -3,16 +3,15 @@ package com.znty.rrs.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.common.enums.AdjustType;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
-import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
-import com.znty.rrs.mapper.AbsIdentityMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -35,9 +34,13 @@ import java.util.Map;
  * 在池主体旗下债券自动入池任务实现
  * <p>
  * 扫描「主体已在指定池」的发行主体，将其旗下未退市、未到期、尚未在目标池的债券自动入池
- * （另排除临时代码已更新为正式代码的记录，不排除 ABS / CRMW）；adjust_type=自动调整，不走审批。
+ * （另排除临时代码已更新为正式代码的记录，并排除 ABS）；adjust_type=自动调整，不走审批。
  * 对应老系统 AutoAdjustInNewBondToLimitPoolJob。名称/cron/启停/扩展参数由库表维护。
- * 同池-only、带 market_codes 的 IP_RULE「主体下债券自动入库」见
+ * </p>
+ * <p>
+ * ABS 不参与本任务：其进出池与未确认主体的待确认提醒统一由
+ * {@link CompanyAbsBondAutoInService} 按池对账负责，避免两条任务重复生成提醒、重复写池状态。
+ * 同池-only、带 market_codes 的 IP_RULE「主体下债券自动入池」见
  * {@link CompanySamePoolBondAutoInService}。
  * </p>
  */
@@ -52,8 +55,8 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_ID = "0";
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    /** 任务默认展示名称 */
-    private static final String DEFAULT_TASK_NAME = "在池主体旗下债券自动入池（ABS债提醒）";
+    /** 任务默认展示名称（名称即口径提示：ABS 债已整体移出本任务） */
+    private static final String DEFAULT_TASK_NAME = "在池主体旗下债券自动入池（已排除ABS债）";
     /** 自动入池原因（写入调库日志） */
     private static final String REASON_COMPANY_NEW_BOND_IN = "在池主体旗下债券自动入池";
     /** 解析 param_json 用 */
@@ -82,11 +85,11 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调入规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
                     + "扫描范围：所有已有生效主体的普通池自动追加同池映射，再与参数及关系绑定池取并集；并集为空时本轮失败\n"
                     + "处理规则：主体已在主体池且生效时，将其旗下未退市、未到期且未在债券目标池的债券自动入池\n"
-                    + "类型范围：普通债、ABS、CRMW 均处理；排除退市债和已更新正式代码的临时代码\n"
-                    + "ABS 规则：未确认主体的 ABS 只生成待确认提醒，不计入自动入池数量；研究员确认主体后再入池\n"
+                    + "类型范围：普通债、CRMW；排除退市债、已更新正式代码的临时代码以及全部 ABS\n"
+                    + "ABS 说明：ABS 的进出池与未确认主体的待确认提醒由「主体下ABS债券自动入库（区分已确认发行人和未确认发行人）」统一处理，本任务不再生成 ABS 提醒\n"
                     + "CRMW 说明：CRMW 证券跟随主体进入普通目标池时写 ip_pool_status，不写 CRMW 组合状态表\n"
                     + "关系调出：入池成功后，按目标池调入互斥关系及反向调入限制关系自动调出债券原所在池并记录日志\n"
-                    + "范围说明：不检查调入限制池，也不按目标池 market_codes 过滤；需要同池市场/限制校验时请使用“主体下债券自动入库”任务\n"
+                    + "范围说明：不检查调入限制池，也不按目标池 market_codes 过滤；需要同池市场/限制校验时请使用“主体下债券自动入池”任务\n"
                     + "参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
@@ -96,12 +99,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
-    /** ABS 主体联动与规则提醒 */
-    @Resource
-    private AbsCompanySyncService absCompanySyncService;
-    /** ABS 主体联动提醒状态 */
-    @Resource
-    private AbsIdentityMapper absIdentityMapper;
     /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -126,7 +123,11 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 执行在池主体旗下债券自动入池：按库表 param_json 映射扫描待入池债券，未确认 ABS 先生成待确认日志
+     * 执行在池主体旗下债券自动入池：按库表 param_json 映射扫描待入池债券并直接落池
+     *
+     * ABS 不在本任务处理范围内，其进出池与提醒由 ABS 对账任务负责
+     *
+     * @return 本轮任务执行结果
      */
     @Override
     public ScheduledTaskResult execute() {
@@ -160,7 +161,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 按扩展参数中的「主体所在池 → 债券写入池」映射扫描待入池新债，普通债直接落池，未确认 ABS 先进入待确认流程
+     * 按扩展参数中的「主体所在池 → 债券写入池」映射扫描待入池新债，命中即直接落池
+     *
+     * ABS 已在候选 SQL 排除，本方法只处理普通债与 CRMW
+     *
+     * @param taskName 任务展示名称
+     * @param detail 任务过程日志
+     * @return 本轮入池汇总
      */
     private AutoInSummary doAutoInCompanyNewBond(String taskName, TaskDetailLog detail) {
         // 读取扩展参数原文
@@ -175,9 +182,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
                 mappings, TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
         infoDetail(detail, "有效映射组数 " + pairList.size());
-        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、普通债发行主体非空、ABS按关系主体匹配、"
-                + "maturity_date为空或>今日；发行主体已在映射主体池生效、债券未在映射目标池生效，"
-                + "并排除 status=updated 且已补齐正式代码的临时代码记录；未确认 ABS 只生成待确认日志并计入规则提醒统计；映射组数="
+        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、发行主体已在映射主体池生效、"
+                + "债券未在映射目标池生效、maturity_date为空或>今日、排除 ABS，"
+                + "并排除 status=updated 且已补齐正式代码的临时代码记录；映射组数="
                 + pairList.size());
         // 构建池 ID → 池信息映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
@@ -201,7 +208,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 continue;
             }
             List<ScheduledAdjustCandidateDto> bondList = autoAdjustMapper.queryCompanyNewBondForAutoIn(
-                    companyInPoolId, bondTargetPoolId, CompanyBondSyncPolicy.currentTypeScope());
+                    companyInPoolId, bondTargetPoolId, CompanyBondSyncPolicy.newBondInboundScope());
             if (bondList == null || bondList.isEmpty()) {
                 infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
                         + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 无待入池新债");
@@ -209,30 +216,9 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             }
             int pairCount = 0;
             for (ScheduledAdjustCandidateDto bond : bondList) {
-                // ABS 未确认或已有提醒时，先交给研究员处理，不自动入池
-                boolean absBond = "abs".equals(bond.getSecurityType())
-                        || Integer.valueOf(1).equals(bond.getAbsFlag());
-                if (absBond && !absCompanySyncService.allowScheduledSync(bond,
-                        bond.getTriggerCompanyCode(), bondTargetPoolId, targetPool.getPoolName(), true,
-                        companyInPoolId)) {
-                    boolean pendingIdentity = !StringUtils.hasText(bond.getIssuerCode());
-                    IpGradeRuleAlertBo latestAlert = absIdentityMapper.queryLatestSyncAlert(
-                            bond.getSecurityCode(), bondTargetPoolId);
-                    boolean reminderOpen = latestAlert != null && "00".equals(latestAlert.getAlertStatus());
-                    if (reminderOpen) {
-                        summary.addAbsRuleReminder(pendingIdentity);
-                        infoDetail(detail, pendingIdentity
-                                ? "ABS债券[" + bond.getSecurityCode() + "]主体未确认，已生成或保留待确认提醒，本轮跳过自动入池"
-                                : "ABS债券[" + bond.getSecurityCode() + "]存在主体联动规则提醒，本轮跳过自动入池");
-                    } else {
-                        infoDetail(detail, "ABS债券[" + bond.getSecurityCode()
-                                + "]已有处理结论，本轮不重复统计规则提醒，继续跳过自动入池");
-                    }
-                    continue;
-                }
                 List<Long> currentPoolIds = securityPoolAdjustMapper
                         .querySecurityCurrentPoolIdList(bond.getSecurityCode());
-                bond.setAdjustType("自动调整");
+                bond.setAdjustType(AdjustType.AUTO.getCode());
                 bond.setAdjustMode(AdjustMode.IN.getCode());
                 bond.setTargetPoolId(bondTargetPoolId);
                 bond.setTargetPoolName(targetPool.getPoolName());
@@ -242,8 +228,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
                 String reason = ScheduledAdjustLogHelper.appendDetails(REASON_COMPANY_NEW_BOND_IN,
                         ScheduledAdjustLogHelper.issuerDetail(bond),
-                        ScheduledAdjustLogHelper.poolDetail("主体所在池", companyPool, companyInPoolId),
-                        ScheduledAdjustLogHelper.passiveAbsIdentityDetail(bond));
+                        ScheduledAdjustLogHelper.poolDetail("主体所在池", companyPool, companyInPoolId));
                 if (bond.getTriggerCompanyCode() != null) {
                     reason = ScheduledAdjustLogHelper.appendDetails(reason, "联动触发主体：" + bond.getTriggerCompanyCode());
                 }
@@ -287,10 +272,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         private int total;
         /** 按主体所在池与债券目标池映射保存入池数量。 */
         private final Map<String, MappingSummary> mappingSummaries = new LinkedHashMap<>();
-        /** 本轮因 ABS 主体联动规则提醒跳过的数量。 */
-        private int absRuleReminderCount;
-        /** 本轮因主体未确认生成或保留待确认提醒的数量。 */
-        private int absPendingIdentityCount;
 
         /** 累加一个主体池与债券目标池映射的入池数量。 */
         private void addMapping(Long companyPoolId, String companyPoolName, Long bondPoolId,
@@ -299,14 +280,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             mappingSummaries.put(key, new MappingSummary(companyPoolId, companyPoolName,
                     bondPoolId, bondPoolName, count));
             total += count;
-        }
-
-        /** 累加 ABS 规则提醒统计，不计入实际入池数量。 */
-        private void addAbsRuleReminder(boolean pendingIdentity) {
-            absRuleReminderCount++;
-            if (pendingIdentity) {
-                absPendingIdentityCount++;
-            }
         }
 
         /** 构建最近执行结果文案。 */
@@ -325,12 +298,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                             .append("(").append(mapping.companyPoolId).append(")→债券池")
                             .append(mapping.bondPoolName).append("(").append(mapping.bondPoolId)
                             .append(")：").append(mapping.count).append(" 条债券");
-                }
-            }
-            if (absRuleReminderCount > 0) {
-                message.append("；ABS规则提醒跳过 ").append(absRuleReminderCount).append(" 条");
-                if (absPendingIdentityCount > 0) {
-                    message.append("（其中待确认主体 ").append(absPendingIdentityCount).append(" 条）");
                 }
             }
             return message.toString();
@@ -394,17 +361,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 从库表读取任务展示名称，缺失或仍为旧默认名称时使用新名称
+     * 从库表读取任务展示名称，缺失时使用默认名称
      */
     private String resolveTaskName() {
         try {
             SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
             if (conf != null && StringUtils.hasText(conf.getTaskName())) {
-                String taskName = conf.getTaskName().trim();
-                if ("在池主体旗下债券自动入池".equals(taskName)) {
-                    return DEFAULT_TASK_NAME;
-                }
-                return taskName;
+                return conf.getTaskName().trim();
             }
         } catch (Exception e) {
             log.debug("读取任务名称失败: {}", TASK_CODE);

@@ -38,7 +38,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 不符合主体债入库规则提醒：定时扫描已在分级库但按当前规则不再允许的债券，生成待办供人工处理。
+ * 不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）：定时扫描已在分级库但按当前规则不应继续持有的债券，生成待办供人工处理
+ *
+ * <p>ABS 的评级主体在确认权益人时已固定到主档发行人字段，直接取主档发行人内评；
+ * 担保债可能对应多个担保人，需按当前在池记录的入库快照取当时选定的担保人，再查该担保人最新内评。</p>
  *
  * <p>对齐老系统 InconformityMaingrade2Job：只提醒、不自动出池。处理入口在「我的事宜」分级规则提醒页签。</p>
  */
@@ -50,7 +53,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     public static final String TASK_CODE = "bond_grade_inconformity_alert";
 
     /** 任务名称 */
-    public static final String TASK_NAME = "不符合主体债入库规则提醒";
+    public static final String TASK_NAME = "不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）";
 
     /** 待处理 */
     public static final String STATUS_OPEN = "00";
@@ -63,9 +66,11 @@ public class GradeRuleAlertService implements RrsScheduledTask {
 
     private static final String PARAM_HELP =
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"
-                    + "处理范围：扫描已在信用债 1～5 级且生效的债券，不含境外债\n"
-                    + "复核规则：按当前主体债入库规则复核，包括特殊债、担保债、观察池和重点观察名单\n"
-                    + "评级来源：ABS、担保债沿用当前入库快照的评级主体，按该主体查询最新内评；缺少主体信息则本轮失败并回滚\n"
+                    + "处理范围：扫描已在信用债 1～5 级且生效的债券，含 ABS 债，不含境外债\n"
+                    + "复核规则：按当前主体债入池规则复核，包括特殊债、担保债、观察池和重点观察名单\n"
+                    + "评级来源：ABS 的评级主体在确认权益人时已固定到主档发行人字段，直接取主档发行人内评，不查询入库快照；"
+                    + "担保债可能对应多个担保人，按当前在池记录的入库快照取当时选定的担保人，再查该担保人最新内评，"
+                    + "缺少担保人信息则本轮失败并回滚\n"
                     + "本轮命中：本轮仍不符合规则，新增或刷新待办\n"
                     + "沿用结论：同券同池、同档位同原因的待办已由研究员标记已处理或去调库时，本轮不再重复生成\n"
                     + "本轮失效：曾待处理但本轮已合规或不在扫描范围的待办，状态置为 99\n"
@@ -115,7 +120,8 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     public ScheduledTaskResult execute() {
         Date start = new Date();
         TaskDetailLog detailLog = new TaskDetailLog();
-        detailLog.line("开始扫描：已在信用债 1～5 级且生效的债券是否仍符合主体债入库规则");
+        detailLog.line("开始扫描：已在信用债 1～5 级且生效的债券是否仍符合主体债入池规则");
+        detailLog.line("评级来源：ABS 取主档发行人内评；担保债按本池入库快照取当时选定的担保人，再查该担保人最新内评");
         detailLog.line("扫描条件：ip_pool_status.is_deleted=0、audit_status=20；"
                 + "ip_investment_pool.is_deleted=0、pool_type=credit_bond、inner_sort BETWEEN 1 AND 5、"
                 + "pool_level为空或=2");
@@ -136,7 +142,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             if (row.getSecurityCode() == null || row.getCurrentPoolId() == null) {
                 continue;
             }
-            // 用当前在池状态的来源日志定位评级主体，再按最新内评复核
+            // ABS 用主档发行人内评，担保债按本池快照取担保人再查最新内评
             String fail = securityPoolAdjustService.evaluateGradedInboundForPool(
                     row.getSecurityCode(), row.getCurrentPoolId(), row.getAdjustLogId());
             if (fail == null || fail.isEmpty()) {

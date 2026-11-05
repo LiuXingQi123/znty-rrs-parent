@@ -1,7 +1,5 @@
 package com.znty.rrs.service;
 
-import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
-
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
@@ -35,12 +33,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 主体下债券自动入库任务（同池）
+ * 主体下债券自动入池任务（同池）
  * <p>
  * 对应老系统 IP_RULE type=0「主体下债券自动入库」：主体已在目标池 → 旗下 bond 大类、
  * 未退市、未到期（含到期当天）、尚未在<strong>同一池</strong>的债券自动入池；尊重池 market_codes（空不限制）；
  * 不排除临时代码已更新记录。与 {@link CompanyNewBondAutoInService}
  * （对应 AutoAdjustInNewBondToLimitPoolJob，可跨池、排除临时代码）区分。
+ * </p>
+ * <p>
+ * 本任务<strong>不处理 ABS</strong>：ABS 的进出池与未确认主体的待确认提醒统一由
+ * {@link CompanyAbsBondAutoInService} 按池对账负责，候选 SQL 已移除 ABS 的四类关系码匹配分支，
+ * 只处理自身带有发行主体的普通债与 CRMW。
  * </p>
  */
 @Slf4j
@@ -55,7 +58,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
     /** 自动入池原因 */
-    private static final String REASON = "主体下债券自动入库";
+    private static final String REASON = "主体下债券自动入池";
     /**
      * 扩展参数说明
      */
@@ -69,10 +72,10 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                     + "扫描范围：所有已有生效主体的普通池自动参与；再与扩展参数 poolIds、关系绑定池取并集；并集为空时本轮失败\n"
                     + "处理规则：主体已在目标池时，将其旗下未退市、未到期（含到期当天）且未在同一池的债券自动入池\n"
                     + "17 特别规则：扫描黑名单质押库时再次校验主体三条件，三个条件均不满足则不补债\n"
-                    + "市场规则：目标池 market_codes 为空或 [] 时不限制；有配置时债券须命中允许市场\n"
+                    + "市场规则：目标池 market_codes 未配置（null 或 []）时不限制；有配置时债券须命中允许市场\n"
                     + "限制规则：债券已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "关系调出：入池成功后，按目标池调入互斥关系及反向调入限制关系自动调出债券原所在池并记录日志\n"
-                    + "范围说明：排除退市债；不排除已更新临时代码、ABS、CRMW；跨池场景请使用“在池主体旗下债券自动入池”任务\n"
+                    + "范围说明：排除退市债和 ABS；不排除已更新临时代码、CRMW；ABS 由“在池主体旗下债券自动入池”生成待确认提醒并负责入池\n"
                     + "CRMW 说明：CRMW 证券跟随主体进入普通目标池时写 ip_pool_status，不写 CRMW 组合状态表\n"
                     + "参数格式错误时，本轮任务失败";
 
@@ -83,13 +86,6 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
-    /** ABS 主体联动与规则提醒 */
-    @Resource
-    private AbsIdentityService absIdentityService;
-
-    /** ABS 主体联动与规则提醒 */
-    @Resource
-    private AbsCompanySyncService absCompanySyncService;
     /** 投资池 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -155,9 +151,9 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     private AutoInSummary doAutoIn(String taskName, TaskDetailLog detail) {
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "目标池列表 poolIds=" + poolIds + "（主体与债同一池）");
-        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、普通债发行主体非空、ABS按关系主体匹配、"
+        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、发行主体非空、排除 ABS、"
                 + "security_status!=D、maturity_date为空或>=今日；发行主体已在目标池 " + poolIds
-                + " 生效、债券未在同池生效，并满足目标池 market_codes；未确认 ABS 只生成待确认日志");
+                + " 生效、债券未在同池生效，并满足目标池 market_codes");
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
@@ -176,21 +172,18 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
             }
             List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
-            // 查询同池待入库债券（含市场过滤）
+            // 查询同池待入库债券（含市场过滤，SQL 层已排除 ABS）
             List<ScheduledAdjustCandidateDto> bondList = autoAdjustMapper.queryCompanyBondSamePoolForAutoIn(
-                    poolId, CompanyBondSyncPolicy.currentTypeScope());
+                    poolId, CompanyBondSyncPolicy.samePoolBondScope());
             if (bondList == null || bondList.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待入库同池债券");
                 continue;
             }
-            List<String> windCodes = new ArrayList<>();
+            List<String> windCodes = new ArrayList<>(bondList.size());
             for (ScheduledAdjustCandidateDto bond : bondList) {
-                // ABS 保持唯一主体身份，存在其他依据时交由研究员处理
-                if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
-                    && !absCompanySyncService.allowScheduledSync(bond, bond.getTriggerCompanyCode(), poolId, pool.getPoolName(), true)) {
-                    continue;
+                if (bond != null && StringUtils.hasText(bond.getSecurityCode())) {
+                    windCodes.add(bond.getSecurityCode());
                 }
-                windCodes.add(bond.getSecurityCode());
             }
             // SQL 按当前市场筛选后，再批量检查唯一映射，重复源数据不能直接自动落池
             securityMarketService.queryMarketCodeMap(windCodes);
@@ -203,10 +196,9 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                     SecurityInfoBo security = securityPoolAdjustMapper
                             .querySecurityBoByCode(bond.getSecurityCode());
                     String companyCode = security == null ? null : security.getIssuerCode();
-                    boolean matched = CreditBondSpecialInboundRule.isAbs(security)
-                            ? pledgeBlacklistRuleService.validateCompanies(absIdentityService.queryRiskCompanyCodes(security),
-                                    AdjustMode.IN.getCode()) == null
-                            : companyCode != null && pledgeBlacklistRuleService.evaluate(companyCode).shouldBeInBlacklist();
+                    // ABS 已在候选 SQL 排除，这里只按发行主体校验黑名单质押库三条件
+                    boolean matched = companyCode != null
+                            && pledgeBlacklistRuleService.evaluate(companyCode).shouldBeInBlacklist();
                     if (!matched) {
                         // 记录未命中黑名单质押库条件的跳过原因
                         warnDetail(detail, "债券[" + bond.getSecurityCode()

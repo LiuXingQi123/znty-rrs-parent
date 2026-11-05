@@ -30,6 +30,22 @@ public class CompanyBondSyncPolicyTest {
         assertThat(scope.getExcludedSecurityTypes()).containsExactly("crmw", "convertible_bond");
     }
 
+    /**
+     * 验证三条任务专用范围统一排除 ABS，且都不排除 CRMW
+     *
+     * <p>三条任务的旗下债口径必须一致，否则同一条主体联动链路会出现 ABS 从某个入口漏进来
+     */
+    @Test
+    public void taskSpecificScopesShouldExcludeAbsOnly() {
+        for (CompanyBondTypeScopeBo scope : Arrays.asList(
+                CompanyBondSyncPolicy.samePoolBondScope(),
+                CompanyBondSyncPolicy.newBondInboundScope(),
+                CompanyBondSyncPolicy.outerRatingInboundScope())) {
+            assertThat(scope.isExcludeAbs()).isTrue();
+            assertThat(scope.getExcludedSecurityTypes()).isEmpty();
+        }
+    }
+
     /** 验证 CRMW 专用组合池与普通风险池边界。 */
     @Test
     public void isCrmwCombinationPoolShouldUsePoolType() {

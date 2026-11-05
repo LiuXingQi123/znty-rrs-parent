@@ -42,7 +42,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 验证分级规则扫描沿用入库主体并读取最新评分，以及旧待办的处理边界 */
+/** 验证分级规则扫描的评级来源口径（ABS 用主档发行人内评、担保债用快照担保人最新内评），以及旧待办的处理边界 */
 public class GradeRuleAlertServiceTest {
 
     /** 证券与快照查询组件 */
@@ -105,7 +105,7 @@ public class GradeRuleAlertServiceTest {
         snapshot.setInnerGuarantorRating("4");
         when(securityMapper.querySecuritySnapshotDetailByAdjustLogId(101L, "TEST_ABS.SH"))
                 .thenReturn(snapshot);
-        // 入库实际主体的最新评分为 1，主档及快照评分均不参与本次矩阵取值
+        // 快照主体最新评分为 1，仅担保债场景使用；ABS 一律读主档发行人内评
         when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(rating("1"));
         when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(2L, 1), pool(3L, 2)));
         CreditBondTermBucketBo bucket = new CreditBondTermBucketBo();
@@ -129,37 +129,66 @@ public class GradeRuleAlertServiceTest {
         when(gradeMapper.queryEnabledRatingGradeList()).thenReturn(grades);
     }
 
-    /** 主档评分为空时，按入库实际主体最新评分复核，不误报无内评 */
+    /** ABS 直接取主档发行人内评，不读入库快照，也不再查一遍最新内评 */
     @Test
-    public void shouldUseSelectedCompanyWhenMasterRatingMissing() {
+    public void absShouldUseMasterIssuerRating() {
+        master.setIssuerCode("ABS_ISSUER");
+        master.setInnerIssuerRating("1");
         assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 101L)).isNull();
         verify(gradeMapper).queryAllowedPoolIdsByGradeAndBucket("1", "LE_1");
+        verify(securityMapper, never()).querySecuritySnapshotDetailByAdjustLogId(anyLong(), anyString());
+        verify(securityMapper, never()).queryLatestRatingCompanyByCode(anyString());
         verify(securityMapper, never()).queryRelatedRatingCompanyList(anyString());
         verify(securityMapper, never()).querySelfSelectedRightsHolderByCode(anyString());
-        assertThat(master.getInnerGuarantorRating()).isNull();
-        assertThat(snapshot.getInnerGuarantorRating()).isEqualTo("4");
     }
 
-    /** 主档残留旧评分时，不再因旧评分对应矩阵为空而误报 */
+    /** ABS 主档担保人字段残留评分时不影响矩阵取值 */
     @Test
-    public void shouldIgnoreStaleMasterAndSnapshotRatings() {
+    public void absShouldIgnoreStaleGuarantorField() {
+        master.setInnerIssuerRating("1");
         master.setInnerGuarantorRating("4");
         assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 101L)).isNull();
+        verify(gradeMapper).queryAllowedPoolIdsByGradeAndBucket("1", "LE_1");
         verify(gradeMapper, never()).queryAllowedPoolIdsByGradeAndBucket("4", "LE_1");
     }
 
-    /** 入库后的真实评级下调仍需提醒，不能一直使用快照旧评分 */
+    /** ABS 评级下调后仍要提醒，取的是主档发行人当前内评 */
     @Test
-    public void shouldAlertWhenSelectedCompanyRatingDowngrades() {
-        snapshot.setInnerGuarantorRating("1");
-        when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(rating("2"));
+    public void absShouldAlertWhenIssuerRatingDowngrades() {
+        master.setInnerIssuerRating("2");
         assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 101L))
                 .contains("特殊债调整后的允许范围", "仅 2 级及更差");
     }
 
-    /** 同券不同池沿用各自入库记录的主体，不取全券最近一笔快照 */
+    /** ABS 主档发行人内评缺失或空白时都按无内评分提醒，不回退快照或担保人字段 */
     @Test
-    public void shouldUseSnapshotOfEachPoolEntry() {
+    public void absShouldAlertWhenIssuerRatingMissing() {
+        master.setIssuerCode("ABS_ISSUER");
+        master.setInnerGuarantorRating("1");
+        master.setInnerIssuerRating(null);
+        assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 101L))
+                .contains("所选权益人无内评分", "ABS_ISSUER");
+        master.setInnerIssuerRating(" ");
+        assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 101L))
+                .contains("所选权益人无内评分", "ABS_ISSUER");
+        verify(gradeMapper, never()).queryAllowedPoolIdsByGradeAndBucket(anyString(), anyString());
+        verify(securityMapper, never()).querySecuritySnapshotDetailByAdjustLogId(anyLong(), anyString());
+    }
+
+    /** ABS 不再依赖来源日志与入库快照，历史缺失也不会中止整轮扫描 */
+    @Test
+    public void absShouldNotNeedEntryLogOrSnapshot() {
+        master.setInnerIssuerRating("1");
+        assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, null)).isNull();
+        assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 999L)).isNull();
+        verify(securityMapper, never()).querySecuritySnapshotDetailByAdjustLogId(anyLong(), anyString());
+    }
+
+    /** 担保债同一只券在不同池沿用各自入库快照选定的担保人 */
+    @Test
+    public void guaranteedBondShouldUseSnapshotOfEachPoolEntry() {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
         SecurityInfoDetailDto other = new SecurityInfoDetailDto();
         other.setGuarantorId("SELECTED_B");
         when(securityMapper.querySecuritySnapshotDetailByAdjustLogId(102L, "TEST_ABS.SH")).thenReturn(other);
@@ -170,44 +199,46 @@ public class GradeRuleAlertServiceTest {
         verify(securityMapper).queryLatestRatingCompanyByCode("SELECTED_B");
     }
 
-    /** 最新评分确实缺失时保留提醒并给出主体代码，不回退快照或发行主体评分 */
+    /** 担保债担保人评级下调后仍要提醒，不能一直使用快照旧评分 */
     @Test
-    public void shouldAlertWhenLatestRatingMissing() {
+    public void guaranteedBondShouldAlertWhenGuarantorRatingDowngrades() {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
         snapshot.setInnerGuarantorRating("1");
-        when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(null);
+        when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(rating("2"));
+        // 担保人降到 2 档后矩阵最好池为二级库，一级库不再允许
+        when(gradeMapper.queryAllowedPoolIdsByGradeAndBucket("2", "LE_1"))
+                .thenReturn(Collections.singletonList(3L));
         assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 101L))
-                .contains("所选权益人无内评分", "SELECTED_A");
-        verify(gradeMapper, never()).queryAllowedPoolIdsByGradeAndBucket(anyString(), anyString());
+                .contains("特殊债调整后的允许范围", "仅 2 级及更差");
     }
 
-    /** 最新评分记录存在但为空白时，同样不能沿用旧评分 */
+    /** 担保债缺少来源日志时明确报出证券和池，不猜选担保人 */
     @Test
-    public void shouldNotFallbackWhenLatestRatingBlank() {
-        when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(rating(" "));
-        assertThat(securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 101L))
-                .contains("所选权益人无内评分", "SELECTED_A");
-    }
-
-    /** 缺少来源日志时明确报出证券和池，不猜选关系主体 */
-    @Test
-    public void shouldRejectMissingEntryLog() {
+    public void guaranteedBondShouldRejectMissingEntryLog() {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
         assertThatThrownBy(() -> securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, null))
                 .isInstanceOf(BizException.class).hasMessageContaining("TEST_ABS.SH")
                 .hasMessageContaining("当前池[2]").hasMessageContaining("缺少来源入库日志");
     }
 
-    /** 缺少精确入库快照时不读取其他调库记录代替 */
+    /** 担保债缺少精确入库快照时不读取其他调库记录代替 */
     @Test
-    public void shouldRejectMissingExactEntrySnapshot() {
+    public void guaranteedBondShouldRejectMissingExactEntrySnapshot() {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
         assertThatThrownBy(() -> securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 999L))
                 .isInstanceOf(BizException.class).hasMessageContaining("入库日志[999]")
                 .hasMessageContaining("缺少入库证券快照");
         verify(securityMapper, never()).queryLatestSecuritySnapshotDetailByWindCode(anyString());
     }
 
-    /** 快照缺少实际评级主体代码时不能按名称推断 */
+    /** 担保债快照缺少担保人代码时不能按名称推断 */
     @Test
-    public void shouldRejectMissingSelectedCompanyCode() {
+    public void guaranteedBondShouldRejectMissingGuarantorCode() {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
         snapshot.setGuarantorId(" ");
         assertThatThrownBy(() -> securityService.evaluateGradedInboundForPool("TEST_ABS.SH", 2L, 101L))
                 .isInstanceOf(BizException.class).hasMessageContaining("入库日志[101]")
@@ -258,22 +289,24 @@ public class GradeRuleAlertServiceTest {
 
     /** 原误报已合规时不再刷新待办，由原有本轮失效逻辑关闭旧提醒 */
     @Test
-    public void taskShouldExpireOldFalseAlertWhenLatestRatingAllows() {
+    public void taskShouldExpireOldFalseAlertWhenRatingAllows() {
+        master.setInnerIssuerRating("1");
         when(alertMapper.queryGradedBondInPoolList()).thenReturn(Collections.singletonList(scan(2L, 101L)));
         when(alertMapper.editStaleOpenAlertInvalid(anyString())).thenReturn(1);
         ScheduledTaskResult result = alertService.execute();
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getMessage()).contains("本轮命中 0 条", "本轮失效 1 条");
-        verify(securityMapper).querySecuritySnapshotDetailByAdjustLogId(101L, "TEST_ABS.SH");
+        verify(gradeMapper).queryAllowedPoolIdsByGradeAndBucket("1", "LE_1");
         verify(alertMapper, never()).addAlert(any(IpGradeRuleAlertBo.class));
         verify(alertMapper).editStaleOpenAlertInvalid(anyString());
     }
 
-    /** 最新内评确实缺失时生成可定位主体的待办，不改变池状态 */
+    /** 主档发行人内评确实缺失时生成可定位主体的待办，不改变池状态 */
     @Test
     public void taskShouldCreateAlertForActualMissingRating() {
+        master.setIssuerCode("SELECTED_A");
+        master.setInnerIssuerRating(null);
         when(alertMapper.queryGradedBondInPoolList()).thenReturn(Collections.singletonList(scan(2L, 101L)));
-        when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(null);
         ScheduledTaskResult result = alertService.execute();
         assertThat(result.getMessage()).contains("本轮命中 1 条");
         ArgumentCaptor<IpGradeRuleAlertBo> captor = ArgumentCaptor.forClass(IpGradeRuleAlertBo.class);
@@ -282,9 +315,11 @@ public class GradeRuleAlertServiceTest {
         assertThat(captor.getValue().getAlertStatus()).isEqualTo("00");
     }
 
-    /** 快照缺失中止本轮，异常传播给事务及任务执行器，不能继续关闭旧提醒 */
+    /** 担保债快照缺失中止本轮，异常传播给事务及任务执行器，不能继续关闭旧提醒 */
     @Test
     public void taskShouldNotExpireAlertsWhenEntryIdentityMissing() {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
         when(alertMapper.queryGradedBondInPoolList()).thenReturn(Collections.singletonList(scan(2L, 999L)));
         assertThatThrownBy(() -> alertService.execute()).isInstanceOf(BizException.class);
         verify(alertMapper, never()).editStaleOpenAlertInvalid(anyString());
@@ -294,8 +329,9 @@ public class GradeRuleAlertServiceTest {
     /** 同一依据已标记已处理时，下一轮扫描不再新增待办 */
     @Test
     public void taskShouldSkipAlertWhenSameBasisAlreadyProcessed() {
+        master.setIssuerCode("SELECTED_A");
+        master.setInnerIssuerRating(null);
         when(alertMapper.queryGradedBondInPoolList()).thenReturn(Collections.singletonList(scan(2L, 101L)));
-        when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(null);
         alertService.execute();
         ArgumentCaptor<IpGradeRuleAlertBo> captor = ArgumentCaptor.forClass(IpGradeRuleAlertBo.class);
         verify(alertMapper).addAlert(captor.capture());
@@ -319,7 +355,7 @@ public class GradeRuleAlertServiceTest {
         processed.setContextKey(GradeRuleAlertService.buildGradeContextKey("TEST_ABS.SH", 2L, 1, "旧原因"));
         when(alertMapper.queryLatestGradeAlert("TEST_ABS.SH", 2L)).thenReturn(processed);
         when(alertMapper.queryGradedBondInPoolList()).thenReturn(Collections.singletonList(scan(2L, 101L)));
-        when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(null);
+        master.setInnerIssuerRating(null);
 
         ScheduledTaskResult result = alertService.execute();
 

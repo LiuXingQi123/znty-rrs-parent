@@ -34,7 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 主体下债券自动入库（同池 / IP_RULE）单元测试
+ * 主体下债券自动入池（同池 / IP_RULE）单元测试
  */
 public class CompanySamePoolBondAutoInServiceTest {
 
@@ -81,7 +81,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("主体下债券自动入库");
+        conf.setTaskName("主体下债券自动入池");
         conf.setParamJson("{\"poolIds\":[15]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanySamePoolBondAutoInService.TASK_CODE)).thenReturn(conf);
 
@@ -138,7 +138,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         assertThat(inboundLog.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(inboundLog.getTargetPoolId()).isEqualTo(15L);
         assertThat(inboundLog.getAdjustReason())
-                .isEqualTo("主体下债券自动入库（发行主体：测试集团/C001；主体所在池：债券禁止库）");
+                .isEqualTo("主体下债券自动入池（发行主体：测试集团/C001；主体所在池：债券禁止库）");
         assertThat(inboundLog.getAdjustAdvice()).isNull();
         assertThat(inboundLog.getAdjustBatchNo()).matches("BOND\\d{17}1001");
         assertThat(outboundLog.getAdjustType()).isEqualTo("互斥调整");
@@ -170,7 +170,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("主体下债券自动入库");
+        conf.setTaskName("主体下债券自动入池");
         conf.setParamJson("{\"poolIds\":[17]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanySamePoolBondAutoInService.TASK_CODE)).thenReturn(conf);
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -250,7 +250,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("主体下债券自动入库");
+        conf.setTaskName("主体下债券自动入池");
         conf.setParamJson("{\"poolIds\":[15]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanySamePoolBondAutoInService.TASK_CODE)).thenReturn(conf);
         InvestmentPoolBo pool = new InvestmentPoolBo();

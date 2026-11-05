@@ -84,8 +84,8 @@ public class SecurityPoolAdjustRedirectTest {
         log = log(101L, "ABS.SH", "credit_bond", "调入", 2L);
         when(mapper.queryAdjustLogListForAudit(101L, null)).thenReturn(Collections.singletonList(log));
         snapshot = snapshot("SELF_SELECTED");
-        snapshot.setGuarantor("本笔申请自选权益人");
-        snapshot.setInnerGuarantorRating("4");
+        snapshot.setIssuer("本笔申请自选权益人");
+        snapshot.setInnerIssuerRating("4");
         when(mapper.querySecuritySnapshotDetailByAdjustLogId(101L, "ABS.SH")).thenReturn(snapshot);
         when(mapper.queryLatestRatingCompanyByCode("SELF_SELECTED")).thenReturn(rating("1"));
         pools = new ArrayList<>();
@@ -126,8 +126,10 @@ public class SecurityPoolAdjustRedirectTest {
         verify(gradeMapper).queryAllowedPoolIdsByGradeAndBucket("1", "LE_1");
         verify(mapper, never()).queryRelatedRatingCompanyList(anyString());
         verify(mapper, never()).queryLatestSecuritySnapshotDetailByWindCode(anyString());
+        // 主档担保人字段是多值串、快照残留旧评分，两者都不参与 ABS 改判取值
         assertThat(master.getInnerGuarantorRating()).isEqualTo("1,2+");
-        assertThat(snapshot.getInnerGuarantorRating()).isEqualTo("4");
+        assertThat(master.getInnerIssuerRating()).isEqualTo("3");
+        assertThat(snapshot.getInnerIssuerRating()).isEqualTo("4");
     }
 
     /** 完整路径复用当前已加载的池数据，保留同名候选和原名称，不增加查询 */
@@ -291,10 +293,10 @@ public class SecurityPoolAdjustRedirectTest {
     /** 快照缺少主体或残留多个主体时必须明确拒绝 */
     @Test
     public void shouldRejectMissingOrMultipleSnapshotCompanies() {
-        snapshot.setGuarantorId(" ");
+        snapshot.setIssuerCode(" ");
         assertThatThrownBy(() -> service.queryRedirectPoolOptions("ABS.SH", 101L))
                 .isInstanceOf(BizException.class).hasMessageContaining("缺少实际评级主体代码");
-        snapshot.setGuarantorId("A,B");
+        snapshot.setIssuerCode("A,B");
         assertThatThrownBy(() -> service.queryRedirectPoolOptions("ABS.SH", 101L))
                 .isInstanceOf(BizException.class).hasMessageContaining("不是单一代码");
     }
@@ -404,6 +406,8 @@ public class SecurityPoolAdjustRedirectTest {
     /** 构造单一主体快照 */
     private SecurityInfoDetailDto snapshot(String code) {
         SecurityInfoDetailDto item = new SecurityInfoDetailDto();
+        // ABS 读权益人代码，担保债读所选担保人代码，两类用例共用同一份快照
+        item.setIssuerCode(code);
         item.setGuarantorId(code);
         return item;
     }

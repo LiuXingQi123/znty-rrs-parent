@@ -133,7 +133,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         ScheduledAdjustCandidateDto bond3 = new ScheduledAdjustCandidateDto();
         bond3.setSecurityCode("BOND003.IB");
         bond3.setSecurityShortName("债3");
-        bond3.setSecurityType("abs");
+        bond3.setSecurityType("crmw");
         when(autoAdjustMapper.queryCompanyBondNotInSamePoolForAutoIn(
                 eq("C90005"), eq(17L), any(com.znty.rrs.entity.bo.CompanyBondTypeScopeBo.class)))
                 .thenReturn(Arrays.asList(bond1, bond2, bond3));
@@ -158,8 +158,10 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         // 1 主体 + 3 债
         verify(securityPoolAdjustMapper, times(4)).addAdjustLog(captor.capture());
         verify(securityPoolAdjustMapper, times(4)).addPoolStatus(any(IpAdjustLogBo.class));
-        verify(autoAdjustMapper).queryCompanyBondNotInSamePoolForAutoIn(
-                eq("C90005"), eq(17L), any(com.znty.rrs.entity.bo.CompanyBondTypeScopeBo.class));
+        // 候选查询必须使用排除 ABS 的专用范围，防止调用点被改回 currentTypeScope 导致 ABS 重新跟随入池
+        ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
+        verify(autoAdjustMapper).queryCompanyBondNotInSamePoolForAutoIn(eq("C90005"), eq(17L), scopeCaptor.capture());
+        assertThat(scopeCaptor.getValue().isExcludeAbs()).isTrue();
         verify(ruleService).evaluate("C90005");
         IpAdjustLogBo log = captor.getAllValues().get(0);
         assertThat(log.getSecurityCode()).isEqualTo("C90005");

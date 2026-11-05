@@ -307,9 +307,9 @@ public class CrmwPoolAdjustService {
         master.setRatingOutlook(snapshot.getRatingOutlook());
         master.setGuarantor(snapshot.getGuarantor());
         master.setGuarantorId(snapshot.getGuarantorId());
+        master.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
         master.setAgencyName(snapshot.getAgencyName());
         master.setDateCallExists(snapshot.getDateCallExists());
-        master.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
         master.setDateExists(snapshot.getDateExists());
         master.setFundUse(snapshot.getFundUse());
         master.setPromptReason(snapshot.getPromptReason());
@@ -1437,14 +1437,12 @@ public class CrmwPoolAdjustService {
         }
         // 合并主档当前值与前端传入字段，作为本笔快照内容（不回写主档）
         SecurityInfoBo mergedSecurityInfo = buildMergedSecurityInfo(req.getSecurityCode(), req.getSecurityInfo(), shared.securityInfo);
-        // 担保人名称、代码和内评使用提交阶段校验后的所选担保人，禁止前端旧值进入快照
-        if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
-            mergedSecurityInfo.setIssuer(shared.securityInfo.getIssuer());
-            mergedSecurityInfo.setIssuerCode(shared.securityInfo.getIssuerCode());
-            mergedSecurityInfo.setInnerIssuerRating(shared.securityInfo.getInnerIssuerRating());
-            mergedSecurityInfo.setRatingBondissuer(shared.securityInfo.getRatingBondissuer());
-            mergedSecurityInfo.setRatingBondissuerAgency(shared.securityInfo.getRatingBondissuerAgency());
-        }
+        // 主体与评级字段按本次校验后的结果原样落快照，不在下游再按证券类型挑字段
+        mergedSecurityInfo.setIssuer(shared.securityInfo.getIssuer());
+        mergedSecurityInfo.setIssuerCode(shared.securityInfo.getIssuerCode());
+        mergedSecurityInfo.setInnerIssuerRating(shared.securityInfo.getInnerIssuerRating());
+        mergedSecurityInfo.setRatingBondissuer(shared.securityInfo.getRatingBondissuer());
+        mergedSecurityInfo.setRatingBondissuerAgency(shared.securityInfo.getRatingBondissuerAgency());
         mergedSecurityInfo.setGuarantor(shared.securityInfo.getGuarantor());
         mergedSecurityInfo.setGuarantorId(shared.securityInfo.getGuarantorId());
         mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
@@ -1845,7 +1843,7 @@ public class CrmwPoolAdjustService {
         // 当前项目主体债入库规则未落地（P2 阻塞），暂仅加载不使用，待主体债入库规则接入后启用
         shared.setSecurityInObservePool(crmwPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()));
         shared.setIssuerInObservePool(crmwPoolAdjustMapper.queryIssuerInObservePool(req.getSecurityCode()));
-        // 评级下调三标志：主体/展望按发行人评级判定，担保人按页面所选主体代码判定
+        // 评级下调：主体与展望按发行人评级判定，担保人按本次所选担保人代码判定
         shared.setIssuerRatingDowngraded(ratingDowngradeChecker.isIssuerDowngraded(securityInfo));
         shared.setOutlookRatingDowngraded(ratingDowngradeChecker.isOutlookNegative(securityInfo));
         shared.setGuarantorRatingDowngraded(ratingDowngradeChecker.isGuarantorDowngraded(req.getGuarantorCode()));
@@ -4146,9 +4144,18 @@ public class CrmwPoolAdjustService {
     private AdjustSharedData loadSharedDataForSecurity(String securityCode, SecurityInfoBo securityInfo,
                                                        AdjustSharedData mainShared, AdjustCheckReq mainReq) {
         AdjustSharedData shared = new AdjustSharedData();
-        securityInfo.setGuarantor(mainShared.getSecurityInfo().getGuarantor());
-        securityInfo.setGuarantorId(mainShared.getSecurityInfo().getGuarantorId());
-        securityInfo.setInnerGuarantorRating(mainShared.getSecurityInfo().getInnerGuarantorRating());
+        // 关联码沿用主券已校验的评级主体，字段原样拷贝
+        SecurityInfoBo mainSecurityInfo = mainShared.getSecurityInfo();
+        if (securityInfo != null && mainSecurityInfo != null) {
+            securityInfo.setIssuer(mainSecurityInfo.getIssuer());
+            securityInfo.setIssuerCode(mainSecurityInfo.getIssuerCode());
+            securityInfo.setInnerIssuerRating(mainSecurityInfo.getInnerIssuerRating());
+            securityInfo.setRatingBondissuer(mainSecurityInfo.getRatingBondissuer());
+            securityInfo.setRatingBondissuerAgency(mainSecurityInfo.getRatingBondissuerAgency());
+            securityInfo.setGuarantor(mainSecurityInfo.getGuarantor());
+            securityInfo.setGuarantorId(mainSecurityInfo.getGuarantorId());
+            securityInfo.setInnerGuarantorRating(mainSecurityInfo.getInnerGuarantorRating());
+        }
         shared.setSecurityInfo(securityInfo);
         shared.setCrmwScode(mainShared.getCrmwScode());
         shared.setCrmwStype(mainShared.getCrmwStype());

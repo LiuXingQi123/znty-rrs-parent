@@ -585,7 +585,7 @@ public class AbsIdentityService {
      * 最终规则复核使用本笔已选主体，同时保留主档最新证券状态和日期
      * 执行顺序：
      * 1. 按申请来源精确读取快照
-     * 2. 仅回填五个主体字段及现有矩阵评级字段
+     * 2. 仅回填五个主体字段，担保人字段不承载 ABS 评级主体
      * @param security 当前主档业务对象
      * @param log 本笔日志
      * @param crmw 是否为组合申请
@@ -602,9 +602,6 @@ public class AbsIdentityService {
         security.setInnerIssuerRating(snapshot.getInnerIssuerRating());
         security.setRatingBondissuer(snapshot.getRatingBondissuer());
         security.setRatingBondissuerAgency(snapshot.getRatingBondissuerAgency());
-        security.setGuarantor(snapshot.getGuarantor());
-        security.setGuarantorId(snapshot.getGuarantorId());
-        security.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
     }
 
     /**

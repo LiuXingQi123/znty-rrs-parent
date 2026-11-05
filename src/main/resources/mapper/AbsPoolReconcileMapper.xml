@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.AbsPoolReconcileMapper">
+
+    <!-- ABS 主档全集：未退市即可参与，到期判断在任务内按 maturity_date 做，与同父类任务口径分离 -->
+    <select id="queryAbsBondList" resultType="com.znty.rrs.entity.schedule.AbsBondCandidateDto">
+        SELECT bond.wind_code AS security_code
+               ,bond.short_name AS security_short_name
+               ,bond.security_type
+               ,bond.abs_flag
+               ,bond.issuer_code
+               ,bond.issuer AS issuer_name
+               ,bond.maturity_date
+               ,bond.market
+        FROM rrs_securityinfo bond
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                          AND dst.is_deleted = 0
+                                          AND dst.category_type = 'bond'
+        WHERE (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+          AND bond.security_status != 'D'
+    </select>
+
+    <!-- ABS 四类关联主体：担保人、差额支付承诺人、债务主体、原始权益人，一次全表读后在内存分组 -->
+    <select id="queryAbsCompanyRelationList" resultType="com.znty.rrs.entity.schedule.AbsCompanyRelationDto">
+        SELECT relation.s_info_windcode AS abs_code
+               ,relation.s_info_compcode AS company_code
+        FROM ais_inv_ods.wind_cbondissuer relation
+        WHERE relation.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
+    </select>
+
+    <!-- 各池已生效主体：security_type 经字典限定为 company 大类，避免把债券记录误当成主体 -->
+    <select id="queryEffectiveCompanyPoolRows" resultType="com.znty.rrs.entity.schedule.PoolSecurityRowDto">
+        SELECT status.target_pool_id AS pool_id
+               ,status.security_code
+        FROM ip_pool_status status
+        INNER JOIN dict_security_type dst ON dst.security_type = status.security_type
+                                          AND dst.is_deleted = 0
+                                          AND dst.category_type = 'company'
+        WHERE status.audit_status = '20'
+          AND status.is_deleted = 0
+    </select>
+
+    <!-- 各池已生效 ABS：以主档 ABS 标志判定，不依赖写入时落库的 security_type -->
+    <select id="queryEffectiveAbsPoolRows" resultType="com.znty.rrs.entity.schedule.PoolSecurityRowDto">
+        SELECT status.target_pool_id AS pool_id
+               ,status.security_code
+        FROM ip_pool_status status
+        INNER JOIN rrs_securityinfo bond ON bond.wind_code = status.security_code
+        WHERE status.audit_status = '20'
+          AND status.is_deleted = 0
+          AND (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+    </select>
+
+</mapper>

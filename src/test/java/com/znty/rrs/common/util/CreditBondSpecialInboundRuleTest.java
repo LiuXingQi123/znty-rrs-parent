@@ -66,10 +66,10 @@ public class CreditBondSpecialInboundRuleTest {
 
         SecurityInfoBo abs = new SecurityInfoBo();
         abs.setAbsFlag(1);
-        abs.setInnerIssuerRating("1");
+        abs.setInnerIssuerRating("2");
         assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(abs, false))
                 .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
-        abs.setInnerGuarantorRating("1");
+        abs.setInnerIssuerRating("1");
         assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(abs, false))
                 .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.LEVEL_ONE_ONLY);
     }
@@ -150,21 +150,22 @@ public class CreditBondSpecialInboundRuleTest {
     }
 
     @Test
-    public void absOneGradeUsesGuarantorRatingNotIssuer() {
+    public void absOneGradeUsesIssuerRatingOnly() {
         SecurityInfoBo abs = new SecurityInfoBo();
         abs.setAbsFlag(1);
         abs.setGuarantFlag(1);
         abs.setInnerIssuerRating("2");
         abs.setInnerGuarantorRating("1");
+        // ABS 即使带担保标记也只认发行人内评，不取担保人内评的 1 档
         assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(abs, false))
-                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.LEVEL_ONE_ONLY);
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
 
         abs.setInnerIssuerRating("1");
         abs.setInnerGuarantorRating("3");
         assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(abs, false))
-                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
+                .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.LEVEL_ONE_ONLY);
 
-        abs.setInnerGuarantorRating(null);
+        abs.setInnerIssuerRating(null);
         assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(abs, false))
                 .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
     }
@@ -213,14 +214,27 @@ public class CreditBondSpecialInboundRuleTest {
         sec.setAbsFlag(1);
         sec.setYxFlag(1);
         sec.setGuarantFlag(1);
-        sec.setInnerIssuerRating("2");
-        sec.setInnerGuarantorRating("1");
+        sec.setInnerIssuerRating("1");
+        sec.setInnerGuarantorRating("2");
         assertThat(CreditBondSpecialInboundRule.isSpecialBranch(sec)).isTrue();
         assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, false))
                 .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.LEVEL_ONE_ONLY);
-        sec.setInnerGuarantorRating("2");
+        sec.setInnerIssuerRating("2");
         assertThat(CreditBondSpecialInboundRule.resolveGradedInboundMode(sec, false))
                 .isEqualTo(CreditBondSpecialInboundRule.GradedInboundMode.DOWNGRADE_CEILING);
+    }
+
+    @Test
+    public void absWithGuaranteeDoesNotGetStrongGuaranteeExemption() {
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setAbsFlag(1);
+        sec.setGuarantFlag(1);
+        sec.setInnerIssuerRating("2");
+        sec.setInnerGuarantorRating("1");
+        // ABS 的评级主体是权益人，不按担保人内评享受重点观察名单豁免
+        assertThat(CreditBondSpecialInboundRule.isStrongGuarantee(sec)).isFalse();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, 1))
+                .contains("不得新增入库");
     }
 
     @Test

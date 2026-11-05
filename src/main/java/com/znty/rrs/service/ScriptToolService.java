@@ -2028,7 +2028,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "credit-bond-grade", "信用债评级规则", "重置信用债主体内评分档和评级准入规则。", "medium", "rrs_credit_bond_grade_rule_demo_data.sql");
         addModuleTask(taskMap, "temp-security-code", "临时代码", "重置临时代码管理演示数据。", "medium", "rrs_temp_security_code_demo_data.sql");
         addModuleTask(taskMap, "scheduled-task", "定时任务配置", "重置定时任务配置与执行历史演示数据。", "medium", "rrs_scheduled_task_demo_data.sql");
-        addModuleTask(taskMap, "grade-rule-alert", "不符合分级规则提醒", "重置不符合主体债入库规则提醒待办。", "medium", "rrs_grade_rule_alert_demo_data.sql");
+        addModuleTask(taskMap, "grade-rule-alert", "不符合分级规则提醒", "重置不符合主体债入池规则提醒待办。", "medium", "rrs_grade_rule_alert_demo_data.sql");
         addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体观察名单、主体评级、担保人内评、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
         addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 全量主体公司简介、债券发行人主体、评级、公司财务指标与跨市场证券代码演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;

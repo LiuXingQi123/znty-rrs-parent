@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * 不符合主体债入库规则提醒
+ * 不符合主体债入池规则提醒
  */
 public interface GradeRuleAlertMapper {
 

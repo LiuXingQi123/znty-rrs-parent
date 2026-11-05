@@ -15,7 +15,7 @@ import javax.annotation.Resource;
 import java.util.List;
 
 /**
- * 不符合主体债入库规则提醒
+ * 不符合主体债入池规则提醒
  */
 @RestController
 @RequestMapping("/api/v1/gradeRuleAlert")

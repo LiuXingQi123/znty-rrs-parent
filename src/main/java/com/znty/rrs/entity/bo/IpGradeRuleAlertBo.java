@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.Date;
 
 /**
- * 不符合主体债入库规则提醒待办
+ * 不符合主体债入池规则提醒待办
  */
 @Data
 public class IpGradeRuleAlertBo {

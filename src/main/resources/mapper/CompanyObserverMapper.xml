@@ -39,6 +39,7 @@
         </foreach>
         UNION
         <!-- 2. 查询目标池内未退市、未到期债券的发行主体，包含主体已出池但旗下债券仍在池的情况 -->
+        <!-- ABS 不参与本任务，其主体由观察名单或在池主体记录覆盖，避免仅因 ABS 在池而反向纳管主体 -->
         SELECT bond.issuer_code AS security_code
                ,bond.issuer AS security_short_name
                ,'company' AS security_type
@@ -51,6 +52,7 @@
           AND ips.is_deleted = 0
           AND bond.security_status != 'D'
           AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
+          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
           AND ips.target_pool_id IN
         <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
             #{poolId}
@@ -58,31 +60,17 @@
     </select>
     <!-- 批量预读主体旗下有效债券，统一保留主体联动的类型及到期日口径 -->
     <select id="queryObserverBondList" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        <!-- 主体关系去重后再联接，B 作为触发主体而 ABS 仍保留已选 A 身份 -->
-        WITH company_refs AS (
-            SELECT wind_code AS security_code, issuer_code AS company_code FROM rrs_securityinfo
-            WHERE issuer_code IS NOT NULL AND issuer_code != ''
-            UNION
-            SELECT issuer.s_info_windcode AS security_code, issuer.s_info_compcode AS company_code
-            FROM ais_inv_ods.wind_cbondissuer issuer
-            INNER JOIN rrs_securityinfo si ON si.wind_code = issuer.s_info_windcode
-            WHERE (si.abs_flag = 1 OR si.security_type = 'abs')
-              AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
-              AND issuer.s_info_compcode IS NOT NULL AND issuer.s_info_compcode != ''
-        )
-        <!-- 一个主体和一只债仅返回一行，保留批量读取口径 -->
+        <!-- 只按主档发行主体关联；ABS 已由 company_abs_bond_auto_in 按池对账，不参与主体观察名单联动 -->
         SELECT DISTINCT bond.wind_code AS security_code
                ,bond.short_name AS security_short_name
                ,bond.security_type
                ,bond.issuer_code
                ,bond.abs_flag
-               ,company_ref.company_code AS trigger_company_code
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
-        INNER JOIN company_refs company_ref ON company_ref.security_code = bond.wind_code
-        WHERE company_ref.company_code IN
+        WHERE bond.issuer_code IN
         <foreach collection="companyCodes" item="companyCode" open="(" separator="," close=")">
             #{companyCode}
         </foreach>
@@ -97,7 +85,7 @@
               #{securityType}
           </foreach>
         </if>
-        ORDER BY company_ref.company_code
+        ORDER BY bond.issuer_code
                  ,bond.wind_code
     </select>
 

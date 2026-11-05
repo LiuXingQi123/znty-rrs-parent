@@ -69,6 +69,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     + "评级口径：近一年（日历年）内配置表中的有效机构多评级取孰低，一年以前忽略；近一年无认可外评不因（二）入库\n"
                     + "限制规则：主体已在目标池配置的调入限制池时，跳过该条记录\n"
                     + "联动处理：主体成功入池后，本任务内自写逻辑同批调入该主体旗下未退市、未到期债券（不复用人工 syncCompanyBonds）；"
+                    + "旗下债已排除 ABS，ABS 的进出池与未确认提醒由「主体下ABS债券自动入库」任务负责；"
                     + "债命中调入限制池则阻断主体入池并整批回滚；入池后按互斥/反向限制从债当前所在池自动调出\n"
                     + "执行方式：直接生效，不走审批；参数格式错误时，本轮任务失败";
 
@@ -79,9 +80,6 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
-    /** ABS 主体联动与规则提醒 */
-    @Resource
-    private AbsCompanySyncService absCompanySyncService;
     /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -449,7 +447,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             throw new BizException("CRMW 组合池不支持主体及旗下债券同池调整");
         }
         List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryCompanyBondNotInSamePoolForAutoIn(
-                companyCode, poolId, CompanyBondSyncPolicy.currentTypeScope());
+                companyCode, poolId, CompanyBondSyncPolicy.outerRatingInboundScope());
         if (bonds == null || bonds.isEmpty()) {
             return 0;
         }
@@ -461,11 +459,6 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 + "（同池旗下债）";
         for (ScheduledAdjustCandidateDto bond : bonds) {
             if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
-                continue;
-            }
-            // ABS 保持唯一主体身份，存在其他依据时交由研究员处理
-            if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
-                    && !absCompanySyncService.allowScheduledSync(bond, companyCode, poolId, pool.getPoolName(), true)) {
                 continue;
             }
             List<Long> currentPoolIds = securityPoolAdjustMapper
