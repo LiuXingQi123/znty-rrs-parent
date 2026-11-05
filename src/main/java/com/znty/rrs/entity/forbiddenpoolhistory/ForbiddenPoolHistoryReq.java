@@ -50,4 +50,7 @@ public class ForbiddenPoolHistoryReq extends PageRequest {
 
     /** 调整状态 */
     private String auditStatus;
+
+    /** 统一社会信用代码（模糊搜索）：主体记录按自身信用代码匹配，债券记录按发行主体信用代码匹配 */
+    private String registerNumber;
 }

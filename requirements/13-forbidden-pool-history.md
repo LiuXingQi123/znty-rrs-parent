@@ -37,6 +37,7 @@
 |---|---|---|---|
 | 文本输入 | `companyCode` | 模糊 | 主体代码，回车查询 |
 | 文本输入 | `companyName` | 模糊 | 主体全称，回车查询 |
+| 文本输入 | `registerNumber` | 模糊 | 统一社会信用代码：主体记录匹配 `wind_compintroduction.REGISTERNUMBER`，债券记录按 `issuer_code` 反查其发行主体信用代码 |
 | 文本输入 | `securityCode` | 模糊 | 证券代码，回车查询 |
 | 文本输入 | `securityShortName` | 模糊 | 证券名称，回车查询 |
 | 下拉 | `categoryType` | 精确 | 对象类型：`company`=主体 / `bond`=债券；未选则全部 |
@@ -53,7 +54,7 @@
 ### 2.2 查询接口
 
 - 路径：`POST /api/v1/forbiddenPoolHistory/queryForbiddenPoolHistoryPage`
-- 导出：`POST /api/v1/forbiddenPoolHistory/exportForbiddenPoolHistoryExcel`（同筛选、不分页；列与页面一致，审核状态转中文）
+- 导出：`POST /api/v1/forbiddenPoolHistory/exportForbiddenPoolHistoryExcel`（同筛选、不分页；列与页面一致，审核状态转中文；统一社会信用代码经筛选生效但导出模板暂不含该列）
 - 请求体：
   ```json
   { "companyCode", "companyName", "securityCode", "securityShortName",

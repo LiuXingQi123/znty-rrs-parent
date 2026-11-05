@@ -23,6 +23,9 @@ public class ForbiddenPoolQueryDto {
     /** 发行主体 */
     private String issuer;
 
+    /** 统一社会信用代码：主体行为自身信用代码，债券行为其发行主体信用代码 */
+    private String registerNumber;
+
     /** 调整人 */
     private String adjusterName;
 

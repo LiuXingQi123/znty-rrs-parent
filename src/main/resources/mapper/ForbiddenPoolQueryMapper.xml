@@ -21,6 +21,10 @@
                ,dst.security_type_name
                ,dst.category_type
                ,COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) AS issuer
+               <!-- 主体行取自身信用代码，债券行取发行主体信用代码 -->
+               ,COALESCE(wci.REGISTERNUMBER,
+                         (SELECT rc.REGISTERNUMBER FROM ais_inv_ods.wind_compintroduction rc
+                          WHERE rc.COMP_ID = bi.issuer_code LIMIT 1)) AS registerNumber
                ,bi.maturity_date
                ,bi.delist_date
                ,bi.repurchase_date
@@ -82,6 +86,13 @@
             </if>
             <if test="issuer != null and issuer != ''">
                 AND COALESCE(wci.COMP_NAME, bi.issuer, ips.security_short_name) LIKE CONCAT('%', #{issuer}, '%')
+            </if>
+            <!-- 统一社会信用代码：主体行匹配自身，债券行匹配发行主体，与主体代码条件口径一致 -->
+            <if test="registerNumber != null and registerNumber != ''">
+                AND (wci.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')
+                     OR EXISTS (SELECT 1 FROM ais_inv_ods.wind_compintroduction rc
+                                WHERE rc.COMP_ID = bi.issuer_code
+                                  AND rc.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')))
             </if>
         </where>
         ORDER BY ips.entry_time DESC

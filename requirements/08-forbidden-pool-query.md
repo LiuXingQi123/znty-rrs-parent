@@ -41,6 +41,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 | 日期范围 | `entryTimeRange` | 范围 | 入池日期起/止，`value-format="yyyy-MM-dd"` |
 | 文本输入 | `adjusterName` | 模糊 | 调整人 |
 | 文本输入 | `issuer` | 模糊 | 发行主体全称 |
+| 文本输入 | `registerNumber` | 模糊 | 统一社会信用代码：主体行匹配 `wind_compintroduction.REGISTERNUMBER`，债券行按 `issuer_code` 反查其发行主体信用代码 |
 
 ### 2.2 查询接口
 
@@ -58,7 +59,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 
 ### 2.2.1 导出当前查询结果
 
-点击「导出」调用 `POST /api/v1/forbiddenPoolQuery/exportForbiddenPoolExcel`，筛选条件与列表相同但不传分页；仍按 VIEWABLE 权限过滤。Excel 列与页面一致（不含序号）；「证券状态」后端按到期日派生存续/到期，对齐前端 `getBondStatus`。
+点击「导出」调用 `POST /api/v1/forbiddenPoolQuery/exportForbiddenPoolExcel`，筛选条件与列表相同但不传分页；仍按 VIEWABLE 权限过滤。Excel 列与页面一致（不含序号；统一社会信用代码经筛选生效但导出模板暂不含该列）；「证券状态」后端按到期日派生存续/到期，对齐前端 `getBondStatus`。
 
 ### 2.3 表格列渲染
 
@@ -93,6 +94,8 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 - **只返回债券禁止库的已生效数据**：`INNER JOIN ip_investment_pool p ON p.id=ips.target_pool_id AND p.is_deleted=0 AND p.pool_type='forbidden'`，并强制 `ips.is_deleted=0 AND ips.audit_status='20'`。
 - **逻辑删除过滤**：`ips.is_deleted=0`。
 - **对象类型筛选**：`categoryType='company'` → `ips.security_type='company'`；`categoryType='bond'` → `dst.category_type='bond'`；未传则不限制。
+- **统一社会信用代码筛选**：主体行（`ips.security_type='company'`）已 LEFT JOIN `wind_compintroduction`，直接匹配 `wci.REGISTERNUMBER`；债券行 `wci` 为空，用 `EXISTS` 按 `issuer_code` 反查发行主体的 `REGISTERNUMBER` 匹配，与「主体代码」同时匹配主体与债券发行主体的口径一致。
+- **信用代码展示**：`SELECT` 用 `COALESCE(wci.REGISTERNUMBER, 标量子查询)` 输出 `registerNumber`，主体行取自身、债券行取发行主体，列表与查询条件同一口径。
 - **分页硬上限**：`PageRequest.getPageSize()` 限制最大 100；`pageIndex` <1 兜底为 1。
 - **证券状态筛选 SQL**：`maturity_date` 按 `yyyyMMdd` 存储；`securityStatus == 'active'` → `bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')`；`'matured'` → `bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d')`，与证券池查询保持一致。
 - **`targetPoolName` 覆盖**：XML 查出的 `p.pool_name AS target_pool_name` 会被 Service 的 `fillPoolFullName` 用投资池全路径名覆盖。即表格「投资池名称」列实际显示全路径名（含父级）。

@@ -27,6 +27,9 @@ public class CompanyPoolAdjustHistoryDto {
     /** 主体代码 */
     private String companyCode;
 
+    /** 统一社会信用代码（关联主体简介表 REGISTERNUMBER） */
+    private String registerNumber;
+
     /** 调整类型 */
     private String adjustType;
 

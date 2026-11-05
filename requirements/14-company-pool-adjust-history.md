@@ -45,6 +45,7 @@
 | 投资池选择器（树多选） | `poolIds` | 同主体池查询页 |
 | 主体代码 | `companyCode` | 模糊 |
 | 主体名称 | `companyName` | 模糊（主体池查询页无此项） |
+| 统一社会信用代码 | `registerNumber` | 按 `security_code` 关联 `ais_inv_ods.wind_compintroduction.REGISTERNUMBER` 模糊；列表同步展示该列 |
 | 调整日期范围 | `adjustTimeRange` | daterange，对应 `submit_time` |
 | 调整人 | `adjusterName` | 模糊 |
 | 调整方向 | `adjustMode` | 下拉：调入/调出 |
@@ -58,7 +59,7 @@
 ### 2.2 查询接口
 
 - 路径：`POST /api/v1/companyPoolAdjustHistory/queryCompanyPoolAdjustHistoryPage`
-- 导出：`POST /api/v1/companyPoolAdjustHistory/exportCompanyPoolAdjustHistoryExcel`（同筛选、不分页；列与页面一致，审核状态转中文）
+- 导出：`POST /api/v1/companyPoolAdjustHistory/exportCompanyPoolAdjustHistoryExcel`（同筛选、不分页；列与页面一致，审核状态转中文；统一社会信用代码经筛选生效但导出模板暂不含该列）
 - 请求体（`CompanyPoolAdjustHistoryReq`）：
   ```json
   { "poolIds": [2,3] | null, "companyCode": "C100" | null, "companyName": "交通" | null,

@@ -8,6 +8,8 @@
         SELECT ips.id
                ,ips.security_code
                ,ips.security_short_name
+               <!-- 主体简介按 COMP_ID 取统一社会信用代码 -->
+               ,wci.REGISTERNUMBER AS registerNumber
                ,ips.adjuster_name
                ,ips.entry_time
                ,ips.target_pool_id
@@ -20,6 +22,8 @@
                                              AND dst.category_type = 'company'
         INNER JOIN ip_investment_pool p ON ips.target_pool_id = p.id
                                         AND p.is_deleted = 0
+        <!-- 主体池只存主体，按 COMP_ID 关联主体简介补充统一社会信用代码 -->
+        LEFT JOIN ais_inv_ods.wind_compintroduction wci ON wci.COMP_ID = ips.security_code
         <where>
             ips.is_deleted = 0
             AND ips.audit_status = '20'
@@ -43,6 +47,9 @@
             </if>
             <if test="companyName != null and companyName != ''">
                 AND ips.security_short_name LIKE CONCAT('%', #{companyName}, '%')
+            </if>
+            <if test="registerNumber != null and registerNumber != ''">
+                AND wci.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')
             </if>
             <if test="entryTimeStart != null and entryTimeStart != ''">
                 AND ips.entry_time &gt;= #{entryTimeStart}

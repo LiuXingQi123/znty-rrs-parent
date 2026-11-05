@@ -20,6 +20,9 @@ public class CompanyPoolQueryDto {
     /** 主体代码（对应 security_code） */
     private String securityCode;
 
+    /** 统一社会信用代码（关联主体简介表 REGISTERNUMBER） */
+    private String registerNumber;
+
     /** 调整人 */
     private String adjusterName;
 

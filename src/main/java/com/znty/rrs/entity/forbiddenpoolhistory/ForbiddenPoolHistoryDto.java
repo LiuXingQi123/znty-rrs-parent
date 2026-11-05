@@ -39,6 +39,9 @@ public class ForbiddenPoolHistoryDto {
     /** 发行主体 */
     private String issuer;
 
+    /** 统一社会信用代码：主体记录为自身信用代码，债券记录为其发行主体信用代码 */
+    private String registerNumber;
+
     /** 调整类型 */
     private String adjustType;
 

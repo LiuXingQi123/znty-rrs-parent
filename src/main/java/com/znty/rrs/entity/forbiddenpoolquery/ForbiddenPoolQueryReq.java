@@ -48,4 +48,7 @@ public class ForbiddenPoolQueryReq extends PageRequest {
     /** 发行主体名称（模糊搜索） */
     private String issuer;
 
+    /** 统一社会信用代码（模糊搜索）：主体行按自身信用代码匹配，债券行按发行主体信用代码匹配 */
+    private String registerNumber;
+
 }

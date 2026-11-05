@@ -17,6 +17,10 @@
                ,al.adjust_batch_no
                ,dst.category_type
                ,COALESCE(wci.COMP_NAME, bi.issuer, al.security_short_name) AS issuer
+               <!-- 主体记录取自身信用代码，债券记录取发行主体信用代码 -->
+               ,COALESCE(wci.REGISTERNUMBER,
+                         (SELECT rc.REGISTERNUMBER FROM ais_inv_ods.wind_compintroduction rc
+                          WHERE rc.COMP_ID = bi.issuer_code LIMIT 1)) AS registerNumber
                ,al.adjust_type
                ,al.adjust_mode
                ,al.target_pool_id
@@ -74,6 +78,13 @@
             </if>
             <if test="auditStatus != null and auditStatus != ''">
                 AND al.audit_status = #{auditStatus}
+            </if>
+            <!-- 统一社会信用代码：主体记录匹配自身，债券记录匹配发行主体，与主体代码条件口径一致 -->
+            <if test="registerNumber != null and registerNumber != ''">
+                AND (wci.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')
+                     OR EXISTS (SELECT 1 FROM ais_inv_ods.wind_compintroduction rc
+                                WHERE rc.COMP_ID = bi.issuer_code
+                                  AND rc.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')))
             </if>
         </where>
         <!-- 提交时间优先（最新在前）；同秒内按批次号聚拢同组手工/联动/互斥；id 稳定次序 -->
