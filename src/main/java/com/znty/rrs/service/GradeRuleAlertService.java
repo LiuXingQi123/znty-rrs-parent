@@ -76,7 +76,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
                     + "担保债可能对应多个担保人，按当前在池记录的入库快照取当时选定的担保人，再查该担保人最新内评，"
                     + "缺少担保人信息则本轮失败并回滚\n"
                     + "本轮命中：本轮仍不符合规则，新增或刷新待办\n"
-                    + "沿用结论：同券同池、同档位同原因的待办已由研究员标记已处理或去调库时，本轮不再重复生成\n"
+                    + "沿用结论：同券同池、同档位同原因的待办已由研究员标记已处理时，本轮不再重复生成\n"
                     + "本轮失效：曾待处理但本轮已合规或不在扫描范围的待办，状态置为 99\n"
                     + "仍待处理：执行结束后 alert_status=00 的待办数量，可在“我的事宜”查看\n"
                     + "处理方式：只生成提醒，不自动出池；需由人工在“我的事宜”分级规则提醒页签处理";
@@ -209,7 +209,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     }
 
     /**
-     * 人工标记已处理，同时承接「标记已处理」和「去调库」两个入口
+     * 人工标记规则提醒已处理
      *
      * 只关闭待办并把人工结论绑定到当前依据，不改池状态；
      * 扫描时同一依据不再生成新待办，依据变化后仍会重新提醒
@@ -447,7 +447,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(row.getSecurityCode());
         String specialDesc = buildSpecialTypeDesc(sec, row.getSecurityCode());
         if (open == null) {
-            // 4. 同一依据已由研究员标记已处理或去调库时，不再重复生成待办
+            // 4. 同一依据已由研究员标记已处理时，不再重复生成待办
             if (hasProcessedSameBasis(row.getSecurityCode(), row.getCurrentPoolId(), contextKey)) {
                 return false;
             }
