@@ -117,9 +117,9 @@ public class WindCustomCodeDemoDataTest {
                     ScriptUtils.executeSqlScript(connection, new ByteArrayResource(insert.getBytes(StandardCharsets.UTF_8)));
                 }
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode", Integer.class))
-                        .isEqualTo(52);
+                        .isEqualTo(53);
                 assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT S_INFO_WINDCODE) FROM ais_inv_ods.wind_windcustomcode", Integer.class))
-                        .isEqualTo(52);
+                        .isEqualTo(53);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo s"
                         + " LEFT JOIN ais_inv_ods.wind_windcustomcode w ON w.S_INFO_WINDCODE = s.wind_code"
                         + " WHERE w.S_INFO_WINDCODE IS NULL"
@@ -136,7 +136,7 @@ public class WindCustomCodeDemoDataTest {
                         + " HAVING COUNT(*) = 3 AND COUNT(DISTINCT EXCHMARKET) = 3", String.class))
                         .containsExactlyInAnyOrder("CNDEMO000293", "CNDEMO000301", "CNDEMO000319");
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE sec_id IS NULL", Integer.class)).isZero();
-                assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(52);
+                assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(53);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary'", Integer.class)).isEqualTo(3);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND market = 'NIB'", Integer.class)).isEqualTo(3);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"

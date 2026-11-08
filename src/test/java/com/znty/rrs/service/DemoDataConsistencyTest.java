@@ -68,7 +68,22 @@ public class DemoDataConsistencyTest {
             }
             checked++;
         }
-        assertThat(checked).as("保留全部六条 ABS 样本").isEqualTo(6);
+        assertThat(checked).as("保留全部七条 ABS 样本").isEqualTo(7);
+
+        Map<String, String> absGuaranteed = null;
+        for (Map<String, String> security : readRows("rrs_external_import_demo_data.sql", "rrs_securityinfo")) {
+            if ("ABG001.IB".equals(security.get("wind_code"))) {
+                absGuaranteed = security;
+                break;
+            }
+        }
+        assertThat(absGuaranteed).as("ABS+担保债样本").isNotNull();
+        assertThat(absGuaranteed.get("security_type")).isEqualTo("abs");
+        assertThat(absGuaranteed.get("abs_flag")).isEqualTo("1");
+        assertThat(absGuaranteed.get("guarant_flag")).isEqualTo("1");
+        assertThat(absGuaranteed.get("guarantor_id")).isEqualTo("C10010");
+        assertThat(absGuaranteed.get("inner_guarantor_rating")).isEqualTo("1");
+        assertThat(absGuaranteed.get("issuer_code")).isNull();
     }
 
     /** Demo 中同一主体代码的名称统一使用主体表全称，专用简称字段保持原样 */
