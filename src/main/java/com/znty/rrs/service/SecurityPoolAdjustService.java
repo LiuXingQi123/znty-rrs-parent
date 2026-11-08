@@ -3914,7 +3914,7 @@ public class SecurityPoolAdjustService {
      * 永续发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级；
      * 次级发债主体内评 1 档只能调入一级库，2+/2/2- 下调一级（只留那一档），其余至少下调一级。
      * 担保债或已在观察池：不得高于矩阵最好档，从该档开到五级。
-     * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只能去五级。可转债/可交换债/CRMW 不适用信用债 1～5。
+     * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只能去五级。池间调入限制仅对强担保豁免 restricted 池，禁止池仍全局拦截。可转债/可交换债/CRMW 不适用信用债 1～5。
      * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4。
      * 期限为空默认最长档（期限>5）继续走矩阵，不跳过。
      * 境外债目标池不走本规则。仅调入校验。
@@ -5078,11 +5078,38 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：调入限制池（in_restrict）
      *
-     * 证券当前在配置的限制池中，则不允许调入目标池。
+     * 证券当前在配置的限制池中，则不允许调入目标池；非 ABS、担保人内评为 1 档的强担保债仅豁免重点观察名单池。
      */
     private String inCheckRestrictPool(AdjustCheckContext ctx) {
-        // 通用阻断校验：检查证券是否在指定关系类型的池中
-        return checkBlockedByPools(ctx, RelationType.IN_RESTRICT.getCode(), "调入限制池");
+        List<Long> relPools = ctx.getTargetPoolRelations().get(RelationType.IN_RESTRICT.getCode());
+        if (relPools == null || relPools.isEmpty()) {
+            return null;
+        }
+        // 强担保只豁免重点观察名单的池间限制，其他调入限制池仍然拦截
+        List<Long> blocked = relPools.stream()
+                .filter(ctx.getCurrentPoolIds()::contains)
+                .filter(poolId -> !isStrongGuaranteeRestrictedPool(ctx, poolId))
+                .collect(Collectors.toList());
+        if (!blocked.isEmpty()) {
+            return "证券当前在调入限制池中：" + poolNames(blocked, ctx);
+        }
+        return null;
+    }
+
+    /**
+     * 判断当前限制池是否为强担保可豁免的重点观察名单池
+     *
+     * @param ctx 调库校验上下文
+     * @param poolId 当前限制池 ID
+     * @return true=强担保可豁免的重点观察名单池
+     */
+    private boolean isStrongGuaranteeRestrictedPool(AdjustCheckContext ctx, Long poolId) {
+        if (!CreditBondSpecialInboundRule.isStrongGuarantee(ctx.getSecurityInfo())
+                || ctx.getPoolMap() == null) {
+            return false;
+        }
+        InvestmentPoolBo pool = ctx.getPoolMap().get(poolId);
+        return pool != null && PoolType.RESTRICTED.getCode().equals(pool.getPoolType());
     }
 
     /**

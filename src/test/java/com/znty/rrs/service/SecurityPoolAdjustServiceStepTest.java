@@ -1786,6 +1786,136 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failure).contains("不得新增入库");
     }
 
+    /** 强担保债在重点观察名单中调入信用债大库时，不再被池间调入限制拦截。 */
+    @Test
+    public void checkInConditionsShouldAllowStrongGuaranteeInRestrictedPool() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityInForbiddenPool("STRONG_GUARANTEE.IB")).thenReturn(false);
+
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("STRONG_GUARANTEE.IB");
+        sec.setSecurityType("corporate_bond");
+        sec.setGuarantFlag(1);
+        sec.setInnerGuarantorRating("1");
+        AdjustCheckContext ctx = buildRestrictedInboundContext(sec);
+        ctx.setReleaseRules(true);
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).doesNotContain("证券当前在调入限制池中：重点观察名单");
+    }
+
+    /** 强担保不豁免重点观察名单之外的其他调入限制池。 */
+    @Test
+    public void checkInConditionsShouldStillBlockStrongGuaranteeInOtherRestrictPool() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityInForbiddenPool("STRONG_OTHER_RESTRICT.IB")).thenReturn(false);
+
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("STRONG_OTHER_RESTRICT.IB");
+        sec.setSecurityType("corporate_bond");
+        sec.setGuarantFlag(1);
+        sec.setInnerGuarantorRating("1");
+        AdjustCheckContext ctx = buildRestrictedInboundContext(sec);
+        InvestmentPoolBo otherRestrictPool = new InvestmentPoolBo();
+        otherRestrictPool.setId(24L);
+        otherRestrictPool.setPoolType("blacklist");
+        otherRestrictPool.setPoolName("其他限制池");
+        ctx.getPoolMap().put(otherRestrictPool.getId(), otherRestrictPool);
+        ctx.setCurrentPoolIds(new HashSet<>(Arrays.asList(23L, otherRestrictPool.getId())));
+        Map<String, List<Long>> relations = new HashMap<>();
+        relations.put(RelationType.IN_RESTRICT.getCode(), Arrays.asList(23L, otherRestrictPool.getId()));
+        ctx.setTargetPoolRelations(relations);
+        ctx.setReleaseRules(true);
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("证券当前在调入限制池中：其他限制池");
+    }
+
+    /** 普通担保债或担保人内评非 1 档时，重点观察名单仍按调入限制池拦截。 */
+    @Test
+    public void checkInConditionsShouldBlockNonStrongGuaranteeInRestrictedPool() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityInForbiddenPool("ORDINARY_GUARANTEE.IB")).thenReturn(false);
+
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("ORDINARY_GUARANTEE.IB");
+        sec.setSecurityType("corporate_bond");
+        sec.setGuarantFlag(1);
+        sec.setInnerGuarantorRating("2");
+        AdjustCheckContext ctx = buildRestrictedInboundContext(sec);
+        ctx.setReleaseRules(true);
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("证券当前在调入限制池中：重点观察名单");
+    }
+
+    /** 强担保债同时在禁止池中时，仍由全局禁止池校验拦截。 */
+    @Test
+    public void checkInConditionsShouldStillBlockStrongGuaranteeInForbiddenPool() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        when(mapper.querySecurityInForbiddenPool("STRONG_FORBIDDEN.IB")).thenReturn(true);
+
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setWindCode("STRONG_FORBIDDEN.IB");
+        sec.setSecurityType("corporate_bond");
+        sec.setGuarantFlag(1);
+        sec.setInnerGuarantorRating("1");
+        AdjustCheckContext ctx = buildRestrictedInboundContext(sec);
+        ctx.setReleaseRules(true);
+
+        List<String> failures = service.checkInConditions(ctx);
+
+        assertThat(failures).contains("证券当前在禁止池中");
+    }
+
+    /** 强担保豁免重点观察名单限制后，主体债入库矩阵仍然继续执行。 */
+    @Test
+    public void inCheckMainGradeRuleShouldStillApplyMatrixForStrongGuarantee() {
+        CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "creditBondGradeRuleMapper", gradeRuleMapper);
+        InvestmentPoolBo level1 = new InvestmentPoolBo();
+        level1.setId(2L);
+        level1.setPoolType("credit_bond");
+        level1.setPoolName("一级库");
+        level1.setPoolLevel(2);
+        level1.setInnerSort(1);
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setSecurityType("corporate_bond");
+        sec.setInnerIssuerRating("2");
+        sec.setGuarantFlag(1);
+        sec.setInnerGuarantorRating("1");
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setTargetPool(level1);
+        ctx.setSecurityInfo(sec);
+        ctx.setSecurityInRestrictedPool(true);
+        ctx.setCurrentPoolIds(Collections.<Long>emptySet());
+        ctx.setPoolMap(Collections.singletonMap(2L, level1));
+        CreditBondTermBucketBo gt5 = new CreditBondTermBucketBo();
+        gt5.setBucketCode("GT_5");
+        gt5.setMinTermYear(new BigDecimal("5"));
+        gt5.setMinInclusive(0);
+        when(gradeRuleMapper.queryEnabledTermBucketList()).thenReturn(Collections.singletonList(gt5));
+        when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
+                .thenReturn(Collections.<Long>emptyList());
+
+        String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+
+        assertThat(failure).isEqualTo("主体债入库矩阵未配置允许池");
+        verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket("2", "GT_5");
+    }
+
     /** 境外债目标池不走主体评分档套件（对齐老 polidEnum）。 */
     @Test
     public void inCheckMainGradeRuleShouldSkipWhenOffshoreBondPool() {
@@ -3266,6 +3396,34 @@ public class SecurityPoolAdjustServiceStepTest {
         sec.setGuarantFlag(guarantFlag);
         shared.setSecurityInfo(sec);
         return shared;
+    }
+
+    /** 构建当前在重点观察名单、准备调入信用债大库的校验上下文。 */
+    private AdjustCheckContext buildRestrictedInboundContext(SecurityInfoBo securityInfo) {
+        InvestmentPoolBo targetPool = new InvestmentPoolBo();
+        targetPool.setId(2L);
+        targetPool.setPoolType("credit_bond");
+        targetPool.setPoolName("信用债大库");
+        InvestmentPoolBo restrictedPool = new InvestmentPoolBo();
+        restrictedPool.setId(23L);
+        restrictedPool.setPoolType("restricted");
+        restrictedPool.setPoolName("重点观察名单");
+        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
+        poolMap.put(targetPool.getId(), targetPool);
+        poolMap.put(restrictedPool.getId(), restrictedPool);
+
+        AdjustCheckContext ctx = new AdjustCheckContext();
+        ctx.setSecurityInfo(securityInfo);
+        ctx.setTargetPool(targetPool);
+        ctx.setPoolMap(poolMap);
+        ctx.setCurrentPoolIds(Collections.singleton(restrictedPool.getId()));
+        ctx.setTargetPoolRelations(Collections.singletonMap(
+                RelationType.IN_RESTRICT.getCode(), Collections.singletonList(restrictedPool.getId())));
+        ctx.setRequestInPoolIds(Collections.<Long>emptySet());
+        ctx.setRequestOutPoolIds(Collections.<Long>emptySet());
+        ctx.setCategoryType("bond");
+        ctx.setSecurityInRestrictedPool(true);
+        return ctx;
     }
 
     // ===== 多市场关联码（itemTag=related）=====
