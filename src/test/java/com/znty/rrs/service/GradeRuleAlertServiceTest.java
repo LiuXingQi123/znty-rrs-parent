@@ -315,6 +315,34 @@ public class GradeRuleAlertServiceTest {
         assertThat(captor.getValue().getAlertStatus()).isEqualTo("00");
     }
 
+    /** 重点观察名单债券的五级库满足完整规则时，提醒保留五级库或出库 */
+    @Test
+    public void taskShouldMentionLevelFiveWhenLevelFiveIsAllowed() {
+        prepareRestrictedGuaranteedBond(true);
+        when(alertMapper.queryGradedBondInPoolList()).thenReturn(Collections.singletonList(scan(3L, 101L)));
+
+        alertService.execute();
+
+        ArgumentCaptor<IpGradeRuleAlertBo> captor = ArgumentCaptor.forClass(IpGradeRuleAlertBo.class);
+        verify(alertMapper).addAlert(captor.capture());
+        assertThat(captor.getValue().getFailReason())
+                .isEqualTo("重点观察名单已在库债券只能调入五级库或调出");
+    }
+
+    /** 重点观察名单债券的五级库不满足完整规则时，提醒只允许出库 */
+    @Test
+    public void taskShouldMentionOutboundOnlyWhenLevelFiveIsNotAllowed() {
+        prepareRestrictedGuaranteedBond(false);
+        when(alertMapper.queryGradedBondInPoolList()).thenReturn(Collections.singletonList(scan(3L, 101L)));
+
+        alertService.execute();
+
+        ArgumentCaptor<IpGradeRuleAlertBo> captor = ArgumentCaptor.forClass(IpGradeRuleAlertBo.class);
+        verify(alertMapper).addAlert(captor.capture());
+        assertThat(captor.getValue().getFailReason())
+                .isEqualTo("重点观察名单已在库债券只能调出");
+    }
+
     /** 担保债快照缺失中止本轮，异常传播给事务及任务执行器，不能继续关闭旧提醒 */
     @Test
     public void taskShouldNotExpireAlertsWhenEntryIdentityMissing() {
@@ -533,6 +561,21 @@ public class GradeRuleAlertServiceTest {
         row.setCurrentPoolId(poolId);
         row.setAdjustLogId(logId);
         return row;
+    }
+
+    /** 准备当前在二级库、命中重点观察名单的担保债扫描场景 */
+    private void prepareRestrictedGuaranteedBond(boolean levelFiveAllowed) {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
+        master.setInnerIssuerRating("3");
+        when(securityMapper.querySecurityCurrentPoolIdList("TEST_ABS.SH"))
+                .thenReturn(Collections.singletonList(3L));
+        when(securityMapper.querySecurityInRestrictedPool("TEST_ABS.SH")).thenReturn(true);
+        when(securityMapper.queryIssuerInRestrictedPool("TEST_ABS.SH")).thenReturn(false);
+        when(securityMapper.queryLatestRatingCompanyByCode("SELECTED_A")).thenReturn(rating("2"));
+        when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(2L, 1), pool(3L, 2), pool(6L, 5)));
+        when(gradeMapper.queryAllowedPoolIdsByGradeAndBucket("2", "LE_1"))
+                .thenReturn(levelFiveAllowed ? Collections.singletonList(3L) : Collections.<Long>emptyList());
     }
 
     /** 创建用于校验分级库范围的投资池 */

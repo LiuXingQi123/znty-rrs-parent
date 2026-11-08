@@ -4582,6 +4582,10 @@ public class SecurityPoolAdjustService {
         ctx.setIssuerInRestrictedPool(queryIssuerInPoolType(sec, "restricted"));
         // 复用人工入库规则，缺少评级主体内评时补充主体代码便于定位
         String fail = inCheckMainGradeRule(ctx);
+        if ("重点观察名单已在库债券只能调入五级库或调出".equals(fail)
+                && !hasAllowedLevelFivePool(ctx)) {
+            fail = "重点观察名单已在库债券只能调出";
+        }
         if ("所选权益人无内评分".equals(fail)) {
             // ABS 的评级主体存在主档发行人字段，担保债存在快照担保人字段
             String ratingCompanyCode = CreditBondSpecialInboundRule.isAbs(sec)
@@ -4589,6 +4593,29 @@ public class SecurityPoolAdjustService {
             return fail + "（入库评级主体：" + ratingCompanyCode + "）";
         }
         return fail;
+    }
+
+    /** 判断五级库是否至少有一个池满足当前债券的完整入库规则 */
+    private boolean hasAllowedLevelFivePool(AdjustCheckContext ctx) {
+        if (ctx == null || ctx.getPoolMap() == null) {
+            return false;
+        }
+        InvestmentPoolBo originalPool = ctx.getTargetPool();
+        try {
+            for (InvestmentPoolBo pool : ctx.getPoolMap().values()) {
+                if (!CreditBondSpecialInboundRule.isGradedLevelPool(pool)
+                        || !Integer.valueOf(CreditBondSpecialInboundRule.MAX_LEVEL).equals(pool.getInnerSort())) {
+                    continue;
+                }
+                ctx.setTargetPool(pool);
+                if (inCheckMainGradeRule(ctx) == null) {
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            ctx.setTargetPool(originalPool);
+        }
     }
 
     /**
