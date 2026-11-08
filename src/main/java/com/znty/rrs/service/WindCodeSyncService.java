@@ -23,44 +23,44 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-/** 读取 Wind 代码变更，按 SEC_ID 找到证券并换码，同时处理相关调库记录。 */
+/**
+ * Wind代码变更同步
+ *
+ * 执行顺序：
+ * 1. 按扫描天数查询 Wind 代码变更记录
+ * 2. 按 SEC_ID 合并同一证券的最新变更
+ * 3. 校验最新记录并调用换码业务处理
+ * 4. 汇总成功、跳过和失败数量
+ */
 @Slf4j
 @Service
 public class WindCodeSyncService implements RrsScheduledTask {
-    /** 任务编码。 */
+    /** 任务编码 */
     public static final String TASK_CODE = "wind_code_sync";
-    /** 任务名称。 */
+    /** 任务名称 */
     public static final String TASK_NAME = "Wind代码变更同步";
-    /** 未填写扫描天数时使用 1 天。 */
+    /** 未填写扫描天数时使用 1 天 */
     private static final int DEFAULT_SCAN_DAYS = 1;
-    /** 解析任务扩展参数，拒绝 JSON 对象后面再拼其他内容。 */
+    /** 解析任务扩展参数，拒绝 JSON 对象后面再拼其他内容 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
-    /** 读取页面保存的任务扩展参数。 */
+    /** 读取页面保存的任务扩展参数 */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
-    /** 查询 Wind 代码变更和证券信息。 */
+    /** 查询 Wind 代码变更和证券信息 */
     @Resource
     private WindCodeSyncMapper windCodeSyncMapper;
-    /** 把证券信息、临时代码记录和调库记录中的旧代码改成新代码。 */
+    /** 把证券信息、临时代码记录和调库记录中的旧代码改成新代码 */
     @Resource
     private TempSecurityCodeService tempSecurityCodeService;
 
-    /**
-     * 返回定时任务的注册编码。
-     *
-     * @return Wind 代码变更同步任务编码
-     */
+    /** 返回 Wind代码变更同步任务编码 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /**
-     * 提供任务页面展示的扫描条件、处理范围和执行结果说明。
-     *
-     * @return 任务使用说明
-     */
+    /** 提供 Wind代码变更同步任务参数说明 */
     @Override
     public String getParamHelp() {
         return "参数说明：scanDays 为扫描天数，须为正整数；扩展参数留空或省略 scanDays 时默认 1 天\n"
@@ -75,14 +75,19 @@ public class WindCodeSyncService implements RrsScheduledTask {
     }
 
     /**
-     * 执行一次 Wind 代码变更同步，记录开始和结束日志并返回汇总结果。
-     * 单条换码失败由 doSync 记录；扫描等任务级异常由本方法记录为任务失败。
+     * 执行 Wind代码变更同步
+     *
+     * 执行顺序：
+     * 1. 读取扫描配置并记录任务开始
+     * 2. 查询并逐条处理 Wind 代码变更
+     * 3. 记录扫描级异常和逐条处理结果
+     * 4. 汇总数量并返回任务结果
      *
      * @return 本次执行状态、各类处理数量及明细日志
      */
     @Override
     public ScheduledTaskResult execute() {
-        // 1、记录开始时间，准备明细日志和统计结果。
+        // 1. 记录开始时间，准备明细日志和统计结果
         Date start = new Date();
         long begin = System.currentTimeMillis();
         TaskDetailLog detail = new TaskDetailLog();
@@ -90,16 +95,16 @@ public class WindCodeSyncService implements RrsScheduledTask {
         SyncSummary summary = new SyncSummary();
         boolean executionFailed = false;
         try {
-            // 2、查询并逐条换码，每条的成功、跳过或失败结果由 doSync 记录。
+            // 2. 查询并逐条换码，由 doSync 记录每条结果
             doSync(detail, summary);
         } catch (Exception e) {
-            // 2.1 查询等操作出错，导致任务没执行完时，记为任务失败。
+            // 2.1 查询等操作出错时记为任务失败
             executionFailed = true;
             summary.failed++;
             log.error("Wind 代码变更扫描异常", e);
             detail.line("ERROR", "扫描执行异常：" + e.getMessage());
         }
-        // 3、汇总处理数量，记录任务结束日志并返回结果。
+        // 3. 汇总处理数量，记录任务结束日志并返回结果
         long duration = System.currentTimeMillis() - begin;
         String message = "成功 " + summary.updated + " 条，主档缺失跳过 " + summary.missing
                 + " 条，已是新码跳过 " + summary.alreadyCurrent + " 条，重复跳过 " + summary.repeated + " 条，失败 " + summary.failed + " 条";
@@ -109,33 +114,39 @@ public class WindCodeSyncService implements RrsScheduledTask {
     }
 
     /**
-     * 读取扫描天数，查询数据库时间对应范围内的最新变更，按 SEC_ID 逐条执行换码。
+     * 读取扫描范围并按 SEC_ID 逐条执行换码
      *
-     * @param detailLog 本次任务的明细日志，记录每条变更的处理结果
-     * @param summary 本次任务的累计结果，分别统计成功、各类跳过及失败数量
+     * 执行顺序：
+     * 1. 读取扫描天数并查询最新变更
+     * 2. 按 SEC_ID 分组并保留最新变更
+     * 3. 校验同一证券的最新代码并执行换码
+     * 4. 记录每条成功、跳过或失败结果
+     *
+     * @param detailLog 本次任务的明细日志
+     * @param summary 本次任务的累计结果
      */
     private void doSync(TaskDetailLog detailLog, SyncSummary summary) {
-        // 1、读取页面保存的扫描天数，日期范围仍由数据库计算。
+        // 1. 读取页面保存的扫描天数，日期范围仍由数据库计算
         int scanDays = resolveScanDays();
         detailLog.line("扫描天数=" + scanDays + "，日期按数据库 NOW() 计算");
         detailLog.line("扫描条件：ais_inv_ods.wind_cbondchangewindcode，CHANGE_DATE >= DATE_FORMAT(TIMESTAMPADD(DAY, -"
                 + scanDays + ", NOW()), '%Y%m%d')"
                 + "，同一 SEC_ID 取 CHANGE_DATE 最新记录，S_INFO_OLDWINDCODE!=S_INFO_NEWWINDCODE；按唯一 SEC_ID 匹配主档");
-        // 2、按扫描天数查询最新变更记录，同一只券的较早记录不再重复处理。
+        // 2. 查询最新变更记录，同一只券的较早记录不再重复处理
         List<WindCodeChangeDto> windCodeChanges = windCodeSyncMapper.queryRecentWindCodeChangeList(scanDays);
         detailLog.line("扫描完成：候选 " + windCodeChanges.size() + " 条");
-        // 3、按 SEC_ID 分组，最新日期下内容相同的多条记录只处理一次。
+        // 3. 按 SEC_ID 分组，最新日期下内容相同的多条记录只处理一次
         Map<String, List<WindCodeChangeDto>> changesBySecId = groupChangesBySecId(windCodeChanges);
         for (List<WindCodeChangeDto> securityChanges : changesBySecId.values()) {
             WindCodeChangeDto currentChange = securityChanges.get(0);
             String changeDescription = "SEC_ID=" + currentChange.getSecId() + "，变更记录旧代码=" + currentChange.getOldWindCode()
                     + "，新代码=" + currentChange.getNewWindCode() + "，变更日期=" + currentChange.getChangeDate();
             try {
-                // 4、最新日期有多条记录时，检查新代码是否一致；不一致就报错，不随意选一条。
+                // 4. 检查最新日期下的新代码是否一致
                 validateLatestChanges(securityChanges);
-                // 5、按 SEC_ID 将主档当前代码直接改成最新代码，相关出入库记录一起保存。
+                // 5. 按 SEC_ID 执行换码并同步相关记录
                 WindCodeChangeResult changeResult = tempSecurityCodeService.editWindCodeChangeByJob(currentChange);
-                // 6、按返回结果统计成功或跳过数量，并记录原因。
+                // 6. 按返回结果统计成功或跳过数量，并记录原因
                 if (changeResult == WindCodeChangeResult.UPDATED) {
                     summary.updated++;
                     detailLog.line("换码成功：" + changeDescription);
@@ -152,7 +163,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
                     throw new IllegalStateException("Wind 单条事务未返回明确结果");
                 }
             } catch (Exception e) {
-                // 6.1 本只券失败时记录原因，继续处理其他 SEC_ID 的证券。
+                // 6.1 单只证券失败时记录原因，继续处理其他 SEC_ID
                 summary.failed++;
                 log.error("Wind 换码失败，SEC_ID={}，记录旧码={}，最新代码={}", currentChange.getSecId(),
                         currentChange.getOldWindCode(), currentChange.getNewWindCode(), e);
@@ -162,17 +173,22 @@ public class WindCodeSyncService implements RrsScheduledTask {
     }
 
     /**
-     * 读取页面扩展参数中的扫描天数，未填写时使用 1 天，填写错误时直接报错。
+     * 读取页面扩展参数中的扫描天数
+     *
+     * 执行顺序：
+     * 1. 读取任务扩展参数，未填写时使用默认值
+     * 2. 校验 JSON 对象和字段名称
+     * 3. 校验扫描天数为正整数
      *
      * @return 本次扫描天数
      */
     private int resolveScanDays() {
-        // 1、读取页面保存的参数，留空就使用默认 1 天。
+        // 1. 读取页面保存的参数，留空就使用默认 1 天
         SysScheduledTaskBo task = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
         if (task == null || !StringUtils.hasText(task.getParamJson())) {
             return DEFAULT_SCAN_DAYS;
         }
-        // 2、检查参数是不是有效的 JSON 对象。
+        // 2. 检查参数是不是有效的 JSON 对象
         JsonNode root;
         try {
             root = OBJECT_MAPPER.readTree(task.getParamJson());
@@ -182,13 +198,13 @@ public class WindCodeSyncService implements RrsScheduledTask {
         if (root == null || !root.isObject()) {
             throw new BizException("Wind代码变更同步扩展参数须为 JSON 对象，例如 {\"scanDays\":3}");
         }
-        // 3、只接收 scanDays，字段名写错就提示，避免按默认天数执行。
+        // 3. 只接收 scanDays，字段名写错就提示
         root.fieldNames().forEachRemaining(field -> {
             if (!"scanDays".equals(field)) {
                 throw new BizException("Wind代码变更同步扩展参数包含未知字段：" + field);
             }
         });
-        // 4、未填 scanDays 使用 1 天，填写时必须是正整数。
+        // 4. 未填 scanDays 使用 1 天，填写时必须是正整数
         JsonNode scanDays = root.get("scanDays");
         if (scanDays == null) {
             return DEFAULT_SCAN_DAYS;
@@ -200,7 +216,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
     }
 
     /**
-     * 按 SEC_ID 整理最新变更，便于检查同一日期是否存在冲突记录。
+     * 按 SEC_ID 整理最新变更，便于检查同一日期是否存在冲突记录
      *
      * @param windCodeChanges Wind 查询返回的变更记录
      * @return SEC_ID 与变更列表的对应关系，保留各证券首次出现的顺序
@@ -214,7 +230,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
     }
 
     /**
-     * 检查最新日期下的记录是否指向同一个新代码，避免同一天有多个不同的新代码时随意换码。
+     * 检查最新日期下的记录是否指向同一个新代码，避免同一天有多个不同的新代码时随意换码
      *
      * @param changes 同一 SEC_ID 在最新 CHANGE_DATE 下的变更记录
      */
@@ -229,17 +245,17 @@ public class WindCodeSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 单次任务的业务处理计数，供核心流程与执行结果包装共用。 */
+    /** 单次任务的业务处理计数，供核心流程与执行结果包装共用 */
     private static final class SyncSummary {
-        /** 实际换码成功条数。 */
+        /** 实际换码成功条数 */
         private int updated;
-        /** 主档缺失跳过条数。 */
+        /** 主档缺失跳过条数 */
         private int missing;
-        /** 主档当前代码已经是最新代码的跳过条数。 */
+        /** 主档当前代码已经是最新代码的跳过条数 */
         private int alreadyCurrent;
-        /** 已完成事件跳过条数。 */
+        /** 已完成事件跳过条数 */
         private int repeated;
-        /** 换码失败或最新记录冲突的证券数量。 */
+        /** 换码失败或最新记录冲突的证券数量 */
         private int failed;
     }
 

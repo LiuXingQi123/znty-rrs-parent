@@ -2,19 +2,19 @@ package com.znty.rrs.service;
 
 import org.springframework.stereotype.Service;
 
-/** 恒生池增量 Excel 导出任务。 */
+/** 恒生池增量数据导出 */
 @Service
 public class HsPoolIncrementExcelExportService extends AbstractHsPoolExcelExportService {
-    /** 恒生池增量 Excel 导出任务编码。 */
+    /** 恒生池增量数据导出任务编码 */
     public static final String TASK_CODE = "hs_pool_increment_excel_export";
 
-    /** {@inheritDoc} */
+    /** 返回恒生池增量数据导出任务编码 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** {@inheritDoc} */
+    /** 返回恒生池增量数据导出任务参数说明 */
     @Override
     public String getParamHelp() {
         return "参数格式：JSON 对象，例如 <code>{\"poolIds\":[15,16],\"exportEmptyPool\":true,\"initialStartTime\":\"2026-08-01 00:00:00\",\"outputDir\":\"D:/exports\"}</code>。\n"
@@ -25,13 +25,13 @@ public class HsPoolIncrementExcelExportService extends AbstractHsPoolExcelExport
                 + "导出内容：导出时间窗口内审批通过的调入和调出事件；调出记录的操作类型为“删除”，不要求证券当前仍在池。交易日列表入口已预留，当前列表为空，因此交易日和非交易日均正常执行。";
     }
 
-    /** {@inheritDoc} */
+    /** 返回增量导出标记 */
     @Override
     protected boolean isIncrement() {
         return true;
     }
 
-    /** {@inheritDoc} */
+    /** 返回导出文件名前缀 */
     @Override
     protected String filePrefix() {
         return "hs_pool_increment";

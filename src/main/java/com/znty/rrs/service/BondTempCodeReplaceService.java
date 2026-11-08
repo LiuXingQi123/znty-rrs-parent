@@ -13,7 +13,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 债券临时代码替换任务：扫描已补齐正式码映射的临时代码，复用人工转正式业务分叉。
+ * 债券临时代码替换
+ *
+ * 执行顺序：
+ * 1. 扫描已补齐正式证券代码的临时代码记录
+ * 2. 复用人工转正式业务分叉处理每条记录
+ * 3. 记录成功和失败明细，失败记录保留 temporary 状态供后续重试
+ * 4. 汇总本轮候选、成功和失败数量
  */
 @Slf4j
 @Service
@@ -43,39 +49,50 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
     @Resource
     private TempSecurityCodeService tempSecurityCodeService;
 
-    /** 返回债券临时代码替换任务编码。 */
+    /** 返回债券临时代码替换任务编码 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回债券临时代码替换任务参数说明。 */
+    /** 返回债券临时代码替换任务参数说明 */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
     }
 
     /**
-     * 执行临时代码自动替换；单条记录独立事务，失败项留在 temporary 状态供后续重试。
+     * 执行债券临时代码替换
+     *
+     * 执行顺序：
+     * 1. 查询满足条件的临时代码候选
+     * 2. 逐条复用人工转正式业务处理
+     * 3. 记录每条成功或失败结果
+     * 4. 汇总本轮处理数量并返回任务结果
+     *
+     * @return 本轮任务执行结果
      */
     @Override
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
         TaskDetailLog detail = new TaskDetailLog();
+        // 1. 记录任务开始和扫描条件
         detail.line("任务开始：【" + TASK_NAME + "】");
         detail.line("扫描条件：rrs_temp_security_code.is_deleted=0、status=temporary、"
                 + "security_code IS NOT NULL 且 TRIM 后非空");
         try {
+            // 2. 查询待替换临时代码
             List<TempSecurityCodeBo> sourceList = tempSecurityCodeMapper.queryJobReadyTempSecurityCodeList();
             List<TempSecurityCodeBo> rows = sourceList == null
                     ? Collections.<TempSecurityCodeBo>emptyList() : sourceList;
             detail.line("扫描完成：待替换候选 " + rows.size() + " 条");
             int successCount = 0;
             int failureCount = 0;
+            // 3. 逐条复用人工转正式业务处理
             for (TempSecurityCodeBo row : rows) {
                 try {
-                    // 复用人工转正式的完整业务分叉，并将操作来源记为 job
+                    // 3.1 复用人工转正式的完整业务分叉，并将操作来源记为 job
                     tempSecurityCodeService.editTempSecurityCodeToUpdatedByJob(row.getId());
                     successCount++;
                     detail.line("替换成功：记录ID=" + row.getId()
@@ -90,6 +107,7 @@ public class BondTempCodeReplaceService implements RrsScheduledTask {
                             + "，原因=" + e.getMessage());
                 }
             }
+            // 4. 汇总结果并返回任务状态
             long duration = System.currentTimeMillis() - begin;
             if (failureCount > 0) {
                 String message = "扫描 " + rows.size() + " 条，成功 " + successCount

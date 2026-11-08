@@ -49,7 +49,7 @@ public class CompanyAbsBondAutoInServiceTest {
         Fixture fixture = new Fixture();
         fixture.companyInPool(15L, "C001");
         fixture.absMaster("ABS001", "C001", "测试集团");
-        fixture.conf("{\"poolIds\":[15]}");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true}");
         fixture.allowSync(true);
         fixture.stubWrite();
 
@@ -75,7 +75,7 @@ public class CompanyAbsBondAutoInServiceTest {
         fixture.companyInPool(15L, "C001");
         fixture.absMaster("ABS002", null, null);
         fixture.relation("ABS002", "C001");
-        fixture.conf("{\"poolIds\":[15]}");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true}");
         fixture.allowSync(false);
 
         ScheduledTaskResult result = fixture.service.execute();
@@ -116,7 +116,7 @@ public class CompanyAbsBondAutoInServiceTest {
         Fixture fixture = new Fixture();
         fixture.companyInPool(15L, "C001");
         fixture.absMaster("ABS031", "C001", "测试集团", LocalDate.now().plusDays(10).format(BASIC_ISO_DATE));
-        fixture.conf("{\"poolIds\":[15],\"minDaysToMaturity\":30}");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true,\"minDaysToMaturity\":30}");
         fixture.allowSync(true);
 
         ScheduledTaskResult result = fixture.service.execute();
@@ -132,7 +132,7 @@ public class CompanyAbsBondAutoInServiceTest {
         Fixture fixture = new Fixture();
         fixture.companyInPool(15L, "C001");
         fixture.absMaster("ABS032", "C001", "测试集团", LocalDate.now().plusDays(40).format(BASIC_ISO_DATE));
-        fixture.conf("{\"poolIds\":[15],\"minDaysToMaturity\":30}");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true,\"minDaysToMaturity\":30}");
         fixture.allowSync(true);
         fixture.stubWrite();
 
@@ -149,7 +149,7 @@ public class CompanyAbsBondAutoInServiceTest {
         Fixture fixture = new Fixture();
         fixture.companyInPool(15L, "C001");
         fixture.absMaster("ABS033", "C001", "测试集团", LocalDate.now().format(BASIC_ISO_DATE));
-        fixture.conf("{\"poolIds\":[15]}");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true}");
         fixture.allowSync(true);
         fixture.stubWrite();
 
@@ -167,7 +167,7 @@ public class CompanyAbsBondAutoInServiceTest {
         fixture.companyInPool(15L, "C999");
         fixture.absMaster("ABS021", "C001", "已离池集团");
         fixture.absInPool(15L, "ABS021");
-        fixture.conf("{\"poolIds\":[15],\"enableOut\":false}");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true,\"enableOut\":false}");
 
         ScheduledTaskResult result = fixture.service.execute();
 
@@ -188,12 +188,12 @@ public class CompanyAbsBondAutoInServiceTest {
         assertThat(result.getMessage()).contains("入池与出池开关同时关闭");
     }
 
-    /** 参数解析：开关默认开启、到期保护天数默认 0 */
+    /** 参数解析：入池开关默认关闭、出池开关默认开启、到期保护天数默认 0 */
     @Test
     public void parseParams_ShouldUseSafeDefaults() {
         CompanyAbsBondAutoInService service = new CompanyAbsBondAutoInService();
         CompanyAbsBondAutoInService.AbsSyncParams params = service.parseParams("{}");
-        assertThat(params.enableIn).isTrue();
+        assertThat(params.enableIn).isFalse();
         assertThat(params.enableOut).isTrue();
         assertThat(params.minDaysToMaturity).isEqualTo(0);
         assertThat(params.poolIds).isEmpty();
@@ -205,7 +205,7 @@ public class CompanyAbsBondAutoInServiceTest {
     public void parseParams_ShouldReadSwitchesAndProtectDays() {
         CompanyAbsBondAutoInService service = new CompanyAbsBondAutoInService();
         CompanyAbsBondAutoInService.AbsSyncParams params = service.parseParams(
-                "{\"poolIds\":[15,17],\"enableOut\":false,\"minDaysToMaturity\":20,"
+                "{\"poolIds\":[15,17],\"enableIn\":true,\"enableOut\":false,\"minDaysToMaturity\":20,"
                         + "\"mappings\":[{\"bondPoolId\":16,\"companyPoolId\":15}]}");
         assertThat(params.enableIn).isTrue();
         assertThat(params.enableOut).isFalse();

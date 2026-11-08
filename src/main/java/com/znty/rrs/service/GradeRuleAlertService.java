@@ -38,12 +38,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）：定时扫描已在分级库但按当前规则不应继续持有的债券，生成待办供人工处理
+ * 不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）
  *
- * <p>ABS 的评级主体在确认权益人时已固定到主档发行人字段，直接取主档发行人内评；
- * 担保债可能对应多个担保人，需按当前在池记录的入库快照取当时选定的担保人，再查该担保人最新内评。</p>
+ * 执行顺序：
+ * 1. 扫描已在信用债分级库且当前生效的债券
+ * 2. 按当前主体债入池规则复核普通债、ABS 和担保债，其中 ABS 使用主档发行人内评，担保债按本池入库快照确定当时选定的担保人，再查询该担保人最新内评
+ * 3. 新增或刷新不符合规则的待办，沿用已处理结论
+ * 4. 关闭本轮不再命中的旧待办
+ * 5. 返回本轮命中、失效和仍待处理数量
  *
- * <p>对齐老系统 InconformityMaingrade2Job：只提醒、不自动出池。处理入口在「我的事宜」分级规则提醒页签。</p>
+ * 对齐老系统 InconformityMaingrade2Job，只生成提醒，不自动出池，人工处理入口为“我的事宜”分级规则提醒页签
  */
 @Slf4j
 @Service
@@ -115,6 +119,17 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         return PARAM_HELP;
     }
 
+    /**
+     * 执行不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）
+     *
+     * 执行顺序：
+     * 1. 记录扫描条件并查询在池分级债券
+     * 2. 逐条复核主体债入池规则并生成或刷新待办
+     * 3. 关闭本轮未再命中的旧待办
+     * 4. 统计仍待处理数量并返回任务结果
+     *
+     * @return 本轮任务执行结果
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ScheduledTaskResult execute() {
@@ -126,7 +141,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
                 + "ip_investment_pool.is_deleted=0、pool_type=credit_bond、inner_sort BETWEEN 1 AND 5、"
                 + "pool_level为空或=2");
 
-        // 拉取扫描样本
+        // 1. 查询在池分级债券样本
         List<GradeRuleAlertScanDto> inPoolList = gradeRuleAlertMapper.queryGradedBondInPoolList();
         if (inPoolList == null) {
             inPoolList = new ArrayList<GradeRuleAlertScanDto>();
@@ -136,19 +151,20 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         int hitCount = 0;
         int skippedCount = 0;
         Date scanTime = new Date();
-        // 失效比较使用秒级时间字符串，与 DATETIME 精度对齐
+        // 2. 准备与数据库 DATETIME 精度一致的扫描时间
         String scanTimeText = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(scanTime);
+        // 3. 逐条复核规则并生成或刷新待办
         for (GradeRuleAlertScanDto row : inPoolList) {
             if (row.getSecurityCode() == null || row.getCurrentPoolId() == null) {
                 continue;
             }
-            // ABS 用主档发行人内评，担保债按本池快照取担保人再查最新内评
+            // 3.1 ABS 用主档发行人内评，担保债按本池快照取担保人再查最新内评
             String fail = securityPoolAdjustService.evaluateGradedInboundForPool(
                     row.getSecurityCode(), row.getCurrentPoolId(), row.getAdjustLogId());
             if (fail == null || fail.isEmpty()) {
                 continue;
             }
-            // 命中后按依据判断是否需要提醒，同一依据已由研究员处理时沿用人工结论
+            // 3.2 按依据新增或刷新待办，沿用已处理结论
             if (upsertOpenAlert(row, fail, scanTime)) {
                 hitCount++;
             } else {
@@ -158,11 +174,11 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         detailLog.line("本轮命中（新增/刷新待办）" + hitCount + " 条");
         detailLog.line("沿用已处理结论（同一依据不再提醒）" + skippedCount + " 条");
 
-        // 关闭本轮未再命中的旧待处理待办
+        // 4. 关闭本轮未再命中的旧待处理待办
         int invalidCount = gradeRuleAlertMapper.editStaleOpenAlertInvalid(scanTimeText);
         detailLog.line("本轮失效（曾待处理、本轮未再命中，已置 99）" + invalidCount + " 条");
 
-        // 统计执行后仍待处理数量，供摘要与影响条数
+        // 5. 统计执行后仍待处理数量，供摘要与影响条数
         int openCount = gradeRuleAlertMapper.queryOpenAlertCount();
         detailLog.line("仍待处理（alert_status=00，我的事宜可见）" + openCount + " 条");
 
@@ -173,7 +189,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     }
 
     /**
-     * 分页查询待办。
+     * 分页查询待办
      *
      * @param req 查询条件
      * @return 分页结果
@@ -208,6 +224,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
      */
     @Transactional(rollbackFor = Exception.class)
     public GradeRuleAlertDto editAlertProcessed(GradeRuleAlertReq req) {
+        // 1. 校验请求和待办状态
         if (req.getId() == null) {
             throw new BizException("待办 ID 不能为空");
         }
@@ -221,15 +238,16 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         if (RULE_TYPE_ABS.equals(exist.getRuleType())) {
             throw new BizException("ABS 主体联动提醒请使用确认主体或忽略入池");
         }
+        // 2. 回填处理人和处理时间
         Date now = new Date();
         exist.setDealUserId(req.getCurrentUserId());
         exist.setDealUserName(req.getCurrentUserName());
         exist.setDealTime(now);
         exist.setUpdtTime(now);
-        // 按当前依据绑定人工结论，下一轮同依据直接跳过
+        // 3. 按当前依据绑定人工结论，下一轮同依据直接跳过
         exist.setContextKey(buildGradeContextKey(exist.getSecurityCode(), exist.getCurrentPoolId(),
                 exist.getCurrentSort(), exist.getFailReason()));
-        // 条件更新待办为已处理
+        // 4. 条件更新待办为已处理并返回最新记录
         int n = gradeRuleAlertMapper.editAlertProcessed(exist);
         if (n == 0) {
             throw new BizException("待办状态已变化，请刷新后重试");
@@ -260,9 +278,20 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         return candidates;
     }
 
-    /** 处理 ABS 规则提醒：确认主体或忽略本次入池 */
+    /**
+     * 处理 ABS 规则提醒：确认主体或忽略本次入池
+     *
+     * 执行顺序：
+     * 1. 校验提醒和处理动作
+     * 2. 按确认主体或忽略入池分支更新业务数据
+     * 3. 更新提醒状态并返回最新待办
+     *
+     * @param req ABS 提醒处理请求
+     * @return 更新后的待办
+     */
     @Transactional(rollbackFor = Exception.class)
     public GradeRuleAlertDto processAbsAlert(GradeRuleAlertReq req) {
+        // 1. 校验提醒和处理动作
         if (req.getId() == null) {
             throw new BizException("待办 ID 不能为空");
         }
@@ -273,6 +302,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         if (!STATUS_OPEN.equals(alert.getAlertStatus())) {
             throw new BizException("仅待处理的 ABS 主体联动提醒可以操作");
         }
+        // 2. 回填处理人和处理时间
         Date now = new Date();
         alert.setDealUserId(req.getCurrentUserId());
         alert.setDealUserName(req.getCurrentUserName());
@@ -283,7 +313,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             if (pending != null && absIdentityMapper.editPendingScheduledInboundInvalid(pending.getId()) != 1) {
                 throw new BizException("ABS 待确认入池流程状态已变化，请刷新后重试");
             }
-            // 兼容本次改造前已经直接落池的旧记录
+            // 2.1 清理旧版本可能已经落池的被动记录
             absIdentityMapper.deletePassiveInboundLog(alert.getSecurityCode(), alert.getCurrentPoolId());
             absIdentityMapper.deletePassiveInboundStatus(alert.getSecurityCode(), alert.getCurrentPoolId());
             alert.setIssuerCode(null);
@@ -301,12 +331,13 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             alert.setIssuerCode(master.getIssuerCode());
             alert.setIssuerName(master.getIssuer());
             alert.setFailReason("研究员确认主体[" + master.getIssuerCode() + "]，已完成入池");
-            // 按确认后的身份重算依据摘要，后续同主体同依据不再提醒
+            // 2.2 按确认后的身份重算依据摘要，后续同主体同依据不再提醒
             alert.setContextKey(absCompanySyncService.resolveContextKey(
                     alert.getSecurityCode(), master.getIssuerCode(), alert.getCurrentPoolId()));
         } else {
             throw new BizException("ABS 提醒处理动作不正确");
         }
+        // 3. 更新提醒状态并返回最新待办
         if (absIdentityMapper.editAbsAlertDecision(alert) != 1) {
             throw new BizException("ABS 主体联动提醒状态已变化，请刷新后重试");
         }
@@ -315,12 +346,22 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         return result;
     }
 
-    /** 研究员确认 ABS 主体后完成主体落档、池状态落地及关系池调出 */
+    /**
+     * 研究员确认 ABS 主体后完成主体落档、池状态落地及关系池调出
+     *
+     * 执行顺序：
+     * 1. 查询待确认入池日志并处理历史兼容情况
+     * 2. 完成主体身份和待确认日志更新
+     * 3. 写入池状态并处理关系池调出
+     *
+     * @param master 已确认的主体主档
+     * @param alert ABS 规则提醒
+     */
     private void confirmPendingInbound(SecurityInfoBo master, IpGradeRuleAlertBo alert) {
         IpAdjustLogBo pending = absIdentityMapper.queryPendingScheduledInboundLog(
                 alert.getSecurityCode(), alert.getCurrentPoolId());
         if (pending == null) {
-            // 兼容改造前已经生效的被动入池记录，只补写主档主体身份
+            // 1. 兼容改造前已经生效的被动入池记录，只补写主档主体身份
             if (absIdentityMapper.editApprovedIdentity(master) != 1) {
                 throw new BizException("ABS 主体确认保存失败");
             }
@@ -337,7 +378,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         List<Long> currentPoolIds = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(
                 pending.getSecurityCode());
         if (currentPoolIds != null && currentPoolIds.contains(pending.getTargetPoolId())) {
-            // 其他链路已经先行落池时，只关闭重复的待确认日志并补写主体身份
+            // 1.1 其他链路已经先行落池时，只关闭重复的待确认日志并补写主体身份
             if (absIdentityMapper.editPendingScheduledInboundInvalid(pending.getId()) != 1) {
                 throw new BizException("ABS 待确认入池流程状态已变化，请刷新后重试");
             }
@@ -346,6 +387,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             }
             return;
         }
+        // 2. 更新待确认日志和确认后的主体信息
         String confirmedRemark = "（研究员确认主体：" + master.getIssuerCode() + "，已完成入池）";
         String confirmedReason = pending.getAdjustReason();
         if (!StringUtils.hasText(confirmedReason)) {
@@ -359,6 +401,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         if (absIdentityMapper.editPendingScheduledInboundApproved(pending.getId(), confirmedReason) != 1) {
             throw new BizException("ABS 待确认入池流程状态已变化，请刷新后重试");
         }
+        // 3. 写入池状态并处理关系池调出
         pending.setAuditStatus("20");
         pending.setAdjustLogId(pending.getId());
         if (securityPoolAdjustMapper.addPoolStatus(pending) != 1) {
@@ -395,16 +438,16 @@ public class GradeRuleAlertService implements RrsScheduledTask {
      * @return true=已新增或刷新待办；false=同一依据已处理，本轮跳过
      */
     private boolean upsertOpenAlert(IpGradeRuleAlertBo row, String fail, Date scanTime) {
-        // 依据摘要：证券、当前池、档位、不符合原因任一变化都视为新问题
+        // 1. 生成本轮依据摘要
         String contextKey = buildGradeContextKey(row.getSecurityCode(), row.getCurrentPoolId(),
                 row.getCurrentSort(), fail);
-        // 查询是否已有同券同池待处理待办
+        // 2. 查询是否已有同券同池待处理待办
         IpGradeRuleAlertBo open = gradeRuleAlertMapper.queryOpenAlert(row.getSecurityCode(), row.getCurrentPoolId());
-        // 拼特殊类型说明
+        // 3. 补充特殊债类型说明
         SecurityInfoBo sec = securityPoolAdjustMapper.querySecurityBoByCode(row.getSecurityCode());
         String specialDesc = buildSpecialTypeDesc(sec, row.getSecurityCode());
         if (open == null) {
-            // 同一依据已由研究员标记已处理或去调库时，不再重复生成待办
+            // 4. 同一依据已由研究员标记已处理或去调库时，不再重复生成待办
             if (hasProcessedSameBasis(row.getSecurityCode(), row.getCurrentPoolId(), contextKey)) {
                 return false;
             }
@@ -415,7 +458,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
             row.setLastScanTime(scanTime);
             row.setCrteTime(scanTime);
             row.setUpdtTime(scanTime);
-            // 新增待处理待办
+            // 5. 新增待处理待办
             gradeRuleAlertMapper.addAlert(row);
             return true;
         }
@@ -429,7 +472,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
         open.setContextKey(contextKey);
         open.setLastScanTime(scanTime);
         open.setUpdtTime(scanTime);
-        // 刷新已有待处理待办
+        // 6. 刷新已有待处理待办
         gradeRuleAlertMapper.editAlertScan(open);
         return true;
     }
@@ -466,7 +509,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     }
 
     /**
-     * 拼特殊类型说明，便于列表一眼看到为何被扫到。
+     * 拼特殊类型说明，便于列表一眼看到为何被扫到
      *
      * @param sec          证券
      * @param securityCode 证券代码

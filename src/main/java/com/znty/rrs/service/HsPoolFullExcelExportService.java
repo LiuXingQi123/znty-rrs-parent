@@ -2,19 +2,19 @@ package com.znty.rrs.service;
 
 import org.springframework.stereotype.Service;
 
-/** 恒生池全量 Excel 导出任务。 */
+/** 恒生池全量数据导出（不含已到期） */
 @Service
 public class HsPoolFullExcelExportService extends AbstractHsPoolExcelExportService {
-    /** 恒生池全量 Excel 导出任务编码。 */
+    /** 恒生池全量数据导出（不含已到期）任务编码 */
     public static final String TASK_CODE = "hs_pool_full_excel_export";
 
-    /** {@inheritDoc} */
+    /** 返回恒生池全量数据导出（不含已到期）任务编码 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** {@inheritDoc} */
+    /** 返回恒生池全量数据导出（不含已到期）任务参数说明 */
     @Override
     public String getParamHelp() {
         return "参数格式：可选 JSON 对象，例如 <code>{\"poolIds\":[15,16],\"exportEmptyPool\":true,\"outputDir\":\"D:/exports\"}</code>。\n"
@@ -24,13 +24,13 @@ public class HsPoolFullExcelExportService extends AbstractHsPoolExcelExportServi
                 + "导出内容：当前已生效的非主体证券和 CRMW；普通证券排除已到期数据，CRMW 不校验到期日；恒生池名称为空时使用投资池完整名称，竖线可配置多个 Sheet 名。";
     }
 
-    /** {@inheritDoc} */
+    /** 返回全量导出标记 */
     @Override
     protected boolean isIncrement() {
         return false;
     }
 
-    /** {@inheritDoc} */
+    /** 返回导出文件名前缀 */
     @Override
     protected String filePrefix() {
         return "hs_pool_full";

@@ -150,8 +150,8 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
-        assertThat(result.getMessage()).contains("本轮共自动入池 1 个主体、3 只债券")
-                .contains("黑名单质押库(17)：1 个主体、3 只债券");
+        assertThat(result.getMessage()).contains("任务完成：扫描候选主体 1 个，实际入池 1 个主体、3 只债券，未处理 0 个主体")
+                .contains("黑名单质押库（17）：扫描 1 个主体，入池 1 个主体、3 只债券，未处理 0 个主体");
         assertThat(service.getTaskCode()).isEqualTo("company_outer_rating_aa_minus_auto_in");
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);

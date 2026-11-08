@@ -28,11 +28,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * CRMW 凭证到期自动出池。
- * <p>
- * 对应老 IP_RULE {@code AdjustRuleCrmwDueOutPool}：走 AdjustPoolByRule 出池，
- * 到期宽限 T-2，并拦截调出限制池（关系 12）。落 {@code ip_pool_status_crmw}。
- * </p>
+ * CRMW到期自动出池
+ *
+ * 对应老 IP_RULE AdjustRuleCrmwDueOutPool，使用 CRMW 专用池状态表执行到期出池
+ * 1. 合并扩展参数和关系配置中的 CRMW 组合池
+ * 2. 扫描已生效且凭证到期日早于昨天的 CRMW 组合，按 T-2 口径处理
+ * 3. 命中调出限制池（关系 12）或并发已出池的记录只跳过并记录原因
+ * 4. 软删除池状态成功后写入自动调库日志，批次按凭证和标的证券组合生成
  */
 @Slf4j
 @Service
@@ -67,16 +69,30 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     @Resource
     private AutoAdjustPoolScopeHelper poolScopeHelper;
 
+    /** 返回CRMW到期自动出池任务编码 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
+    /** 返回CRMW到期自动出池任务参数说明 */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
     }
 
+    /**
+     * 执行CRMW到期自动出池
+     *
+     * 执行顺序：
+     * 1. 读取任务展示名称并记录任务开始
+     * 2. 合并扫描池，逐池查询到期 CRMW 组合
+     * 3. 对命中调出限制池或已提前出池的记录记录原因并跳过
+     * 4. 对实际出池的 CRMW 写入调库日志并汇总结果
+     * 5. 返回任务成功或任务级失败结果
+     *
+     * @return 本轮任务执行结果
+     */
     @Override
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
@@ -105,24 +121,43 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         }
     }
 
+    /**
+     * 按扫描池处理到期 CRMW 组合
+     *
+     * 执行顺序：
+     * 1. 解析扩展参数和关系配置得到扫描池
+     * 2. 读取 CRMW 池、批次时间和调出限制池配置
+     * 3. 逐池查询到期组合并按限制关系和当前池状态判断是否处理
+     * 4. 写入自动出池日志并汇总各池结果
+     *
+     * @param taskName 任务展示名称
+     * @param detail 过程日志
+     * @return 本轮 CRMW 到期出池汇总
+     */
     private AutoOutSummary doAutoOut(String taskName, TaskDetailLog detail) {
+        // 1. 解析扩展参数和关系配置，得到待扫描池
         List<Long> poolIds = resolvePoolIds(taskName, detail);
         infoDetail(detail, "扫描池列表 poolIds=" + poolIds);
         infoDetail(detail, "扫描条件：ip_pool_status_crmw.is_deleted=0、audit_status=20、target_pool_id IN "
                 + poolIds + "、pool_type=crmw、凭证 security_type=crmw、maturity_date<昨日");
+        // 2. 读取投资池信息和自动调库批次时间
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
+        // 3. 读取全量池关系，供调出限制池校验
         List<PoolRelationBo> allRelations = crmwPoolAdjustMapper.queryAllPoolRelationList();
         AutoOutSummary summary = new AutoOutSummary();
+        // 4. 逐个目标池扫描和处理到期 CRMW
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
                 warnDetail(detail, "池[" + poolId + "]不存在，跳过");
                 continue;
             }
+            // 4.1 读取当前目标池的调出限制池
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
+            // 4.2 查询凭证到期日早于昨天的 CRMW 组合
             List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryCrmwPoolByExpired(poolId);
             if (expiredList == null || expiredList.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无到期 CRMW");
@@ -130,9 +165,11 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
             }
             int poolCount = 0;
             for (ScheduledAdjustCandidateDto item : expiredList) {
+                // 4.3 缺少 CRMW 凭证编码时无法生成组合批次，直接跳过
                 if (item == null || !StringUtils.hasText(item.getCrmwScode())) {
                     continue;
                 }
+                // 4.4 对齐老 AdjustPoolByRule.checkSecurityOutPoolRelation（关系 12 / 调出限制池），命中时跳过
                 if (AutoAdjustRestrictHelper.isInAnyPool(
                         crmwPoolAdjustMapper.querySecurityCurrentPoolIdList(
                                 item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype()),
@@ -140,6 +177,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                     warnDetail(detail, "CRMW[" + item.getCrmwScode() + "]当前在调出限制池中，跳过");
                     continue;
                 }
+                // 4.5 软删除目标池状态，未删到时视为已被其他处理提前出池
                 int deleted = crmwPoolAdjustMapper.deletePoolStatusSoft(
                         item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype(), poolId);
                 if (deleted == 0) {
@@ -147,6 +185,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                             + "]软删失败（可能并发已出池），跳过");
                     continue;
                 }
+                // 4.6 准备自动出池日志字段
                 item.setAdjustType("自动调整");
                 item.setAdjustMode(AdjustMode.OUT.getCode());
                 item.setTargetPoolId(poolId);
@@ -159,7 +198,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                         ScheduledAdjustLogHelper.dateDetail("凭证到期日", item.getMaturityDate()),
                         "出池口径：到期日早于昨日");
                 item.setAdjustReason(reason);
-                // 按 CRMW 凭证和标的证券组合生成自动调库批次号
+                // 4.7 按 CRMW 凭证和标的证券组合生成自动调库批次号
                 String batchNo = batchNoContext.resolveCrmwBatchNo(
                         item.getCrmwScode(), item.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
                 item.setAdjustBatchNo(batchNo);
@@ -167,6 +206,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                 crmwPoolAdjustMapper.addAdjustLog(item);
                 poolCount++;
             }
+            // 4.8 记录当前目标池实际出池数量
             summary.addPool(poolId, pool.getPoolName(), poolCount);
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 调出 " + poolCount + " 条");
         }
@@ -174,21 +214,21 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         return summary;
     }
 
-    /** 本轮 CRMW 到期出池汇总。 */
+    /** 本轮 CRMW 到期出池汇总 */
     private static final class AutoOutSummary {
 
-        /** 本轮实际出池总数。 */
+        /** 本轮实际出池总数 */
         private int total;
-        /** 按目标池保存实际出池数量。 */
+        /** 按目标池保存实际出池数量 */
         private final Map<Long, PoolSummary> poolSummaries = new LinkedHashMap<>();
 
-        /** 累加目标池出池数量。 */
+        /** 累加目标池出池数量 */
         private void addPool(Long poolId, String poolName, int count) {
             poolSummaries.put(poolId, new PoolSummary(poolId, poolName, count));
             total += count;
         }
 
-        /** 构建最近执行结果文案。 */
+        /** 构建最近执行结果文案 */
         private String buildMessage() {
             StringBuilder message = new StringBuilder("本轮共自动出池 ")
                     .append(total).append(" 条到期 CRMW 组合");
@@ -207,17 +247,17 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         }
     }
 
-    /** 单个目标池出池统计。 */
+    /** 单个目标池出池统计 */
     private static final class PoolSummary {
 
-        /** 目标池 ID。 */
+        /** 目标池 ID */
         private final Long poolId;
-        /** 目标池名称。 */
+        /** 目标池名称 */
         private final String poolName;
-        /** 实际出池数量。 */
+        /** 实际出池数量 */
         private final int count;
 
-        /** 创建目标池统计。 */
+        /** 创建目标池统计 */
         private PoolSummary(Long poolId, String poolName, int count) {
             this.poolId = poolId;
             this.poolName = poolName;
@@ -225,6 +265,15 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         }
     }
 
+    /**
+     * 解析扫描池
+     *
+     * 将扩展参数 poolIds 与关系配置绑定本任务的 CRMW 池取并集
+     *
+     * @param taskName 任务展示名称
+     * @param detail 过程日志
+     * @return 去重后的扫描池 ID 列表
+     */
     private List<Long> resolvePoolIds(String taskName, TaskDetailLog detail) {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
         String paramJson = (conf != null && StringUtils.hasText(conf.getParamJson()))
@@ -233,6 +282,15 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         return poolScopeHelper.resolveUnionPoolIds(paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
     }
 
+    /**
+     * 解析扩展参数中的扫描池
+     *
+     * 非法 JSON 或空池列表直接返回业务错误
+     *
+     * @param raw 扩展参数原文
+     * @param taskName 任务展示名称
+     * @return 扫描池 ID 列表
+     */
     List<Long> parsePoolIds(String raw, String taskName) {
         List<Long> ids = AutoAdjustPoolScopeHelper.parseOptionalPoolIds(raw);
         if (ids.isEmpty()) {
@@ -241,10 +299,12 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         return ids;
     }
 
+    /** 单测入口：解析 poolIds */
     List<Long> parsePoolIds(String raw) {
         return parsePoolIds(raw, TASK_CODE);
     }
 
+    /** 加载全部投资池，供目标池存在性和池名称校验使用 */
     private Map<Long, InvestmentPoolBo> buildPoolMap() {
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         List<InvestmentPoolBo> poolList = investmentPoolMapper.queryPoolList();
@@ -256,6 +316,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         return poolMap;
     }
 
+    /** 从库表读取任务展示名称，缺失时回退为任务编码 */
     private String resolveTaskName() {
         try {
             SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
@@ -268,6 +329,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         return TASK_CODE;
     }
 
+    /** 写 INFO 级过程日志并同步任务明细 */
     private void infoDetail(TaskDetailLog detail, String line) {
         log.info(line);
         if (detail != null) {
@@ -275,6 +337,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         }
     }
 
+    /** 写 WARN 级过程日志并同步任务明细 */
     private void warnDetail(TaskDetailLog detail, String line) {
         log.warn(line);
         if (detail != null) {

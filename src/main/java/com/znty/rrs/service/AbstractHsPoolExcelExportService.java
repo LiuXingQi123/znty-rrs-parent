@@ -40,43 +40,51 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** 恒生池 Excel 定时导出公共实现。 */
+/**
+ * 恒生池 Excel 定时导出公共实现
+ *
+ * 统一承载三个恒生池导出任务的参数解析、池范围处理、市场转换、工作簿生成和文件备份
+ * 1. 全量任务按当前生效池状态导出，普通证券按任务配置决定是否排除已到期数据，CRMW 不校验到期日
+ * 2. 增量任务按成功执行水位导出审批通过的调入、调出事件，不要求证券当前仍在池
+ * 3. 所有任务按叶子池生成 Sheet，支持空池 Sheet、恒生池名称拆分和同名 Sheet 合并
+ * 4. 文件写入日期目录并同步生成 bak 备份，导出过程和结果写入任务明细日志
+ */
 public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTask {
-    /** 统一证券市场查询组件。 */
+    /** 统一证券市场查询组件 */
     @Resource
     private SecurityMarketService securityMarketService;
 
-    /** JSON 参数解析组件。 */
+    /** JSON 参数解析组件 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    /** Excel 固定表头，与老系统恒生定时导出格式一致。 */
+    /** Excel 固定表头，与老系统恒生定时导出格式一致 */
     private static final String[] TITLES = {"证券名称", "证券代码", "操作类型", "市场名称", "备注"};
-    /** Excel 每列固定宽度，单位为字符。 */
+    /** Excel 每列固定宽度，单位为字符 */
     private static final int COLUMN_WIDTH = 25;
-    /** 流式工作簿在内存中保留的行数。 */
+    /** 流式工作簿在内存中保留的行数 */
     private static final int ROW_ACCESS_WINDOW_SIZE = 500;
-    /** 增量首次执行时间参数格式。 */
+    /** 增量首次执行时间参数格式 */
     private static final String DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm:ss";
 
-    /** 恒生池 Excel 默认导出目录。 */
+    /** 恒生池 Excel 默认导出目录 */
     @Value("${rrs.hs-pool-export.storage-path:D:/uploads/znty_rrs/hs-pool-export}")
     private String defaultOutputDir;
 
-    /** 恒生池 Excel 导出数据访问组件。 */
+    /** 恒生池 Excel 导出数据访问组件 */
     @Resource
     private HsPoolExcelExportMapper hsPoolExcelExportMapper;
-    /** 定时任务配置与执行历史数据访问组件。 */
+    /** 定时任务配置与执行历史数据访问组件 */
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
 
     /**
-     * 判断当前任务是否为增量导出。
+     * 判断当前任务是否为增量导出
      *
      * @return true 表示增量导出
      */
     protected abstract boolean isIncrement();
 
     /**
-     * 判断全量任务是否包含已到期普通证券。
+     * 判断全量任务是否包含已到期普通证券
      *
      * @return true 表示包含已到期普通证券；增量任务不使用该配置
      */
@@ -85,14 +93,14 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 获取导出文件名前缀。
+     * 获取导出文件名前缀
      *
      * @return 文件名前缀
      */
     protected abstract String filePrefix();
 
     /**
-     * 按页面指定条件生成恒生格式 Excel，不写服务器目录。
+     * 按页面指定条件生成恒生格式 Excel，不写服务器目录
      *
      * @param poolIds 指定叶子投资池；为空时导出全部叶子池
      * @param startTime 增量开始时间；全量模式仅用于参数统一
@@ -106,7 +114,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         SXSSFWorkbook workbook = new SXSSFWorkbook(ROW_ACCESS_WINDOW_SIZE);
         workbook.setCompressTempFiles(true);
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            // 手动导出默认保留空池 Sheet，与定时任务默认行为一致。
+            // 1. 手动导出默认保留空池 Sheet，与定时任务默认行为一致
             populateWorkbook(workbook, pools, startTime, endTime, true, detail);
             workbook.write(outputStream);
             byte[] bytes = outputStream.toByteArray();
@@ -126,7 +134,13 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 执行恒生池 Excel 导出任务。
+     * 执行恒生池 Excel 导出任务
+     *
+     * 执行顺序：
+     * 1. 读取任务名称和扩展参数，确定池范围、空池规则、目录和增量起始时间
+     * 2. 查询增量水位并构造全量或增量时间窗口
+     * 3. 按叶子池查询数据，生成恒生格式 Excel 和 bak 备份文件
+     * 4. 记录文件路径、Sheet 数量、证券行数并返回任务结果
      *
      * @return 定时任务执行结果
      */
@@ -140,7 +154,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
             SysScheduledTaskBo taskConfig = scheduledTaskMapper.queryTaskByCode(getTaskCode());
             taskName = taskConfig == null || !StringUtils.hasText(taskConfig.getTaskName())
                     ? getTaskCode() : taskConfig.getTaskName();
-            // 解析当前任务的池范围、空池、目录和首次增量时间参数。
+            // 1. 解析当前任务的池范围、空池、目录和首次增量时间参数
             ExportParams params = parseParams(taskConfig);
             detail.line("任务开始：【" + taskName + "】");
             String poolScope = params.poolIds == null || params.poolIds.isEmpty()
@@ -155,24 +169,24 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
                         + "category_type!=company；普通证券包含已到期=" + includeExpiredForFullExport()
                         + "，CRMW 不校验到期日");
             }
-            // 预留增量任务交易日过滤入口，交易日数据源和非交易日策略确认后再启用。
+            // 2. 预留增量任务交易日过滤入口，交易日数据源和非交易日策略确认后再启用
             if (isIncrement() && shouldSkipByTradeDay(startTime)) {
                 detail.line("INFO", "当前日期不满足交易日执行条件，本次增量导出不执行");
                 return ScheduledTaskResult.failure(getTaskCode(), taskName, "交易日校验未通过，增量导出未执行", startTime,
                         System.currentTimeMillis() - beginTime, detail.build());
             }
-            // 后续增量读取上次成功开始时间，首次增量使用配置的初始时间。
+            // 3. 后续增量读取上次成功开始时间，首次增量使用配置的初始时间
             Date previousSuccessTime = queryWatermark();
             boolean firstIncrement = isIncrement() && previousSuccessTime == null;
             Date windowStart = firstIncrement ? params.initialStartTime : previousSuccessTime;
             if (firstIncrement && windowStart == null) {
                 throw new BizException("增量任务首次执行必须配置 initialStartTime，格式为 " + DATE_TIME_PATTERN);
             }
-            // 按参数筛选叶子池；未指定 poolIds 时查询全部叶子池。
+            // 4. 按参数筛选叶子池；未指定 poolIds 时查询全部叶子池
             List<HsPoolExportPoolDto> pools = hsPoolExcelExportMapper.queryExportPoolList(params.poolIds);
-            // 解析并创建按执行日期划分的绝对导出目录。
+            // 5. 解析并创建按执行日期划分的绝对导出目录
             Path outputDir = resolveOutputDir(params.outputDir, startTime);
-            // 按叶子池逐池查询，并使用流式工作簿生成恒生 Excel 文件和备份文件。
+            // 6. 按叶子池逐池查询，并使用流式工作簿生成恒生 Excel 文件和备份文件
             ExportResult result = writeWorkbook(pools, windowStart, startTime, params.exportEmptyPool,
                     outputDir, detail);
             String scope = firstIncrement ? "首次增量" : isIncrement() ? "增量" : "全量";
@@ -192,7 +206,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 查询增量任务水位线。
+     * 查询增量任务水位线
      *
      * @return 上一次成功执行的开始时间；全量任务或首次执行返回 null
      */
@@ -201,13 +215,13 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 判断本次增量任务是否应因交易日条件跳过。
+     * 判断本次增量任务是否应因交易日条件跳过
      *
      * @param executeTime 本次任务开始时间
      * @return 当前阶段固定返回 false，不执行交易日过滤
      */
     private boolean shouldSkipByTradeDay(Date executeTime) {
-        // 查询结果为空表示交易日过滤尚未启用，本次不做拦截。
+        // 1. 查询结果为空表示交易日过滤尚未启用，本次不做拦截
         List<Date> tradeDays = queryTradeDayList(executeTime);
         if (tradeDays == null || tradeDays.isEmpty()) {
             return false;
@@ -222,18 +236,18 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 查询用于校验的交易日日期。
+     * 查询用于校验的交易日日期
      *
      * @param executeTime 本次任务开始时间
      * @return 交易日日期；当前返回空集合，表示暂不启用交易日过滤
      */
     protected List<Date> queryTradeDayList(Date executeTime) {
-        // TODO 待确认交易日数据源、查询异常处理和非交易日强制执行配置后接入正式查询。
+        // 1. TODO 待确认交易日数据源、查询异常处理和非交易日强制执行配置后接入正式查询
         return Collections.emptyList();
     }
 
     /**
-     * 查询指定投资池本次应导出的证券或调库事件。
+     * 查询指定投资池本次应导出的证券或调库事件
      *
      * @param poolId 投资池 ID
      * @param windowStart 增量时间窗口下界
@@ -256,7 +270,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 解析任务扩展参数。
+     * 解析任务扩展参数
      *
      * @param taskConfig 当前任务配置
      * @return 规范化导出参数
@@ -278,7 +292,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         if (node.has("exportEmptyPool") && !node.get("exportEmptyPool").isNull()) {
             params.exportEmptyPool = node.get("exportEmptyPool").asBoolean(true);
         }
-        // 解析可选的叶子投资池 ID 数组。
+        // 1. 解析可选的叶子投资池 ID 数组
         params.poolIds = parsePoolIds(node.get("poolIds"));
         if (node.hasNonNull("initialStartTime") && StringUtils.hasText(node.get("initialStartTime").asText())) {
             params.initialStartTime = parseTime(node.get("initialStartTime").asText().trim());
@@ -287,7 +301,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 解析投资池 ID 数组。
+     * 解析投资池 ID 数组
      *
      * @param poolIdsNode poolIds JSON 节点
      * @return 投资池 ID；未配置或空数组时返回 null
@@ -310,7 +324,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 严格解析首次增量时间。
+     * 严格解析首次增量时间
      *
      * @param value 时间文本
      * @return 时间对象
@@ -326,7 +340,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 解析并创建“根目录/执行日期”导出目录。
+     * 解析并创建“根目录/执行日期”导出目录
      *
      * @param outputDir 配置的导出根目录
      * @param startTime 本次执行开始时间
@@ -341,7 +355,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 按投资池生成流式 Excel 工作簿，同名 Sheet 合并追加。
+     * 按投资池生成流式 Excel 工作簿，同名 Sheet 合并追加
      *
      * @param pools 待处理叶子投资池
      * @param windowStart 增量时间窗口下界
@@ -364,12 +378,12 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
             try (OutputStream outputStream = Files.newOutputStream(filePath)) {
                 workbook.write(outputStream);
             }
-            // 文件写入成功后复制到日期目录下的 bak 备份目录。
+            // 1. 文件写入成功后复制到日期目录下的 bak 备份目录
             Path backupDir = outputDir.resolve("bak");
             Files.createDirectories(backupDir);
             Path backupPath = backupDir.resolve(fileName).toAbsolutePath().normalize();
             Files.copy(filePath, backupPath, StandardCopyOption.REPLACE_EXISTING);
-            // TODO 后续接入公司 FTP 配置，将主文件和备份文件上传至恒生接收目录。
+            // 2. TODO 后续接入公司 FTP 配置，将主文件和备份文件上传至恒生接收目录
             return new ExportResult(filePath.toString(), backupPath.toString(), summary.sheetCount, summary.rowCount);
         } finally {
             try {
@@ -381,7 +395,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 查询各投资池并写入工作簿。
+     * 查询各投资池并写入工作簿
      */
     private WorkbookSummary populateWorkbook(SXSSFWorkbook workbook, List<HsPoolExportPoolDto> pools,
                                                Date windowStart, Date endTime, boolean exportEmptyPool,
@@ -390,13 +404,13 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         Map<String, Sheet> sheets = new HashMap<>();
         Map<String, String> sheetOwners = new HashMap<>();
         for (HsPoolExportPoolDto pool : pools) {
-            // 逐池查询，避免一次性将全部池数据加载到内存。
+            // 1. 逐池查询，避免一次性将全部池数据加载到内存
             List<HsPoolExportRowDto> poolRows = queryRows(pool.getPoolId(), windowStart, endTime);
             if (!exportEmptyPool && (poolRows == null || poolRows.isEmpty())) {
                 detail.line("INFO", "投资池 " + pool.getPoolId() + "-" + pool.getPoolName() + " 为空，已跳过 Sheet");
                 continue;
             }
-            // 一个恒生池名称可使用竖线拆分为多个 Sheet 名称。
+            // 2. 一个恒生池名称可使用竖线拆分为多个 Sheet 名称
             for (String sheetName : resolveSheetNames(pool)) {
                 String sheetKey = sheetName.toLowerCase(Locale.ROOT);
                 Sheet sheet = sheets.get(sheetKey);
@@ -404,13 +418,13 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
                     sheet = workbook.createSheet(sheetName);
                     sheets.put(sheetKey, sheet);
                     sheetOwners.put(sheetKey, pool.getPoolId() + "-" + pool.getPoolName());
-                    // 新建 Sheet 时写入固定表头并设置列宽。
+                    // 2.1 新建 Sheet 时写入固定表头并设置列宽
                     createHeader(sheet);
                 } else {
                     detail.line("WARN", "Sheet 名称重复，已合并追加：" + sheetName + "；原池="
                             + sheetOwners.get(sheetKey) + "，当前池=" + pool.getPoolId() + "-" + pool.getPoolName());
                 }
-                // 全量按市场和代码去重；增量保留同一证券的多次调入、调出事件。
+                // 3. 全量按市场和代码去重；增量保留同一证券的多次调入、调出事件
                 rowCount += writePoolRows(sheet, poolRows, !isIncrement());
             }
         }
@@ -423,7 +437,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 生成投资池对应的 Sheet 名称列表。
+     * 生成投资池对应的 Sheet 名称列表
      *
      * @param pool 当前投资池
      * @return Sheet 名称列表
@@ -455,7 +469,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 写入固定五列表头，并将全部列宽设置为 25 个字符。
+     * 写入固定五列表头，并将全部列宽设置为 25 个字符
      *
      * @param sheet 当前工作表
      */
@@ -468,7 +482,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 写入市场拆分后的证券或调库事件行。
+     * 写入市场拆分后的证券或调库事件行
      *
      * @param sheet 当前工作表
      * @param rows 当前投资池原始数据
@@ -483,7 +497,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         int startIndex = rowIndex;
         Set<String> seen = new HashSet<>();
         for (HsPoolExportRowDto row : rows) {
-            // 按当前记录所属市场生成恒生行。
+            // 1. 按当前记录所属市场生成恒生行
             List<String[]> marketRows = markets(row);
             for (String[] market : marketRows) {
                 if (deduplicate && !seen.add(market[0] + "|" + market[1])) {
@@ -501,7 +515,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 将当前证券代码转换为恒生市场编码与无后缀代码组合。
+     * 将当前证券代码转换为恒生市场编码与无后缀代码组合
      *
      * @param row 证券原始行
      * @return 市场拆分行
@@ -538,13 +552,13 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
             default:
                 throw new BizException("恒生导出不支持市场：" + row.getSecurityCode() + "，" + row.getMarketCode());
         }
-        // 按当前记录唯一市场写出代码
+        // 1. 按当前记录唯一市场写出代码
         addMarket(result, hsMarket, row.getSecurityCode());
         return result;
     }
 
     /**
-     * 添加非空市场代码。
+     * 添加非空市场代码
      *
      * @param markets 市场拆分行集合
      * @param marketCode 恒生市场编码
@@ -552,7 +566,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
      */
     private void addMarket(List<String[]> markets, HsMarketCode marketCode, String code) {
         if (StringUtils.hasText(code)) {
-            // 去掉 Wind 证券代码中的市场后缀。
+            // 1. 去掉 Wind 证券代码中的市场后缀
             String securityCode = removeSecurityCodeSuffix(code);
             if (StringUtils.hasText(securityCode)) {
                 markets.add(new String[]{marketCode.getCode(), securityCode});
@@ -561,7 +575,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 去掉证券代码首个点号及其后的市场后缀。
+     * 去掉证券代码首个点号及其后的市场后缀
      *
      * @param code 原始证券代码
      * @return 无市场后缀的证券代码
@@ -573,7 +587,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     }
 
     /**
-     * 将空字符串规范化为空白单元格。
+     * 将空字符串规范化为空白单元格
      *
      * @param value 原始值
      * @return 非 null 文本
@@ -582,35 +596,35 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         return value == null ? "" : value;
     }
 
-    /** 格式化增量时间窗口。 */
+    /** 格式化增量时间窗口 */
     private String formatTime(Date time) {
         return new SimpleDateFormat(DATE_TIME_PATTERN).format(time);
     }
 
-    /** 规范化任务扩展参数。 */
+    /** 规范化任务扩展参数 */
     private static class ExportParams {
-        /** 指定叶子投资池；为空时导出全部叶子池。 */
+        /** 指定叶子投资池；为空时导出全部叶子池 */
         private List<Long> poolIds;
-        /** 是否生成没有数据的投资池 Sheet。 */
+        /** 是否生成没有数据的投资池 Sheet */
         private boolean exportEmptyPool = true;
-        /** 导出根目录。 */
+        /** 导出根目录 */
         private String outputDir;
-        /** 增量任务首次执行的时间窗口下界。 */
+        /** 增量任务首次执行的时间窗口下界 */
         private Date initialStartTime;
     }
 
-    /** 单次工作簿写入结果。 */
+    /** 单次工作簿写入结果 */
     private static class ExportResult {
-        /** 导出文件绝对路径。 */
+        /** 导出文件绝对路径 */
         private final String filePath;
-        /** 备份文件绝对路径。 */
+        /** 备份文件绝对路径 */
         private final String backupPath;
-        /** 工作簿 Sheet 数量。 */
+        /** 工作簿 Sheet 数量 */
         private final int sheetCount;
-        /** 实际导出证券行数。 */
+        /** 实际导出证券行数 */
         private final int rowCount;
 
-        /** 构造工作簿写入结果。 */
+        /** 构造工作簿写入结果 */
         private ExportResult(String filePath, String backupPath, int sheetCount, int rowCount) {
             this.filePath = filePath;
             this.backupPath = backupPath;
@@ -619,14 +633,14 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         }
     }
 
-    /** 工作簿内容统计。 */
+    /** 工作簿内容统计 */
     private static class WorkbookSummary {
-        /** Sheet 数量。 */
+        /** Sheet 数量 */
         private final int sheetCount;
-        /** 实际数据行数。 */
+        /** 实际数据行数 */
         private final int rowCount;
 
-        /** 构造工作簿统计。 */
+        /** 构造工作簿统计 */
         private WorkbookSummary(int sheetCount, int rowCount) {
             this.sheetCount = sheetCount;
             this.rowCount = rowCount;

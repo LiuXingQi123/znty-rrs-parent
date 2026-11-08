@@ -39,7 +39,16 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.util.StringUtils;
 
-/** 根据主体观察名单同步观察池、重点观察名单、关系池及主体旗下债券，ABS 债由 ABS 对账任务单独处理。 */
+/**
+ * 主体观察名单同步（已排除ABS债）
+ *
+ * 根据主体观察名单同步观察池、重点观察名单、关系池及主体旗下债券
+ * 1. 按观察类型把主体调入对应目标池，类型变更、类型1、空值或名单移除时退出原对应池
+ * 2. 普通债和 CRMW 随主体进出池，ABS 债已排除，由主体下ABS债券自动入库任务按池对账
+ * 3. 先调出不符合观察类型的主体及旗下债券，再调入符合观察类型的主体及旗下债券
+ * 4. 调入、调出限制池或关系校验不通过时整轮回滚，弹性禁投池命中只记录警告
+ * 5. 发行主体编码为空的脏数据只跳过并记录数量，不阻断本轮同步
+ */
 @Slf4j
 @Service
 public class CompanyObserverPoolSyncService implements RrsScheduledTask {
@@ -68,13 +77,13 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     @Resource
     private ScheduledTaskMapper scheduledTaskMapper;
 
-    /** 返回任务编码。 */
+    /** 返回主体观察名单同步任务编码 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回主体观察名单同步的参数说明和业务规则。 */
+    /** 返回主体观察名单同步的参数说明和业务规则 */
     @Override
     public String getParamHelp() {
         return "1. 参数格式：JSON 对象，默认配置 <code>{\"observePoolId\":16,\"keyObservePoolId\":23}</code>\n"
@@ -97,7 +106,17 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
                 + "company_abs_bond_auto_in 负责";
     }
 
-    /** 执行主体观察名单同步，记录任务结果。 */
+    /**
+     * 执行主体观察名单同步，记录主体和旗下债券的调库结果
+     *
+     * 执行顺序：
+     * 1. 记录任务开始时间和过程日志
+     * 2. 查询观察名单、目标池和关系配置，按先出后入顺序同步主体及旗下债券
+     * 3. 汇总各池主体、债券和关系池的实际进出数量
+     * 4. 发生业务或系统异常时标记整轮事务回滚并返回失败结果
+     *
+     * @return 本轮任务执行结果
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ScheduledTaskResult execute() {
@@ -124,7 +143,14 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 查询观察名单，按先出后入顺序同步主体、旗下债券及关系池。 */
+    /**
+     * 查询观察名单，按先出后入顺序同步主体、旗下债券及关系池
+     *
+     * ABS 旗下债券不在本任务处理范围，主体本身仍按观察名单正常同步
+     *
+     * @param detail 任务过程日志
+     * @return 本轮同步结果
+     */
     private SyncResult doSync(TaskDetailLog detail) {
         // 1. 读取观察池、重点观察名单的目标池配置
         Map<String, Long> observerPools = queryObserverPoolMappings();
@@ -142,7 +168,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         int missingIssuerCount = 0;
         List<String> missingIssuerSamples = new ArrayList<>();
         for (ScheduledAdjustCandidateDto company : companyObserverMapper.queryCurrentCompanyList(poolIds)) {
-            // 发行主体编码为空时只记录警告并跳过，避免单条脏数据导致整轮任务失败
+            // 4.1 发行主体编码为空时只记录警告并跳过，避免单条脏数据导致整轮任务失败
             if (!StringUtils.hasText(company.getSecurityCode())) {
                 missingIssuerCount++;
                 if (missingIssuerSamples.size() < MISSING_ISSUER_SAMPLE_SIZE) {
@@ -170,18 +196,18 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
                 + (missingIssuerCount > 0 ? "，跳过发行主体编码为空记录 " + missingIssuerCount + " 条" : ""));
         // 5. 查询关系池配置，准备主体批次和进出池统计
         SyncContext context = new SyncContext(pools, poolIds, securityPoolAdjustMapper.queryAllPoolRelationList(), detail);
-        // 批量读取本轮全部候选债券及其所有当前所在池，后续业务循环不再查询数据库
+        // 5.1 批量读取本轮全部候选债券及其所有当前所在池，后续业务循环不再查询数据库
         loadSyncData(new ArrayList<>(companies.keySet()), context);
         // 6. 先调出不符合观察类型的主体及旗下债券，再调入符合观察类型的主体及旗下债券
         for (boolean inbound : new boolean[]{false, true}) {
             for (ScheduledAdjustCandidateDto company : companies.values()) {
                 CompanyObserverDto observer = observers.get(company.getSecurityCode());
                 Long desiredPoolId = observer == null ? null : observerPools.get(observer.getObserverType());
-                // 确定本主体计划调入的目标池和联动池，用于来源池、调入互斥池校验
+                // 6.1 确定本主体计划调入的目标池和联动池，用于来源池、调入互斥池校验
                 context.requestInPoolIds = resolveRequestInPoolIds(desiredPoolId, context);
                 for (Long poolId : poolIds) {
                     if (inbound == poolId.equals(desiredPoolId)) {
-                        // 同步目标池及其调入、调出联动池
+                        // 6.2 同步目标池及其调入、调出联动池
                         syncSourcePool(company, observer, pools.get(poolId), inbound, context);
                     }
                 }
@@ -191,7 +217,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return buildSyncResult(context, missingIssuerCount);
     }
 
-    /** 按编码分批预读本轮债券及池状态，数据仅在当前任务事务内使用。 */
+    /** 按编码分批预读本轮债券及池状态，数据仅在当前任务事务内使用 */
     private void loadSyncData(List<String> companyCodes, SyncContext context) {
         Set<String> securityCodes = new LinkedHashSet<>(companyCodes);
         CompanyBondTypeScopeBo typeScope = CompanyBondSyncPolicy.observerPoolScope();
@@ -223,18 +249,18 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
                 + "次，池状态查询" + statusQueryCount + "次，每批最多" + QUERY_BATCH_SIZE + "个编码");
     }
 
-    /** 取得本轮实时所在池的副本，避免原始来源池快照被后续调库覆盖。 */
+    /** 取得本轮实时所在池的副本，避免原始来源池快照被后续调库覆盖 */
     private List<Long> getCurrentPoolIds(String securityCode, SyncContext context) {
         return new ArrayList<>(context.currentPoolIds.computeIfAbsent(securityCode, key -> new LinkedHashSet<>()));
     }
 
-    /** 直接读取本轮预分组的关系池，不在每次主体、债券校验时遍历全量配置。 */
+    /** 直接读取本轮预分组的关系池，不在每次主体、债券校验时遍历全量配置 */
     private List<Long> resolveRelationPoolIds(Long poolId, String relationType, SyncContext context) {
         return context.relationPoolIds.getOrDefault(poolId, Collections.emptyMap())
                 .getOrDefault(relationType, Collections.emptyList());
     }
 
-    /** 汇总各投资池的主体和旗下债券进出池数量。 */
+    /** 汇总各投资池的主体和旗下债券进出池数量 */
     private SyncResult buildSyncResult(SyncContext context, int missingIssuerCount) {
         // 1. 按投资池统计主体和债券的实际进出池数量
         SyncResult result = new SyncResult();
@@ -261,7 +287,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return result;
     }
 
-    /** 查询本主体计划调入的目标池和调入联动池。 */
+    /** 查询本主体计划调入的目标池和调入联动池 */
     private Set<Long> resolveRequestInPoolIds(Long desiredPoolId, SyncContext context) {
         // 1. 确定观察类型对应的目标池
         Set<Long> poolIds = new LinkedHashSet<>();
@@ -273,7 +299,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return poolIds;
     }
 
-    /** 读取并校验观察池、重点观察名单的目标池参数。 */
+    /** 读取并校验观察池、重点观察名单的目标池参数 */
     private Map<String, Long> queryObserverPoolMappings() {
         // 1. 查询本任务保存的扩展参数
         SysScheduledTaskBo task = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
@@ -298,7 +324,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         Map<String, Long> result = new LinkedHashMap<>();
         // 3. 读取观察类型对应的目标池
         appendObserverPoolMapping(result, root, "observePoolId", CompanyObserverType.OBSERVE.getCode());
-        // 读取重点观察类型对应的目标池
+        // 3.1 读取重点观察类型对应的目标池
         appendObserverPoolMapping(result, root, "keyObservePoolId", CompanyObserverType.KEY_OBSERVE.getCode());
         // 4. 校验至少配置一类目标池，且两类目标池不同
         if (result.isEmpty()) {
@@ -310,7 +336,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return result;
     }
 
-    /** 校验并保存单个观察类型对应的目标池ID。 */
+    /** 校验并保存单个观察类型对应的目标池 ID */
     private void appendObserverPoolMapping(Map<String, Long> mappings, JsonNode root, String field, String observerType) {
         // 1. 省略或为空的目标池不加入本轮同步范围
         JsonNode value = root.get(field);
@@ -325,7 +351,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         mappings.put(observerType, value.longValue());
     }
 
-    /** 查询投资池，校验本任务目标池是否可用。 */
+    /** 查询投资池，校验本任务目标池是否可用 */
     private Map<Long, InvestmentPoolBo> queryRequiredPools(List<Long> poolIds) {
         // 1. 查询投资池信息，供目标池、联动池和互斥池使用
         Map<Long, InvestmentPoolBo> pools = new LinkedHashMap<>();
@@ -343,7 +369,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return pools;
     }
 
-    /** 查询观察名单，校验主体信息、观察类型及主体是否重复。 */
+    /** 查询观察名单，校验主体信息、观察类型及主体是否重复 */
     private Map<String, CompanyObserverDto> queryValidatedObservers() {
         Map<String, CompanyObserverDto> result = new LinkedHashMap<>();
         for (CompanyObserverDto observer : companyObserverMapper.queryCompanyObserverList()) {
@@ -369,7 +395,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return result;
     }
 
-    /** 同步观察类型对应的目标池及调入、调出联动池。 */
+    /** 同步观察类型对应的目标池及调入、调出联动池 */
     private void syncSourcePool(ScheduledAdjustCandidateDto company, CompanyObserverDto observer,
                                 InvestmentPoolBo pool, boolean inbound, SyncContext context) {
         String mode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
@@ -388,12 +414,12 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         boolean changed = syncCompanyAndBonds(company, pool, inbound, batchNo, reason, false, context);
         // 4. 调入时补齐联动池，调出时仅在目标池实际出池后联动调出
         if (inbound || changed) {
-            // 按调入、调出联动池配置同步主体及旗下债券
+            // 4.1 按调入、调出联动池配置同步主体及旗下债券
             syncLinkedPools(company, pool, inbound, batchNo, reason, context);
         }
     }
 
-    /** 按调入、调出联动池配置，同批同步主体及旗下债券。 */
+    /** 按调入、调出联动池配置，同批同步主体及旗下债券 */
     private void syncLinkedPools(ScheduledAdjustCandidateDto company, InvestmentPoolBo sourcePool,
                                  boolean inbound, String batchNo, String reason, SyncContext context) {
         String mode = inbound ? AdjustMode.IN.getCode() : AdjustMode.OUT.getCode();
@@ -421,7 +447,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 同步主体及旗下债券进出池，返回是否发生实际调整。 */
+    /** 同步主体及旗下债券进出池，返回是否发生实际调整 */
     private boolean syncCompanyAndBonds(ScheduledAdjustCandidateDto company, InvestmentPoolBo pool,
                                         boolean inbound, String batchNo, String reason, boolean linked,
                                         SyncContext context) {
@@ -451,7 +477,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
             if (!StringUtils.hasText(bond.getSecurityCode()) || !StringUtils.hasText(bond.getSecurityType())) {
                 throw new BizException("主体[" + companyCode + "]的旗下债券候选缺少证券代码或类型");
             }
-            // 使用已预读并随本轮调库更新的池状态，避免逐只债券查询
+            // 4.1 使用已预读并随本轮调库更新的池状态，避免逐只债券查询
             List<Long> bondPools = getCurrentPoolIds(bond.getSecurityCode(), context);
             context.originalPools.putIfAbsent(bond.getSecurityCode(), new ArrayList<>(bondPools));
             if (bondPools.contains(pool.getId()) != inbound) {
@@ -475,7 +501,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return changed;
     }
 
-    /** 记录旗下债券进出池数量及调入、调出弹性禁投池的警告数量。 */
+    /** 记录旗下债券进出池数量及调入、调出弹性禁投池的警告数量 */
     private void writeBondProcessSummary(String companyCode, SyncContext context) {
         for (Map.Entry<Long, BondProcessSummary> entry : context.bondProcessSummaries.entrySet()) {
             BondProcessSummary summary = entry.getValue();
@@ -496,7 +522,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         context.bondProcessSummaries.clear();
     }
 
-    /** 在内存中按实时状态筛选债券，保留调入时先补缺失、再检查已在池债券的顺序。 */
+    /** 在内存中按实时状态筛选债券，保留调入时先补缺失、再检查已在池债券的顺序 */
     private List<ScheduledAdjustCandidateDto> resolveCompanyBondCandidates(String companyCode, Long poolId,
                                                                           boolean inbound, SyncContext context) {
         List<ScheduledAdjustCandidateDto> missing = new ArrayList<>();
@@ -514,7 +540,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return missing;
     }
 
-    /** 根据调入互斥池和反向调入限制池配置，调出主体及债券。 */
+    /** 根据调入互斥池和反向调入限制池配置，调出主体及债券 */
     private void syncInboundMutexPools(ScheduledAdjustCandidateDto item, InvestmentPoolBo inboundPool,
                                        String batchNo, String reason, SyncContext context) {
         // 1. 查询调入互斥池，以及将本次调入池配置为调入限制池的投资池
@@ -549,7 +575,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 校验关系池，写入主体或债券的调库记录和池状态。 */
+    /** 校验关系池，写入主体或债券的调库记录和池状态 */
     private IpAdjustLogBo applyChange(ScheduledAdjustCandidateDto item, InvestmentPoolBo pool, boolean inbound,
                                       String batchNo, String reason, String adjustType, List<Long> currentPools,
                                       SyncContext context) {
@@ -582,7 +608,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         if (changed != 1) {
             throw new BizException("主体/债券[" + item.getSecurityCode() + "]" + mode + "池状态写入条数异常：" + changed);
         }
-        // 写入成功后立即维护本轮实时状态，后续联动、互斥及限制校验读取最新结果
+        // 3.1 写入成功后立即维护本轮实时状态，后续联动、互斥及限制校验读取最新结果
         Set<Long> currentPoolIds = context.currentPoolIds.computeIfAbsent(item.getSecurityCode(), key -> new LinkedHashSet<>());
         if (inbound) {
             currentPoolIds.add(pool.getId());
@@ -603,7 +629,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         return adjustLog;
     }
 
-    /** 来源池、调入调出限制池、调出互斥池、调入调出弹性禁投池的相关校验。 */
+    /** 来源池、调入调出限制池、调出互斥池、调入调出弹性禁投池的相关校验 */
     private void validatePoolRelations(ScheduledAdjustCandidateDto item, InvestmentPoolBo pool, boolean inbound,
                                        List<Long> currentPools, SyncContext context) {
         // 1. 来源池校验：调入时须满足至少一个配置的来源池
@@ -648,17 +674,17 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 执行失败时回滚本轮调库记录和池状态。 */
+    /** 执行失败时回滚本轮调库记录和池状态 */
     private void markTransactionRollbackOnly() {
         try {
-            // 标记本轮事务回滚，撤销已写入的调库记录和池状态
+            // 1. 标记本轮事务回滚，撤销已写入的调库记录和池状态
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
         } catch (NoTransactionException ignored) {
             log.debug("当前无可回滚事务: {}", TASK_CODE);
         }
     }
 
-    /** 本轮任务的投资池配置、主体批次和进出池统计。 */
+    /** 本轮任务的投资池配置、主体批次和进出池统计 */
     private static final class SyncContext {
         /** 全量池配置 */
         private final Map<Long, InvestmentPoolBo> pools;
@@ -685,13 +711,13 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         /** 本轮过程日志 */
         private final TaskDetailLog detail;
 
-        /** 初始化一轮同步上下文。 */
+        /** 初始化一轮同步上下文 */
         private SyncContext(Map<Long, InvestmentPoolBo> pools, List<Long> poolIds,
                             List<PoolRelationBo> relations, TaskDetailLog detail) {
             // 1. 保存本轮使用的投资池、关系池配置和过程日志
             this.pools = pools;
             this.detail = detail;
-            // 按池和关系类型索引，保留直接关系原有顺序及忽略空关系的处理口径
+            // 1.1 按池和关系类型索引，保留直接关系原有顺序及忽略空关系的处理口径
             for (PoolRelationBo relation : relations) {
                 if (relation == null || relation.getPoolId() == null || relation.getRelationType() == null
                         || relation.getRelationPoolId() == null) {
@@ -700,7 +726,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
                 relationPoolIds.computeIfAbsent(relation.getPoolId(), key -> new LinkedHashMap<>())
                         .computeIfAbsent(relation.getRelationType(), key -> new ArrayList<>()).add(relation.getRelationPoolId());
             }
-            // 每个池只计算一次调入互斥和反向限制关系，证券循环直接使用结果
+            // 1.2 每个池只计算一次调入互斥和反向限制关系，证券循环直接使用结果
             for (Long poolId : pools.keySet()) {
                 inboundAutoOutPoolIds.put(poolId, AutoAdjustRelationHelper.resolveInboundAutoOutPoolIds(poolId, relations));
             }
@@ -711,7 +737,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
     }
 
-    /** 单主体、单目标池的债券过程日志数量，不保存或输出证券代码。 */
+    /** 单主体、单目标池的债券过程日志数量，不保存或输出证券代码 */
     private static final class BondProcessSummary {
         /** 实际调入债券数量 */
         private int inCount;
@@ -723,7 +749,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         private int outWarningCount;
     }
 
-    /** 一轮同步的结果摘要。 */
+    /** 一轮同步的结果摘要 */
     private static final class SyncResult {
         /** 包含源池及联动池实际变化的总条数 */
         private int affectedCount;
@@ -731,7 +757,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         private String message;
     }
 
-    /** 单个目标池的主体、债券及关系池实际调整数量。 */
+    /** 单个目标池的主体、债券及关系池实际调整数量 */
     private static final class SyncSummary {
         /** 主体入池数 */
         private int companyIn;

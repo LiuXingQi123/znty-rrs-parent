@@ -31,18 +31,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 在池主体旗下债券自动入池任务实现
- * <p>
- * 扫描「主体已在指定池」的发行主体，将其旗下未退市、未到期、尚未在目标池的债券自动入池
- * （另排除临时代码已更新为正式代码的记录，并排除 ABS）；adjust_type=自动调整，不走审批。
- * 对应老系统 AutoAdjustInNewBondToLimitPoolJob。名称/cron/启停/扩展参数由库表维护。
- * </p>
- * <p>
- * ABS 不参与本任务：其进出池与未确认主体的待确认提醒统一由
- * {@link CompanyAbsBondAutoInService} 按池对账负责，避免两条任务重复生成提醒、重复写池状态。
- * 同池-only、带 market_codes 的 IP_RULE「主体下债券自动入池」见
- * {@link CompanySamePoolBondAutoInService}。
- * </p>
+ * 在池主体旗下债券自动入池（已排除ABS债）
+ *
+ * 执行顺序：
+ * 1. 合并扩展参数、关系配置和已有主体所在池的映射
+ * 2. 查询主体已在池且债券尚未在目标池的普通债和 CRMW
+ * 3. 排除退市债、已更新正式代码的临时代码和 ABS
+ * 4. 写入债券入池记录并处理互斥出池
+ * 5. 返回映射、实际入池和未处理数量
  */
 @Slf4j
 @Service
@@ -123,9 +119,14 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 执行在池主体旗下债券自动入池：按库表 param_json 映射扫描待入池债券并直接落池
+     * 执行在池主体旗下债券自动入池（已排除ABS债）
      *
-     * ABS 不在本任务处理范围内，其进出池与提醒由 ABS 对账任务负责
+     * 执行顺序：
+     * 1. 读取扩展参数并合并同池、跨池映射
+     * 2. 逐个映射查询待入池债券
+     * 3. 对不满足单条业务条件的债券记录原因后跳过
+     * 4. 写入债券入池记录并处理关系池出池
+     * 5. 返回任务成功或任务级失败结果
      *
      * @return 本轮任务执行结果
      */
@@ -134,90 +135,107 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
         TaskDetailLog detail = new TaskDetailLog();
-        // 展示名读库
+        // 1. 读取任务展示名称
         String taskName = resolveTaskName();
-        // 记录开始（控制台 + 过程日志）
-        infoDetail(detail, taskName + " 开始");
+        // 2. 记录任务开始
+        infoDetail(detail, "任务开始：" + taskName);
         try {
-            // 执行主体新债自动入池（扩展参数非法时抛 BizException → 记失败）
+            // 3. 执行在池主体旗下债券自动入池
             AutoInSummary summary = doAutoInCompanyNewBond(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
             String message = summary.buildMessage();
-            infoDetail(detail, taskName + " 结束，" + message);
+            // 4. 记录任务结果并返回成功结果
+            infoDetail(detail, "任务结束：" + message + "；耗时 " + duration + " 毫秒");
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
             long duration = System.currentTimeMillis() - begin;
-            warnDetail(detail, taskName + " 失败: " + e.getMessage());
+            warnDetail(detail, "任务未完成：" + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - begin;
             log.error("{} 异常", taskName, e);
-            detail.line("ERROR", taskName + " 异常: " + e.getMessage());
+            detail.line("任务未完成：系统异常，" + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName,
                     "执行异常: " + e.getMessage(), startTime, duration, detail.build());
         }
     }
 
     /**
-     * 按扩展参数中的「主体所在池 → 债券写入池」映射扫描待入池新债，命中即直接落池
+     * 按主体所在池到债券写入池的映射处理待入池债券
      *
-     * ABS 已在候选 SQL 排除，本方法只处理普通债与 CRMW
+     * 执行顺序：
+     * 1. 解析扩展参数并补充已有主体所在池的同池映射
+     * 2. 校验目标池并查询待入池债券
+     * 3. 对不满足单条业务条件的债券记录原因后跳过
+     * 4. 写入债券入池记录并处理关系池出池
+     * 5. 汇总每组映射的处理结果
      *
      * @param taskName 任务展示名称
-     * @param detail 任务过程日志
+     * @param detail 过程日志
      * @return 本轮入池汇总
      */
     private AutoInSummary doAutoInCompanyNewBond(String taskName, TaskDetailLog detail) {
-        // 读取扩展参数原文
+        // 1. 读取扩展参数原文
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
-        // 解析为 [主体所在池ID, 债券写入池ID] 列表（非法则抛业务异常）
+        // 2. 解析主体池到债券池的映射
         List<long[]> mappings = new ArrayList<>(parseParamMappings(paramJson, taskName));
-        // 所有已有主体的普通池都补齐同池债券，保留显式配置的跨池映射
+        // 3. 补充已有主体所在池的同池映射
         for (Long poolId : autoAdjustMapper.queryCompanyCurrentPoolIds()) {
             mappings.add(new long[]{poolId, poolId});
         }
         List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
                 mappings, TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
-        infoDetail(detail, "有效映射组数 " + pairList.size());
-        infoDetail(detail, "扫描条件：dict_security_type.category_type=bond、发行主体已在映射主体池生效、"
-                + "债券未在映射目标池生效、maturity_date为空或>今日、排除 ABS，"
-                + "并排除 status=updated 且已补齐正式代码的临时代码记录；映射组数="
-                + pairList.size());
-        // 构建池 ID → 池信息映射
+        infoDetail(detail, "扫描范围：有效主体池到债券目标池的映射 " + pairList.size() + " 组");
+        infoDetail(detail, "处理条件：普通债或 CRMW，未退市、未到期、排除 ABS，且尚未在债券目标池");
+        // 4. 构建池信息映射并读取关系配置
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
         AutoInSummary summary = new AutoInSummary();
+        // 5. 逐个映射查询和处理债券
         for (long[] pair : pairList) {
             Long companyInPoolId = pair[0];
             Long bondTargetPoolId = pair[1];
             InvestmentPoolBo companyPool = poolMap.get(companyInPoolId);
             InvestmentPoolBo targetPool = poolMap.get(bondTargetPoolId);
             if (targetPool == null) {
-                warnDetail(detail, "债券写入池[" + bondTargetPoolId + "]不存在，跳过映射 "
-                        + companyInPoolId + "→" + bondTargetPoolId);
+                summary.addSkipped(1);
+                skipDetail(detail, "债券目标池【" + bondTargetPoolId + "】不存在，映射 "
+                        + companyInPoolId + "→" + bondTargetPoolId + " 本轮未处理");
                 continue;
             }
             if (CompanyBondSyncPolicy.isCrmwCombinationPool(targetPool)) {
-                warnDetail(detail, "债券写入池[" + bondTargetPoolId
-                        + "]为 CRMW 组合池，主体旗下证券不能通过普通池状态写入，跳过该映射");
+                summary.addSkipped(1);
+                skipDetail(detail, "债券目标池【" + bondTargetPoolId
+                        + "】是 CRMW 组合池，不能通过普通池状态写入，本轮未处理");
                 continue;
             }
             List<ScheduledAdjustCandidateDto> bondList = autoAdjustMapper.queryCompanyNewBondForAutoIn(
                     companyInPoolId, bondTargetPoolId, CompanyBondSyncPolicy.newBondInboundScope());
             if (bondList == null || bondList.isEmpty()) {
+                summary.addMapping(companyInPoolId, companyPool == null ? null : companyPool.getPoolName(),
+                        bondTargetPoolId, targetPool.getPoolName(), 0, 0, 0);
                 infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
                         + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 无待入池新债");
                 continue;
             }
             int pairCount = 0;
+            int pairSkippedCount = 0;
             for (ScheduledAdjustCandidateDto bond : bondList) {
+                if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+                    pairSkippedCount++;
+                    skipDetail(detail, "映射 " + companyInPoolId + "→" + bondTargetPoolId
+                            + " 的扫描结果缺少证券编码，无法处理");
+                    continue;
+                }
+                // 5.1 读取债券当前所在池
                 List<Long> currentPoolIds = securityPoolAdjustMapper
                         .querySecurityCurrentPoolIdList(bond.getSecurityCode());
+                // 5.2 准备债券入池日志字段
                 bond.setAdjustType(AdjustType.AUTO.getCode());
                 bond.setAdjustMode(AdjustMode.IN.getCode());
                 bond.setTargetPoolId(bondTargetPoolId);
@@ -233,22 +251,22 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     reason = ScheduledAdjustLogHelper.appendDetails(reason, "联动触发主体：" + bond.getTriggerCompanyCode());
                 }
                 bond.setAdjustReason(reason);
-                // 按实际债券和目标池生成自动调库批次号
+                // 5.3 生成批次号并写入债券入池日志
                 String batchNo = batchNoContext.resolveBondBatchNo(
                         bond.getSecurityCode(), bondTargetPoolId, AdjustMode.IN.getCode());
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
-                // 写自动调入日志
+                // 5.4 写债券入池日志并更新池状态
                 securityPoolAdjustMapper.addAdjustLog(bond);
                 bond.setAdjustLogId(bond.getId());
-                // 写入在池状态
                 int inserted = securityPoolAdjustMapper.addPoolStatus(bond);
                 if (inserted != 1) {
-                    warnDetail(detail, "债券[" + bond.getSecurityCode() + "]写入池状态失败（可能并发已入池），跳过");
+                    pairSkippedCount++;
+                    skipDetail(detail, "证券【" + bond.getSecurityCode() + "】：当前已在债券目标池，本轮不处理");
                     continue;
                 }
                 pairCount++;
-                // 入池成功后从当前实际所在的互斥/受限池调出，并写同批自动调出日志
+                // 5.5 入池成功后处理债券原所在的关系池
                 int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
                         bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
                 if (autoOutCount > 0) {
@@ -257,35 +275,47 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 }
             }
             summary.addMapping(companyInPoolId, companyPool == null ? null : companyPool.getPoolName(),
-                    bondTargetPoolId, targetPool.getPoolName(), pairCount);
-            infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
-                    + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 入池 " + pairCount + " 条");
+                    bondTargetPoolId, targetPool.getPoolName(), bondList.size(), pairCount, pairSkippedCount);
+            infoDetail(detail, "处理结果：主体所在池【" + companyInPoolId + "】→债券池【"
+                    + targetPool.getPoolName() + "】实际入池 " + pairCount + " 条，未处理 " + pairSkippedCount + " 条");
         }
-        infoDetail(detail, summary.buildMessage());
         return summary;
     }
 
-    /** 本轮在池主体旗下债券入池汇总。 */
+    /** 本轮在池主体旗下债券入池汇总 */
     private static final class AutoInSummary {
 
-        /** 本轮实际入池总数。 */
+        /** 本轮实际入池总数 */
         private int total;
-        /** 按主体所在池与债券目标池映射保存入池数量。 */
+        /** 本轮扫描到的债券候选数 */
+        private int candidateCount;
+        /** 本轮未处理的债券或映射数量 */
+        private int skippedCount;
+        /** 按主体所在池与债券目标池映射保存入池数量 */
         private final Map<String, MappingSummary> mappingSummaries = new LinkedHashMap<>();
 
-        /** 累加一个主体池与债券目标池映射的入池数量。 */
+        /** 累加未处理映射数量 */
+        private void addSkipped(int count) {
+            skippedCount += count;
+        }
+
+        /** 累加一个主体池与债券目标池映射的入池数量 */
         private void addMapping(Long companyPoolId, String companyPoolName, Long bondPoolId,
-                                String bondPoolName, int count) {
+                                String bondPoolName, int candidateCount, int count, int skippedCount) {
             String key = companyPoolId + "-" + bondPoolId;
             mappingSummaries.put(key, new MappingSummary(companyPoolId, companyPoolName,
-                    bondPoolId, bondPoolName, count));
+                    bondPoolId, bondPoolName, candidateCount, count, skippedCount));
+            this.candidateCount += candidateCount;
+            this.skippedCount += skippedCount;
             total += count;
         }
 
-        /** 构建最近执行结果文案。 */
+        /** 构建最近执行结果文案 */
         private String buildMessage() {
-            StringBuilder message = new StringBuilder("本轮共自动入池 ")
-                    .append(total).append(" 条债券");
+            StringBuilder message = new StringBuilder("任务完成：扫描候选债券 ")
+                    .append(candidateCount).append(" 条，实际入池 ")
+                    .append(total).append(" 条，未处理 ")
+                    .append(skippedCount).append(" 条");
             if (!mappingSummaries.isEmpty()) {
                 message.append("；目标池明细：");
                 int index = 0;
@@ -295,37 +325,45 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     }
                     message.append("主体池")
                             .append(mapping.companyPoolName == null ? "" : mapping.companyPoolName)
-                            .append("(").append(mapping.companyPoolId).append(")→债券池")
-                            .append(mapping.bondPoolName).append("(").append(mapping.bondPoolId)
-                            .append(")：").append(mapping.count).append(" 条债券");
+                            .append("（").append(mapping.companyPoolId).append("）→债券池")
+                            .append(mapping.bondPoolName).append("（").append(mapping.bondPoolId)
+                            .append("）：扫描 ").append(mapping.candidateCount).append(" 条，入池 ")
+                            .append(mapping.count).append(" 条，未处理 ")
+                            .append(mapping.skippedCount).append(" 条");
                 }
             }
             return message.toString();
         }
     }
 
-    /** 单个主体池与债券目标池映射的入池统计。 */
+    /** 单个主体池与债券目标池映射的入池统计 */
     private static final class MappingSummary {
 
-        /** 主体所在池 ID。 */
+        /** 主体所在池 ID */
         private final Long companyPoolId;
-        /** 主体所在池名称。 */
+        /** 主体所在池名称 */
         private final String companyPoolName;
-        /** 债券目标池 ID。 */
+        /** 债券目标池 ID */
         private final Long bondPoolId;
-        /** 债券目标池名称。 */
+        /** 债券目标池名称 */
         private final String bondPoolName;
-        /** 实际入池数量。 */
+        /** 扫描候选数量 */
+        private final int candidateCount;
+        /** 实际入池数量 */
         private final int count;
+        /** 未处理数量 */
+        private final int skippedCount;
 
-        /** 创建映射统计。 */
+        /** 创建映射统计 */
         private MappingSummary(Long companyPoolId, String companyPoolName, Long bondPoolId,
-                               String bondPoolName, int count) {
+                               String bondPoolName, int candidateCount, int count, int skippedCount) {
             this.companyPoolId = companyPoolId;
             this.companyPoolName = companyPoolName;
             this.bondPoolId = bondPoolId;
             this.bondPoolName = bondPoolName;
+            this.candidateCount = candidateCount;
             this.count = count;
+            this.skippedCount = skippedCount;
         }
     }
 
@@ -335,7 +373,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     private void infoDetail(TaskDetailLog detail, String line) {
         log.info(line);
         if (detail != null) {
-            detail.line("INFO", line);
+            detail.line(line);
         }
     }
 
@@ -345,7 +383,20 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     private void warnDetail(TaskDetailLog detail, String line) {
         log.warn(line);
         if (detail != null) {
-            detail.line("WARN", line);
+            detail.line(line);
+        }
+    }
+
+    /**
+     * 记录业务上未处理的债券或映射，不把可预期情况写成任务异常
+     *
+     * @param detail 过程日志
+     * @param line 未处理原因
+     */
+    private void skipDetail(TaskDetailLog detail, String line) {
+        log.info("定时任务未处理：{}", line);
+        if (detail != null) {
+            detail.line("未处理：" + line);
         }
     }
 
@@ -390,12 +441,13 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 解析扩展参数为池映射列表：每项 [companyInPoolId, bondTargetPoolId]（仅 JSON）
-     * <p>
-     * 支持：{@code poolIds} 数组（主体与债同一池，可多个）、{@code poolId} 单个、
-     * {@code mappings} 显式「主体所在池→债券写入池」。
-     * 非法 JSON 抛 {@link BizException}；无有效映射时返回空列表，由并集解析再决定是否失败。
-     * </p>
+     * 解析扩展参数中的主体池到债券池映射
+     *
+     * 支持 poolIds、poolId 和 mappings 三种写法，非法 JSON 直接返回业务错误
+     *
+     * @param raw 扩展参数原文
+     * @param taskName 任务展示名称
+     * @return 每项为主体所在池 ID 和债券写入池 ID 的映射
      */
     List<long[]> parseParamMappings(String raw, String taskName) {
         List<long[]> result = new ArrayList<>();
@@ -414,7 +466,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
                     + "；请使用标准 JSON，示例 {\"poolIds\":[15]}");
         }
-        // 同池多个：poolIds
+        // 1. 读取同池多目标池配置
         JsonNode poolIdsNode = root.get("poolIds");
         if (poolIdsNode != null && !poolIdsNode.isNull()) {
             if (!poolIdsNode.isArray()) {
@@ -428,7 +480,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 result.add(new long[]{id, id});
             }
         }
-        // 同池单个：poolId（与 poolIds 可并存）
+        // 2. 读取同池单目标池配置
         if (root.has("poolId") && !root.get("poolId").isNull()) {
             Long id = readNumberNode(root.get("poolId"));
             if (id == null) {
@@ -436,7 +488,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
             }
             result.add(new long[]{id, id});
         }
-        // 不同池映射
+        // 3. 读取显式跨池映射
         JsonNode mappings = root.get("mappings");
         if (mappings != null && mappings.isArray()) {
             for (JsonNode item : mappings) {

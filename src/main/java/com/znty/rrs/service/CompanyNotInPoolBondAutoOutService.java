@@ -29,12 +29,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 主体不在指定池时，将其旗下已在债券池的未退市债自动调出。
- * <p>
- * 对应老 {@code AutoAdjustInLimitPoolToNewBondJob}（独立 Job，不走 AdjustPoolByRule，
- * 因此不看调入/调出限制池）。老配置 AUTOPOOLID_BPMP 为「债券池-主体池」。
- * 当前统一处理全部 bond 大类，不排除 ABS / CRMW。
- * </p>
+ * 主体不在池债券自动出池(默认关闭)
+ *
+ * 执行顺序：
+ * 1. 合并扩展参数和关系配置中的债券池、主体池映射
+ * 2. 查询债券已在债券池且主体不在对应主体池的记录
+ * 3. 跳过退市债、数据不完整和需要人工确认的 ABS
+ * 4. 软删除债券池状态并写入自动出池日志
+ * 5. 汇总每组映射的实际出池和未处理数量
+ *
+ * 本任务是独立 Job，不走 AdjustPoolByRule，不检查调入或调出限制池，普通债、ABS 和 CRMW 均按本任务口径处理
  */
 @Slf4j
 @Service
@@ -95,18 +99,33 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         return PARAM_HELP;
     }
 
+    /**
+     * 执行主体不在池债券自动出池(默认关闭)
+     *
+     * 执行顺序：
+     * 1. 读取任务名称并记录任务开始
+     * 2. 扫描债券池与主体池映射
+     * 3. 对不满足单条业务条件的债券记录原因后跳过
+     * 4. 写入债券出池记录并汇总结果
+     * 5. 返回任务成功或任务级失败结果
+     *
+     * @return 本轮任务执行结果
+     */
     @Override
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
         TaskDetailLog detail = new TaskDetailLog();
+        // 1. 读取任务展示名称并记录任务开始
         String taskName = resolveTaskName();
-        infoDetail(detail, taskName + " 开始");
+        infoDetail(detail, "任务开始：" + taskName);
         try {
+            // 2. 执行主体不在池债券自动出池
             AutoOutSummary summary = doAutoOut(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
             String message = summary.buildMessage();
-            infoDetail(detail, taskName + " 结束，" + message);
+            // 3. 记录任务结果并返回成功结果
+            infoDetail(detail, "任务结束：" + message + "；耗时 " + duration + " 毫秒");
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
@@ -123,7 +142,21 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         }
     }
 
+    /**
+     * 按债券池和主体池映射处理主体不在池的债券
+     *
+     * 执行顺序：
+     * 1. 解析扩展参数和关系配置映射
+     * 2. 读取投资池、批次信息和扫描候选
+     * 3. 逐条检查债券并处理出池
+     * 4. 汇总映射处理结果
+     *
+     * @param taskName 任务展示名称
+     * @param detail 过程日志
+     * @return 本轮债券出池汇总
+     */
     private AutoOutSummary doAutoOut(String taskName, TaskDetailLog detail) {
+        // 1. 读取扩展参数并解析有效映射
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
         List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
@@ -132,10 +165,12 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         infoDetail(detail, "扫描条件：ip_pool_status.is_deleted=0、audit_status=20、category_type=bond；"
                 + "债券已在映射债券池生效、issuer_code非空，发行主体不在映射主体池的生效主体记录中；"
                 + "映射组数=" + pairList.size());
+        // 2. 准备投资池信息和自动调库批次
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
         AutoOutSummary summary = new AutoOutSummary();
+        // 3. 逐个映射查询和处理债券
         for (long[] pair : pairList) {
             Long bondPoolId = pair[0];
             Long companyPoolId = pair[1];
@@ -163,16 +198,18 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     continue;
                 }
-                // ABS 保持唯一主体身份，存在其他依据时交由研究员处理
+                // 3.1 ABS 保持唯一主体身份，存在其他依据时交由研究员处理
                 if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
                     && !absCompanySyncService.allowScheduledSync(bond, bond.getIssuerCode(), bondPoolId, bondPool.getPoolName(), false, companyPoolId)) {
                     continue;
                 }
+                // 3.2 软删除债券池状态，未删到时视为已被其他处理提前出池
                 int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(bond.getSecurityCode(), bondPoolId);
                 if (deleted == 0) {
                     warnDetail(detail, "债券[" + bond.getSecurityCode() + "]软删失败（可能并发已出池），跳过");
                     continue;
                 }
+                // 3.3 准备债券自动出池日志字段
                 bond.setAdjustType("自动调整");
                 bond.setAdjustMode(AdjustMode.OUT.getCode());
                 bond.setTargetPoolId(bondPoolId);
@@ -185,11 +222,12 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                         ScheduledAdjustLogHelper.issuerDetail(bond),
                         ScheduledAdjustLogHelper.poolDetail("主体未在池", companyPool, companyPoolId));
                 bond.setAdjustReason(reason);
-                // 按实际债券和目标池生成自动调库批次号
+                // 3.4 生成批次号并写入自动出池日志
                 String batchNo = batchNoContext.resolveBondBatchNo(
                         bond.getSecurityCode(), bondPoolId, AdjustMode.OUT.getCode());
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
+                // 3.5 写债券出池日志
                 securityPoolAdjustMapper.addAdjustLog(bond);
                 pairCount++;
             }
@@ -202,15 +240,15 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         return summary;
     }
 
-    /** 本轮主体不在池债券出池汇总。 */
+    /** 本轮主体不在池债券出池汇总 */
     private static final class AutoOutSummary {
 
-        /** 本轮实际出池总数。 */
+        /** 本轮实际出池总数 */
         private int total;
-        /** 按债券池与主体池映射保存出池数量。 */
+        /** 按债券池与主体池映射保存出池数量 */
         private final Map<String, MappingSummary> mappingSummaries = new LinkedHashMap<>();
 
-        /** 累加一个债券池与主体池映射的出池数量。 */
+        /** 累加一个债券池与主体池映射的出池数量 */
         private void addMapping(Long bondPoolId, String bondPoolName, Long companyPoolId,
                                 String companyPoolName, int count) {
             String key = bondPoolId + "-" + companyPoolId;
@@ -219,7 +257,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
             total += count;
         }
 
-        /** 构建最近执行结果文案。 */
+        /** 构建最近执行结果文案 */
         private String buildMessage() {
             StringBuilder message = new StringBuilder("本轮共自动出池 ")
                     .append(total).append(" 条债券");
@@ -241,21 +279,21 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         }
     }
 
-    /** 单个债券池与主体池映射的出池统计。 */
+    /** 单个债券池与主体池映射的出池统计 */
     private static final class MappingSummary {
 
-        /** 债券目标池 ID。 */
+        /** 债券目标池 ID */
         private final Long bondPoolId;
-        /** 债券目标池名称。 */
+        /** 债券目标池名称 */
         private final String bondPoolName;
-        /** 主体所在池 ID。 */
+        /** 主体所在池 ID */
         private final Long companyPoolId;
-        /** 主体所在池名称。 */
+        /** 主体所在池名称 */
         private final String companyPoolName;
-        /** 实际出池数量。 */
+        /** 实际出池数量 */
         private final int count;
 
-        /** 创建映射统计。 */
+        /** 创建映射统计 */
         private MappingSummary(Long bondPoolId, String bondPoolName, Long companyPoolId,
                                String companyPoolName, int count) {
             this.bondPoolId = bondPoolId;
@@ -275,7 +313,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     }
 
     /**
-     * 解析为 [bondPoolId, companyPoolId]；poolIds 表示两池相同。
+     * 解析为 [bondPoolId, companyPoolId]；poolIds 表示两池相同
      */
     List<long[]> parseParamMappings(String raw, String taskName) {
         List<long[]> result = new ArrayList<>();

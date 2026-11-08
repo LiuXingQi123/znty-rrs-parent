@@ -33,12 +33,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 外评 AA- 及以下主体自动入池任务
- * <p>
- * 对应老系统 {@code AdjustRuleInAA}。现按质押券黑名单管理办法：
- * 未在目标池且满足（一）禁止库 /（二）近一年孰低 AA-及以下 /（三）重点观察名单 之一即入池。
- * Demo 目标池为黑名单质押库 17。adjust_type=自动调整，不走审批。
- * </p>
+ * 外评AA-及以下主体自动入池（已排除ABS债）
+ *
+ * 执行顺序：
+ * 1. 读取认可外评机构和主体入池目标池
+ * 2. 合并禁止库、低评级和重点观察名单三类入池候选
+ * 3. 跳过已不满足条件、命中调入限制池或主体数据不完整的记录
+ * 4. 写入主体和旗下普通债、CRMW 的入池记录
+ * 5. 返回主体和旗下债券的处理结果
  */
 @Slf4j
 @Service
@@ -92,7 +94,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     /** 黑名单质押库三条件统一判定服务 */
     @Resource
     private PledgeBlacklistRuleService pledgeBlacklistRuleService;
-    /** 外部评级机构配置服务。 */
+    /** 外部评级机构配置服务 */
     @Resource
     private ExternalRatingAgencyService externalRatingAgencyService;
 
@@ -113,7 +115,16 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 执行质押券黑名单自动入池：扫描满足（一）（二）（三）之一且未在目标池的主体
+     * 执行外评AA-及以下主体自动入池（已排除ABS债）
+     *
+     * 执行顺序：
+     * 1. 读取任务配置并准备过程日志
+     * 2. 查询并合并三类主体入池候选
+     * 3. 对不满足单条业务条件的主体记录原因后跳过
+     * 4. 写入主体和旗下债券入池记录
+     * 5. 返回任务成功或任务级失败结果
+     *
+     * @return 本轮任务执行结果
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -121,93 +132,105 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
         TaskDetailLog detail = new TaskDetailLog();
-        // 展示名读库
+        // 1. 读取任务展示名称
         String taskName = resolveTaskName();
-        // 记录开始（控制台 + 过程日志）
-        infoDetail(detail, taskName + " 开始");
+        // 2. 记录任务开始
+        infoDetail(detail, "任务开始：" + taskName);
         try {
-            // 执行自动入池（扩展参数非法时抛 BizException → 记失败）
+            // 3. 执行主体自动入池
             AutoInSummary summary = doAutoIn(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
             String message = summary.buildMessage();
-            // 记录结束（控制台 + 过程日志）
-            infoDetail(detail, taskName + " 结束，" + message);
+            // 4. 记录任务结果并返回成功结果
+            infoDetail(detail, "任务结束：" + message + "；耗时 " + duration + " 毫秒");
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.companyCount, startTime, duration,
                     detail.build());
         } catch (BizException e) {
-            // 返回失败结果前标记本轮事务回滚
+            // 4.1 业务错误时标记本轮事务回滚并返回失败结果
             markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
-            // 记录业务失败
-            warnDetail(detail, taskName + " 失败: " + e.getMessage());
+            warnDetail(detail, "任务未完成：" + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
         } catch (Exception e) {
-            // 返回失败结果前标记本轮事务回滚
+            // 4.2 系统错误时标记本轮事务回滚并返回失败结果
             markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             log.error("{} 异常", taskName, e);
-            detail.line("ERROR", taskName + " 异常: " + e.getMessage());
+            detail.line("任务未完成：系统异常，" + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName,
                     "执行异常: " + e.getMessage(), startTime, duration, detail.build());
         }
     }
 
     /**
-     * 按目标池将满足质押券黑名单（一）（二）（三）之一且未在池的主体自动入池
+     * 按目标池将满足黑名单三项条件之一且尚未入池的主体自动入池
+     *
+     * 执行顺序：
+     * 1. 读取认可外评机构和目标池配置
+     * 2. 按三项条件查询并合并主体候选
+     * 3. 逐个检查主体当前状态和调入限制
+     * 4. 写入主体入池记录并处理旗下债券
+     * 5. 汇总目标池处理结果
      *
      * @param taskName 任务展示名称
-     * @param detail   过程日志
-     * @return 本轮主体与债券入池汇总
+     * @param detail 过程日志
+     * @return 本轮主体与旗下债券入池汇总
      */
     private AutoInSummary doAutoIn(String taskName, TaskDetailLog detail) {
-        // 本轮任务统一使用同一份有效外部评级机构配置
+        // 1. 读取本轮统一使用的外部评级机构
         List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
-        // 从扩展参数与关系配置解析入池目标池
+        // 2. 合并扩展参数和关系配置中的入池目标池
         List<Long> poolIds = resolvePoolIds(taskName, detail);
-        infoDetail(detail, "目标池列表 poolIds=" + poolIds);
-        infoDetail(detail, "扫描条件：主体未在目标池 " + poolIds
-                + " 的生效记录中，且满足禁止库15、近一年认可外评孰低AA-及以下、重点观察23任一条件");
-        // 构建池 ID → 池对象映射
+        infoDetail(detail, "扫描范围：目标池编号 " + poolIds);
+        infoDetail(detail, "处理条件：主体尚未在目标池生效，且满足禁止库、低评级或重点观察任一条件");
+        // 3. 构建池信息映射
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
-        // 一次加载全量池关系，供调入限制池（in_restrict）拦截
+        // 4. 读取全量池关系，供调入限制池校验
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         AutoInSummary summary = new AutoInSummary();
+        // 5. 逐个目标池查询和处理主体
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
-                warnDetail(detail, "池[" + poolId + "]不存在，跳过");
+                summary.addSkipped(1);
+                skipDetail(detail, "目标池【" + poolId + "】不存在，本轮未处理");
                 continue;
             }
-            // 解析目标池的调入限制池
+            // 5.1 读取当前目标池的调入限制池
             List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
-            // 分别查询（一）（二）（三）后在内存合并去重
+            // 5.2 查询并合并三类主体入池候选
             List<ScheduledAdjustCandidateDto> companies = queryInboundCandidates(poolId, agencyCodes);
             if (companies == null || companies.isEmpty()) {
-                infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无待入池黑名单主体");
+                summary.addPool(poolId, pool.getPoolName(), 0, 0, 0, 0);
+                infoDetail(detail, "扫描结果：池【" + pool.getPoolName() + "】没有待入池主体");
                 continue;
             }
             int poolCount = 0;
             int poolBondCount = 0;
+            int poolSkippedCount = 0;
             for (ScheduledAdjustCandidateDto company : companies) {
                 if (company == null || !StringUtils.hasText(company.getSecurityCode())) {
+                    poolSkippedCount++;
+                    skipDetail(detail, "扫描结果缺少主体编码，无法处理");
                     continue;
                 }
                 if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId)
                         && !pledgeBlacklistRuleService.evaluate(company.getSecurityCode()).shouldBeInBlacklist()) {
-                    // 记录候选状态变化后的跳过原因
-                    warnDetail(detail, "主体[" + company.getSecurityCode()
-                            + "]已不再命中黑名单质押库三个条件，跳过");
+                    // 5.3 记录主体条件变化后的跳过原因
+                    poolSkippedCount++;
+                    skipDetail(detail, "主体【" + company.getSecurityCode() + "】：当前已不再满足黑名单入池条件，本轮不处理");
                     continue;
                 }
-                // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
+                // 5.4 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池），命中时跳过
                 if (AutoAdjustRestrictHelper.isInAnyPool(
                         securityPoolAdjustMapper.querySecurityCurrentPoolIdList(company.getSecurityCode()),
                         inRestrictPoolIds)) {
-                    warnDetail(detail, "主体[" + company.getSecurityCode() + "]当前在调入限制池中，跳过");
+                    poolSkippedCount++;
+                    skipDetail(detail, "主体【" + company.getSecurityCode() + "】：当前位于调入限制池，本轮不处理");
                     continue;
                 }
                 company.setSecurityType("company");
@@ -219,49 +242,57 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 company.setAuditStatus(AuditStatus.APPROVED.getCode());
                 company.setAdjusterId(AUTO_ADJUSTER_ID);
                 company.setAdjusterName(AUTO_ADJUSTER_NAME);
-                // 按命中的（一）（二）（三）拼接调整原因
+                // 5.5 按命中的三项条件拼接调整原因
                 String reason = buildAdjustReason(company);
                 company.setAdjustReason(reason);
-                // 按主体和目标池生成自动调库批次号
+                // 5.6 生成主体入池批次号
                 String batchNo = batchNoContext.resolveCompanyBatchNo(
                         company.getSecurityCode(), poolId, AdjustMode.IN.getCode());
                 company.setAdjustBatchNo(batchNo);
                 company.setSubmitTime(submitTime);
-                // 写自动入池日志
+                // 5.7 写主体入池日志并更新池状态
                 if (securityPoolAdjustMapper.addAdjustLog(company) != 1) {
                     throw new BizException("主体[" + company.getSecurityCode() + "]自动调入日志写入失败");
                 }
                 company.setAdjustLogId(company.getId());
-                // 写入在池状态
                 int inserted = securityPoolAdjustMapper.addPoolStatus(company);
                 if (inserted != 1) {
                     throw new BizException("主体[" + company.getSecurityCode()
                             + "]写入池状态失败（可能并发已入池）");
                 }
-                // 主体入池成功后，本任务内自写逻辑同批调入旗下未退市、未到期债（不复用人工 syncCompanyBonds）
+                // 5.8 主体入池成功后处理旗下债券
                 poolBondCount += inSamePoolBonds(company, pool, allRelations, poolMap, detail);
                 poolCount++;
             }
-            summary.addPool(poolId, pool.getPoolName(), poolCount, poolBondCount);
-            infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 入池 "
-                    + poolCount + " 个主体、" + poolBondCount + " 只债券");
+            summary.addPool(poolId, pool.getPoolName(), companies.size(), poolCount, poolBondCount, poolSkippedCount);
+            infoDetail(detail, "处理结果：池【" + pool.getPoolName() + "】实际入池 "
+                    + poolCount + " 个主体、" + poolBondCount + " 只债券，未处理 " + poolSkippedCount + " 个主体");
         }
-        infoDetail(detail, summary.buildMessage());
         return summary;
     }
 
-    /** 本轮主体自动入池及其旗下债券同步结果。 */
+    /** 本轮主体自动入池及其旗下债券同步结果 */
     private static final class AutoInSummary {
 
-        /** 本轮自动入池主体总数。 */
+        /** 本轮自动入池主体总数 */
         private int companyCount;
-        /** 本轮同步入池债券总数。 */
+        /** 本轮同步入池债券总数 */
         private int bondCount;
-        /** 按目标池保存入池统计，保持任务扫描顺序。 */
+        /** 本轮扫描到的主体候选数 */
+        private int candidateCount;
+        /** 本轮未处理的主体或配置项数量 */
+        private int skippedCount;
+        /** 按目标池保存入池统计，保持任务扫描顺序 */
         private final Map<Long, PoolAutoInSummary> poolSummaries = new LinkedHashMap<>();
 
-        /** 累加一个目标池的主体和债券入池数量。 */
-        private void addPool(Long poolId, String poolName, int companyCount, int bondCount) {
+        /** 累加未处理配置项数量 */
+        private void addSkipped(int count) {
+            skippedCount += count;
+        }
+
+        /** 累加一个目标池的主体和债券入池数量 */
+        private void addPool(Long poolId, String poolName, int candidateCount,
+                             int companyCount, int bondCount, int skippedCount) {
             PoolAutoInSummary poolSummary = poolSummaries.get(poolId);
             if (poolSummary == null) {
                 poolSummary = new PoolAutoInSummary(poolId, poolName);
@@ -269,15 +300,21 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             }
             poolSummary.companyCount += companyCount;
             poolSummary.bondCount += bondCount;
+            poolSummary.candidateCount += candidateCount;
+            poolSummary.skippedCount += skippedCount;
+            this.candidateCount += candidateCount;
             this.companyCount += companyCount;
             this.bondCount += bondCount;
+            this.skippedCount += skippedCount;
         }
 
-        /** 构建最近结果展示的主体、债券及目标池明细。 */
+        /** 构建最近结果展示的主体、债券及目标池明细 */
         private String buildMessage() {
-            StringBuilder message = new StringBuilder("本轮共自动入池 ")
+            StringBuilder message = new StringBuilder("任务完成：扫描候选主体 ")
+                    .append(candidateCount).append(" 个，实际入池 ")
                     .append(companyCount).append(" 个主体、")
-                    .append(bondCount).append(" 只债券");
+                    .append(bondCount).append(" 只债券，未处理 ")
+                    .append(skippedCount).append(" 个主体");
             if (!poolSummaries.isEmpty()) {
                 message.append("；目标池明细：");
                 int index = 0;
@@ -285,29 +322,35 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                     if (index++ > 0) {
                         message.append("；");
                     }
-                    message.append(poolSummary.poolName).append("(")
-                            .append(poolSummary.poolId).append(")：")
+                    message.append(poolSummary.poolName).append("（")
+                            .append(poolSummary.poolId).append("）：扫描 ")
+                            .append(poolSummary.candidateCount).append(" 个主体，入池 ")
                             .append(poolSummary.companyCount).append(" 个主体、")
-                            .append(poolSummary.bondCount).append(" 只债券");
+                            .append(poolSummary.bondCount).append(" 只债券，未处理 ")
+                            .append(poolSummary.skippedCount).append(" 个主体");
                 }
             }
             return message.toString();
         }
     }
 
-    /** 单个目标池的主体和债券入池统计。 */
+    /** 单个目标池的主体和债券入池统计 */
     private static final class PoolAutoInSummary {
 
-        /** 目标池 ID。 */
+        /** 目标池 ID */
         private final Long poolId;
-        /** 目标池名称。 */
+        /** 目标池名称 */
         private final String poolName;
-        /** 目标池主体入池数。 */
+        /** 目标池主体入池数 */
         private int companyCount;
-        /** 目标池债券入池数。 */
+        /** 目标池债券入池数 */
         private int bondCount;
+        /** 目标池扫描主体数 */
+        private int candidateCount;
+        /** 目标池未处理主体数 */
+        private int skippedCount;
 
-        /** 创建目标池统计对象。 */
+        /** 创建目标池统计对象 */
         private PoolAutoInSummary(Long poolId, String poolName) {
             this.poolId = poolId;
             this.poolName = poolName;
@@ -315,7 +358,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 分别查询条款（一）（二）（三），按主体代码合并并回填命中标记。
+     * 分别查询条款（一）（二）（三），按主体代码合并并回填命中标记
      *
      * @param targetPoolId 入池目标池
      * @param agencyCodes 有效外部评级机构编码
@@ -324,20 +367,20 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     private List<ScheduledAdjustCandidateDto> queryInboundCandidates(
             Long targetPoolId, List<String> agencyCodes) {
         Map<String, ScheduledAdjustCandidateDto> merged = new LinkedHashMap<>();
-        // 条款（一）：当前在禁止库且尚未在目标池
+        // 1. 查询当前在禁止库且尚未在目标池的主体
         mergeInboundHits(merged, autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 AutoAdjustRestrictHelper.COMPANY_FORBIDDEN_POOL_ID, targetPoolId), true, false, false);
-        // 条款（三）：当前在重点观察且尚未在目标池
+        // 2. 查询当前在重点观察且尚未在目标池的主体
         mergeInboundHits(merged, autoAdjustMapper.queryCompanyInPoolNotInTarget(
                 AutoAdjustRestrictHelper.KEY_WATCH_POOL_ID, targetPoolId), false, false, true);
-        // 条款（二）：近一年孰低 AA-及以下且尚未在目标池
+        // 3. 查询近一年孰低 AA-及以下且尚未在目标池的主体
         mergeInboundHits(merged, autoAdjustMapper.queryCompanyByLowOuterRatingNotInPool(targetPoolId, agencyCodes),
                 false, true, false);
         return new ArrayList<>(merged.values());
     }
 
     /**
-     * 将一批候选并入结果，并按本批命中的条款打标记。
+     * 将一批候选并入结果，并按本批命中的条款打标记
      *
      * @param merged     按主体代码去重的结果
      * @param rows       本条款查询结果
@@ -380,7 +423,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 调整原因按命中的（一）（二）（三）拼接。
+     * 调整原因按命中的（一）（二）（三）拼接
      *
      * @param company 入池候选（含命中标记与孰低外评）
      * @return 调整原因
@@ -390,11 +433,11 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
             return REASON;
         }
         List<String> parts = new ArrayList<>();
-        // 条款（一）：当前在公司信用债禁止库
+        // 1. 拼接当前在公司信用债禁止库的命中说明
         if (isFlagHit(company.getInForbiddenPool())) {
             parts.add("公司信用债禁止库内主体");
         }
-        // 条款（二）：近一年认可外评孰低为 AA-及以下
+        // 2. 拼接近一年认可外评孰低为 AA-及以下的命中说明
         if (isLowOuterRatingHit(company)) {
             if (StringUtils.hasText(company.getOuterRating())) {
                 parts.add("近一年孰低外评：" + company.getOuterRating().trim());
@@ -402,7 +445,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 parts.add("近一年孰低外评为AA-及以下");
             }
         }
-        // 条款（三）：当前在重点观察名单
+        // 3. 拼接当前在重点观察名单的命中说明
         if (isFlagHit(company.getInRestrictedPool())) {
             parts.add("重点观察名单内主体");
         }
@@ -422,15 +465,19 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 将主体旗下尚未在同一目标池的未退市、未到期债券一并调入，并处理互斥/反向限制出池。
+     * 将主体旗下尚未在目标池的未退市、未到期债券一并调入，并处理互斥出池
      *
-     * <p>批次号、提交时间、调整原因、目标池 ID 均从已落库的主体日志读取，避免参数过多。
+     * 执行顺序：
+     * 1. 查询主体旗下符合范围的普通债和 CRMW
+     * 2. 检查目标池和债券调入限制
+     * 3. 写入债券入池日志和池状态
+     * 4. 按互斥和反向限制关系处理债券原所在池
      *
-     * @param companyLog   已生效的主体入池日志
-     * @param pool         目标池
-     * @param allRelations 全量池关系（解析调入限制与互斥出池）
-     * @param poolMap      全量池映射（互斥调出取池名）
-     * @param detail       过程日志
+     * @param companyLog 已生效的主体入池日志
+     * @param pool 目标池
+     * @param allRelations 全量池关系
+     * @param poolMap 全量池映射
+     * @param detail 过程日志
      * @return 实际入池债券条数
      */
     private int inSamePoolBonds(IpAdjustLogBo companyLog, InvestmentPoolBo pool,
@@ -442,7 +489,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         }
         Long poolId = companyLog.getTargetPoolId();
         String companyCode = companyLog.getSecurityCode();
-        // CRMW 组合池不能写普通池状态，阻断主体调整以保持主体和债券一致
+        // 1. 校验目标池类型，CRMW 组合池不走普通池状态
         if (CompanyBondSyncPolicy.isCrmwCombinationPool(pool)) {
             throw new BizException("CRMW 组合池不支持主体及旗下债券同池调整");
         }
@@ -451,7 +498,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         if (bonds == null || bonds.isEmpty()) {
             return 0;
         }
-        // 解析目标池调入限制池，债券无法跟随时阻断主体入池并回滚
+        // 2. 读取目标池调入限制池，供旗下债券校验
         List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                 poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
         int bondCount = 0;
@@ -459,17 +506,19 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 + "（同池旗下债）";
         for (ScheduledAdjustCandidateDto bond : bonds) {
             if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+                skipDetail(detail, "主体【" + companyCode + "】旗下债券缺少证券编码，本轮未处理");
                 continue;
             }
             List<Long> currentPoolIds = securityPoolAdjustMapper
                     .querySecurityCurrentPoolIdList(bond.getSecurityCode());
-            // 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池）
+            // 3. 对齐老 AdjustPoolByRule.checkSecurityInPoolRelation（关系 11 / 调入限制池），命中时阻断主体联动
             if (AutoAdjustRestrictHelper.isInAnyPool(currentPoolIds, inRestrictPoolIds)) {
                 throw new BizException("债券[" + bond.getSecurityCode()
                         + "]当前在调入限制池中，不能联动调入主体");
             }
-            // 回填自动入池日志公共字段（与主体同批次）
+            // 4. 回填债券自动入池日志字段
             fillAutoInBondLog(bond, companyLog, pool, bondReason);
+            // 5. 写债券入池日志并更新池状态
             if (securityPoolAdjustMapper.addAdjustLog(bond) != 1) {
                 throw new BizException("债券[" + bond.getSecurityCode() + "]自动调入日志写入失败");
             }
@@ -480,7 +529,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                         + "]写入池状态失败（可能并发已入池）");
             }
             bondCount++;
-            // 入目标池后，从债当前所在的互斥/反向限制池自动调出
+            // 6. 入目标池后处理债券原所在的互斥和反向限制池
             int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
                     bond, currentPoolIds, poolMap, allRelations, securityPoolAdjustMapper);
             if (autoOutCount > 0) {
@@ -495,7 +544,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 按主体入池日志回填旗下债自动入池公共字段。
+     * 按主体入池日志回填旗下债自动入池公共字段
      *
      * @param bond       旗下债日志
      * @param companyLog 主体入池日志
@@ -520,7 +569,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 判断查询回填的命中标记是否为 1。
+     * 判断查询回填的命中标记是否为 1
      *
      * @param flag 命中标记
      * @return true=命中
@@ -530,13 +579,13 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 判断是否命中条款（二）；查询未带回标记时，仅有外评文本则按（二）展示。
+     * 判断是否命中条款（二）；查询未带回标记时，仅有外评文本则按（二）展示
      *
      * @param company 入池候选
      * @return true=命中近一年孰低 AA-及以下
      */
     private static boolean isLowOuterRatingHit(ScheduledAdjustCandidateDto company) {
-        // 优先使用 SQL 回填的（二）命中标记
+        // 1. 优先使用 SQL 回填的（二）命中标记
         if (isFlagHit(company.getInLowOuterRating())) {
             return true;
         }
@@ -558,7 +607,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         String paramJson = (conf != null && StringUtils.hasText(conf.getParamJson()))
                 ? conf.getParamJson().trim() : null;
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
-        // 参数池与关系配置绑定池取并集
+        // 1. 合并扩展参数和关系配置绑定池
         return poolScopeHelper.resolveUnionPoolIds(paramJson, TASK_CODE, RuleType.AUTO_IN.getCode(), detail);
     }
 
@@ -570,7 +619,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * @return 池 ID 列表
      */
     List<Long> parsePoolIds(String raw, String taskName) {
-        // 解析 JSON 中的 poolIds 数组
+        // 1. 解析 JSON 中的 poolIds 数组
         List<Long> ids = AutoAdjustPoolScopeHelper.parseOptionalPoolIds(raw);
         if (ids.isEmpty()) {
             throw new BizException("扩展参数须包含非空 poolIds 数组，示例 {\"poolIds\":[17]}");
@@ -630,7 +679,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     private void infoDetail(TaskDetailLog detail, String line) {
         log.info(line);
         if (detail != null) {
-            detail.line("INFO", line);
+            detail.line(line);
         }
     }
 
@@ -643,11 +692,24 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     private void warnDetail(TaskDetailLog detail, String line) {
         log.warn(line);
         if (detail != null) {
-            detail.line("WARN", line);
+            detail.line(line);
         }
     }
 
-    /** 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚。 */
+    /**
+     * 记录业务上未处理的主体或债券，不把可预期情况写成任务异常
+     *
+     * @param detail 过程日志
+     * @param line 未处理原因
+     */
+    private void skipDetail(TaskDetailLog detail, String line) {
+        log.info("定时任务未处理：{}", line);
+        if (detail != null) {
+            detail.line("未处理：" + line);
+        }
+    }
+
+    /** 当前任务发生异常时标记事务回滚 */
     private void markTransactionRollbackOnly() {
         try {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();

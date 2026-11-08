@@ -16,7 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 /**
- * 债券类型变更任务：以证券主数据为准同步当前生效池状态及其关联调库日志。
+ * 债券类型变更
+ *
+ * 以证券主数据为准同步当前生效池状态及其关联调库日志
+ * 1. 查询普通池和 CRMW 池中旧类型与主数据不一致的生效记录
+ * 2. 先条件更新池状态，避免覆盖扫描后的并发变更
+ * 3. 同步当前池状态关联的调库日志类型，其他历史日志保留原始快照
+ * 4. 任一异常时整轮事务回滚并返回失败结果
  */
 @Slf4j
 @Service
@@ -39,20 +45,28 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
     @Resource
     private BondSecurityMaintenanceMapper bondSecurityMaintenanceMapper;
 
-    /** 返回债券类型变更任务编码。 */
+    /** 返回债券类型变更任务编码 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回债券类型变更任务参数说明。 */
+    /** 返回债券类型变更任务参数说明 */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
     }
 
     /**
-     * 执行债券类型同步。
+     * 执行债券类型变更
+     *
+     * 执行顺序：
+     * 1. 查询普通池和 CRMW 池候选记录
+     * 2. 分别同步两类池状态及当前关联调库日志
+     * 3. 汇总普通池、CRMW 池和跳过数量
+     * 4. 发生异常时标记事务回滚并返回失败结果
+     *
+     * @return 本轮任务执行结果
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -64,6 +78,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
         detail.line("扫描条件：ip_pool_status/ip_pool_status_crmw.is_deleted=0、audit_status=20；"
                 + "rrs_securityinfo 按 wind_code 匹配；新旧 security_type 均属于 bond 大类且不相等");
         try {
+            // 1. 查询普通池和 CRMW 池中类型发生变化的候选记录
             List<BondSecurityTypeChangeDto> normalRows =
                     bondSecurityMaintenanceMapper.queryPoolSecurityTypeChangeList();
             List<BondSecurityTypeChangeDto> crmwRows =
@@ -72,9 +87,9 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
             int crmwCandidateCount = crmwRows == null ? 0 : crmwRows.size();
             detail.line("扫描完成：普通池候选 " + normalCandidateCount
                     + " 条，CRMW 池候选 " + crmwCandidateCount + " 条");
-            // 同步普通池证券类型
+            // 2. 同步普通池证券类型
             int normalCount = editSecurityTypeList(normalRows, false, detail);
-            // 同步 CRMW 池标的证券类型
+            // 3. 同步 CRMW 池标的证券类型
             int crmwCount = editSecurityTypeList(crmwRows, true, detail);
             int total = normalCount + crmwCount;
             int skippedCount = normalCandidateCount + crmwCandidateCount - total;
@@ -86,7 +101,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
             return ScheduledTaskResult.success(TASK_CODE, TASK_NAME, message, total, startTime,
                     duration, detail.build());
         } catch (Exception e) {
-            // 返回失败结果前标记本轮事务回滚，避免池状态与关联日志部分更新
+            // 4. 返回失败结果前标记本轮事务回滚，避免池状态与关联日志部分更新
             markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             log.error("{}执行异常", TASK_NAME, e);
@@ -97,7 +112,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
         }
     }
 
-    /** 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚。 */
+    /** 任务捕获异常并返回失败结果时，将当前数据库事务标记为回滚 */
     private void markTransactionRollbackOnly() {
         try {
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -107,7 +122,12 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
     }
 
     /**
-     * 同步一类池状态列表。
+     * 同步一类池状态列表
+     *
+     * 执行顺序：
+     * 1. 按池类型条件更新当前池状态
+     * 2. 同步当前池状态关联的调库日志类型
+     * 3. 记录并发变化、缺少关联日志和成功更新明细
      *
      * @param sourceList 待同步记录
      * @param crmwPool 是否为 CRMW 池表
@@ -122,7 +142,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
         int count = 0;
         Date updateTime = new Date();
         for (BondSecurityTypeChangeDto row : rows) {
-            // 先条件更新池状态，避免覆盖扫描后的并发变更
+            // 1. 先条件更新池状态，避免覆盖扫描后的并发变更
             int updated = crmwPool
                     ? bondSecurityMaintenanceMapper.editCrmwPoolSecurityType(row, updateTime)
                     : bondSecurityMaintenanceMapper.editPoolSecurityType(row, updateTime);
@@ -135,7 +155,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
                 continue;
             }
             if (row.getAdjustLogId() != null) {
-                // 同步当前池状态关联的调库日志类型
+                // 2. 同步当前池状态关联的调库日志类型
                 int logUpdated = bondSecurityMaintenanceMapper.editAdjustLogSecurityType(
                         row.getAdjustLogId(), row.getNewSecurityType(), updateTime);
                 if (logUpdated == 0) {

@@ -83,8 +83,11 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAdjustBatchNo()).matches("BOND\\d{17}2001");
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
-        assertThat(result.getMessage()).contains("本轮共自动出池 1 条到期证券")
-                .contains("目标池明细：信用债大库(10)：1 条");
+        assertThat(result.getMessage()).contains("任务完成：扫描候选 1 条，实际出池 1 条，未处理 0 条")
+                .contains("信用债大库（10）：扫描 1 条，出池 1 条，未处理 0 条");
+        assertThat(result.getDetailLog()).contains("任务开始：到期证券自动出池")
+                .contains("处理结果：池【信用债大库】实际出池 1 条，未处理 0 条")
+                .contains("任务结束：任务完成：扫描候选 1 条");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
         assertThat(result.getTaskName()).isEqualTo("到期证券自动出池");
         assertThat(service.getTaskCode()).isEqualTo(AutoAdjustService.TASK_CODE);
@@ -213,6 +216,8 @@ public class AutoAdjustServiceTest {
         verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(0);
+        assertThat(result.getMessage()).contains("扫描候选 1 条，实际出池 0 条，未处理 1 条");
+        assertThat(result.getDetailLog()).contains("未处理：证券【S001】：当前已不在目标池，本轮不处理");
     }
 
     @Test
@@ -252,6 +257,8 @@ public class AutoAdjustServiceTest {
         verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(0);
+        assertThat(result.getMessage()).contains("扫描候选 1 条，实际出池 0 条，未处理 1 条");
+        assertThat(result.getDetailLog()).contains("未处理：证券【S001】：当前位于调出限制池，本轮不处理");
     }
 
     @Test

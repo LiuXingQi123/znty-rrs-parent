@@ -132,8 +132,8 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
         assertThat(result.getTaskName()).isEqualTo("在池主体旗下债券自动入池（已排除ABS债）");
-        assertThat(result.getMessage()).contains("本轮共自动入池 1 条债券")
-                .contains("主体池债券禁止库(15)→债券池债券禁止库(15)：1 条债券");
+        assertThat(result.getMessage()).contains("任务完成：扫描候选债券 1 条，实际入池 1 条，未处理 0 条")
+                .contains("主体池债券禁止库（15）→债券池债券禁止库（15）：扫描 1 条，入池 1 条，未处理 0 条");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
         ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
         verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L), scopeCaptor.capture());

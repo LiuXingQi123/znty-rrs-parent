@@ -23,10 +23,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 /**
- * 主体库内债券主体不在池债邮件提醒。
+ * 主体库内债券主体不在池债邮件提醒
  *
- * <p>对齐老系统 RemindLimitPoolToNewBondJob：按债券池、主体池映射扫描
- * 债券池中仍生效但发行主体不在对应主体池的债券，排除 CRMW。</p>
+ * 对齐老系统 RemindLimitPoolToNewBondJob，按债券池与主体池映射检查主体归属
+ * 1. 债券池和主体池可以使用同一池，也可以通过 mappings 配置跨池关系
+ * 2. 只扫描债券池内审批通过且仍生效的普通债，排除 CRMW
+ * 3. 发行主体不在对应主体池时生成提醒候选，通知未接入时保留过程明细供人工核对
  */
 @Slf4j
 @Service
@@ -59,19 +61,29 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
     @Resource
     private ScheduledReminderDeliveryService reminderDeliveryService;
 
-    /** 返回主体不在池债券提醒任务编码。 */
+    /** 返回主体库内债券主体不在池债邮件提醒任务编码 */
     @Override
     public String getTaskCode() {
         return TASK_CODE;
     }
 
-    /** 返回主体不在池债券提醒任务参数说明。 */
+    /** 返回主体库内债券主体不在池债邮件提醒任务参数说明 */
     @Override
     public String getParamHelp() {
         return PARAM_HELP;
     }
 
-    /** 执行主体不在池债券提醒。 */
+    /**
+     * 执行主体库内债券主体不在池债邮件提醒
+     *
+     * 执行顺序：
+     * 1. 读取同池或跨池的债券池、主体池映射
+     * 2. 按映射扫描债券池内审批通过且发行主体不在主体池的普通债
+     * 3. 合并候选、记录债券和发行主体明细并调用统一通知投递服务
+     * 4. 返回本轮候选数量、通知状态和过程日志
+     *
+     * @return 本轮任务执行结果
+     */
     @Override
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
@@ -79,14 +91,14 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         TaskDetailLog detail = new TaskDetailLog();
         detail.line("任务开始：【" + TASK_NAME + "】");
         try {
-            // 解析债券池与主体池映射
+            // 1. 解析债券池与主体池映射
             List<long[]> mappings = resolveMappings();
             detail.line("扫描条件：ip_pool_status.is_deleted=0、audit_status=20、category_type=bond、"
                     + "security_type!=crmw；债券在 bondPoolId，发行主体不在对应 companyPoolId 的生效主体记录中");
             detail.line("扫描范围：池映射 " + mappings.size() + " 组");
             List<BondReminderDto> rows = new ArrayList<BondReminderDto>();
             for (long[] mapping : mappings) {
-                // 按单个池映射扫描主体不在池债券
+                // 2. 按单个池映射扫描主体不在池债券
                 List<BondReminderDto> current = bondReminderMapper.queryIssuerNotInCompanyPoolBondList(
                         mapping[0], mapping[1]);
                 if (current != null) {
@@ -96,10 +108,10 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
                         + "，命中 " + (current == null ? 0 : current.size()) + " 条");
             }
             detail.line("扫描完成：主体不在池债券候选 " + rows.size() + " 条");
-            // 生成消息及执行历史中的可追溯明细
+            // 3. 生成消息及执行历史中的可追溯明细
             ScheduledReminderMessageDto reminder = buildReminder(rows);
             appendDetail(rows, detail);
-            // 调用统一投递边界；当前实现明确返回未接入
+            // 4. 调用统一投递边界；当前实现明确返回未接入
             ScheduledReminderDeliveryService.DeliveryResult delivery = reminderDeliveryService.send(reminder);
             detail.line("消息投递状态=" + (delivery.isDelivered() ? "已发送" : "待接入")
                     + "，说明=" + delivery.getMessage());
@@ -121,7 +133,13 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         }
     }
 
-    /** 读取并解析债券池、主体池映射。 */
+    /**
+     * 读取并解析债券池、主体池映射
+     *
+     * poolIds 表示同池关系，mappings 表示可不同的债券池和主体池，重复关系只扫描一次
+     *
+     * @return 去重后的债券池与主体池映射
+     */
     private List<long[]> resolveMappings() {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
         if (conf == null || !StringUtils.hasText(conf.getParamJson())) {
@@ -138,9 +156,9 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         }
         List<long[]> result = new ArrayList<long[]>();
         Set<String> keys = new LinkedHashSet<String>();
-        // poolIds 表示债券池与主体池相同
+        // 1. poolIds 表示债券池与主体池相同
         appendSamePoolMappings(root.get("poolIds"), result, keys);
-        // mappings 表示债券池与主体池可不同
+        // 2. mappings 表示债券池与主体池可不同
         appendCrossPoolMappings(root.get("mappings"), result, keys);
         if (result.isEmpty()) {
             throw new BizException("poolIds 与 mappings 不能同时为空");
@@ -148,7 +166,7 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         return result;
     }
 
-    /** 解析同池映射。 */
+    /** 解析同池映射 */
     private void appendSamePoolMappings(JsonNode node, List<long[]> result, Set<String> keys) {
         if (node == null || node.isNull()) {
             return;
@@ -157,14 +175,14 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
             throw new BizException("poolIds 须为数字数组");
         }
         for (JsonNode item : node) {
-            // 校验同池配置 ID
+            // 1. 校验同池配置 ID
             long id = requirePositiveId(item, "poolIds");
-            // 对同一映射去重
+            // 2. 对同一映射去重
             addMapping(id, id, result, keys);
         }
     }
 
-    /** 解析跨池映射。 */
+    /** 解析跨池映射 */
     private void appendCrossPoolMappings(JsonNode node, List<long[]> result, Set<String> keys) {
         if (node == null || node.isNull()) {
             return;
@@ -176,15 +194,15 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
             if (item == null || !item.isObject()) {
                 throw new BizException("mappings 元素须为对象");
             }
-            // 校验债券池和主体池 ID
+            // 1. 校验债券池和主体池 ID
             long bondPoolId = requirePositiveId(item.get("bondPoolId"), "bondPoolId");
             long companyPoolId = requirePositiveId(item.get("companyPoolId"), "companyPoolId");
-            // 对同一映射去重
+            // 2. 对同一映射去重
             addMapping(bondPoolId, companyPoolId, result, keys);
         }
     }
 
-    /** 校验并读取正整数池 ID。 */
+    /** 校验并读取正整数池 ID */
     private long requirePositiveId(JsonNode node, String fieldName) {
         if (node == null || !node.isNumber() || node.asLong() <= 0) {
             throw new BizException(fieldName + " 须为正整数，非法值: " + node);
@@ -192,7 +210,7 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         return node.asLong();
     }
 
-    /** 添加去重后的池映射。 */
+    /** 添加去重后的池映射 */
     private void addMapping(long bondPoolId, long companyPoolId,
                             List<long[]> result, Set<String> keys) {
         String key = bondPoolId + "-" + companyPoolId;
@@ -201,7 +219,7 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         }
     }
 
-    /** 构建后续通知通道可直接消费的消息。 */
+    /** 构建后续通知通道可直接消费的消息 */
     private ScheduledReminderMessageDto buildReminder(List<BondReminderDto> rows) {
         ScheduledReminderMessageDto message = new ScheduledReminderMessageDto();
         message.setTaskCode(TASK_CODE);
@@ -212,14 +230,14 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         return message;
     }
 
-    /** 将候选明细写入过程日志，通知未接入时仍可人工核对。 */
+    /** 将候选明细写入过程日志，通知未接入时仍可人工核对 */
     private void appendDetail(List<BondReminderDto> rows, TaskDetailLog detail) {
         if (rows.isEmpty()) {
             detail.line("本轮无主体不在池债券");
             return;
         }
         for (BondReminderDto row : rows) {
-            // 将可空主体字段格式化为可读文本
+            // 1. 将可空主体字段格式化为可读文本
             detail.line("提醒候选：债券=" + row.getSecurityShortName() + "(" + row.getSecurityCode() + ")"
                     + "，发行主体=" + nullToEmpty(row.getIssuerName())
                     + "(" + nullToEmpty(row.getIssuerCode()) + ")"
@@ -227,7 +245,7 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
         }
     }
 
-    /** 将空字符串字段安全输出到过程日志。 */
+    /** 将空字符串字段安全输出到过程日志 */
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
     }
