@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import javax.annotation.Resource;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -196,7 +197,7 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 按 SEC_ID 找到证券，把证券表里的旧代码改成新代码，再改相关的调库记录。
+     * 按 SEC_ID 找到证券，拆分保存旧临时代码失效主档和新代码主档，再改相关的调库记录。
      * 证券表、临时代码记录、普通池和 CRMW 一起改；任何一步失败，这条换码的修改全部撤销。
      * 找不到证券、主档已经是最新代码、这条变更已经处理过时，分别返回对应的跳过结果。
      *
@@ -265,10 +266,22 @@ public class TempSecurityCodeService {
         Date now = new Date();
         // 8、查旧代码有没有临时代码记录，有就继续用，没有就按旧证券信息新增。
         TempSecurityCodeBo registration = prepareWindRegistration(masterChange, master, market, now, eventKey);
-        // 9、把证券表中的旧代码改成新代码；temporary 改为 temp_converted，其他来源保持原样。
+        // 9、复制新代码主档，再把旧代码主档保留为失效临时代码。
         String newSource = "temporary".equals(source) ? "temp_converted" : source;
-        if (windCodeSyncMapper.editSecurityWindCode(masterChange, source, newSource, market, now) != 1) {
-            throw new BizException("Wind 主档更名失败，SEC_ID=" + change.getSecId());
+        SecurityInfoBo newMaster = new SecurityInfoBo();
+        BeanUtils.copyProperties(master, newMaster);
+        newMaster.setWindCode(change.getNewWindCode());
+        newMaster.setSecuritySource(newSource);
+        if ("temporary".equals(source)) {
+            newMaster.setMarket(market);
+        }
+        newMaster.setTs(now);
+        if (windCodeSyncMapper.addSecurityWindCodeMaster(newMaster) != 1) {
+            throw new BizException("Wind 新代码主档新增失败，SEC_ID=" + change.getSecId());
+        }
+        if (windCodeSyncMapper.editSecurityWindCodeToTemporary(masterChange, source,
+                registration.getSecId(), now) != 1) {
+            throw new BizException("Wind 旧代码临时主档失效失败，SEC_ID=" + change.getSecId());
         }
         // 10、查出换码后的证券信息和市场，供后面更新调库记录使用。
         TempSecurityCodeDto.FormalSecurityOption formal = queryRequiredFormalSecurity(change.getNewWindCode());
@@ -304,7 +317,7 @@ public class TempSecurityCodeService {
                 throw new BizException("临时代码在 rrs_temp_security_code 表中没有对应记录，securityCode=" + master.getWindCode());
             }
             registration = new TempSecurityCodeBo();
-            registration.setSecId(master.getSecId());
+            registration.setSecId(TEMP_SEC_ID_PREFIX + master.getWindCode());
             registration.setTempSecurityCode(master.getWindCode());
             registration.setTempSecurityName(master.getShortName() == null ? master.getFullName() : master.getShortName());
             // 2.1 名称使用证券简称或全称，两者都没有就报错。

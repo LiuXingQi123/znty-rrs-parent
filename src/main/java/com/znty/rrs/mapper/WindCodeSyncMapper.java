@@ -31,8 +31,12 @@ public interface WindCodeSyncMapper {
     /** 查询原子提交的事件完成标记，支持连续换码后的重复扫描。 */
     int queryCompletedWindCodeChangeCount(@Param("eventKey") String eventKey);
 
-    /** 在旧码、来源仍一致时原地更名，保留证券 ID 及其他主档字段。 */
-    int editSecurityWindCode(@Param("change") WindCodeChangeDto change,
-                             @Param("oldSource") String oldSource, @Param("newSource") String newSource,
-                             @Param("market") String market, @Param("updateTime") Date updateTime);
+    /** 按实体新增新代码主档，保留新代码的正式 SEC_ID。 */
+    int addSecurityWindCodeMaster(SecurityInfoBo securityInfo);
+
+    /** 将旧代码主档保留为失效临时代码记录，避免与新代码共用 SEC_ID。 */
+    int editSecurityWindCodeToTemporary(@Param("change") WindCodeChangeDto change,
+                                        @Param("oldSource") String oldSource,
+                                        @Param("tempSecId") String tempSecId,
+                                        @Param("updateTime") Date updateTime);
 }

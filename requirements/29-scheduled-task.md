@@ -57,8 +57,8 @@
 | `company_observer_pool_sync` | 主体观察名单同步（已排除ABS债） | `0 0 6 * * ?` | 每天06:00执行，调度默认关闭；默认参数 `{"observePoolId":16,"keyObservePoolId":23}` 分别对应类型2、3，后端只管理配置池；按源池in_linked/out_linked配置即时联动主体及旗下债券（例如23↔17）；先出后入、补齐差异、整轮回滚；**旗下 ABS 债不参与**，其进出池与主体确认由 `company_abs_bond_auto_in` 按池对账 |
 | `pledge_blacklist_daily_increment_reminder` | 质押黑名单库每日增量提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 默认 `[17]`；按上次成功执行时间水位扫描审批通过的债券、主体调入调出流水。当前仅生成候选与过程日志，通知通道待接入 |
 | `bond_issuer_not_in_company_pool_reminder` | 主体库内债券主体不在池债邮件提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 支持同池，`mappings` 支持债券池与主体池跨池映射；扫描发行主体不在对应主体池的在池债券，排除 CRMW。当前仅生成候选与过程日志，通知通道待接入 |
-| `hs_pool_increment_excel_export` | 恒生池增量数据导出 | `0 */6 * * * ?` | 每 6 分钟执行一次；首次从 `initialStartTime` 开始，后续从上次成功执行开始时间继续；导出窗口内审批通过的调入和调出，调出标记“删除”；交易日过滤暂未启用 |
-| `wind_code_sync` | Wind代码变更同步 | `0 2/10 * * * ?` | `{"scanDays":1}`，scanDays 为正整数，省略默认 1 天。每小时第 2/12/22/32/42/52 分钟执行；按唯一 SEC_ID 原地更名主档，按四类来源准备登记，复用单码业务转换；修改普通池、CRMW及在途申请，须与其他调库错开 |
+| `hs_pool_increment_excel_export` | 恒生池增量数据导出 | `0 */6 * * * ?` | 每 6 分钟执行一次；首次从 `initialStartTime` 开始，后续从上次成功执行开始时间继续；导出窗口内审批通过的调入和调出，调出标记“删除”；按证券主档排除已失效临时代码的转正出库记录；交易日过滤暂未启用 |
+| `wind_code_sync` | Wind代码变更同步 | `0 2/10 * * * ?` | `{"scanDays":1}`，scanDays 为正整数，省略默认 1 天。每小时第 2/12/22/32/42/52 分钟执行；按唯一 SEC_ID 拆分旧临时代码失效主档和新代码主档，按四类来源准备登记，复用单码业务转换；修改普通池、CRMW及在途申请，须与其他调库错开 |
 
 > Demo 行与 id 按上表顺序排列，且全部 `schedule_enabled=0`（默认关闭）。Demo **cron** 须与下方「执行顺序」一致；新增或改 cron 时必须先读第 4.1 节。三项恒生池 Excel 导出任务不改池状态；Wind 换码会修改池状态，Demo 与其他调库错开，已有数据库配置须在页面自行调整，不由程序自动覆盖。
 
@@ -416,7 +416,7 @@ doSync()
   ↓
 TempSecurityCodeService.editWindCodeChangeByJob(change)
   │  单条事件的事务入口：以下操作一起提交，任一步失败全部回滚
-  │  按 SEC_ID 锁定主档，检查是否已完成或已是新码，使用主档当前代码直接换码
+  │  按 SEC_ID 锁定主档，检查是否已完成或已是新码，使用主档当前代码准备拆分换码
   │
   ├─ prepareWindRegistration()
   │    查询主档当前代码对应的 rrs_temp_security_code 记录
@@ -425,9 +425,12 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
   │    有登记：校验待转正状态、目标码、类型和市场后复用
   │    在 memo 中附加事件去重标记；复用记录的备注随后续转正更新一起保存
   │
-  ├─ windCodeSyncMapper.editSecurityWindCode()
-  │    更新 rrs_securityinfo：wind_code 从旧码改为新码，保留原 SEC_ID
-  │    来源 temporary 改为 temp_converted，official/temp_converted 保持不变
+  ├─ windCodeSyncMapper.addSecurityWindCodeMaster()
+  │    按 SecurityInfoBo 新增新代码主档，保留正式 SEC_ID 和主数据字段
+  │
+  ├─ windCodeSyncMapper.editSecurityWindCodeToTemporary()
+  │    旧代码主档保留，security_status 置 D、security_source 置 temporary，并改用临时 SEC_ID
+  │    新代码来源：temporary 改为 temp_converted，official/temp_converted 保持不变
   │
   └─ editTempSecurityCodeToUpdated(..., true)
        │  组装转正数据：正式码=本次新码、状态=updated、操作来源=job
@@ -459,7 +462,7 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
 
 - 方法分工与其他定时任务一致：`execute()` 仅包装计时、开始/结束日志、任务级异常及执行结果；核心 `doSync()` 负责查询最新变更、核对最新日期并列记录、逐只证券换码及结果汇总。
 - 数据源：`ais_inv_ods.wind_cbondchangewindcode`。页面扩展参数可填 `{"scanDays":3}`；scanDays 为 int 范围内的正整数，留空或省略默认 1 天，NULL、0、负数、小数、字符串、布尔值、未知字段及错误 JSON 均在扫描前报错。每次执行重新读取配置。SQL 使用 `CHANGE_DATE >= DATE_FORMAT(TIMESTAMPADD(DAY, -#{scanDays}, NOW()), '%Y%m%d')`，仅绑定天数，日期由数据库计算，Java 不传开始/结束日期，也不增加今天上限。例如 3 表示从数据库当前日期的 3 天前（含）开始，按八位 yyyyMMdd 比较，不是精确小时窗口。按 SEC_ID 取最大 CHANGE_DATE，较早记录不处理，最新记录旧新码相同则不处理；S_INFO_WINDCODE 可重复，OPDATE、OBJECT_ID 不决定新旧。
-- 一条 `SEC_ID` 唯一对应一条主档，各市场证券的 SEC_ID 独立。按 SEC_ID 锁主档，将主档当前 wind_code 直接更新为最新记录的 S_INFO_NEWWINDCODE，保留证券 ID 和其他字段。主档还不是新码时，新码不得占用其他主档；主档已经是新码时直接跳过，不新增临时代码记录和调库记录。
+- 一条正式 `SEC_ID` 唯一对应一条有效主档，各市场证券的 SEC_ID 独立。按 SEC_ID 锁定当前主档后，复制新增最新代码主档，再将旧代码主档保留为 `security_source=temporary`、`security_status=D` 的失效临时代码，并为旧记录使用 `TEMP_` 临时 SEC_ID。主档还不是新码时，新码不得占用其他主档；主档已经是新码时直接跳过，不新增临时代码记录和调库记录。
 - 完成标记由 SEC_ID、变更记录旧代码、新代码和 CHANGE_DATE 组成，`OBJECT_ID` 不参与判重，也不做必填校验；仅 OBJECT_ID 不同、为空或缺失的同一变更仍按重复处理。证券匹配始终按 SEC_ID。下文提到的临时代码记录，就是 `rrs_temp_security_code` 表中的一条数据。
 - 用户确认：源表有 A→B、B→C，主档仍是 A 时，直接执行 A→C。源记录旧码 B 不存在也继续；临时代码记录、普通池、CRMW 和待审批申请都使用主档实际旧码 A，不生成中间码 B 的出入库记录。按 SEC_ID 无主档时仍 WARN 提示并跳过，临时表即使有记录也不单独转换。本条规则替代此前“事件旧码不存在就跳过”的规则。
 - 四类处理：`official` 只补任务登记并保留来源；`temporary` 复用未删除、temporary 状态的原登记，主档改为 `temp_converted` 并写入原登记的明确市场；主档缺失特别提示、跳过且不补数据；`temp_converted` 要有转正历史，新增本次旧新码登记、保留原登记。
@@ -470,7 +473,7 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
 - Wind 换码生成的普通池、CRMW 旧代码出库日志，调整类型统一使用 `AdjustType.WIND_CODE_CHANGE_OUT.getCode()`，存储值仍为 `Wind代码变更调出`；新代码入库及原待审批申请的调整类型沿用现有规则。
 - 每只证券通过 `TempSecurityCodeService.editWindCodeChangeByJob` 独立事务提交；主档、临时代码记录、流水、池状态和快照任一步失败全部回滚。备注保留原内容并追加 `[wind_code_sync:SEC_ID:源记录旧码:新码:日期]`，同事务成功后用于去重。即使实际换码为 A→C，标记仍使用源记录 B→C，不能改写输入记录导致重试标记变化；备注超长明确报错。
 - 同一 SEC_ID 的最新日期若有多条记录且新代码相同，只执行一次；若新代码不同，记录 ERROR 并跳过该证券，不按 OPDATE、OBJECT_ID 或旧新码链猜测先后，其他证券继续。
-- 过程日志区分成功、主档缺失跳过、已是新码跳过、重复跳过、失败。主档缺失为 WARN，包含 SEC_ID、源记录旧新码和日期；日志中的“变更记录旧代码”是源数据旧码，实际出入库记录使用主档当前代码。失败项在日期窗口内重扫，超窗需核查并专项补执行；不修改 AIS 源结构，不补主档或 ID 映射。
+- 过程日志区分成功、主档缺失跳过、已是新码跳过、重复跳过、失败。主档缺失为 WARN，包含 SEC_ID、源记录旧新码和日期；日志中的“变更记录旧代码”是源数据旧码，实际出入库记录使用拆分前主档当前代码。失败项在日期窗口内重扫，超窗需核查并专项补执行；不修改 AIS 源结构，不补主档或 ID 映射。
 - 任务执行状态与单条业务结果分别统计：扫描和逐条处理正常完成即返回任务成功，即使存在单条转换失败或全部单条失败，也保留 ERROR 明细、失败条数和实际成功影响数；只有扫描或其他任务级异常导致执行未完成时返回任务失败。
 - 实际成功换码固定向 `rrs_temp_security_code_update_log` 写一条登记映射（`replace_table_name='rrs_temp_security_code'`、`replace_record_id=登记ID`），记录主档实际旧码到最新新码，无业务引用时同样写入；受影响的业务记录另存原有转换明细。主档缺失、已是新码、已完成变更等跳过不新增日志；日志写入失败与主档、登记和业务转换一起回滚。
 - 人工新增 ID 当前为 `TEMP_临时代码`，未与 Wind 真实 SEC_ID 建立对应时按主档缺失处理，不按名称或代码猜测证券身份。
@@ -491,7 +494,7 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
 | `WCH_DEMO_013` | 主档 SEC_ID=S9001046、当前码 PPN001.IB，最新记录为 `PPN000.IB→PPN006.IB`，源记录旧码不存在 | 按 SEC_ID 直接换成 PPN006.IB，新增 PPN001.IB→PPN006.IB 记录；不创建 PPN000.IB |
 
 `WCTMP001.IB` 专用于演示“外部已补齐真实 SEC_ID”的待转正场景：主档为 `S9001050`，原登记仍保留创建时的 `TEMP_WCTMP001.IB`。这只是 Demo 的外部映射前置状态，不代表 Wind 任务会自动把 TEMP_ 身份转换成真实 SEC_ID。原 TMP001.IB / TMP003.IB 人工录入及取消样例继续保留。
-- 测试：`WindCodeChangeDemoDataTest` 原样执行 Demo、生产 Mapper 和事务，验证四类来源、最新历史、主档直接换码、普通/CRMW 出入库、在途与快照、历史保留和重复执行。`WindCodeSyncServiceTest` 验证数据库扫描接口、最新日期并列冲突、相同新码去重和失败隔离；`TempSecurityCodePersistenceTest` 验证数据库日期边界、相同/不同 S_INFO_WINDCODE 的最新记录、OPDATE 不决定新旧、主档 A 直接改为 C、已是新码跳过、源记录不被改写，以及原事务回滚规则。异常数据仅在隔离测试中建立（H2 测试使用 JDK 17）。
+- 测试：`WindCodeChangeDemoDataTest` 原样执行 Demo、生产 Mapper 和事务，验证四类来源、最新历史、旧临时代码失效主档与新代码主档、普通/CRMW 出入库、在途与快照、历史保留和重复执行。`WindCodeSyncServiceTest` 验证数据库扫描接口、最新日期并列冲突、相同新码去重和失败隔离；`TempSecurityCodePersistenceTest` 验证数据库日期边界、相同/不同 S_INFO_WINDCODE 的最新记录、OPDATE 不决定新旧、主档拆分保存、已是新码跳过、源记录不被改写，以及原事务回滚规则。异常数据仅在隔离测试中建立（H2 测试使用 JDK 17）。
 - Demo 编码只变化数字末位，市场后缀不变；XYB 历史为 `XYB001.IB→XYB006.IB→XYB007.IB`，本次实际只做 `XYB001.IB→XYB007.IB`。
 
 

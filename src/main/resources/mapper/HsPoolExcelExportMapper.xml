@@ -83,12 +83,12 @@
                ,export_row.securityCode
                ,export_row.operationType
         FROM (
-            <!-- 普通证券增量：含 ip_pool_status 中 crmw 跟债日志；不校验当前仍在池，调出事件保留为删除记录 -->
+            <!-- 普通证券增量：含 ip_pool_status 中 crmw 跟债日志；不校验当前仍在池，按主档排除失效临时代码 -->
             SELECT COALESCE(si.short_name, al.security_short_name) AS securityShortName
                    ,al.security_code AS securityCode
                    ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
             FROM ip_adjust_log al
-            LEFT JOIN rrs_securityinfo si ON si.wind_code = al.security_code
+            INNER JOIN rrs_securityinfo si ON si.wind_code = al.security_code
             INNER JOIN dict_security_type dst ON dst.security_type = al.security_type
                                                  AND dst.is_deleted = 0
             WHERE al.target_pool_id = #{poolId}
@@ -98,13 +98,14 @@
               AND al.audit_time &gt; #{startTime}
               AND al.audit_time &lt;= #{endTime}
               AND dst.category_type != 'company'
+              AND NOT (si.security_source = 'temporary' AND si.security_status = 'D')
             UNION ALL
-            <!-- CRMW 增量：同一调库日志按凭证信息生成调入或删除记录 -->
+            <!-- CRMW 增量：同一调库日志按凭证信息生成调入或删除记录，按主档排除失效临时代码 -->
             SELECT COALESCE(crmw_si.short_name, al.crmw_name) AS securityShortName
                    ,al.crmw_scode AS securityCode
                    ,CASE WHEN al.adjust_mode = '调出' THEN '删除' ELSE '' END AS operationType
             FROM ip_adjust_log al
-            LEFT JOIN rrs_securityinfo crmw_si ON crmw_si.wind_code = al.crmw_scode
+            INNER JOIN rrs_securityinfo crmw_si ON crmw_si.wind_code = al.crmw_scode
             WHERE al.target_pool_id = #{poolId}
               AND al.is_deleted = 0
               AND al.audit_status = '20'
@@ -113,6 +114,7 @@
               AND al.audit_time &lt;= #{endTime}
               AND al.crmw_scode IS NOT NULL
               AND TRIM(al.crmw_scode) != ''
+              AND NOT (crmw_si.security_source = 'temporary' AND crmw_si.security_status = 'D')
         ) export_row
         ORDER BY export_row.securityShortName ASC
     </select>

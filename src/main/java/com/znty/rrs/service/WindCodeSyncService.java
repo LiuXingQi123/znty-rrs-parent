@@ -66,9 +66,9 @@ public class WindCodeSyncService implements RrsScheduledTask {
         return "参数说明：scanDays 为扫描天数，须为正整数；扩展参数留空或省略 scanDays 时默认 1 天\n"
                 + PARAM_HELP_TOOLTIP_PREFIX + "填写示例：{\"scanDays\":3}，从数据库当前日期的 3 天前开始扫描\n"
                 + "扫描条件：SQL 使用数据库 NOW() 往前减 scanDays 天，CHANGE_DATE 为八位 yyyyMMdd；同一 SEC_ID 取 CHANGE_DATE 最新记录，旧码不等于新码\n"
-                + "身份匹配：按唯一 SEC_ID 查询 rrs_securityinfo，原地更名并保留证券 ID\n"
+                + "身份匹配：按唯一 SEC_ID 查询 rrs_securityinfo，拆分保存旧临时代码失效主档和新代码主档\n"
                 + "临时代码记录：指 rrs_temp_security_code 表中的记录；official 新增一条，temporary 使用原记录并转为 temp_converted，temp_converted 新增本次记录并保留历史\n"
-                + "处理范围：仅本次旧新码，复用普通池、CRMW及在途申请转换；主档缺失时特别提示并跳过；主档有数据时，从当前代码直接改为最新代码\n"
+                + "处理范围：仅本次旧新码，复用普通池、CRMW及在途申请转换；主档缺失时特别提示并跳过；主档有数据时，从当前代码拆分为失效旧主档和最新代码主档\n"
                 + "执行保障：每条换码一起保存，失败就撤销这条的修改；成功后在临时代码记录备注中保留变更标记，重复扫描不重复调库\n"
                 + "结果口径：正常完成扫描和逐条处理即为任务成功，单条失败保留明细及计数；扫描或任务级异常才算任务失败\n"
                 + "执行频率：Demo 每 10 分钟的第 2 分钟执行，会修改池状态，须与其他调库任务错开";

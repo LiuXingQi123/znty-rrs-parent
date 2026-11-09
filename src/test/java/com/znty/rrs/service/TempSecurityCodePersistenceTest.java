@@ -319,7 +319,7 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isEqualTo(1);
     }
 
-    /** official 主档原地更名，只补登记，重复事件与连续更名均不重复写入。 */
+    /** official 主档拆分保存旧临时代码和新正式代码，重复事件与连续更名均不重复写入。 */
     @Test
     public void windOfficialShouldRenameOnceAndPreserveIdentityAcrossChain() {
         when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
@@ -335,6 +335,8 @@ public class TempSecurityCodePersistenceTest {
         assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'", String.class))
                 .isEqualTo("official");
         assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code IN ('FORMAL.IB','NEW.IB')"
+                + " AND security_source='temporary' AND security_status='D'")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE status='updated' AND oprt_source='job'"))
                 .isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log")).isZero();
@@ -392,7 +394,7 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo(2);
     }
 
-    /** temporary 复用原人工登记，原备注及登记证券 ID 保留，新主档正常可用。 */
+    /** temporary 复用原人工登记，原备注及登记证券 ID 保留，旧主档失效且新主档正常可用。 */
     @Test
     public void windTemporaryShouldReuseRegistrationAndConvertSource() throws Exception {
         TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
@@ -410,6 +412,12 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo("temp_converted");
         assertThat(jdbc.queryForObject("SELECT market FROM rrs_securityinfo WHERE sec_id='REAL_ID'", String.class)).isEqualTo("NIB");
         assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE sec_id='REAL_ID'", String.class)).isEqualTo("L");
+        assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE wind_code='001.IB'", String.class))
+                .isEqualTo("temporary");
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE wind_code='001.IB'", String.class))
+                .isEqualTo("D");
+        assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_securityinfo WHERE wind_code='001.IB'", String.class))
+                .isEqualTo("TEMP_001.IB");
         // Wind 临时来源沿用原登记 ID，成功映射也应关联同一条登记。
         assertConversionAudit(temp.getId(), "001.IB", "NEW.IB");
     }
@@ -424,7 +432,7 @@ public class TempSecurityCodePersistenceTest {
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code_update_log")).isZero();
     }
 
-    /** 变更记录旧码不存在时，仍按 SEC_ID 将主档当前代码直接改为最新代码。 */
+    /** 变更记录旧码不存在时，仍按 SEC_ID 将主档当前代码拆分保存为最新代码。 */
     @Test
     public void windShouldUseCurrentMasterCodeWhenRecordedOldCodeIsMissing() {
         jdbc.update("INSERT INTO rrs_temp_security_code(temp_security_code,security_code,status,is_deleted,oprt_source,memo)"
@@ -434,7 +442,9 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo(WindCodeChangeResult.UPDATED);
         assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='OFFICIAL_ID'", String.class))
                 .isEqualTo("NEW.IB");
-        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo")).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE wind_code='FORMAL.IB'", String.class))
+                .isEqualTo("D");
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='ABSENT.IB'"
                 + " AND security_code IS NULL AND status='temporary' AND oprt_source='manual' AND memo='原登记备注'")).isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='FORMAL.IB'"

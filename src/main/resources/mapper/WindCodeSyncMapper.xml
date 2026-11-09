@@ -48,15 +48,194 @@
           AND LOCATE(#{eventKey}, memo) > 0
     </select>
 
-    <!-- 临时占位转正时使用已核实的登记市场，其他来源保留原市场。 -->
-    <update id="editSecurityWindCode">
+    <!-- 复制新代码主档；新代码沿用原证券的主数据和正式 SEC_ID，临时代码旧主档随后单独置为失效。 -->
+    <insert id="addSecurityWindCodeMaster">
+        INSERT INTO rrs_securityinfo (
+            wind_code
+            ,full_name
+            ,issue_announcement
+            ,short_name
+            ,security_type
+            ,term_year
+            ,term_day
+            ,maturityembedded_desc
+            ,form_desc
+            ,sec_typename
+            ,comp_type
+            ,issuer
+            ,issuer_code
+            ,crncy_code
+            ,issue_amountplan
+            ,list_date
+            ,firstissue_date
+            ,maturity_date
+            ,carry_date
+            ,end_date
+            ,interest_type
+            ,interest_frequency
+            ,interest_yearcount
+            ,coupon_rate
+            ,spread
+            ,redemption_flag
+            ,redemption_date
+            ,redemption_price
+            ,date_call_exists
+            ,callbkorputbk_date
+            ,redemption_content
+            ,repurchase_flag
+            ,repurchase_date
+            ,repurchase_price
+            ,repurchase_content
+            ,payment_date
+            ,delist_date
+            ,securities_types_dq
+            ,coupon_desc
+            ,issue_type
+            ,corporate_bond_flag
+            ,payadvanced_flag
+            ,chooseright_flag
+            ,incbonds_flag
+            ,industry_name
+            ,industry_name2
+            ,inner_class
+            ,cj_flag
+            ,yx_flag
+            ,dy_flag
+            ,date_exists
+            ,date_exists_str
+            ,rating_bond
+            ,rating_bondissuer
+            ,rating_outlook
+            ,rating_bond_agency
+            ,rating_bondissuer_agency
+            ,rating_cnbd
+            ,inright_flag
+            ,date_inright_exists
+            ,date_inright_next
+            ,issue_amountact
+            ,guarantor
+            ,guarantor_id
+            ,agency_name
+            ,agency_nameid
+            ,create_time
+            ,ts
+            ,security_status
+            ,security_source
+            ,date_next
+            ,fund_use
+            ,par
+            ,info_pledge_ratio
+            ,inner_issuer_rating
+            ,inner_guarantor_rating
+            ,prompt_reason
+            ,analysis
+            ,date_repurchase_exists
+            ,guarant_flag
+            ,guarant_type
+            ,abs_flag
+            ,std_clause_flag
+            ,std_credit_flag
+            ,sec_id
+            ,market
+        )
+        VALUES (
+            #{windCode}
+            ,#{fullName}
+            ,#{issueAnnouncement}
+            ,#{shortName}
+            ,#{securityType}
+            ,#{termYear}
+            ,#{termDay}
+            ,#{maturityembeddedDesc}
+            ,#{formDesc}
+            ,#{secTypename}
+            ,#{compType}
+            ,#{issuer}
+            ,#{issuerCode}
+            ,#{crncyCode}
+            ,#{issueAmountplan}
+            ,#{listDate}
+            ,#{firstissueDate}
+            ,#{maturityDate}
+            ,#{carryDate}
+            ,#{endDate}
+            ,#{interestType}
+            ,#{interestFrequency}
+            ,#{interestYearcount}
+            ,#{couponRate}
+            ,#{spread}
+            ,#{redemptionFlag}
+            ,#{redemptionDate}
+            ,#{redemptionPrice}
+            ,#{dateCallExists}
+            ,#{callbkorputbkDate}
+            ,#{redemptionContent}
+            ,#{repurchaseFlag}
+            ,#{repurchaseDate}
+            ,#{repurchasePrice}
+            ,#{repurchaseContent}
+            ,#{paymentDate}
+            ,#{delistDate}
+            ,#{securitiesTypesDq}
+            ,#{couponDesc}
+            ,#{issueType}
+            ,#{corporateBondFlag}
+            ,#{payadvancedFlag}
+            ,#{chooserightFlag}
+            ,#{incbondsFlag}
+            ,#{industryName}
+            ,#{industryName2}
+            ,#{innerClass}
+            ,#{cjFlag}
+            ,#{yxFlag}
+            ,#{dyFlag}
+            ,#{dateExists}
+            ,#{dateExistsStr}
+            ,#{ratingBond}
+            ,#{ratingBondissuer}
+            ,#{ratingOutlook}
+            ,#{ratingBondAgency}
+            ,#{ratingBondissuerAgency}
+            ,#{ratingCnbd}
+            ,#{inrightFlag}
+            ,#{dateInrightExists}
+            ,#{dateInrightNext}
+            ,#{issueAmountact}
+            ,#{guarantor}
+            ,#{guarantorId}
+            ,#{agencyName}
+            ,#{agencyNameid}
+            ,#{createTime}
+            ,#{ts}
+            ,#{securityStatus}
+            ,#{securitySource}
+            ,#{dateNext}
+            ,#{fundUse}
+            ,#{par}
+            ,#{infoPledgeRatio}
+            ,#{innerIssuerRating}
+            ,#{innerGuarantorRating}
+            ,#{promptReason}
+            ,#{analysis}
+            ,#{dateRepurchaseExists}
+            ,#{guarantFlag}
+            ,#{guarantType}
+            ,#{absFlag}
+            ,#{stdClauseFlag}
+            ,#{stdCreditFlag}
+            ,#{secId}
+            ,#{market}
+        )
+    </insert>
+
+    <!-- 旧主档保留为失效临时代码，旧代码和新代码不再共用 SEC_ID。 -->
+    <update id="editSecurityWindCodeToTemporary">
         UPDATE rrs_securityinfo
-        SET wind_code = #{change.newWindCode}
-           ,security_source = #{newSource}
-           ,market = CASE WHEN #{oldSource} = 'temporary' THEN #{market} ELSE market END
+        SET security_status = 'D'
+           ,security_source = 'temporary'
+           ,sec_id = #{tempSecId}
            ,ts = #{updateTime}
-        WHERE sec_id = #{change.secId}
-          AND wind_code = #{change.oldWindCode}
+        WHERE wind_code = #{change.oldWindCode}
           AND security_source = #{oldSource}
     </update>
 </mapper>

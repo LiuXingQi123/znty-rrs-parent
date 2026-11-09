@@ -244,6 +244,12 @@ public class WindCodeChangeDemoDataTest {
                 .isEqualTo(1);
         // 主体同步后的待转正样本已在观察池，换码也必须按真实持仓旧出新入
         assertPoolMove("WCTMP001.IB", "WCTMP006.IB", "ip_pool_status", 16L);
+        assertThat(jdbc.queryForObject("SELECT security_source FROM rrs_securityinfo WHERE wind_code='WCTMP001.IB'", String.class))
+                .isEqualTo("temporary");
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE wind_code='WCTMP001.IB'", String.class))
+                .isEqualTo("D");
+        assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_securityinfo WHERE wind_code='WCTMP001.IB'", String.class))
+                .isEqualTo("TEMP_WCTMP001.IB");
         // 已转正且没有在池记录的资产证券化样本仍只改主档和登记
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code IN ('ABN002.IB','ABN007.IB')", Integer.class)).isZero();
         Map<String, Integer> before = new LinkedHashMap<>();
