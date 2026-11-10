@@ -1906,6 +1906,9 @@ public class ScriptToolService {
         if (baseName.startsWith("rrs_scheduled_task")) {
             return "scheduled-task";
         }
+        if (baseName.startsWith("rrs_crmw_rule_alert")) {
+            return "crmw-rule-alert";
+        }
         if (baseName.startsWith("rrs_grade_rule_alert")) {
             return "grade-rule-alert";
         }
@@ -1990,6 +1993,9 @@ public class ScriptToolService {
         if ("scheduled-task".equals(moduleCode)) {
             return "定时任务配置";
         }
+        if ("crmw-rule-alert".equals(moduleCode)) {
+            return "CRMW规则提醒";
+        }
         if ("grade-rule-alert".equals(moduleCode)) {
             return "不符合分级规则提醒";
         }
@@ -2029,6 +2035,7 @@ public class ScriptToolService {
         addModuleTask(taskMap, "temp-security-code", "临时代码", "重置临时代码管理演示数据。", "medium", "rrs_temp_security_code_demo_data.sql");
         addModuleTask(taskMap, "scheduled-task", "定时任务配置", "重置定时任务配置与执行历史演示数据。", "medium", "rrs_scheduled_task_demo_data.sql");
         addModuleTask(taskMap, "grade-rule-alert", "不符合分级规则提醒", "重置不符合主体债入池规则提醒待办。", "medium", "rrs_grade_rule_alert_demo_data.sql");
+        addModuleTask(taskMap, "crmw-rule-alert", "CRMW规则提醒", "重置CRMW规则提醒及操作审计，不修改池状态。", "medium", "rrs_crmw_rule_alert_demo_data.sql");
         addModuleTask(taskMap, "ais-analysis", "AIS 投资分析库", "重置 AIS 主体观察名单、主体评级、担保人内评、用户、角色和用户角色关系演示数据。", "danger", "ais_inv_analysis_demo_data.sql");
         addModuleTask(taskMap, "ais-ods", "AIS 投资 ODS 库", "重置 Wind 全量主体公司简介、债券发行人主体、评级、公司财务指标与跨市场证券代码演示数据。", "danger", "ais_inv_ods_demo_data.sql");
         return taskMap;
@@ -2490,6 +2497,7 @@ public class ScriptToolService {
                 "rrs_adjust_snapshot_schema.sql",
                 "rrs_scheduled_task_schema.sql",
                 "rrs_grade_rule_alert_schema.sql",
+                "rrs_crmw_rule_alert_schema.sql",
                 "rrs_script_tool_schema.sql"
         );
     }
@@ -2522,7 +2530,8 @@ public class ScriptToolService {
                 "rrs_temp_security_code_demo_data.sql",
                 "rrs_import_temp_demo_data.sql",
                 "rrs_scheduled_task_demo_data.sql",
-                "rrs_grade_rule_alert_demo_data.sql"
+                "rrs_grade_rule_alert_demo_data.sql",
+                "rrs_crmw_rule_alert_demo_data.sql"
         );
     }
 
@@ -2714,7 +2723,9 @@ public class ScriptToolService {
                 "rrs_report_out",
                 "rrs_temp_fund_code_update_log",
                 "sys_imp_tmp",
-                "sys_imp_tmp_detl"
+                "sys_imp_tmp_detl",
+                "ip_crmw_rule_alert_evt",
+                "ip_crmw_rule_alert"
         );
     }
 
@@ -2849,6 +2860,8 @@ public class ScriptToolService {
                 buildTable("znty_rrs", "credit_bond_term_bucket", "期限分组"),
                 buildTable("znty_rrs", "ip_grade_rule_alert", "不符合分级规则提醒"),
                 buildTable("znty_rrs", "ip_grade_rule_alert_evt", "不符合分级规则提醒事件"),
+                buildTable("znty_rrs", "ip_crmw_rule_alert", "CRMW规则提醒"),
+                buildTable("znty_rrs", "ip_crmw_rule_alert_evt", "CRMW规则提醒事件"),
                 buildTable("znty_rrs", "my_security_pool", "我的证券池")
         )));
         groups.add(buildTableGroup("scheduled-task", "定时任务", "znty_rrs", Arrays.asList(

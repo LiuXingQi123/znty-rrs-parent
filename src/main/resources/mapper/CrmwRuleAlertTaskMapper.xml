@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.CrmwRuleAlertTaskMapper">
+    <!-- 业务示例：
+         1. 标的债券：A 公司发行的债券，是接受信用保护的对象
+         2. CRMW 凭证：由 B 机构创设／提供信用保护
+         3. 凭证主档的 issuer_code 对应 B 机构，本任务读取 B 机构的主体内评和名单，不使用标的债发行人 A 的内评
+    -->
+    <!-- 1. 仅扫描有效CRMW在池组合，不关联证券主档，不对任务候选排序 -->
+    <select id="queryCrmwInPoolList" resultType="com.znty.rrs.entity.schedule.CrmwRuleAlertScanDto">
+        SELECT ps.crmw_scode
+               , ps.crmw_name
+               , ps.security_code
+               , ps.security_short_name
+               , ps.target_pool_id AS current_pool_id
+               , p.pool_name AS current_pool_name
+               , ps.adjust_log_id
+        FROM ip_pool_status_crmw ps
+        INNER JOIN ip_investment_pool p ON p.id = ps.target_pool_id
+                                       AND p.is_deleted = 0
+                                       AND p.pool_type = 'crmw'
+        WHERE ps.is_deleted = 0
+          AND ps.audit_status = '20'
+    </select>
+
+    <!-- 2. 只批量读取本轮凭证的主体字段，避免大主档参与组合关联 -->
+    <select id="queryCrmwSecurityList" resultType="com.znty.rrs.entity.schedule.CrmwRuleAlertScanDto">
+        SELECT wind_code AS crmw_scode
+               , security_type AS crmw_security_type
+               , issuer_code
+               , issuer AS issuer_name
+        FROM rrs_securityinfo
+        WHERE wind_code IN
+        <foreach collection="crmwCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+    </select>
+
+    <!-- 3. 按本轮创设方分组取最新时间，保留最新空评分，不逐条排序取评级 -->
+    <select id="queryLatestIssuerRatingList" resultType="com.znty.rrs.entity.schedule.CrmwRuleAlertScanDto">
+        SELECT g.windcode AS issuer_code
+               , g.total_score AS inner_issuer_rating
+        FROM ais_inv_analysis.v_inv_grade_result g
+        INNER JOIN (
+            SELECT windcode
+                   , MAX(ts) AS latest_time
+            FROM ais_inv_analysis.v_inv_grade_result
+            WHERE windcode IN
+            <foreach collection="issuerCodes" item="code" open="(" separator="," close=")">
+                #{code}
+            </foreach>
+            GROUP BY windcode
+        ) latest ON latest.windcode = g.windcode
+                AND (g.ts = latest.latest_time OR (g.ts IS NULL AND latest.latest_time IS NULL))
+    </select>
+
+    <!-- 4. 一次查询创设方的主体观察及重点观察状态，同一主体多池记录合并 -->
+    <select id="queryIssuerWatchList" resultType="com.znty.rrs.entity.schedule.CrmwRuleAlertScanDto">
+        SELECT s.security_code AS issuer_code
+               , MAX(CASE WHEN p.pool_type = 'observe' THEN 1 ELSE 0 END) AS in_observe_pool
+               , MAX(CASE WHEN p.pool_type = 'restricted' THEN 1 ELSE 0 END) AS in_restricted_pool
+        FROM ip_pool_status s
+        INNER JOIN ip_investment_pool p ON p.id = s.target_pool_id AND p.is_deleted = 0
+        WHERE s.is_deleted = 0
+          AND s.audit_status = '20'
+          AND s.security_type = 'company'
+          AND p.pool_type IN ('observe', 'restricted')
+          AND s.security_code IN
+        <foreach collection="issuerCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+        GROUP BY s.security_code
+    </select>
+
+    <!-- 5. 批量取同凭证、标的和池的最近提醒，用最大主键保持原来的最近记录口径 -->
+    <select id="queryLatestAlertList" resultType="com.znty.rrs.entity.bo.IpCrmwRuleAlertBo">
+        SELECT a.id
+               , a.crmw_scode
+               , a.security_code
+               , a.current_pool_id
+               , a.context_key
+               , a.alert_status
+        FROM ip_crmw_rule_alert a
+        INNER JOIN (
+            SELECT MAX(id) AS id
+            FROM ip_crmw_rule_alert
+            WHERE is_deleted = 0
+              AND crmw_scode IN
+            <foreach collection="crmwCodes" item="code" open="(" separator="," close=")">
+                #{code}
+            </foreach>
+            GROUP BY crmw_scode
+                     , security_code
+                     , current_pool_id
+        ) latest ON latest.id = a.id
+    </select>
+
+    <!-- 新增待处理提醒并返回主键 -->
+    <insert id="addAlert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ip_crmw_rule_alert (
+            crmw_scode
+            , crmw_name
+            , security_code
+            , security_short_name
+            , issuer_code
+            , issuer_name
+            , inner_issuer_rating
+            , current_pool_id
+            , current_pool_name
+            , adjust_log_id
+            , fail_reason
+            , context_key
+            , alert_status
+            , last_scan_time
+            , deal_user_id
+            , deal_user_name
+            , deal_time
+            , is_deleted
+            , crte_time
+            , updt_time
+        ) VALUES (
+            #{crmwScode}
+            , #{crmwName}
+            , #{securityCode}
+            , #{securityShortName}
+            , #{issuerCode}
+            , #{issuerName}
+            , #{innerIssuerRating}
+            , #{currentPoolId}
+            , #{currentPoolName}
+            , #{adjustLogId}
+            , #{failReason}
+            , #{contextKey}
+            , #{alertStatus}
+            , #{lastScanTime}
+            , #{dealUserId}
+            , #{dealUserName}
+            , #{dealTime}
+            , #{isDeleted}
+            , #{crteTime}
+            , #{updtTime}
+        )
+    </insert>
+
+    <!-- 刷新风险依据及扫描时间，不更改人工处理信息 -->
+    <update id="editAlertScan">
+        UPDATE ip_crmw_rule_alert
+        SET crmw_name = #{crmwName}
+            , security_short_name = #{securityShortName}
+            , issuer_code = #{issuerCode}
+            , issuer_name = #{issuerName}
+            , inner_issuer_rating = #{innerIssuerRating}
+            , current_pool_name = #{currentPoolName}
+            , adjust_log_id = #{adjustLogId}
+            , fail_reason = #{failReason}
+            , context_key = #{contextKey}
+            , last_scan_time = #{lastScanTime}
+            , updt_time = #{updtTime}
+        WHERE id = #{id} AND alert_status = '00' AND is_deleted = 0
+    </update>
+
+    <!-- 查询本轮已恢复合规或已经出库的待处理提醒 -->
+    <select id="queryStaleOpenAlertList" resultType="com.znty.rrs.entity.bo.IpCrmwRuleAlertBo">
+        SELECT * FROM ip_crmw_rule_alert
+        WHERE is_deleted = 0 AND alert_status = '00'
+          AND (last_scan_time IS NULL OR last_scan_time &lt; #{scanTime})
+    </select>
+
+    <!-- 失效旧提醒，仅修改提醒表 -->
+    <update id="editAlertInvalid">
+        UPDATE ip_crmw_rule_alert SET alert_status = '99'
+            , updt_time = #{updtTime}
+        WHERE id = #{id} AND is_deleted = 0 AND alert_status = '00'
+    </update>
+
+    <!-- 返回仍待处理的独立CRMW提醒数量 -->
+    <select id="queryOpenAlertCount" resultType="int">
+        SELECT COUNT(*) FROM ip_crmw_rule_alert WHERE is_deleted = 0 AND alert_status = '00'
+    </select>
+
+    <!-- 保存每次变更后的完整提醒快照与操作人 -->
+    <insert id="addAlertEvent">
+        INSERT INTO ip_crmw_rule_alert_evt (
+            id
+            , crmw_scode
+            , crmw_name
+            , security_code
+            , security_short_name
+            , issuer_code
+            , issuer_name
+            , inner_issuer_rating
+            , current_pool_id
+            , current_pool_name
+            , adjust_log_id
+            , fail_reason
+            , context_key
+            , alert_status
+            , last_scan_time
+            , deal_user_id
+            , deal_user_name
+            , deal_time
+            , is_deleted
+            , crte_time
+            , updt_time
+            , opter_id
+            , opt_time
+            , oprt_type
+        )
+        SELECT id
+            , crmw_scode
+            , crmw_name
+            , security_code
+            , security_short_name
+            , issuer_code
+            , issuer_name
+            , inner_issuer_rating
+            , current_pool_id
+            , current_pool_name
+            , adjust_log_id
+            , fail_reason
+            , context_key
+            , alert_status
+            , last_scan_time
+            , deal_user_id
+            , deal_user_name
+            , deal_time
+            , is_deleted
+            , crte_time
+            , updt_time
+            , #{operatorId}
+            , updt_time
+            , #{operationType}
+        FROM ip_crmw_rule_alert WHERE id = #{id}
+    </insert>
+</mapper>

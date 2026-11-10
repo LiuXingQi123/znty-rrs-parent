@@ -57,6 +57,7 @@
 | `company_observer_pool_sync` | 主体观察名单同步（已排除ABS债） | `0 0 6 * * ?` | 每天06:00执行，调度默认关闭；默认参数 `{"observePoolId":16,"keyObservePoolId":23}` 分别对应类型2、3，后端只管理配置池；按源池in_linked/out_linked配置即时联动主体及旗下债券（例如23↔17）；先出后入、补齐差异、整轮回滚；**旗下 ABS 债不参与**，其进出池与主体确认由 `company_abs_bond_auto_in` 按池对账 |
 | `pledge_blacklist_daily_increment_reminder` | 质押黑名单库每日增量提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 默认 `[17]`；按上次成功执行时间水位扫描审批通过的债券、主体调入调出流水。当前仅生成候选与过程日志，通知通道待接入 |
 | `bond_issuer_not_in_company_pool_reminder` | 主体库内债券主体不在池债邮件提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 支持同池，`mappings` 支持债券池与主体池跨池映射；扫描发行主体不在对应主体池的在池债券，排除 CRMW。当前仅生成候选与过程日志，通知通道待接入 |
+| `crmw_rule_alert` | CRMW规则提醒 | `0 13 9 * * ?` | 每天09:13；凭证创设方最新内评低于3档或已在观察/重点观察名单时生成独立待办，只提醒不改池，详见[47](47-crmw-rule-alert.md) |
 | `hs_pool_increment_excel_export` | 恒生池增量数据导出 | `0 */6 * * * ?` | 每 6 分钟执行一次；首次从 `initialStartTime` 开始，后续从上次成功执行开始时间继续；导出窗口内审批通过的调入和调出，调出标记“删除”；按证券主档排除已失效临时代码的转正出库记录；交易日过滤暂未启用 |
 | `wind_code_sync` | Wind代码变更同步 | `0 2/10 * * * ?` | `{"scanDays":1}`，scanDays 为正整数，省略默认 1 天。每小时第 2/12/22/32/42/52 分钟执行；按唯一 SEC_ID 拆分旧临时代码失效主档和新代码主档，按四类来源准备登记，复用单码业务转换；修改普通池、CRMW及在途申请，须与其他调库错开 |
 
@@ -99,7 +100,7 @@
 
 调度器**不会**保证「A 跑完再跑 B」。若任务 B 依赖任务 A 改过的池状态，必须满足：`A 的 cron < B 的 cron`，并留足 A 跑完的时间（Demo 按整点错开）。
 
-当前 14 个需要池状态先后编排的任务，其**必须顺序**与 Demo cron：
+当前 15 个需要池状态先后编排的任务，其**必须顺序**与 Demo cron：
 
 | 顺序 | 时刻 | 任务 | 为何必须在这 |
 |------|------|------|----------------|
@@ -117,6 +118,8 @@
 | 12 | 次日 06:00 | `company_observer_pool_sync` | 按用户指定时间扫描名单及九类池关系，主体和旗下债券即时同步源池/联动池，早于09:00提醒；默认关闭 |
 | 13 | 次日 09:00 | `pledge_blacklist_daily_increment_reminder` | 依赖前序调库流水稳定后再汇总增量；只读，不改池 |
 | 14 | 次日 09:00 | `bond_issuer_not_in_company_pool_reminder` | 在所有主体/债券自动调库完成后检查最终不一致；只读，不改池 |
+
+| 15 | 次日 09:13 | `crmw_rule_alert` | 读取06:00同步后的主体观察名单及有效CRMW组合，仅维护独立提醒，不改池 |
 
 另：`wind_code_sync` 使用 `0 2/10 * * * ?`，会修改主档、普通池、CRMW及在途申请；与每 10 分钟整点和每 5 分钟任务错开，22:42 在临时代码替换 22:40 之后、23:00 到期扫描之前。任务不是编排器，错开不保证前序已完成，启用时仍须按实际耗时留足间隔。`bond_temp_code_replace` 保留独立任务和原 cron；`company_inpool_bond_auto_in` 仍每 10 分钟执行。不同 taskCode 没有全局锁；同一证券更名由主档行锁、登记条件更新和事务保护。
 
@@ -509,3 +512,13 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
 提醒适用于任意目标池，和分级规则提醒共用“我的事宜—规则提醒”。`ip_grade_rule_alert.rule_type` 区分规则，`context_key` 标识主体身份、各关联主体当前池状态及最近生效日志版本。相同依据不重复生成待办；已人工处理的依据不立即触发反向自动调库；主体重新进出池形成新版本后重新判断。ABS 提醒中的“确认主体”在同一事务内更新主档五字段、将 `absIdentityPending` 待确认日志转为 `audit_status=20`、写入 `ip_pool_status` 并处理关系池；“忽略入池”将待确认日志置为 `audit_status=-1`，不写入池状态。改造前已经直接落池的旧记录仍按原逻辑兼容软删除；不删除 `ip_adjust_step`、快照或人工调库历史。分级扫描失效处理只清理原分级规则提醒。
 
 原批量预读 SELECT 次数公式描述常规数据预读；ABS 还执行主体身份及联动依据的实时复核，不把旧的初始池状态当作最终结果。
+
+### CRMW规则提醒的依赖评估
+
+定时任务由独立 `CrmwRuleAlertTaskService implements RrsScheduledTask` 实现：`execute()` 只包装计时、起止日志、任务级异常和结果；私有 `doScanCrmwRuleAlerts()` 处理扫描及待办维护，使用独立 `CrmwRuleAlertTaskMapper`。失败结果保留过程日志，并标记本轮事务回滚。页面查询与人工处理由 `CrmwRuleAlertService` 负责，不混入定时任务类。
+
+1. 读取 `ip_pool_status` 主体名单与 `ip_pool_status_crmw` 组合状态，仅写 `ip_crmw_rule_alert` 及审计。
+2. 晚于23:05到期清理及06:00名单同步；不依赖其他提醒任务。
+3. 不自动出池或入禁止库，不覆盖后续调库；下轮扫描失效不再命中的待办。
+4. 09:13避开每10分钟整点补债、第5分钟ABS对账、第12分钟换码、每6分钟导出；仍需按前序实际耗时核对。
+5. Demo默认关闭，无扩展参数，cron与清单和执行顺序同步。实现与启用步骤见[47](47-crmw-rule-alert.md)。

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.CrmwRuleAlertMapper">
+    <!-- 按凭证、标的及状态分页查询独立提醒 -->
+    <select id="queryAlertPage" resultType="com.znty.rrs.entity.crmwrulealert.CrmwRuleAlertDto">
+        SELECT * FROM ip_crmw_rule_alert
+        <where>
+            AND is_deleted = 0
+            <if test="crmwScode != null and crmwScode != ''">
+                AND crmw_scode LIKE CONCAT('%', #{crmwScode}, '%')
+            </if>
+            <if test="securityCode != null and securityCode != ''">
+                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+            </if>
+            <if test="alertStatus != null and alertStatus != ''">
+                AND alert_status = #{alertStatus}
+            </if>
+        </where>
+        ORDER BY last_scan_time DESC
+                 , id DESC
+    </select>
+
+    <!-- 查询人工处理的提醒 -->
+    <select id="queryAlertById" resultType="com.znty.rrs.entity.bo.IpCrmwRuleAlertBo">
+        SELECT * FROM ip_crmw_rule_alert WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <!-- 人工标记已处理，摘要保持不变 -->
+    <update id="editAlertProcessed">
+        UPDATE ip_crmw_rule_alert SET alert_status = '20'
+            , deal_user_id = #{dealUserId}
+            , deal_user_name = #{dealUserName}
+            , deal_time = #{dealTime}
+            , updt_time = #{updtTime}
+        WHERE id = #{id} AND is_deleted = 0 AND alert_status = '00'
+    </update>
+
+    <!-- 保存每次变更后的完整提醒快照与操作人 -->
+    <insert id="addAlertEvent">
+        INSERT INTO ip_crmw_rule_alert_evt (
+            id
+            , crmw_scode
+            , crmw_name
+            , security_code
+            , security_short_name
+            , issuer_code
+            , issuer_name
+            , inner_issuer_rating
+            , current_pool_id
+            , current_pool_name
+            , adjust_log_id
+            , fail_reason
+            , context_key
+            , alert_status
+            , last_scan_time
+            , deal_user_id
+            , deal_user_name
+            , deal_time
+            , is_deleted
+            , crte_time
+            , updt_time
+            , opter_id
+            , opt_time
+            , oprt_type
+        )
+        SELECT id
+            , crmw_scode
+            , crmw_name
+            , security_code
+            , security_short_name
+            , issuer_code
+            , issuer_name
+            , inner_issuer_rating
+            , current_pool_id
+            , current_pool_name
+            , adjust_log_id
+            , fail_reason
+            , context_key
+            , alert_status
+            , last_scan_time
+            , deal_user_id
+            , deal_user_name
+            , deal_time
+            , is_deleted
+            , crte_time
+            , updt_time
+            , #{operatorId}
+            , updt_time
+            , #{operationType}
+        FROM ip_crmw_rule_alert WHERE id = #{id}
+    </insert>
+</mapper>

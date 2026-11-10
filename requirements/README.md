@@ -46,6 +46,7 @@
 | 40 | 基金池批量调整（批量调入/调出） | `batch_fund_pool_adjust.html` | [40-batch-fund-pool-adjust.md](40-batch-fund-pool-adjust.md) | `BatchFundPoolAdjustApiTest` / `BatchFundPoolAdjustServiceTest` / `BatchFundPoolAdjustMapperTest` |
 | 45 | 股票池批量调整（批量调入/调出） | `batch_stock_pool_adjust.html` | [45-batch-stock-pool-adjust.md](45-batch-stock-pool-adjust.md) | `BatchStockPoolAdjustApiTest` / `BatchStockPoolAdjustServiceTest` / `BatchStockPoolAdjustMapperTest` |
 | 46 | 股票池 Excel 导入 | `stock_pool_excel_import.html` | [46-stock-pool-excel-import.md](46-stock-pool-excel-import.md) | `StockPoolExcelImportServiceTest` / `StockPoolExcelImportApiTest` / `StockPoolExcelImportPersistenceTest` / `StockPoolAdjustExcelSubmitServiceTest` / `CommonFileServiceTest` |
+| 47 | CRMW规则提醒 | `my_matters.html?tab=crmwRuleAlert` | [47-crmw-rule-alert.md](47-crmw-rule-alert.md) | `CrmwRuleAlertTaskServiceTest` / `CrmwRuleAlertServiceTest` / `CrmwRuleAlertMapperTest` / `CrmwRuleAlertApiTest` |
 
 ## 脚本工具数据初始化
 

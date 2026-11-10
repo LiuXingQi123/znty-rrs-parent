@@ -53,6 +53,7 @@ public class ScheduledTaskDemoDataTest {
                 new TaskConfig("company_observer_pool_sync", "主体观察名单同步（已排除ABS债）", "0 0 6 * * ?"),
                 new TaskConfig("pledge_blacklist_daily_increment_reminder", "质押黑名单库每日增量提醒", "0 0 9 * * ?"),
                 new TaskConfig("bond_issuer_not_in_company_pool_reminder", "主体库内债券主体不在池债邮件提醒", "0 0 9 * * ?"),
+                new TaskConfig("crmw_rule_alert", "CRMW规则提醒", "0 13 9 * * ?"),
                 new TaskConfig("hs_pool_increment_excel_export", "恒生池增量数据导出", "0 */6 * * * ?"),
                 new TaskConfig("wind_code_sync", "Wind代码变更同步", "0 2/10 * * * ?"),
                 new TaskConfig("company_abs_bond_auto_in",
@@ -130,6 +131,7 @@ public class ScheduledTaskDemoDataTest {
         taskSources.put("company_inpool_bond_auto_in", "CompanyNewBondAutoInService.java");
         taskSources.put("company_not_in_pool_bond_auto_out", "CompanyNotInPoolBondAutoOutService.java");
         taskSources.put("bond_grade_inconformity_alert", "GradeRuleAlertService.java");
+        taskSources.put("crmw_rule_alert", "CrmwRuleAlertTaskService.java");
         taskSources.put("hs_pool_full_excel_export", "AbstractHsPoolExcelExportService.java");
         taskSources.put("hs_pool_full_including_expired_excel_export", "AbstractHsPoolExcelExportService.java");
         taskSources.put("pledge_blacklist_daily_increment_reminder",
@@ -140,7 +142,7 @@ public class ScheduledTaskDemoDataTest {
         taskSources.put("wind_code_sync", "WindCodeSyncService.java");
         taskSources.put("company_abs_bond_auto_in", "CompanyAbsBondAutoInService.java");
 
-        assertThat(taskSources).hasSize(18);
+        assertThat(taskSources).hasSize(19);
         for (Map.Entry<String, String> entry : taskSources.entrySet()) {
             String source = new String(Files.readAllBytes(Paths.get("src", "main", "java", "com", "znty",
                     "rrs", "service", entry.getValue())), StandardCharsets.UTF_8);
