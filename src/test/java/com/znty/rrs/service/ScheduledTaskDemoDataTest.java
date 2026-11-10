@@ -57,7 +57,8 @@ public class ScheduledTaskDemoDataTest {
                 new TaskConfig("hs_pool_increment_excel_export", "恒生池增量数据导出", "0 */6 * * * ?"),
                 new TaskConfig("wind_code_sync", "Wind代码变更同步", "0 2/10 * * * ?"),
                 new TaskConfig("company_abs_bond_auto_in",
-                        "主体下ABS债券自动入库（区分已确认发行人和未确认发行人）", "0 5/10 * * * ?")
+                        "主体下ABS债券自动入库（区分已确认发行人和未确认发行人）", "0 5/10 * * * ?"),
+                new TaskConfig("crmw_forbidden_auto_out", "CRMW关联禁投自动出库", "0 7/10 * * * ?")
         );
 
         int previousIndex = -1;
@@ -141,8 +142,9 @@ public class ScheduledTaskDemoDataTest {
         taskSources.put("hs_pool_increment_excel_export", "AbstractHsPoolExcelExportService.java");
         taskSources.put("wind_code_sync", "WindCodeSyncService.java");
         taskSources.put("company_abs_bond_auto_in", "CompanyAbsBondAutoInService.java");
+        taskSources.put("crmw_forbidden_auto_out", "CrmwForbiddenAutoOutService.java");
 
-        assertThat(taskSources).hasSize(19);
+        assertThat(taskSources).hasSize(20);
         for (Map.Entry<String, String> entry : taskSources.entrySet()) {
             String source = new String(Files.readAllBytes(Paths.get("src", "main", "java", "com", "znty",
                     "rrs", "service", entry.getValue())), StandardCharsets.UTF_8);
