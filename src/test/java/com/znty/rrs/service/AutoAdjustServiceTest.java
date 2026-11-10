@@ -37,6 +37,65 @@ import static org.mockito.Mockito.when;
  */
 public class AutoAdjustServiceTest {
 
+    /** 每轮读取保存的天数，候选查询、过程日志和业务调库原因使用同一个值 */
+    @Test
+    public void autoOutExpiredShouldReloadConfiguredMaturityOffsetDays() {
+        AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+        AutoAdjustService service = new AutoAdjustService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, mapper);
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setTaskName("到期证券自动出池");
+        when(taskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(15L);
+        pool.setPoolName("债券禁止库");
+        when(poolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+        when(mapper.queryBoundPoolIds(AutoAdjustService.TASK_CODE, "auto_out"))
+                .thenReturn(Collections.singletonList(15L));
+        when(adjustMapper.deletePoolStatusSoft("S001", 15L)).thenReturn(1);
+
+        for (int days : new int[]{3, 0, -1}) {
+            conf.setParamJson("{\"maturityOffsetDays\":" + days + "}");
+            ScheduledAdjustCandidateDto item = new ScheduledAdjustCandidateDto();
+            item.setSecurityCode("S001");
+            when(mapper.queryPoolSecurityByExpired(15L, days)).thenReturn(Collections.singletonList(item));
+
+            ScheduledTaskResult result = service.execute();
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getAffectedCount()).isEqualTo(1);
+            verify(mapper).queryPoolSecurityByExpired(15L, days);
+            assertThat(result.getDetailLog()).contains("maturityOffsetDays=" + days);
+            assertThat(item.getAdjustReason()).contains("出池口径：到期日早于当前日期减去 " + days + " 天");
+        }
+    }
+
+    /** 日期偏移参数写错时，不应扫描候选或修改池状态 */
+    @Test
+    public void autoOutExpiredShouldFailBeforeScanWhenMaturityOffsetInvalid() {
+        AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
+        ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+        AutoAdjustService service = new AutoAdjustService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
+        SysScheduledTaskBo conf = new SysScheduledTaskBo();
+        conf.setParamJson("{\"poolIds\":[15],\"maturityOffsetDays\":1.5}");
+        when(taskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("maturityOffsetDays");
+        verify(mapper, never()).queryPoolSecurityByExpired(any(Long.class), any(Integer.class));
+    }
+
     @Test
     public void autoOutExpiredShouldDeleteExpiredSecurities() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -64,7 +123,7 @@ public class AutoAdjustServiceTest {
         expired.setSecurityShortName("测试债");
         expired.setSecurityType("corporate_bond");
         expired.setMaturityDate("20260901");
-        when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1)).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
         when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(1);
 
@@ -78,7 +137,7 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getAdjustReason())
-                .isEqualTo("证券到期自动调出（到期日：2026-09-01；出池口径：到期日早于昨日）");
+                .isEqualTo("证券到期自动调出（到期日：2026-09-01；出池口径：到期日早于当前日期减去 1 天）");
         assertThat(log.getAdjustAdvice()).isNull();
         assertThat(log.getAdjustBatchNo()).matches("BOND\\d{17}2001");
         assertThat(result.isSuccess()).isTrue();
@@ -121,7 +180,7 @@ public class AutoAdjustServiceTest {
         first.setSecurityCode("S001");
         ScheduledAdjustCandidateDto second = new ScheduledAdjustCandidateDto();
         second.setSecurityCode("S002");
-        when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(first, second));
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1)).thenReturn(Arrays.asList(first, second));
         when(securityPoolAdjustMapper.queryAllPoolRelationList())
                 .thenReturn(Collections.<PoolRelationBo>emptyList());
         when(securityPoolAdjustMapper.deletePoolStatusSoft(any(String.class), eq(10L))).thenReturn(1);
@@ -207,7 +266,7 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
         ScheduledAdjustCandidateDto expired = new ScheduledAdjustCandidateDto();
         expired.setSecurityCode("S001");
-        when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1)).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
         when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(0);
 
@@ -243,7 +302,7 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
         ScheduledAdjustCandidateDto expired = new ScheduledAdjustCandidateDto();
         expired.setSecurityCode("S001");
-        when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1)).thenReturn(Arrays.asList(expired));
         PoolRelationBo restrict = new PoolRelationBo();
         restrict.setPoolId(10L);
         restrict.setRelationType(RelationType.OUT_RESTRICT.getCode());
@@ -297,7 +356,7 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
         ScheduledAdjustCandidateDto expired = new ScheduledAdjustCandidateDto();
         expired.setSecurityCode("S001");
-        when(autoAdjustMapper.queryPoolSecurityByExpired(10L)).thenReturn(Arrays.asList(expired));
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1)).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
         when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(1);
 
@@ -305,7 +364,7 @@ public class AutoAdjustServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
-        verify(autoAdjustMapper).queryPoolSecurityByExpired(10L);
+        verify(autoAdjustMapper).queryPoolSecurityByExpired(10L, 1);
     }
 
     @Test
@@ -334,16 +393,16 @@ public class AutoAdjustServiceTest {
         pool16.setId(16L);
         pool16.setPoolName("观察池");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool10, pool16));
-        when(autoAdjustMapper.queryPoolSecurityByExpired(10L))
+        when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1))
                 .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
-        when(autoAdjustMapper.queryPoolSecurityByExpired(16L))
+        when(autoAdjustMapper.queryPoolSecurityByExpired(16L, 1))
                 .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
 
         ScheduledTaskResult result = service.execute();
 
         assertThat(result.isSuccess()).isTrue();
-        verify(autoAdjustMapper).queryPoolSecurityByExpired(10L);
-        verify(autoAdjustMapper).queryPoolSecurityByExpired(16L);
+        verify(autoAdjustMapper).queryPoolSecurityByExpired(10L, 1);
+        verify(autoAdjustMapper).queryPoolSecurityByExpired(16L, 1);
     }
 }

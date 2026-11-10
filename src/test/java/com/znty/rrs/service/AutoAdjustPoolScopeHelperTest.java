@@ -23,6 +23,34 @@ import static org.mockito.Mockito.when;
  */
 public class AutoAdjustPoolScopeHelperTest {
 
+    /** 日期偏移省略时沿用 1 天，显式配置支持零、正数和负数 */
+    @Test
+    public void maturityOffsetDaysShouldDefaultAndAcceptSignedIntegers() {
+        assertThat(AutoAdjustPoolScopeHelper.parseMaturityOffsetDays(null)).isEqualTo(1);
+        assertThat(AutoAdjustPoolScopeHelper.parseMaturityOffsetDays(" ")).isEqualTo(1);
+        assertThat(AutoAdjustPoolScopeHelper.parseMaturityOffsetDays("{}")).isEqualTo(1);
+        assertThat(AutoAdjustPoolScopeHelper.parseMaturityOffsetDays("{\"poolIds\":[15]}")).isEqualTo(1);
+        for (int days : new int[]{0, 1, 3, -1, Integer.MAX_VALUE, Integer.MIN_VALUE}) {
+            assertThat(AutoAdjustPoolScopeHelper.parseMaturityOffsetDays(
+                    "{\"maturityOffsetDays\":" + days + "}")).isEqualTo(days);
+        }
+    }
+
+    /** 非整数和超出 int 范围的配置必须明确失败，不能静默改成默认值 */
+    @Test
+    public void maturityOffsetDaysShouldRejectInvalidValues() {
+        for (String value : new String[]{"null", "\"3\"", "true", "1.5", "1.0", "[]", "{}",
+                "2147483648", "-2147483649"}) {
+            assertThatThrownBy(() -> AutoAdjustPoolScopeHelper.parseMaturityOffsetDays(
+                    "{\"maturityOffsetDays\":" + value + "}"))
+                    .isInstanceOf(BizException.class).hasMessageContaining("maturityOffsetDays");
+        }
+        assertThatThrownBy(() -> AutoAdjustPoolScopeHelper.parseMaturityOffsetDays("[]"))
+                .isInstanceOf(BizException.class).hasMessageContaining("JSON 对象");
+        assertThatThrownBy(() -> AutoAdjustPoolScopeHelper.parseMaturityOffsetDays("{broken}"))
+                .isInstanceOf(BizException.class).hasMessageContaining("JSON 解析失败");
+    }
+
     @Test
     public void parseOptionalPoolIdsShouldAllowEmpty() {
         assertThat(AutoAdjustPoolScopeHelper.parseOptionalPoolIds(null)).isEmpty();

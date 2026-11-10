@@ -95,19 +95,10 @@ public class AutoAdjustPoolScopeHelper {
      */
     public static List<Long> parseOptionalPoolIds(String paramJson) {
         List<Long> result = new ArrayList<Long>();
-        if (!StringUtils.hasText(paramJson)) {
+        // 读取 JSON 对象，再按扫描池字段解析
+        JsonNode root = parseParamJson(paramJson);
+        if (root == null) {
             return result;
-        }
-        String text = paramJson.trim();
-        if (!text.startsWith("{")) {
-            throw new BizException("扩展参数仅支持 JSON 对象，示例 {\"poolIds\":[15]}，当前: " + text);
-        }
-        JsonNode root;
-        try {
-            root = OBJECT_MAPPER.readTree(text);
-        } catch (Exception e) {
-            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
-                    + "；请使用标准 JSON，数字勿加单引号，示例 {\"poolIds\":[15]}");
         }
         JsonNode poolIds = root.get("poolIds");
         if (poolIds == null || poolIds.isNull()) {
@@ -124,6 +115,57 @@ public class AutoAdjustPoolScopeHelper {
             result.add(item.asLong());
         }
         return result;
+    }
+
+    /**
+     * 读取到期自动出池的日期偏移天数，省略时沿用原有的 1 天
+     *
+     * 执行顺序：
+     * 1. 解析扩展参数，空配置或省略字段时返回 1
+     * 2. 校验字段为 int 范围内的整数并返回，允许 0 和负数
+     *
+     * @param paramJson 扩展参数原文
+     * @return DATE_SUB 使用的偏移天数
+     */
+    public static int parseMaturityOffsetDays(String paramJson) {
+        // 读取 JSON 对象，再校验日期偏移字段
+        JsonNode root = parseParamJson(paramJson);
+        if (root == null || !root.has("maturityOffsetDays")) {
+            return 1;
+        }
+        JsonNode days = root.get("maturityOffsetDays");
+        if (!days.isIntegralNumber() || !days.canConvertToInt()) {
+            throw new BizException("maturityOffsetDays 须为 int 范围内的整数，当前: " + days);
+        }
+        return days.intValue();
+    }
+
+    /**
+     * 解析任务扩展参数的 JSON 对象
+     *
+     * 执行顺序：
+     * 1. 空参数返回空对象引用
+     * 2. 解析 JSON，格式错误时返回明确的业务错误
+     *
+     * @param paramJson 扩展参数原文
+     * @return JSON 对象，未配置时为 null
+     */
+    private static JsonNode parseParamJson(String paramJson) {
+        if (!StringUtils.hasText(paramJson)) {
+            return null;
+        }
+        String text = paramJson.trim();
+        if (!text.startsWith("{")) {
+            throw new BizException("扩展参数仅支持 JSON 对象，示例 {\"poolIds\":[15]}，当前: " + text);
+        }
+        JsonNode root;
+        try {
+            root = OBJECT_MAPPER.readTree(text);
+        } catch (Exception e) {
+            throw new BizException("扩展参数 JSON 解析失败: " + e.getMessage()
+                    + "；请使用标准 JSON，数字勿加单引号，示例 {\"poolIds\":[15]}");
+        }
+        return root;
     }
 
     /**

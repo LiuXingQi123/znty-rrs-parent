@@ -32,7 +32,7 @@ import java.util.Map;
  *
  * 执行顺序：
  * 1. 合并扩展参数和关系配置中的扫描池
- * 2. 扫描目标池内已生效且到期日早于昨天的债券和股票
+ * 2. 按 maturityOffsetDays 扫描目标池内已生效且到期日早于截止日期的债券和股票
  * 3. 跳过主体、基金、CRMW、调出限制池和已提前出池的记录
  * 4. 软删除池状态成功后写入自动出池日志并统计实际出池数量
  * 5. 返回本轮扫描、出池和未处理数量
@@ -54,14 +54,16 @@ public class AutoAdjustService implements RrsScheduledTask {
      * 本任务扩展参数说明（配置页按行拆成列表展示）
      */
     private static final String PARAM_HELP =
-            "参数格式：JSON 对象，例如 <code>{\"poolIds\":[15]}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
+            "参数格式：JSON 对象，例如 <code>{\"poolIds\":[15],\"maturityOffsetDays\":1}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[15]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 15（债券禁止库）内已生效的债券、股票，到期后从 15（债券禁止库）自动调出\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,16]}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）内的证券，到期后从各自所在池自动调出\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（到期出池扫描池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
+                    + "maturityOffsetDays（到期日期偏移天数）：可选，省略默认 1；须为 int 范围内的整数，允许 0 和负数\n"
+                    + "天数含义：到期日早于数据库当前日期减去该天数才出池（不含截止当天）；1=早于昨天，0=早于今天，3=早于三天前，-1=早于明天\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
-                    + "处理规则：扫描目标池内已生效的债券、股票；到期日早于昨天（T-2）时自动调出\n"
+                    + "处理规则：扫描目标池内已生效的债券、股票；按 maturityOffsetDays 计算截止日期，默认 1 沿用早于昨天（T-2）的口径\n"
                     + "排除范围：主体、基金和 CRMW 不处理；CRMW 请使用“CRMW到期自动出池”任务\n"
                     + "限制规则：证券已在目标池配置的调出限制池时，跳过该条记录\n"
                     + "执行方式：直接生效，不走审批；仅软删除成功才写日志并计入影响条数\n"
@@ -159,10 +161,15 @@ public class AutoAdjustService implements RrsScheduledTask {
      * @return 本轮到期证券出池汇总
      */
     private AutoOutSummary doAutoOutExpired(String taskName, TaskDetailLog detail) {
-        // 1. 解析扩展参数和关系配置，得到待扫描池
-        List<Long> poolIds = resolvePoolIds(taskName, detail);
+        // 1. 读取本轮扩展参数，解析日期偏移并合并待扫描池
+        String paramJson = resolveParamJson(detail);
+        int maturityOffsetDays = AutoAdjustPoolScopeHelper.parseMaturityOffsetDays(paramJson);
+        List<Long> poolIds = poolScopeHelper.resolveUnionPoolIds(
+                paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
         infoDetail(detail, "扫描范围：目标池编号 " + poolIds);
-        infoDetail(detail, "处理条件：已生效的债券和股票，且到期日早于昨天；CRMW、主体和基金不处理");
+        String maturityRule = "到期日早于当前日期减去 " + maturityOffsetDays + " 天";
+        infoDetail(detail, "扫描条件：已生效的债券和股票，且" + maturityRule
+                + "（数据库日期，maturityOffsetDays=" + maturityOffsetDays + "）；CRMW、主体和基金不处理");
         // 2. 读取投资池信息
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         List<InvestmentPoolBo> poolList = investmentPoolMapper.queryPoolList();
@@ -188,7 +195,8 @@ public class AutoAdjustService implements RrsScheduledTask {
             // 5.1 读取当前目标池的调出限制池
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
-            List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryPoolSecurityByExpired(poolId);
+            List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryPoolSecurityByExpired(
+                    poolId, maturityOffsetDays);
             if (expiredList == null || expiredList.isEmpty()) {
                 summary.addPool(poolId, pool.getPoolName(), 0, 0, 0);
                 infoDetail(detail, "扫描结果：池【" + pool.getPoolName() + "】没有发现到期证券");
@@ -228,7 +236,7 @@ public class AutoAdjustService implements RrsScheduledTask {
                 sec.setAdjusterName(AUTO_ADJUSTER_NAME);
                 String reason = ScheduledAdjustLogHelper.appendDetails(REASON_EXPIRED_OUT,
                         ScheduledAdjustLogHelper.dateDetail("到期日", sec.getMaturityDate()),
-                        "出池口径：到期日早于昨日");
+                        "出池口径：" + maturityRule);
                 sec.setAdjustReason(reason);
                 // 5.5 生成批次号并写入自动出池日志
                 String batchNo = batchNoContext.resolveBondBatchNo(
@@ -321,15 +329,21 @@ public class AutoAdjustService implements RrsScheduledTask {
     }
 
     /**
-     * 解析扫描池：扩展参数 poolIds 与关系配置绑定本任务的池取并集
+     * 读取本轮任务使用的扩展参数
+     *
+     * 执行顺序：
+     * 1. 从任务配置读取 param_json 并记录过程日志
+     * 2. 返回参数原文，供日期偏移和扫描池解析共用
+     *
+     * @param detail 过程日志
+     * @return 扩展参数原文，未配置时为 null
      */
-    private List<Long> resolvePoolIds(String taskName, TaskDetailLog detail) {
+    private String resolveParamJson(TaskDetailLog detail) {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
         String paramJson = (conf != null && StringUtils.hasText(conf.getParamJson()))
                 ? conf.getParamJson().trim() : null;
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
-        // 1. 合并扩展参数和关系配置绑定池
-        return poolScopeHelper.resolveUnionPoolIds(paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
+        return paramJson;
     }
 
     /**

@@ -73,7 +73,7 @@
 
     <!-- 查询指定池中已生效且已到期的在池证券（仅回填 securityCode/securityShortName/securityType）
          到期宽限对齐老系统 AdjustRuleByExpired：enddate < trunc(sysdate-1)，
-         即到期日早于昨天（T-2），到期当天与到期次日仍不出池。
+         到期日早于当前日期减去 maturityOffsetDays 天，默认 1 即早于昨天（T-2）
          大类对齐老 ptype=4000 或 2000：仅债、股；CRMW 走独立任务 crmw_expired_auto_out -->
     <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
@@ -91,7 +91,7 @@
           AND ips.security_type != 'crmw'
           AND si.maturity_date IS NOT NULL
           AND si.maturity_date != ''
-          AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y%m%d')
+          AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')
     </select>
 
     <!--
@@ -555,7 +555,7 @@
         ORDER BY bond.wind_code ASC
     </select>
 
-    <!-- CRMW 到期自动出池：凭证到期日早于昨天（T-2），对齐 AdjustRuleCrmwDueOutPool + AdjustRuleByExpired -->
+    <!-- CRMW 到期自动出池：凭证到期日早于当前日期减去 maturityOffsetDays 天，默认 1 即原 T-2 口径 -->
     <select id="queryCrmwPoolByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
                ,ips.security_short_name
@@ -574,7 +574,7 @@
           AND crmw.security_type = 'crmw'
           AND crmw.maturity_date IS NOT NULL
           AND crmw.maturity_date != ''
-          AND crmw.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY), '%Y%m%d')
+          AND crmw.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')
         ORDER BY ips.crmw_scode ASC
                  ,ips.security_code ASC
     </select>

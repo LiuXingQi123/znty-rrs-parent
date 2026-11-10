@@ -50,17 +50,9 @@ public interface AutoAdjustMapper {
      */
     List<Long> queryBoundPoolIds(@Param("taskCode") String taskCode, @Param("ruleType") String ruleType);
 
-    /**
-     * 查询指定池中已生效（audit_status=20）且已到期的在池证券。
-     *
-     * <p>到期口径对齐老系统 {@code AdjustRuleByExpired}：{@code maturity_date} 早于昨天（T-2），
-     * 到期当天与到期次日仍不出池。大类对齐老 ptype=4000/2000，仅债、股；排除 crmw。
-     * 回填证券基本信息与 maturityDate，供自动调出日志展示实际到期日。
-     *
-     * @param poolId 目标池 ID
-     * @return 到期在池证券列表（每条对应一条待自动调出记录）
-     */
-    List<ScheduledAdjustCandidateDto> queryPoolSecurityByExpired(@Param("poolId") Long poolId);
+    /** 按日期偏移天数查询目标池内已生效的到期债券和股票，返回实际到期日供调库日志使用 */
+    List<ScheduledAdjustCandidateDto> queryPoolSecurityByExpired(@Param("poolId") Long poolId,
+                                                               @Param("maturityOffsetDays") int maturityOffsetDays);
 
     /**
      * 查询「主体已在主体池、旗下未到期债券尚未在目标池」的待自动入池债券。
@@ -172,13 +164,9 @@ public interface AutoAdjustMapper {
             @Param("poolId") Long poolId,
             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
-    /**
-     * 查询 CRMW 池中已生效且凭证到期日早于昨天（T-2）的在池组合。
-     *
-     * <p>对应老 IP_RULE {@code AdjustRuleCrmwDueOutPool}。到期看凭证 {@code crmw_scode}
-     * 主数据 {@code maturity_date}，落地表 {@code ip_pool_status_crmw}。
-     */
-    List<ScheduledAdjustCandidateDto> queryCrmwPoolByExpired(@Param("poolId") Long poolId);
+    /** 按凭证到期日和日期偏移天数查询 ip_pool_status_crmw 内已生效的到期组合 */
+    List<ScheduledAdjustCandidateDto> queryCrmwPoolByExpired(@Param("poolId") Long poolId,
+                                                           @Param("maturityOffsetDays") int maturityOffsetDays);
 
     /**
      * 查询「债已在债券池、其发行主体不在主体池」的待自动出池债券。
