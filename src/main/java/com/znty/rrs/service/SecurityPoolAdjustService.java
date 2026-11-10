@@ -1,4 +1,6 @@
 package com.znty.rrs.service;
+
+import com.znty.rrs.common.constants.BusinessSwitches;
 import com.znty.rrs.common.enums.ApprovalStrategy;
 
 import com.znty.rrs.common.enums.FlowStatus;
@@ -647,7 +649,7 @@ public class SecurityPoolAdjustService {
      * 永续：发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级。
      * 次级：发债主体内评 1 档只能调入一级库，2+/2/2- 下调一级（只留那一档），其余至少下调一级。
      * 私募/永续/次级「1 档」只看发债主体内评；ABS「1 档」只看所选权益人内评（自选权益人优先，复用 innerGuarantorRating）。担保债（覆盖永续等），或证券/主体已在观察池：不得高于矩阵最好档，从该档开到五级。普通债只保留矩阵单元格。
-     * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只留五级。含权只改期限。releaseRules 跳过矩阵。
+     * 已在重点观察名单：未在分级库不得新增（开关开启时强担保豁免），已在 1～4 级只留五级。含权只改期限。releaseRules 跳过矩阵。
      *
      * @param pools 待过滤的投资池列表
      * @param req   选池请求
@@ -699,7 +701,8 @@ public class SecurityPoolAdjustService {
         }
         // 取当前已在分级库的最好档，供重点观察名单判断「新增还是已在库」
         Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
-        if (inRestricted && !CreditBondSpecialInboundRule.isStrongGuarantee(securityInfo)
+        if (inRestricted && !CreditBondSpecialInboundRule.isStrongGuarantee(
+                securityInfo, BusinessSwitches.STRONG_GUARANTEE_ENABLED)
                 && currentGradedSort == null) {
             // 已在重点观察名单且未在信用债分级库：整棵信用债树不可选（境外债不受评分档套件限制）
             return excludeGradedBondPools(pools);
@@ -746,7 +749,7 @@ public class SecurityPoolAdjustService {
                 continue;
             }
             String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
-                    securityInfo, inRestricted, currentGradedSort, p.getInnerSort());
+                    securityInfo, inRestricted, currentGradedSort, p.getInnerSort(), BusinessSwitches.STRONG_GUARANTEE_ENABLED);
             if (restrictedFail != null) {
                 continue;
             }
@@ -3525,7 +3528,8 @@ public class SecurityPoolAdjustService {
                 continue;
             }
             // 保留当前准入规则对重点观察名单的处理
-            if (CreditBondSpecialInboundRule.checkRestricted(security, inRestricted, currentSort, pool.getInnerSort()) != null) {
+            if (CreditBondSpecialInboundRule.checkRestricted(security, inRestricted, currentSort,
+                    pool.getInnerSort(), BusinessSwitches.STRONG_GUARANTEE_ENABLED) != null) {
                 continue;
             }
             // 按矩阵或特殊债调整后的范围收集完整层级
@@ -3914,7 +3918,7 @@ public class SecurityPoolAdjustService {
      * 永续发债主体内评 1 档下调一级（矩阵最好档再降一档且只留那一档），其余至少下调一级；
      * 次级发债主体内评 1 档只能调入一级库，2+/2/2- 下调一级（只留那一档），其余至少下调一级。
      * 担保债或已在观察池：不得高于矩阵最好档，从该档开到五级。
-     * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只能去五级。池间调入限制仅对强担保豁免 restricted 池，禁止池仍全局拦截。可转债/可交换债/CRMW 不适用信用债 1～5。
+     * 已在重点观察名单：未在分级库不得新增（开关开启时强担保豁免），已在 1～4 级只能去五级。开关开启时池间调入限制仅对强担保豁免 restricted 池，禁止池仍全局拦截。可转债/可交换债/CRMW 不适用信用债 1～5。
      * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4。
      * 期限为空默认最长档（期限>5）继续走矩阵，不跳过。
      * 境外债目标池不走本规则。仅调入校验。
@@ -3944,7 +3948,8 @@ public class SecurityPoolAdjustService {
         // 重点观察名单：未在分级库不得新增；已在 1～4 级只能去五级
         String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
                 sec, inRestricted, currentGradedSort,
-                CreditBondSpecialInboundRule.isGradedLevelPool(pool) ? pool.getInnerSort() : null);
+                CreditBondSpecialInboundRule.isGradedLevelPool(pool) ? pool.getInnerSort() : null,
+                BusinessSwitches.STRONG_GUARANTEE_ENABLED);
         if (restrictedFail != null) {
             return restrictedFail;
         }
@@ -4517,7 +4522,7 @@ public class SecurityPoolAdjustService {
             }
             // 改判同样套重点观察名单：禁新增、已在 1～4 只能去五级
             String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
-                    sec, inRestricted, currentGradedSort, p.getInnerSort());
+                    sec, inRestricted, currentGradedSort, p.getInnerSort(), BusinessSwitches.STRONG_GUARANTEE_ENABLED);
             if (restrictedFail != null) {
                 continue;
             }
@@ -5078,14 +5083,14 @@ public class SecurityPoolAdjustService {
     /**
      * 规则：调入限制池（in_restrict）
      *
-     * 证券当前在配置的限制池中，则不允许调入目标池；非 ABS、担保人内评为 1 档的强担保债仅豁免重点观察名单池。
+     * 证券当前在配置的限制池中，则不允许调入目标池；开关开启时，非 ABS、担保人内评为 1 档的强担保债仅豁免重点观察名单池。
      */
     private String inCheckRestrictPool(AdjustCheckContext ctx) {
         List<Long> relPools = ctx.getTargetPoolRelations().get(RelationType.IN_RESTRICT.getCode());
         if (relPools == null || relPools.isEmpty()) {
             return null;
         }
-        // 强担保只豁免重点观察名单的池间限制，其他调入限制池仍然拦截
+        // 开关开启时，强担保只豁免重点观察名单的池间限制，其他调入限制池仍然拦截
         List<Long> blocked = relPools.stream()
                 .filter(ctx.getCurrentPoolIds()::contains)
                 .filter(poolId -> !isStrongGuaranteeRestrictedPool(ctx, poolId))
@@ -5104,7 +5109,8 @@ public class SecurityPoolAdjustService {
      * @return true=强担保可豁免的重点观察名单池
      */
     private boolean isStrongGuaranteeRestrictedPool(AdjustCheckContext ctx, Long poolId) {
-        if (!CreditBondSpecialInboundRule.isStrongGuarantee(ctx.getSecurityInfo())
+        if (!CreditBondSpecialInboundRule.isStrongGuarantee(
+                ctx.getSecurityInfo(), BusinessSwitches.STRONG_GUARANTEE_ENABLED)
                 || ctx.getPoolMap() == null) {
             return false;
         }

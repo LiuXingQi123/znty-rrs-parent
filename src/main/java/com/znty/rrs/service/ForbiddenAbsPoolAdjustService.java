@@ -1,4 +1,6 @@
 package com.znty.rrs.service;
+
+import com.znty.rrs.common.constants.BusinessSwitches;
 import com.znty.rrs.common.enums.ApprovalStrategy;
 
 import com.znty.rrs.common.enums.FlowStatus;
@@ -369,7 +371,7 @@ public class ForbiddenAbsPoolAdjustService {
      * 可转债 / 可交换债 / CRMW 去掉信用债 1～5。
      * ABS 按特殊债：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级。「1 档」只看担保人内评。
      * 担保债，或证券/主体已在观察池：不得高于矩阵最好档，从该档开到五级。普通债只保留矩阵单元格。
-     * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只留五级。含权只改期限。releaseRules 跳过矩阵。
+     * 已在重点观察名单：未在分级库不得新增（开关开启时强担保豁免），已在 1～4 级只留五级。含权只改期限。releaseRules 跳过矩阵。
      *
      * @param pools 待过滤的投资池列表
      * @param req   选池请求
@@ -418,7 +420,8 @@ public class ForbiddenAbsPoolAdjustService {
         }
         // 取当前已在分级库的最好档，供重点观察名单判断「新增还是已在库」
         Integer currentGradedSort = resolveCurrentGradedSort(currentPoolIds, poolMap);
-        if (inRestricted && !CreditBondSpecialInboundRule.isStrongGuarantee(securityInfo)
+        if (inRestricted && !CreditBondSpecialInboundRule.isStrongGuarantee(
+                securityInfo, BusinessSwitches.STRONG_GUARANTEE_ENABLED)
                 && currentGradedSort == null) {
             // 已在重点观察名单且未在信用债分级库：整棵信用债树不可选（境外债不受评分档套件限制）
             return excludeGradedBondPools(pools);
@@ -465,7 +468,7 @@ public class ForbiddenAbsPoolAdjustService {
                 continue;
             }
             String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
-                    securityInfo, inRestricted, currentGradedSort, p.getInnerSort());
+                    securityInfo, inRestricted, currentGradedSort, p.getInnerSort(), BusinessSwitches.STRONG_GUARANTEE_ENABLED);
             if (restrictedFail != null) {
                 continue;
             }
@@ -2659,7 +2662,7 @@ public class ForbiddenAbsPoolAdjustService {
      * <p>调入信用债大库池时，按债券的「主体内评分档 × 期限档」查矩阵得到允许调入的池列表。
      * 担保债取主体与担保人内评孰高后再查矩阵；ABS 按特殊债：担保人内评 1 档只能调入一级库，无担保人或非 1 档至少下调一级。
      * ABS「1 档」只看担保人内评。担保债或已在观察池：不得高于矩阵最好档，从该档开到五级。
-     * 已在重点观察名单：未在分级库不得新增（强担保豁免），已在 1～4 级只能去五级。可转债/可交换债/CRMW 不适用信用债 1～5。
+     * 已在重点观察名单：未在分级库不得新增（开关开启时强担保豁免），已在 1～4 级只能去五级。可转债/可交换债/CRMW 不适用信用债 1～5。
      * 正式证券无内评禁止入信用债 1～5 级；临时代码默认档 4。
      * 期限为空默认最长档（期限>5）继续走矩阵，不跳过。
      * 境外债目标池不走本规则。仅调入校验。
@@ -2688,7 +2691,8 @@ public class ForbiddenAbsPoolAdjustService {
         // 重点观察名单：禁止新增，已在库只能去五级
         String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
                 sec, inRestricted, currentGradedSort,
-                CreditBondSpecialInboundRule.isGradedLevelPool(pool) ? pool.getInnerSort() : null);
+                CreditBondSpecialInboundRule.isGradedLevelPool(pool) ? pool.getInnerSort() : null,
+                BusinessSwitches.STRONG_GUARANTEE_ENABLED);
         if (restrictedFail != null) {
             return restrictedFail;
         }
@@ -3167,7 +3171,7 @@ public class ForbiddenAbsPoolAdjustService {
             }
             // 改判同样套重点观察名单：禁新增、已在 1～4 只能去五级
             String restrictedFail = CreditBondSpecialInboundRule.checkRestricted(
-                    sec, inRestricted, currentGradedSort, p.getInnerSort());
+                    sec, inRestricted, currentGradedSort, p.getInnerSort(), BusinessSwitches.STRONG_GUARANTEE_ENABLED);
             if (restrictedFail != null) {
                 continue;
             }

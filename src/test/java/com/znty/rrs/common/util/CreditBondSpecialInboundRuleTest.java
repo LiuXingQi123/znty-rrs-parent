@@ -232,8 +232,8 @@ public class CreditBondSpecialInboundRuleTest {
         sec.setInnerIssuerRating("2");
         sec.setInnerGuarantorRating("1");
         // ABS 的评级主体是权益人，不按担保人内评享受重点观察名单豁免
-        assertThat(CreditBondSpecialInboundRule.isStrongGuarantee(sec)).isFalse();
-        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, 1))
+        assertThat(CreditBondSpecialInboundRule.isStrongGuarantee(sec, true)).isFalse();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, 1, true))
                 .contains("不得新增入库");
     }
 
@@ -267,22 +267,43 @@ public class CreditBondSpecialInboundRuleTest {
     @Test
     public void restrictedBlocksNewInboundUnlessStrongGuarantee() {
         SecurityInfoBo sec = new SecurityInfoBo();
-        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, 1))
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, 1, true))
                 .contains("不得新增入库");
         sec.setGuarantFlag(1);
         sec.setInnerGuarantorRating("1");
-        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, 1)).isNull();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, 1, true)).isNull();
+    }
+
+    /** 关闭开关后，担保人一档也执行完整的重点观察名单限制 */
+    @Test
+    public void disabledStrongGuaranteeShouldKeepRestrictedRules() {
+        SecurityInfoBo sec = new SecurityInfoBo();
+        sec.setGuarantFlag(1);
+        sec.setInnerGuarantorRating("1");
+        assertThat(CreditBondSpecialInboundRule.isStrongGuarantee(sec, false)).isFalse();
+        assertThat(CreditBondSpecialInboundRule.isStrongGuarantee(sec, true)).isTrue();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, 1, false))
+                .contains("不得新增入库");
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 2, 3, false))
+                .contains("只能调入五级库");
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 5, 3, false))
+                .contains("不可上调");
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 2, 5, false)).isNull();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, false, null, 1, false)).isNull();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, null, null, false)).isNull();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 2, 3, true)).isNull();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 5, 3, true)).isNull();
     }
 
     @Test
     public void restrictedAlreadyInPoolCanOnlyGoToLevelFive() {
         SecurityInfoBo sec = new SecurityInfoBo();
-        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 2, 3))
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 2, 3, true))
                 .contains("只能调入五级库");
-        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 2, 5)).isNull();
-        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 5, 3))
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 2, 5, true)).isNull();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 5, 3, true))
                 .contains("不可上调");
-        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 5, 5)).isNull();
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(sec, true, 5, 5, true)).isNull();
     }
 
     @Test

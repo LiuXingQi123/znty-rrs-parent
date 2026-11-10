@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.znty.rrs.common.constants.BusinessSwitches;
 import com.znty.rrs.common.enums.AttachmentPurpose;
 import com.znty.rrs.common.enums.AttachmentCategory;
 import com.znty.rrs.common.enums.RelationType;
@@ -278,7 +279,7 @@ public class SecurityPoolAdjustServiceStepTest {
         securityInfo.setInnerIssuerRating("1");
         securityInfo.setInnerGuarantorRating("1");
 
-        assertThat(CreditBondSpecialInboundRule.checkRestricted(securityInfo, true, null, 1))
+        assertThat(CreditBondSpecialInboundRule.checkRestricted(securityInfo, true, null, 1, true))
                 .isEqualTo("重点观察名单原则上不得新增入库信用债分级库");
     }
 
@@ -1786,7 +1787,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failure).contains("不得新增入库");
     }
 
-    /** 强担保债在重点观察名单中调入信用债大库时，不再被池间调入限制拦截。 */
+    /** 强担保是否豁免重点观察名单的池间调入限制，由统一常量决定 */
     @Test
     public void checkInConditionsShouldAllowStrongGuaranteeInRestrictedPool() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
@@ -1803,8 +1804,11 @@ public class SecurityPoolAdjustServiceStepTest {
         ctx.setReleaseRules(true);
 
         List<String> failures = service.checkInConditions(ctx);
-
-        assertThat(failures).doesNotContain("证券当前在调入限制池中：重点观察名单");
+        if (BusinessSwitches.STRONG_GUARANTEE_ENABLED) {
+            assertThat(failures).doesNotContain("证券当前在调入限制池中：重点观察名单");
+        } else {
+            assertThat(failures).contains("证券当前在调入限制池中：重点观察名单");
+        }
     }
 
     /** 强担保不豁免重点观察名单之外的其他调入限制池。 */
@@ -1834,7 +1838,8 @@ public class SecurityPoolAdjustServiceStepTest {
 
         List<String> failures = service.checkInConditions(ctx);
 
-        assertThat(failures).contains("证券当前在调入限制池中：其他限制池");
+        assertThat(failures).anyMatch(reason -> reason.contains("证券当前在调入限制池中：")
+                && reason.contains("其他限制池"));
     }
 
     /** 普通担保债或担保人内评非 1 档时，重点观察名单仍按调入限制池拦截。 */
@@ -1879,7 +1884,7 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(failures).contains("证券当前在禁止池中");
     }
 
-    /** 强担保豁免重点观察名单限制后，主体债入库矩阵仍然继续执行。 */
+    /** 关闭强担保豁免时先拦截重点观察名单，非重点观察债仍继续校验矩阵 */
     @Test
     public void inCheckMainGradeRuleShouldStillApplyMatrixForStrongGuarantee() {
         CreditBondGradeRuleMapper gradeRuleMapper = mock(CreditBondGradeRuleMapper.class);
@@ -1910,8 +1915,12 @@ public class SecurityPoolAdjustServiceStepTest {
         when(gradeRuleMapper.queryAllowedPoolIdsByGradeAndBucket(any(String.class), any(String.class)))
                 .thenReturn(Collections.<Long>emptyList());
 
+        if (!BusinessSwitches.STRONG_GUARANTEE_ENABLED) {
+            String restrictedFailure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
+            assertThat(restrictedFailure).isEqualTo("重点观察名单原则上不得新增入库信用债分级库");
+            ctx.setSecurityInRestrictedPool(false);
+        }
         String failure = ReflectionTestUtils.invokeMethod(service, "inCheckMainGradeRule", ctx);
-
         assertThat(failure).isEqualTo("主体债入库矩阵未配置允许池");
         verify(gradeRuleMapper).queryAllowedPoolIdsByGradeAndBucket("2", "GT_5");
     }

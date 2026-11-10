@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.constants.BusinessSwitches;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
@@ -127,6 +128,27 @@ public class GradeRuleAlertServiceTest {
             grades.add(grade);
         }
         when(gradeMapper.queryEnabledRatingGradeList()).thenReturn(grades);
+    }
+
+    /** 定时扫描与人工调库共用开关，关闭时提醒强担保债的重点观察名单限制 */
+    @Test
+    public void taskShouldFollowStrongGuaranteeSwitch() {
+        master.setAbsFlag(0);
+        master.setGuarantFlag(1);
+        when(securityMapper.querySecurityInRestrictedPool("TEST_ABS.SH")).thenReturn(true);
+        when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(2L, 1), pool(3L, 2), pool(6L, 5)));
+        when(alertMapper.queryGradedBondInPoolList()).thenReturn(Collections.singletonList(scan(2L, 101L)));
+
+        ScheduledTaskResult result = alertService.execute();
+        if (BusinessSwitches.STRONG_GUARANTEE_ENABLED) {
+            assertThat(result.getMessage()).contains("本轮命中 0 条");
+            verify(alertMapper, never()).addAlert(any(IpGradeRuleAlertBo.class));
+        } else {
+            assertThat(result.getMessage()).contains("本轮命中 1 条");
+            ArgumentCaptor<IpGradeRuleAlertBo> captor = ArgumentCaptor.forClass(IpGradeRuleAlertBo.class);
+            verify(alertMapper).addAlert(captor.capture());
+            assertThat(captor.getValue().getFailReason()).contains("只能调入五级库或调出");
+        }
     }
 
     /** ABS 直接取主档发行人内评，不读入库快照，也不再查一遍最新内评 */

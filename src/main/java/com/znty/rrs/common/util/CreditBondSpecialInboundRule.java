@@ -31,7 +31,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
  * 含权债不改档位，只改期限（见 {@code CreditBondRemainTermUtil}）。
  * 可转债 / 可交换债 / 可分离转债 / CRMW 不能进信用债 1～5。
  * 重点观察名单不走上面的类型分支，单独 {@link #checkRestricted}：未在分级库不得新增；已在 1～4 级只能去五级或出库；
- * 有担保且担保人内评 1 档可豁免（ABS 不适用，其评级主体是权益人）；CRMW 事先已排除分级库。
+ * 开关开启时，有担保且担保人内评 1 档可豁免（ABS 不适用，其评级主体是权益人）；CRMW 事先已排除分级库。
  * 境外债不走本规则。</p>
  */
 public final class CreditBondSpecialInboundRule {
@@ -227,15 +227,17 @@ public final class CreditBondSpecialInboundRule {
     }
 
     /**
-     * 强担保豁免：有担保且担保人内评档为 1。
+     * 强担保豁免：开关开启、有担保且担保人内评档为 1
      *
      * ABS 的评级主体是已固定的权益人，担保标记不参与其准入判定，因此不适用本豁免
      *
      * @param sec 证券主数据
+     * @param strongGuaranteeEnabled 是否启用强担保豁免
      * @return true=强担保，重点观察名单可豁免
      */
-    public static boolean isStrongGuarantee(SecurityInfoBo sec) {
-        return !isAbs(sec) && isGuaranteed(sec) && isGradeOne(sec.getInnerGuarantorRating());
+    public static boolean isStrongGuarantee(SecurityInfoBo sec, boolean strongGuaranteeEnabled) {
+        return strongGuaranteeEnabled && !isAbs(sec) && isGuaranteed(sec)
+                && isGradeOne(sec.getInnerGuarantorRating());
     }
 
     /**
@@ -321,20 +323,22 @@ public final class CreditBondSpecialInboundRule {
     /**
      * 已在重点观察名单时的入库校验（仅目标为信用债 1～5 级时拦截）。
      * 未在分级库：不得新增；已在 1～4 级：只能去五级或出库；已在五级：不可上调。
-     * 强担保（有担保且担保人内评 1 档）返回 null，由调用方继续走其它规则。
+     * 开关开启时，强担保（有担保且担保人内评 1 档）返回 null，由调用方继续走其它规则
      *
      * @param sec               证券
      * @param inRestricted      证券或主体在重点观察名单
      * @param currentGradedSort 当前已在分级库的最好档；未在分级库为 null
      * @param targetSort        目标分级库档；非分级库目标为 null（本方法不拦）
+     * @param strongGuaranteeEnabled 是否启用强担保豁免
      * @return 失败文案；通过为 null
      */
     public static String checkRestricted(SecurityInfoBo sec, boolean inRestricted,
-                                         Integer currentGradedSort, Integer targetSort) {
+                                         Integer currentGradedSort, Integer targetSort,
+                                         boolean strongGuaranteeEnabled) {
         if (!inRestricted || targetSort == null) {
             return null;
         }
-        if (isStrongGuarantee(sec)) {
+        if (isStrongGuarantee(sec, strongGuaranteeEnabled)) {
             return null;
         }
         if (currentGradedSort == null) {

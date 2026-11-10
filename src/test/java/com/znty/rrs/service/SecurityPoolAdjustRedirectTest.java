@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.constants.BusinessSwitches;
 import com.znty.rrs.entity.bo.CreditBondInnerRatingGradeBo;
 import com.znty.rrs.entity.bo.CreditBondTermBucketBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
@@ -215,7 +216,12 @@ public class SecurityPoolAdjustRedirectTest {
         master.setAbsFlag(0);
         master.setGuarantFlag(1);
         when(mapper.querySecurityInRestrictedPool("ABS.SH")).thenReturn(true);
-        assertThat(service.queryRedirectPoolOptions("ABS.SH", 101L)).hasSize(5);
+        List<RedirectPoolOptionDto> options = service.queryRedirectPoolOptions("ABS.SH", 101L);
+        if (BusinessSwitches.STRONG_GUARANTEE_ENABLED) {
+            assertThat(options).hasSize(5);
+        } else {
+            assertThat(options).isEmpty();
+        }
         when(mapper.queryLatestRatingCompanyByCode("SELF_SELECTED")).thenReturn(rating("2"));
         assertThat(service.queryRedirectPoolOptions("ABS.SH", 101L)).isEmpty();
     }

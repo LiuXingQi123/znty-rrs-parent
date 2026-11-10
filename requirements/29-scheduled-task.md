@@ -343,6 +343,8 @@
 
 对应老系统 `InconformityMaingrade2Job`。实现类 `GradeRuleAlertService`（`implements RrsScheduledTask`），**只提醒、不改池**。
 
+**强担保豁免开关**：统一使用 `common/constants/BusinessSwitches.java` 中的代码常量 `BusinessSwitches.STRONG_GUARANTEE_ENABLED`，当前为 `false`。改为 `true` 可恢复豁免，修改后需重新编译并重启服务生效。关闭时，非 ABS 担保人内评 1 档也执行重点观察名单限制；开启时恢复原有重点观察名单准入及池间 `in_restrict` 豁免。普通担保债内评取较优值及矩阵规则不变，ABS、禁止池及其他限制池不享受该豁免。 此任务复用人工规则：关闭开关后，重点观察名单内的强担保债也按普通债规则生成提醒；开启后恢复豁免，下一轮扫描按原有机制失效不再命中的待处理提醒。
+
 1. 扫已在信用债 1～5 级且 `audit_status=20` 的债券（`queryGradedBondInPoolList`；不含境外债，对齐老 polidEnum）。  
 2. 扫描携带当前在池记录的 `adjust_log_id`，对每条调用 `SecurityPoolAdjustService.evaluateGradedInboundForPool`（含特殊债/担保债/观察池、重点观察名单）。**ABS 的评级主体在确认权益人时已固定写入主档发行人字段且不可更换，直接取主档 `inner_issuer_rating`，不查询入库快照**；**担保债可能对应多个担保人（主档 `guarantor_id` 为逗号多值串，无法判断当时选了哪一个），按该入库日志及证券代码精确读取快照，以当时选定的单一 `guarantor_id` 从 `ais_inv_analysis.v_inv_grade_result` 取 `ts` 最新的 `total_score`**；不使用主档或快照旧评分，不重选关系列表首条，不取同券其他入库记录代替。普通非担保债继续使用原主体内评口径。重点观察名单已在一至四级时，先按完整主体债入池规则复核五级库；存在可通过的五级库才提示“只能调入五级库或调出”，五级库也不满足时提示“只能调出”。
 3. 仍允许则跳过；不再允许则按「证券 + 当前池 + 档位 + 不符合原因」生成 `context_key`：同券同池已有待处理则刷新原因与扫描时间（计入**本轮命中**）；同一摘要已由人工标记已处理时跳过（计入**沿用已处理**）；否则新增 `ip_grade_rule_alert`（`alert_status=00`，计入**本轮命中**）。
