@@ -124,7 +124,7 @@ public class BatchCrmwPoolAdjustServiceTest {
         item.setFailReasons(Collections.emptyList());
         AdjustCheckDto checkDto = new AdjustCheckDto();
         checkDto.setItems(Collections.singletonList(item));
-        when(crmwPoolAdjustService.checkCrmwAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
+        when(crmwPoolAdjustService.checkBatchAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
 
         BatchCrmwAdjustReq req = new BatchCrmwAdjustReq();
         req.setCurrentUserId("1");
@@ -148,7 +148,7 @@ public class BatchCrmwPoolAdjustServiceTest {
         assertThat(dto.getItems().get(0).getSecurityCode()).isEqualTo("MTN001.IB");
         assertThat(dto.getItems().get(0).getFailReasons()).isEmpty();
         ArgumentCaptor<AdjustCheckReq> captor = ArgumentCaptor.forClass(AdjustCheckReq.class);
-        verify(crmwPoolAdjustService).checkCrmwAdjust(captor.capture());
+        verify(crmwPoolAdjustService).checkBatchAdjust(captor.capture());
         assertThat(captor.getValue().getCrmwScode()).isEqualTo("CRMW001.IB");
         assertThat(captor.getValue().getCrmwName()).isEqualTo("某CRMW凭证A");
         assertThat(captor.getValue().getGuarantorCode()).isEqualTo("C10008");
@@ -235,7 +235,7 @@ public class BatchCrmwPoolAdjustServiceTest {
         }
     }
 
-    /** 验证批量校验结果透传单笔流程候选，不注入 batchIn/batchOut。 */
+    /** 验证映射层保留校验入口已生成的流程候选，不重复追加 */
     @Test
     public void buildBatchCheckResultShouldPassThroughSingleFlowOptions() {
         BatchCrmwPoolAdjustService service = new BatchCrmwPoolAdjustService();
@@ -321,7 +321,7 @@ public class BatchCrmwPoolAdjustServiceTest {
 
         AdjustCheckDto checkDto = new AdjustCheckDto();
         checkDto.setItems(Arrays.asList(manual, mutex));
-        when(crmwPoolAdjustService.checkCrmwAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
+        when(crmwPoolAdjustService.checkBatchAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
 
         BatchCrmwAdjustReq req = new BatchCrmwAdjustReq();
         req.setCurrentUserId("1");

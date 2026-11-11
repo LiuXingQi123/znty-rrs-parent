@@ -14,8 +14,8 @@
 ## 标的债券一券多码调库
 
 - CRMW 凭证本身为单一代码，不存在多市场扩批；仅将其绑定标的债券按 Wind 非空 `S_INFO_ISINCODE` 展开同券代码，排除自身、去重、不递归，空 ISIN 和临时代码不关联。
-- `checkCrmwAdjust` 在手工、联动、互斥项生成后追加 `itemTag=related` 的关联调整项。每个实际代码独立校验市场、凭证+标的组合在池状态、活动池组、冻结期和原调库规则；同池调入累计主项及已通过关联项的容量。主券或任一关联码校验失败，按 adjustGroupKey 反向阻断整个同券跨市场调库组，保留失败代码和具体原因；不得只提交该组中通过的部分代码，其他独立调库组不受影响。
-- 单笔提交携带基本信息已查询的 `relatedMarketCodes: [{ windCode, marketCode }]`；后端直接使用传入集合核对各目标池的调入明细是否带齐主券及关联券，提交阶段不再查询同券关系。批量及 Excel 入口复用本次校验结果中的实际代码集合。逐券活动流程检查继续执行。
+- `checkExcelAdjust` 在手工、联动、互斥项生成后追加 `itemTag=related` 的关联调整项。每个实际代码独立校验市场、凭证+标的组合在池状态、活动池组、冻结期和原调库规则；同池调入累计主项及已通过关联项的容量。主券与关联码原校验原因完整保留；Excel 业务失败转为提示后整组可提交，关联证券无法识别或 ABS 身份冲突仍阻断整组，其他独立调库组不受影响。
+- 单笔提交携带基本信息已查询的 `relatedMarketCodes: [{ windCode, marketCode }]`；后端直接使用传入集合核对各目标池的调入明细是否带齐主券及关联券，提交阶段不再查询同券关系。批量及 Excel 入口复用本次校验结果中的实际代码集合。逐券活动流程检查继续执行并作为调整提示，Excel 提交不再因此阻断。
 - 关联项保持同一个 `crmwScode/crmwStype`，`sourceSecurityCode` 为触发主组合键 `crmwScode|securityCode`，共用原主项的 `adjustGroupKey`、流程与 CRMW 批次号，仅手工项创建流程步骤；关联项的报告要求由同组手工项承担。
 - 提交 `items[]` 新增 `securityCode/securityShortName/securityType`，记录、快照与最终落池使用实际标的身份。未传明细代码的旧单组合请求继续使用请求级主券代码。直通即时生效，人工审批仅最终 `20` 同批落池；出池精确匹配原凭证、实际标的和目标池，保留其他凭证的组合。
 - 批量及 Excel 导入透传实际代码；同批显式选择多个同券代码时按凭证+标的+目标池+方向去重，手工主项优先。Excel 关联项的全称、市场、类型来自自身主档。
@@ -76,7 +76,7 @@ CRMW代码、CRMW全称、CRMW市场、证券代码、证券全称、证券类�
 | `POST crmwPoolExcelImport/uploadExcel` | multipart：`request` JSON + `file` + 可选 `originalFileNameListJson` |
 | `POST .../queryTask` | 批次信息 + `checkItems` |
 | `POST .../queryItemPage` | 明细分页（关键字匹配 CRMW 代码或证券代码） |
-| `POST .../checkImport` | 逐组合委托 `checkCrmwAdjust` |
+| `POST .../checkImport` | 逐组合委托 `checkExcelAdjust` |
 | `POST .../submitImport` | 按组合分组委托 `submitAdjustLog` |
 | `POST .../cancelImport` | 逻辑删除批次 |
 
@@ -91,11 +91,11 @@ Excel 层只做：模板/临时表、目标池解析、`excel_importable` 权限
 
 | 动作 | 服务 |
 |------|------|
-| 校验 | `CrmwPoolAdjustService.checkCrmwAdjust`（与批量内部逐组合同路径） |
+| 校验 | `CrmwPoolAdjustService.checkExcelAdjust`（原规则执行后转为业务提示） |
 | 提交 | `CrmwPoolAdjustService.submitAdjustLog`（整批共享附件上下文与 `BatchNoContext`） |
 
 - 每行 Excel → 一凭证 + 一标的 + 一目标池 + 方向
-- 保留完整展开项（手工 / 联动 / 互斥 / 关联），**不注入** batchIn/batchOut
+- 保留完整展开项（手工 / 联动 / 互斥 / 关联），主项保留单笔候选并追加已配置的 batchIn/batchOut
 - 校验结果「调整类型」：手工主项 **Excel导入**；联动/互斥/关联同名
 - 提交：按 `crmwScode|securityCode` 分组；手工主项 `adjust_type=Excel导入`
 - 仅提交 `canAdjust=true` 的校验结果项
@@ -115,3 +115,17 @@ Excel 层只做：模板/临时表、目标池解析、`excel_importable` 权限
 ## 当前市场口径
 
 市场按当前代码在 `rrs_securityinfo.market` 的本地市场值校验（外部导入与 Wind `EXCHMARKET` 保持一致），银行间使用 NIB；临时代码使用登记表市场。关联券其他市场不使当前代码通过市场限制。批量候选直接按主档市场筛选，临时代码用登记表 EXISTS 筛选，展示按当前页批量查询唯一市场，避免关联连接重复分页或逐行市场查询。CRMW 导入复用证券主档缓存，同一代码的市场只查询一次。缺失、重复或不支持的映射报出具体代码。
+
+
+## 批量流程与 Excel 提示放行
+
+- 普通单笔继续使用原业务规则；普通批量追加已配置的批量流程，业务失败仍阻断
+- Excel 通过 `checkExcelAdjust` 执行完整规则，再将锁池、容量、在途、限制池、到期、已在池或不在池等业务失败保留为 `failReasons` 提示，允许可识别的组合及同组配套项提交
+- 凭证、标的、关联证券或目标池无法识别、类型错误、权限不足、主体选择不合法及 ABS 身份冲突仍阻断；关联主档缺失阻断整个来源组
+- Excel 主项保留完整单笔候选，再追加目标池已配置的 batchIn/batchOut 并推荐；未配置时保留单笔推荐，不生成额外的批量无需审批候选
+- Excel 提交不再因近期重复业务申请、在途、配套互斥调出可行性、报告必填或组合在池状态重新阻断；导入批次仍禁止重复提交，已提供的报告引用仍须有效
+- 直通预检和人工终审通过同组 Excel 主项批次识别配套项，采用相同提示放行口径；标的、CRMW 凭证及目标池必须存在，ABS 身份仍强制检查
+- Excel 重复调入先软删除同凭证、实际标的、目标池的旧有效状态再写新状态；调出已不在池时按完成处理，不影响其他凭证组合
+- 提交保留实际选择的流程 ID、Key、类型；只有审批通过或直通成功才落池，整批数据库异常仍回滚
+- Excel 提交使用本次已加载并核实的证券信息逐日志保存申请快照，非 ABS 也保存；不重复查询主档、不写回主档，审核和历史详情按申请快照回显
+- 保留原候选来源、模板和页面操作，不新增表结构

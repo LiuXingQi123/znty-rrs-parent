@@ -5,64 +5,69 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import lombok.Data;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * 调库校验（checkAdjust）的共享数据载体
+ * 保存一次 CRMW 组合调库校验共用的数据
  *
- * <p>checkAdjust 每次调用需要加载多项证券/池的基础数据，这些数据在整个调用过程中保持不变。
- * 将其封装为此类后，buildCheckContext、buildAutoResultItem 等辅助方法只需接收一个
- * shared 参数，既能保持方法签名简洁（≤4 个参数），也便于后续扩展新的校验参数——
- * 新增字段只需改动此类和 loadSharedData 的数据加载部分，辅助方法签名无需调整。
+ * 手工项、联动项和互斥项共用已加载的证券资料、投资池配置及组合在池状态，避免逐项重复查询
+ * 同券跨市场项沿用池配置，并按各自的标的代码读取组合在池状态
  */
 @Data
 public class AdjustSharedData {
 
-    /** 证券基础信息（来自 rrs_securityinfo） */
+    /** 批量及 Excel 校验时是否追加目标池配置的批量流程 */
+    private boolean batchFlowOptionsEnabled;
+
+    /** 本次查到证券主数据的主标的和跨市场标的代码，用于判断 Excel 调整组的证券资料是否齐全 */
+    private Set<String> knownSecurityCodes = new HashSet<>();
+
+    /** 标的证券基础信息（来自 rrs_securityinfo） */
     private SecurityInfoBo securityInfo;
     /** CRMW 凭证代码 */
     private String crmwScode;
-    /** CRMW 证券类型 */
+    /** CRMW 凭证的证券类型 */
     private String crmwStype;
 
-    /** 全量投资池索引（ID → Bo），用于快速查找池详情和构建池路径名称 */
+    /** 按池 ID 保存的投资池配置，用于查找池详情和拼接池全名 */
     private Map<Long, InvestmentPoolBo> poolMap;
 
-    /** 证券当前有效所在池 ID 集合（ip_pool_status_crmw.audit_status='20'） */
+    /** 当前凭证与标的组合有效在池的池 ID（ip_pool_status_crmw.audit_status='20'） */
     private Set<Long> currentPoolIds;
 
-    /** 全量投资池关系配置（poolId → relationType → 关联池 ID 列表） */
+    /** 按池 ID 和关系类型保存的关联池 ID，用于查询来源池、限制池、联动池和互斥池 */
     private Map<Long, Map<String, List<Long>>> poolRelationMap;
 
-    /** 证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
+    /** 标的证券是否有待处理的 CRMW 调库步骤 */
     private boolean hasPendingProcess;
 
-    /** 当前 CRMW 组合活动流程涉及的顶级投资池组 ID 集合 */
+    /** 当前组合进行中的手工调库流程所涉及的根池 ID，用于检查目标池组是否已有流程 */
     private Set<Long> pendingPoolGroupIds;
 
-    /** 证券当前进行中流程所在步骤名称 */
+    /** 标的证券当前待处理的调库步骤名称 */
     private String pendingProcessNodeLabel;
 
-    /** 当前证券自身是否在观察池（pool_type='observe'，audit_status='20'） */
+    /** 标的证券是否有效在观察池（pool_type='observe'，audit_status='20'） */
     private boolean securityInObservePool;
 
-    /** 发行主体是否在观察池（主体级记录：ip_pool_status.security_code = issuer_code） */
+    /** 标的发行人是否在观察池，按发行人代码查询 ip_pool_status 的主体级记录 */
     private boolean issuerInObservePool;
 
-    /** 主体评级是否下调（由 RatingDowngradeChecker 查 wind_cbondissuerrating 比较当前与前次评级判定） */
+    /** 发行人主体评级是否下调，按 wind_cbondissuerrating 最新记录的当前评级、前次评级和评级变化判断 */
     private boolean issuerRatingDowngraded;
 
-    /** 展望评级是否下调（由 RatingDowngradeChecker 读 rrs_securityinfo.rating_outlook 是否为负面判定） */
+    /** 标的证券的评级展望是否为负面（rrs_securityinfo.rating_outlook） */
     private boolean outlookRatingDowngraded;
 
-    /** 担保人评级是否下调（CRMW 凭证级无担保人，恒 false） */
+    /** 本次选择的担保人评级是否下调，未选担保人时为 false */
     private boolean guarantorRatingDowngraded;
 
-    /** 本次请求中所有调入操作涉及的目标池 ID 集合，用于互斥池同时勾选校验 */
+    /** 本次请求调入的目标池 ID，用于检查是否同时调入互斥池 */
     private Set<Long> requestInPoolIds;
 
-    /** 本次请求中所有调出操作涉及的目标池 ID 集合，用于互斥池同时勾选校验 */
+    /** 本次请求调出的目标池 ID，用于检查是否同时调出互斥池 */
     private Set<Long> requestOutPoolIds;
 }

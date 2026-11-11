@@ -214,3 +214,7 @@ CRMW 凭证基本信息由 `queryCrmwDetail` 直接读取主档，保持原逻�
 `sys_attachment.source_attachment_id` 保存复制来源的报告库附件 ID，附件查询返回 `sourceAttachmentId/sourceReportId/sourceReportSource/sourceReportTitle`；基金代码转正继承关联时保留该来源。新增 `POST /api/v1/reports/queryReportDetail { reportId, source: internal|external }`，非法来源、无效 ID、不存在或已删除报告明确失败。
 
 新环境通过更新后的原始附件 schema 初始化；存量升级使用 `sql/tool_report_source_upgrade.sql`（不加入初始化/重置执行）。仅修复唯一可定位来源，未定位项明确输出供核对，运行时不猜测归属。前端完整说明见 `docs/report-materials.html`。
+
+## 批量及 Excel 流程展示
+
+流程类型支持批量调入/批量调出，保留申请时实际选择。Excel 主项与同组配套项终审采用业务提示放行口径，数据存在性和 ABS 身份仍强制检查；普通单笔和批量保持原阻断规则。

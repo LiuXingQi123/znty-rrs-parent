@@ -37,7 +37,7 @@ public class CrmwRelatedEntryPointTest {
         ReflectionTestUtils.setField(service, "batchCrmwPoolAdjustMapper", mapper);
         ReflectionTestUtils.setField(service, "crmwPoolAdjustService", single);
         when(mapper.queryEnabledLeafCrmwPoolCount(18L)).thenReturn(1);
-        when(single.checkCrmwAdjust(any())).thenAnswer(call -> {
+        when(single.checkBatchAdjust(any())).thenAnswer(call -> {
             AdjustCheckReq req = call.getArgument(0);
             List<AdjustCheckDto.CheckResultItem> items = new ArrayList<>();
             for (String code : Arrays.asList("A.IB", "A.SH")) {

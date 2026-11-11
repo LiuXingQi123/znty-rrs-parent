@@ -17,7 +17,7 @@
 ## 标的债券一券多码调库
 
 - CRMW 凭证本身为单一代码，不存在多市场扩批；仅将其绑定标的债券按 Wind 非空 `S_INFO_ISINCODE` 展开同券代码，排除自身、去重、不递归，空 ISIN 和临时代码不关联。
-- `checkCrmwAdjust` 在手工、联动、互斥项生成后追加 `itemTag=related` 的关联调整项。每个实际代码独立校验市场、凭证+标的组合在池状态、活动池组、冻结期和原调库规则；同池调入累计主项及已通过关联项的容量。主券或任一关联码校验失败，按 adjustGroupKey 反向阻断整个同券跨市场调库组，保留失败代码和具体原因；不得只提交该组中通过的部分代码，其他独立调库组不受影响。
+- `checkBatchAdjust` 在手工、联动、互斥项生成后追加 `itemTag=related` 的关联调整项。每个实际代码独立校验市场、凭证+标的组合在池状态、活动池组、冻结期和原调库规则；同池调入累计主项及已通过关联项的容量。主券或任一关联码校验失败，按 adjustGroupKey 反向阻断整个同券跨市场调库组，保留失败代码和具体原因；不得只提交该组中通过的部分代码，其他独立调库组不受影响。
 - 单笔提交携带基本信息已查询的 `relatedMarketCodes: [{ windCode, marketCode }]`；后端直接使用传入集合核对各目标池的调入明细是否带齐主券及关联券，提交阶段不再查询同券关系。批量及 Excel 入口复用本次校验结果中的实际代码集合。逐券活动流程检查继续执行。
 - 关联项保持同一个 `crmwScode/crmwStype`，`sourceSecurityCode` 为触发主组合键 `crmwScode|securityCode`，共用原主项的 `adjustGroupKey`、流程与 CRMW 批次号，仅手工项创建流程步骤；关联项的报告要求由同组手工项承担。
 - 提交 `items[]` 新增 `securityCode/securityShortName/securityType`，记录、快照与最终落池使用实际标的身份。未传明细代码的旧单组合请求继续使用请求级主券代码。直通即时生效，人工审批仅最终 `20` 同批落池；出池精确匹配原凭证、实际标的和目标池，保留其他凭证的组合。
@@ -60,13 +60,13 @@
 
 编排层 `BatchCrmwPoolAdjustService`：
 
-- `checkAdjust` 逐组合组装与单笔相同的 `AdjustCheckReq`，直接调用 `CrmwPoolAdjustService.checkCrmwAdjust`（与证券池批量调用 `checkAdjust` 同构）；结果项身份、流程候选与 `warnings` 透传单笔返回，不在批量侧重写规则。调入「已在池」按凭证+标的组合判断。
+- `checkAdjust` 逐组合组装与单笔相同的 `AdjustCheckReq`，调用 `CrmwPoolAdjustService.checkBatchAdjust`，完整复用单笔校验并追加批量候选；结果项身份、流程候选与 `warnings` 透传单笔返回，不在批量侧重写规则。调入「已在池」按凭证+标的组合判断。
 - CRMW 单笔 `AdjustCheckReq` 和 `CrmwPoolAdjustSubmitReq` 均接收 `guarantorCode`、`rightsHolderCode`、`selfSelectedRightsHolderCode`；批量编排层按标的类型透传实际选中的评级主体。ABS 自选权益人优先，两者均未选时阻断。目标池仍不是信用债大库，不走主体债矩阵；`releaseRules=yes` 仅在提交时把说明追加到调整意见/调整说明，**不改变**单笔校验结果。
 - `addAdjustLog` 按组合分组后委托 `submitAdjustLog`，整批共享附件与 `BatchNoContext`。
 - 手工项 `adjustType=手动批量调整`；批次号前缀仍为 `CRMW`。
 - 整批一个事务；约 30 秒防重复键含 `crmwScode`。
 - 存在直通项时 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`。
-- **不注入** batchIn/batchOut。
+- 保留完整单笔候选，额外加入已配置的 batchIn/batchOut 并设为唯一推荐；未配置时保留单笔推荐，不生成额外的批量无需审批候选。提交保留用户实际选择，普通批量业务失败仍阻断。
 - 候选查询与证券池批量的有意差异：证券池仍是一个 `querySecurityPage` + `direction`；CRMW 拆成 `queryInboundCandidatePage` / `queryOutboundCandidatePage`，查询请求体不带 `direction`。
 
 落池只写 `ip_pool_status_crmw`。审批复用现有 CRMW 审核/详情/历史页。

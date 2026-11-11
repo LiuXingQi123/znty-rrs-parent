@@ -38,6 +38,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -148,14 +149,14 @@ public class CrmwRelatedMarketAdjustTest {
                 .containsOnly(items.get(0).getAdjustGroupKey());
     }
 
-    /** 关联项累计主项和此前关联项的容量占用。 */
+    /** 关联项累计容量，任一市场超容时按现有规则阻断整组 */
     @Test
     public void checkShouldAccumulateCapacityAcrossCodes() {
         pool.setMaxCapacity(2L);
         // 执行完整调入校验
         List<AdjustCheckDto.CheckResultItem> items = service.checkCrmwAdjust(checkReq("调入")).getItems();
         assertThat(items).extracting(AdjustCheckDto.CheckResultItem::isCanAdjust)
-                .containsExactly(true, true, false);
+                .containsExactly(false, false, false);
         assertThat(items.get(2).getFailReasons()).anyMatch(reason -> reason.contains("持仓上限"));
     }
 
@@ -169,7 +170,7 @@ public class CrmwRelatedMarketAdjustTest {
                 .thenReturn(Collections.singletonList(18L));
         // 执行完整调入校验
         List<AdjustCheckDto.CheckResultItem> items = service.checkCrmwAdjust(checkReq("调入")).getItems();
-        assertThat(items.get(0).isCanAdjust()).isTrue();
+        assertThat(items).allMatch(item -> !item.isCanAdjust());
         assertThat(items.get(1).getFailReasons()).contains("证券不在本池投资市场范围内");
         assertThat(items.get(2).getFailReasons()).contains("信用缓释凭证与标的证券组合已在目标投资池中");
     }
@@ -188,7 +189,7 @@ public class CrmwRelatedMarketAdjustTest {
         when(mapper.queryCrmwPoolEntryTime("A.SH", "C.IB", "crmw", 18L)).thenReturn(new Date());
         // 执行完整调出校验
         List<AdjustCheckDto.CheckResultItem> items = service.checkCrmwAdjust(checkReq("调出")).getItems();
-        assertThat(items.get(0).isCanAdjust()).isTrue();
+        assertThat(items).allMatch(item -> !item.isCanAdjust());
         assertThat(items.get(1).getFailReasons()).contains("证券仍在目标投资池冻结期内");
         assertThat(items.get(2).isCanAdjust()).isFalse();
         verify(mapper).queryCrmwPoolEntryTime("A.SH", "C.IB", "crmw", 18L);
@@ -314,6 +315,19 @@ public class CrmwRelatedMarketAdjustTest {
         assertThat(steps.getAllValues()).extracting(IpAdjustStepBo::getAdjustLogId).containsOnly(logs.get(0).getId());
         assertThat(steps.getAllValues()).extracting(IpAdjustStepBo::getStepStatus).contains("pending");
         verify(mapper, never()).addPoolStatus(any());
+
+        // Excel 选择人工批量流程时仍等待审批，三市场均保存申请快照
+        clearInvocations(mapper);
+        logs.clear();
+        req.setAdjustType("Excel导入");
+        req.getItems().get(0).setFlowType("batchInbound");
+        service.submitAdjustLog(req, null, new CrmwPoolAdjustService.BatchNoContext());
+        assertThat(logs).hasSize(3);
+        assertThat(logs).extracting(IpAdjustLogBo::getAuditStatus).containsOnly("00");
+        assertThat(logs).extracting(IpAdjustLogBo::getFlowId).containsOnly(9L);
+        assertThat(logs).extracting(IpAdjustLogBo::getFlowType).containsOnly("batchInbound");
+        verify(mapper, times(3)).addAdjustSecuritySnapshotCrmw(any());
+        verify(mapper, never()).addPoolStatus(any());
     }
 
     /** 人工审批完成时同批关联日志一起复核、落池。 */
@@ -340,6 +354,18 @@ public class CrmwRelatedMarketAdjustTest {
         step.setAdjustBatchNo("CRMW_BATCH");
         when(mapper.queryAdjustLogListForAudit(1L, "CRMW_BATCH")).thenReturn(logs);
         when(mapper.editActiveAdjustLogAuditStatus(1L, "CRMW_BATCH", "20")).thenReturn(3);
+        ReflectionTestUtils.invokeMethod(flowService, "finishAdjustBatch", step);
+        verify(mapper, times(3)).addPoolStatus(any());
+        assertThat(logs).extracting(IpAdjustLogBo::getAuditStatus).containsOnly("20");
+
+        // Excel 主项及关联项在真实审批收尾入口使用同一提示放行口径
+        clearInvocations(mapper);
+        pool.setLockFlag(1);
+        logs.get(0).setAdjustType("Excel导入");
+        for (IpAdjustLogBo log : logs) {
+            log.setAdjustBatchNo("CRMW_BATCH");
+            log.setAuditStatus("00");
+        }
         ReflectionTestUtils.invokeMethod(flowService, "finishAdjustBatch", step);
         verify(mapper, times(3)).addPoolStatus(any());
         assertThat(logs).extracting(IpAdjustLogBo::getAuditStatus).containsOnly("20");

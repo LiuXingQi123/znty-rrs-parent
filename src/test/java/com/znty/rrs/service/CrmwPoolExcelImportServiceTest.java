@@ -201,11 +201,11 @@ public class CrmwPoolExcelImportServiceTest {
         ri.setItemTag("manual");
         ri.setAdjustGroupKey("18_调入");
         ri.setCanAdjust(true);
-        ri.setFailReasons(new ArrayList<>());
+        ri.setFailReasons(Collections.singletonList("目标投资池容量已满"));
         ri.setFlowOptions(new ArrayList<>());
         AdjustCheckDto checkDto = new AdjustCheckDto();
         checkDto.setItems(Collections.singletonList(ri));
-        when(crmwPoolAdjustService.checkCrmwAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
+        when(crmwPoolAdjustService.checkExcelAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
 
         when(importMapper.countByChkRslt(eq("IMP3"), eq("0"))).thenReturn(0);
         when(importMapper.queryItemList(anyString(), any(), any()))
@@ -219,7 +219,9 @@ public class CrmwPoolExcelImportServiceTest {
 
         CrmwPoolExcelImportDto dto = service.checkImport(req);
         assertNotNull(dto);
-        verify(crmwPoolAdjustService).checkCrmwAdjust(any(AdjustCheckReq.class));
+        verify(crmwPoolAdjustService).checkExcelAdjust(any(AdjustCheckReq.class));
+        assertEquals("全部可提交，其中 1 条含调整提示", dto.getChkDscr());
+        assertEquals("目标投资池容量已满", dto.getCheckItems().get(0).getFailReasons().get(0));
         verify(importMapper).updateItemCheckResult(any(SysImpTmpDetlBo.class));
         verify(importMapper).updateBatchCheckResult(any(SysImpTmpBo.class));
     }
