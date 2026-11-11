@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.WindCodeSyncMapper">
-    <!-- 按扩展参数指定的天数使用数据库时间过滤；同一 SEC_ID 只保留 CHANGE_DATE 最新的记录。 -->
+    <!-- 按指定天数筛选近期换码记录，每个 SEC_ID 只查询变更日期最新的记录 -->
     <select id="queryRecentWindCodeChangeList" resultType="com.znty.rrs.entity.schedule.WindCodeChangeDto">
         SELECT c.OBJECT_ID
               ,c.SEC_ID
@@ -22,33 +22,33 @@
                 ,c.SEC_ID
     </select>
 
-    <!-- 不使用 LIMIT 1；SEC_ID 唯一性被破坏时由 MyBatis 显式报错。 -->
+    <!-- 按 SEC_ID 锁定证券主档，匹配多条时由 MyBatis 报错 -->
     <select id="querySecurityBySecIdForUpdate" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
         SELECT * FROM rrs_securityinfo WHERE sec_id = #{secId} FOR UPDATE
     </select>
 
-    <!-- 旧码登记与人工转正的状态条件更新共用同一行锁。 -->
+    <!-- 锁定旧代码未删除的登记，供后续检查和复用 -->
     <select id="queryOldCodeRegistrationList" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
         SELECT * FROM rrs_temp_security_code
         WHERE temp_security_code = #{oldCode} AND is_deleted = 0
         ORDER BY id FOR UPDATE
     </select>
 
-    <!-- 历史转正登记只读，不重置其状态或原始临时代码。 -->
+    <!-- 查询已转正的历史登记，用于核对当前证券是否有转正记录 -->
     <select id="queryConvertedRegistrationList" resultType="com.znty.rrs.entity.bo.TempSecurityCodeBo">
         SELECT * FROM rrs_temp_security_code
         WHERE security_code = #{oldCode} AND status = 'updated' AND is_deleted = 0
-        ORDER BY id FOR UPDATE
+        ORDER BY id
     </select>
 
-    <!-- 完成标记与主档、业务转换同一事务提交；不在 AIS 表增加处理字段。 -->
+    <!-- 按备注中的事件标记检查本次换码是否已完成 -->
     <select id="queryCompletedWindCodeChangeCount" resultType="int">
         SELECT COUNT(1) FROM rrs_temp_security_code
         WHERE status = 'updated' AND oprt_source = 'job'
           AND LOCATE(#{eventKey}, memo) > 0
     </select>
 
-    <!-- 复制新代码主档；新代码沿用原证券的主数据和正式 SEC_ID，临时代码旧主档随后单独置为失效。 -->
+    <!-- 新增新代码主档，沿用原证券主数据和正式 SEC_ID -->
     <insert id="addSecurityWindCodeMaster">
         INSERT INTO rrs_securityinfo (
             wind_code
@@ -228,7 +228,7 @@
         )
     </insert>
 
-    <!-- 旧主档保留为失效临时代码，旧代码和新代码不再共用 SEC_ID。 -->
+    <!-- 停用旧代码主档并改用临时 SEC_ID，将正式 SEC_ID 留给新代码 -->
     <update id="editSecurityWindCodeToTemporary">
         UPDATE rrs_securityinfo
         SET security_status = 'D'

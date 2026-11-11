@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.TempFundCodeMapper">
 
-    <!-- 登记列表包含软删除记录；状态和来源筛选由用户决定 -->
+    <!-- 查询临时基金登记列表，按请求筛选状态和来源，包含软删除记录 -->
     <select id="queryTempFundCodePage" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto">
         SELECT t.*
               ,td.security_type_name AS temp_security_type_name
@@ -104,19 +104,14 @@
         WHERE t.id = #{id} AND t.is_deleted = 0
     </select>
 
-    <!-- 在锁主档之前仅确定登记所引用的临时代码 -->
+    <!-- 按主键读取未删除登记，主档加锁后再次读取以复核状态 -->
     <select id="queryTempFundCodeById" resultType="com.znty.rrs.entity.bo.TempFundCodeBo">
         SELECT * FROM rrs_temp_fund_code WHERE id = #{id} AND is_deleted = 0
     </select>
 
-    <!-- 主档锁之后锁定登记，以当前读校验状态 -->
-    <select id="queryTempFundCodeByIdForUpdate" resultType="com.znty.rrs.entity.bo.TempFundCodeBo">
-        SELECT * FROM rrs_temp_fund_code WHERE id = #{id} AND is_deleted = 0 FOR UPDATE
-    </select>
-
     <!-- 同码占位不能覆盖主档，已删除主档的代码也保留占用 -->
-    <select id="queryFundCodeReferenceIdListForUpdate" resultType="java.lang.Long">
-        SELECT id FROM rrs_fundinfo WHERE fund_code = #{fundCode} ORDER BY id FOR UPDATE
+    <select id="queryFundCodeReferenceIdList" resultType="java.lang.Long">
+        SELECT id FROM rrs_fundinfo WHERE fund_code = #{fundCode} ORDER BY id
     </select>
 
     <!-- 取消和转正后的登记仍占用临时代码 -->
@@ -169,7 +164,7 @@
         )
     </insert>
 
-    <!-- 占位主档全称使用简称，来源为 temporary、状态为 L（存续或上市中）；不补未知日期和管理人 -->
+    <!-- 写入临时基金占位主档，用简称作为全称，来源为 temporary，状态为 L（存续或上市中） -->
     <insert id="addTempFundInfo">
         INSERT INTO rrs_fundinfo (
             fund_code
@@ -196,7 +191,7 @@
         )
     </insert>
 
-    <!-- 状态条件阻断重复转正、取消和删除 -->
+    <!-- 仅更新仍为临时状态的登记，避免重复转正、取消和删除 -->
     <update id="editTempFundCodeState">
         UPDATE rrs_temp_fund_code
         SET fund_code = #{fundCode}
@@ -272,14 +267,14 @@
              + (SELECT COUNT(*) FROM ip_pool_status_fund WHERE fund_code = #{fundCode} AND is_deleted = 0) AS ref_count
     </select>
 
-    <!-- 只锁定在途日志，终态历史不替换 -->
-    <select id="queryPendingAdjustLogListForUpdate" resultType="com.znty.rrs.entity.bo.FundAdjustLogBo">
+    <!-- 读取在途日志，终态历史不替换 -->
+    <select id="queryPendingAdjustLogList" resultType="com.znty.rrs.entity.bo.FundAdjustLogBo">
         SELECT * FROM ip_adjust_log_fund
         WHERE fund_code = #{fundCode} AND is_deleted = 0 AND audit_status IN ('00', '11')
-        ORDER BY id FOR UPDATE
+        ORDER BY id
     </select>
 
-    <!-- 在途仅修改四个主档字段，三个基金调库参数和所有审批关联保持原值 -->
+    <!-- 替换指定在途日志的基金代码、全称、简称和产品类型 -->
     <update id="editPendingFundReference">
         UPDATE ip_adjust_log_fund
         SET fund_code = #{bo.fundCode}
@@ -293,13 +288,13 @@
     </update>
 
     <!-- 池状态保存原入池业务信息，原日志 ID 用于继承附件关联 -->
-    <select id="queryActivePoolStatusListForUpdate" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto$PoolStatusReference">
+    <select id="queryActivePoolStatusList" resultType="com.znty.rrs.entity.tempfundcode.TempFundCodeDto$PoolStatusReference">
         SELECT ps.*
               ,ps.id AS pool_status_id
               ,ps.adjust_log_id AS source_adjust_log_id
         FROM ip_pool_status_fund ps
         WHERE ps.fund_code = #{fundCode} AND ps.audit_status = '20' AND ps.is_deleted = 0
-        ORDER BY ps.id FOR UPDATE
+        ORDER BY ps.id
     </select>
 
     <!-- 同池已有正式基金时保留其原记录，不覆盖评分等参数 -->
@@ -309,7 +304,7 @@
           AND audit_status = '20' AND is_deleted = 0
     </select>
 
-    <!-- 只软删除本次锁定的原临时在池记录 -->
+    <!-- 只软删除本次读取的原临时在池记录 -->
     <update id="deleteTempPoolStatusById">
         UPDATE ip_pool_status_fund SET is_deleted = 1
                                      ,updt_time = #{now}

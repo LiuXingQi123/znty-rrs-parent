@@ -34,7 +34,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 基金临时代码单元测试，验证明确输入、状态门禁和业务分叉。 */
+/**
+ * 基金临时代码服务单元测试
+ * 验证新增登记、转正、取消发行和删除的校验规则及写入结果
+ */
 public class TempFundCodeServiceTest {
     /** 被测人工管理服务 */
     private TempFundCodeService service;
@@ -46,10 +49,10 @@ public class TempFundCodeServiceTest {
     private SysAttachmentService attachments;
     /** 当前有效临时登记 */
     private TempFundCodeBo record;
-    /** 真实主档形式的正式选项 */
+    /** 从正式基金主档返回的选项 */
     private TempFundCodeDto.FormalFundOption formal;
 
-    /** 预置正常数据和成功写入契约，异常用例只覆盖其目标条件。 */
+    /** 准备有效登记、基金主档和默认写入结果 */
     @Before
     public void setUp() {
         mapper = mock(TempFundCodeMapper.class);
@@ -73,7 +76,6 @@ public class TempFundCodeServiceTest {
         record.setStatus("temporary");
         record.setIsDeleted(0);
         when(mapper.queryTempFundCodeById(1L)).thenReturn(record);
-        when(mapper.queryTempFundCodeByIdForUpdate(1L)).thenReturn(record);
         FundInfoBo temporary = new FundInfoBo();
         temporary.setFundCode("TMP001");
         temporary.setId(2L);
@@ -106,13 +108,13 @@ public class TempFundCodeServiceTest {
         when(mapper.deleteTempPoolStatusById(anyLong(), any(Date.class))).thenReturn(1);
     }
 
-    /** 清理模拟分页接口留下的线程上下文。 */
+    /** 清理模拟分页接口留下的线程上下文 */
     @After
     public void tearDown() {
         PageHelper.clearPage();
     }
 
-    /** 四项输入去除首尾空格，占位和审计使用同一登记信息。 */
+    /** 四项输入去除首尾空格，占位和审计使用同一登记信息 */
     @Test
     public void shouldCreatePlaceholderFromFourFieldsAndAuditOperator() {
         // 构造正常新增请求
@@ -130,7 +132,7 @@ public class TempFundCodeServiceTest {
         verify(mapper).addTempFundCodeEvent(eq(2L), eq("1"), eq("INSERT"), any(Date.class));
     }
 
-    /** 空值、超长、非法市场与非基金字典类型明确失败且不写登记。 */
+    /** 空值、超长、非法市场与非基金字典类型明确失败且不写登记 */
     @Test
     public void shouldRejectMissingOversizedAndInvalidFields() {
         // 构造新增请求并依次覆盖错误字段
@@ -151,27 +153,27 @@ public class TempFundCodeServiceTest {
         verify(mapper, never()).addTempFundCode(any(TempFundCodeBo.class));
     }
 
-    /** 原主档存在或取消、已更新登记占用代码时不得覆盖新增。 */
+    /** 验证主档或未删除登记已占用代码时拒绝新增 */
     @Test
     public void shouldRejectCodesAlreadyUsedByMasterOrRegistration() {
-        when(mapper.queryFundCodeReferenceIdListForUpdate("TMP001")).thenReturn(Collections.singletonList(8L));
-        // 同码主档存在时直接失败
+        when(mapper.queryFundCodeReferenceIdList("TMP001")).thenReturn(Collections.singletonList(8L));
+        // 1. 同码主档存在时直接失败
         assertThatThrownBy(() -> service.addTempFundCode(addRequest())).hasMessageContaining("已存在于基金主档");
-        when(mapper.queryFundCodeReferenceIdListForUpdate("TMP001")).thenReturn(Collections.emptyList());
+        when(mapper.queryFundCodeReferenceIdList("TMP001")).thenReturn(Collections.emptyList());
         when(mapper.queryTempFundCodeCount("TMP001")).thenReturn(1);
-        // 同码有效登记存在时直接失败
+        // 2. 同码有效登记存在时直接失败
         assertThatThrownBy(() -> service.addTempFundCode(addRequest())).hasMessageContaining("已存在于登记");
         verify(mapper, never()).addTempFundCode(any(TempFundCodeBo.class));
     }
 
-    /** 使用正式权威信息仅更新在途四字段，无在池记录时不生成出入库日志。 */
+    /** 验证转正使用正式主档更新在途日志，无在池记录时不生成出入池日志 */
     @Test
     public void shouldUseFormalMasterAndOnlyReplacePendingReferences() {
         FundAdjustLogBo pending = new FundAdjustLogBo();
         pending.setId(10L);
-        when(mapper.queryPendingAdjustLogListForUpdate("TMP001")).thenReturn(Collections.singletonList(pending));
+        when(mapper.queryPendingAdjustLogList("TMP001")).thenReturn(Collections.singletonList(pending));
         when(mapper.editPendingFundReference(any(TempFundCodeBo.class), anyList())).thenReturn(1);
-        // 正式信息仅从 Mapper 的权威主档选项读取
+        // 使用正式基金代码发起转正，验证保存的信息来自主档
         service.editTempFundCodeToUpdated(operation("FORMAL001"));
         ArgumentCaptor<TempFundCodeBo> capture = ArgumentCaptor.forClass(TempFundCodeBo.class);
         verify(mapper).editPendingFundReference(capture.capture(), eq(Collections.singletonList(10L)));
@@ -184,13 +186,13 @@ public class TempFundCodeServiceTest {
         verify(mapper).addTempFundCodeUpdateLog(any(TempFundCodeUpdateLogBo.class));
     }
 
-    /** 已在池正式调入继承参数和原因意见，附件指向新入池日志。 */
+    /** 已在池正式调入继承参数和原因意见，附件指向新入池日志 */
     @Test
     public void shouldKeepPoolParametersAndCopyOriginalAttachments() {
-        // 准备完整在池引用
+        // 1. 准备完整在池引用
         TempFundCodeDto.PoolStatusReference pool = poolReference();
-        when(mapper.queryActivePoolStatusListForUpdate("TMP001")).thenReturn(Collections.singletonList(pool));
-        // 转正需要一条临时调出和一条正式调入
+        when(mapper.queryActivePoolStatusList("TMP001")).thenReturn(Collections.singletonList(pool));
+        // 2. 转正需要一条临时调出和一条正式调入
         service.editTempFundCodeToUpdated(operation("FORMAL001"));
         ArgumentCaptor<FundAdjustLogBo> capture = ArgumentCaptor.forClass(FundAdjustLogBo.class);
         verify(fundMapper, times(2)).addAdjustLog(capture.capture());
@@ -206,55 +208,55 @@ public class TempFundCodeServiceTest {
         verify(attachments).copyFundAdjustAttachments(90L, 102L, "1");
     }
 
-    /** 正式已在同池时只产生调出，正式记录及附件不被覆盖。 */
+    /** 正式已在同池时只产生调出，正式记录及附件不被覆盖 */
     @Test
     public void shouldOnlyRemoveTemporaryWhenFormalAlreadyInSamePool() {
-        // 准备原在池状态
-        when(mapper.queryActivePoolStatusListForUpdate("TMP001")).thenReturn(Collections.singletonList(poolReference()));
+        // 1. 准备原在池状态
+        when(mapper.queryActivePoolStatusList("TMP001")).thenReturn(Collections.singletonList(poolReference()));
         when(mapper.queryFormalPoolStatusCount("FORMAL001", 5L)).thenReturn(1);
-        // 同池正式已存在时转正只调出临时成员
+        // 2. 同池正式已存在时转正只调出临时成员
         service.editTempFundCodeToUpdated(operation("FORMAL001"));
         verify(fundMapper).addAdjustLog(any(FundAdjustLogBo.class));
         verify(fundMapper, never()).addFundPoolStatus(any(FundAdjustLogBo.class));
         verify(attachments, never()).copyFundAdjustAttachments(anyLong(), anyLong(), anyString());
     }
 
-    /** 锁等待期间登记已更新或取消时，三个操作都必须被状态门禁阻止。 */
+    /** 确认主档加锁后的状态检查能拒绝转正、取消和删除已结束的登记 */
     @Test
     public void shouldRejectOperationsAfterStateChangedUnderLock() {
         record.setStatus("updated");
-        // 锁后重新验证状态，禁止重复转正
+        // 1. 锁后重新验证状态，禁止重复转正
         assertThatThrownBy(() -> service.editTempFundCodeToUpdated(operation("FORMAL001"))).hasMessageContaining("只有临时状态");
-        // 锁后重新验证状态，禁止取消
+        // 2. 锁后重新验证状态，禁止取消
         assertThatThrownBy(() -> service.editTempFundCodeToCancelled(operation(null))).hasMessageContaining("只有临时状态");
-        // 已更新登记也不允许删除
+        // 3. 已更新登记也不允许删除
         assertThatThrownBy(() -> service.deleteTempFundCode(operation(null))).hasMessageContaining("只有临时状态");
         record.setStatus("cancelled");
-        // 已取消登记不允许删除
+        // 4. 已取消登记不允许删除
         assertThatThrownBy(() -> service.deleteTempFundCode(operation(null))).hasMessageContaining("只有临时状态");
         verify(mapper, never()).editTempFundCodeState(any(TempFundCodeBo.class));
     }
 
-    /** 同码、无有效正式主档和残缺正式信息都不可转正。 */
+    /** 同码、无有效正式主档和残缺正式信息都不可转正 */
     @Test
     public void shouldRejectInvalidFormalMaster() {
-        // 临时和正式代码不可相同
+        // 1. 临时和正式代码不可相同
         assertThatThrownBy(() -> service.editTempFundCodeToUpdated(operation("TMP001"))).hasMessageContaining("不能与临时代码相同");
         when(mapper.queryFormalFundByCode("FORMAL001")).thenReturn(null);
-        // 终止或占位代码不能冒充正式主档
+        // 2. 正式主档查询无有效结果时拒绝转正
         assertThatThrownBy(() -> service.editTempFundCodeToUpdated(operation("FORMAL001"))).hasMessageContaining("正式基金不存在");
         when(mapper.queryFormalFundByCode("FORMAL001")).thenReturn(formal);
         formal.setFundShortName(null);
-        // 主档残缺时不推断简称
+        // 3. 正式主档缺少简称时拒绝转正
         assertThatThrownBy(() -> service.editTempFundCodeToUpdated(operation("FORMAL001"))).hasMessageContaining("正式基金简称");
         verify(mapper, never()).editTempFundCodeState(any(TempFundCodeBo.class));
     }
 
-    /** 取消有引用仍成功，保留业务记录且禁用主档。 */
+    /** 验证已有业务引用的临时基金可以取消，并停用其占位主档 */
     @Test
     public void shouldCancelUsedCodeWithoutCheckingReferenceGuard() {
         when(mapper.queryCoreReferenceCount("TMP001")).thenReturn(8);
-        // 已有业务引用仍允许取消，不检查删除操作的引用门禁
+        // 验证取消发行无需检查删除登记时才使用的引用限制
         service.editTempFundCodeToCancelled(operation(null));
         assertThat(record.getStatus()).isEqualTo("cancelled");
         verify(mapper, never()).queryCoreReferenceCount(anyString());
@@ -262,14 +264,14 @@ public class TempFundCodeServiceTest {
         verify(fundMapper, never()).addAdjustLog(any(FundAdjustLogBo.class));
     }
 
-    /** 有核心引用拒绝删除，无引用只软删登记且保留主档。 */
+    /** 有核心引用拒绝删除，无引用只软删登记且保留主档 */
     @Test
     public void shouldDeleteOnlyUnreferencedRegistrationAndKeepMaster() {
         when(mapper.queryCoreReferenceCount("TMP001")).thenReturn(1);
-        // 核心引用为任何未删除日志或池状态
+        // 1. 核心引用为任何未删除日志或池状态
         assertThatThrownBy(() -> service.deleteTempFundCode(operation(null))).hasMessageContaining("无法删除");
         when(mapper.queryCoreReferenceCount("TMP001")).thenReturn(0);
-        // 无引用时仅软删除临时代码登记
+        // 2. 无引用时仅软删除临时代码登记
         service.deleteTempFundCode(operation(null));
         assertThat(record.getStatus()).isEqualTo("deleted");
         assertThat(record.getIsDeleted()).isEqualTo(1);
@@ -277,18 +279,18 @@ public class TempFundCodeServiceTest {
         verify(mapper).addTempFundCodeEvent(eq(1L), eq("1"), eq("DELETE"), any(Date.class));
     }
 
-    /** 条件写入失败时禁止继续改业务引用和占位主档。 */
+    /** 条件写入失败时禁止继续改业务引用和占位主档 */
     @Test
     public void shouldStopWhenConditionalStateUpdateFails() {
         when(mapper.editTempFundCodeState(any(TempFundCodeBo.class))).thenReturn(0);
         // 状态条件写入必须严格影响一条记录
         assertThatThrownBy(() -> service.editTempFundCodeToUpdated(operation("FORMAL001"))).hasMessageContaining("状态已变化");
-        verify(mapper, never()).queryPendingAdjustLogListForUpdate(anyString());
+        verify(mapper, never()).queryPendingAdjustLogList(anyString());
         verify(mapper, never()).editTempFundInfoToDisabled(anyString(), any(Date.class));
     }
 
     /**
-     * 构造有效四字段新增请求。
+     * 构造有效四字段新增请求
      *
      * @return 人工新增参数
      */
@@ -303,7 +305,7 @@ public class TempFundCodeServiceTest {
     }
 
     /**
-     * 构造状态操作请求。
+     * 构造状态操作请求
      *
      * @param code 正式基金代码，取消或删除时为空
      * @return 操作定位和经办人
@@ -317,7 +319,7 @@ public class TempFundCodeServiceTest {
     }
 
     /**
-     * 构造具有原日志关联的完整在池状态。
+     * 构造具有原日志关联的完整在池状态
      *
      * @return 原业务信息
      */
