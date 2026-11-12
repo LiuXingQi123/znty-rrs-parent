@@ -266,6 +266,9 @@ public class CompanyObserverPoolSyncPersistenceTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_pool_status WHERE is_deleted=0 AND target_pool_id IN (16,99)", Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log WHERE target_pool_id=99 AND adjust_type='互斥调整'", Integer.class)).isEqualTo(4);
         assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT adjust_batch_no) FROM ip_adjust_log WHERE target_pool_id IN (23,17,99)", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForList("SELECT adjust_reason FROM ip_adjust_log WHERE target_pool_id IN (23,17,99)", String.class))
+                .hasSize(12)
+                .allSatisfy(reason -> assertThat(reason).startsWith("【任务名称：主体观察名单同步（已排除ABS债）】"));
         assertThat(service.execute().getAffectedCount()).isZero();
         jdbc.update("UPDATE ais_inv_analysis.company_observer_view SET observer_type='1'");
         ScheduledTaskResult outbound = service.execute();

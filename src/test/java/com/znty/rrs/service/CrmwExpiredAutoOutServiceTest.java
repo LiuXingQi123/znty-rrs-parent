@@ -136,7 +136,7 @@ public class CrmwExpiredAutoOutServiceTest {
         assertThat(item.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(item.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(item.getAdjustReason())
-                .isEqualTo("CRMW到期自动调出（凭证到期日：2026-08-31；出池口径：到期日早于当前日期减去 1 天）");
+                .isEqualTo("【任务名称：CRMW到期自动出池】（凭证到期日：2026-08-31；出池口径：到期日早于当前日期减去 1 天）");
         assertThat(item.getAdjustAdvice()).isNull();
         assertThat(item.getAdjustBatchNo()).matches("CRMW\\d{17}2001");
         assertThat(result.getDetailLog()).doesNotContain("批次号");

@@ -242,12 +242,15 @@ public class ScheduledTaskServiceTest {
     @Test
     public void executeTaskShouldRunImpl() {
         RrsScheduledTask task = mockTask("a");
-        when(task.execute()).thenReturn(ScheduledTaskResult.success("a", "A", "ok", 1, new Date(), 1L));
+        when(task.execute()).thenAnswer(invocation -> {
+            assertThat(ScheduledAdjustLogHelper.taskLabel("默认任务名")).isEqualTo("【任务名称：自定义任务名】");
+            return ScheduledTaskResult.success("a", "默认任务名", "ok", 1, new Date(), 1L);
+        });
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
         DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskCode("a");
-        conf.setTaskName("A");
+        conf.setTaskName("自定义任务名");
         when(mapper.queryTaskByCode("a")).thenReturn(conf);
 
         ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
@@ -260,6 +263,7 @@ public class ScheduledTaskServiceTest {
         req.setTaskCode("a");
         ScheduledTaskResult result = service.executeTask(req);
         assertThat(result.isSuccess()).isTrue();
+        assertThat(ScheduledAdjustLogHelper.labelCurrentTask("人工调整")).isEqualTo("人工调整");
         verify(task, times(1)).execute();
         verify(mapper).addRunLog(any());
     }
@@ -330,6 +334,7 @@ public class ScheduledTaskServiceTest {
         assertThatThrownBy(() -> service.executeTask(req))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("测试异常");
+        assertThat(ScheduledAdjustLogHelper.labelCurrentTask("人工调整")).isEqualTo("人工调整");
         verify(mapper).addRunLog(any());
         verify(mapper).editTaskLastRun(any(SysScheduledTaskBo.class));
     }

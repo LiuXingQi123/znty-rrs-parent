@@ -163,7 +163,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(17L);
-        assertThat(log.getAdjustReason()).isEqualTo("外评非AA-及以下主体自动出池（近一年孰低外评：AAA）");
+        assertThat(log.getAdjustReason()).isEqualTo("【任务名称：外评非AA-及以下主体自动出池】（近一年孰低外评：AAA）");
         assertThat(log.getAdjustAdvice()).isNull();
         assertThat(log.getAdjustBatchNo()).matches("COMP\\d{17}2001");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
@@ -326,9 +326,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(securityPoolAdjustMapper, times(2)).addAdjustLog(captor.capture());
         assertThat(captor.getAllValues().get(0).getAdjustReason())
-                .isEqualTo("外评非AA-及以下主体自动出池（近一年孰低外评：AA）");
+                .isEqualTo("【任务名称：外评非AA-及以下主体自动出池】（近一年孰低外评：AA）");
         assertThat(captor.getAllValues().get(1).getAdjustReason())
-                .isEqualTo("外评非AA-及以下主体自动出池（近一年孰低外评：AA）（同池旗下债）");
+                .isEqualTo("【任务名称：外评非AA-及以下主体自动出池】（近一年孰低外评：AA）（同池旗下债）");
         assertThat(captor.getAllValues().get(0).getAdjustAdvice()).isNull();
         assertThat(captor.getAllValues().get(1).getAdjustAdvice()).isNull();
         assertThat(captor.getAllValues().get(0).getAdjustBatchNo()).matches("COMP\\d{17}2001");

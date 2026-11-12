@@ -64,7 +64,8 @@ public class CompanyAbsBondAutoInServiceTest {
         assertThat(log.getSecurityCode()).isEqualTo("ABS001");
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(15L);
-        assertThat(log.getAdjustReason()).contains("主体下ABS债券自动入库").contains("联动触发主体：C001");
+        assertThat(log.getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库】")
+                .contains("联动触发主体：C001");
         verify(fixture.securityPoolAdjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
     }
 
@@ -107,7 +108,8 @@ public class CompanyAbsBondAutoInServiceTest {
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(fixture.securityPoolAdjustMapper).addAdjustLog(captor.capture());
         assertThat(captor.getValue().getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
-        assertThat(captor.getValue().getAdjustReason()).contains("主体下ABS债券自动出池");
+        assertThat(captor.getValue().getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库】")
+                .contains("主体下ABS债券自动出池");
     }
 
     /** 距到期不足保护天数的 ABS 不再补入，其余池内记录不受影响 */

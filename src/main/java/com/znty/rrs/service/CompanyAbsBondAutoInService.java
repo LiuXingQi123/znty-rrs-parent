@@ -71,6 +71,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
 
+    /** 任务默认展示名称 */
+    private static final String DEFAULT_TASK_NAME = "主体下ABS债券自动入库（区分已确认发行人和未确认发行人）";
+
     /** 自动入池原因 */
     private static final String REASON_IN = "主体下ABS债券自动入库";
 
@@ -182,7 +185,8 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             taskName = config.taskName;
             infoDetail(detail, taskName + " 开始");
             // 2. 按池对账 ABS 进出
-            AbsSyncSummary summary = doSync(config, detail);
+            AbsSyncSummary summary = ScheduledAdjustLogHelper.runWithTaskName(config.taskName,
+                    () -> doSync(config, detail));
             long duration = System.currentTimeMillis() - begin;
             String message = summary.buildMessage();
             infoDetail(detail, taskName + " 结束，" + message);
@@ -781,7 +785,8 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         candidate.setAuditStatus(AuditStatus.APPROVED.getCode());
         candidate.setAdjusterId(AUTO_ADJUSTER_ID);
         candidate.setAdjusterName(AUTO_ADJUSTER_NAME);
-        candidate.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(reasonPrefix,
+        candidate.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(
+                ScheduledAdjustLogHelper.taskLabel(DEFAULT_TASK_NAME) + reasonPrefix,
                 ScheduledAdjustLogHelper.issuerDetail(candidate),
                 ScheduledAdjustLogHelper.poolDetail("主体所在池", pool.companyPool, pool.companyPoolId),
                 trigger == null ? null : "联动触发主体：" + trigger));
@@ -982,14 +987,14 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /**
      * 读取任务名与扩展参数，配置表只查一次
      *
-     * 任务名缺失时回退任务编码，保证过程日志仍然可读
+     * 任务名缺失时使用默认任务名称，保证过程日志仍然可读
      *
      * @return 任务配置
      */
     private TaskConfig loadTaskConfig() {
         SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
         String taskName = conf != null && StringUtils.hasText(conf.getTaskName())
-                ? conf.getTaskName() : TASK_CODE;
+                ? conf.getTaskName() : DEFAULT_TASK_NAME;
         String paramJson = conf != null && StringUtils.hasText(conf.getParamJson())
                 ? conf.getParamJson().trim() : null;
         return new TaskConfig(taskName, paramJson);

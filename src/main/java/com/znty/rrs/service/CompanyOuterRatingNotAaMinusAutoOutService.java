@@ -55,8 +55,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     private static final String AUTO_ADJUSTER_ID = "0";
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    /** 自动出池原因 */
-    private static final String REASON = "外评非AA-及以下主体自动出池";
+    /** 任务默认展示名称 */
+    private static final String DEFAULT_TASK_NAME = "外评非AA-及以下主体自动出池";
     /** JSON 解析 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -248,7 +248,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                     continue;
                 }
                 // 6.5 准备主体出池原因和批次信息
-                String reason = buildAdjustReason(company.getOuterRating());
+                String reason = buildAdjustReason(company.getOuterRating(), taskName);
                 String batchNo = batchNoContext.resolveCompanyBatchNo(
                         company.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
                 // 6.6 回填主体自动出池日志字段
@@ -454,13 +454,12 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
      * 调整原因带上近一年孰低外评
      *
      * @param outerRating 近一年孰低外评
+     * @param taskName 任务名称
      * @return 调整原因
      */
-    static String buildAdjustReason(String outerRating) {
-        if (!StringUtils.hasText(outerRating)) {
-            return REASON;
-        }
-        return REASON + "（近一年孰低外评：" + outerRating.trim() + "）";
+    private static String buildAdjustReason(String outerRating, String taskName) {
+        String label = ScheduledAdjustLogHelper.taskLabel(taskName);
+        return StringUtils.hasText(outerRating) ? label + "（近一年孰低外评：" + outerRating.trim() + "）" : label;
     }
 
     /**
@@ -587,7 +586,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     }
 
     /**
-     * 从库表读取任务展示名称，缺失时回退为任务编码
+     * 从库表读取任务展示名称，缺失时使用默认任务名称
      *
      * @return 任务名称
      */
@@ -600,7 +599,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         } catch (Exception e) {
             log.debug("读取任务名称失败: {}", TASK_CODE);
         }
-        return TASK_CODE;
+        return DEFAULT_TASK_NAME;
     }
 
     /**

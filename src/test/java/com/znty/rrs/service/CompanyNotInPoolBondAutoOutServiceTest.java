@@ -78,7 +78,7 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         assertThat(bond.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(bond.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(bond.getAdjustReason())
-                .isEqualTo("债券主体不在池债券出池（发行主体：测试集团/C001；主体未在池：债券禁止库）");
+                .isEqualTo("【任务名称：主体不在池债券自动出池】（发行主体：测试集团/C001；主体未在池：债券禁止库）");
         assertThat(bond.getAdjustAdvice()).isNull();
         assertThat(bond.getAdjustBatchNo()).matches("BOND\\d{17}2001");
         assertThat(result.getDetailLog()).doesNotContain("批次号");

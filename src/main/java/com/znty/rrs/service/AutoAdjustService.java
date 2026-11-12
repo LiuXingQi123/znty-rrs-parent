@@ -48,8 +48,8 @@ public class AutoAdjustService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_ID = "0";
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    /** 自动调出原因（写入调库日志） */
-    private static final String REASON_EXPIRED_OUT = "证券到期自动调出";
+    /** 任务默认展示名称 */
+    private static final String DEFAULT_TASK_NAME = "到期证券自动出池";
     /**
      * 本任务扩展参数说明（配置页按行拆成列表展示）
      */
@@ -234,7 +234,7 @@ public class AutoAdjustService implements RrsScheduledTask {
                 sec.setAuditStatus(AuditStatus.APPROVED.getCode());
                 sec.setAdjusterId(AUTO_ADJUSTER_ID);
                 sec.setAdjusterName(AUTO_ADJUSTER_NAME);
-                String reason = ScheduledAdjustLogHelper.appendDetails(REASON_EXPIRED_OUT,
+                String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.dateDetail("到期日", sec.getMaturityDate()),
                         "出池口径：" + maturityRule);
                 sec.setAdjustReason(reason);
@@ -404,7 +404,7 @@ public class AutoAdjustService implements RrsScheduledTask {
     }
 
     /**
-     * 从库表读取任务展示名称，缺失时回退为任务编码
+     * 从库表读取任务展示名称，缺失时使用默认任务名称
      */
     private String resolveTaskName() {
         try {
@@ -415,6 +415,6 @@ public class AutoAdjustService implements RrsScheduledTask {
         } catch (Exception e) {
             log.debug("读取任务名称失败: {}", TASK_CODE);
         }
-        return TASK_CODE;
+        return DEFAULT_TASK_NAME;
     }
 }

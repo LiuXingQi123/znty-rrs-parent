@@ -53,8 +53,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_NAME = "系统";
     /** 任务默认展示名称（名称即口径提示：ABS 债已整体移出本任务） */
     private static final String DEFAULT_TASK_NAME = "在池主体旗下债券自动入池（已排除ABS债）";
-    /** 自动入池原因（写入调库日志） */
-    private static final String REASON_COMPANY_NEW_BOND_IN = "在池主体旗下债券自动入池";
     /** 解析 param_json 用 */
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -244,7 +242,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 bond.setAuditStatus(AuditStatus.APPROVED.getCode());
                 bond.setAdjusterId(AUTO_ADJUSTER_ID);
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
-                String reason = ScheduledAdjustLogHelper.appendDetails(REASON_COMPANY_NEW_BOND_IN,
+                String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.issuerDetail(bond),
                         ScheduledAdjustLogHelper.poolDetail("主体所在池", companyPool, companyInPoolId));
                 if (bond.getTriggerCompanyCode() != null) {

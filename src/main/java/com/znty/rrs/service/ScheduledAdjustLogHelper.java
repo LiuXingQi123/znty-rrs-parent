@@ -8,12 +8,42 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 /** 定时任务调库日志文案辅助逻辑。 */
 final class ScheduledAdjustLogHelper {
 
+    /** 当前调度线程执行的任务名称，供共享业务方法记录调库来源 */
+    private static final ThreadLocal<String> TASK_NAME = new ThreadLocal<>();
+
     /** 禁止实例化定时调库日志辅助类。 */
     private ScheduledAdjustLogHelper() {
+    }
+
+    /** 执行任务并在退出时恢复当前线程原有的任务名称 */
+    static <T> T runWithTaskName(String taskName, Supplier<T> task) {
+        String previousName = TASK_NAME.get();
+        TASK_NAME.set(taskName);
+        try {
+            return task.get();
+        } finally {
+            if (previousName == null) {
+                TASK_NAME.remove();
+            } else {
+                TASK_NAME.set(previousName);
+            }
+        }
+    }
+
+    /** 使用定时任务管理页的名称，直接执行时使用业务默认名称 */
+    static String taskLabel(String defaultName) {
+        String name = TASK_NAME.get();
+        return "【任务名称：" + (name == null ? defaultName : name.trim()) + "】";
+    }
+
+    /** 共享业务在定时任务执行期间为原因加上任务名称前缀 */
+    static String labelCurrentTask(String reason) {
+        return TASK_NAME.get() == null ? reason : taskLabel(null) + reason;
     }
 
     /** 在基础原因后以中文括号追加非空判断信息。 */

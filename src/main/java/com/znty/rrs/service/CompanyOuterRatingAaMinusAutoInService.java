@@ -53,8 +53,8 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     private static final String AUTO_ADJUSTER_ID = "0";
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    /** 自动入池原因 */
-    private static final String REASON = "外评AA-及以下主体自动入池";
+    /** 任务默认展示名称 */
+    private static final String DEFAULT_TASK_NAME = "外评AA-及以下主体自动入池（已排除ABS债）";
     /**
      * 本任务扩展参数说明（配置页按行拆成列表展示）
      */
@@ -243,7 +243,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
                 company.setAdjusterId(AUTO_ADJUSTER_ID);
                 company.setAdjusterName(AUTO_ADJUSTER_NAME);
                 // 5.5 按命中的三项条件拼接调整原因
-                String reason = buildAdjustReason(company);
+                String reason = buildAdjustReason(company, taskName);
                 company.setAdjustReason(reason);
                 // 5.6 生成主体入池批次号
                 String batchNo = batchNoContext.resolveCompanyBatchNo(
@@ -426,11 +426,13 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
      * 调整原因按命中的（一）（二）（三）拼接
      *
      * @param company 入池候选（含命中标记与孰低外评）
+     * @param taskName 任务名称
      * @return 调整原因
      */
-    static String buildAdjustReason(ScheduledAdjustCandidateDto company) {
+    static String buildAdjustReason(ScheduledAdjustCandidateDto company, String taskName) {
+        String label = ScheduledAdjustLogHelper.taskLabel(taskName);
         if (company == null) {
-            return REASON;
+            return label;
         }
         List<String> parts = new ArrayList<>();
         // 1. 拼接当前在公司信用债禁止库的命中说明
@@ -449,19 +451,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         if (isFlagHit(company.getInRestrictedPool())) {
             parts.add("重点观察名单内主体");
         }
-        if (parts.isEmpty()) {
-            return REASON;
-        }
-        StringBuilder builder = new StringBuilder(REASON);
-        builder.append('（');
-        for (int i = 0; i < parts.size(); i++) {
-            if (i > 0) {
-                builder.append('；');
-            }
-            builder.append(parts.get(i));
-        }
-        builder.append('）');
-        return builder.toString();
+        return ScheduledAdjustLogHelper.appendDetails(label, parts.toArray(new String[0]));
     }
 
     /**
@@ -502,8 +492,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                 poolId, RelationType.IN_RESTRICT.getCode(), allRelations);
         int bondCount = 0;
-        String bondReason = (companyLog.getAdjustReason() == null ? REASON : companyLog.getAdjustReason())
-                + "（同池旗下债）";
+        String bondReason = companyLog.getAdjustReason() + "（同池旗下债）";
         for (ScheduledAdjustCandidateDto bond : bonds) {
             if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                 skipDetail(detail, "主体【" + companyCode + "】旗下债券缺少证券编码，本轮未处理");
@@ -654,7 +643,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
     }
 
     /**
-     * 从库表读取任务展示名称，缺失时回退为任务编码
+     * 从库表读取任务展示名称，缺失时使用默认任务名称
      *
      * @return 任务名称
      */
@@ -667,7 +656,7 @@ public class CompanyOuterRatingAaMinusAutoInService implements RrsScheduledTask 
         } catch (Exception e) {
             log.debug("读取任务名称失败: {}", TASK_CODE);
         }
-        return TASK_CODE;
+        return DEFAULT_TASK_NAME;
     }
 
     /**

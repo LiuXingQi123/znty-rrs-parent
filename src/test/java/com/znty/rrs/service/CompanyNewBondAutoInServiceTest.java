@@ -119,7 +119,7 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(adjustLog.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(adjustLog.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(adjustLog.getAdjustReason())
-                .isEqualTo("在池主体旗下债券自动入池（发行主体：测试集团/C001；主体所在池：债券禁止库）");
+                .isEqualTo("【任务名称：在池主体旗下债券自动入池（已排除ABS债）】（发行主体：测试集团/C001；主体所在池：债券禁止库）");
         assertThat(adjustLog.getAdjustAdvice()).isNull();
         assertThat(adjustLog.getAdjustBatchNo()).matches("BOND\\d{17}1001");
         assertThat(autoOutLog.getAdjustType()).isEqualTo("互斥调整");

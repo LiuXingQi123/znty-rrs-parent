@@ -347,8 +347,9 @@ public class ScheduledTaskService {
                                         String operatorId, String operatorName) {
         // 取业务实现
         RrsScheduledTask task = requireImpl(taskCode);
-        // 展示名读库
-        String displayName = resolveTaskName(taskCode);
+        // 展示名读库，执行历史缺少名称时仍可用任务编码定位
+        String configuredName = queryConfiguredTaskName(taskCode);
+        String displayName = configuredName == null ? taskCode : configuredName;
         // 本机锁只负责同一 JVM 内同任务串行；保留它可使本机并发触发按顺序执行，
         // 避免它们在尚未执行时就相互判定为“其他节点正在执行”。
         Object lock = runLocks.computeIfAbsent(taskCode, k -> new Object());
@@ -363,7 +364,7 @@ public class ScheduledTaskService {
                 Date startTime = new Date();
                 try {
                     // 执行业务并在持锁期间写入执行结果
-                    resultHolder[0] = task.execute();
+                    resultHolder[0] = ScheduledAdjustLogHelper.runWithTaskName(configuredName, task::execute);
                     persistRunResult(taskCode, displayName, resultHolder[0], triggerType, operatorId, operatorName);
                 } catch (RuntimeException | Error e) {
                     // 未捕获异常也要记录失败结果，再保留原异常继续向上抛出
@@ -490,18 +491,18 @@ public class ScheduledTaskService {
     }
 
     /**
-     * 从库表读取任务展示名称，读库失败或名称为空时回退为任务编码
+     * 从库表读取任务展示名称，读库失败或名称为空时交由调用方选择默认名称
      */
-    private String resolveTaskName(String taskCode) {
+    private String queryConfiguredTaskName(String taskCode) {
         try {
             SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(taskCode);
             if (conf != null && StringUtils.hasText(conf.getTaskName())) {
                 return conf.getTaskName();
             }
         } catch (Exception ignored) {
-            // 读库失败时回退编码
+            // 读库失败时由调用方选择默认名称
         }
-        return taskCode;
+        return null;
     }
 
     /**

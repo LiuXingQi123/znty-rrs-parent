@@ -49,7 +49,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
 
     private static final String AUTO_ADJUSTER_ID = "0";
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    private static final String REASON = "债券主体不在池债券出池";
+    private static final String DEFAULT_TASK_NAME = "主体不在池债券自动出池(默认关闭)";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =
             "参数格式：须填写 JSON 对象；poolIds、mappings 可组合，例如 <code>{\"poolIds\":[15]}</code>\n"
@@ -218,7 +218,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 bond.setAuditStatus(AuditStatus.APPROVED.getCode());
                 bond.setAdjusterId(AUTO_ADJUSTER_ID);
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
-                String reason = ScheduledAdjustLogHelper.appendDetails(REASON,
+                String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.issuerDetail(bond),
                         ScheduledAdjustLogHelper.poolDetail("主体未在池", companyPool, companyPoolId));
                 bond.setAdjustReason(reason);
@@ -384,7 +384,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         } catch (Exception e) {
             log.debug("读取任务名称失败: {}", TASK_CODE);
         }
-        return TASK_CODE;
+        return DEFAULT_TASK_NAME;
     }
 
     private void infoDetail(TaskDetailLog detail, String line) {

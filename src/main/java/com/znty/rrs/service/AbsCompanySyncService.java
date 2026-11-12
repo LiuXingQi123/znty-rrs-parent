@@ -252,7 +252,7 @@ public class AbsCompanySyncService {
         pending.setAdjusterId(AUTO_ADJUSTER_ID);
         pending.setAdjusterName(AUTO_ADJUSTER_NAME);
         pending.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(
-                "ABS主体自动联动入池（待确认）",
+                ScheduledAdjustLogHelper.labelCurrentTask("ABS主体自动联动入池（待确认）"),
                 StringUtils.hasText(triggerCompanyCode) ? "触发主体：" + triggerCompanyCode : null,
                 companyPoolId == null ? null : "主体依据池：" + companyPoolId,
                 StringUtils.hasText(poolName) ? "目标池：" + poolName : null));

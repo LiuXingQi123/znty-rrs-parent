@@ -138,7 +138,7 @@ public class CompanySamePoolBondAutoInServiceTest {
         assertThat(inboundLog.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(inboundLog.getTargetPoolId()).isEqualTo(15L);
         assertThat(inboundLog.getAdjustReason())
-                .isEqualTo("主体下债券自动入池（发行主体：测试集团/C001；主体所在池：债券禁止库）");
+                .isEqualTo("【任务名称：主体下债券自动入池】（发行主体：测试集团/C001；主体所在池：债券禁止库）");
         assertThat(inboundLog.getAdjustAdvice()).isNull();
         assertThat(inboundLog.getAdjustBatchNo()).matches("BOND\\d{17}1001");
         assertThat(outboundLog.getAdjustType()).isEqualTo("互斥调整");
@@ -146,7 +146,8 @@ public class CompanySamePoolBondAutoInServiceTest {
         assertThat(outboundLog.getTargetPoolId()).isEqualTo(3L);
         assertThat(outboundLog.getTargetPoolName()).isEqualTo("二级库");
         assertThat(outboundLog.getAdjustBatchNo()).isEqualTo(inboundLog.getAdjustBatchNo());
-        assertThat(outboundLog.getAdjustReason()).contains("池关系触发：调入债券禁止库后自动调出二级库");
+        assertThat(outboundLog.getAdjustReason()).startsWith("【任务名称：主体下债券自动入池】")
+                .contains("池关系触发：调入债券禁止库后自动调出二级库");
         assertThat(outboundLog.getAdjustAdvice()).isNull();
         assertThat(result.getDetailLog()).doesNotContain("批次号");
         verify(securityPoolAdjustMapper).deletePoolStatusSoft("112008001.IB", 3L);

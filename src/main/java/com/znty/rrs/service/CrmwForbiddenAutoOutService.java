@@ -235,7 +235,8 @@ public class CrmwForbiddenAutoOutService implements RrsScheduledTask {
         row.setAuditStatus(AuditStatus.APPROVED.getCode());
         row.setAdjusterId("0");
         row.setAdjusterName("系统");
-        row.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(TASK_NAME, reasons.toArray(new String[0])));
+        row.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(
+                ScheduledAdjustLogHelper.taskLabel(TASK_NAME), reasons.toArray(new String[0])));
         row.setSubmitTime(batchContext.getSubmitTime());
         row.setAdjustBatchNo(batchContext.resolveCrmwBatchNo(row.getCrmwScode(), row.getSecurityCode(),
                 row.getTargetPoolId(), AdjustMode.OUT.getCode()));

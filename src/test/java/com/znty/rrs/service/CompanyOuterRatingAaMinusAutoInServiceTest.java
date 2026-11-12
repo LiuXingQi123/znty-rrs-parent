@@ -93,7 +93,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         bindExternalRatingAgency(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("外评AA-及以下主体自动入池");
+        conf.setTaskName("外评AA-及以下主体自动入池（已排除ABS债）");
         conf.setParamJson("{\"poolIds\":[17]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanyOuterRatingAaMinusAutoInService.TASK_CODE))
                 .thenReturn(conf);
@@ -170,7 +170,11 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(17L);
-        assertThat(log.getAdjustReason()).isEqualTo("外评AA-及以下主体自动入池（近一年孰低外评：AA-）");
+        String taskLabel = "【任务名称：外评AA-及以下主体自动入池（已排除ABS债）】";
+        assertThat(log.getAdjustReason()).isEqualTo(taskLabel + "（近一年孰低外评：AA-）");
+        assertThat(captor.getAllValues().subList(1, 4)).allSatisfy(bond ->
+                assertThat(bond.getAdjustReason())
+                        .startsWith(taskLabel + "（近一年孰低外评：AA-）（同池旗下债）"));
         assertThat(log.getAdjustAdvice()).isNull();
         assertThat(log.getAdjustBatchNo()).matches("COMP\\d{17}1001");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
@@ -215,7 +219,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         company.setInRestrictedPool(1);
         company.setInLowOuterRating(1);
         company.setOuterRating("AA-");
-        assertThat(CompanyOuterRatingAaMinusAutoInService.buildAdjustReason(company))
+        assertThat(CompanyOuterRatingAaMinusAutoInService.buildAdjustReason(company, "外评AA-及以下主体自动入池"))
                 .contains("禁止库")
                 .contains("重点观察")
                 .contains("AA-");

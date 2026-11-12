@@ -406,7 +406,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         }
         // 2. 生成主体、旗下债券和关系池共用的调库批次及调整原因
         String batchNo = context.batches.resolveCompanyBatchNo(companyCode, pool.getId(), mode);
-        String reason = ScheduledAdjustLogHelper.appendDetails(TASK_NAME,
+        String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(TASK_NAME),
                 "主体：" + companyCode,
                 observer == null ? "观察名单已移除" : "observer_type=" + observer.getObserverType(),
                 "目标池：" + pool.getPoolName());

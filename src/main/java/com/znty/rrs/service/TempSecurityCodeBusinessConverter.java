@@ -105,6 +105,10 @@ public class TempSecurityCodeBusinessConverter {
     private ConversionPlan prepareConversion(TempSecurityCodeBo mapping, boolean singleCode) {
         ConversionPlan plan = new ConversionPlan();
         plan.singleCode = singleCode;
+        if (TempOprtSource.JOB.getCode().equals(mapping.getOprtSource())) {
+            plan.taskLabel = ScheduledAdjustLogHelper.taskLabel(
+                    singleCode ? WindCodeSyncService.TASK_NAME : BondTempCodeReplaceService.TASK_NAME);
+        }
         // 1. 查出旧代码已入池、或还在审批中的申请所涉及的普通池。
         List<Long> poolIds = tempSecurityCodeMapper.queryOrdinaryConversionPoolIdList(mapping);
         if (poolIds.isEmpty()) {
@@ -538,6 +542,7 @@ public class TempSecurityCodeBusinessConverter {
             group = new ConversionPlan();
             group.crmw = true;
             group.singleCode = plan.singleCode;
+            group.taskLabel = plan.taskLabel;
             group.crmwScode = code;
             group.crmwStype = type;
             group.active = new ArrayList<>();
@@ -574,7 +579,8 @@ public class TempSecurityCodeBusinessConverter {
             out.setFlowKey(null);
             out.setFlowType(null);
             out.setSubmitTime(mapping.getUpdateTime());
-            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.singleCode ? AdjustType.WIND_CODE_CHANGE_OUT.getCode() : REASON_TEMP_OUT,
+            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(
+                    plan.labelReason(plan.singleCode ? AdjustType.WIND_CODE_CHANGE_OUT.getCode() : REASON_TEMP_OUT),
                     (plan.singleCode ? "旧代码：" : "临时代码：") + mapping.getTempSecurityCode(),
                     (plan.singleCode ? "新代码：" : "正式代码：") + mapping.getSecurityCode()));
             out.setAdjustAdvice(TempOprtSource.JOB.getCode().equals(mapping.getOprtSource()) ? null : out.getAdjustReason());
@@ -613,8 +619,8 @@ public class TempSecurityCodeBusinessConverter {
                 in.setFlowType(null);
                 in.setSubmitTime(mapping.getUpdateTime());
                 in.setAuditStatus(AuditStatus.APPROVED.getCode());
-                in.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(active.getAdjustReason() == null
-                        ? REASON_FORMAL_IN : active.getAdjustReason(), "代码替换：" + mapping.getTempSecurityCode()
+                in.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.labelReason(active.getAdjustReason() == null
+                        ? REASON_FORMAL_IN : active.getAdjustReason()), "代码替换：" + mapping.getTempSecurityCode()
                         + "→" + mapping.getSecurityCode(), "本条正式代码：" + member.getWindCode()));
                 in.setAdjustAdvice(TempOprtSource.JOB.getCode().equals(mapping.getOprtSource()) ? null : in.getAdjustReason());
                 if (securityPoolAdjustMapper.addAdjustLog(in) != 1) {
@@ -662,7 +668,8 @@ public class TempSecurityCodeBusinessConverter {
                 log.setSecurityShortName(member.getShortName());
                 log.setSecurityType(member.getSecurityType());
                 log.setUpdtTime(mapping.getUpdateTime());
-                log.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(original.getAdjustReason(),
+                log.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(
+                        selected ? original.getAdjustReason() : plan.labelReason(original.getAdjustReason()),
                         "代码替换：" + mapping.getTempSecurityCode() + "→" + mapping.getSecurityCode(),
                         "本条正式代码：" + member.getWindCode()));
                 int written = selected ? tempSecurityCodeMapper.editConversionPendingLog(log, mapping.getTempSecurityCode())
@@ -702,7 +709,7 @@ public class TempSecurityCodeBusinessConverter {
             out.setFlowKey(null);
             out.setFlowType(null);
             out.setSubmitTime(mapping.getUpdateTime());
-            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails("临时代码转正互斥配套调出",
+            out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.labelReason("临时代码转正互斥配套调出"),
                     "代码替换：" + mapping.getTempSecurityCode() + "→" + mapping.getSecurityCode(),
                     "本条正式代码：" + state.getSecurityCode(), "互斥配套调出池：" + state.getTargetPoolName()));
             out.setAdjustAdvice(TempOprtSource.JOB.getCode().equals(mapping.getOprtSource()) ? null : out.getAdjustReason());
@@ -745,7 +752,7 @@ public class TempSecurityCodeBusinessConverter {
                     out.setAdjustType(ADJUST_TYPE_MUTEX);
                 }
                 out.setUpdtTime(mapping.getUpdateTime());
-                out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(source.getAdjustReason(),
+                out.setAdjustReason(ScheduledAdjustLogHelper.appendDetails(plan.labelReason(source.getAdjustReason()),
                         "代码替换：" + mapping.getTempSecurityCode() + "→" + mapping.getSecurityCode(),
                         "本条正式代码：" + member.getWindCode()));
                 if (TempOprtSource.JOB.getCode().equals(mapping.getOprtSource())) {
@@ -903,6 +910,9 @@ public class TempSecurityCodeBusinessConverter {
 
     /** 放本次要用的在池记录、待审批申请、新代码的证券信息和检查结果；CRMW 按凭证分开保存。 */
     public static final class ConversionPlan {
+        /** 本次换码任务的名称标注，人工转换为空 */
+        private String taskLabel;
+
         /** 是否只处理 Wind 这条变更指定的新代码。 */
         private boolean singleCode;
         /** 这些记录是否属于某个 CRMW 凭证的标的债券。 */
@@ -932,5 +942,15 @@ public class TempSecurityCodeBusinessConverter {
         /** 本次即时转换共用批次，不影响流程中审批批次。 */
         private String batchNo = UUID.randomUUID().toString().replace("-", "");
 
+        /** 在新建的调库记录上标注换码来源，保留原有调整原因 */
+        private String labelReason(String reason) {
+            if (taskLabel == null) {
+                return reason;
+            }
+            if (reason == null || reason.trim().isEmpty()) {
+                return taskLabel;
+            }
+            return reason.startsWith("【任务名称：") ? taskLabel + "原调整原因：" + reason : taskLabel + reason;
+        }
     }
 }

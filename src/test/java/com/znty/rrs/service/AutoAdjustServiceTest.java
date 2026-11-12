@@ -137,7 +137,7 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getAdjustReason())
-                .isEqualTo("证券到期自动调出（到期日：2026-09-01；出池口径：到期日早于当前日期减去 1 天）");
+                .isEqualTo("【任务名称：到期证券自动出池】（到期日：2026-09-01；出池口径：到期日早于当前日期减去 1 天）");
         assertThat(log.getAdjustAdvice()).isNull();
         assertThat(log.getAdjustBatchNo()).matches("BOND\\d{17}2001");
         assertThat(result.isSuccess()).isTrue();

@@ -53,8 +53,8 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_ID = "0";
     /** 系统调库操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    /** 自动入池原因 */
-    private static final String REASON = "主体下债券自动入池";
+    /** 任务默认展示名称 */
+    private static final String DEFAULT_TASK_NAME = "主体下债券自动入池（已排除ABS债）";
     /**
      * 扩展参数说明
      */
@@ -254,7 +254,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
                 bond.setAuditStatus(AuditStatus.APPROVED.getCode());
                 bond.setAdjusterId(AUTO_ADJUSTER_ID);
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
-                String reason = ScheduledAdjustLogHelper.appendDetails(REASON,
+                String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.issuerDetail(bond),
                         ScheduledAdjustLogHelper.poolDetail("主体所在池", pool, poolId),
                         ScheduledAdjustLogHelper.passiveAbsIdentityDetail(bond));
@@ -421,7 +421,7 @@ public class CompanySamePoolBondAutoInService implements RrsScheduledTask {
         } catch (Exception e) {
             log.debug("读取任务名称失败: {}", TASK_CODE);
         }
-        return TASK_CODE;
+        return DEFAULT_TASK_NAME;
     }
 
     private void infoDetail(TaskDetailLog detail, String line) {

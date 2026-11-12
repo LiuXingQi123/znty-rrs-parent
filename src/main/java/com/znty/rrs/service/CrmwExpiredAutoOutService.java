@@ -45,7 +45,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
 
     private static final String AUTO_ADJUSTER_ID = "0";
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    private static final String REASON = "CRMW到期自动调出";
+    private static final String DEFAULT_TASK_NAME = "CRMW到期自动出池";
     private static final String PARAM_HELP =
             "参数格式：JSON 对象，例如 <code>{\"poolIds\":[18],\"maturityOffsetDays\":1}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[18]}</code>\n"
@@ -202,7 +202,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                 item.setAuditStatus(AuditStatus.APPROVED.getCode());
                 item.setAdjusterId(AUTO_ADJUSTER_ID);
                 item.setAdjusterName(AUTO_ADJUSTER_NAME);
-                String reason = ScheduledAdjustLogHelper.appendDetails(REASON,
+                String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.dateDetail("凭证到期日", item.getMaturityDate()),
                         "出池口径：" + maturityRule);
                 item.setAdjustReason(reason);
@@ -325,7 +325,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         return poolMap;
     }
 
-    /** 从库表读取任务展示名称，缺失时回退为任务编码 */
+    /** 从库表读取任务展示名称，缺失时使用默认任务名称 */
     private String resolveTaskName() {
         try {
             SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
@@ -335,7 +335,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         } catch (Exception e) {
             log.debug("读取任务名称失败: {}", TASK_CODE);
         }
-        return TASK_CODE;
+        return DEFAULT_TASK_NAME;
     }
 
     /** 写 INFO 级过程日志并同步任务明细 */

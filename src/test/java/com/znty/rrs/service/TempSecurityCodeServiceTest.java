@@ -366,9 +366,9 @@ public class TempSecurityCodeServiceTest {
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(adjustMapper, times(4)).addAdjustLog(logCaptor.capture());
         assertThat(logCaptor.getAllValues().get(0).getAdjustReason())
-                .isEqualTo("债券临时代码调出（临时代码：TMP001；正式代码：110001.IB）");
+                .isEqualTo("【任务名称：债券临时代码替换】债券临时代码调出（临时代码：TMP001；正式代码：110001.IB）");
         assertThat(logCaptor.getAllValues().get(1).getAdjustReason())
-                .isEqualTo("研究建议（代码替换：TMP001→110001.IB；本条正式代码：110001.IB）");
+                .isEqualTo("【任务名称：债券临时代码替换】研究建议（代码替换：TMP001→110001.IB；本条正式代码：110001.IB）");
         for (IpAdjustLogBo log : logCaptor.getAllValues()) {
             assertThat(log.getAdjustAdvice()).isNull();
             assertThat(log.getAdjusterId()).isEqualTo("0");
