@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AbsRatingCompanyCache {
 
     /** 候选仅供短期交互复用，提交后以数据库申请快照为准 */
-    private static final long CANDIDATE_LIFETIME_MS = 15 * 60 * 1000L;
+    private static final long CANDIDATE_LIFETIME_MS = 60 * 1000L;
 
     /** 关联评级主体候选读取 */
     @Resource

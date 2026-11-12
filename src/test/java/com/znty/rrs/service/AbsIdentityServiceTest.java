@@ -92,6 +92,21 @@ public class AbsIdentityServiceTest {
         verifyNoInteractions(mapper);
     }
 
+    /** 候选从写入时起缓存一分钟 */
+    @Test
+    public void relatedCandidateShouldExpireOneMinuteAfterCaching() {
+        RelatedRatingCompanyDto row = new RelatedRatingCompanyDto();
+        row.setCompanyCode("A");
+        long before = System.currentTimeMillis();
+        service.rememberRelated("ABS1", Collections.singletonList(row));
+        long after = System.currentTimeMillis();
+
+        Object cache = ReflectionTestUtils.getField(service, "absRatingCompanyCache");
+        Map<?, ?> entries = (Map<?, ?>) ReflectionTestUtils.getField(cache, "relatedCandidates");
+        Long expiresAt = (Long) ReflectionTestUtils.getField(entries.get("ABS1"), "expiresAt");
+        assertThat(expiresAt).isBetween(before + 60_000L, after + 60_000L);
+    }
+
     /** 在途或在库已经占用 A 时，其他库不能选择 B */
     @Test
     public void occupiedIdentityShouldRejectDifferentSubject() {
