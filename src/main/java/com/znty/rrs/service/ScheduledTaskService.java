@@ -335,32 +335,44 @@ public class ScheduledTaskService {
                 // 定时触发执行
                 runTask(taskCode, ScheduleTriggerType.CRON.getCode(), SYSTEM_OPERATOR_ID, SYSTEM_OPERATOR_NAME);
             } catch (Exception e) {
-                log.error("定时任务执行失败: {}", taskCode, e);
+                log.error("定时任务触发失败: {}", taskCode, e);
             }
         });
     }
 
     /**
-     * 按任务编码串行执行业务实现，并在 MySQL 命名锁内持久化最近执行摘要与执行历史。
+     * 按任务编码串行执行业务实现
+     *
+     * 执行顺序：
+     * 1. 获取本机锁和 MySQL 命名锁
+     * 2. 读取最新配置，定时触发时仅在调度开启的情况下继续
+     * 3. 执行业务并在持锁期间保存最近执行摘要与执行历史
      */
     private ScheduledTaskResult runTask(String taskCode, String triggerType,
                                         String operatorId, String operatorName) {
         // 取业务实现
         RrsScheduledTask task = requireImpl(taskCode);
-        // 展示名读库，执行历史缺少名称时仍可用任务编码定位
-        String configuredName = queryConfiguredTaskName(taskCode);
-        String displayName = configuredName == null ? taskCode : configuredName;
+        boolean cronTriggered = ScheduleTriggerType.CRON.getCode().equals(triggerType);
         // 本机锁只负责同一 JVM 内同任务串行；保留它可使本机并发触发按顺序执行，
         // 避免它们在尚未执行时就相互判定为“其他节点正在执行”。
         Object lock = runLocks.computeIfAbsent(taskCode, k -> new Object());
         synchronized (lock) {
-            log.info("执行定时任务 {} ({}) trigger={}", displayName, taskCode, triggerType);
             // 回调在当前线程同步执行，数组仅用于从 Runnable 回传本次执行结果。
             ScheduledTaskResult[] resultHolder = new ScheduledTaskResult[1];
             // MySQL 命名锁负责多 JVM / 多机器互斥；等待 0 秒，未获锁立即返回，
             // 不占用动态调度线程。任务执行和结果落库均置于持锁回调内，避免其他实例
             // 在业务已完成但历史尚未写入的窗口内重复执行。
             boolean acquired = jobLockService.executeWithLock(buildLockName(taskCode), 0, () -> {
+                // 持锁后读取库表配置，避免其他节点保留的旧调度在关闭后继续执行
+                SysScheduledTaskBo config = queryRunConfig(taskCode, cronTriggered);
+                if (cronTriggered && (config == null || !Integer.valueOf(1).equals(config.getScheduleEnabled()))) {
+                    log.info("定时任务 {} 未启用或配置不存在，本次跳过", taskCode);
+                    return;
+                }
+                String configuredName = config != null && StringUtils.hasText(config.getTaskName())
+                        ? config.getTaskName() : null;
+                String displayName = configuredName == null ? taskCode : configuredName;
+                log.info("执行定时任务 {} ({}) trigger={}", displayName, taskCode, triggerType);
                 Date startTime = new Date();
                 try {
                     // 执行业务并在持锁期间写入执行结果
@@ -381,7 +393,7 @@ public class ScheduledTaskService {
                     throw new BizException("任务正在其他节点执行");
                 }
                 // cron 触发由其他实例执行时仅记录跳过日志，不写执行历史或最近执行摘要。
-                log.info("定时任务 {} ({}) 正在其他节点执行，已跳过", displayName, taskCode);
+                log.info("定时任务 {} 正在其他节点执行，已跳过", taskCode);
                 return null;
             }
             // 已获取分布式锁时，返回持锁回调内产生的业务执行结果。
@@ -491,18 +503,25 @@ public class ScheduledTaskService {
     }
 
     /**
-     * 从库表读取任务展示名称，读库失败或名称为空时交由调用方选择默认名称
+     * 读取本次执行使用的最新任务配置
+     *
+     * 执行顺序：
+     * 1. 按任务编码读取未删除的配置
+     * 2. 读取失败时，定时触发抛出异常并跳过本轮，手动触发沿用默认任务名称
+     *
+     * @param taskCode 任务编码
+     * @param cronTriggered 是否为定时触发
+     * @return 任务配置，配置不存在或手动触发时读取失败则为空
      */
-    private String queryConfiguredTaskName(String taskCode) {
+    private SysScheduledTaskBo queryRunConfig(String taskCode, boolean cronTriggered) {
         try {
-            SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(taskCode);
-            if (conf != null && StringUtils.hasText(conf.getTaskName())) {
-                return conf.getTaskName();
+            return scheduledTaskMapper.queryTaskByCode(taskCode);
+        } catch (RuntimeException e) {
+            if (cronTriggered) {
+                throw e;
             }
-        } catch (Exception ignored) {
-            // 读库失败时由调用方选择默认名称
+            return null;
         }
-        return null;
     }
 
     /**

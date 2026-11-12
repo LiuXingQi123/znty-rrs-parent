@@ -10,6 +10,7 @@ import com.znty.rrs.schedule.DynamicTaskScheduler;
 import com.znty.rrs.schedule.RrsScheduledTask;
 import com.znty.rrs.schedule.ScheduledTaskResult;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
@@ -240,7 +241,7 @@ public class ScheduledTaskServiceTest {
     }
 
     @Test
-    public void executeTaskShouldRunImpl() {
+    public void executeTaskShouldRunImplWhenScheduleIsDisabled() {
         RrsScheduledTask task = mockTask("a");
         when(task.execute()).thenAnswer(invocation -> {
             assertThat(ScheduledAdjustLogHelper.taskLabel("默认任务名")).isEqualTo("【任务名称：自定义任务名】");
@@ -251,6 +252,7 @@ public class ScheduledTaskServiceTest {
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskCode("a");
         conf.setTaskName("自定义任务名");
+        conf.setScheduleEnabled(0);
         when(mapper.queryTaskByCode("a")).thenReturn(conf);
 
         ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
@@ -272,10 +274,6 @@ public class ScheduledTaskServiceTest {
     public void cronTaskShouldSkipWithoutHistoryWhenLockIsHeldByAnotherNode() {
         RrsScheduledTask task = mockTask("a");
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
-        SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskCode("a");
-        conf.setTaskName("任务A");
-        when(mapper.queryTaskByCode("a")).thenReturn(conf);
 
         ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
@@ -285,8 +283,48 @@ public class ScheduledTaskServiceTest {
                 "a", "cron", "0", "系统");
         assertThat(result).isNull();
         verify(task, never()).execute();
+        verify(mapper, never()).queryTaskByCode("a");
         verify(mapper, never()).addRunLog(any());
         verify(mapper, never()).editTaskLastRun(any(SysScheduledTaskBo.class));
+    }
+
+    @Test
+    public void cronCallbackShouldOnlyRunWhenCurrentConfigIsEnabled() {
+        RrsScheduledTask task = mockTask("a");
+        when(task.execute()).thenReturn(ScheduledTaskResult.success("a", "任务A", "ok", 1, new Date(), 1L));
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
+        SysScheduledTaskBo enabled = new SysScheduledTaskBo();
+        enabled.setTaskCode("a");
+        enabled.setTaskName("任务A");
+        enabled.setCronExpression("0 0 2 * * ?");
+        enabled.setScheduleEnabled(1);
+        when(mapper.queryTaskList()).thenReturn(Collections.singletonList(enabled));
+
+        ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", scheduler);
+        ReflectionTestUtils.setField(service, "jobLockService", executeTaskJobLock());
+        service.initAfterStartup();
+
+        ArgumentCaptor<Runnable> callback = ArgumentCaptor.forClass(Runnable.class);
+        verify(scheduler).schedule(eq("a"), eq(enabled.getCronExpression()), callback.capture());
+        SysScheduledTaskBo disabled = new SysScheduledTaskBo();
+        disabled.setScheduleEnabled(0);
+        when(mapper.queryTaskByCode("a")).thenReturn(disabled).thenReturn(null)
+                .thenThrow(new IllegalStateException("读取任务配置失败")).thenReturn(enabled);
+
+        callback.getValue().run();
+        callback.getValue().run();
+        callback.getValue().run();
+        verify(task, never()).execute();
+        verify(mapper, never()).addRunLog(any());
+        verify(mapper, never()).editTaskLastRun(any(SysScheduledTaskBo.class));
+
+        callback.getValue().run();
+        verify(task).execute();
+        verify(mapper).addRunLog(any());
+        verify(mapper).editTaskLastRun(any(SysScheduledTaskBo.class));
     }
 
     @Test
