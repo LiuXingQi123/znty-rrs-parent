@@ -3,7 +3,9 @@ package com.znty.rrs.service;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.mapper.AbsIdentityMapper;
 import com.znty.rrs.mapper.AutoAdjustMapper;
+import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
+import com.znty.rrs.mapper.WindRatingMapper;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -56,14 +58,15 @@ public class AbsIdentityMapperIntegrationTest {
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
         jdbc.execute("CREATE SCHEMA ais_inv_analysis");
         jdbc.execute("CREATE TABLE ais_inv_ods.wind_cbondissuer (s_info_windcode VARCHAR(32), s_info_compcode VARCHAR(32), s_info_compname VARCHAR(100), s_info_typecode BIGINT, opdate TIMESTAMP)");
-        jdbc.execute("CREATE TABLE ais_inv_ods.wind_cbondissuerrating (object_id VARCHAR(100), s_info_compcode VARCHAR(32), b_info_creditrating VARCHAR(40), b_info_creditratingagency VARCHAR(10), ann_dt VARCHAR(8), ann_dt2 VARCHAR(8), opdate TIMESTAMP)");
+        jdbc.execute("CREATE TABLE ais_inv_ods.wind_cbondissuerrating (object_id VARCHAR(100), s_info_compcode VARCHAR(32), b_info_creditrating VARCHAR(40), b_info_creditratingagency VARCHAR(10), ann_dt VARCHAR(8), ann_dt2 VARCHAR(8), opdate TIMESTAMP, b_info_precreditrating VARCHAR(40), b_creditratingchange VARCHAR(10))");
         jdbc.execute("CREATE TABLE ais_inv_analysis.v_inv_grade_result (windcode VARCHAR(32), windname VARCHAR(100), total_score VARCHAR(50), ts TIMESTAMP)");
         jdbc.execute("CREATE TABLE ais_inv_analysis.t_inv_company (wind_code VARCHAR(32), full_name VARCHAR(100), short_names VARCHAR(100))");
         jdbc.execute("CREATE TABLE dict_external_rating_agency (b_info_creditratingagency VARCHAR(10), is_deleted INT)");
         jdbc.update("INSERT INTO rrs_securityinfo(wind_code, abs_flag, security_type) VALUES ('ABS1',1,'abs')");
         Configuration config = new Configuration(new Environment("abs-test", new JdbcTransactionFactory(), ds));
         config.setMapUnderscoreToCamelCase(true);
-        for (String mapper : Arrays.asList("AbsIdentityMapper", "SecurityPoolAdjustMapper", "AutoAdjustMapper")) {
+        for (String mapper : Arrays.asList("AbsIdentityMapper", "SecurityPoolAdjustMapper", "AutoAdjustMapper",
+                "CommonMapper", "WindRatingMapper")) {
             try (InputStream in = getClass().getResourceAsStream("/mapper/" + mapper + ".xml")) {
                 new XMLMapperBuilder(in, config, mapper, config.getSqlFragments()).parse();
             }
@@ -230,14 +233,18 @@ public class AbsIdentityMapperIntegrationTest {
         }
     }
 
-    /** 候选一次返回内评和最新认可外评，评级与机构取同一条记录 */
+    /** 按评级日期取最新认可外评，评级与机构取同一条记录 */
     @Test
     public void candidatesShouldReturnLatestRecognizedOuterRatingAndAgencyTogether() {
         jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuer VALUES ('ABS1','A','甲',115201000,NOW())");
         jdbc.update("INSERT INTO ais_inv_analysis.v_inv_grade_result VALUES('A','甲','2',NOW())");
         jdbc.update("INSERT INTO ais_inv_analysis.t_inv_company VALUES('A','甲',NULL)");
         jdbc.update("INSERT INTO dict_external_rating_agency VALUES ('R1',0),('R2',0)");
-        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuerrating VALUES ('1','A','AA','R1','20260101','20260101',NOW()),('2','A','AA+','R2','20260201','20260201',NOW()),('3','A','AAA','INVALID','20260301','20260301',NOW())");
+        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuerrating"
+                + " (object_id,s_info_compcode,b_info_creditrating,b_info_creditratingagency,ann_dt,ann_dt2,opdate)"
+                + " VALUES ('1','A','AA','R1','20260101','20260301',NOW()),"
+                + " ('2','A','AA+','R2','20260201','20260201',NOW()),"
+                + " ('3','A','AAA','INVALID','20260401','20260401',NOW())");
         try (SqlSession session = factory.openSession()) {
             SecurityPoolAdjustMapper mapper = session.getMapper(SecurityPoolAdjustMapper.class);
             assertThat(mapper.queryRelatedRatingCompanyList("ABS1")).singleElement().satisfies(row -> {
@@ -246,7 +253,21 @@ public class AbsIdentityMapperIntegrationTest {
                 assertThat(row.getRatingBondissuer()).isEqualTo("AA+");
                 assertThat(row.getRatingBondissuerAgency()).isEqualTo("R2");
             });
-            assertThat(mapper.querySelfSelectedRightsHolderByCode("A").getRatingBondissuerAgency()).isEqualTo("R2");
+            assertThat(mapper.querySelfSelectedRightsHolderByCode("A")).satisfies(row -> {
+                assertThat(row.getRatingBondissuer()).isEqualTo("AA+");
+                assertThat(row.getRatingBondissuerAgency()).isEqualTo("R2");
+            });
+            assertThat(mapper.querySelfSelectedRightsHolderPage("A", null)).singleElement().satisfies(row -> {
+                assertThat(row.getRatingBondissuer()).isEqualTo("AA+");
+                assertThat(row.getRatingBondissuerAgency()).isEqualTo("R2");
+            });
+            assertThat(session.getMapper(CommonMapper.class).queryGuarantorGradeList(Collections.singletonList("ABS1")))
+                    .singleElement().satisfies(row -> {
+                        assertThat(row.getRatingBondissuer()).isEqualTo("AA+");
+                        assertThat(row.getRatingBondissuerAgency()).isEqualTo("R2");
+                    });
+            assertThat(session.getMapper(WindRatingMapper.class).queryLatestRating("A", Arrays.asList("R1", "R2"))
+                    .getCreditRating()).isEqualTo("AA+");
         }
     }
 

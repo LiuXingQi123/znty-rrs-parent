@@ -31,7 +31,7 @@
         ) THEN 1 ELSE 0 END
     </select>
 
-    <!-- 黑名单质押库统一条件（二）：近一年认可机构外评存在 AA- 及以下档位。 -->
+    <!-- 黑名单质押库统一条件（二）：按评级日期筛选近一年，认可机构外评存在 AA- 及以下档位 -->
     <select id="queryCompanyHasLowOuterRating" resultType="boolean">
         SELECT CASE WHEN EXISTS (
             SELECT 1
@@ -48,8 +48,7 @@
                   AND 1 = 0
                 </otherwise>
             </choose>
-              AND COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000')
-                    &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
+              AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
               AND TRIM(r.b_info_creditrating) IN (
                   'AA-', 'A+', 'A', 'A-'
                   ,'BBB+', 'BBB', 'BBB-'
@@ -257,12 +256,12 @@
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        <!-- 近一年认可机构外评，并转成可比较档位。 -->
+        <!-- 按评级日期筛选近一年认可机构外评，并转成可比较档位 -->
         WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
                    ,r.b_info_creditrating
-                   ,COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000') AS declare_dt
+                   ,r.ann_dt
                    ,CASE TRIM(r.b_info_creditrating)
                         WHEN 'AAA+' THEN 21
                         WHEN 'AAA' THEN 20
@@ -303,10 +302,9 @@
                   AND 1 = 0
                 </otherwise>
             </choose>
-              AND COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000')
-                    &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
+              AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
         )
-        <!-- 每个主体取近一年孰低外评；同档取日期更新的一条。 -->
+        <!-- 每个主体取近一年孰低外评，同档取评级日期最新的一条 -->
         ,effective AS (
             SELECT s_info_compcode
                    ,s_info_compname
@@ -318,7 +316,7 @@
                        ,ROW_NUMBER() OVER (
                            PARTITION BY s_info_compcode
                            ORDER BY rating_value ASC
-                                    ,declare_dt DESC
+                                    ,ann_dt DESC
                        ) AS rn
                 FROM rated
             ) t
@@ -357,12 +355,12 @@
     -->
     <select id="queryCompanyByNotLowOuterRatingInPool"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        <!-- 近一年认可机构外评，并转成可比较档位。 -->
+        <!-- 按评级日期筛选近一年认可机构外评，并转成可比较档位 -->
         WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
                    ,r.b_info_creditrating
-                   ,COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000') AS declare_dt
+                   ,r.ann_dt
                    ,CASE TRIM(r.b_info_creditrating)
                         WHEN 'AAA+' THEN 21
                         WHEN 'AAA' THEN 20
@@ -403,10 +401,9 @@
                   AND 1 = 0
                 </otherwise>
             </choose>
-              AND COALESCE(NULLIF(r.ann_dt2, ''), NULLIF(r.ann_dt, ''), '00000000')
-                    &gt;= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
+              AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
         )
-        <!-- 每个主体取近一年孰低外评；同档取日期更新的一条。 -->
+        <!-- 每个主体取近一年孰低外评，同档取评级日期最新的一条 -->
         ,effective AS (
             SELECT s_info_compcode
                    ,s_info_compname
@@ -418,7 +415,7 @@
                        ,ROW_NUMBER() OVER (
                            PARTITION BY s_info_compcode
                            ORDER BY rating_value ASC
-                                    ,declare_dt DESC
+                                    ,ann_dt DESC
                        ) AS rn
                 FROM rated
             ) t

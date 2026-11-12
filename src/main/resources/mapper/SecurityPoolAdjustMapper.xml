@@ -339,15 +339,14 @@
                 WHERE eligible.company_code = grade.windcode
             )
         )
-        <!-- 从认可机构读取候选主体最新一条外评，评级与机构来自同一行 -->
+        <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
         ,ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
                    , ROW_NUMBER() OVER (
                        PARTITION BY rating.s_info_compcode
-                       ORDER BY COALESCE(NULLIF(rating.ann_dt2, ''), NULLIF(rating.ann_dt, '')) DESC
-                                , rating.ann_dt DESC
+                       ORDER BY rating.ann_dt DESC
                                 , rating.opdate DESC
                                 , rating.object_id DESC
                    ) AS row_num
@@ -433,15 +432,14 @@
                 WHERE company.company_code = grade.windcode
             )
         )
-        <!-- 从认可机构读取候选主体最新一条外评，评级与机构来自同一行 -->
+        <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
         ,ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
                    , ROW_NUMBER() OVER (
                        PARTITION BY rating.s_info_compcode
-                       ORDER BY COALESCE(NULLIF(rating.ann_dt2, ''), NULLIF(rating.ann_dt, '')) DESC
-                                , rating.ann_dt DESC
+                       ORDER BY rating.ann_dt DESC
                                 , rating.opdate DESC
                                 , rating.object_id DESC
                    ) AS row_num
@@ -496,15 +494,14 @@
             FROM ais_inv_analysis.v_inv_grade_result grade
             WHERE grade.windcode = #{companyCode}
         )
-        <!-- 从认可机构读取候选主体最新一条外评，评级与机构来自同一行 -->
+        <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
         ,ranked_outer_rating AS (
             SELECT rating.s_info_compcode
                    , rating.b_info_creditrating
                    , rating.b_info_creditratingagency
                    , ROW_NUMBER() OVER (
                        PARTITION BY rating.s_info_compcode
-                       ORDER BY COALESCE(NULLIF(rating.ann_dt2, ''), NULLIF(rating.ann_dt, '')) DESC
-                                , rating.ann_dt DESC
+                       ORDER BY rating.ann_dt DESC
                                 , rating.opdate DESC
                                 , rating.object_id DESC
                    ) AS row_num

@@ -34,6 +34,23 @@ public class ExternalRatingAgencyMapperSqlTest {
                 .doesNotContain("e.b_info_creditrating IS NULL");
     }
 
+    /** 近一年外评直接按评级日期筛选，同档按评级日期取最新记录 */
+    @Test
+    public void pledgeRatingQueries_ShouldUseRatingDate() throws Exception {
+        String xml = readMapper("AutoAdjustMapper.xml");
+        String ratingDateFilter = "AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')";
+
+        assertThat(selectBlock(xml, "queryCompanyHasLowOuterRating"))
+                .contains(ratingDateFilter)
+                .doesNotContain("ann_dt2");
+        for (String queryId : Arrays.asList("queryCompanyByLowOuterRatingNotInPool",
+                "queryCompanyByNotLowOuterRatingInPool")) {
+            assertThat(selectBlock(xml, queryId)).as(queryId)
+                    .contains(ratingDateFilter, ",ann_dt DESC")
+                    .doesNotContain("ann_dt2");
+        }
+    }
+
     /** 两个任务都应将非标准评级排在标准评级之后，并排除空评级 */
     @Test
     public void autoAdjustRatingQueries_ShouldRankNonstandardRatingsAfterStandardRatings() throws Exception {
