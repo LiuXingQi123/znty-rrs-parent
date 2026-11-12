@@ -34,6 +34,19 @@ public class ExternalRatingAgencyMapperSqlTest {
                 .doesNotContain("e.b_info_creditrating IS NULL");
     }
 
+    /** 两个任务都应将非标准评级排在标准评级之后，并排除空评级 */
+    @Test
+    public void autoAdjustRatingQueries_ShouldRankNonstandardRatingsAfterStandardRatings() throws Exception {
+        String xml = readMapper("AutoAdjustMapper.xml");
+        for (String queryId : Arrays.asList("queryCompanyByLowOuterRatingNotInPool",
+                "queryCompanyByNotLowOuterRatingInPool")) {
+            assertThat(selectBlock(xml, queryId)).as(queryId)
+                    .contains("WHEN 'AAA+' THEN 21", "WHEN 'AA-' THEN 17", "ELSE 999")
+                    .contains("ORDER BY rating_value ASC", "TRIM(r.b_info_creditrating) != ''")
+                    .doesNotContain("WHERE rating_value");
+        }
+    }
+
     /** 配置查询应只返回未删除、非空机构并按数值编码升序。 */
     @Test
     public void agencyQuery_ShouldFilterAndSortActiveCodes() throws Exception {

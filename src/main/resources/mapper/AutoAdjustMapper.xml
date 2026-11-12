@@ -253,7 +253,7 @@
 
     <!--
       条款（二）：近一年认可机构外评孰低为 AA-及以下、且尚未在目标池。
-      一年以前忽略；未知档位不参与比较；认可机构由配置参数控制。
+      一年以前忽略；非标准评级排在标准评级之后；认可机构由配置参数控制。
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
@@ -285,13 +285,13 @@
                         WHEN 'CC' THEN 3
                         WHEN 'C' THEN 2
                         WHEN 'D' THEN 1
-                        ELSE 0
+                        ELSE 999
                     END AS rating_value
             FROM ais_inv_ods.wind_cbondissuerrating r
             WHERE r.s_info_compcode IS NOT NULL
               AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
-              AND r.b_info_creditrating != ''
+              AND TRIM(r.b_info_creditrating) != ''
             <choose>
                 <when test="agencyCodes != null and agencyCodes.size() &gt; 0">
                   AND r.b_info_creditratingagency IN
@@ -321,7 +321,6 @@
                                     ,declare_dt DESC
                        ) AS rn
                 FROM rated
-                WHERE rating_value &gt; 0
             ) t
             WHERE t.rn = 1
         )
@@ -386,13 +385,13 @@
                         WHEN 'CC' THEN 3
                         WHEN 'C' THEN 2
                         WHEN 'D' THEN 1
-                        ELSE 0
+                        ELSE 999
                     END AS rating_value
             FROM ais_inv_ods.wind_cbondissuerrating r
             WHERE r.s_info_compcode IS NOT NULL
               AND r.s_info_compcode != ''
               AND r.b_info_creditrating IS NOT NULL
-              AND r.b_info_creditrating != ''
+              AND TRIM(r.b_info_creditrating) != ''
             <choose>
                 <when test="agencyCodes != null and agencyCodes.size() &gt; 0">
                   AND r.b_info_creditratingagency IN
@@ -422,11 +421,10 @@
                                     ,declare_dt DESC
                        ) AS rn
                 FROM rated
-                WHERE rating_value &gt; 0
             ) t
             WHERE t.rn = 1
         )
-        <!-- 已在目标池且孰低不属于 AA-及以下，或近一年无认可外评的主体。 -->
+        <!-- 已在目标池、近一年有认可外评且孰低不属于 AA-及以下的主体 -->
         SELECT ips.security_code
                ,COALESCE(NULLIF(e.s_info_compname, ''), NULLIF(ips.security_short_name, ''), ips.security_code)
                    AS security_short_name
