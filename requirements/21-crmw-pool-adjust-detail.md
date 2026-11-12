@@ -40,6 +40,8 @@
 
 ## 2. 筛选与查询逻辑
 
+可绑定证券列表按标的证券代码前缀筛选。
+
 无独立筛选；`loadDetailData` 用 `Promise.all` 并发 **6 个接口**（与 [20] 审批页相同）：`querySecurityDetail`、`queryCrmwDetail`、`queryCrmwAdjustPoolList`(in)、`queryCrmwAdjustPoolList`(out)、`queryCrmwPoolStatus`、`queryCrmwAdjustLogList`。随后 `loadLogAttachments` + `loadFlowSteps`。
 
 ---

@@ -100,7 +100,7 @@ Demo 中前三条担保债及 `108008902.IB` 默认首选某金融公司（C1001
 | `POST commonFile/downloadTemplate` | `{ templateCode: security_pool_import \| company_pool_import }` → Base64 xlsx |
 | `POST securityPoolExcelImport/uploadExcel` | multipart：`request` JSON（含 `importType`）+ `file` + 可选 `originalFileNameListJson`（JSON 数组，单文件时长度 1；兼容公司环境中文文件名乱码） |
 | `POST .../queryTask` | 批次信息 + `checkItems` |
-| `POST .../queryItemPage` | 明细分页，证券行附带类型、ABS 标志、关联候选、已保存选择及最新内评 |
+| `POST .../queryItemPage` | 明细分页，证券代码或主体代码按前缀筛选，证券行附带类型、ABS 标志、关联候选、已保存选择及最新内评 |
 | `POST .../editRatingCompany` | `{ impId, itemId, relatedCompanyCode, selfSelectedRightsHolderCode, currentUserId, pageIndex, pageSize, keyword }`；按导入明细 ID 仅更新当前行，空字符串清除对应角色，并清空本批旧校验快照 |
 | `POST .../checkImport` | 内联校验，回写 chk_* 与 `result_json` |
 | `POST .../submitImport` | 内联提交（可带前端流程选择后的 `checkItems`） |

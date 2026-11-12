@@ -72,7 +72,7 @@
                 </foreach>
             </if>
             <if test="securityCode != null and securityCode != ''">
-                AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND ips.security_code LIKE CONCAT(#{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND ips.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')
@@ -93,7 +93,7 @@
                 AND bi.full_name LIKE CONCAT('%', #{securityFullName}, '%')
             </if>
             <if test="issuerCode != null and issuerCode != ''">
-                AND bi.issuer_code LIKE CONCAT('%', #{issuerCode}, '%')
+                AND bi.issuer_code LIKE CONCAT(#{issuerCode}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
                 AND bi.issuer LIKE CONCAT('%', #{issuer}, '%')

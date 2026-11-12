@@ -63,7 +63,7 @@
 
 字段：`securityCode`/`securityShortName`/`issuer`，以及是否特征多选 `bondYesFlags`（顺序与证券池调整一致：ABS / 担保 / 永续 / 次级 / 私募 / 含权 / 标准信用债；勾选即筛「是」，多选 AND）。
 
-- 接口：`POST /api/v1/crmwPoolAdjust/queryBindableSecurityPage`，返回 `PageResult<SecurityInfoDto>`。
+- 接口：`POST /api/v1/crmwPoolAdjust/queryBindableSecurityPage`，返回 `PageResult<SecurityInfoDto>`。标的证券代码按前缀匹配。
 - SQL（`queryBindableSecurityPage`）：`INNER JOIN dict_security_type dst ... AND dst.category_type='bond'` 限定债券大类，再通过 `WHERE si.security_type != 'crmw'` 排除 CRMW 凭证；未维护有效债券类型字典的证券不会进入候选。`bondYesFlags` 条件口径同 [04]（`abs` 为 `absFlag=1` 或类型 `abs`，`private` 为发行方式/内部分类含「私募」）。
 - 表格在操作列前展示是否 ABS/担保/永续/次级/私募/含权/标准信用债（是/否 Tag）。
 - 分页：`pagination: {pageIndex:1, pageSize:5, total:0}`，`page-sizes=[5,10,20,50,100]`。

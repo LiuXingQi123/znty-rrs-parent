@@ -49,7 +49,7 @@
         <where>
             AND is_deleted = 0
             <if test="securityCode != null and securityCode != ''">
-                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND security_code LIKE CONCAT(#{securityCode}, '%')
             </if>
             <if test="alertStatus != null and alertStatus != ''">
                 AND alert_status = #{alertStatus}

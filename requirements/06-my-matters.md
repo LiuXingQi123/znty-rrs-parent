@@ -56,7 +56,7 @@
 | `myMatters/queryMyInitiatedMattersPage` | businessDomain,currentUserId | `PageResult<MyMattersDto>` |
 | `myMatters/queryFlowOptionList` | businessDomain,currentUserId | `List<FlowOptionDto>` |
 
-分页与我发起的支持 `flowIds`、`securityCode`、`securityShortName`、`startDateStart/End`、`processDescription`、`auditStatus`、`pageIndex/pageSize`；待处理/已完成还支持 `initiatorName`。兼容原请求字段名称，基金/股票 Mapper 将代码/名称筛选映射为各自主档列。
+分页与我发起的支持 `flowIds`、`securityCode`、`securityShortName`、`startDateStart/End`、`processDescription`、`auditStatus`、`pageIndex/pageSize`；待处理/已完成还支持 `initiatorName`。债券事项、规则提醒和 CRMW 规则提醒的证券代码按前缀匹配。基金/股票 Mapper 将代码/名称筛选映射为各自主档列。
 
 列表摘要包含 `businessDomain`、`businessScene`、`objectCode/objectName`、`adjustLogId`、`adjustBatchNo`、`stepId`、目标池、流程名称、步骤名称、步骤/审核状态、流程描述、发起人及开始时间；保留各业务定位字段 `securityCode` / `crmwScode` / `fundCode` / `stockCode` 等。
 

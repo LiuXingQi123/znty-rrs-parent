@@ -43,9 +43,9 @@
 | 控件 | 字段 | 说明 |
 |---|---|---|
 | 投资池选择器（树多选） | `poolIds` | 同主体池查询页 |
-| 主体代码 | `companyCode` | 模糊 |
+| 主体代码 | `companyCode` | 前缀匹配 |
 | 主体名称 | `companyName` | 模糊（主体池查询页无此项） |
-| 统一社会信用代码 | `registerNumber` | 按 `security_code` 关联 `ais_inv_ods.wind_compintroduction.REGISTERNUMBER` 模糊；列表同步展示该列 |
+| 统一社会信用代码 | `registerNumber` | 按 `security_code` 关联 `ais_inv_ods.wind_compintroduction.REGISTERNUMBER` 前缀匹配；列表同步展示该列 |
 | 调整日期范围 | `adjustTimeRange` | daterange，对应 `submit_time` |
 | 调整人 | `adjusterName` | 模糊 |
 | 调整方向 | `adjustMode` | 下拉：调入/调出 |
@@ -128,7 +128,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 要点：
 - `INNER JOIN dict_security_type dst` 且 ON 上带 `dst.is_deleted=0 AND dst.category_type='company'`，与主体池查询保持一致。
 - `LEFT JOIN ip_investment_pool p ON p.id=al.target_pool_id AND p.is_deleted=0`；主体池当前态查询使用 INNER JOIN，历史流水则保留目标池已缺失时的日志记录。
-- WHERE 固定 `al.is_deleted=0`；动态 `<if>`：`poolIds`(IN)、`companyCode`(LIKE)、`companyName`(LIKE security_short_name)、`adjustTimeStart/End`(submit_time 范围，end 拼 23:59:59)、`adjusterName`(LIKE)、`adjustMode`(=)、`auditStatus`(=)。
+- WHERE 固定 `al.is_deleted=0`；动态 `<if>`：`poolIds`(IN)、`companyCode`(前缀 LIKE)、`companyName`(LIKE security_short_name)、`adjustTimeStart/End`(submit_time 范围，end 拼 23:59:59)、`adjusterName`(LIKE)、`adjustMode`(=)、`auditStatus`(=)。
 - 排序 `submit_time DESC, adjust_batch_no DESC, id DESC`。
 - Service 层 `fillPoolFullName` 用 `queryPoolFullNameMap()` 覆盖为全路径。
 

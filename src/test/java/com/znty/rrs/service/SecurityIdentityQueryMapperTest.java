@@ -94,7 +94,7 @@ public class SecurityIdentityQueryMapperTest {
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addInterceptor(new PageInterceptor());
         for (String name : Arrays.asList("SecurityPoolAdjust", "SecurityPoolQuery", "SecurityPoolAdjustHistory",
-                "BatchSecurityPoolAdjust", "StockSecurityBatchAdjust")) {
+                "BatchSecurityPoolAdjust", "StockSecurityBatchAdjust", "ForbiddenPoolQuery", "ForbiddenPoolHistory")) {
             String resource = "mapper/" + name + "Mapper.xml";
             try (InputStream input = Resources.getResourceAsStream(resource)) {
                 new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
@@ -103,7 +103,7 @@ public class SecurityIdentityQueryMapperTest {
         session = new SqlSessionFactoryBuilder().build(configuration).openSession();
     }
 
-    /** 五类列表按独立条件模糊查询，多个条件按 AND 组合且原始字段正常返回 */
+    /** 五类列表按主体编码前缀和证券全称片段筛选，多个条件按 AND 组合 */
     @Test
     public void shouldFilterAndReturnSecurityIdentityForAllLists() {
         Object[][] cases = {
@@ -127,11 +127,13 @@ public class SecurityIdentityQueryMapperTest {
                 assertThat(querySecurityList(req)).as(statement).hasSize(4);
             }
             request.setValue("issuerCode", "0123");
+            assertThat(querySecurityList(req)).as(statement).isEmpty();
+            request.setValue("issuerCode", "0012");
             assertThat(querySecurityList(req)).as(statement).hasSize(2);
             request.setValue("issuerCode", null);
             request.setValue("securityFullName", "绿色公司");
             assertThat(querySecurityList(req)).as(statement).hasSize(2);
-            request.setValue("issuerCode", "0123");
+            request.setValue("issuerCode", "0012");
             List<?> matched = querySecurityList(req);
             assertThat(matched).as(statement).hasSize(1);
             MetaObject response = configuration.newMetaObject(matched.get(0));
@@ -149,11 +151,25 @@ public class SecurityIdentityQueryMapperTest {
         }
     }
 
+    /** 禁投池主体自身与债券发行主体的信用代码都按前缀筛选 */
+    @Test
+    public void shouldUseCreditCodePrefixForBothForbiddenPoolBranches() {
+        for (String query : Arrays.asList("ForbiddenPoolQueryMapper.queryForbiddenPoolPage",
+                "ForbiddenPoolHistoryMapper.queryForbiddenPoolHistoryPage")) {
+            String sql = configuration.getMappedStatement("com.znty.rrs.mapper." + query)
+                    .getBoundSql(Collections.singletonMap("registerNumber", "9131")).getSql();
+            assertThat(sql).as(query)
+                    .contains("wci.REGISTERNUMBER LIKE CONCAT(?, '%')")
+                    .contains("rc.REGISTERNUMBER LIKE CONCAT(?, '%')")
+                    .doesNotContain("REGISTERNUMBER LIKE CONCAT('%',");
+        }
+    }
+
     /** 新增查询条件仍遵守目标池方向及存量调入来源池范围 */
     @Test
     public void shouldKeepDirectionAndSourceScopeWithIdentityFilters() {
         BatchSecurityPoolAdjustReq batch = new BatchSecurityPoolAdjustReq();
-        batch.setIssuerCode("0123");
+        batch.setIssuerCode("0012");
         batch.setSecurityFullName("绿色公司");
         batch.setDirection("in");
         batch.setPoolId(3L);
@@ -166,7 +182,7 @@ public class SecurityIdentityQueryMapperTest {
         assertThat(querySecurityList(batch)).isEmpty();
 
         StockSecurityBatchAdjustReq stock = new StockSecurityBatchAdjustReq();
-        stock.setIssuerCode("0123");
+        stock.setIssuerCode("0012");
         stock.setSecurityFullName("绿色公司");
         stock.setDirection("in");
         stock.setPoolId(3L);
@@ -190,7 +206,7 @@ public class SecurityIdentityQueryMapperTest {
         assertThat(all.getTotal()).isEqualTo(4);
         assertThat(all.getRecords()).hasSize(2);
         req.setSecurityFullName("绿色公司");
-        req.setIssuerCode("0123");
+        req.setIssuerCode("0012");
         PageResult<SecurityInfoDto> matched = service.querySecurityPage(req);
         assertThat(matched.getTotal()).isEqualTo(1);
         assertThat(matched.getRecords()).extracting(SecurityInfoDto::getWindCode).containsExactly("A");

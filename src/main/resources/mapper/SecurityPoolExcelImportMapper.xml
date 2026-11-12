@@ -126,7 +126,7 @@
                 AND chk_rslt = #{chkRslt}
             </if>
             <if test="keyword != null and keyword != ''">
-                AND fld001 LIKE CONCAT('%', #{keyword}, '%')
+                AND fld001 LIKE CONCAT(#{keyword}, '%')
             </if>
         </where>
         ORDER BY row_no ASC, id ASC

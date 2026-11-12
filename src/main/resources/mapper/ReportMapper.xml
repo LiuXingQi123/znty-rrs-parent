@@ -41,7 +41,7 @@
                 AND report_title LIKE CONCAT('%', #{reportTitle}, '%')
             </if>
             <if test="securityCode != null and securityCode != ''">
-                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND security_code LIKE CONCAT(#{securityCode}, '%')
             </if>
             <if test="reportType != null and reportType != ''">
                 AND report_type = #{reportType}
@@ -76,7 +76,7 @@
                 AND report_title LIKE CONCAT('%', #{reportTitle}, '%')
             </if>
             <if test="securityCode != null and securityCode != ''">
-                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND security_code LIKE CONCAT(#{securityCode}, '%')
             </if>
             <if test="reportType != null and reportType != ''">
                 AND report_type = #{reportType}

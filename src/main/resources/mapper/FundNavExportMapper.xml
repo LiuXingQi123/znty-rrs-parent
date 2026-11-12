@@ -15,7 +15,7 @@
                     OR fund_short_name LIKE CONCAT('%', #{fundName}, '%'))
             </if>
             <if test="fundCode != null and fundCode != ''">
-                AND fund_code LIKE CONCAT('%', #{fundCode}, '%')
+                AND fund_code LIKE CONCAT(#{fundCode}, '%')
             </if>
             <if test="marketCodes != null and marketCodes.size() > 0">
                 AND market_code IN

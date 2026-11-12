@@ -33,7 +33,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 
 | 控件 | v-model | 匹配方式 | 说明 |
 |---|---|---|---|
-| 文本输入 | `securityCode` | 模糊 | 证券代码，回车查询 |
+| 文本输入 | `securityCode` | 前缀匹配 | 证券代码，回车查询 |
 | 文本输入 | `securityShortName` | 模糊 | 证券简称，回车查询 |
 | 下拉 | `securityType` | 精确 | 证券类型，来自 `querySecurityTypeList` |
 | 下拉 | `categoryType` | 精确 | 对象类型：`company`=主体 / `bond`=债券；未选则全部 |
@@ -41,7 +41,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 | 日期范围 | `entryTimeRange` | 范围 | 入池日期起/止，`value-format="yyyy-MM-dd"` |
 | 文本输入 | `adjusterName` | 模糊 | 调整人 |
 | 文本输入 | `issuer` | 模糊 | 发行主体全称 |
-| 文本输入 | `registerNumber` | 模糊 | 统一社会信用代码：主体行匹配 `wind_compintroduction.REGISTERNUMBER`，债券行按 `issuer_code` 反查其发行主体信用代码 |
+| 文本输入 | `registerNumber` | 前缀匹配 | 统一社会信用代码：主体行匹配 `wind_compintroduction.REGISTERNUMBER`，债券行按 `issuer_code` 反查其发行主体信用代码 |
 
 ### 2.2 查询接口
 
@@ -140,7 +140,7 @@ LEFT JOIN dict_security_type dst ON dst.security_type = ips.security_type AND ds
 LEFT JOIN ais_inv_ods.wind_compintroduction wci ON wci.COMP_ID = ips.security_code AND ips.security_type = 'company'
 <where>
     ips.is_deleted = 0 AND ips.audit_status = '20'
-    <if securityCode> AND ips.security_code LIKE CONCAT('%', #{securityCode}, '%') </if>
+    <if securityCode> AND ips.security_code LIKE CONCAT(#{securityCode}, '%') </if>
     <if securityShortName> AND ips.security_short_name LIKE CONCAT('%', #{securityShortName}, '%') </if>
     <if securityType> AND ips.security_type = #{securityType} </if>
     <if categoryType=='company'> AND ips.security_type = 'company' </if>

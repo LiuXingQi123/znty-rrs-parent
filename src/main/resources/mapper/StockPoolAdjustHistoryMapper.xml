@@ -30,7 +30,7 @@
             </foreach>
         </if>
         <if test="stockCode != null and stockCode != ''">
-            AND al.stock_code LIKE CONCAT('%', #{stockCode}, '%')
+            AND al.stock_code LIKE CONCAT(#{stockCode}, '%')
         </if>
         <if test="adjustTimeStart != null and adjustTimeStart != ''">
             AND al.submit_time &gt;= #{adjustTimeStart}

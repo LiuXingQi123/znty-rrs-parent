@@ -38,7 +38,7 @@
             AND si.security_type != 'crmw'
             AND si.security_status != 'D'
             <if test="securityCode != null and securityCode != ''">
-                AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND si.wind_code LIKE CONCAT(#{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')

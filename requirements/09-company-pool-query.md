@@ -45,9 +45,9 @@
 | 控件 | 字段 | 说明 |
 |---|---|---|
 | 投资池选择器（popover + tree，多选） | `poolIds` | 父节点禁用，仅叶子可选；`check-strictly` |
-| 主体代码（文本输入） | `companyCode` | 模糊，回车查询 |
+| 主体代码（文本输入） | `companyCode` | 前缀匹配，回车查询 |
 | 主体名称（文本输入） | `companyName` | 按当前在池状态快照的主体名称模糊查询，回车查询 |
-| 统一社会信用代码（文本输入） | `registerNumber` | 按 `security_code` 关联 `ais_inv_ods.wind_compintroduction.REGISTERNUMBER` 模糊查询，回车查询；列表同步展示该列 |
+| 统一社会信用代码（文本输入） | `registerNumber` | 按 `security_code` 关联 `ais_inv_ods.wind_compintroduction.REGISTERNUMBER` 前缀匹配，回车查询；列表同步展示该列 |
 | 入池时间范围（daterange） | `entryTimeRange` | `value-format='yyyy-MM-dd'` |
 | 调整人（文本输入） | `adjusterName` | 模糊，回车查询 |
 | 查询 / 重置 | — | 查询重置页码为 1；重置清空全部条件并清树勾选 |
@@ -77,7 +77,7 @@
 ## 3. 关键校验与可见数据范围
 
 - **可见范围** = `ip_pool_status` 中 `is_deleted=0` 且 `audit_status='20'` 且 `security_type` 属于 `category_type='company'` 的记录。无角色/用户级数据权限过滤（无「我的主体池」概念）。
-- 筛选条件全部可选；`poolIds` 为空时不过滤投资池；`companyCode`/`companyName`/`adjusterName` 走 `LIKE CONCAT('%', ?, '%')`；`registerNumber` 按 `COMP_ID` 关联 `ais_inv_ods.wind_compintroduction` 后匹配 `REGISTERNUMBER`，同走 `LIKE`。
+- 筛选条件全部可选；`poolIds` 为空时不过滤投资池；`companyCode`/`registerNumber` 走 `LIKE CONCAT(?, '%')`；`registerNumber` 按 `COMP_ID` 关联 `ais_inv_ods.wind_compintroduction` 后匹配 `REGISTERNUMBER`；`companyName`/`adjusterName` 走 `LIKE CONCAT('%', ?, '%')`。
 - 时间范围：`entry_time >= start` 且 `entry_time <= end`，前端补秒。
 - `pageSize` 后端封顶 100；`pageIndex` <1 自动归 1。
 - 投资池树只返回 `is_deleted=0` 的池；已停用（`status='disabled'`）的池**仍会出现在树中**（SQL 未过滤 status）。

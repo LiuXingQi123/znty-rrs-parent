@@ -67,6 +67,7 @@
 - 整批一个事务；约 30 秒防重复键含 `crmwScode`。
 - 存在直通项时 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`。
 - 保留完整单笔候选，额外加入已配置的 batchIn/batchOut 并设为唯一推荐；未配置时保留单笔推荐，不生成额外的批量无需审批候选。提交保留用户实际选择，普通批量业务失败仍阻断。
+- 调入、调出候选的标的证券代码按前缀匹配，CRMW 凭证代码按包含匹配。
 - 候选查询与证券池批量的有意差异：证券池仍是一个 `querySecurityPage` + `direction`；CRMW 拆成 `queryInboundCandidatePage` / `queryOutboundCandidatePage`，查询请求体不带 `direction`。
 
 落池只写 `ip_pool_status_crmw`。审批复用现有 CRMW 审核/详情/历史页。

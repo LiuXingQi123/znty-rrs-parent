@@ -35,10 +35,10 @@
 
 | 控件 | v-model | 匹配方式 | 说明 |
 |---|---|---|---|
-| 文本输入 | `companyCode` | 模糊 | 主体代码，回车查询 |
+| 文本输入 | `companyCode` | 前缀匹配 | 主体代码，回车查询 |
 | 文本输入 | `companyName` | 模糊 | 主体全称，回车查询 |
-| 文本输入 | `registerNumber` | 模糊 | 统一社会信用代码：主体记录匹配 `wind_compintroduction.REGISTERNUMBER`，债券记录按 `issuer_code` 反查其发行主体信用代码 |
-| 文本输入 | `securityCode` | 模糊 | 证券代码，回车查询 |
+| 文本输入 | `registerNumber` | 前缀匹配 | 统一社会信用代码：主体记录匹配 `wind_compintroduction.REGISTERNUMBER`，债券记录按 `issuer_code` 反查其发行主体信用代码 |
+| 文本输入 | `securityCode` | 前缀匹配 | 证券代码，回车查询 |
 | 文本输入 | `securityShortName` | 模糊 | 证券名称，回车查询 |
 | 下拉 | `categoryType` | 精确 | 对象类型：`company`=主体 / `bond`=债券；未选则全部 |
 | 日期范围 | `adjustTimeRange` | 范围 | 调整开始/结束，`value-format="yyyy-MM-dd"` |
@@ -127,9 +127,9 @@ LEFT JOIN rrs_securityinfo bi ON bi.wind_code = al.security_code
 LEFT JOIN ais_inv_ods.wind_compintroduction wci ON wci.COMP_ID = al.security_code AND al.security_type = 'company'
 <where>
     al.is_deleted = 0
-    <if companyCode>   AND (wci.COMP_ID LIKE CONCAT('%', #{companyCode}, '%') OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%')) </if>
+    <if companyCode>   AND (wci.COMP_ID LIKE CONCAT(#{companyCode}, '%') OR bi.issuer_code LIKE CONCAT(#{companyCode}, '%')) </if>
     <if companyName>   AND COALESCE(wci.COMP_NAME, bi.issuer) LIKE CONCAT('%', #{companyName}, '%') </if>
-    <if securityCode>  AND al.security_code LIKE CONCAT('%', #{securityCode}, '%') </if>
+    <if securityCode>  AND al.security_code LIKE CONCAT(#{securityCode}, '%') </if>
     <if securityShortName> AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%') </if>
     <if categoryType=='company'> AND al.security_type = 'company' </if>
     <if categoryType=='bond'> AND dst.category_type = 'bond' </if>

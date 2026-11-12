@@ -54,7 +54,7 @@
 
 | 接口 | 请求 | 返回 |
 |---|---|---|
-| `/api/v1/crmwRuleAlert/queryAlertPage` | crmwScode、securityCode（模糊）、alertStatus、pageIndex、pageSize | `PageResult<CrmwRuleAlertDto>` |
+| `/api/v1/crmwRuleAlert/queryAlertPage` | crmwScode（包含匹配）、securityCode（前缀匹配）、alertStatus、pageIndex、pageSize | `PageResult<CrmwRuleAlertDto>` |
 | `/api/v1/crmwRuleAlert/editAlertProcessed` | id、currentUserId、currentUserName（必传） | 更新后的提醒 |
 
 独立Tab使用独立筛选、列表、分页、角标和请求序号，只在债券业务显示。URL `my_matters.html?tab=crmwRuleAlert` 可直达；与现有共享规则提醒口径一致，不额外按研究员归属筛选。

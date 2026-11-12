@@ -38,7 +38,7 @@
 
 - 路径：`POST /api/v1/forbiddenPoolAdjust/queryCompanyPage`
 - 请求体：`{ companyCode, companyFullName, registerNumber, pageIndex, pageSize }`
-- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_compintroduction`，按 `COMP_ID`、`COMP_NAME`、`REGISTERNUMBER` 模糊筛选，无需按债券记录分组。列表回填旗下债券数量。
+- 后端：`ForbiddenPoolAdjustService.queryCompanyPage`，`PageHelper.startPage` 分页。SQL 读取 `ais_inv_ods.wind_compintroduction`，`COMP_ID`、`REGISTERNUMBER` 按前缀筛选，`COMP_NAME` 按包含筛选，无需按债券记录分组。列表回填旗下债券数量。
 - `fillCompanyBondCount`：另查 `queryCompanyBondCountList`（`issuer_code IN (...)` 且 `category_type='bond'`，仅排除 `security_status='D'`，`GROUP BY issuer_code`）批量回填 `companyBondCount`，统计包含普通债、ABS、CRMW。`company` 大类非 bond，不必再排。该数不等于「各池在池债券数」之和（未入池债仍计入总数；同一债在多池会出现分池合计大于总数的情况）。对比证券池时用主体全称填「发行人」（名称模糊），禁投侧按主体代码精确关联。
 - 返回 `PageResult<ForbiddenPoolAdjustDto>`，前端取 `data.records` 与 `data.total`。
 

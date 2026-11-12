@@ -217,9 +217,12 @@ public class WindCustomCodeDemoDataTest {
                 assertThat(batch.querySecurityPage(filter)).hasSize(1);
                 filter.setSecurityCode("XYB001.IB"); filter.setMarketCodes(Arrays.asList("NIB"));
                 assertThat(batch.querySecurityPage(filter)).hasSize(1);
-                filter.setSecurityCode("TMP001.IB");
+                filter.setSecurityCode("TMP001");
                 assertThat(batch.querySecurityPage(filter)).extracting(candidate -> candidate.getSecurityCode())
-                        .containsExactlyInAnyOrder("TMP001.IB", "WCTMP001.IB");
+                        .containsExactly("TMP001.IB");
+                filter.setSecurityCode("WCTMP001");
+                assertThat(batch.querySecurityPage(filter)).extracting(candidate -> candidate.getSecurityCode())
+                        .containsExactly("WCTMP001.IB");
                 StockSecurityBatchAdjustReq stockFilter = new StockSecurityBatchAdjustReq();
                 stockFilter.setSecurityCode("198101.SH"); stockFilter.setMarketCodes(Arrays.asList("SSE"));
                 assertThat(session.getMapper(StockSecurityBatchAdjustMapper.class).querySecurityPage(stockFilter)).hasSize(1);

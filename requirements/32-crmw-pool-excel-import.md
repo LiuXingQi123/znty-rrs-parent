@@ -85,7 +85,7 @@
 | `POST commonFile/downloadTemplate` | `{ templateCode: crmw_pool_import }` → Base64 xlsx |
 | `POST crmwPoolExcelImport/uploadExcel` | multipart：`request` JSON + `file` + 可选 `originalFileNameListJson` |
 | `POST .../queryTask` | 批次信息 + `checkItems` |
-| `POST .../queryItemPage` | 明细分页（关键字匹配 CRMW 代码或证券代码） |
+| `POST .../queryItemPage` | 明细分页（关键字匹配 CRMW 代码片段或证券代码前缀） |
 | `POST .../editRatingCompany` | 按批次和明细 ID 保存关联主体、自选权益人并清除旧校验 |
 | `POST .../checkImport` | 逐组合委托 `checkExcelAdjust` |
 | `POST .../submitImport` | 按组合分组委托 `submitAdjustLog` |

@@ -46,14 +46,14 @@
                 </foreach>
             </if>
             <if test="companyCode != null and companyCode != ''">
-                AND (wci.COMP_ID LIKE CONCAT('%', #{companyCode}, '%')
-                     OR bi.issuer_code LIKE CONCAT('%', #{companyCode}, '%'))
+                AND (wci.COMP_ID LIKE CONCAT(#{companyCode}, '%')
+                     OR bi.issuer_code LIKE CONCAT(#{companyCode}, '%'))
             </if>
             <if test="companyName != null and companyName != ''">
                 AND COALESCE(wci.COMP_NAME, bi.issuer) LIKE CONCAT('%', #{companyName}, '%')
             </if>
             <if test="securityCode != null and securityCode != ''">
-                AND al.security_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND al.security_code LIKE CONCAT(#{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND al.security_short_name LIKE CONCAT('%', #{securityShortName}, '%')
@@ -81,10 +81,10 @@
             </if>
             <!-- 统一社会信用代码：主体记录匹配自身，债券记录匹配发行主体，与主体代码条件口径一致 -->
             <if test="registerNumber != null and registerNumber != ''">
-                AND (wci.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')
+                AND (wci.REGISTERNUMBER LIKE CONCAT(#{registerNumber}, '%')
                      OR EXISTS (SELECT 1 FROM ais_inv_ods.wind_compintroduction rc
                                 WHERE rc.COMP_ID = bi.issuer_code
-                                  AND rc.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')))
+                                  AND rc.REGISTERNUMBER LIKE CONCAT(#{registerNumber}, '%')))
             </if>
         </where>
         <!-- 提交时间优先（最新在前）；同秒内按批次号聚拢同组手工/联动/互斥；id 稳定次序 -->

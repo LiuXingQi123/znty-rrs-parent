@@ -15,7 +15,7 @@
             AND si.security_status != 'D'
             AND si.security_type != 'crmw'
             <if test="securityCode != null and securityCode != ''">
-                AND si.wind_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND si.wind_code LIKE CONCAT(#{securityCode}, '%')
             </if>
             <if test="securityShortName != null and securityShortName != ''">
                 AND si.short_name LIKE CONCAT('%', #{securityShortName}, '%')
@@ -27,7 +27,7 @@
                 AND si.full_name LIKE CONCAT('%', #{securityFullName}, '%')
             </if>
             <if test="issuerCode != null and issuerCode != ''">
-                AND si.issuer_code LIKE CONCAT('%', #{issuerCode}, '%')
+                AND si.issuer_code LIKE CONCAT(#{issuerCode}, '%')
             </if>
             <if test="issuer != null and issuer != ''">
                 AND si.issuer LIKE CONCAT('%', #{issuer}, '%')
@@ -407,7 +407,7 @@
                 AND company.wind_code != ''
                 AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
                 <if test="companyCode != null and companyCode != ''">
-                    AND company.wind_code LIKE CONCAT('%', #{companyCode}, '%')
+                    AND company.wind_code LIKE CONCAT(#{companyCode}, '%')
                 </if>
                 <if test="companyName != null and companyName != ''">
                     AND (company.full_name LIKE CONCAT('%', #{companyName}, '%')

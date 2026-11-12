@@ -7,7 +7,7 @@
 
 ## 列表查询字段
 
-- 查询条件新增主体编码 `issuerCode`、证券全称 `securityFullName`，分别对主档 `issuer_code`、`full_name` 做包含式模糊查询；留空不限制，与既有条件按 AND 组合
+- 证券代码、主体编码 `issuerCode` 按前缀匹配，证券全称 `securityFullName` 按包含匹配；留空不限制，与既有条件按 AND 组合
 - 列表展示主体编码 `issuerCode`、证券全称 `fullName`，已有证券全称列直接保留；值为空时留白
 - 原“发行人”“发行主体全称”查询条件及对应列表列统一显示为“主体全称”，继续使用 `issuer` 字段及原有匹配规则
 - 新增条件支持回车查询，查询回到第一页，重置时清空；证券基础信息等非查询、非列表区域保持原样
@@ -202,7 +202,8 @@ this.loadList();                  // 列表数据
 - **WHERE 条件构造**：固定 `ips.is_deleted=0 AND ips.audit_status='20'`（债券大类，含 crmw 跟债记录；主体不进本页）；动态条件用 `<if>`：
   - `securityStatus='active'` → `bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')`；`'matured'` → `bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d')`
   - `poolIds` → `ips.target_pool_id IN (...)` foreach
-  - `securityCode`/`securityShortName`/`adjusterName` → `LIKE CONCAT('%', #{x}, '%')`
+  - `securityCode`/`issuerCode` → `LIKE CONCAT(#{x}, '%')`
+  - `securityShortName`/`adjusterName` → `LIKE CONCAT('%', #{x}, '%')`
   - `securityType` → `=`
   - `entryTimeStart`/`entryTimeEnd` → `>=` / `<=`
   - `issuer` → `bi.issuer LIKE`

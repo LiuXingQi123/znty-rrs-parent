@@ -9,7 +9,7 @@
 
 ## 列表查询字段
 
-- 查询条件新增主体编码 `issuerCode`、证券全称 `securityFullName`，分别对主档 `issuer_code`、`full_name` 做包含式模糊查询；留空不限制，与既有条件按 AND 组合
+- 证券代码、主体编码 `issuerCode` 按前缀匹配，证券全称 `securityFullName` 按包含匹配；留空不限制，与既有条件按 AND 组合
 - 列表展示主体编码 `issuerCode`、证券全称 `fullName`，已有证券全称列直接保留；值为空时留白
 - 原“发行人”“发行主体全称”查询条件及对应列表列统一显示为“主体全称”，继续使用 `issuer` 字段及原有匹配规则
 - 新增条件支持回车查询，查询回到第一页，重置时清空；证券基础信息等非查询、非列表区域保持原样
@@ -47,7 +47,7 @@
 - 调出：前端不展示也不传 `sourcePoolIds`，后端不应用来源池过滤；查询范围不是默认来源池的并集，而是不受来源池限制的全部候选证券。
 - 方向：`in` = 不在目标产品池；`out` = 已在目标产品池。
 - 仍排除 `security_type IN ('crmw','company')` 与 `security_status='D'`。  
-- 发行主体：`issuer` / `issuer_code` 模糊匹配。
+- 发行主体：`issuer` 按包含匹配，`issuer_code` 按前缀匹配。
 
 ---
 

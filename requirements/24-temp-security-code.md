@@ -24,7 +24,7 @@
 
 | 字段 | 控件 | 匹配 |
 |---|---|---|
-| `tempSecurityCode` | el-input（`v-model.trim`，回车查询） | LIKE `%xxx%` |
+| `tempSecurityCode` | el-input（`v-model.trim`，回车查询） | LIKE `xxx%` |
 | `tempSecurityName` | el-input（`v-model.trim`，回车查询） | LIKE `%xxx%` |
 | `statusList` | el-select 多选（`collapse-tags`，可清空） | `status IN (...)` |
 | `oprtSourceList` | el-select 多选（`collapse-tags`，可清空）；**默认 `['manual']`** | `oprt_source IN (...)`；取值 `manual=人工 / job=定时任务 / other=其他` |
@@ -32,6 +32,8 @@
 操作：`handleSearch`（重置 `pageIndex=1` 后 `loadList`）、`handleReset`（清空代码/名称/状态，操作来源恢复默认 `['manual']` 后回首页）、`openAddDialog`（新增）。
 
 ### 2.2 列表查询
+
+临时证券代码按前缀匹配，临时证券名称按包含匹配。
 
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodePage`
 - 请求体：`{ tempSecurityCode, tempSecurityName, statusList, oprtSourceList, pageIndex, pageSize }`（`TempSecurityCodeReq extends PageRequest`）
@@ -43,10 +45,12 @@
 
 ### 2.3 下拉选项查询
 
+正式证券远程搜索按代码前缀或名称片段匹配。
+
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodeOptions`
 - 请求体：`{}`（`TempSecurityCodeReq`）
 - 后端 `queryTempSecurityCodeOptions`：`OptionBundle` 装载 `queryCompanyOptionList(req)` + `querySecurityTypeList()`。
-  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_compintroduction`（**跨库**，`COMP_ID` 对应主体代码，`COMP_NAME` 对应全称，`COMP_SNAME` 对应简称），可选按 `companyKeyword` 模糊匹配名称/代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。
+  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_compintroduction`（**跨库**，`COMP_ID` 对应主体代码，`COMP_NAME` 对应全称，`COMP_SNAME` 对应简称），可选按 `companyKeyword` 包含匹配名称或前缀匹配代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。
   - `querySecurityTypeList`：`FROM dict_security_type WHERE is_deleted = 0 AND category_type != 'company' ORDER BY category_type ASC, sort_order ASC, id ASC`，返回 `securityType/securityTypeName/categoryType/categoryTypeName`。
 
 ---

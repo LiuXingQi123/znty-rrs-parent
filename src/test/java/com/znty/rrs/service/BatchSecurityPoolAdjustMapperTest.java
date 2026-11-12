@@ -108,12 +108,15 @@ public class BatchSecurityPoolAdjustMapperTest {
             req.setPoolId(2L);
             req.setDirection(direction);
             req.setIssuer("发行人甲");
-            req.setSecurityCode("1");
+            req.setSecurityCode("in".equals(direction) ? "IN" : "OUT");
             req.setSecurityShortName("测试");
             req.setMarketCodes(Collections.singletonList("NIB"));
             req.setBondYesFlags(Collections.singletonList("abs"));
             assertThat(mapper.querySecurityPage(req)).extracting(BatchSecurityCandidateDto::getSecurityCode)
                     .containsExactly("in".equals(direction) ? "IN1" : "OUT1");
+            req.setSecurityCode("1");
+            assertThat(mapper.querySecurityPage(req)).isEmpty();
+            req.setSecurityCode("in".equals(direction) ? "IN" : "OUT");
             req.setIssuer("另一发行人");
             assertThat(mapper.querySecurityPage(req)).isEmpty();
         }

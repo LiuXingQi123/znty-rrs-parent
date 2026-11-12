@@ -10,7 +10,7 @@
                 AND crmw_scode LIKE CONCAT('%', #{crmwScode}, '%')
             </if>
             <if test="securityCode != null and securityCode != ''">
-                AND security_code LIKE CONCAT('%', #{securityCode}, '%')
+                AND security_code LIKE CONCAT(#{securityCode}, '%')
             </if>
             <if test="alertStatus != null and alertStatus != ''">
                 AND alert_status = #{alertStatus}

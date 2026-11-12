@@ -35,7 +35,7 @@
                                         AND dst.is_deleted = 0
         <where>
             <if test="tempSecurityCode != null and tempSecurityCode != ''">
-                AND t.temp_security_code LIKE CONCAT('%', #{tempSecurityCode}, '%')
+                AND t.temp_security_code LIKE CONCAT(#{tempSecurityCode}, '%')
             </if>
             <if test="tempSecurityName != null and tempSecurityName != ''">
                 AND t.temp_security_name LIKE CONCAT('%', #{tempSecurityName}, '%')
@@ -178,7 +178,7 @@
             AND c.COMP_ID != ''
             <if test="companyKeyword != null and companyKeyword != ''">
                 AND (c.COMP_NAME LIKE CONCAT('%', #{companyKeyword}, '%')
-                     OR c.COMP_ID LIKE CONCAT('%', #{companyKeyword}, '%'))
+                     OR c.COMP_ID LIKE CONCAT(#{companyKeyword}, '%'))
             </if>
             <if test="tempCompanyCode != null and tempCompanyCode != ''">
                 AND c.COMP_ID = #{tempCompanyCode}
@@ -211,7 +211,7 @@
             AND si.security_source != 'temporary'
             AND si.security_type NOT IN ('crmw', 'company')
             <if test="securityKeyword != null and securityKeyword != ''">
-                AND (si.wind_code LIKE CONCAT('%', #{securityKeyword}, '%')
+                AND (si.wind_code LIKE CONCAT(#{securityKeyword}, '%')
                      OR si.short_name LIKE CONCAT('%', #{securityKeyword}, '%')
                      OR si.full_name LIKE CONCAT('%', #{securityKeyword}, '%'))
             </if>

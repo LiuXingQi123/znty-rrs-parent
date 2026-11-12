@@ -18,13 +18,13 @@
         FROM ais_inv_ods.wind_compintroduction c
         <where>
             <if test="companyCode != null and companyCode != ''">
-                AND c.COMP_ID LIKE CONCAT('%', #{companyCode}, '%')
+                AND c.COMP_ID LIKE CONCAT(#{companyCode}, '%')
             </if>
             <if test="companyFullName != null and companyFullName != ''">
                 AND c.COMP_NAME LIKE CONCAT('%', #{companyFullName}, '%')
             </if>
             <if test="registerNumber != null and registerNumber != ''">
-                AND c.REGISTERNUMBER LIKE CONCAT('%', #{registerNumber}, '%')
+                AND c.REGISTERNUMBER LIKE CONCAT(#{registerNumber}, '%')
             </if>
         </where>
     </select>

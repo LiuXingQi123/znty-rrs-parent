@@ -371,7 +371,7 @@
             </if>
             <if test="keyword != null and keyword != ''">
                 AND (fld001 LIKE CONCAT('%', #{keyword}, '%')
-                     OR fld004 LIKE CONCAT('%', #{keyword}, '%'))
+                     OR fld004 LIKE CONCAT(#{keyword}, '%'))
             </if>
         </where>
         ORDER BY row_no ASC
