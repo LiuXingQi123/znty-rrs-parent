@@ -645,6 +645,8 @@ public class SecurityPoolExcelImportServiceTest {
         pool.setPoolName("一级库");
         pool.setPoolType("credit_bond");
         pool.setLockFlag(0);
+        pool.setBatchInFlowId(12L);
+        pool.setBatchInFlowKey("bond:inbound");
         when(importMapper.queryEnabledLeafPoolByParentAndChildName("信用债大库", "一级库"))
                 .thenReturn(pool);
 
@@ -661,7 +663,12 @@ public class SecurityPoolExcelImportServiceTest {
         ri.setAdjustGroupKey("5_调入");
         ri.setCanAdjust(true);
         ri.setFailReasons(new ArrayList<>(tips));
-        ri.setFlowOptions(new ArrayList<>());
+        AdjustCheckDto.FlowOption normal = new AdjustCheckDto.FlowOption();
+        normal.setFlowId(12L);
+        normal.setFlowKey("bond:inbound");
+        normal.setFlowType("normalInbound");
+        normal.setSelectable(true);
+        ri.setFlowOptions(Collections.singletonList(normal));
         AdjustCheckDto checkDto = new AdjustCheckDto();
         checkDto.setItems(Collections.singletonList(ri));
         when(securityPoolAdjustService.checkExcelAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
@@ -693,14 +700,23 @@ public class SecurityPoolExcelImportServiceTest {
             assertTrue(item.getChkDscr().contains("调整提示"));
             assertEquals(tips, dto.getCheckItems().get(0).getFailReasons());
             assertTrue(batch.getResultJson().contains("证券当前在禁止池中"));
+            SecurityPoolExcelImportCheckItemDto chosen = dto.getCheckItems().get(0);
+            assertEquals("batchInbound", chosen.getFlowType());
+            chosen.setFlowType("normalInbound");
+            chosen.setSelectedFlowKey("0_bond:inbound_1");
+            req.setCheckItems(dto.getCheckItems());
             req.setCurrentUserName("测试研究员");
-            service.submitImport(req);
+            SecurityPoolExcelImportDto submitted = service.submitImport(req);
             ArgumentCaptor<List<SecurityPoolAdjustSubmitReq>> requests = ArgumentCaptor.forClass(List.class);
             verify(securityPoolAdjustService).addExcelImportAdjustLogList(requests.capture());
             assertEquals(1, requests.getValue().size());
             assertEquals("110001.SH", requests.getValue().get(0).getSecurityCode());
             assertEquals("Excel导入", requests.getValue().get(0).getAdjustType());
             assertEquals(Long.valueOf(5), requests.getValue().get(0).getItems().get(0).getTargetPoolId());
+            assertEquals("normalInbound", requests.getValue().get(0).getItems().get(0).getFlowType());
+            assertEquals("0_bond:inbound_1", submitted.getCheckItems().get(0).getSelectedFlowKey());
+            assertEquals(tips, submitted.getCheckItems().get(0).getFailReasons());
+            assertEquals("batchInbound", service.queryTask(req).getCheckItems().get(0).getFlowType());
         }
     }
 

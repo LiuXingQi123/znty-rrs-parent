@@ -53,6 +53,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -1084,7 +1085,12 @@ public class SecurityPoolExcelImportService {
         for (SysImpTmpDetlBo bo : securityPoolExcelImportMapper.queryBatchItemList(batch.getImpId())) {
             sourceMap.put(bo.getId(), bo);
         }
+        Map<List<Object>, SecurityPoolExcelImportCheckItemDto> submittedFlows = new HashMap<>();
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
+            if (isFlowSelectableTag(ci.getItemTag())) {
+                // 记录本次所选流程，供提交响应回显
+                submittedFlows.put(flowSelectionRowKey(ci), ci);
+            }
             // 仅回写 Excel 手工主项对应的导入明细
             if (!isManualTag(ci.getItemTag()) || ci.getSourceItemId() == null) {
                 continue;
@@ -1120,6 +1126,21 @@ public class SecurityPoolExcelImportService {
 
         // 主表转任务 DTO
         SecurityPoolExcelImportDto dto = toTaskDto(securityPoolExcelImportMapper.queryBatchByImpId(batch.getImpId()));
+        for (SecurityPoolExcelImportCheckItemDto item : dto.getCheckItems()) {
+            if (!item.isCanAdjust()) {
+                continue;
+            }
+            // 只替换提交响应里对应行的流程
+            SecurityPoolExcelImportCheckItemDto submitted = submittedFlows.get(flowSelectionRowKey(item));
+            if (submitted != null) {
+                item.setSelectedFlowKey(submitted.getSelectedFlowKey());
+                item.setFlowId(submitted.getFlowId());
+                item.setFlowKey(submitted.getFlowKey());
+                item.setFlowType(submitted.getFlowType());
+                item.setFlowName(submitted.getFlowName());
+                item.setDirectFlow(submitted.isDirectFlow());
+            }
+        }
         dto.setAdjustBatchNoList(batchNos);
         dto.setLogIds(logIds);
         return dto;
@@ -2200,6 +2221,20 @@ public class SecurityPoolExcelImportService {
             }
         }
         return result;
+    }
+
+    /**
+     * 定位需要回写流程的校验行
+     *
+     * 执行顺序：
+     * 1. 组合来源行、实际证券或主体代码、目标池、方向及调整项标签
+     *
+     * @param item 导入校验项
+     * @return 校验行的匹配键
+     */
+    private List<Object> flowSelectionRowKey(SecurityPoolExcelImportCheckItemDto item) {
+        return Arrays.asList(item.getSourceItemId(), item.getSecurityCode(), item.getTargetPoolId(),
+                item.getAdjustMode(), item.getItemTag());
     }
 
     /** 同组中优先取手工项/清空项作为主项 */

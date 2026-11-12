@@ -8,6 +8,7 @@ import com.znty.rrs.entity.crmwpoolexcelimport.CrmwPoolExcelImportPoolDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -26,6 +27,18 @@ public interface CrmwPoolExcelImportMapper {
      * 按业务批次号查询有效批次
      */
     SysImpTmpBo queryByImpId(@Param("impId") String impId);
+
+    /** 锁定导入批次，串行处理主体修改、校验、提交和取消 */
+    Long queryBatchIdForUpdate(@Param("impId") String impId);
+
+    /** 查询指定批次的有效导入行 */
+    SysImpTmpDetlBo queryItemById(@Param("impId") String impId, @Param("itemId") Long itemId);
+
+    /** 更新单条导入行的评级主体 */
+    int editRatingCompany(SysImpTmpDetlBo bo);
+
+    /** 清除批次内所有导入行的旧校验结果 */
+    int resetItemCheckResults(@Param("impId") String impId, @Param("updtTime") Date updtTime);
 
     /**
      * 更新批次校验结果与计数

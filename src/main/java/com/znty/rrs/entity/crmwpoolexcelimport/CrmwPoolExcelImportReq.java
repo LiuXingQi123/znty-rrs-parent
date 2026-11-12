@@ -15,6 +15,12 @@ public class CrmwPoolExcelImportReq extends PageRequest {
 
     /** 导入批次号 */
     private String impId;
+    /** 需要修改评级主体的导入明细 ID */
+    private Long itemId;
+    /** 关联担保人或权益人代码 */
+    private String relatedCompanyCode;
+    /** ABS 自选权益人代码 */
+    private String selfSelectedRightsHolderCode;
     /** 目标 CRMW 池 ID */
     private Long targetPoolId;
     /** 调整方向：in / out */

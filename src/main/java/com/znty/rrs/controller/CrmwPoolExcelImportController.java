@@ -52,6 +52,12 @@ public class CrmwPoolExcelImportController {
         return ApiResponse.success(crmwPoolExcelImportService.uploadExcel(req, file, originalFileNameListJson));
     }
 
+    /** 保存导入行的评级主体并清除旧校验结果 */
+    @PostMapping("/editRatingCompany")
+    public ApiResponse<CrmwPoolExcelImportDto> editRatingCompany(@RequestBody CrmwPoolExcelImportReq req) {
+        return ApiResponse.success(crmwPoolExcelImportService.editRatingCompany(req));
+    }
+
     /**
      * 查询导入批次
      */

@@ -142,6 +142,50 @@
         LIMIT 1
     </select>
 
+    <!-- 锁定有效的 CRMW 导入批次 -->
+    <select id="queryBatchIdForUpdate" resultType="java.lang.Long">
+        SELECT id
+        FROM sys_imp_tmp
+        WHERE imp_id = #{impId}
+          AND biz_type = 'crmw_pool_excel'
+          AND is_deleted = 0
+        FOR UPDATE
+    </select>
+
+    <!-- 查询当前批次的单条导入行 -->
+    <select id="queryItemById" resultType="com.znty.rrs.entity.bo.SysImpTmpDetlBo">
+        SELECT id
+               , imp_id
+               , fld004
+        FROM sys_imp_tmp_detl
+        WHERE imp_id = #{impId}
+          AND id = #{itemId}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 保存关联担保人或权益人和 ABS 自选权益人 -->
+    <update id="editRatingCompany">
+        UPDATE sys_imp_tmp_detl
+        SET fld012 = #{fld012}
+          , fld013 = #{fld013}
+          , fld014 = #{fld014}
+          , fld015 = #{fld015}
+          , updt_time = #{updtTime}
+        WHERE imp_id = #{impId}
+          AND id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <!-- 主体变更后清除所有导入行的校验结果 -->
+    <update id="resetItemCheckResults">
+        UPDATE sys_imp_tmp_detl
+        SET chk_rslt = '0'
+          , chk_dscr = NULL
+          , updt_time = #{updtTime}
+        WHERE imp_id = #{impId}
+          AND is_deleted = 0
+    </update>
+
     <!-- 更新批次校验结果与计数 -->
     <update id="updateBatchCheckResult">
         UPDATE sys_imp_tmp

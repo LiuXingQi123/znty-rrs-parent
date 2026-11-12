@@ -1,5 +1,6 @@
 package com.znty.rrs.entity.crmwpoolexcelimport;
 
+import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -10,6 +11,13 @@ import java.util.List;
  */
 @Data
 public class CrmwPoolExcelImportCheckItemDto {
+
+    /** 服务端校验时核实的标的评级主体 */
+    private RatingCompanySelectionReq selectedRatingCompany;
+    /** 来源导入行的权益人或担保人名称 */
+    private String ratingCompanyName;
+    /** 来源导入行的权益人或担保人代码 */
+    private String ratingCompanyCode;
 
     /** 来源导入明细 ID */
     private Long sourceItemId;

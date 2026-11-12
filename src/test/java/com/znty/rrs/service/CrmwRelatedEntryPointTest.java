@@ -112,7 +112,7 @@ public class CrmwRelatedEntryPointTest {
             items.add(item);
         }
         CrmwPoolAdjustSubmitReq req = ReflectionTestUtils.invokeMethod(new CrmwPoolExcelImportService(),
-                "buildSubmitReq", items, new SysImpTmpBo(), "1", "测试用户", new InvestmentPoolBo());
+                "buildSubmitReq", items, items.get(0), new SysImpTmpBo(), "1", "测试用户", new InvestmentPoolBo());
         assertThat(req.getCrmwScode()).isEqualTo("C.IB");
         assertThat(req.getItems()).extracting(CrmwPoolAdjustSubmitReq.AdjustItem::getSecurityCode)
                 .containsExactly("A.IB", "A.SH");

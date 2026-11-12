@@ -1,6 +1,10 @@
 package com.znty.rrs.entity.crmwpoolexcelimport;
 
+import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * CRMW 池 Excel 导入明细展示
@@ -32,6 +36,16 @@ public class CrmwPoolExcelImportItemDto {
     private String securityTypeName;
     /** 证券市场编码（逗号分隔） */
     private String securityMarket;
+    /** 标的证券是否 ABS */
+    private Integer absFlag;
+    /** 已保存的关联担保人或权益人代码 */
+    private String relatedCompanyCode;
+    /** 已保存的 ABS 自选权益人代码 */
+    private String selfSelectedRightsHolderCode;
+    /** 标的证券的关联主体候选 */
+    private List<RelatedRatingCompanyDto> relatedRatingCompanies;
+    /** 已保存的自选权益人及其评级 */
+    private SelfSelectedRightsHolderDto selfSelectedRightsHolder;
     /** 解析后的目标池 ID */
     private Long resolvedPoolId;
     /** 校验结果 0/1/2 */

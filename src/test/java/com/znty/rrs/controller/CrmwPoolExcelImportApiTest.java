@@ -55,6 +55,15 @@ public class CrmwPoolExcelImportApiTest extends ControllerApiTestSupport {
                 "{\"impId\":\"IMP1\",\"pageIndex\":1,\"pageSize\":20}");
     }
 
+    /** 验证编辑导入明细评级主体接口 */
+    @Test
+    public void shouldEditRatingCompany() throws Exception {
+        assertPostSuccess(
+                mockMvc,
+                "/api/v1/crmwPoolExcelImport/editRatingCompany",
+                "{\"impId\":\"IMP1\",\"itemId\":7,\"relatedCompanyCode\":\"A\",\"selfSelectedRightsHolderCode\":\"B\",\"currentUserId\":\"1\"}");
+    }
+
     /** 验证导入校验接口 */
     @Test
     public void shouldCheckImport() throws Exception {
