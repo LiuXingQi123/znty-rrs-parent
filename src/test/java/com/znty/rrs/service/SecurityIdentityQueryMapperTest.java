@@ -71,7 +71,12 @@ public class SecurityIdentityQueryMapperTest {
                 + "issue_type VARCHAR(30), inner_class VARCHAR(30), guarantor VARCHAR(100), guarantor_id VARCHAR(30))");
         jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(20), security_type_name VARCHAR(50), "
                 + "category_type VARCHAR(20), is_deleted INT, sort_order INT)");
-        jdbc.execute("CREATE TABLE ip_investment_pool (id BIGINT, pool_name VARCHAR(100), is_deleted INT)");
+        jdbc.execute("CREATE TABLE ip_investment_pool (id BIGINT, parent_id BIGINT, pool_code VARCHAR(30), "
+                + "pool_name VARCHAR(100), pool_type VARCHAR(20), status VARCHAR(20), is_deleted INT, "
+                + "market_codes VARCHAR(100), variety_codes VARCHAR(100), description VARCHAR(100), "
+                + "max_capacity INT, batch_in_flow_id BIGINT, batch_in_flow_key VARCHAR(30), batch_in_flow_name VARCHAR(30), "
+                + "batch_out_flow_id BIGINT, batch_out_flow_key VARCHAR(30), batch_out_flow_name VARCHAR(30), "
+                + "outer_sort INT, inner_sort INT)");
         jdbc.execute("CREATE TABLE my_security_pool (id BIGINT, security_code VARCHAR(30), user_id VARCHAR(20), status VARCHAR(10))");
         jdbc.execute("CREATE TABLE ip_pool_status (id BIGINT, security_code VARCHAR(30), security_short_name VARCHAR(100), "
                 + "security_type VARCHAR(20), adjuster_name VARCHAR(50), entry_time TIMESTAMP, target_pool_id BIGINT, "
@@ -193,6 +198,37 @@ public class SecurityIdentityQueryMapperTest {
         stock.setDirection("out");
         stock.setPoolId(2L);
         assertThat(querySecurityList(stock)).hasSize(1);
+    }
+
+    /** CRMW 库可作为已有来源池，存量目标池仅允许债券产品库叶子，候选保留 CRMW 凭证 */
+    @Test
+    public void stockAdjustShouldIncludeCrmwCredentialsAndOnlyProductTargets() {
+        JdbcTemplate jdbc = new JdbcTemplate(database);
+        jdbc.update("INSERT INTO ip_investment_pool (id, parent_id, pool_code, pool_type, status, is_deleted) VALUES "
+                + "(100, NULL, 'bond_product_root', 'bond_product', 'enabled', 0), "
+                + "(101, 100, 'product_leaf', 'bond_product', 'enabled', 0), "
+                + "(18, NULL, 'crmw_root', 'crmw', 'enabled', 0)");
+        jdbc.update("INSERT INTO rrs_securityinfo (wind_code, short_name, security_type, security_status) "
+                + "VALUES ('CRMW.IB', '测试凭证', 'crmw', 'L')");
+        jdbc.update("INSERT INTO ip_pool_status (security_code, security_type, target_pool_id, audit_status, is_deleted) "
+                + "VALUES ('CRMW.IB', 'crmw', 18, '20', 0), ('CRMW.IB', 'crmw', 101, '20', 1)");
+
+        StockSecurityBatchAdjustMapper mapper = session.getMapper(StockSecurityBatchAdjustMapper.class);
+        StockSecurityBatchAdjustReq req = new StockSecurityBatchAdjustReq();
+        assertThat(mapper.queryPoolPage(req)).extracting(pool -> pool.getId()).containsExactly(101L);
+        assertThat(mapper.queryEnabledLeafPoolCount(101L)).isEqualTo(1);
+        assertThat(mapper.queryEnabledLeafPoolCount(18L)).isZero();
+
+        req.setPoolId(101L);
+        req.setDirection("in");
+        req.setSourcePoolIds(Collections.singletonList(18L));
+        assertThat(mapper.querySecurityPage(req)).extracting(row -> row.getSecurityCode()).containsExactly("CRMW.IB");
+
+        jdbc.update("UPDATE ip_pool_status SET is_deleted = 0 WHERE security_code = 'CRMW.IB' AND target_pool_id = 101");
+        session.clearCache();
+        req.setDirection("out");
+        req.setSourcePoolIds(null);
+        assertThat(mapper.querySecurityPage(req)).extracting(row -> row.getSecurityCode()).containsExactly("CRMW.IB");
     }
 
     /** Service 必须把新增条件完整传到真实 Mapper，分页与空条件也正常工作 */

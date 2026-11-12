@@ -581,7 +581,7 @@ public class SecurityPoolAdjustService {
      * 查询可调入/可调出的投资池列表（含互斥关系，树结构由前端自行组装）
      *
      * @param req 当前用户为管理员时返回全量启用池，普通用户仅返回有可调整权限的池及其祖先节点；
-     *            入/出方向均排除 CRMW 池（pool_type=crmw）；主体相关池（禁投/观察等）保留以支持单券入池；
+     *            候选池包含符合选池条件的 CRMW 池；主体相关池（禁投/观察等）保留以支持单券入池；
      *            调入方向额外按主体内评矩阵过滤信用债大库
      */
     public List<PoolDto> queryAdjustPoolList(SecurityPoolAdjustReq req) {
@@ -601,11 +601,6 @@ public class SecurityPoolAdjustService {
             }
         }
 
-        // 证券池调库选池：入/出均排除 CRMW 池（CRMW 走独立链路）；禁投/观察等主体相关池不按 pool_type 排除
-        allPools = filterOutCrmwPools(allPools);
-        if (allPools.isEmpty()) {
-            return new ArrayList<>();
-        }
         // 只保留投资品种包含债券的池，父级没有债券品种时仍保留，便于展开到下级
         allPools = retainPoolsContainingVariety(allPools, CategoryType.BOND.getCode());
         if (allPools.isEmpty()) {
@@ -847,31 +842,6 @@ public class SecurityPoolAdjustService {
             if (pool != null && retainedIds.contains(pool.getId())) {
                 result.add(pool);
             }
-        }
-        return result;
-    }
-
-    /**
-     * 从投资池列表中排除 CRMW 组合池，普通证券仍通过证券调库办理
-     *
-     * 执行顺序：
-     * 1. 保留列表中非 CRMW 组合池
-     * @param pools 待过滤的投资池
-     * @return 人工证券调库可选的投资池
-     */
-    private List<InvestmentPoolBo> filterOutCrmwPools(List<InvestmentPoolBo> pools) {
-        if (pools == null || pools.isEmpty()) {
-            return new ArrayList<>();
-        }
-        List<InvestmentPoolBo> result = new ArrayList<>();
-        for (InvestmentPoolBo pool : pools) {
-            if (pool == null) {
-                continue;
-            }
-            if (PoolType.CRMW.getCode().equals(pool.getPoolType())) {
-                continue;
-            }
-            result.add(pool);
         }
         return result;
     }

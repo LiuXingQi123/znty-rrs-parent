@@ -69,9 +69,9 @@ import static org.mockito.Mockito.when;
 /** SecurityPoolAdjustServiceStepTest 测试类。 */
 public class SecurityPoolAdjustServiceStepTest {
 
-    /** CRMW 只在候选查询中过滤，通用选池仍保留普通池并排除组合池 */
+    /** CRMW 池与其他池一起按原选池规则返回 */
     @Test
-    public void crmwSecurityShouldKeepGeneralPoolSelectionForBothDirections() {
+    public void shouldIncludeCrmwPoolForBothDirections() {
         SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
         SecurityPoolAdjustMapper securityMapper = mock(SecurityPoolAdjustMapper.class);
@@ -91,10 +91,14 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
         req.setCurrentUserId("1");
         req.setSecurityCode("C1");
-        req.setSecurityType("crmw");
-        for (String direction : new String[]{"in", "out"}) {
-            req.setAdjustDirection(direction);
-            assertThat(service.queryAdjustPoolList(req)).extracting(PoolDto::getId).containsExactly(102L);
+        for (String securityType : new String[]{"mtn", "crmw"}) {
+            SecurityInfoBo securityInfo = new SecurityInfoBo();
+            securityInfo.setSecurityType(securityType);
+            req.setSecurityInfo(securityInfo);
+            for (String direction : new String[]{"in", "out"}) {
+                req.setAdjustDirection(direction);
+                assertThat(service.queryAdjustPoolList(req)).extracting(PoolDto::getId).containsExactly(102L, 900L);
+            }
         }
     }
 

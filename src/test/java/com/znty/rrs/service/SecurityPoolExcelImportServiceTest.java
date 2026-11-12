@@ -18,6 +18,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
+import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.SecurityPoolExcelImportMapper;
@@ -422,8 +423,30 @@ public class SecurityPoolExcelImportServiceTest {
         verify(importMapper, never()).queryCompanyMatchList(eq(2), anyList());
     }
 
+    /** 证券上传必须填写父池，根池允许父池和子池填写同名 */
+    @Test
+    public void uploadSecurityShouldRequireParentPoolName() throws Exception {
+        ReflectionTestUtils.setField(service, "commonMapper", mock(CommonMapper.class));
+        List<SysImpTmpDetlBo> rows = uploadRows("security",
+                new String[]{"父池名称", "子池名称", "证券名称", "证券代码"}, new String[][]{
+                        {"", "CRMW库", "测试凭证一", "CRMW001.IB"},
+                        {"CRMW库", "CRMW库", "测试凭证二", "CRMW002.IB"}
+                });
+        assertEquals("2", rows.get(0).getChkRslt());
+        assertTrue(rows.get(0).getChkDscr().contains("父池名称为空"));
+        assertEquals("0", rows.get(1).getChkRslt());
+    }
+
     /** 构造主体 Excel，并捕获上传写入的明细。 */
     private List<SysImpTmpDetlBo> uploadCompanyRows(String[][] values) throws Exception {
+        String[] columns = values[0].length == 5
+                ? new String[]{"父池名称", "子池名称", "统一社会信用代码", "主体全称", "主体代码"}
+                : new String[]{"父池名称", "子池名称", "主体全称", "主体代码"};
+        return uploadRows("company", columns, values);
+    }
+
+    /** 构造指定模板的 Excel，并捕获上传写入的明细 */
+    private List<SysImpTmpDetlBo> uploadRows(String importType, String[] columns, String[][] values) throws Exception {
         List<SysImpTmpDetlBo> savedRows = new ArrayList<>();
         SysImpTmpBo[] savedBatch = new SysImpTmpBo[1];
         SysAttachmentService attachmentService = mock(SysAttachmentService.class);
@@ -440,11 +463,8 @@ public class SecurityPoolExcelImportServiceTest {
         when(importMapper.queryBatchByImpId(anyString())).thenAnswer(invocation -> savedBatch[0]);
         when(importMapper.queryItemPage(anyString(), any(), any())).thenReturn(savedRows);
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            Sheet sheet = workbook.createSheet("主体");
+            Sheet sheet = workbook.createSheet(importType);
             Row header = sheet.createRow(0);
-            String[] columns = values[0].length == 5
-                    ? new String[]{"父池名称", "子池名称", "统一社会信用代码", "主体全称", "主体代码"}
-                    : new String[]{"父池名称", "子池名称", "主体全称", "主体代码"};
             for (int i = 0; i < columns.length; i++) {
                 header.createCell(i).setCellValue(columns[i]);
             }
@@ -456,10 +476,10 @@ public class SecurityPoolExcelImportServiceTest {
             }
             workbook.write(output);
             SecurityPoolExcelImportReq req = new SecurityPoolExcelImportReq();
-            req.setImportType("company");
+            req.setImportType(importType);
             req.setDirection("in");
             req.setCurrentUserId("1");
-            service.uploadExcel(req, new MockMultipartFile("file", "主体.xlsx",
+            service.uploadExcel(req, new MockMultipartFile("file", "导入.xlsx",
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", output.toByteArray()));
         }
         return savedRows;
@@ -480,7 +500,7 @@ public class SecurityPoolExcelImportServiceTest {
         pool.setId(16L);
         pool.setPoolName("观察池");
         pool.setPoolType("observe");
-        when(importMapper.queryEnabledLeafPoolByParentAndChildName(null, "观察池")).thenReturn(pool);
+        when(importMapper.queryEnabledLeafPoolByParentAndChildName(null, "观察池", false)).thenReturn(pool);
         doAnswer(invocation -> {
             ForbiddenPoolAdjustCheckReq checkReq = invocation.getArgument(0);
             AdjustCheckDto.CheckResultItem result = new AdjustCheckDto.CheckResultItem();
@@ -585,7 +605,7 @@ public class SecurityPoolExcelImportServiceTest {
         identity.rememberRelated("ABS1", Arrays.asList(first, second));
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(101L);
-        when(importMapper.queryEnabledLeafPoolByParentAndChildName("父池", "子池")).thenReturn(pool);
+        when(importMapper.queryEnabledLeafPoolByParentAndChildName("父池", "子池", true)).thenReturn(pool);
         List<SysImpTmpDetlBo> rows = new ArrayList<>();
         for (int index = 0; index < 3; index++) {
             SysImpTmpDetlBo row = new SysImpTmpDetlBo();
@@ -647,7 +667,7 @@ public class SecurityPoolExcelImportServiceTest {
         pool.setLockFlag(0);
         pool.setBatchInFlowId(12L);
         pool.setBatchInFlowKey("bond:inbound");
-        when(importMapper.queryEnabledLeafPoolByParentAndChildName("信用债大库", "一级库"))
+        when(importMapper.queryEnabledLeafPoolByParentAndChildName("信用债大库", "一级库", true))
                 .thenReturn(pool);
 
         AdjustCheckDto.CheckResultItem ri = new AdjustCheckDto.CheckResultItem();

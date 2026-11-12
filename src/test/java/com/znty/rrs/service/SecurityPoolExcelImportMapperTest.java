@@ -5,6 +5,7 @@ import com.znty.rrs.mapper.SecurityPoolExcelImportMapper;
 import com.znty.rrs.mapper.ForbiddenPoolAdjustMapper;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustReq;
 import com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto;
+import com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
@@ -177,6 +178,46 @@ public class SecurityPoolExcelImportMapperTest {
                 statement.execute("DROP TABLE ais_inv_ods.wind_compintroduction");
             }
             assertThat(importMapper.queryPoolMemberList(16L, "company")).hasSize(1);
+        }
+    }
+
+    /** 证券导入按同名父子列定位根叶子池，清空出库包含普通证券表里的 CRMW 凭证 */
+    @Test
+    public void shouldResolveCrmwRootAndFindSingleSecurityMembers() throws Exception {
+        try (SqlSession session = openSession("crmw_single_security_excel")) {
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.execute("CREATE TABLE ip_investment_pool (id BIGINT, parent_id BIGINT, pool_code VARCHAR(30), "
+                        + "pool_name VARCHAR(30), pool_type VARCHAR(30), pool_level INT, market_codes VARCHAR(30), "
+                        + "variety_codes VARCHAR(30), hs_pool_name VARCHAR(30), in_flow_id BIGINT, in_flow_key VARCHAR(30), "
+                        + "in_flow_name VARCHAR(30), out_flow_id BIGINT, out_flow_key VARCHAR(30), out_flow_name VARCHAR(30), "
+                        + "simple_in_flow_id BIGINT, simple_in_flow_key VARCHAR(30), simple_out_flow_id BIGINT, "
+                        + "simple_out_flow_key VARCHAR(30), batch_in_flow_id BIGINT, batch_in_flow_key VARCHAR(30), "
+                        + "batch_in_flow_name VARCHAR(30), batch_out_flow_id BIGINT, batch_out_flow_key VARCHAR(30), "
+                        + "batch_out_flow_name VARCHAR(30), max_capacity INT, lock_flag INT, open_day_adjust INT, "
+                        + "status VARCHAR(20), is_deleted INT, crte_time TIMESTAMP, updt_time TIMESTAMP)");
+                statement.execute("INSERT INTO ip_investment_pool (id, pool_name, pool_type, status, is_deleted) VALUES "
+                        + "(18, 'CRMW库', 'crmw', 'enabled', 0), (19, '普通池', 'bond_product', 'enabled', 0), "
+                        + "(20, '产品库', 'bond_product', 'enabled', 0)");
+                statement.execute("INSERT INTO ip_investment_pool (id, parent_id, pool_name, pool_type, status, is_deleted) "
+                        + "VALUES (21, 20, '产品子池', 'bond_product', 'enabled', 0)");
+                statement.execute("CREATE TABLE ip_pool_status (security_code VARCHAR(30), security_type VARCHAR(20), "
+                        + "target_pool_id BIGINT, audit_status VARCHAR(10), is_deleted INT)");
+                statement.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(30), short_name VARCHAR(30), security_type VARCHAR(20))");
+                statement.execute("INSERT INTO rrs_securityinfo VALUES ('CRMW.IB', '凭证', 'crmw'), ('C001', '主体', 'company')");
+                statement.execute("INSERT INTO ip_pool_status VALUES ('CRMW.IB', 'crmw', 18, '20', 0), ('C001', 'company', 18, '20', 0)");
+            }
+
+            SecurityPoolExcelImportMapper mapper = session.getMapper(SecurityPoolExcelImportMapper.class);
+            assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("CRMW库", "CRMW库", true).getId()).isEqualTo(18L);
+            assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("普通池", "普通池", true).getId()).isEqualTo(19L);
+            assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("产品库", "产品子池", true).getId()).isEqualTo(21L);
+            assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("产品库", "产品库", true)).isNull();
+            assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("产品子池", "产品子池", true)).isNull();
+            assertThat(mapper.queryEnabledLeafPoolByParentAndChildName(null, "CRMW库", true)).isNull();
+            assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("CRMW库", "CRMW库", false)).isNull();
+            assertThat(mapper.queryEnabledLeafPoolByParentAndChildName(null, "普通池", false).getId()).isEqualTo(19L);
+            assertThat(mapper.queryPoolMemberList(18L, "security")).extracting(PoolMemberDto::getSecurityCode)
+                    .containsExactly("CRMW.IB");
         }
     }
 

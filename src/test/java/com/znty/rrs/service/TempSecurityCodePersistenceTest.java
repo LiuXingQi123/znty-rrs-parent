@@ -1001,6 +1001,64 @@ public class TempSecurityCodePersistenceTest {
                 .isEqualTo("FORMAL.IB");
     }
 
+    /** 普通单券调到 CRMW 池后，在池和在途记录都由普通转正链路处理 */
+    @Test
+    public void ordinarySingleSecurityInCrmwPoolShouldConvertWithPendingApproval() throws Exception {
+        setupGroup();
+        addCrmwPool(200L, "[]");
+        TempSecurityCodeDto temp = service.addTempSecurityCode(addReq("001.IB"));
+        addActive("001.IB", 200L);
+        IpAdjustLogBo pending = addPending("001.IB", 200L, "调出", "00");
+        jdbc.update("UPDATE ip_adjust_log SET pool_type='crmw' WHERE target_pool_id=200");
+        jdbc.update("UPDATE ip_pool_status SET pool_type='crmw' WHERE target_pool_id=200");
+
+        service.editTempSecurityCodeToUpdated(operation(temp.getId(), "FORMAL.IB"));
+
+        assertThat(activeCodes(200L)).containsExactlyInAnyOrder("FORMAL.IB", "FORMAL.SH", "FORMAL.SZ");
+        assertThat(jdbc.queryForObject("SELECT security_code FROM ip_adjust_log WHERE id=?", String.class, pending.getId()))
+                .isEqualTo("FORMAL.IB");
+        assertThat(jdbc.queryForObject("SELECT audit_status FROM ip_adjust_log WHERE id=?", String.class, pending.getId()))
+                .isEqualTo("00");
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE adjust_log_id="
+                + pending.getId() + " AND wind_code='FORMAL.IB'")).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw")).isZero();
+        assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw")).isZero();
+    }
+
+    /** CRMW 专用审批 Mapper 只识别带凭证代码的调库组合 */
+    @Test
+    public void crmwApprovalMapperShouldIgnoreSingleSecurityInSamePool() {
+        IpAdjustLogBo ordinary = addPending("FORMAL.IB", 200L, "调入", "11");
+        jdbc.update("UPDATE ip_adjust_log SET pool_type='crmw' WHERE id=?", ordinary.getId());
+        jdbc.update("INSERT INTO ip_adjust_step(id,adjust_log_id,adjust_batch_no,node_label,step_status)"
+                + " VALUES(1001,?,'ORIGINAL','单券待办','pending')", ordinary.getId());
+
+        assertThat(crmwMapper.querySecurityHasPendingProcess("FORMAL.IB")).isFalse();
+        assertThat(crmwMapper.querySecurityPendingProcessNodeLabel("FORMAL.IB")).isNull();
+        assertThat(crmwMapper.queryAdjustStepById(1001L)).isNull();
+        assertThat(crmwMapper.queryAdjustLogListForAudit(ordinary.getId(), "ORIGINAL")).isEmpty();
+        assertThat(crmwMapper.editAdjustLogReasonAdvice(ordinary.getId(), "ORIGINAL", "原因", "意见")).isZero();
+        assertThat(crmwMapper.editAdjustLogAuditStatus(ordinary.getId(), "ORIGINAL", "20")).isZero();
+        assertThat(crmwMapper.editActiveAdjustLogAuditStatus(ordinary.getId(), "ORIGINAL", "20")).isZero();
+
+        IpAdjustLogBo combo = baseLog("FORMAL.IB", 200L);
+        combo.setPoolType("crmw");
+        combo.setCrmwScode("K.IB");
+        combo.setAdjustBatchNo("CRMW_ORIGINAL");
+        combo.setAuditStatus("11");
+        adjustMapper.addAdjustLog(combo);
+        jdbc.update("INSERT INTO ip_adjust_step(id,adjust_log_id,adjust_batch_no,node_label,step_status)"
+                + " VALUES(1002,?,'CRMW_ORIGINAL','组合待办','pending')", combo.getId());
+
+        assertThat(crmwMapper.querySecurityHasPendingProcess("FORMAL.IB")).isTrue();
+        assertThat(crmwMapper.querySecurityPendingProcessNodeLabel("FORMAL.IB")).isEqualTo("组合待办");
+        assertThat(crmwMapper.queryAdjustStepById(1002L).getAdjustLogId()).isEqualTo(combo.getId());
+        assertThat(crmwMapper.queryAdjustLogListForAudit(combo.getId(), "CRMW_ORIGINAL"))
+                .extracting(IpAdjustLogBo::getId).containsExactly(combo.getId());
+        assertThat(crmwMapper.editAdjustLogReasonAdvice(combo.getId(), "CRMW_ORIGINAL", "原因", "意见")).isEqualTo(1);
+        assertThat(crmwMapper.editActiveAdjustLogAuditStatus(combo.getId(), "CRMW_ORIGINAL", "20")).isEqualTo(1);
+    }
+
     /** 多个原池分别承接整组，所有即时转换共用一次批次。 */
     @Test
     public void multiplePoolsShouldConvertAtomically() throws Exception {

@@ -190,19 +190,20 @@ public class BatchCrmwPoolAdjustMapperTest {
                 .containsExactly("OUT_C|OUT_B");
     }
 
-    /** 人工证券调库列表和类型筛选排除 CRMW，专用组合候选仍保留凭证 */
+    /** 人工证券调库列表和类型筛选包含 CRMW 凭证，继续排除其他大类和退市证券 */
     @Test
-    public void shouldExcludeCrmwFromSecurityAdjustmentCandidatesAndTypes() {
+    public void shouldIncludeCrmwInSecurityAdjustmentCandidatesAndTypes() {
         SecurityPoolAdjustMapper securityMapper = session.getMapper(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
         req.setSecurityType("crmw");
-        assertThat(securityMapper.querySecurityPage(req)).isEmpty();
+        assertThat(securityMapper.querySecurityPage(req)).extracting(SecurityInfoDto::getWindCode)
+                .containsExactlyInAnyOrder("C1", "C2", "OUT_C", "PENDING_C");
         assertThat(securityMapper.querySecurityTypeList()).extracting(row -> row.getSecurityType())
-                .containsExactly("bond", "abs");
+                .containsExactly("bond", "abs", "crmw");
         req.setSecurityType(null);
         assertThat(securityMapper.querySecurityPage(req))
                 .extracting(SecurityInfoDto::getWindCode)
-                .doesNotContain("COMPANY", "STOCK", "FUND", "D_B", "D_C", "C1", "C2", "OUT_C", "PENDING_C");
+                .doesNotContain("COMPANY", "STOCK", "FUND", "D_B", "D_C");
     }
 
     /** 释放测试会话、分页上下文和数据库 */

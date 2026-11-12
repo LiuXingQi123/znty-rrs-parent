@@ -131,6 +131,22 @@ public class MyMattersMapperSqlTest {
         }
     }
 
+    /** 相同目标池下，单券凭证走证券审批，带凭证代码的组合走 CRMW 审批 */
+    @Test
+    public void crmwPoolShouldRouteByAdjustmentObject() throws Exception {
+        sql("INSERT INTO dict_security_type VALUES('crmw','bond',0)",
+                "UPDATE ip_adjust_log SET pool_type='crmw', target_pool_id=18, security_type='crmw', adjuster_id='2' WHERE id=1",
+                "UPDATE ip_adjust_log SET pool_type='crmw', target_pool_id=18, crmw_scode='CRMW.IB', adjuster_id='2' WHERE id=2");
+
+        MyMattersReq req = request("bond", "pending", "1");
+        assertThat(rows("bond", "queryMyMattersPage", req)).extracting(MyMattersDto::getBusinessScene)
+                .containsExactly("crmwAdjust", "securityAdjust");
+
+        req.setCurrentUserId("2");
+        assertThat(rows("bond", "queryMyInitiatedMattersPage", req)).extracting(MyMattersDto::getBusinessScene)
+                .contains("crmwAdjust", "securityAdjust");
+    }
+
     /** 原管理员 ID 可查全量事项，但本人发起列表不扩大；边界外 ID 仍按本人范围。 */
     @Test public void globalAdminIdsShouldControlMatterScopeWithoutEntryPermission() {
         for (String domain : new String[]{"bond", "fund", "stock"}) {

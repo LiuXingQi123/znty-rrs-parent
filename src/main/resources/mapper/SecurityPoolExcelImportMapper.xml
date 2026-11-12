@@ -247,7 +247,7 @@
 
     <!-- ═══════════ 目标池解析 ═══════════ -->
 
-    <!-- 按父池名称 + 子池名称解析启用叶子投资池；父池名为空时按子池名匹配根/叶子池 -->
+    <!-- 按父池名称 + 子池名称解析启用叶子投资池；证券导入根叶子池时两列均填池名 -->
     <select id="queryEnabledLeafPoolByParentAndChildName" resultType="com.znty.rrs.entity.bo.InvestmentPoolBo">
         SELECT c.id
                ,c.parent_id
@@ -287,11 +287,19 @@
               AND p.is_deleted = 0
         WHERE c.is_deleted = 0
           AND c.status = 'enabled'
-          AND c.pool_type != 'crmw'
           AND c.pool_name = #{childPoolName}
-          <if test="parentPoolName != null and parentPoolName != ''">
-              AND p.pool_name = #{parentPoolName}
+          <if test="!securityImport">
+              AND c.pool_type != 'crmw'
           </if>
+          <choose>
+              <when test="securityImport">
+                  AND (p.pool_name = #{parentPoolName}
+                       OR (c.parent_id IS NULL AND c.pool_name = #{parentPoolName}))
+              </when>
+              <when test="parentPoolName != null and parentPoolName != ''">
+                  AND p.pool_name = #{parentPoolName}
+              </when>
+          </choose>
           AND NOT EXISTS (
               SELECT 1
               FROM ip_investment_pool child
@@ -325,7 +333,7 @@
           AND ips.is_deleted = 0
           <if test="memberType == 'security'">
               AND (si.security_type IS NULL
-                   OR si.security_type NOT IN ('crmw', 'company'))
+                   OR si.security_type != 'company')
           </if>
           <if test="memberType == 'company'">
               AND ips.security_type = 'company'

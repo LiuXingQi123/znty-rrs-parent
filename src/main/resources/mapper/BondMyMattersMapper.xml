@@ -22,7 +22,7 @@
                ,f.name AS flowName
                ,s.node_label AS stepName
                -- 主体禁投：先看 pool_type，旧数据无类型时再用 15/16/17/23 兜底
-               ,CASE WHEN al.pool_type = 'crmw'
+               ,CASE WHEN al.pool_type = 'crmw' AND NULLIF(al.crmw_scode, '') IS NOT NULL
                      THEN 'crmwAdjust'
                      WHEN dst.category_type = 'company'
                           AND (
@@ -201,7 +201,7 @@
                ,f.name AS flowName
                ,s.node_label AS stepName
                -- 主体禁投：先看 pool_type，旧数据无类型时再用 15/16/17/23 兜底
-               ,CASE WHEN al.pool_type = 'crmw'
+               ,CASE WHEN al.pool_type = 'crmw' AND NULLIF(al.crmw_scode, '') IS NOT NULL
                      THEN 'crmwAdjust'
                      WHEN dst.category_type = 'company'
                           AND (

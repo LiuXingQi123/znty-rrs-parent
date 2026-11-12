@@ -104,14 +104,16 @@ public interface SecurityPoolExcelImportMapper {
 
     /**
      * 按父池名称 + 子池名称解析启用叶子投资池
-     * <p>父池名为空时按子池名称匹配启用叶子池（含根叶子）。</p>
+     * <p>证券导入根叶子池时父池名和子池名均为池名，主体导入按原池范围匹配</p>
      *
-     * @param parentPoolName 父池名称（可空）
+     * @param parentPoolName 父池名称（主体导入可空）
      * @param childPoolName  子池名称
+     * @param securityImport 是否证券导入
      * @return 匹配的叶子池，不存在时返回 null
      */
     InvestmentPoolBo queryEnabledLeafPoolByParentAndChildName(@Param("parentPoolName") String parentPoolName,
-                                                             @Param("childPoolName") String childPoolName);
+                                                             @Param("childPoolName") String childPoolName,
+                                                             @Param("securityImport") boolean securityImport);
 
     /**
      * 查询目标池当前有效在池成员（audit_status=20）

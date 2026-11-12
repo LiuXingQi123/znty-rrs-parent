@@ -401,12 +401,12 @@ public class TempSecurityCodeBusinessConverter {
         return pool.getPoolName();
     }
 
-    /** 校验目标池存在且类型匹配；实际新增入池时，逐码检查市场是否符合目标池配置。 */
+    /** 校验目标池存在且组合使用 CRMW 池；实际新增入池时，逐码检查市场是否符合目标池配置 */
     private void validateMarket(ConversionPlan plan, InvestmentPoolBo pool, boolean inbound) {
         if (pool == null) {
             throw new BizException("目标投资池不存在");
         }
-        if (plan.crmw != "crmw".equals(pool.getPoolType())) {
+        if (plan.crmw && !"crmw".equals(pool.getPoolType())) {
             throw new BizException("目标投资池类型不符，投资池：" + pool.getPoolName());
         }
         if (inbound) {

@@ -25,6 +25,7 @@
         <where>
             al.is_deleted = 0
             AND al.pool_type = 'crmw'
+            AND NULLIF(al.crmw_scode, '') IS NOT NULL
             <if test="crmwScode != null and crmwScode != ''">
                 AND al.crmw_scode LIKE CONCAT('%', #{crmwScode}, '%')
             </if>

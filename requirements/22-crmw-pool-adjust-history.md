@@ -2,7 +2,7 @@
 
 > 前端页面：`crmw_pool_adjust_history.html`
 > 后端前缀：`/api/v1/crmwPoolAdjustHistory`
-> 角色定位：查询 CRMW 池调库流水（`ip_adjust_log` 以 `pool_type='crmw'` 过滤），返回**所有状态**（含 `20/21/99/-1` 终态）的调库记录，可点击跳转详情。
+> 角色定位：查询 CRMW 池调库流水（`ip_adjust_log` 以 `pool_type='crmw'` 且 `crmw_scode` 非空过滤），返回**所有状态**（含 `20/21/99/-1` 终态）的调库记录，可点击跳转详情。
 
 ---
 
@@ -48,6 +48,7 @@ LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id AND p.is_deleted = 0
 <where>
     al.is_deleted = 0
     AND al.pool_type = 'crmw'
+    AND NULLIF(al.crmw_scode, '') IS NOT NULL
     <if crmwScode>  AND al.crmw_scode LIKE CONCAT('%', #{crmwScode}, '%') </if>
     <if crmwName>   AND al.crmw_name LIKE CONCAT('%', #{crmwName}, '%') </if>
     <if adjustTimeStart> AND al.submit_time >= #{adjustTimeStart} </if>
@@ -59,7 +60,7 @@ LEFT JOIN ip_investment_pool p ON p.id = al.target_pool_id AND p.is_deleted = 0
 ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 ```
 
-- **固定过滤**：`is_deleted=0 AND pool_type='crmw'` — 读共享 `ip_adjust_log` 表，按 CRMW 过滤。
+- **固定过滤**：`is_deleted=0 AND pool_type='crmw' AND NULLIF(crmw_scode, '') IS NOT NULL` — 读共享 `ip_adjust_log` 表，按 CRMW 过滤。
 - **返回所有状态**（含 `20/21/99/-1` 终态），与查询页（只返回 `20`）不同。
 - **Service 后处理**：`fillPoolFullName` 用 `investmentPoolService.queryPoolFullNameMap()` 覆盖 `targetPoolName` 为全路径名。
 
@@ -97,7 +98,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 
 ### 4.1 `ip_adjust_log`（主表，共享调库记录表）
 
-`pool_type='crmw'` 过滤；含 `crmw_name/crmw_scode` 字段。历史页看调库流水，**不关联** `ip_pool_status_crmw`（与查询页区别）。
+`pool_type='crmw'` 且 `crmw_scode` 非空；含 `crmw_name/crmw_scode` 字段。历史页看调库流水，**不关联** `ip_pool_status_crmw`（与查询页区别）。
 
 ### 4.2 `ip_investment_pool`（LEFT JOIN 取池名）
 
@@ -111,7 +112,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 
 ## 6. 与其他池模块的差异
 
-- **vs 证券池历史（10）**：CRMW 历史页筛选项为 CRMW 代码/名称（而非证券代码/简称）；主表 `ip_adjust_log` 以 `pool_type='crmw'` 过滤；表格列含 CRMW 名称/代码。
+- **vs 证券池历史（10）**：CRMW 历史页筛选项为 CRMW 代码/名称（而非证券代码/简称）；主表 `ip_adjust_log` 以 `pool_type='crmw'` 且 `crmw_scode` 非空过滤；表格列含 CRMW 名称/代码。
 - **vs 禁投池历史（13）**：两边名称/代码均可点击跳详情。CRMW 走 `openCrmwAdjustDetail`（须带 `crmwScode`）；禁投池走 `openPoolAdjustDetail`，按 `categoryType` 分流主体/证券详情。
 - **vs CRMW 查询页（18）**：历史页主表 `ip_adjust_log`（调库流水，含所有状态）；查询页主表 `ip_pool_status_crmw`（当前状态，仅 `audit_status='20'`）。
 - 状态字典一致：8 项内联（含 `'32'`），与禁投池历史页一致。
@@ -120,7 +121,7 @@ ORDER BY al.submit_time DESC, al.adjust_batch_no DESC, al.id DESC
 
 ## 7. 验收标准
 
-- 仅返回 `pool_type='crmw' AND is_deleted=0` 的调库记录，含所有状态。
+- 仅返回 `pool_type='crmw'`、`crmw_scode` 非空且 `is_deleted=0` 的组合调库记录，含所有状态。
 - 调整时间范围筛选边界含当日 00:00:00 ~ 23:59:59。
 - 投资池名称显示全路径。
 - 调整类型/方向/审核状态 el-tag 配色按字段语义差异化。

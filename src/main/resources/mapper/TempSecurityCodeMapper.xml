@@ -455,7 +455,8 @@
         UNION
         SELECT target_pool_id FROM ip_adjust_log
         WHERE security_code = #{tempSecurityCode} AND security_type = #{tempSecurityType}
-          AND pool_type != 'crmw' AND audit_status IN ('00', '11') AND is_deleted = 0
+          AND (pool_type != 'crmw' OR (pool_type = 'crmw' AND NULLIF(crmw_scode, '') IS NULL))
+          AND audit_status IN ('00', '11') AND is_deleted = 0
         ORDER BY target_pool_id
     </select>
 
@@ -463,7 +464,8 @@
     <select id="queryOrdinaryPendingLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT * FROM ip_adjust_log
         WHERE security_code = #{tempSecurityCode} AND security_type = #{tempSecurityType}
-          AND pool_type != 'crmw' AND audit_status IN ('00', '11') AND is_deleted = 0
+          AND (pool_type != 'crmw' OR (pool_type = 'crmw' AND NULLIF(crmw_scode, '') IS NULL))
+          AND audit_status IN ('00', '11') AND is_deleted = 0
         ORDER BY id
     </select>
 
@@ -471,7 +473,9 @@
     <select id="queryCrmwPendingLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT * FROM ip_adjust_log
         WHERE security_code = #{tempSecurityCode} AND security_type = #{tempSecurityType}
-          AND pool_type = 'crmw' AND audit_status IN ('00', '11') AND is_deleted = 0
+          AND pool_type = 'crmw'
+          AND NULLIF(crmw_scode, '') IS NOT NULL
+          AND audit_status IN ('00', '11') AND is_deleted = 0
         ORDER BY id
     </select>
 

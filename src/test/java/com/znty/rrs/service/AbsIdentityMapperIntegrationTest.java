@@ -82,13 +82,17 @@ public class AbsIdentityMapperIntegrationTest {
         jdbc.execute(ddl.group().replaceAll("(?s)\\) ENGINE.*", ")"));
     }
 
-    /** 主档为空时仍应通过申请快照占用身份，终结后才解除 */
+    /** 普通 ABS 调入 CRMW 池时，普通快照仍占用主体身份，终结后才解除 */
     @Test
     public void pendingAndReturnedForEditShouldOccupyUntilTerminal() {
-        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_type,target_pool_id,audit_status,is_deleted) VALUES (1,'ABS1','abs',101,'00',0)");
+        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_type,target_pool_id,pool_type,audit_status,is_deleted) "
+                + "VALUES (1,'ABS1','abs',18,'crmw','00',0)");
         jdbc.update("INSERT INTO ip_adjust_security_snapshot(adjust_log_id,wind_code,issuer_code,is_deleted) VALUES(1,'ABS1','A',0)");
         try (SqlSession session = factory.openSession()) {
-            assertThat(session.getMapper(AbsIdentityMapper.class).queryOccupiedIdentityCodes("ABS1")).containsExactly("A");
+            AbsIdentityMapper mapper = session.getMapper(AbsIdentityMapper.class);
+            assertThat(mapper.queryOccupiedIdentityCodes("ABS1")).containsExactly("A");
+            assertThat(mapper.queryUnconfirmedActiveOrPending("ABS1")).isFalse();
+            assertThat(mapper.queryPendingIdentityDetail("ABS1").getIssuerCode()).isEqualTo("A");
         }
         jdbc.update("UPDATE ip_adjust_log SET audit_status='11'");
         try (SqlSession session = factory.openSession()) {
@@ -169,7 +173,7 @@ public class AbsIdentityMapperIntegrationTest {
     /** CRMW 使用共用日志及独立快照，审核中和驳回待修改均占用主体 */
     @Test
     public void crmwPendingShouldUseSharedLogAndCrmwSnapshot() {
-        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_type,target_pool_id,pool_type,audit_status,is_deleted) VALUES(1,'ABS1','abs',101,'crmw','00',0)");
+        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_type,target_pool_id,pool_type,crmw_scode,audit_status,is_deleted) VALUES(1,'ABS1','abs',101,'crmw','CRMW.IB','00',0)");
         jdbc.update("INSERT INTO ip_adjust_security_snapshot_crmw(adjust_log_id,wind_code,issuer,issuer_code,rating_bondissuer,rating_bondissuer_agency,inner_issuer_rating,is_deleted) VALUES(1,'ABS1','甲','A','AA+','R1','2',0)");
         for (String status : Arrays.asList("00", "11")) {
             jdbc.update("UPDATE ip_adjust_log SET audit_status=?", status);
@@ -193,7 +197,7 @@ public class AbsIdentityMapperIntegrationTest {
     /** 两条链路同时有申请时都参与唯一主体校验，不能因共用日志而读取错快照 */
     @Test
     public void ordinaryAndCrmwPendingShouldReserveIdentityTogether() {
-        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_type,target_pool_id,pool_type,audit_status,is_deleted) VALUES(1,'ABS1','abs',101,'credit','00',0),(2,'ABS1','abs',102,'crmw','11',0)");
+        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_type,target_pool_id,pool_type,crmw_scode,audit_status,is_deleted) VALUES(1,'ABS1','abs',101,'crmw','', '00',0),(2,'ABS1','abs',102,'crmw','CRMW.IB','11',0)");
         jdbc.update("INSERT INTO ip_adjust_security_snapshot(adjust_log_id,wind_code,issuer_code,is_deleted) VALUES(1,'ABS1','A',0)");
         jdbc.update("INSERT INTO ip_adjust_security_snapshot_crmw(adjust_log_id,wind_code,issuer_code,is_deleted) VALUES(2,'ABS1','B',0)");
         try (SqlSession session = factory.openSession()) {

@@ -342,6 +342,7 @@
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{securityCode}
           AND al.pool_type = 'crmw'
+          AND NULLIF(al.crmw_scode, '') IS NOT NULL
           AND al.is_deleted = 0
           AND s.step_status = 'pending'
     </select>
@@ -353,6 +354,7 @@
         INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
         WHERE al.security_code = #{securityCode}
           AND al.pool_type = 'crmw'
+          AND NULLIF(al.crmw_scode, '') IS NOT NULL
           AND al.is_deleted = 0
           AND s.step_status = 'pending'
         ORDER BY s.sort_order ASC
@@ -693,7 +695,7 @@
         ORDER BY id ASC
     </select>
 
-    <!-- 根据 ID 查询流程步骤 -->
+    <!-- 根据 ID 查询 CRMW 组合的流程步骤 -->
     <select id="queryAdjustStepById" resultType="com.znty.rrs.entity.bo.IpAdjustStepBo">
         SELECT id
                ,adjust_log_id
@@ -711,8 +713,16 @@
                ,process_comment
                ,start_time
                ,process_time
-        FROM ip_adjust_step
-        WHERE id = #{id}
+        FROM ip_adjust_step s
+        WHERE s.id = #{id}
+          AND EXISTS (
+              SELECT 1
+              FROM ip_adjust_log al
+              WHERE al.id = s.adjust_log_id
+                AND al.is_deleted = 0
+                AND al.pool_type = 'crmw'
+                AND NULLIF(al.crmw_scode, '') IS NOT NULL
+          )
     </select>
 
     <!-- 按处理人查询同批次同节点待处理步骤 -->
@@ -829,6 +839,7 @@
         <where>
             is_deleted = 0
             AND pool_type = 'crmw'
+            AND NULLIF(crmw_scode, '') IS NOT NULL
             <choose>
                 <when test="adjustBatchNo != null and adjustBatchNo != ''">
                     AND adjust_batch_no = #{adjustBatchNo}
@@ -854,6 +865,8 @@
         <where>
             is_deleted = 0
             AND audit_status = '11'
+            AND pool_type = 'crmw'
+            AND NULLIF(crmw_scode, '') IS NOT NULL
             <choose>
                 <when test="adjustBatchNo != null and adjustBatchNo != ''">
                     AND adjust_batch_no = #{adjustBatchNo}
@@ -873,6 +886,7 @@
            ,updt_time = NOW()
         WHERE is_deleted = 0
           AND pool_type = 'crmw'
+          AND NULLIF(crmw_scode, '') IS NOT NULL
           <choose>
               <when test="adjustBatchNo != null and adjustBatchNo != ''">
                   AND adjust_batch_no = #{adjustBatchNo}
@@ -888,6 +902,8 @@
         UPDATE ip_adjust_log
         SET audit_status = #{auditStatus}, audit_time = NOW(), updt_time = NOW()
         WHERE audit_status IN ('00', '11')
+          AND pool_type = 'crmw'
+          AND NULLIF(crmw_scode, '') IS NOT NULL
           <choose>
               <when test="adjustBatchNo != null and adjustBatchNo != ''">
                   AND adjust_batch_no = #{adjustBatchNo}

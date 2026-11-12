@@ -618,7 +618,7 @@ public class SecurityPoolExcelImportService {
             InvestmentPoolBo pool = null;
             if (preReasons.isEmpty()) {
                 // 按父子池名称解析叶子池
-                pool = resolvePoolByNames(parentName, childName, poolNameCache);
+                pool = resolvePoolByNames(parentName, childName, true, poolNameCache);
                 if (pool == null) {
                     preReasons.add("未找到启用叶子池：父池[" + parentName + "] / 子池[" + childName + "]");
                 } else {
@@ -874,7 +874,7 @@ public class SecurityPoolExcelImportService {
             InvestmentPoolBo pool = null;
             if (preReasons.isEmpty()) {
                 // 按父子池名称解析叶子池
-                pool = resolvePoolByNames(isBlank(parentName) ? null : parentName, childName, poolNameCache);
+                pool = resolvePoolByNames(parentName, childName, false, poolNameCache);
                 if (pool == null) {
                     preReasons.add(isBlank(parentName)
                             ? ("未找到启用叶子池：子池[" + childName + "]")
@@ -2147,7 +2147,7 @@ public class SecurityPoolExcelImportService {
     // ═══════════════════════════════════════════════════════════
 
     /** 按父池名称 + 子池名称解析启用叶子池（带缓存） */
-    private InvestmentPoolBo resolvePoolByNames(String parentName, String childName,
+    private InvestmentPoolBo resolvePoolByNames(String parentName, String childName, boolean securityImport,
                                                 Map<String, InvestmentPoolBo> cache) {
         String cacheKey = trimToEmpty(parentName) + "||" + trimToEmpty(childName);
         if (cache.containsKey(cacheKey)) {
@@ -2155,7 +2155,7 @@ public class SecurityPoolExcelImportService {
         }
         // 查询启用叶子投资池
         InvestmentPoolBo pool = securityPoolExcelImportMapper.queryEnabledLeafPoolByParentAndChildName(
-                isBlank(parentName) ? null : parentName, childName);
+                isBlank(parentName) ? null : parentName, childName, securityImport);
         cache.put(cacheKey, pool);
         return pool;
     }

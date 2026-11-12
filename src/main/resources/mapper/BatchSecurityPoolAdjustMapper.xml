@@ -22,8 +22,7 @@
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
-          <!-- 证券池批量主页排除 CRMW 池，并只保留投资品种包含债券的池 -->
-          AND p.pool_type != 'crmw'
+          <!-- 证券池批量主页只保留投资品种包含债券的池 -->
           AND JSON_CONTAINS(p.variety_codes, '"bond"')
         <if test="poolIds != null and poolIds.size() > 0">
           AND p.id IN
@@ -103,7 +102,7 @@
                ,si.guarantor_id
         FROM rrs_securityinfo si
         <where>
-            AND si.security_type NOT IN ('company', 'crmw')
+            AND si.security_type != 'company'
             AND si.security_status != 'D'
             <if test="direction == 'in'">
                 AND NOT EXISTS (
@@ -188,14 +187,13 @@
         </where>
     </select>
 
-    <!-- 查询指定投资池是否为启用叶子池（排除 CRMW，且投资品种包含债券） -->
+    <!-- 查询指定投资池是否为投资品种包含债券的启用叶子池 -->
     <select id="queryEnabledLeafPoolCount" resultType="int">
         SELECT COUNT(1)
         FROM ip_investment_pool p
         WHERE p.id = #{poolId}
           AND p.status = 'enabled'
           AND p.is_deleted = 0
-          AND p.pool_type != 'crmw'
           AND JSON_CONTAINS(p.variety_codes, '"bond"')
           AND NOT EXISTS (
               SELECT 1

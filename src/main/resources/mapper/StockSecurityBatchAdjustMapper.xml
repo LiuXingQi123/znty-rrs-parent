@@ -2,14 +2,14 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.StockSecurityBatchAdjustMapper">
-    <!-- 存量证券批量调整：目标池限债券产品库(bond_product_root)子树叶子；候选须在来源池 -->
+    <!-- 存量证券批量调整：目标池限债券产品库子树的启用叶子；调入候选须在来源池 -->
 
     <!--
       分页查询债券产品库根树下的启用叶子投资池。
-      子树：以 pool_code=bond_product_root 为根的递归后代（不含其它 bond_product 根如债券产品库1）。
+      从 bond_product_root 递归查询（不含债券产品库1）。
     -->
     <select id="queryPoolPage" resultType="com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchPoolDto">
-        WITH RECURSIVE product_tree AS (
+        WITH RECURSIVE product_tree (id) AS (
             SELECT id
             FROM ip_investment_pool
             WHERE pool_code = 'bond_product_root'
@@ -113,7 +113,7 @@
                ,si.guarantor_id
         FROM rrs_securityinfo si
         <where>
-            AND si.security_type NOT IN ('crmw', 'company')
+            AND si.security_type != 'company'
             AND si.security_status != 'D'
             <if test="direction == 'in'">
                 AND NOT EXISTS (
@@ -217,7 +217,7 @@
 
     <!-- 目标池是否为债券产品库根树下启用叶子 -->
     <select id="queryEnabledLeafPoolCount" resultType="int">
-        WITH RECURSIVE product_tree AS (
+        WITH RECURSIVE product_tree (id) AS (
             SELECT id
             FROM ip_investment_pool
             WHERE pool_code = 'bond_product_root'

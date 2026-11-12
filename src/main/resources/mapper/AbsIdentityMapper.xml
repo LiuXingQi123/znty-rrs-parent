@@ -17,7 +17,7 @@
                                                   AND snap.is_deleted = 0
         WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
           AND snap.issuer_code IS NOT NULL AND TRIM(snap.issuer_code) != ''
-          AND (log.pool_type IS NULL OR log.pool_type != 'crmw')
+          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR NULLIF(log.crmw_scode, '') IS NULL)
         UNION ALL
         SELECT snap.issuer_code
         FROM ip_adjust_log log
@@ -27,6 +27,7 @@
         WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
           AND snap.issuer_code IS NOT NULL AND TRIM(snap.issuer_code) != ''
           AND log.pool_type = 'crmw'
+          AND NULLIF(log.crmw_scode, '') IS NOT NULL
     </select>
 
     <!-- 主档已确认身份的唯一主体，只在五字段为空时视为未确认 -->
@@ -69,7 +70,7 @@
                 WHERE log.security_code = #{securityCode}
                   AND log.audit_status IN ('00', '11')
                   AND log.is_deleted = 0
-                  AND (log.pool_type IS NULL OR log.pool_type != 'crmw')
+                  AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR NULLIF(log.crmw_scode, '') IS NULL)
                   AND (snap.issuer_code IS NULL OR TRIM(snap.issuer_code) = '')
             )
             OR EXISTS (
@@ -82,6 +83,7 @@
                   AND log.audit_status IN ('00', '11')
                   AND log.is_deleted = 0
                   AND log.pool_type = 'crmw'
+                  AND NULLIF(log.crmw_scode, '') IS NOT NULL
                   AND (snap.issuer_code IS NULL OR TRIM(snap.issuer_code) = '')
             )
         )
@@ -127,7 +129,7 @@
         INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = log.id
                                                    AND snap.wind_code = log.security_code AND snap.is_deleted = 0
         WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
-          AND (log.pool_type IS NULL OR log.pool_type != 'crmw')
+          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR NULLIF(log.crmw_scode, '') IS NULL)
         UNION ALL
         SELECT snap.wind_code
             , snap.issuer
@@ -140,6 +142,7 @@
                                                         AND snap.wind_code = log.security_code AND snap.is_deleted = 0
         WHERE log.security_code = #{securityCode} AND log.audit_status IN ('00', '11') AND log.is_deleted = 0
           AND log.pool_type = 'crmw'
+          AND NULLIF(log.crmw_scode, '') IS NOT NULL
         LIMIT 1
     </select>
 
