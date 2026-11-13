@@ -1,11 +1,16 @@
 package com.znty.rrs.service;
 
+import org.junit.Assume;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.Arrays;
 import java.util.List;
 
@@ -24,14 +29,54 @@ public class ExternalRatingAgencyMapperSqlTest {
         assertParameterizedQueries("WindRatingMapper.xml", Arrays.asList("queryLatestRating"));
     }
 
-    /** 自动出池查询应排除近一年无认可外评的主体。 */
+    /** 自动进出池按归一后的评级分值判断，无认可外评时不出池 */
     @Test
-    public void autoOutRatingQuery_ShouldExcludeCompanyWithoutEffectiveRating() throws Exception {
+    public void autoAdjustRatingQueries_ShouldFilterByEffectiveRatingValue() throws Exception {
         String xml = readMapper("AutoAdjustMapper.xml");
-        String select = selectBlock(xml, "queryCompanyByNotLowOuterRatingInPool");
 
-        assertThat(select).contains("AND e.b_info_creditrating IS NOT NULL")
-                .doesNotContain("e.b_info_creditrating IS NULL");
+        assertThat(selectBlock(xml, "queryCompanyByLowOuterRatingNotInPool"))
+                .contains("WHERE e.rating_value &lt;= 17");
+        assertThat(selectBlock(xml, "queryCompanyByNotLowOuterRatingInPool"))
+                .contains("AND e.rating_value > 17")
+                .doesNotContain("COALESCE(e.rating_value");
+    }
+
+    /** 黑名单质押库校验和定时任务使用相同的评级提取规则 */
+    @Test
+    public void pledgeRatingQueries_ShouldNormalizeRatingSuffixes() throws Exception {
+        String xml = readMapper("AutoAdjustMapper.xml");
+        String normalization = "REGEXP_SUBSTR(TRIM(r.b_info_creditrating), '^(A+|B+|C+|D)[+-]?', 1, 1, 'c')";
+        assertThat(selectBlock(xml, "queryCompanyHasLowOuterRating")).contains(normalization + " IN (");
+        String autoIn = selectBlock(xml, "queryCompanyByLowOuterRatingNotInPool");
+        int caseStart = autoIn.indexOf("CASE " + normalization);
+        assertThat(caseStart).isGreaterThanOrEqualTo(0);
+        String ratingCase = autoIn.substring(caseStart, autoIn.indexOf(" AS rating_value", caseStart));
+        assertThat(selectBlock(xml, "queryCompanyByNotLowOuterRatingInPool")).contains(ratingCase);
+
+        String version = System.getProperty("java.specification.version");
+        int major = Integer.parseInt(version.startsWith("1.") ? version.substring(2) : version);
+        Assume.assumeTrue("H2 2.3.232 SQL 测试需 Java 11 以上运行时", major >= 11);
+        String sql = "SELECT " + ratingCase.replace("r.b_info_creditrating", "CAST(? AS VARCHAR)");
+        try (Connection connection = DriverManager.getConnection("jdbc:h2:mem:");
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            assertRatingValue(statement, "AA-", 17);
+            assertRatingValue(statement, "AA-xxx", 17);
+            assertRatingValue(statement, "A-xxx", 14);
+            assertRatingValue(statement, "AA+xxx", 19);
+            assertRatingValue(statement, "AAxxx", 18);
+            assertRatingValue(statement, "  BBB+（观察）  ", 13);
+            assertRatingValue(statement, "AAA-xxx", 999);
+            assertRatingValue(statement, "未知", 999);
+        }
+    }
+
+    /** 执行 Mapper 中的评级转换表达式并检查分值 */
+    private void assertRatingValue(PreparedStatement statement, String rating, int expected) throws Exception {
+        statement.setString(1, rating);
+        try (ResultSet result = statement.executeQuery()) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getInt(1)).as(rating).isEqualTo(expected);
+        }
     }
 
     /** 近一年外评直接按评级日期筛选，同档按评级日期取最新记录 */

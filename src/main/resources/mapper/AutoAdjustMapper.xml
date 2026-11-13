@@ -49,7 +49,7 @@
                 </otherwise>
             </choose>
               AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
-              AND TRIM(r.b_info_creditrating) IN (
+              AND REGEXP_SUBSTR(TRIM(r.b_info_creditrating), '^(A+|B+|C+|D)[+-]?', 1, 1, 'c') IN (
                   'AA-', 'A+', 'A', 'A-'
                   ,'BBB+', 'BBB', 'BBB-'
                   ,'BB+', 'BB', 'BB-'
@@ -256,13 +256,13 @@
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        <!-- 按评级日期筛选近一年认可机构外评，并转成可比较档位 -->
+        <!-- 筛选近一年认可机构外评，提取开头的评级档位后转成分值 -->
         WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
                    ,r.b_info_creditrating
                    ,r.ann_dt
-                   ,CASE TRIM(r.b_info_creditrating)
+                   , CASE REGEXP_SUBSTR(TRIM(r.b_info_creditrating), '^(A+|B+|C+|D)[+-]?', 1, 1, 'c')
                         WHEN 'AAA+' THEN 21
                         WHEN 'AAA' THEN 20
                         WHEN 'AA+' THEN 19
@@ -309,10 +309,12 @@
             SELECT s_info_compcode
                    ,s_info_compname
                    ,b_info_creditrating
+                   , rating_value
             FROM (
                 SELECT s_info_compcode
                        ,s_info_compname
                        ,b_info_creditrating
+                       , rating_value
                        ,ROW_NUMBER() OVER (
                            PARTITION BY s_info_compcode
                            ORDER BY rating_value ASC
@@ -328,14 +330,7 @@
                ,'company' AS security_type
                ,e.b_info_creditrating AS outer_rating
         FROM effective e
-        WHERE e.b_info_creditrating IN (
-              'AA-', 'A+', 'A', 'A-'
-              ,'BBB+', 'BBB', 'BBB-'
-              ,'BB+', 'BB', 'BB-'
-              ,'B+', 'B', 'B-'
-              ,'CCC', 'CC', 'C'
-              ,'D'
-          )
+        WHERE e.rating_value &lt;= 17
           AND NOT EXISTS (
               SELECT 1
               FROM ip_pool_status ips
@@ -355,13 +350,13 @@
     -->
     <select id="queryCompanyByNotLowOuterRatingInPool"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        <!-- 按评级日期筛选近一年认可机构外评，并转成可比较档位 -->
+        <!-- 筛选近一年认可机构外评，提取开头的评级档位后转成分值 -->
         WITH rated AS (
             SELECT r.s_info_compcode
                    ,r.s_info_compname
                    ,r.b_info_creditrating
                    ,r.ann_dt
-                   ,CASE TRIM(r.b_info_creditrating)
+                   , CASE REGEXP_SUBSTR(TRIM(r.b_info_creditrating), '^(A+|B+|C+|D)[+-]?', 1, 1, 'c')
                         WHEN 'AAA+' THEN 21
                         WHEN 'AAA' THEN 20
                         WHEN 'AA+' THEN 19
@@ -408,10 +403,12 @@
             SELECT s_info_compcode
                    ,s_info_compname
                    ,b_info_creditrating
+                   , rating_value
             FROM (
                 SELECT s_info_compcode
                        ,s_info_compname
                        ,b_info_creditrating
+                       , rating_value
                        ,ROW_NUMBER() OVER (
                            PARTITION BY s_info_compcode
                            ORDER BY rating_value ASC
@@ -433,15 +430,7 @@
           AND ips.security_type = 'company'
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND e.b_info_creditrating IS NOT NULL
-          AND e.b_info_creditrating NOT IN (
-              'AA-', 'A+', 'A', 'A-'
-              ,'BBB+', 'BBB', 'BBB-'
-              ,'BB+', 'BB', 'BB-'
-              ,'B+', 'B', 'B-'
-              ,'CCC', 'CC', 'C'
-              ,'D'
-          )
+          AND e.rating_value > 17
         <if test="limitPoolIds != null and limitPoolIds.size() &gt; 0">
           AND NOT EXISTS (
               SELECT 1
