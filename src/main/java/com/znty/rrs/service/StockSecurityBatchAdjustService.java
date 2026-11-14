@@ -73,7 +73,7 @@ public class StockSecurityBatchAdjustService {
 
     /**
      * 来源池白名单 pool_code（有序，与前端下拉一致）。
-     * 所有来源池均走 ip_pool_status。
+     * CRMW 库按组合状态表的标的证券筛选，其余来源池使用普通状态表
      * 目标池范围由 Mapper 限定 pool_code=bond_product_root 子树叶子。
      */
     private static final List<String> SOURCE_POOL_CODES = ProductInboundPoolCodes.SOURCES;
@@ -380,7 +380,9 @@ public class StockSecurityBatchAdjustService {
         if (req.getSourcePoolIds() == null || req.getSourcePoolIds().isEmpty()) {
             throw new BizException("请至少选择一个来源池");
         }
-        Set<Long> allowedIds = resolveSourcePoolMap().values().stream()
+        // 复用白名单校验时已加载的来源池配置
+        Map<String, InvestmentPoolBo> sourcePools = resolveSourcePoolMap();
+        Set<Long> allowedIds = sourcePools.values().stream()
                 .map(InvestmentPoolBo::getId)
                 .collect(Collectors.toSet());
         for (Long sourcePoolId : req.getSourcePoolIds()) {
@@ -388,6 +390,8 @@ public class StockSecurityBatchAdjustService {
                 throw new BizException("来源池不在允许范围内");
             }
         }
+        Long crmwPoolId = sourcePools.get(ProductInboundPoolCodes.CRMW).getId();
+        req.setCrmwSourcePoolId(req.getSourcePoolIds().contains(crmwPoolId) ? crmwPoolId : null);
     }
 
     /**

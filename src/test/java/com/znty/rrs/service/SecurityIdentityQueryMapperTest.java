@@ -81,6 +81,8 @@ public class SecurityIdentityQueryMapperTest {
         jdbc.execute("CREATE TABLE ip_pool_status (id BIGINT, security_code VARCHAR(30), security_short_name VARCHAR(100), "
                 + "security_type VARCHAR(20), adjuster_name VARCHAR(50), entry_time TIMESTAMP, target_pool_id BIGINT, "
                 + "adjust_log_id BIGINT, adjust_batch_no VARCHAR(50), audit_status VARCHAR(10), is_deleted INT)");
+        jdbc.execute("CREATE TABLE ip_pool_status_crmw (security_code VARCHAR(30), crmw_scode VARCHAR(30), "
+                + "target_pool_id BIGINT, audit_status VARCHAR(10), is_deleted INT)");
         jdbc.execute("CREATE TABLE ip_adjust_log (id BIGINT, security_code VARCHAR(30), security_short_name VARCHAR(100), "
                 + "security_type VARCHAR(20), target_pool_id BIGINT, adjust_type VARCHAR(30), adjust_mode VARCHAR(10), "
                 + "adjust_batch_no VARCHAR(50), pool_type VARCHAR(20), audit_status VARCHAR(10), adjuster_name VARCHAR(50), "
@@ -200,9 +202,9 @@ public class SecurityIdentityQueryMapperTest {
         assertThat(querySecurityList(stock)).hasSize(1);
     }
 
-    /** CRMW 库可作为已有来源池，存量目标池仅允许债券产品库叶子，候选保留 CRMW 凭证 */
+    /** CRMW 来源只匹配有效组合的标的代码，多来源按并集返回，目标仍限产品库叶子 */
     @Test
-    public void stockAdjustShouldIncludeCrmwCredentialsAndOnlyProductTargets() {
+    public void stockAdjustShouldUseCrmwUnderlyingAndOnlyProductTargets() {
         JdbcTemplate jdbc = new JdbcTemplate(database);
         jdbc.update("INSERT INTO ip_investment_pool (id, parent_id, pool_code, pool_type, status, is_deleted) VALUES "
                 + "(100, NULL, 'bond_product_root', 'bond_product', 'enabled', 0), "
@@ -212,6 +214,10 @@ public class SecurityIdentityQueryMapperTest {
                 + "VALUES ('CRMW.IB', '测试凭证', 'crmw', 'L')");
         jdbc.update("INSERT INTO ip_pool_status (security_code, security_type, target_pool_id, audit_status, is_deleted) "
                 + "VALUES ('CRMW.IB', 'crmw', 18, '20', 0), ('CRMW.IB', 'crmw', 101, '20', 1)");
+        jdbc.update("INSERT INTO ip_pool_status_crmw VALUES "
+                + "('A', 'CRMW.IB', 18, '20', 0), ('A', 'CRMW2.IB', 18, '20', 0), "
+                + "('B', 'CRMW.IB', 18, '00', 0), ('C', 'CRMW.IB', 18, '20', 1), "
+                + "('D', 'CRMW.IB', 99, '20', 0)");
 
         StockSecurityBatchAdjustMapper mapper = session.getMapper(StockSecurityBatchAdjustMapper.class);
         StockSecurityBatchAdjustReq req = new StockSecurityBatchAdjustReq();
@@ -222,13 +228,30 @@ public class SecurityIdentityQueryMapperTest {
         req.setPoolId(101L);
         req.setDirection("in");
         req.setSourcePoolIds(Collections.singletonList(18L));
-        assertThat(mapper.querySecurityPage(req)).extracting(row -> row.getSecurityCode()).containsExactly("CRMW.IB");
+        req.setCrmwSourcePoolId(18L);
+        assertThat(mapper.querySecurityPage(req)).extracting(row -> row.getSecurityCode()).containsExactly("A");
+        req.setSourcePoolIds(Arrays.asList(18L, 2L));
+        assertThat(mapper.querySecurityPage(req)).extracting(row -> row.getSecurityCode())
+                .containsExactlyInAnyOrder("A", "B", "C", "D");
+        jdbc.update("INSERT INTO ip_pool_status (security_code, target_pool_id, audit_status, is_deleted) "
+                + "VALUES ('A', 101, '20', 0)");
+        session.clearCache();
+        req.setSourcePoolIds(Collections.singletonList(18L));
+        assertThat(mapper.querySecurityPage(req)).isEmpty();
+
+        SecurityPoolAdjustMapper securityMapper = session.getMapper(SecurityPoolAdjustMapper.class);
+        assertThat(securityMapper.querySecurityInCrmwSourcePool("A", 18L)).isTrue();
+        assertThat(securityMapper.querySecurityInCrmwSourcePool("A", 99L)).isFalse();
+        for (String code : Arrays.asList("B", "C", "D", "CRMW.IB")) {
+            assertThat(securityMapper.querySecurityInCrmwSourcePool(code, 18L)).isFalse();
+        }
 
         jdbc.update("UPDATE ip_pool_status SET is_deleted = 0 WHERE security_code = 'CRMW.IB' AND target_pool_id = 101");
         session.clearCache();
         req.setDirection("out");
         req.setSourcePoolIds(null);
-        assertThat(mapper.querySecurityPage(req)).extracting(row -> row.getSecurityCode()).containsExactly("CRMW.IB");
+        assertThat(mapper.querySecurityPage(req)).extracting(row -> row.getSecurityCode())
+                .containsExactlyInAnyOrder("A", "CRMW.IB");
     }
 
     /** Service 必须把新增条件完整传到真实 Mapper，分页与空条件也正常工作 */

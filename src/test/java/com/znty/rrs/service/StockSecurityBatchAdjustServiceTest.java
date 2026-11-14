@@ -1,11 +1,15 @@
 package com.znty.rrs.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.znty.rrs.common.constants.ProductInboundPoolCodes;
+import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchAdjustReq;
 import com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchAdjustSubmitReq;
 import com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchAdjustDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
+import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.StockSecurityBatchAdjustMapper;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -90,6 +94,38 @@ public class StockSecurityBatchAdjustServiceTest {
         req.setSourcePoolIds(Collections.singletonList(99999L));
 
         ReflectionTestUtils.invokeMethod(service, "validateSecurityPageReq", req);
+    }
+
+    /** 从白名单解析当前环境的 CRMW 池 ID，仅在本次勾选时传给查询 */
+    @Test
+    public void validateSecurityPageReqShouldResolveSelectedCrmwSourcePoolId() throws Exception {
+        StockSecurityBatchAdjustMapper mapper = mock(StockSecurityBatchAdjustMapper.class);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        StockSecurityBatchAdjustService service = new StockSecurityBatchAdjustService();
+        ReflectionTestUtils.setField(service, "stockSecurityBatchAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        when(mapper.queryEnabledLeafPoolCount(33L)).thenReturn(1);
+        long nextPoolId = 801L;
+        for (String code : ProductInboundPoolCodes.SOURCES) {
+            InvestmentPoolBo pool = new InvestmentPoolBo();
+            pool.setId(ProductInboundPoolCodes.CRMW.equals(code) ? 800L : nextPoolId++);
+            pool.setPoolCode(code);
+            pool.setIsDeleted(0);
+            when(poolMapper.queryPoolByCode(pool.getPoolCode())).thenReturn(pool);
+        }
+
+        ObjectMapper json = new ObjectMapper();
+        StockSecurityBatchAdjustReq req = json.readValue(
+                "{\"poolId\":33,\"direction\":\"in\",\"sourcePoolIds\":[800],\"crmwSourcePoolId\":999}",
+                StockSecurityBatchAdjustReq.class);
+        assertThat(req.getCrmwSourcePoolId()).isNull();
+        ReflectionTestUtils.invokeMethod(service, "validateSecurityPageReq", req);
+        assertThat(req.getCrmwSourcePoolId()).isEqualTo(800L);
+        assertThat(json.valueToTree(req).has("crmwSourcePoolId")).isFalse();
+
+        req.setSourcePoolIds(Collections.singletonList(801L));
+        ReflectionTestUtils.invokeMethod(service, "validateSecurityPageReq", req);
+        assertThat(req.getCrmwSourcePoolId()).isNull();
     }
 
 }

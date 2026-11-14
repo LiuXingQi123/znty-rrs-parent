@@ -157,6 +157,9 @@ public class SecurityPoolAdjustService {
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
+    /** 是否认可普通状态表中的 CRMW 库作为快速入库来源 */
+    private boolean crmwUsePoolStatus = BusinessSwitches.CRMW_USE_POOL_STATUS;
+
     /** ABS 跨池主体身份及已查询候选复用 */
     @Resource
     private AbsIdentityService absIdentityService;
@@ -1612,10 +1615,25 @@ public class SecurityPoolAdjustService {
         String exemptionType = manual.getMaterialExemptionType();
         boolean exempt = false;
         if (MaterialExemptionType.PRODUCT_SOURCE.getCode().equals(exemptionType)) {
-            // 产品库：只复用当前在库集合核对来源，不将本次待申请调入算作已在库
-            if (!isProductInboundFlowMatched(pool, shared.poolMap, shared.currentPoolIds)) {
+            // 复核主券和同组关联调入证券的当前有效来源
+            if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)
+                    || !isProductInboundFlowMatched(req.getSecurityCode(), pool, shared.poolMap, shared.currentPoolIds)) {
                 throw new BizException("目标池[" + (pool == null ? manual.getTargetPoolId() : pool.getPoolName())
                         + "]快速入库来源资格已失效，请重新校验");
+            }
+            for (SecurityPoolAdjustSubmitReq.AdjustItem related : req.getItems()) {
+                if (!ItemType.RELATED.getCode().equals(related.getItemTag())
+                        || !AdjustMode.IN.getCode().equals(related.getAdjustMode())
+                        || !Objects.equals(manual.getAdjustGroupKey(), related.getAdjustGroupKey())) {
+                    continue;
+                }
+                // 关联码按自己的当前在池记录判断
+                String code = resolveItemSecurityCode(req, related);
+                Set<Long> currentPoolIds = new HashSet<>(securityPoolAdjustMapper.querySecurityCurrentPoolIdList(code));
+                // 关联码失去有效来源时整组重新校验
+                if (!isProductInboundFlowMatched(code, pool, shared.poolMap, currentPoolIds)) {
+                    throw new BizException("关联代码[" + code + "]快速入库来源资格已失效，请重新校验");
+                }
             }
             exempt = true;
         } else if (MaterialExemptionType.CREDIT_BOND_SIMPLE.getCode().equals(exemptionType)) {
@@ -1852,6 +1870,11 @@ public class SecurityPoolAdjustService {
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
             // 同组先按主项快速资格判断材料豁免，无资格时继续执行原报告要求
             if (isExcelAdjustType(req.getAdjustType())) {
+                if (isManualSubmitItem(item)
+                        && MaterialExemptionType.PRODUCT_SOURCE.getCode().equals(item.getMaterialExemptionType())) {
+                    // Excel 仍免必填报告，带有产品库豁免资格时复核来源
+                    isInboundMaterialExempt(req, item, shared);
+                }
                 // Excel 的业务校验只作提示，不在提交时用报告必填要求重新阻断
                 sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
             } else if (isInboundMaterialExempt(req, item, shared)) {
@@ -2946,7 +2969,7 @@ public class SecurityPoolAdjustService {
 
         // 产品库来源资格独立判断，命中时优先快速，仍保留原普通或特殊流程
         if (isProductInboundTarget(targetPool, shared.getPoolMap())) {
-            return resolveProductInboundFlowOptions(shared, targetPool);
+            return resolveProductInboundFlowOptions(req.getSecurityCode(), shared, targetPool);
         }
 
         // 手工调入：当前已在目标池调入互斥池时优先特殊审批（信用债大库默认排除）
@@ -3160,19 +3183,21 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 单独判断产品库快速入库资格，只使用已经查出的当前在库集合
+     * 判断证券是否具备产品库快速入库来源资格
      *
      * 执行顺序：
      * 1. 确认目标属于存量产品库范围
-     * 2. 按存量入口共用的来源编码检查当前是否有效在库
+     * 2. 检查普通状态表的有效来源，CRMW 库受开关控制
+     * 3. 普通来源未命中时按标的代码检查 CRMW 组合状态
      *
+     * @param securityCode 证券代码
      * @param pool 目标池
      * @param poolMap 已加载的投资池集合
      * @param currentPoolIds 当前已生效的在库集合，不含本次待申请项
      * @return 是否满足产品库快速资格
      */
-    private boolean isProductInboundFlowMatched(InvestmentPoolBo pool, Map<Long, InvestmentPoolBo> poolMap,
-                                                 Set<Long> currentPoolIds) {
+    private boolean isProductInboundFlowMatched(String securityCode, InvestmentPoolBo pool,
+                                                 Map<Long, InvestmentPoolBo> poolMap, Set<Long> currentPoolIds) {
         // 复用目标范围判断，不按池名或池类型扩大范围
         if (!isProductInboundTarget(pool, poolMap) || currentPoolIds == null) {
             return false;
@@ -3180,8 +3205,15 @@ public class SecurityPoolAdjustService {
         for (Long id : currentPoolIds) {
             InvestmentPoolBo source = poolMap.get(id);
             if (source != null && ProductInboundPoolCodes.SOURCES.contains(source.getPoolCode())
+                    && (crmwUsePoolStatus || !ProductInboundPoolCodes.CRMW.equals(source.getPoolCode()))
                     && !Integer.valueOf(1).equals(source.getIsDeleted())) {
                 return true;
+            }
+        }
+        for (InvestmentPoolBo source : poolMap.values()) {
+            if (ProductInboundPoolCodes.CRMW.equals(source.getPoolCode())
+                    && Integer.valueOf(0).equals(source.getIsDeleted())) {
+                return securityPoolAdjustMapper.querySecurityInCrmwSourcePool(securityCode, source.getId());
             }
         }
         return false;
@@ -3191,19 +3223,21 @@ public class SecurityPoolAdjustService {
      * 为产品库构建快速与原流程候选，来源资格满足时优先快速
      *
      * 执行顺序：
-     * 1. 读取本次已经加载的当前来源状态
+     * 1. 判断证券的当前有效来源
      * 2. 构建 simple_in 快速候选并标记材料豁免依据
      * 3. 保留原特殊或普通流程，未命中快速时仍推荐原流程
      *
+     * @param securityCode 证券代码
      * @param shared 本次校验数据
      * @param pool 产品库目标池
      * @return 当前目标池的流程候选
      */
-    private List<AdjustCheckDto.FlowOption> resolveProductInboundFlowOptions(AdjustSharedData shared,
+    private List<AdjustCheckDto.FlowOption> resolveProductInboundFlowOptions(String securityCode, AdjustSharedData shared,
                                                                            InvestmentPoolBo pool) {
         // 产品库资格独立于信用债简易的评级和历史报告条件，ABS 只提供一般入库流程
         boolean abs = CreditBondSpecialInboundRule.isAbs(shared.getSecurityInfo());
-        boolean matched = !abs && isProductInboundFlowMatched(pool, shared.getPoolMap(), shared.getCurrentPoolIds());
+        boolean matched = !abs && isProductInboundFlowMatched(
+                securityCode, pool, shared.getPoolMap(), shared.getCurrentPoolIds());
         FlowOptionParam fast = new FlowOptionParam();
         fast.setFlowType(FlowType.SIMPLE_INBOUND.getCode());
         fast.setFlowName(resolveFlowName(pool.getSimpleInFlowName(), "产品库快速入库流程"));
@@ -3259,8 +3293,9 @@ public class SecurityPoolAdjustService {
                 AdjustSharedData related = entry.getValue();
                 boolean matched;
                 if (MaterialExemptionType.PRODUCT_SOURCE.getCode().equals(option.getMaterialExemptionType())) {
-                    // 关联码的当前来源状态已经在逐码准入校验时查询
-                    matched = isProductInboundFlowMatched(pool, related.getPoolMap(), related.getCurrentPoolIds());
+                    // 按关联码判断产品库来源资格
+                    matched = isProductInboundFlowMatched(entry.getKey(), pool, related.getPoolMap(),
+                            related.getCurrentPoolIds());
                 } else {
                     AdjustCheckReq relatedReq = new AdjustCheckReq();
                     relatedReq.setSecurityCode(entry.getKey());

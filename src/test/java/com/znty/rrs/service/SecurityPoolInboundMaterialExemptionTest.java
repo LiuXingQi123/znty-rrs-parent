@@ -36,12 +36,15 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** 信用债和产品库快速入库的材料豁免与原入口隔离测试 */
 public class SecurityPoolInboundMaterialExemptionTest {
+
+    private static final long CRMW_POOL_ID = 18L;
 
     /** 六项来源均可使用，来源判断不查询数据库 */
     @Test
@@ -61,9 +64,44 @@ public class SecurityPoolInboundMaterialExemptionTest {
         f.check.setCurrentPoolIds(Collections.<Long>emptySet());
         f.check.setRequestInPoolIds(Collections.singleton(3L));
         assertThat(f.productMatches()).isFalse();
-        assertThat(f.options().get(0).isSelectable()).isFalse();
-        assertThat(f.options().get(1).isRecommended()).isTrue();
-        verifyNoInteractions(f.mapper);
+        List<AdjustCheckDto.FlowOption> options = f.options();
+        assertThat(options.get(0).isSelectable()).isFalse();
+        assertThat(options.get(1).isRecommended()).isTrue();
+        verify(f.mapper, times(2)).querySecurityInCrmwSourcePool("BOND.IB", CRMW_POOL_ID);
+    }
+
+    /** 开关只控制普通 CRMW 来源，组合标的和其他来源始终有效 */
+    @Test
+    public void productShouldAcceptCrmwUnderlyingWithOrWithoutStandardSource() throws Exception {
+        Fixture f = new Fixture();
+        f.check.setCurrentPoolIds(Collections.singleton(CRMW_POOL_ID));
+        assertThat(f.productMatches()).isTrue();
+        ReflectionTestUtils.setField(f.service, "crmwUsePoolStatus", false);
+        assertThat(f.productMatches()).isFalse();
+
+        f.check.setCurrentPoolIds(Collections.emptySet());
+        when(f.mapper.querySecurityInCrmwSourcePool("BOND.IB", CRMW_POOL_ID)).thenReturn(true);
+        assertThat(f.options().get(0).getMaterialExemptionType()).isEqualTo("productSource");
+        assertThat(f.exempt(f.manual, f.submitData())).isTrue();
+        when(f.mapper.querySecurityInCrmwSourcePool("BOND.IB", CRMW_POOL_ID)).thenReturn(false);
+        assertThatThrownBy(() -> f.exempt(f.manual, f.submitData())).isInstanceOf(BizException.class)
+                .hasMessageContaining("来源资格已失效");
+        f.check.setCurrentPoolIds(Collections.singleton(3L));
+        assertThat(f.productMatches()).isTrue();
+    }
+
+    /** 主券有来源时，提交仍复核同组关联码的有效来源 */
+    @Test
+    public void submitShouldRecheckCrmwSourceForRelatedSecurity() throws Exception {
+        Fixture f = new Fixture();
+        SecurityPoolAdjustSubmitReq.AdjustItem related = f.item(2L, "调入", "related", "fast-group");
+        related.setSecurityCode("RELATED.SH");
+        f.request.getItems().add(related);
+        when(f.mapper.querySecurityCurrentPoolIdList("RELATED.SH")).thenReturn(Collections.emptyList());
+        assertThatThrownBy(() -> f.exempt(f.manual, f.submitData())).isInstanceOf(BizException.class)
+                .hasMessageContaining("关联代码[RELATED.SH]快速入库来源资格已失效");
+        when(f.mapper.querySecurityInCrmwSourcePool("RELATED.SH", CRMW_POOL_ID)).thenReturn(true);
+        assertThat(f.exempt(f.manual, f.submitData())).isTrue();
     }
 
     /** 同类型的另一棵树、根节点、非叶子、停用和删除目标均不在范围内 */
@@ -120,7 +158,7 @@ public class SecurityPoolInboundMaterialExemptionTest {
         assertThat(options.get(0).getMaterialExemptionType()).isNull();
         assertThat(options.get(0).getUnmatchReasons()).anyMatch(reason -> reason.contains("RELATED.SH"));
         assertThat(options.get(1).isRecommended()).isTrue();
-        verifyNoInteractions(f.mapper);
+        verify(f.mapper).querySecurityInCrmwSourcePool("RELATED.SH", CRMW_POOL_ID);
     }
 
     /** 单笔匹配不会因配置了批量流程而额外展示批量候选 */
@@ -360,15 +398,16 @@ public class SecurityPoolInboundMaterialExemptionTest {
         assertThat(captor.getValue().getFlowType()).isEqualTo("normalInbound");
     }
 
-    /** 来源变化使用本次已经加载的集合判断，不再发起来源查询 */
+    /** 普通来源失效且组合来源未命中时拒绝使用产品库豁免 */
     @Test
-    public void lostSourceShouldFailWithoutAdditionalDatabaseQuery() throws Exception {
+    public void lostSourceShouldFailWhenCrmwSourceAlsoMissing() throws Exception {
         Fixture f = new Fixture();
         Object shared = f.submitData();
         ReflectionTestUtils.setField(shared, "currentPoolIds", Collections.emptySet());
         assertThatThrownBy(() -> f.exempt(f.manual, shared)).isInstanceOf(BizException.class)
                 .hasMessageContaining("来源资格已失效");
-        verifyNoInteractions(f.mapper, f.flowMapper);
+        verify(f.mapper).querySecurityInCrmwSourcePool("BOND.IB", CRMW_POOL_ID);
+        verifyNoInteractions(f.flowMapper);
     }
 
     /** 自愿补充报告仍检查有效引用，普通申请按资格豁免 */
@@ -399,6 +438,18 @@ public class SecurityPoolInboundMaterialExemptionTest {
         assertThat(directLogs.get(0).getAdjustType()).isEqualTo("Excel导入");
     }
 
+    /** Excel 提交已取得产品库豁免的主项时复核来源 */
+    @Test
+    public void excelImportShouldRecheckClaimedProductSource() throws Exception {
+        Fixture f = new Fixture();
+        f.request.setAdjustType(SecurityPoolAdjustService.EXCEL_IMPORT_ADJUST_TYPE);
+        f.check.setCurrentPoolIds(Collections.emptySet());
+        Object shared = f.submitData();
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(f.service, "executeInboundSubmit", f.request,
+                shared, null, new ArrayList<IpAdjustLogBo>()))
+                .isInstanceOf(BizException.class).hasMessageContaining("来源资格已失效");
+    }
+
     /** 构造完整的产品库、当前来源和直接生效流程，供各业务场景复用 */
     private static class Fixture {
         final SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
@@ -414,12 +465,14 @@ public class SecurityPoolInboundMaterialExemptionTest {
         final SecurityPoolAdjustSubmitReq.AdjustItem manual = item(2L, "调入", "manual", "fast-group");
 
         Fixture() {
+            ReflectionTestUtils.setField(service, "crmwUsePoolStatus", true);
             ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
             ReflectionTestUtils.setField(service, "flowMapper", flowMapper);
             ReflectionTestUtils.setField(service, "sysAttachmentService", attachments);
             pools.put(1L, root);
             pools.put(2L, target);
             pools.put(3L, source);
+            pools.put(CRMW_POOL_ID, pool(CRMW_POOL_ID, null, ProductInboundPoolCodes.CRMW));
             target.setSimpleInFlowId(105L);
             target.setSimpleInFlowKey("bond:fast-inbound");
             target.setInFlowId(103L);
@@ -451,6 +504,7 @@ public class SecurityPoolInboundMaterialExemptionTest {
             pool.setPoolCode(code);
             pool.setPoolName(code);
             pool.setStatus("enabled");
+            pool.setIsDeleted(0);
             pool.setPoolType("bond_product");
             return pool;
         }
@@ -474,12 +528,15 @@ public class SecurityPoolInboundMaterialExemptionTest {
         }
 
         boolean productMatches() {
-            return ReflectionTestUtils.invokeMethod(service, "isProductInboundFlowMatched", target, pools,
+            return ReflectionTestUtils.invokeMethod(service, "isProductInboundFlowMatched", request.getSecurityCode(),
+                    target, pools,
                     check.getCurrentPoolIds());
         }
 
         List<AdjustCheckDto.FlowOption> options() {
-            return ReflectionTestUtils.invokeMethod(service, "resolveAdjustFlowOptionsForItem", new AdjustCheckReq(),
+            AdjustCheckReq req = new AdjustCheckReq();
+            req.setSecurityCode(request.getSecurityCode());
+            return ReflectionTestUtils.invokeMethod(service, "resolveAdjustFlowOptionsForItem", req,
                     check, checkItem());
         }
 

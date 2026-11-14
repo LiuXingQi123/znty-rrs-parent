@@ -136,17 +136,31 @@
                 )
             </if>
             <if test="direction == 'in'">
-                <!-- 调入：任一已选来源有效在池（统一查询 ip_pool_status） -->
-                AND EXISTS (
+                <!-- 调入：普通来源与 CRMW 组合来源任一命中即可 -->
+                AND (
+                    EXISTS (
                         SELECT 1
                         FROM ip_pool_status src
                         WHERE src.security_code = si.wind_code
                           AND src.audit_status = '20'
                           AND src.is_deleted = 0
                           AND src.target_pool_id IN
-                        <foreach collection="sourcePoolIds" item="srcPoolId" open="(" separator="," close=")">
-                            #{srcPoolId}
-                        </foreach>
+                            <foreach collection="sourcePoolIds" item="srcPoolId" open="(" separator="," close=")">
+                                #{srcPoolId}
+                            </foreach>
+                          <if test="crmwSourcePoolId != null">
+                              AND src.target_pool_id != #{crmwSourcePoolId}
+                          </if>
+                    )
+                    <if test="crmwSourcePoolId != null">
+                        OR si.wind_code IN (
+                            SELECT src.security_code
+                            FROM ip_pool_status_crmw src
+                            WHERE src.target_pool_id = #{crmwSourcePoolId}
+                              AND src.audit_status = '20'
+                              AND src.is_deleted = 0
+                        )
+                    </if>
                 )
             </if>
             <if test="securityCode != null and securityCode != ''">

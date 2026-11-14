@@ -1,5 +1,6 @@
 package com.znty.rrs.entity.stocksecuritybatchadjust;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.znty.rrs.common.PageRequest;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -55,6 +56,10 @@ public class StockSecurityBatchAdjustReq extends PageRequest {
      * 白名单 pool_code：crmw_root / credit_bond_level_1~3 / convertible_bond_core / convertible_bond_focus
      */
     private List<Long> sourcePoolIds;
+
+    /** 本次勾选的 CRMW 来源池 ID，由后端解析 */
+    @JsonIgnore
+    private Long crmwSourcePoolId;
 
     /** 主体全称（沿用模糊匹配 issuer / issuer_code） */
     private String issuer;

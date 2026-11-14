@@ -123,6 +123,10 @@ public interface SecurityPoolAdjustMapper {
     /** 查询证券当前有效所在池 ID 列表（audit_status=20） */
     List<Long> querySecurityCurrentPoolIdList(@Param("securityCode") String securityCode);
 
+    /** 判断标的证券是否在 CRMW 库存在有效组合 */
+    boolean querySecurityInCrmwSourcePool(@Param("securityCode") String securityCode,
+                                          @Param("poolId") Long poolId);
+
     /** 查询目标投资池当前有效证券数量 */
     int queryPoolCurrentCount(@Param("poolId") Long poolId);
 
