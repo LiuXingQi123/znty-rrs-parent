@@ -128,9 +128,10 @@ Mapper       ── 数据库操作接口，对应 XML
 - **表达**：使用中文大白话，简单易懂，讲清楚做什么、为什么这样做，不堆术语
 - **编号**：多步骤说明按实际执行顺序使用 `1.`、`2.`、`3.`、`4.`… 连续编号，一条说明一个步骤；方法内部的多步骤注释也按此编号，不为凑数量拆分步骤
 - **标点**：注释正文、步骤及 `@param` / `@return` 说明末尾不加句号
-- **类**：Javadoc，说明职责；Controller / Mapper 类使用单行 `/** 说明 */`
+- **类**：Javadoc，说明职责。Controller 类使用单行 `/** 说明 */`，Mapper 接口使用多行 Javadoc
 - **字段**：`/** 字段说明 */`，**必须保留**（如 `/** 证券池批量调整数据访问组件 */` 紧邻 `private BatchSecurityPoolAdjustMapper batchSecurityPoolAdjustMapper;`），禁止以“字面翻译型注释”为由删除；判断特征：注释描述的是该字段的用途/类型/职责，与下一行字段声明直接对应
-- **Controller / Mapper 方法**：使用单行 Javadoc，如 `/** 分页查询流程列表 */`，简洁说明接口用途或数据库操作，不展开 Service 的执行步骤
+- **Controller 方法**：使用单行 Javadoc，如 `/** 分页查询流程列表 */`，简洁说明接口用途
+- **Mapper 方法**：使用多行 Javadoc，说明数据库操作、参数和返回值，格式见下文「Mapper 方法注释模板」
 - **Service 方法**：包括私有方法，使用下方多行 Javadoc 格式，先说明用途，再写必要的业务原因或限制，随后用「执行顺序：」列出编号步骤，最后写 `@param` / `@return`；无参数时省略 `@param`，返回 `void` 时省略 `@return`，简单方法按实际逻辑写步骤
 - **其他方法**：Javadoc，说明用途，关键参数加 `@param`
 - **方法内部**：关键步骤添加简洁单行注释；**调用其他私有方法时，必须在调用行上方添加 `//` 注释说明调用目的**（如 `// 构建白名单流程候选项`），禁止省略；该注释属于“调用目的说明”，不得当作“字面翻译型注释”误删
@@ -225,8 +226,24 @@ public PageResult<FlowDto> queryFlowPage(FlowReq req) {
 
 ## Mapper 规范
 
-- 类和每个方法使用单行 `/** 说明 */` 注释，简洁说明用途，末尾不加句号
+- 接口使用多行 Javadoc，说明负责的数据对象和主要职责
+- 方法使用多行 Javadoc，首行概括数据库操作的用途，按实际行为补充影响调用的筛选条件、空结果含义、回填字段或锁定行为
+- 按方法声明顺序为每个参数写 `@param`，参数名使用 Java 签名中的名称。非 `void` 方法写 `@return`，说明返回数据的含义。写操作返回行数时，说明是受影响的行数
+- 无参数时省略 `@param`，返回 `void` 时省略 `@return`。注释正文和标签说明末尾不加句号
 - 只定义接口，SQL 在对应 XML 中编写
+
+### Mapper 方法注释模板
+
+```java
+/**
+ * 统计指定流程 Key 下未删除的流程定义，用于校验 Key 是否重复
+ *
+ * @param flowKey 待校验的流程 Key
+ * @param excludeId 编辑时排除的流程定义 ID，为 {@code null} 时不排除记录
+ * @return 符合条件的流程定义数量
+ */
+int countByFlowKey(@Param("flowKey") String flowKey, @Param("excludeId") Long excludeId);
+```
 
 ---
 
