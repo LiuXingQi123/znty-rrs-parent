@@ -1,12 +1,24 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.entity.bo.PoolRelationBo;
+import com.znty.rrs.entity.schedule.PoolSecurityRowDto;
+import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
+import com.znty.rrs.mapper.AutoAdjustMapper;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * 自动调库池关系拦截（对齐老 AdjustPoolByRule 关系 11 / 12）。
+ * 自动调库池关系校验与候选数据查询
+ *
+ * 供到期出池、旗下债券同步和 ABS 对账读取池关系、在池状态及在途流程
  */
 final class AutoAdjustRestrictHelper {
 
@@ -14,8 +26,63 @@ final class AutoAdjustRestrictHelper {
     static final long COMPANY_FORBIDDEN_POOL_ID = 15L;
     /** 管理办法（三）：重点观察名单 */
     static final long KEY_WATCH_POOL_ID = 23L;
+    /** 每次批量读取的证券或主体编码上限 */
+    static final int QUERY_BATCH_SIZE = 500;
 
     private AutoAdjustRestrictHelper() {
+    }
+
+    /**
+     * 提取本组待处理的不同证券代码
+     *
+     * 重复的候选记录共用同一份查询结果
+     *
+     * @param candidates 本组待处理的证券记录
+     * @return 去掉空代码和重复代码后的列表
+     */
+    static List<String> candidateCodes(List<ScheduledAdjustCandidateDto> candidates) {
+        return candidates.stream().filter(Objects::nonNull).map(ScheduledAdjustCandidateDto::getSecurityCode)
+                .filter(StringUtils::hasText).distinct().collect(Collectors.toList());
+    }
+
+    /**
+     * 按证券代码分批读取生效池状态
+     *
+     * 同一只债券在同一池可能有多条入池依据，保留每条记录供跟随出池判断
+     *
+     * 执行顺序：
+     * 1. 按每批数量上限查询候选证券的生效池状态
+     * 2. 将每条状态记录的池 ID 按证券代码归组
+     *
+     * @param mapper 自动调库查询组件
+     * @param codes 本组去重后的证券代码
+     * @return 证券代码及其每条生效记录对应的池 ID
+     */
+    static Map<String, List<Long>> queryActivePools(AutoAdjustMapper mapper, List<String> codes) {
+        Map<String, List<Long>> poolsByCode = new HashMap<>();
+        for (int offset = 0; offset < codes.size(); offset += QUERY_BATCH_SIZE) {
+            List<String> batch = codes.subList(offset, Math.min(offset + QUERY_BATCH_SIZE, codes.size()));
+            for (PoolSecurityRowDto row : mapper.queryActiveSecurityPoolRows(batch)) {
+                poolsByCode.computeIfAbsent(row.getSecurityCode(), key -> new ArrayList<>()).add(row.getPoolId());
+            }
+        }
+        return poolsByCode;
+    }
+
+    /**
+     * 分批查询存在待处理调库步骤的证券
+     *
+     * @param mapper 自动调库查询组件
+     * @param codes 本组去重后的证券代码
+     * @return 存在待处理调库步骤的证券代码集合
+     */
+    static Set<String> queryPendingCodes(AutoAdjustMapper mapper, List<String> codes) {
+        Set<String> pending = new HashSet<>();
+        for (int offset = 0; offset < codes.size(); offset += QUERY_BATCH_SIZE) {
+            List<String> batch = codes.subList(offset, Math.min(offset + QUERY_BATCH_SIZE, codes.size()));
+            pending.addAll(mapper.queryPendingSecurityCodes(batch));
+        }
+        return pending;
     }
 
     /**

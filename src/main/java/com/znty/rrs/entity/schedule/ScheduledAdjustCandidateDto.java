@@ -27,6 +27,9 @@ public class ScheduledAdjustCandidateDto extends IpAdjustLogBo {
     /** 到期日，格式 yyyyMMdd */
     private String maturityDate;
 
+    /** 到期出池候选是否已在任一调出限制池中 */
+    private boolean outRestricted;
+
     /** 近一年认可外评孰低值 */
     private String outerRating;
 

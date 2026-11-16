@@ -152,9 +152,13 @@ public class AutoAdjustService implements RrsScheduledTask {
      *
      * 执行顺序：
      * 1. 解析扩展参数和关系配置得到扫描池
-     * 2. 读取投资池和关系配置，准备调库所需信息
-     * 3. 逐池查询到期证券并按业务条件判断是否处理
-     * 4. 统计各池实际出池和未处理数量
+     * 2. 读取投资池信息
+     * 3. 准备本轮批次和提交时间
+     * 4. 读取池关系配置
+     * 5. 逐池查询到期候选，同时标记调出限制命中结果
+     * 6. 跳过缺少证券代码或命中限制的候选
+     * 7. 软删可调出的记录，实际删到才写出池日志
+     * 8. 统计各池实际出池和未处理数量
      *
      * @param taskName 任务展示名称
      * @param detail 过程日志
@@ -184,7 +188,7 @@ public class AutoAdjustService implements RrsScheduledTask {
         // 4. 读取全量池关系，供调出限制池校验
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
         AutoOutSummary summary = new AutoOutSummary();
-        // 5. 逐个目标池扫描和处理到期证券
+        // 5. 逐池扫描到期证券，同时标记调出限制命中结果
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
@@ -192,11 +196,11 @@ public class AutoAdjustService implements RrsScheduledTask {
                 skipDetail(detail, "目标池【" + poolId + "】不存在，本轮未处理");
                 continue;
             }
-            // 5.1 读取当前目标池的调出限制池
+            // 传入本目标池配置的调出限制池，随候选一起检查
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
             List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryPoolSecurityByExpired(
-                    poolId, maturityOffsetDays);
+                    poolId, maturityOffsetDays, outRestrictPoolIds);
             if (expiredList == null || expiredList.isEmpty()) {
                 summary.addPool(poolId, pool.getPoolName(), 0, 0, 0);
                 infoDetail(detail, "扫描结果：池【" + pool.getPoolName() + "】没有发现到期证券");
@@ -204,28 +208,27 @@ public class AutoAdjustService implements RrsScheduledTask {
             }
             int poolCount = 0;
             int poolSkippedCount = 0;
+            // 6. 跳过缺少证券代码或命中调出限制的候选
             for (ScheduledAdjustCandidateDto sec : expiredList) {
                 if (sec == null || !StringUtils.hasText(sec.getSecurityCode())) {
                     poolSkippedCount++;
                     skipDetail(detail, "扫描结果缺少证券编码，无法处理");
                     continue;
                 }
-                // 5.2 对齐老 AdjustPoolByRule.checkSecurityOutPoolRelation（关系 12 / 调出限制池），命中时跳过
-                if (AutoAdjustRestrictHelper.isInAnyPool(
-                        securityPoolAdjustMapper.querySecurityCurrentPoolIdList(sec.getSecurityCode()),
-                        outRestrictPoolIds)) {
+                // 使用候选查询返回的调出限制结果
+                if (sec.isOutRestricted()) {
                     poolSkippedCount++;
                     skipDetail(detail, "证券【" + sec.getSecurityCode() + "】：当前位于调出限制池，本轮不处理");
                     continue;
                 }
-                // 5.3 软删除目标池状态，未删到时视为已被其他处理提前出池
+                // 7. 软删仍在目标池的记录，实际删到才写出池日志
                 int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(sec.getSecurityCode(), poolId);
                 if (deleted == 0) {
                     poolSkippedCount++;
                     skipDetail(detail, "证券【" + sec.getSecurityCode() + "】：当前已不在目标池，本轮不处理");
                     continue;
                 }
-                // 5.4 准备自动出池日志字段
+                // 保留实际到期日和任务使用的日期口径
                 sec.setAdjustType("自动调整");
                 sec.setAdjustMode(AdjustMode.OUT.getCode());
                 sec.setTargetPoolId(poolId);
@@ -238,15 +241,15 @@ public class AutoAdjustService implements RrsScheduledTask {
                         ScheduledAdjustLogHelper.dateDetail("到期日", sec.getMaturityDate()),
                         "出池口径：" + maturityRule);
                 sec.setAdjustReason(reason);
-                // 5.5 生成批次号并写入自动出池日志
+                // 以本次出池证券和目标池生成批次号
                 String batchNo = batchNoContext.resolveBondBatchNo(
                         sec.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
                 sec.setAdjustBatchNo(batchNo);
                 sec.setSubmitTime(submitTime);
-                // 5.6 软删除成功后写入自动出池日志
                 securityPoolAdjustMapper.addAdjustLog(sec);
                 poolCount++;
             }
+            // 8. 分别汇总本池候选、实际出池和未处理数量
             summary.addPool(poolId, pool.getPoolName(), expiredList.size(), poolCount, poolSkippedCount);
             infoDetail(detail, "处理结果：池【" + pool.getPoolName() + "】实际出池 "
                     + poolCount + " 条，未处理 " + poolSkippedCount + " 条");

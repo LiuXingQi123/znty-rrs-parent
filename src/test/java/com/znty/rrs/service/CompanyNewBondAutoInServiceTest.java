@@ -6,6 +6,7 @@ import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
+import com.znty.rrs.entity.schedule.PoolSecurityRowDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -19,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 在池主体旗下债券自动入池任务单元测试。
+ * 在池主体旗下债券自动入池任务单元测试
  */
 public class CompanyNewBondAutoInServiceTest {
 
@@ -71,6 +73,7 @@ public class CompanyNewBondAutoInServiceTest {
         verify(mapper, never()).queryCompanyNewBondForAutoIn(any(), eq(17L), any(), any());
     }
 
+    /** 批量读取所在池，同一映射共用一次容量查询，入池成功后调出互斥池 */
     @Test
     public void executeShouldInsertNewBonds() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -94,6 +97,7 @@ public class CompanyNewBondAutoInServiceTest {
         pool.setPoolName("债券禁止库");
         pool.setPoolType("forbidden");
         pool.setStatus("enabled");
+        pool.setMaxCapacity(1L);
         InvestmentPoolBo relatedPool = new InvestmentPoolBo();
         relatedPool.setId(3L);
         relatedPool.setPoolName("二级库");
@@ -109,10 +113,16 @@ public class CompanyNewBondAutoInServiceTest {
         bond.setSecurityType("mtn");
         bond.setIssuerCode("C001");
         bond.setIssuerName("测试集团");
+        ScheduledAdjustCandidateDto overflowBond = new ScheduledAdjustCandidateDto();
+        overflowBond.setSecurityCode("BOND002.IB");
+        overflowBond.setIssuerCode("C001");
         when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L), isNull(),
-                any(CompanyBondTypeScopeBo.class))).thenReturn(Arrays.asList(bond));
-        when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("BOND001.IB"))
-                .thenReturn(Arrays.asList(3L));
+                any(CompanyBondTypeScopeBo.class))).thenReturn(Arrays.asList(bond, overflowBond));
+        PoolSecurityRowDto inPool = new PoolSecurityRowDto();
+        inPool.setSecurityCode("BOND001.IB");
+        inPool.setPoolId(3L);
+        when(autoAdjustMapper.queryActiveSecurityPoolRows(Arrays.asList("BOND001.IB", "BOND002.IB")))
+                .thenReturn(Collections.singletonList(inPool));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(9001L);
@@ -145,14 +155,18 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
         assertThat(result.getTaskName()).isEqualTo("在池主体旗下债券自动入池（已排除ABS债）（仅债券）");
-        assertThat(result.getMessage()).contains("任务完成：扫描候选债券 1 条，实际入池 1 条，未处理 0 条")
-                .contains("主体池债券禁止库（15）→债券池债券禁止库（15）：扫描 1 条，入池 1 条，未处理 0 条");
+        assertThat(result.getMessage()).contains("任务完成：扫描候选债券 2 条，实际入池 1 条，未处理 1 条")
+                .contains("主体池债券禁止库（15）→债券池债券禁止库（15）：扫描 2 条，入池 1 条，未处理 1 条");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
         ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
         verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L), isNull(), scopeCaptor.capture());
         assertThat(scopeCaptor.getValue().isExcludeAbs()).isTrue();
         assertThat(scopeCaptor.getValue().getExcludedSecurityTypes()).isEmpty();
         verify(securityPoolAdjustMapper).deletePoolStatusSoft("BOND001.IB", 3L);
+        verify(autoAdjustMapper).queryActiveSecurityPoolRows(Arrays.asList("BOND001.IB", "BOND002.IB"));
+        verify(securityPoolAdjustMapper).queryPoolCurrentCount(15L);
+        verify(securityPoolAdjustMapper, never()).querySecurityCurrentPoolIdList(any());
+        verify(scheduledTaskMapper).queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE);
     }
 
     @Test

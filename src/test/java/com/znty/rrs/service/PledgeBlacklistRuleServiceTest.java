@@ -7,6 +7,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -14,6 +15,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /** 黑名单质押库三条件统一判定测试。 */
@@ -108,5 +111,29 @@ public class PledgeBlacklistRuleServiceTest {
         assertThatThrownBy(() -> service.evaluate("C005"))
                 .isInstanceOf(BizException.class)
                 .hasMessageContaining("未配置有效外部评级机构");
+    }
+
+    /** 定时任务跨组复用已查过的主体判定，包括未命中的结果 */
+    @Test
+    public void scheduledDecisions_ShouldQueryEachCompanyOnceAcrossGroups() {
+        List<String> agencies = Collections.singletonList("2");
+        when(autoAdjustMapper.queryScheduledBlacklistCompanyCodes(Arrays.asList("C001", "C002"),
+                agencies, 15L, 23L)).thenReturn(Collections.singletonList("C001"));
+        when(autoAdjustMapper.queryScheduledBlacklistCompanyCodes(Collections.singletonList("C003"),
+                agencies, 15L, 23L)).thenReturn(Collections.singletonList("C003"));
+
+        PledgeBlacklistRuleService.ScheduledDecisions decisions = service.scheduledDecisions();
+        decisions.load(Arrays.asList("C001", "C001", "C002"));
+        decisions.load(Arrays.asList("C002", "C003"));
+
+        assertThat(decisions.matches("C001")).isTrue();
+        assertThat(decisions.matches("C002")).isFalse();
+        assertThat(decisions.matches("C003")).isTrue();
+        verify(externalRatingAgencyService).queryRequiredAgencyCodeList();
+        verify(autoAdjustMapper).queryScheduledBlacklistCompanyCodes(Arrays.asList("C001", "C002"),
+                agencies, 15L, 23L);
+        verify(autoAdjustMapper).queryScheduledBlacklistCompanyCodes(Collections.singletonList("C003"),
+                agencies, 15L, 23L);
+        verifyNoMoreInteractions(autoAdjustMapper);
     }
 }

@@ -261,6 +261,31 @@ public class AbsIdentityServiceTest {
         verify(mapper, never()).editApprovedIdentity(any());
     }
 
+    /** 批量读取的已有待确认日志用于回填简称，避免生成第二条待确认日志 */
+    @Test
+    public void scheduledInboundShouldReuseBatchedPendingLog() {
+        master.setIssuerCode(null);
+        master.setIssuer(null);
+        ScheduledAdjustCandidateDto candidate = new ScheduledAdjustCandidateDto();
+        candidate.setSecurityCode("ABS1");
+        candidate.setSecurityShortName("测试ABS");
+        candidate.setSecurityType("abs");
+        IpAdjustLogBo existing = new IpAdjustLogBo();
+        existing.setId(10L);
+        existing.setSecurityCode("ABS1");
+        when(mapper.queryPendingScheduledInboundLogs(Collections.singletonList("ABS1"), 101L))
+                .thenReturn(Collections.singletonList(existing));
+
+        AbsCompanySyncService.ScheduledReads reads =
+                syncService.loadScheduledReads(Collections.singletonList("ABS1"), 101L, true);
+        assertThat(syncService.allowScheduledSync(candidate, "B", 101L, "任意业务池", true, 101L, reads)).isFalse();
+
+        verify(mapper).editPendingScheduledInboundSecurityShortName(10L, "测试ABS");
+        verify(mapper, never()).queryLatestSyncAlert(any(), any());
+        verify(mapper, never()).queryPendingScheduledInboundLog(any(), any());
+        verify(securityMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
+    }
+
     /** 主档尚未确认主体时，人工联动和定时任务写同样的提醒和待确认日志，都不提前落池 */
     @Test
     public void manualAndScheduledInboundShouldUseSamePendingRule() {

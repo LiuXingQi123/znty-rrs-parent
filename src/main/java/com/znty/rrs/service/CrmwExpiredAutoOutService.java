@@ -31,10 +31,13 @@ import java.util.Map;
  * CRMW到期自动出池
  *
  * 对应老 IP_RULE AdjustRuleCrmwDueOutPool，使用 CRMW 专用池状态表执行到期出池
+ *
+ * 执行顺序：
  * 1. 合并扩展参数和关系配置中的 CRMW 组合池
- * 2. 按 maturityOffsetDays 扫描已生效且凭证到期日早于截止日期的 CRMW 组合
- * 3. 命中调出限制池（关系 12）或并发已出池的记录只跳过并记录原因
+ * 2. 按 maturityOffsetDays 扫描到期的生效组合，同时标记是否命中调出限制池
+ * 3. 跳过缺少凭证代码、命中调出限制或已提前出池的组合
  * 4. 软删除池状态成功后写入自动调库日志，批次按凭证和标的证券组合生成
+ * 5. 汇总各目标池实际出池的组合数量
  */
 @Slf4j
 @Service
@@ -128,9 +131,12 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
      *
      * 执行顺序：
      * 1. 解析扩展参数和关系配置得到扫描池
-     * 2. 读取 CRMW 池、批次时间和调出限制池配置
-     * 3. 逐池查询到期组合并按限制关系和当前池状态判断是否处理
-     * 4. 写入自动出池日志并汇总各池结果
+     * 2. 读取投资池信息，准备本轮批次和提交时间
+     * 3. 读取池关系配置
+     * 4. 逐池按凭证到期日查询组合，并按标的、凭证和凭证类型标记调出限制
+     * 5. 跳过缺少凭证编码或命中限制的组合
+     * 6. 软删可调出的组合，实际删到才写出池日志
+     * 7. 汇总各池实际出池数量
      *
      * @param taskName 任务展示名称
      * @param detail 过程日志
@@ -154,38 +160,34 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         // 3. 读取全量池关系，供调出限制池校验
         List<PoolRelationBo> allRelations = crmwPoolAdjustMapper.queryAllPoolRelationList();
         AutoOutSummary summary = new AutoOutSummary();
-        // 4. 逐个目标池扫描和处理到期 CRMW
+        // 4. 逐池扫描到期组合，同时标记调出限制命中结果
         for (Long poolId : poolIds) {
             InvestmentPoolBo pool = poolMap.get(poolId);
             if (pool == null) {
                 warnDetail(detail, "池[" + poolId + "]不存在，跳过");
                 continue;
             }
-            // 4.1 读取当前目标池的调出限制池
+            // 取本目标池的调出限制配置，供候选查询按 CRMW 组合匹配
             List<Long> outRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
-            // 4.2 按配置天数查询凭证到期日早于截止日期的 CRMW 组合
             List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryCrmwPoolByExpired(
-                    poolId, maturityOffsetDays);
+                    poolId, maturityOffsetDays, outRestrictPoolIds);
             if (expiredList == null || expiredList.isEmpty()) {
                 infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 无到期 CRMW");
                 continue;
             }
             int poolCount = 0;
+            // 5. 跳过缺少凭证编码或命中调出限制的组合
             for (ScheduledAdjustCandidateDto item : expiredList) {
-                // 4.3 缺少 CRMW 凭证编码时无法生成组合批次，直接跳过
                 if (item == null || !StringUtils.hasText(item.getCrmwScode())) {
                     continue;
                 }
-                // 4.4 对齐老 AdjustPoolByRule.checkSecurityOutPoolRelation（关系 12 / 调出限制池），命中时跳过
-                if (AutoAdjustRestrictHelper.isInAnyPool(
-                        crmwPoolAdjustMapper.querySecurityCurrentPoolIdList(
-                                item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype()),
-                        outRestrictPoolIds)) {
+                // 使用候选查询返回的调出限制结果
+                if (item.isOutRestricted()) {
                     warnDetail(detail, "CRMW[" + item.getCrmwScode() + "]当前在调出限制池中，跳过");
                     continue;
                 }
-                // 4.5 软删除目标池状态，未删到时视为已被其他处理提前出池
+                // 6. 软删仍在目标池的组合，实际删到才写出池日志
                 int deleted = crmwPoolAdjustMapper.deletePoolStatusSoft(
                         item.getSecurityCode(), item.getCrmwScode(), item.getCrmwStype(), poolId);
                 if (deleted == 0) {
@@ -193,7 +195,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                             + "]软删失败（可能并发已出池），跳过");
                     continue;
                 }
-                // 4.6 准备自动出池日志字段
+                // 保留凭证实际到期日和任务使用的日期口径
                 item.setAdjustType("自动调整");
                 item.setAdjustMode(AdjustMode.OUT.getCode());
                 item.setTargetPoolId(poolId);
@@ -206,7 +208,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                         ScheduledAdjustLogHelper.dateDetail("凭证到期日", item.getMaturityDate()),
                         "出池口径：" + maturityRule);
                 item.setAdjustReason(reason);
-                // 4.7 按 CRMW 凭证和标的证券组合生成自动调库批次号
+                // 按 CRMW 凭证和标的证券组合生成自动调库批次号
                 String batchNo = batchNoContext.resolveCrmwBatchNo(
                         item.getCrmwScode(), item.getSecurityCode(), poolId, AdjustMode.OUT.getCode());
                 item.setAdjustBatchNo(batchNo);
@@ -214,7 +216,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                 crmwPoolAdjustMapper.addAdjustLog(item);
                 poolCount++;
             }
-            // 4.8 记录当前目标池实际出池数量
+            // 7. 汇总当前目标池实际出池数量
             summary.addPool(poolId, pool.getPoolName(), poolCount);
             infoDetail(detail, "池[" + pool.getPoolName() + "](" + poolId + ") 调出 " + poolCount + " 条");
         }

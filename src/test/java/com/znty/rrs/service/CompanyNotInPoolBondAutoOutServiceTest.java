@@ -6,6 +6,7 @@ import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
+import com.znty.rrs.entity.schedule.PoolSecurityRowDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -18,6 +19,7 @@ import org.junit.runners.Parameterized;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,9 +41,11 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         return new Object[]{false, true};
     }
 
+    /** 撤销跟随记录后，目标池是否仍有其他有效入池依据 */
     @Parameterized.Parameter
     public boolean independentStatusRemains;
 
+    /** 批量查询后保留在途债券，撤销最后一条入池依据时才记出池日志 */
     @Test
     public void execute_ShouldOutBondWhenCompanyNotInPool() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -74,19 +78,30 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         bond.setSecurityShortName("某债");
         bond.setIssuerCode("C001");
         bond.setIssuerName("测试集团");
+        ScheduledAdjustCandidateDto pending = new ScheduledAdjustCandidateDto();
+        pending.setSecurityCode("B002");
+        pending.setPoolStatusId(124L);
         when(autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(eq(15L),
                 eq(new java.util.LinkedHashSet<>(java.util.Arrays.asList(15L, 16L)))))
-                .thenReturn(Collections.singletonList(bond));
+                .thenReturn(Arrays.asList(bond, pending));
         when(autoAdjustMapper.deleteCompanyFollowedBondStatus(123L)).thenReturn(1);
-        when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("B001"))
-                .thenReturn(Collections.singletonList(15L))
-                .thenReturn(independentStatusRemains ? Collections.singletonList(15L) : Collections.emptyList());
+        PoolSecurityRowDto inPool = new PoolSecurityRowDto();
+        inPool.setSecurityCode("B001");
+        inPool.setPoolId(15L);
+        when(autoAdjustMapper.queryActiveSecurityPoolRows(Arrays.asList("B001", "B002")))
+                .thenReturn(independentStatusRemains ? Arrays.asList(inPool, inPool) : Collections.singletonList(inPool));
+        when(autoAdjustMapper.queryPendingSecurityCodes(Arrays.asList("B001", "B002")))
+                .thenReturn(Collections.singletonList("B002"));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
 
         assertThat(result.isSuccess()).isTrue();
         verify(autoAdjustMapper).deleteCompanyFollowedBondStatus(123L);
+        verify(autoAdjustMapper, never()).deleteCompanyFollowedBondStatus(124L);
+        verify(autoAdjustMapper).queryActiveSecurityPoolRows(Arrays.asList("B001", "B002"));
+        verify(autoAdjustMapper).queryPendingSecurityCodes(Arrays.asList("B001", "B002"));
+        verify(securityPoolAdjustMapper, never()).querySecurityCurrentPoolIdList(any());
         if (independentStatusRemains) {
             assertThat(result.getAffectedCount()).isZero();
             verify(securityPoolAdjustMapper, never()).addAdjustLog(any());

@@ -48,15 +48,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
- * 主体下ABS债券自动入库（区分已确认发行人和未确认发行人）
+ * 主体下ABS债券自动入库（区分已确认发行人和未确认发行人）（仅债券）
  *
- * ABS 的进出池由本任务统一按池做全量对账，先算出按规则应在池的记录，再与实际在池记录求差集
- * 1. 已确认发行主体的 ABS 直接跟随发行主体入池、出池
- * 2. 未确认发行主体的 ABS 只生成 absCompanySync 规则提醒与待确认调库日志，等研究员确认身份后由下一轮对账落池
- * 3. 判定统一复用 AbsCompanySyncService.allowScheduledSync，债级独立入库依据、未结束调库流程、其他关联主体是否仍在池、黑名单质押库三条件和提醒幂等都由该入口处理
- * 4. 数据通过 ABS 主档、四类关联主体、各池生效主体、各池生效 ABS 四条批量查询装载，在内存中完成差集计算
+ * ABS 按目标池对账，在同一个池内先处理出池，再处理入池
+ *
+ * 执行顺序：
+ * 1. 批量读取 ABS 主档、四类关联主体、各池生效主体和各池生效 ABS，确定扫描范围
+ * 2. 比较应在池与实际在池的证券，筛出已失去主体依据的出池候选
+ * 3. 检查出池保护，命中保护时只留提醒，符合条件时写出池记录
+ * 4. 筛选仍有主体依据的入池候选，主体未确认时只生成提醒和待确认日志，符合条件的已确认主体债券写入池记录
+ * 5. 汇总各池入池、出池、提醒和失败结果
  */
 @Slf4j
 @Service
@@ -406,12 +410,12 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     }
 
     /**
-     * 执行出池，逐只过保护后落库
+     * 处理已失去主体依据的 ABS 出池候选
      *
      * 执行顺序：
-     * 1. 逐只走统一联动判定，命中债级独立依据、在途流程或其他关联主体仍在池时只留提醒
-     * 2. 软删池状态，并发已出池的跳过
-     * 3. 写自动调库日志并累计出池数量
+     * 1. 批量读取本池候选的最新联动提醒和在途流程
+     * 2. 逐只判断出池保护，命中独立入池依据、在途流程或其他主体依据时只留提醒
+     * 3. 软删允许出池的记录，实际删到才写日志并计数
      *
      * @param candidates 待出池的 ABS 主档列表
      * @param pool 单池上下文
@@ -421,26 +425,27 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      */
     private void executeOut(List<AbsBondCandidateDto> candidates, PoolContext pool, AbsSyncContext context,
                             PoolResult result, TaskDetailLog detail) {
+        // 1. 按本池候选批量读取提醒与在途流程
+        AbsCompanySyncService.ScheduledReads reads = absCompanySyncService.loadScheduledReads(candidates.stream()
+                .map(AbsBondCandidateDto::getSecurityCode).collect(Collectors.toList()), pool.bondPoolId, false);
         for (AbsBondCandidateDto abs : candidates) {
-            // 1.1 已确认发行人沿用主档主体进行出池保护校验
+            // 2. 以主档主体和本阶段读到的记录判断能否出池
             String trigger = StringUtils.hasText(abs.getIssuerCode()) ? abs.getIssuerCode().trim() : null;
-            // 1.2 生成出池方向的调库日志对象，原因与批次号一并填好
+            // 填好调库原因和批次号，供出池成功后记账
             ScheduledAdjustCandidateDto candidate = buildAdjustCandidate(abs, pool, context,
                     AdjustMode.OUT.getCode(), REASON_OUT, null, null);
-            // 1.3 统一联动判定，命中保护时只生成提醒
             if (!absCompanySyncService.allowScheduledSync(candidate, trigger, pool.bondPoolId,
-                    pool.bondPool.getPoolName(), false, pool.companyPoolIds.iterator().next())) {
+                    pool.bondPool.getPoolName(), false, pool.companyPoolIds.iterator().next(), reads)) {
                 result.reminderCount++;
                 infoDetail(detail, "ABS[" + abs.getSecurityCode() + "]存在出池保护依据，已生成或保留规则提醒，本轮不自动出池");
                 continue;
             }
-            // 1.4 软删池状态，返回 0 说明并发已出池
+            // 3. 仅本次实际删除生效记录时写出池日志并计数
             int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(abs.getSecurityCode(), pool.bondPoolId);
             if (deleted == 0) {
                 warnDetail(detail, "ABS[" + abs.getSecurityCode() + "]软删失败（可能并发已出池），跳过");
                 continue;
             }
-            // 1.5 写自动出池日志
             if (securityPoolAdjustMapper.addAdjustLog(candidate) != 1) {
                 throw new BizException("ABS[" + abs.getSecurityCode() + "]自动调出日志写入失败");
             }
@@ -523,11 +528,10 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      * 通过后才写调库日志和池状态，最后按互斥关系调出原所在池
      *
      * 执行顺序：
-     * 1. 解析目标池配置的调入限制池
-     * 2. 逐只走统一联动判定，未确认主体或已有结论时只留提醒
-     * 3. 已在调入限制池的跳过，已在目标池生效的跳过
-     * 4. 写自动入池日志与池状态，两条都必须成功
-     * 5. 入池成功后按互斥与反向限制关系调出原所在池
+     * 1. 读取调入限制配置，按本阶段候选批量读取所在池、提醒和待确认日志
+     * 2. 对每只候选检查 ABS 联动条件、调入限制和目标池状态
+     * 3. 对符合条件的候选写入日志和池状态
+     * 4. 入池成功后按互斥与反向限制关系调出原所在池
      *
      * @param candidates ABS 代码到联动触发主体的映射
      * @param pool 单池上下文
@@ -537,9 +541,13 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      */
     private void executeIn(Map<String, String> candidates, PoolContext pool, AbsSyncContext context,
                            PoolResult result, TaskDetailLog detail) {
-        // 1. 解析目标池的调入限制池关系
+        // 1. 读取调入限制配置以及本阶段所需的在池和联动数据
         List<Long> inRestrictPoolIds = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                 pool.bondPoolId, RelationType.IN_RESTRICT.getCode(), context.allRelations);
+        // 在出池处理完后重新读取，后续校验使用本阶段的结果
+        List<String> codes = new ArrayList<>(candidates.keySet());
+        Map<String, List<Long>> poolsByCode = AutoAdjustRestrictHelper.queryActivePools(autoAdjustMapper, codes);
+        AbsCompanySyncService.ScheduledReads reads = absCompanySyncService.loadScheduledReads(codes, pool.bondPoolId, true);
         for (Map.Entry<String, String> entry : candidates.entrySet()) {
             String securityCode = entry.getKey();
             String trigger = entry.getValue();
@@ -550,27 +558,25 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             Long companyPoolId = pool.companyPoolIds.stream()
                     .filter(id -> context.snapshot.companiesOf(id).contains(trigger))
                     .findFirst().orElseThrow(IllegalStateException::new);
-            // 2.1 生成入池方向的调库日志对象，原因与批次号一并填好
+            // 2. 准备带主体依据的调库记录，先查联动结论，再判断是否已在池或命中限制池
             ScheduledAdjustCandidateDto candidate = buildAdjustCandidate(abs, pool, context,
                     AdjustMode.IN.getCode(), REASON_IN, trigger, companyPoolId);
-            // 2.2 统一联动判定，未确认主体或已有处理结论时只生成提醒
             if (!absCompanySyncService.allowScheduledSync(candidate, trigger, pool.bondPoolId,
-                    pool.bondPool.getPoolName(), true, companyPoolId)) {
+                    pool.bondPool.getPoolName(), true, companyPoolId, reads)) {
                 result.reminderCount++;
                 infoDetail(detail, "ABS[" + securityCode + "]主体未确认或存在入池规则提醒，本轮跳过自动入池");
                 continue;
             }
-            // 2.3 查当前实际所在池，用于限制池阻断与并发复核
-            List<Long> currentPoolIds = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(securityCode);
+            List<Long> currentPoolIds = poolsByCode.getOrDefault(securityCode, Collections.emptyList());
             if (AutoAdjustRestrictHelper.isInAnyPool(currentPoolIds, inRestrictPoolIds)) {
                 warnDetail(detail, "ABS[" + securityCode + "]当前在调入限制池中，跳过");
                 continue;
             }
-            if (currentPoolIds != null && currentPoolIds.contains(pool.bondPoolId)) {
+            if (currentPoolIds.contains(pool.bondPoolId)) {
                 infoDetail(detail, "ABS[" + securityCode + "]已在目标池生效，跳过");
                 continue;
             }
-            // 2.4 先写调库日志，再用日志主键写池状态
+            // 3. 先写调库日志，再用日志主键写池状态
             if (securityPoolAdjustMapper.addAdjustLog(candidate) != 1) {
                 throw new BizException("ABS[" + securityCode + "]自动调入日志写入失败");
             }
@@ -579,7 +585,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
                 throw new BizException("ABS[" + securityCode + "]写入池状态失败（可能并发已入池）");
             }
             result.inCount++;
-            // 2.5 入池成功后调出互斥与反向限制池
+            // 4. 入池成功后调出互斥与反向限制池
             int autoOutCount = AutoAdjustRelationHelper.autoOutCurrentRelationPools(
                     candidate, currentPoolIds, context.poolMap, context.allRelations, securityPoolAdjustMapper);
             if (autoOutCount > 0) {

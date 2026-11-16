@@ -30,7 +30,7 @@
           AND NULLIF(log.crmw_scode, '') IS NOT NULL
     </select>
 
-    <!-- 主档已确认身份的唯一主体，只在五字段为空时视为未确认 -->
+    <!-- 从证券主档读取非空白的主体代码 -->
     <select id="queryConfirmedIdentityCode" resultType="java.lang.String">
         SELECT si.issuer_code
         FROM rrs_securityinfo si
@@ -148,6 +148,7 @@
 
     <!-- 四类关系和所选主体使用同一集合，日志版本用于识别退出后重新进入的新一轮变化 -->
     <select id="queryCompanyPoolContext" resultType="java.lang.String">
+        <!-- 将 Wind 四类关系中的主体与主档选定主体合并去重 -->
         WITH companies AS (
             SELECT issuer.s_info_compcode AS company_code
             FROM ais_inv_ods.wind_cbondissuer issuer
@@ -173,7 +174,7 @@
         ORDER BY c.company_code
     </select>
 
-    <!-- 其他主体仍在同一实际目标池时交给研究员处理，不直接决定 ABS 出库 -->
+    <!-- 查询主体依据池内仍生效的其他关联主体，供 ABS 出池保护使用 -->
     <select id="queryOtherCompanyInPool" resultType="java.lang.String">
         SELECT DISTINCT ps.security_code
         FROM ip_pool_status ps
@@ -216,6 +217,35 @@
         WHERE security_code = #{securityCode} AND current_pool_id = #{poolId}
           AND rule_type = 'absCompanySync' AND is_deleted = 0
         ORDER BY id DESC LIMIT 1
+    </select>
+
+    <!-- 批量查询目标池内每只候选 ABS 的最新主体联动提醒 -->
+    <select id="queryLatestSyncAlerts" resultType="com.znty.rrs.entity.bo.IpGradeRuleAlertBo">
+        <!-- 为每个候选保留输入序号和原始证券代码，查询结果按原始代码返回 -->
+        WITH candidates AS (
+            <foreach collection="securityCodes" item="code" index="idx" separator=" UNION ALL ">
+                SELECT CAST(#{idx} AS DECIMAL(10, 0)) AS candidate_index
+                       , CONCAT(#{code}, '') AS security_code
+            </foreach>
+        )
+        <!-- 每只候选按提醒 ID 倒序取第一条，保留已处理的人工结论 -->
+        SELECT id
+               , security_code
+               , context_key
+               , alert_status
+        FROM (
+            SELECT a.id
+                   , c.security_code
+                   , a.context_key
+                   , a.alert_status
+                   , ROW_NUMBER() OVER (PARTITION BY c.candidate_index ORDER BY a.id DESC) AS row_no
+            FROM candidates c
+            INNER JOIN ip_grade_rule_alert a ON a.security_code = c.security_code
+            WHERE a.current_pool_id = #{poolId}
+              AND a.rule_type = 'absCompanySync'
+              AND a.is_deleted = 0
+        ) ranked
+        WHERE row_no = 1
     </select>
 
     <!-- 沿用我的事宜规则提醒入口，目标池不限定为信用债分级库 -->
@@ -337,6 +367,36 @@
           AND is_deleted = 0
         ORDER BY id DESC
         LIMIT 1
+    </select>
+
+    <!-- 批量查询目标池内每只候选 ABS 的最新待确认入池日志 -->
+    <select id="queryPendingScheduledInboundLogs" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        <!-- 为每个候选保留输入序号和原始证券代码，查询结果按原始代码返回 -->
+        WITH candidates AS (
+            <foreach collection="securityCodes" item="code" index="idx" separator=" UNION ALL ">
+                SELECT CAST(#{idx} AS DECIMAL(10, 0)) AS candidate_index
+                       , CONCAT(#{code}, '') AS security_code
+            </foreach>
+        )
+        <!-- 每只候选按日志 ID 倒序取第一条，只匹配自动调入且尚待确认的日志 -->
+        SELECT id
+               , security_code
+               , security_short_name
+        FROM (
+            SELECT al.id
+                   , c.security_code
+                   , al.security_short_name
+                   , ROW_NUMBER() OVER (PARTITION BY c.candidate_index ORDER BY al.id DESC) AS row_no
+            FROM candidates c
+            INNER JOIN ip_adjust_log al ON al.security_code = c.security_code
+            WHERE al.target_pool_id = #{poolId}
+              AND al.adjust_type = '自动调整'
+              AND al.adjust_mode = '调入'
+              AND al.flow_type = 'absIdentityPending'
+              AND al.audit_status = '00'
+              AND al.is_deleted = 0
+        ) ranked
+        WHERE row_no = 1
     </select>
 
     <!-- 研究员确认主体后，将待确认日志转为已通过并更新确认原因，随后由业务事务写入池状态 -->

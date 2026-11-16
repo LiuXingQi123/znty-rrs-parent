@@ -67,6 +67,8 @@ public class CompanyAbsBondAutoInServiceTest {
         assertThat(log.getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库（仅债券）】")
                 .contains("联动触发主体：C001");
         verify(fixture.securityPoolAdjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
+        verify(fixture.autoAdjustMapper).queryActiveSecurityPoolRows(Collections.singletonList("ABS001"));
+        verify(fixture.securityPoolAdjustMapper, never()).querySecurityCurrentPoolIdList(anyString());
     }
 
     /** 未确认发行人的 ABS：只生成提醒，不写池状态 */
@@ -97,7 +99,7 @@ public class CompanyAbsBondAutoInServiceTest {
         fixture.absInPool(15L, "ABS003");
         fixture.conf("{\"poolIds\":[15]}");
         when(fixture.absCompanySyncService.allowScheduledSync(any(), eq("C001"), eq(15L),
-                eq("债券禁止库"), eq(false), eq(15L))).thenReturn(true);
+                eq("债券禁止库"), eq(false), eq(15L), any())).thenReturn(true);
         when(fixture.securityPoolAdjustMapper.deletePoolStatusSoft("ABS003", 15L)).thenReturn(1);
         when(fixture.securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
 
@@ -301,8 +303,6 @@ public class CompanyAbsBondAutoInServiceTest {
             AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
             when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
             when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.emptyList());
-            when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList(anyString()))
-                    .thenReturn(Collections.emptyList());
             when(securityMarketService.queryMarketCode(anyString())).thenReturn("SSE");
         }
 
@@ -365,7 +365,7 @@ public class CompanyAbsBondAutoInServiceTest {
 
         /** 指定 ABS 联动判定结果 */
         private void allowSync(boolean allowed) {
-            when(absCompanySyncService.allowScheduledSync(any(), any(), any(), any(), anyBoolean(), any()))
+            when(absCompanySyncService.allowScheduledSync(any(), any(), any(), any(), anyBoolean(), any(), any()))
                     .thenReturn(allowed);
         }
 

@@ -1,6 +1,7 @@
 package com.znty.rrs.mapper;
 
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
+import com.znty.rrs.entity.schedule.PoolSecurityRowDto;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -9,53 +10,111 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 自动调库数据访问组件。
+ * 到期出池、主体外评调整及旗下债券同步
  *
- * <p>支持到期证券自动出池、在池主体旗下债券自动入池、主体下债券同池自动入库、
- * 外评 AA- 及以下主体自动入池、外评非 AA- 及以下主体自动出池等定时任务查询，
- * 复用 {@link SecurityPoolAdjustMapper#addAdjustLog} /
- * {@link SecurityPoolAdjustMapper#addPoolStatus} /
- * {@link SecurityPoolAdjustMapper#deletePoolStatusSoft} 落地。
+ * 负责查询到期证券及 CRMW 组合、主体外评和旗下债券同步数据，并按记录 ID 撤销债券跟随记录
  */
 @Mapper
 public interface AutoAdjustMapper {
 
-    /** 查询所有已有生效主体的普通池，供补债任务自动覆盖同池债券。 */
+    /**
+     * 批量查询证券审批通过且未删除的池状态
+     *
+     * 同一证券在同一池的多条记录分别返回，供跟随出池判断是否仍有其他入池依据
+     *
+     * @param securityCodes 本批待查询的证券代码，不能为空
+     * @return 生效池状态列表，每条记录包含候选原始代码和所在池 ID
+     */
+    List<PoolSecurityRowDto> queryActiveSecurityPoolRows(@Param("securityCodes") List<String> securityCodes);
+
+    /**
+     * 批量查询存在待处理调库步骤的证券
+     *
+     * 调库日志未删除且同一调整批次存在待处理步骤时才算在途
+     *
+     * @param securityCodes 本批待查询的证券代码，不能为空
+     * @return 存在在途流程的候选证券代码
+     */
+    List<String> queryPendingSecurityCodes(@Param("securityCodes") List<String> securityCodes);
+
+    /**
+     * 批量查询命中黑名单质押库任一条件的发行主体
+     *
+     * 主体在禁止库或重点观察名单生效，或者近一年存在认可机构给出的 AA- 及以下外评，即视为命中
+     *
+     * @param companyCodes 本批待判断的发行主体代码，不能为空
+     * @param agencyCodes 认可评级机构代码，空时只判断条件池
+     * @param forbiddenPoolId 债券禁止库 ID
+     * @param keyWatchPoolId 重点观察名单池 ID
+     * @return 命中至少一项条件的候选主体原始代码
+     */
+    List<String> queryScheduledBlacklistCompanyCodes(@Param("companyCodes") List<String> companyCodes,
+                                                    @Param("agencyCodes") List<String> agencyCodes,
+                                                    @Param("forbiddenPoolId") long forbiddenPoolId,
+                                                    @Param("keyWatchPoolId") long keyWatchPoolId);
+
+    /**
+     * 查询当前已有生效主体的普通池
+     *
+     * 只返回已启用且未删除的普通池，供补债任务识别同池映射
+     *
+     * @return 去重后的普通池 ID，未找到时返回空列表
+     */
     List<Long> queryCompanyCurrentPoolIds();
 
     /**
-     * 查询主体当前是否已在指定池生效。
+     * 判断发行主体当前是否在指定池生效
      *
-     * @param companyCode 发行主体代码
-     * @param poolId      投资池 ID
-     * @return {@code true}=主体当前已在指定池生效
+     * @param companyCode 待检查的发行主体代码
+     * @param poolId 目标池 ID
+     * @return 存在审批通过且未删除的主体记录时为 true
      */
     boolean queryCompanyInPool(@Param("companyCode") String companyCode, @Param("poolId") Long poolId);
 
     /**
-     * 查询主体近一年认可机构外评是否存在 AA- 及以下档位。
+     * 判断发行主体近一年是否存在认可机构给出的 AA- 及以下外评
      *
-     * @param companyCode 发行主体代码
-     * @param agencyCodes 有效外部评级机构编码
-     * @return {@code true}=近一年认可机构外评孰低为 AA- 及以下
+     * @param companyCode 待检查的发行主体代码
+     * @param agencyCodes 认可评级机构代码，空时没有命中
+     * @return 存在符合评级和日期条件的外评时为 true
      */
     boolean queryCompanyHasLowOuterRating(@Param("companyCode") String companyCode,
                                           @Param("agencyCodes") List<String> agencyCodes);
 
     /**
-     * 查询投资池关系配置中绑定了指定定时任务与调入/调出类型的池 ID。
+     * 查询任务与调库方向对应的池绑定
      *
-     * @param taskCode 定时任务编码（sys_scheduled_task.task_code）
-     * @param ruleType 规则类型：auto_in / auto_out
-     * @return 池 ID 列表（去重）
+     * @param taskCode 定时任务编码
+     * @param ruleType 调库方向类型，如 auto_in 或 auto_out
+     * @return 未删除绑定中的池 ID，去重后按 ID 升序返回
      */
     List<Long> queryBoundPoolIds(@Param("taskCode") String taskCode, @Param("ruleType") String ruleType);
 
-    /** 按日期偏移天数查询目标池内已生效的到期债券和股票，返回实际到期日供调库日志使用 */
+    /**
+     * 查询目标池内已生效的到期债券和股票
+     *
+     * 以数据库当前日期减去配置天数作为截止日，实际到期日严格早于截止日才返回
+     *
+     * @param poolId 扫描的目标池 ID
+     * @param maturityOffsetDays 到期日期偏移天数
+     * @param outRestrictPoolIds 调出限制池 ID，空时不匹配限制池
+     * @return 含实际到期日和调出限制命中结果的候选证券
+     */
     List<ScheduledAdjustCandidateDto> queryPoolSecurityByExpired(@Param("poolId") Long poolId,
-                                                               @Param("maturityOffsetDays") int maturityOffsetDays);
+                                                                 @Param("maturityOffsetDays") int maturityOffsetDays,
+                                                                 @Param("outRestrictPoolIds") List<Long> outRestrictPoolIds);
 
-    /** 按已启用目标池的市场配置查询未在目标池的旗下债券，调度任务传入范围以排除 ABS */
+    /**
+     * 查询来源池内生效主体的待补入债券
+     *
+     * 排除退市债券、已到期债券、已转正临时代码及目标池内已有生效记录的债券
+     *
+     * @param companyPoolId 主体依据池 ID
+     * @param targetPoolId 债券目标池 ID
+     * @param targetMarketCodes 目标池允许的市场代码数组 JSON，为空时不限制市场
+     * @param bondTypeScope 债券类型排除范围，定时补债时用于排除 ABS
+     * @return 待补入的债券及发行主体信息，按债券代码升序返回
+     */
     List<ScheduledAdjustCandidateDto> queryCompanyNewBondForAutoIn(
             @Param("companyPoolId") Long companyPoolId,
             @Param("targetPoolId") Long targetPoolId,
@@ -63,38 +122,38 @@ public interface AutoAdjustMapper {
             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
-     * 查询当前已在来源池、尚未在目标池的主体。
-     * <p>供条款（一）禁止库、条款（三）重点观察名单复用；security_type 固定 company。</p>
+     * 查询已在来源池生效且尚未在目标池生效的主体
      *
-     * @param sourcePoolId 来源池 ID
-     * @param targetPoolId 入池目标池 ID
-     * @return 待入池主体
+     * 供债券禁止库和重点观察名单两项条件复用
+     *
+     * @param sourcePoolId 主体所在的来源池 ID
+     * @param targetPoolId 拟调入的目标池 ID
+     * @return 待调入的主体候选
      */
     List<ScheduledAdjustCandidateDto> queryCompanyInPoolNotInTarget(
             @Param("sourcePoolId") Long sourcePoolId,
             @Param("targetPoolId") Long targetPoolId);
 
     /**
-     * 查询近一年认可外评孰低为 AA-及以下、且尚未在目标池的主体。
-     * <p>仅条款（二）；一年以前忽略；认可机构由外部评级机构配置表控制。</p>
+     * 查询近一年认可外评孰低为 AA- 及以下且尚未在目标池生效的主体
      *
-     * @param poolId 入池目标池 ID
-     * @param agencyCodes 有效外部评级机构编码
-     * @return 待入池主体（含 outerRating）
+     * @param poolId 主体调入的目标池 ID
+     * @param agencyCodes 认可评级机构代码
+     * @return 带孰低外评的待调入主体候选
      */
     List<ScheduledAdjustCandidateDto> queryCompanyByLowOuterRatingNotInPool(
             @Param("poolId") Long poolId,
             @Param("agencyCodes") List<String> agencyCodes);
 
     /**
-     * 查询已在目标池、近一年认可外评孰低不属于 AA-及以下的主体。
-     * <p>仅条款（二）的反面；无认可外评不返回。条款（一）（三）由调用方按在池名单排除。
-     * {@code limitPoolIds} 为额外拦截池，空则不加这段。</p>
+     * 查询目标池内近一年认可外评孰低高于 AA- 的生效主体
      *
-     * @param poolId       出池目标池 ID
-     * @param limitPoolIds 额外拦截池；空则不追加
-     * @param agencyCodes  有效外部评级机构编码
-     * @return 待出池主体（含 outerRating）
+     * 近一年没有有效认可外评的主体不返回
+     *
+     * @param poolId 主体调出的目标池 ID
+     * @param limitPoolIds 额外拦截池 ID，为空时不检查额外拦截池
+     * @param agencyCodes 认可评级机构代码
+     * @return 带孰低外评的待调出主体候选
      */
     List<ScheduledAdjustCandidateDto> queryCompanyByNotLowOuterRatingInPool(
             @Param("poolId") Long poolId,
@@ -102,25 +161,54 @@ public interface AutoAdjustMapper {
             @Param("agencyCodes") List<String> agencyCodes);
 
     /**
-     * 查询指定池中当前已生效的主体代码。
+     * 查询指定池中当前已生效的主体
      *
-     * @param poolId 池 ID
-     * @return 主体代码列表
+     * @param poolId 待查询的池 ID
+     * @return 审批通过且未删除的主体代码，去重后返回
      */
     List<String> queryCompanyCodeListInPool(@Param("poolId") Long poolId);
 
-    /** 按凭证到期日和日期偏移天数查询 ip_pool_status_crmw 内已生效的到期组合 */
+    /**
+     * 查询目标池内按凭证到期日判定的到期 CRMW 组合
+     *
+     * 调出限制按标的证券代码、凭证代码和凭证类型匹配
+     *
+     * @param poolId 扫描的 CRMW 目标池 ID
+     * @param maturityOffsetDays 到期日期偏移天数，截止日当天不计入候选
+     * @param outRestrictPoolIds 调出限制池 ID，为空时不匹配限制池
+     * @return 含凭证到期日和调出限制命中结果的候选组合
+     */
     List<ScheduledAdjustCandidateDto> queryCrmwPoolByExpired(@Param("poolId") Long poolId,
-                                                           @Param("maturityOffsetDays") int maturityOffsetDays);
+                                                           @Param("maturityOffsetDays") int maturityOffsetDays,
+                                                           @Param("outRestrictPoolIds") List<Long> outRestrictPoolIds);
 
-    /** 查询曾有已生效主体的池，覆盖最后一个主体退出后的清理 */
+    /**
+     * 查询曾有主体生效的池
+     *
+     * 包含后来已被软删的生效记录，用于覆盖最后一个主体退出后的债券清理
+     *
+     * @return 去重后的历史主体池 ID
+     */
     List<Long> queryCompanyHistoricalPoolIds();
 
-    /** 查询已失去全部主体依据的普通债跟随记录 */
+    /**
+     * 查询已失去全部主体依据的普通债跟随记录
+     *
+     * 只查询可识别为主体跟随且仍然生效的入池记录，排除 ABS 和退市债券
+     *
+     * @param bondPoolId 待检查的债券目标池 ID
+     * @param companyPoolIds 支撑留池的全部主体依据池 ID，不能为空
+     * @return 待撤销的跟随记录，含池状态记录 ID 和发行主体信息
+     */
     List<ScheduledAdjustCandidateDto> queryCompanyFollowedBondsForAutoOut(
             @Param("bondPoolId") Long bondPoolId,
             @Param("companyPoolIds") Set<Long> companyPoolIds);
 
-    /** 撤销指定的债券跟随记录 */
+    /**
+     * 按记录 ID 软删一条仍生效的债券跟随记录
+     *
+     * @param poolStatusId 要撤销的池状态记录 ID
+     * @return 受影响的行数，记录不存在或已失效时为 0
+     */
     int deleteCompanyFollowedBondStatus(@Param("poolStatusId") Long poolStatusId);
 }

@@ -3,27 +3,36 @@ package com.znty.rrs.service;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
-/** 黑名单质押库三条件统一判定服务。 */
+/**
+ * 黑名单质押库三条件校验
+ *
+ * 供人工调库和债券定时同步判断发行主体是否满足黑名单质押库条件
+ */
 @Service
 public class PledgeBlacklistRuleService {
 
-    /** 债券禁止库。 */
+    /** 债券禁止库 */
     public static final Long FORBIDDEN_POOL_ID = 15L;
-    /** 黑名单质押库。 */
+    /** 黑名单质押库 */
     public static final Long BLACKLIST_POOL_ID = 17L;
-    /** 重点观察名单。 */
+    /** 重点观察名单 */
     public static final Long KEY_WATCH_POOL_ID = 23L;
 
-    /** 自动调库规则查询数据访问组件。 */
+    /** 自动调库规则查询数据访问组件 */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
-    /** 外部评级机构配置服务。 */
+    /** 外部评级机构配置服务 */
     @Resource
     private ExternalRatingAgencyService externalRatingAgencyService;
 
@@ -79,6 +88,71 @@ public class PledgeBlacklistRuleService {
      */
     public Decision evaluate(String companyCode) {
         return evaluate(companyCode, Collections.<Long>emptySet(), Collections.<Long>emptySet());
+    }
+
+    /**
+     * 创建本轮债券定时任务共用的主体判定
+     *
+     * 首次有主体需要判断时才读取认可评级机构配置
+     *
+     * @return 仅在本轮任务内使用的主体判定结果容器
+     */
+    ScheduledDecisions scheduledDecisions() {
+        return new ScheduledDecisions();
+    }
+
+    /** 只在当前任务内保留主体判定，供多组债券候选复用 */
+    final class ScheduledDecisions {
+        /** 本轮已查询的主体判定，包含未命中结果 */
+        private final Map<String, Boolean> decisions = new HashMap<>();
+        /** 本轮使用的认可评级机构 */
+        private List<String> agencyCodes;
+
+        /**
+         * 分批判断本轮尚未查过的发行主体
+         *
+         * 已查过的主体直接复用结果，包括三项条件均未命中的主体
+         *
+         * 执行顺序：
+         * 1. 提取有代码、未查询且去重后的主体
+         * 2. 首次有待判断主体时读取认可评级机构配置
+         * 3. 分批查询命中任一条件的主体，记录每个候选的判定结果
+         *
+         * @param companyCodes 本组候选债券的发行主体代码
+         */
+        void load(List<String> companyCodes) {
+            // 1. 筛出本轮尚未查过的非空主体代码
+            List<String> missing = companyCodes.stream()
+                    .filter(StringUtils::hasText).filter(code -> !decisions.containsKey(code))
+                    .distinct().collect(Collectors.toList());
+            if (missing.isEmpty()) {
+                return;
+            }
+            // 2. 优先复用本轮已读取的认可评级机构
+            if (agencyCodes == null) {
+                agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
+            }
+            // 3. 按批查询并保存命中与未命中的结果
+            for (int offset = 0; offset < missing.size(); offset += AutoAdjustRestrictHelper.QUERY_BATCH_SIZE) {
+                List<String> batch = missing.subList(offset,
+                        Math.min(offset + AutoAdjustRestrictHelper.QUERY_BATCH_SIZE, missing.size()));
+                Set<String> matched = new HashSet<>(autoAdjustMapper.queryScheduledBlacklistCompanyCodes(
+                        batch, agencyCodes, FORBIDDEN_POOL_ID, KEY_WATCH_POOL_ID));
+                for (String code : batch) {
+                    decisions.put(code, matched.contains(code));
+                }
+            }
+        }
+
+        /**
+         * 读取已批量查询的主体判定结果
+         *
+         * @param companyCode 发行主体代码
+         * @return 本轮已查到该主体命中任一条件时返回 true
+         */
+        boolean matches(String companyCode) {
+            return Boolean.TRUE.equals(decisions.get(companyCode));
+        }
     }
 
     /**

@@ -2,6 +2,87 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.AutoAdjustMapper">
 
+    <!-- 批量查询候选证券的生效池状态，保留同一证券在同一池的多条入池依据 -->
+    <select id="queryActiveSecurityPoolRows" resultType="com.znty.rrs.entity.schedule.PoolSecurityRowDto">
+        <!-- 用任务传入的证券代码构造候选，返回原始代码供调用方按代码取结果 -->
+        WITH candidates AS (
+            <foreach collection="securityCodes" item="code" separator=" UNION ALL ">
+                SELECT CONCAT(#{code}, '') AS security_code
+            </foreach>
+        )
+        <!-- 只返回审批通过且未删除的池状态 -->
+        SELECT c.security_code
+               , ps.target_pool_id AS pool_id
+        FROM candidates c
+        INNER JOIN ip_pool_status ps ON ps.security_code = c.security_code
+        WHERE ps.audit_status = '20'
+          AND ps.is_deleted = 0
+    </select>
+
+    <!-- 批量查询存在待处理调库步骤的证券 -->
+    <select id="queryPendingSecurityCodes" resultType="java.lang.String">
+        <!-- 用任务传入的证券代码构造候选，保留原始代码 -->
+        WITH candidates AS (
+            <foreach collection="securityCodes" item="code" separator=" UNION ALL ">
+                SELECT CONCAT(#{code}, '') AS security_code
+            </foreach>
+        )
+        <!-- 调库日志未删除且同一批次存在待处理步骤才算在途 -->
+        SELECT c.security_code
+        FROM candidates c
+        WHERE EXISTS (
+            SELECT 1
+            FROM ip_adjust_log al
+            INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
+                                       AND s.step_status = 'pending'
+            WHERE al.security_code = c.security_code
+              AND al.is_deleted = 0
+        )
+    </select>
+
+    <!-- 批量查询命中黑名单质押库任一条件的发行主体 -->
+    <select id="queryScheduledBlacklistCompanyCodes" resultType="java.lang.String">
+        <!-- 为每个候选主体保留输入序号和原始代码，按序号合并命中结果 -->
+        WITH candidates AS (
+            <foreach collection="companyCodes" item="code" index="idx" separator=" UNION ALL ">
+                SELECT CAST(#{idx} AS DECIMAL(10, 0)) AS candidate_index
+                       , CONCAT(#{code}, '') AS company_code
+            </foreach>
+        )
+        <!-- 分别匹配在 15 或 23 池生效的主体、近一年有认可机构 AA- 及以下外评的主体 -->
+        , matching_candidates AS (
+            SELECT DISTINCT c.candidate_index
+            FROM candidates c
+            INNER JOIN ip_pool_status ips ON ips.security_code = c.company_code
+            WHERE ips.security_type = 'company'
+              AND ips.target_pool_id IN (#{forbiddenPoolId}, #{keyWatchPoolId})
+              AND ips.audit_status = '20'
+              AND ips.is_deleted = 0
+            <if test="agencyCodes != null and !agencyCodes.isEmpty()">
+                UNION
+                SELECT c.candidate_index
+                FROM candidates c
+                INNER JOIN ais_inv_ods.wind_cbondissuerrating r ON r.s_info_compcode = c.company_code
+                WHERE r.b_info_creditratingagency IN
+                <foreach collection="agencyCodes" item="agencyCode" open="(" separator="," close=")">
+                    #{agencyCode}
+                </foreach>
+                  AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
+                  AND REGEXP_SUBSTR(TRIM(r.b_info_creditrating), '^(A+|B+|C+|D)[+-]?', 1, 1, 'c') IN (
+                      'AA-', 'A+', 'A', 'A-'
+                      , 'BBB+', 'BBB', 'BBB-'
+                      , 'BB+', 'BB', 'BB-'
+                      , 'B+', 'B', 'B-'
+                      , 'CCC', 'CC', 'C', 'D'
+                  )
+            </if>
+        )
+        <!-- 返回命中任一条件的候选主体原始代码 -->
+        SELECT c.company_code
+        FROM candidates c
+        INNER JOIN matching_candidates hit ON hit.candidate_index = c.candidate_index
+    </select>
+
     <!-- 查询所有已有生效主体的普通池，避免补债范围遗漏观察池或新增主体池 -->
     <select id="queryCompanyCurrentPoolIds" resultType="java.lang.Long">
         SELECT DISTINCT ips.target_pool_id
@@ -18,7 +99,7 @@
         ORDER BY ips.target_pool_id ASC
     </select>
 
-    <!-- 黑名单质押库统一条件（一）/（三）：主体当前是否已在指定池生效。 -->
+    <!-- 查询主体当前是否已在黑名单质押库条件对应的池中生效 -->
     <select id="queryCompanyInPool" resultType="boolean">
         SELECT CASE WHEN EXISTS (
             SELECT 1
@@ -70,7 +151,7 @@
         ORDER BY pool_id ASC
     </select>
 
-    <!-- 查询指定池中已生效且已到期的在池证券（仅回填 securityCode/securityShortName/securityType）
+    <!-- 查询指定池中已生效且已到期的债券和股票，配置调出限制池时同时标记是否命中
          到期宽限对齐老系统 AdjustRuleByExpired：enddate < trunc(sysdate-1)，
          到期日早于当前日期减去 maturityOffsetDays 天，默认 1 即早于昨天（T-2）
          大类对齐老 ptype=4000 或 2000：仅债、股；CRMW 走独立任务 crmw_expired_auto_out -->
@@ -79,11 +160,27 @@
                ,ips.security_short_name
                ,ips.security_type
                ,si.maturity_date
+        <if test="outRestrictPoolIds != null and !outRestrictPoolIds.isEmpty()">
+               , restricted.security_code IS NOT NULL AS out_restricted
+        </if>
         FROM ip_pool_status ips
         INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                          AND dst.is_deleted = 0
                                          AND dst.category_type IN ('bond', 'stock')
+        <!-- 同一证券可能同时出现在多个限制池，只关联一次以保留原候选数量 -->
+        <if test="outRestrictPoolIds != null and !outRestrictPoolIds.isEmpty()">
+        LEFT JOIN (
+            SELECT DISTINCT security_code
+            FROM ip_pool_status
+            WHERE audit_status = '20'
+              AND is_deleted = 0
+              AND target_pool_id IN
+              <foreach collection="outRestrictPoolIds" item="id" open="(" separator="," close=")">
+                  #{id}
+              </foreach>
+        ) restricted ON restricted.security_code = ips.security_code
+        </if>
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -159,7 +256,7 @@
         ORDER BY bond.wind_code ASC
     </select>
 
-    <!-- 条款（一）（三）共用：当前已在来源池、尚未在目标池的主体。 -->
+    <!-- 查询已在来源池生效且尚未在目标池生效的主体，供条款（一）和（三）共用 -->
     <select id="queryCompanyInPoolNotInTarget"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
@@ -184,8 +281,8 @@
     </select>
 
     <!--
-      条款（二）：近一年认可机构外评孰低为 AA-及以下、且尚未在目标池。
-      一年以前忽略；非标准评级排在标准评级之后；认可机构由配置参数控制。
+      条款（二）查询近一年认可机构外评孰低为 AA- 及以下且尚未在目标池的主体
+      非标准评级排在标准评级之后，认可机构由配置参数控制
     -->
     <select id="queryCompanyByLowOuterRatingNotInPool"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
@@ -257,7 +354,7 @@
             ) t
             WHERE t.rn = 1
         )
-        <!-- 孰低落在 AA-及以下且尚未在目标池的主体。 -->
+        <!-- 返回外评孰低为 AA- 及以下且尚未在目标池的主体 -->
         SELECT e.s_info_compcode AS security_code
                ,COALESCE(NULLIF(e.s_info_compname, ''), e.s_info_compcode) AS security_short_name
                ,'company' AS security_type
@@ -277,9 +374,9 @@
     </select>
 
     <!--
-      条款（二）反面：已在目标池、近一年存在认可外评且孰低不属于 AA-及以下。
-      无认可外评不参与自动出池；条款（一）（三）由 Java 按在池名单排除。
-      limitPoolIds 为额外拦截；空则不加这段。
+      查询已在目标池且近一年认可外评孰低高于 AA- 的主体
+      无认可外评的主体不进入本条候选，条款（一）和（三）由调用方另行判断
+      limitPoolIds 为空时省略额外拦截池检查
     -->
     <select id="queryCompanyByNotLowOuterRatingInPool"
             resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
@@ -381,7 +478,7 @@
         ORDER BY ips.security_code ASC
     </select>
 
-    <!-- 指定池中当前已生效的主体代码，供出池时排除仍命中条款（一）（三）的主体。 -->
+    <!-- 查询指定池内的生效主体代码，供出池时保留仍命中条款（一）或（三）的主体 -->
     <select id="queryCompanyCodeListInPool" resultType="java.lang.String">
         SELECT DISTINCT ips.security_code
         FROM ip_pool_status ips
@@ -391,7 +488,7 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- CRMW 到期自动出池：凭证到期日早于当前日期减去 maturityOffsetDays 天，默认 1 即原 T-2 口径 -->
+    <!-- 查询到期 CRMW 组合并标记调出限制，凭证到期日须早于当前日期减去配置天数，默认 1 天 -->
     <select id="queryCrmwPoolByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
                ,ips.security_short_name
@@ -401,8 +498,29 @@
                ,ips.crmw_mktcode
                ,ips.crmw_stype
                ,crmw.maturity_date
+        <if test="outRestrictPoolIds != null and !outRestrictPoolIds.isEmpty()">
+               , restricted.security_code IS NOT NULL AS out_restricted
+        </if>
         FROM ip_pool_status_crmw ips
         INNER JOIN rrs_securityinfo crmw ON crmw.wind_code = ips.crmw_scode
+        <!-- 限制池按标的证券、凭证和凭证类型去重，避免同一组合的多条记录重复标记候选 -->
+        <if test="outRestrictPoolIds != null and !outRestrictPoolIds.isEmpty()">
+        LEFT JOIN (
+            SELECT DISTINCT security_code
+                   , crmw_scode
+                   , crmw_stype
+            FROM ip_pool_status_crmw
+            WHERE pool_type = 'crmw'
+              AND audit_status = '20'
+              AND is_deleted = 0
+              AND target_pool_id IN
+              <foreach collection="outRestrictPoolIds" item="id" open="(" separator="," close=")">
+                  #{id}
+              </foreach>
+        ) restricted ON restricted.security_code = ips.security_code
+                     AND restricted.crmw_scode = ips.crmw_scode
+                     AND restricted.crmw_stype = ips.crmw_stype
+        </if>
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
@@ -415,6 +533,7 @@
                  ,ips.security_code ASC
     </select>
 
+    <!-- 查询曾有主体生效的池，覆盖最后一个主体退出后仍需清理旗下债券的情况 -->
     <select id="queryCompanyHistoricalPoolIds" resultType="java.lang.Long">
         SELECT DISTINCT ps.target_pool_id
         FROM ip_pool_status ps
@@ -423,7 +542,7 @@
           AND ps.target_pool_id IS NOT NULL
     </select>
 
-    <!-- 仅撤销明确来自主体跟随的记录，保留人工及来源不清的记录 -->
+    <!-- 查询已失去全部主体依据的债券跟随记录，供后续按记录 ID 撤销 -->
     <select id="queryCompanyFollowedBondsForAutoOut" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ps.id AS pool_status_id
              , bond.wind_code AS security_code
@@ -467,6 +586,7 @@
         ORDER BY bond.wind_code, ps.id
     </select>
 
+    <!-- 按记录 ID 软删一条仍有效的债券跟随记录，保留同池其他入池依据 -->
     <update id="deleteCompanyFollowedBondStatus">
         UPDATE ip_pool_status
         SET is_deleted = 1

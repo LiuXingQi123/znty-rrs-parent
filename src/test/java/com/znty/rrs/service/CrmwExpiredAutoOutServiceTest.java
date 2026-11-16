@@ -61,13 +61,13 @@ public class CrmwExpiredAutoOutServiceTest {
             item.setSecurityCode("B001");
             item.setCrmwScode("CRMW001");
             item.setCrmwStype("crmw");
-            when(mapper.queryCrmwPoolByExpired(18L, days)).thenReturn(Collections.singletonList(item));
+            when(mapper.queryCrmwPoolByExpired(18L, days, Collections.emptyList())).thenReturn(Collections.singletonList(item));
 
             ScheduledTaskResult result = service.execute();
 
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getAffectedCount()).isEqualTo(1);
-            verify(mapper).queryCrmwPoolByExpired(18L, days);
+            verify(mapper).queryCrmwPoolByExpired(18L, days, Collections.emptyList());
             assertThat(result.getDetailLog()).contains("maturityOffsetDays=" + days);
             assertThat(item.getAdjustReason()).contains("出池口径：到期日早于当前日期减去 " + days + " 天");
         }
@@ -89,7 +89,7 @@ public class CrmwExpiredAutoOutServiceTest {
 
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getMessage()).contains("maturityOffsetDays");
-        verify(mapper, never()).queryCrmwPoolByExpired(any(Long.class), any(Integer.class));
+        verify(mapper, never()).queryCrmwPoolByExpired(any(Long.class), any(Integer.class), any());
     }
 
     @Test
@@ -121,7 +121,7 @@ public class CrmwExpiredAutoOutServiceTest {
         item.setCrmwScode("CRMW001");
         item.setCrmwStype("crmw");
         item.setMaturityDate("20260831");
-        when(autoAdjustMapper.queryCrmwPoolByExpired(18L, 1)).thenReturn(Collections.singletonList(item));
+        when(autoAdjustMapper.queryCrmwPoolByExpired(18L, 1, Collections.emptyList())).thenReturn(Collections.singletonList(item));
         when(crmwPoolAdjustMapper.deletePoolStatusSoft("B001", "CRMW001", "crmw", 18L)).thenReturn(1);
         when(crmwPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
 
@@ -168,7 +168,7 @@ public class CrmwExpiredAutoOutServiceTest {
         item.setSecurityCode("B001");
         item.setCrmwScode("CRMW001");
         item.setCrmwStype("crmw");
-        when(autoAdjustMapper.queryCrmwPoolByExpired(18L, 1)).thenReturn(Collections.singletonList(item));
+        when(autoAdjustMapper.queryCrmwPoolByExpired(18L, 1, Collections.emptyList())).thenReturn(Collections.singletonList(item));
         when(crmwPoolAdjustMapper.deletePoolStatusSoft("B001", "CRMW001", "crmw", 18L)).thenReturn(0);
 
         ScheduledTaskResult result = service.execute();

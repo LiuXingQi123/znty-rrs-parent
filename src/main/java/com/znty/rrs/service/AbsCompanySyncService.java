@@ -12,6 +12,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AbsIdentityMapper;
+import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import org.springframework.stereotype.Service;
@@ -20,17 +21,18 @@ import org.springframework.util.StringUtils;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * ABS 主体联动与规则提醒。
+ * ABS 主体联动及任意池规则提醒
  *
- * <p>主体入池、退出、外评调整等触发源统一在此判断关联 ABS 能否继续自动联动：
- * 未确认主体只生成待确认提醒、主体退出仍有其他依据时只提醒不自动出库、
- * 相同依据已人工处理时保持人工结论。7 个定时任务与主体联动链路共用同一口径。
- *
- * <p>本类不负责身份落档与申请快照，那部分由 {@link AbsIdentityService} 承担。
+ * 供主体下 ABS 债券自动入库任务复用，判断 ABS 能否联动入池或出池，并维护规则提醒和待确认日志
+ * 相同主体依据已有人工处理结论时沿用该结论
+ * 主体身份落档和申请快照由 {@link AbsIdentityService} 处理
  */
 @Service
 public class AbsCompanySyncService {
@@ -38,10 +40,10 @@ public class AbsCompanySyncService {
     /** 未确认 ABS 的待确认入池日志类型，人工主体调库与定时任务共用，不进入普通审批流程 */
     public static final String ABS_PENDING_FLOW_TYPE = "absIdentityPending";
 
-    /** 自动任务操作人 ID。 */
+    /** 自动任务操作人 ID */
     private static final String AUTO_ADJUSTER_ID = "0";
 
-    /** 自动任务操作人名称。 */
+    /** 自动任务操作人名称 */
     private static final String AUTO_ADJUSTER_NAME = "系统";
 
     /** ABS 身份与联动查询 */
@@ -51,6 +53,10 @@ public class AbsCompanySyncService {
     /** 已有调库快照查询 */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    /** 定时对账批量读取在途步骤 */
+    @Resource
+    private AutoAdjustMapper autoAdjustMapper;
 
     /** 投资池查询，用于补写待确认日志的池类型 */
     @Resource
@@ -67,13 +73,8 @@ public class AbsCompanySyncService {
     /**
      * 主体联动前决定自动处理还是生成规则提醒，适用于任意目标池
      *
-     * <p>人工主体调库落池与定时任务共用本方法，未确认主体时两者都当场生成
-     * absCompanySync 提醒和一条 audit_status=00 的待确认日志，且都不写池状态
+     * 主体依据和债券目标使用同一个池时调用此入口
      *
-     * 执行顺序：
-     * 1. 非 ABS 保持原逻辑，ABS 读取主档和当前全部依据
-     * 2. 相同依据已经人工处理时保持人工结论
-     * 3. 入库缺少身份或出库仍有其他主体、独立依据、在途申请时生成提醒
      * @param security 关联证券
      * @param triggerCompanyCode 触发本次联动的主体
      * @param poolId 实际目标池
@@ -83,14 +84,16 @@ public class AbsCompanySyncService {
      */
     public boolean allowCompanySync(SecurityInfoBo security, String triggerCompanyCode,
                                     Long poolId, String poolName, boolean inbound) {
-        return resolveAbsCompanySync(security, triggerCompanyCode, poolId, poolName, inbound, poolId);
+        return allowCompanySync(security, triggerCompanyCode, poolId, poolName, inbound, poolId);
     }
 
     /**
      * 按实际主体来源池决定 ABS 是否可以联动，兼容主体池与债券池不同的映射
+     *
      * 执行顺序：
      * 1. 核验身份并检查当前主体依据和人工结论
      * 2. 使用主体来源池判断其他主体是否仍命中，提醒落在实际债券目标池
+     *
      * @param security 关联证券
      * @param triggerCompanyCode 触发主体
      * @param poolId 债券实际目标池
@@ -101,12 +104,34 @@ public class AbsCompanySyncService {
      */
     public boolean allowCompanySync(SecurityInfoBo security, String triggerCompanyCode,
                                     Long poolId, String poolName, boolean inbound, Long companyPoolId) {
-        return resolveAbsCompanySync(security, triggerCompanyCode, poolId, poolName, inbound, companyPoolId);
+        // 按当前证券读取依据并执行统一联动判定
+        return resolveAbsCompanySync(security, triggerCompanyCode, poolId, poolName, inbound, companyPoolId, null);
     }
 
-    /** 人工联动与定时扫描共用 ABS 处理口径 */
+    /**
+     * 判断 ABS 是否允许继续入池或出池，并维护对应提醒和待确认日志
+     *
+     * 人工入口按证券查询，定时对账可传入同一目标池和阶段已批量读取的记录
+     *
+     * 执行顺序：
+     * 1. 核对主档和触发主体，有相同依据的人工结论时沿用该结论
+     * 2. 检查主体身份、出池保护及黑名单质押库条件，确定是否需要提醒
+     * 3. 可以联动时关闭已解除的待处理提醒，入池时关闭旧待确认日志
+     * 4. 不能联动时更新或新增提醒，主体未确认且需入池时保留待确认日志
+     *
+     * @param security 本次处理的证券
+     * @param triggerCompanyCode 触发联动的主体代码
+     * @param poolId 债券目标池 ID
+     * @param poolName 债券目标池名称
+     * @param inbound 是否为入池
+     * @param companyPoolId 主体依据所在池 ID
+     * @param reads 定时对账已读的提醒和在途记录，人工入口传空
+     * @return 是否允许继续调整池状态
+     */
     private boolean resolveAbsCompanySync(SecurityInfoBo security, String triggerCompanyCode,
-                                     Long poolId, String poolName, boolean inbound, Long companyPoolId) {
+                                     Long poolId, String poolName, boolean inbound, Long companyPoolId,
+                                     ScheduledReads reads) {
+        // 1. 核对主档主体和触发主体，沿用相同依据的人工结论
         if (!CreditBondSpecialInboundRule.isAbs(security)) {
             return true;
         }
@@ -115,7 +140,7 @@ public class AbsCompanySyncService {
         if (master == null) {
             throw new BizException("ABS[" + security.getWindCode() + "]主档不存在");
         }
-        // 已确认身份后只认主档主体，B/C 等其他权益人的进出不再影响该 ABS
+        // 已确认身份后，其他关联主体进出时不用再处理这只 ABS
         String confirmedCode = StringUtils.hasText(master.getIssuerCode()) ? master.getIssuerCode().trim() : null;
         boolean confirmed = confirmedCode != null;
         if (confirmed && !confirmedCode.equals(triggerCompanyCode)) {
@@ -125,12 +150,14 @@ public class AbsCompanySyncService {
         String contextKey = resolveContextKey(master.getWindCode(), confirmedCode, poolId);
         // 未确认身份的 ABS 任一关联主体入池都只生成提醒和待确认日志，人工与定时完全一致，不直接落池
         boolean pendingInbound = !confirmed && inbound;
-        IpGradeRuleAlertBo previous = absIdentityMapper.queryLatestSyncAlert(master.getWindCode(), poolId);
+        IpGradeRuleAlertBo previous = reads == null ? absIdentityMapper.queryLatestSyncAlert(master.getWindCode(), poolId)
+                : reads.latestAlerts.get(security.getWindCode());
         // 相同主体依据已经被研究员处理时，不再次生成待确认流程或反向调库
         if (previous != null && contextKey.equals(previous.getContextKey())
                 && "20".equals(previous.getAlertStatus())) {
             return false;
         }
+        // 2. 检查身份、出池保护和 17 池条件，确定提醒原因
         String reason = null;
         if (confirmed) {
             try {
@@ -145,7 +172,8 @@ public class AbsCompanySyncService {
                 // 已确认身份只判断该 ABS 自身的独立依据和在途流程，其他权益人不再构成保留理由
                 if (absIdentityMapper.queryIndependentInbound(master.getWindCode(), poolId)) {
                     reason = "主体退出，但 ABS 存在债级独立入库依据，请研究员确认保留或发起出库";
-                } else if (securityPoolAdjustMapper.querySecurityHasPendingProcess(master.getWindCode())) {
+                // 在途调库未结束时只提醒，避免自动出池
+                } else if (hasPendingProcess(master, security.getWindCode(), reads)) {
                     reason = "主体退出，但 ABS 存在未结束的调库流程，请研究员确认出库时点";
                 }
             } else {
@@ -157,7 +185,8 @@ public class AbsCompanySyncService {
                             + "]仍在该池，请研究员确认保留或发起出库";
                 } else if (absIdentityMapper.queryIndependentInbound(master.getWindCode(), poolId)) {
                     reason = "主体退出，但 ABS 存在债级独立入库依据，请研究员确认保留或发起出库";
-                } else if (securityPoolAdjustMapper.querySecurityHasPendingProcess(master.getWindCode())) {
+                // 在其他主体和独立入池依据之外，再检查在途调库保护
+                } else if (hasPendingProcess(master, security.getWindCode(), reads)) {
                     reason = "主体退出，但 ABS 存在未结束的调库流程，请研究员确认出库时点";
                 } else {
                     reason = "ABS 尚未确认主体身份，触发主体退出时请研究员确认是否出库";
@@ -173,20 +202,23 @@ public class AbsCompanySyncService {
         if (reason == null && pendingInbound) {
             reason = "主体[" + triggerCompanyCode + "]入池触发 ABS 联动，ABS 主体身份尚未确认，请研究员选择权益人";
         }
+        // 3. 可以继续联动时，关闭不再需要的提醒和入池待确认日志
         if (reason == null) {
             if (previous != null && "00".equals(previous.getAlertStatus())) {
                 absIdentityMapper.editSyncAlertInvalid(master.getWindCode(), poolId);
             }
             // 主体已明确或触发依据已消失时，关闭遗留的待确认日志
             if (inbound) {
-                IpAdjustLogBo pending = absIdentityMapper.queryPendingScheduledInboundLog(
-                        master.getWindCode(), poolId);
+                IpAdjustLogBo pending = reads == null
+                        ? absIdentityMapper.queryPendingScheduledInboundLog(master.getWindCode(), poolId)
+                        : reads.pendingInboundLogs.get(security.getWindCode());
                 if (pending != null) {
                     absIdentityMapper.editPendingScheduledInboundInvalid(pending.getId());
                 }
             }
             return true;
         }
+        // 4. 写入当前依据对应的提醒，并维护未确认主体的待确认入池日志
         IpGradeRuleAlertBo alert = new IpGradeRuleAlertBo();
         alert.setSecurityCode(master.getWindCode());
         alert.setSecurityShortName(master.getShortName());
@@ -205,27 +237,47 @@ public class AbsCompanySyncService {
         }
         if (pendingInbound) {
             // 未确认 ABS 只保存待确认日志，人工调库和定时任务写同一条，都不提前落池
-            createPendingInboundLog(security, triggerCompanyCode, poolId, poolName, companyPoolId);
+            IpAdjustLogBo existing = reads == null
+                    ? absIdentityMapper.queryPendingScheduledInboundLog(security.getWindCode(), poolId)
+                    : reads.pendingInboundLogs.get(security.getWindCode());
+            // 沿用本池已有的待确认日志，缺失时才创建
+            createPendingInboundLog(security, triggerCompanyCode, poolId, poolName, companyPoolId, existing);
         }
         return false;
     }
 
     /**
+     * 检查证券是否存在待处理的调库步骤
+     *
+     * @param master 证券主档，人工入口使用其中的证券代码查询
+     * @param candidateCode 定时任务传入的候选代码，用于读取批量结果
+     * @param reads 定时对账已读的在途记录，人工入口传空
+     * @return 是否存在待处理的调库步骤
+     */
+    private boolean hasPendingProcess(SecurityInfoBo master, String candidateCode, ScheduledReads reads) {
+        return reads == null ? securityPoolAdjustMapper.querySecurityHasPendingProcess(master.getWindCode())
+                : reads.pendingProcessCodes.contains(candidateCode);
+    }
+
+    /**
      * 创建未确认 ABS 的待确认入池日志
      *
-     * <p>人工主体调库与定时任务共用本方法，因此 adjust_type 固定为自动调整、操作人记系统：
-     * 这条日志只是等待研究员确认主体的中间态，不是研究员发起的调库申请；
-     * 确认主体、忽略入池、回填简称三条 SQL 也按自动调整定位该日志
+     * 日志标记为系统自动调整，供确认主体、忽略入池或回填简称时定位
+     *
+     * 执行顺序：
+     * 1. 已有待确认日志时按需回填简称
+     * 2. 缺少待确认日志时根据证券和目标池信息写入一条待确认记录
      *
      * @param security 关联证券
      * @param triggerCompanyCode 触发主体
      * @param poolId 债券目标池
      * @param poolName 债券目标池名称
      * @param companyPoolId 主体依据所在池
+     * @param existing 当前证券在本池已有的待确认日志
      */
     private void createPendingInboundLog(SecurityInfoBo security, String triggerCompanyCode,
-                                         Long poolId, String poolName, Long companyPoolId) {
-        IpAdjustLogBo existing = absIdentityMapper.queryPendingScheduledInboundLog(security.getWindCode(), poolId);
+                                         Long poolId, String poolName, Long companyPoolId, IpAdjustLogBo existing) {
+        // 1. 已有待确认日志时仅回填缺失的证券简称
         if (existing != null) {
             // 兼容修复前已生成但简称为空的待确认日志
             if (!StringUtils.hasText(existing.getSecurityShortName())
@@ -235,6 +287,7 @@ public class AbsCompanySyncService {
             }
             return;
         }
+        // 2. 用当前证券和目标池信息建立待确认日志
         IpAdjustLogBo pending = new IpAdjustLogBo();
         pending.setSecurityCode(security.getWindCode());
         pending.setSecurityShortName(security.getShortName());
@@ -383,6 +436,28 @@ public class AbsCompanySyncService {
      */
     public boolean allowScheduledSync(ScheduledAdjustCandidateDto candidate, String triggerCompanyCode,
                                       Long poolId, String poolName, boolean inbound, Long companyPoolId) {
+        return allowScheduledSync(candidate, triggerCompanyCode, poolId, poolName, inbound, companyPoolId, null);
+    }
+
+    /**
+     * 用目标池当前阶段的批量读取结果判断 ABS 能否联动
+     *
+     * 执行顺序：
+     * 1. 非 ABS 直接放行，ABS 候选转换为联动校验所需的证券信息
+     * 2. 用统一的 ABS 校验判断是否允许调整池状态
+     *
+     * @param candidate 自动调库候选
+     * @param triggerCompanyCode 触发联动的主体代码
+     * @param poolId 债券目标池 ID
+     * @param poolName 债券目标池名称
+     * @param inbound 是否为入池
+     * @param companyPoolId 主体依据所在池 ID
+     * @param reads 本阶段批量读取的提醒和在途记录，空时按证券查询
+     * @return 是否允许继续调整池状态
+     */
+    boolean allowScheduledSync(ScheduledAdjustCandidateDto candidate, String triggerCompanyCode,
+                               Long poolId, String poolName, boolean inbound, Long companyPoolId, ScheduledReads reads) {
+        // 1. 只转换需要联动判断的 ABS 候选
         if (!"abs".equals(candidate.getSecurityType()) && !Integer.valueOf(1).equals(candidate.getAbsFlag())) {
             return true;
         }
@@ -393,8 +468,53 @@ public class AbsCompanySyncService {
         security.setAbsFlag(candidate.getAbsFlag());
         security.setIssuerCode(candidate.getIssuerCode());
         security.setIssuer(candidate.getIssuerName());
-        // 统一走人工联动入口，定时任务不再单独维护一套判断
-        return allowCompanySync(security, triggerCompanyCode, poolId, poolName, inbound, companyPoolId);
+        // 2. 按与人工入口相同的规则判断 ABS 能否联动
+        return resolveAbsCompanySync(security, triggerCompanyCode, poolId, poolName, inbound, companyPoolId, reads);
+    }
+
+    /**
+     * 分批读取目标池当前阶段需要的 ABS 联动数据
+     *
+     * 同一阶段每只证券只处理一次，下一阶段或下一个目标池重新读取
+     *
+     * 执行顺序：
+     * 1. 批量读取本池每只候选证券的最新联动提醒
+     * 2. 入池读取本池待确认日志，出池读取候选证券的在途流程
+     *
+     * @param codes 当前阶段去重后的候选证券代码
+     * @param poolId 债券目标池 ID
+     * @param inbound 是否为入池阶段
+     * @return 按证券代码查询的本阶段联动数据
+     */
+    ScheduledReads loadScheduledReads(List<String> codes, Long poolId, boolean inbound) {
+        ScheduledReads reads = new ScheduledReads();
+        for (int offset = 0; offset < codes.size(); offset += AutoAdjustRestrictHelper.QUERY_BATCH_SIZE) {
+            List<String> batch = codes.subList(offset, Math.min(offset + AutoAdjustRestrictHelper.QUERY_BATCH_SIZE,
+                    codes.size()));
+            // 1. 读取包含人工处理结论在内的最新联动提醒
+            for (IpGradeRuleAlertBo alert : absIdentityMapper.queryLatestSyncAlerts(batch, poolId)) {
+                reads.latestAlerts.put(alert.getSecurityCode(), alert);
+            }
+            // 2. 按阶段读取待确认日志或在途调库流程
+            if (inbound) {
+                for (IpAdjustLogBo pending : absIdentityMapper.queryPendingScheduledInboundLogs(batch, poolId)) {
+                    reads.pendingInboundLogs.put(pending.getSecurityCode(), pending);
+                }
+            } else {
+                reads.pendingProcessCodes.addAll(autoAdjustMapper.queryPendingSecurityCodes(batch));
+            }
+        }
+        return reads;
+    }
+
+    /** 单池单阶段查询结果，后续阶段重新读取生效状态 */
+    static final class ScheduledReads {
+        /** 候选证券的最新联动提醒 */
+        private final Map<String, IpGradeRuleAlertBo> latestAlerts = new HashMap<>();
+        /** 入池候选已有的待确认日志 */
+        private final Map<String, IpAdjustLogBo> pendingInboundLogs = new HashMap<>();
+        /** 出池候选中的在途证券 */
+        private final Set<String> pendingProcessCodes = new HashSet<>();
     }
 
     /**

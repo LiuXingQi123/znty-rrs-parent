@@ -3,7 +3,7 @@ package com.znty.rrs.entity.schedule;
 import lombok.Data;
 
 /**
- * 池生效状态聚合行，按池装载主体代码或 ABS 代码，供对账任务在内存中做差集。
+ * 定时任务批量读取的生效池状态，包含池 ID 和证券或主体代码
  */
 @Data
 public class PoolSecurityRowDto {

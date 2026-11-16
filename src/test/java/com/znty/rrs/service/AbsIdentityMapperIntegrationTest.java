@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.mapper.AbsIdentityMapper;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.CommonMapper;
@@ -80,6 +81,29 @@ public class AbsIdentityMapperIntegrationTest {
         Matcher ddl = Pattern.compile("(?s)CREATE TABLE `" + tableName + "`\\s*\\(.*?;").matcher(schema);
         assertThat(ddl.find()).as("生产脚本必须定义表 %s", tableName).isTrue();
         jdbc.execute(ddl.group().replaceAll("(?s)\\) ENGINE.*", ")"));
+    }
+
+    /** 批量结果与单只查询一致，包含已处理结论并隔离目标池 */
+    @Test
+    public void scheduledBatchShouldReadLatestAlertAndPendingRecordInTargetPool() throws Exception {
+        createBusinessTable("rrs_grade_rule_alert_schema.sql", "ip_grade_rule_alert");
+        jdbc.update("INSERT INTO ip_grade_rule_alert(id,security_code,current_pool_id,context_key,rule_type,alert_status,is_deleted) "
+                + "VALUES(1,'ABS1',101,'old','absCompanySync','00',0),(2,'ABS1',101,'current','absCompanySync','20',0),"
+                + "(3,'ABS1',102,'otherPool','absCompanySync','00',0),(4,'ABS1',101,'deleted','absCompanySync','00',1)");
+        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,security_short_name,target_pool_id,adjust_type,adjust_mode,flow_type,audit_status,is_deleted) "
+                + "VALUES(10,'ABS1','旧','101','自动调整','调入','absIdentityPending','00',0),"
+                + "(11,'ABS1','当前','101','自动调整','调入','absIdentityPending','00',0),"
+                + "(12,'ABS1','已通过','101','自动调整','调入','absIdentityPending','20',0),"
+                + "(13,'ABS1','其他池','102','自动调整','调入','absIdentityPending','00',0)");
+        try (SqlSession session = factory.openSession()) {
+            AbsIdentityMapper mapper = session.getMapper(AbsIdentityMapper.class);
+            assertThat(mapper.queryLatestSyncAlerts(Arrays.asList("ABS1", "ABS2"), 101L))
+                    .extracting(IpGradeRuleAlertBo::getId).containsExactly(mapper.queryLatestSyncAlert("ABS1", 101L).getId());
+            assertThat(mapper.queryPendingScheduledInboundLogs(Arrays.asList("ABS1", "ABS2"), 101L))
+                    .extracting(IpAdjustLogBo::getId).containsExactly(mapper.queryPendingScheduledInboundLog("ABS1", 101L).getId());
+            assertThat(mapper.queryPendingScheduledInboundLogs(Collections.singletonList("ABS1"), 102L))
+                    .extracting(IpAdjustLogBo::getId).containsExactly(13L);
+        }
     }
 
     /** 普通 ABS 调入 CRMW 池时，普通快照仍占用主体身份，终结后才解除 */
