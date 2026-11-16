@@ -45,8 +45,7 @@
     <!--
       查询指定投资池当前有效在池数量（按类型分项，批量页「现有数量」多行展示）。
       分类取 ip_pool_status.security_type：crmw / company 单独计；其余按字典 category_type。
-      不关联 rrs_securityinfo（池内含主体等无证券主数据行）。无字典 → unknown。
-      不在此排除任何类型，主体/CRMW/债券等均统计，便于与全量在池对照。
+      包含池内全部类型，用于「现有数量」展示；候选证券由下方列表查询单独筛选。
     -->
     <select id="queryPoolCurrentCountByTypeList"
             resultType="com.znty.rrs.entity.batchsecuritypooladjust.BatchPoolTypeCountDto">

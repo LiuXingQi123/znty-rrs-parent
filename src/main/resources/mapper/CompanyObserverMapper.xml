@@ -37,56 +37,6 @@
         <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
             #{poolId}
         </foreach>
-        UNION
-        <!-- 2. 查询目标池内未退市、未到期债券的发行主体，包含主体已出池但旗下债券仍在池的情况 -->
-        <!-- ABS 不参与本任务，其主体由观察名单或在池主体记录覆盖，避免仅因 ABS 在池而反向纳管主体 -->
-        SELECT bond.issuer_code AS security_code
-               ,bond.issuer AS security_short_name
-               ,'company' AS security_type
-        FROM ip_pool_status ips
-        INNER JOIN rrs_securityinfo bond ON bond.wind_code = ips.security_code
-        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
-                                         AND dst.category_type = 'bond'
-                                         AND dst.is_deleted = 0
-        WHERE ips.audit_status = '20'
-          AND ips.is_deleted = 0
-          AND bond.security_status != 'D'
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
-          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
-          AND ips.target_pool_id IN
-        <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
-            #{poolId}
-        </foreach>
-    </select>
-    <!-- 批量预读主体旗下有效债券，统一保留主体联动的类型及到期日口径 -->
-    <select id="queryObserverBondList" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        <!-- 只按主档发行主体关联；ABS 已由 company_abs_bond_auto_in 按池对账，不参与主体观察名单联动 -->
-        SELECT DISTINCT bond.wind_code AS security_code
-               ,bond.short_name AS security_short_name
-               ,bond.security_type
-               ,bond.issuer_code
-               ,bond.abs_flag
-        FROM rrs_securityinfo bond
-        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
-                                         AND dst.is_deleted = 0
-                                         AND dst.category_type = 'bond'
-        WHERE bond.issuer_code IN
-        <foreach collection="companyCodes" item="companyCode" open="(" separator="," close=")">
-            #{companyCode}
-        </foreach>
-          AND bond.security_status != 'D'
-          AND (bond.maturity_date IS NULL OR bond.maturity_date &gt;= DATE_FORMAT(CURDATE(), '%Y%m%d'))
-        <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
-          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
-        </if>
-        <if test="bondTypeScope != null and bondTypeScope.excludedSecurityTypes != null and bondTypeScope.excludedSecurityTypes.size() > 0">
-          AND bond.security_type NOT IN
-          <foreach collection="bondTypeScope.excludedSecurityTypes" item="securityType" open="(" separator="," close=")">
-              #{securityType}
-          </foreach>
-        </if>
-        ORDER BY bond.issuer_code
-                 ,bond.wind_code
     </select>
 
     <!-- 仅按本轮证券编码批量读取所有有效所在池，保留配置池外的来源、限制和互斥依据 -->

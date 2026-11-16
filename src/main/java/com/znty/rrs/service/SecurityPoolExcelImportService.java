@@ -509,8 +509,9 @@ public class SecurityPoolExcelImportService {
             checkItems = checkSecurityImport(items, inbound, allowLinkMutex, opterId, now);
         }
         // 清空目标池校验（独立方法，与证券/主体并列）
-        List<SecurityPoolExcelImportCheckItemDto> clearItems =
-                checkClearTargetOutbound(items, inbound, clearTarget, companyImport, allowLinkMutex, opterId);
+        List<SecurityPoolExcelImportCheckItemDto> clearItems = checkClearTargetOutbound(items,
+                inbound && clearTarget ? collectInboundPoolIds(checkItems) : Collections.emptySet(),
+                companyImport, allowLinkMutex, opterId);
         if (!clearItems.isEmpty()) {
             List<SecurityPoolExcelImportCheckItemDto> merged = new ArrayList<>(clearItems);
             merged.addAll(checkItems);
@@ -1047,29 +1048,32 @@ public class SecurityPoolExcelImportService {
         // 拆分清空出库项与 Excel 导入项
         List<SecurityPoolExcelImportCheckItemDto> clearItems = new ArrayList<>();
         List<SecurityPoolExcelImportCheckItemDto> excelItems = new ArrayList<>();
-        Set<String> clearSourceCodes = new HashSet<>();
+        // 清空主项必须和同一目标池的可提交调入主项一起提交
+        Set<Long> inboundPoolIds = "in".equals(batch.getFld001()) && parseClearTarget(batch.getOptionJson())
+                ? collectInboundPoolIds(checkItems) : Collections.emptySet();
+        Set<String> clearGroupKeys = new HashSet<>();
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
-            // 清空主项和它的展开项没有来源导入明细 ID
-            if (isClearTag(ci.getItemTag())) {
-                clearSourceCodes.add(ci.getSourceSecurityCode());
+            if (isClearTag(ci.getItemTag()) && inboundPoolIds.contains(ci.getTargetPoolId())) {
+                clearGroupKeys.add(ci.getAdjustGroupKey());
             }
         }
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
-            // 清空主项及同一来源的联动、互斥、关联项一起提交出库
-            if (isClearTag(ci.getItemTag()) || (ci.getSourceItemId() == null
-                    && clearSourceCodes.contains(ci.getSourceSecurityCode()))) {
+            // 配套项按清空主项的分组提交，同一证券在别的池不能触发本组清空
+            if (ci.getSourceItemId() == null && clearGroupKeys.contains(ci.getAdjustGroupKey())) {
                 clearItems.add(ci);
-            } else {
+            } else if (ci.getSourceItemId() != null && !isClearTag(ci.getItemTag())) {
                 excelItems.add(ci);
             }
+        }
+        if (excelItems.isEmpty()) {
+            throw new BizException("没有可提交的导入项");
         }
         List<Long> logIds = new ArrayList<>();
         List<String> batchNos = new ArrayList<>();
         // 先提交清空出库，再提交 Excel 导入项
         if (!clearItems.isEmpty()) {
             // 提交清空目标池出库
-            logIds.addAll(submitClearTargetOutbound(clearItems, batch, opterId, opterName,
-                    IMPORT_TYPE_COMPANY.equals(importType), batchNos));
+            logIds.addAll(submitClearTargetOutbound(clearItems, batch, opterId, opterName));
         }
         if (IMPORT_TYPE_COMPANY.equals(importType)) {
             // 主体分支：禁投池同构提交
@@ -1342,19 +1346,25 @@ public class SecurityPoolExcelImportService {
     /**
      * 首先清空目标池 — 校验。
      * <p>
-     * 仅调入且勾选 clearTarget 时生效。对每个本批涉及的目标池：
-     * 在池成员 − 本批 Excel 代码 = 差集出库名单，走批量调出校验并注入 batchOut 流程。
+     * 仅对本批至少有一条可调入数据的目标池生成清空项
+     * 读取目标池内全部主体和证券，排除本批 Excel 名单，再按成员类型走对应调出校验
      * </p>
      * <p>
-     * 在途规则：本批导入编码的在途由证券/主体校验路径处理（对应行失败）；
-     * 非本批导入编码若存在在途，不纳入清空名单（不特殊管控）。
+     * 清空时跳过在途主体，证券在途继续由 Excel 校验生成提示
      * </p>
+     *
+     * @param items Excel 导入明细
+     * @param inboundPoolIds 勾选清空且有可调入数据的目标池 ID
+     * @param companyImport 是否使用主体模板
+     * @param allowLinkMutex 是否保留联动及互斥调整项
+     * @param opterId 当前用户 ID
+     * @return 各目标池的清空校验结果
      */
     private List<SecurityPoolExcelImportCheckItemDto> checkClearTargetOutbound(
-            List<SysImpTmpDetlBo> items, boolean inbound, boolean clearTarget,
+            List<SysImpTmpDetlBo> items, Set<Long> inboundPoolIds,
             boolean companyImport, boolean allowLinkMutex, String opterId) {
         List<SecurityPoolExcelImportCheckItemDto> clearItems = new ArrayList<>();
-        if (!clearTarget || !inbound || items == null || items.isEmpty()) {
+        if (inboundPoolIds.isEmpty()) {
             return clearItems;
         }
 
@@ -1366,7 +1376,7 @@ public class SecurityPoolExcelImportService {
             Long poolId = parsePoolId(item.getFld009());
             // 读取明细证券/主体代码
             String code = trimToEmpty(item.getFld001());
-            if (poolId == null || code.isEmpty()) {
+            if (!inboundPoolIds.contains(poolId) || code.isEmpty()) {
                 continue;
             }
             Set<String> codes = excelCodesByPool.get(poolId);
@@ -1387,7 +1397,6 @@ public class SecurityPoolExcelImportService {
             return clearItems;
         }
 
-        String memberType = companyImport ? "company" : "security";
         for (Map.Entry<Long, Set<String>> entry : excelCodesByPool.entrySet()) {
             Long poolId = entry.getKey();
             InvestmentPoolBo pool = poolMap.get(poolId);
@@ -1402,8 +1411,7 @@ public class SecurityPoolExcelImportService {
             }
             Set<String> excelCodes = entry.getValue();
             // 查询目标池当前有效在池成员
-            List<PoolMemberDto> members =
-                    securityPoolExcelImportMapper.queryPoolMemberList(poolId, memberType);
+            List<PoolMemberDto> members = securityPoolExcelImportMapper.queryPoolMemberList(poolId);
             if (members == null || members.isEmpty()) {
                 continue;
             }
@@ -1412,20 +1420,35 @@ public class SecurityPoolExcelImportService {
                     continue;
                 }
                 String code = member.getSecurityCode().trim();
-                // 差集：本批 Excel 中的代码不做出库清空
-                if (excelCodes.contains(code)) {
+                boolean companyMember = IMPORT_TYPE_COMPANY.equals(member.getSecurityType());
+                // 仅保留与本批 Excel 类型和代码都匹配的成员
+                if (companyMember == companyImport && excelCodes.contains(code)) {
                     continue;
                 }
-                // 主体导入仍跳过在途成员，证券清空由共用校验保留在途提示后放行
-                if (companyImport && securityPoolAdjustMapper.querySecurityHasPendingProcess(code)) {
+                // 跳过在途主体，证券清空由共用校验保留在途提示
+                if (companyMember && securityPoolAdjustMapper.querySecurityHasPendingProcess(code)) {
                     continue;
                 }
                 // 对差集成员执行清空出库校验
                 clearItems.addAll(buildClearOutboundCheckItems(
-                        member, pool, companyImport, allowLinkMutex));
+                        member, pool, companyMember, allowLinkMutex));
             }
         }
         return clearItems;
+    }
+
+    /**
+     * 收集有可提交 Excel 调入主项的目标池
+     *
+     * @param checkItems 本批调库校验结果
+     * @return 可调入的目标池 ID
+     */
+    private Set<Long> collectInboundPoolIds(List<SecurityPoolExcelImportCheckItemDto> checkItems) {
+        return checkItems.stream()
+                .filter(item -> item.isCanAdjust() && item.getSourceItemId() != null
+                        && isManualTag(item.getItemTag()) && AdjustMode.IN.getCode().equals(item.getAdjustMode()))
+                .map(SecurityPoolExcelImportCheckItemDto::getTargetPoolId)
+                .collect(Collectors.toSet());
     }
 
     /**
@@ -1433,7 +1456,7 @@ public class SecurityPoolExcelImportService {
      */
     private List<SecurityPoolExcelImportCheckItemDto> buildClearOutboundCheckItems(
             PoolMemberDto member, InvestmentPoolBo pool,
-            boolean companyImport, boolean allowLinkMutex) {
+            boolean companyMember, boolean allowLinkMutex) {
         List<SecurityPoolExcelImportCheckItemDto> result = new ArrayList<>();
         String code = member.getSecurityCode().trim();
         String shortName = member.getSecurityShortName();
@@ -1442,7 +1465,7 @@ public class SecurityPoolExcelImportService {
 
         AdjustCheckDto checkDto;
         try {
-            if (companyImport) {
+            if (companyMember) {
                 // 主体：禁投池调出校验
                 ForbiddenPoolAdjustCheckReq companyReq = new ForbiddenPoolAdjustCheckReq();
                 companyReq.setCompanyCode(code);
@@ -1496,7 +1519,7 @@ public class SecurityPoolExcelImportService {
         }
         for (AdjustCheckDto.CheckResultItem ri : resultItems) {
             SecurityPoolExcelImportCheckItemDto mapped;
-            if (companyImport) {
+            if (companyMember) {
                 // 映射主体校验结果
                 mapped = mapCompanyCheckResult(null, ri, code);
             } else {
@@ -1553,36 +1576,37 @@ public class SecurityPoolExcelImportService {
     }
 
     /**
-     * 首先清空目标池 — 提交（独立方法）
-     * <p>按代码分组，证券走 addAdjustLog，主体走 addCompanyAdjustLog；adjustType=Excel清空。</p>
+     * 按来源对象类型和代码提交清空出库，主体与证券各走自己的调出流程
+     *
+     * @param clearItems 本批可提交的清空及配套调整项
+     * @param batch 导入批次及调整说明
+     * @param opterId 经办人 ID
+     * @param opterName 经办人姓名
+     * @return 写入的调库日志 ID
      */
     private List<Long> submitClearTargetOutbound(List<SecurityPoolExcelImportCheckItemDto> clearItems,
-                                                 SysImpTmpBo batch, String opterId, String opterName,
-                                                 boolean companyImport, List<String> batchNos) {
+                                                 SysImpTmpBo batch, String opterId, String opterName) {
         if (clearItems == null || clearItems.isEmpty()) {
             return new ArrayList<>();
         }
-        // 按主体/证券代码分组
-        Map<String, List<SecurityPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
+        // 按对象类型和来源代码分组，证券关联项跟随主券提交
+        Map<List<Object>, List<SecurityPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
         for (SecurityPoolExcelImportCheckItemDto ci : clearItems) {
-            String groupKey = !isBlank(ci.getSourceSecurityCode())
+            String sourceCode = !isBlank(ci.getSourceSecurityCode())
                     ? ci.getSourceSecurityCode() : ci.getSecurityCode();
-            List<SecurityPoolExcelImportCheckItemDto> list = groupMap.get(groupKey);
-            if (list == null) {
-                list = new ArrayList<>();
-                groupMap.put(groupKey, list);
-            }
-            list.add(ci);
+            boolean companyMember = IMPORT_TYPE_COMPANY.equals(ci.getSecurityType());
+            groupMap.computeIfAbsent(Arrays.asList(companyMember, sourceCode), key -> new ArrayList<>()).add(ci);
         }
         List<Long> allLogIds = new ArrayList<>();
-        for (Map.Entry<String, List<SecurityPoolExcelImportCheckItemDto>> entry : groupMap.entrySet()) {
-            List<SecurityPoolExcelImportCheckItemDto> group = entry.getValue();
+        for (List<SecurityPoolExcelImportCheckItemDto> group : groupMap.values()) {
             // 同组优先取清空/手工主项
             SecurityPoolExcelImportCheckItemDto primary = resolvePrimaryItem(group);
-            if (companyImport) {
+            String sourceCode = !isBlank(primary.getSourceSecurityCode())
+                    ? primary.getSourceSecurityCode() : primary.getSecurityCode();
+            if (IMPORT_TYPE_COMPANY.equals(primary.getSecurityType())) {
                 // 主体清空出库提交
                 ForbiddenPoolAdjustSubmitReq submitReq = new ForbiddenPoolAdjustSubmitReq();
-                submitReq.setCompanyCode(entry.getKey());
+                submitReq.setCompanyCode(sourceCode);
                 submitReq.setCompanyShortName(primary.getSecurityShortName());
                 submitReq.setSecurityType("company");
                 submitReq.setAdjustType(ADJUST_TYPE_CLEAR);
@@ -1622,7 +1646,7 @@ public class SecurityPoolExcelImportService {
             } else {
                 // 证券清空出库提交
                 SecurityPoolAdjustSubmitReq submitReq = new SecurityPoolAdjustSubmitReq();
-                submitReq.setSecurityCode(entry.getKey());
+                submitReq.setSecurityCode(sourceCode);
                 submitReq.setSecurityShortName(primary.getSecurityShortName());
                 submitReq.setSecurityType(primary.getSecurityType());
                 submitReq.setAdjustType(ADJUST_TYPE_CLEAR);

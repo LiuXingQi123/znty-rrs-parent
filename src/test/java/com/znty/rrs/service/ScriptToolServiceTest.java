@@ -36,19 +36,29 @@ import static org.mockito.ArgumentMatchers.anyString;
  */
 public class ScriptToolServiceTest {
 
-    /** 主体审批通过演示场景包含旗下债券日志、范围筛选和同批池状态。 */
+    /** 主体审批通过演示场景只生成主体日志、审批步骤和池状态 */
     @Test
-    public void approvedCompanySceneShouldIncludeBondStates() {
+    public void approvedCompanySceneShouldOnlyWriteCompanyStates() {
         ScriptToolService service = new ScriptToolService();
         List<String> statements = ReflectionTestUtils.invokeMethod(service, "buildDemoSceneStatements", "forbidden-company-approved");
         String sql = String.join("\n", statements);
-        assertTrue(sql.contains("SELECT s.wind_code, s.short_name, s.security_type"));
-        assertTrue(sql.contains("d.category_type = 'bond'"));
-        assertTrue(sql.contains("s.security_status != 'D'"));
-        assertTrue(sql.contains("s.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')"));
-        assertTrue(sql.contains("AND NOT EXISTS (SELECT 1 FROM ip_pool_status ps"));
-        assertTrue(sql.contains("p.id IN (15, 17)"));
-        assertTrue(sql.contains("INSERT INTO ip_adjust_security_snapshot"));
+        assertTrue(sql.contains("SELECT s.COMP_ID, s.COMP_NAME, 'company'"));
+        assertTrue(sql.contains("s.COMP_ID = 'C10006'"));
+        assertTrue(sql.contains("FROM ais_inv_ods.wind_compintroduction s INNER JOIN ip_investment_pool p ON p.id = 15"));
+        assertTrue(sql.contains("SELECT l.security_code, l.security_short_name, l.security_type, '联动调整'"));
+        assertTrue(sql.contains("FROM ip_adjust_log l INNER JOIN ip_investment_pool p ON p.id = 17"));
+        assertTrue(sql.contains("INSERT INTO ip_pool_status ("));
+        assertTrue(sql.contains("INSERT INTO ip_adjust_step ("));
+        assertFalse(sql.contains("rrs_securityinfo"));
+        assertFalse(sql.contains("INSERT INTO ip_adjust_security_snapshot"));
+    }
+
+    /** ABS 演示场景继续采用证券主档生成证券快照 */
+    @Test
+    public void pendingAbsSceneShouldStillWriteSecuritySnapshot() {
+        ScriptToolService service = new ScriptToolService();
+        List<String> statements = ReflectionTestUtils.invokeMethod(service, "buildDemoSceneStatements", "forbidden-abs-pending");
+        assertTrue(statements.stream().anyMatch(sql -> sql.startsWith("INSERT INTO ip_adjust_security_snapshot (")));
     }
 
     /** 验证分类批次覆盖范围与依赖顺序，全库不得遗漏或重复脚本。 */

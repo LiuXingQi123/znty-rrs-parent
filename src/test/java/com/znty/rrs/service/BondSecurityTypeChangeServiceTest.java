@@ -37,7 +37,7 @@ public class BondSecurityTypeChangeServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(2);
-        assertThat(result.getDetailLog()).contains("任务开始：【债券类型变更】")
+        assertThat(result.getDetailLog()).contains("任务开始：【债券类型变更（仅债券）】")
                 .contains("扫描条件：ip_pool_status/ip_pool_status_crmw.is_deleted=0、audit_status=20")
                 .contains("新旧 security_type 均属于 bond 大类且不相等")
                 .contains("扫描完成：普通池候选 1 条，CRMW 池候选 1 条")

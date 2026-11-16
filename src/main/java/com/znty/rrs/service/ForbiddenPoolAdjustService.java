@@ -73,6 +73,7 @@ import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitReq;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -135,12 +136,6 @@ public class ForbiddenPoolAdjustService {
     private static final String COMPANY_SECURITY_TYPE = CategoryType.COMPANY.getCode();
     /** 禁投池、观察池、黑名单质押库和重点观察名单 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
-    /**
-     * 债券禁止库 ID（pool_code=forbidden_root）。
-     * 仅主体对该池调入/调出生效时，才自动同步旗下未到期债券。
-     */
-    private static final Long BOND_FORBIDDEN_POOL_ID = 15L;
-
     static {
         ALLOWED_MANUAL_POOL_IDS.add(15L);
         ALLOWED_MANUAL_POOL_IDS.add(16L);
@@ -151,10 +146,6 @@ public class ForbiddenPoolAdjustService {
     /** 禁投池主体调整数据访问组件 */
     @Resource
     private ForbiddenPoolAdjustMapper forbiddenPoolAdjustMapper;
-
-    /** ABS 主体身份与联动提醒 */
-    @Resource
-    private AbsCompanySyncService absCompanySyncService;
 
     /** 投资池数据访问组件 */
     @Resource
@@ -373,92 +364,7 @@ public class ForbiddenPoolAdjustService {
                 item.setSourceSecurityCode(company.getCompanyCode());
             }
         }
-        // 追加主体调入实际目标池时，旗下债券需要执行的互斥调出项
-        appendCompanyBondMutexOutItems(company.getCompanyCode(), result, context);
         return result;
-    }
-
-    /**
-     * 在主体调库校验结果中追加旗下债券互斥调出项。
-     *
-     * <p>互斥项与主体手工调入项共用流程和批次，但调整对象为具体债券。
-     */
-    private void appendCompanyBondMutexOutItems(String companyCode, AdjustCheckDto result) {
-        // 单笔调用仍读取当前池与关系配置
-        appendCompanyBondMutexOutItems(companyCode, result, null);
-    }
-
-    /** 追加债券互斥项，批量入口使用本次公共配置，债券及池状态仍实时查询。 */
-    private void appendCompanyBondMutexOutItems(String companyCode, AdjustCheckDto result,
-                                                CompanyAdjustCheckContext context) {
-        if (result == null || result.getItems() == null) {
-            return;
-        }
-        List<AdjustCheckDto.CheckResultItem> inboundItems = result.getItems().stream()
-                .filter(item -> ItemType.MANUAL.getCode().equals(item.getItemTag())
-                        || ItemType.LINKAGE.getCode().equals(item.getItemTag()))
-                .filter(item -> AdjustMode.IN.getCode().equals(item.getAdjustMode()))
-                .filter(item -> item.getTargetPoolId() != null)
-                .collect(Collectors.toList());
-        if (inboundItems.isEmpty()) {
-            return;
-        }
-        List<InvestmentPoolBo> pools = context == null ? investmentPoolMapper.queryPoolList() : context.getPools();
-        Map<Long, InvestmentPoolBo> poolMap = pools.stream()
-                .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
-        List<PoolRelationBo> relations = context == null
-                ? forbiddenPoolAdjustMapper.queryAllPoolRelationList() : context.getRelations();
-        // 收集已存在的真实调出项，避免跨目标池重复生成债券调出记录
-        Set<String> outboundKeys = result.getItems().stream()
-                .filter(item -> AdjustMode.OUT.getCode().equals(item.getAdjustMode()))
-                .map(item -> buildSecurityPoolKey(item.getSecurityCode(), item.getTargetPoolId()))
-                .collect(Collectors.toSet());
-        for (AdjustCheckDto.CheckResultItem inboundItem : inboundItems) {
-            // 逐目标池补齐债券互斥项，同一债券同一出池只展示并执行一次
-            appendCompanyBondMutexOutItemsForPool(companyCode, result, inboundItem, relations, poolMap, outboundKeys);
-        }
-    }
-
-    /** 按主体实际调入池追加旗下债券的互斥调出项。 */
-    private void appendCompanyBondMutexOutItemsForPool(String companyCode, AdjustCheckDto result,
-            AdjustCheckDto.CheckResultItem inboundItem, List<PoolRelationBo> relations,
-            Map<Long, InvestmentPoolBo> poolMap, Set<String> outboundKeys) {
-        List<Long> relationPoolIds = AutoAdjustRelationHelper.resolveInboundAutoOutPoolIds(
-                inboundItem.getTargetPoolId(), relations);
-        if (relationPoolIds.isEmpty()) {
-            return;
-        }
-        List<ForbiddenPoolAdjustDto.CompanyBond> bonds = forbiddenPoolAdjustMapper
-                .queryCompanyBondMutexOutList(companyCode, inboundItem.getTargetPoolId(), relationPoolIds,
-                        CompanyBondSyncPolicy.currentTypeScope());
-        if (bonds == null || bonds.isEmpty()) {
-            return;
-        }
-        for (ForbiddenPoolAdjustDto.CompanyBond bond : bonds) {
-            // 同批多个调入池可能要求同一债券从同一关系池调出，避免重复日志和重复软删
-            if (!outboundKeys.add(buildSecurityPoolKey(bond.getWindCode(), bond.getTargetPoolId()))) {
-                continue;
-            }
-            InvestmentPoolBo pool = poolMap.get(bond.getTargetPoolId());
-            AdjustCheckDto.CheckResultItem mutexItem = new AdjustCheckDto.CheckResultItem();
-            mutexItem.setSecurityCode(bond.getWindCode());
-            mutexItem.setSecurityShortName(bond.getShortName());
-            mutexItem.setSecurityType(bond.getSecurityType());
-            mutexItem.setSourceSecurityCode(companyCode);
-            mutexItem.setTargetPoolId(bond.getTargetPoolId());
-            mutexItem.setPoolName(buildPoolPath(bond.getTargetPoolId(), poolMap));
-            mutexItem.setPoolType(pool == null ? null : pool.getPoolType());
-            mutexItem.setAdjustMode(AdjustMode.OUT.getCode());
-            mutexItem.setItemTag(ItemType.MUTEX.getCode());
-            mutexItem.setAdjustGroupKey(inboundItem.getAdjustGroupKey());
-            mutexItem.setCanAdjust(inboundItem.isCanAdjust());
-            mutexItem.setFailReasons(inboundItem.isCanAdjust()
-                    ? new ArrayList<String>()
-                    : Collections.singletonList("关联的主体调入项校验未通过，本次不会执行互斥调出"));
-            mutexItem.setWarnings(new ArrayList<String>());
-            mutexItem.setFlowOptions(new ArrayList<AdjustCheckDto.FlowOption>());
-            result.getItems().add(mutexItem);
-        }
     }
 
     /**
@@ -588,6 +494,10 @@ public class ForbiddenPoolAdjustService {
             throw new BizException("调库项不能为空");
         }
         for (ForbiddenPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if ((StringUtils.hasText(item.getSecurityCode()) && !company.getCompanyCode().equals(item.getSecurityCode()))
+                    || (StringUtils.hasText(item.getSecurityType()) && !COMPANY_SECURITY_TYPE.equals(item.getSecurityType()))) {
+                throw new BizException("主体调库只接受主体调整项，请重新校验后提交");
+            }
             boolean manual = item.getItemTag() == null || item.getItemTag().isEmpty()
                     || ItemType.MANUAL.getCode().equals(item.getItemTag());
             if (manual && (item.getTargetPoolId() == null
@@ -2783,20 +2693,11 @@ public class ForbiddenPoolAdjustService {
                         inCheckSourcePool(ctx), inCheckRestrictPool(ctx), inCheckForbiddenPool(ctx));
                 int increment = inboundIncrements.getOrDefault(pool.getId(), 0);
                 int currentCount = forbiddenPoolAdjustMapper.queryPoolCurrentCount(pool.getId());
-                // 所有主体目标池均同步旗下未到期债券，容量按「主体 + 同步债」预占
-                int syncBondCount = CategoryType.COMPANY.getCode().equals(categoryType)
-                        ? forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
-                                log.getSecurityCode(), pool.getId(),
-                                CompanyBondSyncPolicy.currentTypeScope()).size()
-                        : 0;
-                int totalIncrement = 1 + syncBondCount;
                 if (failure == null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
-                        && currentCount + increment + totalIncrement > pool.getMaxCapacity()) {
-                    failure = syncBondCount > 0
-                            ? "目标投资池容量不足，无法容纳主体及同步债券"
-                            : "目标投资池容量不足";
+                        && currentCount + increment + 1 > pool.getMaxCapacity()) {
+                    failure = "目标投资池容量不足";
                 }
-                inboundIncrements.put(pool.getId(), increment + totalIncrement);
+                inboundIncrements.put(pool.getId(), increment + 1);
             } else {
                 ctx.setTargetPoolEntryTime(forbiddenPoolAdjustMapper.queryPoolEntryTime(
                         log.getSecurityCode(), pool.getId()));
@@ -2820,14 +2721,14 @@ public class ForbiddenPoolAdjustService {
         }
         // 复核当前数据库业务状态并锁定目标池
         recheckBeforeFinalApproval(directApplyLogs);
-        // 将主体和符合条件的旗下债券统一应用到当前池状态
+        // 应用批次中已提交的显式调整项
         applyPoolStatusChanges(directApplyLogs);
         // 直通落池成功后，将手工信评附件沉淀为内部报告
         reportService.addInternalReportsOnFinish(directApplyLogs);
     }
 
     /**
-     * 统一应用主体池状态，并同步旗下债券出入同一目标池，不按池 ID 限制。
+     * 应用主体池状态及历史在途批次已提交的显式调整项
      *
      * @param logList 同一批次待生效的调整日志
      */
@@ -2835,11 +2736,6 @@ public class ForbiddenPoolAdjustService {
         if (logList == null || logList.isEmpty()) {
             return;
         }
-        Set<String> explicitOutboundKeys = logList.stream()
-                .filter(log -> AdjustMode.OUT.getCode().equals(log.getAdjustMode()))
-                .filter(log -> !COMPANY_SECURITY_TYPE.equals(log.getSecurityType()))
-                .map(log -> buildSecurityPoolKey(log.getSecurityCode(), log.getTargetPoolId()))
-                .collect(Collectors.toSet());
         for (IpAdjustLogBo log : logList) {
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
                 log.setAuditStatus(AuditStatus.APPROVED.getCode());
@@ -2854,181 +2750,7 @@ public class ForbiddenPoolAdjustService {
                     throw new BizException("主体当前池状态已发生变化，请刷新后重试");
                 }
             }
-            // 主体生效后同步旗下债券出入同一目标池
-            syncCompanyBonds(log, explicitOutboundKeys);
-            // 15/23 条件变化后，若主体本来就在 17，补齐此前遗漏或新发行的旗下债券
-            syncExistingBlacklistBondsIfRequired(log, explicitOutboundKeys);
         }
-    }
-
-    /**
-     * 同步主体旗下未到期债券并检查写入结果。
-     *
-     * <p>主体出入任意目标池均执行同池债券同步。
-     * 同步范围：issuer 下全部 bond 大类（含 ABS、crmw），排除已过期；调入再排除已在目标池，调出仅处理当前在池。
-     *
-     * @param companyLog 已生效的主体调整日志
-     * @return 实际成功调入目标池的债券数量；调出场景返回 0
-     */
-    private int syncCompanyBonds(IpAdjustLogBo companyLog) {
-        // 按无显式债券调出项的场景同步旗下债券
-        return syncCompanyBonds(companyLog, Collections.<String>emptySet());
-    }
-
-    /**
-     * 同步主体旗下债券；同批已存在的显式债券调出项由批次后续统一落池。
-     *
-     * @param companyLog          已生效的主体调整日志
-     * @param explicitOutboundKeys 同批显式债券调出项唯一键
-     * @return 实际成功调入目标池的债券数量；调出场景返回 0
-     */
-    private int syncCompanyBonds(IpAdjustLogBo companyLog, Set<String> explicitOutboundKeys) {
-        if (companyLog == null || companyLog.getTargetPoolId() == null) {
-            return 0;
-        }
-        String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(companyLog.getSecurityType());
-        if (!CategoryType.COMPANY.getCode().equals(categoryType)) {
-            return 0;
-        }
-        boolean inbound = AdjustMode.IN.getCode().equals(companyLog.getAdjustMode());
-        List<SecurityInfoBo> bonds = inbound
-                ? forbiddenPoolAdjustMapper.queryCompanyInboundBondForAutoList(
-                        companyLog.getSecurityCode(), companyLog.getTargetPoolId(),
-                        CompanyBondSyncPolicy.currentTypeScope())
-                : forbiddenPoolAdjustMapper.queryCompanyOutboundBondForAutoList(
-                        companyLog.getSecurityCode(), companyLog.getTargetPoolId(),
-                        CompanyBondSyncPolicy.currentTypeScope());
-        int synchronizedBondCount = 0;
-        // 按实际目标池的互斥和反向调入限制关系确定债券需自动调出的池
-        List<Long> autoOutPoolIds = inbound
-                ? AutoAdjustRelationHelper.resolveInboundAutoOutPoolIds(companyLog.getTargetPoolId(),
-                        forbiddenPoolAdjustMapper.queryAllPoolRelationList())
-                : Collections.<Long>emptyList();
-        Map<Long, InvestmentPoolBo> autoOutPoolMap = autoOutPoolIds.isEmpty()
-                ? Collections.<Long, InvestmentPoolBo>emptyMap()
-                : investmentPoolMapper.queryPoolByIdsList(new ArrayList<>(autoOutPoolIds)).stream()
-                        .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool));
-        for (SecurityInfoBo bond : bonds) {
-            // 任意目标池统一判断主体依据，B 触发时保留已确定的 A 身份
-            if (CreditBondSpecialInboundRule.isAbs(bond) && !absCompanySyncService.allowCompanySync(bond, companyLog.getSecurityCode(),
-                    companyLog.getTargetPoolId(), companyLog.getTargetPoolName(), inbound)) {
-                continue;
-            }
-            // 同批显式债券调出由批次统一落池，主体同步不重复生成日志或软删
-            if (!inbound && explicitOutboundKeys.contains(
-                    buildSecurityPoolKey(bond.getWindCode(), companyLog.getTargetPoolId()))) {
-                continue;
-            }
-            // 构建旗下债券自动调整日志
-            IpAdjustLogBo autoLog = buildCompanyBondAutoLog(companyLog, bond);
-            // 旗下债券自动同步与主体提交时间保持一致，便于历史同批相邻
-            autoLog.setSubmitTime(companyLog.getSubmitTime());
-            if (forbiddenPoolAdjustMapper.addAdjustLog(autoLog) != 1) {
-                throw new BizException("旗下债券[" + bond.getWindCode() + "]自动调整日志写入失败");
-            }
-            if (inbound) {
-                autoLog.setAdjustLogId(autoLog.getId());
-                if (forbiddenPoolAdjustMapper.addPoolStatus(autoLog) != 1) {
-                    throw new BizException("旗下债券[" + bond.getWindCode() + "]调入失败，请刷新后重试");
-                }
-                synchronizedBondCount++;
-                List<Long> currentPoolIds = forbiddenPoolAdjustMapper
-                        .querySecurityCurrentPoolIdList(bond.getWindCode());
-                List<Long> actualOutPoolIds = currentPoolIds == null
-                        ? Collections.<Long>emptyList()
-                        : currentPoolIds.stream().filter(autoOutPoolIds::contains)
-                                .distinct().sorted().collect(Collectors.toList());
-                for (Long outPoolId : actualOutPoolIds) {
-                    if (explicitOutboundKeys.contains(buildSecurityPoolKey(bond.getWindCode(), outPoolId))) {
-                        continue;
-                    }
-                    InvestmentPoolBo outPool = autoOutPoolMap.get(outPoolId);
-                    if (outPool == null) {
-                        throw new BizException("旗下债券[" + bond.getWindCode()
-                                + "]自动调出池配置不存在，请检查投资池关系配置");
-                    }
-                    // 为债券从互斥或受限池自动调出生成独立调整日志
-                    IpAdjustLogBo autoOutLog = buildCompanyBondAutoLog(companyLog, bond);
-                    autoOutLog.setAdjustType("互斥调整");
-                    autoOutLog.setAdjustMode(AdjustMode.OUT.getCode());
-                    autoOutLog.setTargetPoolId(outPoolId);
-                    autoOutLog.setTargetPoolName(outPool.getPoolName());
-                    autoOutLog.setPoolType(outPool.getPoolType());
-                    String autoOutReason = "主体“" + companyLog.getSecurityShortName()
-                            + "”调入“" + companyLog.getTargetPoolName()
-                            + "”，旗下债券自动调出“" + outPool.getPoolName() + "”";
-                    autoOutReason = ScheduledAdjustLogHelper.appendDetails(autoOutReason,
-                            ScheduledAdjustLogHelper.absCompanySyncDetail(bond, companyLog.getSecurityCode()));
-                    autoOutLog.setAdjustReason(autoOutReason);
-                    autoOutLog.setSubmitTime(companyLog.getSubmitTime());
-                    if (forbiddenPoolAdjustMapper.addAdjustLog(autoOutLog) != 1) {
-                        throw new BizException("旗下债券[" + bond.getWindCode() + "]自动调出日志写入失败");
-                    }
-                    if (forbiddenPoolAdjustMapper.deletePoolStatusSoft(bond.getWindCode(), outPoolId) == 0) {
-                        throw new BizException("旗下债券[" + bond.getWindCode() + "]从["
-                                + outPool.getPoolName() + "]自动调出失败，请刷新后重试");
-                    }
-                }
-            } else {
-                int deleted = forbiddenPoolAdjustMapper.deletePoolStatusSoft(
-                        bond.getWindCode(), companyLog.getTargetPoolId());
-                if (deleted == 0) {
-                    throw new BizException("旗下债券[" + bond.getWindCode() + "]调出失败，请刷新后重试");
-                }
-            }
-        }
-        return synchronizedBondCount;
-    }
-
-    /**
-     * 15/23 调整后主体仍应在 17 时，补齐 17 中缺少的旗下债券。
-     *
-     * @param sourceLog            触发条件变化的主体调整日志
-     * @param explicitOutboundKeys 同批显式债券调出项唯一键
-     */
-    private void syncExistingBlacklistBondsIfRequired(IpAdjustLogBo sourceLog,
-                                                       Set<String> explicitOutboundKeys) {
-        if (sourceLog == null || (!BOND_FORBIDDEN_POOL_ID.equals(sourceLog.getTargetPoolId())
-                && !PledgeBlacklistRuleService.KEY_WATCH_POOL_ID.equals(sourceLog.getTargetPoolId()))) {
-            return;
-        }
-        String categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType(sourceLog.getSecurityType());
-        if (!CategoryType.COMPANY.getCode().equals(categoryType)
-                || !pledgeBlacklistRuleService.evaluate(sourceLog.getSecurityCode()).shouldBeInBlacklist()) {
-            return;
-        }
-        List<Long> currentPoolIds = forbiddenPoolAdjustMapper
-                .querySecurityCurrentPoolIdList(sourceLog.getSecurityCode());
-        if (currentPoolIds == null
-                || !currentPoolIds.contains(PledgeBlacklistRuleService.BLACKLIST_POOL_ID)) {
-            return;
-        }
-        List<InvestmentPoolBo> pools = investmentPoolMapper.queryPoolByIdsList(
-                Collections.singletonList(PledgeBlacklistRuleService.BLACKLIST_POOL_ID));
-        if (pools == null || pools.isEmpty()) {
-            throw new BizException("黑名单质押库配置不存在");
-        }
-        InvestmentPoolBo blacklistPool = pools.get(0);
-        IpAdjustLogBo syncLog = new IpAdjustLogBo();
-        syncLog.setSecurityCode(sourceLog.getSecurityCode());
-        syncLog.setSecurityShortName(sourceLog.getSecurityShortName());
-        syncLog.setSecurityType(sourceLog.getSecurityType());
-        syncLog.setAdjustMode(AdjustMode.IN.getCode());
-        syncLog.setAdjustBatchNo(sourceLog.getAdjustBatchNo());
-        syncLog.setTargetPoolId(blacklistPool.getId());
-        syncLog.setTargetPoolName(blacklistPool.getPoolName());
-        syncLog.setPoolType(blacklistPool.getPoolType());
-        syncLog.setAdjusterId(sourceLog.getAdjusterId());
-        syncLog.setAdjusterName(sourceLog.getAdjusterName());
-        syncLog.setAdjustAdvice(sourceLog.getAdjustAdvice());
-        syncLog.setSubmitTime(sourceLog.getSubmitTime());
-        // 复用统一债券同步逻辑补齐黑名单质押库债券
-        syncCompanyBonds(syncLog, explicitOutboundKeys);
-    }
-
-    /** 构建调整对象与投资池的唯一键。 */
-    private String buildSecurityPoolKey(String securityCode, Long poolId) {
-        return (securityCode == null ? "" : securityCode) + "|" + poolId;
     }
 
     /** 返回第一个最终审批复核失败原因。 */
@@ -4402,40 +4124,6 @@ public class ForbiddenPoolAdjustService {
             bo.setSubmitTime(shared.batchNoContext.submitTime);
         }
         return bo;
-    }
-
-    /**
-     * 无需人工审批的主体调整生效后，同步旗下债券出入实际目标池。
-     */
-    private void syncCompanyBondsOnDirect(IpAdjustLogBo companyLog) {
-        // 使用统一债券同步与结果检查逻辑
-        syncCompanyBonds(companyLog);
-    }
-
-    /**
-     * 构建主体旗下债券自动调整日志。
-     */
-    private IpAdjustLogBo buildCompanyBondAutoLog(IpAdjustLogBo companyLog, SecurityInfoBo bond) {
-        IpAdjustLogBo autoLog = new IpAdjustLogBo();
-        autoLog.setSecurityCode(bond.getWindCode());
-        autoLog.setSecurityShortName(bond.getShortName());
-        autoLog.setSecurityType(bond.getSecurityType());
-        autoLog.setAdjustType("自动调整");
-        autoLog.setAdjustMode(companyLog.getAdjustMode());
-        autoLog.setAdjustBatchNo(companyLog.getAdjustBatchNo());
-        autoLog.setTargetPoolId(companyLog.getTargetPoolId());
-        autoLog.setTargetPoolName(companyLog.getTargetPoolName());
-        autoLog.setPoolType(companyLog.getPoolType());
-        autoLog.setAuditStatus(AuditStatus.APPROVED.getCode());
-        autoLog.setAdjusterId(companyLog.getAdjusterId());
-        autoLog.setAdjusterName(companyLog.getAdjusterName());
-        String reason = "主体“" + companyLog.getSecurityShortName() + "”"
-                + companyLog.getAdjustMode() + "，旗下债券自动同步调整";
-        reason = ScheduledAdjustLogHelper.appendDetails(reason,
-                ScheduledAdjustLogHelper.absCompanySyncDetail(bond, companyLog.getSecurityCode()));
-        autoLog.setAdjustReason(reason);
-        autoLog.setAdjustAdvice(companyLog.getAdjustAdvice());
-        return autoLog;
     }
 
     /**

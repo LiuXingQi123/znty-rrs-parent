@@ -37,27 +37,26 @@ public class ScheduledTaskDemoDataTest {
         String sql = new String(Files.readAllBytes(Paths.get("sql", "rrs_scheduled_task_demo_data.sql")),
                 StandardCharsets.UTF_8);
         List<TaskConfig> configs = Arrays.asList(
-                new TaskConfig("bond_temp_code_replace", "债券临时代码替换", "0 40 4,8,9,13,18,22 * * ?"),
-                new TaskConfig("bond_security_type_change", "债券类型变更", "0 0 22 * * ?"),
+                new TaskConfig("bond_temp_code_replace", "债券临时代码替换（仅债券）", "0 40 4,8,9,13,18,22 * * ?"),
+                new TaskConfig("bond_security_type_change", "债券类型变更（仅债券）", "0 0 22 * * ?"),
                 new TaskConfig("security_expired_auto_out", "到期证券自动出池", "0 0 23 * * ?"),
                 new TaskConfig("crmw_expired_auto_out", "CRMW到期自动出池", "0 5 23 * * ?"),
-                new TaskConfig("company_outer_rating_not_aa_minus_auto_out", "外评非AA-及以下主体自动出池", "0 10 23 * * ?"),
-                new TaskConfig("company_outer_rating_aa_minus_auto_in", "外评AA-及以下主体自动入池（已排除ABS债）", "0 15 23 * * ?"),
-                new TaskConfig("company_same_pool_bond_auto_in", "主体下债券自动入池（已排除ABS债）", "0 20 23 * * ?"),
-                new TaskConfig("company_inpool_bond_auto_in", "在池主体旗下债券自动入池（已排除ABS债）", "0 */10 * * * ?"),
-                new TaskConfig("company_not_in_pool_bond_auto_out", "主体不在池债券自动出池(默认关闭)", "0 0 0 * * ?"),
+                new TaskConfig("company_outer_rating_not_aa_minus_auto_out", "外评非AA-及以下主体自动出池（仅主体）", "0 10 23 * * ?"),
+                new TaskConfig("company_outer_rating_aa_minus_auto_in", "外评AA-及以下主体自动入池（仅主体）", "0 15 23 * * ?"),
+                new TaskConfig("company_inpool_bond_auto_in", "在池主体旗下债券自动入池（已排除ABS债）（仅债券）", "0 1/10 * * * ?"),
+                new TaskConfig("company_not_in_pool_bond_auto_out", "主体依据失效的债券自动出池（仅债券）", "0 3/10 * * * ?"),
                 new TaskConfig("bond_grade_inconformity_alert",
-                        "不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）", "0 0 1 * * ?"),
+                        "不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）（仅债券）", "0 0 1 * * ?"),
                 new TaskConfig("hs_pool_full_excel_export", "恒生池全量数据导出（不含已到期）", "0 10 1 * * ?"),
                 new TaskConfig("hs_pool_full_including_expired_excel_export", "恒生池全量数据导出（含已到期）", "0 20 1 * * ?"),
-                new TaskConfig("company_observer_pool_sync", "主体观察名单同步（已排除ABS债）", "0 0 6 * * ?"),
+                new TaskConfig("company_observer_pool_sync", "主体观察名单同步（仅主体）", "0 0 6 * * ?"),
                 new TaskConfig("pledge_blacklist_daily_increment_reminder", "质押黑名单库每日增量提醒", "0 0 9 * * ?"),
-                new TaskConfig("bond_issuer_not_in_company_pool_reminder", "主体库内债券主体不在池债邮件提醒", "0 0 9 * * ?"),
+                new TaskConfig("bond_issuer_not_in_company_pool_reminder", "主体库内债券主体不在池债邮件提醒（仅债券）", "0 0 9 * * ?"),
                 new TaskConfig("crmw_rule_alert", "CRMW规则提醒", "0 13 9 * * ?"),
                 new TaskConfig("hs_pool_increment_excel_export", "恒生池增量数据导出", "0 */6 * * * ?"),
-                new TaskConfig("wind_code_sync", "Wind代码变更同步", "0 2/10 * * * ?"),
+                new TaskConfig("wind_code_sync", "Wind代码变更同步（仅债券）", "0 2/10 * * * ?"),
                 new TaskConfig("company_abs_bond_auto_in",
-                        "主体下ABS债券自动入库（区分已确认发行人和未确认发行人）", "0 5/10 * * * ?"),
+                        "主体下ABS债券自动入库（区分已确认发行人和未确认发行人）（仅债券）", "0 5/10 * * * ?"),
                 new TaskConfig("crmw_forbidden_auto_out", "CRMW关联禁投自动出库", "0 7/10 * * * ?")
         );
 
@@ -75,7 +74,6 @@ public class ScheduledTaskDemoDataTest {
                     .isTrue();
         }
 
-        // 仅主体不在池债券自动出池任务在说明中强调默认关闭
         Pattern descriptionPattern = Pattern.compile(
                 "\\(\\d+,\\s*'([^']+)',\\s*'[^']+',\\s*'(.*?)',\\s*'[^']+',\\s*0,",
                 Pattern.DOTALL);
@@ -86,11 +84,6 @@ public class ScheduledTaskDemoDataTest {
             String taskCode = descriptionMatcher.group(1);
             String description = descriptionMatcher.group(2);
             assertThat(description.length()).as(taskCode + " 的任务说明不能超过 500 字").isLessThanOrEqualTo(500);
-            if ("company_not_in_pool_bond_auto_out".equals(taskCode)) {
-                assertThat(description).contains("默认关闭调度");
-            } else {
-                assertThat(description).doesNotContain("默认关闭调度");
-            }
             if ("company_outer_rating_not_aa_minus_auto_out".equals(taskCode)) {
                 assertThat(description).contains("AA-及以下不出池")
                         .contains("空评级/近一年无认可外评不出池");
@@ -128,7 +121,6 @@ public class ScheduledTaskDemoDataTest {
                 "CompanyOuterRatingNotAaMinusAutoOutService.java");
         taskSources.put("company_outer_rating_aa_minus_auto_in",
                 "CompanyOuterRatingAaMinusAutoInService.java");
-        taskSources.put("company_same_pool_bond_auto_in", "CompanySamePoolBondAutoInService.java");
         taskSources.put("company_inpool_bond_auto_in", "CompanyNewBondAutoInService.java");
         taskSources.put("company_not_in_pool_bond_auto_out", "CompanyNotInPoolBondAutoOutService.java");
         taskSources.put("bond_grade_inconformity_alert", "GradeRuleAlertService.java");
@@ -144,7 +136,7 @@ public class ScheduledTaskDemoDataTest {
         taskSources.put("company_abs_bond_auto_in", "CompanyAbsBondAutoInService.java");
         taskSources.put("crmw_forbidden_auto_out", "CrmwForbiddenAutoOutService.java");
 
-        assertThat(taskSources).hasSize(20);
+        assertThat(taskSources).hasSize(19);
         for (Map.Entry<String, String> entry : taskSources.entrySet()) {
             String source = new String(Files.readAllBytes(Paths.get("src", "main", "java", "com", "znty",
                     "rrs", "service", entry.getValue())), StandardCharsets.UTF_8);

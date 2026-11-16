@@ -57,7 +57,7 @@ public class GradeRuleAlertService implements RrsScheduledTask {
     public static final String TASK_CODE = "bond_grade_inconformity_alert";
 
     /** 任务名称 */
-    public static final String TASK_NAME = "不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）";
+    public static final String TASK_NAME = "不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）（仅债券）";
 
     /** 待处理 */
     public static final String STATUS_OPEN = "00";

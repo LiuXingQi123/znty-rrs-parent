@@ -93,13 +93,13 @@
 
 ## 5. 关键数据库表
 
-view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip_investment_pool`/`ip_adjust_log`/`wf_flow_definition`/`ip_adjust_step`/`sys_attachment`。adjust 模式提交时写 `ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`/`sys_attachment`，与 [15] 完全一致（含所有主体目标池入/出方向的旗下债券同步，直通与审批均复用 `applyPoolStatusChanges`，其中 `maturity_date` 按 `yyyyMMdd` 与数据库当前日比较）。
+view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip_investment_pool`/`ip_adjust_log`/`wf_flow_definition`/`ip_adjust_step`/`sys_attachment`。adjust 模式提交时写 `ip_adjust_log`/`ip_pool_status`/`ip_adjust_step`/`sys_attachment`，与 [15] 完全一致。旗下债券由独立任务同步。
 
 ---
 
 ## 6. 状态流转
 
-详情页本身不驱动状态流转。view 模式展示的 `audit_status`/`step_status` 由 [15] 申请与 [16] 审批写入。详情页 adjust 模式提交后，新记录初始为 `00`（非直通）或 `20`（直通，含 `syncCompanyBondsOnDirect`）。
+详情页本身不驱动状态流转。view 模式展示的 `audit_status`/`step_status` 由 [15] 申请与 [16] 审批写入。详情页 adjust 模式提交后，新记录初始为 `00`（非直通）或 `20`（直通）。
 
 `audit_status` 枚举与 [15]/[16] 完全一致（-1/00/11/20/21/32/99）。`queryAdjustLogList` 无批次参数时排除终态 `-1/20/21/99`，仅展示进行中（`00/11/32`）记录。
 
@@ -132,7 +132,7 @@ view 模式纯读：`rrs_securityinfo`/`dict_security_type`/`ip_pool_status`/`ip
 
 - 前端：`znty-rrs-ui/forbidden_pool_adjust_detail.html`（`initStandaloneDetailPage`、`entryMode` 归一化、`isViewMode`/`isAdjustMode`/`isSecurityInfoReadonly`/`showAdjustLogSection`/`showFlowStatusSection`/`showAdjustOpSection`/`showLogUploadActions` 计算属性、并发加载、`loadFlowSteps`/`uniqueAdjustLogsByFlow`、`flowStepSpanMethod`/`getFlowStepRowClass`、adjust 模式 `submitAdjustLog`）、`css/forbidden_pool_adjust_detail.css`
 - Controller：`ForbiddenPoolAdjustController.java`（详情用 `queryCompanyDetail`/`queryCompanyPoolStatus`/`queryCompanyBondList`/`queryAdjustLogList`/`queryAdjustStepList`，adjust 模式用 `checkAdjust`/`addAdjustLogWithFiles`）
-- Service：`ForbiddenPoolAdjustService.java`（详情查询方法 + adjust 模式 `checkCompanyAdjust`/`addCompanyAdjustLog`/`addAdjustLog`/`createInitialSteps`/`syncCompanyBondsOnDirect`）
+- Service：`ForbiddenPoolAdjustService.java`（详情查询方法 + adjust 模式 `checkCompanyAdjust`/`addCompanyAdjustLog`/`addAdjustLog`/`createInitialSteps`/`applyPoolStatusChanges`）
 - Mapper：`ForbiddenPoolAdjustMapper.java` / `ForbiddenPoolAdjustMapper.xml`
 - 实体：同 [15]（`ForbiddenPoolAdjustReq/Dto/CheckReq/SubmitReq/SubmitDto` + 复用 `AdjustLogDto/IpAdjustStepDto/PoolDto`）
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`（调库运行态表）

@@ -32,7 +32,7 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
     public static final String TASK_CODE = "bond_security_type_change";
 
     /** 任务名称 */
-    public static final String TASK_NAME = "债券类型变更";
+    public static final String TASK_NAME = "债券类型变更（仅债券）";
 
     private static final String PARAM_HELP =
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"

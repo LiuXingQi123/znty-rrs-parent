@@ -4,7 +4,6 @@ import com.znty.rrs.entity.bo.IpAdjustStepBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
-import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -47,45 +46,6 @@ public interface ForbiddenPoolAdjustMapper {
     List<ForbiddenPoolAdjustDto.CompanyBond> queryCompanyBondList(
             @Param("companyCode") String companyCode,
             @Param("targetPoolId") Long targetPoolId);
-
-    /**
-     * 查询主体调入任意目标池时需同步的未到期（含当天）旗下债券。
-     *
-     * @param companyCode 发行主体代码
-     * @param targetPoolId 目标池 ID
-     * @param bondTypeScope 主体旗下债券类型范围
-     * @return 未在目标池的普通债、ABS 和 CRMW
-     */
-    List<SecurityInfoBo> queryCompanyInboundBondForAutoList(@Param("companyCode") String companyCode,
-                                                            @Param("targetPoolId") Long targetPoolId,
-                                                            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
-
-    /**
-     * 查询主体调入任意目标池时，需要从关系池互斥调出的旗下债券。
-     *
-     * @param companyCode 发行主体代码
-     * @param targetPoolId 调入目标池 ID
-     * @param relationPoolIds 需自动调出的关系池 ID
-     * @param bondTypeScope 主体旗下债券类型范围
-     * @return 当前在关系池中的普通债、ABS 和 CRMW
-     */
-    List<ForbiddenPoolAdjustDto.CompanyBond> queryCompanyBondMutexOutList(
-            @Param("companyCode") String companyCode,
-            @Param("targetPoolId") Long targetPoolId,
-            @Param("relationPoolIds") List<Long> relationPoolIds,
-            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
-
-    /**
-     * 查询主体调出任意目标池时需同步的未到期（含当天）且当前在池旗下债券。
-     *
-     * @param companyCode 发行主体代码
-     * @param targetPoolId 目标池 ID
-     * @param bondTypeScope 主体旗下债券类型范围
-     * @return 当前在目标池的普通债、ABS 和 CRMW
-     */
-    List<SecurityInfoBo> queryCompanyOutboundBondForAutoList(@Param("companyCode") String companyCode,
-                                                             @Param("targetPoolId") Long targetPoolId,
-                                                             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /** 查询主体当前有效所在池 ID */
     List<Long> queryCompanyCurrentPoolIdList(@Param("companyCode") String companyCode);

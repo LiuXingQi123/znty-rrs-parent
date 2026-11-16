@@ -2,7 +2,6 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
-import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
@@ -13,13 +12,11 @@ import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
-import com.znty.rrs.schedule.TaskDetailLog;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,7 +25,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,37 +32,6 @@ import static org.mockito.Mockito.when;
  * 外评非 AA- 及以下主体自动出池任务单元测试
  */
 public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
-
-    /** 自动主体出池同样不按目标池 ID 限制，旗下债券使用主体批次调出同一池。 */
-    @Test
-    public void outboundBondsShouldFollowEveryCompanyPool() {
-        for (Long poolId : new Long[]{16L, 23L, 999L}) {
-            AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
-            SecurityPoolAdjustMapper statusMapper = mock(SecurityPoolAdjustMapper.class);
-            CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
-            ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
-            ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", statusMapper);
-            InvestmentPoolBo pool = new InvestmentPoolBo();
-            pool.setId(poolId);
-            pool.setPoolName("目标池");
-            ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
-            bond.setSecurityCode("B001");
-            bond.setSecurityType("abs");
-            when(mapper.queryCompanyBondInSamePoolForAutoOut(eq("C001"), eq(poolId),
-                    any(CompanyBondTypeScopeBo.class))).thenReturn(Collections.singletonList(bond));
-            when(statusMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
-            when(statusMapper.deletePoolStatusSoft("B001", poolId)).thenReturn(1);
-
-            Integer count = ReflectionTestUtils.invokeMethod(service, "outSamePoolBonds", "C001", pool, poolId,
-                    "COMP_TEST", new Date(), Collections.emptyList(), new TaskDetailLog(), "主体出池");
-
-            assertThat(count).isEqualTo(1);
-            assertThat(bond.getAdjustMode()).isEqualTo("调出");
-            assertThat(bond.getTargetPoolId()).isEqualTo(poolId);
-            assertThat(bond.getAdjustBatchNo()).isEqualTo("COMP_TEST");
-            verify(statusMapper).deletePoolStatusSoft("B001", poolId);
-        }
-    }
 
     /** 验证参数说明包含默认池与额外拦截参数。 */
     @Test
@@ -137,9 +102,6 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
                 eq(17L), eq(Collections.<Long>emptyList()), any(List.class)))
                 .thenReturn(Collections.singletonList(company));
-        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C90001"), eq(17L),
-                any(CompanyBondTypeScopeBo.class)))
-                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(9001L);
@@ -163,7 +125,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(17L);
-        assertThat(log.getAdjustReason()).isEqualTo("【任务名称：外评非AA-及以下主体自动出池】（近一年孰低外评：AAA）");
+        assertThat(log.getAdjustReason()).isEqualTo("【任务名称：外评非AA-及以下主体自动出池（仅主体）】（近一年孰低外评：AAA）");
         assertThat(log.getAdjustAdvice()).isNull();
         assertThat(log.getAdjustBatchNo()).matches("COMP\\d{17}2001");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
@@ -268,101 +230,6 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(0);
         verify(securityPoolAdjustMapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
-    }
-
-    /** 验证主体调出后同批调出符合范围的旗下债券。 */
-    @Test
-    public void execute_ShouldOutSamePoolBondsAfterCompanyOut() {
-        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
-        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
-        ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
-        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
-        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
-        ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
-        ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
-        // 注入黑名单质押库统一判定服务
-        bindPledgeBlacklistRule(service, autoAdjustMapper);
-        AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
-
-        SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("外评非AA-及以下主体自动出池");
-        conf.setParamJson("{\"poolIds\":[17],\"limitPoolIds\":[]}");
-        when(scheduledTaskMapper.queryTaskByCode(CompanyOuterRatingNotAaMinusAutoOutService.TASK_CODE))
-                .thenReturn(conf);
-        InvestmentPoolBo pool = new InvestmentPoolBo();
-        pool.setId(17L);
-        pool.setPoolName("黑名单质押库");
-        pool.setPoolType("blacklist");
-        when(investmentPoolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
-
-        ScheduledAdjustCandidateDto company = new ScheduledAdjustCandidateDto();
-        company.setSecurityCode("C90001");
-        company.setSecurityType("company");
-        company.setOuterRating("AA");
-        ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
-        bond.setSecurityCode("B001");
-        bond.setSecurityShortName("某债");
-        bond.setSecurityType("corporate_bond");
-        when(autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
-                eq(17L), eq(Collections.<Long>emptyList()), any(List.class)))
-                .thenReturn(Collections.singletonList(company));
-        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C90001"), eq(17L),
-                any(CompanyBondTypeScopeBo.class)))
-                .thenReturn(Collections.singletonList(bond));
-        when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
-        when(securityPoolAdjustMapper.deletePoolStatusSoft("C90001", 17L)).thenReturn(1);
-        when(securityPoolAdjustMapper.deletePoolStatusSoft("B001", 17L)).thenReturn(1);
-
-        ScheduledTaskResult result = service.execute();
-
-        assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getAffectedCount()).isEqualTo(2);
-        assertThat(result.getMessage()).contains("任务完成：扫描候选主体 1 个，实际出池 1 个主体、1 只债券，未处理 0 个主体")
-                .contains("黑名单质押库（17）：扫描 1 个主体，出池 1 个主体、1 只债券，未处理 0 个主体");
-        verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("C90001"), eq(17L));
-        verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("B001"), eq(17L));
-        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(securityPoolAdjustMapper, times(2)).addAdjustLog(captor.capture());
-        assertThat(captor.getAllValues().get(0).getAdjustReason())
-                .isEqualTo("【任务名称：外评非AA-及以下主体自动出池】（近一年孰低外评：AA）");
-        assertThat(captor.getAllValues().get(1).getAdjustReason())
-                .isEqualTo("【任务名称：外评非AA-及以下主体自动出池】（近一年孰低外评：AA）（同池旗下债）");
-        assertThat(captor.getAllValues().get(0).getAdjustAdvice()).isNull();
-        assertThat(captor.getAllValues().get(1).getAdjustAdvice()).isNull();
-        assertThat(captor.getAllValues().get(0).getAdjustBatchNo()).matches("COMP\\d{17}2001");
-        assertThat(captor.getAllValues().get(1).getAdjustBatchNo())
-                .isEqualTo(captor.getAllValues().get(0).getAdjustBatchNo());
-    }
-
-    /** 验证旗下债命中调出限制池时阻断主体联动。 */
-    @Test
-    public void outSamePoolBonds_ShouldFailWhenBondIsOutRestricted() {
-        AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
-        SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
-        CompanyOuterRatingNotAaMinusAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingNotAaMinusAutoOutService());
-        ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
-        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
-
-        ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
-        bond.setSecurityCode("B001");
-        when(autoAdjustMapper.queryCompanyBondInSamePoolForAutoOut(eq("C001"), eq(17L),
-                any(CompanyBondTypeScopeBo.class)))
-                .thenReturn(Collections.singletonList(bond));
-        when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList("B001"))
-                .thenReturn(Collections.singletonList(99L));
-        InvestmentPoolBo pool = new InvestmentPoolBo();
-        pool.setId(17L);
-        pool.setPoolName("黑名单质押库");
-
-        // 执行旗下债券联动调出并校验限制池阻断
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "outSamePoolBonds",
-                "C001", pool, 17L, "BATCH001", new Date(), Collections.singletonList(99L),
-                null, "自动出池"))
-                .isInstanceOf(BizException.class)
-                .hasMessageContaining("不能联动调出主体");
-        verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
     }
 
     /** 验证未配置或配置空额外拦截池时均按不拦截处理。 */

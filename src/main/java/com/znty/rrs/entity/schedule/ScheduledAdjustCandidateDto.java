@@ -9,6 +9,9 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class ScheduledAdjustCandidateDto extends IpAdjustLogBo {
 
+    /** 本次独立同步可撤销的在池记录 ID */
+    private Long poolStatusId;
+
     /** ABS 标志，用于自动调库共用主体身份校验 */
     private Integer absFlag;
 

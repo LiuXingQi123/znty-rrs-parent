@@ -119,9 +119,7 @@ public interface SecurityPoolExcelImportMapper {
      * 查询目标池当前有效在池成员（audit_status=20）
      *
      * @param poolId     目标池 ID
-     * @param memberType security=排除 crmw/company；company=仅 company
      * @return 在池成员列表
      */
-    List<PoolMemberDto> queryPoolMemberList(@Param("poolId") Long poolId,
-                                            @Param("memberType") String memberType);
+    List<PoolMemberDto> queryPoolMemberList(@Param("poolId") Long poolId);
 }

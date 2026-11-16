@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RuleType;
+import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
+import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -18,6 +20,9 @@ import com.znty.rrs.schedule.ScheduledTaskResult;
 import com.znty.rrs.schedule.TaskDetailLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
@@ -26,19 +31,21 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.Map;
 
 /**
- * 主体不在池债券自动出池(默认关闭)
+ * 主体依据失效的债券自动出池
  *
  * 执行顺序：
  * 1. 合并扩展参数和关系配置中的债券池、主体池映射
  * 2. 查询债券已在债券池且主体不在对应主体池的记录
- * 3. 跳过退市债、数据不完整和需要人工确认的 ABS
+ * 3. 排除退市债、ABS 和来源无法确认的记录
  * 4. 软删除债券池状态并写入自动出池日志
  * 5. 汇总每组映射的实际出池和未处理数量
  *
- * 本任务是独立 Job，不走 AdjustPoolByRule，不检查调入或调出限制池，普通债、ABS 和 CRMW 均按本任务口径处理
+ * 本任务处理普通债与普通风险池内的 CRMW，ABS 由专用任务同步
  */
 @Slf4j
 @Service
@@ -49,7 +56,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
 
     private static final String AUTO_ADJUSTER_ID = "0";
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    private static final String DEFAULT_TASK_NAME = "主体不在池债券自动出池(默认关闭)";
+    static final String DEFAULT_TASK_NAME = "主体依据失效的债券自动出池（仅债券）";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =
             "参数格式：须填写 JSON 对象；poolIds、mappings 可组合，例如 <code>{\"poolIds\":[15]}</code>\n"
@@ -67,10 +74,10 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "companyPoolId（主体应在池）：用于检查债券发行主体是否仍在该池；主体不在该池时，债券才出库\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调出规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
                     + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
-                    + "处理规则：未退市债券已在债券池、发行主体不在对应主体池时，将该债券自动调出\n"
-                    + "类型范围：排除退市债；普通债、ABS、CRMW 均处理\n"
+                    + "处理规则：仅调出可识别为主体跟随入池且所有映射依据均已失效的债券\n"
+                    + "类型范围：普通债和 CRMW；排除退市债和 ABS\n"
                     + "CRMW 说明：仅调出 CRMW 证券在普通池的 ip_pool_status，不操作 CRMW 组合状态表\n"
-                    + "范围说明：不检查调出限制池；仅软删除成功才写日志并计入影响条数\n"
+                    + "范围说明：遵守调出限制池、调出互斥和在途流程；保留其他来源入池记录\n"
                     + "参数格式错误时，本轮任务失败";
 
     @Resource
@@ -78,9 +85,12 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
-    /** ABS 主体联动与规则提醒 */
+    /** 普通债补入范围 */
     @Resource
-    private AbsCompanySyncService absCompanySyncService;
+    private CompanyNewBondAutoInService companyNewBondAutoInService;
+    /** 黑名单质押库三条件判定 */
+    @Resource
+    private PledgeBlacklistRuleService pledgeBlacklistRuleService;
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
     @Resource
@@ -100,7 +110,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
     }
 
     /**
-     * 执行主体不在池债券自动出池(默认关闭)
+     * 调出主体依据全部失效的跟随入池债券
      *
      * 执行顺序：
      * 1. 读取任务名称并记录任务开始
@@ -112,6 +122,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
      * @return 本轮任务执行结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ScheduledTaskResult execute() {
         Date startTime = new Date();
         long begin = System.currentTimeMillis();
@@ -120,7 +131,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         String taskName = resolveTaskName();
         infoDetail(detail, "任务开始：" + taskName);
         try {
-            // 2. 执行主体不在池债券自动出池
+            // 2. 调出主体依据全部失效的跟随入池债券
             AutoOutSummary summary = doAutoOut(taskName, detail);
             long duration = System.currentTimeMillis() - begin;
             String message = summary.buildMessage();
@@ -129,11 +140,17 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
             return ScheduledTaskResult.success(TASK_CODE, taskName, message, summary.total, startTime, duration,
                     detail.build());
         } catch (BizException e) {
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             long duration = System.currentTimeMillis() - begin;
             warnDetail(detail, taskName + " 失败: " + e.getMessage());
             return ScheduledTaskResult.failure(TASK_CODE, taskName, e.getMessage(), startTime, duration,
                     detail.build());
         } catch (Exception e) {
+            if (TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            }
             long duration = System.currentTimeMillis() - begin;
             log.error("{} 异常", taskName, e);
             detail.line("ERROR", taskName + " 异常: " + e.getMessage());
@@ -159,26 +176,38 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         // 1. 读取扩展参数并解析有效映射
         String paramJson = resolveParamJson();
         infoDetail(detail, "扩展参数 param_json=" + (paramJson == null ? "" : paramJson));
+        List<long[]> outboundMappings = new ArrayList<>(parseParamMappings(paramJson, taskName));
+        for (Long poolId : autoAdjustMapper.queryCompanyHistoricalPoolIds()) {
+            outboundMappings.add(new long[]{poolId, poolId});
+        }
+        for (long[] pair : companyNewBondAutoInService.resolveInboundMappings(detail)) {
+            outboundMappings.add(new long[]{pair[1], pair[0]});
+        }
+        if (outboundMappings.isEmpty() && poolScopeHelper.queryBoundPoolIds(TASK_CODE, RuleType.AUTO_OUT.getCode()).isEmpty()) {
+            return new AutoOutSummary();
+        }
         List<long[]> pairList = poolScopeHelper.unionSamePoolMappings(
-                parseParamMappings(paramJson, taskName), TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
-        infoDetail(detail, "有效映射组数 " + pairList.size());
-        infoDetail(detail, "扫描条件：ip_pool_status.is_deleted=0、audit_status=20、category_type=bond；"
-                + "债券已在映射债券池生效、issuer_code非空，发行主体不在映射主体池的生效主体记录中；"
-                + "映射组数=" + pairList.size());
+                outboundMappings, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
+        Map<Long, Set<Long>> companyPoolsByBondPool = new LinkedHashMap<>();
+        for (long[] pair : pairList) {
+            companyPoolsByBondPool.computeIfAbsent(pair[0], key -> new LinkedHashSet<>()).add(pair[1]);
+        }
+        infoDetail(detail, "有效债券池数 " + companyPoolsByBondPool.size());
+        infoDetail(detail, "扫描条件：普通债跟随记录已生效，且发行主体已不在任一依据池");
         // 2. 准备投资池信息和自动调库批次
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
+        List<PoolRelationBo> relations = securityPoolAdjustMapper.queryAllPoolRelationList();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
         AutoOutSummary summary = new AutoOutSummary();
         // 3. 逐个映射查询和处理债券
-        for (long[] pair : pairList) {
-            Long bondPoolId = pair[0];
-            Long companyPoolId = pair[1];
+        for (Map.Entry<Long, Set<Long>> entry : companyPoolsByBondPool.entrySet()) {
+            Long bondPoolId = entry.getKey();
+            Set<Long> companyPoolIds = entry.getValue();
             InvestmentPoolBo bondPool = poolMap.get(bondPoolId);
-            InvestmentPoolBo companyPool = poolMap.get(companyPoolId);
             if (bondPool == null) {
                 warnDetail(detail, "债券池[" + bondPoolId + "]不存在，跳过映射 "
-                        + bondPoolId + "←主体池" + companyPoolId);
+                        + bondPoolId + "←主体池" + companyPoolIds);
                 continue;
             }
             if (CompanyBondSyncPolicy.isCrmwCombinationPool(bondPool)) {
@@ -186,27 +215,39 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                         + "]为 CRMW 组合池，主体旗下证券不能通过普通池状态调出，跳过该映射");
                 continue;
             }
-            List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryBondInPoolWhenCompanyNotIn(
-                    bondPoolId, companyPoolId, CompanyBondSyncPolicy.currentTypeScope());
-            if (bonds == null || bonds.isEmpty()) {
-                infoDetail(detail, "债券池[" + bondPool.getPoolName() + "](" + bondPoolId
-                        + ") 无「主体不在池" + companyPoolId + "」待出债");
-                continue;
-            }
+            // 每个债券池一次核对所有主体依据
+            companyPoolIds.add(bondPoolId);
+            List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(
+                    bondPoolId, companyPoolIds);
+            List<Long> restrictPools = AutoAdjustRestrictHelper.resolveRelationPoolIds(
+                    bondPoolId, RelationType.OUT_RESTRICT.getCode(), relations);
+            List<Long> mutexPools = AutoAdjustRestrictHelper.resolveRelationPoolIds(
+                    bondPoolId, RelationType.OUT_MUTEX.getCode(), relations);
             int pairCount = 0;
             for (ScheduledAdjustCandidateDto bond : bonds) {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     continue;
                 }
-                // 3.1 ABS 保持唯一主体身份，存在其他依据时交由研究员处理
-                if (("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))
-                    && !absCompanySyncService.allowScheduledSync(bond, bond.getIssuerCode(), bondPoolId, bondPool.getPoolName(), false, companyPoolId)) {
+                if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(bondPoolId)
+                        && pledgeBlacklistRuleService.evaluate(bond.getIssuerCode()).shouldBeInBlacklist()) {
+                    infoDetail(detail, "债券[" + bond.getSecurityCode() + "]的发行主体仍满足黑名单条件，暂不调出");
                     continue;
                 }
-                // 3.2 软删除债券池状态，未删到时视为已被其他处理提前出池
-                int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(bond.getSecurityCode(), bondPoolId);
+                List<Long> currentPools = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(bond.getSecurityCode());
+                if (AutoAdjustRestrictHelper.isInAnyPool(currentPools, restrictPools)
+                        || AutoAdjustRestrictHelper.isInAnyPool(currentPools, mutexPools)
+                        || securityPoolAdjustMapper.querySecurityHasPendingProcess(bond.getSecurityCode())) {
+                    infoDetail(detail, "债券[" + bond.getSecurityCode() + "]命中调出限制、互斥或在途流程，暂不调出");
+                    continue;
+                }
+                // 只删除已识别的跟随记录，其他渠道入池记录继续有效
+                int deleted = autoAdjustMapper.deleteCompanyFollowedBondStatus(bond.getPoolStatusId());
                 if (deleted == 0) {
                     warnDetail(detail, "债券[" + bond.getSecurityCode() + "]软删失败（可能并发已出池），跳过");
+                    continue;
+                }
+                if (securityPoolAdjustMapper.querySecurityCurrentPoolIdList(bond.getSecurityCode()).contains(bondPoolId)) {
+                    infoDetail(detail, "债券[" + bond.getSecurityCode() + "]撤销跟随依据，其他在池记录仍生效");
                     continue;
                 }
                 // 3.3 准备债券自动出池日志字段
@@ -220,7 +261,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
                 String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.issuerDetail(bond),
-                        ScheduledAdjustLogHelper.poolDetail("主体未在池", companyPool, companyPoolId));
+                        "主体未在任一依据池：" + companyPoolIds);
                 bond.setAdjustReason(reason);
                 // 3.4 生成批次号并写入自动出池日志
                 String batchNo = batchNoContext.resolveBondBatchNo(
@@ -228,13 +269,14 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 bond.setAdjustBatchNo(batchNo);
                 bond.setSubmitTime(submitTime);
                 // 3.5 写债券出池日志
-                securityPoolAdjustMapper.addAdjustLog(bond);
+                if (securityPoolAdjustMapper.addAdjustLog(bond) != 1) {
+                    throw new BizException("债券[" + bond.getSecurityCode() + "]自动调出日志写入失败");
+                }
                 pairCount++;
             }
-            summary.addMapping(bondPoolId, bondPool.getPoolName(), companyPoolId,
-                    companyPool == null ? null : companyPool.getPoolName(), pairCount);
+            summary.addPool(bondPool.getPoolName(), companyPoolIds, pairCount);
             infoDetail(detail, "债券池[" + bondPool.getPoolName() + "](" + bondPoolId
-                    + ")←主体池[" + companyPoolId + "] 出池 " + pairCount + " 条");
+                    + ")←主体池[" + companyPoolIds + "] 出池 " + pairCount + " 条");
         }
         infoDetail(detail, summary.buildMessage());
         return summary;
@@ -245,62 +287,18 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
 
         /** 本轮实际出池总数 */
         private int total;
-        /** 按债券池与主体池映射保存出池数量 */
-        private final Map<String, MappingSummary> mappingSummaries = new LinkedHashMap<>();
+        /** 各债券池的出池结果 */
+        private final List<String> poolResults = new ArrayList<>();
 
-        /** 累加一个债券池与主体池映射的出池数量 */
-        private void addMapping(Long bondPoolId, String bondPoolName, Long companyPoolId,
-                                String companyPoolName, int count) {
-            String key = bondPoolId + "-" + companyPoolId;
-            mappingSummaries.put(key, new MappingSummary(bondPoolId, bondPoolName,
-                    companyPoolId, companyPoolName, count));
+        /** 累计实际出池记录 */
+        private void addPool(String bondPoolName, Set<Long> companyPoolIds, int count) {
             total += count;
+            poolResults.add(bondPoolName + "（主体依据池 " + companyPoolIds + "）出池 " + count + " 条");
         }
 
-        /** 构建最近执行结果文案 */
+        /** 汇总本轮出池结果 */
         private String buildMessage() {
-            StringBuilder message = new StringBuilder("本轮共自动出池 ")
-                    .append(total).append(" 条债券");
-            if (!mappingSummaries.isEmpty()) {
-                message.append("；目标池明细：");
-                int index = 0;
-                for (MappingSummary mapping : mappingSummaries.values()) {
-                    if (index++ > 0) {
-                        message.append("；");
-                    }
-                    message.append("债券池").append(mapping.bondPoolName).append("(")
-                            .append(mapping.bondPoolId).append(")←主体池")
-                            .append(mapping.companyPoolName == null ? "" : mapping.companyPoolName)
-                            .append("(").append(mapping.companyPoolId).append(")：")
-                            .append(mapping.count).append(" 条债券");
-                }
-            }
-            return message.toString();
-        }
-    }
-
-    /** 单个债券池与主体池映射的出池统计 */
-    private static final class MappingSummary {
-
-        /** 债券目标池 ID */
-        private final Long bondPoolId;
-        /** 债券目标池名称 */
-        private final String bondPoolName;
-        /** 主体所在池 ID */
-        private final Long companyPoolId;
-        /** 主体所在池名称 */
-        private final String companyPoolName;
-        /** 实际出池数量 */
-        private final int count;
-
-        /** 创建映射统计 */
-        private MappingSummary(Long bondPoolId, String bondPoolName, Long companyPoolId,
-                               String companyPoolName, int count) {
-            this.bondPoolId = bondPoolId;
-            this.bondPoolName = bondPoolName;
-            this.companyPoolId = companyPoolId;
-            this.companyPoolName = companyPoolName;
-            this.count = count;
+            return "任务完成：实际出池 " + total + " 条。" + String.join("；", poolResults);
         }
     }
 
@@ -379,7 +377,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         try {
             SysScheduledTaskBo conf = scheduledTaskMapper.queryTaskByCode(TASK_CODE);
             if (conf != null && StringUtils.hasText(conf.getTaskName())) {
-                return conf.getTaskName();
+                return ScheduledAdjustLogHelper.withTaskScope(TASK_CODE, conf.getTaskName());
             }
         } catch (Exception e) {
             log.debug("读取任务名称失败: {}", TASK_CODE);

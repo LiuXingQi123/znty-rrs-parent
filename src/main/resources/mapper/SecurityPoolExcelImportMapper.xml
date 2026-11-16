@@ -313,31 +313,16 @@
     <!-- 查询目标池当前有效在池成员（清空目标池用） -->
     <select id="queryPoolMemberList"
             resultType="com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto">
-        SELECT ips.security_code AS securityCode
-        <choose>
-            <when test="memberType == 'company'">
-               ,ips.security_short_name AS securityShortName
-               ,ips.security_type AS securityType
-            </when>
-            <otherwise>
-               ,si.short_name AS securityShortName
-               ,si.security_type AS securityType
-            </otherwise>
-        </choose>
+        SELECT ips.security_code
+               ,CASE WHEN ips.security_type = 'company' THEN ips.security_short_name
+                     ELSE COALESCE(si.short_name, ips.security_short_name)
+                END AS security_short_name
+               ,ips.security_type
         FROM ip_pool_status ips
-        <if test="memberType != 'company'">
-            LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
-        </if>
+        LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code AND ips.security_type != 'company'
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          <if test="memberType == 'security'">
-              AND (si.security_type IS NULL
-                   OR si.security_type != 'company')
-          </if>
-          <if test="memberType == 'company'">
-              AND ips.security_type = 'company'
-          </if>
         ORDER BY ips.security_code ASC
     </select>
 </mapper>

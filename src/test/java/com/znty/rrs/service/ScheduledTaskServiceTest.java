@@ -13,6 +13,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -53,6 +54,32 @@ public class ScheduledTaskServiceTest {
         List<ScheduledTaskInfoDto> list = service.queryTaskList();
         assertThat(list).hasSize(1);
         assertThat(list.get(0).isCodeRegistered()).isTrue();
+    }
+
+    /** 已有库表名称按任务编码标注，保留自定义文字和混合任务名称 */
+    @Test
+    public void queryTaskListShouldLabelCompanyAndBondScopes() {
+        ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
+        SysScheduledTaskBo observer = new SysScheduledTaskBo();
+        observer.setTaskCode(CompanyObserverPoolSyncService.TASK_CODE);
+        observer.setTaskName("自定义观察名单");
+        SysScheduledTaskBo bonds = new SysScheduledTaskBo();
+        bonds.setTaskCode(CompanyNewBondAutoInService.TASK_CODE);
+        bonds.setTaskName("补债（仅债券）");
+        SysScheduledTaskBo expiry = new SysScheduledTaskBo();
+        expiry.setTaskCode(AutoAdjustService.TASK_CODE);
+        expiry.setTaskName("到期证券自动出池");
+        SysScheduledTaskBo bondOutbound = new SysScheduledTaskBo();
+        bondOutbound.setTaskCode(CompanyNotInPoolBondAutoOutService.TASK_CODE);
+        bondOutbound.setTaskName("主体跟随债券自动出池（仅债券）");
+        when(mapper.queryTaskList()).thenReturn(Arrays.asList(observer, bonds, expiry, bondOutbound));
+        ScheduledTaskService service = new ScheduledTaskService(Collections.emptyList());
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
+        ReflectionTestUtils.setField(service, "dynamicTaskScheduler", mock(DynamicTaskScheduler.class));
+
+        assertThat(service.queryTaskList()).extracting(ScheduledTaskInfoDto::getTaskName)
+                .containsExactly("自定义观察名单（仅主体）", "补债（仅债券）", "到期证券自动出池",
+                        "主体依据失效的债券自动出池（仅债券）");
     }
 
     @Test
@@ -242,18 +269,19 @@ public class ScheduledTaskServiceTest {
 
     @Test
     public void executeTaskShouldRunImplWhenScheduleIsDisabled() {
-        RrsScheduledTask task = mockTask("a");
+        String taskCode = CompanyObserverPoolSyncService.TASK_CODE;
+        RrsScheduledTask task = mockTask(taskCode);
         when(task.execute()).thenAnswer(invocation -> {
-            assertThat(ScheduledAdjustLogHelper.taskLabel("默认任务名")).isEqualTo("【任务名称：自定义任务名】");
-            return ScheduledTaskResult.success("a", "默认任务名", "ok", 1, new Date(), 1L);
+            assertThat(ScheduledAdjustLogHelper.taskLabel("默认任务名")).isEqualTo("【任务名称：自定义任务名（仅主体）】");
+            return ScheduledTaskResult.success(taskCode, "默认任务名（仅主体）", "ok", 1, new Date(), 1L);
         });
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
         DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskCode("a");
+        conf.setTaskCode(taskCode);
         conf.setTaskName("自定义任务名");
         conf.setScheduleEnabled(0);
-        when(mapper.queryTaskByCode("a")).thenReturn(conf);
+        when(mapper.queryTaskByCode(taskCode)).thenReturn(conf);
 
         ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
@@ -262,7 +290,7 @@ public class ScheduledTaskServiceTest {
         ReflectionTestUtils.setField(service, "jobLockService", jobLockService);
 
         ScheduledTaskReq req = new ScheduledTaskReq();
-        req.setTaskCode("a");
+        req.setTaskCode(taskCode);
         ScheduledTaskResult result = service.executeTask(req);
         assertThat(result.isSuccess()).isTrue();
         assertThat(ScheduledAdjustLogHelper.labelCurrentTask("人工调整")).isEqualTo("人工调整");

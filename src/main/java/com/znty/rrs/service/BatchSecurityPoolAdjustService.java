@@ -769,7 +769,7 @@ public class BatchSecurityPoolAdjustService {
         if (rawList == null || rawList.isEmpty()) {
             return new ArrayList<>();
         }
-        // 主体 / CRMW 优先，其余按 category_type 常见顺序，未知与其它垫后
+        // 「现有数量」分项展示顺序：主体、CRMW、其他证券类别
         final List<String> typeOrder = Arrays.asList(
                 CategoryType.COMPANY.getCode(),
                 "crmw",

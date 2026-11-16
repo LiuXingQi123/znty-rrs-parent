@@ -263,6 +263,7 @@ public class ScheduledTaskService {
         if (!StringUtils.hasText(taskName)) {
             throw new BizException("任务名称不能为空");
         }
+        taskName = ScheduledAdjustLogHelper.withTaskScope(taskCode, taskName);
         if (taskName.length() > 128) {
             throw new BizException("任务名称不能超过 128 字");
         }
@@ -370,7 +371,7 @@ public class ScheduledTaskService {
                     return;
                 }
                 String configuredName = config != null && StringUtils.hasText(config.getTaskName())
-                        ? config.getTaskName() : null;
+                        ? ScheduledAdjustLogHelper.withTaskScope(taskCode, config.getTaskName()) : null;
                 String displayName = configuredName == null ? taskCode : configuredName;
                 log.info("执行定时任务 {} ({}) trigger={}", displayName, taskCode, triggerType);
                 Date startTime = new Date();
@@ -444,7 +445,7 @@ public class ScheduledTaskService {
 
             SysScheduledTaskRunLogBo logBo = new SysScheduledTaskRunLogBo();
             logBo.setTaskCode(taskCode);
-            logBo.setTaskName(displayName);
+            logBo.setTaskName(truncate(displayName, 128));
             logBo.setTriggerType(triggerType);
             logBo.setRunStatus(status);
             logBo.setMessage(truncate(message, 1000));
@@ -535,7 +536,7 @@ public class ScheduledTaskService {
         String code = bo.getTaskCode();
         dto.setId(bo.getId());
         dto.setTaskCode(code);
-        dto.setTaskName(bo.getTaskName());
+        dto.setTaskName(ScheduledAdjustLogHelper.withTaskScope(code, bo.getTaskName()));
         dto.setDescription(bo.getDescription());
         dto.setCronExpression(bo.getCronExpression());
         dto.setScheduleEnabled(Integer.valueOf(1).equals(bo.getScheduleEnabled()));

@@ -38,7 +38,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
     /** 任务编码 */
     public static final String TASK_CODE = "wind_code_sync";
     /** 任务名称 */
-    public static final String TASK_NAME = "Wind代码变更同步";
+    public static final String TASK_NAME = "Wind代码变更同步（仅债券）";
     /** 未填写扫描天数时使用 1 天 */
     private static final int DEFAULT_SCAN_DAYS = 1;
     /** 解析任务扩展参数，拒绝 JSON 对象后面再拼其他内容 */

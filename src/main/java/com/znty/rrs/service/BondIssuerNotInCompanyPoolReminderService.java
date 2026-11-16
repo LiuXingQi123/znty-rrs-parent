@@ -38,7 +38,7 @@ public class BondIssuerNotInCompanyPoolReminderService implements RrsScheduledTa
     public static final String TASK_CODE = "bond_issuer_not_in_company_pool_reminder";
 
     /** 任务名称 */
-    public static final String TASK_NAME = "主体库内债券主体不在池债邮件提醒";
+    public static final String TASK_NAME = "主体库内债券主体不在池债邮件提醒（仅债券）";
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =

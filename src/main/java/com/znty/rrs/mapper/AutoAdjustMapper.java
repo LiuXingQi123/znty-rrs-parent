@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 自动调库数据访问组件。
@@ -54,36 +55,11 @@ public interface AutoAdjustMapper {
     List<ScheduledAdjustCandidateDto> queryPoolSecurityByExpired(@Param("poolId") Long poolId,
                                                                @Param("maturityOffsetDays") int maturityOffsetDays);
 
-    /**
-     * 查询「主体已在主体池、旗下未到期债券尚未在目标池」的待自动入池债券。
-     *
-     * <p>对应老系统 {@code AutoAdjustInNewBondToLimitPoolJob}：
-     * 主体在 companyPoolId（category_type=company）且 bond 大类未到期、未在 targetPoolId；
-     * 普通债按 issuer_code 匹配，ABS 通过四类关系主体匹配；仅排除已更新为正式代码的临时代码；
-     * 当前 {@code bondTypeScope} 不排除 ABS / CRMW，未确认 ABS 的后续落池由主体提醒处理。
-     *
-     * @param companyPoolId 主体所在池 ID（如债券禁止库 15）
-     * @param targetPoolId  债券自动入池目标池 ID（可与主体池相同）
-     * @param bondTypeScope 主体旗下债券类型范围
-     * @return 待入池债券（含发行主体代码与名称）
-     */
+    /** 按已启用目标池的市场配置查询未在目标池的旗下债券，调度任务传入范围以排除 ABS */
     List<ScheduledAdjustCandidateDto> queryCompanyNewBondForAutoIn(
             @Param("companyPoolId") Long companyPoolId,
             @Param("targetPoolId") Long targetPoolId,
-            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
-
-    /**
-     * 查询「主体已在本池、旗下债未在本池」的同池自动入库候选。
-     * <p>对应老系统 IP_RULE type=0「主体下债券自动入库」：主体与债<strong>必须同一池</strong>；
-     * 债大类未到期（含到期当天，对齐老 {@code enddate >= sysdate}）；尊重池 {@code market_codes}（空则不限制）；
-     * <strong>不</strong>排除临时代码已更新记录（与 Job 版口径区分）；当前类型范围包含 ABS / CRMW。</p>
-     *
-     * @param poolId 主体所在池且债写入池（同一 ID）
-     * @param bondTypeScope 主体旗下债券类型范围
-     * @return 待入池债券（含发行主体代码与名称）
-     */
-    List<ScheduledAdjustCandidateDto> queryCompanyBondSamePoolForAutoIn(
-            @Param("poolId") Long poolId,
+            @Param("targetMarketCodes") String targetMarketCodes,
             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**
@@ -133,54 +109,18 @@ public interface AutoAdjustMapper {
      */
     List<String> queryCompanyCodeListInPool(@Param("poolId") Long poolId);
 
-    /**
-     * 查询主体旗下尚未在指定池的债券（bond 大类），供外评入池后同批跟进同池债。
-     *
-     * <p>未到期含当天；当前类型范围包含 ABS / CRMW。
-     *
-     * @param companyCode   主体代码
-     * @param poolId        与主体相同的目标池
-     * @param bondTypeScope 主体旗下债券类型范围
-     * @return 待入池债券（securityCode/securityShortName/securityType）
-     */
-    List<ScheduledAdjustCandidateDto> queryCompanyBondNotInSamePoolForAutoIn(
-            @Param("companyCode") String companyCode,
-            @Param("poolId") Long poolId,
-            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
-
-    /**
-     * 查询主体旗下当前已在指定池的债券（bond 大类），供外评出池时顺带出同池债。
-     *
-     * <p>对应老系统 {@code findSecurityByCompanyCode(..., 4000)} 后再按在池过滤；
-     * 当前类型范围包含 ABS / CRMW。
-     *
-     * @param companyCode 主体代码
-     * @param poolId      与主体相同的目标池
-     * @param bondTypeScope 主体旗下债券类型范围
-     * @return 在池债券（securityCode/securityShortName/securityType）
-     */
-    List<ScheduledAdjustCandidateDto> queryCompanyBondInSamePoolForAutoOut(
-            @Param("companyCode") String companyCode,
-            @Param("poolId") Long poolId,
-            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
-
     /** 按凭证到期日和日期偏移天数查询 ip_pool_status_crmw 内已生效的到期组合 */
     List<ScheduledAdjustCandidateDto> queryCrmwPoolByExpired(@Param("poolId") Long poolId,
                                                            @Param("maturityOffsetDays") int maturityOffsetDays);
 
-    /**
-     * 查询「债已在债券池、其发行主体不在主体池」的待自动出池债券。
-     *
-     * <p>对应老 {@code AutoAdjustInLimitPoolToNewBondJob}，当前通过 {@code bondTypeScope}
-     * 统一包含普通债、ABS、CRMW；后续差异化排除也须通过该范围参数表达。
-     *
-     * @param bondPoolId    债券当前所在池
-     * @param companyPoolId 主体应在的池（不在则出债）
-     * @param bondTypeScope 主体旗下债券类型范围
-     * @return 待调出债券（含发行主体代码与名称）
-     */
-    List<ScheduledAdjustCandidateDto> queryBondInPoolWhenCompanyNotIn(
+    /** 查询曾有已生效主体的池，覆盖最后一个主体退出后的清理 */
+    List<Long> queryCompanyHistoricalPoolIds();
+
+    /** 查询已失去全部主体依据的普通债跟随记录 */
+    List<ScheduledAdjustCandidateDto> queryCompanyFollowedBondsForAutoOut(
             @Param("bondPoolId") Long bondPoolId,
-            @Param("companyPoolId") Long companyPoolId,
-            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
+            @Param("companyPoolIds") Set<Long> companyPoolIds);
+
+    /** 撤销指定的债券跟随记录 */
+    int deleteCompanyFollowedBondStatus(@Param("poolStatusId") Long poolStatusId);
 }

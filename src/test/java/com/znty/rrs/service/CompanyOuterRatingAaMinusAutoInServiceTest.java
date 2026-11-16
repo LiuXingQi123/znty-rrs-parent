@@ -37,44 +37,6 @@ import static org.mockito.Mockito.when;
  */
 public class CompanyOuterRatingAaMinusAutoInServiceTest {
 
-    /** 外评主体进入任意普通池时均跟债；债券受限时抛异常交由事务整体回滚。 */
-    @Test
-    public void bondsShouldFollowEveryPoolAndRejectRestrictedBond() {
-        for (Long poolId : Arrays.asList(16L, 23L, 999L)) {
-            AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
-            SecurityPoolAdjustMapper statusMapper = mock(SecurityPoolAdjustMapper.class);
-            CompanyOuterRatingAaMinusAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyOuterRatingAaMinusAutoInService());
-            ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
-            ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", statusMapper);
-            InvestmentPoolBo pool = new InvestmentPoolBo();
-            pool.setId(poolId);
-            pool.setPoolType("observe");
-            IpAdjustLogBo company = new IpAdjustLogBo();
-            company.setSecurityCode("C001");
-            company.setTargetPoolId(poolId);
-            company.setAdjustBatchNo("COMP_TEST");
-            ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
-            bond.setSecurityCode("B001");
-            when(mapper.queryCompanyBondNotInSamePoolForAutoIn(eq("C001"), eq(poolId),
-                    any(CompanyBondTypeScopeBo.class))).thenReturn(Collections.singletonList(bond));
-            when(statusMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
-            when(statusMapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
-            Integer count = ReflectionTestUtils.invokeMethod(service, "inSamePoolBonds", company, pool,
-                    Collections.emptyList(), Collections.singletonMap(poolId, pool), new TaskDetailLog());
-            assertThat(count).isEqualTo(1);
-            assertThat(bond.getTargetPoolId()).isEqualTo(poolId);
-            assertThat(bond.getAdjustBatchNo()).isEqualTo("COMP_TEST");
-            PoolRelationBo restrict = new PoolRelationBo();
-            restrict.setPoolId(poolId);
-            restrict.setRelationType("in_restrict");
-            restrict.setRelationPoolId(3L);
-            when(statusMapper.querySecurityCurrentPoolIdList("B001")).thenReturn(Collections.singletonList(3L));
-            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "inSamePoolBonds", company, pool,
-                    Collections.singletonList(restrict), Collections.singletonMap(poolId, pool), new TaskDetailLog()))
-                    .isInstanceOf(BizException.class).hasMessageContaining("不能联动调入主体");
-        }
-    }
-
     /** 验证低外评主体自动调入并同步旗下债券。 */
     @Test
     public void execute_ShouldAutoInCompanyWithLowOuterRating() {
@@ -93,7 +55,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         bindExternalRatingAgency(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
-        conf.setTaskName("外评AA-及以下主体自动入池（已排除ABS债）");
+        conf.setTaskName("外评AA-及以下主体自动入池");
         conf.setParamJson("{\"poolIds\":[17]}");
         when(scheduledTaskMapper.queryTaskByCode(CompanyOuterRatingAaMinusAutoInService.TASK_CODE))
                 .thenReturn(conf);
@@ -122,21 +84,6 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         when(ruleService.evaluate("C90005"))
                 .thenReturn(new PledgeBlacklistRuleService.Decision(false, true, false));
 
-        ScheduledAdjustCandidateDto bond1 = new ScheduledAdjustCandidateDto();
-        bond1.setSecurityCode("BOND001.IB");
-        bond1.setSecurityShortName("债1");
-        bond1.setSecurityType("credit_bond");
-        ScheduledAdjustCandidateDto bond2 = new ScheduledAdjustCandidateDto();
-        bond2.setSecurityCode("BOND002.IB");
-        bond2.setSecurityShortName("债2");
-        bond2.setSecurityType("credit_bond");
-        ScheduledAdjustCandidateDto bond3 = new ScheduledAdjustCandidateDto();
-        bond3.setSecurityCode("BOND003.IB");
-        bond3.setSecurityShortName("债3");
-        bond3.setSecurityType("crmw");
-        when(autoAdjustMapper.queryCompanyBondNotInSamePoolForAutoIn(
-                eq("C90005"), eq(17L), any(com.znty.rrs.entity.bo.CompanyBondTypeScopeBo.class)))
-                .thenReturn(Arrays.asList(bond1, bond2, bond3));
         when(securityPoolAdjustMapper.querySecurityCurrentPoolIdList(any(String.class)))
                 .thenReturn(Collections.<Long>emptyList());
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
@@ -150,18 +97,14 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(1);
-        assertThat(result.getMessage()).contains("任务完成：扫描候选主体 1 个，实际入池 1 个主体、3 只债券，未处理 0 个主体")
-                .contains("黑名单质押库（17）：扫描 1 个主体，入池 1 个主体、3 只债券，未处理 0 个主体");
+        assertThat(result.getMessage()).contains("任务完成：扫描候选主体 1 个，实际入池 1 个主体，未处理 0 个主体")
+                .contains("黑名单质押库（17）：扫描 1 个主体，入池 1 个主体，未处理 0 个主体");
         assertThat(service.getTaskCode()).isEqualTo("company_outer_rating_aa_minus_auto_in");
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         // 1 主体 + 3 债
-        verify(securityPoolAdjustMapper, times(4)).addAdjustLog(captor.capture());
-        verify(securityPoolAdjustMapper, times(4)).addPoolStatus(any(IpAdjustLogBo.class));
-        // 候选查询必须使用排除 ABS 的专用范围，防止调用点被改回 currentTypeScope 导致 ABS 重新跟随入池
-        ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
-        verify(autoAdjustMapper).queryCompanyBondNotInSamePoolForAutoIn(eq("C90005"), eq(17L), scopeCaptor.capture());
-        assertThat(scopeCaptor.getValue().isExcludeAbs()).isTrue();
+        verify(securityPoolAdjustMapper, times(1)).addAdjustLog(captor.capture());
+        verify(securityPoolAdjustMapper, times(1)).addPoolStatus(any(IpAdjustLogBo.class));
         verify(ruleService).evaluate("C90005");
         IpAdjustLogBo log = captor.getAllValues().get(0);
         assertThat(log.getSecurityCode()).isEqualTo("C90005");
@@ -170,11 +113,8 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(17L);
-        String taskLabel = "【任务名称：外评AA-及以下主体自动入池（已排除ABS债）】";
+        String taskLabel = "【任务名称：外评AA-及以下主体自动入池（仅主体）】";
         assertThat(log.getAdjustReason()).isEqualTo(taskLabel + "（近一年孰低外评：AA-）");
-        assertThat(captor.getAllValues().subList(1, 4)).allSatisfy(bond ->
-                assertThat(bond.getAdjustReason())
-                        .startsWith(taskLabel + "（近一年孰低外评：AA-）（同池旗下债）"));
         assertThat(log.getAdjustAdvice()).isNull();
         assertThat(log.getAdjustBatchNo()).matches("COMP\\d{17}1001");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
@@ -191,7 +131,7 @@ public class CompanyOuterRatingAaMinusAutoInServiceTest {
                 .contains("AA-及以下因评级入池")
                 .contains("空评级/近一年无认可外评不因评级入池")
                 .contains("配置表中的有效机构")
-                .contains("不复用人工 syncCompanyBonds");
+                .contains("旗下债券由独立任务同步");
     }
 
     /** 未配置有效外部评级机构时应阻断本轮自动入池。 */

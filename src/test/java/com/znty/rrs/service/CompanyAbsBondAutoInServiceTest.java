@@ -64,7 +64,7 @@ public class CompanyAbsBondAutoInServiceTest {
         assertThat(log.getSecurityCode()).isEqualTo("ABS001");
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(15L);
-        assertThat(log.getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库】")
+        assertThat(log.getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库（仅债券）】")
                 .contains("联动触发主体：C001");
         verify(fixture.securityPoolAdjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
     }
@@ -96,7 +96,8 @@ public class CompanyAbsBondAutoInServiceTest {
         fixture.absMaster("ABS003", "C001", "已离池集团");
         fixture.absInPool(15L, "ABS003");
         fixture.conf("{\"poolIds\":[15]}");
-        fixture.allowSync(true);
+        when(fixture.absCompanySyncService.allowScheduledSync(any(), eq("C001"), eq(15L),
+                eq("债券禁止库"), eq(false), eq(15L))).thenReturn(true);
         when(fixture.securityPoolAdjustMapper.deletePoolStatusSoft("ABS003", 15L)).thenReturn(1);
         when(fixture.securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
 
@@ -108,8 +109,27 @@ public class CompanyAbsBondAutoInServiceTest {
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(fixture.securityPoolAdjustMapper).addAdjustLog(captor.capture());
         assertThat(captor.getValue().getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
-        assertThat(captor.getValue().getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库】")
+        assertThat(captor.getValue().getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库（仅债券）】")
                 .contains("主体下ABS债券自动出池");
+    }
+
+    /** 任一显式依据池仍有已确认发行人时保留 ABS */
+    @Test
+    public void executeShouldKeepAbsWhileAnyMappedSourceIsActive() {
+        Fixture fixture = new Fixture();
+        fixture.absMaster("ABS003", "C001", "发行人");
+        fixture.companyInPool(23L, "C001");
+        fixture.absInPool(15L, "ABS003");
+        fixture.conf("{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":16},"
+                + "{\"bondPoolId\":15,\"companyPoolId\":23}]}");
+        fixture.allowSync(true);
+        when(fixture.securityPoolAdjustMapper.deletePoolStatusSoft("ABS003", 15L)).thenReturn(1);
+
+        ScheduledTaskResult result = fixture.service.execute();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isZero();
+        verify(fixture.securityPoolAdjustMapper, never()).deletePoolStatusSoft("ABS003", 15L);
     }
 
     /** 距到期不足保护天数的 ABS 不再补入，其余池内记录不受影响 */

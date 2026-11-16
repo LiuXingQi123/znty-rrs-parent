@@ -60,6 +60,15 @@ public class CompanyNewBondAutoInScopeTest {
         assertThat(sql).doesNotContain("MIN(");
     }
 
+    /** 投资池市场由调用方传入，候选 SQL 只按该配置匹配债券市场 */
+    @Test
+    public void newBondSqlShouldUseMarketConfigWithoutJoiningTargetPool() throws Exception {
+        String sql = render(CompanyBondSyncPolicy.newBondInboundScope());
+        assertThat(sql).doesNotContain("ip_investment_pool");
+        assertThat(sql).contains("COALESCE(JSON_LENGTH(?), 0) = 0",
+                "JSON_CONTAINS(?, JSON_QUOTE(TRIM(bond.market)))");
+    }
+
     /**
      * 验证联动主体直接取发行主体，不再用标量子查询回查在池主体
      *
@@ -113,6 +122,7 @@ public class CompanyNewBondAutoInScopeTest {
         Map<String, Object> params = new HashMap<>();
         params.put("companyPoolId", 15L);
         params.put("targetPoolId", 15L);
+        params.put("targetMarketCodes", "[\"NIB\"]");
         params.put("bondTypeScope", scope);
         MappedStatement statement = cfg.getMappedStatement(SELECT_ID);
         return statement.getBoundSql(params).getSql();

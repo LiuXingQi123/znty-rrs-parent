@@ -30,7 +30,7 @@ public class BondTempCodeReplaceServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(2);
-        assertThat(result.getDetailLog()).contains("任务开始：【债券临时代码替换】")
+        assertThat(result.getDetailLog()).contains("任务开始：【债券临时代码替换（仅债券）】")
                 .contains("扫描条件：rrs_temp_security_code.is_deleted=0、status=temporary、"
                         + "security_code IS NOT NULL 且 TRIM 后非空")
                 .contains("扫描完成：待替换候选 2 条")

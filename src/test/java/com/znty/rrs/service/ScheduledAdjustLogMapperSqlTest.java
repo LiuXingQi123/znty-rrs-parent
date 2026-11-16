@@ -26,8 +26,7 @@ public class ScheduledAdjustLogMapperSqlTest {
         assertThat(selectBlock(xml, "queryCrmwPoolByExpired"))
                 .contains(",crmw.maturity_date");
         assertIssuerColumns(selectBlock(xml, "queryCompanyNewBondForAutoIn"));
-        assertIssuerColumns(selectBlock(xml, "queryCompanyBondSamePoolForAutoIn"));
-        assertIssuerColumns(selectBlock(xml, "queryBondInPoolWhenCompanyNotIn"));
+        assertIssuerColumns(selectBlock(xml, "queryCompanyFollowedBondsForAutoOut"));
     }
 
     /** 验证调库日志实体不混入仅用于定时任务判断的辅助字段。 */
@@ -42,8 +41,7 @@ public class ScheduledAdjustLogMapperSqlTest {
 
     /** 验证查询片段包含发行主体编码和名称。 */
     private void assertIssuerColumns(String select) {
-        assertThat(select).contains(",bond.issuer_code")
-                .contains(",bond.issuer AS issuer_name");
+        assertThat(select).contains("bond.issuer_code", "bond.issuer AS issuer_name");
     }
 
     /** 从 Mapper XML 中截取指定查询片段并验证结果类型。 */

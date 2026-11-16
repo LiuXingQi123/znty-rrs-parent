@@ -1,6 +1,5 @@
 package com.znty.rrs.service;
 
-import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.IpPoolStatusBo;
@@ -32,7 +31,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -52,19 +50,19 @@ public class CompanyObserverPoolSyncServiceTest {
         f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
         f.states.put("C1", new LinkedHashSet<>(Arrays.asList(16L, 23L)));
         f.states.put("B1", new LinkedHashSet<>(Arrays.asList(16L, 23L)));
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(2);
+        assertThat(f.service.execute().getAffectedCount()).isEqualTo(1);
         verify(f.sourceMapper).queryCurrentCompanyList(Arrays.asList(116L, 123L));
         f.observers.get(0).setObserverType("3");
         ScheduledTaskResult switched = f.service.execute();
         assertThat(switched.isSuccess()).isTrue();
-        assertThat(switched.getAffectedCount()).isEqualTo(6);
+        assertThat(switched.getAffectedCount()).isEqualTo(3);
         assertThat(switched.getDetailLog()).contains("2=116", "3=123", "源池=池123", "配置池=[117]");
         assertThat(f.states.get("C1")).containsExactly(16L, 23L, 123L, 117L);
-        assertThat(f.states.get("B1")).containsExactly(16L, 23L, 123L, 117L);
+        assertThat(f.states.get("B1")).containsExactly(16L, 23L);
         assertThat(f.logs).allSatisfy(row -> assertThat(row.getTargetPoolId()).isIn(116L, 123L, 117L));
         f.observers.clear();
         f.currentCompanies.add(item("C1", "company"));
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(4);
+        assertThat(f.service.execute().getAffectedCount()).isEqualTo(2);
         assertThat(f.states.get("C1")).containsExactly(16L, 23L);
         assertThat(f.states.get("B1")).containsExactly(16L, 23L);
     }
@@ -136,36 +134,6 @@ public class CompanyObserverPoolSyncServiceTest {
         }
     }
 
-    /** 两种观察类型进入各自目标池，旗下普通债/CRMW 沿用主体批次；ABS 不在同步范围。 */
-    @Test
-    public void shouldEnterMappedPoolsWithBondsAndCompanyBatches() {
-        Fixture f = new Fixture();
-        f.observers.add(observer("C1", "2"));
-        f.observers.add(observer("C2", "3"));
-        f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-        f.bonds.put("C2", Collections.singletonList(item("CRMW1", "crmw")));
-        ScheduledTaskResult result = f.service.execute();
-        assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getAffectedCount()).isEqualTo(4);
-        assertThat(f.states.get("C1")).containsExactly(16L);
-        assertThat(f.states.get("B1")).containsExactly(16L);
-        assertThat(f.states.get("C2")).containsExactly(23L);
-        assertThat(f.states.get("CRMW1")).containsExactly(23L);
-        for (IpAdjustLogBo row : f.logs) {
-            assertThat(row.getAuditStatus()).isEqualTo("20");
-            assertThat(row.getAdjusterId()).isEqualTo("0");
-            assertThat(row.getAdjustType()).isEqualTo("自动调整");
-            assertThat(row.getAdjustBatchNo()).startsWith("COMP");
-            assertThat(row.getAdjustAdvice()).isNull();
-            assertThat(row.getAdjustLogId()).isEqualTo(row.getId());
-        }
-        assertThat(f.logs.get(0).getAdjustBatchNo()).isEqualTo(f.logs.get(1).getAdjustBatchNo());
-        assertThat(f.logs.get(2).getAdjustBatchNo()).isEqualTo(f.logs.get(3).getAdjustBatchNo())
-                .isNotEqualTo(f.logs.get(0).getAdjustBatchNo());
-        assertThat(result.getDetailLog()).contains("扫描条件：", "扫描完成：", "任务结束（成功）")
-                .doesNotContain(f.logs.get(0).getAdjustBatchNo());
-    }
-
     /** 类型从观察切换到重点观察时，先退出主体及债券旧池，再进入新池，重复执行不重复记账。 */
     @Test
     public void shouldMoveBothDirectionsBeforeInboundAndRemainIdempotent() {
@@ -174,35 +142,14 @@ public class CompanyObserverPoolSyncServiceTest {
         f.bonds.put("C1", Collections.singletonList(item("B1", "company_bond")));
         f.states.put("C1", new LinkedHashSet<>(Collections.singletonList(16L)));
         f.states.put("B1", new LinkedHashSet<>(Collections.singletonList(16L)));
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(4);
-        assertThat(f.logs).extracting(IpAdjustLogBo::getAdjustMode).containsExactly("调出", "调出", "调入", "调入");
+        assertThat(f.service.execute().getAffectedCount()).isEqualTo(2);
+        assertThat(f.logs).extracting(IpAdjustLogBo::getAdjustMode).containsExactly("调出", "调入");
         assertThat(f.states.get("C1")).containsExactly(23L);
-        assertThat(f.states.get("B1")).containsExactly(23L);
+        assertThat(f.states.get("B1")).containsExactly(16L);
         ScheduledTaskResult repeated = f.service.execute();
         assertThat(repeated.isSuccess()).isTrue();
         assertThat(repeated.getAffectedCount()).isZero();
-        assertThat(f.logs).hasSize(4);
-    }
-
-    /** 类型1、空值和名单移除都退出对应池；主体已出但旗下债仍在时也能清理。 */
-    @Test
-    public void shouldExitForNoneBlankAndRemovedObserversIncludingOrphanBonds() {
-        for (String type : Arrays.asList("1", null, "", "removed")) {
-            Fixture f = new Fixture();
-            if (!"removed".equals(type)) {
-                f.observers.add(observer("C1", type));
-            }
-            f.currentCompanies.add(item("C1", "company"));
-            f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-            f.states.put("B1", new LinkedHashSet<>(Collections.singletonList(23L)));
-            if (!"1".equals(type)) {
-                f.states.put("C1", new LinkedHashSet<>(Collections.singletonList(23L)));
-            }
-            ScheduledTaskResult result = f.service.execute();
-            assertThat(result.isSuccess()).as("type=" + type).isTrue();
-            assertThat(f.states.get("B1")).isEmpty();
-            assertThat(f.logs).allMatch(row -> "调出".equals(row.getAdjustMode()));
-        }
+        assertThat(f.logs).hasSize(2);
     }
 
     /** 在池记录发行主体编码为空时只跳过该记录，本轮继续执行并在过程日志和结果中记录。 */
@@ -224,20 +171,9 @@ public class CompanyObserverPoolSyncServiceTest {
         assertThat(f.logs).extracting(IpAdjustLogBo::getSecurityCode).containsExactly("C1");
     }
 
-    /** 主体已经在正确池时仍补齐旗下新债，不生成重复主体日志。 */
-    @Test
-    public void shouldRepairMissingBondsWhenCompanyAlreadyInPool() {
-        Fixture f = new Fixture();
-        f.observers.add(observer("C1", "2"));
-        f.states.put("C1", new LinkedHashSet<>(Collections.singletonList(16L)));
-        f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(1);
-        assertThat(f.logs).extracting(IpAdjustLogBo::getSecurityCode).containsExactly("B1");
-    }
-
     /** 观察类型变化只同步主体与非 ABS 债券，旗下 ABS 债保持原池状态不动。 */
     @Test
-    public void shouldLeaveAbsBondsOutOfObserverSync() {
+    public void shouldLeaveAllBondsOutOfObserverSync() {
         Fixture f = new Fixture();
         f.observers.add(observer("C1", "3"));
         f.bonds.put("C1", Arrays.asList(item("ABS1", "abs"), item("B1", "mtn")));
@@ -248,9 +184,9 @@ public class CompanyObserverPoolSyncServiceTest {
         assertThat(result.isSuccess()).isTrue();
         // 主体与普通债进出池，ABS 既不出旧池也不进新池
         assertThat(f.states.get("C1")).containsExactly(23L);
-        assertThat(f.states.get("B1")).containsExactly(23L);
+        assertThat(f.states.get("B1")).containsExactly(16L);
         assertThat(f.states.get("ABS1")).containsExactly(16L);
-        assertThat(f.logs).extracting(IpAdjustLogBo::getSecurityCode).containsExactly("C1", "B1", "C1", "B1");
+        assertThat(f.logs).extracting(IpAdjustLogBo::getSecurityCode).containsExactly("C1", "C1");
         assertThat(f.logs).allMatch(row -> !"ABS1".equals(row.getSecurityCode()));
     }
 
@@ -280,84 +216,6 @@ public class CompanyObserverPoolSyncServiceTest {
         }
     }
 
-    /** 主体或旗下债券命中调入/调出限制均返回失败，交由整轮事务回滚。 */
-    @Test
-    public void shouldRejectRestrictedCompanyOrBondForBothDirections() {
-        for (boolean inbound : new boolean[]{false, true}) {
-            for (boolean companyRestricted : new boolean[]{false, true}) {
-                Fixture f = new Fixture();
-                f.observers.add(observer("C1", inbound ? "2" : "1"));
-                f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-                f.states.put("C1", new LinkedHashSet<>(inbound ? Collections.emptyList() : Collections.singletonList(16L)));
-                f.states.put("B1", new LinkedHashSet<>(inbound ? Collections.emptyList() : Collections.singletonList(16L)));
-                f.states.get(companyRestricted ? "C1" : "B1").add(15L);
-                PoolRelationBo relation = new PoolRelationBo();
-                relation.setPoolId(16L);
-                relation.setRelationType(inbound ? "in_restrict" : "out_restrict");
-                relation.setRelationPoolId(15L);
-                when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Collections.singletonList(relation));
-                ScheduledTaskResult result = f.service.execute();
-                assertThat(result.isSuccess()).isFalse();
-                assertThat(result.getMessage()).contains(companyRestricted ? "C1" : "B1", "限制池");
-            }
-        }
-    }
-
-    /** 债券入池后按互斥/反向限制出原池，关系日志沿用主体批次。 */
-    @Test
-    public void shouldApplyBondRelationOutWithCompanyBatch() {
-        Fixture f = new Fixture();
-        f.observers.add(observer("C1", "2"));
-        f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-        f.states.put("B1", new LinkedHashSet<>(Collections.singletonList(99L)));
-        PoolRelationBo relation = new PoolRelationBo();
-        relation.setPoolId(16L);
-        relation.setRelationType("in_mutex");
-        relation.setRelationPoolId(99L);
-        InvestmentPoolBo other = pool(99L, "other");
-        when(f.poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"), other));
-        when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Collections.singletonList(relation));
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(3);
-        assertThat(f.states.get("B1")).containsExactly(16L);
-        assertThat(f.logs.get(2).getAdjustType()).isEqualTo("互斥调整");
-        assertThat(f.logs.get(2).getAdjustBatchNo()).isEqualTo(f.logs.get(0).getAdjustBatchNo());
-    }
-
-    /** 重点观察源池的双向联动即时同步17及旗下债，同批次、去重且可重复执行。 */
-    @Test
-    public void shouldSynchronizeLinkedBlacklistBothDirectionsWithSourceBatch() {
-        Fixture f = new Fixture();
-        f.observers.add(observer("C1", "3"));
-        f.bonds.put("C1", Arrays.asList(item("B1", "mtn"), item("CRMW1", "crmw")));
-        PoolRelationBo linkedIn = relation(23L, 17L, "in_linked");
-        when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
-                linkedIn, linkedIn, relation(23L, 23L, "in_linked"), relation(23L, 17L, "out_linked")));
-        ScheduledTaskResult entered = f.service.execute();
-        assertThat(entered.isSuccess()).isTrue();
-        assertThat(entered.getAffectedCount()).isEqualTo(6);
-        for (String code : Arrays.asList("C1", "B1", "CRMW1")) {
-            assertThat(f.states.get(code)).containsExactly(23L, 17L);
-        }
-        assertThat(f.logs).extracting(IpAdjustLogBo::getAdjustBatchNo).containsOnly(f.logs.get(0).getAdjustBatchNo());
-        assertThat(f.logs.subList(3, 6)).allMatch(row -> "联动调整".equals(row.getAdjustType()));
-        assertThat(entered.getDetailLog()).contains("in_linked/out_linked", "联动扫描：");
-        assertThat(entered.getMessage()).contains("池17：主体入1/出0，债券入2/出0");
-        assertThat(f.service.execute().getAffectedCount()).isZero();
-        assertThat(f.logs).hasSize(6);
-
-        f.observers.get(0).setObserverType("2");
-        ScheduledTaskResult exited = f.service.execute();
-        assertThat(exited.isSuccess()).isTrue();
-        assertThat(exited.getAffectedCount()).isEqualTo(9);
-        for (String code : Arrays.asList("C1", "B1", "CRMW1")) {
-            assertThat(f.states.get(code)).containsExactly(16L);
-        }
-        assertThat(f.logs.subList(6, 12)).allMatch(row -> "调出".equals(row.getAdjustMode()));
-        assertThat(f.logs.subList(6, 12)).extracting(IpAdjustLogBo::getAdjustBatchNo)
-                .containsOnly(f.logs.get(6).getAdjustBatchNo());
-        assertThat(f.logs.subList(9, 12)).allMatch(row -> "联动调整".equals(row.getAdjustType()));
-    }
-
     /** 任意源池及联动目标按配置执行，未配置的17不被硬编码处理。 */
     @Test
     public void shouldReadConfiguredTargetsInsteadOfHardcodingBlacklist() {
@@ -367,36 +225,14 @@ public class CompanyObserverPoolSyncServiceTest {
         when(f.poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"), pool(99L, "other")));
         when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
                 relation(16L, 99L, "in_linked"), relation(16L, 99L, "out_linked")));
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(4);
-        assertThat(f.states.get("C1")).containsExactly(16L, 99L);
-        assertThat(f.states.get("B1")).containsExactly(16L, 99L);
-        f.observers.get(0).setObserverType("1");
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(4);
-        assertThat(f.states.get("C1")).isEmpty();
-        assertThat(f.states.get("B1")).isEmpty();
-        assertThat(f.logs).noneMatch(row -> Long.valueOf(17L).equals(row.getTargetPoolId()));
-    }
-
-    /** 源池状态不变也补齐联动池主体及旗下新债；源池无实际退出时不误出无关17状态。 */
-    @Test
-    public void shouldRepairLinkedDifferencesWithoutRemovingUnrelatedStatus() {
-        Fixture f = new Fixture();
-        f.observers.add(observer("C1", "3"));
-        f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-        f.states.put("C1", new LinkedHashSet<>(Collections.singletonList(23L)));
-        f.states.put("B1", new LinkedHashSet<>(Collections.singletonList(23L)));
-        when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
-                relation(23L, 17L, "in_linked"), relation(23L, 17L, "out_linked")));
         assertThat(f.service.execute().getAffectedCount()).isEqualTo(2);
-        assertThat(f.logs).allMatch(row -> Long.valueOf(17L).equals(row.getTargetPoolId()));
-        f.states.get("B1").remove(17L);
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(1);
+        assertThat(f.states.get("C1")).containsExactly(16L, 99L);
+        assertThat(f.states).doesNotContainKey("B1");
         f.observers.get(0).setObserverType("1");
-        f.states.get("C1").remove(23L);
-        f.states.get("B1").remove(23L);
-        assertThat(f.service.execute().getAffectedCount()).isZero();
-        assertThat(f.states.get("C1")).containsExactly(17L);
-        assertThat(f.states.get("B1")).containsExactly(17L);
+        assertThat(f.service.execute().getAffectedCount()).isEqualTo(2);
+        assertThat(f.states.get("C1")).isEmpty();
+        assertThat(f.states).doesNotContainKey("B1");
+        assertThat(f.logs).noneMatch(row -> Long.valueOf(17L).equals(row.getTargetPoolId()));
     }
 
     /** 联动目标池同样检查实际主体及债券的调入/调出限制。 */
@@ -408,36 +244,13 @@ public class CompanyObserverPoolSyncServiceTest {
             f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
             f.states.put("C1", new LinkedHashSet<>(inbound ? Collections.emptyList() : Arrays.asList(23L, 17L)));
             f.states.put("B1", new LinkedHashSet<>(inbound ? Collections.emptyList() : Arrays.asList(23L, 17L)));
-            f.states.get("B1").add(15L);
+            f.states.get("C1").add(15L);
             when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
                     relation(23L, 17L, inbound ? "in_linked" : "out_linked"),
                     relation(17L, 15L, inbound ? "in_restrict" : "out_restrict")));
             ScheduledTaskResult result = f.service.execute();
             assertThat(result.isSuccess()).isFalse();
-            assertThat(result.getMessage()).contains("B1", "池17", "限制池");
-        }
-    }
-
-    /** 来源池取任一命中，主体与债券分别校验，不满足时阻断。 */
-    @Test
-    public void shouldRequireAnySourcePoolForCompanyAndBond() {
-        for (String missing : Arrays.asList("none", "company", "bond")) {
-            Fixture f = new Fixture();
-            f.observers.add(observer("C1", "2"));
-            f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-            if (!"company".equals(missing)) {
-                f.states.put("C1", new LinkedHashSet<>(Collections.singletonList(98L)));
-            }
-            if (!"bond".equals(missing)) {
-                f.states.put("B1", new LinkedHashSet<>(Collections.singletonList(98L)));
-            }
-            when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
-                    relation(16L, 99L, "source"), relation(16L, 98L, "source")));
-            ScheduledTaskResult result = f.service.execute();
-            assertThat(result.isSuccess()).as(missing).isEqualTo("none".equals(missing));
-            if (!result.isSuccess()) {
-                assertThat(result.getMessage()).contains("来源池", "company".equals(missing) ? "C1" : "B1");
-            }
+            assertThat(result.getMessage()).contains("C1", "池17", "限制池");
         }
     }
 
@@ -449,7 +262,7 @@ public class CompanyObserverPoolSyncServiceTest {
         f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
         when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
                 relation(23L, 17L, "source"), relation(23L, 17L, "in_linked")));
-        assertThat(f.service.execute().getAffectedCount()).isEqualTo(4);
+        assertThat(f.service.execute().getAffectedCount()).isEqualTo(2);
 
         Fixture switching = new Fixture();
         switching.observers.add(observer("C1", "3"));
@@ -457,25 +270,8 @@ public class CompanyObserverPoolSyncServiceTest {
         switching.states.put("C1", new LinkedHashSet<>(Collections.singletonList(16L)));
         switching.states.put("B1", new LinkedHashSet<>(Collections.singletonList(16L)));
         when(switching.statusMapper.queryAllPoolRelationList()).thenReturn(Collections.singletonList(relation(23L, 16L, "source")));
-        assertThat(switching.service.execute().getAffectedCount()).isEqualTo(4);
-        assertThat(switching.states.get("B1")).containsExactly(23L);
-    }
-
-    /** 调出互斥按主体链路对当前命中对象阻断，主体和债券均生效。 */
-    @Test
-    public void shouldRejectOutboundMutexForCompanyAndBond() {
-        for (String blockedCode : Arrays.asList("C1", "B1")) {
-            Fixture f = new Fixture();
-            f.observers.add(observer("C1", "1"));
-            f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-            f.states.put("C1", new LinkedHashSet<>(Collections.singletonList(23L)));
-            f.states.put("B1", new LinkedHashSet<>(Collections.singletonList(23L)));
-            f.states.get(blockedCode).add(99L);
-            when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Collections.singletonList(relation(23L, 99L, "out_mutex")));
-            ScheduledTaskResult result = f.service.execute();
-            assertThat(result.isSuccess()).isFalse();
-            assertThat(result.getMessage()).contains(blockedCode, "调出互斥池");
-        }
+        assertThat(switching.service.execute().getAffectedCount()).isEqualTo(2);
+        assertThat(switching.states.get("B1")).containsExactly(16L);
     }
 
     /** 两类弹性禁投按现有主体规则只记警告，仍正常完成主体及债券入/出池。 */
@@ -491,59 +287,10 @@ public class CompanyObserverPoolSyncServiceTest {
                     relation(23L, 99L, inbound ? "in_soft_restrict" : "out_soft_restrict")));
             ScheduledTaskResult result = f.service.execute();
             assertThat(result.isSuccess()).isTrue();
-            assertThat(result.getAffectedCount()).isEqualTo(2);
-            assertThat(result.getDetailLog()).contains("WARN", "C1", "弹性禁投池（警告不阻断）命中1只")
+            assertThat(result.getAffectedCount()).isEqualTo(1);
+            assertThat(result.getDetailLog()).contains("WARN", "C1", "弹性禁投池（警告不阻断）")
                     .doesNotContain("B1");
         }
-    }
-
-    /** 主体和旗下债券都执行互斥退出，配套调出不能绕过目标池的硬限制或互斥规则。 */
-    @Test
-    public void shouldApplyCompanyMutexAndValidateGeneratedOutbound() {
-        for (String outRule : Arrays.asList("none", "out_restrict", "out_mutex")) {
-            Fixture f = new Fixture();
-            f.observers.add(observer("C1", "3"));
-            f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-            f.states.put("C1", new LinkedHashSet<>(Collections.singletonList(99L)));
-            f.states.put("B1", new LinkedHashSet<>(Arrays.asList(99L, 15L)));
-            when(f.poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"), pool(99L, "other")));
-            List<PoolRelationBo> relations = new ArrayList<>();
-            relations.add(relation(23L, 99L, "in_mutex"));
-            if (!"none".equals(outRule)) {
-                relations.add(relation(99L, 15L, outRule));
-            }
-            when(f.statusMapper.queryAllPoolRelationList()).thenReturn(relations);
-            ScheduledTaskResult result = f.service.execute();
-            assertThat(result.isSuccess()).isEqualTo("none".equals(outRule));
-            if (result.isSuccess()) {
-                assertThat(result.getAffectedCount()).isEqualTo(4);
-                assertThat(f.states.get("C1")).containsExactly(23L);
-                assertThat(f.states.get("B1")).containsExactly(15L, 23L);
-                assertThat(f.logs).filteredOn(row -> "互斥调整".equals(row.getAdjustType())).hasSize(2);
-                assertThat(f.service.execute().getAffectedCount()).isZero();
-            } else {
-                assertThat(result.getMessage()).contains("B1", "池99");
-            }
-        }
-    }
-
-    /** 主体和债券已在目标池时也修复互斥双池，不要求先产生新的调入日志。 */
-    @Test
-    public void shouldRepairExistingCompanyAndBondMutexOverlap() {
-        Fixture f = new Fixture();
-        f.observers.add(observer("C1", "3"));
-        f.bonds.put("C1", Collections.singletonList(item("B1", "mtn")));
-        f.states.put("C1", new LinkedHashSet<>(Arrays.asList(23L, 99L)));
-        f.states.put("B1", new LinkedHashSet<>(Arrays.asList(23L, 99L)));
-        when(f.poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"), pool(99L, "other")));
-        when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Collections.singletonList(relation(23L, 99L, "in_mutex")));
-        ScheduledTaskResult result = f.service.execute();
-        assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getAffectedCount()).isEqualTo(2);
-        assertThat(f.logs).allMatch(row -> "互斥调整".equals(row.getAdjustType()) && "调出".equals(row.getAdjustMode()));
-        assertThat(f.states.get("C1")).containsExactly(23L);
-        assertThat(f.states.get("B1")).containsExactly(23L);
-        assertThat(f.service.execute().getAffectedCount()).isZero();
     }
 
     /** 同批计划调入源池及其互斥联动池时明确阻断，不通过先入后出掩盖冲突。 */
@@ -556,72 +303,6 @@ public class CompanyObserverPoolSyncServiceTest {
         ScheduledTaskResult result = f.service.execute();
         assertThat(result.isSuccess()).isFalse();
         assertThat(result.getMessage()).contains("同批调入池", "冲突");
-    }
-
-    /** 大量旗下债券只输出按主体、目标池的数量，联动、互斥和柔性警告均不逐券输出。 */
-    @Test
-    public void shouldAggregateBondProcessLogsByCompanyAndPool() {
-        Fixture f = new Fixture();
-        f.observers.add(observer("C1", "3"));
-        List<ScheduledAdjustCandidateDto> bonds = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
-            String code = "BOND_DETAIL_" + i;
-            bonds.add(item(code, "mtn"));
-            f.states.put(code, new LinkedHashSet<>(Arrays.asList(99L, 15L)));
-        }
-        f.bonds.put("C1", bonds);
-        when(f.poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"),
-                pool(17L, "blacklist"), pool(99L, "other")));
-        when(f.statusMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
-                relation(23L, 17L, "in_linked"), relation(23L, 17L, "out_linked"), relation(23L, 99L, "in_mutex"),
-                relation(23L, 15L, "in_soft_restrict"), relation(23L, 15L, "out_soft_restrict"),
-                relation(17L, 15L, "in_soft_restrict"), relation(17L, 15L, "out_soft_restrict"),
-                relation(99L, 15L, "out_soft_restrict")));
-        ScheduledTaskResult inbound = f.service.execute();
-        assertThat(inbound.isSuccess()).isTrue();
-        assertThat(inbound.getAffectedCount()).isEqualTo(302);
-        assertThat(inbound.getDetailLog()).contains("处理成功：主体[C1] 调入 池23", "处理成功：主体[C1] 调入 池17",
-                "主体[C1]旗下债券：投资池=池23，调入100只，调出0只",
-                "主体[C1]旗下债券：投资池=池99，调入0只，调出100只",
-                "主体[C1]旗下债券：投资池=池17，调入100只，调出0只",
-                "调入弹性禁投池（警告不阻断）命中100只", "调出弹性禁投池（警告不阻断）命中100只")
-                .doesNotContain("BOND_DETAIL_");
-        assertThat(inbound.getDetailLog().split("\\R")).hasSizeLessThan(25);
-        assertThat(f.logs).hasSize(302);
-
-        f.observers.get(0).setObserverType("1");
-        ScheduledTaskResult outbound = f.service.execute();
-        assertThat(outbound.isSuccess()).isTrue();
-        assertThat(outbound.getAffectedCount()).isEqualTo(202);
-        assertThat(outbound.getDetailLog()).contains("处理成功：主体[C1] 调出 池23", "处理成功：主体[C1] 调出 池17",
-                "主体[C1]旗下债券：投资池=池23，调入0只，调出100只",
-                "主体[C1]旗下债券：投资池=池17，调入0只，调出100只")
-                .doesNotContain("BOND_DETAIL_");
-        assertThat(outbound.getDetailLog().split("\\R")).hasSizeLessThan(25);
-        assertThat(f.logs).hasSize(504);
-        ScheduledTaskResult repeated = f.service.execute();
-        assertThat(repeated.getAffectedCount()).isZero();
-        assertThat(repeated.getDetailLog()).doesNotContain("旗下债券：投资池=");
-    }
-
-    /** 超过一批的主体及债券仅按编码分批预读，业务循环不再触发逐项查询。 */
-    @Test
-    public void shouldBoundReadQueriesByBatchCountInsteadOfItemCount() {
-        Fixture f = new Fixture();
-        for (int index = 0; index < 1001; index++) {
-            String companyCode = "BULK_C" + index;
-            f.observers.add(observer(companyCode, "2"));
-            f.bonds.put(companyCode, Arrays.asList(item("BULK_A" + index, "mtn"), item("BULK_B" + index, "abs")));
-        }
-        ScheduledTaskResult result = f.service.execute();
-        assertThat(result.isSuccess()).isTrue();
-        // 每个主体只同步普通债，ABS 债被类型范围排除
-        assertThat(result.getAffectedCount()).isEqualTo(2002);
-        verify(f.sourceMapper, times(2)).queryObserverBondList(anyList(), any(CompanyBondTypeScopeBo.class));
-        verify(f.sourceMapper, times(3)).queryObserverPoolStatusList(anyList());
-        verify(f.statusMapper, never()).querySecurityCurrentPoolIdList(anyString());
-        verifyNoInteractions(f.bondMapper);
-        assertThat(result.getDetailLog()).contains("旗下债券1001只", "债券查询2次，池状态查询3次");
     }
 
     /** 互斥调出后后续限制校验应看到实时内存状态，不能沿用预读时的旧状态。 */
@@ -639,10 +320,9 @@ public class CompanyObserverPoolSyncServiceTest {
                 relation(99L, 98L, "out_restrict")));
         ScheduledTaskResult result = f.service.execute();
         assertThat(result.isSuccess()).isTrue();
-        assertThat(result.getAffectedCount()).isEqualTo(6);
+        assertThat(result.getAffectedCount()).isEqualTo(3);
         assertThat(f.states.get("C1")).containsExactly(23L);
-        assertThat(f.states.get("B1")).containsExactly(23L);
-        verify(f.sourceMapper).queryObserverBondList(anyList(), any(CompanyBondTypeScopeBo.class));
+        assertThat(f.states.get("B1")).containsExactly(98L, 99L);
         verify(f.sourceMapper).queryObserverPoolStatusList(anyList());
         verify(f.statusMapper, never()).querySecurityCurrentPoolIdList(anyString());
     }
@@ -652,7 +332,6 @@ public class CompanyObserverPoolSyncServiceTest {
     public void shouldSkipBatchQueriesWhenNoCompaniesNeedProcessing() {
         Fixture f = new Fixture();
         assertThat(f.service.execute().getAffectedCount()).isZero();
-        verify(f.sourceMapper, never()).queryObserverBondList(anyList(), any(CompanyBondTypeScopeBo.class));
         verify(f.sourceMapper, never()).queryObserverPoolStatusList(anyList());
     }
 
@@ -734,23 +413,6 @@ public class CompanyObserverPoolSyncServiceTest {
             when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(pool(16L, "observe"), pool(23L, "restricted"), pool(17L, "blacklist")));
             when(sourceMapper.queryCompanyObserverList()).thenReturn(observers);
             when(sourceMapper.queryCurrentCompanyList(anyList())).thenReturn(currentCompanies);
-            when(sourceMapper.queryObserverBondList(anyList(), any(CompanyBondTypeScopeBo.class))).thenAnswer(call -> {
-                List<ScheduledAdjustCandidateDto> result = new ArrayList<>();
-                List<String> companyCodes = call.getArgument(0);
-                CompanyBondTypeScopeBo scope = call.getArgument(1);
-                for (String companyCode : companyCodes) {
-                    for (ScheduledAdjustCandidateDto bond : bonds.getOrDefault(companyCode, Collections.emptyList())) {
-                        // 与真实 SQL 一致：类型范围要求排除 ABS 时，ABS 债不进入候选
-                        if (scope != null && scope.isExcludeAbs()
-                                && ("abs".equals(bond.getSecurityType()) || Integer.valueOf(1).equals(bond.getAbsFlag()))) {
-                            continue;
-                        }
-                        bond.setIssuerCode(companyCode);
-                        result.add(bond);
-                    }
-                }
-                return result;
-            });
             when(sourceMapper.queryObserverPoolStatusList(anyList())).thenAnswer(call -> {
                 List<IpPoolStatusBo> result = new ArrayList<>();
                 List<String> codes = call.getArgument(0);

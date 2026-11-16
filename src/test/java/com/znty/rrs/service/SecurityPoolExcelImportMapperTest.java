@@ -144,6 +144,7 @@ public class SecurityPoolExcelImportMapperTest {
                         + " 'DEMO_CREDIT', '国有企业', '北京市', '北京市', '20010101')");
                 statement.execute("CREATE TABLE ip_pool_status (security_code VARCHAR(40), security_type VARCHAR(20),"
                         + " target_pool_id BIGINT, audit_status VARCHAR(2), is_deleted INT, security_short_name VARCHAR(200))");
+                 statement.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(40), short_name VARCHAR(200), security_type VARCHAR(20))");
                 statement.execute("INSERT INTO ip_pool_status VALUES ('C10011', 'company', 16, '20', 0, '池内主体名称'),"
                         + " ('BOND001', 'bond', 16, '20', 0, '债券'), ('C10012', 'company', 16, '00', 0, '在途主体')");
             }
@@ -164,9 +165,9 @@ public class SecurityPoolExcelImportMapperTest {
             req.setRegisterNumber("MISSING");
             assertThat(mapper.queryCompanyPage(req)).isEmpty();
             SecurityPoolExcelImportMapper importMapper = session.getMapper(SecurityPoolExcelImportMapper.class);
-            assertThat(importMapper.queryPoolMemberList(16L, "company")).hasSize(1);
-            assertThat(importMapper.queryPoolMemberList(16L, "company").get(0).getSecurityCode()).isEqualTo("C10011");
-            assertThat(importMapper.queryPoolMemberList(16L, "company").get(0).getSecurityShortName()).isEqualTo("池内主体名称");
+            assertThat(importMapper.queryPoolMemberList(16L)).extracting(PoolMemberDto::getSecurityCode)
+                    .containsExactly("BOND001", "C10011");
+            assertThat(importMapper.queryPoolMemberList(16L).get(1).getSecurityShortName()).isEqualTo("池内主体名称");
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.execute("UPDATE ais_inv_ods.wind_compintroduction SET COMP_SNAME = NULL WHERE COMP_ID = 'C10011'");
             }
@@ -177,11 +178,11 @@ public class SecurityPoolExcelImportMapperTest {
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.execute("DROP TABLE ais_inv_ods.wind_compintroduction");
             }
-            assertThat(importMapper.queryPoolMemberList(16L, "company")).hasSize(1);
+            assertThat(importMapper.queryPoolMemberList(16L)).hasSize(2);
         }
     }
 
-    /** 证券导入按同名父子列定位根叶子池，清空出库包含普通证券表里的 CRMW 凭证 */
+    /** 证券导入按同名父子列定位根叶子池，清空包含普通池状态表里的主体及 CRMW 凭证 */
     @Test
     public void shouldResolveCrmwRootAndFindSingleSecurityMembers() throws Exception {
         try (SqlSession session = openSession("crmw_single_security_excel")) {
@@ -201,10 +202,12 @@ public class SecurityPoolExcelImportMapperTest {
                 statement.execute("INSERT INTO ip_investment_pool (id, parent_id, pool_name, pool_type, status, is_deleted) "
                         + "VALUES (21, 20, '产品子池', 'bond_product', 'enabled', 0)");
                 statement.execute("CREATE TABLE ip_pool_status (security_code VARCHAR(30), security_type VARCHAR(20), "
-                        + "target_pool_id BIGINT, audit_status VARCHAR(10), is_deleted INT)");
+                        + "target_pool_id BIGINT, audit_status VARCHAR(10), is_deleted INT, security_short_name VARCHAR(30))");
                 statement.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(30), short_name VARCHAR(30), security_type VARCHAR(20))");
                 statement.execute("INSERT INTO rrs_securityinfo VALUES ('CRMW.IB', '凭证', 'crmw'), ('C001', '主体', 'company')");
-                statement.execute("INSERT INTO ip_pool_status VALUES ('CRMW.IB', 'crmw', 18, '20', 0), ('C001', 'company', 18, '20', 0)");
+                statement.execute("INSERT INTO ip_pool_status VALUES ('CRMW.IB', 'crmw', 18, '20', 0, '原凭证'),"
+                        + " ('C001', 'company', 18, '20', 0, '原主体'), ('C002', 'company', 18, '20', 1, '已退出主体'),"
+                        + " ('OTHER.IB', 'bond', 19, '20', 0, '其他池证券')");
             }
 
             SecurityPoolExcelImportMapper mapper = session.getMapper(SecurityPoolExcelImportMapper.class);
@@ -216,8 +219,9 @@ public class SecurityPoolExcelImportMapperTest {
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName(null, "CRMW库", true)).isNull();
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("CRMW库", "CRMW库", false)).isNull();
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName(null, "普通池", false).getId()).isEqualTo(19L);
-            assertThat(mapper.queryPoolMemberList(18L, "security")).extracting(PoolMemberDto::getSecurityCode)
-                    .containsExactly("CRMW.IB");
+            List<PoolMemberDto> members = mapper.queryPoolMemberList(18L);
+            assertThat(members).extracting(PoolMemberDto::getSecurityCode).containsExactly("C001", "CRMW.IB");
+            assertThat(members).extracting(PoolMemberDto::getSecurityShortName).containsExactly("原主体", "凭证");
         }
     }
 

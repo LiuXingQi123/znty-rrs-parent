@@ -548,7 +548,7 @@ public class ForbiddenPoolAdjustFlowService {
         if (updated != logList.size()) {
             throw new BizException("审批任务状态已发生变化，请刷新后重试");
         }
-        // 使用主体调库统一落池与旗下债券同步保护
+        // 落地主体调库批次中已经提交的调整项
         forbiddenPoolAdjustService.applyPoolStatusChanges(logList);
         // 审批通过结束后，将手工上传的信评报告沉淀为内部报告
         reportService.addInternalReportsOnFinish(logList);

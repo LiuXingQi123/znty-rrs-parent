@@ -7,6 +7,8 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
+import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitDto;
+import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustSubmitReq;
 import com.znty.rrs.entity.forbiddenpooladjust.CompanyAdjustCheckContext;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportDto;
 import com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto;
@@ -15,6 +17,7 @@ import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportCheckItemDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
+import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
@@ -31,6 +34,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -42,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Date;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -54,6 +59,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -90,13 +96,13 @@ public class SecurityPoolExcelImportServiceTest {
         dto.setItems(Collections.singletonList(item));
         when(securityPoolAdjustService.checkExcelAdjust(any())).thenReturn(dto);
         when(investmentPoolMapper.queryPoolById(100L)).thenReturn(pool);
-        when(importMapper.queryPoolMemberList(100L, "security")).thenReturn(Collections.singletonList(member));
+        when(importMapper.queryPoolMemberList(100L)).thenReturn(Collections.singletonList(member));
         when(securityPoolAdjustMapper.querySecurityHasPendingProcess("C1")).thenReturn(true);
         SysImpTmpDetlBo imported = new SysImpTmpDetlBo();
         imported.setFld001("NEW");
         imported.setFld009("100");
         List<SecurityPoolExcelImportCheckItemDto> results = ReflectionTestUtils.invokeMethod(service,
-                "checkClearTargetOutbound", Collections.singletonList(imported), true, true, false, false, "1");
+                "checkClearTargetOutbound", Collections.singletonList(imported), Collections.singleton(100L), false, false, "1");
         assertEquals(1, results.size());
         assertTrue(results.get(0).isCanAdjust());
         assertTrue(results.get(0).getFailReasons().contains("目标投资池已锁定"));
@@ -104,6 +110,168 @@ public class SecurityPoolExcelImportServiceTest {
         verify(securityPoolAdjustService).checkExcelAdjust(any());
         verify(securityPoolAdjustService, never()).checkAdjust(any());
         verify(securityPoolAdjustMapper, never()).querySecurityHasPendingProcess("C1");
+    }
+
+    /** 两种模板都清空名单外的主体和证券，并按实际对象提交出库 */
+    @Test
+    public void clearTargetShouldCheckAndSubmitBothMemberTypesForEitherTemplate() {
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(16L);
+        when(investmentPoolMapper.queryPoolById(16L)).thenReturn(pool);
+        PoolMemberDto company = new PoolMemberDto();
+        company.setSecurityCode("OLD_COMPANY");
+        company.setSecurityType("company");
+        PoolMemberDto bond = new PoolMemberDto();
+        bond.setSecurityCode("OLD_BOND.IB");
+        bond.setSecurityType("bond");
+        PoolMemberDto listed = new PoolMemberDto();
+        listed.setSecurityCode("LISTED");
+        when(importMapper.queryPoolMemberList(16L)).thenReturn(Arrays.asList(company, bond, listed));
+        when(forbiddenPoolAdjustService.checkCompanyAdjust(any(ForbiddenPoolAdjustCheckReq.class)))
+                .thenReturn(clearCheckResult(company));
+        when(securityPoolAdjustService.checkExcelAdjust(any(AdjustCheckReq.class))).thenReturn(clearCheckResult(bond));
+        ForbiddenPoolAdjustSubmitDto companySubmit = new ForbiddenPoolAdjustSubmitDto();
+        companySubmit.setLogIds(Collections.singletonList(101L));
+        when(forbiddenPoolAdjustService.addCompanyAdjustLog(any(ForbiddenPoolAdjustSubmitReq.class), eq(Collections.emptyList())))
+                .thenReturn(companySubmit);
+        AdjustSubmitDto bondSubmit = new AdjustSubmitDto();
+        bondSubmit.setLogIds(Collections.singletonList(102L));
+        when(securityPoolAdjustService.addAdjustLog(any(SecurityPoolAdjustSubmitReq.class))).thenReturn(bondSubmit);
+        SysImpTmpDetlBo imported = new SysImpTmpDetlBo();
+        imported.setFld001("LISTED");
+        imported.setFld009("16");
+
+        for (boolean companyImport : new boolean[]{false, true}) {
+            listed.setSecurityType(companyImport ? "company" : "bond");
+            List<SecurityPoolExcelImportCheckItemDto> results = ReflectionTestUtils.invokeMethod(service,
+                    "checkClearTargetOutbound", Collections.singletonList(imported), Collections.singleton(16L), companyImport, false, "1");
+            assertEquals(2, results.size());
+            assertEquals("OLD_COMPANY", results.get(0).getSecurityCode());
+            assertEquals("OLD_BOND.IB", results.get(1).getSecurityCode());
+            List<Long> ids = ReflectionTestUtils.invokeMethod(service, "submitClearTargetOutbound",
+                    results, new SysImpTmpBo(), "1", "测试用户");
+            assertEquals(Arrays.asList(101L, 102L), ids);
+        }
+
+        ArgumentCaptor<ForbiddenPoolAdjustSubmitReq> companyRequests =
+                ArgumentCaptor.forClass(ForbiddenPoolAdjustSubmitReq.class);
+        verify(forbiddenPoolAdjustService, times(2)).addCompanyAdjustLog(companyRequests.capture(), eq(Collections.emptyList()));
+        ArgumentCaptor<SecurityPoolAdjustSubmitReq> bondRequests = ArgumentCaptor.forClass(SecurityPoolAdjustSubmitReq.class);
+        verify(securityPoolAdjustService, times(2)).addAdjustLog(bondRequests.capture());
+        for (ForbiddenPoolAdjustSubmitReq request : companyRequests.getAllValues()) {
+            assertEquals("OLD_COMPANY", request.getCompanyCode());
+            assertEquals("调出", request.getItems().get(0).getAdjustMode());
+        }
+        for (SecurityPoolAdjustSubmitReq request : bondRequests.getAllValues()) {
+            assertEquals("OLD_BOND.IB", request.getSecurityCode());
+            assertEquals("调出", request.getItems().get(0).getAdjustMode());
+        }
+    }
+
+    /** 只有可调入的 Excel 主项才能触发对应池的清空校验 */
+    @Test
+    public void clearCheckShouldSkipPoolsWithoutSubmittableInbound() {
+        SysImpTmpDetlBo validRow = new SysImpTmpDetlBo();
+        validRow.setFld001("NEW.IB");
+        validRow.setFld009("16");
+        SysImpTmpDetlBo failedRow = new SysImpTmpDetlBo();
+        failedRow.setFld001("INVALID.IB");
+        failedRow.setFld009("23");
+        SecurityPoolExcelImportCheckItemDto valid = importAdjustItem("NEW.IB", 16L, "调入", "manual", 1L, "in16");
+        SecurityPoolExcelImportCheckItemDto failed = importAdjustItem("INVALID.IB", 23L, "调入", "manual", 2L, "in23");
+        failed.setCanAdjust(false);
+        SecurityPoolExcelImportCheckItemDto linked = importAdjustItem("NEW.IB", 23L, "调入", "linkage", 1L, "in16");
+        SecurityPoolExcelImportCheckItemDto outbound = importAdjustItem("OLD.IB", 23L, "调出", "manual", 3L, "out23");
+        List<SysImpTmpDetlBo> rows = Arrays.asList(validRow, failedRow);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(16L);
+        when(investmentPoolMapper.queryPoolById(16L)).thenReturn(pool);
+
+        Set<Long> noInbound = ReflectionTestUtils.invokeMethod(service, "collectInboundPoolIds",
+                Arrays.asList(failed, linked, outbound));
+        List<SecurityPoolExcelImportCheckItemDto> noClear = ReflectionTestUtils.invokeMethod(service,
+                "checkClearTargetOutbound", rows, noInbound, false, false, "1");
+        assertTrue(noClear.isEmpty());
+        verify(importMapper, never()).queryPoolMemberList(any());
+
+        Set<Long> inbound = ReflectionTestUtils.invokeMethod(service, "collectInboundPoolIds",
+                Arrays.asList(valid, failed, linked, outbound));
+        ReflectionTestUtils.invokeMethod(service, "checkClearTargetOutbound", rows, inbound, false, false, "1");
+        verify(importMapper).queryPoolMemberList(16L);
+        verify(importMapper, never()).queryPoolMemberList(23L);
+    }
+
+    /** 只提交清空项时拒绝写库，其他池的调入也不能触发本池清空 */
+    @Test
+    public void submitImportShouldRequireInboundForEachClearedPool() {
+        SysImpTmpBo batch = new SysImpTmpBo();
+        batch.setImpId("CLEAR");
+        batch.setFld001("in");
+        batch.setChkRslt("1");
+        batch.setSaveRslt("0");
+        batch.setOpterId("1");
+        batch.setOptionJson("{\"clearTarget\":true,\"importType\":\"security\"}");
+        batch.setResultJson("{}");
+        when(importMapper.queryBatchByImpId("CLEAR")).thenReturn(batch);
+        SecurityPoolExcelImportReq req = new SecurityPoolExcelImportReq();
+        req.setImpId("CLEAR");
+        SecurityPoolExcelImportCheckItemDto clear16 = importAdjustItem("OLD.IB", 16L, "调出", "clear", null, "out16");
+        SecurityPoolExcelImportCheckItemDto clear23 = importAdjustItem("OLD.IB", 23L, "调出", "clear", null, "out23");
+        SecurityPoolExcelImportCheckItemDto linked23 = importAdjustItem("OLD.IB", 17L, "调出", "linkage", null, "out23");
+        req.setCheckItems(Arrays.asList(clear16, clear23, linked23));
+
+        try {
+            service.submitImport(req);
+            fail();
+        } catch (BizException e) {
+            assertEquals("没有可提交的导入项", e.getMessage());
+        }
+        verify(securityPoolAdjustService, never()).addAdjustLog(any(SecurityPoolAdjustSubmitReq.class));
+
+        SysImpTmpDetlBo source = new SysImpTmpDetlBo();
+        source.setId(1L);
+        source.setFld001("NEW.IB");
+        source.setFld009("16");
+        source.setChkRslt("1");
+        when(importMapper.queryBatchItemList("CLEAR")).thenReturn(Collections.singletonList(source));
+        SecurityPoolExcelImportCheckItemDto inbound = importAdjustItem("NEW.IB", 16L, "调入", "manual", 1L, "in16");
+        req.setCheckItems(Arrays.asList(clear16, clear23, linked23, inbound));
+        service.submitImport(req);
+
+        ArgumentCaptor<SecurityPoolAdjustSubmitReq> clearRequest = ArgumentCaptor.forClass(SecurityPoolAdjustSubmitReq.class);
+        InOrder order = inOrder(securityPoolAdjustService);
+        order.verify(securityPoolAdjustService).addAdjustLog(clearRequest.capture());
+        order.verify(securityPoolAdjustService).addExcelImportAdjustLogList(anyList());
+        assertEquals(1, clearRequest.getValue().getItems().size());
+        assertEquals(Long.valueOf(16L), clearRequest.getValue().getItems().get(0).getTargetPoolId());
+    }
+
+    private SecurityPoolExcelImportCheckItemDto importAdjustItem(String code, Long poolId, String mode,
+                                                                 String tag, Long sourceId, String groupKey) {
+        SecurityPoolExcelImportCheckItemDto item = new SecurityPoolExcelImportCheckItemDto();
+        item.setSecurityCode(code);
+        item.setSourceSecurityCode(code);
+        item.setSecurityType("bond");
+        item.setTargetPoolId(poolId);
+        item.setAdjustMode(mode);
+        item.setItemTag(tag);
+        item.setSourceItemId(sourceId);
+        item.setAdjustGroupKey(groupKey);
+        item.setCanAdjust(true);
+        return item;
+    }
+
+    private AdjustCheckDto clearCheckResult(PoolMemberDto member) {
+        AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+        item.setSecurityCode(member.getSecurityCode());
+        item.setSecurityType(member.getSecurityType());
+        item.setTargetPoolId(16L);
+        item.setAdjustMode("调出");
+        item.setItemTag("manual");
+        item.setCanAdjust(true);
+        AdjustCheckDto dto = new AdjustCheckDto();
+        dto.setItems(Collections.singletonList(item));
+        return dto;
     }
 
     private SecurityPoolExcelImportService service;

@@ -230,8 +230,6 @@ public class AbsIdentityMapperIntegrationTest {
         jdbc.update("INSERT INTO ais_inv_ods.wind_cbondissuer VALUES ('ABS1','B','乙',115200000,NOW())");
         jdbc.update("INSERT INTO ip_pool_status(id,security_code,security_type,target_pool_id,audit_status,is_deleted) VALUES(1,'ABS1','abs',101,'20',0),(2,'B','company',202,'20',0)");
         try (SqlSession session = factory.openSession()) {
-            assertThat(session.getMapper(AutoAdjustMapper.class).queryBondInPoolWhenCompanyNotIn(101L, 202L, null))
-                    .singleElement().satisfies(row -> assertThat(row.getSecurityCode()).isEqualTo("ABS1"));
             assertThat(session.getMapper(AbsIdentityMapper.class).queryOtherCompanyInPool("ABS1", "A", 202L))
                     .containsExactly("B");
         }

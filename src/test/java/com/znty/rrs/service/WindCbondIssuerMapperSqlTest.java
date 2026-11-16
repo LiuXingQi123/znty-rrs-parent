@@ -32,13 +32,13 @@ public class WindCbondIssuerMapperSqlTest {
             assertThat(xml).as(mapperFile + " 应查询公司简介")
                     .contains("ais_inv_ods.wind_compintroduction");
             if ("ForbiddenPoolAdjustMapper.xml".equals(mapperFile)) {
-                // 主体资料继续查公司简介，ABS 旗下债关系允许查询 Wind 四类关系
+                // 主体资料查公司简介，ABS 关系由独立对账查询
                 for (String queryId : Arrays.asList("queryCompanyPage", "queryCompanyDetail")) {
                     int start = xml.indexOf("<select id=\"" + queryId + "\"");
                     String query = xml.substring(start, xml.indexOf("</select>", start));
                     assertThat(query).contains("wind_compintroduction").doesNotContain("wind_cbondissuer");
                 }
-                assertThat(xml).contains("abs_issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)");
+                assertThat(xml).doesNotContain("ais_inv_ods.wind_cbondissuer");
             } else {
                 assertThat(xml).doesNotContain("ais_inv_ods.wind_cbondissuer");
             }

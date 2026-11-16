@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** 定时任务调库日志文案辅助逻辑。 */
+/** 定时任务名称和调库日志文案辅助逻辑 */
 final class ScheduledAdjustLogHelper {
 
     /** 当前调度线程执行的任务名称，供共享业务方法记录调库来源 */
@@ -18,6 +18,40 @@ final class ScheduledAdjustLogHelper {
 
     /** 禁止实例化定时调库日志辅助类。 */
     private ScheduledAdjustLogHelper() {
+    }
+
+    /** 按任务处理对象追加范围标注，兼容已有任务配置名称 */
+    static String withTaskScope(String taskCode, String name) {
+        if (taskCode == null || !StringUtils.hasText(name)) {
+            return name;
+        }
+        String suffix;
+        switch (taskCode) {
+            case CompanyObserverPoolSyncService.TASK_CODE:
+            case CompanyOuterRatingAaMinusAutoInService.TASK_CODE:
+            case CompanyOuterRatingNotAaMinusAutoOutService.TASK_CODE:
+                suffix = "（仅主体）";
+                break;
+            case CompanyNewBondAutoInService.TASK_CODE:
+            case CompanyNotInPoolBondAutoOutService.TASK_CODE:
+            case CompanyAbsBondAutoInService.TASK_CODE:
+            case BondTempCodeReplaceService.TASK_CODE:
+            case BondSecurityTypeChangeService.TASK_CODE:
+            case WindCodeSyncService.TASK_CODE:
+            case GradeRuleAlertService.TASK_CODE:
+            case BondIssuerNotInCompanyPoolReminderService.TASK_CODE:
+                suffix = "（仅债券）";
+                break;
+            default:
+                return name;
+        }
+        String taskName = name.trim();
+        if (CompanyNotInPoolBondAutoOutService.TASK_CODE.equals(taskCode)
+                && ("主体跟随债券自动出池".equals(taskName)
+                || "主体跟随债券自动出池（仅债券）".equals(taskName))) {
+            return CompanyNotInPoolBondAutoOutService.DEFAULT_TASK_NAME;
+        }
+        return taskName.endsWith(suffix) ? taskName : taskName + suffix;
     }
 
     /** 执行任务并在退出时恢复当前线程原有的任务名称 */

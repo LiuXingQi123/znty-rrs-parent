@@ -17,19 +17,7 @@ public class CompanyBondTypeScopeMapperSqlTest {
     /** 验证所有主体联动候选统一排除退市债，并使用相同债券类型范围参数。 */
     @Test
     public void companyBondQueriesShouldUseUnifiedCandidateScope() throws Exception {
-        // 分别校验定时任务与人工主体调库的全部候选查询
-        assertMapperQueries("AutoAdjustMapper.xml", Arrays.asList(
-                "queryCompanyNewBondForAutoIn",
-                "queryCompanyBondSamePoolForAutoIn",
-                "queryCompanyBondNotInSamePoolForAutoIn",
-                "queryCompanyBondInSamePoolForAutoOut",
-                "queryBondInPoolWhenCompanyNotIn"));
-        assertMapperQueries("ForbiddenPoolAdjustMapper.xml", Arrays.asList(
-                "queryCompanyInboundBondForAutoList",
-                "queryCompanyBondMutexOutList",
-                "queryCompanyOutboundBondForAutoList"));
-        // 观察名单使用批量候选查询，债券范围仍与其他主体联动链路保持一致
-        assertMapperQueries("CompanyObserverMapper.xml", Arrays.asList("queryObserverBondList"));
+        assertMapperQueries("AutoAdjustMapper.xml", Arrays.asList("queryCompanyNewBondForAutoIn"));
     }
 
     /** 验证主体详情债券数量与实际联动范围一致，CRMW 也参与统计。 */

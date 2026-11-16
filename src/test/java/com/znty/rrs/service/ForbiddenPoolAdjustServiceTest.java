@@ -4,7 +4,6 @@ import com.znty.rrs.entity.bo.FlowDefinitionBo;
 import com.znty.rrs.entity.bo.FlowEdgeBo;
 import com.znty.rrs.entity.bo.FlowNodeBo;
 import com.znty.rrs.entity.bo.FlowVersionBo;
-import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
@@ -25,13 +24,7 @@ import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.ForbiddenPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import org.junit.Test;
-import org.junit.Assume;
-import org.mockito.ArgumentCaptor;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
@@ -47,8 +40,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -342,109 +333,6 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(forbiddenDto.getCurrentCount()).isEqualTo(12);
     }
 
-    /** 验证主体调入债券禁止库时，债券同步入池并从当前实际所在的关系池自动调出。 */
-    @Test
-    public void syncCompanyBondsOnDirectShouldInsertBondAndAutoOutRelatedPool() {
-        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
-        ForbiddenPoolAdjustService service = buildService(mapper);
-        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
-        SecurityInfoBo newBond = buildBond("B002");
-        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-        when(mapper.queryCompanyInboundBondForAutoList(eq("C10001"), eq(15L),
-                any(CompanyBondTypeScopeBo.class)))
-                .thenReturn(Collections.singletonList(newBond));
-        when(mapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
-                buildRelation(15L, "in_mutex", 3L),
-                buildRelation(3L, "in_restrict", 15L)));
-        when(poolMapper.queryPoolByIdsList(anyList()))
-                .thenReturn(Collections.singletonList(buildPool(3L, "二级库", "credit_bond")));
-        when(mapper.querySecurityCurrentPoolIdList("B002")).thenReturn(Arrays.asList(2L, 3L, 15L));
-        when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
-        when(mapper.deletePoolStatusSoft("B002", 3L)).thenReturn(1);
-        doAnswer(invocation -> {
-            IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
-            log.setId(99L);
-            return 1;
-        }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
-        IpAdjustLogBo companyLog = new IpAdjustLogBo();
-        companyLog.setSecurityCode("C10001");
-        companyLog.setSecurityShortName("某公司");
-        companyLog.setSecurityType("company");
-        companyLog.setAdjustMode("调入");
-        companyLog.setAdjustBatchNo("COMPANY202606281001");
-        companyLog.setTargetPoolId(15L);
-        companyLog.setTargetPoolName("债券禁止库");
-        companyLog.setPoolType("forbidden");
-        companyLog.setAdjusterId("1");
-        companyLog.setAdjusterName("管理员");
-
-        ReflectionTestUtils.invokeMethod(service, "syncCompanyBondsOnDirect", companyLog);
-
-        ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-        verify(mapper, times(2)).addAdjustLog(captor.capture());
-        IpAdjustLogBo inboundLog = captor.getAllValues().get(0);
-        IpAdjustLogBo outboundLog = captor.getAllValues().get(1);
-        assertThat(inboundLog.getSecurityCode()).isEqualTo("B002");
-        assertThat(inboundLog.getAdjustType()).isEqualTo("自动调整");
-        assertThat(inboundLog.getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
-        assertThat(outboundLog.getSecurityCode()).isEqualTo("B002");
-        assertThat(outboundLog.getAdjustType()).isEqualTo("互斥调整");
-        assertThat(outboundLog.getAdjustMode()).isEqualTo("调出");
-        assertThat(outboundLog.getTargetPoolId()).isEqualTo(3L);
-        assertThat(outboundLog.getTargetPoolName()).isEqualTo("二级库");
-        assertThat(outboundLog.getPoolType()).isEqualTo("credit_bond");
-        assertThat(outboundLog.getAdjustReason()).contains("调入“债券禁止库”", "自动调出“二级库”");
-        verify(mapper).addPoolStatus(inboundLog);
-        verify(mapper).deletePoolStatusSoft("B002", 3L);
-        verify(mapper, never()).deletePoolStatusSoft("B002", 2L);
-    }
-
-    /** 验证同批已有债券互斥调出项时，主体同步不重复生成日志和删除池状态。 */
-    @Test
-    public void syncCompanyBondsShouldLeaveExplicitOutboundToBatchApply() {
-        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
-        ForbiddenPoolAdjustService service = buildService(mapper);
-        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
-        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-        when(mapper.queryCompanyInboundBondForAutoList(eq("C10001"), eq(15L),
-                any(CompanyBondTypeScopeBo.class)))
-                .thenReturn(Collections.singletonList(buildBond("B002")));
-        when(mapper.queryAllPoolRelationList()).thenReturn(
-                Collections.singletonList(buildRelation(15L, "in_mutex", 3L)));
-        when(poolMapper.queryPoolByIdsList(Collections.singletonList(3L)))
-                .thenReturn(Collections.singletonList(buildPool(3L, "二级库", "credit_bond")));
-        when(mapper.querySecurityCurrentPoolIdList("B002")).thenReturn(Arrays.asList(3L, 15L));
-        when(mapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
-        when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
-
-        ReflectionTestUtils.invokeMethod(service, "syncCompanyBonds", buildCompanyLog(),
-                Collections.singleton("B002|3"));
-
-        verify(mapper, times(1)).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(mapper, never()).deletePoolStatusSoft("B002", 3L);
-    }
-
-    /** 主体出池时，同批已显式列出的债券调出不再重复落地。 */
-    @Test
-    public void outboundSyncShouldLeaveExplicitBondToBatchApply() {
-        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-        // 观察池主体和债券同批出池，债券已有真实调出日志
-        ForbiddenPoolAdjustService service = buildService(mapper);
-        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-        when(mapper.queryCompanyOutboundBondForAutoList(eq("C10001"), eq(16L),
-                any(CompanyBondTypeScopeBo.class))).thenReturn(Collections.singletonList(buildBond("B002")));
-        IpAdjustLogBo log = buildCompanyLog();
-        log.setTargetPoolId(16L);
-        log.setAdjustMode("调出");
-
-        ReflectionTestUtils.invokeMethod(service, "syncCompanyBonds", log, Collections.singleton("B002|16"));
-
-        verify(mapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(mapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
-    }
-
     /** 验证调入互斥关系与反向调入限制关系会合并，重复池仅保留一次。 */
     @Test
     public void resolveInboundAutoOutPoolIdsShouldMergeAndDeduplicateRelations() {
@@ -459,213 +347,9 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(poolIds).containsExactly(3L, 4L);
     }
 
-    /** 验证校验结果会追加以具体债券为调整对象的互斥调出项。 */
-    @Test
-    public void appendCompanyBondMutexOutItemsShouldAddBondRows() {
-        for (Long targetPoolId : Arrays.asList(15L, 16L, 23L, 999L)) {
-            ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-            InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
-            ForbiddenPoolAdjustService service = buildService(mapper);
-            ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
-            when(mapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
-                    buildRelation(targetPoolId, "in_mutex", 3L),
-                    buildRelation(3L, "in_restrict", targetPoolId)));
-            ForbiddenPoolAdjustDto.CompanyBond bond = new ForbiddenPoolAdjustDto.CompanyBond();
-            bond.setWindCode("B002");
-            bond.setShortName("测试债券");
-            bond.setSecurityType("company_bond");
-            bond.setTargetPoolId(3L);
-            when(mapper.queryCompanyBondMutexOutList(eq("C10001"), eq(targetPoolId),
-                    eq(Collections.singletonList(3L)), any(CompanyBondTypeScopeBo.class)))
-                    .thenReturn(Collections.singletonList(bond));
-            when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(
-                    buildPool(1L, "信用债大库", "credit_bond"),
-                    buildChildPool(3L, 1L, "二级库", "credit_bond")));
-            AdjustCheckDto.CheckResultItem manual = new AdjustCheckDto.CheckResultItem();
-            manual.setTargetPoolId(targetPoolId);
-            manual.setAdjustMode("调入");
-            manual.setItemTag("manual");
-            manual.setAdjustGroupKey("15_调入");
-            manual.setCanAdjust(true);
-            AdjustCheckDto result = new AdjustCheckDto();
-            result.setItems(new ArrayList<>(Collections.singletonList(manual)));
-
-            ReflectionTestUtils.invokeMethod(service, "appendCompanyBondMutexOutItems", "C10001", result);
-
-            assertThat(result.getItems()).hasSize(2);
-            AdjustCheckDto.CheckResultItem mutexItem = result.getItems().get(1);
-            assertThat(mutexItem.getSecurityCode()).isEqualTo("B002");
-            assertThat(mutexItem.getSecurityShortName()).isEqualTo("测试债券");
-            assertThat(mutexItem.getSecurityType()).isEqualTo("company_bond");
-            assertThat(mutexItem.getTargetPoolId()).isEqualTo(3L);
-            assertThat(mutexItem.getPoolName()).isEqualTo("信用债大库/二级库");
-            assertThat(mutexItem.getAdjustMode()).isEqualTo("调出");
-            assertThat(mutexItem.getItemTag()).isEqualTo("mutex");
-            assertThat(mutexItem.isCanAdjust()).isTrue();
-            assertThat(mutexItem.getFlowOptions()).isEmpty();
-        }
-    }
-
-    /** 多个主体目标池需要同一债券出池时，预览只保留一个真实调出项。 */
-    @Test
-    public void mutexPreviewShouldDeduplicateAcrossInboundPools() {
-        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-        // 构建两个主体调入项，均要求旗下同一债券从池 3 调出
-        ForbiddenPoolAdjustService service = buildService(mapper);
-        when(mapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
-                buildRelation(16L, "in_mutex", 3L), buildRelation(23L, "in_mutex", 3L)));
-        ForbiddenPoolAdjustDto.CompanyBond bond = new ForbiddenPoolAdjustDto.CompanyBond();
-        bond.setWindCode("B002");
-        bond.setTargetPoolId(3L);
-        when(mapper.queryCompanyBondMutexOutList(eq("C10001"), any(Long.class), anyList(),
-                any(CompanyBondTypeScopeBo.class))).thenReturn(Collections.singletonList(bond));
-        List<AdjustCheckDto.CheckResultItem> items = new ArrayList<>();
-        for (Long poolId : Arrays.asList(16L, 23L)) {
-            AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
-            item.setTargetPoolId(poolId);
-            item.setItemTag("manual");
-            item.setAdjustMode("调入");
-            item.setCanAdjust(true);
-            items.add(item);
-        }
-        AdjustCheckDto result = new AdjustCheckDto();
-        result.setItems(items);
-
-        ReflectionTestUtils.invokeMethod(service, "appendCompanyBondMutexOutItems", "C10001", result);
-
-        assertThat(result.getItems()).hasSize(3);
-        verify(mapper, times(2)).queryCompanyBondMutexOutList(eq("C10001"), any(Long.class), anyList(),
-                any(CompanyBondTypeScopeBo.class));
-    }
-
-    /** 使用 H2 真实事务验证旗下债写入或软删失败后，主体及先前债券状态全部回滚。 */
-    @Test
-    public void companyAndBondsShouldRollbackTogetherInBothDirections() {
-        String version = System.getProperty("java.specification.version");
-        int major = Integer.parseInt(version.startsWith("1.") ? version.substring(2) : version);
-        Assume.assumeTrue("H2 2.3.232 持久化测试需 Java 11 以上运行时", major >= 11);
-        for (String mode : Arrays.asList("调入", "调出")) {
-            DriverManagerDataSource source = new DriverManagerDataSource(
-                    "jdbc:h2:mem:company_sync_" + ("调入".equals(mode) ? "in" : "out") + ";DB_CLOSE_DELAY=-1", "sa", "");
-            JdbcTemplate jdbc = new JdbcTemplate(source);
-            TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
-            jdbc.execute("CREATE TABLE pool_state (security_code VARCHAR(32))");
-            if ("调出".equals(mode)) {
-                jdbc.update("INSERT INTO pool_state VALUES ('C10001'), ('B001'), ('B002')");
-            }
-            ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-            // 将 Mapper 的状态写入接到内存库，第二只债券模拟写入失败
-            ForbiddenPoolAdjustService service = buildService(mapper);
-            when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-            List<SecurityInfoBo> bonds = Arrays.asList(buildBond("B001"), buildBond("B002"));
-            when(mapper.queryCompanyInboundBondForAutoList(eq("C10001"), eq(16L),
-                    any(CompanyBondTypeScopeBo.class))).thenReturn(bonds);
-            when(mapper.queryCompanyOutboundBondForAutoList(eq("C10001"), eq(16L),
-                    any(CompanyBondTypeScopeBo.class))).thenReturn(bonds);
-            when(mapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
-            when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
-                IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
-                return "B002".equals(log.getSecurityCode()) ? 0
-                        : jdbc.update("INSERT INTO pool_state VALUES (?)", log.getSecurityCode());
-            });
-            when(mapper.deletePoolStatusSoft(any(String.class), eq(16L))).thenAnswer(invocation -> {
-                String code = (String) invocation.getArguments()[0];
-                return "B002".equals(code) ? 0 : jdbc.update("DELETE FROM pool_state WHERE security_code = ?", code);
-            });
-            // 通过与提交、审批相同的事务边界应用主体和债券变化
-            IpAdjustLogBo log = buildCompanyLog();
-            log.setTargetPoolId(16L);
-            log.setAdjustMode(mode);
-            assertThatThrownBy(() -> transaction.execute(status -> {
-                service.applyPoolStatusChanges(Collections.singletonList(log));
-                return null;
-            })).isInstanceOf(BizException.class);
-            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM pool_state", Integer.class))
-                    .isEqualTo("调入".equals(mode) ? 0 : 3);
-            jdbc.execute("DROP ALL OBJECTS");
-        }
-    }
-
-    /** 验证所有主体目标池的入池和出池均生成同批债券日志并改变对应状态。 */
-    @Test
-    public void syncCompanyBondsShouldFollowEveryTargetPoolAndDirection() {
-        for (Long poolId : Arrays.asList(15L, 16L, 17L, 23L, 999L)) {
-            for (String mode : Arrays.asList("调入", "调出")) {
-                ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-                // 构建独立服务，避免不同目标池的调用验证相互干扰
-                ForbiddenPoolAdjustService service = buildService(mapper);
-                when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-                List<SecurityInfoBo> bonds = new ArrayList<>();
-                for (String type : Arrays.asList("company_bond", "abs", "crmw")) {
-                    // 各类 bond 子类型均跟随主体
-                    SecurityInfoBo bond = buildBond("B_" + type);
-                    bond.setSecurityType(type);
-                    bonds.add(bond);
-                }
-                when(mapper.queryCompanyInboundBondForAutoList(eq("C10001"), eq(poolId),
-                        any(CompanyBondTypeScopeBo.class))).thenReturn(bonds);
-                when(mapper.queryCompanyOutboundBondForAutoList(eq("C10001"), eq(poolId),
-                        any(CompanyBondTypeScopeBo.class))).thenReturn(bonds);
-                when(mapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
-                    ((IpAdjustLogBo) invocation.getArguments()[0]).setId(99L);
-                    return 1;
-                });
-                when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
-                when(mapper.deletePoolStatusSoft(any(String.class), eq(poolId))).thenReturn(1);
-                // 主体日志中的目标池、方向、批次必须完整传递给债券
-                IpAdjustLogBo companyLog = buildCompanyLog();
-                companyLog.setTargetPoolId(poolId);
-                companyLog.setTargetPoolName("目标池" + poolId);
-                companyLog.setAdjustMode(mode);
-
-                ReflectionTestUtils.invokeMethod(service, "syncCompanyBondsOnDirect", companyLog);
-
-                ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
-                verify(mapper, times(3)).addAdjustLog(captor.capture());
-                for (IpAdjustLogBo log : captor.getAllValues()) {
-                    assertThat(log.getTargetPoolId()).isEqualTo(poolId);
-                    assertThat(log.getAdjustMode()).isEqualTo(mode);
-                    assertThat(log.getAdjustBatchNo()).isEqualTo(companyLog.getAdjustBatchNo());
-                    assertThat(log.getAuditStatus()).isEqualTo("20");
-                }
-                if ("调入".equals(mode)) {
-                    verify(mapper, times(3)).addPoolStatus(any(IpAdjustLogBo.class));
-                    verify(mapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
-                } else {
-                    verify(mapper, times(3)).deletePoolStatusSoft(any(String.class), eq(poolId));
-                    verify(mapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
-                }
-            }
-        }
-    }
-
-    /** 普通债券调库不触发主体跟债，避免递归同步。 */
-    @Test
-    public void syncCompanyBondsShouldSkipNonCompany() {
-        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-        ForbiddenPoolAdjustService service = buildService(mapper);
-        IpAdjustLogBo companyLog = new IpAdjustLogBo();
-        companyLog.setSecurityCode("C10001");
-        companyLog.setSecurityType("company_bond");
-        companyLog.setAdjustMode("调入");
-        companyLog.setTargetPoolId(16L);
-        companyLog.setTargetPoolName("观察池");
-        companyLog.setPoolType("observe");
-
-        ReflectionTestUtils.invokeMethod(service, "syncCompanyBondsOnDirect", companyLog);
-
-        verify(mapper).queryCategoryTypeBySecurityType("company_bond");
-        verify(mapper, never()).queryCompanyInboundBondForAutoList(
-                any(String.class), any(Long.class), any(CompanyBondTypeScopeBo.class));
-        verify(mapper, never()).queryCompanyOutboundBondForAutoList(
-                any(String.class), any(Long.class), any(CompanyBondTypeScopeBo.class));
-        verify(mapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(mapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
-    }
-
     /** 观察池和新增主体池也必须为旗下债券预占容量。 */
     @Test
-    public void finalRecheckShouldCountBondsForEveryCompanyPool() {
+    public void finalRecheckShouldCountOnlySubmittedItems() {
         for (Long poolId : Arrays.asList(16L, 23L, 999L)) {
             ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
             // 构建主体及尚未入池债券，目标池仅剩一个名额
@@ -684,32 +368,9 @@ public class ForbiddenPoolAdjustServiceTest {
             when(mapper.queryCompanySecurityBoByCode(log.getSecurityCode())).thenReturn(company);
             when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
             when(mapper.queryPoolCurrentCount(poolId)).thenReturn(1);
-            when(mapper.queryCompanyInboundBondForAutoList(eq(log.getSecurityCode()), eq(poolId),
-                    any(CompanyBondTypeScopeBo.class))).thenReturn(Collections.singletonList(buildBond("B001")));
-
-            assertThatThrownBy(() -> service.recheckBeforeFinalApproval(Collections.singletonList(log)))
-                    .isInstanceOf(BizException.class).hasMessageContaining("无法容纳主体及同步债券");
+            service.recheckBeforeFinalApproval(Collections.singletonList(log));
             verify(mapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
         }
-    }
-
-    /** 验证同步债券调入写入数量异常时阻断整批事务。 */
-    @Test(expected = BizException.class)
-    public void syncCompanyBondsShouldFailWhenInboundInsertCountIsInvalid() {
-        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
-        ForbiddenPoolAdjustService service = buildService(mapper);
-        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
-        when(mapper.queryCompanyInboundBondForAutoList(eq("C10001"), eq(15L),
-                any(CompanyBondTypeScopeBo.class)))
-                .thenReturn(Collections.singletonList(buildBond("B002")));
-        doAnswer(invocation -> {
-            ((IpAdjustLogBo) invocation.getArguments()[0]).setId(99L);
-            return 1;
-        }).when(mapper).addAdjustLog(any(IpAdjustLogBo.class));
-        when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(0);
-
-        IpAdjustLogBo companyLog = buildCompanyLog();
-        ReflectionTestUtils.invokeMethod(service, "syncCompanyBondsOnDirect", companyLog);
     }
 
     /** 验证主体调入不受证券品种和市场配置拦截。 */
@@ -771,11 +432,33 @@ public class ForbiddenPoolAdjustServiceTest {
         verify(attachmentService).validateCreditReportSources(Collections.singletonList(100L), true);
     }
 
+    /** 生效时仅处理已提交项目，历史债券互斥调出仍可完成 */
+    @Test
+    public void applyPoolStatusShouldOnlyApplyExplicitItems() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        IpAdjustLogBo company = buildCompanyLog();
+        IpAdjustLogBo legacyBond = new IpAdjustLogBo();
+        legacyBond.setSecurityCode("B001");
+        legacyBond.setSecurityType("mtn");
+        legacyBond.setTargetPoolId(16L);
+        legacyBond.setAdjustMode("调出");
+        when(mapper.addPoolStatus(company)).thenReturn(1);
+        when(mapper.deletePoolStatusSoft("B001", 16L)).thenReturn(1);
+
+        service.applyPoolStatusChanges(Arrays.asList(company, legacyBond));
+
+        verify(mapper).addPoolStatus(company);
+        verify(mapper).deletePoolStatusSoft("B001", 16L);
+        verify(mapper, never()).addAdjustLog(any());
+    }
+
     /** 构建服务并注入公共依赖。 */
     private ForbiddenPoolAdjustService buildService(ForbiddenPoolAdjustMapper mapper) {
         ForbiddenPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new ForbiddenPoolAdjustService());
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustMapper", mapper);
-        ReflectionTestUtils.setField(service, "investmentPoolMapper", mock(InvestmentPoolMapper.class));
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
         ReflectionTestUtils.setField(service, "investmentPoolService", mock(InvestmentPoolService.class));
         ReflectionTestUtils.setField(service, "sysAttachmentService", mock(SysAttachmentService.class));
         return service;

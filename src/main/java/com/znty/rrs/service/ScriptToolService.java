@@ -2124,7 +2124,7 @@ public class ScriptToolService {
                 "生成 C10009（某国际贸易集团有限公司）调入重点观察名单23的待复核申请。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step"));
         addDemoScene(sceneMap, "forbidden-company-approved", "禁投池主体审批通过", "forbidden",
-                "生成 C10006（某电力股份有限公司）审批通过，同批落地主体及旗下证券的15、17池状态与证券快照。",
+                "生成 C10006（某电力股份有限公司）审批通过并进入15、17池，旗下债券由独立定时任务同步。",
                 Arrays.asList("znty_rrs.ip_adjust_log", "znty_rrs.ip_adjust_step", "znty_rrs.ip_pool_status"));
         addDemoScene(sceneMap, "forbidden-abs-pending", "ABS 债禁投待审批", "forbidden",
                 "生成已在二级库的 108008901.IB 调入禁止库15的申请，快照沿用主档已生效的 C10008 主体身份。",
@@ -2300,23 +2300,17 @@ public class ScriptToolService {
                 + "FROM " + objectTable + " s INNER JOIN ip_investment_pool p ON p.id = " + poolId
                 + " INNER JOIN wf_flow_definition f ON f.id = " + flowId + " INNER JOIN ais_inv_analysis.t_sys_user u ON u.id = 2" + crmwJoin
                 + " WHERE " + objectKey + " = '" + objectCode + "'");
-        if (company && "20".equals(status)) {
-            // 主体入禁止库时，主体及旗下已确定身份证券共用批次同步进入 15 和 17
+        if (company && poolId == 15 && "20".equals(status) && "调入".equals(mode)) {
+            // 主体进入禁止库后，生成同批次的主体黑名单质押库联动项
             statements.add("INSERT INTO ip_adjust_log (security_code, security_short_name, security_type, adjust_type, adjust_mode, adjust_batch_no, "
                     + "target_pool_id, target_pool_name, pool_type, flow_id, flow_key, flow_type, audit_status, adjuster_id, adjuster_name, adjust_reason, "
                     + "submit_time, audit_time, entry_time, is_deleted, crte_time, updt_time) "
-                    + "SELECT source.security_code, source.security_short_name, source.security_type, '联动调整', '调入', l.adjust_batch_no, "
-                    + "p.id, p.pool_name, p.pool_type, l.flow_id, l.flow_key, l.flow_type, '20', l.adjuster_id, l.adjuster_name, '主体入禁止库，同批联动证券及黑名单质押库', "
+                    + "SELECT l.security_code, l.security_short_name, l.security_type, '联动调整', '调入', l.adjust_batch_no, "
+                    + "p.id, p.pool_name, p.pool_type, l.flow_id, l.flow_key, l.flow_type, '20', l.adjuster_id, l.adjuster_name, '主体入禁止库，联动调入黑名单质押库', "
                     + "l.submit_time, l.audit_time, l.entry_time, 0, NOW(), NOW() "
-                    + "FROM ip_adjust_log l INNER JOIN (SELECT COMP_ID AS security_code, COMP_NAME AS security_short_name, 'company' AS security_type "
-                    + "FROM ais_inv_ods.wind_compintroduction WHERE COMP_ID = '" + objectCode + "' UNION ALL "
-                    + "SELECT s.wind_code, s.short_name, s.security_type FROM rrs_securityinfo s INNER JOIN dict_security_type d "
-                    + "ON d.security_type = s.security_type AND d.category_type = 'bond' AND d.is_deleted = 0 "
-                    + "WHERE s.issuer_code = '" + objectCode + "' AND s.security_status != 'D' "
-                    + "AND (s.maturity_date IS NULL OR s.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d'))) source ON 1 = 1 "
-                    + "INNER JOIN ip_investment_pool p ON p.id IN (15, 17) WHERE l.adjust_batch_no = '" + batchNo + "' AND l.adjust_type = '手工调整'"
-                    + " AND NOT (source.security_code = l.security_code AND p.id = l.target_pool_id) "
-                    + "AND NOT EXISTS (SELECT 1 FROM ip_pool_status ps WHERE ps.security_code = source.security_code AND ps.target_pool_id = p.id "
+                    + "FROM ip_adjust_log l INNER JOIN ip_investment_pool p ON p.id = 17 "
+                    + "WHERE l.adjust_batch_no = '" + batchNo + "' AND l.adjust_type = '手工调整' "
+                    + "AND NOT EXISTS (SELECT 1 FROM ip_pool_status ps WHERE ps.security_code = l.security_code AND ps.target_pool_id = p.id "
                     + "AND ps.audit_status = '20' AND ps.is_deleted = 0)");
         }
         if ("20".equals(status) && "调入".equals(mode)) {
@@ -2336,8 +2330,10 @@ public class ScriptToolService {
         }
         // 生成主项实际经过的流程步骤，联动项按同一批次读取这些步骤
         statements.add(buildDemoStepInsert(batchNo, status, flowId));
-        // 每笔证券申请都保留自身快照，ABS 在途身份与当前已生效主体保持一致
-        statements.addAll(buildDemoSnapshotInserts(batchNo));
+        if (!company) {
+            // 每笔证券申请都保留自身快照，ABS 在途身份与当前已生效主体保持一致
+            statements.addAll(buildDemoSnapshotInserts(batchNo));
+        }
         return statements;
     }
 

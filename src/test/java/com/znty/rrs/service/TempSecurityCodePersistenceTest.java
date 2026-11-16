@@ -1285,7 +1285,7 @@ public class TempSecurityCodePersistenceTest {
         // 核对实际写入数量，避免重复记账或部分落地
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_reason LIKE '%代码%' AND adjust_advice IS NOT NULL"))
                 .isZero();
-        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_reason LIKE '【任务名称：债券临时代码替换】%'"))
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE adjust_reason LIKE '【任务名称：债券临时代码替换（仅债券）】%'"))
                 .isEqualTo(4);
         assertThat(mapper.queryTempSecurityCodeById(temp.getId()).getOprtSource()).isEqualTo("job");
         // 核对实际写入数量，避免重复记账或部分落地
