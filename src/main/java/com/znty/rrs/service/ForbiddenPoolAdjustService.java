@@ -134,6 +134,8 @@ public class ForbiddenPoolAdjustService {
     private static final String ADMIN_USER_ID = "1";
     /** 禁投池主体调库记录固定证券类型 */
     private static final String COMPANY_SECURITY_TYPE = CategoryType.COMPANY.getCode();
+    /** Excel 清空主项的调库来源 */
+    private static final String EXCEL_CLEAR_ADJUST_TYPE = "Excel清空";
     /** 禁投池、观察池、黑名单质押库和重点观察名单 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
     static {
@@ -326,6 +328,24 @@ public class ForbiddenPoolAdjustService {
 
     /** 主体批量校验复用本次匹配资料，逐项规则与单笔入口一致。 */
     public AdjustCheckDto checkCompanyAdjust(ForbiddenPoolAdjustCheckReq req, CompanyAdjustCheckContext context) {
+        // 普通主体入口沿用原规则和拦截方式
+        return checkCompanyAdjust(req, context, false);
+    }
+
+    /**
+     * 执行主体 Excel 调库校验，保留业务失败原因供页面提示
+     *
+     * @param req 单个主体的导入或清空调库请求
+     * @param context 本批已查的主体与池配置，清空出库按当前数据读取
+     * @return 可提交状态、调整提示和流程候选
+     */
+    AdjustCheckDto checkCompanyExcelAdjust(ForbiddenPoolAdjustCheckReq req, CompanyAdjustCheckContext context) {
+        // 运行完整主体校验，在生成流程候选前将业务失败转为提示
+        return checkCompanyAdjust(req, context, true);
+    }
+
+    private AdjustCheckDto checkCompanyAdjust(ForbiddenPoolAdjustCheckReq req, CompanyAdjustCheckContext context,
+                                              boolean excelWarningsOnly) {
         // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         ForbiddenPoolAdjustReq detailReq = new ForbiddenPoolAdjustReq();
@@ -353,7 +373,8 @@ public class ForbiddenPoolAdjustService {
         }
         checkReq.setItems(items);
         // 复用本类内部的完整关系和流程校验实现
-        AdjustCheckDto result = context == null ? checkAdjust(checkReq) : checkAdjust(checkReq, context);
+        AdjustCheckDto result = context == null && !excelWarningsOnly
+                ? checkAdjust(checkReq) : checkAdjust(checkReq, context, excelWarningsOnly);
         // 主体手工及联动项统一携带主数据身份，校验失败项也保留主体全称
         for (AdjustCheckDto.CheckResultItem item : result.getItems()) {
             if (item.getSecurityCode() == null || item.getSecurityCode().trim().isEmpty()
@@ -381,6 +402,36 @@ public class ForbiddenPoolAdjustService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ForbiddenPoolAdjustSubmitDto addCompanyAdjustLog(ForbiddenPoolAdjustSubmitReq req,
+                                                             List<MultipartFile> files,
+                                                             String originalFileNameListJson) {
+        if (isExcelAdjustType(req.getAdjustType())) {
+            throw new BizException("主体 Excel 调库请通过证券池 Excel 导入提交");
+        }
+        // 普通主体申请使用共同的提交逻辑
+        return submitCompanyAdjust(req, files, originalFileNameListJson);
+    }
+
+    /**
+     * 提交 Excel 导入或清空生成的主体调库申请
+     *
+     * @param req Excel 导入服务构建的调库明细、调整来源和所选流程
+     * @return 主体调库提交结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ForbiddenPoolAdjustSubmitDto addCompanyExcelAdjustLog(ForbiddenPoolAdjustSubmitReq req) {
+        // 沿用主体提交和流程写入逻辑
+        return submitCompanyAdjust(req, Collections.emptyList(), null);
+    }
+
+    /**
+     * 复用主体身份校验、请求转换和调库日志写入
+     *
+     * @param req 主体调库请求
+     * @param files 本次提交的附件
+     * @param originalFileNameListJson 附件原始名称
+     * @return 主体调库提交结果
+     */
+    private ForbiddenPoolAdjustSubmitDto submitCompanyAdjust(ForbiddenPoolAdjustSubmitReq req,
                                                              List<MultipartFile> files,
                                                              String originalFileNameListJson) {
         // 校验主体代码非空
@@ -809,15 +860,20 @@ public class ForbiddenPoolAdjustService {
                                             BatchNoContext batchNoContext) {
         // ══ 第一阶段：前置校验 ══
         validateSubmitReq(req);
-        // 检查短时间内是否已提交相同申请
-        checkRecentDuplicateSubmit(req);
+        boolean excelAdjust = isExcelAdjustType(req.getAdjustType());
+        if (!excelAdjust) {
+            // 检查短时间内是否已提交相同申请
+            checkRecentDuplicateSubmit(req);
+        }
 
         // ══ 第二阶段：参数初始化 ══
         SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
-        // 检查本次涉及的顶级池组是否已有活动流程
-        checkSubmitPendingPoolGroups(req, shared.poolMap);
-        // 调入须同步调出互斥池：缺失或调出不可行则整单拒绝，防止双池
-        validateRequiredMutexOutboundOnSubmit(req, shared);
+        if (!excelAdjust) {
+            // 检查本次涉及的顶级池组是否已有活动流程
+            checkSubmitPendingPoolGroups(req, shared.poolMap);
+            // 检查调入需要的互斥调出是否完整且可执行
+            validateRequiredMutexOutboundOnSubmit(req, shared);
+        }
 
         List<IpAdjustLogBo> directApplyLogs = new ArrayList<>();
         // ══ 第三阶段：调入处理 ══
@@ -1311,7 +1367,13 @@ public class ForbiddenPoolAdjustService {
      * none=不限制 / any=任意一篇研究报告 / internal=必须是内部研究报告。
      * 对应老项目 rschDocMode/rschDocOutMode 报告校验。在提交阶段校验（checkAdjust 阶段无报告信息）。
      */
-    private void checkReportRequired(SecurityPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool, String reportRestriction, String securityCode) {
+    private void checkReportRequired(SecurityPoolAdjustSubmitReq.AdjustItem item, InvestmentPoolBo pool,
+                                     String reportRestriction, String securityCode, String adjustType) {
+        if (isExcelAdjustType(adjustType)) {
+            // Excel 免必填报告，仍校验已填写的报告引用
+            sysAttachmentService.validateCreditReportSources(item.getCreditReportSourceAttachmentIds(), false);
+            return;
+        }
         if (pool == null || reportRestriction == null || reportRestriction.isEmpty() || "none".equals(reportRestriction)) {
             return;
         }
@@ -1366,7 +1428,7 @@ public class ForbiddenPoolAdjustService {
             // 报告必填校验（按池 in_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
             checkReportRequired(item, reportPool, reportPool != null ? reportPool.getInReportRestriction() : null,
-                    resolveItemSecurityCode(req, item));
+                    resolveItemSecurityCode(req, item), req.getAdjustType());
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -1455,7 +1517,7 @@ public class ForbiddenPoolAdjustService {
             // 报告必填校验（按池 out_report_restriction，提交阶段校验）
             InvestmentPoolBo reportPool = shared.poolMap.get(item.getTargetPoolId());
             checkReportRequired(item, reportPool, reportPool != null ? reportPool.getOutReportRestriction() : null,
-                    resolveItemSecurityCode(req, item));
+                    resolveItemSecurityCode(req, item), req.getAdjustType());
             // 获取同组手工调库项，联动/互斥项按手工项共用流程和批次号
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem = resolveManualSubmitItem(req, item);
             // 从调库项的 flowId 或 flowKey 解析出流程定义 ID
@@ -1687,11 +1749,12 @@ public class ForbiddenPoolAdjustService {
      */
     public AdjustCheckDto checkAdjust(AdjustCheckReq req) {
         // 单笔请求不复用其他调用的数据
-        return checkAdjust(req, null);
+        return checkAdjust(req, null, false);
     }
 
     /** 执行相同的完整校验规则，按需使用当前批次公共数据。 */
-    private AdjustCheckDto checkAdjust(AdjustCheckReq req, CompanyAdjustCheckContext context) {
+    private AdjustCheckDto checkAdjust(AdjustCheckReq req, CompanyAdjustCheckContext context,
+                                       boolean excelWarningsOnly) {
 
         // ══ 第一阶段：前置校验 ══
         validateCheckAdjustReq(req);
@@ -1714,6 +1777,11 @@ public class ForbiddenPoolAdjustService {
         // ══ 第四阶段：调出校验 ══
         resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys));
 
+        if (excelWarningsOnly) {
+            // 原校验已完成，保留失败原因供 Excel 页面提示
+            allowExcelImportResults(shared, resultItems);
+        }
+
         // ══ 第五阶段：流程类型判断 ══
         List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
 
@@ -1729,6 +1797,28 @@ public class ForbiddenPoolAdjustService {
             }
         }
         return dto;
+    }
+
+    /**
+     * 原规则执行后，将主体 Excel 的业务失败作为可提交提示
+     *
+     * 执行顺序：
+     * 1. 主体已在加载主数据时校验，找出目标池缺失的调库组
+     * 2. 其余组允许提交，保留原失败原因供页面展示
+     *
+     * @param shared 本次已加载的主体和投资池数据
+     * @param items 原规则执行后的完整结果
+     */
+    private void allowExcelImportResults(AdjustSharedData shared, List<AdjustCheckDto.CheckResultItem> items) {
+        Set<String> invalidGroups = new HashSet<>();
+        for (AdjustCheckDto.CheckResultItem item : items) {
+            if (!shared.getPoolMap().containsKey(item.getTargetPoolId())) {
+                invalidGroups.add(item.getAdjustGroupKey());
+            }
+        }
+        for (AdjustCheckDto.CheckResultItem item : items) {
+            item.setCanAdjust(!invalidGroups.contains(item.getAdjustGroupKey()));
+        }
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -2664,16 +2754,23 @@ public class ForbiddenPoolAdjustService {
                 .map(IpAdjustLogBo::getTargetPoolId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
+        // 按批次识别 Excel 主项和同组配套项
+        Set<String> excelBatchNos = collectExcelBatchNos(logList);
         Map<Long, Integer> inboundIncrements = new HashMap<>();
         for (IpAdjustLogBo log : logList) {
+            // Excel 保留目标池和调整对象的存在性校验
+            boolean excelAdjust = isExcelCompanyLog(log, excelBatchNos);
             InvestmentPoolBo pool = poolMap.get(log.getTargetPoolId());
-            if (pool == null || !"enabled".equals(pool.getStatus())
-                    || Integer.valueOf(1).equals(pool.getIsDeleted())) {
+            if (pool == null || (!excelAdjust && (!"enabled".equals(pool.getStatus())
+                    || Integer.valueOf(1).equals(pool.getIsDeleted())))) {
                 throwFinalRecheckFailure(log, "目标投资池不存在或已停用");
             }
             SecurityInfoBo security = queryAdjustSecurityInfo(log.getSecurityCode(), log.getSecurityType());
             if (security == null) {
                 throwFinalRecheckFailure(log, "调整对象不存在");
+            }
+            if (excelAdjust) {
+                continue;
             }
             String categoryType = forbiddenPoolAdjustMapper
                     .queryCategoryTypeBySecurityType(security.getSecurityType());
@@ -2736,8 +2833,15 @@ public class ForbiddenPoolAdjustService {
         if (logList == null || logList.isEmpty()) {
             return;
         }
+        // Excel 配套项沿用主项的生效方式
+        Set<String> excelBatchNos = collectExcelBatchNos(logList);
         for (IpAdjustLogBo log : logList) {
+            boolean excelAdjust = isExcelCompanyLog(log, excelBatchNos);
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
+                if (excelAdjust) {
+                    // 已在目标池时先结束旧状态，避免重复的有效在池记录
+                    forbiddenPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
+                }
                 log.setAuditStatus(AuditStatus.APPROVED.getCode());
                 log.setAdjustLogId(log.getId());
                 if (forbiddenPoolAdjustMapper.addPoolStatus(log) != 1) {
@@ -2746,11 +2850,49 @@ public class ForbiddenPoolAdjustService {
             } else if (AdjustMode.OUT.getCode().equals(log.getAdjustMode())) {
                 int deleted = forbiddenPoolAdjustMapper.deletePoolStatusSoft(
                         log.getSecurityCode(), log.getTargetPoolId());
-                if (deleted == 0) {
+                if (deleted == 0 && !excelAdjust) {
                     throw new BizException("主体当前池状态已发生变化，请刷新后重试");
                 }
             }
         }
+    }
+
+    /**
+     * 识别主体 Excel 调库主项的批次，供同批次配套项使用
+     *
+     * @param logList 本次待生效的调库日志
+     * @return Excel 导入或清空主项的非空批次号
+     */
+    private Set<String> collectExcelBatchNos(List<IpAdjustLogBo> logList) {
+        return logList.stream()
+                .filter(log -> COMPANY_SECURITY_TYPE.equals(log.getSecurityType())
+                        && isExcelAdjustType(log.getAdjustType()))
+                .map(IpAdjustLogBo::getAdjustBatchNo)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 判断主体调库日志是否属于 Excel 导入或清空申请
+     *
+     * @param log 待生效的调库日志
+     * @param excelBatchNos Excel 主项的批次号集合
+     * @return 是否为主体 Excel 主项或同批次配套项
+     */
+    private boolean isExcelCompanyLog(IpAdjustLogBo log, Set<String> excelBatchNos) {
+        return COMPANY_SECURITY_TYPE.equals(log.getSecurityType())
+                && (isExcelAdjustType(log.getAdjustType()) || excelBatchNos.contains(log.getAdjustBatchNo()));
+    }
+
+    /**
+     * 判断调库来源是否由 Excel 导入服务生成
+     *
+     * @param adjustType 调库来源
+     * @return 是否为 Excel 导入或清空
+     */
+    private boolean isExcelAdjustType(String adjustType) {
+        return SecurityPoolAdjustService.EXCEL_IMPORT_ADJUST_TYPE.equals(adjustType)
+                || EXCEL_CLEAR_ADJUST_TYPE.equals(adjustType);
     }
 
     /** 返回第一个最终审批复核失败原因。 */

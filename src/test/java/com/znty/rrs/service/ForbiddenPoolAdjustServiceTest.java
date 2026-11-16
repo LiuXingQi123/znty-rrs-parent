@@ -24,6 +24,7 @@ import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.ForbiddenPoolAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import org.junit.Test;
+import org.mockito.InOrder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Constructor;
@@ -41,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -88,6 +90,139 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThatThrownBy(() -> service.checkCompanyAdjust(single)).isInstanceOf(BizException.class)
                 .hasMessageContaining("公司主体不存在");
         verify(mapper).queryCompanyDetail("C001");
+    }
+
+    /** 主体清空出库保留锁池和在途提示，并允许按调出流程提交和生效 */
+    @Test
+    public void excelClearOutboundShouldWarnAndApplyWithLockedPoolAndPendingProcess() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        ReportService reportService = mock(ReportService.class);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        ReflectionTestUtils.setField(service, "reportService", reportService);
+        InvestmentPoolBo pool = buildPool(16L, "观察池", "observe");
+        pool.setLockFlag(1);
+        pool.setOutReportRestriction("internal");
+        when(poolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+        when(mapper.queryCompanyDetail("C001")).thenReturn(buildCompany("C001"));
+        SecurityInfoBo company = new SecurityInfoBo();
+        company.setWindCode("C001");
+        company.setSecurityType("company");
+        when(mapper.queryCompanySecurityBoByCode("C001")).thenReturn(company);
+        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
+        when(mapper.querySecurityCurrentPoolIdList("C001")).thenReturn(Collections.singletonList(16L));
+        when(mapper.queryPendingManualTargetPoolIdList("C001", null)).thenReturn(Collections.singletonList(16L));
+        when(mapper.deletePoolStatusSoft("C001", 16L)).thenReturn(1);
+
+        ForbiddenPoolAdjustCheckReq check = new ForbiddenPoolAdjustCheckReq();
+        check.setCompanyCode("C001");
+        ForbiddenPoolAdjustCheckReq.CheckItem checkItem = new ForbiddenPoolAdjustCheckReq.CheckItem();
+        checkItem.setTargetPoolId(16L);
+        checkItem.setAdjustMode("调出");
+        check.setItems(Collections.singletonList(checkItem));
+        assertThat(service.checkCompanyAdjust(check).getItems().get(0).isCanAdjust()).isFalse();
+
+        AdjustCheckDto.CheckResultItem cleared = service.checkCompanyExcelAdjust(check, null).getItems().get(0);
+        assertThat(cleared.isCanAdjust()).isTrue();
+        assertThat(cleared.getFailReasons()).contains("目标投资池已锁定");
+        assertThat(cleared.getFailReasons()).anyMatch(reason -> reason.contains("流程"));
+        assertThat(cleared.getFlowOptions()).hasSize(1);
+        assertThat(cleared.getFlowOptions().get(0).getFlowType()).isEqualTo("normalOutbound");
+
+        ForbiddenPoolAdjustSubmitReq req = new ForbiddenPoolAdjustSubmitReq();
+        req.setCompanyCode("C001");
+        req.setAdjusterId("1");
+        ForbiddenPoolAdjustSubmitReq.AdjustItem item = new ForbiddenPoolAdjustSubmitReq.AdjustItem();
+        item.setTargetPoolId(16L);
+        item.setAdjustMode("调出");
+        item.setItemTag("manual");
+        item.setAdjustGroupKey(cleared.getAdjustGroupKey());
+        req.setItems(Collections.singletonList(item));
+        assertThatThrownBy(() -> service.addCompanyAdjustLog(req, Collections.emptyList()))
+                .isInstanceOf(BizException.class).hasMessageContaining("流程");
+        req.setAdjustType("Excel清空");
+        service.addCompanyExcelAdjustLog(req);
+
+        verify(mapper).deletePoolStatusSoft("C001", 16L);
+        verify(reportService).addInternalReportsOnFinish(anyList());
+    }
+
+    /** 主体清空及同批联动已出池时可重复生效，普通主体出库仍校验池状态 */
+    @Test
+    public void excelClearOutboundShouldAllowAlreadyRemovedLinkedMember() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        IpAdjustLogBo clear = buildCompanyLog();
+        clear.setTargetPoolId(16L);
+        clear.setAdjustMode("调出");
+        clear.setAdjustType("Excel清空");
+        clear.setAdjustBatchNo("COMP_CLEAR");
+        IpAdjustLogBo linked = buildCompanyLog();
+        linked.setTargetPoolId(17L);
+        linked.setAdjustMode("调出");
+        linked.setAdjustType("联动调整");
+        linked.setAdjustBatchNo("COMP_CLEAR");
+
+        service.applyPoolStatusChanges(Arrays.asList(clear, linked));
+
+        verify(mapper).deletePoolStatusSoft("C10001", 16L);
+        verify(mapper).deletePoolStatusSoft("C10001", 17L);
+        assertThatThrownBy(() -> service.applyPoolStatusChanges(Collections.singletonList(linked)))
+                .isInstanceOf(BizException.class).hasMessageContaining("当前池状态");
+    }
+
+    /** 已在目标池的主体导入保留提示，生效时先结束旧记录再写入本次状态 */
+    @Test
+    public void excelInboundShouldWarnAndReplaceExistingPoolStatus() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        ReflectionTestUtils.setField(service, "reportService", mock(ReportService.class));
+        InvestmentPoolBo pool = buildPool(16L, "观察池", "observe");
+        pool.setInReportRestriction("internal");
+        when(poolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+        when(mapper.queryCompanyDetail("C001")).thenReturn(buildCompany("C001"));
+        SecurityInfoBo company = new SecurityInfoBo();
+        company.setWindCode("C001");
+        company.setSecurityType("company");
+        when(mapper.queryCompanySecurityBoByCode("C001")).thenReturn(company);
+        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
+        when(mapper.querySecurityCurrentPoolIdList("C001")).thenReturn(Collections.singletonList(16L));
+        when(mapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(1);
+
+        ForbiddenPoolAdjustCheckReq check = new ForbiddenPoolAdjustCheckReq();
+        check.setCompanyCode("C001");
+        ForbiddenPoolAdjustCheckReq.CheckItem checkItem = new ForbiddenPoolAdjustCheckReq.CheckItem();
+        checkItem.setTargetPoolId(16L);
+        checkItem.setAdjustMode("调入");
+        check.setItems(Collections.singletonList(checkItem));
+        CompanyAdjustCheckContext context = service.createCompanyCheckContext(
+                Collections.singletonMap("C001", buildCompany("C001")));
+        assertThat(service.checkCompanyAdjust(check, context).getItems().get(0).isCanAdjust()).isFalse();
+        AdjustCheckDto.CheckResultItem checked = service.checkCompanyExcelAdjust(check, context).getItems().get(0);
+        assertThat(checked.isCanAdjust()).isTrue();
+        assertThat(checked.getFailReasons()).anyMatch(reason -> reason.contains("已在"));
+        assertThat(checked.getFlowOptions()).hasSize(1);
+
+        ForbiddenPoolAdjustSubmitReq req = new ForbiddenPoolAdjustSubmitReq();
+        req.setCompanyCode("C001");
+        req.setAdjusterId("1");
+        req.setAdjustType("Excel导入");
+        ForbiddenPoolAdjustSubmitReq.AdjustItem item = new ForbiddenPoolAdjustSubmitReq.AdjustItem();
+        item.setTargetPoolId(16L);
+        item.setAdjustMode("调入");
+        item.setItemTag("manual");
+        item.setAdjustGroupKey(checked.getAdjustGroupKey());
+        req.setItems(Collections.singletonList(item));
+        assertThatThrownBy(() -> service.addCompanyAdjustLog(req, Collections.emptyList()))
+                .isInstanceOf(BizException.class).hasMessageContaining("Excel 调库");
+        service.addCompanyExcelAdjustLog(req);
+
+        InOrder writes = inOrder(mapper);
+        writes.verify(mapper).deletePoolStatusSoft("C001", 16L);
+        writes.verify(mapper).addPoolStatus(any(IpAdjustLogBo.class));
     }
 
     /** 主体校验结果使用主体全称，失败及联动项均保留身份，债券互斥项不被覆盖。 */
@@ -407,7 +542,7 @@ public class ForbiddenPoolAdjustServiceTest {
         SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
         InvestmentPoolBo pool = buildPool(10L, "禁投池", "forbidden");
         try {
-            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any", null);
+            ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "any", null, null);
         } catch (Exception e) {
             assertThat(e).isInstanceOf(BizException.class);
             assertThat(e.getMessage()).contains("要求研究报告");
@@ -427,7 +562,7 @@ public class ForbiddenPoolAdjustServiceTest {
         item.setCreditReportSourceAttachmentIds(Collections.singletonList(100L));
         InvestmentPoolBo pool = buildPool(15L, "禁投池", "forbidden");
 
-        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal", "C10001");
+        ReflectionTestUtils.invokeMethod(service, "checkReportRequired", item, pool, "internal", "C10001", null);
 
         verify(attachmentService).validateCreditReportSources(Collections.singletonList(100L), true);
     }

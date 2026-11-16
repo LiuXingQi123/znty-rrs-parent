@@ -924,7 +924,8 @@ public class SecurityPoolExcelImportService {
                     // 首个进入完整校验的主体才加载当前批次公共池配置
                     checkContext = forbiddenPoolAdjustService.createCompanyCheckContext(lookup.companies);
                 }
-                checkDto = forbiddenPoolAdjustService.checkCompanyAdjust(companyReq, checkContext);
+                // 主体导入执行完整校验，业务失败作为调整提示
+                checkDto = forbiddenPoolAdjustService.checkCompanyExcelAdjust(companyReq, checkContext);
             } catch (BizException e) {
                 List<String> reasons = Collections.singletonList(e.getMessage());
                 // 标记导入行校验失败
@@ -951,10 +952,11 @@ public class SecurityPoolExcelImportService {
             }
 
             boolean manualPass = false;
+            List<String> tips = new ArrayList<>();
             for (AdjustCheckDto.CheckResultItem ri : resultItems) {
                 // 映射主体校验结果
                 SecurityPoolExcelImportCheckItemDto mapped =
-                        mapCompanyCheckResult(item, ri, code);
+                        mapCompanyCheckResult(item, ri, code, pool);
                 // 判断手工主项是否可调整
                 if (isManualTag(mapped.getItemTag()) && mapped.isCanAdjust()) {
                     manualPass = true;
@@ -962,12 +964,13 @@ public class SecurityPoolExcelImportService {
                         item.setFld002(mapped.getSecurityShortName());
                     }
                 }
+                tips.addAll(mapped.getFailReasons());
                 checkItems.add(mapped);
             }
 
             if (manualPass) {
                 item.setChkRslt("1");
-                item.setChkDscr("校验通过");
+                item.setChkDscr(tips.isEmpty() ? "校验通过" : "调整提示：" + String.join("；", tips));
                 item.setUpdtTime(now);
                 securityPoolExcelImportMapper.editItemCheckResult(item);
             } else {
@@ -1271,13 +1274,25 @@ public class SecurityPoolExcelImportService {
     }
 
     /**
-     * 主体提交：按主体代码分组，逐组调用 {@link ForbiddenPoolAdjustService#addCompanyAdjustLog}。
+     * 主体提交：按主体代码分组，逐组调用 Excel 提示放行入口。
      */
     private List<Long> submitCompanyImport(List<SecurityPoolExcelImportCheckItemDto> checkItems,
                                            SysImpTmpBo batch, String opterId, String opterName,
                                            List<String> batchNos) {
+        // 用本批服务端校验结果确认提交项，页面选择流程时不能把失败项改为可提交
+        List<SecurityPoolExcelImportCheckItemDto> checkedItems = parseCheckItems(batch.getResultJson());
+        if (checkedItems == null) {
+            throw new BizException("校验结果缺失，请重新校验");
+        }
+        Set<List<Object>> checkedRows = checkedItems.stream()
+                .filter(SecurityPoolExcelImportCheckItemDto::isCanAdjust)
+                .map(this::flowSelectionRowKey)
+                .collect(Collectors.toSet());
         Map<String, List<SecurityPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
+            if (!checkedRows.contains(flowSelectionRowKey(ci))) {
+                throw new BizException("校验结果与来源导入明细不一致，请重新校验");
+            }
             String groupKey = !isBlank(ci.getSourceSecurityCode())
                     ? ci.getSourceSecurityCode() : ci.getSecurityCode();
             List<SecurityPoolExcelImportCheckItemDto> list = groupMap.get(groupKey);
@@ -1330,8 +1345,9 @@ public class SecurityPoolExcelImportService {
             }
             submitReq.setItems(submitItems);
 
+            // 主体导入按本次选择的流程提交，原业务失败已在校验结果中提示
             ForbiddenPoolAdjustSubmitDto submitDto =
-                    forbiddenPoolAdjustService.addCompanyAdjustLog(submitReq, Collections.emptyList());
+                    forbiddenPoolAdjustService.addCompanyExcelAdjustLog(submitReq);
             if (submitDto != null && submitDto.getLogIds() != null) {
                 allLogIds.addAll(submitDto.getLogIds());
             }
@@ -1350,7 +1366,7 @@ public class SecurityPoolExcelImportService {
      * 读取目标池内全部主体和证券，排除本批 Excel 名单，再按成员类型走对应调出校验
      * </p>
      * <p>
-     * 清空时跳过在途主体，证券在途继续由 Excel 校验生成提示
+     * 清空证券和主体时，在途等原业务失败原因作为调整提示
      * </p>
      *
      * @param items Excel 导入明细
@@ -1425,10 +1441,6 @@ public class SecurityPoolExcelImportService {
                 if (companyMember == companyImport && excelCodes.contains(code)) {
                     continue;
                 }
-                // 跳过在途主体，证券清空由共用校验保留在途提示
-                if (companyMember && securityPoolAdjustMapper.querySecurityHasPendingProcess(code)) {
-                    continue;
-                }
                 // 对差集成员执行清空出库校验
                 clearItems.addAll(buildClearOutboundCheckItems(
                         member, pool, companyMember, allowLinkMutex));
@@ -1466,7 +1478,7 @@ public class SecurityPoolExcelImportService {
         AdjustCheckDto checkDto;
         try {
             if (companyMember) {
-                // 主体：禁投池调出校验
+                // 主体清空执行禁投池调出校验并保留业务提示
                 ForbiddenPoolAdjustCheckReq companyReq = new ForbiddenPoolAdjustCheckReq();
                 companyReq.setCompanyCode(code);
                 companyReq.setCompanyShortName(shortName);
@@ -1476,7 +1488,7 @@ public class SecurityPoolExcelImportService {
                 cItem.setPoolType(pool.getPoolType());
                 cItem.setAdjustMode(adjustMode);
                 companyReq.setItems(Collections.singletonList(cItem));
-                checkDto = forbiddenPoolAdjustService.checkCompanyAdjust(companyReq);
+                checkDto = forbiddenPoolAdjustService.checkCompanyExcelAdjust(companyReq, null);
             } else {
                 // 证券清空与导入共用提示放行入口，原出库原因仍保留
                 AdjustCheckReq checkReq = new AdjustCheckReq();
@@ -1521,7 +1533,7 @@ public class SecurityPoolExcelImportService {
             SecurityPoolExcelImportCheckItemDto mapped;
             if (companyMember) {
                 // 映射主体校验结果
-                mapped = mapCompanyCheckResult(null, ri, code);
+                mapped = mapCompanyCheckResult(null, ri, code, pool);
             } else {
                 // 映射证券校验结果并注入批量流程
                 mapped = mapSecurityCheckResult(null, ri, code, pool, "out");
@@ -1532,15 +1544,6 @@ public class SecurityPoolExcelImportService {
                 mapped.setAdjustType(ADJUST_TYPE_CLEAR);
                 if (mapped.isCanAdjust()) {
                     mapped.setAdjustNote("首先清空目标池");
-                    List<SecurityPoolExcelImportCheckItemDto.FlowOptionDto> flowOptions =
-                            mapped.getFlowOptions() == null
-                                    ? new ArrayList<>()
-                                    : new ArrayList<>(mapped.getFlowOptions());
-                    // 注入目标池批量调出流程
-                    injectBatchFlowOption(flowOptions, pool, "out");
-                    mapped.setFlowOptions(flowOptions);
-                    // 默认选中推荐流程
-                    applyDefaultSelectedFlow(mapped);
                 }
             }
             result.add(mapped);
@@ -1637,9 +1640,9 @@ public class SecurityPoolExcelImportService {
                     submitItems.add(si);
                 }
                 submitReq.setItems(submitItems);
-                // 调用禁投池主体提交写调库日志
+                // 使用主体清空入口写调库日志并保留所选流程
                 ForbiddenPoolAdjustSubmitDto submitDto =
-                        forbiddenPoolAdjustService.addCompanyAdjustLog(submitReq, Collections.emptyList());
+                        forbiddenPoolAdjustService.addCompanyExcelAdjustLog(submitReq);
                 if (submitDto != null && submitDto.getLogIds() != null) {
                     allLogIds.addAll(submitDto.getLogIds());
                 }
@@ -1772,10 +1775,11 @@ public class SecurityPoolExcelImportService {
     }
 
     /**
-     * 映射主体校验结果（流程候选项已由禁投池 checkAdjust 产出）
+     * 映射主体校验结果，保留单笔候选并追加目标池配置的批量流程
      */
     private SecurityPoolExcelImportCheckItemDto mapCompanyCheckResult(
-            SysImpTmpDetlBo sourceItem, AdjustCheckDto.CheckResultItem ri, String excelCode) {
+            SysImpTmpDetlBo sourceItem, AdjustCheckDto.CheckResultItem ri,
+            String excelCode, InvestmentPoolBo pool) {
         SecurityPoolExcelImportCheckItemDto dto = new SecurityPoolExcelImportCheckItemDto();
         if (sourceItem != null) {
             dto.setSourceItemId(sourceItem.getId());
@@ -1809,13 +1813,10 @@ public class SecurityPoolExcelImportService {
                 flowOptions.add(toFlowOptionDto(fo));
             }
         }
-        // 可调整手工项且无流程候选时：注入标准入/出库流程
-        if (dto.isCanAdjust() && isManualTag(dto.getItemTag()) && flowOptions.isEmpty()) {
-            InvestmentPoolBo pool = investmentPoolMapper.queryPoolById(dto.getTargetPoolId());
-            if (pool != null) {
-                // 注入主体标准入/出库流程
-                injectCompanyFlowOption(flowOptions, pool, AdjustMode.IN.getCode().equals(dto.getAdjustMode()));
-            }
+        if (dto.isCanAdjust() && isManualTag(dto.getItemTag())) {
+            boolean inbound = AdjustMode.IN.getCode().equals(dto.getAdjustMode());
+            // 追加目标池对应方向的批量流程候选
+            injectBatchFlowOption(flowOptions, pool, inbound ? "in" : "out");
         }
         dto.setFlowOptions(flowOptions);
         // 默认选中推荐/首个可选流程
@@ -1850,52 +1851,6 @@ public class SecurityPoolExcelImportService {
         for (AdjustCheckDto.FlowOption option : combined) {
             // 复用导入页映射，透传材料豁免并重建唯一键
             flowOptions.add(toFlowOptionDto(option));
-        }
-    }
-
-    /** 主体：注入标准入/出库流程（禁投池常用配置） */
-    private void injectCompanyFlowOption(List<SecurityPoolExcelImportCheckItemDto.FlowOptionDto> flowOptions,
-                                         InvestmentPoolBo pool, boolean inbound) {
-        Long flowId = inbound ? pool.getInFlowId() : pool.getOutFlowId();
-        String flowKey = inbound ? pool.getInFlowKey() : pool.getOutFlowKey();
-        String flowName = inbound ? pool.getInFlowName() : pool.getOutFlowName();
-        // 标准流程未配时回退批量流程
-        if (flowId == null && isBlank(flowKey)) {
-            flowId = inbound ? pool.getBatchInFlowId() : pool.getBatchOutFlowId();
-            flowKey = inbound ? pool.getBatchInFlowKey() : pool.getBatchOutFlowKey();
-            flowName = inbound ? pool.getBatchInFlowName() : pool.getBatchOutFlowName();
-        }
-        boolean direct = flowId == null && isBlank(flowKey);
-        String flowType = inbound ? FlowType.NORMAL_INBOUND.getCode() : FlowType.NORMAL_OUTBOUND.getCode();
-        String displayName;
-        if (direct) {
-            displayName = "无需审批";
-        } else if (!isBlank(flowName)) {
-            displayName = flowName.trim();
-        } else {
-            displayName = inbound ? "标准调入流程" : "标准调出流程";
-        }
-
-        SecurityPoolExcelImportCheckItemDto.FlowOptionDto opt =
-                new SecurityPoolExcelImportCheckItemDto.FlowOptionDto();
-        opt.setFlowId(flowId);
-        opt.setFlowKey(flowKey);
-        opt.setFlowName(displayName);
-        opt.setFlowType(flowType);
-        opt.setRecommended(true);
-        opt.setMatched(true);
-        opt.setSelectable(true);
-        // 生成流程 optionKey
-        opt.setOptionKey(buildFlowOptionKey(opt));
-        List<String> reasons = new ArrayList<>();
-        if (direct) {
-            reasons.add("目标池未配置审批流程，按无需审批处理");
-        } else {
-            reasons.add(inbound ? "目标池配置的调入流程" : "目标池配置的调出流程");
-        }
-        opt.setMatchReasons(reasons);
-        if (flowOptions != null) {
-            flowOptions.add(0, opt);
         }
     }
 
