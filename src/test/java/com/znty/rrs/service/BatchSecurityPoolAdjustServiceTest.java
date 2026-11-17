@@ -32,12 +32,15 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import org.mockito.ArgumentCaptor;
 import static org.mockito.Mockito.mock;
@@ -209,6 +212,9 @@ public class BatchSecurityPoolAdjustServiceTest {
         ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
         ReflectionTestUtils.setField(securityPoolAdjustService, "sysAttachmentService", attachmentService);
+        BatchSecurityCheckMapper submitMapper = mock(BatchSecurityCheckMapper.class);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "batchSecurityCheckMapper", submitMapper);
+        wireSubmitRatings(securityPoolAdjustService, submitMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
 
@@ -256,6 +262,105 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(captor.getAllValues().get(1).getAdjustBatchNo()).matches("BOND\\d{17}1002");
     }
 
+    /** 独立直通调入按批取数，整批容量和逐券在途规则都继续生效 */
+    @Test
+    public void directSubmitShouldBatchQueriesAndKeepCapacityAndPendingChecks() {
+        SecurityPoolAdjustService submit = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        SecurityPoolAdjustMapper adjust = mock(SecurityPoolAdjustMapper.class);
+        BatchSecurityCheckMapper batch = mock(BatchSecurityCheckMapper.class);
+        InvestmentPoolMapper pools = mock(InvestmentPoolMapper.class);
+        SysAttachmentService attachments = mock(SysAttachmentService.class);
+        ReportService reports = mock(ReportService.class);
+        ReflectionTestUtils.setField(submit, "securityPoolAdjustMapper", adjust);
+        ReflectionTestUtils.setField(submit, "batchSecurityCheckMapper", batch);
+        wireSubmitRatings(submit, batch);
+        ReflectionTestUtils.setField(submit, "investmentPoolMapper", pools);
+        ReflectionTestUtils.setField(submit, "sysAttachmentService", attachments);
+        ReflectionTestUtils.setField(submit, "reportService", reports);
+
+        InvestmentPoolBo target = buildPool(11L, null, "测试池", "observe");
+        target.setStatus("enabled");
+        target.setIsDeleted(0);
+        target.setMaxCapacity(999L);
+        target.setVarietyCodes("[\"bond\"]");
+        Row category = new Row();
+        category.setSecurityType("MTN");
+        category.setCategoryType("bond");
+        when(batch.queryCategories()).thenReturn(Collections.singletonList(category));
+        when(pools.queryPoolList()).thenReturn(Collections.singletonList(target));
+        List<SecurityInfoBo> masters = new ArrayList<>();
+        List<SecurityPoolAdjustSubmitReq> requests = new ArrayList<>();
+        List<IpAdjustLogBo> preview = new ArrayList<>();
+        for (int i = 0; i < 1000; i++) {
+            String code = "B" + i + ".IB";
+            SecurityInfoBo master = new SecurityInfoBo();
+            master.setWindCode(code);
+            master.setSecurityType("mtn");
+            masters.add(master);
+
+            SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+            item.setSecurityCode(code);
+            item.setSecurityShortName("测试债");
+            item.setSecurityType("mtn");
+            item.setTargetPoolId(11L);
+            item.setAdjustMode("调入");
+            item.setItemTag("manual");
+            item.setAdjustGroupKey(code + "_manual_11");
+            SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+            req.setSecurityCode(code);
+            req.setAdjusterId("1");
+            req.setAdjustType("手动批量调整");
+            req.setItems(Collections.singletonList(item));
+            requests.add(req);
+
+            IpAdjustLogBo log = new IpAdjustLogBo();
+            log.setSecurityCode(code);
+            log.setTargetPoolId(11L);
+            log.setAdjustMode("调入");
+            preview.add(log);
+        }
+        when(batch.querySecurities(anyList())).thenReturn(masters.subList(0, 500), masters.subList(500, 1000));
+        SysAttachmentService.SubmissionFiles files = mock(SysAttachmentService.SubmissionFiles.class);
+        assertThatThrownBy(() -> submit.submitAdjustLogBatch(requests, files, preview))
+                .hasMessageContaining("容量已满");
+        verify(adjust, never()).addAdjustLog(any());
+
+        target.setMaxCapacity(1000L);
+        Row pending = new Row();
+        pending.setSecurityCode("B0.IB");
+        pending.setPoolId(11L);
+        when(batch.querySecurities(anyList())).thenReturn(masters.subList(0, 500), masters.subList(500, 1000));
+        when(batch.queryPendingPools(anyList())).thenReturn(Collections.singletonList(pending));
+        assertThatThrownBy(() -> submit.submitAdjustLogBatch(requests, files, preview))
+                .hasMessageContaining("存在进行中的调库流程");
+        verify(adjust, never()).addAdjustLog(any());
+
+        clearInvocations(batch, adjust, pools);
+        when(batch.querySecurities(anyList())).thenReturn(masters.subList(0, 500), masters.subList(500, 1000));
+        when(batch.queryPendingPools(anyList())).thenReturn(Collections.emptyList());
+        doAnswer(call -> {
+            IpAdjustLogBo log = call.getArgument(0);
+            log.setId((long) log.getSecurityCode().hashCode());
+            return 1;
+        }).when(adjust).addAdjustLog(any());
+        when(adjust.addPoolStatus(any())).thenReturn(1);
+
+        assertThat(submit.submitAdjustLogBatch(requests, files, preview)).hasSize(1000);
+        verify(pools, never()).lockPoolByIdsList(anyList());
+        verify(batch).queryPoolCounts(Collections.singletonList(11L));
+        verify(batch, times(2)).querySecurities(anyList());
+        verify(batch, times(2)).queryActiveStates(anyList());
+        verify(batch, times(2)).queryPendingPools(anyList());
+        verify(adjust, never()).queryRecentManualAdjustLogList(anyString(), eq("1"), eq(30));
+        verify(batch, times(2)).queryRatingCompanies(anyList());
+        verify(adjust, never()).queryCategoryTypeBySecurityType(anyString());
+        verify(adjust, never()).querySecurityBoByCode(anyString());
+        verify(adjust, never()).querySecurityCurrentPoolIdList(anyString());
+        verify(adjust, never()).queryPoolCurrentCount(anyLong());
+        verify(adjust, times(1000)).addPoolStatus(any());
+        verify(reports, never()).addInternalReportsOnFinish(anyList());
+    }
+
     /** 验证批量提交同一证券的手工调入和互斥调出时写入两条调库记录（委托单券服务）。 */
     @Test
     public void addAdjustLogShouldInsertManualInboundAndMutexOutboundForSameSecurity() {
@@ -273,6 +378,9 @@ public class BatchSecurityPoolAdjustServiceTest {
         ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
         ReflectionTestUtils.setField(securityPoolAdjustService, "sysAttachmentService", attachmentService);
+        BatchSecurityCheckMapper submitMapper = mock(BatchSecurityCheckMapper.class);
+        ReflectionTestUtils.setField(securityPoolAdjustService, "batchSecurityCheckMapper", submitMapper);
+        wireSubmitRatings(securityPoolAdjustService, submitMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "reportService", mock(ReportService.class));
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
 
@@ -460,49 +568,11 @@ public class BatchSecurityPoolAdjustServiceTest {
         assertThat(result.getAdjustGroupKey()).isEqualTo("S001_11_in");
     }
 
-    /** 验证证券集合不同时不按重复批量申请拦截。 */
-    @Test
-    public void checkRecentBatchDuplicateShouldAllowDifferentSecuritySet() {
-        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
-        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
-        IpAdjustLogBo history = new IpAdjustLogBo();
-        history.setSecurityCode("S001");
-        history.setTargetPoolId(11L);
-        history.setAdjustMode("调入");
-        history.setFlowId(1L);
-        when(mapper.queryRecentBatchManualAdjustLogList("1", 30))
-                .thenReturn(Collections.singletonList(history));
-        BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
-        req.setAdjusterId("1");
-        req.setItems(Arrays.asList(buildBatchSubmitItem("S001"), buildBatchSubmitItem("S002")));
-
-        ReflectionTestUtils.invokeMethod(service, "checkRecentBatchDuplicateSubmit", req);
-
-        verify(mapper).queryRecentBatchManualAdjustLogList("1", 30);
-    }
-
-    /** 验证批量证券顺序不同但内容相同时仍阻止重复提交。 */
-    @Test
-    public void checkRecentBatchDuplicateShouldRejectSameItemsInDifferentOrder() {
-        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
-        BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
-        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
-        IpAdjustLogBo first = buildBatchHistoryLog("S001");
-        IpAdjustLogBo second = buildBatchHistoryLog("S002");
-        when(mapper.queryRecentBatchManualAdjustLogList("1", 30)).thenReturn(Arrays.asList(first, second));
-        BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
-        req.setAdjusterId("1");
-        req.setItems(Arrays.asList(buildBatchSubmitItem("S002"), buildBatchSubmitItem("S001")));
-
-        try {
-            ReflectionTestUtils.invokeMethod(service, "checkRecentBatchDuplicateSubmit", req);
-        } catch (Exception e) {
-            assertThat(e).isInstanceOf(BizException.class);
-            assertThat(e.getMessage()).contains("请勿重复操作");
-            return;
-        }
-        throw new AssertionError("内容相同且顺序不同时应阻止重复提交");
+    /** 正式提交使用实际候选加载器，Mapper 使用各用例的模拟数据 */
+    private void wireSubmitRatings(SecurityPoolAdjustService submit, BatchSecurityCheckMapper mapper) {
+        BatchSecurityCheckService check = new BatchSecurityCheckService();
+        ReflectionTestUtils.setField(check, "batchSecurityCheckMapper", mapper);
+        ReflectionTestUtils.setField(submit, "batchSecurityCheckService", check);
     }
 
     /** 构建批量提交明细。 */
@@ -516,16 +586,6 @@ public class BatchSecurityPoolAdjustServiceTest {
         item.setFlowId(1L);
         item.setAdjustGroupKey(securityCode + "_manual_11_调入");
         return item;
-    }
-
-    /** 构建批量防重复历史日志。 */
-    private IpAdjustLogBo buildBatchHistoryLog(String securityCode) {
-        IpAdjustLogBo log = new IpAdjustLogBo();
-        log.setSecurityCode(securityCode);
-        log.setTargetPoolId(11L);
-        log.setAdjustMode("调入");
-        log.setFlowId(1L);
-        return log;
     }
 
     /** 构建指定属性的批量提交明细。 */

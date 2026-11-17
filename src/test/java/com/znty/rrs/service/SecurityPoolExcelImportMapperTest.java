@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -165,9 +166,9 @@ public class SecurityPoolExcelImportMapperTest {
             req.setRegisterNumber("MISSING");
             assertThat(mapper.queryCompanyPage(req)).isEmpty();
             SecurityPoolExcelImportMapper importMapper = session.getMapper(SecurityPoolExcelImportMapper.class);
-            assertThat(importMapper.queryPoolMemberList(16L)).extracting(PoolMemberDto::getSecurityCode)
+            assertThat(importMapper.queryPoolMemberList(Collections.singletonList(16L))).extracting(PoolMemberDto::getSecurityCode)
                     .containsExactly("BOND001", "C10011");
-            assertThat(importMapper.queryPoolMemberList(16L).get(1).getSecurityShortName()).isEqualTo("池内主体名称");
+            assertThat(importMapper.queryPoolMemberList(Collections.singletonList(16L)).get(1).getSecurityShortName()).isEqualTo("池内主体名称");
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.execute("UPDATE ais_inv_ods.wind_compintroduction SET COMP_SNAME = NULL WHERE COMP_ID = 'C10011'");
             }
@@ -178,7 +179,7 @@ public class SecurityPoolExcelImportMapperTest {
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.execute("DROP TABLE ais_inv_ods.wind_compintroduction");
             }
-            assertThat(importMapper.queryPoolMemberList(16L)).hasSize(2);
+            assertThat(importMapper.queryPoolMemberList(Collections.singletonList(16L))).hasSize(2);
         }
     }
 
@@ -219,33 +220,70 @@ public class SecurityPoolExcelImportMapperTest {
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName(null, "CRMW库", true)).isNull();
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("CRMW库", "CRMW库", false)).isNull();
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName(null, "普通池", false).getId()).isEqualTo(19L);
-            List<PoolMemberDto> members = mapper.queryPoolMemberList(18L);
+            List<PoolMemberDto> members = mapper.queryPoolMemberList(Collections.singletonList(18L));
             assertThat(members).extracting(PoolMemberDto::getSecurityCode).containsExactly("C001", "CRMW.IB");
             assertThat(members).extracting(PoolMemberDto::getSecurityShortName).containsExactly("原主体", "凭证");
         }
     }
 
-    /** 重新校验回填的主体代码须写入临时明细，刷新和提交使用同一代码。 */
+    /** 批量校验保留各行校验结果和空值，提交只更新同批未删除的指定行 */
     @Test
-    public void shouldPersistResolvedCompanyCodeWithCheckResult() throws Exception {
-        // 使用真实更新和查询验证代码持久化
-        try (SqlSession session = openSession("company_excel_code")) {
+    public void shouldPersistBatchCheckAndSaveResultsWithinImport() throws Exception {
+        try (SqlSession session = openSession("excel_batch_results")) {
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.execute("CREATE TABLE sys_imp_tmp_detl (id BIGINT, imp_id VARCHAR(32),"
                         + " chk_rslt VARCHAR(2), chk_dscr VARCHAR(128), fld001 VARCHAR(32),"
                         + " fld009 VARCHAR(32), fld010 VARCHAR(32), fld011 VARCHAR(32), fld012 VARCHAR(128),"
-                        + " fld013 VARCHAR(32), fld014 VARCHAR(128), updt_time TIMESTAMP, is_deleted INT)");
-                statement.execute("INSERT INTO sys_imp_tmp_detl (id, imp_id, is_deleted) VALUES (1, 'IMP1', 0)");
+                        + " fld013 VARCHAR(32), fld014 VARCHAR(128), updt_time TIMESTAMP, is_deleted INT,"
+                        + " save_rslt VARCHAR(2), save_dscr VARCHAR(128), ref_id BIGINT)");
+                statement.execute("INSERT INTO sys_imp_tmp_detl (id, imp_id, is_deleted, fld001, fld011, ref_id)"
+                        + " VALUES (1, 'IMP1', 0, 'OLD', 'OLD', 42), (2, 'IMP1', 0, 'OLD', 'OLD', NULL),"
+                        + " (3, 'IMP2', 0, 'OLD', 'OLD', NULL), (4, 'IMP1', 1, 'OLD', 'OLD', NULL),"
+                        + " (5, 'IMP1', 0, 'OLD', 'OLD', NULL)");
             }
             SecurityPoolExcelImportMapper mapper = session.getMapper(SecurityPoolExcelImportMapper.class);
-            SysImpTmpDetlBo item = new SysImpTmpDetlBo();
-            item.setId(1L);
-            item.setFld001("C001");
-            item.setChkRslt("1");
-            assertThat(mapper.editItemCheckResult(item)).isEqualTo(1);
+            SysImpTmpDetlBo valid = new SysImpTmpDetlBo();
+            valid.setId(1L);
+            valid.setFld001("C001");
+            valid.setChkRslt("1");
+            valid.setFld009("16");
+            SysImpTmpDetlBo invalid = new SysImpTmpDetlBo();
+            invalid.setId(2L);
+            invalid.setFld001("C002");
+            invalid.setChkRslt("2");
+            invalid.setChkDscr("目标池不存在");
+            invalid.setFld011("C003");
+            SysImpTmpDetlBo otherImport = new SysImpTmpDetlBo();
+            otherImport.setId(3L);
+            SysImpTmpDetlBo deleted = new SysImpTmpDetlBo();
+            deleted.setId(4L);
+
+            Date now = new Date(1234000L);
+            assertThat(mapper.editItemCheckResultList("IMP1", Arrays.asList(valid, invalid, otherImport, deleted), now))
+                    .isEqualTo(2);
             SysImpTmpDetlBo saved = mapper.queryItemById("IMP1", 1L);
             assertThat(saved.getFld001()).isEqualTo("C001");
             assertThat(saved.getChkRslt()).isEqualTo("1");
+            assertThat(saved.getFld009()).isEqualTo("16");
+            assertThat(saved.getFld011()).isNull();
+            assertThat(saved.getUpdtTime()).isEqualTo(now);
+            SysImpTmpDetlBo failed = mapper.queryItemById("IMP1", 2L);
+            assertThat(failed.getFld001()).isEqualTo("C002");
+            assertThat(failed.getChkRslt()).isEqualTo("2");
+            assertThat(failed.getChkDscr()).isEqualTo("目标池不存在");
+            assertThat(failed.getFld011()).isEqualTo("C003");
+            assertThat(mapper.queryItemById("IMP2", 3L).getFld001()).isEqualTo("OLD");
+            assertThat(mapper.queryItemById("IMP1", 5L).getFld001()).isEqualTo("OLD");
+
+            Date submitTime = new Date(2345000L);
+            assertThat(mapper.editItemSaveResultByIds("IMP1", Arrays.asList(1L, 3L, 4L), submitTime)).isEqualTo(1);
+            saved = mapper.queryItemById("IMP1", 1L);
+            assertThat(saved.getSaveRslt()).isEqualTo("1");
+            assertThat(saved.getSaveDscr()).isEqualTo("提交成功");
+            assertThat(saved.getRefId()).isEqualTo(42L);
+            assertThat(saved.getUpdtTime()).isEqualTo(submitTime);
+            assertThat(mapper.queryItemById("IMP1", 2L).getSaveRslt()).isNull();
+            assertThat(mapper.queryItemById("IMP2", 3L).getSaveRslt()).isNull();
         }
     }
 

@@ -155,29 +155,35 @@
           AND NULLIF(log.crmw_scode, '') IS NOT NULL
     </select>
 
-    <select id="queryScheduledEligibleCodes" resultType="java.lang.String">
-        SELECT bond.wind_code
+    <select id="queryScheduledSecurities"
+            resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$ScheduledSecurity">
+        SELECT bond.*
+               , CASE WHEN bond.security_status != 'D'
+                AND (bond.maturity_date IS NULL
+                    OR bond.maturity_date >= DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL #{minDaysToMaturity} DAY), '%Y%m%d'))
+                AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+                AND EXISTS (
+                    SELECT 1
+                    FROM dict_security_type dst
+                    WHERE dst.security_type = bond.security_type
+                      AND dst.is_deleted = 0
+                      AND dst.category_type = 'bond'
+                )
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM rrs_temp_security_code ts
+                    WHERE ts.temp_security_code = bond.wind_code
+                      AND ts.security_code IS NOT NULL
+                      AND ts.security_code != ''
+                      AND IFNULL(ts.is_deleted, 0) = 0
+                      AND ts.status = 'updated'
+                )
+                THEN 1 ELSE 0 END AS eligible
         FROM rrs_securityinfo bond
-        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
-                                         AND dst.category_type = 'bond'
-                                         AND dst.is_deleted = 0
-        WHERE bond.security_status != 'D'
-          AND (bond.maturity_date IS NULL
-               OR bond.maturity_date >= DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL #{minDaysToMaturity} DAY), '%Y%m%d'))
-          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
-          AND bond.wind_code IN
+        WHERE bond.wind_code IN
         <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
             #{code}
         </foreach>
-          AND NOT EXISTS (
-              SELECT 1
-              FROM rrs_temp_security_code ts
-              WHERE ts.temp_security_code = bond.wind_code
-                AND ts.security_code IS NOT NULL
-                AND ts.security_code != ''
-                AND IFNULL(ts.is_deleted, 0) = 0
-                AND ts.status = 'updated'
-          )
     </select>
 
     <!-- 按代码读取本批证券主档 -->

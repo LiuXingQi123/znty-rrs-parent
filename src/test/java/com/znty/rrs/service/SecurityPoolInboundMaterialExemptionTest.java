@@ -580,7 +580,7 @@ public class SecurityPoolInboundMaterialExemptionTest {
             security.setWindCode("BOND.IB");
             security.setSecurityType("bond");
             return sharedConstructor.newInstance(security, pools, check.getCurrentPoolIds(),
-                    Collections.emptyMap(), false, false, false, snapshots,
+                    Collections.emptyMap(), snapshots,
                     new SecurityPoolAdjustService.BatchNoContext(), null);
         }
     }

@@ -20,8 +20,18 @@ public class CompanyAdjustCheckContext {
     /** 本次读取的投资池关系 */
     private final List<PoolRelationBo> relations;
 
+    /** Excel 主体批量查询结果 */
+    private final BatchCompanyAdjustCheckData batchData;
+
     public CompanyAdjustCheckContext(Map<String, ForbiddenPoolAdjustDto> companyMap,
                                      List<InvestmentPoolBo> pools, List<PoolRelationBo> relations) {
+        this(companyMap, pools, relations, null);
+    }
+
+    public CompanyAdjustCheckContext(Map<String, ForbiddenPoolAdjustDto> companyMap,
+                                     List<InvestmentPoolBo> pools, List<PoolRelationBo> relations,
+                                     BatchCompanyAdjustCheckData batchData) {
+        this.batchData = batchData;
         this.companyMap = Collections.unmodifiableMap(new HashMap<>(companyMap));
         this.pools = Collections.unmodifiableList(new ArrayList<>(pools));
         this.relations = Collections.unmodifiableList(new ArrayList<>(relations));

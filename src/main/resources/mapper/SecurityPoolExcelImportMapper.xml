@@ -40,15 +40,6 @@
         LIMIT 1
     </select>
 
-    <!-- 锁定导入批次，串行处理主体修改、校验、提交和取消 -->
-    <select id="queryBatchIdForUpdate" resultType="java.lang.Long">
-        SELECT id
-        FROM sys_imp_tmp
-        WHERE imp_id = #{impId}
-          AND is_deleted = 0
-        FOR UPDATE
-    </select>
-
     <!-- 更新批次校验结果与计数 -->
     <update id="editBatchCheckResult">
         UPDATE sys_imp_tmp
@@ -178,32 +169,75 @@
           AND is_deleted = 0
     </update>
 
-    <!-- 更新单条明细校验结果及已复核的主体选择 -->
-    <update id="editItemCheckResult">
+    <!-- 批量回写各行校验结果，空字段按该行的校验值清空 -->
+    <update id="editItemCheckResultList">
         UPDATE sys_imp_tmp_detl
-        SET chk_rslt = #{chkRslt}
-          , chk_dscr = #{chkDscr}
-          , fld001 = #{fld001}
-          , fld009 = #{fld009}
-          , fld010 = #{fld010}
-          , fld011 = #{fld011}
-          , fld012 = #{fld012}
-          , fld013 = #{fld013}
-          , fld014 = #{fld014}
+        SET chk_rslt = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.chkRslt,jdbcType=VARCHAR}
+            </foreach>
+            ELSE chk_rslt END
+          , chk_dscr = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.chkDscr,jdbcType=VARCHAR}
+            </foreach>
+            ELSE chk_dscr END
+          , fld001 = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.fld001,jdbcType=VARCHAR}
+            </foreach>
+            ELSE fld001 END
+          , fld009 = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.fld009,jdbcType=VARCHAR}
+            </foreach>
+            ELSE fld009 END
+          , fld010 = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.fld010,jdbcType=VARCHAR}
+            </foreach>
+            ELSE fld010 END
+          , fld011 = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.fld011,jdbcType=VARCHAR}
+            </foreach>
+            ELSE fld011 END
+          , fld012 = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.fld012,jdbcType=VARCHAR}
+            </foreach>
+            ELSE fld012 END
+          , fld013 = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.fld013,jdbcType=VARCHAR}
+            </foreach>
+            ELSE fld013 END
+          , fld014 = CASE id
+            <foreach collection="items" item="item">
+                WHEN #{item.id} THEN #{item.fld014,jdbcType=VARCHAR}
+            </foreach>
+            ELSE fld014 END
           , updt_time = #{updtTime}
-        WHERE id = #{id}
+        WHERE imp_id = #{impId}
           AND is_deleted = 0
+          AND id IN
+        <foreach collection="items" item="item" open="(" separator="," close=")">
+            #{item.id}
+        </foreach>
     </update>
 
-    <!-- 更新单条明细保存结果 -->
-    <update id="editItemSaveResult">
+    <!-- 批量标记本批已提交的手工来源行，保留原有关联业务单 ID -->
+    <update id="editItemSaveResultByIds">
         UPDATE sys_imp_tmp_detl
-        SET save_rslt = #{saveRslt}
-          , save_dscr = #{saveDscr}
-          , ref_id = #{refId}
+        SET save_rslt = '1'
+          , save_dscr = '提交成功'
           , updt_time = #{updtTime}
-        WHERE id = #{id}
+        WHERE imp_id = #{impId}
           AND is_deleted = 0
+          AND id IN
+        <foreach collection="itemIds" item="itemId" open="(" separator="," close=")">
+            #{itemId}
+        </foreach>
     </update>
 
     <!-- 逻辑删除批次下全部明细 -->
@@ -313,16 +347,20 @@
     <!-- 查询目标池当前有效在池成员（清空目标池用） -->
     <select id="queryPoolMemberList"
             resultType="com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto">
-        SELECT ips.security_code
+        SELECT ips.target_pool_id
+               ,ips.security_code
                ,CASE WHEN ips.security_type = 'company' THEN ips.security_short_name
                      ELSE COALESCE(si.short_name, ips.security_short_name)
                 END AS security_short_name
                ,ips.security_type
         FROM ip_pool_status ips
         LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code AND ips.security_type != 'company'
-        WHERE ips.target_pool_id = #{poolId}
+        WHERE ips.target_pool_id IN
+        <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+            #{poolId}
+        </foreach>
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-        ORDER BY ips.security_code ASC
+        ORDER BY ips.target_pool_id ASC, ips.security_code ASC
     </select>
 </mapper>

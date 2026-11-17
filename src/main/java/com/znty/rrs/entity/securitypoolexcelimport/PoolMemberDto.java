@@ -8,6 +8,9 @@ import lombok.Data;
 @Data
 public class PoolMemberDto {
 
+    /** 成员所在的目标池 */
+    private Long targetPoolId;
+
     /** 证券/主体代码 */
     private String securityCode;
     /** 简称 */

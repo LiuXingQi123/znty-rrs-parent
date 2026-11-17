@@ -537,7 +537,7 @@ class SecurityPoolCheckRules {
     }
 
     /** 根据对应入口提供的候选数据校验并回填主体 */
-    private RatingSelection applySelectedRatingCompanyInternal(
+    RatingSelection applySelectedRatingCompanyInternal(
             SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
             String selfSelectedRightsHolderCode, boolean requireAbsSelection, RatingCompanySelectionReq selected,
             BatchSecurityCheckData batchData) {
@@ -2259,6 +2259,11 @@ class SecurityPoolCheckRules {
      * @return 不通过的失败原因列表，通过则返回空列表
      */
     List<String> checkOutConditions(AdjustCheckContext ctx) {
+        return checkOutConditions(ctx, null);
+    }
+
+    /** 复核互斥调出时，批量提交使用本次已读到的关联主体 */
+    List<String> checkOutConditions(AdjustCheckContext ctx, List<RelatedRatingCompanyDto> candidates) {
         List<String> failures = new ArrayList<>();
         // 通用校验（所有类型都走）
         failures.addAll(checkCommonOut(ctx));
@@ -2274,7 +2279,7 @@ class SecurityPoolCheckRules {
             failures.addAll(checkCompanyOut(ctx));
         }
         // 按发行主体复核黑名单质押库调出条件
-        addPledgeBlacklistFailure(failures, ctx, AdjustMode.OUT.getCode());
+        addPledgeBlacklistFailure(failures, ctx, AdjustMode.OUT.getCode(), candidates);
         return failures;
     }
 
@@ -2286,6 +2291,12 @@ class SecurityPoolCheckRules {
      * @param adjustMode 调整方向
      */
     void addPledgeBlacklistFailure(List<String> failures, AdjustCheckContext ctx, String adjustMode) {
+        addPledgeBlacklistFailure(failures, ctx, adjustMode, null);
+    }
+
+    /** 按调用入口提供的候选复核黑名单质押条件 */
+    private void addPledgeBlacklistFailure(List<String> failures, AdjustCheckContext ctx, String adjustMode,
+                                           List<RelatedRatingCompanyDto> candidates) {
         if (ctx == null || ctx.getTargetPool() == null
                 || !PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(ctx.getTargetPool().getId())) {
             return;
@@ -2295,7 +2306,9 @@ class SecurityPoolCheckRules {
         String failure;
         if (CreditBondSpecialInboundRule.isAbs(security)) {
             if (ctx.getBatchData() == null) {
-                failure = pledgeBlacklistRuleService.validateCompanies(absIdentityService.queryRiskCompanyCodes(security),
+                List<String> companies = candidates == null ? absIdentityService.queryRiskCompanyCodes(security)
+                        : absIdentityService.queryRiskCompanyCodesWithCandidates(security, candidates);
+                failure = pledgeBlacklistRuleService.validateCompanies(companies,
                         adjustMode, ctx.getRequestInPoolIds(), ctx.getRequestOutPoolIds());
             } else {
                 // 根据已加载的各主体状态执行同一组合规则

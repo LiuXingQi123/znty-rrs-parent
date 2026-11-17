@@ -68,49 +68,6 @@
                  ,si.security_type ASC
     </select>
 
-    <!-- 查询操作人最近一次批量提交的全部手工调库记录 -->
-    <select id="queryRecentBatchManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
-        SELECT al.id
-               ,al.security_code
-               ,al.adjust_type
-               ,al.adjust_mode
-               ,al.adjust_batch_no
-               ,al.target_pool_id
-               ,al.flow_id
-               ,al.flow_key
-               ,al.audit_status
-               ,al.adjuster_id
-               ,al.adjust_reason
-               ,al.adjust_advice
-               ,al.submit_time
-        FROM ip_adjust_log al
-        INNER JOIN (
-            SELECT CASE
-                       WHEN CHAR_LENGTH(adjust_batch_no) &gt;= 25 THEN LEFT(adjust_batch_no, 21)
-                       ELSE LEFT(adjust_batch_no, 18)
-                   END AS batch_prefix
-            FROM ip_adjust_log
-            WHERE adjuster_id = #{adjusterId}
-              AND adjust_type = '手动批量调整'
-              AND audit_status NOT IN ('-1', '99')
-              AND is_deleted = 0
-              AND submit_time &gt;= DATE_SUB(NOW(), INTERVAL #{seconds} SECOND)
-            ORDER BY submit_time DESC
-                     ,id DESC
-            LIMIT 1
-        ) latest ON CASE
-                        WHEN CHAR_LENGTH(al.adjust_batch_no) &gt;= 25 THEN LEFT(al.adjust_batch_no, 21)
-                        ELSE LEFT(al.adjust_batch_no, 18)
-                    END = latest.batch_prefix
-        WHERE al.adjuster_id = #{adjusterId}
-          AND al.adjust_type = '手动批量调整'
-          AND al.audit_status NOT IN ('-1', '99')
-          AND al.is_deleted = 0
-        ORDER BY al.security_code ASC
-                 ,al.target_pool_id ASC
-                 ,al.id ASC
-    </select>
-
     <!-- 查询操作人近期有效的手工调库记录 -->
     <select id="queryRecentManualAdjustLogList" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
         SELECT id

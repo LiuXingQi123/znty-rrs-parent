@@ -7,6 +7,8 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.common.SecurityMarketMappingDto;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /** 当前批次的证券调库校验数据，批次结束后丢弃 */
 public class BatchSecurityCheckData {
@@ -28,6 +31,12 @@ public class BatchSecurityCheckData {
     public final Map<String, SecurityInfoBo> securities = new HashMap<>();
     /** Excel 输入代码忽略大小写后对应的主档代码 */
     public final Map<String, String> excelSecurityCodes = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+
+    /** 本次 Excel 查过的主档输入，包含查询未命中的代码 */
+    public final Set<String> lookedUpExcelSecurities = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+    /** 本次查过的关联主体及自选权益人，用于补齐首屏缺项 */
+    public final Set<String> lookedUpRatingCompanies = new HashSet<>();
+    public final Set<String> lookedUpSelfSelectedCompanies = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 
     /** 返回主档里的证券代码，找不到时保留输入用于报错 */
     public String resolveExcelSecurityCode(String code) {
@@ -59,7 +68,7 @@ public class BatchSecurityCheckData {
     /** 债券关联评级主体，保留原候选顺序 */
     public final Map<String, List<RelatedRatingCompanyDto>> ratingCompanies = new HashMap<>();
     /** 通过精确代码查询的 ABS 自选权益人 */
-    public final Map<String, SelfSelectedRightsHolderDto> selfSelectedCompanies = new HashMap<>();
+    public final Map<String, SelfSelectedRightsHolderDto> selfSelectedCompanies = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
     /** 各实际 ABS 代码尚未确认主体或已占用的主体记录 */
     public final Map<String, List<Row>> absIdentities = new HashMap<>();
     /** 外评下调的发行主体或担保人 */
@@ -84,6 +93,14 @@ public class BatchSecurityCheckData {
     public final Set<String> reportExemptIssuers = new HashSet<>();
     /** 有有效 CRMW 组合来源的标的证券 */
     public final Set<String> crmwSources = new HashSet<>();
+
+    /** 读取补债主档时一并返回此证券是否仍符合任务范围 */
+    public static class ScheduledSecurity extends SecurityInfoBo {
+        /** 证券仍符合任务的品种、到期及临时代码要求 */
+        @Getter
+        @Setter
+        private boolean eligible;
+    }
 
     /** 批量查询的证券与池状态、在途节点、品种或关联代码 */
     @Data

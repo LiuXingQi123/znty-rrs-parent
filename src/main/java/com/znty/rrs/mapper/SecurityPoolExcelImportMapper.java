@@ -30,9 +30,6 @@ public interface SecurityPoolExcelImportMapper {
      */
     SysImpTmpBo queryBatchByImpId(@Param("impId") String impId);
 
-    /** 锁定导入批次，串行处理主体修改、校验、提交和取消 */
-    Long queryBatchIdForUpdate(@Param("impId") String impId);
-
     /**
      * 更新批次校验结果与计数
      */
@@ -71,9 +68,16 @@ public interface SecurityPoolExcelImportMapper {
     SysImpTmpDetlBo queryItemById(@Param("impId") String impId, @Param("itemId") Long itemId);
 
     /**
-     * 更新单条明细校验结果
+     * 批量更新本批明细的校验结果和已复核的字段
+     *
+     * @param impId 导入批次号
+     * @param items 本次需要回写的导入明细
+     * @param updtTime 本批统一的修改时间
+     * @return 更新的行数
      */
-    int editItemCheckResult(SysImpTmpDetlBo bo);
+    int editItemCheckResultList(@Param("impId") String impId,
+                                @Param("items") List<SysImpTmpDetlBo> items,
+                                @Param("updtTime") Date updtTime);
 
     /** 更新当前导入行的关联主体和 ABS 自选权益人 */
     int editRatingCompany(SysImpTmpDetlBo bo);
@@ -82,9 +86,15 @@ public interface SecurityPoolExcelImportMapper {
     int editItemCheckResultByImpId(@Param("impId") String impId, @Param("updtTime") Date updtTime);
 
     /**
-     * 更新单条明细保存结果
+     * 将本批指定的有效导入明细标记为提交成功
+     *
+     * @param impId 导入批次号
+     * @param itemIds 已提交的导入明细 ID
+     * @param updtTime 本批统一的修改时间
+     * @return 更新的行数
      */
-    int editItemSaveResult(SysImpTmpDetlBo bo);
+    int editItemSaveResultByIds(@Param("impId") String impId, @Param("itemIds") List<Long> itemIds,
+                                 @Param("updtTime") Date updtTime);
 
     /**
      * 逻辑删除批次下全部明细
@@ -118,8 +128,8 @@ public interface SecurityPoolExcelImportMapper {
     /**
      * 查询目标池当前有效在池成员（audit_status=20）
      *
-     * @param poolId     目标池 ID
+     * @param poolIds 目标池 ID
      * @return 在池成员列表
      */
-    List<PoolMemberDto> queryPoolMemberList(@Param("poolId") Long poolId);
+    List<PoolMemberDto> queryPoolMemberList(@Param("poolIds") List<Long> poolIds);
 }

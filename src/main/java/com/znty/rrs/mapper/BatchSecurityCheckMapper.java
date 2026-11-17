@@ -4,6 +4,7 @@ import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.WindIssuerRatingBo;
 import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.ScheduledSecurity;
 import com.znty.rrs.entity.securitypooladjust.PoolDto;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
@@ -51,10 +52,10 @@ public interface BatchSecurityCheckMapper {
      *
      * @param securityCodes 实际证券代码
      * @param minDaysToMaturity 距到期至少多少自然日
-     * @return 满足任务候选范围的证券代码
+     * @return 完整主档和各证券的任务候选资格
      */
-    List<String> queryScheduledEligibleCodes(@Param("securityCodes") List<String> securityCodes,
-                                            @Param("minDaysToMaturity") int minDaysToMaturity);
+    List<ScheduledSecurity> queryScheduledSecurities(@Param("securityCodes") List<String> securityCodes,
+                                                        @Param("minDaysToMaturity") int minDaysToMaturity);
 
     /**
      * 按代码读取本批证券主档

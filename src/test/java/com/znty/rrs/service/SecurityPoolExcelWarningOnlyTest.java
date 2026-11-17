@@ -8,7 +8,9 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustSharedData;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
+import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.mapper.AbsIdentityMapper;
+import com.znty.rrs.mapper.BatchSecurityCheckMapper;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -25,6 +27,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -33,6 +39,49 @@ import static org.mockito.Mockito.when;
 
 /** Excel 原规则提示后放行与其他入口隔离测试 */
 public class SecurityPoolExcelWarningOnlyTest {
+
+    /** Excel 普通债直通继续放行已有提示，只复核本批证券、池和来源选择 */
+    @Test
+    public void excelDirectSubmitShouldUseBatchMastersAndKeepWarningOnlySemantics() {
+        Fixture f = new Fixture();
+        BatchSecurityCheckMapper batch = mock(BatchSecurityCheckMapper.class);
+        SysAttachmentService attachments = mock(SysAttachmentService.class);
+        ReflectionTestUtils.setField(f.service, "batchSecurityCheckMapper", batch);
+        ReflectionTestUtils.setField(f.service, "sysAttachmentService", attachments);
+        f.pool.setStatus("disabled");
+        List<String> codes = Collections.singletonList("BOND.IB");
+        when(batch.querySecurities(codes)).thenReturn(Collections.singletonList(f.security));
+        when(f.mapper.addPoolStatus(any())).thenReturn(1);
+        doAnswer(call -> {
+            IpAdjustLogBo log = call.getArgument(0);
+            log.setId(10L);
+            return 1;
+        }).when(f.mapper).addAdjustLog(any());
+
+        SecurityPoolAdjustSubmitReq.AdjustItem item = new SecurityPoolAdjustSubmitReq.AdjustItem();
+        item.setSecurityCode("BOND.IB");
+        item.setSecurityType("bond");
+        item.setSecurityShortName("测试债");
+        item.setTargetPoolId(100L);
+        item.setAdjustMode("调入");
+        item.setAdjustGroupKey("EXCEL_1");
+        item.setItemTag("manual");
+        SecurityPoolAdjustSubmitReq req = new SecurityPoolAdjustSubmitReq();
+        req.setSecurityCode("BOND.IB");
+        req.setAdjusterId("1");
+        req.setAdjustType("Excel导入");
+        req.setItems(Collections.singletonList(item));
+
+        assertThat(f.service.addExcelImportAdjustLogList(Collections.singletonList(req))).hasSize(1);
+        verify(f.pools, never()).lockPoolByIdsList(any());
+        verify(batch).querySecurities(codes);
+        verify(batch).queryActiveStates(codes);
+        verify(f.mapper, never()).querySecurityBoByCode(anyString());
+        verify(f.mapper, never()).queryPoolCurrentCount(anyLong());
+        InOrder writes = inOrder(f.mapper);
+        writes.verify(f.mapper).deletePoolStatusSoft("BOND.IB", 100L);
+        writes.verify(f.mapper).addPoolStatus(any());
+    }
 
     @Test
     public void excelShouldKeepActualForbiddenFailureAndBuildFlowWhileSingleStillRejects() {

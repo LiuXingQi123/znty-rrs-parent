@@ -46,6 +46,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustLogDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustSharedData;
 import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData;
+import com.znty.rrs.mapper.BatchSecurityCheckMapper;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
 import com.znty.rrs.entity.bo.FlowDefinitionBo;
 import com.znty.rrs.entity.bo.FlowEdgeBo;
@@ -83,6 +84,7 @@ import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.RoleBo;
 import com.znty.rrs.entity.bo.UserBo;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -98,10 +100,12 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -184,6 +188,14 @@ public class SecurityPoolAdjustService {
     /** 系统附件业务服务 */
     @Resource
     private SysAttachmentService sysAttachmentService;
+
+    /** 读取批量提交共用的证券与池状态 */
+    @Resource
+    private BatchSecurityCheckMapper batchSecurityCheckMapper;
+
+    /** 批量读取评级主体 */
+    @Resource
+    private BatchSecurityCheckService batchSecurityCheckService;
     /** 报告库服务，用于直通落池成功后统一生成内部报告 */
     @Resource
     private ReportService reportService;
@@ -1038,6 +1050,216 @@ public class SecurityPoolAdjustService {
     }
 
     /**
+     * 批量页面按主券分组提交，共用池配置、证券主档及流程快照
+     *
+     * @param requests 按触发主券分组的提交请求
+     * @param submissionFiles 本批附件上下文
+     * @param directRecheck 有直通项时批量页面原有的整批预检明细
+     * @return 各组提交结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<AdjustSubmitDto> submitAdjustLogBatch(List<SecurityPoolAdjustSubmitReq> requests,
+                                                    SysAttachmentService.SubmissionFiles submissionFiles,
+                                                     List<IpAdjustLogBo> directRecheck) {
+        if (requests.isEmpty()) {
+            return Collections.emptyList();
+        }
+        BatchSubmitData batch = loadBatchSubmitData(requests);
+        // 正式提交使用数据库中的评级候选和本次请求选择的主体代码
+        Set<String> codes = requests.stream().map(SecurityPoolAdjustSubmitReq::getSecurityCode)
+                .filter(Objects::nonNull).map(batch.data::resolveExcelSecurityCode)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        // 配套项可能是 ABS，黑名单质押库也复用本次查到的候选
+        batch.data.securities.values().stream().filter(CreditBondSpecialInboundRule::isAbs)
+                .map(SecurityInfoBo::getWindCode).forEach(codes::add);
+        List<String> selfSelected = requests.stream().map(SecurityPoolAdjustSubmitReq::getSelfSelectedRightsHolderCode)
+                .map(this::emptyToNull).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        batchSecurityCheckService.loadRatingCandidates(batch.data, new ArrayList<>(codes), selfSelected);
+        if (!directRecheck.isEmpty()) {
+            // 能独立入池的普通债共用本批数据库状态
+            loadIndependentInboundData(requests, batch, false);
+            // 保留批量页面原有的整批预检
+            recheckBeforeFinalApproval(directRecheck, batch, false);
+        }
+        return submitBatchRequests(requests, submissionFiles, batch);
+    }
+
+    /**
+     * 按原分组提交 Excel 证券清空项，评级候选来自本次批量查询
+     *
+     * @param requests 清空出库的证券请求
+     * @param ratingData Excel 本次读取的评级候选
+     * @return 各组提交结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<AdjustSubmitDto> addExcelClearAdjustLogList(List<SecurityPoolAdjustSubmitReq> requests,
+                                                            BatchSecurityCheckData ratingData) {
+        BatchSubmitData batch = loadBatchSubmitData(requests, ratingData);
+        batch.data.ratingCompanies.putAll(ratingData.ratingCompanies);
+        batch.data.selfSelectedCompanies.putAll(ratingData.selfSelectedCompanies);
+        SysAttachmentService.SubmissionFiles files = sysAttachmentService.createSubmissionFiles(
+                Collections.emptyList(), requests.get(0).getAdjusterId(), Collections.emptyList());
+        // 复用流程和主档数据，保留清空项原有的提交步骤
+        return submitBatchRequests(requests, files, batch);
+    }
+
+    /**
+     * 准备 Excel 批量提交，保留每行独立的主体选择和原提交规则
+     *
+     * @param requests 按来源行或清空主券分组的请求
+     * @param ratingData 本次提交已读的主档及评级候选
+     * @param clear 是否为清空出库
+     * @return 本批已校验的提交组
+     */
+    List<ExcelSubmitGroup> prepareExcelSubmitGroups(List<SecurityPoolAdjustSubmitReq> requests,
+                                                    BatchSecurityCheckData ratingData, boolean clear) {
+        BatchSubmitData batch = loadBatchSubmitData(requests, ratingData);
+        batch.excelBulk = true;
+        batch.data.ratingCompanies.putAll(ratingData.ratingCompanies);
+        batch.data.selfSelectedCompanies.putAll(ratingData.selfSelectedCompanies);
+        BatchNoContext batchNo = new BatchNoContext();
+        Map<String, String> absIdentities = new HashMap<>();
+        List<ExcelSubmitGroup> groups = new ArrayList<>();
+        for (SecurityPoolAdjustSubmitReq req : requests) {
+            // 创建任何流程前先复核本行的证券、评级主体和关联码
+            SubmitSharedData shared = prepareSubmitSharedData(req, batchNo, batch);
+            if (!clear) {
+                if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
+                    String previous = absIdentities.put(req.getSecurityCode(), shared.securityInfo.getIssuerCode());
+                    if (previous != null && !previous.equals(shared.securityInfo.getIssuerCode())) {
+                        throw new BizException("同一 ABS[" + req.getSecurityCode() + "]在同批申请中选择了不同主体");
+                    }
+                }
+                req.setSecurityInfo(shared.securityInfo);
+            }
+            groups.add(new ExcelSubmitGroup(req, shared, batch));
+        }
+        return groups;
+    }
+
+    /**
+     * 生成直通组的日志和步骤，待审批或需复核材料来源的组使用原提交流程
+     *
+     * @param group 已通过前置检查的提交组
+     */
+    void planExcelDirectGroup(ExcelSubmitGroup group) {
+        SecurityPoolAdjustSubmitReq req = group.request;
+        SubmitSharedData shared = group.shared;
+        if (!isExcelAdjustType(req.getAdjustType()) || req.getItems().stream().anyMatch(item ->
+                MaterialExemptionType.PRODUCT_SOURCE.getCode().equals(item.getMaterialExemptionType())
+                        || !CollectionUtils.isEmpty(item.getCreditReportFileIndexes())
+                        || !CollectionUtils.isEmpty(item.getMaterialFileIndexes())
+                        || !CollectionUtils.isEmpty(item.getCreditReportSourceAttachmentIds())
+                        || !CollectionUtils.isEmpty(item.getMaterialSourceAttachmentIds()))) {
+            return;
+        }
+        List<ExcelSubmitRow> rows = new ArrayList<>();
+        boolean ordinary = true;
+        for (AdjustMode mode : Arrays.asList(AdjustMode.IN, AdjustMode.OUT)) {
+            for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
+                if (!mode.getCode().equals(item.getAdjustMode())) {
+                    continue;
+                }
+                SecurityPoolAdjustSubmitReq.AdjustItem manual = resolveManualSubmitItem(req, item);
+                Long flowId = resolveLoadedFlowId(manual, shared);
+                FlowSnapshot flow = shared.flowSnapshotMap.get(flowId);
+                if (flowId != null && (flow == null || !isDirectFlow(flow))) {
+                    return;
+                }
+                IpAdjustLogBo log = buildAdjustLog(req, item, manual, shared);
+                log.setAdjustBatchNo(resolveAdjustBatchNo(req, item, flowId == null, shared));
+                log.setAuditStatus(AuditStatus.APPROVED.getCode());
+                List<IpAdjustStepBo> steps = new ArrayList<>();
+                if (isManualSubmitItem(item) && flow != null
+                        && !createInitialSteps(null, log.getAdjustBatchNo(), flow,
+                                req.getAdjusterId(), req.getAdjusterName(), steps)) {
+                    return;
+                }
+                String masterCode = group.batch.data.resolveExcelSecurityCode(log.getSecurityCode());
+                SecurityInfoBo master = group.batch.data.securities.get(masterCode);
+                if (master == null) {
+                    throwApprovalRecheckFailure(log, "证券不存在");
+                }
+                if (!shared.poolMap.containsKey(log.getTargetPoolId())) {
+                    throwApprovalRecheckFailure(log, "目标投资池不存在或已停用");
+                }
+                ordinary &= !CreditBondSpecialInboundRule.isAbs(master) && !"abs".equalsIgnoreCase(master.getSecurityType());
+                rows.add(new ExcelSubmitRow(log, steps));
+            }
+        }
+        List<IpAdjustLogBo> logs = rows.stream().map(row -> row.log).collect(Collectors.toList());
+        Set<String> excelBatches = collectExcelAdjustBatches(logs);
+        for (IpAdjustLogBo log : logs) {
+            if (!isExcelAdjustType(log.getAdjustType()) && !excelBatches.contains(log.getAdjustBatchNo())) {
+                return;
+            }
+        }
+        group.rows = rows;
+        group.ordinary = ordinary;
+    }
+
+    /**
+     * 用已回填日志主键生成证券和 ABS 申请快照
+     *
+     * @param group 本组直通日志和初始步骤
+     * @param snapshots 本次待批量写入的快照
+     */
+    void collectExcelSubmitSnapshots(ExcelSubmitGroup group, List<AdjustSecuritySnapshotBo> snapshots) {
+        for (ExcelSubmitRow row : group.rows) {
+            group.shared.submittedLogs.put(row.log.getId(), row.log);
+        }
+        // 快照与原保存流程共用主档合并及评级字段
+        postSubmitProcess(group.request, group.shared, snapshots);
+    }
+
+    /**
+     * 在池状态变更前复核本组 ABS 快照并生效主体身份
+     *
+     * @param group 已保存申请快照的直通组
+     * @param logs 本组调库日志
+     */
+    void approveExcelAbsGroup(ExcelSubmitGroup group, List<IpAdjustLogBo> logs) {
+        recheckBeforeFinalApproval(logs, group.batch, false);
+        absIdentityService.approveIdentities(logs);
+    }
+
+    /**
+     * 批量落池后按原业务记录 ABS 人工结论
+     *
+     * @param logs 刚生效的直通日志
+     */
+    void recordExcelAbsDecisions(List<IpAdjustLogBo> logs) {
+        absCompanySyncService.recordManualDecisions(logs);
+    }
+
+    /**
+     * 使用原路径提交待审批或需独立处理材料的组
+     *
+     * @param group 已完成前置校验的组
+     * @return 本组提交结果
+     */
+    AdjustSubmitDto submitExcelGroupIndividually(ExcelSubmitGroup group) {
+        SysAttachmentService.SubmissionFiles files = sysAttachmentService.createSubmissionFiles(
+                Collections.emptyList(), group.request.getAdjusterId(), Collections.emptyList());
+        // 单组保留已有审批及材料处理步骤
+        return submitPreparedAdjustLog(group.request, group.shared, files, group.batch);
+    }
+
+    /** 按原顺序校验并保存各提交组 */
+    private List<AdjustSubmitDto> submitBatchRequests(List<SecurityPoolAdjustSubmitReq> requests,
+                                                      SysAttachmentService.SubmissionFiles submissionFiles,
+                                                      BatchSubmitData batch) {
+        List<AdjustSubmitDto> results = new ArrayList<>();
+        BatchNoContext batchNoContext = new BatchNoContext();
+        for (SecurityPoolAdjustSubmitReq req : requests) {
+            // 按原顺序执行各组的前置校验、写入和直通落池
+            SubmitSharedData shared = prepareSubmitSharedData(req, batchNoContext, batch);
+            results.add(submitPreparedAdjustLog(req, shared, submissionFiles, batch));
+        }
+        return results;
+    }
+
+    /**
      * 按 Excel 导入行批量提交，各行独立使用所选评级主体并保存证券快照。
      *
      * 在创建任何新流程前统一检查已有在途流程，避免同码多行相互阻断。
@@ -1058,12 +1280,15 @@ public class SecurityPoolAdjustService {
         if (requests == null || requests.isEmpty()) {
             return Collections.emptyList();
         }
+        BatchSubmitData batch = loadBatchSubmitData(requests);
+        // Excel 的普通直通调入也复用本批读取的证券和在池状态
+        loadIndependentInboundData(requests, batch, true);
         BatchNoContext batchNoContext = new BatchNoContext();
         List<SubmitSharedData> sharedDataList = new ArrayList<>();
         Map<String, String> absIdentities = new HashMap<>();
         for (SecurityPoolAdjustSubmitReq req : requests) {
             // 写入新流程前检查本行既有在途流程、重复提交和配套互斥调出
-            SubmitSharedData shared = prepareSubmitSharedData(req, batchNoContext);
+            SubmitSharedData shared = prepareSubmitSharedData(req, batchNoContext, batch);
             if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
                 String previous = absIdentities.put(req.getSecurityCode(), shared.securityInfo.getIssuerCode());
                 if (previous != null && !previous.equals(shared.securityInfo.getIssuerCode())) {
@@ -1079,7 +1304,7 @@ public class SecurityPoolAdjustService {
         List<AdjustSubmitDto> results = new ArrayList<>();
         for (int index = 0; index < requests.size(); index++) {
             // 各行独立落调库记录和主体快照，行内联动、互斥、关联项仍共用流程
-            results.add(submitPreparedAdjustLog(requests.get(index), sharedDataList.get(index), submissionFiles));
+            results.add(submitPreparedAdjustLog(requests.get(index), sharedDataList.get(index), submissionFiles, batch));
         }
         return results;
     }
@@ -1099,20 +1324,151 @@ public class SecurityPoolAdjustService {
      * @return 经前置校验的证券、主体、池状态及流程数据
      */
     private SubmitSharedData prepareSubmitSharedData(SecurityPoolAdjustSubmitReq req, BatchNoContext batchNoContext) {
+        return prepareSubmitSharedData(req, batchNoContext, null);
+    }
+
+    /**
+     * 读取批量页面和 Excel 的公共提交数据
+     *
+     * @param requests 本批调库请求
+     * @return 本次事务内使用的提交数据
+     */
+    private BatchSubmitData loadBatchSubmitData(List<SecurityPoolAdjustSubmitReq> requests) {
+        return loadBatchSubmitData(requests, null);
+    }
+
+    /** 复用本次 Excel 清空已读取的主档，只查询配套项缺少的代码 */
+    private BatchSubmitData loadBatchSubmitData(List<SecurityPoolAdjustSubmitReq> requests,
+                                                BatchSecurityCheckData ratingData) {
+        BatchSubmitData batch = new BatchSubmitData();
+        if (ratingData != null) {
+            batch.data.securities.putAll(ratingData.securities);
+            batch.data.excelSecurityCodes.putAll(ratingData.excelSecurityCodes);
+        }
+        for (InvestmentPoolBo pool : investmentPoolMapper.queryPoolList()) {
+            batch.data.pools.put(pool.getId(), pool);
+        }
+        // 与单券使用相同的池关系口径
+        batch.data.relations.putAll(buildPoolRelationMap(securityPoolAdjustMapper.queryAllPoolRelationList()));
+        Set<String> requestedCodes = new LinkedHashSet<>();
+        for (SecurityPoolAdjustSubmitReq request : requests) {
+            requestedCodes.add(request.getSecurityCode());
+            if (request.getItems() != null) {
+                for (SecurityPoolAdjustSubmitReq.AdjustItem item : request.getItems()) {
+                    requestedCodes.add(resolveItemSecurityCode(request, item));
+                }
+            }
+        }
+        List<String> codes = requestedCodes.stream().filter(code -> code != null && !code.trim().isEmpty())
+                .filter(code -> !batch.data.securities.containsKey(batch.data.resolveExcelSecurityCode(code)))
+                .collect(Collectors.toList());
+        int size = AutoAdjustRestrictHelper.QUERY_BATCH_SIZE;
+        for (int offset = 0; offset < codes.size(); offset += size) {
+            List<String> chunk = codes.subList(offset, Math.min(offset + size, codes.size()));
+            for (SecurityInfoBo master : batchSecurityCheckMapper.querySecurities(chunk)) {
+                batch.data.securities.put(master.getWindCode(), master);
+                batch.data.excelSecurityCodes.put(master.getWindCode(), master.getWindCode());
+            }
+        }
+        return batch;
+    }
+
+    /**
+     * 独立调入的证券在本批只出现一次，各组互不改变其他证券的在池和在途状态
+     *
+     * @param requests 本批调库请求
+     * @param batch 本批提交数据
+     * @param excel 是否为 Excel 提示放行入口
+     */
+    private void loadIndependentInboundData(List<SecurityPoolAdjustSubmitReq> requests, BatchSubmitData batch,
+                                            boolean excel) {
+        Set<String> codes = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        Set<Long> poolIds = new TreeSet<>();
+        boolean direct = !excel;
+        for (SecurityPoolAdjustSubmitReq req : requests) {
+            SecurityInfoBo master = batch.data.securities.get(req.getSecurityCode());
+            if (master == null || CreditBondSpecialInboundRule.isAbs(master)
+                    || "abs".equalsIgnoreCase(master.getSecurityType())
+                    || req.getItems() == null || req.getItems().size() != 1) {
+                return;
+            }
+            SecurityPoolAdjustSubmitReq.AdjustItem item = req.getItems().get(0);
+            Long poolId = item.getTargetPoolId();
+            if (!AdjustMode.IN.getCode().equals(item.getAdjustMode()) || !isManualSubmitItem(item)
+                    || !req.getSecurityCode().equals(resolveItemSecurityCode(req, item))
+                    || !codes.add(req.getSecurityCode()) || poolId == null
+                    || (!excel && PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(poolId))) {
+                return;
+            }
+            poolIds.add(poolId);
+            if (!direct) {
+                // 复用提交时实际采用的流程 ID 和快照判定
+                Long flowId = resolveFlowIdFromItem(item, batch);
+                FlowSnapshot snapshot = flowId == null ? null : loadBatchFlowSnapshot(batch, flowId);
+                direct = flowId == null || (snapshot != null && isDirectFlow(snapshot));
+            }
+        }
+        if (!direct) {
+            return;
+        }
+        // 本批共用一次状态读取，各组顺序处理并累计生效容量
+        batch.independent = true;
+        if (!excel) {
+            // 普通批量落池需要复核容量和证券品种
+            for (PoolDto count : batchSecurityCheckMapper.queryPoolCounts(new ArrayList<>(poolIds))) {
+                batch.data.counts.put(count.getId(), count.getCurrentCount());
+            }
+            Set<String> ambiguousTypes = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+            for (BatchSecurityCheckData.Row row : batchSecurityCheckMapper.queryCategories()) {
+                String type = row.getSecurityType();
+                if (type != null && batch.categories.containsKey(type)) {
+                    ambiguousTypes.add(type);
+                } else if (type != null) {
+                    batch.categories.put(type, row.getCategoryType());
+                }
+            }
+            for (String type : ambiguousTypes) {
+                // 字典重复时沿用原查单个品种的取值
+                batch.categories.put(type, securityPoolAdjustMapper.queryCategoryTypeBySecurityType(type));
+            }
+        }
+        Map<String, String> codeIndex = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        codes.forEach(code -> codeIndex.put(code, code));
+        List<String> securityCodes = new ArrayList<>(codes);
+        int size = AutoAdjustRestrictHelper.QUERY_BATCH_SIZE;
+        for (int offset = 0; offset < securityCodes.size(); offset += size) {
+            List<String> chunk = securityCodes.subList(offset, Math.min(offset + size, securityCodes.size()));
+            for (BatchSecurityCheckData.Row row : batchSecurityCheckMapper.queryActiveStates(chunk)) {
+                String code = codeIndex.getOrDefault(row.getSecurityCode(), row.getSecurityCode());
+                batch.data.activePools.computeIfAbsent(code, key -> new HashSet<>()).add(row.getPoolId());
+            }
+            if (excel) {
+                // Excel 读取在池状态供产品库材料资格复核
+                continue;
+            }
+            for (BatchSecurityCheckData.Row row : batchSecurityCheckMapper.queryPendingPools(chunk)) {
+                batch.pendingPools.computeIfAbsent(row.getSecurityCode(), key -> new ArrayList<>()).add(row.getPoolId());
+            }
+        }
+    }
+
+    /** 按原规则校验一组提交，批量入口复用本批已读取的数据 */
+    private SubmitSharedData prepareSubmitSharedData(SecurityPoolAdjustSubmitReq req, BatchNoContext batchNoContext,
+                                                     BatchSubmitData batch) {
         if (req == null) {
             throw new BizException("调库请求不能为空");
         }
         // ══ 第一阶段：前置校验 ══
         // 校验证券代码及调库明细必填字段
         validateSubmitReq(req);
-        // 普通入口检查重复申请，Excel 已有批次防重复，原业务失败不再阻断
-        if (!isExcelAdjustType(req.getAdjustType())) {
+        // 单券仍按其入口检查历史申请，批量提交使用本批查出的业务状态
+        if (batch == null && !isExcelAdjustType(req.getAdjustType())) {
             checkRecentDuplicateSubmit(req);
         }
 
         // ══ 第二阶段：参数初始化 ══
         // 复用页面证券信息和已选主体，准备本次共享数据
-        SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext);
+        SubmitSharedData shared = loadSubmitSharedData(req, batchNoContext, batch);
         if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
             Set<String> identityCodes = new TreeSet<>();
             identityCodes.add(req.getSecurityCode());
@@ -1130,11 +1486,11 @@ public class SecurityPoolAdjustService {
         validateRelatedInboundItemsOnSubmit(req);
         // 普通入口检查在途，Excel 在原校验中保留在途提示后放行
         if (!isExcelAdjustType(req.getAdjustType())) {
-            checkSubmitPendingPoolGroups(req, shared.poolMap);
+            checkSubmitPendingPoolGroups(req, shared.poolMap, batch);
         }
         // 普通入口要求互斥调出可执行，Excel 沿用导入选项及原校验提示
         if (!isExcelAdjustType(req.getAdjustType())) {
-            validateRequiredMutexOutboundOnSubmit(req, shared);
+            validateRequiredMutexOutboundOnSubmit(req, shared, batch);
         }
         return shared;
     }
@@ -1156,6 +1512,13 @@ public class SecurityPoolAdjustService {
      */
     private AdjustSubmitDto submitPreparedAdjustLog(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
                                                     SysAttachmentService.SubmissionFiles submissionFiles) {
+        return submitPreparedAdjustLog(req, shared, submissionFiles, null);
+    }
+
+    /** 保存本组提交，独立调入共用本批落池数据 */
+    private AdjustSubmitDto submitPreparedAdjustLog(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
+                                                    SysAttachmentService.SubmissionFiles submissionFiles,
+                                                     BatchSubmitData batch) {
         // ══ 第三阶段：调入处理 ══
         List<IpAdjustLogBo> directApplyLogs = new ArrayList<>();
         // 提交调入项，并收集需要立即生效的记录
@@ -1173,7 +1536,7 @@ public class SecurityPoolAdjustService {
         // 保存本次提交使用的证券信息和评级主体
         postSubmitProcess(req, shared);
         // 快照保存后再处理直通，主档五字段只在审核通过事务内更新
-        recheckAndApplyDirectLogs(directApplyLogs);
+        recheckAndApplyDirectLogs(directApplyLogs, req, batch);
 
         // 组装返回结果
         AdjustSubmitDto dto = new AdjustSubmitDto();
@@ -1232,7 +1595,8 @@ public class SecurityPoolAdjustService {
      *
      * 防止前端只提交可调入项、丢弃失败的互斥调出项，造成双池。
      */
-    private void validateRequiredMutexOutboundOnSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+    private void validateRequiredMutexOutboundOnSubmit(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
+                                                      BatchSubmitData batch) {
         Set<Long> requestOutPoolIds = new HashSet<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             if (item != null && AdjustMode.OUT.getCode().equals(item.getAdjustMode())
@@ -1272,14 +1636,13 @@ public class SecurityPoolAdjustService {
                 checkShared.setPoolMap(shared.poolMap);
                 checkShared.setCurrentPoolIds(shared.currentPoolIds);
                 checkShared.setPoolRelationMap(shared.poolRelationMap);
-                checkShared.setHasPendingProcess(shared.hasPendingProcess);
-                checkShared.setSecurityInObservePool(shared.securityInObservePool);
-                checkShared.setIssuerInObservePool(shared.issuerInObservePool);
                 checkShared.setRequestInPoolIds(Collections.<Long>emptySet());
                 checkShared.setRequestOutPoolIds(requestOutPoolIds);
                 int poolCurrentCount = securityPoolAdjustMapper.queryPoolCurrentCount(mutexId);
                 AdjustCheckContext ctx = buildCheckContext(fakeOut, poolCurrentCount, checkShared);
-                List<String> outFailures = checkOutConditions(ctx);
+                List<RelatedRatingCompanyDto> candidates = batch == null ? null
+                        : batch.data.ratingCompanies.getOrDefault(shared.securityInfo.getWindCode(), Collections.emptyList());
+                List<String> outFailures = checkRules().checkOutConditions(ctx, candidates);
                 if (outFailures != null && !outFailures.isEmpty()) {
                     // 提交异常文案：总述 + 编号原因（与校验结果列表口径一致）
                     throw new BizException(buildMutexOutboundFailureMessage(mutexPoolName, outFailures));
@@ -1319,15 +1682,18 @@ public class SecurityPoolAdjustService {
 
     /** 检查正式提交涉及的池组是否已有活动流程（按每条调库项的证券代码独立判断）。 */
     private void checkSubmitPendingPoolGroups(SecurityPoolAdjustSubmitReq req,
-                                              Map<Long, InvestmentPoolBo> poolMap) {
+                                              Map<Long, InvestmentPoolBo> poolMap, BatchSubmitData batch) {
         // 按证券代码缓存 pending 池组，避免同码多行重复查库
         Map<String, Set<Long>> pendingGroupsBySecurity = new HashMap<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             String securityCode = resolveItemSecurityCode(req, item);
             Set<Long> pendingGroups = pendingGroupsBySecurity.get(securityCode);
             if (pendingGroups == null) {
-                pendingGroups = resolvePoolGroupIds(
-                        securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(securityCode, null), poolMap);
+                List<Long> pendingPools = batch != null && batch.independent
+                        ? batch.pendingPools.getOrDefault(securityCode, Collections.emptyList())
+                        : securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(securityCode, null);
+                // 池归组沿用单券口径
+                pendingGroups = resolvePoolGroupIds(pendingPools, poolMap);
                 pendingGroupsBySecurity.put(securityCode, pendingGroups);
             }
             Long groupId = resolveRootPoolId(item.getTargetPoolId(), poolMap);
@@ -1399,46 +1765,64 @@ public class SecurityPoolAdjustService {
      */
     private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req) {
         // 创建本次提交独立批次号上下文
-        return loadSubmitSharedData(req, new BatchNoContext());
+        return loadSubmitSharedData(req, new BatchNoContext(), null);
     }
 
     /**
      * 第二阶段：参数初始化，使用指定批次号上下文。
      */
-    private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req, BatchNoContext batchNoContext) {
-        // 证券基础信息（兼含存在性校验）
-        SecurityInfoBo securityInfo = req.getSecurityInfo() != null && req.getSecurityInfo().getSecurityType() != null
-                ? req.getSecurityInfo() : securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+    private SubmitSharedData loadSubmitSharedData(SecurityPoolAdjustSubmitReq req, BatchNoContext batchNoContext,
+                                                   BatchSubmitData batch) {
+        // 优先使用页面提供的快照来源，再使用本次批量读取的普通债主档
+        SecurityInfoBo securityInfo = req.getSecurityInfo();
+        if (securityInfo == null || securityInfo.getSecurityType() == null) {
+            SecurityInfoBo master = batch == null ? null : batch.data.securities.get(req.getSecurityCode());
+            if (master == null || CreditBondSpecialInboundRule.isAbs(master)) {
+                securityInfo = securityPoolAdjustMapper.querySecurityBoByCode(req.getSecurityCode());
+            } else {
+                securityInfo = new SecurityInfoBo();
+                BeanUtils.copyProperties(master, securityInfo);
+            }
+        }
         if (securityInfo == null) {
             throw new BizException("证券不存在");
         }
         // 提交时重新校验并读取最终评级主体，ABS 必须选择权益人或自选权益人
         SelectedRatingCompanyData selectedRatingCompany = applySelectedRatingCompanyInternal(
-                securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
-                req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany());
+                securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(), req.getSelfSelectedRightsHolderCode(),
+                true, batch == null || isExcelAdjustType(req.getAdjustType()) ? req.getSelectedRatingCompany() : null,
+                batch == null ? null : batch.data);
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
-        Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
-        List<InvestmentPoolBo> allPools = investmentPoolMapper.queryPoolList();
-        for (InvestmentPoolBo p : allPools) {
-            poolMap.put(p.getId(), p);
+        Map<Long, InvestmentPoolBo> poolMap = batch == null ? investmentPoolMapper.queryPoolList().stream()
+                .collect(Collectors.toMap(InvestmentPoolBo::getId, pool -> pool)) : batch.data.pools;
+
+        // 独立调入的证券代码在批内只出现一次，共用本次读取的状态
+        Set<Long> currentPoolIds;
+        if (batch != null && EXCEL_CLEAR_ADJUST_TYPE.equals(req.getAdjustType())) {
+            // 清空出库走 Excel 提示口径，提交阶段不使用在池列表复核业务条件
+            currentPoolIds = Collections.emptySet();
+        } else if (batch != null && batch.excelBulk && req.getItems().stream().noneMatch(item ->
+                MaterialExemptionType.PRODUCT_SOURCE.getCode().equals(item.getMaterialExemptionType()))) {
+            // Excel 的直通复核只检查存在性，只有产品快速资格仍使用当前在池列表
+            currentPoolIds = Collections.emptySet();
+        } else if (batch != null && batch.independent) {
+            currentPoolIds = batch.data.activePools.getOrDefault(req.getSecurityCode(), Collections.emptySet());
+        } else {
+            currentPoolIds = new HashSet<>(securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode()));
         }
 
-        // 证券当前有效入池 ID 集合（audit_status='20' 表示已生效）
-        List<Long> currentPoolIdList = securityPoolAdjustMapper.querySecurityCurrentPoolIdList(req.getSecurityCode());
-        Set<Long> currentPoolIds = new HashSet<>(currentPoolIdList);
+        // 加载池关系映射
+        Map<Long, Map<String, List<Long>>> poolRelationMap = batch == null
+                ? buildPoolRelationMap(securityPoolAdjustMapper.queryAllPoolRelationList()) : batch.data.relations;
 
-        // 全量投资池关系配置，构建三层嵌套 Map
-        Map<Long, Map<String, List<Long>>> poolRelationMap = buildPoolRelationMap(
-                securityPoolAdjustMapper.queryAllPoolRelationList());
-
-        // 收集所有调库项中引用的唯一流程标识，批量加载流程快照
+        // 收集所有流程ID
         Set<Long> uniqueFlowIds = new HashSet<>();
         Map<String, Long> resolvedFlowIdsByKey = new HashMap<>();
         for (SecurityPoolAdjustSubmitReq.AdjustItem item : req.getItems()) {
             // 只有 Key 的同一流程只解析一次，解析结果与快照是否存在分别保留
             Long resolvedId = item.getFlowId() == null && resolvedFlowIdsByKey.containsKey(item.getFlowKey())
-                    ? resolvedFlowIdsByKey.get(item.getFlowKey()) : resolveFlowIdFromItem(item);
+                    ? resolvedFlowIdsByKey.get(item.getFlowKey()) : resolveFlowIdFromItem(item, batch);
             if (item.getFlowId() == null && emptyToNull(item.getFlowKey()) != null) {
                 resolvedFlowIdsByKey.put(item.getFlowKey(), resolvedId);
             }
@@ -1451,7 +1835,13 @@ public class SecurityPoolAdjustService {
         Map<Long, FlowSnapshot> flowSnapshotMap = new HashMap<>();
         for (Long flowId : uniqueFlowIds) {
             // 为指定流程 ID 构建运行时快照（定义 + 活跃版本 + 节点索引 + 连线列表）
-            FlowSnapshot snapshot = buildFlowSnapshot(flowId);
+            FlowSnapshot snapshot;
+            if (batch == null) {
+                snapshot = buildFlowSnapshot(flowId);
+            } else {
+                // 同一流程只读取一次快照
+                snapshot = loadBatchFlowSnapshot(batch, flowId);
+            }
             if (snapshot != null) {
                 flowSnapshotMap.put(flowId, snapshot);
             }
@@ -1462,9 +1852,6 @@ public class SecurityPoolAdjustService {
                 poolMap,
                 currentPoolIds,
                 poolRelationMap,
-                securityPoolAdjustMapper.querySecurityHasPendingProcess(req.getSecurityCode()),
-                securityPoolAdjustMapper.querySecurityInObservePool(req.getSecurityCode()),
-                queryIssuerInPoolType(securityInfo, "observe"),
                 flowSnapshotMap,
                 batchNoContext,
                 selectedRatingCompany
@@ -1481,13 +1868,21 @@ public class SecurityPoolAdjustService {
      * @param item 调库项
      * @return 流程定义 ID，解析失败返回 null
      */
-    private Long resolveFlowIdFromItem(SecurityPoolAdjustSubmitReq.AdjustItem item) {
+    private Long resolveFlowIdFromItem(SecurityPoolAdjustSubmitReq.AdjustItem item, BatchSubmitData batch) {
         if (item.getFlowId() != null) {
             return item.getFlowId();
         }
         if (item.getFlowKey() != null && !item.getFlowKey().isEmpty()) {
-            FlowDefinitionBo def = flowMapper.queryActiveFlowByKey(item.getFlowKey());
-            return def != null ? def.getId() : null;
+            String key = item.getFlowKey();
+            if (batch != null && batch.flowIds.containsKey(key)) {
+                return batch.flowIds.get(key);
+            }
+            FlowDefinitionBo def = flowMapper.queryActiveFlowByKey(key);
+            Long flowId = def != null ? def.getId() : null;
+            if (batch != null) {
+                batch.flowIds.put(key, flowId);
+            }
+            return flowId;
         }
         return null;
     }
@@ -1609,14 +2004,20 @@ public class SecurityPoolAdjustService {
      */
     private String buildAdjustBatchNo(
             SecurityPoolAdjustSubmitReq.AdjustItem manualItem, boolean noFlow, SubmitSharedData shared) {
-        int serial;
+        int first;
+        int sequence;
         if (noFlow) {
-            serial = 3000 + ++shared.batchNoContext.noFlowBatchSeq;
+            first = 3000;
+            sequence = ++shared.batchNoContext.noFlowBatchSeq;
         } else if (AdjustMode.IN.getCode().equals(manualItem.getAdjustMode())) {
-            serial = 1000 + ++shared.batchNoContext.inboundBatchSeq;
+            first = 1000;
+            sequence = ++shared.batchNoContext.inboundBatchSeq;
         } else {
-            serial = 2000 + ++shared.batchNoContext.outboundBatchSeq;
+            first = 2000;
+            sequence = ++shared.batchNoContext.outboundBatchSeq;
         }
+        // 单个方向超过一千组时跳过其他方向的序号范围
+        int serial = first + sequence + (sequence - 1) / 1000 * 2000;
         return "BOND" + shared.batchNoContext.batchTimeText + String.format("%04d", serial);
     }
 
@@ -1661,12 +2062,25 @@ public class SecurityPoolAdjustService {
     }
 
     /**
-     * 为指定流程 ID 构建运行时快照（定义 + 活跃版本 + 节点索引 + 连线列表）。
+     * 按定义 ID 复用本次提交的流程快照
      *
-     * 节点按 DB ID 建立索引，供遍历连线时快速查找目标节点。
+     * @param batch 本次提交的数据
+     * @param flowId 流程定义 ID
+     * @return 活跃版本快照，流程或活跃版本不存在时返回 null
+     */
+    private FlowSnapshot loadBatchFlowSnapshot(BatchSubmitData batch, Long flowId) {
+        if (!batch.flows.containsKey(flowId)) {
+            // 无有效版本时也保留查询结果
+            batch.flows.put(flowId, buildFlowSnapshot(flowId));
+        }
+        return batch.flows.get(flowId);
+    }
+
+    /**
+     * 为指定流程构建运行时快照，包含活跃版本、节点索引及连线
      *
      * @param flowId 流程定义 ID
-     * @return FlowSnapshot，若流程不存在或无活跃版本则返回 null
+     * @return 活跃版本快照，流程或活跃版本不存在时返回 null
      */
     private FlowSnapshot buildFlowSnapshot(Long flowId) {
         return checkRules().buildFlowSnapshot(flowId);
@@ -1887,6 +2301,12 @@ public class SecurityPoolAdjustService {
      * @param shared 本次提交的共享数据，快照按其中的调库记录逐条写各自的证券代码
      */
     private void postSubmitProcess(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared) {
+        postSubmitProcess(req, shared, null);
+    }
+
+    /** 合并本次证券快照数据，批量路径先收集再写入 */
+    private void postSubmitProcess(SecurityPoolAdjustSubmitReq req, SubmitSharedData shared,
+                                   List<AdjustSecuritySnapshotBo> snapshots) {
         if (req.getSecurityInfo() == null) {
             return;
         }
@@ -1903,11 +2323,11 @@ public class SecurityPoolAdjustService {
         mergedSecurityInfo.setInnerGuarantorRating(shared.securityInfo.getInnerGuarantorRating());
         req.setSecurityInfo(mergedSecurityInfo);
         // 按调库日志落证券信息快照
-        if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo)) {
+        if (CreditBondSpecialInboundRule.isAbs(shared.securityInfo) && snapshots == null) {
             absIdentityService.saveSnapshots(mergedSecurityInfo, shared.submittedLogs, req.getAdjusterId(),
                     shared.selectedRatingCompany.rightsHolderName, shared.selectedRatingCompany.selfSelectedRightsHolderName);
         } else {
-            saveAdjustSecuritySnapshots(req, shared.submittedLogs, shared.selectedRatingCompany);
+            saveAdjustSecuritySnapshots(req, shared.submittedLogs, shared.selectedRatingCompany, snapshots);
         }
     }
 
@@ -1927,7 +2347,8 @@ public class SecurityPoolAdjustService {
      * @param selectedRatingCompany 本次提交选定的评级主体
      */
     private void saveAdjustSecuritySnapshots(SecurityPoolAdjustSubmitReq req, Map<Long, IpAdjustLogBo> logs,
-                                             SelectedRatingCompanyData selectedRatingCompany) {
+                                             SelectedRatingCompanyData selectedRatingCompany,
+                                             List<AdjustSecuritySnapshotBo> snapshots) {
         if (logs == null || logs.isEmpty() || req.getSecurityInfo() == null) {
             return;
         }
@@ -1945,7 +2366,11 @@ public class SecurityPoolAdjustService {
                 snapshot.setAbsOriginatorName(selectedRatingCompany.rightsHolderName);
                 snapshot.setCompanySelector(selectedRatingCompany.selfSelectedRightsHolderName);
             }
-            securityPoolAdjustMapper.addAdjustSecuritySnapshot(snapshot);
+            if (snapshots == null) {
+                securityPoolAdjustMapper.addAdjustSecuritySnapshot(snapshot);
+            } else {
+                snapshots.add(snapshot);
+            }
         }
     }
 
@@ -2343,8 +2768,17 @@ public class SecurityPoolAdjustService {
             SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
             String selfSelectedRightsHolderCode, boolean requireAbsSelection, RatingCompanySelectionReq selected) {
         // 执行共用评级主体选择后转换为现有调库结果
+        return applySelectedRatingCompanyInternal(securityInfo, guarantorCode, rightsHolderCode,
+                selfSelectedRightsHolderCode, requireAbsSelection, selected, null);
+    }
+
+    /** 批量提交使用提交时已读取的候选，Excel 使用本次按数据库复核的主体 */
+    private SelectedRatingCompanyData applySelectedRatingCompanyInternal(
+            SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode, String selfSelectedRightsHolderCode,
+            boolean requireAbsSelection, RatingCompanySelectionReq selected, BatchSecurityCheckData batchData) {
         SecurityPoolCheckRules.RatingSelection selection = checkRules().applySelectedRatingCompanyInternal(
-                securityInfo, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode, requireAbsSelection, selected);
+                securityInfo, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode,
+                requireAbsSelection, selected, batchData);
         SelectedRatingCompanyData result = new SelectedRatingCompanyData();
         result.rightsHolderName = selection.rightsHolderName;
         result.selfSelectedRightsHolderName = selection.selfSelectedRightsHolderName;
@@ -2853,25 +3287,36 @@ public class SecurityPoolAdjustService {
      * @param logList 同批次调库记录
      */
     public void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList) {
-        // 最终审批前先检查 ABS 在库和在途身份
-        absIdentityService.validateApprovalIdentities(logList);
+        // 单券与审批入口仍按其自己的日志读取动态状态
+        recheckBeforeFinalApproval(logList, null, true);
+    }
+
+    /** 从现有规则执行最终复核，独立调入复用本批数据库状态 */
+    private void recheckBeforeFinalApproval(List<IpAdjustLogBo> logList, BatchSubmitData batch, boolean lockPools) {
+        boolean independent = batch != null && batch.independent;
+        if (!independent) {
+            // 最终审批前先检查 ABS 在库和在途身份
+            absIdentityService.validateApprovalIdentities(logList);
+        }
 
         if (logList == null || logList.isEmpty()) {
             return;
         }
         // 配套日志保持联动、互斥、关联类型，通过同组主项批次继承 Excel 来源
         Set<String> excelBatches = collectExcelAdjustBatches(logList);
-        Map<Long, InvestmentPoolBo> poolMap = investmentPoolMapper.queryPoolList().stream()
-                .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p));
-        List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
-                .filter(Objects::nonNull).distinct().sorted().collect(Collectors.toList());
-        if (!poolIds.isEmpty()) {
-            // 锁定目标池，串行完成容量和池状态复核
-            investmentPoolMapper.lockPoolByIdsList(poolIds);
+        Map<Long, InvestmentPoolBo> poolMap = batch == null ? investmentPoolMapper.queryPoolList().stream()
+                .collect(Collectors.toMap(InvestmentPoolBo::getId, p -> p)) : batch.data.pools;
+        if (lockPools) {
+            List<Long> poolIds = logList.stream().map(IpAdjustLogBo::getTargetPoolId)
+                    .filter(Objects::nonNull).distinct().sorted().collect(Collectors.toList());
+            if (!poolIds.isEmpty()) {
+                // 锁定目标池，串行完成容量和池状态复核
+                investmentPoolMapper.lockPoolByIdsList(poolIds);
+            }
         }
         Map<Long, Integer> inboundIncrements = new HashMap<>();
-        Map<Long, Map<String, List<Long>>> relationMap = buildPoolRelationMap(
-                securityPoolAdjustMapper.queryAllPoolRelationList());
+        Map<Long, Map<String, List<Long>>> relationMap = batch == null
+                ? buildPoolRelationMap(securityPoolAdjustMapper.queryAllPoolRelationList()) : batch.data.relations;
         Set<Long> projectedInPoolIds = logList.stream()
                 .filter(log -> AdjustMode.IN.getCode().equals(log.getAdjustMode()))
                 .map(IpAdjustLogBo::getTargetPoolId)
@@ -2890,7 +3335,11 @@ public class SecurityPoolAdjustService {
                     || Integer.valueOf(1).equals(pool.getIsDeleted())))) {
                 throwApprovalRecheckFailure(log, "目标投资池不存在或已停用");
             }
-            SecurityInfoBo security = securityPoolAdjustMapper.querySecurityBoByCode(log.getSecurityCode());
+            SecurityInfoBo security = batch == null ? null : batch.data.securities.get(log.getSecurityCode());
+            if (security == null || CreditBondSpecialInboundRule.isAbs(security)) {
+                // ABS 复核继续使用当前主档及申请快照
+                security = securityPoolAdjustMapper.querySecurityBoByCode(log.getSecurityCode());
+            }
             if (security == null) {
                 throwApprovalRecheckFailure(log, "证券不存在");
             }
@@ -2905,15 +3354,28 @@ public class SecurityPoolAdjustService {
                 // Excel 已保留原规则提示，直通与人工审批最终落池均不再因业务失败阻断
                 continue;
             }
-            Set<Long> currentPoolIds = new HashSet<>(
-                    securityPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getSecurityCode()));
+            Set<Long> currentPoolIds = independent
+                    ? batch.data.activePools.getOrDefault(log.getSecurityCode(), Collections.emptySet())
+                    : new HashSet<>(securityPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getSecurityCode()));
             AdjustCheckContext ctx = new AdjustCheckContext();
+            if (independent) {
+                ctx.setBatchData(batch.data);
+            }
             ctx.setSecurityInfo(security);
             ctx.setTargetPool(pool);
             ctx.setPoolMap(poolMap);
             ctx.setCurrentPoolIds(currentPoolIds);
             ctx.setTargetPoolRelations(relationMap.getOrDefault(pool.getId(), Collections.emptyMap()));
-            ctx.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(security.getSecurityType()));
+            String securityType = security.getSecurityType();
+            if (independent && securityType != null) {
+                if (!batch.categories.containsKey(securityType)) {
+                    // 批量索引未找到旧品种码时按数据库的比较规则查一次
+                    batch.categories.put(securityType, securityPoolAdjustMapper.queryCategoryTypeBySecurityType(securityType));
+                }
+                ctx.setCategoryType(batch.categories.get(securityType));
+            } else if (!independent) {
+                ctx.setCategoryType(securityPoolAdjustMapper.queryCategoryTypeBySecurityType(securityType));
+            }
             ctx.setRequestInPoolIds(projectedInPoolIds);
             ctx.setRequestOutPoolIds(projectedOutPoolIds);
             String failure;
@@ -2921,7 +3383,8 @@ public class SecurityPoolAdjustService {
                 failure = firstFailure(inCheckPoolLocked(ctx), inCheckSecurityAlreadyInPool(ctx),
                         inCheckVariety(ctx), inCheckSourcePool(ctx), inCheckRestrictPool(ctx),
                         inCheckForbiddenPool(ctx));
-                int currentCount = securityPoolAdjustMapper.queryPoolCurrentCount(pool.getId());
+                int currentCount = independent ? batch.data.counts.getOrDefault(pool.getId(), 0)
+                        : securityPoolAdjustMapper.queryPoolCurrentCount(pool.getId());
                 int increment = inboundIncrements.getOrDefault(pool.getId(), 0);
                 if (failure == null && pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0
                         && currentCount + increment >= pool.getMaxCapacity()) {
@@ -2936,7 +3399,10 @@ public class SecurityPoolAdjustService {
             }
             if (failure == null && PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(pool.getId())) {
                 failure = CreditBondSpecialInboundRule.isAbs(security)
-                        ? pledgeBlacklistRuleService.validateCompanies(absIdentityService.queryRiskCompanyCodes(security),
+                        ? pledgeBlacklistRuleService.validateCompanies(batch == null
+                                ? absIdentityService.queryRiskCompanyCodes(security)
+                                : absIdentityService.queryRiskCompanyCodesWithCandidates(security,
+                                        batch.data.ratingCompanies.getOrDefault(security.getWindCode(), Collections.emptyList())),
                                 log.getAdjustMode(), projectedInPoolIds, projectedOutPoolIds)
                         : pledgeBlacklistRuleService.validate(security.getIssuerCode(), log.getAdjustMode(),
                                 projectedInPoolIds, projectedOutPoolIds);
@@ -2952,16 +3418,32 @@ public class SecurityPoolAdjustService {
      *
      * @param logList 本次需要立即生效的完整调库日志集合
      */
-    private void recheckAndApplyDirectLogs(List<IpAdjustLogBo> logList) {
+    private void recheckAndApplyDirectLogs(List<IpAdjustLogBo> logList, SecurityPoolAdjustSubmitReq req,
+                                          BatchSubmitData batch) {
         if (logList == null || logList.isEmpty()) {
             return;
         }
-        // 按最终审批口径锁池并复核动态业务状态
-        recheckBeforeFinalApproval(logList);
-        // 将复核通过的直通调库日志统一应用到当前池状态
-        applyPoolStatusChanges(logList);
-        // 直通完成后复用正常审批通过的内部报告生成逻辑
-        reportService.addInternalReportsOnFinish(logList);
+        // 批量与 Excel 使用本次读取的状态，单券入口沿用原终审调用
+        if (batch == null && !isExcelAdjustType(req.getAdjustType())) {
+            recheckBeforeFinalApproval(logList);
+        } else {
+            recheckBeforeFinalApproval(logList, batch, false);
+        }
+        boolean independent = batch != null && batch.independent;
+        // 仍按原顺序落池，已成功调入才计入后续组的容量
+        if (independent) {
+            applyPoolStatusChanges(logList, true);
+            for (IpAdjustLogBo log : logList) {
+                batch.data.counts.merge(log.getTargetPoolId(), 1, Integer::sum);
+            }
+        } else {
+            applyPoolStatusChanges(logList);
+        }
+        // 只有本次手工上传信评附件才会生成内部报告
+        if (batch == null || req.getItems().stream().anyMatch(item -> item.getCreditReportFileIndexes() != null
+                && !item.getCreditReportFileIndexes().isEmpty())) {
+            reportService.addInternalReportsOnFinish(logList);
+        }
     }
 
     /**
@@ -2970,8 +3452,16 @@ public class SecurityPoolAdjustService {
      * @param logList 已通过最终复核的调库日志集合
      */
     public void applyPoolStatusChanges(List<IpAdjustLogBo> logList) {
+        // 通用落池入口继续核对 ABS 身份
+        applyPoolStatusChanges(logList, false);
+    }
+
+    /** 应用状态变更，已确认整批均为普通证券时省去 ABS 查询 */
+    private void applyPoolStatusChanges(List<IpAdjustLogBo> logList, boolean ordinaryOnly) {
         // 全部主体一致后，在同一事务中保存通过审核的五字段
-        absIdentityService.approveIdentities(logList);
+        if (!ordinaryOnly) {
+            absIdentityService.approveIdentities(logList);
+        }
 
         // 与最终复核使用同一来源口径，普通手工和批量调整不受影响
         Set<String> excelBatches = collectExcelAdjustBatches(logList);
@@ -3001,7 +3491,9 @@ public class SecurityPoolAdjustService {
 
         }
         // 批量保存 ABS 人工结论，不给普通债逐行增加主档查询
-        absCompanySyncService.recordManualDecisions(logList);
+        if (!ordinaryOnly) {
+            absCompanySyncService.recordManualDecisions(logList);
+        }
     }
 
     /**
@@ -3625,6 +4117,12 @@ public class SecurityPoolAdjustService {
      */
     private boolean createInitialSteps(Long adjustLogId, String adjustBatchNo, FlowSnapshot snapshot,
                                        String adjusterId, String adjusterName) {
+        return createInitialSteps(adjustLogId, adjustBatchNo, snapshot, adjusterId, adjusterName, null);
+    }
+
+    /** 生成原流程初始步骤，直通批量提交先收集步骤 */
+    private boolean createInitialSteps(Long adjustLogId, String adjustBatchNo, FlowSnapshot snapshot,
+                                       String adjusterId, String adjusterName, List<IpAdjustStepBo> steps) {
         if (snapshot == null) {
             return false;
         }
@@ -3641,7 +4139,7 @@ public class SecurityPoolAdjustService {
         int sortOrder = startNode.getSortOrder() != null ? startNode.getSortOrder() : 1;
         // 插入单条步骤记录到 ip_adjust_step
         insertStepRecord(adjustLogId, adjustBatchNo, startNode, null, sortOrder, ProcessAction.AUTO_PROCESS.getCode(),
-                         null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
+                         null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now, steps);
 
         FlowNodeBo prevNode = startNode;
         // 查找初始步骤的下一个节点
@@ -3654,7 +4152,7 @@ public class SecurityPoolAdjustService {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
                 // 插入单条步骤记录到 ip_adjust_step
                 insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, ProcessAction.SUBMIT.getCode(),
-                                 adjusterId, adjusterName, ProcessAction.SUBMIT.getCode(), null, now);
+                                 adjusterId, adjusterName, ProcessAction.SUBMIT.getCode(), null, now, steps);
                 // 查找初始步骤的下一个节点
                 FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
                 prevNode = currentNode;
@@ -3668,7 +4166,7 @@ public class SecurityPoolAdjustService {
                     && ApprovalStrategy.AUTO.getCode().equals(config.getApprovalStrategy())) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
                 insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, ProcessAction.AUTO_PROCESS.getCode(),
-                                 null, null, ProcessAction.AUTO_PROCESS.getCode(), "系统自动审批通过", now);
+                                 null, null, ProcessAction.AUTO_PROCESS.getCode(), "系统自动审批通过", now, steps);
                 FlowNodeBo nextNode = findNextNodeForInitialSteps(snapshot, currentNode, prevNode);
                 prevNode = currentNode;
                 currentNode = nextNode;
@@ -3676,8 +4174,10 @@ public class SecurityPoolAdjustService {
             }
 
             if (NodeType.APPROVAL.getCode().equals(currentNode.getNodeType())) {
-                // 为审批节点创建待处理步骤记录（按处理人明细展开为具体人员）
-                createPendingSteps(adjustLogId, adjustBatchNo, currentNode, snapshot, now);
+                if (steps == null) {
+                    // 为审批节点按处理人展开待处理步骤
+                    createPendingSteps(adjustLogId, adjustBatchNo, currentNode, snapshot, now);
+                }
                 return false;
             }
 
@@ -3685,7 +4185,7 @@ public class SecurityPoolAdjustService {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
                 // 插入单条步骤记录到 ip_adjust_step
                 insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, ProcessAction.AUTO_PROCESS.getCode(),
-                                 null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
+                                 null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now, steps);
                 return true;
             }
 
@@ -3693,7 +4193,7 @@ public class SecurityPoolAdjustService {
             if (NodeType.AUTO.getCode().equals(currentNode.getNodeType())) {
                 sortOrder = currentNode.getSortOrder() != null ? currentNode.getSortOrder() : 1;
                 insertStepRecord(adjustLogId, adjustBatchNo, currentNode, config, sortOrder, ProcessAction.AUTO_PROCESS.getCode(),
-                                 null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now);
+                                 null, null, ProcessAction.AUTO_PROCESS.getCode(), null, now, steps);
             }
 
             // 查找初始步骤的下一个节点
@@ -3725,7 +4225,7 @@ public class SecurityPoolAdjustService {
         if (handlers.isEmpty()) {
             // 无配置处理人时仍创建一条空处理人的待处理记录
             insertStepRecord(adjustLogId, adjustBatchNo, node, config, sortOrder, StepStatus.PENDING.getCode(),
-                             null, null, null, null, now);
+                             null, null, null, null, now, null);
             return;
         }
         // 只排除本批次真正审核过的人，待办和抢占跳过的人仍可进入下一节点
@@ -3733,7 +4233,7 @@ public class SecurityPoolAdjustService {
         for (HandlerTarget handler : handlers) {
             // 插入单条步骤记录到 ip_adjust_step
             insertStepRecord(adjustLogId, adjustBatchNo, node, config, sortOrder, StepStatus.PENDING.getCode(),
-                             handler.handlerId, handler.handlerName, null, null, now);
+                             handler.handlerId, handler.handlerName, null, null, now, null);
         }
     }
 
@@ -3759,7 +4259,8 @@ public class SecurityPoolAdjustService {
     private void insertStepRecord(Long adjustLogId, String adjustBatchNo, FlowNodeBo node,
                                   NodeApprovalConfigBo config, int sortOrder,
                                   String stepStatus, String handlerId, String handlerName,
-                                  String processAction, String processComment, Date startTime) {
+                                  String processAction, String processComment, Date startTime,
+                                  List<IpAdjustStepBo> steps) {
         IpAdjustStepBo step = new IpAdjustStepBo();
         step.setAdjustLogId(adjustLogId);
         step.setAdjustBatchNo(adjustBatchNo);
@@ -3776,7 +4277,11 @@ public class SecurityPoolAdjustService {
         step.setProcessComment(processComment);
         step.setStartTime(startTime);
         step.setProcessTime(StepStatus.PENDING.getCode().equals(stepStatus) ? null : startTime);
-        securityPoolAdjustMapper.addAdjustStep(step);
+        if (steps == null) {
+            securityPoolAdjustMapper.addAdjustStep(step);
+        } else {
+            steps.add(step);
+        }
     }
 
     /**
@@ -4090,15 +4595,6 @@ public class SecurityPoolAdjustService {
         /** 全量投资池关系配置（poolId → relationType → 关联池 ID 列表） */
         final Map<Long, Map<String, List<Long>>> poolRelationMap;
 
-        /** 证券是否存在进行中的调库流程（以是否存在待处理步骤为准） */
-        final boolean hasPendingProcess;
-
-        /** 当前证券自身是否在观察池（pool_type='observe'，audit_status='20'） */
-        final boolean securityInObservePool;
-
-        /** 发行主体是否在观察池（主体级记录：ip_pool_status.security_code = issuer_code） */
-        final boolean issuerInObservePool;
-
         /** 流程快照索引（flowId → FlowSnapshot），供第三/四阶段快速判断直通流程 */
         final Map<Long, FlowSnapshot> flowSnapshotMap;
 
@@ -4115,9 +4611,6 @@ public class SecurityPoolAdjustService {
                          Map<Long, InvestmentPoolBo> poolMap,
                          Set<Long> currentPoolIds,
                          Map<Long, Map<String, List<Long>>> poolRelationMap,
-                         boolean hasPendingProcess,
-                         boolean securityInObservePool,
-                         boolean issuerInObservePool,
                          Map<Long, FlowSnapshot> flowSnapshotMap,
                          BatchNoContext batchNoContext,
                          SelectedRatingCompanyData selectedRatingCompany) {
@@ -4125,13 +4618,54 @@ public class SecurityPoolAdjustService {
             this.poolMap = poolMap;
             this.currentPoolIds = currentPoolIds;
             this.poolRelationMap = poolRelationMap;
-            this.hasPendingProcess = hasPendingProcess;
-            this.securityInObservePool = securityInObservePool;
-            this.issuerInObservePool = issuerInObservePool;
             this.flowSnapshotMap = flowSnapshotMap;
             this.batchNoContext = batchNoContext;
             this.selectedRatingCompany = selectedRatingCompany;
         }
+    }
+
+    /** Excel 批量提交的来源行 */
+    static final class ExcelSubmitGroup {
+        final SecurityPoolAdjustSubmitReq request;
+        private final SubmitSharedData shared;
+        private final BatchSubmitData batch;
+        List<ExcelSubmitRow> rows;
+        boolean ordinary;
+
+        ExcelSubmitGroup(SecurityPoolAdjustSubmitReq request, SubmitSharedData shared, BatchSubmitData batch) {
+            this.request = request;
+            this.shared = shared;
+            this.batch = batch;
+        }
+    }
+
+    /** 单条直通日志及对应的初始步骤 */
+    static final class ExcelSubmitRow {
+        final IpAdjustLogBo log;
+        final List<IpAdjustStepBo> steps;
+
+        ExcelSubmitRow(IpAdjustLogBo log, List<IpAdjustStepBo> steps) {
+            this.log = log;
+            this.steps = steps;
+        }
+    }
+
+    /** 批量提交共用的数据，仅在本次事务内使用 */
+    private static class BatchSubmitData {
+        /** 已读取的证券、池配置及独立调入状态 */
+        final BatchSecurityCheckData data = new BatchSecurityCheckData();
+        /** 已解析的流程 Key */
+        final Map<String, Long> flowIds = new HashMap<>();
+        /** 按流程定义 ID 缓存的快照 */
+        final Map<Long, FlowSnapshot> flows = new HashMap<>();
+        /** 品种到大类的映射，匹配旧数据中的大小写差异 */
+        final Map<String, String> categories = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        /** 本批证券的在途流程占用池 */
+        final Map<String, List<Long>> pendingPools = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        /** 各证券只调入一次并共用本批读取的状态 */
+        boolean independent;
+        /** Excel 只为仍需复核实际来源的产品快速资格读在池状态 */
+        boolean excelBulk;
     }
 
     /** 证券池调库页面所选权益人的快照留痕信息。 */

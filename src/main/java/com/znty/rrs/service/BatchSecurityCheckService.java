@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -59,7 +60,7 @@ public class BatchSecurityCheckService {
     @Resource
     private AbsIdentityService absIdentityService;
 
-    /** 投资池查询与锁定 */
+    /** 投资池查询 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
 
@@ -258,12 +259,29 @@ public class BatchSecurityCheckService {
      */
     BatchSecurityCheckData loadExcelRatingCandidates(List<String> codes, List<String> selfSelected) {
         BatchSecurityCheckData data = new BatchSecurityCheckData();
-        // 按输入查主档，再用主档中的实际代码查询评级候选
-        loadExcelSecurityMasters(codes, data);
-        List<String> masterCodes = codes.stream().map(data::resolveExcelSecurityCode)
-                .filter(data.securities::containsKey).distinct().collect(Collectors.toList());
-        loadRatingCandidates(data, masterCodes, selfSelected);
+        completeExcelRatingCandidates(data, codes, selfSelected);
         return data;
+    }
+
+    /**
+     * 补齐本次 Excel 首屏未查过的证券主档与评级候选
+     *
+     * @param data 本次已读取的证券主档、关联主体及自选权益人
+     * @param codes 当前页证券代码
+     * @param selfSelected 当前页自选权益人代码
+     */
+    void completeExcelRatingCandidates(BatchSecurityCheckData data, List<String> codes, List<String> selfSelected) {
+        List<String> missingMasters = codes.stream()
+                .filter(code -> !data.lookedUpExcelSecurities.contains(code)).collect(Collectors.toList());
+        // 先按输入补齐主档，再用主档中的实际代码查询评级候选
+        loadExcelSecurityMasters(missingMasters, data);
+        List<String> masterCodes = codes.stream().map(data::resolveExcelSecurityCode).distinct()
+                .filter(data.securities::containsKey).filter(code -> !data.lookedUpRatingCompanies.contains(code))
+                .collect(Collectors.toList());
+        List<String> missingSelfSelected = selfSelected.stream()
+                .filter(code -> !data.lookedUpSelfSelectedCompanies.contains(code)).collect(Collectors.toList());
+        // 已查过但未命中的证券或候选同样复用空结果
+        loadRatingCandidates(data, masterCodes, missingSelfSelected);
     }
 
     /**
@@ -297,7 +315,7 @@ public class BatchSecurityCheckService {
      * 加载批次使用的证券、投资池及校验事实
      *
      * @param requests 本批调库请求
-     * @param scheduled 是否在读取动态状态前先锁涉及的池
+     * @param scheduled 是否读取任务专用的准入和容量数据
      * @param minDaysToMaturity 任务的最少剩余自然日
      * @param clearTarget 是否加载清空出库已占用的自选权益人
      * @param excel 是否按 Excel 输入匹配主档代码
@@ -324,9 +342,6 @@ public class BatchSecurityCheckService {
             if (scheduled) {
                 affectedPools.addAll(AutoAdjustRelationHelper.resolveInboundAutoOutPoolIds(target, relations));
             }
-        }
-        if (scheduled) {
-            investmentPoolMapper.lockPoolByIdsList(new ArrayList<>(affectedPools));
         }
         investmentPoolMapper.queryPoolList().forEach(pool -> data.pools.put(pool.getId(), pool));
         batchSecurityCheckMapper.queryPoolCounts(new ArrayList<>(affectedPools))
@@ -364,8 +379,20 @@ public class BatchSecurityCheckService {
             // Excel 主券已读过主档，此处只补充新增的关联券
             masterCodesToLoad.removeAll(mainCodes);
         }
-        forEachCheckChunk(new ArrayList<>(masterCodesToLoad), chunk ->
-                batchSecurityCheckMapper.querySecurities(chunk).forEach(sec -> data.securities.put(sec.getWindCode(), sec)));
+        if (scheduled) {
+            // 任务主档和落池前的候选资格一次读取，保留未通过资格的主档供规则返回原因
+            forEachCheckChunk(new ArrayList<>(masterCodesToLoad), chunk ->
+                    batchSecurityCheckMapper.queryScheduledSecurities(chunk, minDaysToMaturity).forEach(sec -> {
+                        data.securities.put(sec.getWindCode(), sec);
+                        if (sec.isEligible()) {
+                            data.scheduledEligibleCodes.add(sec.getWindCode());
+                        }
+                    }));
+        } else {
+            forEachCheckChunk(new ArrayList<>(masterCodesToLoad), chunk ->
+                    batchSecurityCheckMapper.querySecurities(chunk)
+                            .forEach(sec -> data.securities.put(sec.getWindCode(), sec)));
+        }
         // 证券各自的校验事实由同一批次共享
         forEachCheckChunk(actualCodes, chunk -> {
             securityMarketMapper.queryMarketMappingList(chunk).forEach(row -> data.markets
@@ -374,10 +401,6 @@ public class BatchSecurityCheckService {
                     .computeIfAbsent(row.getSecurityCode(), key -> new HashSet<>()).add(row.getPoolId()));
             batchSecurityCheckMapper.queryPendingLabels(chunk).forEach(row ->
                     data.pendingLabels.put(row.getSecurityCode(), row.getNodeLabel()));
-            if (scheduled) {
-                data.scheduledEligibleCodes.addAll(
-                        batchSecurityCheckMapper.queryScheduledEligibleCodes(chunk, minDaysToMaturity));
-            }
         });
         Set<String> absCodes = requests.stream().map(AdjustCheckReq::getSecurityCode)
                 .filter(code -> CreditBondSpecialInboundRule.isAbs(data.securities.get(code)))
@@ -518,16 +541,46 @@ public class BatchSecurityCheckService {
                 data.securities.put(masterCode, security);
                 data.excelSecurityCodes.put(masterCode, masterCode);
             }
+            data.lookedUpExcelSecurities.addAll(chunk);
         });
     }
 
+    /**
+     * 批量读取未指定主体的 ABS 默认权益人
+     *
+     * @param codes 本次提交未显式选择主体的证券代码
+     * @return 各证券的首个关联主体编码
+     */
+    Map<String, String> loadDefaultRightsHolders(Set<String> codes) {
+        Map<String, String> defaults = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        // 按原候选顺序保留首项
+        forEachCheckChunk(new ArrayList<>(codes), chunk -> batchSecurityCheckMapper.queryRatingCompanies(chunk)
+                .forEach(row -> {
+                    if (!defaults.containsKey(row.getSecurityCode())) {
+                        defaults.put(row.getSecurityCode(), row.getCompanyCode());
+                    }
+                }));
+        return defaults;
+    }
+
+    /** 判断 ABS 提交项是否需要读取默认权益人 */
+    static boolean needsDefaultRightsHolder(String securityType, String rightsHolder, String selfSelected) {
+        return "abs".equals(securityType) && !StringUtils.hasText(rightsHolder) && !StringUtils.hasText(selfSelected);
+    }
+
     /** 按代码分批加载关联评级主体和精确匹配的自选权益人 */
-    private void loadRatingCandidates(BatchSecurityCheckData data, List<String> codes, List<String> selfSelected) {
-        forEachCheckChunk(codes, chunk -> batchSecurityCheckMapper.queryRatingCompanies(chunk)
-                .forEach(row -> data.ratingCompanies.computeIfAbsent(row.getSecurityCode(), key -> new ArrayList<>())
-                        .add(row)));
-        forEachCheckChunk(selfSelected, chunk -> batchSecurityCheckMapper.querySelfSelectedCompanies(chunk)
-                .forEach(row -> data.selfSelectedCompanies.put(row.getCompanyCode(), row)));
+    void loadRatingCandidates(BatchSecurityCheckData data, List<String> codes, List<String> selfSelected) {
+        forEachCheckChunk(codes, chunk -> {
+            batchSecurityCheckMapper.queryRatingCompanies(chunk)
+                    .forEach(row -> data.ratingCompanies.computeIfAbsent(row.getSecurityCode(), key -> new ArrayList<>())
+                            .add(row));
+            data.lookedUpRatingCompanies.addAll(chunk);
+        });
+        forEachCheckChunk(selfSelected, chunk -> {
+            batchSecurityCheckMapper.querySelfSelectedCompanies(chunk)
+                    .forEach(row -> data.selfSelectedCompanies.put(row.getCompanyCode(), row));
+            data.lookedUpSelfSelectedCompanies.addAll(chunk);
+        });
     }
 
     /** 使用现有自动调库的分批大小执行批次查询 */

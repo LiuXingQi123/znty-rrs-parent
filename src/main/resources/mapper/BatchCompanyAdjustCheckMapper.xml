@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.BatchCompanyAdjustCheckMapper">
+    <select id="queryCompanyDetails" resultType="com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto">
+        SELECT lookup.company_code AS lookup_value
+             , c.COMP_ID AS company_code
+             , c.COMP_NAME AS company_full_name
+             , c.COMP_SNAME AS company_short_name
+        FROM (
+            <foreach collection="codes" item="code" separator=" UNION ALL ">
+                SELECT CONCAT(#{code}, '') AS company_code
+            </foreach>
+        ) lookup
+        INNER JOIN ais_inv_ods.wind_compintroduction c ON c.COMP_ID = lookup.company_code
+    </select>
+
+    <select id="queryCurrentPools" resultType="com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData$Row">
+        SELECT lookup.security_code
+             , ips.target_pool_id
+             , ips.security_type
+        <if test="!entryPoolIds.isEmpty()">
+             , al.id AS entry_log_id
+             , COALESCE(ips.entry_time, al.audit_time, ips.crte_time) AS entry_time
+        </if>
+        FROM (
+            <foreach collection="codes" item="code" separator=" UNION ALL ">
+                SELECT CONCAT(#{code}, '') AS security_code
+            </foreach>
+        ) lookup
+        INNER JOIN ip_pool_status ips ON ips.security_code = lookup.security_code
+        <if test="!entryPoolIds.isEmpty()">
+            LEFT JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
+                                       AND ips.target_pool_id IN
+            <foreach collection="entryPoolIds" item="poolId" open="(" separator="," close=")">
+                #{poolId}
+            </foreach>
+        </if>
+        WHERE ips.audit_status = '20'
+          AND ips.is_deleted = 0
+        <if test="!entryPoolIds.isEmpty()">
+            ORDER BY ips.id ASC
+        </if>
+    </select>
+
+    <select id="queryPendingLabels" resultType="com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData$Row">
+        SELECT ranked.security_code
+             , ranked.node_label
+        FROM (
+            SELECT lookup.security_code
+                 , s.node_label
+                 , ROW_NUMBER() OVER (PARTITION BY lookup.input_order
+                      ORDER BY s.sort_order ASC, s.id ASC, al.submit_time DESC, al.id DESC) AS seq
+            FROM (
+                <foreach collection="codes" item="code" index="idx" separator=" UNION ALL ">
+                    SELECT CAST(#{idx} AS DECIMAL(10, 0)) AS input_order, CONCAT(#{code}, '') AS security_code
+                </foreach>
+            ) lookup
+            INNER JOIN ip_adjust_log al ON al.security_code = lookup.security_code
+            INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
+            WHERE al.is_deleted = 0
+              AND al.audit_status IN ('00', '11')
+              AND s.step_status = 'pending'
+        ) ranked
+        WHERE ranked.seq = 1
+    </select>
+
+    <select id="queryPendingPools" resultType="com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData$Row">
+        SELECT DISTINCT lookup.input_order
+             , lookup.security_code
+             , occupied.target_pool_id
+        FROM (
+            <foreach collection="codes" item="code" index="idx" separator=" UNION ALL ">
+                SELECT CAST(#{idx} AS DECIMAL(10, 0)) AS input_order, CONCAT(#{code}, '') AS security_code
+            </foreach>
+        ) lookup
+        INNER JOIN ip_adjust_log manual_log ON manual_log.security_code = lookup.security_code
+        INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual_log.adjust_batch_no
+                                         AND occupied.audit_status IN ('00', '11')
+                                         AND occupied.is_deleted = 0
+        WHERE manual_log.adjust_type = '手工调整'
+          AND manual_log.audit_status IN ('00', '11')
+          AND manual_log.is_deleted = 0
+          AND EXISTS (
+              SELECT 1
+              FROM ip_adjust_step pending_step
+              WHERE pending_step.adjust_batch_no = manual_log.adjust_batch_no
+                AND pending_step.step_status = 'pending'
+          )
+    </select>
+
+    <select id="queryPoolCounts" resultType="com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData$Row">
+        SELECT target_pool_id
+             , COUNT(DISTINCT security_code) AS current_count
+        FROM ip_pool_status
+        WHERE audit_status = '20'
+          AND is_deleted = 0
+          AND target_pool_id IN
+        <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+            #{poolId}
+        </foreach>
+        GROUP BY target_pool_id
+    </select>
+
+    <select id="queryOpenPools" resultType="java.lang.Long">
+        SELECT DISTINCT pool_id
+        FROM ip_pool_open_day
+        WHERE pool_id IN
+        <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+            #{poolId}
+        </foreach>
+          AND begin_date &lt;= #{today}
+          AND end_date >= #{today}
+          AND is_deleted = 0
+    </select>
+
+    <select id="queryLowRatedCompanies" resultType="java.lang.String">
+        SELECT lookup.security_code
+        FROM (
+            <foreach collection="codes" item="code" separator=" UNION ALL ">
+                SELECT CONCAT(#{code}, '') AS security_code
+            </foreach>
+        ) lookup
+        WHERE EXISTS (
+            SELECT 1
+            FROM ais_inv_ods.wind_cbondissuerrating r
+            WHERE r.s_info_compcode = lookup.security_code
+              AND r.b_info_creditratingagency IN
+              <foreach collection="agencyCodes" item="agencyCode" open="(" separator="," close=")">
+                  #{agencyCode}
+              </foreach>
+              AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
+              AND REGEXP_SUBSTR(TRIM(r.b_info_creditrating), '^(A+|B+|C+|D)[+-]?', 1, 1, 'c') IN (
+                  'AA-', 'A+', 'A', 'A-'
+                , 'BBB+', 'BBB', 'BBB-'
+                , 'BB+', 'BB', 'BB-', 'B+', 'B', 'B-'
+                , 'CCC', 'CC', 'C', 'D'
+              )
+        )
+    </select>
+</mapper>

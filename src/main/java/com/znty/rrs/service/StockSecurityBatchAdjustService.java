@@ -41,10 +41,10 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -66,8 +66,6 @@ public class StockSecurityBatchAdjustService {
     @Resource
     private SecurityMarketService securityMarketService;
 
-    /** 短时间重复提交判定窗口（秒） */
-    private static final int DUPLICATE_SUBMIT_WINDOW_SECONDS = 30;
     /** 管理员用户 ID */
     private static final String ADMIN_USER_ID = "1";
 
@@ -202,7 +200,7 @@ public class StockSecurityBatchAdjustService {
     }
 
     /**
-     * 按提交明细实际选中的流程判断是否存在直通项；存在时落池前统一锁池复核整批状态。
+     * 按提交明细实际选中的流程判断是否存在直通项；存在时落池前统一复核整批状态。
      */
     private boolean needsWholeBatchDirectRecheck(StockSecurityBatchAdjustSubmitReq req) {
         if (req.getItems() == null) {
@@ -234,39 +232,6 @@ public class StockSecurityBatchAdjustService {
             logs.add(log);
         }
         return logs;
-    }
-
-    /** 按完整证券集合及手工调库项集合检查最近一次批量申请。 */
-    private void checkRecentBatchDuplicateSubmit(StockSecurityBatchAdjustSubmitReq req) {
-        List<IpAdjustLogBo> recent = securityPoolAdjustMapper.queryRecentBatchManualAdjustLogList(
-                req.getAdjusterId(), DUPLICATE_SUBMIT_WINDOW_SECONDS);
-        if (recent == null || recent.isEmpty()) {
-            return;
-        }
-        List<String> requestKeys = req.getItems().stream().filter(this::isManualBatchSubmitItem)
-                .map(this::buildBatchDuplicateItemKey).sorted().collect(Collectors.toList());
-        List<String> historyKeys = recent.stream().map(this::buildBatchDuplicateItemKey)
-                .sorted().collect(Collectors.toList());
-        boolean sameText = recent.stream().allMatch(log ->
-                Objects.equals(normalizeDuplicateText(req.getAdjustReason()),
-                        normalizeDuplicateText(log.getAdjustReason()))
-                        && Objects.equals(normalizeDuplicateText(buildBatchAdjustAdvice(req)),
-                        normalizeDuplicateText(log.getAdjustAdvice())));
-        if (!requestKeys.isEmpty() && requestKeys.equals(historyKeys) && sameText) {
-            throw new BizException("调库申请已提交，请勿重复操作");
-        }
-    }
-
-    /** 构造批量请求手工项防重复比较键。 */
-    private String buildBatchDuplicateItemKey(StockSecurityBatchAdjustSubmitReq.AdjustItem item) {
-        return item.getSecurityCode() + "|" + item.getTargetPoolId() + "|" + item.getAdjustMode()
-                + "|" + item.getFlowId() + "|" + normalizeDuplicateText(item.getFlowKey());
-    }
-
-    /** 构造历史批量手工日志防重复比较键。 */
-    private String buildBatchDuplicateItemKey(IpAdjustLogBo log) {
-        return log.getSecurityCode() + "|" + log.getTargetPoolId() + "|" + log.getAdjustMode()
-                + "|" + log.getFlowId() + "|" + normalizeDuplicateText(log.getFlowKey());
     }
 
     /** 在放开主体债矩阵时补充调整说明。 */
@@ -310,20 +275,29 @@ public class StockSecurityBatchAdjustService {
         validateAdjustSubmitReq(req);
         // 校验批量调库目标池权限
         validateAdjustPoolPermission(req.getCurrentUserId(), req.getPoolId());
-        // 按完整证券集合和手工项集合检查近期重复批量申请
-        checkRecentBatchDuplicateSubmit(req);
-        // 存在直通落池项时，提交前统一锁池并复核整批状态
-        if (needsWholeBatchDirectRecheck(req)) {
-            securityPoolAdjustService.recheckBeforeFinalApproval(buildDirectRecheckLogList(req));
-        }
+        // 存在直通落池项时，提交前统一复核整批状态
+        List<IpAdjustLogBo> directRecheck = needsWholeBatchDirectRecheck(req)
+                ? buildDirectRecheckLogList(req) : Collections.emptyList();
 
+        // 汇总需要默认权益人的 ABS，集中读取本次提交所用的候选
+        Set<String> defaultAbsCodes = new LinkedHashSet<>();
+        for (StockSecurityBatchAdjustSubmitReq.AdjustItem item : req.getItems()) {
+            if (BatchSecurityCheckService.needsDefaultRightsHolder(
+                    item.getSecurityType(), item.getRightsHolderCode(), item.getSelfSelectedRightsHolderCode())) {
+                String sourceCode = item.getSourceSecurityCode() == null || item.getSourceSecurityCode().isEmpty()
+                        ? item.getSecurityCode() : item.getSourceSecurityCode();
+                defaultAbsCodes.add(sourceCode);
+            }
+        }
+        Map<String, String> defaultRightsHolders = defaultAbsCodes.isEmpty() ? Collections.emptyMap()
+                : batchSecurityCheckService.loadDefaultRightsHolders(defaultAbsCodes);
         // 按触发主券分组，确保 related 与主券同次提交、共享批次与流程步骤
         Map<String, String> absSelections = new HashMap<>();
         for (StockSecurityBatchAdjustSubmitReq.AdjustItem item : req.getItems()) {
             String sourceCode = item.getSourceSecurityCode() == null || item.getSourceSecurityCode().isEmpty()
                     ? item.getSecurityCode() : item.getSourceSecurityCode();
             absIdentityService.validateBatchSelection(sourceCode, item.getSecurityType(), item.getRightsHolderCode(),
-                    item.getSelfSelectedRightsHolderCode(), absSelections);
+                    item.getSelfSelectedRightsHolderCode(), absSelections, defaultRightsHolders);
         }
         Map<String, List<StockSecurityBatchAdjustSubmitReq.AdjustItem>> itemMap = new LinkedHashMap<>();
         for (StockSecurityBatchAdjustSubmitReq.AdjustItem item : req.getItems()) {
@@ -345,11 +319,14 @@ public class StockSecurityBatchAdjustService {
         SysAttachmentService.SubmissionFiles submissionFiles =
                 sysAttachmentService.createSubmissionFiles(files, req.getAdjusterId(), originalFileNameList);
         // 整批共用单券批次号上下文，保证多证券批次号序号连续
-        SecurityPoolAdjustService.BatchNoContext batchNoContext = new SecurityPoolAdjustService.BatchNoContext();
-        for (Map.Entry<String, List<StockSecurityBatchAdjustSubmitReq.AdjustItem>> entry : itemMap.entrySet()) {
-            // 构建单证券调库提交请求后，委托单券 submitAdjustLog 落库（整批共享附件与批次号）
-            AdjustSubmitDto submitDto = securityPoolAdjustService.submitAdjustLog(
-                    buildSingleSubmitReq(req, entry.getValue()), submissionFiles, batchNoContext);
+        List<SecurityPoolAdjustSubmitReq> requests = new ArrayList<>();
+        for (List<StockSecurityBatchAdjustSubmitReq.AdjustItem> group : itemMap.values()) {
+            // 按触发主券保留原分组和提交顺序
+            requests.add(buildSingleSubmitReq(req, group));
+        }
+        // 整批共用提交数据，按原分组保存日志和流程
+        for (AdjustSubmitDto submitDto : securityPoolAdjustService.submitAdjustLogBatch(
+                requests, submissionFiles, directRecheck)) {
             if (submitDto == null) {
                 continue;
             }
@@ -548,7 +525,6 @@ public class StockSecurityBatchAdjustService {
         checkReq.setGuarantorCode(security.getGuarantorCode());
         checkReq.setRightsHolderCode(security.getRightsHolderCode());
         checkReq.setSelfSelectedRightsHolderCode(security.getSelfSelectedRightsHolderCode());
-        checkReq.setSelectedRatingCompany(security.getSelectedRatingCompany());
         checkReq.setReleaseRules("yes".equals(req.getReleaseRules()));
         checkReq.setItems(Collections.singletonList(item));
         return checkReq;
@@ -625,7 +601,6 @@ public class StockSecurityBatchAdjustService {
         submitReq.setGuarantorCode(primary.getGuarantorCode());
         submitReq.setRightsHolderCode(primary.getRightsHolderCode());
         submitReq.setSelfSelectedRightsHolderCode(primary.getSelfSelectedRightsHolderCode());
-        submitReq.setSelectedRatingCompany(primary.getSelectedRatingCompany());
 
         List<SecurityPoolAdjustSubmitReq.AdjustItem> submitItems = new ArrayList<>();
         for (StockSecurityBatchAdjustSubmitReq.AdjustItem item : items) {
@@ -661,11 +636,6 @@ public class StockSecurityBatchAdjustService {
                 }).collect(Collectors.toList()));
         submitReq.setItems(submitItems);
         return submitReq;
-    }
-
-    /** 归一化防重复比较文本。 */
-    private String normalizeDuplicateText(String value) {
-        return value == null || value.trim().isEmpty() ? null : value;
     }
 
     /** 在放开主体债矩阵时将审计说明追加到调整意见。 */

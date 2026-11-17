@@ -177,8 +177,8 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 1. `@Transactional(rollbackFor = Exception.class)`——**整个批量提交是一个事务**。
 2. `validateAdjustSubmitReq`：poolId/direction/items/adjusterId/adjusterName 非空；目标池为启用叶子池；每条 item 的 securityCode 非空、手工项 `adjustMode` 必须等于本次方向、`targetPoolId` 非空。**不强制**每条都带 `flowId`/`flowKey`（无流程或直通流程允许空，与单券一致；前端可提交行仍会尽量选 recommended）。
 3. `validateAdjustPoolPermission`：权限校验同校验阶段。
-4. **整批防重复** `checkRecentBatchDuplicateSubmit`：约 30 秒窗口内，比较调整人最近一次「手动批量」手工项集合键（证券|目标池|方向|flowId|flowKey）与原因/意见文本，相同则拒绝。
-5. **直通预检** `needsWholeBatchDirectRecheck`：任一手工项经 `securityPoolAdjustService.isDirectAdjustFlow(flowId, flowKey)` 判定为直通时，提交前调用 `recheckBeforeFinalApproval`（锁池 + 容量/在池/限制等动态复核），整批共用一次。
+4. **正式提交取数**：本次使用数据库中的证券、评级候选和池状态，逐组检查在途和直通前状态。
+5. **直通预检** `needsWholeBatchDirectRecheck`：任一手工项经 `securityPoolAdjustService.isDirectAdjustFlow(flowId, flowKey)` 判定为直通时，提交前调用 `recheckBeforeFinalApproval`（容量/在池/限制等动态复核），整批共用一次。
 6. **按触发主券分组**：`resolveBatchSubmitGroupKey`（`sourceSecurityCode` 优先，否则 `securityCode`），保证 related 关联码与主券同组提交、共享批次与流程步骤。
 7. `sysAttachmentService.createSubmissionFiles(files, adjusterId)`：multipart 包成 `SubmissionFiles`，**整批共用一份物理文件**。
 8. `new SecurityPoolAdjustService.BatchNoContext()`：创建**批次号上下文**（`batchTimeText` yyyyMMddHHmmss + inbound/outbound/noFlow 序号），**整批共用**，多证券序号连续。
@@ -186,6 +186,8 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 10. 累加 `submitCount`、收集 `logIds` 到返回 dto。
 
 **返回结构** `BatchSecurityInboundAdjustDto`：`{ items:[], securityCount, submitCount, logIds:[...] }`。
+
+普通债独立直通调入时，正式提交批量读取证券主档、评级主体、在池、在途和容量，共用池关系与流程快照。未显式选择主体的 ABS，按本次批量查询的首个候选校验同批主体一致性。逐组落池成功后才增加本批容量；有配套项、同券重复、ABS 或黑名单质押调入时，保留原动态业务复核。
 
 ### 3.4 后端批量校验逻辑（逐条列举，与单笔异同）
 
@@ -199,7 +201,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 **调入校验规则顺序**（与单笔 `checkCommonIn` + 类型特有一致）：
 
-池锁定 → 品种 → 市场 → pending → 已在目标池 → 容量 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突 → 弹性禁投(in_soft_restrict，警告) → 全局禁止池 → **行业限制（已注释）** → 开放日 →（债券）到期 → 主体内评矩阵（期限口径同 [04]/[23]：普通债及含权赎回侧解析 `date_exists_str`，含权回售侧用年字段，两侧都有取更短；不再用 `date_exists` 总天数÷365；非 ABS 非担保债使用债务主体内评，非 ABS 担保债取债务主体与所选担保人内评较优值；ABS 直接使用自选权益人〔优先〕或普通权益人内评；私募、永续、次级、重点观察名单及特殊债降档规则与单券调库一致；可转债/可交换/CRMW 不适用 1～5；期限无法解析时默认最长档继续走矩阵；校验和提交直接使用页面已查询的所选主体及 `total_score`） /（股票）退市 → 评级限制（空实现）/（基金）评分（仅 check）。
+池锁定 → 品种 → 市场 → pending → 已在目标池 → 容量 → 来源池 → 调入限制池(in_restrict) → 同请求互斥冲突 → 弹性禁投(in_soft_restrict，警告) → 全局禁止池 → **行业限制（已注释）** → 开放日 →（债券）到期 → 主体内评矩阵（期限口径同 [04]/[23]：普通债及含权赎回侧解析 `date_exists_str`，含权回售侧用年字段，两侧都有取更短；不再用 `date_exists` 总天数÷365；非 ABS 非担保债使用债务主体内评，非 ABS 担保债取债务主体与所选担保人内评较优值；ABS 直接使用自选权益人〔优先〕或普通权益人内评；私募、永续、次级、重点观察名单及特殊债降档规则与单券调库一致；可转债/可交换/CRMW 不适用 1～5；期限无法解析时默认最长档继续走矩阵；校验和提交按页面选择的主体代码批量读取候选及 `total_score`） /（股票）退市 → 评级限制（空实现）/（基金）评分（仅 check）。
 
 批量页面对所有证券统一查询 `115004000=担保人`、`115203000=差额支付承诺人`、`115200000=债务主体`、`115201000=原始权益人` 四类关系主体。同一主体兼多类关系时按类型分别返回，仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序，页面默认选中第一条。非 ABS 页面展示为担保人，ABS 展示为权益人，并可从 `t_inv_company` 分页选择自选权益人；自选弹窗与单笔调库一致，单选列位于序号列左侧。ABS 的“担保人主体内评分”自选优先，否则显示普通权益人内评。展开项为“名称 + 类型标签 + 内评”，收起后为“名称（类型）”。
 
@@ -209,7 +211,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 **流程展示与提交**：逐券复用单笔完整校验和匹配（白名单/信用债简易/产品库快速/默认/特殊/升降级等），再通过公共方法追加目标池配置的 `batchIn/batchOut` 专用流程并设为唯一推荐。仅配置了流程 ID 或 Key 时追加；不凭空生成批量无需审批选项。同一 ID/Key 的快速与批量候选按类型分别保留，材料豁免由主项资格决定，选批量流程也可豁免。前端默认选中 `recommended` 项，操作员可按行改选。提交透传所选 `flowId/flowKey/flowType`，不再用批量配置覆盖选择。
 
-批量页面保留单笔准入规则和批量流程候选。证券状态及市场按代码分批查询，池配置按整批读取，`adjustGroupKey` 加主券 `sourceSecurityCode_` 前缀。互斥冲突按当前证券的调库项判断，整批事务、防重复和直通预检沿用现有提交规则。
+批量页面保留单笔准入规则和批量流程候选。证券状态及市场按代码分批查询，池配置按整批读取，`adjustGroupKey` 加主券 `sourceSecurityCode_` 前缀。互斥冲突按当前证券的调库项判断，整批事务及直通预检沿用现有提交规则。
 
 ### 3.5 后端批量提交逻辑
 
@@ -304,15 +306,15 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 | **分组** | 单次请求内多目标池 | 按 **`sourceSecurityCode`/主券** 分组，related 与主券同组 |
 | **批次号** | 单次 `new BatchNoContext()` | **整批共用一个 `BatchNoContext`**，跨组序号递增 |
 | **附件** | 单次 `SubmissionFiles` | **整批共用** `SubmissionFiles` |
-| **防重复 / 直通** | 单券窗口防重复；直通/终审 `recheckBeforeFinalApproval` | 整批防重复；存在直通项时提交前整批 `isDirectAdjustFlow` + `recheckBeforeFinalApproval` |
+| **防重复 / 直通** | 单券窗口防重复；直通/终审 `recheckBeforeFinalApproval` | 以在途和在池状态复核；存在直通项时提交前整批 `isDirectAdjustFlow` + `recheckBeforeFinalApproval` |
 | **事务范围** | 单笔 `@Transactional` | 外层批量 `@Transactional` 包裹各组 `submitAdjustLog`，**整批原子** |
 | **审批流程选择** | 弹窗选流程，`dto.flowOptions` | 行内 `flowOptions`；提交透传所选流程，**不回填** batch 流程 |
 | **调整原因/建议** | 单笔一份 | **整批一份**，透传到每组 |
 | **候选/池查询** | 证券检索 + 可调池树 | `queryPoolPage` + 按目标池方向的候选证券分页 |
-| **编排层自有逻辑** | — | 权限、候选方向过滤、防重复、直通预检、分组、共享附件/批次号、整批事务 |
+| **编排层自有逻辑** | — | 权限、候选方向过滤、直通预检、分组、共享附件/批次号、整批事务 |
 | **复用的单笔逻辑** | — | 共用 `SecurityPoolCheckRules`；提交继续使用 `submitAdjustLog`（五阶段）、`isDirectAdjustFlow`、`recheckBeforeFinalApproval`、`BatchNoContext` 及单券内建步骤/落池/附件 |
 
-**一句话总结**：批量是「编排层」——权限/候选/防重复/直通预检/分组/共享附件与批次号/整批事务；校验与落库全部委托 `SecurityPoolAdjustService`，不重复实现业务规则。与 [27 存量证券批量](27-stock-security-batch-adjust.md) **同构**（存量仅多产品库目标 + 来源池）。
+**一句话总结**：批量是「编排层」——权限/候选/直通预检/分组/共享附件与批次号/整批事务；校验与落库全部委托 `SecurityPoolAdjustService`，不重复实现业务规则。与 [27 存量证券批量](27-stock-security-batch-adjust.md) **同构**（存量仅多产品库目标 + 来源池）。
 
 ---
 
@@ -332,7 +334,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 - 前端：`znty-rrs-ui/batch_security_pool_adjust.html`（主页面）、`znty-rrs-ui/batch_security_pool_adjust_select.html`（独立选择页）、`znty-rrs-ui/dict.js`
 - Controller：`BatchSecurityPoolAdjustController.java`
-- Service：`BatchSecurityPoolAdjustService.java`（编排：`checkAdjust`→`BatchSecurityCheckService`→`SecurityPoolCheckRules`，`addAdjustLog`→防重复/直通预检/分组→`SPA.submitAdjustLog`）、`SecurityPoolAdjustService.java`（`checkAdjust`/`submitAdjustLog`/`isDirectAdjustFlow`/`recheckBeforeFinalApproval`/`BatchNoContext`）、`SysAttachmentService.java`
+- Service：`BatchSecurityPoolAdjustService.java`（编排：`checkAdjust`→`BatchSecurityCheckService`→`SecurityPoolCheckRules`，`addAdjustLog`→直通预检/分组→`SPA.submitAdjustLogBatch`）、`SecurityPoolAdjustService.java`（`checkAdjust`/`submitAdjustLog`/`isDirectAdjustFlow`/`recheckBeforeFinalApproval`/`BatchNoContext`）、`SysAttachmentService.java`
 - Mapper：`BatchSecurityPoolAdjustMapper.java` / `BatchSecurityPoolAdjustMapper.xml`
 - 实体：`BatchSecurityPoolAdjustReq`、`BatchSecurityInboundAdjustReq`、`BatchSecurityInboundAdjustDto`、`BatchSecurityPoolDto`、`BatchSecurityCandidateDto`
 - SQL：`sql/rrs_external_import_schema.sql`（`rrs_securityinfo`）、`sql/rrs_security_pool_adjust_schema.sql`、`sql/rrs_pool_init_schema.sql`、`sql/rrs_sys_attachment_schema.sql`

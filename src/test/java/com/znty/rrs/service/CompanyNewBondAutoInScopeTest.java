@@ -10,6 +10,7 @@ import org.apache.ibatis.session.Configuration;
 import org.junit.Test;
 
 import java.io.InputStream;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -75,6 +76,27 @@ public class CompanyNewBondAutoInScopeTest {
         BoundSql sql = render(CompanyBondSyncPolicy.newBondInboundScope(), 1);
         assertThat(sql.getSql()).contains("bond.maturity_date IS NULL",
                 "bond.maturity_date >= DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL ? DAY), '%Y%m%d')");
+        assertThat(sql.getParameterMappings()).extracting(ParameterMapping::getProperty)
+                .contains("minDaysToMaturity");
+    }
+
+    /** 主档保留全部实际代码，资格列继续复核到期、品种及已转正临时代码 */
+    @Test
+    public void scheduledMasterQueryShouldReturnEligibilityWithoutFilteringMasters() throws Exception {
+        Configuration cfg = new Configuration();
+        String resource = "mapper/BatchSecurityCheckMapper.xml";
+        try (InputStream is = Resources.getResourceAsStream(resource)) {
+            new XMLMapperBuilder(is, cfg, resource, cfg.getSqlFragments()).parse();
+        }
+        Map<String, Object> params = new HashMap<>();
+        params.put("securityCodes", Collections.singletonList("B1.IB"));
+        params.put("minDaysToMaturity", 1);
+        BoundSql sql = cfg.getMappedStatement("com.znty.rrs.mapper.BatchSecurityCheckMapper.queryScheduledSecurities")
+                .getBoundSql(params);
+        assertThat(sql.getSql()).contains("SELECT bond.*", "CASE WHEN bond.security_status != 'D'",
+                "bond.maturity_date IS NULL", "INTERVAL ? DAY", "dst.category_type = 'bond'",
+                "bond.security_type = 'abs'", "ts.status = 'updated'",
+                "THEN 1 ELSE 0 END AS eligible", "WHERE bond.wind_code IN");
         assertThat(sql.getParameterMappings()).extracting(ParameterMapping::getProperty)
                 .contains("minDaysToMaturity");
     }

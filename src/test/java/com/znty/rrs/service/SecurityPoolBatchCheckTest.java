@@ -9,6 +9,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData;
 import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.ScheduledSecurity;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
@@ -22,6 +23,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashSet;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -152,6 +155,56 @@ public class SecurityPoolBatchCheckTest {
         verifyNoInteractions(fixture.adjust);
     }
 
+    /** 首屏沿用本次校验的候选，仅补查池名或权限校验未通过的行及其展示信息 */
+    @Test
+    public void excelFirstPageOnlyCompletesMissingRatingData() {
+        Fixture fixture = new Fixture();
+        SecurityInfoBo abs = new SecurityInfoBo();
+        abs.setWindCode("ABS.IB");
+        abs.setSecurityType("abs");
+        SecurityInfoBo skipped = new SecurityInfoBo();
+        skipped.setWindCode("SKIPPED.IB");
+        skipped.setSecurityType("mtn");
+        List<String> checkedCodes = Arrays.asList("abs.ib", "NOT_FOUND");
+        List<String> checkedCandidates = Arrays.asList("ABS.IB", "NOT_FOUND");
+        List<String> skippedInput = Collections.singletonList("skipped.ib");
+        List<String> skippedCodes = Collections.singletonList("SKIPPED.IB");
+        when(fixture.batch.querySecurities(checkedCodes)).thenReturn(Collections.singletonList(abs));
+        when(fixture.batch.querySecurities(skippedInput)).thenReturn(Collections.singletonList(skipped));
+        RelatedRatingCompanyDto related = new RelatedRatingCompanyDto();
+        related.setSecurityCode("ABS.IB");
+        related.setCompanyCode("RELATED");
+        when(fixture.batch.queryRatingCompanies(checkedCandidates)).thenReturn(Collections.singletonList(related));
+        SelfSelectedRightsHolderDto selected = new SelfSelectedRightsHolderDto();
+        selected.setCompanyCode("SELECTED");
+        selected.setInnerRating("1");
+        when(fixture.batch.querySelfSelectedCompanies(Arrays.asList("SELECTED", "NOT_ACTIVE")))
+                .thenReturn(Collections.singletonList(selected));
+        AdjustCheckReq first = request("abs.ib");
+        first.setSelfSelectedRightsHolderCode("SELECTED");
+        AdjustCheckReq second = request("abs.ib");
+        second.setSelfSelectedRightsHolderCode("NOT_ACTIVE");
+        BatchSecurityCheckData data = fixture.service.loadExcelCheckData(Arrays.asList(first, second, request("NOT_FOUND")), false);
+
+        List<String> pageCodes = Arrays.asList("ABS.IB", "NOT_FOUND", "skipped.ib");
+        List<String> pageSelf = Arrays.asList("selected", "NOT_ACTIVE", "DISPLAY_ONLY");
+        fixture.service.completeExcelRatingCandidates(data, pageCodes, pageSelf);
+        fixture.service.completeExcelRatingCandidates(data, pageCodes, pageSelf);
+
+        assertThat(data.resolveExcelSecurityCode("skipped.ib")).isEqualTo("SKIPPED.IB");
+        assertThat(data.ratingCompanies.get("ABS.IB")).containsExactly(related);
+        assertThat(data.selfSelectedCompanies.get("selected")).isSameAs(selected);
+        verify(fixture.batch).querySecurities(checkedCodes);
+        verify(fixture.batch).querySecurities(skippedInput);
+        verify(fixture.batch, times(2)).querySecurities(anyList());
+        verify(fixture.batch).queryRatingCompanies(checkedCandidates);
+        verify(fixture.batch).queryRatingCompanies(skippedCodes);
+        verify(fixture.batch, times(2)).queryRatingCompanies(anyList());
+        verify(fixture.batch).querySelfSelectedCompanies(Arrays.asList("SELECTED", "NOT_ACTIVE"));
+        verify(fixture.batch).querySelfSelectedCompanies(Collections.singletonList("DISPLAY_ONLY"));
+        verify(fixture.batch, times(2)).querySelfSelectedCompanies(anyList());
+    }
+
     /** ABS 主体选择、在途冲突和同批冲突都使用预加载数据 */
     @Test
     public void checksAbsIdentitiesWithoutReadingSingleSecurityMapper() {
@@ -222,8 +275,50 @@ public class SecurityPoolBatchCheckTest {
                 .isEqualTo(page.get(0).getItems().get(0).getFailReasons());
         assertThat(task.get(1).getItems().get(0).isCanAdjust()).isTrue();
         assertThat(task.get(2).getItems().get(0).getFailReasons()).contains("目标投资池已达持仓上限（1）");
-        verify(fixture.pools).lockPoolByIdsList(Collections.singletonList(9L));
-        verify(fixture.batch).queryScheduledEligibleCodes(anyList(), eq(1));
+        verify(fixture.pools, never()).lockPoolByIdsList(anyList());
+        verify(fixture.batch).queryScheduledSecurities(anyList(), eq(1));
+    }
+
+    /** 默认权益人按每 500 个代码重新查库，保留每只证券的首个候选 */
+    @Test
+    public void defaultRightsHoldersShouldUseCurrentDatabaseCandidatesInChunks() {
+        Fixture fixture = new Fixture();
+        List<String> codes = IntStream.range(0, 1000).mapToObj(i -> "ABS" + i + ".IB").collect(Collectors.toList());
+        when(fixture.batch.queryRatingCompanies(anyList())).thenAnswer(call -> {
+            List<String> chunk = call.getArgument(0);
+            return chunk.stream().flatMap(code -> Arrays.asList("FIRST", "SECOND").stream().map(company -> {
+                RelatedRatingCompanyDto row = new RelatedRatingCompanyDto();
+                row.setSecurityCode(code);
+                row.setCompanyCode(company);
+                return row;
+            })).collect(Collectors.toList());
+        });
+
+        Map<String, String> defaults = fixture.service.loadDefaultRightsHolders(new LinkedHashSet<>(codes));
+
+        assertThat(defaults).hasSize(1000);
+        assertThat(defaults.get("abs999.ib")).isEqualTo("FIRST");
+        verify(fixture.batch).queryRatingCompanies(codes.subList(0, 500));
+        verify(fixture.batch).queryRatingCompanies(codes.subList(500, 1000));
+    }
+
+    /** 有主档但是到期或转正资格不通过的债券仍由任务按原原因跳过 */
+    @Test
+    public void scheduledUsesEligibilityFromTheSameMasterQuery() {
+        Fixture fixture = new Fixture();
+        ScheduledSecurity ineligible = new ScheduledSecurity();
+        ineligible.setWindCode("B1");
+        ineligible.setSecurityType("mtn");
+        ineligible.setIssuerCode("ISSUER");
+        when(fixture.batch.queryScheduledSecurities(Collections.singletonList("B1"), 1))
+                .thenReturn(Collections.singletonList(ineligible));
+
+        AdjustCheckDto result = fixture.service.checkSecurityBatch(Collections.singletonList(request("B1")), true, 1)
+                .get(0);
+
+        assertThat(result.getItems().get(0).isCanAdjust()).isFalse();
+        assertThat(result.getItems().get(0).getFailReasons()).contains("证券不符合定时补债范围或距到期天数不足");
+        verify(fixture.batch, never()).querySecurities(anyList());
     }
 
     /** 配套联动也需要满足目标池容量和报告要求 */
@@ -248,7 +343,7 @@ public class SecurityPoolBatchCheckTest {
 
         assertThat(result.getItems()).hasSize(2);
         assertThat(result.getItems().get(1).getFailReasons()).contains("目标池要求研究报告且本次没有可用的报告豁免");
-        verify(fixture.pools).lockPoolByIdsList(Arrays.asList(9L, 10L));
+        verify(fixture.pools, never()).lockPoolByIdsList(anyList());
     }
 
     /** 构建只包含一个目标池的单券请求 */
@@ -309,8 +404,17 @@ public class SecurityPoolBatchCheckTest {
                     return mapping;
                 }).collect(Collectors.toList());
             });
-            when(batch.queryScheduledEligibleCodes(anyList(), anyInt()))
-                    .thenAnswer(call -> call.getArgument(0));
+            when(batch.queryScheduledSecurities(anyList(), anyInt())).thenAnswer(call -> {
+                List<String> codes = call.getArgument(0);
+                return codes.stream().map(code -> {
+                    ScheduledSecurity security = new ScheduledSecurity();
+                    security.setWindCode(code);
+                    security.setSecurityType("mtn");
+                    security.setIssuerCode("ISSUER");
+                    security.setEligible(true);
+                    return security;
+                }).collect(Collectors.toList());
+            });
         }
     }
 }

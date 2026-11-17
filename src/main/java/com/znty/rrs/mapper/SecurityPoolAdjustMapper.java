@@ -106,10 +106,6 @@ public interface SecurityPoolAdjustMapper {
                                                        @Param("adjusterId") String adjusterId,
                                                        @Param("seconds") int seconds);
 
-    /** 查询操作人最近一次批量提交的全部手工调库记录 */
-    List<IpAdjustLogBo> queryRecentBatchManualAdjustLogList(@Param("adjusterId") String adjusterId,
-                                                            @Param("seconds") int seconds);
-
     /** 查询证券活动流程涉及的手工调库目标池 ID */
     List<Long> queryPendingManualTargetPoolIdList(@Param("securityCode") String securityCode,
                                                   @Param("excludeBatchNo") String excludeBatchNo);

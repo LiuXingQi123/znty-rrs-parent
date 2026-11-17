@@ -3,6 +3,7 @@ package com.znty.rrs.entity.securitypooladjust;
 
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -19,6 +20,9 @@ public class AdjustCheckContext {
 
     /** 批次校验时复用的数据库数据 */
     private BatchSecurityCheckData batchData;
+
+    /** 本次 Excel 主体校验读取的数据 */
+    private BatchCompanyAdjustCheckData batchCompanyData;
 
     /** 证券基础信息 */
     private SecurityInfoBo securityInfo;

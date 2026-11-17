@@ -1,6 +1,9 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData;
+import com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData.CompanyState;
+import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -182,6 +185,28 @@ public class PledgeBlacklistRuleService {
         List<String> agencyCodes = externalRatingAgencyService.queryRequiredAgencyCodeList();
         boolean lowOuterRating = autoAdjustMapper.queryCompanyHasLowOuterRating(companyCode, agencyCodes);
         return new Decision(inForbidden, lowOuterRating, inKeyWatch);
+    }
+
+    /**
+     * 使用本次批量数据和本行的调入、调出列表判定三条件
+     *
+     * @param batch 本次校验数据
+     * @param companyCode 主体代码
+     * @param inboundPoolIds 本行预计调入的池
+     * @param outboundPoolIds 本行预计调出的池
+     * @return 三条件判定结果
+     */
+    Decision evaluateCompanyBatch(BatchCompanyAdjustCheckData batch, String companyCode,
+                                  Set<Long> inboundPoolIds, Set<Long> outboundPoolIds) {
+        if (!batch.ratingAgenciesConfigured) {
+            throw new BizException("未配置有效外部评级机构");
+        }
+        CompanyState state = batch.states.get(companyCode);
+        boolean inForbidden = inboundPoolIds.contains(FORBIDDEN_POOL_ID)
+                || (!outboundPoolIds.contains(FORBIDDEN_POOL_ID) && state.companyPoolIds.contains(FORBIDDEN_POOL_ID));
+        boolean inKeyWatch = inboundPoolIds.contains(KEY_WATCH_POOL_ID)
+                || (!outboundPoolIds.contains(KEY_WATCH_POOL_ID) && state.companyPoolIds.contains(KEY_WATCH_POOL_ID));
+        return new Decision(inForbidden, state.lowOuterRating, inKeyWatch);
     }
 
     /**

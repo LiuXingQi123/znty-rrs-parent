@@ -2994,9 +2994,6 @@ public class SecurityPoolAdjustServiceStepTest {
                 new HashMap<Long, InvestmentPoolBo>(),
                 Collections.<Long>emptySet(),
                 new HashMap<Long, Map<String, List<Long>>>(),
-                false,
-                false,
-                false,
                 snapshotMap,
                 batchNoContext,
                 null);

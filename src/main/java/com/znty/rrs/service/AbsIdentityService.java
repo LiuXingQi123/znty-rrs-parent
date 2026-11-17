@@ -139,6 +139,22 @@ public class AbsIdentityService {
             // 后台查询也在本轮交互有效期内复用
             rememberRelated(security.getWindCode(), candidates);
         }
+        return collectRiskCompanyCodes(security, candidates);
+    }
+
+    /** 按当前确认身份和本批新读到的候选生成风险主体 */
+    List<String> queryRiskCompanyCodesWithCandidates(SecurityInfoBo security,
+                                                      List<RelatedRatingCompanyDto> candidates) {
+        String confirmed = absIdentityMapper.queryConfirmedIdentityCode(security.getWindCode());
+        if (confirmed != null && !confirmed.trim().isEmpty()) {
+            return Collections.singletonList(confirmed.trim());
+        }
+        // 只汇总本批已读的候选
+        return collectRiskCompanyCodes(security, candidates);
+    }
+
+    /** 汇总已读取的关联主体和本次实际选中的主体 */
+    private List<String> collectRiskCompanyCodes(SecurityInfoBo security, List<RelatedRatingCompanyDto> candidates) {
         Set<String> codes = new LinkedHashSet<>();
         for (RelatedRatingCompanyDto candidate : candidates) {
             if (candidate.getCompanyCode() != null && !candidate.getCompanyCode().trim().isEmpty()) {
@@ -430,15 +446,26 @@ public class AbsIdentityService {
      */
     public void validateBatchSelection(String securityCode, String securityType, String rightsHolderCode,
                                        String selfSelectedCode, Map<String, String> selectedBySecurity) {
+        validateBatchSelection(securityCode, securityType, rightsHolderCode, selfSelectedCode, selectedBySecurity, null);
+    }
+
+    /** 使用本次集中读取的默认权益人，继续核对同券的主体选择 */
+    void validateBatchSelection(String securityCode, String securityType, String rightsHolderCode,
+                                String selfSelectedCode, Map<String, String> selectedBySecurity,
+                                Map<String, String> defaultRightsHolders) {
         if (!"abs".equals(securityType)) {
             return;
         }
         String code = selfSelectedCode != null && !selfSelectedCode.trim().isEmpty()
                 ? selfSelectedCode.trim() : rightsHolderCode;
         if (code == null || code.trim().isEmpty()) {
-            // 没有显式选择时使用同一候选顺序，不能用空值绕过跨行比较
-            List<RelatedRatingCompanyDto> related = findRelated(securityCode);
-            code = related == null || related.isEmpty() ? null : related.get(0).getCompanyCode();
+            if (defaultRightsHolders == null) {
+                // 兼容沿用交互候选的入口
+                List<RelatedRatingCompanyDto> related = findRelated(securityCode);
+                code = related == null || related.isEmpty() ? null : related.get(0).getCompanyCode();
+            } else {
+                code = defaultRightsHolders.get(securityCode);
+            }
         }
         if (code == null || code.trim().isEmpty()) {
             throw new BizException("ABS[" + securityCode + "]请选择权益人或自选权益人");

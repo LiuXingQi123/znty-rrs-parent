@@ -4,7 +4,7 @@
 > 后端前缀：`/api/v1/stockSecurityBatchAdjust`  
 > 角色定位：业务人员在**债券产品库**叶子池上，对存量证券做批量调入/调出；仅调入按指定来源池筛选。
 
-与 [12-batch-security-pool-adjust.md](12-batch-security-pool-adjust.md) **同构**（校验/提交/附件/现有数量分项/整批防重复/直通复核），差异如下。
+与 [12-batch-security-pool-adjust.md](12-batch-security-pool-adjust.md) **同构**（校验/提交/附件/现有数量分项/在途和在池复核/直通复核），差异如下。
 
 
 ## 列表查询字段
@@ -37,7 +37,7 @@
 | 可选证券筛选 | 代码 / 简称 / 市场 / 是否特征 | 另加**发行主体**；调入另加来源池；是否特征含 ABS/担保/永续/次级/私募/含权/标准信用债，多选 AND |
 | 来源池 | 无 | 调入固定白名单 6 项，调出不设来源池查询条件 |
 
-**校验 / 提交与证券池批量一致**（编排细节见 [12](12-batch-security-pool-adjust.md) §3.2～§3.5）：`checkAdjust` 调用 `BatchSecurityCheckService` 一次，集中读取证券、池关系、容量、在途状态、主体名单等数据，再逐券执行共用规则（完整单笔候选 + 公共方法追加配置的 batchIn/batchOut，统一推荐批量）；`addAdjustLog` 分组后委托 `submitAdjustLog`（共享附件与 `BatchNoContext`），整批防重复、直通用 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`；手工项 `adjustType=手动批量调整`。本类只编排产品库与调入来源池差异，不新建业务表。
+**校验 / 提交与证券池批量一致**（编排细节见 [12](12-batch-security-pool-adjust.md) §3.2～§3.5）：`checkAdjust` 调用 `BatchSecurityCheckService` 一次，集中读取证券、池关系、容量、在途状态、主体名单等数据，再逐券执行共用规则（完整单笔候选 + 公共方法追加配置的 batchIn/batchOut，统一推荐批量）；`addAdjustLog` 分组后委托 `submitAdjustLogBatch`（共享附件、批次号、池配置和流程快照，普通债独立直通调入从数据库按批读取证券、评级主体、在途、在池和容量），直通用 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`；手工项 `adjustType=手动批量调整`。ABS 默认主体使用本次从数据库集中读取的候选。本类只编排产品库与调入来源池差异，不新建业务表。
 
 ---
 
