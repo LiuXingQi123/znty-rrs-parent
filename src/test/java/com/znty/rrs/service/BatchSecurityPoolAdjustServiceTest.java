@@ -1,6 +1,11 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper;
+import com.znty.rrs.mapper.BatchSecurityCheckMapper;
+import com.znty.rrs.mapper.CreditBondGradeRuleMapper;
+import com.znty.rrs.mapper.SecurityMarketMapper;
+import com.znty.rrs.entity.common.SecurityMarketMappingDto;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -329,7 +334,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
         BatchSecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new BatchSecurityPoolAdjustService());
-        // 批量校验已委托单笔 SecurityPoolAdjustService，需同步注入相同 mock
+        // 批量取数由独立服务负责，共用真实单券判定
         SecurityPoolAdjustService securityPoolAdjustService = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(securityPoolAdjustService, "securityMarketService", mock(SecurityMarketService.class));
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
@@ -339,14 +344,37 @@ public class BatchSecurityPoolAdjustServiceTest {
         ReflectionTestUtils.setField(securityPoolAdjustService, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(securityPoolAdjustService, "flowMapper", mock(FlowMapper.class));
         ReflectionTestUtils.setField(securityPoolAdjustService, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
-        ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
+        BatchSecurityCheckService batchChecks = new BatchSecurityCheckService();
+        ReflectionTestUtils.setField(batchChecks, "securityPoolCheckRules",
+                ReflectionTestUtils.invokeMethod(securityPoolAdjustService, "checkRules"));
+        ReflectionTestUtils.setField(batchChecks, "investmentPoolMapper", investmentPoolMapper);
+        ReflectionTestUtils.setField(service, "batchSecurityCheckService", batchChecks);
 
         when(mapper.queryEnabledLeafPoolCount(3L)).thenReturn(1);
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("106006789");
         securityInfo.setShortName("测试债");
         securityInfo.setSecurityType("mtn");
-        when(adjustMapper.querySecurityBoByCode("106006789")).thenReturn(securityInfo);
+        BatchSecurityCheckMapper batchData = mock(BatchSecurityCheckMapper.class);
+        SecurityMarketMapper marketMapper = mock(SecurityMarketMapper.class);
+        ReflectionTestUtils.setField(batchChecks, "batchSecurityCheckMapper", batchData);
+        ReflectionTestUtils.setField(batchChecks, "securityMarketMapper", marketMapper);
+        ReflectionTestUtils.setField(batchChecks, "creditBondGradeRuleMapper", mock(CreditBondGradeRuleMapper.class));
+        ReflectionTestUtils.setField(batchChecks, "externalRatingAgencyService", mock(ExternalRatingAgencyService.class));
+        when(batchData.querySecurities(Collections.singletonList("106006789"))).thenReturn(Collections.singletonList(securityInfo));
+        Row state = new Row();
+        state.setSecurityCode("106006789");
+        state.setPoolId(2L);
+        when(batchData.queryActiveStates(Collections.singletonList("106006789"))).thenReturn(Collections.singletonList(state));
+        Row category = new Row();
+        category.setSecurityType("mtn");
+        category.setCategoryType("bond");
+        when(batchData.queryCategories()).thenReturn(Collections.singletonList(category));
+        SecurityMarketMappingDto market = new SecurityMarketMappingDto();
+        market.setWindCode("106006789");
+        market.setRawMarketCode("NIB");
+        when(marketMapper.queryMarketMappingList(Collections.singletonList("106006789")))
+                .thenReturn(Collections.singletonList(market));
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(
                 buildPool(1L, null, "信用债大库", "credit_bond"),
                 buildPool(2L, 1L, "一级库", "credit_bond"),
@@ -354,7 +382,7 @@ public class BatchSecurityPoolAdjustServiceTest {
         when(investmentPoolMapper.queryPoolById(3L)).thenReturn(buildPool(3L, 1L, "二级库", "credit_bond"));
         when(adjustMapper.querySecurityCurrentPoolIdList("106006789"))
                 .thenReturn(Collections.singletonList(2L));
-        when(adjustMapper.queryAllPoolRelationList())
+        when(batchData.queryPoolRelations())
                 .thenReturn(Collections.singletonList(buildRelation(3L, "in_mutex", 2L, "一级库")));
         when(adjustMapper.queryPoolCurrentCount(anyLong())).thenReturn(0);
         when(adjustMapper.querySecurityHasPendingProcess("106006789")).thenReturn(false);

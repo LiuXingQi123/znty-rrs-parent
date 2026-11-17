@@ -193,7 +193,7 @@
     <!--
       主体下新债自动入池候选（对齐老系统 AutoAdjustInNewBondToLimitPoolJob）：
       1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池；trigger_company_code 直接取发行主体
-      2) 旗下 bond 大类未退市、未到期、尚未在 targetPoolId
+      2) 旗下 bond 大类未退市、尚未在 targetPoolId，有到期日时距到期不少于 minDaysToMaturity 天
       3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
       4) 固定排除 ABS（由 CompanyBondSyncPolicy.newBondInboundScope 传入 excludeAbs=true）：
          ABS 的进出池与未确认提醒统一由 company_abs_bond_auto_in 按池对账负责，
@@ -213,7 +213,8 @@
                                          AND dst.is_deleted = 0
                                          AND dst.category_type = 'bond'
         WHERE bond.security_status != 'D'
-          AND (bond.maturity_date IS NULL OR bond.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d'))
+          AND (bond.maturity_date IS NULL
+               OR bond.maturity_date >= DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL #{minDaysToMaturity} DAY), '%Y%m%d'))
         <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
         </if>
@@ -251,8 +252,6 @@
                 AND IFNULL(ts.is_deleted, 0) = 0
                 AND ts.status = 'updated'
           )
-          AND (COALESCE(JSON_LENGTH(#{targetMarketCodes,jdbcType=VARCHAR}), 0) = 0
-               OR JSON_CONTAINS(#{targetMarketCodes,jdbcType=VARCHAR}, JSON_QUOTE(TRIM(bond.market))))
         ORDER BY bond.wind_code ASC
     </select>
 

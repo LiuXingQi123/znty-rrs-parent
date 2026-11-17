@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -65,11 +66,17 @@ public class PledgeBlacklistRuleService {
      */
     public String validateCompanies(List<String> codes, String adjustMode,
                                     Set<Long> inboundPoolIds, Set<Long> outboundPoolIds) {
+        // 单券入口按当前库状态逐个得到主体判定
+        return validateCompanies(codes, adjustMode, code -> evaluate(code, inboundPoolIds, outboundPoolIds));
+    }
+
+    /** 按指定入口提供的主体判定汇总 ABS 黑名单质押库资格 */
+    String validateCompanies(List<String> codes, String adjustMode, Function<String, Decision> evaluateCompany) {
         if (codes.isEmpty()) {
             return "无法识别 ABS 关联主体，不能调整黑名单质押库";
         }
         for (String code : codes) {
-            Decision decision = evaluate(code, inboundPoolIds, outboundPoolIds);
+            Decision decision = evaluateCompany.apply(code);
             if (decision.shouldBeInBlacklist()) {
                 if (AdjustMode.IN.getCode().equals(adjustMode)) {
                     return null;
@@ -192,6 +199,12 @@ public class PledgeBlacklistRuleService {
             return "无法识别发行主体，不能调整黑名单质押库";
         }
         Decision decision = evaluate(companyCode, inboundPoolIds, outboundPoolIds);
+        // 使用同一套方向规则生成失败原因
+        return validateDecision(decision, adjustMode);
+    }
+
+    /** 按已有三条件判定结果生成调入或调出失败原因 */
+    String validateDecision(Decision decision, String adjustMode) {
         if (AdjustMode.IN.getCode().equals(adjustMode) && !decision.shouldBeInBlacklist()) {
             return "发行主体未命中黑名单质押库三个条件，不能调入17（黑名单质押库）";
         }

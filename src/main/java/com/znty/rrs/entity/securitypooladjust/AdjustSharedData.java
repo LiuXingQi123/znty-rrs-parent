@@ -21,6 +21,9 @@ import java.util.Set;
 @Data
 public class AdjustSharedData {
 
+    /** 批次校验时复用的数据库数据 */
+    private BatchSecurityCheckData batchData;
+
     /** 两个批量申请入口在单笔匹配结果上追加配置的批量流程 */
     private boolean batchFlowOptionsEnabled;
 

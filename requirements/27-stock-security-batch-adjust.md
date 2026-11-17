@@ -37,7 +37,7 @@
 | 可选证券筛选 | 代码 / 简称 / 市场 / 是否特征 | 另加**发行主体**；调入另加来源池；是否特征含 ABS/担保/永续/次级/私募/含权/标准信用债，多选 AND |
 | 来源池 | 无 | 调入固定白名单 6 项，调出不设来源池查询条件 |
 
-**校验 / 提交与证券池批量一致**（编排细节见 [12](12-batch-security-pool-adjust.md) §3.2～§3.5）：`checkAdjust` 逐券委托 `SecurityPoolAdjustService.checkBatchAdjust`（完整单笔候选 + 公共方法追加配置的 batchIn/batchOut，统一推荐批量）；`addAdjustLog` 分组后委托 `submitAdjustLog`（共享附件与 `BatchNoContext`），整批防重复、直通用 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`；手工项 `adjustType=手动批量调整`。本类只编排产品库与调入来源池差异，不新建业务表。
+**校验 / 提交与证券池批量一致**（编排细节见 [12](12-batch-security-pool-adjust.md) §3.2～§3.5）：`checkAdjust` 调用 `BatchSecurityCheckService` 一次，集中读取证券、池关系、容量、在途状态、主体名单等数据，再逐券执行共用规则（完整单笔候选 + 公共方法追加配置的 batchIn/batchOut，统一推荐批量）；`addAdjustLog` 分组后委托 `submitAdjustLog`（共享附件与 `BatchNoContext`），整批防重复、直通用 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`；手工项 `adjustType=手动批量调整`。本类只编排产品库与调入来源池差异，不新建业务表。
 
 ---
 
@@ -68,7 +68,7 @@
 - 菜单：债券研究 → 存量证券批量调整
 - 「请选择投资池」默认收起。树请求 `includePoolTypes: ['bond_product']` 且 `includeVarietyCodes: ['bond']`，仅保留债券产品库分支。
 - 可选证券区：调入展示来源池多选（必选），调出不展示来源池；市场筛选直接读取 `rrs_securityinfo.market`（与 Wind `EXCHMARKET` 一致，银行间使用 NIB），临时代码使用登记市场；均支持发行主体、代码、简称、市场、是否特征，默认 10 条/页；列表「剩余期限(年)」同 [12]（`dateExists` 库内为**天**，前端 ÷365 展示），并展示 ABS/担保/永续/次级/私募/含权/标准信用债七列「是/否」Tag
-- 担保人/权益人与证券池批量调整保持一致：查询四类关系主体并默认选中第一条，`115200000` 展示为“债务主体”；ABS 显示自选权益人及担保人主体内评分，自选时评分优先取自选主体。
+- 担保人/权益人与证券池批量调整保持一致：查询四类关系主体并默认选中第一条，`115200000` 展示为“债务主体”；ABS 显示自选权益人及担保人主体内评分，自选时评分优先取自选主体。自选候选分页使用 `batchSecurityPoolAdjust/querySelfSelectedRightsHolderPage`。
 - 工作台内容区为固定底部操作栏预留可滚动安全区，候选表格分页不得被“返回/下一步”遮挡
 
 ---

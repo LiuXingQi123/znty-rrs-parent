@@ -568,7 +568,7 @@ public class SecurityPoolInboundMaterialExemptionTest {
             definition.setFlowKey("bond:fast-inbound");
             definition.setStatus("active");
             Constructor<?> snapshotConstructor = Class.forName(
-                    "com.znty.rrs.service.SecurityPoolAdjustService$FlowSnapshot").getDeclaredConstructors()[0];
+                    "com.znty.rrs.service.SecurityPoolCheckRules$FlowSnapshot").getDeclaredConstructors()[0];
             snapshotConstructor.setAccessible(true);
             Object snapshot = snapshotConstructor.newInstance(definition, null, nodes,
                     Collections.singletonList(edge(1L, 3L)), Collections.emptyMap(), Collections.emptyMap());

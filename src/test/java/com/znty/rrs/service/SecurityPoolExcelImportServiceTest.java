@@ -17,6 +17,7 @@ import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportCheckItemDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData;
 import com.znty.rrs.entity.securitypooladjust.AdjustSubmitDto;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
@@ -25,7 +26,6 @@ import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.SecurityPoolExcelImportMapper;
-import com.znty.rrs.mapper.AbsIdentityMapper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -57,6 +57,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -97,7 +98,7 @@ public class SecurityPoolExcelImportServiceTest {
         item.setFailReasons(Collections.singletonList("目标投资池已锁定"));
         AdjustCheckDto dto = new AdjustCheckDto();
         dto.setItems(Collections.singletonList(item));
-        when(securityPoolAdjustService.checkExcelAdjust(any())).thenReturn(dto);
+        when(batchSecurityCheckService.checkExcelItem(any(), any())).thenReturn(dto);
         when(investmentPoolMapper.queryPoolById(100L)).thenReturn(pool);
         when(importMapper.queryPoolMemberList(100L)).thenReturn(Collections.singletonList(member));
         when(securityPoolAdjustMapper.querySecurityHasPendingProcess("C1")).thenReturn(true);
@@ -110,7 +111,7 @@ public class SecurityPoolExcelImportServiceTest {
         assertTrue(results.get(0).isCanAdjust());
         assertTrue(results.get(0).getFailReasons().contains("目标投资池已锁定"));
         assertEquals("Excel清空", results.get(0).getAdjustType());
-        verify(securityPoolAdjustService).checkExcelAdjust(any());
+        verify(batchSecurityCheckService).checkExcelItem(any(), any());
         verify(securityPoolAdjustService, never()).checkAdjust(any());
         verify(securityPoolAdjustMapper, never()).querySecurityHasPendingProcess("C1");
     }
@@ -136,7 +137,7 @@ public class SecurityPoolExcelImportServiceTest {
         companyCheck.getItems().get(0).setFailReasons(Collections.singletonList("存在进行中的流程"));
         when(forbiddenPoolAdjustService.checkCompanyExcelAdjust(any(ForbiddenPoolAdjustCheckReq.class), eq(null)))
                 .thenReturn(companyCheck);
-        when(securityPoolAdjustService.checkExcelAdjust(any(AdjustCheckReq.class))).thenReturn(clearCheckResult(bond));
+        when(batchSecurityCheckService.checkExcelItem(any(AdjustCheckReq.class), any())).thenReturn(clearCheckResult(bond));
         ForbiddenPoolAdjustSubmitDto companySubmit = new ForbiddenPoolAdjustSubmitDto();
         companySubmit.setLogIds(Collections.singletonList(101L));
         when(forbiddenPoolAdjustService.addCompanyExcelAdjustLog(any(ForbiddenPoolAdjustSubmitReq.class)))
@@ -150,6 +151,7 @@ public class SecurityPoolExcelImportServiceTest {
 
         for (boolean companyImport : new boolean[]{false, true}) {
             listed.setSecurityType(companyImport ? "company" : "bond");
+            imported.setFld001(companyImport ? "LISTED" : "listed");
             List<SecurityPoolExcelImportCheckItemDto> results = ReflectionTestUtils.invokeMethod(service,
                     "checkClearTargetOutbound", Collections.singletonList(imported), Collections.singleton(16L), companyImport, false, "1");
             assertEquals(2, results.size());
@@ -297,6 +299,7 @@ public class SecurityPoolExcelImportServiceTest {
     private InvestmentPoolMapper investmentPoolMapper;
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
     private SecurityPoolAdjustService securityPoolAdjustService;
+    private BatchSecurityCheckService batchSecurityCheckService;
     private ForbiddenPoolAdjustService forbiddenPoolAdjustService;
     /** 模拟数据库按原条件返回的批量匹配结果 */
     private final Map<String, List<String>> companyMatches = new HashMap<>();
@@ -308,11 +311,15 @@ public class SecurityPoolExcelImportServiceTest {
         investmentPoolMapper = mock(InvestmentPoolMapper.class);
         securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         securityPoolAdjustService = mock(SecurityPoolAdjustService.class);
+        batchSecurityCheckService = mock(BatchSecurityCheckService.class);
+        when(batchSecurityCheckService.loadExcelCheckData(anyList(), anyBoolean())).thenReturn(new BatchSecurityCheckData());
+        when(batchSecurityCheckService.loadExcelRatingCandidates(anyList(), anyList())).thenReturn(new BatchSecurityCheckData());
         forbiddenPoolAdjustService = mock(ForbiddenPoolAdjustService.class);
         ReflectionTestUtils.setField(service, "securityPoolExcelImportMapper", importMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "securityPoolAdjustService", securityPoolAdjustService);
+        ReflectionTestUtils.setField(service, "batchSecurityCheckService", batchSecurityCheckService);
         ReflectionTestUtils.setField(service, "forbiddenPoolAdjustService", forbiddenPoolAdjustService);
         when(forbiddenPoolAdjustService.createCompanyCheckContext(anyMap())).thenAnswer(invocation ->
                 new CompanyAdjustCheckContext(invocation.getArgument(0), Collections.emptyList(), Collections.emptyList()));
@@ -623,6 +630,22 @@ public class SecurityPoolExcelImportServiceTest {
         assertEquals("0", rows.get(1).getChkRslt());
     }
 
+    /** 同池证券代码仅大小写不同时，上传按重复处理 */
+    @Test
+    public void uploadSecurityShouldDetectDuplicateCodeIgnoringCase() throws Exception {
+        ReflectionTestUtils.setField(service, "commonMapper", mock(CommonMapper.class));
+        List<SysImpTmpDetlBo> rows = uploadRows("security",
+                new String[]{"父池名称", "子池名称", "证券名称", "证券代码"}, new String[][]{
+                        {"债券库", "一级库", "测试债", "110001.sh"},
+                        {"债券库", "一级库", "测试债", "110001.SH"},
+                        {"债券库", "二级库", "测试债", "110001.Sh"}
+                });
+        assertEquals("0", rows.get(0).getChkRslt());
+        assertEquals("2", rows.get(1).getChkRslt());
+        assertTrue(rows.get(1).getChkDscr().contains("相同证券代码与子池重复"));
+        assertEquals("0", rows.get(2).getChkRslt());
+    }
+
     /** 构造主体 Excel，并捕获上传写入的明细。 */
     private List<SysImpTmpDetlBo> uploadCompanyRows(String[][] values) throws Exception {
         String[] columns = values[0].length == 5
@@ -893,31 +916,32 @@ public class SecurityPoolExcelImportServiceTest {
 
     @Test
     public void checkImport_PassWhenSecurityOkAndNotInPool() {
-        assertSecurityImportWithTips(Collections.emptyList());
+        assertSecurityImportWithTips(Collections.emptyList(), "110001.SH");
     }
 
     @Test
     public void checkAndSubmitShouldKeepWarningsAndAcceptOriginallyFailedSecurity() {
-        assertSecurityImportWithTips(Arrays.asList("证券当前在调入限制池中：债券禁止库", "证券当前在禁止池中"));
+        assertSecurityImportWithTips(Arrays.asList("证券当前在调入限制池中：债券禁止库", "证券当前在禁止池中"),
+                "110001.sh");
     }
 
     /** 同批 ABS 多主体全部作为不可调整行返回，其他独立证券仍通过 */
     @Test
     public void conflictingAbsRowsShouldReturnReasonsWithoutAbortingImportCheck() {
         AbsIdentityService identity = new AbsIdentityService();
-        AbsIdentityMapper identities = mock(AbsIdentityMapper.class);
-        ReflectionTestUtils.setField(identity, "absIdentityMapper", identities);
         ReflectionTestUtils.setField(service, "absIdentityService", identity);
         SecurityInfoBo abs = new SecurityInfoBo();
         abs.setWindCode("ABS1");
         abs.setSecurityType("abs");
-        when(identities.queryAbsSecurityList(anyList())).thenReturn(Collections.singletonList(abs));
-        when(securityPoolAdjustMapper.querySecurityBoByCode("ABS1")).thenReturn(abs);
         RelatedRatingCompanyDto first = new RelatedRatingCompanyDto();
         first.setCompanyCode("A");
         RelatedRatingCompanyDto second = new RelatedRatingCompanyDto();
         second.setCompanyCode("B");
-        identity.rememberRelated("ABS1", Arrays.asList(first, second));
+        BatchSecurityCheckData data = new BatchSecurityCheckData();
+        data.securities.put("ABS1", abs);
+        data.ratingCompanies.put("ABS1", Arrays.asList(first, second));
+        when(batchSecurityCheckService.loadExcelCheckData(anyList(), eq(false))).thenReturn(data);
+        when(batchSecurityCheckService.findConflictingAbsCodes(anyList(), eq(data))).thenCallRealMethod();
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(101L);
         when(importMapper.queryEnabledLeafPoolByParentAndChildName("父池", "子池", true)).thenReturn(pool);
@@ -931,7 +955,7 @@ public class SecurityPoolExcelImportServiceTest {
             if (index < 2) row.setFld011(index == 0 ? "A" : "B");
             rows.add(row);
         }
-        when(securityPoolAdjustService.checkExcelAdjust(any())).thenAnswer(invocation -> {
+        when(batchSecurityCheckService.checkExcelItem(any(), any())).thenAnswer(invocation -> {
             AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
             item.setItemTag("manual");
             item.setCanAdjust(true);
@@ -950,10 +974,19 @@ public class SecurityPoolExcelImportServiceTest {
         assertEquals("2", rows.get(0).getChkRslt());
         assertEquals("2", rows.get(1).getChkRslt());
         assertEquals("1", rows.get(2).getChkRslt());
+
+        // 一行的池名称错误不掩盖同一 ABS 的不同主体选择
+        rows.get(1).setFld004(null);
+        result = ReflectionTestUtils.invokeMethod(service,
+                "checkSecurityImport", rows, true, false, "1", new Date());
+        assertEquals(3, result.size());
+        assertTrue(result.get(0).getFailReasons().get(0).contains("同批申请中选择了不同主体"));
+        assertTrue(result.get(1).getFailReasons().contains("子池名称为空"));
+        assertTrue(result.get(2).isCanAdjust());
     }
 
     /** 使用真实导入编排验证来源明细、校验快照和提交参数保持一致 */
-    private void assertSecurityImportWithTips(List<String> tips) {
+    private void assertSecurityImportWithTips(List<String> tips, String inputCode) {
         SysImpTmpBo batch = new SysImpTmpBo();
         batch.setImpId("IMP3");
         batch.setFld001("in");
@@ -966,7 +999,7 @@ public class SecurityPoolExcelImportServiceTest {
         SysImpTmpDetlBo item = new SysImpTmpDetlBo();
         item.setId(10L);
         item.setImpId("IMP3");
-        item.setFld001("110001.SH");
+        item.setFld001(inputCode);
         item.setFld002("测试债");
         item.setFld003("信用债大库");
         item.setFld004("一级库");
@@ -1006,7 +1039,15 @@ public class SecurityPoolExcelImportServiceTest {
         ri.setFlowOptions(Collections.singletonList(normal));
         AdjustCheckDto checkDto = new AdjustCheckDto();
         checkDto.setItems(Collections.singletonList(ri));
-        when(securityPoolAdjustService.checkExcelAdjust(any(AdjustCheckReq.class))).thenReturn(checkDto);
+        when(batchSecurityCheckService.checkExcelItem(any(AdjustCheckReq.class), any())).thenReturn(checkDto);
+        BatchSecurityCheckData data = new BatchSecurityCheckData();
+        data.excelSecurityCodes.put("110001.SH", "110001.SH");
+        when(batchSecurityCheckService.loadExcelCheckData(anyList(), eq(false))).thenAnswer(invocation -> {
+            List<AdjustCheckReq> checks = invocation.getArgument(0);
+            assertEquals(inputCode, checks.get(0).getSecurityCode());
+            checks.get(0).setSecurityCode(data.resolveExcelSecurityCode(inputCode));
+            return data;
+        });
 
         when(importMapper.queryItemCountByCheckResult(eq("IMP3"), eq("0"))).thenReturn(0);
         batch.setPassCount(1);
@@ -1024,11 +1065,12 @@ public class SecurityPoolExcelImportServiceTest {
 
         SecurityPoolExcelImportDto dto = service.checkImport(req);
         assertNotNull(dto);
-        verify(securityPoolAdjustService).checkExcelAdjust(any(AdjustCheckReq.class));
+        verify(batchSecurityCheckService).checkExcelItem(any(AdjustCheckReq.class), any());
         verify(importMapper).editItemCheckResult(any(SysImpTmpDetlBo.class));
         verify(importMapper).editBatchCheckResult(any(SysImpTmpBo.class));
         verify(forbiddenPoolAdjustService, never()).checkCompanyExcelAdjust(any(), any());
         assertEquals("1", item.getChkRslt());
+        assertEquals("110001.SH", item.getFld001());
         assertEquals(1, dto.getCheckPassCount().intValue());
         assertEquals(0, dto.getCheckFailCount().intValue());
         if (!tips.isEmpty()) {
@@ -1106,16 +1148,24 @@ public class SecurityPoolExcelImportServiceTest {
     public void applyDefaultRatingCompany_ShouldFillAbsRightsHolderAndNonAbsGuarantor() {
         SecurityInfoBo absSecurity = new SecurityInfoBo();
         absSecurity.setAbsFlag(1);
-        when(securityPoolAdjustMapper.querySecurityBoByCode("ABS001.IB")).thenReturn(absSecurity);
-        when(securityPoolAdjustMapper.queryRelatedRatingCompanyList("ABS001.IB"))
-                .thenReturn(buildRelatedCompanies("RIGHTS_FIRST", "RIGHTS_SECOND"));
+        BatchSecurityCheckData data = new BatchSecurityCheckData();
+        data.securities.put("ABS001.IB", absSecurity);
+        data.ratingCompanies.put("ABS001.IB", buildRelatedCompanies("RIGHTS_FIRST", "RIGHTS_SECOND"));
 
         AdjustCheckReq absReq = new AdjustCheckReq();
         absReq.setSecurityCode("ABS001.IB");
-        ReflectionTestUtils.invokeMethod(service, "applyDefaultRatingCompany", absReq);
+        ReflectionTestUtils.invokeMethod(service, "applyClearRatingCompany", absReq, data);
 
         assertEquals("RIGHTS_FIRST", absReq.getRightsHolderCode());
         assertEquals(null, absReq.getGuarantorCode());
+
+        BatchSecurityCheckData.Row occupied = new BatchSecurityCheckData.Row();
+        occupied.setCompanyCode("OCCUPIED");
+        data.absIdentities.put("ABS001.IB", Collections.singletonList(occupied));
+        absReq.setRightsHolderCode(null);
+        ReflectionTestUtils.invokeMethod(service, "applyClearRatingCompany", absReq, data);
+        assertEquals("OCCUPIED", absReq.getSelfSelectedRightsHolderCode());
+        verify(securityPoolAdjustMapper, never()).querySecurityBoByCode("ABS001.IB");
 
         SecurityInfoBo normalSecurity = new SecurityInfoBo();
         normalSecurity.setAbsFlag(0);

@@ -20,7 +20,7 @@ DELETE FROM `sys_scheduled_task_evt`;
 DELETE FROM `sys_scheduled_task`;
 
 -- ----------------------------------------------------------------------------
--- 定时任务配置样例（20 条）
+-- 定时任务配置样例（19 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `sys_scheduled_task` (
     `id`, `task_code`, `task_name`, `description`, `cron_expression`, `schedule_enabled`,
@@ -28,14 +28,14 @@ INSERT INTO `sys_scheduled_task` (
     `last_duration_ms`, `last_trigger_type`, `is_deleted`, `crte_time`, `updt_time`
 ) VALUES
 -- cron 执行顺序：临时代码多时点替换 → 22:00 同步债券类型 → 22:40 再替换 → 再清到期 → 先改主体（先出后入）→ 再同步旗下债（先入后出）
--- 临时代码 04:40/08:40/09:40/13:40/18:40/22:40 → 22:00 债券类型变更 → 23:00 到期债股出 → 23:05 CRMW到期出 → 23:10 外评主体出 → 23:15 外评主体入 → 23:20 同池债入 → 次日06:00观察名单及联动同步
+-- 临时代码 04:40/08:40/09:40/13:40/18:40/22:40 → 22:00 债券类型变更 → 23:00 到期债股出 → 23:05 CRMW到期出 → 23:10 外评主体出 → 23:15 外评主体入 → 23:21 旗下债券补入 → 次日06:00观察名单及联动同步
 (13, 'bond_temp_code_replace', '债券临时代码替换（仅债券）', '1. 每天 04:40、08:40、09:40、13:40、18:40、22:40 执行，无需扩展参数。\n2. 扫描 rrs_temp_security_code 中 status=temporary 且已由外部数据补齐 security_code 的记录。\n3. 正式名称、市场、类型以 rrs_securityinfo 正式主数据为准。\n4. 普通池按同券市场代码整组转换；在途沿用原审批并补关联项，已在池临时退出后正式组统一进入。\n5. CRMW 保留凭证，标的按全部市场代码整组转换并逐码记账；即时记录调整人为系统，oprt_source 记为 job；任一成员失败回滚本条映射。\n6. 本任务与 wind_code_sync 使用独立扫描入口，共用业务转换组件。', '0 40 4,8,9,13,18,22 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
 (14, 'bond_security_type_change', '债券类型变更（仅债券）', '1. 每天 22:00 执行，无需扩展参数。\n2. 以 rrs_securityinfo.security_type 为最新证券类型。\n3. 仅处理新旧类型都属于 bond 大类的生效记录。\n4. 同步 ip_pool_status、ip_pool_status_crmw 及各池状态当前关联的 ip_adjust_log。\n5. 其他历史调库日志保留原始快照。\n6. 位于 18:40 临时代码替换之后、23:00 到期及主体调库任务之前；22:40 替换直接使用正式主数据类型。', '0 0 22 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
 (1, 'security_expired_auto_out', '到期证券自动出池', '1. 每天 23:00 执行。\n2. 扫描 poolIds 指定目标池；默认 [15]，即 15（债券禁止库）。\n3. 已生效债券、股票的到期日早于当前日期减去 maturityOffsetDays 天时，自动调出；省略默认 1（原 T-2），支持整数、0 和负数。\n4. 主体、基金、CRMW 不处理；CRMW 请使用独立到期出池任务。\n5. 证券命中目标池的调出限制池时，跳过该条记录。\n6. 仅软删除成功才写日志并计入影响条数。', '0 0 23 * * ?', 0, '{"poolIds":[15],"maturityOffsetDays":1}', NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
 (2, 'crmw_expired_auto_out', 'CRMW到期自动出池', '1. 每天 23:05 执行。\n2. 扫描 poolIds 指定 CRMW 目标池；默认 [18]，即 18（CRMW库）。\n3. 已生效 CRMW 组合的凭证到期日早于当前日期减去 maturityOffsetDays 天时，自动调出；省略默认 1（原 T-2），支持整数、0 和负数。\n4. 凭证命中目标池的调出限制池时，跳过该条记录。\n5. 仅软删除成功才写日志并计入影响条数。', '0 5 23 * * ?', 0, '{"poolIds":[18],"maturityOffsetDays":1}', NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
 (3, 'company_outer_rating_not_aa_minus_auto_out', '外评非AA-及以下主体自动出池（仅主体）', '只调出主体。AA-及以下不出池；空评级/近一年无认可外评不出池。旗下债券由独立任务同步', '0 10 23 * * ?', 0, '{"poolIds":[17],"limitPoolIds":[]}', NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
 (4, 'company_outer_rating_aa_minus_auto_in', '外评AA-及以下主体自动入池（仅主体）', '只调入主体。AA-及以下因评级入池；空评级/近一年无认可外评不因评级入池，命中禁止库 15 或重点观察 23 时仍按相应条件入池', '0 15 23 * * ?', 0, '{"poolIds":[17]}', NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
-(6, 'company_inpool_bond_auto_in', '在池主体旗下债券自动入池（已排除ABS债）（仅债券）', '每10分钟同步普通债和CRMW，支持同池和跨池，复核市场、容量、调入限制及17三条件', '0 1/10 * * * ?', 0, '{"poolIds":[15,16,17,23]}', NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
+(6, 'company_inpool_bond_auto_in', '在池主体旗下债券自动入池（已排除ABS债）（仅债券）', '按主体生效池筛选普通债和CRMW，批量执行手工单券准入规则。整组通过且可直通才写入，缺少报告豁免或需要人工审批的记录跳过并记录原因。minDaysToMaturity 默认 0，到期当天可入；填 1 时到期当天不入。', '0 1/10 * * * ?', 0, '{"poolIds":[15,16,17,23],"minDaysToMaturity":0}', NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
 (7, 'company_not_in_pool_bond_auto_out', '主体依据失效的债券自动出池（仅债券）', '只撤销主体依据全部失效且可识别的跟随记录，保留其他渠道入池记录', '0 3/10 * * * ?', 0, '{"poolIds":[15,16,17,23]}', NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
 (8, 'bond_grade_inconformity_alert', '不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）（仅债券）', '1. 每天 01:00 执行，无需扩展参数。\n2. 扫描已在信用债 1～5 级且不符合当前主体债入池规则的债券，含 ABS 债，不含境外债。\n3. ABS 确认权益人后主体已固定到主档发行人字段，直接取主档发行人内评，不查询入库快照。\n4. 担保债可能对应多个担保人，按当前在池记录的入库快照取当时选定的担保人，再查该担保人最新内评。\n5. 写入待办供人工下调或出库，不自动修改池状态。\n6. 执行摘要区分本轮命中、沿用已处理、本轮失效、仍待处理。\n7. 对齐老系统 InconformityMaingrade2Job。', '0 0 1 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),
 (9, 'hs_pool_full_excel_export', '恒生池全量数据导出（不含已到期）', '1. 每天 01:10 执行。\n2. poolIds 可限制导出叶子池，未填写时导出全部叶子池。\n3. 导出当前已生效的非主体证券和 CRMW；普通证券排除已到期数据，CRMW 不校验到期日。\n4. 恒生池名称为空时使用投资池完整名称，竖线可拆分多个 Sheet，同名 Sheet 合并并记录警告。\n5. 固定导出证券名称、证券代码、操作类型、市场名称、备注；全量操作类型和备注为空。\n6. 市场输出中文名称并按多个市场代码字段拆行，该口径后续再确认。\n7. outputDir 下按 yyyyMMdd 建日期目录并生成 bak 备份；FTP 暂未接入。', '0 10 1 * * ?', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, NOW(), NOW()),

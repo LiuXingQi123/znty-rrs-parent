@@ -2,12 +2,10 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
-import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchAdjustDto;
 import com.znty.rrs.entity.stocksecuritybatchadjust.StockSecurityBatchAdjustSubmitReq;
-import com.znty.rrs.mapper.AbsIdentityMapper;
 import com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.StockSecurityBatchAdjustMapper;
 import org.junit.Test;
@@ -15,12 +13,15 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 /** 两个批量入口的同批 ABS 不同主体应返回逐项不可调整，不中断整批校验 */
 public class AbsBatchIdentityCheckTest {
@@ -31,7 +32,7 @@ public class AbsBatchIdentityCheckTest {
         BatchSecurityPoolAdjustMapper mapper = mock(BatchSecurityPoolAdjustMapper.class);
         ReflectionTestUtils.setField(service, "batchSecurityPoolAdjustMapper", mapper);
         when(mapper.queryEnabledLeafPoolCount(101L)).thenReturn(1);
-        // 使用真实主体冲突组件及正常单券校验响应，验证批量编排保留失败结果
+        // 批量编排应透传校验服务的主体冲突原因
         prepareIdentity(service);
         BatchSecurityInboundAdjustReq req = new BatchSecurityInboundAdjustReq();
         req.setCurrentUserId("1");
@@ -63,7 +64,7 @@ public class AbsBatchIdentityCheckTest {
         StockSecurityBatchAdjustMapper mapper = mock(StockSecurityBatchAdjustMapper.class);
         ReflectionTestUtils.setField(service, "stockSecurityBatchAdjustMapper", mapper);
         when(mapper.queryEnabledLeafPoolCount(101L)).thenReturn(1);
-        // 使用相同真实主体组件验证存量入口，不给普通证券追加身份限制
+        // 存量入口应整批传入并保留逐项失败原因
         prepareIdentity(service);
         StockSecurityBatchAdjustSubmitReq req = new StockSecurityBatchAdjustSubmitReq();
         req.setCurrentUserId("1");
@@ -81,6 +82,10 @@ public class AbsBatchIdentityCheckTest {
 
         StockSecurityBatchAdjustDto result = service.checkAdjust(req);
 
+        BatchSecurityCheckService batch = (BatchSecurityCheckService)
+                ReflectionTestUtils.getField(service, "batchSecurityCheckService");
+        verify(batch).checkSecurityBatch(anyList(), eq(false));
+
         assertThat(result.getItems()).hasSize(3);
         assertThat(result.getItems().subList(0, 2)).allSatisfy(item -> {
             assertThat(item.isCanAdjust()).isFalse();
@@ -89,26 +94,31 @@ public class AbsBatchIdentityCheckTest {
         assertThat(result.getItems().get(2).isCanAdjust()).isTrue();
     }
 
-    /** 为批量编排设置真实身份组件，单券响应逐次创建，避免结果对象互相污染 */
+    /** 为两个批量入口设置共用校验依赖，每项创建独立测试结果 */
     private void prepareIdentity(Object target) {
         AbsIdentityService identity = new AbsIdentityService();
-        AbsIdentityMapper mapper = mock(AbsIdentityMapper.class);
-        SecurityInfoBo abs = new SecurityInfoBo();
-        abs.setWindCode("ABS1");
-        abs.setSecurityType("abs");
-        when(mapper.queryAbsSecurityList(anyList())).thenReturn(Collections.singletonList(abs));
-        ReflectionTestUtils.setField(identity, "absIdentityMapper", mapper);
-        ReflectionTestUtils.setField(target, "absIdentityService", identity);
-        SecurityPoolAdjustService single = mock(SecurityPoolAdjustService.class);
-        when(single.checkBatchAdjust(any())).thenAnswer(invocation -> {
-            AdjustCheckReq req = invocation.getArgument(0);
-            AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
-            item.setSecurityCode(req.getSecurityCode());
-            item.setCanAdjust(true);
-            AdjustCheckDto result = new AdjustCheckDto();
-            result.setItems(Collections.singletonList(item));
-            return result;
+        BatchSecurityCheckService batch = mock(BatchSecurityCheckService.class);
+        when(batch.checkSecurityBatch(anyList(), eq(false))).thenAnswer(invocation -> {
+            List<AdjustCheckReq> requests = invocation.getArgument(0);
+            return requests.stream().map(req -> {
+                AdjustCheckDto result = allowed(req);
+                if ("ABS1".equals(req.getSecurityCode())) {
+                    identity.applyCheckFailure(result.getItems().get(0),
+                            "同一 ABS[ABS1]在同批申请中选择了不同主体，请统一后重新校验");
+                }
+                return result;
+            }).collect(Collectors.toList());
         });
-        ReflectionTestUtils.setField(target, "securityPoolAdjustService", single);
+        ReflectionTestUtils.setField(target, "batchSecurityCheckService", batch);
+    }
+
+    /** 创建独立结果，避免一条身份失败污染其他请求 */
+    private AdjustCheckDto allowed(AdjustCheckReq req) {
+        AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+        item.setSecurityCode(req.getSecurityCode());
+        item.setCanAdjust(true);
+        AdjustCheckDto result = new AdjustCheckDto();
+        result.setItems(Collections.singletonList(item));
+        return result;
     }
 }

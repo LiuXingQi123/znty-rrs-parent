@@ -2,7 +2,11 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.mapper.AbsIdentityMapper;
+import com.znty.rrs.mapper.BatchSecurityCheckMapper;
+import com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -24,6 +28,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -67,7 +73,7 @@ public class AbsIdentityMapperIntegrationTest {
         Configuration config = new Configuration(new Environment("abs-test", new JdbcTransactionFactory(), ds));
         config.setMapUnderscoreToCamelCase(true);
         for (String mapper : Arrays.asList("AbsIdentityMapper", "SecurityPoolAdjustMapper", "AutoAdjustMapper",
-                "CommonMapper", "WindRatingMapper")) {
+                "CommonMapper", "WindRatingMapper", "BatchSecurityCheckMapper", "BatchSecurityPoolAdjustMapper")) {
             try (InputStream in = getClass().getResourceAsStream("/mapper/" + mapper + ".xml")) {
                 new XMLMapperBuilder(in, config, mapper, config.getSqlFragments()).parse();
             }
@@ -103,6 +109,51 @@ public class AbsIdentityMapperIntegrationTest {
                     .extracting(IpAdjustLogBo::getId).containsExactly(mapper.queryPendingScheduledInboundLog("ABS1", 101L).getId());
             assertThat(mapper.queryPendingScheduledInboundLogs(Collections.singletonList("ABS1"), 102L))
                     .extracting(IpAdjustLogBo::getId).containsExactly(13L);
+        }
+    }
+
+    /** 批量一次取回主档、普通快照和 CRMW 快照的占用，以及尚未确认主体的记录 */
+    @Test
+    public void batchIdentityRowsShouldMatchSingleSecurityChecks() {
+        jdbc.update("UPDATE rrs_securityinfo SET issuer_code='OWNER' WHERE wind_code='ABS1'");
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code, abs_flag, security_type) VALUES ('ABS2',1,'abs')");
+        jdbc.update("INSERT INTO ip_pool_status(security_code,target_pool_id,audit_status,is_deleted) VALUES('ABS2',101,'20',0)");
+        jdbc.update("INSERT INTO ip_adjust_log(id,security_code,pool_type,crmw_scode,audit_status,is_deleted) "
+                + "VALUES(1,'ABS1','observe',NULL,'00',0),(2,'ABS1','crmw','CRMW.IB','11',0),"
+                + "(3,'ABS2','observe',NULL,'20',0)");
+        jdbc.update("INSERT INTO ip_adjust_security_snapshot(adjust_log_id,wind_code,issuer_code,is_deleted) "
+                + "VALUES(1,'ABS1','PENDING',0),(3,'ABS2','TERMINAL',0)");
+        jdbc.update("INSERT INTO ip_adjust_security_snapshot_crmw(adjust_log_id,wind_code,issuer_code,is_deleted) "
+                + "VALUES(2,'ABS1','CRMW_OWNER',0)");
+        try (SqlSession session = factory.openSession()) {
+            AbsIdentityMapper single = session.getMapper(AbsIdentityMapper.class);
+            BatchSecurityCheckMapper batch = session.getMapper(BatchSecurityCheckMapper.class);
+            List<String> codes = Arrays.asList("ABS1", "ABS2");
+            List<Row> rows = batch.queryAbsIdentities(codes);
+            for (String code : codes) {
+                List<Row> matching = rows.stream().filter(row -> code.equals(row.getSecurityCode()))
+                        .collect(Collectors.toList());
+                assertThat(matching.stream().anyMatch(Row::isUnconfirmedIdentity))
+                        .isEqualTo(single.queryUnconfirmedActiveOrPending(code));
+                assertThat(matching).filteredOn(row -> !row.isUnconfirmedIdentity())
+                        .extracting(Row::getCompanyCode)
+                        .containsExactlyElementsOf(single.queryOccupiedIdentityCodes(code));
+            }
+        }
+    }
+
+    /** 批量精确取数只返回有效主体，弹窗仍按代码前缀和名称筛选 */
+    @Test
+    public void batchRightsHolderLookupsShouldReturnMatchingCompanyCodes() {
+        jdbc.update("INSERT INTO ais_inv_analysis.t_inv_company VALUES('A','ALPHA',NULL),('AA','ALPHA2',NULL),"
+                + "('B','BETA',NULL),('EMPTY',NULL,NULL)");
+        try (SqlSession session = factory.openSession()) {
+            assertThat(session.getMapper(BatchSecurityCheckMapper.class)
+                    .querySelfSelectedCompanies(Arrays.asList("A", "B", "EMPTY")))
+                    .extracting(SelfSelectedRightsHolderDto::getCompanyCode).containsExactlyInAnyOrder("A", "B");
+            assertThat(session.getMapper(BatchSecurityPoolAdjustMapper.class)
+                    .querySelfSelectedRightsHolderPage("A", "ALPHA"))
+                    .extracting(SelfSelectedRightsHolderDto::getCompanyCode).containsExactlyInAnyOrder("A", "AA");
         }
     }
 

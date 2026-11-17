@@ -2943,7 +2943,7 @@ public class SecurityPoolAdjustServiceStepTest {
         for (NodeApprovalConfigBo config : configs) {
             configMap.put(config.getNodeId(), config);
         }
-        Class<?> snapshotClass = Class.forName("com.znty.rrs.service.SecurityPoolAdjustService$FlowSnapshot");
+        Class<?> snapshotClass = Class.forName("com.znty.rrs.service.SecurityPoolCheckRules$FlowSnapshot");
         Constructor<?> constructor = snapshotClass.getDeclaredConstructors()[0];
         constructor.setAccessible(true);
         return constructor.newInstance(null, null, nodeMap, edges, configMap, handlerMap);

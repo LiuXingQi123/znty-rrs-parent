@@ -202,4 +202,79 @@
                 AND child.is_deleted = 0
           )
     </select>
+    <select id="querySelfSelectedRightsHolderPage"
+            resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
+        <!-- 从投资分析主体表按编码汇总可选择主体，并应用页面查询条件。 -->
+        WITH source_company AS (
+            SELECT company.wind_code AS company_code
+                   , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
+            FROM ais_inv_analysis.t_inv_company company
+            <where>
+                AND company.wind_code IS NOT NULL
+                AND company.wind_code != ''
+                AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
+                <if test="companyCode != null and companyCode != ''">
+                    AND company.wind_code LIKE CONCAT(#{companyCode}, '%')
+                </if>
+                <if test="companyName != null and companyName != ''">
+                    AND (company.full_name LIKE CONCAT('%', #{companyName}, '%')
+                         OR company.short_names LIKE CONCAT('%', #{companyName}, '%'))
+                </if>
+            </where>
+            GROUP BY company.wind_code
+        )
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
+        , ranked_grade AS (
+            SELECT grade.windcode
+                   ,grade.windname
+                   ,grade.total_score
+                   ,grade.ts
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY grade.windcode
+                       ORDER BY grade.ts DESC
+                   ) AS row_num
+            FROM ais_inv_analysis.v_inv_grade_result grade
+            WHERE EXISTS (
+                SELECT 1
+                FROM source_company company
+                WHERE company.company_code = grade.windcode
+            )
+        )
+        <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
+        ,ranked_outer_rating AS (
+            SELECT rating.s_info_compcode
+                   , rating.b_info_creditrating
+                   , rating.b_info_creditratingagency
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY rating.s_info_compcode
+                       ORDER BY rating.ann_dt DESC
+                                , rating.opdate DESC
+                                , rating.object_id DESC
+                   ) AS row_num
+            FROM ais_inv_ods.wind_cbondissuerrating rating
+            WHERE EXISTS (
+                SELECT 1 FROM dict_external_rating_agency agency
+                WHERE agency.is_deleted = 0
+                  AND agency.b_info_creditratingagency = rating.b_info_creditratingagency
+            )
+              AND EXISTS (
+                  SELECT 1 FROM source_company candidate
+                  WHERE candidate.company_code = rating.s_info_compcode
+              )
+        )
+        <!-- 返回主体及其最新内评；无内评主体仍可作为自选权益人展示。 -->
+        SELECT company.company_code
+               ,COALESCE(grade.windname, company.company_name) AS company_name
+               ,grade.total_score AS inner_rating
+               ,grade.ts AS rating_time
+               , outer_rating.b_info_creditrating AS rating_bondissuer
+               , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
+        FROM source_company company
+        LEFT JOIN ranked_grade grade ON grade.windcode = company.company_code
+                                    AND grade.row_num = 1
+        LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = company.company_code
+                                                   AND outer_rating.row_num = 1
+        ORDER BY company.company_code ASC
+    </select>
+
 </mapper>

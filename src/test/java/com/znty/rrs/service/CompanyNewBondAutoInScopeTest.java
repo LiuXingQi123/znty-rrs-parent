@@ -3,7 +3,9 @@ package com.znty.rrs.service;
 import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
+import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.session.Configuration;
 import org.junit.Test;
 
@@ -60,13 +62,21 @@ public class CompanyNewBondAutoInScopeTest {
         assertThat(sql).doesNotContain("MIN(");
     }
 
-    /** 投资池市场由调用方传入，候选 SQL 只按该配置匹配债券市场 */
+    /** 主体跟随补债的候选 SQL 不按目标池市场过滤 */
     @Test
-    public void newBondSqlShouldUseMarketConfigWithoutJoiningTargetPool() throws Exception {
+    public void newBondSqlShouldFollowIssuerWithoutMarketFilter() throws Exception {
         String sql = render(CompanyBondSyncPolicy.newBondInboundScope());
-        assertThat(sql).doesNotContain("ip_investment_pool");
-        assertThat(sql).contains("COALESCE(JSON_LENGTH(?), 0) = 0",
-                "JSON_CONTAINS(?, JSON_QUOTE(TRIM(bond.market)))");
+        assertThat(sql).doesNotContain("ip_investment_pool", "market_codes", "bond.market", "JSON_CONTAINS");
+    }
+
+    /** 到期门槛使用绑定天数，保留无到期日债券的原有处理口径 */
+    @Test
+    public void newBondSqlShouldBindMinimumDaysToMaturity() throws Exception {
+        BoundSql sql = render(CompanyBondSyncPolicy.newBondInboundScope(), 1);
+        assertThat(sql.getSql()).contains("bond.maturity_date IS NULL",
+                "bond.maturity_date >= DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL ? DAY), '%Y%m%d')");
+        assertThat(sql.getParameterMappings()).extracting(ParameterMapping::getProperty)
+                .contains("minDaysToMaturity");
     }
 
     /**
@@ -114,6 +124,10 @@ public class CompanyNewBondAutoInScopeTest {
      * @throws Exception 读取 Mapper 失败
      */
     private String render(CompanyBondTypeScopeBo scope) throws Exception {
+        return render(scope, 0).getSql();
+    }
+
+    private BoundSql render(CompanyBondTypeScopeBo scope, int minDaysToMaturity) throws Exception {
         Configuration cfg = new Configuration();
         String resource = "mapper/AutoAdjustMapper.xml";
         try (InputStream is = Resources.getResourceAsStream(resource)) {
@@ -122,9 +136,9 @@ public class CompanyNewBondAutoInScopeTest {
         Map<String, Object> params = new HashMap<>();
         params.put("companyPoolId", 15L);
         params.put("targetPoolId", 15L);
-        params.put("targetMarketCodes", "[\"NIB\"]");
+        params.put("minDaysToMaturity", minDaysToMaturity);
         params.put("bondTypeScope", scope);
         MappedStatement statement = cfg.getMappedStatement(SELECT_ID);
-        return statement.getBoundSql(params).getSql();
+        return statement.getBoundSql(params);
     }
 }

@@ -98,6 +98,10 @@ public class StockSecurityBatchAdjustService {
     @Resource
     private SecurityPoolAdjustService securityPoolAdjustService;
 
+    /** 证券批量校验 */
+    @Resource
+    private BatchSecurityCheckService batchSecurityCheckService;
+
     /**
      * 分页查询当前用户可调整的启用叶子投资池（债券产品库子树）。
      */
@@ -169,7 +173,7 @@ public class StockSecurityBatchAdjustService {
     /**
      * 批量调库下一步校验。
      *
-     * 逐券通过 {@link SecurityPoolAdjustService#checkBatchAdjust} 复用完整单笔匹配，
+     * 整批读取证券和池状态后执行共用校验，
      * 再共用公共方法追加目标池配置的 batchIn/batchOut 流程并推荐
      */
     public StockSecurityBatchAdjustDto checkAdjust(StockSecurityBatchAdjustSubmitReq req) {
@@ -179,22 +183,17 @@ public class StockSecurityBatchAdjustService {
         validateAdjustPoolPermission(req.getCurrentUserId(), req.getPoolId());
 
         StockSecurityBatchAdjustDto dto = new StockSecurityBatchAdjustDto();
-        Map<String, Set<String>> selections = new HashMap<>();
-        for (StockSecurityBatchAdjustSubmitReq.SecurityItem security : req.getSecurities()) {
-            String selected = security.getSelfSelectedRightsHolderCode();
-            if (selected == null || selected.trim().isEmpty()) selected = security.getRightsHolderCode();
-            selections.computeIfAbsent(security.getSecurityCode(), key -> new HashSet<>())
-                    .add(selected == null ? "" : selected.trim());
-        }
-        Map<String, String> identityFailures = absIdentityService.queryBatchIdentityFailures(selections);
-        for (StockSecurityBatchAdjustSubmitReq.SecurityItem security : req.getSecurities()) {
-            // 构建单证券调库校验请求
-            AdjustCheckDto checkDto = checkSingleAdjust(buildSingleCheckReq(req, security));
+        List<AdjustCheckReq> checks = req.getSecurities().stream()
+                .map(security -> buildSingleCheckReq(req, security)).collect(Collectors.toList());
+        // 整批读取调库数据并按请求顺序映射校验结果
+        List<AdjustCheckDto> results = batchSecurityCheckService.checkSecurityBatch(checks, false);
+        for (int index = 0; index < results.size(); index++) {
+            StockSecurityBatchAdjustSubmitReq.SecurityItem security = req.getSecurities().get(index);
+            AdjustCheckDto checkDto = results.get(index);
             if (checkDto == null || checkDto.getItems() == null) {
                 continue;
             }
             for (AdjustCheckDto.CheckResultItem item : checkDto.getItems()) {
-                absIdentityService.applyCheckFailure(item, identityFailures.get(security.getSecurityCode()));
                 // 构建批量调库校验结果（透传单笔流程候选）
                 dto.getItems().add(buildBatchCheckResult(security, item));
             }
@@ -677,13 +676,6 @@ public class StockSecurityBatchAdjustService {
         String advice = req.getAdjustAdvice();
         return advice == null || advice.trim().isEmpty() ? "放开主体债入库矩阵规则"
                 : advice + "；放开主体债入库矩阵规则";
-    }
-
-    /**
-     * 执行单证券调库校验（委托证券池调整服务，与证券池批量调整一致）。
-     */
-    private AdjustCheckDto checkSingleAdjust(AdjustCheckReq req) {
-        return securityPoolAdjustService.checkBatchAdjust(req);
     }
 
     /**

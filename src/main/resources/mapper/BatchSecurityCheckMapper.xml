@@ -1,0 +1,546 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.BatchSecurityCheckMapper">
+    <!-- 对任务主券和关联码使用同一候选范围 -->
+    <select id="queryPoolRelations" resultType="com.znty.rrs.entity.bo.PoolRelationBo">
+        SELECT pool_id
+               , relation_type
+               , relation_pool_id
+        FROM ip_pool_relation
+        WHERE is_deleted = 0
+    </select>
+
+    <select id="queryPoolCounts" resultType="com.znty.rrs.entity.securitypooladjust.PoolDto">
+        SELECT target_pool_id AS id
+               , COUNT(DISTINCT security_code) AS current_count
+        FROM ip_pool_status
+        WHERE audit_status = '20'
+          AND is_deleted = 0
+          AND target_pool_id IN
+        <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+            #{poolId}
+        </foreach>
+        GROUP BY target_pool_id
+    </select>
+
+    <select id="querySelfSelectedCompanies"
+            resultType="com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto">
+        <!-- 按提交编码从投资分析主体表精确读取有效主体 -->
+        WITH source_company AS (
+            SELECT company.wind_code AS company_code
+                   , MAX(COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, ''))) AS company_name
+            FROM ais_inv_analysis.t_inv_company company
+            WHERE company.wind_code IN
+            <foreach collection="companyCodes" item="companyCode" open="(" separator="," close=")">
+                #{companyCode}
+            </foreach>
+              AND COALESCE(NULLIF(company.full_name, ''), NULLIF(company.short_names, '')) IS NOT NULL
+            GROUP BY company.wind_code
+        )
+        <!-- 读取该主体的内评，并按更新时间倒序编号 -->
+        , ranked_grade AS (
+            SELECT grade.windcode
+                   , grade.windname
+                   , grade.total_score
+                   , grade.ts
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY grade.windcode
+                       ORDER BY grade.ts DESC
+                   ) AS row_num
+            FROM ais_inv_analysis.v_inv_grade_result grade
+            WHERE grade.windcode IN
+            <foreach collection="companyCodes" item="companyCode" open="(" separator="," close=")">
+                #{companyCode}
+            </foreach>
+        )
+        <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
+        , ranked_outer_rating AS (
+            SELECT rating.s_info_compcode
+                   , rating.b_info_creditrating
+                   , rating.b_info_creditratingagency
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY rating.s_info_compcode
+                       ORDER BY rating.ann_dt DESC
+                                , rating.opdate DESC
+                                , rating.object_id DESC
+                   ) AS row_num
+            FROM ais_inv_ods.wind_cbondissuerrating rating
+            WHERE EXISTS (
+                SELECT 1 FROM dict_external_rating_agency agency
+                WHERE agency.is_deleted = 0
+                  AND agency.b_info_creditratingagency = rating.b_info_creditratingagency
+            )
+              AND EXISTS (
+                  SELECT 1 FROM source_company candidate
+                  WHERE candidate.company_code = rating.s_info_compcode
+              )
+        )
+        <!-- 返回防伪校验后的主体及其最新内评 -->
+        SELECT company.company_code
+               , COALESCE(grade.windname, company.company_name) AS company_name
+               , grade.total_score AS inner_rating
+               , grade.ts AS rating_time
+               , outer_rating.b_info_creditrating AS rating_bondissuer
+               , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
+        FROM source_company company
+        LEFT JOIN ranked_grade grade ON grade.windcode = company.company_code
+                                    AND grade.row_num = 1
+        LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = company.company_code
+                                                   AND outer_rating.row_num = 1
+    </select>
+
+    <select id="queryAbsIdentities" resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$Row">
+        WITH requested_security AS (
+            SELECT wind_code
+                   , issuer_code
+            FROM rrs_securityinfo
+            WHERE wind_code IN
+            <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+                #{code}
+            </foreach>
+        )
+        SELECT si.wind_code AS security_code
+               , si.issuer_code AS company_code
+               , 0 AS unconfirmed_identity
+        FROM requested_security si
+        WHERE NULLIF(TRIM(si.issuer_code), '') IS NOT NULL
+        UNION ALL
+        SELECT si.wind_code
+               , NULL
+               , 1
+        FROM requested_security si
+        WHERE NULLIF(TRIM(si.issuer_code), '') IS NULL
+          AND (
+              EXISTS (
+                  SELECT 1
+                  FROM ip_pool_status ps
+                  WHERE ps.security_code = si.wind_code AND ps.audit_status = '20' AND ps.is_deleted = 0
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM ip_pool_status_crmw ps
+                  WHERE ps.security_code = si.wind_code AND ps.audit_status = '20' AND ps.is_deleted = 0
+              )
+          )
+        UNION ALL
+        SELECT log.security_code
+               , snap.issuer_code
+               , NULLIF(TRIM(snap.issuer_code), '') IS NULL
+        FROM ip_adjust_log log
+        LEFT JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = log.id
+                                                   AND snap.wind_code = log.security_code
+                                                   AND snap.is_deleted = 0
+        WHERE log.security_code IN
+        <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND log.audit_status IN ('00', '11')
+          AND log.is_deleted = 0
+          AND (log.pool_type IS NULL OR log.pool_type != 'crmw' OR NULLIF(log.crmw_scode, '') IS NULL)
+        UNION ALL
+        SELECT log.security_code
+               , snap.issuer_code
+               , NULLIF(TRIM(snap.issuer_code), '') IS NULL
+        FROM ip_adjust_log log
+        LEFT JOIN ip_adjust_security_snapshot_crmw snap ON snap.adjust_log_id = log.id
+                                                        AND snap.wind_code = log.security_code
+                                                        AND snap.is_deleted = 0
+        WHERE log.security_code IN
+        <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND log.audit_status IN ('00', '11')
+          AND log.is_deleted = 0
+          AND log.pool_type = 'crmw'
+          AND NULLIF(log.crmw_scode, '') IS NOT NULL
+    </select>
+
+    <select id="queryScheduledEligibleCodes" resultType="java.lang.String">
+        SELECT bond.wind_code
+        FROM rrs_securityinfo bond
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.category_type = 'bond'
+                                         AND dst.is_deleted = 0
+        WHERE bond.security_status != 'D'
+          AND (bond.maturity_date IS NULL
+               OR bond.maturity_date >= DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL #{minDaysToMaturity} DAY), '%Y%m%d'))
+          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+          AND bond.wind_code IN
+        <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND NOT EXISTS (
+              SELECT 1
+              FROM rrs_temp_security_code ts
+              WHERE ts.temp_security_code = bond.wind_code
+                AND ts.security_code IS NOT NULL
+                AND ts.security_code != ''
+                AND IFNULL(ts.is_deleted, 0) = 0
+                AND ts.status = 'updated'
+          )
+    </select>
+
+    <!-- 按代码读取本批证券主档 -->
+    <select id="querySecurities" resultType="com.znty.rrs.entity.bo.SecurityInfoBo">
+        SELECT *
+        FROM rrs_securityinfo
+        WHERE wind_code IN
+        <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+    </select>
+
+    <!-- 批量查询每只主券的同 ISIN 关联代码 -->
+    <select id="queryRelatedCodes" resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$Row">
+        SELECT DISTINCT current_code.S_INFO_WINDCODE AS security_code
+               , related.S_INFO_WINDCODE AS related_code
+        FROM ais_inv_ods.wind_windcustomcode current_code
+        INNER JOIN ais_inv_ods.wind_windcustomcode related
+            ON related.S_INFO_ISINCODE = current_code.S_INFO_ISINCODE
+        WHERE current_code.S_INFO_WINDCODE IN
+        <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND current_code.S_INFO_ISINCODE IS NOT NULL
+          AND TRIM(current_code.S_INFO_ISINCODE) != ''
+          AND current_code.EXCHMARKET IN
+          <foreach collection="marketCodes" item="marketCode" open="(" separator="," close=")">
+              #{marketCode}
+          </foreach>
+          AND related.EXCHMARKET IN
+          <foreach collection="marketCodes" item="marketCode" open="(" separator="," close=")">
+              #{marketCode}
+          </foreach>
+          AND NOT EXISTS (
+              SELECT 1 FROM rrs_securityinfo si
+              WHERE si.wind_code = current_code.S_INFO_WINDCODE AND si.security_source = 'temporary'
+          )
+          AND related.S_INFO_WINDCODE != current_code.S_INFO_WINDCODE
+          AND related.S_INFO_WINDCODE IS NOT NULL
+          AND TRIM(related.S_INFO_WINDCODE) != ''
+        ORDER BY security_code, related_code
+    </select>
+
+    <!-- 按现有候选排序批量读取关联评级主体 -->
+    <select id="queryRatingCompanies"
+            resultType="com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto">
+        <!-- 从 Wind 债券发行主体关系表读取当前证券的四类候选；同一主体兼多类关系时按类型分别返回。 -->
+        WITH source_company AS (
+            SELECT issuer.s_info_windcode AS security_code
+                   ,issuer.s_info_compcode AS company_code
+                   ,issuer.s_info_compname AS company_name
+                   ,issuer.s_info_typecode AS relation_type_code
+                   ,CASE issuer.s_info_typecode
+                        WHEN 115004000 THEN 1
+                        WHEN 115203000 THEN 2
+                        WHEN 115200000 THEN 3
+                        WHEN 115201000 THEN 4
+                    END AS relation_sort_no
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY issuer.s_info_windcode, issuer.s_info_compcode, issuer.s_info_typecode
+                       ORDER BY issuer.opdate DESC
+                   ) AS row_num
+            FROM ais_inv_ods.wind_cbondissuer issuer
+            WHERE issuer.s_info_windcode IN
+            <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+              AND issuer.s_info_compcode IS NOT NULL
+              AND issuer.s_info_compcode != ''
+              AND issuer.s_info_typecode IN (115004000, 115203000, 115200000, 115201000)
+        )
+        <!-- 同证券、同主体、同类型仅保留一条；兼多类关系的主体按类型各保留一行。 -->
+        ,eligible_company AS (
+            SELECT security_code
+                   ,company_code
+                   ,company_name
+                   ,relation_type_code
+                   ,relation_sort_no
+            FROM source_company
+            WHERE row_num = 1
+        )
+        <!-- 从投资分析评级视图读取候选主体内评，并按更新时间倒序编号。 -->
+        ,ranked_grade AS (
+            SELECT grade.windcode
+                   ,grade.windname
+                   ,grade.total_score
+                   ,grade.ts
+                   ,ROW_NUMBER() OVER (
+                       PARTITION BY grade.windcode
+                       ORDER BY grade.ts DESC
+                   ) AS row_num
+            FROM ais_inv_analysis.v_inv_grade_result grade
+            WHERE EXISTS (
+                SELECT 1
+                FROM eligible_company eligible
+                WHERE eligible.company_code = grade.windcode
+            )
+        )
+        <!-- 按评级日期取认可机构最新外评，评级与机构来自同一行 -->
+        ,ranked_outer_rating AS (
+            SELECT rating.s_info_compcode
+                   , rating.b_info_creditrating
+                   , rating.b_info_creditratingagency
+                   , ROW_NUMBER() OVER (
+                       PARTITION BY rating.s_info_compcode
+                       ORDER BY rating.ann_dt DESC
+                                , rating.opdate DESC
+                                , rating.object_id DESC
+                   ) AS row_num
+            FROM ais_inv_ods.wind_cbondissuerrating rating
+            WHERE EXISTS (
+                SELECT 1 FROM dict_external_rating_agency agency
+                WHERE agency.is_deleted = 0
+                  AND agency.b_info_creditratingagency = rating.b_info_creditratingagency
+            )
+              AND EXISTS (
+                  SELECT 1 FROM eligible_company candidate
+                  WHERE candidate.company_code = rating.s_info_compcode
+              )
+        )
+        <!-- 返回当前证券关系主体；无内评时评分字段为空。 -->
+        SELECT eligible.security_code
+               ,eligible.company_code
+               ,COALESCE(grade.windname, eligible.company_name) AS company_name
+               ,eligible.relation_type_code
+               ,grade.total_score AS inner_rating
+               ,grade.ts AS rating_time
+               , outer_rating.b_info_creditrating AS rating_bondissuer
+               , outer_rating.b_info_creditratingagency AS rating_bondissuer_agency
+        FROM eligible_company eligible
+        LEFT JOIN ranked_grade grade ON grade.windcode = eligible.company_code
+                                    AND grade.row_num = 1
+        LEFT JOIN ranked_outer_rating outer_rating ON outer_rating.s_info_compcode = eligible.company_code
+                                                   AND outer_rating.row_num = 1
+        ORDER BY eligible.security_code ASC
+                 , eligible.relation_sort_no ASC
+                 ,grade.ts DESC
+                 ,eligible.company_code ASC
+    </select>
+
+    <!-- 读取证券和主体生效所在池及互斥调出使用的入池时间 -->
+    <select id="queryActiveStates" resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$Row">
+        SELECT ips.security_code
+               , ips.target_pool_id AS pool_id
+               , ips.security_type
+               , CASE WHEN al.id IS NOT NULL THEN COALESCE(ips.entry_time, al.audit_time, ips.crte_time)
+                 END AS entry_time
+        FROM ip_pool_status ips
+        LEFT JOIN ip_adjust_log al ON al.id = ips.adjust_log_id
+        WHERE ips.audit_status = '20'
+          AND ips.is_deleted = 0
+          AND ips.security_code IN
+        <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+        ORDER BY ips.id
+    </select>
+
+    <!-- 按手工单券口径批量查询在途批次占用的目标池 -->
+    <select id="queryPendingPools" resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$Row">
+        SELECT DISTINCT manual_log.security_code
+               , occupied.target_pool_id AS pool_id
+        FROM ip_adjust_log manual_log
+        INNER JOIN ip_adjust_step pending_step ON pending_step.adjust_batch_no = manual_log.adjust_batch_no
+                                                AND pending_step.step_status = 'pending'
+        INNER JOIN ip_adjust_log occupied ON occupied.adjust_batch_no = manual_log.adjust_batch_no
+                                         AND occupied.audit_status IN ('00', '11')
+                                         AND occupied.is_deleted = 0
+        WHERE manual_log.security_code IN
+        <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND manual_log.adjust_type IN ('手工调整', '手动批量调整')
+          AND manual_log.audit_status IN ('00', '11')
+          AND manual_log.is_deleted = 0
+    </select>
+
+    <!-- 保留每只证券按原顺序取到的首个待处理节点 -->
+    <select id="queryPendingLabels" resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$Row">
+        SELECT ranked.security_code
+               , ranked.node_label
+        FROM (
+            SELECT al.security_code
+                   , s.node_label
+                   , ROW_NUMBER() OVER (PARTITION BY al.security_code
+                       ORDER BY s.sort_order, s.id, al.submit_time DESC, al.id DESC) AS seq
+            FROM ip_adjust_log al
+            INNER JOIN ip_adjust_step s ON s.adjust_batch_no = al.adjust_batch_no
+            WHERE al.is_deleted = 0
+              AND s.step_status = 'pending'
+              AND al.security_code IN
+            <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+        ) ranked
+        WHERE ranked.seq = 1
+    </select>
+
+    <!-- 读取有效证券品种的大类映射 -->
+    <select id="queryCategories" resultType="com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData$Row">
+        SELECT security_type
+               , category_type
+        FROM dict_security_type
+        WHERE is_deleted = 0
+    </select>
+
+    <!-- 查询当日开放的指定池 -->
+    <select id="queryOpenPools" resultType="java.lang.Long">
+        SELECT DISTINCT pool_id
+        FROM ip_pool_open_day
+        WHERE is_deleted = 0
+          AND begin_date &lt;= #{today}
+          AND end_date >= #{today}
+          AND pool_id IN
+        <foreach collection="poolIds" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+    </select>
+
+    <!-- 批量查询在 CRMW 组合池有有效来源的标的代码 -->
+    <select id="queryCrmwSources" resultType="java.lang.String">
+        SELECT DISTINCT src.security_code
+        FROM ip_pool_status_crmw src
+        WHERE src.target_pool_id = #{poolId}
+          AND src.audit_status = '20'
+          AND src.is_deleted = 0
+          AND src.security_code IN
+        <foreach collection="securityCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+    </select>
+
+    <!-- 按手工口径批量查询命中近一年低外评的主体 -->
+    <select id="queryLowRatedCompanies" resultType="java.lang.String">
+        SELECT DISTINCT r.s_info_compcode
+        FROM ais_inv_ods.wind_cbondissuerrating r
+            WHERE r.s_info_compcode IN
+        <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+            <choose>
+                <when test="agencyCodes != null and agencyCodes.size() &gt; 0">
+                  AND r.b_info_creditratingagency IN
+                  <foreach collection="agencyCodes" item="agencyCode" open="(" separator="," close=")">
+                      #{agencyCode}
+                  </foreach>
+                </when>
+                <otherwise>
+                  AND 1 = 0
+                </otherwise>
+            </choose>
+              AND r.ann_dt >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 YEAR), '%Y%m%d')
+              AND REGEXP_SUBSTR(TRIM(r.b_info_creditrating), '^(A+|B+|C+|D)[+-]?', 1, 1, 'c') IN (
+                  'AA-', 'A+', 'A', 'A-'
+                  ,'BBB+', 'BBB', 'BBB-'
+                  ,'BB+', 'BB', 'BB-'
+                  ,'B+', 'B', 'B-'
+                  ,'CCC', 'CC', 'C', 'D'
+              )
+    </select>
+
+    <!-- 为各主体读取用于评级下调判断的最新记录 -->
+    <select id="queryLatestRatings" resultType="com.znty.rrs.entity.bo.WindIssuerRatingBo">
+        SELECT ranked.company_code
+               , ranked.credit_rating
+               , ranked.pre_credit_rating
+               , ranked.credit_rating_change
+        FROM (
+            SELECT r.s_info_compcode AS company_code
+                   , r.b_info_creditrating AS credit_rating
+                   , r.b_info_precreditrating AS pre_credit_rating
+                   , r.b_creditratingchange AS credit_rating_change
+                   , ROW_NUMBER() OVER (PARTITION BY r.s_info_compcode ORDER BY r.ann_dt DESC) AS seq
+            FROM ais_inv_ods.wind_cbondissuerrating r
+            WHERE r.s_info_compcode IN
+            <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+              AND r.b_info_creditratingagency IN
+            <foreach collection="agencyCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+        ) ranked
+        WHERE ranked.seq = 1
+    </select>
+
+    <!-- 按发行人批量查询简易资格所需的非简易信用债入库历史 -->
+    <select id="queryNonSimpleInboundIssuers" resultType="java.lang.String">
+        SELECT DISTINCT si.issuer_code
+        FROM ip_pool_status ips
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                         AND dst.category_type = 'bond'
+                                         AND dst.is_deleted = 0
+        WHERE si.issuer_code IN
+        <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND si.issuer_code IS NOT NULL
+          AND si.issuer_code != ''
+          AND ips.pool_type = 'credit_bond'
+          AND ips.adjust_mode = '调入'
+          AND ips.flow_type IS NOT NULL
+          AND ips.flow_type != ''
+          AND ips.flow_type != 'simpleInbound'
+          AND ips.audit_status = '20'
+          AND ips.entry_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND ips.entry_time &lt;= NOW()
+    </select>
+
+    <!-- 按发行人批量查询简易资格所需的历史信评附件 -->
+    <select id="queryRecentReportIssuers" resultType="java.lang.String">
+        SELECT DISTINCT si.issuer_code
+        FROM ip_pool_status ips
+        INNER JOIN ip_adjust_log l ON l.id = ips.adjust_log_id
+                                 AND l.security_code = ips.security_code
+        INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
+        INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
+                                         AND dst.category_type = 'bond'
+                                         AND dst.is_deleted = 0
+        WHERE si.issuer_code IN
+        <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND si.issuer_code IS NOT NULL
+          AND si.issuer_code != ''
+          AND ips.adjust_mode = '调入'
+          AND ips.audit_status = '20'
+          AND ips.entry_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND ips.entry_time &lt;= NOW()
+          AND l.adjust_mode = '调入'
+          AND l.audit_status = '20'
+          AND l.is_deleted = 0
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = 'ip_adjust_log'
+                AND a.main_id = l.id
+                AND a.attachment_category IN ('credit_report_hand', 'credit_report_in', 'credit_report_out')
+                AND a.is_deleted = 0
+          )
+    </select>
+
+    <!-- 读取满足近六个自然月同发行人报告豁免的主体 -->
+    <select id="queryReportExemptIssuers" resultType="java.lang.String">
+        SELECT DISTINCT si.issuer_code
+        FROM ip_adjust_log l
+        INNER JOIN rrs_securityinfo si ON si.wind_code = l.security_code
+        WHERE l.audit_status = '20'
+          AND l.adjust_mode = '调入'
+          AND l.is_deleted = 0
+          AND l.crte_time &gt;= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+          AND si.issuer_code IN
+        <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND EXISTS (
+              SELECT 1
+              FROM sys_attachment a
+              WHERE a.table_name = 'ip_adjust_log'
+                AND a.main_id = l.id
+                AND a.is_deleted = 0
+                AND a.attachment_category IN ('credit_report_hand', 'credit_report_in', 'credit_report_out')
+          )
+    </select>
+</mapper>

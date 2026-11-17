@@ -49,16 +49,8 @@ public class SecurityMarketService {
                 if (result.containsKey(code)) {
                     throw new BizException("证券市场映射重复：" + code);
                 }
-                String raw = mapping.getRawMarketCode();
-                if (raw == null || raw.trim().isEmpty()) {
-                    throw new BizException("证券缺少市场映射：" + code);
-                }
-                String market = raw.trim();
-                if (!MarketCode.isValid(market) || MarketCode.UNKNOWN.getCode().equals(market)
-                        || MarketCode.COMPANY.getCode().equals(market)) {
-                    throw new BizException("证券市场不受支持：" + code + "，市场=" + raw);
-                }
-                result.put(code, market);
+                // 复用批次校验使用的市场有效性判断
+                result.put(code, requireMarketCode(code, Collections.singletonList(mapping)));
             }
         }
         for (String code : unique) {
@@ -67,6 +59,26 @@ public class SecurityMarketService {
             }
         }
         return result;
+    }
+
+    /** 验证指定证券只有一条受支持的市场映射 */
+    static String requireMarketCode(String code, List<SecurityMarketMappingDto> records) {
+        if (records.isEmpty()) {
+            throw new BizException("证券缺少市场映射：" + code);
+        }
+        if (records.size() > 1) {
+            throw new BizException("证券市场映射重复：" + code);
+        }
+        String raw = records.get(0).getRawMarketCode();
+        if (raw == null || raw.trim().isEmpty()) {
+            throw new BizException("证券缺少市场映射：" + code);
+        }
+        String market = raw.trim();
+        if (!MarketCode.isValid(market) || MarketCode.UNKNOWN.getCode().equals(market)
+                || MarketCode.COMPANY.getCode().equals(market)) {
+            throw new BizException("证券市场不受支持：" + code + "，市场=" + raw);
+        }
+        return market;
     }
 
     /** 按共用市场集合读取同券代码；范围外代码及临时代码不进入 Wind 同券关联。 */

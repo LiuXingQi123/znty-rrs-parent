@@ -107,18 +107,18 @@ public interface AutoAdjustMapper {
     /**
      * 查询来源池内生效主体的待补入债券
      *
-     * 排除退市债券、已到期债券、已转正临时代码及目标池内已有生效记录的债券
+     * 排除退市债券、距到期不足指定天数的债券、已转正临时代码及目标池内已有生效记录的债券
      *
      * @param companyPoolId 主体依据池 ID
      * @param targetPoolId 债券目标池 ID
-     * @param targetMarketCodes 目标池允许的市场代码数组 JSON，为空时不限制市场
+     * @param minDaysToMaturity 有到期日的债券距到期最少天数，0 表示到期当天可入
      * @param bondTypeScope 债券类型排除范围，定时补债时用于排除 ABS
      * @return 待补入的债券及发行主体信息，按债券代码升序返回
      */
     List<ScheduledAdjustCandidateDto> queryCompanyNewBondForAutoIn(
             @Param("companyPoolId") Long companyPoolId,
             @Param("targetPoolId") Long targetPoolId,
-            @Param("targetMarketCodes") String targetMarketCodes,
+            @Param("minDaysToMaturity") int minDaysToMaturity,
             @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
 
     /**

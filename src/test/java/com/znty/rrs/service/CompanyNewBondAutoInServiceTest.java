@@ -6,9 +6,8 @@ import com.znty.rrs.entity.bo.CompanyBondTypeScopeBo;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
-import com.znty.rrs.entity.schedule.PoolSecurityRowDto;
-import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
+import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
@@ -25,8 +24,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
  */
 public class CompanyNewBondAutoInServiceTest {
 
-    /** 自动扫描主体同池映射，使用已读取的市场配置并跳过停用目标池 */
+    /** 自动扫描主体同池映射并跳过停用目标池 */
     @Test
     public void executeShouldUseLoadedPoolConfigForCandidateQueries() {
         AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
@@ -53,7 +53,6 @@ public class CompanyNewBondAutoInServiceTest {
         InvestmentPoolBo observe = new InvestmentPoolBo();
         observe.setId(16L);
         observe.setStatus("enabled");
-        observe.setMarketCodes("[\"NIB\"]");
         InvestmentPoolBo watch = new InvestmentPoolBo();
         watch.setId(23L);
         watch.setStatus("enabled");
@@ -68,12 +67,14 @@ public class CompanyNewBondAutoInServiceTest {
 
         assertThat(service.execute().isSuccess()).isTrue();
 
-        verify(mapper).queryCompanyNewBondForAutoIn(eq(16L), eq(16L), eq("[\"NIB\"]"), any(CompanyBondTypeScopeBo.class));
-        verify(mapper).queryCompanyNewBondForAutoIn(eq(23L), eq(23L), isNull(), any(CompanyBondTypeScopeBo.class));
-        verify(mapper, never()).queryCompanyNewBondForAutoIn(any(), eq(17L), any(), any());
+        verify(mapper).queryCompanyNewBondForAutoIn(eq(16L), eq(16L), eq(0),
+                any(CompanyBondTypeScopeBo.class));
+        verify(mapper).queryCompanyNewBondForAutoIn(eq(23L), eq(23L), eq(0),
+                any(CompanyBondTypeScopeBo.class));
+        verify(mapper, never()).queryCompanyNewBondForAutoIn(any(), eq(17L), anyInt(), any());
     }
 
-    /** 批量读取所在池，同一映射共用一次容量查询，入池成功后调出互斥池 */
+    /** 批量读取所在池，跳过已有记录，入池成功后调出互斥池 */
     @Test
     public void executeShouldInsertNewBonds() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
@@ -89,7 +90,7 @@ public class CompanyNewBondAutoInServiceTest {
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("在池主体旗下债券自动入池（已排除ABS债）");
-        conf.setParamJson("{\"poolIds\":[15]}");
+        conf.setParamJson("{\"poolIds\":[15],\"minDaysToMaturity\":1}");
         when(scheduledTaskMapper.queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE)).thenReturn(conf);
 
         InvestmentPoolBo pool = new InvestmentPoolBo();
@@ -103,9 +104,6 @@ public class CompanyNewBondAutoInServiceTest {
         relatedPool.setPoolName("二级库");
         relatedPool.setPoolType("credit_bond");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool, relatedPool));
-        when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Arrays.asList(
-                buildRelation(15L, "in_mutex", 3L),
-                buildRelation(3L, "in_restrict", 15L)));
 
         ScheduledAdjustCandidateDto bond = new ScheduledAdjustCandidateDto();
         bond.setSecurityCode("BOND001.IB");
@@ -113,16 +111,20 @@ public class CompanyNewBondAutoInServiceTest {
         bond.setSecurityType("mtn");
         bond.setIssuerCode("C001");
         bond.setIssuerName("测试集团");
-        ScheduledAdjustCandidateDto overflowBond = new ScheduledAdjustCandidateDto();
-        overflowBond.setSecurityCode("BOND002.IB");
-        overflowBond.setIssuerCode("C001");
-        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L), isNull(),
-                any(CompanyBondTypeScopeBo.class))).thenReturn(Arrays.asList(bond, overflowBond));
-        PoolSecurityRowDto inPool = new PoolSecurityRowDto();
-        inPool.setSecurityCode("BOND001.IB");
-        inPool.setPoolId(3L);
-        when(autoAdjustMapper.queryActiveSecurityPoolRows(Arrays.asList("BOND001.IB", "BOND002.IB")))
-                .thenReturn(Collections.singletonList(inPool));
+        ScheduledAdjustCandidateDto alreadyInPoolBond = new ScheduledAdjustCandidateDto();
+        alreadyInPoolBond.setSecurityCode("BOND002.IB");
+        alreadyInPoolBond.setIssuerCode("C001");
+        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L), eq(1),
+                any(CompanyBondTypeScopeBo.class))).thenReturn(Arrays.asList(bond, alreadyInPoolBond));
+        BatchSecurityCheckService checks = mock(BatchSecurityCheckService.class);
+        ReflectionTestUtils.setField(service, "batchSecurityCheckService", checks);
+        AdjustCheckDto.CheckResultItem inbound = checkedItem("BOND001.IB", 15L, "债券禁止库", "调入");
+        AdjustCheckDto.CheckResultItem mutex = checkedItem("BOND001.IB", 3L, "二级库", "调出");
+        AdjustCheckDto.CheckResultItem existing = checkedItem("BOND002.IB", 15L, "债券禁止库", "调入");
+        existing.setCanAdjust(false);
+        existing.setFailReasons(Collections.singletonList("证券已在目标投资池中"));
+        when(checks.checkSecurityBatch(anyList(), eq(true), eq(1)))
+                .thenReturn(Arrays.asList(checkResult(inbound, mutex), checkResult(existing)));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(9001L);
@@ -159,14 +161,84 @@ public class CompanyNewBondAutoInServiceTest {
                 .contains("主体池债券禁止库（15）→债券池债券禁止库（15）：扫描 2 条，入池 1 条，未处理 1 条");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
         ArgumentCaptor<CompanyBondTypeScopeBo> scopeCaptor = ArgumentCaptor.forClass(CompanyBondTypeScopeBo.class);
-        verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L), isNull(), scopeCaptor.capture());
+        verify(autoAdjustMapper).queryCompanyNewBondForAutoIn(eq(15L), eq(15L), eq(1), scopeCaptor.capture());
         assertThat(scopeCaptor.getValue().isExcludeAbs()).isTrue();
         assertThat(scopeCaptor.getValue().getExcludedSecurityTypes()).isEmpty();
         verify(securityPoolAdjustMapper).deletePoolStatusSoft("BOND001.IB", 3L);
-        verify(autoAdjustMapper).queryActiveSecurityPoolRows(Arrays.asList("BOND001.IB", "BOND002.IB"));
-        verify(securityPoolAdjustMapper).queryPoolCurrentCount(15L);
+        verify(checks).checkSecurityBatch(anyList(), eq(true), eq(1));
+        verify(securityPoolAdjustMapper, never()).queryPoolCurrentCount(15L);
         verify(securityPoolAdjustMapper, never()).querySecurityCurrentPoolIdList(any());
         verify(scheduledTaskMapper).queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE);
+    }
+
+    /** 同池和跨池候选共用一次校验，业务失败跳过并记录原因 */
+    @Test
+    public void executeShouldValidateAllMappingsAndLogBlockedCandidates() {
+        AutoAdjustMapper mapper = mock(AutoAdjustMapper.class);
+        SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        ReflectionTestUtils.setField(service, "autoAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjustMapper);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
+        AutoAdjustTestSupport.bindPoolScope(service, mapper);
+        SysScheduledTaskBo config = new SysScheduledTaskBo();
+        config.setParamJson("{\"poolIds\":[17],\"mappings\":[{\"companyInPoolId\":15,\"bondTargetPoolId\":17}]}");
+        when(taskMapper.queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE)).thenReturn(config);
+        InvestmentPoolBo pool = new InvestmentPoolBo();
+        pool.setId(17L);
+        pool.setStatus("enabled");
+        pool.setMaxCapacity(1L);
+        when(poolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
+
+        ScheduledAdjustCandidateDto samePoolBond = new ScheduledAdjustCandidateDto();
+        samePoolBond.setSecurityCode("BOND001.IB");
+        samePoolBond.setIssuerCode("C001");
+        ScheduledAdjustCandidateDto crossPoolBond = new ScheduledAdjustCandidateDto();
+        crossPoolBond.setSecurityCode("BOND002.IB");
+        crossPoolBond.setIssuerCode("C002");
+        BatchSecurityCheckService checks = mock(BatchSecurityCheckService.class);
+        ReflectionTestUtils.setField(service, "batchSecurityCheckService", checks);
+        AdjustCheckDto.CheckResultItem inbound = checkedItem("BOND001.IB", 17L, "黑名单质押库", "调入");
+        AdjustCheckDto.CheckResultItem blocked = checkedItem("BOND002.IB", 17L, "黑名单质押库", "调入");
+        blocked.setCanAdjust(false);
+        blocked.setFailReasons(Collections.singletonList("证券当前在调入限制池中"));
+        when(checks.checkSecurityBatch(anyList(), eq(true), eq(0)))
+                .thenReturn(Arrays.asList(checkResult(inbound), checkResult(blocked)));
+        when(mapper.queryCompanyNewBondForAutoIn(eq(17L), eq(17L), eq(0), any(CompanyBondTypeScopeBo.class)))
+                .thenReturn(Collections.singletonList(samePoolBond));
+        when(mapper.queryCompanyNewBondForAutoIn(eq(15L), eq(17L), eq(0), any(CompanyBondTypeScopeBo.class)))
+                .thenReturn(Collections.singletonList(crossPoolBond));
+        when(adjustMapper.addAdjustLog(any())).thenReturn(1);
+        when(adjustMapper.addPoolStatus(any())).thenReturn(1);
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(1);
+        assertThat(result.getDetailLog()).contains("BOND002.IB", "证券当前在调入限制池中");
+        assertThat(result.getMessage()).contains("证券当前在调入限制池中");
+        verify(adjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
+        verify(checks).checkSecurityBatch(anyList(), eq(true), eq(0));
+    }
+
+    /** 拒绝负数和小数到期门槛 */
+    @Test
+    public void executeShouldRejectInvalidMinimumDaysToMaturity() {
+        CompanyNewBondAutoInService service = new CompanyNewBondAutoInService();
+        ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+        ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
+        SysScheduledTaskBo config = new SysScheduledTaskBo();
+        when(taskMapper.queryTaskByCode(CompanyNewBondAutoInService.TASK_CODE)).thenReturn(config);
+
+        for (String invalid : Arrays.asList("-1", "0.5")) {
+            config.setParamJson("{\"minDaysToMaturity\":" + invalid + "}");
+            ScheduledTaskResult result = service.execute();
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.getMessage()).contains("minDaysToMaturity 须为非负整数");
+        }
     }
 
     @Test
@@ -188,7 +260,7 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isZero();
         verify(autoAdjustMapper, never()).queryCompanyNewBondForAutoIn(
-                any(Long.class), any(Long.class), any(), any(CompanyBondTypeScopeBo.class));
+                any(Long.class), any(Long.class), anyInt(), any(CompanyBondTypeScopeBo.class));
     }
 
     @Test
@@ -225,7 +297,7 @@ public class CompanyNewBondAutoInServiceTest {
         CompanyNewBondAutoInService service = AbsIdentityTestSupport.withIdentity(new CompanyNewBondAutoInService());
         assertThat(service.getParamHelp()).contains("poolIds");
         assertThat(service.getParamHelp()).contains("mappings");
-        assertThat(service.getParamHelp()).contains("须填写 JSON");
+        assertThat(service.getParamHelp()).contains("JSON 对象", "minDaysToMaturity");
         assertThat(service.getParamHelp()).doesNotContain("1)");
     }
 
@@ -261,13 +333,18 @@ public class CompanyNewBondAutoInServiceTest {
         bond2.setSecurityCode("B2");
         bond2.setSecurityShortName("债2");
         bond2.setSecurityType("mtn");
-        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L), isNull(),
+        when(autoAdjustMapper.queryCompanyNewBondForAutoIn(eq(15L), eq(15L), eq(0),
                 any(CompanyBondTypeScopeBo.class))).thenReturn(Arrays.asList(bond1, bond2));
         when(securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenAnswer(invocation -> {
             IpAdjustLogBo log = (IpAdjustLogBo) invocation.getArguments()[0];
             log.setId(1L);
             return 1;
         });
+        BatchSecurityCheckService checks = mock(BatchSecurityCheckService.class);
+        ReflectionTestUtils.setField(service, "batchSecurityCheckService", checks);
+        when(checks.checkSecurityBatch(anyList(), eq(true), eq(0))).thenReturn(Arrays.asList(
+                checkResult(checkedItem("B1", 15L, "债券禁止库", "调入")),
+                checkResult(checkedItem("B2", 15L, "债券禁止库", "调入"))));
         when(securityPoolAdjustMapper.addPoolStatus(any(IpAdjustLogBo.class))).thenReturn(0).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
@@ -276,12 +353,24 @@ public class CompanyNewBondAutoInServiceTest {
         assertThat(result.getAffectedCount()).isZero();
     }
 
-    /** 构建测试用投资池关系。 */
-    private PoolRelationBo buildRelation(Long poolId, String relationType, Long relationPoolId) {
-        PoolRelationBo relation = new PoolRelationBo();
-        relation.setPoolId(poolId);
-        relation.setRelationType(relationType);
-        relation.setRelationPoolId(relationPoolId);
-        return relation;
+    /** 构建共用批量校验返回的一条调库项 */
+    private AdjustCheckDto.CheckResultItem checkedItem(String code, Long poolId, String poolName, String mode) {
+        AdjustCheckDto.CheckResultItem item = new AdjustCheckDto.CheckResultItem();
+        item.setSecurityCode(code);
+        item.setSecurityShortName("测试新债");
+        item.setSecurityType("mtn");
+        item.setPoolName(poolName);
+        item.setPoolType("forbidden");
+        item.setTargetPoolId(poolId);
+        item.setAdjustMode(mode);
+        item.setCanAdjust(true);
+        return item;
+    }
+
+    /** 将调库项封装为同一主券的批量校验结果 */
+    private AdjustCheckDto checkResult(AdjustCheckDto.CheckResultItem... items) {
+        AdjustCheckDto result = new AdjustCheckDto();
+        result.setItems(Arrays.asList(items));
+        return result;
     }
 }

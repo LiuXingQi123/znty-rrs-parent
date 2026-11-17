@@ -47,7 +47,7 @@
 
 目标池由「父池名称 + 子池名称」解析为启用叶子池。证券导入两列必填。目标为根级叶子池时，两列均填写该池的实际名称，例如 `CRMW库 / CRMW库`。有父池的目标按实际父子池名称填写。主体根池允许父池为空。每行可对应不同池。
 
-证券模板不填写评级主体。上传后在「导入明细」中选择，控件和候选口径与「证券池批量调整—可选证券」一致：
+证券代码匹配忽略大小写，校验后回写主档的实际代码用于提交。证券模板不填写评级主体。上传后在「导入明细」中选择，控件和候选口径与「证券池批量调整—可选证券」一致：
 
 - **担保人/权益人**：读取当前证券的四类关联主体，默认选中第一条，并显示名称、关系类型和最新内评。
 - **自选权益人**：仅 ABS 展示，按主体代码或名称查询全市场有效主体；无需与当前证券存在关联。
@@ -117,7 +117,7 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 
 | 分支 | 校验 | 提交 |
 |------|------|------|
-| 证券 | `SecurityPoolAdjustService.checkExcelAdjust`（原规则完整执行，业务失败作为可提交提示，含产品库快速资格） | `SecurityPoolAdjustService.addExcelImportAdjustLogList` |
+| 证券 | `BatchSecurityCheckService` 批量取数并执行共用规则（业务失败作为可提交提示，含产品库快速资格） | `SecurityPoolAdjustService.addExcelImportAdjustLogList` |
 | 主体 | `ForbiddenPoolAdjustService.checkCompanyExcelAdjust` | `ForbiddenPoolAdjustService.addCompanyExcelAdjustLog` |
 
 主体导入走主体落池链路，旗下债券由独立任务按生效状态同步。勾选“首先清空目标池”时，清空范围为目标池内的有效主体和证券，两类对象各走对应的调出流程。
@@ -126,7 +126,7 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 
 ### 4.1 证券导入
 
-- 每行 Excel → 一券 + 一目标池 + 方向，调用完整证券调库校验（含联动/互斥/关联码/流程候选）
+- 每行 Excel → 一券 + 一目标池 + 方向。解析目标池后集中读取主档、在途、在池、容量、评级主体等数据，再逐行执行完整校验（含联动、互斥、关联码和流程候选）。清空目标池时，把名单外证券汇总为一批执行出库校验。
 - 原校验规则保持不变，执行结束后 Excel 专用入口将证券和目标池均可识别的整组结果设为 `canAdjust=true`，保留原 `failReasons` 作为“调整提示”；禁止池、调入限制池、容量、在途等原业务未通过项同样可提交，并继续生成原流程候选和追加批量推荐。不能识别证券、目标池或同组关联证券的数据仍不可提交，不伪造落库对象。
 - 证券和主体的 Excel 调入、调出及清空出库均使用提示放行口径。各自执行原调库业务规则，在途、锁定、冻结期等失败原因作为调整提示；调整对象和目标池须可识别。
 - 产品库快速资格及 CRMW 来源开关见 [04 快速入库与本次材料豁免](04-security-pool-adjust.md#快速入库与本次材料豁免)。提交带有 `productSource` 资格的主项时复核主券和关联市场代码的有效来源。
@@ -134,7 +134,7 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 - ABS 关联权益人写入 `rightsHolderCode`，全市场自选权益人写入 `selfSelectedRightsHolderCode`，两者分别保存且自选优先评级；非 ABS 写入 `guarantorCode`。每次校验/提交重新复核候选资格，复用完整单券调库规则计算可调入池。ABS 最终采用的权益人（自选优先）无内评时，调入信用债分级库的校验提示“所选权益人无内评分”，与单券调整一致。
 - 修改、校验、提交、取消均锁定同一批次，避免交叉执行。主体修改后清空本批行级校验及 `result_json`，即使客户端回传旧 `checkItems` 也不能绕过重新校验。
 - 提交从本批已通过校验的持久化明细读取各行选择，按 `sourceItemId` 分组。非 ABS 不同导入行继续独立选择；同一 ABS 的跨行主体代码必须一致；本行的主项、联动、互斥和关联项共用该行选择及流程。先统一复核已有在途流程，再逐行落库，避免同批新建流程阻断后续行；每组调库日志保存本行所选主体的证券快照。
-- 明细返回 `relatedCompanyCode/relatedCompanyName`、`relatedRatingCompanies`、`selfSelectedRightsHolderCode/selfSelectedRightsHolder`、`securityType/absFlag` 及有效 `ratingCompanyCode/ratingCompanyName/ratingCompanyInnerRating`。校验结果展示有效主体全称/代码；联动、互斥、关联项展示来源导入行选择。首先清空目标池自动生成的出库成员不来源于 Excel 行，仍沿用原有默认主体逻辑。
+- 明细按当前页批量读取主档和评级主体，自选候选分页使用 `batchSecurityPoolAdjust/querySelfSelectedRightsHolderPage`。明细返回 `relatedCompanyCode/relatedCompanyName`、`relatedRatingCompanies`、`selfSelectedRightsHolderCode/selfSelectedRightsHolder`、`securityType/absFlag` 及有效 `ratingCompanyCode/ratingCompanyName/ratingCompanyInnerRating`。校验结果展示有效主体全称/代码；联动、互斥、关联项展示来源导入行选择。首先清空目标池自动生成的出库成员不来源于 Excel 行，仍沿用原有默认主体逻辑。
 - **未勾选**允许联动与互斥：结果中仅保留手工项
 - **勾选**后保留完整展开项（与批量一致）
 - 可调整手工项先保留完整单笔候选（含产品库快速资格及信用债简易资格），再通过 `BatchAdjustFlowOptionHelper.appendConfiguredBatchFlow` 额外加入目标池配置的批量调入/调出流程，批量为唯一推荐；证券池批量、存量证券批量共用该方法。复用本次已加载池配置，不增加查询。

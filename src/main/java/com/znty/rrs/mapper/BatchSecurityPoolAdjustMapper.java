@@ -4,6 +4,7 @@ import com.znty.rrs.entity.batchsecuritypooladjust.BatchPoolTypeCountDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityCandidateDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -27,6 +28,16 @@ public interface BatchSecurityPoolAdjustMapper {
 
     /** 分页查询目标池批量调整候选证券 */
     List<BatchSecurityCandidateDto> querySecurityPage(BatchSecurityPoolAdjustReq req);
+
+    /**
+     * 分页查询可作为 ABS 自选权益人的评级主体
+     *
+     * @param companyCode 主体代码前缀
+     * @param companyName 主体名称关键字
+     * @return 权益人主体列表
+     */
+    List<SelfSelectedRightsHolderDto> querySelfSelectedRightsHolderPage(@Param("companyCode") String companyCode,
+                                                                       @Param("companyName") String companyName);
 
     /** 查询指定投资池是否为启用叶子池 */
     int queryEnabledLeafPoolCount(@Param("poolId") Long poolId);

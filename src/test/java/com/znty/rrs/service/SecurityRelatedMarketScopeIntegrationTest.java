@@ -1,6 +1,8 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.entity.common.SecurityMarketDto;
+import com.znty.rrs.common.enums.MarketCode;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
@@ -9,6 +11,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustSharedData;
 import com.znty.rrs.entity.forbiddenabspooladjust.ForbiddenAbsPoolAdjustCheckReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.ForbiddenAbsPoolAdjustMapper;
+import com.znty.rrs.mapper.BatchSecurityCheckMapper;
 import com.znty.rrs.mapper.SecurityMarketMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -67,6 +70,9 @@ public class SecurityRelatedMarketScopeIntegrationTest {
         try (InputStream xml = Files.newInputStream(Paths.get("src/main/resources/mapper/SecurityMarketMapper.xml"))) {
             new XMLMapperBuilder(xml, configuration, "SecurityMarketMapper", configuration.getSqlFragments()).parse();
         }
+        try (InputStream xml = Files.newInputStream(Paths.get("src/main/resources/mapper/BatchSecurityCheckMapper.xml"))) {
+            new XMLMapperBuilder(xml, configuration, "BatchSecurityCheckMapper", configuration.getSqlFragments()).parse();
+        }
         session = new SqlSessionFactoryBuilder().build(configuration).openSession(true);
         markets = new SecurityMarketService();
         ReflectionTestUtils.setField(markets, "securityMarketMapper", session.getMapper(SecurityMarketMapper.class));
@@ -89,6 +95,17 @@ public class SecurityRelatedMarketScopeIntegrationTest {
                 .containsExactly("A.SH", "A.SZ");
         assertThat(markets.queryRelatedMarketCodes("A.SZ")).extracting(SecurityMarketDto::getWindCode)
                 .containsExactly("A.IB", "A.SH");
+    }
+
+    /** 批量展开结果按主证券区分，各自主码、关联码和市场范围与单券一致 */
+    @Test
+    public void batchRelatedCodesShouldMatchSingleCodeLookups() {
+        List<Row> rows = session.getMapper(BatchSecurityCheckMapper.class)
+                .queryRelatedCodes(Arrays.asList("A.SH", "A.IB"), MarketCode.queryCodeList());
+        assertThat(rows).filteredOn(row -> "A.SH".equals(row.getSecurityCode()))
+                .extracting(Row::getRelatedCode).containsExactly("A.IB", "A.SZ");
+        assertThat(rows).filteredOn(row -> "A.IB".equals(row.getSecurityCode()))
+                .extracting(Row::getRelatedCode).containsExactly("A.SH", "A.SZ");
     }
 
     /** 范围内缺主档仍明确报错，不能通过有无主档决定是否忽略关联券。 */

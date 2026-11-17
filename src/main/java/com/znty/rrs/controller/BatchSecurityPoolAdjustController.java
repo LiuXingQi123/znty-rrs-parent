@@ -7,6 +7,8 @@ import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustDto
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityInboundAdjustReq;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderReq;
 import com.znty.rrs.service.BatchSecurityPoolAdjustService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,6 +53,13 @@ public class BatchSecurityPoolAdjustController {
     public ApiResponse<PageResult<BatchSecurityCandidateDto>> querySecurityPage(
             @RequestBody BatchSecurityPoolAdjustReq req) {
         return ApiResponse.success(batchSecurityPoolAdjustService.querySecurityPage(req));
+    }
+
+    /** 分页查询批量调库可选的 ABS 权益人主体 */
+    @PostMapping("/querySelfSelectedRightsHolderPage")
+    public ApiResponse<PageResult<SelfSelectedRightsHolderDto>> querySelfSelectedRightsHolderPage(
+            @RequestBody SelfSelectedRightsHolderReq req) {
+        return ApiResponse.success(batchSecurityPoolAdjustService.querySelfSelectedRightsHolderPage(req));
     }
 
     /**

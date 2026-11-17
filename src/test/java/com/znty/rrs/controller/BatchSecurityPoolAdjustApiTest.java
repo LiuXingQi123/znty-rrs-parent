@@ -46,6 +46,13 @@ public class BatchSecurityPoolAdjustApiTest extends ControllerApiTestSupport {
                 "{\"poolId\":2,\"direction\":\"in\",\"bondYesFlags\":[\"abs\",\"guarant\"],\"pageIndex\":1,\"pageSize\":20}");
     }
 
+    /** 验证批量 ABS 自选权益人可从批量接口分页查询 */
+    @Test
+    public void shouldQuerySelfSelectedRightsHoldersFromBatchEndpoint() throws Exception {
+        assertPostSuccess(mockMvc, "/api/v1/batchSecurityPoolAdjust/querySelfSelectedRightsHolderPage",
+                "{\"companyCode\":\"A\",\"pageIndex\":1,\"pageSize\":20}");
+    }
+
     /** 验证批量调库下一步校验接口支持调入 */
     @Test
     public void shouldCheckBatchInboundAdjust() throws Exception {

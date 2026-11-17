@@ -9,6 +9,7 @@ import com.znty.rrs.entity.bo.IpGradeRuleAlertBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AbsIdentityMapper;
@@ -21,12 +22,12 @@ import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.HashMap;
 
 /**
  * ABS 在库及在途主体身份约束。
@@ -234,13 +235,22 @@ public class AbsIdentityService {
      * @return 不可调整原因
      */
     public String queryIdentityFailure(String securityCode, String companyCode) {
+        boolean missingCompany = companyCode == null || companyCode.trim().isEmpty();
+        boolean unconfirmed = !missingCompany && absIdentityMapper.queryUnconfirmedActiveOrPending(securityCode);
+        List<String> occupied = missingCompany || unconfirmed ? Collections.emptyList()
+                : absIdentityMapper.queryOccupiedIdentityCodes(securityCode);
+        // 使用本次读取的状态生成原身份冲突原因
+        return resolveIdentityFailure(securityCode, companyCode, unconfirmed, occupied);
+    }
+
+    /** 根据入口读取的主体状态生成身份冲突原因 */
+    private String resolveIdentityFailure(String securityCode, String companyCode, boolean unconfirmed, List<String> occupied) {
         if (companyCode == null || companyCode.trim().isEmpty()) {
             return "ABS[" + securityCode + "]缺少本次入库主体代码";
         }
-        if (absIdentityMapper.queryUnconfirmedActiveOrPending(securityCode)) {
+        if (unconfirmed) {
             return "ABS[" + securityCode + "]已有未确认主体的在库或在途记录，请先处理规则提醒中的主体确认";
         }
-        List<String> occupied = absIdentityMapper.queryOccupiedIdentityCodes(securityCode);
         if (occupied == null) {
             occupied = Collections.emptyList();
         }
@@ -264,13 +274,20 @@ public class AbsIdentityService {
      * @param items 完整校验结果
      */
     public void applyIdentityCheckFailures(SecurityInfoBo security, List<AdjustCheckDto.CheckResultItem> items) {
+        // 单券入口实时检查主体占用
+        applyIdentityCheckFailures(security, items, null);
+    }
+
+    /** 用已读取的主体占用标记各调库组，单券入口传空时实时查询 */
+    void applyIdentityCheckFailures(SecurityInfoBo security, List<AdjustCheckDto.CheckResultItem> items,
+                                    Map<String, List<Row>> identitiesByCode) {
         if (!CreditBondSpecialInboundRule.isAbs(security) || items == null) return;
         Map<String, Set<String>> codesByGroup = new HashMap<>();
         for (AdjustCheckDto.CheckResultItem item : items) {
             String code = item.getSecurityCode() == null ? security.getWindCode() : item.getSecurityCode();
             codesByGroup.computeIfAbsent(item.getAdjustGroupKey(), key -> new LinkedHashSet<>()).add(code);
         }
-        Map<String, Set<String>> failuresByGroup = queryIdentityGroupFailures(security, codesByGroup);
+        Map<String, Set<String>> failuresByGroup = queryIdentityGroupFailures(security, codesByGroup, identitiesByCode);
         for (AdjustCheckDto.CheckResultItem item : items) {
             Set<String> failures = failuresByGroup.get(item.getAdjustGroupKey());
             if (failures != null) {
@@ -292,19 +309,47 @@ public class AbsIdentityService {
      * @return 各组的主体冲突原因
      */
     public Map<String, Set<String>> queryIdentityGroupFailures(SecurityInfoBo security, Map<String, Set<String>> codesByGroup) {
+        // 仍按单券入口实时查询身份占用
+        return queryIdentityGroupFailures(security, codesByGroup, null);
+    }
+
+    /** 按调库组汇总主体冲突，批量入口直接使用已查占用记录 */
+    private Map<String, Set<String>> queryIdentityGroupFailures(SecurityInfoBo security,
+            Map<String, Set<String>> codesByGroup, Map<String, List<Row>> identitiesByCode) {
         Map<String, Set<String>> failures = new HashMap<>();
         if (!CreditBondSpecialInboundRule.isAbs(security)) return failures;
         Map<String, String> failuresByCode = new HashMap<>();
         for (Map.Entry<String, Set<String>> group : codesByGroup.entrySet()) {
             for (String code : group.getValue()) {
                 if (!failuresByCode.containsKey(code)) {
-                    failuresByCode.put(code, queryIdentityFailure(code, security.getIssuerCode()));
+                    String companyCode = security.getIssuerCode();
+                    // 每个实际证券只检查一次，批量入口复用已查占用
+                    String failure = identitiesByCode == null
+                            ? queryIdentityFailure(code, companyCode)
+                            : resolveBatchIdentityFailure(code, companyCode,
+                                    identitiesByCode.getOrDefault(code, Collections.emptyList()));
+                    failuresByCode.put(code, failure);
                 }
                 String failure = failuresByCode.get(code);
                 if (failure != null) failures.computeIfAbsent(group.getKey(), key -> new LinkedHashSet<>()).add(failure);
             }
         }
         return failures;
+    }
+
+    /** 用批量查到的占用记录生成本券的主体冲突原因 */
+    private String resolveBatchIdentityFailure(String securityCode, String companyCode, List<Row> identities) {
+        boolean unconfirmed = false;
+        List<String> occupied = new ArrayList<>();
+        for (Row identity : identities) {
+            if (identity.isUnconfirmedIdentity()) {
+                unconfirmed = true;
+                break;
+            }
+            occupied.add(identity.getCompanyCode());
+        }
+        // 使用同一规则生成冲突原因，未确认主体优先于已占用主体
+        return resolveIdentityFailure(securityCode, companyCode, unconfirmed, occupied);
     }
 
     /**

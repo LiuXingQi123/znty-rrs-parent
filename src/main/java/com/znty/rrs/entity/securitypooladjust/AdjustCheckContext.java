@@ -17,6 +17,9 @@ import java.util.Set;
 @Data
 public class AdjustCheckContext {
 
+    /** 批次校验时复用的数据库数据 */
+    private BatchSecurityCheckData batchData;
+
     /** 证券基础信息 */
     private SecurityInfoBo securityInfo;
 

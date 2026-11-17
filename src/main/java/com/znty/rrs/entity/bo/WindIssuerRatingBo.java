@@ -9,6 +9,9 @@ import lombok.Data;
 @Data
 public class WindIssuerRatingBo {
 
+    /** 批量查询时对应的发行主体或担保人代码 */
+    private String companyCode;
+
     /** 主体信用评级（当前，b_info_creditrating） */
     private String creditRating;
 
