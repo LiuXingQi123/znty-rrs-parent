@@ -72,14 +72,17 @@ public class ScheduledTaskServiceTest {
         SysScheduledTaskBo bondOutbound = new SysScheduledTaskBo();
         bondOutbound.setTaskCode(CompanyNotInPoolBondAutoOutService.TASK_CODE);
         bondOutbound.setTaskName("主体跟随债券自动出池（仅债券）");
-        when(mapper.queryTaskList()).thenReturn(Arrays.asList(observer, bonds, expiry, bondOutbound));
+        SysScheduledTaskBo absInbound = new SysScheduledTaskBo();
+        absInbound.setTaskCode(CompanyAbsBondAutoInService.TASK_CODE);
+        absInbound.setTaskName(CompanyAbsBondAutoInService.DEFAULT_TASK_NAME);
+        when(mapper.queryTaskList()).thenReturn(Arrays.asList(observer, bonds, expiry, bondOutbound, absInbound));
         ScheduledTaskService service = new ScheduledTaskService(Collections.emptyList());
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
         ReflectionTestUtils.setField(service, "dynamicTaskScheduler", mock(DynamicTaskScheduler.class));
 
         assertThat(service.queryTaskList()).extracting(ScheduledTaskInfoDto::getTaskName)
                 .containsExactly("自定义观察名单（仅主体）", "补债（仅债券）", "到期证券自动出池",
-                        "主体依据失效的债券自动出池（仅债券）");
+                        "主体依据失效的债券自动出池（仅债券）", CompanyAbsBondAutoInService.DEFAULT_TASK_NAME);
     }
 
     @Test

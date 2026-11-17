@@ -35,7 +35,7 @@ public class CompanyNewBondAutoInScopeTest {
     @Test
     public void newBondScopeShouldExcludeAbs() throws Exception {
         assertThat(CompanyBondSyncPolicy.newBondInboundScope().isExcludeAbs())
-                .as("高频补债任务必须排除 ABS，否则会与 ABS 对账任务重复写池状态")
+                .as("普通债补入任务排除 ABS，避免与「%s」重复写池状态", CompanyAbsBondAutoInService.DEFAULT_TASK_NAME)
                 .isTrue();
 
         String sql = render(CompanyBondSyncPolicy.newBondInboundScope());

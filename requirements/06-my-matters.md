@@ -76,7 +76,7 @@
 - 所有事项 Tab 的操作按钮与流程描述链接统一按 `canProcess` 判断：true 显示「处理」并打开审核页（entryMode=process），false 显示「查看」并打开只读详情（entryMode=view）。「我发起的」处于流程中并不自动获得处理资格；轮到本人提交/修改或管理员可代办时才显示「处理」。最终提交仍由原审批服务重查资格。工作台页签键包含业务代码和场景、记录/批次，防止不同表相同 ID 混用；无工作台时回退 location.href。
 - 债券保留证券、禁投主体、CRMW 路由；禁投 ABS 债仍走证券路由。
 - 默认分页 1/20，page-sizes=[10,20,50,100]，保持原有日期、状态 Tag、池全路径和表格布局。
-- 人工主体调库落池与定时任务使用同一套 ABS 判断：未确认主体时任一权益人入池都当场生成 `absCompanySync` 提醒和 `absIdentityPending` 待确认日志，不做池状态写入，人工操作后本页「规则提醒」立即可见。
+- 「主体下ABS债券自动入库（区分已确认发行人和未确认发行人）（仅债券）」在 `enableIn` 和 `enableUnconfirmedIssuerIn` 均开启时，才为未确认发行人的 ABS 生成 `absCompanySync` 入池提醒和 `absIdentityPending` 待确认日志。主体审批只处理主体调整项。
 
 ### 分级规则提醒
 

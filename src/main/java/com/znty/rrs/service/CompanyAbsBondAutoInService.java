@@ -76,7 +76,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     private static final String AUTO_ADJUSTER_NAME = "系统";
 
     /** 任务默认展示名称 */
-    private static final String DEFAULT_TASK_NAME = "主体下ABS债券自动入库（区分已确认发行人和未确认发行人）（仅债券）";
+    static final String DEFAULT_TASK_NAME = "主体下ABS债券自动入库（区分已确认发行人和未确认发行人）（仅债券）";
 
     /** 自动入池原因 */
     private static final String REASON_IN = "主体下ABS债券自动入库";
@@ -101,6 +101,8 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             "参数格式：JSON 对象，可全部省略，例如 <code>{}</code>；常用写法 <code>{\"enableIn\":false,\"enableOut\":true}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "入池开关：<code>{\"enableIn\":false}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：只做出池、不补入 ABS；省略时默认关闭\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "未确认发行人入池匹配开关：<code>{\"enableUnconfirmedIssuerIn\":false}</code>\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：默认关闭；与 enableIn 同时开启时，才匹配未确认发行人的 ABS 并生成入池提醒及待确认日志\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "出池开关：<code>{\"enableOut\":false}</code>\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：只补入 ABS、不自动出池；省略时默认开启。首次上线建议先置 false 观察一轮\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "到期保护：<code>{\"minDaysToMaturity\":30}</code>\n"
@@ -111,7 +113,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：主体在 15（债券禁止库）时，旗下 ABS 写入 16（观察池）；配置后该债券池不再按同池口径对账\n"
                     + "扫描范围：扩展参数 poolIds、关系配置绑定本任务的池、已有生效主体的普通池、当前已有 ABS 在池的池，四者并集；并集为空时本轮失败\n"
                     + "已确认发行人：主档 issuer_code 有值时视为已确认，直接跟随该主体在该池的进出状态自动入池、出池\n"
-                    + "未确认发行人：主档 issuer_code 为空时，按担保人、差额支付承诺人、债务主体、原始权益人四类关系匹配池内主体，只生成规则提醒与待确认日志，不自动落池\n"
+                    + "未确认发行人：主档 issuer_code 为空，且 enableIn 和 enableUnconfirmedIssuerIn 均开启时，按担保人、差额支付承诺人、债务主体、原始权益人四类关系匹配池内主体，只生成规则提醒与待确认日志\n"
                     + "出池保护：出池前先判断债级独立入库依据（手工、批量、Excel 入池）、未结束调库流程，以及未确认 ABS 的其他关联主体是否仍在池，命中则只提醒不自动出池\n"
                     + "17 特别规则：黑名单质押库的入池、出池均再次校验主体三条件\n"
                     + "市场规则：目标池 market_codes 未配置（null 或 []）时不限制；有配置时 ABS 须命中允许市场，市场缺失或不受支持的记录跳过并记告警\n"
@@ -231,6 +233,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         // 1. 解析扩展参数并校验开关
         AbsSyncParams params = parseParams(config.paramJson);
         infoDetail(detail, "扩展参数：enableIn=" + params.enableIn + "，enableOut=" + params.enableOut
+                + "，enableUnconfirmedIssuerIn=" + params.enableUnconfirmedIssuerIn
                 + "，minDaysToMaturity=" + params.minDaysToMaturity
                 + "，poolIds=" + params.poolIds + "，mappings=" + joinMappings(params.mappings));
         checkSwitches(params);
@@ -242,7 +245,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         AbsSyncContext context = new AbsSyncContext(poolMap, snapshot, allRelations, params,
                 new SimpleDateFormat(DATE_PATTERN).format(new Date()));
         infoDetail(detail, "扫描条件：ABS 主档未退市且属 bond 大类；已确认发行人按主档 issuer_code 与池内主体等值匹配；"
-                + "未确认发行人按四类关系匹配池内主体并只生成提醒；"
+                + "未确认发行人仅在入池与未确认发行人入池匹配开关均开启时按四类关系匹配并生成入池提醒；"
                 + "ABS 主档 " + snapshot.absList.size() + " 条");
 
         // 3. 合并扫描池并生成映射组
@@ -478,13 +481,14 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     /**
      * 挑选待入池候选，返回「ABS 代码 → 联动触发主体」
      *
-     * 已确认发行人取主档发行主体，未确认时取第一个仍在池的关联主体；
-     * 没有任何主体依据的 ABS 不参与本池入池
+     * 已确认发行人的 ABS 按主档发行人匹配
+     * 未确认发行人的 ABS 仅在 enableUnconfirmedIssuerIn 开启时匹配，取第一个仍在池的关联主体
      *
      * 执行顺序：
-     * 1. 跳过代码为空、已在目标池、已到期或距到期不足保护天数的 ABS
-     * 2. 跳过市场不满足目标池限制的 ABS
-     * 3. 取联动触发主体，取不到说明本轮没有主体依据
+     * 1. 跳过证券代码为空、已在目标池或未确认发行人且专用开关关闭的 ABS
+     * 2. 跳过已到期或距到期不足保护天数的 ABS
+     * 3. 跳过市场不满足目标池限制的 ABS
+     * 4. 匹配池内联动主体，没有匹配到的 ABS 不加入候选
      *
      * @param pool 单池上下文
      * @param context 本轮共享上下文
@@ -496,10 +500,13 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         Map<String, String> candidates = new LinkedHashMap<>();
         for (AbsBondCandidateDto abs : context.snapshot.absList) {
             String securityCode = abs.getSecurityCode();
-            if (!StringUtils.hasText(securityCode) || pool.absInPool.contains(securityCode)) {
+            // 1. 证券代码为空或已在目标池时直接跳过
+            // 主档 issuer_code 为空表示发行人未确认，仅在 enableUnconfirmedIssuerIn 关闭时跳过这类 ABS
+            if (!StringUtils.hasText(securityCode) || pool.absInPool.contains(securityCode)
+                    || (!context.params.enableUnconfirmedIssuerIn && !StringUtils.hasText(abs.getIssuerCode()))) {
                 continue;
             }
-            // 1. 已到期或距到期不足保护天数的 ABS 不再补入
+            // 2. 已到期或距到期不足保护天数的 ABS 不再补入
             if (isMaturityTooClose(abs, context.today, context.params.minDaysToMaturity)) {
                 if (context.params.minDaysToMaturity > 0) {
                     infoDetail(detail, "ABS[" + securityCode + "]到期日 " + abs.getMaturityDate()
@@ -507,11 +514,11 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
                 }
                 continue;
             }
-            // 2. 目标池配置了市场限制时按当前市场准入
+            // 3. 目标池配置了市场限制时按当前市场准入
             if (!marketAllowed(pool, context, abs, detail)) {
                 continue;
             }
-            // 3. 解析本轮联动触发主体，取不到说明主体依据不在该池
+            // 4. 匹配池内联动主体，没有匹配到则跳过
             String trigger = resolveTriggerCompany(abs, context.snapshot.relationMap, pool.companySet);
             if (trigger == null) {
                 continue;
@@ -1062,6 +1069,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         readMappings(root, params);
         params.enableIn = readBoolean(root, "enableIn", false);
         params.enableOut = readBoolean(root, "enableOut", true);
+        params.enableUnconfirmedIssuerIn = readBoolean(root, "enableUnconfirmedIssuerIn", false);
         Integer minDays = readInt(root, "minDaysToMaturity");
         if (minDays != null) {
             if (minDays < 0) {
@@ -1250,6 +1258,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
 
         /** 出池开关 */
         boolean enableOut = true;
+
+        /** 未确认发行人的 ABS 是否参与入池匹配 */
+        boolean enableUnconfirmedIssuerIn = false;
 
         /** 距到期最小剩余天数，不足该天数不再补入 */
         int minDaysToMaturity = DEFAULT_MIN_DAYS_TO_MATURITY;

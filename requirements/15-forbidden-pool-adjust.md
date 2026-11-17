@@ -210,7 +210,7 @@
 
 主体 Excel 批量校验通过当前调用的 `CompanyAdjustCheckContext` 复用已匹配主体资料、投资池配置和池关系，继续执行单笔完整规则；不跨请求缓存。池状态、在途流程等业务事实仍逐项读取，单笔调库及提交、终审复核继续读取当前主数据。
 
-主体资料统一读取 `ais_inv_ods.wind_compintroduction`，支持未发债主体，展示 `COMP_NAME` 全称。旗下债券仍由 `rrs_securityinfo` 按 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type=company`，新申请将全称写入既有名称字段；不迁移历史快照。原本直接读取业务快照的主体池查询、主体池调整历史不新增公司简介关联。`wind_cbondissuer` 只保留在证券池调整的担保人/权益人候选及 ABS 对账；主体旗下债券数量、明细、所在池汇总均只按 `issuer_code`，不参与四类关系扩展。
+主体资料统一读取 `ais_inv_ods.wind_compintroduction`，支持未发债主体，展示 `COMP_NAME` 全称。旗下债券仍由 `rrs_securityinfo` 按 `issuer_code=companyCode` 关联。主体调库日志固定写入 `security_type=company`，新申请将全称写入既有名称字段；不迁移历史快照。原本直接读取业务快照的主体池查询、主体池调整历史不新增公司简介关联。`wind_cbondissuer` 只保留在证券池调整的担保人/权益人候选及「主体下ABS债券自动入库（区分已确认发行人和未确认发行人）（仅债券）」；主体旗下债券数量、明细、所在池汇总均只按 `issuer_code`，不参与四类关系扩展。
 
 服务中保留的证券主体所在池查询 `queryIssuerPoolStatusList` 和最大剩余期限查询 `queryIssuerTargetPoolMaxRemainDays` 同样按 `rrs_securityinfo.issuer_code` 关联，不再按发行人名称判断同主体；最大期限比较已不参与证券池新简易流程，禁投池本身仍不启用简易流程。
 

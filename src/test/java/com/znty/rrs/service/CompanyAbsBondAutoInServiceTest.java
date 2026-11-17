@@ -64,21 +64,40 @@ public class CompanyAbsBondAutoInServiceTest {
         assertThat(log.getSecurityCode()).isEqualTo("ABS001");
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.IN.getCode());
         assertThat(log.getTargetPoolId()).isEqualTo(15L);
-        assertThat(log.getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库（仅债券）】")
+        assertThat(log.getAdjustReason()).startsWith("【任务名称：" + CompanyAbsBondAutoInService.DEFAULT_TASK_NAME + "】")
                 .contains("联动触发主体：C001");
         verify(fixture.securityPoolAdjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
         verify(fixture.autoAdjustMapper).queryActiveSecurityPoolRows(Collections.singletonList("ABS001"));
         verify(fixture.securityPoolAdjustMapper, never()).querySecurityCurrentPoolIdList(anyString());
     }
 
-    /** 未确认发行人的 ABS：只生成提醒，不写池状态 */
+    /** 未配置未确认发行人开关时，关联主体命中也不触发入池提醒 */
+    @Test
+    public void execute_ShouldSkipUnconfirmedIssuerInboundByDefault() {
+        Fixture fixture = new Fixture();
+        fixture.companyInPool(15L, "C001");
+        fixture.absMaster("ABS002", null, null);
+        fixture.relation("ABS002", "C001");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true}");
+
+        ScheduledTaskResult result = fixture.service.execute();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isZero();
+        assertThat(result.getMessage()).contains("规则提醒 0 条");
+        verify(fixture.absCompanySyncService, never()).allowScheduledSync(
+                any(), anyString(), eq(15L), anyString(), eq(true), eq(15L), any());
+        verify(fixture.securityPoolAdjustMapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
+    }
+
+    /** 两个入池开关都开启时，未确认发行人的 ABS 只生成提醒 */
     @Test
     public void execute_ShouldOnlyRemindUnconfirmedAbs() {
         Fixture fixture = new Fixture();
         fixture.companyInPool(15L, "C001");
         fixture.absMaster("ABS002", null, null);
         fixture.relation("ABS002", "C001");
-        fixture.conf("{\"poolIds\":[15],\"enableIn\":true}");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true,\"enableUnconfirmedIssuerIn\":true}");
         fixture.allowSync(false);
 
         ScheduledTaskResult result = fixture.service.execute();
@@ -86,6 +105,8 @@ public class CompanyAbsBondAutoInServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(0);
         assertThat(result.getMessage()).contains("规则提醒 1 条");
+        verify(fixture.absCompanySyncService).allowScheduledSync(
+                any(), eq("C001"), eq(15L), anyString(), eq(true), eq(15L), any());
         verify(fixture.securityPoolAdjustMapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
         verify(fixture.securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
     }
@@ -97,7 +118,9 @@ public class CompanyAbsBondAutoInServiceTest {
         fixture.companyInPool(15L, "C999");
         fixture.absMaster("ABS003", "C001", "已离池集团");
         fixture.absInPool(15L, "ABS003");
-        fixture.conf("{\"poolIds\":[15]}");
+        fixture.absMaster("ABS002", null, null);
+        fixture.relation("ABS002", "C999");
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":false,\"enableUnconfirmedIssuerIn\":true}");
         when(fixture.absCompanySyncService.allowScheduledSync(any(), eq("C001"), eq(15L),
                 eq("债券禁止库"), eq(false), eq(15L), any())).thenReturn(true);
         when(fixture.securityPoolAdjustMapper.deletePoolStatusSoft("ABS003", 15L)).thenReturn(1);
@@ -111,8 +134,11 @@ public class CompanyAbsBondAutoInServiceTest {
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(fixture.securityPoolAdjustMapper).addAdjustLog(captor.capture());
         assertThat(captor.getValue().getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
-        assertThat(captor.getValue().getAdjustReason()).startsWith("【任务名称：主体下ABS债券自动入库（仅债券）】")
+        assertThat(captor.getValue().getAdjustReason())
+                .startsWith("【任务名称：" + CompanyAbsBondAutoInService.DEFAULT_TASK_NAME + "】")
                 .contains("主体下ABS债券自动出池");
+        verify(fixture.absCompanySyncService, never()).allowScheduledSync(
+                any(), anyString(), eq(15L), anyString(), eq(true), eq(15L), any());
     }
 
     /** 任一显式依据池仍有已确认发行人时保留 ABS */
@@ -212,13 +238,14 @@ public class CompanyAbsBondAutoInServiceTest {
         assertThat(result.getMessage()).contains("入池与出池开关同时关闭");
     }
 
-    /** 参数解析：入池开关默认关闭、出池开关默认开启、到期保护天数默认 0 */
+    /** 参数解析：两个入池开关默认关闭、出池开关默认开启、到期保护天数默认 0 */
     @Test
     public void parseParams_ShouldUseSafeDefaults() {
         CompanyAbsBondAutoInService service = new CompanyAbsBondAutoInService();
         CompanyAbsBondAutoInService.AbsSyncParams params = service.parseParams("{}");
         assertThat(params.enableIn).isFalse();
         assertThat(params.enableOut).isTrue();
+        assertThat(params.enableUnconfirmedIssuerIn).isFalse();
         assertThat(params.minDaysToMaturity).isEqualTo(0);
         assertThat(params.poolIds).isEmpty();
         assertThat(params.mappings).isEmpty();
@@ -230,9 +257,11 @@ public class CompanyAbsBondAutoInServiceTest {
         CompanyAbsBondAutoInService service = new CompanyAbsBondAutoInService();
         CompanyAbsBondAutoInService.AbsSyncParams params = service.parseParams(
                 "{\"poolIds\":[15,17],\"enableIn\":true,\"enableOut\":false,\"minDaysToMaturity\":20,"
+                        + "\"enableUnconfirmedIssuerIn\":true,"
                         + "\"mappings\":[{\"bondPoolId\":16,\"companyPoolId\":15}]}");
         assertThat(params.enableIn).isTrue();
         assertThat(params.enableOut).isFalse();
+        assertThat(params.enableUnconfirmedIssuerIn).isTrue();
         assertThat(params.minDaysToMaturity).isEqualTo(20);
         assertThat(params.poolIds).containsExactly(15L, 17L);
         assertThat(params.mappings).hasSize(1);
@@ -247,6 +276,8 @@ public class CompanyAbsBondAutoInServiceTest {
                 .isInstanceOf(BizException.class).hasMessageContaining("minDaysToMaturity");
         assertThatThrownBy(() -> service.parseParams("{\"enableIn\":\"yes\"}"))
                 .isInstanceOf(BizException.class).hasMessageContaining("enableIn");
+        assertThatThrownBy(() -> service.parseParams("{\"enableUnconfirmedIssuerIn\":\"yes\"}"))
+                .isInstanceOf(BizException.class).hasMessageContaining("enableUnconfirmedIssuerIn");
         assertThatThrownBy(() -> service.parseParams("[]"))
                 .isInstanceOf(BizException.class).hasMessageContaining("JSON 对象");
     }
@@ -309,7 +340,7 @@ public class CompanyAbsBondAutoInServiceTest {
         /** 配置任务参数 */
         private void conf(String paramJson) {
             SysScheduledTaskBo conf = new SysScheduledTaskBo();
-            conf.setTaskName("主体下ABS债券自动入库");
+            conf.setTaskName(CompanyAbsBondAutoInService.DEFAULT_TASK_NAME);
             conf.setParamJson(paramJson);
             when(scheduledTaskMapper.queryTaskByCode(CompanyAbsBondAutoInService.TASK_CODE)).thenReturn(conf);
         }
