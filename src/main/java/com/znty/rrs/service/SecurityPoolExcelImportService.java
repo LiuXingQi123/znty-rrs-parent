@@ -1985,11 +1985,16 @@ public class SecurityPoolExcelImportService {
         // 解析调整类型中文
         dto.setAdjustType(resolveAdjustTypeLabel(dto.getItemTag()));
         if (dto.isCanAdjust()) {
+            dto.setAdjustNote(dto.getAdjustType() + (dto.getAdjustMode() == null ? "" : dto.getAdjustMode()));
             List<String> warnings = ri.getWarnings();
-            if (ItemType.LINKAGE.getCode().equals(dto.getItemTag()) && warnings != null && !warnings.isEmpty()) {
-                dto.setAdjustNote(String.join("；", warnings));
-            } else {
-                dto.setAdjustNote(dto.getAdjustType() + (dto.getAdjustMode() == null ? "" : dto.getAdjustMode()));
+            if (warnings != null && !warnings.isEmpty()) {
+                // 可调整项沿用证券 Excel 的提示列表，保留原校验原因并去重
+                Set<String> tips = new LinkedHashSet<>(dto.getFailReasons());
+                tips.addAll(warnings);
+                dto.setFailReasons(new ArrayList<>(tips));
+                if (ItemType.LINKAGE.getCode().equals(dto.getItemTag())) {
+                    dto.setAdjustNote(String.join("；", warnings));
+                }
             }
         }
 

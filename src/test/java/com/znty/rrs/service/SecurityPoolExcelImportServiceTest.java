@@ -770,9 +770,9 @@ public class SecurityPoolExcelImportServiceTest {
         assertEquals(Long.valueOf(21L), requests.getAllValues().get(1).get(0).getItems().get(0).getFlowId());
     }
 
-    /** 主体导入将联动提示写入校验结果的调整说明 */
+    /** 主体导入将联动原因和可放行的校验原因逐条显示 */
     @Test
-    public void mapCompanyCheckResult_ShouldShowBlacklistLinkReason() {
+    public void mapCompanyCheckResult_ShouldListBlacklistLinkReasonAsAdjustTip() {
         InvestmentPoolBo pool = new InvestmentPoolBo();
         pool.setId(23L);
         AdjustCheckDto.CheckResultItem row = new AdjustCheckDto.CheckResultItem();
@@ -781,13 +781,15 @@ public class SecurityPoolExcelImportServiceTest {
         row.setItemTag("linkage");
         row.setCanAdjust(true);
         String reason = "命中黑名单质押库准入条件（本次调入重点观察名单23），联动调入";
-        row.setWarnings(Collections.singletonList(reason));
+        String existingTip = "目标池命中弹性禁投提示";
+        row.setFailReasons(Collections.singletonList(existingTip));
+        row.setWarnings(Arrays.asList(reason, existingTip));
 
         SecurityPoolExcelImportCheckItemDto result = ReflectionTestUtils.invokeMethod(
                 service, "mapCompanyCheckResult", null, row, "C10003", pool);
         assertTrue(result.isCanAdjust());
-        assertTrue(result.getFailReasons().isEmpty());
-        assertEquals(reason, result.getAdjustNote());
+        assertEquals(Arrays.asList(existingTip, reason), result.getFailReasons());
+        assertEquals(String.join("；", reason, existingTip), result.getAdjustNote());
     }
 
     /** 单笔候选为空时，主体导入只使用已配置的批量流程 */
