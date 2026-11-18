@@ -76,6 +76,20 @@ public class TempSecurityCodeDto {
         private String shortName;
     }
 
+    /** 发行主体弹窗选项 */
+    @Data
+    public static class IssuerOption {
+
+        /** 主体代码 */
+        private String companyCode;
+        /** 主体全称 */
+        private String companyFullName;
+        /** 主体简称 */
+        private String companyShortName;
+        /** 统一社会信用代码 */
+        private String registerNumber;
+    }
+
     /**
      * 证券类型下拉选项
      */

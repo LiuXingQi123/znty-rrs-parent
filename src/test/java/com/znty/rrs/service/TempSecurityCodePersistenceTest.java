@@ -101,8 +101,9 @@ public class TempSecurityCodePersistenceTest {
         }
         jdbc.execute("CREATE ALIAS DATE_FORMAT FOR 'com.znty.rrs.service.TempSecurityCodePersistenceTest.formatDate'");
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
-        jdbc.execute("CREATE TABLE ais_inv_ods.wind_compintroduction (COMP_ID VARCHAR(40),COMP_NAME VARCHAR(200),COMP_SNAME VARCHAR(100))");
-        jdbc.update("INSERT INTO ais_inv_ods.wind_compintroduction VALUES ('C10001','测试发行主体','主体简称')");
+        jdbc.execute("CREATE TABLE ais_inv_ods.wind_compintroduction (COMP_ID VARCHAR(40),COMP_NAME VARCHAR(200),"
+                + "COMP_SNAME VARCHAR(100),REGISTERNUMBER VARCHAR(30))");
+        jdbc.update("INSERT INTO ais_inv_ods.wind_compintroduction VALUES ('C10001','测试发行主体','主体简称','913100000000000001')");
         jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(64),security_type_name VARCHAR(100)"
                 + ",category_type VARCHAR(32),is_deleted INT)");
         jdbc.update("INSERT INTO dict_security_type VALUES ('mtn','中期票据','bond',0)");
@@ -139,6 +140,39 @@ public class TempSecurityCodePersistenceTest {
         proxy.setProxyTargetClass(true);
         proxy.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
         service = (TempSecurityCodeService) proxy.getProxy();
+    }
+
+    /** 验证发行主体直接限制 100 条，并可组合使用三个弹窗条件 */
+    @Test
+    public void issuerOptionListShouldLimitMatchedRowsAndApplyFilters() {
+        jdbc.update("INSERT INTO ais_inv_ods.wind_compintroduction (COMP_ID, COMP_NAME, REGISTERNUMBER)"
+                + " SELECT CONCAT('B', X), '测试发行主体', '913100000000000002' FROM SYSTEM_RANGE(1, 105)");
+        jdbc.update("INSERT INTO ais_inv_ods.wind_compintroduction (COMP_ID, COMP_NAME, REGISTERNUMBER) VALUES"
+                + " ('C10002', '其他主体', '913100000000000003')"
+                + ", ('C10003', '测试发行主体', '913200000000000004')"
+                + ", ('', '测试待补代码主体', '913100000000000005')"
+                + ", (NULL, '测试待补代码主体', '913100000000000006')");
+
+        TempSecurityCodeReq.IssuerQueryReq req = new TempSecurityCodeReq.IssuerQueryReq();
+        assertThat(service.queryIssuerOptionList(req)).hasSize(100);
+        req.setCompanyFullName("发行");
+        req.setRegisterNumber("9131");
+        assertThat(service.queryIssuerOptionList(req)).hasSize(100);
+
+        req.setCompanyCode("C100");
+        List<TempSecurityCodeDto.IssuerOption> rows = service.queryIssuerOptionList(req);
+        assertThat(rows).hasSize(1);
+        TempSecurityCodeDto.IssuerOption issuer = rows.get(0);
+        assertThat(issuer.getCompanyCode()).isEqualTo("C10001");
+        assertThat(issuer.getCompanyFullName()).isEqualTo("测试发行主体");
+        assertThat(issuer.getCompanyShortName()).isEqualTo("主体简称");
+        assertThat(issuer.getRegisterNumber()).isEqualTo("913100000000000001");
+
+        req.setCompanyCode(null);
+        req.setCompanyFullName("待补代码");
+        assertThat(service.queryIssuerOptionList(req))
+                .extracting(TempSecurityCodeDto.IssuerOption::getCompanyCode)
+                .containsExactlyInAnyOrder("", null);
     }
 
     /** 释放隔离内存库并清理分页线程状态。 */

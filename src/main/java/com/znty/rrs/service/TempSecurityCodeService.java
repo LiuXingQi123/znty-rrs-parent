@@ -90,6 +90,19 @@ public class TempSecurityCodeService {
     }
 
     /**
+     * 查询新增临时代码可选的发行主体
+     *
+     * 执行顺序：
+     * 1. 按弹窗条件查询公司简介，最多取 100 条匹配记录
+     *
+     * @param req 主体代码、全称和统一社会信用代码筛选条件
+     * @return 发行主体选项列表
+     */
+    public List<TempSecurityCodeDto.IssuerOption> queryIssuerOptionList(TempSecurityCodeReq.IssuerQueryReq req) {
+        return tempSecurityCodeMapper.queryIssuerOptionList(req);
+    }
+
+    /**
      * 新增临时代码
      */
     @Transactional(rollbackFor = Exception.class)

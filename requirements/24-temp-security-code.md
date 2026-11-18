@@ -10,9 +10,10 @@
 
 单页结构（`el: '#temp_security_code'`），顶栏（SVG 图标 +「临时代码管理」+ 系统名 + `currentDateText`）+ `list-body`（`search-panel` 筛选行 + `table-card` 表格+分页）。
 
-**2 个弹窗**：
+**3 个弹窗**：
 1. **新增临时代码** `addDialogVisible`（50%）：`form-tip`「新增后状态默认为临时，并同步写入临时代码占位证券，可用于后续调库，不代表正式发行。」+ 临时证券信息区（名称/代码/市场/类型/缓释凭证代码/发行主体/发行日期/到期日期）。名称、代码输入框有 placeholder；代码提示需带市场后缀。
 2. **更新正式证券** `updateDialogVisible`（50%）：`form-tip`「更新后状态变为已更新，临时证券与正式证券信息将一并保存。」+ 临时证券信息区（可编辑）+ 正式证券信息区（证券名称/代码/市场/类型）。
+3. **选择发行主体** `issuerDialogVisible`：从新增表单的「发行主体」打开，表格按单选、序号、主体代码、主体全称、社会统一信用代码展示；确认选择回填主体名称和代码，取消保留表单原值。
 
 **初始化**（`created`）：并行调用 `loadOptions()`（`/queryTempSecurityCodeOptions`）与 `loadList()`（`/queryTempSecurityCodePage`）；`mounted()` 注册 `resize` 监听，`beforeDestroy()` 清理。`baseURL` 由 `js/api.js` 注入（`http://localhost:18090`）。
 
@@ -50,8 +51,14 @@
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodeOptions`
 - 请求体：`{}`（`TempSecurityCodeReq`）
 - 后端 `queryTempSecurityCodeOptions`：`OptionBundle` 装载 `queryCompanyOptionList(req)` + `querySecurityTypeList()`。
-  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_compintroduction`（**跨库**，`COMP_ID` 对应主体代码，`COMP_NAME` 对应全称，`COMP_SNAME` 对应简称），可选按 `companyKeyword` 包含匹配名称或前缀匹配代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。
+  - `queryCompanyOptionList`：`FROM ais_inv_ods.wind_compintroduction`（**跨库**，`COMP_ID` 对应主体代码，`COMP_NAME` 对应全称，`COMP_SNAME` 对应简称），可选按 `companyKeyword` 包含匹配名称或前缀匹配代码、`tempCompanyCode` 精确，`LIMIT 50`（不排序），返回 `companyCode/fullName/shortName`。页面加载证券类型时只读取 `securityTypes`。
   - `querySecurityTypeList`：`FROM dict_security_type WHERE is_deleted = 0 AND category_type != 'company' ORDER BY category_type ASC, sort_order ASC, id ASC`，返回 `securityType/securityTypeName/categoryType/categoryTypeName`。
+
+### 2.4 发行主体弹窗查询
+
+- 接口为 `POST /api/v1/tempSecurityCode/queryIssuerOptionList`，从 `ais_inv_ods.wind_compintroduction` 直接查询最多 100 条匹配记录，无分页及总数统计。
+- 请求参数为 `companyCode`（前缀）、`companyFullName`（包含）、`registerNumber`（前缀）。打开时按空条件查询，重置清空条件并重新查询。
+- 返回 `companyCode`、`companyFullName`、`companyShortName`、`registerNumber` 的列表。表格内滚动查看，序号从 1 开始。确认单选后，新增请求沿用 `tempCompanyCode` 提交主体代码。框内显示主体名称与代码，点击清除可重新选择。
 
 ---
 
@@ -131,6 +138,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 |---|---|---|---|
 | `queryTempSecurityCodePage` | `tempSecurityCode?, tempSecurityName?, statusList?, oprtSourceList?, pageIndex, pageSize` | `ApiResponse<PageResult<TempSecurityCodeDto>>` | 分页查询临时代码列表；前端默认传 `oprtSourceList=['manual']` |
 | `queryTempSecurityCodeOptions` | `companyKeyword?`（远程搜索）/`tempCompanyCode?`（精确回显） | `ApiResponse<TempSecurityCodeDto.OptionBundle>` | 查下拉：发行主体（wind_compintroduction 最多 50 条）+ 证券类型 |
+| `queryIssuerOptionList` | `companyCode?, companyFullName?, registerNumber?` | `ApiResponse<List<IssuerOption>>` | 查询发行主体弹窗选项，最多 100 条 |
 | `addTempSecurityCode` | `tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyCode, tempIssueDate, tempMaturityDate` | `ApiResponse<TempSecurityCodeDto>` | 新增临时代码（status=temporary） |
 | `editTempSecurityCodeToUpdated` | `id, tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyCode, tempIssueDate, tempMaturityDate, securityName, securityCode, securityMarket, securityType` | `ApiResponse<TempSecurityCodeDto>` | 更新为正式证券（status=updated，同步 upsert rrs_securityinfo） |
 | `editTempSecurityCodeToCancelled` | `id` | `ApiResponse<TempSecurityCodeDto>` | 取消发行（status=cancelled） |
@@ -149,7 +157,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 | `rrs_temp_security_code`（主表） | 临时代码 | `id, sec_id VARCHAR(100) DEFAULT NULL, temp_security_name, temp_security_code, temp_security_market, temp_security_type, temp_mitigation_code, temp_company_code, temp_company_name_snapshot, temp_issue_date DATE, temp_maturity_date DATE, security_name, security_code, security_market, security_type, update_time, status, is_deleted, oprt_source, memo, crte_time, updt_time`；`oprt_source`：manual=人工 / job=定时任务 / other=其他（仅记最近一次）；仅主键，无二级索引 |
 | `rrs_temp_security_code_update_log`（日志表） | 替换日志 | 记录临时代码、正式代码、被替换表名、被替换记录 ID、替换状态、替换时间 |
 | `dict_security_type`（只读+校验） | 证券类型字典 | `security_type, security_type_name, category_type(bond/stock/fund/company), category_type_name, sort_order, is_deleted`；`querySecurityTypeList` 过滤 `category_type != 'company'`，`querySecurityTypeCount` 校验类型存在 |
-| `ais_inv_ods.wind_compintroduction`（跨库只读） | 发行主体 | `COMP_ID, COMP_NAME, COMP_SNAME`；`queryCompanyOptionList`/`queryCompanyByCode` 读取公司简介全量主体，`LIMIT 50` |
+| `ais_inv_ods.wind_compintroduction`（跨库只读） | 发行主体 | `COMP_ID, COMP_NAME, COMP_SNAME, REGISTERNUMBER`；`queryIssuerOptionList` 最多取 100 条，`queryCompanyOptionList` 最多取 50 条，`queryCompanyByCode` 按主体代码取单条 |
 | `rrs_securityinfo`（upsert 写入） | 证券基础信息库 | key=`wind_code`；`security_source` 区分来源：`official=原始数据（可能含临时代码） / temporary=临时代码占位证券 / temp_converted=临时代码转正式证券`；`addSecurityInfo` 按 `wind_code = securityCode` 写入：`full_name`/`short_name=securityName`、`market=securityMarket`（取表单临时市场，与 `temp_security_market` 一致）、`security_type`、`issuer=tempCompanyNameSnapshot`、`issuer_code=tempCompanyCode`、`firstissue_date`/`maturity_date` 将表单发行/到期日格式化为 `yyyyMMdd`（起息/止息/`date_exists` 未知不写）、**`security_status='L'`（上市中；上市状态枚举 `SecurityStatus`：`L`/`N`/`D`/`U`，勿留 NULL，否则调库列表 `!= 'D'` 查不到；来源无状态用 `U`）**、`create_time`/`ts=updateTime`；正式证券已存在时不覆盖 `security_source` |
 
 ---
@@ -218,7 +226,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 1. **列表不过滤 `is_deleted`**：删除后记录（`is_deleted=1, status='deleted'`）仍出现在列表，但按 id 查详情返回 null。
 2. **删除返回 null**：`deleteTempSecurityCode` 服务方法 `return null`，故 `ApiResponse.success(null)`，前端 `loadList()` 刷新即可。
 3. **无审计表**：与投资池模块的 `_evt` 审计表不同，`operatorId` 字段定义但全程未用。
-4. **跨库读主体**：`queryCompanyOptionList`/`queryCompanyByCode` 读 `ais_inv_ods.wind_compintroduction`，依赖跨库访问权限与该库 schema 稳定；前端远程搜索关键字，最多 50 条。
+4. **跨库读主体**：弹窗分页查询和 `queryCompanyByCode` 的新增校验均读取 `ais_inv_ods.wind_compintroduction`，依赖跨库访问权限与该库 schema 稳定。
 5. **正式代码重复关联**：转正入口在转换前检查已成功关联登记，同一正式代码只允许关联一个临时代码；没有调库流水时同样拦截。正式主档保持原有资料，已有重复数据不自动清理。
 6. **更新时主体变更才重查**：仅 `tempCompanyCode` 变化时重查主体并刷新快照，未变更时保留旧 `tempCompanyNameSnapshot`（即使主体名已被改名）。
 
@@ -227,6 +235,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 ## 8. 验收标准
 
 - 新增临时代码初始 `temporary`，临时证券代码在未删除记录中唯一。
+- 发行主体弹窗按主体代码、主体全称、社会统一信用代码筛选，最多列出 100 条且序号紧跟单选列；仅确认选择时回填主体，重置清空查询条件。
 - 更新为正式证券要求 `temporary` 状态，成功后 `updated` 且 `rrs_securityinfo` 同步 upsert（按 `wind_code` 判重）。
 - 取消发行要求 `temporary` 状态，成功后 `cancelled`，不修改证券字段。
 - 删除为软删（`is_deleted=1, status=deleted`），任意非 `deleted` 状态均可删，返回 null。

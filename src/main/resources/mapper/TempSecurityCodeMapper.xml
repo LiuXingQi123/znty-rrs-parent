@@ -187,6 +187,27 @@
         LIMIT 50
     </select>
 
+    <!-- 按弹窗条件查询发行主体，直接限制结果条数 -->
+    <select id="queryIssuerOptionList" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$IssuerOption">
+        SELECT c.COMP_ID AS company_code
+               , c.COMP_NAME AS company_full_name
+               , c.COMP_SNAME AS company_short_name
+               , c.REGISTERNUMBER AS register_number
+        FROM ais_inv_ods.wind_compintroduction c
+        <where>
+            <if test="companyCode != null and companyCode != ''">
+                AND c.COMP_ID LIKE CONCAT(#{companyCode}, '%')
+            </if>
+            <if test="companyFullName != null and companyFullName != ''">
+                AND c.COMP_NAME LIKE CONCAT('%', #{companyFullName}, '%')
+            </if>
+            <if test="registerNumber != null and registerNumber != ''">
+                AND c.REGISTERNUMBER LIKE CONCAT(#{registerNumber}, '%')
+            </if>
+        </where>
+        LIMIT 100
+    </select>
+
     <!-- 根据主体代码查询公司简介 -->
     <select id="queryCompanyByCode" resultType="com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto$CompanyOption">
         SELECT c.COMP_ID AS companyCode

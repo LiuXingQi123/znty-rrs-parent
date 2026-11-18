@@ -81,6 +81,14 @@ public interface TempSecurityCodeMapper {
     /** 按关键字查询发行主体选项（wind_compintroduction 按 COMP_ID 查询，最多 50 条） */
     List<TempSecurityCodeDto.CompanyOption> queryCompanyOptionList(TempSecurityCodeReq req);
 
+    /**
+     * 从公司简介查询最多 100 条符合弹窗筛选条件的发行主体选项
+     *
+     * @param req 主体代码前缀、全称片段和统一社会信用代码前缀
+     * @return 发行主体选项列表
+     */
+    List<TempSecurityCodeDto.IssuerOption> queryIssuerOptionList(TempSecurityCodeReq.IssuerQueryReq req);
+
     /** 根据主体代码查询发行主体 */
     TempSecurityCodeDto.CompanyOption queryCompanyByCode(@Param("companyCode") String companyCode);
 

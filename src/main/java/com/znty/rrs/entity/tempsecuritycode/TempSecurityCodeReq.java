@@ -52,4 +52,16 @@ public class TempSecurityCodeReq extends PageRequest {
     private String securityType;
     /** 操作人 ID */
     private String operatorId;
+
+    /** 发行主体弹窗查询条件 */
+    @Data
+    public static class IssuerQueryReq {
+
+        /** 主体代码前缀 */
+        private String companyCode;
+        /** 主体全称片段 */
+        private String companyFullName;
+        /** 统一社会信用代码前缀 */
+        private String registerNumber;
+    }
 }

@@ -39,6 +39,13 @@ public class TempSecurityCodeController {
         return ApiResponse.success(tempSecurityCodeService.queryTempSecurityCodeOptions(req));
     }
 
+    /** 查询发行主体弹窗选项，最多返回 100 条 */
+    @PostMapping("/queryIssuerOptionList")
+    public ApiResponse<List<TempSecurityCodeDto.IssuerOption>> queryIssuerOptionList(
+            @RequestBody TempSecurityCodeReq.IssuerQueryReq req) {
+        return ApiResponse.success(tempSecurityCodeService.queryIssuerOptionList(req));
+    }
+
     /**
      * 远程查询正式证券选项（转正选券，代码/名称模糊，最多 50 条）
      */
