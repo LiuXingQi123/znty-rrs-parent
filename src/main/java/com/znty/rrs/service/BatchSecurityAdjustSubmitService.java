@@ -200,7 +200,11 @@ public class BatchSecurityAdjustSubmitService {
      * @param rows 直通调库日志
      */
     private void writePoolStates(List<IpAdjustLogBo> rows) {
-        batchSecurityAdjustSubmitMapper.deletePoolStatusesSoft(rows);
+        List<IpAdjustLogBo> outbound = rows.stream()
+                .filter(log -> AdjustMode.OUT.getCode().equals(log.getAdjustMode())).collect(Collectors.toList());
+        if (!outbound.isEmpty()) {
+            batchSecurityAdjustSubmitMapper.deletePoolStatusesSoft(outbound);
+        }
         List<IpAdjustLogBo> inbound = rows.stream()
                 .filter(log -> AdjustMode.IN.getCode().equals(log.getAdjustMode())).collect(Collectors.toList());
         if (!inbound.isEmpty() && batchSecurityAdjustSubmitMapper.addPoolStatuses(inbound) != inbound.size()) {

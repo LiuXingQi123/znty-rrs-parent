@@ -41,9 +41,10 @@
 
     <!-- 仅按本轮证券编码批量读取所有有效所在池，保留配置池外的来源、限制和互斥依据 -->
     <select id="queryObserverPoolStatusList" resultType="com.znty.rrs.entity.bo.IpPoolStatusBo">
-        SELECT security_code
-               ,target_pool_id
-        FROM ip_pool_status
+        SELECT ps.id
+             , ps.security_code
+             , ps.target_pool_id
+        FROM ip_pool_status ps
         WHERE audit_status = '20'
           AND is_deleted = 0
           AND security_code IN

@@ -14,6 +14,7 @@ public enum AdjustType {
     EXCEL_IMPORT("Excel导入"),
     /** Excel 清空 */
     EXCEL_CLEAR("Excel清空"),
+    CLEAR_POOL("清空目标池"),
     /** 手动批量调整 */
     MANUAL_BATCH("手动批量调整"),
     /** 自动调整 */

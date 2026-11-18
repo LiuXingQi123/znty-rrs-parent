@@ -52,9 +52,9 @@ public class SecurityPoolBatchCheckTest {
         AdjustCheckReq missingItems = new AdjustCheckReq();
         missingItems.setSecurityCode("B2");
 
-        assertThatThrownBy(() -> service.checkSecurityBatch(Arrays.asList(request("B1"), missingCode), false))
+        assertThatThrownBy(() -> service.checkSecurityBatch(Arrays.asList(request("B1"), missingCode)))
                 .isInstanceOf(BizException.class).hasMessage("证券代码不能为空");
-        assertThatThrownBy(() -> service.checkSecurityBatch(Arrays.asList(request("B1"), missingItems), false))
+        assertThatThrownBy(() -> service.checkSecurityBatch(Arrays.asList(request("B1"), missingItems)))
                 .isInstanceOf(BizException.class).hasMessage("调库项不能为空");
     }
 
@@ -65,7 +65,7 @@ public class SecurityPoolBatchCheckTest {
         List<AdjustCheckReq> requests = IntStream.range(0, 1000)
                 .mapToObj(i -> request("B" + i)).collect(Collectors.toList());
 
-        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(requests, false);
+        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(requests);
 
         assertThat(results).hasSize(1000).allSatisfy(result ->
                 assertThat(result.getItems()).singleElement().satisfies(item -> assertThat(item.isCanAdjust()).isTrue()));
@@ -237,7 +237,7 @@ public class SecurityPoolBatchCheckTest {
         AdjustCheckReq ordinary = request("ABS1");
         AdjustCheckReq different = request("ABS1");
         different.setSelfSelectedRightsHolderCode("B");
-        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(Arrays.asList(ordinary, different), false);
+        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(Arrays.asList(ordinary, different));
 
         assertThat(results).allSatisfy(result -> assertThat(result.getItems()).singleElement().satisfies(item -> {
             assertThat(item.isCanAdjust()).isFalse();
@@ -267,8 +267,8 @@ public class SecurityPoolBatchCheckTest {
                 .thenReturn(Collections.singletonList(blocked));
         List<AdjustCheckReq> requests = Arrays.asList(request("B1"), request("B2"), request("B3"));
 
-        List<AdjustCheckDto> page = fixture.service.checkSecurityBatch(requests, false);
-        List<AdjustCheckDto> task = fixture.service.checkSecurityBatch(requests, true, 1);
+        List<AdjustCheckDto> page = fixture.service.checkSecurityBatch(requests);
+        List<AdjustCheckDto> task = fixture.service.checkCompanyFollowBatch(requests, "20261119", Collections.emptySet());
 
         assertThat(page.get(0).getItems().get(0).getFailReasons()).contains("证券当前在禁止池中");
         assertThat(task.get(0).getItems().get(0).getFailReasons())
@@ -276,7 +276,7 @@ public class SecurityPoolBatchCheckTest {
         assertThat(task.get(1).getItems().get(0).isCanAdjust()).isTrue();
         assertThat(task.get(2).getItems().get(0).getFailReasons()).contains("目标投资池已达持仓上限（1）");
         verify(fixture.pools, never()).lockPoolByIdsList(anyList());
-        verify(fixture.batch).queryScheduledSecurities(anyList(), eq(1));
+        verify(fixture.batch).queryScheduledSecurities(anyList());
     }
 
     /** 默认权益人按每 500 个代码重新查库，保留每只证券的首个候选 */
@@ -310,10 +310,12 @@ public class SecurityPoolBatchCheckTest {
         ineligible.setWindCode("B1");
         ineligible.setSecurityType("mtn");
         ineligible.setIssuerCode("ISSUER");
-        when(fixture.batch.queryScheduledSecurities(Collections.singletonList("B1"), 1))
+        ineligible.setEligibleForFollow(true);
+        ineligible.setMaturityDate("20261118");
+        when(fixture.batch.queryScheduledSecurities(Collections.singletonList("B1")))
                 .thenReturn(Collections.singletonList(ineligible));
 
-        AdjustCheckDto result = fixture.service.checkSecurityBatch(Collections.singletonList(request("B1")), true, 1)
+        AdjustCheckDto result = fixture.service.checkCompanyFollowBatch(Collections.singletonList(request("B1")), "20261119", Collections.emptySet())
                 .get(0);
 
         assertThat(result.getItems().get(0).isCanAdjust()).isFalse();
@@ -338,7 +340,7 @@ public class SecurityPoolBatchCheckTest {
         relation.setRelationType("in_linked");
         when(fixture.batch.queryPoolRelations()).thenReturn(Collections.singletonList(relation));
 
-        AdjustCheckDto result = fixture.service.checkSecurityBatch(Collections.singletonList(request("B1")), true)
+        AdjustCheckDto result = fixture.service.checkCompanyFollowBatch(Collections.singletonList(request("B1")), "20261118", Collections.emptySet())
                 .get(0);
 
         assertThat(result.getItems()).hasSize(2);
@@ -368,6 +370,7 @@ public class SecurityPoolBatchCheckTest {
 
         private Fixture() {
             ReflectionTestUtils.setField(service, "batchSecurityCheckMapper", batch);
+            AutoAdjustTestSupport.bindExcelExclusion(service);
             ReflectionTestUtils.setField(service, "investmentPoolMapper", pools);
             ReflectionTestUtils.setField(service, "securityMarketMapper", market);
             AbsIdentityService identity = new AbsIdentityService();
@@ -404,14 +407,14 @@ public class SecurityPoolBatchCheckTest {
                     return mapping;
                 }).collect(Collectors.toList());
             });
-            when(batch.queryScheduledSecurities(anyList(), anyInt())).thenAnswer(call -> {
+            when(batch.queryScheduledSecurities(anyList())).thenAnswer(call -> {
                 List<String> codes = call.getArgument(0);
                 return codes.stream().map(code -> {
                     ScheduledSecurity security = new ScheduledSecurity();
                     security.setWindCode(code);
                     security.setSecurityType("mtn");
                     security.setIssuerCode("ISSUER");
-                    security.setEligible(true);
+                    security.setEligibleForFollow(true);
                     return security;
                 }).collect(Collectors.toList());
             });

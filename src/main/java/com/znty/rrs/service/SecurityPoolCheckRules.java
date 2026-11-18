@@ -67,6 +67,15 @@ import java.util.stream.Collectors;
 @Service
 class SecurityPoolCheckRules {
 
+    static final String PENDING_PROCESS_FAILURE = "证券存在进行中的调库流程";
+    static final String ALREADY_IN_POOL_FAILURE = "证券已在目标投资池中";
+
+    /** 判断 Excel 导入仍需拦截的业务校验结果 */
+    static boolean hasExcelBlockingFailure(AdjustCheckDto.CheckResultItem item) {
+        return item.getFailReasons() != null && item.getFailReasons().stream().anyMatch(reason ->
+                reason.startsWith(PENDING_PROCESS_FAILURE) || ALREADY_IN_POOL_FAILURE.equals(reason));
+    }
+
     /** 是否认可普通池状态中的 CRMW 作为快速入库来源 */
     private boolean crmwUsePoolStatus = BusinessSwitches.CRMW_USE_POOL_STATUS;
 
@@ -193,7 +202,7 @@ class SecurityPoolCheckRules {
     }
 
     /** 沿父级关系查找目标池所属的顶级投资池。 */
-    Long resolveRootPoolId(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
+    static Long resolveRootPoolId(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
         Long currentId = poolId;
         Set<Long> visited = new HashSet<>();
         while (currentId != null && visited.add(currentId)) {
@@ -362,7 +371,8 @@ class SecurityPoolCheckRules {
             boolean knownSecurity = shared.getSecurityInfo() != null
                     && Objects.equals(item.getSecurityCode(), shared.getSecurityInfo().getWindCode());
             knownSecurity = knownSecurity || shared.getRelatedSecurityData().containsKey(item.getSecurityCode());
-            if (!knownSecurity || !shared.getPoolMap().containsKey(item.getTargetPoolId())) {
+            if (!knownSecurity || !shared.getPoolMap().containsKey(item.getTargetPoolId())
+                    || hasExcelBlockingFailure(item)) {
                 invalidGroups.add(item.getAdjustGroupKey());
             }
         }
@@ -1807,6 +1817,14 @@ class SecurityPoolCheckRules {
      */
     List<String> checkInConditions(AdjustCheckContext ctx) {
         List<String> failures = new ArrayList<>();
+        if (ctx.isExcelCompanyFollow()) {
+            // 线下主体决定优先，池关系和在途冲突仍需执行
+            addIfFailed(failures, preCheckPendingProcess(ctx));
+            addIfFailed(failures, inCheckRestrictPool(ctx));
+            addIfFailed(failures, inCheckMutexConflict(ctx));
+            addIfWarning(ctx.getWarnings(), inCheckElasticPool(ctx));
+            return failures;
+        }
         // 通用校验（所有类型都走）
         failures.addAll(checkCommonIn(ctx));
         // 类型特有校验（按 categoryType 路由）
@@ -2265,6 +2283,14 @@ class SecurityPoolCheckRules {
     /** 复核互斥调出时，批量提交使用本次已读到的关联主体 */
     List<String> checkOutConditions(AdjustCheckContext ctx, List<RelatedRatingCompanyDto> candidates) {
         List<String> failures = new ArrayList<>();
+        if (ctx.isExcelCompanyFollow()) {
+            addIfFailed(failures, preCheckPendingProcess(ctx));
+            addIfFailed(failures, outCheckRestrictPool(ctx));
+            addIfFailed(failures, outCheckMutexPool(ctx));
+            addIfFailed(failures, outCheckMutexConflict(ctx));
+            addIfWarning(ctx.getWarnings(), outCheckElasticPool(ctx));
+            return failures;
+        }
         // 通用校验（所有类型都走）
         failures.addAll(checkCommonOut(ctx));
         // 类型特有校验（按 categoryType 路由）
@@ -2482,9 +2508,9 @@ class SecurityPoolCheckRules {
         if (ctx.isHasPendingProcess()) {
             String nodeLabel = ctx.getPendingProcessNodeLabel();
             if (nodeLabel != null && !nodeLabel.trim().isEmpty()) {
-                return "证券存在进行中的调库流程（当前节点：" + nodeLabel.trim() + "）";
+                return PENDING_PROCESS_FAILURE + "（当前节点：" + nodeLabel.trim() + "）";
             }
-            return "证券存在进行中的调库流程";
+            return PENDING_PROCESS_FAILURE;
         }
         return null;
     }
@@ -2497,7 +2523,7 @@ class SecurityPoolCheckRules {
     String inCheckSecurityAlreadyInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
         if (poolId != null && ctx.getCurrentPoolIds().contains(poolId)) {
-            return "证券已在目标投资池中";
+            return ALREADY_IN_POOL_FAILURE;
         }
         return null;
     }
@@ -2897,6 +2923,7 @@ class SecurityPoolCheckRules {
 
         AdjustCheckContext ctx = new AdjustCheckContext();
         ctx.setBatchData(shared.getBatchData());
+        ctx.setExcelCompanyFollow(shared.isExcelCompanyFollow());
         ctx.setSecurityInfo(shared.getSecurityInfo());
         ctx.setTargetPool(targetPool);
         ctx.setParentPool(parentPool);
@@ -3317,6 +3344,7 @@ class SecurityPoolCheckRules {
                     fakeItem.setPoolType(mother.getPoolType());
                     // 构建关联券校验上下文
                     AdjustCheckContext ctx = buildCheckContext(fakeItem, effectiveCount, relatedShared);
+                    ctx.setExcelCompanyFollow(mainShared.isExcelCompanyFollow());
                     List<String> failures = AdjustMode.IN.getCode().equals(mother.getAdjustMode())
                             ? checkInConditions(ctx) : checkOutConditions(ctx);
                     relatedItem.setCanAdjust(failures.isEmpty());
@@ -3400,6 +3428,15 @@ class SecurityPoolCheckRules {
         // 回填主券证券信息，并按 Wind 非空 ISIN 展开同池同向关联项
         expandRelatedMarketCodeItems(req, shared, resultItems);
 
+        if (shared.isExcelCompanyFollow()) {
+            // 已达到目标状态的关系项与关联券不重复执行
+            resultItems.removeIf(item -> {
+                Set<Long> current = shared.getBatchData().activePools
+                        .getOrDefault(item.getSecurityCode(), Collections.emptySet());
+                return current.contains(item.getTargetPoolId()) == AdjustMode.IN.getCode().equals(item.getAdjustMode());
+            });
+        }
+
         if (excelWarningsOnly) {
             // 原校验已经完整执行，只在 Excel 出口改变是否允许提交，不能清空失败原因
             allowExcelImportResults(shared, resultItems);
@@ -3414,7 +3451,8 @@ class SecurityPoolCheckRules {
         }
 
         // ══ 第五阶段：流程类型判断 ══
-        List<AdjustCheckDto.FlowOption> flowOptions = resolveAdjustFlowOptions(req, shared, resultItems);
+        List<AdjustCheckDto.FlowOption> flowOptions = shared.isExcelCompanyFollow()
+                ? Collections.emptyList() : resolveAdjustFlowOptions(req, shared, resultItems);
 
         AdjustCheckDto dto = new AdjustCheckDto();
         dto.setItems(resultItems);
@@ -3443,6 +3481,13 @@ class SecurityPoolCheckRules {
         AdjustSharedData shared = loadBatchSharedData(request, data);
         // 执行共用准入规则和审批流程匹配
         return checkPreparedAdjust(request, shared, includeBatchFlows, excelWarningsOnly);
+    }
+
+    /** 执行主体 Excel 决定派生的调库规则和池关系 */
+    AdjustCheckDto checkExcelCompanyFollowItem(AdjustCheckReq request, BatchSecurityCheckData data) {
+        AdjustSharedData shared = loadBatchSharedData(request, data);
+        shared.setExcelCompanyFollow(true);
+        return checkPreparedAdjust(request, shared, false, false);
     }
 
     /** 共用审批判断所需的流程版本和图数据 */

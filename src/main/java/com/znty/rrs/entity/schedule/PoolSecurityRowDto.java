@@ -13,4 +13,7 @@ public class PoolSecurityRowDto {
 
     /** 已生效的证券或主体代码 */
     private String securityCode;
+
+    /** 在池记录 ID */
+    private Long poolStatusId;
 }

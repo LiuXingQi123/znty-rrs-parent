@@ -54,6 +54,7 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         ScheduledTaskMapper scheduledTaskMapper = mock(ScheduledTaskMapper.class);
         CompanyNotInPoolBondAutoOutService service = AbsIdentityTestSupport.withIdentity(new CompanyNotInPoolBondAutoOutService());
         ReflectionTestUtils.setField(service, "autoAdjustMapper", autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
@@ -81,8 +82,7 @@ public class CompanyNotInPoolBondAutoOutServiceTest {
         ScheduledAdjustCandidateDto pending = new ScheduledAdjustCandidateDto();
         pending.setSecurityCode("B002");
         pending.setPoolStatusId(124L);
-        when(autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(eq(15L),
-                eq(new java.util.LinkedHashSet<>(java.util.Arrays.asList(15L, 16L)))))
+        when(autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(15L))
                 .thenReturn(Arrays.asList(bond, pending));
         when(autoAdjustMapper.deleteCompanyFollowedBondStatus(123L)).thenReturn(1);
         PoolSecurityRowDto inPool = new PoolSecurityRowDto();

@@ -184,7 +184,7 @@ public class StockSecurityBatchAdjustService {
         List<AdjustCheckReq> checks = req.getSecurities().stream()
                 .map(security -> buildSingleCheckReq(req, security)).collect(Collectors.toList());
         // 整批读取调库数据并按请求顺序映射校验结果
-        List<AdjustCheckDto> results = batchSecurityCheckService.checkSecurityBatch(checks, false);
+        List<AdjustCheckDto> results = batchSecurityCheckService.checkSecurityBatch(checks);
         for (int index = 0; index < results.size(); index++) {
             StockSecurityBatchAdjustSubmitReq.SecurityItem security = req.getSecurities().get(index);
             AdjustCheckDto checkDto = results.get(index);

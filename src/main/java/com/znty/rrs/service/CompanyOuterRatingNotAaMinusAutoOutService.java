@@ -28,11 +28,13 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 外评非AA-及以下主体自动出池
@@ -88,6 +90,9 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
     /** 证券池调库落地 Mapper */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
 
     /** 投资池查询 Mapper */
     @Resource
@@ -194,6 +199,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
         // 3. 合并参数池和关系配置绑定池
         List<Long> poolIds = poolScopeHelper.resolveUnionPoolIds(
                 paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
+        Set<Long> protectedStatusIds = poolIds.isEmpty() ? Collections.emptySet()
+                : excelPoolExclusionService.loadProtectedStatusIds(poolIds, false);
         infoDetail(detail, "扫描范围：目标池编号 " + poolIds);
         // 4. 构建池信息映射并解析额外拦截池
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
@@ -220,6 +227,8 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
             // 6.2 查询满足外评条件的主体候选
             List<ScheduledAdjustCandidateDto> companies = autoAdjustMapper.queryCompanyByNotLowOuterRatingInPool(
                     poolId, limitPoolIds, agencyCodes);
+            // 排除直接或同批经 Excel 入池的主体状态
+            companies = ExcelPoolExclusionService.excludeProtectedRows(companies, protectedStatusIds);
             // 6.3 使用统一规则复核主体三项条件
             companies = filterCompaniesNotMatchingBlacklistConditions(companies);
             if (companies == null || companies.isEmpty()) {
@@ -253,7 +262,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutService implements RrsScheduledT
                 if (securityPoolAdjustMapper.addAdjustLog(company) != 1) {
                     throw new BizException("主体[" + company.getSecurityCode() + "]自动调出日志写入失败");
                 }
-                int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(company.getSecurityCode(), poolId);
+                int deleted = securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft(company.getSecurityCode(), poolId);
                 if (deleted != 1) {
                     throw new BizException("主体[" + company.getSecurityCode()
                             + "]软删池状态失败（可能并发已出池）");

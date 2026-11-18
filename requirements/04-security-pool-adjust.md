@@ -459,7 +459,7 @@
 |---|---|
 | id | 主键 |
 | security_code / security_short_name / security_type | 证券信息 |
-| adjust_type | 手工调整/联动调整/互斥调整/关联调整/Excel导入/Excel清空/手动批量调整 |
+| adjust_type | 手工调整/联动调整/互斥调整/关联调整/Excel导入/清空目标池/手动批量调整 |
 | adjust_mode | 调入/调出 |
 | **adjust_batch_no** | 批次号，同组记录共用 |
 | target_pool_id / target_pool_name / pool_type | 目标池 |
@@ -703,7 +703,7 @@ Demo 在原始 `INSERT` 中为全部 52 条证券显式填写标识，设置以�
 
 ## CRMW 普通池入口边界
 
-CRMW 凭证可在证券池调整、批量调整和证券池 Excel 导入中按单券办理。存量证券批量调整也支持凭证，目标限定在债券产品库。前三个入口开放 CRMW 池作为目标池，沿用原调库校验。单券审批通过后写入 `ip_pool_status`。凭证与标的组合继续走专用 CRMW 调库，状态写入 `ip_pool_status_crmw`。 CRMW 专用批量调入仍从 `bond_product1_root`（债券产品库1）及其下级池的有效在池证券组成候选。证券 Excel 清空出库也执行原校验并保留原因，仅提醒不拦截，已有在途的证券仍纳入清空提示。
+CRMW 凭证可在证券池调整、批量调整和证券池 Excel 导入中按单券办理。存量证券批量调整也支持凭证，目标限定在债券产品库。前三个入口开放 CRMW 池作为目标池，沿用原调库校验。单券审批通过后写入 `ip_pool_status`。凭证与标的组合继续走专用 CRMW 调库，状态写入 `ip_pool_status_crmw`。 CRMW 专用批量调入仍从 `bond_product1_root`（债券产品库1）及其下级池的有效在池证券组成候选。清空目标池按各类对象的单笔出库规则执行，校验全部通过后直通落库。
 
 ## 已查询数据复用
 

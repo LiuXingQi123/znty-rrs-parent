@@ -50,7 +50,7 @@ import static org.mockito.Mockito.when;
 
 public class BatchCompanyAdjustCheckServiceTest {
 
-    /** 对照旧逐主体查询和新批量查询，检查调入、清空调出和流程候选均保持一致 */
+    /** 对照逐主体与批量校验，区分 Excel 调入、Excel 调出和独立清空所需数据 */
     @Test
     public void batchChecksShouldMatchExistingRulesAndQueryOncePerBatch() throws Exception {
         try (SqlSession session = openSession(); Statement sql = session.getConnection().createStatement()) {
@@ -94,33 +94,40 @@ public class BatchCompanyAdjustCheckServiceTest {
                 companies.put(code, company);
             }
             CompanyAdjustCheckContext legacy = check.createCompanyCheckContext(companies);
-            for (boolean inbound : new boolean[]{true, false}) {
+            for (String mode : Arrays.asList("in", "out", "clear")) {
+                boolean inbound = "in".equals(mode);
+                boolean clear = "clear".equals(mode);
                 ForbiddenPoolAdjustCheckReq c1 = request("C1", inbound);
                 ForbiddenPoolAdjustCheckReq c2 = request("C2", inbound);
                 ForbiddenPoolAdjustCheckReq c3 = request("C3", inbound);
-                AdjustCheckDto previousC1 = check.checkCompanyExcelAdjust(c1, legacy);
-                AdjustCheckDto previousC2 = check.checkCompanyExcelAdjust(c2, legacy);
-                AdjustCheckDto previousC3 = check.checkCompanyExcelAdjust(c3, legacy);
+                AdjustCheckDto previousC1 = clear ? check.checkCompanyAdjust(c1, legacy) : check.checkCompanyExcelAdjust(c1, legacy, true);
+                AdjustCheckDto previousC2 = clear ? check.checkCompanyAdjust(c2, legacy) : check.checkCompanyExcelAdjust(c2, legacy, true);
+                AdjustCheckDto previousC3 = clear ? check.checkCompanyAdjust(c3, legacy) : check.checkCompanyExcelAdjust(c3, legacy, true);
                 clearInvocations(batchMapper, singleMapper, ratingMapper, agencies);
 
-                CompanyAdjustCheckContext current = inbound
-                        ? batch.load(companies, Collections.singleton(23L), true)
-                        : batch.loadClear(Arrays.asList("C1", "C2", "C3"), Collections.singleton(23L));
-                AdjustCheckDto checkedC1 = check.checkCompanyExcelAdjust(c1, current);
-                AdjustCheckDto checkedC2 = check.checkCompanyExcelAdjust(c2, current);
-                AdjustCheckDto checkedC3 = check.checkCompanyExcelAdjust(c3, current);
+                CompanyAdjustCheckContext current = clear
+                        ? batch.loadClear(Arrays.asList("C1", "C2", "C3"), Collections.singleton(23L))
+                        : batch.load(companies, Collections.singleton(23L), inbound);
+                AdjustCheckDto checkedC1 = clear ? check.checkCompanyAdjust(c1, current) : check.checkCompanyExcelAdjust(c1, current, true);
+                AdjustCheckDto checkedC2 = clear ? check.checkCompanyAdjust(c2, current) : check.checkCompanyExcelAdjust(c2, current, true);
+                AdjustCheckDto checkedC3 = clear ? check.checkCompanyAdjust(c3, current) : check.checkCompanyExcelAdjust(c3, current, true);
 
                 assertThat(checkedC1).usingRecursiveComparison().isEqualTo(previousC1);
                 assertThat(checkedC2).usingRecursiveComparison().isEqualTo(previousC2);
                 assertThat(checkedC3).usingRecursiveComparison().isEqualTo(previousC3);
                 assertThat(checkedC1.getItems().get(0).getFailReasons())
                         .anyMatch(reason -> reason.contains("首个待办"));
-                assertThat(checkedC1.getItems()).hasSize(1);
+                assertThat(checkedC1.getItems()).hasSize("out".equals(mode) ? 2 : 1);
+                if ("out".equals(mode)) {
+                    assertThat(checkedC1.getItems()).noneMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+                }
                 assertThat(checkedC2.getItems()).hasSize(inbound ? 1 : 2);
                 assertThat(checkedC3.getItems()).hasSize(inbound ? 2 : 1);
                 if (!inbound) {
                     assertThat(checkedC2.getItems().get(1).getFailReasons())
                             .anyMatch(reason -> reason.contains("冻结期"));
+                }
+                if (clear) {
                     verify(batchMapper).queryCompanyDetails(anyList());
                 }
                 verify(batchMapper).queryCurrentPools(anyList(), anySet());
@@ -128,13 +135,16 @@ public class BatchCompanyAdjustCheckServiceTest {
                 verify(batchMapper).queryPendingPools(anyList());
                 verify(batchMapper).queryPoolCounts(anySet());
                 verify(batchMapper).queryOpenPools(anySet(), anyString());
-                verify(batchMapper).queryLowRatedCompanies(anyList(), anyList());
+                if (inbound || clear) {
+                    verify(batchMapper).queryLowRatedCompanies(anyList(), anyList());
+                    verify(agencies).queryActiveAgencyCodeList();
+                }
                 verifyNoMoreInteractions(batchMapper, ratingMapper);
                 verify(singleMapper).queryAllPoolRelationList();
                 verify(singleMapper).queryCategoryTypeBySecurityType("company");
                 verifyNoMoreInteractions(singleMapper);
-                verify(agencies).queryActiveAgencyCodeList();
                 verify(agencies, never()).queryRequiredAgencyCodeList();
+                verifyNoMoreInteractions(agencies);
             }
         }
     }

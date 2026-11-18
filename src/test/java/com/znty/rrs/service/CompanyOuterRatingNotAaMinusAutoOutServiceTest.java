@@ -81,6 +81,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         // 注入黑名单质押库统一判定服务
         bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评非AA-及以下主体自动出池");
@@ -107,7 +108,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
             log.setId(9001L);
             return 1;
         });
-        when(securityPoolAdjustMapper.deletePoolStatusSoft("C90001", 17L)).thenReturn(1);
+        when(securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("C90001", 17L)).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
 
@@ -117,7 +118,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
         ArgumentCaptor<IpAdjustLogBo> captor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(securityPoolAdjustMapper).addAdjustLog(captor.capture());
-        verify(securityPoolAdjustMapper).deletePoolStatusSoft(eq("C90001"), eq(17L));
+        verify(securityPoolAdjustMapper).deleteUnprotectedPoolStatusSoft(eq("C90001"), eq(17L));
         IpAdjustLogBo log = captor.getValue();
         assertThat(log.getSecurityCode()).isEqualTo("C90001");
         assertThat(log.getSecurityType()).isEqualTo("company");
@@ -144,6 +145,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         // 注入黑名单质押库统一判定服务
         bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
         when(scheduledTaskMapper.queryTaskByCode(CompanyOuterRatingNotAaMinusAutoOutService.TASK_CODE))
                 .thenReturn(null);
 
@@ -168,6 +170,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         // 注入黑名单质押库统一判定服务
         bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评非AA-及以下主体自动出池");
@@ -187,7 +190,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(0);
         verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
-        verify(securityPoolAdjustMapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
+        verify(securityPoolAdjustMapper, never()).deleteUnprotectedPoolStatusSoft(any(String.class), any(Long.class));
     }
 
     /** 验证主体仍在债券禁止库时不调出黑名单质押库。 */
@@ -205,6 +208,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
         // 注入黑名单质押库统一判定服务
         bindPledgeBlacklistRule(service, autoAdjustMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("外评非AA-及以下主体自动出池");
@@ -229,7 +233,7 @@ public class CompanyOuterRatingNotAaMinusAutoOutServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(0);
-        verify(securityPoolAdjustMapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
+        verify(securityPoolAdjustMapper, never()).deleteUnprotectedPoolStatusSoft(any(String.class), any(Long.class));
     }
 
     /** 验证未配置或配置空额外拦截池时均按不拦截处理。 */

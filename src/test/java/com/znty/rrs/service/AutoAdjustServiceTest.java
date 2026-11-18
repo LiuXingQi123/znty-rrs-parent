@@ -10,6 +10,7 @@ import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AutoAdjustMapper;
+import com.znty.rrs.mapper.ExcelPoolExclusionMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -50,6 +51,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", taskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, mapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("到期证券自动出池");
         when(taskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(conf);
@@ -59,7 +61,7 @@ public class AutoAdjustServiceTest {
         when(poolMapper.queryPoolList()).thenReturn(Collections.singletonList(pool));
         when(mapper.queryBoundPoolIds(AutoAdjustService.TASK_CODE, "auto_out"))
                 .thenReturn(Collections.singletonList(15L));
-        when(adjustMapper.deletePoolStatusSoft("S001", 15L)).thenReturn(1);
+        when(adjustMapper.deleteUnprotectedPoolStatusSoft("S001", 15L)).thenReturn(1);
 
         for (int days : new int[]{3, 0, -1}) {
             conf.setParamJson("{\"maturityOffsetDays\":" + days + "}");
@@ -108,6 +110,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("到期证券自动出池");
@@ -125,13 +128,13 @@ public class AutoAdjustServiceTest {
         expired.setMaturityDate("20260901");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1, Collections.emptyList())).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
-        when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(1);
+        when(securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("S001", 10L)).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
 
         ArgumentCaptor<IpAdjustLogBo> logCaptor = ArgumentCaptor.forClass(IpAdjustLogBo.class);
         verify(securityPoolAdjustMapper).addAdjustLog(logCaptor.capture());
-        verify(securityPoolAdjustMapper).deletePoolStatusSoft("S001", 10L);
+        verify(securityPoolAdjustMapper).deleteUnprotectedPoolStatusSoft("S001", 10L);
         IpAdjustLogBo log = logCaptor.getValue();
         assertThat(log.getAdjustType()).isEqualTo("自动调整");
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
@@ -166,6 +169,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("到期证券自动出池");
@@ -183,7 +187,7 @@ public class AutoAdjustServiceTest {
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1, Collections.emptyList())).thenReturn(Arrays.asList(first, second));
         when(securityPoolAdjustMapper.queryAllPoolRelationList())
                 .thenReturn(Collections.<PoolRelationBo>emptyList());
-        when(securityPoolAdjustMapper.deletePoolStatusSoft(any(String.class), eq(10L))).thenReturn(1);
+        when(securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft(any(String.class), eq(10L))).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
 
@@ -208,6 +212,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(null);
 
@@ -230,6 +235,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("到期证券自动出池");
@@ -255,6 +261,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("到期证券自动出池");
@@ -268,7 +275,7 @@ public class AutoAdjustServiceTest {
         expired.setSecurityCode("S001");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1, Collections.emptyList())).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
-        when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(0);
+        when(securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("S001", 10L)).thenReturn(0);
 
         ScheduledTaskResult result = service.execute();
 
@@ -292,6 +299,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("到期证券自动出池");
@@ -314,7 +322,7 @@ public class AutoAdjustServiceTest {
 
         ScheduledTaskResult result = service.execute();
 
-        verify(securityPoolAdjustMapper, never()).deletePoolStatusSoft(any(String.class), any(Long.class));
+        verify(securityPoolAdjustMapper, never()).deleteUnprotectedPoolStatusSoft(any(String.class), any(Long.class));
         verify(securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(0);
@@ -348,6 +356,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        AutoAdjustTestSupport.bindExcelExclusion(service);
 
         when(scheduledTaskMapper.queryTaskByCode(AutoAdjustService.TASK_CODE)).thenReturn(null);
         when(autoAdjustMapper.queryBoundPoolIds(AutoAdjustService.TASK_CODE, "auto_out"))
@@ -361,7 +370,7 @@ public class AutoAdjustServiceTest {
         expired.setSecurityCode("S001");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1, Collections.emptyList())).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
-        when(securityPoolAdjustMapper.deletePoolStatusSoft("S001", 10L)).thenReturn(1);
+        when(securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("S001", 10L)).thenReturn(1);
 
         ScheduledTaskResult result = service.execute();
 
@@ -382,6 +391,7 @@ public class AutoAdjustServiceTest {
         ReflectionTestUtils.setField(service, "investmentPoolMapper", investmentPoolMapper);
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", scheduledTaskMapper);
         AutoAdjustTestSupport.bindPoolScope(service, autoAdjustMapper);
+        ExcelPoolExclusionMapper exclusions = AutoAdjustTestSupport.bindExcelExclusion(service);
 
         SysScheduledTaskBo conf = new SysScheduledTaskBo();
         conf.setTaskName("到期证券自动出池");
@@ -396,15 +406,28 @@ public class AutoAdjustServiceTest {
         pool16.setId(16L);
         pool16.setPoolName("观察池");
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool10, pool16));
+        ScheduledAdjustCandidateDto protectedStatus = new ScheduledAdjustCandidateDto();
+        protectedStatus.setSecurityCode("B001");
+        protectedStatus.setPoolStatusId(100L);
+        ScheduledAdjustCandidateDto ordinaryStatus = new ScheduledAdjustCandidateDto();
+        ordinaryStatus.setSecurityCode("B001");
+        ordinaryStatus.setPoolStatusId(101L);
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1, Collections.emptyList()))
-                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
+                .thenReturn(Collections.singletonList(protectedStatus));
         when(autoAdjustMapper.queryPoolSecurityByExpired(16L, 1, Collections.emptyList()))
-                .thenReturn(Collections.<ScheduledAdjustCandidateDto>emptyList());
+                .thenReturn(Collections.singletonList(ordinaryStatus));
+        when(exclusions.queryExcelProtectedPoolStatusIds(Arrays.asList(10L, 16L), true))
+                .thenReturn(Collections.singleton(100L));
+        when(securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("B001", 16L)).thenReturn(1);
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
 
         ScheduledTaskResult result = service.execute();
 
         assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isEqualTo(1);
+        verify(exclusions).queryExcelProtectedPoolStatusIds(Arrays.asList(10L, 16L), true);
+        verify(securityPoolAdjustMapper, never()).deleteUnprotectedPoolStatusSoft("B001", 10L);
+        verify(securityPoolAdjustMapper).deleteUnprotectedPoolStatusSoft("B001", 16L);
         verify(autoAdjustMapper).queryPoolSecurityByExpired(10L, 1, Collections.emptyList());
         verify(autoAdjustMapper).queryPoolSecurityByExpired(16L, 1, Collections.emptyList());
     }

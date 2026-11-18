@@ -10,6 +10,7 @@ import com.znty.rrs.entity.bo.NodeApprovalConfigBo;
 import com.znty.rrs.entity.bo.NodeApprovalHandlerBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
+import com.znty.rrs.entity.forbiddenpooladjust.BatchCompanyAdjustCheckData;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
 import com.znty.rrs.entity.forbiddenpooladjust.CompanyAdjustCheckContext;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
@@ -94,7 +95,7 @@ public class ForbiddenPoolAdjustServiceTest {
 
     /** 主体清空出库保留锁池和在途提示，并允许按调出流程提交和生效 */
     @Test
-    public void excelClearOutboundShouldWarnAndApplyWithLockedPoolAndPendingProcess() {
+    public void excelOutboundShouldBlockPendingProcess() {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
         ForbiddenPoolAdjustService service = buildService(mapper);
         InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
@@ -123,29 +124,88 @@ public class ForbiddenPoolAdjustServiceTest {
         check.setItems(Collections.singletonList(checkItem));
         assertThat(service.checkCompanyAdjust(check).getItems().get(0).isCanAdjust()).isFalse();
 
-        AdjustCheckDto.CheckResultItem cleared = service.checkCompanyExcelAdjust(check, null).getItems().get(0);
-        assertThat(cleared.isCanAdjust()).isTrue();
+        AdjustCheckDto.CheckResultItem cleared = service.checkCompanyExcelAdjust(check, null, true).getItems().get(0);
+        assertThat(cleared.isCanAdjust()).isFalse();
         assertThat(cleared.getFailReasons()).contains("目标投资池已锁定");
         assertThat(cleared.getFailReasons()).anyMatch(reason -> reason.contains("流程"));
-        assertThat(cleared.getFlowOptions()).hasSize(1);
-        assertThat(cleared.getFlowOptions().get(0).getFlowType()).isEqualTo("normalOutbound");
+        assertThat(cleared.getFlowOptions()).isEmpty();
+        verify(mapper, never()).deletePoolStatusSoft("C001", 16L);
+    }
 
-        ForbiddenPoolAdjustSubmitReq req = new ForbiddenPoolAdjustSubmitReq();
-        req.setCompanyCode("C001");
-        req.setAdjusterId("1");
-        ForbiddenPoolAdjustSubmitReq.AdjustItem item = new ForbiddenPoolAdjustSubmitReq.AdjustItem();
-        item.setTargetPoolId(16L);
+    /** 主体本次调入重点观察名单时，Excel 联动项显示命中的准入条件 */
+    @Test
+    public void excelInboundShouldExplainBlacklistLinkFromKeyWatch() {
+        ForbiddenPoolAdjustService service = buildService(mock(ForbiddenPoolAdjustMapper.class));
+        ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", new PledgeBlacklistRuleService());
+        BatchCompanyAdjustCheckData batch = new BatchCompanyAdjustCheckData();
+        batch.categoryType = "company";
+        batch.ratingAgenciesConfigured = true;
+        batch.states.put("C10003", new BatchCompanyAdjustCheckData.CompanyState());
+        batch.pools.put(23L, buildPool(23L, "重点观察名单", "restricted"));
+        batch.pools.put(17L, buildPool(17L, "黑名单质押库", "blacklist"));
+        batch.relations.put(23L, Collections.singletonMap("in_linked", Collections.singletonList(17L)));
+        CompanyAdjustCheckContext context = new CompanyAdjustCheckContext(
+                Collections.singletonMap("C10003", buildCompany("C10003")),
+                Collections.emptyList(), Collections.emptyList(), batch);
+
+        ForbiddenPoolAdjustCheckReq request = new ForbiddenPoolAdjustCheckReq();
+        request.setCompanyCode("C10003");
+        ForbiddenPoolAdjustCheckReq.CheckItem item = new ForbiddenPoolAdjustCheckReq.CheckItem();
+        item.setTargetPoolId(23L);
+        item.setAdjustMode("调入");
+        request.setItems(Collections.singletonList(item));
+
+        List<AdjustCheckDto.CheckResultItem> items = service.checkCompanyExcelAdjust(request, context, true).getItems();
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::getTargetPoolId).containsExactly(23L, 17L);
+        assertThat(items).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+        assertThat(items.get(1).getItemTag()).isEqualTo("linkage");
+        assertThat(items.get(1).getFailReasons()).isEmpty();
+        assertThat(items.get(1).getWarnings())
+                .containsExactly("命中黑名单质押库准入条件（本次调入重点观察名单23），联动调入");
+        assertThat(service.checkCompanyAdjust(request, context).getItems().get(1).getWarnings()).isNullOrEmpty();
+    }
+
+    /** 主体 Excel 调出按已配置的联动池生成 17 池调出项，不复核黑名单质押库三条件 */
+    @Test
+    public void excelOutboundShouldExpandBlacklistLinkEvenWhenOrdinaryOutboundWouldRetainIt() {
+        ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
+        ForbiddenPoolAdjustService service = buildService(mapper);
+        InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
+        PledgeBlacklistRuleService pledge = mock(PledgeBlacklistRuleService.class);
+        ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
+        ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", pledge);
+        when(poolMapper.queryPoolList()).thenReturn(Arrays.asList(
+                buildPool(23L, "重点观察名单", "restricted"), buildPool(17L, "黑名单质押库", "blacklist")));
+        when(mapper.queryAllPoolRelationList()).thenReturn(Collections.singletonList(buildRelation(23L, "out_linked", 17L)));
+        when(mapper.queryCategoryTypeBySecurityType("company")).thenReturn("company");
+        when(mapper.querySecurityCurrentPoolIdList("C10007")).thenReturn(Arrays.asList(23L, 17L));
+        when(pledge.evaluate("C10007", Collections.emptySet(), Collections.singleton(23L)))
+                .thenReturn(new PledgeBlacklistRuleService.Decision(false, true, false));
+
+        CompanyAdjustCheckContext context = service.createCompanyCheckContext(
+                Collections.singletonMap("C10007", buildCompany("C10007")));
+        ForbiddenPoolAdjustCheckReq request = new ForbiddenPoolAdjustCheckReq();
+        request.setCompanyCode("C10007");
+        ForbiddenPoolAdjustCheckReq.CheckItem item = new ForbiddenPoolAdjustCheckReq.CheckItem();
+        item.setTargetPoolId(23L);
         item.setAdjustMode("调出");
-        item.setItemTag("manual");
-        item.setAdjustGroupKey(cleared.getAdjustGroupKey());
-        req.setItems(Collections.singletonList(item));
-        assertThatThrownBy(() -> service.addCompanyAdjustLog(req, Collections.emptyList()))
-                .isInstanceOf(BizException.class).hasMessageContaining("流程");
-        req.setAdjustType("Excel清空");
-        service.addCompanyExcelAdjustLog(req);
+        request.setItems(Collections.singletonList(item));
 
-        verify(mapper).deletePoolStatusSoft("C001", 16L);
-        verify(reportService).addInternalReportsOnFinish(anyList());
+        assertThat(service.checkCompanyAdjust(request, context).getItems())
+                .extracting(AdjustCheckDto.CheckResultItem::getTargetPoolId).containsExactly(23L);
+        List<AdjustCheckDto.CheckResultItem> items = service.checkCompanyExcelAdjust(request, context, true).getItems();
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::getTargetPoolId).containsExactly(23L, 17L);
+        assertThat(items).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+        assertThat(items.get(1).getItemTag()).isEqualTo("linkage");
+        assertThat(items.get(1).getFailReasons()).isEmpty();
+        assertThat(items.get(1).getAdjustGroupKey()).isEqualTo(items.get(0).getAdjustGroupKey());
+        when(mapper.queryPendingManualTargetPoolIdList("C10007", null)).thenReturn(Collections.singletonList(17L));
+        assertThat(service.checkCompanyExcelAdjust(request, context, true).getItems())
+                .hasSize(2).noneMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+        assertThat(service.checkCompanyExcelAdjust(request, context, false).getItems())
+                .hasSize(1).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+        verify(pledge).evaluate("C10007", Collections.emptySet(), Collections.singleton(23L));
+        verify(pledge, never()).validate(any(), any(), any(), any());
     }
 
     /** 主体清空及同批联动已出池时可重复生效，普通主体出库仍校验池状态 */
@@ -156,7 +216,7 @@ public class ForbiddenPoolAdjustServiceTest {
         IpAdjustLogBo clear = buildCompanyLog();
         clear.setTargetPoolId(16L);
         clear.setAdjustMode("调出");
-        clear.setAdjustType("Excel清空");
+        clear.setAdjustType("清空目标池");
         clear.setAdjustBatchNo("COMP_CLEAR");
         IpAdjustLogBo linked = buildCompanyLog();
         linked.setTargetPoolId(17L);
@@ -172,9 +232,9 @@ public class ForbiddenPoolAdjustServiceTest {
                 .isInstanceOf(BizException.class).hasMessageContaining("当前池状态");
     }
 
-    /** 已在目标池的主体导入保留提示，生效时先结束旧记录再写入本次状态 */
+    /** 已在目标池的主体导入在校验和实际落池时都拦截 */
     @Test
-    public void excelInboundShouldWarnAndReplaceExistingPoolStatus() {
+    public void excelInboundShouldBlockExistingPoolStatus() {
         ForbiddenPoolAdjustMapper mapper = mock(ForbiddenPoolAdjustMapper.class);
         ForbiddenPoolAdjustService service = buildService(mapper);
         InvestmentPoolMapper poolMapper = mock(InvestmentPoolMapper.class);
@@ -201,10 +261,10 @@ public class ForbiddenPoolAdjustServiceTest {
         CompanyAdjustCheckContext context = service.createCompanyCheckContext(
                 Collections.singletonMap("C001", buildCompany("C001")));
         assertThat(service.checkCompanyAdjust(check, context).getItems().get(0).isCanAdjust()).isFalse();
-        AdjustCheckDto.CheckResultItem checked = service.checkCompanyExcelAdjust(check, context).getItems().get(0);
-        assertThat(checked.isCanAdjust()).isTrue();
+        AdjustCheckDto.CheckResultItem checked = service.checkCompanyExcelAdjust(check, context, true).getItems().get(0);
+        assertThat(checked.isCanAdjust()).isFalse();
         assertThat(checked.getFailReasons()).anyMatch(reason -> reason.contains("已在"));
-        assertThat(checked.getFlowOptions()).hasSize(1);
+        assertThat(checked.getFlowOptions()).isEmpty();
 
         ForbiddenPoolAdjustSubmitReq req = new ForbiddenPoolAdjustSubmitReq();
         req.setCompanyCode("C001");
@@ -218,11 +278,10 @@ public class ForbiddenPoolAdjustServiceTest {
         req.setItems(Collections.singletonList(item));
         assertThatThrownBy(() -> service.addCompanyAdjustLog(req, Collections.emptyList()))
                 .isInstanceOf(BizException.class).hasMessageContaining("Excel 调库");
-        service.addCompanyExcelAdjustLog(req);
-
-        InOrder writes = inOrder(mapper);
-        writes.verify(mapper).deletePoolStatusSoft("C001", 16L);
-        writes.verify(mapper).addPoolStatus(any(IpAdjustLogBo.class));
+        assertThatThrownBy(() -> service.addCompanyExcelAdjustLog(req))
+                .isInstanceOf(BizException.class).hasMessageContaining("已在目标投资池");
+        verify(mapper, never()).deletePoolStatusSoft("C001", 16L);
+        verify(mapper, never()).addPoolStatus(any(IpAdjustLogBo.class));
     }
 
     /** 主体校验结果使用主体全称，失败及联动项均保留身份，债券互斥项不被覆盖。 */

@@ -30,7 +30,8 @@
 
     <!-- 各池已生效主体：security_type 经字典限定为 company 大类，避免把债券记录误当成主体 -->
     <select id="queryEffectiveCompanyPoolRows" resultType="com.znty.rrs.entity.schedule.PoolSecurityRowDto">
-        SELECT status.target_pool_id AS pool_id
+        SELECT status.id AS pool_status_id
+               ,status.target_pool_id AS pool_id
                ,status.security_code
         FROM ip_pool_status status
         INNER JOIN dict_security_type dst ON dst.security_type = status.security_type
@@ -42,7 +43,8 @@
 
     <!-- 各池已生效 ABS：以主档 ABS 标志判定，不依赖写入时落库的 security_type -->
     <select id="queryEffectiveAbsPoolRows" resultType="com.znty.rrs.entity.schedule.PoolSecurityRowDto">
-        SELECT status.target_pool_id AS pool_id
+        SELECT status.id AS pool_status_id
+               ,status.target_pool_id AS pool_id
                ,status.security_code
         FROM ip_pool_status status
         INNER JOIN rrs_securityinfo bond ON bond.wind_code = status.security_code

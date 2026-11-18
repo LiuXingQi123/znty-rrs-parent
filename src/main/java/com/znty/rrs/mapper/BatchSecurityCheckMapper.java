@@ -48,14 +48,12 @@ public interface BatchSecurityCheckMapper {
     List<Row> queryAbsIdentities(@Param("securityCodes") List<String> securityCodes);
 
     /**
-     * 校验任务扩展出的实际调入证券是否仍符合补债候选范围
+     * 批量读取任务主券和关联券主档
      *
-     * @param securityCodes 实际证券代码
-     * @param minDaysToMaturity 距到期至少多少自然日
-     * @return 完整主档和各证券的任务候选资格
+     * @param securityCodes 任务本批需复核的证券代码
+     * @return 证券主档及基本补债资格
      */
-    List<ScheduledSecurity> queryScheduledSecurities(@Param("securityCodes") List<String> securityCodes,
-                                                        @Param("minDaysToMaturity") int minDaysToMaturity);
+    List<ScheduledSecurity> queryScheduledSecurities(@Param("securityCodes") List<String> securityCodes);
 
     /**
      * 按代码读取本批证券主档

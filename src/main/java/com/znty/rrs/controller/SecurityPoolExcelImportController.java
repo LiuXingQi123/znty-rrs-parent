@@ -2,6 +2,7 @@ package com.znty.rrs.controller;
 
 import com.znty.rrs.common.ApiResponse;
 import com.znty.rrs.common.PageResult;
+import com.znty.rrs.entity.securitypoolexcelimport.PoolClearSummaryDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportItemDto;
 import com.znty.rrs.entity.securitypoolexcelimport.SecurityPoolExcelImportReq;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
+import java.util.List;
 
 /**
  * 证券/主体 Excel 导入接口
@@ -84,6 +86,18 @@ public class SecurityPoolExcelImportController {
     public ApiResponse<SecurityPoolExcelImportDto> submitImport(@RequestBody SecurityPoolExcelImportReq req) {
         // 委托服务层按校验结果提交调库
         return ApiResponse.success(securityPoolExcelImportService.submitImport(req));
+    }
+
+    /** 查询可清空投资池的成员数量 */
+    @PostMapping("/queryClearPoolList")
+    public ApiResponse<List<PoolClearSummaryDto>> queryClearPoolList(@RequestBody SecurityPoolExcelImportReq req) {
+        return ApiResponse.success(securityPoolExcelImportService.queryClearPoolList(req));
+    }
+
+    /** 清空选中的投资池 */
+    @PostMapping("/clearPools")
+    public ApiResponse<List<Long>> clearPools(@RequestBody SecurityPoolExcelImportReq req) {
+        return ApiResponse.success(securityPoolExcelImportService.clearPools(req));
     }
 
     /**

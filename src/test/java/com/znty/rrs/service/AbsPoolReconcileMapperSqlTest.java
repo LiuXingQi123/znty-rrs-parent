@@ -75,7 +75,8 @@ public class AbsPoolReconcileMapperSqlTest {
     public void poolRowQueriesShouldOnlyTakeEffectiveRows() throws Exception {
         for (String id : new String[]{"queryEffectiveCompanyPoolRows", "queryEffectiveAbsPoolRows"}) {
             String sql = render(id);
-            assertThat(sql).as(id).contains("status.audit_status = '20'").contains("status.is_deleted = 0");
+            assertThat(sql).as(id).contains("status.id AS pool_status_id", "status.audit_status = '20'", "status.is_deleted = 0")
+                    .doesNotContain("ip_adjust_log", "excel_source");
         }
     }
 

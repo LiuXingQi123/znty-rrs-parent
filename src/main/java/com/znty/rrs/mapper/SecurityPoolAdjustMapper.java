@@ -94,6 +94,24 @@ public interface SecurityPoolAdjustMapper {
     int deletePoolStatusSoft(@Param("securityCode") String securityCode,
                              @Param("targetPoolId") Long targetPoolId);
 
+    /**
+     * 查询对象当前受 Excel 导入保护的池
+     *
+     * @param securityCode 债券或主体代码
+     * @return 受保护池 ID
+     */
+    List<Long> queryExcelProtectedPoolIds(@Param("securityCode") String securityCode);
+
+    /**
+     * 软删除未受 Excel 导入保护的有效池状态
+     *
+     * @param securityCode 债券或主体代码
+     * @param targetPoolId 调出池 ID
+     * @return 实际更新行数
+     */
+    int deleteUnprotectedPoolStatusSoft(@Param("securityCode") String securityCode,
+                                        @Param("targetPoolId") Long targetPoolId);
+
     /** 更新调库详情页传入的证券基础信息字段 */
     int editSecurityInfoForAdjust(SecurityPoolAdjustSubmitReq req);
 

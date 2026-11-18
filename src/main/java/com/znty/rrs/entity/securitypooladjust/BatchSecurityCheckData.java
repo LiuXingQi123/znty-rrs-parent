@@ -27,6 +27,11 @@ public class BatchSecurityCheckData {
     public boolean ratingAgenciesConfigured;
     /** 同时符合定时任务的品种、证券状态及到期门槛的代码 */
     public final Set<String> scheduledEligibleCodes = new HashSet<>();
+    /** 主体 Excel 跟随允许跳过距到期门槛的债券 */
+    public final Set<String> scheduledEligibleWithoutMaturityCodes = new HashSet<>();
+
+    /** 发行主体最近一次生效的 Excel 决定为调出的池 */
+    public final Map<String, Set<Long>> excelCompanyOutPools = new HashMap<>();
     /** 证券主档，构建每只券的校验对象时复制 */
     public final Map<String, SecurityInfoBo> securities = new HashMap<>();
     /** Excel 输入代码忽略大小写后对应的主档代码 */
@@ -96,10 +101,10 @@ public class BatchSecurityCheckData {
 
     /** 读取补债主档时一并返回此证券是否仍符合任务范围 */
     public static class ScheduledSecurity extends SecurityInfoBo {
-        /** 证券仍符合任务的品种、到期及临时代码要求 */
+        /** 证券符合任务的品种、上市状态和临时代码要求 */
         @Getter
         @Setter
-        private boolean eligible;
+        private boolean eligibleForFollow;
     }
 
     /** 批量查询的证券与池状态、在途节点、品种或关联代码 */

@@ -14,6 +14,7 @@ import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData;
 import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.Row;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.ScheduledSecurity;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.BatchSecurityCheckMapper;
 import com.znty.rrs.mapper.CreditBondGradeRuleMapper;
@@ -56,6 +57,10 @@ public class BatchSecurityCheckService {
     @Resource
     private BatchSecurityCheckMapper batchSecurityCheckMapper;
 
+    /** 主体 Excel 调出依据 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
+
     /** ABS 主体冲突结果处理 */
     @Resource
     private AbsIdentityService absIdentityService;
@@ -76,27 +81,27 @@ public class BatchSecurityCheckService {
     @Resource
     private CreditBondGradeRuleMapper creditBondGradeRuleMapper;
 
-    /**
-     * 批量复用单券规则，自动落池在同一事务内校验并写入
-     *
-     * @param requests 本批调库请求
-     * @param scheduled 是否供自动落池使用
-     * @return 每只证券的校验结果，与请求顺序一致
-     */
-    List<AdjustCheckDto> checkSecurityBatch(List<AdjustCheckReq> requests, boolean scheduled) {
-        // 手工页面没有任务专属的到期天数
-        return checkSecurityBatch(requests, scheduled, 0);
+    /** 批量页面沿用单券规则校验本批调库项 */
+    List<AdjustCheckDto> checkSecurityBatch(List<AdjustCheckReq> requests) {
+        return checkSecurityBatch(requests, null, Collections.emptySet());
     }
 
     /**
-     * 按当前批次统一校验主券和配套调整项
+     * 按主体的 Excel 决定批量校验其跟随债券
      *
-     * @param requests 本批调库请求
-     * @param scheduled 是否供任务自动写入
-     * @param minDaysToMaturity 任务的最少剩余自然日
-     * @return 每个调库组的校验结果
+     * @param requests 同轮待处理的调库请求
+     * @param maturityCutoff 本轮初筛使用的到期截止日
+     * @param excelCompanyRequests 随已生效 Excel 主体决定处理的请求
+     * @return 各请求的可执行调库项
      */
-    List<AdjustCheckDto> checkSecurityBatch(List<AdjustCheckReq> requests, boolean scheduled, int minDaysToMaturity) {
+    List<AdjustCheckDto> checkCompanyFollowBatch(List<AdjustCheckReq> requests, String maturityCutoff,
+                                                Set<AdjustCheckReq> excelCompanyRequests) {
+        return checkSecurityBatch(requests, maturityCutoff, excelCompanyRequests);
+    }
+
+    private List<AdjustCheckDto> checkSecurityBatch(List<AdjustCheckReq> requests, String maturityCutoff,
+                                                    Set<AdjustCheckReq> excelCompanyRequests) {
+        boolean scheduled = maturityCutoff != null;
         if (requests.isEmpty()) {
             return Collections.emptyList();
         }
@@ -109,16 +114,18 @@ public class BatchSecurityCheckService {
             }
         }
         // 集中读取本批校验所需的事实
-        BatchSecurityCheckData data = loadBatchCheckData(requests, scheduled, minDaysToMaturity, false, false);
+        BatchSecurityCheckData data = loadBatchCheckData(requests, maturityCutoff, false, false);
         // 识别同一 ABS 在本批请求中的不同主体选择
         Set<String> conflictingAbsCodes = findConflictingAbsCodes(requests, data);
         List<AdjustCheckDto> results = new ArrayList<>(requests.size());
         Map<String, Boolean> directFlows = new HashMap<>();
         for (AdjustCheckReq request : requests) {
             // 页面和任务进入同一规则分支
+            boolean excelCompany = excelCompanyRequests.contains(request);
             AdjustCheckDto result;
             try {
-                result = securityPoolCheckRules.checkBatchItem(request, !scheduled, data);
+                result = excelCompany ? securityPoolCheckRules.checkExcelCompanyFollowItem(request, data)
+                        : securityPoolCheckRules.checkBatchItem(request, !scheduled, data);
             } catch (BizException e) {
                 if (!scheduled) {
                     throw e;
@@ -137,7 +144,7 @@ public class BatchSecurityCheckService {
             }
             if (scheduled) {
                 // 校验直通和材料资格并累计本轮已通过的容量
-                prepareScheduledInbound(result, data, directFlows);
+                prepareScheduledInbound(result, data, directFlows, excelCompany);
             }
             results.add(result);
         }
@@ -177,15 +184,16 @@ public class BatchSecurityCheckService {
      * @param result 一只证券及其配套项的校验结果
      * @param data 本批当前状态
      * @param directFlows 已检查的流程是否可直通
+     * @param excelCompany 是否按生效的主体 Excel 决定执行
      */
     private void prepareScheduledInbound(AdjustCheckDto result, BatchSecurityCheckData data,
-                                         Map<String, Boolean> directFlows) {
+                                         Map<String, Boolean> directFlows, boolean excelCompany) {
         List<AdjustCheckDto.CheckResultItem> items = result.getItems();
         if (items.isEmpty() || items.stream().anyMatch(item -> !item.isCanAdjust())) {
             return;
         }
         AdjustCheckDto.CheckResultItem primary = items.get(0);
-        boolean direct = primary.getFlowOptions().stream().filter(option -> option.isSelectable() && option.isMatched())
+        boolean direct = excelCompany || primary.getFlowOptions().stream().filter(option -> option.isSelectable() && option.isMatched())
                 .anyMatch(option -> directFlows.computeIfAbsent(option.getFlowId() + ":" + option.getFlowKey(),
                         key -> securityPoolCheckRules.isDirectAdjustFlow(option.getFlowId(), option.getFlowKey())));
         if (!direct) {
@@ -203,20 +211,25 @@ public class BatchSecurityCheckService {
                 return;
             }
             boolean inbound = AdjustMode.IN.getCode().equals(item.getAdjustMode());
-            if (inbound && !data.scheduledEligibleCodes.contains(item.getSecurityCode())) {
+            if (inbound && !data.scheduledEligibleCodes.contains(item.getSecurityCode())
+                    && (!excelCompany || !data.scheduledEligibleWithoutMaturityCodes.contains(item.getSecurityCode()))) {
                 // 关联码同样受任务候选范围和到期门槛约束
                 rejectScheduledItem(item, "证券不符合定时补债范围或距到期天数不足");
                 return;
             }
             String issuer = data.securities.get(item.getSecurityCode()).getIssuerCode();
-            if (!ItemType.RELATED.getCode().equals(item.getItemTag()) && primary.getMaterialExemptionType() == null
+            if (inbound && data.excelCompanyOutPools.getOrDefault(issuer, Collections.emptySet()).contains(pool.getId())) {
+                rejectScheduledItem(item, "发行主体已通过 Excel 调出目标池，不能自动补入");
+                return;
+            }
+            if (!excelCompany && !ItemType.RELATED.getCode().equals(item.getItemTag()) && primary.getMaterialExemptionType() == null
                     && requiresReport(inbound ? pool.getInReportRestriction() : pool.getOutReportRestriction())
                     && !data.reportExemptIssuers.contains(issuer)) {
                 // 保留原规则的材料豁免，缺少材料则跳过整组
                 rejectScheduledItem(item, "目标池要求研究报告且本次没有可用的报告豁免");
                 return;
             }
-            if (inbound) {
+            if (inbound && !excelCompany) {
                 int count = data.counts.getOrDefault(pool.getId(), 0) + increments.merge(pool.getId(), 1, Integer::sum);
                 if (pool.getMaxCapacity() != null && pool.getMaxCapacity() > 0 && count > pool.getMaxCapacity()) {
                     // 联动和关联码也纳入同一组的容量累计
@@ -296,7 +309,7 @@ public class BatchSecurityCheckService {
             return new BatchSecurityCheckData();
         }
         // Excel 共用批量事实，清空场景另加载已占用的自选权益人
-        return loadBatchCheckData(requests, false, 0, clearTarget, true);
+        return loadBatchCheckData(requests, null, clearTarget, true);
     }
 
     /**
@@ -311,18 +324,23 @@ public class BatchSecurityCheckService {
         return securityPoolCheckRules.checkBatchItem(request, false, data, true);
     }
 
+    /** 执行严格的单笔出库校验并复用本批已查数据 */
+    AdjustCheckDto checkClearItem(AdjustCheckReq request, BatchSecurityCheckData data) {
+        return securityPoolCheckRules.checkBatchItem(request, false, data);
+    }
+
     /**
      * 加载批次使用的证券、投资池及校验事实
      *
      * @param requests 本批调库请求
-     * @param scheduled 是否读取任务专用的准入和容量数据
-     * @param minDaysToMaturity 任务的最少剩余自然日
+     * @param maturityCutoff 普通债跟随任务的截止日，人工批量为空
      * @param clearTarget 是否加载清空出库已占用的自选权益人
      * @param excel 是否按 Excel 输入匹配主档代码
      * @return 本批共享校验数据
      */
-    private BatchSecurityCheckData loadBatchCheckData(List<AdjustCheckReq> requests, boolean scheduled,
-                                                       int minDaysToMaturity, boolean clearTarget, boolean excel) {
+    private BatchSecurityCheckData loadBatchCheckData(List<AdjustCheckReq> requests, String maturityCutoff,
+                                                       boolean clearTarget, boolean excel) {
+        boolean scheduled = maturityCutoff != null;
         BatchSecurityCheckData data = new BatchSecurityCheckData();
         data.scheduled = scheduled;
         List<PoolRelationBo> relations = batchSecurityCheckMapper.queryPoolRelations();
@@ -380,14 +398,31 @@ public class BatchSecurityCheckService {
             masterCodesToLoad.removeAll(mainCodes);
         }
         if (scheduled) {
-            // 任务主档和落池前的候选资格一次读取，保留未通过资格的主档供规则返回原因
-            forEachCheckChunk(new ArrayList<>(masterCodesToLoad), chunk ->
-                    batchSecurityCheckMapper.queryScheduledSecurities(chunk, minDaysToMaturity).forEach(sec -> {
-                        data.securities.put(sec.getWindCode(), sec);
-                        if (sec.isEligible()) {
-                            data.scheduledEligibleCodes.add(sec.getWindCode());
+            // 以初筛使用的截止日复核本批实际调入代码
+            forEachCheckChunk(new ArrayList<>(masterCodesToLoad), chunk -> {
+                for (ScheduledSecurity security : batchSecurityCheckMapper.queryScheduledSecurities(chunk)) {
+                    String code = security.getWindCode();
+                    data.securities.put(code, security);
+                    if (security.isEligibleForFollow()) {
+                        data.scheduledEligibleWithoutMaturityCodes.add(code);
+                        if (CompanyBondSyncPolicy.meetsMaturity(security.getMaturityDate(), maturityCutoff)) {
+                            data.scheduledEligibleCodes.add(code);
                         }
-                    }));
+                    }
+                }
+            });
+            // 联动和关联券同样受发行主体最近一次 Excel 调出决定约束
+            List<String> issuers = data.securities.values().stream().map(SecurityInfoBo::getIssuerCode)
+                    .filter(StringUtils::hasText).distinct().collect(Collectors.toList());
+            forEachCheckChunk(issuers, chunk -> {
+                ExcelPoolExclusionService.CompanyDecisions decisions = excelPoolExclusionService.loadCompanyDecisions(null, chunk);
+                for (String issuer : chunk) {
+                    Set<Long> outPools = decisions.outPools(issuer);
+                    if (!outPools.isEmpty()) {
+                        data.excelCompanyOutPools.put(issuer, outPools);
+                    }
+                }
+            });
         } else {
             forEachCheckChunk(new ArrayList<>(masterCodesToLoad), chunk ->
                     batchSecurityCheckMapper.querySecurities(chunk)

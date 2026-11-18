@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.znty.rrs.mapper.ExcelPoolExclusionMapper">
+
+    <!-- 批量查询受 Excel 保护的生效在池记录 ID -->
+    <select id="queryExcelProtectedPoolStatusIds" resultType="java.lang.Long">
+        SELECT ps.id
+        FROM ip_pool_status ps
+        WHERE ps.audit_status = '20'
+          AND ps.is_deleted = 0
+        <if test="poolIds != null">
+          AND ps.target_pool_id IN
+          <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+              #{poolId}
+          </foreach>
+        </if>
+          AND (EXISTS (
+              SELECT 1
+              FROM ip_adjust_log src
+              WHERE src.adjust_batch_no = ps.adjust_batch_no
+                AND src.adjust_type = 'Excel导入'
+                AND src.adjust_mode = '调入'
+                AND src.audit_status = '20'
+                AND src.is_deleted = 0
+          )
+          <if test="includeCompanyFollow">
+              OR ps.adjust_reason LIKE '【任务名称：%】【主体跟随】（%【Excel主体跟随】%'
+          </if>
+          )
+    </select>
+
+    <!-- 读取已生效的 Excel 主体调整流水，含同批联动和互斥记录 -->
+    <select id="queryExcelCompanyActions" resultType="com.znty.rrs.entity.bo.IpAdjustLogBo">
+        SELECT al.id
+             , al.security_code
+             , al.target_pool_id
+             , al.adjust_mode
+             , al.audit_time
+             , al.crte_time
+        FROM ip_adjust_log al
+        WHERE al.security_type = 'company'
+          AND al.security_code IS NOT NULL
+          AND al.audit_status = '20'
+          AND al.is_deleted = 0
+        <if test="poolIds != null">
+          AND al.target_pool_id IN
+          <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+              #{poolId}
+          </foreach>
+        </if>
+        <if test="issuerCodes != null">
+          AND al.security_code IN
+          <foreach collection="issuerCodes" item="code" open="(" separator="," close=")">
+              #{code}
+          </foreach>
+        </if>
+          AND (al.adjust_type = 'Excel导入' OR EXISTS (
+              SELECT 1
+              FROM ip_adjust_log src
+              WHERE src.adjust_batch_no = al.adjust_batch_no
+                AND src.security_type = 'company'
+                AND src.adjust_type = 'Excel导入'
+                AND src.audit_status = '20'
+                AND src.is_deleted = 0
+          ))
+    </select>
+
+</mapper>

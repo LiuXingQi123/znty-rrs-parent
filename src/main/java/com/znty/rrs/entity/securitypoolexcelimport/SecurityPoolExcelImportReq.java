@@ -21,8 +21,8 @@ public class SecurityPoolExcelImportReq extends PageRequest {
     private Long targetPoolId;
     /** 调整方向：in / out */
     private String direction;
-    /** 是否首先清空目标池（调入时生效：差集出库 + 批量出库流程） */
-    private Boolean clearTarget;
+    /** 清空目标池选中的池 ID */
+    private List<Long> poolIds;
     /** 是否允许联动与互斥调整 */
     private Boolean allowLinkMutex;
     /** 调整建议（提交弹窗） */

@@ -37,8 +37,8 @@ public class ExternalRatingAgencyMapperSqlTest {
         assertThat(selectBlock(xml, "queryCompanyByLowOuterRatingNotInPool"))
                 .contains("WHERE e.rating_value &lt;= 17");
         assertThat(selectBlock(xml, "queryCompanyByNotLowOuterRatingInPool"))
-                .contains("AND e.rating_value > 17")
-                .doesNotContain("COALESCE(e.rating_value");
+                .contains("ips.id AS pool_status_id", "AND e.rating_value > 17")
+                .doesNotContain("Excel导入", "Excel主体跟随", "COALESCE(e.rating_value");
     }
 
     /** 黑名单质押库校验和定时任务使用相同的评级提取规则 */

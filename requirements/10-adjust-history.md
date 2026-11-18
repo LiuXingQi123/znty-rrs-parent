@@ -89,7 +89,7 @@
 | 主体全称 | `issuer` | tooltip |
 | 证券全称 | `fullName` | tooltip |
 | 是否ABS/担保/永续/次级/私募/含权/标准信用债 | `absFlag` 等 | 与证券池调整页一致的「是/否」Tag；私募按 `issueType` 或 `innerClass` 含“私募”，ABS 兼容类型 `abs` |
-| 调整类型 | `adjustType` | 直接显示（手工调整/联动调整/互斥调整/关联调整/Excel导入/Excel清空/手动批量调整） |
+| 调整类型 | `adjustType` | 直接显示（手工调整/联动调整/互斥调整/关联调整/Excel导入/清空目标池/手动批量调整） |
 | 调整方向 | `adjustMode` | `调入`→绿色 `el-tag--success`；`调出`→红色 `el-tag--danger`；其他空 |
 | 调整原因 | `adjustReason` | tooltip |
 | 投资池名称 | `targetPoolPath` | tooltip，后端填充全路径 |

@@ -156,7 +156,8 @@
          到期日早于当前日期减去 maturityOffsetDays 天，默认 1 即早于昨天（T-2）
          大类对齐老 ptype=4000 或 2000：仅债、股；CRMW 走独立任务 crmw_expired_auto_out -->
     <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT ips.security_code
+        SELECT ips.id AS pool_status_id
+               ,ips.security_code
                ,ips.security_short_name
                ,ips.security_type
                ,si.maturity_date
@@ -188,71 +189,6 @@
           AND si.maturity_date IS NOT NULL
           AND si.maturity_date != ''
           AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')
-    </select>
-
-    <!--
-      主体下新债自动入池候选（对齐老系统 AutoAdjustInNewBondToLimitPoolJob）：
-      1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池；trigger_company_code 直接取发行主体
-      2) 旗下 bond 大类未退市、尚未在 targetPoolId，有到期日时距到期不少于 minDaysToMaturity 天
-      3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
-      4) 固定排除 ABS（由 CompanyBondSyncPolicy.newBondInboundScope 传入 excludeAbs=true）：
-         ABS 的进出池与未确认提醒统一由 company_abs_bond_auto_in 按池对账负责，
-         本 SQL 不再保留 ABS 的四类关系码匹配分支，也不再需要 MIN 标量子查询取联动主体
-      5) 不再判空 issuer_code：下方 EXISTS 的 cps.security_code = bond.issuer_code 本身已天然排除 NULL
-    -->
-    <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
-        SELECT bond.wind_code AS security_code
-               ,bond.short_name AS security_short_name
-               ,bond.security_type
-               ,bond.abs_flag
-               ,bond.issuer_code
-               ,bond.issuer AS issuer_name
-               ,bond.issuer_code AS trigger_company_code
-        FROM rrs_securityinfo bond
-        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
-                                         AND dst.is_deleted = 0
-                                         AND dst.category_type = 'bond'
-        WHERE bond.security_status != 'D'
-          AND (bond.maturity_date IS NULL
-               OR bond.maturity_date >= DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL #{minDaysToMaturity} DAY), '%Y%m%d'))
-        <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
-          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
-        </if>
-        <if test="bondTypeScope != null and bondTypeScope.excludedSecurityTypes != null and bondTypeScope.excludedSecurityTypes.size() > 0">
-          AND bond.security_type NOT IN
-          <foreach collection="bondTypeScope.excludedSecurityTypes" item="securityType" open="(" separator="," close=")">
-              #{securityType}
-          </foreach>
-        </if>
-          AND EXISTS (
-              SELECT 1
-              FROM ip_pool_status cps
-              INNER JOIN dict_security_type cdst ON cdst.security_type = cps.security_type
-                                                AND cdst.is_deleted = 0
-                                                AND cdst.category_type = 'company'
-              WHERE cps.security_code = bond.issuer_code
-                AND cps.target_pool_id = #{companyPoolId}
-                AND cps.audit_status = '20'
-                AND cps.is_deleted = 0
-          )
-          AND NOT EXISTS (
-              SELECT 1
-              FROM ip_pool_status bps
-              WHERE bps.security_code = bond.wind_code
-                AND bps.target_pool_id = #{targetPoolId}
-                AND bps.audit_status = '20'
-                AND bps.is_deleted = 0
-          )
-          AND NOT EXISTS (
-              SELECT 1
-              FROM rrs_temp_security_code ts
-              WHERE ts.temp_security_code = bond.wind_code
-                AND ts.security_code IS NOT NULL
-                AND ts.security_code != ''
-                AND IFNULL(ts.is_deleted, 0) = 0
-                AND ts.status = 'updated'
-          )
-        ORDER BY bond.wind_code ASC
     </select>
 
     <!-- 查询已在来源池生效且尚未在目标池生效的主体，供条款（一）和（三）共用 -->
@@ -448,7 +384,8 @@
             WHERE t.rn = 1
         )
         <!-- 已在目标池、近一年有认可外评且孰低不属于 AA-及以下的主体 -->
-        SELECT ips.security_code
+        SELECT ips.id AS pool_status_id
+               ,ips.security_code
                ,COALESCE(NULLIF(e.s_info_compname, ''), NULLIF(ips.security_short_name, ''), ips.security_code)
                    AS security_short_name
                ,'company' AS security_type
@@ -541,7 +478,76 @@
           AND ps.target_pool_id IS NOT NULL
     </select>
 
-    <!-- 查询已失去全部主体依据的债券跟随记录，供后续按记录 ID 撤销 -->
+    <!-- 读取本轮入池判定所用的数据库日期 -->
+    <select id="queryDatabaseDate" resultType="java.time.LocalDate">
+        SELECT CURDATE()
+    </select>
+
+    <!--
+      主体下新债自动入池候选（对齐老系统 AutoAdjustInNewBondToLimitPoolJob）：
+      1) 发行主体已在 companyPoolId 且为 company 大类、已生效在池；trigger_company_code 直接取发行主体
+      2) 旗下 bond 大类未退市、尚未在 targetPoolId，普通主体依据执行到期天数限制，Excel 主体调入依据跳过该限制
+      3) 排除临时代码已更新为正式代码的记录（对应老系统 SDC_SIRM_TEMPSECURITY2）
+      4) 固定排除 ABS（由 CompanyBondSyncPolicy.newBondInboundScope 传入 excludeAbs=true）：
+         ABS 的进出池与未确认提醒统一由 company_abs_bond_auto_in 按池对账负责，
+         本 SQL 不再保留 ABS 的四类关系码匹配分支，也不再需要 MIN 标量子查询取联动主体
+      5) 最近一次生效的 Excel 主体调出撤销该主体依据，并禁止普通债跟随补入明确调出的目标池
+    -->
+    <select id="queryCompanyNewBondForAutoIn" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
+        SELECT bond.wind_code AS security_code
+               ,bond.short_name AS security_short_name
+               ,bond.security_type
+               ,bond.abs_flag
+               ,bond.issuer_code
+               ,bond.issuer AS issuer_name
+               ,bond.issuer_code AS trigger_company_code
+               ,bond.maturity_date
+        FROM rrs_securityinfo bond
+        INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
+                                         AND dst.is_deleted = 0
+                                         AND dst.category_type = 'bond'
+        WHERE bond.security_status != 'D'
+        <if test="bondTypeScope != null and bondTypeScope.excludeAbs">
+          AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
+        </if>
+        <if test="bondTypeScope != null and bondTypeScope.excludedSecurityTypes != null and bondTypeScope.excludedSecurityTypes.size() > 0">
+          AND bond.security_type NOT IN
+          <foreach collection="bondTypeScope.excludedSecurityTypes" item="securityType" open="(" separator="," close=")">
+              #{securityType}
+          </foreach>
+        </if>
+          AND EXISTS (
+              SELECT 1
+              FROM ip_pool_status cps
+              INNER JOIN dict_security_type cdst ON cdst.security_type = cps.security_type
+                                                AND cdst.is_deleted = 0
+                                                AND cdst.category_type = 'company'
+              WHERE cps.security_code = bond.issuer_code
+                AND cps.target_pool_id = #{companyPoolId}
+                AND cps.audit_status = '20'
+                AND cps.is_deleted = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_pool_status bps
+              WHERE bps.security_code = bond.wind_code
+                AND bps.target_pool_id = #{targetPoolId}
+                AND bps.audit_status = '20'
+                AND bps.is_deleted = 0
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM rrs_temp_security_code ts
+              WHERE ts.temp_security_code = bond.wind_code
+                AND ts.security_code IS NOT NULL
+                AND ts.security_code != ''
+                AND IFNULL(ts.is_deleted, 0) = 0
+                AND ts.status = 'updated'
+          )
+        ORDER BY bond.wind_code ASC
+    </select>
+
+    <!-- 读取生效的债券跟随记录，供服务核对主体依据后按记录 ID 撤销 -->
     <select id="queryCompanyFollowedBondsForAutoOut" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ps.id AS pool_status_id
              , bond.wind_code AS security_code
@@ -549,6 +555,7 @@
              , bond.security_type
              , bond.issuer_code
              , bond.issuer AS issuer_name
+             , CASE WHEN bond.security_status != 'D' THEN 0 ELSE 1 END AS inactive_for_ordinary_out
         FROM ip_pool_status ps
         INNER JOIN rrs_securityinfo bond ON bond.wind_code = ps.security_code
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
@@ -558,7 +565,6 @@
           AND ps.audit_status = '20'
           AND ps.is_deleted = 0
           AND ps.adjust_mode = '调入'
-          AND bond.security_status != 'D'
           AND NOT (COALESCE(bond.abs_flag, 0) = 1 OR bond.security_type = 'abs')
           AND bond.issuer_code IS NOT NULL
           AND bond.issuer_code != ''
@@ -570,19 +576,22 @@
                OR ps.adjust_type IN ('自动调整', '联动调整') AND ps.adjust_batch_no LIKE 'COMP%'
                   AND (ps.adjust_reason LIKE '主体“%”调入，旗下债券自动同步调整%'
                        OR ps.adjust_reason LIKE '【任务名称：%】%（同池旗下债）'))
-          AND NOT EXISTS (
-              SELECT 1
-              FROM ip_pool_status cps
-              WHERE cps.security_code = bond.issuer_code
-                AND cps.security_type = 'company'
-                AND cps.audit_status = '20'
-                AND cps.is_deleted = 0
-                AND cps.target_pool_id IN
-                <foreach collection="companyPoolIds" item="poolId" open="(" separator="," close=")">
-                    #{poolId}
-                </foreach>
-          )
         ORDER BY bond.wind_code, ps.id
+    </select>
+
+    <!-- 批量读取普通债跟随出池所依赖的生效主体状态 -->
+    <select id="queryActiveCompanyPoolRows" resultType="com.znty.rrs.entity.schedule.PoolSecurityRowDto">
+        SELECT security_code
+             , target_pool_id AS pool_id
+        FROM ip_pool_status
+        WHERE security_type = 'company'
+          AND security_code IS NOT NULL
+          AND audit_status = '20'
+          AND is_deleted = 0
+          AND target_pool_id IN
+          <foreach collection="poolIds" item="poolId" open="(" separator="," close=")">
+              #{poolId}
+          </foreach>
     </select>
 
     <!-- 按记录 ID 软删一条仍有效的债券跟随记录，保留同池其他入池依据 -->
@@ -593,5 +602,14 @@
         WHERE id = #{poolStatusId}
           AND audit_status = '20'
           AND is_deleted = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM ip_adjust_log src
+              WHERE src.adjust_batch_no = ip_pool_status.adjust_batch_no
+                AND src.adjust_type = 'Excel导入'
+                AND src.adjust_mode = '调入'
+                AND src.audit_status = '20'
+                AND src.is_deleted = 0
+          )
     </update>
 </mapper>

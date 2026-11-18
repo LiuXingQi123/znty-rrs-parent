@@ -129,6 +129,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
+
     /** 自动调库查询 */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
@@ -444,7 +447,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
                 continue;
             }
             // 3. 仅本次实际删除生效记录时写出池日志并计数
-            int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(abs.getSecurityCode(), pool.bondPoolId);
+            int deleted = securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft(abs.getSecurityCode(), pool.bondPoolId);
             if (deleted == 0) {
                 warnDetail(detail, "ABS[" + abs.getSecurityCode() + "]软删失败（可能并发已出池），跳过");
                 continue;
@@ -519,7 +522,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
                 continue;
             }
             // 4. 匹配池内联动主体，没有匹配到则跳过
-            String trigger = resolveTriggerCompany(abs, context.snapshot.relationMap, pool.companySet);
+            String trigger = resolveTriggerCompany(abs, context.snapshot.relationMap, pool.inboundCompanySet);
             if (trigger == null) {
                 continue;
             }
@@ -563,7 +566,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
                 continue;
             }
             Long companyPoolId = pool.companyPoolIds.stream()
-                    .filter(id -> context.snapshot.companiesOf(id).contains(trigger))
+                    .filter(id -> context.snapshot.inboundCompaniesOf(id).contains(trigger))
                     .findFirst().orElseThrow(IllegalStateException::new);
             // 2. 准备带主体依据的调库记录，先查联动结论，再判断是否已在池或命中限制池
             ScheduledAdjustCandidateDto candidate = buildAdjustCandidate(abs, pool, context,
@@ -581,6 +584,13 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             }
             if (currentPoolIds.contains(pool.bondPoolId)) {
                 infoDetail(detail, "ABS[" + securityCode + "]已在目标池生效，跳过");
+                continue;
+            }
+            List<Long> relationOutPools = AutoAdjustRelationHelper.resolveInboundAutoOutPoolIds(
+                    pool.bondPoolId, context.allRelations);
+            if (!relationOutPools.isEmpty() && !Collections.disjoint(relationOutPools,
+                    securityPoolAdjustMapper.queryExcelProtectedPoolIds(securityCode))) {
+                warnDetail(detail, "ABS[" + securityCode + "]涉及 Excel 导入保护池，跳过本组调库");
                 continue;
             }
             // 3. 先写调库日志，再用日志主键写池状态
@@ -870,10 +880,13 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         }
 
         // 3. 各池已生效主体
-        fillPoolMap(snapshot.companyPoolMap, absPoolReconcileMapper.queryEffectiveCompanyPoolRows());
+        Set<Long> protectedStatusIds = excelPoolExclusionService.loadProtectedStatusIds(null, false);
+        List<PoolSecurityRowDto> companies = absPoolReconcileMapper.queryEffectiveCompanyPoolRows();
+        fillPoolMap(snapshot.companyPoolMap, companies, Collections.emptySet());
+        fillPoolMap(snapshot.inboundCompanyPoolMap, companies, protectedStatusIds);
 
         // 4. 各池已生效 ABS
-        fillPoolMap(snapshot.absPoolMap, absPoolReconcileMapper.queryEffectiveAbsPoolRows());
+        fillPoolMap(snapshot.absPoolMap, absPoolReconcileMapper.queryEffectiveAbsPoolRows(), protectedStatusIds);
 
         infoDetail(detail, "快照装载完成：ABS 主档 " + snapshot.absList.size()
                 + " 条，四类关系覆盖 " + snapshot.relationMap.size() + " 只 ABS，"
@@ -890,13 +903,15 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
      *
      * @param target 目标分组容器
      * @param rows 查询结果
+     * @param excludedStatuses 不参加当前分组的在池记录 ID
      */
-    private void fillPoolMap(Map<Long, Set<String>> target, List<PoolSecurityRowDto> rows) {
+    private void fillPoolMap(Map<Long, Set<String>> target, List<PoolSecurityRowDto> rows, Set<Long> excludedStatuses) {
         if (rows == null) {
             return;
         }
         for (PoolSecurityRowDto row : rows) {
-            if (row == null || row.getPoolId() == null || !StringUtils.hasText(row.getSecurityCode())) {
+            if (row == null || row.getPoolId() == null || !StringUtils.hasText(row.getSecurityCode())
+                    || excludedStatuses.contains(row.getPoolStatusId())) {
                 continue;
             }
             target.computeIfAbsent(row.getPoolId(), key -> new HashSet<>()).add(row.getSecurityCode());
@@ -1314,6 +1329,12 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
 
         /** 池到生效主体 */
         private final Map<Long, Set<String>> companyPoolMap = new HashMap<>();
+        /** 可触发补债的主体池状态 */
+        private final Map<Long, Set<String>> inboundCompanyPoolMap = new HashMap<>();
+
+        private Set<String> inboundCompaniesOf(Long poolId) {
+            return inboundCompanyPoolMap.getOrDefault(poolId, Collections.emptySet());
+        }
 
         /** 池到生效 ABS */
         private final Map<Long, Set<String>> absPoolMap = new HashMap<>();
@@ -1344,6 +1365,9 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
         /** 依据池内的生效主体 */
         private final Set<String> companySet;
 
+        /** 可触发 ABS 补入的主体 */
+        private final Set<String> inboundCompanySet = new HashSet<>();
+
         /** 目标池内已生效的 ABS */
         private final Set<String> absInPool;
 
@@ -1354,6 +1378,7 @@ public class CompanyAbsBondAutoInService implements RrsScheduledTask {
             this.companySet = new HashSet<>();
             for (Long companyPoolId : companyPoolIds) {
                 this.companySet.addAll(context.snapshot.companiesOf(companyPoolId));
+                this.inboundCompanySet.addAll(context.snapshot.inboundCompaniesOf(companyPoolId));
             }
             this.absInPool = context.snapshot.absOf(bondPool.getId());
         }

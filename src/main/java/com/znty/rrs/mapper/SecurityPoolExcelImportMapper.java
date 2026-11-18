@@ -4,6 +4,7 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.securitypoolexcelimport.PoolMemberDto;
+import com.znty.rrs.entity.securitypoolexcelimport.PoolClearSummaryDto;
 import com.znty.rrs.entity.securitypoolexcelimport.CompanyImportMatchDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -132,4 +133,20 @@ public interface SecurityPoolExcelImportMapper {
      * @return 在池成员列表
      */
     List<PoolMemberDto> queryPoolMemberList(@Param("poolIds") List<Long> poolIds);
+
+    /**
+     * 汇总可清空的叶子池的在池主体和债券数量
+     *
+     * @param poolIds 有权限的叶子池 ID
+     * @return 每个池的成员数量
+     */
+    List<PoolClearSummaryDto> queryClearPoolSummaryList(@Param("poolIds") List<Long> poolIds);
+
+    /**
+     * 查询最近六个自然月存在有效调入报告的主体或同发行人债券
+     *
+     * @param codes 需要研究报告的主体或债券代码
+     * @return 满足报告豁免条件的对象代码
+     */
+    List<String> queryClearReportExemptCodes(@Param("codes") List<String> codes);
 }

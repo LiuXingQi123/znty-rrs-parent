@@ -52,7 +52,7 @@ public class BatchCompanyAdjustSubmitServiceTest {
         try (SqlSession session = openSession("direct"); Statement sql = session.getConnection().createStatement()) {
             createTables(sql);
             sql.executeUpdate("INSERT INTO ip_pool_status (security_code, target_pool_id, audit_status, is_deleted) "
-                    + "VALUES ('C1', 23, '20', 0), ('C1', 15, '20', 0), ('OTHER', 17, '20', 0)");
+                    + "VALUES ('C1', 15, '20', 0), ('OTHER', 17, '20', 0)");
             BatchCompanyAdjustSubmitMapper mapper = mock(BatchCompanyAdjustSubmitMapper.class,
                     delegatesTo(session.getMapper(BatchCompanyAdjustSubmitMapper.class)));
             FlowMapper flows = mock(FlowMapper.class);
@@ -76,8 +76,7 @@ public class BatchCompanyAdjustSubmitServiceTest {
             assertEquals(20, count(sql, "SELECT COUNT(*) FROM ip_pool_status p JOIN ip_adjust_log l"
                     + " ON p.adjust_log_id = l.id AND p.target_pool_id = l.target_pool_id"
                     + " AND p.security_code = l.security_code WHERE p.is_deleted = 0"));
-            assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_pool_status WHERE security_code = 'C1'"
-                    + " AND target_pool_id = 23 AND is_deleted = 1"));
+            assertEquals(0, count(sql, "SELECT COUNT(*) FROM ip_pool_status WHERE is_deleted = 1"));
             assertEquals(2, count(sql, "SELECT COUNT(*) FROM ip_pool_status WHERE adjust_log_id IS NULL AND is_deleted = 0"));
             try (ResultSet logs = sql.executeQuery("SELECT id, security_code, target_pool_id FROM ip_adjust_log ORDER BY id")) {
                 for (int i = 0; i < ids.size(); i++) {
@@ -90,7 +89,7 @@ public class BatchCompanyAdjustSubmitServiceTest {
             verify(mapper).queryCompanyList(anyList());
             verify(mapper).addAdjustLogs(anyList());
             verify(mapper).addAdjustSteps(anyList());
-            verify(mapper).deletePoolStatusesSoft(anyList());
+            verify(mapper, never()).deletePoolStatusesSoft(anyList());
             verify(mapper).addPoolStatuses(anyList());
             verifyNoMoreInteractions(mapper);
             verify(flows).queryFlowById(112L);
@@ -134,7 +133,7 @@ public class BatchCompanyAdjustSubmitServiceTest {
             BatchCompanyAdjustSubmitMapper mapper = session.getMapper(BatchCompanyAdjustSubmitMapper.class);
             BatchCompanyAdjustSubmitService service = buildService(mapper, mock(FlowMapper.class), false);
 
-            List<Long> ids = service.submit(Collections.singletonList(request("C1", "Excel清空",
+            List<Long> ids = service.submit(Collections.singletonList(request("C1", "清空目标池",
                     item(23L, "调出", "manual", "OUT"), item(23L, "调入", "manual", "IN"),
                     item(17L, "调出", "linkage", "OUT"))));
 
@@ -145,6 +144,33 @@ public class BatchCompanyAdjustSubmitServiceTest {
             assertEquals(0, count(sql, "SELECT COUNT(*) FROM ip_adjust_log"));
             assertEquals(0, count(sql, "SELECT COUNT(*) FROM ip_adjust_step"));
             assertEquals(0, count(sql, "SELECT COUNT(*) FROM ip_pool_status"));
+        }
+    }
+
+    /** 主体清空和联动出库共用已结束的无需审核流程 */
+    @Test
+    public void clearShouldSaveCompletedFlowForMainAndLinkedOutbound() throws Exception {
+        try (SqlSession session = openSession("company_clear_flow"); Statement sql = session.getConnection().createStatement()) {
+            createTables(sql);
+            sql.executeUpdate("INSERT INTO ais_inv_ods.wind_compintroduction VALUES ('C1', '全称', '简称')");
+            sql.executeUpdate("INSERT INTO ip_pool_status (security_code, target_pool_id, audit_status, is_deleted)"
+                    + " VALUES ('C1', 23, '20', 0), ('C1', 17, '20', 0)");
+            BatchCompanyAdjustSubmitService service = buildService(session.getMapper(BatchCompanyAdjustSubmitMapper.class),
+                    mock(FlowMapper.class), false);
+            ForbiddenPoolAdjustSubmitReq.AdjustItem main = item(23L, "调出", "manual", "OUT");
+            main.setFlowKey("bond:no-approval");
+            main.setFlowType("normalOutbound");
+            ForbiddenPoolAdjustSubmitReq.AdjustItem linked = item(17L, "调出", "linkage", "OUT");
+            List<Long> ids = service.submit(Collections.singletonList(request("C1", "清空目标池", main, linked)));
+
+            assertEquals(2, ids.size());
+            assertEquals(2, count(sql, "SELECT COUNT(*) FROM ip_pool_status WHERE is_deleted=1"));
+            assertEquals(2, count(sql, "SELECT COUNT(*) FROM ip_adjust_log WHERE flow_id=112"
+                    + " AND flow_key='bond:no-approval' AND flow_type='normalOutbound' AND audit_status='20'"));
+            assertEquals(1, count(sql, "SELECT COUNT(DISTINCT adjust_batch_no) FROM ip_adjust_log"));
+            assertEquals(3, count(sql, "SELECT COUNT(*) FROM ip_adjust_step WHERE adjust_log_id=" + ids.get(0)));
+            assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_adjust_step WHERE node_type='end'"));
+            assertEquals(0, count(sql, "SELECT COUNT(*) FROM ip_adjust_step WHERE step_status='pending'"));
         }
     }
 

@@ -60,12 +60,12 @@ public class BatchCompanyAdjustCheckService {
                 companies.putIfAbsent(row.getLookupValue(), company);
             }
         }
-        // 清空出库与导入使用相同的校验数据
-        return load(companies, poolIds, false);
+        // 独立清空按普通出库规则读取外评
+        return load(companies, poolIds, false, true);
     }
 
     /**
-     * 按本次输入的主体和池范围批量读取校验数据
+     * 按本次输入的主体和池范围批量读取 Excel 校验数据
      *
      * 1. 读取池配置与关系，确定手工及可能生成的联动互斥池
      * 2. 读取池容量、开放日和需要的评级机构配置
@@ -78,6 +78,13 @@ public class BatchCompanyAdjustCheckService {
      */
     public CompanyAdjustCheckContext load(Map<String, ForbiddenPoolAdjustDto> companies, Set<Long> poolIds,
                                           boolean inbound) {
+        // Excel 调出按配置联动，不需要取外评判断能否调出黑名单质押库
+        return load(companies, poolIds, inbound, inbound);
+    }
+
+    /** 批量读取本次规则需要的主体状态和池配置 */
+    private CompanyAdjustCheckContext load(Map<String, ForbiddenPoolAdjustDto> companies, Set<Long> poolIds,
+                                           boolean inbound, boolean checkBlacklistRating) {
         BatchCompanyAdjustCheckData data = new BatchCompanyAdjustCheckData();
         if (companies.isEmpty()) {
             return new CompanyAdjustCheckContext(companies, Collections.emptyList(), Collections.emptyList(), data);
@@ -116,7 +123,7 @@ public class BatchCompanyAdjustCheckService {
         Set<Long> entryPools = outboundPools.stream().map(data.pools::get)
                 .filter(pool -> pool != null && pool.getFrozenPeriodIn() != null && pool.getFrozenPeriodIn() > 0)
                 .map(InvestmentPoolBo::getId).collect(Collectors.toSet());
-        List<String> agencies = relevantPools.contains(PledgeBlacklistRuleService.BLACKLIST_POOL_ID)
+        List<String> agencies = checkBlacklistRating && relevantPools.contains(PledgeBlacklistRuleService.BLACKLIST_POOL_ID)
                 ? externalRatingAgencyService.queryActiveAgencyCodeList() : Collections.emptyList();
         data.ratingAgenciesConfigured = !agencies.isEmpty();
         data.categoryType = forbiddenPoolAdjustMapper.queryCategoryTypeBySecurityType("company");

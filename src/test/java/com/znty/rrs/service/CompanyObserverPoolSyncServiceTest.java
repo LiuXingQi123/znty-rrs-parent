@@ -404,6 +404,7 @@ public class CompanyObserverPoolSyncServiceTest {
 
         /** 注入依赖，并让候选查询和状态写入共享同一份状态。 */
         Fixture() {
+            AutoAdjustTestSupport.bindExcelExclusion(service);
             ReflectionTestUtils.setField(service, "companyObserverMapper", sourceMapper);
             ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", statusMapper);
             ReflectionTestUtils.setField(service, "investmentPoolMapper", poolMapper);
@@ -436,7 +437,7 @@ public class CompanyObserverPoolSyncServiceTest {
                 IpAdjustLogBo row = call.getArgument(0);
                 return states.computeIfAbsent(row.getSecurityCode(), key -> new LinkedHashSet<>()).add(row.getTargetPoolId()) ? 1 : 0;
             });
-            when(statusMapper.deletePoolStatusSoft(anyString(), anyLong())).thenAnswer(call ->
+            when(statusMapper.deleteUnprotectedPoolStatusSoft(anyString(), anyLong())).thenAnswer(call ->
                     states.getOrDefault(call.getArgument(0), Collections.emptySet()).remove(call.getArgument(1)) ? 1 : 0);
         }
     }

@@ -21,11 +21,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 到期证券自动出池
@@ -75,6 +77,9 @@ public class AutoAdjustService implements RrsScheduledTask {
     /** 证券池调库落地 Mapper */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
+
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
     /** 投资池查询 Mapper */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -187,6 +192,8 @@ public class AutoAdjustService implements RrsScheduledTask {
         Date submitTime = batchNoContext.getSubmitTime();
         // 4. 读取全量池关系，供调出限制池校验
         List<PoolRelationBo> allRelations = securityPoolAdjustMapper.queryAllPoolRelationList();
+        Set<Long> protectedStatusIds = poolIds.isEmpty() ? Collections.emptySet()
+                : excelPoolExclusionService.loadProtectedStatusIds(poolIds, true);
         AutoOutSummary summary = new AutoOutSummary();
         // 5. 逐池扫描到期证券，同时标记调出限制命中结果
         for (Long poolId : poolIds) {
@@ -201,6 +208,8 @@ public class AutoAdjustService implements RrsScheduledTask {
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
             List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryPoolSecurityByExpired(
                     poolId, maturityOffsetDays, outRestrictPoolIds);
+            // 按本轮独立读取的保护集合排除 Excel 和主体跟随记录
+            expiredList = ExcelPoolExclusionService.excludeProtectedRows(expiredList, protectedStatusIds);
             if (expiredList == null || expiredList.isEmpty()) {
                 summary.addPool(poolId, pool.getPoolName(), 0, 0, 0);
                 infoDetail(detail, "扫描结果：池【" + pool.getPoolName() + "】没有发现到期证券");
@@ -222,7 +231,7 @@ public class AutoAdjustService implements RrsScheduledTask {
                     continue;
                 }
                 // 7. 软删仍在目标池的记录，实际删到才写出池日志
-                int deleted = securityPoolAdjustMapper.deletePoolStatusSoft(sec.getSecurityCode(), poolId);
+                int deleted = securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft(sec.getSecurityCode(), poolId);
                 if (deleted == 0) {
                     poolSkippedCount++;
                     skipDetail(detail, "证券【" + sec.getSecurityCode() + "】：当前已不在目标池，本轮不处理");

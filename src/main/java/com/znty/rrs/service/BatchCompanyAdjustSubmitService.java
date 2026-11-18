@@ -162,7 +162,11 @@ public class BatchCompanyAdjustSubmitService {
      * @param rows 主体和池组合不重复的直通调库日志
      */
     private void writePoolStates(List<IpAdjustLogBo> rows) {
-        batchCompanyAdjustSubmitMapper.deletePoolStatusesSoft(rows);
+        List<IpAdjustLogBo> outbound = rows.stream()
+                .filter(log -> AdjustMode.OUT.getCode().equals(log.getAdjustMode())).collect(Collectors.toList());
+        if (!outbound.isEmpty()) {
+            batchCompanyAdjustSubmitMapper.deletePoolStatusesSoft(outbound);
+        }
         List<IpAdjustLogBo> inbound = rows.stream()
                 .filter(log -> AdjustMode.IN.getCode().equals(log.getAdjustMode()))
                 .collect(Collectors.toList());

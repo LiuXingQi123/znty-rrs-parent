@@ -405,7 +405,6 @@
                                          AND occupied.audit_status IN ('00', '11')
                                          AND occupied.is_deleted = 0
         WHERE manual_log.security_code = #{companyCode}
-          AND manual_log.adjust_type = '手工调整'
           AND manual_log.audit_status IN ('00', '11')
           AND manual_log.is_deleted = 0
           <if test="excludeBatchNo != null and excludeBatchNo != ''">

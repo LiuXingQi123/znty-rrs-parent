@@ -15,6 +15,7 @@ import com.znty.rrs.common.enums.StepStatus;
 import com.znty.rrs.common.enums.AuditStatus;
 
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.common.enums.AdjustType;
 import com.znty.rrs.common.enums.CategoryType;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
@@ -140,8 +141,6 @@ public class SecurityPoolAdjustService {
     /** Excel 证券导入主项类型，配套项通过同组批次识别来源 */
     public static final String EXCEL_IMPORT_ADJUST_TYPE = "Excel导入";
 
-    /** Excel 清空来源，与导入共用业务提示放行规则 */
-    private static final String EXCEL_CLEAR_ADJUST_TYPE = "Excel清空";
     /** 统一证券市场及同券查询组件。 */
     @Resource
     private SecurityMarketService securityMarketService;
@@ -1745,7 +1744,7 @@ public class SecurityPoolAdjustService {
 
     /** 沿父级关系查找目标池所属的顶级投资池。 */
     private Long resolveRootPoolId(Long poolId, Map<Long, InvestmentPoolBo> poolMap) {
-        return checkRules().resolveRootPoolId(poolId, poolMap);
+        return SecurityPoolCheckRules.resolveRootPoolId(poolId, poolMap);
     }
 
     /** 将空字符串归一化为空值，避免重复提交比较受空串表现影响。 */
@@ -1799,7 +1798,7 @@ public class SecurityPoolAdjustService {
 
         // 独立调入的证券代码在批内只出现一次，共用本次读取的状态
         Set<Long> currentPoolIds;
-        if (batch != null && EXCEL_CLEAR_ADJUST_TYPE.equals(req.getAdjustType())) {
+        if (batch != null && AdjustType.CLEAR_POOL.getCode().equals(req.getAdjustType())) {
             // 清空出库走 Excel 提示口径，提交阶段不使用在池列表复核业务条件
             currentPoolIds = Collections.emptySet();
         } else if (batch != null && batch.excelBulk && req.getItems().stream().noneMatch(item ->
@@ -3351,7 +3350,21 @@ public class SecurityPoolAdjustService {
                 continue;
             }
             if (excelImport) {
-                // Excel 已保留原规则提示，直通与人工审批最终落池均不再因业务失败阻断
+                if (batch != null && batch.excelBulk) {
+                    // Excel 提交和清空入口已集中复核本批冲突，直通 ABS 只需要复核身份
+                    continue;
+                }
+                Long rootPoolId = resolveRootPoolId(log.getTargetPoolId(), poolMap);
+                List<Long> pendingPools = securityPoolAdjustMapper.queryPendingManualTargetPoolIdList(
+                        log.getSecurityCode(), log.getAdjustBatchNo());
+                if (resolvePoolGroupIds(pendingPools, poolMap).contains(rootPoolId)) {
+                    throwApprovalRecheckFailure(log, SecurityPoolCheckRules.PENDING_PROCESS_FAILURE);
+                }
+                if (AdjustMode.IN.getCode().equals(log.getAdjustMode())
+                        && securityPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getSecurityCode())
+                        .contains(log.getTargetPoolId())) {
+                    throwApprovalRecheckFailure(log, SecurityPoolCheckRules.ALREADY_IN_POOL_FAILURE);
+                }
                 continue;
             }
             Set<Long> currentPoolIds = independent
@@ -3469,10 +3482,6 @@ public class SecurityPoolAdjustService {
             boolean excelImport = isExcelAdjustType(log.getAdjustType())
                     || (log.getAdjustBatchNo() != null && excelBatches.contains(log.getAdjustBatchNo()));
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
-                if (excelImport) {
-                    // 已在目标池也允许导入时，先结束旧有效状态，避免出现两条有效在库记录
-                    securityPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
-                }
                 log.setAuditStatus(AuditStatus.APPROVED.getCode());
                 log.setAdjustLogId(log.getId());
                 int inserted = securityPoolAdjustMapper.addPoolStatus(log);
@@ -3525,7 +3534,7 @@ public class SecurityPoolAdjustService {
      * @return 是否为 Excel 导入或清空
      */
     private boolean isExcelAdjustType(String adjustType) {
-        return EXCEL_IMPORT_ADJUST_TYPE.equals(adjustType) || EXCEL_CLEAR_ADJUST_TYPE.equals(adjustType);
+        return EXCEL_IMPORT_ADJUST_TYPE.equals(adjustType) || AdjustType.CLEAR_POOL.getCode().equals(adjustType);
     }
 
     /** 返回第一个非空失败原因。 */

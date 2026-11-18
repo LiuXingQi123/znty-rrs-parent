@@ -8,6 +8,7 @@ import com.znty.rrs.common.enums.RuleType;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
+import com.znty.rrs.entity.schedule.PoolSecurityRowDto;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.exception.BizException;
@@ -76,7 +77,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "companyPoolId（主体应在池）：用于检查债券发行主体是否仍在该池；主体不在该池时，债券才出库\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "关系配置：在投资池「自动调出规则」中绑定本任务的池，会按同池映射并入扫描范围\n"
                     + "扫描范围：扩展参数 poolIds/mappings 与投资池关系配置绑定本任务的池（按同池映射）取并集；并集为空时本轮失败\n"
-                    + "处理规则：仅调出可识别为主体跟随入池且所有映射依据均已失效的债券\n"
+                    + "处理规则：对可识别的主体跟随入池记录，目标池有生效的主体 Excel 调出或所有映射依据均失效时撤销\n"
                     + "类型范围：普通债和 CRMW；排除退市债和 ABS\n"
                     + "CRMW 说明：仅调出 CRMW 证券在普通池的 ip_pool_status，不操作 CRMW 组合状态表\n"
                     + "范围说明：遵守调出限制池、调出互斥和在途流程；保留其他来源入池记录\n"
@@ -84,6 +85,8 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
 
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
@@ -199,14 +202,34 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
         for (long[] pair : pairList) {
             companyPoolsByBondPool.computeIfAbsent(pair[0], key -> new LinkedHashSet<>()).add(pair[1]);
         }
-        infoDetail(detail, "有效债券池数 " + companyPoolsByBondPool.size());
-        infoDetail(detail, "扫描条件：普通债跟随记录已生效，且发行主体已不在任一依据池");
         // 2. 准备投资池信息和自动调库批次
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         List<PoolRelationBo> relations = securityPoolAdjustMapper.queryAllPoolRelationList();
+        // 联动池里的跟随记录也要核对触发池的主体依据
+        for (long[] pair : pairList) {
+            for (PoolRelationBo relation : relations) {
+                if (relation.getPoolId().equals(pair[0]) && (RelationType.IN_LINKED.getCode().equals(relation.getRelationType())
+                        || RelationType.OUT_LINKED.getCode().equals(relation.getRelationType()))) {
+                    companyPoolsByBondPool.computeIfAbsent(relation.getRelationPoolId(), key -> new LinkedHashSet<>()).add(pair[1]);
+                }
+            }
+        }
+        infoDetail(detail, "有效债券池数 " + companyPoolsByBondPool.size());
+        infoDetail(detail, "扫描条件：普通债跟随记录已生效，且目标池有主体 Excel 调出或发行主体已不在任一依据池");
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         Date submitTime = batchNoContext.getSubmitTime();
         AutoOutSummary summary = new AutoOutSummary();
+        if (companyPoolsByBondPool.isEmpty()) {
+            return summary;
+        }
+        Set<Long> protectedStatusIds = excelPoolExclusionService.loadProtectedStatusIds(companyPoolsByBondPool.keySet(), false);
+        // 一次读取本轮全部主体依据及 Excel 决定，供各目标池共用
+        companyPoolsByBondPool.forEach((poolId, sources) -> sources.add(poolId));
+        Set<Long> sourcePools = companyPoolsByBondPool.values().stream().flatMap(Set::stream).collect(Collectors.toSet());
+        ExcelPoolExclusionService.CompanyDecisions decisions = excelPoolExclusionService.loadCompanyDecisions(sourcePools, null);
+        Map<String, Set<Long>> activeCompanyPools = autoAdjustMapper.queryActiveCompanyPoolRows(sourcePools).stream()
+                .collect(Collectors.groupingBy(PoolSecurityRowDto::getSecurityCode,
+                        Collectors.mapping(PoolSecurityRowDto::getPoolId, Collectors.toSet())));
         // 3. 按目标池一次检查该池的全部主体依据
         for (Map.Entry<Long, Set<Long>> entry : companyPoolsByBondPool.entrySet()) {
             Long bondPoolId = entry.getKey();
@@ -222,10 +245,10 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                         + "]为 CRMW 组合池，主体旗下证券不能通过普通池状态调出，跳过该映射");
                 continue;
             }
-            // 每个债券池一次核对所有主体依据
-            companyPoolIds.add(bondPoolId);
-            List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(
-                    bondPoolId, companyPoolIds);
+            List<ScheduledAdjustCandidateDto> bonds = autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(bondPoolId);
+            // Excel 独立入池继续保留，主体跟随记录按主体依据过滤
+            bonds = ExcelPoolExclusionService.excludeProtectedRows(bonds, protectedStatusIds);
+            bonds = decisions.filterOutbound(bonds, bondPoolId, companyPoolIds, activeCompanyPools);
             List<Long> restrictPools = AutoAdjustRestrictHelper.resolveRelationPoolIds(
                     bondPoolId, RelationType.OUT_RESTRICT.getCode(), relations);
             List<Long> mutexPools = AutoAdjustRestrictHelper.resolveRelationPoolIds(
@@ -235,11 +258,13 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
             Map<String, List<Long>> poolsByCode = AutoAdjustRestrictHelper.queryActivePools(autoAdjustMapper, candidateCodes);
             Set<String> pendingCodes = AutoAdjustRestrictHelper.queryPendingCodes(autoAdjustMapper, candidateCodes);
             boolean blacklistPool = PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(bondPoolId);
+            List<String> ordinaryIssuers = bonds.stream().filter(Objects::nonNull)
+                    .filter(bond -> !bond.isExcelCompanyAdjustment())
+                    .map(ScheduledAdjustCandidateDto::getIssuerCode).collect(Collectors.toList());
             PledgeBlacklistRuleService.ScheduledDecisions blacklistDecisions = null;
-            if (blacklistPool) {
+            if (blacklistPool && !ordinaryIssuers.isEmpty()) {
                 blacklistDecisions = pledgeBlacklistRuleService.scheduledDecisions();
-                blacklistDecisions.load(bonds.stream().filter(Objects::nonNull)
-                        .map(ScheduledAdjustCandidateDto::getIssuerCode).collect(Collectors.toList()));
+                blacklistDecisions.load(ordinaryIssuers);
             }
             int pairCount = 0;
             // 5. 检查每只债券的出池保护，只撤销符合条件的跟随记录
@@ -247,7 +272,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
                     continue;
                 }
-                if (blacklistPool && blacklistDecisions.matches(bond.getIssuerCode())) {
+                if (blacklistPool && !bond.isExcelCompanyAdjustment() && blacklistDecisions.matches(bond.getIssuerCode())) {
                     infoDetail(detail, "债券[" + bond.getSecurityCode() + "]的发行主体仍满足黑名单条件，暂不调出");
                     continue;
                 }
@@ -281,7 +306,8 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
                 bond.setAdjusterName(AUTO_ADJUSTER_NAME);
                 String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.issuerDetail(bond),
-                        "主体未在任一依据池：" + companyPoolIds);
+                        bond.isExcelCompanyAdjustment() ? "依据：主体Excel调出（主体依据池 " + companyPoolIds + "）"
+                                : "主体未在任一依据池：" + companyPoolIds);
                 bond.setAdjustReason(reason);
                 String batchNo = batchNoContext.resolveBondBatchNo(
                         bond.getSecurityCode(), bondPoolId, AdjustMode.OUT.getCode());

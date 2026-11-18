@@ -165,7 +165,7 @@ public class BatchSecurityPoolAdjustService {
         List<AdjustCheckReq> checks = req.getSecurities().stream()
                 .map(security -> buildSingleCheckReq(req, security)).collect(Collectors.toList());
         // 批量加载一次规则数据，按券保持原校验、流程和返回结构
-        List<AdjustCheckDto> results = batchSecurityCheckService.checkSecurityBatch(checks, false);
+        List<AdjustCheckDto> results = batchSecurityCheckService.checkSecurityBatch(checks);
         for (int index = 0; index < results.size(); index++) {
             BatchSecurityInboundAdjustReq.SecurityItem security = req.getSecurities().get(index);
             AdjustCheckDto checkDto = results.get(index);

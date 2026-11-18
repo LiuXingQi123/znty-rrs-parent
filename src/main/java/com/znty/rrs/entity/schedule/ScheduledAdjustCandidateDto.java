@@ -18,6 +18,12 @@ public class ScheduledAdjustCandidateDto extends IpAdjustLogBo {
     /** 实际触发联动的主体，与 ABS 唯一身份分开保存 */
     private String triggerCompanyCode;
 
+    /** 债券跟随调整是否来自已经生效的主体 Excel 决定 */
+    private boolean excelCompanyAdjustment;
+
+    /** 债券退市或状态缺失，仅在主体 Excel 调出时允许撤销跟随记录 */
+    private boolean inactiveForOrdinaryOut;
+
     /** 发行主体代码 */
     private String issuerCode;
 

@@ -68,7 +68,7 @@ final class AutoAdjustRelationHelper {
                 throw new BizException("债券[" + inboundLog.getSecurityCode()
                         + "]自动调出池配置不存在，请检查投资池关系配置");
             }
-            int deleted = mapper.deletePoolStatusSoft(inboundLog.getSecurityCode(), outPoolId);
+            int deleted = mapper.deleteUnprotectedPoolStatusSoft(inboundLog.getSecurityCode(), outPoolId);
             if (deleted == 0) {
                 continue;
             }

@@ -4,9 +4,11 @@ import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
+import com.znty.rrs.entity.common.SecurityMarketMappingDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckDto;
 import com.znty.rrs.entity.securitypooladjust.AdjustCheckReq;
 import com.znty.rrs.entity.securitypooladjust.AdjustSharedData;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.mapper.AbsIdentityMapper;
@@ -79,7 +81,7 @@ public class SecurityPoolExcelWarningOnlyTest {
         verify(f.mapper, never()).querySecurityBoByCode(anyString());
         verify(f.mapper, never()).queryPoolCurrentCount(anyLong());
         InOrder writes = inOrder(f.mapper);
-        writes.verify(f.mapper).deletePoolStatusSoft("BOND.IB", 100L);
+        verify(f.mapper, never()).deletePoolStatusSoft("BOND.IB", 100L);
         writes.verify(f.mapper).addPoolStatus(any());
     }
 
@@ -103,6 +105,48 @@ public class SecurityPoolExcelWarningOnlyTest {
         assertThat(excel.getItems().get(0).getFailReasons()).contains("证券当前在禁止池中");
         assertThat(excel.getItems().get(0).getFailReasons()).isEqualTo(normal.getItems().get(0).getFailReasons());
         assertThat(excel.getItems().get(0).getFlowOptions()).isNotEmpty();
+    }
+
+    /** 主体 Excel 决定绕过普通门槛，仍生成联动和互斥项并阻断在途冲突 */
+    @Test
+    public void excelCompanyFollowShouldKeepLinkageMutexAndPendingChecks() {
+        SecurityPoolCheckRules rules = AbsIdentityTestSupport.withIdentity(new SecurityPoolCheckRules());
+        ReflectionTestUtils.setField(rules, "ratingDowngradeChecker", mock(RatingDowngradeChecker.class));
+        BatchSecurityCheckData data = new BatchSecurityCheckData();
+        data.scheduled = true;
+        SecurityInfoBo bond = new SecurityInfoBo();
+        bond.setWindCode("BOND.IB");
+        bond.setSecurityType("mtn");
+        bond.setIssuerCode("C10003");
+        data.securities.put(bond.getWindCode(), bond);
+        SecurityMarketMappingDto market = new SecurityMarketMappingDto();
+        market.setRawMarketCode("NIB");
+        data.markets.put(bond.getWindCode(), Collections.singletonList(market));
+        for (long poolId : new long[]{16L, 17L, 23L}) {
+            InvestmentPoolBo pool = new InvestmentPoolBo();
+            pool.setId(poolId);
+            pool.setPoolName("池" + poolId);
+            data.pools.put(poolId, pool);
+        }
+        data.activePools.put(bond.getWindCode(), Collections.singleton(16L));
+        data.relations.put(23L, new HashMap<>());
+        data.relations.get(23L).put("in_linked", Collections.singletonList(17L));
+        data.relations.get(23L).put("in_mutex", Collections.singletonList(16L));
+        AdjustCheckReq req = new AdjustCheckReq();
+        req.setSecurityCode(bond.getWindCode());
+        AdjustCheckReq.CheckItem item = new AdjustCheckReq.CheckItem();
+        item.setTargetPoolId(23L);
+        item.setAdjustMode("调入");
+        req.setItems(Collections.singletonList(item));
+
+        List<AdjustCheckDto.CheckResultItem> items = rules.checkExcelCompanyFollowItem(req, data).getItems();
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::getTargetPoolId).containsExactly(23L, 17L, 16L);
+        assertThat(items).extracting(AdjustCheckDto.CheckResultItem::getAdjustMode).containsExactly("调入", "调入", "调出");
+        assertThat(items).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+
+        data.pendingPools.put(bond.getWindCode(), Collections.singleton(16L));
+        assertThat(rules.checkExcelCompanyFollowItem(req, data).getItems())
+                .filteredOn(row -> row.getTargetPoolId() == 23L).noneMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
     }
 
     /** CRMW 只限制候选列表，通用规则不额外按凭证类型拦截 */
@@ -217,7 +261,7 @@ public class SecurityPoolExcelWarningOnlyTest {
 
     @Test
     public void persistedExcelBatchShouldPassFinalApprovalForManualAndCompanionItems() {
-        for (String type : Arrays.asList("Excel导入", "Excel清空")) {
+        for (String type : Arrays.asList("Excel导入", "清空目标池")) {
             Fixture f = new Fixture();
             f.pool.setLockFlag(1);
             when(f.mapper.querySecurityInForbiddenPool("BOND.IB")).thenReturn(true);
@@ -258,14 +302,28 @@ public class SecurityPoolExcelWarningOnlyTest {
     }
 
     @Test
-    public void repeatedExcelInboundShouldRetireOldStatusBeforeAddingNewStatus() {
+    public void repeatedExcelInboundShouldFailFinalRecheckAndPreserveCurrentStatus() {
         Fixture f = new Fixture();
-        IpAdjustLogBo log = log("Excel导入", "E1", "调入");
-        when(f.mapper.addPoolStatus(log)).thenReturn(1);
-        f.service.applyPoolStatusChanges(Collections.singletonList(log));
-        InOrder order = inOrder(f.mapper);
-        order.verify(f.mapper).deletePoolStatusSoft("BOND.IB", 100L);
-        order.verify(f.mapper).addPoolStatus(log);
+        when(f.mapper.querySecurityCurrentPoolIdList("BOND.IB")).thenReturn(Collections.singletonList(100L));
+        assertThatThrownBy(() -> f.service.recheckBeforeFinalApproval(
+                Collections.singletonList(log("Excel导入", "E1", "调入"))))
+                .isInstanceOf(BizException.class).hasMessageContaining("已在目标投资池");
+        verify(f.mapper, never()).deletePoolStatusSoft("BOND.IB", 100L);
+        verify(f.mapper, never()).addPoolStatus(any());
+    }
+
+    @Test
+    public void pendingAndAlreadyInPoolShouldBlockTheWholeExcelGroup() {
+        Fixture f = new Fixture();
+        for (String reason : Arrays.asList(SecurityPoolCheckRules.PENDING_PROCESS_FAILURE + "（当前节点：审批）",
+                SecurityPoolCheckRules.ALREADY_IN_POOL_FAILURE)) {
+            AdjustCheckDto.CheckResultItem manual = result("BOND.IB", "G", "manual");
+            AdjustCheckDto.CheckResultItem linked = result("BOND.IB", "G", "linkage");
+            linked.setFailReasons(Collections.singletonList(reason));
+            ReflectionTestUtils.invokeMethod(f.service, "allowExcelImportResults", f.shared(), Arrays.asList(manual, linked));
+            assertThat(manual.isCanAdjust()).isFalse();
+            assertThat(linked.isCanAdjust()).isFalse();
+        }
     }
 
     @Test

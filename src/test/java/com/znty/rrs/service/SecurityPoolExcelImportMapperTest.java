@@ -143,6 +143,8 @@ public class SecurityPoolExcelImportMapperTest {
                 statement.execute("INSERT INTO ais_inv_ods.wind_compintroduction VALUES "
                         + "('C10011', '未发债主体有限公司', '未发债主体', '有限责任公司', '北京市海淀区',"
                         + " 'DEMO_CREDIT', '国有企业', '北京市', '北京市', '20010101')");
+                statement.execute("CREATE TABLE dict_security_type (security_type VARCHAR(30), category_type VARCHAR(20), is_deleted INT)");
+                statement.execute("INSERT INTO dict_security_type VALUES ('bond','bond',0), ('crmw','bond',0)");
                 statement.execute("CREATE TABLE ip_pool_status (security_code VARCHAR(40), security_type VARCHAR(20),"
                         + " target_pool_id BIGINT, audit_status VARCHAR(2), is_deleted INT, security_short_name VARCHAR(200))");
                  statement.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(40), short_name VARCHAR(200), security_type VARCHAR(20))");
@@ -202,6 +204,8 @@ public class SecurityPoolExcelImportMapperTest {
                         + "(20, '产品库', 'bond_product', 'enabled', 0)");
                 statement.execute("INSERT INTO ip_investment_pool (id, parent_id, pool_name, pool_type, status, is_deleted) "
                         + "VALUES (21, 20, '产品子池', 'bond_product', 'enabled', 0)");
+                statement.execute("CREATE TABLE dict_security_type (security_type VARCHAR(30), category_type VARCHAR(20), is_deleted INT)");
+                statement.execute("INSERT INTO dict_security_type VALUES ('bond','bond',0), ('crmw','bond',0)");
                 statement.execute("CREATE TABLE ip_pool_status (security_code VARCHAR(30), security_type VARCHAR(20), "
                         + "target_pool_id BIGINT, audit_status VARCHAR(10), is_deleted INT, security_short_name VARCHAR(30))");
                 statement.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(30), short_name VARCHAR(30), security_type VARCHAR(20))");
@@ -220,9 +224,34 @@ public class SecurityPoolExcelImportMapperTest {
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName(null, "CRMW库", true)).isNull();
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName("CRMW库", "CRMW库", false)).isNull();
             assertThat(mapper.queryEnabledLeafPoolByParentAndChildName(null, "普通池", false).getId()).isEqualTo(19L);
+            assertThat(mapper.queryClearPoolSummaryList(Arrays.asList(18L, 21L))).hasSize(2);
+            assertThat(mapper.queryClearPoolSummaryList(Collections.singletonList(18L)).get(0).getCompanyCount()).isEqualTo(1L);
+            assertThat(mapper.queryClearPoolSummaryList(Collections.singletonList(18L)).get(0).getBondCount()).isEqualTo(1L);
             List<PoolMemberDto> members = mapper.queryPoolMemberList(Collections.singletonList(18L));
             assertThat(members).extracting(PoolMemberDto::getSecurityCode).containsExactly("C001", "CRMW.IB");
             assertThat(members).extracting(PoolMemberDto::getSecurityShortName).containsExactly("原主体", "凭证");
+        }
+    }
+
+    /** 清空的报告豁免按主体自身及债券发行人批量匹配 */
+    @Test
+    public void clearReportExemptionShouldUseCompanyAndBondIssuerHistory() throws Exception {
+        try (SqlSession session = openSession("clear_report_exempt");
+             Statement statement = session.getConnection().createStatement()) {
+            statement.execute("CREATE TABLE ip_adjust_log (id BIGINT, security_code VARCHAR(40), security_type VARCHAR(20),"
+                    + " adjust_mode VARCHAR(10), audit_status VARCHAR(4), is_deleted INT, crte_time TIMESTAMP)");
+            statement.execute("CREATE TABLE sys_attachment (main_id BIGINT, table_name VARCHAR(40),"
+                    + " attachment_category VARCHAR(40), is_deleted INT)");
+            statement.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(40), issuer_code VARCHAR(40))");
+            statement.execute("INSERT INTO ip_adjust_log VALUES (1, 'C1', 'company', '调入', '20', 0, NOW()),"
+                    + " (2, 'OLD.IB', 'bond', '调入', '20', 0, NOW()),"
+                    + " (3, 'C2', 'company', '调入', '20', 0, TIMESTAMPADD(MONTH, -7, NOW()))");
+            statement.execute("INSERT INTO sys_attachment VALUES (1, 'ip_adjust_log', 'credit_report_in', 0),"
+                    + " (2, 'ip_adjust_log', 'credit_report_hand', 0), (3, 'ip_adjust_log', 'credit_report_in', 0)");
+            statement.execute("INSERT INTO rrs_securityinfo VALUES ('OLD.IB', 'C3'), ('NEW.IB', 'C3'), ('OTHER.IB', 'C1')");
+            SecurityPoolExcelImportMapper mapper = session.getMapper(SecurityPoolExcelImportMapper.class);
+            assertThat(mapper.queryClearReportExemptCodes(Arrays.asList("C1", "C2", "NEW.IB", "OTHER.IB")))
+                    .containsExactlyInAnyOrder("C1", "NEW.IB");
         }
     }
 

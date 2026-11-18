@@ -31,13 +31,18 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 在池主体旗下债券自动入池（已排除ABS债）（仅债券）
@@ -97,12 +102,16 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + CompanyAbsBondAutoInService.DEFAULT_TASK_NAME + "」处理\n"
                     + "CRMW 说明：CRMW 证券跟随主体进入普通目标池时写 ip_pool_status，不写 CRMW 组合状态表\n"
                     + "准入规则：与手工批量校验共用禁止库、调入限制、市场、容量、评级及其他单券规则\n"
+                    + "Excel 主体调入生效后优先补债，保留池关系和在途校验\n"
                     + "配套调整：联动调入、互斥及反向限制池调出与主券同组，整组通过且可直通才落池\n"
                     + "参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
     @Resource
     private AutoAdjustMapper autoAdjustMapper;
+    /** 本轮应排除的 Excel 主体及证券记录 */
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
     /** 证券池调库落地 Mapper */
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
@@ -224,13 +233,23 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         }
         infoDetail(detail, "扫描范围：有效主体池到债券目标池的映射 " + pairList.size() + " 组");
         infoDetail(detail, "扫描条件：普通债或 CRMW，未退市、排除 ABS，且尚未在债券目标池"
-                + "；有到期日的债券距到期至少 " + minDaysToMaturity + " 天");
+                + "；普通主体依据要求距到期至少 " + minDaysToMaturity + " 天，Excel 主体依据跳过该门槛");
         // 2. 读取投资池、池关系和本轮批次信息
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
         ScheduledAdjustBatchNoContext batchNoContext = new ScheduledAdjustBatchNoContext();
         AutoInSummary summary = new AutoInSummary();
         List<InboundMapping> mappings = new ArrayList<>();
         List<AdjustCheckReq> requests = new ArrayList<>();
+        Set<AdjustCheckReq> excelCompanyRequests = Collections.newSetFromMap(new IdentityHashMap<>());
+        List<InboundCandidate> candidates = new ArrayList<>();
+        Set<Long> decisionPoolIds = new HashSet<>();
+        for (long[] pair : pairList) {
+            decisionPoolIds.add(pair[0]);
+            decisionPoolIds.add(pair[1]);
+        }
+        ExcelPoolExclusionService.CompanyDecisions decisions = excelPoolExclusionService.loadCompanyDecisions(decisionPoolIds, null);
+        String maturityCutoff = autoAdjustMapper.queryDatabaseDate().plusDays(minDaysToMaturity)
+                .format(DateTimeFormatter.BASIC_ISO_DATE);
         // 3. 逐组验证目标池并查询旗下债券候选
         for (long[] pair : pairList) {
             Long companyInPoolId = pair[0];
@@ -250,72 +269,102 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 continue;
             }
             List<ScheduledAdjustCandidateDto> bondList = autoAdjustMapper.queryCompanyNewBondForAutoIn(
-                    companyInPoolId, bondTargetPoolId, minDaysToMaturity,
-                    CompanyBondSyncPolicy.newBondInboundScope());
-            if (bondList == null || bondList.isEmpty()) {
+                    companyInPoolId, bondTargetPoolId, CompanyBondSyncPolicy.newBondInboundScope());
+            bondList = decisions.filterInbound(bondList, companyInPoolId, bondTargetPoolId, maturityCutoff);
+            if (bondList.isEmpty()) {
                 summary.addMapping(companyInPoolId, companyPool == null ? null : companyPool.getPoolName(),
                         bondTargetPoolId, targetPool.getPoolName(), 0, 0, 0);
                 infoDetail(detail, "主体所在池[" + companyInPoolId + "]→债券写入池["
                         + targetPool.getPoolName() + "](" + bondTargetPoolId + ") 无待入池新债");
                 continue;
             }
-            mappings.add(new InboundMapping(companyInPoolId, companyPool, targetPool, bondList));
+            InboundMapping mapping = new InboundMapping(companyInPoolId, companyPool, targetPool, bondList.size());
+            mappings.add(mapping);
             for (ScheduledAdjustCandidateDto bond : bondList) {
-                if (bond != null && StringUtils.hasText(bond.getSecurityCode())) {
-                    AdjustCheckReq request = new AdjustCheckReq();
-                    request.setSecurityCode(bond.getSecurityCode());
-                    AdjustCheckReq.CheckItem item = new AdjustCheckReq.CheckItem();
-                    item.setTargetPoolId(targetPool.getId());
-                    item.setTargetPoolName(targetPool.getPoolName());
-                    item.setPoolType(targetPool.getPoolType());
-                    item.setAdjustMode(AdjustMode.IN.getCode());
-                    request.setItems(Collections.singletonList(item));
-                    requests.add(request);
+                if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
+                    mapping.skippedCount++;
+                    skipDetail(detail, "扫描结果缺少证券编码，无法处理");
+                    continue;
                 }
+                candidates.add(new InboundCandidate(bond, mapping));
+            }
+        }
+
+        // Excel 决定先校验、先落库，使普通候选看到其联动产生的池状态
+        candidates.sort(Comparator.comparing(candidate -> !candidate.bond.isExcelCompanyAdjustment()));
+        for (InboundCandidate candidate : candidates) {
+            ScheduledAdjustCandidateDto bond = candidate.bond;
+            InvestmentPoolBo targetPool = candidate.mapping.targetPool;
+            AdjustCheckReq request = new AdjustCheckReq();
+            request.setSecurityCode(bond.getSecurityCode());
+            AdjustCheckReq.CheckItem item = new AdjustCheckReq.CheckItem();
+            item.setTargetPoolId(targetPool.getId());
+            item.setTargetPoolName(targetPool.getPoolName());
+            item.setPoolType(targetPool.getPoolType());
+            item.setAdjustMode(AdjustMode.IN.getCode());
+            request.setItems(Collections.singletonList(item));
+            requests.add(request);
+            if (bond.isExcelCompanyAdjustment()) {
+                excelCompanyRequests.add(request);
             }
         }
 
         // 4. 全部映射共用一批校验数据，与手工批量调入执行同一套规则
         List<AdjustCheckDto> results = requests.isEmpty() ? Collections.emptyList()
-                : batchSecurityCheckService.checkSecurityBatch(requests, true, minDaysToMaturity);
+                : batchSecurityCheckService.checkCompanyFollowBatch(requests, maturityCutoff, excelCompanyRequests);
+        Map<Long, Set<String>> appliedInbounds = new HashMap<>();
         int resultIndex = 0;
-        for (InboundMapping mapping : mappings) {
-            int pairCount = 0;
-            int pairSkippedCount = 0;
-            for (ScheduledAdjustCandidateDto bond : mapping.candidates) {
-                if (bond == null || !StringUtils.hasText(bond.getSecurityCode())) {
-                    pairSkippedCount++;
-                    skipDetail(detail, "扫描结果缺少证券编码，无法处理");
-                    continue;
+        for (InboundCandidate candidate : candidates) {
+            InboundMapping mapping = candidate.mapping;
+            ScheduledAdjustCandidateDto bond = candidate.bond;
+            List<AdjustCheckDto.CheckResultItem> items = results.get(resultIndex++).getItems();
+            if (items.isEmpty()) {
+                // 已由本轮配套调整实际入池的候选无需重复处理
+                if (!appliedInbounds.getOrDefault(mapping.targetPool.getId(), Collections.emptySet())
+                        .contains(bond.getSecurityCode())) {
+                    mapping.skippedCount++;
+                    skipDetail(detail, "证券【" + bond.getSecurityCode() + "】池【" + mapping.targetPool.getPoolName()
+                            + "】：无可执行的调入项，本轮未写入目标池");
                 }
-                List<AdjustCheckDto.CheckResultItem> items = results.get(resultIndex++).getItems();
-                // 5. 失败原因由任务按实际证券和池记录，整组失败则跳过该候选
-                if (items.isEmpty() || items.stream().anyMatch(item -> !item.isCanAdjust())) {
-                    pairSkippedCount++;
-                    for (AdjustCheckDto.CheckResultItem item : items) {
-                        if (!item.isCanAdjust()) {
-                            skipDetail(detail, "证券【" + item.getSecurityCode() + "】池【"
-                                    + (item.getPoolName() == null ? item.getTargetPoolId() : item.getPoolName())
-                                    + "】：" + String.join("、", item.getFailReasons()));
-                            item.getFailReasons().forEach(reason -> summary.failures.merge(reason, 1, Integer::sum));
-                        }
-                    }
-                    continue;
-                }
-                for (AdjustCheckDto.CheckResultItem item : items) {
-                    if (item.getWarnings() != null) {
-                        item.getWarnings().forEach(warning -> warnDetail(detail,
-                                "证券【" + item.getSecurityCode() + "】池【" + item.getPoolName() + "】：" + warning));
-                    }
-                }
-                // 6. 同组联动调入、关联码和互斥调出共用一条业务批次
-                pairCount += applyInboundGroup(bond, items, mapping, taskName, batchNoContext);
+                continue;
             }
+            // 5. 失败原因由任务按实际证券和池记录，整组失败则跳过该候选
+            if (items.stream().anyMatch(item -> !item.isCanAdjust())) {
+                mapping.skippedCount++;
+                for (AdjustCheckDto.CheckResultItem item : items) {
+                    if (!item.isCanAdjust()) {
+                        skipDetail(detail, "证券【" + item.getSecurityCode() + "】池【"
+                                + (item.getPoolName() == null ? item.getTargetPoolId() : item.getPoolName())
+                                + "】：" + String.join("、", item.getFailReasons()));
+                        item.getFailReasons().forEach(reason -> summary.failures.merge(reason, 1, Integer::sum));
+                    }
+                }
+                continue;
+            }
+            for (AdjustCheckDto.CheckResultItem item : items) {
+                if (item.getWarnings() != null) {
+                    item.getWarnings().forEach(warning -> warnDetail(detail,
+                            "证券【" + item.getSecurityCode() + "】池【" + item.getPoolName() + "】：" + warning));
+                }
+            }
+            // 保护配套调出项，避免自动调入后留下互斥的有效池状态
+            if (items.stream().filter(item -> AdjustMode.OUT.getCode().equals(item.getAdjustMode()))
+                    .anyMatch(item -> securityPoolAdjustMapper.queryExcelProtectedPoolIds(item.getSecurityCode())
+                            .contains(item.getTargetPoolId()))) {
+                mapping.skippedCount++;
+                skipDetail(detail, "证券【" + bond.getSecurityCode() + "】涉及 Excel 导入保护池，跳过本组调库");
+                continue;
+            }
+            // 6. 同组联动调入、关联码和互斥调出共用一条业务批次
+            mapping.inboundCount += applyInboundGroup(bond, items, mapping, taskName, batchNoContext, appliedInbounds);
+        }
+        for (InboundMapping mapping : mappings) {
             summary.addMapping(mapping.sourcePoolId, mapping.sourcePool == null ? null : mapping.sourcePool.getPoolName(),
-                    mapping.targetPool.getId(), mapping.targetPool.getPoolName(), mapping.candidates.size(),
-                    pairCount, pairSkippedCount);
+                    mapping.targetPool.getId(), mapping.targetPool.getPoolName(), mapping.candidateCount,
+                    mapping.inboundCount, mapping.skippedCount);
             infoDetail(detail, "处理结果：主体所在池【" + mapping.sourcePoolId + "】→债券池【"
-                    + mapping.targetPool.getPoolName() + "】实际入池 " + pairCount + " 条，未处理 " + pairSkippedCount + " 条");
+                    + mapping.targetPool.getPoolName() + "】实际入池 " + mapping.inboundCount + " 条，未处理 "
+                    + mapping.skippedCount + " 条");
         }
         return summary;
     }
@@ -328,13 +377,18 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
      * @param mapping 触发本次入池的主体池至目标池映射
      * @param taskName 任务展示名称
      * @param batchContext 当前任务批次号上下文
+     * @param appliedInbounds 按目标池记录本轮已实际写入且仍在池的证券
      * @return 实际新增的入池状态数量
      */
     private int applyInboundGroup(ScheduledAdjustCandidateDto bond, List<AdjustCheckDto.CheckResultItem> items,
-                                  InboundMapping mapping, String taskName, ScheduledAdjustBatchNoContext batchContext) {
+                                  InboundMapping mapping, String taskName, ScheduledAdjustBatchNoContext batchContext,
+                                  Map<Long, Set<String>> appliedInbounds) {
         String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName) + "【主体跟随】",
                 ScheduledAdjustLogHelper.issuerDetail(bond), "依据池ID：" + mapping.sourcePoolId,
                 ScheduledAdjustLogHelper.poolDetail("主体所在池", mapping.sourcePool, mapping.sourcePoolId));
+        if (bond.isExcelCompanyAdjustment()) {
+            reason = ScheduledAdjustLogHelper.appendDetails(reason, "【Excel主体跟随】");
+        }
         if (bond.getTriggerCompanyCode() != null) {
             reason = ScheduledAdjustLogHelper.appendDetails(reason, "联动触发主体：" + bond.getTriggerCompanyCode());
         }
@@ -368,9 +422,12 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                 if (securityPoolAdjustMapper.addPoolStatus(log) != 1) {
                     throw new BizException("证券[" + item.getSecurityCode() + "]自动调入池状态写入失败");
                 }
+                appliedInbounds.computeIfAbsent(item.getTargetPoolId(), id -> new HashSet<>()).add(item.getSecurityCode());
                 count++;
-            } else if (securityPoolAdjustMapper.deletePoolStatusSoft(item.getSecurityCode(), item.getTargetPoolId()) == 0) {
+            } else if (securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft(item.getSecurityCode(), item.getTargetPoolId()) == 0) {
                 throw new BizException("证券[" + item.getSecurityCode() + "]配套调出时池状态已变化");
+            } else {
+                appliedInbounds.getOrDefault(item.getTargetPoolId(), Collections.emptySet()).remove(item.getSecurityCode());
             }
         }
         return count;
@@ -384,15 +441,32 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
         private final InvestmentPoolBo sourcePool;
         /** 债券目标池 */
         private final InvestmentPoolBo targetPool;
-        /** 待检查的候选 */
-        private final List<ScheduledAdjustCandidateDto> candidates;
+        /** 候选数量 */
+        private final int candidateCount;
+        /** 实际入池数量 */
+        private int inboundCount;
+        /** 未处理数量 */
+        private int skippedCount;
 
         private InboundMapping(Long sourcePoolId, InvestmentPoolBo sourcePool, InvestmentPoolBo targetPool,
-                               List<ScheduledAdjustCandidateDto> candidates) {
+                               int candidateCount) {
             this.sourcePoolId = sourcePoolId;
             this.sourcePool = sourcePool;
             this.targetPool = targetPool;
-            this.candidates = candidates;
+            this.candidateCount = candidateCount;
+        }
+    }
+
+    /** 记录候选债券的触发映射，按 Excel 优先级执行后回填各池统计 */
+    private static final class InboundCandidate {
+        /** 待检查的旗下债券 */
+        private final ScheduledAdjustCandidateDto bond;
+        /** 当前债券的来源池和目标池 */
+        private final InboundMapping mapping;
+
+        private InboundCandidate(ScheduledAdjustCandidateDto bond, InboundMapping mapping) {
+            this.bond = bond;
+            this.mapping = mapping;
         }
     }
 

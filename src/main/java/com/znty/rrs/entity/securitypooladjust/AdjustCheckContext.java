@@ -18,6 +18,9 @@ import java.util.Set;
 @Data
 public class AdjustCheckContext {
 
+    /** 是否按生效的主体 Excel 决定同步旗下债券 */
+    private boolean excelCompanyFollow;
+
     /** 批次校验时复用的数据库数据 */
     private BatchSecurityCheckData batchData;
 

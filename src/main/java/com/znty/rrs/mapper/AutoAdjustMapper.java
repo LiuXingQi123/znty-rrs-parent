@@ -6,8 +6,9 @@ import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 到期出池、主体外评调整及旗下债券同步
@@ -105,23 +106,6 @@ public interface AutoAdjustMapper {
                                                                  @Param("outRestrictPoolIds") List<Long> outRestrictPoolIds);
 
     /**
-     * 查询来源池内生效主体的待补入债券
-     *
-     * 排除退市债券、距到期不足指定天数的债券、已转正临时代码及目标池内已有生效记录的债券
-     *
-     * @param companyPoolId 主体依据池 ID
-     * @param targetPoolId 债券目标池 ID
-     * @param minDaysToMaturity 有到期日的债券距到期最少天数，0 表示到期当天可入
-     * @param bondTypeScope 债券类型排除范围，定时补债时用于排除 ABS
-     * @return 待补入的债券及发行主体信息，按债券代码升序返回
-     */
-    List<ScheduledAdjustCandidateDto> queryCompanyNewBondForAutoIn(
-            @Param("companyPoolId") Long companyPoolId,
-            @Param("targetPoolId") Long targetPoolId,
-            @Param("minDaysToMaturity") int minDaysToMaturity,
-            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
-
-    /**
      * 查询已在来源池生效且尚未在目标池生效的主体
      *
      * 供债券禁止库和重点观察名单两项条件复用
@@ -192,17 +176,42 @@ public interface AutoAdjustMapper {
     List<Long> queryCompanyHistoricalPoolIds();
 
     /**
-     * 查询已失去全部主体依据的普通债跟随记录
+     * 读取当前数据库日期
      *
-     * 只查询可识别为主体跟随且仍然生效的入池记录，排除 ABS 和退市债券
+     * @return 数据库当天的自然日
+     */
+    LocalDate queryDatabaseDate();
+
+    /**
+     * 查询来源池内生效主体的待补入债券
+     *
+     * 排除退市债券、已转正临时代码和目标池已有生效记录的债券，到期日供服务按主体来源判断
+     *
+     * @param companyPoolId 主体依据池 ID
+     * @param targetPoolId 债券目标池 ID
+     * @param bondTypeScope 债券类型排除范围，定时补债时用于排除 ABS
+     * @return 待补入的债券及发行主体信息，按债券代码升序返回
+     */
+    List<ScheduledAdjustCandidateDto> queryCompanyNewBondForAutoIn(
+            @Param("companyPoolId") Long companyPoolId,
+            @Param("targetPoolId") Long targetPoolId,
+            @Param("bondTypeScope") CompanyBondTypeScopeBo bondTypeScope);
+
+    /**
+     * 查询当前有效的普通债跟随记录
      *
      * @param bondPoolId 待检查的债券目标池 ID
-     * @param companyPoolIds 支撑留池的全部主体依据池 ID，不能为空
-     * @return 待撤销的跟随记录，含池状态记录 ID 和发行主体信息
+     * @return 跟随记录，含池状态记录 ID 和发行主体信息
      */
-    List<ScheduledAdjustCandidateDto> queryCompanyFollowedBondsForAutoOut(
-            @Param("bondPoolId") Long bondPoolId,
-            @Param("companyPoolIds") Set<Long> companyPoolIds);
+    List<ScheduledAdjustCandidateDto> queryCompanyFollowedBondsForAutoOut(@Param("bondPoolId") Long bondPoolId);
+
+    /**
+     * 按池批量读取生效主体
+     *
+     * @param poolIds 需要查询的主体依据池
+     * @return 各池中的有效主体
+     */
+    List<PoolSecurityRowDto> queryActiveCompanyPoolRows(@Param("poolIds") Collection<Long> poolIds);
 
     /**
      * 按记录 ID 软删一条仍生效的债券跟随记录

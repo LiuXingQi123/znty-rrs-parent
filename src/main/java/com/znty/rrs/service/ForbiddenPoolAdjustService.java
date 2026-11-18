@@ -16,6 +16,7 @@ import com.znty.rrs.common.enums.StepStatus;
 import com.znty.rrs.common.enums.AuditStatus;
 
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.common.enums.AdjustType;
 import com.znty.rrs.common.enums.CategoryType;
 
 import com.znty.rrs.common.enums.AttachmentPurpose;
@@ -137,8 +138,6 @@ public class ForbiddenPoolAdjustService {
     private static final String ADMIN_USER_ID = "1";
     /** 禁投池主体调库记录固定证券类型 */
     private static final String COMPANY_SECURITY_TYPE = CategoryType.COMPANY.getCode();
-    /** Excel 清空主项的调库来源 */
-    private static final String EXCEL_CLEAR_ADJUST_TYPE = "Excel清空";
     /** 禁投池、观察池、黑名单质押库和重点观察名单 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
     static {
@@ -332,7 +331,7 @@ public class ForbiddenPoolAdjustService {
     /** 主体批量校验复用本次匹配资料，逐项规则与单笔入口一致。 */
     public AdjustCheckDto checkCompanyAdjust(ForbiddenPoolAdjustCheckReq req, CompanyAdjustCheckContext context) {
         // 普通主体入口沿用原规则和拦截方式
-        return checkCompanyAdjust(req, context, false);
+        return checkCompanyAdjust(req, context, false, true);
     }
 
     /**
@@ -340,15 +339,17 @@ public class ForbiddenPoolAdjustService {
      *
      * @param req 单个主体的导入或清空调库请求
      * @param context 本批已查的主体与池配置，清空出库按当前数据读取
+     * @param allowLinkMutex 是否启用联动和互斥调整
      * @return 可提交状态、调整提示和流程候选
      */
-    AdjustCheckDto checkCompanyExcelAdjust(ForbiddenPoolAdjustCheckReq req, CompanyAdjustCheckContext context) {
+    AdjustCheckDto checkCompanyExcelAdjust(ForbiddenPoolAdjustCheckReq req, CompanyAdjustCheckContext context,
+                                            boolean allowLinkMutex) {
         // 运行完整主体校验，在生成流程候选前将业务失败转为提示
-        return checkCompanyAdjust(req, context, true);
+        return checkCompanyAdjust(req, context, true, allowLinkMutex);
     }
 
     private AdjustCheckDto checkCompanyAdjust(ForbiddenPoolAdjustCheckReq req, CompanyAdjustCheckContext context,
-                                              boolean excelWarningsOnly) {
+                                              boolean excelWarningsOnly, boolean allowLinkMutex) {
         // 校验主体代码非空
         validateCompanyCode(req.getCompanyCode());
         ForbiddenPoolAdjustReq detailReq = new ForbiddenPoolAdjustReq();
@@ -377,7 +378,7 @@ public class ForbiddenPoolAdjustService {
         checkReq.setItems(items);
         // 复用本类内部的完整关系和流程校验实现
         AdjustCheckDto result = context == null && !excelWarningsOnly
-                ? checkAdjust(checkReq) : checkAdjust(checkReq, context, excelWarningsOnly);
+                ? checkAdjust(checkReq) : checkAdjust(checkReq, context, excelWarningsOnly, allowLinkMutex);
         // 主体手工及联动项统一携带主数据身份，校验失败项也保留主体全称
         for (AdjustCheckDto.CheckResultItem item : result.getItems()) {
             if (item.getSecurityCode() == null || item.getSecurityCode().trim().isEmpty()
@@ -1835,12 +1836,12 @@ public class ForbiddenPoolAdjustService {
      */
     public AdjustCheckDto checkAdjust(AdjustCheckReq req) {
         // 单笔请求不复用其他调用的数据
-        return checkAdjust(req, null, false);
+        return checkAdjust(req, null, false, true);
     }
 
     /** 执行相同的完整校验规则，按需使用当前批次公共数据。 */
     private AdjustCheckDto checkAdjust(AdjustCheckReq req, CompanyAdjustCheckContext context,
-                                       boolean excelWarningsOnly) {
+                                       boolean excelWarningsOnly, boolean allowLinkMutex) {
 
         // ══ 第一阶段：前置校验 ══
         validateCheckAdjustReq(req);
@@ -1858,10 +1859,10 @@ public class ForbiddenPoolAdjustService {
         // ══ 第三阶段：调入校验 ══
         List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>(
                 // 执行调入校验并补充联动、互斥调库项
-                executeInAdjustCheck(req, shared, coveredKeys));
+                executeInAdjustCheck(req, shared, coveredKeys, excelWarningsOnly));
 
         // ══ 第四阶段：调出校验 ══
-        resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys));
+        resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys, excelWarningsOnly, allowLinkMutex));
 
         if (excelWarningsOnly) {
             // 原校验已完成，保留失败原因供 Excel 页面提示
@@ -1898,7 +1899,8 @@ public class ForbiddenPoolAdjustService {
     private void allowExcelImportResults(AdjustSharedData shared, List<AdjustCheckDto.CheckResultItem> items) {
         Set<String> invalidGroups = new HashSet<>();
         for (AdjustCheckDto.CheckResultItem item : items) {
-            if (!shared.getPoolMap().containsKey(item.getTargetPoolId())) {
+            if (!shared.getPoolMap().containsKey(item.getTargetPoolId())
+                    || SecurityPoolCheckRules.hasExcelBlockingFailure(item)) {
                 invalidGroups.add(item.getAdjustGroupKey());
             }
         }
@@ -2029,13 +2031,12 @@ public class ForbiddenPoolAdjustService {
     }
 
     /** 根据本行预计调库和本次取得的外评判定黑名单质押库状态 */
-    private boolean shouldBeInBlacklist(String code, AdjustSharedData shared) {
+    private PledgeBlacklistRuleService.Decision evaluateBlacklist(String code, AdjustSharedData shared) {
         BatchCompanyAdjustCheckData batch = shared.getBatchCompanyData();
-        PledgeBlacklistRuleService.Decision decision = batch == null
+        return batch == null
                 ? pledgeBlacklistRuleService.evaluate(code, shared.getRequestInPoolIds(), shared.getRequestOutPoolIds())
                 : pledgeBlacklistRuleService.evaluateCompanyBatch(batch, code,
                         shared.getRequestInPoolIds(), shared.getRequestOutPoolIds());
-        return decision.shouldBeInBlacklist();
     }
 
     /** 判断有效在池记录关联的未删除投资池是否包含指定类型 */
@@ -2078,10 +2079,11 @@ public class ForbiddenPoolAdjustService {
      * @param req         调库校验请求
      * @param shared      本次校验的共享数据
      * @param coveredKeys 已覆盖的"池ID_方向"集合，用于自动项去重
+     * @param excelImport 是否为 Excel 主体导入
      * @return 调入方向的全部校验结果（手动项 + 自动项）
      */
     private List<AdjustCheckDto.CheckResultItem> executeInAdjustCheck(
-            AdjustCheckReq req, AdjustSharedData shared, Set<String> coveredKeys) {
+            AdjustCheckReq req, AdjustSharedData shared, Set<String> coveredKeys, boolean excelImport) {
 
         List<AdjustCheckDto.CheckResultItem> results = new ArrayList<>();
 
@@ -2120,21 +2122,25 @@ public class ForbiddenPoolAdjustService {
             List<Long> inLinkage = relations.get(RelationType.IN_LINKED.getCode());
             if (inLinkage != null) {
                 for (Long linkedId : inLinkage) {
-                    if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
-                            && !shouldBeInBlacklist(req.getSecurityCode(), shared)) {
-                        continue;
-                    }
-                    if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
-                            && shared.getCurrentPoolIds().contains(linkedId)) {
+                    // 复用本行三条件判定生成联动说明
+                    PledgeBlacklistRuleService.Decision blacklist = PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
+                            ? evaluateBlacklist(req.getSecurityCode(), shared) : null;
+                    if (blacklist != null && (!blacklist.shouldBeInBlacklist()
+                            || shared.getCurrentPoolIds().contains(linkedId))) {
                         continue;
                     }
                     // coveredKeys.add 返回 true 表示该 key 是首次出现，生成自动项
                     if (coveredKeys.add(linkedId + "_调入")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
                         AdjustCheckDto.CheckResultItem autoItem =
-                                buildAutoResultItem(linkedId, AdjustMode.IN.getCode(), ItemType.LINKAGE.getCode(), adjustGroupKey, shared);
+                                buildAutoResultItem(linkedId, AdjustMode.IN.getCode(), ItemType.LINKAGE.getCode(),
+                                        adjustGroupKey, shared, false);
                         // 关联手工项失败时阻断自动联动项
                         inheritManualItemFailure(autoItem, resultItem);
+                        if (excelImport && blacklist != null) {
+                            autoItem.setWarnings(Collections.singletonList("命中黑名单质押库准入条件（"
+                                    + blacklist.getMatchDescription(shared.getRequestInPoolIds()) + "），联动调入"));
+                        }
                         groupLinkedItems.add(autoItem);
                         results.add(autoItem);
                     }
@@ -2157,7 +2163,8 @@ public class ForbiddenPoolAdjustService {
                     if (coveredKeys.add(mutexId + "_调出")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
                         AdjustCheckDto.CheckResultItem autoItem =
-                                buildAutoResultItem(mutexId, AdjustMode.OUT.getCode(), ItemType.MUTEX.getCode(), adjustGroupKey, shared);
+                                buildAutoResultItem(mutexId, AdjustMode.OUT.getCode(), ItemType.MUTEX.getCode(),
+                                        adjustGroupKey, shared, false);
                         // 关联手工项失败时阻断自动互斥项
                         inheritManualItemFailure(autoItem, resultItem);
                         groupMutexItems.add(autoItem);
@@ -2188,10 +2195,13 @@ public class ForbiddenPoolAdjustService {
      * @param req         调库校验请求
      * @param shared      本次校验的共享数据
      * @param coveredKeys 已覆盖的"池ID_方向"集合，用于自动项去重
+     * @param excelOutbound 是否为主体 Excel 调出
+     * @param allowLinkage 是否展开调出联动池
      * @return 调出方向的全部校验结果（手动项 + 自动项）
      */
     private List<AdjustCheckDto.CheckResultItem> executeOutAdjustCheck(
-            AdjustCheckReq req, AdjustSharedData shared, Set<String> coveredKeys) {
+            AdjustCheckReq req, AdjustSharedData shared, Set<String> coveredKeys, boolean excelOutbound,
+            boolean allowLinkage) {
 
         List<AdjustCheckDto.CheckResultItem> results = new ArrayList<>();
 
@@ -2206,7 +2216,7 @@ public class ForbiddenPoolAdjustService {
             int poolCurrentCount = poolCurrentCount(item.getTargetPoolId(), shared);
             // 构建调库校验上下文
             AdjustCheckContext ctx = buildCheckContext(item, poolCurrentCount, shared);
-            List<String> failures = checkOutConditions(ctx);
+            List<String> failures = checkOutConditions(ctx, excelOutbound);
 
             AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
             resultItem.setTargetPoolId(item.getTargetPoolId());
@@ -2221,6 +2231,9 @@ public class ForbiddenPoolAdjustService {
             resultItem.setWarnings(ctx.getWarnings());
             results.add(resultItem);
 
+            if (!allowLinkage) {
+                continue;
+            }
             // 联动调出：目标池调出时，其联动池（out_linked）需同步调出
             Map<String, List<Long>> relations = shared.getPoolRelationMap().getOrDefault(
                     item.getTargetPoolId(), Collections.emptyMap());
@@ -2228,9 +2241,9 @@ public class ForbiddenPoolAdjustService {
             List<Long> outLinkage = relations.get(RelationType.OUT_LINKED.getCode());
             if (outLinkage != null) {
                 for (Long linkedId : outLinkage) {
-                    // 15/23 调出后若另外条件仍成立，主体与旗下债继续保留在黑名单质押库。
-                    if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
-                            && shouldBeInBlacklist(req.getSecurityCode(), shared)) {
+                    // 普通调出仍保留命中其他黑名单条件的主体，Excel 调出按联动配置生成
+                    if (!excelOutbound && PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
+                            && evaluateBlacklist(req.getSecurityCode(), shared).shouldBeInBlacklist()) {
                         continue;
                     }
                     if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
@@ -2240,7 +2253,8 @@ public class ForbiddenPoolAdjustService {
                     if (coveredKeys.add(linkedId + "_调出")) {
                         // 构建自动生成的联动/互斥调整项校验结果  与手动项校验流程完全相同，区别在于：  targetPoolId 来自池关系配置，由系统自动推导，非用户选择 itemTag 标记为ItemType.LINKAGE.getCode()或ItemType.MUTEX.getCode()，前端据此区分显示样式
                         AdjustCheckDto.CheckResultItem autoItem =
-                                buildAutoResultItem(linkedId, AdjustMode.OUT.getCode(), ItemType.LINKAGE.getCode(), adjustGroupKey, shared);
+                                buildAutoResultItem(linkedId, AdjustMode.OUT.getCode(), ItemType.LINKAGE.getCode(),
+                                        adjustGroupKey, shared, excelOutbound);
                         // 关联手工项失败时阻断自动联动项
                         inheritManualItemFailure(autoItem, resultItem);
                         groupLinkedItems.add(autoItem);
@@ -2895,6 +2909,17 @@ public class ForbiddenPoolAdjustService {
                 throwFinalRecheckFailure(log, "调整对象不存在");
             }
             if (excelAdjust) {
+                Long rootPoolId = resolveRootPoolId(log.getTargetPoolId(), poolMap);
+                List<Long> pendingPools = forbiddenPoolAdjustMapper.queryPendingManualTargetPoolIdList(
+                        log.getSecurityCode(), log.getAdjustBatchNo());
+                if (resolvePoolGroupIds(pendingPools, poolMap).contains(rootPoolId)) {
+                    throwFinalRecheckFailure(log, SecurityPoolCheckRules.PENDING_PROCESS_FAILURE);
+                }
+                if (AdjustMode.IN.getCode().equals(log.getAdjustMode())
+                        && forbiddenPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getSecurityCode())
+                        .contains(log.getTargetPoolId())) {
+                    throwFinalRecheckFailure(log, SecurityPoolCheckRules.ALREADY_IN_POOL_FAILURE);
+                }
                 continue;
             }
             String categoryType = forbiddenPoolAdjustMapper
@@ -2963,10 +2988,6 @@ public class ForbiddenPoolAdjustService {
         for (IpAdjustLogBo log : logList) {
             boolean excelAdjust = isExcelCompanyLog(log, excelBatchNos);
             if (AdjustMode.IN.getCode().equals(log.getAdjustMode())) {
-                if (excelAdjust) {
-                    // 已在目标池时先结束旧状态，避免重复的有效在池记录
-                    forbiddenPoolAdjustMapper.deletePoolStatusSoft(log.getSecurityCode(), log.getTargetPoolId());
-                }
                 log.setAuditStatus(AuditStatus.APPROVED.getCode());
                 log.setAdjustLogId(log.getId());
                 if (forbiddenPoolAdjustMapper.addPoolStatus(log) != 1) {
@@ -3017,7 +3038,7 @@ public class ForbiddenPoolAdjustService {
      */
     private boolean isExcelAdjustType(String adjustType) {
         return SecurityPoolAdjustService.EXCEL_IMPORT_ADJUST_TYPE.equals(adjustType)
-                || EXCEL_CLEAR_ADJUST_TYPE.equals(adjustType);
+                || AdjustType.CLEAR_POOL.getCode().equals(adjustType);
     }
 
     /** 返回第一个最终审批复核失败原因。 */
@@ -3156,6 +3177,11 @@ public class ForbiddenPoolAdjustService {
      * @return 不通过的失败原因列表，通过则返回空列表
      */
     public List<String> checkOutConditions(AdjustCheckContext ctx) {
+        return checkOutConditions(ctx, false);
+    }
+
+    /** 校验调出规则，主体 Excel 调出跳过黑名单质押库三条件 */
+    private List<String> checkOutConditions(AdjustCheckContext ctx, boolean excelOutbound) {
         List<String> failures = new ArrayList<>();
         // 通用校验（所有类型都走）
         failures.addAll(checkCommonOut(ctx));
@@ -3170,8 +3196,10 @@ public class ForbiddenPoolAdjustService {
         } else if (CategoryType.COMPANY.getCode().equals(categoryType)) {
             failures.addAll(checkCompanyOut(ctx));
         }
-        // 按发行主体复核黑名单质押库调出条件
-        addPledgeBlacklistFailure(failures, ctx, AdjustMode.OUT.getCode());
+        if (!excelOutbound) {
+            // 普通调出按发行主体复核黑名单质押库三条件
+            addPledgeBlacklistFailure(failures, ctx, AdjustMode.OUT.getCode());
+        }
         return failures;
     }
 
@@ -3349,9 +3377,9 @@ public class ForbiddenPoolAdjustService {
         if (ctx.isHasPendingProcess()) {
             String nodeLabel = ctx.getPendingProcessNodeLabel();
             if (nodeLabel != null && !nodeLabel.trim().isEmpty()) {
-                return "证券存在进行中的调库流程（当前节点：" + nodeLabel.trim() + "）";
+                return SecurityPoolCheckRules.PENDING_PROCESS_FAILURE + "（当前节点：" + nodeLabel.trim() + "）";
             }
-            return "证券存在进行中的调库流程";
+            return SecurityPoolCheckRules.PENDING_PROCESS_FAILURE;
         }
         return null;
     }
@@ -3368,7 +3396,7 @@ public class ForbiddenPoolAdjustService {
     private String inCheckSecurityAlreadyInPool(AdjustCheckContext ctx) {
         Long poolId = ctx.getTargetPool() != null ? ctx.getTargetPool().getId() : null;
         if (poolId != null && ctx.getCurrentPoolIds().contains(poolId)) {
-            return "证券已在目标投资池中";
+            return SecurityPoolCheckRules.ALREADY_IN_POOL_FAILURE;
         }
         return null;
     }
@@ -3786,9 +3814,11 @@ public class ForbiddenPoolAdjustService {
      * @param itemTag      来源标签：linkage（联动）/ mutex（互斥）
      * @param adjustGroupKey 触发该自动项的手工调库分组 Key
      * @param shared       本次 checkAdjust 调用的共享数据
+     * @param excelOutbound 是否为主体 Excel 调出生成的配套项
      */
     private AdjustCheckDto.CheckResultItem buildAutoResultItem(
-            Long targetPoolId, String adjustMode, String itemTag, String adjustGroupKey, AdjustSharedData shared) {
+            Long targetPoolId, String adjustMode, String itemTag, String adjustGroupKey, AdjustSharedData shared,
+            boolean excelOutbound) {
 
         int poolCurrentCount = poolCurrentCount(targetPoolId, shared);
         InvestmentPoolBo pool = shared.getPoolMap().get(targetPoolId);
@@ -3802,7 +3832,8 @@ public class ForbiddenPoolAdjustService {
         // 构建调库校验上下文
         AdjustCheckContext ctx = buildCheckContext(fakeItem, poolCurrentCount, shared);
 
-        List<String> failures = AdjustMode.IN.getCode().equals(adjustMode) ? checkInConditions(ctx) : checkOutConditions(ctx);
+        List<String> failures = AdjustMode.IN.getCode().equals(adjustMode)
+                ? checkInConditions(ctx) : checkOutConditions(ctx, excelOutbound);
 
         AdjustCheckDto.CheckResultItem resultItem = new AdjustCheckDto.CheckResultItem();
         resultItem.setTargetPoolId(targetPoolId);

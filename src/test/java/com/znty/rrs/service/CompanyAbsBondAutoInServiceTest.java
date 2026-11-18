@@ -10,6 +10,7 @@ import com.znty.rrs.entity.schedule.PoolSecurityRowDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.AbsPoolReconcileMapper;
 import com.znty.rrs.mapper.AutoAdjustMapper;
+import com.znty.rrs.mapper.ExcelPoolExclusionMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.ScheduledTaskMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -21,7 +22,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 
 import static java.time.format.DateTimeFormatter.BASIC_ISO_DATE;
@@ -30,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -69,6 +73,31 @@ public class CompanyAbsBondAutoInServiceTest {
         verify(fixture.securityPoolAdjustMapper).addPoolStatus(any(IpAdjustLogBo.class));
         verify(fixture.autoAdjustMapper).queryActiveSecurityPoolRows(Collections.singletonList("ABS001"));
         verify(fixture.securityPoolAdjustMapper, never()).querySecurityCurrentPoolIdList(anyString());
+    }
+
+    /** ABS 对账共用一份保护集合，Excel 主体不作为补入依据，Excel 债券不参加自动出池 */
+    @Test
+    public void executeShouldFilterExcelProtectedStatusesAfterLoadingSnapshot() {
+        Fixture fixture = new Fixture();
+        fixture.companyInPool(15L, "C001");
+        fixture.companyRows.get(0).setPoolStatusId(101L);
+        fixture.absMaster("ABS001", "C001", "在池主体");
+        fixture.absMaster("ABS002", "C002", "不在池主体");
+        fixture.absInPool(15L, "ABS002");
+        fixture.absPoolRows.get(0).setPoolStatusId(102L);
+        fixture.conf("{\"poolIds\":[15],\"enableIn\":true}");
+        fixture.allowSync(true);
+        fixture.stubWrite();
+        when(fixture.exclusions.queryExcelProtectedPoolStatusIds(null, false))
+                .thenReturn(new HashSet<>(Arrays.asList(101L, 102L)));
+
+        ScheduledTaskResult result = fixture.service.execute();
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getAffectedCount()).isZero();
+        verify(fixture.exclusions).queryExcelProtectedPoolStatusIds(null, false);
+        verify(fixture.securityPoolAdjustMapper, never()).addAdjustLog(any(IpAdjustLogBo.class));
+        verify(fixture.securityPoolAdjustMapper, never()).deleteUnprotectedPoolStatusSoft(anyString(), anyLong());
     }
 
     /** 未配置未确认发行人开关时，关联主体命中也不触发入池提醒 */
@@ -123,7 +152,7 @@ public class CompanyAbsBondAutoInServiceTest {
         fixture.conf("{\"poolIds\":[15],\"enableIn\":false,\"enableUnconfirmedIssuerIn\":true}");
         when(fixture.absCompanySyncService.allowScheduledSync(any(), eq("C001"), eq(15L),
                 eq("债券禁止库"), eq(false), eq(15L), any())).thenReturn(true);
-        when(fixture.securityPoolAdjustMapper.deletePoolStatusSoft("ABS003", 15L)).thenReturn(1);
+        when(fixture.securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("ABS003", 15L)).thenReturn(1);
         when(fixture.securityPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
 
         ScheduledTaskResult result = fixture.service.execute();
@@ -151,13 +180,13 @@ public class CompanyAbsBondAutoInServiceTest {
         fixture.conf("{\"mappings\":[{\"bondPoolId\":15,\"companyPoolId\":16},"
                 + "{\"bondPoolId\":15,\"companyPoolId\":23}]}");
         fixture.allowSync(true);
-        when(fixture.securityPoolAdjustMapper.deletePoolStatusSoft("ABS003", 15L)).thenReturn(1);
+        when(fixture.securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("ABS003", 15L)).thenReturn(1);
 
         ScheduledTaskResult result = fixture.service.execute();
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isZero();
-        verify(fixture.securityPoolAdjustMapper, never()).deletePoolStatusSoft("ABS003", 15L);
+        verify(fixture.securityPoolAdjustMapper, never()).deleteUnprotectedPoolStatusSoft("ABS003", 15L);
     }
 
     /** 距到期不足保护天数的 ABS 不再补入，其余池内记录不受影响 */
@@ -223,7 +252,7 @@ public class CompanyAbsBondAutoInServiceTest {
 
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(0);
-        verify(fixture.securityPoolAdjustMapper, never()).deletePoolStatusSoft(anyString(), any());
+        verify(fixture.securityPoolAdjustMapper, never()).deleteUnprotectedPoolStatusSoft(anyString(), any());
     }
 
     /** 入池与出池同时关闭时本轮失败，避免误以为执行过 */
@@ -293,6 +322,7 @@ public class CompanyAbsBondAutoInServiceTest {
 
         /** 被测服务 */
         private final CompanyAbsBondAutoInService service = new CompanyAbsBondAutoInService();
+        private final ExcelPoolExclusionMapper exclusions = AutoAdjustTestSupport.bindExcelExclusion(service);
         /** ABS 对账查询 */
         private final AbsPoolReconcileMapper absPoolReconcileMapper = mock(AbsPoolReconcileMapper.class);
         /** 调库落地 */

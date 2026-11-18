@@ -3,8 +3,15 @@ package com.znty.rrs.service;
 import com.znty.rrs.entity.bo.SysScheduledTaskBo;
 import com.znty.rrs.entity.schedule.CompanyObserverDto;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData.ScheduledSecurity;
 import com.znty.rrs.mapper.CompanyObserverMapper;
 import com.znty.rrs.mapper.AutoAdjustMapper;
+import com.znty.rrs.mapper.BatchSecurityCheckMapper;
+import com.znty.rrs.mapper.ExcelPoolExclusionMapper;
+import com.znty.rrs.entity.schedule.PoolSecurityRowDto;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.stream.Collectors;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
@@ -19,7 +26,9 @@ import java.time.LocalDate;
 import java.util.UUID;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.LinkedHashSet;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.executor.statement.StatementHandler;
@@ -56,6 +65,9 @@ public class CompanyObserverPoolSyncPersistenceTest {
     /** 真实名单 Mapper */
     private CompanyObserverMapper sourceMapper;
     private AutoAdjustMapper autoAdjustMapper;
+    private BatchSecurityCheckMapper batchSecurityCheckMapper;
+    private ExcelPoolExclusionService exclusions;
+    private SecurityPoolAdjustMapper securityPoolAdjustMapper;
     /** 可配置实际目标池清单 */
     private InvestmentPoolMapper poolMapper;
     /** 模拟前端保存的任务扩展参数 */
@@ -100,7 +112,8 @@ public class CompanyObserverPoolSyncPersistenceTest {
         Configuration configuration = new Configuration(new Environment("test", new SpringManagedTransactionFactory(), ds));
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addInterceptor(new SelectCounter(selectSql));
-        for (String name : new String[]{"CompanyObserverMapper.xml", "AutoAdjustMapper.xml", "SecurityPoolAdjustMapper.xml"}) {
+        for (String name : new String[]{"CompanyObserverMapper.xml", "AutoAdjustMapper.xml", "SecurityPoolAdjustMapper.xml",
+                "BatchSecurityCheckMapper.xml", "ExcelPoolExclusionMapper.xml"}) {
             String resource = "mapper/" + name;
             try (InputStream input = getClass().getClassLoader().getResourceAsStream(resource)) {
                 new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
@@ -109,11 +122,15 @@ public class CompanyObserverPoolSyncPersistenceTest {
         SqlSessionTemplate session = new SqlSessionTemplate(new SqlSessionFactoryBuilder().build(configuration));
         sourceMapper = session.getMapper(CompanyObserverMapper.class);
         autoAdjustMapper = session.getMapper(AutoAdjustMapper.class);
+        batchSecurityCheckMapper = session.getMapper(BatchSecurityCheckMapper.class);
+        securityPoolAdjustMapper = session.getMapper(SecurityPoolAdjustMapper.class);
         CompanyObserverPoolSyncServiceTest.Fixture fixture = new CompanyObserverPoolSyncServiceTest.Fixture();
+        exclusions = AutoAdjustTestSupport.bindExcelExclusion(
+                fixture.service, session.getMapper(ExcelPoolExclusionMapper.class));
         poolMapper = fixture.poolMapper;
         task = fixture.task;
         ReflectionTestUtils.setField(fixture.service, "companyObserverMapper", sourceMapper);
-        ReflectionTestUtils.setField(fixture.service, "securityPoolAdjustMapper", session.getMapper(SecurityPoolAdjustMapper.class));
+        ReflectionTestUtils.setField(fixture.service, "securityPoolAdjustMapper", securityPoolAdjustMapper);
         ProxyFactory proxy = new ProxyFactory(fixture.service);
         proxy.setProxyTargetClass(true);
         proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(ds), new AnnotationTransactionAttributeSource()));
@@ -363,15 +380,16 @@ public class CompanyObserverPoolSyncPersistenceTest {
         ScheduledTaskResult result = service.execute();
         assertThat(result.isSuccess()).isTrue();
         assertThat(result.getAffectedCount()).isEqualTo(81);
-        // 任务和投资池配置由桩提供，真实查询仅名单、当前主体、关系、债券批次、状态批次各一次。
-        assertThat(selectSql).hasSize(4);
+        // 任务和投资池配置由桩提供，名单、当前主体、关系、Excel 保护及状态批次各查一次
+        assertThat(selectSql).hasSize(5);
+        assertThat(selectSql).filteredOn(query -> query.contains("FROM ip_adjust_log src")).hasSize(1);
         assertThat(result.getDetailLog()).contains("主体池状态查询1次");
         selectSql.clear();
         assertThat(service.execute().getAffectedCount()).isZero();
-        assertThat(selectSql).hasSize(4);
+        assertThat(selectSql).hasSize(5);
     }
 
-    /** 真实 SQL 只撤销已失去所有主体依据的跟随状态 */
+    /** 使用真实候选查询及 Java 决定撤销已失去所有主体依据的跟随状态 */
     @Test
     public void removesOnlyFollowedStatusAfterLastSourceLeaves() {
         jdbc.update("INSERT INTO ip_pool_status (id,security_code,security_type,target_pool_id,audit_status,is_deleted,"
@@ -384,15 +402,99 @@ public class CompanyObserverPoolSyncPersistenceTest {
                 + " (105,'C1','company',23,'20',0,'调入','手工调整','COMP6',NULL)");
         LinkedHashSet<Long> companyPools = new LinkedHashSet<>(Arrays.asList(16L, 23L));
 
-        assertThat(autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(16L, companyPools)).isEmpty();
+        assertThat(followedBondsForAutoOut(16L, companyPools)).isEmpty();
         jdbc.update("UPDATE ip_pool_status SET is_deleted=1 WHERE id=105");
-        assertThat(autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(16L, companyPools))
+        assertThat(followedBondsForAutoOut(16L, companyPools))
                 .extracting(ScheduledAdjustCandidateDto::getPoolStatusId).containsExactly(100L, 102L);
         assertThat(autoAdjustMapper.deleteCompanyFollowedBondStatus(100L)).isEqualTo(1);
         assertThat(autoAdjustMapper.deleteCompanyFollowedBondStatus(102L)).isEqualTo(1);
-        assertThat(autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(16L, companyPools)).isEmpty();
+        assertThat(followedBondsForAutoOut(16L, companyPools)).isEmpty();
         assertThat(jdbc.queryForList("SELECT id FROM ip_pool_status WHERE is_deleted=0 ORDER BY id", Long.class))
                 .containsExactly(101L, 103L, 104L);
+    }
+
+    /** Excel 主体调入及同批联动触发补债，生效调出优先于普通主体状态 */
+    @Test
+    public void appliesLatestExcelCompanyDecisionToBothFollowPools() {
+        jdbc.execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(32), security_code VARCHAR(32),"
+                + " is_deleted INT, status VARCHAR(32))");
+        List<ScheduledSecurity> masters = batchSecurityCheckMapper.queryScheduledSecurities(Arrays.asList("B1", "OLD", "ABS1"));
+        assertThat(masters).filteredOn(ScheduledSecurity::isEligibleForFollow).extracting(ScheduledSecurity::getWindCode)
+                .containsExactlyInAnyOrder("B1", "OLD");
+        jdbc.update("INSERT INTO ip_pool_status (security_code,security_type,target_pool_id,audit_status,is_deleted,adjust_mode) VALUES"
+                + " ('C1','company',23,'20',0,'调入'), ('C1','company',17,'20',0,'调入')");
+        assertThat(bondsForAutoIn(23L, 23L, 0)).extracting(ScheduledAdjustCandidateDto::getSecurityCode)
+                .containsExactly("B1", "CRMW1", "TODAY");
+        assertThat(bondsForAutoIn(23L, 23L, 1)).extracting(ScheduledAdjustCandidateDto::getSecurityCode)
+                .containsExactly("B1", "CRMW1");
+        jdbc.update("INSERT INTO ip_adjust_log (id,security_code,security_type,target_pool_id,audit_status,is_deleted,"
+                + "adjust_mode,adjust_type,adjust_batch_no) VALUES"
+                + " (110,'C1','company',23,'20',0,'调入','Excel导入','COMP_IN'),"
+                + " (111,'C1','company',17,'20',0,'调入','联动调整','COMP_IN'),"
+                + " (112,'C1','company',23,'00',0,'调出','Excel导入','COMP_PENDING')");
+        for (long poolId : new long[]{23L, 17L}) {
+            List<ScheduledAdjustCandidateDto> candidates = bondsForAutoIn(poolId, poolId, 30);
+            assertThat(candidates).extracting(ScheduledAdjustCandidateDto::getSecurityCode)
+                    .containsExactly("B1", "CRMW1", "OLD", "TODAY");
+            assertThat(candidates).allMatch(ScheduledAdjustCandidateDto::isExcelCompanyAdjustment);
+        }
+        jdbc.update("INSERT INTO ip_pool_status (id,security_code,security_type,target_pool_id,audit_status,is_deleted,"
+                + "adjust_mode,adjust_type,adjust_batch_no,adjust_reason) VALUES"
+                + " (120,'B1','mtn',23,'20',0,'调入','自动调整','BOND1','【任务名称：补债】【主体跟随】（【Excel主体跟随】）'),"
+                + " (121,'B1','mtn',17,'20',0,'调入','自动调整','BOND2','【任务名称：补债】【主体跟随】（【Excel主体跟随】）'),"
+                + " (122,'B1','mtn',17,'20',0,'调入','手工调整','BOND3','人工入池')");
+        LinkedHashSet<Long> companyPools = new LinkedHashSet<>(Arrays.asList(15L, 17L, 23L));
+        assertThat(followedBondsForAutoOut(17L, companyPools)).isEmpty();
+        assertThat(securityPoolAdjustMapper.queryExcelProtectedPoolIds("B1")).containsExactlyInAnyOrder(17L, 23L);
+        assertThat(exclusions.loadProtectedStatusIds(null, false)).isEmpty();
+        assertThat(exclusions.loadProtectedStatusIds(Collections.singletonList(17L), true))
+                .containsExactly(121L);
+        assertThat(securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("B1", 23L)).isZero();
+        jdbc.update("INSERT INTO ip_adjust_log (id,security_code,security_type,target_pool_id,audit_status,is_deleted,"
+                + "adjust_mode,adjust_type,adjust_batch_no) VALUES"
+                + " (113,'C1','company',23,'20',0,'调出','Excel导入','COMP_OUT'),"
+                + " (114,'C1','company',17,'20',0,'调出','联动调整','COMP_OUT')");
+        jdbc.update("INSERT INTO ip_pool_status (security_code,security_type,target_pool_id,audit_status,is_deleted,adjust_mode) VALUES"
+                + " ('C1','company',15,'20',0,'调入')");
+        assertThat(exclusions.loadCompanyDecisions(null, Collections.singletonList("C1"))
+                .outPools("C1")).containsExactlyInAnyOrder(17L, 23L);
+        assertThat(bondsForAutoIn(15L, 15L, 30))
+                .extracting(ScheduledAdjustCandidateDto::getSecurityCode).containsExactly("B1", "CRMW1");
+        for (long poolId : new long[]{23L, 17L}) {
+            assertThat(bondsForAutoIn(poolId, poolId, 0)).isEmpty();
+            assertThat(bondsForAutoIn(15L, poolId, 0)).isEmpty();
+            List<ScheduledAdjustCandidateDto> candidates = followedBondsForAutoOut(poolId, companyPools);
+            assertThat(candidates).hasSize(1).allMatch(ScheduledAdjustCandidateDto::isExcelCompanyAdjustment);
+            assertThat(autoAdjustMapper.deleteCompanyFollowedBondStatus(candidates.get(0).getPoolStatusId())).isEqualTo(1);
+        }
+        assertThat(jdbc.queryForList("SELECT id FROM ip_pool_status WHERE security_code='B1' AND is_deleted=0", Long.class))
+                .containsExactly(122L);
+        jdbc.update("INSERT INTO ip_adjust_log (id,security_code,security_type,target_pool_id,audit_status,is_deleted,"
+                + "adjust_mode,adjust_type,adjust_batch_no,audit_time,crte_time) VALUES"
+                + " (115,'C1','company',23,'20',0,'调入','Excel导入','COMP_RESUME',NULL,NOW()),"
+                + " (116,'C1','company',17,'20',0,'调入','联动调整','COMP_RESUME',NULL,NOW()),"
+                + " (117,'C1','company',23,'20',0,'调出','Excel导入','COMP_OLDER','2000-01-01 00:00:00',NOW())");
+        assertThat(exclusions.loadCompanyDecisions(null, Collections.singletonList("C1"))
+                .outPools("C1")).isEmpty();
+        assertThat(bondsForAutoIn(17L, 17L, 30))
+                .extracting(ScheduledAdjustCandidateDto::getSecurityCode).containsExactly("CRMW1", "OLD", "TODAY");
+    }
+
+    private List<ScheduledAdjustCandidateDto> bondsForAutoIn(Long from, Long target, int days) {
+        String cutoff = autoAdjustMapper.queryDatabaseDate().plusDays(days).format(DateTimeFormatter.BASIC_ISO_DATE);
+        return exclusions.loadCompanyDecisions(Arrays.asList(from, target), null).filterInbound(
+                autoAdjustMapper.queryCompanyNewBondForAutoIn(from, target, CompanyBondSyncPolicy.newBondInboundScope()),
+                from, target, cutoff);
+    }
+
+    private List<ScheduledAdjustCandidateDto> followedBondsForAutoOut(Long poolId, Set<Long> sources) {
+        Map<String, Set<Long>> activePools = autoAdjustMapper.queryActiveCompanyPoolRows(sources).stream()
+                .collect(Collectors.groupingBy(PoolSecurityRowDto::getSecurityCode,
+                        Collectors.mapping(PoolSecurityRowDto::getPoolId, Collectors.toSet())));
+        List<ScheduledAdjustCandidateDto> candidates = ExcelPoolExclusionService.excludeProtectedRows(
+                autoAdjustMapper.queryCompanyFollowedBondsForAutoOut(poolId),
+                exclusions.loadProtectedStatusIds(Collections.singletonList(poolId), false));
+        return exclusions.loadCompanyDecisions(sources, null).filterOutbound(candidates, poolId, sources, activePools);
     }
 
     /** 在 JDBC 准备语句时计数，避免只统计 Mapper 调用而误把缓存命中当作数据库查询。 */

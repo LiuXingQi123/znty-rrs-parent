@@ -5,7 +5,6 @@ import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
-import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.session.Configuration;
 import org.junit.Test;
 
@@ -70,17 +69,14 @@ public class CompanyNewBondAutoInScopeTest {
         assertThat(sql).doesNotContain("ip_investment_pool", "market_codes", "bond.market", "JSON_CONTAINS");
     }
 
-    /** 到期门槛使用绑定天数，保留无到期日债券的原有处理口径 */
+    /** 主券候选 SQL 返回原始到期日，由 Java 按本轮截止日判断 */
     @Test
-    public void newBondSqlShouldBindMinimumDaysToMaturity() throws Exception {
-        BoundSql sql = render(CompanyBondSyncPolicy.newBondInboundScope(), 1);
-        assertThat(sql.getSql()).contains("bond.maturity_date IS NULL",
-                "bond.maturity_date >= DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL ? DAY), '%Y%m%d')");
-        assertThat(sql.getParameterMappings()).extracting(ParameterMapping::getProperty)
-                .contains("minDaysToMaturity");
+    public void newBondSqlShouldReadMaturityWithoutApplyingTheCutoff() throws Exception {
+        assertThat(render(CompanyBondSyncPolicy.newBondInboundScope())).contains("bond.maturity_date")
+                .doesNotContain("TIMESTAMPADD", "insufficient_maturity", "excel_company_actions", "ROW_NUMBER");
     }
 
-    /** 主档保留全部实际代码，资格列继续复核到期、品种及已转正临时代码 */
+    /** 主档保留全部实际代码，SQL 只标记品种、上市及临时代码资格 */
     @Test
     public void scheduledMasterQueryShouldReturnEligibilityWithoutFilteringMasters() throws Exception {
         Configuration cfg = new Configuration();
@@ -90,15 +86,12 @@ public class CompanyNewBondAutoInScopeTest {
         }
         Map<String, Object> params = new HashMap<>();
         params.put("securityCodes", Collections.singletonList("B1.IB"));
-        params.put("minDaysToMaturity", 1);
         BoundSql sql = cfg.getMappedStatement("com.znty.rrs.mapper.BatchSecurityCheckMapper.queryScheduledSecurities")
                 .getBoundSql(params);
         assertThat(sql.getSql()).contains("SELECT bond.*", "CASE WHEN bond.security_status != 'D'",
-                "bond.maturity_date IS NULL", "INTERVAL ? DAY", "dst.category_type = 'bond'",
+                "dst.category_type = 'bond'",
                 "bond.security_type = 'abs'", "ts.status = 'updated'",
-                "THEN 1 ELSE 0 END AS eligible", "WHERE bond.wind_code IN");
-        assertThat(sql.getParameterMappings()).extracting(ParameterMapping::getProperty)
-                .contains("minDaysToMaturity");
+                "AS eligible_for_follow", "WHERE bond.wind_code IN").doesNotContain("TIMESTAMPADD", "maturity_date");
     }
 
     /**
@@ -146,10 +139,6 @@ public class CompanyNewBondAutoInScopeTest {
      * @throws Exception 读取 Mapper 失败
      */
     private String render(CompanyBondTypeScopeBo scope) throws Exception {
-        return render(scope, 0).getSql();
-    }
-
-    private BoundSql render(CompanyBondTypeScopeBo scope, int minDaysToMaturity) throws Exception {
         Configuration cfg = new Configuration();
         String resource = "mapper/AutoAdjustMapper.xml";
         try (InputStream is = Resources.getResourceAsStream(resource)) {
@@ -158,9 +147,8 @@ public class CompanyNewBondAutoInScopeTest {
         Map<String, Object> params = new HashMap<>();
         params.put("companyPoolId", 15L);
         params.put("targetPoolId", 15L);
-        params.put("minDaysToMaturity", minDaysToMaturity);
         params.put("bondTypeScope", scope);
         MappedStatement statement = cfg.getMappedStatement(SELECT_ID);
-        return statement.getBoundSql(params);
+        return statement.getBoundSql(params).getSql();
     }
 }

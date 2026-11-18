@@ -63,7 +63,7 @@ public class BatchSecurityAdjustSubmitServiceTest {
         try (SqlSession session = openSession("security_direct"); Statement sql = session.getConnection().createStatement()) {
             createTables(sql);
             sql.executeUpdate("INSERT INTO ip_pool_status (security_code,target_pool_id,audit_status,is_deleted)"
-                    + " VALUES ('B1.SH', 2, '20', 0), ('B1.SH', 3, '20', 0)");
+                    + " VALUES ('B1.SH', 3, '20', 0)");
             BatchSecurityAdjustSubmitMapper writes = mock(BatchSecurityAdjustSubmitMapper.class,
                     delegatesTo(session.getMapper(BatchSecurityAdjustSubmitMapper.class)));
             Fixture fixture = new Fixture(writes);
@@ -100,7 +100,7 @@ public class BatchSecurityAdjustSubmitServiceTest {
                     + " ON p.adjust_log_id=l.id AND p.security_code=l.security_code AND p.target_pool_id=l.target_pool_id"
                     + " WHERE p.is_deleted=0"));
             assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_pool_status WHERE security_code='B1.SH' AND target_pool_id=3 AND is_deleted=0"));
-            assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_pool_status WHERE security_code='B1.SH' AND target_pool_id=2 AND is_deleted=1"));
+            assertEquals(0, count(sql, "SELECT COUNT(*) FROM ip_pool_status WHERE security_code='B1.SH' AND target_pool_id=2 AND is_deleted=1"));
             InOrder writesAndAbs = inOrder(writes, fixture.absIdentity, fixture.sync);
             writesAndAbs.verify(writes).addAdjustLogs(anyList());
             writesAndAbs.verify(writes).addAdjustSteps(anyList());
@@ -111,7 +111,7 @@ public class BatchSecurityAdjustSubmitServiceTest {
             writesAndAbs.verify(writes).addPoolStatuses(anyList());
             writesAndAbs.verify(fixture.sync).recordManualDecisions(anyList());
             writesAndAbs.verify(writes).addPoolStatuses(anyList());
-            verify(writes, times(3)).deletePoolStatusesSoft(anyList());
+            verify(writes, never()).deletePoolStatusesSoft(anyList());
             verify(fixture.legacy, never()).querySecurityCurrentPoolIdList(anyString());
             verify(fixture.legacy, never()).addAdjustLog(any());
             verify(fixture.reads, never()).querySecurities(anyList());
@@ -122,9 +122,9 @@ public class BatchSecurityAdjustSubmitServiceTest {
         }
     }
 
-    /** 清空出库只结束状态，普通证券清空沿用原无快照口径 */
+    /** 债券清空使用固定流程，出库与结束步骤共同生效 */
     @Test
-    public void directClearShouldEndPoolStatesWithoutInsertingInboundRows() throws Exception {
+    public void directClearShouldSaveCompletedFlowAndEndPoolState() throws Exception {
         try (SqlSession session = openSession("security_clear"); Statement sql = session.getConnection().createStatement()) {
             createTables(sql);
             sql.executeUpdate("INSERT INTO ip_pool_status (security_code,target_pool_id,audit_status,is_deleted)"
@@ -137,10 +137,18 @@ public class BatchSecurityAdjustSubmitServiceTest {
             master.setWindCode("OLD.IB");
             master.setSecurityType("mtn");
             data.securities.put(master.getWindCode(), master);
-            SecurityPoolAdjustSubmitReq req = request("OLD.IB", "调出", item("OLD.IB", "调出", "manual"));
+            SecurityPoolAdjustSubmitReq.AdjustItem clear = item("OLD.IB", "调出", "manual");
+            clear.setFlowKey("bond:no-approval");
+            clear.setFlowType("normalOutbound");
+            SecurityPoolAdjustSubmitReq req = request("OLD.IB", "调出", clear);
             List<AdjustSubmitDto> result = fixture.service.submit(Collections.singletonList(req), data, true);
             assertThat(result).extracting(AdjustSubmitDto::getSubmitCount).containsExactly(1);
             assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_pool_status WHERE is_deleted=1"));
+            assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_adjust_log WHERE flow_id=112"
+                    + " AND flow_key='bond:no-approval' AND flow_type='normalOutbound' AND audit_status='20'"));
+            assertEquals(3, count(sql, "SELECT COUNT(*) FROM ip_adjust_step WHERE adjust_log_id=" + result.get(0).getLogIds().get(0)));
+            assertEquals(1, count(sql, "SELECT COUNT(*) FROM ip_adjust_step WHERE node_type='end'"));
+            assertEquals(0, count(sql, "SELECT COUNT(*) FROM ip_adjust_step WHERE step_status='pending'"));
             verify(writes, never()).addPoolStatuses(anyList());
             verify(writes, never()).addSecuritySnapshots(anyList());
             verify(fixture.absIdentity, never()).approveIdentities(anyList());
@@ -229,7 +237,7 @@ public class BatchSecurityAdjustSubmitServiceTest {
         req.setSecurityCode(code);
         req.setAdjusterId("1");
         req.setAdjusterName("测试用户");
-        req.setAdjustType("调入".equals(mode) ? "Excel导入" : "Excel清空");
+        req.setAdjustType("调入".equals(mode) ? "Excel导入" : "清空目标池");
         req.setSelectedRatingCompany(new RatingCompanySelectionReq());
         req.setItems(Arrays.asList(items));
         return req;
@@ -269,13 +277,37 @@ public class BatchSecurityAdjustSubmitServiceTest {
         return config;
     }
 
+    /** 定时出库跳过导入主项与同批关联项，人工出库可结束保护 */
+    @Test
+    public void scheduledOutboundShouldPreserveExcelBatchAndAllowManualRemoval() throws Exception {
+        try (SqlSession session = openSession("excel_protection"); Statement sql = session.getConnection().createStatement()) {
+            createTables(sql);
+            sql.executeUpdate("INSERT INTO ip_adjust_log (adjust_batch_no, adjust_type, adjust_mode, audit_status, is_deleted)"
+                    + " VALUES ('E1', 'Excel导入', '调入', '20', 0), ('E2', 'Excel导入', '调入', '00', 0)");
+            sql.executeUpdate("INSERT INTO ip_pool_status (security_code, target_pool_id, adjust_batch_no, adjust_type,"
+                    + " audit_status, is_deleted) VALUES ('AAA', 17, 'E1', 'Excel导入', '20', 0),"
+                    + " ('BOND.SH', 17, 'E1', '关联调整', '20', 0), ('BOND.SH', 16, 'E2', '手工调整', '20', 0)");
+            SecurityPoolAdjustMapper mapper = session.getMapper(SecurityPoolAdjustMapper.class);
+
+            assertThat(mapper.queryExcelProtectedPoolIds("AAA")).containsExactly(17L);
+            assertThat(mapper.queryExcelProtectedPoolIds("BOND.SH")).containsExactly(17L);
+            assertEquals(0, mapper.deleteUnprotectedPoolStatusSoft("AAA", 17L));
+            assertEquals(0, mapper.deleteUnprotectedPoolStatusSoft("BOND.SH", 17L));
+            assertEquals(1, mapper.deleteUnprotectedPoolStatusSoft("BOND.SH", 16L));
+            assertEquals(1, mapper.deletePoolStatusSoft("AAA", 17L));
+            assertThat(mapper.queryExcelProtectedPoolIds("AAA")).isEmpty();
+        }
+    }
+
     private SqlSession openSession(String name) throws Exception {
         UnpooledDataSource source = new UnpooledDataSource("org.h2.Driver", "jdbc:h2:mem:" + name + ";MODE=MySQL", "sa", "");
         Configuration config = new Configuration(new Environment(name, new JdbcTransactionFactory(), source));
         config.setMapUnderscoreToCamelCase(true);
-        String resource = "mapper/BatchSecurityAdjustSubmitMapper.xml";
-        try (InputStream xml = Resources.getResourceAsStream(resource)) {
-            new XMLMapperBuilder(xml, config, resource, config.getSqlFragments()).parse();
+        for (String resource : Arrays.asList("mapper/BatchSecurityAdjustSubmitMapper.xml",
+                "mapper/SecurityPoolAdjustMapper.xml")) {
+            try (InputStream xml = Resources.getResourceAsStream(resource)) {
+                new XMLMapperBuilder(xml, config, resource, config.getSqlFragments()).parse();
+            }
         }
         return new SqlSessionFactoryBuilder().build(config).openSession(false);
     }

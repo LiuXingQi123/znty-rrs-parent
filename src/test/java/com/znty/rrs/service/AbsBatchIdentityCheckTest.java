@@ -84,7 +84,7 @@ public class AbsBatchIdentityCheckTest {
 
         BatchSecurityCheckService batch = (BatchSecurityCheckService)
                 ReflectionTestUtils.getField(service, "batchSecurityCheckService");
-        verify(batch).checkSecurityBatch(anyList(), eq(false));
+        verify(batch).checkSecurityBatch(anyList());
 
         assertThat(result.getItems()).hasSize(3);
         assertThat(result.getItems().subList(0, 2)).allSatisfy(item -> {
@@ -98,7 +98,7 @@ public class AbsBatchIdentityCheckTest {
     private void prepareIdentity(Object target) {
         AbsIdentityService identity = new AbsIdentityService();
         BatchSecurityCheckService batch = mock(BatchSecurityCheckService.class);
-        when(batch.checkSecurityBatch(anyList(), eq(false))).thenAnswer(invocation -> {
+        when(batch.checkSecurityBatch(anyList())).thenAnswer(invocation -> {
             List<AdjustCheckReq> requests = invocation.getArgument(0);
             return requests.stream().map(req -> {
                 AdjustCheckDto result = allowed(req);

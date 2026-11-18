@@ -69,6 +69,9 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     @Resource
     private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
+    @Resource
+    private ExcelPoolExclusionService excelPoolExclusionService;
+
     /** 投资池配置查询 */
     @Resource
     private InvestmentPoolMapper investmentPoolMapper;
@@ -215,12 +218,18 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
     /** 按编码分批预读本轮主体池状态，数据仅在当前任务事务内使用 */
     private void loadSyncData(List<String> companyCodes, SyncContext context) {
         List<String> codes = companyCodes;
+        Set<Long> protectedStatusIds = codes.isEmpty() ? Collections.emptySet()
+                : excelPoolExclusionService.loadProtectedStatusIds(null, false);
         int statusQueryCount = 0;
         for (int offset = 0; offset < codes.size(); offset += QUERY_BATCH_SIZE) {
             List<String> batch = codes.subList(offset, Math.min(offset + QUERY_BATCH_SIZE, codes.size()));
             for (IpPoolStatusBo status : companyObserverMapper.queryObserverPoolStatusList(batch)) {
                 context.currentPoolIds.computeIfAbsent(status.getSecurityCode(), key -> new LinkedHashSet<>())
                         .add(status.getTargetPoolId());
+                if (protectedStatusIds.contains(status.getId())) {
+                    context.protectedPools.computeIfAbsent(status.getSecurityCode(), key -> new LinkedHashSet<>())
+                            .add(status.getTargetPoolId());
+                }
             }
             statusQueryCount++;
         }
@@ -390,7 +399,8 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         // 3. 同步主体在目标池中的状态
         boolean changed = syncCompany(company, pool, inbound, batchNo, reason, false, context);
         // 4. 调入时补齐联动池，调出时仅在目标池实际出池后联动调出
-        if (inbound || changed) {
+        if ((inbound || changed) && !context.protectedPools.getOrDefault(companyCode, Collections.emptySet())
+                .contains(pool.getId())) {
             // 4.1 按调入、调出联动池配置同步主体
             syncLinkedPools(company, pool, inbound, batchNo, reason, context);
         }
@@ -433,6 +443,13 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         // 1. 查询主体当前在池情况，保留本轮调整前的来源池依据
         List<Long> currentPoolIds = getCurrentPoolIds(companyCode, context);
         context.originalPools.putIfAbsent(companyCode, new ArrayList<>(currentPoolIds));
+        Set<Long> protectedPools = context.protectedPools.getOrDefault(companyCode, Collections.emptySet());
+        if ((!inbound && protectedPools.contains(pool.getId()))
+                || (inbound && !Collections.disjoint(protectedPools,
+                context.inboundAutoOutPoolIds.getOrDefault(pool.getId(), Collections.emptyList())))) {
+            context.detail.line("主体[" + companyCode + "]涉及 Excel 导入保护池，跳过当前池调整");
+            return false;
+        }
         boolean companyInPool = currentPoolIds.contains(pool.getId());
         boolean changed = companyInPool != inbound;
         if (companyInPool != inbound) {
@@ -511,7 +528,7 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         // 3. 调入时新增池状态，调出时软删除池状态
         adjustLog.setAdjustLogId(adjustLog.getId());
         int changed = inbound ? securityPoolAdjustMapper.addPoolStatus(adjustLog)
-                : securityPoolAdjustMapper.deletePoolStatusSoft(item.getSecurityCode(), pool.getId());
+                : securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft(item.getSecurityCode(), pool.getId());
         if (changed != 1) {
             throw new BizException("主体[" + item.getSecurityCode() + "]" + mode + "池状态写入条数异常：" + changed);
         }
@@ -581,6 +598,8 @@ public class CompanyObserverPoolSyncService implements RrsScheduledTask {
         /** 各池调入后须配套调出的互斥池及反向限制池 */
         private final Map<Long, List<Long>> inboundAutoOutPoolIds = new LinkedHashMap<>();
         /** 本轮实时池状态，数据库写入成功后同步更新 */
+        private final Map<String, Set<Long>> protectedPools = new LinkedHashMap<>();
+
         private final Map<String, Set<Long>> currentPoolIds = new LinkedHashMap<>();
         /** 按主体、原目标池和调整方向分组的调库批次 */
         private final ScheduledAdjustBatchNoContext batches = new ScheduledAdjustBatchNoContext();
