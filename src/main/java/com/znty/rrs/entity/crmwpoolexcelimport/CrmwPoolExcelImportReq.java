@@ -19,6 +19,9 @@ public class CrmwPoolExcelImportReq extends PageRequest {
     private Long itemId;
     /** 关联担保人或权益人代码 */
     private String relatedCompanyCode;
+
+    /** ABS 担保债独立选择的担保人代码 */
+    private String guarantorCode;
     /** ABS 自选权益人代码 */
     private String selfSelectedRightsHolderCode;
     /** 目标 CRMW 池 ID */

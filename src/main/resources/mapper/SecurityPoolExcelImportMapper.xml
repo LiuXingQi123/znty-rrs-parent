@@ -153,6 +153,7 @@
           , fld012 = #{fld012}
           , fld013 = #{fld013}
           , fld014 = #{fld014}
+          , fld020 = #{fld020}
           , updt_time = #{updtTime}
         WHERE imp_id = #{impId}
           AND id = #{id}

@@ -43,6 +43,9 @@ public class SecurityPoolExcelImportReq extends PageRequest {
     private Long itemId;
     /** 页面选中的关联担保人或权益人代码，空字符串表示清除 */
     private String relatedCompanyCode;
+
+    /** ABS 担保债独立选择的担保人代码 */
+    private String guarantorCode;
     /** 页面选中的 ABS 自选权益人代码，空字符串表示清除 */
     private String selfSelectedRightsHolderCode;
 }

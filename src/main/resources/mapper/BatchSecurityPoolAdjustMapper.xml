@@ -99,6 +99,7 @@
                ,si.date_exists_str
                ,si.guarantor
                ,si.guarantor_id
+               , si.inner_guarantor_rating
         FROM rrs_securityinfo si
         <where>
             AND si.security_type != 'company'

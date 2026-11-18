@@ -83,6 +83,7 @@
                ,si.date_exists_str
                ,si.guarantor
                ,si.guarantor_id
+               , si.inner_guarantor_rating
         FROM ip_pool_status_crmw ips
         LEFT JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         <where>
@@ -190,6 +191,7 @@
                ,bond.date_exists_str
                ,bond.guarantor
                ,bond.guarantor_id
+               , bond.inner_guarantor_rating
         FROM rrs_securityinfo bond
         INNER JOIN dict_security_type dst ON dst.security_type = bond.security_type
                                          AND dst.is_deleted = 0

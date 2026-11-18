@@ -34,6 +34,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
+import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
@@ -185,19 +186,67 @@ public class SecurityPoolAdjustServiceStepTest {
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         securityInfo.setWindCode("ABS001.IB");
         securityInfo.setAbsFlag(1);
+        securityInfo.setGuarantFlag(1);
+        securityInfo.setGuarantorId("G10001");
+        securityInfo.setGuarantor("担保主体");
+        securityInfo.setInnerGuarantorRating("1");
         RelatedRatingCompanyDto firstCompany = new RelatedRatingCompanyDto();
         firstCompany.setCompanyCode("C10001");
         firstCompany.setCompanyName("接口首条主体");
         firstCompany.setInnerRating("3");
+        RelatedRatingCompanyDto savedGuarantor = new RelatedRatingCompanyDto();
+        savedGuarantor.setCompanyCode("G10001");
+        savedGuarantor.setCompanyName("担保主体");
+        savedGuarantor.setInnerRating("1");
         when(mapper.queryRelatedRatingCompanyList("ABS001.IB"))
-                .thenReturn(Collections.singletonList(firstCompany));
+                .thenReturn(Arrays.asList(firstCompany, savedGuarantor));
 
         ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
                 securityInfo, null, null, null, true);
 
         assertThat(securityInfo.getIssuerCode()).isEqualTo("C10001");
         assertThat(securityInfo.getIssuer()).isEqualTo("接口首条主体");
-        assertThat(securityInfo.getGuarantorId()).isNull();
+        assertThat(securityInfo.getInnerIssuerRating()).isEqualTo("3");
+        assertThat(securityInfo.getGuarantorId()).isEqualTo("G10001");
+        assertThat(securityInfo.getGuarantor()).isEqualTo("担保主体");
+        assertThat(securityInfo.getInnerGuarantorRating()).isEqualTo("1");
+    }
+
+    /** ABS 担保债独立选取担保人，切换担保人不影响已选权益人与内评 */
+    @Test
+    public void guaranteedAbsShouldKeepGuarantorAndRightsHolderSeparate() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        SecurityInfoBo security = new SecurityInfoBo();
+        security.setWindCode("ABS001.IB");
+        security.setAbsFlag(1);
+        security.setGuarantFlag(1);
+        RelatedRatingCompanyDto first = new RelatedRatingCompanyDto();
+        first.setCompanyCode("G1");
+        first.setCompanyName("担保人一");
+        first.setInnerRating("1");
+        RelatedRatingCompanyDto second = new RelatedRatingCompanyDto();
+        second.setCompanyCode("G2");
+        second.setCompanyName("担保人二");
+        second.setInnerRating("2");
+        when(mapper.queryRelatedRatingCompanyList("ABS001.IB")).thenReturn(Arrays.asList(first, second));
+        RatingCompanySelectionReq rightsHolder = new RatingCompanySelectionReq();
+        rightsHolder.setCompanyCode("R1");
+        rightsHolder.setCompanyName("当前权益人");
+        rightsHolder.setInnerRating("3");
+
+        service.applySelectedRatingCompany(security, "G1", "R1", null, true, rightsHolder);
+        assertThat(security.getInnerGuarantorRating()).isEqualTo("1");
+        service.applySelectedRatingCompany(security, "G2", "R1", null, true, rightsHolder);
+
+        assertThat(security.getGuarantorId()).isEqualTo("G2");
+        assertThat(security.getGuarantor()).isEqualTo("担保人二");
+        assertThat(security.getInnerGuarantorRating()).isEqualTo("2");
+        assertThat(security.getIssuerCode()).isEqualTo("R1");
+        assertThat(security.getInnerIssuerRating()).isEqualTo("3");
+        assertThatThrownBy(() -> service.applySelectedRatingCompany(security, "OTHER", "R1", null, true, rightsHolder))
+                .isInstanceOf(BizException.class).hasMessage("所选担保人不属于当前证券");
     }
 
     /** ABS 无关联评级主体时，后端仍返回明确的主体选择失败原因。 */
@@ -217,25 +266,38 @@ public class SecurityPoolAdjustServiceStepTest {
                 .hasMessage("请选择权益人或自选权益人");
     }
 
-    /** 非 ABS 未选择担保人时默认使用关联主体接口返回的首条。 */
+    /** 仅担保债初始化担保人，优先回显有效的已保存值 */
     @Test
-    public void nonAbsShouldDefaultToFirstRelatedCompanyWhenNoSelection() {
+    public void guaranteedBondShouldInitializeGuarantorOnMissingSelection() {
         SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
         SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
         ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
-        SecurityInfoBo securityInfo = new SecurityInfoBo();
-        securityInfo.setWindCode("BOND001.IB");
-        RelatedRatingCompanyDto firstCompany = new RelatedRatingCompanyDto();
-        firstCompany.setCompanyCode("C20001");
-        firstCompany.setCompanyName("接口首条主体");
-        when(mapper.queryRelatedRatingCompanyList("BOND001.IB"))
-                .thenReturn(Collections.singletonList(firstCompany));
+        RelatedRatingCompanyDto first = new RelatedRatingCompanyDto();
+        first.setCompanyCode("G1");
+        first.setCompanyName("首个担保人");
+        first.setInnerRating("1");
+        RelatedRatingCompanyDto second = new RelatedRatingCompanyDto();
+        second.setCompanyCode("G2");
+        second.setCompanyName("已有担保人");
+        second.setInnerRating("2");
+        when(mapper.queryRelatedRatingCompanyList("BOND001.IB")).thenReturn(Arrays.asList(first, second));
+        SecurityInfoBo security = new SecurityInfoBo();
+        security.setWindCode("BOND001.IB");
+        security.setGuarantFlag(0);
 
-        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany",
-                securityInfo, null, null, null, false);
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany", security, null, null, null, false);
+        assertThat(security.getGuarantorId()).isNull();
+        verify(mapper, never()).queryRelatedRatingCompanyList("BOND001.IB");
 
-        assertThat(securityInfo.getGuarantorId()).isEqualTo("C20001");
-        assertThat(securityInfo.getGuarantor()).isEqualTo("接口首条主体");
+        security.setGuarantFlag(1);
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany", security, null, null, null, false);
+        assertThat(security.getGuarantorId()).isEqualTo("G1");
+        assertThat(security.getInnerGuarantorRating()).isEqualTo("1");
+
+        security.setGuarantorId("G2");
+        ReflectionTestUtils.invokeMethod(service, "applySelectedRatingCompany", security, null, null, null, false);
+        assertThat(security.getGuarantorId()).isEqualTo("G2");
+        assertThat(security.getInnerGuarantorRating()).isEqualTo("2");
     }
 
     /** 非担保债即使选择关系主体，矩阵仍只使用债务主体内评。 */

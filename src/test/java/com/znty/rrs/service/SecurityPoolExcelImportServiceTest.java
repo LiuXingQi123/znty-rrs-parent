@@ -24,7 +24,6 @@ import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.BatchSecurityCheckMapper;
-import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityPoolExcelImportMapper;
@@ -603,7 +602,6 @@ public class SecurityPoolExcelImportServiceTest {
     /** 证券上传必须填写父池，根池允许父池和子池填写同名 */
     @Test
     public void uploadSecurityShouldRequireParentPoolName() throws Exception {
-        ReflectionTestUtils.setField(service, "commonMapper", mock(CommonMapper.class));
         List<SysImpTmpDetlBo> rows = uploadRows("security",
                 new String[]{"父池名称", "子池名称", "证券名称", "证券代码"}, new String[][]{
                         {"", "CRMW库", "测试凭证一", "CRMW001.IB"},
@@ -617,7 +615,6 @@ public class SecurityPoolExcelImportServiceTest {
     /** 同池证券代码仅大小写不同时，上传按重复处理 */
     @Test
     public void uploadSecurityShouldDetectDuplicateCodeIgnoringCase() throws Exception {
-        ReflectionTestUtils.setField(service, "commonMapper", mock(CommonMapper.class));
         List<SysImpTmpDetlBo> rows = uploadRows("security",
                 new String[]{"父池名称", "子池名称", "证券名称", "证券代码"}, new String[][]{
                         {"债券库", "一级库", "测试债", "110001.sh"},
@@ -1227,6 +1224,63 @@ public class SecurityPoolExcelImportServiceTest {
 
         assertEquals(null, normalReq.getGuarantorCode());
         assertEquals(null, normalReq.getRightsHolderCode());
+    }
+
+    /** 上传时初始化担保人首项，ABS 担保人和权益人分别保存 */
+    @Test
+    public void uploadShouldDefaultGuarantorInBothBondTypes() {
+        BatchSecurityCheckData data = new BatchSecurityCheckData();
+        SecurityInfoBo abs = new SecurityInfoBo();
+        abs.setWindCode("ABS001.IB");
+        abs.setAbsFlag(1);
+        abs.setGuarantFlag(1);
+        data.securities.put("ABS001.IB", abs);
+        data.ratingCompanies.put("ABS001.IB", buildRelatedCompanies("G1", "G2"));
+        SecurityInfoBo bond = new SecurityInfoBo();
+        bond.setWindCode("BOND001.IB");
+        bond.setGuarantFlag(1);
+        bond.setGuarantorId("G2");
+        data.securities.put("BOND001.IB", bond);
+        data.ratingCompanies.put("BOND001.IB", buildRelatedCompanies("G1", "G2"));
+        when(batchSecurityCheckService.loadExcelRatingCandidates(anyList(), anyList())).thenReturn(data);
+        SysImpTmpDetlBo absItem = new SysImpTmpDetlBo();
+        absItem.setFld001("ABS001.IB");
+        SysImpTmpDetlBo bondItem = new SysImpTmpDetlBo();
+        bondItem.setFld001("BOND001.IB");
+
+        ReflectionTestUtils.invokeMethod(service, "initializeRatingCompanies", Arrays.asList(absItem, bondItem));
+
+        assertEquals("G1", absItem.getFld020());
+        assertEquals("G1", absItem.getFld011());
+        assertEquals("G2", bondItem.getFld011());
+        assertEquals(null, bondItem.getFld020());
+    }
+
+    /** ABS 导入按行分别传递担保人编码和普通权益人编码 */
+    @Test
+    public void applyImportedRatingCompanyShouldKeepAbsGuarantorSeparate() {
+        SecurityInfoBo security = new SecurityInfoBo();
+        security.setWindCode("ABS001.IB");
+        security.setAbsFlag(1);
+        security.setGuarantFlag(1);
+        BatchSecurityCheckData data = new BatchSecurityCheckData();
+        data.securities.put("ABS001.IB", security);
+        data.ratingCompanies.put("ABS001.IB", buildRelatedCompanies("RIGHTS", "GUARANTOR"));
+        SysImpTmpDetlBo item = new SysImpTmpDetlBo();
+        item.setFld001("ABS001.IB");
+        item.setFld011("RIGHTS");
+        item.setFld020("GUARANTOR");
+        AdjustCheckReq check = new AdjustCheckReq();
+        check.setSecurityCode("ABS001.IB");
+
+        ReflectionTestUtils.invokeMethod(service, "applyImportedRatingCompany", check, item, data);
+        SecurityPoolAdjustSubmitReq submit = new SecurityPoolAdjustSubmitReq();
+        ReflectionTestUtils.invokeMethod(service, "applyImportedRatingCompany", submit, item, data);
+
+        assertEquals("RIGHTS", check.getRightsHolderCode());
+        assertEquals("GUARANTOR", check.getGuarantorCode());
+        assertEquals("RIGHTS", submit.getRightsHolderCode());
+        assertEquals("GUARANTOR", submit.getGuarantorCode());
     }
 
     /** 构造已按关联主体接口顺序返回的测试数据。 */

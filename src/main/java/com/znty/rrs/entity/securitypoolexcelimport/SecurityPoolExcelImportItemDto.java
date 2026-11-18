@@ -36,10 +36,22 @@ public class SecurityPoolExcelImportItemDto {
     private String securityType;
     /** 是否 ABS，来自证券主数据 */
     private Integer absFlag;
+
+    /** 是否担保债 */
+    private Integer guarantFlag;
+
+    /** 担保人名称 */
+    private String guarantor;
+
+    /** 担保人主体内评分 */
+    private String innerGuarantorRating;
     /** 当前证券的四类关联主体候选 */
     private List<RelatedRatingCompanyDto> relatedRatingCompanies;
     /** 页面选中的关联主体代码 */
     private String relatedCompanyCode;
+
+    /** ABS 担保债独立选择的担保人代码 */
+    private String guarantorCode;
     /** 页面选中的关联主体名称 */
     private String relatedCompanyName;
     /** 页面选中的 ABS 自选权益人代码 */

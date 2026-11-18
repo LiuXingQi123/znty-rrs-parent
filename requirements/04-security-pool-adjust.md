@@ -122,18 +122,18 @@
 
 ### 2.6 详情页初始化（并发加载）
 
-`loadDetailData(securityCode)` 先调用 `querySecurityDetail` 取得证券基本信息，再调用调库专用相关主体接口；若相关主体只有一个，非 ABS 自动作为担保人、ABS 自动作为权益人。随后并发加载池列表、池状态和调库记录：
+`loadDetailData(securityCode)` 先调用 `querySecurityDetail` 取得证券基本信息，再调用调库专用相关主体接口；仅 ABS 首次申请默认使用首个权益人。担保债回显已保存且仍在候选中的担保人，否则默认选择首个候选。随后并发加载池列表、池状态和调库记录：
 
 | 接口 | 请求体 | 用途 |
 |---|---|---|
-| `queryRelatedRatingCompanyList` | `{ securityCode }` | 非 ABS 的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115200000/115201000` 四类关系主体；主体内评左关联，无内评主体仍返回，内评字段为空；同一主体兼多类关系时按类型分别返回（例如既是原始权益人又是差额支付承诺人则占两行），仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
+| `queryRelatedRatingCompanyList` | `{ securityCode }` | 担保债的担保人下拉和 ABS 的权益人下拉统一查询当前证券 `115004000/115203000/115200000/115201000` 四类关系主体；主体内评左关联，无内评主体仍返回，内评字段为空；同一主体兼多类关系时按类型分别返回（例如既是原始权益人又是差额支付承诺人则占两行），仅对同证券、同主体、同类型去重；四类依次映射排序号 `1/2/3/4` 升序，同类型按内评时间倒序 |
 | `querySelfSelectedRightsHolderPage` | `{ companyCode, companyName, pageIndex, pageSize }` | ABS 自选权益人分页；从 `ais_inv_analysis.t_inv_company` 以 `wind_code` 查询全市场主体，编码按前缀、名称按包含匹配，关联最新主体内评，名称使用 `full_name` 优先、`short_names` 兜底，默认每页 20 条，可切换 10/20/30/50 条 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'in', currentUserId, releaseRules, guarantorCode, rightsHolderCode, selfSelectedRightsHolderCode }` | 可调入池 |
 | `queryAdjustPoolList` | `{ securityCode, adjustDirection:'out', currentUserId }` | 可调出池 |
 | `querySecurityPoolStatus` | `{ securityCode }` | 当前所在池 + 主体所在池 |
 | `queryAdjustLogList` | `{ securityCode, adjustBatchNo }` | 历史调库记录（不传批次仅返回未终结流程：`audit_status NOT IN ('-1','20','21','99')`） |
 
-非 ABS 和 ABS 都使用上述四类关系主体：页面分别展示为“担保人”和“权益人”。页面首次加载时按接口顺序默认选中第一条，用户可改选；用户在页面清空选择时，前端阻止进入下一步。后端对接口直调或遗漏参数同样直接取关联评级主体接口返回的第 1 条（不按关系类型二次筛选）：ABS 写入权益人，非 ABS 写入担保人；无关联主体时 ABS 仍返回“请选择权益人或自选权益人”。ABS 还可从全市场主体选择自选权益人，自选存在时优先于普通权益人，清除后回退普通权益人。任一选择变化均重新查询可调入池并清空原有调入选择，不缓存查询结果、不重新查询最近信评报告。
+仅 ABS 展示权益人和自选权益人，首次可编辑时默认选择首个权益人，已确认或在途主体优先回显。仅担保债展示担保人和担保人主体内评分。可编辑时从该券关系主体候选中选择一名担保人，内评分随选择更新。ABS 担保债分别选择担保人与权益人。担保人优先回显已保存且仍有效的选择，否则默认选中首项，可手动改选。ABS 担保债同时展示两组字段，权益人内评展示在「主体内评分」。 ABS 自选优先于普通权益人，清除后回到普通权益人。未指定评级主体时，ABS 的权益人和担保债的担保人分别按上述口径初始化，无权益人候选时提示选择权益人或自选权益人。选择变化后刷新可调入池并清空原调入选择。
 
 随后：
 1. 用 `securityCurrentPools.targetPoolId` 构建 `currentSecurityPoolIds` 集合。
@@ -433,7 +433,7 @@
 | `queryIssuerFinancialList` | securityCode | `List<IssuerFinancialDto>` | 四期报告，缺失期保留日期和空指标 |
 | `queryIssuerFinancialByReportDate` | securityCode, reportDate | `IssuerFinancialDto` | 精确查询指定报告期，不存在返回 null |
 | `saveIssuerFinancialList` | securityCode, records[{reportDate,...完整14项指标}] | `List<IssuerFinancialDto>` | 独立事务批量覆盖本次已修改报告期的完整指标 |
-| `queryRelatedRatingCompanyList` | securityCode | `List<RelatedRatingCompanyDto>` | 当前证券四类关系主体，供非 ABS 担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
+| `queryRelatedRatingCompanyList` | securityCode | `List<RelatedRatingCompanyDto>` | 当前证券四类关系主体，供担保债担保人和 ABS 权益人下拉共同使用；同一主体兼多类关系时按类型分别返回；主体内评左关联，未评级主体仍返回 |
 | `querySelfSelectedRightsHolderPage` | companyCode?, companyName?, pageIndex, pageSize | `PageResult<SelfSelectedRightsHolderDto>` | 从 `ais_inv_analysis.t_inv_company` 分页查询自选权益人，关联最新内评 |
 | `queryAdjustPoolList` | securityCode, adjustDirection(in/out), currentUserId, releaseRules?, guarantorCode?, rightsHolderCode?, selfSelectedRightsHolderCode? | `List<PoolDto>`（含 inMutexPoolIds/outMutexPoolIds/currentCount） | 可调入/可调出投资池列表。保留投资品种包含债券的池及其上级，符合原选池条件的 CRMW 池也可选择。调入时按最终评级主体执行矩阵：非 ABS 非担保债仅主体内评；非 ABS 担保债主体/所选担保人孰优；ABS 自选权益人优先，否则普通权益人，且不享受强担保豁免。所选主体通过 `selectedRatingCompany` 直接传入，不重复读取名称和评级 |
 | `querySecurityPoolStatus` | securityCode | `SecurityPoolStatusDto`（securityCurrentPools[], issuerCurrentPools[]） | 证券/主体当前所在池 |

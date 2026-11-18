@@ -339,9 +339,11 @@ public class CrmwPoolAdjustService {
         master.setRatingBond(snapshot.getRatingBond());
         master.setRatingBondissuer(snapshot.getRatingBondissuer());
         master.setRatingOutlook(snapshot.getRatingOutlook());
-        master.setGuarantor(snapshot.getGuarantor());
-        master.setGuarantorId(snapshot.getGuarantorId());
-        master.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
+        if (!CreditBondSpecialInboundRule.isAbs(master)) {
+            master.setGuarantor(snapshot.getGuarantor());
+            master.setGuarantorId(snapshot.getGuarantorId());
+            master.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
+        }
         master.setAgencyName(snapshot.getAgencyName());
         master.setDateCallExists(snapshot.getDateCallExists());
         master.setDateExists(snapshot.getDateExists());

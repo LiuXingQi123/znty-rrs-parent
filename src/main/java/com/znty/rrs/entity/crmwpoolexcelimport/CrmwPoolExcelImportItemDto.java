@@ -38,8 +38,20 @@ public class CrmwPoolExcelImportItemDto {
     private String securityMarket;
     /** 标的证券是否 ABS */
     private Integer absFlag;
+
+    /** 是否担保债 */
+    private Integer guarantFlag;
+
+    /** 担保人名称 */
+    private String guarantor;
+
+    /** 担保人主体内评分 */
+    private String innerGuarantorRating;
     /** 已保存的关联担保人或权益人代码 */
     private String relatedCompanyCode;
+
+    /** ABS 担保债独立选择的担保人代码 */
+    private String guarantorCode;
     /** 已保存的 ABS 自选权益人代码 */
     private String selfSelectedRightsHolderCode;
     /** 标的证券的关联主体候选 */

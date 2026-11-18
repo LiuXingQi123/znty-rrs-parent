@@ -519,9 +519,11 @@ public class SecurityPoolAdjustService {
         master.setRatingBond(snapshot.getRatingBond());
         master.setRatingBondissuer(snapshot.getRatingBondissuer());
         master.setRatingOutlook(snapshot.getRatingOutlook());
-        master.setGuarantor(snapshot.getGuarantor());
-        master.setGuarantorId(snapshot.getGuarantorId());
-        master.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
+        if (!CreditBondSpecialInboundRule.isAbs(master)) {
+            master.setGuarantor(snapshot.getGuarantor());
+            master.setGuarantorId(snapshot.getGuarantorId());
+            master.setInnerGuarantorRating(snapshot.getInnerGuarantorRating());
+        }
         master.setAbsOriginatorName(snapshot.getAbsOriginatorName());
         master.setCompanySelector(snapshot.getCompanySelector());
         master.setAgencyName(snapshot.getAgencyName());

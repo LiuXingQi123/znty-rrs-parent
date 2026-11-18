@@ -395,28 +395,9 @@ class SecurityPoolCheckRules {
         }
         SecurityInfoBo securityInfo = new SecurityInfoBo();
         BeanUtils.copyProperties(master, securityInfo);
-        if (req.getSelectedRatingCompany() != null || CreditBondSpecialInboundRule.isAbs(securityInfo)) {
-            // 批量上下文直接使用已查权益人候选
-            applySelectedRatingCompanyInternal(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
-                    req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany(), data);
-        } else {
-            securityInfo.setGuarantor(null);
-            securityInfo.setGuarantorId(null);
-            securityInfo.setInnerGuarantorRating(null);
-            List<RelatedRatingCompanyDto> companies = data.ratingCompanies.getOrDefault(req.getSecurityCode(),
-                    Collections.emptyList());
-            String guarantor = emptyToNull(req.getGuarantorCode());
-            RelatedRatingCompanyDto selected = companies.stream()
-                    .filter(company -> guarantor == null || guarantor.equals(company.getCompanyCode()))
-                    .findFirst().orElse(null);
-            if (selected != null) {
-                // 沿用页面默认选第一项或按指定担保人选取的规则
-                fillSelectedRatingCompany(securityInfo, selected.getCompanyCode(), selected.getCompanyName(),
-                        selected.getInnerRating());
-            } else if (guarantor != null) {
-                throw new BizException("所选担保人不属于当前证券");
-            }
-        }
+        // 批量上下文复用已读取的主体候选
+        applySelectedRatingCompanyInternal(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
+                req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany(), data);
         // 将批次状态转为单券规则原本使用的结构
         AdjustSharedData shared = buildBatchSecurityFacts(securityInfo, data, req.getGuarantorCode());
         shared.setRequestInPoolIds(req.getItems().stream()
@@ -551,11 +532,28 @@ class SecurityPoolCheckRules {
             SecurityInfoBo securityInfo, String guarantorCode, String rightsHolderCode,
             String selfSelectedRightsHolderCode, boolean requireAbsSelection, RatingCompanySelectionReq selected,
             BatchSecurityCheckData batchData) {
+        boolean abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
+        boolean guaranteed = Integer.valueOf(1).equals(securityInfo.getGuarantFlag());
+        if (guaranteed && guarantorCode == null && (abs || selected == null)) {
+            // 只为未传选择的请求初始化，显式传空不再套用默认首项
+            RelatedRatingCompanyDto guarantor = defaultGuarantor(securityInfo,
+                    relatedRatingCompanies(securityInfo.getWindCode(), batchData));
+            if (guarantor != null) {
+                fillSelectedRatingCompany(securityInfo, guarantor.getCompanyCode(),
+                        guarantor.getCompanyName(), guarantor.getInnerRating());
+            }
+        }
+        if (abs && guaranteed && emptyToNull(guarantorCode) != null) {
+            // ABS 的担保人独立写入快照，后续权益人选择仍只回填发行主体字段
+            RelatedRatingCompanyDto guarantor = findRelatedRatingCompany(
+                    securityInfo.getWindCode(), guarantorCode.trim(), "所选担保人不属于当前证券", batchData);
+            fillSelectedRatingCompany(securityInfo, guarantor.getCompanyCode(),
+                    guarantor.getCompanyName(), guarantor.getInnerRating());
+        }
         if (selected != null) {
             RatingSelection result = new RatingSelection();
             // 预览允许空选择，下一步和正式提交才要求主体必填
-            if (CreditBondSpecialInboundRule.isAbs(securityInfo)
-                    && emptyToNull(selected.getCompanyCode()) == null) {
+            if (abs && emptyToNull(selected.getCompanyCode()) == null) {
                 if (requireAbsSelection) {
                     throw new BizException("请选择权益人或自选权益人");
                 }
@@ -565,14 +563,11 @@ class SecurityPoolCheckRules {
                 securityInfo.setRatingBondissuer(null);
                 securityInfo.setRatingBondissuerAgency(null);
                 securityInfo.setInnerIssuerRating(null);
-                securityInfo.setGuarantor(null);
-                securityInfo.setGuarantorId(null);
-                securityInfo.setInnerGuarantorRating(null);
                 return result;
             }
             result.rightsHolderName = selected.getRightsHolderName();
             result.selfSelectedRightsHolderName = selected.getSelfSelectedRightsHolderName();
-            if (CreditBondSpecialInboundRule.isAbs(securityInfo)) {
+            if (abs) {
                 // ABS 的评级主体是权益人，只写发行人五字段，不借用担保人字段承载
                 absIdentityService.applySelection(securityInfo, selected.getCompanyCode(), selected.getCompanyName(),
                         selected.getInnerRating(), selected.getRatingBondissuer(), selected.getRatingBondissuerAgency());
@@ -583,11 +578,8 @@ class SecurityPoolCheckRules {
             }
             return result;
         }
-        securityInfo.setGuarantor(null);
-        securityInfo.setGuarantorId(null);
-        securityInfo.setInnerGuarantorRating(null);
         RatingSelection result = new RatingSelection();
-        if (CreditBondSpecialInboundRule.isAbs(securityInfo)) {
+        if (abs) {
             RelatedRatingCompanyDto rightsHolder = null;
             SelfSelectedRightsHolderDto selfSelected = null;
             if (rightsHolderCode != null && !rightsHolderCode.trim().isEmpty()) {
@@ -633,19 +625,32 @@ class SecurityPoolCheckRules {
             }
             return result;
         }
-        RelatedRatingCompanyDto guarantor = null;
-        if (guarantorCode != null && !guarantorCode.trim().isEmpty()) {
-            guarantor = findRelatedRatingCompany(
+        if (emptyToNull(guarantorCode) != null) {
+            // 普通担保债使用明确选择的担保人，空选择不取首个候选
+            RelatedRatingCompanyDto guarantor = findRelatedRatingCompany(
                     securityInfo.getWindCode(), guarantorCode.trim(), "所选担保人不属于当前证券", batchData);
-        } else {
-            // 前端未传选择时，直接采用关联评级主体接口返回的首条，不按关系类型二次筛选
-            guarantor = queryFirstRelatedRatingCompany(securityInfo.getWindCode(), batchData);
-        }
-        if (guarantor != null) {
             fillSelectedRatingCompany(securityInfo, guarantor.getCompanyCode(),
                     guarantor.getCompanyName(), guarantor.getInnerRating());
+        } else if (!guaranteed) {
+            fillSelectedRatingCompany(securityInfo, null, null, null);
         }
         return result;
+    }
+
+    /**
+     * 担保债优先回显候选中的已保存担保人，否则使用首个候选
+     *
+     * @param security 当前证券
+     * @param candidates 已按展示顺序排列的关联主体
+     * @return 默认担保人，无候选或非担保债时返回空
+     */
+    static RelatedRatingCompanyDto defaultGuarantor(SecurityInfoBo security, List<RelatedRatingCompanyDto> candidates) {
+        if (!Integer.valueOf(1).equals(security.getGuarantFlag()) || candidates.isEmpty()) {
+            return null;
+        }
+        String savedCode = security.getGuarantorId();
+        return candidates.stream().filter(candidate -> candidate.getCompanyCode().equals(savedCode))
+                .findFirst().orElse(candidates.get(0));
     }
 
     /** 查询并校验当前证券的相关评级主体。 */

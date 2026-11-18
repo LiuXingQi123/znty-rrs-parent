@@ -84,6 +84,9 @@ public class BatchSecurityCandidateDto {
     /** 担保人ID（代码，多担保人逗号分隔，与 guarantor 按位置配对） */
     private String guarantorId;
 
+    /** 担保人主体内评分 */
+    private String innerGuarantorRating;
+
     /** 到期日期 */
     private String maturityDate;
 

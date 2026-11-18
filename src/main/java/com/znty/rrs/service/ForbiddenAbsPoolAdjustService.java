@@ -1006,7 +1006,7 @@ public class ForbiddenAbsPoolAdjustService {
         validateAbsSecurity(securityInfo);
         // ABS 按证券池调库口径校验权益人，自选权益人优先
         SecurityPoolAdjustService.SelectedRatingCompanyData selectedRatingCompany =
-                securityPoolAdjustService.applySelectedRatingCompany(securityInfo, null, req.getRightsHolderCode(),
+                securityPoolAdjustService.applySelectedRatingCompany(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
                         req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情
@@ -1740,7 +1740,7 @@ public class ForbiddenAbsPoolAdjustService {
         // 直接检查本次已加载的证券，不再为 ABS 类型重复读取主档
         validateAbsSecurity(securityInfo);
         // ABS 按证券池调库口径校验权益人，自选权益人优先
-        securityPoolAdjustService.applySelectedRatingCompany(securityInfo, null, req.getRightsHolderCode(),
+        securityPoolAdjustService.applySelectedRatingCompany(securityInfo, req.getGuarantorCode(), req.getRightsHolderCode(),
                 req.getSelfSelectedRightsHolderCode(), true, req.getSelectedRatingCompany());
 
         // 全量投资池，构建 ID → Bo 索引，供后续快速查找池详情

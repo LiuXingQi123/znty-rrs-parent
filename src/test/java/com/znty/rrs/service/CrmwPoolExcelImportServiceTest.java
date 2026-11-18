@@ -3,6 +3,7 @@ package com.znty.rrs.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.PoolPermissionBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
 import com.znty.rrs.entity.crmwpooladjust.AdjustCheckDto;
@@ -12,6 +13,7 @@ import com.znty.rrs.entity.crmwpooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.crmwpoolexcelimport.CrmwPoolExcelImportCheckItemDto;
 import com.znty.rrs.entity.crmwpoolexcelimport.CrmwPoolExcelImportDto;
 import com.znty.rrs.entity.crmwpoolexcelimport.CrmwPoolExcelImportReq;
+import com.znty.rrs.entity.securitypooladjust.BatchSecurityCheckData;
 import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
@@ -96,6 +98,38 @@ public class CrmwPoolExcelImportServiceTest {
     }
 
     /** 验证上传时缺少调整方向会被拒绝。 */
+    @Test
+    public void uploadShouldDefaultAbsGuarantorAndKeepConfirmedRightsHolder() {
+        SecurityInfoBo bond = new SecurityInfoBo();
+        bond.setWindCode("ABS001.IB");
+        bond.setGuarantFlag(1);
+        bond.setAbsFlag(1);
+        SecurityInfoBo identity = new SecurityInfoBo();
+        identity.setIssuerCode("R2");
+        identity.setIssuer("已确认权益人");
+        RelatedRatingCompanyDto first = new RelatedRatingCompanyDto();
+        first.setCompanyCode("G1");
+        first.setCompanyName("首个候选");
+        RelatedRatingCompanyDto second = new RelatedRatingCompanyDto();
+        second.setCompanyCode("R2");
+        second.setCompanyName("已确认权益人");
+        BatchSecurityCheckData data = new BatchSecurityCheckData();
+        data.securities.put("ABS001.IB", bond);
+        data.ratingCompanies.put("ABS001.IB", Arrays.asList(first, second));
+        List<String> codes = Collections.singletonList("ABS001.IB");
+        when(absIdentityService.queryCurrentIdentities(codes)).thenReturn(Collections.singletonMap("ABS001.IB", identity));
+        BatchSecurityCheckService candidateService = mock(BatchSecurityCheckService.class);
+        when(candidateService.loadExcelRatingCandidates(codes, Collections.emptyList())).thenReturn(data);
+        ReflectionTestUtils.setField(service, "batchSecurityCheckService", candidateService);
+        SysImpTmpDetlBo item = new SysImpTmpDetlBo();
+        item.setFld004("ABS001.IB");
+
+        ReflectionTestUtils.invokeMethod(service, "initializeRatingCompanies", Collections.singletonList(item));
+
+        assertEquals("G1", item.getFld020());
+        assertEquals("R2", item.getFld012());
+    }
+
     @Test
     public void uploadExcelShouldThrowWhenDirectionMissing() {
         CrmwPoolExcelImportReq req = new CrmwPoolExcelImportReq();

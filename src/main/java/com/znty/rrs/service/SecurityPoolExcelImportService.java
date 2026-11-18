@@ -23,7 +23,6 @@ import com.znty.rrs.entity.bo.PoolPermissionBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.SysImpTmpBo;
 import com.znty.rrs.entity.bo.SysImpTmpDetlBo;
-import com.znty.rrs.entity.common.GuarantorGradeDto;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustCheckReq;
 import com.znty.rrs.entity.forbiddenpooladjust.ForbiddenPoolAdjustDto;
 import com.znty.rrs.entity.forbiddenpooladjust.CompanyAdjustCheckContext;
@@ -45,7 +44,6 @@ import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
-import com.znty.rrs.mapper.CommonMapper;
 import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.BatchSecurityCheckMapper;
@@ -67,11 +65,12 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -144,9 +143,7 @@ public class SecurityPoolExcelImportService {
     /** ABS 候选与跨池主体身份 */
     @Resource
     private AbsIdentityService absIdentityService;
-    /** 关联主体批量查询（与批量调整可选证券使用同一排序） */
-    @Resource
-    private CommonMapper commonMapper;
+
     /** 证券调库完整校验/提交（批量调库内部亦委托该服务） */
     @Resource
     private BatchSecurityAdjustSubmitService batchSecurityAdjustSubmitService;
@@ -340,33 +337,42 @@ public class SecurityPoolExcelImportService {
         return new PageResult<>(records, pageInfo.getTotal(), req.getPageIndex(), req.getPageSize());
     }
 
-    /** 批量读取关联候选，仅首次上传时默认选择第一条。 */
+    /** 仅在上传初始化适用的担保人和权益人。 */
     private void initializeRatingCompanies(List<SysImpTmpDetlBo> items) {
         List<String> securityCodes = items.stream().map(SysImpTmpDetlBo::getFld001)
                 .filter(code -> !isBlank(code)).map(String::trim).distinct().collect(Collectors.toList());
         if (securityCodes.isEmpty()) {
             return;
         }
-        Map<String, GuarantorGradeDto> firstCompanies = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-        Map<String, Set<String>> allCompanies = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-        Map<String, SecurityInfoBo> currentIdentities = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-        currentIdentities.putAll(absIdentityService.queryCurrentIdentities(securityCodes));
-        for (GuarantorGradeDto company : commonMapper.queryGuarantorGradeList(securityCodes)) {
-            if (!isBlank(company.getWindcode())) {
-                firstCompanies.putIfAbsent(company.getSecurityCode(), company);
-                allCompanies.computeIfAbsent(company.getSecurityCode(), key -> new HashSet<>()).add(company.getWindcode());
-            }
-        }
+        BatchSecurityCheckData data = batchSecurityCheckService.loadExcelRatingCandidates(securityCodes, Collections.emptyList());
+        List<String> absCodes = data.securities.values().stream().filter(CreditBondSpecialInboundRule::isAbs)
+                .map(SecurityInfoBo::getWindCode).collect(Collectors.toList());
+        Map<String, SecurityInfoBo> identities = absIdentityService.queryCurrentIdentities(absCodes);
         for (SysImpTmpDetlBo item : items) {
-            GuarantorGradeDto company = firstCompanies.get(trimToEmpty(item.getFld001()));
-            if (company != null) {
-                item.setFld011(company.getWindcode());
-                item.setFld012(company.getWindname());
+            String code = data.resolveExcelSecurityCode(trimToEmpty(item.getFld001()));
+            SecurityInfoBo security = data.securities.get(code);
+            if (security == null) {
+                continue;
             }
-            SecurityInfoBo identity = currentIdentities.get(trimToEmpty(item.getFld001()));
+            List<RelatedRatingCompanyDto> candidates = data.ratingCompanies.getOrDefault(code, Collections.emptyList());
+            // 担保债按页面顺序初始化担保人，优先回显已有担保人
+            RelatedRatingCompanyDto guarantor = SecurityPoolCheckRules.defaultGuarantor(security, candidates);
+            if (!CreditBondSpecialInboundRule.isAbs(security)) {
+                if (guarantor != null) {
+                    item.setFld011(guarantor.getCompanyCode());
+                    item.setFld012(guarantor.getCompanyName());
+                }
+                continue;
+            }
+            item.setFld020(guarantor == null ? null : guarantor.getCompanyCode());
+            if (!candidates.isEmpty()) {
+                item.setFld011(candidates.get(0).getCompanyCode());
+                item.setFld012(candidates.get(0).getCompanyName());
+            }
+            // ABS 权益人继续优先使用已确认或占用的身份
+            SecurityInfoBo identity = identities.get(code);
             if (identity != null) {
-                Set<String> relatedCodes = allCompanies.getOrDefault(trimToEmpty(item.getFld001()), Collections.emptySet());
-                if (relatedCodes.contains(identity.getIssuerCode())) {
+                if (candidates.stream().anyMatch(candidate -> candidate.getCompanyCode().equals(identity.getIssuerCode()))) {
                     item.setFld011(identity.getIssuerCode());
                     item.setFld012(identity.getIssuer());
                 } else {
@@ -400,6 +406,9 @@ public class SecurityPoolExcelImportService {
             if (info != null) {
                 dto.setSecurityType(info.getSecurityType());
                 dto.setAbsFlag(info.getAbsFlag());
+                dto.setGuarantFlag(info.getGuarantFlag());
+                dto.setGuarantor(info.getGuarantor());
+                dto.setInnerGuarantorRating(info.getInnerGuarantorRating());
             }
             dto.setRelatedRatingCompanies(related);
             for (RelatedRatingCompanyDto company : related) {
@@ -454,6 +463,9 @@ public class SecurityPoolExcelImportService {
         }
         // 空字符串允许清除关联主体或自选权益人
         selection.setFld011(trimToNull(req.getRelatedCompanyCode()));
+        if (req.getGuarantorCode() != null) {
+            selection.setFld020(trimToNull(req.getGuarantorCode()));
+        }
         selection.setFld013(trimToNull(req.getSelfSelectedRightsHolderCode()));
         // 按本次选择重新查询并回填名称，编辑时允许清空主体
         String securityCode = trimToEmpty(selection.getFld001());
@@ -684,7 +696,7 @@ public class SecurityPoolExcelImportService {
                     : new AdjustCheckReq();
             // 入口失败的行也参与同一 ABS 的主体一致性检查
             request.setSecurityCode(code);
-            request.setGuarantorCode(trimToNull(item.getFld011()));
+            request.setGuarantorCode(trimToNull(isBlank(item.getFld020()) ? item.getFld011() : item.getFld020()));
             request.setRightsHolderCode(trimToNull(item.getFld011()));
             request.setSelfSelectedRightsHolderCode(trimToNull(item.getFld013()));
             selections.add(request);
@@ -2077,11 +2089,11 @@ public class SecurityPoolExcelImportService {
         if (master == null) {
             return;
         }
-        List<RelatedRatingCompanyDto> candidates = data.ratingCompanies.getOrDefault(code, Collections.emptyList());
-        String first = candidates.isEmpty() ? null : trimToNull(candidates.get(0).getCompanyCode());
         if (!CreditBondSpecialInboundRule.isAbs(master)) {
             return;
         }
+        List<RelatedRatingCompanyDto> candidates = data.ratingCompanies.getOrDefault(code, Collections.emptyList());
+        String first = candidates.isEmpty() ? null : trimToNull(candidates.get(0).getCompanyCode());
         SecurityInfoBo identity = identities.get(code);
         if (identity == null) {
             req.setRightsHolderCode(first);
@@ -2121,7 +2133,7 @@ public class SecurityPoolExcelImportService {
         req.setSecurityInfo(company.securityInfo);
         req.setSelectedRatingCompany(company.selection);
         if (company.abs) {
-            req.setGuarantorCode(null);
+            req.setGuarantorCode(item.getFld020());
             req.setRightsHolderCode(company.relatedCompanyCode);
             req.setSelfSelectedRightsHolderCode(company.selfSelectedRightsHolderCode);
         } else {
@@ -2149,6 +2161,7 @@ public class SecurityPoolExcelImportService {
         req.setSecurityInfo(company.securityInfo);
         req.setSelectedRatingCompany(company.selection);
         if (company.abs) {
+            req.setGuarantorCode(item.getFld020());
             req.setRightsHolderCode(company.relatedCompanyCode);
             req.setSelfSelectedRightsHolderCode(company.selfSelectedRightsHolderCode);
         } else {
@@ -2164,7 +2177,8 @@ public class SecurityPoolExcelImportService {
             return null;
         }
         boolean abs = CreditBondSpecialInboundRule.isAbs(securityInfo);
-        String code = trimToEmpty(item.getFld011());
+        boolean guaranteed = Integer.valueOf(1).equals(securityInfo.getGuarantFlag());
+        String code = abs || guaranteed ? trimToEmpty(item.getFld011()) : "";
         String selfCode = trimToEmpty(item.getFld013());
         RelatedRatingCompanyDto selected = null;
         if (companies != null) {
@@ -2193,8 +2207,17 @@ public class SecurityPoolExcelImportService {
         }
         boolean hasRelated = companies != null
                 && companies.stream().anyMatch(company -> !isBlank(company.getCompanyCode()));
-        if (requireSelection && selected == null && selfSelected == null && (abs || hasRelated)) {
-            throw new BizException(abs ? "请选择权益人或自选权益人" : "请选择担保人/权益人");
+        String absGuarantorCode = abs && guaranteed ? trimToNull(item.getFld020()) : null;
+        if (absGuarantorCode != null && (!hasRelated
+                || companies.stream().noneMatch(company -> absGuarantorCode.equals(company.getCompanyCode())))) {
+            throw new BizException("所选担保人不属于当前证券，请重新选择");
+        }
+        if (requireSelection && abs && guaranteed && hasRelated && absGuarantorCode == null) {
+            throw new BizException("请选择担保人");
+        }
+        item.setFld020(absGuarantorCode);
+        if (requireSelection && selected == null && selfSelected == null && (abs || (guaranteed && hasRelated))) {
+            throw new BizException(abs ? "请选择权益人或自选权益人" : "请选择担保人");
         }
         item.setFld011(selected == null ? null : selected.getCompanyCode());
         item.setFld012(selected == null ? null : selected.getCompanyName());
@@ -2779,6 +2802,7 @@ public class SecurityPoolExcelImportService {
         dto.setChildPoolName(bo.getFld004());
         dto.setUnifiedSocialCreditCode(bo.getFld005());
         dto.setRelatedCompanyCode(bo.getFld011());
+        dto.setGuarantorCode(bo.getFld020());
         dto.setRelatedCompanyName(bo.getFld012());
         dto.setSelfSelectedRightsHolderCode(bo.getFld013());
         if (!isBlank(bo.getFld013())) {
