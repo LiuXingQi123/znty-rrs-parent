@@ -131,10 +131,10 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 1. `validateAdjustCheckReq`：poolId 非空、direction ∈ {in,out}、securities 非空、每只证券 securityCode 非空、目标池为启用叶子池（`queryEnabledLeafPoolCount`）。
 2. `validateAdjustPoolPermission`：管理员(1)放行；否则校验当前用户对 poolId 拥有 adjustable 权限。
 3. `resolveAdjustMode`：`in→调入`、`out→调出`。
-4. 将所有证券交给 `BatchSecurityCheckService`。批量读取涉及的池关系、容量、主档、同券关系、在池、在途、评级、ABS 权益人与主体占用等数据后，逐券执行 `SecurityPoolCheckRules` 的共用规则，并追加已配置的批量流程候选。第 6 项自动补债也使用这个批量校验入口。
+4. 将所有证券交给 `BatchSecurityCheckService`。批量读取涉及的池关系、容量、主档、同券关系、在池、在途、评级、ABS 权益人与主体占用等数据后，逐券执行 `SecurityPoolCheckRules` 的共用规则并匹配单笔流程。第 6 项自动补债也使用这个批量校验入口。
 5. 单笔校验返回 `AdjustCheckDto.items`（可能含手工项 + 联动/互斥/关联码自动项），用 `buildBatchCheckResult` 转成批量结果项：
    - `adjustGroupKey` 改写为 `sourceSecurityCode + "_" + 原始groupKey`（触发主券前缀，related 与主券同批）。
-   - 透传 `canAdjust`、`failReasons`、`flowOptions`（完整单笔候选 + 配置的 batchIn/Out，推荐批量）。
+   - 透传 `canAdjust`、`failReasons`、`flowOptions`（完整单笔候选和推荐标记）。
 
 **返回结构** `BatchSecurityInboundAdjustDto`：
 ```json
@@ -209,9 +209,9 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 池锁定 → pending → 未入池 → 冻结期（入池时间缺失报「证券入池生效时间缺失」，与单券相同）→ 调出限制池(out_restrict) → 调出互斥池(out_mutex) → 同请求互斥冲突 → 弹性禁投(out_soft_restrict，警告) → 开放日 →（债券/股票）到期或退市。
 
-**流程展示与提交**：逐券复用单笔完整校验和匹配（白名单/信用债简易/产品库快速/默认/特殊/升降级等），再通过公共方法追加目标池配置的 `batchIn/batchOut` 专用流程并设为唯一推荐。仅配置了流程 ID 或 Key 时追加；不凭空生成批量无需审批选项。同一 ID/Key 的快速与批量候选按类型分别保留，材料豁免由主项资格决定，选批量流程也可豁免。前端默认选中 `recommended` 项，操作员可按行改选。提交透传所选 `flowId/flowKey/flowType`，不再用批量配置覆盖选择。
+**流程展示与提交**：调入和调出均逐券复用单笔完整校验及流程匹配（白名单/信用债简易/产品库快速/默认/特殊/升降级等），保留单笔推荐。前端默认选中可选的推荐项，操作员可按行改选。提交透传所选 `flowId/flowKey/flowType`，材料豁免由主项资格决定。
 
-批量页面保留单笔准入规则和批量流程候选。证券状态及市场按代码分批查询，池配置按整批读取，`adjustGroupKey` 加主券 `sourceSecurityCode_` 前缀。互斥冲突按当前证券的调库项判断，整批事务及直通预检沿用现有提交规则。
+证券状态及市场按代码分批查询，池配置按整批读取，`adjustGroupKey` 加主券 `sourceSecurityCode_` 前缀。互斥冲突按当前证券的调库项判断，整批事务及直通预检沿用现有提交规则。
 
 ### 3.5 后端批量提交逻辑
 
@@ -300,7 +300,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 | 维度 | 单笔调库（`SecurityPoolAdjustService` + `security_pool_adjust.html`） | 批量调库（`BatchSecurityPoolAdjustService` + `batch_security_pool_adjust.html`） |
 |---|---|---|
 | **入口选择** | 选一只证券 → 查可调投资池树 → 勾选一个或多个目标池 | 选一个目标池 → 查候选证券 → 勾选多只证券 |
-| **校验接口** | `checkAdjust`（单证券多目标池） | 同名 `checkAdjust`，整批取数并逐券执行共用校验规则；`adjustGroupKey` 加 `sourceSecurityCode_` 前缀；返回单笔 `flowOptions` 并追加配置的 batchIn/Out 为推荐 |
+| **校验接口** | `checkAdjust`（单证券多目标池） | 同名 `checkAdjust`，整批取数并逐券执行共用校验规则；`adjustGroupKey` 加 `sourceSecurityCode_` 前缀；返回单笔 `flowOptions` 及推荐标记 |
 | **校验规则** | 四阶段 + 调入/调出规则 + 联动/互斥 + 流程候选 | **完全复用**，无批量专属规则 |
 | **提交接口** | 页面/Controller：`addAdjustLog`（内部 `submitAdjustLog`） | 批量 Controller 仍 `addAdjustLog`/`addAdjustLogWithFiles`；Service 编排后调 **`SPA.submitAdjustLog`**；`adjustType="手动批量调整"` |
 | **分组** | 单次请求内多目标池 | 按 **`sourceSecurityCode`/主券** 分组，related 与主券同组 |
@@ -354,7 +354,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 ## 快速入库与本次材料豁免
 
-适用证券池调整（包括详情页调库和审核页下一步模式）、证券池批量调整、存量证券批量调整及证券池 Excel 导入。后三个入口保留完整单笔候选，另共用 BatchAdjustFlowOptionHelper 追加配置的批量流程并统一推荐批量；未配置时保留单笔推荐。
+适用证券池调整（包括详情页调库和审核页下一步模式）、证券池批量调整、存量证券批量调整及证券池 Excel 导入。证券池批量调整与存量证券批量调整均沿用单笔流程候选和推荐。证券池 Excel 导入会追加并推荐目标池已配置的批量流程。
 
 - 信用债沿用 isSimpleInboundFlowMatched，资格在“下一步”计算，提交不重复查询矩阵、180 天入库经历或历史报告条件。资格中的历史报告要求仍保留，豁免的是本次提交材料。
 - 产品库快速资格适用于 `bond_product_root` 子树启用叶子。信用债一至三级、转债核心/重点按 `ip_pool_status` 判断。CRMW 库默认认可 `ip_pool_status` 的有效在池记录和 `ip_pool_status_crmw.security_code` 的有效组合标的，任一命中即可。有效记录须审批通过且未删除。本次待申请调入来源池不计入资格。

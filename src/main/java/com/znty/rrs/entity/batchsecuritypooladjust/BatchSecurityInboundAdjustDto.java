@@ -67,7 +67,7 @@ public class BatchSecurityInboundAdjustDto {
         /** 不可调整原因列表 */
         private List<String> failReasons = new ArrayList<>();
 
-        /** 当前行候选：单笔匹配结果加目标池配置的批量流程 */
+        /** 当前行的单笔流程候选及推荐标记 */
         private List<AdjustCheckDto.FlowOption> flowOptions = new ArrayList<>();
 
         /** 本组快速资格对应的材料豁免依据，与所选流程无关 */

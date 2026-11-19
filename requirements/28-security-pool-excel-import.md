@@ -138,7 +138,7 @@ Excel 层负责：模板/临时表、父子池解析、`excel_importable` 权限
 - 独立分页按当前页批量读取主档和评级主体。校验回写后使用本次已读明细组装首屏，复用证券主档、关联主体和自选权益人，仅补查首屏未读取的代码。自选候选分页使用 `batchSecurityPoolAdjust/querySelfSelectedRightsHolderPage`。明细返回 `relatedCompanyCode/relatedCompanyName`、`relatedRatingCompanies`、`selfSelectedRightsHolderCode/selfSelectedRightsHolder`、`securityType/absFlag` 及有效 `ratingCompanyCode/ratingCompanyName/ratingCompanyInnerRating`。校验结果展示有效主体全称/代码；联动、互斥、关联项展示来源导入行选择。独立清空入口的债券使用当前有效主体及默认候选。
 - **未勾选**允许联动与互斥：结果中仅保留手工项
 - **勾选**后保留完整展开项（与批量一致）
-- 可调整手工项先保留完整单笔候选（含产品库快速资格及信用债简易资格），再通过 `BatchAdjustFlowOptionHelper.appendConfiguredBatchFlow` 额外加入目标池配置的批量调入/调出流程，批量为唯一推荐；证券池批量、存量证券批量共用该方法。复用本次已加载池配置，不增加查询。
+- 可调整手工项先保留完整单笔候选（含产品库快速资格及信用债简易资格），再通过 `BatchAdjustFlowOptionHelper.appendConfiguredBatchFlow` 加入目标池配置的批量调入或调出流程，并将其设为唯一推荐。复用本次已加载的池配置。
 - 仅配置批量流程 ID 或 Key 时追加，未配置不新增批量无需审批候选并保留单笔推荐。同一流程定义的快速与批量选项按类型分别保留。满足快速资格即豁免本次信评报告及其他附件，与选择快速、一般、特殊或批量流程无关；行级 materialExemptionType 随校验结果和提交明细透传，切换流程不撤去提示，同组配套项跟随主项。
 - 提交保留所选流程 ID/Key/类型，透传行级材料豁免依据，复用单笔材料规则；不再禁用产品库快速及材料豁免。批量推荐不覆盖操作员手动选择，不展示合同投资范围确认提示。
 - 校验结果「调整类型」：手工主项 **Excel导入**（不对齐单笔「手工调整」；对齐批量渠道专属命名「手动批量调整」）；联动/互斥/关联同名

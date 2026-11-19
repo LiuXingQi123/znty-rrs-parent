@@ -1,6 +1,7 @@
 package com.znty.rrs.service;
 
 import com.znty.rrs.common.enums.AdjustMode;
+import com.znty.rrs.common.enums.FlowType;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
@@ -79,6 +80,42 @@ public class SecurityPoolBatchCheckTest {
         verify(fixture.batch, times(2)).queryRelatedCodes(anyList(), anyList());
         verify(fixture.market, times(2)).queryMarketMappingList(anyList());
         verifyNoInteractions(fixture.adjust);
+    }
+
+    /** 目标池配置了批量流程时，页面调入和调出仍沿用单笔候选及推荐 */
+    @Test
+    public void pageKeepsSingleFlowRecommendationsForBothDirections() {
+        Fixture fixture = new Fixture();
+        fixture.target.setInFlowId(11L);
+        fixture.target.setOutFlowId(12L);
+        fixture.target.setBatchInFlowId(21L);
+        fixture.target.setBatchOutFlowId(22L);
+        AdjustCheckReq inbound = request("B1");
+        AdjustCheckReq outbound = request("B2");
+        outbound.getItems().get(0).setAdjustMode(AdjustMode.OUT.getCode());
+        Row existing = new Row();
+        existing.setSecurityCode("B2");
+        existing.setPoolId(fixture.target.getId());
+        when(fixture.batch.queryActiveStates(anyList())).thenReturn(Collections.singletonList(existing));
+
+        List<AdjustCheckDto> results = fixture.service.checkSecurityBatch(Arrays.asList(inbound, outbound));
+
+        assertThat(results.get(0).getItems()).singleElement().satisfies(item -> {
+            assertThat(item.isCanAdjust()).isTrue();
+            assertThat(item.getFlowOptions()).singleElement().satisfies(option -> {
+                assertThat(option.getFlowType()).isEqualTo(FlowType.NORMAL_INBOUND.getCode());
+                assertThat(option.getFlowId()).isEqualTo(11L);
+                assertThat(option.isRecommended()).isTrue();
+            });
+        });
+        assertThat(results.get(1).getItems()).singleElement().satisfies(item -> {
+            assertThat(item.isCanAdjust()).isTrue();
+            assertThat(item.getFlowOptions()).singleElement().satisfies(option -> {
+                assertThat(option.getFlowType()).isEqualTo(FlowType.NORMAL_OUTBOUND.getCode());
+                assertThat(option.getFlowId()).isEqualTo(12L);
+                assertThat(option.isRecommended()).isTrue();
+            });
+        });
     }
 
     /** 千行 Excel 复用整批数据，原业务失败仍作为调整提示 */

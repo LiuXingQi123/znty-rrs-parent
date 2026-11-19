@@ -11,7 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-/** 三个批量入口共用的流程候选追加工具，不查询数据库 */
+/** 根据已加载的目标池配置追加批量流程候选 */
 public final class BatchAdjustFlowOptionHelper {
 
     private BatchAdjustFlowOptionHelper() {

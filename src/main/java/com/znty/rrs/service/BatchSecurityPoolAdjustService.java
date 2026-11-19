@@ -457,8 +457,7 @@ public class BatchSecurityPoolAdjustService {
     /**
      * 将单笔校验结果项映射为批量结果行。
      *
-     * 候选保留完整单笔匹配（白名单/简易/产品库快速/默认/特殊/升降级等），
-     * 并由公共校验入口追加目标池配置的批量流程，此处直接透传
+     * 候选直接透传完整单笔匹配结果和推荐标记（白名单/简易/产品库快速/默认/特殊/升降级等）
      */
     private BatchSecurityInboundAdjustDto.CheckResultItem buildBatchCheckResult(
             BatchSecurityInboundAdjustReq.SecurityItem security,

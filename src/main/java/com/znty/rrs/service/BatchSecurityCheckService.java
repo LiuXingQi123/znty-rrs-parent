@@ -120,12 +120,12 @@ public class BatchSecurityCheckService {
         List<AdjustCheckDto> results = new ArrayList<>(requests.size());
         Map<String, Boolean> directFlows = new HashMap<>();
         for (AdjustCheckReq request : requests) {
-            // 页面和任务进入同一规则分支
+            // 页面和任务均沿用单笔流程候选
             boolean excelCompany = excelCompanyRequests.contains(request);
             AdjustCheckDto result;
             try {
                 result = excelCompany ? securityPoolCheckRules.checkExcelCompanyFollowItem(request, data)
-                        : securityPoolCheckRules.checkBatchItem(request, !scheduled, data);
+                        : securityPoolCheckRules.checkBatchItem(request, false, data);
             } catch (BizException e) {
                 if (!scheduled) {
                     throw e;

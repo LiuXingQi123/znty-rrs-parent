@@ -37,7 +37,7 @@
 | 可选证券筛选 | 代码 / 简称 / 市场 / 是否特征 | 另加**发行主体**；调入另加来源池；是否特征含 ABS/担保/永续/次级/私募/含权/标准信用债，多选 AND |
 | 来源池 | 无 | 调入固定白名单 6 项，调出不设来源池查询条件 |
 
-**校验 / 提交与证券池批量一致**（编排细节见 [12](12-batch-security-pool-adjust.md) §3.2～§3.5）：`checkAdjust` 调用 `BatchSecurityCheckService` 一次，集中读取证券、池关系、容量、在途状态、主体名单等数据，再逐券执行共用规则（完整单笔候选 + 公共方法追加配置的 batchIn/batchOut，统一推荐批量）；`addAdjustLog` 分组后委托 `submitAdjustLogBatch`（共享附件、批次号、池配置和流程快照，普通债独立直通调入从数据库按批读取证券、评级主体、在途、在池和容量），直通用 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`；手工项 `adjustType=手动批量调整`。ABS 默认主体使用本次从数据库集中读取的候选。本类只编排产品库与调入来源池差异，不新建业务表。
+**校验 / 提交与证券池批量一致**（编排细节见 [12](12-batch-security-pool-adjust.md) §3.2～§3.5）：`checkAdjust` 调用 `BatchSecurityCheckService` 一次，集中读取证券、池关系、容量、在途状态、主体名单等数据，再逐券执行共用规则，返回完整单笔候选及推荐。`addAdjustLog` 分组后委托 `submitAdjustLogBatch`（共享附件、批次号、池配置和流程快照，普通债独立直通调入从数据库按批读取证券、评级主体、在途、在池和容量），直通用 `isDirectAdjustFlow` + `recheckBeforeFinalApproval`；手工项 `adjustType=手动批量调整`。ABS 默认主体使用本次从数据库集中读取的候选。本类只编排产品库与调入来源池差异，不新建业务表。
 
 ---
 
@@ -92,7 +92,7 @@
 
 ## 快速入库与本次材料豁免
 
-适用证券池调整（包括详情页调库和审核页下一步模式）、证券池批量调整、存量证券批量调整及证券池 Excel 导入。后三个入口保留完整单笔候选，另共用 BatchAdjustFlowOptionHelper 追加配置的批量流程并统一推荐批量；未配置时保留单笔推荐。
+适用证券池调整（包括详情页调库和审核页下一步模式）、证券池批量调整、存量证券批量调整及证券池 Excel 导入。证券池批量调整与存量证券批量调整均沿用单笔流程候选和推荐。证券池 Excel 导入会追加并推荐目标池已配置的批量流程。
 
 - 信用债沿用 isSimpleInboundFlowMatched，资格在“下一步”计算，提交不重复查询矩阵、180 天入库经历或历史报告条件。资格中的历史报告要求仍保留，豁免的是本次提交材料。
 - 产品库快速资格适用于 `bond_product_root` 子树启用叶子。信用债一至三级、转债核心/重点按 `ip_pool_status` 判断。CRMW 库默认认可 `ip_pool_status` 的有效在池记录和 `ip_pool_status_crmw.security_code` 的有效组合标的，任一命中即可。有效记录须审批通过且未删除。本次待申请调入来源池不计入资格。
