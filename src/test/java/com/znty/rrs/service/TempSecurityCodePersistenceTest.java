@@ -18,6 +18,7 @@ import com.znty.rrs.common.enums.WindCodeChangeResult;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.bo.IpAdjustLogBo;
+import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import java.io.InputStream;
@@ -51,6 +52,7 @@ import org.junit.Test;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
 import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.beans.BeanUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -2169,6 +2171,76 @@ public class TempSecurityCodePersistenceTest {
     private void addCrmwPool(Long id, String markets) {
         jdbc.update("INSERT INTO ip_investment_pool(id,pool_name,pool_type,status,market_codes,is_deleted)"
                 + " VALUES (?,'CRMW池','crmw','enabled',? FORMAT JSON,0)", id, markets);
+    }
+
+    /** ABS 在途转正时，普通池和 CRMW 的正式快照各自保留原申请主体 */
+    @Test
+    public void pendingAbsConversionShouldCopyChosenIssuerToFormalSnapshots() throws Exception {
+        setupGroup();
+        jdbc.update("INSERT INTO dict_security_type VALUES ('abs','资产支持证券','bond',0)");
+        jdbc.update("UPDATE rrs_securityinfo SET security_type='abs',abs_flag=1,coupon_rate='3.5' WHERE wind_code LIKE 'FORMAL.%'");
+        addPool(100L, "[]", 10);
+        addCrmwPool(200L, "[]");
+        TempSecurityCodeReq req = addReq("001.IB");
+        req.setTempSecurityType("abs");
+        Long tempId = service.addTempSecurityCode(req).getId();
+
+        IpAdjustLogBo ordinary = addPending("001.IB", 100L, "调入", "00");
+        jdbc.update("UPDATE ip_adjust_log SET security_type='abs' WHERE id=?", ordinary.getId());
+        AdjustSecuritySnapshotBo temporary = new AdjustSecuritySnapshotBo();
+        temporary.setAdjustLogId(ordinary.getId());
+        temporary.setWindCode("001.IB");
+        temporary.setSecurityType("abs");
+        temporary.setAbsFlag(1);
+        temporary.setIssuerCode("C10001");
+        temporary.setIssuer("已选主体");
+        temporary.setInnerIssuerRating("2+");
+        temporary.setRatingBondissuer("AA+");
+        temporary.setRatingBondissuerAgency("R1");
+        temporary.setAbsOriginatorName("普通候选");
+        temporary.setCompanySelector("已选主体");
+        temporary.setCouponRate("1.0");
+        temporary.setIsDeleted(0);
+        adjustMapper.addAdjustSecuritySnapshot(temporary);
+
+        IpAdjustLogBo crmw = baseLog("001.IB", 200L);
+        crmw.setSecurityType("abs");
+        crmw.setPoolType("crmw");
+        crmw.setAuditStatus("11");
+        crmw.setAdjustBatchNo("CRMW_PENDING");
+        crmw.setCrmwScode("K.IB");
+        crmw.setCrmwStype("crmw");
+        adjustMapper.addAdjustLog(crmw);
+        AdjustSecuritySnapshotCrmwBo crmwTemporary = new AdjustSecuritySnapshotCrmwBo();
+        BeanUtils.copyProperties(temporary, crmwTemporary, "id");
+        crmwTemporary.setAdjustLogId(crmw.getId());
+        crmwTemporary.setCrmwScode("K.IB");
+        crmwTemporary.setCrmwStype("crmw");
+        crmwTemporary.setAbsOriginatorName("已选主体");
+        crmwTemporary.setCompanySelector(null);
+        crmwMapper.addAdjustSecuritySnapshotCrmw(crmwTemporary);
+
+        service.editTempSecurityCodeToUpdated(operation(tempId, "FORMAL.IB"));
+
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot WHERE wind_code LIKE 'FORMAL.%'"
+                + " AND abs_originator_name='普通候选' AND company_selector='已选主体'"
+                + " AND issuer_code='C10001' AND issuer='已选主体' AND inner_issuer_rating='2+'"
+                + " AND rating_bondissuer='AA+' AND rating_bondissuer_agency='R1' AND coupon_rate='3.5'")).isEqualTo(3);
+        assertThat(count("SELECT COUNT(*) FROM ip_adjust_security_snapshot_crmw WHERE wind_code LIKE 'FORMAL.%'"
+                + " AND abs_originator_name='已选主体' AND company_selector IS NULL"
+                + " AND issuer_code='C10001' AND issuer='已选主体' AND inner_issuer_rating='2+'"
+                + " AND rating_bondissuer='AA+' AND rating_bondissuer_agency='R1' AND coupon_rate='3.5'")).isEqualTo(3);
+        assertThat(adjustMapper.querySecuritySnapshotDetailByAdjustLogId(ordinary.getId(), "001.IB").getCompanySelector())
+                .isEqualTo("已选主体");
+        assertThat(count("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code LIKE 'FORMAL.%' AND issuer_code IS NULL"))
+                .isEqualTo(3);
+
+        AbsIdentityService approval = new AbsIdentityService();
+        ReflectionTestUtils.setField(approval, "securityPoolAdjustMapper", adjustMapper);
+        ordinary.setSecurityCode("FORMAL.IB");
+        SecurityInfoBo approvalSecurity = new SecurityInfoBo();
+        approval.restoreSnapshotSelection(approvalSecurity, ordinary, false);
+        assertThat(approvalSecurity.getIssuerCode()).isEqualTo("C10001");
     }
 
     /** 核对两类在途状态均逐码保存快照并沿用原批次。 */

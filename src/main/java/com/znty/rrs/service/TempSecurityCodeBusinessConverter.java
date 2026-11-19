@@ -5,6 +5,7 @@ import com.znty.rrs.common.enums.AdjustType;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.TempOprtSource;
+import com.znty.rrs.common.util.CreditBondSpecialInboundRule;
 import com.znty.rrs.common.util.MarketCodeMatchUtil;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotCrmwBo;
@@ -15,6 +16,7 @@ import com.znty.rrs.entity.bo.PoolRelationBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
+import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
@@ -34,6 +36,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 临时代码转正业务转换，由转正入口持有事务。
@@ -665,7 +668,11 @@ public class TempSecurityCodeBusinessConverter {
      * @param mapping 旧新代码映射、操作来源及更新时间
      */
     private void convertPendingLogs(ConversionPlan plan, TempSecurityCodeBo mapping) {
+        boolean preserveAbsSelection = !plan.singleCode && "abs".equals(mapping.getTempSecurityType())
+                && plan.members.stream().anyMatch(CreditBondSpecialInboundRule::isAbs);
         for (IpAdjustLogBo original : plan.pending) {
+            // 按旧代码取本笔申请的主体，供同券各正式 ABS 快照使用
+            SecurityInfoDetailDto selection = preserveAbsSelection ? queryPendingAbsSelection(original, plan.crmw) : null;
             for (SecurityInfoBo member : plan.members) {
                 boolean selected = mapping.getSecurityCode().equals(member.getWindCode());
                 IpAdjustLogBo log = new IpAdjustLogBo();
@@ -690,12 +697,15 @@ public class TempSecurityCodeBusinessConverter {
                 if (written != 1) {
                     throw new BizException("在途调库转换失败，securityCode=" + member.getWindCode());
                 }
+                // 正式主档提供证券字段，原 ABS 申请提供已选主体
+                SecurityInfoBo snapshotSecurity = selection != null && CreditBondSpecialInboundRule.isAbs(member)
+                        ? copyAbsSelection(member, selection) : member;
                 if (plan.crmw) {
-                    // 临时转正和 Wind 换码都按目标主档新增快照，保留旧快照
-                    saveCrmwSnapshot(log, member, mapping);
+                    // 保存正式标的的 CRMW 快照
+                    saveCrmwSnapshot(log, snapshotSecurity, mapping);
                 } else {
-                    // 旧快照不改码，为新代码按主档保存独立快照
-                    saveSnapshot(log, member, mapping);
+                    // 保存正式证券的普通快照
+                    saveSnapshot(log, snapshotSecurity, mapping);
                 }
                 // 每个市场代码独立记录替换日志
                 addMemberAudit(mapping, member, "ip_adjust_log", log.getId());
@@ -703,6 +713,43 @@ public class TempSecurityCodeBusinessConverter {
         }
         // 6.2.1 补本次转正新增的互斥配套调出，原互斥池在池记录继续保留到审批通过
         convertPendingMutexOut(plan, mapping);
+    }
+
+    /**
+     * 查询原申请已选的 ABS 主体和权益人名称
+     * @param original 转正前的调库记录
+     * @param crmw 是否读取 CRMW 标的快照
+     * @return 原申请快照中的选择，没有保存主体时为空
+     */
+    private SecurityInfoDetailDto queryPendingAbsSelection(IpAdjustLogBo original, boolean crmw) {
+        SecurityInfoBo originalSnapshot = crmw
+                ? crmwPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(original.getId(), original.getSecurityCode())
+                : securityPoolAdjustMapper.querySecuritySnapshotDetailByAdjustLogId(original.getId(), original.getSecurityCode());
+        if (originalSnapshot == null || !StringUtils.hasText(originalSnapshot.getIssuerCode())) {
+            return null;
+        }
+        SecurityInfoDetailDto selection = new SecurityInfoDetailDto();
+        BeanUtils.copyProperties(originalSnapshot, selection);
+        return selection;
+    }
+
+    /**
+     * 在正式主档的副本上保留原申请已选主体
+     * @param member 当前市场的正式证券主档
+     * @param selection 原申请已有的主体选择
+     * @return 用于保存本笔正式证券快照的数据
+     */
+    private SecurityInfoDetailDto copyAbsSelection(SecurityInfoBo member, SecurityInfoDetailDto selection) {
+        SecurityInfoDetailDto snapshot = new SecurityInfoDetailDto();
+        BeanUtils.copyProperties(member, snapshot);
+        snapshot.setIssuerCode(selection.getIssuerCode());
+        snapshot.setIssuer(selection.getIssuer());
+        snapshot.setInnerIssuerRating(selection.getInnerIssuerRating());
+        snapshot.setRatingBondissuer(selection.getRatingBondissuer());
+        snapshot.setRatingBondissuerAgency(selection.getRatingBondissuerAgency());
+        snapshot.setAbsOriginatorName(selection.getAbsOriginatorName());
+        snapshot.setCompanySelector(selection.getCompanySelector());
+        return snapshot;
     }
 
     /** 把新代码从互斥池调出，每个代码分别保存调库记录、快照和替换日志。 */
@@ -788,15 +835,14 @@ public class TempSecurityCodeBusinessConverter {
     }
 
     /**
-     * 7. 临时转正和 Wind 换码都按目标主档新增快照，旧代码快照保持原样。
+     * 7. 为目标证券新增独立快照，保留旧快照
      *
      * @param log 本次快照对应的调库记录，提供日志 ID、调整人和提交时间
-     * @param member 从证券主档查出的本次目标证券信息
+     * @param member 本次目标证券信息，在途 ABS 转正时带有原申请主体
      * @param mapping 本次旧代码、新代码及转换时间等信息
      */
     private void saveSnapshot(IpAdjustLogBo log, SecurityInfoBo member, TempSecurityCodeBo mapping) {
-        // member 是目标代码的主档，snapshot 是准备新增的快照；旧快照不参与修改。
-        // 1. 新建快照对象，所有证券基础信息都取目标主档，不继承旧快照的填写值或空值。
+        // 1. 将准备好的正式证券信息复制到新快照
         AdjustSecuritySnapshotBo snapshot = new AdjustSecuritySnapshotBo();
         BeanUtils.copyProperties(member, snapshot);
         // 2. 主档 ID 不能当作快照 ID，清空后让数据库生成新 ID，再关联本次调库记录。
@@ -883,9 +929,9 @@ public class TempSecurityCodeBusinessConverter {
         }
     }
 
-    /** 按目标主档新增 CRMW 标的快照，临时转正和 Wind 换码都保留旧快照及本笔凭证。 */
+    /** 新增 CRMW 标的快照，保留旧快照及本笔凭证 */
     private void saveCrmwSnapshot(IpAdjustLogBo log, SecurityInfoBo member, TempSecurityCodeBo mapping) {
-        // 1. 证券信息取目标主档，准备独立的新快照，旧快照保持原代码和内容。
+        // 1. 将准备好的正式标的信息复制到新快照
         AdjustSecuritySnapshotCrmwBo snapshot = new AdjustSecuritySnapshotCrmwBo();
         BeanUtils.copyProperties(member, snapshot);
         // 2. 清空主档带来的 ID，关联本次调库日志并使用目标证券身份。
