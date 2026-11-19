@@ -43,7 +43,7 @@
 |---|---|---|---|
 | `bond_temp_code_replace` | 债券临时代码替换（仅债券） | `0 40 4,8,9,13,18,22 * * ?` | 每天 04:40、08:40、09:40、13:40、18:40、22:40 执行。无需参数；扫描 `rrs_temp_security_code.status=temporary` 且已由外部数据补齐 `security_code` 的记录，复用临时代码人工转正的完整分叉逻辑，操作来源记为 `job` |
 | `bond_security_type_change` | 债券类型变更（仅债券） | `0 0 22 * * ?` | 每天 22:00 执行。无需参数；以 `rrs_securityinfo.security_type` 为准，同步普通池、CRMW 池标的证券及当前关联调库日志中的债券类型 |
-| `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`{"poolIds":[15],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[15]`（债券禁止库），与投资池关系配置绑定本任务的池取并集；扫描已生效债券、股票，到期日早于当前日期减去 `maturityOffsetDays` 天时自动调出，省略默认 1（原 T-2），支持 0、正负整数；命中调出限制池、已被其他处理提前出池或缺少证券编码时跳过，并在结果中说明未处理数量 |
+| `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`{"poolIds":[15],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[15]`（债券禁止库），与投资池关系配置绑定本任务的池取并集；扫描 `ip_pool_status` 中已生效且未删除的债券（含 ABS、CRMW），到期日早于当前日期减去 `maturityOffsetDays` 天时进入候选，省略默认 1（原 T-2），支持 0、正负整数；先剔除 Excel 保护项，再跳过命中调出限制池、已提前出池或缺少证券编码的记录 |
 | `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`{"poolIds":[18],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[18]`（CRMW库），与关系配置绑定池取并集；扫描已生效 CRMW 组合，凭证到期日早于当前日期减去 `maturityOffsetDays` 天时自动调出，省略默认 1（原 T-2），支持 0、正负整数；命中调出限制池则跳过 |
 | `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池（仅主体） | `0 10 23 * * ?` | 只同步主体，旗下债券由独立任务处理 |
 | `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池（仅主体） | `0 15 23 * * ?` | 只同步主体，旗下债券由独立任务处理 |
@@ -97,7 +97,7 @@
 - Cron 回调取得任务锁后读取共享主库的最新配置，仅在 `schedule_enabled=1` 时执行业务。关闭、配置不存在（含删除）或读取失败时跳过，仅记录应用日志，不新增执行历史或更新最近执行摘要。已开始的任务继续执行，关闭调度后仍可手动执行。
 - **不同 taskCode 之间没有全局锁、没有编排器**：先后完全靠 cron。有业务依赖的任务必须把 cron 配成先后执行，禁止设成同一分钟。
 
-任务名称用「（仅主体）」或「（仅债券）」标出单一处理对象。已有配置按任务编码显示标注，自定义名称保留。债股混合任务和 CRMW 组合任务使用各自的名称。
+任务名称用「（仅主体）」或「（仅债券）」标出单一处理对象。已有配置按任务编码显示标注，自定义名称保留。到期证券自动出池和 CRMW 组合任务保留各自的名称。
 
 ### 4.1 执行顺序（新增/改 cron 必读）
 
@@ -109,8 +109,8 @@
 |------|------|------|----------------|
 | 1 | 04:40、08:40、09:40、13:40、18:40、22:40 | `bond_temp_code_replace` | 多时点把外部数据已匹配的临时代码转正式；会改在途日志及普通/CRMW 池状态；22:40 批次直接使用正式主数据类型 |
 | 2 | 22:00 | `bond_security_type_change` | 在 18:40 临时代码替换后，以最新主数据统一当前在池债券类型；早于 22:40 替换批次 |
-| 3 | 23:00 | `security_expired_auto_out` | 先清到期债/股，避免后面入债再扫到已到期券 |
-| 4 | 23:05 | `crmw_expired_auto_out` | 先清到期 CRMW（独立表，与债股到期同属「先清理」） |
+| 3 | 23:00 | `security_expired_auto_out` | 先清到期债券，避免后面入债再扫到已到期券 |
+| 4 | 23:05 | `crmw_expired_auto_out` | 先清到期 CRMW（独立表，与到期债券同属「先清理」） |
 | 5 | 23:10 | `company_outer_rating_not_aa_minus_auto_out` | **先改主体**：不再满足质押券黑名单（一）（二）（三）的主体先出 17 |
 | 6 | 23:15 | `company_outer_rating_aa_minus_auto_in` | 再把新满足（一）（二）（三）之一的主体入 17（须先出后入） |
 | 8 | 每 10 分钟（第 5/15/25…分） | `company_abs_bond_auto_in` | 处理 ABS 入池、出池和提醒；与第 9 项错开，避免同秒抢写池状态 |
@@ -234,11 +234,11 @@
 对应老系统 `AdjustRuleByExpired` + `AdjustPoolByRule.doAdjustOutByRule`：
 
 1. 到期日期偏移：扩展参数 `maturityOffsetDays` 可选，省略默认 `1`，沿用原先早于昨天（T-2）的口径；必须为 int 范围内的整数，允许 `0` 和负数，显式 NULL、小数、字符串、布尔值、超范围整数或错误 JSON 均在扫描前报错。每轮读取当前保存的配置，使用 `maturity_date < DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')`，仅绑定天数，日期由数据库计算，保持严格小于、不含截止当天。例如 `{"poolIds":[15],"maturityOffsetDays":3}` 表示早于三天前才出池；`0` 为早于今天，`-1` 为早于明天；原有 `poolIds` 与关系配置取并集的规则不变
-2. 大类对齐老 `ptype=4000 or 2000`：仅债、股；排除 `crmw`（走 `crmw_expired_auto_out`）。  
-3. 调出限制：目标池若配置 `out_restrict`（老关系类型 12），扫描候选时同时判断该证券是否在任一限制池中。命中则跳过，并记录证券和跳过原因。
-4. 仅 `deletePoolStatusSoft` 实际删到记录才写 `ip_adjust_log` 并计入影响条数；未删到时按已被其他处理提前出池跳过。
+2. 扫描 `ip_pool_status` 中已生效且未删除的债券，包含符合条件的 ABS、CRMW。按证券代码关联 `rrs_securityinfo` 取到期日。`ip_pool_status_crmw` 中的凭证与标的组合由 `crmw_expired_auto_out` 扫描。
+3. 按在池记录 ID 剔除 Excel 调入、同批配套入池和 Excel 主体跟随补入的保护记录。目标池若配置 `out_restrict`（老关系类型 12），扫描候选时同时判断该证券是否在任一限制池中。命中则跳过，并记录证券和跳过原因。
+4. 仅 `deleteUnprotectedPoolStatusSoft` 实际删到记录才写 `ip_adjust_log` 并计入影响条数；未删到时按已被其他处理提前出池跳过。
 5. 证券编码为空的候选记录只跳过，不影响其他证券继续处理。
-6. 最近执行结果展示扫描候选数、实际出池数、未处理数，并按目标池列出扫描、出池和未处理数量；过程日志按行记录未处理原因。
+6. 最近执行结果展示扫描候选数、实际出池数、未处理数，并按目标池列出扫描、出池和未处理数量；过程日志按池记录到期命中数、Excel 保护跳过数和未处理原因。
 
 ### 7.1 `crmw_expired_auto_out`（23:05）
 

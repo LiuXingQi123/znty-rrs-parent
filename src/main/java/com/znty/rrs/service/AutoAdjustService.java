@@ -34,8 +34,8 @@ import java.util.Set;
  *
  * 执行顺序：
  * 1. 合并扩展参数和关系配置中的扫描池
- * 2. 按 maturityOffsetDays 扫描目标池内已生效且到期日早于截止日期的债券和股票
- * 3. 跳过主体、基金、CRMW、调出限制池和已提前出池的记录
+ * 2. 按 maturityOffsetDays 扫描 ip_pool_status 内已生效且到期日早于截止日期的债券（含 ABS、CRMW）
+ * 3. 剔除 Excel 保护记录，跳过命中调出限制池或已提前出池的记录
  * 4. 软删除池状态成功后写入自动出池日志并统计实际出池数量
  * 5. 返回本轮扫描、出池和未处理数量
  */
@@ -58,16 +58,16 @@ public class AutoAdjustService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "参数格式：JSON 对象，例如 <code>{\"poolIds\":[15],\"maturityOffsetDays\":1}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[15]}</code>\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 15（债券禁止库）内已生效的债券、股票，到期后从 15（债券禁止库）自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 15（债券禁止库）中已生效且未删除的债券，找出到期候选\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（多池）：<code>{\"poolIds\":[15,16]}</code>\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）内的证券，到期后从各自所在池自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）中的到期债券候选\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（到期出池扫描池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
                     + "maturityOffsetDays（到期日期偏移天数）：可选，省略默认 1；须为 int 范围内的整数，允许 0 和负数\n"
                     + "天数含义：到期日早于数据库当前日期减去该天数才出池（不含截止当天）；1=早于昨天，0=早于今天，3=早于三天前，-1=早于明天\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
-                    + "处理规则：扫描目标池内已生效的债券、股票；按 maturityOffsetDays 计算截止日期，默认 1 沿用早于昨天（T-2）的口径\n"
-                    + "排除范围：主体、基金和 CRMW 不处理；CRMW 请使用“CRMW到期自动出池”任务\n"
-                    + "限制规则：证券已在目标池配置的调出限制池时，跳过该条记录\n"
+                    + "候选查询：扫描 ip_pool_status 中已生效且未删除的债券（含 ABS、CRMW），按 rrs_securityinfo 的到期日判断\n"
+                    + "CRMW 组合池：ip_pool_status_crmw 中的凭证与标的组合由“CRMW到期自动出池”任务处理\n"
+                    + "最终出池：先按在池记录 ID 剔除 Excel 保护项，再跳过缺少证券编码或命中调出限制池的记录\n"
                     + "执行方式：直接生效，不走审批；仅软删除成功才写日志并计入影响条数\n"
                     + "参数格式错误时，本轮任务失败";
 
@@ -156,7 +156,7 @@ public class AutoAdjustService implements RrsScheduledTask {
      * 按扫描池处理到期证券
      *
      * 执行顺序：
-     * 1. 解析扩展参数和关系配置得到扫描池
+     * 1. 读取到期偏移天数，打印扫描条件，再合并扫描池
      * 2. 读取投资池信息
      * 3. 准备本轮批次和提交时间
      * 4. 读取池关系配置
@@ -173,12 +173,12 @@ public class AutoAdjustService implements RrsScheduledTask {
         // 1. 读取本轮扩展参数，解析日期偏移并合并待扫描池
         String paramJson = resolveParamJson(detail);
         int maturityOffsetDays = AutoAdjustPoolScopeHelper.parseMaturityOffsetDays(paramJson);
+        String maturityRule = "到期日早于当前日期减去 " + maturityOffsetDays + " 天";
+        // 查池配置和到期候选之前，先说明从哪张表查和哪些记录能出池
+        logExecutionRules(detail, maturityRule, maturityOffsetDays);
         List<Long> poolIds = poolScopeHelper.resolveUnionPoolIds(
                 paramJson, TASK_CODE, RuleType.AUTO_OUT.getCode(), detail);
         infoDetail(detail, "扫描范围：目标池编号 " + poolIds);
-        String maturityRule = "到期日早于当前日期减去 " + maturityOffsetDays + " 天";
-        infoDetail(detail, "扫描条件：已生效的债券和股票，且" + maturityRule
-                + "（数据库日期，maturityOffsetDays=" + maturityOffsetDays + "）；CRMW、主体和基金不处理");
         // 2. 读取投资池信息
         Map<Long, InvestmentPoolBo> poolMap = new HashMap<>();
         List<InvestmentPoolBo> poolList = investmentPoolMapper.queryPoolList();
@@ -208,11 +208,14 @@ public class AutoAdjustService implements RrsScheduledTask {
                     poolId, RelationType.OUT_RESTRICT.getCode(), allRelations);
             List<ScheduledAdjustCandidateDto> expiredList = autoAdjustMapper.queryPoolSecurityByExpired(
                     poolId, maturityOffsetDays, outRestrictPoolIds);
-            // 按本轮独立读取的保护集合排除 Excel 和主体跟随记录
+            // 统计 Excel 保护跳过数，区分没有查到候选和候选全部受保护
+            int matchedCount = expiredList == null ? 0 : expiredList.size();
             expiredList = ExcelPoolExclusionService.excludeProtectedRows(expiredList, protectedStatusIds);
+            int candidateCount = expiredList == null ? 0 : expiredList.size();
+            infoDetail(detail, "扫描结果：池【" + pool.getPoolName() + "】到期命中 "
+                    + matchedCount + " 条，Excel 保护跳过 " + (matchedCount - candidateCount) + " 条");
             if (expiredList == null || expiredList.isEmpty()) {
                 summary.addPool(poolId, pool.getPoolName(), 0, 0, 0);
-                infoDetail(detail, "扫描结果：池【" + pool.getPoolName() + "】没有发现到期证券");
                 continue;
             }
             int poolCount = 0;
@@ -259,11 +262,34 @@ public class AutoAdjustService implements RrsScheduledTask {
                 poolCount++;
             }
             // 8. 分别汇总本池候选、实际出池和未处理数量
-            summary.addPool(poolId, pool.getPoolName(), expiredList.size(), poolCount, poolSkippedCount);
+            summary.addPool(poolId, pool.getPoolName(), candidateCount, poolCount, poolSkippedCount);
             infoDetail(detail, "处理结果：池【" + pool.getPoolName() + "】实际出池 "
                     + poolCount + " 条，未处理 " + poolSkippedCount + " 条");
         }
         return summary;
+    }
+
+    /**
+     * 在扫描前打印本任务的查询和出池规则
+     *
+     * 执行顺序：
+     * 1. 说明扫描池的来源和到期候选的查询条件
+     * 2. 说明如何从到期候选筛出最终出池记录
+     *
+     * @param detail 过程日志
+     * @param maturityRule 本轮到期日判断说明
+     * @param maturityOffsetDays 本轮到期偏移天数
+     */
+    private void logExecutionRules(TaskDetailLog detail, String maturityRule, int maturityOffsetDays) {
+        // 说明扩展参数和投资池配置都会影响本轮扫描范围
+        infoDetail(detail, "扫描范围：合并扩展参数 poolIds 和投资池绑定");
+        // 写明在池记录和到期日分别从哪张表读取
+        infoDetail(detail, "扫描条件：扫描 ip_pool_status 中已生效且未删除的债券（含 ABS、CRMW），"
+                + "按证券代码匹配 rrs_securityinfo，主数据到期日有值且" + maturityRule
+                + "（数据库日期，maturityOffsetDays=" + maturityOffsetDays + "）");
+        // 区分查到的到期债券和实际能出池的记录
+        infoDetail(detail, "最终出池范围：先按在池记录 ID 剔除 Excel 保护项，"
+                + "再跳过缺少证券编码或命中调出限制池的记录，软删除成功才写调库记录并计入实际出池");
     }
 
     /** 本轮到期证券出池汇总 */

@@ -151,10 +151,10 @@
         ORDER BY pool_id ASC
     </select>
 
-    <!-- 查询指定池中已生效且已到期的债券和股票，配置调出限制池时同时标记是否命中
+    <!-- 查询 ip_pool_status 中已生效且到期的债券（含 ABS、CRMW），同时标记是否命中调出限制池
          到期宽限对齐老系统 AdjustRuleByExpired：enddate < trunc(sysdate-1)，
          到期日早于当前日期减去 maturityOffsetDays 天，默认 1 即早于昨天（T-2）
-         大类对齐老 ptype=4000 或 2000：仅债、股；CRMW 走独立任务 crmw_expired_auto_out -->
+         ip_pool_status_crmw 中的凭证与标的组合由 crmw_expired_auto_out 扫描 -->
     <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.id AS pool_status_id
                ,ips.security_code
@@ -168,7 +168,7 @@
         INNER JOIN rrs_securityinfo si ON si.wind_code = ips.security_code
         INNER JOIN dict_security_type dst ON dst.security_type = ips.security_type
                                          AND dst.is_deleted = 0
-                                         AND dst.category_type IN ('bond', 'stock')
+                                         AND dst.category_type = 'bond'
         <!-- 同一证券可能同时出现在多个限制池，只关联一次以保留原候选数量 -->
         <if test="outRestrictPoolIds != null and !outRestrictPoolIds.isEmpty()">
         LEFT JOIN (
@@ -185,7 +185,6 @@
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND ips.security_type != 'crmw'
           AND si.maturity_date IS NOT NULL
           AND si.maturity_date != ''
           AND si.maturity_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')

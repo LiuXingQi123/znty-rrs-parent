@@ -92,14 +92,14 @@ public interface AutoAdjustMapper {
     List<Long> queryBoundPoolIds(@Param("taskCode") String taskCode, @Param("ruleType") String ruleType);
 
     /**
-     * 查询目标池内已生效的到期债券和股票
+     * 查询 ip_pool_status 中目标池已生效的到期债券，包含符合条件的 ABS 和 CRMW
      *
      * 以数据库当前日期减去配置天数作为截止日，实际到期日严格早于截止日才返回
      *
      * @param poolId 扫描的目标池 ID
      * @param maturityOffsetDays 到期日期偏移天数
      * @param outRestrictPoolIds 调出限制池 ID，空时不匹配限制池
-     * @return 含实际到期日和调出限制命中结果的候选证券
+     * @return 含实际到期日和调出限制命中结果的候选债券，Excel 保护记录由服务过滤
      */
     List<ScheduledAdjustCandidateDto> queryPoolSecurityByExpired(@Param("poolId") Long poolId,
                                                                  @Param("maturityOffsetDays") int maturityOffsetDays,

@@ -99,7 +99,7 @@ public class AutoAdjustServiceTest {
     }
 
     @Test
-    public void autoOutExpiredShouldDeleteExpiredSecurities() {
+    public void autoOutExpiredShouldDeleteExpiredCrmwInOrdinaryPool() {
         AutoAdjustMapper autoAdjustMapper = mock(AutoAdjustMapper.class);
         SecurityPoolAdjustMapper securityPoolAdjustMapper = mock(SecurityPoolAdjustMapper.class);
         InvestmentPoolMapper investmentPoolMapper = mock(InvestmentPoolMapper.class);
@@ -123,8 +123,8 @@ public class AutoAdjustServiceTest {
         when(investmentPoolMapper.queryPoolList()).thenReturn(Arrays.asList(pool));
         ScheduledAdjustCandidateDto expired = new ScheduledAdjustCandidateDto();
         expired.setSecurityCode("S001");
-        expired.setSecurityShortName("测试债");
-        expired.setSecurityType("corporate_bond");
+        expired.setSecurityShortName("测试凭证");
+        expired.setSecurityType("crmw");
         expired.setMaturityDate("20260901");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1, Collections.emptyList())).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
@@ -136,6 +136,7 @@ public class AutoAdjustServiceTest {
         verify(securityPoolAdjustMapper).addAdjustLog(logCaptor.capture());
         verify(securityPoolAdjustMapper).deleteUnprotectedPoolStatusSoft("S001", 10L);
         IpAdjustLogBo log = logCaptor.getValue();
+        assertThat(log.getSecurityType()).isEqualTo("crmw");
         assertThat(log.getAdjustType()).isEqualTo("自动调整");
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
@@ -148,6 +149,9 @@ public class AutoAdjustServiceTest {
         assertThat(result.getMessage()).contains("任务完成：扫描候选 1 条，实际出池 1 条，未处理 0 条")
                 .contains("信用债大库（10）：扫描 1 条，出池 1 条，未处理 0 条");
         assertThat(result.getDetailLog()).contains("任务开始：到期证券自动出池")
+                .contains("扫描条件：扫描 ip_pool_status 中已生效且未删除的债券（含 ABS、CRMW）")
+                .contains("最终出池范围：先按在池记录 ID 剔除 Excel 保护项")
+                .contains("扫描结果：池【信用债大库】到期命中 1 条，Excel 保护跳过 0 条")
                 .contains("处理结果：池【信用债大库】实际出池 1 条，未处理 0 条")
                 .contains("任务结束：任务完成：扫描候选 1 条");
         assertThat(result.getDetailLog()).doesNotContain("批次号");
@@ -341,7 +345,7 @@ public class AutoAdjustServiceTest {
         assertThatThrownBy(() -> service.parsePoolIds("{\"poolIds\":[]}")).isInstanceOf(BizException.class);
         assertThatThrownBy(() -> service.parsePoolIds(null)).isInstanceOf(BizException.class);
         assertThatThrownBy(() -> service.parsePoolIds("{\"poolIds\":'123'}")).isInstanceOf(BizException.class);
-        assertThat(service.getParamHelp()).contains("poolIds");
+        assertThat(service.getParamHelp()).contains("poolIds", "扫描 ip_pool_status", "含 ABS、CRMW", "剔除 Excel 保护项");
     }
 
     @Test

@@ -64,6 +64,8 @@ public class ExpiredAutoOutMapperTest {
             if (crmw) {
                 assertThat(bound.getSql()).contains("restricted.crmw_scode = ips.crmw_scode",
                         "restricted.crmw_stype = ips.crmw_stype", "pool_type = 'crmw'");
+            } else {
+                assertThat(bound.getSql()).contains("FROM ip_pool_status ips", "dst.category_type = 'bond'");
             }
             PreparedStatement prepared = mock(PreparedStatement.class);
             new DefaultParameterHandler(statement, params, bound).setParameters(prepared);
@@ -74,7 +76,7 @@ public class ExpiredAutoOutMapperTest {
         }
     }
 
-    /** 同批 Excel 调入和主体跟随均受保护，同券其他池和空原因的普通记录仍可出池 */
+    /** 到期候选包含 ABS 和 CRMW，排除股票，再按在池记录 ID 排除 Excel 保护项 */
     @Test
     public void expiredQueryShouldExcludeOnlyProtectedStatusRows() throws Exception {
         Assume.assumeTrue("H2 2.3.232 SQL 测试需 Java 11 以上运行时",
@@ -91,15 +93,20 @@ public class ExpiredAutoOutMapperTest {
                     + "adjust_mode VARCHAR(8), audit_status VARCHAR(2), is_deleted INT)");
             jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(16), maturity_date VARCHAR(8))");
             jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(16), category_type VARCHAR(16), is_deleted INT)");
-            jdbc.execute("INSERT INTO dict_security_type VALUES ('mtn','bond',0)");
-            jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('DIRECT','20000101'),('FOLLOW','20000101'),('PENDING','20000101')");
+            jdbc.execute("INSERT INTO dict_security_type VALUES ('mtn','bond',0),('abs','bond',0),"
+                    + "('stock','stock',0),('crmw','bond',0)");
+            jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('DIRECT','20000101'),('FOLLOW','20000101'),"
+                    + "('PENDING','20000101'),('STOCK','20000101'),('CRMW','20000101'),('CRMW_EXCEL','20000101')");
             jdbc.execute("INSERT INTO ip_adjust_log VALUES ('BOND_EXCEL','Excel导入','调入','20',0),"
                     + "('BOND_PENDING','Excel导入','调入','00',0)");
             jdbc.execute("INSERT INTO ip_pool_status VALUES"
                     + " (1,17,'DIRECT','债券一','mtn','20',0,'BOND_EXCEL',NULL),"
                     + " (2,17,'FOLLOW','债券二','mtn','20',0,'BOND_JOB','【任务名称：补债】【主体跟随】（【Excel主体跟随】）'),"
                     + " (3,23,'DIRECT','债券一','mtn','20',0,'BOND_MANUAL',NULL),"
-                    + " (4,17,'PENDING','债券三','mtn','20',0,'BOND_PENDING',NULL)");
+                    + " (4,17,'PENDING','ABS债券','abs','20',0,'BOND_PENDING',NULL),"
+                    + " (5,17,'STOCK','股票','stock','20',0,'STOCK_BASE',NULL),"
+                    + " (6,17,'CRMW','凭证','crmw','20',0,'CRMW_BASE',NULL),"
+                    + " (7,17,'CRMW_EXCEL','Excel凭证','crmw','20',0,'BOND_EXCEL',NULL)");
 
             Set<Long> protectedIds = new HashSet<>();
             MappedStatement protection = configuration.getMappedStatement(
@@ -117,7 +124,7 @@ public class ExpiredAutoOutMapperTest {
                     }
                 }
             }
-            assertThat(protectedIds).containsExactlyInAnyOrder(1L, 2L);
+            assertThat(protectedIds).containsExactlyInAnyOrder(1L, 2L, 7L);
             for (long poolId : new long[]{17L, 23L}) {
                 Object params = new ParamNameResolver(configuration, method)
                         .getNamedParams(new Object[]{poolId, 0, Collections.emptyList()});
@@ -136,10 +143,11 @@ public class ExpiredAutoOutMapperTest {
                             candidates.add(candidate);
                         }
                     }
-                    assertThat(candidates).hasSize(poolId == 17L ? 3 : 1);
+                    assertThat(candidates).hasSize(poolId == 17L ? 5 : 1);
                     assertThat(ExcelPoolExclusionService.excludeProtectedRows(candidates, protectedIds))
                             .extracting(ScheduledAdjustCandidateDto::getSecurityCode)
-                            .containsExactly(poolId == 17L ? "PENDING" : "DIRECT");
+                            .containsExactlyInAnyOrder(poolId == 17L ? new String[]{"PENDING", "CRMW"}
+                                    : new String[]{"DIRECT"});
                 }
             }
         }
