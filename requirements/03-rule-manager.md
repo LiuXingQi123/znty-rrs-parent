@@ -62,7 +62,7 @@ Vue 2.5 + Element UI 2.15 + axios + moment（CDN）。所有请求走统一封�
 | 创建时间 | 直接显示 |
 | 操作 | 编辑 / 测试 / 启用\|禁用切换 / 删除 |
 
-分页：`page-sizes=[10,20,50,100]`，layout `total, sizes, prev, pager, next, jumper`。后端 `PageRequest` pageSize 硬上限 100。
+分页：`page-sizes=[10,20,50,100]`，layout `total, sizes, prev, pager, next, jumper`。后端 `PageRequest` pageSize 硬上限 4000。
 
 ---
 
@@ -250,7 +250,7 @@ rule_preset_option_set 1──N rule_preset_option_item（独立，仅作选项�
 ### 7.2 参数校验
 
 - 前端：新增参数 `label`/`name` 非空，select/multiselect 须有 ≥1 选项，`name` 不重复（仅前端校验，后端不查重）；保存规则 `name`/`script` 非空；保存用例名非空。
-- 后端：`validateSaveReq`（name/script 非空）；`editRuleStatus`（status 白名单）；`requireRule`（id 非空、存在）；`TestCaseService.validateSaveReq`（name/ruleId 非空）；`runTestCase`（关联规则不存在抛异常）；`PageRequest` pageSize 上限 100。
+- 后端：`validateSaveReq`（name/script 非空）；`editRuleStatus`（status 白名单）；`requireRule`（id 非空、存在）；`TestCaseService.validateSaveReq`（name/ruleId 非空）；`runTestCase`（关联规则不存在抛异常）；`PageRequest` pageSize 上限 4000。
 
 ### 7.3 参数类型转换约束（关键）
 

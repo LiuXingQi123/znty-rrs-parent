@@ -96,7 +96,7 @@ Vue 实例挂载 `#forbidden_pool_query`。布局：顶栏（闪电图标 +「�
 - **对象类型筛选**：`categoryType='company'` → `ips.security_type='company'`；`categoryType='bond'` → `dst.category_type='bond'`；未传则不限制。
 - **统一社会信用代码筛选**：主体行（`ips.security_type='company'`）已 LEFT JOIN `wind_compintroduction`，直接匹配 `wci.REGISTERNUMBER`；债券行 `wci` 为空，用 `EXISTS` 按 `issuer_code` 反查发行主体的 `REGISTERNUMBER` 匹配，与「主体代码」同时匹配主体与债券发行主体的口径一致。
 - **信用代码展示**：`SELECT` 用 `COALESCE(wci.REGISTERNUMBER, 标量子查询)` 输出 `registerNumber`，主体行取自身、债券行取发行主体，列表与查询条件同一口径。
-- **分页硬上限**：`PageRequest.getPageSize()` 限制最大 100；`pageIndex` <1 兜底为 1。
+- **分页硬上限**：`PageRequest.getPageSize()` 限制最大 4000；`pageIndex` <1 兜底为 1。
 - **证券状态筛选 SQL**：`maturity_date` 按 `yyyyMMdd` 存储；`securityStatus == 'active'` → `bi.maturity_date >= DATE_FORMAT(CURDATE(), '%Y%m%d')`；`'matured'` → `bi.maturity_date < DATE_FORMAT(CURDATE(), '%Y%m%d')`，与证券池查询保持一致。
 - **`targetPoolName` 覆盖**：XML 查出的 `p.pool_name AS target_pool_name` 会被 Service 的 `fillPoolFullName` 用投资池全路径名覆盖。即表格「投资池名称」列实际显示全路径名（含父级）。
 - **无可见数据范围/权限校验**：无按当前用户或角色过滤的逻辑，未引用 `ip_pool_permission`。任何调用方都能看到全部禁投池数据。

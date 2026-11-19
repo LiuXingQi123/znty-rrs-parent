@@ -73,7 +73,7 @@
 
 ### 2.3 分页
 
-与主体池查询页一致（默认 20、可选 10/20/50/100、后端封顶 100）。排序 `submit_time DESC, adjust_batch_no DESC, id DESC`。
+与主体池查询页一致（默认 20、可选 10/20/50/100、后端封顶 4000）。排序 `submit_time DESC, adjust_batch_no DESC, id DESC`。
 
 ---
 

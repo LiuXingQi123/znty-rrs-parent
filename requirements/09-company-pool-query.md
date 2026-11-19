@@ -70,7 +70,7 @@
 
 ### 2.3 分页
 
-`pageIndex` 默认 1、`pageSize` 默认 20，可选 `[10,20,50,100]`；后端 `PageRequest.getPageSize()` 硬上限 100。`handleSizeChange` 同时重置到第 1 页。排序 `entry_time DESC, id DESC`。
+`pageIndex` 默认 1、`pageSize` 默认 20，可选 `[10,20,50,100]`；后端 `PageRequest.getPageSize()` 硬上限 4000。`handleSizeChange` 同时重置到第 1 页。排序 `entry_time DESC, id DESC`。
 
 ---
 
@@ -79,7 +79,7 @@
 - **可见范围** = `ip_pool_status` 中 `is_deleted=0` 且 `audit_status='20'` 且 `security_type` 属于 `category_type='company'` 的记录。无角色/用户级数据权限过滤（无「我的主体池」概念）。
 - 筛选条件全部可选；`poolIds` 为空时不过滤投资池；`companyCode`/`registerNumber` 走 `LIKE CONCAT(?, '%')`；`registerNumber` 按 `COMP_ID` 关联 `ais_inv_ods.wind_compintroduction` 后匹配 `REGISTERNUMBER`；`companyName`/`adjusterName` 走 `LIKE CONCAT('%', ?, '%')`。
 - 时间范围：`entry_time >= start` 且 `entry_time <= end`，前端补秒。
-- `pageSize` 后端封顶 100；`pageIndex` <1 自动归 1。
+- `pageSize` 后端封顶 4000；`pageIndex` <1 自动归 1。
 - 投资池树只返回 `is_deleted=0` 的池；已停用（`status='disabled'`）的池**仍会出现在树中**（SQL 未过滤 status）。
 
 ---

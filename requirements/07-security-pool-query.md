@@ -153,7 +153,7 @@ this.loadList();                  // 列表数据
 
 ## 6. 分页参数
 
-`pagination: { pageIndex:1, pageSize:20, total:0 }`，`page-sizes=[10,20,50,100]`，layout `total, sizes, prev, pager, next, jumper`。后端 `PageRequest` 对 pageSize 硬限制：`Math.min(pageSize, 100)`。查询/翻页/切条数均重置或保留 pageIndex 后调 `loadList`。
+`pagination: { pageIndex:1, pageSize:20, total:0 }`，`page-sizes=[10,20,50,100]`，layout `total, sizes, prev, pager, next, jumper`。后端 `PageRequest` 对 pageSize 硬限制：`Math.min(pageSize, 4000)`。查询/翻页/切条数均重置或保留 pageIndex 后调 `loadList`。
 
 ---
 

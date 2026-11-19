@@ -86,7 +86,7 @@
 
 ### 2.4 分页
 
-`page-sizes=[10,20,50,100]`，layout `total, sizes, prev, pager, next, jumper`。后端 `PageRequest` pageSize 硬上限 100。
+`page-sizes=[10,20,50,100]`，layout `total, sizes, prev, pager, next, jumper`。后端 `PageRequest` pageSize 硬上限 4000。
 
 ---
 
