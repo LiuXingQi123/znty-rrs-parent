@@ -44,7 +44,7 @@
 | `bond_temp_code_replace` | 债券临时代码替换（仅债券） | `0 40 4,8,9,13,18,22 * * ?` | 每天 04:40、08:40、09:40、13:40、18:40、22:40 执行。无需参数；扫描 `rrs_temp_security_code.status=temporary` 且已由外部数据补齐 `security_code` 的记录，复用临时代码人工转正的完整分叉逻辑，操作来源记为 `job` |
 | `bond_security_type_change` | 债券类型变更（仅债券） | `0 0 22 * * ?` | 每天 22:00 执行。无需参数；以 `rrs_securityinfo.security_type` 为准，同步普通池、CRMW 池标的证券及当前关联调库日志中的债券类型 |
 | `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`{"poolIds":[15],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[15]`（债券禁止库），与投资池关系配置绑定本任务的池取并集；扫描 `ip_pool_status` 中已生效且未删除的债券（含 ABS、CRMW），到期日早于当前日期减去 `maturityOffsetDays` 天时进入候选，省略默认 1（原 T-2），支持 0、正负整数；先剔除 Excel 保护项，再跳过命中调出限制池、已提前出池或缺少证券编码的记录 |
-| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`{"poolIds":[18],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[18]`（CRMW库），与关系配置绑定池取并集；扫描已生效 CRMW 组合，凭证到期日早于当前日期减去 `maturityOffsetDays` 天时自动调出，省略默认 1（原 T-2），支持 0、正负整数；命中调出限制池则跳过 |
+| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`{"poolIds":[18],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[18]`（CRMW库），与关系配置绑定池取并集；扫描 `ip_pool_status_crmw` 中已生效且未删除的凭证与标的组合（含 ABS 债券作为标的的组合）；仅按凭证到期日判断，标的证券到期本身不会触发组合出池；`ip_pool_status` 中的 CRMW 券由到期证券自动出池任务扫描；省略 `maturityOffsetDays` 默认 1（原 T-2），支持 0、正负整数；命中调出限制池则跳过 |
 | `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池（仅主体） | `0 10 23 * * ?` | 只同步主体，旗下债券由独立任务处理 |
 | `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池（仅主体） | `0 15 23 * * ?` | 只同步主体，旗下债券由独立任务处理 |
 | `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池（已排除ABS债）（仅债券） | `0 1/10 * * * ?` | 普通债与 CRMW 入池，支持同池及跨池；`{"poolIds":[15,16,17,23],"minDaysToMaturity":0}` |
@@ -244,10 +244,12 @@
 
 对应老 IP_RULE `AdjustRuleCrmwDueOutPool`：
 
-1. 扫 `ip_pool_status_crmw` 已生效组合，按凭证 `crmw_scode` 主数据到期日判断；扩展参数 `maturityOffsetDays` 的默认值、校验和截止日期计算同 7.0 节，两任务独立配置，例如 `{"poolIds":[18],"maturityOffsetDays":1}`，省略天数仍沿用早于昨天（T-2）的口径
-2. 扫描候选时按标的证券代码、凭证代码和凭证类型匹配调出限制池。命中则跳过，仅软删成功才写日志。
-3. 不走审批。  
-4. 最近执行结果展示实际出池总数，并按 CRMW 目标池列出出池数量。
+1. 扫描 `ip_pool_status_crmw` 中已生效且未删除的凭证与标的组合，包含 ABS 债券作为标的的组合。`ip_pool_status` 中的 CRMW 券由 `security_expired_auto_out` 扫描。
+2. 按凭证 `crmw_scode` 关联 `rrs_securityinfo` 读取到期日。凭证达到出池阈值时调出整条组合。`maturityOffsetDays` 的默认值、校验和截止日期计算同 7.0 节，两任务独立配置，例如 `{"poolIds":[18],"maturityOffsetDays":1}`，省略天数仍沿用早于昨天（T-2）的口径。
+3. 凭证未达到出池阈值时，即使标的证券已到期，本任务也不会调出该组合。
+4. 扫描候选时按标的证券代码、凭证代码和凭证类型匹配调出限制池。命中则跳过，仅软删成功才写日志。
+5. 不走审批。
+6. 最近执行结果展示实际出池总数，并按 CRMW 目标池列出出池数量。
 
 ### Excel 导入的在池保护
 
