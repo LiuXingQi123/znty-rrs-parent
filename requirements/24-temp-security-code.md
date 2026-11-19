@@ -70,6 +70,8 @@
 
 `validateAddReq` → 查 `queryCompanyByCode(tempCompanyCode)` 校验主体存在（`wind_compintroduction`）→ `resolveCompanyName`（fullName 优先，其次 shortName，否则抛「发行主体缺少名称」）→ 构造 `TempSecurityCodeBo`，`secId = "TEMP_" + tempSecurityCode`，`status = TempStatus.TEMPORARY.getCode()`（`temporary`）、`oprtSource = manual`、`isDeleted=0`、`crteTime`/`updtTime=now` → `addTempSecurityCode` INSERT（回填 id）→ 同步写入 `rrs_securityinfo`（`wind_code=tempSecurityCode`，`sec_id=secId`，名称、类型、发行主体全称+`issuer_code`、`firstissue_date`/`maturity_date` 将表单日期格式化为 `yyyyMMdd`，起息/止息/`date_exists` 未知不写，`security_status='L'` 上市中，`security_source='temporary'`；市场同时写入临时代码表 `temp_security_market` 和证券表 `market`，两处均取表单选择的市场编码）→ `queryTempSecurityCodeDetail` 返回详情。正式证券字段仍为 NULL。**必须写明确的 `security_status`**：临时代码占位写 `'L'`（上市中）；外部/特殊来源若无状态写 `'U'`（未知，`SecurityStatus.UNKNOWN`）。证券池调整列表条件是 `security_status != 'D'`，若留 `NULL`/空串，SQL 三值逻辑会把行滤掉。
 
+新增临时代码时，「资产支持证券」（`abs`）的占位主档写入 `abs_flag=1`，可在「禁投池调整 → ABS」中查询。其他类型（含「资产证券化」`abs_all`）的占位标识为空。
+
 ### 3.2 更新为正式证券 `editTempSecurityCodeToUpdated`（`@Transactional`）
 
 对齐老系统 `TempSecurityInfoTableAction#refreshTempSecurity`，**流程中 vs 已在池分叉处理**（逻辑不同）：

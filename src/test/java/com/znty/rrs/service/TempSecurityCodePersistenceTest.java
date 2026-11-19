@@ -6,10 +6,12 @@ import com.github.pagehelper.PageInterceptor;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeDto;
 import com.znty.rrs.entity.tempsecuritycode.TempSecurityCodeReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
+import com.znty.rrs.entity.securitypooladjust.SecurityInfoDto;
 import com.znty.rrs.entity.crmwpooladjust.CrmwPoolAdjustReq;
 import com.znty.rrs.mapper.TempSecurityCodeMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
+import com.znty.rrs.mapper.ForbiddenAbsPoolAdjustMapper;
 import com.znty.rrs.mapper.WindCodeSyncMapper;
 import com.znty.rrs.entity.schedule.WindCodeChangeDto;
 import com.znty.rrs.common.enums.WindCodeChangeResult;
@@ -78,6 +80,9 @@ public class TempSecurityCodePersistenceTest {
     /** 真实 CRMW 池状态及快照 Mapper。 */
     private CrmwPoolAdjustMapper crmwMapper;
 
+    /** ABS 禁投池的实际选券查询 */
+    private ForbiddenAbsPoolAdjustMapper forbiddenAbsMapper;
+
     /** 真实 Wind 事件与主档 Mapper。 */
     private WindCodeSyncMapper windMapper;
 
@@ -113,13 +118,15 @@ public class TempSecurityCodePersistenceTest {
         config.setMapUnderscoreToCamelCase(true);
         config.addInterceptor(new PageInterceptor());
         config.setEnvironment(new Environment("test", new SpringManagedTransactionFactory(), source));
-        for (String name : Arrays.asList("TempSecurityCodeMapper", "SecurityPoolAdjustMapper", "CrmwPoolAdjustMapper", "WindCodeSyncMapper")) {
+        for (String name : Arrays.asList("TempSecurityCodeMapper", "SecurityPoolAdjustMapper", "CrmwPoolAdjustMapper",
+                "WindCodeSyncMapper", "ForbiddenAbsPoolAdjustMapper")) {
             try (InputStream xml = getClass().getResourceAsStream("/mapper/" + name + ".xml")) {
                 new XMLMapperBuilder(xml, config, name + ".xml", config.getSqlFragments()).parse();
             }
         }
         SqlSessionTemplate session = new SqlSessionTemplate(new SqlSessionFactoryBuilder().build(config));
         mapper = session.getMapper(TempSecurityCodeMapper.class);
+        forbiddenAbsMapper = session.getMapper(ForbiddenAbsPoolAdjustMapper.class);
         markets = mock(SecurityMarketService.class);
         when(markets.queryMarketCode("FORMAL.IB")).thenReturn("NIB");
         adjustMapper = session.getMapper(SecurityPoolAdjustMapper.class);
@@ -140,6 +147,27 @@ public class TempSecurityCodePersistenceTest {
         proxy.setProxyTargetClass(true);
         proxy.addAdvice(new TransactionInterceptor(manager, new AnnotationTransactionAttributeSource()));
         service = (TempSecurityCodeService) proxy.getProxy();
+    }
+
+    /** 新增临时资产支持证券后，禁投池可按 ABS 主档标识选券 */
+    @Test
+    public void addedTemporaryAbsShouldBeSearchableInForbiddenAbsPool() throws Exception {
+        jdbc.update("INSERT INTO dict_security_type VALUES ('abs','资产支持证券','bond',0)"
+                + ", ('abs_all','资产证券化','bond',0)");
+        TempSecurityCodeReq abs = addReq("TEMPABS001.IB");
+        abs.setTempSecurityType("abs");
+        service.addTempSecurityCode(abs);
+        TempSecurityCodeReq absAll = addReq("TEMPABS002.IB");
+        absAll.setTempSecurityType("abs_all");
+        service.addTempSecurityCode(absAll);
+
+        assertThat(jdbc.queryForObject("SELECT abs_flag FROM rrs_securityinfo WHERE wind_code = ?",
+                Integer.class, "TEMPABS001.IB")).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT abs_flag FROM rrs_securityinfo WHERE wind_code = ?",
+                Integer.class, "TEMPABS002.IB")).isNull();
+        assertThat(forbiddenAbsMapper.querySecurityPage("TEMPABS", null, null, null))
+                .extracting(SecurityInfoDto::getWindCode)
+                .containsExactly("TEMPABS001.IB");
     }
 
     /** 验证发行主体直接限制 100 条，并可组合使用三个弹窗条件 */
