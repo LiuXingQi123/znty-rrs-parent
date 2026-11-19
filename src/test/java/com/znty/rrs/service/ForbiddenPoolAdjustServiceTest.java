@@ -132,9 +132,9 @@ public class ForbiddenPoolAdjustServiceTest {
         verify(mapper, never()).deletePoolStatusSoft("C001", 16L);
     }
 
-    /** 主体本次调入重点观察名单时，Excel 联动项显示命中的准入条件 */
+    /** 主体 Excel 调入重点观察名单时，按规则联动黑名单质押库，通过的联动项无额外提示 */
     @Test
-    public void excelInboundShouldExplainBlacklistLinkFromKeyWatch() {
+    public void excelInboundShouldLinkBlacklistFromKeyWatchWithoutTip() {
         ForbiddenPoolAdjustService service = buildService(mock(ForbiddenPoolAdjustMapper.class));
         ReflectionTestUtils.setField(service, "pledgeBlacklistRuleService", new PledgeBlacklistRuleService());
         BatchCompanyAdjustCheckData batch = new BatchCompanyAdjustCheckData();
@@ -160,8 +160,7 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(items).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
         assertThat(items.get(1).getItemTag()).isEqualTo("linkage");
         assertThat(items.get(1).getFailReasons()).isEmpty();
-        assertThat(items.get(1).getWarnings())
-                .containsExactly("命中黑名单质押库准入条件（本次调入重点观察名单23），联动调入");
+        assertThat(items.get(1).getWarnings()).isNullOrEmpty();
         assertThat(service.checkCompanyAdjust(request, context).getItems().get(1).getWarnings()).isNullOrEmpty();
     }
 

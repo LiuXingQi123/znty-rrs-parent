@@ -1123,11 +1123,9 @@ public class SecurityPoolExcelImportService {
      *
      * 执行顺序：
      * 1. 读取本次提交的批次，拒绝重复提交及未校验、主体修改后尚未重新校验的批次。
-     * 2. 从请求或批次快照筛选可提交项，确定经办人，并用请求中的非空原因和意见更新本次提交参数。
-     * 3. 拆分清空出库项与导入项，将无来源明细 ID 且来源代码匹配清空主项的展开项一并归入清空出库。
-     * 4. 先提交清空出库，再按导入类型提交主体或证券；证券按来源明细分组使用各行保存的主体选择。
-     * 5. 根据已提交的 Excel 手工主项回写对应明细保存状态，更新批次快照和批次提交结果。
-     * 6. 回查批次任务，附加本次汇总的调库日志 ID 和批次号列表后返回；业务异常由事务整体回滚。
+     * 2. 依据校验快照核对逐条勾选的调整项，确定经办人、原因和意见
+     * 3. 复核在途和在池状态，按导入类型提交证券或主体，证券使用各来源行保存的主体选择
+     * 4. 回写实际提交项对应的来源明细，更新批次状态并返回调库日志 ID 和批次号
      *
      * @param req 携带批次号、经办人、原因意见及可提交校验项的提交请求
      * @return 提交后的批次任务及调库记录信息
@@ -1147,9 +1145,6 @@ public class SecurityPoolExcelImportService {
         }
         // 筛选可提交的校验结果
         List<SecurityPoolExcelImportCheckItemDto> checkItems = filterSubmittableCheckItems(req, batch);
-        if (checkItems.isEmpty()) {
-            throw new BizException("没有可提交的校验结果，请先校验");
-        }
         String opterId = req.getCurrentUserId() != null && !req.getCurrentUserId().trim().isEmpty()
                 ? req.getCurrentUserId().trim() : batch.getOpterId();
         String opterName = req.getCurrentUserName() != null && !req.getCurrentUserName().trim().isEmpty()
@@ -1181,7 +1176,7 @@ public class SecurityPoolExcelImportService {
             logIds.addAll(submitSecurityImport(checkItems, batch, opterId, opterName, batchNos));
         }
 
-        // 批量回写实际提交的 Excel 手工主项
+        // 批量回写实际提交项对应的 Excel 来源明细
         Date now = new Date();
         Set<Long> submittedSourceIds = new LinkedHashSet<>();
         Map<List<Object>, SecurityPoolExcelImportCheckItemDto> submittedFlows = new HashMap<>();
@@ -1190,10 +1185,7 @@ public class SecurityPoolExcelImportService {
                 // 记录本次所选流程，供提交响应回显
                 submittedFlows.put(flowSelectionRowKey(ci), ci);
             }
-            // 仅回写 Excel 手工主项对应的导入明细
-            if (isManualTag(ci.getItemTag()) && ci.getSourceItemId() != null) {
-                submittedSourceIds.add(ci.getSourceItemId());
-            }
+            submittedSourceIds.add(ci.getSourceItemId());
         }
         if (!submittedSourceIds.isEmpty()) {
             securityPoolExcelImportMapper.editItemSaveResultByIds(
@@ -1344,7 +1336,7 @@ public class SecurityPoolExcelImportService {
                 si.setTargetPoolName(ci.getTargetPoolName());
                 si.setPoolType(ci.getPoolType());
                 si.setAdjustMode(ci.getAdjustMode());
-                si.setItemTag(isBlank(ci.getItemTag()) ? ItemType.MANUAL.getCode() : ci.getItemTag());
+                si.setItemTag(ci == primary || isBlank(ci.getItemTag()) ? ItemType.MANUAL.getCode() : ci.getItemTag());
                 si.setAdjustGroupKey(ci.getAdjustGroupKey());
                 si.setFlowId(ci.getFlowId());
                 si.setFlowKey(ci.getFlowKey());
@@ -1380,6 +1372,8 @@ public class SecurityPoolExcelImportService {
      */
     private List<Long> submitCompanyImport(List<SecurityPoolExcelImportCheckItemDto> checkItems,
                                            SysImpTmpBo batch, String opterId, String opterName) {
+        // 只选配套项的来源行也需要由实际勾选项发起流程
+        Map<Long, SecurityPoolExcelImportCheckItemDto> primaryBySource = resolveSelectedPrimaryItems(checkItems);
         Map<String, List<SecurityPoolExcelImportCheckItemDto>> groupMap = new LinkedHashMap<>();
         for (SecurityPoolExcelImportCheckItemDto ci : checkItems) {
             String groupKey = !isBlank(ci.getSourceSecurityCode())
@@ -1425,7 +1419,8 @@ public class SecurityPoolExcelImportService {
                 si.setTargetPoolName(ci.getTargetPoolName());
                 si.setPoolType(ci.getPoolType());
                 si.setAdjustMode(ci.getAdjustMode());
-                si.setItemTag(isBlank(ci.getItemTag()) ? ItemType.MANUAL.getCode() : ci.getItemTag());
+                si.setItemTag(ci == primaryBySource.get(ci.getSourceItemId()) || isBlank(ci.getItemTag())
+                        ? ItemType.MANUAL.getCode() : ci.getItemTag());
                 si.setAdjustGroupKey(ci.getAdjustGroupKey());
                 si.setFlowId(ci.getFlowId());
                 si.setFlowKey(ci.getFlowKey());
@@ -1992,9 +1987,6 @@ public class SecurityPoolExcelImportService {
                 Set<String> tips = new LinkedHashSet<>(dto.getFailReasons());
                 tips.addAll(warnings);
                 dto.setFailReasons(new ArrayList<>(tips));
-                if (ItemType.LINKAGE.getCode().equals(dto.getItemTag())) {
-                    dto.setAdjustNote(String.join("；", warnings));
-                }
             }
         }
 
@@ -2365,41 +2357,48 @@ public class SecurityPoolExcelImportService {
         return dto;
     }
 
-    /** 从请求或批次快照中筛选可提交的校验结果项 */
+    /**
+     * 按校验快照核对勾选项并读取其审批流程选择
+     *
+     * 执行顺序：
+     * 1. 按来源行、对象、池、方向和类型核对逐条勾选的调整项
+     * 2. 按快照顺序保留已勾选的可调整项，采用已选手工项的流程
+     * 3. 仅勾选配套项的来源行由首个已选项使用来源主项的默认流程
+     *
+     * @param req 携带勾选项的提交请求
+     * @param batch 已保存校验结果的导入批次
+     * @return 本次实际提交的调整项
+     */
     private List<SecurityPoolExcelImportCheckItemDto> filterSubmittableCheckItems(
             SecurityPoolExcelImportReq req, SysImpTmpBo batch) {
         List<SecurityPoolExcelImportCheckItemDto> snapshot = parseCheckItems(batch.getResultJson());
         if (snapshot == null) {
             throw new BizException("校验结果缺失，请重新校验");
         }
-        List<SecurityPoolExcelImportCheckItemDto> saved = snapshot.stream()
-                .filter(item -> item.isCanAdjust() && item.getSourceItemId() != null
-                        && !isBlank(item.getSecurityCode()) && item.getTargetPoolId() != null)
-                .collect(Collectors.toList());
-        if (req.getCheckItems() == null || req.getCheckItems().isEmpty()) {
-            return saved;
+        List<SecurityPoolExcelImportCheckItemDto> requested = req.getCheckItems();
+        if (requested == null || requested.isEmpty()) {
+            throw new BizException("请先勾选要提交的调库项");
         }
         Map<List<Object>, SecurityPoolExcelImportCheckItemDto> submitted = new HashMap<>();
-        Set<List<Object>> validKeys = saved.stream().map(this::flowSelectionRowKey).collect(Collectors.toSet());
-        Set<Long> selectedRows = new HashSet<>();
-        for (SecurityPoolExcelImportCheckItemDto item : req.getCheckItems()) {
-            if (item == null || !item.isCanAdjust()) {
-                continue;
-            }
-            List<Object> key = flowSelectionRowKey(item);
-            if (!validKeys.contains(key) || submitted.putIfAbsent(key, item) != null) {
+        for (SecurityPoolExcelImportCheckItemDto item : requested) {
+            if (item == null || !item.isCanAdjust() || submitted.putIfAbsent(flowSelectionRowKey(item), item) != null) {
                 throw new BizException("提交项与来源导入明细不一致或未通过校验，请重新校验");
             }
-            selectedRows.add(item.getSourceItemId());
         }
         List<SecurityPoolExcelImportCheckItemDto> result = new ArrayList<>();
-        for (SecurityPoolExcelImportCheckItemDto item : saved) {
-            if (!selectedRows.contains(item.getSourceItemId())) {
+        Map<Long, SecurityPoolExcelImportCheckItemDto> savedManualBySource = new HashMap<>();
+        for (SecurityPoolExcelImportCheckItemDto item : snapshot) {
+            if (!item.isCanAdjust() || item.getSourceItemId() == null
+                    || isBlank(item.getSecurityCode()) || item.getTargetPoolId() == null) {
                 continue;
             }
-            SecurityPoolExcelImportCheckItemDto selection = submitted.get(flowSelectionRowKey(item));
+            if (isManualTag(item.getItemTag())) {
+                savedManualBySource.put(item.getSourceItemId(), item);
+            }
+            // 同一复选框只匹配服务端快照里的对应明细
+            SecurityPoolExcelImportCheckItemDto selection = submitted.remove(flowSelectionRowKey(item));
             if (selection == null) {
-                throw new BizException("提交项缺少同组调整明细，请重新校验");
+                continue;
             }
             if (isManualTag(item.getItemTag())) {
                 item.setFlowId(selection.getFlowId());
@@ -2409,7 +2408,45 @@ public class SecurityPoolExcelImportService {
             }
             result.add(item);
         }
+        if (!submitted.isEmpty()) {
+            throw new BizException("提交项与来源导入明细不一致或未通过校验，请重新校验");
+        }
+        // 没选原主项时，审批和调库日志都挂在一个已选配套项上
+        for (SecurityPoolExcelImportCheckItemDto primary : resolveSelectedPrimaryItems(result).values()) {
+            if (isManualTag(primary.getItemTag())) {
+                continue;
+            }
+            SecurityPoolExcelImportCheckItemDto original = savedManualBySource.get(primary.getSourceItemId());
+            if (original == null || isBlank(original.getSelectedFlowKey())) {
+                throw new BizException("配套项的来源主项没有可用的默认审批流程，请重新校验");
+            }
+            primary.setFlowId(original.getFlowId());
+            primary.setFlowKey(original.getFlowKey());
+            primary.setFlowType(original.getFlowType());
+        }
         return result;
+    }
+
+    /**
+     * 为每条已选来源行确定实际发起流程的项
+     *
+     * 执行顺序：
+     * 1. 优先使用已勾选的手工项，其次使用该来源行首个已勾选项
+     *
+     * @param items 已勾选的校验项
+     * @return Excel 来源行 ID 对应的流程主项
+     */
+    private Map<Long, SecurityPoolExcelImportCheckItemDto> resolveSelectedPrimaryItems(
+            List<SecurityPoolExcelImportCheckItemDto> items) {
+        Map<Long, SecurityPoolExcelImportCheckItemDto> primaryBySource = new LinkedHashMap<>();
+        for (SecurityPoolExcelImportCheckItemDto item : items) {
+            if (isManualTag(item.getItemTag())) {
+                primaryBySource.put(item.getSourceItemId(), item);
+            } else {
+                primaryBySource.putIfAbsent(item.getSourceItemId(), item);
+            }
+        }
+        return primaryBySource;
     }
 
     /**

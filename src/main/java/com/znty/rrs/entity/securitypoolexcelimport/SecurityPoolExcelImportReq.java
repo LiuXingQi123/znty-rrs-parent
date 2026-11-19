@@ -27,7 +27,7 @@ public class SecurityPoolExcelImportReq extends PageRequest {
     private Boolean allowLinkMutex;
     /** 调整建议（提交弹窗） */
     private String adjustAdvice;
-    /** 前端选定的可提交校验结果项（含流程选择） */
+    /** 提交时必填，包含逐条勾选的调整项及所选手工项的流程选择 */
     private List<SecurityPoolExcelImportCheckItemDto> checkItems;
     /** 调整原因 */
     private String adjustReason;

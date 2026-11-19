@@ -312,20 +312,13 @@ public class PledgeBlacklistRuleService {
          * @return 已命中条件的中文描述
          */
         public String getMatchDescription() {
-            return getMatchDescription(Collections.emptySet());
-        }
-
-        /** 根据本次预计调入的池区分本次调入与当前在池 */
-        String getMatchDescription(Set<Long> inboundPoolIds) {
             StringBuilder result = new StringBuilder();
             // 追加债券禁止库条件说明
-            append(result, inForbiddenPool, inboundPoolIds.contains(FORBIDDEN_POOL_ID)
-                    ? "本次调入债券禁止库15" : "当前在债券禁止库15");
+            append(result, inForbiddenPool, "当前在债券禁止库15");
             // 追加低外评条件说明
             append(result, lowOuterRating, "近一年认可外评孰低为AA-及以下");
             // 追加重点观察名单条件说明
-            append(result, inKeyWatchPool, inboundPoolIds.contains(KEY_WATCH_POOL_ID)
-                    ? "本次调入重点观察名单23" : "当前在重点观察名单23");
+            append(result, inKeyWatchPool, "当前在重点观察名单23");
             return result.length() == 0 ? "无" : result.toString();
         }
 

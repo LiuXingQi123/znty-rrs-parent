@@ -1859,7 +1859,7 @@ public class ForbiddenPoolAdjustService {
         // ══ 第三阶段：调入校验 ══
         List<AdjustCheckDto.CheckResultItem> resultItems = new ArrayList<>(
                 // 执行调入校验并补充联动、互斥调库项
-                executeInAdjustCheck(req, shared, coveredKeys, excelWarningsOnly));
+                executeInAdjustCheck(req, shared, coveredKeys));
 
         // ══ 第四阶段：调出校验 ══
         resultItems.addAll(executeOutAdjustCheck(req, shared, coveredKeys, excelWarningsOnly, allowLinkMutex));
@@ -2031,12 +2031,13 @@ public class ForbiddenPoolAdjustService {
     }
 
     /** 根据本行预计调库和本次取得的外评判定黑名单质押库状态 */
-    private PledgeBlacklistRuleService.Decision evaluateBlacklist(String code, AdjustSharedData shared) {
+    private boolean shouldBeInBlacklist(String code, AdjustSharedData shared) {
         BatchCompanyAdjustCheckData batch = shared.getBatchCompanyData();
-        return batch == null
+        PledgeBlacklistRuleService.Decision decision = batch == null
                 ? pledgeBlacklistRuleService.evaluate(code, shared.getRequestInPoolIds(), shared.getRequestOutPoolIds())
                 : pledgeBlacklistRuleService.evaluateCompanyBatch(batch, code,
                         shared.getRequestInPoolIds(), shared.getRequestOutPoolIds());
+        return decision.shouldBeInBlacklist();
     }
 
     /** 判断有效在池记录关联的未删除投资池是否包含指定类型 */
@@ -2079,11 +2080,10 @@ public class ForbiddenPoolAdjustService {
      * @param req         调库校验请求
      * @param shared      本次校验的共享数据
      * @param coveredKeys 已覆盖的"池ID_方向"集合，用于自动项去重
-     * @param excelImport 是否为 Excel 主体导入
      * @return 调入方向的全部校验结果（手动项 + 自动项）
      */
     private List<AdjustCheckDto.CheckResultItem> executeInAdjustCheck(
-            AdjustCheckReq req, AdjustSharedData shared, Set<String> coveredKeys, boolean excelImport) {
+            AdjustCheckReq req, AdjustSharedData shared, Set<String> coveredKeys) {
 
         List<AdjustCheckDto.CheckResultItem> results = new ArrayList<>();
 
@@ -2122,10 +2122,9 @@ public class ForbiddenPoolAdjustService {
             List<Long> inLinkage = relations.get(RelationType.IN_LINKED.getCode());
             if (inLinkage != null) {
                 for (Long linkedId : inLinkage) {
-                    // 复用本行三条件判定生成联动说明
-                    PledgeBlacklistRuleService.Decision blacklist = PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
-                            ? evaluateBlacklist(req.getSecurityCode(), shared) : null;
-                    if (blacklist != null && (!blacklist.shouldBeInBlacklist()
+                    // 黑名单质押库按本行预计调库后的条件判定，已在该池的主体无需重复联动
+                    if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
+                            && (!shouldBeInBlacklist(req.getSecurityCode(), shared)
                             || shared.getCurrentPoolIds().contains(linkedId))) {
                         continue;
                     }
@@ -2137,10 +2136,6 @@ public class ForbiddenPoolAdjustService {
                                         adjustGroupKey, shared, false);
                         // 关联手工项失败时阻断自动联动项
                         inheritManualItemFailure(autoItem, resultItem);
-                        if (excelImport && blacklist != null) {
-                            autoItem.setWarnings(Collections.singletonList("命中黑名单质押库准入条件（"
-                                    + blacklist.getMatchDescription(shared.getRequestInPoolIds()) + "），联动调入"));
-                        }
                         groupLinkedItems.add(autoItem);
                         results.add(autoItem);
                     }
@@ -2243,7 +2238,7 @@ public class ForbiddenPoolAdjustService {
                 for (Long linkedId : outLinkage) {
                     // 普通调出仍保留命中其他黑名单条件的主体，Excel 调出按联动配置生成
                     if (!excelOutbound && PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
-                            && evaluateBlacklist(req.getSecurityCode(), shared).shouldBeInBlacklist()) {
+                            && shouldBeInBlacklist(req.getSecurityCode(), shared)) {
                         continue;
                     }
                     if (PledgeBlacklistRuleService.BLACKLIST_POOL_ID.equals(linkedId)
