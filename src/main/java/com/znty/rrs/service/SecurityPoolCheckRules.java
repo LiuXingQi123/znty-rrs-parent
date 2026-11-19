@@ -1429,7 +1429,7 @@ class SecurityPoolCheckRules {
      *   1. 当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内。
      *   2. 同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库。
      *   3. 同发行人债券近180天实际入库的已通过调入业务中有信评附件。
-     *   4. 满足永续债、次级债和标准信用债各自的附加要求。
+     *   4. 按永续、次级、标准信用债的顺序匹配一类附加要求。
      *
      * 唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响。
      */
@@ -1502,7 +1502,7 @@ class SecurityPoolCheckRules {
             unmatchReasons.add("同发行人180天内已入库的调入业务没有有效信评附件");
         }
 
-        // 4. 债券类型要求：分别检查永续债、次级债和标准信用债，多个标志同时存在时全部检查
+        // 4. 债券类型要求：按永续、次级、标准信用债的顺序匹配一类
         int failureCount = unmatchReasons.size();
         // 增加对应类型未满足的原因，未增加失败原因时记录本项命中
         checkSimpleInboundSpecialConditions(shared, standardBestSort,
@@ -1589,10 +1589,8 @@ class SecurityPoolCheckRules {
             if (!levelMatched) {
                 failures.add("永续债内评1档须按标准入库等级下调一级，其余须至少下调一级");
             }
-        }
-
-        // 4.2 次级债：先检查目标档位，再检查内评2-档的五年期限上限
-        if (CreditBondSpecialInboundRule.isSubordinated(security)) {
+        } else if (CreditBondSpecialInboundRule.isSubordinated(security)) {
+            // 4.2 次级债：先检查目标档位，再检查内评2-档的五年期限上限
             boolean gradeTwoBand = "2+".equals(issuerGrade) || "2".equals(issuerGrade) || "2-".equals(issuerGrade);
             boolean levelMatched;
             if ("1".equals(issuerGrade)) {
@@ -1616,13 +1614,10 @@ class SecurityPoolCheckRules {
                     || remainYears.compareTo(BigDecimal.valueOf(5)) > 0)) {
                 failures.add("内评2-档的次级债期限须在5年及以内");
             }
-        }
-
-        // 4.3 标准信用债：独立按std_credit_flag判定，内评3档才增加一年期限限制
-        // 等于1年可通过，空值或负数不通过；其他内评不增加此期限限制
-        if (isStandardCreditBond(security) && "3".equals(issuerGrade)
+        } else if (isStandardCreditBond(security) && "3".equals(issuerGrade)
                 && (remainYears == null || remainYears.signum() < 0
                 || remainYears.compareTo(BigDecimal.ONE) > 0)) {
+            // 4.3 标准信用债：内评3档期限须在1年及以内，空值或负数不通过
             failures.add("内评3档的标准信用债期限须在1年及以内");
         }
     }

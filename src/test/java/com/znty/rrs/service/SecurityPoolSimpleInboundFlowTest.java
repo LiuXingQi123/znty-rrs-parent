@@ -186,6 +186,31 @@ public class SecurityPoolSimpleInboundFlowTest {
         assertThat(fixture.matches(3)).isTrue();
     }
 
+    /** 同时是永续债和次级债时，主体一档按永续规则降至唯一三级 */
+    @Test
+    public void perpetualSubordinatedGradeOneShouldMatchPerpetualDowngrade() {
+        Fixture fixture = createFixture("1", "2年", 2);
+        fixture.security.setYxFlag(1);
+        fixture.security.setCjFlag(1);
+        fixture.security.setStdCreditFlag(0);
+
+        assertThat(fixture.matches(3)).as("%s", fixture.unmatchReasons).isTrue();
+    }
+
+    /** 双属性债券按永续规则允许下调多级，跳过次级二减档的五年上限 */
+    @Test
+    public void perpetualSubordinatedGradeTwoMinusShouldUsePerpetualConditions() {
+        Fixture fixture = createFixture("2-", "6年", 1);
+        fixture.security.setYxFlag(1);
+        fixture.security.setCjFlag(1);
+        fixture.security.setStdCreditFlag(0);
+
+        List<String> failures = new ArrayList<>();
+        ReflectionTestUtils.invokeMethod(fixture.service, "checkSimpleInboundSpecialConditions",
+                fixture.shared, 1, 3, failures);
+        assertThat(failures).isEmpty();
+    }
+
     /** 永续债不能直接选择尚未降级的标准基准池。 */
     @Test
     public void perpetualGradeOneShouldRejectUndowngradedTarget() {
@@ -313,6 +338,32 @@ public class SecurityPoolSimpleInboundFlowTest {
         assertThat(fixture.isStandard()).isTrue();
         fixture.security.setStdClauseFlag(0);
         assertThat(fixture.isStandard()).isTrue();
+    }
+
+    /** 永续债误标为标准信用债时，仍按永续规则校验 */
+    @Test
+    public void perpetualGradeThreeShouldSkipStandardTermLimit() {
+        Fixture fixture = createFixture("3", "2年", 2);
+        fixture.security.setYxFlag(1);
+        fixture.security.setStdCreditFlag(1);
+
+        List<String> failures = new ArrayList<>();
+        ReflectionTestUtils.invokeMethod(fixture.service, "checkSimpleInboundSpecialConditions",
+                fixture.shared, 2, 3, failures);
+        assertThat(failures).isEmpty();
+    }
+
+    /** 次级债误标为标准信用债时，仍按次级规则校验 */
+    @Test
+    public void subordinatedGradeThreeShouldSkipStandardTermLimit() {
+        Fixture fixture = createFixture("3", "2年", 2);
+        fixture.security.setCjFlag(1);
+        fixture.security.setStdCreditFlag(1);
+
+        List<String> failures = new ArrayList<>();
+        ReflectionTestUtils.invokeMethod(fixture.service, "checkSimpleInboundSpecialConditions",
+                fixture.shared, 2, 3, failures);
+        assertThat(failures).isEmpty();
     }
 
     /** 标准汇总标识为零或为空时不推断为标准券。 */
