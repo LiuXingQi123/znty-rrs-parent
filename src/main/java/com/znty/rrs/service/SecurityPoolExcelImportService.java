@@ -1167,7 +1167,7 @@ public class SecurityPoolExcelImportService {
         List<Long> logIds = new ArrayList<>();
         List<String> batchNos = new ArrayList<>();
         // 在写入任何流程前一次复核本批在途与有效在池状态
-        validateImportConflicts(checkItems);
+        validateImportConflicts(checkItems, importType);
         if (IMPORT_TYPE_COMPANY.equals(importType)) {
             // 主体分支：禁投池同构提交
             logIds.addAll(submitCompanyImport(checkItems, batch, opterId, opterName));
@@ -1441,7 +1441,7 @@ public class SecurityPoolExcelImportService {
     // ═══════════════════════════════════════════════════════════
 
     /** 在同一批写入之前复核所有实际对象的在途和重复调入 */
-    private void validateImportConflicts(List<SecurityPoolExcelImportCheckItemDto> items) {
+    private void validateImportConflicts(List<SecurityPoolExcelImportCheckItemDto> items, String importType) {
         List<String> codes = items.stream().map(SecurityPoolExcelImportCheckItemDto::getSecurityCode)
                 .distinct().collect(Collectors.toList());
         List<Long> targetPoolIds = items.stream().map(SecurityPoolExcelImportCheckItemDto::getTargetPoolId)
@@ -1465,13 +1465,15 @@ public class SecurityPoolExcelImportService {
             }
         }
         Map<String, Set<Long>> inbound = new HashMap<>();
+        String pendingProcessFailure = IMPORT_TYPE_COMPANY.equals(importType)
+                ? ForbiddenPoolAdjustService.COMPANY_PENDING_PROCESS_FAILURE : SecurityPoolCheckRules.PENDING_PROCESS_FAILURE;
         for (SecurityPoolExcelImportCheckItemDto item : items) {
             String code = item.getSecurityCode().toUpperCase(Locale.ROOT);
             Long poolId = item.getTargetPoolId();
             if (pendingGroups.getOrDefault(code, Collections.emptySet())
                     .contains(SecurityPoolCheckRules.resolveRootPoolId(poolId, pools))) {
                 throw new BizException(item.getSecurityCode() + " / " + item.getTargetPoolName()
-                        + "：" + SecurityPoolCheckRules.PENDING_PROCESS_FAILURE + "，请重新校验");
+                        + "：" + pendingProcessFailure + "，请重新校验");
             }
             if (AdjustMode.IN.getCode().equals(item.getAdjustMode())
                     && (activePools.getOrDefault(code, Collections.emptySet()).contains(poolId)

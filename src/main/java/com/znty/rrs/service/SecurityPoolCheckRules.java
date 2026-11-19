@@ -71,9 +71,9 @@ class SecurityPoolCheckRules {
     static final String ALREADY_IN_POOL_FAILURE = "证券已在目标投资池中";
 
     /** 判断 Excel 导入仍需拦截的业务校验结果 */
-    static boolean hasExcelBlockingFailure(AdjustCheckDto.CheckResultItem item) {
+    static boolean hasExcelBlockingFailure(AdjustCheckDto.CheckResultItem item, String pendingProcessFailure) {
         return item.getFailReasons() != null && item.getFailReasons().stream().anyMatch(reason ->
-                reason.startsWith(PENDING_PROCESS_FAILURE) || ALREADY_IN_POOL_FAILURE.equals(reason));
+                reason.startsWith(pendingProcessFailure) || ALREADY_IN_POOL_FAILURE.equals(reason));
     }
 
     /** 是否认可普通池状态中的 CRMW 作为快速入库来源 */
@@ -372,7 +372,7 @@ class SecurityPoolCheckRules {
                     && Objects.equals(item.getSecurityCode(), shared.getSecurityInfo().getWindCode());
             knownSecurity = knownSecurity || shared.getRelatedSecurityData().containsKey(item.getSecurityCode());
             if (!knownSecurity || !shared.getPoolMap().containsKey(item.getTargetPoolId())
-                    || hasExcelBlockingFailure(item)) {
+                    || hasExcelBlockingFailure(item, PENDING_PROCESS_FAILURE)) {
                 invalidGroups.add(item.getAdjustGroupKey());
             }
         }

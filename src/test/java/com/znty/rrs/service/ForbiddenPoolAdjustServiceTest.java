@@ -127,7 +127,7 @@ public class ForbiddenPoolAdjustServiceTest {
         AdjustCheckDto.CheckResultItem cleared = service.checkCompanyExcelAdjust(check, null, true).getItems().get(0);
         assertThat(cleared.isCanAdjust()).isFalse();
         assertThat(cleared.getFailReasons()).contains("目标投资池已锁定");
-        assertThat(cleared.getFailReasons()).anyMatch(reason -> reason.contains("流程"));
+        assertThat(cleared.getFailReasons()).contains("主体存在进行中的调库流程");
         assertThat(cleared.getFlowOptions()).isEmpty();
         verify(mapper, never()).deletePoolStatusSoft("C001", 16L);
     }
@@ -140,7 +140,8 @@ public class ForbiddenPoolAdjustServiceTest {
         BatchCompanyAdjustCheckData batch = new BatchCompanyAdjustCheckData();
         batch.categoryType = "company";
         batch.ratingAgenciesConfigured = true;
-        batch.states.put("C10003", new BatchCompanyAdjustCheckData.CompanyState());
+        BatchCompanyAdjustCheckData.CompanyState state = new BatchCompanyAdjustCheckData.CompanyState();
+        batch.states.put("C10003", state);
         batch.pools.put(23L, buildPool(23L, "重点观察名单", "restricted"));
         batch.pools.put(17L, buildPool(17L, "黑名单质押库", "blacklist"));
         batch.relations.put(23L, Collections.singletonMap("in_linked", Collections.singletonList(17L)));
@@ -162,6 +163,14 @@ public class ForbiddenPoolAdjustServiceTest {
         assertThat(items.get(1).getFailReasons()).isEmpty();
         assertThat(items.get(1).getWarnings()).isNullOrEmpty();
         assertThat(service.checkCompanyAdjust(request, context).getItems().get(1).getWarnings()).isNullOrEmpty();
+
+        state.pendingPoolIds.addAll(Arrays.asList(23L, 17L));
+        state.pendingNodeLabel = "研究员B复核";
+        String pending = "主体存在进行中的调库流程（当前节点：研究员B复核）";
+        List<AdjustCheckDto.CheckResultItem> blocked = service.checkCompanyExcelAdjust(request, context, true).getItems();
+        assertThat(blocked).hasSize(2).noneMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+        assertThat(blocked.get(0).getFailReasons()).contains(pending);
+        assertThat(blocked.get(1).getFailReasons()).containsExactly("“重点观察名单”校验未通过", pending);
     }
 
     /** 主体 Excel 调出按已配置的联动池生成 17 池调出项，不复核黑名单质押库三条件 */

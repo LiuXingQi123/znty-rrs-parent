@@ -138,6 +138,8 @@ public class ForbiddenPoolAdjustService {
     private static final String ADMIN_USER_ID = "1";
     /** 禁投池主体调库记录固定证券类型 */
     private static final String COMPANY_SECURITY_TYPE = CategoryType.COMPANY.getCode();
+    /** 主体存在在途调库流程的提示 */
+    static final String COMPANY_PENDING_PROCESS_FAILURE = "主体存在进行中的调库流程";
     /** 禁投池、观察池、黑名单质押库和重点观察名单 ID */
     private static final Set<Long> ALLOWED_MANUAL_POOL_IDS = new HashSet<>();
     static {
@@ -1900,7 +1902,7 @@ public class ForbiddenPoolAdjustService {
         Set<String> invalidGroups = new HashSet<>();
         for (AdjustCheckDto.CheckResultItem item : items) {
             if (!shared.getPoolMap().containsKey(item.getTargetPoolId())
-                    || SecurityPoolCheckRules.hasExcelBlockingFailure(item)) {
+                    || SecurityPoolCheckRules.hasExcelBlockingFailure(item, COMPANY_PENDING_PROCESS_FAILURE)) {
                 invalidGroups.add(item.getAdjustGroupKey());
             }
         }
@@ -2908,7 +2910,7 @@ public class ForbiddenPoolAdjustService {
                 List<Long> pendingPools = forbiddenPoolAdjustMapper.queryPendingManualTargetPoolIdList(
                         log.getSecurityCode(), log.getAdjustBatchNo());
                 if (resolvePoolGroupIds(pendingPools, poolMap).contains(rootPoolId)) {
-                    throwFinalRecheckFailure(log, SecurityPoolCheckRules.PENDING_PROCESS_FAILURE);
+                    throwFinalRecheckFailure(log, COMPANY_PENDING_PROCESS_FAILURE);
                 }
                 if (AdjustMode.IN.getCode().equals(log.getAdjustMode())
                         && forbiddenPoolAdjustMapper.querySecurityCurrentPoolIdList(log.getSecurityCode())
@@ -3363,18 +3365,20 @@ public class ForbiddenPoolAdjustService {
     }
 
     /**
-     * 规则：证券是否存在进行中的调库流程
+     * 规则：调整对象是否存在进行中的调库流程
      *
      * <p>存在 pending 流程步骤的调库记录视为进行中，
      * 需等待该流程终结后方可再次发起调库，避免并发操作导致入池状态混乱。
      */
     private String preCheckPendingProcess(AdjustCheckContext ctx) {
         if (ctx.isHasPendingProcess()) {
+            String reason = COMPANY_SECURITY_TYPE.equals(ctx.getSecurityInfo().getSecurityType())
+                    ? COMPANY_PENDING_PROCESS_FAILURE : SecurityPoolCheckRules.PENDING_PROCESS_FAILURE;
             String nodeLabel = ctx.getPendingProcessNodeLabel();
             if (nodeLabel != null && !nodeLabel.trim().isEmpty()) {
-                return SecurityPoolCheckRules.PENDING_PROCESS_FAILURE + "（当前节点：" + nodeLabel.trim() + "）";
+                return reason + "（当前节点：" + nodeLabel.trim() + "）";
             }
-            return SecurityPoolCheckRules.PENDING_PROCESS_FAILURE;
+            return reason;
         }
         return null;
     }
@@ -3852,8 +3856,7 @@ public class ForbiddenPoolAdjustService {
             return;
         }
         List<String> failures = new ArrayList<>();
-        failures.add("关联手工" + manualItem.getAdjustMode() + "项“" + manualItem.getPoolName()
-                + "”校验未通过");
+        failures.add("“" + manualItem.getPoolName() + "”校验未通过");
         failures.addAll(autoItem.getFailReasons());
         autoItem.setCanAdjust(false);
         autoItem.setFailReasons(failures);
