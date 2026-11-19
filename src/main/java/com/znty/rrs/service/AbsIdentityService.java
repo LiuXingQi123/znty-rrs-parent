@@ -481,6 +481,7 @@ public class AbsIdentityService {
      * 执行顺序：
      * 1. 检查所有在库和在途身份是否一致
      * 2. 主档已保存该身份时直接复用，否则读取尚未通过的申请快照
+     * 3. 未转正 ABS 主档只有登记主体时，按主体代码补充评级
      * @param security 当前主档详情
      * @return 当前占用主体，没有占用时为空
      */
@@ -502,6 +503,16 @@ public class AbsIdentityService {
         SecurityInfoBo identity = new SecurityInfoBo();
         if (code.equals(security.getIssuerCode())) {
             BeanUtils.copyProperties(security, identity);
+            if ("temporary".equals(security.getSecuritySource())
+                    && !StringUtils.hasText(security.getInnerIssuerRating())
+                    && !StringUtils.hasText(security.getRatingBondissuer())) {
+                SelfSelectedRightsHolderDto company = securityPoolAdjustMapper.querySelfSelectedRightsHolderByCode(code);
+                if (company != null) {
+                    identity.setInnerIssuerRating(company.getInnerRating());
+                    identity.setRatingBondissuer(company.getRatingBondissuer());
+                    identity.setRatingBondissuerAgency(company.getRatingBondissuerAgency());
+                }
+            }
         } else {
             identity = absIdentityMapper.queryPendingIdentityDetail(security.getWindCode());
             if (identity == null || !code.equals(identity.getIssuerCode())) {

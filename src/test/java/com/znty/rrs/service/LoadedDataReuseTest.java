@@ -6,6 +6,7 @@ import com.znty.rrs.entity.securitypooladjust.IssuerFinancialDto;
 import com.znty.rrs.entity.securitypooladjust.IssuerFinancialSaveReq;
 import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
+import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.mapper.AbsIdentityMapper;
 import com.znty.rrs.mapper.CrmwPoolAdjustMapper;
 import com.znty.rrs.mapper.ForbiddenAbsPoolAdjustMapper;
@@ -221,6 +222,41 @@ public class LoadedDataReuseTest {
         verify(mapper, times(1)).queryOccupiedIdentityCodes("ABS1");
         verifyNoInteractions(securities);
         verify(mapper, never()).queryPendingIdentityDetail("ABS1");
+    }
+
+    /** 临时 ABS 的登记主体缺少评级时，按原主体代码查询并回显评级 */
+    @Test
+    public void temporaryAbsShouldResolveRegisteredIssuerRatingsForDisplay() {
+        AbsIdentityService service = new AbsIdentityService();
+        AbsIdentityMapper mapper = mock(AbsIdentityMapper.class);
+        SecurityPoolAdjustMapper securities = mock(SecurityPoolAdjustMapper.class);
+        ReflectionTestUtils.setField(service, "absIdentityMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", securities);
+        SecurityInfoBo security = new SecurityInfoBo();
+        security.setWindCode("TMP1");
+        security.setSecurityType("abs");
+        security.setSecuritySource("temporary");
+        security.setIssuerCode("C10002");
+        security.setIssuer("登记主体");
+        when(mapper.queryOccupiedIdentityCodes("TMP1")).thenReturn(Collections.singletonList("C10002"));
+        SelfSelectedRightsHolderDto company = new SelfSelectedRightsHolderDto();
+        company.setCompanyCode("C10002");
+        company.setCompanyName("登记主体");
+        company.setInnerRating("2+");
+        company.setRatingBondissuer("AA+");
+        company.setRatingBondissuerAgency("AGENCY1");
+        when(securities.querySelfSelectedRightsHolderByCode("C10002")).thenReturn(company);
+
+        SecurityInfoBo identity = service.queryCurrentIdentity(security);
+
+        assertThat(identity.getIssuerCode()).isEqualTo("C10002");
+        assertThat(identity.getIssuer()).isEqualTo("登记主体");
+        assertThat(identity.getInnerIssuerRating()).isEqualTo("2+");
+        assertThat(identity.getRatingBondissuer()).isEqualTo("AA+");
+        assertThat(identity.getRatingBondissuerAgency()).isEqualTo("AGENCY1");
+        assertThat(security.getInnerIssuerRating()).isNull();
+        assertThat(security.getRatingBondissuer()).isNull();
+        verify(securities, times(1)).querySelfSelectedRightsHolderByCode("C10002");
     }
 
     /** 三条链路构建快照均直接复制本次已有主档 */
