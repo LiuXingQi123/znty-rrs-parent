@@ -17,6 +17,7 @@
 --   market 与 Wind EXCHMARKET 原值一致；临时代码不写该列，使用登记市场。
 --   WCTMP001.IB：待转正登记保留原 TEMP_ 身份，主档已由外部映射补齐 SEC_ID=S9001050，供 Wind 换码。
 --   WCTMP002.IB：未调库的待转正证券，主档 SEC_ID=S9001052，Wind 换码后生成 WCTMP007.IB。
+--   反向换码样例：初始主档仅预置 102684582.IB，来源为 temp_converted，SEC_ID=S77052872。
 --   Wind 换码样例：108008901.IB、XYB001.IB、198101.SH、128101.SZ 使用对应 Wind 示例证券 ID（不超过 10 位）。
 --   6. 跨市场补充：XYB001/XYB002/XYB003 各 3 个市场代码（IB/SH/SZ），新增 6 行；
 --      同券识别由 Wind S_INFO_ISINCODE 负责，同组主档共用 issuer_code、证券条款
@@ -33,7 +34,7 @@ SET NAMES utf8mb4;
 TRUNCATE TABLE `rrs_securityinfo`;
 
 -- ----------------------------------------------------------------------------
--- 证券信息样例（54 条）
+-- 证券信息样例（55 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `rrs_securityinfo` (
     `wind_code`, `full_name`, `short_name`, `security_type`, `term_year`, `term_day`,
@@ -103,4 +104,5 @@ INSERT INTO `rrs_securityinfo` (
 ('TMP001.IB', '某交投临时中票', '交投临时中票', 'mtn', 3, 1095.0000, NULL, '3年', NULL, NULL, NULL, '20310701', '20310701', 'L', '交通运输', '高速公路', 'AAA', 'AAA', '稳定', '1', NULL, 0, NULL, NULL, NULL, '某省交通投资集团有限公司', 'C10001', '20260701', '20260701', NULL, NULL, '3.5', '1.0', '固定利率', '年付', 1, 'CNY', 10, 100, 0, '固息', '中期票据', '国有企业', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 0, '信用债', 0, 0, 0, 0, '中诚信', '中诚信', 'temporary', NOW(), NOW(), NULL, NULL, 'TEMP_TMP001.IB', 'NIB'),
 ('TMP003.IB', '某能源临时金融债', '能源临时金融', 'financial_bond', 3, 1095.0000, NULL, '6天', NULL, NULL, NULL, '20290801', '20290801', 'D', '能源', '能源开采', 'AAA', 'AAA', '稳定', '1', NULL, 0, NULL, NULL, NULL, '某能源集团有限公司', 'C10003', '20260801', '20260801', NULL, NULL, '3.5', '1.0', '固定利率', '年付', 1, 'CNY', 10, 100, 0, '固息', '金融债', '国有企业', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 0, '信用债', 0, 0, 0, 0, '中诚信', '中诚信', 'temporary', NOW(), NOW(), NULL, NULL, 'TEMP_TMP003.IB', 'NIB'),
 ('WCTMP001.IB', 'Wind临时换码中票', '换码临时中票', 'mtn', 3, 1095.0000, NULL, '3年', NULL, NULL, NULL, '20310701', '20310701', 'L', '交通运输', '高速公路', 'AAA', 'AAA', '稳定', '1', NULL, 0, NULL, NULL, NULL, '某省交通投资集团有限公司', 'C10001', '20260701', '20260701', NULL, NULL, '3.5', '1.0', '固定利率', '年付', 1, 'CNY', 10, 100, 0, '固息', '中期票据', '国有企业', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 0, '信用债', 0, 0, 0, 0, '中诚信', '中诚信', 'temporary', NOW(), NOW(), NULL, NULL, 'S9001050', 'NIB'),
-('WCTMP002.IB', 'Wind未调库临时中票', '未调库临时中票', 'mtn', 3, 1095.0000, NULL, '3年', NULL, NULL, NULL, '20310701', '20310701', 'L', '交通运输', '高速公路', 'AAA', 'AAA', '稳定', '1', NULL, 0, NULL, NULL, NULL, '某省交通投资集团有限公司', 'C10001', '20260701', '20260701', NULL, NULL, '3.5', '1.0', '固定利率', '年付', 1, 'CNY', 10, 100, 0, '固息', '中期票据', '国有企业', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 0, '信用债', 0, 0, 0, 0, '中诚信', '中诚信', 'temporary', NOW(), NOW(), NULL, NULL, 'S9001052', 'NIB');
+('WCTMP002.IB', 'Wind未调库临时中票', '未调库临时中票', 'mtn', 3, 1095.0000, NULL, '3年', NULL, NULL, NULL, '20310701', '20310701', 'L', '交通运输', '高速公路', 'AAA', 'AAA', '稳定', '1', NULL, 0, NULL, NULL, NULL, '某省交通投资集团有限公司', 'C10001', '20260701', '20260701', NULL, NULL, '3.5', '1.0', '固定利率', '年付', 1, 'CNY', 10, 100, 0, '固息', '中期票据', '国有企业', '簿记建档', 0, NULL, NULL, NULL, 0, 0, 0, 0, 0, '信用债', 0, 0, 0, 0, '中诚信', '中诚信', 'temporary', NOW(), NOW(), NULL, NULL, 'S9001052', 'NIB'),
+('102684582.IB', 'Wind反向换码演示中票', '反向换码中票', 'mtn', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '20291118', NULL, 'L', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '某省交通投资集团有限公司', 'C10001', NULL, '20261118', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'CNY', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'temp_converted', NOW(), NOW(), 1, 1, 'S77052872', 'NIB');

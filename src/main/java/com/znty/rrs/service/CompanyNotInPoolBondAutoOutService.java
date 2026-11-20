@@ -39,7 +39,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 主体依据失效的债券自动出池（仅债券）
+ * 出池主体旗下债券自动出池（仅债券）
  *
  * 本任务处理普通债和普通投资池内的 CRMW，ABS 由独立任务同步
  *
@@ -59,7 +59,7 @@ public class CompanyNotInPoolBondAutoOutService implements RrsScheduledTask {
 
     private static final String AUTO_ADJUSTER_ID = "0";
     private static final String AUTO_ADJUSTER_NAME = "系统";
-    static final String DEFAULT_TASK_NAME = "主体依据失效的债券自动出池（仅债券）";
+    private static final String DEFAULT_TASK_NAME = "出池主体旗下债券自动出池（仅债券）";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String PARAM_HELP =
             "参数格式：须填写 JSON 对象；poolIds、mappings 可组合，例如 <code>{\"poolIds\":[15]}</code>\n"

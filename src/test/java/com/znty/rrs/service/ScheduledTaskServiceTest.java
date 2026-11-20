@@ -71,7 +71,7 @@ public class ScheduledTaskServiceTest {
         expiry.setTaskName("到期证券自动出池");
         SysScheduledTaskBo bondOutbound = new SysScheduledTaskBo();
         bondOutbound.setTaskCode(CompanyNotInPoolBondAutoOutService.TASK_CODE);
-        bondOutbound.setTaskName("主体跟随债券自动出池（仅债券）");
+        bondOutbound.setTaskName("出池主体旗下债券自动出池");
         SysScheduledTaskBo absInbound = new SysScheduledTaskBo();
         absInbound.setTaskCode(CompanyAbsBondAutoInService.TASK_CODE);
         absInbound.setTaskName(CompanyAbsBondAutoInService.DEFAULT_TASK_NAME);
@@ -82,7 +82,7 @@ public class ScheduledTaskServiceTest {
 
         assertThat(service.queryTaskList()).extracting(ScheduledTaskInfoDto::getTaskName)
                 .containsExactly("自定义观察名单（仅主体）", "补债（仅债券）", "到期证券自动出池",
-                        "主体依据失效的债券自动出池（仅债券）", CompanyAbsBondAutoInService.DEFAULT_TASK_NAME);
+                        "出池主体旗下债券自动出池（仅债券）", CompanyAbsBondAutoInService.DEFAULT_TASK_NAME);
     }
 
     @Test

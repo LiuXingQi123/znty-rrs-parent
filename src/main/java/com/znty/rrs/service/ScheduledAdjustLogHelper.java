@@ -20,7 +20,7 @@ final class ScheduledAdjustLogHelper {
     private ScheduledAdjustLogHelper() {
     }
 
-    /** 按任务处理对象追加范围标注，兼容已有任务配置名称 */
+    /** 按任务处理对象补齐范围后缀 */
     static String withTaskScope(String taskCode, String name) {
         if (taskCode == null || !StringUtils.hasText(name)) {
             return name;
@@ -46,11 +46,6 @@ final class ScheduledAdjustLogHelper {
                 return name;
         }
         String taskName = name.trim();
-        if (CompanyNotInPoolBondAutoOutService.TASK_CODE.equals(taskCode)
-                && ("主体跟随债券自动出池".equals(taskName)
-                || "主体跟随债券自动出池（仅债券）".equals(taskName))) {
-            return CompanyNotInPoolBondAutoOutService.DEFAULT_TASK_NAME;
-        }
         return taskName.endsWith(suffix) ? taskName : taskName + suffix;
     }
 

@@ -44,7 +44,7 @@ public class ScheduledTaskDemoDataTest {
                 new TaskConfig("company_outer_rating_not_aa_minus_auto_out", "外评非AA-及以下主体自动出池（仅主体）", "0 10 23 * * ?"),
                 new TaskConfig("company_outer_rating_aa_minus_auto_in", "外评AA-及以下主体自动入池（仅主体）", "0 15 23 * * ?"),
                 new TaskConfig("company_inpool_bond_auto_in", "在池主体旗下债券自动入池（已排除ABS债）（仅债券）", "0 1/10 * * * ?"),
-                new TaskConfig("company_not_in_pool_bond_auto_out", "主体依据失效的债券自动出池（仅债券）", "0 3/10 * * * ?"),
+                new TaskConfig("company_not_in_pool_bond_auto_out", "出池主体旗下债券自动出池（仅债券）", "0 3/10 * * * ?"),
                 new TaskConfig("bond_grade_inconformity_alert",
                         "不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）（仅债券）", "0 0 1 * * ?"),
                 new TaskConfig("hs_pool_full_excel_export", "恒生池全量数据导出（不含已到期）", "0 10 1 * * ?"),
@@ -77,6 +77,7 @@ public class ScheduledTaskDemoDataTest {
         Pattern descriptionPattern = Pattern.compile(
                 "\\(\\d+,\\s*'([^']+)',\\s*'[^']+',\\s*'(.*?)',\\s*'[^']+',\\s*0,",
                 Pattern.DOTALL);
+        Pattern stepPattern = Pattern.compile("(?:^|\\\\n)(\\d+)\\. ");
         Matcher descriptionMatcher = descriptionPattern.matcher(sql);
         int descriptionCount = 0;
         while (descriptionMatcher.find()) {
@@ -84,6 +85,15 @@ public class ScheduledTaskDemoDataTest {
             String taskCode = descriptionMatcher.group(1);
             String description = descriptionMatcher.group(2);
             assertThat(description.length()).as(taskCode + " 的任务说明不能超过 500 字").isLessThanOrEqualTo(500);
+            assertThat(description).as(taskCode + " 的任务说明应从第 1 条开始").startsWith("1. ");
+            Matcher stepMatcher = stepPattern.matcher(description);
+            int stepCount = 0;
+            while (stepMatcher.find()) {
+                stepCount++;
+                assertThat(stepMatcher.group(1)).as(taskCode + " 的任务说明编号应连续")
+                        .isEqualTo(String.valueOf(stepCount));
+            }
+            assertThat(stepCount).as(taskCode + " 的任务说明应分条填写").isGreaterThan(1);
             if ("company_outer_rating_not_aa_minus_auto_out".equals(taskCode)) {
                 assertThat(description).contains("AA-及以下不出池")
                         .contains("空评级/近一年无认可外评不出池");
@@ -92,6 +102,11 @@ public class ScheduledTaskDemoDataTest {
                 assertThat(description).contains("AA-及以下因评级入池")
                         .contains("空评级/近一年无认可外评不因评级入池")
                         .contains("命中禁止库 15 或重点观察 23 时仍按相应条件入池");
+            }
+            if ("company_not_in_pool_bond_auto_out".equals(taskCode)) {
+                assertThat(description).contains("目标池最新的 Excel 调出决定已生效",
+                        "所有依据池均无有效留池依据", "调出限制池、调出互斥池或在途流程",
+                        "主体 Excel 调出触发时跳过三条件复核", "最后一条有效在池记录");
             }
         }
         assertThat(descriptionCount).isEqualTo(configs.size());

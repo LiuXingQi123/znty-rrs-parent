@@ -1,12 +1,13 @@
 -- ============================================================
 -- znty-rrs 临时代码管理表 - 演示数据脚本
 -- MySQL version: 8.0.33
--- 说明：temporary 3 条、updated / cancelled 各 1 条；主体与正式代码对齐证券主数据
+-- 说明：temporary 3 条、updated 2 条、cancelled 1 条；主体与正式代码对齐证券主数据
 --   TMP001.IB 仍为临时代码（rrs_securityinfo 占位 security_source=temporary, status=L）
 --   TMP002.IB 已更新为正式证券 ABN002.IB（25国贸资产证券化，security_type=abs_all）
 --   TMP003.IB 已取消发行（rrs_securityinfo 占位 security_source=temporary, status=D）
 --   WCTMP001.IB 待转正，配合 Wind 事件；主档已映射 S9001050，登记仍保留 TEMP_WCTMP001.IB
 --   WCTMP002.IB 待转正，初始无调库业务；主档已映射 S9001052，登记仍保留 TEMP_WCTMP002.IB
+--   q26111727.IB 已转正为 102684582.IB，供 Wind 反向换码。
 --   ABN002.IB 再次换码后，原 TMP002.IB→ABN002.IB 登记和替换历史须保留
 -- ============================================================
 
@@ -23,7 +24,7 @@ TRUNCATE TABLE `rrs_temp_security_code`;
 TRUNCATE TABLE `rrs_temp_security_code_update_log`;
 
 -- ----------------------------------------------------------------------------
--- 临时代码样例（4 条）
+-- 临时代码样例（6 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `rrs_temp_security_code` (
     `id`, `sec_id`, `temp_security_name`, `temp_security_code`, `temp_security_market`, `temp_security_type`,
@@ -35,14 +36,16 @@ INSERT INTO `rrs_temp_security_code` (
 (2, 'TEMP_TMP002.IB', '某国贸临时资产证券化', 'TMP002.IB', 'NIB', 'abs_all', NULL, 'C10009', '某国际贸易集团有限公司', '2024-03-15', '2029-03-18', '25国贸资产证券化01', 'ABN002.IB', 'NIB', 'abs_all', '2026-06-26 10:30:00', 'updated', 0, 'manual', NULL, NOW(), NOW()),
 (3, 'TEMP_TMP003.IB', '某能源临时金融债', 'TMP003.IB', 'NIB', 'financial_bond', NULL, 'C10003', '某能源集团有限公司', '2026-08-01', '2029-08-01', NULL, NULL, NULL, NULL, '2026-06-26 11:10:00', 'cancelled', 0, 'manual', NULL, NOW(), NOW()),
 (4, 'TEMP_WCTMP001.IB', 'Wind临时换码中票', 'WCTMP001.IB', 'NIB', 'mtn', NULL, 'C10001', '某省交通投资集团有限公司', '2026-07-01', '2031-07-01', NULL, NULL, NULL, NULL, NULL, 'temporary', 0, 'manual', 'Wind待转正样例：主档已由外部映射补齐SEC_ID=S9001050，原登记身份和备注保留', NOW(), NOW()),
-(5, 'TEMP_WCTMP002.IB', 'Wind未调库临时中票', 'WCTMP002.IB', 'NIB', 'mtn', NULL, 'C10001', '某省交通投资集团有限公司', '2026-07-01', '2031-07-01', NULL, NULL, NULL, NULL, NULL, 'temporary', 0, 'manual', 'Wind待转正样例：未调库，主档已由外部映射补齐SEC_ID=S9001052', NOW(), NOW());
+(5, 'TEMP_WCTMP002.IB', 'Wind未调库临时中票', 'WCTMP002.IB', 'NIB', 'mtn', NULL, 'C10001', '某省交通投资集团有限公司', '2026-07-01', '2031-07-01', NULL, NULL, NULL, NULL, NULL, 'temporary', 0, 'manual', 'Wind待转正样例：未调库，主档已由外部映射补齐SEC_ID=S9001052', NOW(), NOW()),
+(6, 'TEMP_q26111727.IB', '反向换码临时中票', 'q26111727.IB', 'NIB', 'mtn', NULL, 'C10001', '某省交通投资集团有限公司', '2026-11-18', '2029-11-18', '反向换码中票', '102684582.IB', 'NIB', 'mtn', TIMESTAMPADD(DAY, -2, NOW()), 'updated', 0, 'manual', 'Wind反向换码演示：已由临时代码转正为102684582.IB', TIMESTAMPADD(DAY, -2, NOW()), TIMESTAMPADD(DAY, -2, NOW()));
 
 -- ----------------------------------------------------------------------------
--- 临时代码替换日志样例（1 条）
+-- 临时代码替换日志样例（2 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `rrs_temp_security_code_update_log` (
     `temp_security_name`, `temp_security_code`, `temp_security_market`, `temp_security_type`,
     `security_name`, `security_code`, `security_market`, `security_type`, `replace_table_name`,
     `replace_record_id`, `replace_status`, `replace_time`, `crte_time`
 ) VALUES
-('某国贸临时资产证券化', 'TMP002.IB', 'NIB', 'abs_all', '25国贸资产证券化01', 'ABN002.IB', 'NIB', 'abs_all', 'rrs_securityinfo', NULL, 'success', '2026-06-26 10:30:00', NOW());
+('某国贸临时资产证券化', 'TMP002.IB', 'NIB', 'abs_all', '25国贸资产证券化01', 'ABN002.IB', 'NIB', 'abs_all', 'rrs_securityinfo', NULL, 'success', '2026-06-26 10:30:00', NOW()),
+('反向换码临时中票', 'q26111727.IB', 'NIB', 'mtn', '反向换码中票', '102684582.IB', 'NIB', 'mtn', 'rrs_temp_security_code', 6, 'success', TIMESTAMPADD(DAY, -2, NOW()), TIMESTAMPADD(DAY, -2, NOW()));
