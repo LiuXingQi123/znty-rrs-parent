@@ -21,7 +21,7 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
  * 以证券主数据为准同步当前生效池状态及其关联调库日志
  * 1. 查询普通池和 CRMW 池中旧类型与主数据不一致的生效记录
  * 2. 先条件更新池状态，避免覆盖扫描后的并发变更
- * 3. 同步当前池状态关联的调库日志类型，其他历史日志保留原始快照
+ * 3. 同步当前池状态关联的日志，再按主数据补齐已审批通过的调库流水类型
  * 4. 任一异常时整轮事务回滚并返回失败结果
  */
 @Slf4j
@@ -38,8 +38,8 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
             "参数说明：本任务无需扩展参数，请将 param_json 留空\n"
                     + "数据来源：rrs_securityinfo.security_type 为证券主数据最新类型\n"
                     + "处理范围：仅同步新旧类型都属于 dict_security_type.category_type=bond 的生效池状态\n"
-                    + "写入范围：ip_pool_status、ip_pool_status_crmw 及各池状态当前关联的 ip_adjust_log\n"
-                    + "历史口径：仅改当前池状态关联日志，其他历史调库日志保留原始快照";
+                    + "写入范围：ip_pool_status、ip_pool_status_crmw 及当前关联的 ip_adjust_log\n"
+                    + "历史流水：主档最新类型属于有效债券大类且与流水类型不同时，补齐已审批通过且未删除的调库流水";
 
     /** 债券主数据维护 Mapper */
     @Resource
@@ -63,8 +63,8 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
      * 执行顺序：
      * 1. 查询普通池和 CRMW 池候选记录
      * 2. 分别同步两类池状态及当前关联调库日志
-     * 3. 汇总普通池、CRMW 池和跳过数量
-     * 4. 发生异常时标记事务回滚并返回失败结果
+     * 3. 补齐已审批通过但类型仍与主数据不一致的历史流水
+     * 4. 汇总池状态和补齐的流水数量，发生异常时标记事务回滚并返回失败结果
      *
      * @return 本轮任务执行结果
      */
@@ -91,17 +91,19 @@ public class BondSecurityTypeChangeService implements RrsScheduledTask {
             int normalCount = editSecurityTypeList(normalRows, false, detail);
             // 3. 同步 CRMW 池标的证券类型
             int crmwCount = editSecurityTypeList(crmwRows, true, detail);
+            // 4. 池状态已经更新或证券已经出池时，仍同步剩余的调库流水
+            int historyCount = bondSecurityMaintenanceMapper.editApprovedAdjustLogSecurityTypes(new Date());
             int total = normalCount + crmwCount;
             int skippedCount = normalCandidateCount + crmwCandidateCount - total;
             long duration = System.currentTimeMillis() - begin;
-            String message = "本轮共同步 " + total + " 条债券池状态类型";
+            String message = "本轮共同步 " + total + " 条债券池状态类型，补齐 " + historyCount + " 条调库流水类型";
             detail.line("任务结束（成功）：普通池更新 " + normalCount
                     + " 条，CRMW 池更新 " + crmwCount + " 条，跳过 " + skippedCount
-                    + " 条，耗时 " + duration + " 毫秒");
+                    + " 条，补齐调库流水 " + historyCount + " 条，耗时 " + duration + " 毫秒");
             return ScheduledTaskResult.success(TASK_CODE, TASK_NAME, message, total, startTime,
                     duration, detail.build());
         } catch (Exception e) {
-            // 4. 返回失败结果前标记本轮事务回滚，避免池状态与关联日志部分更新
+            // 返回失败结果前标记本轮事务回滚，避免池状态与调库流水部分更新
             markTransactionRollbackOnly();
             long duration = System.currentTimeMillis() - begin;
             log.error("{}执行异常", TASK_NAME, e);

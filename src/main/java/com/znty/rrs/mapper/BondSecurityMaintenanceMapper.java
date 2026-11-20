@@ -30,4 +30,12 @@ public interface BondSecurityMaintenanceMapper {
     int editAdjustLogSecurityType(@Param("adjustLogId") Long adjustLogId,
                                   @Param("securityType") String securityType,
                                   @Param("updateTime") Date updateTime);
+
+    /**
+     * 同步已审批通过且未删除的债券调库流水类型，包括已经出池的证券
+     *
+     * @param updateTime 本轮更新时间
+     * @return 实际更新的流水条数
+     */
+    int editApprovedAdjustLogSecurityTypes(@Param("updateTime") Date updateTime);
 }

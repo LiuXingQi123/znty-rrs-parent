@@ -42,7 +42,7 @@
 | taskCode | 名称 | 默认 cron | 扩展参数示例 |
 |---|---|---|---|
 | `bond_temp_code_replace` | 债券临时代码替换（仅债券） | `0 40 4,8,9,13,18,22 * * ?` | 每天 04:40、08:40、09:40、13:40、18:40、22:40 执行。无需参数；扫描 `rrs_temp_security_code.status=temporary` 且已由外部数据补齐 `security_code` 的记录，复用临时代码人工转正的完整分叉逻辑，操作来源记为 `job` |
-| `bond_security_type_change` | 债券类型变更（仅债券） | `0 0 22 * * ?` | 每天 22:00 执行。无需参数；以 `rrs_securityinfo.security_type` 为准，同步普通池、CRMW 池标的证券及当前关联调库日志中的债券类型 |
+| `bond_security_type_change` | 债券类型变更（仅债券） | `0 0 22 * * ?` | 每天 22:00 执行。无需参数。以 `rrs_securityinfo.security_type` 为准，同步普通池、CRMW 池标的证券及已审批通过的调入调出流水中的债券类型 |
 | `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`{"poolIds":[15],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[15]`（债券禁止库），与投资池关系配置绑定本任务的池取并集；扫描 `ip_pool_status` 中已生效且未删除的债券（含 ABS、CRMW），到期日早于当前日期减去 `maturityOffsetDays` 天时进入候选，省略默认 1（原 T-2），支持 0、正负整数；先剔除 Excel 保护项，再跳过命中调出限制池、已提前出池或缺少证券编码的记录 |
 | `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`{"poolIds":[18],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[18]`（CRMW库），与关系配置绑定池取并集；扫描 `ip_pool_status_crmw` 中已生效且未删除的凭证与标的组合（含 ABS 债券作为标的的组合）；仅按凭证到期日判断，标的证券到期本身不会触发组合出池；`ip_pool_status` 中的 CRMW 券由到期证券自动出池任务扫描；省略 `maturityOffsetDays` 默认 1（原 T-2），支持 0、正负整数；命中调出限制池则跳过 |
 | `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池（仅主体） | `0 10 23 * * ?` | 只同步主体，旗下债券由独立任务处理 |
@@ -219,11 +219,12 @@
 
 对应老系统 `BondStypeChangeJob`，以新系统当前池状态拆表后的口径实现：
 
-1. `rrs_securityinfo.security_type` 为权威最新类型；只处理新旧类型在 `dict_security_type` 中都属于 `category_type='bond'` 的差异。
-2. 扫描 `audit_status='20'` 且未删除的 `ip_pool_status`、`ip_pool_status_crmw` 标的证券字段。
-3. 条件更新池状态的 `security_type`，并同步该池状态 `adjust_log_id` 指向的当前 `ip_adjust_log.security_type`；其余历史调库日志保留原始快照。
-4. 不修改 CRMW 凭证字段 `crmw_stype`；该字段代表凭证自身类型，不属于老任务的标的债券类型变更范围。
-5. 排在 18:40 临时代码替换之后、22:40 替换之前；22:40 新转正式记录在替换时直接使用正式主数据类型。任务仍早于到期和主体调库，避免后序任务读取旧类型。
+1. `rrs_securityinfo.security_type` 为权威最新类型。
+2. 扫描 `audit_status='20'` 且未删除的 `ip_pool_status`、`ip_pool_status_crmw` 标的证券字段，处理新旧类型均属于有效债券大类的差异。
+3. 条件更新池状态的 `security_type`，并同步该池状态 `adjust_log_id` 指向的当前 `ip_adjust_log.security_type`。
+4. 再按 `ip_adjust_log.security_code` 匹配主档 `wind_code`，同步已审批通过且未删除的调入和调出流水。主档最新类型须属于有效债券大类且与流水类型不同。池状态已一致或证券已出池时仍可同步。执行摘要单列本步骤补齐的流水条数，影响条数仍按池状态更新量统计。
+5. 原有 CRMW 凭证类型 `crmw_stype` 及 `ip_adjust_security_snapshot`、`ip_adjust_security_snapshot_crmw` 中提交时保存的证券信息继续保留。
+6. 排在 18:40 临时代码替换之后、22:40 替换之前。22:40 新转正式记录在替换时直接使用正式主数据类型。任务仍早于到期和主体调库，避免后序任务读取旧类型。
 
 ### 主体观察名单同步 `company_observer_pool_sync`（06:00）
 

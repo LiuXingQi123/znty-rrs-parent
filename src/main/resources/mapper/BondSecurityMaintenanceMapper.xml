@@ -71,13 +71,38 @@
           AND security_type = #{row.oldSecurityType}
     </update>
 
-    <!-- 同步当前池状态关联的调库日志；历史日志保持原始快照 -->
+    <!-- 同步当前池状态直接关联的调库日志 -->
     <update id="editAdjustLogSecurityType">
         UPDATE ip_adjust_log
         SET security_type = #{securityType}
            ,updt_time = #{updateTime}
         WHERE id = #{adjustLogId}
           AND is_deleted = 0
+    </update>
+
+    <!-- 单独同步已审批通过的调入和调出流水，补齐池状态已经一致或已出池的历史记录 -->
+    <update id="editApprovedAdjustLogSecurityTypes">
+        UPDATE ip_adjust_log al
+        SET security_type = (
+            SELECT si.security_type
+            FROM rrs_securityinfo si
+            WHERE si.wind_code = al.security_code
+        )
+        , updt_time = #{updateTime}
+        WHERE al.is_deleted = 0
+          AND al.audit_status = '20'
+          AND al.security_type != (
+              SELECT si.security_type
+              FROM rrs_securityinfo si
+              WHERE si.wind_code = al.security_code
+                AND EXISTS (
+                    SELECT 1
+                    FROM dict_security_type new_type
+                    WHERE new_type.security_type = si.security_type
+                      AND new_type.category_type = 'bond'
+                      AND new_type.is_deleted = 0
+                )
+          )
     </update>
 
 </mapper>

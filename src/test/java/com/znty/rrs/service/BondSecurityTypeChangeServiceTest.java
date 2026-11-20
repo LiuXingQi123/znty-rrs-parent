@@ -3,8 +3,21 @@ package com.znty.rrs.service;
 import com.znty.rrs.entity.schedule.BondSecurityTypeChangeDto;
 import com.znty.rrs.mapper.BondSecurityMaintenanceMapper;
 import com.znty.rrs.schedule.ScheduledTaskResult;
+import java.io.InputStream;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.List;
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
+import org.apache.ibatis.io.Resources;
+import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.junit.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -43,11 +56,67 @@ public class BondSecurityTypeChangeServiceTest {
                 .contains("扫描完成：普通池候选 1 条，CRMW 池候选 1 条")
                 .contains("同步成功：表=ip_pool_status，poolStatusId=1")
                 .contains("同步成功：表=ip_pool_status_crmw，poolStatusId=2")
-                .contains("任务结束（成功）：普通池更新 1 条，CRMW 池更新 1 条，跳过 0 条");
+                .contains("任务结束（成功）：普通池更新 1 条，CRMW 池更新 1 条，跳过 0 条，补齐调库流水 0 条");
         verify(mapper).editPoolSecurityType(eq(normal), any(Date.class));
         verify(mapper).editCrmwPoolSecurityType(eq(crmw), any(Date.class));
         verify(mapper).editAdjustLogSecurityType(eq(11L), eq("new_a"), any(Date.class));
         verify(mapper).editAdjustLogSecurityType(eq(22L), eq("new_b"), any(Date.class));
+    }
+
+    /** 池状态已经一致或已出池时，仍同步已审批通过的调入和调出流水。 */
+    @Test
+    public void executeShouldUpdateApprovedHistoryWithoutPoolCandidates() throws Exception {
+        Configuration configuration = new Configuration(new Environment("test", new JdbcTransactionFactory(),
+                new UnpooledDataSource("org.h2.Driver", "jdbc:h2:mem:bond_type_change;MODE=MySQL", "sa", "")));
+        configuration.setMapUnderscoreToCamelCase(true);
+        String resource = "mapper/BondSecurityMaintenanceMapper.xml";
+        try (InputStream xml = Resources.getResourceAsStream(resource)) {
+            new XMLMapperBuilder(xml, configuration, resource, configuration.getSqlFragments()).parse();
+        }
+        try (SqlSession session = new SqlSessionFactoryBuilder().build(configuration).openSession(true);
+             Statement sql = session.getConnection().createStatement()) {
+            sql.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(32) PRIMARY KEY, security_type VARCHAR(32))");
+            sql.execute("CREATE TABLE dict_security_type (security_type VARCHAR(32) PRIMARY KEY, "
+                    + "category_type VARCHAR(16), is_deleted INT)");
+            sql.execute("CREATE TABLE ip_pool_status (id BIGINT, adjust_log_id BIGINT, security_code VARCHAR(32), "
+                    + "security_short_name VARCHAR(128), security_type VARCHAR(32), audit_status VARCHAR(2), is_deleted INT)");
+            sql.execute("CREATE TABLE ip_pool_status_crmw AS SELECT * FROM ip_pool_status WHERE 1=0");
+            sql.execute("CREATE TABLE ip_adjust_log (id BIGINT PRIMARY KEY, security_code VARCHAR(32), "
+                    + "security_type VARCHAR(32), crmw_stype VARCHAR(32), adjust_mode VARCHAR(8), "
+                    + "audit_status VARCHAR(2), is_deleted INT, updt_time TIMESTAMP)");
+            sql.execute("INSERT INTO dict_security_type VALUES ('abs','bond',0), ('cp','bond',0), "
+                    + "('fund','fund',0), ('retired','bond',1)");
+            sql.execute("INSERT INTO rrs_securityinfo VALUES ('IN','cp'), ('OUT','cp'), ('FUND','fund'), ('RETIRED','retired')");
+            sql.execute("INSERT INTO ip_pool_status VALUES (41,44,'IN','证券','cp','20',0)");
+            sql.execute("INSERT INTO ip_adjust_log VALUES "
+                    + "(42,'IN','abs',NULL,'调入','20',0,NULL), (44,'IN','cp',NULL,'调入','20',0,NULL), "
+                    + "(45,'IN','abs',NULL,'调出','20',0,NULL), (46,'OUT','abs','crmw','调出','20',0,NULL), "
+                    + "(47,'IN','abs',NULL,'调入','00',0,NULL), (48,'IN','abs',NULL,'调入','20',1,NULL), "
+                    + "(49,'MISSING','abs',NULL,'调出','20',0,NULL), (50,'IN','fund',NULL,'调入','20',0,NULL), "
+                    + "(51,'FUND','abs',NULL,'调入','20',0,NULL), (52,'RETIRED','abs',NULL,'调入','20',0,NULL)");
+            BondSecurityTypeChangeService service = new BondSecurityTypeChangeService();
+            ReflectionTestUtils.setField(service, "bondSecurityMaintenanceMapper",
+                    session.getMapper(BondSecurityMaintenanceMapper.class));
+
+            ScheduledTaskResult result = service.execute();
+
+            assertThat(result.isSuccess()).isTrue();
+            assertThat(result.getAffectedCount()).isZero();
+            assertThat(result.getMessage()).contains("补齐 4 条调库流水类型");
+            List<String> logTypes = new ArrayList<>();
+            try (ResultSet rows = sql.executeQuery("SELECT id, security_type, crmw_stype, updt_time FROM ip_adjust_log ORDER BY id")) {
+                while (rows.next()) {
+                    logTypes.add(rows.getString("security_type"));
+                    long id = rows.getLong("id");
+                    assertThat(rows.getTimestamp("updt_time") != null).isEqualTo(id == 42 || id == 45 || id == 46 || id == 50);
+                    if (id == 46) {
+                        assertThat(rows.getString("crmw_stype")).isEqualTo("crmw");
+                    }
+                }
+            }
+            assertThat(logTypes).containsExactly("cp", "cp", "cp", "cp", "abs", "abs", "abs", "cp", "abs", "abs");
+            assertThat(service.execute().getMessage()).contains("补齐 0 条调库流水类型");
+        }
     }
 
     /** 验证同步过程异常时任务返回失败，供事务代理统一回滚本轮修改。 */
