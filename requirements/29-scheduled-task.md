@@ -6,9 +6,10 @@
 - `hs_pool_full_including_expired_excel_export`：对应老系统 `ExportStatusToHsJob2`，与上一任务使用相同池范围和 Excel 结构，但普通证券包含已到期数据；CRMW 同样不校验到期日。
 - `hs_pool_increment_excel_export`：首次以 `initialStartTime` 为下界，后续以上次成功执行开始时间为下界，以本次开始时间为上界。导出审核时间大于下界且不晚于上界的审批通过事件，不要求证券当前仍在池。老系统通过调库日志 `exportflag` 控制增量，新系统明确使用任务成功时间水位线，不更新业务调库日志。
 - 三个任务均使用五列表头：证券名称、证券代码、操作类型、市场名称、备注；调出操作类型写“删除”，备注留空。市场名称列按恒生市场编码输出，当前字段映射为沪市 `1`、深市 `2`、银行间 `4`、北交所 `6`、其他市场 `99999`，完整编码集中维护在 `HsMarketCode`；证券代码去掉首个 `.` 及其后的市场后缀，按实际在池记录或日志中的代码及所属市场输出，不再次展开同券其他市场代码。
-- `hs_pool_name` 为空时使用投资池完整名称，支持竖线拆分多个 Sheet；名称超过 31 位截断，同名 Sheet 合并追加并写过程警告日志。老系统页面手动导出会合并同名 Sheet，但老系统定时任务未做重名判断、直接创建时可能抛异常；新系统采用页面导出的容错方式。
+- 恒生池名称支持用竖线拆分多个 Sheet；名称超过 31 位截断，同名 Sheet 合并追加并写过程警告日志。老系统页面手动导出会合并同名 Sheet，但老系统定时任务未做重名判断、直接创建时可能抛异常；新系统采用页面导出的容错方式。
 - 增量任务已预留交易日日期列表入口；当前列表固定为空，表示尚未启用过滤，因此交易日和非交易日均正常执行。交易日数据源、查询异常策略和非交易日强制执行配置后续确认。
-- `param_json` 支持 `poolIds`、`exportEmptyPool`、`outputDir`。`exportEmptyPool` 默认 `true`，设为 `false` 时跳过无数据的池。`outputDir` 省略时使用 `rrs.hs-pool-export.storage-path`。增量首次执行还必须按 `yyyy-MM-dd HH:mm:ss` 配置 `initialStartTime`。文件写入 `输出根目录/yyyyMMdd`，并复制到同日 `bak` 目录。FTP 暂未接入。
+- 三个任务的「扩展参数」会预填缺失字段：`poolIds: []`（从全部叶子池中筛选）、`exportEmptyPool: true`（保留无数据池的 Sheet）、`exportPoolWithoutHsName: false`（跳过恒生池名称为空的池）、`outputDir: null`（使用 `rrs.hs-pool-export.storage-path`）。增量任务还会显示 `initialStartTime`，未配置时填 `null`，首次执行前须按 `yyyy-MM-dd HH:mm:ss` 填写。已保存的值优先，Demo 沿用预置的增量起始时间。
+- `exportPoolWithoutHsName` 须填写 JSON 布尔值。省略或设为 `false` 时，跳过 `hs_pool_name` 为 NULL、空字符串或纯空白的池，即使 `poolIds` 显式包含该池。逐池生成工作簿时，过程日志会记下被跳过的投资池 ID、名称及原因。设为 `true` 时，恒生池名称为空的池使用投资池完整名称生成 Sheet。`exportEmptyPool` 设为 `false` 时跳过无数据的池。筛选后若未生成任何 Sheet，仍保留「（空池）」表头页。文件写入 `输出根目录/yyyyMMdd`，并复制到同日 `bak` 目录。FTP 暂未接入。
 
 > 前端页面：`scheduled_task.html`  
 > 后端前缀：`/api/v1/scheduledTask`  
@@ -35,6 +36,7 @@
 | 存储 | `param_json` VARCHAR，框架**不解析**含义，只存/改/展示 |
 | 格式 | **仅 JSON 对象**；各任务在 `execute()` 内自行解析；**不兼容**纯文本等旧格式 |
 | 页面说明 | 已注册实现时，列表/详情带 `paramHelp`（来自 `RrsScheduledTask#getParamHelp`），配置页按任务展示，**前端不写死某任务格式** |
+| 页面预填 | 任务可通过 `RrsScheduledTask#getParamDefaults` 提供 `paramDefaults`。打开配置时将缺失字段补入扩展参数输入框，保留已保存的字段和值 |
 | 新任务 | 实现类定义自己的 JSON 字段 + 覆盖 `getParamHelp()` 即可 |
 
 演示数据预置任务（`rrs_scheduled_task_demo_data.sql`）：

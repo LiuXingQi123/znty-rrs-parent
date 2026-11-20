@@ -1,5 +1,7 @@
 package com.znty.rrs.schedule;
 
+import java.util.Map;
+
 /**
  * 定时任务业务实现接口（扩展点）
  * <p>
@@ -40,6 +42,15 @@ public interface RrsScheduledTask {
      * @return 说明文案，无则 null
      */
     default String getParamHelp() {
+        return null;
+    }
+
+    /**
+     * 提供配置页可预填的扩展参数默认值
+     *
+     * @return 可预填的字段和值，无则 null
+     */
+    default Map<String, Object> getParamDefaults() {
         return null;
     }
 }

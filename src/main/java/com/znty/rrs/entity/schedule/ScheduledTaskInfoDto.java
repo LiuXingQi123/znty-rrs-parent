@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.util.Date;
+import java.util.Map;
 
 /**
  * 定时任务管理页列表/详情 DTO（代码注册信息 + 库表配置 + 最近执行）。
@@ -44,6 +45,9 @@ public class ScheduledTaskInfoDto {
      * 扩展参数填写说明（由已注册的 RrsScheduledTask#getParamHelp 提供；未注册实现时为空）
      */
     private String paramHelp;
+
+    /** 由任务实现提供的扩展参数预填值 */
+    private Map<String, Object> paramDefaults;
 
     /** 代码是否已注册实现（false 表示库中有配置但代码未部署） */
     private boolean codeRegistered;

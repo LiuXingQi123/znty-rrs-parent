@@ -87,16 +87,16 @@ public class ScheduledTaskServiceTest {
 
     @Test
     public void queryTaskPageShouldReturnPagedRows() {
-        RrsScheduledTask task = mockTask("a");
+        RrsScheduledTask task = new HsPoolFullExcelExportService();
         ScheduledTaskMapper mapper = mock(ScheduledTaskMapper.class);
         DynamicTaskScheduler scheduler = mock(DynamicTaskScheduler.class);
         SysScheduledTaskBo bo = new SysScheduledTaskBo();
-        bo.setTaskCode("a");
+        bo.setTaskCode(task.getTaskCode());
         bo.setTaskName("任务A");
         bo.setCronExpression("0 0 2 * * ?");
         bo.setScheduleEnabled(1);
         when(mapper.queryTaskPage(any(ScheduledTaskReq.class))).thenReturn(Collections.singletonList(bo));
-        when(scheduler.isScheduled("a")).thenReturn(true);
+        when(scheduler.isScheduled(task.getTaskCode())).thenReturn(true);
 
         ScheduledTaskService service = new ScheduledTaskService(Collections.singletonList(task));
         ReflectionTestUtils.setField(service, "scheduledTaskMapper", mapper);
@@ -110,6 +110,12 @@ public class ScheduledTaskServiceTest {
         PageResult<ScheduledTaskInfoDto> page = service.queryTaskPage(req);
         assertThat(page.getRecords()).hasSize(1);
         assertThat(page.getRecords().get(0).isCodeRegistered()).isTrue();
+        assertThat(page.getRecords().get(0).getParamJson()).isNull();
+        assertThat(page.getRecords().get(0).getParamDefaults()).hasSize(4)
+                .containsEntry("poolIds", Collections.emptyList())
+                .containsEntry("exportEmptyPool", true)
+                .containsEntry("exportPoolWithoutHsName", false)
+                .containsEntry("outputDir", null);
         assertThat(page.getPageIndex()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(10);
         verify(mapper).queryTaskPage(any(ScheduledTaskReq.class));
@@ -129,6 +135,19 @@ public class ScheduledTaskServiceTest {
         assertThat(page.getRecords()).isEmpty();
         assertThat(page.getPageIndex()).isEqualTo(1);
         assertThat(page.getPageSize()).isEqualTo(20);
+    }
+
+    /** 验证两个全量任务使用相同的预填参数，增量额外提供首次起点占位 */
+    @Test
+    public void hsPoolTasksShouldExposeAllConfigDefaults() {
+        HsPoolFullExcelExportService full = new HsPoolFullExcelExportService();
+        HsPoolFullIncludingExpiredExcelExportService includingExpired =
+                new HsPoolFullIncludingExpiredExcelExportService();
+        HsPoolIncrementExcelExportService increment = new HsPoolIncrementExcelExportService();
+
+        assertThat(includingExpired.getParamDefaults()).isEqualTo(full.getParamDefaults());
+        assertThat(increment.getParamDefaults()).hasSize(5).containsAllEntriesOf(full.getParamDefaults())
+                .containsEntry("initialStartTime", null);
     }
 
     @Test

@@ -17,6 +17,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 定时任务 Demo 数据契约测试 */
 public class ScheduledTaskDemoDataTest {
 
+    /** 验证三个恒生池导出任务在 Demo 配置中预置所有扩展参数，增量保留首次起点 */
+    @Test
+    public void hsPoolTasksShouldProvideEditableExportPoolWithoutHsName() throws Exception {
+        String sql = new String(Files.readAllBytes(Paths.get("sql", "rrs_scheduled_task_demo_data.sql")),
+                StandardCharsets.UTF_8);
+        for (String taskCode : Arrays.asList(HsPoolFullExcelExportService.TASK_CODE,
+                HsPoolFullIncludingExpiredExcelExportService.TASK_CODE, HsPoolIncrementExcelExportService.TASK_CODE)) {
+            String row = Arrays.stream(sql.split("\\R"))
+                    .filter(line -> line.contains("'" + taskCode + "'"))
+                    .findFirst().orElse("");
+            assertThat(row).contains("\"poolIds\":[]", "\"exportEmptyPool\":true", "\"exportPoolWithoutHsName\":false",
+                    "\"outputDir\":null", "exportPoolWithoutHsName 默认 false");
+            if (HsPoolIncrementExcelExportService.TASK_CODE.equals(taskCode)) {
+                assertThat(row).contains("\"initialStartTime\":\"2026-01-01 00:00:00\"");
+            }
+        }
+    }
+
     /** 到期任务的 Demo 参数显式给出原有 1 天口径，便于直接在页面调整 */
     @Test
     public void expiredTasksShouldProvideEditableMaturityOffsetDays() throws Exception {

@@ -541,11 +541,13 @@ public class ScheduledTaskService {
         dto.setCronExpression(bo.getCronExpression());
         dto.setScheduleEnabled(Integer.valueOf(1).equals(bo.getScheduleEnabled()));
         dto.setParamJson(bo.getParamJson());
-        // 已注册实现时带回该任务的扩展参数填写说明（通用字段，不写死具体任务）
-        if (code != null && taskMap.containsKey(code)) {
-            dto.setParamHelp(taskMap.get(code).getParamHelp());
+        // 已注册实现时提供参数说明和配置页预填值
+        RrsScheduledTask task = taskMap.get(code);
+        if (task != null) {
+            dto.setParamHelp(task.getParamHelp());
+            dto.setParamDefaults(task.getParamDefaults());
         }
-        dto.setCodeRegistered(code != null && taskMap.containsKey(code));
+        dto.setCodeRegistered(task != null);
         dto.setCurrentlyScheduled(code != null && dynamicTaskScheduler.isScheduled(code));
         dto.setLastRunStatus(bo.getLastRunStatus());
         dto.setLastRunMessage(bo.getLastRunMessage());

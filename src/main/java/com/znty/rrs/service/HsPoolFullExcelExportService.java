@@ -17,11 +17,12 @@ public class HsPoolFullExcelExportService extends AbstractHsPoolExcelExportServi
     /** 返回恒生池全量数据导出（不含已到期）任务参数说明 */
     @Override
     public String getParamHelp() {
-        return "参数格式：可选 JSON 对象，例如 <code>{\"poolIds\":[15,16],\"exportEmptyPool\":true,\"outputDir\":\"D:/exports\"}</code>。\n"
+        return "参数格式：可选 JSON 对象，例如 <code>{\"poolIds\":[15,16],\"exportEmptyPool\":true,\"exportPoolWithoutHsName\":false,\"outputDir\":\"D:/exports\"}</code>。\n"
                 + "poolIds（导出池范围）：可选；仅填写叶子池 ID 数组，未填写或空数组时导出全部叶子池。\n"
                 + "exportEmptyPool（是否生成空池 Sheet）：可选；默认 true，false 时跳过没有数据的池。\n"
-                + "outputDir（导出根目录）：可选；未填写时使用 rrs.hs-pool-export.storage-path，任务会在其下创建 yyyyMMdd 日期目录和 bak 备份目录。\n"
-                + "导出内容：当前已生效的非主体证券和 CRMW；普通证券排除已到期数据，CRMW 不校验到期日；恒生池名称为空时使用投资池完整名称，竖线可配置多个 Sheet 名。";
+                + "exportPoolWithoutHsName（是否导出恒生池名称为空的池）：可选布尔值，默认 false，跳过这些池；设为 true 时使用投资池完整名称生成 Sheet。\n"
+                + "outputDir（导出根目录）：可选，默认 null，使用 rrs.hs-pool-export.storage-path，任务会在其下创建 yyyyMMdd 日期目录和 bak 备份目录。\n"
+                + "导出内容：当前已生效的非主体证券和 CRMW；普通证券排除已到期数据，CRMW 不校验到期日；恒生池名称可用竖线配置多个 Sheet 名。";
     }
 
     /** 返回全量导出标记 */

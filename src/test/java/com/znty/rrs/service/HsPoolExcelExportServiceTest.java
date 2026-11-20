@@ -35,6 +35,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /** 恒生池 Excel 导出任务单元测试。 */
@@ -53,7 +55,8 @@ public class HsPoolExcelExportServiceTest {
             when(taskMapper.queryTaskByCode(HsPoolFullExcelExportService.TASK_CODE)).thenReturn(task);
             HsPoolExportPoolDto bondPool = pool(1L, "恒生债池");
             HsPoolExportPoolDto emptyPool = pool(2L, "恒生空池");
-            when(exportMapper.queryExportPoolList(null)).thenReturn(Arrays.asList(bondPool, emptyPool));
+            when(exportMapper.queryExportPoolList(null))
+                    .thenReturn(Arrays.asList(bondPool, emptyPool, pool(3L, null)));
             HsPoolExportRowDto exportRow = row();
             when(exportMapper.queryFullExportRowList(1L, false)).thenReturn(Collections.singletonList(exportRow));
             when(exportMapper.queryFullExportRowList(2L, false)).thenReturn(Collections.emptyList());
@@ -62,6 +65,7 @@ public class HsPoolExcelExportServiceTest {
 
             assertThat(result.isSuccess()).isTrue();
             assertThat(result.getAffectedCount()).isEqualTo(1);
+            verify(exportMapper, never()).queryFullExportRowList(3L, false);
             String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
             assertThat(Paths.get(filePath).isAbsolute()).isTrue();
             assertThat(Paths.get(filePath).getFileName().toString()).startsWith("hs_pool_full_");
@@ -151,7 +155,7 @@ public class HsPoolExcelExportServiceTest {
         }
     }
 
-    /** 验证恒生池名称为空时使用完整池名，竖线拆分多 Sheet。 */
+    /** 验证显式开启后，恒生池名称为空时使用完整池名，竖线拆分多个 Sheet */
     @Test
     public void blankHsPoolNameShouldFallbackAndPipeShouldCreateMultipleSheets() throws Exception {
         HsPoolExcelExportMapper exportMapper = mock(HsPoolExcelExportMapper.class);
@@ -161,7 +165,7 @@ public class HsPoolExcelExportServiceTest {
         try {
             inject(service, exportMapper, taskMapper, outputDir);
             when(taskMapper.queryTaskByCode(HsPoolFullExcelExportService.TASK_CODE))
-                    .thenReturn(task("恒生池全量数据导出", null));
+                    .thenReturn(task("恒生池全量数据导出", "{\"exportPoolWithoutHsName\":true}"));
             HsPoolExportPoolDto fallbackPool = pool(1L, null);
             fallbackPool.setPoolFullName("投资池/债券池");
             HsPoolExportPoolDto multiNamePool = pool(2L, "恒生池A|恒生池B");
@@ -270,6 +274,69 @@ public class HsPoolExcelExportServiceTest {
         } finally {
             deleteDirectory(outputDir);
         }
+    }
+
+    /** 验证三个任务记录名称为空的池，只查询和导出已命名的池 */
+    @Test
+    public void scheduledExportsShouldSkipPoolsWithoutHsNameWhenDisabled() throws Exception {
+        Path outputDir = Files.createTempDirectory("hs-pool-configured-name-test");
+        try {
+            List<AbstractHsPoolExcelExportService> services = Arrays.asList(new HsPoolFullExcelExportService(),
+                    new HsPoolFullIncludingExpiredExcelExportService(), new HsPoolIncrementExcelExportService());
+            List<Long> poolIds = Arrays.asList(1L, 2L, 3L, 4L);
+            Date initialTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse("2026-08-01 00:00:00");
+            for (AbstractHsPoolExcelExportService service : services) {
+                HsPoolExcelExportMapper exportMapper = mock(HsPoolExcelExportMapper.class);
+                ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+                inject(service, exportMapper, taskMapper, outputDir);
+                when(taskMapper.queryTaskByCode(service.getTaskCode())).thenReturn(task("恒生池导出",
+                        "{\"poolIds\":[1,2,3,4],\"exportEmptyPool\":true,\"exportPoolWithoutHsName\":false,"
+                                + "\"initialStartTime\":\"2026-08-01 00:00:00\"}"));
+                when(exportMapper.queryExportPoolList(poolIds)).thenReturn(Arrays.asList(
+                        pool(1L, null), pool(2L, ""), pool(3L, "  "), pool(4L, "已命名空池")));
+
+                ScheduledTaskResult result = service.execute();
+
+                assertThat(result.isSuccess()).as(service.getTaskCode()).isTrue();
+                assertThat(result.getDetailLog()).contains(
+                        "投资池 1-池1：恒生池名称为空，已跳过导出",
+                        "投资池 2-池2：恒生池名称为空，已跳过导出",
+                        "投资池 3-池3：恒生池名称为空，已跳过导出"
+                ).doesNotContain("投资池 4-池4：恒生池名称为空，已跳过导出");
+                verify(exportMapper).queryExportPoolList(poolIds);
+                if (service.isIncrement()) {
+                    verify(exportMapper).queryIncrementExportRowList(eq(4L), eq(initialTime), any(Date.class));
+                } else {
+                    verify(exportMapper).queryFullExportRowList(4L, service.includeExpiredForFullExport());
+                }
+                verifyNoMoreInteractions(exportMapper);
+                String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
+                try (XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(filePath))) {
+                    assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
+                    assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("已命名空池");
+                    assertThat(workbook.getSheetAt(0).getLastRowNum()).isZero();
+                }
+            }
+        } finally {
+            deleteDirectory(outputDir);
+        }
+    }
+
+    /** 验证名称开关使用非布尔值时，在查询投资池前报错 */
+    @Test
+    public void scheduledExportShouldRejectNonBooleanHsNameOption() {
+        HsPoolExcelExportMapper exportMapper = mock(HsPoolExcelExportMapper.class);
+        ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+        HsPoolFullExcelExportService service = new HsPoolFullExcelExportService();
+        inject(service, exportMapper, taskMapper, Paths.get("target"));
+        when(taskMapper.queryTaskByCode(service.getTaskCode()))
+                .thenReturn(task("恒生池全量数据导出", "{\"exportPoolWithoutHsName\":\"false\"}"));
+
+        ScheduledTaskResult result = service.execute();
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("exportPoolWithoutHsName 必须为布尔值");
+        verifyNoInteractions(exportMapper);
     }
 
     /** 验证交易日列表为空时暂不启用过滤，增量任务仍正常执行。 */
