@@ -2,6 +2,7 @@ package com.znty.rrs.service;
 
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityCandidateDto;
 import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolAdjustReq;
+import com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolDto;
 import com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
@@ -24,7 +25,7 @@ import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 使用真实 MyBatis XML 验证批量调入调出的发行人筛选 */
+/** 使用真实 MyBatis XML 验证批量调整的投资池查询和候选证券筛选 */
 public class BatchSecurityPoolAdjustMapperTest {
 
     /** 隔离测试数据库 */
@@ -48,12 +49,17 @@ public class BatchSecurityPoolAdjustMapperTest {
                 + "rating_bond VARCHAR(20), rating_bondissuer VARCHAR(20), inner_issuer_rating VARCHAR(20), "
                 + "abs_flag INT, guarant_flag INT, yx_flag INT, cj_flag INT, issue_type VARCHAR(20), inner_class VARCHAR(20), "
                 + "inright_flag INT, std_credit_flag INT, maturity_date VARCHAR(20), date_exists DECIMAL(10,2), "
-                + "date_exists_str VARCHAR(30), guarantor VARCHAR(100), guarantor_id VARCHAR(30), "
+                + "date_exists_str VARCHAR(30), guarantor VARCHAR(100), guarantor_id VARCHAR(30), inner_guarantor_rating VARCHAR(20), "
                 + "security_source VARCHAR(20), market VARCHAR(20))");
         jdbc.execute("CREATE TABLE ip_pool_status (security_code VARCHAR(30), target_pool_id BIGINT, "
                 + "audit_status VARCHAR(10), is_deleted INT)");
-        jdbc.execute("CREATE TABLE ip_investment_pool (id BIGINT, pool_type VARCHAR(20))");
-        jdbc.update("INSERT INTO ip_investment_pool VALUES (2, 'bond_product'), (18, 'crmw')");
+        jdbc.execute("CREATE TABLE ip_investment_pool (id BIGINT, parent_id BIGINT, pool_type VARCHAR(20), "
+                + "pool_name VARCHAR(100), market_codes VARCHAR(100), variety_codes VARCHAR(100), description VARCHAR(100), "
+                + "max_capacity BIGINT, batch_in_flow_id BIGINT, batch_in_flow_key VARCHAR(100), batch_in_flow_name VARCHAR(100), "
+                + "batch_out_flow_id BIGINT, batch_out_flow_key VARCHAR(100), batch_out_flow_name VARCHAR(100), "
+                + "status VARCHAR(20), is_deleted INT, outer_sort INT, inner_sort INT)");
+        jdbc.update("INSERT INTO ip_investment_pool (id, pool_type, variety_codes, status, is_deleted) VALUES "
+                + "(2, 'bond_product', '[\"bond\"]', 'enabled', 0), (18, 'crmw', '[\"bond\"]', 'enabled', 0)");
         jdbc.execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(30), temp_security_market VARCHAR(20))");
         jdbc.update("INSERT INTO rrs_securityinfo (wind_code, short_name, security_type, security_status, "
                 + "issuer, issuer_code, market, abs_flag) VALUES "
@@ -75,6 +81,25 @@ public class BatchSecurityPoolAdjustMapperTest {
         }
         session = new SqlSessionFactoryBuilder().build(configuration).openSession();
         mapper = session.getMapper(BatchSecurityPoolAdjustMapper.class);
+    }
+
+    /** 分页查询只返回支持债券的启用信用债叶子池，指定其他类型的池也不会返回 */
+    @Test
+    public void shouldReturnOnlyEnabledCreditBondLeafPools() {
+        JdbcTemplate jdbc = new JdbcTemplate(database);
+        jdbc.execute("CREATE ALIAS JSON_CONTAINS FOR '" + BatchFundPoolAdjustMapperTest.class.getName() + ".jsonContains'");
+        jdbc.update("INSERT INTO ip_investment_pool (id, parent_id, pool_type, variety_codes, status, is_deleted) VALUES "
+                + "(20, NULL, 'credit_bond', '[\"bond\"]', 'enabled', 0), "
+                + "(21, 20, 'credit_bond', '[\"bond\", \"company\"]', 'enabled', 0), "
+                + "(22, 20, 'credit_bond', '[\"bond\"]', 'disabled', 0), "
+                + "(23, 20, 'credit_bond', '[\"company\"]', 'enabled', 0), "
+                + "(24, NULL, 'convertible_bond', '[\"bond\"]', 'enabled', 0), "
+                + "(25, NULL, 'special_account', '[\"bond\"]', 'enabled', 0)");
+
+        BatchSecurityPoolAdjustReq req = new BatchSecurityPoolAdjustReq();
+        assertThat(mapper.queryPoolPage(req)).extracting(BatchSecurityPoolDto::getId).containsExactly(21L);
+        req.setPoolIds(Collections.singletonList(25L));
+        assertThat(mapper.queryPoolPage(req)).isEmpty();
     }
 
     /** 调入调出均仅按发行人名称模糊匹配，且不绕过方向和证券状态限制 */

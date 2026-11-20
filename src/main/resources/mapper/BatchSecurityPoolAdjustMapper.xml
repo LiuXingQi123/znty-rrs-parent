@@ -4,7 +4,7 @@
 <mapper namespace="com.znty.rrs.mapper.BatchSecurityPoolAdjustMapper">
     <!-- 证券池批量调整 mapper，提供可调整投资池及候选证券查询 -->
 
-    <!-- 分页查询启用叶子投资池 -->
+    <!-- 分页查询投资品种包含债券的启用信用债叶子池 -->
     <select id="queryPoolPage" resultType="com.znty.rrs.entity.batchsecuritypooladjust.BatchSecurityPoolDto">
         SELECT p.id
                ,p.pool_name
@@ -22,7 +22,7 @@
         FROM ip_investment_pool p
         WHERE p.status = 'enabled'
           AND p.is_deleted = 0
-          <!-- 证券池批量主页只保留投资品种包含债券的池 -->
+          AND p.pool_type = 'credit_bond'
           AND JSON_CONTAINS(p.variety_codes, '"bond"')
         <if test="poolIds != null and poolIds.size() > 0">
           AND p.id IN

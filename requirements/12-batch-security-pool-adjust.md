@@ -15,7 +15,7 @@
 - 列表展示主体编码 `issuerCode`、证券全称 `fullName`，已有证券全称列直接保留；值为空时留白
 - 原“发行人”“发行主体全称”查询条件及对应列表列统一显示为“主体全称”，继续使用 `issuer` 字段及原有匹配规则
 - 新增条件支持回车查询，查询回到第一页，重置时清空；证券基础信息等非查询、非列表区域保持原样
-- 批量页仅修改工作台内“可选证券”区域，初始投资池列表保持原样；重新进入调入/调出时清空新增条件
+- 上述证券查询条件用于工作台内“可选证券”区域；重新进入调入/调出时清空这些条件
 
 “是否特征”追加“是否标准信用债”（`bondYesFlags` 选项 `stdCredit`），勾选仅筛选证券主档 `std_credit_flag=1`，与其他特征按 AND 组合；不勾选时不限制该字段。对应列表追加 `stdCreditFlag` 列：1=是，其他值（含 NULL）按现有是否类标识显示否，接口保留原始数值，沿用是=`success`、否=`info` 的 Tag。仅使用上游维护的原始标志，不按其他特征或 `std_clause_flag` 推断；CRMW 按标的证券筛选及展示。
 
@@ -55,8 +55,8 @@
 
 **初始化**（`mounted → initPage`）：
 1. `axios.defaults.baseURL = 'http://localhost:18090'`
-2. `apiPost('/api/v1/common/queryPoolTreeList', { includeVarietyCodes: ['bond'] })` → 构建投资池筛选树（保留投资品种包含债券的池及其上级，含 CRMW 池；树默认收起）。
-3. `loadPoolPage()` → `apiPost('/api/v1/batchSecurityPoolAdjust/queryPoolPage', {...})`（启用叶子池，`variety_codes` 包含 `bond`）。
+2. `apiPost('/api/v1/common/queryPoolTreeList', { includePoolTypes: ['credit_bond'], includeVarietyCodes: ['bond'] })` → 构建投资池筛选树（保留信用债类型下投资品种包含债券的池及其上级；树默认收起）。
+3. `loadPoolPage()` → `apiPost('/api/v1/batchSecurityPoolAdjust/queryPoolPage', {...})`（当前用户可调整的启用叶子池，`pool_type` 为 `credit_bond`，`variety_codes` 包含 `bond`）。
 
 ---
 
@@ -246,8 +246,8 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 | 路径 | 请求体字段 | 返回结构 | 用途 |
 |---|---|---|---|
-| `common/queryPoolTreeList` | `{ includeVarietyCodes: ['bond'] }` | `List<PoolTreeDto>` | 主页面投资池筛选树，默认收起，只含投资品种包含债券的池及其上级 |
-| `batchSecurityPoolAdjust/queryPoolPage` | currentUserId, poolIds, pageIndex, pageSize | `PageResult<BatchSecurityPoolDto>`（records:[id/poolName/poolFullName/poolType/marketCodes/varietyCodes/description/maxCapacity/currentCount], total） | 分页查询当前用户可调整的启用叶子投资池；`variety_codes` 包含 `bond`，含 CRMW 池 |
+| `common/queryPoolTreeList` | `{ includePoolTypes: ['credit_bond'], includeVarietyCodes: ['bond'] }` | `List<PoolTreeDto>` | 主页面投资池筛选树，默认收起，保留信用债类型下投资品种包含债券的池及其上级 |
+| `batchSecurityPoolAdjust/queryPoolPage` | currentUserId, poolIds, pageIndex, pageSize | `PageResult<BatchSecurityPoolDto>`（records:[id/poolName/poolFullName/poolType/marketCodes/varietyCodes/description/maxCapacity/currentCount], total） | 分页查询当前用户可调整的启用叶子投资池；`pool_type` 为 `credit_bond`，`variety_codes` 包含 `bond` |
 | `batchSecurityPoolAdjust/querySecurityPage` | currentUserId, poolId, direction(in/out), securityCode, securityShortName, securityFullName, issuerCode, marketCodes, bondYesFlags, pageIndex, pageSize | `PageResult<BatchSecurityCandidateDto>` | 分页查询目标池候选证券；特征多选按 AND |
 | `batchSecurityPoolAdjust/querySelfSelectedRightsHolderPage` | companyCode, companyName, pageIndex, pageSize | `PageResult<SelfSelectedRightsHolderDto>` | 分页筛选 ABS 自选权益人 |
 | `batchSecurityPoolAdjust/checkAdjust` | `BatchSecurityInboundAdjustReq`: currentUserId, direction, poolId, poolName, poolType, securities:[{securityCode,securityShortName,securityType}] | `BatchSecurityInboundAdjustDto`（items:[{...,canAdjust,failReasons,flowOptions}]） | 批量调库下一步校验 |
@@ -379,7 +379,7 @@ POST /api/v1/batchSecurityPoolAdjust/checkAdjust
 
 ## CRMW 普通池入口边界
 
-CRMW 凭证可在证券池调整、批量调整和证券池 Excel 导入中按单券办理。存量证券批量调整也支持凭证，目标限定在债券产品库。前三个入口开放 CRMW 池作为目标池，沿用原调库校验。单券审批通过后写入 `ip_pool_status`。凭证与标的组合继续走专用 CRMW 调库，状态写入 `ip_pool_status_crmw`。 CRMW 专用批量调入仍从 `bond_product1_root`（债券产品库1）及其下级池的有效在池证券组成候选。清空目标池按各类对象的单笔出库规则执行，校验全部通过后直通落库。
+CRMW 凭证可在证券池调整、批量调整和证券池 Excel 导入中按单券办理。证券池调整和证券池 Excel 导入开放 CRMW 池作为目标池，证券池批量调整页面查询的目标池类型为信用债。存量证券批量调整也支持凭证，目标限定在债券产品库。单券审批通过后写入 `ip_pool_status`。凭证与标的组合继续走专用 CRMW 调库，状态写入 `ip_pool_status_crmw`。CRMW 专用批量调入仍从 `bond_product1_root`（债券产品库1）及其下级池的有效在池证券组成候选。清空目标池按各类对象的单笔出库规则执行，校验全部通过后直通落库。
 
 ## 已查询数据复用
 
