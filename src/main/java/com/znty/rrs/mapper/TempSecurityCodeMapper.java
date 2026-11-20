@@ -95,8 +95,15 @@ public interface TempSecurityCodeMapper {
     /** 按关键字远程查询正式证券（rrs_securityinfo，最多 50 条） */
     List<TempSecurityCodeDto.FormalSecurityOption> queryFormalSecurityOptionList(TempSecurityCodeReq req);
 
-    /** 根据正式证券代码查询正式证券选项 */
-    TempSecurityCodeDto.FormalSecurityOption queryFormalSecurityByCode(@Param("securityCode") String securityCode);
+    /**
+     * 根据证券代码查询正式证券选项
+     *
+     * @param securityCode 证券代码
+     * @param allowDelisted 是否允许查询退市证券
+     * @return 匹配的正式证券选项
+     */
+    TempSecurityCodeDto.FormalSecurityOption queryFormalSecurityByCode(@Param("securityCode") String securityCode,
+            @Param("allowDelisted") boolean allowDelisted);
 
     /** 排除当前登记，读取同一正式代码已成功关联的临时代码 */
     TempSecurityCodeBo queryAssociatedTempSecurityCode(@Param("securityCode") String securityCode,

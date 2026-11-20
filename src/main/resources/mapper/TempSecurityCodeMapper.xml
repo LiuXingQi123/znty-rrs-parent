@@ -255,7 +255,10 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = si.security_type
                                         AND dst.is_deleted = 0
         WHERE si.wind_code = #{securityCode}
-          AND si.security_status != 'D'
+          AND si.security_status IS NOT NULL
+          <if test="!allowDelisted">
+              AND si.security_status != 'D'
+          </if>
           AND si.security_source != 'temporary'
           AND si.security_type NOT IN ('crmw', 'company')
         LIMIT 1

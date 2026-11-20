@@ -186,7 +186,7 @@ INSERT INTO `wind_cbondissuer` (
 ('WCC_ISSUER_004', '128102.SZ', '某城市投资开发建设有限公司', 'C10002', 1, '4700000000', '建筑与工程', '4701000000', '城市基建', '4701010000', '基础设施建设', '4701010010', '城市建设', '某省杭州市', '城投公司', 0, '20240530', NULL, '地方国有企业', 0, 4701010010, '2026-07-10', '0'),
 ('WCC_ISSUER_005', '198103.SH', '某能源集团有限公司', 'C10003', 1, '2100000000', '能源', '2101000000', '煤炭', '2101010000', '煤炭开采', '2101010010', '煤炭开采和洗选', '某省太原市', '国有企业', 0, '20240530', NULL, '地方国有企业', 0, 2101010010, '2026-07-10', '0'),
 ('WCC_ISSUER_006', '128103.SZ', '某能源集团有限公司', 'C10003', 1, '2100000000', '能源', '2101000000', '煤炭', '2101010000', '煤炭开采', '2101010010', '煤炭开采和洗选', '某省太原市', '国有企业', 0, '20240530', NULL, '地方国有企业', 0, 2101010010, '2026-07-10', '0'),
-('WCC_ISSUER_009', '102684582.IB', '某省交通投资集团有限公司', 'C10001', 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, DATE_FORMAT(NOW(), '%Y-%m-%d'), '0');
+('WCC_ISSUER_009', '102684582.IB', '某省交通投资集团有限公司', 'C10001', 1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-20', '0');
 
 -- ----------------------------------------------------------------------------
 -- Wind 中国债券发行主体信用评级样例（15 条）
@@ -402,4 +402,4 @@ INSERT INTO `wind_windcustomcode` (
 ('WCC_DEMO_052', 'WCTMP001.IB', NULL, 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'WCTMP001', '换码临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
 ('WCC_DEMO_053', 'ABG001.IB', 'S9001051', 'C10008', 'Q', '企债', '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', 'CNDEMO000460', 'ABG001', '25资管担保ABS', 'NIB', 101001000, NULL, 120001000, 0.001, 10, NULL, NULL, 100003000, NULL, NULL, '2026-10-12', '0'),
 ('WCC_DEMO_054', 'WCTMP002.IB', 'S9001052', 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, 'WCTMP002', '未调库临时中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-12', '0'),
-('WCC_DEMO_055', '102684582.IB', 'S77052872', 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, '102684582', '反向换码中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, DATE_FORMAT(NOW(), '%Y-%m-%d'), '0');
+('WCC_DEMO_055', '102684582.IB', 'S77052872', 'C10001', NULL, NULL, '中国', 'CN', '银行间', 'IB', '人民币元', 'CNY', NULL, '102684582', '反向换码中票', 'NIB', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-20', '0');

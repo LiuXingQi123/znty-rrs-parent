@@ -113,22 +113,29 @@ public class WindCodeChangeDemoDataTest {
             // 原样执行日期表达式，验证重复初始化不会追加记录。
             resetDemo(jdbc, "ais_inv_ods_demo_data.sql", "wind_cbondchangewindcode", "ais_inv_ods.wind_cbondchangewindcode");
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_cbondchangewindcode", Integer.class))
-                    .isEqualTo(14);
+                    .isEqualTo(16);
             try (SqlSession session = new SqlSessionFactoryBuilder().build(config).openSession(true)) {
                 WindCodeSyncMapper mapper = session.getMapper(WindCodeSyncMapper.class);
                 List<WindCodeChangeDto> candidates = mapper.queryRecentWindCodeChangeList(1);
                 assertThat(candidates).extracting(WindCodeChangeDto::getObjectId).containsExactlyInAnyOrder(
                         "WCH_DEMO_001", "WCH_DEMO_003", "WCH_DEMO_004", "WCH_DEMO_005", "WCH_DEMO_006",
-                        "WCH_DEMO_009", "WCH_DEMO_010", "WCH_DEMO_011", "WCH_DEMO_012", "WCH_DEMO_013", "WCH_DEMO_014");
+                        "WCH_DEMO_009", "WCH_DEMO_010", "WCH_DEMO_011", "WCH_DEMO_012", "WCH_DEMO_013", "WCH_DEMO_014",
+                        "WCH_DEMO_016");
                 for (WindCodeChangeDto change : candidates) {
                     assertThat(change.getChangeDate()).matches("\\d{8}");
                     assertThat(change.getSecId()).hasSizeLessThanOrEqualTo(10);
-                    String oldCode = change.getOldWindCode();
-                    int marketSeparator = oldCode.lastIndexOf('.');
-                    assertThat(change.getNewWindCode()).as("%s 仅变化数字末位", change.getObjectId())
-                            .matches(Pattern.quote(oldCode.substring(0, marketSeparator - 1))
-                                    + "\\d" + Pattern.quote(oldCode.substring(marketSeparator)))
-                            .isNotEqualTo(oldCode);
+                    if ("WCH_DEMO_016".equals(change.getObjectId())) {
+                        assertThat(change.getSecId()).isEqualTo("S77052872");
+                        assertThat(change.getOldWindCode()).isEqualTo("102684582.IB");
+                        assertThat(change.getNewWindCode()).isEqualTo("q26111727.IB");
+                    } else {
+                        String oldCode = change.getOldWindCode();
+                        int marketSeparator = oldCode.lastIndexOf('.');
+                        assertThat(change.getNewWindCode()).as("%s 仅变化数字末位", change.getObjectId())
+                                .matches(Pattern.quote(oldCode.substring(0, marketSeparator - 1))
+                                        + "\\d" + Pattern.quote(oldCode.substring(marketSeparator)))
+                                .isNotEqualTo(oldCode);
+                    }
                     if ("WCH_DEMO_006".equals(change.getObjectId())) {
                         assertThat(mapper.querySecurityBySecIdForUpdate(change.getSecId())).isNull();
                     } else {
@@ -197,10 +204,10 @@ public class WindCodeChangeDemoDataTest {
         WindCodeSyncService task = createTask();
         ScheduledTaskResult first = task.execute();
         assertThat(first.isSuccess()).isTrue();
-        assertThat(first.getMessage()).as(first.getDetailLog()).isEqualTo("成功 10 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 0 条，失败 0 条");
+        assertThat(first.getMessage()).as(first.getDetailLog()).isEqualTo("成功 11 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 0 条，失败 0 条");
         assertThat(first.getDetailLog()).contains("特别提示", "SEC_ID=S9999999").doesNotContain("[ERROR]");
         assertThat(first.getDetailLog()).contains("换码成功：SEC_ID=S9001046", "变更记录旧代码=PPN000.IB");
-        assertThat(first.getAffectedCount()).isEqualTo(10);
+        assertThat(first.getAffectedCount()).isEqualTo(11);
         assertThat(jdbc.queryForList("SELECT wind_code FROM rrs_securityinfo WHERE sec_id IN ('S9001003','S9001001','S9001002') ORDER BY sec_id", String.class))
                 .containsExactly("198106.SH", "128106.SZ", "XYB007.IB");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='XYB006.IB'", Integer.class)).isZero();
@@ -278,6 +285,15 @@ public class WindCodeChangeDemoDataTest {
         }
         // 已转正且没有在池记录的资产证券化样本仍只改主档和登记
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code IN ('ABN002.IB','ABN007.IB')", Integer.class)).isZero();
+        // 反向换码创建此前缺失的目标码，沿用退市状态并保留原转正历史
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='q26111727.IB'"
+                + " AND sec_id='S77052872' AND security_source='temp_converted' AND security_status='D'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_securityinfo WHERE wind_code='102684582.IB'", String.class))
+                .isEqualTo("TEMP_102684582.IB");
+        assertThat(jdbc.queryForObject("SELECT security_code FROM rrs_temp_security_code WHERE id=6", String.class))
+                .isEqualTo("102684582.IB");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code WHERE temp_security_code='102684582.IB'"
+                + " AND security_code='q26111727.IB' AND status='updated' AND oprt_source='job'", Integer.class)).isEqualTo(1);
         Map<String, Integer> before = new LinkedHashMap<>();
         for (String table : Arrays.asList("rrs_securityinfo", "rrs_temp_security_code", "rrs_temp_security_code_update_log",
                 "ip_adjust_log", "ip_pool_status", "ip_pool_status_crmw", "ip_adjust_step",
@@ -286,7 +302,7 @@ public class WindCodeChangeDemoDataTest {
         }
         ScheduledTaskResult second = task.execute();
         assertThat(second.isSuccess()).isTrue();
-        assertThat(second.getMessage()).as(second.getDetailLog()).isEqualTo("成功 0 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 10 条，失败 0 条");
+        assertThat(second.getMessage()).as(second.getDetailLog()).isEqualTo("成功 0 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 11 条，失败 0 条");
         for (Map.Entry<String, Integer> entry : before.entrySet()) {
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + entry.getKey(), Integer.class)).as(entry.getKey())
                     .isEqualTo(entry.getValue());

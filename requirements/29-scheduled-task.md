@@ -444,6 +444,7 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
 - 用户确认：源表有 A→B、B→C，主档仍是 A 时，直接执行 A→C。源记录旧码 B 不存在也继续；临时代码记录、普通池、CRMW 和待审批申请都使用主档实际旧码 A，不生成中间码 B 的出入库记录。按 SEC_ID 无主档时仍 WARN 提示并跳过，临时表即使有记录也不单独转换。本条规则替代此前“事件旧码不存在就跳过”的规则。
 - 四类处理：`official` 只补任务登记并保留来源；`temporary` 复用未删除、temporary 状态的原登记，主档改为 `temp_converted` 并写入原登记的明确市场；主档缺失特别提示、跳过且不补数据；`temp_converted` 要有转正历史，新增本次旧新码登记、保留原登记。
 - 任务登记仅补 `rrs_temp_security_code`，不调用页面新增入口、不创建 TEMP_ 占位主档。已有待处理登记的目标码不得与事件冲突，取消、删除或来源与登记不一致时明确失败。
+- Wind 按 SEC_ID 同步代码，源主档为退市状态 `D` 时，新主档沿用 `D`。Wind 读取新主档及迁移已有在池、在途记录时允许该状态。人工转正和 `bond_temp_code_replace` 仍要求目标证券未退市。
 - 主档更名后使用既有正式主数据及市场校验；复用 `TempSecurityCodeBusinessConverter` 的单码入口。普通池、同凭证下 CRMW 标的分别处理：当前状态旧码退出、新码进入；在途申请更新日志身份、保留旧代码快照并新增目标代码快照，沿用原批次、发起人、状态和步骤；历史终态不改写。即时日志操作人为系统、audit_status=20、adjust_advice=NULL。无当前状态或在途业务不生成调库流水。
 - **证券快照**：普通池与 CRMW、当前在池与在途申请统一按目标代码当前主档新增快照，不复制旧快照的业务填写值或空值，不给旧快照改码、更新或删除。在途主项保留原日志 ID，详情和审批按“日志 ID + 证券代码”读取对应快照；CRMW 凭证字段仍取本笔日志。Wind 主档更名不额外补齐利率、评级等信息，新快照使用更名时主档已有值；此规则不保证上游尚未同步的字段非空。重复、已是新码、主档缺失等跳过事件不新增快照；无在池或在途业务时保持只改主档及登记，不额外新增快照；快照写入失败整次换码回滚。本次不自动迁移已经换码的存量数据。
 - 新码不扩展其他市场的 ISIN 关联组；人工转正和 `bond_temp_code_replace` 仍沿用原整组规则。共享转换明确为新码写入“调入”方向，避免原 CRMW 状态缺少方向时生成无方向流水。
@@ -454,7 +455,7 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
 - 任务执行状态与单条业务结果分别统计：扫描和逐条处理正常完成即返回任务成功，即使存在单条转换失败或全部单条失败，也保留 ERROR 明细、失败条数和实际成功影响数；只有扫描或其他任务级异常导致执行未完成时返回任务失败。
 - 实际成功换码固定向 `rrs_temp_security_code_update_log` 写一条登记映射（`replace_table_name='rrs_temp_security_code'`、`replace_record_id=登记ID`），记录主档实际旧码到最新新码，无业务引用时同样写入；受影响的业务记录另存原有转换明细。主档缺失、已是新码、已完成变更等跳过不新增日志；日志写入失败与主档、登记和业务转换一起回滚。
 - 人工新增 ID 当前为 `TEMP_临时代码`，未与 Wind 真实 SEC_ID 建立对应时按主档缺失处理，不按名称或代码猜测证券身份。
-- Demo 包含 14 条换码记录，日期按数据库 NOW() 动态生成；选取最新记录后候选 11 条，首次成功 10 条、主档缺失跳过 1 条、已是新码跳过 0 条、失败 0 条。重复执行时成功 0 条、重复跳过 10 条、主档缺失跳过 1 条，不新增业务记录。XYB 的较早记录、同码记录和窗口外历史不处理；匹配主档的 SEC_ID 唯一且不超过 10 位。
+- Demo 包含 16 条换码记录，日期按数据库 NOW() 动态生成。选取最新记录后候选 12 条，首次成功 11 条、主档缺失跳过 1 条、失败 0 条。再次执行时 11 条因重复跳过，缺失主档仍跳过。XYB 的较早记录、同码记录和窗口外历史不处理，匹配主档的 SEC_ID 唯一且不超过 10 位。
 - 初始化范围：表结构就绪后，可使用脚本工具完整初始化 Demo（`INIT_ALL_DEMO`）。按模块准备时，需恢复 `rrs_external_import_demo_data.sql`、`rrs_temp_security_code_demo_data.sql`、`rrs_dict_demo_data.sql`、`rrs_pool_init_demo_data.sql`、`rrs_security_pool_adjust_demo_data.sql`、`rrs_crmw_pool_status_demo_data.sql` 和 `ais_inv_ods_demo_data.sql`。无论使用哪种方式，从头演示前还须清空普通/CRMW 调库快照（这两张表不由 Demo 脚本灌数）。任务先保持关闭，完整恢复后手动执行；只重置 ODS 事件不会恢复已换码主档、登记或业务状态。从头再演示也须恢复相同范围。
 
 | 事件 | 初始情况 / 编码 | 预期处理 |
@@ -470,6 +471,7 @@ TempSecurityCodeService.editWindCodeChangeByJob(change)
 | `WCH_DEMO_012` | official 无登记，`GSB001.SH→GSB006.SH`，一级库申请待审批 | 原申请 id=8、批次、流程及步骤不变，更新代码和快照，不提前生成在池状态 |
 | `WCH_DEMO_013` | 主档 SEC_ID=S9001046、当前码 PPN001.IB，最新记录为 `PPN000.IB→PPN006.IB`，源记录旧码不存在 | 按 SEC_ID 直接换成 PPN006.IB，新增 PPN001.IB→PPN006.IB 记录；不创建 PPN000.IB |
 | `WCH_DEMO_014` | `WCTMP002.IB→WCTMP007.IB`，旧码主档为 temporary，SEC_ID=S9001052，初始无调库业务 | 复用 id=5 登记，写成功映射；旧主档置 D 并使用 TEMP_WCTMP002.IB，新主档承接 S9001052、来源为 temp_converted；无新增池状态、调库流水或快照 |
+| `WCH_DEMO_015/016` | `q26111727.IB` 已转正为 `102684582.IB`，主档仅有 `102684582.IB`，状态为 D，最新 Wind 事件换回 `q26111727.IB` | 处理 016，保留原转正登记，新增反向登记。新主档 `q26111727.IB` 承接 S77052872，状态沿用 D |
 
 `WCTMP001.IB` 和 `WCTMP002.IB` 均演示“外部已补齐真实 SEC_ID”的待转正场景。主档分别为 `S9001050` 和 `S9001052`，各自的登记仍保留创建时的 TEMP_ 身份。Wind 任务按已匹配的 SEC_ID 查主档。原 TMP001.IB / TMP003.IB 人工录入及取消样例继续保留。
 - 测试：`WindCodeChangeDemoDataTest` 原样执行 Demo、生产 Mapper 和事务，验证四类来源、最新历史、旧临时代码失效主档与新代码主档、普通/CRMW 出入库、在途与快照、历史保留和重复执行。`WindCodeSyncServiceTest` 验证数据库扫描接口、最新日期并列冲突、相同新码去重和失败隔离；`TempSecurityCodePersistenceTest` 验证数据库日期边界、相同/不同 S_INFO_WINDCODE 的最新记录、OPDATE 不决定新旧、主档拆分保存、已是新码跳过、源记录不被改写，以及原事务回滚规则。异常数据仅在隔离测试中建立（H2 测试使用 JDK 17）。

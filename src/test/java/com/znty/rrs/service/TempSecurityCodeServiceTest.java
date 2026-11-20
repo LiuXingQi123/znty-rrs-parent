@@ -80,7 +80,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeReq req = buildUpdateReq();
         TempSecurityCodeBo oldBo = buildOldBo();
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         IpAdjustLogBo pending = new IpAdjustLogBo();
         pending.setId(10L);
         pending.setSecurityCode("TMP001");
@@ -128,7 +128,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeBo oldBo = buildOldBo();
         IpPoolStatusBo poolStatus = buildPoolStatus();
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
         when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
@@ -173,7 +173,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeService service = buildService(mapper, adjustMapper);
         TempSecurityCodeReq req = buildUpdateReq();
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
         when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
@@ -206,7 +206,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
         TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         TempSecurityCodeBo associated = new TempSecurityCodeBo();
         associated.setId(2L);
         associated.setTempSecurityCode("TMP002");
@@ -230,7 +230,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeBo oldBo = buildOldBo();
         oldBo.setSecurityCode("110001.IB");
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         TempSecurityCodeBo associated = new TempSecurityCodeBo();
         associated.setId(2L);
         associated.setTempSecurityCode("TMP002");
@@ -249,7 +249,7 @@ public class TempSecurityCodeServiceTest {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         TempSecurityCodeService service = buildService(mapper, adjustMapper);
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         IpAdjustLogBo history = new IpAdjustLogBo();
         history.setId(27L);
         history.setSecurityCode("110001.IB");
@@ -270,7 +270,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeMapper mapper = mock(TempSecurityCodeMapper.class);
         TempSecurityCodeService service = buildService(mapper, mock(SecurityPoolAdjustMapper.class));
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         SecurityMarketService markets = (SecurityMarketService) ReflectionTestUtils.getField(service, "securityMarketService");
         SecurityMarketDto selected = new SecurityMarketDto();
         selected.setWindCode("110001.IB");
@@ -296,7 +296,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeBo oldBo = buildOldBo();
         oldBo.setSecurityCode("110001.IB");
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         IpAdjustLogBo history = new IpAdjustLogBo();
         history.setId(29L);
         history.setSecurityCode("110001.IB");
@@ -318,7 +318,7 @@ public class TempSecurityCodeServiceTest {
         req.setId(1L);
         req.setSecurityCode("110001.IB");
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(null);
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(null);
 
         assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
                 .isInstanceOf(BizException.class)
@@ -340,7 +340,7 @@ public class TempSecurityCodeServiceTest {
         crmwPoolStatus.setCrmwScode("K.IB");
         crmwPoolStatus.setCrmwStype("crmw");
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(oldBo);
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         when(mapper.queryPendingAdjustLogSecurityReferenceIdList(any(TempSecurityCodeBo.class)))
                 .thenReturn(Collections.<Long>emptyList());
         when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any(TempSecurityCodeBo.class)))
@@ -393,7 +393,7 @@ public class TempSecurityCodeServiceTest {
         TempSecurityCodeService service = buildService(mapper, adjustMapper);
         TempSecurityCodeReq req = buildUpdateReq();
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         when(mapper.editTempSecurityCodeToUpdated(any(TempSecurityCodeBo.class))).thenReturn(0);
 
         assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(req))
@@ -411,7 +411,7 @@ public class TempSecurityCodeServiceTest {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         TempSecurityCodeService service = buildService(mapper, adjustMapper);
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         when(mapper.editTempSecurityCodeToUpdated(any())).thenReturn(1);
         when(mapper.addTempSecurityCodeUpdateLog(any())).thenReturn(0);
 
@@ -427,7 +427,7 @@ public class TempSecurityCodeServiceTest {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         TempSecurityCodeService service = buildService(mapper, adjustMapper);
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         when(mapper.editTempSecurityCodeToUpdated(any())).thenReturn(1);
         when(mapper.queryPendingAdjustLogCrmwReferenceIdList(any())).thenReturn(Arrays.asList(10L, 11L));
         when(mapper.queryPoolStatusCrmwReferenceIdList(any())).thenReturn(Collections.singletonList(88L));
@@ -458,7 +458,7 @@ public class TempSecurityCodeServiceTest {
         SecurityPoolAdjustMapper adjustMapper = mock(SecurityPoolAdjustMapper.class);
         TempSecurityCodeService service = buildService(mapper, adjustMapper);
         when(mapper.queryTempSecurityCodeById(1L)).thenReturn(buildOldBo());
-        when(mapper.queryFormalSecurityByCode("110001.IB")).thenReturn(buildFormalSecurityOption());
+        when(mapper.queryFormalSecurityByCode("110001.IB", false)).thenReturn(buildFormalSecurityOption());
         when(mapper.editTempSecurityCodeToUpdated(any())).thenReturn(1);
         when(mapper.queryPoolStatusCrmwReferenceIdList(any())).thenReturn(Collections.singletonList(88L));
         when(mapper.addTempSecurityCodeUpdateLog(any())).thenReturn(0);

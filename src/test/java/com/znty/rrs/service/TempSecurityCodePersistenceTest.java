@@ -21,6 +21,7 @@ import com.znty.rrs.entity.bo.IpAdjustLogBo;
 import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.bo.TempSecurityCodeBo;
 import com.znty.rrs.entity.bo.AdjustSecuritySnapshotBo;
+import com.znty.rrs.exception.BizException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -570,11 +571,12 @@ public class TempSecurityCodePersistenceTest {
         assertConversionAudit(registrationId, "FORMAL.IB", "NEW.IB");
     }
 
-    /** 单码换码迁移普通池、CRMW 标的和原在途申请，不扩展已有同券其他市场。 */
+    /** 退市债换码迁移普通池、CRMW 标的和原在途申请，不扩展其他市场 */
     @Test
     public void windShouldConvertBothPoolKindsAndKeepPendingApproval() {
         // 建立同券其他市场，确认 Wind 入口不会扩展或重调它们。
         setupGroup();
+        jdbc.update("UPDATE rrs_securityinfo SET security_status='D' WHERE wind_code='FORMAL.IB'");
         when(markets.queryMarketCode("NEW.IB")).thenReturn("NIB");
         // 配置普通池并建立原状态、调出申请。
         addPool(100L, "[]", 10);
@@ -595,6 +597,8 @@ public class TempSecurityCodePersistenceTest {
         assertThat(service.editWindCodeChangeByJob(latest)).isEqualTo(WindCodeChangeResult.ALREADY_COMPLETED);
         assertThat(latest.getOldWindCode()).isEqualTo("INTERMEDIATE.IB");
         assertThat(activeCodes(100L)).containsExactly("FORMAL.SH", "NEW.IB");
+        assertThat(jdbc.queryForObject("SELECT security_status FROM rrs_securityinfo WHERE wind_code='NEW.IB'", String.class))
+                .isEqualTo("D");
         assertThat(count("SELECT COUNT(*) FROM ip_pool_status_crmw WHERE security_code='NEW.IB' AND is_deleted=0")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code='FORMAL.IB' AND adjust_mode='调出'"
                 + " AND adjust_type='Wind代码变更调出' AND audit_status='20' AND adjuster_id='0' AND adjust_advice IS NULL")).isEqualTo(3);
@@ -802,6 +806,20 @@ public class TempSecurityCodePersistenceTest {
         assertMasterIds();
     }
 
+    /** 人工转正和临时代码定时转正均拒绝退市正式代码 */
+    @Test
+    public void ordinaryConversionsShouldStillRejectDelistedFormalSecurity() throws Exception {
+        TempSecurityCodeDto added = service.addTempSecurityCode(addReq("001.IB"));
+        jdbc.update("UPDATE rrs_securityinfo SET security_status='D' WHERE wind_code='FORMAL.IB'");
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdated(operation(added.getId(), "FORMAL.IB")))
+                .isInstanceOf(BizException.class).hasMessageContaining("正式证券不存在或不可用");
+
+        jdbc.update("UPDATE rrs_temp_security_code SET security_code='FORMAL.IB' WHERE id=?", added.getId());
+        assertThatThrownBy(() -> service.editTempSecurityCodeToUpdatedByJob(added.getId()))
+                .isInstanceOf(BizException.class).hasMessageContaining("正式证券不存在或不可用");
+        assertThat(mapper.queryTempSecurityCodeById(added.getId()).getStatus()).isEqualTo("temporary");
+    }
+
     /** 定时转正使用外部补齐的正式代码，并保留临时和正式 ID。 */
     @Test
     public void jobConversionShouldPreserveTemporaryAndFormalIds() throws Exception {
@@ -852,7 +870,8 @@ public class TempSecurityCodePersistenceTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo s"
                 + " JOIN rrs_temp_security_code t ON t.temp_security_code=s.wind_code"
                 + " WHERE s.security_source='temporary' AND s.sec_id=t.sec_id", Integer.class)).isEqualTo(2);
-        assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_temp_security_code WHERE status='updated'", String.class))
+        assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_temp_security_code"
+                + " WHERE status='updated' AND temp_security_code='TMP002.IB'", String.class))
                 .isEqualTo("TEMP_TMP002.IB");
         assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_securityinfo WHERE wind_code='ABN002.IB'", String.class))
                 .doesNotStartWith("TEMP_");

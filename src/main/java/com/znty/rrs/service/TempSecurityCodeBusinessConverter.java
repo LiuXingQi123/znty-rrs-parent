@@ -177,7 +177,8 @@ public class TempSecurityCodeBusinessConverter {
             SecurityInfoBo member = securityPoolAdjustMapper.querySecurityBoByCode(code);
             if (member == null || member.getSecurityType() == null || member.getSecurityType().trim().isEmpty()
                     || member.getSecurityStatus() == null || member.getSecuritySource() == null
-                    || "temporary".equals(member.getSecuritySource()) || "D".equals(member.getSecurityStatus())
+                    || "temporary".equals(member.getSecuritySource())
+                    || (!plan.singleCode && "D".equals(member.getSecurityStatus()))
                     || "crmw".equals(member.getSecurityType()) || "company".equals(member.getSecurityType())) {
                 throw new BizException("正式关联证券不存在或不可用，securityCode=" + code);
             }

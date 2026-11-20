@@ -178,7 +178,7 @@ public class TempSecurityCodeService {
         // 查询并校验临时代码当前状态
         TempSecurityCodeBo oldBo = queryOperableTempSecurityCode(req.getId());
         // 校验正式证券存在且非临时代码占位
-        TempSecurityCodeDto.FormalSecurityOption formalSecurity = queryRequiredFormalSecurity(req.getSecurityCode());
+        TempSecurityCodeDto.FormalSecurityOption formalSecurity = queryRequiredFormalSecurity(req.getSecurityCode(), false);
         if (formalSecurity.getSecurityCode().equals(oldBo.getTempSecurityCode())) {
             throw new BizException("正式证券代码不能与临时代码相同");
         }
@@ -201,7 +201,7 @@ public class TempSecurityCodeService {
         TempSecurityCodeBo oldBo = queryOperableTempSecurityCode(id);
         // 使用外部数据预先写入的正式证券代码查询证券表里的数据
         TempSecurityCodeDto.FormalSecurityOption formalSecurity =
-                queryRequiredFormalSecurity(oldBo.getSecurityCode());
+                queryRequiredFormalSecurity(oldBo.getSecurityCode(), false);
         if (formalSecurity.getSecurityCode().equals(oldBo.getTempSecurityCode())) {
             throw new BizException("正式证券代码不能与临时代码相同，id=" + id);
         }
@@ -298,8 +298,8 @@ public class TempSecurityCodeService {
         if (windCodeSyncMapper.addSecurityWindCodeMaster(newMaster) != 1) {
             throw new BizException("Wind 新代码主档新增失败，SEC_ID=" + change.getSecId());
         }
-        // 10、查出换码后的证券信息和市场，供后面更新调库记录使用。
-        TempSecurityCodeDto.FormalSecurityOption formal = queryRequiredFormalSecurity(change.getNewWindCode());
+        // 10、读取换码后的主档和市场，退市状态仍可同步代码
+        TempSecurityCodeDto.FormalSecurityOption formal = queryRequiredFormalSecurity(change.getNewWindCode(), true);
         // 11、更新临时代码记录及相关调库记录，只处理本次旧新代码，其他市场代码不处理。
         editTempSecurityCodeToUpdated(registration, formal, TempOprtSource.JOB.getCode(), true);
         return WindCodeChangeResult.UPDATED;
@@ -617,10 +617,14 @@ public class TempSecurityCodeService {
 
     /**
      * 查询并校验正式证券主数据
+     *
+     * @param securityCode 证券代码
+     * @param allowDelisted Wind 换码允许读取退市证券，以原主档状态同步代码
+     * @return 正式证券选项和市场
      */
-    private TempSecurityCodeDto.FormalSecurityOption queryRequiredFormalSecurity(String securityCode) {
+    private TempSecurityCodeDto.FormalSecurityOption queryRequiredFormalSecurity(String securityCode, boolean allowDelisted) {
         TempSecurityCodeDto.FormalSecurityOption formalSecurity =
-                tempSecurityCodeMapper.queryFormalSecurityByCode(securityCode);
+                tempSecurityCodeMapper.queryFormalSecurityByCode(securityCode, allowDelisted);
         if (formalSecurity == null) {
             throw new BizException("正式证券不存在或不可用，securityCode=" + securityCode);
         }
