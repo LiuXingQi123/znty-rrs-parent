@@ -279,7 +279,7 @@ public class TempSecurityCodeService {
         Date now = new Date();
         // 8、查旧代码有没有临时代码记录，有就继续用，没有就按旧证券信息新增。
         TempSecurityCodeBo registration = prepareWindRegistration(masterChange, master, market, now, eventKey);
-        // 9、复制新代码主档，再把旧代码主档保留为失效临时代码。
+        // 9、从旧主档复制新主档所需的数据和正式 SEC_ID
         String newSource = "temporary".equals(source) ? "temp_converted" : source;
         SecurityInfoBo newMaster = new SecurityInfoBo();
         BeanUtils.copyProperties(master, newMaster);
@@ -289,12 +289,14 @@ public class TempSecurityCodeService {
             newMaster.setMarket(market);
         }
         newMaster.setTs(now);
-        if (windCodeSyncMapper.addSecurityWindCodeMaster(newMaster) != 1) {
-            throw new BizException("Wind 新代码主档新增失败，SEC_ID=" + change.getSecId());
-        }
+        // 9.1 先将旧主档改用临时 SEC_ID，释放正式 SEC_ID
         if (windCodeSyncMapper.editSecurityWindCodeToTemporary(masterChange, source,
                 registration.getSecId(), now) != 1) {
             throw new BizException("Wind 旧代码临时主档失效失败，SEC_ID=" + change.getSecId());
+        }
+        // 9.2 使用原正式 SEC_ID 新增新代码主档
+        if (windCodeSyncMapper.addSecurityWindCodeMaster(newMaster) != 1) {
+            throw new BizException("Wind 新代码主档新增失败，SEC_ID=" + change.getSecId());
         }
         // 10、查出换码后的证券信息和市场，供后面更新调库记录使用。
         TempSecurityCodeDto.FormalSecurityOption formal = queryRequiredFormalSecurity(change.getNewWindCode());

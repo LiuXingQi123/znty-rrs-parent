@@ -110,16 +110,16 @@ public class WindCodeChangeDemoDataTest {
             resetDemo(jdbc, "ais_inv_ods_demo_data.sql", "wind_windcustomcode", "ais_inv_ods.wind_windcustomcode");
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo s LEFT JOIN ais_inv_ods.wind_windcustomcode w"
                     + " ON w.S_INFO_WINDCODE=s.wind_code WHERE w.S_INFO_WINDCODE IS NULL", Integer.class)).isZero();
-            // 日期表达式原样执行，初始化两次后记录数仍为十三条。
+            // 原样执行日期表达式，验证重复初始化不会追加记录。
             resetDemo(jdbc, "ais_inv_ods_demo_data.sql", "wind_cbondchangewindcode", "ais_inv_ods.wind_cbondchangewindcode");
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_cbondchangewindcode", Integer.class))
-                    .isEqualTo(13);
+                    .isEqualTo(14);
             try (SqlSession session = new SqlSessionFactoryBuilder().build(config).openSession(true)) {
                 WindCodeSyncMapper mapper = session.getMapper(WindCodeSyncMapper.class);
                 List<WindCodeChangeDto> candidates = mapper.queryRecentWindCodeChangeList(1);
                 assertThat(candidates).extracting(WindCodeChangeDto::getObjectId).containsExactlyInAnyOrder(
                         "WCH_DEMO_001", "WCH_DEMO_003", "WCH_DEMO_004", "WCH_DEMO_005", "WCH_DEMO_006",
-                        "WCH_DEMO_009", "WCH_DEMO_010", "WCH_DEMO_011", "WCH_DEMO_012", "WCH_DEMO_013");
+                        "WCH_DEMO_009", "WCH_DEMO_010", "WCH_DEMO_011", "WCH_DEMO_012", "WCH_DEMO_013", "WCH_DEMO_014");
                 for (WindCodeChangeDto change : candidates) {
                     assertThat(change.getChangeDate()).matches("\\d{8}");
                     assertThat(change.getSecId()).hasSizeLessThanOrEqualTo(10);
@@ -156,6 +156,8 @@ public class WindCodeChangeDemoDataTest {
     /** 原始 Demo 全链路执行，验证四类来源、出入池、在途和二次执行幂等。 */
     @Test
     public void demoShouldExecuteAllBranchesAndSkipCompletedEvents() throws Exception {
+        // 模拟生产库对证券 SEC_ID 的唯一约束
+        jdbc.execute("ALTER TABLE rrs_securityinfo ADD CONSTRAINT uq_wind_demo_sec_id UNIQUE (sec_id)");
         // 加载实际池配置、调库流水、步骤和快照结构。
         for (String file : Arrays.asList("rrs_pool_init_schema.sql", "rrs_security_pool_adjust_schema.sql",
                 "rrs_crmw_pool_status_schema.sql", "rrs_adjust_snapshot_schema.sql", "rrs_dict_schema.sql")) {
@@ -186,14 +188,19 @@ public class WindCodeChangeDemoDataTest {
         jdbc.execute(extractStatement("rrs_dict_demo_data.sql", "INSERT INTO", "dict_security_type"));
         // 真实事件含连续换码、主档缺失及两类过滤记录。
         resetDemo(jdbc, "ais_inv_ods_demo_data.sql", "wind_cbondchangewindcode", "ais_inv_ods.wind_cbondchangewindcode");
+        // 确认未调库样本初始是临时主档，且只有待转正登记
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='WCTMP002.IB'"
+                + " AND sec_id='S9001052' AND security_source='temporary' AND security_status='L'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code WHERE id=5"
+                + " AND temp_security_code='WCTMP002.IB' AND status='temporary' AND security_code IS NULL", Integer.class)).isEqualTo(1);
         // 生产 Mapper、市场查询和事务代理均参与本次执行。
         WindCodeSyncService task = createTask();
         ScheduledTaskResult first = task.execute();
         assertThat(first.isSuccess()).isTrue();
-        assertThat(first.getMessage()).as(first.getDetailLog()).isEqualTo("成功 9 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 0 条，失败 0 条");
+        assertThat(first.getMessage()).as(first.getDetailLog()).isEqualTo("成功 10 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 0 条，失败 0 条");
         assertThat(first.getDetailLog()).contains("特别提示", "SEC_ID=S9999999").doesNotContain("[ERROR]");
         assertThat(first.getDetailLog()).contains("换码成功：SEC_ID=S9001046", "变更记录旧代码=PPN000.IB");
-        assertThat(first.getAffectedCount()).isEqualTo(9);
+        assertThat(first.getAffectedCount()).isEqualTo(10);
         assertThat(jdbc.queryForList("SELECT wind_code FROM rrs_securityinfo WHERE sec_id IN ('S9001003','S9001001','S9001002') ORDER BY sec_id", String.class))
                 .containsExactly("198106.SH", "128106.SZ", "XYB007.IB");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='XYB006.IB'", Integer.class)).isZero();
@@ -250,6 +257,25 @@ public class WindCodeChangeDemoDataTest {
                 .isEqualTo("D");
         assertThat(jdbc.queryForObject("SELECT sec_id FROM rrs_securityinfo WHERE wind_code='WCTMP001.IB'", String.class))
                 .isEqualTo("TEMP_WCTMP001.IB");
+        // 未调库的临时中票转正后保留旧主档，新码承接正式 SEC_ID
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='WCTMP002.IB'"
+                + " AND sec_id='TEMP_WCTMP002.IB' AND security_source='temporary' AND security_status='D'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE wind_code='WCTMP007.IB'"
+                + " AND sec_id='S9001052' AND security_source='temp_converted' AND security_status='L'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT memo FROM rrs_temp_security_code WHERE id=5 AND sec_id='TEMP_WCTMP002.IB'"
+                + " AND status='updated' AND security_code='WCTMP007.IB' AND oprt_source='job'", String.class))
+                .contains("[wind_code_sync:S9001052:WCTMP002.IB:WCTMP007.IB:");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code_update_log"
+                + " WHERE replace_table_name='rrs_temp_security_code' AND replace_record_id=5"
+                + " AND temp_security_code='WCTMP002.IB' AND security_code='WCTMP007.IB'", Integer.class)).isEqualTo(1);
+        for (String table : Arrays.asList("ip_adjust_log", "ip_pool_status", "ip_pool_status_crmw")) {
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + table
+                    + " WHERE security_code IN ('WCTMP002.IB','WCTMP007.IB')", Integer.class)).as(table).isZero();
+        }
+        for (String table : Arrays.asList("ip_adjust_security_snapshot", "ip_adjust_security_snapshot_crmw")) {
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + table
+                    + " WHERE wind_code IN ('WCTMP002.IB','WCTMP007.IB')", Integer.class)).as(table).isZero();
+        }
         // 已转正且没有在池记录的资产证券化样本仍只改主档和登记
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ip_adjust_log WHERE security_code IN ('ABN002.IB','ABN007.IB')", Integer.class)).isZero();
         Map<String, Integer> before = new LinkedHashMap<>();
@@ -260,7 +286,7 @@ public class WindCodeChangeDemoDataTest {
         }
         ScheduledTaskResult second = task.execute();
         assertThat(second.isSuccess()).isTrue();
-        assertThat(second.getMessage()).as(second.getDetailLog()).isEqualTo("成功 0 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 9 条，失败 0 条");
+        assertThat(second.getMessage()).as(second.getDetailLog()).isEqualTo("成功 0 条，主档缺失跳过 1 条，已是新码跳过 0 条，重复跳过 10 条，失败 0 条");
         for (Map.Entry<String, Integer> entry : before.entrySet()) {
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + entry.getKey(), Integer.class)).as(entry.getKey())
                     .isEqualTo(entry.getValue());

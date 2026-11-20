@@ -117,9 +117,9 @@ public class WindCustomCodeDemoDataTest {
                     ScriptUtils.executeSqlScript(connection, new ByteArrayResource(insert.getBytes(StandardCharsets.UTF_8)));
                 }
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode", Integer.class))
-                        .isEqualTo(53);
+                        .isEqualTo(54);
                 assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT S_INFO_WINDCODE) FROM ais_inv_ods.wind_windcustomcode", Integer.class))
-                        .isEqualTo(53);
+                        .isEqualTo(54);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo s"
                         + " LEFT JOIN ais_inv_ods.wind_windcustomcode w ON w.S_INFO_WINDCODE = s.wind_code"
                         + " WHERE w.S_INFO_WINDCODE IS NULL"
@@ -130,15 +130,15 @@ public class WindCustomCodeDemoDataTest {
                         + " FROM ais_inv_ods.wind_windcustomcode WHERE S_INFO_ISINCODE IS NOT NULL AND TRIM(S_INFO_ISINCODE) <> ''"
                         + " GROUP BY S_INFO_ISINCODE, EXCHMARKET HAVING COUNT(*) > 1) duplicated_market", Integer.class)).isZero();
                 assertThat(jdbc.queryForList("SELECT S_INFO_WINDCODE FROM ais_inv_ods.wind_windcustomcode WHERE S_INFO_ISINCODE IS NULL", String.class))
-                        .containsExactlyInAnyOrder("TMP001.IB", "TMP003.IB", "WCTMP001.IB");
+                        .containsExactlyInAnyOrder("TMP001.IB", "TMP003.IB", "WCTMP001.IB", "WCTMP002.IB");
                 assertThat(jdbc.queryForList("SELECT S_INFO_ISINCODE FROM ais_inv_ods.wind_windcustomcode"
                         + " WHERE S_INFO_ISINCODE IS NOT NULL GROUP BY S_INFO_ISINCODE"
                         + " HAVING COUNT(*) = 3 AND COUNT(DISTINCT EXCHMARKET) = 3", String.class))
                         .containsExactlyInAnyOrder("CNDEMO000293", "CNDEMO000301", "CNDEMO000319");
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE sec_id IS NULL", Integer.class)).isZero();
-                assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(53);
-                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary'", Integer.class)).isEqualTo(3);
-                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND market = 'NIB'", Integer.class)).isEqualTo(3);
+                assertThat(jdbc.queryForObject("SELECT COUNT(DISTINCT sec_id) FROM znty_rrs.rrs_securityinfo", Integer.class)).isEqualTo(54);
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary'", Integer.class)).isEqualTo(4);
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM znty_rrs.rrs_securityinfo WHERE security_source = 'temporary' AND market = 'NIB'", Integer.class)).isEqualTo(4);
                 assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ais_inv_ods.wind_windcustomcode w"
                         + " LEFT JOIN ais_inv_ods.wind_cbondissuer i ON i.s_info_windcode = w.S_INFO_WINDCODE"
                         + " AND i.s_info_compcode = w.S_INFO_COMPCODE WHERE i.object_id IS NULL", Integer.class)).isZero();
@@ -157,7 +157,8 @@ public class WindCustomCodeDemoDataTest {
             connection.createStatement().execute("CREATE TABLE ip_pool_status (security_code VARCHAR(100), target_pool_id BIGINT, audit_status VARCHAR(2), is_deleted INT)");
             connection.createStatement().execute("INSERT INTO ip_pool_status VALUES ('198101.SH',163,'20',0),('XYB001.IB',163,'20',0),('CRMW001.IB',164,'20',0)");
             connection.createStatement().execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(100))");
-            connection.createStatement().execute("INSERT INTO rrs_temp_security_code VALUES ('TMP001.IB', 'NIB'), ('TMP003.IB', 'NIB'), ('WCTMP001.IB', 'NIB')");
+            connection.createStatement().execute("INSERT INTO rrs_temp_security_code VALUES"
+                    + " ('TMP001.IB', 'NIB'), ('TMP003.IB', 'NIB'), ('WCTMP001.IB', 'NIB'), ('WCTMP002.IB', 'NIB')");
             connection.createStatement().execute("CREATE TABLE ip_pool_status_crmw (security_code VARCHAR(100), crmw_scode VARCHAR(100), crmw_name VARCHAR(100), crmw_stype VARCHAR(32), target_pool_id BIGINT, audit_status VARCHAR(2), is_deleted INT, pool_type VARCHAR(32))");
             connection.createStatement().execute("INSERT INTO ip_pool_status_crmw VALUES ('198101.SH', 'CRMW001.IB', 'CRMW-A', 'crmw', 1, '20', 0, 'crmw'), ('XYB001.IB', 'CRMW001.IB', 'CRMW-A', 'crmw', 1, '20', 0, 'crmw')");
             ds.setUrl(ds.getUrl() + ";SCHEMA=znty_rrs");
