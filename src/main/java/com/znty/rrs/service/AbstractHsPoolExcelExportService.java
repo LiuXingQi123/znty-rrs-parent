@@ -48,7 +48,7 @@ import java.util.Set;
  * 1. 全量任务按当前生效池状态导出，普通证券按任务配置决定是否排除已到期数据，CRMW 不校验到期日
  * 2. 增量任务按成功执行水位导出审批通过的调入、调出事件，不要求证券当前仍在池
  * 3. 所有任务按叶子池生成 Sheet，支持空池 Sheet、恒生池名称拆分和同名 Sheet 合并
- * 4. 文件写入日期目录并同步生成 bak 备份，导出过程和结果写入任务明细日志
+ * 4. 主文件按日期分目录并使用固定名称，覆盖前归档旧版，导出过程和结果写入任务明细日志
  */
 public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTask {
     /** 统一证券市场查询组件 */
@@ -160,7 +160,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
      * 执行顺序：
      * 1. 读取任务名称和扩展参数，确定池范围、名称和空池规则、目录及增量起始时间
      * 2. 查询增量水位并构造全量或增量时间窗口
-     * 3. 按叶子池查询数据，生成恒生格式 Excel 和 bak 备份文件
+     * 3. 按叶子池查询数据，生成恒生格式 Excel，覆盖前归档已存在的同日主文件
      * 4. 记录文件路径、Sheet 数量、证券行数并返回任务结果
      *
      * @return 定时任务执行结果
@@ -207,14 +207,15 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
             List<HsPoolExportPoolDto> pools = hsPoolExcelExportMapper.queryExportPoolList(params.poolIds);
             // 5. 解析并创建按执行日期划分的绝对导出目录
             Path outputDir = resolveOutputDir(params.outputDir, startTime);
-            // 6. 按叶子池逐池查询，并使用流式工作簿生成恒生 Excel 文件和备份文件
+            // 6. 逐池生成恒生 Excel，覆盖同日主文件时归档旧版
             ExportResult result = writeWorkbook(pools, windowStart, startTime, params, outputDir, detail);
             String scope = firstIncrement ? "首次增量" : isIncrement() ? "增量" : "全量";
             String window = "";
             if (isIncrement()) {
                 window = "，时间窗口=(" + formatTime(windowStart) + ", " + formatTime(startTime) + "]";
             }
-            detail.line("INFO", scope + "导出完成，文件=" + result.filePath + "，备份=" + result.backupPath
+            detail.line("INFO", scope + "导出完成，文件=" + result.filePath
+                    + (result.backupPath == null ? "" : "，历史备份=" + result.backupPath)
                     + "，Sheet=" + result.sheetCount + "，证券行=" + result.rowCount + window);
             return ScheduledTaskResult.success(getTaskCode(), taskName, scope + "导出完成：" + result.filePath,
                     result.rowCount, startTime, System.currentTimeMillis() - beginTime, detail.build());
@@ -398,22 +399,36 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
         SXSSFWorkbook workbook = new SXSSFWorkbook(ROW_ACCESS_WINDOW_SIZE);
         workbook.setCompressTempFiles(true);
         try {
-            // 按导出参数逐池写入数据并记录跳过原因
+            // 1. 按导出参数逐池写入数据并记录跳过原因
             WorkbookSummary summary = populateWorkbook(workbook, pools, windowStart, endTime,
                     params.exportEmptyPool, params.exportPoolWithoutHsName, detail);
-            String fileName = filePrefix() + "_"
-                    + new SimpleDateFormat("yyyyMMdd_HHmmss").format(endTime) + ".xlsx";
-            Path filePath = outputDir.resolve(fileName).toAbsolutePath().normalize();
-            try (OutputStream outputStream = Files.newOutputStream(filePath)) {
-                workbook.write(outputStream);
+            Path filePath = outputDir.resolve(filePrefix() + ".xlsx");
+            Path temporaryPath = Files.createTempFile(outputDir, filePrefix() + "_", ".tmp");
+            try {
+                // 2. 先完整写入新工作簿，生成失败时保留当天已有的主文件
+                try (OutputStream outputStream = Files.newOutputStream(temporaryPath)) {
+                    workbook.write(outputStream);
+                }
+                // 3. 覆盖前归档旧主文件，同一秒的备份重名时追加序号
+                String backupPath = null;
+                if (Files.exists(filePath)) {
+                    Path backupDir = Files.createDirectories(outputDir.resolve("bak"));
+                    String historyStem = filePrefix() + "_"
+                            + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+                    Path historyPath = backupDir.resolve(historyStem + ".xlsx");
+                    for (int suffix = 1; Files.exists(historyPath); suffix++) {
+                        historyPath = backupDir.resolve(historyStem + "_" + suffix + ".xlsx");
+                    }
+                    Files.copy(filePath, historyPath);
+                    backupPath = historyPath.toString();
+                }
+                // 4. 用新工作簿替换固定名称的主文件
+                Files.move(temporaryPath, filePath, StandardCopyOption.REPLACE_EXISTING);
+                // TODO 后续接入公司 FTP 配置，将主文件上传至恒生接收目录
+                return new ExportResult(filePath.toString(), backupPath, summary.sheetCount, summary.rowCount);
+            } finally {
+                Files.deleteIfExists(temporaryPath);
             }
-            // 1. 文件写入成功后复制到日期目录下的 bak 备份目录
-            Path backupDir = outputDir.resolve("bak");
-            Files.createDirectories(backupDir);
-            Path backupPath = backupDir.resolve(fileName).toAbsolutePath().normalize();
-            Files.copy(filePath, backupPath, StandardCopyOption.REPLACE_EXISTING);
-            // 2. TODO 后续接入公司 FTP 配置，将主文件和备份文件上传至恒生接收目录
-            return new ExportResult(filePath.toString(), backupPath.toString(), summary.sheetCount, summary.rowCount);
         } finally {
             try {
                 workbook.close();
@@ -654,7 +669,7 @@ public abstract class AbstractHsPoolExcelExportService implements RrsScheduledTa
     private static class ExportResult {
         /** 导出文件绝对路径 */
         private final String filePath;
-        /** 备份文件绝对路径 */
+        /** 旧主文件的历史备份绝对路径，本次未覆盖主文件时为 null */
         private final String backupPath;
         /** 工作簿 Sheet 数量 */
         private final int sheetCount;

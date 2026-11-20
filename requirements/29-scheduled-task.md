@@ -9,7 +9,8 @@
 - 恒生池名称支持用竖线拆分多个 Sheet；名称超过 31 位截断，同名 Sheet 合并追加并写过程警告日志。老系统页面手动导出会合并同名 Sheet，但老系统定时任务未做重名判断、直接创建时可能抛异常；新系统采用页面导出的容错方式。
 - 增量任务已预留交易日日期列表入口；当前列表固定为空，表示尚未启用过滤，因此交易日和非交易日均正常执行。交易日数据源、查询异常策略和非交易日强制执行配置后续确认。
 - 三个任务的「扩展参数」会预填缺失字段：`poolIds: []`（从全部叶子池中筛选）、`exportEmptyPool: true`（保留无数据池的 Sheet）、`exportPoolWithoutHsName: false`（跳过恒生池名称为空的池）、`outputDir: null`（使用 `rrs.hs-pool-export.storage-path`）。增量任务还会显示 `initialStartTime`，未配置时填 `null`，首次执行前须按 `yyyy-MM-dd HH:mm:ss` 填写。已保存的值优先，Demo 沿用预置的增量起始时间。
-- `exportPoolWithoutHsName` 须填写 JSON 布尔值。省略或设为 `false` 时，跳过 `hs_pool_name` 为 NULL、空字符串或纯空白的池，即使 `poolIds` 显式包含该池。逐池生成工作簿时，过程日志会记下被跳过的投资池 ID、名称及原因。设为 `true` 时，恒生池名称为空的池使用投资池完整名称生成 Sheet。`exportEmptyPool` 设为 `false` 时跳过无数据的池。筛选后若未生成任何 Sheet，仍保留「（空池）」表头页。文件写入 `输出根目录/yyyyMMdd`，并复制到同日 `bak` 目录。FTP 暂未接入。
+- `exportPoolWithoutHsName` 须填写 JSON 布尔值。省略或设为 `false` 时，跳过 `hs_pool_name` 为 NULL、空字符串或纯空白的池，即使 `poolIds` 显式包含该池。逐池生成工作簿时，过程日志会记下被跳过的投资池 ID、名称及原因。设为 `true` 时，恒生池名称为空的池使用投资池完整名称生成 Sheet。`exportEmptyPool` 设为 `false` 时跳过无数据的池。筛选后若未生成任何 Sheet，仍保留「（空池）」表头页。
+- 三个定时任务在 `输出根目录/yyyyMMdd` 下分别使用固定文件名 `hs_pool_full.xlsx`、`hs_pool_full_including_expired.xlsx`、`hs_pool_increment.xlsx`。同日再次导出时，先将旧主文件归档到同日 `bak` 目录，再替换主文件。历史文件使用 `任务文件前缀_yyyyMMdd_HHmmss.xlsx`，同秒重名时追加序号。只有发生归档时，完成日志才显示「历史备份」路径。FTP 暂未接入。
 
 > 前端页面：`scheduled_task.html`  
 > 后端前缀：`/api/v1/scheduledTask`  

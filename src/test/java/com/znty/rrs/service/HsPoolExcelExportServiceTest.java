@@ -42,9 +42,9 @@ import static org.mockito.Mockito.when;
 /** 恒生池 Excel 导出任务单元测试。 */
 public class HsPoolExcelExportServiceTest {
 
-    /** 验证全量导出按叶子池建 Sheet、使用五列表头、按实际代码市场生成备份。 */
+    /** 验证首次全量导出生成固定名称的主文件，并按叶子池和实际市场写入数据 */
     @Test
-    public void fullExportShouldCreateSheetsSplitMarketsAndBackupFile() throws Exception {
+    public void firstFullExportShouldCreateFixedFileAndSplitMarkets() throws Exception {
         HsPoolExcelExportMapper exportMapper = mock(HsPoolExcelExportMapper.class);
         ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
         HsPoolFullExcelExportService service = new HsPoolFullExcelExportService();
@@ -68,10 +68,10 @@ public class HsPoolExcelExportServiceTest {
             verify(exportMapper, never()).queryFullExportRowList(3L, false);
             String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
             assertThat(Paths.get(filePath).isAbsolute()).isTrue();
-            assertThat(Paths.get(filePath).getFileName().toString()).startsWith("hs_pool_full_");
+            assertThat(Paths.get(filePath).getFileName().toString()).isEqualTo("hs_pool_full.xlsx");
             assertThat(Paths.get(filePath).getParent().getFileName().toString()).matches("\\d{8}");
-            assertThat(Paths.get(filePath).getParent().resolve("bak").resolve(Paths.get(filePath).getFileName()))
-                    .exists();
+            assertThat(Paths.get(filePath).getParent().resolve("bak")).doesNotExist();
+            assertThat(result.getDetailLog()).doesNotContain("历史备份=");
             try (XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(filePath))) {
                 assertThat(workbook.getNumberOfSheets()).isEqualTo(2);
                 assertThat(workbook.getSheet("恒生债池").getRow(0).getCell(0).getStringCellValue()).isEqualTo("证券名称");
@@ -82,6 +82,79 @@ public class HsPoolExcelExportServiceTest {
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(3).getStringCellValue()).isEqualTo("1");
                 assertThat(workbook.getSheet("恒生债池").getLastRowNum()).isEqualTo(1);
                 assertThat(workbook.getSheet("恒生空池").getLastRowNum()).isZero();
+            }
+        } finally {
+            deleteDirectory(outputDir);
+        }
+    }
+
+    /** 验证同日多次导出覆盖固定主文件，分别归档旧版并记录历史备份路径 */
+    @Test
+    public void repeatedFullExportsShouldReplaceFixedFileAndKeepPreviousVersions() throws Exception {
+        HsPoolExcelExportMapper exportMapper = mock(HsPoolExcelExportMapper.class);
+        ScheduledTaskMapper taskMapper = mock(ScheduledTaskMapper.class);
+        HsPoolFullExcelExportService service = new HsPoolFullExcelExportService();
+        Path outputDir = Files.createTempDirectory("hs-pool-export-history-test");
+        try {
+            inject(service, exportMapper, taskMapper, outputDir);
+            when(exportMapper.queryExportPoolList(null)).thenReturn(Collections.singletonList(pool(1L, "恒生债池")));
+            HsPoolExportRowDto secondRow = row();
+            secondRow.setSecurityShortName("第二版测试债");
+            HsPoolExportRowDto thirdRow = row();
+            thirdRow.setSecurityShortName("第三版测试债");
+            when(exportMapper.queryFullExportRowList(1L, false))
+                    .thenReturn(Collections.singletonList(row()))
+                    .thenReturn(Collections.singletonList(secondRow))
+                    .thenReturn(Collections.singletonList(thirdRow));
+
+            ScheduledTaskResult first = service.execute();
+            assertThat(first.isSuccess()).isTrue();
+            Path filePath = Paths.get(first.getMessage().substring(first.getMessage().indexOf('：') + 1));
+            byte[] firstVersion = Files.readAllBytes(filePath);
+
+            ScheduledTaskResult second = service.execute();
+            assertThat(second.isSuccess()).isTrue();
+            assertThat(second.getMessage()).isEqualTo(first.getMessage());
+            byte[] secondVersion = Files.readAllBytes(filePath);
+            assertThat(secondVersion).isNotEqualTo(firstVersion);
+
+            ScheduledTaskResult third = service.execute();
+            assertThat(third.isSuccess()).isTrue();
+            assertThat(third.getMessage()).isEqualTo(first.getMessage());
+            assertThat(Files.readAllBytes(filePath)).isNotEqualTo(secondVersion);
+
+            Path firstBackup = Paths.get(second.getDetailLog().split("，历史备份=", 2)[1].split("，Sheet=", 2)[0]);
+            Path secondBackup = Paths.get(third.getDetailLog().split("，历史备份=", 2)[1].split("，Sheet=", 2)[0]);
+            assertThat(firstBackup).isNotEqualTo(secondBackup);
+            assertThat(firstBackup.getParent()).isEqualTo(filePath.getParent().resolve("bak"));
+            assertThat(secondBackup.getParent()).isEqualTo(firstBackup.getParent());
+            assertThat(firstBackup.getFileName().toString()).matches("hs_pool_full_\\d{8}_\\d{6}(_\\d+)?\\.xlsx");
+            assertThat(Files.readAllBytes(firstBackup)).isEqualTo(firstVersion);
+            assertThat(Files.readAllBytes(secondBackup)).isEqualTo(secondVersion);
+        } finally {
+            deleteDirectory(outputDir);
+        }
+    }
+
+    /** 验证无法创建历史备份时，当前主文件保留且临时文件被清理 */
+    @Test
+    public void failedBackupShouldKeepCurrentWorkbook() throws Exception {
+        HsPoolFullExcelExportService service = new HsPoolFullExcelExportService();
+        Path outputDir = Files.createTempDirectory("hs-pool-export-backup-failure-test");
+        try {
+            inject(service, mock(HsPoolExcelExportMapper.class), mock(ScheduledTaskMapper.class), outputDir);
+            ScheduledTaskResult first = service.execute();
+            assertThat(first.isSuccess()).isTrue();
+            Path filePath = Paths.get(first.getMessage().substring(first.getMessage().indexOf('：') + 1));
+            byte[] currentVersion = Files.readAllBytes(filePath);
+            Files.write(filePath.resolveSibling("bak"), new byte[0]);
+
+            ScheduledTaskResult failed = service.execute();
+
+            assertThat(failed.isSuccess()).isFalse();
+            assertThat(Files.readAllBytes(filePath)).isEqualTo(currentVersion);
+            try (Stream<Path> files = Files.list(filePath.getParent())) {
+                assertThat(files).containsExactlyInAnyOrder(filePath, filePath.resolveSibling("bak"));
             }
         } finally {
             deleteDirectory(outputDir);
@@ -111,7 +184,7 @@ public class HsPoolExcelExportServiceTest {
             verify(exportMapper).queryFullExportRowList(1L, true);
             String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
             assertThat(Paths.get(filePath).getFileName().toString())
-                    .startsWith("hs_pool_full_including_expired_");
+                    .isEqualTo("hs_pool_full_including_expired.xlsx");
         } finally {
             deleteDirectory(outputDir);
         }
@@ -145,6 +218,7 @@ public class HsPoolExcelExportServiceTest {
             verify(exportMapper).queryIncrementExportRowList(eq(1L), eq(initialTime), any(Date.class));
             verify(exportMapper, never()).queryFullExportRowList(any(Long.class), eq(false));
             String filePath = result.getMessage().substring(result.getMessage().indexOf('：') + 1);
+            assertThat(Paths.get(filePath).getFileName().toString()).isEqualTo("hs_pool_increment.xlsx");
             try (XSSFWorkbook workbook = new XSSFWorkbook(new FileInputStream(filePath))) {
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(2).getStringCellValue()).isEqualTo("删除");
                 assertThat(workbook.getSheet("恒生债池").getRow(1).getCell(1).getStringCellValue()).isEqualTo("110001");
