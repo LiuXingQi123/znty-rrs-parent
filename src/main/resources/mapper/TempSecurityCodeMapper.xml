@@ -231,7 +231,6 @@
         <where>
             AND si.security_status != 'D'
             AND si.security_source != 'temporary'
-            AND si.security_type NOT IN ('crmw', 'company')
             <if test="securityKeyword != null and securityKeyword != ''">
                 AND (si.wind_code LIKE CONCAT(#{securityKeyword}, '%')
                      OR si.short_name LIKE CONCAT('%', #{securityKeyword}, '%')
@@ -261,7 +260,6 @@
               AND si.security_status != 'D'
           </if>
           AND si.security_source != 'temporary'
-          AND si.security_type NOT IN ('crmw', 'company')
         LIMIT 1
     </select>
 
