@@ -333,7 +333,7 @@
 - **调入·已在信用债大库**：`resolveCreditBondAdjustFlowType` 按同父级下 `innerSort` 比较，目标池 sort 小于当前池→`upgradeInbound`（上调）；大于→`downgradeInbound`（下调）。
 - **调入·不在信用债大库**：依次评估白名单、简易、默认调入，推荐优先级 白名单 > 简易 > 默认。
   - 白名单条件顺序：解析 `date_exists_str` 后的剩余期限≤3 年 → 非永续/私募/ABS → 债券类 → 主体在白名单池（**`WHITELIST_POOL_IDS` 当前 emptySet，本条件固定不成立**）→ 非担保债。`date_exists_str` 为空或格式不正确时不命中白名单。
-  - 简易条件顺序：按当前信用债矩阵及特殊债入库规则计算完整允许层级，**唯一且为一/二/三级库，并与本次目标层级一致** → 同发行人债券近180天曾以**非简易入库流程**成功进入信用债大库任意层级 → 满足下述对应债券类型要求 → 同发行人债券近180天实际入库的已通过调入业务中有信评附件。全部满足后，`simpleInbound` 可选并优先推荐，仍可改选默认调入流程。
+  - 简易条件顺序：按当前信用债矩阵及特殊债入库规则计算完整允许层级，**唯一且为一/二/三级库，并与本次目标层级一致** → 同发行人债券近180天曾以**非简易入库流程**成功进入信用债大库任意层级 → 同发行人债券近180天实际入库的已通过调入业务中有信评附件 → 同发行人债券近180天实际入库的已通过调入业务中有有效证券分析 → 满足下述对应债券类型要求。全部满足后，`simpleInbound` 可选并优先推荐，仍可改选默认调入流程。
 
 #### 简易入库的具体口径
 
@@ -361,6 +361,8 @@
 **标准信用债的定义：**公开发行；不涉及永续、回售、赎回、递延付息等特殊条款；无担保、内部分层、差额补足等增信措施；偿付不依赖特定资产；违约风险仅由发行主体信用资质决定；且未在内评系统观察或重点观察名单中。资产支持证券、私募债、永续债、次级债、担保债、含权债等不属于标准信用债。上游按该定义维护 `std_credit_flag`；本服务在进入标准信用债分支时通过 `isStandardCreditBond` 读取该标识，`1` 认定为标准信用债，`0`、`NULL` 不认定。
 
 **报告条件：**`queryIssuerHasRecentCreditReportWithinDays(securityCode, 180)` 查询同发行人债券的已通过调入业务：通过 `ip_pool_status.adjust_log_id` 关联 `ip_adjust_log`，证券发行人代码与当前券非空 `issuer_code` 相同，池状态与调库日志均为 `audit_status=20`、`adjust_mode=调入`，日志未删除。近180天统一按池状态的实际入库时间 `entry_time` 判断，包含边界、不接受未来或缺失时间，日志创建、报告创建和附件绑定时间均不参与计算。业务下存在未删除的信评附件（`sys_attachment.table_name=ip_adjust_log`、`main_id=调库日志ID`、`attachment_category=credit_report_hand/credit_report_in/credit_report_out`）即可；手工上传、内部引用和外部引用均计入，不检查原报告主体、类型或创建时间，出库业务及其他材料不计入。已出池软删的历史入库记录仍计入。**非简易信用债入库经历与信评附件条件仍独立判断，不要求来自同一笔业务；信评附件所在入库业务不额外限制流程类型或目标池类型**。简易流程不复用“半年调入日志带报告”的提交报告豁免条件，该豁免仍沿用原有6个自然月和日志创建时间口径。
+
+**证券分析条件：**`queryIssuerHasRecentAnalysisWithinDays(securityCode, 180)` 查询同发行人债券已审批通过的调入记录：通过 `ip_adjust_log` 关联 `rrs_securityinfo` 与 `ip_adjust_security_snapshot`，证券发行人代码与当前券非空 `issuer_code` 相同，调库日志为 `audit_status=20`、`adjust_mode=调入`、未删除，近180天按日志创建时间 `crte_time` 判断。对应快照存在非空、非空白内容的「证券分析」（`snap.analysis IS NOT NULL AND TRIM(snap.analysis) != ''`）。发起调库申请时（`querySecurityDetail` 无历史 logId 时），默认调用 `queryLatestAnalysisByIssuerWithinDays(securityCode, 180)` 带出同发行人近180天内最新的证券分析文本。
 
 旧简易流程的“本券剩余天数≤同主体目标池最大剩余天数”“同目标池180天内非简易入池”及原主体/展望/担保人评级下调条件不再参与简易命中。
 
@@ -677,7 +679,7 @@ Demo 在原始 `INSERT` 中为全部 54 条证券显式填写标识，设置以�
 
 适用证券池调整（包括详情页调库和审核页下一步模式）、证券池批量调整、存量证券批量调整及证券池 Excel 导入。证券池批量调整与存量证券批量调整均沿用单笔流程候选和推荐。证券池 Excel 导入通过 `BatchAdjustFlowOptionHelper` 追加并推荐目标池已配置的批量流程。
 
-- 信用债沿用 isSimpleInboundFlowMatched，资格在“下一步”计算，提交不重复查询矩阵、180 天入库经历或历史报告条件。资格中的历史报告要求仍保留，豁免的是本次提交材料。
+- 信用债沿用 isSimpleInboundFlowMatched，资格在“下一步”计算，提交不重复查询矩阵、180 天入库经历、历史报告或证券分析条件。资格中的历史报告与证券分析要求仍保留，豁免的是本次提交材料；调库申请默认带出同发行人近180天内最新证券分析。
 - 产品库快速资格适用于 `bond_product_root` 子树启用叶子。信用债一至三级、转债核心/重点按 `ip_pool_status` 判断。CRMW 库默认认可 `ip_pool_status` 的有效在池记录和 `ip_pool_status_crmw.security_code` 的有效组合标的，任一命中即可。有效记录须审批通过且未删除。本次待申请调入来源池不计入资格。
 - `BusinessSwitches.CRMW_USE_POOL_STATUS` 默认开启。改为 `false` 并重新编译、重启服务后，快速入库和材料豁免的 CRMW 来源仅认组合表。
 - ABS 不适用快速入库：简易入库与产品库快速入库的资格对 ABS 直接判为不匹配，`matched` 与 `selectable` 同时为 false，不返回材料豁免提示；批量与 Excel 复用单笔资格，一般/特殊流程及其他材料规则不变。

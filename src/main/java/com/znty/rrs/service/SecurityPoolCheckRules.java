@@ -1424,12 +1424,13 @@ class SecurityPoolCheckRules {
     /**
      * 简易流程命中判断入口。
      *
-     * 以下四项必须全部满足，逐项记录命中或不命中的原因：
+     * 以下五项必须全部满足，逐项记录命中或不命中的原因：
      *
      *   1. 当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内。
      *   2. 同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库。
      *   3. 同发行人债券近180天实际入库的已通过调入业务中有信评附件。
-     *   4. 按永续、次级、标准信用债的顺序匹配一类附加要求。
+     *   4. 同发行人债券近180天实际入库的已通过调入业务中有有效证券分析。
+     *   5. 按永续、次级、标准信用债的顺序匹配一类附加要求。
      *
      * 唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响。
      */
@@ -1502,7 +1503,15 @@ class SecurityPoolCheckRules {
             unmatchReasons.add("同发行人180天内已入库的调入业务没有有效信评附件");
         }
 
-        // 4. 债券类型要求：按永续、次级、标准信用债的顺序匹配一类
+        // 4. 证券分析按所属调入业务的实际入库时间计算180天，快照须有非空证券分析内容
+        if (batchData == null ? securityPoolAdjustMapper.queryIssuerHasRecentAnalysisWithinDays(
+                req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS) : batchData.recentAnalysisIssuers.contains(issuer)) {
+            matchReasons.add("同发行人180天内已入库的调入业务有有效证券分析");
+        } else {
+            unmatchReasons.add("同发行人180天内已入库的调入业务没有有效证券分析");
+        }
+
+        // 5. 债券类型要求：按永续、次级、标准信用债的顺序匹配一类
         int failureCount = unmatchReasons.size();
         // 增加对应类型未满足的原因，未增加失败原因时记录本项命中
         checkSimpleInboundSpecialConditions(shared, standardBestSort,

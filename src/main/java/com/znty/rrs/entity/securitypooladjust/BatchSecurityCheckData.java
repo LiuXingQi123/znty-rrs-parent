@@ -94,6 +94,8 @@ public class BatchSecurityCheckData {
     public final Set<String> nonSimpleInboundIssuers = new HashSet<>();
     /** 同发行人的简易入库信评附件资格 */
     public final Set<String> recentReportIssuers = new HashSet<>();
+    /** 同发行人的简易入库证券分析资格 */
+    public final Set<String> recentAnalysisIssuers = new HashSet<>();
     /** 同发行人近六个月报告豁免资格 */
     public final Set<String> reportExemptIssuers = new HashSet<>();
     /** 有有效 CRMW 组合来源的标的证券 */

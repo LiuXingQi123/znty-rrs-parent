@@ -1029,6 +1029,53 @@
           )
     </select>
 
+    <!-- 查询同发行人近180天内审批通过的调入记录中是否有证券分析 -->
+    <select id="queryIssuerHasRecentAnalysisWithinDays" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM ip_adjust_log l
+        INNER JOIN rrs_securityinfo si ON si.wind_code = l.security_code
+        INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = l.id
+        WHERE si.issuer_code = (
+            SELECT issuer_code
+            FROM rrs_securityinfo
+            WHERE wind_code = #{securityCode}
+            LIMIT 1
+        )
+          AND si.issuer_code IS NOT NULL
+          AND si.issuer_code != ''
+          AND l.adjust_mode = '调入'
+          AND l.audit_status = '20'
+          AND l.is_deleted = 0
+          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND snap.analysis IS NOT NULL
+          AND TRIM(snap.analysis) != ''
+    </select>
+
+    <!-- 查询同发行人近180天内最新审批通过的调入记录中的证券分析 -->
+    <select id="queryLatestAnalysisByIssuerWithinDays" resultType="java.lang.String">
+        SELECT snap.analysis
+        FROM ip_adjust_log l
+        INNER JOIN rrs_securityinfo si ON si.wind_code = l.security_code
+        INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = l.id
+        WHERE si.issuer_code = (
+            SELECT issuer_code
+            FROM rrs_securityinfo
+            WHERE wind_code = #{securityCode}
+            LIMIT 1
+        )
+          AND si.issuer_code IS NOT NULL
+          AND si.issuer_code != ''
+          AND l.adjust_mode = '调入'
+          AND l.audit_status = '20'
+          AND l.is_deleted = 0
+          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND snap.analysis IS NOT NULL
+          AND TRIM(snap.analysis) != ''
+        ORDER BY l.crte_time DESC
+                 ,l.id DESC
+        LIMIT 1
+    </select>
+
     <!-- 旧口径：查询指定天数内同主体、同目标池的非简易入库记录，已出池软删历史仍计。
          当前证券池简易匹配不调用此查询，改用 queryIssuerHasNonSimpleCreditBondInboundWithinDays，
          按同发行人信用债大库任意层级的非简易入库经历判断，不限定历史目标层级。 -->

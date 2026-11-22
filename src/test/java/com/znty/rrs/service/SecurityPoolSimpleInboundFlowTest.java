@@ -42,6 +42,7 @@ public class SecurityPoolSimpleInboundFlowTest {
         assertThat(fixture.unmatchReasons).isEmpty();
         verify(fixture.mapper).queryIssuerHasNonSimpleCreditBondInboundWithinDays("SIMPLE001.IB", 180);
         verify(fixture.mapper).queryIssuerHasRecentCreditReportWithinDays("SIMPLE001.IB", 180);
+        verify(fixture.mapper).queryIssuerHasRecentAnalysisWithinDays("SIMPLE001.IB", 180);
     }
 
     /** 只有报告不能替代同主体最近180天的非简易信用债入库记录。 */
@@ -65,6 +66,17 @@ public class SecurityPoolSimpleInboundFlowTest {
 
         assertThat(fixture.matches(2)).isFalse();
         assertThat(fixture.unmatchReasons).isNotEmpty();
+    }
+
+    /** 同发行人近期入库业务没有有效证券分析时不能走简易流程 */
+    @Test
+    public void shouldRejectWhenRecentAnalysisIsMissing() {
+        // 构建缺少有效证券分析的标准券
+        Fixture fixture = createFixture("2+", "2年", 2);
+        when(fixture.mapper.queryIssuerHasRecentAnalysisWithinDays("SIMPLE001.IB", 180)).thenReturn(false);
+
+        assertThat(fixture.matches(2)).isFalse();
+        assertThat(fixture.unmatchReasons).anyMatch(r -> r.contains("证券分析"));
     }
 
     /** 唯一性须比较完整一至五级集合，不能先去掉四级、五级再判断。 */
@@ -505,6 +517,7 @@ public class SecurityPoolSimpleInboundFlowTest {
         when(fixture.mapper.queryIssuerHasNonSimpleCreditBondInboundWithinDays("SIMPLE001.IB", 180))
                 .thenReturn(true);
         when(fixture.mapper.queryIssuerHasRecentCreditReportWithinDays("SIMPLE001.IB", 180)).thenReturn(true);
+        when(fixture.mapper.queryIssuerHasRecentAnalysisWithinDays("SIMPLE001.IB", 180)).thenReturn(true);
         return fixture;
     }
 

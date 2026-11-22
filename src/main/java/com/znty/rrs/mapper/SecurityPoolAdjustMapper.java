@@ -224,6 +224,14 @@ public interface SecurityPoolAdjustMapper {
     boolean queryIssuerHasRecentCreditReportWithinDays(@Param("securityCode") String securityCode,
                                                       @Param("days") int days);
 
+    /** 按实际入库时间查询同发行人已通过调入业务是否有非空证券分析，已出池历史仍计 */
+    boolean queryIssuerHasRecentAnalysisWithinDays(@Param("securityCode") String securityCode,
+                                                   @Param("days") int days);
+
+    /** 按实际入库时间查询同发行人近指定天数内最新已审批通过调入业务的证券分析 */
+    String queryLatestAnalysisByIssuerWithinDays(@Param("securityCode") String securityCode,
+                                                 @Param("days") int days);
+
     /**
      * 旧口径：查询指定天数内同主体、同目标池的非简易入库记录。
      * 当前证券池简易匹配不调用此方法，改用

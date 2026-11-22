@@ -278,6 +278,12 @@ public class SecurityPoolAdjustService {
             currentMaster = new SecurityInfoBo();
             BeanUtils.copyProperties(master, currentMaster);
             overlayEditableFieldsFromSnapshot(master, latestSnapshot);
+            // 默认带出同发行人近 180 天内最新已审批通过调入业务的证券分析
+            String latestAnalysis = securityPoolAdjustMapper.queryLatestAnalysisByIssuerWithinDays(
+                    req.getSecurityCode(), SecurityPoolCheckRules.SIMPLE_INBOUND_HISTORY_DAYS);
+            if (latestAnalysis != null && !latestAnalysis.trim().isEmpty()) {
+                master.setAnalysis(latestAnalysis);
+            }
             dto = master;
         }
         // 回填证券品种大类（dict_security_type.category_type），供前端按类型差异化展示（如基金评分输入）
@@ -2983,12 +2989,13 @@ public class SecurityPoolAdjustService {
     /**
      * 简易流程命中判断入口。
      *
-     * 以下四项必须全部满足，逐项记录命中或不命中的原因：
+     * 以下五项必须全部满足，逐项记录命中或不命中的原因：
      *
      *   1. 当前规则唯一允许的层级为信用债一至三级，且目标池本身在准入范围内。
      *   2. 同发行人债券近180天以非简易入库流程进入过信用债大库任意层级，含升库和降库。
      *   3. 同发行人债券近180天实际入库的已通过调入业务中有信评附件。
-     *   4. 满足永续债、次级债和标准信用债各自的附加要求。
+     *   4. 同发行人债券近180天实际入库的已通过调入业务中有有效证券分析。
+     *   5. 满足永续债、次级债和标准信用债各自的附加要求。
      *
      * 唯一性按完整一至五级准入范围判断，不受当前勾选池、权限或放开规则开关影响。
      */

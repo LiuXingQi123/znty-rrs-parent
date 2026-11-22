@@ -543,11 +543,13 @@ public class BatchSecurityCheckService {
                         }
                     });
                 }
-                // 按发行人查询两项独立的历史资格
+                // 按发行人查询三项独立的历史资格
                 forEachCheckChunk(issuers, chunk -> {
                     data.nonSimpleInboundIssuers.addAll(batchSecurityCheckMapper.queryNonSimpleInboundIssuers(
                             chunk, SIMPLE_INBOUND_HISTORY_DAYS));
                     data.recentReportIssuers.addAll(batchSecurityCheckMapper.queryRecentReportIssuers(
+                            chunk, SIMPLE_INBOUND_HISTORY_DAYS));
+                    data.recentAnalysisIssuers.addAll(batchSecurityCheckMapper.queryRecentAnalysisIssuers(
                             chunk, SIMPLE_INBOUND_HISTORY_DAYS));
                 });
             }

@@ -34,6 +34,7 @@ import com.znty.rrs.entity.bo.SecurityInfoBo;
 import com.znty.rrs.entity.common.SecurityMarketDto;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustReq;
 import com.znty.rrs.entity.securitypooladjust.SecurityPoolAdjustSubmitReq;
+import com.znty.rrs.entity.securitypooladjust.SecurityInfoDetailDto;
 import com.znty.rrs.entity.securitypooladjust.RatingCompanySelectionReq;
 import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
@@ -3360,6 +3361,7 @@ public class SecurityPoolAdjustServiceStepTest {
                 .thenReturn(Collections.singletonList(targetPool.getId()));
         when(mapper.queryIssuerHasNonSimpleCreditBondInboundWithinDays("110010123", 180)).thenReturn(true);
         when(mapper.queryIssuerHasRecentCreditReportWithinDays("110010123", 180)).thenReturn(true);
+        when(mapper.queryIssuerHasRecentAnalysisWithinDays("110010123", 180)).thenReturn(true);
         AdjustCheckReq req = new AdjustCheckReq();
         req.setSecurityCode("110010123");
         List<String> matchReasons = new ArrayList<>();
@@ -3618,5 +3620,32 @@ public class SecurityPoolAdjustServiceStepTest {
         assertThat(relatedMissing.getSecurityCode()).isEqualTo("MISSING.SZ");
         assertThat(relatedMissing.isCanAdjust()).isFalse();
         assertThat(relatedMissing.getFailReasons().get(0)).contains("在系统中不存在");
+    }
+
+    /** 验证单券调库详情接口默认带出同发行人180天内最新证券分析 */
+    @Test
+    public void querySecurityDetailShouldDefaultLatestAnalysisOfIssuerWithinDays() {
+        SecurityPoolAdjustMapper mapper = mock(SecurityPoolAdjustMapper.class);
+        SecurityMarketService marketService = mock(SecurityMarketService.class);
+        SecurityPoolAdjustService service = AbsIdentityTestSupport.withIdentity(new SecurityPoolAdjustService());
+        ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", mapper);
+        ReflectionTestUtils.setField(service, "securityMarketService", marketService);
+
+        SecurityInfoDetailDto master = new SecurityInfoDetailDto();
+        master.setWindCode("BOND1.IB");
+        master.setSecurityType("bond");
+        master.setIssuerCode("C10001");
+        when(mapper.querySecurityDetail("BOND1.IB")).thenReturn(master);
+        when(mapper.queryLatestSecuritySnapshotDetailByWindCode("BOND1.IB")).thenReturn(null);
+        when(mapper.queryLatestAnalysisByIssuerWithinDays("BOND1.IB", 180))
+                .thenReturn("同发行人最新证券分析内容");
+
+        SecurityPoolAdjustReq req = new SecurityPoolAdjustReq();
+        req.setSecurityCode("BOND1.IB");
+
+        SecurityInfoDetailDto detail = service.querySecurityDetail(req);
+
+        assertThat(detail.getAnalysis()).isEqualTo("同发行人最新证券分析内容");
+        verify(mapper).queryLatestAnalysisByIssuerWithinDays("BOND1.IB", 180);
     }
 }

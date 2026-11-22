@@ -525,6 +525,26 @@
           )
     </select>
 
+    <!-- 按发行人批量查询近180天内审批通过的调入记录中是否有证券分析 -->
+    <select id="queryRecentAnalysisIssuers" resultType="java.lang.String">
+        SELECT DISTINCT si.issuer_code
+        FROM ip_adjust_log l
+        INNER JOIN rrs_securityinfo si ON si.wind_code = l.security_code
+        INNER JOIN ip_adjust_security_snapshot snap ON snap.adjust_log_id = l.id
+        WHERE si.issuer_code IN
+        <foreach collection="companyCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND si.issuer_code IS NOT NULL
+          AND si.issuer_code != ''
+          AND l.adjust_mode = '调入'
+          AND l.audit_status = '20'
+          AND l.is_deleted = 0
+          AND l.crte_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          AND snap.analysis IS NOT NULL
+          AND TRIM(snap.analysis) != ''
+    </select>
+
     <!-- 读取满足近六个自然月同发行人报告豁免的主体 -->
     <select id="queryReportExemptIssuers" resultType="java.lang.String">
         SELECT DISTINCT si.issuer_code

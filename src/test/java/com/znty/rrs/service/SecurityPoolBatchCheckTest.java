@@ -348,11 +348,13 @@ public class SecurityPoolBatchCheckTest {
         ineligible.setSecurityType("mtn");
         ineligible.setIssuerCode("ISSUER");
         ineligible.setEligibleForFollow(true);
-        ineligible.setMaturityDate("20261118");
+        String futureMaturity = java.time.LocalDate.now().plusDays(1).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        String cutoff = java.time.LocalDate.now().plusDays(2).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        ineligible.setMaturityDate(futureMaturity);
         when(fixture.batch.queryScheduledSecurities(Collections.singletonList("B1")))
                 .thenReturn(Collections.singletonList(ineligible));
 
-        AdjustCheckDto result = fixture.service.checkCompanyFollowBatch(Collections.singletonList(request("B1")), "20261119", Collections.emptySet())
+        AdjustCheckDto result = fixture.service.checkCompanyFollowBatch(Collections.singletonList(request("B1")), cutoff, Collections.emptySet())
                 .get(0);
 
         assertThat(result.getItems().get(0).isCanAdjust()).isFalse();

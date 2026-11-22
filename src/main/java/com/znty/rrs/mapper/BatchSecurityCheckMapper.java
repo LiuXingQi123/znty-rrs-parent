@@ -173,6 +173,16 @@ public interface BatchSecurityCheckMapper {
             @Param("days") int days);
 
     /**
+     * 按发行人批量查询简易资格所需的历史证券分析
+     *
+     * @param companyCodes 发行主体代码列表
+     * @param days 按实际入池日期回溯的天数
+     * @return 存在有效证券分析的发行人代码列表
+     */
+    List<String> queryRecentAnalysisIssuers(@Param("companyCodes") List<String> companyCodes,
+            @Param("days") int days);
+
+    /**
      * 读取满足近六个自然月同发行人报告豁免的主体
      *
      * @param companyCodes 发行主体或担保人代码
