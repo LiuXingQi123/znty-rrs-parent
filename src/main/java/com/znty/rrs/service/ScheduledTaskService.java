@@ -451,7 +451,7 @@ public class ScheduledTaskService {
             logBo.setMessage(truncate(message, 1000));
             // 过程日志写入历史（截断防过大）
             String detailLog = result != null ? result.getDetailLog() : null;
-            logBo.setDetailLog(truncate(detailLog, 20000));
+            logBo.setDetailLog(truncate(detailLog, 30000));
             logBo.setAffectedCount(affected);
             logBo.setDurationMs(duration);
             logBo.setStartTime(start);

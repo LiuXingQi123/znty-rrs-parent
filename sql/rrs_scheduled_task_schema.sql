@@ -84,7 +84,7 @@ CREATE TABLE `sys_scheduled_task_run_log`
     `trigger_type`    VARCHAR(32)  DEFAULT NULL            COMMENT '触发方式：manual=手动 / cron=定时',
     `run_status`      VARCHAR(32)  DEFAULT NULL            COMMENT '执行状态：success=成功 / fail=失败',
     `message`         VARCHAR(1000) DEFAULT NULL           COMMENT '执行结果说明',
-    `detail_log`      TEXT         DEFAULT NULL            COMMENT '执行过程日志（多行文本，供历史页查看）',
+    `detail_log`      LONGTEXT     DEFAULT NULL            COMMENT '执行过程日志（多行文本，供历史页查看）',
     `affected_count`  INT          DEFAULT NULL            COMMENT '影响条数',
     `duration_ms`     BIGINT       DEFAULT NULL            COMMENT '耗时毫秒',
     `start_time`      DATETIME     DEFAULT NULL            COMMENT '开始时间',
@@ -97,5 +97,5 @@ CREATE TABLE `sys_scheduled_task_run_log`
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='定时任务执行历史';
 
--- 若库表已存在仅缺 detail_log，可手工执行：
--- ALTER TABLE `sys_scheduled_task_run_log` ADD COLUMN `detail_log` TEXT DEFAULT NULL COMMENT '执行过程日志（多行文本，供历史页查看）' AFTER `message`;
+-- 若库表已存在仅缺 detail_log 或需扩容为 LONGTEXT，可手工执行：
+-- ALTER TABLE `sys_scheduled_task_run_log` MODIFY COLUMN `detail_log` LONGTEXT DEFAULT NULL COMMENT '执行过程日志（多行文本，供历史页查看）';
