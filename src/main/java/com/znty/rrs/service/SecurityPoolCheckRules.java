@@ -79,6 +79,9 @@ class SecurityPoolCheckRules {
     /** 是否认可普通池状态中的 CRMW 作为快速入库来源 */
     private boolean crmwUsePoolStatus = BusinessSwitches.CRMW_USE_POOL_STATUS;
 
+    /** 信用债简易入库是否要求同发行人近180天有有效信评报告 */
+    private boolean simpleInboundRecentReportRequired = BusinessSwitches.SIMPLE_INBOUND_RECENT_REPORT_REQUIRED;
+
     /** 简易入库的历史回看天数 */
     static final int SIMPLE_INBOUND_HISTORY_DAYS = 180;
     /** 白名单入库流程 */
@@ -134,6 +137,21 @@ class SecurityPoolCheckRules {
                            PledgeBlacklistRuleService pledgeBlacklistRuleService,
                            RatingDowngradeChecker ratingDowngradeChecker,
                            boolean crmwUsePoolStatus) {
+        this(securityPoolAdjustMapper, securityMarketService, flowMapper, creditBondGradeRuleMapper,
+                absIdentityService, pledgeBlacklistRuleService, ratingDowngradeChecker, crmwUsePoolStatus,
+                BusinessSwitches.SIMPLE_INBOUND_RECENT_REPORT_REQUIRED);
+    }
+
+    /** 由完整参数组装判定器 */
+    SecurityPoolCheckRules(SecurityPoolAdjustMapper securityPoolAdjustMapper,
+                           SecurityMarketService securityMarketService,
+                           FlowMapper flowMapper,
+                           CreditBondGradeRuleMapper creditBondGradeRuleMapper,
+                           AbsIdentityService absIdentityService,
+                           PledgeBlacklistRuleService pledgeBlacklistRuleService,
+                           RatingDowngradeChecker ratingDowngradeChecker,
+                           boolean crmwUsePoolStatus,
+                           boolean simpleInboundRecentReportRequired) {
         this.securityPoolAdjustMapper = securityPoolAdjustMapper;
         this.securityMarketService = securityMarketService;
         this.flowMapper = flowMapper;
@@ -142,6 +160,12 @@ class SecurityPoolCheckRules {
         this.pledgeBlacklistRuleService = pledgeBlacklistRuleService;
         this.ratingDowngradeChecker = ratingDowngradeChecker;
         this.crmwUsePoolStatus = crmwUsePoolStatus;
+        this.simpleInboundRecentReportRequired = simpleInboundRecentReportRequired;
+    }
+
+    /** 设置信用债简易入库是否强制要求有效信评报告 */
+    void setSimpleInboundRecentReportRequired(boolean simpleInboundRecentReportRequired) {
+        this.simpleInboundRecentReportRequired = simpleInboundRecentReportRequired;
     }
 
     /**
@@ -1494,13 +1518,15 @@ class SecurityPoolCheckRules {
             unmatchReasons.add("同发行人半年内未以非简易入库流程进入信用债大库");
         }
 
-        // 3. 信评附件按所属调入业务的实际入库时间计算180天，手工上传和内外部引用均计入
+        // 3. 信评附件按所属调入业务的实际入库时间计算180天，手工上传和内外部引用均计入（由开关控制是否强制要求）
         // 不检查原报告主体，不要求与上面的非简易信用债入库经历来自同一笔业务
-        if (batchData == null ? securityPoolAdjustMapper.queryIssuerHasRecentCreditReportWithinDays(
-                req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS) : batchData.recentReportIssuers.contains(issuer)) {
-            matchReasons.add("同发行人180天内已入库的调入业务有有效信评附件");
-        } else {
-            unmatchReasons.add("同发行人180天内已入库的调入业务没有有效信评附件");
+        if (simpleInboundRecentReportRequired) {
+            if (batchData == null ? securityPoolAdjustMapper.queryIssuerHasRecentCreditReportWithinDays(
+                    req.getSecurityCode(), SIMPLE_INBOUND_HISTORY_DAYS) : batchData.recentReportIssuers.contains(issuer)) {
+                matchReasons.add("同发行人180天内已入库的调入业务有有效信评附件");
+            } else {
+                unmatchReasons.add("同发行人180天内已入库的调入业务没有有效信评附件");
+            }
         }
 
         // 4. 证券分析按所属调入业务的实际入库时间计算180天，快照须有非空证券分析内容

@@ -14,6 +14,13 @@ public final class BusinessSwitches {
      */
     public static final boolean CRMW_USE_POOL_STATUS = true;
 
+    /**
+     * 信用债简易入库是否强制要求同发行人近180天实际入库业务中有有效信评报告
+     * true 时，同发行人近180天已入库的调入业务必须包含有效信评报告附件才能匹配简易入库流程
+     * false 时，暂不要求此条件（默认值）
+     */
+    public static final boolean SIMPLE_INBOUND_RECENT_REPORT_REQUIRED = false;
+
     /** 禁止实例化 */
     private BusinessSwitches() {
     }

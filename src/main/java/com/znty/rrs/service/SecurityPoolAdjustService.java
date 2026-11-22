@@ -160,6 +160,9 @@ public class SecurityPoolAdjustService {
     /** 是否认可普通状态表中的 CRMW 库作为快速入库来源 */
     private boolean crmwUsePoolStatus = BusinessSwitches.CRMW_USE_POOL_STATUS;
 
+    /** 信用债简易入库是否要求同发行人近180天有有效信评报告 */
+    private boolean simpleInboundRecentReportRequired = BusinessSwitches.SIMPLE_INBOUND_RECENT_REPORT_REQUIRED;
+
     /** ABS 跨池主体身份及已查询候选复用 */
     @Resource
     private AbsIdentityService absIdentityService;
@@ -217,7 +220,16 @@ public class SecurityPoolAdjustService {
             return securityPoolCheckRules;
         }
         return new SecurityPoolCheckRules(securityPoolAdjustMapper, securityMarketService, flowMapper, creditBondGradeRuleMapper,
-                absIdentityService, pledgeBlacklistRuleService, ratingDowngradeChecker, crmwUsePoolStatus);
+                absIdentityService, pledgeBlacklistRuleService, ratingDowngradeChecker, crmwUsePoolStatus,
+                simpleInboundRecentReportRequired);
+    }
+
+    /** 设置信用债简易入库是否强制要求有效信评报告 */
+    void setSimpleInboundRecentReportRequired(boolean simpleInboundRecentReportRequired) {
+        this.simpleInboundRecentReportRequired = simpleInboundRecentReportRequired;
+        if (this.securityPoolCheckRules != null) {
+            this.securityPoolCheckRules.setSimpleInboundRecentReportRequired(simpleInboundRecentReportRequired);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════

@@ -1,5 +1,6 @@
 package com.znty.rrs.service;
 
+import com.znty.rrs.common.constants.BusinessSwitches;
 import com.znty.rrs.common.constants.ProductInboundPoolCodes;
 import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.ItemType;
@@ -543,12 +544,14 @@ public class BatchSecurityCheckService {
                         }
                     });
                 }
-                // 按发行人查询三项独立的历史资格
+                // 按发行人查询独立的历史资格
                 forEachCheckChunk(issuers, chunk -> {
                     data.nonSimpleInboundIssuers.addAll(batchSecurityCheckMapper.queryNonSimpleInboundIssuers(
                             chunk, SIMPLE_INBOUND_HISTORY_DAYS));
-                    data.recentReportIssuers.addAll(batchSecurityCheckMapper.queryRecentReportIssuers(
-                            chunk, SIMPLE_INBOUND_HISTORY_DAYS));
+                    if (BusinessSwitches.SIMPLE_INBOUND_RECENT_REPORT_REQUIRED) {
+                        data.recentReportIssuers.addAll(batchSecurityCheckMapper.queryRecentReportIssuers(
+                                chunk, SIMPLE_INBOUND_HISTORY_DAYS));
+                    }
                     data.recentAnalysisIssuers.addAll(batchSecurityCheckMapper.queryRecentAnalysisIssuers(
                             chunk, SIMPLE_INBOUND_HISTORY_DAYS));
                 });

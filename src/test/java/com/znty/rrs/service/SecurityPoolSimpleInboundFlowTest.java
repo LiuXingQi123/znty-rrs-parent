@@ -31,11 +31,25 @@ import static org.mockito.Mockito.when;
 /** 证券池简易调入流程的业务门槛与特殊债边界测试。 */
 public class SecurityPoolSimpleInboundFlowTest {
 
-    /** 180天内非简易信用债入库和入库业务信评附件必须同时具备，且不再依赖剩余天数 */
+    /** 默认开关关闭时，不强制要求有效信评附件，未查询信评报告仍可通过简易流程 */
     @Test
     public void standardBondShouldPassWithUniqueLevelAndBothRecentPrerequisites() {
         // 构建只允许二级库的标准券
         Fixture fixture = createFixture("2+", "2年", 2);
+        fixture.security.setDateExists(null);
+
+        assertThat(fixture.matches(2)).isTrue();
+        assertThat(fixture.unmatchReasons).isEmpty();
+        verify(fixture.mapper).queryIssuerHasNonSimpleCreditBondInboundWithinDays("SIMPLE001.IB", 180);
+        verify(fixture.mapper, never()).queryIssuerHasRecentCreditReportWithinDays("SIMPLE001.IB", 180);
+        verify(fixture.mapper).queryIssuerHasRecentAnalysisWithinDays("SIMPLE001.IB", 180);
+    }
+
+    /** 开启信评附件开关时，180天内非简易入库、信评附件和证券分析必须同时具备 */
+    @Test
+    public void standardBondShouldPassWhenRecentCreditReportRequiredAndPresent() {
+        Fixture fixture = createFixture("2+", "2年", 2);
+        fixture.service.setSimpleInboundRecentReportRequired(true);
         fixture.security.setDateExists(null);
 
         assertThat(fixture.matches(2)).isTrue();
@@ -57,15 +71,27 @@ public class SecurityPoolSimpleInboundFlowTest {
         assertThat(fixture.unmatchReasons).isNotEmpty();
     }
 
-    /** 同发行人近期入库业务没有有效信评附件时不能走简易流程 */
+    /** 开启信评附件开关时，同发行人近期入库业务没有有效信评附件时不能走简易流程 */
     @Test
     public void shouldRejectWhenRecentCreditReportIsMissing() {
         // 构建只有非简易入库历史的标准券
         Fixture fixture = createFixture("2+", "2年", 2);
+        fixture.service.setSimpleInboundRecentReportRequired(true);
         when(fixture.mapper.queryIssuerHasRecentCreditReportWithinDays("SIMPLE001.IB", 180)).thenReturn(false);
 
         assertThat(fixture.matches(2)).isFalse();
         assertThat(fixture.unmatchReasons).isNotEmpty();
+    }
+
+    /** 默认开关关闭时，缺少近期信评附件不影响简易入库流程匹配 */
+    @Test
+    public void shouldPassWhenRecentCreditReportIsMissingAndSwitchIsDisabled() {
+        Fixture fixture = createFixture("2+", "2年", 2);
+        when(fixture.mapper.queryIssuerHasRecentCreditReportWithinDays("SIMPLE001.IB", 180)).thenReturn(false);
+
+        assertThat(fixture.matches(2)).isTrue();
+        assertThat(fixture.unmatchReasons).isEmpty();
+        verify(fixture.mapper, never()).queryIssuerHasRecentCreditReportWithinDays("SIMPLE001.IB", 180);
     }
 
     /** 同发行人近期入库业务没有有效证券分析时不能走简易流程 */

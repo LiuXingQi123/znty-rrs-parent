@@ -679,7 +679,8 @@ Demo 在原始 `INSERT` 中为全部 54 条证券显式填写标识，设置以�
 
 适用证券池调整（包括详情页调库和审核页下一步模式）、证券池批量调整、存量证券批量调整及证券池 Excel 导入。证券池批量调整与存量证券批量调整均沿用单笔流程候选和推荐。证券池 Excel 导入通过 `BatchAdjustFlowOptionHelper` 追加并推荐目标池已配置的批量流程。
 
-- 信用债沿用 isSimpleInboundFlowMatched，资格在“下一步”计算，提交不重复查询矩阵、180 天入库经历、历史报告或证券分析条件。资格中的历史报告与证券分析要求仍保留，豁免的是本次提交材料；调库申请默认带出同发行人近180天内最新证券分析。
+- 信用债沿用 isSimpleInboundFlowMatched，资格在“下一步”计算，提交不重复查询矩阵、180 天入库经历、历史报告或证券分析条件。资格中的历史证券分析要求保留，豁免的是本次提交材料；调库申请默认带出同发行人近180天内最新证券分析。
+- 信用债简易入库同发行人近 180 天历史有效信评报告条件由 `BusinessSwitches.SIMPLE_INBOUND_RECENT_REPORT_REQUIRED` 开关控制，当前默认 `false`（暂不要求）；若后续需重新启用，改为 `true` 并重新编译重启服务生效。
 - 产品库快速资格适用于 `bond_product_root` 子树启用叶子。信用债一至三级、转债核心/重点按 `ip_pool_status` 判断。CRMW 库默认认可 `ip_pool_status` 的有效在池记录和 `ip_pool_status_crmw.security_code` 的有效组合标的，任一命中即可。有效记录须审批通过且未删除。本次待申请调入来源池不计入资格。
 - `BusinessSwitches.CRMW_USE_POOL_STATUS` 默认开启。改为 `false` 并重新编译、重启服务后，快速入库和材料豁免的 CRMW 来源仅认组合表。
 - ABS 不适用快速入库：简易入库与产品库快速入库的资格对 ABS 直接判为不匹配，`matched` 与 `selectable` 同时为 false，不返回材料豁免提示；批量与 Excel 复用单笔资格，一般/特殊流程及其他材料规则不变。
