@@ -47,9 +47,12 @@ public class SecuritySnapshotMarketIntegrationTest {
         }
         jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(32), security_type_name VARCHAR(100), category_type VARCHAR(32), is_deleted INT)");
         jdbc.execute("INSERT INTO dict_security_type VALUES ('mtn', '中期票据', 'bond', 0)");
-        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(100), security_source VARCHAR(32), market VARCHAR(10))");
-        jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('A.IB', 'official', 'NIB'), ('B.SH', 'official', 'SSE'), ('C.SZ', 'official', 'SZSE')");
-        jdbc.execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(32))");
+        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(100), security_source VARCHAR(32),"
+                + " market VARCHAR(10), sec_id VARCHAR(100), security_status VARCHAR(8))");
+        jdbc.execute("INSERT INTO rrs_securityinfo(wind_code,security_source,market)"
+                + " VALUES ('A.IB', 'official', 'NIB'), ('B.SH', 'official', 'SSE'), ('C.SZ', 'official', 'SZSE')");
+        jdbc.execute("CREATE TABLE rrs_temp_security_code (id BIGINT, sec_id VARCHAR(100), temp_security_code VARCHAR(100),"
+                + " temp_security_market VARCHAR(32), status VARCHAR(32), is_deleted INT, update_time TIMESTAMP)");
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
         jdbc.execute("CREATE TABLE ais_inv_ods.wind_windcustomcode (S_INFO_WINDCODE VARCHAR(100), EXCHMARKET VARCHAR(10), S_INFO_ISINCODE VARCHAR(40))");
         jdbc.execute("INSERT INTO ais_inv_ods.wind_windcustomcode VALUES ('A.IB', 'NIB', 'SAME'), ('B.SH', 'SSE', 'SAME'), ('C.SZ', 'SZSE', 'OTHER')");

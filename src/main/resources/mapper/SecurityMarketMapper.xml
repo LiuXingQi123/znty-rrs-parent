@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.znty.rrs.mapper.SecurityMarketMapper">
-    <!-- 正式证券直接读取主档市场，临时代码只读取登记市场；保留缺失映射供业务报错 -->
+    <!-- 正式证券读主档市场，失效临时主档优先读与其临时 SEC_ID 匹配的最近成功登记 -->
     <select id="queryMarketMappingList" resultType="com.znty.rrs.entity.common.SecurityMarketMappingDto">
         SELECT requested.wind_code
                ,CASE WHEN si.security_source = 'temporary' THEN t.temp_security_market
@@ -15,6 +15,17 @@
         LEFT JOIN rrs_securityinfo si ON si.wind_code = requested.wind_code
         LEFT JOIN rrs_temp_security_code t ON t.temp_security_code = requested.wind_code
                                               AND si.security_source = 'temporary'
+                                              AND t.id = COALESCE((
+                                                  SELECT history.id
+                                                  FROM rrs_temp_security_code history
+                                                  WHERE si.security_status = 'D'
+                                                    AND history.temp_security_code = t.temp_security_code
+                                                    AND history.sec_id = si.sec_id
+                                                    AND history.status = 'updated'
+                                                    AND history.is_deleted = 0
+                                                  ORDER BY history.update_time DESC, history.id DESC
+                                                  LIMIT 1
+                                              ), t.id)
     </select>
     <!-- 先按 Wind EXCHMARKET 筛选共用市场范围；空 ISIN 不关联，范围内缺主档仍保留供报错 -->
     <select id="queryRelatedWindCodeList" resultType="string">

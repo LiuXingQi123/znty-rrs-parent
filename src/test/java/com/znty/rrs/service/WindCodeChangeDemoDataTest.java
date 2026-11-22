@@ -52,6 +52,10 @@ public class WindCodeChangeDemoDataTest {
     private DriverManagerDataSource source;
     /** Demo 数据及结果校验入口。 */
     private JdbcTemplate jdbc;
+    /** 通过生产 Mapper 校验历史码市场 */
+    private SecurityMarketService markets;
+    /** 与 Wind 任务共用事务代理和真实 Mapper 的普通转正任务 */
+    private BondTempCodeReplaceService bondReplaceTask;
 
     /** 创建真实列定义和日期函数，不连接业务数据库。 */
     @Before
@@ -137,9 +141,9 @@ public class WindCodeChangeDemoDataTest {
                                 .isNotEqualTo(oldCode);
                     }
                     if ("WCH_DEMO_006".equals(change.getObjectId())) {
-                        assertThat(mapper.querySecurityBySecIdForUpdate(change.getSecId())).isNull();
+                        assertThat(mapper.querySecurityBySecId(change.getSecId())).isNull();
                     } else {
-                        assertThat(mapper.querySecurityBySecIdForUpdate(change.getSecId())).isNotNull();
+                        assertThat(mapper.querySecurityBySecId(change.getSecId())).isNotNull();
                     }
                 }
                 assertThat(candidates).extracting(WindCodeChangeDto::getChangeDate).containsOnly(to);
@@ -165,16 +169,8 @@ public class WindCodeChangeDemoDataTest {
     public void demoShouldExecuteAllBranchesAndSkipCompletedEvents() throws Exception {
         // 模拟生产库对证券 SEC_ID 的唯一约束
         jdbc.execute("ALTER TABLE rrs_securityinfo ADD CONSTRAINT uq_wind_demo_sec_id UNIQUE (sec_id)");
-        // 加载实际池配置、调库流水、步骤和快照结构。
-        for (String file : Arrays.asList("rrs_pool_init_schema.sql", "rrs_security_pool_adjust_schema.sql",
-                "rrs_crmw_pool_status_schema.sql", "rrs_adjust_snapshot_schema.sql", "rrs_dict_schema.sql")) {
-            String sql = new String(Files.readAllBytes(Paths.get("sql", file)), StandardCharsets.UTF_8);
-            Matcher tables = Pattern.compile("CREATE TABLE `([^`]+)`").matcher(sql);
-            while (tables.find()) {
-                // 按表执行生产 DDL，避免测试改写真实字段。
-                createTable(jdbc, file, tables.group(1), tables.group(1));
-            }
-        }
+        // 加载实际池配置、调库流水、步骤和快照结构
+        createConversionTables();
         // 装载真实主档、登记和已有转换历史。
         resetDemo(jdbc, "rrs_external_import_demo_data.sql", "rrs_securityinfo", "rrs_securityinfo");
         // 登记保留创建时的临时身份，主档使用已映射的真实 SEC_ID。
@@ -309,6 +305,208 @@ public class WindCodeChangeDemoDataTest {
         }
     }
 
+    /** 四次逐笔运行 Wind 任务，换回历史码时重建主档并保留独立登记 */
+    @Test
+    public void windTaskShouldReturnToPreviouslyUsedCodes() throws Exception {
+        jdbc.execute("ALTER TABLE rrs_securityinfo ADD CONSTRAINT uq_wind_demo_sec_id UNIQUE (sec_id)");
+        // 建立换码所需的池、日志及快照表
+        createConversionTables();
+        jdbc.update("UPDATE sys_scheduled_task SET param_json=? WHERE task_code=?",
+                "{\"scanDays\":5}", WindCodeSyncService.TASK_CODE);
+        Timestamp originalCreateTime = Timestamp.valueOf("2026-01-01 08:00:00");
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,sec_id,short_name,security_type,security_source,security_status,create_time)"
+                + " VALUES ('A.IB','CYCLE001','循环换码测试','mtn','temporary','L',?)", originalCreateTime);
+        jdbc.update("INSERT INTO rrs_temp_security_code(sec_id,temp_security_code,temp_security_name,"
+                + "temp_security_type,temp_security_market,status,is_deleted)"
+                + " VALUES ('TEMP_A.IB','A.IB','循环换码测试','mtn','NIB','temporary',0)");
+        // 通过实际的任务入口和生产 Mapper 逐条执行，以不同日期区分最新事件
+        WindCodeSyncService task = createTask();
+        List<String> codes = Arrays.asList("A.IB", "B.IB", "C.IB", "B.IB", "A.IB");
+        for (int i = 0; i < codes.size() - 1; i++) {
+            String oldCode = codes.get(i);
+            String newCode = codes.get(i + 1);
+            jdbc.update("INSERT INTO ais_inv_ods.wind_cbondchangewindcode"
+                    + " (OBJECT_ID,S_INFO_WINDCODE,S_INFO_OLDWINDCODE,S_INFO_NEWWINDCODE,CHANGE_DATE,SEC_ID)"
+                    + " VALUES (?, ?, ?, ?, DATE_FORMAT(TIMESTAMPADD(DAY, ?, NOW()), '%Y%m%d'), 'CYCLE001')",
+                    "CYCLE_" + i, newCode, oldCode, newCode, i - 3);
+            // 模拟换码期间最新主档资料更新，返回历史码时应保留最新资料
+            jdbc.update("UPDATE rrs_securityinfo SET coupon_rate=? WHERE sec_id='CYCLE001'", "3." + i);
+            if ("A.IB".equals(newCode)) {
+                // 区分当前 B 与历史 A 的创建时间，验证重建 A 时保留自身时间
+                jdbc.update("UPDATE rrs_securityinfo SET create_time=? WHERE sec_id='CYCLE001'",
+                        Timestamp.valueOf("2026-02-02 08:00:00"));
+            }
+            ScheduledTaskResult result = task.execute();
+            assertThat(result.getAffectedCount()).as(result.getDetailLog()).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo WHERE sec_id='CYCLE001' AND wind_code=?"
+                    + " AND security_source='temp_converted' AND security_status='L' AND coupon_rate=?",
+                    Integer.class, newCode, "3." + i)).isEqualTo(1);
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo", Integer.class)).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT create_time FROM rrs_securityinfo WHERE wind_code='A.IB'", Timestamp.class))
+                .isEqualTo(originalCreateTime);
+        assertThat(jdbc.queryForList("SELECT sec_id FROM rrs_securityinfo WHERE security_source='temporary'"
+                + " AND security_status='D' ORDER BY wind_code", String.class)).containsExactly("TEMP_B.IB", "TEMP_C.IB");
+        assertThat(jdbc.queryForList("SELECT CONCAT(temp_security_code, '->', security_code)"
+                + " FROM rrs_temp_security_code WHERE status='updated' ORDER BY id", String.class))
+                .containsExactly("A.IB->B.IB", "B.IB->C.IB", "C.IB->B.IB", "B.IB->A.IB");
+        assertThat(jdbc.queryForObject("SELECT security_code FROM rrs_temp_security_code WHERE sec_id='TEMP_A.IB'", String.class))
+                .isEqualTo("B.IB");
+        assertThat(markets.queryMarketCode("B.IB")).isEqualTo("NIB");
+        assertThat(task.execute().getMessage()).contains("重复跳过 1 条");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code_update_log", Integer.class)).isEqualTo(4);
+    }
+
+    /** 三种起点分别通过实际定时任务逐步换回最初的临时代码 */
+    @Test
+    public void scheduledTasksShouldRoundTripAllThreeStartingSources() throws Exception {
+        jdbc.execute("ALTER TABLE rrs_securityinfo ADD CONSTRAINT uq_roundtrip_sec_id UNIQUE (sec_id)");
+        createConversionTables();
+        jdbc.update("UPDATE sys_scheduled_task SET param_json=? WHERE task_code=?",
+                "{\"scanDays\":5}", WindCodeSyncService.TASK_CODE);
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,sec_id,short_name,security_type,security_source,security_status,market)"
+                + " VALUES ('T1.IB','ROUND1','库内原始代码','mtn','official','L','NIB')"
+                + ", ('T2.IB','TEMP_T2.IB','页面临时代码','mtn','temporary','L','NIB')"
+                + ", ('A2.IB','ROUND2','预先入库的正式码','mtn','official','L','NIB')"
+                + ", ('T3.IB','ROUND3','已匹配正式标识的临时代码','mtn','temporary','L','NIB')");
+        jdbc.update("INSERT INTO rrs_temp_security_code(sec_id,temp_security_code,temp_security_name,temp_security_type,"
+                + "temp_security_market,security_code,status,is_deleted)"
+                + " VALUES ('TEMP_T2.IB','T2.IB','页面临时代码','mtn','NIB','A2.IB','temporary',0)"
+                + ", ('TEMP_T3.IB','T3.IB','已匹配正式标识的临时代码','mtn','NIB',NULL,'temporary',0)");
+        WindCodeSyncService windTask = createTask();
+
+        // 页面临时代码先由普通任务使用已入库的正式主档，另外两组先由 Wind 生成新主档
+        ScheduledTaskResult ordinaryResult = bondReplaceTask.execute();
+        assertThat(ordinaryResult.getAffectedCount()).as(ordinaryResult.getDetailLog()).isEqualTo(1);
+        assertThat(ordinaryResult.getDetailLog()).contains("待替换候选 1 条");
+        insertWindChange("ROUND1", "T1.IB", "A1.IB", -3);
+        insertWindChange("ROUND3", "T3.IB", "A3.IB", -3);
+        ScheduledTaskResult firstWindResult = windTask.execute();
+        assertThat(firstWindResult.getAffectedCount()).as(firstWindResult.getDetailLog()).isEqualTo(2);
+
+        List<String> steps = Arrays.asList("A", "B", "A", "T");
+        for (int step = 0; step < steps.size(); step++) {
+            if (step > 0) {
+                for (int number = 1; number <= 3; number++) {
+                    insertWindChange("ROUND" + number, steps.get(step - 1) + number + ".IB",
+                            steps.get(step) + number + ".IB", step - 3);
+                }
+                ScheduledTaskResult result = windTask.execute();
+                assertThat(result.getAffectedCount()).as(result.getDetailLog()).isEqualTo(3);
+                assertThat(result.getMessage()).contains("失败 0 条");
+            }
+            for (int number = 1; number <= 3; number++) {
+                assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id=?",
+                        String.class, "ROUND" + number)).isEqualTo(steps.get(step) + number + ".IB");
+            }
+        }
+        assertThat(jdbc.queryForList("SELECT CONCAT(wind_code, '/', sec_id, '/', security_source, '/', security_status)"
+                + " FROM rrs_securityinfo WHERE wind_code LIKE 'T%' ORDER BY wind_code", String.class))
+                .containsExactly("T1.IB/ROUND1/official/L", "T2.IB/ROUND2/official/L", "T3.IB/ROUND3/temp_converted/L");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_securityinfo", Integer.class)).isEqualTo(9);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code WHERE status='updated'", Integer.class))
+                .isEqualTo(12);
+    }
+
+    /** 同日操作时间并列且目标不同时，任务报告冲突 */
+    @Test
+    public void windTaskShouldBlockSameDayReverseAfterFirstChange() throws Exception {
+        createConversionTables();
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,sec_id,short_name,security_type,security_source,security_status,market)"
+                + " VALUES ('A.IB','SAME_DAY','同日反向换码','mtn','official','L','NIB')");
+        WindCodeSyncService task = createTask();
+        insertWindChange("SAME_DAY", "A.IB", "B.IB", 0);
+        assertThat(task.execute().getAffectedCount()).isEqualTo(1);
+
+        insertWindChange("SAME_DAY", "B.IB", "A.IB", 0);
+        ScheduledTaskResult result = task.execute();
+        assertThat(result.getAffectedCount()).isZero();
+        assertThat(result.getDetailLog()).contains("同一 SEC_ID 的最新日期存在不同变更");
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='SAME_DAY'", String.class))
+                .isEqualTo("B.IB");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code", Integer.class)).isEqualTo(1);
+    }
+
+    /** 同日按 OPDATE 连续换码，操作时间不同的相同方向事件独立处理 */
+    @Test
+    public void windTaskShouldUseLatestOperationTimeForSameDayChanges() throws Exception {
+        createConversionTables();
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,sec_id,short_name,security_type,security_source,security_status,market)"
+                + " VALUES ('A.IB','SAME_DAY','同日循环换码','mtn','official','L','NIB')");
+        WindCodeSyncService task = createTask();
+        String today = jdbc.queryForObject("SELECT DATE_FORMAT(NOW(), '%Y%m%d')", String.class);
+        String date = today.substring(0, 4) + "-" + today.substring(4, 6) + "-" + today.substring(6);
+
+        insertWindChange("SAME_DAY", "A.IB", "B.IB", 0, date + " 09:00:00");
+        assertThat(task.execute().getAffectedCount()).isEqualTo(1);
+        insertWindChange("SAME_DAY", "B.IB", "A.IB", 0, date + " 10:00:00");
+        ScheduledTaskResult reverse = task.execute();
+        assertThat(reverse.getAffectedCount()).as(reverse.getDetailLog()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='SAME_DAY'", String.class))
+                .isEqualTo("A.IB");
+
+        insertWindChange("SAME_DAY", "A.IB", "B.IB", 0, date + " 11:00:00");
+        ScheduledTaskResult last = task.execute();
+        assertThat(last.getAffectedCount()).as(last.getDetailLog()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='SAME_DAY'", String.class))
+                .isEqualTo("B.IB");
+        assertThat(task.execute().getMessage()).contains("重复跳过 1 条");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM rrs_temp_security_code WHERE status='updated'", Integer.class))
+                .isEqualTo(3);
+    }
+
+    /** 同日 OPDATE 并列时报冲突，出现更晚的操作时间后可继续处理 */
+    @Test
+    public void windTaskShouldBlockEqualOperationTimesUntilNewerEventArrives() throws Exception {
+        createConversionTables();
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,sec_id,short_name,security_type,security_source,security_status,market)"
+                + " VALUES ('A.IB','OP_TIE','同时间目标冲突','mtn','official','L','NIB')");
+        WindCodeSyncService task = createTask();
+        String now = jdbc.queryForObject("SELECT DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s')", String.class);
+        String date = now.substring(0, 10);
+        insertWindChange("OP_TIE", "A.IB", "B.IB", 0, date + " 09:00:00");
+        insertWindChange("OP_TIE", "B.IB", "C.IB", 0, date + " 09:00:00");
+
+        ScheduledTaskResult conflict = task.execute();
+        assertThat(conflict.getAffectedCount()).isZero();
+        assertThat(conflict.getDetailLog()).contains("同一 SEC_ID 的最新日期存在不同变更");
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='OP_TIE'", String.class))
+                .isEqualTo("A.IB");
+
+        insertWindChange("OP_TIE", "B.IB", "C.IB", 0, date + " 10:00:00");
+        ScheduledTaskResult resolved = task.execute();
+        assertThat(resolved.getAffectedCount()).as(resolved.getDetailLog()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT wind_code FROM rrs_securityinfo WHERE sec_id='OP_TIE'", String.class))
+                .isEqualTo("C.IB");
+    }
+
+    /** 按相对数据库日期写入一条 Wind 事件 */
+    private void insertWindChange(String secId, String oldCode, String newCode, int dayOffset) {
+        insertWindChange(secId, oldCode, newCode, dayOffset, null);
+    }
+
+    /** 同日事件可另指定操作时间 */
+    private void insertWindChange(String secId, String oldCode, String newCode, int dayOffset, String opDate) {
+        jdbc.update("INSERT INTO ais_inv_ods.wind_cbondchangewindcode"
+                + " (OBJECT_ID,S_INFO_WINDCODE,S_INFO_OLDWINDCODE,S_INFO_NEWWINDCODE,CHANGE_DATE,SEC_ID,OPDATE)"
+                + " VALUES (?, ?, ?, ?, DATE_FORMAT(TIMESTAMPADD(DAY, ?, NOW()), '%Y%m%d'), ?, ?)",
+                secId + "_" + oldCode + "_" + newCode + "_" + dayOffset + "_" + opDate,
+                newCode, oldCode, newCode, dayOffset, secId, opDate);
+    }
+
+    /** 使用生产表结构建好换码涉及的业务表 */
+    private void createConversionTables() throws Exception {
+        for (String file : Arrays.asList("rrs_pool_init_schema.sql", "rrs_security_pool_adjust_schema.sql",
+                "rrs_crmw_pool_status_schema.sql", "rrs_adjust_snapshot_schema.sql", "rrs_dict_schema.sql")) {
+            String sql = new String(Files.readAllBytes(Paths.get("sql", file)), StandardCharsets.UTF_8);
+            Matcher tables = Pattern.compile("CREATE TABLE `([^`]+)`").matcher(sql);
+            while (tables.find()) {
+                // 按表执行生产 DDL，保留真实字段
+                createTable(jdbc, file, tables.group(1), tables.group(1));
+            }
+        }
+    }
+
     /** 验证持仓已替换，并有审批通过的旧码出库、新码入库流水。 */
     private void assertPoolMove(String oldCode, String newCode, String table, Long poolId) {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE security_code=? AND target_pool_id=? AND is_deleted=0", Integer.class, oldCode, poolId)).isZero();
@@ -328,7 +526,7 @@ public class WindCodeChangeDemoDataTest {
             }
         }
         SqlSessionTemplate session = new SqlSessionTemplate(new SqlSessionFactoryBuilder().build(config));
-        SecurityMarketService markets = new SecurityMarketService();
+        markets = new SecurityMarketService();
         ReflectionTestUtils.setField(markets, "securityMarketMapper", session.getMapper(SecurityMarketMapper.class));
         TempSecurityCodeBusinessConverter converter = new TempSecurityCodeBusinessConverter();
         ReflectionTestUtils.setField(converter, "tempSecurityCodeMapper", session.getMapper(TempSecurityCodeMapper.class));
@@ -344,9 +542,13 @@ public class WindCodeChangeDemoDataTest {
         proxy.setProxyTargetClass(true);
         proxy.addAdvice(new TransactionInterceptor(new DataSourceTransactionManager(source), new AnnotationTransactionAttributeSource()));
         WindCodeSyncService task = new WindCodeSyncService();
+        TempSecurityCodeService conversionService = (TempSecurityCodeService) proxy.getProxy();
         ReflectionTestUtils.setField(task, "scheduledTaskMapper", session.getMapper(ScheduledTaskMapper.class));
         ReflectionTestUtils.setField(task, "windCodeSyncMapper", session.getMapper(WindCodeSyncMapper.class));
-        ReflectionTestUtils.setField(task, "tempSecurityCodeService", proxy.getProxy());
+        ReflectionTestUtils.setField(task, "tempSecurityCodeService", conversionService);
+        bondReplaceTask = new BondTempCodeReplaceService();
+        ReflectionTestUtils.setField(bondReplaceTask, "tempSecurityCodeMapper", session.getMapper(TempSecurityCodeMapper.class));
+        ReflectionTestUtils.setField(bondReplaceTask, "tempSecurityCodeService", conversionService);
         return task;
     }
 

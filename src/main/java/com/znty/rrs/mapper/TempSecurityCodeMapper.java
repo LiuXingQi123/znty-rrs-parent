@@ -142,8 +142,20 @@ public interface TempSecurityCodeMapper {
     /** 取消发行临时代码 */
     void editTempSecurityCodeToCancelled(TempSecurityCodeBo bo);
 
-    /** 删除临时代码 */
-    void deleteTempSecurityCode(TempSecurityCodeBo bo);
+    /**
+     * 删除仍处于临时状态的登记
+     *
+     * @param id 临时代码登记 ID
+     * @return 影响的登记行数
+     */
+    int deleteTempSecurityCode(@Param("id") Long id);
+
+    /**
+     * 删除代码对应的临时占位主档
+     *
+     * @param windCode 临时代码
+     */
+    void deleteTemporarySecurityInfo(@Param("windCode") String windCode);
 
     /** 查询核心业务表引用数量 */
     int queryCoreReferenceCount(TempSecurityCodeBo bo);

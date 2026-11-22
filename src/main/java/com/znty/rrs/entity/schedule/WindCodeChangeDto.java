@@ -17,4 +17,6 @@ public class WindCodeChangeDto {
     private String newWindCode;
     /** 八位变更日期，yyyyMMdd。 */
     private String changeDate;
+    /** Wind 操作时间，用于同一变更日期排序和区分事件 */
+    private String opDate;
 }

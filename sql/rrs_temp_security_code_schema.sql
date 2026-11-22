@@ -37,7 +37,7 @@ CREATE TABLE `rrs_temp_security_code`
     `security_market`            VARCHAR(32)  DEFAULT NULL            COMMENT '正式证券市场：SSE=上海证券交易所 / SZSE=深圳证券交易所 / NIB=银行间市场 / BSE=北京证券交易所 / COMPANY=主体 / OTC=场外市场 / QDII=其他QDII市场 / OTHER=其他',
     `security_type`              VARCHAR(64)  DEFAULT NULL            COMMENT '正式证券类型编码，关联 dict_security_type.security_type',
     `update_time`                DATETIME     DEFAULT NULL            COMMENT '业务更新时间，更新为正式证券或取消发行时写入',
-    `status`                     VARCHAR(32)  DEFAULT NULL            COMMENT '状态：temporary=临时 / updated=已更新 / cancelled=已取消 / deleted=已删除',
+    `status`                     VARCHAR(32)  DEFAULT NULL            COMMENT '状态：temporary=临时 / updated=已更新 / cancelled=已取消',
     `is_deleted`                 TINYINT(1)   DEFAULT NULL            COMMENT '是否删除：0=否 / 1=是',
     `oprt_source`                VARCHAR(32)  DEFAULT NULL            COMMENT '操作来源：manual=人工 / job=定时任务 / other=其他',
     `memo`                       VARCHAR(500) DEFAULT NULL            COMMENT '备注',

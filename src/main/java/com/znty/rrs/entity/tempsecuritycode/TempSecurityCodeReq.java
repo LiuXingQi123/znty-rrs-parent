@@ -20,7 +20,7 @@ public class TempSecurityCodeReq extends PageRequest {
     private String tempSecurityName;
     /** 临时证券代码 */
     private String tempSecurityCode;
-    /** 状态列表（多选：temporary/updated/cancelled/deleted） */
+    /** 状态列表（多选：temporary/updated/cancelled） */
     private List<String> statusList;
     /** 操作来源列表（多选：manual/job/other） */
     private List<String> oprtSourceList;

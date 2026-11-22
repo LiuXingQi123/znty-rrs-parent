@@ -1,6 +1,6 @@
 package com.znty.rrs.common.enums;
 
-/** 临时代码状态（对应 rrs_temp_security_code.status） */
+/** 临时证券与临时基金的登记状态 */
 public enum TempStatus {
     /** 临时 */
     TEMPORARY("temporary"),
@@ -8,7 +8,7 @@ public enum TempStatus {
     UPDATED("updated"),
     /** 已取消 */
     CANCELLED("cancelled"),
-    /** 已删除 */
+    /** 已删除，仅用于临时基金 */
     DELETED("deleted");
 
     /** 枚举 code 值 */

@@ -43,6 +43,7 @@ public class TempSecurityCodeService {
 
     /** 临时证券 ID 前缀 */
     private static final String TEMP_SEC_ID_PREFIX = "TEMP_";
+    private static final String WIND_EVENT_MARKER = "[wind_code_sync:";
 
     /** 统一证券市场查询组件。 */
     @Resource
@@ -210,7 +211,7 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 按 SEC_ID 找到证券，拆分保存旧临时代码失效主档和新代码主档，再改相关的调库记录。
+     * 按 SEC_ID 找到证券，保留失效旧主档，新增新码主档或重建已失效的临时目标主档，再改相关调库记录
      * 证券表、临时代码记录、普通池和 CRMW 一起改；任何一步失败，这条换码的修改全部撤销。
      * 找不到证券、主档已经是最新代码、这条变更已经处理过时，分别返回对应的跳过结果。
      *
@@ -234,11 +235,13 @@ public class TempSecurityCodeService {
         if (change.getOldWindCode().equals(change.getNewWindCode())) {
             throw new BizException("Wind 新旧代码不能相同");
         }
-        // 2、用 SEC_ID、变更记录旧代码、新代码和日期生成标记，下次用来判断是否处理过。
-        String eventKey = "[wind_code_sync:" + change.getSecId() + ":" + change.getOldWindCode()
-                + ":" + change.getNewWindCode() + ":" + change.getChangeDate() + "]";
-        // 3、按 SEC_ID 查出并锁定证券，防止同时修改；找不到就返回跳过。
-        SecurityInfoBo master = windCodeSyncMapper.querySecurityBySecIdForUpdate(change.getSecId());
+        // 2、用源事件生成标记，同日再次发生的相同换码用操作时间区分
+        String opDate = change.getOpDate();
+        String eventKey = WIND_EVENT_MARKER + change.getSecId() + ":" + change.getOldWindCode()
+                + ":" + change.getNewWindCode() + ":" + change.getChangeDate()
+                + ":" + (opDate == null ? "" : opDate) + "]";
+        // 3、按 SEC_ID 查询当前证券，找不到就返回跳过
+        SecurityInfoBo master = windCodeSyncMapper.querySecurityBySecId(change.getSecId());
         if (master == null) {
             return WindCodeChangeResult.MISSING_MASTER;
         }
@@ -259,17 +262,20 @@ public class TempSecurityCodeService {
         masterChange.setOldWindCode(master.getWindCode());
         masterChange.setNewWindCode(change.getNewWindCode());
         masterChange.setChangeDate(change.getChangeDate());
-        // 6、检查证券来源、证券类型，以及新代码是否已经存在。
+        // 6、检查证券来源、证券类型和目标主档状态
         String source = master.getSecuritySource();
         if (!"official".equals(source) && !"temporary".equals(source) && !"temp_converted".equals(source)) {
             throw new BizException("证券来源不支持 Wind 换码，security_source=" + source);
         }
         // 6.1 检查证券类型，后面写临时代码记录和检查调库条件时要用。
         validateRequired(master.getSecurityType(), "Wind 旧主档缺少证券类型");
-        if (tempSecurityCodeMapper.querySecurityInfoCount(change.getNewWindCode()) != 0) {
-            throw new BizException("Wind 新代码已存在，违反换码数据约束，securityCode=" + change.getNewWindCode());
+        // 6.2 只允许重建已失效的临时目标主档
+        SecurityInfoBo targetMaster = windCodeSyncMapper.querySecurityByWindCode(change.getNewWindCode());
+        if (targetMaster != null && (!"temporary".equals(targetMaster.getSecuritySource())
+                || !"D".equals(targetMaster.getSecurityStatus()))) {
+            throw new BizException("Wind 新代码已存在，仅允许重建失效临时主档，securityCode=" + change.getNewWindCode());
         }
-        // 6.2 来源是 temp_converted 时，临时代码表中应该保留着之前转正的记录。
+        // 6.3 来源是 temp_converted 时，核对之前的转正登记
         if ("temp_converted".equals(source)
                 && windCodeSyncMapper.queryConvertedRegistrationList(master.getWindCode()).isEmpty()) {
             throw new BizException("已转正证券在临时代码表中没有之前转正的记录，securityCode=" + master.getWindCode());
@@ -289,12 +295,19 @@ public class TempSecurityCodeService {
             newMaster.setMarket(market);
         }
         newMaster.setTs(now);
-        // 9.1 先将旧主档改用临时 SEC_ID，释放正式 SEC_ID
+        // 9.1 先删除失效的临时目标主档，并保留原创建时间
+        if (targetMaster != null) {
+            newMaster.setCreateTime(targetMaster.getCreateTime());
+            if (windCodeSyncMapper.deleteWindHistoricalMaster(targetMaster.getWindCode()) != 1) {
+                throw new BizException("Wind 目标历史主档删除失败，securityCode=" + targetMaster.getWindCode());
+            }
+        }
+        // 9.2 将旧主档改用临时 SEC_ID，释放正式 SEC_ID
         if (windCodeSyncMapper.editSecurityWindCodeToTemporary(masterChange, source,
                 registration.getSecId(), now) != 1) {
             throw new BizException("Wind 旧代码临时主档失效失败，SEC_ID=" + change.getSecId());
         }
-        // 9.2 使用原正式 SEC_ID 新增新代码主档
+        // 9.3 用原正式 SEC_ID 插入目标主档
         if (windCodeSyncMapper.addSecurityWindCodeMaster(newMaster) != 1) {
             throw new BizException("Wind 新代码主档新增失败，SEC_ID=" + change.getSecId());
         }
@@ -306,13 +319,13 @@ public class TempSecurityCodeService {
     }
 
     /**
-     * 查 rrs_temp_security_code 表，找出旧代码对应的记录，没有时按旧证券的信息新增一条。
-     * 已经有对应记录，就检查状态、新代码、证券类型和市场，检查通过后继续用这条记录；
-     * 没有对应记录，就根据证券信息新增；来源是 temporary 却没有原记录时，直接报错。
+     * 根据旧代码准备本次换码登记，保留已经完成的历史登记
+     * 有未完成登记时检查状态、目标代码、证券类型和市场，通过后复用
+     * 没有未完成登记时按旧证券信息新增，主档来源为 temporary 时须有原登记
      * 把这条变更记录的标记加到备注中；换码全部保存成功且临时代码记录变为 updated 后，下次才能据此跳过。
      *
      * @param change 本次变更记录，包含旧代码和新代码
-     * @param master 已按 SEC_ID 锁定并核对旧代码的证券主档
+     * @param master 已按 SEC_ID 查到并核对旧代码的证券主档
      * @param market 从主档或临时代码记录查询并校验通过的市场编码
      * @param now 新增临时代码记录使用的创建、修改时间
      * @param eventKey 这条变更记录的标记，保存到备注后，用来判断它是否已经处理成功
@@ -320,10 +333,10 @@ public class TempSecurityCodeService {
      */
     private TempSecurityCodeBo prepareWindRegistration(WindCodeChangeDto change, SecurityInfoBo master,
                                                        String market, Date now, String eventKey) {
-        // 1、查出并锁定旧代码未删除的临时代码记录；查出多条就报错，避免用错记录。
+        // 1、查询旧代码未删除且未完成的登记，多条未完成登记时报错
         List<TempSecurityCodeBo> registrations = windCodeSyncMapper.queryOldCodeRegistrationList(change.getOldWindCode());
         if (registrations.size() > 1) {
-            throw new BizException("旧代码在临时代码表中有多条未删除的记录，securityCode=" + change.getOldWindCode());
+            throw new BizException("旧代码在临时代码表中有多条未完成的记录，securityCode=" + change.getOldWindCode());
         }
         TempSecurityCodeBo registration;
         if (registrations.isEmpty()) {
@@ -555,16 +568,11 @@ public class TempSecurityCodeService {
         }
         // 校验临时代码未被核心调库业务引用
         validateNoCoreReference(oldBo);
-        Date now = new Date();
-        TempSecurityCodeBo bo = new TempSecurityCodeBo();
-        bo.setId(oldBo.getId());
-        bo.setUpdateTime(now);
-        bo.setStatus(TempStatus.DELETED.getCode());
-        // 页面人工删除
-        bo.setOprtSource(TempOprtSource.MANUAL.getCode());
-        bo.setIsDeleted(1);
-        bo.setUpdtTime(now);
-        tempSecurityCodeMapper.deleteTempSecurityCode(bo);
+        if (tempSecurityCodeMapper.deleteTempSecurityCode(oldBo.getId()) != 1) {
+            throw new BizException("删除临时代码登记失败，id=" + oldBo.getId());
+        }
+        // 同步删除临时占位主档，释放代码供重新新增或 Wind 换入
+        tempSecurityCodeMapper.deleteTemporarySecurityInfo(oldBo.getTempSecurityCode());
         return null;
     }
 

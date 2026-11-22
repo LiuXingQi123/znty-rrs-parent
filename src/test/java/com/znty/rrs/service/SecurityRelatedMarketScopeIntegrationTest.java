@@ -59,11 +59,14 @@ public class SecurityRelatedMarketScopeIntegrationTest {
         dataSource.setDriverClassName("org.h2.Driver");
         dataSource.setUrl("jdbc:h2:mem:market_scope_" + UUID.randomUUID() + ";MODE=MySQL;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1");
         jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(100), security_source VARCHAR(32), market VARCHAR(10))");
-        jdbc.execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(10))");
+        jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(100), security_source VARCHAR(32),"
+                + " market VARCHAR(10), sec_id VARCHAR(100), security_status VARCHAR(8))");
+        jdbc.execute("CREATE TABLE rrs_temp_security_code (id BIGINT, sec_id VARCHAR(100), temp_security_code VARCHAR(100),"
+                + " temp_security_market VARCHAR(10), status VARCHAR(32), is_deleted INT, update_time TIMESTAMP)");
         jdbc.execute("CREATE SCHEMA ais_inv_ods");
         jdbc.execute("CREATE TABLE ais_inv_ods.wind_windcustomcode (S_INFO_WINDCODE VARCHAR(100), S_INFO_ISINCODE VARCHAR(40), EXCHMARKET VARCHAR(10), S_INFO_EXCHMARKET VARCHAR(10))");
-        jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('A.SH', 'official', 'SSE'), ('A.IB', 'official', 'NIB'), ('A.SZ', 'official', 'SZSE')");
+        jdbc.execute("INSERT INTO rrs_securityinfo(wind_code,security_source,market)"
+                + " VALUES ('A.SH', 'official', 'SSE'), ('A.IB', 'official', 'NIB'), ('A.SZ', 'official', 'SZSE')");
         jdbc.execute("INSERT INTO ais_inv_ods.wind_windcustomcode VALUES ('A.SH', 'SAME', 'SSE', 'SSE'), ('A.IB', 'SAME', 'NIB', 'IB'), ('A.SZ', 'SAME', 'SZSE', 'SZSE'), ('A.BC', 'SAME', 'NBC', 'NBC')");
         Configuration configuration = new Configuration(new Environment("test", new JdbcTransactionFactory(), dataSource));
         configuration.setMapUnderscoreToCamelCase(true);
@@ -119,7 +122,7 @@ public class SecurityRelatedMarketScopeIntegrationTest {
     /** 范围外已有主档也不参与关联，主代码在范围外时同样不反向关联。 */
     @Test
     public void excludedMarketShouldRemainUnrelatedEvenWithMaster() {
-        jdbc.update("INSERT INTO rrs_securityinfo VALUES ('A.BC', 'official', 'OTHER')");
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,security_source,market) VALUES ('A.BC', 'official', 'OTHER')");
         assertThat(markets.queryRelatedMarketCodes("A.SH")).extracting(SecurityMarketDto::getWindCode)
                 .doesNotContain("A.BC");
         assertThat(markets.queryRelatedMarketCodes("A.BC")).isEmpty();
@@ -129,7 +132,7 @@ public class SecurityRelatedMarketScopeIntegrationTest {
     /** 默认范围包含投资池全部市场，按 EXCHMARKET 而非后缀或另一个 Wind 市场字段筛选。 */
     @Test
     public void sharedPoolMarketsShouldDetermineScopeInsteadOfSuffix() {
-        jdbc.update("INSERT INTO rrs_securityinfo VALUES ('ALIAS.BC', 'official', 'OTC')");
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,security_source,market) VALUES ('ALIAS.BC', 'official', 'OTC')");
         jdbc.update("INSERT INTO ais_inv_ods.wind_windcustomcode VALUES ('ALIAS.BC', 'SAME', 'OTC', 'NBC')");
         assertThat(markets.queryRelatedMarketCodes("A.SH")).extracting(SecurityMarketDto::getWindCode)
                 .contains("ALIAS.BC");
@@ -141,7 +144,7 @@ public class SecurityRelatedMarketScopeIntegrationTest {
     /** 同一允许市场的多个代码完整保留，不按市场去重。 */
     @Test
     public void multipleCodesInSameAllowedMarketShouldRemainRelated() {
-        jdbc.update("INSERT INTO rrs_securityinfo VALUES ('A2.SH', 'official', 'SSE')");
+        jdbc.update("INSERT INTO rrs_securityinfo(wind_code,security_source,market) VALUES ('A2.SH', 'official', 'SSE')");
         jdbc.update("INSERT INTO ais_inv_ods.wind_windcustomcode VALUES ('A2.SH', 'SAME', 'SSE', 'SSE')");
         assertThat(markets.queryRelatedMarketCodes("A.IB")).extracting(SecurityMarketDto::getWindCode)
                 .containsExactly("A.SH", "A.SZ", "A2.SH");

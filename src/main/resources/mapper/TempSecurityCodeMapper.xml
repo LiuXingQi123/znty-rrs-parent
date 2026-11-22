@@ -34,6 +34,7 @@
         LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type
                                         AND dst.is_deleted = 0
         <where>
+            t.is_deleted = 0
             <if test="tempSecurityCode != null and tempSecurityCode != ''">
                 AND t.temp_security_code LIKE CONCAT(#{tempSecurityCode}, '%')
             </if>
@@ -461,17 +462,20 @@
           AND is_deleted = 0
     </update>
 
-    <!-- 删除临时代码 -->
-    <update id="deleteTempSecurityCode">
-        UPDATE rrs_temp_security_code
-        SET update_time = #{updateTime}
-           ,status = #{status}
-           ,oprt_source = #{oprtSource}
-           ,is_deleted = #{isDeleted}
-           ,updt_time = #{updtTime}
+    <!-- 删除仍处于临时状态的登记 -->
+    <delete id="deleteTempSecurityCode">
+        DELETE FROM rrs_temp_security_code
         WHERE id = #{id}
           AND is_deleted = 0
-    </update>
+          AND status = 'temporary'
+    </delete>
+
+    <!-- 删除登记对应的临时占位主档 -->
+    <delete id="deleteTemporarySecurityInfo">
+        DELETE FROM rrs_securityinfo
+        WHERE wind_code = #{windCode}
+          AND security_source = 'temporary'
+    </delete>
 
     <!-- 查询普通池转换涉及的池，用于加载配置和校验转换计划 -->
     <select id="queryOrdinaryConversionPoolIdList" resultType="long">

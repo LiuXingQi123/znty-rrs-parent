@@ -39,8 +39,8 @@
 - 接口：`POST /api/v1/tempSecurityCode/queryTempSecurityCodePage`
 - 请求体：`{ tempSecurityCode, tempSecurityName, statusList, oprtSourceList, pageIndex, pageSize }`（`TempSecurityCodeReq extends PageRequest`）
 - 后端 `TempSecurityCodeService.queryTempSecurityCodePage`：`PageHelper.startPage(pageIndex, pageSize)` → `tempSecurityCodeMapper.queryTempSecurityCodePage(req)` → `PageInfo` → `PageResult`。
-- SQL 行为：`FROM rrs_temp_security_code t`，`LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type AND dst_temp.is_deleted = 0`（取 `tempSecurityTypeName`），`LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type AND dst.is_deleted = 0`（取正式 `security_type_name`）；`<where>` 拼 `temp_security_code LIKE`、`temp_security_name LIKE`、可选 `status IN`、可选 `oprt_source IN`；排序按状态优先级 + `update_time`/`crte_time`/`id`。
-- **注意**：列表 SQL **未过滤 `is_deleted = 0`**，而 `queryTempSecurityCodeById`/`queryTempSecurityCodeDetail` 均 `AND is_deleted = 0`。即软删除后（`is_deleted=1, status='deleted'`）的记录仍会出现在列表中（显示「已删除」tag），但按 id 查详情会返回 null。这是列表与详情的过滤口径不一致点。
+- SQL 行为：`FROM rrs_temp_security_code t`，`LEFT JOIN dict_security_type dst_temp ON dst_temp.security_type = t.temp_security_type AND dst_temp.is_deleted = 0`（取 `tempSecurityTypeName`），`LEFT JOIN dict_security_type dst ON dst.security_type = t.security_type AND dst.is_deleted = 0`（取正式 `security_type_name`）；`<where>` 固定 `t.is_deleted=0`，再拼 `temp_security_code LIKE`、`temp_security_name LIKE`、可选 `status IN`、可选 `oprt_source IN`；排序按状态优先级 + `update_time`/`crte_time`/`id`。
+- 列表和详情统一按 `is_deleted=0` 查询有效登记，兼容过滤历史软删数据。
 - 分页：前端 `page-sizes=[10,20,50,100]`，默认 `pageSize=20`；`PageRequest` 后端 pageSize 上限 4000。
 - 表格列：序号、临时证券名称/代码/市场(el-tag)/类型(el-tag `tempSecurityTypeName`)、临时缓释凭证代码、临时关联主体(`tempCompanyNameSnapshot`)、临时发行/到期日期、状态(el-tag)、**操作来源(el-tag `oprtSource`)**、证券名称/代码/市场(el-tag)/类型(el-tag `securityTypeName`)、更新时间(`updateTime`)、操作（更新/取消发行/删除）。
 
@@ -130,7 +130,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 
 ### 3.4 删除 `deleteTempSecurityCode`（`@Transactional`）
 
-`validateIdReq` → `queryExistingTempSecurityCode(id)`（仅校验 `is_deleted=0` 存在，**不校验状态**）→ 检查 `ip_adjust_log`、`ip_pool_status`、`ip_pool_status_crmw` 是否仍引用该临时代码，若存在则拒绝删除 → `status=DELETED`(`deleted`)、`oprtSource=manual`、`isDeleted=1`、`updateTime`/`updtTime=now` → `deleteTempSecurityCode` UPDATE（软删）→ **返回 `null`**。
+按 ID 查询登记，仅允许删除 `is_deleted=0`、`status=temporary` 且未被 `ip_adjust_log`、`ip_pool_status`、`ip_pool_status_crmw` 引用的记录。同一事务内物理删除登记，以及 `rrs_securityinfo` 中同一 `wind_code` 且 `security_source=temporary` 的占位主档。删除后返回 `null`，该代码可以重新录入。
 
 ---
 
@@ -146,7 +146,7 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 | `addTempSecurityCode` | `tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyCode, tempIssueDate, tempMaturityDate` | `ApiResponse<TempSecurityCodeDto>` | 新增临时代码（status=temporary） |
 | `editTempSecurityCodeToUpdated` | `id, tempSecurityName, tempSecurityCode, tempSecurityMarket, tempSecurityType, tempMitigationCode?, tempCompanyCode, tempIssueDate, tempMaturityDate, securityName, securityCode, securityMarket, securityType` | `ApiResponse<TempSecurityCodeDto>` | 更新为正式证券（status=updated，同步 upsert rrs_securityinfo） |
 | `editTempSecurityCodeToCancelled` | `id` | `ApiResponse<TempSecurityCodeDto>` | 取消发行（status=cancelled） |
-| `deleteTempSecurityCode` | `id` | `ApiResponse<TempSecurityCodeDto>`（实返 null） | 软删除（status=deleted, is_deleted=1） |
+| `deleteTempSecurityCode` | `id` | `ApiResponse<TempSecurityCodeDto>`（实返 null） | 物理删除临时登记及对应的临时占位主档 |
 
 > `TempSecurityCodeReq extends PageRequest`，含 `id, tempSecurityName, tempSecurityCode, statusList, oprtSourceList, tempSecurityMarket, tempSecurityType, tempMitigationCode, tempCompanyCode, companyKeyword, tempIssueDate(yyyy-MM-dd), tempMaturityDate(yyyy-MM-dd), securityName, securityCode, securityMarket, securityType, operatorId`。`operatorId` **后端未使用**（无审计表），前端不传。`TempSecurityCodeDto` 含主表全字段（含 `oprtSource`）+ `tempSecurityTypeName`/`securityTypeName`（JOIN dict 得来）+ 静态内部类 `CompanyOption`/`SecurityTypeOption`/`OptionBundle`。
 
@@ -170,15 +170,14 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 
 - 新增时额外写入 `sec_id = "TEMP_" + tempSecurityCode`；输入 `001.IB` 时，两表证券 ID 均为 `TEMP_001.IB`，临时代码本身仍为 `001.IB`。
 - 该字段仅供外部使用，当前项目不展示、不作为接口入参或出参，也不参与查询筛选、业务判断或专门校验。原有代码处理及校验规则保持不变。
-- 人工及定时转正、取消发行和软删除不修改该字段；正式证券保留原有 ID。Demo 在原始 INSERT 中补齐，不执行存量迁移或自动补数。
+- 人工及定时转正、取消发行保留原有证券 ID。页面删除会移除临时登记及其占位主档。Demo 在原始 INSERT 中补齐，不执行存量迁移或自动补数。
 
 ## 6. 状态流转
 
-状态枚举（`rrs_temp_security_code.status`，注释「temporary=临时 / updated=已更新 / cancelled=已取消 / deleted=已删除」）：
+证券临时代码状态（`rrs_temp_security_code.status`）：
 - `TempStatus.TEMPORARY("temporary")` — 新增默认
 - `TempStatus.UPDATED("updated")` — 更新为正式证券
 - `TempStatus.CANCELLED("cancelled")` — 取消发行
-- `TempStatus.DELETED("deleted")` — 删除
 
 操作来源枚举（`oprt_source`，注释「manual=人工 / job=定时任务 / other=其他」）：
 - `TempOprtSource.MANUAL("manual")` / `JOB("job")` / `OTHER("other")`
@@ -186,27 +185,17 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 市场枚举 `MarketCode`：`SSE`=上海证券交易所 / `SZSE`=深圳证券交易所 / `NIB`=银行间市场 / `BSE`=北京证券交易所 / `COMPANY`=主体 / `OTC`=场外市场 / `HKEX`=香港交易所 / `QDII`=其他QDII市场 / `JWCW`=JWCW市场 / `UNKNOWN`=未知 / `OTHER`=其他（前端 `marketOptions` 与 `docs/dict.js` 同此 11 项）。
 
 ```
-            addTempSecurityCode
-   (无) ──────────────────────► [temporary]
-                                   │
-                  editTempSecurityCodeToUpdated
-                 ┌─────────────────┴─────────────────┐
-                 ▼                                     ▼
-            [updated]                            editTempSecurityCodeToCancelled
-                                                 ► [cancelled]
-                 │                                     │
-                 └──────────────┬──────────────────────┘
-                                ▼
-                  deleteTempSecurityCode (软删, is_deleted=1)
-                            ► [deleted]
+新增 → temporary ─┬─ 转正 → updated
+                   ├─ 取消发行 → cancelled
+                   └─ 删除 → 物理移除登记及临时占位主档
 ```
 
 **关键守卫**：
 - `queryOperableTempSecurityCode(id)`：先 `queryExistingTempSecurityCode`（`is_deleted=0` 存在），再判 `!TempStatus.TEMPORARY.getCode().equals(bo.getStatus())` → 抛「只有临时状态可以执行该操作，id=..., status=...」。**更新、取消发行均要求 `temporary` 状态**。
-- `deleteTempSecurityCode` 走 `queryExistingTempSecurityCode`（仅校验存在且未删），**不校验当前状态**——即 `temporary`/`updated`/`cancelled` 均可删除。
-- `updated`/`cancelled` 为「冻结态」：仅可删除，不可再更新或取消。
-- 前端按钮可见性：`canOperate(row) = row.status === 'temporary'`（显示「更新」「取消发行」）；`canDelete(row) = row.status !== 'deleted'`（显示「删除」）。
-- 前端状态 tag 配色 `statusTagType`：`temporary→info`、`updated→success`、`cancelled→warning`、`deleted→danger`；`statusOptions` 中文：临时/已更新/已取消/已删除。
+- `deleteTempSecurityCode` 只接受未删除的 `temporary` 登记，并检查核心调库引用。
+- `updated` 和 `cancelled` 的记录作为历史登记保留。
+- 前端按钮可见性：`canOperate(row) = row.status === 'temporary'`（显示「更新」「取消发行」）；`canDelete(row) = row.status === 'temporary'`（显示「删除」）。
+- 前端状态 tag 配色 `statusTagType`：`temporary→info`、`updated→success`、`cancelled→warning`；`statusOptions` 中文：临时/已更新/已取消。
 
 ---
 
@@ -220,14 +209,14 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
   - `validateSecurityType`：`querySecurityTypeCount > 0`，否则「证券类型不存在或已删除，securityType=...」
   - 唯一性：`queryTempSecurityCodeCount(tempSecurityCode, null) > 0` → 「临时证券代码已存在，tempSecurityCode=...」（查 `is_deleted=0`）
 - **更新校验** `validateUpdateReq`：同新增全部临时字段校验 + `validateIdReq`（id 必填）+ 唯一性排除自身 `queryTempSecurityCodeCount(tempSecurityCode, id)` + 正式证券字段 `securityName`/`securityCode`/`securityMarket`/`securityType` 必填 + `validateMarket(securityMarket)` + `validateSecurityType(securityType)`。
-- **取消发行/删除校验**：`validateIdReq`（id 必填）；取消发行额外要求 `temporary` 状态；删除仅要求存在且未删。
+- **取消发行/删除校验**：`validateIdReq`（id 必填）；取消发行和删除均要求 `temporary` 状态，删除还检查核心调库引用。
 - **主体快照** `resolveCompanyName`：`fullName` 优先，其次 `shortName`，两者皆空抛「发行主体缺少名称，companyId=...」。
 - **`rrs_securityinfo` 占位写入**：以 `securityCode` 为 `wind_code` 主键判定。市场同时写入临时代码表 `temp_security_market` 和证券表 `market`，两处均取表单选择的市场编码，`sec_id` 与登记表一致，为 `TEMP_` + 临时代码；临时代码不写 ODS，也不参与 Wind ISIN 同券关联。`issuer` 取 `tempCompanyNameSnapshot`，`issuer_code` 取 `tempCompanyCode`。表单发行/到期以 `yyyyMMdd` 写入 `firstissue_date`/`maturity_date`；起息、止息、`date_exists` 未知不写。**`security_status` 固定 `'L'`**（上市中；枚举见 `SecurityStatus`；不写则为 NULL，证券池调整 `!= 'D'` 查不到；外部无状态数据应落 `'U'`）。`create_time`/`ts` 取新增时间。转正时正式主数据已存在则不再覆盖。
 - **事务**：`addTempSecurityCode`/`editTempSecurityCodeToUpdated`/`editTempSecurityCodeToCancelled`/`deleteTempSecurityCode` 均 `@Transactional(rollbackFor = Exception.class)`。
 - **前端校验** `addRules`/`updateRules`：与后端必填项对齐（`required:true`）；日期 `value-format="yyyy-MM-dd"`；`openUpdateDialog` 回显时正式证券字段缺省取临时字段（`securityName: row.securityName || row.tempSecurityName || ''` 等）。
 
 **值得注意的不一致/风险点**：
-1. **列表不过滤 `is_deleted`**：删除后记录（`is_deleted=1, status='deleted'`）仍出现在列表，但按 id 查详情返回 null。
+1. **历史软删兼容**：列表和详情过滤 `is_deleted=1` 的旧登记。
 2. **删除返回 null**：`deleteTempSecurityCode` 服务方法 `return null`，故 `ApiResponse.success(null)`，前端 `loadList()` 刷新即可。
 3. **无审计表**：与投资池模块的 `_evt` 审计表不同，`operatorId` 字段定义但全程未用。
 4. **跨库读主体**：弹窗分页查询和 `queryCompanyByCode` 的新增校验均读取 `ais_inv_ods.wind_compintroduction`，依赖跨库访问权限与该库 schema 稳定。
@@ -242,9 +231,9 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 - 发行主体弹窗按主体代码、主体全称、社会统一信用代码筛选，最多列出 100 条且序号紧跟单选列；仅确认选择时回填主体，重置清空查询条件。
 - 更新为正式证券要求 `temporary` 状态，成功后 `updated` 且 `rrs_securityinfo` 同步 upsert（按 `wind_code` 判重）。
 - 取消发行要求 `temporary` 状态，成功后 `cancelled`，不修改证券字段。
-- 删除为软删（`is_deleted=1, status=deleted`），任意非 `deleted` 状态均可删，返回 null。
+- 删除仅适用于无核心调库引用的 `temporary` 记录，物理删除登记及临时占位主档，返回 null。
 - 必填校验、市场白名单、证券类型存在性、到期晚于发行日期校验生效。
-- 列表展示软删后的「已删除」记录（`is_deleted` 未过滤），但 `canOperate`/`canDelete` 按状态隐藏对应操作按钮。
+- 列表过滤历史软删登记，删除按钮仅在 `temporary` 状态显示。
 
 ## 9. 关键源码索引
 
@@ -263,4 +252,6 @@ CRMW 按凭证、标的和日志分别留痕；重复扫描已完成事件不再
 
 ## Wind 事件复用转换
 
-`wind_code_sync` 从页面扩展参数读取 scanDays（省略默认 1 天），由 SQL 按数据库时间过滤对应天数、按 SEC_ID 取 CHANGE_DATE 最新记录，按主档当前代码拆分保存失效临时代码主档和最新代码主档，并使用本模块单码转换入口；具体四类分支与事务见需求 29 的“Wind代码变更同步”。official 保持来源并补任务登记；temporary 复用原登记、旧主档保留为失效临时代码、新主档来源转为 temp_converted；temp_converted 新增本次登记保留历史并拆分旧主档；无主档特别提示后跳过。任务会补登记和新代码主档，不修改真实证券 ID 的正式归属，旧主档改用临时 SEC_ID；登记备注保留原内容并保存完成事件标记。人工转正和债券临时代码任务继续使用原 ISIN 整组方式，不受单码模式影响。Wind 入口会按 SEC_ID 匹配有效新主档，旧失效临时代码不参与后续主档锁定。源表 A→B、B→C 而主档仍为 A 时，实际仅执行 A→C；原记录旧码 B 不存在也不跳过。主档已是最新代码时不生成转换和调库记录，标记仍使用源记录旧新码，保证重复扫描结果稳定。
+Wind 换回之前的代码时，只允许重建 `security_source=temporary`、`security_status=D` 的目标主档。在同一事务内按唯一 `wind_code` 删除符合条件的失效目标行、释放当前行的正式 SEC_ID，再插入目标主档并带回原创建时间。普通定时转正留下的失效临时主档也适用。相同临时代码换出多次时，每次成功登记分别保留。读取失效临时主档的市场时，优先取与其临时 SEC_ID 匹配的最近成功登记。
+
+`wind_code_sync` 从页面扩展参数读取 scanDays（省略默认 1 天），由 SQL 按数据库时间过滤对应天数，按 SEC_ID 先取最新 CHANGE_DATE，同日取最新 OPDATE，按主档当前代码拆分保存失效临时代码主档和最新代码主档，并使用本模块单码转换入口；具体四类分支与事务见需求 29 的“Wind代码变更同步”。official 保持来源并补任务登记；temporary 复用原登记、旧主档保留为失效临时代码、新主档来源转为 temp_converted；temp_converted 新增本次登记保留历史并拆分旧主档；无主档特别提示后跳过。任务会补登记和新代码主档，将正式 SEC_ID 转交新码，旧主档改用临时 SEC_ID；登记备注保留原内容并保存完成事件标记。人工转正和债券临时代码任务继续使用原 ISIN 整组方式，不受单码模式影响。后续换码按正式 SEC_ID 查询持有该 ID 的当前主档。源表 A→B、B→C 而主档仍为 A 时，实际仅执行 A→C；原记录旧码 B 不存在也不跳过。主档已是最新代码时不生成转换和调库记录，标记仍使用源记录旧新码，保证重复扫描结果稳定。

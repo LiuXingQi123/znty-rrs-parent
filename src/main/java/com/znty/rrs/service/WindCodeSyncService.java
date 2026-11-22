@@ -65,7 +65,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
     public String getParamHelp() {
         return "参数说明：scanDays 为扫描天数，须为正整数；扩展参数留空或省略 scanDays 时默认 1 天\n"
                 + PARAM_HELP_TOOLTIP_PREFIX + "填写示例：{\"scanDays\":3}，从数据库当前日期的 3 天前开始扫描\n"
-                + "扫描条件：SQL 使用数据库 NOW() 往前减 scanDays 天，CHANGE_DATE 为八位 yyyyMMdd；同一 SEC_ID 取 CHANGE_DATE 最新记录，旧码不等于新码\n"
+                + "扫描条件：SQL 使用数据库 NOW() 往前减 scanDays 天，CHANGE_DATE 为八位 yyyyMMdd；同一 SEC_ID 取 CHANGE_DATE 最新记录，同日取 OPDATE 最新，旧码不等于新码\n"
                 + "身份匹配：按唯一 SEC_ID 查询 rrs_securityinfo，拆分保存旧临时代码失效主档和新代码主档\n"
                 + "临时代码记录：指 rrs_temp_security_code 表中的记录；official 新增一条，temporary 使用原记录并转为 temp_converted，temp_converted 新增本次记录并保留历史\n"
                 + "处理范围：仅本次旧新码，复用普通池、CRMW及在途申请转换；主档缺失时特别提示并跳过；主档有数据时，从当前代码拆分为失效旧主档和最新代码主档\n"
@@ -131,18 +131,19 @@ public class WindCodeSyncService implements RrsScheduledTask {
         detailLog.line("扫描天数=" + scanDays + "，日期按数据库 NOW() 计算");
         detailLog.line("扫描条件：ais_inv_ods.wind_cbondchangewindcode，CHANGE_DATE >= DATE_FORMAT(TIMESTAMPADD(DAY, -"
                 + scanDays + ", NOW()), '%Y%m%d')"
-                + "，同一 SEC_ID 取 CHANGE_DATE 最新记录，S_INFO_OLDWINDCODE!=S_INFO_NEWWINDCODE；按唯一 SEC_ID 匹配主档");
+                + "，同一 SEC_ID 取 CHANGE_DATE 最新记录，同日取 OPDATE 最新，S_INFO_OLDWINDCODE!=S_INFO_NEWWINDCODE；按唯一 SEC_ID 匹配主档");
         // 2. 查询最新变更记录，同一只券的较早记录不再重复处理
         List<WindCodeChangeDto> windCodeChanges = windCodeSyncMapper.queryRecentWindCodeChangeList(scanDays);
         detailLog.line("扫描完成：候选 " + windCodeChanges.size() + " 条");
-        // 3. 按 SEC_ID 分组，最新日期下内容相同的多条记录只处理一次
+        // 3. 按 SEC_ID 分组，最新操作时间下目标相同的多条记录只处理一次
         Map<String, List<WindCodeChangeDto>> changesBySecId = groupChangesBySecId(windCodeChanges);
         for (List<WindCodeChangeDto> securityChanges : changesBySecId.values()) {
             WindCodeChangeDto currentChange = securityChanges.get(0);
             String changeDescription = "SEC_ID=" + currentChange.getSecId() + "，变更记录旧代码=" + currentChange.getOldWindCode()
-                    + "，新代码=" + currentChange.getNewWindCode() + "，变更日期=" + currentChange.getChangeDate();
+                    + "，新代码=" + currentChange.getNewWindCode() + "，变更日期=" + currentChange.getChangeDate()
+                    + (currentChange.getOpDate() == null ? "" : "，操作时间=" + currentChange.getOpDate());
             try {
-                // 4. 检查最新日期下的新代码是否一致
+                // 4. 检查最新操作时间并列时的新代码是否一致
                 validateLatestChanges(securityChanges);
                 // 5. 按 SEC_ID 执行换码并同步相关记录
                 WindCodeChangeResult changeResult = tempSecurityCodeService.editWindCodeChangeByJob(currentChange);
@@ -216,7 +217,7 @@ public class WindCodeSyncService implements RrsScheduledTask {
     }
 
     /**
-     * 按 SEC_ID 整理最新变更，便于检查同一日期是否存在冲突记录
+     * 按 SEC_ID 整理最新变更，便于检查并列记录是否冲突
      *
      * @param windCodeChanges Wind 查询返回的变更记录
      * @return SEC_ID 与变更列表的对应关系，保留各证券首次出现的顺序
@@ -230,9 +231,9 @@ public class WindCodeSyncService implements RrsScheduledTask {
     }
 
     /**
-     * 检查最新日期下的记录是否指向同一个新代码，避免同一天有多个不同的新代码时随意换码
+     * 检查最新日期、最新操作时间下的并列记录是否指向同一个新代码
      *
-     * @param changes 同一 SEC_ID 在最新 CHANGE_DATE 下的变更记录
+     * @param changes 同一 SEC_ID 在最新 CHANGE_DATE 和 OPDATE 下的变更记录
      */
     private void validateLatestChanges(List<WindCodeChangeDto> changes) {
         WindCodeChangeDto first = changes.get(0);

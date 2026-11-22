@@ -156,9 +156,10 @@ public class WindCustomCodeDemoDataTest {
             connection.createStatement().execute(extractStatement(readSql("rrs_dict_demo_data.sql"), "INSERT INTO", "dict_security_type"));
             connection.createStatement().execute("CREATE TABLE ip_pool_status (security_code VARCHAR(100), target_pool_id BIGINT, audit_status VARCHAR(2), is_deleted INT)");
             connection.createStatement().execute("INSERT INTO ip_pool_status VALUES ('198101.SH',163,'20',0),('XYB001.IB',163,'20',0),('CRMW001.IB',164,'20',0)");
-            connection.createStatement().execute("CREATE TABLE rrs_temp_security_code (temp_security_code VARCHAR(100), temp_security_market VARCHAR(100))");
-            connection.createStatement().execute("INSERT INTO rrs_temp_security_code VALUES"
-                    + " ('TMP001.IB', 'NIB'), ('TMP003.IB', 'NIB'), ('WCTMP001.IB', 'NIB'), ('WCTMP002.IB', 'NIB')");
+            connection.createStatement().execute(extractStatement(readSql("rrs_temp_security_code_schema.sql"),
+                    "CREATE TABLE", "rrs_temp_security_code").replaceAll("(?s)\\) ENGINE.*", ")"));
+            connection.createStatement().execute(extractStatement(readSql("rrs_temp_security_code_demo_data.sql"),
+                    "INSERT INTO", "rrs_temp_security_code"));
             connection.createStatement().execute("CREATE TABLE ip_pool_status_crmw (security_code VARCHAR(100), crmw_scode VARCHAR(100), crmw_name VARCHAR(100), crmw_stype VARCHAR(32), target_pool_id BIGINT, audit_status VARCHAR(2), is_deleted INT, pool_type VARCHAR(32))");
             connection.createStatement().execute("INSERT INTO ip_pool_status_crmw VALUES ('198101.SH', 'CRMW001.IB', 'CRMW-A', 'crmw', 1, '20', 0, 'crmw'), ('XYB001.IB', 'CRMW001.IB', 'CRMW-A', 'crmw', 1, '20', 0, 'crmw')");
             ds.setUrl(ds.getUrl() + ";SCHEMA=znty_rrs");
