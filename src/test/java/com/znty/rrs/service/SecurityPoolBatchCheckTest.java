@@ -15,6 +15,7 @@ import com.znty.rrs.entity.securitypooladjust.RelatedRatingCompanyDto;
 import com.znty.rrs.entity.securitypooladjust.SelfSelectedRightsHolderDto;
 import com.znty.rrs.exception.BizException;
 import com.znty.rrs.mapper.BatchSecurityCheckMapper;
+import com.znty.rrs.mapper.FlowMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityMarketMapper;
 import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
@@ -362,22 +363,31 @@ public class SecurityPoolBatchCheckTest {
         verify(fixture.batch, never()).querySecurities(anyList());
     }
 
+    /** 补债通过业务校验后直接生效，手工入池仍匹配目标池配置的审批流程 */
+    @Test
+    public void scheduledInboundDoesNotRequireConfiguredFlowToBeDirect() {
+        Fixture fixture = new Fixture();
+        fixture.target.setInFlowId(113L);
+        fixture.target.setInFlowKey("company:forbidden-inbound");
+        List<AdjustCheckReq> requests = Collections.singletonList(request("B1"));
+
+        AdjustCheckDto page = fixture.service.checkSecurityBatch(requests).get(0);
+        AdjustCheckDto scheduled = fixture.service.checkCompanyFollowBatch(requests, "20261118", Collections.emptySet()).get(0);
+
+        assertThat(page.getItems().get(0).getFlowOptions()).singleElement().satisfies(option ->
+                assertThat(option.getFlowId()).isEqualTo(113L));
+        assertThat(scheduled.getItems()).singleElement().satisfies(item -> {
+            assertThat(item.isCanAdjust()).isTrue();
+            assertThat(item.getFailReasons()).isEmpty();
+        });
+    }
+
     /** 配套联动也需要满足目标池容量和报告要求 */
     @Test
     public void scheduledDoesNotApplyIncompleteLinkedGroup() {
         Fixture fixture = new Fixture();
-        InvestmentPoolBo linked = new InvestmentPoolBo();
-        linked.setId(10L);
-        linked.setPoolName("联动池");
-        linked.setStatus("enabled");
-        linked.setPoolType("observe");
+        InvestmentPoolBo linked = fixture.withLinkedPool();
         linked.setInReportRestriction("internal");
-        when(fixture.pools.queryPoolList()).thenReturn(Arrays.asList(fixture.target, linked));
-        PoolRelationBo relation = new PoolRelationBo();
-        relation.setPoolId(9L);
-        relation.setRelationPoolId(10L);
-        relation.setRelationType("in_linked");
-        when(fixture.batch.queryPoolRelations()).thenReturn(Collections.singletonList(relation));
 
         AdjustCheckDto result = fixture.service.checkCompanyFollowBatch(Collections.singletonList(request("B1")), "20261118", Collections.emptySet())
                 .get(0);
@@ -385,6 +395,100 @@ public class SecurityPoolBatchCheckTest {
         assertThat(result.getItems()).hasSize(2);
         assertThat(result.getItems().get(1).getFailReasons()).contains("目标池要求研究报告且本次没有可用的报告豁免");
         verify(fixture.pools, never()).lockPoolByIdsList(anyList());
+    }
+
+    /** 同券跨市场只补联动池里仍缺少的代码 */
+    @Test
+    public void scheduledStillIncludesMissingRelatedLinkedInbound() {
+        Fixture fixture = new Fixture();
+        InvestmentPoolBo linked = fixture.withLinkedPool();
+        Row related = new Row();
+        related.setSecurityCode("B1");
+        related.setRelatedCode("B2");
+        when(fixture.batch.queryRelatedCodes(anyList(), anyList())).thenReturn(Collections.singletonList(related));
+        Row existing = new Row();
+        existing.setSecurityCode("B1");
+        existing.setPoolId(linked.getId());
+        when(fixture.batch.queryActiveStates(anyList())).thenReturn(Collections.singletonList(existing));
+
+        AdjustCheckDto result = fixture.service.checkCompanyFollowBatch(Collections.singletonList(request("B1")),
+                "20261118", Collections.emptySet()).get(0);
+
+        assertThat(result.getItems()).hasSize(3).allMatch(AdjustCheckDto.CheckResultItem::isCanAdjust);
+        assertThat(result.getItems()).filteredOn(item -> linked.getId().equals(item.getTargetPoolId()))
+                .extracting(AdjustCheckDto.CheckResultItem::getSecurityCode).containsExactly("B2");
+    }
+
+    /** 补债跳过已在池的联动项，普通页面继续保留原校验结果 */
+    @Test
+    public void scheduledSkipsOnlySatisfiedLinkedInbounds() {
+        Fixture fixture = new Fixture();
+        InvestmentPoolBo linked = fixture.withLinkedPool();
+        Row existing = new Row();
+        existing.setSecurityCode("B1");
+        existing.setPoolId(linked.getId());
+        when(fixture.batch.queryActiveStates(anyList())).thenReturn(Collections.singletonList(existing));
+        AdjustCheckReq direct = request("B2");
+        direct.getItems().get(0).setTargetPoolId(linked.getId());
+
+        List<AdjustCheckDto> results = fixture.service.checkCompanyFollowBatch(
+                Arrays.asList(request("B1"), direct, request("B2")), "20261118", Collections.emptySet());
+
+        for (int index : new int[]{0, 2}) {
+            assertThat(results.get(index).getItems()).singleElement().satisfies(item -> {
+                assertThat(item.getTargetPoolId()).isEqualTo(9L);
+                assertThat(item.isCanAdjust()).isTrue();
+            });
+        }
+        assertThat(results.get(1).getItems()).singleElement().satisfies(item -> {
+            assertThat(item.getTargetPoolId()).isEqualTo(linked.getId());
+            assertThat(item.isCanAdjust()).isTrue();
+        });
+
+        assertThat(fixture.service.checkSecurityBatch(Collections.singletonList(request("B1"))).get(0).getItems())
+                .hasSize(2).last().satisfies(item ->
+                        assertThat(item.getFailReasons()).containsExactly(SecurityPoolCheckRules.ALREADY_IN_POOL_FAILURE));
+
+        linked.setLockFlag(1);
+        assertThat(fixture.service.checkCompanyFollowBatch(Collections.singletonList(request("B1")),
+                "20261118", Collections.emptySet()).get(0).getItems()).hasSize(2).last().satisfies(item -> {
+            assertThat(item.isCanAdjust()).isFalse();
+            assertThat(item.getFailReasons()).contains(SecurityPoolCheckRules.ALREADY_IN_POOL_FAILURE, "目标投资池已锁定");
+        });
+    }
+
+    /** 受 Excel 保护而跳过的组不能给下一组提供已入池状态 */
+    @Test
+    public void scheduledDoesNotReserveExcelProtectedGroup() {
+        Fixture fixture = new Fixture();
+        InvestmentPoolBo linked = fixture.withLinkedPool();
+        PoolRelationBo linkage = fixture.batch.queryPoolRelations().get(0);
+        PoolRelationBo mutex = new PoolRelationBo();
+        mutex.setPoolId(linked.getId());
+        mutex.setRelationPoolId(11L);
+        mutex.setRelationType("in_mutex");
+        when(fixture.batch.queryPoolRelations()).thenReturn(Arrays.asList(linkage, mutex));
+        InvestmentPoolBo protectedPool = new InvestmentPoolBo();
+        protectedPool.setId(11L);
+        protectedPool.setStatus("enabled");
+        when(fixture.pools.queryPoolList()).thenReturn(Arrays.asList(fixture.target, linked, protectedPool));
+        Row existing = new Row();
+        existing.setSecurityCode("B1");
+        existing.setPoolId(protectedPool.getId());
+        when(fixture.batch.queryActiveStates(anyList())).thenReturn(Collections.singletonList(existing));
+        when(fixture.adjust.queryExcelProtectedPoolIds("B1")).thenReturn(Collections.singletonList(protectedPool.getId()));
+        AdjustCheckReq direct = request("B1");
+        direct.getItems().get(0).setTargetPoolId(linked.getId());
+
+        List<AdjustCheckDto> results = fixture.service.checkCompanyFollowBatch(
+                Arrays.asList(direct, request("B1")), "20261118", Collections.emptySet());
+
+        assertThat(results.get(0).getItems()).hasSize(2).last().satisfies(item -> {
+            assertThat(item.isCanAdjust()).isFalse();
+            assertThat(item.getFailReasons()).containsExactly("涉及 Excel 导入保护池，跳过本组调库");
+        });
+        assertThat(results.get(1).getItems()).extracting(AdjustCheckDto.CheckResultItem::getTargetPoolId)
+                .containsExactly(9L, linked.getId());
     }
 
     /** 构建只包含一个目标池的单券请求 */
@@ -409,12 +513,13 @@ public class SecurityPoolBatchCheckTest {
 
         private Fixture() {
             ReflectionTestUtils.setField(service, "batchSecurityCheckMapper", batch);
+            ReflectionTestUtils.setField(service, "securityPoolAdjustMapper", adjust);
             AutoAdjustTestSupport.bindExcelExclusion(service);
             ReflectionTestUtils.setField(service, "investmentPoolMapper", pools);
             ReflectionTestUtils.setField(service, "securityMarketMapper", market);
             AbsIdentityService identity = new AbsIdentityService();
             ReflectionTestUtils.setField(service, "absIdentityService", identity);
-            SecurityPoolCheckRules rules = new SecurityPoolCheckRules(adjust, null, null, null, identity, null,
+            SecurityPoolCheckRules rules = new SecurityPoolCheckRules(adjust, null, mock(FlowMapper.class), null, identity, null,
                     mock(RatingDowngradeChecker.class), false);
             ReflectionTestUtils.setField(service, "securityPoolCheckRules", rules);
             target.setId(9L);
@@ -457,6 +562,21 @@ public class SecurityPoolBatchCheckTest {
                     return security;
                 }).collect(Collectors.toList());
             });
+        }
+
+        /** 为目标池配置一个联动调入池 */
+        private InvestmentPoolBo withLinkedPool() {
+            InvestmentPoolBo linked = new InvestmentPoolBo();
+            linked.setId(10L);
+            linked.setStatus("enabled");
+            linked.setPoolType("observe");
+            PoolRelationBo relation = new PoolRelationBo();
+            relation.setPoolId(target.getId());
+            relation.setRelationPoolId(linked.getId());
+            relation.setRelationType("in_linked");
+            when(pools.queryPoolList()).thenReturn(Arrays.asList(target, linked));
+            when(batch.queryPoolRelations()).thenReturn(Collections.singletonList(relation));
+            return linked;
         }
     }
 }

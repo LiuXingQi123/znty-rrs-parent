@@ -21,6 +21,7 @@ import com.znty.rrs.mapper.BatchSecurityCheckMapper;
 import com.znty.rrs.mapper.CreditBondGradeRuleMapper;
 import com.znty.rrs.mapper.InvestmentPoolMapper;
 import com.znty.rrs.mapper.SecurityMarketMapper;
+import com.znty.rrs.mapper.SecurityPoolAdjustMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,10 @@ public class BatchSecurityCheckService {
     /** 批次校验取数 */
     @Resource
     private BatchSecurityCheckMapper batchSecurityCheckMapper;
+
+    /** 查询配套调出项的 Excel 入池保护 */
+    @Resource
+    private SecurityPoolAdjustMapper securityPoolAdjustMapper;
 
     /** 主体 Excel 调出依据 */
     @Resource
@@ -119,9 +124,8 @@ public class BatchSecurityCheckService {
         // 识别同一 ABS 在本批请求中的不同主体选择
         Set<String> conflictingAbsCodes = findConflictingAbsCodes(requests, data);
         List<AdjustCheckDto> results = new ArrayList<>(requests.size());
-        Map<String, Boolean> directFlows = new HashMap<>();
         for (AdjustCheckReq request : requests) {
-            // 页面和任务均沿用单笔流程候选
+            // 复用单券准入和材料豁免规则，自动任务整组通过后直接生效
             boolean excelCompany = excelCompanyRequests.contains(request);
             AdjustCheckDto result;
             try {
@@ -144,8 +148,8 @@ public class BatchSecurityCheckService {
                 result.getItems().forEach(item -> absIdentityService.applyCheckFailure(item, failure));
             }
             if (scheduled) {
-                // 校验直通和材料资格并累计本轮已通过的容量
-                prepareScheduledInbound(result, data, directFlows, excelCompany);
+                // 校验自动落池条件并累计本轮已通过的容量
+                prepareScheduledInbound(result, data, excelCompany);
             }
             results.add(result);
         }
@@ -180,28 +184,18 @@ public class BatchSecurityCheckService {
     }
 
     /**
-     * 复核自动落池的流程、报告和本轮容量
+     * 复核自动落池的证券资格、材料、容量和 Excel 保护
      *
      * @param result 一只证券及其配套项的校验结果
      * @param data 本批当前状态
-     * @param directFlows 已检查的流程是否可直通
      * @param excelCompany 是否按生效的主体 Excel 决定执行
      */
-    private void prepareScheduledInbound(AdjustCheckDto result, BatchSecurityCheckData data,
-                                         Map<String, Boolean> directFlows, boolean excelCompany) {
+    private void prepareScheduledInbound(AdjustCheckDto result, BatchSecurityCheckData data, boolean excelCompany) {
         List<AdjustCheckDto.CheckResultItem> items = result.getItems();
         if (items.isEmpty() || items.stream().anyMatch(item -> !item.isCanAdjust())) {
             return;
         }
         AdjustCheckDto.CheckResultItem primary = items.get(0);
-        boolean direct = excelCompany || primary.getFlowOptions().stream().filter(option -> option.isSelectable() && option.isMatched())
-                .anyMatch(option -> directFlows.computeIfAbsent(option.getFlowId() + ":" + option.getFlowKey(),
-                        key -> securityPoolCheckRules.isDirectAdjustFlow(option.getFlowId(), option.getFlowKey())));
-        if (!direct) {
-            // 人工审批的业务留给页面处理
-            rejectScheduledItem(primary, "需要人工审批或缺少有效的直通流程");
-            return;
-        }
         Map<Long, Integer> increments = new HashMap<>();
         for (AdjustCheckDto.CheckResultItem item : items) {
             InvestmentPoolBo pool = data.pools.get(item.getTargetPoolId());
@@ -237,6 +231,14 @@ public class BatchSecurityCheckService {
                     rejectScheduledItem(item, "目标投资池已达持仓上限（" + pool.getMaxCapacity() + "）");
                     return;
                 }
+            }
+        }
+        // 有 Excel 保护的组不会落库，不能把它的调入计入后续候选的在池状态
+        for (AdjustCheckDto.CheckResultItem item : items) {
+            if (AdjustMode.OUT.getCode().equals(item.getAdjustMode())
+                    && securityPoolAdjustMapper.queryExcelProtectedPoolIds(item.getSecurityCode()).contains(item.getTargetPoolId())) {
+                rejectScheduledItem(item, "涉及 Excel 导入保护池，跳过本组调库");
+                return;
             }
         }
         // 只有整组通过时，才更新下一组校验可见的在池状态及容量

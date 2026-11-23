@@ -51,7 +51,7 @@ import java.util.Set;
  * 1. 合并扩展参数、关系配置和已有主体所在池的映射
  * 2. 查询尚未在目标池生效且符合到期日和证券类型要求的旗下债券
  * 3. 共用手工批量规则校验候选债券及配套出入池
- * 4. 只写入整组通过且可以直通的出入池记录
+ * 4. 整组通过后由系统直接写入生效的出入池记录
  * 5. 返回映射、实际入池和未处理数量
  */
 @Slf4j
@@ -103,7 +103,7 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     + "CRMW 说明：CRMW 证券跟随主体进入普通目标池时写 ip_pool_status，不写 CRMW 组合状态表\n"
                     + "准入规则：与手工批量校验共用禁止库、调入限制、市场、容量、评级及其他单券规则\n"
                     + "Excel 主体调入生效后优先补债，保留池关系和在途校验\n"
-                    + "配套调整：联动调入、互斥及反向限制池调出与主券同组，整组通过且可直通才落池\n"
+                    + "配套调整：联动调入、互斥及反向限制池调出与主券同组，整组通过后系统自动调整并直接生效\n"
                     + "参数格式错误时，本轮任务失败";
 
     /** 自动调库查询 Mapper */
@@ -346,14 +346,6 @@ public class CompanyNewBondAutoInService implements RrsScheduledTask {
                     item.getWarnings().forEach(warning -> warnDetail(detail,
                             "证券【" + item.getSecurityCode() + "】池【" + item.getPoolName() + "】：" + warning));
                 }
-            }
-            // 保护配套调出项，避免自动调入后留下互斥的有效池状态
-            if (items.stream().filter(item -> AdjustMode.OUT.getCode().equals(item.getAdjustMode()))
-                    .anyMatch(item -> securityPoolAdjustMapper.queryExcelProtectedPoolIds(item.getSecurityCode())
-                            .contains(item.getTargetPoolId()))) {
-                mapping.skippedCount++;
-                skipDetail(detail, "证券【" + bond.getSecurityCode() + "】涉及 Excel 导入保护池，跳过本组调库");
-                continue;
             }
             // 6. 同组联动调入、关联码和互斥调出共用一条业务批次
             mapping.inboundCount += applyInboundGroup(bond, items, mapping, taskName, batchNoContext, appliedInbounds);

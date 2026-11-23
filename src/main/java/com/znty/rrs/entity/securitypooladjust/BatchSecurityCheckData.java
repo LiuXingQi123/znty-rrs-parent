@@ -21,7 +21,7 @@ import java.util.TreeSet;
 
 /** 当前批次的证券调库校验数据，批次结束后丢弃 */
 public class BatchSecurityCheckData {
-    /** 自动落池批次需要占用本轮容量并验证材料和直通资格 */
+    /** 自动落池批次需要验证材料并累计本轮容量 */
     public boolean scheduled;
     /** 本轮认可外评机构是否已配置，黑名单校验要求非空 */
     public boolean ratingAgenciesConfigured;

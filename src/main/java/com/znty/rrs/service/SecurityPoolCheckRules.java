@@ -3268,6 +3268,7 @@ class SecurityPoolCheckRules {
         if (mainSec == null || resultItems == null || resultItems.isEmpty()) {
             return;
         }
+        boolean scheduled = mainShared.getBatchData() != null && mainShared.getBatchData().scheduled;
         // 回填主券证券信息到已有结果项
         for (AdjustCheckDto.CheckResultItem item : resultItems) {
             if (item.getSecurityCode() == null || item.getSecurityCode().isEmpty()) {
@@ -3293,6 +3294,10 @@ class SecurityPoolCheckRules {
             }
         }
         if (relatedCodes.isEmpty()) {
+            // 没有其他市场代码时，只跳过主券已满足的联动调入
+            if (scheduled) {
+                resultItems.removeIf(item -> isSatisfiedLinkedInbound(item.getItemTag(), item));
+            }
             return;
         }
 
@@ -3395,12 +3400,31 @@ class SecurityPoolCheckRules {
                     // 同组手工项失败时阻断关联项
                     inheritManualItemFailure(relatedItem, manualItem);
                 }
-                relatedResults.add(relatedItem);
+                // 关联券来自联动调入时，也只补联动池里缺少的券
+                if (!scheduled || !isSatisfiedLinkedInbound(mother.getItemTag(), relatedItem)) {
+                    relatedResults.add(relatedItem);
+                }
             }
         }
+        // 保留仍需执行的关联券，整组校验前跳过主券已满足的联动调入
+        if (scheduled) {
+            resultItems.removeIf(item -> isSatisfiedLinkedInbound(item.getItemTag(), item));
+        }
         resultItems.addAll(relatedResults);
-        // 任一市场失败反向阻断整个调库组，避免只提交部分市场
         propagateRelatedMarketFailure(resultItems);
+    }
+
+    /**
+     * 判断自动补债的联动调入是否只因已在池而失败
+     *
+     * @param sourceTag 主券调库项的类型，关联券沿用来源项类型
+     * @param item 本次校验的实际证券和目标池
+     * @return 联动池已满足且没有其他校验失败时返回 true
+     */
+    private boolean isSatisfiedLinkedInbound(String sourceTag, AdjustCheckDto.CheckResultItem item) {
+        return ItemType.LINKAGE.getCode().equals(sourceTag)
+                && AdjustMode.IN.getCode().equals(item.getAdjustMode())
+                && Collections.singletonList(ALREADY_IN_POOL_FAILURE).equals(item.getFailReasons());
     }
 
     /** 汇总跨市场失败原因后统一阻断同组，保留原始失败项的具体原因。 */
