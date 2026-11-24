@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-/** 到期出池 SQL 的摘牌日边界和 JDBC 参数绑定测试 */
+/** 到期出池 SQL 的主档状态、摘牌日边界和 JDBC 参数绑定测试 */
 public class ExpiredAutoOutMapperTest {
 
     private static final String MYSQL_CUTOFF = "DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL ? DAY), '%Y%m%d')";
@@ -52,9 +52,10 @@ public class ExpiredAutoOutMapperTest {
                         .getNamedParams(new Object[]{15L, days, Collections.emptyList()});
                 BoundSql bound = statement.getBoundSql(params);
                 assertThat(bound.getSql()).contains(
+                        "AND (" + (crmw ? "crmw" : "si") + ".security_status = 'D'",
                         ".delist_date IS NOT NULL", ".delist_date != ''",
                         (crmw ? "crmw" : "si") + ".delist_date < " + MYSQL_CUTOFF)
-                        .doesNotContain(".delist_date <=", "security_status", "out_restricted");
+                        .doesNotContain(".delist_date <=", "out_restricted");
                 PreparedStatement prepared = mock(PreparedStatement.class);
                 new DefaultParameterHandler(statement, params, bound).setParameters(prepared);
                 verify(prepared).setLong(1, 15L);
@@ -99,10 +100,12 @@ public class ExpiredAutoOutMapperTest {
             jdbc.execute("CREATE TABLE dict_security_type (security_type VARCHAR(16), category_type VARCHAR(16), is_deleted INT)");
             jdbc.execute("INSERT INTO dict_security_type VALUES ('mtn','bond',0),('abs','bond',0),"
                     + "('stock','stock',0),('crmw','bond',0)");
-            jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('DIRECT','20000101','D'),('FOLLOW','20000101','D'),"
+            jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('DIRECT',NULL,'D'),('FOLLOW','20000101','D'),"
                     + "('PENDING','20000101','D'),('STOCK','20000101','D'),('CRMW','20000101','D'),"
                     + "('CRMW_EXCEL','20000101','D'),('ACTIVE','20000101','L'),('NO_DATE',NULL,'D'),('EMPTY_DATE','','D'),"
-                    + "('CUTOFF',FORMATDATETIME(DATEADD('DAY', -1, CURRENT_DATE),'yyyyMMdd'),'D')");
+                    + "('CUTOFF',FORMATDATETIME(DATEADD('DAY', -1, CURRENT_DATE),'yyyyMMdd'),'D'),"
+                    + "('FUTURE_D','20991231','D'),('FUTURE_L','20991231','L'),('NO_DATE_L',NULL,'L'),"
+                    + "('CUTOFF_L',FORMATDATETIME(DATEADD('DAY', -1, CURRENT_DATE),'yyyyMMdd'),'L')");
             jdbc.execute("INSERT INTO ip_adjust_log VALUES ('BOND_EXCEL','Excel导入','调入','20',0),"
                     + "('BOND_PENDING','Excel导入','调入','00',0)");
             jdbc.execute("INSERT INTO ip_pool_status VALUES"
@@ -116,7 +119,13 @@ public class ExpiredAutoOutMapperTest {
                     + " (8,17,'ACTIVE','存续债券','mtn','20',0,'BOND_MANUAL',NULL),"
                     + " (9,17,'NO_DATE','摘牌日NULL','mtn','20',0,'BOND_MANUAL',NULL),"
                     + " (10,17,'EMPTY_DATE','摘牌日空串','mtn','20',0,'BOND_MANUAL',NULL),"
-                    + " (11,17,'CUTOFF','摘牌日等于截止日','mtn','20',0,'BOND_MANUAL',NULL)");
+                    + " (11,17,'CUTOFF','退市且摘牌日等于截止日','mtn','20',0,'BOND_MANUAL',NULL),"
+                    + " (12,17,'FUTURE_D','退市且摘牌日晚于截止日','mtn','20',0,'BOND_MANUAL',NULL),"
+                    + " (13,17,'FUTURE_L','摘牌日晚于截止日','mtn','20',0,'BOND_MANUAL',NULL),"
+                    + " (14,17,'NO_DATE_L','存续且摘牌日NULL','mtn','20',0,'BOND_MANUAL',NULL),"
+                    + " (15,17,'CUTOFF_L','存续且摘牌日等于截止日','mtn','20',0,'BOND_MANUAL',NULL),"
+                    + " (16,17,'NO_DATE','未生效退市债券','mtn','00',0,'BOND_MANUAL',NULL),"
+                    + " (17,17,'NO_DATE','已删除退市债券','mtn','20',1,'BOND_MANUAL',NULL)");
 
             Set<Long> protectedIds = new HashSet<>();
             MappedStatement protection = configuration.getMappedStatement(
@@ -150,19 +159,20 @@ public class ExpiredAutoOutMapperTest {
                             candidates.add(candidate);
                         }
                     }
-                    assertThat(candidates).hasSize(poolId == 17L ? 6 : 1);
+                    assertThat(candidates).hasSize(poolId == 17L ? 10 : 1);
                     assertThat(ExcelPoolExclusionService.excludeProtectedRows(candidates, protectedIds))
                             .extracting(ScheduledAdjustCandidateDto::getSecurityCode)
-                            .containsExactlyInAnyOrder(poolId == 17L ? new String[]{"PENDING", "CRMW", "ACTIVE"}
+                            .containsExactlyInAnyOrder(poolId == 17L
+                                    ? new String[]{"PENDING", "CRMW", "ACTIVE", "NO_DATE", "EMPTY_DATE", "CUTOFF", "FUTURE_D"}
                                     : new String[]{"DIRECT"});
                 }
             }
         }
     }
 
-    /** 组合只按凭证摘牌日判断，凭证状态和标的摘牌日不影响结果 */
+    /** 组合按凭证状态或摘牌日判断，标的债券单独到期不触发出池 */
     @Test
-    public void crmwExpiredQueryShouldOnlyCheckCertificateDelistDate() throws Exception {
+    public void crmwExpiredQueryShouldUseOnlyCertificateStatusAndDelistDate() throws Exception {
         Assume.assumeTrue("H2 2.3.232 SQL 测试需 Java 11 以上运行时",
                 !System.getProperty("java.specification.version").startsWith("1."));
         Configuration configuration = loadMapper();
@@ -179,17 +189,21 @@ public class ExpiredAutoOutMapperTest {
             jdbc.execute("CREATE TABLE rrs_securityinfo (wind_code VARCHAR(16), security_type VARCHAR(16),"
                     + "delist_date VARCHAR(8), security_status VARCHAR(1))");
             jdbc.execute("INSERT INTO rrs_securityinfo VALUES ('ACTIVE_BOND','mtn',NULL,'L'),"
-                    + "('DELISTED_BOND','mtn','20000101','D'),('D_CERT','crmw',NULL,'D'),('L_CERT','crmw','20000101','L')");
+                    + "('DELISTED_BOND','mtn','20000101','D'),('D_CERT','crmw',NULL,'D'),('L_CERT','crmw','20000101','L'),"
+                    + "('D_FUTURE_CERT','crmw','20991231','D'),('L_FUTURE_CERT','crmw','20991231','L')");
             jdbc.execute("INSERT INTO ip_pool_status_crmw VALUES"
                     + " (18,'ACTIVE_BOND','债券A','mtn','凭证L','L_CERT','NIB','crmw','20',0,'crmw'),"
-                    + " (18,'DELISTED_BOND','债券B','mtn','凭证D','D_CERT','NIB','crmw','20',0,'crmw')");
+                    + " (18,'ACTIVE_BOND','债券A','mtn','凭证D','D_CERT','NIB','crmw','20',0,'crmw'),"
+                    + " (18,'ACTIVE_BOND','债券A','mtn','凭证D未来摘牌','D_FUTURE_CERT','NIB','crmw','20',0,'crmw'),"
+                    + " (18,'DELISTED_BOND','债券B','mtn','凭证L未来摘牌','L_FUTURE_CERT','NIB','crmw','20',0,'crmw')");
             try (PreparedStatement prepared = conn.prepareStatement(bound.getSql().replace(MYSQL_CUTOFF, H2_CUTOFF))) {
                 new DefaultParameterHandler(mapped, params, bound).setParameters(prepared);
                 try (ResultSet rows = prepared.executeQuery()) {
-                    assertThat(rows.next()).isTrue();
-                    assertThat(rows.getString("crmw_scode")).isEqualTo("L_CERT");
-                    assertThat(rows.getString("delist_date")).isEqualTo("20000101");
-                    assertThat(rows.next()).isFalse();
+                    List<String> certificates = new ArrayList<>();
+                    while (rows.next()) {
+                        certificates.add(rows.getString("crmw_scode"));
+                    }
+                    assertThat(certificates).containsExactly("D_CERT", "D_FUTURE_CERT", "L_CERT");
                 }
             }
         }

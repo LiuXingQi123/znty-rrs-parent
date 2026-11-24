@@ -4,6 +4,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.RuleType;
+import com.znty.rrs.common.enums.SecurityStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -34,7 +35,7 @@ import java.util.Set;
  *
  * 执行顺序：
  * 1. 合并扩展参数和关系配置中的扫描池
- * 2. 按 maturityOffsetDays 扫描 ip_pool_status 内已生效且摘牌日早于截止日期的债券（含 ABS、CRMW）
+ * 2. 扫描 ip_pool_status 内已生效且状态为 D 或摘牌日早于截止日的债券（含 ABS、CRMW）
  * 3. 剔除 Excel 保护记录，跳过命中调出限制池或已提前出池的记录
  * 4. 软删除池状态成功后写入自动出池日志并统计实际出池数量
  * 5. 返回本轮扫描、出池和未处理数量
@@ -63,9 +64,9 @@ public class AutoAdjustService implements RrsScheduledTask {
                     + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：分别扫描 15（债券禁止库）、16（观察池）中的到期债券候选\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（到期出池扫描池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
                     + "maturityOffsetDays（到期日期偏移天数）：可选，省略默认 1；须为 int 范围内的整数，允许 0 和负数\n"
-                    + "天数含义：摘牌日早于数据库当前日期减去该天数才出池（不含截止当天）；1=早于昨天（T-2），0=早于今天，3=早于三天前，-1=早于明天\n"
+                    + "天数含义：按数据库当前日期减去该天数比较摘牌日（不含截止当天）。1=早于昨天（T-2），0=早于今天，3=早于三天前，-1=早于明天\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
-                    + "候选查询：扫描 ip_pool_status 中已生效且未删除的债券（含 ABS、CRMW），按 rrs_securityinfo 的摘牌日判断\n"
+                    + "候选查询：扫描 ip_pool_status 中已生效且未删除的债券（含 ABS、CRMW）。证券状态为 D 或摘牌日早于截止日时进入候选\n"
                     + "CRMW 组合池：ip_pool_status_crmw 中的凭证与标的组合由“CRMW到期自动出池”任务处理\n"
                     + "最终出池：先按在池记录 ID 剔除 Excel 保护项，再跳过缺少证券编码或命中调出限制池的记录\n"
                     + "执行方式：直接生效，不走审批；仅软删除成功才写日志并计入影响条数\n"
@@ -240,7 +241,7 @@ public class AutoAdjustService implements RrsScheduledTask {
                     skipDetail(detail, "证券【" + sec.getSecurityCode() + "】：当前已不在目标池，本轮不处理");
                     continue;
                 }
-                // 保留实际到期日和任务使用的日期口径
+                // 记录实际命中的到期依据
                 sec.setAdjustType("自动调整");
                 sec.setAdjustMode(AdjustMode.OUT.getCode());
                 sec.setTargetPoolId(poolId);
@@ -251,7 +252,8 @@ public class AutoAdjustService implements RrsScheduledTask {
                 sec.setAdjusterName(AUTO_ADJUSTER_NAME);
                 String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.dateDetail("摘牌日", sec.getDelistDate()),
-                        "出池口径：" + maturityRule);
+                        "出池口径：" + (SecurityStatus.DELISTED.getCode().equals(sec.getSecurityStatus())
+                                ? "证券状态为 D（退市）" : maturityRule));
                 sec.setAdjustReason(reason);
                 // 以本次出池证券和目标池生成批次号
                 String batchNo = batchNoContext.resolveBondBatchNo(
@@ -283,9 +285,9 @@ public class AutoAdjustService implements RrsScheduledTask {
     private void logExecutionRules(TaskDetailLog detail, String maturityRule, int maturityOffsetDays) {
         // 说明扩展参数和投资池配置都会影响本轮扫描范围
         infoDetail(detail, "扫描范围：合并扩展参数 poolIds 和投资池绑定");
-        // 写明在池记录和摘牌日分别从哪张表读取
+        // 写明证券主档及两种到期条件
         infoDetail(detail, "扫描条件：扫描 ip_pool_status 中已生效且未删除的债券（含 ABS、CRMW），"
-                + "按证券代码匹配 rrs_securityinfo，主档摘牌日有值且" + maturityRule
+                + "按证券代码匹配 rrs_securityinfo，证券状态为 D 或" + maturityRule
                 + "（数据库日期，maturityOffsetDays=" + maturityOffsetDays + "）");
         // 区分查到的到期债券和实际能出池的记录
         infoDetail(detail, "最终出池范围：先按在池记录 ID 剔除 Excel 保护项，"

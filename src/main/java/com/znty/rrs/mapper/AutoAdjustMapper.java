@@ -94,12 +94,12 @@ public interface AutoAdjustMapper {
     /**
      * 查询 ip_pool_status 中目标池已生效的到期债券，包含符合条件的 ABS 和 CRMW
      *
-     * 以数据库当前日期减去配置天数作为截止日，摘牌日严格早于截止日才返回
+     * 主档状态为 D 直接命中，其余按摘牌日是否严格早于截止日判断
      *
      * @param poolId 扫描的目标池 ID
-     * @param maturityOffsetDays 到期日期偏移天数，截止日当天不计入候选
+     * @param maturityOffsetDays 摘牌日的截止日期偏移天数，日期比较不含截止日当天
      * @param outRestrictPoolIds 调出限制池 ID，空时不匹配限制池
-     * @return 含摘牌日和调出限制命中结果的候选债券，Excel 保护记录由服务过滤
+     * @return 含主档状态、摘牌日和调出限制命中结果的候选债券，Excel 保护记录由服务过滤
      */
     List<ScheduledAdjustCandidateDto> queryPoolSecurityByExpired(@Param("poolId") Long poolId,
                                                                  @Param("maturityOffsetDays") int maturityOffsetDays,
@@ -153,14 +153,14 @@ public interface AutoAdjustMapper {
     List<String> queryCompanyCodeListInPool(@Param("poolId") Long poolId);
 
     /**
-     * 查询目标池内按凭证到期日判定的到期 CRMW 组合
+     * 查询目标池内按凭证状态或摘牌日判定的到期 CRMW 组合
      *
      * 调出限制按标的证券代码、凭证代码和凭证类型匹配
      *
      * @param poolId 扫描的 CRMW 目标池 ID
-     * @param maturityOffsetDays 到期日期偏移天数，截止日当天不计入候选
+     * @param maturityOffsetDays 凭证摘牌日的截止日期偏移天数，日期比较不含截止日当天
      * @param outRestrictPoolIds 调出限制池 ID，为空时不匹配限制池
-     * @return 含凭证摘牌日和调出限制命中结果的候选组合
+     * @return 含凭证状态、摘牌日和调出限制命中结果的候选组合
      */
     List<ScheduledAdjustCandidateDto> queryCrmwPoolByExpired(@Param("poolId") Long poolId,
                                                            @Param("maturityOffsetDays") int maturityOffsetDays,

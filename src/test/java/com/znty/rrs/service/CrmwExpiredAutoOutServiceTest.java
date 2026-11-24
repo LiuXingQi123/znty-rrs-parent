@@ -120,7 +120,8 @@ public class CrmwExpiredAutoOutServiceTest {
         item.setSecurityCode("B001");
         item.setCrmwScode("CRMW001");
         item.setCrmwStype("crmw");
-        item.setDelistDate("20260831");
+        item.setSecurityStatus("D");
+        item.setDelistDate("20991231");
         when(autoAdjustMapper.queryCrmwPoolByExpired(18L, 1, Collections.emptyList())).thenReturn(Collections.singletonList(item));
         when(crmwPoolAdjustMapper.deletePoolStatusSoft("B001", "CRMW001", "crmw", 18L)).thenReturn(1);
         when(crmwPoolAdjustMapper.addAdjustLog(any(IpAdjustLogBo.class))).thenReturn(1);
@@ -136,7 +137,7 @@ public class CrmwExpiredAutoOutServiceTest {
         assertThat(item.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(item.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(item.getAdjustReason())
-                .isEqualTo("【任务名称：CRMW到期自动出池】（凭证摘牌日：2026-08-31；出池口径：凭证摘牌日早于当前日期减去 1 天）");
+                .isEqualTo("【任务名称：CRMW到期自动出池】（凭证摘牌日：2099-12-31；出池口径：凭证状态为 D（退市））");
         assertThat(item.getAdjustAdvice()).isNull();
         assertThat(item.getAdjustBatchNo()).matches("CRMW\\d{17}2001");
         assertThat(result.getDetailLog()).doesNotContain("批次号");

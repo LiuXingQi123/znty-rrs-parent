@@ -152,7 +152,7 @@
     </select>
 
     <!-- 查询 ip_pool_status 中已生效且到期的债券（含 ABS、CRMW），同时标记是否命中调出限制池
-         按证券主档摘牌日判断，摘牌日早于数据库当前日期减去 maturityOffsetDays 天才进入候选
+         主档状态为 D 或摘牌日有值且早于数据库当前日期减去 maturityOffsetDays 天时进入候选
          ip_pool_status_crmw 中的凭证与标的组合由 crmw_expired_auto_out 扫描 -->
     <select id="queryPoolSecurityByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.id AS pool_status_id
@@ -160,6 +160,7 @@
                ,ips.security_short_name
                ,ips.security_type
                ,si.delist_date
+               , si.security_status
         <if test="outRestrictPoolIds != null and !outRestrictPoolIds.isEmpty()">
                , restricted.security_code IS NOT NULL AS out_restricted
         </if>
@@ -184,9 +185,10 @@
         WHERE ips.target_pool_id = #{poolId}
           AND ips.audit_status = '20'
           AND ips.is_deleted = 0
-          AND si.delist_date IS NOT NULL
-          AND si.delist_date != ''
-          AND si.delist_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')
+          AND (si.security_status = 'D'
+               OR (si.delist_date IS NOT NULL
+                   AND si.delist_date != ''
+                   AND si.delist_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')))
     </select>
 
     <!-- 查询已在来源池生效且尚未在目标池生效的主体，供条款（一）和（三）共用 -->
@@ -422,7 +424,7 @@
           AND ips.is_deleted = 0
     </select>
 
-    <!-- 查询到期 CRMW 组合并标记调出限制，按凭证摘牌日判断，摘牌日早于数据库当前日期减去 maturityOffsetDays 天才进入候选 -->
+    <!-- 查询到期 CRMW 组合并标记调出限制，按凭证主档状态或摘牌日判断 -->
     <select id="queryCrmwPoolByExpired" resultType="com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto">
         SELECT ips.security_code
                ,ips.security_short_name
@@ -432,6 +434,7 @@
                ,ips.crmw_mktcode
                ,ips.crmw_stype
                ,crmw.delist_date
+               , crmw.security_status
         <if test="outRestrictPoolIds != null and !outRestrictPoolIds.isEmpty()">
                , restricted.security_code IS NOT NULL AS out_restricted
         </if>
@@ -460,9 +463,10 @@
           AND ips.is_deleted = 0
           AND ips.pool_type = 'crmw'
           AND crmw.security_type = 'crmw'
-          AND crmw.delist_date IS NOT NULL
-          AND crmw.delist_date != ''
-          AND crmw.delist_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')
+          AND (crmw.security_status = 'D'
+               OR (crmw.delist_date IS NOT NULL
+                   AND crmw.delist_date != ''
+                   AND crmw.delist_date &lt; DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL #{maturityOffsetDays} DAY), '%Y%m%d')))
         ORDER BY ips.crmw_scode ASC
                  ,ips.security_code ASC
     </select>

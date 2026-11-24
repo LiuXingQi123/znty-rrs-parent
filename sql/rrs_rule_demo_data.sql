@@ -165,11 +165,11 @@ INSERT INTO `rule_definition` (
 (40,'流程-简易命中','[resolveAdjustFlowOptions] isSimpleInboundFlowMatched。一至三级库、期限、180天一般入库。','flow_match','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nunmatch = "";\nif (targetInnerSort < 1 || targetInnerSort > 3) {\n    unmatch = unmatch + "目标池不是信用债大库一、二、三级库;";\n}\nif (!(remainDaysParseable == "是" || remainDaysParseable == "1" || remainDaysParseable == 1)) {\n    unmatch = unmatch + "剩余期限无法解析，date_exists 为空;";\n}\nif ((remainDaysParseable == "是" || remainDaysParseable == "1" || remainDaysParseable == 1) && !(remainNotExceedIssuerMax == "是" || remainNotExceedIssuerMax == "1" || remainNotExceedIssuerMax == 1) && (hasIssuerMaxRemain == "是" || hasIssuerMaxRemain == "1" || hasIssuerMaxRemain == 1)) {\n    unmatch = unmatch + "剩余期限超过同主体在池最大期限;";\n}\nif (!(hasNonSimpleInbound180 == "是" || hasNonSimpleInbound180 == "1" || hasNonSimpleInbound180 == 1)) {\n    unmatch = unmatch + "该主体180天内未以一般流程入过目标池，不满足简易流程前提条件;";\n}\nif (unmatch == "") {\n    return "命中简易流程";\n}\nreturn "未命中:" + unmatch;\n','active',0,NOW(),NOW()),
 (41,'流程-信用债升降级','[resolveCreditBondAdjustFlowType] 已在信用债大库时按 inner_sort 比较：目标更小=upgradeInbound。','flow_match','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (!(alreadyInCreditBond == "是" || alreadyInCreditBond == "1" || alreadyInCreditBond == 1)) {\n    return "不适用";\n}\nif (targetInnerSort < currentInnerSort) {\n    return "upgradeInbound";\n}\nif (targetInnerSort > currentInnerSort) {\n    return "downgradeInbound";\n}\nreturn "normalInbound";\n','active',0,NOW(),NOW()),
 (42,'提交-研究报告必填','[submitAdjustLog] checkReportRequired。none/空不限制；any 任意报告；internal 必须内部报告库。','submit','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (targetPoolId == null || targetPoolId == "") {\n    return "调库项不能为空";\n}\nif (securityExists == "否") {\n    return "证券不存在";\n}\nif (poolExists == "否") {\n    return "目标投资池不存在";\n}\nif (reportRestriction == null || reportRestriction == "" || reportRestriction == "none") {\n    return "通过";\n}\nif ((hasRecentInboundReport == "是" || hasRecentInboundReport == "1" || hasRecentInboundReport == 1)) {\n    return "通过";\n}\nif (!(hasAnyReport == "是" || hasAnyReport == "1" || hasAnyReport == 1)) {\n    return "目标池[" + poolName + "]要求研究报告，请上传或选择报告";\n}\nif (reportRestriction == "internal" && !(hasInternalReport == "是" || hasInternalReport == "1" || hasInternalReport == 1)) {\n    return "目标池[" + poolName + "]要求内部研究报告，请从内部报告库选择";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
-(43,'自动-到期出池','[AutoAdjustService] 摘牌日早于昨天（T-2）自动出池，原因与 Java 一致：证券到期自动调出。','auto_adjust','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (delistDate == null || delistDate == "") {\n    return "通过";\n}\nif (delistDate < cutoffDate) {\n    return "证券到期自动调出";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
+(43,'自动-到期出池','[AutoAdjustService] 状态为 D 直接判为到期。其余按摘牌日判断，默认早于昨天（T-2）自动出池。','auto_adjust','if (securityCode == null || securityCode == "") {\n    return "证券代码不能为空";\n}\nif (securityStatus == "D") {\n    return "证券到期自动调出";\n}\nif (delistDate == null || delistDate == "") {\n    return "通过";\n}\nif (delistDate < cutoffDate) {\n    return "证券到期自动调出";\n}\nreturn "通过";\n','active',0,NOW(),NOW()),
 (44,'自动-主体外评AA-入池','[CompanyOuterRatingAaMinusAutoInService] 外评落在 AA-/A/BBB… 名单且尚未在目标池则自动入池。','auto_adjust','if (issuerCode == null || issuerCode == "") {\n    return "主体代码不能为空";\n}\nif (issuerRating == null || issuerRating == "") {\n    return "主体外评不能为空";\n}\nif ((alreadyInTargetPool == "是" || alreadyInTargetPool == "1" || alreadyInTargetPool == 1)) {\n    return "通过";\n}\nlowList = ",AA-,A+,A,A-,BBB+,BBB,BBB-,BB+,BB,BB-,B+,B,B-,CCC,CC,C,";\nif (lowList.indexOf("," + issuerRating + ",") >= 0) {\n    return "外评AA-及以下主体自动入池";\n}\nreturn "通过";\n','active',0,NOW(),NOW());
 
 -- ----------------------------------------------------------------------------
--- 规则参数样例（309 条）
+-- 规则参数样例（310 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `rule_param` (
     id, rule_id, param_name, param_label, param_type, required, sort_no, crte_time, updt_time
@@ -475,7 +475,8 @@ INSERT INTO `rule_param` (
 (302,42,'hasAnyReport','是否已选/上传报告','select',1,8,NOW(),NOW()),
 (303,42,'hasInternalReport','是否内部报告库','select',1,9,NOW(),NOW()),
 (304,43,'securityCode','证券代码','string',1,1,NOW(),NOW()),
-(305,43,'delistDate','摘牌日yyyyMMdd','string',1,2,NOW(),NOW()),
+(305,43,'delistDate','摘牌日yyyyMMdd','string',0,2,NOW(),NOW()),
+(310,43,'securityStatus','证券状态（D=退市）','string',0,4,NOW(),NOW()),
 (306,43,'cutoffDate','截止日yyyyMMdd','string',1,3,NOW(),NOW()),
 (307,44,'issuerCode','主体代码','string',1,1,NOW(),NOW()),
 (308,44,'issuerRating','主体外评','select',1,2,NOW(),NOW()),
@@ -894,7 +895,7 @@ INSERT INTO `rule_param_option` (
 (309,'否','否',2,NOW(),NOW());
 
 -- ----------------------------------------------------------------------------
--- 规则测试用例样例（97 条）
+-- 规则测试用例样例（98 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `rule_test_case` (
     id, case_name, rule_id, rule_name_snapshot, last_result, last_output, last_run_time, crte_time,
@@ -993,13 +994,14 @@ INSERT INTO `rule_test_case` (
 (91,'未填证券代码不出池',43,'自动-到期出池','fail','证券代码不能为空',NOW(),NOW(),NOW()),
 (92,'未到期不出池',43,'自动-到期出池','pass','通过',NOW(),NOW(),NOW()),
 (93,'已到期应出池',43,'自动-到期出池','fail','证券到期自动调出',NOW(),NOW(),NOW()),
+(98,'退市且无摘牌日应出池',43,'自动-到期出池','fail','证券到期自动调出',NOW(),NOW(),NOW()),
 (94,'未填主体代码',44,'自动-主体外评AA-入池','fail','主体代码不能为空',NOW(),NOW(),NOW()),
 (95,'AA-应入池',44,'自动-主体外评AA-入池','pass','外评AA-及以下主体自动入池',NOW(),NOW(),NOW()),
 (96,'A+应入池',44,'自动-主体外评AA-入池','pass','外评AA-及以下主体自动入池',NOW(),NOW(),NOW()),
 (97,'AAA不自动入',44,'自动-主体外评AA-入池','pass','通过',NOW(),NOW(),NOW());
 
 -- ----------------------------------------------------------------------------
--- 测试用例参数值样例（752 条）
+-- 测试用例参数值样例（756 条）
 -- ----------------------------------------------------------------------------
 INSERT INTO `rule_test_case_param` (
     id, case_id, param_name, param_label_snapshot, param_type_snapshot, param_value, crte_time,
@@ -1739,6 +1741,10 @@ INSERT INTO `rule_test_case_param` (
 (738,93,'securityCode','证券代码','string','138026.SH',NOW(),NOW()),
 (739,93,'delistDate','摘牌日yyyyMMdd','string','20240101',NOW(),NOW()),
 (740,93,'cutoffDate','截止日yyyyMMdd','string','20260831',NOW(),NOW()),
+(753,98,'securityCode','证券代码','string','138026.SH',NOW(),NOW()),
+(754,98,'delistDate','摘牌日yyyyMMdd','string','',NOW(),NOW()),
+(755,98,'cutoffDate','截止日yyyyMMdd','string','20260831',NOW(),NOW()),
+(756,98,'securityStatus','证券状态（D=退市）','string','D',NOW(),NOW()),
 (741,94,'issuerCode','主体代码','string','',NOW(),NOW()),
 (742,94,'issuerRating','主体外评','select','',NOW(),NOW()),
 (743,94,'alreadyInTargetPool','是否已在目标池','select','',NOW(),NOW()),

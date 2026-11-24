@@ -2,7 +2,7 @@
 
 ## 恒生池 Excel 导出
 
-- `hs_pool_full_excel_export`：对应老系统 `ExportStatusToHsJob`，导出指定叶子池当前已生效的非主体证券及 CRMW；普通证券排除摘牌日早于当天的记录，独立 CRMW 组合不校验摘牌日；未指定 `poolIds` 时导出全部叶子池。
+- `hs_pool_full_excel_export`：对应老系统 `ExportStatusToHsJob`，导出指定叶子池当前已生效的非主体证券及 CRMW；普通证券排除状态为 D 或摘牌日早于当天的记录，独立 CRMW 组合不校验摘牌日；未指定 `poolIds` 时导出全部叶子池。
 - `hs_pool_full_including_expired_excel_export`：对应老系统 `ExportStatusToHsJob2`，与上一任务使用相同池范围和 Excel 结构，但普通证券包含已到期数据；独立 CRMW 组合不校验摘牌日。
 - `hs_pool_increment_excel_export`：首次以 `initialStartTime` 为下界，后续以上次成功执行开始时间为下界，以本次开始时间为上界。导出审核时间大于下界且不晚于上界的审批通过事件，不要求证券当前仍在池。老系统通过调库日志 `exportflag` 控制增量，新系统明确使用任务成功时间水位线，不更新业务调库日志。
 - 三个任务均使用五列表头：证券名称、证券代码、操作类型、市场名称、备注；调出操作类型写“删除”，备注留空。市场名称列按恒生市场编码输出，当前字段映射为沪市 `1`、深市 `2`、银行间 `4`、北交所 `6`、其他市场 `99999`，完整编码集中维护在 `HsMarketCode`；证券代码去掉首个 `.` 及其后的市场后缀，按实际在池记录或日志中的代码及所属市场输出，不再次展开同券其他市场代码。
@@ -26,7 +26,7 @@
 
 外部评级相关任务与人工调库评级下调检查共用 `dict_external_rating_agency`：只读取 `is_deleted=0` 且机构编码非空的数据。业务先查询有效 `b_info_creditratingagency` 列表，再作为参数传入 Wind 评级查询；未配置有效机构时，自动调库与黑名单校验阻断，评级下调检查按 fail-open 视为未下调。
 
-定时任务统一写入 `ip_adjust_log`（CRMW 以 `pool_type=crmw` 区分）时只赋值 `adjust_reason`，`adjust_advice` 保持 `NULL`；人工调库及人工临时代码转正不受此规则影响。新生成的调库记录以 【任务名称：任务名称】 标注来源，优先使用定时任务管理页配置的名称，同批旗下债券、联动和互斥记录沿用同一名称。括号中展示本次判断的重要依据：到期出池任务展示摘牌日和截止日期口径；主体旗下债券任务展示发行主体及主体所在/未在池；池关系联动出池展示调入池和被调出池；临时代码替换定时任务展示临时代码与正式代码。示例：`【任务名称：到期证券自动出池】（摘牌日：2026-09-01；出池口径：摘牌日早于当前日期减去 1 天）`、`【任务名称：主体下债券自动入池（已排除ABS债）】（发行主体：某集团/C001；主体所在池：债券禁止库）`。
+定时任务统一写入 `ip_adjust_log`（CRMW 以 `pool_type=crmw` 区分）时只赋值 `adjust_reason`，`adjust_advice` 保持 `NULL`；人工调库及人工临时代码转正不受此规则影响。新生成的调库记录以 【任务名称：任务名称】 标注来源，优先使用定时任务管理页配置的名称，同批旗下债券、联动和互斥记录沿用同一名称。括号中展示本次判断的重要依据：到期出池任务展示实际命中的状态或日期口径，有摘牌日时一并展示；主体旗下债券任务展示发行主体及主体所在/未在池；池关系联动出池展示调入池和被调出池；临时代码替换定时任务展示临时代码与正式代码。示例：`【任务名称：到期证券自动出池】（摘牌日：2026-09-01；出池口径：摘牌日早于当前日期减去 1 天）`、`【任务名称：主体下债券自动入池（已排除ABS债）】（发行主体：某集团/C001；主体所在池：债券禁止库）`。
 
 自动调库批次号按“实际主调整对象 + 主目标池 + 调整方向”生成。主体及主体关联/互斥项使用 `COMP` 批次，独立债券同步使用 `BOND` 批次；只有债券/普通证券调整时按证券代码生成 `BOND` 批次，其关联/互斥项继承主日志批次；CRMW 按“凭证代码 + 标的证券代码”组合生成 `CRMW` 批次。不同主对象或不同主目标池不得共用批次。历史 `AUTO` 前缀记录不迁移；新任务过程日志不输出批次号，但 `adjust_batch_no` 继续写入业务调库日志和池状态。
 
@@ -46,15 +46,15 @@
 |---|---|---|---|
 | `bond_temp_code_replace` | 债券临时代码替换（仅债券） | `0 40 4,8,9,13,18,22 * * ?` | 每天 04:40、08:40、09:40、13:40、18:40、22:40 执行。无需参数；扫描 `rrs_temp_security_code.status=temporary` 且已由外部数据补齐 `security_code` 的记录，复用临时代码人工转正的完整分叉逻辑，操作来源记为 `job` |
 | `bond_security_type_change` | 债券类型变更（仅债券） | `0 0 22 * * ?` | 每天 22:00 执行。无需参数。以 `rrs_securityinfo.security_type` 为准，同步普通池、CRMW 池标的证券及已审批通过的调入调出流水中的债券类型 |
-| `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`{"poolIds":[15],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[15]`（债券禁止库），与投资池关系配置绑定本任务的池取并集；扫描 `ip_pool_status` 中已生效且未删除的债券（含 ABS、CRMW），默认摘牌日早于昨天（T-2）自动出池，截止日由 `maturityOffsetDays` 配置；先剔除 Excel 保护项，再跳过命中调出限制池、已提前出池或缺少证券编码的记录 |
-| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`{"poolIds":[18],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[18]`（CRMW库），与关系配置绑定池取并集；扫描 `ip_pool_status_crmw` 中已生效且未删除的凭证与标的组合（含 ABS 债券作为标的的组合）；默认凭证摘牌日早于昨天（T-2）自动出池，截止日由 `maturityOffsetDays` 配置；`ip_pool_status` 中的 CRMW 券由到期证券自动出池任务扫描；命中调出限制池则跳过 |
+| `security_expired_auto_out` | 到期证券自动出池 | `0 0 23 * * ?` | 每天 23:00 执行。`{"poolIds":[15],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[15]`（债券禁止库），与投资池关系配置绑定本任务的池取并集；扫描 `ip_pool_status` 中已生效且未删除的债券（含 ABS、CRMW），状态为 D 或摘牌日早于截止日时判为到期。`maturityOffsetDays` 默认 1，日期口径为早于昨天（T-2）；先剔除 Excel 保护项，再跳过命中调出限制池、已提前出池或缺少证券编码的记录 |
+| `crmw_expired_auto_out` | CRMW到期自动出池 | `0 5 23 * * ?` | 每天 23:05 执行。`{"poolIds":[18],"maturityOffsetDays":1}`；`poolIds` 可选，Demo 为 `[18]`（CRMW库），与关系配置绑定池取并集；扫描 `ip_pool_status_crmw` 中已生效且未删除的凭证与标的组合（含 ABS 债券作为标的的组合）；凭证状态为 D 或摘牌日早于截止日时判为到期。`maturityOffsetDays` 默认 1，日期口径为早于昨天（T-2）；`ip_pool_status` 中的 CRMW 券由到期证券自动出池任务扫描；命中调出限制池则跳过 |
 | `company_outer_rating_not_aa_minus_auto_out` | 外评非AA-及以下主体自动出池（仅主体） | `0 10 23 * * ?` | Demo 扫描 17（黑名单质押库）。近一年最低认可外评为 AA 及以上、且未命中 15/23 留池条件及出池限制的主体自动调出，详见 7.2 节 |
 | `company_outer_rating_aa_minus_auto_in` | 外评AA-及以下主体自动入池（仅主体） | `0 15 23 * * ?` | Demo 调入 17（黑名单质押库）。尚未在目标池且命中 15、近一年最低认可外评为 AA- 及以下或命中 23 的主体通过校验后调入，详见 7.2 节 |
 | `company_inpool_bond_auto_in` | 在池主体旗下债券自动入池（已排除ABS债）（仅债券） | `0 1/10 * * * ?` | 普通债与 CRMW 入池，支持同池及跨池；`{"poolIds":[15,16,17,23],"minDaysToMaturity":0}` |
 | `company_abs_bond_auto_in` | 主体下ABS债券自动入库（区分已确认发行人和未确认发行人）（仅债券） | `0 5/10 * * * ?` | 独立核对 ABS 入池、出池及待确认提醒 |
 | `company_not_in_pool_bond_auto_out` | 出池主体旗下债券自动出池（仅债券） | `0 3/10 * * * ?` | 目标池主体 Excel 调出生效或全部主体依据失效时，撤销符合条件的跟随记录，详见 7.3 节 |
 | `bond_grade_inconformity_alert` | 不符合主体债入池规则提醒（含ABS债，担保债取快照担保人内评）（仅债券） | `0 0 1 * * ?` | 每天 01:00 执行。无需参数；扫描不符合当前主体债入池规则的在池信用债（**含 ABS 债**，不含境外债），生成待办供人工处理，不自动出池。**ABS 的评级主体在确认权益人时已固定到主档发行人字段，直接取主档 `inner_issuer_rating`，不查询入库快照**；**担保债可能对应多个担保人，主档 `guarantor_id` 为逗号多值串，按当前在池记录 `adjust_log_id` 的入库快照取当时选定的担保人，再查该担保人最新内评**。摘要区分**本轮命中** / **沿用已处理** / **本轮失效** / **仍待处理** |
-| `hs_pool_full_excel_export` | 恒生池全量数据导出（不含已到期） | `0 10 1 * * ?` | 每天 01:10 执行；`poolIds` 可限制叶子池，省略时导出全部叶子池；默认生成空池 Sheet；导出当前已生效的非主体证券及 CRMW，普通证券排除摘牌日早于当天的记录，独立 CRMW 组合不校验摘牌日 |
+| `hs_pool_full_excel_export` | 恒生池全量数据导出（不含已到期） | `0 10 1 * * ?` | 每天 01:10 执行；`poolIds` 可限制叶子池，省略时导出全部叶子池；默认生成空池 Sheet；导出当前已生效的非主体证券及 CRMW，普通证券排除状态为 D 或摘牌日早于当天的记录，独立 CRMW 组合不校验摘牌日 |
 | `hs_pool_full_including_expired_excel_export` | 恒生池全量数据导出（含已到期） | `0 20 1 * * ?` | 每天 01:20 执行；参数与不含已到期全量任务一致；普通证券不校验摘牌日，包含仍在池的已到期数据，独立 CRMW 组合不校验摘牌日 |
 | `company_observer_pool_sync` | 主体观察名单同步（仅主体） | `0 0 6 * * ?` | 根据 AIS 名单先出后入。Demo 将类型 2、3 分别同步至观察池 16、重点观察名单 23，并按配置处理主体池关系 |
 | `pledge_blacklist_daily_increment_reminder` | 质押黑名单库每日增量提醒 | `0 0 9 * * ?` | 每天 09:00 执行；`poolIds` 默认 `[17]`；按上次成功执行时间水位扫描审批通过的债券、主体调入调出流水。当前仅生成候选与过程日志，通知通道待接入 |
@@ -199,7 +199,7 @@ Demo 的「任务说明」保存在 `sys_scheduled_task.description`，最多 50
 
 自动调入/调出类任务的扫描池 = **扩展参数 `poolIds`（及 mappings） ∪ 投资池关系配置中绑定了本任务的池**。
 
-证券主档同时保存到期日 `maturity_date` 和摘牌日 `delist_date`，格式均为 `yyyyMMdd`。摘牌日用于记录业务到期日。原有的日期门槛使用摘牌日与各自截止日比较。证券状态的存续或到期按主档 `security_status` 展示，D 表示到期，其余状态表示未到期。
+证券主档同时保存到期日 `maturity_date` 和摘牌日 `delist_date`，格式均为 `yyyyMMdd`。摘牌日用于记录业务到期日。定时任务优先识别证券主档状态 D。其余证券按各任务的摘牌日规则判断。页面证券状态仍按主档状态展示。
 
 1. 投资池维护页「自动调入规则 / 自动调出规则」选择定时任务，写入 `ip_pool_auto_rule`（`rule_id`=`sys_scheduled_task.id`，`task_code`，`rule_type`=auto_in/auto_out）。  
 2. 任务执行时按自身 `task_code` + 对应 `rule_type` 查出绑定池，与 `param_json.poolIds` 去重并集。  
@@ -242,8 +242,8 @@ Demo 的「任务说明」保存在 `sys_scheduled_task.description`，最多 50
 
 对应老系统 `AdjustRuleByExpired` + `AdjustPoolByRule.doAdjustOutByRule`：
 
-1. 摘牌日 `delist_date` 必须有值且严格早于数据库当前日期减去 `maturityOffsetDays` 天。省略天数时按 `1` 执行，即摘牌日早于昨天（T-2）才纳入候选。允许 int 范围内的整数（含 0 和负数）。显式 NULL、小数、字符串、布尔值、超范围整数或错误 JSON 会在扫描前报错。
-2. 扫描 `ip_pool_status` 中已生效且未删除的债券，包含符合条件的 ABS、CRMW。按证券代码关联 `rrs_securityinfo` 取摘牌日。`ip_pool_status_crmw` 中的凭证与标的组合由 `crmw_expired_auto_out` 扫描。
+1. 主档 `security_status = 'D'` 直接纳入到期候选。其余证券的摘牌日 `delist_date` 须有值且严格早于数据库当前日期减去 `maturityOffsetDays` 天。省略天数时按 `1` 执行，即摘牌日早于昨天（T-2）才纳入候选。允许 int 范围内的整数（含 0 和负数）。显式 NULL、小数、字符串、布尔值、超范围整数或错误 JSON 会在扫描前报错。
+2. 扫描 `ip_pool_status` 中已生效且未删除的债券，包含符合条件的 ABS、CRMW。按证券代码关联 `rrs_securityinfo` 取证券状态和摘牌日。`ip_pool_status_crmw` 中的凭证与标的组合由 `crmw_expired_auto_out` 扫描。
 3. 按在池记录 ID 剔除 Excel 调入、同批配套入池和 Excel 主体跟随补入的保护记录。目标池若配置 `out_restrict`（老关系类型 12），扫描候选时同时判断该证券是否在任一限制池中。命中则跳过，并记录证券和跳过原因。
 4. 仅 `deleteUnprotectedPoolStatusSoft` 实际删到记录才写 `ip_adjust_log` 并计入影响条数；未删到时按已被其他处理提前出池跳过。
 5. 证券编码为空的候选记录只跳过，不影响其他证券继续处理。
@@ -254,8 +254,8 @@ Demo 的「任务说明」保存在 `sys_scheduled_task.description`，最多 50
 对应老 IP_RULE `AdjustRuleCrmwDueOutPool`：
 
 1. 扫描 `ip_pool_status_crmw` 中已生效且未删除的凭证与标的组合，包含 ABS 债券作为标的的组合。`ip_pool_status` 中的 CRMW 券由 `security_expired_auto_out` 扫描。
-2. 按凭证 `crmw_scode` 关联证券主档，取 `delist_date`。凭证摘牌日有值且严格早于截止日时调出整条组合。`maturityOffsetDays` 规则同 7.0 节，两条任务独立保存参数。
-3. CRMW 组合以凭证摘牌日为准。标的债券单独达到日期条件时，组合不会出池。
+2. 按凭证 `crmw_scode` 关联证券主档。凭证状态为 D 或凭证摘牌日有值且严格早于截止日时纳入到期候选。`maturityOffsetDays` 规则同 7.0 节，两条任务独立保存参数。
+3. CRMW 组合按凭证状态和摘牌日判断。标的债券单独到期时，组合不会出池。
 4. 扫描候选时按标的证券代码、凭证代码和凭证类型匹配调出限制池。命中则跳过，仅软删成功才写日志。
 5. 不走审批。
 6. 最近执行结果展示实际出池总数，并按 CRMW 目标池列出出池数量。
@@ -340,7 +340,7 @@ Demo 的「任务说明」保存在 `sys_scheduled_task.description`，最多 50
 
 1. `poolIds` 指定质押黑名单扫描池，默认 `[17]`；当前按目标池精确匹配，不自动展开子池。
 2. 时间窗口为左闭右开 `[windowStart, currentStart)`：后续执行用本任务最近一次成功执行的 `start_time` 作下界，首次执行从当天 `00:00:00` 开始。
-3. 扫描 `ip_adjust_log.audit_status='20'`、未删除且 `audit_time` 位于窗口内的债券/主体调入调出流水；债券摘牌日须为 NULL 或晚于当天。
+3. 扫描 `ip_adjust_log.audit_status='20'`、未删除且 `audit_time` 位于窗口内的债券/主体调入调出流水。债券须关联证券主档、状态不为 D，且摘牌日为 NULL 或晚于当天。
 4. 候选包含证券/主体名称、代码、发行主体、目标池、调整方向和审核时间，写入任务过程日志。
 5. 无增量时仍构造“当日无增量调整”消息，保持老系统每日提醒语义。
 6. 当前 `ScheduledReminderDeliveryService` 明确返回 `delivered=false`，不执行外部发送；接入邮件/站内信时只替换该投递服务。

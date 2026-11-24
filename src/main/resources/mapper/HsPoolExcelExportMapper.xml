@@ -61,6 +61,7 @@
               AND ips.audit_status = '20'
               AND dst.category_type != 'company'
               <if test="!includeExpired">
+                  AND si.security_status != 'D'
                   AND (si.delist_date IS NULL OR TRIM(si.delist_date) = '' OR si.delist_date >= DATE_FORMAT(CURDATE(), '%Y%m%d'))
               </if>
             UNION ALL

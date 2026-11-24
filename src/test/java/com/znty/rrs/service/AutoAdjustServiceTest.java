@@ -125,7 +125,7 @@ public class AutoAdjustServiceTest {
         expired.setSecurityCode("S001");
         expired.setSecurityShortName("测试凭证");
         expired.setSecurityType("crmw");
-        expired.setDelistDate("20260901");
+        expired.setSecurityStatus("D");
         when(autoAdjustMapper.queryPoolSecurityByExpired(10L, 1, Collections.emptyList())).thenReturn(Arrays.asList(expired));
         when(securityPoolAdjustMapper.queryAllPoolRelationList()).thenReturn(Collections.<PoolRelationBo>emptyList());
         when(securityPoolAdjustMapper.deleteUnprotectedPoolStatusSoft("S001", 10L)).thenReturn(1);
@@ -141,7 +141,7 @@ public class AutoAdjustServiceTest {
         assertThat(log.getAdjustMode()).isEqualTo(AdjustMode.OUT.getCode());
         assertThat(log.getAuditStatus()).isEqualTo(AuditStatus.APPROVED.getCode());
         assertThat(log.getAdjustReason())
-                .isEqualTo("【任务名称：到期证券自动出池】（摘牌日：2026-09-01；出池口径：摘牌日早于当前日期减去 1 天）");
+                .isEqualTo("【任务名称：到期证券自动出池】（出池口径：证券状态为 D（退市））");
         assertThat(log.getAdjustAdvice()).isNull();
         assertThat(log.getAdjustBatchNo()).matches("BOND\\d{17}2001");
         assertThat(result.isSuccess()).isTrue();

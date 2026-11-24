@@ -4,6 +4,10 @@ import com.ql.util.express.DefaultContext;
 import com.ql.util.express.ExpressRunner;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -39,6 +43,26 @@ public class RuleDemoScriptTest {
             ctx.put(String.valueOf(kv[i]), kv[i + 1]);
         }
         return new ExpressRunner().execute(script, ctx, null, true, false);
+    }
+
+    /** 到期出池 Demo 先判断退市状态，日期分支仍判断原截止日 */
+    @Test
+    public void autoOutDemoShouldUseStatusBeforeDelistDate() throws Exception {
+        String row = Files.readAllLines(Paths.get("sql", "rrs_rule_demo_data.sql"), StandardCharsets.UTF_8).stream()
+                .filter(line -> line.startsWith("(43,'自动-到期出池',"))
+                .findFirst().orElseThrow(AssertionError::new);
+        String scriptStart = ",'auto_adjust','";
+        String script = row.substring(row.indexOf(scriptStart) + scriptStart.length(), row.indexOf("','active'"))
+                .replace("\\n", "\n");
+
+        assertEquals("证券到期自动调出", run(script, "securityCode", "BOND1", "securityStatus", "D",
+                "delistDate", "", "cutoffDate", "20261123"));
+        assertEquals("证券到期自动调出", run(script, "securityCode", "BOND1", "securityStatus", "D",
+                "delistDate", "20991231", "cutoffDate", "20261123"));
+        assertEquals("证券到期自动调出", run(script, "securityCode", "BOND1",
+                "delistDate", "20261122", "cutoffDate", "20261123"));
+        assertEquals("通过", run(script, "securityCode", "BOND1", "securityStatus", "L",
+                "delistDate", "20261123", "cutoffDate", "20261123"));
     }
 
     /** 空参数与 checkAdjust 前置一致，不能返回通过 */

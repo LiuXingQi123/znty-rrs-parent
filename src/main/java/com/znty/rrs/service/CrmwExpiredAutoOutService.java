@@ -4,6 +4,7 @@ import com.znty.rrs.common.enums.AdjustMode;
 import com.znty.rrs.common.enums.AuditStatus;
 import com.znty.rrs.common.enums.RelationType;
 import com.znty.rrs.common.enums.RuleType;
+import com.znty.rrs.common.enums.SecurityStatus;
 import com.znty.rrs.entity.bo.InvestmentPoolBo;
 import com.znty.rrs.entity.schedule.ScheduledAdjustCandidateDto;
 import com.znty.rrs.entity.bo.PoolRelationBo;
@@ -34,7 +35,7 @@ import java.util.Map;
  *
  * 执行顺序：
  * 1. 合并扩展参数和关系配置中的 CRMW 组合池
- * 2. 按 maturityOffsetDays 扫描到期的生效组合，同时标记是否命中调出限制池
+ * 2. 按凭证状态或摘牌日扫描到期的生效组合，同时标记是否命中调出限制池
  * 3. 跳过缺少凭证代码、命中调出限制或已提前出池的组合
  * 4. 软删除池状态成功后写入自动调库日志，批次按凭证和标的证券组合生成
  * 5. 汇总各目标池实际出池的组合数量
@@ -52,10 +53,10 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
     private static final String PARAM_HELP =
             "参数格式：JSON 对象，例如 <code>{\"poolIds\":[18],\"maturityOffsetDays\":1}</code>；也可不填 poolIds，仅扫描投资池关系配置中绑定了本任务的池\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "数组写法（单池）：<code>{\"poolIds\":[18]}</code>\n"
-                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 18（CRMW库）内已生效的 CRMW 组合，凭证摘牌日早于截止日期时从 18（CRMW库）自动调出\n"
+                    + PARAM_HELP_TOOLTIP_PREFIX + "配置含义：扫描 18（CRMW库）内已生效的 CRMW 组合，凭证状态为 D 或摘牌日早于截止日时进入候选\n"
                     + PARAM_HELP_TOOLTIP_PREFIX + "poolIds（CRMW 出池扫描池）：可选；与投资池「关系配置 → 自动调出规则」中绑定本任务的池取并集后扫描\n"
                     + "maturityOffsetDays（到期日期偏移天数）：可选，省略默认 1；须为 int 范围内的整数，允许 0 和负数\n"
-                    + "天数含义：凭证摘牌日早于数据库当前日期减去该天数才出池（不含截止当天）；1=早于昨天，0=早于今天，3=早于三天前，-1=早于明天\n"
+                    + "天数含义：按数据库当前日期减去该天数比较凭证摘牌日（不含截止当天）。1=早于昨天，0=早于今天，3=早于三天前，-1=早于明天\n"
                     + "扫描范围：扩展参数 poolIds 与投资池关系配置绑定本任务的池取并集；并集为空时本轮失败\n"
                     + "处理规则：扫描目标池内已生效的 CRMW 组合；按 maturityOffsetDays 计算截止日期，默认 1 沿用早于昨天（T-2）的口径\n"
                     + "限制规则：当前已在目标池配置的调出限制池时，跳过该条记录\n"
@@ -133,7 +134,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
      * 1. 解析扩展参数和关系配置得到扫描池
      * 2. 读取投资池信息，准备本轮批次和提交时间
      * 3. 读取池关系配置
-     * 4. 逐池按凭证到期日查询组合，并按标的、凭证和凭证类型标记调出限制
+     * 4. 逐池按凭证状态或摘牌日查询组合，并按标的、凭证和凭证类型标记调出限制
      * 5. 跳过缺少凭证编码或命中限制的组合
      * 6. 软删可调出的组合，实际删到才写出池日志
      * 7. 汇总各池实际出池数量
@@ -151,7 +152,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
         String maturityRule = "凭证摘牌日早于当前日期减去 " + maturityOffsetDays + " 天";
         infoDetail(detail, "扫描池列表 poolIds=" + poolIds);
         infoDetail(detail, "扫描条件：ip_pool_status_crmw.is_deleted=0、audit_status=20、target_pool_id IN "
-                + poolIds + "、pool_type=crmw、凭证 security_type=crmw、" + maturityRule
+                + poolIds + "、pool_type=crmw、凭证 security_type=crmw，凭证状态为 D 或" + maturityRule
                 + "（数据库日期，maturityOffsetDays=" + maturityOffsetDays + "）");
         // 2. 读取投资池信息和自动调库批次时间
         Map<Long, InvestmentPoolBo> poolMap = buildPoolMap();
@@ -195,7 +196,7 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                             + "]软删失败（可能并发已出池），跳过");
                     continue;
                 }
-                // 保留凭证实际到期日和任务使用的日期口径
+                // 记录实际命中的凭证到期依据
                 item.setAdjustType("自动调整");
                 item.setAdjustMode(AdjustMode.OUT.getCode());
                 item.setTargetPoolId(poolId);
@@ -206,7 +207,8 @@ public class CrmwExpiredAutoOutService implements RrsScheduledTask {
                 item.setAdjusterName(AUTO_ADJUSTER_NAME);
                 String reason = ScheduledAdjustLogHelper.appendDetails(ScheduledAdjustLogHelper.taskLabel(taskName),
                         ScheduledAdjustLogHelper.dateDetail("凭证摘牌日", item.getDelistDate()),
-                        "出池口径：" + maturityRule);
+                        "出池口径：" + (SecurityStatus.DELISTED.getCode().equals(item.getSecurityStatus())
+                                ? "凭证状态为 D（退市）" : maturityRule));
                 item.setAdjustReason(reason);
                 // 按 CRMW 凭证和标的证券组合生成自动调库批次号
                 String batchNo = batchNoContext.resolveCrmwBatchNo(

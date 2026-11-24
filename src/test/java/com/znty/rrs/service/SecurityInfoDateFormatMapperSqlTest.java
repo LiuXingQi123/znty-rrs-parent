@@ -33,14 +33,15 @@ public class SecurityInfoDateFormatMapperSqlTest {
         assertThat(xml).doesNotContain("DATE_FORMAT(#{tempMaturityDate}, '%Y-%m-%d')");
     }
 
-    /** 质押黑名单增量继续保留空摘牌日，并排除摘牌日当天 */
+    /** 质押黑名单增量排除退市债券，保留其余债券的原日期条件 */
     @Test
     public void blacklistReminderShouldKeepExclusiveDelistDateBoundary() throws Exception {
         Path mapperPath = Paths.get("src", "main", "resources", "mapper", "BondReminderMapper.xml");
         String xml = new String(Files.readAllBytes(mapperPath), StandardCharsets.UTF_8);
         assertThat(xml)
-                .contains("si.delist_date IS NULL", "si.delist_date > DATE_FORMAT(CURDATE(), '%Y%m%d')")
-                .doesNotContain("si.maturity_date", "si.security_status");
+                .contains("dst.category_type = 'company'", "OR (si.security_status != 'D'",
+                        "AND (si.delist_date IS NULL OR si.delist_date > DATE_FORMAT(CURDATE(), '%Y%m%d'))")
+                .doesNotContain("si.maturity_date", "OR si.wind_code IS NULL");
     }
 
     /**
